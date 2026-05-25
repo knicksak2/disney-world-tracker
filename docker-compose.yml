@@ -1,0 +1,96 @@
+# Local development stack for Disney World Tracker.
+#
+# Spins up the three backend services the API expects:
+#
+#   - postgres     PostgreSQL 16 with the dwt database pre-created.
+#   - redis        Redis 7 for sessions, lockout counters, leaderboard cache.
+#   - minio        S3-compatible object store for avatar uploads.
+#   - minio-init   One-shot job that creates the `avatars` bucket on first
+#                  start and then exits. Safe to re-run; mb is idempotent
+#                  with the -p flag.
+#
+# Volumes persist across `docker compose down`. Use `docker compose down -v`
+# to wipe state when you want a clean slate.
+#
+# Usage:
+#   docker compose up -d         # start everything in the background
+#   docker compose logs -f api   # tail logs (replace `api` with service name)
+#   docker compose down          # stop without deleting data
+#   docker compose down -v       # stop and wipe persisted volumes
+#
+# The default credentials in this file are for LOCAL DEVELOPMENT ONLY. They
+# match the values in apps/api/.env.example so a fresh clone runs without
+# editing anything.
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: dwt-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: dwt
+      POSTGRES_PASSWORD: dwt
+      POSTGRES_DB: dwt
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dwt -d dwt"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: dwt-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    container_name: dwt-minio
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: dwt-minio-admin
+      MINIO_ROOT_PASSWORD: dwt-minio-password
+    command: server /data --console-address ":9001"
+    ports:
+      # S3 API. The Fastify avatar route talks to this port.
+      - "9000:9000"
+      # Web console. Open http://localhost:9001 in a browser to manage buckets.
+      - "9001:9001"
+    volumes:
+      - minio-data:/data
+
+  # One-shot job that waits for MinIO, then creates the `avatars` bucket and
+  # makes its objects publicly readable so the mobile app can render avatar
+  # URLs without signing each request. Exits 0 once the bucket is ready.
+  minio-init:
+    image: minio/mc:latest
+    container_name: dwt-minio-init
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+        until /usr/bin/mc alias set local http://minio:9000 dwt-minio-admin dwt-minio-password >/dev/null 2>&1; do
+          echo 'waiting for minio...';
+          sleep 2;
+        done;
+        /usr/bin/mc mb --ignore-existing local/avatars;
+        /usr/bin/mc anonymous set download local/avatars;
+        echo 'avatars bucket ready';
+      "
+
+volumes:
+  postgres-data:
+  redis-data:
+  minio-data:
