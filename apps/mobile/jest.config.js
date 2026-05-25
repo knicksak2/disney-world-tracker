@@ -1,0 +1,40 @@
+/**
+ * Jest configuration for the Expo mobile app.
+ *
+ * Uses the `jest-expo` preset, which configures the React Native /
+ * Expo Babel transform pipeline, the React Native test environment,
+ * and platform-specific module resolution.
+ *
+ * Key extensions on top of the preset:
+ *
+ *   - `setupFilesAfterEnv` wires in the
+ *     `@testing-library/jest-native` matcher extensions
+ *     (`toBeOnTheScreen`, `toHaveTextContent`, …) for every test file.
+ *   - `transformIgnorePatterns` extends the preset's default to allow
+ *     transformation of `@react-navigation/*`, `react-native-*`,
+ *     `expo*`, `@expo/*`, `@dwt/shared`, and a few other ESM packages
+ *     that ship un-transpiled JS.
+ *   - `moduleNameMapper` resolves `@dwt/shared` to the workspace
+ *     TypeScript source (rather than the compiled `dist`), matching the
+ *     `babel.config.js` `module-resolver` alias used in dev.
+ */
+
+/** @type {import('jest').Config} */
+module.exports = {
+  preset: 'jest-expo',
+  setupFilesAfterEnv: ['@testing-library/jest-native/extend-expect'],
+  // React Native's Animated module schedules background timers that the
+  // BottomTabBar uses for its press feedback. They keep the Node event
+  // loop alive after the test suite finishes; force-exit avoids a
+  // 1-second hang at the end of every Jest run without masking real
+  // unsettled promises (we do not have any).
+  forceExit: true,
+  transformIgnorePatterns: [
+    'node_modules/(?!((jest-)?react-native|@react-native(-community)?|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-clone-referenced-element|@react-navigation/.*|@unimodules/.*|unimodules|sentry-expo|native-base|react-native-svg|@dwt/shared))',
+  ],
+  testPathIgnorePatterns: ['/node_modules/', '/android/', '/ios/'],
+  moduleNameMapper: {
+    '^@dwt/shared$': '<rootDir>/../../packages/shared/src/index.ts',
+    '^@dwt/shared/(.*)$': '<rootDir>/../../packages/shared/src/$1',
+  },
+};

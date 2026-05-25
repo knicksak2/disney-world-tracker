@@ -1,0 +1,33 @@
+{
+  "name": "disney-world-tracker",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Disney World Tracker monorepo: Fastify API, React Native mobile app, and shared TypeScript package.",
+  "workspaces": [
+    "apps/api",
+    "apps/mobile",
+    "packages/shared"
+  ],
+  "engines": {
+    "node": ">=20.0.0 <21",
+    "npm": ">=10.0.0"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm test --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present",
+    "dev:api": "npm run dev --workspace apps/api",
+    "dev:mobile": "npm run dev --workspace apps/mobile",
+    "build:shared": "npm run build --workspace packages/shared",
+    "migrate": "npm run migrate --workspace apps/api"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.7",
+    "eslint": "^9.9.0",
+    "typescript": "^5.5.4",
+    "typescript-eslint": "^8.0.0",
+    "@eslint/js": "^9.9.0",
+    "tsx": "^4.19.0"
+  }
+}

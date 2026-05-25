@@ -1,0 +1,58 @@
+{
+  "id": "e957da41-3552-4cf6-b636-5babc5cbc4e5",
+  "name": "Walt Disney World® Resort",
+  "entityType": "DESTINATION",
+  "timezone": "America/New_York",
+  "children": [
+    {
+      "id": "80010110",
+      "name": "Seven Dwarfs Mine Train",
+      "entityType": "ATTRACTION",
+      "parentId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "80010110;entityType=Attraction"
+    },
+    {
+      "id": "16124144-de4f-4d65-b231-78e644f0db20",
+      "name": "Mickey's PhilharMagic",
+      "entityType": "SHOW",
+      "parentId": "75ea578a-adc8-4116-a54d-dccb60765ef9"
+    },
+    {
+      "id": "80010210",
+      "name": "Be Our Guest Restaurant",
+      "entityType": "RESTAURANT",
+      "parentId": "75ea578a-adc8-4116-a54d-dccb60765ef9"
+    },
+    {
+      "id": "80060297",
+      "name": "Disney Festival of Fantasy Parade",
+      "entityType": "ATTRACTION",
+      "parentId": "75ea578a-adc8-4116-a54d-dccb60765ef9"
+    },
+    {
+      "id": "80010191",
+      "name": "Meet Mickey Mouse at Town Square Theater",
+      "entityType": "ATTRACTION",
+      "parentId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "attractionType": "MEET_AND_GREET"
+    },
+    {
+      "id": "80010103",
+      "name": "Test Track presented by Chevrolet",
+      "entityType": "ATTRACTION",
+      "parentId": "47f90d2c-e191-4239-a466-5892ef59a88b"
+    },
+    {
+      "id": "411552c7-b40e-4be3-9f5e-2f7c3e5f9020",
+      "name": "Disney's Grand Floridian Resort & Spa",
+      "entityType": "HOTEL",
+      "parentId": "e957da41-3552-4cf6-b636-5babc5cbc4e5"
+    },
+    {
+      "id": "00000000-orphan-attraction",
+      "name": "Orphan Attraction",
+      "entityType": "ATTRACTION",
+      "parentId": "00000000-unknown-parent"
+    }
+  ]
+}

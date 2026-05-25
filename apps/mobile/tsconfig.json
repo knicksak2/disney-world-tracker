@@ -1,0 +1,18 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "jsx": "react-native",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022", "DOM"],
+    "types": ["react", "node", "jest"],
+    "noEmit": true,
+    "allowJs": false,
+    "paths": {
+      "@dwt/shared": ["../../packages/shared/src/index.ts"],
+      "@dwt/shared/*": ["../../packages/shared/src/*"]
+    }
+  },
+  "include": ["src/**/*", "app.config.ts"],
+  "exclude": ["node_modules", ".expo", "android", "ios"]
+}

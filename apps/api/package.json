@@ -1,0 +1,35 @@
+{
+  "name": "@dwt/api",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Fastify API for Disney World Tracker.",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "echo \"[api] dev script not yet implemented\" && exit 0",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest --run"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.620.0",
+    "@dwt/shared": "0.0.0",
+    "@fastify/multipart": "^8.3.0",
+    "@fastify/rate-limit": "^9.1.0",
+    "argon2": "^0.40.0",
+    "bullmq": "^5.13.0",
+    "fastify": "^4.28.1",
+    "ioredis": "^5.4.0",
+    "pg": "^8.13.0",
+    "pino": "^9.3.0",
+    "uuid": "^14.0.0"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.11.10",
+    "@types/uuid": "^10.0.0",
+    "fast-check": "^3.21.0",
+    "ioredis-mock": "^8.13.1",
+    "pg-mem": "^3.0.14",
+    "vitest": "^1.6.0"
+  }
+}
