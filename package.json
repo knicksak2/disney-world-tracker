@@ -23,11 +23,14 @@
     "migrate": "npm run migrate --workspace apps/api"
   },
   "devDependencies": {
+    "@eslint/js": "^9.9.0",
     "@types/node": "^20.12.7",
     "eslint": "^9.9.0",
-    "typescript": "^5.5.4",
-    "typescript-eslint": "^8.0.0",
-    "@eslint/js": "^9.9.0",
-    "tsx": "^4.19.0"
+    "tsx": "^4.19.0",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.0.0"
+  },
+  "overrides": {
+    "@types/react": "19.2.10"
   }
 }

@@ -36,5 +36,12 @@ module.exports = {
   moduleNameMapper: {
     '^@dwt/shared$': '<rootDir>/../../packages/shared/src/index.ts',
     '^@dwt/shared/(.*)$': '<rootDir>/../../packages/shared/src/$1',
+    // The `@dwt/shared` sources use explicit ESM `.js` specifiers on their
+    // relative imports (e.g. `export … from './enums.js'`) so the compiled
+    // output is valid ESM. Under Jest's resolver those map onto the `.ts`
+    // sources, so strip the `.js` extension from relative specifiers and let
+    // the resolver pick up the TypeScript file. Anchored to `./` / `../`
+    // prefixes so only relative imports are rewritten.
+    '^(\\.{1,2}/.*)\\.js$': '$1',
   },
 };
