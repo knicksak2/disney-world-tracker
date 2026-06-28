@@ -33,6 +33,7 @@ import {
   type RatingRoutesOptions,
 } from '../routes.js';
 import type {
+  GetRatingResult,
   RatingRepo,
   RemoveRatingResult,
   SetRatingResult,
@@ -52,6 +53,10 @@ interface RepoCalls {
     userId: string;
     experienceId: string;
   }>;
+  readonly getRating: Array<{
+    userId: string;
+    experienceId: string;
+  }>;
 }
 
 interface RepoStubs {
@@ -64,13 +69,17 @@ interface RepoStubs {
     userId: string,
     experienceId: string,
   ) => Promise<RemoveRatingResult>;
+  getRating?: (
+    userId: string,
+    experienceId: string,
+  ) => Promise<GetRatingResult | null>;
 }
 
 function makeRepo(stubs: RepoStubs = {}): {
   repo: RatingRepo;
   calls: RepoCalls;
 } {
-  const calls: RepoCalls = { setRating: [], removeRating: [] };
+  const calls: RepoCalls = { setRating: [], removeRating: [], getRating: [] };
   return {
     calls,
     repo: {
@@ -92,6 +101,17 @@ function makeRepo(stubs: RepoStubs = {}): {
           return stubs.removeRating(userId, experienceId);
         }
         return { experienceId, previousValue: 5 };
+      },
+      async getRating(userId, experienceId) {
+        calls.getRating.push({ userId, experienceId });
+        if (stubs.getRating) {
+          return stubs.getRating(userId, experienceId);
+        }
+        return {
+          experienceId,
+          value: 7,
+          updatedAt: new Date('2024-01-15T12:34:56.000Z'),
+        };
       },
     },
   };
@@ -120,7 +140,7 @@ async function buildApp(
 ): Promise<{ app: FastifyInstance; repoCalls: RepoCalls }> {
   const fallback = makeRepo();
   const repo = overrides.repo ?? fallback.repo;
-  const repoCalls = overrides.repo ? { setRating: [], removeRating: [] } : fallback.calls;
+  const repoCalls = overrides.repo ? { setRating: [], removeRating: [], getRating: [] } : fallback.calls;
 
   const app = Fastify();
   registerErrorHandler(app);
@@ -140,6 +160,91 @@ async function buildApp(
 
 const EXPERIENCE_ID = '22222222-2222-4222-8222-222222222222';
 const USER_ID = '11111111-1111-4111-8111-111111111111';
+
+describe('GET /me/experiences/:id/rating', () => {
+  it('returns 200 with the rating DTO when one exists', async () => {
+    const { repo } = makeRepo({
+      async getRating(_userId, experienceId) {
+        return {
+          experienceId,
+          value: 8,
+          updatedAt: new Date('2024-03-01T09:00:00.000Z'),
+        };
+      },
+    });
+    const { app } = await buildApp({
+      repo,
+      requireSession: makeRequireSession({ userId: USER_ID }),
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/me/experiences/${EXPERIENCE_ID}/rating`,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      experienceId: EXPERIENCE_ID,
+      value: 8,
+      updatedAt: '2024-03-01T09:00:00.000Z',
+    });
+
+    await app.close();
+  });
+
+  it('returns 404 rating_not_found when no rating exists', async () => {
+    const { repo } = makeRepo({
+      async getRating() {
+        return null;
+      },
+    });
+    const { app } = await buildApp({ repo });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/me/experiences/${EXPERIENCE_ID}/rating`,
+    });
+
+    expect(res.statusCode).toBe(404);
+    const body = res.json() as { error: { code: string } };
+    expect(body.error.code).toBe('rating_not_found');
+
+    await app.close();
+  });
+
+  it('rejects a non-UUID :id with 400 validation_failed and does not call the repo', async () => {
+    const { app, repoCalls } = await buildApp();
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/me/experiences/not-a-uuid/rating',
+    });
+
+    expect(res.statusCode).toBe(400);
+    const body = res.json() as { error: { code: string; field?: string } };
+    expect(body.error.code).toBe('validation_failed');
+    expect(body.error.field).toBe('id');
+    expect(repoCalls.getRating).toEqual([]);
+
+    await app.close();
+  });
+
+  it('returns 401 when unauthorized, without invoking the repo', async () => {
+    const { app, repoCalls } = await buildApp({
+      requireSession: makeRequireSession({ unauthorized: true }),
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/me/experiences/${EXPERIENCE_ID}/rating`,
+    });
+
+    expect(res.statusCode).toBe(401);
+    expect(repoCalls.getRating).toEqual([]);
+
+    await app.close();
+  });
+});
 
 describe('PUT /me/experiences/:id/rating', () => {
   it('returns 201 with the new rating when no prior rating existed (UPSERT)', async () => {

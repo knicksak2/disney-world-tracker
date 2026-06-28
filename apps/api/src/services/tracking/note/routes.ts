@@ -114,6 +114,12 @@ const VALIDATION_MESSAGE_TO_CODE: Readonly<Record<string, ErrorCode>> = {
  */
 export function noteRoutes(options: NoteRoutesOptions): FastifyPluginAsync {
   return async function noteRoutesPlugin(app: FastifyInstance): Promise<void> {
+    app.get(
+      '/me/experiences/:id/note',
+      { preHandler: options.requireSession },
+      (request, reply) => handleGet(options, request, reply),
+    );
+
     app.put(
       '/me/experiences/:id/note',
       { preHandler: options.requireSession },
@@ -131,6 +137,35 @@ export function noteRoutes(options: NoteRoutesOptions): FastifyPluginAsync {
 // ---------------------------------------------------------------------------
 // Handlers
 // ---------------------------------------------------------------------------
+
+/**
+ * `GET /me/experiences/:id/note` — read the caller's Note for the
+ * Experience.
+ *
+ * Returns 200 with the persisted `NoteDTO` when a Note exists. Throws
+ * `note_not_found` (404) when none exists for `(userId, experienceId)`
+ * (R5.7); the App's `fetchOrNullOnCode` swallows that exact code into
+ * the empty state (R5.9).
+ *
+ * Validates: R5.8, R5.9
+ */
+async function handleGet(
+  opts: NoteRoutesOptions,
+  request: FastifyRequest,
+  _reply: FastifyReply,
+): Promise<NoteDTO> {
+  const userId = requireUserId(request);
+  const { id: experienceId } = parseInput(notePathSchema, request.params);
+
+  const note = await opts.repo.getNote(userId, experienceId);
+  if (!note) {
+    throw new AppError(
+      'note_not_found',
+      'No note exists for this experience.',
+    );
+  }
+  return note;
+}
 
 /**
  * `PUT /me/experiences/:id/note` — UPSERT the caller's Note for the

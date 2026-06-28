@@ -139,6 +139,13 @@ function makeInMemoryRepo(): InMemoryRepo {
       const key = makeRepoKey(input.userId, input.experienceId);
       return store.delete(key);
     },
+    async getCompletion(
+      userId: string,
+      experienceId: string,
+    ): Promise<CompletionDTO | null> {
+      const key = makeRepoKey(userId, experienceId);
+      return store.get(key) ?? null;
+    },
   };
   return repo;
 }

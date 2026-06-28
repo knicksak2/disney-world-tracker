@@ -87,6 +87,17 @@ export interface CompletionRepo {
   edit(input: CompletionUpsertInput): Promise<CompletionDTO | null>;
 
   /**
+   * Fetch the Completion for `(userId, experienceId)`, or `null` when no
+   * Completion exists. Used by the read path `GET
+   * /me/experiences/:id/completion`; the route maps `null` to
+   * `completion_not_found` so the App can render its empty state.
+   */
+  getCompletion(
+    userId: string,
+    experienceId: string,
+  ): Promise<CompletionDTO | null>;
+
+  /**
    * Delete the Completion for `(userId, experienceId)`. Returns `true`
    * when a row was deleted and `false` when no row matched. The route
    * maps `false` to `completion_not_found` per R2.7.
@@ -105,6 +116,8 @@ export function createCompletionRepo(pool: DbPool): CompletionRepo {
     mark: (input) => mark(pool, input),
     edit: (input) => edit(pool, input),
     unmark: (input) => unmark(pool, input),
+    getCompletion: (userId, experienceId) =>
+      getCompletion(pool, userId, experienceId),
   };
 }
 
@@ -175,6 +188,28 @@ async function unmark(
   );
   // `pg` returns `rowCount` as `number | null`; treat null defensively.
   return (result.rowCount ?? 0) > 0;
+}
+
+/**
+ * SELECT a single Completion by `(user_id, experience_id)` or return
+ * `null` when none exists. Mirrors the column list and row-mapping used
+ * by `mark`/`edit` so the GET read path returns the exact same
+ * `CompletionDTO` shape.
+ */
+async function getCompletion(
+  pool: DbPool,
+  userId: string,
+  experienceId: string,
+): Promise<CompletionDTO | null> {
+  const result = await pool.query<CompletionRow>(
+    `SELECT user_id, experience_id, completed_on, user_tz
+       FROM completions
+      WHERE user_id = $1
+        AND experience_id = $2`,
+    [userId, experienceId],
+  );
+  const row = result.rows[0];
+  return row ? rowToDto(row) : null;
 }
 
 // ---------------------------------------------------------------------------

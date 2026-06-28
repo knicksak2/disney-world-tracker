@@ -324,3 +324,46 @@ describe('Rating repo — removeRating', () => {
     expect(emitter.events).toEqual([]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// getRating — SELECT
+// ---------------------------------------------------------------------------
+
+describe('Rating repo — getRating', () => {
+  it('returns the rating row when one exists', async () => {
+    const pool = makePool((call) => {
+      expect(call.text).toContain('SELECT value, updated_at FROM ratings');
+      expect(call.params).toEqual([USER_ID, EXPERIENCE_ID]);
+      return { rows: [{ value: 8, updated_at: UPDATED_AT }] };
+    });
+    const emitter = makeEmitter();
+    const repo = createRatingRepo({
+      pool: pool as unknown as Parameters<typeof createRatingRepo>[0]['pool'],
+      emitRatingChanged: emitter.emit,
+    });
+
+    const result = await repo.getRating(USER_ID, EXPERIENCE_ID);
+
+    expect(result).toEqual({
+      experienceId: EXPERIENCE_ID,
+      value: 8,
+      updatedAt: UPDATED_AT,
+    });
+    // A plain read must not emit any RatingChanged event.
+    expect(emitter.events).toEqual([]);
+  });
+
+  it('returns null when no row exists', async () => {
+    const pool = makePool(() => ({ rows: [] }));
+    const emitter = makeEmitter();
+    const repo = createRatingRepo({
+      pool: pool as unknown as Parameters<typeof createRatingRepo>[0]['pool'],
+      emitRatingChanged: emitter.emit,
+    });
+
+    const result = await repo.getRating(USER_ID, EXPERIENCE_ID);
+
+    expect(result).toBeNull();
+    expect(emitter.events).toEqual([]);
+  });
+});

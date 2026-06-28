@@ -131,6 +131,83 @@ const USER_ID = '11111111-1111-4111-8111-111111111111';
 const EXPERIENCE_ID = '22222222-2222-4222-8222-222222222222';
 
 // ---------------------------------------------------------------------------
+// GET /me/experiences/:id/note
+// ---------------------------------------------------------------------------
+
+describe('GET /me/experiences/:id/note', () => {
+  it('returns 200 with the Note DTO when one exists (R5.8)', async () => {
+    const repo = makeRepo({
+      getResult: {
+        userId: USER_ID,
+        experienceId: EXPERIENCE_ID,
+        body: 'great ride',
+        updatedAt: '2024-06-01T12:00:00.000Z',
+      },
+    });
+    const app = await buildApp({ repo });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: `/me/experiences/${EXPERIENCE_ID}/note`,
+      headers: { 'x-test-user-id': USER_ID },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      userId: USER_ID,
+      experienceId: EXPERIENCE_ID,
+      body: 'great ride',
+      updatedAt: '2024-06-01T12:00:00.000Z',
+    });
+  });
+
+  it('returns 404 note_not_found when no Note exists (R5.9)', async () => {
+    const repo = makeRepo({ getResult: null });
+    const app = await buildApp({ repo });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: `/me/experiences/${EXPERIENCE_ID}/note`,
+      headers: { 'x-test-user-id': USER_ID },
+    });
+
+    expect(response.statusCode).toBe(404);
+    const body = response.json() as { error: { code: string } };
+    expect(body.error.code).toBe('note_not_found');
+  });
+
+  it('rejects an unauthenticated GET with 401 unauthorized', async () => {
+    const repo = makeRepo();
+    const app = await buildApp({ repo });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: `/me/experiences/${EXPERIENCE_ID}/note`,
+    });
+
+    expect(response.statusCode).toBe(401);
+    const body = response.json() as { error: { code: string } };
+    expect(body.error.code).toBe('unauthorized');
+  });
+
+  it('rejects a malformed experience id with validation_failed', async () => {
+    const repo = makeRepo();
+    const app = await buildApp({ repo });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/me/experiences/not-a-uuid/note',
+      headers: { 'x-test-user-id': USER_ID },
+    });
+
+    expect(response.statusCode).toBe(400);
+    const body = response.json() as { error: { code: string; field?: string } };
+    expect(body.error.code).toBe('validation_failed');
+    expect(body.error.field).toBe('id');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // PUT /me/experiences/:id/note — create
 // ---------------------------------------------------------------------------
 

@@ -212,3 +212,65 @@ describe('CompletionRepo.unmark', () => {
     expect(removed).toBe(false);
   });
 });
+
+describe('CompletionRepo.getCompletion', () => {
+  it('selects and returns the persisted DTO when a row exists', async () => {
+    const pool = makePool((call) => {
+      expect(call.text).toMatch(/^SELECT user_id, experience_id, completed_on, user_tz/);
+      expect(call.params).toEqual([USER_ID, EXPERIENCE_ID]);
+      return {
+        rows: [
+          {
+            user_id: USER_ID,
+            experience_id: EXPERIENCE_ID,
+            completed_on: '2024-06-14',
+            user_tz: 'America/New_York',
+          },
+        ],
+      };
+    });
+    const repo = createCompletionRepo(
+      pool as unknown as Parameters<typeof createCompletionRepo>[0],
+    );
+
+    const dto = await repo.getCompletion(USER_ID, EXPERIENCE_ID);
+
+    expect(dto).toEqual({
+      userId: USER_ID,
+      experienceId: EXPERIENCE_ID,
+      completedOn: '2024-06-14',
+      userTz: 'America/New_York',
+    });
+  });
+
+  it('serializes a Date column value back to YYYY-MM-DD', async () => {
+    const pool = makePool(() => ({
+      rows: [
+        {
+          user_id: USER_ID,
+          experience_id: EXPERIENCE_ID,
+          completed_on: new Date('2024-06-14T00:00:00Z'),
+          user_tz: 'America/New_York',
+        },
+      ],
+    }));
+    const repo = createCompletionRepo(
+      pool as unknown as Parameters<typeof createCompletionRepo>[0],
+    );
+
+    const dto = await repo.getCompletion(USER_ID, EXPERIENCE_ID);
+
+    expect(dto?.completedOn).toBe('2024-06-14');
+  });
+
+  it('returns null when no row matches the (user, experience) pair', async () => {
+    const pool = makePool(() => ({ rows: [] }));
+    const repo = createCompletionRepo(
+      pool as unknown as Parameters<typeof createCompletionRepo>[0],
+    );
+
+    const dto = await repo.getCompletion(USER_ID, EXPERIENCE_ID);
+
+    expect(dto).toBeNull();
+  });
+});

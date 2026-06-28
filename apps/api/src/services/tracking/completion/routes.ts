@@ -139,6 +139,30 @@ export function completionRoutes(
   return async function completionRoutesPlugin(
     app: FastifyInstance,
   ): Promise<void> {
+    // --- GET /me/experiences/:id/completion (read) ----------------------
+    app.get(
+      '/me/experiences/:id/completion',
+      { preHandler: options.requireSession },
+      async (request) => {
+        const userId = requireUser(request);
+        const { id: experienceId } = parseOrAppError(
+          paramsSchema,
+          request.params,
+        );
+
+        const dto = await options.repo.getCompletion(userId, experienceId);
+        if (dto === null) {
+          // No Completion for the pair. The App's `fetchOrNullOnCode`
+          // swallows this exact code into its empty state (R2.4).
+          throw new AppError(
+            'completion_not_found',
+            'No completion exists for this experience.',
+          );
+        }
+        return dto;
+      },
+    );
+
     // --- PUT /me/experiences/:id/completion (mark) -----------------------
     app.put(
       '/me/experiences/:id/completion',

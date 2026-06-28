@@ -67,25 +67,31 @@ interface FakeRepo extends CompletionRepo {
   readonly markCalls: CompletionUpsertInput[];
   readonly editCalls: CompletionUpsertInput[];
   readonly unmarkCalls: CompletionDeleteInput[];
+  readonly getCalls: Array<{ userId: string; experienceId: string }>;
   /** When set, `mark` returns `null` to simulate a PK collision. */
   markCollision: boolean;
   /** When `true`, `edit` returns `null` to simulate "no row to update". */
   editMissing: boolean;
   /** When `true`, `unmark` returns `false` to simulate "no row to delete". */
   unmarkMissing: boolean;
+  /** When `true`, `getCompletion` returns `null` to simulate "no row". */
+  getMissing: boolean;
 }
 
 function makeFakeRepo(): FakeRepo {
   const markCalls: CompletionUpsertInput[] = [];
   const editCalls: CompletionUpsertInput[] = [];
   const unmarkCalls: CompletionDeleteInput[] = [];
+  const getCalls: Array<{ userId: string; experienceId: string }> = [];
   const fake: FakeRepo = {
     markCalls,
     editCalls,
     unmarkCalls,
+    getCalls,
     markCollision: false,
     editMissing: false,
     unmarkMissing: false,
+    getMissing: false,
     async mark(input) {
       markCalls.push(input);
       if (fake.markCollision) return null;
@@ -109,6 +115,16 @@ function makeFakeRepo(): FakeRepo {
     async unmark(input) {
       unmarkCalls.push(input);
       return !fake.unmarkMissing;
+    },
+    async getCompletion(userId, experienceId) {
+      getCalls.push({ userId, experienceId });
+      if (fake.getMissing) return null;
+      return {
+        userId,
+        experienceId,
+        completedOn: '2024-06-14',
+        userTz: TZ,
+      };
     },
   };
   return fake;
@@ -168,6 +184,62 @@ async function buildApp(opts: {
   await app.ready();
   return app;
 }
+
+// ---------------------------------------------------------------------------
+// GET /me/experiences/:id/completion
+// ---------------------------------------------------------------------------
+
+describe('GET /me/experiences/:id/completion', () => {
+  it('returns 200 with the completion DTO when one exists (R2.4)', async () => {
+    const repo = makeFakeRepo();
+    const app = await buildApp({ repo });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/me/experiences/${EXPERIENCE_ID}/completion`,
+      headers: { 'x-test-user-id': USER_ID },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      userId: USER_ID,
+      experienceId: EXPERIENCE_ID,
+      completedOn: '2024-06-14',
+      userTz: TZ,
+    });
+    expect(repo.getCalls).toEqual([
+      { userId: USER_ID, experienceId: EXPERIENCE_ID },
+    ]);
+  });
+
+  it('returns completion_not_found (404) when no row exists for the pair', async () => {
+    const repo = makeFakeRepo();
+    repo.getMissing = true;
+    const app = await buildApp({ repo });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/me/experiences/${EXPERIENCE_ID}/completion`,
+      headers: { 'x-test-user-id': USER_ID },
+    });
+
+    expect(res.statusCode).toBe(404);
+    expect(res.json().error.code).toBe('completion_not_found');
+  });
+
+  it('rejects anonymous requests with unauthorized', async () => {
+    const repo = makeFakeRepo();
+    const app = await buildApp({ repo });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/me/experiences/${EXPERIENCE_ID}/completion`,
+    });
+
+    expect(res.statusCode).toBe(401);
+    expect(res.json().error.code).toBe('unauthorized');
+  });
+});
 
 // ---------------------------------------------------------------------------
 // PUT /me/experiences/:id/completion

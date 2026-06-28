@@ -145,6 +145,19 @@ export interface RemoveRatingResult {
 }
 
 /**
+ * Result returned to the route handler on a successful read.
+ *
+ * Mirrors the shared `RatingDTO` shape so the GET route can return it
+ * directly. `updatedAt` is the post-write timestamp the DB stamped on
+ * the most recent set/replace.
+ */
+export interface GetRatingResult {
+  readonly experienceId: string;
+  readonly value: number;
+  readonly updatedAt: Date;
+}
+
+/**
  * Public repo surface.
  */
 export interface RatingRepo {
@@ -157,6 +170,16 @@ export interface RatingRepo {
     userId: string,
     experienceId: string,
   ): Promise<RemoveRatingResult>;
+  /**
+   * Fetch the Rating for `(userId, experienceId)`, or `null` when no
+   * Rating exists. Used by the read path `GET /me/experiences/:id/rating`;
+   * the route maps `null` to `rating_not_found` so the App can render its
+   * empty state (R4.6).
+   */
+  getRating(
+    userId: string,
+    experienceId: string,
+  ): Promise<GetRatingResult | null>;
 }
 
 /**
@@ -171,6 +194,8 @@ export function createRatingRepo(opts: RatingRepoOptions): RatingRepo {
       setRating(opts, userId, experienceId, value),
     removeRating: (userId, experienceId) =>
       removeRating(opts, userId, experienceId),
+    getRating: (userId, experienceId) =>
+      getRating(opts, userId, experienceId),
   };
 }
 
@@ -339,8 +364,38 @@ async function removeRating(
 }
 
 // ---------------------------------------------------------------------------
-// Helpers
+// Get (SELECT)
 // ---------------------------------------------------------------------------
+
+/**
+ * SELECT the rating for `(userId, experienceId)` or return `null` when no
+ * row exists. A plain read needs no transaction — there is no companion
+ * write to keep consistent — so this issues a single pooled query.
+ *
+ * The route maps a `null` result to `AppError('rating_not_found', ...)`
+ * (404) which the App's `fetchOrNullOnCode` swallows into the empty
+ * state (R4.6).
+ */
+async function getRating(
+  opts: RatingRepoOptions,
+  userId: string,
+  experienceId: string,
+): Promise<GetRatingResult | null> {
+  const result = await opts.pool.query<{ value: number; updated_at: Date }>(
+    `SELECT value, updated_at FROM ratings
+      WHERE user_id = $1 AND experience_id = $2`,
+    [userId, experienceId],
+  );
+  const row = result.rows[0];
+  if (!row) {
+    return null;
+  }
+  return {
+    experienceId,
+    value: row.value,
+    updatedAt: row.updated_at,
+  };
+}
 
 /**
  * Roll back a transaction without throwing if the rollback itself fails

@@ -94,6 +94,34 @@ export function ratingRoutes(
   return async function ratingRoutesPlugin(
     app: FastifyInstance,
   ): Promise<void> {
+    app.get(
+      '/me/experiences/:id/rating',
+      { preHandler: options.requireSession },
+      async (request) => {
+        const { id: experienceId } = parseOrAppError(
+          ratingParamsSchema,
+          request.params,
+        );
+        const userId = requireUserId(request.userId);
+
+        const result = await options.repo.getRating(userId, experienceId);
+        if (result === null) {
+          // No Rating for the pair. The App's `fetchOrNullOnCode`
+          // swallows this exact code into the empty state (R4.6).
+          throw new AppError(
+            'rating_not_found',
+            'No rating exists for this user and experience.',
+          );
+        }
+
+        return {
+          experienceId: result.experienceId,
+          value: result.value,
+          updatedAt: result.updatedAt.toISOString(),
+        };
+      },
+    );
+
     app.put(
       '/me/experiences/:id/rating',
       { preHandler: options.requireSession },
