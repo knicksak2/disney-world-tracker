@@ -50,7 +50,7 @@ function nonJsonResponse(body: string, status = 200): Response {
 describe('createThemeParksClient — base URL', () => {
   it('defaults to the v1 ThemeParks.wiki base URL', async () => {
     const fetchSpy = vi
-      .fn<Parameters<FetchLike>, ReturnType<FetchLike>>()
+      .fn<FetchLike>()
       .mockResolvedValue(jsonResponse({ destinations: [] }));
     const client = createThemeParksClient({ fetch: fetchSpy });
     await client.getDestinations();
@@ -62,7 +62,7 @@ describe('createThemeParksClient — base URL', () => {
 
   it('honours an injected base URL from configuration', async () => {
     const fetchSpy = vi
-      .fn<Parameters<FetchLike>, ReturnType<FetchLike>>()
+      .fn<FetchLike>()
       .mockResolvedValue(jsonResponse({ destinations: [] }));
     const client = createThemeParksClient({
       baseUrl: 'https://staging.example.com/v1',
@@ -77,7 +77,7 @@ describe('createThemeParksClient — base URL', () => {
 
   it('strips trailing slashes from the base URL', async () => {
     const fetchSpy = vi
-      .fn<Parameters<FetchLike>, ReturnType<FetchLike>>()
+      .fn<FetchLike>()
       .mockResolvedValue(jsonResponse({ destinations: [] }));
     const client = createThemeParksClient({
       baseUrl: 'https://example.com/v1///',
@@ -113,7 +113,7 @@ describe('getDestinations', () => {
 
   it('issues an Accept: application/json header', async () => {
     const fetchSpy = vi
-      .fn<Parameters<FetchLike>, ReturnType<FetchLike>>()
+      .fn<FetchLike>()
       .mockResolvedValue(jsonResponse({ destinations: [] }));
     const client = createThemeParksClient({ fetch: fetchSpy });
     await client.getDestinations();
@@ -217,7 +217,7 @@ describe('getEntityChildren', () => {
 
   it('URL-encodes the entity id into the path', async () => {
     const fetchSpy = vi
-      .fn<Parameters<FetchLike>, ReturnType<FetchLike>>()
+      .fn<FetchLike>()
       .mockResolvedValue(jsonResponse(validChildrenBody));
     const client = createThemeParksClient({
       baseUrl: 'https://api.example.com/v1',
