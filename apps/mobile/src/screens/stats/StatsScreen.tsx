@@ -5,7 +5,7 @@
  * completion percentages from `GET /me/stats`. The server already does
  * the math (rounding to one decimal place, capping at 100.0, treating
  * a zero denominator as 0.0 / count 0); this screen just lays the
- * numbers out as cards.
+ * numbers out as themed cards.
  *
  * Behavior:
  *
@@ -34,12 +34,10 @@
  *     place rather than overriding it here.
  *
  *   - **Rendering.** Percentages are displayed with one decimal place
- *     using `formatPercent` (e.g. 42.5%, 100.0%, 0.0%). The server
- *     already returns the rounded value; `toFixed(1)` is a display-only
- *     normalization so values like `42` (which the server's
- *     `computePercent` could return as `42`, not `42.0`) still render
- *     as "42.0%". Counts render as "X of Y experiences" / "X of Y" on
- *     each card.
+ *     using `formatPercent` (e.g. 42.5%, 100.0%, 0.0%). Counts render
+ *     as "X of Y experiences" / "X of Y" on each card. Per-Park and
+ *     per-Category cards carry their accent hue / category glyph from
+ *     the theme.
  *
  *   - **Stable ordering.** The screen iterates over the `PARKS` and
  *     `EXPERIENCE_CATEGORIES` constant tuples from `@dwt/shared` so the
@@ -47,6 +45,11 @@
  *     on JSON object key ordering. This also means a Park or Category
  *     with zero Experiences (R3.6, R3.7) still appears in the list with
  *     "0 of 0" and "0.0%" — the user sees a stable, predictable layout.
+ *
+ * Styling: uses the shared "Magical / Whimsical" theme — a gradient
+ * hero header, the overall completion as a hero stat in a `Card`, and
+ * per-Park / per-Category breakdowns as themed cards. See
+ * `theme/theme.ts` and `theme/components.tsx`.
  *
  * Validates: Requirements R3.1, R3.2, R3.3, R3.4
  */
@@ -59,6 +62,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 
 import {
@@ -69,6 +73,15 @@ import {
 } from '@dwt/shared';
 
 import { ApiError, apiRequest } from '../../api/client';
+import { theme } from '../../theme/theme';
+import {
+  Badge,
+  Card,
+  EmptyState,
+  GradientHeader,
+  ScreenContainer,
+  SectionLabel,
+} from '../../theme/components';
 
 // ---------------------------------------------------------------------------
 // Wire shape
@@ -128,17 +141,27 @@ export default function StatsScreen(): JSX.Element {
 
   if (query.isLoading && query.data === undefined) {
     return (
-      <View style={styles.center} testID="stats-loading">
-        <ActivityIndicator />
-      </View>
+      <ScreenContainer>
+        <GradientHeader title="Your Stats" icon="stats-chart" />
+        <View style={styles.center} testID="stats-loading">
+          <ActivityIndicator color={theme.color.primary} />
+        </View>
+      </ScreenContainer>
     );
   }
 
   if (query.isError && query.data === undefined) {
     return (
-      <View style={styles.center} testID="stats-error">
-        <Text style={styles.errorText}>{ERROR_COPY}</Text>
-      </View>
+      <ScreenContainer>
+        <GradientHeader title="Your Stats" icon="stats-chart" />
+        <View style={styles.center} testID="stats-error">
+          <EmptyState
+            icon="cloud-offline-outline"
+            title="Couldn't load stats"
+            body={ERROR_COPY}
+          />
+        </View>
+      </ScreenContainer>
     );
   }
 
@@ -148,39 +171,59 @@ export default function StatsScreen(): JSX.Element {
   const stats = query.data ?? null;
   if (stats === null) {
     return (
-      <View style={styles.center} testID="stats-error">
-        <Text style={styles.errorText}>{ERROR_COPY}</Text>
-      </View>
+      <ScreenContainer>
+        <GradientHeader title="Your Stats" icon="stats-chart" />
+        <View style={styles.center} testID="stats-error">
+          <EmptyState
+            icon="cloud-offline-outline"
+            title="Couldn't load stats"
+            body={ERROR_COPY}
+          />
+        </View>
+      </ScreenContainer>
     );
   }
 
   return (
-    <ScrollView
-      contentContainerStyle={styles.scrollContent}
-      testID="stats-screen"
-    >
-      <OverallCard breakdown={stats.overall} />
+    <ScreenContainer>
+      <GradientHeader
+        title="Your Stats"
+        subtitle="Track how much magic you've experienced."
+        icon="stats-chart"
+      />
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        testID="stats-screen"
+      >
+        <OverallCard breakdown={stats.overall} />
 
-      <SectionHeader label="By Park" />
-      {PARKS.map((park) => (
-        <BreakdownCard
-          key={park}
-          title={park}
-          breakdown={stats.byPark[park]}
-          testID={`stats-park-${park}`}
-        />
-      ))}
+        <SectionLabel style={styles.sectionLabel}>By Park</SectionLabel>
+        {PARKS.map((park) => (
+          <BreakdownCard
+            key={park}
+            title={park}
+            breakdown={stats.byPark[park]}
+            accentColor={theme.parkAccent[park]}
+            testID={`stats-park-${park}`}
+          />
+        ))}
 
-      <SectionHeader label="By Category" />
-      {EXPERIENCE_CATEGORIES.map((category) => (
-        <BreakdownCard
-          key={category}
-          title={formatCategory(category)}
-          breakdown={stats.byCategory[category]}
-          testID={`stats-category-${category}`}
-        />
-      ))}
-    </ScrollView>
+        <SectionLabel style={styles.sectionLabel}>By Category</SectionLabel>
+        {EXPERIENCE_CATEGORIES.map((category) => {
+          const visual = theme.categoryVisual[category];
+          return (
+            <BreakdownCard
+              key={category}
+              title={visual.label}
+              breakdown={stats.byCategory[category]}
+              accentColor={visual.tint}
+              icon={visual.glyph as keyof typeof Ionicons.glyphMap}
+              testID={`stats-category-${category}`}
+            />
+          );
+        })}
+      </ScrollView>
+    </ScreenContainer>
   );
 }
 
@@ -194,39 +237,61 @@ function OverallCard({
   readonly breakdown: StatsBreakdown;
 }): JSX.Element {
   return (
-    <View style={[styles.card, styles.overallCard]} testID="stats-overall">
-      <Text style={styles.overallLabel}>Overall</Text>
-      <Text style={styles.overallPercent}>{formatPercent(breakdown.percent)}</Text>
+    <Card style={styles.overallCard} testID="stats-overall">
+      <View style={styles.overallIconCircle}>
+        <Ionicons name="sparkles" size={22} color={theme.color.accent} />
+      </View>
+      <Text style={styles.overallLabel}>Overall completion</Text>
+      <Text style={styles.overallPercent}>
+        {formatPercent(breakdown.percent)}
+      </Text>
       <Text style={styles.overallCounts}>
         {`${breakdown.completed} of ${breakdown.total} experiences`}
       </Text>
-    </View>
+    </Card>
   );
-}
-
-function SectionHeader({ label }: { readonly label: string }): JSX.Element {
-  return <Text style={styles.sectionHeader}>{label}</Text>;
 }
 
 function BreakdownCard({
   title,
   breakdown,
+  accentColor,
+  icon,
   testID,
 }: {
   readonly title: string;
   readonly breakdown: StatsBreakdown;
+  readonly accentColor?: string;
+  readonly icon?: keyof typeof Ionicons.glyphMap;
   readonly testID?: string;
 }): JSX.Element {
   return (
-    <View style={styles.card} {...(testID !== undefined ? { testID } : {})}>
+    <Card
+      {...(accentColor !== undefined ? { accentColor } : {})}
+      {...(testID !== undefined ? { testID } : {})}
+      style={styles.card}
+    >
       <View style={styles.cardHeader}>
-        <Text style={styles.cardTitle}>{title}</Text>
-        <Text style={styles.cardPercent}>{formatPercent(breakdown.percent)}</Text>
+        <View style={styles.cardTitleWrap}>
+          {icon !== undefined ? (
+            <Ionicons
+              name={icon}
+              size={16}
+              color={accentColor ?? theme.color.primary}
+              style={styles.cardIcon}
+            />
+          ) : null}
+          <Text style={styles.cardTitle}>{title}</Text>
+        </View>
+        <Badge
+          label={formatPercent(breakdown.percent)}
+          color={accentColor ?? theme.color.primary}
+        />
       </View>
       <Text style={styles.cardCounts}>
         {`${breakdown.completed} of ${breakdown.total}`}
       </Text>
-    </View>
+    </Card>
   );
 }
 
@@ -251,15 +316,6 @@ function formatPercent(value: number): string {
   return `${value.toFixed(1)}%`;
 }
 
-/**
- * Render the underscore-bearing `Character_Meet` enum as a friendlier
- * "Character Meet" label without losing the literal value used over the
- * wire. Mirrors the same helper in `CatalogScreen.tsx`.
- */
-function formatCategory(value: ExperienceCategory): string {
-  return value === 'Character_Meet' ? 'Character Meet' : value;
-}
-
 // ---------------------------------------------------------------------------
 // Styles
 // ---------------------------------------------------------------------------
@@ -269,78 +325,72 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 24,
-    backgroundColor: '#ffffff',
-  },
-  errorText: {
-    fontSize: 15,
-    color: '#555555',
-    textAlign: 'center',
+    padding: theme.spacing.xl,
   },
   scrollContent: {
-    padding: 16,
-    paddingBottom: 32,
-    backgroundColor: '#ffffff',
-  },
-  card: {
-    backgroundColor: '#f7f7f9',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
+    padding: theme.spacing.lg,
+    paddingBottom: theme.spacing.xxl,
   },
   overallCard: {
-    backgroundColor: '#003a9b',
     alignItems: 'center',
-    paddingVertical: 24,
-    marginBottom: 20,
+    paddingVertical: theme.spacing.xl,
+    marginBottom: theme.spacing.lg,
+  },
+  overallIconCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: theme.color.surfaceAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: theme.spacing.sm,
   },
   overallLabel: {
-    color: '#cfd9f0',
-    fontSize: 13,
-    fontWeight: '600',
-    letterSpacing: 0.5,
+    ...theme.typography.meta,
+    color: theme.color.textSecondary,
     textTransform: 'uppercase',
-    marginBottom: 6,
+    letterSpacing: 0.5,
+    marginBottom: theme.spacing.xs,
   },
   overallPercent: {
-    color: '#ffffff',
+    ...theme.typography.display,
     fontSize: 48,
-    fontWeight: '700',
-    marginBottom: 4,
+    color: theme.color.primary,
+    marginBottom: theme.spacing.xs,
   },
   overallCounts: {
-    color: '#cfd9f0',
-    fontSize: 14,
+    ...theme.typography.body,
+    color: theme.color.textSecondary,
   },
-  sectionHeader: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#444444',
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
-    marginTop: 8,
-    marginBottom: 8,
+  sectionLabel: {
+    marginTop: theme.spacing.sm,
+    marginBottom: theme.spacing.sm,
+  },
+  card: {
+    marginBottom: theme.spacing.md,
   },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: theme.spacing.xs,
+  },
+  cardTitleWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexShrink: 1,
+    paddingRight: theme.spacing.sm,
+  },
+  cardIcon: {
+    marginRight: theme.spacing.sm,
   },
   cardTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#111111',
+    ...theme.typography.subtitle,
+    color: theme.color.textPrimary,
     flexShrink: 1,
-    paddingRight: 8,
-  },
-  cardPercent: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#003a9b',
   },
   cardCounts: {
-    fontSize: 13,
-    color: '#666666',
+    ...theme.typography.meta,
+    color: theme.color.textSecondary,
   },
 });

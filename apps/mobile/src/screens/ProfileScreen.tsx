@@ -19,6 +19,11 @@
 //     when violated (R7.2, R7.6).
 //   - Logout calls `POST /auth/logout` and clears the session token so the
 //     navigator flips back to the auth stack (R6.10).
+//
+// Styling: uses the shared "Magical / Whimsical" theme — a gradient hero
+// header, the avatar + display name + completion stat inside `Card`s, and
+// themed PrimaryButton / SecondaryButton controls (logout is a danger-tone
+// SecondaryButton). See `theme/theme.ts` and `theme/components.tsx`.
 
 import React, { useEffect, useMemo, useState } from 'react';
 import type { RouteProp } from '@react-navigation/native';
@@ -26,7 +31,6 @@ import { useRoute } from '@react-navigation/native';
 import {
   ActivityIndicator,
   Image,
-  Pressable,
   StyleSheet,
   Text,
   TextInput,
@@ -46,6 +50,15 @@ import {
 import { ApiError, apiRequest } from '../api/client';
 import type { MainTabParamList } from '../navigation/RootNavigator';
 import { useSessionStore } from '../state/sessionStore';
+import { theme } from '../theme/theme';
+import {
+  Card,
+  EmptyState,
+  GradientHeader,
+  PrimaryButton,
+  ScreenContainer,
+  SecondaryButton,
+} from '../theme/components';
 
 // ---------------------------------------------------------------------------
 // Route + response shapes
@@ -233,12 +246,14 @@ export default function ProfileScreen(): JSX.Element {
   if (
     (stillResolvingSelf && meQuery.isLoading) ||
     profileQuery.isLoading ||
-    profileQuery.fetchStatus === 'fetching' && profileQuery.data === undefined
+    (profileQuery.fetchStatus === 'fetching' && profileQuery.data === undefined)
   ) {
     return (
-      <View style={styles.centered} accessibilityRole="progressbar">
-        <ActivityIndicator />
-      </View>
+      <ScreenContainer>
+        <View style={styles.centered} accessibilityRole="progressbar">
+          <ActivityIndicator color={theme.color.primary} />
+        </View>
+      </ScreenContainer>
     );
   }
 
@@ -247,11 +262,16 @@ export default function ProfileScreen(): JSX.Element {
   // auth stack; anything else is a transient error worth surfacing.
   if (stillResolvingSelf && meQuery.isError) {
     return (
-      <View style={styles.centered}>
-        <Text style={styles.errorText}>
-          We couldn&apos;t load your profile. Please try again later.
-        </Text>
-      </View>
+      <ScreenContainer>
+        <GradientHeader title="Profile" icon="person-circle" compact />
+        <View style={styles.centered}>
+          <EmptyState
+            icon="alert-circle-outline"
+            title="We couldn't load your profile"
+            body="Please try again later."
+          />
+        </View>
+      </ScreenContainer>
     );
   }
 
@@ -262,12 +282,16 @@ export default function ProfileScreen(): JSX.Element {
   // re-issuing the same read would be analytics-adjacent behavior.
   if (result?.kind === 'forbidden') {
     return (
-      <View style={styles.centered}>
-        <Text style={styles.emptyTitle}>Profile unavailable</Text>
-        <Text style={styles.emptyBody}>
-          You don&apos;t have permission to view this profile.
-        </Text>
-      </View>
+      <ScreenContainer>
+        <GradientHeader title="Profile" icon="person-circle" compact />
+        <View style={styles.centered}>
+          <EmptyState
+            icon="lock-closed-outline"
+            title="Profile unavailable"
+            body="You don't have permission to view this profile."
+          />
+        </View>
+      </ScreenContainer>
     );
   }
 
@@ -276,11 +300,16 @@ export default function ProfileScreen(): JSX.Element {
     // Profile read can produce is either handled above (forbidden) or
     // routed through the global 401 path (`unauthorized`).
     return (
-      <View style={styles.centered}>
-        <Text style={styles.errorText}>
-          We couldn&apos;t load this profile. Please try again later.
-        </Text>
-      </View>
+      <ScreenContainer>
+        <GradientHeader title="Profile" icon="person-circle" compact />
+        <View style={styles.centered}>
+          <EmptyState
+            icon="alert-circle-outline"
+            title="We couldn't load this profile"
+            body="Please try again later."
+          />
+        </View>
+      </ScreenContainer>
     );
   }
 
@@ -372,101 +401,100 @@ function ProfileContent({
   );
 
   return (
-    <View style={styles.container}>
-      <View style={styles.avatarWrap}>
-        {profile.avatarUrl !== null ? (
-          <Image
-            source={{ uri: profile.avatarUrl }}
-            style={styles.avatar}
-            accessibilityLabel={`${profile.displayName}'s avatar`}
-          />
-        ) : (
-          <View style={[styles.avatar, styles.avatarPlaceholder]}>
-            <Text style={styles.avatarPlaceholderText}>
-              {profile.displayName.slice(0, 1).toUpperCase()}
-            </Text>
+    <ScreenContainer>
+      <GradientHeader
+        title={isSelf ? 'Your Profile' : profile.displayName}
+        {...(isSelf ? { subtitle: 'Manage your magical identity.' } : {})}
+        icon="person-circle"
+      />
+
+      <View style={styles.body}>
+        <Card style={styles.identityCard}>
+          <View style={styles.avatarWrap}>
+            {profile.avatarUrl !== null ? (
+              <Image
+                source={{ uri: profile.avatarUrl }}
+                style={styles.avatar}
+                accessibilityLabel={`${profile.displayName}'s avatar`}
+              />
+            ) : (
+              <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                <Text style={styles.avatarPlaceholderText}>
+                  {profile.displayName.slice(0, 1).toUpperCase()}
+                </Text>
+              </View>
+            )}
           </View>
-        )}
-      </View>
 
-      {isSelf && isEditing ? (
-        <View style={styles.editor}>
-          <TextInput
-            value={draftName}
-            onChangeText={onChangeDraft}
-            placeholder="Display name"
-            autoCapitalize="none"
-            autoCorrect={false}
-            maxLength={50}
-            editable={!saving}
-            style={styles.input}
-            accessibilityLabel="Display name"
-          />
-          {nameError !== null ? (
-            <Text style={styles.inlineError} accessibilityRole="alert">
-              {nameError}
-            </Text>
-          ) : null}
-          <View style={styles.row}>
-            <Pressable
-              accessibilityRole="button"
-              onPress={onSave}
-              disabled={saving}
-              style={[styles.button, saving && styles.buttonDisabled]}
-            >
-              <Text style={styles.buttonText}>
-                {saving ? 'Saving…' : 'Save'}
-              </Text>
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              onPress={onCancelEdit}
-              disabled={saving}
-              style={[styles.button, styles.buttonSecondary]}
-            >
-              <Text style={styles.buttonText}>Cancel</Text>
-            </Pressable>
+          {isSelf && isEditing ? (
+            <View style={styles.editor}>
+              <Text style={styles.label}>Display name</Text>
+              <TextInput
+                value={draftName}
+                onChangeText={onChangeDraft}
+                placeholder="Display name"
+                placeholderTextColor={theme.color.textSecondary}
+                autoCapitalize="none"
+                autoCorrect={false}
+                maxLength={50}
+                editable={!saving}
+                style={styles.input}
+                accessibilityLabel="Display name"
+              />
+              {nameError !== null ? (
+                <Text style={styles.inlineError} accessibilityRole="alert">
+                  {nameError}
+                </Text>
+              ) : null}
+              <View style={styles.row}>
+                <PrimaryButton
+                  label="Save"
+                  icon="checkmark-outline"
+                  loading={saving}
+                  onPress={onSave}
+                  disabled={saving}
+                  style={styles.flexBtn}
+                />
+                <SecondaryButton
+                  label="Cancel"
+                  onPress={onCancelEdit}
+                  disabled={saving}
+                  style={styles.flexBtn}
+                />
+              </View>
+            </View>
+          ) : (
+            <View style={styles.headerBlock}>
+              <Text style={styles.displayName}>{profile.displayName}</Text>
+              {isSelf ? (
+                <SecondaryButton
+                  label="Edit display name"
+                  icon="create-outline"
+                  onPress={onStartEdit}
+                />
+              ) : null}
+            </View>
+          )}
+        </Card>
+
+        <Card style={styles.statCard}>
+          <Text style={styles.statLabel}>Overall completion</Text>
+          <Text style={styles.statValue}>{percentLabel}</Text>
+        </Card>
+
+        {isSelf ? (
+          <View style={styles.logoutBlock}>
+            <SecondaryButton
+              label={loggingOut ? 'Logging out\u2026' : 'Log out'}
+              icon="log-out-outline"
+              tone="danger"
+              onPress={onLogout}
+              disabled={loggingOut}
+            />
           </View>
-        </View>
-      ) : (
-        <View style={styles.headerBlock}>
-          <Text style={styles.displayName}>{profile.displayName}</Text>
-          {isSelf ? (
-            <Pressable
-              accessibilityRole="button"
-              onPress={onStartEdit}
-              style={[styles.button, styles.buttonSecondary]}
-            >
-              <Text style={styles.buttonText}>Edit display name</Text>
-            </Pressable>
-          ) : null}
-        </View>
-      )}
-
-      <View style={styles.statBlock}>
-        <Text style={styles.statLabel}>Overall completion</Text>
-        <Text style={styles.statValue}>{percentLabel}</Text>
+        ) : null}
       </View>
-
-      {isSelf ? (
-        <View style={styles.logoutBlock}>
-          <Pressable
-            accessibilityRole="button"
-            onPress={onLogout}
-            disabled={loggingOut}
-            style={[
-              styles.button,
-              styles.buttonDanger,
-              loggingOut && styles.buttonDisabled,
-            ]}
-          >
-            <Text style={styles.buttonText}>
-              {loggingOut ? 'Logging out…' : 'Log out'}
-            </Text>
-          </Pressable>
-        </View>
-      ) : null}
-    </View>
+    </ScreenContainer>
   );
 }
 
@@ -475,17 +503,22 @@ function ProfileContent({
 // ---------------------------------------------------------------------------
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 24,
-    gap: 24,
-  },
   centered: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 24,
-    gap: 8,
+    padding: theme.spacing.xl,
+    gap: theme.spacing.sm,
+  },
+  body: {
+    flex: 1,
+    paddingHorizontal: theme.spacing.xl,
+    marginTop: -theme.spacing.lg,
+    gap: theme.spacing.lg,
+  },
+  identityCard: {
+    alignItems: 'center',
+    gap: theme.spacing.lg,
   },
   avatarWrap: {
     alignItems: 'center',
@@ -494,91 +527,70 @@ const styles = StyleSheet.create({
     width: 96,
     height: 96,
     borderRadius: 48,
-    backgroundColor: '#e5e7eb',
+    backgroundColor: theme.color.surfaceAlt,
   },
   avatarPlaceholder: {
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarPlaceholderText: {
-    fontSize: 36,
-    fontWeight: '600',
-    color: '#374151',
+    ...theme.typography.display,
+    color: theme.color.primary,
   },
   headerBlock: {
     alignItems: 'center',
-    gap: 12,
+    gap: theme.spacing.md,
   },
   displayName: {
-    fontSize: 22,
-    fontWeight: '600',
+    ...theme.typography.title,
+    color: theme.color.textPrimary,
   },
   editor: {
-    gap: 8,
+    alignSelf: 'stretch',
+    gap: theme.spacing.sm,
+  },
+  label: {
+    ...theme.typography.meta,
+    color: theme.color.textSecondary,
   },
   input: {
     borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    borderColor: theme.color.border,
+    borderRadius: theme.radius.md,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.md,
     fontSize: 16,
-    backgroundColor: '#ffffff',
+    color: theme.color.textPrimary,
+    backgroundColor: theme.color.surfaceAlt,
   },
   inlineError: {
-    color: '#b91c1c',
+    color: theme.color.danger,
     fontSize: 14,
   },
   row: {
     flexDirection: 'row',
-    gap: 12,
+    gap: theme.spacing.md,
   },
-  statBlock: {
+  flexBtn: {
+    flexGrow: 1,
+    flexBasis: 0,
+  },
+  statCard: {
     alignItems: 'center',
-    gap: 4,
+    gap: theme.spacing.xs,
   },
   statLabel: {
-    fontSize: 14,
-    color: '#6b7280',
+    ...theme.typography.meta,
+    color: theme.color.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   statValue: {
-    fontSize: 28,
-    fontWeight: '700',
+    ...theme.typography.display,
+    color: theme.color.primary,
   },
   logoutBlock: {
     marginTop: 'auto',
-  },
-  button: {
-    backgroundColor: '#2563eb',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  buttonSecondary: {
-    backgroundColor: '#6b7280',
-  },
-  buttonDanger: {
-    backgroundColor: '#b91c1c',
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  buttonText: {
-    color: '#ffffff',
-    fontWeight: '600',
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  emptyBody: {
-    fontSize: 14,
-    color: '#6b7280',
-    textAlign: 'center',
-  },
-  errorText: {
-    color: '#b91c1c',
-    textAlign: 'center',
+    marginBottom: theme.spacing.xl,
   },
 });

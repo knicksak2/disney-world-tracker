@@ -62,10 +62,13 @@ import {
   Text,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 import type { RatingDTO } from '@dwt/shared';
 
 import { ApiError, apiRequest } from '../../api/client';
+import { theme } from '../../theme/theme';
+import { PrimaryButton, SecondaryButton } from '../../theme/components';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -240,19 +243,17 @@ export default function RatingControl({
           })}
         </View>
         <View style={styles.actionRow}>
-          <Pressable
-            accessibilityRole="button"
+          <SecondaryButton
+            label="Cancel"
             accessibilityLabel="Cancel rating selection"
             disabled={busy}
             onPress={closePicker}
-            style={styles.secondaryButton}
             testID="rating-cancel"
-          >
-            <Text style={styles.secondaryButtonText}>Cancel</Text>
-          </Pressable>
+          />
           {busy ? (
             <ActivityIndicator
               accessibilityLabel="Saving rating"
+              color={theme.color.primary}
               testID="rating-busy"
             />
           ) : null}
@@ -269,35 +270,36 @@ export default function RatingControl({
   if (rating !== null) {
     return (
       <View style={styles.container} testID="rating-control">
-        <Text style={styles.ratingValue} testID="rating-value">
-          {rating.value} / 10
-        </Text>
+        <View style={styles.ratingValueRow}>
+          <Ionicons name="star" size={20} color={theme.color.accent} />
+          <Text style={styles.ratingValue} testID="rating-value">
+            {rating.value} / 10
+          </Text>
+        </View>
         <View style={styles.actionRow}>
-          <Pressable
-            accessibilityRole="button"
+          <PrimaryButton
+            label="Change"
+            icon="create-outline"
             accessibilityLabel="Change rating"
             disabled={busy}
             onPress={openPicker}
-            style={styles.primaryButton}
             testID="rating-change"
-          >
-            <Text style={styles.primaryButtonText}>Change</Text>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
+          />
+          <SecondaryButton
+            label="Remove"
+            icon="trash-outline"
+            tone="danger"
             accessibilityLabel="Remove rating"
             disabled={busy}
             onPress={() => {
               void submitRemoval();
             }}
-            style={styles.dangerButton}
             testID="rating-remove"
-          >
-            <Text style={styles.dangerButtonText}>Remove</Text>
-          </Pressable>
+          />
           {busy ? (
             <ActivityIndicator
               accessibilityLabel="Updating rating"
+              color={theme.color.primary}
               testID="rating-busy"
             />
           ) : null}
@@ -317,16 +319,14 @@ export default function RatingControl({
       <Text style={styles.empty} testID="rating-empty">
         Not rated
       </Text>
-      <Pressable
-        accessibilityRole="button"
+      <PrimaryButton
+        label="Rate this experience"
+        icon="star-outline"
         accessibilityLabel="Rate this experience"
         disabled={busy}
         onPress={openPicker}
-        style={styles.primaryButton}
         testID="rating-open"
-      >
-        <Text style={styles.primaryButtonText}>Rate this experience</Text>
-      </Pressable>
+      />
       {errorMessage !== null ? (
         <Text style={styles.errorText} testID="rating-error">
           {errorMessage}
@@ -387,84 +387,56 @@ function messageForRemoveError(err: unknown): string {
 
 const styles = StyleSheet.create({
   container: {
-    gap: 8,
+    gap: theme.spacing.md,
   },
   pickerRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 6,
+    gap: theme.spacing.sm,
   },
   pickerButton: {
-    minWidth: 36,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 6,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#9ca3af',
-    backgroundColor: '#f3f4f6',
+    minWidth: 40,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    borderRadius: theme.radius.md,
+    borderWidth: 1,
+    borderColor: theme.color.borderStrong,
+    backgroundColor: theme.color.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
   pickerButtonSelected: {
-    backgroundColor: '#1d4ed8',
-    borderColor: '#1d4ed8',
+    backgroundColor: theme.color.primary,
+    borderColor: theme.color.primary,
   },
   pickerButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#111827',
+    ...theme.typography.subtitle,
+    color: theme.color.textPrimary,
   },
   pickerButtonTextSelected: {
-    color: '#ffffff',
+    color: theme.color.textOnPrimary,
   },
   actionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: theme.spacing.sm,
   },
-  primaryButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 6,
-    backgroundColor: '#1d4ed8',
-  },
-  primaryButtonText: {
-    color: '#ffffff',
-    fontWeight: '600',
-  },
-  secondaryButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 6,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#9ca3af',
-  },
-  secondaryButtonText: {
-    color: '#111827',
-    fontWeight: '600',
-  },
-  dangerButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 6,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#b91c1c',
-  },
-  dangerButtonText: {
-    color: '#b91c1c',
-    fontWeight: '600',
+  ratingValueRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
   },
   ratingValue: {
-    fontSize: 18,
-    fontWeight: '600',
+    ...theme.typography.title,
+    color: theme.color.textPrimary,
   },
   empty: {
-    fontSize: 14,
-    color: '#6b7280',
+    ...theme.typography.body,
+    color: theme.color.textSecondary,
     fontStyle: 'italic',
   },
   errorText: {
-    color: '#b91c1c',
+    color: theme.color.danger,
     fontSize: 13,
   },
 });

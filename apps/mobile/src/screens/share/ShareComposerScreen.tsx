@@ -49,8 +49,10 @@
  *     navigation kicks in so the user sees a confirmation even on a
  *     fast network.
  *
- * The screen is intentionally focused: only the composer goes here.
- * The Inbox UI is task 18.3 in a sibling file.
+ * Styling: uses the shared "Magical / Whimsical" theme — a gradient
+ * hero header, the friend picker as selectable `Card`s, payload-kind
+ * `Chip`s, themed inputs, and a themed Send PrimaryButton. See
+ * `theme/theme.ts` and `theme/components.tsx`.
  *
  * Validates: Requirements R9.1, R9.2, R9.3, R9.4, R9.5, R9.6, R9.7
  */
@@ -59,12 +61,12 @@ import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
-  Pressable,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
@@ -77,6 +79,16 @@ import {
 
 import { ApiError, apiRequest } from '../../api/client';
 import type { FriendsStackParamList } from '../../navigation/FriendsStack';
+import { theme } from '../../theme/theme';
+import {
+  Card,
+  Chip,
+  EmptyState,
+  GradientHeader,
+  PrimaryButton,
+  ScreenContainer,
+  SectionLabel,
+} from '../../theme/components';
 
 // ---------------------------------------------------------------------------
 // Wire shapes
@@ -351,19 +363,27 @@ export default function ShareComposerScreen({
 
   if (friendsQuery.isLoading && friendsQuery.data === undefined) {
     return (
-      <View style={styles.centered} accessibilityRole="progressbar">
-        <ActivityIndicator />
-      </View>
+      <ScreenContainer>
+        <GradientHeader title="Share" icon="share-social" />
+        <View style={styles.centered} accessibilityRole="progressbar">
+          <ActivityIndicator color={theme.color.primary} />
+        </View>
+      </ScreenContainer>
     );
   }
 
   if (friendsQuery.isError && friendsQuery.data === undefined) {
     return (
-      <View style={styles.centered}>
-        <Text style={styles.error} accessibilityRole="alert">
-          Couldn{'\u2019'}t load friends. Pull back and try again.
-        </Text>
-      </View>
+      <ScreenContainer>
+        <GradientHeader title="Share" icon="share-social" />
+        <View style={styles.centered}>
+          <EmptyState
+            icon="cloud-offline-outline"
+            title="Couldn't load friends"
+            body="Pull back and try again."
+          />
+        </View>
+      </ScreenContainer>
     );
   }
 
@@ -374,134 +394,152 @@ export default function ShareComposerScreen({
     kind === 'progress' && statsQuery.isLoading && statsQuery.data === undefined;
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.heading}>Share with friends</Text>
-
-      <Text style={styles.counter}>
-        {recipientCount}/{MAX_RECIPIENTS} selected
-      </Text>
+    <ScreenContainer>
+      <GradientHeader
+        title="Share with friends"
+        subtitle={`${recipientCount}/${MAX_RECIPIENTS} selected`}
+        icon="share-social"
+      />
 
       <FlatList
         data={friends}
         keyExtractor={(item) => item.userId}
+        contentContainerStyle={styles.listContent}
+        ListHeaderComponent={
+          <SectionLabel style={styles.pickerLabel}>Recipients</SectionLabel>
+        }
         ListEmptyComponent={
-          <Text style={styles.empty}>
-            You don{'\u2019'}t have any friends yet.
-          </Text>
+          <View style={styles.centered}>
+            <EmptyState
+              icon="people-outline"
+              title="No friends yet"
+              body="Add friends before sharing."
+            />
+          </View>
         }
         renderItem={({ item }) => {
           const isSelected = selected.has(item.userId);
           return (
-            <Pressable
-              accessibilityRole="checkbox"
-              accessibilityState={{ checked: isSelected }}
-              accessibilityLabel={`Select ${item.displayName}`}
+            <Card
               onPress={() => toggleRecipient(item.userId)}
-              style={[
-                styles.friendRow,
-                isSelected ? styles.friendRowSelected : null,
-              ]}
+              {...(isSelected ? { accentColor: theme.color.primary } : {})}
+              style={[styles.friendRow, isSelected && styles.friendRowSelected]}
             >
-              <Text style={styles.friendName}>{item.displayName}</Text>
-              {isSelected ? <Text style={styles.tick}>{'\u2713'}</Text> : null}
-            </Pressable>
+              <View style={styles.friendRowInner}>
+                <Text style={styles.friendName}>{item.displayName}</Text>
+                <Ionicons
+                  name={isSelected ? 'checkmark-circle' : 'ellipse-outline'}
+                  size={22}
+                  color={
+                    isSelected ? theme.color.primary : theme.color.borderStrong
+                  }
+                />
+              </View>
+            </Card>
           );
         }}
-        style={styles.friendList}
+        ListFooterComponent={
+          <View style={styles.footer}>
+            <SectionLabel>What to share</SectionLabel>
+            <View style={styles.kindRow}>
+              <Chip
+                label="Experience"
+                active={kind === 'experience'}
+                onPress={() => {
+                  setKind('experience');
+                  setSubmissionError(null);
+                }}
+              />
+              <Chip
+                label="Progress"
+                active={kind === 'progress'}
+                onPress={() => {
+                  setKind('progress');
+                  setSubmissionError(null);
+                }}
+              />
+            </View>
+
+            {kind === 'experience' ? (
+              <View style={styles.fieldGroup}>
+                <Text style={styles.label}>Experience id</Text>
+                <TextInput
+                  value={experienceId}
+                  onChangeText={setExperienceId}
+                  placeholder="experience-uuid"
+                  placeholderTextColor={theme.color.textSecondary}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  style={styles.input}
+                  accessibilityLabel="Experience id"
+                />
+
+                <Text style={styles.label}>Rating (optional, 1-10)</Text>
+                <TextInput
+                  value={ratingText}
+                  onChangeText={setRatingText}
+                  keyboardType="number-pad"
+                  placeholder="e.g. 8"
+                  placeholderTextColor={theme.color.textSecondary}
+                  style={styles.input}
+                  accessibilityLabel="Rating"
+                />
+
+                <Text style={styles.label}>Note (optional)</Text>
+                <TextInput
+                  value={noteText}
+                  onChangeText={setNoteText}
+                  placeholder="Say something nice"
+                  placeholderTextColor={theme.color.textSecondary}
+                  multiline
+                  maxLength={MAX_NOTE_LENGTH}
+                  style={[styles.input, styles.noteInput]}
+                  accessibilityLabel="Note"
+                />
+                <Text style={styles.helper}>
+                  {noteText.trim().length}/{MAX_NOTE_LENGTH}
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.fieldGroup}>
+                <Text style={styles.helper}>
+                  {sendingProgressBlocked
+                    ? 'Loading your progress\u2026'
+                    : 'Your current progress will be shared as a snapshot.'}
+                </Text>
+              </View>
+            )}
+
+            {submissionError !== null ? (
+              <Text style={styles.error} accessibilityRole="alert">
+                {submissionError}
+              </Text>
+            ) : null}
+
+            {justSent ? (
+              <View style={styles.successRow}>
+                <Ionicons
+                  name="checkmark-circle"
+                  size={18}
+                  color={theme.color.success}
+                />
+                <Text style={styles.success}>Sent</Text>
+              </View>
+            ) : null}
+
+            <PrimaryButton
+              label="Send"
+              icon="send"
+              loading={sendMutation.isPending}
+              disabled={sendDisabled}
+              onPress={handleSend}
+              accessibilityLabel="Send share"
+              style={styles.sendButton}
+            />
+          </View>
+        }
       />
-
-      <View style={styles.kindRow}>
-        <KindButton
-          label="Experience"
-          active={kind === 'experience'}
-          onPress={() => {
-            setKind('experience');
-            setSubmissionError(null);
-          }}
-        />
-        <KindButton
-          label="Progress"
-          active={kind === 'progress'}
-          onPress={() => {
-            setKind('progress');
-            setSubmissionError(null);
-          }}
-        />
-      </View>
-
-      {kind === 'experience' ? (
-        <View style={styles.fieldGroup}>
-          <Text style={styles.label}>Experience id</Text>
-          <TextInput
-            value={experienceId}
-            onChangeText={setExperienceId}
-            placeholder="experience-uuid"
-            autoCapitalize="none"
-            autoCorrect={false}
-            style={styles.input}
-            accessibilityLabel="Experience id"
-          />
-
-          <Text style={styles.label}>Rating (optional, 1-10)</Text>
-          <TextInput
-            value={ratingText}
-            onChangeText={setRatingText}
-            keyboardType="number-pad"
-            placeholder="e.g. 8"
-            style={styles.input}
-            accessibilityLabel="Rating"
-          />
-
-          <Text style={styles.label}>Note (optional)</Text>
-          <TextInput
-            value={noteText}
-            onChangeText={setNoteText}
-            placeholder="Say something nice"
-            multiline
-            maxLength={MAX_NOTE_LENGTH}
-            style={[styles.input, styles.noteInput]}
-            accessibilityLabel="Note"
-          />
-          <Text style={styles.helper}>
-            {noteText.trim().length}/{MAX_NOTE_LENGTH}
-          </Text>
-        </View>
-      ) : (
-        <View style={styles.fieldGroup}>
-          <Text style={styles.helper}>
-            {sendingProgressBlocked
-              ? 'Loading your progress\u2026'
-              : 'Your current progress will be shared as a snapshot.'}
-          </Text>
-        </View>
-      )}
-
-      {submissionError !== null ? (
-        <Text style={styles.error} accessibilityRole="alert">
-          {submissionError}
-        </Text>
-      ) : null}
-
-      {justSent ? <Text style={styles.success}>Sent</Text> : null}
-
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Send share"
-        accessibilityState={{ disabled: sendDisabled }}
-        disabled={sendDisabled}
-        onPress={handleSend}
-        style={[
-          styles.sendButton,
-          sendDisabled ? styles.sendButtonDisabled : null,
-        ]}
-      >
-        {sendMutation.isPending ? (
-          <ActivityIndicator />
-        ) : (
-          <Text style={styles.sendButtonText}>Send</Text>
-        )}
-      </Pressable>
-    </View>
+    </ScreenContainer>
   );
 }
 
@@ -575,36 +613,6 @@ function mapServerError(err: ApiError): string {
   return ERROR_GENERIC;
 }
 
-// ---------------------------------------------------------------------------
-// Subcomponents
-// ---------------------------------------------------------------------------
-
-interface KindButtonProps {
-  readonly label: string;
-  readonly active: boolean;
-  readonly onPress: () => void;
-}
-
-function KindButton({ label, active, onPress }: KindButtonProps): JSX.Element {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ selected: active }}
-      onPress={onPress}
-      style={[styles.kindButton, active ? styles.kindButtonActive : null]}
-    >
-      <Text
-        style={[
-          styles.kindButtonText,
-          active ? styles.kindButtonTextActive : null,
-        ]}
-      >
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
-
 // `useMemo` is intentionally not used for the friends list above; the
 // data is already a stable reference returned by react-query, and the
 // `selected` set is the only piece of derived state the UI consumes.
@@ -614,119 +622,83 @@ function KindButton({ label, active, onPress }: KindButtonProps): JSX.Element {
 // ---------------------------------------------------------------------------
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 16,
-    gap: 12,
-  },
   centered: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    padding: theme.spacing.xl,
   },
-  heading: {
-    fontSize: 20,
-    fontWeight: '600',
+  listContent: {
+    paddingHorizontal: theme.spacing.lg,
+    paddingTop: theme.spacing.md,
+    paddingBottom: theme.spacing.xxl,
   },
-  counter: {
-    color: '#444',
-  },
-  friendList: {
-    flexGrow: 0,
-    maxHeight: 240,
+  pickerLabel: {
+    marginBottom: theme.spacing.sm,
   },
   friendRow: {
+    marginBottom: theme.spacing.sm,
+    padding: theme.spacing.md,
+  },
+  friendRowSelected: {
+    backgroundColor: theme.color.surfaceAlt,
+  },
+  friendRowInner: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 6,
-    backgroundColor: '#f6f6f6',
-    marginBottom: 4,
-  },
-  friendRowSelected: {
-    backgroundColor: '#dbeafe',
   },
   friendName: {
-    fontSize: 16,
+    ...theme.typography.subtitle,
+    color: theme.color.textPrimary,
+    flexShrink: 1,
   },
-  tick: {
-    fontSize: 18,
-    color: '#1d4ed8',
-  },
-  empty: {
-    color: '#666',
-    fontStyle: 'italic',
-    paddingVertical: 8,
+  footer: {
+    marginTop: theme.spacing.lg,
+    gap: theme.spacing.md,
   },
   kindRow: {
     flexDirection: 'row',
-    gap: 8,
-  },
-  kindButton: {
-    flex: 1,
-    paddingVertical: 10,
-    alignItems: 'center',
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#cbd5e1',
-    backgroundColor: '#fff',
-  },
-  kindButtonActive: {
-    backgroundColor: '#1d4ed8',
-    borderColor: '#1d4ed8',
-  },
-  kindButtonText: {
-    color: '#1d4ed8',
-    fontWeight: '600',
-  },
-  kindButtonTextActive: {
-    color: '#fff',
   },
   fieldGroup: {
-    gap: 6,
+    gap: theme.spacing.sm,
   },
   label: {
-    fontSize: 14,
-    color: '#333',
+    ...theme.typography.meta,
+    color: theme.color.textSecondary,
   },
   input: {
     borderWidth: 1,
-    borderColor: '#cbd5e1',
-    borderRadius: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    backgroundColor: '#fff',
+    borderColor: theme.color.border,
+    borderRadius: theme.radius.md,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.md,
+    fontSize: 16,
+    color: theme.color.textPrimary,
+    backgroundColor: theme.color.surfaceAlt,
   },
   noteInput: {
     minHeight: 80,
     textAlignVertical: 'top',
   },
   helper: {
-    color: '#666',
-    fontSize: 12,
+    ...theme.typography.meta,
+    color: theme.color.textSecondary,
   },
   error: {
-    color: '#b00020',
+    color: theme.color.danger,
+    fontSize: 14,
+  },
+  successRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.xs,
   },
   success: {
-    color: '#1b5e20',
-    fontWeight: '600',
+    color: theme.color.success,
+    ...theme.typography.subtitle,
   },
   sendButton: {
-    backgroundColor: '#1d4ed8',
-    paddingVertical: 12,
-    borderRadius: 6,
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  sendButtonDisabled: {
-    backgroundColor: '#94a3b8',
-  },
-  sendButtonText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 16,
+    marginTop: theme.spacing.sm,
   },
 });

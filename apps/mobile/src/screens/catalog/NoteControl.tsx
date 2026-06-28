@@ -35,19 +35,14 @@
 // of the detail screen read consistently.
 
 import React, { useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { useMutation } from '@tanstack/react-query';
 
 import { type NoteDTO, noteInputSchema } from '@dwt/shared';
 
 import { ApiError, apiRequest } from '../../api/client';
+import { theme } from '../../theme/theme';
+import { PrimaryButton, SecondaryButton } from '../../theme/components';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -273,32 +268,21 @@ export default function NoteControl({
           </Text>
         ) : null}
         <View style={styles.buttonRow}>
-          <Pressable
-            accessibilityRole="button"
+          <PrimaryButton
+            label="Save"
+            loading={saveMutation.isPending}
             onPress={handleSave}
             disabled={isMutating}
-            style={[styles.button, isMutating && styles.buttonDisabled]}
             testID="note-save"
-          >
-            {saveMutation.isPending ? (
-              <ActivityIndicator color="#ffffff" />
-            ) : (
-              <Text style={styles.buttonText}>Save</Text>
-            )}
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
+            style={styles.flexBtn}
+          />
+          <SecondaryButton
+            label="Cancel"
             onPress={handleCancel}
             disabled={isMutating}
-            style={[
-              styles.button,
-              styles.buttonSecondary,
-              isMutating && styles.buttonDisabled,
-            ]}
             testID="note-cancel"
-          >
-            <Text style={styles.buttonText}>Cancel</Text>
-          </Pressable>
+            style={styles.flexBtn}
+          />
         </View>
       </View>
     );
@@ -324,15 +308,13 @@ export default function NoteControl({
           </Text>
         ) : null}
         <View style={styles.buttonRow}>
-          <Pressable
-            accessibilityRole="button"
+          <PrimaryButton
+            label="Add note"
+            icon="add-circle-outline"
             onPress={handleStartAdd}
             disabled={isMutating}
-            style={[styles.button, isMutating && styles.buttonDisabled]}
             testID="note-add"
-          >
-            <Text style={styles.buttonText}>Add note</Text>
-          </Pressable>
+          />
         </View>
       </View>
     );
@@ -353,32 +335,23 @@ export default function NoteControl({
         </Text>
       ) : null}
       <View style={styles.buttonRow}>
-        <Pressable
-          accessibilityRole="button"
+        <SecondaryButton
+          label="Edit"
+          icon="create-outline"
           onPress={handleStartEdit}
           disabled={isMutating}
-          style={[styles.button, isMutating && styles.buttonDisabled]}
           testID="note-edit"
-        >
-          <Text style={styles.buttonText}>Edit</Text>
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
+          style={styles.flexBtn}
+        />
+        <SecondaryButton
+          label="Delete"
+          icon="trash-outline"
+          tone="danger"
           onPress={handleDelete}
           disabled={isMutating}
-          style={[
-            styles.button,
-            styles.buttonDanger,
-            isMutating && styles.buttonDisabled,
-          ]}
           testID="note-delete"
-        >
-          {deleteMutation.isPending ? (
-            <ActivityIndicator color="#ffffff" />
-          ) : (
-            <Text style={styles.buttonText}>Delete</Text>
-          )}
-        </Pressable>
+          style={styles.flexBtn}
+        />
       </View>
     </View>
   );
@@ -390,30 +363,31 @@ export default function NoteControl({
 
 const styles = StyleSheet.create({
   viewer: {
-    gap: 8,
+    gap: theme.spacing.md,
   },
   editor: {
-    gap: 8,
+    gap: theme.spacing.sm,
   },
   body: {
-    fontSize: 14,
-    color: '#111827',
+    ...theme.typography.body,
+    color: theme.color.textPrimary,
     lineHeight: 20,
   },
   empty: {
-    fontSize: 14,
-    color: '#6b7280',
+    ...theme.typography.body,
+    color: theme.color.textSecondary,
     fontStyle: 'italic',
   },
   input: {
     borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    borderColor: theme.color.border,
+    borderRadius: theme.radius.md,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.md,
     fontSize: 14,
     minHeight: 96,
-    backgroundColor: '#ffffff',
+    color: theme.color.textPrimary,
+    backgroundColor: theme.color.surfaceAlt,
     textAlignVertical: 'top',
   },
   counterRow: {
@@ -421,37 +395,19 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   counter: {
-    fontSize: 12,
-    color: '#6b7280',
+    ...theme.typography.meta,
+    color: theme.color.textSecondary,
   },
   buttonRow: {
     flexDirection: 'row',
-    gap: 12,
+    gap: theme.spacing.md,
   },
-  button: {
-    backgroundColor: '#2563eb',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: 96,
-  },
-  buttonSecondary: {
-    backgroundColor: '#6b7280',
-  },
-  buttonDanger: {
-    backgroundColor: '#b91c1c',
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  buttonText: {
-    color: '#ffffff',
-    fontWeight: '600',
+  flexBtn: {
+    flexGrow: 1,
+    flexBasis: 0,
   },
   errorText: {
-    color: '#b91c1c',
+    color: theme.color.danger,
     fontSize: 14,
   },
 });

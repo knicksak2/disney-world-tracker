@@ -15,12 +15,17 @@
 //     via `friendsErrorMessage`.
 //   - A header button navigates to `FriendsSearch` so the user can find
 //     people to add.
+//
+// Styling: uses the shared "Magical / Whimsical" theme — a gradient hero
+// header with Inbox / Share / Find-friends actions, section labels, rows as
+// `Card`s, and themed PrimaryButton / SecondaryButton controls. Empty
+// sections and the no-friends state use calm muted styling; only mutation
+// failures use danger. See `theme/theme.ts` and `theme/components.tsx`.
 
 import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
-  Pressable,
   StyleSheet,
   Text,
   View,
@@ -34,6 +39,16 @@ import {
 
 import { ApiError, apiRequest } from '../../api/client';
 import type { FriendsStackParamList } from '../../navigation/FriendsStack';
+import { theme } from '../../theme/theme';
+import {
+  Badge,
+  Card,
+  EmptyState,
+  GradientHeader,
+  PrimaryButton,
+  ScreenContainer,
+  SecondaryButton,
+} from '../../theme/components';
 import { friendsErrorMessage } from './errorMessages';
 
 // ---------------------------------------------------------------------------
@@ -186,30 +201,61 @@ export default function FriendsListScreen({ navigation }: Props): JSX.Element {
   // Render branches
   // -------------------------------------------------------------------------
 
+  const headerActions = (
+    <View style={styles.headerActions}>
+      <SecondaryButton
+        label="Inbox"
+        icon="mail-outline"
+        onPress={() => {
+          navigation.navigate('Inbox');
+        }}
+        testID="friends-inbox"
+        style={styles.headerBtn}
+      />
+      <SecondaryButton
+        label="Share"
+        icon="share-social-outline"
+        onPress={() => {
+          navigation.navigate('ShareComposer');
+        }}
+        testID="friends-share"
+        style={styles.headerBtn}
+      />
+    </View>
+  );
+
   if (friendsQuery.isLoading && friendsQuery.data === undefined) {
     return (
-      <View style={styles.center} testID="friends-loading">
-        <ActivityIndicator />
-      </View>
+      <ScreenContainer>
+        <GradientHeader title="Friends" icon="people" />
+        <View style={styles.center} testID="friends-loading">
+          <ActivityIndicator color={theme.color.primary} />
+        </View>
+      </ScreenContainer>
     );
   }
 
   if (friendsQuery.isError && friendsQuery.data === undefined) {
     return (
-      <View style={styles.center}>
-        <Text style={styles.errorTitle}>We couldn&rsquo;t load your friends.</Text>
-        <Text style={styles.errorBody}>{friendsErrorMessage(friendsQuery.error)}</Text>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => {
-            void friendsQuery.refetch();
-          }}
-          style={styles.button}
-          testID="friends-retry"
-        >
-          <Text style={styles.buttonText}>Retry</Text>
-        </Pressable>
-      </View>
+      <ScreenContainer>
+        <GradientHeader title="Friends" icon="people" />
+        <View style={styles.center}>
+          <EmptyState
+            icon="cloud-offline-outline"
+            title="We couldn't load your friends"
+            body={friendsErrorMessage(friendsQuery.error)}
+          />
+          <PrimaryButton
+            label="Retry"
+            icon="refresh-outline"
+            onPress={() => {
+              void friendsQuery.refetch();
+            }}
+            testID="friends-retry"
+            style={styles.retryBtn}
+          />
+        </View>
+      </ScreenContainer>
     );
   }
 
@@ -226,49 +272,32 @@ export default function FriendsListScreen({ navigation }: Props): JSX.Element {
     data.outgoingRequests.length;
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Friends</Text>
-        <View style={styles.headerActions}>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => {
-              navigation.navigate('Inbox');
-            }}
-            style={[styles.button, styles.buttonSecondary]}
-            testID="friends-inbox"
-          >
-            <Text style={styles.buttonText}>Inbox</Text>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => {
-              navigation.navigate('ShareComposer');
-            }}
-            style={[styles.button, styles.buttonSecondary]}
-            testID="friends-share"
-          >
-            <Text style={styles.buttonText}>Share</Text>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
+    <ScreenContainer>
+      <GradientHeader
+        title="Friends"
+        subtitle="Share the magic with your crew."
+        icon="people"
+        right={
+          <PrimaryButton
+            label="Find"
+            icon="person-add-outline"
             onPress={() => {
               navigation.navigate('FriendsSearch');
             }}
-            style={styles.button}
             testID="friends-find"
-          >
-            <Text style={styles.buttonText}>Find friends</Text>
-          </Pressable>
-        </View>
-      </View>
+          />
+        }
+      />
+
+      {headerActions}
 
       {totalContent === 0 ? (
         <View style={styles.center} testID="friends-empty">
-          <Text style={styles.emptyTitle}>No friends yet</Text>
-          <Text style={styles.emptyBody}>
-            Tap &ldquo;Find friends&rdquo; to search for people you know.
-          </Text>
+          <EmptyState
+            icon="people-outline"
+            title="No friends yet"
+            body="Tap &ldquo;Find&rdquo; to search for people you know."
+          />
         </View>
       ) : (
         <FlatList
@@ -323,7 +352,7 @@ export default function FriendsListScreen({ navigation }: Props): JSX.Element {
           contentContainerStyle={styles.listContent}
         />
       )}
-    </View>
+    </ScreenContainer>
   );
 }
 
@@ -426,39 +455,30 @@ function IncomingRequestRow({
   onDecline,
 }: IncomingRequestRowProps): JSX.Element {
   return (
-    <View
-      style={styles.row}
-      testID={`friends-incoming-${request.id}`}
-    >
+    <Card style={styles.row} testID={`friends-incoming-${request.id}`}>
       <View style={styles.rowMain}>
         <Text style={styles.rowName}>{request.otherDisplayName}</Text>
       </View>
       <View style={styles.rowActions}>
-        <Pressable
-          accessibilityRole="button"
+        <PrimaryButton
+          label="Accept"
+          icon="checkmark-outline"
           onPress={onAccept}
           disabled={busy}
-          style={[styles.button, busy && styles.buttonDisabled]}
           testID={`friends-accept-${request.id}`}
-        >
-          <Text style={styles.buttonText}>Accept</Text>
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
+          style={styles.flexBtn}
+        />
+        <SecondaryButton
+          label="Decline"
+          icon="close-outline"
           onPress={onDecline}
           disabled={busy}
-          style={[
-            styles.button,
-            styles.buttonSecondary,
-            busy && styles.buttonDisabled,
-          ]}
           testID={`friends-decline-${request.id}`}
-        >
-          <Text style={styles.buttonText}>Decline</Text>
-        </Pressable>
+          style={styles.flexBtn}
+        />
       </View>
       {error !== null ? <Text style={styles.rowError}>{error}</Text> : null}
-    </View>
+    </Card>
   );
 }
 
@@ -476,27 +496,24 @@ function FriendRow({
   onRemove,
 }: FriendRowProps): JSX.Element {
   return (
-    <View style={styles.row} testID={`friends-friend-${friend.userId}`}>
+    <Card
+      accentColor={theme.color.primary}
+      style={styles.row}
+      testID={`friends-friend-${friend.userId}`}
+    >
       <View style={styles.rowMain}>
         <Text style={styles.rowName}>{friend.displayName}</Text>
-      </View>
-      <View style={styles.rowActions}>
-        <Pressable
-          accessibilityRole="button"
+        <SecondaryButton
+          label={busy ? 'Removing\u2026' : 'Remove'}
+          icon="person-remove-outline"
+          tone="danger"
           onPress={onRemove}
           disabled={busy}
-          style={[
-            styles.button,
-            styles.buttonDanger,
-            busy && styles.buttonDisabled,
-          ]}
           testID={`friends-remove-${friend.userId}`}
-        >
-          <Text style={styles.buttonText}>{busy ? 'Removing\u2026' : 'Remove'}</Text>
-        </Pressable>
+        />
       </View>
       {error !== null ? <Text style={styles.rowError}>{error}</Text> : null}
-    </View>
+    </Card>
   );
 }
 
@@ -506,12 +523,12 @@ function OutgoingRequestRow({
   readonly request: FriendRequestListEntry;
 }): JSX.Element {
   return (
-    <View style={styles.row} testID={`friends-outgoing-${request.id}`}>
+    <Card style={styles.row} testID={`friends-outgoing-${request.id}`}>
       <View style={styles.rowMain}>
         <Text style={styles.rowName}>{request.otherDisplayName}</Text>
-        <Text style={styles.rowMeta}>Pending</Text>
+        <Badge label="Pending" color={theme.color.warning} icon="time-outline" />
       </View>
-    </View>
+    </Card>
   );
 }
 
@@ -520,128 +537,76 @@ function OutgoingRequestRow({
 // ---------------------------------------------------------------------------
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#ffffff',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#dddddd',
-  },
   headerActions: {
     flexDirection: 'row',
-    gap: 8,
+    gap: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.lg,
+    paddingTop: theme.spacing.md,
   },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#111111',
+  headerBtn: {
+    flexGrow: 1,
+    flexBasis: 0,
   },
   center: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 24,
-    gap: 8,
+    padding: theme.spacing.xl,
+    gap: theme.spacing.md,
   },
-  errorTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#222222',
-    textAlign: 'center',
-  },
-  errorBody: {
-    fontSize: 14,
-    color: '#555555',
-    textAlign: 'center',
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#222222',
-    textAlign: 'center',
-  },
-  emptyBody: {
-    fontSize: 14,
-    color: '#555555',
-    textAlign: 'center',
+  retryBtn: {
+    alignSelf: 'center',
+    minWidth: 160,
   },
   listContent: {
-    paddingBottom: 24,
+    paddingHorizontal: theme.spacing.lg,
+    paddingTop: theme.spacing.md,
+    paddingBottom: theme.spacing.xxl,
   },
   sectionHeader: {
-    backgroundColor: '#f4f4f4',
-    paddingHorizontal: 16,
-    paddingVertical: 6,
+    paddingVertical: theme.spacing.sm,
+    marginTop: theme.spacing.sm,
   },
   sectionHeaderText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#444444',
+    ...theme.typography.meta,
+    color: theme.color.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   sectionEmpty: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.xs,
   },
   sectionEmptyText: {
-    fontSize: 14,
-    color: '#888888',
+    ...theme.typography.body,
+    color: theme.color.textSecondary,
     fontStyle: 'italic',
   },
   row: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#eeeeee',
-    gap: 8,
+    marginBottom: theme.spacing.md,
+    gap: theme.spacing.md,
   },
   rowMain: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: theme.spacing.md,
   },
   rowName: {
-    fontSize: 16,
-    color: '#111111',
+    ...theme.typography.subtitle,
+    color: theme.color.textPrimary,
     flexShrink: 1,
-  },
-  rowMeta: {
-    fontSize: 12,
-    color: '#666666',
   },
   rowActions: {
     flexDirection: 'row',
-    gap: 8,
+    gap: theme.spacing.sm,
+  },
+  flexBtn: {
+    flexGrow: 1,
+    flexBasis: 0,
   },
   rowError: {
-    fontSize: 13,
-    color: '#b91c1c',
-  },
-  button: {
-    backgroundColor: '#2563eb',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  buttonSecondary: {
-    backgroundColor: '#6b7280',
-  },
-  buttonDanger: {
-    backgroundColor: '#b91c1c',
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  buttonText: {
-    color: '#ffffff',
-    fontWeight: '600',
-    fontSize: 14,
+    ...theme.typography.meta,
+    color: theme.color.danger,
   },
 });

@@ -21,17 +21,22 @@
  *
  *   - When the response carries an empty `entries` array — meaning no
  *     active Experiences cleared the `count >= 3` threshold — the
- *     screen replaces the list with a single non-interactive line
- *     ("No leaderboard yet — keep exploring!"). The empty-state body
- *     is intentionally NOT wrapped in `Pressable`, so tap gestures
- *     within the section have nowhere to go (R11.12).
+ *     screen replaces the list with a single non-interactive
+ *     `EmptyState` ("No leaderboard yet — keep exploring!"). The
+ *     empty-state body is intentionally NOT wrapped in `Pressable`, so
+ *     tap gestures within the section have nowhere to go (R11.12).
  *
  * Tap-to-detail (R11.6):
  *
- *   - Each row is a `Pressable` that dispatches a cross-stack
+ *   - Each row is a `Card` (Pressable) that dispatches a cross-stack
  *     navigation into the Catalog tab's `ExperienceDetail` screen,
  *     passing the leaderboard entry's `experienceId`. The detail
  *     screen owns its own loading and error handling.
+ *
+ * Styling: uses the shared "Magical / Whimsical" theme — a gradient
+ * hero header, leaderboard rows as `Card`s with a park-colored left
+ * accent and a category `Badge`. See `theme/theme.ts` and
+ * `theme/components.tsx`.
  *
  * Validates: Requirements R11.1, R11.2, R11.3, R11.4, R11.5, R11.6,
  *            R11.7, R11.8, R11.9, R11.10, R11.11, R11.12
@@ -41,11 +46,11 @@ import React from 'react';
 import {
   ActivityIndicator,
   FlatList,
-  Pressable,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 
@@ -53,6 +58,14 @@ import type { ExperienceCategory, LeaderboardEntryDTO } from '@dwt/shared';
 
 import { ApiError, apiRequest } from '../../api/client';
 import type { MainTabParamList } from '../../navigation/RootNavigator';
+import { theme } from '../../theme/theme';
+import {
+  Badge,
+  Card,
+  EmptyState,
+  GradientHeader,
+  ScreenContainer,
+} from '../../theme/components';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -107,33 +120,39 @@ export default function HomeScreen({ navigation }: Props): JSX.Element {
   const showList = !showLoading && !query.isError && entries.length > 0;
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.sectionTitle} accessibilityRole="header">
-        Highest-Rated Experiences
-      </Text>
+    <ScreenContainer>
+      <GradientHeader
+        title="Highest-Rated Experiences"
+        subtitle="The most magical, ranked by the community."
+        icon="trophy"
+      />
 
       {showLoading ? (
         <View style={styles.center} testID="home-leaderboard-loading">
-          <ActivityIndicator />
+          <ActivityIndicator color={theme.color.primary} />
         </View>
       ) : null}
 
       {query.isError && query.data === undefined ? (
         <View style={styles.center} testID="home-leaderboard-error">
-          <Text style={styles.errorText}>
-            Couldn&apos;t load the leaderboard. Pull to refresh later.
-          </Text>
+          <EmptyState
+            icon="cloud-offline-outline"
+            title="Couldn't load the leaderboard"
+            body="Pull to refresh later."
+          />
         </View>
       ) : null}
 
       {showEmpty ? (
-        // R11.11 + R11.12: render a plain Text node — no Pressable, no
-        // onPress wiring — so tap gestures within the section cannot
-        // resolve to a navigation action.
+        // R11.11 + R11.12: render a plain (non-interactive) EmptyState —
+        // no Pressable, no onPress wiring — so tap gestures within the
+        // section cannot resolve to a navigation action.
         <View style={styles.center} testID="home-leaderboard-empty">
-          <Text style={styles.emptyText}>
-            No leaderboard yet — keep exploring!
-          </Text>
+          <EmptyState
+            icon="sparkles-outline"
+            title="No leaderboard yet — keep exploring!"
+            body="Rate experiences to help the magic rise to the top."
+          />
         </View>
       ) : null}
 
@@ -142,8 +161,9 @@ export default function HomeScreen({ navigation }: Props): JSX.Element {
           data={entries as LeaderboardEntryDTO[]}
           keyExtractor={(item) => item.experienceId}
           contentContainerStyle={styles.listContent}
-          renderItem={({ item }) => (
+          renderItem={({ item, index }) => (
             <LeaderboardRow
+              rank={index + 1}
               entry={item}
               onPress={() => {
                 // R11.6: cross-stack navigation into the Catalog tab's
@@ -159,7 +179,7 @@ export default function HomeScreen({ navigation }: Props): JSX.Element {
           )}
         />
       ) : null}
-    </View>
+    </ScreenContainer>
   );
 }
 
@@ -168,35 +188,57 @@ export default function HomeScreen({ navigation }: Props): JSX.Element {
 // ---------------------------------------------------------------------------
 
 interface LeaderboardRowProps {
+  readonly rank: number;
   readonly entry: LeaderboardEntryDTO;
   readonly onPress: () => void;
 }
 
-function LeaderboardRow({ entry, onPress }: LeaderboardRowProps): JSX.Element {
+function LeaderboardRow({ rank, entry, onPress }: LeaderboardRowProps): JSX.Element {
   // R11.5: name, Park, Experience_Category, Aggregate_Rating to one
   // decimal place, count of contributing Ratings.
   const meanLabel = entry.value.toFixed(1);
   const countLabel = `${entry.count} ${entry.count === 1 ? 'rating' : 'ratings'}`;
+  const visual = theme.categoryVisual[entry.category];
   return (
-    <Pressable
+    <Card
       onPress={onPress}
-      style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-      accessibilityRole="button"
-      accessibilityLabel={`${entry.name}, ${entry.park}, ${formatCategory(
-        entry.category,
-      )}, rated ${meanLabel} from ${countLabel}`}
+      accentColor={theme.parkAccent[entry.park]}
+      style={styles.row}
       testID={`home-leaderboard-row-${entry.experienceId}`}
     >
-      <Text style={styles.rowName} numberOfLines={1}>
-        {entry.name}
-      </Text>
-      <Text style={styles.rowMeta} numberOfLines={1}>
-        {entry.park} • {formatCategory(entry.category)}
-      </Text>
-      <Text style={styles.rowStats}>
-        {meanLabel} / 10 ({countLabel})
-      </Text>
-    </Pressable>
+      <View
+        style={styles.rowInner}
+        accessibilityLabel={`${entry.name}, ${entry.park}, ${formatCategory(
+          entry.category,
+        )}, rated ${meanLabel} from ${countLabel}`}
+      >
+        <View style={styles.rankBadge}>
+          <Text style={styles.rankText}>{rank}</Text>
+        </View>
+        <View style={styles.rowText}>
+          <Text style={styles.rowName} numberOfLines={1}>
+            {entry.name}
+          </Text>
+          <Text style={styles.rowMeta} numberOfLines={1}>
+            {entry.park}
+          </Text>
+          <View style={styles.rowBadges}>
+            <Badge
+              label={visual.label}
+              color={visual.tint}
+              icon={visual.glyph as keyof typeof Ionicons.glyphMap}
+            />
+          </View>
+        </View>
+        <View style={styles.rowStatsWrap}>
+          <View style={styles.rowStatsValue}>
+            <Ionicons name="star" size={16} color={theme.color.accent} />
+            <Text style={styles.rowStatsNumber}>{meanLabel}</Text>
+          </View>
+          <Text style={styles.rowStatsCount}>{countLabel}</Text>
+        </View>
+      </View>
+    </Card>
   );
 }
 
@@ -218,60 +260,71 @@ function formatCategory(value: ExperienceCategory): string {
 // ---------------------------------------------------------------------------
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#ffffff',
-    paddingTop: 16,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#111111',
-    paddingHorizontal: 16,
-    paddingBottom: 8,
-  },
   center: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 24,
-  },
-  emptyText: {
-    fontSize: 15,
-    color: '#555555',
-    textAlign: 'center',
-  },
-  errorText: {
-    fontSize: 14,
-    color: '#b91c1c',
-    textAlign: 'center',
+    padding: theme.spacing.xl,
   },
   listContent: {
-    paddingBottom: 24,
+    paddingHorizontal: theme.spacing.lg,
+    paddingTop: theme.spacing.lg,
+    paddingBottom: theme.spacing.xxl,
   },
   row: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#eeeeee',
+    marginBottom: theme.spacing.md,
+    padding: theme.spacing.md,
   },
-  rowPressed: {
-    backgroundColor: '#f7f7f7',
+  rowInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  rankBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: theme.color.surfaceAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: theme.spacing.md,
+  },
+  rankText: {
+    ...theme.typography.subtitle,
+    color: theme.color.primary,
+  },
+  rowText: {
+    flex: 1,
+    marginRight: theme.spacing.md,
+    gap: theme.spacing.xs,
   },
   rowName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111111',
-    marginBottom: 2,
+    ...theme.typography.subtitle,
+    color: theme.color.textPrimary,
   },
   rowMeta: {
-    fontSize: 12,
-    color: '#666666',
-    marginBottom: 2,
+    ...theme.typography.meta,
+    color: theme.color.textSecondary,
   },
-  rowStats: {
-    fontSize: 13,
-    color: '#222222',
-    fontWeight: '600',
+  rowBadges: {
+    flexDirection: 'row',
+    alignSelf: 'flex-start',
+    marginTop: theme.spacing.xs,
+  },
+  rowStatsWrap: {
+    alignItems: 'flex-end',
+    gap: 2,
+  },
+  rowStatsValue: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.xs,
+  },
+  rowStatsNumber: {
+    ...theme.typography.heading,
+    color: theme.color.textPrimary,
+  },
+  rowStatsCount: {
+    ...theme.typography.meta,
+    color: theme.color.textSecondary,
   },
 });

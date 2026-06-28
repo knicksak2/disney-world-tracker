@@ -23,7 +23,7 @@
  *     the network on tab focus.
  *
  *   - **Stale-cache banner (R1.13).** When the response carries
- *     `staleCache: true`, a small yellow banner is rendered above the
+ *     `staleCache: true`, a small warning banner is rendered above the
  *     list; the data is still useful, the upstream sync just couldn't
  *     refresh it. The banner does not auto-retry; the cache will
  *     refresh on the next scheduled sync (or via React Query's normal
@@ -47,13 +47,17 @@
  *     `ExperienceDetail` in the parent stack with the row's stable
  *     internal id; task 16.3 owns that screen's body.
  *
+ * Styling: uses the shared "Magical / Whimsical" theme — a gradient hero
+ * header with the search field beneath it, themed filter `Chip`s,
+ * experience rows as `Card`s with a park-colored left accent and a
+ * category `Badge`. See `theme/theme.ts` and `theme/components.tsx`.
+ *
  * Validates: Requirements 1.13, 1.17, 1.18, 1.19, 1.22, 1.24
  */
 
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Pressable,
   ScrollView,
   SectionList,
   StyleSheet,
@@ -61,6 +65,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
@@ -74,6 +79,15 @@ import {
 
 import { ApiError, apiRequest } from '../../api/client';
 import type { CatalogStackParamList } from '../../navigation/CatalogStack';
+import { theme } from '../../theme/theme';
+import {
+  Badge,
+  Card,
+  Chip,
+  EmptyState,
+  GradientHeader,
+  ScreenContainer,
+} from '../../theme/components';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -168,10 +182,17 @@ export default function CatalogScreen({ navigation }: Props): JSX.Element {
   // fetch is still in cache (e.g. earlier filter combination), in which
   // case we keep showing it and surface staleness via the banner.
   if (query.isError && query.data === undefined) {
-    if (query.error instanceof ApiError && query.error.code === 'catalog_unavailable') {
+    if (
+      query.error instanceof ApiError &&
+      query.error.code === 'catalog_unavailable'
+    ) {
       return <CatalogUnavailableState />;
     }
-    return <GenericErrorState message={query.error?.message ?? 'Catalog couldn\u2019t be loaded.'} />;
+    return (
+      <GenericErrorState
+        message={query.error?.message ?? 'Catalog couldn\u2019t be loaded.'}
+      />
+    );
   }
 
   const showStaleBanner = query.data?.staleCache === true;
@@ -179,19 +200,35 @@ export default function CatalogScreen({ navigation }: Props): JSX.Element {
   const showEmpty = !showLoading && sections.length === 0;
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <TextInput
-          style={styles.searchInput}
-          value={searchInput}
-          onChangeText={setSearchInput}
-          placeholder="Search experiences"
-          autoCapitalize="none"
-          autoCorrect={false}
-          returnKeyType="search"
-          accessibilityLabel="Search experiences"
-          testID="catalog-search"
-        />
+    <ScreenContainer>
+      <GradientHeader
+        title="Catalog"
+        subtitle="Find your next bit of magic."
+        icon="map"
+      />
+
+      <View style={styles.controls}>
+        <View style={styles.searchWrap}>
+          <Ionicons
+            name="search"
+            size={18}
+            color={theme.color.textSecondary}
+            style={styles.searchIcon}
+          />
+          <TextInput
+            style={styles.searchInput}
+            value={searchInput}
+            onChangeText={setSearchInput}
+            placeholder="Search experiences"
+            placeholderTextColor={theme.color.textSecondary}
+            autoCapitalize="none"
+            autoCorrect={false}
+            returnKeyType="search"
+            accessibilityLabel="Search experiences"
+            testID="catalog-search"
+          />
+        </View>
+
         <FilterChipRow
           label="Park"
           values={PARKS}
@@ -211,30 +248,50 @@ export default function CatalogScreen({ navigation }: Props): JSX.Element {
 
       {showStaleBanner ? (
         <View style={styles.staleBanner} testID="catalog-stale-banner">
+          <Ionicons
+            name="cloud-offline-outline"
+            size={16}
+            color={theme.color.warningText}
+            style={styles.staleBannerIcon}
+          />
           <Text style={styles.staleBannerText}>Showing cached catalog</Text>
         </View>
       ) : null}
 
       {showLoading ? (
         <View style={styles.center} testID="catalog-loading">
-          <ActivityIndicator />
+          <ActivityIndicator color={theme.color.primary} />
         </View>
       ) : showEmpty ? (
         <View style={styles.center} testID="catalog-empty">
-          <Text style={styles.emptyText}>No experiences match your filters.</Text>
+          <EmptyState
+            icon="search-outline"
+            title="No experiences match your filters"
+            body="Try clearing a filter or searching for something else."
+          />
         </View>
       ) : (
         <SectionList
           sections={sections as unknown as CatalogSection[]}
           keyExtractor={(item) => item.id}
           renderSectionHeader={({ section }) => (
-            <Text style={styles.sectionHeader}>{section.title}</Text>
+            <View style={styles.sectionHeaderWrap}>
+              <View
+                style={[
+                  styles.sectionDot,
+                  { backgroundColor: theme.parkAccent[section.title] },
+                ]}
+              />
+              <Text style={styles.sectionHeader}>{section.title}</Text>
+            </View>
           )}
           renderItem={({ item }) => (
             <ExperienceRow
               experience={item}
               onPress={() => {
-                navigation.navigate('ExperienceDetail', { experienceId: item.id });
+                navigation.navigate('ExperienceDetail', {
+                  experienceId: item.id,
+                });
               }}
             />
           )}
@@ -242,7 +299,7 @@ export default function CatalogScreen({ navigation }: Props): JSX.Element {
           contentContainerStyle={styles.listContent}
         />
       )}
-    </View>
+    </ScreenContainer>
   );
 }
 
@@ -259,12 +316,19 @@ interface FilterChipRowProps<T extends string> {
   readonly testIdPrefix: string;
 }
 
-function FilterChipRow<T extends string>(props: FilterChipRowProps<T>): JSX.Element {
-  const { label, values, selected, onChange, formatLabel, testIdPrefix } = props;
+function FilterChipRow<T extends string>(
+  props: FilterChipRowProps<T>,
+): JSX.Element {
+  const { label, values, selected, onChange, formatLabel, testIdPrefix } =
+    props;
   return (
     <View style={styles.chipRowContainer}>
       <Text style={styles.chipRowLabel}>{label}</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.chipRowContent}
+      >
         <Chip
           label="All"
           active={selected === null}
@@ -285,66 +349,70 @@ function FilterChipRow<T extends string>(props: FilterChipRowProps<T>): JSX.Elem
   );
 }
 
-interface ChipProps {
-  readonly label: string;
-  readonly active: boolean;
-  readonly onPress: () => void;
-  readonly testID?: string;
-}
-
-function Chip({ label, active, onPress, testID }: ChipProps): JSX.Element {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.chip,
-        active && styles.chipActive,
-        pressed && styles.chipPressed,
-      ]}
-      accessibilityRole="button"
-      accessibilityState={{ selected: active }}
-      {...(testID !== undefined ? { testID } : {})}
-    >
-      <Text style={[styles.chipText, active && styles.chipTextActive]}>{label}</Text>
-    </Pressable>
-  );
-}
-
 interface ExperienceRowProps {
   readonly experience: ExperienceDTO;
   readonly onPress: () => void;
 }
 
 function ExperienceRow({ experience, onPress }: ExperienceRowProps): JSX.Element {
+  const visual = theme.categoryVisual[experience.category];
   return (
-    <Pressable
+    <Card
       onPress={onPress}
-      style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-      accessibilityRole="button"
-      accessibilityLabel={experience.name}
+      accentColor={theme.parkAccent[experience.park]}
+      style={styles.row}
       testID={`catalog-row-${experience.id}`}
     >
-      <Text style={styles.rowName}>{experience.name}</Text>
-      <Text style={styles.rowMeta}>{formatCategory(experience.category)}</Text>
-    </Pressable>
+      <View style={styles.rowInner}>
+        <View style={styles.rowText}>
+          <Text style={styles.rowName} numberOfLines={2}>
+            {experience.name}
+          </Text>
+          <View style={styles.rowBadges}>
+            <Badge
+              label={visual.label}
+              color={visual.tint}
+              icon={visual.glyph as keyof typeof Ionicons.glyphMap}
+            />
+          </View>
+        </View>
+        <Ionicons
+          name="chevron-forward"
+          size={20}
+          color={theme.color.textSecondary}
+        />
+      </View>
+    </Card>
   );
 }
 
 function CatalogUnavailableState(): JSX.Element {
   return (
-    <View style={styles.center} testID="catalog-unavailable">
-      <Text style={styles.errorTitle}>Catalog couldn&apos;t be loaded.</Text>
-      <Text style={styles.errorBody}>Try again later.</Text>
-    </View>
+    <ScreenContainer>
+      <GradientHeader title="Catalog" icon="map" />
+      <View style={styles.center} testID="catalog-unavailable">
+        <EmptyState
+          icon="cloud-offline-outline"
+          title="Catalog couldn't be loaded"
+          body="Try again later."
+        />
+      </View>
+    </ScreenContainer>
   );
 }
 
 function GenericErrorState({ message }: { readonly message: string }): JSX.Element {
   return (
-    <View style={styles.center} testID="catalog-error">
-      <Text style={styles.errorTitle}>Something went wrong</Text>
-      <Text style={styles.errorBody}>{message}</Text>
-    </View>
+    <ScreenContainer>
+      <GradientHeader title="Catalog" icon="map" />
+      <View style={styles.center} testID="catalog-error">
+        <EmptyState
+          icon="alert-circle-outline"
+          title="Something went wrong"
+          body={message}
+        />
+      </View>
+    </ScreenContainer>
   );
 }
 
@@ -411,119 +479,107 @@ function formatCategory(value: ExperienceCategory): string {
 // ---------------------------------------------------------------------------
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#ffffff',
+  controls: {
+    paddingHorizontal: theme.spacing.lg,
+    paddingTop: theme.spacing.md,
+    paddingBottom: theme.spacing.sm,
+    marginTop: -theme.spacing.lg,
   },
-  header: {
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 8,
-    backgroundColor: '#ffffff',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#dddddd',
+  searchWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.color.surface,
+    borderRadius: theme.radius.md,
+    paddingHorizontal: theme.spacing.md,
+    borderWidth: 1,
+    borderColor: theme.color.border,
+    ...theme.shadow.card,
+  },
+  searchIcon: {
+    marginRight: theme.spacing.sm,
   },
   searchInput: {
-    borderWidth: 1,
-    borderColor: '#cccccc',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    flex: 1,
+    paddingVertical: theme.spacing.md,
     fontSize: 16,
-    marginBottom: 8,
-    backgroundColor: '#ffffff',
+    color: theme.color.textPrimary,
   },
   chipRowContainer: {
-    marginTop: 6,
+    marginTop: theme.spacing.md,
   },
   chipRowLabel: {
-    fontSize: 12,
-    color: '#666666',
-    fontWeight: '600',
-    marginBottom: 4,
+    ...theme.typography.meta,
+    color: theme.color.textSecondary,
+    marginBottom: theme.spacing.xs,
   },
-  chip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    backgroundColor: '#eeeeee',
-    marginRight: 8,
-  },
-  chipActive: {
-    backgroundColor: '#003a9b',
-  },
-  chipPressed: {
-    opacity: 0.7,
-  },
-  chipText: {
-    fontSize: 13,
-    color: '#222222',
-  },
-  chipTextActive: {
-    color: '#ffffff',
-    fontWeight: '600',
+  chipRowContent: {
+    paddingRight: theme.spacing.lg,
   },
   staleBanner: {
-    backgroundColor: '#fff4cc',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#e5d28b',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.color.warningSurface,
+    marginHorizontal: theme.spacing.lg,
+    marginTop: theme.spacing.sm,
+    paddingVertical: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.md,
+    borderRadius: theme.radius.md,
+  },
+  staleBannerIcon: {
+    marginRight: theme.spacing.sm,
   },
   staleBannerText: {
-    color: '#8a6d1a',
-    fontSize: 13,
+    color: theme.color.warningText,
+    ...theme.typography.meta,
   },
   center: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 24,
-  },
-  emptyText: {
-    fontSize: 15,
-    color: '#555555',
-    textAlign: 'center',
-  },
-  errorTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#222222',
-    marginBottom: 6,
-    textAlign: 'center',
-  },
-  errorBody: {
-    fontSize: 14,
-    color: '#555555',
-    textAlign: 'center',
+    padding: theme.spacing.xl,
   },
   listContent: {
-    paddingBottom: 24,
+    paddingHorizontal: theme.spacing.lg,
+    paddingTop: theme.spacing.sm,
+    paddingBottom: theme.spacing.xxl,
+  },
+  sectionHeaderWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.color.background,
+    paddingVertical: theme.spacing.sm,
+    marginTop: theme.spacing.xs,
+  },
+  sectionDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginRight: theme.spacing.sm,
   },
   sectionHeader: {
-    backgroundColor: '#f4f4f4',
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#444444',
+    ...theme.typography.subtitle,
+    color: theme.color.textPrimary,
   },
   row: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#eeeeee',
+    marginBottom: theme.spacing.md,
+    padding: theme.spacing.md,
   },
-  rowPressed: {
-    backgroundColor: '#f7f7f7',
+  rowInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  rowText: {
+    flex: 1,
+    marginRight: theme.spacing.md,
+    gap: theme.spacing.sm,
   },
   rowName: {
-    fontSize: 16,
-    color: '#111111',
-    marginBottom: 2,
+    ...theme.typography.subtitle,
+    color: theme.color.textPrimary,
   },
-  rowMeta: {
-    fontSize: 12,
-    color: '#666666',
+  rowBadges: {
+    flexDirection: 'row',
+    alignSelf: 'flex-start',
   },
 });

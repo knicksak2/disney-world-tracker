@@ -1,5 +1,10 @@
-import * as SecureStore from 'expo-secure-store';
 import { create } from 'zustand';
+
+import {
+  clearSessionToken,
+  getSessionToken,
+  setSessionToken,
+} from '../api/sessionStorage';
 
 /**
  * Session state for the mobile client.
@@ -9,6 +14,16 @@ import { create } from 'zustand';
  * (Keychain on iOS, EncryptedSharedPreferences on Android) so the user
  * stays signed in across app launches and the token is never written to
  * plain JS storage (R6.10, R6.11).
+ *
+ * IMPORTANT: persistence goes through the shared `api/sessionStorage`
+ * helpers rather than calling `expo-secure-store` directly. Those same
+ * helpers are what `api/client.ts#apiRequest` reads to attach the
+ * `Authorization: Bearer <token>` header. Using a single module (and thus
+ * a single SecureStore key, `dwt.session.token`) is what keeps the
+ * navigator's view of "am I signed in?" in lockstep with the token the API
+ * client actually sends. A previous version of this store wrote to a
+ * different key (`dwt.sessionToken`), so the navigator showed the main tabs
+ * while every authenticated request went out with no token and 401'd.
  *
  * The store exposes three mutations:
  *   - `setToken`     — call after a successful login/register.
@@ -23,8 +38,6 @@ import { create } from 'zustand';
  * valid session.
  */
 
-const SESSION_TOKEN_KEY = 'dwt.sessionToken';
-
 export interface SessionState {
   token: string | null;
   hydrated: boolean;
@@ -37,15 +50,15 @@ export const useSessionStore = create<SessionState>((set) => ({
   token: null,
   hydrated: false,
   setToken: async (token: string) => {
-    await SecureStore.setItemAsync(SESSION_TOKEN_KEY, token);
+    await setSessionToken(token);
     set({ token });
   },
   clearToken: async () => {
-    await SecureStore.deleteItemAsync(SESSION_TOKEN_KEY);
+    await clearSessionToken();
     set({ token: null });
   },
   loadFromStorage: async () => {
-    const stored = await SecureStore.getItemAsync(SESSION_TOKEN_KEY);
+    const stored = await getSessionToken();
     set({ token: stored ?? null, hydrated: true });
   },
 }));

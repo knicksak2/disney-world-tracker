@@ -58,16 +58,18 @@ import {
   ActivityIndicator,
   Alert,
   Modal,
-  Pressable,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 import type { CompletionDTO } from '@dwt/shared';
 
 import { ApiError, apiRequest } from '../../api/client';
+import { theme } from '../../theme/theme';
+import { PrimaryButton, SecondaryButton } from '../../theme/components';
 
 // ---------------------------------------------------------------------------
 // Public props
@@ -336,52 +338,51 @@ export default function CompletionControls({
           <Text style={styles.statusEmpty} testID="completion-empty-status">
             Not visited yet
           </Text>
-          <Pressable
-            accessibilityRole="button"
+          <PrimaryButton
+            label={busy ? 'Marking\u2026' : 'Mark as visited'}
+            icon="checkmark-circle-outline"
             accessibilityLabel="Mark as visited"
             onPress={() => {
               void handleMark();
             }}
             disabled={busy}
-            style={[styles.button, busy && styles.buttonDisabled]}
             testID="completion-mark-button"
-          >
-            <Text style={styles.buttonText}>
-              {busy ? 'Marking…' : 'Mark as visited'}
-            </Text>
-          </Pressable>
+          />
         </View>
       ) : (
         // R2.4 — populated state with edit / remove affordances.
         <View style={styles.populated}>
-          <Text style={styles.statusFilled} testID="completion-date">
-            Completed on {completion.completedOn}
-          </Text>
+          <View style={styles.statusFilledRow}>
+            <Ionicons
+              name="checkmark-circle"
+              size={18}
+              color={theme.color.success}
+              style={styles.statusIcon}
+            />
+            <Text style={styles.statusFilled} testID="completion-date">
+              Completed on {completion.completedOn}
+            </Text>
+          </View>
           <View style={styles.row}>
-            <Pressable
-              accessibilityRole="button"
+            <SecondaryButton
+              label="Edit date"
+              icon="calendar-outline"
               accessibilityLabel="Edit completion date"
               onPress={openEditor}
               disabled={busy}
-              style={[styles.button, busy && styles.buttonDisabled]}
               testID="completion-edit-button"
-            >
-              <Text style={styles.buttonText}>Edit date</Text>
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
+              style={styles.flexBtn}
+            />
+            <SecondaryButton
+              label="Unmark"
+              icon="close-circle-outline"
+              tone="danger"
               accessibilityLabel="Unmark completion"
               onPress={handleUnmark}
               disabled={busy}
-              style={[
-                styles.button,
-                styles.buttonDanger,
-                busy && styles.buttonDisabled,
-              ]}
               testID="completion-unmark-button"
-            >
-              <Text style={styles.buttonText}>Unmark</Text>
-            </Pressable>
+              style={styles.flexBtn}
+            />
           </View>
         </View>
       )}
@@ -389,6 +390,7 @@ export default function CompletionControls({
       {busy ? (
         <ActivityIndicator
           accessibilityLabel="Updating completion"
+          color={theme.color.primary}
           style={styles.spinner}
         />
       ) : null}
@@ -419,6 +421,7 @@ export default function CompletionControls({
                 if (editorError !== null) setEditorError(null);
               }}
               placeholder="YYYY-MM-DD"
+              placeholderTextColor={theme.color.textSecondary}
               autoCapitalize="none"
               autoCorrect={false}
               keyboardType="numbers-and-punctuation"
@@ -435,28 +438,22 @@ export default function CompletionControls({
               </Text>
             ) : null}
             <View style={styles.row}>
-              <Pressable
-                accessibilityRole="button"
+              <PrimaryButton
+                label={busy ? 'Saving\u2026' : 'Save'}
                 onPress={() => {
                   void handleEditSubmit();
                 }}
                 disabled={busy}
-                style={[styles.button, busy && styles.buttonDisabled]}
                 testID="completion-edit-submit"
-              >
-                <Text style={styles.buttonText}>
-                  {busy ? 'Saving…' : 'Save'}
-                </Text>
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
+                style={styles.flexBtn}
+              />
+              <SecondaryButton
+                label="Cancel"
                 onPress={closeEditor}
                 disabled={busy}
-                style={[styles.button, styles.buttonSecondary]}
                 testID="completion-edit-cancel"
-              >
-                <Text style={styles.buttonText}>Cancel</Text>
-              </Pressable>
+                style={styles.flexBtn}
+              />
             </View>
           </View>
         </View>
@@ -471,88 +468,81 @@ export default function CompletionControls({
 
 const styles = StyleSheet.create({
   container: {
-    gap: 8,
+    gap: theme.spacing.sm,
   },
   populated: {
-    gap: 8,
+    gap: theme.spacing.sm,
   },
   row: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: theme.spacing.sm,
     alignItems: 'center',
   },
+  flexBtn: {
+    flexGrow: 1,
+    flexBasis: 0,
+  },
   statusEmpty: {
-    fontSize: 14,
-    color: '#6b7280',
+    ...theme.typography.body,
+    color: theme.color.textSecondary,
     fontStyle: 'italic',
     flexGrow: 1,
   },
-  statusFilled: {
-    fontSize: 14,
-    color: '#111827',
-  },
-  button: {
-    backgroundColor: '#2563eb',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8,
+  statusFilledRow: {
+    flexDirection: 'row',
     alignItems: 'center',
   },
-  buttonSecondary: {
-    backgroundColor: '#6b7280',
+  statusIcon: {
+    marginRight: theme.spacing.sm,
   },
-  buttonDanger: {
-    backgroundColor: '#b91c1c',
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  buttonText: {
-    color: '#ffffff',
-    fontWeight: '600',
+  statusFilled: {
+    ...theme.typography.subtitle,
+    color: theme.color.textPrimary,
   },
   spinner: {
     alignSelf: 'flex-start',
   },
   error: {
-    color: '#b91c1c',
+    color: theme.color.danger,
     fontSize: 13,
   },
   input: {
     borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    borderColor: theme.color.border,
+    borderRadius: theme.radius.md,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.md,
     fontSize: 16,
-    backgroundColor: '#ffffff',
+    color: theme.color.textPrimary,
+    backgroundColor: theme.color.surfaceAlt,
   },
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    backgroundColor: 'rgba(31, 18, 53, 0.5)',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 24,
+    padding: theme.spacing.xl,
   },
   modalCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
-    padding: 20,
+    backgroundColor: theme.color.surface,
+    borderRadius: theme.radius.lg,
+    padding: theme.spacing.xl,
     width: '100%',
     maxWidth: 400,
-    gap: 8,
+    gap: theme.spacing.sm,
+    ...theme.shadow.floating,
   },
   modalTitle: {
-    fontSize: 16,
-    fontWeight: '700',
+    ...theme.typography.heading,
+    color: theme.color.textPrimary,
   },
   modalHint: {
-    fontSize: 13,
-    color: '#6b7280',
+    ...theme.typography.body,
+    color: theme.color.textSecondary,
   },
   modalMeta: {
-    fontSize: 12,
-    color: '#6b7280',
+    ...theme.typography.meta,
+    color: theme.color.textSecondary,
   },
 });

@@ -14,17 +14,22 @@
 //   - Successful sends invalidate the `['friends']` cache so when the user
 //     navigates back to `FriendsList`, the new outgoing request is visible
 //     without a second fetch.
+//
+// Styling: uses the shared "Magical / Whimsical" theme — a gradient hero
+// header, a themed search field matching CatalogScreen, result rows as
+// `Card`s with a "Send request" PrimaryButton, and calm muted helper/empty
+// states. See `theme/theme.ts` and `theme/components.tsx`.
 
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
-  Pressable,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import {
   useMutation,
   useQuery,
@@ -33,6 +38,14 @@ import {
 
 import { ApiError, apiRequest } from '../../api/client';
 import { useDebounce } from '../../hooks/useDebounce';
+import { theme } from '../../theme/theme';
+import {
+  Card,
+  EmptyState,
+  GradientHeader,
+  PrimaryButton,
+  ScreenContainer,
+} from '../../theme/components';
 import { friendsErrorMessage } from './errorMessages';
 
 // ---------------------------------------------------------------------------
@@ -189,20 +202,31 @@ export default function FriendsSearchScreen(): JSX.Element {
     searchQuery.fetchStatus !== 'fetching';
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <TextInput
-          value={input}
-          onChangeText={setInput}
-          placeholder="Search by name or email"
-          autoCapitalize="none"
-          autoCorrect={false}
-          returnKeyType="search"
-          maxLength={SEARCH_MAX_LENGTH}
-          accessibilityLabel="Search for friends"
-          style={styles.input}
-          testID="friends-search-input"
-        />
+    <ScreenContainer>
+      <GradientHeader title="Find Friends" icon="search" />
+
+      <View style={styles.controls}>
+        <View style={styles.searchWrap}>
+          <Ionicons
+            name="search"
+            size={18}
+            color={theme.color.textSecondary}
+            style={styles.searchIcon}
+          />
+          <TextInput
+            value={input}
+            onChangeText={setInput}
+            placeholder="Search by name or email"
+            placeholderTextColor={theme.color.textSecondary}
+            autoCapitalize="none"
+            autoCorrect={false}
+            returnKeyType="search"
+            maxLength={SEARCH_MAX_LENGTH}
+            accessibilityLabel="Search for friends"
+            style={styles.searchInput}
+            testID="friends-search-input"
+          />
+        </View>
         {inlineLengthError !== null ? (
           <Text style={styles.inlineError} accessibilityRole="alert">
             {inlineLengthError}
@@ -212,24 +236,31 @@ export default function FriendsSearchScreen(): JSX.Element {
 
       {lengthStatus === 'idle' ? (
         <View style={styles.center} testID="friends-search-idle">
-          <Text style={styles.helperText}>
-            Type a name or email to find friends.
-          </Text>
+          <EmptyState
+            icon="people-outline"
+            title="Find your friends"
+            body="Type a name or email to search."
+          />
         </View>
       ) : isLoading ? (
         <View style={styles.center} testID="friends-search-loading">
-          <ActivityIndicator />
+          <ActivityIndicator color={theme.color.primary} />
         </View>
       ) : isError ? (
         <View style={styles.center}>
-          <Text style={styles.errorTitle}>Search failed</Text>
-          <Text style={styles.errorBody}>
-            {friendsErrorMessage(searchQuery.error)}
-          </Text>
+          <EmptyState
+            icon="alert-circle-outline"
+            title="Search failed"
+            body={friendsErrorMessage(searchQuery.error)}
+          />
         </View>
       ) : showEmpty ? (
         <View style={styles.center} testID="friends-search-empty">
-          <Text style={styles.helperText}>No matching users.</Text>
+          <EmptyState
+            icon="search-outline"
+            title="No matching users"
+            body="Try a different name or email."
+          />
         </View>
       ) : (
         <FlatList
@@ -259,7 +290,7 @@ export default function FriendsSearchScreen(): JSX.Element {
           contentContainerStyle={styles.listContent}
         />
       )}
-    </View>
+    </ScreenContainer>
   );
 }
 
@@ -283,33 +314,27 @@ function ResultRow({
   onSend,
 }: ResultRowProps): JSX.Element {
   return (
-    <View style={styles.row} testID={`friends-search-row-${hit.id}`}>
+    <Card style={styles.row} testID={`friends-search-row-${hit.id}`}>
       <View style={styles.rowMain}>
         <View style={styles.rowText}>
           <Text style={styles.rowName}>{hit.displayName}</Text>
           <Text style={styles.rowMeta}>{hit.email}</Text>
         </View>
-        <Pressable
-          accessibilityRole="button"
+        <PrimaryButton
+          label={sent ? 'Sent' : busy ? 'Sending\u2026' : 'Send request'}
+          icon={sent ? 'checkmark-outline' : 'person-add-outline'}
           onPress={onSend}
           disabled={busy || sent}
-          style={[
-            styles.button,
-            (busy || sent) && styles.buttonDisabled,
-          ]}
+          loading={busy}
           testID={`friends-send-${hit.id}`}
-        >
-          <Text style={styles.buttonText}>
-            {sent ? 'Sent' : busy ? 'Sending\u2026' : 'Send request'}
-          </Text>
-        </Pressable>
+        />
       </View>
       {error !== null ? (
         <Text style={styles.rowError} accessibilityRole="alert">
           {error}
         </Text>
       ) : null}
-    </View>
+    </Card>
   );
 }
 
@@ -318,98 +343,71 @@ function ResultRow({
 // ---------------------------------------------------------------------------
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#ffffff',
+  controls: {
+    paddingHorizontal: theme.spacing.lg,
+    paddingTop: theme.spacing.md,
+    paddingBottom: theme.spacing.sm,
+    marginTop: -theme.spacing.lg,
+    gap: theme.spacing.sm,
   },
-  header: {
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#dddddd',
-    gap: 6,
-  },
-  input: {
+  searchWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.color.surface,
+    borderRadius: theme.radius.md,
+    paddingHorizontal: theme.spacing.md,
     borderWidth: 1,
-    borderColor: '#cccccc',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    borderColor: theme.color.border,
+    ...theme.shadow.card,
+  },
+  searchIcon: {
+    marginRight: theme.spacing.sm,
+  },
+  searchInput: {
+    flex: 1,
+    paddingVertical: theme.spacing.md,
     fontSize: 16,
-    backgroundColor: '#ffffff',
+    color: theme.color.textPrimary,
   },
   inlineError: {
-    color: '#b91c1c',
+    color: theme.color.danger,
     fontSize: 13,
   },
   center: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 24,
-    gap: 8,
-  },
-  helperText: {
-    fontSize: 14,
-    color: '#555555',
-    textAlign: 'center',
-  },
-  errorTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#222222',
-    textAlign: 'center',
-  },
-  errorBody: {
-    fontSize: 14,
-    color: '#555555',
-    textAlign: 'center',
+    padding: theme.spacing.xl,
   },
   listContent: {
-    paddingBottom: 24,
+    paddingHorizontal: theme.spacing.lg,
+    paddingTop: theme.spacing.sm,
+    paddingBottom: theme.spacing.xxl,
   },
   row: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#eeeeee',
-    gap: 6,
+    marginBottom: theme.spacing.md,
+    gap: theme.spacing.sm,
   },
   rowMain: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 12,
+    gap: theme.spacing.md,
   },
   rowText: {
     flexShrink: 1,
+    gap: 2,
   },
   rowName: {
-    fontSize: 16,
-    color: '#111111',
+    ...theme.typography.subtitle,
+    color: theme.color.textPrimary,
   },
   rowMeta: {
-    fontSize: 12,
-    color: '#666666',
+    ...theme.typography.meta,
+    color: theme.color.textSecondary,
   },
   rowError: {
-    fontSize: 13,
-    color: '#b91c1c',
-  },
-  button: {
-    backgroundColor: '#2563eb',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  buttonText: {
-    color: '#ffffff',
-    fontWeight: '600',
-    fontSize: 14,
+    ...theme.typography.meta,
+    color: theme.color.danger,
   },
 });

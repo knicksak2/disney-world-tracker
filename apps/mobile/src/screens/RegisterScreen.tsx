@@ -25,10 +25,24 @@
  * The screen never logs the password and clears it from local state
  * on a successful submit so it cannot be read back from a later
  * component-tree dump (R6.11).
+ *
+ * Styling: mirrors LoginScreen against the shared "Magical / Whimsical"
+ * theme — a gradient hero header, an elevated card holding the form,
+ * and the themed PrimaryButton. See `theme/theme.ts` and
+ * `theme/components.tsx`.
  */
 
 import React, { useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import { registerInputSchema } from '@dwt/shared';
@@ -36,6 +50,13 @@ import { registerInputSchema } from '@dwt/shared';
 import { ApiError, apiRequest } from '../api/client';
 import type { AuthStackParamList } from '../navigation/RootNavigator';
 import { useSessionStore } from '../state/sessionStore';
+import { theme } from '../theme/theme';
+import {
+  Card,
+  GradientHeader,
+  PrimaryButton,
+  ScreenContainer,
+} from '../theme/components';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'Register'>;
 
@@ -155,124 +176,138 @@ export default function RegisterScreen({ navigation }: Props): JSX.Element {
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Create your account</Text>
-      <Text style={styles.subtitle}>
-        Track your visits, ratings, and notes across every Park.
-      </Text>
-
-      <View style={styles.field}>
-        <Text style={styles.label}>Email</Text>
-        <TextInput
-          style={[
-            styles.input,
-            fieldErrors.email !== null && styles.inputError,
-          ]}
-          value={email}
-          onChangeText={setEmail}
-          autoCapitalize="none"
-          autoCorrect={false}
-          autoComplete="email"
-          keyboardType="email-address"
-          textContentType="emailAddress"
-          editable={!submitting}
-          accessibilityLabel="Email"
-          testID="register-email"
-        />
-        {fieldErrors.email !== null ? (
-          <Text style={styles.fieldError}>{fieldErrors.email}</Text>
-        ) : null}
-      </View>
-
-      <View style={styles.field}>
-        <Text style={styles.label}>Display name</Text>
-        <TextInput
-          style={[
-            styles.input,
-            fieldErrors.displayName !== null && styles.inputError,
-          ]}
-          value={displayName}
-          onChangeText={setDisplayName}
-          autoCapitalize="words"
-          autoCorrect={false}
-          autoComplete="name"
-          textContentType="name"
-          maxLength={50}
-          editable={!submitting}
-          accessibilityLabel="Display name"
-          testID="register-display-name"
-        />
-        {fieldErrors.displayName !== null ? (
-          <Text style={styles.fieldError}>{fieldErrors.displayName}</Text>
-        ) : null}
-      </View>
-
-      <View style={styles.field}>
-        <Text style={styles.label}>Password</Text>
-        <TextInput
-          style={[
-            styles.input,
-            fieldErrors.password !== null && styles.inputError,
-          ]}
-          value={password}
-          onChangeText={setPassword}
-          autoCapitalize="none"
-          autoCorrect={false}
-          autoComplete="password-new"
-          textContentType="newPassword"
-          secureTextEntry
-          editable={!submitting}
-          accessibilityLabel="Password"
-          testID="register-password"
-        />
-        {fieldErrors.password !== null ? (
-          <Text style={styles.fieldError}>{fieldErrors.password}</Text>
-        ) : null}
-      </View>
-
-      {formError !== null ? (
-        <Text style={styles.formError} testID="register-form-error">
-          {formError}
-        </Text>
-      ) : null}
-
-      <Pressable
-        style={({ pressed }) => [
-          styles.primaryButton,
-          (pressed || submitting) && styles.primaryButtonPressed,
-        ]}
-        disabled={submitting}
-        onPress={() => {
-          void handleSubmit();
-        }}
-        accessibilityRole="button"
-        accessibilityLabel="Create account"
-        testID="register-submit"
+    <ScreenContainer>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.flex}
       >
-        {submitting ? (
-          <ActivityIndicator color="#ffffff" />
-        ) : (
-          <Text style={styles.primaryButtonText}>Create account</Text>
-        )}
-      </Pressable>
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          keyboardShouldPersistTaps="handled"
+        >
+          <GradientHeader
+            title="Create your account"
+            subtitle="Track your visits, ratings, and notes across every Park."
+            icon="sparkles"
+          />
 
-      <Pressable
-        style={styles.linkButton}
-        onPress={() => {
-          if (!submitting) {
-            navigation.navigate('Login');
-          }
-        }}
-        accessibilityRole="link"
-        accessibilityLabel="Already have an account? Sign in"
-        testID="register-go-login"
-      >
-        <Text style={styles.linkText}>
-          Already have an account?{' '}
-          <Text style={styles.linkTextEmphasis}>Sign in</Text>
-        </Text>
-      </Pressable>
-    </View>
+          <View style={styles.body}>
+            <Card>
+              <View style={styles.field}>
+                <Text style={styles.label}>Email</Text>
+                <TextInput
+                  style={[
+                    styles.input,
+                    fieldErrors.email !== null && styles.inputError,
+                  ]}
+                  value={email}
+                  onChangeText={setEmail}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  autoComplete="email"
+                  keyboardType="email-address"
+                  textContentType="emailAddress"
+                  placeholder="you@example.com"
+                  placeholderTextColor={theme.color.textSecondary}
+                  editable={!submitting}
+                  accessibilityLabel="Email"
+                  testID="register-email"
+                />
+                {fieldErrors.email !== null ? (
+                  <Text style={styles.fieldError}>{fieldErrors.email}</Text>
+                ) : null}
+              </View>
+
+              <View style={styles.field}>
+                <Text style={styles.label}>Display name</Text>
+                <TextInput
+                  style={[
+                    styles.input,
+                    fieldErrors.displayName !== null && styles.inputError,
+                  ]}
+                  value={displayName}
+                  onChangeText={setDisplayName}
+                  autoCapitalize="words"
+                  autoCorrect={false}
+                  autoComplete="name"
+                  textContentType="name"
+                  maxLength={50}
+                  placeholder="Your name"
+                  placeholderTextColor={theme.color.textSecondary}
+                  editable={!submitting}
+                  accessibilityLabel="Display name"
+                  testID="register-display-name"
+                />
+                {fieldErrors.displayName !== null ? (
+                  <Text style={styles.fieldError}>
+                    {fieldErrors.displayName}
+                  </Text>
+                ) : null}
+              </View>
+
+              <View style={styles.field}>
+                <Text style={styles.label}>Password</Text>
+                <TextInput
+                  style={[
+                    styles.input,
+                    fieldErrors.password !== null && styles.inputError,
+                  ]}
+                  value={password}
+                  onChangeText={setPassword}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  autoComplete="password-new"
+                  textContentType="newPassword"
+                  secureTextEntry
+                  placeholder="Choose a password"
+                  placeholderTextColor={theme.color.textSecondary}
+                  editable={!submitting}
+                  accessibilityLabel="Password"
+                  testID="register-password"
+                />
+                {fieldErrors.password !== null ? (
+                  <Text style={styles.fieldError}>{fieldErrors.password}</Text>
+                ) : null}
+              </View>
+
+              {formError !== null ? (
+                <Text style={styles.formError} testID="register-form-error">
+                  {formError}
+                </Text>
+              ) : null}
+
+              <PrimaryButton
+                label="Create account"
+                icon="person-add-outline"
+                loading={submitting}
+                onPress={() => {
+                  void handleSubmit();
+                }}
+                testID="register-submit"
+                style={styles.submit}
+              />
+            </Card>
+
+            <Pressable
+              style={styles.linkButton}
+              onPress={() => {
+                if (!submitting) {
+                  navigation.navigate('Login');
+                }
+              }}
+              accessibilityRole="link"
+              accessibilityLabel="Already have an account? Sign in"
+              testID="register-go-login"
+            >
+              <Text style={styles.linkText}>
+                Already have an account?{' '}
+                <Text style={styles.linkTextEmphasis}>Sign in</Text>
+              </Text>
+            </Pressable>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </ScreenContainer>
   );
 }
 
@@ -329,78 +364,57 @@ function applyServerFieldError(
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    paddingHorizontal: 24,
-    paddingTop: 64,
-    backgroundColor: '#ffffff',
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#555555',
-    marginBottom: 24,
+  flex: { flex: 1 },
+  scroll: { flexGrow: 1, paddingBottom: theme.spacing.xxl },
+  body: {
+    paddingHorizontal: theme.spacing.xl,
+    marginTop: -theme.spacing.lg,
+    gap: theme.spacing.lg,
   },
   field: {
-    marginBottom: 16,
+    marginBottom: theme.spacing.lg,
   },
   label: {
-    fontSize: 13,
-    fontWeight: '600',
-    marginBottom: 6,
-    color: '#222222',
+    ...theme.typography.meta,
+    color: theme.color.textSecondary,
+    marginBottom: theme.spacing.xs,
   },
   input: {
     borderWidth: 1,
-    borderColor: '#cccccc',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    borderColor: theme.color.border,
+    borderRadius: theme.radius.md,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.md,
     fontSize: 16,
-    backgroundColor: '#ffffff',
+    color: theme.color.textPrimary,
+    backgroundColor: theme.color.surfaceAlt,
   },
   inputError: {
-    borderColor: '#cc0033',
+    borderColor: theme.color.danger,
   },
   fieldError: {
-    marginTop: 6,
-    color: '#cc0033',
+    marginTop: theme.spacing.xs,
+    color: theme.color.danger,
     fontSize: 13,
   },
   formError: {
-    marginBottom: 12,
-    color: '#cc0033',
+    marginBottom: theme.spacing.md,
+    color: theme.color.danger,
     fontSize: 14,
   },
-  primaryButton: {
-    backgroundColor: '#003a9b',
-    borderRadius: 8,
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  primaryButtonPressed: {
-    opacity: 0.85,
-  },
-  primaryButtonText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '600',
+  submit: {
+    marginTop: theme.spacing.xs,
   },
   linkButton: {
-    marginTop: 20,
     alignItems: 'center',
+    paddingVertical: theme.spacing.sm,
   },
   linkText: {
     fontSize: 14,
-    color: '#444444',
+    color: theme.color.textSecondary,
   },
   linkTextEmphasis: {
-    color: '#003a9b',
-    fontWeight: '600',
+    color: theme.color.primary,
+    fontWeight: '700',
   },
 });

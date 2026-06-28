@@ -17,23 +17,26 @@
 //     not met, the response carries `value: null` and the screen renders
 //     "Not enough ratings yet" (R10.6); otherwise the one-decimal mean
 //     plus the rating count are shown (R10.5).
-//   - This screen is read-only display for task 16.3; the actual
-//     mark / edit / save controls land in tasks 17.1, 17.2, and 17.3.
-//     Each "Your …" section therefore renders a disabled "Edit"
-//     placeholder button at the spot where the real control will mount,
-//     so the layout is final and the next tasks only swap component
-//     contents.
+//   - The embedded CompletionControls / RatingControl / NoteControl own the
+//     mutation flows and invalidate the relevant queries through `onMutated`.
+//
+// Styling: uses the shared "Magical / Whimsical" theme — a compact gradient
+// header carrying the Experience name with its Park subtitle and category
+// glyph, each section wrapped in a `Card` with a `SectionLabel`, and the
+// Park / category surfaced as themed `Badge`s. Empty "nothing yet" states
+// use calm muted text; only genuine load errors use danger. See
+// `theme/theme.ts` and `theme/components.tsx`.
 
 import React from 'react';
 import { useQueries, useQueryClient } from '@tanstack/react-query';
 import {
   ActivityIndicator,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import type { RouteProp } from '@react-navigation/native';
 import { useRoute } from '@react-navigation/native';
 
@@ -49,6 +52,15 @@ import type {
 
 import { ApiError, apiRequest } from '../../api/client';
 import type { CatalogStackParamList } from '../../navigation/CatalogStack';
+import { theme } from '../../theme/theme';
+import {
+  Badge,
+  Card,
+  EmptyState,
+  GradientHeader,
+  ScreenContainer,
+  SectionLabel,
+} from '../../theme/components';
 import CompletionControls from './CompletionControls';
 import NoteControl from './NoteControl';
 import RatingControl from './RatingControl';
@@ -187,141 +199,153 @@ export default function ExperienceDetailScreen(): JSX.Element {
   // gated on the slowest hop.
   if (experienceQ.isLoading) {
     return (
-      <View style={styles.centered} accessibilityRole="progressbar">
-        <ActivityIndicator />
-      </View>
+      <ScreenContainer>
+        <View style={styles.centered} accessibilityRole="progressbar">
+          <ActivityIndicator color={theme.color.primary} />
+        </View>
+      </ScreenContainer>
     );
   }
 
   if (experienceQ.isError || experienceQ.data === undefined) {
     return (
-      <View style={styles.centered}>
-        <Text style={styles.errorText}>
-          We couldn&apos;t load this experience. Please try again later.
-        </Text>
-      </View>
+      <ScreenContainer>
+        <GradientHeader title="Experience" icon="map" compact />
+        <View style={styles.centered}>
+          <EmptyState
+            icon="alert-circle-outline"
+            title="We couldn't load this experience"
+            body="Please try again later."
+          />
+        </View>
+      </ScreenContainer>
     );
   }
 
   const experience = experienceQ.data;
+  const visual = theme.categoryVisual[experience.category];
 
   return (
-    <ScrollView
-      contentContainerStyle={styles.container}
-      testID="experience-detail"
-    >
+    <ScreenContainer>
       {/* -------------------------------------------------------------- */}
-      {/* Header: name + Park + category badges (R1.22)                  */}
+      {/* Header: name + Park subtitle + category glyph (R1.22)          */}
       {/* -------------------------------------------------------------- */}
-      <View style={styles.headerBlock}>
-        <Text style={styles.name} accessibilityRole="header">
-          {experience.name}
-        </Text>
+      <GradientHeader
+        title={experience.name}
+        subtitle={experience.park}
+        icon={visual.glyph as keyof typeof Ionicons.glyphMap}
+        compact
+      />
+
+      <ScrollView
+        contentContainerStyle={styles.container}
+        testID="experience-detail"
+      >
+        {/* Park + category badges, surfaced as themed pills. */}
         <View style={styles.badgeRow}>
-          <Badge label={experience.park} testID="experience-park-badge" />
+          <Badge
+            label={experience.park}
+            color={theme.parkAccent[experience.park]}
+            icon="location"
+            testID="experience-park-badge"
+          />
           <Badge
             label={categoryLabel(experience.category)}
+            color={visual.tint}
+            icon={visual.glyph as keyof typeof Ionicons.glyphMap}
             testID="experience-category-badge"
           />
         </View>
-      </View>
 
-      {/* -------------------------------------------------------------- */}
-      {/* Description (R1.22). Server is responsible for HTML/script    */}
-      {/* stripping at write time (R1.7 sanitization step in the catalog */}
-      {/* repo); the App renders it as plain Text.                       */}
-      {/* -------------------------------------------------------------- */}
-      <Section title="About">
-        {experience.description.length > 0 ? (
-          <Text style={styles.bodyText}>{experience.description}</Text>
-        ) : (
-          <Text style={styles.empty}>No description available.</Text>
-        )}
-      </Section>
+        {/* ------------------------------------------------------------ */}
+        {/* About (R1.22). Server is responsible for HTML/script         */}
+        {/* stripping at write time; the App renders it as plain Text.   */}
+        {/* ------------------------------------------------------------ */}
+        <Card style={styles.section}>
+          <SectionLabel>About</SectionLabel>
+          {experience.description.length > 0 ? (
+            <Text style={styles.bodyText}>{experience.description}</Text>
+          ) : (
+            <Text style={styles.empty}>No description available.</Text>
+          )}
+        </Card>
 
-      {/* -------------------------------------------------------------- */}
-      {/* Your Completion (R2.4). Task 17.1 swaps the placeholder for    */}
-      {/* the real mark / unmark / edit-date control                     */}
-      {/* (`CompletionControls`). The control owns the mutations and     */}
-      {/* invalidates the cached Completion query through `onMutated`    */}
-      {/* so the section re-renders with the freshest DTO.               */}
-      {/* -------------------------------------------------------------- */}
-      <Section title="Your Completion">
-        <CompletionSection
-          experienceId={experienceId}
-          query={completionQ}
-          onMutated={() => {
-            // Invalidate every query that reflects Completion state for
-            // this Experience. The Completion query itself drives the
-            // section render; the stats query (R3) and any future
-            // friend-feed surfaces also read off the same store, so a
-            // single invalidate keeps them in lockstep.
-            void queryClient.invalidateQueries({
-              queryKey: ['experience-completion', experienceId],
-            });
-          }}
-        />
-      </Section>
+        {/* ------------------------------------------------------------ */}
+        {/* Your Completion (R2.4).                                      */}
+        {/* ------------------------------------------------------------ */}
+        <Card style={styles.section}>
+          <SectionLabel>Your Completion</SectionLabel>
+          <CompletionSection
+            experienceId={experienceId}
+            query={completionQ}
+            onMutated={() => {
+              // Invalidate every query that reflects Completion state for
+              // this Experience. The Completion query itself drives the
+              // section render; the stats query (R3) and any future
+              // friend-feed surfaces also read off the same store, so a
+              // single invalidate keeps them in lockstep.
+              void queryClient.invalidateQueries({
+                queryKey: ['experience-completion', experienceId],
+              });
+            }}
+          />
+        </Card>
 
-      {/* -------------------------------------------------------------- */}
-      {/* Your Rating (R4.1, R4.3, R4.4, R4.5, R4.6, R4.7, R4.8). Task   */}
-      {/* 17.2 swaps the placeholder for the real RatingControl, which   */}
-      {/* owns the 1..10 picker plus the set / replace / remove flows.   */}
-      {/* The control invokes `onMutated` after every successful write   */}
-      {/* so the rating + community-aggregate queries refetch.           */}
-      {/* -------------------------------------------------------------- */}
-      <Section title="Your Rating">
-        <RatingSection
-          experienceId={experienceId}
-          query={ratingQ}
-          onMutated={() => {
-            // Refresh both the User's own rating row and the community
-            // aggregate (R10.5, R10.6) — the latter changes whenever a
-            // rating is set, replaced, or removed.
-            void queryClient.invalidateQueries({
-              queryKey: ['experience-rating', experienceId],
-            });
-            void queryClient.invalidateQueries({
-              queryKey: ['experience-aggregate', experienceId],
-            });
-          }}
-        />
-      </Section>
+        {/* ------------------------------------------------------------ */}
+        {/* Your Rating (R4.1, R4.3, R4.4, R4.5, R4.6, R4.7, R4.8).      */}
+        {/* ------------------------------------------------------------ */}
+        <Card style={styles.section}>
+          <SectionLabel>Your Rating</SectionLabel>
+          <RatingSection
+            experienceId={experienceId}
+            query={ratingQ}
+            onMutated={() => {
+              // Refresh both the User's own rating row and the community
+              // aggregate (R10.5, R10.6) — the latter changes whenever a
+              // rating is set, replaced, or removed.
+              void queryClient.invalidateQueries({
+                queryKey: ['experience-rating', experienceId],
+              });
+              void queryClient.invalidateQueries({
+                queryKey: ['experience-aggregate', experienceId],
+              });
+            }}
+          />
+        </Card>
 
-      {/* -------------------------------------------------------------- */}
-      {/* Your Note (R5.3-R5.9). Task 17.3 swaps the placeholder for     */}
-      {/* the real `NoteControl`, which handles add / edit / delete in   */}
-      {/* place. The control owns its own buttons (Add / Edit / Delete   */}
-      {/* / Save / Cancel) so the section header no longer carries the   */}
-      {/* disabled "Edit" placeholder.                                   */}
-      {/* -------------------------------------------------------------- */}
-      <Section title="Your Note">
-        <NoteSection
-          experienceId={experienceId}
-          query={noteQ}
-          onMutated={() => {
-            // Invalidate the cached Note read for this Experience so
-            // the section re-renders with the freshest DTO (R5.8 /
-            // R5.9 render parity). Stats and Share surfaces don't read
-            // off the Note query directly, so a single invalidate
-            // here is sufficient.
-            void queryClient.invalidateQueries({
-              queryKey: ['experience-note', experienceId],
-            });
-          }}
-        />
-      </Section>
+        {/* ------------------------------------------------------------ */}
+        {/* Your Note (R5.3-R5.9).                                       */}
+        {/* ------------------------------------------------------------ */}
+        <Card style={styles.section}>
+          <SectionLabel>Your Note</SectionLabel>
+          <NoteSection
+            experienceId={experienceId}
+            query={noteQ}
+            onMutated={() => {
+              // Invalidate the cached Note read for this Experience so
+              // the section re-renders with the freshest DTO (R5.8 /
+              // R5.9 render parity). Stats and Share surfaces don't read
+              // off the Note query directly, so a single invalidate
+              // here is sufficient.
+              void queryClient.invalidateQueries({
+                queryKey: ['experience-note', experienceId],
+              });
+            }}
+          />
+        </Card>
 
-      {/* -------------------------------------------------------------- */}
-      {/* Community Rating (R10.5, R10.6). Server enforces the           */}
-      {/* `count >= 3` threshold; on the wire, `value === null` either   */}
-      {/* means "below threshold" or "no aggregate row yet" — both       */}
-      {/* render as the same empty state.                                */}
-      {/* -------------------------------------------------------------- */}
-      <Section title="Community Rating">
-        <AggregateContent query={aggregateQ} />
-      </Section>
-    </ScrollView>
+        {/* ------------------------------------------------------------ */}
+        {/* Community Rating (R10.5, R10.6). Server enforces the         */}
+        {/* `count >= 3` threshold; on the wire, `value === null` either */}
+        {/* means "below threshold" or "no aggregate row yet" — both     */}
+        {/* render as the same empty state.                              */}
+        {/* ------------------------------------------------------------ */}
+        <Card style={styles.section}>
+          <SectionLabel>Community Rating</SectionLabel>
+          <AggregateContent query={aggregateQ} />
+        </Card>
+      </ScrollView>
+    </ScreenContainer>
   );
 }
 
@@ -345,12 +369,15 @@ function CompletionSection({
   readonly onMutated: () => void;
 }): JSX.Element {
   if (query.isLoading) {
-    return <ActivityIndicator accessibilityLabel="Loading completion" />;
+    return (
+      <ActivityIndicator
+        accessibilityLabel="Loading completion"
+        color={theme.color.primary}
+      />
+    );
   }
   if (query.isError) {
-    return (
-      <Text style={styles.errorText}>Could not load completion.</Text>
-    );
+    return <Text style={styles.errorText}>Could not load completion.</Text>;
   }
   // `data` is `undefined` until the first fetch resolves; treat it as
   // "no completion yet" so the empty-state mark button is reachable
@@ -375,7 +402,12 @@ function RatingSection({
   readonly onMutated: () => void;
 }): JSX.Element {
   if (query.isLoading) {
-    return <ActivityIndicator accessibilityLabel="Loading rating" />;
+    return (
+      <ActivityIndicator
+        accessibilityLabel="Loading rating"
+        color={theme.color.primary}
+      />
+    );
   }
   if (query.isError) {
     return <Text style={styles.errorText}>Could not load rating.</Text>;
@@ -405,7 +437,12 @@ function NoteSection({
   readonly onMutated: () => void;
 }): JSX.Element {
   if (query.isLoading) {
-    return <ActivityIndicator accessibilityLabel="Loading note" />;
+    return (
+      <ActivityIndicator
+        accessibilityLabel="Loading note"
+        color={theme.color.primary}
+      />
+    );
   }
   if (query.isError) {
     return <Text style={styles.errorText}>Could not load note.</Text>;
@@ -432,14 +469,15 @@ function AggregateContent({
 }): JSX.Element {
   if (query.isLoading) {
     return (
-      <ActivityIndicator accessibilityLabel="Loading community rating" />
+      <ActivityIndicator
+        accessibilityLabel="Loading community rating"
+        color={theme.color.primary}
+      />
     );
   }
   if (query.isError || query.data === undefined) {
     return (
-      <Text style={styles.errorText}>
-        Could not load community rating.
-      </Text>
+      <Text style={styles.errorText}>Could not load community rating.</Text>
     );
   }
   const aggregate = query.data;
@@ -456,9 +494,12 @@ function AggregateContent({
   // contributing rating count.
   return (
     <View style={styles.aggregateBlock}>
-      <Text style={styles.aggregateValue} testID="aggregate-value">
-        {aggregate.value.toFixed(1)} / 10
-      </Text>
+      <View style={styles.aggregateValueRow}>
+        <Ionicons name="star" size={22} color={theme.color.accent} />
+        <Text style={styles.aggregateValue} testID="aggregate-value">
+          {aggregate.value.toFixed(1)} / 10
+        </Text>
+      </View>
       <Text style={styles.aggregateMeta} testID="aggregate-count">
         ({aggregate.count} {aggregate.count === 1 ? 'rating' : 'ratings'})
       </Text>
@@ -467,157 +508,58 @@ function AggregateContent({
 }
 
 // ---------------------------------------------------------------------------
-// Presentational primitives
-// ---------------------------------------------------------------------------
-
-interface BadgeProps {
-  readonly label: string;
-  readonly testID?: string;
-}
-
-function Badge({ label, testID }: BadgeProps): JSX.Element {
-  return (
-    <View style={styles.badge} testID={testID}>
-      <Text style={styles.badgeText}>{label}</Text>
-    </View>
-  );
-}
-
-interface SectionProps {
-  readonly title: string;
-  /**
-   * When provided, renders a disabled placeholder button on the section
-   * header. Tasks 17.1 / 17.2 / 17.3 will replace these with the real
-   * controls; carrying the slot now keeps the layout stable across the
-   * follow-up tasks.
-   */
-  readonly actionLabel?: string;
-  readonly children: React.ReactNode;
-}
-
-function Section({
-  title,
-  actionLabel,
-  children,
-}: SectionProps): JSX.Element {
-  return (
-    <View style={styles.section}>
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>{title}</Text>
-        {actionLabel !== undefined ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`${actionLabel} ${title}`}
-            // No-op; the real handler is wired in the corresponding 17.x
-            // task. Disabled visually so the placeholder doesn't read
-            // as an interactive control.
-            onPress={noop}
-            disabled
-            style={styles.sectionAction}
-          >
-            <Text style={styles.sectionActionText}>{actionLabel}</Text>
-          </Pressable>
-        ) : null}
-      </View>
-      {children}
-    </View>
-  );
-}
-
-function noop(): void {
-  // Intentionally empty — placeholder for 17.x controls.
-}
-
-// ---------------------------------------------------------------------------
 // Styles
 // ---------------------------------------------------------------------------
 
 const styles = StyleSheet.create({
   container: {
-    padding: 24,
-    gap: 16,
+    padding: theme.spacing.lg,
+    paddingBottom: theme.spacing.xxl,
+    gap: theme.spacing.md,
   },
   centered: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 24,
-    gap: 8,
-  },
-  headerBlock: {
-    gap: 8,
-  },
-  name: {
-    fontSize: 24,
-    fontWeight: '700',
+    padding: theme.spacing.xl,
+    gap: theme.spacing.sm,
   },
   badgeRow: {
     flexDirection: 'row',
-    gap: 8,
+    gap: theme.spacing.sm,
     flexWrap: 'wrap',
   },
-  badge: {
-    backgroundColor: '#e5e7eb',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  badgeText: {
-    fontSize: 12,
-    color: '#374151',
-    fontWeight: '600',
-  },
   section: {
-    gap: 6,
-    paddingVertical: 8,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#e5e7eb',
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  sectionAction: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    opacity: 0.5,
-  },
-  sectionActionText: {
-    color: '#6b7280',
-    fontWeight: '600',
+    gap: theme.spacing.md,
   },
   bodyText: {
-    fontSize: 14,
-    color: '#111827',
+    ...theme.typography.body,
+    color: theme.color.textPrimary,
     lineHeight: 20,
   },
   empty: {
-    fontSize: 14,
-    color: '#6b7280',
+    ...theme.typography.body,
+    color: theme.color.textSecondary,
     fontStyle: 'italic',
   },
-  ratingValue: {
-    fontSize: 18,
-    fontWeight: '600',
-  },
   aggregateBlock: {
-    gap: 2,
+    gap: theme.spacing.xs,
+  },
+  aggregateValueRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
   },
   aggregateValue: {
-    fontSize: 20,
-    fontWeight: '700',
+    ...theme.typography.title,
+    color: theme.color.textPrimary,
   },
   aggregateMeta: {
-    fontSize: 12,
-    color: '#6b7280',
+    ...theme.typography.meta,
+    color: theme.color.textSecondary,
   },
   errorText: {
-    color: '#b91c1c',
+    ...theme.typography.body,
+    color: theme.color.danger,
   },
 });

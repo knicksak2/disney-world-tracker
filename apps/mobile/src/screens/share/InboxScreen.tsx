@@ -42,6 +42,11 @@
  *     react-query cache deduplicates lookups across rows — opening
  *     three Shares from the same friend results in one HTTP fetch.
  *
+ * Styling: uses the shared "Magical / Whimsical" theme — a gradient
+ * hero header showing the unread count as a `Badge`, rows as `Card`s,
+ * a calm `EmptyState` for the empty inbox, and themed open / delete
+ * actions. See `theme/theme.ts` and `theme/components.tsx`.
+ *
  * Validates: Requirements R9.8, R9.9, R9.10
  */
 
@@ -50,11 +55,11 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
-  Pressable,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import {
@@ -68,6 +73,15 @@ import {
 } from '@dwt/shared';
 
 import { ApiError, apiRequest } from '../../api/client';
+import { theme } from '../../theme/theme';
+import {
+  Badge,
+  Card,
+  EmptyState,
+  GradientHeader,
+  ScreenContainer,
+  SecondaryButton,
+} from '../../theme/components';
 
 // ---------------------------------------------------------------------------
 // Wire shapes
@@ -333,17 +347,27 @@ export default function InboxScreen(): JSX.Element {
 
   if (inboxQuery.isLoading) {
     return (
-      <View style={styles.centerWrap}>
-        <ActivityIndicator />
-      </View>
+      <ScreenContainer>
+        <GradientHeader title="Inbox" icon="mail" />
+        <View style={styles.centerWrap}>
+          <ActivityIndicator color={theme.color.primary} />
+        </View>
+      </ScreenContainer>
     );
   }
 
   if (inboxQuery.isError || inboxQuery.data === undefined) {
     return (
-      <View style={styles.centerWrap}>
-        <Text style={styles.errorText}>{ERROR_COPY}</Text>
-      </View>
+      <ScreenContainer>
+        <GradientHeader title="Inbox" icon="mail" />
+        <View style={styles.centerWrap}>
+          <EmptyState
+            icon="cloud-offline-outline"
+            title="Couldn't load your inbox"
+            body={ERROR_COPY}
+          />
+        </View>
+      </ScreenContainer>
     );
   }
 
@@ -357,23 +381,31 @@ export default function InboxScreen(): JSX.Element {
   const displayedUnread = Math.max(unread, localUnread);
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Inbox</Text>
-        <Text
-          style={styles.headerCount}
-          accessibilityLabel={`${displayedUnread} unread shares`}
-        >
-          {displayedUnread} unread
-        </Text>
-      </View>
+    <ScreenContainer>
+      <GradientHeader
+        title="Inbox"
+        subtitle="Shares your friends sent your way."
+        icon="mail"
+        right={
+          <Badge
+            label={`${displayedUnread} unread`}
+            color={theme.color.accent}
+            icon="ellipse"
+            testID="inbox-unread-badge"
+          />
+        }
+      />
       <FlatList
         data={items}
         keyExtractor={(item) => item.shareId}
-        ItemSeparatorComponent={() => <View style={styles.separator} />}
+        contentContainerStyle={styles.listContent}
         ListEmptyComponent={
           <View style={styles.centerWrap}>
-            <Text style={styles.emptyText}>{EMPTY_COPY}</Text>
+            <EmptyState
+              icon="mail-open-outline"
+              title={EMPTY_COPY}
+              body="When friends share with you, it'll show up here."
+            />
           </View>
         }
         renderItem={({ item }) => (
@@ -392,7 +424,7 @@ export default function InboxScreen(): JSX.Element {
           />
         )}
       />
-    </View>
+    </ScreenContainer>
   );
 }
 
@@ -422,37 +454,33 @@ function InboxRow(props: {
 
   if (!item.isOpened) {
     return (
-      <View style={styles.row}>
-        <Pressable
-          onPress={onOpen}
-          disabled={isOpening}
-          style={({ pressed }) => [
-            styles.rowMain,
-            pressed && styles.rowPressed,
-          ]}
-          accessibilityRole="button"
-          accessibilityLabel="Open unopened share"
-        >
-          <Text style={styles.unopenedDot}>{'\u25cf'}</Text>
-          <Text style={styles.unopenedLabel}>
-            {isOpening ? 'Opening\u2026' : 'Unopened share'}
-          </Text>
-        </Pressable>
-        <Pressable
-          onPress={onDelete}
-          disabled={isDeleting}
-          style={({ pressed }) => [
-            styles.deleteBtn,
-            pressed && styles.deleteBtnPressed,
-          ]}
-          accessibilityRole="button"
-          accessibilityLabel="Delete share"
-        >
-          <Text style={styles.deleteBtnText}>
-            {isDeleting ? '\u2026' : 'Delete'}
-          </Text>
-        </Pressable>
-      </View>
+      <Card
+        {...(isOpening ? {} : { onPress: onOpen })}
+        accentColor={theme.color.accent}
+        style={styles.row}
+      >
+        <View style={styles.rowInner}>
+          <View style={styles.unopenedMain}>
+            <Ionicons
+              name="ellipse"
+              size={10}
+              color={theme.color.accent}
+              style={styles.unopenedDot}
+            />
+            <Text style={styles.unopenedLabel}>
+              {isOpening ? 'Opening\u2026' : 'Unopened share'}
+            </Text>
+          </View>
+          <SecondaryButton
+            label={isDeleting ? '\u2026' : 'Delete'}
+            icon="trash-outline"
+            tone="danger"
+            onPress={onDelete}
+            disabled={isDeleting}
+            accessibilityLabel="Delete share"
+          />
+        </View>
+      </Card>
     );
   }
 
@@ -462,36 +490,34 @@ function InboxRow(props: {
   // something rather than crashing.
   const { senderId, payload, sentAt } = item;
   return (
-    <View style={styles.row}>
-      <View style={styles.rowMain}>
-        <View style={styles.openedHeader}>
-          {senderId !== undefined && <SenderName senderId={senderId} />}
-          {sentAt !== undefined && (
-            <Text style={styles.timestamp}>{formatTimestamp(sentAt)}</Text>
+    <Card accentColor={theme.color.primary} style={styles.row}>
+      <View style={styles.openedTopRow}>
+        <View style={styles.openedMain}>
+          <View style={styles.openedHeader}>
+            {senderId !== undefined && <SenderName senderId={senderId} />}
+            {sentAt !== undefined && (
+              <Text style={styles.timestamp}>{formatTimestamp(sentAt)}</Text>
+            )}
+          </View>
+          {payload !== undefined && (
+            <View style={styles.payloadWrap}>
+              <Text style={styles.summary}>{summarizePayload(payload)}</Text>
+              {renderPayloadBody(payload)}
+            </View>
           )}
         </View>
-        {payload !== undefined && (
-          <View>
-            <Text style={styles.summary}>{summarizePayload(payload)}</Text>
-            {renderPayloadBody(payload)}
-          </View>
-        )}
       </View>
-      <Pressable
-        onPress={onDelete}
-        disabled={isDeleting}
-        style={({ pressed }) => [
-          styles.deleteBtn,
-          pressed && styles.deleteBtnPressed,
-        ]}
-        accessibilityRole="button"
-        accessibilityLabel="Delete share"
-      >
-        <Text style={styles.deleteBtnText}>
-          {isDeleting ? '\u2026' : 'Delete'}
-        </Text>
-      </Pressable>
-    </View>
+      <View style={styles.openedActions}>
+        <SecondaryButton
+          label={isDeleting ? 'Deleting\u2026' : 'Delete'}
+          icon="trash-outline"
+          tone="danger"
+          onPress={onDelete}
+          disabled={isDeleting}
+          accessibilityLabel="Delete share"
+        />
+      </View>
+    </Card>
   );
 }
 
@@ -500,71 +526,46 @@ function InboxRow(props: {
 // ---------------------------------------------------------------------------
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomColor: '#e5e7eb',
-    borderBottomWidth: 1,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-  },
-  headerCount: {
-    fontSize: 14,
-    color: '#374151',
-  },
   centerWrap: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 24,
+    padding: theme.spacing.xl,
   },
-  errorText: {
-    fontSize: 14,
-    color: '#b91c1c',
-    textAlign: 'center',
-  },
-  emptyText: {
-    fontSize: 14,
-    color: '#6b7280',
-    textAlign: 'center',
-  },
-  separator: {
-    height: 1,
-    backgroundColor: '#f1f5f9',
+  listContent: {
+    paddingHorizontal: theme.spacing.lg,
+    paddingTop: theme.spacing.md,
+    paddingBottom: theme.spacing.xxl,
+    flexGrow: 1,
   },
   row: {
+    marginBottom: theme.spacing.md,
+    gap: theme.spacing.md,
+  },
+  rowInner: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 8,
+    justifyContent: 'space-between',
+    gap: theme.spacing.md,
   },
-  rowMain: {
-    flex: 1,
-    flexDirection: 'column',
-    gap: 4,
-  },
-  rowPressed: {
-    opacity: 0.6,
+  unopenedMain: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexShrink: 1,
   },
   unopenedDot: {
-    color: '#2563eb',
-    fontSize: 14,
-    marginRight: 8,
+    marginRight: theme.spacing.sm,
   },
   unopenedLabel: {
-    fontSize: 16,
-    color: '#111827',
-    fontWeight: '500',
+    ...theme.typography.subtitle,
+    color: theme.color.textPrimary,
+  },
+  openedTopRow: {
+    flexDirection: 'row',
+  },
+  openedMain: {
+    flex: 1,
+    gap: theme.spacing.xs,
   },
   openedHeader: {
     flexDirection: 'row',
@@ -572,35 +573,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   sender: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
+    ...theme.typography.subtitle,
+    color: theme.color.textPrimary,
   },
   timestamp: {
-    fontSize: 12,
-    color: '#6b7280',
+    ...theme.typography.meta,
+    color: theme.color.textSecondary,
+  },
+  payloadWrap: {
+    gap: 2,
   },
   summary: {
-    fontSize: 14,
-    color: '#374151',
+    ...theme.typography.body,
+    color: theme.color.textPrimary,
     marginTop: 2,
   },
   bodyLine: {
-    fontSize: 13,
-    color: '#4b5563',
+    ...theme.typography.meta,
+    color: theme.color.textSecondary,
   },
-  deleteBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 4,
-    backgroundColor: '#fee2e2',
-  },
-  deleteBtnPressed: {
-    opacity: 0.6,
-  },
-  deleteBtnText: {
-    fontSize: 13,
-    color: '#b91c1c',
-    fontWeight: '500',
+  openedActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
   },
 });

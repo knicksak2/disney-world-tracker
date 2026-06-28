@@ -4,6 +4,7 @@ import {
   createNativeStackNavigator,
 } from '@react-navigation/native-stack';
 import type { NavigatorScreenParams } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 
 import { setOnUnauthorizedCallback } from '../api/client';
 import { useSessionStore } from '../state/sessionStore';
@@ -74,9 +75,35 @@ function AuthStackNavigator(): JSX.Element {
   );
 }
 
+/**
+ * Map each main tab to its Ionicons glyph (filled when focused, outline
+ * otherwise). Kept as a module constant so the `screenOptions` callback
+ * stays a cheap lookup rather than a per-render branch.
+ */
+const TAB_ICONS: Record<
+  keyof MainTabParamList,
+  { readonly focused: keyof typeof Ionicons.glyphMap; readonly unfocused: keyof typeof Ionicons.glyphMap }
+> = {
+  Home: { focused: 'home', unfocused: 'home-outline' },
+  Catalog: { focused: 'compass', unfocused: 'compass-outline' },
+  Stats: { focused: 'stats-chart', unfocused: 'stats-chart-outline' },
+  Friends: { focused: 'people', unfocused: 'people-outline' },
+  Profile: { focused: 'person-circle', unfocused: 'person-circle-outline' },
+};
+
 function MainTabsNavigator(): JSX.Element {
   return (
-    <MainTabs.Navigator>
+    <MainTabs.Navigator
+      screenOptions={({ route }) => ({
+        tabBarActiveTintColor: '#003a9b',
+        tabBarInactiveTintColor: '#6b7280',
+        tabBarIcon: ({ focused, color, size }) => {
+          const glyphs = TAB_ICONS[route.name];
+          const name = focused ? glyphs.focused : glyphs.unfocused;
+          return <Ionicons name={name} size={size} color={color} />;
+        },
+      })}
+    >
       <MainTabs.Screen name="Home" component={HomeScreen} />
       <MainTabs.Screen
         name="Catalog"
