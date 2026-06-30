@@ -1,0 +1,14 @@
+# Normalize line endings so file checksums are stable across OS.
+# SQL migrations are hashed by the migration runner; CRLF vs LF would change
+# the checksum and break the "already applied" check on a Linux host.
+*.sql text eol=lf
+
+# Keep source and config files LF everywhere (matches .editorconfig).
+*.ts text eol=lf
+*.tsx text eol=lf
+*.js text eol=lf
+*.mjs text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
