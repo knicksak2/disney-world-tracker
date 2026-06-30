@@ -21,7 +21,12 @@ services:
     # SQL migrations. Migrations live in the build step because Render's free
     # tier does not support a separate preDeployCommand; they are idempotent,
     # so re-running on every deploy just skips already-applied files.
-    buildCommand: npm ci && npm run build:shared && npm run build --workspace apps/api && npm run migrate --workspace apps/api
+    #
+    # `--include=dev` is required: NODE_ENV=production (set below, needed at
+    # runtime) otherwise makes npm omit devDependencies, but the build needs
+    # them (typescript, @types/*, tsx for migrations). Runtime `npm start`
+    # only uses production deps, so shipping dev deps in the image is harmless.
+    buildCommand: npm ci --include=dev && npm run build:shared && npm run build --workspace apps/api && npm run migrate --workspace apps/api
     startCommand: npm start --workspace apps/api
     healthCheckPath: /health
     envVars:
