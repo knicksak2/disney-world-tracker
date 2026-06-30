@@ -9,7 +9,7 @@
     "dev": "tsx watch --env-file=.env src/index.ts",
     "dev:cloud": "tsx watch --env-file=.env.dev src/index.ts",
     "start": "node --env-file-if-exists=.env dist/index.js",
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest --run",
     "migrate": "tsx --env-file-if-exists=.env src/db/migrate.ts",
