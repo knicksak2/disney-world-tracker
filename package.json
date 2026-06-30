@@ -18,9 +18,11 @@
     "test": "npm test --workspaces --if-present",
     "build": "npm run build --workspaces --if-present",
     "dev:api": "npm run dev --workspace apps/api",
+    "dev:api:cloud": "npm run dev:cloud --workspace apps/api",
     "dev:mobile": "npm run dev --workspace apps/mobile",
     "build:shared": "npm run build --workspace packages/shared",
-    "migrate": "npm run migrate --workspace apps/api"
+    "migrate": "npm run migrate --workspace apps/api",
+    "migrate:cloud": "npm run migrate:cloud --workspace apps/api"
   },
   "devDependencies": {
     "@eslint/js": "^9.9.0",

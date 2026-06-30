@@ -24,10 +24,10 @@ coverage/
 .nyc_output/
 *.lcov
 
-# Environment files
+# Environment files — ignore everything except the committed *.example templates
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
 
 # Editor / OS
 .DS_Store

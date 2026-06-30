@@ -35,7 +35,8 @@ Set up the environment files (one-time). On Windows use `copy`; on macOS / Linux
 copy apps\api\.env.example apps\api\.env          # Windows
 cp apps/api/.env.example apps/api/.env            # macOS / Linux
 
-# Mobile env — Expo auto-loads this; defaults to the Android emulator URL
+# Mobile env — OPTIONAL. The app defaults to the Android emulator URL with no
+# config. Only copy this if you target an iOS simulator or a physical phone.
 copy apps\mobile\.env.example apps\mobile\.env.local   # Windows
 cp apps/mobile/.env.example apps/mobile/.env.local     # macOS / Linux
 ```
@@ -56,7 +57,7 @@ Three terminals total once everything is running:
 
 When the Expo server prints a QR code, scan it with the Expo Go app on your phone, or press `i` for the iOS simulator / `a` for the Android emulator.
 
-The mobile app reads its API URL from `apps/mobile/.env.local`. The template defaults to `http://10.0.2.2:3000` for the Android emulator; if you target the iOS simulator or a physical phone, edit that one line (see [Mobile `dev` script](#mobile-dev-script) for the values). Restart Metro after changing it.
+The mobile app resolves its API URL automatically: local `expo start` runs default to `http://10.0.2.2:3000` (the Android emulator), while production builds target the hosted Render API. You only need `apps/mobile/.env.local` to override the local target (iOS simulator or a physical phone); see [Mobile `dev` script](#mobile-dev-script). Restart Metro after changing it.
 
 ## What Each Piece Does
 
@@ -85,11 +86,22 @@ The MinIO console is at http://localhost:9001 (login: `dwt-minio-admin` / `dwt-m
 
 ### `apps/api/.env`
 
-The API never reads `process.env` directly outside its config loader, so every backend setting lives in `apps/api/.env`. The `.env.example` template ships with values that match `docker-compose.yml` — just copy it to `.env` (see [Quickstart](#quickstart--run-everything-locally)). The real `.env` is gitignored.
+The API never reads `process.env` directly outside its config loader, so every backend setting lives in an env file. The `.env.example` template ships with values that match `docker-compose.yml` — just copy it to `.env` (see [Quickstart](#quickstart--run-everything-locally)). The real `.env` is gitignored.
 
 Required keys: `DATABASE_URL`, `REDIS_URL`, `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `SESSION_SECRET` (32+ chars), `THEMEPARKS_BASE_URL`. See `apps/api/.env.example` for descriptions.
 
 Optional keys: `WIKI_CONTACT` — a contact email or project URL used only by the image-sourcing job (`npm run source-images`); see [Experience Images](#experience-images). Not needed to run the API server.
+
+#### Two environments: local vs hosted dev
+
+You can point the API at either your local Docker stack or your hosted managed services (Neon / Upstash / Cloudflare R2) without editing files — each lives in its own gitignored env file and has its own command:
+
+| Target | Env file | Run the API | Run migrations |
+| --- | --- | --- | --- |
+| **Local** (Docker) | `apps/api/.env` | `npm run dev:api` | `npm run migrate` |
+| **Hosted dev** (Neon/Upstash/R2) | `apps/api/.env.dev` | `npm run dev:api:cloud` | `npm run migrate:cloud` |
+
+Copy `.env.example` to `.env.dev` and fill in your managed-service credentials there. The two files never interfere, so switching environments is just a matter of which command you run. (`migrate:cloud` only needs `DATABASE_URL`; running the full API with `dev:api:cloud` needs the Redis and S3 values filled in too.) All `.env*` files except `.env.example` are gitignored.
 
 ### API `dev` script
 
@@ -110,11 +122,23 @@ Run it with `npm run dev:api` from the repo root.
 npm run dev:mobile
 ```
 
-Runs `expo start` from `apps/mobile`. The Expo dev server reads `apps/mobile/app.config.ts`, which exposes `extra.apiBaseUrl` to the app via `expo-constants`. The base URL comes from the `API_BASE_URL` env var, falling back to `http://localhost:3000` when unset.
+Runs `expo start` from `apps/mobile`. The Expo dev server reads `apps/mobile/app.config.ts`, which exposes `extra.apiBaseUrl` to the app via `expo-constants`.
 
-#### Local config with `.env.local` (recommended)
+#### How the API base URL is chosen
 
-Expo's CLI automatically loads `apps/mobile/.env.local` (gitignored) when it starts, so you can set the API URL once instead of typing it before every run. Copy the template and you're done:
+`app.config.ts` resolves the base URL with this precedence (first match wins):
+
+| # | Source | When it applies |
+| --- | --- | --- |
+| 1 | `API_BASE_URL` env var | Any context — explicit override |
+| 2 | `PROD_API_BASE_URL` env var (default `https://dwt-api.onrender.com`) | Release builds/exports, where Expo sets `NODE_ENV=production` |
+| 3 | Built-in default `http://10.0.2.2:3000` | Local `expo start` (`NODE_ENV=development`) |
+
+The upshot: a plain `npm run dev:mobile` hits your **local** API automatically, and a production build (`expo export` / EAS) targets **Render** automatically — no env juggling between them. The hosted default matches the `dwt-api` service in `render.yaml`; if you rename the Render service, set `PROD_API_BASE_URL` to its URL.
+
+#### Local config with `.env.local` (only to override the local target)
+
+You don't need `.env.local` at all for the Android emulator — that's the built-in default. Create it only to point local dev somewhere else (iOS simulator, physical phone). Expo's CLI loads `apps/mobile/.env.local` (gitignored) automatically at startup:
 
 ```bash
 # Windows
@@ -124,15 +148,17 @@ copy apps\mobile\.env.example apps\mobile\.env.local
 cp apps/mobile/.env.example apps/mobile/.env.local
 ```
 
-The template defaults to `http://10.0.2.2:3000` for the Android emulator (`10.0.2.2` is how the emulator reaches the host machine). Edit `.env.local` for your target:
+Then uncomment `API_BASE_URL` in `.env.local` and set your target:
 
 | Target | `API_BASE_URL` |
 | --- | --- |
-| Android emulator | `http://10.0.2.2:3000` |
+| Android emulator | `http://10.0.2.2:3000` (the default — no `.env.local` needed) |
 | iOS simulator | `http://localhost:3000` |
 | Physical phone (Expo Go) | `http://<your-LAN-IP>:3000`, e.g. `http://192.168.1.50:3000` |
 
-Then just run `npm run dev:mobile`. Find your LAN IP with `ipconfig` (Windows) or `ifconfig` / `ip a` (macOS / Linux).
+Find your LAN IP with `ipconfig` (Windows) or `ifconfig` / `ip a` (macOS / Linux).
+
+> Because `API_BASE_URL` wins in **every** context (precedence #1), setting it in `.env.local` also applies to a local `expo export`. That's harmless for EAS/CI builds (no `.env.local` there), just keep it in mind if you run a production export on your own machine.
 
 Because the value is read at Expo startup, restart Metro after editing `.env.local`.
 
@@ -187,7 +213,7 @@ adb shell pm list packages | findstr exponent    # expect: package:host.exp.expo
 
 If you'd rather keep the **LAN** URL (e.g. to also test on a physical phone over the same Wi-Fi), allow Node.js through Windows Defender Firewall on **Private** networks for port `8081` instead — and skip both the `adb reverse` and `REACT_NATIVE_PACKAGER_HOSTNAME` steps.
 
-> The app's API base URL is independent of how Metro connects: it comes from `apps/mobile/.env.local` (default `http://10.0.2.2:3000`, the emulator's route to the host). Make sure `npm run dev:api` is running so the app has a backend to talk to.
+> The app's API base URL is independent of how Metro connects: in local dev it defaults to `http://10.0.2.2:3000` (the emulator's route to the host), overridable via `API_BASE_URL` in `apps/mobile/.env.local`. Make sure `npm run dev:api` is running so the app has a backend to talk to.
 
 #### One-off override
 
@@ -210,9 +236,11 @@ All from the repo root.
 
 | Command | What it does |
 | --- | --- |
-| `npm run dev:api` | Starts the Fastify API in watch mode against the services in `docker-compose.yml`. |
+| `npm run dev:api` | Starts the Fastify API in watch mode against the **local** services in `docker-compose.yml` (uses `apps/api/.env`). |
+| `npm run dev:api:cloud` | Starts the Fastify API in watch mode against your **hosted dev** services (uses `apps/api/.env.dev`). |
 | `npm run dev:mobile` | Starts the Expo dev server. |
-| `npm run migrate` | Applies any pending SQL migrations from `apps/api/migrations/` to the configured Postgres. Idempotent. |
+| `npm run migrate` | Applies any pending SQL migrations from `apps/api/migrations/` to the **local** Postgres (`apps/api/.env`). Idempotent. |
+| `npm run migrate:cloud` | Applies pending migrations to the **hosted** Postgres (`apps/api/.env.dev`). Idempotent. |
 | `npm run lint` | Runs ESLint across the entire repo using the shared `eslint.config.mjs`. |
 | `npm run typecheck` | Runs `tsc --noEmit` in every workspace. |
 | `npm test` | Runs the test suite in every workspace (vitest for API + shared, jest for mobile). |
@@ -299,6 +327,31 @@ curl -X POST http://localhost:3000/auth/register \
 ```
 
 If both succeed, the API is talking to Postgres and Redis correctly. The mobile app can then reach the same endpoints.
+
+## Deploying the API (Render)
+
+The API deploys to [Render](https://render.com) as a free Web Service, defined as code in [`render.yaml`](./render.yaml) (a Render Blueprint). The backing services are managed elsewhere on their own free tiers — Postgres on [Neon](https://neon.tech), Redis on [Upstash](https://upstash.com), and avatar storage on [Cloudflare R2](https://developers.cloudflare.com/r2/). See [`hosting.md`](./.kiro/specs/disney-world-tracker/hosting.md) for the full rationale and free-tier details.
+
+### One-time provider setup
+
+1. **Neon** — create a project, then copy the **pooled** connection string (host contains `-pooler`, ends with `?sslmode=require`). The schema and extensions (`citext`, `pg_trgm`, `pgcrypto`) are created by the migrations, not by hand. You don't need Neon Auth — the app has its own auth.
+2. **Upstash** — create a Redis database, copy the `rediss://` URL.
+3. **Cloudflare R2** — create a bucket (e.g. `avatars-dev`), generate an Access Key ID + Secret, and note the S3 endpoint `https://<accountid>.r2.cloudflarestorage.com`.
+
+### Deploy
+
+1. Push to the `develop` branch (the branch `render.yaml` auto-deploys).
+2. In Render: **New +** → **Blueprint** → select this repo. Render reads `render.yaml`.
+3. Fill in the secret env vars it prompts for (these are `sync: false` in the blueprint): `DATABASE_URL`, `REDIS_URL`, `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`. `SESSION_SECRET` is auto-generated; `NODE_ENV` and `THEMEPARKS_BASE_URL` are preset.
+4. Render runs the build (`npm ci` → build shared → build API), applies migrations as a pre-deploy step, then starts the server. The health check is `GET /health`.
+
+The deployed URL looks like `https://dwt-api.onrender.com` — this is also the default the mobile app targets in production builds (see [How the API base URL is chosen](#how-the-api-base-url-is-chosen)). If you rename the Render service, set `PROD_API_BASE_URL` in the mobile app to match.
+
+> **Free-tier note:** the service sleeps after 15 minutes idle, so the first request after a quiet period takes 30–60s to wake. Expected, not a bug.
+
+### Testing against hosted services from your machine
+
+Before (or instead of) deploying, you can run the API or migrations locally against the hosted services using `apps/api/.env.dev` — see [Two environments: local vs hosted dev](#two-environments-local-vs-hosted-dev). For example, `npm run migrate:cloud` applies the schema to Neon from your machine; Render's pre-deploy step then finds them already applied and skips them.
 
 ## Tooling Conventions
 

@@ -1,0 +1,47 @@
+# Render Blueprint for the Disney World Tracker API.
+#
+# This provisions the Fastify API as a free-tier Web Service. The backing
+# services (Postgres, Redis, object storage) are NOT created here — they live
+# on Neon, Upstash, and Cloudflare R2 respectively (see
+# .kiro/specs/disney-world-tracker/hosting.md). You paste their credentials
+# into the environment variables below from the Render dashboard.
+#
+# Deploy: push this file to your repo, then in Render choose
+# "New +" -> "Blueprint" and point it at this repository/branch.
+
+services:
+  - type: web
+    name: dwt-api
+    runtime: node
+    plan: free
+    region: ohio # US East — keep all providers in the same region for latency
+    branch: develop # the branch Render auto-deploys
+    # Install the whole workspace (lockfile-exact), build the shared package
+    # that the API imports, then compile the API to dist/.
+    buildCommand: npm ci && npm run build:shared && npm run build --workspace apps/api
+    # Apply any pending SQL migrations against Neon before each release goes live.
+    preDeployCommand: npm run migrate --workspace apps/api
+    startCommand: npm start --workspace apps/api
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Render injects PORT automatically; the config falls back to 3000 locally.
+      # The remaining values are secrets — set them in the dashboard, not in git.
+      - key: DATABASE_URL # Neon pooled connection string (?sslmode=require)
+        sync: false
+      - key: REDIS_URL # Upstash rediss:// URL (TLS)
+        sync: false
+      - key: S3_ENDPOINT # https://<accountid>.r2.cloudflarestorage.com
+        sync: false
+      - key: S3_BUCKET # e.g. avatars-dev
+        sync: false
+      - key: S3_ACCESS_KEY_ID
+        sync: false
+      - key: S3_SECRET_ACCESS_KEY
+        sync: false
+      - key: THEMEPARKS_BASE_URL
+        value: https://api.themeparks.wiki/v1
+      # 256-bit session signing secret — generated once by Render and kept stable.
+      - key: SESSION_SECRET
+        generateValue: true

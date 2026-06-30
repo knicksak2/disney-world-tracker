@@ -7,11 +7,13 @@
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch --env-file=.env src/index.ts",
-    "start": "node --env-file=.env dist/index.js",
+    "dev:cloud": "tsx watch --env-file=.env.dev src/index.ts",
+    "start": "node --env-file-if-exists=.env dist/index.js",
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest --run",
-    "migrate": "tsx --env-file=.env src/db/migrate.ts",
+    "migrate": "tsx --env-file-if-exists=.env src/db/migrate.ts",
+    "migrate:cloud": "tsx --env-file=.env.dev src/db/migrate.ts",
     "sync": "tsx --env-file=.env src/scripts/runSync.ts",
     "source-images": "tsx --env-file=.env src/scripts/sourceImages.ts"
   },
