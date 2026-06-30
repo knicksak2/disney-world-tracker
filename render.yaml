@@ -17,10 +17,11 @@ services:
     region: ohio # US East — keep all providers in the same region for latency
     branch: develop # the branch Render auto-deploys
     # Install the whole workspace (lockfile-exact), build the shared package
-    # that the API imports, then compile the API to dist/.
-    buildCommand: npm ci && npm run build:shared && npm run build --workspace apps/api
-    # Apply any pending SQL migrations against Neon before each release goes live.
-    preDeployCommand: npm run migrate --workspace apps/api
+    # that the API imports, compile the API to dist/, then apply any pending
+    # SQL migrations. Migrations live in the build step because Render's free
+    # tier does not support a separate preDeployCommand; they are idempotent,
+    # so re-running on every deploy just skips already-applied files.
+    buildCommand: npm ci && npm run build:shared && npm run build --workspace apps/api && npm run migrate --workspace apps/api
     startCommand: npm start --workspace apps/api
     healthCheckPath: /health
     envVars:

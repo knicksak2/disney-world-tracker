@@ -343,7 +343,7 @@ The API deploys to [Render](https://render.com) as a free Web Service, defined a
 1. Push to the `develop` branch (the branch `render.yaml` auto-deploys).
 2. In Render: **New +** → **Blueprint** → select this repo. Render reads `render.yaml`.
 3. Fill in the secret env vars it prompts for (these are `sync: false` in the blueprint): `DATABASE_URL`, `REDIS_URL`, `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`. `SESSION_SECRET` is auto-generated; `NODE_ENV` and `THEMEPARKS_BASE_URL` are preset.
-4. Render runs the build (`npm ci` → build shared → build API), applies migrations as a pre-deploy step, then starts the server. The health check is `GET /health`.
+4. Render runs the build (`npm ci` → build shared → build API → apply migrations), then starts the server. The health check is `GET /health`. (Migrations run in the build step because Render's free tier doesn't support a separate pre-deploy command; they're idempotent, so they're skipped when already applied.)
 
 The deployed URL looks like `https://dwt-api.onrender.com` — this is also the default the mobile app targets in production builds (see [How the API base URL is chosen](#how-the-api-base-url-is-chosen)). If you rename the Render service, set `PROD_API_BASE_URL` in the mobile app to match.
 
@@ -351,7 +351,7 @@ The deployed URL looks like `https://dwt-api.onrender.com` — this is also the 
 
 ### Testing against hosted services from your machine
 
-Before (or instead of) deploying, you can run the API or migrations locally against the hosted services using `apps/api/.env.dev` — see [Two environments: local vs hosted dev](#two-environments-local-vs-hosted-dev). For example, `npm run migrate:cloud` applies the schema to Neon from your machine; Render's pre-deploy step then finds them already applied and skips them.
+Before (or instead of) deploying, you can run the API or migrations locally against the hosted services using `apps/api/.env.dev` — see [Two environments: local vs hosted dev](#two-environments-local-vs-hosted-dev). For example, `npm run migrate:cloud` applies the schema to Neon from your machine; Render's build-step migration then finds them already applied and skips them.
 
 ## Tooling Conventions
 
