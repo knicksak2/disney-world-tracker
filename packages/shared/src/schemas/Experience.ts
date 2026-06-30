@@ -27,5 +27,9 @@ export const experienceSchema = z
     category: experienceCategorySchema,
     description: z.string().max(1000),
     active: z.boolean(),
+    // Optional + nullable: curated out of band from the catalog sync, so a
+    // row may have no image yet (null) and pre-field fixtures may omit it.
+    imageUrl: z.string().url().max(2048).nullable().optional(),
+    imageAttribution: z.string().max(1000).nullable().optional(),
   })
   .strict();

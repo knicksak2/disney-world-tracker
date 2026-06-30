@@ -11,7 +11,9 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest --run",
-    "migrate": "tsx --env-file=.env src/db/migrate.ts"
+    "migrate": "tsx --env-file=.env src/db/migrate.ts",
+    "sync": "tsx --env-file=.env src/scripts/runSync.ts",
+    "source-images": "tsx --env-file=.env src/scripts/sourceImages.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.620.0",

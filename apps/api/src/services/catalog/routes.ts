@@ -136,6 +136,10 @@ export interface ExperienceDetailResponse {
   readonly park: Park;
   readonly category: ExperienceCategory;
   readonly description: string;
+  /** Representative image URL, or `null` when none has been sourced. */
+  readonly imageUrl: string | null;
+  /** Attribution/license note for `imageUrl`, or `null`. */
+  readonly imageAttribution: string | null;
 }
 
 /**
@@ -309,6 +313,8 @@ function toDetailResponse(experience: ExperienceDTO): ExperienceDetailResponse {
     park: experience.park,
     category: experience.category,
     description: experience.description,
+    imageUrl: experience.imageUrl ?? null,
+    imageAttribution: experience.imageAttribution ?? null,
   };
 }
 

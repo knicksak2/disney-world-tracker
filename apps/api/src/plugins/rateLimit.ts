@@ -5,7 +5,7 @@
  * the design's "Security and privacy" section:
  *
  *   - **Reads (HTTP GET / HEAD): 60 requests / minute, per-user.**
- *   - **Mutations (HTTP POST / PUT / PATCH / DELETE): 10 requests / minute, per-user.**
+ *   - **Mutations (HTTP POST / PUT / PATCH / DELETE): 60 requests / minute, per-user.**
  *   - **`POST /auth/login`: 5 attempts / 15 minutes, per-account (email-keyed).**
  *
  * The email-keyed login limit is the defense-in-depth backstop for R6.7's
@@ -103,14 +103,21 @@ export interface DwtRateLimitOptions {
   readonly redis?: RateLimitPluginOptions['redis'];
   /** GET/HEAD budget. Defaults to 60 / 60_000ms (one minute). */
   readonly reads?: RouteGroupBudget;
-  /** POST/PUT/PATCH/DELETE budget. Defaults to 10 / 60_000ms. */
+  /** POST/PUT/PATCH/DELETE budget. Defaults to 60 / 60_000ms. */
   readonly mutations?: RouteGroupBudget;
   /** `POST /auth/login` budget. Defaults to 5 / 900_000ms (15 minutes). */
   readonly loginAccount?: RouteGroupBudget;
 }
 
 const DEFAULT_READS: RouteGroupBudget = { max: 60, timeWindowMs: 60_000 };
-const DEFAULT_MUTATIONS: RouteGroupBudget = { max: 10, timeWindowMs: 60_000 };
+// Mutations get the same 60/min budget as reads. The app's core flow is
+// "log my visit" — a single Experience can take up to three writes
+// (completion + rating + note) and users routinely revise ratings/notes
+// and log several Experiences in quick succession, so a tighter cap
+// (the original 10/min) tripped legitimate usage. 60/min per user still
+// firmly throttles automated write floods (defense in depth, R6.7) while
+// leaving real users ample headroom.
+const DEFAULT_MUTATIONS: RouteGroupBudget = { max: 60, timeWindowMs: 60_000 };
 const DEFAULT_LOGIN_ACCOUNT: RouteGroupBudget = {
   max: 5,
   timeWindowMs: 15 * 60_000,

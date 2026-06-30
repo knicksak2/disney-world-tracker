@@ -312,14 +312,17 @@ describe('GET /catalog/:experienceId', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    // The detail response carries id+name+park+category+description; no
-    // `active` flag (it's only relevant to the browse path).
+    // The detail response carries id+name+park+category+description plus the
+    // optional image fields (null when unsourced); no `active` flag (it's
+    // only relevant to the browse path).
     expect(res.json()).toEqual({
       id: exp.id,
       name: exp.name,
       park: exp.park,
       category: exp.category,
       description: exp.description,
+      imageUrl: null,
+      imageAttribution: null,
     });
     expect(res.json()).not.toHaveProperty('active');
     await app.close();

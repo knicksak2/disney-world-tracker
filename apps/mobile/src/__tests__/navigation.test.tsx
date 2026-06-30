@@ -178,6 +178,22 @@ describe('navigation (R6.10, R11.6, R11.12)', () => {
       if (path === '/home/highest-rated') {
         return { entries: [SAMPLE_ENTRY] };
       }
+      // The detail screen's live read hits `/catalog/:id/live`. It must be
+      // matched before the generic `/catalog/` branch below (which would
+      // otherwise return the catalog-detail shape and make the live section
+      // throw). Serve a minimal, valid `LiveDetailResponseDTO`.
+      if (typeof path === 'string' && path.endsWith('/live')) {
+        return {
+          liveDetail: {
+            status: 'Unknown',
+            showtimes: [],
+            operatingHours: [],
+            diningAvailability: [],
+          },
+          retrievedAt: '2024-05-01T19:30:00Z',
+          stale: false,
+        };
+      }
       if (typeof path === 'string' && path.startsWith('/catalog/')) {
         return {
           id: SAMPLE_ENTRY.experienceId,

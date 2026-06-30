@@ -34,6 +34,9 @@ export const ERROR_CODES = [
   'catalog_unavailable',
   'stale_cache',
 
+  // -- Live experience details (R2.8, R3.2) -----------------------------
+  'live_unavailable',
+
   // -- Tracking: completions (R2.6-R2.8) --------------------------------
   'completion_future_date',
   'completion_not_found',
@@ -132,6 +135,9 @@ export const errorCodeToHttpStatus: { readonly [K in ErrorCode]: number } = {
   // Catalog
   catalog_unavailable: 503,
   stale_cache: 200,
+
+  // Live experience details
+  live_unavailable: 503,
 
   // Tracking: completions
   completion_future_date: 400,

@@ -83,6 +83,11 @@ import {
 import { createAggregateRepo } from './services/aggregate/repo.js';
 import { createLeaderboard } from './services/aggregate/leaderboard.js';
 
+import { createLiveCache } from './services/live/cache.js';
+import { createLiveRepo } from './services/live/repo.js';
+import { createLiveService } from './services/live/service.js';
+import { createThemeParksLiveClient } from './services/live/themeparksLive.js';
+
 import { createFriendsRepo } from './services/friends/repo.js';
 import { createSharingRepo } from './services/sharing/repo.js';
 import { createStatsRepo } from './services/stats/repo.js';
@@ -169,6 +174,29 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
     redis: redis as never,
   });
 
+  // --- Live_Service wiring -------------------------------------------
+  // The live read path shares exactly one piece of relational state with
+  // the catalog path (`experiences.upstream_entity_id`, read-only via the
+  // live repo) and reuses the same Redis instance as the leaderboard cache
+  // for its short-lived Live_Cache. The upstream live client takes the same
+  // `AppConfig.themeparks.baseUrl` as the catalog client. The orchestrator
+  // owns the resolve → cache → fetch → stale-fallback decision.
+  const themeparksLiveClient = createThemeParksLiveClient({
+    baseUrl: config.themeparks.baseUrl,
+  });
+  // The Live_Cache accepts the same narrow structural Redis interface as the
+  // leaderboard cache; ioredis's many `set` overloads are not assignable to
+  // its single rest-arg signature, so we mirror the harness/leaderboard
+  // `as never` cast — the runtime call shape (`set(key, val, 'EX', n)`) is
+  // satisfied by the real client.
+  const liveCache = createLiveCache(redis as never);
+  const liveRepo = createLiveRepo(pool);
+  const liveService = createLiveService({
+    repo: liveRepo,
+    cache: liveCache,
+    client: themeparksLiveClient,
+  });
+
   // --- Auth wiring ----------------------------------------------------
   const lockout = createLockoutService(redis as never);
   const sessionMiddleware = createSessionMiddleware({
@@ -226,6 +254,7 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
     stats: { repo: statsRepo, pool, requireSession: sessionMiddleware },
     aggregate: { repo: aggregateRepo },
     leaderboard: { service: leaderboardService },
+    live: liveService,
     tracking: {
       completion: { repo: completionRepo, requireSession: sessionMiddleware },
       rating: { repo: ratingRepo, requireSession: sessionMiddleware },

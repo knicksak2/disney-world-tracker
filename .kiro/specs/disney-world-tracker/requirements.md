@@ -14,6 +14,10 @@ The Disney World Tracker is a mobile application that provides a comprehensive c
 - **ThemeParks_API**: The public ThemeParks.wiki HTTP API (version 1, base URL https://api.themeparks.wiki/v1) used as the upstream source of Walt Disney World Experience data, accessed via the entity-based endpoints `/destinations` and `/entity/{id}/children`.
 - **Catalog_Sync**: The process by which the Catalog_Service retrieves Experience data from the ThemeParks_API and reconciles it into the local cache.
 - **Catalog_Service**: The component responsible for sourcing Experience data from the ThemeParks_API, maintaining a local cache, and serving the list of Experiences to the App.
+- **Image_Sourcing_Job**: A standalone job, run independently of and separately from the Catalog_Sync, that enriches active Experience records with freely-licensed imagery sourced from Wikipedia and Wikimedia Commons.
+- **Experience_Image**: A representative image associated with an Experience, stored as a URL, that is absent when no image has been sourced for that Experience.
+- **Image_Attribution**: The licensing and source attribution text stored alongside an Experience_Image for an Experience.
+- **Image_Override**: A curated entry in the overrides file (imageOverrides.json) that maps an Experience name to a specific Experience_Image and takes precedence over automated sourcing.
 - **Tracking_Service**: The component responsible for recording per-User completion status, ratings, and notes for Experiences.
 - **Stats_Service**: The component responsible for computing completion percentages and progress statistics for a User.
 - **Auth_Service**: The component responsible for user registration, login, logout, and session management.
@@ -229,3 +233,34 @@ The Disney World Tracker is a mobile application that provides a comprehensive c
 10. WHERE between 1 and 9 active Experiences inclusive meet the minimum sample threshold, THE Home_Screen SHALL display all qualifying Experiences in the Highest-Rated Experiences section, ranked according to acceptance criterion 3.
 11. WHERE zero active Experiences meet the minimum sample threshold, THE Home_Screen SHALL display an empty-state message in the Highest-Rated Experiences section indicating that no highest-rated Experiences are available.
 12. WHILE the Highest-Rated Experiences section is in the empty-state described in acceptance criterion 11, THE App SHALL ignore tap gestures within the section and SHALL NOT open any Experience detail view as a result of those gestures.
+
+### Requirement 12: Experience Images
+
+**User Story:** As a User, I want to see a representative photo for each Experience in the catalog, so that I can visually recognize attractions, shows, and restaurants while browsing and viewing details.
+
+#### Acceptance Criteria
+
+1. THE Catalog_Service SHALL store for each Experience an optional Experience_Image URL that, when present, is between 1 and 2048 characters inclusive, and that is absent when no Experience_Image has been sourced for that Experience.
+2. THE Catalog_Service SHALL store for each Experience an optional Image_Attribution value that, when present, is between 1 and 1000 characters inclusive, and that is absent when no Experience_Image has been sourced for that Experience.
+3. WHEN a Catalog_Sync reconciles upstream Experience data into the local cache, THE Catalog_Service SHALL leave each existing Experience's stored Experience_Image URL and Image_Attribution values unchanged.
+4. WHEN a Catalog_Sync adds a new Experience for a previously unseen ThemeParks_API entity ID, THE Catalog_Service SHALL create that Experience with an absent Experience_Image URL and an absent Image_Attribution value.
+5. THE Image_Sourcing_Job SHALL process only active Experiences and SHALL exclude inactive Experiences from processing.
+6. WHEN the Image_Sourcing_Job resolves an Experience_Image for an Experience, THE Image_Sourcing_Job SHALL evaluate candidate sources in the following precedence order and select the first source that yields an image: the Image_Override, then a confident Wikipedia article lead-image match, then a confident Wikimedia Commons photo match, then, where park-level fallback is enabled, the Experience's Park image.
+7. WHERE an Image_Override exists for an Experience, THE Image_Sourcing_Job SHALL select the Image_Override image as the Experience_Image without consulting any other source.
+8. THE Image_Sourcing_Job SHALL match an Image_Override entry to an Experience by comparing the Experience name to the Image_Override key case-insensitively and ignoring punctuation.
+9. THE Image_Sourcing_Job SHALL treat a candidate title as a confident match for an Experience name when the Jaccard token similarity between the two names is at least 0.5, or when one name's meaningful tokens (excluding stopwords) are a subset of the other's, subject to a distinctiveness guard that prevents a match based on a single short generic token.
+10. WHEN the Image_Sourcing_Job evaluates a Wikimedia Commons candidate, THE Image_Sourcing_Job SHALL accept only raster photo files with a jpg, jpeg, png, or webp extension and SHALL reject SVG, PDF, audio, and video files.
+11. WHERE park-level fallback is enabled and no Image_Override, Wikipedia, or Wikimedia Commons match is found for an Experience, THE Image_Sourcing_Job SHALL select the Experience's Park image as the Experience_Image.
+12. IF no candidate source yields an image for an Experience, THEN THE Image_Sourcing_Job SHALL leave that Experience's Experience_Image URL and Image_Attribution values absent.
+13. WHILE running in default mode, THE Image_Sourcing_Job SHALL process only active Experiences whose Experience_Image URL is absent.
+14. WHILE running in force mode, THE Image_Sourcing_Job SHALL process all active Experiences and re-source the Experience_Image for each.
+15. WHILE running in dry-run mode, THE Image_Sourcing_Job SHALL report resolved matches and SHALL leave every stored Experience_Image URL and Image_Attribution value unchanged.
+16. WHEN the Image_Sourcing_Job stores an Image_Attribution value, THE Image_Sourcing_Job SHALL truncate the attribution text to at most 1000 characters before storing it.
+17. THE Image_Sourcing_Job SHALL send a descriptive User-Agent populated from the WIKI_CONTACT configuration value on each request to Wikipedia and Wikimedia Commons.
+18. THE Image_Sourcing_Job SHALL wait a politeness delay between successive requests to Wikipedia and Wikimedia Commons.
+19. IF a Wikipedia or Wikimedia Commons request returns HTTP status 429 or 503, THEN THE Image_Sourcing_Job SHALL retry the request using backoff that honors the Retry-After header when the header is present.
+20. THE Catalog_Service SHALL include in each Experience's catalog response an imageUrl field holding the Experience_Image URL or null and an imageAttribution field holding the Image_Attribution value or null.
+21. WHEN the App requests the catalog browse list, THE Catalog_Service SHALL return the imageUrl and imageAttribution fields for each Experience.
+22. WHEN the App requests an Experience detail view by Experience identifier, THE Catalog_Service SHALL return the imageUrl and imageAttribution fields for that Experience.
+23. WHEN the App displays an Experience on the catalog browse list or the detail view and the Experience's imageUrl is non-null, THE App SHALL display the Experience_Image together with its Image_Attribution.
+24. WHEN the App displays an Experience on the catalog browse list or the detail view and the Experience's imageUrl is null, THE App SHALL display a placeholder corresponding to the Experience's Experience_Category in place of an Experience_Image.

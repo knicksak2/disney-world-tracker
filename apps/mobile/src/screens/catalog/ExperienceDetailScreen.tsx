@@ -31,6 +31,7 @@ import React from 'react';
 import { useQueries, useQueryClient } from '@tanstack/react-query';
 import {
   ActivityIndicator,
+  Image,
   ScrollView,
   StyleSheet,
   Text,
@@ -45,6 +46,7 @@ import type {
   CompletionDTO,
   ErrorCode,
   ExperienceCategory,
+  LiveDetailResponseDTO,
   NoteDTO,
   Park,
   RatingDTO,
@@ -64,6 +66,10 @@ import {
 import CompletionControls from './CompletionControls';
 import NoteControl from './NoteControl';
 import RatingControl from './RatingControl';
+import { liveSectionFor } from './gating';
+import RideLiveSection from './live/RideLiveSection';
+import ShowtimesSection from './live/ShowtimesSection';
+import DiningSection from './live/DiningSection';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -81,6 +87,8 @@ interface ExperienceDetailDTO {
   readonly park: Park;
   readonly category: ExperienceCategory;
   readonly description: string;
+  readonly imageUrl: string | null;
+  readonly imageAttribution: string | null;
 }
 
 type ExperienceDetailRouteProp = RouteProp<
@@ -183,6 +191,20 @@ export default function ExperienceDetailScreen(): JSX.Element {
             `/experiences/${encodedId}/aggregate-rating`,
           ),
       },
+      {
+        // Live operational layer (R3.2-R3.5, R7.*). This read is fully
+        // independent of the static catalog detail above: a failure here
+        // (e.g. a 503 `live_unavailable` when no cached Live_Detail exists)
+        // surfaces only the live-unavailable indicator and never blocks the
+        // static fields from rendering. The category gate (`liveSectionFor`)
+        // decides which — if any — live section consumes this result.
+        queryKey: ['experience-live', experienceId] as const,
+        queryFn: () =>
+          apiRequest<LiveDetailResponseDTO>(
+            'GET',
+            `/catalog/${encodedId}/live`,
+          ),
+      },
     ],
   });
 
@@ -191,6 +213,7 @@ export default function ExperienceDetailScreen(): JSX.Element {
   const ratingQ = queries[2];
   const noteQ = queries[3];
   const aggregateQ = queries[4];
+  const liveQ = queries[5];
 
   // Block the whole screen on the catalog detail load — the section
   // headers depend on the Experience name and the screen has nothing
@@ -217,6 +240,10 @@ export default function ExperienceDetailScreen(): JSX.Element {
             title="We couldn't load this experience"
             body="Please try again later."
           />
+          {/* R3.4: even when the static detail fields cannot be rendered, the
+              App still surfaces the live-unavailable indicator for the
+              Experience. */}
+          <LiveUnavailableIndicator />
         </View>
       </ScreenContainer>
     );
@@ -241,6 +268,13 @@ export default function ExperienceDetailScreen(): JSX.Element {
         contentContainerStyle={styles.container}
         testID="experience-detail"
       >
+        {/* Hero image (sourced photo or category placeholder). */}
+        <ExperienceHero
+          imageUrl={experience.imageUrl}
+          attribution={experience.imageAttribution}
+          category={experience.category}
+        />
+
         {/* Park + category badges, surfaced as themed pills. */}
         <View style={styles.badgeRow}>
           <Badge
@@ -271,6 +305,20 @@ export default function ExperienceDetailScreen(): JSX.Element {
         </Card>
 
         {/* ------------------------------------------------------------ */}
+        {/* Live operational section (R7.5: at most one, by category).   */}
+        {/* Ride/Character_Meet → wait/status, Show/Parade → showtimes,  */}
+        {/* Restaurant → dining, Other → nothing (R7.1-R7.4). A live     */}
+        {/* failure renders only the unavailable indicator (R3.2) while  */}
+        {/* the static fields above remain visible (R3.3); a stale       */}
+        {/* success renders the out-of-date indicator + Retrieved_At     */}
+        {/* (R3.5), both owned by the section components.                */}
+        {/* ------------------------------------------------------------ */}
+        <LiveOperationalSection
+          category={experience.category}
+          query={liveQ}
+        />
+
+        {/* ------------------------------------------------------------ */}
         {/* Your Completion (R2.4).                                      */}
         {/* ------------------------------------------------------------ */}
         <Card style={styles.section}>
@@ -280,12 +328,21 @@ export default function ExperienceDetailScreen(): JSX.Element {
             query={completionQ}
             onMutated={() => {
               // Invalidate every query that reflects Completion state for
-              // this Experience. The Completion query itself drives the
-              // section render; the stats query (R3) and any future
-              // friend-feed surfaces also read off the same store, so a
-              // single invalidate keeps them in lockstep.
+              // this Experience. The Completion query drives this
+              // section's render...
               void queryClient.invalidateQueries({
                 queryKey: ['experience-completion', experienceId],
+              });
+              // ...and the Stats screen's roll-up (`GET /me/stats`,
+              // queryKey ['me-stats']) counts completions, so it must be
+              // invalidated here too. Without this, marking/unmarking a
+              // Completion leaves the cached stats untouched and the
+              // Stats screen keeps showing the pre-mutation totals until
+              // its staleTime lapses — i.e. "I completed a ride but my
+              // stats still say zero". `['me-stats']` as a prefix also
+              // catches the friend/self summary variants.
+              void queryClient.invalidateQueries({
+                queryKey: ['me-stats'],
               });
             }}
           />
@@ -346,6 +403,63 @@ export default function ExperienceDetailScreen(): JSX.Element {
         </Card>
       </ScrollView>
     </ScreenContainer>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Hero image
+// ---------------------------------------------------------------------------
+
+/**
+ * Full-width hero image for the detail view. Shows the sourced photo when
+ * present (with its license attribution caption beneath, as required by the
+ * image's terms); otherwise a category-tinted placeholder with the category
+ * glyph so the layout is consistent whether or not an image exists.
+ */
+function ExperienceHero({
+  imageUrl,
+  attribution,
+  category,
+}: {
+  readonly imageUrl: string | null;
+  readonly attribution: string | null;
+  readonly category: ExperienceCategory;
+}): JSX.Element {
+  const [failed, setFailed] = React.useState(false);
+  const visual = theme.categoryVisual[category];
+  const hasImage = imageUrl != null && imageUrl.length > 0 && !failed;
+
+  if (!hasImage) {
+    return (
+      <View
+        style={[styles.hero, styles.heroPlaceholder, { backgroundColor: visual.tint }]}
+        testID="experience-hero-placeholder"
+      >
+        <Ionicons
+          name={visual.glyph as keyof typeof Ionicons.glyphMap}
+          size={48}
+          color={theme.color.textOnPrimary}
+        />
+      </View>
+    );
+  }
+
+  return (
+    <View>
+      <Image
+        source={{ uri: imageUrl as string }}
+        style={styles.hero}
+        resizeMode="cover"
+        onError={() => setFailed(true)}
+        accessibilityIgnoresInvertColors
+        testID="experience-hero-image"
+      />
+      {attribution != null && attribution.length > 0 ? (
+        <Text style={styles.heroAttribution} numberOfLines={2}>
+          {attribution}
+        </Text>
+      ) : null}
+    </View>
   );
 }
 
@@ -508,6 +622,100 @@ function AggregateContent({
 }
 
 // ---------------------------------------------------------------------------
+// Live operational section
+// ---------------------------------------------------------------------------
+
+/**
+ * The "live information currently unavailable" indicator (R3.2, R3.4). Shown
+ * when the live read fails (e.g. a 503 `live_unavailable` with no cached
+ * Live_Detail) — the static detail fields remain visible above it (R3.3), and
+ * it is also surfaced when the static detail itself cannot be rendered (R3.4).
+ */
+function LiveUnavailableIndicator(): JSX.Element {
+  return (
+    <Card style={styles.section} testID="live-unavailable">
+      <EmptyState
+        icon="cloud-offline-outline"
+        title="Live information currently unavailable"
+        body="We couldn't load live details right now. Please try again later."
+      />
+    </Card>
+  );
+}
+
+/**
+ * Render at most one live operational section, chosen solely by the
+ * Experience's category via `liveSectionFor` (R7.1–R7.5):
+ *   - `Ride` / `Character_Meet` → wait/status section,
+ *   - `Show` / `Parade`         → showtimes section,
+ *   - `Restaurant`              → dining section,
+ *   - `Other`                   → no live section.
+ *
+ * The read is independent of the static catalog detail, so a live failure
+ * degrades to the unavailable indicator (R3.2) without affecting the static
+ * fields. On a `stale: true` success the section component renders the
+ * out-of-date indicator together with the Retrieved_At time (R3.5).
+ */
+function LiveOperationalSection({
+  category,
+  query,
+}: {
+  readonly category: ExperienceCategory;
+  readonly query: QueryLike<LiveDetailResponseDTO>;
+}): JSX.Element | null {
+  const section = liveSectionFor(category);
+
+  // R7.1: `Other` (and any non-live category) shows no live section at all.
+  if (section === 'none') {
+    return null;
+  }
+
+  if (query.isLoading) {
+    return (
+      <Card style={styles.section}>
+        <ActivityIndicator
+          accessibilityLabel="Loading live information"
+          color={theme.color.primary}
+        />
+      </Card>
+    );
+  }
+
+  // R3.2: a failed live retrieval (the orchestrator returns a 503
+  // `live_unavailable` when no cached Live_Detail exists) shows only the
+  // unavailable indicator; the static fields above remain visible (R3.3).
+  if (query.isError || query.data === undefined) {
+    return <LiveUnavailableIndicator />;
+  }
+
+  const { liveDetail, retrievedAt, stale } = query.data;
+  // Lift `upstreamLastUpdated` out of the detail so the section can label it
+  // distinctly from Retrieved_At (R4.13, R5.7, R6.8).
+  const sectionProps = {
+    liveDetail,
+    retrievedAt,
+    stale,
+    ...(liveDetail.upstreamLastUpdated !== undefined
+      ? { upstreamLastUpdated: liveDetail.upstreamLastUpdated }
+      : {}),
+  };
+
+  switch (section) {
+    case 'wait_status': // R7.2
+      return <RideLiveSection {...sectionProps} />;
+    case 'showtimes': // R7.3
+      return <ShowtimesSection {...sectionProps} />;
+    case 'dining': // R7.4
+      return <DiningSection {...sectionProps} />;
+    default: {
+      // Exhaustiveness guard: a new `LiveSection` member must be handled here.
+      const _exhaustive: never = section;
+      return _exhaustive;
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Styles
 // ---------------------------------------------------------------------------
 
@@ -528,6 +736,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: theme.spacing.sm,
     flexWrap: 'wrap',
+  },
+  hero: {
+    width: '100%',
+    height: 200,
+    borderRadius: theme.radius.lg,
+    backgroundColor: theme.color.surfaceAlt,
+  },
+  heroPlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroAttribution: {
+    ...theme.typography.meta,
+    color: theme.color.textSecondary,
+    marginTop: theme.spacing.xs,
+    fontStyle: 'italic',
   },
   section: {
     gap: theme.spacing.md,

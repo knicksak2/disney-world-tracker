@@ -29,9 +29,11 @@
  *   3. ATTRACTION + name matches /parade/i                → Parade
  *   4. ATTRACTION + name matches /meet[- ]?(and[- ]?)?greet/i → Character_Meet
  *   5. ATTRACTION otherwise                               → Ride
- *   6. SHOW (regardless of name/attractionType)           → Show
- *   7. RESTAURANT (regardless of name)                    → Restaurant
- *   8. Anything else                                      → Other
+ *   6. SHOW + parade indicator                            → Parade
+ *   7. SHOW + character-meet indicator                    → Character_Meet
+ *   8. SHOW otherwise                                     → Show
+ *   9. RESTAURANT (regardless of name)                    → Restaurant
+ *  10. Anything else                                      → Other
  *
  * `numRuns: 100` per the spec convention.
  */
@@ -54,7 +56,7 @@ const NUM_RUNS = 100;
 // and must be updated at the same time.
 
 const PARADE_NAME_PATTERN = /parade/i;
-const CHARACTER_MEET_NAME_PATTERN = /meet[- ]?(and[- ]?)?greet/i;
+const CHARACTER_MEET_NAME_PATTERN = /^meet\b|meet[- ]?(and[- ]?)?greet/i;
 
 // ---------------------------------------------------------------------------
 // Generators
@@ -282,9 +284,70 @@ describe('classify — Property 1: every entity is mapped by the rule table', ()
     );
   });
 
-  it('rule 6: SHOW ⇒ Show (regardless of name and attractionType)', () => {
+  it('rule 6: SHOW + attractionType === "PARADE" ⇒ Parade (regardless of name)', () => {
     fc.assert(
-      fc.property(anyNameArb, nonPivotalAttractionTypeArb, (name, at) => {
+      fc.property(anyNameArb, (name) => {
+        const entity: ThemeParksEntity = {
+          entityType: 'SHOW',
+          name,
+          attractionType: 'PARADE',
+        };
+        return classify(entity) === 'Parade';
+      }),
+      { numRuns: NUM_RUNS },
+    );
+  });
+
+  it('rule 6b: SHOW + attractionType === "MEET_AND_GREET" ⇒ Character_Meet (regardless of name)', () => {
+    fc.assert(
+      fc.property(anyNameArb, (name) => {
+        const entity: ThemeParksEntity = {
+          entityType: 'SHOW',
+          name,
+          attractionType: 'MEET_AND_GREET',
+        };
+        return classify(entity) === 'Character_Meet';
+      }),
+      { numRuns: NUM_RUNS },
+    );
+  });
+
+  it('rule 6c: SHOW + name matches /parade/i (no pivotal attractionType) ⇒ Parade', () => {
+    fc.assert(
+      fc.property(paradeNameArb, nonPivotalAttractionTypeArb, (name, at) => {
+        fc.pre(PARADE_NAME_PATTERN.test(name));
+        const entity: ThemeParksEntity = {
+          entityType: 'SHOW',
+          name,
+          ...(at !== undefined ? { attractionType: at } : {}),
+        };
+        return classify(entity) === 'Parade';
+      }),
+      { numRuns: NUM_RUNS },
+    );
+  });
+
+  it('rule 6d: SHOW + name matches /meet[- ]?(and[- ]?)?greet/i (no parade match, no pivotal attractionType) ⇒ Character_Meet', () => {
+    fc.assert(
+      fc.property(meetGreetNameArb, nonPivotalAttractionTypeArb, (name, at) => {
+        fc.pre(!PARADE_NAME_PATTERN.test(name));
+        fc.pre(CHARACTER_MEET_NAME_PATTERN.test(name));
+        const entity: ThemeParksEntity = {
+          entityType: 'SHOW',
+          name,
+          ...(at !== undefined ? { attractionType: at } : {}),
+        };
+        return classify(entity) === 'Character_Meet';
+      }),
+      { numRuns: NUM_RUNS },
+    );
+  });
+
+  it('rule 6e: SHOW otherwise (no pattern match, no pivotal attractionType) ⇒ Show', () => {
+    fc.assert(
+      fc.property(cleanNameArb, nonPivotalAttractionTypeArb, (name, at) => {
+        fc.pre(!PARADE_NAME_PATTERN.test(name));
+        fc.pre(!CHARACTER_MEET_NAME_PATTERN.test(name));
         const entity: ThemeParksEntity = {
           entityType: 'SHOW',
           name,
@@ -524,11 +587,73 @@ describe('classify — fixed examples for regression', () => {
     ).toBe('Ride');
   });
 
-  it('SHOW with name "Parade of Lights" still maps to Show (sub-classification only applies under ATTRACTION)', () => {
+  it('SHOW that is actually a character meet (upstream types it as SHOW) maps to Character_Meet', () => {
+    // The user-reported case: meet-and-greets that run at a stage/theater
+    // come through with entityType "SHOW" and must not land in the generic
+    // Show bucket.
+    expect(
+      classify({
+        entityType: 'SHOW',
+        name: 'Meet Mickey Mouse at Town Square Theater',
+      }),
+    ).toBe('Character_Meet');
+    expect(
+      classify({
+        entityType: 'SHOW',
+        name: 'Character Meet and Greet',
+        attractionType: 'MEET_AND_GREET',
+      }),
+    ).toBe('Character_Meet');
+  });
+
+  it('classifies real WDW character meets (captured live from ThemeParks.wiki) as Character_Meet', () => {
+    // These are the exact upstream names/types observed on the live API.
+    // Every WDW character meet follows the "Meet <character> at/in <place>"
+    // naming convention and arrives as entityType SHOW with no structured
+    // sub-classifier, so the leading-"meet" name signal is what catches
+    // them. Locked in here so a future regex change cannot silently
+    // regress real data.
+    const realMeets = [
+      'Meet Ariel at Walt Disney Presents',
+      'Meet Mulan in China',
+      'Meet Olaf at Celebrity Spotlight',
+      'Meet Cinderella and Princess Tiana at Princess Fairytale Hall',
+      'Meet Disney Stars at Red Carpet Dreams',
+      'Meet Daring Disney Pals as Circus Stars at Pete\'s Silly Sideshow',
+      'Meet Ariel at Her Grotto',
+    ];
+    for (const name of realMeets) {
+      expect(classify({ entityType: 'SHOW', name })).toBe('Character_Meet');
+    }
+  });
+
+  it('leaves real WDW stage shows (captured live) as Show', () => {
+    const realShows = [
+      'The Dapper Dans',
+      'Green Army Drum Corps',
+      'Tam Tam Drummers of Harambe',
+      'For the First Time in Forever: A Frozen Sing-Along Celebration',
+      'Entertainment at Canada Mill Stage',
+    ];
+    for (const name of realShows) {
+      expect(classify({ entityType: 'SHOW', name })).toBe('Show');
+    }
+  });
+
+  it('SHOW with name "Parade of Lights" maps to Parade (sub-classification applies under SHOW too)', () => {
     expect(
       classify({
         entityType: 'SHOW',
         name: 'Parade of Lights',
+      }),
+    ).toBe('Parade');
+  });
+
+  it('SHOW with no parade/meet signal still maps to Show', () => {
+    expect(
+      classify({
+        entityType: 'SHOW',
+        name: 'Fantasmic!',
       }),
     ).toBe('Show');
   });

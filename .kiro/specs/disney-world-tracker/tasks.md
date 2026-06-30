@@ -676,6 +676,47 @@ flowchart LR
 - [x] 21. Final checkpoint
   - Ensure all backend and mobile tests pass; ensure migrations apply cleanly on a fresh Postgres; ensure the API smoke perf SLAs are within budget; ask the user if questions arise.
 
+- [x] 22. Experience Images
+  > Added after the original plan was written. The Experience Images feature (Requirement 12, design Property 29 and the "Image survival across sync" / Image_Sourcing_Job sections) was implemented out of band because ThemeParks.wiki exposes no imagery. These tasks record the work as completed.
+  - [x] 22.1 Add image columns to the experiences schema
+    - Create `apps/api/migrations/0002_experience_images.sql` adding nullable `image_url` (CHECK length 1..2048) and `image_attribution` (CHECK length 1..1000) columns to `experiences`
+    - Columns are absent (NULL) until populated out of band by the Image_Sourcing_Job
+    - _Requirements: R12.1, R12.2_
+  - [x] 22.2 Persist and map image fields in the Catalog repo so sourced images survive sync
+    - In `apps/api/src/services/catalog/repo.ts`, exclude `image_url` and `image_attribution` from the `applyReconciliation` `INSERT ... ON CONFLICT (id) DO UPDATE SET` list so a curated/sourced image survives every catalog refresh untouched, and so brand-new upstream rows are inserted with both image fields NULL
+    - Extend `listActiveExperiences` and `getExperience` to SELECT `image_url` / `image_attribution`; `rowToDto` maps them to `imageUrl` / `imageAttribution`
+    - Carry `imageUrl: string | null` and `imageAttribution: string | null` on the shared `ExperienceDTO`
+    - _Requirements: R12.3, R12.4, R12.20_
+  - [x] 22.3 Return image fields from the Catalog routes
+    - In `apps/api/src/services/catalog/routes.ts`, `GET /catalog` (browse list) and `GET /catalog/:experienceId` (detail) both return `imageUrl` and `imageAttribution` for every Experience (null when unsourced)
+    - _Requirements: R12.21, R12.22_
+  - [x] 22.4 Implement the Image_Sourcing_Job (`source-images`)
+    - Create `apps/api/src/scripts/sourceImages.ts` as a standalone job (run via `npm run source-images`) that runs independently of Catalog_Sync
+    - Layered resolution, first hit wins: curated override → confident Wikipedia lead-image match → confident Wikimedia Commons photo match → opt-in park-level fallback → leave NULL
+    - Confident-match heuristic: Jaccard token similarity `>= 0.5` OR meaningful-token subset, with a distinctiveness guard against single short generic tokens
+    - Commons filter accepts only raster photos (`.jpg/.jpeg/.png/.webp`); rejects SVG, PDF, audio, video
+    - Run modes: default (active rows where `image_url IS NULL`), `--force` (re-source all active rows), `--dry-run` (report only, write nothing), `--park-fallback`, `--overrides <path>`
+    - Process only active rows (`WHERE active = TRUE`); truncate attribution to 1000 characters before storing
+    - Wikimedia etiquette: descriptive `User-Agent` from `WIKI_CONTACT`, politeness delay between calls, retry/backoff on HTTP 429/503 honoring `Retry-After`
+    - _Requirements: R12.5, R12.6, R12.9, R12.10, R12.11, R12.12, R12.13, R12.14, R12.15, R12.16, R12.17, R12.18, R12.19_
+  - [x] 22.5 Add the curated image overrides file
+    - Create `apps/api/src/scripts/imageOverrides.json` mapping Experience names to curated image URLs + attribution; matched case-insensitively with punctuation ignored; an override short-circuits all other lookups
+    - _Requirements: R12.7, R12.8_
+  - [x] 22.6 Add the manual Catalog_Sync trigger script
+    - Create `apps/api/src/scripts/runSync.ts` as a one-off manual `Catalog_Sync` trigger (run via `npm run sync`), supporting operational script for refreshing the catalog on demand
+    - _Requirements: R1.10_
+  - [x] 22.7 Render Experience images on the mobile catalog list and detail screens
+    - In `apps/mobile/src/screens/catalog/CatalogScreen.tsx` (`ExperienceThumb`) and `apps/mobile/src/screens/catalog/ExperienceDetailScreen.tsx` (`ExperienceHero`), render the sourced image and its attribution when `imageUrl` is non-null
+    - Fall back to a category-tinted placeholder (with the category glyph) when `imageUrl` is null
+    - _Requirements: R12.23, R12.24_
+  - [x]* 22.8 Write property test for sourced-image survival across reconciliation
+    - **Property 29: Sourced images survive catalog reconciliation**
+    - **Validates: Requirements 12.3, 12.4**
+    - File: `apps/api/src/services/catalog/__tests__/imageSurvival.prop.test.ts`
+    - Tag header: `// Feature: disney-world-tracker, Property 29: sourced image fields survive catalog reconciliation and new rows arrive null`
+    - Assert that `image_url` / `image_attribution` on a row with non-null image data are unchanged across any sequence of upsert / soft-delete / re-appearance, and that newly-inserted rows have null image fields
+    - `numRuns: 100`
+
 ## Notes
 
 - Tasks marked with `*` are optional test sub-tasks. Skipping them speeds up an MVP cut at the cost of correctness coverage; the property tests are how the design's 28 properties are mechanically pinned down.
@@ -684,6 +725,7 @@ flowchart LR
 - The architecture is hosting-agnostic. Provider-specific configuration lives only in `apps/api/src/config.ts` and infra glue, never in service code.
 - Checkpoints (tasks 21 and the implicit wave boundaries in the dependency graph) are where the orchestrator should pause for human review before kicking off the next wave.
 - "PBT applicability": the design's Correctness Properties section lists 28 properties; every property maps to exactly one optional sub-task in this plan. Non-property criteria (UI navigation, perf SLAs, external HTTP wiring, persistence existence) get the example/integration/smoke tests called out in tasks 9.9, 13.2, 20.1, and 20.2.
+- Task group 22 (Experience Images) was added after the original plan was written, capturing the out-of-band imagery feature (Requirement 12, design Property 29). It appears as a final wave (id 18) in the dependency graph. All 22.x sub-tasks, including the Property 29 property test (22.8), are complete.
 
 ## Task Dependency Graph
 
@@ -707,7 +749,8 @@ flowchart LR
     { "id": 14, "tasks": ["16.1", "16.2", "16.3"] },
     { "id": 15, "tasks": ["17.1", "17.2", "17.3", "17.4"] },
     { "id": 16, "tasks": ["18.1", "18.2", "18.3", "19.1"] },
-    { "id": 17, "tasks": ["20.1", "20.2", "20.3"] }
+    { "id": 17, "tasks": ["20.1", "20.2", "20.3"] },
+    { "id": 18, "tasks": ["22.1", "22.2", "22.3", "22.4", "22.5", "22.6", "22.7", "22.8"] }
   ]
 }
 ```

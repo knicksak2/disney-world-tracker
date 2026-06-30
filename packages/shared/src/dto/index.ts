@@ -25,3 +25,17 @@ export type { ShareRecipientDTO } from './ShareRecipient.js';
 export type { AggregateRatingDTO } from './AggregateRating.js';
 export type { LeaderboardEntryDTO } from './LeaderboardEntry.js';
 export type { StatsDTO, StatsBreakdown } from './Stats.js';
+export type {
+  OperatingStatus,
+  ReturnWindowState,
+  BoardingGroupAllocation,
+  ReturnWindow,
+  PaidReturnWindow,
+  BoardingGroupStatus,
+  ForecastEntry,
+  Showtime,
+  OperatingHours,
+  DiningAvailabilityEntry,
+  LiveDetailDTO,
+  LiveDetailResponseDTO,
+} from './LiveDetail.js';

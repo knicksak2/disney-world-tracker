@@ -1,0 +1,7 @@
+{
+  "__comment": "Curated image overrides for the `source-images` job. Real keys are Experience names (matched case-insensitively, punctuation ignored). Values are either a URL string, or an object { \"url\": \"...\", \"attribution\": \"...\" }. Entries here ALWAYS win over the automated Wikipedia / park-fallback lookup. Use freely-licensed images (e.g. a Wikimedia Commons file URL) and keep the attribution accurate. Any key starting with \"__\" is ignored, so this comment and the example below are not applied.",
+  "__example": {
+    "url": "https://upload.wikimedia.org/wikipedia/commons/.../YourImage.jpg",
+    "attribution": "Description — source, license (e.g. CC BY-SA)."
+  }
+}

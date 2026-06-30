@@ -26,7 +26,7 @@ export default function CatalogStack(): JSX.Element {
       <Stack.Screen
         name="CatalogList"
         component={CatalogScreen}
-        options={{ title: 'Catalog' }}
+        options={{ headerShown: false }}
       />
       <Stack.Screen
         name="ExperienceDetail"

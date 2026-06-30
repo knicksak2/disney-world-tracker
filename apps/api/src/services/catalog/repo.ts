@@ -133,6 +133,8 @@ interface ExperienceRow extends QueryResultRow {
   category: ExperienceCategory;
   description: string;
   active: boolean;
+  image_url: string | null;
+  image_attribution: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -475,7 +477,8 @@ async function listActiveExperiences(
   }
 
   const sql = `
-    SELECT id, upstream_entity_id, name, park, category, description, active
+    SELECT id, upstream_entity_id, name, park, category, description, active,
+           image_url, image_attribution
       FROM experiences
      WHERE ${where.join(' AND ')}
      ORDER BY park ASC, lower(name) ASC, id ASC`;
@@ -504,7 +507,8 @@ async function getExperience(
   id: string,
 ): Promise<ExperienceDTO | null> {
   const result = await pool.query<ExperienceRow>(
-    `SELECT id, upstream_entity_id, name, park, category, description, active
+    `SELECT id, upstream_entity_id, name, park, category, description, active,
+            image_url, image_attribution
        FROM experiences
       WHERE id = $1`,
     [id],
@@ -529,6 +533,8 @@ function rowToDto(row: ExperienceRow): ExperienceDTO {
     category: row.category,
     description: row.description,
     active: row.active,
+    imageUrl: row.image_url,
+    imageAttribution: row.image_attribution,
   };
 }
 

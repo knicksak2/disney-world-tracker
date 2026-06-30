@@ -61,6 +61,8 @@ import {
   leaderboardRoutes,
   type LeaderboardRoutesOptions,
 } from './services/aggregate/leaderboardRoutes.js';
+import { liveRoutes } from './services/live/routes.js';
+import type { LiveService } from './services/live/service.js';
 import type { RatingChangedEvent } from './services/aggregate/ratingChangedQueue.js';
 
 /**
@@ -125,6 +127,17 @@ export interface BuildServerServices {
    * or Redis.
    */
   readonly leaderboard?: LeaderboardRoutesOptions;
+  /**
+   * Live_Service route (task 8.2). Wires `GET /catalog/:experienceId/live`
+   * against a {@link LiveService} orchestrator produced by
+   * `createLiveService({ repo, cache, client })` in
+   * `services/live/service.ts`. The service owns the resolve → cache →
+   * fetch → stale-fallback decision; the route is a thin HTTP boundary on
+   * top of it. Tests pass an in-memory implementation satisfying the same
+   * `LiveService` interface so the route layer can be exercised without
+   * Postgres, Redis, or the upstream live endpoint.
+   */
+  readonly live?: LiveService;
   /**
    * Tracking_Service route options. Each tracking sub-domain
    * (`completion`, `rating`, `note`) is opt-in so a focused unit-test
@@ -219,6 +232,96 @@ export function buildServer(
   // reach it without re-reading environment state.
   app.decorate('config', config);
 
+  // Tolerant body parsing for bodyless "action" endpoints.
+  //
+  // Several endpoints are pure action calls that carry no request body
+  // (e.g. POST /me/friend-requests/:id/accept and .../decline). Mobile HTTP
+  // stacks (React Native / Expo) commonly send these as a POST with a
+  // zero-length body but *no* `Content-Type` header. Fastify's default
+  // content-type handling rejects that shape two different ways, both of
+  // which the global error hook (see `errors/handler.ts`) surfaces as
+  // `validation_failed` — which the client renders as the misleading
+  // "Please check your input and try again." for a request that has no
+  // input to get wrong:
+  //
+  //   1. `Content-Type: application/json` + empty body
+  //      → `FST_ERR_CTP_EMPTY_JSON_BODY` (400).
+  //   2. No (or blank) `Content-Type` but a body is signalled via
+  //      Content-Length/Transfer-Encoding
+  //      → `FST_ERR_CTP_INVALID_MEDIA_TYPE` ("Unsupported Media Type:
+  //      undefined", 415).
+  //
+  // We install two parsers so an empty (or whitespace-only) body parses to
+  // `undefined` regardless of the content-type header, and a stray
+  // non-empty body under an unsupported content-type is tolerated rather
+  // than rejected. Valid JSON under `application/json` is still parsed
+  // normally, and malformed JSON under `application/json` still fails with a
+  // 4xx `FST_ERR_CTP_*` code (mapped to `validation_failed`, the correct
+  // code for a genuinely broken JSON payload). The more specific
+  // `application/json` parser takes precedence over the `*` catch-all, and
+  // `@fastify/multipart`'s `multipart/form-data` parser (registered by the
+  // profile routes) is more specific still, so avatar uploads are
+  // unaffected.
+  app.addContentTypeParser(
+    'application/json',
+    { parseAs: 'string' },
+    (_req, body, done) => {
+      const text = typeof body === 'string' ? body : String(body ?? '');
+      if (text.trim().length === 0) {
+        done(null, undefined);
+        return;
+      }
+      try {
+        done(null, JSON.parse(text));
+      } catch (err) {
+        const parseError = err as Error & {
+          statusCode?: number;
+          code?: string;
+        };
+        parseError.statusCode = 400;
+        // Reuse Fastify's own code prefix so the error hook's
+        // `FST_ERR_CTP_*` branch maps this to `validation_failed`.
+        parseError.code = 'FST_ERR_CTP_INVALID_JSON_BODY';
+        done(parseError, undefined);
+      }
+    },
+  );
+  app.addContentTypeParser(
+    '*',
+    { parseAs: 'string' },
+    (req, body, done) => {
+      const text = typeof body === 'string' ? body : String(body ?? '');
+      if (text.trim().length === 0) {
+        // A bodyless request with a missing/unknown content-type is a
+        // legitimate action call — accept it with an undefined body.
+        done(null, undefined);
+        return;
+      }
+      // A non-empty body arrived under a content-type we have no parser for
+      // (some mobile HTTP stacks attach a stray body and a non-JSON or blank
+      // content-type to bodyless action POSTs). Our API only *consumes*
+      // application/json (handled by the parser above) and multipart
+      // (handled by @fastify/multipart); no route reads a body of any other
+      // type. So rather than reject with 415 — which the client surfaces as
+      // a confusing `validation_failed` — we best-effort parse the body as
+      // JSON and otherwise ignore it. Routes that actually require a body
+      // still validate `request.body` via Zod and reject an undefined/own
+      // shape with the appropriate field error.
+      req.log.warn(
+        {
+          contentType: req.headers['content-type'] ?? null,
+          bodyLength: text.length,
+        },
+        'request with unsupported content-type; ignoring body',
+      );
+      try {
+        done(null, JSON.parse(text));
+      } catch {
+        done(null, undefined);
+      }
+    },
+  );
+
   // The request-id and error-envelope hooks are registered before any
   // route plugin so every route, including the ones registered below,
   // produces the uniform shape on both success and failure paths.
@@ -271,6 +374,10 @@ export function buildServer(
 
   if (services.leaderboard !== undefined) {
     void app.register(leaderboardRoutes(services.leaderboard));
+  }
+
+  if (services.live !== undefined) {
+    void app.register(liveRoutes({ live: services.live }));
   }
 
   if (services.tracking?.completion !== undefined) {

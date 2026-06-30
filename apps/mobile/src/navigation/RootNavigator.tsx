@@ -95,6 +95,7 @@ function MainTabsNavigator(): JSX.Element {
   return (
     <MainTabs.Navigator
       screenOptions={({ route }) => ({
+        headerShown: false,
         tabBarActiveTintColor: '#003a9b',
         tabBarInactiveTintColor: '#6b7280',
         tabBarIcon: ({ focused, color, size }) => {

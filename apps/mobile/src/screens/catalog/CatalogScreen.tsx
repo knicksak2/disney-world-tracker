@@ -58,6 +58,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Image,
   ScrollView,
   SectionList,
   StyleSheet,
@@ -274,6 +275,11 @@ export default function CatalogScreen({ navigation }: Props): JSX.Element {
         <SectionList
           sections={sections as unknown as CatalogSection[]}
           keyExtractor={(item) => item.id}
+          style={styles.list}
+          initialNumToRender={12}
+          maxToRenderPerBatch={12}
+          windowSize={11}
+          removeClippedSubviews
           renderSectionHeader={({ section }) => (
             <View style={styles.sectionHeaderWrap}>
               <View
@@ -364,6 +370,10 @@ function ExperienceRow({ experience, onPress }: ExperienceRowProps): JSX.Element
       testID={`catalog-row-${experience.id}`}
     >
       <View style={styles.rowInner}>
+        <ExperienceThumb
+          imageUrl={experience.imageUrl ?? null}
+          category={experience.category}
+        />
         <View style={styles.rowText}>
           <Text style={styles.rowName} numberOfLines={2}>
             {experience.name}
@@ -383,6 +393,46 @@ function ExperienceRow({ experience, onPress }: ExperienceRowProps): JSX.Element
         />
       </View>
     </Card>
+  );
+}
+
+/**
+ * Small leading thumbnail for a catalog row. Renders the sourced image when
+ * present; otherwise a category-tinted placeholder with the category glyph so
+ * every row shows something even before images are sourced.
+ */
+function ExperienceThumb({
+  imageUrl,
+  category,
+}: {
+  readonly imageUrl: string | null;
+  readonly category: ExperienceCategory;
+}): JSX.Element {
+  const [failed, setFailed] = useState(false);
+  const visual = theme.categoryVisual[category];
+
+  if (imageUrl !== null && imageUrl.length > 0 && !failed) {
+    return (
+      <Image
+        source={{ uri: imageUrl }}
+        style={styles.thumb}
+        resizeMode="cover"
+        onError={() => setFailed(true)}
+        accessibilityIgnoresInvertColors
+      />
+    );
+  }
+
+  return (
+    <View
+      style={[styles.thumb, styles.thumbPlaceholder, { backgroundColor: visual.tint }]}
+    >
+      <Ionicons
+        name={visual.glyph as keyof typeof Ionicons.glyphMap}
+        size={22}
+        color={theme.color.textOnPrimary}
+      />
+    </View>
   );
 }
 
@@ -543,6 +593,9 @@ const styles = StyleSheet.create({
     paddingTop: theme.spacing.sm,
     paddingBottom: theme.spacing.xxl,
   },
+  list: {
+    flex: 1,
+  },
   sectionHeaderWrap: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -568,6 +621,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  thumb: {
+    width: 56,
+    height: 56,
+    borderRadius: theme.radius.md,
+    marginRight: theme.spacing.md,
+    backgroundColor: theme.color.surfaceAlt,
+  },
+  thumbPlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   rowText: {
     flex: 1,

@@ -54,6 +54,18 @@ export type {
   LeaderboardEntryDTO,
   StatsDTO,
   StatsBreakdown,
+  OperatingStatus,
+  ReturnWindowState,
+  BoardingGroupAllocation,
+  ReturnWindow,
+  PaidReturnWindow,
+  BoardingGroupStatus,
+  ForecastEntry,
+  Showtime,
+  OperatingHours,
+  DiningAvailabilityEntry,
+  LiveDetailDTO,
+  LiveDetailResponseDTO,
 } from './dto/index.js';
 
 // Zod schemas + input types.
@@ -100,6 +112,19 @@ export {
   leaderboardEntrySchema,
   statsSchema,
   userSearchInputSchema,
+  // Live_Detail schemas
+  liveDetailSchema,
+  liveDetailResponseSchema,
+  operatingStatusSchema,
+  returnWindowStateSchema,
+  boardingGroupAllocationSchema,
+  returnWindowSchema,
+  paidReturnWindowSchema,
+  boardingGroupStatusSchema,
+  forecastEntrySchema,
+  showtimeSchema,
+  operatingHoursSchema,
+  diningAvailabilityEntrySchema,
 } from './schemas/index.js';
 export type {
   RegisterInput,

@@ -172,6 +172,8 @@ The upstream sub-classification check is encapsulated in a single pure function 
 - Reconciliation is a deterministic pure function `reconcile(currentCache, upstreamSet) -> { upserts, softDeletes }`. Soft-delete sets `experiences.active = false` while preserving the row and all foreign-key references from Completions, Ratings, and Notes (R1.15). Re-appearance flips `active = true` again with the same internal id.
 - On any HTTP error from upstream, the sync run is recorded with status `failed`, the cache is unchanged, and the existing rows continue to serve traffic with a `staleCache: true` flag on responses (R1.13).
 
+**Image survival across sync (R12.3, R12.4):** the `experiences` table carries two image columns (`image_url`, `image_attribution`) that are populated entirely out of band by the Image_Sourcing_Job, because ThemeParks.wiki exposes no imagery. Reconciliation's `applyReconciliation` upsert is an `INSERT ... ON CONFLICT (id) DO UPDATE` whose `SET` list **never references `image_url` or `image_attribution`**, so a curated or sourced image survives every subsequent catalog refresh untouched. A brand-new upstream entity is inserted with `image_url = NULL` / `image_attribution = NULL` and is enriched later, out of band. This is the single most valuable invariant of the imagery feature and is pinned by Property 29.
+
 **Opportunistic sync on read (R1.11, R1.12):**
 
 ```
@@ -192,6 +194,78 @@ The 5-second timeout is enforced with a deadline-aware promise race; the sync co
 | --- | --- | --- |
 | GET | `/catalog` | All active Experiences, optional `parkId`, `category`, `q` filters; grouped/sorted server-side to satisfy R1.17–R1.21. The server returns a flat list with stable ordering; the client groups by Park for display. |
 | GET | `/catalog/{experienceId}` | Single Experience detail (name, Park, Experience_Category, description) |
+
+**Experience DTO image fields (R12.20–R12.22):** `ExperienceDTO` carries `imageUrl: string | null` and `imageAttribution: string | null`. Both `GET /catalog` (browse list) and `GET /catalog/{experienceId}` (detail) return these fields for every Experience; they are `null` when no image has been sourced (the client then renders a category placeholder per R12.24).
+
+### Image_Sourcing_Job
+
+A standalone CLI job (`src/scripts/sourceImages.ts`, run via `npm run source-images`) that enriches active Experiences with freely-licensed imagery. It runs **independently of Catalog_Sync** — ThemeParks.wiki exposes no imagery, so images are curated out of band and must survive every catalog refresh (see "Image survival across sync" above; `applyReconciliation` never writes the image columns).
+
+**Image sources (freely licensed, attribution preserved):**
+
+- **Wikipedia** — the MediaWiki search API (`action=query&list=search`) finds candidate articles across several query variants, and the REST summary endpoint (`/page/summary/{title}`) yields the article's lead image (`originalimage`, falling back to `thumbnail`).
+- **Wikimedia Commons** — a `generator=search` over the File namespace (`gsrnamespace=6`) reads `imageinfo` for a thumbnail URL. Commons holds photos for far more attractions/restaurants/shows than there are Wikipedia articles, so this layer materially raises coverage. Only raster photos are accepted (`.jpg/.jpeg/.png/.webp`); SVG logos, PDFs, audio, and video are rejected (R12.10).
+
+Both sources are CC BY-SA / public domain; the source page or file URL and license note are stored in `image_attribution` (R12.2).
+
+**Resolution order (first hit wins) (R12.6, R12.7, R12.11, R12.12):**
+
+1. **Curated Image_Override** — an entry in `imageOverrides.json`, keyed by Experience name matched case-insensitively with punctuation ignored (R12.8). An override always wins and short-circuits all other lookups (R12.7).
+2. **Confident Wikipedia article match** — first article whose title confidently matches the Experience name; its lead image is used.
+3. **Confident Wikimedia Commons photo match** — first raster photo whose (cleaned) filename confidently matches.
+4. **Park-level fallback** (opt-in via `--park-fallback`) — the Experience's Park photo, so a miss still shows a real image (R12.11).
+5. **Leave NULL** — if every layer misses, `image_url` stays `NULL` and the App renders its category placeholder (R12.12, R12.24).
+
+**Confident-match rule (R12.9):** a candidate title is accepted when Jaccard token similarity between the two names is `>= 0.5`, OR when one name's meaningful tokens (stopwords removed) are a subset of the other's, subject to a distinctiveness guard (the subset side must have `>= 2` tokens, or one token `>= 4` chars) so a single short generic word cannot trigger a match. This catches partial names ("Soarin'" ⊂ "Soarin' Around the World") and Commons filenames carrying extra date/author tokens, while still refusing a wrong photo.
+
+**Run modes / idempotency (R12.5, R12.13–R12.16):**
+
+| Mode | Flag | Behavior |
+| --- | --- | --- |
+| Default | (none) | Fills only active rows where `image_url IS NULL` — re-running is idempotent (R12.13) |
+| Force | `--force` | Re-sources every active row (R12.14) |
+| Dry-run | `--dry-run` | Reports resolved matches, writes nothing (R12.15) |
+| Park fallback | `--park-fallback` | Also uses a Park photo for otherwise-unmatched rows (R12.11) |
+| Custom overrides | `--overrides <path>` | Loads overrides from a custom path |
+
+Only active rows are ever processed (`WHERE active = TRUE`, R12.5); attribution is truncated to 1000 characters on write (R12.16).
+
+**Wikimedia API etiquette (R12.17–R12.19):** every request sends a descriptive `User-Agent` built from the `WIKI_CONTACT` env var; a politeness delay separates successive calls; and HTTP `429`/`503` responses are retried with exponential backoff that honors the `Retry-After` header when present.
+
+#### Image_Sourcing_Job flow (per Experience)
+
+```mermaid
+sequenceDiagram
+    participant Job as Image_Sourcing_Job
+    participant DB as Postgres (experiences)
+    participant OV as imageOverrides.json
+    participant WP as Wikipedia
+    participant WC as Wikimedia Commons
+
+    Note over Job,DB: load active rows (default: image_url IS NULL; force: all)
+    Job->>OV: lookup normalized name
+    alt override hit
+        OV-->>Job: curated url + attribution
+    else no override
+        Job->>WP: search + REST summary (confident match?)
+        alt confident Wikipedia match
+            WP-->>Job: lead image + attribution
+        else
+            Job->>WC: generator=search File namespace (raster + confident match?)
+            alt confident Commons photo
+                WC-->>Job: thumbnail url + attribution
+            else --park-fallback enabled
+                Job->>WP: park page lead image
+            else all miss
+                Note over Job: leave image_url NULL (placeholder)
+            end
+        end
+    end
+    alt resolved and not --dry-run
+        Job->>DB: UPDATE image_url, image_attribution (truncated to 1000)
+    end
+    Note over Job,WC: politeness delay between calls; retry 429/503 with backoff
+```
 
 ### Tracking_Service
 
@@ -364,6 +438,8 @@ erDiagram
         text park "enum"
         text category "enum: Ride|Show|Restaurant|Parade|Character_Meet|Other"
         text description
+        text image_url "nullable, 1..2048; sourced out of band"
+        text image_attribution "nullable, 1..1000"
         bool active
         timestamptz updated_at
     }
@@ -429,6 +505,7 @@ erDiagram
 - `friend_requests` UNIQUE on `(sender_id, recipient_id)` plus an application-level check rejecting an inverse-direction pending request or an existing friendship (R8.7).
 - `share_recipients (share_id, recipient_id)` PRIMARY KEY.
 - `aggregate_ratings.experience_id` PRIMARY KEY with CHECK `count_ratings >= 0` and CHECK `mean_x10 IS NULL OR mean_x10 BETWEEN 10 AND 100` (R10.1).
+- `experiences.image_url` and `experiences.image_attribution` are nullable `TEXT` columns added by migration `0002_experience_images.sql`, with CHECK `image_url IS NULL OR char_length(image_url) BETWEEN 1 AND 2048` and CHECK `image_attribution IS NULL OR char_length(image_attribution) BETWEEN 1 AND 1000` (R12.1, R12.2). Both are `NULL` until the Image_Sourcing_Job enriches the row; the length bounds prevent an enrichment bug from writing oversized values into the cache.
 
 ### Sequence Diagrams
 
@@ -698,6 +775,12 @@ The properties below are written so each one drives one or more property-based t
 
 **Validates: Requirements 11.7, 11.8, 11.9**
 
+### Property 29: Sourced images survive catalog reconciliation
+
+*For any* Experience row carrying a non-null `image_url` / `image_attribution` and *any* sequence of catalog reconciliations applied to it (upserts of changed name/Park/Experience_Category, soft-delete, and re-appearance), the row's `image_url` and `image_attribution` values remain unchanged after every reconciliation step; and *for any* upstream entity id absent from the cache, the Experience inserted for it has `image_url` and `image_attribution` both null.
+
+**Validates: Requirements 12.3, 12.4**
+
 ## Error Handling
 
 All API errors follow a uniform JSON envelope:
@@ -765,6 +848,7 @@ All API errors follow a uniform JSON envelope:
 - Catalog_Service strips any HTML or script content from upstream `description` fields before persisting; the field is rendered as plain text in the client.
 - Rate limiting at the gateway: 60 req/min/user for read endpoints, 10 req/min/user for mutations, 5 attempts/15 min/account for `/auth/login` (the lockout rule is enforced after rate limiting passes, so a flood does not bypass the account lockout window).
 - Privacy boundary on aggregate ratings is enforced in the type system: the `AggregateRatingDTO` has only `value | null` and `count`; there is no code path on the server that returns another User's individual Rating value.
+- Experience imagery uses only freely-licensed sources (Wikipedia / Wikimedia Commons, CC BY-SA or public domain) with the source page/file URL and license note preserved in `image_attribution`, rather than scraping copyrighted, ToS-restricted Disney pages. The stored URL and attribution lengths are bounded at the DB layer (CHECK 1..2048 and 1..1000 respectively), so an enrichment bug cannot write unbounded values into the cache.
 
 ## Testing Strategy
 
@@ -821,6 +905,7 @@ All API errors follow a uniform JSON envelope:
 | 26 (aggregate rating) | Sequences of rating set/replace/remove events | Reference implementation recomputes from raw events |
 | 27 (leaderboard ordering) | Random Experience+aggregate datasets with ties | |
 | 28 (leaderboard staleness) | Sequences of Home_Screen open timestamps | |
+| 29 (image survival across sync) | A seeded row with non-null image fields + random reconciliation sequences (rename, soft-delete, re-appearance) and disjoint new-entity sets | Reference model asserts image columns are never in the reconcile `SET` list; new rows arrive NULL |
 
 ### Tests not driven by properties
 
@@ -828,6 +913,12 @@ All API errors follow a uniform JSON envelope:
 - **Perf SLAs** (R3.4, R3.5, R5.8, R5.9, R6.1, R10.7, R11) are smoke tests that run a single representative scenario against staging-like data and assert the wall-clock duration is within budget.
 - **External API wiring** (R1.1, R1.10) is verified with one integration test against a recorded ThemeParks_API fixture.
 - **Persistence existence** (R1.9) and the avatar storage round-trip are verified with one integration test each.
+- **Image_Sourcing_Job matching heuristics** (R12.6–R12.12, R12.16) — the override normalization (`normalize`), confident-match rule (`isConfidentMatch`), raster-photo predicate (`isPhotoUrl`), resolution precedence (`resolveImage` with mocked source layers), and attribution truncation — are covered by example-based unit tests rather than property tests, since the end-to-end job depends on live Wikipedia/Wikimedia network responses.
+- **Image_Sourcing_Job run modes and DB selection** (R12.5, R12.13–R12.15) are verified with integration tests asserting the correct `experiences` row set is selected (active-only; NULL-image-only in default mode; all active in force mode) and that dry-run performs no writes.
+- **Wikimedia API etiquette** (R12.17–R12.19) — descriptive `User-Agent` from `WIKI_CONTACT`, politeness delay, and retry-with-backoff honoring `Retry-After` on HTTP 429/503 — is verified with integration tests against a stubbed HTTP server.
+- **Image DTO and endpoint shape** (R12.20–R12.22) is verified with unit tests on the DTO mapper and integration tests on `GET /catalog` and `GET /catalog/{experienceId}`.
+- **Image rendering and placeholder** (R12.23, R12.24) are verified with React Native Testing Library example tests.
+- **Image column schema bounds** (R12.1, R12.2) are verified with a migration/schema test asserting the CHECK constraints exist.
 
 ### Coverage targets
 

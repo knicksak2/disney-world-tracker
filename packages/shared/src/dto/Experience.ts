@@ -34,4 +34,22 @@ export interface ExperienceDTO {
    * row has been soft-deleted but preserved for FK references (R1.15).
    */
   readonly active: boolean;
+
+  /**
+   * Absolute URL of a representative image for this Experience, or `null`
+   * when none has been sourced yet. Images are curated out of band from the
+   * ThemeParks.wiki catalog sync (which exposes no imagery), so this field is
+   * independent of the upstream entity lifecycle and survives catalog
+   * refreshes. The App falls back to a category placeholder when it is
+   * `null`. Optional on the type so existing fixtures that predate the field
+   * remain valid; the wire payload always carries it (possibly `null`).
+   */
+  readonly imageUrl?: string | null;
+
+  /**
+   * Human-readable attribution / license note for `imageUrl` (e.g. the
+   * Wikimedia author and license), or `null` when not applicable. Stored so
+   * the App can render the credit required by the image's license.
+   */
+  readonly imageAttribution?: string | null;
 }

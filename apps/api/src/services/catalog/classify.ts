@@ -11,18 +11,20 @@
  *   - **Deterministic**: equal inputs always produce equal outputs, so it
  *     is a sound property-test target (see Property 1).
  *
- * Mapping table (from design.md):
+ * Mapping table:
  *
  *   | entityType  | sub-classification signal           | result          |
  *   | ----------- | ----------------------------------- | --------------- |
  *   | ATTRACTION  | parade indicator                    | Parade          |
  *   | ATTRACTION  | character-meet indicator            | Character_Meet  |
  *   | ATTRACTION  | (none of the above)                 | Ride            |
- *   | SHOW        | n/a                                 | Show            |
+ *   | SHOW        | parade indicator                    | Parade          |
+ *   | SHOW        | character-meet indicator            | Character_Meet  |
+ *   | SHOW        | (none of the above)                 | Show            |
  *   | RESTAURANT  | n/a                                 | Restaurant      |
  *   | (any other) | n/a                                 | Other           |
  *
- * Sub-classification precedence for `ATTRACTION` entities:
+ * Sub-classification precedence (applied to both `ATTRACTION` and `SHOW`):
  *
  *   1. The structured `attractionType` field, when present, is
  *      authoritative:
@@ -33,12 +35,20 @@
  *        - `/parade/i`                    → `Parade`
  *        - `/meet[- ]?(and[- ]?)?greet/i` → `Character_Meet`
  *
- *   3. Otherwise the base `ATTRACTION` mapping → `Ride`.
+ *   3. Otherwise the base mapping applies (`ATTRACTION → Ride`,
+ *      `SHOW → Show`).
  *
- * Sub-classification is only consulted for `ATTRACTION` entities. A `SHOW`
- * or `RESTAURANT` whose name happens to contain "parade" is still mapped by
- * its base `entityType`; the design's mapping table only places the parade
- * and character-meet sub-classification rows under `ATTRACTION`.
+ * Why `SHOW` is sub-classified too: upstream (ThemeParks.wiki) is not
+ * consistent about whether a character meet-and-greet is an `ATTRACTION`
+ * or a `SHOW`. Many meet-and-greets that run at a stage/theater come
+ * through with `entityType === 'SHOW'`, and parades occasionally do as
+ * well. Consulting the same parade / character-meet signals for `SHOW`
+ * keeps those experiences out of the generic `Show` bucket and in the
+ * category the user actually expects.
+ *
+ * `RESTAURANT` is deliberately *not* sub-classified: a dining location
+ * named e.g. "Meet & Greet Cafe" is still a `Restaurant`, and there is no
+ * upstream ambiguity to correct for there.
  *
  * Note on the include set (R1.2): this function does not enforce the
  * include-set rule. The caller is responsible for filtering entities whose
@@ -58,11 +68,22 @@ import type { ThemeParksEntity } from './types.js';
 const PARADE_NAME_PATTERN = /parade/i;
 
 /**
- * Matches "meet greet", "meet and greet", "meet-and-greet", "meet&greet"-like
- * variants — the conventional upstream phrasing for character meet-and-greet
- * experiences — case-insensitive.
+ * Matches the conventional upstream phrasings for a character meet-and-greet
+ * experience, case-insensitive:
+ *
+ *   - The explicit "meet greet" / "meet and greet" / "meet-and-greet" /
+ *     "meetandgreet" forms, anywhere in the name; and
+ *   - A name that *begins* with the word "meet" (e.g. "Meet Mickey Mouse at
+ *     Town Square Theater", "Meet Disney Princesses at Princess Fairytale
+ *     Hall"). This is the dominant naming convention for WDW meet-and-greets
+ *     and the only signal available when upstream types them as `SHOW`
+ *     (which, unlike `ATTRACTION`, does not carry an `attractionType`).
+ *
+ * The leading-"meet" branch is intentionally anchored to the start of the
+ * name (`^meet\b`) rather than matching "meet" anywhere, to avoid
+ * misclassifying shows whose descriptions or titles merely mention meeting.
  */
-const CHARACTER_MEET_NAME_PATTERN = /meet[- ]?(and[- ]?)?greet/i;
+const CHARACTER_MEET_NAME_PATTERN = /^meet\b|meet[- ]?(and[- ]?)?greet/i;
 
 /** Upstream `attractionType` value that authoritatively marks a parade. */
 const ATTRACTION_TYPE_PARADE = 'PARADE';
@@ -79,9 +100,9 @@ const ATTRACTION_TYPE_MEET_AND_GREET = 'MEET_AND_GREET';
 export function classify(entity: ThemeParksEntity): ExperienceCategory {
   switch (entity.entityType) {
     case 'ATTRACTION':
-      return classifyAttraction(entity);
+      return subClassify(entity) ?? 'Ride';
     case 'SHOW':
-      return 'Show';
+      return subClassify(entity) ?? 'Show';
     case 'RESTAURANT':
       return 'Restaurant';
     default:
@@ -90,12 +111,19 @@ export function classify(entity: ThemeParksEntity): ExperienceCategory {
 }
 
 /**
- * Sub-classify an `ATTRACTION` entity. Structured `attractionType` is
- * checked first so that an upstream value of `"PARADE"` or
- * `"MEET_AND_GREET"` always wins over the name regex, even if the name is
- * ambiguous or absent.
+ * Detect a parade / character-meet sub-classification from an entity's
+ * structured `attractionType` (authoritative when present) or its name.
+ * Returns `null` when neither signal matches, leaving the caller to apply
+ * the base mapping for the entity's `entityType`.
+ *
+ * Structured `attractionType` is checked first so that an upstream value
+ * of `"PARADE"` or `"MEET_AND_GREET"` always wins over the name regex,
+ * even if the name is ambiguous or absent. Among the name fallbacks the
+ * parade pattern is tested before the character-meet pattern.
  */
-function classifyAttraction(entity: ThemeParksEntity): ExperienceCategory {
+function subClassify(
+  entity: ThemeParksEntity,
+): 'Parade' | 'Character_Meet' | null {
   if (entity.attractionType === ATTRACTION_TYPE_PARADE) {
     return 'Parade';
   }
@@ -110,5 +138,5 @@ function classifyAttraction(entity: ThemeParksEntity): ExperienceCategory {
     return 'Character_Meet';
   }
 
-  return 'Ride';
+  return null;
 }
