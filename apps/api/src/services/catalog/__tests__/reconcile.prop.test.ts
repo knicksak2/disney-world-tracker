@@ -1,92 +1,76 @@
-// Feature: disney-world-tracker, Property 5: reconcile produces correct upsert and soft-delete sets
+// Feature: disney-facilities-catalog-source, Property 13: Reconciliation diff rules hold for both Experiences and Resorts
 /**
- * Property-based tests for `reconcile(currentCache, upstreamSet)`.
+ * Property-based tests for the pure reconciliation core
+ * (`reconcile` / `reconcileResorts` / `reconcileCatalog`, `reconcile.ts`).
  *
- * Validates: Requirements 1.14, 1.15, 1.16
+ * Property 13 (design.md → Correctness Properties):
  *
- * Property 5 (design.md → Correctness Properties):
+ *   For any cache snapshot and upstream set (of Experiences *or* Resorts),
+ *   `reconcile` emits:
+ *     - an active INSERT for each upstream id absent from the cache (R11.1);
+ *     - a REACTIVATION preserving the same internal id for each upstream id
+ *       present as a soft-deleted row (R11.2 / R6.10);
+ *     - an UPSERT to upstream values for each active row whose
+ *       `name`/`park`/`category` (Experiences) or resort descriptive fields
+ *       (Resorts) differ (R11.3, R6.3-R6.5);
+ *     - NO CHANGE for each active row that already equals upstream (R11.4);
+ *     - a SOFT-DELETE preserving the row and its internal id for each active
+ *       cached row absent from upstream (R11.5 / R6.9 / R10.6).
  *
- *   For any (currentCache, upstreamSet) pair, the output of
- *   reconcile(currentCache, upstreamSet)
- *     (a) adds an Experience with internalId == derive(upstreamId) for
- *         every upstream id absent from currentCache,
- *     (b) marks active = false for every cache id absent from upstream
- *         while preserving the row and all foreign-key references from
- *         Completions, Ratings, and Notes,
- *     (c) updates name, Park, and Experience_Category to the upstream
- *         value while preserving the internal id when an upstream
- *         entity's metadata differs from the cached row.
+ * Validates: Requirements 6.9, 6.10, 10.6, 11.1, 11.2, 11.3, 11.4, 11.5
  *
- * The implementation under test (`reconcile.ts`) layers two additional
- * deterministic rules on top of the property text:
- *
- *   (d) A soft-deleted cache row whose id reappears upstream is upserted
- *       (reactivation; `active` flips back to `true` with the same
- *       internal id) — design.md "Catalog_Sync" + R1.15.
- *   (e) An already-inactive cache row that is still missing upstream
- *       produces no diff (idempotency).
- *
- * The tests exercise (a)–(e) plus a global idempotency property: applying
- * the diff and re-running `reconcile` against the resulting cache and the
- * same upstream set produces an empty diff.
+ * This is the Disney-sourced successor to the retired ThemeParks.wiki
+ * reconcile property suite: the Experience arm now carries the enrichment /
+ * area / imagery fields through the diff, and a parallel Resort arm exercises
+ * the identical insert / reactivate / upsert / no-change / soft-delete rules
+ * over the Resort descriptive fields.
  *
  * `numRuns: 100` per the spec convention.
+ *
+ * NOTE: this file is shared with Property 24 (image_url sole-writer); that
+ * property lives in its own top-level `describe` block appended below this
+ * one so the two suites stay independent.
  */
 
 import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
-import { EXPERIENCE_CATEGORIES, PARKS } from '@dwt/shared';
-import type { ExperienceCategory, Park } from '@dwt/shared';
+import { AREA_TYPES, EXPERIENCE_CATEGORIES, PARKS } from '@dwt/shared';
+import type {
+  AreaType,
+  ExperienceCategory,
+  MealPeriodDTO,
+  Park,
+} from '@dwt/shared';
 
-import { reconcile } from '../reconcile.js';
+import { reconcile, reconcileResorts, reconcileCatalog } from '../reconcile.js';
+import { selectImageUrl } from '../disney/imagery.js';
+import type { FacilityDocument } from '../disney/facilityDoc.js';
 import type {
   CatalogCacheRow,
   ReconcileResult,
-  ReconcileSoftDelete,
-  ReconcileUpsert,
+  ResortCacheRow,
+  ResortReconcileResult,
   UpstreamExperience,
+  UpstreamResort,
 } from '../types.js';
 
 const NUM_RUNS = 100;
 
 // ---------------------------------------------------------------------------
-// Generators
+// Shared building blocks
 // ---------------------------------------------------------------------------
 //
-// The generators below build cache and upstream sets in three stages so
-// the property tests can talk directly about each diff rule:
+// Both the Experience and the Resort arm are built from the same six-way
+// "presence" fact sheet so the assertions can name each diff rule directly
+// without re-implementing `reconcile`:
 //
-//   1. A pool of distinct internal ids.
-//   2. A "fact sheet" per id describing whether it appears in the cache,
-//      the upstream set, or both, plus its metadata on each side.
-//   3. Materialized cache rows and upstream entities.
-//
-// Building the cache and upstream sets from a shared per-id fact sheet is
-// what lets the test assertions reason about expected upserts and
-// soft-deletes without re-implementing `reconcile` itself.
+//   - 'cache-only-active'   → active cache row missing upstream → soft-delete
+//   - 'cache-only-inactive' → inactive cache row missing upstream → no-op
+//   - 'upstream-only'       → upstream id missing from cache → insert
+//   - 'both-active-same'    → active cache row matching upstream → no-op
+//   - 'both-active-drift'   → active cache row drifted vs upstream → upsert
+//   - 'both-inactive'       → soft-deleted cache row reappears upstream → reactivate
 
-const internalId = fc
-  .integer({ min: 0, max: 1_000_000 })
-  .map((n) => `id-${n}`);
-
-const park: fc.Arbitrary<Park> = fc.constantFrom(...PARKS);
-const category: fc.Arbitrary<ExperienceCategory> = fc.constantFrom(
-  ...EXPERIENCE_CATEGORIES,
-);
-const name = fc.string({ minLength: 1, maxLength: 32 });
-const description = fc.string({ minLength: 0, maxLength: 64 });
-
-/**
- * Per-id presence in the cache and upstream set. The combinations cover
- * every diff rule:
- *
- *   - 'cache-only-active'   → active cache row missing upstream → soft-delete (rule b/d)
- *   - 'cache-only-inactive' → inactive cache row missing upstream → no-op (rule e)
- *   - 'upstream-only'       → upstream id missing from cache → upsert (rule a)
- *   - 'both-active-same'    → active cache row matching upstream → no-op
- *   - 'both-active-drift'   → active cache row with drift vs upstream → upsert (rule c)
- *   - 'both-inactive'       → inactive cache row whose id reappears upstream → upsert (rule d, reactivation)
- */
 type Presence =
   | 'cache-only-active'
   | 'cache-only-inactive'
@@ -104,156 +88,55 @@ const presence: fc.Arbitrary<Presence> = fc.constantFrom(
   'both-inactive',
 );
 
-interface Fact {
-  readonly id: string;
-  readonly presence: Presence;
-  // Cache-side metadata (used when the id is in the cache).
-  readonly cacheName: string;
-  readonly cachePark: Park;
-  readonly cacheCategory: ExperienceCategory;
-  // Upstream-side metadata (used when the id is in upstream).
-  readonly upstreamName: string;
-  readonly upstreamPark: Park;
-  readonly upstreamCategory: ExperienceCategory;
-  readonly upstreamDescription: string;
-  readonly upstreamEntityId: string;
-}
+const internalId = fc.integer({ min: 0, max: 1_000_000 }).map((n) => `id-${n}`);
 
-const fact: fc.Arbitrary<Omit<Fact, 'id'>> = fc.record({
-  presence,
-  cacheName: name,
-  cachePark: park,
-  cacheCategory: category,
-  upstreamName: name,
-  upstreamPark: park,
-  upstreamCategory: category,
-  upstreamDescription: description,
-  upstreamEntityId: fc.string({ minLength: 1, maxLength: 24 }),
+const park: fc.Arbitrary<Park | null> = fc.option(fc.constantFrom(...PARKS), {
+  nil: null,
 });
+const category: fc.Arbitrary<ExperienceCategory> = fc.constantFrom(
+  ...EXPERIENCE_CATEGORIES,
+);
+const areaType: fc.Arbitrary<AreaType> = fc.constantFrom(...AREA_TYPES);
+const name = fc.string({ minLength: 1, maxLength: 24 });
 
-/**
- * A scenario is a set of `Fact` records keyed by distinct internal ids.
- * The materialized cache and upstream lists are derived from the same
- * facts, which is what lets the assertions name the expected diff
- * directly.
- */
-const scenario = fc
-  .uniqueArray(internalId, { minLength: 0, maxLength: 30 })
-  .chain((ids) =>
-    fc
-      .tuple(...ids.map(() => fact))
-      .map((facts) =>
-        ids.map<Fact>((id, i) => {
-          const f = facts[i] ?? facts[0];
-          if (f === undefined) {
-            // Unreachable because `ids` is empty when `facts` is empty.
-            throw new Error('unreachable: empty fact at index');
-          }
-          return { id, ...f };
-        }),
-      ),
-  );
-
-function buildCache(facts: readonly Fact[]): CatalogCacheRow[] {
-  const out: CatalogCacheRow[] = [];
-  for (const f of facts) {
-    switch (f.presence) {
-      case 'cache-only-active':
-      case 'both-active-same':
-      case 'both-active-drift':
-        out.push({
-          id: f.id,
-          active: true,
-          name: f.cacheName,
-          park: f.cachePark,
-          category: f.cacheCategory,
-        });
-        break;
-      case 'cache-only-inactive':
-      case 'both-inactive':
-        out.push({
-          id: f.id,
-          active: false,
-          name: f.cacheName,
-          park: f.cachePark,
-          category: f.cacheCategory,
-        });
-        break;
-      case 'upstream-only':
-        // Not in cache.
-        break;
-    }
-  }
-  return out;
-}
-
-function buildUpstream(facts: readonly Fact[]): UpstreamExperience[] {
-  const out: UpstreamExperience[] = [];
-  for (const f of facts) {
-    switch (f.presence) {
-      case 'upstream-only':
-        out.push({
-          id: f.id,
-          upstreamEntityId: f.upstreamEntityId,
-          name: f.upstreamName,
-          park: f.upstreamPark,
-          category: f.upstreamCategory,
-          description: f.upstreamDescription,
-        });
-        break;
-      case 'both-active-same':
-        // Mirror cache metadata exactly so no drift is reported.
-        out.push({
-          id: f.id,
-          upstreamEntityId: f.upstreamEntityId,
-          name: f.cacheName,
-          park: f.cachePark,
-          category: f.cacheCategory,
-          description: f.upstreamDescription,
-        });
-        break;
-      case 'both-active-drift': {
-        // Force at least one of name/park/category to differ from the
-        // cached row so the case actually exercises rule (c). When the
-        // upstream randomized triple happens to equal the cache, perturb
-        // the name with a sentinel suffix (still within the 1..200 char
-        // bound from R1.8 because cacheName <= 32 + suffix).
-        const drift =
-          f.upstreamName !== f.cacheName ||
-          f.upstreamPark !== f.cachePark ||
-          f.upstreamCategory !== f.cacheCategory;
-        out.push({
-          id: f.id,
-          upstreamEntityId: f.upstreamEntityId,
-          name: drift ? f.upstreamName : `${f.cacheName}~drift`,
-          park: f.upstreamPark,
-          category: f.upstreamCategory,
-          description: f.upstreamDescription,
-        });
-        break;
-      }
-      case 'both-inactive':
-        out.push({
-          id: f.id,
-          upstreamEntityId: f.upstreamEntityId,
-          name: f.upstreamName,
-          park: f.upstreamPark,
-          category: f.upstreamCategory,
-          description: f.upstreamDescription,
-        });
-        break;
-      case 'cache-only-active':
-      case 'cache-only-inactive':
-        // Not in upstream.
-        break;
-    }
-  }
-  return out;
-}
-
-// ---------------------------------------------------------------------------
-// Helpers used by the property assertions
-// ---------------------------------------------------------------------------
+// Descriptions / addresses / phones / image urls are drawn from a "clean"
+// pool that `sanitizeDescription` leaves byte-for-byte unchanged (no tags, no
+// entities, no leading/trailing/collapsible whitespace). That keeps the Resort
+// description drift comparison — which compares against the *sanitized* form —
+// free of spurious drift when a cache row is meant to mirror upstream exactly.
+const cleanText = fc.constantFrom(
+  'Alpha',
+  'Bravo',
+  'Charlie',
+  'Delta',
+  'Echo',
+  'Foxtrot',
+  'Grand Floridian',
+  'Polynesian Village',
+  'Contemporary',
+);
+const cleanTextOrNull: fc.Arbitrary<string | null> = fc.option(cleanText, {
+  nil: null,
+});
+const urlOrNull: fc.Arbitrary<string | null> = fc.option(
+  fc.constantFrom(
+    'https://cdn.disney.com/a.jpg',
+    'https://cdn.disney.com/b.png',
+    'https://cdn.disney.com/c.webp',
+  ),
+  { nil: null },
+);
+const coord: fc.Arbitrary<number | null> = fc.option(
+  fc.double({ min: -180, max: 180, noNaN: true, noDefaultInfinity: true }),
+  { nil: null },
+);
+const mealPeriods: fc.Arbitrary<readonly MealPeriodDTO[]> = fc.array(
+  fc.record({
+    type: fc.string({ minLength: 1, maxLength: 8 }),
+    priceTier: fc.option(fc.constantFrom('$', '$$', '$$$'), { nil: null }),
+  }),
+  { maxLength: 3 },
+);
 
 function indexBy<T extends { readonly id: string }>(
   rows: readonly T[],
@@ -263,23 +146,128 @@ function indexBy<T extends { readonly id: string }>(
   return m;
 }
 
-/**
- * Apply a `ReconcileResult` to a cache snapshot the same way the design's
- * SQL caller is specified to apply it (UPSERT for `upserts`, set
- * `active = false` for `softDeletes`, leave everything else alone).
- *
- * Used to verify the global idempotency property: reconciling against the
- * upstream set after applying the diff must yield an empty diff.
- */
-function applyDiff(
+// ===========================================================================
+// Experience arm
+// ===========================================================================
+
+interface ExperiencePayload extends UpstreamExperience {
+  readonly presence: Presence;
+}
+
+const experiencePayload: fc.Arbitrary<Omit<ExperiencePayload, 'id' | 'presence'>> =
+  fc.record({
+    upstreamEntityId: fc.string({ minLength: 1, maxLength: 24 }),
+    name,
+    park,
+    category,
+    // Land is defaulted to `null` here: this suite (Property 13) does not
+    // exercise Land drift, so keeping both the cache row and the upstream row
+    // at `null` leaves the name/park/category diff rules unchanged. Land's own
+    // reconciliation (Properties 4-6) is covered in reconcileLand.prop.test.ts.
+    land: fc.constant<string | null>(null),
+    description: cleanText,
+    imageUrl: urlOrNull,
+    areaType,
+    resortId: fc.option(internalId, { nil: null }),
+    latitude: coord,
+    longitude: coord,
+    accessibility: fc.array(fc.constantFrom('wheelchair-access', 'audio', 'ecv'), {
+      maxLength: 3,
+    }),
+    priceTier: fc.option(fc.constantFrom('$', '$$', '$$$'), { nil: null }),
+    mealPeriods,
+  });
+
+const experienceScenario: fc.Arbitrary<readonly ExperiencePayload[]> = fc
+  .uniqueArray(internalId, { minLength: 0, maxLength: 25 })
+  .chain((ids) =>
+    fc
+      .tuple(...ids.map(() => fc.tuple(presence, experiencePayload)))
+      .map((rows) =>
+        ids.map<ExperiencePayload>((id, i) => {
+          const entry = rows[i];
+          if (entry === undefined) {
+            throw new Error('unreachable: empty experience payload at index');
+          }
+          const [p, payload] = entry;
+          return { id, presence: p, ...payload };
+        }),
+      ),
+  );
+
+function buildExperienceCache(
+  facts: readonly ExperiencePayload[],
+): CatalogCacheRow[] {
+  const out: CatalogCacheRow[] = [];
+  for (const f of facts) {
+    switch (f.presence) {
+      case 'upstream-only':
+        break;
+      case 'both-active-same':
+      case 'cache-only-active':
+        out.push({
+          id: f.id,
+          active: true,
+          name: f.name,
+          park: f.park,
+          category: f.category,
+          land: f.land,
+        });
+        break;
+      case 'both-active-drift':
+        // Force drift on `name`; park/category still mirror upstream so the
+        // ONLY difference is a change-detected field (R11.3).
+        out.push({
+          id: f.id,
+          active: true,
+          name: `${f.name}~old`,
+          park: f.park,
+          category: f.category,
+          land: f.land,
+        });
+        break;
+      case 'cache-only-inactive':
+      case 'both-inactive':
+        out.push({
+          id: f.id,
+          active: false,
+          name: f.name,
+          park: f.park,
+          category: f.category,
+          land: f.land,
+        });
+        break;
+    }
+  }
+  return out;
+}
+
+function buildExperienceUpstream(
+  facts: readonly ExperiencePayload[],
+): UpstreamExperience[] {
+  const out: UpstreamExperience[] = [];
+  for (const f of facts) {
+    if (
+      f.presence === 'upstream-only' ||
+      f.presence === 'both-active-same' ||
+      f.presence === 'both-active-drift' ||
+      f.presence === 'both-inactive'
+    ) {
+      const { presence: _presence, ...exp } = f;
+      void _presence;
+      out.push(exp);
+    }
+  }
+  return out;
+}
+
+/** Apply an Experience diff the way the repo's SQL caller is specified to. */
+function applyExperienceDiff(
   cache: readonly CatalogCacheRow[],
   diff: ReconcileResult,
-  upstream: readonly UpstreamExperience[],
 ): CatalogCacheRow[] {
-  const upstreamById = indexBy(upstream);
   const next = new Map<string, CatalogCacheRow>();
   for (const row of cache) next.set(row.id, row);
-
   for (const u of diff.upserts) {
     next.set(u.id, {
       id: u.id,
@@ -287,47 +275,167 @@ function applyDiff(
       name: u.name,
       park: u.park,
       category: u.category,
+      land: u.land,
     });
   }
   for (const d of diff.softDeletes) {
     const existing = next.get(d.id);
-    if (existing !== undefined) {
-      next.set(d.id, { ...existing, active: false });
-    }
+    if (existing !== undefined) next.set(d.id, { ...existing, active: false });
   }
-  // Touch upstreamById to satisfy lint: it's not used by the apply rule
-  // (the diff already encodes the apply intent), but keeping the parameter
-  // makes the helper signature read like the SQL caller.
-  void upstreamById;
   return [...next.values()];
 }
 
-// ---------------------------------------------------------------------------
-// Property assertions
-// ---------------------------------------------------------------------------
+// ===========================================================================
+// Resort arm
+// ===========================================================================
 
-describe('reconcile — Property 5: correct upserts and soft-deletes', () => {
-  it('upserts every upstream id absent from the cache (rule a)', () => {
+interface ResortPayload extends UpstreamResort {
+  readonly presence: Presence;
+}
+
+const resortPayload: fc.Arbitrary<Omit<ResortPayload, 'id' | 'presence'>> =
+  fc.record({
+    upstreamEntityId: fc.string({ minLength: 1, maxLength: 24 }),
+    name,
+    description: cleanTextOrNull,
+    imageUrl: urlOrNull,
+    latitude: coord,
+    longitude: coord,
+    address: cleanTextOrNull,
+    phone: cleanTextOrNull,
+  });
+
+const resortScenario: fc.Arbitrary<readonly ResortPayload[]> = fc
+  .uniqueArray(internalId, { minLength: 0, maxLength: 25 })
+  .chain((ids) =>
+    fc
+      .tuple(...ids.map(() => fc.tuple(presence, resortPayload)))
+      .map((rows) =>
+        ids.map<ResortPayload>((id, i) => {
+          const entry = rows[i];
+          if (entry === undefined) {
+            throw new Error('unreachable: empty resort payload at index');
+          }
+          const [p, payload] = entry;
+          return { id, presence: p, ...payload };
+        }),
+      ),
+  );
+
+/**
+ * A resort cache row that mirrors an upstream payload exactly. Because the
+ * clean-text pool is sanitize-stable, the cached (already-sanitized)
+ * description equals `sanitizeResortDescription(payload.description)`, so a
+ * mirrored row reports no drift.
+ */
+function mirroredResortRow(
+  f: ResortPayload,
+  active: boolean,
+): ResortCacheRow {
+  return {
+    id: f.id,
+    active,
+    name: f.name,
+    description: f.description,
+    imageUrl: f.imageUrl,
+    latitude: f.latitude,
+    longitude: f.longitude,
+    address: f.address,
+    phone: f.phone,
+  };
+}
+
+function buildResortCache(facts: readonly ResortPayload[]): ResortCacheRow[] {
+  const out: ResortCacheRow[] = [];
+  for (const f of facts) {
+    switch (f.presence) {
+      case 'upstream-only':
+        break;
+      case 'both-active-same':
+      case 'cache-only-active':
+        out.push(mirroredResortRow(f, true));
+        break;
+      case 'both-active-drift':
+        // Force drift on `name` only; every other field mirrors upstream so
+        // the row differs from upstream on exactly one descriptive field.
+        out.push({ ...mirroredResortRow(f, true), name: `${f.name}~old` });
+        break;
+      case 'cache-only-inactive':
+      case 'both-inactive':
+        out.push(mirroredResortRow(f, false));
+        break;
+    }
+  }
+  return out;
+}
+
+function buildResortUpstream(
+  facts: readonly ResortPayload[],
+): UpstreamResort[] {
+  const out: UpstreamResort[] = [];
+  for (const f of facts) {
+    if (
+      f.presence === 'upstream-only' ||
+      f.presence === 'both-active-same' ||
+      f.presence === 'both-active-drift' ||
+      f.presence === 'both-inactive'
+    ) {
+      const { presence: _presence, ...resort } = f;
+      void _presence;
+      out.push(resort);
+    }
+  }
+  return out;
+}
+
+/** Apply a Resort diff the way the repo's SQL caller is specified to. */
+function applyResortDiff(
+  cache: readonly ResortCacheRow[],
+  diff: ResortReconcileResult,
+): ResortCacheRow[] {
+  const next = new Map<string, ResortCacheRow>();
+  for (const row of cache) next.set(row.id, row);
+  for (const u of diff.upserts) {
+    next.set(u.id, {
+      id: u.id,
+      active: u.active,
+      name: u.name,
+      description: u.description,
+      imageUrl: u.imageUrl,
+      latitude: u.latitude,
+      longitude: u.longitude,
+      address: u.address,
+      phone: u.phone,
+    });
+  }
+  for (const d of diff.softDeletes) {
+    const existing = next.get(d.id);
+    if (existing !== undefined) next.set(d.id, { ...existing, active: false });
+  }
+  return [...next.values()];
+}
+
+// ===========================================================================
+// Property 13 — Experience arm
+// ===========================================================================
+
+describe('reconcile — Property 13: Experience diff rules', () => {
+  it('inserts every upstream id absent from the cache, active (R11.1)', () => {
     fc.assert(
-      fc.property(scenario, (facts) => {
-        const cache = buildCache(facts);
-        const upstream = buildUpstream(facts);
-        const diff = reconcile(cache, upstream);
-
+      fc.property(experienceScenario, (facts) => {
+        const cache = buildExperienceCache(facts);
+        const diff = reconcile(cache, buildExperienceUpstream(facts));
         const upserts = indexBy(diff.upserts);
+
         for (const f of facts) {
           if (f.presence === 'upstream-only') {
             const u = upserts.get(f.id);
-            expect(u, `upstream-only id ${f.id} must be upserted`).toBeDefined();
-            // Internal id is the upstream id; the property text says
-            // `internalId == derive(upstreamId)` — the caller is
-            // responsible for derivation, and `reconcile` just preserves
-            // whatever id the caller passed (R1.7 + design note).
+            expect(u, `insert expected for ${f.id}`).toBeDefined();
             expect(u?.id).toBe(f.id);
             expect(u?.active).toBe(true);
-            expect(u?.name).toBe(f.upstreamName);
-            expect(u?.park).toBe(f.upstreamPark);
-            expect(u?.category).toBe(f.upstreamCategory);
+            expect(u?.name).toBe(f.name);
+            expect(u?.park).toBe(f.park);
+            expect(u?.category).toBe(f.category);
           }
         }
       }),
@@ -335,129 +443,45 @@ describe('reconcile — Property 5: correct upserts and soft-deletes', () => {
     );
   });
 
-  it('soft-deletes active cache rows absent from upstream (rule b)', () => {
+  it('reactivates soft-deleted rows that reappear upstream with the same id (R11.2)', () => {
     fc.assert(
-      fc.property(scenario, (facts) => {
-        const cache = buildCache(facts);
-        const upstream = buildUpstream(facts);
-        const diff = reconcile(cache, upstream);
-
-        const softDeletes = new Set(
-          diff.softDeletes.map((d: ReconcileSoftDelete) => d.id),
-        );
-        for (const f of facts) {
-          if (f.presence === 'cache-only-active') {
-            expect(
-              softDeletes.has(f.id),
-              `active cache id ${f.id} missing upstream must soft-delete`,
-            ).toBe(true);
-          }
-        }
-        // Also: no soft-delete is emitted for any id that is still upstream.
-        const upstreamIds = new Set(upstream.map((u) => u.id));
-        for (const id of softDeletes) {
-          expect(upstreamIds.has(id)).toBe(false);
-        }
-      }),
-      { numRuns: NUM_RUNS },
-    );
-  });
-
-  it('upserts active cache rows whose name/park/category drifts (rule c)', () => {
-    fc.assert(
-      fc.property(scenario, (facts) => {
-        const cache = buildCache(facts);
-        const upstream = buildUpstream(facts);
-        const diff = reconcile(cache, upstream);
-
+      fc.property(experienceScenario, (facts) => {
+        const cache = buildExperienceCache(facts);
+        const diff = reconcile(cache, buildExperienceUpstream(facts));
         const upserts = indexBy(diff.upserts);
-        const cacheById = indexBy(cache);
-        const upstreamById = indexBy(upstream);
 
-        for (const f of facts) {
-          if (f.presence === 'both-active-drift') {
-            const cached = cacheById.get(f.id);
-            const ent = upstreamById.get(f.id);
-            expect(cached).toBeDefined();
-            expect(ent).toBeDefined();
-            // Drift exists by construction.
-            const driftExists =
-              cached!.name !== ent!.name ||
-              cached!.park !== ent!.park ||
-              cached!.category !== ent!.category;
-            expect(driftExists).toBe(true);
-
-            const u = upserts.get(f.id);
-            expect(u, `drifted id ${f.id} must be upserted`).toBeDefined();
-            // Internal id preserved (R1.16).
-            expect(u?.id).toBe(f.id);
-            expect(u?.active).toBe(true);
-            // Name/park/category match upstream (R1.16).
-            expect(u?.name).toBe(ent!.name);
-            expect(u?.park).toBe(ent!.park);
-            expect(u?.category).toBe(ent!.category);
-          }
-        }
-      }),
-      { numRuns: NUM_RUNS },
-    );
-  });
-
-  it('reactivates soft-deleted cache rows that reappear upstream with the same id (rule d)', () => {
-    fc.assert(
-      fc.property(scenario, (facts) => {
-        const cache = buildCache(facts);
-        const upstream = buildUpstream(facts);
-        const diff = reconcile(cache, upstream);
-
-        const upserts = indexBy(diff.upserts);
         for (const f of facts) {
           if (f.presence === 'both-inactive') {
             const u = upserts.get(f.id);
-            expect(
-              u,
-              `reappeared inactive id ${f.id} must be upserted (reactivation)`,
-            ).toBeDefined();
-            // Same internal id (R1.15: "preserve internal id on reactivation").
+            expect(u, `reactivation expected for ${f.id}`).toBeDefined();
             expect(u?.id).toBe(f.id);
-            // active flips back to true.
             expect(u?.active).toBe(true);
+            expect(u?.name).toBe(f.name);
+            expect(u?.park).toBe(f.park);
+            expect(u?.category).toBe(f.category);
           }
-        }
-        // No soft-delete is emitted for an id present in upstream.
-        const upstreamIds = new Set(upstream.map((u) => u.id));
-        for (const d of diff.softDeletes) {
-          expect(upstreamIds.has(d.id)).toBe(false);
         }
       }),
       { numRuns: NUM_RUNS },
     );
   });
 
-  it('emits no diff for already-inactive rows still missing upstream (rule e, idempotency)', () => {
+  it('upserts active rows whose name/park/category drift, to upstream values (R11.3)', () => {
     fc.assert(
-      fc.property(scenario, (facts) => {
-        const cache = buildCache(facts);
-        const upstream = buildUpstream(facts);
-        const diff = reconcile(cache, upstream);
-
-        const upsertIds = new Set(
-          diff.upserts.map((u: ReconcileUpsert) => u.id),
-        );
-        const softDeleteIds = new Set(
-          diff.softDeletes.map((d: ReconcileSoftDelete) => d.id),
-        );
+      fc.property(experienceScenario, (facts) => {
+        const cache = buildExperienceCache(facts);
+        const diff = reconcile(cache, buildExperienceUpstream(facts));
+        const upserts = indexBy(diff.upserts);
 
         for (const f of facts) {
-          if (f.presence === 'cache-only-inactive') {
-            expect(
-              upsertIds.has(f.id),
-              `inactive id ${f.id} still missing upstream must not upsert`,
-            ).toBe(false);
-            expect(
-              softDeleteIds.has(f.id),
-              `inactive id ${f.id} still missing upstream must not soft-delete`,
-            ).toBe(false);
+          if (f.presence === 'both-active-drift') {
+            const u = upserts.get(f.id);
+            expect(u, `upsert expected for drifted ${f.id}`).toBeDefined();
+            expect(u?.id).toBe(f.id);
+            expect(u?.active).toBe(true);
+            expect(u?.name).toBe(f.name);
+            expect(u?.park).toBe(f.park);
+            expect(u?.category).toBe(f.category);
           }
         }
       }),
@@ -465,19 +489,13 @@ describe('reconcile — Property 5: correct upserts and soft-deletes', () => {
     );
   });
 
-  it('emits no diff for active cache rows that match upstream exactly', () => {
+  it('leaves active rows that already equal upstream unchanged (R11.4)', () => {
     fc.assert(
-      fc.property(scenario, (facts) => {
-        const cache = buildCache(facts);
-        const upstream = buildUpstream(facts);
-        const diff = reconcile(cache, upstream);
-
-        const upsertIds = new Set(
-          diff.upserts.map((u: ReconcileUpsert) => u.id),
-        );
-        const softDeleteIds = new Set(
-          diff.softDeletes.map((d: ReconcileSoftDelete) => d.id),
-        );
+      fc.property(experienceScenario, (facts) => {
+        const cache = buildExperienceCache(facts);
+        const diff = reconcile(cache, buildExperienceUpstream(facts));
+        const upsertIds = new Set(diff.upserts.map((u) => u.id));
+        const softDeleteIds = new Set(diff.softDeletes.map((d) => d.id));
 
         for (const f of facts) {
           if (f.presence === 'both-active-same') {
@@ -490,48 +508,731 @@ describe('reconcile — Property 5: correct upserts and soft-deletes', () => {
     );
   });
 
-  it('re-running reconcile after applying the diff produces an empty diff (idempotency)', () => {
+  it('soft-deletes active cache rows absent from upstream, preserving the row/id (R11.5)', () => {
     fc.assert(
-      fc.property(scenario, (facts) => {
-        const cache = buildCache(facts);
-        const upstream = buildUpstream(facts);
+      fc.property(experienceScenario, (facts) => {
+        const cache = buildExperienceCache(facts);
+        const upstream = buildExperienceUpstream(facts);
         const diff = reconcile(cache, upstream);
+        const softDeletes = new Set(diff.softDeletes.map((d) => d.id));
 
-        const nextCache = applyDiff(cache, diff, upstream);
-        const second = reconcile(nextCache, upstream);
-
-        expect(second.upserts).toEqual([]);
-        expect(second.softDeletes).toEqual([]);
-      }),
-      { numRuns: NUM_RUNS },
-    );
-  });
-
-  it('every emitted upsert lands with active = true (soft-delete never flows through upserts)', () => {
-    fc.assert(
-      fc.property(scenario, (facts) => {
-        const cache = buildCache(facts);
-        const upstream = buildUpstream(facts);
-        const diff = reconcile(cache, upstream);
-
-        for (const u of diff.upserts) {
-          expect(u.active).toBe(true);
+        for (const f of facts) {
+          if (f.presence === 'cache-only-active') {
+            expect(
+              softDeletes.has(f.id),
+              `soft-delete expected for ${f.id}`,
+            ).toBe(true);
+          }
+        }
+        // The soft-deleted id is preserved (still present in the cache); a
+        // soft-delete never targets an id that is still upstream.
+        const cacheIds = new Set(cache.map((r) => r.id));
+        const upstreamIds = new Set(upstream.map((u) => u.id));
+        for (const id of softDeletes) {
+          expect(cacheIds.has(id)).toBe(true);
+          expect(upstreamIds.has(id)).toBe(false);
         }
       }),
       { numRuns: NUM_RUNS },
     );
   });
 
-  it('upsert and soft-delete sets are disjoint by id', () => {
+  it('emits no diff for already-inactive rows still missing upstream (idempotency)', () => {
     fc.assert(
-      fc.property(scenario, (facts) => {
-        const cache = buildCache(facts);
-        const upstream = buildUpstream(facts);
+      fc.property(experienceScenario, (facts) => {
+        const cache = buildExperienceCache(facts);
+        const diff = reconcile(cache, buildExperienceUpstream(facts));
+        const upsertIds = new Set(diff.upserts.map((u) => u.id));
+        const softDeleteIds = new Set(diff.softDeletes.map((d) => d.id));
+
+        for (const f of facts) {
+          if (f.presence === 'cache-only-inactive') {
+            expect(upsertIds.has(f.id)).toBe(false);
+            expect(softDeleteIds.has(f.id)).toBe(false);
+          }
+        }
+      }),
+      { numRuns: NUM_RUNS },
+    );
+  });
+
+  it('produces disjoint, all-active upserts and re-running yields an empty diff', () => {
+    fc.assert(
+      fc.property(experienceScenario, (facts) => {
+        const cache = buildExperienceCache(facts);
+        const upstream = buildExperienceUpstream(facts);
         const diff = reconcile(cache, upstream);
 
         const upsertIds = new Set(diff.upserts.map((u) => u.id));
-        for (const d of diff.softDeletes) {
-          expect(upsertIds.has(d.id)).toBe(false);
+        for (const u of diff.upserts) expect(u.active).toBe(true);
+        for (const d of diff.softDeletes) expect(upsertIds.has(d.id)).toBe(false);
+
+        const second = reconcile(applyExperienceDiff(cache, diff), upstream);
+        expect(second.upserts).toEqual([]);
+        expect(second.softDeletes).toEqual([]);
+      }),
+      { numRuns: NUM_RUNS },
+    );
+  });
+});
+
+// ===========================================================================
+// Property 13 — Resort arm
+// ===========================================================================
+
+describe('reconcileResorts — Property 13: Resort diff rules', () => {
+  it('inserts every upstream resort absent from the cache, active (R6.9/R11.1)', () => {
+    fc.assert(
+      fc.property(resortScenario, (facts) => {
+        const cache = buildResortCache(facts);
+        const diff = reconcileResorts(cache, buildResortUpstream(facts));
+        const upserts = indexBy(diff.upserts);
+
+        for (const f of facts) {
+          if (f.presence === 'upstream-only') {
+            const u = upserts.get(f.id);
+            expect(u, `insert expected for resort ${f.id}`).toBeDefined();
+            expect(u?.id).toBe(f.id);
+            expect(u?.active).toBe(true);
+            expect(u?.name).toBe(f.name);
+            expect(u?.imageUrl).toBe(f.imageUrl);
+            expect(u?.latitude).toBe(f.latitude);
+            expect(u?.longitude).toBe(f.longitude);
+            expect(u?.address).toBe(f.address);
+            expect(u?.phone).toBe(f.phone);
+          }
+        }
+      }),
+      { numRuns: NUM_RUNS },
+    );
+  });
+
+  it('reactivates soft-deleted resorts that reappear upstream with the same id (R6.10)', () => {
+    fc.assert(
+      fc.property(resortScenario, (facts) => {
+        const cache = buildResortCache(facts);
+        const diff = reconcileResorts(cache, buildResortUpstream(facts));
+        const upserts = indexBy(diff.upserts);
+
+        for (const f of facts) {
+          if (f.presence === 'both-inactive') {
+            const u = upserts.get(f.id);
+            expect(u, `reactivation expected for resort ${f.id}`).toBeDefined();
+            expect(u?.id).toBe(f.id);
+            expect(u?.active).toBe(true);
+          }
+        }
+      }),
+      { numRuns: NUM_RUNS },
+    );
+  });
+
+  it('upserts active resorts whose descriptive fields drift, to upstream values (R6.3-R6.5)', () => {
+    fc.assert(
+      fc.property(resortScenario, (facts) => {
+        const cache = buildResortCache(facts);
+        const diff = reconcileResorts(cache, buildResortUpstream(facts));
+        const upserts = indexBy(diff.upserts);
+
+        for (const f of facts) {
+          if (f.presence === 'both-active-drift') {
+            const u = upserts.get(f.id);
+            expect(u, `upsert expected for drifted resort ${f.id}`).toBeDefined();
+            expect(u?.id).toBe(f.id);
+            expect(u?.active).toBe(true);
+            // Drifted `name` is corrected back to the upstream value.
+            expect(u?.name).toBe(f.name);
+            expect(u?.imageUrl).toBe(f.imageUrl);
+            expect(u?.address).toBe(f.address);
+            expect(u?.phone).toBe(f.phone);
+          }
+        }
+      }),
+      { numRuns: NUM_RUNS },
+    );
+  });
+
+  it('leaves active resorts that already equal upstream unchanged (R11.4)', () => {
+    fc.assert(
+      fc.property(resortScenario, (facts) => {
+        const cache = buildResortCache(facts);
+        const diff = reconcileResorts(cache, buildResortUpstream(facts));
+        const upsertIds = new Set(diff.upserts.map((u) => u.id));
+        const softDeleteIds = new Set(diff.softDeletes.map((d) => d.id));
+
+        for (const f of facts) {
+          if (f.presence === 'both-active-same') {
+            expect(upsertIds.has(f.id)).toBe(false);
+            expect(softDeleteIds.has(f.id)).toBe(false);
+          }
+        }
+      }),
+      { numRuns: NUM_RUNS },
+    );
+  });
+
+  it('soft-deletes active resorts absent from upstream, preserving the row/id (R6.9/R10.6)', () => {
+    fc.assert(
+      fc.property(resortScenario, (facts) => {
+        const cache = buildResortCache(facts);
+        const upstream = buildResortUpstream(facts);
+        const diff = reconcileResorts(cache, upstream);
+        const softDeletes = new Set(diff.softDeletes.map((d) => d.id));
+
+        for (const f of facts) {
+          if (f.presence === 'cache-only-active') {
+            expect(
+              softDeletes.has(f.id),
+              `soft-delete expected for resort ${f.id}`,
+            ).toBe(true);
+          }
+        }
+        const cacheIds = new Set(cache.map((r) => r.id));
+        const upstreamIds = new Set(upstream.map((u) => u.id));
+        for (const id of softDeletes) {
+          expect(cacheIds.has(id)).toBe(true);
+          expect(upstreamIds.has(id)).toBe(false);
+        }
+      }),
+      { numRuns: NUM_RUNS },
+    );
+  });
+
+  it('emits no diff for already-inactive resorts still missing upstream (idempotency)', () => {
+    fc.assert(
+      fc.property(resortScenario, (facts) => {
+        const cache = buildResortCache(facts);
+        const diff = reconcileResorts(cache, buildResortUpstream(facts));
+        const upsertIds = new Set(diff.upserts.map((u) => u.id));
+        const softDeleteIds = new Set(diff.softDeletes.map((d) => d.id));
+
+        for (const f of facts) {
+          if (f.presence === 'cache-only-inactive') {
+            expect(upsertIds.has(f.id)).toBe(false);
+            expect(softDeleteIds.has(f.id)).toBe(false);
+          }
+        }
+      }),
+      { numRuns: NUM_RUNS },
+    );
+  });
+
+  it('produces disjoint, all-active upserts and re-running yields an empty diff', () => {
+    fc.assert(
+      fc.property(resortScenario, (facts) => {
+        const cache = buildResortCache(facts);
+        const upstream = buildResortUpstream(facts);
+        const diff = reconcileResorts(cache, upstream);
+
+        const upsertIds = new Set(diff.upserts.map((u) => u.id));
+        for (const u of diff.upserts) expect(u.active).toBe(true);
+        for (const d of diff.softDeletes) expect(upsertIds.has(d.id)).toBe(false);
+
+        const second = reconcileResorts(applyResortDiff(cache, diff), upstream);
+        expect(second.upserts).toEqual([]);
+        expect(second.softDeletes).toEqual([]);
+      }),
+      { numRuns: NUM_RUNS },
+    );
+  });
+});
+
+// ===========================================================================
+// Property 13 — combined reconcileCatalog composition
+// ===========================================================================
+
+describe('reconcileCatalog — Property 13: combined composition', () => {
+  it('composes the Experience and Resort diffs exactly as the individual functions do', () => {
+    fc.assert(
+      fc.property(
+        experienceScenario,
+        resortScenario,
+        (expFacts, resortFacts) => {
+          const snapshot = {
+            experiences: buildExperienceCache(expFacts),
+            resorts: buildResortCache(resortFacts),
+          };
+          const upstream = {
+            experiences: buildExperienceUpstream(expFacts),
+            resorts: buildResortUpstream(resortFacts),
+          };
+
+          const combined = reconcileCatalog(snapshot, upstream);
+
+          expect(combined.experiences).toEqual(
+            reconcile(snapshot.experiences, upstream.experiences),
+          );
+          expect(combined.resorts).toEqual(
+            reconcileResorts(snapshot.resorts, upstream.resorts),
+          );
+        },
+      ),
+      { numRuns: NUM_RUNS },
+    );
+  });
+});
+
+// ===========================================================================
+// Fixed regression examples (both arms)
+// ===========================================================================
+
+describe('reconcile / reconcileResorts — Property 13 fixed examples', () => {
+  const baseExperience: UpstreamExperience = {
+    id: 'exp-1',
+    upstreamEntityId: '80010177;entityType=Attraction',
+    name: 'Space Mountain',
+    park: 'Magic Kingdom',
+    category: 'Ride',
+    land: 'Tomorrowland',
+    description: 'Indoor roller coaster.',
+    imageUrl: 'https://cdn.disney.com/space.jpg',
+    areaType: 'ThemePark',
+    resortId: null,
+    latitude: 28.4,
+    longitude: -81.6,
+    accessibility: ['wheelchair-access'],
+    priceTier: null,
+    mealPeriods: [],
+  };
+
+  const baseResort: UpstreamResort = {
+    id: 'res-1',
+    upstreamEntityId: '80010407;entityType=Resort',
+    name: 'Grand Floridian',
+    description: 'Flagship resort.',
+    imageUrl: 'https://cdn.disney.com/gf.jpg',
+    latitude: 28.41,
+    longitude: -81.58,
+    address: '4401 Floridian Way',
+    phone: '407-555-1000',
+  };
+
+  it('experience + resort empty inputs produce empty diffs', () => {
+    expect(reconcile([], [])).toEqual({ upserts: [], softDeletes: [] });
+    expect(reconcileResorts([], [])).toEqual({ upserts: [], softDeletes: [] });
+  });
+
+  it('inserts a brand-new experience and resort as active', () => {
+    const exp = reconcile([], [baseExperience]);
+    expect(exp.softDeletes).toEqual([]);
+    expect(exp.upserts).toHaveLength(1);
+    expect(exp.upserts[0]).toMatchObject({ id: 'exp-1', active: true });
+
+    const res = reconcileResorts([], [baseResort]);
+    expect(res.softDeletes).toEqual([]);
+    expect(res.upserts).toHaveLength(1);
+    expect(res.upserts[0]).toMatchObject({ id: 'res-1', active: true });
+  });
+
+  it('soft-deletes an active experience and resort missing from upstream', () => {
+    const exp = reconcile(
+      [{ id: 'exp-1', active: true, name: 'Old', park: 'EPCOT', category: 'Ride', land: null }],
+      [],
+    );
+    expect(exp.upserts).toEqual([]);
+    expect(exp.softDeletes).toEqual([{ id: 'exp-1' }]);
+
+    const res = reconcileResorts(
+      [
+        {
+          id: 'res-1',
+          active: true,
+          name: 'Old',
+          description: null,
+          imageUrl: null,
+          latitude: null,
+          longitude: null,
+          address: null,
+          phone: null,
+        },
+      ],
+      [],
+    );
+    expect(res.upserts).toEqual([]);
+    expect(res.softDeletes).toEqual([{ id: 'res-1' }]);
+  });
+
+  it('reactivates a soft-deleted experience and resort that reappear upstream', () => {
+    const exp = reconcile(
+      [{ id: 'exp-1', active: false, name: 'Space Mountain', park: 'Magic Kingdom', category: 'Ride', land: 'Tomorrowland' }],
+      [baseExperience],
+    );
+    expect(exp.softDeletes).toEqual([]);
+    expect(exp.upserts[0]).toMatchObject({ id: 'exp-1', active: true });
+
+    const res = reconcileResorts(
+      [
+        {
+          id: 'res-1',
+          active: false,
+          name: 'Grand Floridian',
+          description: 'Flagship resort.',
+          imageUrl: 'https://cdn.disney.com/gf.jpg',
+          latitude: 28.41,
+          longitude: -81.58,
+          address: '4401 Floridian Way',
+          phone: '407-555-1000',
+        },
+      ],
+      [baseResort],
+    );
+    expect(res.softDeletes).toEqual([]);
+    expect(res.upserts[0]).toMatchObject({ id: 'res-1', active: true });
+  });
+
+  it('does not diff an already-inactive experience/resort still missing upstream', () => {
+    expect(
+      reconcile(
+        [{ id: 'exp-1', active: false, name: 'Old', park: 'EPCOT', category: 'Ride', land: null }],
+        [],
+      ),
+    ).toEqual({ upserts: [], softDeletes: [] });
+
+    expect(
+      reconcileResorts(
+        [
+          {
+            id: 'res-1',
+            active: false,
+            name: 'Old',
+            description: null,
+            imageUrl: null,
+            latitude: null,
+            longitude: null,
+            address: null,
+            phone: null,
+          },
+        ],
+        [],
+      ),
+    ).toEqual({ upserts: [], softDeletes: [] });
+  });
+});
+
+// ===========================================================================
+// Property 24 — image_url sole-writer via reconciliation
+// ===========================================================================
+// Feature: disney-facilities-catalog-source, Property 24: Catalog_Sync is the sole writer of image_url, sourced from Disney via reconciliation
+/**
+ * Property 24 (design.md → Correctness Properties):
+ *
+ *   For any upstream Facility_Document set and cache snapshot, after
+ *   reconciliation the persisted `image_url` of every catalog item (Experience
+ *   or Resort) equals `selectImageUrl` of its document — the non-empty
+ *   `detailImageUrl`, else the non-empty `listImageUrl`, else `null` — set only
+ *   through the `reconcile` → `applyReconciliation` path and by no other
+ *   writer, and no `image_attribution` value is persisted.
+ *
+ * Validates: Requirements 7.1, 7.2, 7.3, 7.4, 14.8, 14.9
+ *
+ * This suite composes the real `selectImageUrl` (imagery.ts) with the real
+ * `reconcile`/`reconcileResorts` (reconcile.ts) so the end-to-end sourcing —
+ * Disney Facility_Document → `selectImageUrl` → reconcile diff → applied
+ * `image_url` — is exercised as one pipeline. It lives in its own top-level
+ * describe blocks, fully independent of the Property 13 suites above.
+ *
+ * `numRuns: 100` per the spec convention (reuses the shared NUM_RUNS).
+ */
+
+// A single candidate image-field value spanning the full R7 input space:
+// absent (`undefined`), empty, and whitespace-only (all three → no image
+// source, R7.3), plus genuine URLs — some padded with surrounding whitespace
+// to prove `selectImageUrl` trims before the value reaches the diff (R7.1/7.2).
+const imageFieldP24: fc.Arbitrary<string | undefined> = fc.oneof(
+  fc.constant<string | undefined>(undefined),
+  fc.constant(''),
+  fc.constant('   '),
+  fc.constantFrom(
+    'https://cdn.disney.com/detail.jpg',
+    '  https://cdn.disney.com/list.png  ',
+    'https://cdn.disney.com/hero.webp',
+  ),
+);
+
+// A minimal Facility_Document carrying only what `selectImageUrl` reads
+// (`detailImageUrl` / `listImageUrl`), each field independently
+// present/absent/empty so detail-wins (R7.1), list-fallback (R7.2), and
+// null-precedence (R7.3) are all exercised. `id` is irrelevant to imagery so a
+// constant Enterprise_Id keeps the doc well-formed.
+/**
+ * Build a minimal Facility_Document carrying only the two image fields, setting
+ * each one *only when defined* so the result satisfies
+ * `exactOptionalPropertyTypes` (an explicit `undefined` is not assignable to an
+ * optional `detailImageUrl?: string`).
+ */
+function imageDoc(
+  detailImageUrl: string | undefined,
+  listImageUrl: string | undefined,
+): FacilityDocument {
+  const doc: {
+    id: string;
+    detailImageUrl?: string;
+    listImageUrl?: string;
+  } = { id: '80010177;entityType=Attraction' };
+  if (detailImageUrl !== undefined) doc.detailImageUrl = detailImageUrl;
+  if (listImageUrl !== undefined) doc.listImageUrl = listImageUrl;
+  return doc;
+}
+
+const imageDocP24: fc.Arbitrary<FacilityDocument> = fc
+  .record({
+    detailImageUrl: imageFieldP24,
+    listImageUrl: imageFieldP24,
+  })
+  .map((fields) => imageDoc(fields.detailImageUrl, fields.listImageUrl));
+
+// A document guaranteed to carry NO usable image source (every field absent,
+// empty, or whitespace-only) so `selectImageUrl` must yield `null` (R7.3).
+const emptyImageDocP24: fc.Arbitrary<FacilityDocument> = fc
+  .record({
+    detailImageUrl: fc.constantFrom<string | undefined>(undefined, '', '   ', '\t\n'),
+    listImageUrl: fc.constantFrom<string | undefined>(undefined, '', '   ', '\t\n'),
+  })
+  .map((fields) => imageDoc(fields.detailImageUrl, fields.listImageUrl));
+
+// --- Experience arm facts --------------------------------------------------
+
+interface ExperienceImageFactP24 {
+  readonly id: string;
+  readonly presence: Presence;
+  readonly doc: FacilityDocument;
+  readonly name: string;
+  readonly park: Park | null;
+  readonly category: ExperienceCategory;
+}
+
+function makeItemScenarioP24<Extra>(
+  extra: fc.Arbitrary<Extra>,
+): fc.Arbitrary<readonly ({ id: string; presence: Presence; doc: FacilityDocument } & Extra)[]> {
+  return fc
+    .uniqueArray(internalId, { minLength: 0, maxLength: 20 })
+    .chain((ids) =>
+      fc
+        .tuple(
+          ...ids.map(() =>
+            fc.tuple(presence, imageDocP24, extra),
+          ),
+        )
+        .map((rows) =>
+          ids.map((id, i) => {
+            const entry = rows[i];
+            if (entry === undefined) {
+              throw new Error('unreachable: empty P24 payload at index');
+            }
+            const [p, doc, rest] = entry;
+            return { id, presence: p, doc, ...rest };
+          }),
+        ),
+    );
+}
+
+const experienceImageScenarioP24: fc.Arbitrary<readonly ExperienceImageFactP24[]> =
+  makeItemScenarioP24(fc.record({ name, park, category }));
+
+function toUpstreamExperienceP24(f: ExperienceImageFactP24): UpstreamExperience {
+  return {
+    id: f.id,
+    upstreamEntityId: f.doc.id,
+    name: f.name,
+    park: f.park,
+    category: f.category,
+    land: null,
+    description: 'Alpha',
+    // The one line under test: image_url is sourced from Disney via
+    // `selectImageUrl`, verbatim, before it enters reconcile (R7, R14.9).
+    imageUrl: selectImageUrl(f.doc),
+    areaType: 'ThemePark',
+    resortId: null,
+    latitude: null,
+    longitude: null,
+    accessibility: [],
+    priceTier: null,
+    mealPeriods: [],
+  };
+}
+
+function buildExperienceCacheP24(
+  facts: readonly ExperienceImageFactP24[],
+): CatalogCacheRow[] {
+  const out: CatalogCacheRow[] = [];
+  for (const f of facts) {
+    switch (f.presence) {
+      case 'upstream-only':
+        break;
+      case 'both-active-same':
+      case 'cache-only-active':
+        out.push({ id: f.id, active: true, name: f.name, park: f.park, category: f.category, land: null });
+        break;
+      case 'both-active-drift':
+        out.push({ id: f.id, active: true, name: `${f.name}~old`, park: f.park, category: f.category, land: null });
+        break;
+      case 'cache-only-inactive':
+      case 'both-inactive':
+        out.push({ id: f.id, active: false, name: f.name, park: f.park, category: f.category, land: null });
+        break;
+    }
+  }
+  return out;
+}
+
+const UPSTREAM_PRESENCES: readonly Presence[] = [
+  'upstream-only',
+  'both-active-same',
+  'both-active-drift',
+  'both-inactive',
+];
+
+// A presence that should produce an upsert (insert / reactivate / drift) —
+// i.e. a path where reconcile is expected to (re)write image_url.
+const UPSERT_PRESENCES: readonly Presence[] = [
+  'upstream-only',
+  'both-active-drift',
+  'both-inactive',
+];
+
+function buildExperienceUpstreamP24(
+  facts: readonly ExperienceImageFactP24[],
+): UpstreamExperience[] {
+  return facts
+    .filter((f) => UPSTREAM_PRESENCES.includes(f.presence))
+    .map(toUpstreamExperienceP24);
+}
+
+// --- Resort arm facts ------------------------------------------------------
+
+interface ResortImageFactP24 {
+  readonly id: string;
+  readonly presence: Presence;
+  readonly doc: FacilityDocument;
+  readonly name: string;
+}
+
+const resortImageScenarioP24: fc.Arbitrary<readonly ResortImageFactP24[]> =
+  makeItemScenarioP24(fc.record({ name }));
+
+function toUpstreamResortP24(f: ResortImageFactP24): UpstreamResort {
+  return {
+    id: f.id,
+    upstreamEntityId: f.doc.id,
+    name: f.name,
+    description: null,
+    // Same sourcing rule shared with Experiences (R6.5, R7).
+    imageUrl: selectImageUrl(f.doc),
+    latitude: null,
+    longitude: null,
+    address: null,
+    phone: null,
+  };
+}
+
+function buildResortCacheP24(
+  facts: readonly ResortImageFactP24[],
+): ResortCacheRow[] {
+  const out: ResortCacheRow[] = [];
+  for (const f of facts) {
+    const img = selectImageUrl(f.doc);
+    const base = {
+      id: f.id,
+      name: f.name,
+      description: null,
+      imageUrl: img,
+      latitude: null,
+      longitude: null,
+      address: null,
+      phone: null,
+    } as const;
+    switch (f.presence) {
+      case 'upstream-only':
+        break;
+      case 'both-active-same':
+      case 'cache-only-active':
+        out.push({ ...base, active: true });
+        break;
+      case 'both-active-drift':
+        out.push({ ...base, active: true, name: `${f.name}~old` });
+        break;
+      case 'cache-only-inactive':
+      case 'both-inactive':
+        out.push({ ...base, active: false });
+        break;
+    }
+  }
+  return out;
+}
+
+function buildResortUpstreamP24(
+  facts: readonly ResortImageFactP24[],
+): UpstreamResort[] {
+  return facts
+    .filter((f) => UPSTREAM_PRESENCES.includes(f.presence))
+    .map(toUpstreamResortP24);
+}
+
+describe('reconcile — Property 24: Experience image_url is Disney-sourced via reconciliation', () => {
+  it('carries selectImageUrl(doc) verbatim on every insert/reactivate/drift upsert (R7.1/7.2, R14.9)', () => {
+    fc.assert(
+      fc.property(experienceImageScenarioP24, (facts) => {
+        const cache = buildExperienceCacheP24(facts);
+        const diff = reconcile(cache, buildExperienceUpstreamP24(facts));
+        const upserts = indexBy(diff.upserts);
+
+        for (const f of facts) {
+          if (UPSERT_PRESENCES.includes(f.presence)) {
+            const u = upserts.get(f.id);
+            expect(u, `upsert expected for ${f.id} (${f.presence})`).toBeDefined();
+            // The diff carries the Disney-sourced image URL byte-for-byte.
+            expect(u?.imageUrl).toBe(selectImageUrl(f.doc));
+          }
+        }
+      }),
+      { numRuns: NUM_RUNS },
+    );
+  });
+
+  it('carries null when the document has no non-empty image source (R7.3)', () => {
+    fc.assert(
+      fc.property(
+        fc
+          .uniqueArray(internalId, { minLength: 1, maxLength: 12 })
+          .chain((ids) =>
+            fc
+              .tuple(...ids.map(() => fc.tuple(emptyImageDocP24, name, park, category)))
+              .map((rows) =>
+                ids.map((id, i) => {
+                  const entry = rows[i];
+                  if (entry === undefined) throw new Error('unreachable');
+                  const [doc, nm, pk, cat] = entry;
+                  return { id, presence: 'upstream-only' as Presence, doc, name: nm, park: pk, category: cat };
+                }),
+              ),
+          ),
+        (facts) => {
+          const diff = reconcile([], buildExperienceUpstreamP24(facts));
+          expect(diff.upserts).toHaveLength(facts.length);
+          for (const u of diff.upserts) {
+            expect(u.imageUrl).toBeNull();
+          }
+        },
+      ),
+      { numRuns: NUM_RUNS },
+    );
+  });
+});
+
+describe('reconcileResorts — Property 24: Resort image_url is Disney-sourced via reconciliation', () => {
+  it('carries selectImageUrl(doc) verbatim on every insert/reactivate/drift upsert (R6.5, R7, R14.9)', () => {
+    fc.assert(
+      fc.property(resortImageScenarioP24, (facts) => {
+        const cache = buildResortCacheP24(facts);
+        const diff = reconcileResorts(cache, buildResortUpstreamP24(facts));
+        const upserts = indexBy(diff.upserts);
+
+        for (const f of facts) {
+          if (UPSERT_PRESENCES.includes(f.presence)) {
+            const u = upserts.get(f.id);
+            expect(u, `resort upsert expected for ${f.id} (${f.presence})`).toBeDefined();
+            expect(u?.imageUrl).toBe(selectImageUrl(f.doc));
+          }
         }
       }),
       { numRuns: NUM_RUNS },
@@ -539,69 +1240,102 @@ describe('reconcile — Property 5: correct upserts and soft-deletes', () => {
   });
 });
 
-describe('reconcile — fixed examples for regression', () => {
-  it('produces empty diff for empty inputs', () => {
-    const result = reconcile([], []);
-    expect(result.upserts).toEqual([]);
-    expect(result.softDeletes).toEqual([]);
+describe('reconcile / reconcileResorts — Property 24: sole-writer end-to-end via reconciliation', () => {
+  it('is the only path that populates image_url: an empty store gains exactly the Disney-sourced URLs, then re-running writes nothing (R7.4, R14.9)', () => {
+    fc.assert(
+      fc.property(
+        experienceImageScenarioP24,
+        resortImageScenarioP24,
+        (expFacts, resortFacts) => {
+          const expUpstream = buildExperienceUpstreamP24(expFacts);
+          const resortUpstream = buildResortUpstreamP24(resortFacts);
+
+          // Model the persistence layer's image_url column as a store that
+          // starts empty (no prior writer) and is mutated ONLY by applying the
+          // reconcile diff — exactly what applyReconciliation does (R14.9).
+          const expStore = new Map<string, string | null>();
+          const resortStore = new Map<string, string | null>();
+
+          const expDiff = reconcile([], expUpstream);
+          for (const u of expDiff.upserts) expStore.set(u.id, u.imageUrl);
+          // Soft-deletes only flip `active`; they never touch image_url.
+          const resortDiff = reconcileResorts([], resortUpstream);
+          for (const u of resortDiff.upserts) resortStore.set(u.id, u.imageUrl);
+
+          // Every persisted image_url equals selectImageUrl of its document.
+          const expDocById = indexBy(
+            expFacts.filter((f) => UPSTREAM_PRESENCES.includes(f.presence)),
+          );
+          for (const u of expUpstream) {
+            const f = expDocById.get(u.id);
+            expect(expStore.get(u.id)).toBe(selectImageUrl(f!.doc));
+          }
+          const resortDocById = indexBy(
+            resortFacts.filter((f) => UPSTREAM_PRESENCES.includes(f.presence)),
+          );
+          for (const u of resortUpstream) {
+            const f = resortDocById.get(u.id);
+            expect(resortStore.get(u.id)).toBe(selectImageUrl(f!.doc));
+          }
+
+          // Sole-writer / idempotency: re-running reconcile against a cache
+          // that already mirrors upstream emits no upsert, so no second writer
+          // and no rewrite of image_url.
+          const expCacheAfter: CatalogCacheRow[] = expDiff.upserts.map((u) => ({
+            id: u.id,
+            active: u.active,
+            name: u.name,
+            park: u.park,
+            category: u.category,
+            land: u.land,
+          }));
+          const resortCacheAfter: ResortCacheRow[] = resortDiff.upserts.map((u) => ({
+            id: u.id,
+            active: u.active,
+            name: u.name,
+            description: u.description,
+            imageUrl: u.imageUrl,
+            latitude: u.latitude,
+            longitude: u.longitude,
+            address: u.address,
+            phone: u.phone,
+          }));
+          expect(reconcile(expCacheAfter, expUpstream).upserts).toEqual([]);
+          expect(reconcileResorts(resortCacheAfter, resortUpstream).upserts).toEqual([]);
+        },
+      ),
+      { numRuns: NUM_RUNS },
+    );
   });
 
-  it('upserts a brand-new upstream row that is absent from the cache', () => {
-    const result = reconcile(
-      [],
-      [
-        {
-          id: 'exp-1',
-          upstreamEntityId: 'wdw:attraction:1',
-          name: 'Space Mountain',
-          park: 'Magic Kingdom',
-          category: 'Ride',
-          description: 'Indoor roller coaster.',
-        },
-      ],
-    );
-    expect(result.softDeletes).toEqual([]);
-    expect(result.upserts).toHaveLength(1);
-    expect(result.upserts[0]).toMatchObject({
-      id: 'exp-1',
-      active: true,
-      name: 'Space Mountain',
-      park: 'Magic Kingdom',
-      category: 'Ride',
-    });
-  });
+  it('emits no image_attribution anywhere in the Experience or Resort diff shapes (R14.8)', () => {
+    fc.assert(
+      fc.property(
+        experienceImageScenarioP24,
+        resortImageScenarioP24,
+        (expFacts, resortFacts) => {
+          const expDiff = reconcile(
+            buildExperienceCacheP24(expFacts),
+            buildExperienceUpstreamP24(expFacts),
+          );
+          const resortDiff = reconcileResorts(
+            buildResortCacheP24(resortFacts),
+            buildResortUpstreamP24(resortFacts),
+          );
 
-  it('soft-deletes an active cache row that is missing from upstream', () => {
-    const result = reconcile(
-      [
-        {
-          id: 'exp-1',
-          active: true,
-          name: 'Old Ride',
-          park: 'Magic Kingdom',
-          category: 'Ride',
+          const allActions: object[] = [
+            ...expDiff.upserts,
+            ...expDiff.softDeletes,
+            ...resortDiff.upserts,
+            ...resortDiff.softDeletes,
+          ];
+          for (const action of allActions) {
+            expect(action).not.toHaveProperty('image_attribution');
+            expect(action).not.toHaveProperty('imageAttribution');
+          }
         },
-      ],
-      [],
+      ),
+      { numRuns: NUM_RUNS },
     );
-    expect(result.upserts).toEqual([]);
-    expect(result.softDeletes).toEqual([{ id: 'exp-1' }]);
-  });
-
-  it('does not emit a diff for an already-inactive cache row missing from upstream', () => {
-    const result = reconcile(
-      [
-        {
-          id: 'exp-1',
-          active: false,
-          name: 'Old Ride',
-          park: 'Magic Kingdom',
-          category: 'Ride',
-        },
-      ],
-      [],
-    );
-    expect(result.upserts).toEqual([]);
-    expect(result.softDeletes).toEqual([]);
   });
 });

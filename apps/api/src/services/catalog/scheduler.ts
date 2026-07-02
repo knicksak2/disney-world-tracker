@@ -81,9 +81,10 @@ export const CATALOG_SYNC_JOB_NAME = 'catalog-sync.run';
 export const CATALOG_SYNC_SCHEDULER_ID = 'catalog-sync.every-24h';
 
 /**
- * Default 24-hour interval expressed in milliseconds, matching R1.10.
- * Exposed as a constant so tests can compare against it without
- * recomputing the literal.
+ * Default 24-hour interval expressed in milliseconds, matching R9.1 / R1.10.
+ * This equals the `config.ts` default for `disney.syncIntervalMs`, so it is the
+ * effective cadence when `CATALOG_SYNC_INTERVAL_MS` is unset. Exposed as a
+ * constant so tests can compare against it without recomputing the literal.
  */
 export const CATALOG_SYNC_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
@@ -129,10 +130,11 @@ export interface CatalogSchedulerOptions {
   readonly logger?: Logger;
 
   /**
-   * Override the 24-hour repeat interval. Useful for tests that want
-   * to drive several iterations quickly. Production callers should leave
-   * this unset so R1.10's "at least once every 24 hours" is honored
-   * verbatim.
+   * Override the repeat interval (ms). Useful for tests that want to drive
+   * several iterations quickly. When omitted, the interval defaults to the
+   * configured `disney.syncIntervalMs` (loaded from `config.ts`), which is
+   * floored at 24h so R9.1's "no more frequently than once per 24 hours" is
+   * honored while remaining operator-configurable via `CATALOG_SYNC_INTERVAL_MS`.
    */
   readonly intervalMs?: number;
 
@@ -187,9 +189,14 @@ export async function startCatalogScheduler(
     runSync,
     connection,
     logger,
-    intervalMs = CATALOG_SYNC_INTERVAL_MS,
     autorun = true,
   } = options;
+
+  // The repeat interval is operator-configurable: an explicit `intervalMs`
+  // (tests) wins, otherwise it defaults to the configured `disney.syncIntervalMs`
+  // (≥24h, R9.1). Config is loaded lazily so a test supplying `intervalMs` never
+  // triggers a real config parse.
+  const intervalMs = options.intervalMs ?? (await loadConfiguredIntervalMs());
 
   const queue = new Queue(CATALOG_SYNC_QUEUE_NAME, { connection });
 
@@ -263,4 +270,20 @@ export async function startCatalogScheduler(
       await queue.close();
     },
   };
+}
+
+// ---------------------------------------------------------------------------
+// Config-driven interval
+// ---------------------------------------------------------------------------
+
+/**
+ * Resolve the scheduled repeat interval from the global config
+ * (`disney.syncIntervalMs`, floored at 24h per R9.1). Loaded lazily via a
+ * dynamic import so a test that supplies an explicit `intervalMs` never
+ * triggers a real config parse, keeping the scheduler unit-testable without a
+ * populated environment.
+ */
+async function loadConfiguredIntervalMs(): Promise<number> {
+  const configMod = await import('../../config.js');
+  return configMod.loadConfig().disney.syncIntervalMs;
 }

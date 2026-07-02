@@ -33,11 +33,18 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import { describe, expect, it } from 'vitest';
 
-import type { ExperienceDTO } from '@dwt/shared';
+import type { ExperienceDTO, MenuDTO, ResortDTO } from '@dwt/shared';
 
 import { registerErrorHandler } from '../../../errors/handler.js';
 import { AppError } from '../../../errors/AppError.js';
-import { catalogRoutes, type CatalogRoutesOptions, type CatalogGetExperience, type CatalogListActiveExperiences } from '../routes.js';
+import {
+  catalogRoutes,
+  type CatalogRoutesOptions,
+  type CatalogGetExperience,
+  type CatalogListActiveExperiences,
+  type CatalogDestinationCount,
+  type CatalogLiveDetailResult,
+} from '../routes.js';
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -55,6 +62,8 @@ function makeExperience(overrides: Partial<ExperienceDTO> = {}): ExperienceDTO {
     category: 'Ride',
     description: 'A classic indoor roller coaster.',
     active: true,
+    imageUrl: null,
+    areaType: 'ThemePark',
     ...overrides,
   };
 }
@@ -104,7 +113,21 @@ async function buildApp(
   const app = Fastify({ logger: false });
   registerErrorHandler(app);
   await app.register(
-    catalogRoutes({ decideRead, listActiveExperiences, getExperience }),
+    catalogRoutes({
+      decideRead,
+      listActiveExperiences,
+      getExperience,
+      ...(overrides.getMenusFor ? { getMenusFor: overrides.getMenusFor } : {}),
+      ...(overrides.listActiveResorts
+        ? { listActiveResorts: overrides.listActiveResorts }
+        : {}),
+      ...(overrides.listDestinationCounts
+        ? { listDestinationCounts: overrides.listDestinationCounts }
+        : {}),
+      ...(overrides.getLiveDetail
+        ? { getLiveDetail: overrides.getLiveDetail }
+        : {}),
+    }),
   );
 
   return { app, get decideReadCalls() { return decideReadCalls; }, listFilters, detailIds };
@@ -127,20 +150,25 @@ describe('GET /catalog', () => {
     expect(res.json()).toEqual({
       experiences: [exp],
       staleCache: false,
+      cacheAgeHours: null,
     });
     await app.close();
   });
 
   it('forwards staleCache=true from the read decision', async () => {
     const { app } = await buildApp({
-      decideRead: async () => ({ staleCache: true }),
+      decideRead: async () => ({ staleCache: true, cacheAgeHours: 30 }),
       listActiveExperiences: async () => [],
     });
 
     const res = await app.inject({ method: 'GET', url: '/catalog' });
 
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ experiences: [], staleCache: true });
+    expect(res.json()).toEqual({
+      experiences: [],
+      staleCache: true,
+      cacheAgeHours: 30,
+    });
     await app.close();
   });
 
@@ -312,9 +340,10 @@ describe('GET /catalog/:experienceId', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    // The detail response carries id+name+park+category+description plus the
-    // optional image fields (null when unsourced); no `active` flag (it's
-    // only relevant to the browse path).
+    // The detail response carries the full Experience projection (id, name,
+    // park, category, description, imageUrl, areaType, plus any persisted
+    // enrichment) minus the browse-only `active` flag; no `imageAttribution`
+    // (Disney imagery needs no third-party credit).
     expect(res.json()).toEqual({
       id: exp.id,
       name: exp.name,
@@ -322,9 +351,10 @@ describe('GET /catalog/:experienceId', () => {
       category: exp.category,
       description: exp.description,
       imageUrl: null,
-      imageAttribution: null,
+      areaType: 'ThemePark',
     });
     expect(res.json()).not.toHaveProperty('active');
+    expect(res.json()).not.toHaveProperty('imageAttribution');
     await app.close();
   });
 
@@ -373,6 +403,579 @@ describe('GET /catalog/:experienceId', () => {
     expect(res.json()).toMatchObject({
       error: { code: 'validation_failed', field: 'experienceId' },
     });
+    await app.close();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GET /catalog — areaType filter (R16.3)
+// ---------------------------------------------------------------------------
+
+describe('GET /catalog areaType filter', () => {
+  it('forwards a valid areaType filter to the repo (R16.3)', async () => {
+    const { app, listFilters } = await buildApp();
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/catalog?areaType=Resort',
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(listFilters).toEqual([{ areaType: 'Resort' }]);
+    await app.close();
+  });
+
+  it('forwards areaType alongside parkId, category, and q (R16.3, R16.4)', async () => {
+    const { app, listFilters } = await buildApp();
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/catalog?parkId=EPCOT&category=Restaurant&areaType=ThemePark&q=Space',
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(listFilters).toEqual([
+      {
+        park: 'EPCOT',
+        category: 'Restaurant',
+        areaType: 'ThemePark',
+        q: 'Space',
+      },
+    ]);
+    await app.close();
+  });
+
+  it('rejects an invalid areaType enum value with validation_failed', async () => {
+    const { app } = await buildApp();
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/catalog?areaType=Galaxy',
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({
+      error: { code: 'validation_failed', field: 'areaType' },
+    });
+    await app.close();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GET /catalog/:experienceId — enrichment + menus (R5.6, R5.7, R8.5)
+// ---------------------------------------------------------------------------
+
+describe('GET /catalog/:experienceId enrichment + menus', () => {
+  it('exposes persisted enrichment fields on the detail response (R5.6, R5.7)', async () => {
+    const exp = makeExperience({
+      id: '55555555-5555-4555-8555-555555555555',
+      areaType: 'Resort',
+      resortId: '66666666-6666-4666-8666-666666666666',
+      latitude: 28.4,
+      longitude: -81.5,
+      accessibility: ['wheelchair-access'],
+      priceTier: '$$',
+      mealPeriods: [{ type: 'Dinner', priceTier: '$$' }],
+    });
+    const { app } = await buildApp({ getExperience: async () => exp });
+
+    const res = await app.inject({ method: 'GET', url: `/catalog/${exp.id}` });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      id: exp.id,
+      name: exp.name,
+      park: exp.park,
+      category: exp.category,
+      description: exp.description,
+      imageUrl: null,
+      areaType: 'Resort',
+      resortId: '66666666-6666-4666-8666-666666666666',
+      latitude: 28.4,
+      longitude: -81.5,
+      accessibility: ['wheelchair-access'],
+      priceTier: '$$',
+      mealPeriods: [{ type: 'Dinner', priceTier: '$$' }],
+    });
+    await app.close();
+  });
+
+  it('attaches persisted menus fetched via getMenusFor (R8.5)', async () => {
+    const exp = makeExperience({
+      id: '77777777-7777-4777-8777-777777777777',
+      category: 'Restaurant',
+    });
+    const menus: MenuDTO[] = [
+      {
+        menuType: 'Dinner',
+        cuisineType: 'American',
+        groups: [
+          {
+            name: 'Appetizers',
+            items: [{ name: 'Soup', price: '$8' }],
+          },
+        ],
+      },
+    ];
+    const menuCalls: string[] = [];
+    const { app } = await buildApp({
+      getExperience: async () => exp,
+      getMenusFor: async (id) => {
+        menuCalls.push(id);
+        return menus;
+      },
+    });
+
+    const res = await app.inject({ method: 'GET', url: `/catalog/${exp.id}` });
+
+    expect(res.statusCode).toBe(200);
+    expect(menuCalls).toEqual([exp.id]);
+    expect(res.json().menus).toEqual(menus);
+    await app.close();
+  });
+
+  it('omits menus when getMenusFor returns none (R8.3)', async () => {
+    const exp = makeExperience({
+      id: '88888888-8888-4888-8888-888888888888',
+    });
+    const { app } = await buildApp({
+      getExperience: async () => exp,
+      getMenusFor: async () => [],
+    });
+
+    const res = await app.inject({ method: 'GET', url: `/catalog/${exp.id}` });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).not.toHaveProperty('menus');
+    await app.close();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GET /resorts (R6.8, R16.5)
+// ---------------------------------------------------------------------------
+
+describe('GET /resorts', () => {
+  it('returns the active resort list from the repo port (R6.8)', async () => {
+    const resorts: ResortDTO[] = [
+      {
+        id: '99999999-9999-4999-8999-999999999999',
+        name: "Disney's Polynesian Village Resort",
+        description: 'A South Seas paradise.',
+        imageUrl: 'https://cdn.example/poly.jpg',
+        latitude: 28.4,
+        longitude: -81.58,
+        address: '1600 Seven Seas Dr',
+        phone: '407-555-0100',
+      },
+    ];
+    const { app } = await buildApp({ listActiveResorts: async () => resorts });
+
+    const res = await app.inject({ method: 'GET', url: '/resorts' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ resorts });
+    await app.close();
+  });
+
+  it('is not registered (404) when no resort port is wired', async () => {
+    const { app } = await buildApp();
+
+    const res = await app.inject({ method: 'GET', url: '/resorts' });
+
+    expect(res.statusCode).toBe(404);
+    await app.close();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GET /catalog/:experienceId/live (R9.1)
+// ---------------------------------------------------------------------------
+
+describe('GET /catalog/:experienceId/live', () => {
+  it('serves the Disney live projection via the injected port (R9.1)', async () => {
+    const experienceId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+    const result: CatalogLiveDetailResult = {
+      liveDetail: {
+        status: 'Operating',
+        waitMinutes: 35,
+        showtimes: [],
+        operatingHours: [],
+        diningAvailability: [],
+      },
+      retrievedAt: '2024-01-01T12:00:00.000Z',
+      stale: false,
+    };
+    const liveCalls: string[] = [];
+    const { app } = await buildApp({
+      getLiveDetail: async (id) => {
+        liveCalls.push(id);
+        return result;
+      },
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/catalog/${experienceId}/live`,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(liveCalls).toEqual([experienceId]);
+    expect(res.json()).toEqual(result);
+    await app.close();
+  });
+
+  it('rejects a non-UUID experienceId on the live route with validation_failed', async () => {
+    const { app } = await buildApp({
+      getLiveDetail: async () => {
+        throw new Error('should not be called');
+      },
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/catalog/not-a-uuid/live',
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({
+      error: { code: 'validation_failed', field: 'experienceId' },
+    });
+    await app.close();
+  });
+
+  it('propagates live_unavailable from the port as HTTP 503', async () => {
+    const { app } = await buildApp({
+      getLiveDetail: async () => {
+        throw new AppError(
+          'live_unavailable',
+          'Live data is currently unavailable.',
+        );
+      },
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/catalog/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb/live',
+    });
+
+    expect(res.statusCode).toBe(503);
+    expect(res.json()).toMatchObject({
+      error: { code: 'live_unavailable' },
+    });
+    await app.close();
+  });
+
+  it('is not registered here (404) when no live port is wired', async () => {
+    const { app } = await buildApp();
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/catalog/cccccccc-cccc-4ccc-8ccc-cccccccccccc/live',
+    });
+
+    expect(res.statusCode).toBe(404);
+    await app.close();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GET /catalog — Land filter (R3.4, R3.5, R3.7)
+// ---------------------------------------------------------------------------
+
+describe('GET /catalog land filter', () => {
+  it('forwards a Land filter value to the repo (R3.4)', async () => {
+    const { app, listFilters } = await buildApp();
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/catalog?land=Fantasyland',
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(listFilters).toEqual([{ land: 'Fantasyland' }]);
+    await app.close();
+  });
+
+  it('preserves the Land filter value case-sensitively (R3.4)', async () => {
+    const { app, listFilters } = await buildApp();
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/catalog?land=TOMORROWLAND',
+    });
+
+    expect(res.statusCode).toBe(200);
+    // The route forwards the exact casing to the repo, which applies the
+    // case-sensitive `land = $n` predicate.
+    expect(listFilters).toEqual([{ land: 'TOMORROWLAND' }]);
+    await app.close();
+  });
+
+  it('forwards Land alongside parkId, category, areaType, and q (R3.5, R3.7)', async () => {
+    const { app, listFilters } = await buildApp();
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/catalog?parkId=Magic%20Kingdom&category=Ride&areaType=ThemePark&q=mountain&land=Fantasyland',
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(listFilters).toEqual([
+      {
+        park: 'Magic Kingdom',
+        category: 'Ride',
+        areaType: 'ThemePark',
+        q: 'mountain',
+        land: 'Fantasyland',
+      },
+    ]);
+    await app.close();
+  });
+
+  it('returns an empty list when the Land filter matches nothing (R3.8)', async () => {
+    const { app } = await buildApp({
+      listActiveExperiences: async () => [],
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/catalog?land=NoSuchLand',
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      experiences: [],
+      staleCache: false,
+      cacheAgeHours: null,
+    });
+    await app.close();
+  });
+
+  it('exposes a persisted Land value on each list Experience (R3.1, R3.3)', async () => {
+    const exp = makeExperience({ land: 'Fantasyland' });
+    const { app } = await buildApp({
+      listActiveExperiences: async () => [exp],
+    });
+
+    const res = await app.inject({ method: 'GET', url: '/catalog' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().experiences[0].land).toBe('Fantasyland');
+    await app.close();
+  });
+
+  it('rejects a Land filter longer than 200 characters with validation_failed (R1.7)', async () => {
+    const { app } = await buildApp();
+    const longLand = 'x'.repeat(201);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/catalog?land=${longLand}`,
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({
+      error: { code: 'validation_failed', field: 'land' },
+    });
+    await app.close();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GET /catalog/:experienceId — Land detail field (R3.3)
+// ---------------------------------------------------------------------------
+
+describe('GET /catalog/:experienceId land field', () => {
+  it('carries a persisted Land value on the detail response (R3.3)', async () => {
+    const exp = makeExperience({
+      id: '12121212-1212-4121-8121-121212121212',
+      land: 'Fantasyland',
+    });
+    const { app } = await buildApp({ getExperience: async () => exp });
+
+    const res = await app.inject({ method: 'GET', url: `/catalog/${exp.id}` });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().land).toBe('Fantasyland');
+    await app.close();
+  });
+
+  it('carries an explicit null Land through the detail response (R3.2)', async () => {
+    const exp = makeExperience({
+      id: '13131313-1313-4131-8131-131313131313',
+      land: null,
+    });
+    const { app } = await buildApp({ getExperience: async () => exp });
+
+    const res = await app.inject({ method: 'GET', url: `/catalog/${exp.id}` });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().land).toBeNull();
+    await app.close();
+  });
+
+  it('omits the Land field when the Experience has no persisted Land (R3.2)', async () => {
+    const exp = makeExperience({
+      id: '14141414-1414-4141-8141-141414141414',
+    });
+    const { app } = await buildApp({ getExperience: async () => exp });
+
+    const res = await app.inject({ method: 'GET', url: `/catalog/${exp.id}` });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).not.toHaveProperty('land');
+    await app.close();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GET /catalog/destinations (R3.6, R10.1, R10.2)
+// ---------------------------------------------------------------------------
+
+describe('GET /catalog/destinations', () => {
+  /** The eight-Destination payload the repo port produces (R3.6, R4.5, R4.6). */
+  const destinations: CatalogDestinationCount[] = [
+    { destination: 'Magic Kingdom', count: 42 },
+    { destination: 'EPCOT', count: 30 },
+    { destination: 'Hollywood Studios', count: 25 },
+    { destination: 'Animal Kingdom', count: 28 },
+    { destination: 'Typhoon Lagoon', count: 5 },
+    { destination: 'Blizzard Beach', count: 0 },
+    { destination: 'Disney Springs', count: 18 },
+    { destination: 'Resorts', count: 60 },
+  ];
+
+  it('returns the eight-entry destinations payload with staleCache=false (R3.6)', async () => {
+    const { app } = await buildApp({
+      listDestinationCounts: async () => destinations,
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/catalog/destinations',
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      destinations,
+      staleCache: false,
+      cacheAgeHours: null,
+    });
+    // All eight Destinations are present, including a zero-count one (R4.6).
+    expect(res.json().destinations).toHaveLength(8);
+    await app.close();
+  });
+
+  it('flags staleCache=true and the cache age from the read decision (R10.1)', async () => {
+    const { app } = await buildApp({
+      decideRead: async () => ({ staleCache: true, cacheAgeHours: 30 }),
+      listDestinationCounts: async () => destinations,
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/catalog/destinations',
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      destinations,
+      staleCache: true,
+      cacheAgeHours: 30,
+    });
+    await app.close();
+  });
+
+  it('propagates catalog_unavailable from the read decision as HTTP 503 (R10.2)', async () => {
+    let countsCalled = false;
+    const { app } = await buildApp({
+      decideRead: async () => {
+        throw new AppError(
+          'catalog_unavailable',
+          'The Disney World catalog could not be loaded.',
+        );
+      },
+      listDestinationCounts: async () => {
+        countsCalled = true;
+        return destinations;
+      },
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/catalog/destinations',
+    });
+
+    expect(res.statusCode).toBe(503);
+    expect(res.json()).toEqual({
+      error: {
+        code: 'catalog_unavailable',
+        message: 'The Disney World catalog could not be loaded.',
+      },
+    });
+    // The counts read is short-circuited when the decision throws (R10.2).
+    expect(countsCalled).toBe(false);
+    await app.close();
+  });
+
+  it('runs the read decision before reading the counts', async () => {
+    const events: string[] = [];
+    const { app } = await buildApp({
+      decideRead: async () => {
+        events.push('decide');
+        return { staleCache: false };
+      },
+      listDestinationCounts: async () => {
+        events.push('counts');
+        return destinations;
+      },
+    });
+
+    await app.inject({ method: 'GET', url: '/catalog/destinations' });
+
+    expect(events).toEqual(['decide', 'counts']);
+    await app.close();
+  });
+
+  it('falls through to the detail param route (400) when no destinations port is wired', async () => {
+    const { app } = await buildApp();
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/catalog/destinations',
+    });
+
+    // Without the destinations port the static route is not registered, so
+    // `/catalog/destinations` is captured by the parametric
+    // `/catalog/:experienceId` route, where "destinations" fails UUID
+    // validation and surfaces as 400 validation_failed.
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({
+      error: { code: 'validation_failed', field: 'experienceId' },
+    });
+    await app.close();
+  });
+
+  it('resolves /catalog/destinations to the counts route, not the detail param route', async () => {
+    // Fastify resolves the static `/catalog/destinations` ahead of the
+    // parametric `/catalog/:experienceId`, so the detail port is never hit.
+    const detailIds: string[] = [];
+    const { app } = await buildApp({
+      getExperience: async (id) => {
+        detailIds.push(id);
+        return null;
+      },
+      listDestinationCounts: async () => destinations,
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/catalog/destinations',
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(detailIds).toEqual([]);
     await app.close();
   });
 });

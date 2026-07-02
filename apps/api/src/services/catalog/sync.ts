@@ -1,83 +1,107 @@
 /**
- * Catalog_Sync orchestrator.
+ * Catalog_Sync orchestrator (Disney sources).
  *
  * `runSync(options)` is the single entry point that drives one full
- * synchronization pass against the ThemeParks.wiki API, reconciles the
- * result against the local cache, and records the outcome in
- * `catalog_sync_runs` / `catalog_cache_metadata`.
+ * synchronization pass against the Disney sources — the `Disney_Sync_Gateway`
+ * facilities channel and the `Menu_Service` — reconciles the result against
+ * the local cache, and records the outcome in `catalog_sync_runs` /
+ * `catalog_cache_metadata`.
  *
- * The orchestrator is the meeting point of the pure functions implemented
- * earlier in Wave 5 — `classify` (task 4.1), `reconcile` (task 4.2),
- * `internalId` (task 4.3) — the typed upstream HTTP client (task 9.1),
- * the catalog repo (task 9.2), and the Redis coordination lock. It is
- * deliberately the only place where those pieces are wired together so
- * that the BullMQ scheduler (task 9.5) and the opportunistic 5-second
- * race on read (task 9.4) can both call it without duplicating logic.
+ * The orchestrator is the meeting point of the pure Disney transformation
+ * cores (`classifyFacility`, `resolveArea`, `extractEnrichment`,
+ * `selectImageUrl`, `projectMenus`), the identity Bridge_Map
+ * (`assignInternalId`), the combined `reconcileCatalog` diff, the typed
+ * `Facilities_Client`, the catalog repo, and the Redis coordination lock. It
+ * is deliberately the only place where those pieces are wired together so that
+ * the BullMQ scheduler and the opportunistic on-read sync can both call it
+ * without duplicating logic.
  *
  * Behavior, anchored to the design and requirements:
  *
- *   1. **Single in-flight sync per cluster (R1.10).** A Redis `SET ... NX PX`
- *      against `catalog:sync:lock` with a 10-minute TTL guards every run.
- *      A concurrent caller (e.g., the scheduled job firing while an
- *      opportunistic on-read sync is still running) gets back
- *      `{ status: 'skipped', reason: 'lock_held' }` and proceeds with the
- *      existing cache. The 10-minute TTL is a hard ceiling on lock
- *      lifetime so a crashed worker cannot wedge syncs forever; a healthy
- *      run completes in seconds and releases the lock explicitly.
+ *   1. **Single in-flight sync per cluster.** A Redis `SET ... NX PX` against
+ *      `catalog:sync:lock` with a 10-minute TTL guards every run. A concurrent
+ *      caller gets `{ status: 'skipped', reason: 'lock_held' }`.
  *
- *   2. **Atomic lock release.** Release uses a small Lua script that only
- *      DELs the key when the stored token matches our token. This avoids
- *      the classic "lock TTL elapsed, key was reissued by another worker,
- *      I delete their lock on my way out" race.
+ *   2. **Atomic lock release.** Release uses a small Lua script that only DELs
+ *      the key when the stored token matches our token.
  *
- *   3. **Upstream walk (R1.1, R1.2).** We resolve the Walt Disney World
- *      Resort destination from `/destinations`, build a `parkId -> Park`
- *      map from its `parks` array, then call `/entity/{wdwId}/children`
- *      to fetch the entire entity tree. For every entity whose
- *      `entityType` is in the include set `{ATTRACTION, SHOW, RESTAURANT}`,
- *      we walk the `parentId` chain up to a known park root and emit
- *      one `UpstreamExperience` per resolution. Entities outside the
- *      include set, and entities whose parent chain does not land in a
- *      known park, are dropped from the upstream set; `reconcile` will
- *      soft-delete any such row that previously existed in the cache
- *      (R1.15).
+ *   3. **Checkpoint-driven upstream walk (R6, R7).** The run reads the
+ *      persisted `Changes_Checkpoint` from the `Document_Store`: absent ⇒
+ *      `Bootstrap_Sync` (full channel enumeration with no `since`, R6.1);
+ *      present ⇒ `Delta_Sync` (`_changes?since=<seq>`, R6.2). Only the
+ *      non-deleted changed ids are bulk-fetched (R6.4); deleted ids become
+ *      tombstones (R7.3). The document upserts, tombstones, and the new
+ *      `last_seq` checkpoint are persisted atomically via `applyDelta` — and
+ *      only on a successful enumeration+fetch (R6.3, R6.5, R7.5).
  *
- *   4. **Transactional cache write (R1.14, R1.15, R1.16).** The diff
- *      produced by `reconcile` is applied via `repo.applyReconciliation`,
- *      which runs every upsert and soft-delete inside a single Postgres
- *      transaction — a partial failure rolls back to leave the cache
- *      untouched. The success run row is then recorded in its own
- *      transaction together with the metadata pointer update so an
- *      observer can never see a `last_successful_sync_at` that points to
- *      a missing run row.
+ *   4. **Reconcile from the store (R7.4).** The upstream entity set is derived
+ *      from `documentStore.getActiveDocuments()` (the non-tombstoned bodies),
+ *      not a fresh full enumeration, then normalized: blank/whitespace-name
+ *      documents are excluded (R3.7).
  *
- *   5. **Failure handling (R1.13).** Any thrown error during the upstream
- *      walk, classification, reconcile, or apply phase is caught,
- *      translated into a `failed` row in `catalog_sync_runs`, and the
- *      cache is left unchanged. The metadata pointer is not updated, so
- *      the read path's cache age continues to count from the previous
- *      successful sync.
+ *   5. **No menu fetch during sync (R8.1, R10.4).** Menus are demand-driven at
+ *      read time now; the sync issues no `Menu_Service` requests.
  *
- * Validates: Requirements 1.10, 1.13, 1.14, 1.15, 1.16
+ *   6. **Identity continuity (R10).** Both Experiences and Resorts derive their
+ *      Internal_Id via `assignInternalId(enterpriseId, bridge)`: the bridged id
+ *      when the Enterprise_Id has a continuity entry (R10.3), else UUIDv5 of the
+ *      Enterprise_Id (R10.1, R10.4).
+ *
+ *   7. **Transactional cache write (R11.6, R11.7).** The combined diff produced
+ *      by `reconcileCatalog` (Experiences + Resorts) plus the per-restaurant
+ *      menu writes is applied via `repo.applyReconciliation` inside a single
+ *      Postgres transaction — a partial failure rolls back to leave the cache
+ *      untouched.
+ *
+ *   8. **Failure handling + outcome discriminator (R12.3, R12.4, R12.5).** Any
+ *      thrown error is caught, translated into a `failed` row, and the cache is
+ *      left unchanged. Every run records an `outcome` discriminator from the
+ *      closed set `{ success, http_status, network, invalid_response, aborted }`:
+ *      a successful run records `success`; an `UpstreamError` records its
+ *      `kind` (so a Sync Gateway auth rejection surfaces as `http_status` with
+ *      the prior cache unchanged, R12.3). A non-upstream failure (e.g. a DB
+ *      error during apply) records `invalid_response` — the run could not
+ *      produce a valid, applied result.
+ *
+ * Validates: Requirements 3.4, 3.5, 3.6, 3.7, 6.1, 6.2, 6.3, 6.4, 6.5, 8.1,
+ *            8.3, 8.4, 12.3, 12.4, 12.5
  */
 
 import { randomUUID } from 'node:crypto';
 
-import type { ExperienceCategory, Park } from '@dwt/shared';
+import type { ExperienceCategory } from '@dwt/shared';
 
 import type { RedisClient } from '../../redis/client.js';
-import { classify } from './classify.js';
-import { internalId } from './internalId.js';
-import { reconcile } from './reconcile.js';
-import type { CatalogRepo } from './repo.js';
+import { assignInternalId } from './disney/bridge.js';
+import { classifyFacility } from './disney/classifyFacility.js';
+import { resolveArea } from './disney/area.js';
+import { extractEnrichment } from './disney/enrich.js';
 import {
-  UpstreamError,
-  type ThemeParksClient,
-  type ThemeParksDestinationEntry,
-  type ThemeParksDestinationParkEntry,
-  type ThemeParksEntityChild,
-} from './themeparks.js';
-import type { UpstreamExperience } from './types.js';
+  EXPERIENCE_ELIGIBLE_TYPES,
+  RESORT_TYPE,
+  adaptFacilityDocument,
+  deriveEnterpriseId,
+  type FacilityDocument,
+} from './disney/facilityDoc.js';
+import {
+  FACILITIES_CHANNEL,
+  type ChannelChange,
+  type FacilitiesClient,
+} from './disney/facilitiesClient.js';
+import { selectImageUrl } from './disney/imagery.js';
+import { resolveLand } from './disney/land.js';
+import type {
+  DocumentStore,
+  StoredFacilityDocument,
+} from './documentStore.js';
+import { outcomeFromError } from './outcome.js';
+import { reconcileCatalog } from './reconcile.js';
+import type { CatalogRepo, SyncRunOutcome } from './repo.js';
+import { UpstreamError } from './themeparks.js';
+import type {
+  UpstreamExperience,
+  UpstreamResort,
+} from './types.js';
 
 // ---------------------------------------------------------------------------
 // Tunable constants
@@ -89,73 +113,88 @@ export const CATALOG_SYNC_LOCK_KEY = 'catalog:sync:lock';
 /**
  * Default TTL for the sync coordination lock.
  *
- * Per the task brief, 10 minutes (600 seconds = 600000 ms) is the
- * maximum lifetime of the lock. A healthy run completes well inside
- * this window; the TTL exists so that a crashed worker eventually
- * releases the lock without operator intervention.
+ * 10 minutes (600000 ms) is the maximum lifetime of the lock. A healthy run
+ * completes well inside this window; the TTL exists so that a crashed worker
+ * eventually releases the lock without operator intervention.
  */
 export const CATALOG_SYNC_LOCK_TTL_MS = 10 * 60 * 1000;
 
-/**
- * Upstream `entityType` values that map to an Experience per the design's
- * mapping table (R1.2). Every other entityType is excluded from the
- * Experience set — `classify` handles them as `Other` defensively, but
- * the orchestrator never feeds them to `reconcile` because they would
- * never be associated with a Park root and would soft-delete spuriously.
- */
-const INCLUDE_SET: ReadonlySet<string> = new Set([
-  'ATTRACTION',
-  'SHOW',
-  'RESTAURANT',
-]);
-
-/**
- * Match a Walt Disney World destination by name or slug. The TP wiki API
- * has historically returned this as `"Walt Disney World Resort"` with
- * slug `"waltdisneyworldresort"`; we accept either signal so a small
- * upstream rename does not break the sync.
- */
-const WDW_NAME_PATTERN = /walt\s*disney\s*world/i;
-const WDW_SLUG_PATTERN = /waltdisneyworld/i;
+/** The Facility_Type of a restaurant, whose menus are fetched best-effort (R8.1). */
+const RESTAURANT_TYPE = 'restaurant';
 
 // ---------------------------------------------------------------------------
 // Public surface
 // ---------------------------------------------------------------------------
 
 /**
- * Options accepted by `runSync`. Every dependency is injectable so unit
- * tests can drive the orchestrator with fakes; production callers leave
- * everything at the default and the function wires itself up against the
- * shared pool / Redis client / config-driven HTTP client.
+ * What triggered a `runSync` invocation. Only a `'scheduled'` run is subject to
+ * the freshness guard (R9.2): the BullMQ scheduler fires on a fixed cadence, so
+ * a tick that lands while the cache is still fresh is a no-op. An `'on_read'`
+ * run is the opportunistic refresh from `decideCatalogRead` — it only ever runs
+ * *because* the cache age already exceeded the freshness interval (R9.3), so it
+ * must never be short-circuited by the guard. A `'manual'` run (the one-off
+ * `npm run sync` script / an operator trigger) likewise always proceeds.
+ */
+export type SyncTrigger = 'scheduled' | 'on_read' | 'manual';
+
+/**
+ * Options accepted by `runSync`. Every dependency is injectable so unit tests
+ * can drive the orchestrator with fakes; production callers leave everything at
+ * the default and the function wires itself up against the shared pool / Redis
+ * client / config-driven Facilities_Client.
  */
 export interface RunSyncOptions {
-  /** ThemeParks.wiki HTTP client. Defaults to one built with the global config. */
-  readonly client?: ThemeParksClient;
+  /** Disney Facilities_Client. Defaults to one built with the global config. */
+  readonly client?: FacilitiesClient;
   /** Catalog repo. Defaults to one built against the singleton DB pool. */
   readonly repo?: CatalogRepo;
+  /**
+   * Durable Document_Store holding the fetched Facility_Documents and the
+   * Changes_Checkpoint. Defaults to one built against the singleton DB pool.
+   * Injected so unit tests can drive the Bootstrap_Sync / Delta_Sync decision
+   * and the atomic checkpoint persistence with an in-memory fake.
+   */
+  readonly documentStore?: DocumentStore;
   /** Redis client used for the coordination lock. Defaults to the singleton. */
   readonly redis?: RedisClient;
   /** Override the lock TTL. Production callers should leave this at the default. */
   readonly lockTtlMs?: number;
   /** Override the wall clock used for `started_at` / `finished_at`. */
   readonly now?: () => Date;
+  /**
+   * What triggered this run. Defaults to `'manual'` so existing callers (the
+   * one-off script, the on-read opportunistic path) proceed unconditionally.
+   * Pass `'scheduled'` from the BullMQ worker so the run is subject to the
+   * freshness guard (R9.2).
+   */
+  readonly trigger?: SyncTrigger;
+  /**
+   * Freshness interval (ms) used by the scheduled-run guard. A scheduled run is
+   * a no-op while the most recent successful sync completed within this window
+   * (R9.2). Defaults to the configured `disney.syncIntervalMs` (≥24h). Only
+   * consulted for a `'scheduled'` trigger.
+   */
+  readonly freshnessIntervalMs?: number;
 }
 
 /** Outcome reported by `runSync`. */
-export type RunSyncResult =
-  | RunSyncSuccess
-  | RunSyncFailure
-  | RunSyncSkipped;
+export type RunSyncResult = RunSyncSuccess | RunSyncFailure | RunSyncSkipped;
 
 export interface RunSyncSuccess {
   readonly status: 'success';
   readonly runId: string;
-  /** Number of upstream entities accepted into the upstream set. */
+  /** Number of upstream entities accepted into the upstream set (Experiences + Resorts). */
   readonly entitiesProcessed: number;
-  /** Number of rows the diff upserted. */
+  /** Number of Experience rows the diff upserted. */
   readonly upserts: number;
-  /** Number of rows the diff soft-deleted. */
+  /** Number of Experience rows the diff soft-deleted. */
   readonly softDeletes: number;
+  /** Number of Resort rows the diff upserted. */
+  readonly resortUpserts: number;
+  /** Number of Resort rows the diff soft-deleted. */
+  readonly resortSoftDeletes: number;
+  /** Number of restaurants whose menus were persisted this run. */
+  readonly menusWritten: number;
 }
 
 export interface RunSyncFailure {
@@ -163,29 +202,59 @@ export interface RunSyncFailure {
   readonly runId: string;
   /** Discriminator for the failure mode for log/metric routing. */
   readonly reason: 'upstream' | 'unknown';
+  /** Run-outcome discriminator recorded in `catalog_sync_runs.outcome` (R12.5). */
+  readonly outcome: SyncRunOutcome;
   /** Original error preserved for the caller to log. */
   readonly error: unknown;
 }
 
 export interface RunSyncSkipped {
   readonly status: 'skipped';
-  readonly reason: 'lock_held';
+  /**
+   * Why the run did not proceed:
+   *   - `'lock_held'` — another sync holds the `catalog:sync:lock` (R11.1);
+   *   - `'fresh'`     — a scheduled run found the cache still within the
+   *                     freshness interval, so it was a no-op (R9.2).
+   */
+  readonly reason: 'lock_held' | 'fresh';
 }
 
 /**
  * Drive one full Catalog_Sync pass.
  *
- * The function is safe to call concurrently; redundant callers race for
- * the Redis lock and the loser receives `{ status: 'skipped' }`.
+ * The function is safe to call concurrently; redundant callers race for the
+ * Redis lock and the loser receives `{ status: 'skipped' }`.
  */
 export async function runSync(
   options: RunSyncOptions = {},
 ): Promise<RunSyncResult> {
   const redis = options.redis ?? (await loadDefaultRedis());
   const repo = options.repo ?? (await loadDefaultRepo());
+  const now = options.now ?? (() => new Date());
+  const trigger = options.trigger ?? 'manual';
+
+  // ---- 0. Freshness guard for scheduled runs (R9.2) ----------------------
+  // Only a scheduled invocation is subject to the guard. An on-read
+  // opportunistic refresh (R9.3) fires *because* the cache already exceeded the
+  // freshness interval, and a manual/operator trigger is always intentional —
+  // both bypass the guard. A scheduled tick that lands while the most recent
+  // successful sync is still within the freshness interval is a no-op, so
+  // low-change-rate static data imposes minimal load on the fragile source.
+  // Checked before any expensive setup (document store / Facilities_Client /
+  // lock) so a fresh no-op is cheap.
+  if (trigger === 'scheduled') {
+    const freshnessIntervalMs =
+      options.freshnessIntervalMs ?? (await loadDefaultSyncIntervalMs());
+    const { lastSuccessfulSyncAt } = await repo.getCacheAge(now());
+    if (isWithinFreshness(lastSuccessfulSyncAt, now(), freshnessIntervalMs)) {
+      return { status: 'skipped', reason: 'fresh' };
+    }
+  }
+
+  const documentStore =
+    options.documentStore ?? (await loadDefaultDocumentStore());
   const client = options.client ?? (await loadDefaultClient());
   const lockTtlMs = options.lockTtlMs ?? CATALOG_SYNC_LOCK_TTL_MS;
-  const now = options.now ?? (() => new Date());
 
   // ---- 1. Acquire the cluster-wide sync lock -----------------------------
   const lockToken = randomUUID();
@@ -195,12 +264,10 @@ export async function runSync(
   }
 
   try {
-    return await runSyncWithLock(client, repo, now);
+    return await runSyncWithLock(client, repo, documentStore, now);
   } finally {
-    // Best-effort release. If Redis is unreachable here, the TTL will
-    // expire the lock; we never throw out of `finally` because the
-    // function's contract is to surface the sync outcome, not lock
-    // hygiene.
+    // Best-effort release. If Redis is unreachable here, the TTL will expire
+    // the lock; we never throw out of `finally`.
     try {
       await releaseLock(redis, lockToken);
     } catch {
@@ -210,49 +277,134 @@ export async function runSync(
   }
 }
 
+// ---------------------------------------------------------------------------
+// Freshness guard (pure, R9.2)
+// ---------------------------------------------------------------------------
+
+/**
+ * Whether the most recent successful sync is still within the freshness
+ * interval — the pure comparison behind the scheduled-run guard (R9.2) and the
+ * seam Property 11 (task 10.2) targets.
+ *
+ * Returns `true` (the cache is fresh, so a scheduled run should be skipped) iff
+ * a prior successful sync exists AND its age is at most `intervalMs`. This is
+ * the exact complement of the on-read refresh trigger, which fires when the
+ * cache age *exceeds* the interval (R9.3): a run at exactly `intervalMs` old is
+ * still fresh (the boundary is strictly-greater-than, matching the read path's
+ * staleness boundary). A `null` `lastSuccessfulSyncAt` (no successful sync yet)
+ * is never fresh, so a first-ever scheduled run always proceeds.
+ *
+ * Total and side-effect-free: a negative age (writer/reader clock skew, i.e. a
+ * "future" last-sync timestamp) is treated as fresh, since a sync that appears
+ * to have completed in the future has certainly completed within the interval.
+ */
+export function isWithinFreshness(
+  lastSuccessfulSyncAt: Date | null,
+  now: Date,
+  intervalMs: number,
+): boolean {
+  if (lastSuccessfulSyncAt === null) {
+    return false;
+  }
+  const ageMs = now.getTime() - lastSuccessfulSyncAt.getTime();
+  return ageMs <= intervalMs;
+}
+
 /**
  * Inner orchestration body. Separated from the lock dance so the lock's
  * try/finally is unambiguous.
- *
- * Note on `recordSyncRun` calls: success and failure each append a single
- * row to `catalog_sync_runs`. We do not write a `running` row at the start
- * because the design's read path keys off `last_successful_sync_at`, not
- * "is a run in progress?". A `running` row would only buy diagnostics, at
- * the cost of an extra round-trip on the happy path.
  */
 async function runSyncWithLock(
-  client: ThemeParksClient,
+  client: FacilitiesClient,
   repo: CatalogRepo,
+  documentStore: DocumentStore,
   now: () => Date,
 ): Promise<RunSyncSuccess | RunSyncFailure> {
   const startedAt = now();
   let entitiesProcessed = 0;
 
   try {
-    // ---- 2. Upstream walk -------------------------------------------------
-    const destinations = await client.getDestinations();
-    const wdw = findWdwDestination(destinations.destinations);
-    const parkMap = buildParkMap(wdw);
+    // ---- 2. Read the checkpoint + decide the sync mode (R6.1, R6.2) ------
+    // Absent checkpoint ⇒ Bootstrap_Sync (full enumeration, no `since`);
+    // present ⇒ Delta_Sync (enumerate `_changes?since=<checkpoint>`). The pure
+    // `decideSyncMode` seam makes this decision property-testable (task 8.4).
+    const checkpoint = await documentStore.getCheckpoint();
+    const { since } = decideSyncMode(checkpoint);
 
-    const childrenResp = await client.getEntityChildren(wdw.id);
-    const entityMap = buildEntityMap(childrenResp.children);
-
-    const upstreamSet = buildUpstreamSet(
-      childrenResp.children,
-      entityMap,
-      parkMap,
+    // ---- 3. Enumerate the Facilities_Channel (R6.2, R6.4, R7.3) ----------
+    // `listChannelDocumentIds` returns the per-document change records (each
+    // carrying a tombstone flag) plus the enumeration's `last_seq`. The pure
+    // `partitionChanges` seam splits the feed into the non-deleted changed ids
+    // to fetch and the deleted ids to tombstone (task 8.5).
+    const { changes, lastSeq } = await client.listChannelDocumentIds(
+      FACILITIES_CHANNEL,
+      since,
     );
-    entitiesProcessed = upstreamSet.length;
+    const { changedIds, deletedIds } = partitionChanges(changes);
 
-    // ---- 3. Reconcile + transactional apply ------------------------------
-    const cache = await repo.getCacheSnapshot();
-    const diff = reconcile(cache, upstreamSet);
+    // ---- 4. Fetch only the non-deleted changed documents (R6.4, R6.6) ----
+    // A Delta_Sync fetches exactly the changed ids; a Bootstrap_Sync fetches
+    // every live id. Both are paced within the Request_Budget by the transport.
+    const fetched = await client.bulkGetDocuments(changedIds);
+    const upserts: readonly StoredFacilityDocument[] = fetched.map((doc) => ({
+      enterpriseId: doc.id,
+      body: doc,
+      deleted: false,
+      changeSeq: lastSeq,
+    }));
+
+    // ---- 5. Persist the delta + checkpoint atomically (R6.3, R6.5, R7.5) -
+    // `applyDelta` writes the document upserts, the tombstones, and the new
+    // checkpoint in ONE transaction, so a failure anywhere before this leaves
+    // the prior checkpoint and stored documents intact (the run resumes from
+    // the last good sequence).
+    //
+    // The `_changes` feed keys documents by the raw Couchbase `_id` (a
+    // channel-prefixed form such as
+    // `wdw.facilities.1_0.en_us.restaurant.412260665;entityType=restaurant`),
+    // so `changedIds` are fetched verbatim above. The Document_Store, however,
+    // is keyed by the clean Enterprise_Id (the normalized `doc.id` used for the
+    // upserts). Normalize each deleted id to that same clean Enterprise_Id so a
+    // tombstone matches the row it should remove; an id carrying no
+    // Enterprise_Id token falls back to its raw value (a harmless no-op key).
+    const deletes = deletedIds.map((id) => deriveEnterpriseId(id) ?? id);
+    await documentStore.applyDelta({ upserts, deletes, lastSeq });
+
+    // ---- 6. Reconcile from the Document_Store, not a re-enumeration (R7.4) 
+    // The upstream entity set is the store's active (non-tombstoned) documents;
+    // each raw stored document is adapted into the shape the pure transformation
+    // cores expect (lowercase `type`, synthesized `ancestors`, numeric coords,
+    // grouped `facets`), then normalization drops blank-name documents (R3.7).
+    const upstreamDocs = await documentStore.getActiveDocuments();
+    const normalized = upstreamDocs
+      .map((doc) => adaptFacilityDocument(doc as unknown as Record<string, unknown>))
+      .filter(isIncludedDocument)
+      // Drop park-reservation / park-pass placeholders that Disney types as
+      // `Attraction` — they would otherwise become bogus "Ride" catalog cards.
+      .filter((doc) => !isPlaceholderDocument(doc));
+
+    // ---- 7. Bridge map for identity continuity (R10.1, R10.3, R10.4) -----
+    const bridge = await repo.getBridgeMap();
+
+    // ---- 8. Split + transform (R4, R5, R6, R7) ---------------------------
+    // NOTE: no per-restaurant menu fetch happens here — menus are demand-driven
+    // now (R8.1 / R10.4). The sync issues no Menu_Service requests.
+    const { experiences, resorts } = buildUpstreamCatalog(normalized, bridge);
+    entitiesProcessed = experiences.length + resorts.length;
+
+    // ---- 9. Reconcile + transactional apply (R11.6, R11.7) ---------------
+    const snapshot = {
+      experiences: await repo.getCacheSnapshot(),
+      resorts: await repo.getResortSnapshot(),
+    };
+    const diff = reconcileCatalog(snapshot, { experiences, resorts });
     await repo.applyReconciliation(diff);
 
-    // ---- 4. Record success ----------------------------------------------
+    // ---- 10. Record success (R12.6) --------------------------------------
     const finishedAt = now();
     const run = await repo.recordSyncRun({
       status: 'success',
+      outcome: 'success',
       startedAt,
       finishedAt,
       entitiesProcessed,
@@ -262,23 +414,27 @@ async function runSyncWithLock(
       status: 'success',
       runId: run.id,
       entitiesProcessed,
-      upserts: diff.upserts.length,
-      softDeletes: diff.softDeletes.length,
+      upserts: diff.experiences.upserts.length,
+      softDeletes: diff.experiences.softDeletes.length,
+      resortUpserts: diff.resorts.upserts.length,
+      resortSoftDeletes: diff.resorts.softDeletes.length,
+      // Menus are no longer written during sync (lazy retrieval, R8.1).
+      menusWritten: 0,
     };
   } catch (err) {
-    // ---- 5. Record failure (R1.13) --------------------------------------
-    // The cache is intentionally left unchanged: `applyReconciliation`
-    // either ran to completion before the throw (in which case the
-    // diff was applied transactionally) or threw before any write
-    // landed. Both paths are consistent with R1.13's "retain the prior
-    // cache contents unchanged" because applied diffs are durable and
-    // un-applied diffs were rolled back by the repo's transaction.
+    // ---- 11. Record failure (R6.5, R12.1, R12.4, R12.5, R12.6) -----------
+    // The checkpoint and cache are intentionally left unchanged: `applyDelta`
+    // only persists the new checkpoint on a successful enumeration+fetch, and
+    // `applyReconciliation` runs its diff transactionally, so an un-applied
+    // diff was rolled back. A Disney WAF block or credential rejection surfaces
+    // here classified into `waf_block` / `auth_failure`, so the prior cache is
+    // preserved and served slightly stale (R12.1).
     const finishedAt = now();
+    const outcome = outcomeFromError(err);
     const reason: RunSyncFailure['reason'] =
       err instanceof UpstreamError ? 'upstream' : 'unknown';
 
-    const errorClass =
-      err instanceof Error ? err.name : 'NonError';
+    const errorClass = err instanceof Error ? err.name : 'NonError';
     const errorMessage =
       err instanceof Error
         ? err.message
@@ -290,6 +446,7 @@ async function runSyncWithLock(
     try {
       const run = await repo.recordSyncRun({
         status: 'failed',
+        outcome,
         startedAt,
         finishedAt,
         errorClass,
@@ -298,27 +455,284 @@ async function runSyncWithLock(
       });
       runId = run.id;
     } catch {
-      // If we cannot even record the failure (DB outage), surface the
-      // original cause rather than the secondary failure: the original
-      // is the actionable signal for operators. `runId` stays empty so
-      // callers can detect the partial failure.
+      // If we cannot even record the failure (DB outage), surface the original
+      // cause rather than the secondary failure. `runId` stays empty so callers
+      // can detect the partial failure.
     }
 
-    return { status: 'failed', runId, reason, error: err };
+    return { status: 'failed', runId, reason, outcome, error: err };
   }
+}
+
+// ---------------------------------------------------------------------------
+// Sync-mode decision + delta fetch set (pure, R6.1, R6.2, R6.4, R7.3)
+// ---------------------------------------------------------------------------
+
+/**
+ * The Bootstrap_Sync / Delta_Sync decision derived from the persisted
+ * Changes_Checkpoint. `since === undefined` drives a full channel enumeration
+ * (Bootstrap_Sync, R6.1); a defined `since` drives an incremental enumeration
+ * whose `_changes?since=` equals the stored checkpoint (Delta_Sync, R6.2).
+ */
+export interface SyncModeDecision {
+  readonly mode: 'bootstrap' | 'delta';
+  /**
+   * The `since` sequence to enumerate from: `undefined` for a Bootstrap_Sync
+   * (no `since`, full enumeration), the stored checkpoint for a Delta_Sync.
+   */
+  readonly since: string | undefined;
+}
+
+/**
+ * Decide the sync mode from the persisted checkpoint (pure, total).
+ *
+ * A `null` checkpoint (first boot, R6.1) ⇒ `Bootstrap_Sync` with no `since`; a
+ * present checkpoint (R6.2) ⇒ `Delta_Sync` whose `since` is exactly that
+ * checkpoint. This is the seam Property 6 (task 8.4) targets.
+ */
+export function decideSyncMode(checkpoint: string | null): SyncModeDecision {
+  if (checkpoint === null) {
+    return { mode: 'bootstrap', since: undefined };
+  }
+  return { mode: 'delta', since: checkpoint };
+}
+
+/** The changed (to fetch) and deleted (to tombstone) id sets of a `_changes` feed. */
+export interface PartitionedChanges {
+  /** Non-deleted changed ids — exactly the set fetched via `_bulk_get` (R6.4). */
+  readonly changedIds: readonly string[];
+  /** Deleted/tombstoned ids — propagated to the Document_Store (R7.3). */
+  readonly deletedIds: readonly string[];
+}
+
+/**
+ * Partition a `_changes` feed into the non-deleted changed ids (to fetch) and
+ * the deleted ids (to tombstone) — pure and total (task 8.5 / Property 7).
+ *
+ * The `changedIds` are exactly the ids whose change is not a tombstone, so an
+ * unchanged document (absent from the feed) is never fetched, and a tombstoned
+ * document is never fetched but is propagated as a delete.
+ */
+export function partitionChanges(
+  changes: readonly ChannelChange[],
+): PartitionedChanges {
+  const changedIds: string[] = [];
+  const deletedIds: string[] = [];
+  for (const change of changes) {
+    if (change.deleted) {
+      deletedIds.push(change.id);
+    } else {
+      changedIds.push(change.id);
+    }
+  }
+  return { changedIds, deletedIds };
+}
+
+// ---------------------------------------------------------------------------
+// Normalization (R3.4, R3.7)
+// ---------------------------------------------------------------------------
+
+/**
+ * Whether a Facility_Document survives normalization into the upstream entity
+ * set. A tombstone (`softDeleted === true`, R3.4) or a document with no `name`
+ * / a whitespace-only `name` (R3.7) is excluded; every other document is kept
+ * regardless of its type (the type split happens downstream).
+ */
+export function isIncludedDocument(doc: FacilityDocument): boolean {
+  if (doc.softDeleted === true) {
+    return false;
+  }
+  if (doc.name === undefined || doc.name.trim().length === 0) {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Names of Disney park-reservation / park-pass placeholder documents that must
+ * never surface as catalog Experiences.
+ *
+ * Walt Disney World publishes its park-reservation and park-pass system as
+ * `Attraction`-typed Facility_Documents (one per park, plus cast variants) —
+ * e.g. `"Theme Park Reservation"` (one per theme park) and
+ * `"Disney Park Pass - Cast Afternoon"`. They carry no description, imagery, or
+ * real location, and are not something a guest visits, yet their
+ * `attraction` type makes `classifyFacility` map them to `Ride`, so dozens of
+ * identical bogus "Ride" cards leak into the catalogue.
+ *
+ * These are not distinguishable by Facility_Type (which is the only signal the
+ * type-based split and `classifyFacility` use), so they are excluded here by
+ * name. The pattern is anchored at the start and matched case-insensitively
+ * against the trimmed name so future `"Disney Park Pass - …"` variants are
+ * caught too. No real attraction name begins with either phrase.
+ */
+const PLACEHOLDER_NAME_PATTERN =
+  /^(?:theme park reservation|disney park pass)\b/i;
+
+/**
+ * Whether a Facility_Document is a park-reservation / park-pass placeholder
+ * identified by its {@link PLACEHOLDER_NAME_PATTERN name} rather than its
+ * Facility_Type. Pure and total; kept separate from {@link isIncludedDocument}
+ * (whose R3.4/R3.7 contract stays intact) so this data-quality exclusion is
+ * independently testable.
+ */
+export function isPlaceholderDocument(doc: FacilityDocument): boolean {
+  return (
+    doc.name !== undefined && PLACEHOLDER_NAME_PATTERN.test(doc.name.trim())
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Split + transform (R4, R5, R6, R7)
+// ---------------------------------------------------------------------------
+
+/** A restaurant Experience and the Enterprise_Id its menus are fetched by. */
+interface RestaurantRef {
+  readonly experienceId: string;
+  readonly enterpriseId: string;
+}
+
+/** The result of splitting the normalized documents into the upstream catalog. */
+interface UpstreamCatalogBuild {
+  readonly experiences: readonly UpstreamExperience[];
+  readonly resorts: readonly UpstreamResort[];
+  readonly restaurantRefs: readonly RestaurantRef[];
+}
+
+/**
+ * Split the normalized Facility_Documents into the upstream Experience and
+ * Resort sets, resolving each item's Internal_Id via the Bridge_Map and
+ * running the pure transformation cores.
+ *
+ * A `resort` document produces exactly one Resort record (R6.1); the structural
+ * `resort-area` type is not `resort` and so is never produced as a Resort
+ * (R6.2). An `Experience_Eligible_Type` produces one Experience once
+ * `classifyFacility` yields a category (R4). Every other type is dropped.
+ */
+function buildUpstreamCatalog(
+  documents: readonly FacilityDocument[],
+  bridge: ReadonlyMap<string, string>,
+): UpstreamCatalogBuild {
+  const experiences: UpstreamExperience[] = [];
+  const resorts: UpstreamResort[] = [];
+  const restaurantRefs: RestaurantRef[] = [];
+
+  for (const doc of documents) {
+    const type = doc.type;
+
+    if (type === RESORT_TYPE) {
+      resorts.push(toUpstreamResort(doc, bridge));
+      continue;
+    }
+
+    if (type !== undefined && EXPERIENCE_ELIGIBLE_TYPES.has(type)) {
+      const category = classifyFacility(doc);
+      if (category === null) {
+        // Defensive: an eligible type always classifies, but never emit an
+        // Experience without a category.
+        continue;
+      }
+      const experience = toUpstreamExperience(doc, category, bridge);
+      experiences.push(experience);
+      if (type === RESTAURANT_TYPE) {
+        restaurantRefs.push({
+          experienceId: experience.id,
+          enterpriseId: doc.id,
+        });
+      }
+      continue;
+    }
+
+    // Non_Experience_Type (other than `resort`), absent, or unrecognized type
+    // -> dropped from both sets.
+  }
+
+  return { experiences, resorts, restaurantRefs };
+}
+
+/**
+ * Build a single `UpstreamExperience` from a classified Facility_Document.
+ *
+ * The Internal_Id is bridged for continuity (R10.3) else derived (R10.1); the
+ * owning Area/Area_Type comes from `resolveArea` (R4.11–R4.15) with a
+ * `Resort`-area's specific resort resolved to its Internal_Id via the same
+ * Bridge_Map (R4.14); enrichment (R5) and imagery (R7) come from their pure
+ * cores. `description` is carried raw — reconcile sanitizes it (R11.8).
+ */
+function toUpstreamExperience(
+  doc: FacilityDocument,
+  category: ExperienceCategory,
+  bridge: ReadonlyMap<string, string>,
+): UpstreamExperience {
+  const area = resolveArea(doc);
+  const enrichment = extractEnrichment(doc);
+
+  // A `Resort`-area Experience references its owning resort's Internal_Id,
+  // derived from the resort ancestor's Enterprise_Id the same way as any other
+  // catalog id (R4.14). The catch-all resort area (no specific resort) and all
+  // non-`Resort` areas carry no resort reference.
+  const resortId =
+    area.areaType === 'Resort' && area.resortEnterpriseId !== undefined
+      ? assignInternalId(area.resortEnterpriseId, bridge)
+      : null;
+
+  return {
+    id: assignInternalId(doc.id, bridge),
+    upstreamEntityId: doc.id,
+    // `name` is guaranteed present + non-blank by normalization (R3.7).
+    name: (doc.name as string).trim(),
+    park: area.park ?? null,
+    category,
+    description: doc.description ?? '',
+    imageUrl: selectImageUrl(doc),
+    areaType: area.areaType,
+    land: resolveLand(doc, area),
+    resortId,
+    latitude: enrichment.latitude,
+    longitude: enrichment.longitude,
+    accessibility: enrichment.accessibility,
+    priceTier: enrichment.priceTier,
+    mealPeriods: enrichment.mealPeriods,
+  };
+}
+
+/**
+ * Build a single `UpstreamResort` from a `resort` Facility_Document (R6.1).
+ *
+ * Every descriptive field is copied from the document (R6.3); an omitted
+ * `description`, `latitude`, `longitude`, `address`, or `phone` becomes `null`
+ * per-field (R6.4). Unlike Experience coordinates (R5.2, which null both when
+ * either is missing), a Resort keeps whichever coordinate is present. Imagery
+ * follows the shared precedence via `selectImageUrl` (R6.5). The Internal_Id is
+ * bridged for continuity else derived (R6.6, R10).
+ */
+function toUpstreamResort(
+  doc: FacilityDocument,
+  bridge: ReadonlyMap<string, string>,
+): UpstreamResort {
+  return {
+    id: assignInternalId(doc.id, bridge),
+    upstreamEntityId: doc.id,
+    name: (doc.name as string).trim(),
+    description: doc.description ?? null,
+    imageUrl: selectImageUrl(doc),
+    latitude: Number.isFinite(doc.latitude) ? (doc.latitude as number) : null,
+    longitude: Number.isFinite(doc.longitude)
+      ? (doc.longitude as number)
+      : null,
+    address: doc.address ?? null,
+    phone: doc.phone ?? null,
+  };
 }
 
 // ---------------------------------------------------------------------------
 // Default-dependency lazy loaders
 // ---------------------------------------------------------------------------
 //
-// The orchestrator imports its production dependencies (`getRedisClient`,
-// `getPool`/`createCatalogRepo`, `createThemeParksClient`) lazily so that
-// unit tests injecting fakes through `RunSyncOptions` never trigger a
-// load of the real `pg` or `ioredis` modules. This keeps the test
-// environment hermetic on machines where those packages are not present
-// (CI sandboxes, locked-down workstations) and matches the pattern
-// `repo.ts` uses with type-only imports of the pool.
+// The orchestrator imports its production dependencies lazily so that unit
+// tests injecting fakes through `RunSyncOptions` never trigger a load of the
+// real `pg` / `ioredis` / config modules. This keeps the test environment
+// hermetic and matches the pattern `repo.ts` uses with type-only imports.
 
 async function loadDefaultRedis(): Promise<RedisClient> {
   const mod = await import('../../redis/client.js');
@@ -333,9 +747,46 @@ async function loadDefaultRepo(): Promise<CatalogRepo> {
   return repoMod.createCatalogRepo(poolMod.getPool());
 }
 
-async function loadDefaultClient(): Promise<ThemeParksClient> {
-  const mod = await import('./themeparks.js');
-  return mod.createThemeParksClient();
+async function loadDefaultDocumentStore(): Promise<DocumentStore> {
+  const [poolMod, storeMod] = await Promise.all([
+    import('../../db/pool.js'),
+    import('./documentStore.js'),
+  ]);
+  return storeMod.createDocumentStore(poolMod.getPool());
+}
+
+/**
+ * Resolve the freshness interval for the scheduled-run guard from the global
+ * config (`disney.syncIntervalMs`, ≥24h). Loaded lazily so unit tests that pass
+ * an explicit `freshnessIntervalMs` never trigger a real config parse.
+ */
+async function loadDefaultSyncIntervalMs(): Promise<number> {
+  const configMod = await import('../../config.js');
+  return configMod.loadConfig().disney.syncIntervalMs;
+}
+
+async function loadDefaultClient(): Promise<FacilitiesClient> {
+  const [configMod, clientMod, transportMod, limiterMod] = await Promise.all([
+    import('../../config.js'),
+    import('./disney/facilitiesClient.js'),
+    import('./disney/transport.js'),
+    import('./disney/rateLimiter.js'),
+  ]);
+  const config = configMod.loadConfig();
+  // Build the shared Disney_Transport with an in-process Rate_Limiter so all
+  // Disney HTTP is paced and retried in one place (task 6.1). The composition
+  // root wires the authoritative (Redis-backed) limiter in task 13.6; this
+  // default keeps standalone/script invocations self-contained.
+  const limiter = limiterMod.createInProcessRateLimiter(config.disney.requestBudget);
+  const transport = transportMod.createDisneyTransport({
+    limiter,
+    backoff: config.disney.backoff,
+  });
+  return clientMod.createFacilitiesClient({
+    transport,
+    baseUrl: config.disney.syncGateway.baseUrl,
+    credentials: config.disney.credentials,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -345,8 +796,8 @@ async function loadDefaultClient(): Promise<ThemeParksClient> {
 /**
  * Try to acquire the sync lock. Returns `true` iff this call won the race.
  *
- * Uses `SET key value NX PX <ttl>` which is the canonical Redis lock
- * primitive: atomic, expiring, and only succeeds when the key is unset.
+ * Uses `SET key value NX PX <ttl>` which is the canonical Redis lock primitive:
+ * atomic, expiring, and only succeeds when the key is unset.
  */
 async function acquireLock(
   redis: RedisClient,
@@ -364,10 +815,10 @@ async function acquireLock(
 }
 
 /**
- * Release the lock iff the stored token matches `token`. Implemented with
- * a small Lua script to keep the read-then-delete atomic; without this,
- * an over-running worker could delete a lock issued to a successor after
- * the TTL elapsed.
+ * Release the lock iff the stored token matches `token`. Implemented with a
+ * small Lua script to keep the read-then-delete atomic; without this, an
+ * over-running worker could delete a lock issued to a successor after the TTL
+ * elapsed.
  */
 async function releaseLock(
   redis: RedisClient,
@@ -380,244 +831,15 @@ async function releaseLock(
   await redis.eval(script, 1, CATALOG_SYNC_LOCK_KEY, token);
 }
 
-// ---------------------------------------------------------------------------
-// Upstream walk helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Pick the Walt Disney World Resort entry out of the destinations list.
- *
- * The TP wiki API returns destinations for every world-wide Disney resort;
- * we identify ours by name pattern and slug pattern (defense in depth in
- * case the upstream renames one). Throwing on absence is correct: if the
- * destination is gone, every subsequent step is undefined.
- */
-function findWdwDestination(
-  destinations: readonly ThemeParksDestinationEntry[],
-): ThemeParksDestinationEntry {
-  for (const dest of destinations) {
-    if (
-      WDW_NAME_PATTERN.test(dest.name) ||
-      (dest.slug !== undefined && WDW_SLUG_PATTERN.test(dest.slug))
-    ) {
-      return dest;
-    }
-  }
-  throw new UpstreamError(
-    'invalid_response',
-    'Walt Disney World destination not present in /destinations response.',
-  );
-}
-
-/**
- * Build the upstream-park-id -> Park enum lookup from the destination's
- * `parks` array.
- *
- * Parks whose names cannot be matched to one of the seven Park enum
- * values are dropped from the map. This is intentional: an unrecognized
- * park (e.g., a future addition to the resort) should not silently be
- * mapped to one of the existing enum values. Entities under unmatched
- * parks will fall out of the upstream set and any cached rows for them
- * will be soft-deleted on the next sync.
- */
-function buildParkMap(
-  destination: ThemeParksDestinationEntry,
-): ReadonlyMap<string, Park> {
-  const map = new Map<string, Park>();
-  const parks = destination.parks ?? [];
-  for (const park of parks) {
-    const enumValue = matchParkName(park.name);
-    if (enumValue !== null) {
-      map.set(park.id, enumValue);
-    }
-  }
-  // Disney Springs does not always appear under `destination.parks` because
-  // upstream classifies it as a separate entity type. The orchestrator's
-  // park resolution falls back to name-matching the parent entity below
-  // when the strict id lookup fails.
-  return map;
-}
-
-/**
- * Map an upstream park name to one of the seven `Park` enum values.
- *
- * Patterns are deliberately permissive: TP wiki uses "Disney's Hollywood
- * Studios" and "Disney's Animal Kingdom Theme Park" rather than the bare
- * names in the Park enum. The first match wins; ordering matters only
- * for disambiguation between "Magic Kingdom" and the catch-all.
- */
-function matchParkName(name: string): Park | null {
-  const normalized = name.toLowerCase();
-  if (/magic\s*kingdom/.test(normalized)) return 'Magic Kingdom';
-  if (/epcot/.test(normalized)) return 'EPCOT';
-  if (/hollywood\s*studios/.test(normalized)) return 'Hollywood Studios';
-  if (/animal\s*kingdom/.test(normalized)) return 'Animal Kingdom';
-  if (/typhoon\s*lagoon/.test(normalized)) return 'Typhoon Lagoon';
-  if (/blizzard\s*beach/.test(normalized)) return 'Blizzard Beach';
-  if (/disney\s*springs/.test(normalized)) return 'Disney Springs';
-  return null;
-}
-
-/**
- * Build an id -> entity lookup from the flat children array. Used to walk
- * `parentId` chains without an O(n) scan per entity.
- *
- * Duplicates are silently overwritten; the upstream API does not produce
- * them in practice, but the assignment is deterministic.
- */
-function buildEntityMap(
-  children: readonly ThemeParksEntityChild[],
-): ReadonlyMap<string, ThemeParksEntityChild> {
-  const map = new Map<string, ThemeParksEntityChild>();
-  for (const child of children) {
-    map.set(child.id, child);
-  }
-  return map;
-}
-
-/**
- * Maximum hops the parent-chain walker takes before declaring the chain
- * unresolvable. The TP wiki entity tree under WDW is at most a handful
- * of levels deep (destination -> park -> land -> attraction); 32 is a
- * generous ceiling that also bounds the walker's work in the presence
- * of an accidental upstream cycle.
- */
-const MAX_PARENT_CHAIN_HOPS = 32;
-
-/**
- * Resolve which Park (if any) an entity belongs to by walking its
- * `parentId` chain in `entityMap` until either:
- *
- *   - a parent's id matches an entry in `parkMap` (return that Park), or
- *   - a parent's name matches a known Park (return that Park) — fallback
- *     for the case where the destination's `parks` array does not list
- *     the entity (e.g. Disney Springs sometimes appears as a top-level
- *     entity rather than a park entry), or
- *   - the chain runs out / hits the hop ceiling (return `null`).
- */
-function resolvePark(
-  entity: ThemeParksEntityChild,
-  entityMap: ReadonlyMap<string, ThemeParksEntityChild>,
-  parkMap: ReadonlyMap<string, Park>,
-): Park | null {
-  // Self check first: an entity that is itself a Park (e.g. a top-level
-  // park returned in the children list) maps directly.
-  const selfDirect = parkMap.get(entity.id);
-  if (selfDirect !== undefined) return selfDirect;
-
-  const visited = new Set<string>();
-  let cursor: ThemeParksEntityChild | undefined = entity;
-  for (let hop = 0; hop < MAX_PARENT_CHAIN_HOPS; hop++) {
-    const parentId = cursor.parentId;
-    if (parentId === undefined) return null;
-    if (visited.has(parentId)) return null; // cycle guard
-    visited.add(parentId);
-
-    const direct = parkMap.get(parentId);
-    if (direct !== undefined) return direct;
-
-    const parent = entityMap.get(parentId);
-    if (parent === undefined) return null;
-
-    // Name fallback: catches park-shaped entities that are not in the
-    // destination's `parks` array (notably Disney Springs).
-    if (parent.entityType === 'PARK' || parent.entityType === 'DESTINATION') {
-      const fallback = matchParkName(parent.name);
-      if (fallback !== null) return fallback;
-    }
-
-    cursor = parent;
-  }
-  return null;
-}
-
-/**
- * Walk every child entity, filter to the include set, classify, resolve
- * its Park, and emit one `UpstreamExperience` per acceptance.
- *
- * Entities that fail any of these checks are dropped silently; the diff
- * produced by `reconcile` against the resulting set is the cache's source
- * of truth, so dropped entities will be soft-deleted next pass if they
- * were previously cached (R1.15) and never inserted otherwise.
- */
-function buildUpstreamSet(
-  children: readonly ThemeParksEntityChild[],
-  entityMap: ReadonlyMap<string, ThemeParksEntityChild>,
-  parkMap: ReadonlyMap<string, Park>,
-): readonly UpstreamExperience[] {
-  const out: UpstreamExperience[] = [];
-  const seenIds = new Set<string>();
-
-  for (const child of children) {
-    if (!INCLUDE_SET.has(child.entityType)) continue;
-    const park = resolvePark(child, entityMap, parkMap);
-    if (park === null) continue;
-
-    const category: ExperienceCategory = classify({
-      entityType: child.entityType,
-      name: child.name,
-      ...(child.attractionType !== undefined
-        ? { attractionType: child.attractionType }
-        : {}),
-    });
-
-    const id = internalId(child.id);
-    // Deduplicate on the derived internal id. `internalId` is one-to-one
-    // by Property 2, so duplicates here imply the upstream returned two
-    // entries with the same upstream id — last-write-wins matches the
-    // dedupe rule in `reconcile.ts`.
-    if (seenIds.has(id)) {
-      // Replace earlier occurrence: find and overwrite. This is rare
-      // enough (production never produces it) that an O(n) scan is
-      // simpler than indexing `out` by id.
-      const idx = out.findIndex((e) => e.id === id);
-      if (idx >= 0) {
-        out[idx] = toUpstreamExperience(id, child, park, category);
-      }
-      continue;
-    }
-
-    seenIds.add(id);
-    out.push(toUpstreamExperience(id, child, park, category));
-  }
-
-  return out;
-}
-
-/** Build a single `UpstreamExperience` from a classified child. */
-function toUpstreamExperience(
-  id: string,
-  child: ThemeParksEntityChild,
-  park: Park,
-  category: ExperienceCategory,
-): UpstreamExperience {
-  return {
-    id,
-    upstreamEntityId: child.id,
-    name: child.name,
-    park,
-    category,
-    // The children endpoint does not expose a description in the typed
-    // projection. The repo's `applyReconciliation` runs description
-    // through `sanitizeDescription`, which maps `''` to `''`, so this
-    // is safe and column-compatible (`description NOT NULL DEFAULT ''`).
-    description: '',
-  };
-}
-
-// Re-export the helpers that the test suite (task 9.6+ and 9.9 integration
-// fixture) needs to drive without re-implementing. They are exported as a
-// stable internal seam, not part of the public API of the orchestrator.
+// Re-export the internal seam the test suite drives without re-implementing.
 export const __internal = {
-  buildEntityMap,
-  buildParkMap,
-  buildUpstreamSet,
-  findWdwDestination,
-  matchParkName,
-  resolvePark,
+  buildUpstreamCatalog,
+  decideSyncMode,
+  isIncludedDocument,
+  isPlaceholderDocument,
+  isWithinFreshness,
+  outcomeFromError,
+  partitionChanges,
+  toUpstreamExperience,
+  toUpstreamResort,
 };
-
-// `ThemeParksDestinationParkEntry` is unused at runtime here but is
-// re-exported to satisfy any consumer that wants to type-check fixtures
-// against the same shape the orchestrator consumes.
-export type { ThemeParksDestinationParkEntry };

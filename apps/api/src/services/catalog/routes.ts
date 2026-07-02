@@ -1,11 +1,16 @@
 /**
  * Catalog_Service HTTP routes.
  *
- * Task 9.6 of the disney-world-tracker plan. Wires the two read endpoints
- * from the design's Catalog_Service "Read endpoints" table:
+ * Wires the read endpoints from the design's section 12 "Routes" table:
  *
- *   GET /catalog                  list active Experiences (filterable)
- *   GET /catalog/:experienceId    single Experience detail view
+ *   GET /catalog                       list active Experiences (filterable),
+ *                                      with a { staleCache, cacheAgeHours }
+ *                                      staleness indicator (R12.1, R16.3, R16.4)
+ *   GET /catalog/:experienceId         single Experience detail incl.
+ *                                      enrichment + menus (R5.6, R5.7, R8.5)
+ *   GET /resorts                       list active Resort DTOs (R6.8, R16.5)
+ *   GET /catalog/:experienceId/live    Disney-sourced Live_Detail keyed by
+ *                                      Enterprise_Id (R9.1)
  *
  * The plugin is a thin HTTP boundary on top of three injected ports:
  *
@@ -45,12 +50,18 @@ import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { ZodError, z } from 'zod';
 
 import type {
+  AreaType,
   ErrorCode,
   ExperienceCategory,
   ExperienceDTO,
+  LiveDetailDTO,
+  MealPeriodDTO,
+  MenuDTO,
   Park,
+  ResortDTO,
 } from '@dwt/shared';
 import {
+  AREA_TYPES,
   experienceCategorySchema,
   parkSchema,
   searchQuerySchema,
@@ -72,7 +83,14 @@ import { AppError } from '../../errors/AppError.js';
 export interface CatalogListFilters {
   readonly park?: Park;
   readonly category?: ExperienceCategory;
+  readonly areaType?: AreaType;
   readonly q?: string;
+  /**
+   * Case-sensitive exact Land filter (R3.4). When present, the repo returns
+   * only active Experiences whose persisted Land equals this value, combined
+   * conjunctively with every other supplied filter (R3.7).
+   */
+  readonly land?: string;
 }
 
 /**
@@ -83,6 +101,16 @@ export interface CatalogListFilters {
  */
 export interface CatalogReadDecisionResult {
   readonly staleCache: boolean;
+  /**
+   * Age of the cache being served, in hours, threaded into the `/catalog`
+   * response so the App receives the cache's age alongside the staleness
+   * indicator (R12.1). `null` when the cache was just refreshed within the
+   * read deadline (no meaningful staleness to report) or when no successful
+   * sync has ever run. Optional at the type level so pre-existing decision
+   * stubs that only signal `staleCache` remain assignable; the route emits
+   * `null` when it is absent.
+   */
+  readonly cacheAgeHours?: number | null;
 }
 
 /**
@@ -115,31 +143,135 @@ export type CatalogGetExperience = (
 ) => Promise<ExperienceDTO | null>;
 
 /**
+ * Port owned by task 8.4 (`CatalogRepo.getMenusFor`). Returns the persisted
+ * dining menus for a restaurant Experience, or an empty array for a
+ * non-restaurant / a restaurant whose menu fetch returned nothing or failed
+ * (R8.3, R8.4, R8.5). The detail route attaches the result to the Experience
+ * detail response (R8.5).
+ */
+export type CatalogGetMenusFor = (
+  experienceId: string,
+) => Promise<readonly MenuDTO[]>;
+
+/**
+ * Port owned by task 8.4 (`CatalogRepo.listActiveResorts`). Returns the
+ * active (non-soft-deleted) Resort DTOs backing `GET /resorts` (R6.8, R16.5).
+ */
+export type CatalogListActiveResorts = () => Promise<readonly ResortDTO[]>;
+
+/**
+ * Identifier for one Catalog_Home Destination surfaced by
+ * `GET /catalog/destinations`: either one of the seven `Park` values (the four
+ * theme parks, the two water parks, and Disney Springs) or the literal
+ * `'Resorts'` for the single aggregate Resorts Destination. Declared
+ * structurally here (mirroring the repo's `DestinationId`) so this module does
+ * not import the repo's concrete types.
+ */
+export type CatalogDestinationId = Park | 'Resorts';
+
+/**
+ * The active-Experience count for one Destination. Mirrors the repo's
+ * `DestinationCount` structurally (R3.6, R4.5, R4.6).
+ */
+export interface CatalogDestinationCount {
+  readonly destination: CatalogDestinationId;
+  readonly count: number;
+}
+
+/**
+ * Port owned by task 5.2 (`CatalogRepo.listDestinationCounts`). Returns the
+ * active-Experience count for each of the eight Destinations — the seven `Park`
+ * Destinations counted by `park` plus the aggregate `'Resorts'` Destination
+ * counting every active `Resort`-area Experience (R3.6, R4.5) — always
+ * including zero-count Destinations (R4.6). `GET /catalog/destinations` is
+ * registered only when this port is wired.
+ */
+export type CatalogListDestinationCounts = () => Promise<
+  readonly CatalogDestinationCount[]
+>;
+
+/**
+ * Result served by `GET /catalog/:experienceId/live`. Structurally the Disney
+ * live orchestrator's result: the projected `liveDetail` (from
+ * `disney/liveProject.ts`, keyed by the Experience's Enterprise_Id, R9.1), the
+ * `retrievedAt` instant, a `stale` fallback indicator, and the optional
+ * `upstreamLastUpdated`. Declared structurally here so the route module does
+ * not depend on the live-service concrete types.
+ */
+export interface CatalogLiveDetailResult {
+  readonly liveDetail: LiveDetailDTO;
+  readonly retrievedAt: string;
+  readonly stale: boolean;
+  readonly upstreamLastUpdated?: string;
+}
+
+/**
+ * Port that resolves an Experience's Enterprise_Id and projects its Disney
+ * live documents into a {@link CatalogLiveDetailResult} (R9.1). The route is a
+ * thin boundary over it: the Enterprise_Id resolution and the
+ * `projectLiveDetail` call live in the injected implementation.
+ *
+ * Optional on {@link CatalogRoutesOptions}: while the ThemeParks.wiki-sourced
+ * live route is still wired through the legacy `live/routes.ts` plugin, the
+ * catalog plugin leaves `/catalog/:experienceId/live` unregistered to avoid a
+ * duplicate-route registration. Once the Disney live orchestrator is composed
+ * (ThemeParks.wiki retirement), wiring this port registers the endpoint here.
+ */
+export type CatalogGetLiveDetail = (
+  experienceId: string,
+) => Promise<CatalogLiveDetailResult>;
+
+/**
  * Shape of the `GET /catalog/:experienceId` response body.
  *
- * Fields mirror the design's "single Experience detail" contract: `name`,
- * `park`, `category`, `description` are the four fields R1.22 calls out
- * for the App detail view. The internal `id` is also included because
- * the client uses it as the cache key for completions, ratings, and
- * notes; this does not violate R1.22, which lists the *minimum* set of
- * fields the App must display.
+ * The detail view carries the full Experience projection — the core catalog
+ * fields (`id`, `name`, `park`, `category`, `description`, `imageUrl`,
+ * `areaType`) plus every persisted enrichment field (`resortId`, coordinates,
+ * `accessibility`, `priceTier`, `mealPeriods`) and the restaurant's `menus`
+ * (R5.6, R5.7, R8.5). Each enrichment field is present only when persisted,
+ * exactly as the {@link ExperienceDTO} models it; `menus` is attached from the
+ * separate `getMenusFor` read and is present only when the Experience has
+ * persisted menus.
  *
- * The `active` flag is intentionally NOT exposed on the detail response:
- * a soft-deleted Experience reachable through a User's existing
- * Completion/Rating/Note continues to render through this endpoint
- * (R1.15 preservation), and the client treats every row returned here
- * as a valid detail view.
+ * `park` is `null` for a `Resort`-area Experience with no park ancestor
+ * (R4.14, R4.15). The `image_attribution` field is gone: Disney-sourced
+ * imagery needs no third-party credit (R14.8).
+ *
+ * The `active` flag is intentionally NOT exposed: a soft-deleted Experience
+ * reachable through a User's existing Completion/Rating/Note continues to
+ * render through this endpoint (R10.6 preservation), and the client treats
+ * every row returned here as a valid detail view.
  */
 export interface ExperienceDetailResponse {
   readonly id: string;
   readonly name: string;
-  readonly park: Park;
+  readonly park: Park | null;
   readonly category: ExperienceCategory;
   readonly description: string;
-  /** Representative image URL, or `null` when none has been sourced. */
+  /** Representative image URL, or `null` when none is present upstream. */
   readonly imageUrl: string | null;
-  /** Attribution/license note for `imageUrl`, or `null`. */
-  readonly imageAttribution: string | null;
+  /** Owning Area_Type, so the App can group by area (R5.7). */
+  readonly areaType: AreaType;
+  /** Referenced Resort Internal_Id for a `Resort` area (R5.7). */
+  readonly resortId?: string | null;
+  /** Latitude when persisted (R5.1, R5.6). */
+  readonly latitude?: number | null;
+  /** Longitude when persisted (R5.1, R5.6). */
+  readonly longitude?: number | null;
+  /** Accessibility tags when persisted (R5.3, R5.6). */
+  readonly accessibility?: readonly string[];
+  /** Dining price tier when persisted (R5.4, R5.6). */
+  readonly priceTier?: string | null;
+  /** Meal periods when persisted (R5.5, R5.6). */
+  readonly mealPeriods?: readonly MealPeriodDTO[];
+  /** Persisted dining menus, present only when the Experience has any (R8.5). */
+  readonly menus?: readonly MenuDTO[];
+  /**
+   * Themed Land within a `ThemePark`/`WaterPark`, present only when persisted;
+   * `null` or absent for `DisneySprings`/`Resort` Experiences and for park
+   * Experiences with no resolvable Land (R3.1, R3.2, R3.3).
+   */
+  readonly land?: string | null;
 }
 
 /**
@@ -151,6 +283,31 @@ export interface CatalogRoutesOptions {
   readonly decideRead: CatalogReadDecision;
   readonly listActiveExperiences: CatalogListActiveExperiences;
   readonly getExperience: CatalogGetExperience;
+  /**
+   * Reads a restaurant Experience's persisted menus for the detail view
+   * (R8.5). Optional so the detail route still serves without menus when a
+   * harness omits it; when absent the detail response simply carries no
+   * `menus` field.
+   */
+  readonly getMenusFor?: CatalogGetMenusFor;
+  /**
+   * Lists the active Resort DTOs for `GET /resorts` (R6.8, R16.5). When
+   * absent, the `/resorts` route is not registered.
+   */
+  readonly listActiveResorts?: CatalogListActiveResorts;
+  /**
+   * Reports the per-Destination active-Experience counts for
+   * `GET /catalog/destinations` (R3.6, R4.5, R4.6). When absent, the
+   * destinations route is not registered (existing optional-port pattern).
+   */
+  readonly listDestinationCounts?: CatalogListDestinationCounts;
+  /**
+   * Projects an Experience's Disney live documents keyed by Enterprise_Id
+   * (R9.1) for `GET /catalog/:experienceId/live`. When absent, the live route
+   * is not registered here (it remains served by the legacy live plugin until
+   * ThemeParks.wiki retirement).
+   */
+  readonly getLiveDetail?: CatalogGetLiveDetail;
 }
 
 // ---------------------------------------------------------------------------
@@ -166,10 +323,17 @@ export interface CatalogRoutesOptions {
  *   The route handler maps it to the repo's `park` filter.
  * - `category` is optional and validated against the ExperienceCategory
  *   enum (R1.18).
+ * - `areaType` is optional and validated against the AreaType enum
+ *   (`ThemePark`/`WaterPark`/`DisneySprings`/`Resort`), so the browse path
+ *   can present each Area in its own section (R16.3).
  * - `q` is optional and constrained to 1..100 characters by
  *   `searchQuerySchema` (length cap aligned with the shared user-search
  *   schema, kept consistent across endpoints). The trim-and-non-empty
  *   rule of R1.20 is enforced post-validation in the handler.
+ * - `land` is optional and constrained to 1..200 characters, mirroring the
+ *   Land persistence cap (R1.7). The route maps it to the repo's `land`
+ *   filter, which applies a case-sensitive exact match (R3.4) combined
+ *   conjunctively with every other supplied parameter (R3.5, R3.7).
  *
  * Invalid enum values fail the schema and surface as `validation_failed`.
  */
@@ -177,7 +341,9 @@ const catalogQuerySchema = z
   .object({
     parkId: parkSchema.optional(),
     category: experienceCategorySchema.optional(),
+    areaType: z.enum(AREA_TYPES).optional(),
     q: searchQuerySchema.optional(),
+    land: z.string().min(1).max(200).optional(),
   })
   .strict();
 
@@ -219,21 +385,23 @@ export function catalogRoutes(
       const filters = parseListQuery(request.query);
 
       // Order matters: decide first so that a `catalog_unavailable`
-      // throw (R1.24) is propagated by the global error hook before we
+      // throw (R12.2) is propagated by the global error hook before we
       // touch the database for the row read. When the decision returns
       // `staleCache: true`, the read is still allowed because the repo
-      // has the prior successful cache contents (R1.13).
+      // has the prior successful cache contents (R12.7).
       const decision = await options.decideRead();
       const experiences = await options.listActiveExperiences(filters);
 
       return {
         experiences,
+        // Staleness indicator (R12.1): whether the response was served from a
+        // stale cache and, when known, the cache's age in hours.
         staleCache: decision.staleCache,
+        cacheAgeHours: decision.cacheAgeHours ?? null,
       };
     });
 
-    app.get('/catalog/:experienceId', async (request, reply) => {
-      const { experienceId } = parseDetailParams(request.params);
+    app.get('/catalog/:experienceId', async (request, reply) => {      const { experienceId } = parseDetailParams(request.params);
       const experience = await options.getExperience(experienceId);
       if (experience === null) {
         // No catalog-specific "not found" code is defined in the shared
@@ -245,8 +413,62 @@ export function catalogRoutes(
         reply.callNotFound();
         return reply;
       }
-      return toDetailResponse(experience);
+      // Attach the persisted dining menus for the detail view (R8.5). The
+      // menu read is a separate port because menus live in their own table;
+      // a missing port or a non-restaurant Experience yields no menus.
+      const menus = options.getMenusFor
+        ? await options.getMenusFor(experienceId)
+        : [];
+      return toDetailResponse(experience, menus);
     });
+
+    // GET /catalog/destinations — per-Destination active-Experience counts for
+    // Catalog_Home (R3.6, R4.5, R4.6). Registered only when the repo port is
+    // wired (existing optional-port pattern). Fastify resolves static routes
+    // ahead of parametric ones, so `/catalog/destinations` is matched here and
+    // never captured by the `/catalog/:experienceId` param route regardless of
+    // registration order.
+    if (options.listDestinationCounts !== undefined) {
+      const listDestinationCounts = options.listDestinationCounts;
+      app.get('/catalog/destinations', async () => {
+        // Order matters, exactly as for `GET /catalog`: decide first so a
+        // `catalog_unavailable` throw with no prior cache propagates (R10.2)
+        // and a stale cache is flagged (R10.1) before the counts read.
+        const decision = await options.decideRead();
+        const destinations = await listDestinationCounts();
+        return {
+          destinations,
+          staleCache: decision.staleCache,
+          cacheAgeHours: decision.cacheAgeHours ?? null,
+        };
+      });
+    }
+
+    // GET /resorts — list active Resort DTOs (R6.8, R16.5). Registered only
+    // when the repo port is wired.
+    if (options.listActiveResorts !== undefined) {
+      const listActiveResorts = options.listActiveResorts;
+      app.get('/resorts', async () => {
+        const resorts = await listActiveResorts();
+        return { resorts };
+      });
+    }
+
+    // GET /catalog/:experienceId/live — Disney-sourced Live_Detail keyed by
+    // the Experience's Enterprise_Id (R9.1). Registered only when the Disney
+    // live port is wired, so it does not collide with the legacy live plugin
+    // that still serves this path until ThemeParks.wiki retirement.
+    if (options.getLiveDetail !== undefined) {
+      const getLiveDetail = options.getLiveDetail;
+      app.get('/catalog/:experienceId/live', async (request) => {
+        const { experienceId } = parseDetailParams(request.params);
+        // The injected implementation resolves the Enterprise_Id and runs the
+        // pure Disney live projection; a failed retrieval with no cached value
+        // throws `AppError('live_unavailable')` (R12.10), which the global
+        // error hook turns into the uniform 503 envelope.
+        return getLiveDetail(experienceId);
+      });
+    }
   };
 }
 
@@ -284,11 +506,17 @@ function parseListQuery(raw: unknown): CatalogListFilters {
   if (parsed.category !== undefined) {
     filters.category = parsed.category;
   }
+  if (parsed.areaType !== undefined) {
+    filters.areaType = parsed.areaType;
+  }
   if (parsed.q !== undefined) {
     const trimmed = parsed.q.trim();
     if (trimmed.length > 0) {
       filters.q = trimmed;
     }
+  }
+  if (parsed.land !== undefined) {
+    filters.land = parsed.land;
   }
   return filters;
 }
@@ -302,19 +530,24 @@ function parseDetailParams(raw: unknown): { experienceId: string } {
 
 /**
  * Project an `ExperienceDTO` (which carries `active`) onto the detail
- * response shape (which does not). Keeping the mapping in one place
- * makes it easy to extend later without bleeding extra fields onto the
- * wire by accident.
+ * response shape (which does not), attaching the separately-read dining
+ * `menus` (R8.5). Every persisted enrichment field on the DTO is carried
+ * through verbatim — the DTO already omits any field that was not persisted
+ * (R5.6, R5.7) — while `active` is dropped and `menus` is attached only when
+ * the Experience has persisted menus.
  */
-function toDetailResponse(experience: ExperienceDTO): ExperienceDetailResponse {
+function toDetailResponse(
+  experience: ExperienceDTO,
+  menus: readonly MenuDTO[],
+): ExperienceDetailResponse {
+  // Strip `active` (browse-path only); keep all other DTO fields, including
+  // the present-only-when-persisted enrichment fields.
+  const { active: _active, menus: _dtoMenus, ...rest } = experience;
+  void _active;
+  void _dtoMenus;
   return {
-    id: experience.id,
-    name: experience.name,
-    park: experience.park,
-    category: experience.category,
-    description: experience.description,
-    imageUrl: experience.imageUrl ?? null,
-    imageAttribution: experience.imageAttribution ?? null,
+    ...rest,
+    ...(menus.length > 0 ? { menus } : {}),
   };
 }
 

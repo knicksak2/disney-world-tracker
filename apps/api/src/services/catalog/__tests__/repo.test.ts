@@ -44,9 +44,10 @@ import type { ExperienceCategory, Park } from '@dwt/shared';
 
 import { createCatalogRepo } from '../repo.js';
 import type {
-  ReconcileResult,
+  CatalogDiff,
   ReconcileSoftDelete,
   ReconcileUpsert,
+  ResortReconcileResult,
 } from '../types.js';
 
 // ---------------------------------------------------------------------------
@@ -191,7 +192,16 @@ function upsert(
     name: 'Test Attraction',
     park: MAGIC_KINGDOM,
     category: RIDE,
+    land: null,
     description: 'A simple description.',
+    imageUrl: null,
+    areaType: 'ThemePark',
+    resortId: null,
+    latitude: null,
+    longitude: null,
+    accessibility: [],
+    priceTier: null,
+    mealPeriods: [],
     active: true,
     ...override,
   };
@@ -201,13 +211,30 @@ function softDelete(id: string): ReconcileSoftDelete {
   return { id };
 }
 
+/** An empty Resort reconcile arm. */
+const EMPTY_RESORTS: ResortReconcileResult = { upserts: [], softDeletes: [] };
+
+/**
+ * Wrap an Experience diff into the combined {@link CatalogDiff} shape
+ * `applyReconciliation` now consumes. Resorts default to empty so these repo
+ * tests stay focused on the Experience write path.
+ */
+function experienceDiff(
+  upserts: readonly ReconcileUpsert[],
+  softDeletes: readonly ReconcileSoftDelete[] = [],
+): CatalogDiff {
+  return {
+    experiences: { upserts, softDeletes },
+    resorts: EMPTY_RESORTS,
+  };
+}
+
 describe('CatalogRepo.applyReconciliation', () => {
   it('is a no-op for an empty diff (no DB connection)', async () => {
     const pool = makePool();
     const repo = createCatalogRepo(pool as never);
-    const empty: ReconcileResult = { upserts: [], softDeletes: [] };
 
-    await repo.applyReconciliation(empty);
+    await repo.applyReconciliation(experienceDiff([], []));
 
     expect(pool.calls).toHaveLength(0);
     expect(pool.clients).toHaveLength(0);
@@ -217,10 +244,9 @@ describe('CatalogRepo.applyReconciliation', () => {
     const pool = makePool();
     const repo = createCatalogRepo(pool as never);
 
-    await repo.applyReconciliation({
-      upserts: [upsert()],
-      softDeletes: [softDelete('id-2')],
-    });
+    await repo.applyReconciliation(
+      experienceDiff([upsert()], [softDelete('id-2')]),
+    );
 
     const texts = pool.calls.map((c) => c.text);
     // BEGIN, UPSERT, SOFT-DELETE, COMMIT — all on the client connection.
@@ -235,19 +261,19 @@ describe('CatalogRepo.applyReconciliation', () => {
     expect(pool.clients[0]?.released).toBe(true);
   });
 
-  it('sanitizes the description before persisting', async () => {
+  it('persists the reconcile-provided description verbatim', async () => {
     const pool = makePool();
     const repo = createCatalogRepo(pool as never);
 
-    await repo.applyReconciliation({
-      upserts: [
-        upsert({
-          description:
-            '<p>It\u2019s magical<script>alert(1)</script></p>',
-        }),
-      ],
-      softDeletes: [],
-    });
+    // `reconcile` sanitizes descriptions to plain text before they reach the
+    // repo (the `ReconcileUpsert.description` contract, R11.8), so the repo
+    // persists the value verbatim. This asserts the repo does not re-sanitize
+    // or otherwise mutate the description it is handed.
+    await repo.applyReconciliation(
+      experienceDiff([
+        upsert({ description: 'It\u2019s magical' }),
+      ]),
+    );
 
     const insert = pool.calls.find((c) =>
       c.text.includes('INSERT INTO experiences'),
@@ -266,7 +292,7 @@ describe('CatalogRepo.applyReconciliation', () => {
     const repo = createCatalogRepo(pool as never);
 
     await expect(
-      repo.applyReconciliation({ upserts: [upsert()], softDeletes: [] }),
+      repo.applyReconciliation(experienceDiff([upsert()])),
     ).rejects.toBe(boom);
 
     const texts = pool.calls.map((c) => c.text);
@@ -374,6 +400,14 @@ describe('CatalogRepo.listActiveExperiences', () => {
           category: RIDE,
           description: '',
           active: true,
+          image_url: null,
+          latitude: null,
+          longitude: null,
+          area_type: 'ThemePark',
+          resort_id: null,
+          accessibility: [],
+          price_tier: null,
+          meal_periods: [],
         },
         {
           id: 'b',
@@ -383,6 +417,14 @@ describe('CatalogRepo.listActiveExperiences', () => {
           category: SHOW,
           description: '',
           active: true,
+          image_url: null,
+          latitude: null,
+          longitude: null,
+          area_type: 'ThemePark',
+          resort_id: null,
+          accessibility: [],
+          price_tier: null,
+          meal_periods: [],
         },
       ],
     }));
@@ -456,6 +498,14 @@ describe('CatalogRepo.getExperience', () => {
           category: SHOW,
           description: 'Last performed years ago.',
           active: false,
+          image_url: null,
+          latitude: null,
+          longitude: null,
+          area_type: 'ThemePark',
+          resort_id: null,
+          accessibility: [],
+          price_tier: null,
+          meal_periods: [],
         },
       ],
     }));
@@ -470,6 +520,8 @@ describe('CatalogRepo.getExperience', () => {
       category: SHOW,
       description: 'Last performed years ago.',
       active: false,
+      imageUrl: null,
+      areaType: 'ThemePark',
     });
     expect(pool.calls[0]?.text).toMatch(/FROM experiences\s+WHERE id = \$1/);
   });

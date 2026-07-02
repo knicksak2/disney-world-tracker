@@ -93,6 +93,35 @@ const descriptionArb = fc.string({ minLength: 0, maxLength: 1000 });
 const upstreamEntityIdArb = fc.string({ minLength: 1, maxLength: 64 });
 
 /**
+ * Fill the enrichment / area / imagery fields the Disney-sourced
+ * `UpstreamExperience` now requires with their "not persisted" defaults. This
+ * property targets only the R1.8 core-field constraints (name/park/category/
+ * description), so the enrichment fields are held at neutral values and do not
+ * affect the assertions.
+ */
+function withEnrichmentDefaults(base: {
+  id: string;
+  upstreamEntityId: string;
+  name: string;
+  park: Park;
+  category: ExperienceCategory;
+  description: string;
+}): UpstreamExperience {
+  return {
+    ...base,
+    land: null,
+    imageUrl: null,
+    areaType: 'ThemePark',
+    resortId: null,
+    latitude: null,
+    longitude: null,
+    accessibility: [],
+    priceTier: null,
+    mealPeriods: [],
+  };
+}
+
+/**
  * One fully-classified upstream Experience whose fields already satisfy
  * R1.8. The internal `id` is the deterministic UUID v5 of the upstream
  * entity id (R1.7), so the produced row has a UUID `id` for the schema to
@@ -106,14 +135,16 @@ const upstreamExperienceArb: fc.Arbitrary<UpstreamExperience> = fc
     category: categoryArb,
     description: descriptionArb,
   })
-  .map((r) => ({
-    id: internalId(r.upstreamEntityId),
-    upstreamEntityId: r.upstreamEntityId,
-    name: r.name,
-    park: r.park,
-    category: r.category,
-    description: r.description,
-  }));
+  .map((r) =>
+    withEnrichmentDefaults({
+      id: internalId(r.upstreamEntityId),
+      upstreamEntityId: r.upstreamEntityId,
+      name: r.name,
+      park: r.park,
+      category: r.category,
+      description: r.description,
+    }),
+  );
 
 /**
  * An upstream entity set with distinct internal ids. Distinctness keeps
@@ -139,6 +170,7 @@ const cacheRowArb: fc.Arbitrary<CatalogCacheRow> = fc.record({
   name: nameArb,
   park: parkArb,
   category: categoryArb,
+  land: fc.constant<string | null>(null),
 });
 
 /** Cache with distinct ids; same dedupe-avoidance reasoning as upstream. */
@@ -160,7 +192,7 @@ const cacheArb = fc.uniqueArray(cacheRowArb, {
 function toExperienceShape(u: ReconcileUpsert): {
   id: string;
   name: string;
-  park: Park;
+  park: Park | null;
   category: ExperienceCategory;
   description: string;
   active: boolean;
@@ -276,14 +308,14 @@ describe('catalog — Property 3: bound-driving fixed examples', () => {
     const result = reconcile(
       [],
       [
-        {
+        withEnrichmentDefaults({
           id: internalId(upstreamId),
           upstreamEntityId: upstreamId,
           name,
           park: 'Magic Kingdom',
           category: 'Ride',
           description: '',
-        },
+        }),
       ],
     );
     expect(result.upserts).toHaveLength(1);
@@ -298,14 +330,14 @@ describe('catalog — Property 3: bound-driving fixed examples', () => {
     const result = reconcile(
       [],
       [
-        {
+        withEnrichmentDefaults({
           id: internalId(upstreamId),
           upstreamEntityId: upstreamId,
           name: 'A Ride',
           park: 'EPCOT',
           category: 'Ride',
           description,
-        },
+        }),
       ],
     );
     expect(result.upserts).toHaveLength(1);
@@ -319,14 +351,14 @@ describe('catalog — Property 3: bound-driving fixed examples', () => {
     const result = reconcile(
       [],
       [
-        {
+        withEnrichmentDefaults({
           id: internalId(upstreamId),
           upstreamEntityId: upstreamId,
           name: 'A Show',
           park: 'Hollywood Studios',
           category: 'Show',
           description: '',
-        },
+        }),
       ],
     );
     expect(result.upserts).toHaveLength(1);

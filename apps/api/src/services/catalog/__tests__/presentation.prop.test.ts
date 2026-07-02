@@ -291,6 +291,18 @@ function toSqlRow(r: PopulationRow): Record<string, unknown> {
     category: r.category,
     description: r.description,
     active: r.active,
+    // Enrichment columns read by `repo.rowToDto`. This legacy presentation
+    // property covers only the park/category/q filter + ordering pipeline, so
+    // the enrichment fields are held at their "not persisted" defaults: a null
+    // image, a ThemePark area, and empty facet/coordinate values.
+    image_url: null,
+    latitude: null,
+    longitude: null,
+    area_type: 'ThemePark',
+    resort_id: null,
+    accessibility: [],
+    price_tier: null,
+    meal_periods: [],
   };
 }
 
@@ -383,6 +395,11 @@ function computeOracle(
     category: r.category,
     description: r.description,
     active: r.active,
+    // Mirror `repo.rowToDto`: `imageUrl` and `areaType` are always present;
+    // the remaining enrichment fields are absent when not persisted (the
+    // defaults set by `toSqlRow`), so they are omitted here.
+    imageUrl: null,
+    areaType: 'ThemePark',
   }));
 }
 
@@ -569,7 +586,9 @@ describe('catalog presentation — Property 6: filter, group, and sort', () => {
               const prev = body.experiences[i - 1]!;
               const curr = body.experiences[i]!;
               if (prev.park !== curr.park) {
-                expect(prev.park < curr.park).toBe(true);
+                // The presentation population always carries a non-null Park,
+                // so ordering compares the Park strings directly.
+                expect((prev.park ?? '') < (curr.park ?? '')).toBe(true);
               } else {
                 const prevName = prev.name.toLowerCase();
                 const currName = curr.name.toLowerCase();
@@ -607,7 +626,11 @@ describe('catalog presentation — fixed examples for regression', () => {
     try {
       const res = await app.inject({ method: 'GET', url: '/catalog' });
       expect(res.statusCode).toBe(200);
-      expect(res.json()).toEqual({ experiences: [], staleCache: false });
+      expect(res.json()).toEqual({
+        experiences: [],
+        staleCache: false,
+        cacheAgeHours: null,
+      });
     } finally {
       await app.close();
     }
