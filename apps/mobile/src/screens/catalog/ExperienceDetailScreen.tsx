@@ -28,7 +28,7 @@
 // `theme/theme.ts` and `theme/components.tsx`.
 
 import React from 'react';
-import { useQueries, useQueryClient } from '@tanstack/react-query';
+import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ActivityIndicator,
   Image,
@@ -39,21 +39,25 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { RouteProp } from '@react-navigation/native';
-import { useRoute } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import type {
   AggregateRatingDTO,
+  AreaType,
   CompletionDTO,
   ErrorCode,
   ExperienceCategory,
   LiveDetailResponseDTO,
+  MealPeriodDTO,
   NoteDTO,
   Park,
   RatingDTO,
+  ResortDTO,
 } from '@dwt/shared';
 
 import { ApiError, apiRequest } from '../../api/client';
-import type { CatalogStackParamList } from '../../navigation/CatalogStack';
+import type { RootStackParamList } from '../../navigation/RootNavigator';
 import { theme } from '../../theme/theme';
 import {
   Badge,
@@ -66,6 +70,7 @@ import {
 import CompletionControls from './CompletionControls';
 import NoteControl from './NoteControl';
 import RatingControl from './RatingControl';
+import { buildInfoTags } from './infoTags';
 import { liveSectionFor } from './gating';
 import RideLiveSection from './live/RideLiveSection';
 import ShowtimesSection from './live/ShowtimesSection';
@@ -88,11 +93,33 @@ interface ExperienceDetailDTO {
   readonly category: ExperienceCategory;
   readonly description: string;
   readonly imageUrl: string | null;
-  readonly imageAttribution: string | null;
+  /**
+   * Enrichment fields surfaced as Info_Tags (R9.2-R9.7). Each is present only
+   * when persisted upstream, mirroring `ExperienceDTO`/`ExperienceDetailResponse`;
+   * `buildInfoTags` omits any that are absent or empty (R9.8).
+   */
+  readonly areaType: AreaType;
+  readonly resortId?: string | null;
+  readonly latitude?: number | null;
+  readonly longitude?: number | null;
+  readonly accessibility?: readonly string[];
+  readonly priceTier?: string | null;
+  readonly mealPeriods?: readonly MealPeriodDTO[];
+  readonly land?: string | null;
+}
+
+/** Wire shape for `GET /resorts`; only the fields needed to resolve a name. */
+interface ResortListResponse {
+  readonly resorts: readonly ResortDTO[];
 }
 
 type ExperienceDetailRouteProp = RouteProp<
-  CatalogStackParamList,
+  RootStackParamList,
+  'ExperienceDetail'
+>;
+
+type ExperienceDetailNavigationProp = NativeStackNavigationProp<
+  RootStackParamList,
   'ExperienceDetail'
 >;
 
@@ -142,6 +169,7 @@ function categoryLabel(category: ExperienceCategory): string {
 
 export default function ExperienceDetailScreen(): JSX.Element {
   const route = useRoute<ExperienceDetailRouteProp>();
+  const navigation = useNavigation<ExperienceDetailNavigationProp>();
   const { experienceId } = route.params;
   const encodedId = encodeURIComponent(experienceId);
   const queryClient = useQueryClient();
@@ -215,6 +243,23 @@ export default function ExperienceDetailScreen(): JSX.Element {
   const aggregateQ = queries[4];
   const liveQ = queries[5];
 
+  // Resort name lookup for the specific-Resort Info_Tag (R9.7). Only a
+  // `Resort`-area Experience that references a specific Resort needs the
+  // Resorts list, so the fetch is gated on the loaded detail — non-Resort
+  // detail views never issue this request. When the name is unavailable
+  // (list still loading, request failed, or no matching Resort) `resortName`
+  // stays `null` and `buildInfoTags` omits the Resort tag (R9.8).
+  const detail = experienceQ.data;
+  const needsResortName =
+    detail?.areaType === 'Resort' &&
+    typeof detail.resortId === 'string' &&
+    detail.resortId.length > 0;
+  const resortsQ = useQuery({
+    queryKey: ['resorts'] as const,
+    queryFn: () => apiRequest<ResortListResponse>('GET', '/resorts'),
+    enabled: needsResortName,
+  });
+
   // Block the whole screen on the catalog detail load — the section
   // headers depend on the Experience name and the screen has nothing
   // useful to show without it. The four secondary fetches each render
@@ -233,7 +278,7 @@ export default function ExperienceDetailScreen(): JSX.Element {
   if (experienceQ.isError || experienceQ.data === undefined) {
     return (
       <ScreenContainer>
-        <GradientHeader title="Experience" icon="map" compact />
+        <GradientHeader title="Experience" icon="map" compact onBack={() => navigation.goBack()} />
         <View style={styles.centered}>
           <EmptyState
             icon="alert-circle-outline"
@@ -252,6 +297,19 @@ export default function ExperienceDetailScreen(): JSX.Element {
   const experience = experienceQ.data;
   const visual = theme.categoryVisual[experience.category];
 
+  // Resolve the referenced Resort's name for the specific-Resort Info_Tag
+  // (R9.7); `null` whenever the name is unavailable so the tag is omitted.
+  const resortName =
+    needsResortName && experience.resortId != null
+      ? resortsQ.data?.resorts.find((r) => r.id === experience.resortId)?.name ??
+        null
+      : null;
+
+  // Ordered enrichment Info_Tags (R9.2-R9.8, R9.11). Rendered as a wrapping
+  // badge row beneath the Park/category badges; absent/empty values produce
+  // no tag.
+  const infoTags = buildInfoTags(experience, resortName);
+
   return (
     <ScreenContainer>
       {/* -------------------------------------------------------------- */}
@@ -262,6 +320,7 @@ export default function ExperienceDetailScreen(): JSX.Element {
         subtitle={experience.park}
         icon={visual.glyph as keyof typeof Ionicons.glyphMap}
         compact
+        onBack={() => navigation.goBack()}
       />
 
       <ScrollView
@@ -271,7 +330,6 @@ export default function ExperienceDetailScreen(): JSX.Element {
         {/* Hero image (sourced photo or category placeholder). */}
         <ExperienceHero
           imageUrl={experience.imageUrl}
-          attribution={experience.imageAttribution}
           category={experience.category}
         />
 
@@ -290,6 +348,28 @@ export default function ExperienceDetailScreen(): JSX.Element {
             testID="experience-category-badge"
           />
         </View>
+
+        {/* ------------------------------------------------------------ */}
+        {/* Info_Tags (R9.2-R9.8, R9.11): a wrapping row of compact       */}
+        {/* labelled pills surfacing the persisted enrichment (Land,      */}
+        {/* price tier, accessibility, coordinates, meal periods, and the */}
+        {/* specific Resort), in fixed order, each omitted when absent.    */}
+        {/* Each pill carries its `accessibilityLabel` (R12.5). Renders    */}
+        {/* nothing when the Experience has no enrichment to show.         */}
+        {/* ------------------------------------------------------------ */}
+        {infoTags.length > 0 ? (
+          <View style={styles.badgeRow} testID="experience-info-tags">
+            {infoTags.map((tag, index) => (
+              <Badge
+                key={`${tag.kind}-${index}`}
+                label={tag.label}
+                color={theme.color.primary}
+                accessibilityLabel={tag.accessibilityLabel}
+                testID={`experience-info-tag-${tag.kind}`}
+              />
+            ))}
+          </View>
+        ) : null}
 
         {/* ------------------------------------------------------------ */}
         {/* About (R1.22). Server is responsible for HTML/script         */}
@@ -412,17 +492,15 @@ export default function ExperienceDetailScreen(): JSX.Element {
 
 /**
  * Full-width hero image for the detail view. Shows the sourced photo when
- * present (with its license attribution caption beneath, as required by the
- * image's terms); otherwise a category-tinted placeholder with the category
- * glyph so the layout is consistent whether or not an image exists.
+ * present; otherwise a category-tinted placeholder with the category glyph so
+ * the layout is consistent whether or not an image exists. Disney imagery
+ * needs no attribution caption (R14.8).
  */
 function ExperienceHero({
   imageUrl,
-  attribution,
   category,
 }: {
   readonly imageUrl: string | null;
-  readonly attribution: string | null;
   readonly category: ExperienceCategory;
 }): JSX.Element {
   const [failed, setFailed] = React.useState(false);
@@ -454,11 +532,6 @@ function ExperienceHero({
         accessibilityIgnoresInvertColors
         testID="experience-hero-image"
       />
-      {attribution != null && attribution.length > 0 ? (
-        <Text style={styles.heroAttribution} numberOfLines={2}>
-          {attribution}
-        </Text>
-      ) : null}
     </View>
   );
 }
@@ -746,12 +819,6 @@ const styles = StyleSheet.create({
   heroPlaceholder: {
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  heroAttribution: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
-    marginTop: theme.spacing.xs,
-    fontStyle: 'italic',
   },
   section: {
     gap: theme.spacing.md,

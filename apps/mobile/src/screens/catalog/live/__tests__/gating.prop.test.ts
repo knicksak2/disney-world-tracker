@@ -49,6 +49,10 @@ const EXPECTED_SECTION: Readonly<Record<ExperienceCategory, LiveSection>> = {
   Show: 'showtimes', // R7.3
   Parade: 'showtimes', // R7.3
   Restaurant: 'dining', // R7.4
+  Tour: 'none', // R7.1
+  Recreation: 'none', // R7.1
+  Spa: 'none', // R7.1
+  Event: 'none', // R7.1
   Other: 'none', // R7.1
 };
 

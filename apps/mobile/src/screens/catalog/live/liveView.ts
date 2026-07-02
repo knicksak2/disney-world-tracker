@@ -266,3 +266,46 @@ export function diningWalkupState(
 function isPresent(value: string | undefined): value is string {
   return typeof value === 'string' && value.length > 0;
 }
+
+// ---------------------------------------------------------------------------
+// Lightning Lane / boarding group display (ThemeParks.wiki, R11.6, R11.7)
+// ---------------------------------------------------------------------------
+
+/**
+ * Humanize a coarse upstream state token (e.g. `"SOLD_OUT"`, `"PAID_RETURN"`,
+ * `"FINISHED"`) into a readable label ("Sold out", "Paid return", "Finished").
+ * Returns `undefined` for an absent/blank token so the caller omits the row.
+ * Pure and total.
+ */
+export function humanizeCoarseState(state: string | undefined): string | undefined {
+  if (state === undefined) {
+    return undefined;
+  }
+  const trimmed = state.trim();
+  if (trimmed.length === 0) {
+    return undefined;
+  }
+  const spaced = trimmed.replace(/[_-]+/g, ' ').toLowerCase();
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
+
+/**
+ * Format a Lightning Lane price. ThemeParks.wiki reports `amount` in the
+ * currency's minor units (e.g. `1500` for `USD` = `$15.00`), so the amount is
+ * divided by 100 and formatted with the currency. Falls back to a plain
+ * `"<amount> <currency>"` when the currency code is not recognized by `Intl`.
+ * Pure and total.
+ */
+export function formatLightningLanePrice(
+  amount: number,
+  currency: string,
+): string {
+  try {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency,
+    }).format(amount / 100);
+  } catch {
+    return `${(amount / 100).toFixed(2)} ${currency}`;
+  }
+}

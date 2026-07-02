@@ -60,7 +60,18 @@ import ShowtimesSection from '../ShowtimesSection';
 import DiningSection from '../DiningSection';
 import ExperienceDetailScreen from '../../ExperienceDetailScreen';
 import { ApiError, apiRequest as mockedApiRequest } from '../../../../api/client';
-import type { CatalogStackParamList } from '../../../../navigation/CatalogStack';
+
+/**
+ * Local Catalog-stack param list for the test harness. The standalone detail
+ * render below registers `ExperienceDetail` in a throwaway stack; the
+ * production `CatalogStackParamList` no longer carries `ExperienceDetail` (it
+ * moved to the root stack), so this harness declares its own param list rather
+ * than importing the trimmed production type.
+ */
+type CatalogStackParamList = {
+  CatalogList: undefined;
+  ExperienceDetail: { experienceId: string };
+};
 
 const apiRequestMock = mockedApiRequest as jest.MockedFunction<
   typeof mockedApiRequest
@@ -89,30 +100,14 @@ function emptyDetail(overrides: Partial<LiveDetailDTO> = {}): LiveDetailDTO {
 // RideLiveSection (R4.*)
 // ---------------------------------------------------------------------------
 
-describe('RideLiveSection (R4.1, R4.5–R4.10, R4.13)', () => {
+describe('RideLiveSection (R4.1, R4.5–R4.7, R4.13)', () => {
   const now = new Date('2024-05-01T19:00:00Z');
 
-  test('renders status, standby + single-rider waits, windows, boarding group, forecast, and both timestamps', () => {
+  test('renders status, standby + single-rider waits, forecast, and both timestamps', () => {
     const detail = emptyDetail({
       status: 'Operating',
       waitMinutes: 45,
       singleRiderWaitMinutes: 20,
-      returnWindow: {
-        state: 'Available',
-        start: '2024-05-01T20:00:00Z', // 4:00 PM
-        end: '2024-05-01T21:00:00Z', // 5:00 PM
-      },
-      paidReturnWindow: {
-        state: 'Available',
-        price: { amount: 1500, currency: 'USD', formatted: '$15.00 per guest' },
-      },
-      boardingGroup: {
-        allocation: 'Available',
-        currentGroupStart: 10,
-        currentGroupEnd: 25,
-        nextAllocationTime: '2024-05-01T20:30:00Z', // 4:30 PM
-        estimatedWaitMinutes: 35,
-      },
       forecast: [
         { time: '2024-05-01T20:00:00Z', waitMinutes: 40, percentage: 80 }, // 4:00 PM
         { time: '2024-05-01T21:00:00Z', waitMinutes: 15, percentage: 30 }, // 5:00 PM — lowest
@@ -142,23 +137,6 @@ describe('RideLiveSection (R4.1, R4.5–R4.10, R4.13)', () => {
 
     // R4.7 — single-rider wait, distinct from standby.
     expect(screen.getByTestId('single-rider-wait')).toHaveTextContent('20 min');
-
-    // R4.8 — return window state + park-local window (composite text node, so
-    // regex/substring matchers are used).
-    const returnTimes = screen.getByTestId('return-window-times');
-    expect(returnTimes).toHaveTextContent(/4:00\s*PM/);
-    expect(returnTimes).toHaveTextContent(/5:00\s*PM/);
-
-    // R4.9 — paid return window formatted price verbatim from upstream.
-    expect(screen.getByTestId('paid-return-price')).toHaveTextContent(
-      '$15.00 per guest',
-    );
-
-    // R4.10 — boarding-group allocation + current group range.
-    expect(screen.getByTestId('boarding-group')).toBeTruthy();
-    expect(screen.getByTestId('boarding-group-range')).toHaveTextContent(
-      /10.25/,
-    );
 
     // R4.11 — forecast renders as a bar chart with the lowest entry highlighted.
     expect(screen.getByTestId('forecast-chart')).toBeTruthy();
@@ -477,7 +455,6 @@ describe('ExperienceDetailScreen live-unavailable state (R3.2, R3.3, R3.4)', () 
           category: 'Ride',
           description: 'A thrilling indoor coaster.',
           imageUrl: null,
-          imageAttribution: null,
         };
       }
       if (path === `/catalog/${experienceId}/live`) {

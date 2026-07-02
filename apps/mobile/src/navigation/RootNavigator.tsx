@@ -15,6 +15,7 @@ import LoginScreen from '../screens/LoginScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import RegisterScreen from '../screens/RegisterScreen';
 import StatsScreen from '../screens/stats/StatsScreen';
+import ExperienceDetailScreen from '../screens/catalog/ExperienceDetailScreen';
 
 /**
  * Root navigator for the mobile app.
@@ -63,8 +64,26 @@ export type MainTabParamList = {
   Profile: { userId?: string } | undefined;
 };
 
+/**
+ * Root-level native stack that hosts the authenticated experience.
+ *
+ * `MainTabs` (the bottom-tab navigator) is the initial route, and
+ * `ExperienceDetail` is registered as a sibling screen pushed *above* the
+ * tabs. Promoting `ExperienceDetail` to the root stack (rather than nesting
+ * it inside the Catalog tab) leaves the originating tab/screen intact
+ * underneath, so a back request pops to the exact screen the User came from
+ * regardless of which tab they started in. The native header is suppressed
+ * (`headerShown: false`) so the screen presents only its themed in-content
+ * header.
+ */
+export type RootStackParamList = {
+  MainTabs: undefined;
+  ExperienceDetail: { experienceId: string };
+};
+
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
 const MainTabs = createBottomTabNavigator<MainTabParamList>();
+const RootStack = createNativeStackNavigator<RootStackParamList>();
 
 function AuthStackNavigator(): JSX.Element {
   return (
@@ -122,6 +141,32 @@ function MainTabsNavigator(): JSX.Element {
   );
 }
 
+/**
+ * Authenticated root stack. Hosts `MainTabs` as the initial route and
+ * registers `ExperienceDetail` as a sibling screen pushed above the tabs.
+ *
+ * `ExperienceDetail` is registered with `headerShown: false` so React
+ * Navigation renders no native header bar; the screen supplies its own
+ * themed header. `MainTabs` is likewise headerless, matching today's
+ * behavior.
+ */
+function RootStackNavigator(): JSX.Element {
+  return (
+    <RootStack.Navigator initialRouteName="MainTabs">
+      <RootStack.Screen
+        name="MainTabs"
+        component={MainTabsNavigator}
+        options={{ headerShown: false }}
+      />
+      <RootStack.Screen
+        name="ExperienceDetail"
+        component={ExperienceDetailScreen}
+        options={{ headerShown: false }}
+      />
+    </RootStack.Navigator>
+  );
+}
+
 export default function RootNavigator(): JSX.Element {
   const token = useSessionStore((state) => state.token);
   const clearToken = useSessionStore((state) => state.clearToken);
@@ -137,5 +182,5 @@ export default function RootNavigator(): JSX.Element {
     };
   }, [clearToken]);
 
-  return token === null ? <AuthStackNavigator /> : <MainTabsNavigator />;
+  return token === null ? <AuthStackNavigator /> : <RootStackNavigator />;
 }

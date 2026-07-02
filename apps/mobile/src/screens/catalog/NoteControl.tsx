@@ -35,7 +35,7 @@
 // of the detail screen read consistently.
 
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { useMutation } from '@tanstack/react-query';
 
 import { type NoteDTO, noteInputSchema } from '@dwt/shared';
@@ -113,6 +113,7 @@ export default function NoteControl({
   // when adding the first Note (R5.3).
   const [isEditing, setIsEditing] = useState(false);
   const [draft, setDraft] = useState('');
+  const [shareable, setShareable] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // If the persisted Note changes from underneath us (e.g. a parent
@@ -121,6 +122,7 @@ export default function NoteControl({
   useEffect(() => {
     if (!isEditing) {
       setDraft(note?.body ?? '');
+      setShareable(note?.shareable ?? false);
     }
   }, [note, isEditing]);
 
@@ -128,10 +130,11 @@ export default function NoteControl({
   // Mutations
   // -------------------------------------------------------------------------
 
-  const saveMutation = useMutation<NoteDTO, ApiError, string>({
-    mutationFn: (trimmedBody: string) =>
+  const saveMutation = useMutation<NoteDTO, ApiError, { body: string; shareable: boolean }>({
+    mutationFn: ({ body, shareable: nextShareable }) =>
       apiRequest<NoteDTO>('PUT', `/me/experiences/${encodedId}/note`, {
-        body: trimmedBody,
+        body,
+        shareable: nextShareable,
       }),
     onSuccess: () => {
       // Drop the editor and let the parent refetch — we render off the
@@ -186,18 +189,21 @@ export default function NoteControl({
 
   const handleStartAdd = (): void => {
     setDraft('');
+    setShareable(false);
     setError(null);
     setIsEditing(true);
   };
 
   const handleStartEdit = (): void => {
     setDraft(note?.body ?? '');
+    setShareable(note?.shareable ?? false);
     setError(null);
     setIsEditing(true);
   };
 
   const handleCancel = (): void => {
     setDraft(note?.body ?? '');
+    setShareable(note?.shareable ?? false);
     setError(null);
     setIsEditing(false);
   };
@@ -215,12 +221,12 @@ export default function NoteControl({
     // before bytes hit the wire (R5.2, R5.10). `noteInputSchema` is the
     // PUT body shape `{ body }`, and its `body` field is the trimmed
     // 1..2000 primitive — so `parsed.data.body` is the value we send.
-    const parsed = noteInputSchema.safeParse({ body: draft });
+    const parsed = noteInputSchema.safeParse({ body: draft, shareable });
     if (!parsed.success) {
       setError(NOTE_LENGTH_INVALID_MESSAGE);
       return;
     }
-    saveMutation.mutate(parsed.data.body);
+    saveMutation.mutate({ body: parsed.data.body, shareable });
   };
 
   const handleDelete = (): void => {
@@ -257,6 +263,23 @@ export default function NoteControl({
           <Text style={styles.counter} testID="note-counter">
             {counter}
           </Text>
+        </View>
+        <View style={styles.shareRow}>
+          <View style={styles.shareTextCol}>
+            <Text style={styles.shareLabel}>Share with friends</Text>
+            <Text style={styles.shareHelper}>
+              {shareable
+                ? 'Friends viewing your profile can read this note.'
+                : 'Only you can see this note.'}
+            </Text>
+          </View>
+          <Switch
+            value={shareable}
+            onValueChange={setShareable}
+            disabled={isMutating}
+            accessibilityLabel="Share note with friends"
+            testID="note-shareable"
+          />
         </View>
         {error !== null ? (
           <Text
@@ -324,6 +347,11 @@ export default function NoteControl({
     <View style={styles.viewer}>
       <Text style={styles.body} testID="note-body">
         {note.body}
+      </Text>
+      <Text style={styles.shareStatus} testID="note-share-status">
+        {note.shareable
+          ? 'Shared with friends'
+          : 'Private — only you can see this'}
       </Text>
       {error !== null ? (
         <Text
@@ -395,6 +423,28 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   counter: {
+    ...theme.typography.meta,
+    color: theme.color.textSecondary,
+  },
+  shareRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: theme.spacing.md,
+  },
+  shareTextCol: {
+    flexShrink: 1,
+    gap: 2,
+  },
+  shareLabel: {
+    ...theme.typography.body,
+    color: theme.color.textPrimary,
+  },
+  shareHelper: {
+    ...theme.typography.meta,
+    color: theme.color.textSecondary,
+  },
+  shareStatus: {
     ...theme.typography.meta,
     color: theme.color.textSecondary,
   },

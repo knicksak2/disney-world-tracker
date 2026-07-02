@@ -11,11 +11,17 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-import type { LiveDetailDTO, OperatingStatus } from '@dwt/shared';
+import type {
+  BoardingGroupState,
+  LightningLaneState,
+  LiveDetailDTO,
+  OperatingStatus,
+} from '@dwt/shared';
 
 import { theme } from '../../../theme/theme';
 import { Badge, SectionLabel } from '../../../theme/components';
-import { formatParkDateTime } from './parkTime';
+import { formatParkDateTime, formatParkTime } from './parkTime';
+import { formatLightningLanePrice, humanizeCoarseState } from './liveView';
 
 /**
  * Props shared by every live section. Mirrors the `LiveDetailResponseDTO`
@@ -132,7 +138,111 @@ export function SubLabel({
   return <SectionLabel style={styles.subLabel}>{children}</SectionLabel>;
 }
 
+/**
+ * Lightning Lane block (R11.6). Renders the coarse Lightning Lane price,
+ * return-window state, and return window when ThemeParks.wiki provides them.
+ * Returns `null` when no sub-field is presentable so the section shows nothing
+ * rather than an empty heading.
+ */
+export function LightningLaneBlock({
+  state,
+}: {
+  readonly state: LightningLaneState;
+}): JSX.Element | null {
+  const rows: { readonly label: string; readonly value: string; readonly testID: string }[] = [];
+
+  if (state.price !== undefined) {
+    rows.push({
+      label: 'Price',
+      value: formatLightningLanePrice(state.price.amount, state.price.currency),
+      testID: 'lightning-lane-price',
+    });
+  }
+  const coarse = humanizeCoarseState(state.state);
+  if (coarse !== undefined) {
+    rows.push({ label: 'Status', value: coarse, testID: 'lightning-lane-state' });
+  }
+  if (state.returnStart !== undefined && state.returnEnd !== undefined) {
+    rows.push({
+      label: 'Return window',
+      value: `${formatParkTime(state.returnStart)} \u2013 ${formatParkTime(state.returnEnd)}`,
+      testID: 'lightning-lane-window',
+    });
+  }
+  if (rows.length === 0 && state.available !== undefined) {
+    rows.push({
+      label: 'Availability',
+      value: state.available ? 'Available' : 'Not available',
+      testID: 'lightning-lane-available',
+    });
+  }
+
+  if (rows.length === 0) {
+    return null;
+  }
+
+  return (
+    <View style={styles.block} testID="lightning-lane">
+      <SubLabel>Lightning Lane</SubLabel>
+      {rows.map((row) => (
+        <DetailRow key={row.testID} label={row.label} value={row.value} testID={row.testID} />
+      ))}
+    </View>
+  );
+}
+
+/**
+ * Boarding group / virtual-queue block (R11.7). Renders the coarse
+ * boarding-group state and current allocated group range when ThemeParks.wiki
+ * provides them; `null` when nothing is presentable.
+ */
+export function BoardingGroupBlock({
+  state,
+}: {
+  readonly state: BoardingGroupState;
+}): JSX.Element | null {
+  const rows: { readonly label: string; readonly value: string; readonly testID: string }[] = [];
+
+  const coarse = humanizeCoarseState(state.state);
+  if (coarse !== undefined) {
+    rows.push({ label: 'Status', value: coarse, testID: 'boarding-group-state' });
+  }
+  if (
+    typeof state.currentGroupStart === 'number' &&
+    typeof state.currentGroupEnd === 'number'
+  ) {
+    rows.push({
+      label: 'Now boarding',
+      value: `Groups ${state.currentGroupStart}\u2013${state.currentGroupEnd}`,
+      testID: 'boarding-group-range',
+    });
+  }
+  if (rows.length === 0 && state.available !== undefined) {
+    rows.push({
+      label: 'Availability',
+      value: state.available ? 'Available' : 'Not available',
+      testID: 'boarding-group-available',
+    });
+  }
+
+  if (rows.length === 0) {
+    return null;
+  }
+
+  return (
+    <View style={styles.block} testID="boarding-group">
+      <SubLabel>Virtual Queue</SubLabel>
+      {rows.map((row) => (
+        <DetailRow key={row.testID} label={row.label} value={row.value} testID={row.testID} />
+      ))}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
+  block: {
+    gap: theme.spacing.xs,
+  },
   staleRow: {
     backgroundColor: theme.color.warningSurface,
     borderRadius: theme.radius.sm,

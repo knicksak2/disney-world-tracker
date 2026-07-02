@@ -2,20 +2,27 @@ import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import CatalogScreen from '../screens/catalog/CatalogScreen';
-import ExperienceDetailScreen from '../screens/catalog/ExperienceDetailScreen';
+import DestinationScreen from '../screens/catalog/DestinationScreen';
+import type { DestinationId } from '../screens/catalog/destinations';
 
 /**
  * Catalog tab stack.
  *
- * The Catalog tab nests its own native stack so the user can drill from
- * the list (`CatalogList`) into the per-Experience detail view
- * (`ExperienceDetail`) without leaving the tab. The list screen owns
- * tasks 16.1/16.2; the detail screen is owned by task 16.3 (currently a
- * placeholder).
+ * The Catalog tab nests its own native stack hosting the Catalog_Home
+ * (`CatalogList`) and the Level-2 per-Destination screen (`DestinationScreen`).
+ * The per-Experience detail view (`ExperienceDetail`) is registered on the
+ * root-level stack (`RootStack`) rather than here, so that returning from the
+ * detail view lands on the originating screen regardless of which tab the
+ * navigation began in.
  */
 export type CatalogStackParamList = {
   CatalogList: undefined;
-  ExperienceDetail: { experienceId: string };
+  /**
+   * Level-2 Destination_Screen, parameterized by the selected Destination.
+   * Registered on this stack (task 11.1); the param shape is declared here so
+   * the screen and its navigators type-check.
+   */
+  DestinationScreen: { destination: DestinationId };
 };
 
 const Stack = createNativeStackNavigator<CatalogStackParamList>();
@@ -29,9 +36,9 @@ export default function CatalogStack(): JSX.Element {
         options={{ headerShown: false }}
       />
       <Stack.Screen
-        name="ExperienceDetail"
-        component={ExperienceDetailScreen}
-        options={{ title: 'Experience' }}
+        name="DestinationScreen"
+        component={DestinationScreen}
+        options={{ headerShown: false }}
       />
     </Stack.Navigator>
   );

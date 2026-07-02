@@ -8,22 +8,20 @@
 //   - the standby Wait_Time / no-wait-posted indicator, gated purely on status
 //     and wait presence via `waitStatusDisplay` (R4.2, R4.3, R4.4),
 //   - the Single_Rider_Wait, distinctly labeled (R4.7),
-//   - the Return_Window state + park-local window (R4.8),
-//   - the Paid_Return_Window's formatted price verbatim from upstream (R4.9),
-//   - the Boarding_Group_Status allocation + current group range (R4.10),
 //   - the upcoming Wait_Time_Forecast sorted ascending with the single lowest
 //     entry highlighted, or the empty state when none (R4.11, R4.12),
 //   - the Retrieved_At and distinctly-labeled Upstream_Last_Updated stamps in
 //     park-local time (R4.5, R4.13).
 //
-// All ordering/selection/gating logic comes from the pure `liveView.ts` helpers;
-// this component is presentation only.
+// Lightning Lane price / coarse return-window state and boarding-group /
+// virtual-queue status are sourced from ThemeParks.wiki (R11.6, R11.7) and
+// rendered here when present.
 
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { theme } from '../../../theme/theme';
-import { Badge, Card, EmptyState, SectionLabel } from '../../../theme/components';
+import { Card, EmptyState, SectionLabel } from '../../../theme/components';
 import {
   lowestWaitEntry,
   upcomingForecast,
@@ -32,7 +30,9 @@ import {
 import { formatParkTime } from './parkTime';
 import ForecastChart from './ForecastChart';
 import {
+  BoardingGroupBlock,
   DetailRow,
+  LightningLaneBlock,
   RetrievalFooter,
   StaleIndicator,
   StatusBadge,
@@ -86,73 +86,14 @@ export default function RideLiveSection({
         />
       ) : null}
 
-      {/* Return_Window state + optional park-local window (R4.8). */}
-      {liveDetail.returnWindow !== undefined ? (
-        <View style={styles.block} testID="return-window">
-          <SubLabel>Return window</SubLabel>
-          <Badge label={returnStateLabel(liveDetail.returnWindow.state)} />
-          {liveDetail.returnWindow.state === 'Available' &&
-          liveDetail.returnWindow.start !== undefined &&
-          liveDetail.returnWindow.end !== undefined ? (
-            <Text style={styles.muted} testID="return-window-times">
-              {formatParkTime(liveDetail.returnWindow.start)} –{' '}
-              {formatParkTime(liveDetail.returnWindow.end)}
-            </Text>
-          ) : null}
-        </View>
+      {/* Lightning Lane price / coarse return-window state (R11.6) and
+          boarding-group / virtual-queue status (R11.7), sourced from
+          ThemeParks.wiki. Each renders only when the upstream provides it. */}
+      {liveDetail.lightningLane !== undefined ? (
+        <LightningLaneBlock state={liveDetail.lightningLane} />
       ) : null}
-
-      {/* Paid_Return_Window — formatted price string verbatim from upstream (R4.9). */}
-      {liveDetail.paidReturnWindow !== undefined ? (
-        <View style={styles.block} testID="paid-return-window">
-          <SubLabel>Lightning Lane</SubLabel>
-          <Badge
-            label={returnStateLabel(liveDetail.paidReturnWindow.state)}
-          />
-          <DetailRow
-            label="Price"
-            value={liveDetail.paidReturnWindow.price.formatted}
-            testID="paid-return-price"
-          />
-          {liveDetail.paidReturnWindow.state === 'Available' &&
-          liveDetail.paidReturnWindow.start !== undefined &&
-          liveDetail.paidReturnWindow.end !== undefined ? (
-            <Text style={styles.muted} testID="paid-return-times">
-              {formatParkTime(liveDetail.paidReturnWindow.start)} –{' '}
-              {formatParkTime(liveDetail.paidReturnWindow.end)}
-            </Text>
-          ) : null}
-        </View>
-      ) : null}
-
-      {/* Boarding_Group_Status allocation + current group range (R4.10). */}
       {liveDetail.boardingGroup !== undefined ? (
-        <View style={styles.block} testID="boarding-group">
-          <SubLabel>Boarding group</SubLabel>
-          <Badge label={liveDetail.boardingGroup.allocation} />
-          {liveDetail.boardingGroup.currentGroupStart !== undefined &&
-          liveDetail.boardingGroup.currentGroupEnd !== undefined ? (
-            <DetailRow
-              label="Now boarding"
-              value={`${liveDetail.boardingGroup.currentGroupStart}–${liveDetail.boardingGroup.currentGroupEnd}`}
-              testID="boarding-group-range"
-            />
-          ) : null}
-          {liveDetail.boardingGroup.nextAllocationTime !== undefined ? (
-            <DetailRow
-              label="Next allocation"
-              value={formatParkTime(liveDetail.boardingGroup.nextAllocationTime)}
-              testID="boarding-group-next"
-            />
-          ) : null}
-          {liveDetail.boardingGroup.estimatedWaitMinutes !== undefined ? (
-            <DetailRow
-              label="Estimated wait"
-              value={`${liveDetail.boardingGroup.estimatedWaitMinutes} min`}
-              testID="boarding-group-wait"
-            />
-          ) : null}
-        </View>
+        <BoardingGroupBlock state={liveDetail.boardingGroup} />
       ) : null}
 
       {/* Wait_Time_Forecast: upcoming entries ascending as a bar chart, with
@@ -184,11 +125,6 @@ export default function RideLiveSection({
       />
     </Card>
   );
-}
-
-/** Map a return-window state enum to its user-facing label (R4.8). */
-function returnStateLabel(state: string): string {
-  return state.replace(/_/g, ' ');
 }
 
 const styles = StyleSheet.create({

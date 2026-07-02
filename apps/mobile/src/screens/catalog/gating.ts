@@ -39,8 +39,12 @@ export function liveSectionFor(category: ExperienceCategory): LiveSection {
       return 'showtimes'; // R7.3
     case 'Restaurant':
       return 'dining'; // R7.4
+    case 'Tour':
+    case 'Recreation':
+    case 'Spa':
+    case 'Event':
     case 'Other':
-      return 'none'; // R7.1
+      return 'none'; // R7.1 — no live operational section for these categories
     default: {
       // Exhaustiveness guard: if a new category is added to the shared
       // union, this assignment fails to compile, flagging that the gating

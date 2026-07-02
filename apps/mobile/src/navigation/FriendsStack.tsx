@@ -2,6 +2,9 @@ import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import FriendsListScreen from '../screens/friends/FriendsListScreen';
+import FriendProfileScreen, {
+  type FriendProfileParams,
+} from '../screens/friends/FriendProfileScreen';
 import FriendsSearchScreen from '../screens/friends/FriendsSearchScreen';
 import InboxScreen from '../screens/share/InboxScreen';
 import ShareComposerScreen from '../screens/share/ShareComposerScreen';
@@ -25,6 +28,7 @@ import ShareComposerScreen from '../screens/share/ShareComposerScreen';
 
 export type FriendsStackParamList = {
   FriendsList: undefined;
+  FriendProfile: FriendProfileParams;
   FriendsSearch: undefined;
   ShareComposer: undefined;
   Inbox: undefined;
@@ -34,11 +38,16 @@ const Stack = createNativeStackNavigator<FriendsStackParamList>();
 
 export default function FriendsStack(): JSX.Element {
   return (
-    <Stack.Navigator>
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen
         name="FriendsList"
         component={FriendsListScreen}
-        options={{ title: 'Friends', headerShown: false }}
+        options={{ title: 'Friends' }}
+      />
+      <Stack.Screen
+        name="FriendProfile"
+        component={FriendProfileScreen}
+        options={{ title: 'Profile' }}
       />
       <Stack.Screen
         name="FriendsSearch"
