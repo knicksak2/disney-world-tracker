@@ -359,6 +359,104 @@ describe('PUT /me/experiences/:id/note', () => {
 });
 
 // ---------------------------------------------------------------------------
+// PUT /me/experiences/:id/note — shareable flag forwarding (R4.6, R4.7)
+// ---------------------------------------------------------------------------
+//
+// These tests use a purpose-built repo that records the `shareable` argument
+// (the shared `makeRepo` intentionally ignores it). They pin the route's
+// contract: the optional `shareable` field is forwarded verbatim to the repo
+// — including `undefined` when omitted — so the repo's COALESCE owns the
+// "default FALSE / preserve-on-omit" decision rather than the route.
+
+interface ShareableCall {
+  readonly body: string;
+  readonly shareable: boolean | undefined;
+}
+
+function makeShareableRepo(): {
+  repo: NoteRepo;
+  calls: ShareableCall[];
+} {
+  const calls: ShareableCall[] = [];
+  const repo: NoteRepo = {
+    async upsertNote(userId, experienceId, body, shareable) {
+      calls.push({ body, shareable });
+      return {
+        userId,
+        experienceId,
+        body,
+        shareable: shareable ?? false,
+        updatedAt: '2024-06-01T12:00:00.000Z',
+      };
+    },
+    async deleteNote() {
+      return true;
+    },
+    async getNote() {
+      return null;
+    },
+  };
+  return { repo, calls };
+}
+
+describe('PUT /me/experiences/:id/note — shareable flag (R4.6, R4.7)', () => {
+  it('forwards undefined when shareable is omitted so the repo defaults a new Note to private', async () => {
+    const { repo, calls } = makeShareableRepo();
+    const app = Fastify({ logger: false });
+    registerErrorHandler(app);
+    await app.register(noteRoutes({ repo, requireSession }));
+    await app.ready();
+
+    const response = await app.inject({
+      method: 'PUT',
+      url: `/me/experiences/${EXPERIENCE_ID}/note`,
+      headers: { 'x-test-user-id': USER_ID, 'content-type': 'application/json' },
+      payload: { body: 'no flag supplied' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(calls).toEqual([{ body: 'no flag supplied', shareable: undefined }]);
+  });
+
+  it('forwards shareable:true so an explicitly shared Note persists', async () => {
+    const { repo, calls } = makeShareableRepo();
+    const app = Fastify({ logger: false });
+    registerErrorHandler(app);
+    await app.register(noteRoutes({ repo, requireSession }));
+    await app.ready();
+
+    const response = await app.inject({
+      method: 'PUT',
+      url: `/me/experiences/${EXPERIENCE_ID}/note`,
+      headers: { 'x-test-user-id': USER_ID, 'content-type': 'application/json' },
+      payload: { body: 'share me', shareable: true },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(calls).toEqual([{ body: 'share me', shareable: true }]);
+    expect((response.json() as NoteDTO).shareable).toBe(true);
+  });
+
+  it('forwards shareable:false so a Note can be made private again', async () => {
+    const { repo, calls } = makeShareableRepo();
+    const app = Fastify({ logger: false });
+    registerErrorHandler(app);
+    await app.register(noteRoutes({ repo, requireSession }));
+    await app.ready();
+
+    const response = await app.inject({
+      method: 'PUT',
+      url: `/me/experiences/${EXPERIENCE_ID}/note`,
+      headers: { 'x-test-user-id': USER_ID, 'content-type': 'application/json' },
+      payload: { body: 'hide me', shareable: false },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(calls).toEqual([{ body: 'hide me', shareable: false }]);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // DELETE /me/experiences/:id/note
 // ---------------------------------------------------------------------------
 

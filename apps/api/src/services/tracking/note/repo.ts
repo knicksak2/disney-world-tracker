@@ -46,6 +46,7 @@ interface NoteRow {
   user_id: string;
   experience_id: string;
   body: string;
+  shareable: boolean;
   updated_at: Date;
 }
 
@@ -66,11 +67,17 @@ export interface NoteRepo {
    * The body is persisted verbatim; trimming is the responsibility of the
    * route layer so the validation rule "1..2000 after trim" (R5.2) is
    * applied before any database round-trip.
+   *
+   * The optional `shareable` flag controls Friend visibility (R4.6, R4.7).
+   * When omitted it defaults to `FALSE` on first write (a new Note is
+   * private by default) and preserves the prior stored value on edit, so a
+   * caller editing only the body never silently flips the flag.
    */
   upsertNote(
     userId: string,
     experienceId: string,
     body: string,
+    shareable?: boolean,
   ): Promise<NoteDTO>;
 
   /**
@@ -98,8 +105,8 @@ export interface NoteRepo {
  */
 export function createNoteRepo(pool: DbPool): NoteRepo {
   return {
-    upsertNote: (userId, experienceId, body) =>
-      upsertNote(pool, userId, experienceId, body),
+    upsertNote: (userId, experienceId, body, shareable) =>
+      upsertNote(pool, userId, experienceId, body, shareable),
     deleteNote: (userId, experienceId) =>
       deleteNote(pool, userId, experienceId),
     getNote: (userId, experienceId) => getNote(pool, userId, experienceId),
@@ -116,22 +123,36 @@ export function createNoteRepo(pool: DbPool): NoteRepo {
  * write so a "save" and "edit" both refresh the timestamp; this matches
  * the design's `NoteDTO.updatedAt` semantics ("most recent save/edit").
  *
+ * The `shareable` flag is bound as a single parameter (`$4`) that is either
+ * the caller-supplied boolean or `null` when omitted. `COALESCE` then makes
+ * the "preserve on omit" rule a property of the SQL rather than of handler
+ * discipline:
+ *   - On INSERT (first write), `COALESCE($4, FALSE)` writes the supplied
+ *     value or `FALSE`, so a brand-new Note is private by default (R4.6).
+ *   - On CONFLICT (edit), `COALESCE($4, notes.shareable)` writes the
+ *     supplied value or keeps the previously stored flag, so editing only
+ *     the body never flips visibility (R4.7).
+ *
  * Validates: R5.1 (one note per user/experience via PK), R5.3 (create on
- * absent), R5.4 (replace on present), R5.5 (create on edit-when-absent).
+ * absent), R5.4 (replace on present), R5.5 (create on edit-when-absent),
+ * R4.6/R4.7 (shareable default and preserve-on-omit).
  */
 async function upsertNote(
   pool: DbPool,
   userId: string,
   experienceId: string,
   body: string,
+  shareable?: boolean,
 ): Promise<NoteDTO> {
   const result = await pool.query<NoteRow>(
-    `INSERT INTO notes (user_id, experience_id, body, updated_at)
-       VALUES ($1, $2, $3, now())
+    `INSERT INTO notes (user_id, experience_id, body, shareable, updated_at)
+       VALUES ($1, $2, $3, COALESCE($4, FALSE), now())
      ON CONFLICT (user_id, experience_id)
-       DO UPDATE SET body = EXCLUDED.body, updated_at = now()
-     RETURNING user_id, experience_id, body, updated_at`,
-    [userId, experienceId, body],
+       DO UPDATE SET body = EXCLUDED.body,
+                     shareable = COALESCE($4, notes.shareable),
+                     updated_at = now()
+     RETURNING user_id, experience_id, body, shareable, updated_at`,
+    [userId, experienceId, body, shareable ?? null],
   );
   const row = result.rows[0];
   if (!row) {
@@ -182,7 +203,7 @@ async function getNote(
   experienceId: string,
 ): Promise<NoteDTO | null> {
   const result = await pool.query<NoteRow>(
-    `SELECT user_id, experience_id, body, updated_at
+    `SELECT user_id, experience_id, body, shareable, updated_at
        FROM notes
       WHERE user_id = $1 AND experience_id = $2`,
     [userId, experienceId],
@@ -205,6 +226,7 @@ function rowToDTO(row: NoteRow): NoteDTO {
     userId: row.user_id,
     experienceId: row.experience_id,
     body: row.body,
+    shareable: row.shareable,
     updatedAt: row.updated_at.toISOString(),
   };
 }

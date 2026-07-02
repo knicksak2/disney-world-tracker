@@ -562,12 +562,30 @@ function buildPgMemDatabase(): IMemoryDb {
  */
 async function applyMigration(db: IMemoryDb): Promise<void> {
   const here = dirname(fileURLToPath(import.meta.url));
-  // test/smoke/harness.ts → ../../migrations/0001_init.sql
-  const migrationPath = resolve(here, '..', '..', 'migrations', '0001_init.sql');
-  let sql = readFileSync(migrationPath, 'utf8');
-  // Strip the two GIN trigram indexes (`USING gin (... gin_trgm_ops)`).
-  sql = sql.replace(/CREATE INDEX[^;]+USING gin[^;]+;/gms, '');
-  db.public.none(sql);
+  // Apply the full migration chain (0001 → 0004) in order so the harness
+  // schema matches production: 0002 adds image columns, 0003 adds the note
+  // `shareable` flag, and 0004 reshapes `experiences` for the Disney sources
+  // (nullable park, area_type + enrichment columns, expanded category /
+  // area_type CHECKs, dropped image_attribution) plus the new resorts /
+  // experience_menus / catalog_id_bridge tables. The seeded category set
+  // (`EXPERIENCE_CATEGORIES` from @dwt/shared) now includes the expanded
+  // taxonomy, so only the 0004 category CHECK admits values like `Tour`.
+  const migrations = [
+    '0001_init.sql',
+    '0002_experience_images.sql',
+    '0003_note_shareable.sql',
+    '0004_disney_sources.sql',
+    '0006_experience_land.sql',
+  ];
+  for (const name of migrations) {
+    const migrationPath = resolve(here, '..', '..', 'migrations', name);
+    let sql = readFileSync(migrationPath, 'utf8');
+    // Strip the GIN trigram indexes (`USING gin (... gin_trgm_ops)`); pg-mem
+    // does not ship the `gin_trgm_ops` operator class. Only 0001 declares
+    // any, but the strip is harmless on the others.
+    sql = sql.replace(/CREATE INDEX[^;]+USING gin[^;]+;/gms, '');
+    db.public.none(sql);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -668,6 +686,10 @@ function buildHarnessConfig(): AppConfig {
       secret: 'harness-session-secret-must-be-at-least-32-chars',
     },
     themeparks: { baseUrl: 'https://api.themeparks.example.invalid/v1' },
+    disney: {
+      syncGateway: { baseUrl: 'https://sync-gw.example.invalid/park-platform-pub/' },
+      credentials: { username: 'harness-user', password: 'harness-pass' },
+    },
   };
 }
 

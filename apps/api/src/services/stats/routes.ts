@@ -53,7 +53,7 @@ import {
 
 import type { DbPool } from '../../db/pool.js';
 import { AppError } from '../../errors/AppError.js';
-import { pair as canonicalPair } from '../friends/canonicalPair.js';
+import { assertOwnerOrFriend } from '../friends/ownerOrFriend.js';
 import { computePercent } from './computePercent.js';
 import type { StatsCell, StatsRepo, StatsSnapshot } from './repo.js';
 
@@ -327,40 +327,6 @@ function buildParkCategoryRecord(
 /** Stable key for the `byParkAndCategory` map. */
 function parkCategoryKey(park: Park, category: ExperienceCategory): string {
   return `${park}|${category}`;
-}
-
-// ---------------------------------------------------------------------------
-// Authorization
-// ---------------------------------------------------------------------------
-
-/**
- * Owner-or-friend gate (R7.4 path applied to Stats per the task brief).
- * When the requester is the target, returns immediately. Otherwise, runs
- * exactly one friendship lookup against the canonical pair and throws
- * `profile_forbidden` on absence.
- *
- * As with `assertOwnerOrFriend` in `auth/profileRoutes.ts`, this function
- * deliberately performs no logging on the deny path so R7.8's "no
- * analytics on deny" rule holds. The eventual `info`-level log emitted by
- * the global error hook is the standard error-response log, not a
- * viewing-attempt analytics record.
- */
-async function assertOwnerOrFriend(
-  pool: DbPool,
-  requesterId: string,
-  targetId: string,
-): Promise<void> {
-  if (requesterId === targetId) return;
-
-  const { lo, hi } = canonicalPair(requesterId, targetId);
-  const result = await pool.query<{ exists: boolean }>(
-    'SELECT EXISTS (SELECT 1 FROM friendships WHERE user_lo_id = $1 AND user_hi_id = $2) AS exists',
-    [lo, hi],
-  );
-  const exists = result.rows[0]?.exists === true;
-  if (!exists) {
-    throw new AppError('profile_forbidden', 'You may not view these stats.');
-  }
 }
 
 // ---------------------------------------------------------------------------

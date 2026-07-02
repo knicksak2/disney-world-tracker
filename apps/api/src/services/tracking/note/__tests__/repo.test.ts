@@ -86,7 +86,131 @@ describe('createNoteRepo.upsertNote', () => {
       updatedAt: '2024-06-01T12:00:00.000Z',
     });
     expect(pool.calls).toHaveLength(1);
-    expect(pool.calls[0]?.params).toEqual([USER_ID, EXPERIENCE_ID, 'rad ride']);
+    expect(pool.calls[0]?.params).toEqual([
+      USER_ID,
+      EXPERIENCE_ID,
+      'rad ride',
+      null,
+    ]);
+  });
+});
+
+describe('createNoteRepo.upsertNote — shareable write path (R4.6, R4.7)', () => {
+  // The repo encodes the "default private / preserve-on-omit" rule entirely
+  // in SQL: it binds `shareable ?? null` to $4 and lets `COALESCE($4, FALSE)`
+  // (insert) / `COALESCE($4, notes.shareable)` (conflict) decide the stored
+  // value. These tests pin both halves: the bound parameter and the COALESCE
+  // expressions that consume it.
+
+  it('binds null for $4 and uses COALESCE so a new Note defaults to FALSE when shareable is omitted', async () => {
+    const updatedAt = new Date('2024-06-01T12:00:00.000Z');
+    const pool = makePool((call) => {
+      // The insert branch defaults an omitted flag to FALSE.
+      expect(call.text).toContain('COALESCE($4, FALSE)');
+      return {
+        rows: [
+          {
+            user_id: USER_ID,
+            experience_id: EXPERIENCE_ID,
+            body: 'new note',
+            shareable: false,
+            updated_at: updatedAt,
+          },
+        ],
+      };
+    });
+    const repo = createNoteRepo(pool as unknown as DbPool);
+
+    const dto = await repo.upsertNote(USER_ID, EXPERIENCE_ID, 'new note');
+
+    // $4 is null (not `false`) so the SQL COALESCE — not the caller — decides
+    // the default, keeping insert (FALSE) and edit (preserve) behavior in SQL.
+    expect(pool.calls[0]?.params[3]).toBeNull();
+    expect(dto.shareable).toBe(false);
+  });
+
+  it('binds true for $4 so an explicit shareable:true persists', async () => {
+    const updatedAt = new Date('2024-06-01T12:00:00.000Z');
+    const pool = makePool(() => ({
+      rows: [
+        {
+          user_id: USER_ID,
+          experience_id: EXPERIENCE_ID,
+          body: 'shared note',
+          shareable: true,
+          updated_at: updatedAt,
+        },
+      ],
+    }));
+    const repo = createNoteRepo(pool as unknown as DbPool);
+
+    const dto = await repo.upsertNote(USER_ID, EXPERIENCE_ID, 'shared note', true);
+
+    expect(pool.calls[0]?.params).toEqual([
+      USER_ID,
+      EXPERIENCE_ID,
+      'shared note',
+      true,
+    ]);
+    expect(dto.shareable).toBe(true);
+  });
+
+  it('binds false for $4 so an explicit shareable:false persists', async () => {
+    const updatedAt = new Date('2024-06-01T12:00:00.000Z');
+    const pool = makePool(() => ({
+      rows: [
+        {
+          user_id: USER_ID,
+          experience_id: EXPERIENCE_ID,
+          body: 'made private',
+          shareable: false,
+          updated_at: updatedAt,
+        },
+      ],
+    }));
+    const repo = createNoteRepo(pool as unknown as DbPool);
+
+    const dto = await repo.upsertNote(
+      USER_ID,
+      EXPERIENCE_ID,
+      'made private',
+      false,
+    );
+
+    expect(pool.calls[0]?.params[3]).toBe(false);
+    expect(dto.shareable).toBe(false);
+  });
+
+  it('binds null for $4 and uses COALESCE(..., notes.shareable) so editing without shareable preserves the prior value', async () => {
+    // Simulate an edit (ON CONFLICT) that keeps a previously-stored
+    // shareable=true: the caller omits the flag, $4 is null, and the conflict
+    // branch's COALESCE($4, notes.shareable) keeps the existing value, which
+    // the rigged RETURNING row reflects.
+    const updatedAt = new Date('2024-06-03T09:15:00.000Z');
+    const pool = makePool((call) => {
+      expect(call.text).toContain('COALESCE($4, notes.shareable)');
+      return {
+        rows: [
+          {
+            user_id: USER_ID,
+            experience_id: EXPERIENCE_ID,
+            body: 'edited body only',
+            shareable: true, // preserved prior value, not flipped to FALSE
+            updated_at: updatedAt,
+          },
+        ],
+      };
+    });
+    const repo = createNoteRepo(pool as unknown as DbPool);
+
+    const dto = await repo.upsertNote(
+      USER_ID,
+      EXPERIENCE_ID,
+      'edited body only',
+    );
+
+    expect(pool.calls[0]?.params[3]).toBeNull();
+    expect(dto.shareable).toBe(true);
   });
 });
 

@@ -500,6 +500,146 @@ describe('POST /auth/logout', () => {
 });
 
 // ---------------------------------------------------------------------------
+// POST /auth/change-password
+// ---------------------------------------------------------------------------
+
+describe('POST /auth/change-password', () => {
+  const currentPassword = 'correctpass1234';
+  let currentHash: string | undefined;
+
+  async function ensureCurrentHash(): Promise<string> {
+    if (!currentHash) {
+      const { hash } = await import('../password.js');
+      currentHash = await hash(currentPassword);
+    }
+    return currentHash;
+  }
+
+  it('updates the hash, revokes other sessions, and returns 204 on success (R6.13, R6.16)', async () => {
+    const passwordHash = await ensureCurrentHash();
+    const pool = makePool((call) => {
+      if (call.text.startsWith('SELECT password_hash FROM users')) {
+        return { rows: [{ password_hash: passwordHash }] };
+      }
+      return { rows: [] };
+    });
+    const { app } = await buildApp({
+      pool,
+      requireSession: makeRequireSession({ userId: 'user-1' }),
+    });
+
+    const bearer = 'opaquesessiontokenABCDEFG';
+    const newPassword = 'brand-new-passw0rd';
+    const response = await app.inject({
+      method: 'POST',
+      url: '/auth/change-password',
+      headers: {
+        authorization: `Bearer ${bearer}`,
+        'x-test-user-id': 'user-1',
+      },
+      payload: { currentPassword, newPassword },
+    });
+
+    expect(response.statusCode).toBe(204);
+
+    // Password was updated with a fresh Argon2id hash, not the plaintext.
+    const update = pool.calls.find((c) => c.text.includes('UPDATE users SET password_hash'));
+    expect(update).toBeDefined();
+    expect(typeof update!.params[0]).toBe('string');
+    expect(String(update!.params[0])).toMatch(/^\$argon2id\$/);
+    expect(update!.params[0]).not.toBe(newPassword);
+    expect(update!.params[1]).toBe('user-1');
+
+    // Other sessions (everything except the caller's current token) revoked.
+    const revoke = pool.calls.find(
+      (c) => c.text.includes('UPDATE sessions') && c.text.includes('token_hash <>'),
+    );
+    expect(revoke).toBeDefined();
+    expect(revoke!.params[0]).toBe('user-1');
+    expect(revoke!.params[1]).toBe(hashToken(bearer));
+
+    // Wrapped in a transaction.
+    expect(pool.calls.some((c) => c.text === 'BEGIN')).toBe(true);
+    expect(pool.calls.some((c) => c.text === 'COMMIT')).toBe(true);
+
+    // The plaintext never appears in any captured SQL parameter.
+    for (const call of pool.calls) {
+      for (const param of call.params) {
+        expect(param).not.toBe(newPassword);
+        expect(param).not.toBe(currentPassword);
+      }
+    }
+  });
+
+  it('returns 401 invalid_credentials when the current password is wrong, leaving the hash untouched (R6.14)', async () => {
+    const passwordHash = await ensureCurrentHash();
+    const pool = makePool((call) => {
+      if (call.text.startsWith('SELECT password_hash FROM users')) {
+        return { rows: [{ password_hash: passwordHash }] };
+      }
+      return { rows: [] };
+    });
+    const { app } = await buildApp({
+      pool,
+      requireSession: makeRequireSession({ userId: 'user-1' }),
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/auth/change-password',
+      headers: {
+        authorization: 'Bearer some-token',
+        'x-test-user-id': 'user-1',
+      },
+      payload: { currentPassword: 'wrong-current-pass', newPassword: 'brand-new-passw0rd' },
+    });
+
+    expect(response.statusCode).toBe(401);
+    const body = response.json() as { error: { code: string } };
+    expect(body.error.code).toBe('invalid_credentials');
+    expect(pool.calls.some((c) => c.text.includes('UPDATE users SET password_hash'))).toBe(false);
+  });
+
+  it('returns 400 validation_failed when the new password is too short (R6.15)', async () => {
+    const pool = makePool(() => ({ rows: [] }));
+    const { app } = await buildApp({
+      pool,
+      requireSession: makeRequireSession({ userId: 'user-1' }),
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/auth/change-password',
+      headers: {
+        authorization: 'Bearer some-token',
+        'x-test-user-id': 'user-1',
+      },
+      payload: { currentPassword: 'correctpass1234', newPassword: 'short' },
+    });
+
+    expect(response.statusCode).toBe(400);
+    const body = response.json() as { error: { code: string; field?: string } };
+    expect(body.error.code).toBe('validation_failed');
+    expect(body.error.field).toBe('newPassword');
+    // Bailed before touching the database.
+    expect(pool.calls.some((c) => c.text.includes('UPDATE users'))).toBe(false);
+  });
+
+  it('returns 401 unauthorized when no session is attached', async () => {
+    const pool = makePool(() => ({ rows: [] }));
+    const { app } = await buildApp({ pool });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/auth/change-password',
+      payload: { currentPassword: 'correctpass1234', newPassword: 'brand-new-passw0rd' },
+    });
+
+    expect(response.statusCode).toBe(401);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // GET /me
 // ---------------------------------------------------------------------------
 

@@ -186,7 +186,7 @@ async function handleGet(
  * write `updatedAt` so the client can render the saved-time indicator
  * without an extra round-trip.
  *
- * Validates: R5.1, R5.2, R5.3, R5.4, R5.5, R5.10
+ * Validates: R5.1, R5.2, R5.3, R5.4, R5.5, R5.10, R4.6, R4.7
  */
 async function handlePut(
   opts: NoteRoutesOptions,
@@ -195,12 +195,14 @@ async function handlePut(
 ): Promise<NoteDTO> {
   const userId = requireUserId(request);
   const { id: experienceId } = parseInput(notePathSchema, request.params);
-  const { body } = parseInput(noteInputSchema, request.body);
+  const { body, shareable } = parseInput(noteInputSchema, request.body);
 
   // The shared schema already trimmed the body; pass the parsed value
   // straight through to the repo so the DB stores exactly what the
-  // validation rule observed.
-  return opts.repo.upsertNote(userId, experienceId, body);
+  // validation rule observed. `shareable` is forwarded as-is (including
+  // `undefined` when omitted) so the repo's COALESCE preserves the prior
+  // flag on edit and defaults a new Note to private (R4.6, R4.7).
+  return opts.repo.upsertNote(userId, experienceId, body, shareable);
 }
 
 /**

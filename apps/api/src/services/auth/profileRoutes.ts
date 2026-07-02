@@ -44,7 +44,7 @@ import {
 
 import type { DbPool } from '../../db/pool.js';
 import { AppError } from '../../errors/AppError.js';
-import { pair as canonicalPair } from '../friends/canonicalPair.js';
+import { assertOwnerOrFriend } from '../friends/ownerOrFriend.js';
 import { computePercent } from '../stats/computePercent.js';
 import {
   MAX_AVATAR_BYTES,
@@ -163,40 +163,6 @@ function toProfileDTO(row: ProfileRow, overallCompletionPercent: number): Profil
     avatarUrl: row.avatar_url,
     overallCompletionPercent,
   };
-}
-
-/**
- * Owner-or-friend authorization gate (R7.4 + R7.8). When the requester is
- * the owner, returns immediately. Otherwise, performs **exactly one**
- * friendship lookup using the canonical-pair invariant of the friendships
- * table; on absence, throws `profile_forbidden` without emitting any log,
- * analytics, or audit event.
- *
- * The function intentionally does not log anything itself — not even at
- * debug level — to satisfy R7.8's "SHALL NOT log, track, or otherwise
- * record the viewing attempt for analytics purposes." The deny path's
- * eventual `info` log line in the global error hook is unavoidable
- * operational logging of error responses, which is distinct from the
- * "viewing attempt analytics" R7.8 forbids; the line carries only the
- * error code, no requester or target identity beyond what the error hook
- * already includes.
- */
-async function assertOwnerOrFriend(
-  pool: DbPool,
-  requesterId: string,
-  ownerId: string,
-): Promise<void> {
-  if (requesterId === ownerId) return;
-
-  const { lo, hi } = canonicalPair(requesterId, ownerId);
-  const result = await pool.query<{ exists: boolean }>(
-    'SELECT EXISTS (SELECT 1 FROM friendships WHERE user_lo_id = $1 AND user_hi_id = $2) AS exists',
-    [lo, hi],
-  );
-  const exists = result.rows[0]?.exists === true;
-  if (!exists) {
-    throw new AppError('profile_forbidden', 'You may not view this profile.');
-  }
 }
 
 /**

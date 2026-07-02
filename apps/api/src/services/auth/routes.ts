@@ -36,7 +36,7 @@ import type {
 import { ZodError, type z } from 'zod';
 
 import type { ErrorCode } from '@dwt/shared';
-import { loginInputSchema, registerInputSchema } from '@dwt/shared';
+import { changePasswordInputSchema, loginInputSchema, registerInputSchema } from '@dwt/shared';
 
 import type { DbPool } from '../../db/pool.js';
 import { AppError } from '../../errors/AppError.js';
@@ -148,6 +148,12 @@ export function authRoutes(options: AuthRoutesOptions): FastifyPluginAsync {
       '/auth/logout',
       { preHandler: options.requireSession },
       (request, reply) => handleLogout(options, request, reply),
+    );
+
+    app.post(
+      '/auth/change-password',
+      { preHandler: options.requireSession },
+      (request, reply) => handleChangePassword(options, request, reply),
     );
 
     app.get(
@@ -405,6 +411,120 @@ async function handleLogout(
   // 204 No Content matches the design's "terminate session" semantic — there
   // is no useful body to return. Setting the status explicitly so Fastify's
   // empty-body handling does not fall back to 200.
+  reply.code(204);
+  reply.send();
+}
+
+/**
+ * `POST /auth/change-password` — change the caller's password.
+ *
+ * The `requireSession` pre-handler has already authenticated the request and
+ * set `request.userId`. The handler then:
+ *
+ *   1. Validates the body (`currentPassword`, `newPassword`) against the
+ *      shared `changePasswordInputSchema`.
+ *   2. Loads the caller's current Argon2id hash and verifies the supplied
+ *      `currentPassword` against it. A mismatch returns `invalid_credentials`
+ *      (401) — the same code login uses — so a stolen session token alone
+ *      cannot rotate the password without also knowing the existing one.
+ *   3. Hashes `newPassword` with Argon2id and writes it to
+ *      `users.password_hash`.
+ *   4. Revokes every *other* session for the user: changing a password is a
+ *      credential-rotation event (R6.16), so any session that may have been
+ *      opened by an attacker is terminated. The caller's current session is
+ *      preserved so they are not logged out of the device they just used to
+ *      make the change.
+ *
+ * Returns 204 No Content on success. The new password never leaves the
+ * Argon2id helper and is never logged or returned.
+ *
+ * Validates: Requirements R6.13, R6.14, R6.15, R6.16.
+ */
+async function handleChangePassword(
+  opts: AuthRoutesOptions,
+  request: FastifyRequest,
+  reply: FastifyReply,
+): Promise<void> {
+  if (!request.userId) {
+    throw new AppError('unauthorized', 'Authentication required.');
+  }
+
+  const input = parseInput(changePasswordInputSchema, request.body);
+
+  const userResult = await opts.pool.query<{ password_hash: string }>(
+    `SELECT password_hash FROM users WHERE id = $1`,
+    [request.userId],
+  );
+  const userRow = userResult.rows[0];
+  if (!userRow) {
+    // The session authenticated but the user no longer exists; treat as
+    // unauthorized rather than 500 — the token no longer maps to an account.
+    throw new AppError('unauthorized', 'Session is no longer valid.');
+  }
+
+  const currentOk = await verifyPassword(
+    userRow.password_hash,
+    input.currentPassword,
+  );
+  if (!currentOk) {
+    // Same code/shape as a failed login so the wrong-current-password path
+    // is indistinguishable from any other credential failure.
+    throw new AppError('invalid_credentials', 'Current password is incorrect.');
+  }
+
+  const newPasswordHash = await hashPassword(input.newPassword);
+
+  // The bearer token of the session that authorized this request. Used to
+  // preserve the current session while revoking every other one.
+  const currentToken = extractBearerToken(request);
+  const currentTokenHash =
+    currentToken !== null ? hashToken(currentToken) : null;
+
+  const client = await opts.pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    await client.query(
+      `UPDATE users SET password_hash = $1 WHERE id = $2`,
+      [newPasswordHash, request.userId],
+    );
+
+    // Revoke all of the user's other live sessions. A password change is a
+    // credential-rotation event, so any session opened with the old
+    // credentials is terminated; the caller's current session is kept so
+    // they are not logged out of the device they just used.
+    if (currentTokenHash !== null) {
+      await client.query(
+        `UPDATE sessions
+            SET revoked_at = now()
+          WHERE user_id = $1
+            AND token_hash <> $2
+            AND revoked_at IS NULL`,
+        [request.userId, currentTokenHash],
+      );
+    } else {
+      await client.query(
+        `UPDATE sessions
+            SET revoked_at = now()
+          WHERE user_id = $1
+            AND revoked_at IS NULL`,
+        [request.userId],
+      );
+    }
+
+    await client.query('COMMIT');
+  } catch (err) {
+    try {
+      await client.query('ROLLBACK');
+    } catch {
+      // The rollback failure is structured-logged by the pool; surface the
+      // original cause.
+    }
+    throw err;
+  } finally {
+    client.release();
+  }
+
   reply.code(204);
   reply.send();
 }

@@ -50,6 +50,10 @@ import {
   type CompletionRoutesOptions,
 } from './services/tracking/completion/routes.js';
 import {
+  friendCompletionsRoutes,
+  type FriendCompletionsRoutesOptions,
+} from './services/tracking/friendCompletions/routes.js';
+import {
   noteRoutes,
   type NoteRoutesOptions,
 } from './services/tracking/note/routes.js';
@@ -61,8 +65,6 @@ import {
   leaderboardRoutes,
   type LeaderboardRoutesOptions,
 } from './services/aggregate/leaderboardRoutes.js';
-import { liveRoutes } from './services/live/routes.js';
-import type { LiveService } from './services/live/service.js';
 import type { RatingChangedEvent } from './services/aggregate/ratingChangedQueue.js';
 
 /**
@@ -128,17 +130,6 @@ export interface BuildServerServices {
    */
   readonly leaderboard?: LeaderboardRoutesOptions;
   /**
-   * Live_Service route (task 8.2). Wires `GET /catalog/:experienceId/live`
-   * against a {@link LiveService} orchestrator produced by
-   * `createLiveService({ repo, cache, client })` in
-   * `services/live/service.ts`. The service owns the resolve → cache →
-   * fetch → stale-fallback decision; the route is a thin HTTP boundary on
-   * top of it. Tests pass an in-memory implementation satisfying the same
-   * `LiveService` interface so the route layer can be exercised without
-   * Postgres, Redis, or the upstream live endpoint.
-   */
-  readonly live?: LiveService;
-  /**
    * Tracking_Service route options. Each tracking sub-domain
    * (`completion`, `rating`, `note`) is opt-in so a focused unit-test
    * harness can wire only the routes it needs.
@@ -160,6 +151,13 @@ export interface BuildServerServices {
     readonly rating?: RatingRoutesOptions;
     /** Note routes (task 10.3). */
     readonly note?: NoteRoutesOptions;
+    /**
+     * Friend Completions read route (task 4.1, Friend Stats Viewing).
+     * Wires `GET /users/:userId/completions` behind the shared
+     * owner-or-friend rule. Opt-in like the other tracking sub-domains
+     * so focused unit tests can register only the routes they need.
+     */
+    readonly friendCompletions?: FriendCompletionsRoutesOptions;
     /**
      * Emitter used by the rating repo to publish
      * `RatingChanged{experienceId, oldValue, newValue}` events on every
@@ -376,10 +374,6 @@ export function buildServer(
     void app.register(leaderboardRoutes(services.leaderboard));
   }
 
-  if (services.live !== undefined) {
-    void app.register(liveRoutes({ live: services.live }));
-  }
-
   if (services.tracking?.completion !== undefined) {
     void app.register(completionRoutes(services.tracking.completion));
   }
@@ -390,6 +384,12 @@ export function buildServer(
 
   if (services.tracking?.note !== undefined) {
     void app.register(noteRoutes(services.tracking.note));
+  }
+
+  if (services.tracking?.friendCompletions !== undefined) {
+    void app.register(
+      friendCompletionsRoutes(services.tracking.friendCompletions),
+    );
   }
 
   return app;

@@ -71,9 +71,9 @@ import {
 import { createCatalogRepo } from './services/catalog/repo.js';
 import { decideCatalogRead } from './services/catalog/readDecision.js';
 import { runSync } from './services/catalog/sync.js';
-import { createThemeParksClient } from './services/catalog/themeparks.js';
 
 import { createCompletionRepo } from './services/tracking/completion/repo.js';
+import { createFriendCompletionsRepo } from './services/tracking/friendCompletions/repo.js';
 import { createNoteRepo } from './services/tracking/note/repo.js';
 import {
   createRatingRepo,
@@ -85,8 +85,13 @@ import { createLeaderboard } from './services/aggregate/leaderboard.js';
 
 import { createLiveCache } from './services/live/cache.js';
 import { createLiveRepo } from './services/live/repo.js';
-import { createLiveService } from './services/live/service.js';
-import { createThemeParksLiveClient } from './services/live/themeparksLive.js';
+import { createThemeParksLiveClient } from './services/live/themeParksLiveClient.js';
+import { createThemeParksLiveService } from './services/live/themeParksLiveService.js';
+import { createThemeParksDirectory } from './services/live/themeParksDirectory.js';
+import { createThemeParksClient } from './services/catalog/themeparks.js';
+import { createFacilitiesClient } from './services/catalog/disney/facilitiesClient.js';
+import { createDisneyTransport } from './services/catalog/disney/transport.js';
+import { createRedisRateLimiter } from './services/catalog/disney/rateLimiter.js';
 
 import { createFriendsRepo } from './services/friends/repo.js';
 import { createSharingRepo } from './services/sharing/repo.js';
@@ -158,6 +163,7 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
 
   const catalogRepo = createCatalogRepo(pool);
   const completionRepo = createCompletionRepo(pool);
+  const friendCompletionsRepo = createFriendCompletionsRepo(pool);
   const noteRepo = createNoteRepo(pool);
   const ratingRepo = createRatingRepo({ pool, emitRatingChanged });
   const friendsRepo = createFriendsRepo(pool);
@@ -174,15 +180,26 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
     redis: redis as never,
   });
 
-  // --- Live_Service wiring -------------------------------------------
-  // The live read path shares exactly one piece of relational state with
-  // the catalog path (`experiences.upstream_entity_id`, read-only via the
-  // live repo) and reuses the same Redis instance as the leaderboard cache
-  // for its short-lived Live_Cache. The upstream live client takes the same
-  // `AppConfig.themeparks.baseUrl` as the catalog client. The orchestrator
-  // owns the resolve → cache → fetch → stale-fallback decision.
-  const themeparksLiveClient = createThemeParksLiveClient({
+  // --- Live_Service wiring (ThemeParks.wiki source) ------------------
+  // The live read path shares exactly one piece of relational state with the
+  // catalog path (`experiences.upstream_entity_id`, read-only via the live
+  // repo — which holds the Experience's `Enterprise_Id`) and reuses the same
+  // Redis instance as the leaderboard cache for its short-lived Live_Cache.
+  // The ThemeParks.wiki live client talks ONLY to ThemeParks.wiki (never a
+  // Disney source, R11.10/R12.3), built from `AppConfig.themeparks`. The
+  // orchestrator owns the resolve → cache → fetch → stale-fallback decision and
+  // projects via the ThemeParks.wiki live projection keyed by Enterprise_Id
+  // (R11.1), which equals the ThemeParks.wiki `External_Id` (R11.2).
+  const themeParksLiveClient = createThemeParksLiveClient({
     baseUrl: config.themeparks.baseUrl,
+  });
+  // Resolve an Experience's Enterprise_Id to the ThemeParks.wiki entity id
+  // (a GUID) required by the live endpoint: the live feed is keyed by the
+  // entity id, not by its `externalId`, so the join (externalId == Enterprise_Id,
+  // R11.2) is performed by enumerating the WDW destination's entities. The
+  // directory is cached (12h) so this costs one enumeration, not one per read.
+  const themeParksDirectory = createThemeParksDirectory({
+    client: createThemeParksClient({ baseUrl: config.themeparks.baseUrl }),
   });
   // The Live_Cache accepts the same narrow structural Redis interface as the
   // leaderboard cache; ioredis's many `set` overloads are not assignable to
@@ -191,10 +208,35 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
   // satisfied by the real client.
   const liveCache = createLiveCache(redis as never);
   const liveRepo = createLiveRepo(pool);
-  const liveService = createLiveService({
+  const liveService = createThemeParksLiveService({
     repo: liveRepo,
     cache: liveCache,
-    client: themeparksLiveClient,
+    client: themeParksLiveClient,
+    resolveEntityId: (enterpriseId) =>
+      themeParksDirectory.resolveEntityId(enterpriseId),
+  });
+
+  // --- Disney egress: shared Rate_Limiter + Transport + Facilities_Client ---
+  // Every Disney HTTP call (the Catalog_Sync facilities channel + demand-driven
+  // Menu_Service reads) must draw from ONE authoritative Request_Budget across
+  // every process sharing the egress IP (R2.4). At the composition root we have
+  // a real Redis client, so we wire the Redis-backed Rate_Limiter (rather than
+  // the per-call in-process default `runSync`/`runOrJoinSync` would otherwise
+  // build) so the budget is shared cluster-wide. The shared Disney_Transport
+  // owns User-Agent injection, lease-before-dispatch pacing, and retry/backoff;
+  // the Facilities_Client is built on top and injected into the on-read
+  // `runSync` call below so the composed limiter/transport are used.
+  const disneyRateLimiter = createRedisRateLimiter(config.disney.requestBudget, {
+    redis,
+  });
+  const disneyTransport = createDisneyTransport({
+    limiter: disneyRateLimiter,
+    backoff: config.disney.backoff,
+  });
+  const facilitiesClient = createFacilitiesClient({
+    transport: disneyTransport,
+    baseUrl: config.disney.syncGateway.baseUrl,
+    credentials: config.disney.credentials,
   });
 
   // --- Auth wiring ----------------------------------------------------
@@ -205,15 +247,15 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
   });
 
   // --- Catalog read-decision (real opportunistic-sync path) -----------
-  // The themeparks client + sync orchestrator are wired so the catalog
+  // The Disney Facilities_Client + sync orchestrator are wired so the catalog
   // read endpoints trigger a real opportunistic sync when the cache is
   // stale (R1.11), serve the prior cache with `staleCache: true` on
   // timeout/upstream error (R1.13), and 503 when no prior cache exists
   // and upstream is unreachable (R1.24). `runSync` owns the Redis NX lock
-  // that prevents duplicate concurrent syncs (R1.10).
-  const themeparksClient = createThemeParksClient({
-    baseUrl: config.themeparks.baseUrl,
-  });
+  // that prevents duplicate concurrent syncs (R1.10). The composed
+  // Facilities_Client (shared Disney_Transport + Redis-backed Rate_Limiter) is
+  // injected so the authoritative cluster-wide Request_Budget is used rather
+  // than the per-call in-process default `runSync` would otherwise build.
   const decideRead = (): ReturnType<typeof decideCatalogRead> =>
     decideCatalogRead({
       repo: {
@@ -225,9 +267,13 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
       sync: {
         async runOrJoinSync() {
           const result = await runSync({
-            client: themeparksClient,
             repo: catalogRepo,
             redis,
+            client: facilitiesClient,
+            // The opportunistic on-read refresh fires precisely because the
+            // cache age already exceeded the freshness interval (R9.3); it must
+            // bypass the scheduled-run freshness guard (R9.2).
+            trigger: 'on_read',
           });
           // `decideCatalogRead` treats a rejected sync as the
           // timeout/error branch. A `skipped` (lock held) result means a
@@ -248,17 +294,30 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
       listActiveExperiences: (filters) =>
         catalogRepo.listActiveExperiences(filters),
       getExperience: (id) => catalogRepo.getExperience(id),
+      getMenusFor: (id) => catalogRepo.getMenusFor(id),
+      listActiveResorts: () => catalogRepo.listActiveResorts(),
+      listDestinationCounts: () => catalogRepo.listDestinationCounts(),
+      // ThemeParks.wiki-sourced Live_Detail served through the catalog
+      // plugin's `/catalog/:experienceId/live` route, keyed by the Experience's
+      // Enterprise_Id (R11.1), which equals the ThemeParks.wiki External_Id
+      // (R11.2). Contacts only ThemeParks.wiki, never a Disney source
+      // (R11.10, R12.3).
+      getLiveDetail: (id) => liveService.getLiveDetail(id),
     },
     friends: { repo: friendsRepo, requireSession: sessionMiddleware },
     sharing: { repo: sharingRepo, requireSession: sessionMiddleware },
     stats: { repo: statsRepo, pool, requireSession: sessionMiddleware },
     aggregate: { repo: aggregateRepo },
     leaderboard: { service: leaderboardService },
-    live: liveService,
     tracking: {
       completion: { repo: completionRepo, requireSession: sessionMiddleware },
       rating: { repo: ratingRepo, requireSession: sessionMiddleware },
       note: { repo: noteRepo, requireSession: sessionMiddleware },
+      friendCompletions: {
+        repo: friendCompletionsRepo,
+        pool,
+        requireSession: sessionMiddleware,
+      },
     },
     // Always set `{}` so the gateway rate limiter (Redis-backed default
     // budgets) applies uniformly across every service route. The

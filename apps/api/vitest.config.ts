@@ -27,6 +27,14 @@ export default defineConfig({
   test: {
     include: ['src/**/*.{test,spec}.ts', 'test/**/*.{test,spec}.ts'],
     exclude: ['**/node_modules/**', '**/dist/**'],
+    // Several suites drive the production SQL through an in-memory Postgres
+    // (`pg-mem`) and rebuild a freshly-migrated database on every property-test
+    // iteration (numRuns: 100). Under full file-level parallelism on slower or
+    // loaded machines those legitimately exceed vitest's 5s/10s defaults, so
+    // give tests and setup hooks generous headroom. This changes only the
+    // tolerance for slow runs, never test behavior or coverage.
+    testTimeout: 30_000,
+    hookTimeout: 30_000,
     server: {
       deps: {
         // Inline the workspace package so its zod import is transformed by
