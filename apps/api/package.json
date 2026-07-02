@@ -14,8 +14,10 @@
     "test": "vitest --run",
     "migrate": "tsx --env-file-if-exists=.env src/db/migrate.ts",
     "migrate:cloud": "tsx --env-file=.env.dev src/db/migrate.ts",
+    "build-bridge": "tsx --env-file=.env src/scripts/buildBridge.ts",
+    "build-bridge:cloud": "tsx --env-file=.env.dev src/scripts/buildBridge.ts",
     "sync": "tsx --env-file=.env src/scripts/runSync.ts",
-    "source-images": "tsx --env-file=.env src/scripts/sourceImages.ts"
+    "sync:cloud": "tsx --env-file=.env.dev src/scripts/runSync.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.620.0",

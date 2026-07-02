@@ -126,6 +126,7 @@ Responsible for registration, login, logout, sessions, lockout, and Profile.
 | POST | `/auth/register` | Create User + Profile + session | RFC 5322 email, 1–50 char display name, 8–128 char password (R6.1, R6.4) |
 | POST | `/auth/login` | Establish session | Increments failed counter on bad creds; rejects if locked out (R6.5–R6.7) |
 | POST | `/auth/logout` | Invalidate session | Marks session row revoked; subsequent requests 401 (R6.8, R6.9) |
+| POST | `/auth/change-password` | Change password | Requires session; re-verifies current password, rehashes new password, revokes other sessions (R6.13–R6.16) |
 | GET | `/me` | Current User + Profile | Requires session |
 | PATCH | `/me/profile` | Update display name | 1–50 chars after trim; whitespace-only rejected (R7.2, R7.6) |
 | PUT | `/me/profile/avatar` | Upload avatar | PNG/JPEG, ≤ 5 MB, content-type and magic-byte sniffed (R7.3, R7.7) |
@@ -135,6 +136,7 @@ Responsible for registration, login, logout, sessions, lockout, and Profile.
 
 - On registration, hash password with Argon2id and a per-record random salt. Store the encoded hash string only.
 - On login, fetch hash by email (constant-time email lookup), verify with Argon2id. Failed attempts increment a Redis counter keyed `lockout:{userId}`. On the 5th failure within 15 minutes, set a Redis lock `locked:{userId}` with 15-minute TTL; subsequent logins return account-locked until the key expires.
+- On password change, the request must carry a valid session. The Auth_Service re-verifies the supplied current password against the stored Argon2id hash (a mismatch returns `invalid_credentials` so a stolen session token alone cannot rotate the password), validates the new password against the 8–128 character rule, and writes a fresh Argon2id hash. In the same transaction it revokes every other session for the User (credential-rotation event, R6.16) while preserving the session that made the change so the User is not logged out of the device they just used.
 - Plaintext passwords are never logged, never persisted, and never returned in any response. The DTO type does not expose a `password` field after registration.
 
 **Session lifecycle:**

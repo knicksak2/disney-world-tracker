@@ -46,6 +46,14 @@ services:
         sync: false
       - key: S3_SECRET_ACCESS_KEY
         sync: false
+      # Disney Sync Gateway HTTP Basic Static_Credentials. Required — the API
+      # fails fast at startup without them. Obtain locally with
+      # `node tools/pull-disney-creds.mjs` and paste the values here (secrets,
+      # not committed). Re-set if Disney rotates them.
+      - key: DISNEY_SYNC_GATEWAY_USERNAME
+        sync: false
+      - key: DISNEY_SYNC_GATEWAY_PASSWORD
+        sync: false
       - key: THEMEPARKS_BASE_URL
         value: https://api.themeparks.wiki/v1
       # 256-bit session signing secret — generated once by Render and kept stable.

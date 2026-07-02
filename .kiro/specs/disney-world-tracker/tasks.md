@@ -299,6 +299,12 @@ flowchart LR
     - Validate inputs with shared Zod schemas, hash with Argon2id, issue session token on success, return 409 `email_in_use` on duplicate (DB unique violation translated)
     - On logout, set `revoked_at = now()` on the session row
     - _Requirements: R6.1, R6.2, R6.3, R6.4, R6.5, R6.6, R6.8, R6.9_
+  - [x] 6.3.1 Implement password change route
+    - Add `POST /auth/change-password` to `apps/api/src/services/auth/routes.ts`, gated by the session pre-handler
+    - Add shared `changePasswordInputSchema` (`currentPassword`, `newPassword`; both validated by the 8-128 char `passwordSchema`)
+    - Re-verify the current password against the stored Argon2id hash (mismatch → `invalid_credentials`); rehash and persist the new password with Argon2id
+    - In one transaction, revoke all other sessions for the user (`revoked_at = now()` where `token_hash <> current`) while preserving the calling session; return 204
+    - _Requirements: R6.13, R6.14, R6.15, R6.16_
   - [x] 6.4 Implement Redis-backed lockout counter and lock
     - Create `apps/api/src/services/auth/lockout.ts` with `recordFailure(userId)`, `isLocked(userId)`, `clearOnSuccess(userId)`
     - Use Redis keys `lockout:{userId}` (15-minute sliding window, 5 failures threshold) and `locked:{userId}` (15-minute TTL); reject all logins while `locked:{userId}` exists
@@ -596,7 +602,14 @@ flowchart LR
   - [x] 15.3 Implement avatar upload
     - Use `expo-image-picker` to capture or pick PNG/JPEG up to 5 MB
     - Validate format and size client-side before upload; show `avatar_invalid` from server on rejection
+    - Mount `AvatarUpload` in `ProfileScreen` self-mode and update the cached `ProfileDTO` on success so the new avatar renders without a refetch
     - _Requirements: R7.3, R7.7_
+  - [x] 15.4 Implement change-password control on Profile (client surface for 6.3.1)
+    - Create `apps/mobile/src/screens/ChangePasswordControl.tsx`: a collapsible current/new/confirm form mounted in `ProfileScreen` self-mode that submits `POST /auth/change-password`
+    - Validate client-side against the shared `changePasswordInputSchema` (both passwords 8-128) and that the two new entries match before any request leaves the device; clear plaintext from state on success (R6.11 hygiene)
+    - Map `invalid_credentials` to a "current password is incorrect" message and `validation_failed` to the length message; on 204 collapse the form and show a confirmation noting other devices were signed out
+    - Add RNTL tests in `apps/mobile/src/screens/__tests__/ChangePasswordControl.test.tsx` covering expand/collapse, mismatch and length validation, the happy-path call shape + success collapse, and the `invalid_credentials` / `validation_failed` mappings
+    - _Requirements: R6.13, R6.14, R6.15, R6.16_
 
 - [x] 16. Mobile catalog
   - [x] 16.1 Implement Catalog list screen with Park grouping and category/park filters
@@ -745,7 +758,7 @@ flowchart LR
     { "id": 10, "tasks": ["8.6", "8.7", "7.3", "7.4", "12.2", "12.3", "12.4", "12.5"] },
     { "id": 11, "tasks": ["13.1", "13.2", "13.3", "13.4"] },
     { "id": 12, "tasks": ["14.1", "14.2", "14.3"] },
-    { "id": 13, "tasks": ["15.1", "15.2", "15.3"] },
+    { "id": 13, "tasks": ["15.1", "15.2", "15.3", "15.4"] },
     { "id": 14, "tasks": ["16.1", "16.2", "16.3"] },
     { "id": 15, "tasks": ["17.1", "17.2", "17.3", "17.4"] },
     { "id": 16, "tasks": ["18.1", "18.2", "18.3", "19.1"] },

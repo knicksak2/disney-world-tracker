@@ -1,6 +1,13 @@
 # Disney World Tracker
 
-A mobile app for tracking Walt Disney World experiences (attractions, shows, restaurants, parades, character meets, and more), backed by a Fastify API and a shared TypeScript package. Catalog data is sourced from the public [ThemeParks.wiki](https://api.themeparks.wiki/v1) API.
+A mobile app for tracking Walt Disney World experiences (attractions, shows, restaurants, parades, character meets, and more) and checking live wait times, show times, Lightning Lane state, and boarding groups, backed by a Fastify API and a shared TypeScript package.
+
+Data is sourced along a **data-by-change-rate** split:
+
+- **Static catalog data** (descriptive fields, resorts/hotels, imagery, menus, coordinates, facets, area/park hierarchy) — low change rate, available only from Disney — comes from Disney's internal sources: the Couchbase **Sync Gateway** and the public dining **Menu Service**.
+- **Live data** (status, standby & single-rider waits, forecast, showtimes, operating hours, walk-up dining, Lightning Lane price/coarse state, boarding groups) — high change rate, stable, third-party-maintained — comes from the public [ThemeParks.wiki](https://api.themeparks.wiki/v1) API.
+
+All Disney access is funneled through a single hardened transport (shared rate limit, bounded backoff with jitter, `Retry-After` handling, and Akamai/WAF-vs-auth failure classification); the catalog sync is incremental (a persisted `_changes` checkpoint + a durable local document store), fetches menus lazily, and runs on an infrequent (≥24h) cadence. See [Data sources & resilience](#data-sources--resilience).
 
 ## Repository Layout
 
@@ -8,7 +15,7 @@ This repository is an npm workspaces monorepo with three packages:
 
 | Path | Description |
 | --- | --- |
-| `apps/api` | Node.js + Fastify backend (TypeScript). Hosts the seven service modules — Auth, Catalog, Tracking, Stats, Friends, Sharing, Aggregate Ratings — plus BullMQ background workers. Talks to PostgreSQL, Redis, and an S3-compatible object store. |
+| `apps/api` | Node.js + Fastify backend (TypeScript). Hosts the eight service modules — Auth, Catalog, Live, Tracking, Stats, Friends, Sharing, Aggregate Ratings — plus BullMQ background workers. Talks to PostgreSQL, Redis, and an S3-compatible object store. |
 | `apps/mobile` | React Native + TypeScript client built with Expo. Targets iOS and Android. |
 | `packages/shared` | Shared DTOs, Zod validation schemas, error code catalog, and enums consumed by both `apps/api` and `apps/mobile`. Imported as `@dwt/shared`. |
 
@@ -17,6 +24,7 @@ This repository is an npm workspaces monorepo with three packages:
 - **Node.js 22 or 24** (LTS). The version is pinned in `.nvmrc` (24) — run `nvm use` to match it. The engines floor is Node 22; the API's `dev` script relies on Node's built-in `--env-file` flag (Node 20.6+).
 - **npm 10+** (ships with Node 22/24)
 - **Docker Desktop** (or any Docker engine + Compose v2) for the Postgres / Redis / MinIO stack
+- **Disney Sync Gateway credentials** (`DISNEY_SYNC_GATEWAY_USERNAME` / `_PASSWORD`). The API fails fast at startup without them. Pull them into `apps/api/.env` with `node tools/pull-disney-creds.mjs` (see [Disney credentials](#disney-credentials)).
 - For the mobile app: **Expo Go** on your phone, or Xcode (iOS) / Android Studio with an emulator
 
 ## Quickstart — Run Everything Locally
@@ -45,10 +53,14 @@ Then bring up the stack and start the apps:
 
 ```bash
 docker compose up -d                 # start Postgres, Redis, MinIO
+node tools/pull-disney-creds.mjs     # write Disney Sync Gateway creds into apps/api/.env
 npm run migrate                      # apply database migrations
+npm run sync --workspace apps/api    # seed the catalog from Disney (first run; see below)
 npm run dev:api                      # terminal 1: Fastify API on :3000
 npm run dev:mobile                   # terminal 2: Expo dev server
 ```
+
+> **Seed the catalog first.** The initial catalog load is a full "bootstrap" sync of several thousand Disney documents. The on-read opportunistic refresh only races that against a 5-second read deadline, so a cold `GET /catalog` would return `503 catalog_unavailable` while the sync finishes in the background. Running `npm run sync` (from `apps/api`) once up front populates the cache so the app has data immediately. After that, syncs are incremental.
 
 Three terminals total once everything is running:
 1. Docker (in the background)
@@ -58,6 +70,34 @@ Three terminals total once everything is running:
 When the Expo server prints a QR code, scan it with the Expo Go app on your phone, or press `i` for the iOS simulator / `a` for the Android emulator.
 
 The mobile app resolves its API URL automatically: local `expo start` runs default to `http://10.0.2.2:3000` (the Android emulator), while production builds target the hosted Render API. You only need `apps/mobile/.env.local` to override the local target (iOS simulator or a physical phone); see [Mobile `dev` script](#mobile-dev-script). Restart Metro after changing it.
+
+> **Local vs hosted services.** The commands above run the API against the local Docker stack (`apps/api/.env`). To point it at managed cloud services (Neon / Upstash / Cloudflare R2) instead, use the `:cloud` variants — `npm run dev:api:cloud` and `npm run migrate:cloud` — which read `apps/api/.env.dev`. See [Two environments: local vs hosted dev](#two-environments-local-vs-hosted-dev).
+
+## First-Run Behavior
+
+A few things to expect on the very first request:
+
+- **Catalog seeding.** The catalog is sourced from Disney's Sync Gateway. On a fresh database run `npm run sync` (from `apps/api`) once to bootstrap it — see the note in [Quickstart](#quickstart--run-everything-locally). The on-read refresh keeps it fresh afterward (a read past the 24h freshness window kicks off an incremental background sync). If Disney is blocked/unreachable and a prior cache exists, the API keeps serving the cached catalog with a staleness indicator; only a first-ever failure with no prior cache returns `503 catalog_unavailable`.
+- **Live data.** Live details (waits, showtimes, Lightning Lane, boarding groups) are fetched on demand from ThemeParks.wiki and cached in Redis for 5 minutes — no catalog sync needed. The first live request builds a small entity directory (Enterprise_Id → ThemeParks id) from ThemeParks.wiki and caches it for 12h.
+- **Disney credentials.** The API refuses to start if `DISNEY_SYNC_GATEWAY_USERNAME` / `_PASSWORD` are missing or blank. Run `node tools/pull-disney-creds.mjs` to populate them.
+- **Argon2 native build.** On first `npm install`, the `argon2` package compiles a small native module. On Windows this needs the Visual Studio Build Tools with the "Desktop development with C++" workload. macOS / Linux users typically have this for free.
+- **MinIO bucket creation.** The `minio-init` container runs once on first `docker compose up`, creates the `avatars` bucket, and exits. You'll see it as `Exited (0)` in `docker compose ps` — that's normal. It re-runs idempotently on subsequent `up` commands.
+
+## Smoke Testing the Stack
+
+After `docker compose up -d` and `npm run migrate`, with the API running on `:3000`:
+
+```bash
+# After `npm run sync`, this returns the catalog; before seeding it may 503.
+curl http://localhost:3000/catalog
+
+# Register a user.
+curl -X POST http://localhost:3000/auth/register \
+  -H "content-type: application/json" \
+  -d '{"email":"test@example.com","password":"longenoughpw","displayName":"Test"}'
+```
+
+If both succeed, the API is talking to Postgres and Redis correctly. The mobile app can then reach the same endpoints.
 
 ## What Each Piece Does
 
@@ -88,9 +128,19 @@ The MinIO console is at http://localhost:9001 (login: `dwt-minio-admin` / `dwt-m
 
 The API never reads `process.env` directly outside its config loader, so every backend setting lives in an env file. The `.env.example` template ships with values that match `docker-compose.yml` — just copy it to `.env` (see [Quickstart](#quickstart--run-everything-locally)). The real `.env` is gitignored.
 
-Required keys: `DATABASE_URL`, `REDIS_URL`, `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `SESSION_SECRET` (32+ chars), `THEMEPARKS_BASE_URL`. See `apps/api/.env.example` for descriptions.
+Required keys: `DATABASE_URL`, `REDIS_URL`, `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `SESSION_SECRET` (32+ chars), and the Disney Sync Gateway `Static_Credentials` `DISNEY_SYNC_GATEWAY_USERNAME` / `DISNEY_SYNC_GATEWAY_PASSWORD` (startup fails fast if either is blank). `THEMEPARKS_BASE_URL` (live source) and `DISNEY_SYNC_GATEWAY_BASE_URL` (static source) default to the documented public endpoints. See `apps/api/.env.example` for descriptions.
 
-Optional keys: `WIKI_CONTACT` — a contact email or project URL used only by the image-sourcing job (`npm run source-images`); see [Experience Images](#experience-images). Not needed to run the API server.
+Optional Disney resilience-tuning keys (all have sane defaults): `DISNEY_MAX_RPS`, `DISNEY_MAX_CONCURRENCY` (shared Request_Budget), `DISNEY_BACKOFF_*` (bounded backoff), `MENU_FRESHNESS_MS` (lazy-menu cache window), and `CATALOG_SYNC_INTERVAL_MS` (scheduled cadence, floored at 24h). Override only if you have a reason to.
+
+#### Disney credentials
+
+The Sync Gateway requires HTTP Basic `Static_Credentials`. The supported way to obtain/refresh them is the credential-pull tool, which decodes them and writes only the two `DISNEY_SYNC_GATEWAY_*` lines into `apps/api/.env` (never printing the values; `.env` is gitignored):
+
+```bash
+node tools/pull-disney-creds.mjs
+```
+
+Re-run it if Disney rotates the credentials. A `waf_block` outcome in the sync-run history means Disney's edge (Akamai) throttled the shared egress IP (transient, retried); an `auth_failure` means the credentials are invalid/expired — re-pull them.
 
 #### Two environments: local vs hosted dev
 
@@ -162,7 +212,23 @@ Find your LAN IP with `ipconfig` (Windows) or `ifconfig` / `ip a` (macOS / Linux
 
 Because the value is read at Expo startup, restart Metro after editing `.env.local`.
 
-#### Android emulator: connecting over localhost (recommended)
+#### One-off override
+
+To override without editing the file, set `API_BASE_URL` inline for a single run:
+
+```bash
+# macOS / Linux
+API_BASE_URL=http://192.168.1.50:3000 npm run dev:mobile
+
+# Windows PowerShell
+$env:API_BASE_URL="http://192.168.1.50:3000"; npm run dev:mobile
+
+# Windows cmd
+set API_BASE_URL=http://192.168.1.50:3000 && npm run dev:mobile
+```
+
+<details>
+<summary><strong>Troubleshooting: Android emulator can't connect to Metro</strong></summary>
 
 By default Expo advertises a **LAN** URL (e.g. `exp://192.168.1.154:8081`). Expo Go running inside an Android emulator often can't reach your machine's LAN address — usually because Windows Defender Firewall blocks Node on port `8081` — so the app never connects back to Metro. The symptom in the Expo terminal is:
 
@@ -215,20 +281,7 @@ If you'd rather keep the **LAN** URL (e.g. to also test on a physical phone over
 
 > The app's API base URL is independent of how Metro connects: in local dev it defaults to `http://10.0.2.2:3000` (the emulator's route to the host), overridable via `API_BASE_URL` in `apps/mobile/.env.local`. Make sure `npm run dev:api` is running so the app has a backend to talk to.
 
-#### One-off override
-
-To override without editing the file, set `API_BASE_URL` inline for a single run:
-
-```bash
-# macOS / Linux
-API_BASE_URL=http://192.168.1.50:3000 npm run dev:mobile
-
-# Windows PowerShell
-$env:API_BASE_URL="http://192.168.1.50:3000"; npm run dev:mobile
-
-# Windows cmd
-set API_BASE_URL=http://192.168.1.50:3000 && npm run dev:mobile
-```
+</details>
 
 ## Repo-Wide Scripts
 
@@ -247,86 +300,39 @@ All from the repo root.
 | `npm run build` | Builds every workspace's `build` script. |
 | `npm run build:shared` | Builds just the shared package. |
 
-## Experience Images
+### Catalog operational scripts (`apps/api`)
 
-The mobile app shows an image for every Experience — a thumbnail in the catalog list and a hero image on the detail screen. Because the ThemeParks.wiki catalog upstream exposes **no imagery**, images are sourced and stored separately from the catalog sync.
+Run these from `apps/api` (they read `apps/api/.env`):
 
-### How it works
+| Command | What it does |
+| --- | --- |
+| `npm run sync` | Triggers one immediate Catalog_Sync now (bootstrap on first run, incremental thereafter), reconciling the result into the cache. Coordinated by the same Redis lock as the scheduled/on-read syncs, so concurrent runs are safe. Use it to seed a fresh DB or force a refresh. |
+| `npm run sync:cloud` | Same as `sync`, but against your **hosted** services (reads `apps/api/.env.dev`). Use it to seed or refresh the catalog in the hosted Neon database from your machine — the hosted API has no unattended seed step (see [Updating a running deployment](#updating-a-running-deployment)). |
+| `npm run build-bridge` | One-time identity Bridge_Map build: maps each Disney `Enterprise_Id` to the internal id derived during the ThemeParks.wiki era, preserving id continuity across the source migration. Only needed when migrating an existing catalog. |
 
-- The `experiences` table has `image_url` and `image_attribution` columns (migration `0002_experience_images.sql`). These are **not** written by the catalog sync, so a curated image survives every catalog refresh.
-- A standalone job, `npm run source-images` (run from `apps/api`), fills each Experience's image using a layered lookup, taking the first hit:
-  1. **Curated override** — an entry in [`src/scripts/imageOverrides.json`](apps/api/src/scripts/imageOverrides.json) keyed by Experience name. The escape hatch for anything the automated lookup misses: you pick the URL by hand and it always wins.
-  2. **Wikipedia article** — finds a matching article and uses its lead image, accepted only when the page title confidently matches the name.
-  3. **Wikimedia Commons** — searches [Commons](https://commons.wikimedia.org) for a photo file. Commons holds photos for far more attractions, restaurants, and shows than there are Wikipedia articles, so this is the biggest coverage source. A file is accepted only when its filename confidently matches and it's a raster photo (logos/PDFs/audio are filtered out).
-  4. **Park-level fallback** *(opt-in, `--park-fallback`)* — uses the park's own photo so the row still shows a real image instead of a placeholder.
-- "Confident match" accepts a candidate when token similarity clears a threshold **or** one name's meaningful tokens are a subset of the other's (ignoring filler like "the", "of", "Disney"). This matches partial names like "Soarin'" → "Soarin' Around the World" without guessing a wrong photo.
-- Where every layer misses, the row keeps `image_url = NULL` and the app renders a **category-colored placeholder** with the category glyph — so coverage is always 100% visually, even when photo coverage isn't.
+## Experience images
 
-> Note: Images are sourced from Wikimedia (freely licensed, attribution preserved), **not** scraped from Disney's website — Disney's images are copyrighted and their site's terms prohibit scraping.
+Every Experience and Resort can show an image — a thumbnail in the catalog list and a hero image on the detail screen. Imagery is now **sourced directly from Disney** as part of the catalog: each Facility document carries `detailImageUrl` / `listImageUrl`, and the catalog sync writes the preferred one to `experiences.image_url` (and `resorts.image_url`). No separate image-sourcing job, curated overrides, or third-party (Wikimedia) lookup is involved — that pipeline, its `imageOverrides.json`, the `source-images` command, and the `image_attribution` column were retired when catalog sourcing moved to Disney.
 
-### Curating images by hand
+When an item has no Disney image URL, the row keeps `image_url = NULL` and the app renders a **category-colored placeholder** with the category glyph, so coverage is always 100% visually.
 
-For anything the automated lookup can't find (or finds a poor photo for), add an entry to `apps/api/src/scripts/imageOverrides.json`. Keys are Experience names (matched case-insensitively, punctuation ignored); values are a URL string or an object with `url` + `attribution`:
+## Data sources & resilience
 
-```json
-{
-  "Tiana's Bayou Adventure": "https://upload.wikimedia.org/.../image.jpg",
-  "Space Mountain": {
-    "url": "https://upload.wikimedia.org/.../space_mountain.jpg",
-    "attribution": "Space Mountain — Wikimedia Commons (CC BY-SA)."
-  }
-}
-```
+The catalog and live paths are deliberately split (see the intro) and Disney access is hardened so a sync burst can't again trip Disney's edge protection.
 
-Use freely-licensed images (a Wikimedia Commons file URL works well) and keep the attribution accurate. Keys starting with `__` are ignored, so the file's `__comment`/`__example` entries aren't applied. Overrides always win over the automated lookup.
+### Static catalog (Disney)
 
-### Running the job
+- **Single shared transport.** Every Disney request (Sync Gateway + Menu Service) flows through one `Disney_Transport` that owns the shared **Request_Budget** rate limiter (Redis-backed across processes, in-process fallback), bounded **exponential backoff with jitter** honoring `Retry-After`, the required `User-Agent` headers, and failure **classification** — an Akamai/WAF "Access Denied" `403`/`429` is a transient `waf_block` (retried), distinct from a genuine `auth_failure` (fatal, fail fast).
+- **Incremental sync.** `Catalog_Sync` persists a `_changes` **checkpoint** and a durable local **document store** (`disney_documents`). The first run is a full `Bootstrap_Sync`; subsequent runs are `Delta_Sync`s that fetch only changed documents. Reconciliation reads the active document set from the store, not a fresh full enumeration.
+- **Lazy menus & infrequent cadence.** Restaurant menus are fetched on demand and cached (not fetched during sync); the scheduled sync runs no more than once per 24h, with an on-read opportunistic refresh past the freshness window.
+- **Graceful degradation.** A Disney block or credential rotation leaves the prior cache byte-identical and keeps serving it with a staleness indicator; only a first-ever failure with no prior cache returns `503 catalog_unavailable`. Every run records an outcome (`success | waf_block | auth_failure | network | invalid_response | aborted`) in the sync-run history.
 
-```bash
-cd apps/api
+### Live data (ThemeParks.wiki)
 
-npm run source-images -- --dry-run         # preview matches without writing
-npm run source-images                      # fill rows missing an image
-npm run source-images -- --force           # re-source every active row
-npm run source-images -- --park-fallback   # also use a park photo for misses
-npm run source-images -- --overrides path.json   # use a custom overrides file
-```
+- Live details come from ThemeParks.wiki's `/entity/{id}/live` feed, joined to the catalog by matching the Experience's Disney `Enterprise_Id` to the ThemeParks.wiki `externalId`. Because the live endpoint is keyed by ThemeParks.wiki's own entity id (a GUID), the API resolves `Enterprise_Id → entity id` via a cached directory (built from the WDW destination's entities, refreshed every 12h) before fetching.
+- Beyond status, waits, forecast, showtimes, hours, and walk-up dining, ThemeParks.wiki uniquely provides single-rider wait **minutes**, **Lightning Lane** price + coarse return-window state, and **boarding-group** status — all surfaced in the app's ride live section. The live path never contacts a Disney source, so it stays fully functional even while Disney is blocked.
+- Entities ThemeParks.wiki doesn't track (e.g. some resort dining) resolve to no live data and degrade to "live unavailable" — there is no Disney live fallback (that path is retired).
 
-The job is idempotent: without `--force` it only fills rows where `image_url IS NULL`. It requires network access and a populated catalog (run `npm run migrate` and let the catalog sync first). The closing line reports a per-source breakdown, e.g. `1 override, 40 wikipedia, 73 commons, 0 park-fallback, 12 skipped`.
-
-### `WIKI_CONTACT` and rate limiting
-
-Wikimedia's [User-Agent policy](https://meta.wikimedia.org/wiki/User-Agent_policy) requires requests to send a descriptive User-Agent that includes a way to contact you; traffic using a placeholder User-Agent is throttled (HTTP 429) or blocked. Set `WIKI_CONTACT` in `apps/api/.env` to an email or project URL:
-
-```dotenv
-WIKI_CONTACT=https://github.com/<you>/<repo>
-```
-
-The job warns at startup if it's unset. It also removes browser-only CORS params and honors `Retry-After` with exponential backoff, so occasional throttling during a large run is handled gracefully rather than erroring out.
-
-## First-Run Behavior
-
-A few things to expect on the very first request:
-
-- **Empty catalog.** The Catalog service syncs from ThemeParks.wiki on first read when the cache is older than 24 hours. The first `GET /catalog` triggers a sync; give it a few seconds. If the upstream is unreachable and there's no prior cache, the API returns `503 catalog_unavailable` rather than serving stale empty data.
-- **Argon2 native build.** On first `npm install`, the `argon2` package compiles a small native module. On Windows this needs the Visual Studio Build Tools with the "Desktop development with C++" workload. macOS / Linux users typically have this for free.
-- **MinIO bucket creation.** The `minio-init` container runs once on first `docker compose up`, creates the `avatars` bucket, and exits. You'll see it as `Exited (0)` in `docker compose ps` — that's normal. It re-runs idempotently on subsequent `up` commands.
-
-## Smoke Testing the Stack
-
-After `docker compose up -d` and `npm run migrate`, with the API running on `:3000`:
-
-```bash
-# Should return an empty list initially (catalog sync runs in background).
-curl http://localhost:3000/catalog
-
-# Register a user.
-curl -X POST http://localhost:3000/auth/register \
-  -H "content-type: application/json" \
-  -d '{"email":"test@example.com","password":"longenoughpw","displayName":"Test"}'
-```
-
-If both succeed, the API is talking to Postgres and Redis correctly. The mobile app can then reach the same endpoints.
 
 ## Deploying the API (Render)
 
@@ -342,7 +348,7 @@ The API deploys to [Render](https://render.com) as a free Web Service, defined a
 
 1. Push to the `develop` branch (the branch `render.yaml` auto-deploys).
 2. In Render: **New +** → **Blueprint** → select this repo. Render reads `render.yaml`.
-3. Fill in the secret env vars it prompts for (these are `sync: false` in the blueprint): `DATABASE_URL`, `REDIS_URL`, `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`. `SESSION_SECRET` is auto-generated; `NODE_ENV` and `THEMEPARKS_BASE_URL` are preset.
+3. Fill in the secret env vars it prompts for (these are `sync: false` in the blueprint): `DATABASE_URL`, `REDIS_URL`, `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, and the Disney Sync Gateway `DISNEY_SYNC_GATEWAY_USERNAME` / `DISNEY_SYNC_GATEWAY_PASSWORD` (the API won't boot without the Disney credentials — obtain them locally with `node tools/pull-disney-creds.mjs` and paste the values). `SESSION_SECRET` is auto-generated; `NODE_ENV` and `THEMEPARKS_BASE_URL` are preset.
 4. Render runs the build (`npm ci` → build shared → build API → apply migrations), then starts the server. The health check is `GET /health`. (Migrations run in the build step because Render's free tier doesn't support a separate pre-deploy command; they're idempotent, so they're skipped when already applied.)
 
 The deployed URL looks like `https://dwt-api.onrender.com` — this is also the default the mobile app targets in production builds (see [How the API base URL is chosen](#how-the-api-base-url-is-chosen)). If you rename the Render service, set `PROD_API_BASE_URL` in the mobile app to match.
@@ -352,6 +358,65 @@ The deployed URL looks like `https://dwt-api.onrender.com` — this is also the 
 ### Testing against hosted services from your machine
 
 Before (or instead of) deploying, you can run the API or migrations locally against the hosted services using `apps/api/.env.dev` — see [Two environments: local vs hosted dev](#two-environments-local-vs-hosted-dev). For example, `npm run migrate:cloud` applies the schema to Neon from your machine; Render's build-step migration then finds them already applied and skips them.
+
+## Updating a running deployment
+
+Once everything is live, an update flows through three independent tracks — the API/backend, the hosted catalog data, and the mobile app. Only the ones you actually changed need attention.
+
+### 1. API + schema (Render, automatic on push)
+
+Render auto-deploys the `dwt-api` service on every push to the **`develop`** branch. There is no separate deploy command:
+
+```bash
+git checkout develop
+git add -A && git commit -m "..."   # your changes
+git push origin develop             # Render picks it up and rebuilds
+```
+
+The build step re-runs the whole chain — `npm ci` → build `@dwt/shared` → build the API → **`npm run migrate`** — so:
+
+- **Shared-package changes** (`packages/shared`) ship automatically; the API build rebuilds `@dwt/shared` before compiling, so no extra step.
+- **New migrations** in `apps/api/migrations/` are applied against Neon during the build (idempotent — already-applied files are skipped). You don't run migrations by hand for a deploy.
+- **New/changed env vars:** if your change reads a new secret, add it in the **Render dashboard first** (Environment → Add), then push. Secrets are `sync: false` in `render.yaml`, so they're never in git and Render won't have them until you set them. A missing required var makes the API fail fast on boot (e.g. the Disney credentials).
+
+Watch the deploy in the Render dashboard; the health check is `GET /health`. Free-tier note still applies — the first request after idle takes 30–60s to wake.
+
+> **Managed services (Neon / Upstash / R2) need no "push."** There's nothing to deploy to them — schema changes reach Neon through the deploy's migrate step, and Upstash/R2 only hold runtime data. You only touch their dashboards to rotate credentials or resize.
+
+### 2. Hosted catalog data (manual, from your machine)
+
+The hosted API has **no unattended catalog seed** — the scheduler isn't started in the boot path, and a cold read only opportunistically refreshes. After a fresh deploy (or when you want to force a catalog refresh in production), seed Neon from your machine:
+
+```bash
+npm run migrate:cloud --workspace apps/api   # ensure schema is current (safe to re-run)
+npm run sync:cloud --workspace apps/api      # bootstrap/refresh the hosted catalog
+```
+
+`sync:cloud` reads `apps/api/.env.dev` (your hosted `DATABASE_URL` + Disney credentials) and writes into the same Neon database the deployed API reads. The first run is a full bootstrap; later runs are incremental. Live data (waits, showtimes, Lightning Lane, boarding groups) needs no sync — it's fetched on demand from ThemeParks.wiki.
+
+### 3. Mobile app (EAS build → install on phone)
+
+The app points at the hosted API in every non-local build (`API_BASE_URL=https://dwt-api.onrender.com` in `eas.json`), so once the API deploy is live the phone just needs a new build. **There is no over-the-air update path** — `expo-updates` isn't installed, so *every* JS or native change requires a full rebuild (no `eas update`).
+
+Build with EAS (needs the [EAS CLI](https://docs.expo.dev/eas/) — `npm i -g eas-cli` — and an Expo login; the project is already configured in `eas.json`, project `knicksak2s-team`):
+
+```bash
+cd apps/mobile
+eas login                                  # once
+eas build --profile preview -p android     # internal APK to sideload
+```
+
+Profiles (all target the hosted Render API):
+
+| Profile | Output | Use |
+| --- | --- | --- |
+| `development` | dev client (`developmentClient: true`) | run with a local Metro dev server |
+| `preview` | internal Android **APK** | quickest way to get a real build on your own phone |
+| `production` | store-ready build (`autoIncrement: true`) | app store submission |
+
+When the build finishes, EAS prints a URL — open it on the phone (or scan the QR) to download and install the APK. For iOS you'd use `-p ios` with an appropriate profile and Apple credentials.
+
+> Because there's no OTA channel, the sequence for a full change is: push to `develop` (API), then rebuild and reinstall the app. A backend-only change needs no rebuild; a mobile-only JS change still needs a full `eas build`.
 
 ## Tooling Conventions
 
@@ -366,3 +431,5 @@ Before (or instead of) deploying, you can run the API or migrations locally agai
 - [`.kiro/specs/disney-world-tracker/design.md`](./.kiro/specs/disney-world-tracker/design.md) — architecture and design decisions
 - [`.kiro/specs/disney-world-tracker/tasks.md`](./.kiro/specs/disney-world-tracker/tasks.md) — implementation plan
 - [`.kiro/specs/disney-world-tracker/hosting.md`](./.kiro/specs/disney-world-tracker/hosting.md) — production hosting and deployment details
+- [`.kiro/specs/disney-facilities-catalog-source/`](./.kiro/specs/disney-facilities-catalog-source/) — migration of catalog sourcing from ThemeParks.wiki to the Disney sources (facilities, resorts, menus, imagery, identity continuity)
+- [`.kiro/specs/disney-source-resilience/`](./.kiro/specs/disney-source-resilience/) — the data-by-change-rate split (static from Disney, live from ThemeParks.wiki), the hardened Disney transport, incremental checkpoint-driven sync, lazy menus, graceful degradation, and the ThemeParks.wiki live path (Lightning Lane + boarding groups)

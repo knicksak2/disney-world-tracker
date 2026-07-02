@@ -147,6 +147,10 @@ The Disney World Tracker is a mobile application that provides a comprehensive c
 10. WHILE a User does not have a valid non-expired authenticated session, THE App SHALL deny access to Completions, Ratings, Notes, Friends, and Sharing features with an unauthorized error response.
 11. THE Auth_Service SHALL store passwords only as one-way cryptographic hashes and SHALL NOT store or transmit passwords in plaintext at any time.
 12. THE Auth_Service SHALL grant access to Completions, Ratings, Notes, Friends, and Sharing features if and only if the request is associated with a valid non-expired authenticated session.
+13. WHEN an authenticated User submits a password change request providing the User's correct current password and a new password of at least 8 characters and at most 128 characters, THE Auth_Service SHALL replace the stored password hash with a hash of the new password.
+14. IF an authenticated User submits a password change request in which the supplied current password does not match the User's stored password, THEN THE Auth_Service SHALL reject the request, return an authentication error response, and leave the stored password hash unchanged.
+15. IF an authenticated User submits a password change request in which the new password is shorter than 8 or longer than 128 characters, THEN THE Auth_Service SHALL reject the request, return a validation error response indicating the failing field, and leave the stored password hash unchanged.
+16. WHEN THE Auth_Service successfully changes a User's password, THE Auth_Service SHALL invalidate all of that User's other authenticated sessions such that subsequent requests using those sessions are rejected with an unauthorized error response, while preserving the session that initiated the password change.
 
 ### Requirement 7: User Profile
 
