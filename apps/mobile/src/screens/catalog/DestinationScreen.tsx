@@ -89,7 +89,7 @@ import {
   type Section,
 } from './catalogGrouping';
 import { useDestinationSections } from './useDestinationSections';
-import { priceTierListTag } from './infoTags';
+import { priceTierListTag, resortAreaLabel } from './infoTags';
 import {
   useAccessibilityFocusOnMount,
   useResultCountAnnouncement,
@@ -157,7 +157,12 @@ export default function DestinationScreen({
   if (destination === undefined) {
     return (
       <ScreenContainer>
-        <GradientHeader title="Catalog" icon="map" />
+        <GradientHeader
+          title="Catalog"
+          icon="map"
+          onBack={() => navigation.goBack()}
+          backAccessibilityLabel="Back to catalog"
+        />
         <View style={styles.center} testID="destination-unknown">
           <EmptyState
             icon="alert-circle-outline"
@@ -239,6 +244,8 @@ function DestinationBody({
           title={destination.title}
           subtitle="Browse this destination."
           icon="map"
+          onBack={() => navigation.goBack()}
+          backAccessibilityLabel="Back to catalog"
         />
       </View>
 
@@ -806,7 +813,9 @@ interface ExperienceRowProps {
 
 /**
  * One Experience row. Shows the thumbnail (or category placeholder), the name,
- * the category badge, and — for a Restaurant with a persisted price tier — the
+ * the category badge, the Resort_Area zone tag (for a Resort-area Experience
+ * that carries one, so a resort's Experiences convey which part of the property
+ * they sit in), and — for a Restaurant with a persisted price tier — the
  * compact price-tier Info_Tag from `priceTierListTag` (R9.9), so the row and the
  * detail view present the price tier identically.
  */
@@ -828,6 +837,10 @@ function ExperienceRow({ experience, onPress }: ExperienceRowProps): JSX.Element
     ? priceTierListTag((experience.priceTier as string).trim())
     : null;
 
+  // The Resort_Area zone tag (e.g. "EPCOT Resort Area"), shown only for a
+  // Resort-area Experience that carries one.
+  const resortArea = resortAreaLabel(experience);
+
   return (
     <Card
       onPress={onPress}
@@ -844,6 +857,22 @@ function ExperienceRow({ experience, onPress }: ExperienceRowProps): JSX.Element
           <Text style={styles.rowName} numberOfLines={2}>
             {experience.name}
           </Text>
+          {resortArea !== null ? (
+            <View
+              style={styles.rowMetaLine}
+              testID={`destination-resort-area-${experience.id}`}
+            >
+              <Ionicons
+                name="location"
+                size={12}
+                color={theme.color.textSecondary}
+                style={styles.rowMetaIcon}
+              />
+              <Text style={styles.rowMeta} numberOfLines={1}>
+                {resortArea}
+              </Text>
+            </View>
+          ) : null}
           <View style={styles.rowBadges}>
             <Badge
               label={visual.label}
@@ -1040,9 +1069,22 @@ const styles = StyleSheet.create({
     ...theme.typography.subtitle,
     color: theme.color.textPrimary,
   },
+  rowMetaLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  rowMetaIcon: {
+    marginRight: 4,
+  },
+  rowMeta: {
+    ...theme.typography.meta,
+    color: theme.color.textSecondary,
+    flexShrink: 1,
+  },
   rowBadges: {
     flexDirection: 'row',
     alignSelf: 'flex-start',
+    flexWrap: 'wrap',
     gap: theme.spacing.sm,
   },
   filterRow: {

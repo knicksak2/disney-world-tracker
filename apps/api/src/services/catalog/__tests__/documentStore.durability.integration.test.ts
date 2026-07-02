@@ -218,6 +218,7 @@ describe('Document_Store durability (integration, pg-mem)', () => {
     applyMigration(db, '0004_disney_sources.sql');
     applyMigration(db, '0005_disney_source_resilience.sql');
     applyMigration(db, '0006_experience_land.sql');
+    applyMigration(db, '0007_experience_resort_area.sql');
   });
 
   afterEach(async () => {

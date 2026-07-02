@@ -262,6 +262,7 @@ function experienceUpsert(
     park: 'Magic Kingdom',
     category: 'Ride',
     land: null,
+    resortArea: null,
     description: 'plain text',
     imageUrl: null,
     areaType: 'ThemePark',
@@ -301,6 +302,7 @@ describe('Catalog repo applyReconciliation — transactional apply (pg-mem)', ()
     applyMigration(db, '0003_note_shareable.sql');
     applyMigration(db, '0004_disney_sources.sql');
     applyMigration(db, '0006_experience_land.sql');
+    applyMigration(db, '0007_experience_resort_area.sql');
   });
 
   afterEach(async () => {

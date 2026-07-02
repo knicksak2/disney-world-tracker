@@ -272,6 +272,11 @@ export interface ExperienceDetailResponse {
    * Experiences with no resolvable Land (R3.1, R3.2, R3.3).
    */
   readonly land?: string | null;
+  /**
+   * WDW Resort_Area zone for a `Resort`-area Experience, present only when
+   * persisted; `null`/absent otherwise.
+   */
+  readonly resortArea?: string | null;
 }
 
 /**
@@ -414,11 +419,14 @@ export function catalogRoutes(
         return reply;
       }
       // Attach the persisted dining menus for the detail view (R8.5). The
-      // menu read is a separate port because menus live in their own table;
-      // a missing port or a non-restaurant Experience yields no menus.
-      const menus = options.getMenusFor
-        ? await options.getMenusFor(experienceId)
-        : [];
+      // menu read is a separate port because menus live in their own table.
+      // The read is gated on `category === 'Restaurant'` so a non-restaurant
+      // detail read never triggers a Menu_Service fetch and always omits the
+      // `menus` field (R1.4); a missing port likewise yields no menus.
+      const menus =
+        options.getMenusFor && experience.category === 'Restaurant'
+          ? await options.getMenusFor(experienceId)
+          : [];
       return toDetailResponse(experience, menus);
     });
 

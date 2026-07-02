@@ -339,3 +339,177 @@ describe('decideMenuFetch (Property 10: freshness decision)', () => {
     );
   });
 });
+
+// ---------------------------------------------------------------------------
+// restaurant-menu-display Property 1: Lazy retrieval serves fresh, fetches on
+// miss/stale, and degrades on failure.
+//
+// The restaurant-menu-display feature wires this same seam into the read path.
+// Its Property 1 restates the lazy-retrieval contract against that feature's
+// acceptance criteria (R1.1 fetch-on-miss, R1.2 fetch-on-stale, R1.3
+// serve-fresh, R3.3/R3.4 serve-prior-cache-on-failure, R3.5 never-propagate).
+// It is asserted here as a single sweep over the whole cache-state space with
+// faked repo/client, independent of the disney-source-resilience tag above.
+// ---------------------------------------------------------------------------
+
+// Feature: restaurant-menu-display, Property 1: Lazy retrieval serves fresh, fetches on miss/stale, and degrades on failure
+describe('createMenuRetrieval.getMenuForRestaurant (restaurant-menu-display Property 1: Lazy retrieval serves fresh, fetches on miss/stale, and degrades on failure)', () => {
+  it('serves fresh from cache with no Menu_Service contact (R1.3), fetches exactly once and persists the projection stamped with now on miss/stale (R1.1, R1.2), and returns the prior cache unchanged without throwing on failure (R3.3, R3.4, R3.5)', async () => {
+    await fc.assert(
+      fc.asyncProperty(
+        idArb,
+        idArb,
+        cacheStateArb,
+        rawMenuArb,
+        fc.boolean(),
+        async (experienceId, upstreamEntityId, cache, raw, fetchFails) => {
+          const cached =
+            cache.fetchedAt === null
+              ? null
+              : { menus: cache.cachedMenus, fetchedAt: cache.fetchedAt };
+          const state: MenuFetchState = { upstreamEntityId, cached };
+
+          const clientCalls: string[] = [];
+          const upserts: UpsertCall[] = [];
+          const warnings: string[] = [];
+
+          const retrieval = createMenuRetrieval({
+            repo: makeRepo(state, upserts),
+            client: makeClient(raw, fetchFails, clientCalls),
+            freshnessMs: cache.interval,
+            now: () => cache.now,
+            logger: makeLogger(warnings),
+          });
+
+          // The enclosing read never throws, whatever the cache state or fetch
+          // outcome (R3.5).
+          const served = await retrieval.getMenuForRestaurant(experienceId);
+
+          const shouldFetch = decideMenuFetch(
+            cache.fetchedAt,
+            cache.now,
+            cache.interval,
+          );
+          const priorCached = cached?.menus ?? [];
+
+          if (!shouldFetch) {
+            // (R1.3) Fresh ⇒ serve the cache and never contact the Menu_Service.
+            expect(clientCalls).toHaveLength(0);
+            expect(upserts).toHaveLength(0);
+            expect(warnings).toHaveLength(0);
+            expect(served).toEqual(priorCached);
+            return;
+          }
+
+          // (R1.1, R1.2) Missing or stale ⇒ contact the Menu_Service exactly
+          // once, against the Experience's upstream id.
+          expect(clientCalls).toEqual([upstreamEntityId]);
+
+          if (fetchFails) {
+            // (R3.3, R3.4, R3.5) On failure ⇒ return the prior cache unchanged,
+            // persist nothing, record the failure, and never throw.
+            expect(served).toEqual(priorCached);
+            expect(upserts).toHaveLength(0);
+            expect(warnings).toHaveLength(1);
+          } else {
+            // (R1.1, R1.2) On success ⇒ persist the projected result stamped
+            // with now and return it.
+            const expectedMenus = projectMenus(raw);
+            expect(served).toEqual(expectedMenus);
+            expect(upserts).toEqual([
+              { experienceId, menus: expectedMenus, fetchedAt: cache.now },
+            ]);
+            expect(warnings).toHaveLength(0);
+          }
+        },
+      ),
+      { numRuns: 200 },
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// restaurant-menu-display Property 3: A single detail read issues at most one
+// Menu_Service request.
+//
+// A single Menu_Service response carries ALL of a restaurant's menus (one per
+// meal period), so the seam must call `client.getMenus` exactly once per
+// invocation no matter how many menus / meal periods that response contains.
+// This drives the seam with a missing/stale cache (so a fetch occurs) and a
+// call-counting `getMenus` returning an arbitrary number of menus, then asserts
+// the client was invoked exactly once (R2.2).
+// ---------------------------------------------------------------------------
+
+/**
+ * A raw Menu_Service payload with an ARBITRARY number of menus (meal periods),
+ * spanning zero up to many, each with an arbitrary number of groups/items — so
+ * the "regardless of menu/meal-period count" quantifier is exercised.
+ */
+const wideRawMenusArb: fc.Arbitrary<readonly RawMenu[]> = fc.array(
+  fc.record({
+    menuType: fc.option(fc.string(), { nil: null }),
+    cuisineType: fc.option(fc.string(), { nil: null }),
+    groups: fc.array(
+      fc.record({
+        name: fc.option(fc.string(), { nil: null }),
+        items: fc.array(
+          fc.record({
+            name: fc.option(fc.string(), { nil: null }),
+            price: fc.option(fc.string(), { nil: null }),
+          }),
+          { maxLength: 6 },
+        ),
+      }),
+      { maxLength: 6 },
+    ),
+  }),
+  { minLength: 0, maxLength: 30 },
+);
+
+/** A cache state that always forces a fetch: missing or stale. */
+const fetchingStateArb: fc.Arbitrary<CacheState> = fc.oneof(
+  missingStateArb,
+  staleStateArb,
+);
+
+// Feature: restaurant-menu-display, Property 3: A single detail read issues at most one Menu_Service request
+describe('createMenuRetrieval.getMenuForRestaurant (restaurant-menu-display Property 3: A single detail read issues at most one Menu_Service request)', () => {
+  it('invokes the Menu_Service exactly once per detail read, regardless of how many menus/meal periods the restaurant offers (R2.2)', async () => {
+    await fc.assert(
+      fc.asyncProperty(
+        idArb,
+        idArb,
+        fetchingStateArb,
+        wideRawMenusArb,
+        async (experienceId, upstreamEntityId, cache, raw) => {
+          const cached =
+            cache.fetchedAt === null
+              ? null
+              : { menus: cache.cachedMenus, fetchedAt: cache.fetchedAt };
+          const state: MenuFetchState = { upstreamEntityId, cached };
+
+          const clientCalls: string[] = [];
+          const upserts: UpsertCall[] = [];
+          const warnings: string[] = [];
+
+          const retrieval = createMenuRetrieval({
+            repo: makeRepo(state, upserts),
+            // Never throws: this property is about the fetch COUNT, not failure.
+            client: makeClient(raw, false, clientCalls),
+            freshnessMs: cache.interval,
+            now: () => cache.now,
+            logger: makeLogger(warnings),
+          });
+
+          await retrieval.getMenuForRestaurant(experienceId);
+
+          // Exactly one Menu_Service request, against the Experience's upstream
+          // id, no matter how many menus the single response carried.
+          expect(clientCalls).toHaveLength(1);
+          expect(clientCalls).toEqual([upstreamEntityId]);
+        },
+      ),
+      { numRuns: 200 },
+    );
+  });
+});

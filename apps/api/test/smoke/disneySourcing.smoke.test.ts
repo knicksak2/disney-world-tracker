@@ -51,6 +51,8 @@ import { fileURLToPath } from 'node:url';
 import { DataType, newDb, type IMemoryDb } from 'pg-mem';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+import type { MenuDTO } from '@dwt/shared';
+
 import type { AppConfig } from '../../src/config.js';
 import type { DbPool } from '../../src/db/pool.js';
 import { buildServer } from '../../src/server.js';
@@ -64,7 +66,16 @@ import {
   type FacilitiesClient,
 } from '../../src/services/catalog/disney/facilitiesClient.js';
 import { createDisneyTransport } from '../../src/services/catalog/disney/transport.js';
-import { createInProcessRateLimiter } from '../../src/services/catalog/disney/rateLimiter.js';
+import {
+  createInProcessRateLimiter,
+  createRedisRateLimiter,
+} from '../../src/services/catalog/disney/rateLimiter.js';
+import type { RedisClient } from '../../src/redis/client.js';
+import {
+  createMenuRetrieval,
+  type MenuRetrievalRepo,
+} from '../../src/services/catalog/menuRetrieval.js';
+import type { MenuFetchState } from '../../src/services/catalog/repo.js';
 import { createLiveRepo } from '../../src/services/live/repo.js';
 import { createLiveCache } from '../../src/services/live/cache.js';
 import { createThemeParksLiveClient } from '../../src/services/live/themeParksLiveClient.js';
@@ -527,6 +538,7 @@ function buildSmokeConfig(): AppConfig {
         maxDelayMs: 30_000,
         maxTotalDelayMs: 120_000,
       },
+      diningMenuBaseUrl: MENU_SERVICE_BASE_URL,
       menuFreshnessMs: 86_400_000,
       syncIntervalMs: 86_400_000,
     },
@@ -888,5 +900,239 @@ describe('Disney sourcing end-to-end smoke (R12.6, R13.1, R14.1)', () => {
       during.some((c) => c.url.includes('/entity/') && c.url.endsWith('/live')),
     ).toBe(true);
     expect(during.some((c) => c.url.endsWith('/_bulk_get'))).toBe(false);
+  });
+});
+
+// ===========================================================================
+// Menu retrieval wiring: transport + budget routing (R2.1, R2.3)
+// ===========================================================================
+//
+// The end-to-end suite above proves the *sync* path never touches the
+// Menu_Service. This block proves the complementary demand-driven wiring the
+// composition root installs (`composeServices.ts`): the lazy `MenuRetrieval`
+// seam is built on the SAME composed `facilitiesClient` that sits on top of the
+// shared `Disney_Transport` and the Redis-backed `Rate_Limiter`, so EVERY
+// Menu_Service egress request first acquires a Request_Budget lease and is
+// dispatched through the transport — and NO path reaches the Menu_Service
+// without it (R2.1, R2.3).
+//
+// The assertion is structural and ordering-based: a single ordered event log
+// records both every Rate_Limiter `acquire(bucket)` and every `fetch(url)`.
+// Because the transport is the only code that both leases and dispatches, a
+// Menu_Service fetch that were to bypass the transport/budget would appear in
+// the log WITHOUT an immediately-preceding lease acquisition. Proving every
+// Menu_Service (`web`) fetch is immediately preceded by a `web` lease acquire
+// therefore proves the budget governs every Menu_Service dispatch.
+
+/** An ordered record of a budget lease acquisition or an HTTP dispatch. */
+type WiringEvent =
+  | { readonly kind: 'acquire'; readonly bucket: string }
+  | { readonly kind: 'fetch'; readonly url: string };
+
+/**
+ * A `fetch`-shaped stub for the Menu_Service + Public_Token endpoints that
+ * appends every dispatch to the shared ordered `events` log. It responds only
+ * to the two `web`-target URLs `getMenus` touches (token grant + menu GET); any
+ * other URL throws, so an unexpected egress path fails loudly.
+ */
+function createMenuWiringFetch(events: WiringEvent[]): typeof globalThis.fetch {
+  const json = (value: unknown): Response =>
+    new Response(JSON.stringify(value), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+
+  const stub = async (
+    input: RequestInfo | URL,
+    _init?: RequestInit,
+  ): Promise<Response> => {
+    const url = typeof input === 'string' ? input : input.toString();
+    events.push({ kind: 'fetch', url });
+
+    if (url === AUTHORIZATION_URL) {
+      return json({ access_token: 'wiring-public-token', expires_in: 3600 });
+    }
+    if (url.startsWith(MENU_SERVICE_BASE_URL)) {
+      const lastSegment = url.slice(url.lastIndexOf('/') + 1);
+      const enterpriseId = decodeURIComponent(lastSegment);
+      return json(MENUS_BY_ENTERPRISE_ID[enterpriseId] ?? []);
+    }
+    throw new Error(`Unexpected menu-wiring fetch to ${url}`);
+  };
+
+  return stub as unknown as typeof globalThis.fetch;
+}
+
+/**
+ * A minimal `RedisClient` fake driving the authoritative Redis-backed
+ * Rate_Limiter without a real Redis. It records each budget acquisition (the
+ * two-key acquire script) into the shared ordered log — deriving the target
+ * bucket from the `disney:ratelimit:{bucket}:*` key — and always grants
+ * (`[0, 0]`). The one-key release script is a no-op returning `0`. This proves
+ * the transport really consults the Redis-backed limiter before every dispatch.
+ */
+function createFakeBudgetRedis(events: WiringEvent[]): RedisClient {
+  return {
+    async eval(
+      _script: string,
+      numKeys: number,
+      ...args: Array<string | number>
+    ): Promise<unknown> {
+      if (numKeys === 2) {
+        // args[0] = `disney:ratelimit:{bucket}:concurrency`.
+        const bucket = String(args[0]).split(':')[2] ?? 'unknown';
+        events.push({ kind: 'acquire', bucket });
+        return [0, 0]; // granted: one rate slot + one concurrency slot
+      }
+      return 0; // release
+    },
+  } as unknown as RedisClient;
+}
+
+/**
+ * A fake {@link MenuRetrievalRepo} for a single restaurant whose cache is
+ * missing, so `getMenuForRestaurant` is forced down the fetch path (the only
+ * path that contacts the Menu_Service). `upsertMenus` records the persisted
+ * menus so the test can confirm the fetched result flowed back through the seam.
+ */
+function createFakeMenuRepo(upstreamEntityId: string): {
+  readonly repo: MenuRetrievalRepo;
+  readonly upserts: (readonly MenuDTO[])[];
+} {
+  const upserts: (readonly MenuDTO[])[] = [];
+  const repo: MenuRetrievalRepo = {
+    async getMenuFetchState(): Promise<MenuFetchState | null> {
+      // Cache missing ⇒ decideMenuFetch returns true ⇒ fetch on demand (R8.2).
+      return { upstreamEntityId, cached: null };
+    },
+    async upsertMenus(_experienceId, menus): Promise<void> {
+      upserts.push(menus);
+    },
+  };
+  return { repo, upserts };
+}
+
+type MenuDTOList = readonly MenuDTO[];
+
+describe('Menu retrieval wiring: transport + budget routing (R2.1, R2.3)', () => {
+  let events: WiringEvent[];
+  let served: readonly unknown[];
+  let upserts: MenuDTOList[];
+
+  beforeAll(async () => {
+    events = [];
+
+    // --- Composed Disney egress stack (mirrors composeServices.ts) --------
+    // Authoritative Redis-backed Request_Budget → shared Disney_Transport →
+    // shared Facilities_Client. This is the exact chain the composition root
+    // wires; here the Redis and fetch boundaries are faked so the real seam
+    // classes run end-to-end.
+    const budget = createRedisRateLimiter(
+      { maxRequestsPerSecond: 5, maxConcurrency: 4 },
+      { redis: createFakeBudgetRedis(events) },
+    );
+    const transport = createDisneyTransport({
+      limiter: budget,
+      backoff: {
+        baseDelayMs: 500,
+        factor: 2,
+        maxRetries: 5,
+        maxDelayMs: 30_000,
+        maxTotalDelayMs: 120_000,
+      },
+      fetch: createMenuWiringFetch(events),
+    });
+    const facilitiesClient = createFacilitiesClient({
+      transport,
+      baseUrl: SYNC_GATEWAY_BASE_URL,
+      credentials: { username: 'smoke-user', password: 'smoke-pass' },
+      menuService: {
+        baseUrl: MENU_SERVICE_BASE_URL,
+        authorizationUrl: AUTHORIZATION_URL,
+        clientId: 'WIRING-CLIENT',
+      },
+    });
+
+    // --- Lazy retrieval seam wired to the composed client ----------------
+    // Exactly the `createMenuRetrieval({ repo, client: facilitiesClient, ... })`
+    // wiring composeServices.ts installs; the repo is faked with a missing
+    // cache so the fetch path (the only Menu_Service egress) runs.
+    const fake = createFakeMenuRepo(RESTAURANT_ENTERPRISE_ID);
+    upserts = fake.upserts;
+    const menuRetrieval = createMenuRetrieval({
+      repo: fake.repo,
+      client: facilitiesClient,
+      freshnessMs: 86_400_000,
+    });
+
+    // The catalog `getMenusFor` port as composed at the composition root.
+    const getMenusFor = (id: string): Promise<readonly unknown[]> =>
+      menuRetrieval.getMenuForRestaurant(id);
+
+    served = await getMenusFor('experience-crt');
+  });
+
+  it('fetches the restaurant menu through the composed Menu_Service egress', () => {
+    // The seam resolved the fetched menus back through to the caller, and
+    // persisted them via the repo — proving the wiring runs end-to-end.
+    expect(served).toHaveLength(1);
+    expect((served[0] as { menuType: string }).menuType).toBe('Dinner');
+    expect(upserts).toHaveLength(1);
+
+    // The Menu_Service was actually contacted (demand-driven fetch path).
+    const menuFetches = events.filter(
+      (e): e is Extract<WiringEvent, { kind: 'fetch' }> =>
+        e.kind === 'fetch' && e.url.startsWith(MENU_SERVICE_BASE_URL),
+    );
+    expect(menuFetches).toHaveLength(1);
+    // At most one Menu_Service request per detail read: one response carries
+    // every menu (R2.2 is exercised incidentally here).
+    expect(
+      events.filter(
+        (e) => e.kind === 'fetch' && e.url.startsWith(MENU_SERVICE_BASE_URL),
+      ),
+    ).toHaveLength(1);
+  });
+
+  it('leases the Redis-backed Request_Budget before every Menu_Service dispatch (R2.1)', () => {
+    // The transport acquires a `web`-bucket lease from the Redis-backed limiter
+    // before each `web` dispatch (Public_Token grant + menu GET), always
+    // through the shared budget.
+    const acquires = events.filter((e) => e.kind === 'acquire');
+    const fetches = events.filter((e) => e.kind === 'fetch');
+
+    // Every dispatch consumed exactly one budget lease.
+    expect(acquires).toHaveLength(fetches.length);
+    expect(acquires.length).toBeGreaterThan(0);
+    // Every Menu_Service egress leases the authoritative `web` bucket.
+    expect(acquires.every((e) => e.kind === 'acquire' && e.bucket === 'web')).toBe(
+      true,
+    );
+  });
+
+  it('routes every Menu_Service request through the transport — none bypasses the budget (R2.3)', () => {
+    // Ordering invariant: because the transport is the only code that both
+    // leases the budget and dispatches, EVERY fetch must be immediately
+    // preceded by a lease acquisition. A Menu_Service call that bypassed the
+    // transport/budget would appear as a `fetch` with no preceding `acquire`.
+    events.forEach((event, index) => {
+      if (event.kind !== 'fetch') {
+        return;
+      }
+      const previous = events[index - 1];
+      expect(previous).toBeDefined();
+      expect(previous?.kind).toBe('acquire');
+      expect(previous?.kind === 'acquire' && previous.bucket).toBe('web');
+    });
+
+    // And there is no Menu_Service dispatch that never leased the budget: the
+    // acquire/fetch counts match and every fetch is a leased `web` dispatch.
+    const fetches = events.filter((e) => e.kind === 'fetch');
+    const leasedWebFetches = events.filter((event, index) => {
+      if (event.kind !== 'fetch') return false;
+      const previous = events[index - 1];
+      return previous?.kind === 'acquire' && previous.bucket === 'web';
+    });
+    expect(leasedWebFetches).toHaveLength(fetches.length);
   });
 });

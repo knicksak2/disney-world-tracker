@@ -90,6 +90,7 @@ import {
 } from './disney/facilitiesClient.js';
 import { selectImageUrl } from './disney/imagery.js';
 import { resolveLand } from './disney/land.js';
+import { resolveResortArea } from './disney/resortArea.js';
 import type {
   DocumentStore,
   StoredFacilityDocument,
@@ -381,7 +382,10 @@ async function runSyncWithLock(
       .filter(isIncludedDocument)
       // Drop park-reservation / park-pass placeholders that Disney types as
       // `Attraction` — they would otherwise become bogus "Ride" catalog cards.
-      .filter((doc) => !isPlaceholderDocument(doc));
+      .filter((doc) => !isPlaceholderDocument(doc))
+      // Drop Cast-Member-only "Working Cast Dining" restaurant variants — they
+      // are back-of-house locations no guest can visit.
+      .filter((doc) => !isWorkingCastDocument(doc));
 
     // ---- 7. Bridge map for identity continuity (R10.1, R10.3, R10.4) -----
     const bridge = await repo.getBridgeMap();
@@ -582,6 +586,38 @@ export function isPlaceholderDocument(doc: FacilityDocument): boolean {
   );
 }
 
+/**
+ * Names of Cast-Member-only dining locations that must never surface as guest
+ * catalog Experiences.
+ *
+ * Walt Disney World publishes a Cast-Member ("working cast") variant of many
+ * quick-service restaurants as its own `restaurant`-typed Facility_Document —
+ * the guest-facing venue name with a `" - Working Cast Dining"` suffix (e.g.
+ * `"Backlot Express - Working Cast Dining"`, `"Satu'li Canteen - Working Cast
+ * Dining"`). These are back-of-house locations only Cast Members can visit, so
+ * they should not appear in a guest catalog, yet their `restaurant` type makes
+ * `classifyFacility` map them to `Restaurant` alongside the real venues.
+ *
+ * Like the park-pass placeholders, they are not distinguishable by
+ * Facility_Type, so they are excluded here by name. The pattern matches the
+ * `"Working Cast Dining"` marker case-insensitively anywhere in the trimmed
+ * name; no guest-facing venue carries this phrase.
+ */
+const WORKING_CAST_NAME_PATTERN = /working cast dining/i;
+
+/**
+ * Whether a Facility_Document is a Cast-Member-only "working cast" dining
+ * location identified by its {@link WORKING_CAST_NAME_PATTERN name} rather than
+ * its Facility_Type. Pure and total; kept separate from
+ * {@link isIncludedDocument} so this data-quality exclusion is independently
+ * testable.
+ */
+export function isWorkingCastDocument(doc: FacilityDocument): boolean {
+  return (
+    doc.name !== undefined && WORKING_CAST_NAME_PATTERN.test(doc.name.trim())
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Split + transform (R4, R5, R6, R7)
 // ---------------------------------------------------------------------------
@@ -687,6 +723,7 @@ function toUpstreamExperience(
     imageUrl: selectImageUrl(doc),
     areaType: area.areaType,
     land: resolveLand(doc, area),
+    resortArea: resolveResortArea(doc, area),
     resortId,
     latitude: enrichment.latitude,
     longitude: enrichment.longitude,
@@ -837,6 +874,7 @@ export const __internal = {
   decideSyncMode,
   isIncludedDocument,
   isPlaceholderDocument,
+  isWorkingCastDocument,
   isWithinFreshness,
   outcomeFromError,
   partitionChanges,

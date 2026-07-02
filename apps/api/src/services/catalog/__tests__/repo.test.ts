@@ -193,6 +193,7 @@ function upsert(
     park: MAGIC_KINGDOM,
     category: RIDE,
     land: null,
+    resortArea: null,
     description: 'A simple description.',
     imageUrl: null,
     areaType: 'ThemePark',

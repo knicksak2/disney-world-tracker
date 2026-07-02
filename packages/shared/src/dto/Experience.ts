@@ -93,4 +93,15 @@ export interface ExperienceDTO {
    * (R1.3-R1.5, R3.1, R3.2).
    */
   readonly land?: string | null;
+
+  /**
+   * The WDW Resort_Area (a broad geographic zone of the property such as
+   * "EPCOT Resort Area" or "Magic Kingdom Resort Area"), resolved from the
+   * Resort_Area_Ancestor during Catalog_Sync. Present only for `Resort`-area
+   * Experiences (where the specific resort alone does not convey which part of
+   * the property it sits in); `null`/absent for `ThemePark`/`WaterPark`/
+   * `DisneySprings` Experiences, where the Park/Destination already conveys the
+   * zone, and for `Resort` Experiences with no resolvable Resort_Area.
+   */
+  readonly resortArea?: string | null;
 }

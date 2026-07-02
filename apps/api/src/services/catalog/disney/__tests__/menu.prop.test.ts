@@ -235,3 +235,104 @@ describe('projectMenus — fixed regression examples', () => {
     expect(projectMenus(raw)).toEqual([{ menuType: 'All Day', cuisineType: null, groups: [] }]);
   });
 });
+
+// Feature: restaurant-menu-display, Property 5: Menu projection preserves structure, order, and field values verbatim
+/**
+ * Property 5 (design → restaurant-menu-display): *For any* raw Menu_Service
+ * payload, the projected menus preserve the order of menus, of groups within
+ * each menu, and of items within each group, and preserve each menu's
+ * `menuType`, each menu's `cuisineType` when present (else `null`), each
+ * group's `name`, each item's `name`, and each item's `price` string verbatim
+ * when present (else `null`), with no reordering, addition, or mutation as the
+ * menus flow through to the response.
+ *
+ * Validates: Requirements 3.6
+ *
+ * The generator produces "clean" raw payloads (every present string field is
+ * already a string, no `null`/`undefined` array entries) so the projection is
+ * a structural identity apart from the two documented normalizations: an
+ * absent `cuisineType` becomes `null` and an absent item `price` becomes
+ * `null`. This lets the test assert, index-by-index, that the projected
+ * structure has the same shape and order as the input (no reordering, no
+ * addition, no dropped entries) and that every carried field value matches the
+ * upstream value verbatim. `cuisineType` and `price` are each independently
+ * present-or-absent so the "when present (else null)" branch is exercised.
+ */
+describe('projectMenus — Property 5: projection preserves structure, order, and values verbatim', () => {
+  interface P5RawItem {
+    readonly name: string;
+    readonly price?: string;
+  }
+  interface P5RawGroup {
+    readonly name: string;
+    readonly items: readonly P5RawItem[];
+  }
+  interface P5RawMenu {
+    readonly menuType: string;
+    readonly cuisineType?: string;
+    readonly groups: readonly P5RawGroup[];
+  }
+
+  const p5ItemArb: fc.Arbitrary<P5RawItem> = fc
+    .record({ name: fc.string(), price: fc.string(), includePrice: fc.boolean() })
+    .map(({ name, price, includePrice }) => (includePrice ? { name, price } : { name }));
+
+  const p5GroupArb: fc.Arbitrary<P5RawGroup> = fc.record({
+    name: fc.string(),
+    items: fc.array(p5ItemArb, { maxLength: 6 }),
+  });
+
+  const p5MenuArb: fc.Arbitrary<P5RawMenu> = fc
+    .record({
+      menuType: fc.string(),
+      cuisineType: fc.string(),
+      groups: fc.array(p5GroupArb, { maxLength: 5 }),
+      includeCuisine: fc.boolean(),
+    })
+    .map(({ menuType, cuisineType, groups, includeCuisine }) =>
+      includeCuisine ? { menuType, cuisineType, groups } : { menuType, groups },
+    );
+
+  it('preserves menu/group/item order and every field value verbatim, with cuisine/price defaulting to null when absent (R3.6)', () => {
+    fc.assert(
+      fc.property(fc.array(p5MenuArb, { maxLength: 6 }), (rawMenus) => {
+        const projected = projectMenus(rawMenus as readonly RawMenu[]);
+
+        // No addition or dropping: the menu count (and thus order by index) is preserved.
+        expect(projected).toHaveLength(rawMenus.length);
+
+        rawMenus.forEach((rawMenu, mi) => {
+          const menu = projected[mi];
+          expect(menu).toBeDefined();
+          if (menu === undefined) return;
+
+          // menuType verbatim; cuisineType verbatim when present else null.
+          expect(menu.menuType).toBe(rawMenu.menuType);
+          expect(menu.cuisineType).toBe(rawMenu.cuisineType ?? null);
+
+          // Group order and count preserved.
+          expect(menu.groups).toHaveLength(rawMenu.groups.length);
+          rawMenu.groups.forEach((rawGroup, gi) => {
+            const group = menu.groups[gi];
+            expect(group).toBeDefined();
+            if (group === undefined) return;
+
+            // Group name verbatim; item order and count preserved.
+            expect(group.name).toBe(rawGroup.name);
+            expect(group.items).toHaveLength(rawGroup.items.length);
+            rawGroup.items.forEach((rawItem, ii) => {
+              const item = group.items[ii];
+              expect(item).toBeDefined();
+              if (item === undefined) return;
+
+              // Item name verbatim; price verbatim when present else null.
+              expect(item.name).toBe(rawItem.name);
+              expect(item.price).toBe(rawItem.price ?? null);
+            });
+          });
+        });
+      }),
+      { numRuns: NUM_RUNS },
+    );
+  });
+});

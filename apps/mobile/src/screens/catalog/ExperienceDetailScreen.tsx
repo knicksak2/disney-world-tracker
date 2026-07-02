@@ -50,6 +50,7 @@ import type {
   ExperienceCategory,
   LiveDetailResponseDTO,
   MealPeriodDTO,
+  MenuDTO,
   NoteDTO,
   Park,
   RatingDTO,
@@ -70,6 +71,7 @@ import {
 import CompletionControls from './CompletionControls';
 import NoteControl from './NoteControl';
 import RatingControl from './RatingControl';
+import MenuSummaryCard from './MenuSummaryCard';
 import { buildInfoTags } from './infoTags';
 import { liveSectionFor } from './gating';
 import RideLiveSection from './live/RideLiveSection';
@@ -106,6 +108,12 @@ interface ExperienceDetailDTO {
   readonly priceTier?: string | null;
   readonly mealPeriods?: readonly MealPeriodDTO[];
   readonly land?: string | null;
+  /**
+   * Dining menus surfaced on the detail response for a Restaurant_Experience,
+   * mirroring the backend `ExperienceDetailResponse.menus` (R3.1). Present only
+   * when the restaurant has one or more menus available; omitted otherwise.
+   */
+  readonly menus?: readonly MenuDTO[];
 }
 
 /** Wire shape for `GET /resorts`; only the fields needed to resolve a name. */
@@ -383,6 +391,24 @@ export default function ExperienceDetailScreen(): JSX.Element {
             <Text style={styles.empty}>No description available.</Text>
           )}
         </Card>
+
+        {/* ------------------------------------------------------------ */}
+        {/* Menu_Summary_Card (R4.1-R4.7). Rendered only for a           */}
+        {/* Restaurant_Experience: a pressable summary of the available  */}
+        {/* menus (count + a Badge per menu type) that opens the         */}
+        {/* Menu_Screen, an empty state when the restaurant has no        */}
+        {/* menus, and nothing for a non-restaurant. The detail load is   */}
+        {/* already settled here, but the query flags are forwarded so    */}
+        {/* the card owns its own loading/error rendering.                */}
+        {/* ------------------------------------------------------------ */}
+        <MenuSummaryCard
+          category={experience.category}
+          menus={experience.menus}
+          isLoading={experienceQ.isLoading}
+          isError={experienceQ.isError}
+          experienceId={experienceId}
+          navigation={navigation}
+        />
 
         {/* ------------------------------------------------------------ */}
         {/* Live operational section (R7.5: at most one, by category).   */}

@@ -214,6 +214,7 @@ function toExperienceUpsert(entity: UpstreamExperience): ReconcileUpsert {
     park: entity.park,
     category: entity.category,
     land: entity.land,
+    resortArea: entity.resortArea,
     description: sanitizeDescription(entity.description),
     imageUrl: entity.imageUrl,
     areaType: entity.areaType,
@@ -228,13 +229,17 @@ function toExperienceUpsert(entity: UpstreamExperience): ReconcileUpsert {
 }
 
 /**
- * True when the upstream Experience's `name`, `park`, `category`, or `land`
- * differs from the cached row. Change detection is scoped to exactly these
- * fields (R11.3, R11.4, R2.4-R2.7); `upstreamEntityId` never drifts (it is the
- * row's derivation source), and description/imagery/enrichment are carried
- * through without being change-detection signals on their own. Including
- * `land` ensures a Land drift triggers an upsert (R2.4), an equal Land is a
- * no-op (R2.5), and repeated syncs stay idempotent (R2.6).
+ * True when the upstream Experience's `name`, `park`, `category`, `land`,
+ * `areaType`, or `resortId` differs from the cached row. Change detection is
+ * scoped to exactly these fields (R11.3, R11.4, R2.4-R2.7, R4.11-R4.15);
+ * `upstreamEntityId` never drifts (it is the row's derivation source), and
+ * description/imagery/enrichment coordinates are carried through without being
+ * change-detection signals on their own. Including `land` ensures a Land drift
+ * triggers an upsert (R2.4), an equal Land is a no-op (R2.5), and repeated
+ * syncs stay idempotent (R2.6). Including `areaType`/`resortId`/`resortArea`
+ * ensures a re-resolved owning Area (e.g. a restaurant that now resolves to its
+ * specific resort rather than the resort-wide catch-all, or a newly resolved
+ * Resort_Area zone) is likewise re-applied.
  */
 function hasExperienceMaterialChange(
   cached: CatalogCacheRow,
@@ -244,7 +249,10 @@ function hasExperienceMaterialChange(
     cached.name !== entity.name ||
     cached.park !== entity.park ||
     cached.category !== entity.category ||
-    cached.land !== entity.land
+    cached.land !== entity.land ||
+    cached.areaType !== entity.areaType ||
+    cached.resortId !== entity.resortId ||
+    cached.resortArea !== entity.resortArea
   );
 }
 

@@ -26,7 +26,8 @@ export type InfoTagKind =
   | 'accessibility'
   | 'coordinates'
   | 'mealPeriod'
-  | 'resort';
+  | 'resort'
+  | 'resortArea';
 
 /** One compact, labelled Info_Tag ready for rendering. */
 export interface InfoTag {
@@ -53,6 +54,7 @@ export type InfoTagExperience = Pick<
   | 'longitude'
   | 'mealPeriods'
   | 'resortId'
+  | 'resortArea'
 >;
 
 /** A string is present when it is non-null/undefined and not whitespace-only. */
@@ -89,10 +91,12 @@ function priceTierTag(priceTier: string): InfoTag {
  *   - one tag per meal period (R9.6)
  *   - the specific Resort, only when the area is `Resort`, a Resort is
  *     referenced, and its name is available (R9.7)
+ *   - the Resort_Area zone, only when the area is `Resort` and a Resort_Area is
+ *     persisted
  *
  * Tags are ordered Land → price tier → accessibility → coordinates → meal
- * period → resort, omitting absent ones while preserving the relative order of
- * those present (R9.11). Pure and total — never throws.
+ * period → resort → resort area, omitting absent ones while preserving the
+ * relative order of those present (R9.11). Pure and total — never throws.
  */
 export function buildInfoTags(
   experience: InfoTagExperience,
@@ -171,6 +175,17 @@ export function buildInfoTags(
     });
   }
 
+  // 7. Resort_Area zone — only for a `Resort` area with a persisted zone. Shown
+  //    after the specific Resort so the reading is "resort, then its zone".
+  if (experience.areaType === 'Resort' && isNonEmpty(experience.resortArea)) {
+    const area = experience.resortArea.trim();
+    tags.push({
+      kind: 'resortArea',
+      label: area,
+      accessibilityLabel: `Resort area: ${area}`,
+    });
+  }
+
   return tags;
 }
 
@@ -182,4 +197,20 @@ export function buildInfoTags(
  */
 export function priceTierListTag(priceTier: string): InfoTag {
   return priceTierTag(priceTier);
+}
+
+/**
+ * The Resort_Area zone label for a compact list row (e.g. the Resorts
+ * Destination and global-search rows), or `null` when the Experience is not a
+ * Resort-area Experience or carries no persisted Resort_Area. Trimmed for
+ * display. Kept here so every surface derives the row-level zone label the same
+ * way (mirroring `priceTierListTag`).
+ */
+export function resortAreaLabel(
+  experience: Pick<ExperienceDTO, 'areaType' | 'resortArea'>,
+): string | null {
+  if (experience.areaType !== 'Resort') {
+    return null;
+  }
+  return isNonEmpty(experience.resortArea) ? experience.resortArea.trim() : null;
 }

@@ -248,6 +248,8 @@ interface ExperienceRow extends QueryResultRow {
   active: boolean;
   /** Persisted Land name, or `null` when the Experience has no Land (R2.1, R3.1). */
   land: string | null;
+  /** Persisted Resort_Area zone for a `Resort`-area Experience, else `null`. */
+  resort_area: string | null;
   image_url: string | null;
   latitude: number | null;
   longitude: number | null;
@@ -424,14 +426,16 @@ async function getCacheAge(pool: DbPool, now: Date): Promise<CacheAgeInfo> {
  * back to active when the upstream id reappears (R1.15 reactivation).
  *
  * `description` is intentionally NOT projected: `reconcile`'s diff rules
- * (R1.16) only consider `name`, `park`, and `category` as material change
- * signals, and reading description would only inflate the snapshot.
+ * (R1.16) only consider `name`, `park`, `category`, `land`, `area_type`, and
+ * `resort_id` as material change signals, and reading description would only
+ * inflate the snapshot.
  */
 async function getCacheSnapshot(
   pool: DbPool,
 ): Promise<readonly CatalogCacheRow[]> {
   const result = await pool.query<ExperienceRow>(
-    `SELECT id, upstream_entity_id, name, park, category, description, active, land
+    `SELECT id, upstream_entity_id, name, park, category, description, active, land,
+            area_type, resort_id, resort_area
        FROM experiences`,
   );
   return result.rows.map(rowToCacheSnapshot);
@@ -446,6 +450,9 @@ function rowToCacheSnapshot(row: ExperienceRow): CatalogCacheRow {
     park: row.park,
     category: row.category,
     land: row.land,
+    areaType: row.area_type,
+    resortId: row.resort_id,
+    resortArea: row.resort_area,
   };
 }
 
@@ -602,9 +609,9 @@ async function applyReconciliation(
         `INSERT INTO experiences (
            id, upstream_entity_id, name, park, category, description, active,
            image_url, latitude, longitude, area_type, resort_id,
-           accessibility, price_tier, meal_periods, land, updated_at
+           accessibility, price_tier, meal_periods, land, resort_area, updated_at
          )
-         VALUES ($1, $2, $3, $4, $5, $6, TRUE, $7, $8, $9, $10, $11, $12, $13, $14::jsonb, $15, now())
+         VALUES ($1, $2, $3, $4, $5, $6, TRUE, $7, $8, $9, $10, $11, $12, $13, $14::jsonb, $15, $16, now())
          ON CONFLICT (id) DO UPDATE SET
            upstream_entity_id = EXCLUDED.upstream_entity_id,
            name               = EXCLUDED.name,
@@ -621,6 +628,7 @@ async function applyReconciliation(
            price_tier         = EXCLUDED.price_tier,
            meal_periods       = EXCLUDED.meal_periods,
            land               = EXCLUDED.land,
+           resort_area        = EXCLUDED.resort_area,
            updated_at         = now()`,
         [
           upsert.id,
@@ -638,6 +646,7 @@ async function applyReconciliation(
           upsert.priceTier,
           JSON.stringify(upsert.mealPeriods),
           upsert.land,
+          upsert.resortArea,
         ],
       );
     }
@@ -836,7 +845,7 @@ async function listActiveExperiences(
 
   const sql = `
     SELECT id, upstream_entity_id, name, park, category, description, active,
-           land, image_url, latitude, longitude, area_type, resort_id,
+           land, resort_area, image_url, latitude, longitude, area_type, resort_id,
            accessibility, price_tier, meal_periods
       FROM experiences
      WHERE ${where.join(' AND ')}
@@ -889,7 +898,7 @@ async function getExperience(
 ): Promise<ExperienceDTO | null> {
   const result = await pool.query<ExperienceRow>(
     `SELECT id, upstream_entity_id, name, park, category, description, active,
-            land, image_url, latitude, longitude, area_type, resort_id,
+            land, resort_area, image_url, latitude, longitude, area_type, resort_id,
             accessibility, price_tier, meal_periods
        FROM experiences
       WHERE id = $1`,
@@ -1079,6 +1088,7 @@ function rowToDto(row: ExperienceRow): ExperienceDTO {
     imageUrl: row.image_url,
     areaType: row.area_type,
     ...(row.land !== null ? { land: row.land } : {}),
+    ...(row.resort_area !== null ? { resortArea: row.resort_area } : {}),
     ...(row.resort_id !== null ? { resortId: row.resort_id } : {}),
     ...(row.latitude !== null ? { latitude: row.latitude } : {}),
     ...(row.longitude !== null ? { longitude: row.longitude } : {}),

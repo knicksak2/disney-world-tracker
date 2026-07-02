@@ -74,6 +74,7 @@ import {
   ActivityIndicator,
   FlatList,
   Image,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -103,7 +104,7 @@ import {
   type Destination,
   type DestinationId,
 } from './destinations';
-import { priceTierListTag } from './infoTags';
+import { priceTierListTag, resortAreaLabel } from './infoTags';
 import { useCardFocusRestore, useResultCountAnnouncement } from './catalogFocus';
 
 // ---------------------------------------------------------------------------
@@ -393,7 +394,12 @@ function GridBody({
   }
 
   return (
-    <View style={styles.grid} testID="catalog-destination-grid">
+    <ScrollView
+      style={styles.gridScroll}
+      contentContainerStyle={styles.grid}
+      testID="catalog-destination-grid"
+      keyboardShouldPersistTaps="handled"
+    >
       {DESTINATIONS.map((destination) => (
         <DestinationCard
           key={destination.id}
@@ -403,7 +409,7 @@ function GridBody({
           onPress={() => onSelectDestination(destination)}
         />
       ))}
-    </View>
+    </ScrollView>
   );
 }
 
@@ -599,6 +605,9 @@ function SearchResultRow({
     typeof experience.land === 'string' && experience.land.trim().length > 0
       ? experience.land.trim()
       : null;
+  // A Resort-area result has no Land; surface its Resort_Area zone instead so
+  // the row conveys which part of the property it sits in.
+  const detail = land ?? resortAreaLabel(experience);
 
   // R9.9: a Restaurant with a persisted price tier shows the compact price tag.
   const showPriceTag =
@@ -625,13 +634,14 @@ function SearchResultRow({
           <Text style={styles.rowName} numberOfLines={2}>
             {experience.name}
           </Text>
-          {/* R5.3: each result shows its Destination and, when present, Land. */}
+          {/* R5.3: each result shows its Destination and, when present, its
+              Land — or, for a Resort-area result, its Resort_Area zone. */}
           <Text
             style={styles.rowMeta}
             numberOfLines={1}
             testID={`catalog-search-meta-${experience.id}`}
           >
-            {land !== null ? `${destinationLabel} · ${land}` : destinationLabel}
+            {detail !== null ? `${destinationLabel} · ${detail}` : destinationLabel}
           </Text>
           <View style={styles.rowBadges}>
             <Badge
@@ -823,6 +833,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: theme.spacing.xl,
+  },
+  gridScroll: {
+    flex: 1,
   },
   grid: {
     flexDirection: 'row',

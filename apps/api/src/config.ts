@@ -71,6 +71,16 @@ const envSchema = z.object({
     .url('DISNEY_SYNC_GATEWAY_BASE_URL must be a well-formed absolute URL')
     .default('https://realtime-sync-gw.wdprapps.disney.com/park-platform-pub/'),
 
+  // Public dining-menu API the anonymous Disney website itself calls
+  // (`?searchTerm={facilityId|slug}`). This is the demand-driven Menu_Service
+  // source: unlike the scoped explorer-service finder, it serves menus to
+  // anonymous callers, so no guest token is required. Overridable for tests;
+  // validated as a well-formed absolute URL.
+  DISNEY_DINING_MENU_BASE_URL: z
+    .string()
+    .url('DISNEY_DINING_MENU_BASE_URL must be a well-formed absolute URL')
+    .default('https://disneyworld.disney.go.com/dining/dinemenu/api/menu'),
+
   // Static_Credentials for HTTP Basic auth against the Sync Gateway. Both are
   // required and must be non-empty; a missing/empty value halts startup with a
   // ConfigError naming the offending variable (R13.2, R13.3).
@@ -172,6 +182,8 @@ export interface AppConfig {
       readonly maxDelayMs: number;
       readonly maxTotalDelayMs: number;
     };
+    // Public dining-menu API base (demand-driven menu source, R8).
+    readonly diningMenuBaseUrl: string;
     // How long a cached restaurant menu is served without a Menu_Service call (R8).
     readonly menuFreshnessMs: number;
     // Infrequent static-sync cadence, floored at 24h (R9).
@@ -256,6 +268,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
         maxDelayMs: data.DISNEY_BACKOFF_MAX_DELAY_MS,
         maxTotalDelayMs: data.DISNEY_BACKOFF_MAX_TOTAL_MS,
       },
+      diningMenuBaseUrl: data.DISNEY_DINING_MENU_BASE_URL,
       menuFreshnessMs: data.MENU_FRESHNESS_MS,
       syncIntervalMs: data.CATALOG_SYNC_INTERVAL_MS,
     },

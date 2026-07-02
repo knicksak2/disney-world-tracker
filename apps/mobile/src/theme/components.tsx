@@ -346,7 +346,9 @@ export function Badge({
       {icon !== undefined ? (
         <Ionicons name={icon} size={12} color={badgeColor} style={styles.badgeIcon} />
       ) : null}
-      <Text style={[styles.badgeText, { color: badgeColor }]}>{label}</Text>
+      <Text style={[styles.badgeText, { color: badgeColor }]} numberOfLines={1}>
+        {label}
+      </Text>
     </View>
   );
 }
@@ -580,12 +582,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.md,
     paddingVertical: 5,
     borderRadius: theme.radius.pill,
+    flexShrink: 1,
   },
   badgeIcon: {
     marginRight: 4,
   },
   badgeText: {
     ...theme.typography.meta,
+    flexShrink: 1,
   },
   chip: {
     paddingHorizontal: theme.spacing.lg,

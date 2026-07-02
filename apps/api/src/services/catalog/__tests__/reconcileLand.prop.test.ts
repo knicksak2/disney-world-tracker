@@ -98,6 +98,7 @@ function makeUpstream(
     imageUrl: null,
     areaType: 'ThemePark',
     resortId: null,
+    resortArea: null,
     latitude: null,
     longitude: null,
     accessibility: [],
@@ -115,7 +116,17 @@ function makeCacheRow(
   cat: ExperienceCategory,
   landValue: string | null,
 ): CatalogCacheRow {
-  return { id, active, name: n, park: pk, category: cat, land: landValue };
+  return {
+    id,
+    active,
+    name: n,
+    park: pk,
+    category: cat,
+    land: landValue,
+    areaType: 'ThemePark',
+    resortId: null,
+    resortArea: null,
+  };
 }
 
 /**
@@ -138,6 +149,9 @@ function applyDiff(
       park: u.park,
       category: u.category,
       land: u.land,
+      areaType: u.areaType,
+      resortId: u.resortId,
+      resortArea: u.resortArea,
     });
   }
   for (const d of diff.softDeletes) {
@@ -366,5 +380,162 @@ describe('reconcile — Land reconciliation fixed examples', () => {
 
     const react = reconcile(afterDelete, [base('Tomorrowland')]);
     expect(react.upserts[0]).toMatchObject({ id: 'exp-1', active: true, land: 'Tomorrowland' });
+  });
+
+  it('a resortId drift (catch-all -> specific resort) triggers an upsert (R4.14)', () => {
+    // A resort restaurant already cached with no specific resort (the R4.15
+    // resort-wide catch-all), now re-resolved to a specific resort. Only the
+    // resortId differs, so this exercises the resortId change-detection signal.
+    const resortExp = (
+      resortId: string | null,
+      resortArea: string | null,
+    ): UpstreamExperience => ({
+      id: 'exp-1',
+      upstreamEntityId: 'up-exp-1',
+      name: 'Kimonos Lounge',
+      park: null,
+      category: 'Restaurant',
+      land: null,
+      description: 'Alpha',
+      imageUrl: null,
+      areaType: 'Resort',
+      resortId,
+      resortArea,
+      latitude: null,
+      longitude: null,
+      accessibility: [],
+      priceTier: null,
+      mealPeriods: [],
+    });
+    const cache: CatalogCacheRow[] = [
+      {
+        id: 'exp-1',
+        active: true,
+        name: 'Kimonos Lounge',
+        park: null,
+        category: 'Restaurant',
+        land: null,
+        areaType: 'Resort',
+        resortId: null,
+        resortArea: 'EPCOT Resort Area',
+      },
+    ];
+    const diff = reconcile(cache, [resortExp('resort-swan', 'EPCOT Resort Area')]);
+    expect(diff.upserts).toHaveLength(1);
+    expect(diff.upserts[0]).toMatchObject({ id: 'exp-1', resortId: 'resort-swan' });
+  });
+
+  it('a resortArea drift (null -> resolved zone) triggers an upsert', () => {
+    const cache: CatalogCacheRow[] = [
+      {
+        id: 'exp-1',
+        active: true,
+        name: 'Kimonos Lounge',
+        park: null,
+        category: 'Restaurant',
+        land: null,
+        areaType: 'Resort',
+        resortId: 'resort-swan',
+        resortArea: null,
+      },
+    ];
+    const upstream: UpstreamExperience = {
+      id: 'exp-1',
+      upstreamEntityId: 'up-exp-1',
+      name: 'Kimonos Lounge',
+      park: null,
+      category: 'Restaurant',
+      land: null,
+      description: 'Alpha',
+      imageUrl: null,
+      areaType: 'Resort',
+      resortId: 'resort-swan',
+      resortArea: 'EPCOT Resort Area',
+      latitude: null,
+      longitude: null,
+      accessibility: [],
+      priceTier: null,
+      mealPeriods: [],
+    };
+    const diff = reconcile(cache, [upstream]);
+    expect(diff.upserts).toHaveLength(1);
+    expect(diff.upserts[0]).toMatchObject({
+      id: 'exp-1',
+      resortArea: 'EPCOT Resort Area',
+    });
+  });
+
+  it('an areaType drift (Resort -> ThemePark) triggers an upsert (R4.11)', () => {
+    const cache: CatalogCacheRow[] = [
+      {
+        id: 'exp-1',
+        active: true,
+        name: 'Storybook Treats',
+        park: 'Magic Kingdom',
+        category: 'Restaurant',
+        land: null,
+        areaType: 'Resort',
+        resortId: null,
+        resortArea: 'Magic Kingdom Resort Area',
+      },
+    ];
+    const upstream: UpstreamExperience = {
+      id: 'exp-1',
+      upstreamEntityId: 'up-exp-1',
+      name: 'Storybook Treats',
+      park: 'Magic Kingdom',
+      category: 'Restaurant',
+      land: null,
+      description: 'Alpha',
+      imageUrl: null,
+      areaType: 'ThemePark',
+      resortId: null,
+      resortArea: null,
+      latitude: null,
+      longitude: null,
+      accessibility: [],
+      priceTier: null,
+      mealPeriods: [],
+    };
+    const diff = reconcile(cache, [upstream]);
+    expect(diff.upserts).toHaveLength(1);
+    expect(diff.upserts[0]).toMatchObject({ id: 'exp-1', areaType: 'ThemePark' });
+  });
+
+  it('unchanged areaType, resortId, and resortArea is a no-op (R4.11, R4.14)', () => {
+    const cache: CatalogCacheRow[] = [
+      {
+        id: 'exp-1',
+        active: true,
+        name: 'Kimonos Lounge',
+        park: null,
+        category: 'Restaurant',
+        land: null,
+        areaType: 'Resort',
+        resortId: 'resort-swan',
+        resortArea: 'EPCOT Resort Area',
+      },
+    ];
+    const upstream: UpstreamExperience = {
+      id: 'exp-1',
+      upstreamEntityId: 'up-exp-1',
+      name: 'Kimonos Lounge',
+      park: null,
+      category: 'Restaurant',
+      land: null,
+      description: 'Alpha',
+      imageUrl: null,
+      areaType: 'Resort',
+      resortId: 'resort-swan',
+      resortArea: 'EPCOT Resort Area',
+      latitude: null,
+      longitude: null,
+      accessibility: [],
+      priceTier: null,
+      mealPeriods: [],
+    };
+    const diff = reconcile(cache, [upstream]);
+    expect(diff.upserts).toEqual([]);
+    expect(diff.softDeletes).toEqual([]);
   });
 });

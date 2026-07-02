@@ -165,6 +165,7 @@ const experiencePayload: fc.Arbitrary<Omit<ExperiencePayload, 'id' | 'presence'>
     // at `null` leaves the name/park/category diff rules unchanged. Land's own
     // reconciliation (Properties 4-6) is covered in reconcileLand.prop.test.ts.
     land: fc.constant<string | null>(null),
+    resortArea: fc.constant<string | null>(null),
     description: cleanText,
     imageUrl: urlOrNull,
     areaType,
@@ -212,11 +213,14 @@ function buildExperienceCache(
           park: f.park,
           category: f.category,
           land: f.land,
+          areaType: f.areaType,
+          resortId: f.resortId,
+          resortArea: f.resortArea,
         });
         break;
       case 'both-active-drift':
-        // Force drift on `name`; park/category still mirror upstream so the
-        // ONLY difference is a change-detected field (R11.3).
+        // Force drift on `name`; park/category/area still mirror upstream so
+        // the ONLY difference is a change-detected field (R11.3).
         out.push({
           id: f.id,
           active: true,
@@ -224,6 +228,9 @@ function buildExperienceCache(
           park: f.park,
           category: f.category,
           land: f.land,
+          areaType: f.areaType,
+          resortId: f.resortId,
+          resortArea: f.resortArea,
         });
         break;
       case 'cache-only-inactive':
@@ -235,6 +242,9 @@ function buildExperienceCache(
           park: f.park,
           category: f.category,
           land: f.land,
+          areaType: f.areaType,
+          resortId: f.resortId,
+          resortArea: f.resortArea,
         });
         break;
     }
@@ -276,6 +286,9 @@ function applyExperienceDiff(
       park: u.park,
       category: u.category,
       land: u.land,
+      areaType: u.areaType,
+      resortId: u.resortId,
+      resortArea: u.resortArea,
     });
   }
   for (const d of diff.softDeletes) {
@@ -788,6 +801,7 @@ describe('reconcile / reconcileResorts — Property 13 fixed examples', () => {
     imageUrl: 'https://cdn.disney.com/space.jpg',
     areaType: 'ThemePark',
     resortId: null,
+    resortArea: null,
     latitude: 28.4,
     longitude: -81.6,
     accessibility: ['wheelchair-access'],
@@ -826,7 +840,7 @@ describe('reconcile / reconcileResorts — Property 13 fixed examples', () => {
 
   it('soft-deletes an active experience and resort missing from upstream', () => {
     const exp = reconcile(
-      [{ id: 'exp-1', active: true, name: 'Old', park: 'EPCOT', category: 'Ride', land: null }],
+      [{ id: 'exp-1', active: true, name: 'Old', park: 'EPCOT', category: 'Ride', land: null, areaType: 'ThemePark', resortId: null, resortArea: null }],
       [],
     );
     expect(exp.upserts).toEqual([]);
@@ -854,7 +868,7 @@ describe('reconcile / reconcileResorts — Property 13 fixed examples', () => {
 
   it('reactivates a soft-deleted experience and resort that reappear upstream', () => {
     const exp = reconcile(
-      [{ id: 'exp-1', active: false, name: 'Space Mountain', park: 'Magic Kingdom', category: 'Ride', land: 'Tomorrowland' }],
+      [{ id: 'exp-1', active: false, name: 'Space Mountain', park: 'Magic Kingdom', category: 'Ride', land: 'Tomorrowland', areaType: 'ThemePark', resortId: null, resortArea: null }],
       [baseExperience],
     );
     expect(exp.softDeletes).toEqual([]);
@@ -883,7 +897,7 @@ describe('reconcile / reconcileResorts — Property 13 fixed examples', () => {
   it('does not diff an already-inactive experience/resort still missing upstream', () => {
     expect(
       reconcile(
-        [{ id: 'exp-1', active: false, name: 'Old', park: 'EPCOT', category: 'Ride', land: null }],
+        [{ id: 'exp-1', active: false, name: 'Old', park: 'EPCOT', category: 'Ride', land: null, areaType: 'ThemePark', resortId: null, resortArea: null }],
         [],
       ),
     ).toEqual({ upserts: [], softDeletes: [] });
@@ -1043,6 +1057,7 @@ function toUpstreamExperienceP24(f: ExperienceImageFactP24): UpstreamExperience 
     imageUrl: selectImageUrl(f.doc),
     areaType: 'ThemePark',
     resortId: null,
+    resortArea: null,
     latitude: null,
     longitude: null,
     accessibility: [],
@@ -1061,14 +1076,14 @@ function buildExperienceCacheP24(
         break;
       case 'both-active-same':
       case 'cache-only-active':
-        out.push({ id: f.id, active: true, name: f.name, park: f.park, category: f.category, land: null });
+        out.push({ id: f.id, active: true, name: f.name, park: f.park, category: f.category, land: null, areaType: 'ThemePark', resortId: null, resortArea: null });
         break;
       case 'both-active-drift':
-        out.push({ id: f.id, active: true, name: `${f.name}~old`, park: f.park, category: f.category, land: null });
+        out.push({ id: f.id, active: true, name: `${f.name}~old`, park: f.park, category: f.category, land: null, areaType: 'ThemePark', resortId: null, resortArea: null });
         break;
       case 'cache-only-inactive':
       case 'both-inactive':
-        out.push({ id: f.id, active: false, name: f.name, park: f.park, category: f.category, land: null });
+        out.push({ id: f.id, active: false, name: f.name, park: f.park, category: f.category, land: null, areaType: 'ThemePark', resortId: null, resortArea: null });
         break;
     }
   }
@@ -1288,6 +1303,9 @@ describe('reconcile / reconcileResorts — Property 24: sole-writer end-to-end v
             park: u.park,
             category: u.category,
             land: u.land,
+            areaType: u.areaType,
+            resortId: u.resortId,
+            resortArea: u.resortArea,
           }));
           const resortCacheAfter: ResortCacheRow[] = resortDiff.upserts.map((u) => ({
             id: u.id,

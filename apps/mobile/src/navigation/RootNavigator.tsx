@@ -16,6 +16,7 @@ import ProfileScreen from '../screens/ProfileScreen';
 import RegisterScreen from '../screens/RegisterScreen';
 import StatsScreen from '../screens/stats/StatsScreen';
 import ExperienceDetailScreen from '../screens/catalog/ExperienceDetailScreen';
+import MenuScreen from '../screens/catalog/MenuScreen';
 
 /**
  * Root navigator for the mobile app.
@@ -79,6 +80,13 @@ export type MainTabParamList = {
 export type RootStackParamList = {
   MainTabs: undefined;
   ExperienceDetail: { experienceId: string };
+  /**
+   * Dedicated Menu_Screen for a Restaurant_Experience, reachable by tapping
+   * the Menu_Summary_Card on the detail screen (R4.2, R5.8). Registered as a
+   * sibling of `ExperienceDetail` in task 7.1; the param type is declared here
+   * so the card's `navigation.navigate('Menu', { experienceId })` type-checks.
+   */
+  Menu: { experienceId: string };
 };
 
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
@@ -161,6 +169,11 @@ function RootStackNavigator(): JSX.Element {
       <RootStack.Screen
         name="ExperienceDetail"
         component={ExperienceDetailScreen}
+        options={{ headerShown: false }}
+      />
+      <RootStack.Screen
+        name="Menu"
+        component={MenuScreen}
         options={{ headerShown: false }}
       />
     </RootStack.Navigator>

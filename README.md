@@ -4,7 +4,7 @@ A mobile app for tracking Walt Disney World experiences (attractions, shows, res
 
 Data is sourced along a **data-by-change-rate** split:
 
-- **Static catalog data** (descriptive fields, resorts/hotels, imagery, menus, coordinates, facets, area/park hierarchy) — low change rate, available only from Disney — comes from Disney's internal sources: the Couchbase **Sync Gateway** and the public dining **Menu Service**.
+- **Static catalog data** (descriptive fields, resorts/hotels, imagery, menus, coordinates, facets, area/park hierarchy) — low change rate, available only from Disney — comes from Disney's sources: the Couchbase **Sync Gateway** (catalog documents) and Disney's public **dining-menu API** (`disneyworld.disney.go.com`, restaurant menus).
 - **Live data** (status, standby & single-rider waits, forecast, showtimes, operating hours, walk-up dining, Lightning Lane price/coarse state, boarding groups) — high change rate, stable, third-party-maintained — comes from the public [ThemeParks.wiki](https://api.themeparks.wiki/v1) API.
 
 All Disney access is funneled through a single hardened transport (shared rate limit, bounded backoff with jitter, `Retry-After` handling, and Akamai/WAF-vs-auth failure classification); the catalog sync is incremental (a persisted `_changes` checkpoint + a durable local document store), fetches menus lazily, and runs on an infrequent (≥24h) cadence. See [Data sources & resilience](#data-sources--resilience).
@@ -128,7 +128,7 @@ The MinIO console is at http://localhost:9001 (login: `dwt-minio-admin` / `dwt-m
 
 The API never reads `process.env` directly outside its config loader, so every backend setting lives in an env file. The `.env.example` template ships with values that match `docker-compose.yml` — just copy it to `.env` (see [Quickstart](#quickstart--run-everything-locally)). The real `.env` is gitignored.
 
-Required keys: `DATABASE_URL`, `REDIS_URL`, `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `SESSION_SECRET` (32+ chars), and the Disney Sync Gateway `Static_Credentials` `DISNEY_SYNC_GATEWAY_USERNAME` / `DISNEY_SYNC_GATEWAY_PASSWORD` (startup fails fast if either is blank). `THEMEPARKS_BASE_URL` (live source) and `DISNEY_SYNC_GATEWAY_BASE_URL` (static source) default to the documented public endpoints. See `apps/api/.env.example` for descriptions.
+Required keys: `DATABASE_URL`, `REDIS_URL`, `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `SESSION_SECRET` (32+ chars), and the Disney Sync Gateway `Static_Credentials` `DISNEY_SYNC_GATEWAY_USERNAME` / `DISNEY_SYNC_GATEWAY_PASSWORD` (startup fails fast if either is blank). `THEMEPARKS_BASE_URL` (live source), `DISNEY_SYNC_GATEWAY_BASE_URL` (static catalog source), and `DISNEY_DINING_MENU_BASE_URL` (restaurant menus, from Disney's public website dining-menu API — anonymous, no credentials) all default to the documented public endpoints. See `apps/api/.env.example` for descriptions.
 
 Optional Disney resilience-tuning keys (all have sane defaults): `DISNEY_MAX_RPS`, `DISNEY_MAX_CONCURRENCY` (shared Request_Budget), `DISNEY_BACKOFF_*` (bounded backoff), `MENU_FRESHNESS_MS` (lazy-menu cache window), and `CATALOG_SYNC_INTERVAL_MS` (scheduled cadence, floored at 24h). Override only if you have a reason to.
 
@@ -322,9 +322,9 @@ The catalog and live paths are deliberately split (see the intro) and Disney acc
 
 ### Static catalog (Disney)
 
-- **Single shared transport.** Every Disney request (Sync Gateway + Menu Service) flows through one `Disney_Transport` that owns the shared **Request_Budget** rate limiter (Redis-backed across processes, in-process fallback), bounded **exponential backoff with jitter** honoring `Retry-After`, the required `User-Agent` headers, and failure **classification** — an Akamai/WAF "Access Denied" `403`/`429` is a transient `waf_block` (retried), distinct from a genuine `auth_failure` (fatal, fail fast).
+- **Single shared transport.** Every Disney request (Sync Gateway + dining-menu API) flows through one `Disney_Transport` that owns the shared **Request_Budget** rate limiter (Redis-backed across processes, in-process fallback), bounded **exponential backoff with jitter** honoring `Retry-After`, the required `User-Agent` headers, and failure **classification** — an Akamai/WAF "Access Denied" `403`/`429` is a transient `waf_block` (retried), distinct from a genuine `auth_failure` (fatal, fail fast).
 - **Incremental sync.** `Catalog_Sync` persists a `_changes` **checkpoint** and a durable local **document store** (`disney_documents`). The first run is a full `Bootstrap_Sync`; subsequent runs are `Delta_Sync`s that fetch only changed documents. Reconciliation reads the active document set from the store, not a fresh full enumeration.
-- **Lazy menus & infrequent cadence.** Restaurant menus are fetched on demand and cached (not fetched during sync); the scheduled sync runs no more than once per 24h, with an on-read opportunistic refresh past the freshness window.
+- **Lazy menus & infrequent cadence.** Restaurant menus are fetched on demand from Disney's **public website dining-menu API** (anonymous, keyed by the restaurant's `Enterprise_Id`) and cached (not fetched during sync); a menu fetch failure or an unexpected response shape is logged and degrades to the cached/empty result without failing the detail read. The scheduled sync runs no more than once per 24h, with an on-read opportunistic refresh past the freshness window.
 - **Graceful degradation.** A Disney block or credential rotation leaves the prior cache byte-identical and keeps serving it with a staleness indicator; only a first-ever failure with no prior cache returns `503 catalog_unavailable`. Every run records an outcome (`success | waf_block | auth_failure | network | invalid_response | aborted`) in the sync-run history.
 
 ### Live data (ThemeParks.wiki)

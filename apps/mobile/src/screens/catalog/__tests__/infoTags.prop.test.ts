@@ -35,6 +35,7 @@ const KIND_ORDER: readonly InfoTagKind[] = [
   'coordinates',
   'mealPeriod',
   'resort',
+  'resortArea',
 ];
 
 function kindIndex(kind: InfoTagKind): number {
@@ -121,6 +122,7 @@ const experienceArb = fc.record({
   longitude: optionalCoordArb,
   mealPeriods: mealPeriodsArb,
   resortId: optionalStringArb,
+  resortArea: optionalStringArb,
 }) as fc.Arbitrary<InfoTagExperience>;
 
 // The resort-name argument spans present, null, and whitespace-only values so
@@ -202,6 +204,17 @@ describe('Property 14: buildInfoTags preserves the fixed relative order and omit
           isPresentString(experience.resortId) &&
           isPresentString(resortName);
         expect(countOfKind('resort')).toBe(resortPresent ? 1 : 0);
+
+        // Resort area: present iff area is Resort AND a Resort_Area is
+        // persisted (independent of whether a specific resort resolved).
+        const resortAreaPresent =
+          experience.areaType === 'Resort' &&
+          isPresentString(experience.resortArea);
+        expect(countOfKind('resortArea')).toBe(resortAreaPresent ? 1 : 0);
+        if (resortAreaPresent) {
+          const areaTag = tags.find((t) => t.kind === 'resortArea')!;
+          expect(areaTag.label).toBe(experience.resortArea!.trim());
+        }
       }),
       { numRuns: NUM_RUNS },
     );

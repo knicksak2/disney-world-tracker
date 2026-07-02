@@ -80,6 +80,12 @@ export interface UpstreamExperience {
    * casing preserved, truncated to at most 200 characters.
    */
   readonly land: string | null;
+  /**
+   * WDW Resort_Area (geographic zone) when `areaType === 'Resort'`, else `null`
+   * (resolved by `resolveResortArea`). Trimmed, original casing preserved,
+   * truncated to at most 200 characters.
+   */
+  readonly resortArea: string | null;
   /** Description text (R1.8: 0..1000 chars). */
   readonly description: string;
   /**
@@ -113,9 +119,9 @@ export interface UpstreamExperience {
  *
  * Only the fields that participate in the diff decision are listed: `id`
  * to look up by stable internal id, `active` to detect soft-deleted rows
- * eligible for reactivation, and `name`/`park`/`category` to detect
- * material drift from upstream (R1.16). The full row also has
- * `upstreamEntityId`, `description`, and timestamps, but those do not
+ * eligible for reactivation, and `name`/`park`/`category`/`land`/`areaType`/
+ * `resortId` to detect material drift from upstream (R1.16). The full row also
+ * has `upstreamEntityId`, `description`, and timestamps, but those do not
  * influence whether `reconcile` emits an upsert.
  */
 export interface CatalogCacheRow {
@@ -130,6 +136,25 @@ export interface CatalogCacheRow {
    * material change.
    */
   readonly land: string | null;
+  /**
+   * The resolved Area_Type of the Experience. Read into the diff so a
+   * re-classification of the owning Area (e.g. a restaurant moving from the
+   * resort-wide catch-all to a specific resort) is detected as a material
+   * change and re-applied to the cached row (R4.11-R4.15).
+   */
+  readonly areaType: AreaType;
+  /**
+   * The owning Resort's Internal_Id when the Experience belongs to a specific
+   * resort, else `null`. Read into the diff so a change in the resolved resort
+   * ancestor is detected as a material change (R4.14).
+   */
+  readonly resortId: string | null;
+  /**
+   * The persisted Resort_Area (geographic zone) for a `Resort`-area
+   * Experience, else `null`. Read into the diff so a change in the resolved
+   * Resort_Area is detected as a material change.
+   */
+  readonly resortArea: string | null;
 }
 
 /**
@@ -152,6 +177,12 @@ export interface ReconcileUpsert {
    * no Land (R2.1, R3.1). Carried through the diff so Catalog_Sync writes it.
    */
   readonly land: string | null;
+  /**
+   * WDW Resort_Area (geographic zone) to persist for a `Resort`-area
+   * Experience, or `null` otherwise. Carried through the diff so Catalog_Sync
+   * writes it.
+   */
+  readonly resortArea: string | null;
   /** Disney-provided image URL (from `selectImageUrl`), or `null` (R7.1-R7.3, R14.9). */
   readonly imageUrl: string | null;
   /** Owning Area_Type (R5.7). */

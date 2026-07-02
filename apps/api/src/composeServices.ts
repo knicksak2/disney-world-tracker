@@ -92,6 +92,8 @@ import { createThemeParksClient } from './services/catalog/themeparks.js';
 import { createFacilitiesClient } from './services/catalog/disney/facilitiesClient.js';
 import { createDisneyTransport } from './services/catalog/disney/transport.js';
 import { createRedisRateLimiter } from './services/catalog/disney/rateLimiter.js';
+import { createDiningMenuClient } from './services/catalog/disney/diningMenuClient.js';
+import { createMenuRetrieval } from './services/catalog/menuRetrieval.js';
 
 import { createFriendsRepo } from './services/friends/repo.js';
 import { createSharingRepo } from './services/sharing/repo.js';
@@ -239,6 +241,26 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
     credentials: config.disney.credentials,
   });
 
+  // Demand-driven menu source. The scoped explorer-service finder rejects the
+  // app's anonymous token (403 "required scopes"), so menus are sourced from
+  // Disney's PUBLIC website dining-menu API (`?searchTerm={Enterprise_Id}`),
+  // which serves anonymous callers. It shares the SAME Disney_Transport, so
+  // every request still draws from the single authoritative Redis-backed
+  // Request_Budget (R2.1, R2.3) — no second transport or limiter is created.
+  const diningMenuClient = createDiningMenuClient({
+    transport: disneyTransport,
+    baseUrl: config.disney.diningMenuBaseUrl,
+  });
+
+  // Demand-driven Menu retrieval seam (R1.1-R1.3): fetch on cache miss/stale,
+  // serve cache when fresh, degrade to cache on failure. The seam's
+  // `logger`/`now` default to production implementations.
+  const menuRetrieval = createMenuRetrieval({
+    repo: catalogRepo,
+    client: diningMenuClient,
+    freshnessMs: config.disney.menuFreshnessMs,
+  });
+
   // --- Auth wiring ----------------------------------------------------
   const lockout = createLockoutService(redis as never);
   const sessionMiddleware = createSessionMiddleware({
@@ -294,7 +316,7 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
       listActiveExperiences: (filters) =>
         catalogRepo.listActiveExperiences(filters),
       getExperience: (id) => catalogRepo.getExperience(id),
-      getMenusFor: (id) => catalogRepo.getMenusFor(id),
+      getMenusFor: (id) => menuRetrieval.getMenuForRestaurant(id),
       listActiveResorts: () => catalogRepo.listActiveResorts(),
       listDestinationCounts: () => catalogRepo.listDestinationCounts(),
       // ThemeParks.wiki-sourced Live_Detail served through the catalog

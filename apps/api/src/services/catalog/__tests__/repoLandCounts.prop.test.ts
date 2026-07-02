@@ -121,6 +121,7 @@ function freshRepo(): { repo: CatalogRepo; pool: DbPool } {
   applyMigration(db, '0003_note_shareable.sql');
   applyMigration(db, '0004_disney_sources.sql');
   applyMigration(db, '0006_experience_land.sql');
+  applyMigration(db, '0007_experience_resort_area.sql');
 
   return { repo: createCatalogRepo(pool), pool };
 }

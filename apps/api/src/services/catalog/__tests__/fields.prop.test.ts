@@ -110,6 +110,7 @@ function withEnrichmentDefaults(base: {
   return {
     ...base,
     land: null,
+    resortArea: null,
     imageUrl: null,
     areaType: 'ThemePark',
     resortId: null,
@@ -171,6 +172,9 @@ const cacheRowArb: fc.Arbitrary<CatalogCacheRow> = fc.record({
   park: parkArb,
   category: categoryArb,
   land: fc.constant<string | null>(null),
+  areaType: fc.constant<'ThemePark'>('ThemePark'),
+  resortId: fc.constant<string | null>(null),
+  resortArea: fc.constant<string | null>(null),
 });
 
 /** Cache with distinct ids; same dedupe-avoidance reasoning as upstream. */

@@ -848,6 +848,9 @@ describe('runSync — reconcile drives upserts and soft-deletes', () => {
         park: 'Magic Kingdom',
         category: 'Ride',
         land: null,
+        areaType: 'ThemePark',
+        resortId: null,
+        resortArea: null,
       },
     ];
     const repo = createStubRepo({ snapshot });
@@ -880,6 +883,9 @@ describe('runSync — reconcile drives upserts and soft-deletes', () => {
         park: 'Magic Kingdom',
         category: 'Ride',
         land: null,
+        areaType: 'ThemePark',
+        resortId: null,
+        resortArea: null,
       },
     ];
     const repo = createStubRepo({ snapshot });

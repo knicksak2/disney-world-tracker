@@ -13,7 +13,7 @@
  * intentionally NOT duplicated here.
  */
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import type { MenuDTO } from '@dwt/shared';
 
@@ -177,6 +177,44 @@ describe('createMenuRetrieval.getMenuForRestaurant', () => {
     expect(clientCalls).toEqual(['ent-3']); // it did attempt
     expect(repoCalls.upserts).toHaveLength(0); // nothing cached on failure
     expect(warnings).toHaveLength(1); // failure recorded
+  });
+
+  // Feature: restaurant-menu-display, R3.5 example: a Menu_Service failure is
+  // recorded via `logger.warn` (non-propagation itself is covered by Property 1
+  // / the R8.5 test above). This pins the observable side effect — that the
+  // failure is logged — with an explicit spy logger.
+  it('invokes logger.warn when the Menu_Service fetch fails (R3.5)', async () => {
+    const now = new Date(FRESHNESS_MS + 10);
+    const state: MenuFetchState = {
+      upstreamEntityId: 'ent-warn',
+      cached: { menus: CACHED, fetchedAt: new Date(1) }, // stale ⇒ tries fetch
+    };
+    const clientCalls: string[] = [];
+    const repoCalls: RepoCalls = { upserts: [] };
+    const fetchError = new Error('Menu_Service exploded');
+    const warn = vi.fn();
+
+    const retrieval = createMenuRetrieval({
+      repo: makeRepo(state, repoCalls),
+      client: makeClient(async () => {
+        throw fetchError;
+      }, clientCalls),
+      freshnessMs: FRESHNESS_MS,
+      now: () => now,
+      logger: { warn },
+    });
+
+    await retrieval.getMenuForRestaurant('exp-warn');
+
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        err: fetchError,
+        experienceId: 'exp-warn',
+        upstreamEntityId: 'ent-warn',
+      }),
+      expect.any(String),
+    );
   });
 
   it('returns an empty array when the Experience does not exist', async () => {

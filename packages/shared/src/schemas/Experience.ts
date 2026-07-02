@@ -34,5 +34,9 @@ export const experienceSchema = z
     // Present only when persisted; null/absent otherwise. Capped at 200 chars
     // to mirror the persistence length constraint (R1.7, R3.1, R3.2).
     land: z.string().max(200).nullable().optional(),
+    // WDW Resort_Area (geographic zone) for a Resort-area Experience, resolved
+    // during Catalog_Sync. Present only when persisted; null/absent otherwise.
+    // Capped at 200 chars to mirror the persistence length constraint.
+    resortArea: z.string().max(200).nullable().optional(),
   })
   .strict();
