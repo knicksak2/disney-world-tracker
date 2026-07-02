@@ -27,10 +27,33 @@ export const EXPERIENCE_CATEGORIES = [
   'Restaurant',
   'Parade',
   'Character_Meet',
+  'Tour',
+  'Recreation',
+  'Spa',
+  'Event',
   'Other',
 ] as const;
 
 export type ExperienceCategory = (typeof EXPERIENCE_CATEGORIES)[number];
+
+// ---------------------------------------------------------------------------
+// AreaType
+// ---------------------------------------------------------------------------
+//
+// The kind of place an Experience belongs to, per the requirements glossary.
+// An Experience is grouped by its Area_Type; a `Resort`-area Experience
+// additionally references the specific Resort's Internal_Id. The value set is
+// closed and mirrors the design's area-resolution precedence
+// (ThemePark → WaterPark → DisneySprings → Resort).
+
+export const AREA_TYPES = [
+  'ThemePark',
+  'WaterPark',
+  'DisneySprings',
+  'Resort',
+] as const;
+
+export type AreaType = (typeof AREA_TYPES)[number];
 
 // ---------------------------------------------------------------------------
 // Park

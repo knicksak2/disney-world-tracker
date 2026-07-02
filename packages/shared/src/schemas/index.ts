@@ -28,8 +28,8 @@ export {
 } from './primitives.js';
 
 // DTO schemas
-export { userSchema, registerInputSchema, loginInputSchema } from './User.js';
-export type { RegisterInput, LoginInput } from './User.js';
+export { userSchema, registerInputSchema, loginInputSchema, changePasswordInputSchema } from './User.js';
+export type { RegisterInput, LoginInput, ChangePasswordInput } from './User.js';
 
 export {
   profileSchema,
@@ -78,13 +78,10 @@ export {
   liveDetailSchema,
   liveDetailResponseSchema,
   operatingStatusSchema,
-  returnWindowStateSchema,
-  boardingGroupAllocationSchema,
-  returnWindowSchema,
-  paidReturnWindowSchema,
-  boardingGroupStatusSchema,
   forecastEntrySchema,
   showtimeSchema,
   operatingHoursSchema,
   diningAvailabilityEntrySchema,
+  lightningLaneStateSchema,
+  boardingGroupStateSchema,
 } from './LiveDetail.js';

@@ -10,7 +10,10 @@
 export type { UserDTO } from './User.js';
 export type { ProfileDTO } from './Profile.js';
 export type { ExperienceDTO } from './Experience.js';
+export type { ResortDTO } from './Resort.js';
+export type { MealPeriodDTO, MenuDTO } from './Menu.js';
 export type { CompletionDTO } from './Completion.js';
+export type { CompletionEntryDTO, FriendCompletionsDTO } from './CompletionEntry.js';
 export type { RatingDTO } from './Rating.js';
 export type { NoteDTO } from './Note.js';
 export type { FriendRequestDTO } from './FriendRequest.js';
@@ -27,15 +30,29 @@ export type { LeaderboardEntryDTO } from './LeaderboardEntry.js';
 export type { StatsDTO, StatsBreakdown } from './Stats.js';
 export type {
   OperatingStatus,
-  ReturnWindowState,
-  BoardingGroupAllocation,
-  ReturnWindow,
-  PaidReturnWindow,
-  BoardingGroupStatus,
   ForecastEntry,
   Showtime,
   OperatingHours,
   DiningAvailabilityEntry,
+  LightningLaneState,
+  BoardingGroupState,
   LiveDetailDTO,
   LiveDetailResponseDTO,
 } from './LiveDetail.js';
+
+export {
+  SYNC_RUN_OUTCOMES,
+  DISNEY_TARGETS,
+  DISNEY_FAILURE_KINDS,
+} from './DisneySource.js';
+export type {
+  SyncRunOutcome,
+  DisneyTarget,
+  DisneyRequestSpec,
+  DisneyResponse,
+  DisneyFailureKind,
+  DisneyClassification,
+  BackoffConfig,
+  RateLimiterConfig,
+  StoredDocument,
+} from './DisneySource.js';

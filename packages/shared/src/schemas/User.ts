@@ -61,3 +61,21 @@ export const loginInputSchema = z
   .strict();
 
 export type LoginInput = z.infer<typeof loginInputSchema>;
+
+/**
+ * Change-password input (R6.13-R6.16). The caller supplies their current
+ * password (re-verified server-side against the stored Argon2id hash before
+ * any change) and a new password validated by the same 8-128 character
+ * `passwordSchema` used at registration. A wrong current password yields
+ * `invalid_credentials` (R6.14); a structurally invalid new password yields
+ * `validation_failed` (R6.15). Both passwords flow only into the Argon2id
+ * helpers and are never logged or returned.
+ */
+export const changePasswordInputSchema = z
+  .object({
+    currentPassword: passwordSchema,
+    newPassword: passwordSchema,
+  })
+  .strict();
+
+export type ChangePasswordInput = z.infer<typeof changePasswordInputSchema>;

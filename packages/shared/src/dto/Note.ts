@@ -16,6 +16,17 @@ export interface NoteDTO {
   /** Trimmed body, 1-2000 characters (R5.2). */
   readonly body: string;
 
+  /**
+   * Whether the owning User has marked this Note shareable with Friends.
+   * Private by default (`false`); only the owner can flip it via the Note
+   * write path. The Friend Completions read honors this flag (R4.6, R4.7).
+   *
+   * Optional on the DTO type because some in-memory callers construct
+   * partial DTOs; persisted Notes always carry a boolean since the
+   * `notes.shareable` column is `NOT NULL DEFAULT FALSE` (migration 0003).
+   */
+  readonly shareable?: boolean;
+
   /** ISO-8601 timestamp of the most recent save/edit. */
   readonly updatedAt: string;
 }

@@ -15,11 +15,13 @@
 // Enums (runtime tuples + derived union types).
 export {
   EXPERIENCE_CATEGORIES,
+  AREA_TYPES,
   PARKS,
   SHARE_PAYLOAD_KINDS,
 } from './enums.js';
 export type {
   ExperienceCategory,
+  AreaType,
   Park,
   SharePayloadKind,
 } from './enums.js';
@@ -40,7 +42,12 @@ export type {
   UserDTO,
   ProfileDTO,
   ExperienceDTO,
+  ResortDTO,
+  MealPeriodDTO,
+  MenuDTO,
   CompletionDTO,
+  CompletionEntryDTO,
+  FriendCompletionsDTO,
   RatingDTO,
   NoteDTO,
   FriendRequestDTO,
@@ -55,17 +62,32 @@ export type {
   StatsDTO,
   StatsBreakdown,
   OperatingStatus,
-  ReturnWindowState,
-  BoardingGroupAllocation,
-  ReturnWindow,
-  PaidReturnWindow,
-  BoardingGroupStatus,
   ForecastEntry,
   Showtime,
   OperatingHours,
   DiningAvailabilityEntry,
+  LightningLaneState,
+  BoardingGroupState,
   LiveDetailDTO,
   LiveDetailResponseDTO,
+} from './dto/index.js';
+
+// Disney source-resilience transport-facing types (closed-set value tuples).
+export {
+  SYNC_RUN_OUTCOMES,
+  DISNEY_TARGETS,
+  DISNEY_FAILURE_KINDS,
+} from './dto/index.js';
+export type {
+  SyncRunOutcome,
+  DisneyTarget,
+  DisneyRequestSpec,
+  DisneyResponse,
+  DisneyFailureKind,
+  DisneyClassification,
+  BackoffConfig,
+  RateLimiterConfig,
+  StoredDocument,
 } from './dto/index.js';
 
 // Zod schemas + input types.
@@ -90,6 +112,7 @@ export {
   userSchema,
   registerInputSchema,
   loginInputSchema,
+  changePasswordInputSchema,
   profileSchema,
   profileDisplayNameInputSchema,
   experienceSchema,
@@ -116,19 +139,17 @@ export {
   liveDetailSchema,
   liveDetailResponseSchema,
   operatingStatusSchema,
-  returnWindowStateSchema,
-  boardingGroupAllocationSchema,
-  returnWindowSchema,
-  paidReturnWindowSchema,
-  boardingGroupStatusSchema,
   forecastEntrySchema,
   showtimeSchema,
   operatingHoursSchema,
   diningAvailabilityEntrySchema,
+  lightningLaneStateSchema,
+  boardingGroupStateSchema,
 } from './schemas/index.js';
 export type {
   RegisterInput,
   LoginInput,
+  ChangePasswordInput,
   ProfileDisplayNameInput,
   CompletionInput,
   RatingInput,

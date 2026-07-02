@@ -30,6 +30,9 @@ export const experienceSchema = z
     // Optional + nullable: curated out of band from the catalog sync, so a
     // row may have no image yet (null) and pre-field fixtures may omit it.
     imageUrl: z.string().url().max(2048).nullable().optional(),
-    imageAttribution: z.string().max(1000).nullable().optional(),
+    // Themed Land within a ThemePark/WaterPark, resolved during Catalog_Sync.
+    // Present only when persisted; null/absent otherwise. Capped at 200 chars
+    // to mirror the persistence length constraint (R1.7, R3.1, R3.2).
+    land: z.string().max(200).nullable().optional(),
   })
   .strict();

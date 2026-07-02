@@ -74,14 +74,6 @@ describe('liveDetailSchema — out-of-range minute values', () => {
     });
     expect(result.success).toBe(false);
   });
-
-  it('rejects an out-of-range boarding-group estimatedWaitMinutes', () => {
-    const result = liveDetailSchema.safeParse({
-      ...MINIMAL,
-      boardingGroup: { allocation: 'Available', estimatedWaitMinutes: -1 },
-    });
-    expect(result.success).toBe(false);
-  });
 });
 
 describe('liveDetailSchema — out-of-range forecast values', () => {
@@ -117,5 +109,103 @@ describe('liveDetailSchema — out-of-range forecast values', () => {
       forecast: [{ time, waitMinutes: 30, percentage: 50 }],
     });
     expect(result.success).toBe(true);
+  });
+});
+
+describe('liveDetailSchema — Lightning Lane state (R11.6, R11.8)', () => {
+  const time = '2024-05-01T13:00:00Z';
+
+  it('accepts the minimal shape without lightningLane (omitted when absent)', () => {
+    expect(liveDetailSchema.safeParse(MINIMAL).success).toBe(true);
+  });
+
+  it('accepts an empty lightningLane object (all fields optional)', () => {
+    expect(
+      liveDetailSchema.safeParse({ ...MINIMAL, lightningLane: {} }).success,
+    ).toBe(true);
+  });
+
+  it('accepts a fully-populated lightningLane', () => {
+    const result = liveDetailSchema.safeParse({
+      ...MINIMAL,
+      lightningLane: {
+        available: true,
+        price: { amount: 15, currency: 'USD' },
+        returnStart: time,
+        returnEnd: '2024-05-01T14:00:00Z',
+        state: 'AVAILABLE',
+      },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects an unknown key on lightningLane (strict)', () => {
+    expect(
+      liveDetailSchema.safeParse({
+        ...MINIMAL,
+        lightningLane: { extra: true },
+      }).success,
+    ).toBe(false);
+  });
+
+  it('rejects a lightningLane price missing its currency', () => {
+    expect(
+      liveDetailSchema.safeParse({
+        ...MINIMAL,
+        lightningLane: { price: { amount: 15 } },
+      }).success,
+    ).toBe(false);
+  });
+
+  it('rejects a non-ISO returnStart', () => {
+    expect(
+      liveDetailSchema.safeParse({
+        ...MINIMAL,
+        lightningLane: { returnStart: 'not-a-time' },
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe('liveDetailSchema — boarding-group state (R11.7, R11.8)', () => {
+  it('accepts the minimal shape without boardingGroup (omitted when absent)', () => {
+    expect(liveDetailSchema.safeParse(MINIMAL).success).toBe(true);
+  });
+
+  it('accepts an empty boardingGroup object (all fields optional)', () => {
+    expect(
+      liveDetailSchema.safeParse({ ...MINIMAL, boardingGroup: {} }).success,
+    ).toBe(true);
+  });
+
+  it('accepts a fully-populated boardingGroup', () => {
+    const result = liveDetailSchema.safeParse({
+      ...MINIMAL,
+      boardingGroup: {
+        available: true,
+        currentGroupStart: 40,
+        currentGroupEnd: 55,
+        state: 'AVAILABLE',
+      },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects an unknown key on boardingGroup (strict)', () => {
+    expect(
+      liveDetailSchema.safeParse({
+        ...MINIMAL,
+        boardingGroup: { extra: 1 },
+      }).success,
+    ).toBe(false);
+  });
+
+  it('rejects a non-integer currentGroupStart', () => {
+    expect(
+      liveDetailSchema.safeParse({
+        ...MINIMAL,
+        boardingGroup: { currentGroupStart: 40.5 },
+      }).success,
+    ).toBe(false);
   });
 });
