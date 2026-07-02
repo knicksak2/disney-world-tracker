@@ -151,7 +151,7 @@ You can point the API at either your local Docker stack or your hosted managed s
 | **Local** (Docker) | `apps/api/.env` | `npm run dev:api` | `npm run migrate` |
 | **Hosted dev** (Neon/Upstash/R2) | `apps/api/.env.dev` | `npm run dev:api:cloud` | `npm run migrate:cloud` |
 
-Copy `.env.example` to `.env.dev` and fill in your managed-service credentials there. The two files never interfere, so switching environments is just a matter of which command you run. (`migrate:cloud` only needs `DATABASE_URL`; running the full API with `dev:api:cloud` needs the Redis and S3 values filled in too.) All `.env*` files except `.env.example` are gitignored.
+Copy `.env.example` to `.env.dev` and fill in your managed-service credentials there. The two files never interfere, so switching environments is just a matter of which command you run. (`migrate:cloud` only needs `DATABASE_URL`; running the full API with `dev:api:cloud` needs the Redis and S3 values filled in too.) The Disney Sync Gateway credentials are the exception — don't hand-copy them; `node tools/pull-disney-creds.mjs` writes the current values into **both** `.env` and `.env.dev` (a stale placeholder in `.env.dev` is what makes `sync:cloud` fail with `auth_failure`/401). All `.env*` files except `.env.example` are gitignored.
 
 ### API `dev` script
 

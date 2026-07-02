@@ -1,9 +1,12 @@
 // Local one-off: pull Disney Sync Gateway Basic-auth credentials out of the
-// mousetools `environments.bin` blob and write them into apps/api/.env.
+// mousetools `environments.bin` blob and write them into the API env files.
 //
 // - Never prints the credential values.
 // - Only rewrites the two DISNEY_SYNC_GATEWAY_USERNAME / _PASSWORD lines.
-// - .env is gitignored, so values never enter version control.
+// - Updates every target env file that exists (apps/api/.env for local, and
+//   apps/api/.env.dev for the hosted/cloud target) so `sync` and `sync:cloud`
+//   stay in step.
+// - All target files are gitignored, so values never enter version control.
 //
 // Re-run this if Disney rotates the credentials.
 //
@@ -11,16 +14,15 @@
 
 import crypto from 'node:crypto';
 import { readFile, writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
-const ENV_PATH = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  '..',
-  'apps',
-  'api',
-  '.env',
-);
+const API_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'apps', 'api');
+
+// Every env file the credentials should be written into. `.env` drives the
+// local (`sync`) path; `.env.dev` drives the hosted (`sync:cloud`) path.
+const ENV_PATHS = [path.join(API_DIR, '.env'), path.join(API_DIR, '.env.dev')];
 const BIN_URL =
   'https://gitlab.com/caratozzoloxyz/public/MouseTools/-/raw/master/mousetools/resources/environments.bin';
 
@@ -72,13 +74,21 @@ async function main() {
     throw new Error('environments.bin did not contain syncGatewayUser / syncGatewayPass');
   }
 
-  let content = await readFile(ENV_PATH, 'utf-8');
-  content = upsertLine(content, 'DISNEY_SYNC_GATEWAY_USERNAME', user);
-  content = upsertLine(content, 'DISNEY_SYNC_GATEWAY_PASSWORD', pass);
-  await writeFile(ENV_PATH, content, 'utf-8');
+  const targets = ENV_PATHS.filter((p) => existsSync(p));
+  if (targets.length === 0) {
+    throw new Error(
+      `No env files found to update. Create at least one of:\n  ${ENV_PATHS.join('\n  ')}`,
+    );
+  }
 
-  // Confirmation only — never echo the secret values.
-  console.log(`Updated ${ENV_PATH}`);
+  for (const envPath of targets) {
+    let content = await readFile(envPath, 'utf-8');
+    content = upsertLine(content, 'DISNEY_SYNC_GATEWAY_USERNAME', user);
+    content = upsertLine(content, 'DISNEY_SYNC_GATEWAY_PASSWORD', pass);
+    await writeFile(envPath, content, 'utf-8');
+    // Confirmation only — never echo the secret values.
+    console.log(`Updated ${envPath}`);
+  }
   console.log(`  DISNEY_SYNC_GATEWAY_USERNAME: set (${user.length} chars)`);
   console.log(`  DISNEY_SYNC_GATEWAY_PASSWORD: set (${pass.length} chars)`);
 }
