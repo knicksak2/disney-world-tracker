@@ -34,7 +34,8 @@ const apiBaseUrl =
 
 const config: ExpoConfig = {
   name: 'Disney World Tracker',
-  slug: 'dwt',
+  slug: 'disney-tracker',
+  owner: 'knicksak2s-team',
   version: '0.0.0',
   orientation: 'portrait',
   // NOTE: custom icon/splash/adaptive-icon assets are not yet committed, so
@@ -55,6 +56,9 @@ const config: ExpoConfig = {
   plugins: ['expo-secure-store', 'expo-image-picker', 'expo-status-bar'],
   extra: {
     apiBaseUrl,
+    eas: {
+      projectId: 'e98d1957-cb2c-431a-be3d-486c6c66122c',
+    },
   },
 };
 
