@@ -364,7 +364,11 @@ export default function ShareComposerScreen({
   if (friendsQuery.isLoading && friendsQuery.data === undefined) {
     return (
       <ScreenContainer>
-        <GradientHeader title="Share" icon="share-social" />
+        <GradientHeader
+          title="Share"
+          icon="share-social"
+          onBack={() => navigation.goBack()}
+        />
         <View style={styles.centered} accessibilityRole="progressbar">
           <ActivityIndicator color={theme.color.primary} />
         </View>
@@ -375,7 +379,11 @@ export default function ShareComposerScreen({
   if (friendsQuery.isError && friendsQuery.data === undefined) {
     return (
       <ScreenContainer>
-        <GradientHeader title="Share" icon="share-social" />
+        <GradientHeader
+          title="Share"
+          icon="share-social"
+          onBack={() => navigation.goBack()}
+        />
         <View style={styles.centered}>
           <EmptyState
             icon="cloud-offline-outline"
@@ -399,6 +407,7 @@ export default function ShareComposerScreen({
         title="Share with friends"
         subtitle={`${recipientCount}/${MAX_RECIPIENTS} selected`}
         icon="share-social"
+        onBack={() => navigation.goBack()}
       />
 
       <FlatList

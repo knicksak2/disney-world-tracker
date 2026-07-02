@@ -60,6 +60,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import {
@@ -263,6 +264,7 @@ const EMPTY_COPY = 'Your inbox is empty.';
 
 export default function InboxScreen(): JSX.Element {
   const queryClient = useQueryClient();
+  const navigation = useNavigation();
 
   // -------------------------------------------------------------------------
   // List query
@@ -348,7 +350,11 @@ export default function InboxScreen(): JSX.Element {
   if (inboxQuery.isLoading) {
     return (
       <ScreenContainer>
-        <GradientHeader title="Inbox" icon="mail" />
+        <GradientHeader
+          title="Inbox"
+          icon="mail"
+          onBack={() => navigation.goBack()}
+        />
         <View style={styles.centerWrap}>
           <ActivityIndicator color={theme.color.primary} />
         </View>
@@ -359,7 +365,11 @@ export default function InboxScreen(): JSX.Element {
   if (inboxQuery.isError || inboxQuery.data === undefined) {
     return (
       <ScreenContainer>
-        <GradientHeader title="Inbox" icon="mail" />
+        <GradientHeader
+          title="Inbox"
+          icon="mail"
+          onBack={() => navigation.goBack()}
+        />
         <View style={styles.centerWrap}>
           <EmptyState
             icon="cloud-offline-outline"
@@ -386,6 +396,7 @@ export default function InboxScreen(): JSX.Element {
         title="Inbox"
         subtitle="Shares your friends sent your way."
         icon="mail"
+        onBack={() => navigation.goBack()}
         right={
           <Badge
             label={`${displayedUnread} unread`}

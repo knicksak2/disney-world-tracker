@@ -15,6 +15,7 @@ import {
   StyleSheet,
   Text,
   View,
+  type AccessibilityRole,
   type StyleProp,
   type TextStyle,
   type ViewStyle,
@@ -54,12 +55,24 @@ export function GradientHeader({
   icon,
   compact = false,
   right,
+  onBack,
+  backAccessibilityLabel = 'Go back',
 }: {
   readonly title: string;
   readonly subtitle?: string;
   readonly icon?: keyof typeof Ionicons.glyphMap;
   readonly compact?: boolean;
   readonly right?: React.ReactNode;
+  /**
+   * When provided, renders a themed leading back control that invokes this
+   * callback on press. The control is exposed to assistive tech as a button
+   * (`accessibilityRole="button"`) with `backAccessibilityLabel` as its label.
+   * Optional so existing `GradientHeader` usages (Catalog, Home, Stats, etc.)
+   * are unaffected.
+   */
+  readonly onBack?: () => void;
+  /** Spoken label for the back control; defaults to "Go back". */
+  readonly backAccessibilityLabel?: string;
 }): JSX.Element {
   return (
     <LinearGradient
@@ -82,6 +95,24 @@ export function GradientHeader({
         style={styles.sparkleMidLeft}
       />
       <View style={styles.headerRow}>
+        {onBack !== undefined ? (
+          <Pressable
+            onPress={onBack}
+            accessibilityRole="button"
+            accessibilityLabel={backAccessibilityLabel}
+            hitSlop={8}
+            style={({ pressed }) => [
+              styles.headerBackBtn,
+              pressed && styles.cardPressed,
+            ]}
+          >
+            <Ionicons
+              name="arrow-back"
+              size={compact ? 22 : 24}
+              color={theme.color.textOnPrimary}
+            />
+          </Pressable>
+        ) : null}
         <View style={styles.headerTextWrap}>
           <View style={styles.headerTitleRow}>
             {icon !== undefined ? (
@@ -119,6 +150,8 @@ export function Card({
   onPress,
   accentColor,
   testID,
+  accessibilityRole,
+  accessibilityLabel,
 }: {
   readonly children: React.ReactNode;
   readonly style?: StyleProp<ViewStyle>;
@@ -126,6 +159,10 @@ export function Card({
   /** Optional left accent stripe color (e.g. park hue). */
   readonly accentColor?: string;
   readonly testID?: string;
+  /** Accessibility role forwarded to the pressable wrapper when `onPress` is set. */
+  readonly accessibilityRole?: AccessibilityRole;
+  /** Accessibility label forwarded to the pressable wrapper when `onPress` is set. */
+  readonly accessibilityLabel?: string;
 }): JSX.Element {
   const inner = (
     <View
@@ -151,6 +188,8 @@ export function Card({
       onPress={onPress}
       style={({ pressed }) => [pressed && styles.cardPressed]}
       testID={testID}
+      {...(accessibilityRole !== undefined ? { accessibilityRole } : {})}
+      {...(accessibilityLabel !== undefined ? { accessibilityLabel } : {})}
     >
       {inner}
     </Pressable>
@@ -283,14 +322,27 @@ export function Badge({
   color: badgeColor = theme.color.primary,
   icon,
   testID,
+  accessibilityLabel,
 }: {
   readonly label: string;
   readonly color?: string;
   readonly icon?: keyof typeof Ionicons.glyphMap;
   readonly testID?: string;
+  /**
+   * Optional screen-reader alternative. When provided the badge is exposed as a
+   * single accessible element carrying this label instead of the raw display
+   * text, so Info_Tags can convey their meaning (e.g. "Land: Fantasyland").
+   */
+  readonly accessibilityLabel?: string;
 }): JSX.Element {
   return (
-    <View style={[styles.badge, { backgroundColor: `${hexToRgba(badgeColor, 0.14)}` }]} testID={testID}>
+    <View
+      style={[styles.badge, { backgroundColor: `${hexToRgba(badgeColor, 0.14)}` }]}
+      testID={testID}
+      {...(accessibilityLabel !== undefined
+        ? { accessible: true, accessibilityLabel }
+        : {})}
+    >
       {icon !== undefined ? (
         <Ionicons name={icon} size={12} color={badgeColor} style={styles.badgeIcon} />
       ) : null}
@@ -304,17 +356,30 @@ export function Chip({
   active,
   onPress,
   testID,
+  accessibilityLabel,
 }: {
   readonly label: string;
   readonly active: boolean;
   readonly onPress: () => void;
   readonly testID?: string;
+  /**
+   * Override the spoken label. When omitted the chip derives an accessible
+   * label from its visible `label` plus an explicit selected / not-selected
+   * state value, so a filter chip conveys both the option name and its
+   * selection state to assistive technology (R12.3), e.g. "Ride, selected" /
+   * "Ride, not selected". `accessibilityState={{ selected }}` is retained
+   * alongside so platforms that surface state natively still do.
+   */
+  readonly accessibilityLabel?: string;
 }): JSX.Element {
+  const spokenLabel =
+    accessibilityLabel ?? `${label}, ${active ? 'selected' : 'not selected'}`;
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
       accessibilityState={{ selected: active }}
+      accessibilityLabel={spokenLabel}
       testID={testID}
       style={({ pressed }) => [
         styles.chip,
@@ -406,6 +471,15 @@ const styles = StyleSheet.create({
   },
   headerTextWrap: {
     flex: 1,
+  },
+  headerBackBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: theme.spacing.sm,
+    backgroundColor: 'rgba(255,255,255,0.16)',
   },
   headerTitleRow: {
     flexDirection: 'row',

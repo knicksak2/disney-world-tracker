@@ -53,11 +53,16 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
+import type { CompositeScreenProps } from '@react-navigation/native';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import type { ExperienceCategory, LeaderboardEntryDTO } from '@dwt/shared';
 
 import { ApiError, apiRequest } from '../../api/client';
-import type { MainTabParamList } from '../../navigation/RootNavigator';
+import type {
+  MainTabParamList,
+  RootStackParamList,
+} from '../../navigation/RootNavigator';
 import { theme } from '../../theme/theme';
 import {
   Badge,
@@ -71,7 +76,17 @@ import {
 // Types
 // ---------------------------------------------------------------------------
 
-type Props = BottomTabScreenProps<MainTabParamList, 'Home'>;
+/**
+ * The Home tab lives inside `MainTabs`, which is itself a screen on the
+ * root-level `RootStack`. Composing the bottom-tab screen props with the
+ * root stack's props lets the leaderboard rows dispatch
+ * `navigation.navigate('ExperienceDetail', { experienceId })` against
+ * `RootStack` (the navigation bubbles up past the tab navigator).
+ */
+type Props = CompositeScreenProps<
+  BottomTabScreenProps<MainTabParamList, 'Home'>,
+  NativeStackScreenProps<RootStackParamList>
+>;
 
 /**
  * Wire shape for `GET /home/highest-rated`. Mirrors
@@ -166,13 +181,11 @@ export default function HomeScreen({ navigation }: Props): JSX.Element {
               rank={index + 1}
               entry={item}
               onPress={() => {
-                // R11.6: cross-stack navigation into the Catalog tab's
-                // ExperienceDetail screen. The bottom-tab navigator
-                // accepts a nested `screen`/`params` payload to drive
-                // a child stack.
-                navigation.navigate('Catalog', {
-                  screen: 'ExperienceDetail',
-                  params: { experienceId: item.experienceId },
+                // R11.6: push the root-level ExperienceDetail screen above
+                // the tabs so back returns to the Home leaderboard. The
+                // navigate bubbles up from the Home tab to RootStack.
+                navigation.navigate('ExperienceDetail', {
+                  experienceId: item.experienceId,
                 });
               }}
             />

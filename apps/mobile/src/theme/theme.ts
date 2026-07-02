@@ -169,8 +169,28 @@ export const categoryVisual: Record<
   Restaurant: { glyph: 'restaurant', tint: '#f6a609', label: 'Restaurant' },
   Parade: { glyph: 'sparkles', tint: '#f6c343', label: 'Parade' },
   Character_Meet: { glyph: 'happy', tint: '#2f80ed', label: 'Character Meet' },
+  Tour: { glyph: 'walk', tint: '#00897b', label: 'Tour' },
+  Recreation: { glyph: 'bicycle', tint: '#43a047', label: 'Recreation' },
+  Spa: { glyph: 'flower', tint: '#ec407a', label: 'Spa' },
+  Event: { glyph: 'calendar', tint: '#8e24aa', label: 'Event' },
   Other: { glyph: 'star', tint: '#6b6480', label: 'Other' },
 };
+
+// ---------------------------------------------------------------------------
+// Resort visual
+// ---------------------------------------------------------------------------
+
+/**
+ * Placeholder visual for a Resort (a first-class catalog concept distinct from
+ * an Experience). Used when a Resort's `imageUrl` is `null` so every resort in
+ * the browse list still shows a recognizable glyph + tint rather than a blank
+ * tile (R7.5).
+ */
+export const resortVisual: {
+  readonly glyph: string;
+  readonly tint: string;
+  readonly label: string;
+} = { glyph: 'bed', tint: '#5b2a86', label: 'Resort' };
 
 // ---------------------------------------------------------------------------
 // Aggregated export
@@ -185,6 +205,7 @@ export const theme = {
   shadow,
   parkAccent,
   categoryVisual,
+  resortVisual,
 } as const;
 
 export type Theme = typeof theme;

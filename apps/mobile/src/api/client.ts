@@ -156,6 +156,13 @@ function resolveBaseUrl(): string {
  *     pick `T` based on the route contract; `apiRequest` does no
  *     runtime validation of the success body.
  *
+ * An optional `signal` is forwarded to the underlying `fetch` so a
+ * caller can enforce a per-request timeout (or otherwise cancel the
+ * request) via an `AbortController`. When the signal aborts, `fetch`
+ * rejects with an `AbortError`; `apiRequest` lets that rejection
+ * propagate unchanged so the caller can translate it into whatever
+ * domain error its retry contract expects.
+ *
  * Generic `T` defaults to `unknown` so callers must opt in to a
  * specific shape.
  */
@@ -163,6 +170,7 @@ export async function apiRequest<T = unknown>(
   method: ApiMethod,
   path: string,
   body?: unknown,
+  signal?: AbortSignal,
 ): Promise<T> {
   const baseUrl = resolveBaseUrl();
   const url = path.startsWith('/') ? `${baseUrl}${path}` : `${baseUrl}/${path}`;
@@ -185,6 +193,9 @@ export async function apiRequest<T = unknown>(
   };
   if (body !== undefined) {
     init.body = JSON.stringify(body);
+  }
+  if (signal !== undefined) {
+    init.signal = signal;
   }
 
   const response = await fetch(url, init);

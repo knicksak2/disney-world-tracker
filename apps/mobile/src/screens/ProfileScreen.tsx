@@ -48,6 +48,8 @@ import {
 } from '@dwt/shared';
 
 import { ApiError, apiRequest } from '../api/client';
+import AvatarUpload from './AvatarUpload';
+import ChangePasswordControl from './ChangePasswordControl';
 import type { MainTabParamList } from '../navigation/RootNavigator';
 import { useSessionStore } from '../state/sessionStore';
 import { theme } from '../theme/theme';
@@ -358,6 +360,18 @@ export default function ProfileScreen(): JSX.Element {
       saving={saveNameMutation.isPending}
       onLogout={() => logoutMutation.mutate()}
       loggingOut={logoutMutation.isPending}
+      onAvatarUploaded={(avatarUrl) => {
+        // Mirror the save-name path: update the cached Profile so the new
+        // avatar renders immediately without an extra GET.
+        const next: ProfileQueryResult = {
+          kind: 'ok',
+          profile: { ...profile, avatarUrl },
+        };
+        queryClient.setQueryData<ProfileQueryResult>(
+          ['profile', profile.userId],
+          next,
+        );
+      }}
     />
   );
 }
@@ -379,6 +393,7 @@ interface ProfileContentProps {
   readonly saving: boolean;
   readonly onLogout: () => void;
   readonly loggingOut: boolean;
+  readonly onAvatarUploaded: (avatarUrl: string) => void;
 }
 
 function ProfileContent({
@@ -394,6 +409,7 @@ function ProfileContent({
   saving,
   onLogout,
   loggingOut,
+  onAvatarUploaded,
 }: ProfileContentProps): JSX.Element {
   const percentLabel = useMemo(
     () => formatPercent(profile.overallCompletionPercent),
@@ -425,6 +441,13 @@ function ProfileContent({
               </View>
             )}
           </View>
+
+          {isSelf ? (
+            <AvatarUpload
+              currentAvatarUrl={profile.avatarUrl}
+              onUploaded={onAvatarUploaded}
+            />
+          ) : null}
 
           {isSelf && isEditing ? (
             <View style={styles.editor}>
@@ -481,6 +504,13 @@ function ProfileContent({
           <Text style={styles.statLabel}>Overall completion</Text>
           <Text style={styles.statValue}>{percentLabel}</Text>
         </Card>
+
+        {isSelf ? (
+          <Card style={styles.securityCard}>
+            <Text style={styles.statLabel}>Account security</Text>
+            <ChangePasswordControl />
+          </Card>
+        ) : null}
 
         {isSelf ? (
           <View style={styles.logoutBlock}>
@@ -578,6 +608,9 @@ const styles = StyleSheet.create({
   statCard: {
     alignItems: 'center',
     gap: theme.spacing.xs,
+  },
+  securityCard: {
+    gap: theme.spacing.md,
   },
   statLabel: {
     ...theme.typography.meta,

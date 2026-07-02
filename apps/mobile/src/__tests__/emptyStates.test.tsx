@@ -9,9 +9,10 @@
  *
  * Coverage map:
  *
- *   - **R1.23** Catalog zero matches — `GET /catalog` returns
- *     `{ experiences: [], staleCache: false }`. The list body is
- *     replaced with the `catalog-empty` view.
+ *   - **R1.23** Catalog zero matches — the Catalog_Home grid renders,
+ *     then a global search returning `{ experiences: [] }` shows the
+ *     `catalog-search-empty` state (the old flat `catalog-empty` view was
+ *     removed when the grid + global search replaced the flat list).
  *
  *   - **R1.24** Catalog unavailable — `GET /catalog` rejects with an
  *     `ApiError` carrying code `catalog_unavailable`. With no prior
@@ -62,7 +63,7 @@ import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 // ---------------------------------------------------------------------------
 // Mocks (must be declared before the modules under test are imported).
@@ -121,8 +122,19 @@ import {
   ApiError,
   apiRequest as mockedApiRequest,
 } from '../api/client';
-import type { CatalogStackParamList } from '../navigation/CatalogStack';
 import type { MainTabParamList } from '../navigation/RootNavigator';
+
+/**
+ * Local Catalog-stack param list for the test harness. The standalone detail
+ * render below registers `ExperienceDetail` in a throwaway stack; the
+ * production `CatalogStackParamList` no longer carries `ExperienceDetail` (it
+ * moved to the root stack), so this harness declares its own param list rather
+ * than importing the trimmed production type.
+ */
+type CatalogStackParamList = {
+  CatalogList: undefined;
+  ExperienceDetail: { experienceId: string };
+};
 
 const apiRequestMock = mockedApiRequest as jest.MockedFunction<
   typeof mockedApiRequest
@@ -234,9 +246,9 @@ describe('empty-state renders (R1.23, R1.24, R4.6, R5.9, R10.6, R11.11)', () => 
   });
 
   // -------------------------------------------------------------------------
-  // R1.23 — Catalog zero matches
+  // R1.23 — Catalog zero matches (global search empty state)
   // -------------------------------------------------------------------------
-  test('R1.23: catalog with zero matches renders the empty state', async () => {
+  test('R1.23: an active search with zero matches renders the empty state', async () => {
     apiRequestMock.mockImplementation(async (_method, path) => {
       if (typeof path === 'string' && path.startsWith('/catalog')) {
         return { experiences: [], staleCache: false };
@@ -246,11 +258,16 @@ describe('empty-state renders (R1.23, R1.24, R4.6, R5.9, R10.6, R11.11)', () => 
 
     renderCatalog();
 
-    const empty = await screen.findByTestId('catalog-empty');
+    // Catalog_Home renders the Destination grid first (the flat-catalog
+    // `catalog-empty` state was removed when the grid + global search replaced
+    // the flat list). A global search with no matches shows the search
+    // empty-results state (R5.6).
+    await screen.findByTestId('catalog-destination-grid');
+    fireEvent.changeText(screen.getByTestId('catalog-search'), 'zzzz');
+
+    const empty = await screen.findByTestId('catalog-search-empty');
     expect(empty).toBeTruthy();
-    expect(
-      screen.getByText(/no experiences match your filters/i),
-    ).toBeTruthy();
+    expect(screen.getByText(/no experiences matched/i)).toBeTruthy();
   });
 
   // -------------------------------------------------------------------------

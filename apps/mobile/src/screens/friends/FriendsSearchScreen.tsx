@@ -30,6 +30,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 import {
   useMutation,
   useQuery,
@@ -99,6 +100,7 @@ const SEARCH_DEBOUNCE_MS = 250;
 
 export default function FriendsSearchScreen(): JSX.Element {
   const queryClient = useQueryClient();
+  const navigation = useNavigation();
   const [input, setInput] = useState('');
   const debouncedInput = useDebounce(input, SEARCH_DEBOUNCE_MS);
 
@@ -203,7 +205,11 @@ export default function FriendsSearchScreen(): JSX.Element {
 
   return (
     <ScreenContainer>
-      <GradientHeader title="Find Friends" icon="search" />
+      <GradientHeader
+        title="Find Friends"
+        icon="search"
+        onBack={() => navigation.goBack()}
+      />
 
       <View style={styles.controls}>
         <View style={styles.searchWrap}>

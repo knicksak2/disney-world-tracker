@@ -44,6 +44,7 @@ import {
   View,
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { Ionicons } from '@expo/vector-icons';
 
 import { registerInputSchema } from '@dwt/shared';
 
@@ -100,6 +101,7 @@ export default function RegisterScreen({ navigation }: Props): JSX.Element {
   const [email, setEmail] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>(NO_FIELD_ERRORS);
@@ -247,24 +249,43 @@ export default function RegisterScreen({ navigation }: Props): JSX.Element {
 
               <View style={styles.field}>
                 <Text style={styles.label}>Password</Text>
-                <TextInput
-                  style={[
-                    styles.input,
-                    fieldErrors.password !== null && styles.inputError,
-                  ]}
-                  value={password}
-                  onChangeText={setPassword}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  autoComplete="password-new"
-                  textContentType="newPassword"
-                  secureTextEntry
-                  placeholder="Choose a password"
-                  placeholderTextColor={theme.color.textSecondary}
-                  editable={!submitting}
-                  accessibilityLabel="Password"
-                  testID="register-password"
-                />
+                <View style={styles.passwordRow}>
+                  <TextInput
+                    style={[
+                      styles.input,
+                      styles.passwordInput,
+                      fieldErrors.password !== null && styles.inputError,
+                    ]}
+                    value={password}
+                    onChangeText={setPassword}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    autoComplete="password-new"
+                    textContentType="newPassword"
+                    secureTextEntry={!showPassword}
+                    placeholder="Choose a password"
+                    placeholderTextColor={theme.color.textSecondary}
+                    editable={!submitting}
+                    accessibilityLabel="Password"
+                    testID="register-password"
+                  />
+                  <Pressable
+                    style={styles.passwordToggle}
+                    onPress={() => setShowPassword((prev) => !prev)}
+                    accessibilityRole="button"
+                    accessibilityLabel={
+                      showPassword ? 'Hide password' : 'Show password'
+                    }
+                    hitSlop={8}
+                    testID="register-password-toggle"
+                  >
+                    <Ionicons
+                      name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                      size={22}
+                      color={theme.color.textSecondary}
+                    />
+                  </Pressable>
+                </View>
                 {fieldErrors.password !== null ? (
                   <Text style={styles.fieldError}>{fieldErrors.password}</Text>
                 ) : null}
@@ -391,6 +412,18 @@ const styles = StyleSheet.create({
   },
   inputError: {
     borderColor: theme.color.danger,
+  },
+  passwordRow: {
+    justifyContent: 'center',
+  },
+  passwordInput: {
+    paddingRight: theme.spacing.xl + theme.spacing.lg,
+  },
+  passwordToggle: {
+    position: 'absolute',
+    right: theme.spacing.md,
+    height: '100%',
+    justifyContent: 'center',
   },
   fieldError: {
     marginTop: theme.spacing.xs,

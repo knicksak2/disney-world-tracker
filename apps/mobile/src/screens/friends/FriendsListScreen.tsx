@@ -343,6 +343,12 @@ export default function FriendsListScreen({ navigation }: Props): JSX.Element {
                       setRowError(item.friend.userId, null);
                       removeMutation.mutate(item.friend.userId);
                     }}
+                    onPress={() => {
+                      navigation.navigate('FriendProfile', {
+                        friendId: item.friend.userId,
+                        displayName: item.friend.displayName,
+                      });
+                    }}
                   />
                 );
               case 'outgoing':
@@ -487,6 +493,7 @@ interface FriendRowProps {
   readonly error: string | null;
   readonly busy: boolean;
   readonly onRemove: () => void;
+  readonly onPress: () => void;
 }
 
 function FriendRow({
@@ -494,11 +501,13 @@ function FriendRow({
   error,
   busy,
   onRemove,
+  onPress,
 }: FriendRowProps): JSX.Element {
   return (
     <Card
       accentColor={theme.color.primary}
       style={styles.row}
+      onPress={onPress}
       testID={`friends-friend-${friend.userId}`}
     >
       <View style={styles.rowMain}>
