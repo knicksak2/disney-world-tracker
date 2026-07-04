@@ -567,6 +567,7 @@ describe('GET /resorts', () => {
         longitude: -81.58,
         address: '1600 Seven Seas Dr',
         phone: '407-555-0100',
+        representingExperienceId: '88888888-8888-4888-8888-888888888888',
       },
     ];
     const { app } = await buildApp({ listActiveResorts: async () => resorts });
@@ -976,6 +977,144 @@ describe('GET /catalog/destinations', () => {
 
     expect(res.statusCode).toBe(200);
     expect(detailIds).toEqual([]);
+    await app.close();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GET /catalog/:experienceId + /live — unchanged behavior with facet
+// enrichment wired in (R10.3)
+// ---------------------------------------------------------------------------
+
+describe('detail + live behavior unchanged by facet enrichment (R10.3)', () => {
+  it('leaves the existing detail-response fields unchanged for a DTO without the new facet fields', async () => {
+    // A DTO carrying the pre-existing detail fields (core projection plus the
+    // already-persisted enrichment: coordinates, accessibility, menus/meal
+    // periods) but none of the six new facet-enrichment fields.
+    const exp = makeExperience({
+      id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+      name: "Be Our Guest Restaurant",
+      park: 'Magic Kingdom',
+      category: 'Restaurant',
+      description: 'Dine in the Beast\u2019s enchanted castle.',
+      imageUrl: 'https://cdn.example/bog.jpg',
+      areaType: 'ThemePark',
+      latitude: 28.42,
+      longitude: -81.58,
+      accessibility: ['wheelchair-access'],
+      priceTier: '$$$',
+      mealPeriods: [{ type: 'Dinner', priceTier: '$$$' }],
+      land: 'Fantasyland',
+    });
+    const menus: MenuDTO[] = [
+      {
+        menuType: 'Dinner',
+        cuisineType: 'French',
+        groups: [{ name: 'Entrees', items: [{ name: 'Ratatouille', price: '$34' }] }],
+      },
+    ];
+    const { app } = await buildApp({
+      getExperience: async () => exp,
+      getMenusFor: async () => menus,
+    });
+
+    const res = await app.inject({ method: 'GET', url: `/catalog/${exp.id}` });
+
+    expect(res.statusCode).toBe(200);
+    // Every existing detail field is projected verbatim; `active` is stripped.
+    expect(res.json()).toEqual({
+      id: exp.id,
+      name: exp.name,
+      park: exp.park,
+      category: exp.category,
+      description: exp.description,
+      imageUrl: 'https://cdn.example/bog.jpg',
+      areaType: 'ThemePark',
+      latitude: 28.42,
+      longitude: -81.58,
+      accessibility: ['wheelchair-access'],
+      priceTier: '$$$',
+      mealPeriods: [{ type: 'Dinner', priceTier: '$$$' }],
+      land: 'Fantasyland',
+      menus,
+    });
+    // None of the six new facet-enrichment fields appear when unpersisted.
+    const body = res.json();
+    expect(body).not.toHaveProperty('heightRequirement');
+    expect(body).not.toHaveProperty('groupedFacets');
+    expect(body).not.toHaveProperty('physicalConsiderations');
+    expect(body).not.toHaveProperty('interestFacets');
+    expect(body).not.toHaveProperty('whyThis');
+    expect(body).not.toHaveProperty('subType');
+    expect(body).not.toHaveProperty('active');
+    await app.close();
+  });
+
+  it('serves the live projection unchanged via the injected port (R10.3)', async () => {
+    const experienceId = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+    const result: CatalogLiveDetailResult = {
+      liveDetail: {
+        status: 'Operating',
+        waitMinutes: 20,
+        showtimes: [],
+        operatingHours: [],
+        diningAvailability: [],
+      },
+      retrievedAt: '2024-06-01T09:30:00.000Z',
+      stale: false,
+    };
+    const liveCalls: string[] = [];
+    const { app } = await buildApp({
+      getLiveDetail: async (id) => {
+        liveCalls.push(id);
+        return result;
+      },
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/catalog/${experienceId}/live`,
+    });
+
+    expect(res.statusCode).toBe(200);
+    // The live handler forwards the id to the port and returns its result
+    // byte-for-byte: the facet-enrichment work never touches this path.
+    expect(liveCalls).toEqual([experienceId]);
+    expect(res.json()).toEqual(result);
+    await app.close();
+  });
+
+  it('keeps live behavior independent of persisted facet enrichment on the same Experience', async () => {
+    // Even when the detail read would surface the new facet fields, the live
+    // route is served solely by its own port and is unaffected (R10.3).
+    const experienceId = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
+    const result: CatalogLiveDetailResult = {
+      liveDetail: {
+        status: 'Down',
+        showtimes: [],
+        operatingHours: [],
+        diningAvailability: [],
+      },
+      retrievedAt: '2024-06-01T10:00:00.000Z',
+      stale: true,
+    };
+    const { app } = await buildApp({
+      getExperience: async () =>
+        makeExperience({
+          id: experienceId,
+          subType: 'Roller Coaster',
+          groupedFacets: { Thrill: [{ id: 'big-drops', name: 'Big Drops' }] },
+        }),
+      getLiveDetail: async () => result,
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/catalog/${experienceId}/live`,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual(result);
     await app.close();
   });
 });

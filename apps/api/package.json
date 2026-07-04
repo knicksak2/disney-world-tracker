@@ -17,7 +17,9 @@
     "build-bridge": "tsx --env-file=.env src/scripts/buildBridge.ts",
     "build-bridge:cloud": "tsx --env-file=.env.dev src/scripts/buildBridge.ts",
     "sync": "tsx --env-file=.env src/scripts/runSync.ts",
-    "sync:cloud": "tsx --env-file=.env.dev src/scripts/runSync.ts"
+    "sync:cloud": "tsx --env-file=.env.dev src/scripts/runSync.ts",
+    "backfill-facets": "tsx --env-file=.env src/scripts/backfillFacetEnrichment.ts",
+    "backfill-facets:cloud": "tsx --env-file=.env.dev src/scripts/backfillFacetEnrichment.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.620.0",

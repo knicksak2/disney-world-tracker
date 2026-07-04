@@ -54,11 +54,15 @@ import type {
   ErrorCode,
   ExperienceCategory,
   ExperienceDTO,
+  FacetValueDTO,
+  GroupedFacetsDTO,
+  HeightRequirementDTO,
   LiveDetailDTO,
   MealPeriodDTO,
   MenuDTO,
   Park,
   ResortDTO,
+  WhyThisDTO,
 } from '@dwt/shared';
 import {
   AREA_TYPES,
@@ -277,6 +281,36 @@ export interface ExperienceDetailResponse {
    * persisted; `null`/absent otherwise.
    */
   readonly resortArea?: string | null;
+  /**
+   * Height_Requirement facet value plus derived numeric minimums, present only
+   * when a height facet is persisted; `null`/absent otherwise (R2, R10.1).
+   */
+  readonly heightRequirement?: HeightRequirementDTO | null;
+  /**
+   * Grouped_Facets: display-and-targeting-ready facet values keyed by
+   * Facet_Group name; absent when no facet groups are persisted (R1, R10.1).
+   */
+  readonly groupedFacets?: GroupedFacetsDTO;
+  /**
+   * Physical_Considerations facet values; absent when none are persisted
+   * (R3, R10.1).
+   */
+  readonly physicalConsiderations?: readonly FacetValueDTO[];
+  /**
+   * Interest_Facets: grouped facet values describing thematic interests; absent
+   * when none are persisted (R4, R10.1).
+   */
+  readonly interestFacets?: GroupedFacetsDTO;
+  /**
+   * Why_This: structured curated marketing copy, present only when persisted;
+   * `null`/absent otherwise (R5, R10.1).
+   */
+  readonly whyThis?: WhyThisDTO | null;
+  /**
+   * Sub_Type: finer-grained classification, present only when persisted;
+   * `null`/absent otherwise (R6, R10.1).
+   */
+  readonly subType?: string | null;
 }
 
 /**

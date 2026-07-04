@@ -20,10 +20,10 @@
 
 import fc from 'fast-check';
 
-import { EXPERIENCE_CATEGORIES, PARKS } from '@dwt/shared';
+import { AREA_TYPES, EXPERIENCE_CATEGORIES, PARKS } from '@dwt/shared';
 import type { CompletionEntryDTO } from '@dwt/shared';
 
-import { groupByCategory, groupByPark, namedEntries } from '../grouping';
+import { groupByAreaType, groupByCategory, groupByPark, namedEntries } from '../grouping';
 
 const NUM_RUNS = 100;
 
@@ -64,6 +64,7 @@ const entryArb: fc.Arbitrary<CompletionEntryDTO> = fc.record({
   experienceId: fc.uuid(),
   experienceName: nameArb,
   park: fc.constantFrom(...PARKS),
+  areaType: fc.constantFrom(...AREA_TYPES),
   category: fc.constantFrom(...EXPERIENCE_CATEGORIES),
   completedOn: fc.constant('2024-01-01'),
   rating: fc.option(fc.integer({ min: 1, max: 10 }), { nil: null }),
@@ -72,6 +73,27 @@ const entryArb: fc.Arbitrary<CompletionEntryDTO> = fc.record({
 
 /** A list of entries spanning all Parks/categories, including unnamed ones. */
 const entriesArb = fc.array(entryArb, { maxLength: 30 });
+
+/**
+ * A single Completion_Entry that additionally spans the Area_Type space and a
+ * *nullable* Park. Resort-area and resort entries carry `park: null`, so this
+ * generator emits `null` alongside every catalog Park to exercise the
+ * Park-less handling of `groupByAreaType`: partitioning must be driven purely
+ * by `areaType`, independent of whether the entry belongs to a Park.
+ */
+const areaEntryArb: fc.Arbitrary<CompletionEntryDTO> = fc.record({
+  experienceId: fc.uuid(),
+  experienceName: nameArb,
+  park: fc.option(fc.constantFrom(...PARKS), { nil: null }),
+  areaType: fc.constantFrom(...AREA_TYPES),
+  category: fc.constantFrom(...EXPERIENCE_CATEGORIES),
+  completedOn: fc.constant('2024-01-01'),
+  rating: fc.option(fc.integer({ min: 1, max: 10 }), { nil: null }),
+  sharedNote: fc.option(fc.string({ maxLength: 20 }), { nil: null }),
+});
+
+/** A list of Area_Type entries, including Park-less and unnamed ones. */
+const areaEntriesArb = fc.array(areaEntryArb, { maxLength: 30 });
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -224,6 +246,92 @@ describe('Property 3: groupByCategory is a faithful, order-preserving partition'
         // Concatenation equals namedEntries(entries) as a multiset and count:
         // single-group membership with nothing lost or duplicated
         // (R6.2, R6.4).
+        const flat = groups.flatMap((g) => [...g.entries]);
+        expectSameByReference(flat, named);
+      }),
+      { numRuns: NUM_RUNS },
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Feature: resort-tracking-and-stats, Property: groupByAreaType is a faithful,
+// order-preserving partition that handles Park-less entries
+// ---------------------------------------------------------------------------
+//
+// Validates: Requirements 5.2
+
+describe('Property 4: groupByAreaType is a faithful, order-preserving partition', () => {
+  it('partitions the named entries into one ordered group per Area_Type, independent of Park', () => {
+    fc.assert(
+      fc.property(areaEntriesArb, (entries) => {
+        const groups = groupByAreaType(entries, AREA_TYPES);
+        const named = entries.filter(isNamed);
+
+        // Exactly one group per Area_Type, in the canonical AREA_TYPES order,
+        // including Area_Types with no entries (R5.2).
+        expect(groups.map((g) => g.areaType)).toEqual([...AREA_TYPES]);
+
+        for (const group of groups) {
+          for (const entry of group.entries) {
+            // Membership rule: each entry in a group is named and belongs to
+            // that group's Area_Type; no other-Area_Type or unnamed entry
+            // leaks in (R5.2).
+            expect(isNamed(entry)).toBe(true);
+            expect(entry.areaType).toBe(group.areaType);
+          }
+
+          // Source order preserved within the group: it equals the named
+          // entries for that Area_Type taken in read order (R5.2). This
+          // comparison is Park-agnostic, so Park-less (`park: null`) entries
+          // are grouped by their Area_Type exactly like Park-bearing ones.
+          const expectedForArea = named.filter(
+            (entry) => entry.areaType === group.areaType,
+          );
+          expect(group.entries).toEqual(expectedForArea);
+        }
+
+        // Partition completeness: the concatenation of all Area_Type groups
+        // equals namedEntries(entries) as a multiset and a count — every
+        // named entry (Park-less ones included) lands in exactly one group and
+        // nothing is invented or lost (R5.2).
+        const flat = groups.flatMap((g) => [...g.entries]);
+        expectSameByReference(flat, named);
+      }),
+      { numRuns: NUM_RUNS },
+    );
+  });
+
+  it('groups Park-less entries by their Area_Type and drops unnamed entries', () => {
+    // A focused generator forcing every entry to be Park-less, so the property
+    // that Park-less entries are still partitioned by Area_Type is exercised
+    // even under fast-check shrinking (R5.2).
+    const parklessEntriesArb = fc.array(
+      areaEntryArb.map((entry) => ({ ...entry, park: null })),
+      { maxLength: 30 },
+    );
+
+    fc.assert(
+      fc.property(parklessEntriesArb, (entries) => {
+        const groups = groupByAreaType(entries, AREA_TYPES);
+        const named = entries.filter(isNamed);
+
+        // Every named Park-less entry is placed in its Area_Type group...
+        for (const entry of named) {
+          const group = groups.find((g) => g.areaType === entry.areaType)!;
+          expect(group.entries.includes(entry)).toBe(true);
+        }
+
+        // ...and every unnamed entry is dropped from every group (R5.2).
+        for (const entry of entries) {
+          if (!isNamed(entry)) {
+            for (const group of groups) {
+              expect(group.entries.includes(entry)).toBe(false);
+            }
+          }
+        }
+
+        // No entry is lost: the groups together hold exactly the named entries.
         const flat = groups.flatMap((g) => [...g.entries]);
         expectSameByReference(flat, named);
       }),

@@ -67,6 +67,49 @@ import { AppError } from '../../errors/AppError.js';
 import type { SharingRepo } from './repo.js';
 
 // ---------------------------------------------------------------------------
+// ShareDelivered dispatch seam (R7.7)
+// ---------------------------------------------------------------------------
+
+/**
+ * Event emitted after a Share is durably delivered (`createShareAtomic`
+ * commits). Carries exactly what the Notification_Service needs to target and
+ * compose a push without re-reading the `shares` row: the recipients to
+ * notify, the sender to name, and — for an `experience` Share — the referenced
+ * `experienceId` whose name becomes the content label. A `progress` Share needs
+ * no extra field; its notification label is fixed.
+ *
+ * The type is declared here (rather than imported from the Notification_Service)
+ * so the Sharing_Service stays decoupled from the notification wiring, mirroring
+ * how the rating repo depends only on a structural `RatingChangedEvent` port.
+ * It is structurally identical to the Notification_Service's `ShareDeliveredEvent`,
+ * so the composition root can hand this straight to it.
+ */
+export type ShareDeliveredNotice =
+  | {
+      readonly shareId: string;
+      readonly senderId: string;
+      readonly recipientIds: readonly string[];
+      readonly payloadKind: 'experience';
+      readonly experienceId: string;
+    }
+  | {
+      readonly shareId: string;
+      readonly senderId: string;
+      readonly recipientIds: readonly string[];
+      readonly payloadKind: 'progress';
+    };
+
+/**
+ * Background dispatch port for {@link ShareDeliveredNotice}. It returns `void`
+ * (not a promise) so the route handler cannot await — and therefore cannot be
+ * blocked or failed by — the notification path (R7.7). The port implementation
+ * (wired in `composeServices.ts`) owns the fire-and-forget scheduling and its
+ * own bounded retry; `POST /me/shares` returns `201` regardless of push
+ * outcome.
+ */
+export type ShareDeliveredDispatch = (event: ShareDeliveredNotice) => void;
+
+// ---------------------------------------------------------------------------
 // Plugin options
 // ---------------------------------------------------------------------------
 
@@ -83,6 +126,14 @@ export interface SharingRoutesOptions {
    * assigns `request.userId`. Reused on every route in this plugin.
    */
   readonly requireSession: preHandlerHookHandler;
+  /**
+   * Optional background dispatch invoked after `createShareAtomic` commits so
+   * the Notification_Service can deliver a push (R7, R7.7). Omitted in unit
+   * tests and in any harness that does not exercise the notification path; when
+   * absent, `POST /me/shares` behaves exactly as before. The dispatch is
+   * best-effort and decoupled — it never blocks or fails the request.
+   */
+  readonly emitShareDelivered?: ShareDeliveredDispatch;
 }
 
 // ---------------------------------------------------------------------------
@@ -191,7 +242,7 @@ const inboxParamsSchema = z.object({ shareId: uuidSchema }).strict();
 export function sharingRoutes(
   options: SharingRoutesOptions,
 ): FastifyPluginAsync {
-  const { repo, requireSession } = options;
+  const { repo, requireSession, emitShareDelivered } = options;
 
   return async function sharingRoutesPlugin(
     app: FastifyInstance,
@@ -211,6 +262,17 @@ export function sharingRoutes(
           body.recipientIds,
           payload,
         );
+
+        // R7.7: the Share is durably delivered — hand it to the background
+        // notification dispatch (when wired) and return 201 immediately. The
+        // dispatch is fire-and-forget (`void` return) so nothing about the push
+        // path can block or fail this request.
+        if (emitShareDelivered !== undefined) {
+          emitShareDelivered(
+            buildShareDeliveredNotice(result.shareId, senderId, body.recipientIds, payload),
+          );
+        }
+
         reply.code(201);
         return {
           shareId: result.shareId,
@@ -228,6 +290,23 @@ export function sharingRoutes(
       async (request) => {
         const recipientId = requireUser(request);
         return repo.listInbox(recipientId);
+      },
+    );
+
+    // -------------------------------------------------------------------
+    // GET /me/shares
+    // -------------------------------------------------------------------
+    // List the Shares the caller sent, most-recent first. Backs the mobile
+    // Sent Shares surface, which then reads each Share's reactions via the
+    // sender-gated `GET /me/shares/:shareId/reactions` (R11.7). The repo's
+    // `sender_id = $1` predicate keeps the list scoped to the caller's own
+    // Shares, so no request parameters are needed.
+    app.get(
+      '/me/shares',
+      { preHandler: requireSession },
+      async (request) => {
+        const senderId = requireUser(request);
+        return repo.listSentShares(senderId);
       },
     );
 
@@ -292,6 +371,37 @@ export function sharingRoutes(
 // ---------------------------------------------------------------------------
 // Payload composition
 // ---------------------------------------------------------------------------
+
+/**
+ * Build the {@link ShareDeliveredNotice} for the background notification
+ * dispatch from the committed share's id and its composed payload. The
+ * `experience` branch carries the `experienceId` so the Notification_Service
+ * can resolve the Experience name for the content label without re-reading the
+ * `shares` row; the `progress` branch needs no extra field (its label is
+ * fixed).
+ */
+function buildShareDeliveredNotice(
+  shareId: string,
+  senderId: string,
+  recipientIds: ReadonlyArray<string>,
+  payload: SharePayload,
+): ShareDeliveredNotice {
+  if (payload.kind === 'experience') {
+    return {
+      shareId,
+      senderId,
+      recipientIds,
+      payloadKind: 'experience',
+      experienceId: payload.experienceId,
+    };
+  }
+  return {
+    shareId,
+    senderId,
+    recipientIds,
+    payloadKind: 'progress',
+  };
+}
 
 /**
  * Compose the canonical `SharePayload` from the validated request body.

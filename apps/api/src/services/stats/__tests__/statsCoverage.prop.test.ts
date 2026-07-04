@@ -97,6 +97,8 @@ function activeOnlySnapshot(
       acc.set(key, {
         park: exp.park,
         category: exp.category,
+        areaType: 'ThemePark',
+        isResortRepresentation: false,
         completed: existing.completed + (exp.completed ? 1 : 0),
         total: existing.total + 1,
       });
@@ -104,6 +106,8 @@ function activeOnlySnapshot(
       acc.set(key, {
         park: exp.park,
         category: exp.category,
+        areaType: 'ThemePark',
+        isResortRepresentation: false,
         completed: exp.completed ? 1 : 0,
         total: 1,
       });

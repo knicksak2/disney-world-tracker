@@ -15,7 +15,7 @@
  * Validates: Requirements 4.2, 4.3, 4.4, 4.6, 4.7
  */
 
-import type { ExperienceCategory, Park } from '../enums.js';
+import type { AreaType, ExperienceCategory, Park } from '../enums.js';
 
 export interface CompletionEntryDTO {
   /**
@@ -27,8 +27,18 @@ export interface CompletionEntryDTO {
   /** Completed Experience's name (R4.2). */
   readonly experienceName: string;
 
-  /** Owning Park (R4.2). */
-  readonly park: Park;
+  /**
+   * Owning Park (R4.2), or `null` for resort-area and resort entries that have
+   * no owning Park.
+   */
+  readonly park: Park | null;
+
+  /**
+   * The kind of place the Experience belongs to, from the closed set
+   * `AREA_TYPES`. Used by the mobile grouping fold to partition entries by
+   * Area_Type and to surface the resort group (R5.2, R5.3).
+   */
+  readonly areaType: AreaType;
 
   /** Experience classification (R4.2). */
   readonly category: ExperienceCategory;

@@ -29,6 +29,7 @@ import { registerErrorHandler } from '../../../errors/handler.js';
 import type {
   InboxResponse,
   OpenedShareDetail,
+  SentShareDTO,
   ShareDeliveryResult,
   SharingRepo,
 } from '../repo.js';
@@ -62,6 +63,7 @@ interface FakeRepoOverrides {
     recipientId: string,
     shareId: string,
   ) => Promise<boolean>;
+  readonly listSentShares?: (senderId: string) => Promise<SentShareDTO[]>;
 }
 
 function makeRepo(overrides: FakeRepoOverrides = {}): FakeRepo {
@@ -98,6 +100,13 @@ function makeRepo(overrides: FakeRepoOverrides = {}): FakeRepo {
         return overrides.softDeleteForRecipient(recipientId, shareId);
       }
       return false;
+    },
+    async listSentShares(senderId) {
+      record('listSentShares', [senderId]);
+      if (overrides.listSentShares) {
+        return overrides.listSentShares(senderId);
+      }
+      return [];
     },
   };
 }
@@ -446,14 +455,25 @@ describe('GET /me/inbox', () => {
     const bundle: InboxResponse = {
       unread: 1,
       items: [
-        { shareId: SHARE_ID, isOpened: false },
         {
-          shareId: 'other000-0000-4000-8000-000000000000',
-          isOpened: true,
+          shareId: SHARE_ID,
+          read: false,
           senderId: SENDER,
+          senderDisplayName: 'Mickey Mouse',
           payloadKind: 'experience',
           payload: { kind: 'experience', experienceId: EXPERIENCE_ID, rating: 9 },
           sentAt: '2024-05-01T10:00:00.000Z',
+          myReaction: null,
+        },
+        {
+          shareId: 'other000-0000-4000-8000-000000000000',
+          read: true,
+          senderId: SENDER,
+          senderDisplayName: 'Mickey Mouse',
+          payloadKind: 'experience',
+          payload: { kind: 'experience', experienceId: EXPERIENCE_ID, rating: 9 },
+          sentAt: '2024-05-01T10:00:00.000Z',
+          myReaction: 'love',
         },
       ],
     };
@@ -476,6 +496,43 @@ describe('GET /me/inbox', () => {
   it('rejects an unauthenticated request as 401', async () => {
     const { app } = await buildApp();
     const response = await app.inject({ method: 'GET', url: '/me/inbox' });
+    expect(response.statusCode).toBe(401);
+  });
+});
+
+// ===========================================================================
+// GET /me/shares (Sent Shares surface, R11.7 support)
+// ===========================================================================
+
+describe('GET /me/shares', () => {
+  it('returns the caller\u2019s sent shares from the repo', async () => {
+    const sent: SentShareDTO[] = [
+      {
+        shareId: SHARE_ID,
+        payloadKind: 'experience',
+        payload: { kind: 'experience', experienceId: EXPERIENCE_ID, rating: 9 },
+        sentAt: '2024-05-01T10:00:00.000Z',
+      },
+    ];
+    const { app, repo } = await buildApp({
+      repo: makeRepo({
+        async listSentShares() {
+          return sent;
+        },
+      }),
+      defaultUserId: SENDER,
+    });
+
+    const response = await app.inject({ method: 'GET', url: '/me/shares' });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual(sent);
+    expect(repo.events).toEqual([{ method: 'listSentShares', args: [SENDER] }]);
+  });
+
+  it('rejects an unauthenticated request as 401', async () => {
+    const { app } = await buildApp();
+    const response = await app.inject({ method: 'GET', url: '/me/shares' });
     expect(response.statusCode).toBe(401);
   });
 });

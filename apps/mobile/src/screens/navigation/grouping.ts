@@ -11,7 +11,7 @@
  * Validates: Requirements 3.1, 3.4, 3.6, 4.1, 4.3, 4.5, 4.6, 6.1, 6.2, 6.3, 6.4
  */
 
-import type { CompletionEntryDTO, ExperienceCategory, Park } from '@dwt/shared';
+import type { AreaType, CompletionEntryDTO, ExperienceCategory, Park } from '@dwt/shared';
 
 /**
  * Entries that have an available (non-empty, non-whitespace) Experience name,
@@ -42,6 +42,30 @@ export function groupByPark(
   return parks.map((park) => ({
     park,
     entries: named.filter((entry) => entry.park === park),
+  }));
+}
+
+export interface AreaTypeGroup {
+  readonly areaType: AreaType;
+  readonly entries: readonly CompletionEntryDTO[]; // source order preserved (R5.2)
+}
+
+/**
+ * One AreaTypeGroup per Area_Type, in the canonical AREA_TYPES order. Each named
+ * entry lands in exactly the group whose Area_Type equals the entry's
+ * areaType; unnamed entries are dropped (R5.2). Order within a group is the
+ * source order from the originating read. Mirrors groupByPark; Park-less
+ * entries that are excluded from every Park group are partitioned here by their
+ * Area_Type instead.
+ */
+export function groupByAreaType(
+  entries: readonly CompletionEntryDTO[],
+  areaTypes: readonly AreaType[],
+): readonly AreaTypeGroup[] {
+  const named = namedEntries(entries);
+  return areaTypes.map((areaType) => ({
+    areaType,
+    entries: named.filter((entry) => entry.areaType === areaType),
   }));
 }
 

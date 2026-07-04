@@ -143,6 +143,7 @@ function sampleEntry(
     experienceId: '33333333-3333-4333-8333-333333333333',
     experienceName: 'Space Mountain',
     park: 'Magic Kingdom',
+    areaType: 'ThemePark',
     category: 'Ride',
     completedOn: '2024-05-01',
     rating: 9,

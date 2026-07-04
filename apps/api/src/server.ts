@@ -42,6 +42,18 @@ import {
   type SharingRoutesOptions,
 } from './services/sharing/routes.js';
 import {
+  pushRoutes,
+  type PushRoutesOptions,
+} from './services/push/routes.js';
+import {
+  notificationPreferenceRoutes,
+  type NotificationPreferenceRoutesOptions,
+} from './services/push/preferenceRoutes.js';
+import {
+  reactionRoutes,
+  type ReactionRoutesOptions,
+} from './services/reactions/routes.js';
+import {
   statsRoutes,
   type StatsRoutesOptions,
 } from './services/stats/routes.js';
@@ -104,6 +116,24 @@ export interface BuildServerServices {
   readonly friends?: FriendsRoutesOptions;
   /** Sharing_Service routes (task 12.1). */
   readonly sharing?: SharingRoutesOptions;
+  /**
+   * Push_Registration_Service routes (task 12.1, Phase 2). Wires
+   * `POST/DELETE /me/push-registrations` so a device can register/refresh and
+   * invalidate its Expo push token (R8). Opt-in like every other service so a
+   * focused unit-test harness need not satisfy the push repo contract.
+   */
+  readonly push?: PushRoutesOptions;
+  /**
+   * Notification preference store routes (task 13.1, Phase 2). Wires
+   * `GET/PUT /me/notification-preferences` so a User can read and set their
+   * `Share_Notification_Preference` (R9.3-R9.5, R9.7, R9.8).
+   */
+  readonly notificationPreferences?: NotificationPreferenceRoutesOptions;
+  /**
+   * Reaction_Service routes (task 14.1, Phase 2). Wires the reaction
+   * submit/replace/remove endpoints and the sender's reaction view (R11).
+   */
+  readonly reactions?: ReactionRoutesOptions;
   /** Stats_Service routes (task 11.1). */
   readonly stats?: StatsRoutesOptions;
   /**
@@ -360,6 +390,20 @@ export function buildServer(
 
   if (services.sharing !== undefined) {
     void app.register(sharingRoutes(services.sharing));
+  }
+
+  if (services.push !== undefined) {
+    void app.register(pushRoutes(services.push));
+  }
+
+  if (services.notificationPreferences !== undefined) {
+    void app.register(
+      notificationPreferenceRoutes(services.notificationPreferences),
+    );
+  }
+
+  if (services.reactions !== undefined) {
+    void app.register(reactionRoutes(services.reactions));
   }
 
   if (services.stats !== undefined) {

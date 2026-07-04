@@ -97,7 +97,20 @@ import { createMenuRetrieval } from './services/catalog/menuRetrieval.js';
 
 import { createFriendsRepo } from './services/friends/repo.js';
 import { createSharingRepo } from './services/sharing/repo.js';
+import type { ShareDeliveredNotice } from './services/sharing/routes.js';
 import { createStatsRepo } from './services/stats/repo.js';
+
+import { createPushRepo } from './services/push/repo.js';
+import { createNotificationPreferenceRepo } from './services/push/preferenceRepo.js';
+import { createReactionsRepo } from './services/reactions/repo.js';
+import {
+  createNotificationService,
+  createExpoPushClient,
+  createSenderDisplayNameResolver,
+  createExperienceNameResolver,
+} from './services/notifications/index.js';
+
+import { createLogger } from './logger.js';
 
 /**
  * Handle returned by {@link buildApp}. The `app` is a configured-but-unbound
@@ -171,6 +184,51 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
   const friendsRepo = createFriendsRepo(pool);
   const sharingRepo = createSharingRepo(pool);
   const statsRepo = createStatsRepo(pool);
+
+  // --- Phase 2 sharing services (push / preferences / reactions / notify) ---
+  // All four repos are pool-backed and constructor-injected like every other
+  // service. The Push_Registration repo and the preference repo also back the
+  // Notification_Service's delivery targeting and preference gate, so they are
+  // built once and shared between the HTTP route wiring and the notification
+  // dispatch below.
+  const pushRepo = createPushRepo(pool);
+  const notificationPreferenceRepo = createNotificationPreferenceRepo(pool);
+  const reactionsRepo = createReactionsRepo(pool);
+
+  // The Notification_Service runs on a background dispatch decoupled from the
+  // request lifecycle, so it owns no Fastify request logger; give it an ad-hoc
+  // pino logger (the same redacting options the server uses) so its best-effort
+  // warnings/errors are still captured. It talks to the real Expo Push API and
+  // resolves the sender display name / Experience name from Postgres.
+  const notificationLogger = createLogger();
+  const notificationService = createNotificationService({
+    preferences: notificationPreferenceRepo,
+    pushTokens: pushRepo,
+    expoClient: createExpoPushClient(),
+    resolveSenderDisplayName: createSenderDisplayNameResolver(pool),
+    resolveExperienceName: createExperienceNameResolver(pool),
+    logger: notificationLogger,
+  });
+
+  /**
+   * Background `ShareDelivered` dispatch (design decision 4, R7.7).
+   *
+   * Invoked by the Sharing_Service route AFTER `createShareAtomic` commits. The
+   * port returns `void`, so the route handler cannot await it — the request
+   * returns `201` immediately regardless of push outcome. `handleShareDelivered`
+   * already swallows every internal failure (it never rejects), but the trailing
+   * `.catch` is defensive so an unexpected rejection can never surface as an
+   * unhandled promise rejection. `ShareDeliveredNotice` is structurally identical
+   * to the service's `ShareDeliveredEvent`, so it is handed across directly.
+   */
+  const emitShareDelivered = (event: ShareDeliveredNotice): void => {
+    void notificationService.handleShareDelivered(event).catch((err: unknown) => {
+      notificationLogger.error(
+        { err, shareId: event.shareId },
+        'ShareDelivered dispatch failed',
+      );
+    });
+  };
   // The leaderboard cache and the lockout service accept a narrow
   // structural Redis interface whose `set` is a single rest-arg overload;
   // ioredis's `Redis` exposes many `set` overloads that are not assignable
@@ -327,7 +385,19 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
       getLiveDetail: (id) => liveService.getLiveDetail(id),
     },
     friends: { repo: friendsRepo, requireSession: sessionMiddleware },
-    sharing: { repo: sharingRepo, requireSession: sessionMiddleware },
+    sharing: {
+      repo: sharingRepo,
+      requireSession: sessionMiddleware,
+      // R7.7: dispatch the notification on a background port after the share
+      // transaction commits; the request is never blocked or failed by push.
+      emitShareDelivered,
+    },
+    push: { repo: pushRepo, requireSession: sessionMiddleware },
+    notificationPreferences: {
+      repo: notificationPreferenceRepo,
+      requireSession: sessionMiddleware,
+    },
+    reactions: { repo: reactionsRepo, requireSession: sessionMiddleware },
     stats: { repo: statsRepo, pool, requireSession: sessionMiddleware },
     aggregate: { repo: aggregateRepo },
     leaderboard: { service: leaderboardService },

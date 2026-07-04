@@ -326,25 +326,29 @@ describe('createShareAtomic happy path (R9.1)', () => {
 // ===========================================================================
 
 describe('listInbox', () => {
-  it('returns unread count and items, including raw fields for opened items (R9.9)', async () => {
+  it('discloses sender/content/timestamp for every row regardless of read state (R4.1, R6.2)', async () => {
     const sentAt = new Date('2024-05-01T10:00:00.000Z');
     const pool = makePool(() => ({
       rows: [
         {
           share_id: 'abcde111-1111-4111-8111-111111111111',
-          is_opened: true,
+          read: true,
           sender_id: SENDER,
+          sender_display_name: 'Mickey Mouse',
           payload_kind: 'experience',
           payload_snapshot: EXPERIENCE_PAYLOAD,
           sent_at: sentAt,
+          my_reaction: 'like',
         },
         {
           share_id: 'abcde222-2222-4222-8222-222222222222',
-          is_opened: false,
+          read: false,
           sender_id: SENDER,
+          sender_display_name: 'Mickey Mouse',
           payload_kind: 'experience',
           payload_snapshot: EXPERIENCE_PAYLOAD,
           sent_at: sentAt,
+          my_reaction: null,
         },
       ],
     }));
@@ -352,28 +356,50 @@ describe('listInbox', () => {
 
     const inbox = await repo.listInbox(REC_A);
 
+    // `unread` counts only rows whose `read` is false (R6.2).
     expect(inbox.unread).toBe(1);
     expect(inbox.items).toHaveLength(2);
-    // Opened item carries sender, payload, sentAt (R9.9).
+    // Read item carries sender id/name, payload, sentAt, and reaction.
     expect(inbox.items[0]).toEqual({
       shareId: 'abcde111-1111-4111-8111-111111111111',
-      isOpened: true,
+      read: true,
       senderId: SENDER,
+      senderDisplayName: 'Mickey Mouse',
       payloadKind: 'experience',
       payload: EXPERIENCE_PAYLOAD,
       sentAt: sentAt.toISOString(),
+      myReaction: 'like',
     });
-    // Unopened item: only shareId + isOpened (R9.8).
+    // Unread item discloses the same fields (R4.1, R6.2); only `read`
+    // and `myReaction` differ.
     expect(inbox.items[1]).toEqual({
       shareId: 'abcde222-2222-4222-8222-222222222222',
-      isOpened: false,
+      read: false,
+      senderId: SENDER,
+      senderDisplayName: 'Mickey Mouse',
+      payloadKind: 'experience',
+      payload: EXPERIENCE_PAYLOAD,
+      sentAt: sentAt.toISOString(),
+      myReaction: null,
     });
+  });
+
+  it('joins profiles for the sender display name and left-joins the reaction', async () => {
+    const pool = makePool((call) => {
+      expect(call.text).toContain('JOIN profiles p ON p.user_id = s.sender_id');
+      expect(call.text).toContain('LEFT JOIN share_reactions');
+      return { rows: [] };
+    });
+    const repo = createSharingRepo(asPool(pool));
+
+    await repo.listInbox(REC_A);
   });
 
   it('filters out recipient-soft-deleted rows via the SQL predicate', async () => {
     const pool = makePool((call) => {
-      // The predicate must include `recipient_deleted_at IS NULL`; we
-      // assert on the text rather than mocking deleted rows.
+      // The predicate must include `recipient_deleted_at IS NULL` and the
+      // recipient privacy boundary; we assert on the text rather than
+      // mocking deleted rows.
       expect(call.text).toContain('recipient_deleted_at IS NULL');
       expect(call.text).toContain('recipient_id = $1');
       return { rows: [] };
@@ -489,6 +515,72 @@ describe('softDeleteForRecipient', () => {
     // No other recipient id appears in params.
     expect(call.params).not.toContain(REC_B);
     expect(call.params).not.toContain(SENDER);
+  });
+});
+
+// ===========================================================================
+// listSentShares (Sent Shares surface, R11.7 support)
+// ===========================================================================
+
+describe('listSentShares', () => {
+  it('scopes the query to the caller and orders most-recent first', async () => {
+    const pool = makePool((call) => {
+      // The list is scoped to the caller's own sent shares.
+      expect(call.text).toContain('FROM shares s');
+      expect(call.text).toContain('WHERE s.sender_id = $1');
+      expect(call.text).toContain('ORDER BY s.sent_at DESC');
+      expect(call.params).toEqual([SENDER]);
+      return { rows: [] };
+    });
+    const repo = createSharingRepo(asPool(pool));
+
+    const sent = await repo.listSentShares(SENDER);
+
+    expect(sent).toEqual([]);
+  });
+
+  it('maps rows into SentShareDTO with ISO timestamps and parsed payloads', async () => {
+    const sentAt = new Date('2024-05-01T12:00:00.000Z');
+    const progressPayload: SharePayload = {
+      kind: 'progress',
+      overallPercent: 42.5,
+      perParkPercent: {},
+      perCategoryPercent: {},
+    };
+    const pool = makePool(() => ({
+      rows: [
+        {
+          share_id: SHARE_ID,
+          payload_kind: 'experience',
+          payload_snapshot: EXPERIENCE_PAYLOAD,
+          sent_at: sentAt,
+        },
+        {
+          share_id: 'abcde777-7777-4777-8777-777777777777',
+          payload_kind: 'progress',
+          payload_snapshot: progressPayload,
+          sent_at: sentAt,
+        },
+      ],
+    }));
+    const repo = createSharingRepo(asPool(pool));
+
+    const sent = await repo.listSentShares(SENDER);
+
+    expect(sent).toEqual([
+      {
+        shareId: SHARE_ID,
+        payloadKind: 'experience',
+        payload: EXPERIENCE_PAYLOAD,
+        sentAt: sentAt.toISOString(),
+      },
+      {
+        shareId: 'abcde777-7777-4777-8777-777777777777',
+        payloadKind: 'progress',
+        payload: progressPayload,
+        sentAt: sentAt.toISOString(),
+      },
+    ]);
   });
 });
 

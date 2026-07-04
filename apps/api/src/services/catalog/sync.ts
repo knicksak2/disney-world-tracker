@@ -89,6 +89,7 @@ import {
   type FacilitiesClient,
 } from './disney/facilitiesClient.js';
 import { selectImageUrl } from './disney/imagery.js';
+import { internalId, RESORT_VISIT_ID_NAMESPACE } from './internalId.js';
 import { resolveLand } from './disney/land.js';
 import { resolveResortArea } from './disney/resortArea.js';
 import type {
@@ -657,7 +658,15 @@ function buildUpstreamCatalog(
     const type = doc.type;
 
     if (type === RESORT_TYPE) {
-      resorts.push(toUpstreamResort(doc, bridge));
+      const resort = toUpstreamResort(doc, bridge);
+      resorts.push(resort);
+      // Option A: emit one resort-representing Experience per Resort so the
+      // hotel is completable through the existing `completions -> experiences`
+      // FK. It flows through the very same Experience insert / reactivate /
+      // soft-delete reconciliation as any other Experience — so a Resort going
+      // inactive soft-deletes its representing row (preserving Completions,
+      // R3.5) and a reactivation restores it (R3.1, R3.2, R3.4, R3.5).
+      experiences.push(toResortRepresentingExperience(resort));
       continue;
     }
 
@@ -725,11 +734,19 @@ function toUpstreamExperience(
     land: resolveLand(doc, area),
     resortArea: resolveResortArea(doc, area),
     resortId,
+    // Ordinary Experiences (including resort-area activities) never represent
+    // the hotel itself; the resort-representing rows are emitted separately
+    // (task 3.2).
+    representsResortId: null,
     latitude: enrichment.latitude,
     longitude: enrichment.longitude,
     accessibility: enrichment.accessibility,
     priceTier: enrichment.priceTier,
     mealPeriods: enrichment.mealPeriods,
+    groupedFacets: enrichment.groupedFacets,
+    heightRequirement: enrichment.heightRequirement,
+    whyThis: enrichment.whyThis,
+    subType: enrichment.subType,
   };
 }
 
@@ -759,6 +776,78 @@ function toUpstreamResort(
       : null,
     address: doc.address ?? null,
     phone: doc.phone ?? null,
+  };
+}
+
+/**
+ * Suffix appended to a Resort's Enterprise_Id to form the `upstreamEntityId` of
+ * its resort-representing Experience.
+ *
+ * `experiences.upstream_entity_id` is UNIQUE, and a Resort's own
+ * Facility_Document Enterprise_Id is (in principle) distinct from every
+ * Experience-eligible document's id, but the representing row is a *synthetic*
+ * Experience derived from that Resort. Suffixing keeps its `upstreamEntityId`
+ * unambiguously the representing row's own — never colliding with a real
+ * Experience that might one day share the raw Enterprise_Id — while staying a
+ * deterministic function of the Resort so re-syncs map to the same row.
+ */
+const RESORT_VISIT_UPSTREAM_ID_SUFFIX = ':resort-visit';
+
+/**
+ * Build the resort-representing `UpstreamExperience` for a given upstream
+ * Resort (Option A, design.md → "Catalog_Sync change").
+ *
+ * The representing row stands in for the hotel itself so it is completable
+ * through the existing `completions -> experiences` FK with no new write
+ * plumbing. Its fields are deliberately inert:
+ *
+ *   - `id`: UUIDv5 of the Resort's Enterprise_Id over the distinct
+ *     {@link RESORT_VISIT_ID_NAMESPACE}, so it is stable across syncs yet never
+ *     collides with the Resort's own Internal_Id or any Experience id (R3.1,
+ *     R3.2).
+ *   - `upstreamEntityId`: the Resort's Enterprise_Id suffixed so it stays
+ *     UNIQUE in `experiences`.
+ *   - `park`: `null`; `areaType`: `'Resort'`; `category`: `'Resort'` (the real
+ *     Experience_Category these hotel stand-ins carry, so resort progress
+ *     surfaces under the `Resort` Category; the row is still excluded from the
+ *     Area_Type roll-up via the `representsResortId` discriminator so it is not
+ *     conflated with resort-*area* activity counts).
+ *   - `resortId` and `representsResortId`: both the Resort's Internal_Id — the
+ *     former links the row back to its hotel, the latter marks it as the hotel's
+ *     stand-in (`UNIQUE` guarantees at most one representing row per Resort).
+ *   - `name` / `imageUrl` / `description`: copied from the Resort.
+ *
+ * Every remaining Experience field is an empty/`null` placeholder: a hotel
+ * stand-in carries no land, coordinates, enrichment, or menus of its own.
+ */
+function toResortRepresentingExperience(
+  resort: UpstreamResort,
+): UpstreamExperience {
+  return {
+    id: internalId(resort.upstreamEntityId, RESORT_VISIT_ID_NAMESPACE),
+    upstreamEntityId: resort.upstreamEntityId + RESORT_VISIT_UPSTREAM_ID_SUFFIX,
+    name: resort.name,
+    park: null,
+    category: 'Resort',
+    description: resort.description ?? '',
+    imageUrl: resort.imageUrl,
+    areaType: 'Resort',
+    land: null,
+    resortArea: null,
+    // The representing row both belongs to its hotel (`resortId`) and *is* the
+    // hotel's stand-in (`representsResortId`); the discriminator is what keeps
+    // it out of the resort-area activity roll-ups.
+    resortId: resort.id,
+    representsResortId: resort.id,
+    latitude: null,
+    longitude: null,
+    accessibility: [],
+    priceTier: null,
+    mealPeriods: [],
+    groupedFacets: {},
+    heightRequirement: null,
+    whyThis: null,
+    subType: null,
   };
 }
 
@@ -878,6 +967,7 @@ export const __internal = {
   isWithinFreshness,
   outcomeFromError,
   partitionChanges,
+  toResortRepresentingExperience,
   toUpstreamExperience,
   toUpstreamResort,
 };

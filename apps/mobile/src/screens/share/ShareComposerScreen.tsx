@@ -1,84 +1,54 @@
 /**
- * ShareComposerScreen — Compose and send a Share to 1..50 friends.
+ * ShareComposerScreen — Pick recipients and confirm a pre-populated Share.
  *
- * Renders a single-screen composer that lets the signed-in user pick
- * 1..50 friends as recipients, choose a payload kind (Experience or
- * Progress), optionally attach a Rating (1..10) and trimmed Note when
- * sharing an Experience, and submit to `POST /me/shares`.
+ * The composer no longer lets the User choose a payload kind or type a raw
+ * Experience identifier. Every `Share_Entry_Point` (the Experience_Detail_View
+ * and the Progress_Screen) opens the composer with a fully derived,
+ * discriminated `ShareComposerParams`; the screen simply renders a read-only
+ * preview of that content, offers include/exclude toggles for the sender's
+ * Rating and Note (when present), lets the User pick 1..50 recipient friends,
+ * and submits to `POST /me/shares`.
  *
- * Behavior:
+ * Behavior for this task (5.1 — preview + toggles):
  *
- *   - **Friends.** A `useQuery` against `GET /me/friends` populates the
- *     recipient picker. Friends already accepted (the `friends` array
- *     of the bundle) are the only candidates; pending requests are not
- *     selectable. The list is reused — the same query key the Friends
- *     tab (task 18.1) already warms — so the picker shows up instantly
- *     when navigated to from Friends.
+ *   - **Kind is derived (R2.1).** The payload kind comes from
+ *     `route.params.kind`; there is no kind picker.
  *
- *   - **Selection rules (R9.2).** Selected friends are tracked as a
- *     `Set<string>` of user ids. The Send button is disabled while the
- *     selection size is `0` or `> 50`; the counter renders as
- *     `N/50 selected`. The server re-validates this and surfaces
- *     `share_recipient_count_invalid` if the client invariant ever
- *     slips — we map that code to the same friendly copy.
+ *   - **Read-only preview (R2.2, R2.3, R2.4).** For an `experience` payload the
+ *     preview shows the Experience name, Park, and Experience_Category, plus
+ *     each value currently marked for inclusion (the Rating and/or Note). For a
+ *     `progress` payload the preview shows the overall completion percentage to
+ *     one decimal place.
  *
- *   - **Payload kinds (R9.1, R9.7).** The user picks one of two
- *     branches:
- *       * `experience` — supply an Experience id (free-text for now;
- *         a future picker can swap the input out without changing
- *         this screen's contract). Optional Rating (1..10) and
- *         optional Note (trimmed, ≤ 2000 chars). The Note is trimmed
- *         and length-validated client-side; a server `note_length_invalid`
- *         is the authoritative fallback.
- *       * `progress` — sends the user's current progress snapshot.
- *         The server's contract requires the client to supply the
- *         numeric snapshot in the body (`statsSnapshot`), so we fetch
- *         `GET /me/stats` lazily and project it into the wire shape
- *         only at submit time. This keeps the composer cheap when the
- *         user never picks the progress branch.
+ *   - **No free-text identifier (R2.5).** The `experienceId` comes from params;
+ *     the screen never renders a raw-identifier input.
  *
- *   - **Errors.** Server error codes are mapped to inline UI copy:
- *       * `share_recipient_count_invalid` → "Pick between 1 and 50 friends."
- *       * `share_atomic_rejected`         → "Some recipients are no
- *         longer your friends. Refresh and try again."
- *       * any other → "Couldn't send right now. Try again." (the
- *         generic `internal_error` lands here too).
+ *   - **Include/exclude toggles (R2.14).** When the `experience` payload carries
+ *     a Rating and/or a Note, the screen renders an independent include toggle
+ *     for each, defaulting to included. Excluding a value removes it from the
+ *     preview and (task 5.3) from the submitted body.
  *
- *   - **Success.** On success we navigate back to the previous screen.
- *     The transient `Sent` indicator briefly renders before the
- *     navigation kicks in so the user sees a confirmation even on a
- *     fast network.
+ * The recipient picker (task 5.2) and submission wiring (task 5.3) are refined
+ * in their own tasks; this task establishes the kind-derived preview and the
+ * inclusion toggles they build on.
  *
- * Styling: uses the shared "Magical / Whimsical" theme — a gradient
- * hero header, the friend picker as selectable `Card`s, payload-kind
- * `Chip`s, themed inputs, and a themed Send PrimaryButton. See
- * `theme/theme.ts` and `theme/components.tsx`.
- *
- * Validates: Requirements R9.1, R9.2, R9.3, R9.4, R9.5, R9.6, R9.7
+ * Styling: uses the shared "Magical / Whimsical" theme components — a gradient
+ * hero header, the friend picker as selectable `Card`s, `Chip` include toggles,
+ * and a themed Send `PrimaryButton`. See `theme/theme.ts` and
+ * `theme/components.tsx`.
  */
 
-import React, { useCallback, useState } from 'react';
-import {
-  ActivityIndicator,
-  FlatList,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, FlatList, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
-import {
-  EXPERIENCE_CATEGORIES,
-  PARKS,
-  type ExperienceCategory,
-  type Park,
-} from '@dwt/shared';
-
 import { ApiError, apiRequest } from '../../api/client';
-import type { FriendsStackParamList } from '../../navigation/FriendsStack';
+import type {
+  RootStackParamList,
+  ShareComposerParams,
+} from '../../navigation/RootNavigator';
 import { theme } from '../../theme/theme';
 import {
   Card,
@@ -89,6 +59,13 @@ import {
   ScreenContainer,
   SectionLabel,
 } from '../../theme/components';
+import {
+  MAX_RECIPIENTS,
+  canSend,
+  hasNoFriends,
+  isRecipientCountValid,
+} from './recipientGating';
+import { buildShareCreateBody, type ShareCreateBody } from './shareBody';
 
 // ---------------------------------------------------------------------------
 // Wire shapes
@@ -120,51 +97,6 @@ interface FriendsAndRequestsResponse {
   readonly outgoingRequests: ReadonlyArray<FriendRequestListEntry>;
 }
 
-/**
- * Shape mirrors `StatsResponse` from
- * `apps/api/src/services/stats/routes.ts`. Used only when the user
- * picks the progress branch; we project it into `statsSnapshot` for
- * the share body.
- */
-interface StatsBreakdown {
-  readonly completed: number;
-  readonly total: number;
-  readonly percent: number;
-}
-
-interface StatsResponse {
-  readonly overall: StatsBreakdown;
-  readonly byPark: { readonly [park in Park]: StatsBreakdown };
-  readonly byCategory: {
-    readonly [category in ExperienceCategory]: StatsBreakdown;
-  };
-}
-
-/** Body for `POST /me/shares` — Experience branch. */
-interface ExperienceShareBody {
-  readonly kind: 'experience';
-  readonly recipientIds: ReadonlyArray<string>;
-  readonly experienceId: string;
-  readonly rating?: number;
-  readonly includeRating?: boolean;
-  readonly note?: string;
-}
-
-/** Body for `POST /me/shares` — Progress branch. */
-interface ProgressShareBody {
-  readonly kind: 'progress';
-  readonly recipientIds: ReadonlyArray<string>;
-  readonly statsSnapshot: {
-    readonly overallPercent: number;
-    readonly perParkPercent: { readonly [park in Park]?: number };
-    readonly perCategoryPercent: {
-      readonly [category in ExperienceCategory]?: number;
-    };
-  };
-}
-
-type ShareCreateBody = ExperienceShareBody | ProgressShareBody;
-
 interface ShareCreateResponse {
   readonly shareId: string;
   readonly deliveredTo: ReadonlyArray<string>;
@@ -174,32 +106,27 @@ interface ShareCreateResponse {
 // Constants
 // ---------------------------------------------------------------------------
 
-const MAX_RECIPIENTS = 50;
-const MIN_RECIPIENTS = 1;
-const MAX_NOTE_LENGTH = 2000;
-const MIN_RATING = 1;
-const MAX_RATING = 10;
-
 const FRIENDS_QUERY_KEY = ['me-friends'] as const;
-const STATS_QUERY_KEY = ['me-stats'] as const;
+
+const ERROR_NO_FRIENDS = 'Add friends before sharing.';
 
 const ERROR_RECIPIENT_COUNT = 'Pick between 1 and 50 friends.';
 const ERROR_ATOMIC_REJECTED =
   'Some recipients are no longer your friends. Refresh and try again.';
 const ERROR_GENERIC = 'Couldn\u2019t send right now. Try again.';
-const ERROR_NOTE_LENGTH = 'Note must be 1 to 2000 characters.';
-const ERROR_RATING_RANGE = 'Rating must be a whole number between 1 and 10.';
-const ERROR_EXPERIENCE_REQUIRED = 'Enter an Experience id to share.';
 
 // ---------------------------------------------------------------------------
 // Screen
 // ---------------------------------------------------------------------------
 
-type Props = NativeStackScreenProps<FriendsStackParamList, 'ShareComposer'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'ShareComposer'>;
 
 export default function ShareComposerScreen({
   navigation,
+  route,
 }: Props): JSX.Element {
+  const params = route.params;
+
   // -------------------------------------------------------------------------
   // Friends list (the recipient picker source)
   // -------------------------------------------------------------------------
@@ -217,12 +144,29 @@ export default function ShareComposerScreen({
   const [selected, setSelected] = useState<ReadonlySet<string>>(
     () => new Set<string>(),
   );
-  const [kind, setKind] = useState<'experience' | 'progress'>('experience');
-  const [experienceId, setExperienceId] = useState<string>('');
-  const [ratingText, setRatingText] = useState<string>('');
-  const [noteText, setNoteText] = useState<string>('');
+
+  // Include/exclude toggles for the experience payload's Rating and Note
+  // (R2.14). Each defaults to included; the toggle only appears when the
+  // corresponding value is present in the params.
+  const [includeRating, setIncludeRating] = useState<boolean>(true);
+  const [includeNote, setIncludeNote] = useState<boolean>(true);
+
   const [submissionError, setSubmissionError] = useState<string | null>(null);
   const [justSent, setJustSent] = useState<boolean>(false);
+
+  // Holds the pending success-indication timer (R2.10) so it can be cleared if
+  // the screen unmounts before the 250 ms window elapses, avoiding a stray
+  // `goBack()`/state update on an unmounted component.
+  const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (successTimerRef.current !== null) {
+        clearTimeout(successTimerRef.current);
+        successTimerRef.current = null;
+      }
+    },
+    [],
+  );
 
   const toggleRecipient = useCallback((userId: string): void => {
     setSelected((prev) => {
@@ -237,18 +181,6 @@ export default function ShareComposerScreen({
   }, []);
 
   // -------------------------------------------------------------------------
-  // Stats fetch — only enabled when the user picks the progress branch.
-  // The screen does not block the user from selecting "Progress"; we lazy-
-  // fetch the snapshot so a user who never picks it pays nothing.
-  // -------------------------------------------------------------------------
-
-  const statsQuery = useQuery<StatsResponse, ApiError>({
-    queryKey: STATS_QUERY_KEY,
-    queryFn: () => apiRequest<StatsResponse>('GET', '/me/stats'),
-    enabled: kind === 'progress',
-  });
-
-  // -------------------------------------------------------------------------
   // Mutation
   // -------------------------------------------------------------------------
 
@@ -257,17 +189,20 @@ export default function ShareComposerScreen({
       mutationFn: (body) =>
         apiRequest<ShareCreateResponse>('POST', '/me/shares', body),
       onSuccess: () => {
-        // Briefly flash the inline "Sent" indicator before popping the
-        // screen. We schedule the navigation in a microtask so React
-        // commits the success state first; without this, fast networks
-        // would skip the indicator entirely.
+        // Success path (R2.10): show the "Sent" indication for 250 ms, then
+        // return to the screen the composer was opened from. The timer id is
+        // tracked so an early unmount cancels the pending navigation.
         setSubmissionError(null);
         setJustSent(true);
-        setTimeout(() => {
+        if (successTimerRef.current !== null) {
+          clearTimeout(successTimerRef.current);
+        }
+        successTimerRef.current = setTimeout(() => {
+          successTimerRef.current = null;
           if (navigation.canGoBack()) {
             navigation.goBack();
           }
-        }, 600);
+        }, 250);
       },
       onError: (err) => {
         setJustSent(false);
@@ -277,84 +212,43 @@ export default function ShareComposerScreen({
   );
 
   // -------------------------------------------------------------------------
-  // Submit
+  // Submit — derives the body from params plus the inclusion toggles.
   // -------------------------------------------------------------------------
 
+  const friendCount = friendsQuery.data?.friends.length ?? 0;
   const recipientCount = selected.size;
-  const recipientCountValid =
-    recipientCount >= MIN_RECIPIENTS && recipientCount <= MAX_RECIPIENTS;
+  const recipientCountValid = isRecipientCountValid(recipientCount);
+  const noFriends = hasNoFriends(friendCount);
 
   const handleSend = useCallback((): void => {
     setSubmissionError(null);
 
+    if (noFriends) {
+      setSubmissionError(ERROR_NO_FRIENDS);
+      return;
+    }
+
     if (!recipientCountValid) {
-      // Belt-and-braces: the Send button is disabled when the count is
-      // out of range, so this branch is only hit if the disabled state
-      // is bypassed (e.g. by an automated tool). The message matches
-      // the server's `share_recipient_count_invalid` copy.
       setSubmissionError(ERROR_RECIPIENT_COUNT);
       return;
     }
 
     const recipientIds = Array.from(selected);
 
-    if (kind === 'experience') {
-      const trimmedExperienceId = experienceId.trim();
-      if (trimmedExperienceId.length === 0) {
-        setSubmissionError(ERROR_EXPERIENCE_REQUIRED);
-        return;
-      }
-
-      const ratingResult = parseRating(ratingText);
-      if (ratingResult === 'invalid') {
-        setSubmissionError(ERROR_RATING_RANGE);
-        return;
-      }
-
-      const trimmedNote = noteText.trim();
-      if (trimmedNote.length > MAX_NOTE_LENGTH) {
-        setSubmissionError(ERROR_NOTE_LENGTH);
-        return;
-      }
-
-      const body: ExperienceShareBody = {
-        kind: 'experience',
-        recipientIds,
-        experienceId: trimmedExperienceId,
-        ...(ratingResult !== 'omitted'
-          ? { rating: ratingResult, includeRating: true }
-          : {}),
-        ...(trimmedNote.length > 0 ? { note: trimmedNote } : {}),
-      };
-      sendMutation.mutate(body);
-      return;
-    }
-
-    // kind === 'progress'
-    const stats = statsQuery.data;
-    if (stats === undefined) {
-      // We need the snapshot from the stats endpoint before we can
-      // submit. Surface a friendly retry message; the user can hit
-      // Send again once the stats query settles.
-      setSubmissionError(ERROR_GENERIC);
-      return;
-    }
-
-    const body: ProgressShareBody = {
-      kind: 'progress',
+    const body: ShareCreateBody = buildShareCreateBody(
+      params,
+      { includeRating, includeNote },
       recipientIds,
-      statsSnapshot: buildStatsSnapshot(stats),
-    };
+    );
     sendMutation.mutate(body);
   }, [
-    experienceId,
-    kind,
-    noteText,
-    ratingText,
+    includeNote,
+    includeRating,
+    noFriends,
+    params,
     recipientCountValid,
     selected,
     sendMutation,
-    statsQuery.data,
   ]);
 
   // -------------------------------------------------------------------------
@@ -396,10 +290,40 @@ export default function ShareComposerScreen({
   }
 
   const friends = friendsQuery.data?.friends ?? [];
+
+  // No-friends empty state (R2.15): the User has zero Friends to share with, so
+  // show a dedicated empty-state indication and keep the send control disabled.
+  if (noFriends) {
+    return (
+      <ScreenContainer>
+        <GradientHeader
+          title="Share"
+          icon="share-social"
+          onBack={() => navigation.goBack()}
+        />
+        <View style={styles.centered}>
+          <EmptyState
+            icon="people-outline"
+            title="No friends to share with"
+            body="Add friends before sharing."
+          />
+          <PrimaryButton
+            label="Send"
+            icon="send"
+            disabled
+            onPress={handleSend}
+            accessibilityLabel="Send share"
+            style={styles.sendButton}
+          />
+        </View>
+      </ScreenContainer>
+    );
+  }
+
+  // Send is gated by the recipient count and no-friends rule (R2.6, R2.7,
+  // R2.15) plus the in-flight/just-sent UI lifecycle (R2.9).
   const sendDisabled =
-    !recipientCountValid || sendMutation.isPending || justSent;
-  const sendingProgressBlocked =
-    kind === 'progress' && statsQuery.isLoading && statsQuery.data === undefined;
+    !canSend(recipientCount, friendCount) || sendMutation.isPending || justSent;
 
   return (
     <ScreenContainer>
@@ -415,7 +339,13 @@ export default function ShareComposerScreen({
         keyExtractor={(item) => item.userId}
         contentContainerStyle={styles.listContent}
         ListHeaderComponent={
-          <SectionLabel style={styles.pickerLabel}>Recipients</SectionLabel>
+          <SharePreview
+            params={params}
+            includeRating={includeRating}
+            includeNote={includeNote}
+            onToggleRating={() => setIncludeRating((v) => !v)}
+            onToggleNote={() => setIncludeNote((v) => !v)}
+          />
         }
         ListEmptyComponent={
           <View style={styles.centered}>
@@ -449,76 +379,6 @@ export default function ShareComposerScreen({
         }}
         ListFooterComponent={
           <View style={styles.footer}>
-            <SectionLabel>What to share</SectionLabel>
-            <View style={styles.kindRow}>
-              <Chip
-                label="Experience"
-                active={kind === 'experience'}
-                onPress={() => {
-                  setKind('experience');
-                  setSubmissionError(null);
-                }}
-              />
-              <Chip
-                label="Progress"
-                active={kind === 'progress'}
-                onPress={() => {
-                  setKind('progress');
-                  setSubmissionError(null);
-                }}
-              />
-            </View>
-
-            {kind === 'experience' ? (
-              <View style={styles.fieldGroup}>
-                <Text style={styles.label}>Experience id</Text>
-                <TextInput
-                  value={experienceId}
-                  onChangeText={setExperienceId}
-                  placeholder="experience-uuid"
-                  placeholderTextColor={theme.color.textSecondary}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  style={styles.input}
-                  accessibilityLabel="Experience id"
-                />
-
-                <Text style={styles.label}>Rating (optional, 1-10)</Text>
-                <TextInput
-                  value={ratingText}
-                  onChangeText={setRatingText}
-                  keyboardType="number-pad"
-                  placeholder="e.g. 8"
-                  placeholderTextColor={theme.color.textSecondary}
-                  style={styles.input}
-                  accessibilityLabel="Rating"
-                />
-
-                <Text style={styles.label}>Note (optional)</Text>
-                <TextInput
-                  value={noteText}
-                  onChangeText={setNoteText}
-                  placeholder="Say something nice"
-                  placeholderTextColor={theme.color.textSecondary}
-                  multiline
-                  maxLength={MAX_NOTE_LENGTH}
-                  style={[styles.input, styles.noteInput]}
-                  accessibilityLabel="Note"
-                />
-                <Text style={styles.helper}>
-                  {noteText.trim().length}/{MAX_NOTE_LENGTH}
-                </Text>
-              </View>
-            ) : (
-              <View style={styles.fieldGroup}>
-                <Text style={styles.helper}>
-                  {sendingProgressBlocked
-                    ? 'Loading your progress\u2026'
-                    : 'Your current progress will be shared as a snapshot.'}
-                </Text>
-              </View>
-            )}
-
             {submissionError !== null ? (
               <Text style={styles.error} accessibilityRole="alert">
                 {submissionError}
@@ -553,58 +413,121 @@ export default function ShareComposerScreen({
 }
 
 // ---------------------------------------------------------------------------
+// Read-only preview (R2.2, R2.3, R2.4) + include/exclude toggles (R2.14)
+// ---------------------------------------------------------------------------
+
+function SharePreview({
+  params,
+  includeRating,
+  includeNote,
+  onToggleRating,
+  onToggleNote,
+}: {
+  readonly params: ShareComposerParams;
+  readonly includeRating: boolean;
+  readonly includeNote: boolean;
+  readonly onToggleRating: () => void;
+  readonly onToggleNote: () => void;
+}): JSX.Element {
+  if (params.kind === 'experience') {
+    const showRating = params.rating !== undefined;
+    const showNote = params.note !== undefined && params.note.length > 0;
+    return (
+      <View style={styles.previewBlock}>
+        <SectionLabel style={styles.previewLabel}>Sharing</SectionLabel>
+        <Card style={styles.previewCard}>
+          <Text style={styles.previewTitle} testID="preview-experience-name">
+            {params.experienceName}
+          </Text>
+          <Text style={styles.previewMeta} testID="preview-experience-meta">
+            {params.park} {'\u00b7'} {categoryLabel(params.category)}
+          </Text>
+
+          {showRating && includeRating ? (
+            <Text style={styles.previewValue} testID="preview-rating">
+              Rating: {params.rating}/10
+            </Text>
+          ) : null}
+
+          {showNote && includeNote ? (
+            <Text style={styles.previewValue} testID="preview-note">
+              {params.note}
+            </Text>
+          ) : null}
+        </Card>
+
+        {showRating || showNote ? (
+          <View style={styles.toggleRow}>
+            {showRating ? (
+              <Chip
+                label={includeRating ? 'Rating included' : 'Rating excluded'}
+                active={includeRating}
+                onPress={onToggleRating}
+                testID="toggle-rating"
+                accessibilityLabel={`Include rating, ${
+                  includeRating ? 'included' : 'excluded'
+                }`}
+              />
+            ) : null}
+            {showNote ? (
+              <Chip
+                label={includeNote ? 'Note included' : 'Note excluded'}
+                active={includeNote}
+                onPress={onToggleNote}
+                testID="toggle-note"
+                accessibilityLabel={`Include note, ${
+                  includeNote ? 'included' : 'excluded'
+                }`}
+              />
+            ) : null}
+          </View>
+        ) : null}
+
+        <SectionLabel style={styles.pickerLabel}>Recipients</SectionLabel>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.previewBlock}>
+      <SectionLabel style={styles.previewLabel}>Sharing</SectionLabel>
+      <Card style={styles.previewCard}>
+        <Text style={styles.previewTitle}>Progress</Text>
+        <Text style={styles.previewValue} testID="preview-overall-percent">
+          {formatPercent(params.overallPercent)}% complete overall
+        </Text>
+      </Card>
+      <SectionLabel style={styles.pickerLabel}>Recipients</SectionLabel>
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
 /**
- * Parse the rating text input. Returns:
- *   - `'omitted'` when the field is empty (no rating attached).
- *   - `'invalid'` when the value is not an integer in `1..10`.
- *   - the integer value otherwise.
- *
- * The server's `ratingValueSchema` enforces integer 1..10; we mirror
- * the rule client-side so the user gets immediate feedback without a
- * round-trip.
+ * Friendly label for an Experience_Category. The enum members use
+ * underscores (e.g. `Character_Meet`); render them with spaces, mirroring
+ * `ExperienceDetailScreen`.
  */
-function parseRating(raw: string): number | 'omitted' | 'invalid' {
-  const trimmed = raw.trim();
-  if (trimmed.length === 0) return 'omitted';
-  if (!/^-?\d+$/.test(trimmed)) return 'invalid';
-  const value = Number.parseInt(trimmed, 10);
-  if (!Number.isFinite(value)) return 'invalid';
-  if (value < MIN_RATING || value > MAX_RATING) return 'invalid';
-  return value;
+function categoryLabel(category: string): string {
+  return category.replace(/_/g, ' ');
 }
 
 /**
- * Project a `StatsResponse` into the wire `statsSnapshot` shape the
- * server's `progressShareInputSchema` accepts. We forward the
- * `percent` field of each breakdown verbatim — it is already in
- * `[0, 100]` per `computePercent`. The server re-clamps as defense in
- * depth.
+ * Render a completion percentage to exactly one decimal place (R2.4). The
+ * value arrives already rounded to one decimal from the Progress_Screen; this
+ * formats it consistently regardless of trailing-zero representation.
  */
-function buildStatsSnapshot(
-  stats: StatsResponse,
-): ProgressShareBody['statsSnapshot'] {
-  const perParkPercent: { [park in Park]?: number } = {};
-  for (const park of PARKS) {
-    perParkPercent[park] = stats.byPark[park].percent;
-  }
-  const perCategoryPercent: { [category in ExperienceCategory]?: number } = {};
-  for (const category of EXPERIENCE_CATEGORIES) {
-    perCategoryPercent[category] = stats.byCategory[category].percent;
-  }
-  return {
-    overallPercent: stats.overall.percent,
-    perParkPercent,
-    perCategoryPercent,
-  };
+function formatPercent(value: number): string {
+  return value.toFixed(1);
 }
 
 /**
- * Map a server `ApiError` to user-facing copy. Three codes get
- * dedicated messages per the task brief; everything else (including
- * the catch-all `internal_error`) collapses to the generic copy.
+ * Map a server `ApiError` to user-facing copy. Recipient-count and
+ * non-friend-recipient errors get dedicated messages; everything else
+ * (including the catch-all `internal_error`) collapses to the generic copy.
  */
 function mapServerError(err: ApiError): string {
   if (err.code === 'share_recipient_count_invalid') {
@@ -613,18 +536,8 @@ function mapServerError(err: ApiError): string {
   if (err.code === 'share_atomic_rejected') {
     return ERROR_ATOMIC_REJECTED;
   }
-  if (err.code === 'note_length_invalid') {
-    return ERROR_NOTE_LENGTH;
-  }
-  if (err.code === 'rating_out_of_range') {
-    return ERROR_RATING_RANGE;
-  }
   return ERROR_GENERIC;
 }
-
-// `useMemo` is intentionally not used for the friends list above; the
-// data is already a stable reference returned by react-query, and the
-// `selected` set is the only piece of derived state the UI consumes.
 
 // ---------------------------------------------------------------------------
 // Styles
@@ -642,7 +555,36 @@ const styles = StyleSheet.create({
     paddingTop: theme.spacing.md,
     paddingBottom: theme.spacing.xxl,
   },
+  previewBlock: {
+    gap: theme.spacing.sm,
+    marginBottom: theme.spacing.md,
+  },
+  previewLabel: {
+    marginBottom: theme.spacing.xs,
+  },
+  previewCard: {
+    padding: theme.spacing.md,
+    gap: theme.spacing.xs,
+  },
+  previewTitle: {
+    ...theme.typography.subtitle,
+    color: theme.color.textPrimary,
+  },
+  previewMeta: {
+    ...theme.typography.meta,
+    color: theme.color.textSecondary,
+  },
+  previewValue: {
+    ...theme.typography.body,
+    color: theme.color.textPrimary,
+  },
+  toggleRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: theme.spacing.sm,
+  },
   pickerLabel: {
+    marginTop: theme.spacing.sm,
     marginBottom: theme.spacing.sm,
   },
   friendRow: {
@@ -665,34 +607,6 @@ const styles = StyleSheet.create({
   footer: {
     marginTop: theme.spacing.lg,
     gap: theme.spacing.md,
-  },
-  kindRow: {
-    flexDirection: 'row',
-  },
-  fieldGroup: {
-    gap: theme.spacing.sm,
-  },
-  label: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: theme.color.border,
-    borderRadius: theme.radius.md,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.md,
-    fontSize: 16,
-    color: theme.color.textPrimary,
-    backgroundColor: theme.color.surfaceAlt,
-  },
-  noteInput: {
-    minHeight: 80,
-    textAlignVertical: 'top',
-  },
-  helper: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
   },
   error: {
     color: theme.color.danger,

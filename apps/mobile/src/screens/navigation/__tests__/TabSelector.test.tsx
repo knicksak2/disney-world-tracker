@@ -92,11 +92,14 @@ describe('TabSelector', () => {
       return onSelect;
     }
 
-    test('renders exactly four tabs with the expected non-empty labels (R1.1, R1.2, R8.1, R8.2)', () => {
+    test('renders exactly one tab per mode with the expected non-empty labels (R1.1, R1.2, R8.1, R8.2)', () => {
       renderSelector(activeMode);
 
       expect(screen.getByTestId('tab-selector')).toBeTruthy();
-      expect(tabs).toHaveLength(4);
+      // One selectable tab per declared mode — the two selectors differ in
+      // tab count (the Own_Stats_Selector adds the Areas tab), so this is
+      // asserted against the spec length rather than a fixed number.
+      expect(renderedIconNames()).toHaveLength(tabs.length);
 
       for (const tab of tabs) {
         // One selectable tab per mode, addressable by its testID.
@@ -107,11 +110,11 @@ describe('TabSelector', () => {
       }
     });
 
-    test('renders four distinct icons (R1.2, R8.2)', () => {
+    test('renders one distinct icon per tab (R1.2, R8.2)', () => {
       renderSelector(activeMode);
 
       const names = renderedIconNames();
-      expect(names).toHaveLength(4);
+      expect(names).toHaveLength(tabs.length);
       // Every icon differs from every other icon.
       expect(new Set(names).size).toBe(names.length);
       // The rendered icons match the declared specs, in order.

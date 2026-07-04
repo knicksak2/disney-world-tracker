@@ -184,6 +184,7 @@ function resortArb(): fc.Arbitrary<ResortDTO> {
     longitude: fc.constant(null),
     address: fc.constant(null),
     phone: fc.constant(null),
+    representingExperienceId: fc.option(fc.uuid(), { nil: null }),
   });
 }
 

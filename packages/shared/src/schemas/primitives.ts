@@ -9,7 +9,12 @@
 
 import { z } from 'zod';
 
-import { EXPERIENCE_CATEGORIES, PARKS, SHARE_PAYLOAD_KINDS } from '../enums.js';
+import {
+  EXPERIENCE_CATEGORIES,
+  PARKS,
+  SHARE_PAYLOAD_KINDS,
+  SHARE_REACTION_VALUES,
+} from '../enums.js';
 
 // ---------------------------------------------------------------------------
 // Identifiers
@@ -163,6 +168,13 @@ export const parkSchema = z.enum(PARKS);
 
 /** SharePayloadKind enum (R9.1, R9.7). */
 export const sharePayloadKindSchema = z.enum(SHARE_PAYLOAD_KINDS);
+
+/**
+ * Share_Reaction value from the closed `Reaction_Vocabulary` (R11.2, R11.3).
+ * A candidate value is accepted if and only if it belongs to this set; any
+ * other value is a validation error and nothing is persisted.
+ */
+export const shareReactionValueSchema = z.enum(SHARE_REACTION_VALUES);
 
 // ---------------------------------------------------------------------------
 // Stats primitives

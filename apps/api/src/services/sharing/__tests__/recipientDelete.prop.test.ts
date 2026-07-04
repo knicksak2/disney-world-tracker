@@ -55,6 +55,7 @@ const NUM_RUNS = 100;
 
 const SHARE_ID = '11111111-1111-4111-8111-111111111111';
 const SENDER_ID = '22222222-2222-4222-8222-222222222222';
+const SENDER_DISPLAY_NAME = 'Mickey Mouse';
 const EXPERIENCE_ID = '33333333-3333-4333-8333-333333333333';
 const SENT_AT = new Date('2024-05-01T10:00:00.000Z');
 
@@ -207,11 +208,13 @@ function makeFakePool(db: FakeDb): DbPool {
         ) {
           rows.push({
             share_id: row.share_id,
-            is_opened: row.opened_at !== null,
+            read: row.opened_at !== null,
             sender_id: db.share.sender_id,
+            sender_display_name: SENDER_DISPLAY_NAME,
             payload_kind: db.share.payload_kind,
             payload_snapshot: db.share.payload_snapshot,
             sent_at: db.share.sent_at,
+            my_reaction: null,
           });
         }
       }
@@ -381,13 +384,19 @@ describe('Sharing_Service softDeleteForRecipient — Property 25', () => {
           } else {
             // (e) non-deleted recipient still sees the share. Each
             // recipient's row was unopened in this test, so unread
-            // == 1 and the single item carries the unopened
-            // privacy projection.
+            // == 1 and the single item carries the full disclosure
+            // projection regardless of read state (R4.1, R6.2).
             expect(inbox.items).toHaveLength(1);
             expect(inbox.unread).toBe(1);
             expect(inbox.items[0]).toEqual({
               shareId: SHARE_ID,
-              isOpened: false,
+              read: false,
+              senderId: SENDER_ID,
+              senderDisplayName: SENDER_DISPLAY_NAME,
+              payloadKind: 'experience',
+              payload: INITIAL_PAYLOAD,
+              sentAt: SENT_AT.toISOString(),
+              myReaction: null,
             });
           }
         }

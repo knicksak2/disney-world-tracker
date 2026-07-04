@@ -98,12 +98,17 @@ function makeUpstream(
     imageUrl: null,
     areaType: 'ThemePark',
     resortId: null,
+    representsResortId: null,
     resortArea: null,
     latitude: null,
     longitude: null,
     accessibility: [],
     priceTier: null,
     mealPeriods: [],
+    groupedFacets: {},
+    heightRequirement: null,
+    whyThis: null,
+    subType: null,
   };
 }
 
@@ -126,6 +131,7 @@ function makeCacheRow(
     areaType: 'ThemePark',
     resortId: null,
     resortArea: null,
+    representsResortId: null,
   };
 }
 
@@ -152,6 +158,7 @@ function applyDiff(
       areaType: u.areaType,
       resortId: u.resortId,
       resortArea: u.resortArea,
+      representsResortId: u.representsResortId,
     });
   }
   for (const d of diff.softDeletes) {
@@ -400,12 +407,17 @@ describe('reconcile — Land reconciliation fixed examples', () => {
       imageUrl: null,
       areaType: 'Resort',
       resortId,
+      representsResortId: null,
       resortArea,
       latitude: null,
       longitude: null,
       accessibility: [],
       priceTier: null,
       mealPeriods: [],
+      groupedFacets: {},
+      heightRequirement: null,
+      whyThis: null,
+      subType: null,
     });
     const cache: CatalogCacheRow[] = [
       {
@@ -418,6 +430,7 @@ describe('reconcile — Land reconciliation fixed examples', () => {
         areaType: 'Resort',
         resortId: null,
         resortArea: 'EPCOT Resort Area',
+        representsResortId: null,
       },
     ];
     const diff = reconcile(cache, [resortExp('resort-swan', 'EPCOT Resort Area')]);
@@ -437,6 +450,7 @@ describe('reconcile — Land reconciliation fixed examples', () => {
         areaType: 'Resort',
         resortId: 'resort-swan',
         resortArea: null,
+        representsResortId: null,
       },
     ];
     const upstream: UpstreamExperience = {
@@ -450,12 +464,17 @@ describe('reconcile — Land reconciliation fixed examples', () => {
       imageUrl: null,
       areaType: 'Resort',
       resortId: 'resort-swan',
+      representsResortId: null,
       resortArea: 'EPCOT Resort Area',
       latitude: null,
       longitude: null,
       accessibility: [],
       priceTier: null,
       mealPeriods: [],
+      groupedFacets: {},
+      heightRequirement: null,
+      whyThis: null,
+      subType: null,
     };
     const diff = reconcile(cache, [upstream]);
     expect(diff.upserts).toHaveLength(1);
@@ -477,6 +496,7 @@ describe('reconcile — Land reconciliation fixed examples', () => {
         areaType: 'Resort',
         resortId: null,
         resortArea: 'Magic Kingdom Resort Area',
+        representsResortId: null,
       },
     ];
     const upstream: UpstreamExperience = {
@@ -490,12 +510,17 @@ describe('reconcile — Land reconciliation fixed examples', () => {
       imageUrl: null,
       areaType: 'ThemePark',
       resortId: null,
+      representsResortId: null,
       resortArea: null,
       latitude: null,
       longitude: null,
       accessibility: [],
       priceTier: null,
       mealPeriods: [],
+      groupedFacets: {},
+      heightRequirement: null,
+      whyThis: null,
+      subType: null,
     };
     const diff = reconcile(cache, [upstream]);
     expect(diff.upserts).toHaveLength(1);
@@ -514,6 +539,7 @@ describe('reconcile — Land reconciliation fixed examples', () => {
         areaType: 'Resort',
         resortId: 'resort-swan',
         resortArea: 'EPCOT Resort Area',
+        representsResortId: null,
       },
     ];
     const upstream: UpstreamExperience = {
@@ -527,12 +553,17 @@ describe('reconcile — Land reconciliation fixed examples', () => {
       imageUrl: null,
       areaType: 'Resort',
       resortId: 'resort-swan',
+      representsResortId: null,
       resortArea: 'EPCOT Resort Area',
       latitude: null,
       longitude: null,
       accessibility: [],
       priceTier: null,
       mealPeriods: [],
+      groupedFacets: {},
+      heightRequirement: null,
+      whyThis: null,
+      subType: null,
     };
     const diff = reconcile(cache, [upstream]);
     expect(diff.upserts).toEqual([]);

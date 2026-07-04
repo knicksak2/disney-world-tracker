@@ -18,12 +18,14 @@ export {
   AREA_TYPES,
   PARKS,
   SHARE_PAYLOAD_KINDS,
+  SHARE_REACTION_VALUES,
 } from './enums.js';
 export type {
   ExperienceCategory,
   AreaType,
   Park,
   SharePayloadKind,
+  ShareReactionValue,
 } from './enums.js';
 
 // Error code catalog and uniform JSON envelope.
@@ -42,6 +44,10 @@ export type {
   UserDTO,
   ProfileDTO,
   ExperienceDTO,
+  FacetValueDTO,
+  GroupedFacetsDTO,
+  HeightRequirementDTO,
+  WhyThisDTO,
   ResortDTO,
   MealPeriodDTO,
   MenuDTO,
@@ -53,10 +59,15 @@ export type {
   FriendRequestDTO,
   FriendshipDTO,
   ShareDTO,
+  SentShareDTO,
   SharePayload,
   ExperienceSharePayload,
   ProgressSharePayload,
   ShareRecipientDTO,
+  ShareReactionDTO,
+  NotificationPreferenceDTO,
+  InboxItemDTO,
+  InboxResponse,
   AggregateRatingDTO,
   LeaderboardEntryDTO,
   StatsDTO,
@@ -107,6 +118,7 @@ export {
   experienceCategorySchema,
   parkSchema,
   sharePayloadKindSchema,
+  shareReactionValueSchema,
   completionPercentSchema,
   // DTO schemas
   userSchema,
@@ -131,6 +143,11 @@ export {
   progressSharePayloadSchema,
   shareInputSchema,
   shareRecipientSchema,
+  shareReactionSchema,
+  notificationPreferenceSchema,
+  notificationPreferenceInputSchema,
+  inboxItemSchema,
+  inboxResponseSchema,
   aggregateRatingSchema,
   leaderboardEntrySchema,
   statsSchema,
@@ -157,4 +174,5 @@ export type {
   FriendRequestInput,
   ShareInput,
   UserSearchInput,
+  NotificationPreferenceInput,
 } from './schemas/index.js';

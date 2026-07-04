@@ -170,6 +170,7 @@ function toCompletionEntryDTO(entry: CompletionEntry): CompletionEntryDTO {
     experienceId: entry.experienceId,
     experienceName: entry.experienceName,
     park: entry.park,
+    areaType: entry.areaType,
     category: entry.category,
     completedOn: entry.completedOn,
     rating: entry.rating,

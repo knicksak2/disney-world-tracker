@@ -194,9 +194,30 @@ describe('buildResponse — roll-up of snapshot cells (R3.1, R3.2, R3.3, R3.6, R
     // byCategory.Show: 1 / 2 → 50.0%
     // byCategory.Restaurant: 2 / 5 → 40.0%
     const cells: StatsCell[] = [
-      { park: 'Magic Kingdom', category: 'Ride', completed: 4, total: 10 },
-      { park: 'Magic Kingdom', category: 'Show', completed: 1, total: 2 },
-      { park: 'EPCOT', category: 'Restaurant', completed: 2, total: 5 },
+      {
+        park: 'Magic Kingdom',
+        category: 'Ride',
+        areaType: 'ThemePark',
+        isResortRepresentation: false,
+        completed: 4,
+        total: 10,
+      },
+      {
+        park: 'Magic Kingdom',
+        category: 'Show',
+        areaType: 'ThemePark',
+        isResortRepresentation: false,
+        completed: 1,
+        total: 2,
+      },
+      {
+        park: 'EPCOT',
+        category: 'Restaurant',
+        areaType: 'ThemePark',
+        isResortRepresentation: false,
+        completed: 2,
+        total: 5,
+      },
     ];
 
     const response = buildResponse(snapshotOf(cells));
@@ -249,7 +270,14 @@ describe('buildResponse — roll-up of snapshot cells (R3.1, R3.2, R3.3, R3.6, R
     // This shouldn't happen in practice (the snapshot reads numerator and
     // denominator atomically) but the route must remain safe regardless.
     const cells: StatsCell[] = [
-      { park: 'Magic Kingdom', category: 'Ride', completed: 99, total: 10 },
+      {
+        park: 'Magic Kingdom',
+        category: 'Ride',
+        areaType: 'ThemePark',
+        isResortRepresentation: false,
+        completed: 99,
+        total: 10,
+      },
     ];
     const response = buildResponse(snapshotOf(cells));
 
@@ -263,7 +291,14 @@ describe('buildResponse — roll-up of snapshot cells (R3.1, R3.2, R3.3, R3.6, R
     const cells: StatsCell[] = [];
     for (const park of PARKS) {
       for (const category of EXPERIENCE_CATEGORIES) {
-        cells.push({ park, category, completed: 1, total: 3 });
+        cells.push({
+          park,
+          category,
+          areaType: 'ThemePark',
+          isResortRepresentation: false,
+          completed: 1,
+          total: 3,
+        });
       }
     }
     const response = buildResponse(snapshotOf(cells));
@@ -294,7 +329,14 @@ describe('GET /me/stats', () => {
   it('returns the requester own stats with computed percentages (R3.1-R3.4)', async () => {
     const snapshot: StatsSnapshot = {
       cells: [
-        { park: 'Magic Kingdom', category: 'Ride', completed: 3, total: 10 },
+        {
+          park: 'Magic Kingdom',
+          category: 'Ride',
+          areaType: 'ThemePark',
+          isResortRepresentation: false,
+          completed: 3,
+          total: 10,
+        },
       ],
     };
     const { repo, callsForUser } = makeFakeRepo(
@@ -351,7 +393,14 @@ describe('GET /me/stats/summary?for=<userId>', () => {
   it('allows the owner to read their own stats without consulting friendships', async () => {
     const snapshot: StatsSnapshot = {
       cells: [
-        { park: 'EPCOT', category: 'Restaurant', completed: 2, total: 4 },
+        {
+          park: 'EPCOT',
+          category: 'Restaurant',
+          areaType: 'ThemePark',
+          isResortRepresentation: false,
+          completed: 2,
+          total: 4,
+        },
       ],
     };
     const { repo, callsForUser } = makeFakeRepo(
@@ -382,7 +431,14 @@ describe('GET /me/stats/summary?for=<userId>', () => {
   it('allows an accepted Friend to read the target stats (R7.4)', async () => {
     const snapshot: StatsSnapshot = {
       cells: [
-        { park: 'Animal Kingdom', category: 'Ride', completed: 1, total: 5 },
+        {
+          park: 'Animal Kingdom',
+          category: 'Ride',
+          areaType: 'ThemePark',
+          isResortRepresentation: false,
+          completed: 1,
+          total: 5,
+        },
       ],
     };
     const { repo, callsForUser } = makeFakeRepo(

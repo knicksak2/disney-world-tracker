@@ -46,7 +46,11 @@ import {
   type AreaType,
   type ExperienceCategory,
   type ExperienceDTO,
+  type FacetValueDTO,
+  type GroupedFacetsDTO,
+  type HeightRequirementDTO,
   type Park,
+  type WhyThisDTO,
 } from '@dwt/shared';
 
 import { registerErrorHandler } from '../../../errors/handler.js';
@@ -239,6 +243,181 @@ describe('GET /catalog filtering — Property 23: returns only items matching th
           }
         },
       ),
+      { numRuns: NUM_RUNS },
+    );
+  });
+});
+
+// Feature: experience-facet-enrichment, Property 10: Detail response passes new fields through by persistence
+/**
+ * Property-based test for the `GET /catalog/:experienceId` detail-response
+ * pass-through of the six new enrichment fields (task 8.2).
+ *
+ * Validates: Requirements 10.1, 10.2
+ *
+ * Property 10 (design.md → Correctness Properties → "Detail response passes
+ * new fields through by persistence"):
+ *
+ *   For any Experience_DTO, `toDetailResponse` includes each of the six new
+ *   enrichment fields (`heightRequirement`, `groupedFacets`,
+ *   `physicalConsiderations`, `interestFacets`, `whyThis`, `subType`) in the
+ *   response exactly when the DTO carries it, and omits each field the DTO
+ *   omits, leaving all existing detail fields unchanged.
+ *
+ * `toDetailResponse` is a private helper in `routes.ts`; it is exercised here
+ * through the registered `GET /catalog/:experienceId` route with an injected
+ * `getExperience` port returning the generated DTO — the same in-process
+ * Fastify harness the other tests in this file use. `getMenusFor` is left
+ * unwired so the detail response carries only the DTO's own fields (no `menus`
+ * attachment), isolating the enrichment pass-through.
+ *
+ * Test strategy: generate an ExperienceDTO whose six new enrichment fields are
+ * each independently present (possibly `null`, where the field's type allows
+ * it) or absent, alongside the always-present core fields. The route returns
+ * the projection; the test asserts (a) per-field presence parity — the
+ * response carries a new field's key exactly when the DTO does — and (b) the
+ * whole response equals the DTO with only `active` stripped, proving the new
+ * fields pass through verbatim and every existing field is unchanged.
+ *
+ * `numRuns: 100` per the spec convention.
+ */
+
+/** A fixed valid UUID for the request path; the port ignores the argument. */
+const DETAIL_PATH_ID = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+
+/** The six new enrichment field names Property 10 governs. */
+const ENRICHMENT_FIELDS = [
+  'heightRequirement',
+  'groupedFacets',
+  'physicalConsiderations',
+  'interestFacets',
+  'whyThis',
+  'subType',
+] as const;
+
+/** Build a detail-route app whose `getExperience` returns the given DTO. */
+async function buildDetailApp(dto: ExperienceDTO): Promise<FastifyInstance> {
+  const app = Fastify({ logger: false });
+  registerErrorHandler(app);
+  await app.register(
+    catalogRoutes({
+      decideRead: async () => ({ staleCache: false, cacheAgeHours: null }),
+      listActiveExperiences: async () => [],
+      // Return the generated DTO regardless of the requested id; the route
+      // only uses the id to validate the path and look the row up.
+      getExperience: async () => dto,
+    }),
+  );
+  return app;
+}
+
+// ---------------------------------------------------------------------------
+// Enrichment-field generators (mirror the shared DTO shapes)
+// ---------------------------------------------------------------------------
+
+const facetValueArb: fc.Arbitrary<FacetValueDTO> = fc.record({
+  id: fc.string({ maxLength: 12 }),
+  name: fc.string({ maxLength: 12 }),
+});
+
+/** Grouped_Facets keyed by Persisted_Facet_Group names. */
+const groupedFacetsArb: fc.Arbitrary<GroupedFacetsDTO> = fc.dictionary(
+  fc.constantFrom(
+    'height',
+    'physicalConsiderations',
+    'interests',
+    'thrillFactor',
+    'age',
+    'parkInterests',
+    'disneyFavorites',
+  ),
+  fc.array(facetValueArb, { maxLength: 4 }),
+  { maxKeys: 4 },
+);
+
+const heightRequirementArb: fc.Arbitrary<HeightRequirementDTO> = fc.record({
+  id: fc.string({ maxLength: 12 }),
+  name: fc.string({ maxLength: 12 }),
+  minInches: fc.option(fc.integer({ min: 0, max: 300 }), { nil: null }),
+  minCentimeters: fc.option(fc.integer({ min: 0, max: 300 }), { nil: null }),
+});
+
+const whyThisArb: fc.Arbitrary<WhyThisDTO> = fc.record({
+  title: fc.option(fc.string({ maxLength: 20 }), { nil: null }),
+  bullets: fc.array(fc.string({ maxLength: 20 }), { maxLength: 4 }),
+  quotes: fc.array(fc.string({ maxLength: 20 }), { maxLength: 4 }),
+});
+
+/**
+ * Generate the six new enrichment fields with independent presence/absence.
+ * `requiredKeys: []` lets fast-check omit any subset of keys, exercising both
+ * "carried" (present, possibly `null`) and "omitted" cases per field.
+ */
+const enrichmentArb = fc.record(
+  {
+    heightRequirement: fc.option(heightRequirementArb, { nil: null }),
+    groupedFacets: groupedFacetsArb,
+    physicalConsiderations: fc.array(facetValueArb, { maxLength: 4 }),
+    interestFacets: groupedFacetsArb,
+    whyThis: fc.option(whyThisArb, { nil: null }),
+    subType: fc.option(fc.string({ maxLength: 20 }), { nil: null }),
+  },
+  { requiredKeys: [] },
+);
+
+/** Always-present core fields of an ExperienceDTO detail view. */
+const coreExperienceArb = fc.record({
+  id: fc.uuid(),
+  name: fc.string({ minLength: 1, maxLength: 30 }),
+  park: fc.option(fc.constantFrom<Park>(...PARKS), { nil: null }),
+  category: fc.constantFrom<ExperienceCategory>(...EXPERIENCE_CATEGORIES),
+  description: fc.string({ maxLength: 30 }),
+  active: fc.boolean(),
+  imageUrl: fc.option(fc.webUrl(), { nil: null }),
+  areaType: fc.constantFrom<AreaType>(...AREA_TYPES),
+});
+
+const detailExperienceArb: fc.Arbitrary<ExperienceDTO> = fc
+  .tuple(coreExperienceArb, enrichmentArb)
+  .map(([core, enrichment]) => ({ ...core, ...enrichment }) as ExperienceDTO);
+
+describe('GET /catalog/:experienceId — Property 10: detail response passes new fields through by persistence', () => {
+  it('includes each new enrichment field exactly when the DTO carries it, leaving existing fields unchanged (R10.1, R10.2)', async () => {
+    await fc.assert(
+      fc.asyncProperty(detailExperienceArb, async (dto) => {
+        const app = await buildDetailApp(dto);
+        try {
+          const res = await app.inject({
+            method: 'GET',
+            url: `/catalog/${DETAIL_PATH_ID}`,
+          });
+
+          expect(res.statusCode).toBe(200);
+          const body = res.json() as Record<string, unknown>;
+
+          // (a) Per-field presence parity: the response carries a new
+          // enrichment field's key exactly when the DTO does (R10.1, R10.2).
+          for (const field of ENRICHMENT_FIELDS) {
+            const dtoHas = Object.prototype.hasOwnProperty.call(dto, field);
+            const bodyHas = Object.prototype.hasOwnProperty.call(body, field);
+            expect(bodyHas).toBe(dtoHas);
+            if (dtoHas) {
+              expect(body[field]).toEqual(
+                (dto as unknown as Record<string, unknown>)[field],
+              );
+            }
+          }
+
+          // (b) The whole response equals the DTO with only `active` stripped:
+          // every new field passes through verbatim and no existing detail
+          // field is changed (no `menus` is attached — the port is unwired).
+          const { active: _active, ...expected } = dto;
+          void _active;
+          expect(body).toEqual(expected);
+        } finally {
+          await app.close();
+        }
+      }),
       { numRuns: NUM_RUNS },
     );
   });

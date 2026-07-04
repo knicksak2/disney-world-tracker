@@ -576,6 +576,16 @@ async function applyMigration(db: IMemoryDb): Promise<void> {
     '0003_note_shareable.sql',
     '0004_disney_sources.sql',
     '0006_experience_land.sql',
+    // 0009 adds the additive `experiences.represents_resort_id` column (plus its
+    // partial-unique and active indexes) that the stats snapshot query now reads
+    // via `(represents_resort_id IS NOT NULL) AS is_resort_representation`. Its
+    // only dependency is the `resorts` table from 0004, so it applies cleanly on
+    // top of this curated chain; without it `/me/stats` fails with a 500.
+    '0009_resort_representing_experiences.sql',
+    // 0010 widens the category CHECK to admit the `Resort` category the harness
+    // now cycles through (`EXPERIENCE_CATEGORIES` includes `Resort`); without it
+    // the seeded rows whose category lands on `Resort` violate the constraint.
+    '0010_resort_experience_category.sql',
   ];
   for (const name of migrations) {
     const migrationPath = resolve(here, '..', '..', 'migrations', name);

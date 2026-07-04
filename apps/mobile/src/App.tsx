@@ -5,6 +5,9 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import RootNavigator from './navigation/RootNavigator';
+import { navigationRef } from './navigation/navigationRef';
+import { usePushRegistration } from './hooks/usePushRegistration';
+import { useNotificationResponse } from './hooks/useNotificationResponse';
 import { useSessionStore } from './state/sessionStore';
 
 /**
@@ -34,10 +37,19 @@ export default function App(): JSX.Element {
     void loadFromStorage();
   }, [loadFromStorage]);
 
+  // Register this device for Share push notifications once authenticated
+  // (R8.1, R9.1); no-op until a session is hydrated and present.
+  usePushRegistration();
+
+  // Deep-link a tapped Share push notification to the Inbox and on to the
+  // Share's destination (R10). Mounted once at the root, above the navigator,
+  // so it can dispatch navigation through the shared `navigationRef`.
+  useNotificationResponse();
+
   return (
     <SafeAreaProvider>
       <QueryClientProvider client={queryClient}>
-        <NavigationContainer>
+        <NavigationContainer ref={navigationRef}>
           <RootNavigator />
         </NavigationContainer>
         <StatusBar style="auto" />

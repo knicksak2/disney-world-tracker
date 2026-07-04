@@ -137,6 +137,9 @@ function makeCaptureRepo(): CaptureRepo {
     async softDeleteForRecipient(): Promise<boolean> {
       return false;
     },
+    async listSentShares() {
+      return [];
+    },
   };
   return repo;
 }

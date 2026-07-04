@@ -17,6 +17,12 @@
  */
 
 import type { AreaType, ExperienceCategory, Park } from '../enums.js';
+import type {
+  FacetValueDTO,
+  GroupedFacetsDTO,
+  HeightRequirementDTO,
+  WhyThisDTO,
+} from './Facet.js';
 import type { MealPeriodDTO, MenuDTO } from './Menu.js';
 
 export interface ExperienceDTO {
@@ -104,4 +110,41 @@ export interface ExperienceDTO {
    * zone, and for `Resort` Experiences with no resolvable Resort_Area.
    */
   readonly resortArea?: string | null;
+
+  /**
+   * Height_Requirement facet value plus derived numeric minimums, mined from
+   * the Facility_Document during Catalog_Sync (R2). Present only when a height
+   * facet is persisted; `null`/absent otherwise.
+   */
+  readonly heightRequirement?: HeightRequirementDTO | null;
+
+  /**
+   * Grouped_Facets: display-and-targeting-ready facet values keyed by
+   * Facet_Group name (R1, R7.1). Absent when no facet groups are persisted.
+   */
+  readonly groupedFacets?: GroupedFacetsDTO;
+
+  /**
+   * Physical_Considerations facet values mined from the Facility_Document
+   * (R3). Absent when none are persisted.
+   */
+  readonly physicalConsiderations?: readonly FacetValueDTO[];
+
+  /**
+   * Interest_Facets: grouped facet values describing thematic interests (R4).
+   * Absent when none are persisted.
+   */
+  readonly interestFacets?: GroupedFacetsDTO;
+
+  /**
+   * Why_This: structured curated marketing copy (R5). Present only when
+   * persisted; `null`/absent otherwise.
+   */
+  readonly whyThis?: WhyThisDTO | null;
+
+  /**
+   * Sub_Type: a finer-grained classification mined from the Facility_Document
+   * (R6). Present only when persisted; `null`/absent otherwise.
+   */
+  readonly subType?: string | null;
 }

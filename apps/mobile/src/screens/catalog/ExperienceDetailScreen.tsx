@@ -48,6 +48,9 @@ import type {
   CompletionDTO,
   ErrorCode,
   ExperienceCategory,
+  FacetValueDTO,
+  GroupedFacetsDTO,
+  HeightRequirementDTO,
   LiveDetailResponseDTO,
   MealPeriodDTO,
   MenuDTO,
@@ -55,6 +58,7 @@ import type {
   Park,
   RatingDTO,
   ResortDTO,
+  WhyThisDTO,
 } from '@dwt/shared';
 
 import { ApiError, apiRequest } from '../../api/client';
@@ -65,9 +69,14 @@ import {
   Card,
   EmptyState,
   GradientHeader,
+  PrimaryButton,
   ScreenContainer,
   SectionLabel,
 } from '../../theme/components';
+import {
+  buildExperienceShareParams,
+  isExperienceShareEntryEnabled,
+} from './shareEntryPoint';
 import CompletionControls from './CompletionControls';
 import NoteControl from './NoteControl';
 import RatingControl from './RatingControl';
@@ -114,6 +123,18 @@ interface ExperienceDetailDTO {
    * when the restaurant has one or more menus available; omitted otherwise.
    */
   readonly menus?: readonly MenuDTO[];
+  /**
+   * Facet enrichment surfaced as Info_Tags / a Why_This section (R11). Each is
+   * present only when persisted upstream, mirroring `ExperienceDTO` /
+   * `ExperienceDetailResponse`; `buildInfoTags` and the screen omit any that are
+   * absent or empty (R11.5).
+   */
+  readonly heightRequirement?: HeightRequirementDTO | null;
+  readonly groupedFacets?: GroupedFacetsDTO;
+  readonly physicalConsiderations?: readonly FacetValueDTO[];
+  readonly interestFacets?: GroupedFacetsDTO;
+  readonly whyThis?: WhyThisDTO | null;
+  readonly subType?: string | null;
 }
 
 /** Wire shape for `GET /resorts`; only the fields needed to resolve a name. */
@@ -358,6 +379,43 @@ export default function ExperienceDetailScreen(): JSX.Element {
         </View>
 
         {/* ------------------------------------------------------------ */}
+        {/* Share_Entry_Point (R1.1-R1.5). A themed share control that   */}
+        {/* opens the Share_Composer pre-populated with an               */}
+        {/* Experience_Share for this Experience. It is disabled while   */}
+        {/* the Experience detail, the viewer's Rating, or the viewer's  */}
+        {/* Note is still loading (R1.2). On activation it projects the   */}
+        {/* loaded detail plus the viewer's Rating (whole 1–10 when       */}
+        {/* present, R1.4) and Note (≤2000 chars when present, R1.5) into */}
+        {/* discriminated `experience` composer params and navigates      */}
+        {/* cross-navigator to the RootStack `ShareComposer` modal        */}
+        {/* (R1.3).                                                       */}
+        {/* ------------------------------------------------------------ */}
+        <PrimaryButton
+          label="Share"
+          icon="share-social"
+          testID="experience-share-button"
+          accessibilityLabel={`Share ${experience.name}`}
+          disabled={
+            !isExperienceShareEntryEnabled({
+              detailLoading: experienceQ.isLoading,
+              ratingLoading: ratingQ.isLoading,
+              noteLoading: noteQ.isLoading,
+            })
+          }
+          onPress={() => {
+            navigation.navigate(
+              'ShareComposer',
+              buildExperienceShareParams(
+                experience,
+                ratingQ.data ?? null,
+                noteQ.data ?? null,
+              ),
+            );
+          }}
+          style={styles.shareButton}
+        />
+
+        {/* ------------------------------------------------------------ */}
         {/* Info_Tags (R9.2-R9.8, R9.11): a wrapping row of compact       */}
         {/* labelled pills surfacing the persisted enrichment (Land,      */}
         {/* price tier, accessibility, coordinates, meal periods, and the */}
@@ -391,6 +449,21 @@ export default function ExperienceDetailScreen(): JSX.Element {
             <Text style={styles.empty}>No description available.</Text>
           )}
         </Card>
+
+        {/* ------------------------------------------------------------ */}
+        {/* Why visit (R11.4-R11.6). A section rendering the Why_This    */}
+        {/* bullets as flavor text when the Experience carries one or    */}
+        {/* more bullets (R11.4). The section is omitted entirely when   */}
+        {/* the Why_This value is absent or carries no bullets (R11.5).  */}
+        {/* Each bullet is plain Text; the `SectionLabel` header supplies */}
+        {/* the accessible label for the section (R11.6). Bullets that    */}
+        {/* merely duplicate the About description are dropped so the      */}
+        {/* same copy is never shown twice.                               */}
+        {/* ------------------------------------------------------------ */}
+        <WhyThisSection
+          whyThis={experience.whyThis}
+          description={experience.description}
+        />
 
         {/* ------------------------------------------------------------ */}
         {/* Menu_Summary_Card (R4.1-R4.7). Rendered only for a           */}
@@ -721,6 +794,59 @@ function AggregateContent({
 }
 
 // ---------------------------------------------------------------------------
+// Why visit (Why_This)
+// ---------------------------------------------------------------------------
+
+/**
+ * Normalize marketing copy for duplicate comparison: trim, collapse internal
+ * whitespace runs to a single space, and lowercase. Used to detect when a
+ * Why_This bullet merely restates the About description regardless of casing
+ * or incidental whitespace differences. An absent value normalizes to `''`.
+ */
+function normalizeCopy(value?: string | null): string {
+  return (value ?? '').trim().replace(/\s+/gu, ' ').toLowerCase();
+}
+
+/**
+ * "Why visit" section (R11.4-R11.6). Renders the Why_This `bullets` as flavor
+ * text when the Experience carries one or more (R11.4). Returns `null` — i.e.
+ * omits the section entirely — when the Why_This value is absent/null or its
+ * `bullets` list is empty (R11.5), so the screen never shows an empty "Why
+ * visit" card. The `SectionLabel` header provides the screen-reader accessible
+ * label for the section (R11.6); each bullet is a plain `Text` line.
+ *
+ * Bullets that merely restate the About `description` are filtered out so the
+ * same copy is never shown in both sections; when that leaves no distinct
+ * bullets the section is omitted just like the empty case above.
+ */
+function WhyThisSection({
+  whyThis,
+  description,
+}: {
+  readonly whyThis?: WhyThisDTO | null | undefined;
+  readonly description?: string | undefined;
+}): JSX.Element | null {
+  const normalizedDescription = normalizeCopy(description);
+  const bullets = (whyThis?.bullets ?? []).filter(
+    (bullet) => normalizeCopy(bullet) !== normalizedDescription,
+  );
+  // R11.5: omit the section entirely when there is nothing distinct to show.
+  if (bullets.length === 0) {
+    return null;
+  }
+  return (
+    <Card style={styles.section} testID="experience-why-this">
+      <SectionLabel>Why visit</SectionLabel>
+      {bullets.map((bullet, index) => (
+        <Text key={`why-this-${index}`} style={styles.bodyText}>
+          {bullet}
+        </Text>
+      ))}
+    </Card>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Live operational section
 // ---------------------------------------------------------------------------
 
@@ -835,6 +961,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: theme.spacing.sm,
     flexWrap: 'wrap',
+  },
+  shareButton: {
+    marginTop: theme.spacing.xs,
   },
   hero: {
     width: '100%',

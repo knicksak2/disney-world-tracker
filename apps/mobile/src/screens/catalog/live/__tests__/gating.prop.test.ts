@@ -54,6 +54,7 @@ const EXPECTED_SECTION: Readonly<Record<ExperienceCategory, LiveSection>> = {
   Spa: 'none', // R7.1
   Event: 'none', // R7.1
   Other: 'none', // R7.1
+  Resort: 'none', // R7.1 — resort stand-in has no live section
 };
 
 const ALL_SECTIONS: readonly LiveSection[] = ['wait_status', 'showtimes', 'dining', 'none'];

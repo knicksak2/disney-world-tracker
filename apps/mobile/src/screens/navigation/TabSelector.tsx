@@ -7,7 +7,7 @@
  * generic over the mode union `M` so both screens reuse it:
  *
  *   - Friend_Profile_View → `FRIEND_PROFILE_TABS` (Overview / Parks /
- *     Categories / Experiences).
+ *     Categories / Experiences / Compare).
  *   - Own_Stats_View → `OWN_STATS_TABS` (Own_Overview / Own_Parks /
  *     Own_Categories / Own_Experiences).
  *
@@ -47,13 +47,22 @@ import { theme } from '../../theme/theme';
 // Mode unions
 // ---------------------------------------------------------------------------
 
-/** The four Profile_View_Modes of the Friend_Profile_View (R1.1). */
-export type ProfileViewMode = 'Overview' | 'Parks' | 'Categories' | 'Experiences';
+/**
+ * The Profile_View_Modes of the Friend_Profile_View (R1.1). `Compare` hosts the
+ * Phase 3 Progress_Comparison section (R12.*).
+ */
+export type ProfileViewMode =
+  | 'Overview'
+  | 'Parks'
+  | 'Categories'
+  | 'Experiences'
+  | 'Compare';
 
 /** The four Own_Stats_View_Modes of the Own_Stats_View (R8.1). */
 export type OwnStatsViewMode =
   | 'Own_Overview'
   | 'Own_Parks'
+  | 'Own_Areas'
   | 'Own_Categories'
   | 'Own_Experiences';
 
@@ -80,8 +89,8 @@ export interface TabSpec<M extends string> {
 
 /**
  * The Friend_Profile_View's View_Selector tabs, in the fixed order
- * Overview → Parks → Categories → Experiences (R1.1). Each icon is distinct
- * (R1.2).
+ * Overview → Parks → Categories → Experiences → Compare (R1.1). Each icon is
+ * distinct (R1.2). `Compare` hosts the Phase 3 Progress_Comparison (R12.*).
  */
 export const FRIEND_PROFILE_TABS: readonly TabSpec<ProfileViewMode>[] = [
   {
@@ -108,12 +117,18 @@ export const FRIEND_PROFILE_TABS: readonly TabSpec<ProfileViewMode>[] = [
     icon: 'list-outline',
     accessibilityLabel: 'Experiences',
   },
+  {
+    mode: 'Compare',
+    label: 'Compare',
+    icon: 'git-compare-outline',
+    accessibilityLabel: 'Compare',
+  },
 ] as const;
 
 /**
  * The Own_Stats_View's Own_Stats_Selector tabs, in the fixed order
- * Own_Overview → Own_Parks → Own_Categories → Own_Experiences (R8.1). Each
- * icon is distinct (R8.2).
+ * Own_Overview → Own_Parks → Own_Areas → Own_Categories → Own_Experiences
+ * (R8.1). Each icon is distinct (R8.2).
  */
 export const OWN_STATS_TABS: readonly TabSpec<OwnStatsViewMode>[] = [
   {
@@ -127,6 +142,12 @@ export const OWN_STATS_TABS: readonly TabSpec<OwnStatsViewMode>[] = [
     label: 'Parks',
     icon: 'map-outline',
     accessibilityLabel: 'Parks',
+  },
+  {
+    mode: 'Own_Areas',
+    label: 'Areas',
+    icon: 'business-outline',
+    accessibilityLabel: 'Areas',
   },
   {
     mode: 'Own_Categories',

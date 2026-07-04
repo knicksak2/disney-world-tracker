@@ -38,7 +38,6 @@
  */
 
 import React from 'react';
-import { FlatList } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -128,6 +127,7 @@ function resort(
     longitude: null,
     address: null,
     phone: null,
+    representingExperienceId: null,
     ...overrides,
   };
 }
@@ -519,7 +519,7 @@ describe('DestinationScreen layouts (R6, R7, R8)', () => {
     // ---------------------------------------------------------------------
     // R8.3 / R8.4 / R8.7 — anchors (incl. empty), catch-all, empty indication
     // ---------------------------------------------------------------------
-    test('R8.3/R8.4/R8.7: every Resort anchors (incl. empty) and unmatched Experiences fall under the catch-all', async () => {
+    test('R8.3/R8.4/R8.7: every Resort is a collapsible section (incl. empty); expanding reveals its Experiences and the catch-all', async () => {
       const { experiences, resorts } = resortsFixture();
       stub(experiences, resorts);
 
@@ -527,7 +527,7 @@ describe('DestinationScreen layouts (R6, R7, R8)', () => {
 
       await screen.findByTestId('destination-resort-resort-poly');
 
-      // R8.3 — every active Resort renders as a browsable anchor, including the
+      // R8.3 — every active Resort renders as a section header, including the
       // Contemporary Resort that has no associated Experiences.
       const contemp = orderOf('destination-resort-resort-contemp');
       const poly = orderOf('destination-resort-resort-poly');
@@ -541,20 +541,29 @@ describe('DestinationScreen layouts (R6, R7, R8)', () => {
       expect(contemp).toBeLessThan(poly);
       expect(poly).toBeLessThan(catchall);
 
-      // R8.2 — 'Ohana is grouped beneath its matched Polynesian anchor.
-      const ohana = orderOf('destination-row-poly-ohana');
-      expect(poly).toBeLessThan(ohana);
-      expect(ohana).toBeLessThan(catchall);
+      // Collapsed by default — no Experience rows are shown until a section is
+      // expanded.
+      expect(screen.queryByTestId('destination-row-poly-ohana')).toBeNull();
 
-      // R8.4 — both the unmatched-resortId and no-resortId Experiences fall
-      // under the single trailing catch-all group.
+      // R8.2 — expanding Polynesian reveals 'Ohana beneath it.
+      fireEvent.press(
+        screen.getByTestId('destination-resort-resort-poly-header'),
+      );
+      expect(screen.getByTestId('destination-row-poly-ohana')).toBeTruthy();
+
+      // R8.4 — expanding the catch-all reveals both the unmatched-resortId and
+      // the no-resortId Experiences.
+      fireEvent.press(
+        screen.getByTestId('destination-resort-__resort_catchall__-header'),
+      );
       expect(screen.getByTestId('destination-row-exp-ghost')).toBeTruthy();
       expect(screen.getByTestId('destination-row-exp-cart')).toBeTruthy();
-      expect(orderOf('destination-row-exp-ghost')).toBeGreaterThan(catchall);
-      expect(orderOf('destination-row-exp-cart')).toBeGreaterThan(catchall);
 
-      // R8.7 — the empty Contemporary anchor shows its empty-group indication,
-      // while the Polynesian anchor (which has 'Ohana) does not.
+      // R8.7 — expanding the empty Contemporary section shows its empty-group
+      // indication, while the Polynesian section (which has 'Ohana) does not.
+      fireEvent.press(
+        screen.getByTestId('destination-resort-resort-contemp-header'),
+      );
       expect(
         screen.getByTestId('destination-resort-empty-resort-contemp'),
       ).toBeTruthy();
@@ -564,32 +573,30 @@ describe('DestinationScreen layouts (R6, R7, R8)', () => {
     });
 
     // ---------------------------------------------------------------------
-    // R8.6 — tapping a Resort anchor scrolls to its group, staying on screen
+    // Tapping a Resort section header expands/collapses it, staying on screen
     // ---------------------------------------------------------------------
-    test('R8.6: tapping a Resort anchor scrolls the list to that group', async () => {
+    test('tapping a Resort section header expands then collapses it in place', async () => {
       const { experiences, resorts } = resortsFixture();
       stub(experiences, resorts);
 
-      // Spy on the FlatList scroll primitive the anchor tap drives (R8.6).
-      const scrollSpy = jest
-        .spyOn(FlatList.prototype, 'scrollToIndex')
-        .mockImplementation(() => {});
-
       renderDestination('Resorts');
 
-      const polyAnchor = await screen.findByTestId(
-        'destination-resort-resort-poly',
+      const polyHeader = await screen.findByTestId(
+        'destination-resort-resort-poly-header',
       );
 
-      fireEvent.press(polyAnchor);
+      // Collapsed initially.
+      expect(screen.queryByTestId('destination-row-poly-ohana')).toBeNull();
 
-      // The list scrolled to the Polynesian anchor's row index (1: after the
-      // Contemporary anchor at index 0), and we remained on the screen (the
-      // anchor is still mounted).
-      expect(scrollSpy).toHaveBeenCalledTimes(1);
-      expect(scrollSpy).toHaveBeenCalledWith(
-        expect.objectContaining({ index: 1 }),
-      );
+      // Tap to expand — the Resort's Experiences appear.
+      fireEvent.press(polyHeader);
+      expect(screen.getByTestId('destination-row-poly-ohana')).toBeTruthy();
+
+      // Tap again to collapse — the Experiences are hidden again.
+      fireEvent.press(polyHeader);
+      expect(screen.queryByTestId('destination-row-poly-ohana')).toBeNull();
+
+      // We remained on the screen throughout.
       expect(
         screen.getByTestId('destination-resort-resort-poly'),
       ).toBeTruthy();

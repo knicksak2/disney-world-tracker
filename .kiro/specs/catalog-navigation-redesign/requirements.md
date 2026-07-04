@@ -150,11 +150,13 @@ This feature builds directly on the completed `disney-facilities-catalog-source`
 
 1. WHEN the Destination_Screen opens for the Resorts Destination, THE App SHALL request active `Resort`-area Experiences and active Resorts from the API.
 2. THE Resorts Destination_Screen SHALL group each active `Resort`-area Experience under its specific Resort by matching the Experience's referenced Resort Internal_Id to that Resort's Internal_Id.
-3. THE Resorts Destination_Screen SHALL list every active Resort as a browsable anchor row ordered alphabetically by Resort name using case-insensitive comparison, including a Resort that has no associated active Experiences.
-4. WHERE a `Resort`-area Experience references no specific Resort or references a Resort Internal_Id that matches no active Resort, THE Resorts Destination_Screen SHALL list that Experience under a single resort-wide catch-all group positioned after all specific Resort groups.
+3. THE Resorts Destination_Screen SHALL present every active Resort as a collapsible section, ordered alphabetically by Resort name using case-insensitive comparison, including a Resort that has no associated active Experiences, so the full resort directory stays browsable as a compact list of section headers rather than one long flat list.
+4. WHERE a `Resort`-area Experience references no specific Resort or references a Resort Internal_Id that matches no active Resort, THE Resorts Destination_Screen SHALL list that Experience under a single resort-wide catch-all section positioned after all specific Resort sections.
 5. WHEN a user selects an Experience row, THE App SHALL navigate to the Experience_Detail_Screen for that Experience.
-6. WHEN a user selects a Resort anchor row, THE Resorts Destination_Screen SHALL scroll to that Resort's group and remain on the Resorts Destination_Screen.
-7. WHERE a listed Resort has no associated active Experiences, THE Resorts Destination_Screen SHALL display an empty-group indication for that Resort's group.
+6. WHEN the Resorts Destination_Screen opens, THE Resorts Destination_Screen SHALL present every Resort section collapsed.
+7. WHEN a user selects a Resort's section header, THE Resorts Destination_Screen SHALL toggle that Resort's section between expanded and collapsed in place and remain on the Resorts Destination_Screen.
+8. WHILE a Resort's section is expanded, THE Resorts Destination_Screen SHALL display that Resort's `Resort`-area Experiences as rows within the section.
+9. WHERE a listed Resort has no associated active Experiences, THE Resorts Destination_Screen SHALL display an empty-group indication within that Resort's section while it is expanded.
 
 ### Requirement 9: Enriched Experience Detail
 

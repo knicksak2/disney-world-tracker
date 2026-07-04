@@ -70,3 +70,19 @@ export interface ShareDTO {
   /** ISO-8601 timestamp the Share was sent. */
   readonly sentAt: string;
 }
+
+/**
+ * One entry in the sender's own list of Shares they sent, backing the mobile
+ * Sent Shares surface (design → Reaction_Service, "a minimal Sent Shares
+ * surface on mobile"). It carries just enough to render each Share's content
+ * and to key the per-Share reactions read (`GET /me/shares/:shareId/reactions`,
+ * R11.7): the Share id, its payload kind and snapshot, and when it was sent.
+ * The reactions themselves are fetched per Share via that dedicated endpoint,
+ * so this DTO does not embed them.
+ */
+export interface SentShareDTO {
+  readonly shareId: string;
+  readonly payloadKind: SharePayloadKind;
+  readonly payload: SharePayload;
+  readonly sentAt: string;
+}

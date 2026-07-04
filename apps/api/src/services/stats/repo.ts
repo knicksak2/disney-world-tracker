@@ -44,8 +44,8 @@
  * Validates: Requirements R3.1, R3.2, R3.3, R3.4, R3.5, R3.6, R3.7, R3.8.
  */
 
-import type { ExperienceCategory, Park } from '@dwt/shared';
-import { EXPERIENCE_CATEGORIES, PARKS } from '@dwt/shared';
+import type { AreaType, ExperienceCategory, Park } from '@dwt/shared';
+import { AREA_TYPES, EXPERIENCE_CATEGORIES, PARKS } from '@dwt/shared';
 
 import type { DbPool } from '../../db/pool.js';
 
@@ -66,8 +66,25 @@ import type { DbPool } from '../../db/pool.js';
  * (`PARKS.length * EXPERIENCE_CATEGORIES.length`).
  */
 export interface StatsCell {
-  readonly park: Park;
+  /**
+   * The owning Park, or `null` for Park-less rows (resort-area Experiences
+   * and resort-representing rows). Park-less rows are retained in the
+   * snapshot and simply do not contribute to the Park dimensions.
+   */
+  readonly park: Park | null;
   readonly category: ExperienceCategory;
+  /**
+   * The kind of place the Experience belongs to, from the closed `AREA_TYPES`
+   * set. Feeds the per-Area_Type roll-up.
+   */
+  readonly areaType: AreaType;
+  /**
+   * `true` when this cell counts resort-representing rows
+   * (`represents_resort_id IS NOT NULL`) — the hotels-visited rows that back
+   * the Resort_Statistic. Such rows are excluded from the Category and
+   * Area_Type roll-ups and are the sole source of the Resort_Statistic.
+   */
+  readonly isResortRepresentation: boolean;
   readonly completed: number;
   readonly total: number;
 }
@@ -112,15 +129,19 @@ export interface StatsRepo {
  * decimal string — we parse it explicitly in `parseCount`.
  */
 interface DenominatorRow {
-  readonly park: string;
+  readonly park: string | null;
   readonly category: string;
+  readonly area_type: string;
+  readonly is_resort_representation: boolean;
   readonly total: string;
 }
 
 /** Row shape returned by the numerator query. `completed` is a `bigint`. */
 interface NumeratorRow {
-  readonly park: string;
+  readonly park: string | null;
   readonly category: string;
+  readonly area_type: string;
+  readonly is_resort_representation: boolean;
   readonly completed: string;
 }
 
@@ -135,6 +156,15 @@ const PARK_SET = new Set<string>(PARKS);
 
 /** Set of valid ExperienceCategory values; mirror of `PARK_SET`. */
 const CATEGORY_SET = new Set<string>(EXPERIENCE_CATEGORIES);
+
+/**
+ * Set of valid Area_Type values. A row is retained in the snapshot when its
+ * `area_type` is a member of this closed set; unlike Park, an Area_Type is
+ * always required (every active Experience carries one). Rows whose
+ * `area_type` drifts out of the shared enum are dropped for the same
+ * defence-in-depth reason as rogue Park/Category values.
+ */
+const AREA_TYPE_SET = new Set<string>(AREA_TYPES);
 
 /**
  * Build a `StatsRepo` against the supplied pool. The repo holds no state;
@@ -158,21 +188,25 @@ export function createStatsRepo(pool: DbPool): StatsRepo {
         const denominators = await client.query<DenominatorRow>(
           `SELECT park,
                   category,
+                  area_type,
+                  (represents_resort_id IS NOT NULL) AS is_resort_representation,
                   COUNT(*)::bigint AS total
              FROM experiences
             WHERE active = TRUE
-            GROUP BY park, category`,
+            GROUP BY park, category, area_type, is_resort_representation`,
         );
 
         const numerators = await client.query<NumeratorRow>(
-          `SELECT e.park     AS park,
-                  e.category AS category,
+          `SELECT e.park      AS park,
+                  e.category  AS category,
+                  e.area_type AS area_type,
+                  (e.represents_resort_id IS NOT NULL) AS is_resort_representation,
                   COUNT(*)::bigint AS completed
              FROM completions c
              JOIN experiences e ON e.id = c.experience_id
             WHERE c.user_id = $1
               AND e.active  = TRUE
-            GROUP BY e.park, e.category`,
+            GROUP BY e.park, e.category, e.area_type, is_resort_representation`,
           [userId],
         );
 
@@ -204,12 +238,25 @@ export function createStatsRepo(pool: DbPool): StatsRepo {
 
 /**
  * Merge the denominator and numerator grouped query results into a flat
- * list of `(park, category, completed, total)` cells.
+ * list of `(park, category, area_type, is_resort_representation, completed,
+ * total)` cells.
  *
- * Any row whose `park` or `category` is not part of the closed enum
- * (which would only happen if the DB CHECK constraint drifts out from
- * under the application enum) is dropped silently — the cell would have
- * no place in the typed `StatsResponse` anyway.
+ * A row is retained when its `category ∈ EXPERIENCE_CATEGORIES` and its
+ * `area_type ∈ AREA_TYPES`. A Park is NO LONGER required: Park-less rows
+ * (resort-area Experiences and resort-representing rows, where
+ * `row.park === null`) are kept in the snapshot and simply do not contribute
+ * to the Park dimensions at the route layer (R1.1, R1.3, R2.2). Any row whose
+ * `category` or `area_type` is not part of the closed enum — or whose non-null
+ * `park` is not a valid Park — is dropped silently, since it would have no
+ * place in the typed `StatsResponse` (defence-in-depth against a DB CHECK
+ * constraint drifting from the application enum).
+ *
+ * Cells are keyed by their full grouping tuple
+ * `(park, category, area_type, is_resort_representation)`. The key MUST include
+ * every grouping column because `park` can be `null` and multiple distinct
+ * Park-less cells coexist (e.g. a resort-area Restaurant vs. a resort-
+ * representing `Other` row) — keying on `(park, category)` alone would collide
+ * them.
  *
  * Exported for direct unit testing of the merge logic without a live DB.
  */
@@ -217,32 +264,55 @@ export function mergeRows(
   denominatorRows: readonly DenominatorRow[],
   numeratorRows: readonly NumeratorRow[],
 ): StatsSnapshot {
-  // Map keyed by `${park}|${category}` so we can fold the two query
+  // Map keyed by the full grouping tuple so we can fold the two query
   // result sets into a single pass without quadratic lookups.
   type CellAccumulator = {
-    park: Park;
+    park: Park | null;
     category: ExperienceCategory;
+    areaType: AreaType;
+    isResortRepresentation: boolean;
     completed: number;
     total: number;
   };
   const cellMap = new Map<string, CellAccumulator>();
 
-  const keyOf = (park: string, category: string): string =>
-    `${park}|${category}`;
+  // `park` may be null; a literal string sentinel keeps null distinct from any
+  // real Park name. The full tuple is required so Park-less cells that share a
+  // (park, category) pair but differ by area_type or representation flag do not
+  // collide.
+  const keyOf = (
+    park: string | null,
+    category: string,
+    areaType: string,
+    isResortRepresentation: boolean,
+  ): string =>
+    `${park ?? '\u0000null'}|${category}|${areaType}|${isResortRepresentation ? '1' : '0'}`;
+
+  const isRetained = (park: string | null, category: string, areaType: string): boolean =>
+    (park === null || PARK_SET.has(park)) &&
+    CATEGORY_SET.has(category) &&
+    AREA_TYPE_SET.has(areaType);
 
   for (const row of denominatorRows) {
-    if (!PARK_SET.has(row.park) || !CATEGORY_SET.has(row.category)) {
+    if (!isRetained(row.park, row.category, row.area_type)) {
       continue;
     }
     const total = parseCount(row.total);
-    const key = keyOf(row.park, row.category);
+    const key = keyOf(
+      row.park,
+      row.category,
+      row.area_type,
+      row.is_resort_representation,
+    );
     const existing = cellMap.get(key);
     if (existing) {
       existing.total = total;
     } else {
       cellMap.set(key, {
-        park: row.park as Park,
+        park: row.park as Park | null,
         category: row.category as ExperienceCategory,
+        areaType: row.area_type as AreaType,
+        isResortRepresentation: row.is_resort_representation,
         completed: 0,
         total,
       });
@@ -250,11 +320,16 @@ export function mergeRows(
   }
 
   for (const row of numeratorRows) {
-    if (!PARK_SET.has(row.park) || !CATEGORY_SET.has(row.category)) {
+    if (!isRetained(row.park, row.category, row.area_type)) {
       continue;
     }
     const completed = parseCount(row.completed);
-    const key = keyOf(row.park, row.category);
+    const key = keyOf(
+      row.park,
+      row.category,
+      row.area_type,
+      row.is_resort_representation,
+    );
     const existing = cellMap.get(key);
     if (existing) {
       existing.completed = completed;
@@ -265,11 +340,13 @@ export function mergeRows(
       // branch normally only fires when an Experience exists and is
       // active but never produced a denominator row — which is
       // structurally impossible (every active row contributes to its
-      // own (park, category) cell). Defending against it costs nothing
-      // and keeps the helper total over its inputs.
+      // own grouping cell). Defending against it costs nothing and keeps
+      // the helper total over its inputs.
       cellMap.set(key, {
-        park: row.park as Park,
+        park: row.park as Park | null,
         category: row.category as ExperienceCategory,
+        areaType: row.area_type as AreaType,
+        isResortRepresentation: row.is_resort_representation,
         completed,
         total: 0,
       });

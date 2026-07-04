@@ -344,18 +344,30 @@ export function groupByLandFiltered(
  */
 export function groupByCategory(experiences: readonly ExperienceDTO[]): readonly Section<ExperienceDTO>[];
 
-/** A Resorts-Destination row: a resort anchor, or an Experience under it. */
+/**
+ * Group the Resorts Destination's Experiences into one collapsible Section per
+ * active Resort (R8.2, R8.3): every Resort a section ordered case-insensitively
+ * by name (including resorts with no Experiences, so the full directory stays
+ * browsable), its resortId-matched Experiences as items, then a single trailing
+ * catch-all section (Experiences with no/unmatched resortId) appended after all
+ * specific Resort sections (R8.4). No Experience is omitted. This is the core the
+ * Resorts layout renders.
+ */
+export function groupByResort(
+  experiences: readonly ExperienceDTO[],
+  resorts: readonly ResortDTO[],
+): readonly Section<ExperienceDTO>[];
+
+/**
+ * The flat-row equivalent of `groupByResort`, retained as the pure totality core
+ * the property tests exercise (anchors ordered, Experiences totally partitioned).
+ * Not used for rendering — the layout renders collapsible sections via
+ * `groupByResort`.
+ */
 export type ResortRow =
   | { readonly kind: 'resort'; readonly resort: ResortDTO }
   | { readonly kind: 'experience'; readonly experience: ExperienceDTO };
 
-/**
- * Build the Resorts Destination rows (R8.2, R8.3, R8.4): every active Resort as a
- * browsable anchor ordered case-insensitively by name (including resorts with no
- * Experiences), each Resort followed by its resortId-matched Experiences, and a
- * single resort-wide catch-all group (Experiences with no/unmatched resortId)
- * appended after all specific Resort groups. No Experience is omitted.
- */
 export function buildResortRows(
   experiences: readonly ExperienceDTO[],
   resorts: readonly ResortDTO[],
@@ -377,9 +389,15 @@ policy to one hook.
 drives `groupByLandFiltered` client-side over the already-fetched Experiences (no refetch), preserving
 grouping and omitting emptied sections (R6.8, R6.9).
 
-**Resorts anchors + scroll (R8.6).** Selecting a Resort anchor row scrolls the list to that Resort's
-group and stays on the screen, using a `SectionList`/`FlatList` ref + `scrollToLocation`/index. Empty
-Resort groups render an empty-group indication (R8.7).
+**Resorts collapsible sections (R8.3, R8.6–R8.9).** The Resorts layout renders every active Resort
+(and the trailing catch-all) as a collapsible `GroupSection` via `groupByResort`, ordered
+case-insensitively by name. Unlike the park layouts' default-*expanded* policy, the Resort sections
+start **collapsed** — a long resort directory is far easier to scan and scroll as a compact list of
+headers than as one flat list — so the layout seeds the pure `toggle`/`isExpanded` reducer with an
+empty (all-collapsed) set rather than using `useDestinationSections`. Selecting a Resort's section
+header toggles that section between expanded and collapsed in place and stays on the screen (R8.6,
+R8.7); while expanded, its `Resort`-area Experiences render as rows (R8.8), and an expanded Resort with
+no Experiences shows an empty-group indication (R8.9).
 
 ### 7. Info_Tags (`infoTags.ts` + `ExperienceDetailScreen.tsx`) — mobile
 

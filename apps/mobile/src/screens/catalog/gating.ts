@@ -44,7 +44,9 @@ export function liveSectionFor(category: ExperienceCategory): LiveSection {
     case 'Spa':
     case 'Event':
     case 'Other':
+    case 'Resort':
       return 'none'; // R7.1 — no live operational section for these categories
+      // (a resort-representing stand-in has no live wait/showtime/dining data)
     default: {
       // Exhaustiveness guard: if a new category is added to the shared
       // union, this assignment fails to compile, flagging that the gating

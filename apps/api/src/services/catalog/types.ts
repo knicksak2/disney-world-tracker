@@ -17,9 +17,12 @@
 import type {
   AreaType,
   ExperienceCategory,
+  GroupedFacetsDTO,
+  HeightRequirementDTO,
   MealPeriodDTO,
   MenuDTO,
   Park,
+  WhyThisDTO,
 } from '@dwt/shared';
 
 /**
@@ -102,6 +105,16 @@ export interface UpstreamExperience {
    * (R5.7).
    */
   readonly resortId: string | null;
+  /**
+   * Discriminator marking this row as a resort-representing Experience: the
+   * represented Resort's Internal_Id when the row stands in for the hotel
+   * itself so it is completable through the existing
+   * `completions -> experiences` FK (Option A), else `null` for every ordinary
+   * Experience — including resort-area *activities*, which carry `resortId` but
+   * do not represent the hotel. `UNIQUE` in the schema guarantees at most one
+   * representing row per Resort (Requirements 3.1, 3.2).
+   */
+  readonly representsResortId: string | null;
   /** Latitude when both coordinates are present and finite, else `null` (R5.1, R5.2). */
   readonly latitude: number | null;
   /** Longitude when both coordinates are present and finite, else `null` (R5.1, R5.2). */
@@ -112,6 +125,23 @@ export interface UpstreamExperience {
   readonly priceTier: string | null;
   /** Meal periods for a `restaurant`, else empty (R5.5). */
   readonly mealPeriods: readonly MealPeriodDTO[];
+  /**
+   * Grouped_Facets for the Persisted_Facet_Groups, keyed by group name; empty
+   * when the document carries none (R7.1). Carried through the diff so
+   * Catalog_Sync is the sole writer. The Physical_Considerations and
+   * Interest_Facets views are re-derived from this on read, so they are not
+   * carried separately.
+   */
+  readonly groupedFacets: GroupedFacetsDTO;
+  /**
+   * Height requirement with derived numeric minimums, or `null` when the
+   * document carries no `height` facet (R7.2).
+   */
+  readonly heightRequirement: HeightRequirementDTO | null;
+  /** Structured why-this marketing copy, or `null` when absent (R7.3). */
+  readonly whyThis: WhyThisDTO | null;
+  /** Facility_SubType finer classification, or `null` when absent (R7.4). */
+  readonly subType: string | null;
 }
 
 /**
@@ -155,6 +185,13 @@ export interface CatalogCacheRow {
    * Resort_Area is detected as a material change.
    */
   readonly resortArea: string | null;
+  /**
+   * The represented Resort's Internal_Id when this row is a resort-representing
+   * Experience (Option A), else `null` for every ordinary Experience. Read into
+   * the diff so a drift in the discriminator is detected as a material change
+   * and re-applied to the cached row (Requirements 3.1, 3.2).
+   */
+  readonly representsResortId: string | null;
 }
 
 /**
@@ -189,6 +226,12 @@ export interface ReconcileUpsert {
   readonly areaType: AreaType;
   /** Referenced Resort's Internal_Id for a `Resort` area, else `null` (R5.7). */
   readonly resortId: string | null;
+  /**
+   * The represented Resort's Internal_Id for a resort-representing Experience,
+   * else `null`. Carried through the diff so Catalog_Sync persists the
+   * discriminator that makes the hotel completable (Requirements 3.1, 3.2).
+   */
+  readonly representsResortId: string | null;
   /** Latitude, or `null` (R5.1, R5.2, R5.6). */
   readonly latitude: number | null;
   /** Longitude, or `null` (R5.1, R5.2, R5.6). */
@@ -199,6 +242,19 @@ export interface ReconcileUpsert {
   readonly priceTier: string | null;
   /** Meal periods; empty when none (R5.5, R5.6). */
   readonly mealPeriods: readonly MealPeriodDTO[];
+  /**
+   * Grouped_Facets to persist for the Persisted_Facet_Groups; empty when none
+   * (R7.1). Carried through the diff so Catalog_Sync writes it. The
+   * Physical_Considerations and Interest_Facets views are re-derived on read,
+   * so they are not carried here.
+   */
+  readonly groupedFacets: GroupedFacetsDTO;
+  /** Height requirement with derived numeric minimums, or `null` (R7.2). */
+  readonly heightRequirement: HeightRequirementDTO | null;
+  /** Structured why-this marketing copy, or `null` (R7.3). */
+  readonly whyThis: WhyThisDTO | null;
+  /** Facility_SubType finer classification, or `null` (R7.4). */
+  readonly subType: string | null;
   readonly active: true;
 }
 

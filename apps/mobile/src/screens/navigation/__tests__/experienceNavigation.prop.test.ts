@@ -24,7 +24,7 @@
 
 import fc from 'fast-check';
 
-import { EXPERIENCE_CATEGORIES, PARKS } from '@dwt/shared';
+import { AREA_TYPES, EXPERIENCE_CATEGORIES, PARKS } from '@dwt/shared';
 import type { CompletionEntryDTO, ExperienceCategory, Park } from '@dwt/shared';
 
 import { resolveExperienceTarget } from '../experienceNavigation';
@@ -95,6 +95,7 @@ const missingIdArb: fc.Arbitrary<MaybeId> = fc.oneof(
 const baseEntryArb = fc.record({
   experienceName: experienceNameArb,
   park: parkArb,
+  areaType: fc.constantFrom(...AREA_TYPES),
   category: categoryArb,
   completedOn: completedOnArb,
   rating: ratingArb,

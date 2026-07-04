@@ -66,6 +66,19 @@ export const ERROR_CODES = [
   'share_recipient_count_invalid',
   'share_atomic_rejected',
 
+  // -- Push registration (R8.7) -----------------------------------------
+  // Raised by the Push_Registration_Service when a device id / push token is
+  // malformed; counts as a registration failure the client retries a bounded
+  // number of times before continuing without a registration.
+  'push_registration_invalid',
+
+  // -- Reactions (R11.3, R11.8) -----------------------------------------
+  // `reaction_invalid`: the reaction value is outside the closed
+  // `Reaction_Vocabulary`. `reaction_forbidden`: the caller is reacting to a
+  // Share that was not delivered to them (no `share_recipients` row).
+  'reaction_invalid',
+  'reaction_forbidden',
+
   // -- Edge / gateway (defense-in-depth, R6.7) --------------------------
   // Emitted by the gateway-level rate limiter (task 13.3) when a caller
   // exceeds the configured request budget for read, mutation, or
@@ -167,6 +180,13 @@ export const errorCodeToHttpStatus: { readonly [K in ErrorCode]: number } = {
   // Sharing
   share_recipient_count_invalid: 400,
   share_atomic_rejected: 403,
+
+  // Push registration
+  push_registration_invalid: 400,
+
+  // Reactions
+  reaction_invalid: 400,
+  reaction_forbidden: 403,
 
   // Edge / gateway
   rate_limit_exceeded: 429,

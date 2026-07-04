@@ -48,8 +48,10 @@ import {
 } from '@dwt/shared';
 
 import { ApiError, apiRequest } from '../api/client';
+import { invalidatePushRegistration } from '../hooks/usePushRegistration';
 import AvatarUpload from './AvatarUpload';
 import ChangePasswordControl from './ChangePasswordControl';
+import ShareNotificationPreferenceControl from './ShareNotificationPreferenceControl';
 import type { MainTabParamList } from '../navigation/RootNavigator';
 import { useSessionStore } from '../state/sessionStore';
 import { theme } from '../theme/theme';
@@ -223,6 +225,11 @@ export default function ProfileScreen(): JSX.Element {
 
   const logoutMutation = useMutation<void, ApiError, void>({
     mutationFn: async () => {
+      // R8.8: request invalidation of this device's push registration while
+      // the session token is still present. This is best-effort and
+      // non-blocking — `invalidatePushRegistration` never rejects, so a
+      // failed invalidation cannot block completing logout below.
+      void invalidatePushRegistration();
       await apiRequest<null>('POST', '/auth/logout');
     },
     onSettled: async () => {
@@ -504,6 +511,13 @@ function ProfileContent({
           <Text style={styles.statLabel}>Overall completion</Text>
           <Text style={styles.statValue}>{percentLabel}</Text>
         </Card>
+
+        {isSelf ? (
+          <Card style={styles.securityCard}>
+            <Text style={styles.statLabel}>Notifications</Text>
+            <ShareNotificationPreferenceControl />
+          </Card>
+        ) : null}
 
         {isSelf ? (
           <Card style={styles.securityCard}>

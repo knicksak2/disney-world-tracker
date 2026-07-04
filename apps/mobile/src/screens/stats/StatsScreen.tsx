@@ -51,17 +51,22 @@
 import React from 'react';
 import {
   ActivityIndicator,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import type { NavigationProp } from '@react-navigation/native';
 import { useQuery } from '@tanstack/react-query';
 
 import {
+  AREA_TYPES,
   EXPERIENCE_CATEGORIES,
   PARKS,
+  type AreaType,
   type CompletionEntryDTO,
   type ExperienceCategory,
   type Park,
@@ -69,6 +74,10 @@ import {
 
 import { ApiError, apiRequest } from '../../api/client';
 import { useOwnCompletionsQuery } from '../../hooks/useOwnCompletions';
+import type {
+  RootStackParamList,
+  ShareComposerParams,
+} from '../../navigation/RootNavigator';
 import { theme } from '../../theme/theme';
 import {
   Badge,
@@ -89,9 +98,10 @@ import { useViewMode } from '../navigation/useViewMode';
 import { CompletionRow } from '../navigation/CompletionRow';
 import { CompactEmptyState } from '../navigation/CompactEmptyState';
 import { GroupSection } from '../navigation/GroupSection';
-import { groupByCategory, groupByPark } from '../navigation/grouping';
+import { groupByAreaType, groupByCategory, groupByPark } from '../navigation/grouping';
 import { useGroupSections } from '../navigation/useGroupSections';
 import { useOpenExperience } from '../navigation/experienceNavigation';
+import { isProgressShareEntryEnabled } from './progressShareEntry';
 
 // ---------------------------------------------------------------------------
 // Wire shape
@@ -127,6 +137,13 @@ interface StatsResponse {
       readonly [category in ExperienceCategory]: StatsBreakdown;
     };
   };
+  // Area_Statistics: one Completion_Statistic per Area_Type (R2.1, R2.2). These
+  // count resort-area activity, not hotels visited.
+  readonly byAreaType: { readonly [a in AreaType]: StatsBreakdown };
+  // Resort_Statistic: hotels the User has recorded as visited (R4.1). Kept
+  // distinct from `byAreaType['Resort']` so resort-area activity and
+  // visited-hotel progress are never conflated (R4.4).
+  readonly resort: StatsBreakdown;
 }
 
 // ---------------------------------------------------------------------------
@@ -145,9 +162,89 @@ const EXPERIENCES_ERROR_BODY =
 const OWN_STATS_MODES = [
   'Own_Overview',
   'Own_Parks',
+  'Own_Areas',
   'Own_Categories',
   'Own_Experiences',
 ] as const satisfies readonly [OwnStatsViewMode, ...OwnStatsViewMode[]];
+
+// ---------------------------------------------------------------------------
+// Share_Entry_Point
+// ---------------------------------------------------------------------------
+
+/**
+ * Hook returning `openShareComposer(params)`, which opens the `Share_Composer`
+ * modal pre-populated with a `progress` payload (R1.8):
+ *
+ *   navigation.navigate('ShareComposer', params)
+ *
+ * The composer lives on the root stack (above `MainTabs`), so a `navigate`
+ * from the Stats tab bubbles up past the tab navigator to present it modally
+ * and returns here via `goBack()` (see `RootStackParamList`).
+ *
+ * A `useRef` in-flight guard collapses a burst of taps before the modal is
+ * presented into a single navigation so no duplicate composer is stacked; it
+ * is cleared whenever the Progress_Screen regains focus (including on returning
+ * from the composer), re-arming a deliberate later share.
+ */
+function useOpenShareComposer(): (params: ShareComposerParams) => void {
+  const navigation = useNavigation<NavigationProp<RootStackParamList>>();
+  const inFlightRef = React.useRef(false);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      inFlightRef.current = false;
+    }, []),
+  );
+
+  return React.useCallback(
+    (params: ShareComposerParams) => {
+      if (inFlightRef.current) {
+        return;
+      }
+      inFlightRef.current = true;
+      navigation.navigate('ShareComposer', params);
+    },
+    [navigation],
+  );
+}
+
+/**
+ * The Progress_Screen's `Share_Entry_Point` (R1.6). A themed header control
+ * that opens the `Share_Composer` with the viewer's progress snapshot. It is
+ * disabled while the `GET /me/stats` read has not yet produced data (R1.7); in
+ * that state its press is inert and it is exposed to assistive tech as a
+ * disabled button.
+ */
+function ShareProgressButton({
+  disabled,
+  onPress,
+}: {
+  readonly disabled: boolean;
+  readonly onPress: () => void;
+}): JSX.Element {
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      accessibilityRole="button"
+      accessibilityLabel="Share your progress"
+      accessibilityState={{ disabled }}
+      hitSlop={8}
+      testID="stats-share-button"
+      style={({ pressed }) => [
+        styles.shareBtn,
+        pressed && !disabled && styles.shareBtnPressed,
+        disabled && styles.shareBtnDisabled,
+      ]}
+    >
+      <Ionicons
+        name="share-outline"
+        size={22}
+        color={theme.color.textOnPrimary}
+      />
+    </Pressable>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Screen
@@ -187,13 +284,33 @@ export default function StatsScreen(): JSX.Element {
   // R3.3, R11.3).
   const openExperience = useOpenExperience();
 
+  // Opens the Share_Composer modal on the root stack with the progress
+  // snapshot (R1.6, R1.8). Mounted at the screen level so its in-flight guard
+  // spans the whole Screen_Session.
+  const openShareComposer = useOpenShareComposer();
+
+  // The Progress_Screen's Share_Entry_Point (R1.6). Disabled until the
+  // `GET /me/stats` read has data to project (R1.7); once data is present the
+  // press builds the `progress` params from the displayed percentages (R1.8).
+  const stats = query.data;
+  const shareControl = (
+    <ShareProgressButton
+      disabled={!isProgressShareEntryEnabled(stats === undefined)}
+      onPress={() => {
+        if (stats !== undefined) {
+          openShareComposer(buildProgressShareParams(stats));
+        }
+      }}
+    />
+  );
+
   // R12.1: while `GET /me/stats` is in flight with no prior data, show the
   // view-level loading indicator. `isFetching` (rather than `isLoading`) so a
   // re-issued request after a retry shows the loader again (R12.6).
   if (query.isFetching && query.data === undefined) {
     return (
       <ScreenContainer>
-        <GradientHeader title="Your Stats" icon="stats-chart" />
+        <GradientHeader title="Your Stats" icon="stats-chart" right={shareControl} />
         <View style={styles.center} testID="stats-loading">
           <ActivityIndicator color={theme.color.primary} />
         </View>
@@ -207,7 +324,7 @@ export default function StatsScreen(): JSX.Element {
   if (query.data === undefined) {
     return (
       <ScreenContainer>
-        <GradientHeader title="Your Stats" icon="stats-chart" />
+        <GradientHeader title="Your Stats" icon="stats-chart" right={shareControl} />
         <View style={styles.center} testID="stats-error">
           <EmptyState
             icon="cloud-offline-outline"
@@ -229,8 +346,11 @@ export default function StatsScreen(): JSX.Element {
   }
 
   // R12.2: `GET /me/stats` succeeded — render the Own_Stats_Selector and the
-  // selected mode's content.
-  const stats = query.data;
+  // selected mode's content. `stats` is resolved above (it also gates the
+  // Share_Entry_Point); narrow the undefined case away for the panes below.
+  if (stats === undefined) {
+    return <></>;
+  }
 
   return (
     <ScreenContainer>
@@ -238,6 +358,7 @@ export default function StatsScreen(): JSX.Element {
         title="Your Stats"
         subtitle="Track how much magic you've experienced."
         icon="stats-chart"
+        right={shareControl}
       />
       <ScrollView
         contentContainerStyle={styles.scrollContent}
@@ -248,6 +369,15 @@ export default function StatsScreen(): JSX.Element {
         {mode === 'Own_Overview' ? <OwnOverviewPane stats={stats} /> : null}
         {mode === 'Own_Parks' ? (
           <OwnParksPane
+            stats={stats}
+            entries={completionsQuery.data?.entries}
+            isExpanded={sections.isExpanded}
+            toggle={sections.toggle}
+            onOpenExperience={openExperience}
+          />
+        ) : null}
+        {mode === 'Own_Areas' ? (
+          <OwnAreasPane
             stats={stats}
             entries={completionsQuery.data?.entries}
             isExpanded={sections.isExpanded}
@@ -368,6 +498,153 @@ function OwnParksPane({
           </GroupSection>
         );
       })}
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Own_Areas pane (R5.1–R5.5)
+// ---------------------------------------------------------------------------
+
+/**
+ * Human-readable label per Area_Type. The `Resort` Area_Type is folded into
+ * the dedicated Resorts section below, so its label is only used there.
+ */
+const AREA_TYPE_LABELS: { readonly [a in AreaType]: string } = {
+  ThemePark: 'Theme Parks',
+  WaterPark: 'Water Parks',
+  DisneySprings: 'Disney Springs',
+  Resort: 'Resort Areas',
+};
+
+/**
+ * The Park-like Area_Types shown as their own expandable "By Area" cards. The
+ * `Resort` Area_Type is intentionally excluded here and merged into the single
+ * Resorts section instead, so resort progress lives in one place.
+ */
+const PARK_LIKE_AREA_TYPES: readonly AreaType[] = [
+  'ThemePark',
+  'WaterPark',
+  'DisneySprings',
+];
+
+/**
+ * The Own_Areas pane (R5.1–R5.5). Renders one **expandable** `GroupSection` per
+ * area in a single "By Area" list — the Park-like Area_Types
+ * (`ThemePark`, `WaterPark`, `DisneySprings`) headed by their `stats.byAreaType`
+ * breakdown, plus **Resorts** as just another area card headed by the
+ * hotels-visited `stats.resort` Resort_Statistic. Resorts are not given a
+ * separate section: to the User a resort is simply another kind of area. The
+ * Resorts card's body lists the User's resort completions — visited hotels and
+ * the resort-area experiences under them (every Completion whose Area_Type is
+ * `Resort`); each row navigates to its detail view (R5.4) and a zero-state
+ * shows when there are none (R5.5).
+ */
+function OwnAreasPane({
+  stats,
+  entries,
+  isExpanded,
+  toggle,
+  onOpenExperience,
+}: {
+  readonly stats: StatsResponse;
+  readonly entries: readonly CompletionEntryDTO[] | undefined;
+  readonly isExpanded: (key: string) => boolean;
+  readonly toggle: (key: string) => void;
+  readonly onOpenExperience: (experienceId: string) => void;
+}): JSX.Element {
+  // One group per Area_Type (named entries only, source order preserved).
+  const areaGroups = groupByAreaType(entries ?? [], AREA_TYPES);
+  const entriesFor = (areaType: AreaType): readonly CompletionEntryDTO[] =>
+    areaGroups.find((group) => group.areaType === areaType)?.entries ?? [];
+
+  // Everything under a resort — visited hotels and resort-area experiences —
+  // shares the `Resort` Area_Type, so the merged Resorts section lists them all.
+  const resortEntries = entriesFor('Resort');
+  const resortSectionKey = 'areas:resort';
+
+  return (
+    <View testID="own-areas">
+      {/* Park-like Area_Statistics, each an expandable section listing that
+          area's completions (R5.2). The Resort Area_Type is folded into the
+          Resorts section below rather than shown as its own card. */}
+      <SectionLabel style={styles.sectionLabel}>By Area</SectionLabel>
+      {PARK_LIKE_AREA_TYPES.map((areaType) => {
+        const groupEntries = entriesFor(areaType);
+        const key = `areas:${areaType}`;
+        const label = AREA_TYPE_LABELS[areaType];
+        return (
+          <GroupSection
+            key={areaType}
+            sectionKey={key}
+            expanded={isExpanded(key)}
+            onToggle={toggle}
+            accessibilityLabel={label}
+            testID={`stats-section-area-${areaType}`}
+            header={
+              <BreakdownCard
+                title={label}
+                breakdown={stats.byAreaType[areaType]}
+                testID={`stats-area-${areaType}`}
+              />
+            }
+          >
+            {groupEntries.length === 0 ? (
+              <CompactEmptyState
+                message={`No completed ${label} experiences yet.`}
+                testID={`stats-area-empty-${areaType}`}
+              />
+            ) : (
+              groupEntries.map((entry, index) => (
+                <CompletionRow
+                  key={`${entry.experienceName}-${entry.completedOn}-${index}`}
+                  entry={entry}
+                  fields="parks"
+                  onOpenExperience={onOpenExperience}
+                  testID={`stats-area-${areaType}-row-${index}`}
+                />
+              ))
+            )}
+          </GroupSection>
+        );
+      })}
+
+      {/* Resorts are just another area in the "By Area" list — no separate
+          section. The card is headed by the hotels-visited Resort_Statistic
+          (`stats.resort`) and its body lists the User's resort completions —
+          visited hotels and the resort-area experiences under them (R5.3,
+          R5.4). Always present; shows a zero-state when there are none (R5.5). */}
+      <GroupSection
+        sectionKey={resortSectionKey}
+        expanded={isExpanded(resortSectionKey)}
+        onToggle={toggle}
+        accessibilityLabel="Resorts"
+        testID="stats-section-resort"
+        header={
+          <BreakdownCard
+            title="Resorts"
+            breakdown={stats.resort}
+            testID="stats-resort"
+          />
+        }
+      >
+        {resortEntries.length === 0 ? (
+          <CompactEmptyState
+            message={'No resort visits or resort-area experiences recorded yet.'}
+            testID="stats-resort-empty"
+          />
+        ) : (
+          resortEntries.map((entry, index) => (
+            <CompletionRow
+              key={`${entry.experienceName}-${entry.completedOn}-${index}`}
+              entry={entry}
+              fields="parks"
+              onOpenExperience={onOpenExperience}
+              testID={`stats-resort-row-${index}`}
+            />
+          ))
+        )}
+      </GroupSection>
     </View>
   );
 }
@@ -563,6 +840,53 @@ async function fetchStats(): Promise<StatsResponse> {
 }
 
 /**
+ * Reduce a `StatsBreakdown` to the single one-decimal completion percentage
+ * exactly as the Progress_Screen displays it (R1.8). This mirrors
+ * `displayBreakdown`/`formatPercent`: a zero total (or a non-finite percent)
+ * displays as 0.0, and every other value is the server's percentage snapped to
+ * one decimal place with `toFixed(1)`. Returning the numeric value (rather than
+ * the "%"-suffixed string) keeps it in the shape the `progress`
+ * `ShareComposerParams` expects while guaranteeing it equals the displayed
+ * figure.
+ */
+function displayedPercent(breakdown: StatsBreakdown): number {
+  if (breakdown.total === 0 || !Number.isFinite(breakdown.percent)) {
+    return 0;
+  }
+  return Number(breakdown.percent.toFixed(1));
+}
+
+/**
+ * Build the `progress` `ShareComposerParams` from a loaded `GET /me/stats`
+ * response (R1.8). Carries the overall percentage plus one entry per catalog
+ * Park and per Experience_Category, each snapped to the one-decimal value the
+ * Progress_Screen renders. Iterating `PARKS`/`EXPERIENCE_CATEGORIES` (rather
+ * than `Object.keys`) keeps the maps in the catalog's canonical order and
+ * typed to the `Park`/`ExperienceCategory` unions. Exported so the projection
+ * can be property-tested apart from React Navigation.
+ */
+export function buildProgressShareParams(
+  stats: StatsResponse,
+): ShareComposerParams {
+  const perParkPercent: { [park in Park]?: number } = {};
+  for (const park of PARKS) {
+    perParkPercent[park] = displayedPercent(stats.byPark[park]);
+  }
+
+  const perCategoryPercent: { [category in ExperienceCategory]?: number } = {};
+  for (const category of EXPERIENCE_CATEGORIES) {
+    perCategoryPercent[category] = displayedPercent(stats.byCategory[category]);
+  }
+
+  return {
+    kind: 'progress',
+    overallPercent: displayedPercent(stats.overall),
+    perParkPercent,
+    perCategoryPercent,
+  };
+}
+
+/**
  * Normalize a `StatsBreakdown` for display, re-asserting the zero-total
  * contract defensively (R9.3, R10.3, R11.3): when `total` is zero the
  * percentage shows as 0.0% and the completed count as 0, regardless of what
@@ -687,5 +1011,19 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     minWidth: 160,
     marginTop: theme.spacing.xs,
+  },
+  shareBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.18)',
+  },
+  shareBtnPressed: {
+    opacity: 0.7,
+  },
+  shareBtnDisabled: {
+    opacity: 0.4,
   },
 });

@@ -56,6 +56,7 @@ import fc from 'fast-check';
 import {
   EXPERIENCE_CATEGORIES,
   PARKS,
+  type AreaType,
   type ExperienceCategory,
   type Park,
 } from '@dwt/shared';
@@ -129,7 +130,8 @@ function applyMigration(db: IMemoryDb, name: string): void {
 /** Row shape emitted by the pre-change SELECT (no experience_id column). */
 interface PreChangeRow {
   experience_name: string;
-  park: Park;
+  park: Park | null;
+  area_type: AreaType;
   category: ExperienceCategory;
   completed_on: Date | string;
   rating: number | string | null;
@@ -163,6 +165,7 @@ async function readPreChangeContract(
   const result = await pool.query<PreChangeRow>(
     `SELECT e.name AS experience_name,
             e.park,
+            e.area_type,
             e.category,
             c.completed_on,
             r.value AS rating,
@@ -182,6 +185,7 @@ async function readPreChangeContract(
   return result.rows.map((row) => ({
     experienceName: row.experience_name,
     park: row.park,
+    areaType: row.area_type,
     category: row.category,
     completedOn: toIsoDate(row.completed_on),
     rating: row.rating === null ? null : Number(row.rating),
@@ -245,6 +249,9 @@ beforeAll(async () => {
   applyMigration(db, '0002_experience_images.sql');
   applyMigration(db, '0003_note_shareable.sql');
   applyMigration(db, '0004_disney_sources.sql');
+  // 0010 admits the `Resort` category the arbitraries draw from
+  // (`EXPERIENCE_CATEGORIES` now includes `Resort`).
+  applyMigration(db, '0010_resort_experience_category.sql');
 
   // One persistent target User reused across all property runs.
   const email = `${randomUUID()}@example.test`;

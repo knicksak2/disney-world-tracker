@@ -24,7 +24,7 @@ import React from 'react';
 import { render } from '@testing-library/react-native';
 import fc from 'fast-check';
 
-import { EXPERIENCE_CATEGORIES, PARKS } from '@dwt/shared';
+import { AREA_TYPES, EXPERIENCE_CATEGORIES, PARKS } from '@dwt/shared';
 import type { CompletionEntryDTO, ExperienceCategory, Park } from '@dwt/shared';
 
 import { CompletionRow, type CompletionRowFields } from '../CompletionRow';
@@ -96,6 +96,7 @@ const activatableEntryArb: fc.Arbitrary<CompletionEntryDTO> = fc.record({
   experienceId: presentIdArb,
   experienceName: experienceNameArb,
   park: parkArb,
+  areaType: fc.constantFrom(...AREA_TYPES),
   category: categoryArb,
   completedOn: completedOnArb,
   rating: ratingArb,

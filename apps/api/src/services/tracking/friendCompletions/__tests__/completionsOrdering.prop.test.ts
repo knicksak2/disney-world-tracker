@@ -163,9 +163,11 @@ describe('Friend Completions — Property 9: ordering with case-insensitive tie-
             expect(an <= bn).toBe(true);
 
             if (an === bn) {
-              // Then park ascending (case-insensitive).
-              const ap = a.park.toLowerCase();
-              const bp = b.park.toLowerCase();
+              // Then park ascending (case-insensitive). Park is always
+              // non-null in this suite's generated population; `?? ''` narrows
+              // the now-nullable `park` type without altering the comparison.
+              const ap = (a.park ?? '').toLowerCase();
+              const bp = (b.park ?? '').toLowerCase();
               expect(ap <= bp).toBe(true);
 
               if (ap === bp) {
@@ -242,7 +244,7 @@ describe('Friend Completions — Property 9 fixed examples', () => {
     // All share name "alpha" (case-insensitive) and date; park epcot < magic kingdom,
     // and within epcot, category ride < show.
     expect(
-      result.map((e) => `${e.park.toLowerCase()}/${e.category.toLowerCase()}`),
+      result.map((e) => `${(e.park ?? '').toLowerCase()}/${e.category.toLowerCase()}`),
     ).toEqual(['epcot/ride', 'epcot/show', 'magic kingdom/show']);
   });
 });

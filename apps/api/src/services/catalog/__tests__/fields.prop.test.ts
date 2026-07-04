@@ -114,11 +114,16 @@ function withEnrichmentDefaults(base: {
     imageUrl: null,
     areaType: 'ThemePark',
     resortId: null,
+    representsResortId: null,
     latitude: null,
     longitude: null,
     accessibility: [],
     priceTier: null,
     mealPeriods: [],
+    groupedFacets: {},
+    heightRequirement: null,
+    whyThis: null,
+    subType: null,
   };
 }
 
@@ -175,6 +180,7 @@ const cacheRowArb: fc.Arbitrary<CatalogCacheRow> = fc.record({
   areaType: fc.constant<'ThemePark'>('ThemePark'),
   resortId: fc.constant<string | null>(null),
   resortArea: fc.constant<string | null>(null),
+  representsResortId: fc.constant<string | null>(null),
 });
 
 /** Cache with distinct ids; same dedupe-avoidance reasoning as upstream. */

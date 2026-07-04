@@ -267,11 +267,16 @@ function experienceUpsert(
     imageUrl: null,
     areaType: 'ThemePark',
     resortId: null,
+    representsResortId: null,
     latitude: null,
     longitude: null,
     accessibility: [],
     priceTier: null,
     mealPeriods: [],
+    groupedFacets: {},
+    heightRequirement: null,
+    whyThis: null,
+    subType: null,
     active: true,
     ...overrides,
   };
@@ -282,6 +287,45 @@ function emptyDiff(): CatalogDiff {
     experiences: { upserts: [], softDeletes: [] },
     resorts: { upserts: [], softDeletes: [] },
   };
+}
+
+// ---------------------------------------------------------------------------
+// Raw-column read helper (bypasses the DTO projection)
+// ---------------------------------------------------------------------------
+
+/**
+ * Shape of the persisted enrichment/identity columns read straight from the
+ * `experiences` table. Reading the raw JSONB/text columns (rather than going
+ * through `rowToDto`, which omits absent fields) is what lets these tests
+ * assert the exact stored value — an empty object, a SQL NULL, or the full
+ * structure — for R7.1–R7.6 and R12.3.
+ */
+interface RawExperienceRow {
+  id: string;
+  upstream_entity_id: string;
+  name: string;
+  park: string | null;
+  category: string;
+  active: boolean;
+  grouped_facets: unknown;
+  height_requirement: unknown;
+  why_this: unknown;
+  sub_type: string | null;
+}
+
+/** Read the persisted identity + enrichment columns for one Experience id. */
+async function readRawExperience(
+  pool: DbPool,
+  id: string,
+): Promise<RawExperienceRow | undefined> {
+  const result = await pool.query<RawExperienceRow>(
+    `SELECT id, upstream_entity_id, name, park, category, active,
+            grouped_facets, height_requirement, why_this, sub_type
+       FROM experiences
+      WHERE id = $1`,
+    [id],
+  );
+  return result.rows[0] as RawExperienceRow | undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -303,6 +347,9 @@ describe('Catalog repo applyReconciliation — transactional apply (pg-mem)', ()
     applyMigration(db, '0004_disney_sources.sql');
     applyMigration(db, '0006_experience_land.sql');
     applyMigration(db, '0007_experience_resort_area.sql');
+    applyMigration(db, '0008_experience_facet_enrichment.sql');
+    applyMigration(db, '0009_resort_representing_experiences.sql');
+    applyMigration(db, '0010_resort_experience_category.sql');
   });
 
   afterEach(async () => {
@@ -485,6 +532,240 @@ describe('Catalog repo applyReconciliation — transactional apply (pg-mem)', ()
       longitude: -81.5875,
       address: '4401 Floridian Way',
       phone: '407-824-3000',
+      // The resort projection now surfaces the representing Experience's id so a
+      // Resort can be completed through the existing per-Experience completion
+      // endpoints. This Resort has no representing row synced yet, so it is null.
+      representingExperienceId: null,
     });
+  });
+
+  // -------------------------------------------------------------------------
+  // Enrichment persistence round-trip (migration 0008 + repo.ts wiring)
+  // -------------------------------------------------------------------------
+  //
+  // These exercise the four new Facility_Document enrichment columns end-to-end
+  // through the production `applyReconciliation` SQL against the real 0008
+  // schema: a full-value round-trip (R7.1–R7.4), an absent-value round-trip
+  // (R7.5), identity/existing-column preservation (R7.6), and preservation
+  // across a soft-delete (R12.3). Assertions read the raw JSONB/text columns so
+  // the exact stored shape — full structure, `{}`, or SQL NULL — is observable
+  // rather than filtered through `rowToDto`'s present-only-when-persisted map.
+
+  it('round-trips grouped facets, height requirement, why-this, and sub-type equal (R7.1-R7.4)', async () => {
+    const expId = randomUUID();
+    const repo = createCatalogRepo(pool);
+
+    const groupedFacets = {
+      physicalConsiderations: [
+        { id: 'pc-loud', name: 'Loud Noises' },
+        { id: 'pc-dark', name: 'Dark' },
+      ],
+      interests: [{ id: 'int-thrill', name: 'Thrill Rides' }],
+      thrillFactor: [{ id: 'tf-big-drops', name: 'Big Drops' }],
+    };
+    const heightRequirement = {
+      id: 'h-40in',
+      name: '40in (102cm) or taller',
+      minInches: 40,
+      minCentimeters: 102,
+    };
+    const whyThis = {
+      title: 'Why visit',
+      bullets: ['Iconic coaster', 'Great for thrill seekers'],
+      quotes: ['A must-ride!'],
+    };
+
+    const diff: CatalogDiff = {
+      ...emptyDiff(),
+      experiences: {
+        upserts: [
+          experienceUpsert({
+            id: expId,
+            name: 'Space Mountain',
+            groupedFacets,
+            heightRequirement,
+            whyThis,
+            subType: 'Roller Coaster',
+          }),
+        ],
+        softDeletes: [],
+      },
+    };
+
+    await repo.applyReconciliation(diff);
+
+    // Read the raw persisted columns back and assert byte-for-value equality.
+    const raw = await readRawExperience(pool, expId);
+    expect(raw).toBeDefined();
+    expect(raw?.grouped_facets).toEqual(groupedFacets); // R7.1
+    expect(raw?.height_requirement).toEqual(heightRequirement); // R7.2
+    expect(raw?.why_this).toEqual(whyThis); // R7.3
+    expect(raw?.sub_type).toBe('Roller Coaster'); // R7.4
+
+    // And the projected DTO surfaces the same persisted values on read.
+    const dto = await repo.getExperience(expId);
+    expect(dto?.groupedFacets).toEqual(groupedFacets);
+    expect(dto?.heightRequirement).toEqual(heightRequirement);
+    expect(dto?.whyThis).toEqual(whyThis);
+    expect(dto?.subType).toBe('Roller Coaster');
+  });
+
+  it('persists empty/null enrichment columns when the fields are absent (R7.5)', async () => {
+    const expId = randomUUID();
+    const repo = createCatalogRepo(pool);
+
+    const diff: CatalogDiff = {
+      ...emptyDiff(),
+      experiences: {
+        upserts: [
+          // Absent enrichment: empty grouped facets, null height/why-this/sub-type.
+          experienceUpsert({
+            id: expId,
+            name: 'Peoplemover',
+            groupedFacets: {},
+            heightRequirement: null,
+            whyThis: null,
+            subType: null,
+          }),
+        ],
+        softDeletes: [],
+      },
+    };
+
+    await repo.applyReconciliation(diff);
+
+    const raw = await readRawExperience(pool, expId);
+    expect(raw).toBeDefined();
+    // grouped_facets stores an empty object (never null), the other three
+    // columns store SQL NULL — no partial or fabricated value (R7.5).
+    expect(raw?.grouped_facets).toEqual({});
+    expect(raw?.height_requirement).toBeNull();
+    expect(raw?.why_this).toBeNull();
+    expect(raw?.sub_type).toBeNull();
+
+    // The DTO omits the absent fields entirely.
+    const dto = await repo.getExperience(expId);
+    expect(dto).not.toHaveProperty('groupedFacets');
+    expect(dto).not.toHaveProperty('heightRequirement');
+    expect(dto).not.toHaveProperty('whyThis');
+    expect(dto).not.toHaveProperty('subType');
+  });
+
+  it('writes enrichment without altering existing columns or the Internal_Id (R7.6)', async () => {
+    const expId = randomUUID();
+    // Seed an existing row the way the pre-0008 catalog would hold it: core
+    // columns populated, enrichment defaulted (grouped_facets '{}', the rest
+    // NULL).
+    await seedExperience(pool, expId, 'Big Thunder Mountain');
+
+    const before = await readRawExperience(pool, expId);
+    expect(before).toBeDefined();
+
+    const repo = createCatalogRepo(pool);
+    const groupedFacets = {
+      interests: [{ id: 'int-classic', name: 'Classic Attractions' }],
+    };
+
+    // Re-upsert the SAME id (same upstream entity), now carrying enrichment and
+    // preserving the identity + core taxonomy columns the seed established.
+    const diff: CatalogDiff = {
+      ...emptyDiff(),
+      experiences: {
+        upserts: [
+          experienceUpsert({
+            id: expId,
+            upstreamEntityId: `ent-${expId}`,
+            name: 'Big Thunder Mountain',
+            park: 'Magic Kingdom',
+            category: 'Ride',
+            groupedFacets,
+            subType: 'Mine Train',
+          }),
+        ],
+        softDeletes: [],
+      },
+    };
+
+    await repo.applyReconciliation(diff);
+
+    const after = await readRawExperience(pool, expId);
+    expect(after).toBeDefined();
+    // Internal_Id and upstream identity are unchanged by the enrichment write.
+    expect(after?.id).toBe(expId);
+    expect(after?.id).toBe(before?.id);
+    expect(after?.upstream_entity_id).toBe(before?.upstream_entity_id);
+    // Existing taxonomy columns are intact.
+    expect(after?.name).toBe('Big Thunder Mountain');
+    expect(after?.park).toBe('Magic Kingdom');
+    expect(after?.category).toBe('Ride');
+    expect(after?.active).toBe(true);
+    // ...and the enrichment now sits alongside them.
+    expect(after?.grouped_facets).toEqual(groupedFacets);
+    expect(after?.sub_type).toBe('Mine Train');
+  });
+
+  it('preserves the last-persisted enrichment on a soft-deleted Experience (R12.3)', async () => {
+    const expId = randomUUID();
+    const repo = createCatalogRepo(pool);
+
+    const groupedFacets = {
+      physicalConsiderations: [{ id: 'pc-spin', name: 'Spinning' }],
+      age: [{ id: 'age-all', name: 'All Ages' }],
+    };
+    const heightRequirement = {
+      id: 'h-32in',
+      name: '32in (81cm) or taller',
+      minInches: 32,
+      minCentimeters: 81,
+    };
+    const whyThis = {
+      title: 'Why visit',
+      bullets: ['A whirling classic'],
+      quotes: [],
+    };
+
+    // First apply: persist a fully-enriched, active row.
+    await repo.applyReconciliation({
+      ...emptyDiff(),
+      experiences: {
+        upserts: [
+          experienceUpsert({
+            id: expId,
+            name: 'Mad Tea Party',
+            groupedFacets,
+            heightRequirement,
+            whyThis,
+            subType: 'Spinner',
+          }),
+        ],
+        softDeletes: [],
+      },
+    });
+
+    // Second apply: soft-delete that same row.
+    await repo.applyReconciliation({
+      ...emptyDiff(),
+      experiences: {
+        upserts: [],
+        softDeletes: [{ id: expId }],
+      },
+    });
+
+    const raw = await readRawExperience(pool, expId);
+    expect(raw).toBeDefined();
+    // The row is soft-deleted but still present on disk...
+    expect(raw?.active).toBe(false);
+    // ...with every enrichment value preserved untouched (R12.3).
+    expect(raw?.grouped_facets).toEqual(groupedFacets);
+    expect(raw?.height_requirement).toEqual(heightRequirement);
+    expect(raw?.why_this).toEqual(whyThis);
+    expect(raw?.sub_type).toBe('Spinner');
+
+    // getExperience returns soft-deleted rows, so the enrichment is still
+    // projected for the detail view.
+    const dto = await repo.getExperience(expId);
+    expect(dto?.active).toBe(false);
+    expect(dto?.groupedFacets).toEqual(groupedFacets);
+    expect(dto?.heightRequirement).toEqual(heightRequirement);
   });
 });

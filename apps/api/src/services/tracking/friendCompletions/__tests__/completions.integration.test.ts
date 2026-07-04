@@ -150,6 +150,9 @@ async function setup(): Promise<Fixture> {
   applyInitMigration(db);
   applyMigration(db, '0002_experience_images.sql');
   applyMigration(db, '0003_note_shareable.sql');
+  // 0004 adds `experiences.area_type` (NOT NULL DEFAULT 'ThemePark'), which the
+  // Friend Completions read now projects onto each entry's `areaType`.
+  applyMigration(db, '0004_disney_sources.sql');
 
   const repo = createFriendCompletionsRepo(pool);
   const app = Fastify({ logger: false });

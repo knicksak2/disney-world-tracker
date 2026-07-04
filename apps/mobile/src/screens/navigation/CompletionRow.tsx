@@ -73,7 +73,7 @@ export function CompletionRow({
   readonly testID?: string;
 }): JSX.Element {
   const metaParts: string[] = [];
-  if (fields !== 'parks') {
+  if (fields !== 'parks' && entry.park !== null) {
     metaParts.push(entry.park);
   }
   if (fields !== 'categories') {
@@ -105,7 +105,7 @@ export function CompletionRow({
         {entry.rating !== null ? (
           <Badge
             label={`${entry.rating}/10`}
-            color={theme.color.accent}
+            color={ratingColor(entry.rating)}
             icon="star"
           />
         ) : null}
@@ -125,6 +125,17 @@ export function CompletionRow({
 /** Friendly label for an Experience_Category, falling back to the raw enum. */
 function categoryLabel(category: ExperienceCategory): string {
   return theme.categoryVisual[category]?.label ?? category;
+}
+
+/**
+ * Map a 1–10 Rating to a palette color so the badge conveys sentiment at a
+ * glance: low ratings read red, middling ratings amber, and high ratings green.
+ * The `Badge` applies this color to its star icon, text, and tinted background.
+ */
+function ratingColor(rating: number): string {
+  if (rating >= 8) return theme.color.success;
+  if (rating >= 5) return theme.color.warning;
+  return theme.color.danger;
 }
 
 const MONTHS = [

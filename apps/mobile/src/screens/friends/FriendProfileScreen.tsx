@@ -27,6 +27,9 @@
  *   - **Categories** — Stats `byCategory` headers + Completions grouped by
  *     Category (R4.*).
  *   - **Experiences** — Completions, via the shared `ExperiencesList` (R5.*).
+ *   - **Compare** — the Progress_Comparison: the viewer's and the Friend's
+ *     overall / per-Park / per-Category percentages side by side, derived
+ *     purely from the already-retrieved stats (R12.*).
  *
  *   Each pane shows its own loading indicator while a read whose data it
  *   displays is in flight with no prior data, and its own error + retry when
@@ -41,14 +44,53 @@
  *     withholds the View_Selector and all four modes and shows a single
  *     unavailable message.
  *
+ * Phase 3 foundation (task 23.1): alongside the three friend reads the screen
+ * also mounts the viewer's OWN reads — `GET /me/stats` (via `useOwnStatsQuery`)
+ * and the owner-path `GET /users/:ownId/completions` (via
+ * `useOwnCompletionsQuery`). These warm the cache so the forthcoming
+ * `Progress_Comparison` (task 24) and `Completion_Diff` (task 25) derive from
+ * already-retrieved data rather than issuing fresh reads (R12.4, R13.5).
+ *
+ * Progress_Comparison (task 24.1): the Compare pane pairs the viewer's own
+ * stats (`useOwnStatsQuery`) with the Friend's (`useFriendStatsQuery`) and
+ * renders the overall, per-Park, and per-Category percentages side by side,
+ * each labeled by owner and to one decimal in `[0.0, 100.0]` (R12.1–R12.3),
+ * via the pure `deriveProgressComparison` helper (R12.4). It shows a loading
+ * indication under 30 s (R12.5) and a comparison-unavailable message on
+ * failure or timeout while the tab bar and other panes remain reachable, so
+ * the rest of the profile stays visible (R12.6).
+ *
+ * Completion_Diff (task 25.1): below the comparison, the Compare pane renders
+ * the Completion_Diff — the Friend-minus-viewer set difference by Experience
+ * identity (the Experiences the Friend has completed that the viewer has not),
+ * derived purely from the completions already retrieved on this screen
+ * (`useOwnCompletionsQuery` + `useFriendCompletionsQuery`) via the
+ * `deriveCompletionDiff` helper (R13.1, R13.5). Each entry shows name/Park/
+ * Experience_Category and navigates to `ExperienceDetail` on selection (R13.2,
+ * R13.3); it shows an empty-state when the diff is empty (R13.4), a loading
+ * indication while the completions load (R13.6), a diff-unavailable message on
+ * a failed read while keeping the rest of the profile visible (R13.7), and an
+ * Experience-unavailable message for a diff entry whose Experience cannot be
+ * retrieved (R13.8).
+ *
  * The server already does the percentage math (rounding to one decimal,
  * capping at 100.0, zero-safe denominators); `formatPercent` re-applies
  * `toFixed(1)` purely so a whole-number percent still shows its trailing
  * decimal.
  *
+ * Deep-link to Compare (task 26.1): the Friend_Profile_View accepts an optional
+ * `initialSection: 'comparison'` navigation param. When a `Progress_Share` tap
+ * in the Inbox passes it, the screen seeds `useViewMode` with a `['Compare']`
+ * selection so it opens on the Compare pane (the Progress_Comparison) instead
+ * of the default Overview (R14.1); when the param is absent the screen opens on
+ * Overview as before. The view opens on Compare regardless of whether the
+ * comparison data resolves, so ComparisonMode's own unavailable indication is
+ * what surfaces when it cannot be retrieved (R14.4).
+ *
  * Validates: Requirements 1.1, 1.4, 1.5, 2.1, 2.2, 2.3, 2.4, 2.5, 3.1, 3.2,
  * 3.3, 3.4, 3.5, 3.6, 3.7, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 5.1, 5.2, 5.3,
- * 5.4, 6.5, 7.1, 7.2, 7.3, 7.4, 7.5, 7.6
+ * 5.4, 6.5, 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 12.1, 12.2, 12.3, 12.4, 12.5, 12.6,
+ * 13.1, 13.2, 13.3, 13.4, 13.6, 13.7, 13.8, 14.1, 14.4
  */
 
 import React from 'react';
@@ -80,6 +122,13 @@ import {
   useFriendProfileQuery,
   useFriendStatsQuery,
 } from '../../hooks/useFriendProfile';
+import { useOwnCompletionsQuery } from '../../hooks/useOwnCompletions';
+import { useOwnStatsQuery } from '../../hooks/useOwnStats';
+import {
+  deriveProgressComparison,
+  formatComparisonPercent,
+} from './progressComparison';
+import { deriveCompletionDiff } from './completionDiff';
 import { theme } from '../../theme/theme';
 import {
   Badge,
@@ -93,7 +142,10 @@ import { CompactEmptyState } from '../navigation/CompactEmptyState';
 import { CompletionRow } from '../navigation/CompletionRow';
 import { ExperiencesList } from '../navigation/ExperiencesList';
 import { GroupSection } from '../navigation/GroupSection';
-import { useOpenExperience } from '../navigation/experienceNavigation';
+import {
+  resolveExperienceTarget,
+  useOpenExperience,
+} from '../navigation/experienceNavigation';
 import { groupByCategory, groupByPark } from '../navigation/grouping';
 import {
   FRIEND_PROFILE_TABS,
@@ -112,10 +164,17 @@ import { useViewMode } from '../navigation/useViewMode';
  * selected Friend's `friendId` (used to key all three reads) and
  * `displayName` (rendered immediately in the header so the screen has a
  * title before the Profile read resolves).
+ *
+ * `initialSection` (R14.1): an optional deep-link hint for the section that
+ * should be initially visible. A `Progress_Share` tap in the Inbox passes
+ * `'comparison'` so the screen opens on the Compare pane (the
+ * Progress_Comparison) instead of the default Overview; when absent the screen
+ * opens on Overview as before.
  */
 export interface FriendProfileParams {
   readonly friendId: string;
   readonly displayName: string;
+  readonly initialSection?: 'comparison';
 }
 
 interface FriendProfileScreenProps {
@@ -137,6 +196,7 @@ const FRIEND_MODES = [
   'Parks',
   'Categories',
   'Experiences',
+  'Compare',
 ] as const satisfies readonly ProfileViewMode[];
 
 // ---------------------------------------------------------------------------
@@ -182,7 +242,7 @@ function readState(query: {
 export default function FriendProfileScreen({
   route,
 }: FriendProfileScreenProps): JSX.Element {
-  const { friendId, displayName } = route.params;
+  const { friendId, displayName, initialSection } = route.params;
 
   const navigation = useNavigation();
 
@@ -190,7 +250,31 @@ export default function FriendProfileScreen({
   const statsQuery = useFriendStatsQuery(friendId);
   const completionsQuery = useFriendCompletionsQuery(friendId);
 
-  const { mode, select } = useViewMode(FRIEND_MODES);
+  // Phase 3 foundation (task 23.1): read the viewer's OWN stats and completions
+  // alongside the friend reads above, so the Progress_Comparison (task 24) and
+  // Completion_Diff (task 25) derive from data already retrieved on this
+  // screen rather than issuing fresh reads at render time (R12.4, R13.5).
+  //
+  // `GET /me/stats` (own overall/per-Park/per-Category roll-up) and the
+  // owner-path `GET /users/:ownId/completions` (own Completion_Entries) are
+  // mounted here so both are in flight/cached alongside the friend reads. The
+  // comparison and diff panes consume them via these same hooks — React Query
+  // dedupes by key, so re-calling the hooks in those panes reads this warmed
+  // cache instead of re-fetching. The Compare pane (task 24.1) consumes
+  // `ownStatsQuery`; the Completion_Diff (task 25) will consume the completions.
+  const ownStatsQuery = useOwnStatsQuery();
+  const ownCompletionsQuery = useOwnCompletionsQuery();
+
+  // R14.1: a `Progress_Share` tap in the Inbox deep-links here with
+  // `initialSection: 'comparison'`, so the screen opens on the Compare pane
+  // (the Progress_Comparison) instead of the default Overview. The seed is a
+  // singleton `['Compare']` selection routed through `useViewMode`'s resolver,
+  // which falls back to the default when the param is absent. Even if the
+  // comparison data cannot be retrieved, the view still opens on Compare and
+  // ComparisonMode surfaces its own unavailable indication (R14.4).
+  const initialModes: readonly ProfileViewMode[] =
+    initialSection === 'comparison' ? ['Compare'] : [];
+  const { mode, select } = useViewMode(FRIEND_MODES, initialModes);
 
   // R10.2: a single per-Screen_Session Group_Section state instance backs both
   // the Parks and Categories grouped modes, so each section's Expanded/Collapsed
@@ -310,6 +394,28 @@ export default function FriendProfileScreen({
             onRetryCompletions={onRetryCompletions}
             onOpenExperience={openExperience}
           />
+        ) : null}
+
+        {mode === 'Compare' ? (
+          <>
+            <ComparisonMode
+              friendName={profileQuery.data?.displayName || displayName}
+              viewerStats={ownStatsQuery.data}
+              friendStats={statsQuery.data}
+              viewerFailed={
+                ownStatsQuery.isError && ownStatsQuery.data === undefined
+              }
+              friendFailed={statsQuery.isError && statsQuery.data === undefined}
+            />
+            <CompletionDiffSection
+              friendName={profileQuery.data?.displayName || displayName}
+              viewerState={readState(ownCompletionsQuery)}
+              friendState={readState(completionsQuery)}
+              viewerEntries={ownCompletionsQuery.data?.entries}
+              friendEntries={completionsQuery.data?.entries}
+              onOpenExperience={openExperience}
+            />
+          </>
         ) : null}
       </ScrollView>
     </ScreenContainer>
@@ -633,6 +739,334 @@ function ExperiencesMode({
 }
 
 // ---------------------------------------------------------------------------
+// Compare mode — Progress_Comparison (R12.*)
+// ---------------------------------------------------------------------------
+
+/**
+ * The maximum time the Progress_Comparison waits for both parties' stats
+ * before declaring the comparison unavailable (R12.5, R12.6). Measured from
+ * when the Compare pane first mounts with data still outstanding.
+ */
+const COMPARISON_TIMEOUT_MS = 30_000;
+
+/** The viewer's owner label in the side-by-side comparison (R12.1–R12.3). */
+const VIEWER_OWNER_LABEL = 'You';
+
+const COMPARISON_UNAVAILABLE_TITLE = 'Comparison unavailable';
+const COMPARISON_UNAVAILABLE_BODY =
+  'We couldn\u2019t load the completion comparison right now. The rest of this profile is still available.';
+
+// ---------------------------------------------------------------------------
+// Completion_Diff copy (R13.*)
+// ---------------------------------------------------------------------------
+
+/** Heading over the Completion_Diff section inside the Compare pane. */
+const DIFF_HEADING = 'They\u2019ve done, you haven\u2019t';
+
+const DIFF_EMPTY_TITLE = 'All caught up';
+/** Trailing copy appended after the Friend's name in the empty state (R13.4). */
+const DIFF_EMPTY_SUFFIX =
+  ' \u2014 you\u2019ve completed every Experience they have.';
+
+const DIFF_UNAVAILABLE_TITLE = 'List unavailable';
+const DIFF_UNAVAILABLE_BODY =
+  'We couldn\u2019t load the list of Experiences this friend has completed. The rest of this profile is still available.';
+
+/** Per-entry fallback when a diff entry\u2019s Experience cannot be retrieved (R13.8). */
+const DIFF_ENTRY_UNAVAILABLE = 'This experience is unavailable.';
+
+/**
+ * The Progress_Comparison pane (R12.1–R12.6). Renders the viewer's and the
+ * Friend's overall, per-Park, and per-Experience_Category completion
+ * percentages side by side, each labeled by owner and shown to one decimal in
+ * `[0.0, 100.0]` (R12.1, R12.2, R12.3), derived purely from the stats already
+ * retrieved on this screen (R12.4).
+ *
+ * States:
+ *   - Both roll-ups ready → the derived side-by-side rows.
+ *   - Either read failed, or neither resolved within
+ *     `COMPARISON_TIMEOUT_MS` → a comparison-unavailable message; the tab bar
+ *     and every other pane remain reachable, keeping the rest of the profile
+ *     content visible (R12.6).
+ *   - Otherwise (still loading, under the 30 s window) → a loading indication
+ *     (R12.5).
+ */
+function ComparisonMode({
+  friendName,
+  viewerStats,
+  friendStats,
+  viewerFailed,
+  friendFailed,
+}: {
+  readonly friendName: string;
+  readonly viewerStats: FriendStatsResponse | undefined;
+  readonly friendStats: FriendStatsResponse | undefined;
+  readonly viewerFailed: boolean;
+  readonly friendFailed: boolean;
+}): JSX.Element {
+  const bothReady = viewerStats !== undefined && friendStats !== undefined;
+  const failed = viewerFailed || friendFailed;
+
+  // R12.5/R12.6: cap the loading window at 30 s. The timer is only armed while
+  // the comparison is genuinely pending (neither ready nor already failed), and
+  // is cleared on resolution or unmount so it never fires after the pane leaves.
+  const [timedOut, setTimedOut] = React.useState(false);
+  React.useEffect(() => {
+    if (bothReady || failed) return undefined;
+    const timer = setTimeout(() => {
+      setTimedOut(true);
+    }, COMPARISON_TIMEOUT_MS);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [bothReady, failed]);
+
+  if (!bothReady) {
+    // R12.6: failure or a >30 s wait surfaces the unavailable message while the
+    // selector and other panes stay mounted (remaining content stays visible).
+    if (failed || timedOut) {
+      return (
+        <View testID="friend-mode-compare">
+          <Card style={styles.card} testID="friend-comparison-unavailable">
+            <View style={styles.errorWrap}>
+              <Ionicons
+                name="cloud-offline-outline"
+                size={22}
+                color={theme.color.textSecondary}
+              />
+              <Text style={styles.comparisonUnavailableTitle}>
+                {COMPARISON_UNAVAILABLE_TITLE}
+              </Text>
+              <Text style={styles.errorText}>{COMPARISON_UNAVAILABLE_BODY}</Text>
+            </View>
+          </Card>
+        </View>
+      );
+    }
+    // R12.5: still within the 30 s window with data outstanding.
+    return (
+      <View testID="friend-mode-compare">
+        <ModeLoader testID="friend-comparison-loading" />
+      </View>
+    );
+  }
+
+  const comparison = deriveProgressComparison(viewerStats, friendStats);
+
+  return (
+    <View testID="friend-mode-compare">
+      <ComparisonRowCard
+        title="Overall"
+        row={comparison.overall}
+        friendName={friendName}
+        testID="friend-comparison-overall"
+      />
+
+      <Text style={styles.comparisonGroupHeading}>By park</Text>
+      {comparison.byPark.map((row) => (
+        <ComparisonRowCard
+          key={row.key}
+          title={row.key}
+          row={row}
+          friendName={friendName}
+          testID={`friend-comparison-park-${row.key}`}
+        />
+      ))}
+
+      <Text style={styles.comparisonGroupHeading}>By category</Text>
+      {comparison.byCategory.map((row) => (
+        <ComparisonRowCard
+          key={row.key}
+          title={categoryLabel(row.key)}
+          row={row}
+          friendName={friendName}
+          testID={`friend-comparison-category-${row.key}`}
+        />
+      ))}
+    </View>
+  );
+}
+
+/**
+ * A single comparison dimension: the dimension label plus the viewer's and the
+ * Friend's percentage side by side, each labeled by owner and rendered to one
+ * decimal place (R12.1–R12.3).
+ */
+function ComparisonRowCard({
+  title,
+  row,
+  friendName,
+  testID,
+}: {
+  readonly title: string;
+  readonly row: { readonly viewerPercent: number; readonly friendPercent: number };
+  readonly friendName: string;
+  readonly testID: string;
+}): JSX.Element {
+  return (
+    <Card style={styles.card} testID={testID}>
+      <Text style={styles.comparisonTitle}>{title}</Text>
+      <View style={styles.comparisonRow}>
+        <View style={styles.comparisonCell} testID={`${testID}-viewer`}>
+          <Text style={styles.comparisonOwner}>{VIEWER_OWNER_LABEL}</Text>
+          <Text style={styles.comparisonPercent}>
+            {formatComparisonPercent(row.viewerPercent)}
+          </Text>
+        </View>
+        <View style={styles.comparisonCell} testID={`${testID}-friend`}>
+          <Text style={styles.comparisonOwner} numberOfLines={1}>
+            {friendName}
+          </Text>
+          <Text style={styles.comparisonPercent}>
+            {formatComparisonPercent(row.friendPercent)}
+          </Text>
+        </View>
+      </View>
+    </Card>
+  );
+}
+
+/**
+ * Map an `ExperienceCategory` key to its human display label, reusing the
+ * theme's category visuals so the Compare pane matches the Categories pane.
+ * Falls back to the raw key for any value without a visual.
+ */
+function categoryLabel(key: string): string {
+  const visual = theme.categoryVisual[key as keyof typeof theme.categoryVisual];
+  return visual?.label ?? key;
+}
+
+// ---------------------------------------------------------------------------
+// Completion_Diff section (R13.*)
+// ---------------------------------------------------------------------------
+
+/**
+ * The Completion_Diff section of the Compare pane (R13.1–R13.8). Renders the
+ * Friend-minus-viewer set difference by Experience identity — the Experiences
+ * the Friend has completed that the viewing User has not — derived purely from
+ * the completions already retrieved on this screen (R13.5) via
+ * `deriveCompletionDiff`.
+ *
+ * Each diff entry shows the Experience's name, Park, and Experience_Category
+ * through the shared `CompletionRow` (with `fields="experiences"` so both Park
+ * and Category appear) and navigates to `ExperienceDetail` on selection via the
+ * screen's shared `openExperience` handler (R13.2, R13.3). A diff entry whose
+ * Experience cannot be retrieved — i.e. it carries no usable navigation target
+ * (`resolveExperienceTarget` returns `null`) — renders an
+ * Experience-unavailable message instead of a dead, tappable row, keeping the
+ * remaining entries visible (R13.8).
+ *
+ * States, each scoped to the two completions reads the diff derives from:
+ *   - Either read still loading with no data → a loading indication (R13.6).
+ *   - Either read failed with no data → a diff-unavailable message while the
+ *     tab bar and other panes stay reachable (R13.7).
+ *   - Both ready and the diff is empty → an empty-state indicating the viewer
+ *     has completed every Experience the Friend has (R13.4).
+ *   - Both ready and the diff is non-empty → the list of entries (R13.1).
+ */
+function CompletionDiffSection({
+  friendName,
+  viewerState,
+  friendState,
+  viewerEntries,
+  friendEntries,
+  onOpenExperience,
+}: {
+  readonly friendName: string;
+  readonly viewerState: ReadState;
+  readonly friendState: ReadState;
+  readonly viewerEntries: readonly CompletionEntryDTO[] | undefined;
+  readonly friendEntries: readonly CompletionEntryDTO[] | undefined;
+  readonly onOpenExperience: (experienceId: string) => void;
+}): JSX.Element {
+  // R13.7: either completions read failed with no data → the diff is
+  // unavailable. Checked before loading so a failed read never spins forever.
+  if (viewerState === 'error' || friendState === 'error') {
+    return (
+      <View testID="friend-diff">
+        <Text style={styles.comparisonGroupHeading}>{DIFF_HEADING}</Text>
+        <Card style={styles.card} testID="friend-diff-unavailable">
+          <View style={styles.errorWrap}>
+            <Ionicons
+              name="cloud-offline-outline"
+              size={22}
+              color={theme.color.textSecondary}
+            />
+            <Text style={styles.comparisonUnavailableTitle}>
+              {DIFF_UNAVAILABLE_TITLE}
+            </Text>
+            <Text style={styles.errorText}>{DIFF_UNAVAILABLE_BODY}</Text>
+          </View>
+        </Card>
+      </View>
+    );
+  }
+
+  // R13.6: still resolving one or both completions reads.
+  if (
+    viewerState !== 'ready' ||
+    friendState !== 'ready' ||
+    viewerEntries === undefined ||
+    friendEntries === undefined
+  ) {
+    return (
+      <View testID="friend-diff">
+        <Text style={styles.comparisonGroupHeading}>{DIFF_HEADING}</Text>
+        <ModeLoader testID="friend-diff-loading" />
+      </View>
+    );
+  }
+
+  // R13.1/R13.5: pure Friend-minus-viewer set difference by Experience identity.
+  const diff = deriveCompletionDiff(viewerEntries, friendEntries);
+
+  // R13.4: empty diff → the viewer has completed everything the Friend has.
+  if (diff.length === 0) {
+    return (
+      <View testID="friend-diff">
+        <Text style={styles.comparisonGroupHeading}>{DIFF_HEADING}</Text>
+        <View testID="friend-diff-empty">
+          <EmptyState
+            icon="checkmark-done-outline"
+            title={DIFF_EMPTY_TITLE}
+            body={`${friendName}${DIFF_EMPTY_SUFFIX}`}
+          />
+        </View>
+      </View>
+    );
+  }
+
+  // R13.2/R13.3/R13.8: each entry shows name/Park/Category and navigates to
+  // ExperienceDetail; an entry with no retrievable Experience shows the
+  // Experience-unavailable message instead of a dead, tappable row.
+  return (
+    <View testID="friend-diff">
+      <Text style={styles.comparisonGroupHeading}>{DIFF_HEADING}</Text>
+      {diff.map((entry, index) =>
+        resolveExperienceTarget(entry) === null ? (
+          <Card
+            key={`diff-unavailable-${index}`}
+            style={styles.card}
+            testID={`friend-diff-entry-unavailable-${index}`}
+          >
+            <Text style={styles.cardTitle}>{entry.experienceName}</Text>
+            <Text style={styles.errorText}>{DIFF_ENTRY_UNAVAILABLE}</Text>
+          </Card>
+        ) : (
+          <CompletionRow
+            key={`${entry.experienceId}-${index}`}
+            entry={entry}
+            fields="experiences"
+            onOpenExperience={onOpenExperience}
+            testID={`friend-diff-row-${index}`}
+          />
+        ),
+      )}
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Mode prop types (shared between Parks and Categories)
 // ---------------------------------------------------------------------------
 
@@ -933,5 +1367,39 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     minWidth: 160,
     marginTop: theme.spacing.xs,
+  },
+  // Compare mode (Progress_Comparison, R12.*)
+  comparisonGroupHeading: {
+    ...theme.typography.subtitle,
+    color: theme.color.textPrimary,
+    marginTop: theme.spacing.md,
+    marginBottom: theme.spacing.sm,
+  },
+  comparisonTitle: {
+    ...theme.typography.subtitle,
+    color: theme.color.textPrimary,
+    marginBottom: theme.spacing.sm,
+  },
+  comparisonRow: {
+    flexDirection: 'row',
+    gap: theme.spacing.md,
+  },
+  comparisonCell: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 2,
+  },
+  comparisonOwner: {
+    ...theme.typography.meta,
+    color: theme.color.textSecondary,
+  },
+  comparisonPercent: {
+    ...theme.typography.subtitle,
+    color: theme.color.textPrimary,
+  },
+  comparisonUnavailableTitle: {
+    ...theme.typography.subtitle,
+    color: theme.color.textPrimary,
+    textAlign: 'center',
   },
 });

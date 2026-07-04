@@ -402,6 +402,30 @@ function applyMigrations(db: IMemoryDb): void {
   // 0006 adds the additive `experiences.land` column the reconcile/repo read
   // path now reads and writes; without it the post-sync catalog reads fail.
   db.public.none(readFileSync(migrationPath('0006_experience_land.sql'), 'utf8'));
+  // 0007 adds the additive `experiences.resort_area` column and 0008 adds the
+  // facet-enrichment columns (`grouped_facets`, `height_requirement`,
+  // `why_this`, `sub_type`) the reconcile/repo read+write path now uses.
+  db.public.none(
+    readFileSync(migrationPath('0007_experience_resort_area.sql'), 'utf8'),
+  );
+  db.public.none(
+    readFileSync(migrationPath('0008_experience_facet_enrichment.sql'), 'utf8'),
+  );
+  // 0009 adds the additive `experiences.represents_resort_id` column the catalog
+  // reconcile/repo upsert + read path now writes and projects (one resort-
+  // representing Experience per active Resort). Without it the post-sync catalog
+  // upsert/read fails, so the full Disney sync reports `failed` and the catalog
+  // reads 500.
+  db.public.none(
+    readFileSync(migrationPath('0009_resort_representing_experiences.sql'), 'utf8'),
+  );
+  // 0010 widens the category CHECK to admit `Resort` — the category the
+  // resort-representing Experience now carries. Without it the post-sync upsert
+  // of a representing row violates `experiences_category_chk` and the sync
+  // reports `failed`.
+  db.public.none(
+    readFileSync(migrationPath('0010_resort_experience_category.sql'), 'utf8'),
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -706,9 +730,11 @@ describe('Disney sourcing end-to-end smoke (R12.6, R13.1, R14.1)', () => {
   it('runs a full Disney-sourced sync that persists Experiences and a Resort, fetching no menus', () => {
     expect(syncResult.status).toBe('success');
     if (syncResult.status !== 'success') return;
-    // Ride + Restaurant as Experiences and the Grand Floridian as a Resort;
-    // resort-area and bus-stop are excluded.
-    expect(syncResult.entitiesProcessed).toBe(3);
+    // Ride + Restaurant as Experiences, the Grand Floridian as a Resort, plus
+    // the one resort-representing Experience Catalog_Sync now emits per active
+    // Resort so the hotel is completable (resort-tracking-and-stats). resort-area
+    // and bus-stop are still excluded.
+    expect(syncResult.entitiesProcessed).toBe(4);
     expect(syncResult.resortUpserts).toBe(1);
     // Menus are lazy/demand-driven now — the sync fetches and writes none
     // (R8.1, R10.4).
@@ -746,7 +772,14 @@ describe('Disney sourcing end-to-end smoke (R12.6, R13.1, R14.1)', () => {
     };
 
     const names = body.experiences.map((e) => e.name).sort();
-    expect(names).toEqual(['Cinderella Royal Table', 'Space Mountain']);
+    // The Grand Floridian's resort-representing Experience now surfaces in the
+    // browse catalog alongside the ride and restaurant (resort-tracking-and-stats:
+    // one representing Experience per active Resort, name copied from the Resort).
+    expect(names).toEqual([
+      'Cinderella Royal Table',
+      "Disney's Grand Floridian Resort & Spa",
+      'Space Mountain',
+    ]);
 
     // Non_Experience_Types never surface in the catalog.
     expect(names).not.toContain('Magic Kingdom Resort Area');

@@ -28,9 +28,10 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import type { ExperienceCategory, Park } from '@dwt/shared';
+import type { AreaType, ExperienceCategory, Park } from '@dwt/shared';
 
 import { assignInternalId } from '../disney/bridge.js';
+import { internalId, RESORT_VISIT_ID_NAMESPACE } from '../internalId.js';
 import type { FacilityDocument } from '../disney/facilityDoc.js';
 import {
   FACILITIES_CHANNEL,
@@ -396,10 +397,11 @@ describe('runSync — happy path', () => {
     expect(result.status).toBe('success');
     if (result.status !== 'success') return; // narrowing for TS
 
-    // Three experiences (space mountain, parade, le cellier) + one resort
-    // survive normalization + the type split.
-    expect(result.entitiesProcessed).toBe(4);
-    expect(result.upserts).toBe(3);
+    // Three real experiences (space mountain, parade, le cellier) + one resort
+    // survive normalization + the type split, plus one resort-representing
+    // Experience emitted for that resort (Option A): 4 Experiences + 1 Resort.
+    expect(result.entitiesProcessed).toBe(5);
+    expect(result.upserts).toBe(4);
     expect(result.softDeletes).toBe(0);
     expect(result.resortUpserts).toBe(1);
     expect(result.resortSoftDeletes).toBe(0);
@@ -450,6 +452,16 @@ describe('runSync — happy path', () => {
     expect(diff.resorts.upserts[0]?.upstreamEntityId).toBe(GRAND_FLORIDIAN.id);
     expect(diff.resorts.upserts[0]?.id).toBe(idOf(GRAND_FLORIDIAN.id));
 
+    // Option A: the resort also flows through the Experience diff as a
+    // resort-representing row (park-less, Area_Type 'Resort'), keyed by its
+    // suffixed upstream id so it stays UNIQUE in `experiences`, and pointing
+    // back at the Resort's Internal_Id via `resortId`.
+    const representing = byUpstreamId.get(`${GRAND_FLORIDIAN.id}:resort-visit`);
+    expect(representing).toBeDefined();
+    expect(representing?.park).toBeNull();
+    expect(representing?.areaType).toBe('Resort' satisfies AreaType);
+    expect(representing?.resortId).toBe(idOf(GRAND_FLORIDIAN.id));
+
     // No spurious entries from the excluded / dropped documents.
     expect(byUpstreamId.has(BUS_STOP.id)).toBe(false);
     expect(byUpstreamId.has(TOMBSTONE.id)).toBe(false);
@@ -460,7 +472,7 @@ describe('runSync — happy path', () => {
       expect.objectContaining({
         status: 'success',
         outcome: 'success',
-        entitiesProcessed: 4,
+        entitiesProcessed: 5,
       }),
     ]);
 
@@ -851,6 +863,7 @@ describe('runSync — reconcile drives upserts and soft-deletes', () => {
         areaType: 'ThemePark',
         resortId: null,
         resortArea: null,
+        representsResortId: null,
       },
     ];
     const repo = createStubRepo({ snapshot });
@@ -886,6 +899,7 @@ describe('runSync — reconcile drives upserts and soft-deletes', () => {
         areaType: 'ThemePark',
         resortId: null,
         resortArea: null,
+        representsResortId: null,
       },
     ];
     const repo = createStubRepo({ snapshot });
@@ -906,5 +920,189 @@ describe('runSync — reconcile drives upserts and soft-deletes', () => {
     expect(reactivated).toBeDefined();
     expect(reactivated?.active).toBe(true);
     expect(diff.experiences.softDeletes).toHaveLength(0);
+  });
+});
+
+describe('runSync — resort-representing row reconciliation (Option A, R3.4, R3.5)', () => {
+  /**
+   * The Internal_Id of the resort-representing Experience derived for a given
+   * Resort Enterprise_Id — UUIDv5 over the distinct {@link
+   * RESORT_VISIT_ID_NAMESPACE}, matching `toResortRepresentingExperience`.
+   */
+  function representingIdOf(enterpriseId: string): string {
+    return internalId(enterpriseId, RESORT_VISIT_ID_NAMESPACE);
+  }
+
+  /** The suffixed upstream id that keeps a representing row UNIQUE in `experiences`. */
+  function representingUpstreamIdOf(enterpriseId: string): string {
+    return `${enterpriseId}:resort-visit`;
+  }
+
+  /**
+   * A cached representing-Experience row for a Resort, matching the shape
+   * `toResortRepresentingExperience` emits: park-less, Area_Type `Resort`,
+   * placeholder `Other` category, and both `resortId` / `representsResortId`
+   * set to the Resort's Internal_Id.
+   */
+  function representingCacheRow(
+    resortDoc: FacilityDocument,
+    active: boolean,
+  ): CatalogCacheRow {
+    return {
+      id: representingIdOf(resortDoc.id),
+      active,
+      name: resortDoc.name ?? '',
+      park: null,
+      category: 'Resort',
+      land: null,
+      areaType: 'Resort',
+      resortId: idOf(resortDoc.id),
+      resortArea: null,
+      representsResortId: idOf(resortDoc.id),
+    };
+  }
+
+  /** A cached `resorts` row mirroring the hotel entity itself. */
+  function resortCacheRow(
+    resortDoc: FacilityDocument,
+    active: boolean,
+  ): ResortCacheRow {
+    return {
+      id: idOf(resortDoc.id),
+      active,
+      name: resortDoc.name ?? '',
+      description: null,
+      imageUrl: null,
+      latitude: null,
+      longitude: null,
+      address: null,
+      phone: null,
+    };
+  }
+
+  it('emits one resort-representing Experience per active Resort', async () => {
+    const redis = createFakeRedis();
+    // Fresh cache: the resort and its representing row are both new.
+    const repo = createStubRepo({ snapshot: [], resortSnapshot: [] });
+    const client = makeFacilitiesClient();
+
+    const result = await runSync({
+      redis: redis as unknown as FakeRedis,
+      repo,
+      documentStore: createFakeDocumentStore(),
+      client,
+    });
+
+    expect(result.status).toBe('success');
+
+    const diff = repo.applyCalls[0]!;
+    const representing = diff.experiences.upserts.find(
+      (u) => u.id === representingIdOf(GRAND_FLORIDIAN.id),
+    );
+
+    // The representing row is emitted and inserted as an active Experience...
+    expect(representing).toBeDefined();
+    expect(representing?.active).toBe(true);
+    // ...keyed by the suffixed upstream id so it stays UNIQUE in `experiences`...
+    expect(representing?.upstreamEntityId).toBe(
+      representingUpstreamIdOf(GRAND_FLORIDIAN.id),
+    );
+    // ...park-less, Area_Type `Resort`, placeholder `Other` category...
+    expect(representing?.park).toBeNull();
+    expect(representing?.areaType).toBe('Resort' satisfies AreaType);
+    expect(representing?.category).toBe('Resort' satisfies ExperienceCategory);
+    // ...and both linked back to and standing in for the Resort's Internal_Id.
+    expect(representing?.resortId).toBe(idOf(GRAND_FLORIDIAN.id));
+    expect(representing?.representsResortId).toBe(idOf(GRAND_FLORIDIAN.id));
+
+    // Exactly one representing row exists for the single upstream Resort.
+    const representingCount = diff.experiences.upserts.filter(
+      (u) => u.representsResortId !== null,
+    ).length;
+    expect(representingCount).toBe(1);
+  });
+
+  it('soft-deletes the representing Experience when its Resort goes inactive, preserving Completions', async () => {
+    const redis = createFakeRedis();
+    // Prior cache: the Grand Floridian's representing row + resort row are
+    // both active, but upstream no longer surfaces the resort.
+    const repo = createStubRepo({
+      snapshot: [representingCacheRow(GRAND_FLORIDIAN, true)],
+      resortSnapshot: [resortCacheRow(GRAND_FLORIDIAN, true)],
+    });
+    // Upstream drops the resort entirely (only a ride remains).
+    const client = makeFacilitiesClient({ docs: [SPACE_MOUNTAIN] });
+
+    const result = await runSync({
+      redis: redis as unknown as FakeRedis,
+      repo,
+      documentStore: createFakeDocumentStore(),
+      client,
+    });
+
+    expect(result.status).toBe('success');
+
+    const diff = repo.applyCalls[0]!;
+    const representingId = representingIdOf(GRAND_FLORIDIAN.id);
+
+    // The representing row is SOFT-deleted (flagged for `active = false`), not
+    // re-inserted — its `experiences` row stays on disk so every referencing
+    // Resort_Visit Completion remains valid (R3.5).
+    expect(diff.experiences.softDeletes).toContainEqual({ id: representingId });
+    expect(
+      diff.experiences.upserts.some((u) => u.id === representingId),
+    ).toBe(false);
+
+    // A soft-delete is the only mutation of the representing row: reconcile
+    // never emits a hard delete, so the Completions are preserved.
+    expect(diff.experiences.softDeletes).toEqual([{ id: representingId }]);
+
+    // The hotel entity itself is likewise soft-deleted, not removed.
+    expect(diff.resorts.softDeletes).toEqual([{ id: idOf(GRAND_FLORIDIAN.id) }]);
+  });
+
+  it('reactivates the representing Experience when a previously-inactive Resort reappears', async () => {
+    const redis = createFakeRedis();
+    // Prior cache: the representing row + resort row are both soft-deleted
+    // (the resort had previously dropped out), but upstream now returns it.
+    const repo = createStubRepo({
+      snapshot: [representingCacheRow(GRAND_FLORIDIAN, false)],
+      resortSnapshot: [resortCacheRow(GRAND_FLORIDIAN, false)],
+    });
+    const client = makeFacilitiesClient();
+
+    const result = await runSync({
+      redis: redis as unknown as FakeRedis,
+      repo,
+      documentStore: createFakeDocumentStore(),
+      client,
+    });
+
+    expect(result.status).toBe('success');
+
+    const diff = repo.applyCalls[0]!;
+    const representingId = representingIdOf(GRAND_FLORIDIAN.id);
+
+    // The soft-deleted representing row is reactivated (upserted with the same
+    // Internal_Id and `active = true`), restoring the hotel as completable
+    // while its preserved Completions remain attached (R3.5).
+    const reactivated = diff.experiences.upserts.find(
+      (u) => u.id === representingId,
+    );
+    expect(reactivated).toBeDefined();
+    expect(reactivated?.active).toBe(true);
+    expect(reactivated?.representsResortId).toBe(idOf(GRAND_FLORIDIAN.id));
+
+    // Reactivation is a restore, never a soft-delete.
+    expect(
+      diff.experiences.softDeletes.some((d) => d.id === representingId),
+    ).toBe(false);
+
+    // The hotel entity itself is reactivated too.
+    const reactivatedResort = diff.resorts.upserts.find(
+      (u) => u.id === idOf(GRAND_FLORIDIAN.id),
+    );
+    expect(reactivatedResort).toBeDefined();
+    expect(reactivatedResort?.active).toBe(true);
   });
 });

@@ -43,12 +43,11 @@
  * Validates: Requirements 6.1, 6.10, 7.1, 8.1, 8.5, 9.9, 10.1, 10.2, 10.3, 10.7
  */
 
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
   Image,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -76,16 +75,20 @@ import {
 } from '../../theme/components';
 import { GroupSection } from '../navigation/GroupSection';
 import {
+  type GroupSectionState,
+  isExpanded as isExpandedPure,
+  toggle as togglePure,
+} from '../navigation/groupSectionState';
+import {
   DESTINATIONS,
   destinationCatalogFilter,
   type Destination,
 } from './destinations';
 import {
-  buildResortRows,
   groupByCategory,
   groupByLandFiltered,
+  groupByResort,
   RESORT_CATCHALL_ID,
-  type ResortRow,
   type Section,
 } from './catalogGrouping';
 import { useDestinationSections } from './useDestinationSections';
@@ -620,27 +623,27 @@ function DisneySpringsLayout({
  * as the catalog, `retry: false`), matching how `CatalogScreen` /
  * `ExperienceDetailScreen` consume `/resorts` (R8.1).
  *
- * The two lists are folded into a flat `ResortRow[]` by the pure
- * `buildResortRows` core: every active Resort becomes a browsable anchor row
- * ordered case-insensitively by name — including Resorts with no active
- * Experiences (R8.3) — each anchor immediately followed by its
- * `resortId`-matched Experiences (R8.2), then a single resort-wide catch-all
- * anchor holding Experiences with no/unmatched `resortId` appended after every
- * specific Resort group (R8.4). The rows render in a `FlatList`; anchor rows are
- * Resort headers and experience rows reuse `ExperienceRow` (R8.5). An anchor
- * with no following Experience shows an empty-group indication (R8.7).
+ * Each active Resort becomes a **collapsible section** via the pure
+ * `groupByResort` core: every Resort is a section header ordered
+ * case-insensitively by name — including Resorts with no active Experiences so
+ * the full resort directory stays browsable (R8.3) — with its
+ * `resortId`-matched Experiences (ordered by name) as the section body (R8.2),
+ * then a single resort-wide catch-all section holding Experiences with
+ * no/unmatched `resortId` appended after every specific Resort group (R8.4).
+ * Experience rows reuse `ExperienceRow` (R8.5); an expanded Resort with no
+ * Experiences shows an empty-group indication (R8.7).
  *
- * Tapping a Resort anchor scrolls the list to that Resort's group and stays on
- * the screen (R8.6), via a `FlatList` ref + `scrollToIndex` on the anchor's row
- * index, with a graceful `onScrollToIndexFailed` fallback for rows not yet
- * measured.
+ * Unlike the park layouts (which start expanded), the Resort sections start
+ * **collapsed** — there are many Resorts, so a collapsed directory of headers
+ * is far easier to scan and scroll than one long flat list. Tapping a header
+ * expands/collapses that Resort's Experiences in place and stays on the screen.
  *
  * Graceful degradation (R10.5): the base screen already handles
  * `catalog_unavailable` for the `/catalog` fetch. If the `/resorts` fetch fails
- * or is still loading, `resorts` is simply an empty list, so `buildResortRows`
- * renders every Experience under the catch-all group rather than crashing.
+ * or is still loading, `resorts` is simply an empty list, so `groupByResort`
+ * renders every Experience under the catch-all section rather than crashing.
  *
- * Validates: Requirements 8.1, 8.2, 8.3, 8.4, 8.6, 8.7, 10.5
+ * Validates: Requirements 8.1, 8.2, 8.3, 8.4, 8.5, 8.7, 10.5
  */
 function ResortsLayout({
   experiences,
@@ -650,7 +653,7 @@ function ResortsLayout({
   readonly onSelectExperience: (experience: ExperienceDTO) => void;
 }): JSX.Element {
   // R8.1: fetch the active Resort list. On failure or while loading the list is
-  // empty, so `buildResortRows` degrades to a catch-all-only layout (R10.5).
+  // empty, so `groupByResort` degrades to a catch-all-only layout (R10.5).
   const resortsQuery = useQuery<ResortListResponse, ApiError>({
     queryKey: ['resorts'] as const,
     queryFn: () => apiRequest<ResortListResponse>('GET', '/resorts'),
@@ -660,145 +663,115 @@ function ResortsLayout({
 
   const resorts = resortsQuery.data?.resorts ?? [];
 
-  // R8.2/R8.3/R8.4: fold Experiences + Resorts into the flat anchored row list.
-  const rows = useMemo(
-    () => buildResortRows(experiences, resorts),
+  // R8.2/R8.3/R8.4: one collapsible section per Resort (incl. empty ones) plus a
+  // trailing catch-all, ordered case-insensitively by name.
+  const sections = useMemo(
+    () => groupByResort(experiences, resorts),
     [experiences, resorts],
   );
 
-  // Map each Resort id to the row index of its anchor so an anchor tap can
-  // scroll straight to its group (R8.6).
-  const anchorIndexById = useMemo(() => {
-    const map = new Map<string, number>();
-    rows.forEach((row, index) => {
-      if (row.kind === 'resort') {
-        map.set(row.resort.id, index);
-      }
-    });
-    return map;
-  }, [rows]);
-
-  const listRef = useRef<FlatList<ResortRow>>(null);
-
-  // R8.6: scroll to the tapped Resort's anchor row and remain on this screen.
-  const scrollToResort = useCallback(
-    (resortId: string) => {
-      const index = anchorIndexById.get(resortId);
-      if (index === undefined) {
-        return;
-      }
-      listRef.current?.scrollToIndex({ index, viewPosition: 0, animated: true });
-    },
-    [anchorIndexById],
+  // Collapsed by default: the natural empty state of the proven section-state
+  // reducer is "all collapsed", which is exactly what a long resort directory
+  // wants (the opposite of the park layouts' default-expanded policy).
+  const [expandedState, setExpandedState] = useState<GroupSectionState>(
+    () => new Set(),
   );
-
-  // Rows have heterogeneous heights and no `getItemLayout`, so a target row that
-  // has not been measured yet can fail `scrollToIndex`. Approximate the offset,
-  // jump there, then retry once the target is likely realized.
-  const onScrollToIndexFailed = useCallback(
-    (info: { index: number; averageItemLength: number }) => {
-      listRef.current?.scrollToOffset({
-        offset: info.averageItemLength * info.index,
-        animated: false,
-      });
-      setTimeout(() => {
-        listRef.current?.scrollToIndex({
-          index: info.index,
-          viewPosition: 0,
-          animated: true,
-        });
-      }, 120);
-    },
-    [],
+  const isExpanded = useCallback(
+    (key: string): boolean => isExpandedPure(expandedState, key),
+    [expandedState],
   );
+  const toggle = useCallback((key: string): void => {
+    setExpandedState((current) => togglePure(current, key));
+  }, []);
 
   return (
     <FlatList
-      ref={listRef}
-      data={rows as ResortRow[]}
-      keyExtractor={resortRowKey}
+      data={sections as Section<ExperienceDTO>[]}
+      keyExtractor={(section) => section.key}
       style={styles.list}
       contentContainerStyle={styles.listContent}
-      initialNumToRender={12}
+      initialNumToRender={16}
       windowSize={11}
-      onScrollToIndexFailed={onScrollToIndexFailed}
-      renderItem={({ item, index }) => {
-        if (item.kind === 'resort') {
-          // R8.7: an anchor is empty when the next row is not one of its
-          // Experiences (another anchor follows, or it is the last row).
-          const next = rows[index + 1];
-          const isEmpty = next === undefined || next.kind === 'resort';
-          return (
-            <ResortAnchorRow
-              resort={item.resort}
-              isEmpty={isEmpty}
-              onPress={() => scrollToResort(item.resort.id)}
-            />
-          );
-        }
+      renderItem={({ item: section }) => {
+        const expanded = isExpanded(section.key);
+        const isCatchall = section.key === RESORT_CATCHALL_ID;
         return (
-          <ExperienceRow
-            experience={item.experience}
-            onPress={() => onSelectExperience(item.experience)}
-          />
+          <GroupSection
+            sectionKey={section.key}
+            expanded={expanded}
+            onToggle={toggle}
+            accessibilityLabel={`${section.title}, ${
+              expanded ? 'expanded' : 'collapsed'
+            }`}
+            header={
+              <ResortSectionHeader
+                title={section.title}
+                count={section.items.length}
+                expanded={expanded}
+                isCatchall={isCatchall}
+              />
+            }
+            testID={`destination-resort-${section.key}`}
+          >
+            {section.items.length === 0 ? (
+              <Text
+                style={styles.resortAnchorEmpty}
+                testID={`destination-resort-empty-${section.key}`}
+              >
+                No experiences yet
+              </Text>
+            ) : (
+              section.items.map((experience) => (
+                <ExperienceRow
+                  key={experience.id}
+                  experience={experience}
+                  onPress={() => onSelectExperience(experience)}
+                />
+              ))
+            )}
+          </GroupSection>
         );
       }}
     />
   );
 }
 
-/** Stable key for a Resorts-layout row (anchor by resort id, else experience id). */
-function resortRowKey(row: ResortRow): string {
-  return row.kind === 'resort'
-    ? `resort-${row.resort.id}`
-    : `experience-${row.experience.id}`;
-}
-
 /**
- * A browsable Resort anchor row (R8.3). Tapping it scrolls the list to this
- * Resort's group and stays on the screen (R8.6). When the Resort has no active
- * Experiences an empty-group indication is shown beneath the name (R8.7). The
- * synthetic catch-all anchor (id `RESORT_CATCHALL_ID`) is presented the same way
- * so unmatched Experiences remain browsable.
+ * A Resort section header: the expand/collapse chevron, a Resort (or catch-all)
+ * glyph, the Resort name, and its Experience count. Mirrors `SectionHeader` but
+ * carries the resort-flavored leading icon so a Resort section still reads as a
+ * hotel rather than a generic group.
  */
-function ResortAnchorRow({
-  resort,
-  isEmpty,
-  onPress,
+function ResortSectionHeader({
+  title,
+  count,
+  expanded,
+  isCatchall,
 }: {
-  readonly resort: ResortDTO;
-  readonly isEmpty: boolean;
-  readonly onPress: () => void;
+  readonly title: string;
+  readonly count: number;
+  readonly expanded: boolean;
+  readonly isCatchall: boolean;
 }): JSX.Element {
-  const isCatchall = resort.id === RESORT_CATCHALL_ID;
   return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={`${resort.name}${isEmpty ? ', no experiences' : ''}`}
-      style={styles.resortAnchor}
-      testID={`destination-resort-${resort.id}`}
-    >
+    <View style={styles.sectionHeader}>
+      <Ionicons
+        name={expanded ? 'chevron-down' : 'chevron-forward'}
+        size={18}
+        color={theme.color.textSecondary}
+        style={styles.sectionChevron}
+      />
       <Ionicons
         name={isCatchall ? 'ellipsis-horizontal-circle-outline' : 'bed-outline'}
         size={18}
         color={theme.color.primary}
         style={styles.resortAnchorIcon}
       />
-      <View style={styles.resortAnchorText}>
-        <Text style={styles.resortAnchorName} numberOfLines={1}>
-          {resort.name}
-        </Text>
-        {isEmpty ? (
-          <Text
-            style={styles.resortAnchorEmpty}
-            testID={`destination-resort-empty-${resort.id}`}
-          >
-            No experiences yet
-          </Text>
-        ) : null}
-      </View>
-    </Pressable>
+      <Text style={styles.sectionTitle} numberOfLines={1}>
+        {title}
+      </Text>
+      <Text style={styles.sectionCount}>{count}</Text>
+    </View>
   );
 }
 

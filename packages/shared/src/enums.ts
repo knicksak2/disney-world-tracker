@@ -32,6 +32,11 @@ export const EXPERIENCE_CATEGORIES = [
   'Spa',
   'Event',
   'Other',
+  // `Resort` classifies the resort-representing Experience — the completable
+  // stand-in for a Disney hotel (see the resort-tracking-and-stats feature).
+  // No real, browsable Experience is classified `Resort`; resort-*area*
+  // activities keep their own category (Restaurant, Recreation, Spa, …).
+  'Resort',
 ] as const;
 
 export type ExperienceCategory = (typeof EXPERIENCE_CATEGORIES)[number];
@@ -91,3 +96,26 @@ export type Park = (typeof PARKS)[number];
 export const SHARE_PAYLOAD_KINDS = ['experience', 'progress'] as const;
 
 export type SharePayloadKind = (typeof SHARE_PAYLOAD_KINDS)[number];
+
+// ---------------------------------------------------------------------------
+// Reaction_Vocabulary
+// ---------------------------------------------------------------------------
+//
+// The closed set of values a recipient may attach to a delivered Share as a
+// `Share_Reaction` (R11.2, R11.3). A recipient holds at most one reaction per
+// Share, drawn exclusively from this vocabulary; any value outside the set is
+// rejected with a validation error and nothing is persisted. The sender of the
+// Share can see the reactions their recipients attached (R11.7).
+//
+// The runtime tuple is the source of truth: it seeds the matching Zod
+// primitive (`shareReactionValueSchema`), the migration's CHECK constraint,
+// and property-test arbitraries, so the vocabulary cannot drift between layers.
+
+export const SHARE_REACTION_VALUES = [
+  'like',
+  'love',
+  'been_there',
+  'want_to_go',
+] as const;
+
+export type ShareReactionValue = (typeof SHARE_REACTION_VALUES)[number];

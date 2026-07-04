@@ -38,8 +38,12 @@ import { AREA_TYPES, EXPERIENCE_CATEGORIES, PARKS } from '@dwt/shared';
 import type {
   AreaType,
   ExperienceCategory,
+  FacetValueDTO,
+  GroupedFacetsDTO,
+  HeightRequirementDTO,
   MealPeriodDTO,
   Park,
+  WhyThisDTO,
 } from '@dwt/shared';
 
 import { reconcile, reconcileResorts, reconcileCatalog } from '../reconcile.js';
@@ -138,6 +142,50 @@ const mealPeriods: fc.Arbitrary<readonly MealPeriodDTO[]> = fc.array(
   { maxLength: 3 },
 );
 
+// ---------------------------------------------------------------------------
+// Enrichment field generators (Property 12 carry-through)
+// ---------------------------------------------------------------------------
+//
+// The four persisted enrichment values that `toExperienceUpsert` must copy
+// straight from the upstream Experience: `groupedFacets`, `heightRequirement`,
+// `whyThis`, and `subType`. These arbitraries span the full input space
+// (empty/absent through richly populated) so Property 12 exercises every shape.
+
+const facetValue: fc.Arbitrary<FacetValueDTO> = fc.record({
+  id: fc.string({ minLength: 1, maxLength: 12 }),
+  name: fc.string({ minLength: 1, maxLength: 24 }),
+});
+
+const groupedFacets: fc.Arbitrary<GroupedFacetsDTO> = fc.dictionary(
+  fc.string({ minLength: 1, maxLength: 12 }),
+  fc.array(facetValue, { maxLength: 4 }),
+  { maxKeys: 4 },
+);
+
+const heightRequirement: fc.Arbitrary<HeightRequirementDTO | null> = fc.option(
+  fc.record({
+    id: fc.string({ minLength: 1, maxLength: 12 }),
+    name: fc.string({ minLength: 1, maxLength: 24 }),
+    minInches: fc.option(fc.integer({ min: 0, max: 100 }), { nil: null }),
+    minCentimeters: fc.option(fc.integer({ min: 0, max: 300 }), { nil: null }),
+  }),
+  { nil: null },
+);
+
+const whyThis: fc.Arbitrary<WhyThisDTO | null> = fc.option(
+  fc.record({
+    title: fc.option(fc.string({ maxLength: 24 }), { nil: null }),
+    bullets: fc.array(fc.string({ maxLength: 24 }), { maxLength: 4 }),
+    quotes: fc.array(fc.string({ maxLength: 24 }), { maxLength: 4 }),
+  }),
+  { nil: null },
+);
+
+const subType: fc.Arbitrary<string | null> = fc.option(
+  fc.string({ minLength: 1, maxLength: 16 }),
+  { nil: null },
+);
+
 function indexBy<T extends { readonly id: string }>(
   rows: readonly T[],
 ): Map<string, T> {
@@ -170,6 +218,7 @@ const experiencePayload: fc.Arbitrary<Omit<ExperiencePayload, 'id' | 'presence'>
     imageUrl: urlOrNull,
     areaType,
     resortId: fc.option(internalId, { nil: null }),
+    representsResortId: fc.constant<string | null>(null),
     latitude: coord,
     longitude: coord,
     accessibility: fc.array(fc.constantFrom('wheelchair-access', 'audio', 'ecv'), {
@@ -177,6 +226,10 @@ const experiencePayload: fc.Arbitrary<Omit<ExperiencePayload, 'id' | 'presence'>
     }),
     priceTier: fc.option(fc.constantFrom('$', '$$', '$$$'), { nil: null }),
     mealPeriods,
+    groupedFacets,
+    heightRequirement,
+    whyThis,
+    subType,
   });
 
 const experienceScenario: fc.Arbitrary<readonly ExperiencePayload[]> = fc
@@ -216,6 +269,7 @@ function buildExperienceCache(
           areaType: f.areaType,
           resortId: f.resortId,
           resortArea: f.resortArea,
+          representsResortId: f.representsResortId,
         });
         break;
       case 'both-active-drift':
@@ -231,6 +285,7 @@ function buildExperienceCache(
           areaType: f.areaType,
           resortId: f.resortId,
           resortArea: f.resortArea,
+          representsResortId: f.representsResortId,
         });
         break;
       case 'cache-only-inactive':
@@ -245,6 +300,7 @@ function buildExperienceCache(
           areaType: f.areaType,
           resortId: f.resortId,
           resortArea: f.resortArea,
+          representsResortId: f.representsResortId,
         });
         break;
     }
@@ -289,6 +345,7 @@ function applyExperienceDiff(
       areaType: u.areaType,
       resortId: u.resortId,
       resortArea: u.resortArea,
+      representsResortId: u.representsResortId,
     });
   }
   for (const d of diff.softDeletes) {
@@ -801,12 +858,17 @@ describe('reconcile / reconcileResorts — Property 13 fixed examples', () => {
     imageUrl: 'https://cdn.disney.com/space.jpg',
     areaType: 'ThemePark',
     resortId: null,
+    representsResortId: null,
     resortArea: null,
     latitude: 28.4,
     longitude: -81.6,
     accessibility: ['wheelchair-access'],
     priceTier: null,
     mealPeriods: [],
+    groupedFacets: {},
+    heightRequirement: null,
+    whyThis: null,
+    subType: null,
   };
 
   const baseResort: UpstreamResort = {
@@ -840,7 +902,7 @@ describe('reconcile / reconcileResorts — Property 13 fixed examples', () => {
 
   it('soft-deletes an active experience and resort missing from upstream', () => {
     const exp = reconcile(
-      [{ id: 'exp-1', active: true, name: 'Old', park: 'EPCOT', category: 'Ride', land: null, areaType: 'ThemePark', resortId: null, resortArea: null }],
+      [{ id: 'exp-1', active: true, name: 'Old', park: 'EPCOT', category: 'Ride', land: null, areaType: 'ThemePark', resortId: null, resortArea: null, representsResortId: null }],
       [],
     );
     expect(exp.upserts).toEqual([]);
@@ -868,7 +930,7 @@ describe('reconcile / reconcileResorts — Property 13 fixed examples', () => {
 
   it('reactivates a soft-deleted experience and resort that reappear upstream', () => {
     const exp = reconcile(
-      [{ id: 'exp-1', active: false, name: 'Space Mountain', park: 'Magic Kingdom', category: 'Ride', land: 'Tomorrowland', areaType: 'ThemePark', resortId: null, resortArea: null }],
+      [{ id: 'exp-1', active: false, name: 'Space Mountain', park: 'Magic Kingdom', category: 'Ride', land: 'Tomorrowland', areaType: 'ThemePark', resortId: null, resortArea: null, representsResortId: null }],
       [baseExperience],
     );
     expect(exp.softDeletes).toEqual([]);
@@ -897,7 +959,7 @@ describe('reconcile / reconcileResorts — Property 13 fixed examples', () => {
   it('does not diff an already-inactive experience/resort still missing upstream', () => {
     expect(
       reconcile(
-        [{ id: 'exp-1', active: false, name: 'Old', park: 'EPCOT', category: 'Ride', land: null, areaType: 'ThemePark', resortId: null, resortArea: null }],
+        [{ id: 'exp-1', active: false, name: 'Old', park: 'EPCOT', category: 'Ride', land: null, areaType: 'ThemePark', resortId: null, resortArea: null, representsResortId: null }],
         [],
       ),
     ).toEqual({ upserts: [], softDeletes: [] });
@@ -920,6 +982,70 @@ describe('reconcile / reconcileResorts — Property 13 fixed examples', () => {
         [],
       ),
     ).toEqual({ upserts: [], softDeletes: [] });
+  });
+});
+
+// ===========================================================================
+// Property 12 — upsert carries the new enrichment fields through unchanged
+// ===========================================================================
+// Feature: experience-facet-enrichment, Property 12: Upsert carries the new enrichment fields through unchanged
+/**
+ * Property 12 (design.md → Correctness Properties):
+ *
+ *   For any UpstreamExperience, the ReconcileUpsert produced by
+ *   `toExperienceUpsert` carries identical `groupedFacets`,
+ *   `heightRequirement`, `whyThis`, and `subType` values.
+ *
+ * Validates: Requirements 12.1
+ *
+ * `toExperienceUpsert` is private to reconcile.ts, so it is exercised through
+ * the exported `reconcile(currentCache, upstreamSet)` with an EMPTY cache:
+ * every upstream Experience then takes the insert path and produces exactly one
+ * upsert, letting the assertion compare each upsert's four enrichment fields
+ * against its source upstream Experience by internal id.
+ *
+ * `numRuns: 100` per the spec convention (reuses the shared NUM_RUNS).
+ */
+
+const upstreamExperiencesForCarryThrough: fc.Arbitrary<
+  readonly UpstreamExperience[]
+> = fc
+  .uniqueArray(internalId, { minLength: 0, maxLength: 25 })
+  .chain((ids) =>
+    fc.tuple(...ids.map(() => experiencePayload)).map((payloads) =>
+      ids.map<UpstreamExperience>((id, i) => {
+        const payload = payloads[i];
+        if (payload === undefined) {
+          throw new Error('unreachable: empty carry-through payload at index');
+        }
+        return { id, ...payload };
+      }),
+    ),
+  );
+
+describe('reconcile — Property 12: upsert carries new enrichment fields through unchanged', () => {
+  it('copies groupedFacets/heightRequirement/whyThis/subType verbatim into every insert upsert (R12.1)', () => {
+    fc.assert(
+      fc.property(upstreamExperiencesForCarryThrough, (upstream) => {
+        // Empty cache → every upstream id is absent → every one is inserted,
+        // so there is exactly one upsert per upstream Experience.
+        const diff = reconcile([], upstream);
+        expect(diff.upserts).toHaveLength(upstream.length);
+        expect(diff.softDeletes).toEqual([]);
+
+        const upserts = indexBy(diff.upserts);
+        for (const exp of upstream) {
+          const u = upserts.get(exp.id);
+          expect(u, `upsert expected for ${exp.id}`).toBeDefined();
+          // The four persisted enrichment fields pass through unchanged.
+          expect(u?.groupedFacets).toEqual(exp.groupedFacets);
+          expect(u?.heightRequirement).toEqual(exp.heightRequirement);
+          expect(u?.whyThis).toEqual(exp.whyThis);
+          expect(u?.subType).toEqual(exp.subType);
+        }
+      }),
+      { numRuns: NUM_RUNS },
+    );
   });
 });
 
@@ -1057,12 +1183,17 @@ function toUpstreamExperienceP24(f: ExperienceImageFactP24): UpstreamExperience 
     imageUrl: selectImageUrl(f.doc),
     areaType: 'ThemePark',
     resortId: null,
+    representsResortId: null,
     resortArea: null,
     latitude: null,
     longitude: null,
     accessibility: [],
     priceTier: null,
     mealPeriods: [],
+    groupedFacets: {},
+    heightRequirement: null,
+    whyThis: null,
+    subType: null,
   };
 }
 
@@ -1076,14 +1207,14 @@ function buildExperienceCacheP24(
         break;
       case 'both-active-same':
       case 'cache-only-active':
-        out.push({ id: f.id, active: true, name: f.name, park: f.park, category: f.category, land: null, areaType: 'ThemePark', resortId: null, resortArea: null });
+        out.push({ id: f.id, active: true, name: f.name, park: f.park, category: f.category, land: null, areaType: 'ThemePark', resortId: null, resortArea: null, representsResortId: null });
         break;
       case 'both-active-drift':
-        out.push({ id: f.id, active: true, name: `${f.name}~old`, park: f.park, category: f.category, land: null, areaType: 'ThemePark', resortId: null, resortArea: null });
+        out.push({ id: f.id, active: true, name: `${f.name}~old`, park: f.park, category: f.category, land: null, areaType: 'ThemePark', resortId: null, resortArea: null, representsResortId: null });
         break;
       case 'cache-only-inactive':
       case 'both-inactive':
-        out.push({ id: f.id, active: false, name: f.name, park: f.park, category: f.category, land: null, areaType: 'ThemePark', resortId: null, resortArea: null });
+        out.push({ id: f.id, active: false, name: f.name, park: f.park, category: f.category, land: null, areaType: 'ThemePark', resortId: null, resortArea: null, representsResortId: null });
         break;
     }
   }
@@ -1306,6 +1437,7 @@ describe('reconcile / reconcileResorts — Property 24: sole-writer end-to-end v
             areaType: u.areaType,
             resortId: u.resortId,
             resortArea: u.resortArea,
+            representsResortId: u.representsResortId,
           }));
           const resortCacheAfter: ResortCacheRow[] = resortDiff.upserts.map((u) => ({
             id: u.id,
@@ -1355,5 +1487,257 @@ describe('reconcile / reconcileResorts — Property 24: sole-writer end-to-end v
       ),
       { numRuns: NUM_RUNS },
     );
+  });
+});
+
+// ===========================================================================
+// Property 13 (experience-facet-enrichment) — new enrichment fields are not a
+// drift signal
+// ===========================================================================
+// Feature: experience-facet-enrichment, Property 13: New enrichment fields are not a drift signal
+/**
+ * Property 13 (design.md → Correctness Properties):
+ *
+ *   For any active cached Experience row and any upstream Experience that agree
+ *   on the change-detection fields (`name`, `park`, `category`, `land`,
+ *   `areaType`, `resortId`, `resortArea`), `reconcile` produces no upsert for
+ *   that row even when their `groupedFacets`, `heightRequirement`, `whyThis`,
+ *   or `subType` differ.
+ *
+ * Validates: Requirements 12.2
+ *
+ * `hasExperienceMaterialChange` scopes drift detection to exactly the seven
+ * change-detection fields; `CatalogCacheRow` deliberately does NOT carry the
+ * four enrichment values, so reconcile cannot even observe them in the diff.
+ * This suite pins that down: it builds an active cache row and an upstream
+ * Experience that agree on every change-detection field but carry arbitrary
+ * (independently drawn) enrichment, then asserts the id appears in neither the
+ * upserts nor the soft-deletes — i.e. the enrichment difference is invisible to
+ * change detection. It is fully independent of the Property 12 / Property 13
+ * (disney-facilities-catalog-source) / Property 24 suites above.
+ *
+ * `numRuns: 100` per the spec convention (reuses the shared NUM_RUNS).
+ */
+
+// Change-detection field generators local to this suite. `name`, `park`,
+// `category`, and `areaType` reuse the shared generators above; `land`,
+// `resortArea`, and `resortId` are drawn here so the cache row and upstream can
+// agree on a genuinely varied (non-null) value.
+const landP13NonDrift: fc.Arbitrary<string | null> = fc.option(
+  fc.constantFrom('Tomorrowland', 'Fantasyland', 'World Celebration'),
+  { nil: null },
+);
+const resortAreaP13NonDrift: fc.Arbitrary<string | null> = fc.option(
+  fc.constantFrom('Magic Kingdom Resort Area', 'EPCOT Resort Area'),
+  { nil: null },
+);
+const resortIdP13NonDrift: fc.Arbitrary<string | null> = fc.option(internalId, {
+  nil: null,
+});
+
+// The four enrichment values the upstream Experience carries. They are drawn
+// independently from the change-detection fields (and, conceptually, differ
+// from whatever a prior sync persisted) so the property holds "even when their
+// enrichment differs".
+interface NonDriftFact {
+  readonly id: string;
+  // Shared change-detection fields (cache row and upstream agree on these).
+  readonly name: string;
+  readonly park: Park | null;
+  readonly category: ExperienceCategory;
+  readonly land: string | null;
+  readonly areaType: AreaType;
+  readonly resortId: string | null;
+  readonly resortArea: string | null;
+  // Upstream-only enrichment (arbitrary; the cache row carries none of it).
+  readonly groupedFacets: GroupedFacetsDTO;
+  readonly heightRequirement: HeightRequirementDTO | null;
+  readonly whyThis: WhyThisDTO | null;
+  readonly subType: string | null;
+  // Carried-through-but-not-change-detected fields required to build a
+  // well-formed UpstreamExperience.
+  readonly description: string;
+  readonly imageUrl: string | null;
+  readonly latitude: number | null;
+  readonly longitude: number | null;
+  readonly accessibility: readonly string[];
+  readonly priceTier: string | null;
+  readonly mealPeriods: readonly MealPeriodDTO[];
+}
+
+const nonDriftPayload: fc.Arbitrary<Omit<NonDriftFact, 'id'>> = fc.record({
+  name,
+  park,
+  category,
+  land: landP13NonDrift,
+  areaType,
+  resortId: resortIdP13NonDrift,
+  resortArea: resortAreaP13NonDrift,
+  groupedFacets,
+  heightRequirement,
+  whyThis,
+  subType,
+  description: cleanText,
+  imageUrl: urlOrNull,
+  latitude: coord,
+  longitude: coord,
+  accessibility: fc.array(
+    fc.constantFrom('wheelchair-access', 'audio', 'ecv'),
+    { maxLength: 3 },
+  ),
+  priceTier: fc.option(fc.constantFrom('$', '$$', '$$$'), { nil: null }),
+  mealPeriods,
+});
+
+const nonDriftScenario: fc.Arbitrary<readonly NonDriftFact[]> = fc
+  .uniqueArray(internalId, { minLength: 0, maxLength: 25 })
+  .chain((ids) =>
+    fc.tuple(...ids.map(() => nonDriftPayload)).map((payloads) =>
+      ids.map<NonDriftFact>((id, i) => {
+        const payload = payloads[i];
+        if (payload === undefined) {
+          throw new Error('unreachable: empty non-drift payload at index');
+        }
+        return { id, ...payload };
+      }),
+    ),
+  );
+
+/** An ACTIVE cache row mirroring a fact's change-detection fields exactly. */
+function nonDriftCacheRow(f: NonDriftFact): CatalogCacheRow {
+  return {
+    id: f.id,
+    active: true,
+    name: f.name,
+    park: f.park,
+    category: f.category,
+    land: f.land,
+    areaType: f.areaType,
+    resortId: f.resortId,
+    resortArea: f.resortArea,
+    representsResortId: null,
+  };
+}
+
+/**
+ * An upstream Experience mirroring the same change-detection fields but
+ * carrying the fact's arbitrary enrichment values, proving that enrichment is
+ * never a drift signal.
+ */
+function nonDriftUpstream(f: NonDriftFact): UpstreamExperience {
+  return {
+    id: f.id,
+    upstreamEntityId: `ent-${f.id}`,
+    name: f.name,
+    park: f.park,
+    category: f.category,
+    land: f.land,
+    areaType: f.areaType,
+    resortId: f.resortId,
+    representsResortId: null,
+    resortArea: f.resortArea,
+    description: f.description,
+    imageUrl: f.imageUrl,
+    latitude: f.latitude,
+    longitude: f.longitude,
+    accessibility: f.accessibility,
+    priceTier: f.priceTier,
+    mealPeriods: f.mealPeriods,
+    groupedFacets: f.groupedFacets,
+    heightRequirement: f.heightRequirement,
+    whyThis: f.whyThis,
+    subType: f.subType,
+    active: true,
+  } as UpstreamExperience;
+}
+
+describe('reconcile — Property 13 (experience-facet-enrichment): new enrichment fields are not a drift signal', () => {
+  it('emits no upsert and no soft-delete when only enrichment differs (R12.2)', () => {
+    fc.assert(
+      fc.property(nonDriftScenario, (facts) => {
+        const cache = facts.map(nonDriftCacheRow);
+        const upstream = facts.map(nonDriftUpstream);
+        const diff = reconcile(cache, upstream);
+
+        const upsertIds = new Set(diff.upserts.map((u) => u.id));
+        const softDeleteIds = new Set(diff.softDeletes.map((d) => d.id));
+
+        for (const f of facts) {
+          expect(
+            upsertIds.has(f.id),
+            `no upsert expected for ${f.id} (enrichment-only difference)`,
+          ).toBe(false);
+          expect(
+            softDeleteIds.has(f.id),
+            `no soft-delete expected for ${f.id} (still upstream)`,
+          ).toBe(false);
+        }
+
+        // Change-detection fields all agree, so the diff is entirely empty.
+        expect(diff.upserts).toEqual([]);
+        expect(diff.softDeletes).toEqual([]);
+      }),
+      { numRuns: NUM_RUNS },
+    );
+  });
+
+  it('fixed example: rich enrichment drift on an otherwise-identical row yields an empty diff (R12.2)', () => {
+    const cache: CatalogCacheRow[] = [
+      {
+        id: 'exp-1',
+        active: true,
+        name: 'Space Mountain',
+        park: 'Magic Kingdom',
+        category: 'Ride',
+        land: 'Tomorrowland',
+        areaType: 'ThemePark',
+        resortId: null,
+        resortArea: null,
+        representsResortId: null,
+      },
+    ];
+    const upstream: UpstreamExperience[] = [
+      {
+        id: 'exp-1',
+        upstreamEntityId: '80010177;entityType=Attraction',
+        name: 'Space Mountain',
+        park: 'Magic Kingdom',
+        category: 'Ride',
+        land: 'Tomorrowland',
+        resortArea: null,
+        description: 'Indoor roller coaster.',
+        imageUrl: 'https://cdn.disney.com/space.jpg',
+        areaType: 'ThemePark',
+        resortId: null,
+        representsResortId: null,
+        latitude: 28.4,
+        longitude: -81.6,
+        accessibility: ['wheelchair-access'],
+        priceTier: null,
+        mealPeriods: [],
+        // Every enrichment field is richly populated, unlike the (implicitly
+        // empty) cached enrichment — yet none of it is a drift signal.
+        groupedFacets: {
+          height: [{ id: 'h1', name: '40in (102cm) or taller' }],
+          physicalConsiderations: [{ id: 'p1', name: 'Expectant Mothers Advisory' }],
+          thrillFactor: [{ id: 't1', name: 'Thrill Rides' }],
+        },
+        heightRequirement: {
+          id: 'h1',
+          name: '40in (102cm) or taller',
+          minInches: 40,
+          minCentimeters: null,
+        },
+        whyThis: {
+          title: 'Why visit',
+          bullets: ['Iconic indoor coaster', 'Great for thrill seekers'],
+          quotes: ['A must-ride!'],
+        },
+        subType: 'Roller Coaster',
+        active: true,
+      } as UpstreamExperience,
+    ];
+
+    expect(reconcile(cache, upstream)).toEqual({ upserts: [], softDeletes: [] });
   });
 });

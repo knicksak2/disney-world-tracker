@@ -62,13 +62,17 @@ import type {
   AreaType,
   ExperienceCategory,
   ExperienceDTO,
+  GroupedFacetsDTO,
+  HeightRequirementDTO,
   MealPeriodDTO,
   MenuDTO,
   Park,
   ResortDTO,
   SyncRunOutcome,
+  WhyThisDTO,
 } from '@dwt/shared';
 
+import { deriveFacetViews } from './disney/enrich.js';
 import type { DbPool } from '../../db/pool.js';
 import type {
   CatalogCacheRow,
@@ -255,9 +259,23 @@ interface ExperienceRow extends QueryResultRow {
   longitude: number | null;
   area_type: AreaType;
   resort_id: string | null;
+  /**
+   * Represented Resort's Internal_Id for a resort-representing Experience, else
+   * `null`. NULL for every ordinary Experience, including resort-area
+   * activities (which carry `resort_id`). Requirements 3.1, 3.2.
+   */
+  represents_resort_id: string | null;
   accessibility: string[];
   price_tier: string | null;
   meal_periods: readonly MealPeriodDTO[];
+  /** Grouped_Facets keyed by Facet_Group name; `{}` when none (R7.1, R8.2). */
+  grouped_facets: GroupedFacetsDTO;
+  /** Height requirement with derived numeric minimums, or `null` (R7.2, R8.1). */
+  height_requirement: HeightRequirementDTO | null;
+  /** Structured why-this marketing copy, or `null` (R7.3, R8.3). */
+  why_this: WhyThisDTO | null;
+  /** Facility_SubType finer classification, or `null` (R7.4, R8.4). */
+  sub_type: string | null;
 }
 
 /**
@@ -279,6 +297,13 @@ interface ResortRow extends QueryResultRow {
   address: string | null;
   phone: string | null;
   active: boolean;
+  /**
+   * Id of the active resort-representing Experience standing in for this
+   * Resort, joined in by {@link listActiveResorts} (Option A). Absent on reads
+   * that do not join `experiences` (e.g. the sync snapshot); `null` when the
+   * Resort has no active representing Experience.
+   */
+  representing_experience_id?: string | null;
 }
 
 /**
@@ -426,16 +451,16 @@ async function getCacheAge(pool: DbPool, now: Date): Promise<CacheAgeInfo> {
  * back to active when the upstream id reappears (R1.15 reactivation).
  *
  * `description` is intentionally NOT projected: `reconcile`'s diff rules
- * (R1.16) only consider `name`, `park`, `category`, `land`, `area_type`, and
- * `resort_id` as material change signals, and reading description would only
- * inflate the snapshot.
+ * (R1.16) only consider `name`, `park`, `category`, `land`, `area_type`,
+ * `resort_id`, and `represents_resort_id` as material change signals, and
+ * reading description would only inflate the snapshot.
  */
 async function getCacheSnapshot(
   pool: DbPool,
 ): Promise<readonly CatalogCacheRow[]> {
   const result = await pool.query<ExperienceRow>(
     `SELECT id, upstream_entity_id, name, park, category, description, active, land,
-            area_type, resort_id, resort_area
+            area_type, resort_id, resort_area, represents_resort_id
        FROM experiences`,
   );
   return result.rows.map(rowToCacheSnapshot);
@@ -453,6 +478,7 @@ function rowToCacheSnapshot(row: ExperienceRow): CatalogCacheRow {
     areaType: row.area_type,
     resortId: row.resort_id,
     resortArea: row.resort_area,
+    representsResortId: row.represents_resort_id,
   };
 }
 
@@ -609,27 +635,34 @@ async function applyReconciliation(
         `INSERT INTO experiences (
            id, upstream_entity_id, name, park, category, description, active,
            image_url, latitude, longitude, area_type, resort_id,
-           accessibility, price_tier, meal_periods, land, resort_area, updated_at
+           accessibility, price_tier, meal_periods, land, resort_area,
+           grouped_facets, height_requirement, why_this, sub_type,
+           represents_resort_id, updated_at
          )
-         VALUES ($1, $2, $3, $4, $5, $6, TRUE, $7, $8, $9, $10, $11, $12, $13, $14::jsonb, $15, $16, now())
+         VALUES ($1, $2, $3, $4, $5, $6, TRUE, $7, $8, $9, $10, $11, $12, $13, $14::jsonb, $15, $16, $17::jsonb, $18::jsonb, $19::jsonb, $20, $21, now())
          ON CONFLICT (id) DO UPDATE SET
-           upstream_entity_id = EXCLUDED.upstream_entity_id,
-           name               = EXCLUDED.name,
-           park               = EXCLUDED.park,
-           category           = EXCLUDED.category,
-           description        = EXCLUDED.description,
-           active             = TRUE,
-           image_url          = EXCLUDED.image_url,
-           latitude           = EXCLUDED.latitude,
-           longitude          = EXCLUDED.longitude,
-           area_type          = EXCLUDED.area_type,
-           resort_id          = EXCLUDED.resort_id,
-           accessibility      = EXCLUDED.accessibility,
-           price_tier         = EXCLUDED.price_tier,
-           meal_periods       = EXCLUDED.meal_periods,
-           land               = EXCLUDED.land,
-           resort_area        = EXCLUDED.resort_area,
-           updated_at         = now()`,
+           upstream_entity_id   = EXCLUDED.upstream_entity_id,
+           name                 = EXCLUDED.name,
+           park                 = EXCLUDED.park,
+           category             = EXCLUDED.category,
+           description          = EXCLUDED.description,
+           active               = TRUE,
+           image_url            = EXCLUDED.image_url,
+           latitude             = EXCLUDED.latitude,
+           longitude            = EXCLUDED.longitude,
+           area_type            = EXCLUDED.area_type,
+           resort_id            = EXCLUDED.resort_id,
+           accessibility        = EXCLUDED.accessibility,
+           price_tier           = EXCLUDED.price_tier,
+           meal_periods         = EXCLUDED.meal_periods,
+           land                 = EXCLUDED.land,
+           resort_area          = EXCLUDED.resort_area,
+           grouped_facets       = EXCLUDED.grouped_facets,
+           height_requirement   = EXCLUDED.height_requirement,
+           why_this             = EXCLUDED.why_this,
+           sub_type             = EXCLUDED.sub_type,
+           represents_resort_id = EXCLUDED.represents_resort_id,
+           updated_at           = now()`,
         [
           upsert.id,
           upsert.upstreamEntityId,
@@ -647,6 +680,15 @@ async function applyReconciliation(
           JSON.stringify(upsert.mealPeriods),
           upsert.land,
           upsert.resortArea,
+          JSON.stringify(upsert.groupedFacets),
+          // Nullable JSONB: pass SQL NULL through as null rather than the JSON
+          // string 'null', so an absent field is stored as NULL not JSON null.
+          upsert.heightRequirement === null
+            ? null
+            : JSON.stringify(upsert.heightRequirement),
+          upsert.whyThis === null ? null : JSON.stringify(upsert.whyThis),
+          upsert.subType,
+          upsert.representsResortId,
         ],
       );
     }
@@ -846,7 +888,8 @@ async function listActiveExperiences(
   const sql = `
     SELECT id, upstream_entity_id, name, park, category, description, active,
            land, resort_area, image_url, latitude, longitude, area_type, resort_id,
-           accessibility, price_tier, meal_periods
+           accessibility, price_tier, meal_periods,
+           grouped_facets, height_requirement, why_this, sub_type
       FROM experiences
      WHERE ${where.join(' AND ')}
      ORDER BY park ASC, lower(name) ASC, id ASC`;
@@ -868,11 +911,23 @@ async function listActiveExperiences(
 async function listActiveResorts(
   pool: DbPool,
 ): Promise<readonly ResortDTO[]> {
+  // LEFT JOIN the active resort-representing Experience (Option A) so each
+  // Resort carries the `experienceId` the client PUT/DELETEs a Completion
+  // against. The join filters on `e.active = TRUE`, so an inactive Resort's
+  // (soft-deleted) representing row yields `representing_experience_id = NULL`,
+  // making the Resort uncompletable exactly as a missing/inactive Experience is
+  // (R3.1, R3.3, R3.4). The partial UNIQUE index on `represents_resort_id`
+  // guarantees at most one representing row per Resort, so the join cannot fan
+  // a Resort into multiple rows.
   const result = await pool.query<ResortRow>(
-    `SELECT id, name, description, image_url, latitude, longitude, address, phone
-       FROM resorts
-      WHERE active = TRUE
-      ORDER BY lower(name) ASC, id ASC`,
+    `SELECT r.id, r.name, r.description, r.image_url, r.latitude, r.longitude,
+            r.address, r.phone,
+            e.id AS representing_experience_id
+       FROM resorts r
+       LEFT JOIN experiences e
+         ON e.represents_resort_id = r.id AND e.active = TRUE
+      WHERE r.active = TRUE
+      ORDER BY lower(r.name) ASC, r.id ASC`,
   );
   return result.rows.map(rowToResortDto);
 }
@@ -899,7 +954,8 @@ async function getExperience(
   const result = await pool.query<ExperienceRow>(
     `SELECT id, upstream_entity_id, name, park, category, description, active,
             land, resort_area, image_url, latitude, longitude, area_type, resort_id,
-            accessibility, price_tier, meal_periods
+            accessibility, price_tier, meal_periods,
+            grouped_facets, height_requirement, why_this, sub_type
        FROM experiences
       WHERE id = $1`,
     [id],
@@ -1078,6 +1134,9 @@ async function upsertMenus(
  * detail route (R8.5).
  */
 function rowToDto(row: ExperienceRow): ExperienceDTO {
+  const grouped = row.grouped_facets ?? {};
+  const hasGrouped = Object.keys(grouped).length > 0;
+  const { physicalConsiderations, interestFacets } = deriveFacetViews(grouped);
   return {
     id: row.id,
     name: row.name,
@@ -1097,6 +1156,14 @@ function rowToDto(row: ExperienceRow): ExperienceDTO {
       : {}),
     ...(row.price_tier !== null ? { priceTier: row.price_tier } : {}),
     ...(row.meal_periods.length > 0 ? { mealPeriods: row.meal_periods } : {}),
+    ...(row.height_requirement !== null
+      ? { heightRequirement: row.height_requirement }
+      : {}),
+    ...(hasGrouped ? { groupedFacets: grouped } : {}),
+    ...(physicalConsiderations.length > 0 ? { physicalConsiderations } : {}),
+    ...(Object.keys(interestFacets).length > 0 ? { interestFacets } : {}),
+    ...(row.why_this !== null ? { whyThis: row.why_this } : {}),
+    ...(row.sub_type !== null ? { subType: row.sub_type } : {}),
   };
 }
 
@@ -1111,6 +1178,7 @@ function rowToResortDto(row: ResortRow): ResortDTO {
     longitude: row.longitude,
     address: row.address,
     phone: row.phone,
+    representingExperienceId: row.representing_experience_id ?? null,
   };
 }
 

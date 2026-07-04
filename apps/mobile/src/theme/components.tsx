@@ -22,6 +22,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 
 import { theme } from './theme';
 
@@ -74,12 +75,32 @@ export function GradientHeader({
   /** Spoken label for the back control; defaults to "Go back". */
   readonly backAccessibilityLabel?: string;
 }): JSX.Element {
+  // Add the device's top safe-area inset (status bar / notch height) to the
+  // header padding so the leading back control clears the system UI and stays
+  // tappable. Without this, `headerCompact`'s small `paddingTop` pushes the
+  // back arrow up under the status bar where it can't be reliably pressed.
+  //
+  // Consume the inset context directly (rather than `useSafeAreaInsets`, which
+  // throws when no provider is mounted) so the header still renders in test
+  // environments and any other tree without a `SafeAreaProvider`; the real app
+  // wraps everything in one (see `App.tsx`), so the true inset is used at run
+  // time and we fall back to `0` only when it is genuinely unavailable.
+  const insets = React.useContext(SafeAreaInsetsContext);
+  // Ensure a sensible minimum top gap even when the reported inset is small
+  // (e.g. no notch, or the inset is briefly unavailable before the provider
+  // measures) so the header — and its back control — never crowds the top edge.
+  const topInset = Math.max(insets?.top ?? 0, theme.spacing.xl);
+  const basePadding = compact ? theme.spacing.lg : theme.spacing.xl;
   return (
     <LinearGradient
       colors={theme.gradient.headerVivid}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
-      style={[styles.header, compact && styles.headerCompact]}
+      style={[
+        styles.header,
+        compact && styles.headerCompact,
+        { paddingTop: topInset + basePadding },
+      ]}
     >
       {/* Decorative sparkles — purely visual, not interactive. */}
       <Ionicons
@@ -455,7 +476,8 @@ const styles = StyleSheet.create({
     backgroundColor: theme.color.background,
   },
   header: {
-    paddingTop: 56,
+    // `paddingTop` is applied inline in `GradientHeader` as
+    // `safeAreaInset.top + base` so the header clears the status bar / notch.
     paddingBottom: theme.spacing.xl,
     paddingHorizontal: theme.spacing.xl,
     borderBottomLeftRadius: theme.radius.xl,
@@ -463,7 +485,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   headerCompact: {
-    paddingTop: theme.spacing.lg,
     paddingBottom: theme.spacing.lg,
   },
   headerRow: {

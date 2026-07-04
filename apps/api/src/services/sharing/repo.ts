@@ -59,7 +59,13 @@
  *            R9.8, R9.9, R9.10.
  */
 
-import type { SharePayload, SharePayloadKind } from '@dwt/shared';
+import type {
+  InboxItemDTO,
+  InboxResponse,
+  SentShareDTO,
+  SharePayload,
+  SharePayloadKind,
+} from '@dwt/shared';
 
 import type { DbPool } from '../../db/pool.js';
 import { AppError } from '../../errors/AppError.js';
@@ -80,28 +86,17 @@ export interface ShareDeliveryResult {
 }
 
 /**
- * One row of the inbox listing. Per R9.8/R9.9:
- *   - When `isOpened === false`, only `shareId` and `isOpened` are
- *     present; `senderId`, `payloadKind`, `payload`, and `sentAt` are
- *     intentionally omitted from the wire shape so an unopened share
- *     leaks no metadata.
- *   - When `isOpened === true`, the full content is included.
+ * The recipient inbox view is now the shared `InboxItemDTO` / `InboxResponse`
+ * contract (task 1.1). The reworked projection discloses sender, payload,
+ * timestamp, and the recipient's own `Read_State`/reaction for **every**
+ * non-deleted delivered `Share` (R4.1, R6.2); `Read_State` drives only the
+ * unread count and no longer gates disclosure. Re-exported here so route and
+ * test callers keep importing the inbox types from the repo module.
  */
-export interface InboxItem {
-  readonly shareId: string;
-  readonly isOpened: boolean;
-  readonly senderId?: string;
-  readonly payloadKind?: SharePayloadKind;
-  readonly payload?: SharePayload;
-  readonly sentAt?: string;
-}
+export type { InboxItemDTO, InboxResponse } from '@dwt/shared';
 
-/** Bundled inbox response. */
-export interface InboxResponse {
-  /** Count of `share_recipients` rows whose `opened_at IS NULL`. */
-  readonly unread: number;
-  readonly items: ReadonlyArray<InboxItem>;
-}
+/** Re-export the sent-shares DTO so route/test callers import it from here. */
+export type { SentShareDTO } from '@dwt/shared';
 
 /** Detail returned by `openShare` on success. */
 export interface OpenedShareDetail {
@@ -125,8 +120,21 @@ export interface SharingRepo {
     payload: SharePayload,
   ): Promise<ShareDeliveryResult>;
 
-  /** Bundle the recipient's inbox (R9.8, R9.9). */
+  /**
+   * Bundle the recipient's inbox. Projects sender id/display name, payload,
+   * `sentAt`, per-recipient `read` (`opened_at IS NOT NULL`), and the
+   * recipient's own reaction for every non-deleted row, with `unread` counting
+   * rows whose `opened_at IS NULL` (R4.1, R6.1, R6.2).
+   */
   listInbox(recipientId: string): Promise<InboxResponse>;
+
+  /**
+   * List the Shares a User sent, most-recent first. Backs the mobile Sent
+   * Shares surface, whose per-Share reactions are then read via the sender-
+   * gated `GET /me/shares/:shareId/reactions` (R11.7). The `sender_id = $1`
+   * predicate keeps a User's sent list scoped to their own Shares.
+   */
+  listSentShares(senderId: string): Promise<SentShareDTO[]>;
 
   /**
    * Open a share for the recipient (R9.9). Returns `null` when no
@@ -170,6 +178,7 @@ export function createSharingRepo(pool: DbPool): SharingRepo {
     createShareAtomic: (senderId, recipientIds, payload) =>
       createShareAtomic(pool, senderId, recipientIds, payload),
     listInbox: (recipientId) => listInbox(pool, recipientId),
+    listSentShares: (senderId) => listSentShares(pool, senderId),
     openShare: (recipientId, shareId) =>
       openShare(pool, recipientId, shareId),
     softDeleteForRecipient: (recipientId, shareId) =>
@@ -340,25 +349,34 @@ async function createShareAtomic(
 
 interface InboxRow {
   share_id: string;
-  is_opened: boolean;
+  read: boolean;
   sender_id: string;
+  sender_display_name: string;
   payload_kind: SharePayloadKind;
   payload_snapshot: unknown;
   sent_at: Date | string;
+  my_reaction: string | null;
 }
 
 /**
  * Return the recipient's inbox.
  *
- * The query joins `share_recipients` to `shares` and excludes
- * recipient-soft-deleted rows. The route layer is the one that strips
- * sender/payload/sentAt for unopened items in the wire shape — the repo
- * still returns those fields here so future callers (e.g. an
- * administrative tool) can read the full state without redundant
- * lookups. The route's projection is the privacy boundary.
+ * The reworked projection discloses, for **every** non-deleted delivered
+ * `Share`, the sender id and display name (joined from `profiles`), the
+ * payload snapshot, the delivery timestamp, the per-recipient `read` state
+ * (`opened_at IS NOT NULL`), and the recipient's own `Share_Reaction`
+ * regardless of `Read_State` (R4.1, R6.2). `Read_State` no longer gates
+ * disclosure — it drives only the `unread` count.
  *
- * The unread count is a fast `COUNT(*) WHERE opened_at IS NULL` running
- * on the same base set so the two values cannot drift across requests.
+ * The `recipient_id = $1` predicate remains the privacy boundary (R6.1): a
+ * recipient only ever sees Shares delivered to them, and only their own
+ * per-recipient row (hence their own reaction) is projected. The recipient's
+ * reaction is `LEFT JOIN`ed from `share_reactions` so a Share with no reaction
+ * still appears (and predates Phase 2, when the table may be empty or, in some
+ * environments, not yet migrated — the join is outer either way).
+ *
+ * `unread` is computed from the same base set (rows whose `read` is `false`)
+ * so the count and the items cannot drift across requests.
  */
 async function listInbox(
   pool: DbPool,
@@ -366,13 +384,19 @@ async function listInbox(
 ): Promise<InboxResponse> {
   const result = await pool.query<InboxRow>(
     `SELECT sr.share_id,
-            (sr.opened_at IS NOT NULL) AS is_opened,
+            (sr.opened_at IS NOT NULL) AS read,
             s.sender_id,
+            p.display_name AS sender_display_name,
             s.payload_kind,
             s.payload_snapshot,
-            s.sent_at
+            s.sent_at,
+            reaction.reaction AS my_reaction
        FROM share_recipients sr
        JOIN shares s ON s.id = sr.share_id
+       JOIN profiles p ON p.user_id = s.sender_id
+       LEFT JOIN share_reactions reaction
+              ON reaction.share_id = sr.share_id
+             AND reaction.recipient_id = sr.recipient_id
       WHERE sr.recipient_id = $1
         AND sr.recipient_deleted_at IS NULL
       ORDER BY s.sent_at DESC, sr.share_id ASC`,
@@ -380,25 +404,72 @@ async function listInbox(
   );
 
   let unread = 0;
-  const items: InboxItem[] = [];
+  const items: InboxItemDTO[] = [];
   for (const row of result.rows) {
-    if (!row.is_opened) {
+    if (!row.read) {
       unread += 1;
-      // R9.8: unopened entries reveal only shareId + isOpened.
-      items.push({ shareId: row.share_id, isOpened: false });
-      continue;
     }
-    // R9.9: opened entries reveal sender, content, and timestamp.
+    // R4.1/R6.2: sender, content, timestamp, and the recipient's own reaction
+    // are disclosed for every delivered Share regardless of `read`.
     items.push({
       shareId: row.share_id,
-      isOpened: true,
+      read: row.read,
       senderId: row.sender_id,
+      senderDisplayName: row.sender_display_name,
       payloadKind: row.payload_kind,
       payload: parsePayload(row.payload_snapshot),
       sentAt: toIsoTimestamp(row.sent_at),
+      // The `share_reactions_value_chk` CHECK constraint guarantees the
+      // stored value is a member of the Reaction_Vocabulary, so the raw
+      // column string narrows to the DTO's reaction type.
+      myReaction: (row.my_reaction ?? null) as InboxItemDTO['myReaction'],
     });
   }
   return { unread, items };
+}
+
+// ---------------------------------------------------------------------------
+// listSentShares (R11.7 support — Sent Shares surface)
+// ---------------------------------------------------------------------------
+
+interface SentShareRow {
+  share_id: string;
+  payload_kind: SharePayloadKind;
+  payload_snapshot: unknown;
+  sent_at: Date | string;
+}
+
+/**
+ * Return the Shares a User sent, most-recent first.
+ *
+ * The `sender_id = $1` predicate scopes the list to the requesting User's own
+ * Shares, so this read can never disclose another User's Shares. Each row
+ * carries the payload snapshot and `sentAt` needed to render the Share on the
+ * mobile Sent Shares surface; the reactions attached to each Share are read
+ * separately through the sender-gated `GET /me/shares/:shareId/reactions`
+ * endpoint (R11.7), so they are not joined here.
+ */
+async function listSentShares(
+  pool: DbPool,
+  senderId: string,
+): Promise<SentShareDTO[]> {
+  const result = await pool.query<SentShareRow>(
+    `SELECT s.id AS share_id,
+            s.payload_kind,
+            s.payload_snapshot,
+            s.sent_at
+       FROM shares s
+      WHERE s.sender_id = $1
+      ORDER BY s.sent_at DESC, s.id ASC`,
+    [senderId],
+  );
+
+  return result.rows.map((row) => ({
+    shareId: row.share_id,
+    payloadKind: row.payload_kind,
+    payload: parsePayload(row.payload_snapshot),
+    sentAt: toIsoTimestamp(row.sent_at),
+  }));
 }
 
 // ---------------------------------------------------------------------------

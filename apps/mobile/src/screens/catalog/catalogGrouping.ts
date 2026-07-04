@@ -258,5 +258,68 @@ function catchallResort(): ResortDTO {
     longitude: null,
     address: null,
     phone: null,
+    representingExperienceId: null,
   };
+}
+
+/**
+ * Group the Resorts Destination's Experiences into one collapsible Section per
+ * active Resort (R8.2, R8.3), the sectioned counterpart to {@link buildResortRows}
+ * used by the collapsed-by-default Resorts layout:
+ *
+ *   - every active Resort becomes a Section, ordered case-insensitively
+ *     ascending by name, INCLUDING Resorts with no active Experiences so the
+ *     full resort directory stays browsable (R8.3);
+ *   - each Section's items are its `resortId`-matched Experiences, ordered
+ *     case-insensitively ascending by name (R8.2);
+ *   - a single trailing catch-all Section (key `RESORT_CATCHALL_ID`) holds every
+ *     Experience with no `resortId` or a `resortId` that matches no active
+ *     Resort, appended after all specific Resorts and included only when it has
+ *     at least one Experience (R8.4).
+ *
+ * The Experiences form a total partition: each appears in exactly one Section
+ * (its matched Resort or the single catch-all), so none is omitted. The Section
+ * `key` is the Resort's Internal_Id (or `RESORT_CATCHALL_ID`) so the layout can
+ * derive stable per-section collapsible state and test ids.
+ */
+export function groupByResort(
+  experiences: readonly ExperienceDTO[],
+  resorts: readonly ResortDTO[],
+): readonly Section<ExperienceDTO>[] {
+  const knownResortIds = new Set(resorts.map((r) => r.id));
+
+  const byResort = new Map<string, ExperienceDTO[]>();
+  const catchall: ExperienceDTO[] = [];
+
+  for (const experience of experiences) {
+    const resortId = experience.resortId;
+    if (typeof resortId === 'string' && knownResortIds.has(resortId)) {
+      const bucket = byResort.get(resortId);
+      if (bucket) {
+        bucket.push(experience);
+      } else {
+        byResort.set(resortId, [experience]);
+      }
+    } else {
+      catchall.push(experience);
+    }
+  }
+
+  const sections: Section<ExperienceDTO>[] = [...resorts]
+    .sort((a, b) => compareCaseInsensitive(a.name, b.name))
+    .map((resort) => ({
+      key: resort.id,
+      title: resort.name,
+      items: sortExperiencesByName(byResort.get(resort.id) ?? []),
+    }));
+
+  if (catchall.length > 0) {
+    sections.push({
+      key: RESORT_CATCHALL_ID,
+      title: RESORT_CATCHALL_NAME,
+      items: sortExperiencesByName(catchall),
+    });
+  }
+
+  return sections;
 }

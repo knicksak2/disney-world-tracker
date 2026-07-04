@@ -16,8 +16,14 @@
 //   - A header button navigates to `FriendsSearch` so the user can find
 //     people to add.
 //
+// Feature: social-sharing-loop, Task 6.1 — the top-level Share control was
+// removed from this screen (R3.1). A Share is now initiated only from a
+// Share_Entry_Point on the content being shared (R3.2). The Friends page
+// retains only the Inbox control (navigates to `Inbox`, R3.5) and the Find
+// control (R3.4).
+//
 // Styling: uses the shared "Magical / Whimsical" theme — a gradient hero
-// header with Inbox / Share / Find-friends actions, section labels, rows as
+// header with Inbox / Find-friends actions, section labels, rows as
 // `Card`s, and themed PrimaryButton / SecondaryButton controls. Empty
 // sections and the no-friends state use calm muted styling; only mutation
 // failures use danger. See `theme/theme.ts` and `theme/components.tsx`.
@@ -213,12 +219,12 @@ export default function FriendsListScreen({ navigation }: Props): JSX.Element {
         style={styles.headerBtn}
       />
       <SecondaryButton
-        label="Share"
-        icon="share-social-outline"
+        label="Sent"
+        icon="paper-plane-outline"
         onPress={() => {
-          navigation.navigate('ShareComposer');
+          navigation.navigate('Sent');
         }}
-        testID="friends-share"
+        testID="friends-sent"
         style={styles.headerBtn}
       />
     </View>

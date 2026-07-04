@@ -39,4 +39,15 @@ export interface ResortDTO {
 
   /** Phone, or `null` when the document omits it (R6.4). */
   readonly phone: string | null;
+
+  /**
+   * Catalog Experience_Id (UUID) of the active resort-representing Experience
+   * standing in for this Resort under Option A, or `null` when no active
+   * representing Experience exists (the Resort is inactive or its representing
+   * row has not yet been synced). The client PUT/DELETEs a Completion against
+   * this id to mark the Resort visited; a `null` value means the Resort cannot
+   * currently be completed, exactly as a missing/inactive Experience cannot
+   * (R3.1, R3.3, R3.4).
+   */
+  readonly representingExperienceId: string | null;
 }

@@ -24,6 +24,7 @@ export {
   experienceCategorySchema,
   parkSchema,
   sharePayloadKindSchema,
+  shareReactionValueSchema,
   completionPercentSchema,
 } from './primitives.js';
 
@@ -66,6 +67,16 @@ export {
 export type { ShareInput } from './Share.js';
 
 export { shareRecipientSchema } from './ShareRecipient.js';
+
+export { shareReactionSchema } from './ShareReaction.js';
+
+export {
+  notificationPreferenceSchema,
+  notificationPreferenceInputSchema,
+} from './NotificationPreference.js';
+export type { NotificationPreferenceInput } from './NotificationPreference.js';
+
+export { inboxItemSchema, inboxResponseSchema } from './Inbox.js';
 
 export { aggregateRatingSchema } from './AggregateRating.js';
 export { leaderboardEntrySchema } from './LeaderboardEntry.js';

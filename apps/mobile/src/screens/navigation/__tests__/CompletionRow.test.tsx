@@ -49,6 +49,7 @@ function makeEntry(
     experienceId: EXPERIENCE_ID,
     experienceName: NAME,
     park: 'Magic Kingdom',
+    areaType: 'ThemePark',
     category: 'Ride',
     completedOn: '2024-01-05',
     rating: null,

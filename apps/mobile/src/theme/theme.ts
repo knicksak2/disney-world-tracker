@@ -174,6 +174,7 @@ export const categoryVisual: Record<
   Spa: { glyph: 'flower', tint: '#ec407a', label: 'Spa' },
   Event: { glyph: 'calendar', tint: '#8e24aa', label: 'Event' },
   Other: { glyph: 'star', tint: '#6b6480', label: 'Other' },
+  Resort: { glyph: 'bed', tint: '#5b2a86', label: 'Resort' },
 };
 
 // ---------------------------------------------------------------------------

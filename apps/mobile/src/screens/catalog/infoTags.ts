@@ -19,7 +19,10 @@
 
 import type { ExperienceDTO } from '@dwt/shared';
 
-/** The kinds of persisted enrichment an Info_Tag can surface (R9.2-R9.7). */
+/**
+ * The kinds of persisted enrichment an Info_Tag can surface (R9.2-R9.7,
+ * R11.1-R11.3).
+ */
 export type InfoTagKind =
   | 'land'
   | 'priceTier'
@@ -27,7 +30,10 @@ export type InfoTagKind =
   | 'coordinates'
   | 'mealPeriod'
   | 'resort'
-  | 'resortArea';
+  | 'resortArea'
+  | 'height'
+  | 'advisory'
+  | 'interest';
 
 /** One compact, labelled Info_Tag ready for rendering. */
 export interface InfoTag {
@@ -55,6 +61,9 @@ export type InfoTagExperience = Pick<
   | 'mealPeriods'
   | 'resortId'
   | 'resortArea'
+  | 'heightRequirement'
+  | 'physicalConsiderations'
+  | 'interestFacets'
 >;
 
 /** A string is present when it is non-null/undefined and not whitespace-only. */
@@ -93,10 +102,16 @@ function priceTierTag(priceTier: string): InfoTag {
  *     referenced, and its name is available (R9.7)
  *   - the Resort_Area zone, only when the area is `Resort` and a Resort_Area is
  *     persisted
+ *   - the Height_Requirement, only when persisted with a non-empty name (R11.1)
+ *   - one advisory tag per Physical_Consideration, in persisted order (R11.2)
+ *   - one interest tag per Interest_Facet value across the interest groups, in
+ *     persisted order (R11.3)
  *
  * Tags are ordered Land → price tier → accessibility → coordinates → meal
- * period → resort → resort area, omitting absent ones while preserving the
- * relative order of those present (R9.11). Pure and total — never throws.
+ * period → resort → resort area → height → advisory → interest, omitting absent
+ * ones while preserving the relative order of those present (R9.11, R11.5).
+ * Every emitted tag carries a non-empty `accessibilityLabel` (R12.5, R11.6).
+ * Pure and total — never throws.
  */
 export function buildInfoTags(
   experience: InfoTagExperience,
@@ -184,6 +199,52 @@ export function buildInfoTags(
       label: area,
       accessibilityLabel: `Resort area: ${area}`,
     });
+  }
+
+  // 8. Height_Requirement — only when persisted with a non-empty name (R11.1),
+  //    omitted otherwise (R11.5).
+  if (
+    experience.heightRequirement &&
+    isNonEmpty(experience.heightRequirement.name)
+  ) {
+    const name = experience.heightRequirement.name.trim();
+    tags.push({
+      kind: 'height',
+      label: name,
+      accessibilityLabel: `Height requirement: ${name}`,
+    });
+  }
+
+  // 9. Physical_Considerations — one advisory tag per persisted value, in
+  //    persisted order (R11.2).
+  if (experience.physicalConsiderations) {
+    for (const consideration of experience.physicalConsiderations) {
+      if (isNonEmpty(consideration.name)) {
+        const value = consideration.name.trim();
+        tags.push({
+          kind: 'advisory',
+          label: value,
+          accessibilityLabel: `Advisory: ${value}`,
+        });
+      }
+    }
+  }
+
+  // 10. Interest_Facets — one interest tag per Facet_Value name across the
+  //     interest groups, in persisted (group, then value) order (R11.3).
+  if (experience.interestFacets) {
+    for (const values of Object.values(experience.interestFacets)) {
+      for (const value of values) {
+        if (isNonEmpty(value.name)) {
+          const name = value.name.trim();
+          tags.push({
+            kind: 'interest',
+            label: name,
+            accessibilityLabel: `Interest: ${name}`,
+          });
+        }
+      }
+    }
   }
 
   return tags;

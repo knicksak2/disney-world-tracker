@@ -31,6 +31,8 @@
  * Validates: Requirements 3.5, 3.6, 4.1
  */
 
+import type { FacetValueDTO, GroupedFacetsDTO } from '@dwt/shared';
+
 /**
  * A reference to one ancestor of a Facility_Document, forming the ancestor
  * chain that area resolution (`area.ts`) walks to determine an Experience's
@@ -110,6 +112,23 @@ export interface FacilityDocument {
     readonly type?: string;
     readonly priceTier?: string;
   }[];
+  /**
+   * Structured "why visit this" marketing copy, when present (R5). Tolerant and
+   * optional: every field may be absent, so the Enrichment_Extractor is
+   * responsible for normalizing missing pieces to null/empty.
+   */
+  readonly whyThis?: {
+    readonly title?: string;
+    readonly bullets?: readonly string[];
+    readonly quotes?: readonly string[];
+  };
+  /**
+   * Grouped_Facets keyed by Facet_Group name, each a list of `{id, name}`
+   * Facet_Values (R1). Synthesized by {@link buildGroupedFacets} from the raw
+   * `facets` array during {@link adaptFacilityDocument}; present only for groups
+   * that carried at least one valid facet.
+   */
+  readonly groupedFacets?: GroupedFacetsDTO;
   /** Tombstone flag; `true` → excluded by normalization (R3.4). */
   readonly softDeleted?: boolean;
   /** Upstream last-update timestamp. */
@@ -409,6 +428,72 @@ const ACCESSIBILITY_GROUPS: ReadonlySet<string> = new Set([
   'serviceAnimals',
 ]);
 
+/**
+ * The Facet_Groups this feature captures into Grouped_Facets (Glossary, R1).
+ * Declared here as the single source of truth so the normalizer, the
+ * Enrichment_Extractor views, and their property generators cannot drift.
+ */
+export const PERSISTED_FACET_GROUPS: ReadonlySet<string> = new Set([
+  'height',
+  'physicalConsiderations',
+  'interests',
+  'thrillFactor',
+  'age',
+  'parkInterests',
+  'disneyFavorites',
+]);
+
+/**
+ * The interest/targeting subset of the Persisted_Facet_Groups surfaced as
+ * Interest_Facets (R4) — every Persisted_Facet_Group except `height` and
+ * `physicalConsiderations`.
+ */
+export const INTEREST_FACET_GROUPS: readonly string[] = [
+  'interests',
+  'thrillFactor',
+  'age',
+  'parkInterests',
+  'disneyFavorites',
+];
+
+/**
+ * Build the Grouped_Facets structure from a raw `facets` array (R1).
+ *
+ * Walks the array once, keeping each entry whose `group` is one of the
+ * {@link PERSISTED_FACET_GROUPS} as a `{id, name}` Facet_Value under its group,
+ * in appearance order (R1.1, R1.2, R1.3). Entries whose `group` is not a
+ * Persisted_Facet_Group are excluded (R1.4), and entries missing `group`, `id`,
+ * or `name` — or carrying a non-string value for any of them — are skipped
+ * (R1.5).
+ *
+ * Pure, total, and deterministic; returns an empty structure when nothing
+ * qualifies. Only groups that carried at least one valid facet appear as keys.
+ */
+function buildGroupedFacets(rawFacets: readonly unknown[]): GroupedFacetsDTO {
+  const grouped: Record<string, FacetValueDTO[]> = {};
+  for (const entry of rawFacets) {
+    if (typeof entry !== 'object' || entry === null) {
+      continue;
+    }
+    const { group, id, name } = entry as Record<string, unknown>;
+    // R1.5: skip entries missing group, id, or name (or with non-string values).
+    if (
+      typeof group !== 'string' ||
+      typeof id !== 'string' ||
+      typeof name !== 'string'
+    ) {
+      continue;
+    }
+    // R1.1 / R1.4: only the Persisted_Facet_Groups are captured.
+    if (!PERSISTED_FACET_GROUPS.has(group)) {
+      continue;
+    }
+    // R1.2: preserve both id and name. R1.3: preserve appearance order.
+    (grouped[group] ??= []).push({ id, name });
+  }
+  return grouped;
+}
+
 /** Convert the real facets array into the grouped object the cores expect. */
 function buildFacets(raw: Record<string, unknown>): FacilityDocument['facets'] {
   const rawFacets = raw['facets'];
@@ -526,6 +611,14 @@ export function adaptFacilityDocument(
     adapted['facets'] = facets;
   } else {
     delete adapted['facets'];
+  }
+
+  // Grouped_Facets are mined only from the real array-shaped `facets` (R1);
+  // object-shaped fixture facets carry no raw array to mine, so groupedFacets
+  // is left absent for them. `whyThis` and `subType` are carried through
+  // untouched by the `{ ...raw }` spread above.
+  if (Array.isArray(raw['facets'])) {
+    adapted['groupedFacets'] = buildGroupedFacets(raw['facets']);
   }
 
   const mealPeriods = buildMealPeriods(raw);

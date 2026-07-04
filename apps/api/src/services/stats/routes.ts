@@ -44,8 +44,9 @@ import type {
 } from 'fastify';
 import { ZodError, z } from 'zod';
 
-import type { ExperienceCategory, Park } from '@dwt/shared';
+import type { AreaType, ExperienceCategory, Park } from '@dwt/shared';
 import {
+  AREA_TYPES,
   EXPERIENCE_CATEGORIES,
   PARKS,
   uuidSchema,
@@ -89,6 +90,21 @@ export interface StatsResponse {
       readonly [category in ExperienceCategory]: StatsBreakdown;
     };
   };
+  /**
+   * Per-Area_Type roll-up. Every `AREA_TYPES` value is present; an Area_Type
+   * with no active Experience reports `{ completed: 0, total: 0, percent: 0.0 }`
+   * (R2.1, R2.3). Resort-representing rows are excluded, so this counts
+   * resort-*area* activity, not hotels visited (R2.2, R4.4).
+   */
+  readonly byAreaType: { readonly [area in AreaType]: StatsBreakdown };
+  /**
+   * Hotels-visited Resort_Statistic. Its denominator is the count of active
+   * resort-representing rows (one per active Resort) and its numerator is the
+   * scope's completions of those rows (R4.1). Kept distinct from
+   * `byAreaType['Resort']` so visited-hotel progress and resort-area activity
+   * are not conflated (R4.4).
+   */
+  readonly resort: StatsBreakdown;
 }
 
 // ---------------------------------------------------------------------------
@@ -204,6 +220,9 @@ export function buildResponse(snapshot: StatsSnapshot): StatsResponse {
   const byCategory = new Map<ExperienceCategory, RawBreakdown>(
     EXPERIENCE_CATEGORIES.map((c) => [c, { completed: 0, total: 0 }]),
   );
+  const byAreaType = new Map<AreaType, RawBreakdown>(
+    AREA_TYPES.map((a) => [a, { completed: 0, total: 0 }]),
+  );
   // Park × Category map keyed by "park|category".
   const byParkAndCategory = new Map<string, RawBreakdown>();
   for (const park of PARKS) {
@@ -217,9 +236,10 @@ export function buildResponse(snapshot: StatsSnapshot): StatsResponse {
 
   let overallCompleted = 0;
   let overallTotal = 0;
+  const resort: RawBreakdown = { completed: 0, total: 0 };
 
   for (const cell of snapshot.cells) {
-    accumulateCell(cell, byPark, byCategory, byParkAndCategory);
+    accumulateCell(cell, byPark, byCategory, byAreaType, byParkAndCategory, resort);
     overallCompleted += cell.completed;
     overallTotal += cell.total;
   }
@@ -229,6 +249,8 @@ export function buildResponse(snapshot: StatsSnapshot): StatsResponse {
     byPark: rawMapToBreakdownRecord(byPark, PARKS),
     byCategory: rawMapToBreakdownRecord(byCategory, EXPERIENCE_CATEGORIES),
     byParkAndCategory: buildParkCategoryRecord(byParkAndCategory),
+    byAreaType: rawMapToBreakdownRecord(byAreaType, AREA_TYPES),
+    resort: toBreakdown(resort),
   };
 }
 
@@ -242,22 +264,51 @@ function accumulateCell(
   cell: StatsCell,
   byPark: Map<Park, { completed: number; total: number }>,
   byCategory: Map<ExperienceCategory, { completed: number; total: number }>,
+  byAreaType: Map<AreaType, { completed: number; total: number }>,
   byParkAndCategory: Map<string, { completed: number; total: number }>,
+  resort: { completed: number; total: number },
 ): void {
-  const parkBucket = byPark.get(cell.park);
-  if (parkBucket) {
-    parkBucket.completed += cell.completed;
-    parkBucket.total += cell.total;
+  // Park dimensions are Park-scoped: a Park-less row (resort-area or
+  // resort-representing, `cell.park === null`) contributes to no Park
+  // bucket (R1.4).
+  if (cell.park !== null) {
+    const parkBucket = byPark.get(cell.park);
+    if (parkBucket) {
+      parkBucket.completed += cell.completed;
+      parkBucket.total += cell.total;
+    }
+    const cellBucket = byParkAndCategory.get(
+      parkCategoryKey(cell.park, cell.category),
+    );
+    if (cellBucket) {
+      cellBucket.completed += cell.completed;
+      cellBucket.total += cell.total;
+    }
   }
+
+  // The Category roll-up counts every active row: a real Experience under its
+  // Experience_Category, and each resort-representing row under the `Resort`
+  // Category (the only category those stand-ins carry), so `byCategory['Resort']`
+  // reflects hotels-visited progress rather than reading zero (R1.3).
   const categoryBucket = byCategory.get(cell.category);
   if (categoryBucket) {
     categoryBucket.completed += cell.completed;
     categoryBucket.total += cell.total;
   }
-  const cellBucket = byParkAndCategory.get(parkCategoryKey(cell.park, cell.category));
-  if (cellBucket) {
-    cellBucket.completed += cell.completed;
-    cellBucket.total += cell.total;
+
+  // The Area_Type roll-up still excludes resort-representing rows so
+  // `byAreaType['Resort']` stays scoped to resort-*area* activities and is not
+  // conflated with hotels visited (R2.2, R4.4); the Resort_Statistic remains
+  // their dedicated source (R4.1).
+  if (!cell.isResortRepresentation) {
+    const areaBucket = byAreaType.get(cell.areaType);
+    if (areaBucket) {
+      areaBucket.completed += cell.completed;
+      areaBucket.total += cell.total;
+    }
+  } else {
+    resort.completed += cell.completed;
+    resort.total += cell.total;
   }
 }
 

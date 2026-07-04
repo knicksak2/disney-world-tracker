@@ -33,7 +33,7 @@ import React from 'react';
 import { render } from '@testing-library/react-native';
 import fc from 'fast-check';
 
-import { EXPERIENCE_CATEGORIES, PARKS } from '@dwt/shared';
+import { AREA_TYPES, EXPERIENCE_CATEGORIES, PARKS } from '@dwt/shared';
 import type { CompletionEntryDTO } from '@dwt/shared';
 
 import { CompletionRow } from '../CompletionRow';
@@ -102,6 +102,7 @@ const entryArb: fc.Arbitrary<CompletionEntryDTO> = fc.record({
   experienceId: fc.uuid(),
   experienceName: nameArb,
   park: fc.constantFrom(...PARKS),
+  areaType: fc.constantFrom(...AREA_TYPES),
   category: fc.constantFrom(...EXPERIENCE_CATEGORIES),
   completedOn: fc.constant('2024-01-01'),
   rating: fc.option(fc.integer({ min: 1, max: 10 }), { nil: null }),

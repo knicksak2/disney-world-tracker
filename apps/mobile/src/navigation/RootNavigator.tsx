@@ -5,6 +5,7 @@ import {
 } from '@react-navigation/native-stack';
 import type { NavigatorScreenParams } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import type { ExperienceCategory, Park } from '@dwt/shared';
 
 import { setOnUnauthorizedCallback } from '../api/client';
 import { useSessionStore } from '../state/sessionStore';
@@ -17,6 +18,7 @@ import RegisterScreen from '../screens/RegisterScreen';
 import StatsScreen from '../screens/stats/StatsScreen';
 import ExperienceDetailScreen from '../screens/catalog/ExperienceDetailScreen';
 import MenuScreen from '../screens/catalog/MenuScreen';
+import ShareComposerScreen from '../screens/share/ShareComposerScreen';
 
 /**
  * Root navigator for the mobile app.
@@ -66,6 +68,39 @@ export type MainTabParamList = {
 };
 
 /**
+ * Pre-populated params for the `Share_Composer` (R2.1, R3.2, R3.3).
+ *
+ * The composer no longer lets the User pick the payload kind or type a raw
+ * Experience identifier; instead every `Share_Entry_Point` opens it with a
+ * fully derived, read-only payload. The discriminant `kind` selects between
+ * the two payload variants:
+ *
+ *   - `experience` — carries the referenced Experience's id, name, Park, and
+ *     Experience_Category, plus the viewer's Rating (whole number 1–10) and
+ *     Note (≤2000 chars) when present. The optional `rating`/`note` fields
+ *     drive the include/exclude toggles (R2.14).
+ *   - `progress` — carries the viewer's overall, per-Park, and
+ *     per-Experience_Category completion percentages, each to one decimal
+ *     place as displayed on the Progress_Screen (R1.8).
+ */
+export type ShareComposerParams =
+  | {
+      kind: 'experience';
+      experienceId: string;
+      experienceName: string;
+      park: Park;
+      category: ExperienceCategory;
+      rating?: number;
+      note?: string;
+    }
+  | {
+      kind: 'progress';
+      overallPercent: number;
+      perParkPercent: { [park in Park]?: number };
+      perCategoryPercent: { [category in ExperienceCategory]?: number };
+    };
+
+/**
  * Root-level native stack that hosts the authenticated experience.
  *
  * `MainTabs` (the bottom-tab navigator) is the initial route, and
@@ -78,7 +113,14 @@ export type MainTabParamList = {
  * header.
  */
 export type RootStackParamList = {
-  MainTabs: undefined;
+  /**
+   * The bottom-tab navigator. Typed as `NavigatorScreenParams<MainTabParamList>`
+   * (rather than `undefined`) so a caller holding only the root navigation ref
+   * — e.g. the notification tap handler (task 20.1) — can dispatch a single
+   * nested `navigate('MainTabs', { screen: 'Friends', params: { screen:
+   * 'Inbox', … } })` that walks all the way down to the `Inbox` (R10.1).
+   */
+  MainTabs: NavigatorScreenParams<MainTabParamList> | undefined;
   ExperienceDetail: { experienceId: string };
   /**
    * Dedicated Menu_Screen for a Restaurant_Experience, reachable by tapping
@@ -87,6 +129,14 @@ export type RootStackParamList = {
    * so the card's `navigation.navigate('Menu', { experienceId })` type-checks.
    */
   Menu: { experienceId: string };
+  /**
+   * Share_Composer, promoted from `FriendsStack` to the root stack and
+   * presented as a modal (R3.2). Hosting it here lets every
+   * `Share_Entry_Point` — the Experience_Detail_View and the Progress_Screen,
+   * both reachable from the root stack — open it with one cross-navigator-safe
+   * `navigate('ShareComposer', params)` call and return via `goBack()`.
+   */
+  ShareComposer: ShareComposerParams;
 };
 
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
@@ -175,6 +225,11 @@ function RootStackNavigator(): JSX.Element {
         name="Menu"
         component={MenuScreen}
         options={{ headerShown: false }}
+      />
+      <RootStack.Screen
+        name="ShareComposer"
+        component={ShareComposerScreen}
+        options={{ title: 'Share', presentation: 'modal' }}
       />
     </RootStack.Navigator>
   );

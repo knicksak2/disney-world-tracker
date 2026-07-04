@@ -219,11 +219,16 @@ function toExperienceUpsert(entity: UpstreamExperience): ReconcileUpsert {
     imageUrl: entity.imageUrl,
     areaType: entity.areaType,
     resortId: entity.resortId,
+    representsResortId: entity.representsResortId,
     latitude: entity.latitude,
     longitude: entity.longitude,
     accessibility: entity.accessibility,
     priceTier: entity.priceTier,
     mealPeriods: entity.mealPeriods,
+    groupedFacets: entity.groupedFacets,
+    heightRequirement: entity.heightRequirement,
+    whyThis: entity.whyThis,
+    subType: entity.subType,
     active: true,
   };
 }
@@ -239,7 +244,9 @@ function toExperienceUpsert(entity: UpstreamExperience): ReconcileUpsert {
  * syncs stay idempotent (R2.6). Including `areaType`/`resortId`/`resortArea`
  * ensures a re-resolved owning Area (e.g. a restaurant that now resolves to its
  * specific resort rather than the resort-wide catch-all, or a newly resolved
- * Resort_Area zone) is likewise re-applied.
+ * Resort_Area zone) is likewise re-applied. Including `representsResortId`
+ * ensures a resort-representing row's discriminator is persisted and kept in
+ * sync (Requirements 3.1, 3.2).
  */
 function hasExperienceMaterialChange(
   cached: CatalogCacheRow,
@@ -252,7 +259,8 @@ function hasExperienceMaterialChange(
     cached.land !== entity.land ||
     cached.areaType !== entity.areaType ||
     cached.resortId !== entity.resortId ||
-    cached.resortArea !== entity.resortArea
+    cached.resortArea !== entity.resortArea ||
+    cached.representsResortId !== entity.representsResortId
   );
 }
 

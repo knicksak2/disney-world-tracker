@@ -19,7 +19,7 @@
  *
  * `modes[0]` is the canonical default (Overview / Own_Overview).
  *
- * Validates: Requirements 1.3, 1.4, 1.8, 8.3, 8.4, 8.8, 8.9
+ * Validates: Requirements 1.3, 1.4, 1.8, 8.3, 8.4, 8.8, 8.9, 14.1
  */
 
 import { useCallback, useState } from 'react';
@@ -65,13 +65,25 @@ export function resolveSelectedMode<M extends string>(
  * mode (R1.5, R8.5); tapping the already-active mode leaves it active (R8.9).
  * Either way the next state is funnelled through `resolveSelectedMode`, so the
  * stored value is always exactly one valid mode.
+ *
+ * `initialSelection` seeds the first render (R14.1): callers that deep-link to
+ * a specific section (e.g. a `Progress_Share` tap opening the Compare pane)
+ * pass a singleton selection so the resolver yields that mode initially. It is
+ * routed through `resolveSelectedMode` like every other transition, so an
+ * empty, unknown, or ambiguous seed still falls back to the default `modes[0]`
+ * (R1.3, R8.3). Only the initial render reads it; later selections are
+ * user-driven.
  */
 export function useViewMode<M extends string>(
   modes: readonly [M, ...M[]],
+  initialSelection: readonly M[] = [],
 ): { readonly mode: M; readonly select: (next: M) => void } {
-  // Initialise from an empty selection so the resolver yields the default
-  // mode on first render (R1.3, R8.3).
-  const [mode, setMode] = useState<M>(() => resolveSelectedMode(modes, []));
+  // Initialise from the (optional) seed selection so the resolver yields the
+  // seeded mode on first render, or the default when no valid seed is given
+  // (R1.3, R8.3, R14.1).
+  const [mode, setMode] = useState<M>(() =>
+    resolveSelectedMode(modes, initialSelection),
+  );
 
   const select = useCallback(
     (next: M): void => {

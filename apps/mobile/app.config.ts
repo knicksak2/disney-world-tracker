@@ -50,10 +50,20 @@ const config: ExpoConfig = {
   },
   android: {
     package: 'com.dwt.mobile',
+    // FCM config for the `com.dwt.mobile` Firebase app. Expo's prebuild reads
+    // this file and wires the Google Services Gradle plugin automatically, so
+    // the native FCM SDK can obtain a device push token in a dev/production
+    // build (remote push is unsupported in Expo Go, SDK 53+).
+    googleServicesFile: './google-services.json',
   },
   // SDK 56 promotes `expo-status-bar` to a config plugin that must be
   // registered explicitly (expo install --fix / expo-doctor enforce this).
-  plugins: ['expo-secure-store', 'expo-image-picker', 'expo-status-bar'],
+  plugins: [
+    'expo-secure-store',
+    'expo-image-picker',
+    'expo-status-bar',
+    'expo-notifications',
+  ],
   extra: {
     apiBaseUrl,
     eas: {

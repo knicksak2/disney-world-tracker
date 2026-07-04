@@ -7,19 +7,24 @@ import FriendProfileScreen, {
 } from '../screens/friends/FriendProfileScreen';
 import FriendsSearchScreen from '../screens/friends/FriendsSearchScreen';
 import InboxScreen from '../screens/share/InboxScreen';
-import ShareComposerScreen from '../screens/share/ShareComposerScreen';
+import SentSharesScreen from '../screens/share/SentSharesScreen';
 
 /**
  * Friends tab stack.
  *
  * The Friends tab nests its own native stack so the user can drill from
  * the friends list (`FriendsList`) into the user search
- * (`FriendsSearch`), the Share composer (`ShareComposer`), or the
- * Share inbox (`Inbox`) without leaving the tab.
+ * (`FriendsSearch`) or the Share inbox (`Inbox`) without leaving the tab.
  *
- * The composer is presented modally; the Inbox is a regular pushed
- * screen because the user navigates to it to manage existing shares
- * rather than as an interrupting compose flow.
+ * The Inbox is a regular pushed screen because the user navigates to it
+ * to manage existing shares. The Share composer is no longer part of this
+ * stack — it was promoted to the root stack as a modal (R3.2) so it can be
+ * opened from any `Share_Entry_Point` (see `RootStackParamList`).
+ *
+ * The Sent screen is the minimal "Sent Shares" surface (task 21.2): it lists
+ * the User's sent shares and, per share, its reactions with reactor display
+ * names (R11.7). Like the Inbox it is a pushed screen reached from the Friends
+ * page.
  *
  * The stack is intentionally narrow — we add screens here only when the
  * Friends tab needs to drill in. Anything that should appear from any
@@ -30,8 +35,21 @@ export type FriendsStackParamList = {
   FriendsList: undefined;
   FriendProfile: FriendProfileParams;
   FriendsSearch: undefined;
-  ShareComposer: undefined;
-  Inbox: undefined;
+  /**
+   * The Share inbox. Reached both by an in-app tap on the Friends page (no
+   * params) and by a Share push-notification tap, which forwards the tapped
+   * Share's id as `shareId` so the Inbox can navigate on to the Share's
+   * destination and mark it read (R10.2) or, when the Share is gone, show a
+   * "no longer available" message alongside the current inbox contents
+   * (R10.4). Absent/undefined params open the inbox normally (R10.5).
+   */
+  Inbox: { shareId?: string } | undefined;
+  /**
+   * The Sent Shares surface (task 21.2). Lists the User's sent shares and, per
+   * share, its reactions with reactor display names (R11.7). Reached by an
+   * in-app tap on the Friends page; takes no params.
+   */
+  Sent: undefined;
 };
 
 const Stack = createNativeStackNavigator<FriendsStackParamList>();
@@ -55,14 +73,14 @@ export default function FriendsStack(): JSX.Element {
         options={{ title: 'Find friends' }}
       />
       <Stack.Screen
-        name="ShareComposer"
-        component={ShareComposerScreen}
-        options={{ title: 'Share', presentation: 'modal' }}
-      />
-      <Stack.Screen
         name="Inbox"
         component={InboxScreen}
         options={{ title: 'Inbox' }}
+      />
+      <Stack.Screen
+        name="Sent"
+        component={SentSharesScreen}
+        options={{ title: 'Sent' }}
       />
     </Stack.Navigator>
   );

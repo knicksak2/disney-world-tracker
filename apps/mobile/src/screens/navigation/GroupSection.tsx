@@ -90,7 +90,8 @@ export function GroupSection({
         {header}
       </Pressable>
 
-      {/* Group_Body — rendered only while Expanded (R7.4, R7.5). */}
+      {/* Group_Body — rendered only while Expanded (R7.4, R7.5). Indented with a
+          left rail so its rows read as nested children of the header above. */}
       {expanded ? (
         <View
           style={styles.body}
@@ -111,7 +112,14 @@ const styles = StyleSheet.create({
   headerPressed: {
     opacity: 0.85,
   },
+  // Nest the rows under the header: indent them and draw a left rail so the
+  // group header (flush, full-width) is clearly the parent and the rows below
+  // are clearly its children.
   body: {
     marginTop: theme.spacing.sm,
+    marginLeft: theme.spacing.md,
+    paddingLeft: theme.spacing.md,
+    borderLeftWidth: 2,
+    borderLeftColor: theme.color.borderStrong,
   },
 });

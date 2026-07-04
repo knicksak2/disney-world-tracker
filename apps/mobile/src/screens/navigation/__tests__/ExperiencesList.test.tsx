@@ -45,6 +45,7 @@ function makeEntry(
     experienceId: '11111111-1111-1111-1111-111111111111',
     experienceName: 'Space Mountain',
     park: 'Magic Kingdom',
+    areaType: 'ThemePark',
     category: 'Ride',
     completedOn: '2024-01-05',
     rating: null,

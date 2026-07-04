@@ -10,6 +10,12 @@
 export type { UserDTO } from './User.js';
 export type { ProfileDTO } from './Profile.js';
 export type { ExperienceDTO } from './Experience.js';
+export type {
+  FacetValueDTO,
+  GroupedFacetsDTO,
+  HeightRequirementDTO,
+  WhyThisDTO,
+} from './Facet.js';
 export type { ResortDTO } from './Resort.js';
 export type { MealPeriodDTO, MenuDTO } from './Menu.js';
 export type { CompletionDTO } from './Completion.js';
@@ -20,11 +26,15 @@ export type { FriendRequestDTO } from './FriendRequest.js';
 export type { FriendshipDTO } from './Friendship.js';
 export type {
   ShareDTO,
+  SentShareDTO,
   SharePayload,
   ExperienceSharePayload,
   ProgressSharePayload,
 } from './Share.js';
 export type { ShareRecipientDTO } from './ShareRecipient.js';
+export type { ShareReactionDTO } from './ShareReaction.js';
+export type { NotificationPreferenceDTO } from './NotificationPreference.js';
+export type { InboxItemDTO, InboxResponse } from './Inbox.js';
 export type { AggregateRatingDTO } from './AggregateRating.js';
 export type { LeaderboardEntryDTO } from './LeaderboardEntry.js';
 export type { StatsDTO, StatsBreakdown } from './Stats.js';

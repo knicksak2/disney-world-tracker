@@ -29,7 +29,7 @@
  * Validates: Requirements 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 4.8
  */
 
-import type { ExperienceCategory, Park } from '@dwt/shared';
+import type { AreaType, ExperienceCategory, Park } from '@dwt/shared';
 
 import type { DbPool } from '../../../db/pool.js';
 
@@ -53,8 +53,17 @@ export interface CompletionEntry {
   readonly experienceId: string;
   /** Completed Experience's name. */
   readonly experienceName: string;
-  /** Park the Experience belongs to. */
-  readonly park: Park;
+  /**
+   * Park the Experience belongs to, or `null` for resort-area and
+   * resort-representing entries that have no owning Park.
+   */
+  readonly park: Park | null;
+  /**
+   * The kind of place the Experience belongs to, from the closed set
+   * `AREA_TYPES`. Surfaces the Area_Type on each entry for the mobile grouping
+   * fold and the resort group (R5.2, R5.3).
+   */
+  readonly areaType: AreaType;
   /** Experience_Category of the Experience. */
   readonly category: ExperienceCategory;
   /** Completion date as an ISO-8601 calendar date `YYYY-MM-DD`. */
@@ -96,7 +105,8 @@ export function createFriendCompletionsRepo(pool: DbPool): FriendCompletionsRepo
 interface CompletionEntryRow {
   experience_id: string;
   experience_name: string;
-  park: Park;
+  park: Park | null;
+  area_type: AreaType;
   category: ExperienceCategory;
   completed_on: Date | string;
   rating: number | string | null;
@@ -111,6 +121,7 @@ async function listCompletions(
     `SELECT e.id AS experience_id,
             e.name AS experience_name,
             e.park,
+            e.area_type,
             e.category,
             c.completed_on,
             r.value AS rating,
@@ -144,6 +155,7 @@ function rowToEntry(row: CompletionEntryRow): CompletionEntry {
     experienceId: row.experience_id,
     experienceName: row.experience_name,
     park: row.park,
+    areaType: row.area_type,
     category: row.category,
     completedOn: toIsoDate(row.completed_on),
     rating: row.rating === null ? null : Number(row.rating),

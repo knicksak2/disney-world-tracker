@@ -224,7 +224,7 @@ describe('Friend Completions — Property 7: completions exclude inactive Experi
 /** Stable identity key for a returned entry over its content fields. */
 function entryKey(
   name: string,
-  park: Park,
+  park: Park | null,
   category: ExperienceCategory,
   completedOn: string,
 ): string {
