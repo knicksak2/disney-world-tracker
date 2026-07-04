@@ -37,6 +37,7 @@ import {
   View,
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   useMutation,
   useQuery,
@@ -125,6 +126,19 @@ export default function FriendsListScreen({ navigation }: Props): JSX.Element {
     queryKey: ['friends'],
     queryFn: () => apiRequest<FriendsAndRequests>('GET', '/me/friends'),
   });
+
+  const { refetch: refetchFriends } = friendsQuery;
+
+  // Refetch whenever the screen gains focus so a friend request that arrived
+  // while the User was elsewhere (including one they reached by tapping a
+  // friend-request push notification) shows up without needing an app
+  // restart. This covers the case where the screen is already mounted in the
+  // stack, so React Query's default refetch-on-mount would not fire.
+  useFocusEffect(
+    useCallback(() => {
+      void refetchFriends();
+    }, [refetchFriends]),
+  );
 
   // Per-row error message from the most recent failed mutation. Keyed by
   // the row's stable id (request id for accept/decline, user id for remove).
