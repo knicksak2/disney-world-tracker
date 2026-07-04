@@ -51,7 +51,7 @@ import { ApiError, apiRequest } from '../api/client';
 import { invalidatePushRegistration } from '../hooks/usePushRegistration';
 import AvatarUpload from './AvatarUpload';
 import ChangePasswordControl from './ChangePasswordControl';
-import ShareNotificationPreferenceControl from './ShareNotificationPreferenceControl';
+import PushNotificationPreferenceControl from './PushNotificationPreferenceControl';
 import type { MainTabParamList } from '../navigation/RootNavigator';
 import { useSessionStore } from '../state/sessionStore';
 import { theme } from '../theme/theme';
@@ -515,7 +515,7 @@ function ProfileContent({
         {isSelf ? (
           <Card style={styles.securityCard}>
             <Text style={styles.statLabel}>Notifications</Text>
-            <ShareNotificationPreferenceControl />
+            <PushNotificationPreferenceControl />
           </Card>
         ) : null}
 

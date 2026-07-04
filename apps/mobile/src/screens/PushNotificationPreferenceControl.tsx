@@ -1,13 +1,14 @@
-// Feature: social-sharing-loop, Task 19.1 — Share_Notification_Preference control
+// Feature: social-sharing-loop, Task 19.1 — push notification preference control
 //
 // Validates: Requirements 9.3, 9.6, 9.8
 //
 // Behavior summary:
-//   - R9.3: reads the User's `Share_Notification_Preference` from
+//   - R9.3: reads the User's push notification preference from
 //     `GET /me/notification-preferences` (defaulting to enabled when the User
 //     has never set it) and renders a toggle that lets the User enable or
-//     disable Share push notifications. Flipping the toggle persists the new
-//     value with `PUT /me/notification-preferences`.
+//     disable all push notifications (Share deliveries and friend requests).
+//     Flipping the toggle persists the new value with
+//     `PUT /me/notification-preferences`.
 //   - R9.6: the operating-system Notification_Permission can be revoked outside
 //     the App (in system settings) at any time. This control checks the OS
 //     permission on mount and again every time the App next becomes active
@@ -43,28 +44,28 @@ import { theme } from '../theme/theme';
 // Copy
 // ---------------------------------------------------------------------------
 
-const TITLE = 'Share notifications';
+const TITLE = 'Push notifications';
 const DESCRIPTION =
-  'Get a push notification when a friend shares an experience or their progress with you.';
+  'Get a push notification when a friend shares with you or sends you a friend request.';
 const PERSIST_FAILED_MESSAGE =
   "We couldn't save that change. Your notification preference is unchanged.";
 const LOAD_FAILED_MESSAGE = "We couldn't load your notification preference.";
 // R9.6: shown when the OS permission has been revoked, regardless of the
 // stored preference value.
 const PERMISSION_REVOKED_MESSAGE =
-  'Notifications are turned off for this app in your device settings. Re-enable them there to receive Share notifications.';
+  'Notifications are turned off for this app in your device settings. Re-enable them there to receive notifications.';
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
 /**
- * Self-contained Share_Notification_Preference control for the signed-in user.
+ * Self-contained push notification preference control for the signed-in user.
  * Owns its own preference read, OS-permission gate, and persistence mutation so
  * the parent `ProfileScreen` only has to render
- * `<ShareNotificationPreferenceControl />` in its self-mode block.
+ * `<PushNotificationPreferenceControl />` in its self-mode block.
  */
-export default function ShareNotificationPreferenceControl(): JSX.Element {
+export default function PushNotificationPreferenceControl(): JSX.Element {
   const queryClient = useQueryClient();
 
   // R9.3 / R9.7: read the stored preference. The server returns the default
@@ -141,7 +142,7 @@ export default function ShareNotificationPreferenceControl(): JSX.Element {
       apiRequest<NotificationPreferenceDTO>(
         'PUT',
         '/me/notification-preferences',
-        { shareNotificationsEnabled: enabled },
+        { pushNotificationsEnabled: enabled },
       ),
     onSuccess: (updated) => {
       // Persist the server-echoed value into the cache so the toggle reflects
@@ -187,7 +188,7 @@ export default function ShareNotificationPreferenceControl(): JSX.Element {
     );
   }
 
-  const storedEnabled = preferenceQuery.data.shareNotificationsEnabled ?? true;
+  const storedEnabled = preferenceQuery.data.pushNotificationsEnabled ?? true;
   // R9.6: once we know the OS permission is revoked, the control is unavailable
   // regardless of the stored value.
   const permissionRevoked = permissionGranted === false;
@@ -218,7 +219,7 @@ export default function ShareNotificationPreferenceControl(): JSX.Element {
             false: theme.color.border,
             true: theme.color.primary,
           }}
-          accessibilityLabel="Share notifications"
+          accessibilityLabel="Push notifications"
           accessibilityState={{
             disabled: toggleDisabled,
             checked: toggleValue,

@@ -5,9 +5,9 @@
  * `notification_preferences` table created by `migrations/0011_social_sharing_loop.sql`:
  *
  *   notification_preferences (
- *     user_id                     UUID PRIMARY KEY REFERENCES users(id),
- *     share_notifications_enabled BOOLEAN NOT NULL DEFAULT TRUE,
- *     updated_at                  TIMESTAMPTZ NOT NULL DEFAULT now()
+ *     user_id                    UUID PRIMARY KEY REFERENCES users(id),
+ *     push_notifications_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+ *     updated_at                 TIMESTAMPTZ NOT NULL DEFAULT now()
  *   )
  *
  * The store is intentionally isolated in its own module (rather than folded
@@ -17,9 +17,9 @@
  *
  * Public surface:
  *
- *   - `getPreference(userId)` — read the User's `Share_Notification_Preference`.
+ *   - `getPreference(userId)` — read the User's push notification preference.
  *     Absence of a row means the User has never set the preference, which the
- *     store reports as `shareNotificationsEnabled: true` (R9.7). No row is
+ *     store reports as `pushNotificationsEnabled: true` (R9.7). No row is
  *     written on a read.
  *
  *   - `setPreference(userId, enabled)` — upsert the User's preference and
@@ -42,8 +42,8 @@ import type { DbPool } from '../../db/pool.js';
 /** Persistence surface returned by {@link createNotificationPreferenceRepo}. */
 export interface NotificationPreferenceRepo {
   /**
-   * Read the User's `Share_Notification_Preference`. Returns
-   * `{ shareNotificationsEnabled: true }` when the User has never set a
+   * Read the User's push notification preference. Returns
+   * `{ pushNotificationsEnabled: true }` when the User has never set a
    * preference (no row) per R9.7.
    */
   getPreference(userId: string): Promise<NotificationPreferenceDTO>;
@@ -56,7 +56,7 @@ export interface NotificationPreferenceRepo {
    */
   setPreference(
     userId: string,
-    shareNotificationsEnabled: boolean,
+    pushNotificationsEnabled: boolean,
   ): Promise<NotificationPreferenceDTO>;
 }
 
@@ -83,7 +83,7 @@ export function createNotificationPreferenceRepo(
 // ---------------------------------------------------------------------------
 
 interface PreferenceRow {
-  share_notifications_enabled: boolean;
+  push_notifications_enabled: boolean;
 }
 
 /**
@@ -98,7 +98,7 @@ async function getPreference(
   userId: string,
 ): Promise<NotificationPreferenceDTO> {
   const result = await pool.query<PreferenceRow>(
-    `SELECT share_notifications_enabled
+    `SELECT push_notifications_enabled
        FROM notification_preferences
       WHERE user_id = $1`,
     [userId],
@@ -106,7 +106,7 @@ async function getPreference(
   const row = result.rows[0];
   // R9.7: absence of a row means the User has never set the preference,
   // which is treated as enabled by default.
-  return { shareNotificationsEnabled: row?.share_notifications_enabled ?? true };
+  return { pushNotificationsEnabled: row?.push_notifications_enabled ?? true };
 }
 
 // ---------------------------------------------------------------------------
@@ -129,16 +129,16 @@ async function getPreference(
 async function setPreference(
   pool: DbPool,
   userId: string,
-  shareNotificationsEnabled: boolean,
+  pushNotificationsEnabled: boolean,
 ): Promise<NotificationPreferenceDTO> {
   const result = await pool.query<PreferenceRow>(
-    `INSERT INTO notification_preferences (user_id, share_notifications_enabled, updated_at)
+    `INSERT INTO notification_preferences (user_id, push_notifications_enabled, updated_at)
      VALUES ($1, $2, now())
      ON CONFLICT (user_id)
-       DO UPDATE SET share_notifications_enabled = EXCLUDED.share_notifications_enabled,
+       DO UPDATE SET push_notifications_enabled = EXCLUDED.push_notifications_enabled,
                      updated_at = now()
-     RETURNING share_notifications_enabled`,
-    [userId, shareNotificationsEnabled],
+     RETURNING push_notifications_enabled`,
+    [userId, pushNotificationsEnabled],
   );
   const row = result.rows[0];
   if (!row) {
@@ -147,5 +147,5 @@ async function setPreference(
     // error envelope (R9.8) rather than silently returning the request value.
     throw new Error('Notification preference upsert returned no row.');
   }
-  return { shareNotificationsEnabled: row.share_notifications_enabled };
+  return { pushNotificationsEnabled: row.push_notifications_enabled };
 }

@@ -53,7 +53,7 @@ jest.mock('../../api/client', () => {
 
 import * as Notifications from 'expo-notifications';
 
-import ShareNotificationPreferenceControl from '../ShareNotificationPreferenceControl';
+import PushNotificationPreferenceControl from '../PushNotificationPreferenceControl';
 import { ApiError, apiRequest as mockedApiRequest } from '../../api/client';
 
 import type { NotificationPreferenceDTO } from '@dwt/shared';
@@ -86,7 +86,7 @@ function permission(granted: boolean): Notifications.NotificationPermissionsStat
 function stubPreferenceGet(enabled: boolean): void {
   apiRequestMock.mockImplementation(async (method, path) => {
     if (method === 'GET' && path === '/me/notification-preferences') {
-      return { shareNotificationsEnabled: enabled } as NotificationPreferenceDTO;
+      return { pushNotificationsEnabled: enabled } as NotificationPreferenceDTO;
     }
     throw new Error(`Unexpected apiRequest ${method} ${path}`);
   });
@@ -127,7 +127,7 @@ function renderControl(): ReturnType<typeof render> {
   });
   return render(
     <QueryClientProvider client={client}>
-      <ShareNotificationPreferenceControl />
+      <PushNotificationPreferenceControl />
     </QueryClientProvider>,
   );
 }
@@ -136,7 +136,7 @@ function renderControl(): ReturnType<typeof render> {
 // Suite
 // ---------------------------------------------------------------------------
 
-describe('ShareNotificationPreferenceControl', () => {
+describe('PushNotificationPreferenceControl', () => {
   beforeEach(() => {
     apiRequestMock.mockReset();
     getPermissionsMock.mockReset();
@@ -180,7 +180,7 @@ describe('ShareNotificationPreferenceControl', () => {
     // First the GET resolves enabled; the subsequent PUT echoes the new value.
     apiRequestMock.mockImplementation(async (method, path, body) => {
       if (method === 'GET' && path === '/me/notification-preferences') {
-        return { shareNotificationsEnabled: true } as NotificationPreferenceDTO;
+        return { pushNotificationsEnabled: true } as NotificationPreferenceDTO;
       }
       if (method === 'PUT' && path === '/me/notification-preferences') {
         return body as NotificationPreferenceDTO;
@@ -198,7 +198,7 @@ describe('ShareNotificationPreferenceControl', () => {
       expect(apiRequestMock).toHaveBeenCalledWith(
         'PUT',
         '/me/notification-preferences',
-        { shareNotificationsEnabled: false },
+        { pushNotificationsEnabled: false },
       );
     });
     // The server-echoed value flows into the cache, so the toggle now reads off.
@@ -265,7 +265,7 @@ describe('ShareNotificationPreferenceControl', () => {
   test('R9.8: on persist failure retains the previous value and shows a message', async () => {
     apiRequestMock.mockImplementation(async (method, path) => {
       if (method === 'GET' && path === '/me/notification-preferences') {
-        return { shareNotificationsEnabled: true } as NotificationPreferenceDTO;
+        return { pushNotificationsEnabled: true } as NotificationPreferenceDTO;
       }
       if (method === 'PUT' && path === '/me/notification-preferences') {
         throw new ApiError({

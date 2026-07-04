@@ -49,3 +49,25 @@ export function navigateToInbox(params?: { readonly shareId?: string }): boolean
   });
   return true;
 }
+
+/**
+ * Navigate to the `FriendsList`, the screen that renders incoming pending
+ * Friend_Requests with their Accept/Decline actions. Used to deep-link a
+ * tapped friend-request push notification.
+ *
+ * Returns `true` once the dispatch is issued, or `false` when the navigation
+ * container is not ready yet (the caller should retry within the
+ * foreground-navigation window).
+ */
+export function navigateToFriendsList(): boolean {
+  if (!navigationRef.isReady()) {
+    return false;
+  }
+  navigationRef.navigate('MainTabs', {
+    screen: 'Friends',
+    params: {
+      screen: 'FriendsList',
+    },
+  });
+  return true;
+}

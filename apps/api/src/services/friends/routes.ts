@@ -46,6 +46,41 @@ import { AppError } from '../../errors/AppError.js';
 import type { FriendsRepo } from './repo.js';
 
 // ---------------------------------------------------------------------------
+// FriendRequestReceived dispatch seam
+// ---------------------------------------------------------------------------
+
+/**
+ * Event emitted after a Friend_Request is durably created (`sendRequest`
+ * commits). Carries exactly what the Notification_Service needs to target and
+ * compose a push without re-reading the `friend_requests` row: the recipient
+ * to notify, the sender to name, and the request id for tap deep-linking.
+ *
+ * The type is declared here (rather than imported from the
+ * Notification_Service) so the Friends_Service stays decoupled from the
+ * notification wiring, mirroring the Sharing_Service's `ShareDeliveredNotice`.
+ * It is structurally identical to the Notification_Service's
+ * `FriendRequestReceivedEvent`, so the composition root can hand it straight
+ * through.
+ */
+export interface FriendRequestReceivedNotice {
+  readonly requestId: string;
+  readonly senderId: string;
+  readonly recipientId: string;
+}
+
+/**
+ * Background dispatch port for {@link FriendRequestReceivedNotice}. It returns
+ * `void` (not a promise) so the route handler cannot await — and therefore
+ * cannot be blocked or failed by — the notification path. The port
+ * implementation (wired in `composeServices.ts`) owns the fire-and-forget
+ * scheduling and its own bounded retry; `POST /me/friend-requests` returns
+ * `201` regardless of push outcome.
+ */
+export type FriendRequestReceivedDispatch = (
+  event: FriendRequestReceivedNotice,
+) => void;
+
+// ---------------------------------------------------------------------------
 // Plugin options
 // ---------------------------------------------------------------------------
 
@@ -62,6 +97,13 @@ export interface FriendsRoutesOptions {
    * assigns `request.userId`. Reused on every route in this plugin.
    */
   readonly requireSession: preHandlerHookHandler;
+  /**
+   * Optional background dispatch invoked after a Friend_Request is created,
+   * so the recipient receives a push notification. Fire-and-forget: the
+   * request returns `201` regardless of push outcome. Omitted in unit tests
+   * that don't exercise the notification seam.
+   */
+  readonly emitFriendRequestReceived?: FriendRequestReceivedDispatch;
 }
 
 // ---------------------------------------------------------------------------
@@ -99,7 +141,7 @@ const userIdParamsSchema = z.object({ userId: uuidSchema }).strict();
 export function friendsRoutes(
   options: FriendsRoutesOptions,
 ): FastifyPluginAsync {
-  const { repo, requireSession } = options;
+  const { repo, requireSession, emitFriendRequestReceived } = options;
 
   return async function friendsRoutesPlugin(
     app: FastifyInstance,
@@ -128,6 +170,13 @@ export function friendsRoutes(
         const senderId = requireUser(request);
         const body = parseOrAppError(friendRequestInputSchema, request.body);
         const dto = await repo.sendRequest(senderId, body.recipientId);
+        // Fire-and-forget push to the recipient. The dispatch returns void and
+        // owns its own error handling, so it never blocks or fails the 201.
+        emitFriendRequestReceived?.({
+          requestId: dto.id,
+          senderId: dto.senderId,
+          recipientId: dto.recipientId,
+        });
         reply.code(201);
         return dto;
       },

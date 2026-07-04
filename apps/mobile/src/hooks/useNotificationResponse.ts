@@ -1,8 +1,11 @@
 /**
  * Notification tap deep-linking handler (task 20.1).
  *
- * Mounted once at the app root (`App.tsx`), this hook turns a tapped Share
- * push notification into an in-app deep link, implementing Requirement 10:
+ * Mounted once at the app root (`App.tsx`), this hook turns a tapped push
+ * notification into an in-app deep link. A Share notification routes to the
+ * Inbox per Requirement 10; a friend-request notification (carrying a
+ * `friendRequestId`) routes to the `FriendsList` where the incoming request can
+ * be accepted or declined:
  *
  *   - It reacts to a tap whether the App was NOT running (cold start), in the
  *     background, or in the foreground. A cold-start tap is recovered from
@@ -34,7 +37,10 @@ import { useCallback, useEffect, useRef } from 'react';
 import type * as NotificationsModule from 'expo-notifications';
 
 import { loadNotifications } from '../env/notifications';
-import { navigateToInbox } from '../navigation/navigationRef';
+import {
+  navigateToFriendsList,
+  navigateToInbox,
+} from '../navigation/navigationRef';
 import { useSessionStore } from '../state/sessionStore';
 
 // ---------------------------------------------------------------------------
@@ -75,14 +81,50 @@ export function extractShareId(
   return typeof shareId === 'string' && shareId.length > 0 ? shareId : null;
 }
 
+/**
+ * Detect a friend-request tap. A friend-request notification carries a
+ * `friendRequestId` in its `data` payload (and no `shareId`); its tap opens the
+ * `FriendsList` where the incoming request can be accepted or declined rather
+ * than the Share inbox.
+ */
+export function isFriendRequestTap(
+  response: NotificationsModule.NotificationResponse | null | undefined,
+): boolean {
+  const data = response?.notification?.request?.content?.data;
+  if (data === null || typeof data !== 'object') {
+    return false;
+  }
+  const friendRequestId = (data as { friendRequestId?: unknown })
+    .friendRequestId;
+  return typeof friendRequestId === 'string' && friendRequestId.length > 0;
+}
+
+/**
+ * Classify a tapped notification into its navigation target. Friend-request
+ * taps route to the `FriendsList`; everything else is treated as a Share tap
+ * (carrying a resolvable `shareId`, or none for the R10.5 open-inbox case).
+ */
+export function classifyTap(
+  response: NotificationsModule.NotificationResponse | null | undefined,
+): PendingTap {
+  if (isFriendRequestTap(response)) {
+    return { kind: 'friendRequest' };
+  }
+  return { kind: 'share', shareId: extractShareId(response) };
+}
+
 // ---------------------------------------------------------------------------
 // Hook
 // ---------------------------------------------------------------------------
 
-/** A tapped notification awaiting navigation (its resolved Share id or null). */
-interface PendingTap {
-  readonly shareId: string | null;
-}
+/**
+ * A tapped notification awaiting navigation. A Share tap carries its resolved
+ * Share id (or `null` for the R10.5 open-inbox case); a friend-request tap
+ * carries no id and routes to the `FriendsList`.
+ */
+export type PendingTap =
+  | { readonly kind: 'share'; readonly shareId: string | null }
+  | { readonly kind: 'friendRequest' };
 
 export function useNotificationResponse(): void {
   const token = useSessionStore((state) => state.token);
@@ -127,9 +169,14 @@ export function useNotificationResponse(): void {
         flushingRef.current = false;
         return;
       }
-      const navigated = navigateToInbox(
-        pending.shareId !== null ? { shareId: pending.shareId } : undefined,
-      );
+      const navigated =
+        pending.kind === 'friendRequest'
+          ? navigateToFriendsList()
+          : navigateToInbox(
+              pending.shareId !== null
+                ? { shareId: pending.shareId }
+                : undefined,
+            );
       if (navigated) {
         pendingRef.current = null;
         flushingRef.current = false;
@@ -163,7 +210,7 @@ export function useNotificationResponse(): void {
         if (cancelled || last === null || last === undefined) {
           return;
         }
-        pendingRef.current = { shareId: extractShareId(last) };
+        pendingRef.current = classifyTap(last);
         flush();
       } catch {
         // A failure to read the launch response must not crash startup; the
@@ -185,7 +232,7 @@ export function useNotificationResponse(): void {
     }
     const subscription = notifications.addNotificationResponseReceivedListener(
       (response) => {
-        pendingRef.current = { shareId: extractShareId(response) };
+        pendingRef.current = classifyTap(response);
         flush();
       },
     );

@@ -7,7 +7,7 @@
  *   GET /me/notification-preferences   read preference (default enabled) (R9.3, R9.7)
  *   PUT /me/notification-preferences   set enabled/disabled              (R9.4, R9.5, R9.8)
  *
- * `GET` returns `{ shareNotificationsEnabled: boolean }`, defaulting to `true`
+ * `GET` returns `{ pushNotificationsEnabled: boolean }`, defaulting to `true`
  * when the User has never set the preference (R9.7). `PUT` validates the body
  * against the shared `notificationPreferenceInputSchema`, persists the value,
  * and returns the persisted DTO (R9.4, R9.5). When the value cannot be
@@ -95,10 +95,10 @@ export function notificationPreferenceRoutes(
       { preHandler: requireSession },
       async (request) => {
         const userId = requireUser(request);
-        const { shareNotificationsEnabled } = parseBody(request.body);
+        const { pushNotificationsEnabled } = parseBody(request.body);
         try {
           // R9.4/R9.5: persist and echo the stored value.
-          return await repo.setPreference(userId, shareNotificationsEnabled);
+          return await repo.setPreference(userId, pushNotificationsEnabled);
         } catch (err) {
           // R9.8: on a persistence failure the API returns an error so the
           // client keeps its previously persisted value and shows a message.
@@ -139,7 +139,7 @@ function requireUser(request: FastifyRequest): string {
  * shared schema ensures the API and mobile client cannot drift on the wire
  * shape.
  */
-function parseBody(input: unknown): { shareNotificationsEnabled: boolean } {
+function parseBody(input: unknown): { pushNotificationsEnabled: boolean } {
   try {
     return notificationPreferenceInputSchema.parse(input);
   } catch (err) {
@@ -148,10 +148,10 @@ function parseBody(input: unknown): { shareNotificationsEnabled: boolean } {
       const field =
         issue && issue.path.length > 0
           ? issue.path.map(String).join('.')
-          : 'shareNotificationsEnabled';
+          : 'pushNotificationsEnabled';
       throw new AppError(
         'validation_failed',
-        'shareNotificationsEnabled must be a boolean.',
+        'pushNotificationsEnabled must be a boolean.',
         { field },
       );
     }

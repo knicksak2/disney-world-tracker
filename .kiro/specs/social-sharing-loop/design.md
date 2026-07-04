@@ -339,12 +339,19 @@ registration invalidated (R8.4). Invalidated registrations are excluded from del
 
 | Method | Path | Purpose | Requirements |
 |---|---|---|---|
-| `GET` | `/me/notification-preferences` | Read `Share_Notification_Preference` (default enabled) | R9.3, R9.7 |
+| `GET` | `/me/notification-preferences` | Read the push notification preference (default enabled) | R9.3, R9.7 |
 | `PUT` | `/me/notification-preferences` | Set enabled/disabled | R9.4, R9.5, R9.8 |
 
-`GET` returns `{ shareNotificationsEnabled: boolean }`, defaulting to `true` when the User has never set
+`GET` returns `{ pushNotificationsEnabled: boolean }`, defaulting to `true` when the User has never set
 it (R9.7). `PUT` persists the value; when it cannot persist, the API returns an error and the mobile
 client retains the previously persisted value and shows a message (R9.8).
+
+This preference is a single master toggle governing **all** push notifications — both Share deliveries
+and friend-request notifications. A recipient who has disabled it receives no push of either kind
+(R9.4). It was originally scoped to Share notifications only (`shareNotificationsEnabled` /
+`share_notifications_enabled`); migration `0012_notification_preference_generalize.sql` renamed the
+column to `push_notifications_enabled` and the DTO field to `pushNotificationsEnabled` when
+friend-request notifications were added, preserving each User's stored value.
 
 #### `Reaction_Service` (`services/reactions/{repo.ts,routes.ts}`)
 
@@ -469,7 +476,10 @@ CREATE INDEX push_registrations_user_active_idx
 -- Share_Notification_Preference: per-user; absence means enabled (R9.7).
 CREATE TABLE notification_preferences (
     user_id                    UUID        PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-    share_notifications_enabled BOOLEAN    NOT NULL DEFAULT TRUE,
+    -- Originally share_notifications_enabled (migration 0011); renamed to
+    -- push_notifications_enabled in migration 0012 when the preference became a
+    -- master toggle governing all push notifications (shares + friend requests).
+    push_notifications_enabled BOOLEAN    NOT NULL DEFAULT TRUE,
     updated_at                 TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -512,7 +522,7 @@ interface ShareReactionDTO {
   reactedAt: string;
 }
 
-interface NotificationPreferenceDTO { shareNotificationsEnabled: boolean; }
+interface NotificationPreferenceDTO { pushNotificationsEnabled: boolean; }
 ```
 
 ### New error codes (`packages/shared/src/errors.ts`)

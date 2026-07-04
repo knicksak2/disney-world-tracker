@@ -1,5 +1,6 @@
+
 /**
- * Zod schemas for the `Share_Notification_Preference`.
+ * Zod schemas for the push notification preference.
  *
  * `notificationPreferenceSchema` mirrors `NotificationPreferenceDTO`, the
  * response body for `GET /me/notification-preferences` (R9.3, R9.7).
@@ -13,13 +14,13 @@ import { z } from 'zod';
 
 export const notificationPreferenceSchema = z
   .object({
-    shareNotificationsEnabled: z.boolean(),
+    pushNotificationsEnabled: z.boolean(),
   })
   .strict();
 
 export const notificationPreferenceInputSchema = z
   .object({
-    shareNotificationsEnabled: z.boolean(),
+    pushNotificationsEnabled: z.boolean(),
   })
   .strict();
 

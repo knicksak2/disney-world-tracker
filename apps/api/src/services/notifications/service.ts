@@ -36,7 +36,11 @@
  * Validates: Requirements 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7, 8.6, 9.4, 9.5, 9.7.
  */
 
-import type { ExpoPushClient, ExpoPushMessage } from './expoPushClient.js';
+import type {
+  ExpoPushClient,
+  ExpoPushData,
+  ExpoPushMessage,
+} from './expoPushClient.js';
 
 // ---------------------------------------------------------------------------
 // ShareDelivered event
@@ -67,14 +71,38 @@ export type ShareDeliveredEvent =
     };
 
 // ---------------------------------------------------------------------------
+// FriendRequestReceived event
+// ---------------------------------------------------------------------------
+
+/**
+ * Event handed to the Notification_Service after a Friend_Request is durably
+ * created (`sendRequest` commits). Carries exactly what the service needs to
+ * target and compose without re-reading the `friend_requests` row: the
+ * recipient to notify, the sender to name, and the request id for tap
+ * deep-linking.
+ *
+ * Like a Share notification, a friend-request notification is gated by the
+ * User's push notification preference (the master toggle): a recipient who has
+ * disabled push receives no friend-request notification (R9.4).
+ */
+export interface FriendRequestReceivedEvent {
+  /** The pending Friend_Request's id, used for notification-tap deep-linking. */
+  readonly requestId: string;
+  /** The User who sent the request; named in the notification title. */
+  readonly senderId: string;
+  /** The User who received the request; the notification target. */
+  readonly recipientId: string;
+}
+
+// ---------------------------------------------------------------------------
 // Structural dependency ports
 // ---------------------------------------------------------------------------
 
-/** Reads a User's `Share_Notification_Preference` (default enabled, R9.7). */
+/** Reads a User's push notification preference (default enabled, R9.7). */
 export interface NotificationPreferenceReader {
   getPreference(
     userId: string,
-  ): Promise<{ readonly shareNotificationsEnabled: boolean }>;
+  ): Promise<{ readonly pushNotificationsEnabled: boolean }>;
 }
 
 /**
@@ -141,6 +169,17 @@ export interface NotificationService {
    * (R7.7).
    */
   handleShareDelivered(event: ShareDeliveredEvent): Promise<void>;
+
+  /**
+   * Handle a {@link FriendRequestReceivedEvent}: notify the recipient that
+   * `senderId` sent them a friend request. Resolves once the recipient has
+   * been processed. Never rejects: all errors are caught and logged so the
+   * caller (a background dispatch) is fully decoupled from push outcome, and
+   * `POST /me/friend-requests` returns `201` regardless of push result.
+   */
+  handleFriendRequestReceived(
+    event: FriendRequestReceivedEvent,
+  ): Promise<void>;
 }
 
 // ---------------------------------------------------------------------------
@@ -151,6 +190,8 @@ export interface NotificationService {
 export const MAX_LABEL_LENGTH = 100;
 /** Fixed label for a `Progress_Share` (R7.4). */
 export const PROGRESS_LABEL = 'Shared their progress';
+/** Fixed body for a Friend_Request notification. */
+export const FRIEND_REQUEST_LABEL = 'Sent you a friend request';
 /** Neutral fallbacks when a lookup returns null (still discloses nothing extra). */
 const FALLBACK_SENDER_NAME = 'A friend';
 const FALLBACK_EXPERIENCE_LABEL = 'Shared an experience';
@@ -175,6 +216,8 @@ export function createNotificationService(
   const retryWindowMs = deps.retryWindowMs ?? DEFAULT_RETRY_WINDOW_MS;
   const retryBackoffMs = deps.retryBackoffMs ?? DEFAULT_RETRY_BACKOFF_MS;
 
+  const timing = { now, delay, maxRetries, retryWindowMs, retryBackoffMs };
+
   return {
     async handleShareDelivered(event: ShareDeliveredEvent): Promise<void> {
       let body: string;
@@ -198,12 +241,9 @@ export function createNotificationService(
         event.recipientIds.map((recipientId) =>
           notifyRecipient(recipientId, { title, body }, {
             deps,
-            now,
-            delay,
-            maxRetries,
-            retryWindowMs,
-            retryBackoffMs,
-            shareId: event.shareId,
+            ...timing,
+            data: { shareId: event.shareId },
+            logContext: { shareId: event.shareId },
           }).catch((err) => {
             // Defensive: notifyRecipient already swallows its own errors, but
             // guarantee handleShareDelivered never rejects (R7.7).
@@ -214,6 +254,45 @@ export function createNotificationService(
           }),
         ),
       );
+    },
+
+    async handleFriendRequestReceived(
+      event: FriendRequestReceivedEvent,
+    ): Promise<void> {
+      // Title = the sending User's display name; body = a fixed label. Gated
+      // by the recipient's push notification preference (the master toggle)
+      // via notifyRecipient, exactly like a Share notification (R9.4).
+      let title: string;
+      try {
+        const name = await deps.resolveSenderDisplayName(event.senderId);
+        const trimmed = name?.trim();
+        title =
+          trimmed && trimmed.length > 0 ? trimmed : FALLBACK_SENDER_NAME;
+      } catch (err) {
+        deps.logger?.error(
+          { err, requestId: event.requestId },
+          'friend-request notification composition failed',
+        );
+        return;
+      }
+
+      await notifyRecipient(
+        event.recipientId,
+        { title, body: FRIEND_REQUEST_LABEL },
+        {
+          deps,
+          ...timing,
+          data: { friendRequestId: event.requestId },
+          logContext: { requestId: event.requestId },
+        },
+      ).catch((err) => {
+        // Defensive: notifyRecipient already swallows its own errors, but
+        // guarantee handleFriendRequestReceived never rejects.
+        deps.logger?.error(
+          { err, recipientId: event.recipientId, requestId: event.requestId },
+          'friend-request notification delivery failed for recipient',
+        );
+      });
     },
   };
 }
@@ -270,9 +349,18 @@ interface DeliveryContext {
   readonly maxRetries: number;
   readonly retryWindowMs: number;
   readonly retryBackoffMs: number;
-  readonly shareId: string;
+  /** Routing-only payload attached to every message in this delivery. */
+  readonly data: ExpoPushData;
+  /** Extra fields merged into every log line for this delivery (e.g. shareId). */
+  readonly logContext: Record<string, unknown>;
 }
 
+/**
+ * Gated recipient path: apply the User's push notification preference gate
+ * (R9.4, R9.5, R9.7) and then deliver. Used by both the Share path and the
+ * friend-request path, since the preference is a master toggle governing all
+ * push notifications.
+ */
 async function notifyRecipient(
   recipientId: string,
   content: { readonly title: string; readonly body: string },
@@ -280,15 +368,15 @@ async function notifyRecipient(
 ): Promise<void> {
   const { deps } = ctx;
 
-  // 1. Preference gate (R9.4, R9.5, R9.7). A read failure defaults to skipping
-  //    this recipient rather than risking an unwanted notification.
+  // Preference gate (R9.4, R9.5, R9.7). A read failure defaults to skipping
+  // this recipient rather than risking an unwanted notification.
   let enabled: boolean;
   try {
     const pref = await deps.preferences.getPreference(recipientId);
-    enabled = pref.shareNotificationsEnabled;
+    enabled = pref.pushNotificationsEnabled;
   } catch (err) {
     deps.logger?.warn(
-      { err, recipientId, shareId: ctx.shareId },
+      { err, recipientId, ...ctx.logContext },
       'preference read failed; skipping recipient',
     );
     return;
@@ -298,13 +386,27 @@ async function notifyRecipient(
     return;
   }
 
-  // 2. Active-token targeting (R8.6). No active token ⇒ no notification (R7.5).
+  await deliverToRecipient(recipientId, content, ctx);
+}
+
+/**
+ * Target a recipient's active tokens and send with bounded retry. Shared by
+ * the Share path (after its preference gate) and the friend-request path.
+ */
+async function deliverToRecipient(
+  recipientId: string,
+  content: { readonly title: string; readonly body: string },
+  ctx: DeliveryContext,
+): Promise<void> {
+  const { deps } = ctx;
+
+  // Active-token targeting (R8.6). No active token ⇒ no notification (R7.5).
   let tokens: readonly string[];
   try {
     tokens = await deps.pushTokens.listActiveTokensForUser(recipientId);
   } catch (err) {
     deps.logger?.warn(
-      { err, recipientId, shareId: ctx.shareId },
+      { err, recipientId, ...ctx.logContext },
       'active-token read failed; skipping recipient',
     );
     return;
@@ -314,7 +416,7 @@ async function notifyRecipient(
     return;
   }
 
-  // 3. Send with bounded retry + invalidation (R7.1, R7.6, R7.7).
+  // Send with bounded retry + invalidation (R7.1, R7.6, R7.7).
   await sendWithRetry(tokens, content, ctx);
 }
 
@@ -346,7 +448,7 @@ async function sendWithRetry(
       // Respect the 30s window: do not start a retry that begins past it.
       if (ctx.now() - startedAt >= ctx.retryWindowMs) {
         deps.logger?.warn(
-          { shareId: ctx.shareId, pending: pending.length },
+          { ...ctx.logContext, pending: pending.length },
           'notification retry window elapsed; abandoning pending tokens',
         );
         return;
@@ -361,9 +463,10 @@ async function sendWithRetry(
       to: token,
       title: content.title,
       body: content.body,
-      // Routing-only payload so a notification tap can deep-link to this Share
-      // (R10.2). Carries only the Share id — no rating/note/percentage (R7.2).
-      data: { shareId: ctx.shareId },
+      // Routing-only payload so a notification tap can deep-link to the
+      // triggering Share or Friend_Request (R10.2). Carries only an id — no
+      // rating/note/percentage (R7.2).
+      data: ctx.data,
     }));
 
     let deliveries;
@@ -373,7 +476,7 @@ async function sendWithRetry(
       // Provider unreachable: every pending token transiently failed (R7.7).
       // Keep the whole pending set and retry on the next iteration.
       deps.logger?.warn(
-        { err, shareId: ctx.shareId, pending: pending.length },
+        { err, ...ctx.logContext, pending: pending.length },
         'expo push send threw; will retry pending tokens',
       );
       continue;
@@ -397,7 +500,7 @@ async function sendWithRetry(
           await deps.pushTokens.invalidateByToken(token);
         } catch (err) {
           deps.logger?.warn(
-            { err, shareId: ctx.shareId },
+            { err, ...ctx.logContext },
             'failed to invalidate unregistered token',
           );
         }
@@ -411,7 +514,7 @@ async function sendWithRetry(
 
   if (pending.length > 0) {
     deps.logger?.warn(
-      { shareId: ctx.shareId, pending: pending.length },
+      { ...ctx.logContext, pending: pending.length },
       'notification retries exhausted; some tokens undelivered',
     );
   }

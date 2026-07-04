@@ -30,17 +30,27 @@
 // ---------------------------------------------------------------------------
 
 /**
- * Routing-only data payload carried on a Share push notification. It exists so
- * a notification tap can deep-link to the referenced Share (R10.2/R10.4): the
- * mobile handler reads `notification.request.content.data.shareId`. It carries
- * ONLY the Share id — never the sender's rating, note, or any completion
- * percentage — so the "discloses only sender name and a bounded label"
- * guarantee (R7.2) is preserved.
+ * Routing-only data payload carried on a push notification. It exists so a
+ * notification tap can deep-link to the thing that triggered it: the mobile
+ * handler reads `notification.request.content.data`. Each variant carries ONLY
+ * an id — never a sender's rating, note, or any completion percentage — so the
+ * "discloses only sender name and a bounded label" guarantee (R7.2) is
+ * preserved.
+ *
+ *   - Share variant       — `{ shareId }` deep-links to the delivered Share
+ *     (R10.2/R10.4).
+ *   - Friend-request variant — `{ friendRequestId }` deep-links to the pending
+ *     Friend_Request so a tap can open the incoming-requests view.
  */
-export interface ExpoPushData {
-  /** The delivered Share's id, used for notification-tap deep-linking. */
-  readonly shareId: string;
-}
+export type ExpoPushData =
+  | {
+      /** The delivered Share's id, used for notification-tap deep-linking. */
+      readonly shareId: string;
+    }
+  | {
+      /** The pending Friend_Request's id, used for notification-tap deep-linking. */
+      readonly friendRequestId: string;
+    };
 
 /**
  * A single composed push notification. The Notification_Service sets `title`

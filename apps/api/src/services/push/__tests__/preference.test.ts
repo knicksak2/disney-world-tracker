@@ -4,7 +4,7 @@
  * These cover the two behaviors scoped to this task:
  *
  *   - R9.7  A read for a User who has never set the preference returns
- *           `{ shareNotificationsEnabled: true }` (default enabled). No row is
+ *           `{ pushNotificationsEnabled: true }` (default enabled). No row is
  *           written as a side effect of the read.
  *   - R9.8  When the value cannot be persisted, the store propagates the
  *           underlying error and the `PUT` route surfaces an error envelope so
@@ -85,7 +85,7 @@ describe('NotificationPreferenceRepo.getPreference', () => {
   it('defaults to enabled when the User has never set a preference (no row)', async () => {
     // The SELECT returns no rows: the User has never toggled the setting.
     const pool = makePool((call) => {
-      if (call.text.includes('SELECT share_notifications_enabled')) {
+      if (call.text.includes('SELECT push_notifications_enabled')) {
         return { rows: [] };
       }
       return undefined;
@@ -95,11 +95,11 @@ describe('NotificationPreferenceRepo.getPreference', () => {
     const pref = await repo.getPreference(USER_ID);
 
     // R9.7: absence of a row is treated as enabled by default.
-    expect(pref).toEqual({ shareNotificationsEnabled: true });
+    expect(pref).toEqual({ pushNotificationsEnabled: true });
     // Exactly one read; the read never writes a row as a side effect.
     expect(pool.calls).toHaveLength(1);
     const call = pool.calls[0]!;
-    expect(call.text).toMatch(/SELECT share_notifications_enabled/);
+    expect(call.text).toMatch(/SELECT push_notifications_enabled/);
     expect(call.text).toMatch(/FROM notification_preferences/);
     expect(call.text).toMatch(/user_id = \$1/);
     expect(call.text).not.toMatch(/INSERT|UPDATE/);
@@ -108,8 +108,8 @@ describe('NotificationPreferenceRepo.getPreference', () => {
 
   it('returns the stored value when a row exists', async () => {
     const pool = makePool((call) => {
-      if (call.text.includes('SELECT share_notifications_enabled')) {
-        return { rows: [{ share_notifications_enabled: false }] };
+      if (call.text.includes('SELECT push_notifications_enabled')) {
+        return { rows: [{ push_notifications_enabled: false }] };
       }
       return undefined;
     });
@@ -117,7 +117,7 @@ describe('NotificationPreferenceRepo.getPreference', () => {
 
     // A persisted `false` is returned as-is rather than the default.
     expect(await repo.getPreference(USER_ID)).toEqual({
-      shareNotificationsEnabled: false,
+      pushNotificationsEnabled: false,
     });
   });
 });
@@ -130,7 +130,7 @@ describe('NotificationPreferenceRepo.setPreference', () => {
   it('returns the persisted value from the upsert RETURNING clause', async () => {
     const pool = makePool((call) => {
       if (call.text.includes('INSERT INTO notification_preferences')) {
-        return { rows: [{ share_notifications_enabled: false }] };
+        return { rows: [{ push_notifications_enabled: false }] };
       }
       return undefined;
     });
@@ -139,11 +139,11 @@ describe('NotificationPreferenceRepo.setPreference', () => {
     const pref = await repo.setPreference(USER_ID, false);
 
     // R9.4/R9.5: the persisted value is echoed, not the request value.
-    expect(pref).toEqual({ shareNotificationsEnabled: false });
+    expect(pref).toEqual({ pushNotificationsEnabled: false });
     const call = pool.calls[0]!;
     expect(call.text).toMatch(/INSERT INTO notification_preferences/);
     expect(call.text).toMatch(/ON CONFLICT \(user_id\)/);
-    expect(call.text).toMatch(/RETURNING share_notifications_enabled/);
+    expect(call.text).toMatch(/RETURNING push_notifications_enabled/);
     expect(call.params).toEqual([USER_ID, false]);
   });
 
@@ -189,11 +189,11 @@ interface RepoCalls {
 }
 
 interface RepoStubs {
-  getPreference?: (userId: string) => Promise<{ shareNotificationsEnabled: boolean }>;
+  getPreference?: (userId: string) => Promise<{ pushNotificationsEnabled: boolean }>;
   setPreference?: (
     userId: string,
     enabled: boolean,
-  ) => Promise<{ shareNotificationsEnabled: boolean }>;
+  ) => Promise<{ pushNotificationsEnabled: boolean }>;
 }
 
 function makeRepo(stubs: RepoStubs = {}): {
@@ -209,14 +209,14 @@ function makeRepo(stubs: RepoStubs = {}): {
         if (stubs.getPreference) {
           return stubs.getPreference(userId);
         }
-        return { shareNotificationsEnabled: true };
+        return { pushNotificationsEnabled: true };
       },
       async setPreference(userId, enabled) {
         calls.setPreference.push({ userId, enabled });
         if (stubs.setPreference) {
           return stubs.setPreference(userId, enabled);
         }
-        return { shareNotificationsEnabled: enabled };
+        return { pushNotificationsEnabled: enabled };
       },
     },
   };
@@ -263,7 +263,7 @@ async function buildApp(
 // ---------------------------------------------------------------------------
 
 describe('GET /me/notification-preferences', () => {
-  it('returns { shareNotificationsEnabled: true } for a User with no stored preference (R9.7)', async () => {
+  it('returns { pushNotificationsEnabled: true } for a User with no stored preference (R9.7)', async () => {
     // A fresh User whose repo reports the default: enabled.
     const { app, calls } = await buildApp();
 
@@ -273,7 +273,7 @@ describe('GET /me/notification-preferences', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ shareNotificationsEnabled: true });
+    expect(res.json()).toEqual({ pushNotificationsEnabled: true });
     // The authenticated user is forwarded to the repo read.
     expect(calls.getPreference).toEqual([USER_ID]);
   });
@@ -281,7 +281,7 @@ describe('GET /me/notification-preferences', () => {
   it('echoes a stored disabled preference', async () => {
     const { repo } = makeRepo({
       async getPreference() {
-        return { shareNotificationsEnabled: false };
+        return { pushNotificationsEnabled: false };
       },
     });
     const { app } = await buildApp({ repo });
@@ -292,7 +292,7 @@ describe('GET /me/notification-preferences', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ shareNotificationsEnabled: false });
+    expect(res.json()).toEqual({ pushNotificationsEnabled: false });
   });
 });
 
@@ -313,7 +313,7 @@ describe('PUT /me/notification-preferences persistence failure (R9.8)', () => {
     const res = await app.inject({
       method: 'PUT',
       url: '/me/notification-preferences',
-      payload: { shareNotificationsEnabled: false },
+      payload: { pushNotificationsEnabled: false },
     });
 
     // R9.8: a genuine persistence failure is collapsed to an error envelope so
@@ -340,7 +340,7 @@ describe('PUT /me/notification-preferences persistence failure (R9.8)', () => {
     const res = await app.inject({
       method: 'PUT',
       url: '/me/notification-preferences',
-      payload: { shareNotificationsEnabled: true },
+      payload: { pushNotificationsEnabled: true },
     });
 
     expect(res.json()).toMatchObject({
@@ -354,11 +354,11 @@ describe('PUT /me/notification-preferences persistence failure (R9.8)', () => {
     const res = await app.inject({
       method: 'PUT',
       url: '/me/notification-preferences',
-      payload: { shareNotificationsEnabled: false },
+      payload: { pushNotificationsEnabled: false },
     });
 
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ shareNotificationsEnabled: false });
+    expect(res.json()).toEqual({ pushNotificationsEnabled: false });
     expect(calls.setPreference).toEqual([{ userId: USER_ID, enabled: false }]);
   });
 
@@ -368,11 +368,11 @@ describe('PUT /me/notification-preferences persistence failure (R9.8)', () => {
     const res = await app.inject({
       method: 'PUT',
       url: '/me/notification-preferences',
-      payload: { shareNotificationsEnabled: 'nope' },
+      payload: { pushNotificationsEnabled: 'nope' },
     });
 
     expect(res.json()).toMatchObject({
-      error: { code: 'validation_failed', field: 'shareNotificationsEnabled' },
+      error: { code: 'validation_failed', field: 'pushNotificationsEnabled' },
     });
     expect(calls.setPreference).toEqual([]);
   });

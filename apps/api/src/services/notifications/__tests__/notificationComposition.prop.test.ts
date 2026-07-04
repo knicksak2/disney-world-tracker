@@ -127,7 +127,7 @@ describe('Notification_Service — Property 13: composition discloses only sende
             // composition happens once and is observable in `captured[0]`.
             const preferences: NotificationPreferenceReader = {
               async getPreference() {
-                return { shareNotificationsEnabled: true };
+                return { pushNotificationsEnabled: true };
               },
             };
             const token = `ExponentPushToken[${recipientId}]`;

@@ -103,7 +103,7 @@ function makeUnreachableExpoClient(): RecordingExpoClient {
 function makePreferences(enabled: boolean): NotificationPreferenceReader {
   return {
     async getPreference() {
-      return { shareNotificationsEnabled: enabled };
+      return { pushNotificationsEnabled: enabled };
     },
   };
 }

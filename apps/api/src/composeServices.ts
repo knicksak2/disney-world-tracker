@@ -96,6 +96,7 @@ import { createDiningMenuClient } from './services/catalog/disney/diningMenuClie
 import { createMenuRetrieval } from './services/catalog/menuRetrieval.js';
 
 import { createFriendsRepo } from './services/friends/repo.js';
+import type { FriendRequestReceivedNotice } from './services/friends/routes.js';
 import { createSharingRepo } from './services/sharing/repo.js';
 import type { ShareDeliveredNotice } from './services/sharing/routes.js';
 import { createStatsRepo } from './services/stats/repo.js';
@@ -228,6 +229,32 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
         'ShareDelivered dispatch failed',
       );
     });
+  };
+
+  /**
+   * Background `FriendRequestReceived` dispatch, mirroring `emitShareDelivered`.
+   *
+   * Invoked by the Friends_Service route AFTER `sendRequest` commits so the
+   * recipient gets a push notification. The port returns `void`, so the route
+   * handler cannot await it — `POST /me/friend-requests` returns `201`
+   * immediately regardless of push outcome. `handleFriendRequestReceived`
+   * already swallows every internal failure (it never rejects); the trailing
+   * `.catch` is defensive against an unexpected rejection surfacing as an
+   * unhandled promise rejection. `FriendRequestReceivedNotice` is structurally
+   * identical to the service's `FriendRequestReceivedEvent`, so it is handed
+   * across directly.
+   */
+  const emitFriendRequestReceived = (
+    event: FriendRequestReceivedNotice,
+  ): void => {
+    void notificationService
+      .handleFriendRequestReceived(event)
+      .catch((err: unknown) => {
+        notificationLogger.error(
+          { err, requestId: event.requestId },
+          'FriendRequestReceived dispatch failed',
+        );
+      });
   };
   // The leaderboard cache and the lockout service accept a narrow
   // structural Redis interface whose `set` is a single rest-arg overload;
@@ -384,7 +411,13 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
       // (R11.10, R12.3).
       getLiveDetail: (id) => liveService.getLiveDetail(id),
     },
-    friends: { repo: friendsRepo, requireSession: sessionMiddleware },
+    friends: {
+      repo: friendsRepo,
+      requireSession: sessionMiddleware,
+      // Dispatch a push to the recipient on a background port after the
+      // request row commits; the request is never blocked or failed by push.
+      emitFriendRequestReceived,
+    },
     sharing: {
       repo: sharingRepo,
       requireSession: sessionMiddleware,

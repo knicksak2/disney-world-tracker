@@ -170,7 +170,7 @@ MVP; core implementation sub-tasks are not.
 
 - [x] 13. Implement the notification preference store
   - [x] 13.1 Implement the preference repo and routes
-    - `GET /me/notification-preferences` returns `{ shareNotificationsEnabled }` defaulting to `true` when unset; `PUT` persists the value and returns an error when it cannot persist
+    - `GET /me/notification-preferences` returns `{ pushNotificationsEnabled }` defaulting to `true` when unset; `PUT` persists the value and returns an error when it cannot persist
     - _Requirements: 9.3, 9.4, 9.5, 9.7, 9.8_
   - [x] 13.2 Write unit tests for default and persistence-failure behavior
     - _Requirements: 9.7, 9.8_

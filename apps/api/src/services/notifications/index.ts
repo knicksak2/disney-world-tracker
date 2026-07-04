@@ -25,6 +25,7 @@ export {
   truncateLabel,
   MAX_LABEL_LENGTH,
   PROGRESS_LABEL,
+  FRIEND_REQUEST_LABEL,
 } from './service.js';
 export type {
   NotificationService,
@@ -33,6 +34,7 @@ export type {
   PushTokenTargeter,
   NotificationLogger,
   ShareDeliveredEvent,
+  FriendRequestReceivedEvent,
 } from './service.js';
 
 export { createExpoPushClient } from './expoPushClient.js';

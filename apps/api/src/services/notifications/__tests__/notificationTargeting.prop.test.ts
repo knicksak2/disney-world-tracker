@@ -109,7 +109,7 @@ describe('Notification_Service — Property 15: delivery targets are exactly the
               async getPreference(userId) {
                 const r = byUser.get(userId);
                 return {
-                  shareNotificationsEnabled: r ? r.pref !== 'disabled' : true,
+                  pushNotificationsEnabled: r ? r.pref !== 'disabled' : true,
                 };
               },
             };
