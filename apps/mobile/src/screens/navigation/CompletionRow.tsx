@@ -101,7 +101,14 @@ export function CompletionRow({
         : {})}
     >
       <View style={styles.cardHeader}>
-        <Text style={styles.cardTitle}>{entry.experienceName}</Text>
+        <View style={styles.titleWrap}>
+          <View
+            style={[styles.categoryDot, { backgroundColor: categoryTint(entry.category) }]}
+          />
+          <Text style={styles.cardTitle} numberOfLines={2}>
+            {entry.experienceName}
+          </Text>
+        </View>
         {entry.rating !== null ? (
           <Badge
             label={`${entry.rating}/10`}
@@ -110,9 +117,11 @@ export function CompletionRow({
           />
         ) : null}
       </View>
-      <Text style={styles.completionMeta}>{metaParts.join(' \u00b7 ')}</Text>
+      <Text style={[styles.completionMeta, styles.metaIndent]}>
+        {metaParts.join(' \u00b7 ')}
+      </Text>
       {entry.sharedNote !== null ? (
-        <Text style={styles.completionNote}>{entry.sharedNote}</Text>
+        <Text style={[styles.completionNote, styles.metaIndent]}>{entry.sharedNote}</Text>
       ) : null}
     </Card>
   );
@@ -127,14 +136,21 @@ function categoryLabel(category: ExperienceCategory): string {
   return theme.categoryVisual[category]?.label ?? category;
 }
 
+/** The category's accent tint for the row's color dot, matching the coverage /
+ * interests dot language; falls back to the brand purple. */
+function categoryTint(category: ExperienceCategory): string {
+  return theme.categoryVisual[category]?.tint ?? theme.color.primary;
+}
+
 /**
  * Map a 1–10 Rating to a palette color so the badge conveys sentiment at a
- * glance: low ratings read red, middling ratings amber, and high ratings green.
- * The `Badge` applies this color to its star icon, text, and tinted background.
+ * glance: high ratings read green, middling ratings gold, and low ratings
+ * raspberry. The `Badge` applies this color to its star icon, text, and tinted
+ * background.
  */
 function ratingColor(rating: number): string {
   if (rating >= 8) return theme.color.success;
-  if (rating >= 5) return theme.color.warning;
+  if (rating >= 5) return theme.color.accentDark;
   return theme.color.danger;
 }
 
@@ -175,10 +191,25 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.xs,
     gap: theme.spacing.sm,
   },
+  titleWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+    flexShrink: 1,
+  },
+  categoryDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 3,
+  },
   cardTitle: {
     ...theme.typography.subtitle,
     color: theme.color.textPrimary,
     flexShrink: 1,
+  },
+  metaIndent: {
+    // Align the meta / note under the title text, past the 10px dot + 8px gap.
+    paddingLeft: 18,
   },
   completionMeta: {
     ...theme.typography.meta,

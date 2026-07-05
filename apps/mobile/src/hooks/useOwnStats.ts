@@ -14,12 +14,11 @@
  * (R12.4). Conversely, opening a Friend_Profile_View first warms the same
  * cache entry for the Stats tab.
  *
- * The result is typed as `FriendStatsResponse` — the shared four-dimension
- * roll-up shape (overall / per-Park / per-Category / per-(Park,Category)) that
- * the friend stats read also returns. `GET /me/stats` returns a superset (it
- * also carries area and resort roll-ups the comparison does not use), so the
- * narrower shared type lets task 24 consume the viewer's and the Friend's
- * stats through one uniform contract.
+ * The result is typed as the shared nested `StatsResponse` — the
+ * `coverage` / `ratings` / `percentileRank` contract (see `statsTypes.ts`,
+ * task 3.1) that the friend stats read also returns. Both self and friend
+ * reads share this structurally identical shape, so the comparison can consume
+ * the viewer's and the Friend's stats through one uniform contract.
  *
  * This is an owner-path read of the caller's own data, so it never yields
  * `profile_forbidden`; retry policy is inherited from the app-level default.
@@ -30,7 +29,7 @@
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 
 import { ApiError, apiRequest } from '../api/client';
-import type { FriendStatsResponse } from '../api/friendProfile';
+import type { StatsResponse } from '../api/statsTypes';
 
 // ---------------------------------------------------------------------------
 // Query keys
@@ -63,13 +62,13 @@ const STATS_STALE_TIME_MS = 30 * 1000;
 /**
  * Query the requesting User's own completion statistics via `GET /me/stats`,
  * keyed `['me-stats']` and shared with the Own_Stats_View (R12.4). The result
- * is projected to the shared `FriendStatsResponse` shape so the comparison can
- * consume the viewer's and the Friend's stats uniformly.
+ * is the shared nested `StatsResponse` shape so the comparison can consume the
+ * viewer's and the Friend's stats uniformly.
  */
-export function useOwnStatsQuery(): UseQueryResult<FriendStatsResponse, ApiError> {
-  return useQuery<FriendStatsResponse, ApiError>({
+export function useOwnStatsQuery(): UseQueryResult<StatsResponse, ApiError> {
+  return useQuery<StatsResponse, ApiError>({
     queryKey: ownStatsKeys.stats(),
-    queryFn: () => apiRequest<FriendStatsResponse>('GET', '/me/stats'),
+    queryFn: () => apiRequest<StatsResponse>('GET', '/me/stats'),
     staleTime: STATS_STALE_TIME_MS,
   });
 }

@@ -33,8 +33,8 @@ import {
   fetchFriendCompletions,
   fetchFriendProfile,
   fetchFriendStats,
-  type FriendStatsResponse,
 } from '../api/friendProfile';
+import type { StatsResponse } from '../api/statsTypes';
 
 // ---------------------------------------------------------------------------
 // Query keys
@@ -87,8 +87,8 @@ export function useFriendProfileQuery(
 /** Query a Friend's completion statistics, keyed by `friendId` (R3.1). */
 export function useFriendStatsQuery(
   friendId: string,
-): UseQueryResult<FriendStatsResponse, ApiError> {
-  return useQuery<FriendStatsResponse, ApiError>({
+): UseQueryResult<StatsResponse, ApiError> {
+  return useQuery<StatsResponse, ApiError>({
     queryKey: friendProfileKeys.stats(friendId),
     queryFn: () => fetchFriendStats(friendId),
     retry: retryUnlessForbidden,

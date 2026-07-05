@@ -46,12 +46,7 @@ import {
   waitFor,
 } from '@testing-library/react-native';
 
-import {
-  EXPERIENCE_CATEGORIES,
-  PARKS,
-  type ExperienceCategory,
-  type Park,
-} from '@dwt/shared';
+import { type ExperienceCategory, type Park } from '@dwt/shared';
 
 // ---------------------------------------------------------------------------
 // Mocks (declared before the modules under test are imported).
@@ -87,12 +82,14 @@ jest.mock('../../../api/client', () => {
 // Imports of modules under test (after the mocks above).
 // ---------------------------------------------------------------------------
 
-import StatsScreen from '../../stats/StatsScreen';
+import StatsStack from '../../../navigation/StatsStack';
 import FriendProfileScreen, {
   type FriendProfileParams,
 } from '../../friends/FriendProfileScreen';
 import ExperienceDetailScreen from '../../catalog/ExperienceDetailScreen';
 import { apiRequest as mockedApiRequest } from '../../../api/client';
+import type { StatsResponse } from '../../../api/statsTypes';
+import { makeStatsResponse } from '../../stats/__testSupport__/statsFixture';
 
 /**
  * Local Catalog-stack param list for the test harness. The production
@@ -160,36 +157,9 @@ const EXPERIENCE_DETAIL = {
   imageAttribution: null,
 };
 
-interface Breakdown {
-  readonly completed: number;
-  readonly total: number;
-  readonly percent: number;
-}
-
-interface StatsShape {
-  readonly overall: Breakdown;
-  readonly byPark: { readonly [park in Park]: Breakdown };
-  readonly byCategory: { readonly [category in ExperienceCategory]: Breakdown };
-  readonly byParkAndCategory: {
-    readonly [park in Park]: {
-      readonly [category in ExperienceCategory]: Breakdown;
-    };
-  };
-}
-
-/** A fully-populated stats roll-up (every Park / Category present). */
-function makeStats(): StatsShape {
-  const filler: Breakdown = { completed: 1, total: 10, percent: 10 };
-  const byPark = Object.fromEntries(
-    PARKS.map((park) => [park, filler]),
-  ) as StatsShape['byPark'];
-  const byCategory = Object.fromEntries(
-    EXPERIENCE_CATEGORIES.map((category) => [category, filler]),
-  ) as StatsShape['byCategory'];
-  const byParkAndCategory = Object.fromEntries(
-    PARKS.map((park) => [park, byCategory]),
-  ) as StatsShape['byParkAndCategory'];
-  return { overall: filler, byPark, byCategory, byParkAndCategory };
+/** A fully-populated nested stats roll-up (every Park / Category present). */
+function makeStats(): StatsResponse {
+  return makeStatsResponse();
 }
 
 const FRIEND_PROFILE = {
@@ -308,7 +278,7 @@ function MainTabsStub(): JSX.Element {
       initialRouteName="Stats"
       screenOptions={{ headerShown: false }}
     >
-      <Tab.Screen name="Stats" component={StatsScreen} />
+      <Tab.Screen name="Stats" component={StatsStack} />
       <Tab.Screen name="Catalog" component={CatalogStubStack} />
     </Tab.Navigator>
   );
@@ -342,10 +312,11 @@ describe('return navigation — guard resets on focus so a later tap navigates a
   test('after returning to the originating Stats screen, a subsequent tap navigates anew', async () => {
     renderStubNavigator();
 
-    // Arrive at a Completed_Experience_Row in the Stats Own_Experiences mode.
+    // Arrive at a Completed_Experience_Row on the Stats tab's ExperiencesDetail
+    // screen (reached from the Overview hub's Experiences entry card).
     await screen.findByTestId('stats-screen');
-    fireEvent.press(screen.getByTestId('tab-Own_Experiences'));
-    await screen.findByTestId('own-experiences');
+    fireEvent.press(await screen.findByTestId('stats-highlight-experiences'));
+    await screen.findByTestId('experiences-detail-screen');
     const firstRow = await screen.findByTestId('own-experience-row-0');
 
     // First tap → pushes `ExperienceDetail` onto the root stack above the
@@ -356,15 +327,16 @@ describe('return navigation — guard resets on focus so a later tap navigates a
     });
 
     // Return to the originating screen: popping the root stack re-focuses the
-    // Stats tab, which fires the `useFocusEffect` that clears the in-flight
-    // guard. R5.3: the App returns to the originating screen.
+    // Stats tab's ExperiencesDetail screen, which fires the `useFocusEffect`
+    // that clears the in-flight guard. R5.3: the App returns to the
+    // originating screen.
     act(() => {
       navRef.goBack();
     });
     await waitFor(() => {
-      expect(navRef.getCurrentRoute()?.name).toBe('Stats');
+      expect(navRef.getCurrentRoute()?.name).toBe('ExperiencesDetail');
     });
-    expect(screen.getByTestId('stats-screen')).toBeTruthy();
+    expect(screen.getByTestId('experiences-detail-screen')).toBeTruthy();
 
     // A deliberate subsequent tap after returning navigates again — proving
     // the guard was reset on focus rather than permanently latched (R5.3).

@@ -2,11 +2,16 @@
  * Progress_Comparison derivation (task 24.1).
  *
  * A pure derivation over the viewing User's own stats roll-up and a Friend's
- * stats roll-up — both the shared four-dimension `FriendStatsResponse` shape
+ * stats roll-up — both the shared nested `StatsResponse` shape
  * (`GET /me/stats` for the viewer, `GET /me/stats/summary?for=` for the
  * Friend). The Friend_Profile_View has already retrieved both (task 23.1), so
  * this derivation adds no new reads and simply projects the two roll-ups into
  * side-by-side rows (R12.4).
+ *
+ * The overall / per-Park / per-Category completion percentages are read from
+ * the nested `coverage` object (`stats.coverage.overall`,
+ * `stats.coverage.byPark`, `stats.coverage.byCategory`) after the migration
+ * off the removed flat top-level fields (R11.5, R16.1).
  *
  * For the overall figure, for every Park, and for every Experience_Category it
  * pairs the viewer's percentage with the Friend's percentage (R12.1, R12.2,
@@ -21,12 +26,12 @@
  * concerns kept out of this pure function so it stays trivially testable
  * (Property 20).
  *
- * Validates: Requirements 12.1, 12.2, 12.3, 12.4
+ * Validates: Requirements 11.5, 12.1, 12.2, 12.3, 12.4
  */
 
 import { EXPERIENCE_CATEGORIES, PARKS } from '@dwt/shared';
 
-import type { FriendStatsResponse } from '../../api/friendProfile';
+import type { StatsResponse } from '../../api/friendProfile';
 
 // ---------------------------------------------------------------------------
 // Shapes
@@ -92,24 +97,24 @@ export function formatComparisonPercent(value: number): string {
  * percentage with the Friend's (R12.1, R12.2, R12.3).
  */
 export function deriveProgressComparison(
-  viewer: FriendStatsResponse,
-  friend: FriendStatsResponse,
+  viewer: StatsResponse,
+  friend: StatsResponse,
 ): ProgressComparison {
   return {
     overall: {
       key: 'overall',
-      viewerPercent: clampPercent(viewer.overall.percent),
-      friendPercent: clampPercent(friend.overall.percent),
+      viewerPercent: clampPercent(viewer.coverage.overall.percent),
+      friendPercent: clampPercent(friend.coverage.overall.percent),
     },
     byPark: PARKS.map((park) => ({
       key: park,
-      viewerPercent: clampPercent(viewer.byPark[park].percent),
-      friendPercent: clampPercent(friend.byPark[park].percent),
+      viewerPercent: clampPercent(viewer.coverage.byPark[park].percent),
+      friendPercent: clampPercent(friend.coverage.byPark[park].percent),
     })),
     byCategory: EXPERIENCE_CATEGORIES.map((category) => ({
       key: category,
-      viewerPercent: clampPercent(viewer.byCategory[category].percent),
-      friendPercent: clampPercent(friend.byCategory[category].percent),
+      viewerPercent: clampPercent(viewer.coverage.byCategory[category].percent),
+      friendPercent: clampPercent(friend.coverage.byCategory[category].percent),
     })),
   };
 }

@@ -17,6 +17,7 @@
 
 import type { Park } from '../enums.js';
 import type { ExperienceCategory, SharePayloadKind } from '../enums.js';
+import type { CompletionCell } from './Stats.js';
 
 /**
  * Snapshot of an `experience` Share payload.
@@ -43,12 +44,23 @@ export interface ExperienceSharePayload {
  * Each percentage is in `[0.0, 100.0]` to one decimal place; the per-Park and
  * per-Experience_Category breakdowns are keyed by the Park / category enum
  * member name.
+ *
+ * The expanded-stats feature adds two curated fields captured at share
+ * creation time so shares stay headline-worthy without dumping every number:
+ * - `topFacet` — the sender's top per-Facet_Value_Key Coverage_Statistic as a
+ *   {@link CompletionCell} plus its display label. Present whenever the sender
+ *   has at least one facet statistic (even when its `completed` is 0) and
+ *   omitted entirely when the sender has none (R10.2, R10.7, R10.8).
+ * - `percentileRank` — the sender's Percentile_Rank in `[0.0, 100.0]` to one
+ *   decimal place, `0.0` when the sender has zero Completions (R10.3).
  */
 export interface ProgressSharePayload {
   readonly kind: 'progress';
   readonly overallPercent: number;
   readonly perParkPercent: { readonly [park in Park]?: number };
   readonly perCategoryPercent: { readonly [category in ExperienceCategory]?: number };
+  readonly topFacet?: { readonly label: string; readonly cell: CompletionCell };
+  readonly percentileRank?: number;
 }
 
 export type SharePayload = ExperienceSharePayload | ProgressSharePayload;

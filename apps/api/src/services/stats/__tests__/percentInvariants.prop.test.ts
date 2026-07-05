@@ -8,7 +8,7 @@
  *   and `total === 0 ⇒ completed === 0 ∧ percent === 0.0`.
  *
  * The roll-up under test is `buildResponse(snapshot)` from
- * `services/stats/routes.ts`. It folds a `StatsSnapshot`'s flat cell list into
+ * `services/stats/routes.ts`. It folds a `CoverageCellsSnapshot`'s flat cell list into
  * every response dimension and produces each `percent` field via
  * `computePercent`, which applies the `[0.0, 100.0]` clamp, one-decimal
  * rounding, and the `denominator === 0 ⇒ 0.0` rule uniformly (R2.4, R4.3).
@@ -38,9 +38,25 @@ import fc from 'fast-check';
 
 import { AREA_TYPES, EXPERIENCE_CATEGORIES, PARKS } from '@dwt/shared';
 
-import { buildResponse } from '../routes.js';
-import type { StatsBreakdown } from '../routes.js';
-import type { StatsCell, StatsSnapshot } from '../repo.js';
+import { rollUpCoverage } from '../coverage.js';
+import type { CompletionCell } from '../coverage.js';
+import type { RawCoverageCell } from '../repo.js';
+
+/**
+ * Local compatibility shim. The coverage roll-up moved out of the (now removed)
+ * `buildResponse` route helper into the pure `rollUpCoverage` module, which no
+ * longer produces a `byParkAndCategory` dimension (dropped by the expanded-stats
+ * design). The percent invariants are asserted over every remaining dimension.
+ */
+type StatsCell = Omit<RawCoverageCell, 'land' | 'resortArea'>;
+interface CoverageCellsSnapshot {
+  readonly cells: readonly StatsCell[];
+}
+function buildResponse(snapshot: CoverageCellsSnapshot) {
+  return rollUpCoverage(
+    snapshot.cells.map((c) => ({ ...c, land: null, resortArea: null })),
+  );
+}
 
 const NUM_RUNS = 100;
 
@@ -91,7 +107,7 @@ const representingCellArb: fc.Arbitrary<StatsCell> = fc
   }));
 
 /** A snapshot mixing general cells with guaranteed representing cells. */
-const snapshotArb: fc.Arbitrary<StatsSnapshot> = fc
+const snapshotArb: fc.Arbitrary<CoverageCellsSnapshot> = fc
   .record({
     general: fc.array(cellArb, { maxLength: 60 }),
     representing: fc.array(representingCellArb, { maxLength: 10 }),
@@ -106,8 +122,8 @@ const snapshotArb: fc.Arbitrary<StatsSnapshot> = fc
  */
 function collectBreakdowns(
   response: ReturnType<typeof buildResponse>,
-): ReadonlyArray<{ label: string; breakdown: StatsBreakdown }> {
-  const out: { label: string; breakdown: StatsBreakdown }[] = [];
+): ReadonlyArray<{ label: string; breakdown: CompletionCell }> {
+  const out: { label: string; breakdown: CompletionCell }[] = [];
 
   out.push({ label: 'overall', breakdown: response.overall });
 
@@ -120,15 +136,6 @@ function collectBreakdowns(
       label: `byCategory[${category}]`,
       breakdown: response.byCategory[category],
     });
-  }
-
-  for (const park of PARKS) {
-    for (const category of EXPERIENCE_CATEGORIES) {
-      out.push({
-        label: `byParkAndCategory[${park}][${category}]`,
-        breakdown: response.byParkAndCategory[park][category],
-      });
-    }
   }
 
   for (const areaType of AREA_TYPES) {

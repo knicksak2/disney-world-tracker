@@ -8,7 +8,7 @@
  *   never appear in `byAreaType['Resort']`.
  *
  * The stats roll-up under test is `buildResponse(snapshot)` from
- * `services/stats/routes.ts`. It folds a `StatsSnapshot`'s flat cell list into
+ * `services/stats/routes.ts`. It folds a `CoverageCellsSnapshot`'s flat cell list into
  * the response dimensions. The two dimensions this property targets are:
  *
  *   - `resort`               — the hotels-visited Resort_Statistic. Under
@@ -40,8 +40,25 @@ import fc from 'fast-check';
 
 import { AREA_TYPES, EXPERIENCE_CATEGORIES, PARKS } from '@dwt/shared';
 
-import { buildResponse } from '../routes.js';
-import type { StatsCell, StatsSnapshot } from '../repo.js';
+import { rollUpCoverage } from '../coverage.js';
+import type { RawCoverageCell } from '../repo.js';
+
+/**
+ * Local compatibility shim. The coverage roll-up moved out of the (now removed)
+ * `buildResponse` route helper into the pure `rollUpCoverage` module. These
+ * legacy property tests target the coverage fold, so they build the raw cell
+ * list and call `rollUpCoverage`; the `land`/`resortArea` columns (unused by
+ * this property) default to null.
+ */
+type StatsCell = Omit<RawCoverageCell, 'land' | 'resortArea'>;
+interface CoverageCellsSnapshot {
+  readonly cells: readonly StatsCell[];
+}
+function buildResponse(snapshot: CoverageCellsSnapshot) {
+  return rollUpCoverage(
+    snapshot.cells.map((c) => ({ ...c, land: null, resortArea: null })),
+  );
+}
 
 const NUM_RUNS = 100;
 
@@ -118,7 +135,7 @@ const representingCellArb: fc.Arbitrary<StatsCell> = fc
  * non-representing Resort-area cells and resort-representing cells, so the
  * property always exercises the two "resort" measurements side by side.
  */
-const snapshotArb: fc.Arbitrary<StatsSnapshot> = fc
+const snapshotArb: fc.Arbitrary<CoverageCellsSnapshot> = fc
   .record({
     general: fc.array(cellArb, { maxLength: 60 }),
     resortArea: fc.array(resortAreaCellArb, { maxLength: 10 }),

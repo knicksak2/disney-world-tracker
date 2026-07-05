@@ -27,6 +27,7 @@ import {
   sharePayloadKindSchema,
   uuidSchema,
 } from './primitives.js';
+import { completionCellSchema } from './Stats.js';
 
 // ---------------------------------------------------------------------------
 // Payload schemas
@@ -68,6 +69,12 @@ const perCategoryPercentShape = Object.fromEntries(
  * `progress` payload (R9.7). Each percentage is in `[0.0, 100.0]`; per-Park
  * and per-category fields are optional so the sender can omit groups that
  * have no Experiences.
+ *
+ * The expanded-stats feature adds two optional curated fields (R10.2, R10.3,
+ * R10.7, R10.8): `topFacet` (the top per-Facet_Value_Key Coverage_Statistic as
+ * a `CompletionCell` plus its display label) and `percentileRank` (in
+ * `[0.0, 100.0]`). Both are optional so a sender with no facet statistic omits
+ * `topFacet` entirely.
  */
 export const progressSharePayloadSchema = z
   .object({
@@ -75,6 +82,14 @@ export const progressSharePayloadSchema = z
     overallPercent: completionPercentSchema,
     perParkPercent: z.object(perParkPercentShape).strict(),
     perCategoryPercent: z.object(perCategoryPercentShape).strict(),
+    topFacet: z
+      .object({
+        label: z.string(),
+        cell: completionCellSchema,
+      })
+      .strict()
+      .optional(),
+    percentileRank: completionPercentSchema.optional(),
   })
   .strict();
 

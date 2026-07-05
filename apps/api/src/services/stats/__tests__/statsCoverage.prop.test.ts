@@ -11,7 +11,7 @@
  *   counts.
  *
  * The stats roll-up under test is `buildResponse(snapshot)` from
- * `services/stats/routes.ts`, which folds a `StatsSnapshot`'s flat cell list
+ * `services/stats/routes.ts`, which folds a `CoverageCellsSnapshot`'s flat cell list
  * into `overall` / `byPark` / `byCategory` / `byParkAndCategory`, each a
  * `{ completed, total, percent }` breakdown with `percent === computePercent`.
  *
@@ -41,9 +41,26 @@ import fc from 'fast-check';
 import { EXPERIENCE_CATEGORIES, PARKS } from '@dwt/shared';
 import type { ExperienceCategory, Park } from '@dwt/shared';
 
-import { buildResponse } from '../routes.js';
-import type { StatsCell, StatsSnapshot } from '../repo.js';
+import { rollUpCoverage } from '../coverage.js';
+import type { RawCoverageCell } from '../repo.js';
 import { computePercent } from '../computePercent.js';
+
+/**
+ * Local compatibility shim. The coverage roll-up moved out of the (now removed)
+ * `buildResponse` route helper into the pure `rollUpCoverage` module, which no
+ * longer produces a `byParkAndCategory` dimension (dropped by the expanded-stats
+ * design). The coverage/active-only/percent assertions retain the `overall`,
+ * `byPark`, and `byCategory` checks.
+ */
+type StatsCell = Omit<RawCoverageCell, 'land' | 'resortArea'>;
+interface CoverageCellsSnapshot {
+  readonly cells: readonly StatsCell[];
+}
+function buildResponse(snapshot: CoverageCellsSnapshot) {
+  return rollUpCoverage(
+    snapshot.cells.map((c) => ({ ...c, land: null, resortArea: null })),
+  );
+}
 
 const NUM_RUNS = 100;
 
@@ -85,7 +102,7 @@ function cellKey(park: Park, category: ExperienceCategory): string {
  */
 function activeOnlySnapshot(
   catalog: readonly GeneratedExperience[],
-): StatsSnapshot {
+): CoverageCellsSnapshot {
   const acc = new Map<string, StatsCell>();
   for (const exp of catalog) {
     if (!exp.active) {
@@ -117,7 +134,7 @@ function activeOnlySnapshot(
 }
 
 describe('buildResponse — Property 4: stats coverage, active-only counts, and percentages', () => {
-  it('covers overall, every Park, every Category, and every (Park, Category) cell', () => {
+  it('covers overall, every Park, and every Category', () => {
     fc.assert(
       fc.property(catalogArb, (catalog) => {
         const response = buildResponse(activeOnlySnapshot(catalog));
@@ -131,15 +148,6 @@ describe('buildResponse — Property 4: stats coverage, active-only counts, and 
         expect(new Set(Object.keys(response.byCategory))).toEqual(
           new Set(EXPERIENCE_CATEGORIES),
         );
-        // every (Park, Category) cell present in byParkAndCategory
-        expect(new Set(Object.keys(response.byParkAndCategory))).toEqual(
-          new Set(PARKS),
-        );
-        for (const park of PARKS) {
-          expect(
-            new Set(Object.keys(response.byParkAndCategory[park])),
-          ).toEqual(new Set(EXPERIENCE_CATEGORIES));
-        }
       }),
       { numRuns: NUM_RUNS },
     );
@@ -152,21 +160,7 @@ describe('buildResponse — Property 4: stats coverage, active-only counts, and 
 
         const active = catalog.filter((e) => e.active);
 
-        // Expected per-cell counts derived directly from the active subset.
-        for (const park of PARKS) {
-          for (const category of EXPERIENCE_CATEGORIES) {
-            const inCell = active.filter(
-              (e) => e.park === park && e.category === category,
-            );
-            const expectedTotal = inCell.length;
-            const expectedCompleted = inCell.filter((e) => e.completed).length;
-            const cell = response.byParkAndCategory[park][category];
-            expect(cell.total).toBe(expectedTotal);
-            expect(cell.completed).toBe(expectedCompleted);
-          }
-        }
-
-        // Per-Park and per-Category totals also reflect only active rows.
+        // Per-Park and per-Category totals reflect only active rows.
         for (const park of PARKS) {
           const inPark = active.filter((e) => e.park === park);
           expect(response.byPark[park].total).toBe(inPark.length);
@@ -192,19 +186,18 @@ describe('buildResponse — Property 4: stats coverage, active-only counts, and 
     );
   });
 
-  it('reports overall as the exact sum of all (Park, Category) cell counts', () => {
+  it('reports overall as the exact sum of all per-Category cell counts', () => {
     fc.assert(
       fc.property(catalogArb, (catalog) => {
         const response = buildResponse(activeOnlySnapshot(catalog));
 
+        // Every active Experience carries exactly one Category, so the
+        // per-Category totals partition the catalog and sum to overall.
         let sumCompleted = 0;
         let sumTotal = 0;
-        for (const park of PARKS) {
-          for (const category of EXPERIENCE_CATEGORIES) {
-            const cell = response.byParkAndCategory[park][category];
-            sumCompleted += cell.completed;
-            sumTotal += cell.total;
-          }
+        for (const category of EXPERIENCE_CATEGORIES) {
+          sumCompleted += response.byCategory[category].completed;
+          sumTotal += response.byCategory[category].total;
         }
 
         expect(response.overall.completed).toBe(sumCompleted);
@@ -226,9 +219,6 @@ describe('buildResponse — Property 4: stats coverage, active-only counts, and 
         check(response.overall);
         for (const park of PARKS) {
           check(response.byPark[park]);
-          for (const category of EXPERIENCE_CATEGORIES) {
-            check(response.byParkAndCategory[park][category]);
-          }
         }
         for (const category of EXPERIENCE_CATEGORIES) {
           check(response.byCategory[category]);

@@ -72,6 +72,7 @@ export type {
   LeaderboardEntryDTO,
   StatsDTO,
   StatsBreakdown,
+  CompletionCell,
   OperatingStatus,
   ForecastEntry,
   Showtime,
@@ -151,6 +152,7 @@ export {
   aggregateRatingSchema,
   leaderboardEntrySchema,
   statsSchema,
+  completionCellSchema,
   userSearchInputSchema,
   // Live_Detail schemas
   liveDetailSchema,

@@ -35,12 +35,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
-import {
-  EXPERIENCE_CATEGORIES,
-  PARKS,
-  type ExperienceCategory,
-  type Park,
-} from '@dwt/shared';
+import { type ExperienceCategory, type Park } from '@dwt/shared';
 
 // ---------------------------------------------------------------------------
 // Mocks (declared before the modules under test are imported).
@@ -75,11 +70,13 @@ jest.mock('../../../api/client', () => {
 // Imports of modules under test (after the mocks above).
 // ---------------------------------------------------------------------------
 
-import StatsScreen from '../../stats/StatsScreen';
+import StatsStack from '../../../navigation/StatsStack';
 import FriendProfileScreen, {
   type FriendProfileParams,
 } from '../../friends/FriendProfileScreen';
 import { apiRequest as mockedApiRequest } from '../../../api/client';
+import type { StatsResponse } from '../../../api/statsTypes';
+import { makeStatsResponse } from '../../stats/__testSupport__/statsFixture';
 
 /**
  * Local Catalog-stack param list for the test harness. The production
@@ -136,36 +133,9 @@ const ENTRY = {
   sharedNote: null,
 };
 
-interface Breakdown {
-  readonly completed: number;
-  readonly total: number;
-  readonly percent: number;
-}
-
-interface StatsShape {
-  readonly overall: Breakdown;
-  readonly byPark: { readonly [park in Park]: Breakdown };
-  readonly byCategory: { readonly [category in ExperienceCategory]: Breakdown };
-  readonly byParkAndCategory: {
-    readonly [park in Park]: {
-      readonly [category in ExperienceCategory]: Breakdown;
-    };
-  };
-}
-
-/** A fully-populated stats roll-up (every Park / Category present, R3.1). */
-function makeStats(): StatsShape {
-  const filler: Breakdown = { completed: 1, total: 10, percent: 10 };
-  const byPark = Object.fromEntries(
-    PARKS.map((park) => [park, filler]),
-  ) as StatsShape['byPark'];
-  const byCategory = Object.fromEntries(
-    EXPERIENCE_CATEGORIES.map((category) => [category, filler]),
-  ) as StatsShape['byCategory'];
-  const byParkAndCategory = Object.fromEntries(
-    PARKS.map((park) => [park, byCategory]),
-  ) as StatsShape['byParkAndCategory'];
-  return { overall: filler, byPark, byCategory, byParkAndCategory };
+/** A fully-populated nested stats roll-up (every Park / Category present, R3.1). */
+function makeStats(): StatsResponse {
+  return makeStatsResponse();
 }
 
 const FRIEND_PROFILE = {
@@ -189,8 +159,7 @@ function installApiRouter(): void {
       throw new Error(`unexpected non-string path: ${String(path)}`);
     }
     if (path === '/me') return ME_RESPONSE as unknown;
-    if (path.startsWith('/me/stats/summary')) return makeStats() as unknown;
-    if (path === '/me/stats') return makeStats() as unknown;
+    if (path.startsWith('/me/stats')) return makeStats() as unknown;
     if (path.endsWith('/profile')) return FRIEND_PROFILE as unknown;
     if (path.endsWith('/completions')) {
       return { entries: [ENTRY] } as unknown;
@@ -275,7 +244,7 @@ function renderNavigator(initialTab: 'Stats' | 'Friends'): void {
         initialRouteName={initialTab}
         screenOptions={{ headerShown: false }}
       >
-        <Tab.Screen name="Stats" component={StatsScreen} />
+        <Tab.Screen name="Stats" component={StatsStack} />
         <Tab.Screen name="Friends" component={FriendsTestStack} />
         <Tab.Screen name="Catalog" component={CatalogTestStack} />
       </Tab.Navigator>
@@ -320,29 +289,6 @@ interface ModeCase {
 }
 
 const MODE_CASES: readonly ModeCase[] = [
-  {
-    mode: 'Stats Own_Parks',
-    initialTab: 'Stats',
-    tabTestId: 'tab-Own_Parks',
-    containerTestId: 'own-parks',
-    expandHeaderTestId: 'stats-section-park-Magic Kingdom-header',
-    rowTestId: 'stats-park-Magic Kingdom-row-0',
-  },
-  {
-    mode: 'Stats Own_Categories',
-    initialTab: 'Stats',
-    tabTestId: 'tab-Own_Categories',
-    containerTestId: 'own-categories',
-    expandHeaderTestId: 'stats-section-category-Ride-header',
-    rowTestId: 'stats-category-Ride-row-0',
-  },
-  {
-    mode: 'Stats Own_Experiences',
-    initialTab: 'Stats',
-    tabTestId: 'tab-Own_Experiences',
-    containerTestId: 'own-experiences',
-    rowTestId: 'own-experience-row-0',
-  },
   {
     mode: 'Friend Parks',
     initialTab: 'Friends',

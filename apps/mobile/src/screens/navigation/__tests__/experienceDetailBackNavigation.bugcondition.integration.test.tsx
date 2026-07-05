@@ -66,12 +66,7 @@ import {
 } from '@testing-library/react-native';
 import fc from 'fast-check';
 
-import {
-  EXPERIENCE_CATEGORIES,
-  PARKS,
-  type ExperienceCategory,
-  type Park,
-} from '@dwt/shared';
+import { type ExperienceCategory, type Park } from '@dwt/shared';
 
 // ---------------------------------------------------------------------------
 // Mocks (declared before the modules under test are imported).
@@ -108,12 +103,14 @@ jest.mock('../../../api/client', () => {
 // ---------------------------------------------------------------------------
 
 import HomeScreen from '../../home/HomeScreen';
-import StatsScreen from '../../stats/StatsScreen';
+import StatsStack from '../../../navigation/StatsStack';
 import FriendProfileScreen, {
   type FriendProfileParams,
 } from '../../friends/FriendProfileScreen';
 import ExperienceDetailScreen from '../../catalog/ExperienceDetailScreen';
 import { apiRequest as mockedApiRequest } from '../../../api/client';
+import type { StatsResponse } from '../../../api/statsTypes';
+import { makeStatsResponse } from '../../stats/__testSupport__/statsFixture';
 
 /**
  * Local Catalog-stack param list for the test harness. This mirrors the
@@ -198,36 +195,9 @@ const EXPERIENCE_DETAIL = {
   imageAttribution: null,
 };
 
-interface Breakdown {
-  readonly completed: number;
-  readonly total: number;
-  readonly percent: number;
-}
-
-interface StatsShape {
-  readonly overall: Breakdown;
-  readonly byPark: { readonly [park in Park]: Breakdown };
-  readonly byCategory: { readonly [category in ExperienceCategory]: Breakdown };
-  readonly byParkAndCategory: {
-    readonly [park in Park]: {
-      readonly [category in ExperienceCategory]: Breakdown;
-    };
-  };
-}
-
-/** A fully-populated stats roll-up (every Park / Category present). */
-function makeStats(): StatsShape {
-  const filler: Breakdown = { completed: 1, total: 10, percent: 10 };
-  const byPark = Object.fromEntries(
-    PARKS.map((park) => [park, filler]),
-  ) as StatsShape['byPark'];
-  const byCategory = Object.fromEntries(
-    EXPERIENCE_CATEGORIES.map((category) => [category, filler]),
-  ) as StatsShape['byCategory'];
-  const byParkAndCategory = Object.fromEntries(
-    PARKS.map((park) => [park, byCategory]),
-  ) as StatsShape['byParkAndCategory'];
-  return { overall: filler, byPark, byCategory, byParkAndCategory };
+/** A fully-populated nested stats roll-up (every Park / Category present). */
+function makeStats(): StatsResponse {
+  return makeStatsResponse();
 }
 
 const FRIEND_PROFILE = {
@@ -349,7 +319,7 @@ function MainTabsNavigator(): JSX.Element {
       screenOptions={{ headerShown: false, lazy: false }}
     >
       <Tab.Screen name="Home" component={HomeScreen as React.ComponentType<unknown>} />
-      <Tab.Screen name="Stats" component={StatsScreen} />
+      <Tab.Screen name="Stats" component={StatsStack} />
       <Tab.Screen name="Friends" component={FriendsTestStack} />
       <Tab.Screen name="Catalog" component={CatalogTestStack} />
     </Tab.Navigator>
@@ -442,8 +412,8 @@ interface OriginCase {
 
 async function openFromStats(): Promise<void> {
   await screen.findByTestId('stats-screen');
-  fireEvent.press(screen.getByTestId('tab-Own_Experiences'));
-  await screen.findByTestId('own-experiences');
+  fireEvent.press(await screen.findByTestId('stats-highlight-experiences'));
+  await screen.findByTestId('experiences-detail-screen');
   fireEvent.press(await screen.findByTestId('own-experience-row-0'));
 }
 
@@ -468,7 +438,11 @@ const ORIGIN_LABELS = [
 type OriginLabel = (typeof ORIGIN_LABELS)[number];
 
 const CASES: Record<OriginLabel, OriginCase> = {
-  Stats_View: { initialTab: 'Stats', expectedRoute: 'Stats', open: openFromStats },
+  Stats_View: {
+    initialTab: 'Stats',
+    expectedRoute: 'ExperiencesDetail',
+    open: openFromStats,
+  },
   Friend_Profile_View: {
     initialTab: 'Friends',
     expectedRoute: 'FriendProfile',

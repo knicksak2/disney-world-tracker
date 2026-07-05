@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Stats Experience Redesign — Mockup</title>
+<style>
+  :root {
+    --primary: #5b2a86;
+    --primary-dark: #3d1c5c;
+    --primary-light: #7e57c2;
+    --accent: #f6c343;
+    --accent-dark: #d4a017;
+    --bg: #f5f2fb;
+    --surface: #ffffff;
+    --surface-alt: #efe9f7;
+    --text: #1f1235;
+    --text-secondary: #6b6480;
+    --track: #e7e0f2;
+    --green: #3fa34d;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: #2a2140;
+    color: var(--text);
+    padding: 28px 16px 60px;
+  }
+  h1.page-title { color: #fff; text-align: center; font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+  p.page-sub { color: #b7abd6; text-align: center; font-size: 13px; margin-bottom: 26px; }
+
+  .phones { display: flex; gap: 26px; flex-wrap: wrap; justify-content: center; align-items: flex-start; }
+
+  .phone-wrap { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .phone-label { color: #cfc3ee; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+
+  .phone {
+    width: 300px; height: 640px; background: var(--bg);
+    border-radius: 34px; overflow: hidden; position: relative;
+    border: 9px solid #17111f; box-shadow: 0 18px 50px rgba(0,0,0,.5);
+    display: flex; flex-direction: column;
+  }
+  .screen { flex: 1; overflow-y: auto; overflow-x: hidden; }
+  .screen::-webkit-scrollbar { width: 0; }
+
+  /* Header */
+  .hdr {
+    background: linear-gradient(135deg, #7e57c2, #5b2a86 55%, #3d1c5c);
+    padding: 44px 18px 20px; color: #fff; position: relative;
+  }
+  .hdr .back { position: absolute; left: 14px; top: 44px; font-size: 20px; color: #fff; opacity: .9; }
+  .hdr .share { position: absolute; right: 16px; top: 46px; font-size: 17px; opacity: .95; }
+  .hdr h2 { font-size: 21px; font-weight: 800; }
+  .hdr .sub { font-size: 12.5px; opacity: .85; margin-top: 3px; }
+  .hdr.compact { padding: 42px 18px 16px; }
+  .hdr.compact h2 { font-size: 18px; }
+
+  .body { padding: 16px 14px 30px; }
+
+  /* Card */
+  .card {
+    background: var(--surface); border-radius: 18px; padding: 16px;
+    box-shadow: 0 4px 14px rgba(61,28,92,.10); margin-bottom: 14px;
+  }
+  .card.tap { position: relative; }
+  .card.tap::after { content: "›"; position: absolute; right: 14px; top: 50%; transform: translateY(-50%); color: var(--text-secondary); font-size: 26px; font-weight: 300; }
+
+  .section-label { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text-secondary); margin: 6px 2px 10px; }
+
+  /* Hero ring */
+  .hero { display: flex; flex-direction: column; align-items: center; padding: 22px 16px 20px; text-align: center; }
+  .ring { position: relative; }
+  .ring svg { transform: rotate(-90deg); }
+  .ring .center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .ring .center .big { font-size: 30px; font-weight: 800; color: var(--primary); line-height: 1; }
+  .ring .center .small { font-size: 11px; color: var(--text-secondary); margin-top: 3px; }
+  .hero .label { font-size: 12px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 14px; }
+  .hero .counts { font-size: 13px; color: var(--text-secondary); margin-top: 12px; }
+
+  /* Percentile banner */
+  .pct {
+    background: linear-gradient(120deg, #f6c343, #f0a93b); color: #3d1c5c;
+    border-radius: 16px; padding: 13px 16px; display: flex; align-items: center; gap: 11px; margin-bottom: 16px;
+    box-shadow: 0 4px 14px rgba(214,160,23,.35);
+  }
+  .pct .medal { font-size: 22px; }
+  .pct .txt b { font-size: 15px; } .pct .txt div { font-size: 11.5px; opacity: .8; }
+
+  /* Highlight cards */
+  .hl {
+    background: var(--surface); border-radius: 16px; padding: 14px; margin-bottom: 12px;
+    display: flex; align-items: center; gap: 13px; box-shadow: 0 4px 14px rgba(61,28,92,.09);
+    position: relative;
+  }
+  .hl::after { content: "›"; position: absolute; right: 14px; color: var(--text-secondary); font-size: 24px; font-weight: 300; }
+  .hl .ic { width: 42px; height: 42px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; }
+  .hl .t { flex: 1; }
+  .hl .t .k { font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--text-secondary); }
+  .hl .t .h { font-size: 15px; font-weight: 700; color: var(--text); margin-top: 2px; }
+  .hl .t .s { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+  .chip { display: inline-block; background: var(--accent); color: var(--accent-dark); font-size: 10px; font-weight: 800; padding: 2px 8px; border-radius: 20px; letter-spacing: .03em; }
+  .locked .ic { background: var(--surface-alt); }
+
+  /* Segmented control */
+  .seg { display: flex; background: var(--surface-alt); border-radius: 12px; padding: 4px; margin-bottom: 14px; gap: 2px; }
+  .seg .s { flex: 1; text-align: center; font-size: 12px; font-weight: 600; color: var(--text-secondary); padding: 7px 4px; border-radius: 9px; }
+  .seg .s.on { background: var(--surface); color: var(--primary); box-shadow: 0 2px 6px rgba(61,28,92,.12); }
+
+  /* At-a-glance strip */
+  .glance { display: flex; align-items: center; gap: 14px; background: var(--surface); border-radius: 16px; padding: 14px 16px; margin-bottom: 14px; box-shadow: 0 4px 14px rgba(61,28,92,.09); }
+  .glance .txt .h { font-size: 15px; font-weight: 800; color: var(--text); }
+  .glance .txt .s { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+
+  /* Ranked bar rows */
+  .row { padding: 11px 2px; border-bottom: 1px solid #f0ebf7; }
+  .row:last-child { border-bottom: none; }
+  .row .top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 7px; }
+  .row .top .name { font-size: 13.5px; font-weight: 600; color: var(--text); display: flex; align-items: center; gap: 7px; }
+  .row .top .name .dot { width: 9px; height: 9px; border-radius: 3px; }
+  .row .top .val { font-size: 12px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+  .bar { height: 9px; background: var(--track); border-radius: 6px; overflow: hidden; }
+  .bar > i { display: block; height: 100%; border-radius: 6px; }
+  .done { color: var(--green); font-weight: 700; }
+  .badge-mini { font-size: 11px; color: var(--accent-dark); font-weight: 800; }
+
+  /* Ratings */
+  .dial-wrap { display: flex; align-items: center; gap: 16px; }
+  .dial-num { font-size: 40px; font-weight: 800; color: var(--primary); line-height: 1; }
+  .dial-num span { font-size: 16px; color: var(--text-secondary); font-weight: 600; }
+  .stars { color: var(--accent); font-size: 15px; letter-spacing: 1px; margin-top: 4px; }
+  .hist { display: flex; align-items: flex-end; gap: 5px; height: 90px; margin: 6px 2px 2px; }
+  .hist .b { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; height: 100%; justify-content: flex-end; }
+  .hist .b > i { width: 100%; background: linear-gradient(180deg, var(--primary-light), var(--primary)); border-radius: 4px 4px 0 0; }
+  .hist .b > i.hot { background: linear-gradient(180deg, var(--accent), var(--accent-dark)); }
+  .hist .b > .n { font-size: 9px; color: var(--text-secondary); }
+  .hl-cards { display: flex; gap: 10px; }
+  .hl-cards .c { flex: 1; background: var(--surface); border-radius: 14px; padding: 13px; box-shadow: 0 3px 10px rgba(61,28,92,.09); }
+  .hl-cards .c .k { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+  .hl-cards .c .n { font-size: 13.5px; font-weight: 700; margin: 6px 0 4px; color: var(--text); }
+  .hl-cards .c .v { font-size: 20px; font-weight: 800; }
+  .avg-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .avg-grid .a { background: var(--surface-alt); border-radius: 11px; padding: 9px 11px; display: flex; justify-content: space-between; align-items: center; }
+  .avg-grid .a .l { font-size: 12px; color: var(--text); }
+  .avg-grid .a .v { font-size: 13px; font-weight: 800; color: var(--primary); }
+
+  /* Unlock empty state */
+  .unlock { text-align: center; padding: 26px 18px; }
+  .unlock .lock { font-size: 34px; margin-bottom: 10px; }
+  .unlock .h { font-size: 15px; font-weight: 800; color: var(--text); }
+  .unlock .s { font-size: 12.5px; color: var(--text-secondary); margin: 6px 0 14px; }
+  .unlock .track { height: 8px; background: var(--track); border-radius: 6px; overflow: hidden; max-width: 180px; margin: 0 auto; }
+  .unlock .track > i { display: block; height: 100%; background: var(--accent); border-radius: 6px; }
+
+  .note { color: #b7abd6; font-size: 11.5px; text-align: center; max-width: 300px; line-height: 1.5; }
+  .legend { max-width: 940px; margin: 30px auto 0; color: #d7ccf2; font-size: 13px; line-height: 1.7; background: rgba(255,255,255,.05); border-radius: 14px; padding: 18px 22px; }
+  .legend b { color: #fff; }
+  .legend code { background: rgba(255,255,255,.12); padding: 1px 6px; border-radius: 5px; font-size: 12px; }
+</style>
+</head>
+<body>
+  <h1 class="page-title">Stats Experience Redesign</h1>
+  <p class="page-sub">Overview hub → drill-in detail screens · faithful to the app's purple/gold theme</p>
+
+  <div class="phones">
+
+    <!-- ============ 1. OVERVIEW HUB ============ -->
+    <div class="phone-wrap">
+      <div class="phone-label">1 · Overview Hub (landing)</div>
+      <div class="phone"><div class="screen">
+        <div class="hdr">
+          <div class="share">⤴</div>
+          <h2>Your Stats</h2>
+          <div class="sub">Track how much magic you've experienced.</div>
+        </div>
+        <div class="body">
+          <!-- Hero ring -->
+          <div class="card hero">
+            <div class="label">Overall Completion</div>
+            <div class="ring">
+              <svg width="150" height="150" viewBox="0 0 150 150">
+                <circle cx="75" cy="75" r="64" fill="none" stroke="#e7e0f2" stroke-width="14"/>
+                <circle cx="75" cy="75" r="64" fill="none" stroke="url(#g1)" stroke-width="14"
+                        stroke-linecap="round" stroke-dasharray="402" stroke-dashoffset="169"/>
+                <defs><linearGradient id="g1" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0" stop-color="#7e57c2"/><stop offset="1" stop-color="#5b2a86"/>
+                </linearGradient></defs>
+              </svg>
+              <div class="center"><div class="big">58.0%</div><div class="small">348 / 600</div></div>
+            </div>
+            <div class="counts">252 experiences left to go ✨</div>
+          </div>
+
+          <!-- Percentile brag -->
+          <div class="pct">
+            <div class="medal">🏅</div>
+            <div class="txt"><b>You're ahead of 92.4% of trackers</b><div>Top-tier explorer status</div></div>
+          </div>
+
+          <!-- Highlight / entry cards -->
+          <div class="hl">
+            <div class="ic" style="background:#efe9f7;color:#5b2a86;">🗺️</div>
+            <div class="t"><div class="k">Coverage</div><div class="h">Best park: Magic Kingdom 82%</div><div class="s">EPCOT is closest — 4 to go</div></div>
+          </div>
+          <div class="hl">
+            <div class="ic" style="background:#fff4d6;color:#d4a017;">⭐</div>
+            <div class="t"><div class="k">Ratings</div><div class="h">Average 7.4 / 10</div><div class="s">Top-rated: Rise of the Resistance</div></div>
+          </div>
+          <div class="hl">
+            <div class="ic" style="background:#efe9f7;color:#7e57c2;">✨</div>
+            <div class="t"><div class="k">Interests</div><div class="h">Thrill Rides 71%</div><div class="s">Your strongest interest</div></div>
+          </div>
+          <div class="hl">
+            <div class="ic" style="background:#e8f4ff;color:#2f80ed;">📋</div>
+            <div class="t"><div class="k">Experiences</div><div class="h">Browse all 348</div></div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+
+    <!-- ============ 2. COVERAGE DETAIL ============ -->
+    <div class="phone-wrap">
+      <div class="phone-label">2 · Coverage (lenses + ranked bars)</div>
+      <div class="phone"><div class="screen">
+        <div class="hdr compact">
+          <div class="back">‹</div>
+          <h2 style="padding-left:24px;">Coverage</h2>
+        </div>
+        <div class="body">
+          <!-- At a glance: small ring + summary -->
+          <div class="glance">
+            <div class="ring">
+              <svg width="62" height="62" viewBox="0 0 62 62">
+                <circle cx="31" cy="31" r="25" fill="none" stroke="#e7e0f2" stroke-width="7"/>
+                <circle cx="31" cy="31" r="25" fill="none" stroke="#5b2a86" stroke-width="7"
+                        stroke-linecap="round" stroke-dasharray="157" stroke-dashoffset="66" transform="rotate(-90 31 31)"/>
+              </svg>
+              <div class="center" style="font-size:0;"><div style="font-size:13px;font-weight:800;color:#5b2a86;">58%</div></div>
+            </div>
+            <div class="txt"><div class="h">2 parks complete</div><div class="s">Closest: EPCOT · 4 to go</div></div>
+          </div>
+
+          <!-- Lens switcher -->
+          <div class="seg" style="font-size:11px;">
+            <div class="s on">Parks</div><div class="s">Categories</div><div class="s">Areas</div><div class="s">Lands</div><div class="s">Resorts</div>
+          </div>
+
+          <!-- Ranked bars -->
+          <div class="card" style="padding:6px 14px;">
+            <div class="row">
+              <div class="top"><div class="name"><span class="dot" style="background:#3fa34d;"></span>Animal Kingdom <span class="badge-mini">🏆</span></div><div class="val done">40 / 40 · 100%</div></div>
+              <div class="bar"><i style="width:100%;background:#3fa34d;"></i></div>
+            </div>
+            <div class="row">
+              <div class="top"><div class="name"><span class="dot" style="background:#7e57c2;"></span>Magic Kingdom</div><div class="val">74 / 90 · 82%</div></div>
+              <div class="bar"><i style="width:82%;background:#7e57c2;"></i></div>
+            </div>
+            <div class="row">
+              <div class="top"><div class="name"><span class="dot" style="background:#2f80ed;"></span>EPCOT</div><div class="val">61 / 65 · 94%</div></div>
+              <div class="bar"><i style="width:94%;background:#2f80ed;"></i></div>
+            </div>
+            <div class="row">
+              <div class="top"><div class="name"><span class="dot" style="background:#e8505b;"></span>Hollywood Studios</div><div class="val">38 / 55 · 69%</div></div>
+              <div class="bar"><i style="width:69%;background:#e8505b;"></i></div>
+            </div>
+            <div class="row">
+              <div class="top"><div class="name"><span class="dot" style="background:#f6a609;"></span>Disney Springs</div><div class="val">22 / 60 · 37%</div></div>
+              <div class="bar"><i style="width:37%;background:#f6a609;"></i></div>
+            </div>
+            <div class="row">
+              <div class="top"><div class="name"><span class="dot" style="background:#17a2b8;"></span>Typhoon Lagoon</div><div class="val">5 / 18 · 28%</div></div>
+              <div class="bar"><i style="width:28%;background:#17a2b8;"></i></div>
+            </div>
+          </div>
+          <div class="section-label" style="margin-top:4px;">🏨 Hotels visited</div>
+          <div class="card" style="padding:6px 14px;">
+            <div class="row">
+              <div class="top"><div class="name">Resorts stayed</div><div class="val">9 / 30 · 30%</div></div>
+              <div class="bar"><i style="width:30%;background:#5b2a86;"></i></div>
+            </div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+
+    <!-- ============ 3. RATINGS DETAIL ============ -->
+    <div class="phone-wrap">
+      <div class="phone-label">3 · Ratings (dial · histogram · high/low)</div>
+      <div class="phone"><div class="screen">
+        <div class="hdr compact">
+          <div class="back">‹</div>
+          <h2 style="padding-left:24px;">Your Ratings</h2>
+        </div>
+        <div class="body">
+          <div class="card">
+            <div class="dial-wrap">
+              <div><div class="dial-num">7.4<span>/10</span></div><div class="stars">★★★★★★★☆☆☆</div></div>
+              <div style="flex:1;text-align:right;color:#6b6480;font-size:12px;">across<br><b style="color:#1f1235;font-size:15px;">126 ratings</b></div>
+            </div>
+          </div>
+
+          <div class="section-label">Distribution</div>
+          <div class="card">
+            <div class="hist">
+              <div class="b"><i style="height:8%;"></i><span class="n">1</span></div>
+              <div class="b"><i style="height:5%;"></i><span class="n">2</span></div>
+              <div class="b"><i style="height:12%;"></i><span class="n">3</span></div>
+              <div class="b"><i style="height:20%;"></i><span class="n">4</span></div>
+              <div class="b"><i style="height:34%;"></i><span class="n">5</span></div>
+              <div class="b"><i style="height:52%;"></i><span class="n">6</span></div>
+              <div class="b"><i style="height:78%;" class="hot"></i><span class="n">7</span></div>
+              <div class="b"><i style="height:100%;" class="hot"></i><span class="n">8</span></div>
+              <div class="b"><i style="height:64%;"></i><span class="n">9</span></div>
+              <div class="b"><i style="height:40%;"></i><span class="n">10</span></div>
+            </div>
+          </div>
+
+          <div class="section-label">Your extremes</div>
+          <div class="hl-cards">
+            <div class="c"><div class="k" style="color:#3fa34d;">▲ Highest</div><div class="n">Rise of the Resistance</div><div class="v" style="color:#3fa34d;">10<span style="font-size:13px;color:#6b6480;">/10</span></div></div>
+            <div class="c"><div class="k" style="color:#e8505b;">▼ Lowest</div><div class="n">Stitch's Great Escape</div><div class="v" style="color:#e8505b;">2<span style="font-size:13px;color:#6b6480;">/10</span></div></div>
+          </div>
+
+          <div class="section-label" style="margin-top:16px;">Average by park</div>
+          <div class="avg-grid">
+            <div class="a"><span class="l">Magic Kingdom</span><span class="v">7.9</span></div>
+            <div class="a"><span class="l">EPCOT</span><span class="v">7.1</span></div>
+            <div class="a"><span class="l">Hollywood Studios</span><span class="v">8.2</span></div>
+            <div class="a"><span class="l">Animal Kingdom</span><span class="v">6.8</span></div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+
+    <!-- ============ 4. INTERESTS + RATINGS LOCKED ============ -->
+    <div class="phone-wrap">
+      <div class="phone-label">4 · Interests · & Ratings locked state</div>
+      <div class="phone"><div class="screen">
+        <div class="hdr compact">
+          <div class="back">‹</div>
+          <h2 style="padding-left:24px;">Interests</h2>
+        </div>
+        <div class="body">
+          <div class="note" style="margin:0 0 12px;color:#6b6480;text-align:left;">Completion across Disney's themed facets — sorted by how far along you are.</div>
+          <div class="card" style="padding:6px 14px;">
+            <div class="row">
+              <div class="top"><div class="name">🎢 Thrill Rides</div><div class="val">17 / 24 · 71%</div></div>
+              <div class="bar"><i style="width:71%;background:#7e57c2;"></i></div>
+            </div>
+            <div class="row">
+              <div class="top"><div class="name">👨‍👩‍👧 Family-Friendly</div><div class="val">52 / 80 · 65%</div></div>
+              <div class="bar"><i style="width:65%;background:#2f80ed;"></i></div>
+            </div>
+            <div class="row">
+              <div class="top"><div class="name">💧 Water Rides</div><div class="val">6 / 11 · 55%</div></div>
+              <div class="bar"><i style="width:55%;background:#17a2b8;"></i></div>
+            </div>
+            <div class="row">
+              <div class="top"><div class="name">🌙 Nighttime Spectaculars</div><div class="val">4 / 9 · 44%</div></div>
+              <div class="bar"><i style="width:44%;background:#f6a609;"></i></div>
+            </div>
+            <div class="row">
+              <div class="top"><div class="name">🎭 Live Entertainment</div><div class="val">9 / 28 · 32%</div></div>
+              <div class="bar"><i style="width:32%;background:#e8505b;"></i></div>
+            </div>
+          </div>
+
+          <div class="section-label" style="margin-top:18px;">↓ Ratings — locked example</div>
+          <div class="card">
+            <div class="unlock">
+              <div class="lock">🔒</div>
+              <div class="h">Unlock your rating stats</div>
+              <div class="s">Rate 1 more experience to reveal your average, distribution, and favorites.</div>
+              <div class="track"><i style="width:66%;"></i></div>
+              <div class="s" style="margin-top:8px;">2 / 3 rated</div>
+            </div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+
+    <!-- ============ 5. COVERAGE · RESORTS LENS ============ -->
+    <div class="phone-wrap">
+      <div class="phone-label">5 · Coverage · Resorts lens (per-resort)</div>
+      <div class="phone"><div class="screen">
+        <div class="hdr compact">
+          <div class="back">‹</div>
+          <h2 style="padding-left:24px;">Coverage</h2>
+        </div>
+        <div class="body">
+          <!-- Hotels visited (stayed) — aggregate, kept distinct -->
+          <div class="section-label">🏨 Hotels visited (stayed)</div>
+          <div class="card" style="padding:6px 14px;margin-bottom:16px;">
+            <div class="row">
+              <div class="top"><div class="name">Resorts stayed at</div><div class="val">9 / 30 · 30%</div></div>
+              <div class="bar"><i style="width:30%;background:#5b2a86;"></i></div>
+            </div>
+          </div>
+
+          <!-- Lens switcher, Resorts active -->
+          <div class="seg" style="font-size:11px;">
+            <div class="s">Parks</div><div class="s">Categories</div><div class="s">Areas</div><div class="s">Lands</div><div class="s on">Resorts</div>
+          </div>
+
+          <div class="section-label">What you've done at each resort</div>
+          <!-- Per-resort ranked bars (byResort) -->
+          <div class="card" style="padding:6px 14px;">
+            <div class="row">
+              <div class="top"><div class="name">🛎️ Grand Floridian <span class="badge-mini">🏆</span></div><div class="val done">6 / 6 · 100%</div></div>
+              <div class="bar"><i style="width:100%;background:#3fa34d;"></i></div>
+            </div>
+            <div class="row">
+              <div class="top"><div class="name">🛎️ Contemporary</div><div class="val">7 / 9 · 78%</div></div>
+              <div class="bar"><i style="width:78%;background:#5b2a86;"></i></div>
+            </div>
+            <div class="row">
+              <div class="top"><div class="name">🛎️ Polynesian Village</div><div class="val">5 / 8 · 63%</div></div>
+              <div class="bar"><i style="width:63%;background:#5b2a86;"></i></div>
+            </div>
+            <div class="row">
+              <div class="top"><div class="name">🛎️ Animal Kingdom Lodge</div><div class="val">4 / 9 · 44%</div></div>
+              <div class="bar"><i style="width:44%;background:#7e57c2;"></i></div>
+            </div>
+            <div class="row">
+              <div class="top"><div class="name">🛎️ Riviera</div><div class="val">3 / 7 · 43%</div></div>
+              <div class="bar"><i style="width:43%;background:#7e57c2;"></i></div>
+            </div>
+            <div class="row">
+              <div class="top"><div class="name">🛎️ Caribbean Beach</div><div class="val">2 / 10 · 20%</div></div>
+              <div class="bar"><i style="width:20%;background:#f6a609;"></i></div>
+            </div>
+            <div class="row">
+              <div class="top"><div class="name">🛎️ Pop Century</div><div class="val">1 / 6 · 17%</div></div>
+              <div class="bar"><i style="width:17%;background:#f6a609;"></i></div>
+            </div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+
+  </div>
+
+  <div class="legend">
+    <b>How it fits together.</b> Screen 1 is the <b>Overview hub</b> — one screen tall, no endless scroll: a hero completion <b>ring</b>, the gold percentile brag, and four tappable highlight cards.
+    Tapping a card pushes a focused detail screen (2–4) with a native back arrow; the tab bar stays visible.
+    <br><br>
+    <b>Rings vs bars.</b> Rings are the headline visual — the big hero on the hub and the small "at a glance" ring on Coverage. Comparisons use <b>ranked progress bars</b> sorted most→least complete, so 6 parks or 11 categories stay scannable. Coverage uses a <b>lens switcher</b> (<code>Parks · Categories · Areas · Lands</code>) so you see one dimension at a time.
+    <br><br>
+    <b>Ratings</b> shows a big average + stars, a 1–10 distribution histogram (peak bars in gold), highest/lowest hero cards, and per-park/category averages — or a friendly <b>unlock</b> state below the 3-rating threshold. <b>Interests</b> reuses the ranked-bar pattern for Disney's themed facets.
+    <br><br>
+    <b>Per-resort completion (new).</b> Screen 5 shows the new <b>Resorts lens</b> — "what you've done <i>at</i> each resort" (dining, recreation, spa, etc.), ranked most→least complete. This is powered by a small additive backend dimension (<code>byResort</code>, grouping experiences by their <code>resort_id</code>). It's kept separate from the aggregate <b>Hotels visited (stayed)</b> bar at the top — two complementary stories: which hotels you've stayed at vs. how much you've done at each.
+    <br><br>
+    This is a static HTML approximation of the React Native screens (real theme colors). Fills/percentages are sample data.
+  </div>
+</body>
+</html>

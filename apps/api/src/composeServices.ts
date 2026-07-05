@@ -100,6 +100,7 @@ import type { FriendRequestReceivedNotice } from './services/friends/routes.js';
 import { createSharingRepo } from './services/sharing/repo.js';
 import type { ShareDeliveredNotice } from './services/sharing/routes.js';
 import { createStatsRepo } from './services/stats/repo.js';
+import { buildCuratedProgressStats } from './services/stats/curatedShare.js';
 
 import { createPushRepo } from './services/push/repo.js';
 import { createNotificationPreferenceRepo } from './services/push/preferenceRepo.js';
@@ -424,6 +425,20 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
       // R7.7: dispatch the notification on a background port after the share
       // transaction commits; the request is never blocked or failed by push.
       emitShareDelivered,
+      // R10: capture the sender's curated stats (overallPercent, topFacet,
+      // percentileRank) as a send-time snapshot when a `progress` Share is
+      // created. The stats snapshot is read with `includePercentile: true` so
+      // the Percentile_Rank material is present, then folded by the pure
+      // `buildCuratedProgressStats`. Reusing the Stats_Service's single
+      // `REPEATABLE READ READ ONLY` computation keeps the curated fields
+      // consistent with the Stats_Page and immutable for the recipient (R10.6).
+      computeProgressShareStats: async (senderId: string) => {
+        const snapshot = await statsRepo.getStatsSnapshot({
+          targetUserId: senderId,
+          includePercentile: true,
+        });
+        return buildCuratedProgressStats(snapshot);
+      },
     },
     push: { repo: pushRepo, requireSession: sessionMiddleware },
     notificationPreferences: {

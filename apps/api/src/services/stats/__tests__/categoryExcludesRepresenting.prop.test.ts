@@ -33,8 +33,25 @@ import fc from 'fast-check';
 
 import { AREA_TYPES, EXPERIENCE_CATEGORIES, PARKS } from '@dwt/shared';
 
-import { buildResponse } from '../routes.js';
-import type { StatsCell, StatsSnapshot } from '../repo.js';
+import { rollUpCoverage } from '../coverage.js';
+import type { RawCoverageCell } from '../repo.js';
+
+/**
+ * Local compatibility shim. The coverage roll-up moved out of the (now removed)
+ * `buildResponse` route helper into the pure `rollUpCoverage` module. These
+ * legacy property tests target the coverage fold, so they build the raw cell
+ * list and call `rollUpCoverage`; the `land`/`resortArea` columns (unused by
+ * this property) default to null.
+ */
+type StatsCell = Omit<RawCoverageCell, 'land' | 'resortArea'>;
+interface CoverageCellsSnapshot {
+  readonly cells: readonly StatsCell[];
+}
+function buildResponse(snapshot: CoverageCellsSnapshot) {
+  return rollUpCoverage(
+    snapshot.cells.map((c) => ({ ...c, land: null, resortArea: null })),
+  );
+}
 
 const NUM_RUNS = 100;
 
@@ -90,7 +107,7 @@ const representingCellArb: fc.Arbitrary<StatsCell> = fc
  * exercises the `Resort`-category counting rather than occasionally generating a
  * snapshot with no representing rows at all.
  */
-const snapshotArb: fc.Arbitrary<StatsSnapshot> = fc
+const snapshotArb: fc.Arbitrary<CoverageCellsSnapshot> = fc
   .record({
     general: fc.array(cellArb, { maxLength: 60 }),
     representing: fc.array(representingCellArb, { maxLength: 10 }),

@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "codebase-memory-mcp": {
+      "command": "C:\\Users\\knick\\AppData\\Local\\Programs\\codebase-memory-mcp\\codebase-memory-mcp.exe",
+      "args": [],
+      "disabled": false,
+      "autoApprove": [
+        "list_projects",
+        "index_status",
+        "get_graph_schema",
+        "get_architecture",
+        "search_graph",
+        "search_code",
+        "trace_path",
+        "get_code_snippet"
+      ]
+    }
+  }
+}

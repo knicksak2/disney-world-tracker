@@ -51,8 +51,6 @@ import {
 } from '@testing-library/react-native';
 
 import {
-  EXPERIENCE_CATEGORIES,
-  PARKS,
   type InboxItemDTO,
   type InboxResponse,
   type ProfileDTO,
@@ -95,10 +93,8 @@ jest.mock('../../../api/client', () => {
 import InboxScreen from '../InboxScreen';
 import FriendProfileScreen from '../../friends/FriendProfileScreen';
 import { ApiError, apiRequest as mockedApiRequest } from '../../../api/client';
-import type {
-  FriendStatsBreakdown,
-  FriendStatsResponse,
-} from '../../../api/friendProfile';
+import type { StatsResponse } from '../../../api/statsTypes';
+import { makeStatsResponse } from '../../stats/__testSupport__/statsFixture';
 
 const apiRequestMock = mockedApiRequest as jest.MockedFunction<
   typeof mockedApiRequest
@@ -155,35 +151,8 @@ function makeProfile(overrides: Partial<ProfileDTO> = {}): ProfileDTO {
   };
 }
 
-function breakdown(
-  completed: number,
-  total: number,
-  percent: number,
-): FriendStatsBreakdown {
-  return { completed, total, percent };
-}
-
-function makeStats(
-  overrides: Partial<FriendStatsResponse> = {},
-): FriendStatsResponse {
-  const zero = breakdown(0, 0, 0);
-  const byPark = Object.fromEntries(
-    PARKS.map((park) => [park, zero]),
-  ) as FriendStatsResponse['byPark'];
-  const byCategory = Object.fromEntries(
-    EXPERIENCE_CATEGORIES.map((category) => [category, zero]),
-  ) as FriendStatsResponse['byCategory'];
-  const byParkAndCategory = Object.fromEntries(
-    PARKS.map((park) => [park, byCategory]),
-  ) as FriendStatsResponse['byParkAndCategory'];
-
-  return {
-    overall: breakdown(50, 100, 50),
-    byPark,
-    byCategory,
-    byParkAndCategory,
-    ...overrides,
-  };
+function makeStats(): StatsResponse {
+  return makeStatsResponse();
 }
 
 function meResponse(): unknown {

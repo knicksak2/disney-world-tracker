@@ -33,8 +33,6 @@ import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
-import { EXPERIENCE_CATEGORIES, PARKS } from '@dwt/shared';
-
 // ---------------------------------------------------------------------------
 // Mocks (declared before the modules under test are imported).
 // ---------------------------------------------------------------------------
@@ -91,6 +89,7 @@ import FriendsListScreen from '../friends/FriendsListScreen';
 import ExperienceDetailScreen from '../catalog/ExperienceDetailScreen';
 import StatsScreen from '../stats/StatsScreen';
 import { apiRequest as mockedApiRequest } from '../../api/client';
+import { makeStatsResponse } from '../stats/__testSupport__/statsFixture';
 
 const apiRequestMock = mockedApiRequest as jest.MockedFunction<
   typeof mockedApiRequest
@@ -124,29 +123,6 @@ const EXPERIENCE = {
   imageUrl: null,
   areaType: 'ThemePark',
 } as const;
-
-const ZERO_BREAKDOWN = { completed: 0, total: 0, percent: 0 } as const;
-
-/** A full `GET /me/stats` response with every Park and Category dimension. */
-function makeStatsResponse() {
-  const byCategory = Object.fromEntries(
-    EXPERIENCE_CATEGORIES.map((c) => [c, ZERO_BREAKDOWN]),
-  );
-  const byPark = Object.fromEntries(PARKS.map((p) => [p, ZERO_BREAKDOWN]));
-  return {
-    overall: { completed: 12, total: 100, percent: 12 },
-    byPark,
-    byCategory,
-    byParkAndCategory: Object.fromEntries(PARKS.map((p) => [p, byCategory])),
-    byAreaType: {
-      ThemePark: ZERO_BREAKDOWN,
-      WaterPark: ZERO_BREAKDOWN,
-      DisneySprings: ZERO_BREAKDOWN,
-      Resort: ZERO_BREAKDOWN,
-    },
-    resort: ZERO_BREAKDOWN,
-  };
-}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -281,7 +257,7 @@ describe('Share_Composer opens only from a Share_Entry_Point (R3.2)', () => {
   // -------------------------------------------------------------------------
   test('StatsScreen entry point navigates to ShareComposer with pre-populated progress params', async () => {
     apiRequestMock.mockImplementation(async (_method, path) => {
-      if (path === '/me/stats') return makeStatsResponse();
+      if (path === '/me/stats?percentile=true') return makeStatsResponse();
       if (path === '/me') {
         return {
           user: { id: 'own-user', email: 'me@test.local' },

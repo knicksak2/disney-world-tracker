@@ -28,10 +28,13 @@
 // `theme/theme.ts` and `theme/components.tsx`.
 
 import React from 'react';
-import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueries, useQuery } from '@tanstack/react-query';
 import {
   ActivityIndicator,
   Image,
+  Linking,
+  Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -72,16 +75,20 @@ import {
   PrimaryButton,
   ScreenContainer,
   SectionLabel,
+  SecondaryButton,
 } from '../../theme/components';
 import {
   buildExperienceShareParams,
   isExperienceShareEntryEnabled,
 } from './shareEntryPoint';
-import CompletionControls from './CompletionControls';
-import NoteControl from './NoteControl';
-import RatingControl from './RatingControl';
+import { formatCommunityAggregate } from './aggregateFormat';
 import MenuSummaryCard from './MenuSummaryCard';
-import { buildInfoTags } from './infoTags';
+import YourVisitCard from './YourVisitCard';
+import AboutSection from './AboutSection';
+import { buildTagGroups } from './infoTags';
+import type { TagGroup } from './infoTags';
+import type { DirectionsPlatform } from './directions';
+import { directionsUrl, hasValidCoordinates, staticMapUrl } from './directions';
 import { liveSectionFor } from './gating';
 import RideLiveSection from './live/RideLiveSection';
 import ShowtimesSection from './live/ShowtimesSection';
@@ -201,7 +208,6 @@ export default function ExperienceDetailScreen(): JSX.Element {
   const navigation = useNavigation<ExperienceDetailNavigationProp>();
   const { experienceId } = route.params;
   const encodedId = encodeURIComponent(experienceId);
-  const queryClient = useQueryClient();
 
   // React Query's `useQueries` issues every queryFn concurrently and
   // returns a tuple of `UseQueryResult` aligned with the input order.
@@ -334,10 +340,14 @@ export default function ExperienceDetailScreen(): JSX.Element {
         null
       : null;
 
-  // Ordered enrichment Info_Tags (R9.2-R9.8, R9.11). Rendered as a wrapping
-  // badge row beneath the Park/category badges; absent/empty values produce
-  // no tag.
-  const infoTags = buildInfoTags(experience, resortName);
+  // Grouped, relabelled, de-duplicated Tag_Groups (R1). The Location_Group is
+  // promoted to its own section directly beneath the header/hero region with
+  // the Get_Directions_Action (R4.2, R7.1); the remaining groups (Good to
+  // know, Accessibility, Good for) render last, in the same fixed order
+  // `buildTagGroups` emits (R7.1). Absent groups are already omitted (R7.5).
+  const tagGroups = buildTagGroups(experience, resortName);
+  const locationGroup = tagGroups.find((group) => group.id === 'location');
+  const remainingGroups = tagGroups.filter((group) => group.id !== 'location');
 
   return (
     <ScreenContainer>
@@ -416,63 +426,59 @@ export default function ExperienceDetailScreen(): JSX.Element {
         />
 
         {/* ------------------------------------------------------------ */}
-        {/* Info_Tags (R9.2-R9.8, R9.11): a wrapping row of compact       */}
-        {/* labelled pills surfacing the persisted enrichment (Land,      */}
-        {/* price tier, accessibility, coordinates, meal periods, and the */}
-        {/* specific Resort), in fixed order, each omitted when absent.    */}
-        {/* Each pill carries its `accessibilityLabel` (R12.5). Renders    */}
-        {/* nothing when the Experience has no enrichment to show.         */}
+        {/* Location_Group + Get_Directions_Action (R1.2, R4.2-R4.6,     */}
+        {/* R7.1). Promoted directly beneath the header/hero region. The */}
+        {/* Location Tag_Group renders as a labelled card of pills; the  */}
+        {/* Get directions action is rendered within this area only when */}
+        {/* the stored coordinates are valid (R4.2/R4.3) and opens the OS */}
+        {/* maps app on activation (R4.4), surfacing a non-blocking       */}
+        {/* inline error on failure while leaving the rest of the screen  */}
+        {/* intact (R4.5). Omitted entirely when there is neither a        */}
+        {/* Location group nor valid coordinates (R7.5).                   */}
         {/* ------------------------------------------------------------ */}
-        {infoTags.length > 0 ? (
-          <View style={styles.badgeRow} testID="experience-info-tags">
-            {infoTags.map((tag, index) => (
-              <Badge
-                key={`${tag.kind}-${index}`}
-                label={tag.label}
-                color={theme.color.primary}
-                accessibilityLabel={tag.accessibilityLabel}
-                testID={`experience-info-tag-${tag.kind}`}
-              />
-            ))}
-          </View>
-        ) : null}
-
-        {/* ------------------------------------------------------------ */}
-        {/* About (R1.22). Server is responsible for HTML/script         */}
-        {/* stripping at write time; the App renders it as plain Text.   */}
-        {/* ------------------------------------------------------------ */}
-        <Card style={styles.section}>
-          <SectionLabel>About</SectionLabel>
-          {experience.description.length > 0 ? (
-            <Text style={styles.bodyText}>{experience.description}</Text>
-          ) : (
-            <Text style={styles.empty}>No description available.</Text>
-          )}
-        </Card>
-
-        {/* ------------------------------------------------------------ */}
-        {/* Why visit (R11.4-R11.6). A section rendering the Why_This    */}
-        {/* bullets as flavor text when the Experience carries one or    */}
-        {/* more bullets (R11.4). The section is omitted entirely when   */}
-        {/* the Why_This value is absent or carries no bullets (R11.5).  */}
-        {/* Each bullet is plain Text; the `SectionLabel` header supplies */}
-        {/* the accessible label for the section (R11.6). Bullets that    */}
-        {/* merely duplicate the About description are dropped so the      */}
-        {/* same copy is never shown twice.                               */}
-        {/* ------------------------------------------------------------ */}
-        <WhyThisSection
-          whyThis={experience.whyThis}
-          description={experience.description}
+        <LocationGroupSection
+          group={locationGroup}
+          experienceName={experience.name}
+          latitude={experience.latitude}
+          longitude={experience.longitude}
         />
 
         {/* ------------------------------------------------------------ */}
-        {/* Menu_Summary_Card (R4.1-R4.7). Rendered only for a           */}
-        {/* Restaurant_Experience: a pressable summary of the available  */}
-        {/* menus (count + a Badge per menu type) that opens the         */}
-        {/* Menu_Screen, an empty state when the restaurant has no        */}
-        {/* menus, and nothing for a non-restaurant. The detail load is   */}
-        {/* already settled here, but the query flags are forwarded so    */}
-        {/* the card owns its own loading/error rendering.                */}
+        {/* Your visit (R6, R7.1, R7.2). The consolidated completion →   */}
+        {/* rating → note card, promoted above the Live section and the  */}
+        {/* About_Section. It owns its own per-control loading/error/     */}
+        {/* empty rendering and the `onMutated` query invalidations       */}
+        {/* verbatim (R6.2-R6.4).                                         */}
+        {/* ------------------------------------------------------------ */}
+        <YourVisitCard
+          experienceId={experienceId}
+          completionQuery={completionQ}
+          ratingQuery={ratingQ}
+          noteQuery={noteQ}
+        />
+
+        {/* ------------------------------------------------------------ */}
+        {/* Live operational section (R7.1, R7.3, R8.3: at most one, by  */}
+        {/* category). Ride/Character_Meet → wait/status, Show/Parade →  */}
+        {/* showtimes, Restaurant → dining, Other → nothing. A live      */}
+        {/* failure renders only the unavailable indicator (R8.4) while  */}
+        {/* the static fields above remain visible; a stale success      */}
+        {/* renders the out-of-date indicator + Retrieved_At, both owned  */}
+        {/* by the section components. Placed above the About_Section     */}
+        {/* (R7.3).                                                       */}
+        {/* ------------------------------------------------------------ */}
+        <LiveOperationalSection
+          category={experience.category}
+          query={liveQ}
+        />
+
+        {/* ------------------------------------------------------------ */}
+        {/* Menu_Summary_Card (R7.4, R8.7). Rendered only for a          */}
+        {/* Restaurant_Experience, positioned between the Live section    */}
+        {/* and the About_Section. A pressable summary of the available   */}
+        {/* menus that opens the Menu_Screen; nothing for a               */}
+        {/* non-restaurant. The query flags are forwarded so the card     */}
+        {/* owns its own loading/error rendering.                         */}
         {/* ------------------------------------------------------------ */}
         <MenuSummaryCard
           category={experience.category}
@@ -484,94 +490,26 @@ export default function ExperienceDetailScreen(): JSX.Element {
         />
 
         {/* ------------------------------------------------------------ */}
-        {/* Live operational section (R7.5: at most one, by category).   */}
-        {/* Ride/Character_Meet → wait/status, Show/Parade → showtimes,  */}
-        {/* Restaurant → dining, Other → nothing (R7.1-R7.4). A live     */}
-        {/* failure renders only the unavailable indicator (R3.2) while  */}
-        {/* the static fields above remain visible (R3.3); a stale       */}
-        {/* success renders the out-of-date indicator + Retrieved_At     */}
-        {/* (R3.5), both owned by the section components.                */}
+        {/* About (R5, R7.1). The collapsible description: clamped to 4  */}
+        {/* lines with a "Read more" / "Read less" toggle when it         */}
+        {/* overflows, and the "No description available." empty state    */}
+        {/* when absent/empty/whitespace-only (R5.8).                     */}
         {/* ------------------------------------------------------------ */}
-        <LiveOperationalSection
-          category={experience.category}
-          query={liveQ}
+        <AboutSection description={experience.description} />
+
+        {/* ------------------------------------------------------------ */}
+        {/* Why visit (R8.10, R8.11). Renders the Why_This bullets as    */}
+        {/* flavor text when the Experience carries one or more; omitted  */}
+        {/* entirely when the Why_This value is absent or every bullet    */}
+        {/* merely duplicates the About description.                      */}
+        {/* ------------------------------------------------------------ */}
+        <WhyThisSection
+          whyThis={experience.whyThis}
+          description={experience.description}
         />
 
         {/* ------------------------------------------------------------ */}
-        {/* Your Completion (R2.4).                                      */}
-        {/* ------------------------------------------------------------ */}
-        <Card style={styles.section}>
-          <SectionLabel>Your Completion</SectionLabel>
-          <CompletionSection
-            experienceId={experienceId}
-            query={completionQ}
-            onMutated={() => {
-              // Invalidate every query that reflects Completion state for
-              // this Experience. The Completion query drives this
-              // section's render...
-              void queryClient.invalidateQueries({
-                queryKey: ['experience-completion', experienceId],
-              });
-              // ...and the Stats screen's roll-up (`GET /me/stats`,
-              // queryKey ['me-stats']) counts completions, so it must be
-              // invalidated here too. Without this, marking/unmarking a
-              // Completion leaves the cached stats untouched and the
-              // Stats screen keeps showing the pre-mutation totals until
-              // its staleTime lapses — i.e. "I completed a ride but my
-              // stats still say zero". `['me-stats']` as a prefix also
-              // catches the friend/self summary variants.
-              void queryClient.invalidateQueries({
-                queryKey: ['me-stats'],
-              });
-            }}
-          />
-        </Card>
-
-        {/* ------------------------------------------------------------ */}
-        {/* Your Rating (R4.1, R4.3, R4.4, R4.5, R4.6, R4.7, R4.8).      */}
-        {/* ------------------------------------------------------------ */}
-        <Card style={styles.section}>
-          <SectionLabel>Your Rating</SectionLabel>
-          <RatingSection
-            experienceId={experienceId}
-            query={ratingQ}
-            onMutated={() => {
-              // Refresh both the User's own rating row and the community
-              // aggregate (R10.5, R10.6) — the latter changes whenever a
-              // rating is set, replaced, or removed.
-              void queryClient.invalidateQueries({
-                queryKey: ['experience-rating', experienceId],
-              });
-              void queryClient.invalidateQueries({
-                queryKey: ['experience-aggregate', experienceId],
-              });
-            }}
-          />
-        </Card>
-
-        {/* ------------------------------------------------------------ */}
-        {/* Your Note (R5.3-R5.9).                                       */}
-        {/* ------------------------------------------------------------ */}
-        <Card style={styles.section}>
-          <SectionLabel>Your Note</SectionLabel>
-          <NoteSection
-            experienceId={experienceId}
-            query={noteQ}
-            onMutated={() => {
-              // Invalidate the cached Note read for this Experience so
-              // the section re-renders with the freshest DTO (R5.8 /
-              // R5.9 render parity). Stats and Share surfaces don't read
-              // off the Note query directly, so a single invalidate
-              // here is sufficient.
-              void queryClient.invalidateQueries({
-                queryKey: ['experience-note', experienceId],
-              });
-            }}
-          />
-        </Card>
-
-        {/* ------------------------------------------------------------ */}
-        {/* Community Rating (R10.5, R10.6). Server enforces the         */}
+        {/* Community Rating (R8.5, R8.6). Server enforces the           */}
         {/* `count >= 3` threshold; on the wire, `value === null` either */}
         {/* means "below threshold" or "no aggregate row yet" — both     */}
         {/* render as the same empty state.                              */}
@@ -580,6 +518,17 @@ export default function ExperienceDetailScreen(): JSX.Element {
           <SectionLabel>Community Rating</SectionLabel>
           <AggregateContent query={aggregateQ} />
         </Card>
+
+        {/* ------------------------------------------------------------ */}
+        {/* Remaining Tag_Groups (R1.7, R1.8, R7.1): Good to know,       */}
+        {/* Accessibility, Good for — rendered last, each as a labelled   */}
+        {/* card of relabelled, de-duplicated pills, in the fixed order   */}
+        {/* `buildTagGroups` emits, omitting any group with no            */}
+        {/* renderable tags (R7.5).                                       */}
+        {/* ------------------------------------------------------------ */}
+        {remainingGroups.map((group) => (
+          <TagGroupCard key={group.id} group={group} />
+        ))}
       </ScrollView>
     </ScreenContainer>
   );
@@ -645,109 +594,6 @@ interface QueryLike<T> {
   readonly data: T | undefined;
 }
 
-function CompletionSection({
-  experienceId,
-  query,
-  onMutated,
-}: {
-  readonly experienceId: string;
-  readonly query: QueryLike<CompletionDTO | null>;
-  readonly onMutated: () => void;
-}): JSX.Element {
-  if (query.isLoading) {
-    return (
-      <ActivityIndicator
-        accessibilityLabel="Loading completion"
-        color={theme.color.primary}
-      />
-    );
-  }
-  if (query.isError) {
-    return <Text style={styles.errorText}>Could not load completion.</Text>;
-  }
-  // `data` is `undefined` until the first fetch resolves; treat it as
-  // "no completion yet" so the empty-state mark button is reachable
-  // immediately on the first render after the query settles.
-  const completion = query.data ?? null;
-  return (
-    <CompletionControls
-      experienceId={experienceId}
-      completion={completion}
-      onMutated={onMutated}
-    />
-  );
-}
-
-function RatingSection({
-  experienceId,
-  query,
-  onMutated,
-}: {
-  readonly experienceId: string;
-  readonly query: QueryLike<RatingDTO | null>;
-  readonly onMutated: () => void;
-}): JSX.Element {
-  if (query.isLoading) {
-    return (
-      <ActivityIndicator
-        accessibilityLabel="Loading rating"
-        color={theme.color.primary}
-      />
-    );
-  }
-  if (query.isError) {
-    return <Text style={styles.errorText}>Could not load rating.</Text>;
-  }
-  // `data` is `undefined` until the first fetch resolves; treat it as
-  // "no Rating yet" so the empty-state Rate affordance is reachable
-  // immediately on the first render after the query settles. The
-  // control itself maps `rating === null` to the R4.6 empty state
-  // and any non-null value to the R4.5 populated render.
-  const rating = query.data ?? null;
-  return (
-    <RatingControl
-      experienceId={experienceId}
-      rating={rating}
-      onMutated={onMutated}
-    />
-  );
-}
-
-function NoteSection({
-  experienceId,
-  query,
-  onMutated,
-}: {
-  readonly experienceId: string;
-  readonly query: QueryLike<NoteDTO | null>;
-  readonly onMutated: () => void;
-}): JSX.Element {
-  if (query.isLoading) {
-    return (
-      <ActivityIndicator
-        accessibilityLabel="Loading note"
-        color={theme.color.primary}
-      />
-    );
-  }
-  if (query.isError) {
-    return <Text style={styles.errorText}>Could not load note.</Text>;
-  }
-  // `data` is `undefined` until the first fetch resolves; treat it as
-  // "no Note yet" so the empty-state Add affordance is reachable
-  // immediately on the first render after the query settles. The
-  // control itself maps `note === null` to the R5.9 empty state and
-  // any non-null value to the R5.8 populated render.
-  const note = query.data ?? null;
-  return (
-    <NoteControl
-      experienceId={experienceId}
-      note={note}
-      onMutated={onMutated}
-    />
-  );
-}
-
 function AggregateContent({
   query,
 }: {
@@ -766,30 +612,241 @@ function AggregateContent({
       <Text style={styles.errorText}>Could not load community rating.</Text>
     );
   }
-  const aggregate = query.data;
-  // R10.6: when `value` is null (count < 3, or no row yet) show the
+  // Project the aggregate into its display shape via the pure formatter
+  // (R8.5, R8.6). The renderer stays a thin mapping over that result.
+  const display = formatCommunityAggregate(query.data);
+  // R10.6/R8.5: when `value` is null (count < 3, or no row yet) show the
   // empty state without leaking the underlying count.
-  if (aggregate.value === null) {
+  if (display.kind === 'empty') {
     return (
       <Text style={styles.empty} testID="aggregate-empty">
         Not enough ratings yet
       </Text>
     );
   }
-  // R10.5: render the published mean to one decimal alongside the
+  // R10.5/R8.6: render the published mean to one decimal alongside the
   // contributing rating count.
   return (
     <View style={styles.aggregateBlock}>
       <View style={styles.aggregateValueRow}>
         <Ionicons name="star" size={22} color={theme.color.accent} />
         <Text style={styles.aggregateValue} testID="aggregate-value">
-          {aggregate.value.toFixed(1)} / 10
+          {display.mean} / 10
         </Text>
       </View>
       <Text style={styles.aggregateMeta} testID="aggregate-count">
-        ({aggregate.count} {aggregate.count === 1 ? 'rating' : 'ratings'})
+        ({display.count} {display.count === 1 ? 'rating' : 'ratings'})
       </Text>
     </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Location group + Get directions
+// ---------------------------------------------------------------------------
+
+/**
+ * Map the running OS to the `DirectionsPlatform` `directionsUrl` builds for.
+ * Anything that is not iOS or Android (web, desktop) falls back to the
+ * cross-platform web maps URL.
+ */
+function mapsPlatform(): DirectionsPlatform {
+  if (Platform.OS === 'ios') {
+    return 'ios';
+  }
+  if (Platform.OS === 'android') {
+    return 'android';
+  }
+  return 'web';
+}
+
+/**
+ * Location_Group card plus the Get_Directions_Action (R1.2, R4.2-R4.6).
+ *
+ * Renders the Location Tag_Group's relabelled, de-duplicated tags as a wrapping
+ * row of pills under a "Location" label. When the Experience carries valid
+ * stored coordinates (R4.2 — latitude in [-90, 90] and longitude in [-180,
+ * 180]) it also renders the Get_Directions_Action within this Location area;
+ * the action is omitted entirely when the coordinates are absent or out of
+ * range (R4.3).
+ *
+ * Activating the action opens the OS maps app at the stored coordinates via
+ * `Linking.openURL(directionsUrl(...))` (R4.4). The call is wrapped in a
+ * `try/catch` (after a `Linking.canOpenURL` check): if the maps app cannot be
+ * opened the section sets a local error flag that renders an inline,
+ * non-blocking error indication (matching the existing danger-text pattern)
+ * while every other section of the screen stays intact (R4.5). The action
+ * always exposes a non-empty accessibility label describing the Experience it
+ * routes to (R4.6).
+ *
+ * When the coordinates are valid it additionally renders the Static_Map_Preview
+ * (R10.1-R10.8): a tappable `<Image>` (wrapped in a `Pressable`) sourced from
+ * `staticMapUrl(latitude, longitude)`, gated by the SAME `hasValidCoordinates`
+ * check as Get directions. Tapping the preview opens the OS maps app via the
+ * same `handleGetDirections` path (R10.5/R10.6). If the image fails to load, a
+ * local `mapImageFailed` flag hides ONLY the image while the rest of the
+ * Location content — including the Get directions button — keeps rendering
+ * (R10.7). The preview carries a non-empty accessibility label (R10.8).
+ *
+ * The whole section is omitted when there is neither a Location Tag_Group to
+ * show nor valid coordinates for a Get directions action.
+ */
+function LocationGroupSection({
+  group,
+  experienceName,
+  latitude,
+  longitude,
+}: {
+  readonly group: TagGroup | undefined;
+  readonly experienceName: string;
+  readonly latitude?: number | null | undefined;
+  readonly longitude?: number | null | undefined;
+}): JSX.Element | null {
+  const [failed, setFailed] = React.useState(false);
+  // R10.7: when the static map image fails to load, hide ONLY the image while
+  // continuing to render the rest of the Location group content (including the
+  // Get_Directions_Action).
+  const [mapImageFailed, setMapImageFailed] = React.useState(false);
+  const canGetDirections = hasValidCoordinates(latitude, longitude);
+
+  // Nothing to render: no Location tags and no valid coordinates.
+  if (group === undefined && !canGetDirections) {
+    return null;
+  }
+
+  const handleGetDirections = async (): Promise<void> => {
+    // `canGetDirections` already gates the coordinate range, so a truthy value
+    // here means both are finite and in range (R4.2).
+    const url = directionsUrl(
+      latitude as number,
+      longitude as number,
+      mapsPlatform(),
+    );
+    try {
+      const canOpen = await Linking.canOpenURL(url);
+      if (!canOpen) {
+        // R4.5: the OS reports it cannot open the maps URL.
+        setFailed(true);
+        return;
+      }
+      await Linking.openURL(url);
+      // Clear any prior failure on a successful open.
+      setFailed(false);
+    } catch {
+      // R4.5: opening the maps app rejected — surface the inline error and
+      // preserve all other screen state.
+      setFailed(true);
+    }
+  };
+
+  return (
+    <Card style={styles.section} testID="experience-location-group">
+      <SectionLabel>{group?.label ?? 'Location'}</SectionLabel>
+
+      {group !== undefined ? (
+        <View style={styles.badgeRow}>
+          {group.tags.map((tag, index) => (
+            <Badge
+              key={`${tag.kind}-${index}`}
+              label={tag.label}
+              color={theme.color.primary}
+              accessibilityLabel={tag.accessibilityLabel}
+              testID={`experience-info-tag-${tag.kind}`}
+            />
+          ))}
+        </View>
+      ) : null}
+
+      {/* Static_Map_Preview (R10.1-R10.8). Gated by the SAME coordinate-validity
+          check as the Get_Directions_Action (R10.1/R10.2). Tapping the preview
+          opens the OS maps app via the same `handleGetDirections` path as Get
+          directions (R10.5/R10.6). If the image fails to load, `mapImageFailed`
+          hides only the image while the rest of the Location content — including
+          the Get directions button — keeps rendering (R10.7). */}
+      {canGetDirections && !mapImageFailed ? (
+        <Pressable
+          onPress={() => {
+            void handleGetDirections();
+          }}
+          accessibilityRole="imagebutton"
+          accessibilityLabel={`Map preview of ${experienceName}. Tap for directions.`}
+          testID="experience-static-map"
+        >
+          {/* The ArcGIS export image has no built-in marker, so overlay a
+              centered pin. The coordinate sits at the exact bbox center, so a
+              pin centered over the image lands on the Experience location. The
+              pin is decorative for a11y — the Pressable carries the label. */}
+          <View style={styles.mapPreviewWrap}>
+            <Image
+              source={{
+                uri: staticMapUrl(latitude as number, longitude as number),
+              }}
+              style={styles.mapPreview}
+              resizeMode="cover"
+              onError={() => setMapImageFailed(true)}
+              accessibilityIgnoresInvertColors
+            />
+            <Ionicons
+              name="location"
+              size={32}
+              color={theme.color.accent}
+              style={styles.mapPin}
+              accessibilityElementsHidden
+              importantForAccessibility="no"
+            />
+          </View>
+        </Pressable>
+      ) : null}
+
+      {canGetDirections ? (
+        <SecondaryButton
+          label="Get directions"
+          icon="navigate"
+          onPress={() => {
+            void handleGetDirections();
+          }}
+          accessibilityLabel={`Get directions to ${experienceName}`}
+          testID="experience-get-directions"
+        />
+      ) : null}
+
+      {failed ? (
+        <Text style={styles.errorText} testID="experience-directions-error">
+          Couldn&apos;t open the maps app. Please try again.
+        </Text>
+      ) : null}
+    </Card>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Remaining Tag_Groups (Good to know / Accessibility / Good for)
+// ---------------------------------------------------------------------------
+
+/**
+ * Render one non-Location Tag_Group as a labelled `Card` of pills (R1.7, R7.1).
+ * Used for the Good_To_Know_Group, Accessibility_Group, and Good_For_Group,
+ * which the screen places last in the fixed order `buildTagGroups` emits. The
+ * group's relabelled, de-duplicated tags each render as a `Badge` carrying its
+ * `accessibilityLabel` (R2.4, R2.5). `buildTagGroups` never emits an empty
+ * group, so this card always has at least one pill to show (R7.5).
+ */
+function TagGroupCard({ group }: { readonly group: TagGroup }): JSX.Element {
+  return (
+    <Card style={styles.section} testID={`experience-tag-group-${group.id}`}>
+      <SectionLabel>{group.label}</SectionLabel>
+      <View style={styles.badgeRow}>
+        {group.tags.map((tag, index) => (
+          <Badge
+            key={`${tag.kind}-${index}`}
+            label={tag.label}
+            color={theme.color.primary}
+            accessibilityLabel={tag.accessibilityLabel}
+            testID={`experience-info-tag-${tag.kind}`}
+          />
+        ))}
+      </View>
+    </Card>
   );
 }
 
@@ -974,6 +1031,29 @@ const styles = StyleSheet.create({
   heroPlaceholder: {
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  mapPreviewWrap: {
+    position: 'relative',
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mapPreview: {
+    width: '100%',
+    height: 180,
+    borderRadius: theme.radius.lg,
+    backgroundColor: theme.color.surfaceAlt,
+  },
+  mapPin: {
+    position: 'absolute',
+    // Nudge up by roughly half the icon height so the pin's tip (not its
+    // center) rests on the coordinate at the image center.
+    marginTop: -16,
+    // A drop shadow keeps the pin legible against the varied colors of the
+    // satellite imagery basemap.
+    textShadowColor: 'rgba(0, 0, 0, 0.6)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
   section: {
     gap: theme.spacing.md,

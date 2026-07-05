@@ -334,9 +334,25 @@ The catalog and live paths are deliberately split (see the intro) and Disney acc
 - Entities ThemeParks.wiki doesn't track (e.g. some resort dining) resolve to no live data and degrade to "live unavailable" — there is no Disney live fallback (that path is retired).
 
 
+## Hosting
+
+The backend runs entirely on free tiers, one managed service per concern, chosen so a side-project can run at **$0/month** with no expiring trials. The design is hosting-agnostic (plain Postgres / Redis / S3-compatible interfaces), so any single provider can be swapped without touching application code.
+
+| Concern | Service | Why this one | Free-tier limit |
+| --- | --- | --- | --- |
+| API server | [**Render**](https://render.com) | GitHub-driven deploys, automatic HTTPS, defined as code in [`render.yaml`](./render.yaml); truly free with no credit card | 750 instance-hours/mo; sleeps after 15 min idle (30–60s cold start) |
+| PostgreSQL | [**Neon**](https://neon.tech) | Real Postgres (not a clone) with the `citext` / `pg_trgm` / `pgcrypto` extensions the schema needs, plus built-in connection pooling and scale-to-zero | 0.5 GB storage, 1 project, pauses when idle (1–3s wake) |
+| Redis | [**Upstash**](https://upstash.com) | Pay-per-command with no idle cost — a good fit for our low, bursty usage (cache reads, lockout counters, sync lock, BullMQ) | 10,000 commands/day, 256 MB |
+| Object storage | [**Cloudflare R2**](https://developers.cloudflare.com/r2/) | S3-compatible (same SDK, no lock-in) and **no egress fees** — avatar bytes stream to phones for free, unlike S3's $0.09/GB | 10 GB storage, 1M writes/mo, 10M reads/mo |
+| Live data | [ThemeParks.wiki](https://api.themeparks.wiki/v1) | Already free, public, no key required | — |
+
+Everything except the mobile app is reached server-side; the app only ever knows the Render URL. The main free-tier trade-off is Render's cold start (first request after idle is slow) — a $7/mo upgrade makes it always-on when you have real users.
+
+See [`docs/hosting.md`](./docs/hosting.md) for the full rationale, per-service trade-offs, architecture diagrams, when-to-upgrade thresholds, and honest caveats.
+
 ## Deploying the API (Render)
 
-The API deploys to [Render](https://render.com) as a free Web Service, defined as code in [`render.yaml`](./render.yaml) (a Render Blueprint). The backing services are managed elsewhere on their own free tiers — Postgres on [Neon](https://neon.tech), Redis on [Upstash](https://upstash.com), and avatar storage on [Cloudflare R2](https://developers.cloudflare.com/r2/). See [`hosting.md`](./.kiro/specs/disney-world-tracker/hosting.md) for the full rationale and free-tier details.
+The API deploys to [Render](https://render.com) as a free Web Service, defined as code in [`render.yaml`](./render.yaml) (a Render Blueprint). The backing services are managed elsewhere on their own free tiers — Postgres on [Neon](https://neon.tech), Redis on [Upstash](https://upstash.com), and avatar storage on [Cloudflare R2](https://developers.cloudflare.com/r2/). See the [Hosting](#hosting) section above (and [`docs/hosting.md`](./docs/hosting.md)) for the full rationale and free-tier details.
 
 ### One-time provider setup
 
@@ -394,6 +410,14 @@ npm run sync:cloud --workspace apps/api      # bootstrap/refresh the hosted cata
 
 `sync:cloud` reads `apps/api/.env.dev` (your hosted `DATABASE_URL` + Disney credentials) and writes into the same Neon database the deployed API reads. The first run is a full bootstrap; later runs are incremental. Live data (waits, showtimes, Lightning Lane, boarding groups) needs no sync — it's fetched on demand from ThemeParks.wiki.
 
+> **Backfilling enrichment onto existing rows.** The facet-enrichment columns (`why_this`, `grouped_facets`, `height_requirement`, `sub_type`) are written by sync only when a row is inserted or its identity metadata (name/park/category/land/area/resort) drifts — by design they are *not* drift signals, so a plain `sync:cloud` leaves them NULL on Experiences that already existed before the enrichment feature shipped. After deploying a migration that adds them (or if these fields read NULL in the hosted DB despite a completed sync), run the one-time backfill:
+>
+> ```bash
+> npm run backfill-facets:cloud --workspace apps/api   # recompute enrichment onto existing rows
+> ```
+>
+> It rescans the stored Disney documents, recomputes enrichment with the same pure cores the sync uses, and writes only those four columns onto matching rows. It's idempotent and safe to re-run. (Rows whose source document carries no `whyThis` stay NULL — that's expected, not a failure.)
+
 ### 3. Mobile app (EAS build → install on phone)
 
 The app points at the hosted API in every non-local build (`API_BASE_URL=https://dwt-api.onrender.com` in `eas.json`), so once the API deploy is live the phone just needs a new build. **There is no over-the-air update path** — `expo-updates` isn't installed, so *every* JS or native change requires a full rebuild (no `eas update`).
@@ -418,6 +442,15 @@ When the build finishes, EAS prints a URL — open it on the phone (or scan the 
 
 > Because there's no OTA channel, the sequence for a full change is: push to `develop` (API), then rebuild and reinstall the app. A backend-only change needs no rebuild; a mobile-only JS change still needs a full `eas build`.
 
+#### Push notification credentials (FCM / APNs)
+
+Push (Share deliveries, friend-request notifications) goes through **Expo's push service** — the backend needs no credentials for it (see [`docs/hosting.md`](./docs/hosting.md)). But for Expo to actually *deliver* pushes to devices, the platform credentials must be configured in the EAS project, or Android pushes silently never arrive:
+
+- **Android (FCM).** `apps/mobile/app.config.ts` already points at `apps/mobile/google-services.json` for the `com.dwt.mobile` Firebase app, so Expo's prebuild wires the native FCM SDK to mint device tokens. You still need to upload the matching **FCM v1 service-account key** to the Expo project so the push service can deliver — set it once with `eas credentials -p android` (choose the FCM/push key) or via the Expo dashboard (Project → Credentials → Android → FCM V1). Without it, tokens mint but no notification is delivered.
+- **iOS (APNs).** EAS manages the **APNs push key** as part of your Apple credentials; `eas credentials -p ios` provisions/uploads it. A push-enabled provisioning profile is required.
+
+These are one-time per project (re-done only if the keys rotate). They're a mobile-build concern, independent of the API deploy — a backend change never touches them.
+
 ## Tooling Conventions
 
 - **TypeScript**: strict mode, ES2022 target. All workspaces extend `tsconfig.base.json`. The path alias `@dwt/shared` resolves to `packages/shared/src`.
@@ -430,6 +463,6 @@ When the build finishes, EAS prints a URL — open it on the phone (or scan the 
 - [`.kiro/specs/disney-world-tracker/requirements.md`](./.kiro/specs/disney-world-tracker/requirements.md) — feature requirements
 - [`.kiro/specs/disney-world-tracker/design.md`](./.kiro/specs/disney-world-tracker/design.md) — architecture and design decisions
 - [`.kiro/specs/disney-world-tracker/tasks.md`](./.kiro/specs/disney-world-tracker/tasks.md) — implementation plan
-- [`.kiro/specs/disney-world-tracker/hosting.md`](./.kiro/specs/disney-world-tracker/hosting.md) — production hosting and deployment details
+- [`docs/hosting.md`](./docs/hosting.md) — production hosting and deployment details
 - [`.kiro/specs/disney-facilities-catalog-source/`](./.kiro/specs/disney-facilities-catalog-source/) — migration of catalog sourcing from ThemeParks.wiki to the Disney sources (facilities, resorts, menus, imagery, identity continuity)
 - [`.kiro/specs/disney-source-resilience/`](./.kiro/specs/disney-source-resilience/) — the data-by-change-rate split (static from Disney, live from ThemeParks.wiki), the hardened Disney transport, incremental checkpoint-driven sync, lazy menus, graceful degradation, and the ThemeParks.wiki live path (Lightning Lane + boarding groups)

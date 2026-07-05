@@ -35,11 +35,7 @@ import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 
-import {
-  EXPERIENCE_CATEGORIES,
-  PARKS,
-  type ProfileDTO,
-} from '@dwt/shared';
+import { type ProfileDTO } from '@dwt/shared';
 
 // ---------------------------------------------------------------------------
 // Mocks (declared before the modules under test are imported).
@@ -86,10 +82,8 @@ jest.mock('@react-navigation/native', () => ({
 
 import FriendProfileScreen from '../FriendProfileScreen';
 import { ApiError, apiRequest as mockedApiRequest } from '../../../api/client';
-import type {
-  FriendStatsResponse,
-  FriendStatsBreakdown,
-} from '../../../api/friendProfile';
+import type { StatsResponse } from '../../../api/statsTypes';
+import { makeStatsResponse } from '../../stats/__testSupport__/statsFixture';
 
 const apiRequestMock = mockedApiRequest as jest.MockedFunction<
   typeof mockedApiRequest
@@ -132,35 +126,8 @@ function makeProfile(overrides: Partial<ProfileDTO> = {}): ProfileDTO {
   };
 }
 
-function breakdown(
-  completed: number,
-  total: number,
-  percent: number,
-): FriendStatsBreakdown {
-  return { completed, total, percent };
-}
-
-function makeStats(
-  overrides: Partial<FriendStatsResponse> = {},
-): FriendStatsResponse {
-  const zero = breakdown(0, 0, 0);
-  const byPark = Object.fromEntries(
-    PARKS.map((park) => [park, zero]),
-  ) as FriendStatsResponse['byPark'];
-  const byCategory = Object.fromEntries(
-    EXPERIENCE_CATEGORIES.map((category) => [category, zero]),
-  ) as FriendStatsResponse['byCategory'];
-  const byParkAndCategory = Object.fromEntries(
-    PARKS.map((park) => [park, byCategory]),
-  ) as FriendStatsResponse['byParkAndCategory'];
-
-  return {
-    overall: breakdown(50, 100, 50),
-    byPark,
-    byCategory,
-    byParkAndCategory,
-    ...overrides,
-  };
+function makeStats(): StatsResponse {
+  return makeStatsResponse();
 }
 
 function meResponse(): unknown {

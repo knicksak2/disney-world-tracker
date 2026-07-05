@@ -464,27 +464,27 @@ describe('Catalog navigation accessibility (R12.1-R12.5, R12.8)', () => {
 
       renderDetail(experienceId);
 
-      await screen.findByTestId('experience-info-tags');
+      await screen.findByTestId('experience-location-group');
 
+      // Location group tags each expose a meaning-bearing accessibility label
+      // (R2.4 / R12.5).
+      expect(
+        screen.getByTestId('experience-info-tag-park').props.accessibilityLabel,
+      ).toBe('Park: Magic Kingdom');
       expect(
         screen.getByTestId('experience-info-tag-land').props.accessibilityLabel,
       ).toBe('Land: Fantasyland');
-      expect(
-        screen.getByTestId('experience-info-tag-priceTier').props
-          .accessibilityLabel,
-      ).toBe('Price tier: $$');
+      // Accessibility group tag.
       expect(
         screen.getByTestId('experience-info-tag-accessibility').props
           .accessibilityLabel,
       ).toBe('Accessibility: Wheelchair Accessible');
+      // Raw coordinates are no longer a tag; the Get directions action that
+      // replaces them exposes a non-empty accessibility label (R4.6).
+      expect(screen.queryByTestId('experience-info-tag-coordinates')).toBeNull();
       expect(
-        screen.getByTestId('experience-info-tag-coordinates').props
-          .accessibilityLabel,
-      ).toBe('Coordinates: 28.4189, -81.5779');
-      expect(
-        screen.getByTestId('experience-info-tag-mealPeriod').props
-          .accessibilityLabel,
-      ).toBe('Meal period: Dinner');
+        screen.getByTestId('experience-get-directions').props.accessibilityLabel,
+      ).toBe('Get directions to Space Mountain');
     });
   });
 

@@ -49,12 +49,7 @@ import {
   waitFor,
 } from '@testing-library/react-native';
 
-import {
-  EXPERIENCE_CATEGORIES,
-  PARKS,
-  type ExperienceCategory,
-  type Park,
-} from '@dwt/shared';
+import { type ExperienceCategory, type Park } from '@dwt/shared';
 
 // ---------------------------------------------------------------------------
 // Mocks (declared before the modules under test are imported).
@@ -93,6 +88,8 @@ jest.mock('../../../api/client', () => {
 import RootNavigator from '../../../navigation/RootNavigator';
 import { useSessionStore } from '../../../state/sessionStore';
 import { apiRequest as mockedApiRequest } from '../../../api/client';
+import type { StatsResponse } from '../../../api/statsTypes';
+import { makeStatsResponse } from '../../stats/__testSupport__/statsFixture';
 
 const apiRequestMock = mockedApiRequest as jest.MockedFunction<
   typeof mockedApiRequest
@@ -181,36 +178,9 @@ const FRIEND_PROFILE = {
   overallCompletionPercent: 42,
 };
 
-interface Breakdown {
-  readonly completed: number;
-  readonly total: number;
-  readonly percent: number;
-}
-
-interface StatsShape {
-  readonly overall: Breakdown;
-  readonly byPark: { readonly [park in Park]: Breakdown };
-  readonly byCategory: { readonly [category in ExperienceCategory]: Breakdown };
-  readonly byParkAndCategory: {
-    readonly [park in Park]: {
-      readonly [category in ExperienceCategory]: Breakdown;
-    };
-  };
-}
-
-/** A fully-populated stats roll-up (every Park / Category present). */
-function makeStats(): StatsShape {
-  const filler: Breakdown = { completed: 1, total: 10, percent: 10 };
-  const byPark = Object.fromEntries(
-    PARKS.map((park) => [park, filler]),
-  ) as StatsShape['byPark'];
-  const byCategory = Object.fromEntries(
-    EXPERIENCE_CATEGORIES.map((category) => [category, filler]),
-  ) as StatsShape['byCategory'];
-  const byParkAndCategory = Object.fromEntries(
-    PARKS.map((park) => [park, byCategory]),
-  ) as StatsShape['byParkAndCategory'];
-  return { overall: filler, byPark, byCategory, byParkAndCategory };
+/** A fully-populated nested stats roll-up (every Park / Category present). */
+function makeStats(): StatsResponse {
+  return makeStatsResponse();
 }
 
 /**
@@ -331,14 +301,14 @@ async function openFromHome(): Promise<void> {
   );
 }
 
-/** Navigate to the Stats tab, switch to Own_Experiences, open the row. */
+/** Navigate to the Stats tab, open ExperiencesDetail from the hub, open the row. */
 async function openFromStats(): Promise<void> {
   act(() => {
     navRef.navigate('MainTabs', { screen: 'Stats' });
   });
   await screen.findByTestId('stats-screen');
-  fireEvent.press(screen.getByTestId('tab-Own_Experiences'));
-  await screen.findByTestId('own-experiences');
+  fireEvent.press(await screen.findByTestId('stats-highlight-experiences'));
+  await screen.findByTestId('experiences-detail-screen');
   fireEvent.press(await screen.findByTestId('own-experience-row-0'));
 }
 
@@ -393,10 +363,10 @@ const ORIGIN_CASES: readonly OriginCase[] = [
     expectedRoute: 'Home',
   },
   {
-    label: 'Stats_View (Own_Experiences mode)',
+    label: 'Stats_View (ExperiencesDetail)',
     open: openFromStats,
-    expectedRoute: 'Stats',
-    restoredContainerTestId: 'own-experiences',
+    expectedRoute: 'ExperiencesDetail',
+    restoredContainerTestId: 'experiences-detail-screen',
   },
   {
     label: 'Friend_Profile_View (Experiences mode)',
@@ -469,30 +439,30 @@ describe('Fixed flow — prior tab and mode restored after a return', () => {
     teardownApp();
   });
 
-  test('Stats retains its Own_Experiences mode across an open + themed-back round-trip', async () => {
+  test('Stats retains its ExperiencesDetail screen across an open + themed-back round-trip', async () => {
     renderApp();
 
-    // Switch to the Stats tab and into the Own_Experiences mode before
-    // navigating to the detail (a deliberate non-default tab + mode).
+    // Switch to the Stats tab and drill into the ExperiencesDetail screen
+    // before navigating to the detail (a deliberate non-default tab + screen).
     act(() => {
       navRef.navigate('MainTabs', { screen: 'Stats' });
     });
     await screen.findByTestId('stats-screen');
-    fireEvent.press(screen.getByTestId('tab-Own_Experiences'));
-    await screen.findByTestId('own-experiences');
+    fireEvent.press(await screen.findByTestId('stats-highlight-experiences'));
+    await screen.findByTestId('experiences-detail-screen');
 
-    // Open the detail from the Own_Experiences row, then return via the themed
-    // back control.
+    // Open the detail from the ExperiencesDetail row, then return via the
+    // themed back control.
     fireEvent.press(await screen.findByTestId('own-experience-row-0'));
     await awaitDetailPresented();
     pressThemedBack();
 
     await waitFor(() => {
-      expect(navRef.getCurrentRoute()?.name).toBe('Stats');
+      expect(navRef.getCurrentRoute()?.name).toBe('ExperiencesDetail');
     });
 
-    // Prior tab (Stats) and prior mode (Own_Experiences) are both restored.
-    expect(screen.getByTestId('own-experiences')).toBeTruthy();
+    // Prior tab (Stats) and prior screen (ExperiencesDetail) are both restored.
+    expect(screen.getByTestId('experiences-detail-screen')).toBeTruthy();
   });
 });
 

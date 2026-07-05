@@ -24,6 +24,7 @@ import type { ExperienceDTO } from '@dwt/shared';
  * R11.1-R11.3).
  */
 export type InfoTagKind =
+  | 'park'
   | 'land'
   | 'priceTier'
   | 'accessibility'
@@ -65,6 +66,58 @@ export type InfoTagExperience = Pick<
   | 'physicalConsiderations'
   | 'interestFacets'
 >;
+
+/**
+ * The four labelled Tag_Groups the Experience_Detail_Screen renders, in their
+ * fixed top-level render order (R1.1, R1.8).
+ */
+export type TagGroupId = 'location' | 'goodToKnow' | 'accessibility' | 'goodFor';
+
+/** A labelled sub-group of Info_Tags ready to render (R1.1, R1.7). */
+export interface TagGroup {
+  readonly id: TagGroupId;
+  /** Human-facing group label: "Location" | "Good to know" | "Accessibility" | "Good for". */
+  readonly label: string;
+  /** De-duplicated, relabelled, order-preserved tags for this group (always non-empty). */
+  readonly tags: readonly InfoTag[];
+}
+
+/**
+ * The enrichment fields `buildTagGroups` reads. Extends the existing
+ * `InfoTagExperience` pick with `park` so the Location_Group can surface the
+ * owning Park (R1.2). Sourced entirely from the existing `ExperienceDTO`, so no
+ * DTO change is required.
+ */
+export type TagGroupExperience = InfoTagExperience & Pick<ExperienceDTO, 'park'>;
+
+/**
+ * Static slug→human-friendly label map for accessibility tag values (R2.1,
+ * R2.2). Lookup is exact, whitespace-trimmed, and case-sensitive; values that
+ * miss the map fall through to the separator-collapsing humanisation in
+ * `relabelTagValue`.
+ */
+export const ACCESSIBILITY_LABELS: Record<string, string> = {
+  'no-service-animals': 'Service animals not permitted',
+};
+
+/**
+ * Map a raw tag value to its human-friendly label (R2.1, R2.2, R2.3).
+ *
+ * The value is first trimmed of leading/trailing whitespace, then looked up in
+ * `ACCESSIBILITY_LABELS` with an exact, case-sensitive key match. On a hit the
+ * mapped label is returned. On a miss the trimmed value is humanised: every
+ * hyphen (`-`) and underscore (`_`) separator is replaced with a space,
+ * consecutive separators collapse to a single space, and the result is trimmed
+ * of leading/trailing whitespace. Pure and total — never throws.
+ */
+export function relabelTagValue(value: string): string {
+  const trimmed = value.trim();
+  const mapped = ACCESSIBILITY_LABELS[trimmed];
+  if (mapped !== undefined) {
+    return mapped;
+  }
+  return trimmed.replace(/[-_]+/g, ' ').trim();
+}
 
 /** A string is present when it is non-null/undefined and not whitespace-only. */
 function isNonEmpty(value: string | null | undefined): value is string {
@@ -248,6 +301,230 @@ export function buildInfoTags(
   }
 
   return tags;
+}
+
+/**
+ * The Interest_Facet group key whose Facet_Values are surfaced first within the
+ * Good_For_Group ("age facet tags followed by the interest facet tags", R1.5).
+ * The remaining Interest_Facet groups follow in their persisted insertion
+ * order.
+ */
+const AGE_FACET_GROUP = 'age';
+
+/** A per-group accumulator that de-duplicates tags by their display label. */
+interface GroupAccumulator {
+  readonly tags: InfoTag[];
+  /** Display labels already emitted into this group (case-sensitive). */
+  readonly seen: Set<string>;
+}
+
+function makeAccumulator(): GroupAccumulator {
+  return { tags: [], seen: new Set<string>() };
+}
+
+/**
+ * Append an Info_Tag to a group, dropping it when a case-sensitive duplicate of
+ * its (already relabeled + trimmed) display `label` has already been emitted
+ * into the same group — keeping the first occurrence and its
+ * `accessibilityLabel` (R3.1, R3.2). Callers pass only present, non-empty,
+ * trimmed labels.
+ */
+function addTag(
+  acc: GroupAccumulator,
+  kind: InfoTagKind,
+  label: string,
+  accessibilityLabel: string,
+): void {
+  if (acc.seen.has(label)) {
+    return;
+  }
+  acc.seen.add(label);
+  acc.tags.push({ kind, label, accessibilityLabel });
+}
+
+/**
+ * Location_Group tags in the fixed field order park → land → resort →
+ * resort-area (R1.2). The specific Resort and Resort_Area are surfaced only for
+ * a `Resort`-area Experience (mirroring `buildInfoTags`); the Resort also
+ * requires a referenced Resort id and an available name.
+ */
+function collectLocation(
+  experience: TagGroupExperience,
+  resortName: string | null,
+): InfoTag[] {
+  const acc = makeAccumulator();
+
+  if (isNonEmpty(experience.park)) {
+    const label = experience.park.trim();
+    addTag(acc, 'park', label, `Park: ${label}`);
+  }
+
+  if (isNonEmpty(experience.land)) {
+    const label = experience.land.trim();
+    addTag(acc, 'land', label, `Land: ${label}`);
+  }
+
+  if (
+    experience.areaType === 'Resort' &&
+    isNonEmpty(experience.resortId) &&
+    isNonEmpty(resortName)
+  ) {
+    const label = resortName.trim();
+    addTag(acc, 'resort', label, `Resort: ${label}`);
+  }
+
+  if (experience.areaType === 'Resort' && isNonEmpty(experience.resortArea)) {
+    const label = experience.resortArea.trim();
+    addTag(acc, 'resortArea', label, `Resort area: ${label}`);
+  }
+
+  return acc.tags;
+}
+
+/**
+ * Good_To_Know_Group tags in the fixed field order height-requirement →
+ * physical considerations (R1.3). The Height_Requirement is emitted only when
+ * persisted with a non-empty name; each Physical_Consideration is emitted in
+ * persisted order.
+ */
+function collectGoodToKnow(experience: TagGroupExperience): InfoTag[] {
+  const acc = makeAccumulator();
+
+  if (
+    experience.heightRequirement &&
+    isNonEmpty(experience.heightRequirement.name)
+  ) {
+    const label = experience.heightRequirement.name.trim();
+    addTag(acc, 'height', label, `Height requirement: ${label}`);
+  }
+
+  if (experience.physicalConsiderations) {
+    for (const consideration of experience.physicalConsiderations) {
+      if (isNonEmpty(consideration.name)) {
+        const label = consideration.name.trim();
+        addTag(acc, 'advisory', label, `Advisory: ${label}`);
+      }
+    }
+  }
+
+  return acc.tags;
+}
+
+/**
+ * Accessibility_Group tags in persisted order (R1.4). Each raw accessibility
+ * value is mapped to its human-friendly label via `relabelTagValue` (R2.1-R2.3)
+ * and emitted only when the relabeled label is non-empty; the relabeled label
+ * is exposed as the tag's accessible text (R2.4).
+ */
+function collectAccessibility(experience: TagGroupExperience): InfoTag[] {
+  const acc = makeAccumulator();
+
+  if (experience.accessibility) {
+    for (const raw of experience.accessibility) {
+      if (isNonEmpty(raw)) {
+        const label = relabelTagValue(raw);
+        if (label.length > 0) {
+          addTag(acc, 'accessibility', label, `Accessibility: ${label}`);
+        }
+      }
+    }
+  }
+
+  return acc.tags;
+}
+
+/**
+ * Good_For_Group tags: the age Facet_Values first, then the remaining
+ * Interest_Facet groups' values in persisted (group, then value) order (R1.5).
+ * Each value is emitted only when its `name` is present and non-empty.
+ */
+function collectGoodFor(experience: TagGroupExperience): InfoTag[] {
+  const acc = makeAccumulator();
+  const facets = experience.interestFacets;
+  if (!facets) {
+    return acc.tags;
+  }
+
+  const pushValues = (values: readonly { readonly name: string }[]): void => {
+    for (const value of values) {
+      if (isNonEmpty(value.name)) {
+        const label = value.name.trim();
+        addTag(acc, 'interest', label, `Good for: ${label}`);
+      }
+    }
+  };
+
+  // Age facets first (R1.5).
+  const ageValues = facets[AGE_FACET_GROUP];
+  if (ageValues) {
+    pushValues(ageValues);
+  }
+
+  // Then the remaining interest facet groups in persisted insertion order.
+  for (const [group, values] of Object.entries(facets)) {
+    if (group === AGE_FACET_GROUP) {
+      continue;
+    }
+    pushValues(values);
+  }
+
+  return acc.tags;
+}
+
+/**
+ * Build the ordered, relabeled, de-duplicated Tag_Groups for an Experience
+ * detail view (R1). Groups are emitted in the fixed order Location_Group →
+ * Good_To_Know_Group → Accessibility_Group → Good_For_Group (R1.1, R1.8), each
+ * carrying its human-facing label (R1.7). Assignment is a partition — every
+ * emitted Info_Tag belongs to exactly one group (R9.2):
+ *
+ *   - `location`: park → land → resort → resort-area (R1.2)
+ *   - `goodToKnow`: height-requirement → physical considerations (R1.3)
+ *   - `accessibility`: the relabeled accessibility tags, in persisted order (R1.4)
+ *   - `goodFor`: the age Facet_Values, then the remaining Interest_Facet values
+ *     (R1.5)
+ *
+ * A tag is emitted only when its enrichment value is present and non-empty
+ * (non-null, non-undefined, ≥1 non-whitespace character for strings) and its
+ * label is trimmed (R9.3). Raw coordinates are never emitted as a tag (R4.1).
+ * Within each group, tags whose relabeled + trimmed display label duplicates an
+ * earlier tag (case-sensitive) are dropped, keeping the first occurrence and
+ * its `accessibilityLabel`; de-duplication is independent per group (R3.1-R3.3).
+ * Any group with no renderable tag is omitted, including its label (R1.6);
+ * `[]` is returned when nothing renders. Pure and total — never throws for
+ * null/undefined/empty inputs (R9.5) and deterministic for equal inputs (R9.6).
+ */
+export function buildTagGroups(
+  experience: TagGroupExperience,
+  resortName: string | null,
+): readonly TagGroup[] {
+  const groups: TagGroup[] = [];
+
+  const location = collectLocation(experience, resortName);
+  if (location.length > 0) {
+    groups.push({ id: 'location', label: 'Location', tags: location });
+  }
+
+  const goodToKnow = collectGoodToKnow(experience);
+  if (goodToKnow.length > 0) {
+    groups.push({ id: 'goodToKnow', label: 'Good to know', tags: goodToKnow });
+  }
+
+  const accessibility = collectAccessibility(experience);
+  if (accessibility.length > 0) {
+    groups.push({
+      id: 'accessibility',
+      label: 'Accessibility',
+      tags: accessibility,
+    });
+  }
+
+  const goodFor = collectGoodFor(experience);
+  if (goodFor.length > 0) {
+    groups.push({ id: 'goodFor', label: 'Good for', tags: goodFor });
+  }
+
+  return groups;
 }
 
 /**

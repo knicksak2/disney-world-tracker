@@ -64,7 +64,28 @@ import {
 } from '@dwt/shared';
 
 import { AppError } from '../../errors/AppError.js';
+import type { CuratedProgressStats } from '../stats/curatedShare.js';
 import type { SharingRepo } from './repo.js';
+
+// ---------------------------------------------------------------------------
+// Curated Progress_Share stats seam (Requirement 10)
+// ---------------------------------------------------------------------------
+
+/**
+ * Live-computation port that produces the curated subset of the sender's
+ * statistics captured into a `progress` Share at creation time (R10.1-R10.8).
+ *
+ * The port is injected (rather than depending on the Stats_Service directly) so
+ * the Sharing_Service stays decoupled from the stats wiring and remains unit-
+ * testable with a fake. The composition root binds it to the Stats_Service's
+ * snapshot repository + `buildCuratedProgressStats`, so the fields are a
+ * send-time snapshot of the same single `REPEATABLE READ READ ONLY` computation
+ * the Stats_Page uses (R10.6). It resolves the sender's `overallPercent`,
+ * optional `topFacet`, and `percentileRank`.
+ */
+export type ProgressShareStatsProvider = (
+  senderId: string,
+) => Promise<CuratedProgressStats>;
 
 // ---------------------------------------------------------------------------
 // ShareDelivered dispatch seam (R7.7)
@@ -134,6 +155,16 @@ export interface SharingRoutesOptions {
    * best-effort and decoupled — it never blocks or fails the request.
    */
   readonly emitShareDelivered?: ShareDeliveredDispatch;
+  /**
+   * Optional live-computation port that captures the curated stats subset into
+   * a `progress` Share at creation time (R10.1-R10.8). When supplied, a
+   * `progress` share's `overallPercent`, `topFacet`, and `percentileRank` are
+   * computed server-side from the sender's live stats and written into the
+   * payload snapshot, overriding any client-supplied `overallPercent`. When
+   * omitted (unit tests, harnesses that do not exercise the stats path), the
+   * `progress` payload is composed from the request body exactly as before.
+   */
+  readonly computeProgressShareStats?: ProgressShareStatsProvider;
 }
 
 // ---------------------------------------------------------------------------
@@ -242,7 +273,8 @@ const inboxParamsSchema = z.object({ shareId: uuidSchema }).strict();
 export function sharingRoutes(
   options: SharingRoutesOptions,
 ): FastifyPluginAsync {
-  const { repo, requireSession, emitShareDelivered } = options;
+  const { repo, requireSession, emitShareDelivered, computeProgressShareStats } =
+    options;
 
   return async function sharingRoutesPlugin(
     app: FastifyInstance,
@@ -256,7 +288,18 @@ export function sharingRoutes(
       async (request, reply) => {
         const senderId = requireUser(request);
         const body = parseOrAppError(shareCreateBodySchema, request.body);
-        const payload = composePayload(body);
+        let payload = composePayload(body);
+        // R10: for a `progress` share, capture a send-time snapshot of the
+        // sender's curated stats via the live computation (when the port is
+        // wired) and write `overallPercent`, `topFacet`, and `percentileRank`
+        // into the payload, overriding the client-supplied `overallPercent`.
+        if (
+          payload.kind === 'progress' &&
+          computeProgressShareStats !== undefined
+        ) {
+          const curated = await computeProgressShareStats(senderId);
+          payload = applyCuratedProgressStats(payload, curated);
+        }
         const result = await repo.createShareAtomic(
           senderId,
           body.recipientIds,
@@ -507,6 +550,41 @@ function composeProgressPayload(
     perParkPercent: perPark,
     perCategoryPercent: perCategory,
   };
+}
+
+/**
+ * Overlay the curated, live-computed stats onto a composed `progress` payload
+ * (R10.1, R10.2, R10.3, R10.6, R10.7, R10.8).
+ *
+ * The server-computed `overallPercent` replaces the client-supplied value so
+ * the snapshot reflects the sender's actual send-time completion (R10.1). The
+ * `topFacet` is included only when the provider returned one (R10.7 / R10.8);
+ * omitting it entirely when the sender has no facet statistic keeps the payload
+ * clean. The `percentileRank` is always written (R10.3). The per-Park /
+ * per-Category breakdown maps from the client body are preserved as-is; the
+ * verbose stats excluded by R10.5 (rating distribution, highest/lowest) never
+ * enter this payload shape in the first place.
+ *
+ * `clampPercent` guards the curated percentages defensively even though the
+ * Stats_Service already produces values in `[0.0, 100.0]`.
+ */
+function applyCuratedProgressStats(
+  payload: ProgressSharePayload,
+  curated: CuratedProgressStats,
+): ProgressSharePayload {
+  const next: {
+    -readonly [K in keyof ProgressSharePayload]: ProgressSharePayload[K];
+  } = {
+    kind: 'progress',
+    overallPercent: clampPercent(curated.overallPercent),
+    perParkPercent: payload.perParkPercent,
+    perCategoryPercent: payload.perCategoryPercent,
+    percentileRank: clampPercent(curated.percentileRank),
+  };
+  if (curated.topFacet !== undefined) {
+    next.topFacet = curated.topFacet;
+  }
+  return next;
 }
 
 /**

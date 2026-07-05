@@ -2,14 +2,14 @@
 
 This document explains how the Disney World Tracker backend will be hosted using free-tier services. It is meant for a side-project budget — every piece below has a free tier that does not expire, with no credit card surprises at month 13.
 
-The full architecture from `design.md` calls for four moving pieces:
+The full architecture from `design.md` calls for four self-hosted moving pieces:
 
 1. A long-running API server (Node.js + Fastify)
 2. A relational database (PostgreSQL)
 3. A fast in-memory store (Redis)
 4. Object storage for avatar uploads (S3-compatible)
 
-We map each one to a managed service that gives us a real free tier.
+We map each one to a managed service that gives us a real free tier. Two external data sources sit behind the API and need no hosting of our own — they're consumed over HTTPS server-side (see [Data sources](#data-sources)).
 
 ## At a Glance
 
@@ -19,9 +19,10 @@ We map each one to a managed service that gives us a real free tier.
 | PostgreSQL | **Neon** | 0.5 GB storage, 1 project, autoscale to 0 when idle | Upgrade plan or migrate; data is portable |
 | Redis | **Upstash** | 10,000 commands/day, 256 MB storage, global edge | Per-request pricing kicks in (very cheap); or swap to a different provider |
 | Object storage | **Cloudflare R2** | 10 GB storage, 1M Class A ops/mo, 10M Class B ops/mo, **no egress fees** | Pennies per additional GB |
-| ThemeParks.wiki API | n/a (already free) | Public, no key required | n/a |
+| Live data source | **ThemeParks.wiki** API | n/a (already free) | Public, no key required | n/a |
+| Static catalog source | **Disney** (Sync Gateway + dining-menu API) | n/a (Disney's own endpoints) | Requires Sync Gateway credentials; rate-limited by Disney's edge |
 
-Total monthly cost while the app is small: **$0**. No payment method required to start (R2 asks for one but doesn't charge inside the free tier).
+Total monthly cost while the app is small: **$0**. No payment method required to start (R2 asks for one but doesn't charge inside the free tier). The Disney Sync Gateway needs HTTP Basic credentials (a required secret on Render), but there's no fee — it's Disney's own infrastructure.
 
 ## Architecture With Hosting Overlaid
 
@@ -47,16 +48,18 @@ graph LR
         Avatars[(Avatar PNG/JPEG)]
     end
 
-    External[ThemeParks.wiki API]
+    Live[ThemeParks.wiki API<br/>live waits, showtimes,<br/>Lightning Lane, boarding groups]
+    Disney[Disney sources<br/>Sync Gateway catalog<br/>+ dining-menu API]
 
     App -->|HTTPS| API
     API --> PG
     API --> Redis
     API --> Avatars
-    API -->|24h sync| External
+    API -->|on-demand, 5-min cache| Live
+    API -->|incremental sync ≥24h| Disney
 ```
 
-Everything talks over HTTPS. The mobile app only ever knows about one URL — the Render API endpoint. Render, Neon, Upstash, and R2 are all reached server-side.
+Everything talks over HTTPS. The mobile app only ever knows about one URL — the Render API endpoint. Render, Neon, Upstash, R2, and both data sources are all reached server-side. The two external sources are split by change rate: high-change **live** data from ThemeParks.wiki (fetched on demand, cached briefly in Redis) and low-change **static catalog** data from Disney (synced incrementally, no more than once per 24h).
 
 ---
 
@@ -69,9 +72,10 @@ Render is a platform that takes a GitHub repository, builds it, and runs it as a
 ### How it works
 
 1. You create a Render account and connect your GitHub repo.
-2. You point Render at the backend folder, tell it the build command (`npm run build`) and the start command (`npm start`).
-3. Render builds a container, deploys it, and gives you a URL like `https://disney-world-tracker.onrender.com`.
-4. Every push to `main` triggers an automatic rebuild and zero-downtime deploy.
+2. The service is defined as code in [`render.yaml`](../render.yaml) (a Render Blueprint) — you don't hand-configure it in the dashboard. It pins the runtime, region, build command, start command, health check, and the env vars (secrets are `sync: false`, set once in the dashboard).
+3. The build command installs the workspace, builds the shared package, compiles the API, and applies pending migrations in one chain: `npm ci --include=dev && npm run build:shared && npm run build --workspace apps/api && npm run migrate --workspace apps/api`. Migrations live in the build step because the free tier has no separate pre-deploy hook — they're idempotent, so already-applied files are skipped. The start command is `npm start --workspace apps/api`.
+4. Render builds a container, deploys it, and gives you a URL like `https://dwt-api.onrender.com`. The health check is `GET /health`.
+5. Every push to the **`develop`** branch (the branch pinned in `render.yaml`) triggers an automatic rebuild and deploy.
 
 ### The free tier
 
@@ -82,10 +86,14 @@ Render is a platform that takes a GitHub repository, builds it, and runs it as a
 
 ### What this means for the design
 
-The 24-hour scheduled `Catalog_Sync` job is the one thing that doesn't fit nicely on a sleeping free instance. Two ways to handle it:
+The `Catalog_Sync` job doesn't fit nicely on a sleeping free instance, so on the hosted deployment it is **not run unattended** — the scheduler isn't started in the boot path, and a cold read only opportunistically refreshes an already-seeded catalog. Instead, the catalog is seeded and refreshed **manually from your machine** against the hosted database:
 
-- **Cron Jobs on Render** are a separate service type with their own free hours. We schedule the sync as a cron job that wakes up daily, runs the sync, and exits. Cleaner than running it inside the API process.
-- **External cron trigger** like [cron-job.org](https://cron-job.org) hits a `/internal/sync` endpoint on the API daily. This is the simpler "no extra Render service" option.
+```bash
+npm run migrate:cloud --workspace apps/api   # ensure schema is current
+npm run sync:cloud --workspace apps/api      # bootstrap/refresh the hosted catalog
+```
+
+`sync:cloud` reads `apps/api/.env.dev` (the hosted `DATABASE_URL` + Disney credentials) and writes into the same Neon database the deployed API reads. The first run is a full bootstrap; later runs are incremental. This keeps the free instance simple (no extra cron service, no `/internal/sync` endpoint to secure) at the cost of the catalog refresh being a deliberate manual step. Live data needs no sync at all — it's fetched on demand from ThemeParks.wiki and cached in Redis.
 
 ### Trade-offs
 
@@ -218,6 +226,36 @@ After 10 GB it's **$0.015 per GB-month** for storage. Reads stay free. Realistic
 
 ---
 
+## Data sources
+
+The app's data is split by change rate across two external sources. Neither is hosted by us — both are HTTPS endpoints reached server-side from the Render API — but they shape the deployment (credentials, sync cadence), so they belong in the hosting picture.
+
+### ThemeParks.wiki — live data (free, no key)
+
+High-change-rate data — status, standby / single-rider waits, forecast, showtimes, operating hours, walk-up dining, Lightning Lane price + coarse state, and boarding groups — comes from the public [ThemeParks.wiki](https://api.themeparks.wiki/v1) API. It's fetched **on demand** (not synced), cached in Upstash Redis for ~5 minutes, and needs no credentials. The live path never touches a Disney source, so it stays fully functional even while Disney is blocked.
+
+### Disney — static catalog (credentialed)
+
+Low-change-rate catalog data — descriptive fields, resorts/hotels, imagery, menus, coordinates, facets, area/park hierarchy — comes from Disney's own sources: the Couchbase **Sync Gateway** (catalog documents) and Disney's public **dining-menu API** (restaurant menus, anonymous). This is what makes the deployment's two Disney secrets necessary:
+
+- **`DISNEY_SYNC_GATEWAY_USERNAME` / `_PASSWORD`** are required env vars on Render (`sync: false`). The API fails fast at startup without them. Obtain them locally with `node tools/pull-disney-creds.mjs` and paste the values into the Render dashboard; re-set them if Disney rotates them.
+- All Disney access flows through a single hardened transport (shared rate limit, bounded backoff with jitter, `Retry-After` handling, Akamai/WAF-vs-auth failure classification). A `waf_block` outcome means Disney's edge throttled the shared egress IP (transient); an `auth_failure` means the credentials are invalid — re-pull them.
+- The catalog sync is **incremental** (a persisted `_changes` checkpoint + a durable local document store) and runs no more than once per 24h. On the free tier it's triggered manually via `npm run sync:cloud` rather than by an unattended scheduler (see [Render — What this means for the design](#what-this-means-for-the-design)).
+
+### Trade-offs
+
+| Pro | Con |
+| --- | --- |
+| Both sources are free — no data-provider bill | Disney requires credentials that can rotate (re-pull with the creds tool) |
+| Live and static paths are independent — one can degrade without the other | Disney's edge (Akamai) can throttle the shared egress IP; handled as a transient `waf_block` |
+| Incremental sync keeps Disney traffic (and cost of a block) low | Hosted catalog refresh is a deliberate manual step, not automatic |
+
+### Push notifications — Expo (free, no server credentials)
+
+Push delivery (Share deliveries, friend-request notifications) is **not a hosted service** and adds nothing to the stack. The mobile app mints an Expo push token via `expo-notifications`, and the API sends through Expo's public push service (`https://exp.host/--/api/v2/push/send`) — no server-side key, secret, or env var, so there's nothing to configure on Render. Expo's service delivers to devices through **FCM** (Android) and **APNs** (iOS) under the hood; those credentials live in the **mobile build**, not the backend — see the EAS build notes in the README, not this document.
+
+---
+
 ## How the Pieces Talk
 
 Here's the flow for a user opening the app and rating Space Mountain:
@@ -260,12 +298,13 @@ Every box on the left of "Render API" is the mobile app. Everything else is serv
 When the time comes to deploy, the rough order is:
 
 1. **Cloudflare R2** — create bucket, generate credentials.
-2. **Neon** — create project, copy connection string, run schema migrations.
-3. **Upstash** — create Redis database, copy URL.
-4. **Render** — create Web Service, link GitHub repo, paste the three sets of credentials as environment variables, deploy.
-5. **Optional: Render Cron Job** — schedule the daily Catalog_Sync hit.
+2. **Neon** — create project, copy the pooled connection string. The schema and extensions are created by the migrations (which run in Render's build step), not by hand.
+3. **Upstash** — create Redis database, copy the `rediss://` URL.
+4. **Disney credentials** — obtain the Sync Gateway HTTP Basic credentials locally with `node tools/pull-disney-creds.mjs`; you'll paste the values into Render. The API fails fast on boot without them.
+5. **Render** — create the Blueprint (**New +** → **Blueprint**, point it at the repo). Render reads `render.yaml`; fill in the `sync: false` secrets it prompts for (the three provider credential sets plus the two Disney keys). Push to `develop` to deploy.
+6. **Seed the catalog** — after the first deploy, run `npm run sync:cloud` from your machine to bootstrap the hosted catalog (see [Render — What this means for the design](#what-this-means-for-the-design)).
 
-All four signups are independent. If any single provider goes down or changes their free tier, you swap that one piece without rewriting the others.
+The provider signups are independent. If any single provider goes down or changes their free tier, you swap that one piece without rewriting the others.
 
 ---
 
@@ -281,4 +320,4 @@ All four signups are independent. If any single provider goes down or changes th
 
 ## What Changes in design.md
 
-The design document is hosting-agnostic on purpose, and nothing in it needs to change to deploy on this stack. The interfaces (Postgres, Redis, S3-compatible) are exactly what Neon, Upstash, and R2 provide. Render runs the Node process the design assumes. The only deployment-specific decision is the Catalog_Sync trigger (Render Cron Job vs. external pinger), which is an operational detail rather than an architectural one.
+The design document is hosting-agnostic on purpose, and nothing in it needs to change to deploy on this stack. The interfaces (Postgres, Redis, S3-compatible) are exactly what Neon, Upstash, and R2 provide, and both data sources (ThemeParks.wiki, Disney) are plain HTTPS endpoints. Render runs the Node process the design assumes. The only deployment-specific decision is how `Catalog_Sync` is triggered: rather than the unattended daily scheduler the design allows, the free-tier deployment runs it manually from a developer machine via `npm run sync:cloud` — an operational detail rather than an architectural one.

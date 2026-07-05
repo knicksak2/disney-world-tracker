@@ -1,23 +1,21 @@
 /**
- * Contract test for the Stats_Service endpoint shape (task 6.7).
+ * Contract test for the Stats_Service endpoint shape.
  *
- * This test pins the wire contract of `GET /me/stats` for the two new
- * dimensions this feature adds:
+ * Pins the wire contract of `GET /me/stats` for the coverage dimensions under
+ * the superset response's `coverage` object:
  *
- *   - `byAreaType` — a record keyed by every `AREA_TYPES` value, each a
- *     `{ completed, total, percent }` breakdown (R2.1, R2.3).
- *   - `resort`     — the hotels-visited Resort_Statistic breakdown (R4.2).
+ *   - `coverage.byAreaType` — a record keyed by every `AREA_TYPES` value, each
+ *     a `CompletionCell` (R2.1, R2.3).
+ *   - `coverage.resort`     — the hotels-visited Resort_Statistic cell (R2.1).
  *
- * It asserts the "zero-shape" (`{ completed: 0, total: 0, percent: 0.0 }`)
- * for both dimensions when the snapshot is empty (no cells), and that every
- * `AREA_TYPES` key is present regardless of what the snapshot contains.
+ * It asserts the zero-shape for both dimensions when the snapshot is empty and
+ * that every `AREA_TYPES` key is present regardless of the snapshot contents.
  *
- * The plugin is registered against an in-process Fastify instance with a
- * fake `StatsRepo`, a fake DB pool, and a stub session pre-handler — no
- * Postgres or Redis traffic is involved, matching the convention in
- * `routes.test.ts`.
+ * The plugin is registered against an in-process Fastify instance with a fake
+ * `StatsRepo`, a fake DB pool, and a stub session pre-handler — no Postgres or
+ * Redis traffic is involved.
  *
- * Validates: Requirements 2.1, 2.3, 4.2.
+ * Validates: Requirements 2.1, 2.3.
  */
 
 import Fastify, { type FastifyInstance } from 'fastify';
@@ -29,11 +27,28 @@ import type { AreaType } from '@dwt/shared';
 import { registerErrorHandler } from '../../../errors/handler.js';
 import {
   statsRoutes,
-  type StatsBreakdown,
   type StatsResponse,
   type StatsRoutesOptions,
 } from '../routes.js';
-import type { StatsCell, StatsRepo, StatsSnapshot } from '../repo.js';
+import type { CompletionCell } from '../coverage.js';
+import type { RawCoverageCell, StatsRepo, StatsSnapshot } from '../repo.js';
+
+// ---------------------------------------------------------------------------
+// Snapshot builder
+// ---------------------------------------------------------------------------
+
+type CellInput = Omit<RawCoverageCell, 'land' | 'resortArea'> &
+  Partial<Pick<RawCoverageCell, 'land' | 'resortArea'>>;
+
+function snapshotOf(cells: readonly CellInput[]): StatsSnapshot {
+  return {
+    coverage: cells.map((c) => ({ land: null, resortArea: null, ...c })),
+    facetExperiences: [],
+    userRatings: [],
+    resortCoverage: [],
+    percentile: null,
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Fake DB pool (unused by /me/stats, but required by the plugin options)
@@ -116,33 +131,35 @@ async function fetchStats(snapshot: StatsSnapshot): Promise<StatsResponse> {
 // Helpers
 // ---------------------------------------------------------------------------
 
-/**
- * Assert a breakdown is a well-formed `{ completed, total, percent }` triple
- * of finite numbers. This is the structural half of the contract.
- */
-function expectBreakdownShape(actual: unknown): asserts actual is StatsBreakdown {
+/** Assert a cell is a well-formed `CompletionCell` of finite numbers/flags. */
+function expectCellShape(actual: unknown): asserts actual is CompletionCell {
   expect(actual).toBeDefined();
-  const b = actual as StatsBreakdown;
-  expect(typeof b.completed).toBe('number');
-  expect(typeof b.total).toBe('number');
-  expect(typeof b.percent).toBe('number');
+  const c = actual as CompletionCell;
+  expect(typeof c.completed).toBe('number');
+  expect(typeof c.total).toBe('number');
+  expect(typeof c.percent).toBe('number');
+  expect(typeof c.remaining).toBe('number');
+  expect(typeof c.completeBadge).toBe('boolean');
 }
 
-/** Assert a breakdown equals the zero-shape `{ 0, 0, 0.0 }`. */
-function expectZeroShape(actual: StatsBreakdown | undefined): void {
-  expect(actual).toEqual({ completed: 0, total: 0, percent: 0 });
+/** Assert a cell equals the zero-shape. */
+function expectZeroShape(actual: CompletionCell | undefined): void {
+  expect(actual).toEqual({
+    completed: 0,
+    total: 0,
+    percent: 0,
+    remaining: 0,
+    completeBadge: false,
+  });
 }
 
 // ---------------------------------------------------------------------------
-// Contract: GET /me/stats byAreaType + resort shape
+// Contract: GET /me/stats coverage.byAreaType + coverage.resort shape
 // ---------------------------------------------------------------------------
 
-describe('GET /me/stats — byAreaType + resort contract (R2.1, R2.3, R4.2)', () => {
-  it('returns a byAreaType key for every AREA_TYPES value, each a {completed,total,percent} breakdown', async () => {
-    // A populated snapshot: one real Experience per Area_Type plus a
-    // resort-representing row, so no key is present merely because the
-    // response object was seeded with zeros.
-    const cells: StatsCell[] = [
+describe('GET /me/stats — coverage.byAreaType + coverage.resort contract (R2.1, R2.3)', () => {
+  it('returns a byAreaType key for every AREA_TYPES value, each a CompletionCell', async () => {
+    const cells: CellInput[] = [
       {
         park: 'Magic Kingdom',
         category: 'Ride',
@@ -175,8 +192,7 @@ describe('GET /me/stats — byAreaType + resort contract (R2.1, R2.3, R4.2)', ()
         completed: 1,
         total: 2,
       },
-      // A resort-representing row: sole source of `resort`, carries the real
-      // `Resort` category, excluded from byAreaType.
+      // A resort-representing row: sole source of `resort`, excluded from byAreaType.
       {
         park: null,
         category: 'Resort',
@@ -187,39 +203,42 @@ describe('GET /me/stats — byAreaType + resort contract (R2.1, R2.3, R4.2)', ()
       },
     ];
 
-    const body = await fetchStats({ cells });
+    const body = await fetchStats(snapshotOf(cells));
 
-    // Every AREA_TYPES key is present and well-formed.
-    const areaKeys = Object.keys(body.byAreaType) as AreaType[];
+    const areaKeys = Object.keys(body.coverage.byAreaType) as AreaType[];
     expect(new Set(areaKeys)).toEqual(new Set(AREA_TYPES));
     for (const area of AREA_TYPES) {
-      expectBreakdownShape(body.byAreaType[area]);
+      expectCellShape(body.coverage.byAreaType[area]);
     }
 
-    // The `resort` breakdown is present and well-formed, and counts only the
-    // representing row (kept distinct from byAreaType['Resort'] — R4.4).
-    expectBreakdownShape(body.resort);
-    expect(body.resort).toEqual({ completed: 3, total: 8, percent: 37.5 });
-    // Resort Area_Statistic counts the resort-*area* activity only.
-    expect(body.byAreaType['Resort']).toEqual({
+    // `resort` counts only the representing row (kept distinct from byAreaType.Resort).
+    expectCellShape(body.coverage.resort);
+    expect(body.coverage.resort).toEqual({
+      completed: 3,
+      total: 8,
+      percent: 37.5,
+      remaining: 5,
+      completeBadge: false,
+    });
+    // Resort Area_Statistic counts the resort-area activity only.
+    expect(body.coverage.byAreaType['Resort']).toEqual({
       completed: 1,
       total: 2,
       percent: 50,
+      remaining: 1,
+      completeBadge: false,
     });
   });
 
   it('reports the zero-shape for every byAreaType key and for resort when the snapshot is empty', async () => {
-    const body = await fetchStats({ cells: [] });
+    const body = await fetchStats(snapshotOf([]));
 
-    // byAreaType still exposes every key, each the zero-shape (R2.3).
-    const areaKeys = Object.keys(body.byAreaType) as AreaType[];
+    const areaKeys = Object.keys(body.coverage.byAreaType) as AreaType[];
     expect(new Set(areaKeys)).toEqual(new Set(AREA_TYPES));
     for (const area of AREA_TYPES) {
-      expectZeroShape(body.byAreaType[area]);
+      expectZeroShape(body.coverage.byAreaType[area]);
     }
-
-    // The resort breakdown is present with the zero-shape (R4.2).
-    expectBreakdownShape(body.resort);
-    expectZeroShape(body.resort);
+    expectCellShape(body.coverage.resort);
+    expectZeroShape(body.coverage.resort);
   });
 });

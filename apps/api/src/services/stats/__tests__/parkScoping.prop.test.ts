@@ -7,7 +7,7 @@
  *   `byPark`/`byParkAndCategory` cell.
  *
  * The stats roll-up under test is `buildResponse(snapshot)` from
- * `services/stats/routes.ts`. It folds a `StatsSnapshot`'s flat cell list into
+ * `services/stats/routes.ts`. It folds a `CoverageCellsSnapshot`'s flat cell list into
  * the response dimensions. The Park dimensions (`byPark` and
  * `byParkAndCategory`) must stay scoped to Experiences that belong to a Park:
  * a cell with `park === null` — whether a resort-area Experience
@@ -37,8 +37,25 @@ import fc from 'fast-check';
 import { AREA_TYPES, EXPERIENCE_CATEGORIES, PARKS } from '@dwt/shared';
 import type { Park } from '@dwt/shared';
 
-import { buildResponse } from '../routes.js';
-import type { StatsCell, StatsSnapshot } from '../repo.js';
+import { rollUpCoverage } from '../coverage.js';
+import type { RawCoverageCell } from '../repo.js';
+
+/**
+ * Local compatibility shim. The coverage roll-up moved out of the (now removed)
+ * `buildResponse` route helper into the pure `rollUpCoverage` module, which no
+ * longer produces a `byParkAndCategory` dimension (dropped by the expanded-stats
+ * design). These legacy Park-scoping assertions retain the `byPark` checks; the
+ * `byParkAndCategory` checks are removed with the dimension.
+ */
+type StatsCell = Omit<RawCoverageCell, 'land' | 'resortArea'>;
+interface CoverageCellsSnapshot {
+  readonly cells: readonly StatsCell[];
+}
+function buildResponse(snapshot: CoverageCellsSnapshot) {
+  return rollUpCoverage(
+    snapshot.cells.map((c) => ({ ...c, land: null, resortArea: null })),
+  );
+}
 
 const NUM_RUNS = 100;
 
@@ -112,7 +129,7 @@ const representingCellArb: fc.Arbitrary<StatsCell> = fc
  * representing cells so the property exercises exactly the rows that must be
  * excluded from the Park dimensions.
  */
-const snapshotArb: fc.Arbitrary<StatsSnapshot> = fc
+const snapshotArb: fc.Arbitrary<CoverageCellsSnapshot> = fc
   .record({
     parkCells: fc.array(parkCellArb, { maxLength: 60 }),
     resortArea: fc.array(resortAreaCellArb, { maxLength: 12 }),
@@ -123,7 +140,7 @@ const snapshotArb: fc.Arbitrary<StatsSnapshot> = fc
   }));
 
 /** Sum `total` / `completed` over only the cells with a non-null Park. */
-function parkScopedSums(snapshot: StatsSnapshot): {
+function parkScopedSums(snapshot: CoverageCellsSnapshot): {
   total: number;
   completed: number;
 } {
@@ -159,29 +176,7 @@ describe('buildResponse — Property 2: Park dimensions are Park-scoped', () => 
     );
   });
 
-  it('sums byParkAndCategory[*][*] to exactly the Park-owned cells', () => {
-    fc.assert(
-      fc.property(snapshotArb, (snapshot) => {
-        const response = buildResponse(snapshot);
-        const expected = parkScopedSums(snapshot);
-
-        let sumTotal = 0;
-        let sumCompleted = 0;
-        for (const park of PARKS) {
-          for (const category of EXPERIENCE_CATEGORIES) {
-            sumTotal += response.byParkAndCategory[park][category].total;
-            sumCompleted += response.byParkAndCategory[park][category].completed;
-          }
-        }
-
-        expect(sumTotal).toBe(expected.total);
-        expect(sumCompleted).toBe(expected.completed);
-      }),
-      { numRuns: NUM_RUNS },
-    );
-  });
-
-  it('never leaks a Park-less cell into any byPark/byParkAndCategory bucket', () => {
+  it('never leaks a Park-less cell into any byPark bucket', () => {
     fc.assert(
       fc.property(snapshotArb, (snapshot) => {
         const response = buildResponse(snapshot);
@@ -190,12 +185,6 @@ describe('buildResponse — Property 2: Park dimensions are Park-scoped', () => 
         const expectedPark = new Map<Park, { completed: number; total: number }>(
           PARKS.map((p) => [p, { completed: 0, total: 0 }]),
         );
-        const expectedCell = new Map<string, { completed: number; total: number }>();
-        for (const park of PARKS) {
-          for (const category of EXPERIENCE_CATEGORIES) {
-            expectedCell.set(`${park}|${category}`, { completed: 0, total: 0 });
-          }
-        }
 
         for (const cell of snapshot.cells) {
           if (cell.park === null) {
@@ -204,9 +193,6 @@ describe('buildResponse — Property 2: Park dimensions are Park-scoped', () => 
           const p = expectedPark.get(cell.park)!;
           p.total += cell.total;
           p.completed += cell.completed;
-          const c = expectedCell.get(`${cell.park}|${cell.category}`)!;
-          c.total += cell.total;
-          c.completed += cell.completed;
         }
 
         for (const park of PARKS) {
@@ -214,12 +200,6 @@ describe('buildResponse — Property 2: Park dimensions are Park-scoped', () => 
           expect(response.byPark[park].completed).toBe(
             expectedPark.get(park)!.completed,
           );
-          for (const category of EXPERIENCE_CATEGORIES) {
-            const bucket = response.byParkAndCategory[park][category];
-            const exp = expectedCell.get(`${park}|${category}`)!;
-            expect(bucket.total).toBe(exp.total);
-            expect(bucket.completed).toBe(exp.completed);
-          }
         }
       }),
       { numRuns: NUM_RUNS },
@@ -237,10 +217,6 @@ describe('buildResponse — Property 2: Park dimensions are Park-scoped', () => 
           for (const park of PARKS) {
             expect(response.byPark[park].total).toBe(0);
             expect(response.byPark[park].completed).toBe(0);
-            for (const category of EXPERIENCE_CATEGORIES) {
-              expect(response.byParkAndCategory[park][category].total).toBe(0);
-              expect(response.byParkAndCategory[park][category].completed).toBe(0);
-            }
           }
         },
       ),

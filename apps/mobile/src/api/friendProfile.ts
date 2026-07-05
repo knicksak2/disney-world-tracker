@@ -5,7 +5,7 @@
  * Friend_Profile_View, each keyed by the target Friend's id:
  *
  *   GET /users/{friendId}/profile            → ProfileDTO
- *   GET /me/stats/summary?for={friendId}     → FriendStatsResponse
+ *   GET /me/stats/summary?for={friendId}     → StatsResponse
  *   GET /users/{friendId}/completions        → FriendCompletionsDTO
  *
  * All three share `requestWithTimeout`, which enforces a 30-second
@@ -23,54 +23,26 @@
  * Validates: Requirements 5.5
  */
 
-import type {
-  ExperienceCategory,
-  FriendCompletionsDTO,
-  Park,
-  ProfileDTO,
-} from '@dwt/shared';
+import type { FriendCompletionsDTO, ProfileDTO } from '@dwt/shared';
 
 import { ApiError, apiRequest, type ApiMethod } from './client';
+import type { StatsResponse } from './statsTypes';
 
 // ---------------------------------------------------------------------------
 // Wire shapes
 // ---------------------------------------------------------------------------
 
 /**
- * One row of a stats roll-up returned by `GET /me/stats/summary`. Mirrors
- * `StatsBreakdown` in `apps/api/src/services/stats/routes.ts`: `percent`
- * is already in `[0.0, 100.0]` to one decimal place, and `total === 0`
- * implies `completed === 0` and `percent === 0` (R3.4).
- */
-export interface FriendStatsBreakdown {
-  readonly completed: number;
-  readonly total: number;
-  readonly percent: number;
-}
-
-/**
- * Response shape for `GET /me/stats/summary?for={friendId}`. Mirrors the
- * four-dimension `StatsResponse` contract from the Stats_Service route.
- * Modeled here (rather than imported from the API package) because the
- * mobile client depends only on the public route contract, never on
- * backend internals — matching the convention in `StatsScreen`.
+ * Friend stats read on `GET /me/stats/summary?for={friendId}` returns the
+ * shared nested `StatsResponse` — structurally identical for self and friend
+ * reads (see `statsTypes.ts`, task 3.1). The flat `FriendStatsResponse` /
+ * `FriendStatsBreakdown` shapes were removed in favour of the nested
+ * `coverage` / `ratings` / `percentileRank` contract (R16.1, R16.2, R16.3).
  *
- * Every Park is present in `byPark`, every Experience_Category in
- * `byCategory`, and every `(Park, Category)` cell in `byParkAndCategory`,
- * so the screen can render a stable, fixed-shape layout (R3.1).
+ * Re-exported here so friend-scoped consumers can pull the wire type from the
+ * same module as the reads that produce it.
  */
-export interface FriendStatsResponse {
-  readonly overall: FriendStatsBreakdown;
-  readonly byPark: { readonly [park in Park]: FriendStatsBreakdown };
-  readonly byCategory: {
-    readonly [category in ExperienceCategory]: FriendStatsBreakdown;
-  };
-  readonly byParkAndCategory: {
-    readonly [park in Park]: {
-      readonly [category in ExperienceCategory]: FriendStatsBreakdown;
-    };
-  };
-}
+export type { StatsResponse } from './statsTypes';
 
 // ---------------------------------------------------------------------------
 // Timeout
@@ -141,12 +113,13 @@ export function fetchFriendProfile(friendId: string): Promise<ProfileDTO> {
 
 /**
  * Fetch a Friend's completion statistics from
- * `GET /me/stats/summary?for={friendId}` (R3.1). The `for` query
+ * `GET /me/stats/summary?for={friendId}` (R3.1, R10.2). The `for` query
  * parameter names the target Friend; the requester is taken from the
- * session.
+ * session. The friend read deliberately omits the `percentile` parameter —
+ * percentile is an Own_Surface-only brag (R10.2, R10.6).
  */
-export function fetchFriendStats(friendId: string): Promise<FriendStatsResponse> {
-  return requestWithTimeout<FriendStatsResponse>(
+export function fetchFriendStats(friendId: string): Promise<StatsResponse> {
+  return requestWithTimeout<StatsResponse>(
     'GET',
     `/me/stats/summary?for=${encodeURIComponent(friendId)}`,
   );

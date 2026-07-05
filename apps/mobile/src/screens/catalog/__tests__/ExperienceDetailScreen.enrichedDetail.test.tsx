@@ -1,24 +1,31 @@
 /**
- * ExperienceDetailScreen enriched-detail component tests (tasks.md → 12.2).
+ * ExperienceDetailScreen enriched-detail component tests.
  *
- * Validates: Requirements 9.8, 9.10, 9.11
+ * Validates: Requirements (experience-detail-redesign) 1.2, 1.6, 4.3, 4.6,
+ *            6.1, 7.1, 8.x
  *
  * These component tests mount the real `ExperienceDetailScreen` with
  * `apiRequest` stubbed to fixed `/catalog/:id`, personal (`/me/...`),
- * aggregate, live, and `/resorts` fixtures and assert the enriched Info_Tag
- * row rendered beneath the Park/category badges:
+ * aggregate, live, and `/resorts` fixtures and assert the redesigned, grouped
+ * enrichment layout: the flat `experience-info-tags` row has been replaced by
+ * labelled Tag_Group cards (`experience-location-group`,
+ * `experience-tag-group-goodToKnow`, `experience-tag-group-accessibility`,
+ * `experience-tag-group-goodFor`), each holding individual
+ * `experience-info-tag-{kind}` badges:
  *
- *   - **R9.11 / R9.2-R9.7** present tags render in the fixed relative order
- *     Land → price tier → accessibility → coordinates → meal period → resort,
- *     each surfaced through its `experience-info-tag-{kind}` testID.
+ *   - present enrichment renders in its assigned group, in the fixed section
+ *     order (Location group first, then the remaining groups), with the park
+ *     and land surfaced inside the Location group;
  *
- *   - **R9.8** absent / empty enrichment values produce no tag: an Experience
- *     with no enrichment renders no `experience-info-tags` row at all, and a
- *     `Resort`-area Experience whose referenced Resort name is unavailable
- *     omits the resort tag.
+ *   - raw coordinates are no longer a tag — valid coordinates power the
+ *     `experience-get-directions` action within the Location group, and invalid
+ *     or partial coordinates omit it;
  *
- *   - **R9.10** the existing detail sections (About/description, live,
- *     completion, rating, note, community rating) continue to render.
+ *   - absent / empty enrichment omits the corresponding tags and, when a group
+ *     has no tags, the whole group card (including the Location group);
+ *
+ *   - the three personal controls now live in a single consolidated
+ *     `your-visit-card`, and the About / Community sections still render.
  *
  * Implementation mirrors `src/__tests__/emptyStates.test.tsx`: `expo-secure-store`,
  * `expo-constants`, and the API client are mocked (the real `ApiError` is
@@ -211,7 +218,7 @@ function orderOf(testID: string): number {
 // Suite
 // ---------------------------------------------------------------------------
 
-describe('ExperienceDetailScreen enriched Info_Tags (R9.8, R9.10, R9.11)', () => {
+describe('ExperienceDetailScreen grouped enrichment layout', () => {
   beforeEach(() => {
     apiRequestMock.mockReset();
     const secureStore = jest.requireMock('expo-secure-store') as {
@@ -221,9 +228,10 @@ describe('ExperienceDetailScreen enriched Info_Tags (R9.8, R9.10, R9.11)', () =>
   });
 
   // -------------------------------------------------------------------------
-  // R9.11 / R9.2-R9.6 — present tags render in the fixed relative order
+  // R1.2 / R7.1 — present enrichment renders in its assigned group, in section
+  // order; coordinates power the Get directions action rather than a tag.
   // -------------------------------------------------------------------------
-  test('R9.11: Land, price, accessibility, coordinates, and meal-period tags render in fixed order', async () => {
+  test('R1.2/R7.1: park and land render in the Location group and accessibility values in the Accessibility group, in section order', async () => {
     const experienceId = 'exp-enriched-park';
     stubDetail({
       id: experienceId,
@@ -242,48 +250,53 @@ describe('ExperienceDetailScreen enriched Info_Tags (R9.8, R9.10, R9.11)', () =>
 
     renderDetail(experienceId);
 
-    // The Info_Tag row appears once the detail query settles.
-    await screen.findByTestId('experience-info-tags');
+    // The Location Tag_Group card appears once the detail query settles.
+    await screen.findByTestId('experience-location-group');
 
-    // Every present tag kind is rendered.
+    // The Location group surfaces the park and land tags.
+    expect(screen.getByTestId('experience-info-tag-park')).toBeTruthy();
     expect(screen.getByTestId('experience-info-tag-land')).toBeTruthy();
-    expect(screen.getByTestId('experience-info-tag-priceTier')).toBeTruthy();
+
+    // The Accessibility group surfaces one badge per persisted value.
+    expect(
+      screen.getByTestId('experience-tag-group-accessibility'),
+    ).toBeTruthy();
     expect(
       screen.getAllByTestId('experience-info-tag-accessibility'),
     ).toHaveLength(2);
-    expect(screen.getByTestId('experience-info-tag-coordinates')).toBeTruthy();
-    expect(screen.getAllByTestId('experience-info-tag-mealPeriod')).toHaveLength(
-      2,
-    );
 
-    // R9.8 — this ThemePark Experience references no Resort, so no resort tag.
+    // Raw coordinates are no longer a tag; valid coordinates power the
+    // Get directions action inside the Location group instead (R4.2).
+    expect(screen.queryByTestId('experience-info-tag-coordinates')).toBeNull();
+    expect(screen.getByTestId('experience-get-directions')).toBeTruthy();
+
+    // This ThemePark Experience references no Resort, so no resort tag.
     expect(screen.queryByTestId('experience-info-tag-resort')).toBeNull();
 
-    // R9.11 — present tags appear in the canonical relative order
-    // Land → price tier → accessibility → coordinates → meal period.
+    // Fixed relative order (R1.2, R7.1): park before land within the Location
+    // group, and the Location group renders above the Accessibility group.
+    const park = orderOf('experience-info-tag-park');
     const land = orderOf('experience-info-tag-land');
-    const price = orderOf('experience-info-tag-priceTier');
-    const accessibility = orderOf('experience-info-tag-accessibility');
-    const coordinates = orderOf('experience-info-tag-coordinates');
-    const mealPeriod = orderOf('experience-info-tag-mealPeriod');
+    const locationGroup = orderOf('experience-location-group');
+    const accessibilityGroup = orderOf('experience-tag-group-accessibility');
 
-    expect(land).toBeGreaterThanOrEqual(0);
-    expect(land).toBeLessThan(price);
-    expect(price).toBeLessThan(accessibility);
-    expect(accessibility).toBeLessThan(coordinates);
-    expect(coordinates).toBeLessThan(mealPeriod);
+    expect(park).toBeGreaterThanOrEqual(0);
+    expect(park).toBeLessThan(land);
+    expect(locationGroup).toBeGreaterThanOrEqual(0);
+    expect(locationGroup).toBeLessThan(accessibilityGroup);
 
     // The visible values carry the persisted enrichment verbatim.
+    expect(screen.getAllByText('Magic Kingdom').length).toBeGreaterThan(0);
     expect(screen.getByText('Tomorrowland')).toBeTruthy();
-    expect(screen.getByText('$$')).toBeTruthy();
     expect(screen.getByText('Wheelchair Accessible')).toBeTruthy();
-    expect(screen.getByText('28.4189, -81.5779')).toBeTruthy();
+    expect(screen.getByText('Service Animals')).toBeTruthy();
   });
 
   // -------------------------------------------------------------------------
-  // R9.7 / R9.11 — the specific-Resort tag renders (last) for a Resort area
+  // R1.2 — the specific-Resort tag renders inside the Location group for a
+  // Resort area with a resolvable Resort name.
   // -------------------------------------------------------------------------
-  test('R9.7: a Resort-area Experience with a resolvable Resort renders the resort tag last', async () => {
+  test('R1.2: a Resort-area Experience with a resolvable Resort renders the resort tag in the Location group', async () => {
     const experienceId = 'exp-resort-dining';
     stubDetail(
       {
@@ -301,23 +314,26 @@ describe('ExperienceDetailScreen enriched Info_Tags (R9.8, R9.10, R9.11)', () =>
 
     renderDetail(experienceId);
 
-    await screen.findByTestId('experience-info-tags');
+    await screen.findByTestId('experience-location-group');
 
-    const price = orderOf('experience-info-tag-priceTier');
+    // The resolved Resort name renders as the resort tag within the Location group.
+    expect(screen.getByTestId('experience-info-tag-resort')).toBeTruthy();
+    expect(screen.getByText('Polynesian Village Resort')).toBeTruthy();
+
+    // The resort tag lives inside the Location group card.
+    const locationGroup = orderOf('experience-location-group');
     const resort = orderOf('experience-info-tag-resort');
 
-    expect(price).toBeGreaterThanOrEqual(0);
+    expect(locationGroup).toBeGreaterThanOrEqual(0);
     expect(resort).toBeGreaterThanOrEqual(0);
-    // R9.11 — resort is the last tag, after the price tier.
-    expect(price).toBeLessThan(resort);
-
-    expect(screen.getByText('Polynesian Village Resort')).toBeTruthy();
+    expect(locationGroup).toBeLessThan(resort);
   });
 
   // -------------------------------------------------------------------------
-  // R9.8 — absent enrichment values produce no Info_Tag row at all
+  // R1.6 — absent enrichment omits the corresponding tags and the optional
+  // Tag_Group cards; only the park remains in the Location group.
   // -------------------------------------------------------------------------
-  test('R9.8: an Experience with no enrichment renders no Info_Tag row', async () => {
+  test('R1.6: an Experience with no enrichment beyond its park omits the other tags and optional groups', async () => {
     const experienceId = 'exp-bare';
     stubDetail({
       id: experienceId,
@@ -334,18 +350,29 @@ describe('ExperienceDetailScreen enriched Info_Tags (R9.8, R9.10, R9.11)', () =>
     // The static detail still renders (its description is shown)...
     await screen.findByText('A classic audio-animatronic revue.');
 
-    // ...but the Info_Tag row and every individual tag are omitted (R9.8).
-    expect(screen.queryByTestId('experience-info-tags')).toBeNull();
+    // ...the only Location enrichment is the park, so the Location group shows
+    // the park tag but none of land / resort / resort-area (R1.6).
+    expect(screen.getByTestId('experience-info-tag-park')).toBeTruthy();
     expect(screen.queryByTestId('experience-info-tag-land')).toBeNull();
-    expect(screen.queryByTestId('experience-info-tag-priceTier')).toBeNull();
-    expect(screen.queryByTestId('experience-info-tag-coordinates')).toBeNull();
     expect(screen.queryByTestId('experience-info-tag-resort')).toBeNull();
+    expect(screen.queryByTestId('experience-info-tag-resortArea')).toBeNull();
+
+    // Raw coordinates are never a tag, and none are present so there is no
+    // Get directions action either.
+    expect(screen.queryByTestId('experience-info-tag-coordinates')).toBeNull();
+    expect(screen.queryByTestId('experience-get-directions')).toBeNull();
+
+    // The optional Tag_Group cards are omitted entirely when they have no tags.
+    expect(screen.queryByTestId('experience-tag-group-goodToKnow')).toBeNull();
+    expect(screen.queryByTestId('experience-tag-group-accessibility')).toBeNull();
+    expect(screen.queryByTestId('experience-tag-group-goodFor')).toBeNull();
   });
 
   // -------------------------------------------------------------------------
-  // R9.8 — a single absent value is omitted while present ones still render
+  // R4.3 — partial coordinates omit the Get directions action while present
+  // enrichment (land) still renders.
   // -------------------------------------------------------------------------
-  test('R9.8: coordinates tag is omitted when only one coordinate is present', async () => {
+  test('R4.3: the Get directions action is omitted when only one coordinate is present', async () => {
     const experienceId = 'exp-partial';
     stubDetail({
       id: experienceId,
@@ -355,23 +382,26 @@ describe('ExperienceDetailScreen enriched Info_Tags (R9.8, R9.10, R9.11)', () =>
       description: 'A guided riverboat tour.',
       areaType: 'ThemePark',
       land: 'Adventureland',
-      latitude: 28.418, // longitude absent → no coordinates tag (R9.5, R9.8)
+      latitude: 28.418, // longitude absent → invalid coordinates (R4.3)
     });
 
     renderDetail(experienceId);
 
-    await screen.findByTestId('experience-info-tags');
+    await screen.findByTestId('experience-location-group');
 
-    // Land is present...
+    // Land is present in the Location group...
     expect(screen.getByTestId('experience-info-tag-land')).toBeTruthy();
-    // ...but the coordinates tag is omitted because longitude is absent.
+    // ...coordinates are never a tag, and with only latitude the coordinates
+    // are invalid so the Get directions action is omitted (R4.3).
     expect(screen.queryByTestId('experience-info-tag-coordinates')).toBeNull();
+    expect(screen.queryByTestId('experience-get-directions')).toBeNull();
   });
 
   // -------------------------------------------------------------------------
-  // R9.8 — resort tag omitted when the referenced Resort name is unavailable
+  // R1.6 — resort tag omitted when the referenced Resort name is unavailable;
+  // with no other Location enrichment the whole Location group is omitted.
   // -------------------------------------------------------------------------
-  test('R9.8: resort tag is omitted when the referenced Resort is not in the list', async () => {
+  test('R1.6: the resort tag is omitted when the referenced Resort name is unavailable', async () => {
     const experienceId = 'exp-resort-unknown';
     stubDetail(
       {
@@ -390,18 +420,21 @@ describe('ExperienceDetailScreen enriched Info_Tags (R9.8, R9.10, R9.11)', () =>
 
     renderDetail(experienceId);
 
-    await screen.findByTestId('experience-info-tags');
+    // Wait for a stable, always-present section before asserting omissions.
+    await screen.findByTestId('your-visit-card');
 
-    // Price tier still renders...
-    expect(screen.getByTestId('experience-info-tag-priceTier')).toBeTruthy();
-    // ...but the resort tag is omitted because the name is unavailable (R9.8).
+    // The resort tag is omitted because the resolved name is unavailable.
     expect(screen.queryByTestId('experience-info-tag-resort')).toBeNull();
+    // With no park, land, resort, or resort-area, the Location group is omitted
+    // entirely (R1.6).
+    expect(screen.queryByTestId('experience-location-group')).toBeNull();
   });
 
   // -------------------------------------------------------------------------
-  // R9.10 — the existing detail sections continue to render unchanged
+  // R6.1 / R8 — the description, the consolidated "Your visit" card, and the
+  // Community section all continue to render.
   // -------------------------------------------------------------------------
-  test('R9.10: description and the completion, rating, note, and community sections still render', async () => {
+  test('R6.1/R8: description, the "Your visit" card, and the community section still render', async () => {
     const experienceId = 'exp-sections';
     stubDetail({
       id: experienceId,
@@ -415,18 +448,18 @@ describe('ExperienceDetailScreen enriched Info_Tags (R9.8, R9.10, R9.11)', () =>
 
     renderDetail(experienceId);
 
-    // Description (About) section (R9.10).
+    // About / description section.
     await screen.findByText('A haunted doombuggy dark ride.');
     expect(screen.getByText('About')).toBeTruthy();
 
-    // The Park badge presentation is preserved (R9.1) alongside the new tags.
+    // The Park / category badge presentation is preserved alongside the tags.
     expect(screen.getByTestId('experience-park-badge')).toBeTruthy();
     expect(screen.getByTestId('experience-category-badge')).toBeTruthy();
 
-    // Completion / Rating / Note / Community section labels are all present.
-    expect(screen.getByText('Your Completion')).toBeTruthy();
-    expect(screen.getByText('Your Rating')).toBeTruthy();
-    expect(screen.getByText('Your Note')).toBeTruthy();
+    // The completion, rating, and note controls now live in a single
+    // consolidated "Your visit" card (R6.1); the community section persists.
+    expect(screen.getByTestId('your-visit-card')).toBeTruthy();
+    expect(screen.getByText('Your visit')).toBeTruthy();
     expect(screen.getByText('Community Rating')).toBeTruthy();
 
     // The empty personal-section states still resolve through their own paths.

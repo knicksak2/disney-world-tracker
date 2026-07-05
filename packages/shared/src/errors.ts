@@ -79,6 +79,18 @@ export const ERROR_CODES = [
   'reaction_invalid',
   'reaction_forbidden',
 
+  // -- Stats (expanded-stats R7.8, R7.9, R8.6, R9.6, R11.3) -------------
+  // `stats_unavailable`: the REPEATABLE READ READ ONLY snapshot transaction
+  // failed to begin/commit or was aborted before the per-user statistics
+  // were computed; no partial or precomputed statistics are returned.
+  // `stats_timeout`: the stats computation exceeded its SLA-sized statement
+  // timeout and the request was aborted with no partial statistics.
+  // `stats_target_not_found`: a friend-view request targeted a user id that
+  // does not exist; denied before any statistics read.
+  'stats_unavailable',
+  'stats_timeout',
+  'stats_target_not_found',
+
   // -- Edge / gateway (defense-in-depth, R6.7) --------------------------
   // Emitted by the gateway-level rate limiter (task 13.3) when a caller
   // exceeds the configured request budget for read, mutation, or
@@ -187,6 +199,11 @@ export const errorCodeToHttpStatus: { readonly [K in ErrorCode]: number } = {
   // Reactions
   reaction_invalid: 400,
   reaction_forbidden: 403,
+
+  // Stats
+  stats_unavailable: 503,
+  stats_timeout: 504,
+  stats_target_not_found: 404,
 
   // Edge / gateway
   rate_limit_exceeded: 429,

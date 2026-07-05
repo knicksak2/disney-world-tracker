@@ -42,6 +42,60 @@ const breakdownSchema = z
     }
   });
 
+/**
+ * A Coverage_Statistic cell (`CompletionCell`). Extends the breakdown shape
+ * with a `remaining` count and a `completeBadge` flag. As with
+ * `breakdownSchema`, the rounding of `percent` is enforced at computation
+ * time; this schema checks the structural invariants:
+ * - `completed <= total`,
+ * - `remaining === total - completed`,
+ * - `completeBadge === (total > 0 && completed === total)`,
+ * - `total === 0` implies `completed === 0`, `percent === 0`, `remaining === 0`,
+ *   and `completeBadge === false`.
+ *
+ * Validates: Requirements 1.11, 1.12, 2.3, 2.4, 2.5, 10.2
+ */
+export const completionCellSchema = z
+  .object({
+    completed: z.number().int().min(0),
+    total: z.number().int().min(0),
+    percent: completionPercentSchema,
+    remaining: z.number().int().min(0),
+    completeBadge: z.boolean(),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if (value.completed > value.total) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'completed must be <= total',
+      });
+    }
+    if (value.remaining !== value.total - value.completed) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'remaining must equal total - completed',
+      });
+    }
+    const expectedBadge = value.total > 0 && value.completed === value.total;
+    if (value.completeBadge !== expectedBadge) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'completeBadge must be true iff total > 0 and completed === total',
+      });
+    }
+    if (
+      value.total === 0 &&
+      (value.completed !== 0 || value.percent !== 0 || value.remaining !== 0)
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          'cell with total=0 must have completed=0, percent=0, and remaining=0',
+      });
+    }
+  });
+
 const perParkShape = Object.fromEntries(
   PARKS.map((park) => [park, breakdownSchema] as const),
 ) as { [K in Park]: typeof breakdownSchema };

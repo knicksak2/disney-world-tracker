@@ -61,12 +61,7 @@ import {
   waitFor,
 } from '@testing-library/react-native';
 
-import {
-  EXPERIENCE_CATEGORIES,
-  PARKS,
-  type ExperienceCategory,
-  type Park,
-} from '@dwt/shared';
+import { type ExperienceCategory, type Park } from '@dwt/shared';
 
 // ---------------------------------------------------------------------------
 // Mocks (declared before the modules under test are imported).
@@ -101,10 +96,12 @@ jest.mock('../../../api/client', () => {
 // Imports of modules under test (after the mocks above).
 // ---------------------------------------------------------------------------
 
-import StatsScreen from '../../stats/StatsScreen';
+import StatsStack from '../../../navigation/StatsStack';
 import CatalogScreen from '../../catalog/CatalogScreen';
 import ExperienceDetailScreen from '../../catalog/ExperienceDetailScreen';
 import { apiRequest as mockedApiRequest } from '../../../api/client';
+import type { StatsResponse } from '../../../api/statsTypes';
+import { makeStatsResponse } from '../../stats/__testSupport__/statsFixture';
 
 /**
  * Local Catalog-stack param list for the test harness. Mirrors the UNFIXED
@@ -173,36 +170,9 @@ const EXPERIENCE_DETAIL = {
   imageUrl: null,
 };
 
-interface Breakdown {
-  readonly completed: number;
-  readonly total: number;
-  readonly percent: number;
-}
-
-interface StatsShape {
-  readonly overall: Breakdown;
-  readonly byPark: { readonly [park in Park]: Breakdown };
-  readonly byCategory: { readonly [category in ExperienceCategory]: Breakdown };
-  readonly byParkAndCategory: {
-    readonly [park in Park]: {
-      readonly [category in ExperienceCategory]: Breakdown;
-    };
-  };
-}
-
-/** A fully-populated stats roll-up (every Park / Category present). */
-function makeStats(): StatsShape {
-  const filler: Breakdown = { completed: 1, total: 10, percent: 10 };
-  const byPark = Object.fromEntries(
-    PARKS.map((park) => [park, filler]),
-  ) as StatsShape['byPark'];
-  const byCategory = Object.fromEntries(
-    EXPERIENCE_CATEGORIES.map((category) => [category, filler]),
-  ) as StatsShape['byCategory'];
-  const byParkAndCategory = Object.fromEntries(
-    PARKS.map((park) => [park, byCategory]),
-  ) as StatsShape['byParkAndCategory'];
-  return { overall: filler, byPark, byCategory, byParkAndCategory };
+/** A fully-populated nested stats roll-up (every Park / Category present). */
+function makeStats(): StatsResponse {
+  return makeStatsResponse();
 }
 
 /**
@@ -301,7 +271,7 @@ function MainTabsNavigator(): JSX.Element {
       // real session where the Catalog list has been visited.
       screenOptions={{ headerShown: false, lazy: false }}
     >
-      <Tab.Screen name="Stats" component={StatsScreen} />
+      <Tab.Screen name="Stats" component={StatsStack} />
       <Tab.Screen name="Catalog" component={CatalogTestStack} />
     </Tab.Navigator>
   );
@@ -476,15 +446,15 @@ describe('Preservation 3.4 — originating screen restored in its prior tab and 
     expect(screen.getByTestId('catalog-search').props.value).toBe('Space');
   });
 
-  test('Stats screen retains its selected Own_Experiences mode while the detail is open', async () => {
+  test('Stats screen retains its ExperiencesDetail screen while the detail is open', async () => {
     renderApp('Stats');
 
-    // Put the Stats screen into the Own_Experiences mode.
+    // Drill from the Overview hub into the ExperiencesDetail screen.
     await screen.findByTestId('stats-screen');
-    fireEvent.press(screen.getByTestId('tab-Own_Experiences'));
-    await screen.findByTestId('own-experiences');
+    fireEvent.press(await screen.findByTestId('stats-highlight-experiences'));
+    await screen.findByTestId('experiences-detail-screen');
 
-    // Open the detail from the Stats Own_Experiences row.
+    // Open the detail from an ExperiencesDetail row.
     fireEvent.press(await screen.findByTestId('own-experience-row-0'));
     await waitFor(() => {
       expect(navRef.getCurrentRoute()?.name).toBe('ExperienceDetail');
@@ -495,11 +465,11 @@ describe('Preservation 3.4 — originating screen restored in its prior tab and 
       navRef.navigate('Stats');
     });
     await waitFor(() => {
-      expect(navRef.getCurrentRoute()?.name).toBe('Stats');
+      expect(navRef.getCurrentRoute()?.name).toBe('ExperiencesDetail');
     });
 
-    // Baseline (preserved): the Stats screen is still in the Own_Experiences
-    // mode it was displayed in before navigation began.
-    expect(screen.getByTestId('own-experiences')).toBeTruthy();
+    // Baseline (preserved): the Stats tab is still showing the ExperiencesDetail
+    // screen it was displaying before navigation began.
+    expect(screen.getByTestId('experiences-detail-screen')).toBeTruthy();
   });
 });

@@ -23,6 +23,29 @@ export interface StatsBreakdown {
   readonly percent: number;
 }
 
+/**
+ * A Coverage_Statistic cell: the shared shape reported for every completion
+ * group in the expanded stats response and carried, for the top facet, inside
+ * the Progress_Share payload snapshot.
+ *
+ * It extends {@link StatsBreakdown} with a `remaining` count and a
+ * `completeBadge` flag so every dimension derives these uniformly:
+ * - `percent` is in `[0.0, 100.0]` to one decimal place (half-away-from-zero).
+ * - `remaining` is `total - completed` and is always a non-negative integer.
+ * - `completeBadge` is `true` iff `total > 0 && completed === total`.
+ * - `total === 0` implies `completed === 0`, `percent === 0.0`,
+ *   `remaining === 0`, and `completeBadge === false`.
+ *
+ * Validates: Requirements 1.11, 1.12, 2.3, 2.4, 2.5, 10.2
+ */
+export interface CompletionCell {
+  readonly completed: number;
+  readonly total: number;
+  readonly percent: number;
+  readonly remaining: number;
+  readonly completeBadge: boolean;
+}
+
 export interface StatsDTO {
   readonly overall: StatsBreakdown;
 

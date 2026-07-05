@@ -8,7 +8,7 @@ The design treats the backend as a single deployable service composed of seven c
 
 ### Key Design Decisions
 
-> Hosting and deployment details are documented separately in [hosting.md](hosting.md). The architecture below is platform-agnostic — only the hosting document changes if providers are swapped.
+> Hosting and deployment details are documented separately in [hosting.md](../../../docs/hosting.md). The architecture below is platform-agnostic — only the hosting document changes if providers are swapped.
 
 | Decision | Choice | Rationale |
 | --- | --- | --- |

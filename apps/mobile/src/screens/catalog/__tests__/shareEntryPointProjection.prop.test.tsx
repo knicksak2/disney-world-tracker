@@ -32,10 +32,8 @@
 import fc from 'fast-check';
 
 import {
-  AREA_TYPES,
   EXPERIENCE_CATEGORIES,
   PARKS,
-  type AreaType,
   type ExperienceCategory,
   type NoteDTO,
   type Park,
@@ -46,7 +44,9 @@ import {
   buildExperienceShareParams,
   type ShareableExperienceDetail,
 } from '../shareEntryPoint';
-import { buildProgressShareParams } from '../../stats/StatsScreen';
+import { buildProgressShareParams } from '../../stats/statsView';
+import type { CompletionCell, StatsResponse } from '../../../api/statsTypes';
+import { makeStatsResponse } from '../../stats/__testSupport__/statsFixture';
 
 // ---------------------------------------------------------------------------
 // Shared generators
@@ -126,29 +126,47 @@ function mapArb<K extends string>(
   return fc.record(shape) as fc.Arbitrary<Record<K, StatsBreakdownLike>>;
 }
 
-function nestedParkCategoryArb(): fc.Arbitrary<
-  Record<Park, Record<ExperienceCategory, StatsBreakdownLike>>
-> {
-  const shape: Record<
-    string,
-    fc.Arbitrary<Record<ExperienceCategory, StatsBreakdownLike>>
-  > = {};
-  for (const park of PARKS) shape[park] = mapArb(EXPERIENCE_CATEGORIES);
-  return fc.record(shape) as fc.Arbitrary<
-    Record<Park, Record<ExperienceCategory, StatsBreakdownLike>>
-  >;
-}
+/**
+ * Lift a generated breakdown into a nested `CompletionCell`, preserving the
+ * generated `percent`/`total` verbatim (so the one-decimal snap and the
+ * zero-total display branch stay exercised). Only `total`/`percent` feed
+ * `buildProgressShareParams`; `remaining`/`completeBadge` are derived to keep
+ * the cell structurally valid.
+ */
+const toCell = (b: StatsBreakdownLike): CompletionCell => ({
+  completed: b.completed,
+  total: b.total,
+  percent: b.percent,
+  remaining: Math.max(b.total - b.completed, 0),
+  completeBadge: b.total > 0 && b.completed >= b.total,
+});
 
-type StatsResponseLike = Parameters<typeof buildProgressShareParams>[0];
-
-const statsResponseArb: fc.Arbitrary<StatsResponseLike> = fc.record({
-  overall: breakdownArb,
-  byPark: mapArb<Park>(PARKS),
-  byCategory: mapArb<ExperienceCategory>(EXPERIENCE_CATEGORIES),
-  byParkAndCategory: nestedParkCategoryArb(),
-  byAreaType: mapArb<AreaType>(AREA_TYPES),
-  resort: breakdownArb,
-}) as fc.Arbitrary<StatsResponseLike>;
+// A full nested `StatsResponse` whose `coverage.overall` / `coverage.byPark` /
+// `coverage.byCategory` carry the generated breakdowns (task 11.1). The share
+// projection reads only these three dimensions; the shared fixture builder
+// fills every other field with a valid default.
+const statsResponseArb: fc.Arbitrary<StatsResponse> = fc
+  .record({
+    overall: breakdownArb,
+    byPark: mapArb<Park>(PARKS),
+    byCategory: mapArb<ExperienceCategory>(EXPERIENCE_CATEGORIES),
+  })
+  .map((spec) =>
+    makeStatsResponse({
+      coverage: {
+        overall: toCell(spec.overall),
+        byPark: Object.fromEntries(
+          PARKS.map((park) => [park, toCell(spec.byPark[park])]),
+        ) as Record<Park, CompletionCell>,
+        byCategory: Object.fromEntries(
+          EXPERIENCE_CATEGORIES.map((category) => [
+            category,
+            toCell(spec.byCategory[category]),
+          ]),
+        ) as Record<ExperienceCategory, CompletionCell>,
+      },
+    }),
+  );
 
 // ---------------------------------------------------------------------------
 // Independent oracle (encodes the requirement text directly)
@@ -226,13 +244,15 @@ describe('Property 2: Entry point projects content faithfully into composer para
         if (params.kind !== 'progress') return; // narrow for TypeScript
 
         // Overall percentage equals the displayed one-decimal value.
-        expect(params.overallPercent).toBe(displayedPercent(stats.overall));
+        expect(params.overallPercent).toBe(
+          displayedPercent(stats.coverage.overall),
+        );
 
         // One entry per catalog Park, each equal to its displayed one-decimal
         // value.
         for (const park of PARKS) {
           expect(params.perParkPercent[park]).toBe(
-            displayedPercent(stats.byPark[park]),
+            displayedPercent(stats.coverage.byPark[park]),
           );
         }
         expect(Object.keys(params.perParkPercent).sort()).toEqual(
@@ -243,7 +263,7 @@ describe('Property 2: Entry point projects content faithfully into composer para
         // one-decimal value.
         for (const category of EXPERIENCE_CATEGORIES) {
           expect(params.perCategoryPercent[category]).toBe(
-            displayedPercent(stats.byCategory[category]),
+            displayedPercent(stats.coverage.byCategory[category]),
           );
         }
         expect(Object.keys(params.perCategoryPercent).sort()).toEqual(

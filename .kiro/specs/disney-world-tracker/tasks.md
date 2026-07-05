@@ -8,7 +8,7 @@ This plan turns the design into an incremental, code-only build sequence for a T
 - `apps/mobile` — React Native + TypeScript (Expo bare workflow) client
 - `packages/shared` — DTOs, Zod validation schemas, error code catalog, shared enums
 
-The architecture is hosting-agnostic. Tasks produce code that runs on the stack described in `hosting.md` (Render + Neon + Upstash + Cloudflare R2) but never bake provider names into application code. Anything provider-specific lives in env config and infra glue.
+The architecture is hosting-agnostic. Tasks produce code that runs on the stack described in `docs/hosting.md` (Render + Neon + Upstash + Cloudflare R2) but never bake provider names into application code. Anything provider-specific lives in env config and infra glue.
 
 Property tests use `fast-check` driven through Vitest (backend) and Jest (mobile), each with `numRuns >= 100`. Every property test carries a one-line tag header of the form `// Feature: disney-world-tracker, Property N: <one-line description>` and maps to one or more design properties.
 

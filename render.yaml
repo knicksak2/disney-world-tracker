@@ -3,7 +3,7 @@
 # This provisions the Fastify API as a free-tier Web Service. The backing
 # services (Postgres, Redis, object storage) are NOT created here — they live
 # on Neon, Upstash, and Cloudflare R2 respectively (see
-# .kiro/specs/disney-world-tracker/hosting.md). You paste their credentials
+# docs/hosting.md). You paste their credentials
 # into the environment variables below from the Render dashboard.
 #
 # Deploy: push this file to your repo, then in Render choose

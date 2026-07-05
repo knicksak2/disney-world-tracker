@@ -33,8 +33,6 @@ import { NavigationContainer } from '@react-navigation/native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
-import { EXPERIENCE_CATEGORIES, PARKS } from '@dwt/shared';
-
 // ---------------------------------------------------------------------------
 // Mocks (declared before the modules under test are imported).
 // ---------------------------------------------------------------------------
@@ -75,6 +73,7 @@ jest.mock('../../../api/client', () => {
 
 import FriendsStack from '../../../navigation/FriendsStack';
 import { apiRequest as mockedApiRequest } from '../../../api/client';
+import { makeStatsResponse } from '../../stats/__testSupport__/statsFixture';
 
 const apiRequestMock = mockedApiRequest as jest.MockedFunction<
   typeof mockedApiRequest
@@ -96,23 +95,6 @@ const FRIENDS_RESPONSE = {
   incomingRequests: [],
   outgoingRequests: [],
 } as const;
-
-const ZERO_BREAKDOWN = { completed: 0, total: 0, percent: 0 } as const;
-
-/** A fully-populated stats response so `StatsSection` renders every dimension. */
-function makeStatsResponse() {
-  const byCategory = Object.fromEntries(
-    EXPERIENCE_CATEGORIES.map((c) => [c, ZERO_BREAKDOWN]),
-  );
-  return {
-    overall: ZERO_BREAKDOWN,
-    byPark: Object.fromEntries(PARKS.map((p) => [p, ZERO_BREAKDOWN])),
-    byCategory,
-    byParkAndCategory: Object.fromEntries(
-      PARKS.map((p) => [p, byCategory]),
-    ),
-  };
-}
 
 // ---------------------------------------------------------------------------
 // Helpers

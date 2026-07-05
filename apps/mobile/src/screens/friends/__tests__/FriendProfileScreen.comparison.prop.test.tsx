@@ -86,7 +86,8 @@ jest.mock('@react-navigation/native', () => ({
 
 import FriendProfileScreen from '../FriendProfileScreen';
 import { apiRequest as mockedApiRequest } from '../../../api/client';
-import type { FriendStatsResponse } from '../../../api/friendProfile';
+import type { CompletionCell, StatsResponse } from '../../../api/statsTypes';
+import { makeStatsResponse } from '../../stats/__testSupport__/statsFixture';
 
 const apiRequestMock = mockedApiRequest as jest.MockedFunction<
   typeof mockedApiRequest
@@ -142,35 +143,42 @@ const statsSpecArb: fc.Arbitrary<StatsSpec> = fc.record({
 // ---------------------------------------------------------------------------
 
 /**
- * Build a full four-dimension stats roll-up from a spec. Only `percent` feeds
- * the comparison; the completed/total counts are irrelevant here, so they are
- * zeroed. Every Park and Category cell is present so the derivation emits a
- * stable, fully populated layout.
+ * Build a `CompletionCell` carrying an exact `percent`. Only `percent` feeds
+ * the Progress_Comparison, so the completed/total counts are zeroed; the cell
+ * still satisfies the shape the nested `coverage.*` reads expect.
  */
-function buildStats(spec: StatsSpec): FriendStatsResponse {
-  const bd = (percent: number) => ({ completed: 0, total: 0, percent });
+const cell = (percent: number): CompletionCell => ({
+  completed: 0,
+  total: 0,
+  percent,
+  remaining: 0,
+  completeBadge: false,
+});
 
+/**
+ * Build a full nested stats roll-up from a spec. Only `percent` feeds the
+ * comparison; every Park and Category cell is present so the derivation emits
+ * a stable, fully populated layout, read through `coverage.*` (task 11.1).
+ */
+function buildStats(spec: StatsSpec): StatsResponse {
   const byPark = Object.fromEntries(
-    PARKS.map((park) => [park, bd(spec.byPark[park])]),
-  ) as FriendStatsResponse['byPark'];
+    PARKS.map((park) => [park, cell(spec.byPark[park])]),
+  ) as Record<(typeof PARKS)[number], CompletionCell>;
 
   const byCategory = Object.fromEntries(
     EXPERIENCE_CATEGORIES.map((category) => [
       category,
-      bd(spec.byCategory[category]),
+      cell(spec.byCategory[category]),
     ]),
-  ) as FriendStatsResponse['byCategory'];
+  ) as Record<(typeof EXPERIENCE_CATEGORIES)[number], CompletionCell>;
 
-  const byParkAndCategory = Object.fromEntries(
-    PARKS.map((park) => [park, byCategory]),
-  ) as FriendStatsResponse['byParkAndCategory'];
-
-  return {
-    overall: bd(spec.overall),
-    byPark,
-    byCategory,
-    byParkAndCategory,
-  };
+  return makeStatsResponse({
+    coverage: {
+      overall: cell(spec.overall),
+      byPark,
+      byCategory,
+    },
+  });
 }
 
 function makeProfile(): ProfileDTO {
@@ -192,7 +200,7 @@ const isMe = (p: string): boolean => p === '/me';
 const isProfile = (p: string): boolean => p.endsWith('/profile');
 const isCompletions = (p: string): boolean => p.endsWith('/completions');
 
-function installRoutes(viewer: FriendStatsResponse, friend: FriendStatsResponse): void {
+function installRoutes(viewer: StatsResponse, friend: StatsResponse): void {
   apiRequestMock.mockReset();
   apiRequestMock.mockImplementation(async (_method, path) => {
     if (typeof path !== 'string') {

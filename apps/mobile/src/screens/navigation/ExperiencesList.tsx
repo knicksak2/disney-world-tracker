@@ -261,14 +261,15 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   control: {
-    marginBottom: theme.spacing.md,
+    marginBottom: theme.spacing.sm,
   },
   controlLabel: {
     ...theme.typography.meta,
+    fontSize: 11,
     color: theme.color.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
-    marginBottom: theme.spacing.sm,
+    marginBottom: theme.spacing.xs,
   },
   chipRow: {
     flexDirection: 'row',

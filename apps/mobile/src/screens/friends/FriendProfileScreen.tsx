@@ -22,7 +22,13 @@
  * Per-mode data dependencies and scoped states (R7.1, R7.3, R7.5):
  *
  *   - **Overview** — Profile read (name, avatar/placeholder, overall percent)
- *     plus the Stats read's overall `completed` count (R2.*).
+ *     plus the Stats read's overall `completed` count (from
+ *     `stats.coverage.overall`, R2.*), followed by the Friend's ratings story
+ *     rendered with the SAME shared `RatingsSection` as the Own_Surface, gated
+ *     on the Friend's own `ratings.sufficient` and showing the neutral
+ *     "Not enough ratings yet" copy when insufficient (R11.1, R11.2, R11.3).
+ *     The percentile banner and the interests/facets section are omitted for
+ *     the Friend_Surface (R10.6, R11.4).
  *   - **Parks** — Stats `byPark` headers + Completions grouped by Park (R3.*).
  *   - **Categories** — Stats `byCategory` headers + Completions grouped by
  *     Category (R4.*).
@@ -89,8 +95,9 @@
  *
  * Validates: Requirements 1.1, 1.4, 1.5, 2.1, 2.2, 2.3, 2.4, 2.5, 3.1, 3.2,
  * 3.3, 3.4, 3.5, 3.6, 3.7, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 5.1, 5.2, 5.3,
- * 5.4, 6.5, 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 12.1, 12.2, 12.3, 12.4, 12.5, 12.6,
- * 13.1, 13.2, 13.3, 13.4, 13.6, 13.7, 13.8, 14.1, 14.4
+ * 5.4, 6.5, 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 10.6, 11.1, 11.2, 11.3, 11.4, 11.5,
+ * 12.1, 12.2, 12.3, 12.4, 12.5, 12.6, 13.1, 13.2, 13.3, 13.4, 13.6, 13.7, 13.8,
+ * 14.1, 14.4, 14.6, 14.7
  */
 
 import React from 'react';
@@ -113,10 +120,8 @@ import {
 } from '@dwt/shared';
 
 import { ApiError } from '../../api/client';
-import type {
-  FriendStatsBreakdown,
-  FriendStatsResponse,
-} from '../../api/friendProfile';
+import type { StatsResponse } from '../../api/friendProfile';
+import type { CompletionCell } from '../../api/statsTypes';
 import {
   useFriendCompletionsQuery,
   useFriendProfileQuery,
@@ -138,6 +143,7 @@ import {
   PrimaryButton,
   ScreenContainer,
 } from '../../theme/components';
+import { RatingsSection } from '../stats/components';
 import { CompactEmptyState } from '../navigation/CompactEmptyState';
 import { CompletionRow } from '../navigation/CompletionRow';
 import { ExperiencesList } from '../navigation/ExperiencesList';
@@ -356,6 +362,7 @@ export default function FriendProfileScreen({
             stats={statsQuery.data}
             onRetryProfile={onRetryProfile}
             onRetryStats={onRetryStats}
+            onOpenExperience={openExperience}
           />
         ) : null}
 
@@ -434,14 +441,16 @@ function OverviewMode({
   stats,
   onRetryProfile,
   onRetryStats,
+  onOpenExperience,
 }: {
   readonly fallbackName: string;
   readonly profileState: ReadState;
   readonly statsState: ReadState;
   readonly profile: ProfileDTO | undefined;
-  readonly stats: FriendStatsResponse | undefined;
+  readonly stats: StatsResponse | undefined;
   readonly onRetryProfile: () => void;
   readonly onRetryStats: () => void;
+  readonly onOpenExperience: (experienceId: string) => void;
 }): JSX.Element {
   return (
     <View testID="friend-mode-overview">
@@ -465,8 +474,9 @@ function OverviewMode({
           </Text>
 
           {/* R2.4: total count of completed Active Experiences, sourced from
-              the Stats read's overall `completed`. Scoped to the Stats read so
-              the rest of the card still renders if Stats is slow or failed. */}
+              the Stats read's overall `completed` (now `coverage.overall`).
+              Scoped to the Stats read so the rest of the card still renders if
+              Stats is slow or failed. */}
           {statsState === 'loading' ? (
             <ActivityIndicator
               color={theme.color.primary}
@@ -484,11 +494,30 @@ function OverviewMode({
             </View>
           ) : (
             <Text style={styles.profileCount} testID="friend-overview-count">
-              {`${stats.overall.completed} experiences completed`}
+              {`${stats.coverage.overall.completed} experiences completed`}
             </Text>
           )}
         </Card>
       )}
+
+      {/* R11.1/R11.2/R11.3: the Friend's ratings story rendered with the SAME
+          shared `RatingsSection` as the Own_Surface, gated internally on the
+          Friend's own `ratings.sufficient`. When insufficient it shows the
+          neutral "Not enough ratings yet" message (`emptyVariant="neutral"`)
+          rather than the self-directed unlock call-to-action. Scoped to the
+          Stats read so a slow/failed Stats read never blanks the profile card
+          above (R14.7). The percentile banner and interests/facets section are
+          deliberately omitted for the Friend_Surface (R10.6, R11.4). */}
+      {statsState === 'ready' && stats !== undefined ? (
+        <View style={styles.ratingsWrap} testID="friend-ratings">
+          <RatingsSection
+            ratings={stats.ratings}
+            emptyVariant="neutral"
+            onOpenExperience={onOpenExperience}
+            testID="friend-ratings-section"
+          />
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -530,7 +559,7 @@ function ParksMode(props: ParksModeProps): JSX.Element {
   if (blocking !== null) return blocking;
 
   // Both reads ready.
-  const readyStats = stats as FriendStatsResponse;
+  const readyStats = stats as StatsResponse;
   const groups = groupByPark(entries ?? [], PARKS);
 
   return (
@@ -549,7 +578,7 @@ function ParksMode(props: ParksModeProps): JSX.Element {
             header={
               <StatHeader
                 title={group.park}
-                breakdown={readyStats.byPark[group.park]}
+                breakdown={readyStats.coverage.byPark[group.park]}
                 accentColor={theme.parkAccent[group.park]}
                 testID={`friend-stats-park-${group.park}`}
               />
@@ -617,7 +646,7 @@ function CategoriesMode(props: CategoriesModeProps): JSX.Element {
   });
   if (blocking !== null) return blocking;
 
-  const readyStats = stats as FriendStatsResponse;
+  const readyStats = stats as StatsResponse;
   const groups = groupByCategory(entries ?? [], EXPERIENCE_CATEGORIES);
 
   return (
@@ -653,7 +682,7 @@ function CategoriesMode(props: CategoriesModeProps): JSX.Element {
         ) : (
           <StatHeader
             title={visual.label}
-            breakdown={readyStats.byCategory[group.category]}
+            breakdown={readyStats.coverage.byCategory[group.category]}
             accentColor={visual.tint}
             icon={visual.glyph as keyof typeof Ionicons.glyphMap}
             testID={`friend-stats-category-${group.category}`}
@@ -799,8 +828,8 @@ function ComparisonMode({
   friendFailed,
 }: {
   readonly friendName: string;
-  readonly viewerStats: FriendStatsResponse | undefined;
-  readonly friendStats: FriendStatsResponse | undefined;
+  readonly viewerStats: StatsResponse | undefined;
+  readonly friendStats: StatsResponse | undefined;
   readonly viewerFailed: boolean;
   readonly friendFailed: boolean;
 }): JSX.Element {
@@ -1073,7 +1102,7 @@ function CompletionDiffSection({
 interface ParksModeProps {
   readonly statsState: ReadState;
   readonly completionsState: ReadState;
-  readonly stats: FriendStatsResponse | undefined;
+  readonly stats: StatsResponse | undefined;
   readonly entries: readonly CompletionEntryDTO[] | undefined;
   readonly onRetryStats: () => void;
   readonly onRetryCompletions: () => void;
@@ -1142,7 +1171,7 @@ function StatHeader({
   testID,
 }: {
   readonly title: string;
-  readonly breakdown: FriendStatsBreakdown;
+  readonly breakdown: CompletionCell;
   readonly accentColor?: string;
   readonly icon?: keyof typeof Ionicons.glyphMap;
   readonly testID?: string;
@@ -1325,6 +1354,9 @@ const styles = StyleSheet.create({
   profileCount: {
     ...theme.typography.meta,
     color: theme.color.textSecondary,
+  },
+  ratingsWrap: {
+    marginTop: theme.spacing.md,
   },
   card: {
     marginBottom: theme.spacing.md,

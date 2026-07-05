@@ -1,50 +1,158 @@
 /**
- * Unit tests for the Stats_Service routes plugin (task 11.1).
+ * Unit tests for the Stats_Service routes plugin (expanded-stats task 8.1).
  *
- * The plugin is registered against an in-process Fastify instance with a
- * fake `StatsRepo`, a fake DB pool, and a stub session pre-handler. No
- * Postgres or Redis traffic is involved.
+ * The plugin is registered against an in-process Fastify instance with a fake
+ * `StatsRepo`, a fake DB pool, and a stub session pre-handler. No Postgres or
+ * Redis traffic is involved.
  *
- * Coverage focuses on the requirements scoped to this task:
+ * Coverage focuses on the wiring this task owns:
  *
- *   - R3.1, R3.2, R3.3 — overall, byPark, byCategory percentages are
- *     produced by `computePercent` from the snapshot's counts.
- *   - R3.4              — the response carries `completed`, `total`,
- *                         and `percent` for every dimension.
- *   - R3.6, R3.7        — Park/Category buckets with no active
- *                         Experience report `0/0/0.0`.
- *   - R3.8              — every reported percent is in `[0.0, 100.0]`,
- *                         enforced by `computePercent`.
- *   - R7.4              — `/me/stats/summary?for=<userId>` accepts
- *                         self-reads and reads from accepted Friends.
- *   - R7.4 (deny path)  — non-friend read returns `profile_forbidden`.
+ *   - `assembleResponse` folds the raw snapshot into the superset
+ *     `StatsResponse` (nested `coverage`, `ratings`, optional percentile).
+ *   - Every coverage dimension is a `CompletionCell`; empty groups report the
+ *     zero-shape.
+ *   - `GET /me/stats` reads the requester's own snapshot.
+ *   - `GET /me/stats/summary?for=<userId>` accepts self and Friend reads and
+ *     denies a non-Friend with `profile_forbidden` (R9.2), reading no stats.
+ *   - `?percentile=true` opts into the Percentile_Rank (R7.2).
  *
- * Notes on what is NOT tested here (covered elsewhere or out of scope):
- *
- *   - The `REPEATABLE READ` snapshot semantics live in `repo.ts`; the
- *     route layer is agnostic to whether it is reading a snapshot or a
- *     plain pair of queries.
- *   - The single-line analytics-on-deny rule (R7.8 reuse) is asserted
- *     in the auth/profileRoutes test suite for the `GET /users/:id/profile`
- *     endpoint that shares the same gate; we re-assert here only that
- *     no DB call beyond the friendship lookup runs on the deny path.
+ * The deeper property/integration coverage (friend parity, timeout/error
+ * mapping, percentile failure isolation, performance) lives in the dedicated
+ * task 8.2-8.6 suites.
  */
 
 import Fastify, { type FastifyInstance } from 'fastify';
 import { describe, expect, it } from 'vitest';
 
-import { EXPERIENCE_CATEGORIES, PARKS } from '@dwt/shared';
-import type { ExperienceCategory, Park } from '@dwt/shared';
+import { AREA_TYPES, EXPERIENCE_CATEGORIES, PARKS } from '@dwt/shared';
 
 import { registerErrorHandler } from '../../../errors/handler.js';
 import {
-  buildResponse,
+  assembleResponse,
   statsRoutes,
-  type StatsBreakdown,
   type StatsResponse,
   type StatsRoutesOptions,
 } from '../routes.js';
-import type { StatsCell, StatsRepo, StatsSnapshot } from '../repo.js';
+import type { CompletionCell } from '../coverage.js';
+import type { RawResortCoverageRow, ResortCoverage } from '../resorts.js';
+import type {
+  RawCoverageCell,
+  StatsRepo,
+  StatsSnapshot,
+  StatsSnapshotInput,
+} from '../repo.js';
+
+// ---------------------------------------------------------------------------
+// Snapshot builders
+// ---------------------------------------------------------------------------
+
+/** A partial coverage cell; `land`/`resortArea` default to null. */
+type CellInput = Omit<RawCoverageCell, 'land' | 'resortArea'> &
+  Partial<Pick<RawCoverageCell, 'land' | 'resortArea'>>;
+
+function cell(input: CellInput): RawCoverageCell {
+  return { land: null, resortArea: null, ...input };
+}
+
+/** Build a `StatsSnapshot` whose only populated field is the coverage list. */
+function snapshotOf(cells: readonly CellInput[]): StatsSnapshot {
+  return {
+    coverage: cells.map(cell),
+    facetExperiences: [],
+    userRatings: [],
+    resortCoverage: [],
+    percentile: null,
+  };
+}
+
+/**
+ * Build a `StatsSnapshot` carrying only per-resort raw counts, so the
+ * `byResort` roll-up and its total-order sort can be asserted in isolation.
+ */
+function snapshotWithResorts(
+  rows: readonly RawResortCoverageRow[],
+): StatsSnapshot {
+  return {
+    coverage: [],
+    facetExperiences: [],
+    userRatings: [],
+    resortCoverage: rows,
+    percentile: null,
+  };
+}
+
+/**
+ * Sample per-resort raw rows exercising the total-order sort
+ * (percent desc → total desc → case-insensitive label asc). Intentionally
+ * supplied out of sorted order so the roll-up's sort is actually observed.
+ */
+const SAMPLE_RESORT_ROWS: readonly RawResortCoverageRow[] = [
+  // 0.0% — sorts last.
+  { resortId: 'r-all-star', label: 'All-Star', completed: 0, total: 4 },
+  // 50.0%, total 6 — after the two total-10 rows on the total tiebreak.
+  { resortId: 'r-beach', label: 'Beach Club', completed: 3, total: 6 },
+  // 50.0%, total 10 — 'polynesian' loses the case-insensitive label tiebreak.
+  { resortId: 'r-poly', label: 'Polynesian', completed: 5, total: 10 },
+  // 44.4% — between the 50% cluster and 0%.
+  { resortId: 'r-grand', label: 'Grand Floridian', completed: 4, total: 9 },
+  // 50.0%, total 10 — 'contemporary' wins the case-insensitive label tiebreak.
+  { resortId: 'r-contemp', label: 'Contemporary', completed: 5, total: 10 },
+  // 100.0% — sorts first, complete badge set.
+  { resortId: 'r-yacht', label: 'Yacht Club', completed: 7, total: 7 },
+];
+
+/** The expected `byResort` order for {@link SAMPLE_RESORT_ROWS}. */
+const EXPECTED_RESORT_LABEL_ORDER: readonly string[] = [
+  'Yacht Club', // 100.0%
+  'Contemporary', // 50.0%, total 10, label tiebreak
+  'Polynesian', // 50.0%, total 10
+  'Beach Club', // 50.0%, total 6
+  'Grand Floridian', // 44.4%
+  'All-Star', // 0.0%
+];
+
+/** Assert a `byResort` list matches the expected shape and total-order sort. */
+function expectSampleByResort(byResort: readonly ResortCoverage[]): void {
+  expect(byResort.map((r) => r.label)).toEqual(EXPECTED_RESORT_LABEL_ORDER);
+
+  // Every entry carries the { resortId, label, cell } shape with a well-formed cell.
+  for (const entry of byResort) {
+    expect(typeof entry.resortId).toBe('string');
+    expect(typeof entry.label).toBe('string');
+    expect(typeof entry.cell.completed).toBe('number');
+    expect(typeof entry.cell.total).toBe('number');
+    expect(typeof entry.cell.percent).toBe('number');
+    expect(typeof entry.cell.remaining).toBe('number');
+    expect(typeof entry.cell.completeBadge).toBe('boolean');
+  }
+
+  // Spot-check the extremes: the complete (100%) row and the empty-progress row.
+  const yacht = byResort.find((r) => r.resortId === 'r-yacht');
+  expect(yacht).toEqual({
+    resortId: 'r-yacht',
+    label: 'Yacht Club',
+    cell: {
+      completed: 7,
+      total: 7,
+      percent: 100,
+      remaining: 0,
+      completeBadge: true,
+    },
+  });
+
+  const contemporary = byResort.find((r) => r.resortId === 'r-contemp');
+  expect(contemporary).toEqual({
+    resortId: 'r-contemp',
+    label: 'Contemporary',
+    cell: {
+      completed: 5,
+      total: 10,
+      percent: 50,
+      remaining: 5,
+      completeBadge: false,
+    },
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Fake DB pool
@@ -82,17 +190,17 @@ function makeFakePool(
 
 function makeFakeRepo(snapshotByUser: Map<string, StatsSnapshot>): {
   repo: StatsRepo;
-  callsForUser: string[];
+  inputs: StatsSnapshotInput[];
 } {
-  const callsForUser: string[] = [];
+  const inputs: StatsSnapshotInput[] = [];
   return {
-    callsForUser,
+    inputs,
     repo: {
-      async getStatsSnapshot(userId: string): Promise<StatsSnapshot> {
-        callsForUser.push(userId);
-        const snapshot = snapshotByUser.get(userId);
+      async getStatsSnapshot(input: StatsSnapshotInput): Promise<StatsSnapshot> {
+        inputs.push(input);
+        const snapshot = snapshotByUser.get(input.targetUserId);
         if (!snapshot) {
-          throw new Error(`unexpected getStatsSnapshot for ${userId}`);
+          throw new Error(`unexpected getStatsSnapshot for ${input.targetUserId}`);
         }
         return snapshot;
       },
@@ -141,16 +249,8 @@ async function buildApp(opts: {
 // Helpers
 // ---------------------------------------------------------------------------
 
-/**
- * Build a synthetic snapshot with one cell. Most tests only need to drive
- * a small part of the (Park × Category) grid.
- */
-function snapshotOf(cells: readonly StatsCell[]): StatsSnapshot {
-  return { cells };
-}
-
-function expectBreakdown(
-  actual: StatsBreakdown | undefined,
+function expectCell(
+  actual: CompletionCell | undefined,
   completed: number,
   total: number,
   percent: number,
@@ -161,163 +261,162 @@ function expectBreakdown(
   expect(actual!.percent).toBe(percent);
 }
 
+const ZERO_CELL: CompletionCell = {
+  completed: 0,
+  total: 0,
+  percent: 0,
+  remaining: 0,
+  completeBadge: false,
+};
+
 // ---------------------------------------------------------------------------
-// buildResponse — pure roll-up
+// assembleResponse — pure roll-up
 // ---------------------------------------------------------------------------
 
-describe('buildResponse — roll-up of snapshot cells (R3.1, R3.2, R3.3, R3.6, R3.7, R3.8)', () => {
-  it('produces zero/zero/0.0 for an empty snapshot in every Park/Category bucket', () => {
-    const response = buildResponse(snapshotOf([]));
+describe('assembleResponse — coverage roll-up', () => {
+  it('produces the zero-cell for an empty snapshot in every Park/Category/AreaType bucket', () => {
+    const response = assembleResponse(snapshotOf([]), false);
 
-    expect(response.overall).toEqual({ completed: 0, total: 0, percent: 0 });
+    expect(response.coverage.overall).toEqual(ZERO_CELL);
     for (const park of PARKS) {
-      expectBreakdown(response.byPark[park], 0, 0, 0);
-      for (const category of EXPERIENCE_CATEGORIES) {
-        expectBreakdown(response.byParkAndCategory[park][category], 0, 0, 0);
-      }
+      expect(response.coverage.byPark[park]).toEqual(ZERO_CELL);
     }
     for (const category of EXPERIENCE_CATEGORIES) {
-      expectBreakdown(response.byCategory[category], 0, 0, 0);
+      expect(response.coverage.byCategory[category]).toEqual(ZERO_CELL);
     }
+    for (const area of AREA_TYPES) {
+      expect(response.coverage.byAreaType[area]).toEqual(ZERO_CELL);
+    }
+    expect(response.coverage.resort).toEqual(ZERO_CELL);
+    expect(response.coverage.byLand).toEqual([]);
+    expect(response.coverage.byResortArea).toEqual([]);
+    expect(response.coverage.byFacetValue).toEqual([]);
+
+    // Ratings are insufficient with no rows; percentile omitted when not asked.
+    expect(response.ratings.sufficient).toBe(false);
+    expect(response.ratings.ratedCompletionsCount).toBe(0);
+    expect(response).not.toHaveProperty('percentileRank');
+    expect(response).not.toHaveProperty('percentileUnavailable');
   });
 
-  it('rolls up overall, per-Park, per-Category, and per-Park-and-Category dimensions correctly', () => {
-    // Construct a small grid:
-    //   Magic Kingdom Ride: 4/10 → 40.0%
-    //   Magic Kingdom Show: 1/2  → 50.0%
-    //   EPCOT Restaurant:    2/5  → 40.0%
+  it('rolls up overall, per-Park, per-Category, and per-AreaType dimensions correctly', () => {
+    // Magic Kingdom Ride: 4/10 → 40.0%
+    // Magic Kingdom Show: 1/2  → 50.0%
+    // EPCOT Restaurant:    2/5  → 40.0%
     //
-    // Overall: 7 / 17 → 41.176... → 41.2%
-    // byPark.MK:    5 / 12 → 41.666... → 41.7%
+    // Overall: 7 / 17 → 41.2%
+    // byPark.MK:    5 / 12 → 41.7%
     // byPark.EPCOT: 2 / 5  → 40.0%
-    // byCategory.Ride: 4 / 10 → 40.0%
-    // byCategory.Show: 1 / 2 → 50.0%
-    // byCategory.Restaurant: 2 / 5 → 40.0%
-    const cells: StatsCell[] = [
-      {
-        park: 'Magic Kingdom',
-        category: 'Ride',
-        areaType: 'ThemePark',
-        isResortRepresentation: false,
-        completed: 4,
-        total: 10,
-      },
-      {
-        park: 'Magic Kingdom',
-        category: 'Show',
-        areaType: 'ThemePark',
-        isResortRepresentation: false,
-        completed: 1,
-        total: 2,
-      },
-      {
-        park: 'EPCOT',
-        category: 'Restaurant',
-        areaType: 'ThemePark',
-        isResortRepresentation: false,
-        completed: 2,
-        total: 5,
-      },
-    ];
-
-    const response = buildResponse(snapshotOf(cells));
-
-    // Overall
-    expect(response.overall).toEqual({ completed: 7, total: 17, percent: 41.2 });
-
-    // By Park
-    expectBreakdown(response.byPark['Magic Kingdom'], 5, 12, 41.7);
-    expectBreakdown(response.byPark['EPCOT'], 2, 5, 40);
-    expectBreakdown(response.byPark['Hollywood Studios'], 0, 0, 0);
-    expectBreakdown(response.byPark['Disney Springs'], 0, 0, 0);
-
-    // By Category
-    expectBreakdown(response.byCategory['Ride'], 4, 10, 40);
-    expectBreakdown(response.byCategory['Show'], 1, 2, 50);
-    expectBreakdown(response.byCategory['Restaurant'], 2, 5, 40);
-    expectBreakdown(response.byCategory['Parade'], 0, 0, 0);
-    expectBreakdown(response.byCategory['Character_Meet'], 0, 0, 0);
-    expectBreakdown(response.byCategory['Other'], 0, 0, 0);
-
-    // By Park and Category
-    expectBreakdown(
-      response.byParkAndCategory['Magic Kingdom']['Ride'],
-      4,
-      10,
-      40,
-    );
-    expectBreakdown(
-      response.byParkAndCategory['Magic Kingdom']['Show'],
-      1,
-      2,
-      50,
-    );
-    expectBreakdown(
-      response.byParkAndCategory['Magic Kingdom']['Restaurant'],
-      0,
-      0,
-      0,
-    );
-    expectBreakdown(
-      response.byParkAndCategory['EPCOT']['Restaurant'],
-      2,
-      5,
-      40,
-    );
-  });
-
-  it('caps every percentage at 100.0 even when a cell reports completed > total (R3.8)', () => {
-    // This shouldn't happen in practice (the snapshot reads numerator and
-    // denominator atomically) but the route must remain safe regardless.
-    const cells: StatsCell[] = [
-      {
-        park: 'Magic Kingdom',
-        category: 'Ride',
-        areaType: 'ThemePark',
-        isResortRepresentation: false,
-        completed: 99,
-        total: 10,
-      },
-    ];
-    const response = buildResponse(snapshotOf(cells));
-
-    expect(response.overall.percent).toBe(100);
-    expect(response.byPark['Magic Kingdom'].percent).toBe(100);
-    expect(response.byCategory['Ride'].percent).toBe(100);
-    expect(response.byParkAndCategory['Magic Kingdom']['Ride'].percent).toBe(100);
-  });
-
-  it('every reported percent is within [0, 100]', () => {
-    const cells: StatsCell[] = [];
-    for (const park of PARKS) {
-      for (const category of EXPERIENCE_CATEGORIES) {
-        cells.push({
-          park,
-          category,
+    const response = assembleResponse(
+      snapshotOf([
+        {
+          park: 'Magic Kingdom',
+          category: 'Ride',
+          areaType: 'ThemePark',
+          isResortRepresentation: false,
+          completed: 4,
+          total: 10,
+        },
+        {
+          park: 'Magic Kingdom',
+          category: 'Show',
           areaType: 'ThemePark',
           isResortRepresentation: false,
           completed: 1,
-          total: 3,
-        });
-      }
-    }
-    const response = buildResponse(snapshotOf(cells));
+          total: 2,
+        },
+        {
+          park: 'EPCOT',
+          category: 'Restaurant',
+          areaType: 'ThemePark',
+          isResortRepresentation: false,
+          completed: 2,
+          total: 5,
+        },
+      ]),
+      false,
+    );
 
-    const checkPercent = (b: StatsBreakdown): void => {
-      expect(b.percent).toBeGreaterThanOrEqual(0);
-      expect(b.percent).toBeLessThanOrEqual(100);
-    };
+    expectCell(response.coverage.overall, 7, 17, 41.2);
+    expectCell(response.coverage.byPark['Magic Kingdom'], 5, 12, 41.7);
+    expectCell(response.coverage.byPark['EPCOT'], 2, 5, 40);
+    expect(response.coverage.byPark['Hollywood Studios']).toEqual(ZERO_CELL);
 
-    checkPercent(response.overall);
-    for (const park of PARKS) {
-      checkPercent(response.byPark[park]);
-      for (const category of EXPERIENCE_CATEGORIES) {
-        checkPercent(response.byParkAndCategory[park][category]);
-      }
-    }
-    for (const category of EXPERIENCE_CATEGORIES) {
-      checkPercent(response.byCategory[category]);
-    }
+    expectCell(response.coverage.byCategory['Ride'], 4, 10, 40);
+    expectCell(response.coverage.byCategory['Show'], 1, 2, 50);
+    expectCell(response.coverage.byCategory['Restaurant'], 2, 5, 40);
+    expect(response.coverage.byCategory['Parade']).toEqual(ZERO_CELL);
+
+    expectCell(response.coverage.byAreaType['ThemePark'], 7, 17, 41.2);
+  });
+
+  it('caps every percentage at 100.0 even when a cell reports completed > total', () => {
+    const response = assembleResponse(
+      snapshotOf([
+        {
+          park: 'Magic Kingdom',
+          category: 'Ride',
+          areaType: 'ThemePark',
+          isResortRepresentation: false,
+          completed: 99,
+          total: 10,
+        },
+      ]),
+      false,
+    );
+
+    expect(response.coverage.overall.percent).toBe(100);
+    expect(response.coverage.byPark['Magic Kingdom'].percent).toBe(100);
+    expect(response.coverage.byCategory['Ride'].percent).toBe(100);
+  });
+
+  it('reports the Resort_Statistic from resort-representing rows, distinct from byAreaType.Resort', () => {
+    const response = assembleResponse(
+      snapshotOf([
+        {
+          park: null,
+          category: 'Spa',
+          areaType: 'Resort',
+          isResortRepresentation: false,
+          completed: 1,
+          total: 2,
+        },
+        {
+          park: null,
+          category: 'Resort',
+          areaType: 'Resort',
+          isResortRepresentation: true,
+          completed: 3,
+          total: 8,
+        },
+      ]),
+      false,
+    );
+
+    // resort counts only the representing row.
+    expectCell(response.coverage.resort, 3, 8, 37.5);
+    // byAreaType.Resort counts only the non-representing resort-area row.
+    expectCell(response.coverage.byAreaType['Resort'], 1, 2, 50);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// assembleResponse — byResort roll-up (R7.12)
+// ---------------------------------------------------------------------------
+
+describe('assembleResponse — byResort roll-up', () => {
+  it('surfaces byResort in the coverage object as an empty list when no resort rows exist', () => {
+    const response = assembleResponse(snapshotOf([]), false);
+    expect(response.coverage).toHaveProperty('byResort');
+    expect(response.coverage.byResort).toEqual([]);
+  });
+
+  it('folds raw resort rows into a sorted ResortCoverage[] (percent desc → total desc → ci-label asc)', () => {
+    const response = assembleResponse(
+      snapshotWithResorts(SAMPLE_RESORT_ROWS),
+      false,
+    );
+    expectSampleByResort(response.coverage.byResort);
   });
 });
 
@@ -326,22 +425,18 @@ describe('buildResponse — roll-up of snapshot cells (R3.1, R3.2, R3.3, R3.6, R
 // ---------------------------------------------------------------------------
 
 describe('GET /me/stats', () => {
-  it('returns the requester own stats with computed percentages (R3.1-R3.4)', async () => {
-    const snapshot: StatsSnapshot = {
-      cells: [
-        {
-          park: 'Magic Kingdom',
-          category: 'Ride',
-          areaType: 'ThemePark',
-          isResortRepresentation: false,
-          completed: 3,
-          total: 10,
-        },
-      ],
-    };
-    const { repo, callsForUser } = makeFakeRepo(
-      new Map([['user-self', snapshot]]),
-    );
+  it('returns the requester own stats with computed cells (no percentile requested)', async () => {
+    const snapshot = snapshotOf([
+      {
+        park: 'Magic Kingdom',
+        category: 'Ride',
+        areaType: 'ThemePark',
+        isResortRepresentation: false,
+        completed: 3,
+        total: 10,
+      },
+    ]);
+    const { repo, inputs } = makeFakeRepo(new Map([['user-self', snapshot]]));
     const pool = makeFakePool(() => ({ rows: [] }));
 
     const app = await buildApp({ pool, repo });
@@ -354,19 +449,74 @@ describe('GET /me/stats', () => {
 
     expect(res.statusCode).toBe(200);
     const body = res.json() as StatsResponse;
-    expectBreakdown(body.overall, 3, 10, 30);
-    expectBreakdown(body.byPark['Magic Kingdom'], 3, 10, 30);
-    expectBreakdown(body.byCategory['Ride'], 3, 10, 30);
-    expectBreakdown(body.byParkAndCategory['Magic Kingdom']['Ride'], 3, 10, 30);
+    expectCell(body.coverage.overall, 3, 10, 30);
+    expectCell(body.coverage.byPark['Magic Kingdom'], 3, 10, 30);
+    expectCell(body.coverage.byCategory['Ride'], 3, 10, 30);
+    expect(body).not.toHaveProperty('percentileRank');
 
-    // The repo was queried with the requester id.
-    expect(callsForUser).toEqual(['user-self']);
+    // The repo was queried with the requester id and percentile off.
+    expect(inputs).toHaveLength(1);
+    expect(inputs[0]!.targetUserId).toBe('user-self');
+    expect(inputs[0]!.includePercentile).toBe(false);
     // /me/stats does not need to consult friendships at all.
     expect(pool.calls).toHaveLength(0);
   });
 
+  it('returns byResort in the coverage object, sorted, on GET /me/stats (R7.12)', async () => {
+    const snapshot = snapshotWithResorts(SAMPLE_RESORT_ROWS);
+    const { repo } = makeFakeRepo(new Map([['user-self', snapshot]]));
+    const pool = makeFakePool(() => ({ rows: [] }));
+
+    const app = await buildApp({ pool, repo });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/me/stats',
+      headers: { 'x-test-user-id': 'user-self' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as StatsResponse;
+    expect(body.coverage).toHaveProperty('byResort');
+    expectSampleByResort(body.coverage.byResort);
+  });
+
+  it('requests the percentile read when ?percentile=true (R7.2)', async () => {
+    const snapshot: StatsSnapshot = {
+      ...snapshotOf([]),
+      percentile: { targetTotal: 5, otherTotals: [1, 2, 10] },
+    };
+    const { repo, inputs } = makeFakeRepo(new Map([['user-self', snapshot]]));
+    const pool = makeFakePool(() => ({ rows: [] }));
+
+    const app = await buildApp({ pool, repo });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/me/stats?percentile=true',
+      headers: { 'x-test-user-id': 'user-self' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as StatsResponse;
+    // 2 of 3 other trackers strictly below 5 → 66.7%
+    expect(body.percentileRank).toBe(66.7);
+    expect(body).not.toHaveProperty('percentileUnavailable');
+    expect(inputs[0]!.includePercentile).toBe(true);
+  });
+
+  it('isolates a percentile failure: omits percentileRank, flags percentileUnavailable (R7.9)', () => {
+    // Requested but the repo returned no percentile material.
+    const response = assembleResponse(snapshotOf([]), true);
+    expect(response).not.toHaveProperty('percentileRank');
+    expect(response.percentileUnavailable).toBe(true);
+    // The rest of the response is intact.
+    expect(response.coverage.overall).toEqual(ZERO_CELL);
+    expect(response.ratings.sufficient).toBe(false);
+  });
+
   it('returns 401 unauthorized when the session pre-handler did not set userId', async () => {
-    const { repo, callsForUser } = makeFakeRepo(new Map());
+    const { repo, inputs } = makeFakeRepo(new Map());
     const pool = makeFakePool(() => ({ rows: [] }));
 
     const app = await buildApp({ pool, repo });
@@ -377,8 +527,7 @@ describe('GET /me/stats', () => {
     expect((res.json() as { error: { code: string } }).error.code).toBe(
       'unauthorized',
     );
-    // No repo call is made on the unauthenticated path.
-    expect(callsForUser).toEqual([]);
+    expect(inputs).toEqual([]);
   });
 });
 
@@ -391,21 +540,17 @@ const TARGET_ID = '22222222-2222-4222-8222-222222222222';
 
 describe('GET /me/stats/summary?for=<userId>', () => {
   it('allows the owner to read their own stats without consulting friendships', async () => {
-    const snapshot: StatsSnapshot = {
-      cells: [
-        {
-          park: 'EPCOT',
-          category: 'Restaurant',
-          areaType: 'ThemePark',
-          isResortRepresentation: false,
-          completed: 2,
-          total: 4,
-        },
-      ],
-    };
-    const { repo, callsForUser } = makeFakeRepo(
-      new Map([[VIEWER_ID, snapshot]]),
-    );
+    const snapshot = snapshotOf([
+      {
+        park: 'EPCOT',
+        category: 'Restaurant',
+        areaType: 'ThemePark',
+        isResortRepresentation: false,
+        completed: 2,
+        total: 4,
+      },
+    ]);
+    const { repo, inputs } = makeFakeRepo(new Map([[VIEWER_ID, snapshot]]));
     const pool = makeFakePool(() => ({ rows: [] }));
 
     const app = await buildApp({ pool, repo });
@@ -418,33 +563,58 @@ describe('GET /me/stats/summary?for=<userId>', () => {
 
     expect(res.statusCode).toBe(200);
     const body = res.json() as StatsResponse;
-    expectBreakdown(body.overall, 2, 4, 50);
-    expectBreakdown(body.byPark['EPCOT'], 2, 4, 50);
+    expectCell(body.coverage.overall, 2, 4, 50);
+    expectCell(body.coverage.byPark['EPCOT'], 2, 4, 50);
 
-    // Self-view: no friendship lookup.
-    expect(
-      pool.calls.find((c) => c.text.includes('FROM friendships')),
-    ).toBeUndefined();
-    expect(callsForUser).toEqual([VIEWER_ID]);
+    // Self-view: no friendship lookup, no existence check.
+    expect(pool.calls).toHaveLength(0);
+    expect(inputs[0]!.targetUserId).toBe(VIEWER_ID);
   });
 
-  it('allows an accepted Friend to read the target stats (R7.4)', async () => {
-    const snapshot: StatsSnapshot = {
-      cells: [
-        {
-          park: 'Animal Kingdom',
-          category: 'Ride',
-          areaType: 'ThemePark',
-          isResortRepresentation: false,
-          completed: 1,
-          total: 5,
-        },
-      ],
-    };
-    const { repo, callsForUser } = makeFakeRepo(
-      new Map([[TARGET_ID, snapshot]]),
-    );
-    // VIEWER < TARGET lexicographically → canonical pair (VIEWER, TARGET).
+  it('returns byResort in the coverage object for a self read on the summary endpoint (R7.12)', async () => {
+    // Prove the summary self-read surfaces byResort identically to GET /me/stats,
+    // establishing the self side of the "self and friend structurally identical"
+    // guarantee (both flow through the shared assembleResponse).
+    const selfByResort = assembleResponse(
+      snapshotWithResorts(SAMPLE_RESORT_ROWS),
+      false,
+    ).coverage.byResort;
+
+    const snapshot = snapshotWithResorts(SAMPLE_RESORT_ROWS);
+    const { repo, inputs } = makeFakeRepo(new Map([[VIEWER_ID, snapshot]]));
+    const pool = makeFakePool(() => ({ rows: [] }));
+
+    const app = await buildApp({ pool, repo });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/me/stats/summary?for=${VIEWER_ID}`,
+      headers: { 'x-test-user-id': VIEWER_ID },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as StatsResponse;
+    expect(body.coverage).toHaveProperty('byResort');
+    expectSampleByResort(body.coverage.byResort);
+    expect(body.coverage.byResort).toEqual(selfByResort);
+
+    // Self-view: no friendship lookup, target is the requester.
+    expect(pool.calls).toHaveLength(0);
+    expect(inputs[0]!.targetUserId).toBe(VIEWER_ID);
+  });
+
+  it('allows an accepted Friend to read the target stats (R9.1)', async () => {
+    const snapshot = snapshotOf([
+      {
+        park: 'Animal Kingdom',
+        category: 'Ride',
+        areaType: 'ThemePark',
+        isResortRepresentation: false,
+        completed: 1,
+        total: 5,
+      },
+    ]);
+    const { repo, inputs } = makeFakeRepo(new Map([[TARGET_ID, snapshot]]));
     const pool = makeFakePool((call) => {
       if (call.text.includes('FROM friendships')) {
         return { rows: [{ exists: true }] };
@@ -462,23 +632,65 @@ describe('GET /me/stats/summary?for=<userId>', () => {
 
     expect(res.statusCode).toBe(200);
     const body = res.json() as StatsResponse;
-    expectBreakdown(body.byPark['Animal Kingdom'], 1, 5, 20);
+    expectCell(body.coverage.byPark['Animal Kingdom'], 1, 5, 20);
 
     // Friendship lookup ran with canonical (lo, hi) = (VIEWER, TARGET).
     const friendCall = pool.calls.find((c) =>
       c.text.includes('FROM friendships'),
     );
     expect(friendCall?.params).toEqual([VIEWER_ID, TARGET_ID]);
-
-    // The repo was called with the TARGET's id, not the viewer's.
-    expect(callsForUser).toEqual([TARGET_ID]);
+    // A Friend implies existence, so no existence check is issued.
+    expect(
+      pool.calls.find((c) => c.text.includes('FROM users')),
+    ).toBeUndefined();
+    // The repo was called with the TARGET's id.
+    expect(inputs[0]!.targetUserId).toBe(TARGET_ID);
   });
 
-  it('denies a non-friend with profile_forbidden and does not read the target stats', async () => {
-    const { repo, callsForUser } = makeFakeRepo(new Map());
+  it('returns byResort in the coverage object for a Friend read, structurally identical to self (R7.12, R9.1)', async () => {
+    const rows = SAMPLE_RESORT_ROWS;
+    // Self read of the same rows, to prove the friend response is structurally
+    // identical (both flow through the shared assembleResponse).
+    const selfByResort = assembleResponse(
+      snapshotWithResorts(rows),
+      false,
+    ).coverage.byResort;
+
+    const snapshot = snapshotWithResorts(rows);
+    const { repo, inputs } = makeFakeRepo(new Map([[TARGET_ID, snapshot]]));
+    const pool = makeFakePool((call) => {
+      if (call.text.includes('FROM friendships')) {
+        return { rows: [{ exists: true }] };
+      }
+      return { rows: [] };
+    });
+
+    const app = await buildApp({ pool, repo });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/me/stats/summary?for=${TARGET_ID}`,
+      headers: { 'x-test-user-id': VIEWER_ID },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as StatsResponse;
+    expect(body.coverage).toHaveProperty('byResort');
+    expectSampleByResort(body.coverage.byResort);
+    // The friend read is byte-identical to the self read for the same snapshot.
+    expect(body.coverage.byResort).toEqual(selfByResort);
+    expect(inputs[0]!.targetUserId).toBe(TARGET_ID);
+  });
+
+  it('denies a non-Friend of an existing target with profile_forbidden and reads no stats (R9.2)', async () => {
+    const { repo, inputs } = makeFakeRepo(new Map());
     const pool = makeFakePool((call) => {
       if (call.text.includes('FROM friendships')) {
         return { rows: [{ exists: false }] };
+      }
+      if (call.text.includes('FROM users')) {
+        // The target user exists; the requester is simply not a Friend.
+        return { rows: [{ exists: true }] };
       }
       return { rows: [] };
     });
@@ -495,18 +707,40 @@ describe('GET /me/stats/summary?for=<userId>', () => {
     expect((res.json() as { error: { code: string } }).error.code).toBe(
       'profile_forbidden',
     );
+    // The stats snapshot was never read on the deny path.
+    expect(inputs).toEqual([]);
+  });
 
-    // The friendship lookup ran exactly once.
-    expect(
-      pool.calls.filter((c) => c.text.includes('FROM friendships')),
-    ).toHaveLength(1);
-    // The repo was NOT consulted for the target on the deny path —
-    // no stats were read for the unauthorized user.
-    expect(callsForUser).toEqual([]);
+  it('denies a request for a non-existent target with stats_target_not_found (R9.6)', async () => {
+    const { repo, inputs } = makeFakeRepo(new Map());
+    const pool = makeFakePool((call) => {
+      if (call.text.includes('FROM friendships')) {
+        return { rows: [{ exists: false }] };
+      }
+      if (call.text.includes('FROM users')) {
+        // No such user.
+        return { rows: [{ exists: false }] };
+      }
+      return { rows: [] };
+    });
+
+    const app = await buildApp({ pool, repo });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/me/stats/summary?for=${TARGET_ID}`,
+      headers: { 'x-test-user-id': VIEWER_ID },
+    });
+
+    expect(res.statusCode).toBe(404);
+    expect((res.json() as { error: { code: string } }).error.code).toBe(
+      'stats_target_not_found',
+    );
+    expect(inputs).toEqual([]);
   });
 
   it('returns 400 validation_failed when the for= query parameter is missing', async () => {
-    const { repo, callsForUser } = makeFakeRepo(new Map());
+    const { repo, inputs } = makeFakeRepo(new Map());
     const pool = makeFakePool(() => ({ rows: [] }));
 
     const app = await buildApp({ pool, repo });
@@ -521,9 +755,8 @@ describe('GET /me/stats/summary?for=<userId>', () => {
     expect((res.json() as { error: { code: string } }).error.code).toBe(
       'validation_failed',
     );
-    // No friendship lookup, no repo call.
     expect(pool.calls).toHaveLength(0);
-    expect(callsForUser).toEqual([]);
+    expect(inputs).toEqual([]);
   });
 
   it('returns 400 validation_failed when for= is not a UUID', async () => {
@@ -563,22 +796,20 @@ describe('GET /me/stats/summary?for=<userId>', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Type assertion: the response keys cover every Park and Category
+// Response shape covers every Park, Category, and AreaType
 // ---------------------------------------------------------------------------
 
-describe('Response shape covers every Park and Category', () => {
-  it('exposes byPark with every Park enum member and byCategory with every Category enum member', () => {
-    const response = buildResponse(snapshotOf([]));
-    const parkKeys = Object.keys(response.byPark) as Park[];
-    const categoryKeys = Object.keys(response.byCategory) as ExperienceCategory[];
-
-    expect(new Set(parkKeys)).toEqual(new Set(PARKS));
-    expect(new Set(categoryKeys)).toEqual(new Set(EXPERIENCE_CATEGORIES));
-
-    // byParkAndCategory has the same coverage on both axes.
-    for (const park of PARKS) {
-      const sub = response.byParkAndCategory[park];
-      expect(new Set(Object.keys(sub))).toEqual(new Set(EXPERIENCE_CATEGORIES));
-    }
+describe('Response shape covers every enum dimension', () => {
+  it('exposes coverage.byPark/byCategory/byAreaType with every enum member', () => {
+    const response = assembleResponse(snapshotOf([]), false);
+    expect(new Set(Object.keys(response.coverage.byPark))).toEqual(
+      new Set(PARKS),
+    );
+    expect(new Set(Object.keys(response.coverage.byCategory))).toEqual(
+      new Set(EXPERIENCE_CATEGORIES),
+    );
+    expect(new Set(Object.keys(response.coverage.byAreaType))).toEqual(
+      new Set(AREA_TYPES),
+    );
   });
 });

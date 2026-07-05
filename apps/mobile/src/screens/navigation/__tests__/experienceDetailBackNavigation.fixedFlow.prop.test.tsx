@@ -45,12 +45,7 @@ import {
 } from '@testing-library/react-native';
 import fc from 'fast-check';
 
-import {
-  EXPERIENCE_CATEGORIES,
-  PARKS,
-  type ExperienceCategory,
-  type Park,
-} from '@dwt/shared';
+import { type ExperienceCategory, type Park } from '@dwt/shared';
 
 // ---------------------------------------------------------------------------
 // Mocks (declared before the modules under test are imported).
@@ -86,6 +81,8 @@ jest.mock('../../../api/client', () => {
 import RootNavigator from '../../../navigation/RootNavigator';
 import { useSessionStore } from '../../../state/sessionStore';
 import { apiRequest as mockedApiRequest } from '../../../api/client';
+import type { StatsResponse } from '../../../api/statsTypes';
+import { makeStatsResponse } from '../../stats/__testSupport__/statsFixture';
 
 const apiRequestMock = mockedApiRequest as jest.MockedFunction<
   typeof mockedApiRequest
@@ -150,35 +147,8 @@ const FRIEND_PROFILE = {
   overallCompletionPercent: 42,
 };
 
-interface Breakdown {
-  readonly completed: number;
-  readonly total: number;
-  readonly percent: number;
-}
-
-interface StatsShape {
-  readonly overall: Breakdown;
-  readonly byPark: { readonly [park in Park]: Breakdown };
-  readonly byCategory: { readonly [category in ExperienceCategory]: Breakdown };
-  readonly byParkAndCategory: {
-    readonly [park in Park]: {
-      readonly [category in ExperienceCategory]: Breakdown;
-    };
-  };
-}
-
-function makeStats(): StatsShape {
-  const filler: Breakdown = { completed: 1, total: 10, percent: 10 };
-  const byPark = Object.fromEntries(
-    PARKS.map((park) => [park, filler]),
-  ) as StatsShape['byPark'];
-  const byCategory = Object.fromEntries(
-    EXPERIENCE_CATEGORIES.map((category) => [category, filler]),
-  ) as StatsShape['byCategory'];
-  const byParkAndCategory = Object.fromEntries(
-    PARKS.map((park) => [park, byCategory]),
-  ) as StatsShape['byParkAndCategory'];
-  return { overall: filler, byPark, byCategory, byParkAndCategory };
+function makeStats(): StatsResponse {
+  return makeStatsResponse();
 }
 
 function installApiRouter(): void {
@@ -273,8 +243,10 @@ async function openFromStats(): Promise<void> {
     navRef.navigate('MainTabs', { screen: 'Stats' });
   });
   await screen.findByTestId('stats-screen');
-  fireEvent.press(screen.getByTestId('tab-Own_Experiences'));
-  await screen.findByTestId('own-experiences');
+  // The Overview hub's Experiences entry card pushes the ExperiencesDetail
+  // screen, which hosts the own Completed_Experience_Rows.
+  fireEvent.press(await screen.findByTestId('stats-highlight-experiences'));
+  await screen.findByTestId('experiences-detail-screen');
   fireEvent.press(await screen.findByTestId('own-experience-row-0'));
 }
 
@@ -303,7 +275,9 @@ interface OriginCase {
 }
 
 const CASES: Record<OriginLabel, OriginCase> = {
-  Stats_View: { expectedRoute: 'Stats', open: openFromStats },
+  // The Stats-origin flow now opens the detail from the Stats tab's
+  // ExperiencesDetail screen, so the themed back returns there.
+  Stats_View: { expectedRoute: 'ExperiencesDetail', open: openFromStats },
   Friend_Profile_View: { expectedRoute: 'FriendProfile', open: openFromFriend },
   Home_View: { expectedRoute: 'Home', open: openFromHome },
 };

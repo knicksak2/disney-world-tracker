@@ -11,11 +11,11 @@ import { setOnUnauthorizedCallback } from '../api/client';
 import { useSessionStore } from '../state/sessionStore';
 import CatalogStack, { type CatalogStackParamList } from './CatalogStack';
 import FriendsStack, { type FriendsStackParamList } from './FriendsStack';
+import StatsStack, { type StatsStackParamList } from './StatsStack';
 import HomeScreen from '../screens/home/HomeScreen';
 import LoginScreen from '../screens/LoginScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import RegisterScreen from '../screens/RegisterScreen';
-import StatsScreen from '../screens/stats/StatsScreen';
 import ExperienceDetailScreen from '../screens/catalog/ExperienceDetailScreen';
 import MenuScreen from '../screens/catalog/MenuScreen';
 import ShareComposerScreen from '../screens/share/ShareComposerScreen';
@@ -49,7 +49,16 @@ export type MainTabParamList = {
    * Catalog screen via `navigation.navigate('Catalog', { screen, params })`.
    */
   Catalog: NavigatorScreenParams<CatalogStackParamList> | undefined;
-  Stats: undefined;
+  /**
+   * The Stats tab nests its own native stack (`StatsStack`) hosting the
+   * Overview hub and the focused detail screens. Typing the param as
+   * `NavigatorScreenParams<StatsStackParamList>` (matching the Catalog/Friends
+   * tabs) lets a caller holding the root ref deep-link a specific detail route
+   * via `navigation.navigate('MainTabs', { screen: 'Stats', params: { screen:
+   * 'RatingsDetail' } })`. Only small serializable hint params travel through
+   * navigation — never a `StatsResponse` (R3.5).
+   */
+  Stats: NavigatorScreenParams<StatsStackParamList> | undefined;
   /**
    * The Friends tab nests its own native stack (`FriendsStack`). Same
    * `NavigatorScreenParams` shape as the Catalog tab so callers can
@@ -188,7 +197,11 @@ function MainTabsNavigator(): JSX.Element {
         component={CatalogStack}
         options={{ headerShown: false }}
       />
-      <MainTabs.Screen name="Stats" component={StatsScreen} />
+      <MainTabs.Screen
+        name="Stats"
+        component={StatsStack}
+        options={{ headerShown: false }}
+      />
       <MainTabs.Screen
         name="Friends"
         component={FriendsStack}

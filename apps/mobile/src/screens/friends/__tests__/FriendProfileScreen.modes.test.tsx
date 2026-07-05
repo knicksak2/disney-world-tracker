@@ -86,10 +86,13 @@ jest.mock('@react-navigation/native', () => ({
 
 import FriendProfileScreen from '../FriendProfileScreen';
 import { apiRequest as mockedApiRequest } from '../../../api/client';
-import type {
-  FriendStatsResponse,
-  FriendStatsBreakdown,
-} from '../../../api/friendProfile';
+import type { CompletionCell, StatsResponse } from '../../../api/statsTypes';
+import {
+  makeByCategory,
+  makeByPark,
+  makeCell,
+  makeStatsResponse,
+} from '../../stats/__testSupport__/statsFixture';
 
 const apiRequestMock = mockedApiRequest as jest.MockedFunction<
   typeof mockedApiRequest
@@ -126,48 +129,40 @@ function makeProfile(overrides: Partial<ProfileDTO> = {}): ProfileDTO {
   };
 }
 
+/**
+ * Adapter preserving the pre-migration `breakdown(completed, total, percent)`
+ * call signature used throughout the test bodies. The nested `CompletionCell`
+ * derives its own `percent` / `remaining` / `completeBadge`, so the third
+ * argument is ignored.
+ */
 function breakdown(
   completed: number,
   total: number,
-  percent: number,
-): FriendStatsBreakdown {
-  return { completed, total, percent };
+  _percent?: number,
+): CompletionCell {
+  return makeCell(completed, total);
 }
 
 /**
- * Build a full stats fixture: every Park and Category zeroed, then overlay
- * the supplied non-zero `byPark` / `byCategory` cells and the overall figure.
+ * Build a full nested stats fixture: every Park and Category zeroed, then
+ * overlay the supplied non-zero `byPark` / `byCategory` cells and the overall
+ * figure. Reads on the Friend_Surface go through `coverage.*` (task 11.1).
  */
 function makeStats(overrides?: {
-  overall?: FriendStatsBreakdown;
-  byPark?: Partial<Record<(typeof PARKS)[number], FriendStatsBreakdown>>;
+  overall?: CompletionCell;
+  byPark?: Partial<Record<(typeof PARKS)[number], CompletionCell>>;
   byCategory?: Partial<
-    Record<(typeof EXPERIENCE_CATEGORIES)[number], FriendStatsBreakdown>
+    Record<(typeof EXPERIENCE_CATEGORIES)[number], CompletionCell>
   >;
-}): FriendStatsResponse {
-  const zero = breakdown(0, 0, 0);
-
-  const byPark = Object.fromEntries(
-    PARKS.map((park) => [park, overrides?.byPark?.[park] ?? zero]),
-  ) as FriendStatsResponse['byPark'];
-
-  const byCategory = Object.fromEntries(
-    EXPERIENCE_CATEGORIES.map((category) => [
-      category,
-      overrides?.byCategory?.[category] ?? zero,
-    ]),
-  ) as FriendStatsResponse['byCategory'];
-
-  const byParkAndCategory = Object.fromEntries(
-    PARKS.map((park) => [park, byCategory]),
-  ) as FriendStatsResponse['byParkAndCategory'];
-
-  return {
-    overall: overrides?.overall ?? breakdown(50, 100, 50),
-    byPark,
-    byCategory,
-    byParkAndCategory,
-  };
+}): StatsResponse {
+  const zero = makeCell(0, 0);
+  return makeStatsResponse({
+    coverage: {
+      overall: overrides?.overall ?? makeCell(50, 100),
+      byPark: makeByPark(zero, overrides?.byPark),
+      byCategory: makeByCategory(zero, overrides?.byCategory),
+    },
+  });
 }
 
 function completionEntry(

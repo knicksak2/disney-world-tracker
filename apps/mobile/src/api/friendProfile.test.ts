@@ -42,7 +42,7 @@ import {
   fetchFriendCompletions,
   fetchFriendProfile,
   fetchFriendStats,
-  type FriendStatsResponse,
+  type StatsResponse,
 } from './friendProfile';
 
 const apiRequestMock = mockedApiRequest as jest.MockedFunction<
@@ -84,8 +84,9 @@ describe('friend profile helpers — paths and pass-through (R5.5)', () => {
   });
 
   test('fetchFriendStats targets the summary endpoint with the for= query', async () => {
-    const stats = { overall: { completed: 0, total: 0, percent: 0 } } as
-      unknown as FriendStatsResponse;
+    const stats = {
+      coverage: { overall: { completed: 0, total: 0, percent: 0 } },
+    } as unknown as StatsResponse;
     apiRequestMock.mockResolvedValue(stats);
 
     await fetchFriendStats(FRIEND_ID);
