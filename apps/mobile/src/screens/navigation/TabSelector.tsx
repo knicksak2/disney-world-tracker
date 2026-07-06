@@ -6,8 +6,8 @@
  * non-empty text label, and marks exactly one tab as active. The component is
  * generic over the mode union `M` so both screens reuse it:
  *
- *   - Friend_Profile_View → `FRIEND_PROFILE_TABS` (Overview / Parks /
- *     Categories / Experiences / Compare).
+ *   - Friend_Profile_View → `FRIEND_PROFILE_TABS` (Overview / Coverage /
+ *     Experiences / Compare).
  *   - Own_Stats_View → `OWN_STATS_TABS` (Own_Overview / Own_Parks /
  *     Own_Categories / Own_Experiences).
  *
@@ -53,8 +53,7 @@ import { theme } from '../../theme/theme';
  */
 export type ProfileViewMode =
   | 'Overview'
-  | 'Parks'
-  | 'Categories'
+  | 'Coverage'
   | 'Experiences'
   | 'Compare';
 
@@ -89,8 +88,9 @@ export interface TabSpec<M extends string> {
 
 /**
  * The Friend_Profile_View's View_Selector tabs, in the fixed order
- * Overview → Parks → Categories → Experiences → Compare (R1.1). Each icon is
- * distinct (R1.2). `Compare` hosts the Phase 3 Progress_Comparison (R12.*).
+ * Overview → Coverage → Experiences → Compare (R1.1). Each icon is distinct
+ * (R1.2). `Coverage` hosts the shared lens-driven `CoverageSection`, and
+ * `Compare` hosts the Phase 3 Progress_Comparison (R12.*).
  */
 export const FRIEND_PROFILE_TABS: readonly TabSpec<ProfileViewMode>[] = [
   {
@@ -100,16 +100,10 @@ export const FRIEND_PROFILE_TABS: readonly TabSpec<ProfileViewMode>[] = [
     accessibilityLabel: 'Overview',
   },
   {
-    mode: 'Parks',
-    label: 'Parks',
+    mode: 'Coverage',
+    label: 'Coverage',
     icon: 'map-outline',
-    accessibilityLabel: 'Parks',
-  },
-  {
-    mode: 'Categories',
-    label: 'Categories',
-    icon: 'grid-outline',
-    accessibilityLabel: 'Categories',
+    accessibilityLabel: 'Coverage',
   },
   {
     mode: 'Experiences',

@@ -445,7 +445,7 @@ describe('listFriendsAndRequests', () => {
             {
               friend_id: OTHER,
               display_name: 'Goofy',
-              avatar_url: 'https://cdn.example.com/avatars/goofy.png',
+              avatar_preset: 'ear-balloon',
               established_at: established,
             },
           ],
@@ -477,7 +477,7 @@ describe('listFriendsAndRequests', () => {
         {
           userId: OTHER,
           displayName: 'Goofy',
-          avatarUrl: 'https://cdn.example.com/avatars/goofy.png',
+          avatarPreset: 'ear-balloon',
           establishedAt: established.toISOString(),
         },
       ],

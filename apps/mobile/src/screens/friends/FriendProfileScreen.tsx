@@ -14,24 +14,24 @@
  *
  *   - The screen renders the `View_Selector` (`TabSelector` +
  *     `FRIEND_PROFILE_TABS`) and exactly one Profile_View_Mode pane at a time,
- *     driven by `useViewMode(['Overview','Parks','Categories','Experiences'])`
+ *     driven by `useViewMode(['Overview','Coverage','Experiences','Compare'])`
  *     (R1.1, R1.3, R1.4, R1.5). The selector stays usable even while a
  *     non-forbidden read is in error, and switching modes never re-issues a
  *     read (the panes read from the already-cached query data) (R6.5, R7.6).
  *
  * Per-mode data dependencies and scoped states (R7.1, R7.3, R7.5):
  *
- *   - **Overview** — Profile read (name, avatar/placeholder, overall percent)
- *     plus the Stats read's overall `completed` count (from
- *     `stats.coverage.overall`, R2.*), followed by the Friend's ratings story
- *     rendered with the SAME shared `RatingsSection` as the Own_Surface, gated
- *     on the Friend's own `ratings.sufficient` and showing the neutral
- *     "Not enough ratings yet" copy when insufficient (R11.1, R11.2, R11.3).
- *     The percentile banner and the interests/facets section are omitted for
- *     the Friend_Surface (R10.6, R11.4).
- *   - **Parks** — Stats `byPark` headers + Completions grouped by Park (R3.*).
- *   - **Categories** — Stats `byCategory` headers + Completions grouped by
- *     Category (R4.*).
+ *   - **Overview** — Profile read (name, avatar/placeholder), followed once the
+ *     Stats read is ready by the redesigned overall-completion hero
+ *     (`OverallHeroCard` over `stats.coverage.overall`, R2.*) and the Friend's
+ *     ratings story rendered with the SAME shared `RatingsSection` as the
+ *     Own_Surface, gated on the Friend's own `ratings.sufficient` and showing
+ *     the neutral "Not enough ratings yet" copy when insufficient (R11.1,
+ *     R11.2, R11.3). The percentile banner and the interests/facets section are
+ *     omitted for the Friend_Surface (R10.6, R11.4).
+ *   - **Coverage** — a segmented Lens_Switcher (Parks / Categories / Areas /
+ *     Lands / Resorts) over the shared `CoverageSection`, driven purely by
+ *     `stats.coverage` (R2.*, R3.*, R4.*).
  *   - **Experiences** — Completions, via the shared `ExperiencesList` (R5.*).
  *   - **Compare** — the Progress_Comparison: the viewer's and the Friend's
  *     overall / per-Park / per-Category percentages side by side, derived
@@ -80,9 +80,9 @@
  * retrieved (R13.8).
  *
  * The server already does the percentage math (rounding to one decimal,
- * capping at 100.0, zero-safe denominators); `formatPercent` re-applies
- * `toFixed(1)` purely so a whole-number percent still shows its trailing
- * decimal.
+ * capping at 100.0, zero-safe denominators); `formatComparisonPercent`
+ * re-applies `toFixed(1)` purely so a whole-number percent still shows its
+ * trailing decimal.
  *
  * Deep-link to Compare (task 26.1): the Friend_Profile_View accepts an optional
  * `initialSection: 'comparison'` navigation param. When a `Progress_Share` tap
@@ -103,7 +103,7 @@
 import React from 'react';
 import {
   ActivityIndicator,
-  Image,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -113,15 +113,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 
 import {
-  EXPERIENCE_CATEGORIES,
-  PARKS,
+  type AvatarPresetId,
   type CompletionEntryDTO,
   type ProfileDTO,
 } from '@dwt/shared';
 
 import { ApiError } from '../../api/client';
+import { renderAvatarPreset } from '../../avatars/AvatarPresets';
 import type { StatsResponse } from '../../api/friendProfile';
-import type { CompletionCell } from '../../api/statsTypes';
 import {
   useFriendCompletionsQuery,
   useFriendProfileQuery,
@@ -136,30 +135,51 @@ import {
 import { deriveCompletionDiff } from './completionDiff';
 import { theme } from '../../theme/theme';
 import {
-  Badge,
   Card,
   EmptyState,
   GradientHeader,
   PrimaryButton,
   ScreenContainer,
 } from '../../theme/components';
-import { RatingsSection } from '../stats/components';
-import { CompactEmptyState } from '../navigation/CompactEmptyState';
+import {
+  CoverageSection,
+  OverallHeroCard,
+  RatingsSection,
+  type CoverageLens,
+} from '../stats/components';
 import { CompletionRow } from '../navigation/CompletionRow';
 import { ExperiencesList } from '../navigation/ExperiencesList';
-import { GroupSection } from '../navigation/GroupSection';
 import {
   resolveExperienceTarget,
   useOpenExperience,
 } from '../navigation/experienceNavigation';
-import { groupByCategory, groupByPark } from '../navigation/grouping';
 import {
   FRIEND_PROFILE_TABS,
   TabSelector,
   type ProfileViewMode,
 } from '../navigation/TabSelector';
-import { useGroupSections } from '../navigation/useGroupSections';
 import { useViewMode } from '../navigation/useViewMode';
+
+// ---------------------------------------------------------------------------
+// Coverage lens switcher config (mirrors CoverageDetailScreen, R5.1)
+// ---------------------------------------------------------------------------
+
+/** The five coverage lenses offered by the Coverage pane, in fixed order. */
+const COVERAGE_LENSES: readonly CoverageLens[] = [
+  'parks',
+  'categories',
+  'areas',
+  'lands',
+  'resorts',
+];
+
+const COVERAGE_LENS_LABELS: { readonly [lens in CoverageLens]: string } = {
+  parks: 'Parks',
+  categories: 'Categories',
+  areas: 'Areas',
+  lands: 'Lands',
+  resorts: 'Resorts',
+};
 
 // ---------------------------------------------------------------------------
 // Route params
@@ -199,8 +219,7 @@ interface FriendProfileScreenProps {
  */
 const FRIEND_MODES = [
   'Overview',
-  'Parks',
-  'Categories',
+  'Coverage',
   'Experiences',
   'Compare',
 ] as const satisfies readonly ProfileViewMode[];
@@ -282,13 +301,11 @@ export default function FriendProfileScreen({
     initialSection === 'comparison' ? ['Compare'] : [];
   const { mode, select } = useViewMode(FRIEND_MODES, initialModes);
 
-  // R10.2: a single per-Screen_Session Group_Section state instance backs both
-  // the Parks and Categories grouped modes, so each section's Expanded/Collapsed
-  // state survives switching between modes. Keys are namespaced per mode
-  // (`parks:<name>`, `categories:<name>`) so same-named groups never collide.
-  // Mounting the hook here means the state resets to all-Collapsed when the
-  // screen is presented anew (R8.1, R10.3).
-  const groupSections = useGroupSections();
+  // The active coverage lens for the Coverage pane. Hoisted to the screen so
+  // the chosen lens persists across tab switches (a mode switch is a pure
+  // re-render that unmounts the pane, so the state must live above it).
+  const [coverageLens, setCoverageLens] =
+    React.useState<CoverageLens>('parks');
 
   // R2.1/R2.2: a single per-Screen_Session navigation handler threaded to every
   // Completed_Experience_Row across Parks, Categories, and Experiences modes so
@@ -366,31 +383,13 @@ export default function FriendProfileScreen({
           />
         ) : null}
 
-        {mode === 'Parks' ? (
-          <ParksMode
+        {mode === 'Coverage' ? (
+          <CoverageMode
             statsState={readState(statsQuery)}
-            completionsState={readState(completionsQuery)}
             stats={statsQuery.data}
-            entries={completionsQuery.data?.entries}
             onRetryStats={onRetryStats}
-            onRetryCompletions={onRetryCompletions}
-            isExpanded={groupSections.isExpanded}
-            toggle={groupSections.toggle}
-            onOpenExperience={openExperience}
-          />
-        ) : null}
-
-        {mode === 'Categories' ? (
-          <CategoriesMode
-            statsState={readState(statsQuery)}
-            completionsState={readState(completionsQuery)}
-            stats={statsQuery.data}
-            entries={completionsQuery.data?.entries}
-            onRetryStats={onRetryStats}
-            onRetryCompletions={onRetryCompletions}
-            isExpanded={groupSections.isExpanded}
-            toggle={groupSections.toggle}
-            onOpenExperience={openExperience}
+            lens={coverageLens}
+            onSelectLens={setCoverageLens}
           />
         ) : null}
 
@@ -460,266 +459,120 @@ function OverviewMode({
         <SectionError testID="friend-profile-error" onRetry={onRetryProfile} />
       ) : (
         <Card style={styles.profileCard} testID="friend-profile-summary">
-          {profile.avatarUrl !== null ? (
-            <AvatarImage uri={profile.avatarUrl} />
+          {profile.avatarPreset !== null ? (
+            <AvatarPresetBadge preset={profile.avatarPreset} />
           ) : (
             <AvatarPlaceholder />
           )}
           <Text style={styles.profileName}>
             {profile.displayName || fallbackName}
           </Text>
-          <Text style={styles.profileLabel}>Overall completion</Text>
-          <Text style={styles.profilePercent}>
-            {formatPercent(profile.overallCompletionPercent)}
-          </Text>
-
-          {/* R2.4: total count of completed Active Experiences, sourced from
-              the Stats read's overall `completed` (now `coverage.overall`).
-              Scoped to the Stats read so the rest of the card still renders if
-              Stats is slow or failed. */}
-          {statsState === 'loading' ? (
-            <ActivityIndicator
-              color={theme.color.primary}
-              testID="friend-stats-loading"
-            />
-          ) : statsState === 'error' || stats === undefined ? (
-            <View testID="friend-overview-count-error">
-              <PrimaryButton
-                label="Retry"
-                icon="refresh-outline"
-                onPress={onRetryStats}
-                testID="friend-stats-error-retry"
-                style={styles.retryBtn}
-              />
-            </View>
-          ) : (
-            <Text style={styles.profileCount} testID="friend-overview-count">
-              {`${stats.coverage.overall.completed} experiences completed`}
-            </Text>
-          )}
         </Card>
       )}
 
-      {/* R11.1/R11.2/R11.3: the Friend's ratings story rendered with the SAME
-          shared `RatingsSection` as the Own_Surface, gated internally on the
-          Friend's own `ratings.sufficient`. When insufficient it shows the
+      {/* Below the profile card: the redesigned hero + ratings, rendered with
+          the SAME shared components as the Own_Surface once the Stats read is
+          ready. Scoped to the Stats read so a slow/failed Stats read never
+          blanks the profile card above (R14.7). The hero ring conveys overall
+          completion (R2.*), so the old separate "overall count" text is gone.
+          R11.1/R11.2/R11.3: the Friend's ratings story is gated internally on
+          the Friend's own `ratings.sufficient`; when insufficient it shows the
           neutral "Not enough ratings yet" message (`emptyVariant="neutral"`)
-          rather than the self-directed unlock call-to-action. Scoped to the
-          Stats read so a slow/failed Stats read never blanks the profile card
-          above (R14.7). The percentile banner and interests/facets section are
-          deliberately omitted for the Friend_Surface (R10.6, R11.4). */}
-      {statsState === 'ready' && stats !== undefined ? (
-        <View style={styles.ratingsWrap} testID="friend-ratings">
-          <RatingsSection
-            ratings={stats.ratings}
-            emptyVariant="neutral"
-            onOpenExperience={onOpenExperience}
-            testID="friend-ratings-section"
-          />
+          rather than the self-directed unlock call-to-action. The percentile
+          banner and interests/facets section are deliberately omitted for the
+          Friend_Surface (R10.6, R11.4). */}
+      {statsState === 'loading' ? (
+        <ModeLoader testID="friend-stats-loading" />
+      ) : statsState === 'error' || stats === undefined ? (
+        <SectionError testID="friend-stats-error" onRetry={onRetryStats} />
+      ) : (
+        <View style={styles.heroWrap} testID="friend-overview-stats">
+          <OverallHeroCard overall={stats.coverage.overall} />
+          <View style={styles.ratingsWrap} testID="friend-ratings">
+            <RatingsSection
+              ratings={stats.ratings}
+              emptyVariant="neutral"
+              onOpenExperience={onOpenExperience}
+              testID="friend-ratings-section"
+            />
+          </View>
         </View>
-      ) : null}
+      )}
     </View>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Parks mode (R3.*)
+// Coverage mode (replaces Parks + Categories) — the shared lens-driven
+// `CoverageSection` behind a segmented Lens_Switcher (R2.*, R3.*, R4.*)
 // ---------------------------------------------------------------------------
 
-function ParksMode(props: ParksModeProps): JSX.Element {
-  const {
-    statsState,
-    completionsState,
-    stats,
-    entries,
-    onRetryStats,
-    onRetryCompletions,
-    isExpanded,
-    toggle,
-    onOpenExperience,
-  } = props;
-
-  const blocking = renderBlockingState({
-    testIDContainer: 'friend-mode-parks',
-    reads: [
-      {
-        state: statsState,
-        loadingTestID: 'friend-stats-loading',
-        errorTestID: 'friend-stats-error',
-        onRetry: onRetryStats,
-      },
-      {
-        state: completionsState,
-        loadingTestID: 'friend-completions-loading',
-        errorTestID: 'friend-completions-error',
-        onRetry: onRetryCompletions,
-      },
-    ],
-  });
-  if (blocking !== null) return blocking;
-
-  // Both reads ready.
-  const readyStats = stats as StatsResponse;
-  const groups = groupByPark(entries ?? [], PARKS);
+function CoverageMode({
+  statsState,
+  stats,
+  onRetryStats,
+  lens,
+  onSelectLens,
+}: {
+  readonly statsState: ReadState;
+  readonly stats: StatsResponse | undefined;
+  readonly onRetryStats: () => void;
+  readonly lens: CoverageLens;
+  readonly onSelectLens: (lens: CoverageLens) => void;
+}): JSX.Element {
+  // Scope the pane to the Stats read: its own loading / error + retry, same as
+  // the Overview stats block (R7.1, R7.3, R7.5).
+  if (statsState === 'loading') {
+    return (
+      <View testID="friend-mode-coverage">
+        <ModeLoader testID="friend-stats-loading" />
+      </View>
+    );
+  }
+  if (statsState === 'error' || stats === undefined) {
+    return (
+      <View testID="friend-mode-coverage">
+        <SectionError testID="friend-stats-error" onRetry={onRetryStats} />
+      </View>
+    );
+  }
 
   return (
-    <View testID="friend-mode-parks">
-      {groups.map((group) => {
-        // R7.2 / R8.2: render a Group_Section for every Park, including
-        // zero-count Parks (none omitted). Key namespaced per mode (R10.2).
-        const sectionKey = `parks:${group.park}`;
-        return (
-          <GroupSection
-            key={group.park}
-            sectionKey={sectionKey}
-            expanded={isExpanded(sectionKey)}
-            onToggle={toggle}
-            accessibilityLabel={group.park}
-            header={
-              <StatHeader
-                title={group.park}
-                breakdown={readyStats.coverage.byPark[group.park]}
-                accentColor={theme.parkAccent[group.park]}
-                testID={`friend-stats-park-${group.park}`}
-              />
-            }
-            testID={`friend-park-group-${group.park}`}
-          >
-            {group.entries.length === 0 ? (
-              // R11.2: Expanded body of an empty group shows a Compact_Empty_State.
-              <CompactEmptyState
-                message={'This friend hasn\u2019t completed anything in this park yet.'}
-                testID={`friend-park-empty-${group.park}`}
-              />
-            ) : (
-              // R11.1: Expanded body shows the group's Completed_Experience_Rows.
-              group.entries.map((entry, index) => (
-                <CompletionRow
-                  key={`${entry.experienceName}-${entry.completedOn}-${index}`}
-                  entry={entry}
-                  fields="parks"
-                  onOpenExperience={onOpenExperience}
-                  testID={`friend-park-${group.park}-row-${index}`}
-                />
-              ))
-            )}
-          </GroupSection>
-        );
-      })}
-    </View>
-  );
-}
+    <View testID="friend-mode-coverage">
+      {/* Lens_Switcher: a single segmented control styled identically to the
+          Own_Surface Coverage detail screen — exactly one active, Parks
+          default. */}
+      <View style={styles.seg} testID="friend-coverage-lens-switcher">
+        {COVERAGE_LENSES.map((option) => {
+          const selected = lens === option;
+          return (
+            <Pressable
+              key={option}
+              onPress={() => onSelectLens(option)}
+              accessibilityRole="button"
+              accessibilityState={{ selected }}
+              testID={`friend-coverage-lens-${option}`}
+              style={[styles.segItem, selected && styles.segItemActive]}
+            >
+              <Text
+                style={[styles.segText, selected && styles.segTextActive]}
+                numberOfLines={1}
+              >
+                {COVERAGE_LENS_LABELS[option]}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
 
-// ---------------------------------------------------------------------------
-// Categories mode (R4.*)
-// ---------------------------------------------------------------------------
-
-function CategoriesMode(props: CategoriesModeProps): JSX.Element {
-  const {
-    statsState,
-    completionsState,
-    stats,
-    entries,
-    onRetryStats,
-    onRetryCompletions,
-    isExpanded,
-    toggle,
-    onOpenExperience,
-  } = props;
-
-  const blocking = renderBlockingState({
-    testIDContainer: 'friend-mode-categories',
-    reads: [
-      {
-        state: statsState,
-        loadingTestID: 'friend-stats-loading',
-        errorTestID: 'friend-stats-error',
-        onRetry: onRetryStats,
-      },
-      {
-        state: completionsState,
-        loadingTestID: 'friend-completions-loading',
-        errorTestID: 'friend-completions-error',
-        onRetry: onRetryCompletions,
-      },
-    ],
-  });
-  if (blocking !== null) return blocking;
-
-  const readyStats = stats as StatsResponse;
-  const groups = groupByCategory(entries ?? [], EXPERIENCE_CATEGORIES);
-
-  return (
-    <View testID="friend-mode-categories">
-      {groups.map((group) => {
-        const visual = theme.categoryVisual[group.category];
-        const isEmpty = group.entries.length === 0;
-        // R7.2 / R8.2: a Group_Section for every Category, including empties.
-        const sectionKey = `categories:${group.category}`;
-
-        // R9.2: preserve the underlying mode's figure suppression — an empty
-        // Category_Group's header shows the name and an empty indication with
-        // the percentage and counts suppressed; a non-empty group's header is
-        // the full StatHeader (name + percent + completed/total).
-        const header = isEmpty ? (
-          <Card
-            style={styles.card}
-            testID={`friend-stats-category-${group.category}`}
-          >
-            <View style={styles.cardHeader}>
-              <View style={styles.cardTitleWrap}>
-                <Ionicons
-                  name={visual.glyph as keyof typeof Ionicons.glyphMap}
-                  size={16}
-                  color={visual.tint}
-                  style={styles.cardIcon}
-                />
-                <Text style={styles.cardTitle}>{visual.label}</Text>
-              </View>
-            </View>
-            <Text style={styles.cardCounts}>No completed Experiences yet</Text>
-          </Card>
-        ) : (
-          <StatHeader
-            title={visual.label}
-            breakdown={readyStats.coverage.byCategory[group.category]}
-            accentColor={visual.tint}
-            icon={visual.glyph as keyof typeof Ionicons.glyphMap}
-            testID={`friend-stats-category-${group.category}`}
-          />
-        );
-
-        return (
-          <GroupSection
-            key={group.category}
-            sectionKey={sectionKey}
-            expanded={isExpanded(sectionKey)}
-            onToggle={toggle}
-            accessibilityLabel={visual.label}
-            header={header}
-            testID={`friend-category-group-${group.category}`}
-          >
-            {isEmpty ? (
-              // R11.2: Expanded body of an empty group shows a Compact_Empty_State.
-              <CompactEmptyState
-                message={'This friend hasn\u2019t completed anything in this category yet.'}
-                testID={`friend-category-empty-${group.category}`}
-              />
-            ) : (
-              // R11.1: Expanded body shows the group's Completed_Experience_Rows.
-              group.entries.map((entry, index) => (
-                <CompletionRow
-                  key={`${entry.experienceName}-${entry.completedOn}-${index}`}
-                  entry={entry}
-                  fields="categories"
-                  onOpenExperience={onOpenExperience}
-                  testID={`friend-category-${group.category}-row-${index}`}
-                />
-              ))
-            )}
-          </GroupSection>
-        );
-      })}
+      {/* Only the active lens is rendered, via the SHARED CoverageSection. */}
+      <Card style={styles.lensCard}>
+        <CoverageSection
+          coverage={stats.coverage}
+          lens={lens}
+          testID={`friend-coverage-${lens}`}
+        />
+      </Card>
     </View>
   );
 }
@@ -1096,136 +949,25 @@ function CompletionDiffSection({
 }
 
 // ---------------------------------------------------------------------------
-// Mode prop types (shared between Parks and Categories)
-// ---------------------------------------------------------------------------
-
-interface ParksModeProps {
-  readonly statsState: ReadState;
-  readonly completionsState: ReadState;
-  readonly stats: StatsResponse | undefined;
-  readonly entries: readonly CompletionEntryDTO[] | undefined;
-  readonly onRetryStats: () => void;
-  readonly onRetryCompletions: () => void;
-  readonly isExpanded: (key: string) => boolean;
-  readonly toggle: (key: string) => void;
-  readonly onOpenExperience: (experienceId: string) => void;
-}
-
-type CategoriesModeProps = ParksModeProps;
-
-// ---------------------------------------------------------------------------
-// Blocking-state helper (loading / error gate for multi-read modes)
-// ---------------------------------------------------------------------------
-
-interface ModeRead {
-  readonly state: ReadState;
-  readonly loadingTestID: string;
-  readonly errorTestID: string;
-  readonly onRetry: () => void;
-}
-
-/**
- * For a mode that displays more than one read, render the union of the
- * not-ready reads' loading indicators and error+retry controls scoped to
- * exactly those reads (R7.1, R7.3, R7.5). Returns `null` when every read is
- * ready, so the caller renders the mode content. A read that is `ready`
- * (i.e. has data) is omitted even if a later fetch failed, so other modes'
- * loaded data is retained and the selector stays usable (R7.6).
- */
-function renderBlockingState({
-  testIDContainer,
-  reads,
-}: {
-  readonly testIDContainer: string;
-  readonly reads: readonly ModeRead[];
-}): JSX.Element | null {
-  const pending = reads.filter((read) => read.state !== 'ready');
-  if (pending.length === 0) return null;
-
-  return (
-    <View testID={testIDContainer}>
-      {pending.map((read, index) =>
-        read.state === 'loading' ? (
-          <ModeLoader key={`${read.loadingTestID}-${index}`} testID={read.loadingTestID} />
-        ) : (
-          <SectionError
-            key={`${read.errorTestID}-${index}`}
-            testID={read.errorTestID}
-            onRetry={read.onRetry}
-          />
-        ),
-      )}
-    </View>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Stat header (per-Park / per-Category) (R3.2, R4.2)
-// ---------------------------------------------------------------------------
-
-function StatHeader({
-  title,
-  breakdown,
-  accentColor,
-  icon,
-  testID,
-}: {
-  readonly title: string;
-  readonly breakdown: CompletionCell;
-  readonly accentColor?: string;
-  readonly icon?: keyof typeof Ionicons.glyphMap;
-  readonly testID?: string;
-}): JSX.Element {
-  return (
-    <Card
-      {...(accentColor !== undefined ? { accentColor } : {})}
-      {...(testID !== undefined ? { testID } : {})}
-      style={styles.card}
-    >
-      <View style={styles.cardHeader}>
-        <View style={styles.cardTitleWrap}>
-          {icon !== undefined ? (
-            <Ionicons
-              name={icon}
-              size={16}
-              color={accentColor ?? theme.color.primary}
-              style={styles.cardIcon}
-            />
-          ) : null}
-          <Text style={styles.cardTitle}>{title}</Text>
-        </View>
-        <Badge
-          label={formatPercent(breakdown.percent)}
-          color={accentColor ?? theme.color.primary}
-        />
-      </View>
-      <Text style={styles.cardCounts}>
-        {`${breakdown.completed} of ${breakdown.total}`}
-      </Text>
-    </Card>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // Avatar (R2.2, R2.3, R2.5)
 // ---------------------------------------------------------------------------
 
 /**
- * The Friend's avatar image. On a load failure it swaps to the default
- * placeholder (R2.5).
+ * The Friend's avatar, rendered from their chosen preset id. Falls back to the
+ * placeholder if the id is unknown (e.g. a preset removed after they chose it),
+ * so a stale reference degrades gracefully rather than crashing (R2.5).
  */
-function AvatarImage({ uri }: { readonly uri: string }): JSX.Element {
-  const [failed, setFailed] = React.useState(false);
-  if (failed) return <AvatarPlaceholder />;
+function AvatarPresetBadge({
+  preset,
+}: {
+  readonly preset: AvatarPresetId;
+}): JSX.Element {
+  const art = renderAvatarPreset(preset, 80);
+  if (art === null) return <AvatarPlaceholder />;
   return (
-    <Image
-      source={{ uri }}
-      style={styles.avatar}
-      testID="friend-avatar-image"
-      onError={() => {
-        setFailed(true);
-      }}
-    />
+    <View style={styles.avatar} testID="friend-avatar-image">
+      {art}
+    </View>
   );
 }
 
@@ -1286,17 +1028,6 @@ function isForbidden(error: ApiError | null): boolean {
   return error instanceof ApiError && error.code === 'profile_forbidden';
 }
 
-/**
- * Render a percent with exactly one decimal place (R2.1, R3.2, R4.2). The
- * server already rounds/caps; `toFixed(1)` is display-only so an integer
- * percent still shows its trailing decimal. Non-finite values fall back to
- * "0.0%".
- */
-function formatPercent(value: number): string {
-  if (!Number.isFinite(value)) return '0.0%';
-  return `${value.toFixed(1)}%`;
-}
-
 // ---------------------------------------------------------------------------
 // Styles
 // ---------------------------------------------------------------------------
@@ -1340,20 +1071,8 @@ const styles = StyleSheet.create({
     color: theme.color.textPrimary,
     textAlign: 'center',
   },
-  profileLabel: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  profilePercent: {
-    ...theme.typography.display,
-    fontSize: 40,
-    color: theme.color.primary,
-  },
-  profileCount: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
+  heroWrap: {
+    gap: theme.spacing.md,
   },
   ratingsWrap: {
     marginTop: theme.spacing.md,
@@ -1361,30 +1080,43 @@ const styles = StyleSheet.create({
   card: {
     marginBottom: theme.spacing.md,
   },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: theme.spacing.xs,
-    gap: theme.spacing.sm,
-  },
-  cardTitleWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexShrink: 1,
-    paddingRight: theme.spacing.sm,
-  },
-  cardIcon: {
-    marginRight: theme.spacing.sm,
-  },
   cardTitle: {
     ...theme.typography.subtitle,
     color: theme.color.textPrimary,
     flexShrink: 1,
   },
-  cardCounts: {
+  // Coverage Lens_Switcher — mirrors CoverageDetailScreen's segmented control.
+  seg: {
+    flexDirection: 'row',
+    backgroundColor: theme.color.surfaceAlt,
+    borderRadius: theme.radius.md,
+    padding: 4,
+    gap: 2,
+    marginBottom: theme.spacing.md,
+  },
+  segItem: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 7,
+    paddingHorizontal: 2,
+    borderRadius: theme.radius.sm,
+  },
+  segItemActive: {
+    backgroundColor: theme.color.surface,
+    ...theme.shadow.card,
+  },
+  segText: {
     ...theme.typography.meta,
+    fontSize: 11,
     color: theme.color.textSecondary,
+  },
+  segTextActive: {
+    color: theme.color.primary,
+  },
+  lensCard: {
+    paddingVertical: theme.spacing.sm,
+    marginBottom: theme.spacing.md,
   },
   errorWrap: {
     alignItems: 'center',

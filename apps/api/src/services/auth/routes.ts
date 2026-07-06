@@ -531,7 +531,10 @@ async function handleChangePassword(
 
 interface MeResponseBody {
   readonly user: { readonly id: string; readonly email: string };
-  readonly profile: { readonly displayName: string };
+  readonly profile: {
+    readonly displayName: string;
+    readonly avatarPreset: string | null;
+  };
 }
 
 /**
@@ -555,8 +558,9 @@ async function handleMe(
     id: string;
     email: string;
     display_name: string;
+    avatar_preset: string | null;
   }>(
-    `SELECT u.id, u.email, p.display_name
+    `SELECT u.id, u.email, p.display_name, p.avatar_preset
        FROM users u
        JOIN profiles p ON p.user_id = u.id
       WHERE u.id = $1`,
@@ -573,7 +577,10 @@ async function handleMe(
 
   return {
     user: { id: row.id, email: row.email },
-    profile: { displayName: row.display_name },
+    profile: {
+      displayName: row.display_name,
+      avatarPreset: row.avatar_preset,
+    },
   };
 }
 

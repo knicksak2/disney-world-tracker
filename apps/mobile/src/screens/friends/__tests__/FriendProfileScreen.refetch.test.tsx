@@ -14,9 +14,10 @@
  * `friendId`, and cached by React Query. Every Profile_View_Mode reads from
  * that same cache, so:
  *
- *   - **R6.5** — switching through every mode (Overview → Parks → Categories →
- *     Experiences → Overview) issues NO additional `apiRequest` calls, because
- *     a mode switch is a pure local re-render over already-cached data.
+ *   - **R6.5** — switching through every mode (Overview → Coverage →
+ *     Experiences → Compare → Overview) issues NO additional `apiRequest`
+ *     calls, because a mode switch is a pure local re-render over
+ *     already-cached data.
  *   - **R14.4** — changing the Experience_Filter's Park and Category selections
  *     issues NO additional `apiRequest` calls, because the filter is a
  *     synchronous fold over the already-loaded entries.
@@ -124,7 +125,7 @@ function makeProfile(overrides: Partial<ProfileDTO> = {}): ProfileDTO {
   return {
     userId: FRIEND_ID,
     displayName: DISPLAY_NAME,
-    avatarUrl: null,
+    avatarPreset: null,
     overallCompletionPercent: 42,
     ...overrides,
   };
@@ -267,14 +268,14 @@ describe('FriendProfileScreen request discipline (R6.5, R7.5, R7.6, R14.4)', () 
     const callsAfterLoad = totalCalls();
 
     // Cycle through every other mode and back to Overview.
-    fireEvent.press(screen.getByTestId('tab-Parks'));
-    expect(await screen.findByTestId('friend-mode-parks')).toBeTruthy();
-
-    fireEvent.press(screen.getByTestId('tab-Categories'));
-    expect(await screen.findByTestId('friend-mode-categories')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('tab-Coverage'));
+    expect(await screen.findByTestId('friend-mode-coverage')).toBeTruthy();
 
     fireEvent.press(screen.getByTestId('tab-Experiences'));
     expect(await screen.findByTestId('friend-experiences-list')).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId('tab-Compare'));
+    expect(await screen.findByTestId('friend-mode-compare')).toBeTruthy();
 
     fireEvent.press(screen.getByTestId('tab-Overview'));
     expect(await screen.findByTestId('friend-mode-overview')).toBeTruthy();

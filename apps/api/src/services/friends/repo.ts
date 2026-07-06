@@ -76,13 +76,13 @@ export interface FriendSearchHit {
 /**
  * One entry in the `friends` array of `listFriendsAndRequests`. The
  * `establishedAt` field comes straight from the canonical row;
- * `displayName` and `avatarUrl` are joined from the friend's profile so
+ * `displayName` and `avatarPreset` are joined from the friend's profile so
  * the client renders a friendly list without a second round-trip.
  */
 export interface FriendListEntry {
   readonly userId: string;
   readonly displayName: string;
-  readonly avatarUrl: string | null;
+  readonly avatarPreset: string | null;
   readonly establishedAt: string;
 }
 
@@ -584,7 +584,7 @@ async function listFriendsAndRequests(
       `SELECT
          CASE WHEN f.user_lo_id = $1 THEN f.user_hi_id ELSE f.user_lo_id END AS friend_id,
          p.display_name,
-         p.avatar_url,
+         p.avatar_preset,
          f.established_at
        FROM friendships f
        JOIN profiles p
@@ -628,7 +628,7 @@ async function listFriendsAndRequests(
 interface FriendListRow {
   friend_id: string;
   display_name: string;
-  avatar_url: string | null;
+  avatar_preset: string | null;
   established_at: Date | string;
 }
 
@@ -645,7 +645,7 @@ function friendRowToEntry(row: FriendListRow): FriendListEntry {
   return {
     userId: row.friend_id,
     displayName: row.display_name,
-    avatarUrl: row.avatar_url,
+    avatarPreset: row.avatar_preset,
     establishedAt: toIsoTimestamp(row.established_at),
   };
 }

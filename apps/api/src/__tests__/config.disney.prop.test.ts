@@ -81,10 +81,6 @@ function baseEnv(): NodeJS.ProcessEnv {
     NODE_ENV: 'test',
     DATABASE_URL: 'postgres://user:pass@localhost:5432/db',
     REDIS_URL: 'redis://localhost:6379',
-    S3_ENDPOINT: 'https://s3.example.com',
-    S3_BUCKET: 'bucket',
-    S3_ACCESS_KEY_ID: 'access-key-id',
-    S3_SECRET_ACCESS_KEY: 'secret-access-key',
     SESSION_SECRET: 'x'.repeat(32),
   };
 }

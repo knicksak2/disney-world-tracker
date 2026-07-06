@@ -17,7 +17,7 @@
  *
  * Test harness mirrors `profileRoutes.test.ts` exactly:
  *   - A small in-process Fastify instance with the `profileRoutes` plugin
- *     registered against fake `pool` and `s3Client` collaborators and a
+ *     registered against a fake `pool` collaborator and a
  *     header-driven auth pre-handler.
  *   - The `request.log` is wrapped in a `Proxy` at `onRequest` so every
  *     `info` and `debug` invocation that the deny path could conceivably
@@ -35,6 +35,8 @@
 import { describe, it, expect } from 'vitest';
 import fc from 'fast-check';
 import Fastify from 'fastify';
+
+import { AVATAR_PRESET_IDS } from '@dwt/shared';
 
 import { registerErrorHandler } from '../../../errors/handler.js';
 import { profileRoutes, type ProfileRoutesOptions } from '../profileRoutes.js';
@@ -60,7 +62,7 @@ interface Scenario {
   readonly ownerProfile: {
     readonly user_id: string;
     readonly display_name: string;
-    readonly avatar_url: string | null;
+    readonly avatar_preset: string | null;
   };
   /** Counts returned for the overall-completion query. */
   readonly ownerCompletions: { readonly completed: string; readonly total: string };
@@ -132,7 +134,7 @@ async function buildApp() {
       }
       if (
         text.startsWith(
-          'SELECT user_id, display_name, avatar_url FROM profiles',
+          'SELECT user_id, display_name, avatar_preset FROM profiles',
         )
       ) {
         if (params[0] === s.owner) {
@@ -147,17 +149,8 @@ async function buildApp() {
     },
   };
 
-  const fakeS3 = {
-    async send() {
-      return {};
-    },
-  };
-
   await app.register(profileRoutes, {
     pool: fakePool as unknown as ProfileRoutesOptions['pool'],
-    s3Client: fakeS3 as unknown as ProfileRoutesOptions['s3Client'],
-    bucket: 'avatars',
-    endpoint: 'https://s3.example.com',
     requireAuth,
   });
   await app.ready();
@@ -206,12 +199,11 @@ const scenarioInputArb = fc
       }));
   });
 
-/** Profile fields under read; the route echoes display_name and avatar_url. */
+/** Profile fields under read; the route echoes display_name and avatar_preset. */
 const displayNameArb = fc.string({ minLength: 1, maxLength: 50 });
-const avatarUrlArb = fc.option(
-  fc.string({ minLength: 1, maxLength: 64 }).map((s) => `https://cdn.example/${s}`),
-  { nil: null },
-);
+const avatarPresetArb = fc.option(fc.constantFrom(...AVATAR_PRESET_IDS), {
+  nil: null,
+});
 
 /** Completion counts; the route reduces these via `computePercent`. */
 const completionCountsArb = fc.tuple(
@@ -232,12 +224,12 @@ describe('Property 19: profile visible iff viewer is owner or accepted friend; n
         fc.asyncProperty(
           scenarioInputArb,
           displayNameArb,
-          avatarUrlArb,
+          avatarPresetArb,
           completionCountsArb,
           async (
             { viewer, owner, friendPairs },
             displayName,
-            avatarUrl,
+            avatarPreset,
             [completed, total],
           ) => {
             // Reset capture and scenario for this iteration.
@@ -250,7 +242,7 @@ describe('Property 19: profile visible iff viewer is owner or accepted friend; n
               ownerProfile: {
                 user_id: owner,
                 display_name: displayName,
-                avatar_url: avatarUrl,
+                avatar_preset: avatarPreset,
               },
               ownerCompletions: {
                 completed: String(completed),
@@ -283,12 +275,12 @@ describe('Property 19: profile visible iff viewer is owner or accepted friend; n
               const body = res.json() as {
                 userId: string;
                 displayName: string;
-                avatarUrl: string | null;
+                avatarPreset: string | null;
                 overallCompletionPercent: number;
               };
               expect(body.userId).toBe(owner);
               expect(body.displayName).toBe(displayName);
-              expect(body.avatarUrl).toBe(avatarUrl);
+              expect(body.avatarPreset).toBe(avatarPreset);
               expect(typeof body.overallCompletionPercent).toBe('number');
               // computePercent constraint: result is within [0.0, 100.0].
               expect(body.overallCompletionPercent).toBeGreaterThanOrEqual(0);

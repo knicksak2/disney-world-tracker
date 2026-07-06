@@ -229,7 +229,7 @@ function makeFakePool(): FakePool {
             {
               user_id: 'u-1',
               display_name: params[0] as string,
-              avatar_url: null,
+              avatar_preset: null,
             },
           ],
         };
@@ -250,9 +250,6 @@ async function buildAppForRoute(pool: FakePool): Promise<FastifyInstance> {
   registerErrorHandler(app);
   await app.register(profileRoutes, {
     pool: pool as unknown as ProfileRoutesOptions['pool'],
-    s3Client: { send: async () => ({}) } as unknown as ProfileRoutesOptions['s3Client'],
-    bucket: 'avatars',
-    endpoint: 'https://s3.example.com',
     requireAuth,
   });
   await app.ready();

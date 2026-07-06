@@ -25,10 +25,9 @@
  * mode's pane, the tests navigate between tabs (`tab-selector`) to
  * surface each per-read state in the pane that displays that read:
  *
- *   - Overview pane  → Profile read (`friend-profile-*`) + Stats overall
- *     count (`friend-stats-*`).
- *   - Parks pane     → Stats read (`friend-stats-*`) + Completions read
- *     (`friend-completions-*`).
+ *   - Overview pane  → Profile read (`friend-profile-*`) + Stats read's
+ *     hero/ratings block (`friend-stats-*`).
+ *   - Coverage pane  → Stats read (`friend-stats-*`).
  *   - Experiences    → Completions read (`friend-completions-*`).
  *
  * Coverage map:
@@ -140,7 +139,7 @@ function makeProfile(overrides: Partial<ProfileDTO> = {}): ProfileDTO {
   return {
     userId: FRIEND_ID,
     displayName: DISPLAY_NAME,
-    avatarUrl: null,
+    avatarPreset: null,
     overallCompletionPercent: 42,
     ...overrides,
   };
@@ -244,15 +243,15 @@ describe('FriendProfileScreen loading/forbidden/error/retry (R7.1–R7.4)', () =
 
     renderScreen();
 
-    // Overview is the default mode (R1.3): the Profile read drives the
-    // pane's loader.
+    // Overview is the default mode (R1.3): the Profile read drives the profile
+    // card's loader, and the Stats read drives the hero/ratings block's loader
+    // — both in-flight reads the Overview pane displays show a loader (R7.1).
     expect(await screen.findByTestId('friend-profile-loading')).toBeTruthy();
-
-    // Switch to the Parks pane: both the Stats and Completions reads it
-    // displays are in flight, so both in-pane loaders show (R7.1).
-    fireEvent.press(screen.getByTestId('tab-Parks'));
-
     expect(await screen.findByTestId('friend-stats-loading')).toBeTruthy();
+
+    // Switch to the Experiences pane: the Completions read it displays is in
+    // flight, so its in-pane loader shows (R7.1).
+    fireEvent.press(screen.getByTestId('tab-Experiences'));
     expect(
       await screen.findByTestId('friend-completions-loading'),
     ).toBeTruthy();
@@ -280,8 +279,7 @@ describe('FriendProfileScreen loading/forbidden/error/retry (R7.1–R7.4)', () =
     // The View_Selector and all four mode panes are withheld entirely.
     expect(screen.queryByTestId('tab-selector')).toBeNull();
     expect(screen.queryByTestId('friend-mode-overview')).toBeNull();
-    expect(screen.queryByTestId('friend-mode-parks')).toBeNull();
-    expect(screen.queryByTestId('friend-mode-categories')).toBeNull();
+    expect(screen.queryByTestId('friend-mode-coverage')).toBeNull();
     expect(screen.queryByTestId('friend-mode-experiences')).toBeNull();
   });
 
@@ -320,20 +318,23 @@ describe('FriendProfileScreen loading/forbidden/error/retry (R7.1–R7.4)', () =
     expect(screen.getByTestId('tab-selector')).toBeTruthy();
   });
 
-  test('R7.3: non-forbidden Stats and Completions errors show in-pane errors and retry controls in the Parks pane', async () => {
+  test('R7.3: non-forbidden Stats and Completions errors show in-pane errors and retry controls, each scoped to the pane that displays the read', async () => {
     routeHandlers.profile = () => Promise.resolve(makeProfile());
     routeHandlers.stats = () => Promise.reject(transientError());
     routeHandlers.completions = () => Promise.reject(transientError());
 
     renderScreen();
 
-    // Move to the Parks pane, which displays both the Stats and Completions
-    // reads; each failed read renders its own scoped error + retry (R7.3).
-    fireEvent.press(await screen.findByTestId('tab-Parks'));
-
+    // The Coverage pane displays the Stats read; its failed read renders a
+    // scoped error + retry (R7.3).
+    fireEvent.press(await screen.findByTestId('tab-Coverage'));
     expect(await screen.findByTestId('friend-stats-error')).toBeTruthy();
     expect(screen.getByTestId('friend-stats-error-retry')).toBeTruthy();
-    expect(screen.getByTestId('friend-completions-error')).toBeTruthy();
+
+    // The Experiences pane displays the Completions read; its failed read
+    // renders its own scoped error + retry (R7.3).
+    fireEvent.press(screen.getByTestId('tab-Experiences'));
+    expect(await screen.findByTestId('friend-completions-error')).toBeTruthy();
     expect(screen.getByTestId('friend-completions-error-retry')).toBeTruthy();
     expect(screen.queryByTestId('friend-profile-unavailable')).toBeNull();
   });

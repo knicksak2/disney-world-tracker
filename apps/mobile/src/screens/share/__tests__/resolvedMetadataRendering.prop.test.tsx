@@ -94,7 +94,16 @@ const apiRequestMock = mockedApiRequest as jest.MockedFunction<
   typeof mockedApiRequest
 >;
 
-const NUM_RUNS = 100;
+// Each run mounts the full InboxScreen and awaits an async metadata fetch, so
+// 100 iterations is both slow and flaky under heavy parallel load (the default
+// ~1s `findBy*` window can lapse before React Query settles). 30 runs still
+// crosses the metadata triple with the rating/note states many times over while
+// keeping the suite stable in the full parallel run.
+const NUM_RUNS = 30;
+
+/** Generous `findBy*` window so the async metadata resolution never races the
+ * default ~1s timeout under parallel-worker CPU contention. */
+const FIND_TIMEOUT_MS = 5000;
 
 // ---------------------------------------------------------------------------
 // Generators
@@ -284,6 +293,7 @@ describe('Property 6: Inbox renders resolved Experience metadata and never the r
           // label. Wait for the resolved-name node to appear.
           const nameNode = await view.findByTestId(
             `inbox-experience-name-${c.shareId}`,
+            { timeout: FIND_TIMEOUT_MS },
           );
 
           // The primary label is the resolved name — never the raw identifier

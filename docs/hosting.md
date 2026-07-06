@@ -2,12 +2,13 @@
 
 This document explains how the Disney World Tracker backend will be hosted using free-tier services. It is meant for a side-project budget — every piece below has a free tier that does not expire, with no credit card surprises at month 13.
 
-The full architecture from `design.md` calls for four self-hosted moving pieces:
+The full architecture from `design.md` calls for three self-hosted moving pieces:
 
 1. A long-running API server (Node.js + Fastify)
 2. A relational database (PostgreSQL)
 3. A fast in-memory store (Redis)
-4. Object storage for avatar uploads (S3-compatible)
+
+(Profile avatars are a fixed set of illustrations bundled with the mobile app and referenced by id, so no object storage is needed.)
 
 We map each one to a managed service that gives us a real free tier. Two external data sources sit behind the API and need no hosting of our own — they're consumed over HTTPS server-side (see [Data sources](#data-sources)).
 
@@ -18,11 +19,10 @@ We map each one to a managed service that gives us a real free tier. Two externa
 | API server | **Render** (Web Service) | 750 instance hours/month, sleeps after 15 min idle | First request after sleep takes 30-60s; upgrade to paid ($7/mo) for always-on |
 | PostgreSQL | **Neon** | 0.5 GB storage, 1 project, autoscale to 0 when idle | Upgrade plan or migrate; data is portable |
 | Redis | **Upstash** | 10,000 commands/day, 256 MB storage, global edge | Per-request pricing kicks in (very cheap); or swap to a different provider |
-| Object storage | **Cloudflare R2** | 10 GB storage, 1M Class A ops/mo, 10M Class B ops/mo, **no egress fees** | Pennies per additional GB |
 | Live data source | **ThemeParks.wiki** API | n/a (already free) | Public, no key required | n/a |
 | Static catalog source | **Disney** (Sync Gateway + dining-menu API) | n/a (Disney's own endpoints) | Requires Sync Gateway credentials; rate-limited by Disney's edge |
 
-Total monthly cost while the app is small: **$0**. No payment method required to start (R2 asks for one but doesn't charge inside the free tier). The Disney Sync Gateway needs HTTP Basic credentials (a required secret on Render), but there's no fee — it's Disney's own infrastructure.
+Total monthly cost while the app is small: **$0**. No payment method required to start. The Disney Sync Gateway needs HTTP Basic credentials (a required secret on Render), but there's no fee — it's Disney's own infrastructure.
 
 ## Architecture With Hosting Overlaid
 
@@ -44,22 +44,17 @@ graph LR
         Redis[(Leaderboard cache<br/>Lockout counters<br/>Sync coordination)]
     end
 
-    subgraph R2["Cloudflare R2"]
-        Avatars[(Avatar PNG/JPEG)]
-    end
-
     Live[ThemeParks.wiki API<br/>live waits, showtimes,<br/>Lightning Lane, boarding groups]
     Disney[Disney sources<br/>Sync Gateway catalog<br/>+ dining-menu API]
 
     App -->|HTTPS| API
     API --> PG
     API --> Redis
-    API --> Avatars
     API -->|on-demand, 5-min cache| Live
     API -->|incremental sync ≥24h| Disney
 ```
 
-Everything talks over HTTPS. The mobile app only ever knows about one URL — the Render API endpoint. Render, Neon, Upstash, R2, and both data sources are all reached server-side. The two external sources are split by change rate: high-change **live** data from ThemeParks.wiki (fetched on demand, cached briefly in Redis) and low-change **static catalog** data from Disney (synced incrementally, no more than once per 24h).
+Everything talks over HTTPS. The mobile app only ever knows about one URL — the Render API endpoint. Render, Neon, Upstash, and both data sources are all reached server-side. The two external sources are split by change rate: high-change **live** data from ThemeParks.wiki (fetched on demand, cached briefly in Redis) and low-change **static catalog** data from Disney (synced incrementally, no more than once per 24h).
 
 ---
 
@@ -188,41 +183,9 @@ The next tier is **$0.20 per 100K commands** (pay-as-you-go). You'd have to be d
 
 ---
 
-## Cloudflare R2 — Avatar Storage
+## Avatars — bundled presets (no storage)
 
-### What it does
-
-R2 is Cloudflare's S3-compatible object storage. We use it for user avatar uploads (PNG or JPEG, up to 5 MB each per the design).
-
-### How it works
-
-1. You create an R2 bucket in the Cloudflare dashboard.
-2. You generate an Access Key ID and Secret. Those go in Render's env vars.
-3. The Fastify API uses any S3 SDK (e.g., `@aws-sdk/client-s3`) pointed at R2's endpoint URL. The code is identical to talking to AWS S3.
-4. Avatar reads happen via signed URLs that the API generates on demand.
-
-### The free tier
-
-- **10 GB storage.** At 5 MB per avatar, that's 2,000 avatars even if every user maxes out the size. Realistically thousands more, since most avatars compress smaller.
-- **1M Class A operations/month** (writes — uploads).
-- **10M Class B operations/month** (reads — viewing avatars).
-- **No egress fees.** This is the killer feature versus AWS S3. S3 charges $0.09/GB to send avatar bytes to phones; R2 charges nothing for that bandwidth.
-
-### What this means for the design
-
-The avatar upload flow in `design.md` (PNG/JPEG validation, magic-byte sniffing, 5 MB limit) sits in front of R2. The signed-URL pattern works the same. Only the SDK endpoint URL changes.
-
-### Trade-offs
-
-| Pro | Con |
-| --- | --- |
-| No egress charges (unique among major providers) | Cloudflare account required |
-| S3-compatible, so no vendor lock-in | Upload write rate is rate-limited (not a problem at hobby scale) |
-| Free tier is generous and persistent | Custom domain serving requires a Cloudflare-managed domain |
-
-### When to upgrade
-
-After 10 GB it's **$0.015 per GB-month** for storage. Reads stay free. Realistically you'd never notice the cost until very late.
+Profile avatars are a fixed set of original, Disney-themed illustrations bundled with the mobile app as `react-native-svg` components (see `apps/mobile/src/avatars/AvatarPresets.tsx`). The Profile stores only the chosen preset *id* in `profiles.avatar_preset`; there is no upload, object storage, or bandwidth cost. Adding a preset is a code change (a new id in the shared allowlist, a matching SVG component, and the migration's CHECK constraint), not an infrastructure change.
 
 ---
 
@@ -266,18 +229,11 @@ sequenceDiagram
     participant Render as Render API
     participant Neon as Neon Postgres
     participant Upstash as Upstash Redis
-    participant R2 as Cloudflare R2
 
     App->>Render: GET /me/stats (with session token)
     Render->>Neon: SELECT counts
     Neon-->>Render: numbers
     Render-->>App: percentages
-
-    App->>Render: GET /me/profile/avatar
-    Render->>R2: signed URL request
-    R2-->>Render: signed URL
-    Render-->>App: redirect to URL
-    App->>R2: GET avatar bytes (free egress)
 
     App->>Render: PUT /me/experiences/space-mtn/rating { value: 9 }
     Render->>Neon: UPSERT rating
@@ -289,7 +245,7 @@ sequenceDiagram
     Render->>Upstash: invalidate leaderboard cache
 ```
 
-Every box on the left of "Render API" is the mobile app. Everything else is server-side, and the app never directly touches Neon, Upstash, or R2.
+Every box on the left of "Render API" is the mobile app. Everything else is server-side, and the app never directly touches Neon or Upstash.
 
 ---
 
@@ -297,11 +253,10 @@ Every box on the left of "Render API" is the mobile app. Everything else is serv
 
 When the time comes to deploy, the rough order is:
 
-1. **Cloudflare R2** — create bucket, generate credentials.
-2. **Neon** — create project, copy the pooled connection string. The schema and extensions are created by the migrations (which run in Render's build step), not by hand.
-3. **Upstash** — create Redis database, copy the `rediss://` URL.
-4. **Disney credentials** — obtain the Sync Gateway HTTP Basic credentials locally with `node tools/pull-disney-creds.mjs`; you'll paste the values into Render. The API fails fast on boot without them.
-5. **Render** — create the Blueprint (**New +** → **Blueprint**, point it at the repo). Render reads `render.yaml`; fill in the `sync: false` secrets it prompts for (the three provider credential sets plus the two Disney keys). Push to `develop` to deploy.
+1. **Neon** — create project, copy the pooled connection string. The schema and extensions are created by the migrations (which run in Render's build step), not by hand.
+2. **Upstash** — create Redis database, copy the `rediss://` URL.
+3. **Disney credentials** — obtain the Sync Gateway HTTP Basic credentials locally with `node tools/pull-disney-creds.mjs`; you'll paste the values into Render. The API fails fast on boot without them.
+4. **Render** — create the Blueprint (**New +** → **Blueprint**, point it at the repo). Render reads `render.yaml`; fill in the `sync: false` secrets it prompts for (the two provider connection strings plus the two Disney keys). Push to `develop` to deploy.
 6. **Seed the catalog** — after the first deploy, run `npm run sync:cloud` from your machine to bootstrap the hosted catalog (see [Render — What this means for the design](#what-this-means-for-the-design)).
 
 The provider signups are independent. If any single provider goes down or changes their free tier, you swap that one piece without rewriting the others.
@@ -311,7 +266,7 @@ The provider signups are independent. If any single provider goes down or change
 ## Honest Caveats
 
 - **Cold starts** on Render's free tier mean the very first request after a long idle period will be slow. Acceptable for a side project, frustrating for users you want to keep.
-- **Free tiers do change.** Fly.io's free tier got removed in 2024. Render, Neon, Upstash, and R2 have all been stable, but nothing is forever.
+- **Free tiers do change.** Fly.io's free tier got removed in 2024. Render, Neon, and Upstash have all been stable, but nothing is forever.
 - **Region selection.** Pick the same region across services where possible (US East is the safe default) to keep latency between Render and Neon low.
 - **Backups.** Free Neon includes point-in-time recovery on the latest 24 hours. For anything important, take periodic `pg_dump` exports yourself.
 - **Secrets.** Connection strings and access keys live as environment variables on Render. Never check them into Git.
@@ -320,4 +275,4 @@ The provider signups are independent. If any single provider goes down or change
 
 ## What Changes in design.md
 
-The design document is hosting-agnostic on purpose, and nothing in it needs to change to deploy on this stack. The interfaces (Postgres, Redis, S3-compatible) are exactly what Neon, Upstash, and R2 provide, and both data sources (ThemeParks.wiki, Disney) are plain HTTPS endpoints. Render runs the Node process the design assumes. The only deployment-specific decision is how `Catalog_Sync` is triggered: rather than the unattended daily scheduler the design allows, the free-tier deployment runs it manually from a developer machine via `npm run sync:cloud` — an operational detail rather than an architectural one.
+The design document is hosting-agnostic on purpose, and nothing in it needs to change to deploy on this stack. The interfaces (Postgres, Redis) are exactly what Neon and Upstash provide, and both data sources (ThemeParks.wiki, Disney) are plain HTTPS endpoints. Render runs the Node process the design assumes. The only deployment-specific decision is how `Catalog_Sync` is triggered: rather than the unattended daily scheduler the design allows, the free-tier deployment runs it manually from a developer machine via `npm run sync:cloud` — an operational detail rather than an architectural one.

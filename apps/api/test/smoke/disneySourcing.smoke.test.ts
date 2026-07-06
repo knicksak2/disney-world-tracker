@@ -541,12 +541,6 @@ function buildSmokeConfig(): AppConfig {
     server: { host: '127.0.0.1', port: 0, logLevel: 'silent' },
     database: { url: 'postgres://smoke/dwt' },
     redis: { url: 'redis://smoke:6379' },
-    s3: {
-      endpoint: 'https://s3.example.com',
-      bucket: 'avatars',
-      accessKeyId: 'smoke-access-key',
-      secretAccessKey: 'smoke-secret-key',
-    },
     session: { secret: 'smoke-session-secret-must-be-at-least-32-chars' },
     themeparks: { baseUrl: 'https://api.themeparks.example.invalid/v1' },
     disney: {

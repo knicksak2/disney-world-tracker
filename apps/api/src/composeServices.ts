@@ -3,7 +3,7 @@
  *
  * `buildApp(config)` is the production analogue of the smoke-test harness
  * (`test/smoke/harness.ts`): it constructs the real backend clients
- * (Postgres pool, Redis, S3) from `loadConfig()` output, builds every
+ * (Postgres pool, Redis) from `loadConfig()` output, builds every
  * service repo against them, assembles the `BuildServerServices` object,
  * calls `buildServer(config, services)`, and then registers the auth and
  * profile route plugins that live OUTSIDE `buildServer`. The returned
@@ -50,7 +50,6 @@
  *     Redis NX lock that prevents duplicate concurrent syncs).
  */
 
-import { S3Client } from '@aws-sdk/client-s3';
 import type { FastifyInstance } from 'fastify';
 import { Redis } from 'ioredis';
 
@@ -144,18 +143,6 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
   // and the leaderboard cache expect (both accept the structural ioredis
   // surface), and what `runSync` needs for its NX coordination lock.
   const redis = new Redis(config.redis.url);
-  // Real S3-compatible client. MinIO requires path-style addressing and a
-  // concrete region; both are set explicitly so the same wiring works
-  // against MinIO locally and AWS S3 in production.
-  const s3Client = new S3Client({
-    endpoint: config.s3.endpoint,
-    region: 'us-east-1',
-    forcePathStyle: true,
-    credentials: {
-      accessKeyId: config.s3.accessKeyId,
-      secretAccessKey: config.s3.secretAccessKey,
-    },
-  });
 
   // --- Repos ----------------------------------------------------------
   const aggregateRepo = createAggregateRepo(pool);
@@ -477,8 +464,7 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
   // `await`ing the profile registration deadlocks avvio's plugin-loading
   // graph: awaiting `app.register(...)` forces a partial `ready()` of the
   // tree, and doing that twice while `@fastify/rate-limit`'s global hooks
-  // and `@fastify/multipart` (registered inside `profileRoutes`) are both
-  // pending never resolves. Queueing both with `void` lets Fastify resolve
+  // are pending never resolves. Queueing both with `void` lets Fastify resolve
   // the whole plugin chain in one pass during `app.listen()`/`ready()`,
   // which is exactly the pattern `buildServer` already relies on. Any
   // registration error surfaces through the entrypoint's `listen()` catch.
@@ -487,9 +473,6 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
   );
   void app.register(profileRoutes, {
     pool,
-    s3Client,
-    bucket: config.s3.bucket,
-    endpoint: config.s3.endpoint,
     requireAuth: sessionMiddleware,
   });
 
@@ -497,8 +480,7 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
     app,
     async dispose(): Promise<void> {
       // Release the composition-owned Redis socket. The shared pool is
-      // closed by the entrypoint via `closePool()`. S3Client holds no
-      // long-lived socket that needs an explicit close.
+      // closed by the entrypoint via `closePool()`.
       try {
         await redis.quit();
       } catch {

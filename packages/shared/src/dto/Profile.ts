@@ -3,11 +3,14 @@
  *
  * Public-facing account information for a User: display name, optional avatar,
  * and the User's overall completion percentage as computed by Stats_Service
- * (R7.4). The avatar is referenced by URL — the bytes themselves live in
- * object storage per the design.
+ * (R7.4). The avatar is referenced by a *preset id* — the artwork is a fixed
+ * set of original Disney-themed illustrations bundled with the mobile app, so
+ * there is no hosted image URL. See `constants/avatarPresets.ts`.
  *
- * Validates: Requirements 7.1, 7.2, 7.3, 7.4, 7.5
+ * Validates: Requirements 7.1, 7.2, 7.4, 7.5
  */
+
+import type { AvatarPresetId } from '../constants/avatarPresets.js';
 
 export interface ProfileDTO {
   /** Owning User id; matches `UserDTO.id`. */
@@ -20,10 +23,11 @@ export interface ProfileDTO {
   readonly displayName: string;
 
   /**
-   * URL of the avatar image, or `null` if none is set. The image is stored as
-   * PNG or JPEG ≤ 5 MB per R7.3.
+   * Chosen avatar preset id, or `null` when the user has not picked one. The
+   * id maps to a bundled SVG illustration on the client; a `null` renders the
+   * default placeholder.
    */
-  readonly avatarUrl: string | null;
+  readonly avatarPreset: AvatarPresetId | null;
 
   /**
    * Overall completion percentage in `[0.0, 100.0]` to one decimal place

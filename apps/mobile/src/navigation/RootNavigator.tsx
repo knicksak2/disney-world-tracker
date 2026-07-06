@@ -1,13 +1,16 @@
 import React, { useEffect } from 'react';
+import { View, StyleSheet } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import {
   createNativeStackNavigator,
 } from '@react-navigation/native-stack';
 import type { NavigatorScreenParams } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import type { ExperienceCategory, Park } from '@dwt/shared';
+import { useQuery } from '@tanstack/react-query';
+import { isAvatarPresetId, type ExperienceCategory, type Park } from '@dwt/shared';
 
-import { setOnUnauthorizedCallback } from '../api/client';
+import { apiRequest, setOnUnauthorizedCallback } from '../api/client';
+import { renderAvatarPreset } from '../avatars/AvatarPresets';
 import { useSessionStore } from '../state/sessionStore';
 import CatalogStack, { type CatalogStackParamList } from './CatalogStack';
 import FriendsStack, { type FriendsStackParamList } from './FriendsStack';
@@ -177,6 +180,72 @@ const TAB_ICONS: Record<
   Profile: { focused: 'person-circle', unfocused: 'person-circle-outline' },
 };
 
+/**
+ * `/me` response shape (subset). Mirrors `MeResponseBody` in
+ * `apps/api/src/services/auth/routes.ts`; only the fields the tab icon needs
+ * are typed here.
+ */
+interface MeResponse {
+  readonly user: { readonly id: string; readonly email: string };
+  readonly profile: {
+    readonly displayName: string;
+    readonly avatarPreset: string | null;
+  };
+}
+
+/**
+ * Profile tab icon. When the signed-in user has chosen an avatar preset, the
+ * tab shows that avatar (with a tint ring when the tab is focused) so their
+ * identity is reflected in the tab bar. Otherwise it falls back to the default
+ * person-circle glyph. Reads `/me` via React Query under the shared `['me']`
+ * key, so it reuses the same cached response the Profile screen primes.
+ */
+function ProfileTabIcon({
+  focused,
+  color,
+  size,
+}: {
+  readonly focused: boolean;
+  readonly color: string;
+  readonly size: number;
+}): JSX.Element {
+  const meQuery = useQuery<MeResponse>({
+    queryKey: ['me'],
+    queryFn: () => apiRequest<MeResponse>('GET', '/me'),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const preset = meQuery.data?.profile.avatarPreset ?? null;
+  const glyphs = TAB_ICONS.Profile;
+
+  if (isAvatarPresetId(preset)) {
+    return (
+      <View
+        style={[
+          styles.profileAvatar,
+          {
+            width: size + 6,
+            height: size + 6,
+            borderRadius: (size + 6) / 2,
+            borderColor: focused ? color : 'transparent',
+          },
+        ]}
+        testID="profile-tab-avatar"
+      >
+        {renderAvatarPreset(preset, size)}
+      </View>
+    );
+  }
+
+  return (
+    <Ionicons
+      name={focused ? glyphs.focused : glyphs.unfocused}
+      size={size}
+      color={color}
+    />
+  );
+}
+
 function MainTabsNavigator(): JSX.Element {
   return (
     <MainTabs.Navigator
@@ -185,6 +254,9 @@ function MainTabsNavigator(): JSX.Element {
         tabBarActiveTintColor: '#003a9b',
         tabBarInactiveTintColor: '#6b7280',
         tabBarIcon: ({ focused, color, size }) => {
+          if (route.name === 'Profile') {
+            return <ProfileTabIcon focused={focused} color={color} size={size} />;
+          }
           const glyphs = TAB_ICONS[route.name];
           const name = focused ? glyphs.focused : glyphs.unfocused;
           return <Ionicons name={name} size={size} color={color} />;
@@ -247,6 +319,15 @@ function RootStackNavigator(): JSX.Element {
     </RootStack.Navigator>
   );
 }
+
+const styles = StyleSheet.create({
+  profileAvatar: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    borderWidth: 2,
+  },
+});
 
 export default function RootNavigator(): JSX.Element {
   const token = useSessionStore((state) => state.token);

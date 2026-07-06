@@ -35,8 +35,9 @@ export type { RegisterInput, LoginInput, ChangePasswordInput } from './User.js';
 export {
   profileSchema,
   profileDisplayNameInputSchema,
+  profileAvatarInputSchema,
 } from './Profile.js';
-export type { ProfileDisplayNameInput } from './Profile.js';
+export type { ProfileDisplayNameInput, ProfileAvatarInput } from './Profile.js';
 
 export { experienceSchema } from './Experience.js';
 

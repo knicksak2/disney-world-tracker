@@ -286,10 +286,7 @@ export function buildServer(
   // normally, and malformed JSON under `application/json` still fails with a
   // 4xx `FST_ERR_CTP_*` code (mapped to `validation_failed`, the correct
   // code for a genuinely broken JSON payload). The more specific
-  // `application/json` parser takes precedence over the `*` catch-all, and
-  // `@fastify/multipart`'s `multipart/form-data` parser (registered by the
-  // profile routes) is more specific still, so avatar uploads are
-  // unaffected.
+  // `application/json` parser takes precedence over the `*` catch-all.
   app.addContentTypeParser(
     'application/json',
     { parseAs: 'string' },
@@ -328,9 +325,9 @@ export function buildServer(
       // A non-empty body arrived under a content-type we have no parser for
       // (some mobile HTTP stacks attach a stray body and a non-JSON or blank
       // content-type to bodyless action POSTs). Our API only *consumes*
-      // application/json (handled by the parser above) and multipart
-      // (handled by @fastify/multipart); no route reads a body of any other
-      // type. So rather than reject with 415 — which the client surfaces as
+      // application/json (handled by the parser above); no route reads a
+      // body of any other type. So rather than reject with 415 — which the
+      // client surfaces as
       // a confusing `validation_failed` — we best-effort parse the body as
       // JSON and otherwise ignore it. Routes that actually require a body
       // still validate `request.body` via Zod and reject an undefined/own

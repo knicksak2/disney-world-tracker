@@ -25,7 +25,7 @@
  * -------------
  *
  *   - Build a fully-valid baseline environment that populates every strictly
- *     required variable (DATABASE_URL, REDIS_URL, S3_*, SESSION_SECRET) plus the
+ *     required variable (DATABASE_URL, REDIS_URL, SESSION_SECRET) plus the
  *     two required Disney credentials and the two overridable Disney/ThemeParks
  *     URLs. The URL vars have defaults in the schema, so the success case relies
  *     on those defaults when the vars are absent and on generated valid URLs
@@ -67,10 +67,6 @@ function validBaseEnv(): NodeJS.ProcessEnv {
     NODE_ENV: 'test',
     DATABASE_URL: 'postgres://user:pass@localhost:5432/appdb',
     REDIS_URL: 'redis://localhost:6379',
-    S3_ENDPOINT: 'https://s3.example.com',
-    S3_BUCKET: 'app-bucket',
-    S3_ACCESS_KEY_ID: 'AKIAEXAMPLE',
-    S3_SECRET_ACCESS_KEY: 'secretkeyexamplevalue',
     SESSION_SECRET: 'a'.repeat(32),
     DISNEY_SYNC_GATEWAY_USERNAME: 'disney-user',
     DISNEY_SYNC_GATEWAY_PASSWORD: 'disney-pass',

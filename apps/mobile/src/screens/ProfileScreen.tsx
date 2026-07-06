@@ -30,7 +30,6 @@ import type { RouteProp } from '@react-navigation/native';
 import { useRoute } from '@react-navigation/native';
 import {
   ActivityIndicator,
-  Image,
   StyleSheet,
   Text,
   TextInput,
@@ -49,7 +48,8 @@ import {
 
 import { ApiError, apiRequest } from '../api/client';
 import { invalidatePushRegistration } from '../hooks/usePushRegistration';
-import AvatarUpload from './AvatarUpload';
+import { renderAvatarPreset } from '../avatars/AvatarPresets';
+import AvatarPicker from './AvatarPicker';
 import ChangePasswordControl from './ChangePasswordControl';
 import PushNotificationPreferenceControl from './PushNotificationPreferenceControl';
 import type { MainTabParamList } from '../navigation/RootNavigator';
@@ -78,7 +78,10 @@ type ProfileRouteProp = RouteProp<MainTabParamList, 'Profile'>;
  */
 interface MeResponse {
   readonly user: { readonly id: string; readonly email: string };
-  readonly profile: { readonly displayName: string };
+  readonly profile: {
+    readonly displayName: string;
+    readonly avatarPreset: string | null;
+  };
 }
 
 // Distinct sentinel for "the server denied this read" (`profile_forbidden`).
@@ -367,16 +370,26 @@ export default function ProfileScreen(): JSX.Element {
       saving={saveNameMutation.isPending}
       onLogout={() => logoutMutation.mutate()}
       loggingOut={logoutMutation.isPending}
-      onAvatarUploaded={(avatarUrl) => {
+      onAvatarChanged={(updated) => {
         // Mirror the save-name path: update the cached Profile so the new
         // avatar renders immediately without an extra GET.
-        const next: ProfileQueryResult = {
-          kind: 'ok',
-          profile: { ...profile, avatarUrl },
-        };
+        const next: ProfileQueryResult = { kind: 'ok', profile: updated };
         queryClient.setQueryData<ProfileQueryResult>(
-          ['profile', profile.userId],
+          ['profile', updated.userId],
           next,
+        );
+        // Keep the `['me']` cache in sync so the Profile tab icon reflects the
+        // new avatar immediately (it reads the preset from `/me`).
+        queryClient.setQueryData<MeResponse>(['me'], (prev) =>
+          prev
+            ? {
+                ...prev,
+                profile: {
+                  ...prev.profile,
+                  avatarPreset: updated.avatarPreset,
+                },
+              }
+            : prev,
         );
       }}
     />
@@ -400,7 +413,7 @@ interface ProfileContentProps {
   readonly saving: boolean;
   readonly onLogout: () => void;
   readonly loggingOut: boolean;
-  readonly onAvatarUploaded: (avatarUrl: string) => void;
+  readonly onAvatarChanged: (profile: ProfileDTO) => void;
 }
 
 function ProfileContent({
@@ -416,7 +429,7 @@ function ProfileContent({
   saving,
   onLogout,
   loggingOut,
-  onAvatarUploaded,
+  onAvatarChanged,
 }: ProfileContentProps): JSX.Element {
   const percentLabel = useMemo(
     () => formatPercent(profile.overallCompletionPercent),
@@ -434,12 +447,13 @@ function ProfileContent({
       <View style={styles.body}>
         <Card style={styles.identityCard}>
           <View style={styles.avatarWrap}>
-            {profile.avatarUrl !== null ? (
-              <Image
-                source={{ uri: profile.avatarUrl }}
+            {profile.avatarPreset !== null ? (
+              <View
                 style={styles.avatar}
                 accessibilityLabel={`${profile.displayName}'s avatar`}
-              />
+              >
+                {renderAvatarPreset(profile.avatarPreset, 96)}
+              </View>
             ) : (
               <View style={[styles.avatar, styles.avatarPlaceholder]}>
                 <Text style={styles.avatarPlaceholderText}>
@@ -450,9 +464,9 @@ function ProfileContent({
           </View>
 
           {isSelf ? (
-            <AvatarUpload
-              currentAvatarUrl={profile.avatarUrl}
-              onUploaded={onAvatarUploaded}
+            <AvatarPicker
+              currentPreset={profile.avatarPreset}
+              onChanged={onAvatarChanged}
             />
           ) : null}
 
@@ -510,6 +524,27 @@ function ProfileContent({
         <Card style={styles.statCard}>
           <Text style={styles.statLabel}>Overall completion</Text>
           <Text style={styles.statValue}>{percentLabel}</Text>
+          <View
+            style={styles.progressTrack}
+            accessibilityRole="progressbar"
+            accessibilityValue={{
+              min: 0,
+              max: 100,
+              now: Math.round(profile.overallCompletionPercent),
+            }}
+          >
+            <View
+              style={[
+                styles.progressFill,
+                {
+                  width: `${Math.max(
+                    0,
+                    Math.min(100, profile.overallCompletionPercent),
+                  )}%`,
+                },
+              ]}
+            />
+          </View>
         </Card>
 
         {isSelf ? (
@@ -557,7 +592,7 @@ const styles = StyleSheet.create({
   body: {
     flex: 1,
     paddingHorizontal: theme.spacing.xl,
-    marginTop: -theme.spacing.lg,
+    marginTop: -theme.layout.headerOverlap,
     gap: theme.spacing.lg,
   },
   identityCard: {
@@ -621,7 +656,19 @@ const styles = StyleSheet.create({
   },
   statCard: {
     alignItems: 'center',
-    gap: theme.spacing.xs,
+    gap: theme.spacing.sm,
+  },
+  progressTrack: {
+    alignSelf: 'stretch',
+    height: 8,
+    borderRadius: theme.radius.pill,
+    backgroundColor: theme.color.surfaceAlt,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: theme.radius.pill,
+    backgroundColor: theme.color.primary,
   },
   securityCard: {
     gap: theme.spacing.md,

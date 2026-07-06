@@ -1,14 +1,14 @@
 /**
  * Integration tests for the profile/avatar routes plugin.
  *
- * The plugin is registered against an in-process Fastify instance with
- * fakes for the database pool and the S3 client. The auth pre-handler is
- * also a fake that simply assigns `request.userId` from a header so that
- * each test controls the requester identity without setting up a session.
+ * The plugin is registered against an in-process Fastify instance with a fake
+ * database pool. The auth pre-handler is also a fake that simply assigns
+ * `request.userId` from a header so that each test controls the requester
+ * identity without setting up a session.
  *
- * Coverage focuses on the requirements scoped to task 6.5:
+ * Coverage focuses on the requirements scoped to the profile routes:
  *   - PATCH /me/profile validation (R7.2, R7.5, R7.6)
- *   - PUT /me/profile/avatar magic-byte sniff and size cap (R7.3, R7.7)
+ *   - PUT /me/profile/avatar preset selection + allowlist validation (R7.3)
  *   - GET /users/:userId/profile owner-or-friend gate and the
  *     no-analytics-on-deny rule (R7.4, R7.8)
  */
@@ -58,23 +58,6 @@ function makeFakePool(
 }
 
 // ---------------------------------------------------------------------------
-// Fake S3 client
-// ---------------------------------------------------------------------------
-//
-// Records every `send` call. We never actually open a TCP connection.
-
-function makeFakeS3() {
-  const sent: unknown[] = [];
-  return {
-    sent,
-    async send(cmd: unknown) {
-      sent.push(cmd);
-      return {};
-    },
-  };
-}
-
-// ---------------------------------------------------------------------------
 // Auth pre-handler
 // ---------------------------------------------------------------------------
 
@@ -91,7 +74,6 @@ const requireAuth: ProfileRoutesOptions['requireAuth'] = async (request) => {
 
 async function buildApp(opts: {
   pool: FakePool;
-  s3?: ReturnType<typeof makeFakeS3>;
   /**
    * Optional pre-`ready` setup callback so tests can install additional
    * hooks (e.g. log spies) before the Fastify instance starts handling
@@ -99,25 +81,18 @@ async function buildApp(opts: {
    * with `FST_ERR_INSTANCE_ALREADY_LISTENING`.
    */
   setup?: (app: ReturnType<typeof Fastify>) => void | Promise<void>;
-}): Promise<{
-  app: ReturnType<typeof Fastify>;
-  s3: ReturnType<typeof makeFakeS3>;
-}> {
+}): Promise<{ app: ReturnType<typeof Fastify> }> {
   const app = Fastify({ logger: false });
   registerErrorHandler(app);
-  const s3 = opts.s3 ?? makeFakeS3();
   await app.register(profileRoutes, {
     pool: opts.pool as unknown as ProfileRoutesOptions['pool'],
-    s3Client: s3 as unknown as ProfileRoutesOptions['s3Client'],
-    bucket: 'avatars',
-    endpoint: 'https://s3.example.com',
     requireAuth,
   });
   if (opts.setup) {
     await opts.setup(app);
   }
   await app.ready();
-  return { app, s3 };
+  return { app };
 }
 
 // ---------------------------------------------------------------------------
@@ -130,7 +105,7 @@ describe('PATCH /me/profile', () => {
       if (call.text.startsWith('UPDATE profiles')) {
         return {
           rows: [
-            { user_id: 'u-1', display_name: 'Alice', avatar_url: null },
+            { user_id: 'u-1', display_name: 'Alice', avatar_preset: null },
           ],
         };
       }
@@ -153,7 +128,7 @@ describe('PATCH /me/profile', () => {
     expect(res.json()).toEqual({
       userId: 'u-1',
       displayName: 'Alice',
-      avatarUrl: null,
+      avatarPreset: null,
       overallCompletionPercent: 40.0,
     });
 
@@ -226,42 +201,11 @@ describe('PATCH /me/profile', () => {
 });
 
 // ---------------------------------------------------------------------------
-// PUT /me/profile/avatar
+// PUT /me/profile/avatar — preset selection (R7.3)
 // ---------------------------------------------------------------------------
 
-/**
- * Build a multipart/form-data body containing a single `avatar` file with
- * the supplied bytes. Avoids pulling `form-data` as a test dependency.
- */
-function multipartAvatarBody(
-  bytes: Buffer,
-  filename = 'avatar.bin',
-  contentType = 'application/octet-stream',
-): { payload: Buffer; headers: Record<string, string> } {
-  const boundary = '----dwt-test-boundary-7f3a';
-  const head = Buffer.from(
-    `--${boundary}\r\n` +
-      `Content-Disposition: form-data; name="avatar"; filename="${filename}"\r\n` +
-      `Content-Type: ${contentType}\r\n\r\n`,
-    'utf8',
-  );
-  const tail = Buffer.from(`\r\n--${boundary}--\r\n`, 'utf8');
-  const payload = Buffer.concat([head, bytes, tail]);
-  return {
-    payload,
-    headers: {
-      'content-type': `multipart/form-data; boundary=${boundary}`,
-      'content-length': String(payload.length),
-    },
-  };
-}
-
 describe('PUT /me/profile/avatar', () => {
-  it('accepts a PNG, uploads to S3, and updates the profile', async () => {
-    const pngBytes = Buffer.from([
-      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d,
-    ]);
-
+  it('sets a valid preset id and returns the updated ProfileDTO', async () => {
     const pool = makeFakePool((call) => {
       if (call.text.startsWith('UPDATE profiles')) {
         return {
@@ -269,7 +213,7 @@ describe('PUT /me/profile/avatar', () => {
             {
               user_id: 'u-1',
               display_name: 'Alice',
-              avatar_url: call.params[0] as string,
+              avatar_preset: call.params[0] as string | null,
             },
           ],
         };
@@ -279,54 +223,37 @@ describe('PUT /me/profile/avatar', () => {
       }
       return { rows: [] };
     });
-    const { app, s3 } = await buildApp({ pool });
+    const { app } = await buildApp({ pool });
 
-    const { payload, headers } = multipartAvatarBody(pngBytes);
     const res = await app.inject({
       method: 'PUT',
       url: '/me/profile/avatar',
-      headers: { 'x-test-user-id': 'u-1', ...headers },
-      payload,
+      headers: { 'x-test-user-id': 'u-1', 'content-type': 'application/json' },
+      payload: { avatarPreset: 'castle' },
     });
 
     expect(res.statusCode).toBe(200);
-    const body = res.json() as {
-      userId: string;
-      avatarUrl: string;
-      overallCompletionPercent: number;
-    };
-    expect(body.userId).toBe('u-1');
-    // The avatar URL should reference the configured endpoint and bucket
-    // and the path should include `avatars/u-1/`.
-    expect(body.avatarUrl.startsWith('https://s3.example.com/avatars/avatars/u-1/'))
-      .toBe(true);
-    expect(body.avatarUrl.endsWith('.png')).toBe(true);
-    // Zero-denominator stats produce 0.0 (R3.6).
-    expect(body.overallCompletionPercent).toBe(0);
+    expect(res.json()).toEqual({
+      userId: 'u-1',
+      displayName: 'Alice',
+      avatarPreset: 'castle',
+      overallCompletionPercent: 0,
+    });
 
-    // Exactly one PUT was sent to S3.
-    expect(s3.sent).toHaveLength(1);
-
-    // The DB row was updated with mime=image/png and size = PNG byte count.
+    // The UPDATE persisted the chosen preset id for the requester.
     const updateCall = pool.calls.find((c) =>
       c.text.startsWith('UPDATE profiles'),
     );
-    expect(updateCall?.params[1]).toBe('image/png');
-    expect(updateCall?.params[2]).toBe(pngBytes.length);
+    expect(updateCall?.params[0]).toBe('castle');
+    expect(updateCall?.params[1]).toBe('u-1');
   });
 
-  it('accepts a JPEG signature', async () => {
-    const jpegBytes = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46]);
-
+  it('accepts null to clear the avatar back to the placeholder', async () => {
     const pool = makeFakePool((call) => {
       if (call.text.startsWith('UPDATE profiles')) {
         return {
           rows: [
-            {
-              user_id: 'u-1',
-              display_name: 'Alice',
-              avatar_url: call.params[0] as string,
-            },
+            { user_id: 'u-1', display_name: 'Alice', avatar_preset: null },
           ],
         };
       }
@@ -337,80 +264,76 @@ describe('PUT /me/profile/avatar', () => {
     });
     const { app } = await buildApp({ pool });
 
-    const { payload, headers } = multipartAvatarBody(jpegBytes, 'avatar.jpg');
     const res = await app.inject({
       method: 'PUT',
       url: '/me/profile/avatar',
-      headers: { 'x-test-user-id': 'u-1', ...headers },
-      payload,
+      headers: { 'x-test-user-id': 'u-1', 'content-type': 'application/json' },
+      payload: { avatarPreset: null },
     });
 
     expect(res.statusCode).toBe(200);
-    const body = res.json() as { avatarUrl: string };
-    expect(body.avatarUrl.endsWith('.jpg')).toBe(true);
+    const body = res.json() as { avatarPreset: string | null };
+    expect(body.avatarPreset).toBeNull();
 
     const updateCall = pool.calls.find((c) =>
       c.text.startsWith('UPDATE profiles'),
     );
-    expect(updateCall?.params[1]).toBe('image/jpeg');
+    expect(updateCall?.params[0]).toBeNull();
   });
 
-  it('rejects a payload whose magic bytes are not PNG/JPEG (type confusion)', async () => {
-    // GIF87a header — must NOT pass even though some clients may claim
-    // image/png in the part headers.
-    const gifBytes = Buffer.from([0x47, 0x49, 0x46, 0x38, 0x37, 0x61]);
-
+  it('rejects an unknown preset id with avatar_invalid and does not write', async () => {
     const pool = makeFakePool(() => ({ rows: [] }));
-    const { app, s3 } = await buildApp({ pool });
+    const { app } = await buildApp({ pool });
 
-    const { payload, headers } = multipartAvatarBody(
-      gifBytes,
-      'avatar.png',
-      'image/png',
-    );
     const res = await app.inject({
       method: 'PUT',
       url: '/me/profile/avatar',
-      headers: { 'x-test-user-id': 'u-1', ...headers },
-      payload,
+      headers: { 'x-test-user-id': 'u-1', 'content-type': 'application/json' },
+      payload: { avatarPreset: 'not-a-real-preset' },
     });
 
     expect(res.statusCode).toBe(400);
     expect((res.json() as { error: { code: string } }).error.code).toBe(
       'avatar_invalid',
     );
-    // Critical: no S3 upload, no DB update on rejection (R7.7).
-    expect(s3.sent).toHaveLength(0);
+    // No UPDATE on rejection — the prior avatar is preserved.
     expect(
       pool.calls.find((c) => c.text.startsWith('UPDATE profiles')),
     ).toBeUndefined();
   });
 
-  it('rejects an oversized payload', async () => {
-    // 5 MB + 1 byte starting with a real PNG signature. The multipart
-    // streaming layer rejects this at `limits.fileSize`.
-    const oversize = Buffer.alloc(5 * 1024 * 1024 + 1);
-    oversize[0] = 0x89;
-    oversize[1] = 0x50;
-    oversize[2] = 0x4e;
-    oversize[3] = 0x47;
-
+  it('rejects a body with unexpected extra keys (strict schema)', async () => {
     const pool = makeFakePool(() => ({ rows: [] }));
-    const { app, s3 } = await buildApp({ pool });
+    const { app } = await buildApp({ pool });
 
-    const { payload, headers } = multipartAvatarBody(oversize);
     const res = await app.inject({
       method: 'PUT',
       url: '/me/profile/avatar',
-      headers: { 'x-test-user-id': 'u-1', ...headers },
-      payload,
+      headers: { 'x-test-user-id': 'u-1', 'content-type': 'application/json' },
+      payload: { avatarPreset: 'castle', avatarUrl: 'https://evil.example/x.png' },
     });
 
     expect(res.statusCode).toBe(400);
     expect((res.json() as { error: { code: string } }).error.code).toBe(
       'avatar_invalid',
     );
-    expect(s3.sent).toHaveLength(0);
+  });
+
+  it('returns 401 when the request is unauthenticated', async () => {
+    const pool = makeFakePool(() => ({ rows: [] }));
+    const { app } = await buildApp({ pool });
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/me/profile/avatar',
+      headers: { 'content-type': 'application/json' },
+      payload: { avatarPreset: 'castle' },
+    });
+
+    expect(res.statusCode).toBe(401);
+    expect((res.json() as { error: { code: string } }).error.code).toBe(
+      'unauthorized',
+    );
   });
 });
 
@@ -421,10 +344,10 @@ describe('PUT /me/profile/avatar', () => {
 describe('GET /users/:userId/profile', () => {
   it('allows the owner to view their own profile', async () => {
     const pool = makeFakePool((call) => {
-      if (call.text.startsWith('SELECT user_id, display_name, avatar_url FROM profiles')) {
+      if (call.text.startsWith('SELECT user_id, display_name, avatar_preset FROM profiles')) {
         return {
           rows: [
-            { user_id: 'u-1', display_name: 'Alice', avatar_url: null },
+            { user_id: 'u-1', display_name: 'Alice', avatar_preset: null },
           ],
         };
       }
@@ -445,7 +368,7 @@ describe('GET /users/:userId/profile', () => {
     expect(res.json()).toEqual({
       userId: 'u-1',
       displayName: 'Alice',
-      avatarUrl: null,
+      avatarPreset: null,
       overallCompletionPercent: 25.0,
     });
 
@@ -461,10 +384,10 @@ describe('GET /users/:userId/profile', () => {
         // Friendship row exists.
         return { rows: [{ exists: true }] };
       }
-      if (call.text.startsWith('SELECT user_id, display_name, avatar_url FROM profiles')) {
+      if (call.text.startsWith('SELECT user_id, display_name, avatar_preset FROM profiles')) {
         return {
           rows: [
-            { user_id: 'u-2', display_name: 'Bob', avatar_url: null },
+            { user_id: 'u-2', display_name: 'Bob', avatar_preset: 'fireworks' },
           ],
         };
       }
@@ -483,8 +406,13 @@ describe('GET /users/:userId/profile', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    const body = res.json() as { userId: string; overallCompletionPercent: number };
+    const body = res.json() as {
+      userId: string;
+      avatarPreset: string | null;
+      overallCompletionPercent: number;
+    };
     expect(body.userId).toBe('u-2');
+    expect(body.avatarPreset).toBe('fireworks');
     expect(body.overallCompletionPercent).toBe(0); // R3.6 zero numerator
 
     // Friendship lookup ran with canonical (lo, hi) = (u-1, u-2).
@@ -554,7 +482,7 @@ describe('GET /users/:userId/profile', () => {
     // (defense in depth: the requester learns nothing from the deny).
     expect(
       pool.calls.find((c) =>
-        c.text.startsWith('SELECT user_id, display_name, avatar_url FROM profiles'),
+        c.text.startsWith('SELECT user_id, display_name, avatar_preset FROM profiles'),
       ),
     ).toBeUndefined();
   });

@@ -262,7 +262,7 @@ const styles = StyleSheet.create({
   scroll: { flexGrow: 1, paddingBottom: theme.spacing.xxl },
   body: {
     paddingHorizontal: theme.spacing.xl,
-    marginTop: -theme.spacing.lg,
+    marginTop: -theme.layout.headerOverlap,
     gap: theme.spacing.lg,
   },
   field: {

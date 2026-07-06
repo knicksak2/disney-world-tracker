@@ -1,8 +1,8 @@
 # Render Blueprint for the Disney World Tracker API.
 #
 # This provisions the Fastify API as a free-tier Web Service. The backing
-# services (Postgres, Redis, object storage) are NOT created here — they live
-# on Neon, Upstash, and Cloudflare R2 respectively (see
+# services (Postgres, Redis) are NOT created here — they live
+# on Neon and Upstash respectively (see
 # docs/hosting.md). You paste their credentials
 # into the environment variables below from the Render dashboard.
 #
@@ -37,14 +37,6 @@ services:
       - key: DATABASE_URL # Neon pooled connection string (?sslmode=require)
         sync: false
       - key: REDIS_URL # Upstash rediss:// URL (TLS)
-        sync: false
-      - key: S3_ENDPOINT # https://<accountid>.r2.cloudflarestorage.com
-        sync: false
-      - key: S3_BUCKET # e.g. avatars-dev
-        sync: false
-      - key: S3_ACCESS_KEY_ID
-        sync: false
-      - key: S3_SECRET_ACCESS_KEY
         sync: false
       # Disney Sync Gateway HTTP Basic Static_Credentials. Required — the API
       # fails fast at startup without them. Obtain locally with

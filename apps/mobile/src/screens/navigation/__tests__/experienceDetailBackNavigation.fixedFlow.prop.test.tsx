@@ -143,7 +143,7 @@ const EXPERIENCE_DETAIL = {
 const FRIEND_PROFILE = {
   userId: FRIEND_ID,
   displayName: DISPLAY_NAME,
-  avatarUrl: null,
+  avatarPreset: null,
   overallCompletionPercent: 42,
 };
 

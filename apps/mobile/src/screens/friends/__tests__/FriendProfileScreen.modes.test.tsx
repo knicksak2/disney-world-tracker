@@ -123,7 +123,7 @@ function makeProfile(overrides: Partial<ProfileDTO> = {}): ProfileDTO {
   return {
     userId: FRIEND_ID,
     displayName: DISPLAY_NAME,
-    avatarUrl: null,
+    avatarPreset: null,
     overallCompletionPercent: 42,
     ...overrides,
   };
@@ -237,7 +237,7 @@ describe('FriendProfileScreen mode content (R2.*, R3.2/3.5/3.7, R4.2/4.4/4.7, R5
   // Overview mode (R2.1, R2.2, R2.3, R2.4, R2.5)
   // -------------------------------------------------------------------------
 
-  test('R2.1/R2.4: Overview shows the display name, one-decimal overall percent, and completed count', async () => {
+  test('R2.1/R2.4: Overview shows the display name, the redesigned overall-completion hero, and the shared ratings section', async () => {
     routeHandlers.profile = () =>
       Promise.resolve(makeProfile({ overallCompletionPercent: 42 }));
     routeHandlers.stats = () =>
@@ -248,29 +248,21 @@ describe('FriendProfileScreen mode content (R2.*, R3.2/3.5/3.7, R4.2/4.4/4.7, R5
     // Overview is the default mode on first display.
     const summary = await screen.findByTestId('friend-profile-summary');
     expect(summary).toHaveTextContent(/Mickey Mouse/);
-    // Whole-number percent still renders its trailing decimal (R2.1).
-    expect(summary).toHaveTextContent(/42\.0%/);
 
-    // R2.4: total completed Active Experiences, sourced from stats overall.
-    const count = await screen.findByTestId('friend-overview-count');
-    expect(count).toHaveTextContent(/37 experiences completed/);
+    // R2.*: overall completion is now conveyed by the shared hero ring — its
+    // one-decimal percent and completed/total count render inside the ring.
+    const hero = await screen.findByTestId('friend-overview-stats');
+    expect(hero).toHaveTextContent(/37\.0%/);
+    expect(hero).toHaveTextContent(/37 \/ 100/);
+    expect(screen.getByTestId('overall-hero-ring')).toBeTruthy();
+
+    // R11.1: the Friend's ratings story renders via the SHARED RatingsSection.
+    expect(screen.getByTestId('friend-ratings-section')).toBeTruthy();
   });
 
-  test('R2.1: a fractional overall percent is rendered to exactly one decimal place', async () => {
+  test('R2.2: Overview renders the avatar badge when a preset is set', async () => {
     routeHandlers.profile = () =>
-      Promise.resolve(makeProfile({ overallCompletionPercent: 33.3 }));
-
-    renderScreen();
-
-    const summary = await screen.findByTestId('friend-profile-summary');
-    expect(summary).toHaveTextContent(/33\.3%/);
-  });
-
-  test('R2.2: Overview renders the avatar image when an avatar is set', async () => {
-    routeHandlers.profile = () =>
-      Promise.resolve(
-        makeProfile({ avatarUrl: 'https://cdn.test/avatar/mickey.png' }),
-      );
+      Promise.resolve(makeProfile({ avatarPreset: 'castle' }));
 
     renderScreen();
 
@@ -280,7 +272,7 @@ describe('FriendProfileScreen mode content (R2.*, R3.2/3.5/3.7, R4.2/4.4/4.7, R5
 
   test('R2.3: Overview renders the default placeholder when no avatar is set', async () => {
     routeHandlers.profile = () =>
-      Promise.resolve(makeProfile({ avatarUrl: null }));
+      Promise.resolve(makeProfile({ avatarPreset: null }));
 
     renderScreen();
 
@@ -288,17 +280,15 @@ describe('FriendProfileScreen mode content (R2.*, R3.2/3.5/3.7, R4.2/4.4/4.7, R5
     expect(screen.queryByTestId('friend-avatar-image')).toBeNull();
   });
 
-  test('R2.5: Overview falls back to the placeholder when the avatar image fails to load', async () => {
+  test('R2.5: Overview falls back to the placeholder for an unknown preset id', async () => {
+    // A preset id the client cannot render (e.g. removed after the friend
+    // chose it) degrades gracefully to the placeholder rather than crashing.
     routeHandlers.profile = () =>
       Promise.resolve(
-        makeProfile({ avatarUrl: 'https://cdn.test/avatar/broken.png' }),
+        makeProfile({ avatarPreset: 'no-longer-a-preset' as never }),
       );
 
     renderScreen();
-
-    const image = await screen.findByTestId('friend-avatar-image');
-    // Simulate the native image load failure (R2.5).
-    fireEvent(image, 'error');
 
     expect(
       await screen.findByTestId('friend-avatar-placeholder'),
@@ -307,159 +297,50 @@ describe('FriendProfileScreen mode content (R2.*, R3.2/3.5/3.7, R4.2/4.4/4.7, R5
   });
 
   // -------------------------------------------------------------------------
-  // Parks mode (R3.2, R3.5, R3.7)
+  // Coverage mode — lens switcher + shared CoverageSection (R2.*, R3.*, R4.*)
   // -------------------------------------------------------------------------
 
-  test('R3.2/R3.5: Parks shows a per-Park stat header with one-decimal percent, counts, and grouped rows', async () => {
+  test('Coverage shows the lens switcher and the Parks lens ranked rows by default', async () => {
     routeHandlers.stats = () =>
       Promise.resolve(
         makeStats({ byPark: { 'Magic Kingdom': breakdown(5, 10, 50) } }),
       );
-    routeHandlers.completions = () =>
-      Promise.resolve({
-        entries: [
-          completionEntry({
-            experienceName: 'Space Mountain',
-            park: 'Magic Kingdom',
-            category: 'Ride',
-            completedOn: '2024-01-05',
-            rating: 8,
-            sharedNote: 'Loved every minute of it.',
-          }),
-        ],
-      });
 
     renderScreen();
 
-    // Switch to Parks and wait for its pane.
-    fireEvent.press(await screen.findByTestId('tab-Parks'));
+    // Switch to Coverage and wait for its pane.
+    fireEvent.press(await screen.findByTestId('tab-Coverage'));
 
-    const statHeader = await screen.findByTestId(
-      'friend-stats-park-Magic Kingdom',
-    );
-    // R3.2: percentage to one decimal plus completed/total counts. The header
-    // is always visible regardless of the section's Collapsed/Expanded state.
-    expect(statHeader).toHaveTextContent(/50\.0%/);
-    expect(statHeader).toHaveTextContent(/5 of 10/);
-
-    // Sections start Collapsed (R8.1), so the Group_Body (and its rows) is
-    // hidden until the Group_Header is tapped to Expand it (R7.5).
-    fireEvent.press(
-      screen.getByTestId('friend-park-group-Magic Kingdom-header'),
-    );
-
-    // R3.5: grouped Completion row carries name, date, rating, and note.
-    const group = screen.getByTestId('friend-park-group-Magic Kingdom');
-    expect(group).toHaveTextContent(/Space Mountain/);
-    expect(group).toHaveTextContent(/Ride/);
-    expect(group).toHaveTextContent(/Jan 5, 2024/);
-    expect(group).toHaveTextContent(/8\/10/);
-    expect(group).toHaveTextContent(/Loved every minute of it\./);
-  });
-
-  test('R3.7: Parks shows an empty indication for a Park with no completed Experiences', async () => {
-    routeHandlers.completions = () =>
-      Promise.resolve({
-        entries: [completionEntry({ park: 'Magic Kingdom', category: 'Ride' })],
-      });
-
-    renderScreen();
-
-    fireEvent.press(await screen.findByTestId('tab-Parks'));
-
-    // EPCOT has no entries. Its Group_Header is visible, but the
-    // Compact_Empty_State lives in the Collapsed Group_Body — expand it first
-    // (R7.5).
-    fireEvent.press(screen.getByTestId('friend-park-group-EPCOT-header'));
-
-    // EPCOT's expanded body shows the empty indication (R3.7).
-    expect(await screen.findByTestId('friend-park-empty-EPCOT')).toBeTruthy();
-    // Magic Kingdom (which has an entry) does not show the empty indication
-    // (it is also still Collapsed, so its body is not rendered at all).
+    // The Lens_Switcher renders one segment per lens, Parks active by default.
     expect(
-      screen.queryByTestId('friend-park-empty-Magic Kingdom'),
-    ).toBeNull();
+      await screen.findByTestId('friend-coverage-lens-switcher'),
+    ).toBeTruthy();
+    const parksLens = screen.getByTestId('friend-coverage-lens-parks');
+    expect(parksLens.props.accessibilityState).toMatchObject({
+      selected: true,
+    });
+
+    // The shared CoverageSection renders the Parks lens: a ranked container and
+    // per-park rows (`park-row-*`), sourced purely from `stats.coverage`.
+    const parksContainer = await screen.findByTestId('friend-coverage-parks');
+    expect(parksContainer).toBeTruthy();
+    expect(screen.getByTestId('park-row-Magic Kingdom')).toBeTruthy();
   });
 
-  // -------------------------------------------------------------------------
-  // Categories mode (R4.2, R4.4, R4.7)
-  // -------------------------------------------------------------------------
-
-  test('R4.2/R4.4: Categories shows a per-Category stat header with one-decimal percent, counts, and grouped rows', async () => {
-    routeHandlers.stats = () =>
-      Promise.resolve(
-        makeStats({ byCategory: { Ride: breakdown(3, 4, 75) } }),
-      );
-    routeHandlers.completions = () =>
-      Promise.resolve({
-        entries: [
-          completionEntry({
-            experienceName: 'Space Mountain',
-            park: 'Magic Kingdom',
-            category: 'Ride',
-            completedOn: '2024-01-05',
-            rating: 8,
-            sharedNote: 'Loved every minute of it.',
-          }),
-        ],
-      });
-
+  test('Coverage switches lenses on tap and renders the selected lens content', async () => {
     renderScreen();
 
-    fireEvent.press(await screen.findByTestId('tab-Categories'));
+    fireEvent.press(await screen.findByTestId('tab-Coverage'));
+    await screen.findByTestId('friend-coverage-parks');
 
-    const statHeader = await screen.findByTestId('friend-stats-category-Ride');
-    // R4.2: percentage to one decimal plus completed/total counts. The header
-    // is always visible regardless of the section's Collapsed/Expanded state.
-    expect(statHeader).toHaveTextContent(/75\.0%/);
-    expect(statHeader).toHaveTextContent(/3 of 4/);
+    // Switch to the Resorts lens: the per-resort activity list appears.
+    fireEvent.press(screen.getByTestId('friend-coverage-lens-resorts'));
 
-    // Sections start Collapsed (R8.1); expand the Ride section to reveal its
-    // grouped rows (R7.5).
-    fireEvent.press(screen.getByTestId('friend-category-group-Ride-header'));
-
-    // R4.4: grouped Completion row carries name, park, date, rating, and note.
-    const group = screen.getByTestId('friend-category-group-Ride');
-    expect(group).toHaveTextContent(/Space Mountain/);
-    expect(group).toHaveTextContent(/Magic Kingdom/);
-    expect(group).toHaveTextContent(/Jan 5, 2024/);
-    expect(group).toHaveTextContent(/8\/10/);
-    expect(group).toHaveTextContent(/Loved every minute of it\./);
-  });
-
-  test('R4.7: Categories shows an empty indication with suppressed counts for an empty Category', async () => {
-    routeHandlers.stats = () =>
-      Promise.resolve(
-        makeStats({
-          // A non-zero Show stat exists server-side, but with no Show
-          // entries the group must suppress the percentage and counts (R4.7).
-          byCategory: { Show: breakdown(2, 5, 40) },
-        }),
-      );
-    routeHandlers.completions = () =>
-      Promise.resolve({
-        entries: [completionEntry({ category: 'Ride' })],
-      });
-
-    renderScreen();
-
-    fireEvent.press(await screen.findByTestId('tab-Categories'));
-
-    // R9.2: the empty Show group's header suppresses its percentage and counts.
-    const showHeader = await screen.findByTestId('friend-stats-category-Show');
-    expect(showHeader).not.toHaveTextContent(/40\.0%/);
-    expect(showHeader).not.toHaveTextContent(/2 of 5/);
-
-    // The Compact_Empty_State lives in the Collapsed body — expand Show (R7.5).
-    fireEvent.press(screen.getByTestId('friend-category-group-Show-header'));
-
-    const emptyShow = await screen.findByTestId('friend-category-empty-Show');
-    expect(emptyShow).toBeTruthy();
-    // R4.7: counts and percentage are suppressed for the empty group.
-    expect(emptyShow).not.toHaveTextContent(/40\.0%/);
-    expect(emptyShow).not.toHaveTextContent(/2 of 5/);
-    // The Ride group (with an entry) is not rendered as empty.
-    expect(screen.queryByTestId('friend-category-empty-Ride')).toBeNull();
+    expect(await screen.findByTestId('friend-coverage-resorts')).toBeTruthy();
+    // CoverageSection's resorts lens renders the per-resort activity container.
+    expect(screen.getByTestId('coverage-by-resort')).toBeTruthy();
+    // The Parks lens content is no longer rendered (only the active lens).
+    expect(screen.queryByTestId('friend-coverage-parks')).toBeNull();
   });
 
   // -------------------------------------------------------------------------
@@ -515,24 +396,18 @@ describe('FriendProfileScreen mode content (R2.*, R3.2/3.5/3.7, R4.2/4.4/4.7, R5
 
     // Default: Overview pane visible, others absent.
     expect(await screen.findByTestId('friend-mode-overview')).toBeTruthy();
-    expect(screen.queryByTestId('friend-mode-parks')).toBeNull();
+    expect(screen.queryByTestId('friend-mode-coverage')).toBeNull();
 
-    // Switch to Parks.
-    fireEvent.press(screen.getByTestId('tab-Parks'));
-    expect(await screen.findByTestId('friend-mode-parks')).toBeTruthy();
+    // Switch to Coverage.
+    fireEvent.press(screen.getByTestId('tab-Coverage'));
+    expect(await screen.findByTestId('friend-mode-coverage')).toBeTruthy();
     expect(screen.queryByTestId('friend-mode-overview')).toBeNull();
-    expect(screen.queryByTestId('friend-mode-categories')).toBeNull();
     expect(screen.queryByTestId('friend-mode-experiences')).toBeNull();
-
-    // Switch to Categories.
-    fireEvent.press(screen.getByTestId('tab-Categories'));
-    expect(await screen.findByTestId('friend-mode-categories')).toBeTruthy();
-    expect(screen.queryByTestId('friend-mode-parks')).toBeNull();
 
     // Switch to Experiences.
     fireEvent.press(screen.getByTestId('tab-Experiences'));
     expect(await screen.findByTestId('friend-mode-experiences')).toBeTruthy();
-    expect(screen.queryByTestId('friend-mode-categories')).toBeNull();
+    expect(screen.queryByTestId('friend-mode-coverage')).toBeNull();
 
     // Back to Overview.
     fireEvent.press(screen.getByTestId('tab-Overview'));

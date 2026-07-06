@@ -99,6 +99,29 @@ export const radius = {
 } as const;
 
 // ---------------------------------------------------------------------------
+// Layout
+// ---------------------------------------------------------------------------
+
+/**
+ * Shared layout constants for composing screens against the themed shell.
+ *
+ * `headerOverlap` is the amount the first block of screen content rises up
+ * into the `GradientHeader`'s rounded bottom edge (applied as a negative top
+ * margin on the content body). The tuck fills the gap left by the header's
+ * `borderBottomRadius` so content reads as emerging from the header rather
+ * than sitting below a hard seam.
+ *
+ * Invariant: keep this <= `radius.xl` (the header's bottom corner radius) so
+ * the content nests *within* the curve instead of overrunning it. It is
+ * defined here — once — so every screen shares the same value instead of
+ * hand-copying a magic negative margin, and so changing the header curve only
+ * requires re-tuning a single named constant.
+ */
+export const layout = {
+  headerOverlap: spacing.lg,
+} as const;
+
+// ---------------------------------------------------------------------------
 // Typography
 // ---------------------------------------------------------------------------
 
@@ -202,6 +225,7 @@ export const theme = {
   gradient,
   spacing,
   radius,
+  layout,
   typography,
   shadow,
   parkAccent,

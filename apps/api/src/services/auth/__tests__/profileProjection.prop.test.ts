@@ -35,6 +35,8 @@ import { describe, it } from 'vitest';
 import fc from 'fast-check';
 import Fastify, { type FastifyInstance } from 'fastify';
 
+import { AVATAR_PRESET_IDS } from '@dwt/shared';
+
 import { registerErrorHandler } from '../../../errors/handler.js';
 import { computePercent } from '../../stats/computePercent.js';
 import { profileRoutes, type ProfileRoutesOptions } from '../profileRoutes.js';
@@ -51,7 +53,7 @@ const USER_ID = '11111111-1111-4111-8111-111111111111';
 
 interface ProfileFixture {
   readonly displayName: string;
-  readonly avatarUrl: string | null;
+  readonly avatarPreset: string | null;
   readonly completed: number;
   readonly total: number;
 }
@@ -73,7 +75,7 @@ function makeFakePool(fixture: ProfileFixture): FakePool {
             {
               user_id: USER_ID,
               display_name: fixture.displayName,
-              avatar_url: fixture.avatarUrl,
+              avatar_preset: fixture.avatarPreset,
             },
           ],
         };
@@ -101,9 +103,6 @@ async function buildAppForRoute(pool: FakePool): Promise<FastifyInstance> {
   registerErrorHandler(app);
   await app.register(profileRoutes, {
     pool: pool as unknown as ProfileRoutesOptions['pool'],
-    s3Client: { send: async () => ({}) } as unknown as ProfileRoutesOptions['s3Client'],
-    bucket: 'avatars',
-    endpoint: 'https://s3.example.com',
     requireAuth,
   });
   await app.ready();
@@ -121,9 +120,9 @@ const displayNameArb = fc
   .string({ minLength: 1, maxLength: 50 })
   .filter((s) => /\S/u.test(s));
 
-// Avatar reference: either a URL-like reference string (avatar set) or null (no avatar).
-const avatarUrlArb = fc.option(
-  fc.webUrl().map((u) => `${u}/avatars/${USER_ID}/img.png`),
+// Avatar reference: either a known preset id (avatar set) or null (no avatar).
+const avatarPresetArb = fc.option(
+  fc.constantFrom(...AVATAR_PRESET_IDS),
   { nil: null },
 );
 
@@ -133,7 +132,7 @@ const countArb = fc.nat({ max: 100_000 });
 
 const fixtureArb: fc.Arbitrary<ProfileFixture> = fc.record({
   displayName: displayNameArb,
-  avatarUrl: avatarUrlArb,
+  avatarPreset: avatarPresetArb,
   completed: countArb,
   total: countArb,
 });
@@ -164,7 +163,7 @@ describe('GET /users/:userId/profile — Property 3: profile projection content'
           const body = res.json() as {
             userId: string;
             displayName: string;
-            avatarUrl: string | null;
+            avatarPreset: string | null;
             overallCompletionPercent: number;
           };
 
@@ -172,7 +171,7 @@ describe('GET /users/:userId/profile — Property 3: profile projection content'
           if (body.displayName !== fixture.displayName) return false;
 
           // Avatar reference when set; null no-avatar indicator when not.
-          if (body.avatarUrl !== fixture.avatarUrl) return false;
+          if (body.avatarPreset !== fixture.avatarPreset) return false;
 
           // Overall completion percent matches the shared formula, is bounded to
           // [0.0, 100.0], and is expressed to one decimal place.

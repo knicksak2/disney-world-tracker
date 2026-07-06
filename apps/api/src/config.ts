@@ -38,14 +38,10 @@ const envSchema = z.object({
     .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
     .default('info'),
 
-  // Persistence + cache + object storage. URLs are validated for shape; the
-  // exact provider behind each URL is intentionally opaque to the API code.
+  // Persistence + cache. URLs are validated for shape; the exact provider
+  // behind each URL is intentionally opaque to the API code.
   DATABASE_URL: z.string().min(1),
   REDIS_URL: z.string().min(1),
-  S3_ENDPOINT: z.string().url(),
-  S3_BUCKET: z.string().min(1),
-  S3_ACCESS_KEY_ID: z.string().min(1),
-  S3_SECRET_ACCESS_KEY: z.string().min(1),
 
   // Session signing/secret material. 32-character minimum keeps low-entropy
   // values out of production deployments; the actual session token format is
@@ -132,7 +128,7 @@ type EnvShape = z.infer<typeof envSchema>;
 // ---------------------------------------------------------------------------
 //
 // Structured, namespaced view of configuration. Consumers receive grouped
-// fields (`config.database.url`, `config.s3.bucket`, ...) so that no other
+// fields (`config.database.url`, `config.redis.url`, ...) so that no other
 // module ever needs to know an env-var name. This makes provider swaps a
 // hosting-only change.
 
@@ -148,12 +144,6 @@ export interface AppConfig {
   };
   readonly redis: {
     readonly url: string;
-  };
-  readonly s3: {
-    readonly endpoint: string;
-    readonly bucket: string;
-    readonly accessKeyId: string;
-    readonly secretAccessKey: string;
   };
   readonly session: {
     readonly secret: string;
@@ -243,12 +233,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     },
     database: { url: data.DATABASE_URL },
     redis: { url: data.REDIS_URL },
-    s3: {
-      endpoint: data.S3_ENDPOINT,
-      bucket: data.S3_BUCKET,
-      accessKeyId: data.S3_ACCESS_KEY_ID,
-      secretAccessKey: data.S3_SECRET_ACCESS_KEY,
-    },
     session: { secret: data.SESSION_SECRET },
     themeparks: { baseUrl: data.THEMEPARKS_BASE_URL },
     disney: {

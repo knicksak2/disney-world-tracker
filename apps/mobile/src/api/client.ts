@@ -23,7 +23,12 @@
 
 import Constants from 'expo-constants';
 
-import type { ErrorCode, ErrorEnvelope, ProfileDTO } from '@dwt/shared';
+import type {
+  AvatarPresetId,
+  ErrorCode,
+  ErrorEnvelope,
+  ProfileDTO,
+} from '@dwt/shared';
 
 import { clearSessionToken, getSessionToken } from './sessionStorage';
 
@@ -257,103 +262,24 @@ async function buildApiError(response: Response): Promise<ApiError> {
 }
 
 // ---------------------------------------------------------------------------
-// uploadAvatar
+// setAvatarPreset
 // ---------------------------------------------------------------------------
 
 /**
- * MIME type accepted by `PUT /me/profile/avatar` (R7.3, R7.7). Both the
- * client and the server validate against this set; the client check is
- * a fast-fail before bytes are uploaded, the server re-validates with
- * magic-byte sniffing as the source of truth.
+ * Choose (or clear) the Profile avatar preset via `PUT /me/profile/avatar`.
+ *
+ * Avatars are a fixed set of bundled illustrations referenced by a preset id
+ * (see `AVATAR_PRESET_IDS` / `AvatarPresetId` in `@dwt/shared`), so this is a
+ * plain JSON request — no upload or multipart. Pass a preset id to set the
+ * avatar, or `null` to clear it back to the placeholder.
+ *
+ * `apiRequest` handles Authorization, the uniform error envelope, and the
+ * 401 → session-clear flow, so this is a thin typed wrapper. The server
+ * re-validates the id against the same allowlist and returns the updated
+ * `ProfileDTO`, so the caller can render the new avatar immediately.
  */
-export type AvatarMimeType = 'image/png' | 'image/jpeg';
-
-/**
- * Upload an avatar image to `PUT /me/profile/avatar` as
- * `multipart/form-data`.
- *
- * `apiRequest()` is JSON-only; this helper exists so the avatar route
- * (which the API serves as `multipart/form-data` per R7.3) can reuse
- * the same Authorization and 401 handling without bending `apiRequest`
- * out of shape. Behavior parallels `apiRequest`:
- *
- *   - Resolves the base URL from `app.config.ts`.
- *   - Reads the persisted bearer token and attaches
- *     `Authorization: Bearer <token>` when present.
- *   - On 401: clears the session token and notifies listeners
- *     (R6.10) before throwing an `ApiError`.
- *   - On any other non-2xx: parses the uniform error envelope into an
- *     `ApiError`. The server's `avatar_invalid` code surfaces here on
- *     a server-side rejection (e.g. the magic-byte sniff disagrees
- *     with the claimed MIME type).
- *
- * The caller is responsible for client-side format and size
- * validation (see `apps/mobile/src/screens/AvatarUpload.tsx`); this
- * helper performs no validation of its own beyond what the request
- * itself enforces.
- *
- * On success, returns the updated `ProfileDTO` so the caller can
- * render the new `avatarUrl` immediately.
- */
-export async function uploadAvatar(input: {
-  /** Local file URI returned by `expo-image-picker` (`asset.uri`). */
-  uri: string;
-  /** Sniffed or asset-reported MIME type; must be PNG or JPEG. */
-  mime: AvatarMimeType;
-  /** Optional filename hint; defaults to `avatar.<ext>`. */
-  fileName?: string | null;
-}): Promise<ProfileDTO> {
-  const baseUrl = resolveBaseUrl();
-  const url = `${baseUrl}/me/profile/avatar`;
-
-  // Fastify's `@fastify/multipart` reads the first file off the
-  // request; field name does not matter to the server, but we use
-  // `avatar` for clarity in network traces. The `name` carries the
-  // filename and `type` carries the MIME — React Native's `FormData`
-  // serializes this object into a multipart part.
-  const ext = input.mime === 'image/png' ? 'png' : 'jpg';
-  const filename =
-    input.fileName !== undefined && input.fileName !== null && input.fileName.length > 0
-      ? input.fileName
-      : `avatar.${ext}`;
-
-  const formData = new FormData();
-  // React Native's FormData accepts this `{ uri, name, type }` shape
-  // for file parts; the type here is intentionally permissive because
-  // RN's lib types model `FormData.append` as `(name, value)` only.
-  formData.append('avatar', {
-    uri: input.uri,
-    name: filename,
-    type: input.mime,
-  } as unknown as Blob);
-
-  const headers: Record<string, string> = {
-    Accept: 'application/json',
-  };
-  // NOTE: do NOT set `Content-Type` manually — RN's fetch fills in the
-  // correct `multipart/form-data; boundary=...` value when the body is
-  // a FormData instance.
-
-  const token = await getSessionToken();
-  if (token !== null) {
-    headers.Authorization = `Bearer ${token}`;
-  }
-
-  const response = await fetch(url, {
-    method: 'PUT',
-    headers,
-    body: formData,
-  });
-
-  if (response.status === 401) {
-    await clearSessionToken();
-    notifyUnauthorized();
-    throw await buildApiError(response);
-  }
-
-  if (!response.ok) {
-    throw await buildApiError(response);
-  }
-
-  return (await response.json()) as ProfileDTO;
+export async function setAvatarPreset(
+  avatarPreset: AvatarPresetId | null,
+): Promise<ProfileDTO> {
+  return apiRequest<ProfileDTO>('PUT', '/me/profile/avatar', { avatarPreset });
 }

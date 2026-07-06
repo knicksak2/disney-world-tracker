@@ -519,7 +519,7 @@ describe('GET /me/friends', () => {
         {
           userId: OTHER_ID,
           displayName: 'Goofy',
-          avatarUrl: null,
+          avatarPreset: null,
           establishedAt: '2024-01-01T00:00:00.000Z',
         },
       ],

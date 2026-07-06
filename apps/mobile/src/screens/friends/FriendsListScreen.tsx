@@ -44,7 +44,10 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 
+import { isAvatarPresetId } from '@dwt/shared';
+
 import { ApiError, apiRequest } from '../../api/client';
+import { renderAvatarPreset } from '../../avatars/AvatarPresets';
 import type { FriendsStackParamList } from '../../navigation/FriendsStack';
 import { theme } from '../../theme/theme';
 import {
@@ -79,7 +82,7 @@ interface FriendsAndRequests {
 interface FriendListEntry {
   readonly userId: string;
   readonly displayName: string;
-  readonly avatarUrl: string | null;
+  readonly avatarPreset: string | null;
   readonly establishedAt: string;
 }
 
@@ -508,6 +511,38 @@ function IncomingRequestRow({
   );
 }
 
+/**
+ * Small circular avatar for a friend row. Renders the friend's chosen preset
+ * badge, or a placeholder disc with their first initial when no preset is set
+ * (or the stored id is unknown to this client build).
+ */
+function FriendAvatar({
+  preset,
+  displayName,
+}: {
+  readonly preset: string | null;
+  readonly displayName: string;
+}): JSX.Element {
+  const art = isAvatarPresetId(preset) ? renderAvatarPreset(preset, 40) : null;
+  if (art !== null) {
+    return (
+      <View style={styles.avatar} testID="friend-row-avatar">
+        {art}
+      </View>
+    );
+  }
+  return (
+    <View
+      style={[styles.avatar, styles.avatarPlaceholder]}
+      testID="friend-row-avatar-placeholder"
+    >
+      <Text style={styles.avatarPlaceholderText}>
+        {displayName.slice(0, 1).toUpperCase()}
+      </Text>
+    </View>
+  );
+}
+
 interface FriendRowProps {
   readonly friend: FriendListEntry;
   readonly error: string | null;
@@ -531,7 +566,13 @@ function FriendRow({
       testID={`friends-friend-${friend.userId}`}
     >
       <View style={styles.rowMain}>
-        <Text style={styles.rowName}>{friend.displayName}</Text>
+        <View style={styles.rowIdentity}>
+          <FriendAvatar
+            preset={friend.avatarPreset}
+            displayName={friend.displayName}
+          />
+          <Text style={styles.rowName}>{friend.displayName}</Text>
+        </View>
         <SecondaryButton
           label={busy ? 'Removing\u2026' : 'Remove'}
           icon="person-remove-outline"
@@ -621,10 +662,31 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: theme.spacing.md,
   },
+  rowIdentity: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+    flexShrink: 1,
+  },
   rowName: {
     ...theme.typography.subtitle,
     color: theme.color.textPrimary,
     flexShrink: 1,
+  },
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    overflow: 'hidden',
+    backgroundColor: theme.color.surfaceAlt,
+  },
+  avatarPlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarPlaceholderText: {
+    ...theme.typography.subtitle,
+    color: theme.color.primary,
   },
   rowActions: {
     flexDirection: 'row',

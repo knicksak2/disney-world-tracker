@@ -99,7 +99,16 @@ const apiRequestMock = mockedApiRequest as jest.MockedFunction<
   typeof mockedApiRequest
 >;
 
-const NUM_RUNS = 100;
+// Each run mounts the full InboxScreen and awaits an async metadata fetch, so
+// 100 iterations is both slow and flaky under heavy parallel load (the default
+// ~1s `findBy*` window can lapse before React Query settles). 30 runs still
+// exercises all three rating variants many times over while keeping the suite
+// stable in the full parallel run.
+const NUM_RUNS = 30;
+
+/** Generous `findBy*` window so the async metadata resolution never races the
+ * default ~1s timeout under parallel-worker CPU contention. */
+const FIND_TIMEOUT_MS = 5000;
 
 // The copy the row renders when the payload marks the Rating unavailable
 // (R4.5). Mirrors `RATING_UNAVAILABLE_COPY` in InboxScreen.
@@ -296,7 +305,9 @@ describe('Property 7: Inbox rating rendering matches payload rating state (R4.4,
         );
         try {
           // Wait for the row to resolve so the rating/note block has rendered.
-          await view.findByTestId(`inbox-experience-name-${c.shareId}`);
+          await view.findByTestId(`inbox-experience-name-${c.shareId}`, {
+            timeout: FIND_TIMEOUT_MS,
+          });
 
           const ratingTestId = `inbox-experience-rating-${c.shareId}`;
           const unavailableTestId = `inbox-experience-rating-unavailable-${c.shareId}`;

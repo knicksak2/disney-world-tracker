@@ -653,6 +653,7 @@ describe('GET /me', () => {
               id: 'user-1',
               email: 'alice@example.com',
               display_name: 'Alice',
+              avatar_preset: 'castle',
             },
           ],
         };
@@ -673,7 +674,7 @@ describe('GET /me', () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({
       user: { id: 'user-1', email: 'alice@example.com' },
-      profile: { displayName: 'Alice' },
+      profile: { displayName: 'Alice', avatarPreset: 'castle' },
     });
   });
 

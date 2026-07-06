@@ -86,7 +86,7 @@ const apiRequestMock = mockedApiRequest as jest.MockedFunction<
 const FRIEND = {
   userId: 'friend-123',
   displayName: 'Minnie Mouse',
-  avatarUrl: null,
+  avatarPreset: null,
   establishedAt: '2024-01-02T00:00:00Z',
 } as const;
 
@@ -135,7 +135,7 @@ describe('friend selection navigation (R5.1)', () => {
         return {
           userId: FRIEND.userId,
           displayName: FRIEND.displayName,
-          avatarUrl: null,
+          avatarPreset: null,
           overallCompletionPercent: 0,
         };
       }

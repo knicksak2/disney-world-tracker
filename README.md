@@ -15,7 +15,7 @@ This repository is an npm workspaces monorepo with three packages:
 
 | Path | Description |
 | --- | --- |
-| `apps/api` | Node.js + Fastify backend (TypeScript). Hosts the eight service modules — Auth, Catalog, Live, Tracking, Stats, Friends, Sharing, Aggregate Ratings — plus BullMQ background workers. Talks to PostgreSQL, Redis, and an S3-compatible object store. |
+| `apps/api` | Node.js + Fastify backend (TypeScript). Hosts the eight service modules — Auth, Catalog, Live, Tracking, Stats, Friends, Sharing, Aggregate Ratings — plus BullMQ background workers. Talks to PostgreSQL and Redis. |
 | `apps/mobile` | React Native + TypeScript client built with Expo. Targets iOS and Android. |
 | `packages/shared` | Shared DTOs, Zod validation schemas, error code catalog, and enums consumed by both `apps/api` and `apps/mobile`. Imported as `@dwt/shared`. |
 
@@ -23,7 +23,7 @@ This repository is an npm workspaces monorepo with three packages:
 
 - **Node.js 22 or 24** (LTS). The version is pinned in `.nvmrc` (24) — run `nvm use` to match it. The engines floor is Node 22; the API's `dev` script relies on Node's built-in `--env-file` flag (Node 20.6+).
 - **npm 10+** (ships with Node 22/24)
-- **Docker Desktop** (or any Docker engine + Compose v2) for the Postgres / Redis / MinIO stack
+- **Docker Desktop** (or any Docker engine + Compose v2) for the Postgres / Redis stack
 - **Disney Sync Gateway credentials** (`DISNEY_SYNC_GATEWAY_USERNAME` / `_PASSWORD`). The API fails fast at startup without them. Pull them into `apps/api/.env` with `node tools/pull-disney-creds.mjs` (see [Disney credentials](#disney-credentials)).
 - For the mobile app: **Expo Go** on your phone, or Xcode (iOS) / Android Studio with an emulator
 
@@ -52,7 +52,7 @@ cp apps/mobile/.env.example apps/mobile/.env.local     # macOS / Linux
 Then bring up the stack and start the apps:
 
 ```bash
-docker compose up -d                 # start Postgres, Redis, MinIO
+docker compose up -d                 # start Postgres, Redis
 node tools/pull-disney-creds.mjs     # write Disney Sync Gateway creds into apps/api/.env
 npm run migrate                      # apply database migrations
 npm run sync --workspace apps/api    # seed the catalog from Disney (first run; see below)
@@ -71,7 +71,7 @@ When the Expo server prints a QR code, scan it with the Expo Go app on your phon
 
 The mobile app resolves its API URL automatically: local `expo start` runs default to `http://10.0.2.2:3000` (the Android emulator), while production builds target the hosted Render API. You only need `apps/mobile/.env.local` to override the local target (iOS simulator or a physical phone); see [Mobile `dev` script](#mobile-dev-script). Restart Metro after changing it.
 
-> **Local vs hosted services.** The commands above run the API against the local Docker stack (`apps/api/.env`). To point it at managed cloud services (Neon / Upstash / Cloudflare R2) instead, use the `:cloud` variants — `npm run dev:api:cloud` and `npm run migrate:cloud` — which read `apps/api/.env.dev`. See [Two environments: local vs hosted dev](#two-environments-local-vs-hosted-dev).
+> **Local vs hosted services.** The commands above run the API against the local Docker stack (`apps/api/.env`). To point it at managed cloud services (Neon / Upstash) instead, use the `:cloud` variants — `npm run dev:api:cloud` and `npm run migrate:cloud` — which read `apps/api/.env.dev`. See [Two environments: local vs hosted dev](#two-environments-local-vs-hosted-dev).
 
 ## First-Run Behavior
 
@@ -81,7 +81,7 @@ A few things to expect on the very first request:
 - **Live data.** Live details (waits, showtimes, Lightning Lane, boarding groups) are fetched on demand from ThemeParks.wiki and cached in Redis for 5 minutes — no catalog sync needed. The first live request builds a small entity directory (Enterprise_Id → ThemeParks id) from ThemeParks.wiki and caches it for 12h.
 - **Disney credentials.** The API refuses to start if `DISNEY_SYNC_GATEWAY_USERNAME` / `_PASSWORD` are missing or blank. Run `node tools/pull-disney-creds.mjs` to populate them.
 - **Argon2 native build.** On first `npm install`, the `argon2` package compiles a small native module. On Windows this needs the Visual Studio Build Tools with the "Desktop development with C++" workload. macOS / Linux users typically have this for free.
-- **MinIO bucket creation.** The `minio-init` container runs once on first `docker compose up`, creates the `avatars` bucket, and exits. You'll see it as `Exited (0)` in `docker compose ps` — that's normal. It re-runs idempotently on subsequent `up` commands.
+- **Avatars.** Profile avatars are a fixed set of bundled illustrations chosen in-app (no upload, no object storage). See `apps/mobile/src/avatars/AvatarPresets.tsx`.
 
 ## Smoke Testing the Stack
 
@@ -109,8 +109,6 @@ Spins up the three backend services the API depends on. Default credentials matc
 | --- | --- | --- | --- |
 | `postgres` | `postgres:16` | `5432` | App database (users, experiences, ratings, friendships, shares, etc.) |
 | `redis` | `redis:7-alpine` | `6379` | Session lookups, login lockout counters, leaderboard cache, BullMQ job queues |
-| `minio` | `minio/minio` | `9000` (S3 API), `9001` (web console) | S3-compatible bucket for avatar uploads |
-| `minio-init` | `minio/mc` | — | One-shot job that creates the `avatars` bucket and makes it publicly readable. Exits as soon as the bucket exists. |
 
 Useful commands:
 
@@ -122,13 +120,12 @@ docker compose down          # stop containers (data preserved)
 docker compose down -v       # stop and wipe data — clean slate
 ```
 
-The MinIO console is at http://localhost:9001 (login: `dwt-minio-admin` / `dwt-minio-password`) if you want to inspect uploaded avatars.
 
 ### `apps/api/.env`
 
 The API never reads `process.env` directly outside its config loader, so every backend setting lives in an env file. The `.env.example` template ships with values that match `docker-compose.yml` — just copy it to `.env` (see [Quickstart](#quickstart--run-everything-locally)). The real `.env` is gitignored.
 
-Required keys: `DATABASE_URL`, `REDIS_URL`, `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `SESSION_SECRET` (32+ chars), and the Disney Sync Gateway `Static_Credentials` `DISNEY_SYNC_GATEWAY_USERNAME` / `DISNEY_SYNC_GATEWAY_PASSWORD` (startup fails fast if either is blank). `THEMEPARKS_BASE_URL` (live source), `DISNEY_SYNC_GATEWAY_BASE_URL` (static catalog source), and `DISNEY_DINING_MENU_BASE_URL` (restaurant menus, from Disney's public website dining-menu API — anonymous, no credentials) all default to the documented public endpoints. See `apps/api/.env.example` for descriptions.
+Required keys: `DATABASE_URL`, `REDIS_URL`, `SESSION_SECRET` (32+ chars), and the Disney Sync Gateway `Static_Credentials` `DISNEY_SYNC_GATEWAY_USERNAME` / `DISNEY_SYNC_GATEWAY_PASSWORD` (startup fails fast if either is blank). `THEMEPARKS_BASE_URL` (live source), `DISNEY_SYNC_GATEWAY_BASE_URL` (static catalog source), and `DISNEY_DINING_MENU_BASE_URL` (restaurant menus, from Disney's public website dining-menu API — anonymous, no credentials) all default to the documented public endpoints. See `apps/api/.env.example` for descriptions.
 
 Optional Disney resilience-tuning keys (all have sane defaults): `DISNEY_MAX_RPS`, `DISNEY_MAX_CONCURRENCY` (shared Request_Budget), `DISNEY_BACKOFF_*` (bounded backoff), `MENU_FRESHNESS_MS` (lazy-menu cache window), and `CATALOG_SYNC_INTERVAL_MS` (scheduled cadence, floored at 24h). Override only if you have a reason to.
 
@@ -144,14 +141,14 @@ Re-run it if Disney rotates the credentials. A `waf_block` outcome in the sync-r
 
 #### Two environments: local vs hosted dev
 
-You can point the API at either your local Docker stack or your hosted managed services (Neon / Upstash / Cloudflare R2) without editing files — each lives in its own gitignored env file and has its own command:
+You can point the API at either your local Docker stack or your hosted managed services (Neon / Upstash) without editing files — each lives in its own gitignored env file and has its own command:
 
 | Target | Env file | Run the API | Run migrations |
 | --- | --- | --- | --- |
 | **Local** (Docker) | `apps/api/.env` | `npm run dev:api` | `npm run migrate` |
-| **Hosted dev** (Neon/Upstash/R2) | `apps/api/.env.dev` | `npm run dev:api:cloud` | `npm run migrate:cloud` |
+| **Hosted dev** (Neon/Upstash) | `apps/api/.env.dev` | `npm run dev:api:cloud` | `npm run migrate:cloud` |
 
-Copy `.env.example` to `.env.dev` and fill in your managed-service credentials there. The two files never interfere, so switching environments is just a matter of which command you run. (`migrate:cloud` only needs `DATABASE_URL`; running the full API with `dev:api:cloud` needs the Redis and S3 values filled in too.) The Disney Sync Gateway credentials are the exception — don't hand-copy them; `node tools/pull-disney-creds.mjs` writes the current values into **both** `.env` and `.env.dev` (a stale placeholder in `.env.dev` is what makes `sync:cloud` fail with `auth_failure`/401). All `.env*` files except `.env.example` are gitignored.
+Copy `.env.example` to `.env.dev` and fill in your managed-service credentials there. The two files never interfere, so switching environments is just a matter of which command you run. (`migrate:cloud` only needs `DATABASE_URL`; running the full API with `dev:api:cloud` needs the Redis value filled in too.) The Disney Sync Gateway credentials are the exception — don't hand-copy them; `node tools/pull-disney-creds.mjs` writes the current values into **both** `.env` and `.env.dev` (a stale placeholder in `.env.dev` is what makes `sync:cloud` fail with `auth_failure`/401). All `.env*` files except `.env.example` are gitignored.
 
 ### API `dev` script
 
@@ -336,14 +333,13 @@ The catalog and live paths are deliberately split (see the intro) and Disney acc
 
 ## Hosting
 
-The backend runs entirely on free tiers, one managed service per concern, chosen so a side-project can run at **$0/month** with no expiring trials. The design is hosting-agnostic (plain Postgres / Redis / S3-compatible interfaces), so any single provider can be swapped without touching application code.
+The backend runs entirely on free tiers, one managed service per concern, chosen so a side-project can run at **$0/month** with no expiring trials. The design is hosting-agnostic (plain Postgres / Redis interfaces), so any single provider can be swapped without touching application code.
 
 | Concern | Service | Why this one | Free-tier limit |
 | --- | --- | --- | --- |
 | API server | [**Render**](https://render.com) | GitHub-driven deploys, automatic HTTPS, defined as code in [`render.yaml`](./render.yaml); truly free with no credit card | 750 instance-hours/mo; sleeps after 15 min idle (30–60s cold start) |
 | PostgreSQL | [**Neon**](https://neon.tech) | Real Postgres (not a clone) with the `citext` / `pg_trgm` / `pgcrypto` extensions the schema needs, plus built-in connection pooling and scale-to-zero | 0.5 GB storage, 1 project, pauses when idle (1–3s wake) |
 | Redis | [**Upstash**](https://upstash.com) | Pay-per-command with no idle cost — a good fit for our low, bursty usage (cache reads, lockout counters, sync lock, BullMQ) | 10,000 commands/day, 256 MB |
-| Object storage | [**Cloudflare R2**](https://developers.cloudflare.com/r2/) | S3-compatible (same SDK, no lock-in) and **no egress fees** — avatar bytes stream to phones for free, unlike S3's $0.09/GB | 10 GB storage, 1M writes/mo, 10M reads/mo |
 | Live data | [ThemeParks.wiki](https://api.themeparks.wiki/v1) | Already free, public, no key required | — |
 
 Everything except the mobile app is reached server-side; the app only ever knows the Render URL. The main free-tier trade-off is Render's cold start (first request after idle is slow) — a $7/mo upgrade makes it always-on when you have real users.
@@ -352,19 +348,18 @@ See [`docs/hosting.md`](./docs/hosting.md) for the full rationale, per-service t
 
 ## Deploying the API (Render)
 
-The API deploys to [Render](https://render.com) as a free Web Service, defined as code in [`render.yaml`](./render.yaml) (a Render Blueprint). The backing services are managed elsewhere on their own free tiers — Postgres on [Neon](https://neon.tech), Redis on [Upstash](https://upstash.com), and avatar storage on [Cloudflare R2](https://developers.cloudflare.com/r2/). See the [Hosting](#hosting) section above (and [`docs/hosting.md`](./docs/hosting.md)) for the full rationale and free-tier details.
+The API deploys to [Render](https://render.com) as a free Web Service, defined as code in [`render.yaml`](./render.yaml) (a Render Blueprint). The backing services are managed elsewhere on their own free tiers — Postgres on [Neon](https://neon.tech) and Redis on [Upstash](https://upstash.com). See the [Hosting](#hosting) section above (and [`docs/hosting.md`](./docs/hosting.md)) for the full rationale and free-tier details.
 
 ### One-time provider setup
 
 1. **Neon** — create a project, then copy the **pooled** connection string (host contains `-pooler`, ends with `?sslmode=require`). The schema and extensions (`citext`, `pg_trgm`, `pgcrypto`) are created by the migrations, not by hand. You don't need Neon Auth — the app has its own auth.
 2. **Upstash** — create a Redis database, copy the `rediss://` URL.
-3. **Cloudflare R2** — create a bucket (e.g. `avatars-dev`), generate an Access Key ID + Secret, and note the S3 endpoint `https://<accountid>.r2.cloudflarestorage.com`.
 
 ### Deploy
 
 1. Push to the `develop` branch (the branch `render.yaml` auto-deploys).
 2. In Render: **New +** → **Blueprint** → select this repo. Render reads `render.yaml`.
-3. Fill in the secret env vars it prompts for (these are `sync: false` in the blueprint): `DATABASE_URL`, `REDIS_URL`, `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, and the Disney Sync Gateway `DISNEY_SYNC_GATEWAY_USERNAME` / `DISNEY_SYNC_GATEWAY_PASSWORD` (the API won't boot without the Disney credentials — obtain them locally with `node tools/pull-disney-creds.mjs` and paste the values). `SESSION_SECRET` is auto-generated; `NODE_ENV` and `THEMEPARKS_BASE_URL` are preset.
+3. Fill in the secret env vars it prompts for (these are `sync: false` in the blueprint): `DATABASE_URL`, `REDIS_URL`, and the Disney Sync Gateway `DISNEY_SYNC_GATEWAY_USERNAME` / `DISNEY_SYNC_GATEWAY_PASSWORD` (the API won't boot without the Disney credentials — obtain them locally with `node tools/pull-disney-creds.mjs` and paste the values). `SESSION_SECRET` is auto-generated; `NODE_ENV` and `THEMEPARKS_BASE_URL` are preset.
 4. Render runs the build (`npm ci` → build shared → build API → apply migrations), then starts the server. The health check is `GET /health`. (Migrations run in the build step because Render's free tier doesn't support a separate pre-deploy command; they're idempotent, so they're skipped when already applied.)
 
 The deployed URL looks like `https://dwt-api.onrender.com` — this is also the default the mobile app targets in production builds (see [How the API base URL is chosen](#how-the-api-base-url-is-chosen)). If you rename the Render service, set `PROD_API_BASE_URL` in the mobile app to match.
@@ -397,7 +392,7 @@ The build step re-runs the whole chain — `npm ci` → build `@dwt/shared` → 
 
 Watch the deploy in the Render dashboard; the health check is `GET /health`. Free-tier note still applies — the first request after idle takes 30–60s to wake.
 
-> **Managed services (Neon / Upstash / R2) need no "push."** There's nothing to deploy to them — schema changes reach Neon through the deploy's migrate step, and Upstash/R2 only hold runtime data. You only touch their dashboards to rotate credentials or resize.
+> **Managed services (Neon / Upstash) need no "push."** There's nothing to deploy to them — schema changes reach Neon through the deploy's migrate step, and Upstash only holds runtime data. You only touch their dashboards to rotate credentials or resize.
 
 ### 2. Hosted catalog data (manual, from your machine)
 

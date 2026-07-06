@@ -80,7 +80,7 @@ import { buildShareCreateBody, type ShareCreateBody } from './shareBody';
 interface FriendsListEntry {
   readonly userId: string;
   readonly displayName: string;
-  readonly avatarUrl: string | null;
+  readonly avatarPreset: string | null;
   readonly establishedAt: string;
 }
 

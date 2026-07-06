@@ -266,7 +266,7 @@ function makeProfile(overrides: Partial<ProfileDTO> = {}): ProfileDTO {
   return {
     userId: FRIEND_ID,
     displayName: DISPLAY_NAME,
-    avatarUrl: null,
+    avatarPreset: null,
     overallCompletionPercent: 42,
     ...overrides,
   };

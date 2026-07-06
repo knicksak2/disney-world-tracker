@@ -58,7 +58,6 @@ import { dirname, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { fileURLToPath } from 'node:url';
 
-import type { S3Client } from '@aws-sdk/client-s3';
 import type { FastifyInstance } from 'fastify';
 import RedisMock from 'ioredis-mock';
 import { DataType, newDb, type IMemoryDb } from 'pg-mem';
@@ -286,12 +285,6 @@ export async function setupHarness(
 
   const redis = buildRedisMock();
 
-  // --- Stub S3 client -------------------------------------------------
-  // The harness does not exercise the avatar upload SLA scenario, but
-  // `profileRoutes` requires an S3 client to register. A stub that
-  // resolves every `send` call to an empty result is sufficient.
-  const s3Client = makeStubS3Client();
-
   // --- Repos ----------------------------------------------------------
   const ratingChangedEvents: RatingChangedEvent[] = [];
   const aggregateRepo = createAggregateRepo(pool as never);
@@ -380,9 +373,6 @@ export async function setupHarness(
   // them.
   await app.register(profileRoutes, {
     pool: pool as never,
-    s3Client: s3Client as unknown as S3Client,
-    bucket: 'avatars',
-    endpoint: 'https://s3.example.com',
     requireAuth: sessionMiddleware,
   });
 
@@ -616,24 +606,6 @@ function buildRedisMock(): InstanceType<typeof RedisMock> {
 }
 
 // ---------------------------------------------------------------------------
-// S3 stub
-// ---------------------------------------------------------------------------
-
-/**
- * Minimal S3 client stub. The harness does not exercise the avatar
- * upload SLA scenario, but `profileRoutes` requires an S3 client to
- * register. A stub whose `send` resolves to an empty object is
- * sufficient for that registration.
- */
-function makeStubS3Client(): { send: (cmd: unknown) => Promise<unknown> } {
-  return {
-    async send() {
-      return {};
-    },
-  };
-}
-
-// ---------------------------------------------------------------------------
 // Session DB adapter
 // ---------------------------------------------------------------------------
 
@@ -686,12 +658,6 @@ function buildHarnessConfig(): AppConfig {
     },
     database: { url: 'postgres://harness/dwt' },
     redis: { url: 'redis://harness:6379' },
-    s3: {
-      endpoint: 'https://s3.example.com',
-      bucket: 'avatars',
-      accessKeyId: 'harness-access-key',
-      secretAccessKey: 'harness-secret-key',
-    },
     session: {
       secret: 'harness-session-secret-must-be-at-least-32-chars',
     },

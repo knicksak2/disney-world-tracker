@@ -97,7 +97,7 @@ const ERROR_GENERIC = 'Couldn\u2019t send right now. Try again.';
 const FRIEND = {
   userId: 'friend-123',
   displayName: 'Minnie Mouse',
-  avatarUrl: null,
+  avatarPreset: null,
   establishedAt: '2024-01-02T00:00:00Z',
 } as const;
 

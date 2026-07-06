@@ -72,7 +72,7 @@ describe('TabSelector', () => {
       name: 'View_Selector (FRIEND_PROFILE_TABS)',
       tabs: FRIEND_PROFILE_TABS as readonly TabSpec<ProfileViewMode>[],
       activeMode: 'Overview',
-      otherMode: 'Parks',
+      otherMode: 'Coverage',
     },
     {
       name: 'Own_Stats_Selector (OWN_STATS_TABS)',

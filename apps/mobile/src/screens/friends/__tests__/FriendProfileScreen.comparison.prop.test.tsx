@@ -185,7 +185,7 @@ function makeProfile(): ProfileDTO {
   return {
     userId: FRIEND_ID,
     displayName: DISPLAY_NAME,
-    avatarUrl: null,
+    avatarPreset: null,
     overallCompletionPercent: 0,
   };
 }

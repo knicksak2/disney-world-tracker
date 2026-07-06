@@ -28,6 +28,13 @@ export type {
   ShareReactionValue,
 } from './enums.js';
 
+// Avatar preset catalog (allowlist of bundled illustration ids).
+export {
+  AVATAR_PRESET_IDS,
+  isAvatarPresetId,
+} from './constants/avatarPresets.js';
+export type { AvatarPresetId } from './constants/avatarPresets.js';
+
 // Error code catalog and uniform JSON envelope.
 export {
   ERROR_CODES,
@@ -128,6 +135,7 @@ export {
   changePasswordInputSchema,
   profileSchema,
   profileDisplayNameInputSchema,
+  profileAvatarInputSchema,
   experienceSchema,
   completionSchema,
   completionInputSchema,
@@ -170,6 +178,7 @@ export type {
   LoginInput,
   ChangePasswordInput,
   ProfileDisplayNameInput,
+  ProfileAvatarInput,
   CompletionInput,
   RatingInput,
   NoteInput,

@@ -141,7 +141,7 @@ function makeStats(): StatsResponse {
 const FRIEND_PROFILE = {
   userId: FRIEND_ID,
   displayName: DISPLAY_NAME,
-  avatarUrl: null,
+  avatarPreset: null,
   overallCompletionPercent: 42,
 };
 
@@ -289,22 +289,6 @@ interface ModeCase {
 }
 
 const MODE_CASES: readonly ModeCase[] = [
-  {
-    mode: 'Friend Parks',
-    initialTab: 'Friends',
-    tabTestId: 'tab-Parks',
-    containerTestId: 'friend-mode-parks',
-    expandHeaderTestId: 'friend-park-group-Magic Kingdom-header',
-    rowTestId: 'friend-park-Magic Kingdom-row-0',
-  },
-  {
-    mode: 'Friend Categories',
-    initialTab: 'Friends',
-    tabTestId: 'tab-Categories',
-    containerTestId: 'friend-mode-categories',
-    expandHeaderTestId: 'friend-category-group-Ride-header',
-    rowTestId: 'friend-category-Ride-row-0',
-  },
   {
     mode: 'Friend Experiences',
     initialTab: 'Friends',
