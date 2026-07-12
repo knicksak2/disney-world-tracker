@@ -111,16 +111,18 @@ const cellArb: fc.Arbitrary<RawCoverageCell> = fc
     areaType: areaTypeArb,
     land: rawValueArb,
     resortArea: rawValueArb,
+    worldShowcaseCountry: rawValueArb,
     isResortRepresentation: fc.boolean(),
     counts: countsArb,
   })
   .map(
-    ({ park, category, areaType, land, resortArea, isResortRepresentation, counts }) => ({
+    ({ park, category, areaType, land, resortArea, worldShowcaseCountry, isResortRepresentation, counts }) => ({
       park,
       category,
       areaType,
       land,
       resortArea,
+      worldShowcaseCountry,
       isResortRepresentation,
       completed: counts.completed,
       total: counts.total,
@@ -254,6 +256,7 @@ function makeLandCell(land: string, completed: number, total: number): RawCovera
     areaType: 'ThemePark',
     land,
     resortArea: null,
+    worldShowcaseCountry: null,
     isResortRepresentation: false,
     completed,
     total,

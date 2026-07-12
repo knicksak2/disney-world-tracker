@@ -89,6 +89,12 @@ export interface UpstreamExperience {
    * truncated to at most 200 characters.
    */
   readonly resortArea: string | null;
+  /**
+   * EPCOT World Showcase country pavilion when the resolved Land is
+   * "World Showcase" (resolved by `resolveWorldShowcaseCountry`), else `null`.
+   * One of the eleven pavilion names; truncated to at most 200 characters.
+   */
+  readonly worldShowcaseCountry: string | null;
   /** Description text (R1.8: 0..1000 chars). */
   readonly description: string;
   /**
@@ -186,6 +192,11 @@ export interface CatalogCacheRow {
    */
   readonly resortArea: string | null;
   /**
+   * The persisted World Showcase country pavilion, or `null`. Read into the
+   * diff so a change in the resolved country is detected as a material change.
+   */
+  readonly worldShowcaseCountry: string | null;
+  /**
    * The represented Resort's Internal_Id when this row is a resort-representing
    * Experience (Option A), else `null` for every ordinary Experience. Read into
    * the diff so a drift in the discriminator is detected as a material change
@@ -220,6 +231,11 @@ export interface ReconcileUpsert {
    * writes it.
    */
   readonly resortArea: string | null;
+  /**
+   * EPCOT World Showcase country pavilion to persist, or `null`. Carried
+   * through the diff so Catalog_Sync writes it.
+   */
+  readonly worldShowcaseCountry: string | null;
   /** Disney-provided image URL (from `selectImageUrl`), or `null` (R7.1-R7.3, R14.9). */
   readonly imageUrl: string | null;
   /** Owning Area_Type (R5.7). */

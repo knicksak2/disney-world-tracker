@@ -129,6 +129,25 @@ export interface SharingRepo {
   listInbox(recipientId: string): Promise<InboxResponse>;
 
   /**
+   * Count the recipient's unread inbox Shares — rows addressed to this
+   * recipient that are neither opened (`opened_at IS NULL`) nor soft-deleted
+   * (`recipient_deleted_at IS NULL`). This is the same predicate that drives
+   * `listInbox`'s `unread` field, factored out as a cheap `COUNT(*)` so an
+   * app-wide unread indicator can poll it without materializing the full
+   * inbox projection (R6.2).
+   */
+  countUnreadInbox(recipientId: string): Promise<number>;
+
+  /**
+   * Mark every unread Share in the recipient's inbox as read in one write —
+   * the "mark all read" affordance. Uses the same predicate as the unread
+   * count (`opened_at IS NULL AND recipient_deleted_at IS NULL`) so it flips
+   * exactly the rows the badge counts, stamping `opened_at = now()`. Returns
+   * the number of rows updated (0 when the inbox was already fully read).
+   */
+  markAllInboxRead(recipientId: string): Promise<number>;
+
+  /**
    * List the Shares a User sent, most-recent first. Backs the mobile Sent
    * Shares surface, whose per-Share reactions are then read via the sender-
    * gated `GET /me/shares/:shareId/reactions` (R11.7). The `sender_id = $1`
@@ -178,6 +197,8 @@ export function createSharingRepo(pool: DbPool): SharingRepo {
     createShareAtomic: (senderId, recipientIds, payload) =>
       createShareAtomic(pool, senderId, recipientIds, payload),
     listInbox: (recipientId) => listInbox(pool, recipientId),
+    countUnreadInbox: (recipientId) => countUnreadInbox(pool, recipientId),
+    markAllInboxRead: (recipientId) => markAllInboxRead(pool, recipientId),
     listSentShares: (senderId) => listSentShares(pool, senderId),
     openShare: (recipientId, shareId) =>
       openShare(pool, recipientId, shareId),
@@ -426,6 +447,51 @@ async function listInbox(
     });
   }
   return { unread, items };
+}
+
+/**
+ * Cheap `COUNT(*)` companion to {@link listInbox} for the app-wide unread
+ * indicator. Uses the exact predicate behind `listInbox`'s `unread` field
+ * (`opened_at IS NULL AND recipient_deleted_at IS NULL`) so the badge count
+ * and the inbox screen can never disagree, but skips the joins/projection so
+ * it can be polled cheaply. `COUNT(*)` returns a single row; `pg` yields the
+ * bigint `count` as a string, so we parse it to a number.
+ */
+async function countUnreadInbox(
+  pool: DbPool,
+  recipientId: string,
+): Promise<number> {
+  const result = await pool.query<{ count: string }>(
+    `SELECT count(*) AS count
+       FROM share_recipients sr
+      WHERE sr.recipient_id = $1
+        AND sr.opened_at IS NULL
+        AND sr.recipient_deleted_at IS NULL`,
+    [recipientId],
+  );
+  return Number(result.rows[0]?.count ?? 0);
+}
+
+/**
+ * Bulk "mark all read": stamp `opened_at = now()` on every currently-unread,
+ * non-deleted row addressed to the recipient. The `opened_at IS NULL` guard
+ * makes this idempotent (a second call updates nothing) and preserves the
+ * original open timestamp on rows that were already read. Returns the number
+ * of rows flipped so the caller can tell whether anything changed.
+ */
+async function markAllInboxRead(
+  pool: DbPool,
+  recipientId: string,
+): Promise<number> {
+  const result = await pool.query(
+    `UPDATE share_recipients
+        SET opened_at = now()
+      WHERE recipient_id = $1
+        AND opened_at IS NULL
+        AND recipient_deleted_at IS NULL`,
+    [recipientId],
+  );
+  return result.rowCount ?? 0;
 }
 
 // ---------------------------------------------------------------------------

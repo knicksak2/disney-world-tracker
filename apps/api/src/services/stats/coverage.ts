@@ -18,6 +18,8 @@
  *                                Land values excluded.
  *   - `byResortArea`  (R1.7,   — identical rule for Resort_Area.
  *                      R1.9)
+ *   - `byWorldShowcaseCountry` — identical open-ended rule for the derived
+ *                                EPCOT World Showcase pavilion.
  *   - `resort`        (R2.1,   — the hotels-visited Resort_Statistic: sum of the
  *                      R2.2)     resort-representing rows ONLY, reported
  *                                separately from `byAreaType['Resort']`.
@@ -59,6 +61,8 @@ export interface RawCoverageCell {
   readonly land: string | null;
   /** Raw Resort_Area value; normalized here. May be `null`. */
   readonly resortArea: string | null;
+  /** Raw World Showcase country value; normalized here. May be `null`. */
+  readonly worldShowcaseCountry: string | null;
   /** `true` when the cell counts resort-representing rows (hotels-visited stand-ins). */
   readonly isResortRepresentation: boolean;
   readonly completed: number;
@@ -110,6 +114,7 @@ export interface CoverageStats {
   readonly byAreaType: Record<AreaType, CompletionCell>;
   readonly byLand: readonly LabeledCell[];
   readonly byResortArea: readonly LabeledCell[];
+  readonly byWorldShowcaseCountry: readonly LabeledCell[];
   readonly resort: CompletionCell;
 }
 
@@ -199,6 +204,13 @@ export function rollUpCoverage(cells: readonly RawCoverageCell[]): CoverageStats
     // grouped by the trimmed + case-insensitive key.
     byLand: rollUpNamedDimension(cells, (c) => c.land),
     byResortArea: rollUpNamedDimension(cells, (c) => c.resortArea),
+    // byWorldShowcaseCountry: same open-ended rule keyed on the derived EPCOT
+    // pavilion; only World Showcase experiences carry a non-null value, so this
+    // list holds the (up to eleven) pavilions with active experiences.
+    byWorldShowcaseCountry: rollUpNamedDimension(
+      cells,
+      (c) => c.worldShowcaseCountry,
+    ),
     resort: toCompletionCell(resortCompleted, resortTotal),
   };
 }

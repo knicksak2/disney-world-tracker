@@ -214,6 +214,7 @@ const experiencePayload: fc.Arbitrary<Omit<ExperiencePayload, 'id' | 'presence'>
     // reconciliation (Properties 4-6) is covered in reconcileLand.prop.test.ts.
     land: fc.constant<string | null>(null),
     resortArea: fc.constant<string | null>(null),
+    worldShowcaseCountry: fc.constant<string | null>(null),
     description: cleanText,
     imageUrl: urlOrNull,
     areaType,
@@ -269,6 +270,7 @@ function buildExperienceCache(
           areaType: f.areaType,
           resortId: f.resortId,
           resortArea: f.resortArea,
+          worldShowcaseCountry: f.worldShowcaseCountry,
           representsResortId: f.representsResortId,
         });
         break;
@@ -285,6 +287,7 @@ function buildExperienceCache(
           areaType: f.areaType,
           resortId: f.resortId,
           resortArea: f.resortArea,
+          worldShowcaseCountry: f.worldShowcaseCountry,
           representsResortId: f.representsResortId,
         });
         break;
@@ -300,6 +303,7 @@ function buildExperienceCache(
           areaType: f.areaType,
           resortId: f.resortId,
           resortArea: f.resortArea,
+          worldShowcaseCountry: f.worldShowcaseCountry,
           representsResortId: f.representsResortId,
         });
         break;
@@ -345,6 +349,7 @@ function applyExperienceDiff(
       areaType: u.areaType,
       resortId: u.resortId,
       resortArea: u.resortArea,
+      worldShowcaseCountry: u.worldShowcaseCountry,
       representsResortId: u.representsResortId,
     });
   }
@@ -860,6 +865,7 @@ describe('reconcile / reconcileResorts — Property 13 fixed examples', () => {
     resortId: null,
     representsResortId: null,
     resortArea: null,
+    worldShowcaseCountry: null,
     latitude: 28.4,
     longitude: -81.6,
     accessibility: ['wheelchair-access'],
@@ -902,7 +908,7 @@ describe('reconcile / reconcileResorts — Property 13 fixed examples', () => {
 
   it('soft-deletes an active experience and resort missing from upstream', () => {
     const exp = reconcile(
-      [{ id: 'exp-1', active: true, name: 'Old', park: 'EPCOT', category: 'Ride', land: null, areaType: 'ThemePark', resortId: null, resortArea: null, representsResortId: null }],
+      [{ id: 'exp-1', active: true, name: 'Old', park: 'EPCOT', category: 'Ride', land: null, areaType: 'ThemePark', resortId: null, resortArea: null, worldShowcaseCountry: null, representsResortId: null }],
       [],
     );
     expect(exp.upserts).toEqual([]);
@@ -930,7 +936,7 @@ describe('reconcile / reconcileResorts — Property 13 fixed examples', () => {
 
   it('reactivates a soft-deleted experience and resort that reappear upstream', () => {
     const exp = reconcile(
-      [{ id: 'exp-1', active: false, name: 'Space Mountain', park: 'Magic Kingdom', category: 'Ride', land: 'Tomorrowland', areaType: 'ThemePark', resortId: null, resortArea: null, representsResortId: null }],
+      [{ id: 'exp-1', active: false, name: 'Space Mountain', park: 'Magic Kingdom', category: 'Ride', land: 'Tomorrowland', areaType: 'ThemePark', resortId: null, resortArea: null, worldShowcaseCountry: null, representsResortId: null }],
       [baseExperience],
     );
     expect(exp.softDeletes).toEqual([]);
@@ -959,7 +965,7 @@ describe('reconcile / reconcileResorts — Property 13 fixed examples', () => {
   it('does not diff an already-inactive experience/resort still missing upstream', () => {
     expect(
       reconcile(
-        [{ id: 'exp-1', active: false, name: 'Old', park: 'EPCOT', category: 'Ride', land: null, areaType: 'ThemePark', resortId: null, resortArea: null, representsResortId: null }],
+        [{ id: 'exp-1', active: false, name: 'Old', park: 'EPCOT', category: 'Ride', land: null, areaType: 'ThemePark', resortId: null, resortArea: null, worldShowcaseCountry: null, representsResortId: null }],
         [],
       ),
     ).toEqual({ upserts: [], softDeletes: [] });
@@ -1185,6 +1191,7 @@ function toUpstreamExperienceP24(f: ExperienceImageFactP24): UpstreamExperience 
     resortId: null,
     representsResortId: null,
     resortArea: null,
+    worldShowcaseCountry: null,
     latitude: null,
     longitude: null,
     accessibility: [],
@@ -1207,14 +1214,14 @@ function buildExperienceCacheP24(
         break;
       case 'both-active-same':
       case 'cache-only-active':
-        out.push({ id: f.id, active: true, name: f.name, park: f.park, category: f.category, land: null, areaType: 'ThemePark', resortId: null, resortArea: null, representsResortId: null });
+        out.push({ id: f.id, active: true, name: f.name, park: f.park, category: f.category, land: null, areaType: 'ThemePark', resortId: null, resortArea: null, worldShowcaseCountry: null, representsResortId: null });
         break;
       case 'both-active-drift':
-        out.push({ id: f.id, active: true, name: `${f.name}~old`, park: f.park, category: f.category, land: null, areaType: 'ThemePark', resortId: null, resortArea: null, representsResortId: null });
+        out.push({ id: f.id, active: true, name: `${f.name}~old`, park: f.park, category: f.category, land: null, areaType: 'ThemePark', resortId: null, resortArea: null, worldShowcaseCountry: null, representsResortId: null });
         break;
       case 'cache-only-inactive':
       case 'both-inactive':
-        out.push({ id: f.id, active: false, name: f.name, park: f.park, category: f.category, land: null, areaType: 'ThemePark', resortId: null, resortArea: null, representsResortId: null });
+        out.push({ id: f.id, active: false, name: f.name, park: f.park, category: f.category, land: null, areaType: 'ThemePark', resortId: null, resortArea: null, worldShowcaseCountry: null, representsResortId: null });
         break;
     }
   }
@@ -1437,6 +1444,7 @@ describe('reconcile / reconcileResorts — Property 24: sole-writer end-to-end v
             areaType: u.areaType,
             resortId: u.resortId,
             resortArea: u.resortArea,
+            worldShowcaseCountry: u.worldShowcaseCountry,
             representsResortId: u.representsResortId,
           }));
           const resortCacheAfter: ResortCacheRow[] = resortDiff.upserts.map((u) => ({
@@ -1615,6 +1623,7 @@ function nonDriftCacheRow(f: NonDriftFact): CatalogCacheRow {
     areaType: f.areaType,
     resortId: f.resortId,
     resortArea: f.resortArea,
+    worldShowcaseCountry: null,
     representsResortId: null,
   };
 }
@@ -1636,6 +1645,7 @@ function nonDriftUpstream(f: NonDriftFact): UpstreamExperience {
     resortId: f.resortId,
     representsResortId: null,
     resortArea: f.resortArea,
+    worldShowcaseCountry: null,
     description: f.description,
     imageUrl: f.imageUrl,
     latitude: f.latitude,
@@ -1693,6 +1703,7 @@ describe('reconcile — Property 13 (experience-facet-enrichment): new enrichmen
         areaType: 'ThemePark',
         resortId: null,
         resortArea: null,
+        worldShowcaseCountry: null,
         representsResortId: null,
       },
     ];
@@ -1705,6 +1716,7 @@ describe('reconcile — Property 13 (experience-facet-enrichment): new enrichmen
         category: 'Ride',
         land: 'Tomorrowland',
         resortArea: null,
+        worldShowcaseCountry: null,
         description: 'Indoor roller coaster.',
         imageUrl: 'https://cdn.disney.com/space.jpg',
         areaType: 'ThemePark',

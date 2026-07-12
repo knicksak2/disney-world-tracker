@@ -163,6 +163,12 @@ export interface CatalogListFilters {
   readonly areaType?: AreaType;
   readonly q?: string;
   readonly land?: string;
+  /**
+   * Case-sensitive exact match on `experiences.world_showcase_country` — the
+   * derived EPCOT World Showcase pavilion. Combines conjunctively with every
+   * other filter; a non-matching value yields an empty list.
+   */
+  readonly worldShowcaseCountry?: string;
 }
 
 /**
@@ -254,6 +260,8 @@ interface ExperienceRow extends QueryResultRow {
   land: string | null;
   /** Persisted Resort_Area zone for a `Resort`-area Experience, else `null`. */
   resort_area: string | null;
+  /** Persisted EPCOT World Showcase country pavilion, or `null`. */
+  world_showcase_country: string | null;
   image_url: string | null;
   latitude: number | null;
   longitude: number | null;
@@ -460,7 +468,7 @@ async function getCacheSnapshot(
 ): Promise<readonly CatalogCacheRow[]> {
   const result = await pool.query<ExperienceRow>(
     `SELECT id, upstream_entity_id, name, park, category, description, active, land,
-            area_type, resort_id, resort_area, represents_resort_id
+            area_type, resort_id, resort_area, world_showcase_country, represents_resort_id
        FROM experiences`,
   );
   return result.rows.map(rowToCacheSnapshot);
@@ -478,6 +486,7 @@ function rowToCacheSnapshot(row: ExperienceRow): CatalogCacheRow {
     areaType: row.area_type,
     resortId: row.resort_id,
     resortArea: row.resort_area,
+    worldShowcaseCountry: row.world_showcase_country,
     representsResortId: row.represents_resort_id,
   };
 }
@@ -637,9 +646,9 @@ async function applyReconciliation(
            image_url, latitude, longitude, area_type, resort_id,
            accessibility, price_tier, meal_periods, land, resort_area,
            grouped_facets, height_requirement, why_this, sub_type,
-           represents_resort_id, updated_at
+           represents_resort_id, world_showcase_country, updated_at
          )
-         VALUES ($1, $2, $3, $4, $5, $6, TRUE, $7, $8, $9, $10, $11, $12, $13, $14::jsonb, $15, $16, $17::jsonb, $18::jsonb, $19::jsonb, $20, $21, now())
+         VALUES ($1, $2, $3, $4, $5, $6, TRUE, $7, $8, $9, $10, $11, $12, $13, $14::jsonb, $15, $16, $17::jsonb, $18::jsonb, $19::jsonb, $20, $21, $22, now())
          ON CONFLICT (id) DO UPDATE SET
            upstream_entity_id   = EXCLUDED.upstream_entity_id,
            name                 = EXCLUDED.name,
@@ -662,6 +671,7 @@ async function applyReconciliation(
            why_this             = EXCLUDED.why_this,
            sub_type             = EXCLUDED.sub_type,
            represents_resort_id = EXCLUDED.represents_resort_id,
+           world_showcase_country = EXCLUDED.world_showcase_country,
            updated_at           = now()`,
         [
           upsert.id,
@@ -689,6 +699,7 @@ async function applyReconciliation(
           upsert.whyThis === null ? null : JSON.stringify(upsert.whyThis),
           upsert.subType,
           upsert.representsResortId,
+          upsert.worldShowcaseCountry,
         ],
       );
     }
@@ -871,6 +882,13 @@ async function listActiveExperiences(
     where.push(`land = $${params.length}`);
   }
 
+  if (filters.worldShowcaseCountry !== undefined) {
+    // Case-sensitive exact match on the derived EPCOT pavilion, mirroring the
+    // `land` filter and combining conjunctively with every other filter.
+    params.push(filters.worldShowcaseCountry);
+    where.push(`world_showcase_country = $${params.length}`);
+  }
+
   const trimmedQuery =
     filters.q !== undefined && filters.q.trim().length > 0
       ? filters.q.trim()
@@ -887,7 +905,7 @@ async function listActiveExperiences(
 
   const sql = `
     SELECT id, upstream_entity_id, name, park, category, description, active,
-           land, resort_area, image_url, latitude, longitude, area_type, resort_id,
+           land, resort_area, world_showcase_country, image_url, latitude, longitude, area_type, resort_id,
            accessibility, price_tier, meal_periods,
            grouped_facets, height_requirement, why_this, sub_type
       FROM experiences
@@ -953,7 +971,7 @@ async function getExperience(
 ): Promise<ExperienceDTO | null> {
   const result = await pool.query<ExperienceRow>(
     `SELECT id, upstream_entity_id, name, park, category, description, active,
-            land, resort_area, image_url, latitude, longitude, area_type, resort_id,
+            land, resort_area, world_showcase_country, image_url, latitude, longitude, area_type, resort_id,
             accessibility, price_tier, meal_periods,
             grouped_facets, height_requirement, why_this, sub_type
        FROM experiences
@@ -1148,6 +1166,9 @@ function rowToDto(row: ExperienceRow): ExperienceDTO {
     areaType: row.area_type,
     ...(row.land !== null ? { land: row.land } : {}),
     ...(row.resort_area !== null ? { resortArea: row.resort_area } : {}),
+    ...(row.world_showcase_country !== null
+      ? { worldShowcaseCountry: row.world_showcase_country }
+      : {}),
     ...(row.resort_id !== null ? { resortId: row.resort_id } : {}),
     ...(row.latitude !== null ? { latitude: row.latitude } : {}),
     ...(row.longitude !== null ? { longitude: row.longitude } : {}),

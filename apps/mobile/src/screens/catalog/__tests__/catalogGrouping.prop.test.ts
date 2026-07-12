@@ -28,10 +28,12 @@ import { AREA_TYPES, EXPERIENCE_CATEGORIES, PARKS } from '@dwt/shared';
 import type { ExperienceDTO, ResortDTO } from '@dwt/shared';
 
 import {
+  browseLandOf,
   buildResortRows,
   groupByCategory,
   groupByLand,
   groupByLandFiltered,
+  groupByPavilionFiltered,
   LAND_CATCHALL_KEY,
   RESORT_CATCHALL_ID,
 } from '../catalogGrouping';
@@ -423,6 +425,143 @@ describe('Property 13: buildResortRows anchors every Resort in order and totally
         const flat = experienceRows.map((r) => (r as { experience: ExperienceDTO }).experience);
         expectSameByReference(flat, experiences);
       }),
+      { numRuns: NUM_RUNS },
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Property 14 — Pavilion-aware Land grouping (World Showcase browse facet)
+// ---------------------------------------------------------------------------
+//
+// `groupByPavilionFiltered` behaves exactly like `groupByLandFiltered` except an
+// EPCOT World Showcase Experience (one carrying a resolved `worldShowcaseCountry`)
+// is grouped under its country pavilion instead of the umbrella "World Showcase"
+// Land, so the eleven pavilions become individually browsable sections.
+
+// The eleven World Showcase pavilions.
+const pavilionArb = fc.constantFrom(
+  'Mexico',
+  'Norway',
+  'China',
+  'Germany',
+  'Italy',
+  'The American Adventure',
+  'Japan',
+  'Morocco',
+  'France',
+  'United Kingdom',
+  'Canada',
+);
+
+/**
+ * A mix of World Showcase Experiences (land = "World Showcase" with a resolved
+ * pavilion) and ordinary Experiences (no `worldShowcaseCountry`), so both the
+ * pavilion-explosion and the pass-through-for-everything-else paths are hit.
+ */
+const pavilionExperienceArb: fc.Arbitrary<ExperienceDTO> = fc.oneof(
+  fc.record({
+    id: fc.uuid(),
+    name: nameArb,
+    park: fc.constant<'EPCOT'>('EPCOT'),
+    category: fc.constantFrom(...EXPERIENCE_CATEGORIES),
+    description: fc.constant(''),
+    active: fc.constant(true),
+    imageUrl: fc.constant(null),
+    areaType: fc.constant<'ThemePark'>('ThemePark'),
+    resortId: fc.constant(null),
+    land: fc.constant('World Showcase'),
+    worldShowcaseCountry: pavilionArb,
+  }),
+  experienceArb(RESORT_ID_POOL),
+);
+
+const pavilionExperiencesArb = fc.array(pavilionExperienceArb, { maxLength: 30 });
+
+describe('Property 14: groupByPavilionFiltered explodes World Showcase into per-pavilion sections', () => {
+  it('browseLandOf returns the pavilion for World Showcase experiences, else the persisted Land', () => {
+    fc.assert(
+      fc.property(pavilionExperienceArb, (experience) => {
+        const expected = isNamedLand(experience.worldShowcaseCountry)
+          ? experience.worldShowcaseCountry
+          : experience.land ?? null;
+        expect(browseLandOf(experience)).toBe(expected);
+      }),
+      { numRuns: NUM_RUNS },
+    );
+  });
+
+  it('groups World Showcase experiences under their pavilion (never "World Showcase") and totally partitions', () => {
+    fc.assert(
+      fc.property(pavilionExperiencesArb, (experiences) => {
+        const sections = groupByPavilionFiltered(experiences, null);
+
+        // Each item sits under a section keyed by its browse land, and no
+        // experience that resolved a pavilion is grouped under the umbrella
+        // "World Showcase" (those explode into per-pavilion sections). An
+        // ordinary experience whose persisted Land is literally "World Showcase"
+        // but carries no pavilion still legitimately forms a "World Showcase"
+        // section — that is the fallback path.
+        for (const section of sections) {
+          if (section.key === LAND_CATCHALL_KEY) continue;
+          for (const experience of section.items) {
+            expect(section.key).toBe(browseLandOf(experience));
+            if (section.key === 'World Showcase') {
+              expect(isNamedLand(experience.worldShowcaseCountry)).toBe(false);
+            }
+          }
+        }
+
+        // Named sections ordered case-insensitively; catch-all last.
+        const named = sections.filter((s) => s.key !== LAND_CATCHALL_KEY);
+        expectCaseInsensitiveAscending(named.map((s) => s.title));
+
+        // Total partition — nothing dropped or duplicated.
+        const flat = sections.flatMap((s) => [...s.items]);
+        expectSameByReference(flat, experiences);
+      }),
+      { numRuns: NUM_RUNS },
+    );
+  });
+
+  it('is identical to groupByLandFiltered when no experience carries a pavilion (no-op elsewhere)', () => {
+    // Ordinary experiences never set `worldShowcaseCountry`, so browseLandOf
+    // collapses to the persisted Land and the two groupings must coincide.
+    const ordinaryArb = fc.array(experienceArb(RESORT_ID_POOL), { maxLength: 30 });
+    fc.assert(
+      fc.property(
+        ordinaryArb,
+        fc.oneof(fc.constant(null), fc.constantFrom(...EXPERIENCE_CATEGORIES)),
+        (experiences, category) => {
+          expect(groupByPavilionFiltered(experiences, category)).toEqual(
+            groupByLandFiltered(experiences, category),
+          );
+        },
+      ),
+      { numRuns: NUM_RUNS },
+    );
+  });
+
+  it('respects the category filter, pruning pavilions with no matching experience', () => {
+    fc.assert(
+      fc.property(
+        pavilionExperiencesArb,
+        fc.constantFrom(...EXPERIENCE_CATEGORIES),
+        (experiences, category) => {
+          const filtered = groupByPavilionFiltered(experiences, category);
+          for (const section of filtered) {
+            expect(section.items.length).toBeGreaterThan(0);
+            for (const experience of section.items) {
+              expect(experience.category).toBe(category);
+            }
+          }
+          const flat = filtered.flatMap((s) => [...s.items]);
+          expectSameByReference(
+            flat,
+            experiences.filter((e) => e.category === category),
+          );
+        },
+      ),
       { numRuns: NUM_RUNS },
     );
   });

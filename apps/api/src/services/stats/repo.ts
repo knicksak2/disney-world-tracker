@@ -161,6 +161,7 @@ interface DenominatorRow {
   readonly area_type: string;
   readonly land: string | null;
   readonly resort_area: string | null;
+  readonly world_showcase_country: string | null;
   readonly is_resort_representation: boolean;
   readonly total: string;
 }
@@ -172,6 +173,7 @@ interface NumeratorRow {
   readonly area_type: string;
   readonly land: string | null;
   readonly resort_area: string | null;
+  readonly world_showcase_country: string | null;
   readonly is_resort_representation: boolean;
   readonly completed: string;
 }
@@ -273,11 +275,12 @@ export function createStatsRepo(pool: DbPool): StatsRepo {
                   area_type,
                   land,
                   resort_area,
+                  world_showcase_country,
                   (represents_resort_id IS NOT NULL) AS is_resort_representation,
                   COUNT(*)::bigint AS total
              FROM experiences
             WHERE active = TRUE
-            GROUP BY park, category, area_type, land, resort_area, is_resort_representation`,
+            GROUP BY park, category, area_type, land, resort_area, world_showcase_country, is_resort_representation`,
         );
 
         // 2. Coverage numerators — the same grouping restricted to the
@@ -288,13 +291,14 @@ export function createStatsRepo(pool: DbPool): StatsRepo {
                   e.area_type  AS area_type,
                   e.land       AS land,
                   e.resort_area AS resort_area,
+                  e.world_showcase_country AS world_showcase_country,
                   (e.represents_resort_id IS NOT NULL) AS is_resort_representation,
                   COUNT(*)::bigint AS completed
              FROM completions c
              JOIN experiences e ON e.id = c.experience_id
             WHERE c.user_id = $1
               AND e.active  = TRUE
-            GROUP BY e.park, e.category, e.area_type, e.land, e.resort_area, is_resort_representation`,
+            GROUP BY e.park, e.category, e.area_type, e.land, e.resort_area, e.world_showcase_country, is_resort_representation`,
           [targetUserId],
         );
 
@@ -439,6 +443,7 @@ export function mergeCoverageRows(
     areaType: RawCoverageCell['areaType'];
     land: string | null;
     resortArea: string | null;
+    worldShowcaseCountry: string | null;
     isResortRepresentation: boolean;
     completed: number;
     total: number;
@@ -455,6 +460,7 @@ export function mergeCoverageRows(
     areaType: string,
     land: string | null,
     resortArea: string | null,
+    worldShowcaseCountry: string | null,
     isResortRepresentation: boolean,
   ): string =>
     [
@@ -463,6 +469,7 @@ export function mergeCoverageRows(
       areaType,
       land ?? NULL,
       resortArea ?? NULL,
+      worldShowcaseCountry ?? NULL,
       isResortRepresentation ? '1' : '0',
     ].join(SEP);
 
@@ -485,6 +492,7 @@ export function mergeCoverageRows(
       row.area_type,
       row.land,
       row.resort_area,
+      row.world_showcase_country,
       row.is_resort_representation,
     );
     const total = parseCount(row.total);
@@ -498,6 +506,7 @@ export function mergeCoverageRows(
         areaType: row.area_type as RawCoverageCell['areaType'],
         land: row.land,
         resortArea: row.resort_area,
+        worldShowcaseCountry: row.world_showcase_country,
         isResortRepresentation: row.is_resort_representation,
         completed: 0,
         total,
@@ -515,6 +524,7 @@ export function mergeCoverageRows(
       row.area_type,
       row.land,
       row.resort_area,
+      row.world_showcase_country,
       row.is_resort_representation,
     );
     const completed = parseCount(row.completed);
@@ -531,6 +541,7 @@ export function mergeCoverageRows(
         areaType: row.area_type as RawCoverageCell['areaType'],
         land: row.land,
         resortArea: row.resort_area,
+        worldShowcaseCountry: row.world_showcase_country,
         isResortRepresentation: row.is_resort_representation,
         completed,
         total: 0,

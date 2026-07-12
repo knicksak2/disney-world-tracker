@@ -29,8 +29,11 @@
  *     experience).
  *
  *   - **Total-order sort** (R7.6): percent descending, then total descending,
- *     then case-insensitive label ascending, then exact label ascending. The
- *     exact-label tiebreak keeps the order total and deterministic.
+ *     then case-insensitive label ascending, then exact label ascending, then
+ *     `resortId` ascending. Two distinct resorts may share a name (e.g. a
+ *     duplicated label), so the unique `resortId` (R7.10) is the ultimate
+ *     tiebreak that keeps the order total, deterministic, and independent of
+ *     input order — label alone is not unique.
  *
  *   - **Open-ended & empty** (R7.9, R7.10): the resort set is data-driven and
  *     returned as a list; empty input yields an empty list, and the repository
@@ -110,7 +113,9 @@ export interface ResortCoverage {
  * introduces nor collapses rows, it only maps and sorts.
  *
  * Sort order (R7.6): percent descending → total descending → case-insensitive
- * label ascending → exact label ascending (a total order).
+ * label ascending → exact label ascending → `resortId` ascending (a total
+ * order; `resortId` is unique per R7.10, so the final key resolves any
+ * same-label tie deterministically regardless of input order).
  */
 export function rollUpResortCoverage(
   rows: readonly RawResortCoverageRow[],
@@ -127,6 +132,10 @@ export function rollUpResortCoverage(
       const al = a.label.toLowerCase();
       const bl = b.label.toLowerCase();
       if (al !== bl) return al < bl ? -1 : 1;
-      return a.label < b.label ? -1 : a.label > b.label ? 1 : 0;
+      if (a.label !== b.label) return a.label < b.label ? -1 : 1;
+      // Ultimate tiebreak: the unique resortId (R7.10). Two distinct resorts can
+      // share a label, so without this the sort is not a total order and the
+      // output would depend on input order.
+      return a.resortId < b.resortId ? -1 : a.resortId > b.resortId ? 1 : 0;
     });
 }

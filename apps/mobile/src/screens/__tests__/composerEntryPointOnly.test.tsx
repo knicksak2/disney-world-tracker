@@ -169,6 +169,11 @@ describe('Share_Composer opens only from a Share_Entry_Point (R3.2)', () => {
       if (path === '/me/friends') {
         return FRIENDS_RESPONSE;
       }
+      // The Friends page reads the unread-inbox tally to badge the Inbox
+      // control; answer it benignly (no unread) so the mock stays quiet.
+      if (path === '/me/inbox/unread-count') {
+        return { count: 0 };
+      }
       throw new Error(`unexpected call to ${String(path)}`);
     });
 

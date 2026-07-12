@@ -863,6 +863,7 @@ describe('runSync — reconcile drives upserts and soft-deletes', () => {
         areaType: 'ThemePark',
         resortId: null,
         resortArea: null,
+        worldShowcaseCountry: null,
         representsResortId: null,
       },
     ];
@@ -899,6 +900,7 @@ describe('runSync — reconcile drives upserts and soft-deletes', () => {
         areaType: 'ThemePark',
         resortId: null,
         resortArea: null,
+        worldShowcaseCountry: null,
         representsResortId: null,
       },
     ];
@@ -958,6 +960,7 @@ describe('runSync — resort-representing row reconciliation (Option A, R3.4, R3
       areaType: 'Resort',
       resortId: idOf(resortDoc.id),
       resortArea: null,
+      worldShowcaseCountry: null,
       representsResortId: idOf(resortDoc.id),
     };
   }

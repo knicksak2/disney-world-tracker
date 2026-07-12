@@ -30,6 +30,7 @@ import type { RouteProp } from '@react-navigation/native';
 import { useRoute } from '@react-navigation/native';
 import {
   ActivityIndicator,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -444,7 +445,10 @@ function ProfileContent({
         icon="person-circle"
       />
 
-      <View style={styles.body}>
+      <ScrollView
+        contentContainerStyle={styles.body}
+        showsVerticalScrollIndicator={false}
+      >
         <Card style={styles.identityCard}>
           <View style={styles.avatarWrap}>
             {profile.avatarPreset !== null ? (
@@ -572,7 +576,7 @@ function ProfileContent({
             />
           </View>
         ) : null}
-      </View>
+      </ScrollView>
     </ScreenContainer>
   );
 }
@@ -590,7 +594,7 @@ const styles = StyleSheet.create({
     gap: theme.spacing.sm,
   },
   body: {
-    flex: 1,
+    flexGrow: 1,
     paddingHorizontal: theme.spacing.xl,
     marginTop: -theme.layout.headerOverlap,
     gap: theme.spacing.lg,

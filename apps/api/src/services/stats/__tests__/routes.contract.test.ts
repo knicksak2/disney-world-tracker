@@ -37,12 +37,12 @@ import type { RawCoverageCell, StatsRepo, StatsSnapshot } from '../repo.js';
 // Snapshot builder
 // ---------------------------------------------------------------------------
 
-type CellInput = Omit<RawCoverageCell, 'land' | 'resortArea'> &
-  Partial<Pick<RawCoverageCell, 'land' | 'resortArea'>>;
+type CellInput = Omit<RawCoverageCell, 'land' | 'resortArea' | 'worldShowcaseCountry'> &
+  Partial<Pick<RawCoverageCell, 'land' | 'resortArea' | 'worldShowcaseCountry'>>;
 
 function snapshotOf(cells: readonly CellInput[]): StatsSnapshot {
   return {
-    coverage: cells.map((c) => ({ land: null, resortArea: null, ...c })),
+    coverage: cells.map((c) => ({ land: null, resortArea: null, worldShowcaseCountry: null, ...c })),
     facetExperiences: [],
     userRatings: [],
     resortCoverage: [],

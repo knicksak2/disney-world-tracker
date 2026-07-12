@@ -426,6 +426,12 @@ function applyMigrations(db: IMemoryDb): void {
   db.public.none(
     readFileSync(migrationPath('0010_resort_experience_category.sql'), 'utf8'),
   );
+  // 0014 adds the additive `experiences.world_showcase_country` column the
+  // reconcile/repo upsert path now writes on every Experience. Without it the
+  // post-sync upsert fails and the full Disney sync reports `failed`.
+  db.public.none(
+    readFileSync(migrationPath('0014_experience_world_showcase_country.sql'), 'utf8'),
+  );
 }
 
 // ---------------------------------------------------------------------------

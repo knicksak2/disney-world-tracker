@@ -377,6 +377,52 @@ export default function InboxScreen(): JSX.Element {
     retry: false,
   });
 
+  // Mark a Share read if (and only if) it is currently unread, reusing the
+  // tap-through open mutation. Reading the cached read-state first keeps this
+  // idempotent on the client so an already-read Share never fires a redundant
+  // request — used by both tap-through selection (R5.3) and reacting.
+  const markShareRead = React.useCallback(
+    (shareId: string): void => {
+      const cached = queryClient.getQueryData<InboxResponse>(INBOX_QUERY_KEY);
+      const target = cached?.items.find((it) => it.shareId === shareId);
+      if (target !== undefined && !target.read) {
+        openMutation.mutate(shareId);
+      }
+    },
+    [queryClient, openMutation],
+  );
+
+  // "Mark all read": one request flips every unread Share server-side. On
+  // success we patch the cache so all rows read and the unread count is 0,
+  // then reconcile on settle. The invalidation prefix-matches the
+  // `['inbox', 'unread']` count key, so the tab-bar and Friends-page badges
+  // clear too.
+  const markAllReadMutation = useMutation<
+    { updated: number; unread: number },
+    ApiError,
+    void
+  >({
+    mutationFn: () =>
+      apiRequest<{ updated: number; unread: number }>(
+        'POST',
+        '/me/inbox/read-all',
+      ),
+    onSuccess: () => {
+      queryClient.setQueryData<InboxResponse>(INBOX_QUERY_KEY, (prev) => {
+        if (prev === undefined) return prev;
+        if (prev.unread === 0 && prev.items.every((it) => it.read)) return prev;
+        return {
+          unread: 0,
+          items: prev.items.map((it) => (it.read ? it : { ...it, read: true })),
+        };
+      });
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: INBOX_QUERY_KEY });
+    },
+    retry: false,
+  });
+
   // R5.7 — a Share whose destination is currently being verified. The ref is
   // the authoritative single-flight guard (immune to stale render closures);
   // the state mirror drives the per-row loading indication.
@@ -423,9 +469,7 @@ export default function InboxScreen(): JSX.Element {
 
       // R5.3 — mark an unread Share read on selection regardless of whether
       // its destination turns out to be reachable.
-      if (!item.read) {
-        openMutation.mutate(item.shareId);
-      }
+      markShareRead(item.shareId);
 
       // Clear any stale unavailable message from a previous attempt.
       setRowMessage(item.shareId, null);
@@ -505,7 +549,7 @@ export default function InboxScreen(): JSX.Element {
       beginVerifying,
       endVerifying,
       navigation,
-      openMutation,
+      markShareRead,
       queryClient,
       setRowMessage,
     ],
@@ -629,17 +673,37 @@ export default function InboxScreen(): JSX.Element {
         keyExtractor={(item) => item.shareId}
         contentContainerStyle={styles.listContent}
         ListHeaderComponent={
-          deepLinkMessage !== null ? (
-            <View style={styles.deepLinkBanner} testID="inbox-deeplink-message">
-              <Ionicons
-                name="alert-circle-outline"
-                size={16}
-                color={theme.color.danger}
-                style={styles.deepLinkBannerIcon}
-              />
-              <Text style={styles.deepLinkBannerText}>{deepLinkMessage}</Text>
-            </View>
-          ) : null
+          <>
+            {deepLinkMessage !== null ? (
+              <View
+                style={styles.deepLinkBanner}
+                testID="inbox-deeplink-message"
+              >
+                <Ionicons
+                  name="alert-circle-outline"
+                  size={16}
+                  color={theme.color.danger}
+                  style={styles.deepLinkBannerIcon}
+                />
+                <Text style={styles.deepLinkBannerText}>{deepLinkMessage}</Text>
+              </View>
+            ) : null}
+            {displayedUnread > 0 ? (
+              <View style={styles.markAllRow}>
+                <SecondaryButton
+                  label={
+                    markAllReadMutation.isPending
+                      ? 'Marking\u2026'
+                      : 'Mark all read'
+                  }
+                  icon="checkmark-done-outline"
+                  onPress={() => markAllReadMutation.mutate()}
+                  disabled={markAllReadMutation.isPending}
+                  testID="inbox-mark-all-read"
+                />
+              </View>
+            ) : null}
+          </>
         }
         ListEmptyComponent={
           <View style={styles.centerWrap}>
@@ -654,6 +718,7 @@ export default function InboxScreen(): JSX.Element {
           <InboxRow
             item={item}
             onSelect={() => handleSelect(item)}
+            onReacted={() => markShareRead(item.shareId)}
             isVerifying={verifyingIds.has(item.shareId)}
             message={rowMessages[item.shareId] ?? null}
             onDelete={() => handleDelete(item)}
@@ -690,12 +755,14 @@ export default function InboxScreen(): JSX.Element {
 function InboxRow(props: {
   item: InboxItemDTO;
   onSelect: () => void;
+  onReacted: () => void;
   isVerifying: boolean;
   message: string | null;
   onDelete: () => void;
   isDeleting: boolean;
 }): JSX.Element {
-  const { item, onSelect, isVerifying, message, onDelete, isDeleting } = props;
+  const { item, onSelect, onReacted, isVerifying, message, onDelete, isDeleting } =
+    props;
 
   return (
     <Card
@@ -728,7 +795,7 @@ function InboxRow(props: {
 
       <ShareContent item={item} />
 
-      <ShareReactions item={item} />
+      <ShareReactions item={item} onReacted={onReacted} />
 
       {isVerifying && (
         <View style={styles.verifyingRow}>
@@ -1066,8 +1133,13 @@ function patchInboxReaction(
  *     success, so the prior reaction state is preserved without an optimistic
  *     update to roll back.
  */
-function ShareReactions(props: { item: InboxItemDTO }): JSX.Element {
-  const { item } = props;
+function ShareReactions(props: {
+  item: InboxItemDTO;
+  /** Called after a reaction is successfully attached, so the parent can mark
+   * the Share read — reacting counts as engaging with it. */
+  onReacted: () => void;
+}): JSX.Element {
+  const { item, onReacted } = props;
   const { shareId } = item;
   const queryClient = useQueryClient();
 
@@ -1095,6 +1167,8 @@ function ShareReactions(props: { item: InboxItemDTO }): JSX.Element {
     onSuccess: (_data, reaction) => {
       setFailureMessage(null);
       patchInboxReaction(queryClient, shareId, reaction);
+      // Attaching a reaction is engagement with the Share, so mark it read.
+      onReacted();
     },
     onError: (error) => {
       // R11.12 — only non-authorization failures surface the retry message;
@@ -1221,6 +1295,10 @@ const styles = StyleSheet.create({
     paddingTop: theme.spacing.md,
     paddingBottom: theme.spacing.xxl,
     flexGrow: 1,
+  },
+  markAllRow: {
+    alignItems: 'flex-end',
+    marginBottom: theme.spacing.md,
   },
   row: {
     marginBottom: theme.spacing.md,

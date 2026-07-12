@@ -257,8 +257,21 @@ describe('navigation (R6.10, R11.6, R11.12)', () => {
       if (path === '/home/highest-rated') {
         return { entries: [] };
       }
-      // Detail-screen calls must not happen — failing them loudly would
-      // also fail the test, but we never expect to get here.
+      // Tab-bar chrome fetches its own data in the background: the Profile
+      // tab icon reads `/me`, and the Friends tab icon reads the unread
+      // indicator's two sources. These are unrelated to the empty-state tap
+      // under test, so answer them benignly rather than throwing.
+      if (path === '/me') {
+        return { user: { id: 'u1', email: 'u@x.test' }, profile: { displayName: 'U', avatarPreset: null } };
+      }
+      if (path === '/me/inbox/unread-count') {
+        return { count: 0 };
+      }
+      if (path === '/me/friends') {
+        return { friends: [], incomingRequests: [], outgoingRequests: [] };
+      }
+      // Detail-screen / aggregate calls must not happen for an empty-state
+      // tap — fail loudly if one ever does.
       throw new Error(`unexpected call to ${String(path)}`);
     });
 
@@ -277,9 +290,11 @@ describe('navigation (R6.10, R11.6, R11.12)', () => {
 
     // ExperienceDetail must NOT have been rendered.
     expect(screen.queryByTestId('experience-detail')).toBeNull();
-    // No catalog detail / aggregate fetch should have fired either.
-    expect(apiRequestMock).toHaveBeenCalledTimes(1);
+    // The leaderboard was read, but no catalog-detail or aggregate fetch
+    // fired off the empty-state tap (the mock throws for any such path).
     expect(apiRequestMock).toHaveBeenCalledWith('GET', '/home/highest-rated');
+    const requestedPaths = apiRequestMock.mock.calls.map(([, path]) => path);
+    expect(requestedPaths).not.toContain(`/catalog/${SAMPLE_ENTRY.experienceId}`);
   });
 
   test('R6.10: a 401 from the API routes back to the Login screen', async () => {

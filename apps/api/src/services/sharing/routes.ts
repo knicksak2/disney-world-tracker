@@ -337,6 +337,44 @@ export function sharingRoutes(
     );
 
     // -------------------------------------------------------------------
+    // GET /me/inbox/unread-count
+    // -------------------------------------------------------------------
+    // Lightweight unread tally for the app-wide inbox indicator. Returns the
+    // same unread count as `GET /me/inbox` (`opened_at IS NULL` and not
+    // soft-deleted) without materializing the full inbox, so a tab-bar badge
+    // can poll it cheaply. Registered before the parameterized
+    // `/me/inbox/:shareId/*` routes; Fastify's router prefers the static
+    // segment so `unread-count` is never captured as a `:shareId`.
+    app.get(
+      '/me/inbox/unread-count',
+      { preHandler: requireSession },
+      async (request) => {
+        const recipientId = requireUser(request);
+        const count = await repo.countUnreadInbox(recipientId);
+        return { count };
+      },
+    );
+
+    // -------------------------------------------------------------------
+    // POST /me/inbox/read-all
+    // -------------------------------------------------------------------
+    // "Mark all read" — flip every unread Share in the caller's inbox to read
+    // in a single write. Idempotent (a second call updates nothing). Returns
+    // the number of rows flipped and the resulting unread count (always 0) so
+    // the client can reconcile its badge without a follow-up read. The static
+    // `read-all` segment is registered before the parametric
+    // `/me/inbox/:shareId/*` routes so Fastify never treats it as a `:shareId`.
+    app.post(
+      '/me/inbox/read-all',
+      { preHandler: requireSession },
+      async (request) => {
+        const recipientId = requireUser(request);
+        const updated = await repo.markAllInboxRead(recipientId);
+        return { updated, unread: 0 };
+      },
+    );
+
+    // -------------------------------------------------------------------
     // GET /me/shares
     // -------------------------------------------------------------------
     // List the Shares the caller sent, most-recent first. Backs the mobile

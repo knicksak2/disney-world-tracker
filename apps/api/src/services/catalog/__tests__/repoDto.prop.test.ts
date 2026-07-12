@@ -152,6 +152,7 @@ const experienceRowArb = fc.record({
   active: fc.boolean(),
   land: fc.option(fc.string({ maxLength: 60 }), { nil: null }),
   resort_area: fc.option(fc.string({ maxLength: 60 }), { nil: null }),
+  world_showcase_country: fc.option(fc.string({ maxLength: 60 }), { nil: null }),
   image_url: fc.option(fc.webUrl(), { nil: null }),
   latitude: coordinateArb,
   longitude: coordinateArb,
@@ -202,6 +203,9 @@ function expectedExperienceDto(row: Row): Record<string, unknown> {
   };
   if (row.land !== null) dto.land = row.land;
   if (row.resort_area !== null) dto.resortArea = row.resort_area;
+  if (row.world_showcase_country !== null) {
+    dto.worldShowcaseCountry = row.world_showcase_country;
+  }
   if (row.resort_id !== null) dto.resortId = row.resort_id;
   if (row.latitude !== null) dto.latitude = row.latitude;
   if (row.longitude !== null) dto.longitude = row.longitude;

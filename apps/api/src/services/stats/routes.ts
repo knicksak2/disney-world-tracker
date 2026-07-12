@@ -88,6 +88,7 @@ export interface CoverageResponse {
   readonly byAreaType: Record<AreaType, CompletionCell>;
   readonly byLand: readonly LabeledCell[];
   readonly byResortArea: readonly LabeledCell[];
+  readonly byWorldShowcaseCountry: readonly LabeledCell[];
   readonly byFacetValue: readonly FacetCoverage[];
   readonly resort: CompletionCell;
   readonly byResort: readonly ResortCoverage[];
@@ -274,6 +275,7 @@ export function assembleResponse(
       byAreaType: coverage.byAreaType,
       byLand: coverage.byLand,
       byResortArea: coverage.byResortArea,
+      byWorldShowcaseCountry: coverage.byWorldShowcaseCountry,
       byFacetValue: rollUpFacets(snapshot.facetExperiences),
       resort: coverage.resort,
       byResort: rollUpResortCoverage(snapshot.resortCoverage),

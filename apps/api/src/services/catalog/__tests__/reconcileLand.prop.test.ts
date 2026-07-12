@@ -100,6 +100,7 @@ function makeUpstream(
     resortId: null,
     representsResortId: null,
     resortArea: null,
+    worldShowcaseCountry: null,
     latitude: null,
     longitude: null,
     accessibility: [],
@@ -131,6 +132,7 @@ function makeCacheRow(
     areaType: 'ThemePark',
     resortId: null,
     resortArea: null,
+    worldShowcaseCountry: null,
     representsResortId: null,
   };
 }
@@ -158,6 +160,7 @@ function applyDiff(
       areaType: u.areaType,
       resortId: u.resortId,
       resortArea: u.resortArea,
+      worldShowcaseCountry: u.worldShowcaseCountry,
       representsResortId: u.representsResortId,
     });
   }
@@ -409,6 +412,7 @@ describe('reconcile — Land reconciliation fixed examples', () => {
       resortId,
       representsResortId: null,
       resortArea,
+      worldShowcaseCountry: null,
       latitude: null,
       longitude: null,
       accessibility: [],
@@ -430,6 +434,7 @@ describe('reconcile — Land reconciliation fixed examples', () => {
         areaType: 'Resort',
         resortId: null,
         resortArea: 'EPCOT Resort Area',
+        worldShowcaseCountry: null,
         representsResortId: null,
       },
     ];
@@ -450,6 +455,7 @@ describe('reconcile — Land reconciliation fixed examples', () => {
         areaType: 'Resort',
         resortId: 'resort-swan',
         resortArea: null,
+        worldShowcaseCountry: null,
         representsResortId: null,
       },
     ];
@@ -466,6 +472,7 @@ describe('reconcile — Land reconciliation fixed examples', () => {
       resortId: 'resort-swan',
       representsResortId: null,
       resortArea: 'EPCOT Resort Area',
+      worldShowcaseCountry: null,
       latitude: null,
       longitude: null,
       accessibility: [],
@@ -496,6 +503,7 @@ describe('reconcile — Land reconciliation fixed examples', () => {
         areaType: 'Resort',
         resortId: null,
         resortArea: 'Magic Kingdom Resort Area',
+        worldShowcaseCountry: null,
         representsResortId: null,
       },
     ];
@@ -512,6 +520,7 @@ describe('reconcile — Land reconciliation fixed examples', () => {
       resortId: null,
       representsResortId: null,
       resortArea: null,
+      worldShowcaseCountry: null,
       latitude: null,
       longitude: null,
       accessibility: [],
@@ -539,6 +548,7 @@ describe('reconcile — Land reconciliation fixed examples', () => {
         areaType: 'Resort',
         resortId: 'resort-swan',
         resortArea: 'EPCOT Resort Area',
+        worldShowcaseCountry: null,
         representsResortId: null,
       },
     ];
@@ -555,6 +565,7 @@ describe('reconcile — Land reconciliation fixed examples', () => {
       resortId: 'resort-swan',
       representsResortId: null,
       resortArea: 'EPCOT Resort Area',
+      worldShowcaseCountry: null,
       latitude: null,
       longitude: null,
       accessibility: [],

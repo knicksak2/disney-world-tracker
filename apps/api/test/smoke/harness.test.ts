@@ -67,11 +67,11 @@ describe('smoke harness', () => {
     const user = h.users[0]!;
     const res = await h.requestAs(user, 'GET', '/me/stats');
     expect(res.statusCode).toBe(200);
-    const body = res.json() as { overall: { total: number } };
+    const body = res.json() as { coverage: { overall: { total: number } } };
     // The harness seeds `experiences` active rows; the overall total
-    // surfaces them through the stats query so we know the snapshot
-    // pipeline is functional end-to-end.
-    expect(body.overall.total).toBe(h.experiences.length);
+    // surfaces them through the stats query (under `coverage.overall`) so we
+    // know the snapshot pipeline is functional end-to-end.
+    expect(body.coverage.overall.total).toBe(h.experiences.length);
   });
 
   it('serves the home leaderboard from the in-memory backend', async () => {

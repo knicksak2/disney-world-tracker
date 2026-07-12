@@ -55,6 +55,7 @@ const rawCoverageCellArb: fc.Arbitrary<RawCoverageCell> = fc
       areaType: base.areaType,
       land: null,
       resortArea: null,
+      worldShowcaseCountry: null,
       isResortRepresentation: base.isResortRepresentation,
       completed,
       total: base.total,

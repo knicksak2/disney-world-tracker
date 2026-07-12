@@ -86,7 +86,7 @@ import {
 } from './destinations';
 import {
   groupByCategory,
-  groupByLandFiltered,
+  groupByPavilionFiltered,
   groupByResort,
   RESORT_CATCHALL_ID,
   type Section,
@@ -380,7 +380,7 @@ function ThemeOrWaterParkLayout({
   // R6.8/R6.9: re-derive the Land sections client-side over the already-fetched
   // Experiences whenever the data or the active category changes (no refetch).
   const sections = useMemo(
-    () => groupByLandFiltered(experiences, selectedCategory),
+    () => groupByPavilionFiltered(experiences, selectedCategory),
     [experiences, selectedCategory],
   );
 

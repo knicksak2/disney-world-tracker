@@ -47,13 +47,13 @@ import type { RawCoverageCell } from '../repo.js';
  * design). These legacy Park-scoping assertions retain the `byPark` checks; the
  * `byParkAndCategory` checks are removed with the dimension.
  */
-type StatsCell = Omit<RawCoverageCell, 'land' | 'resortArea'>;
+type StatsCell = Omit<RawCoverageCell, 'land' | 'resortArea' | 'worldShowcaseCountry'>;
 interface CoverageCellsSnapshot {
   readonly cells: readonly StatsCell[];
 }
 function buildResponse(snapshot: CoverageCellsSnapshot) {
   return rollUpCoverage(
-    snapshot.cells.map((c) => ({ ...c, land: null, resortArea: null })),
+    snapshot.cells.map((c) => ({ ...c, land: null, resortArea: null, worldShowcaseCountry: null })),
   );
 }
 

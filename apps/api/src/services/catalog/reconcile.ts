@@ -215,6 +215,7 @@ function toExperienceUpsert(entity: UpstreamExperience): ReconcileUpsert {
     category: entity.category,
     land: entity.land,
     resortArea: entity.resortArea,
+    worldShowcaseCountry: entity.worldShowcaseCountry,
     description: sanitizeDescription(entity.description),
     imageUrl: entity.imageUrl,
     areaType: entity.areaType,
@@ -244,7 +245,9 @@ function toExperienceUpsert(entity: UpstreamExperience): ReconcileUpsert {
  * syncs stay idempotent (R2.6). Including `areaType`/`resortId`/`resortArea`
  * ensures a re-resolved owning Area (e.g. a restaurant that now resolves to its
  * specific resort rather than the resort-wide catch-all, or a newly resolved
- * Resort_Area zone) is likewise re-applied. Including `representsResortId`
+ * Resort_Area zone) is likewise re-applied. Including `worldShowcaseCountry`
+ * ensures a re-resolved EPCOT World Showcase pavilion is re-applied. Including
+ * `representsResortId`
  * ensures a resort-representing row's discriminator is persisted and kept in
  * sync (Requirements 3.1, 3.2).
  */
@@ -260,6 +263,7 @@ function hasExperienceMaterialChange(
     cached.areaType !== entity.areaType ||
     cached.resortId !== entity.resortId ||
     cached.resortArea !== entity.resortArea ||
+    cached.worldShowcaseCountry !== entity.worldShowcaseCountry ||
     cached.representsResortId !== entity.representsResortId
   );
 }

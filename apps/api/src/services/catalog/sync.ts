@@ -92,6 +92,7 @@ import { selectImageUrl } from './disney/imagery.js';
 import { internalId, RESORT_VISIT_ID_NAMESPACE } from './internalId.js';
 import { resolveLand } from './disney/land.js';
 import { resolveResortArea } from './disney/resortArea.js';
+import { resolveWorldShowcaseCountry } from './disney/worldShowcase.js';
 import type {
   DocumentStore,
   StoredFacilityDocument,
@@ -710,6 +711,7 @@ function toUpstreamExperience(
   bridge: ReadonlyMap<string, string>,
 ): UpstreamExperience {
   const area = resolveArea(doc);
+  const land = resolveLand(doc, area);
   const enrichment = extractEnrichment(doc);
 
   // A `Resort`-area Experience references its owning resort's Internal_Id,
@@ -731,8 +733,9 @@ function toUpstreamExperience(
     description: doc.description ?? '',
     imageUrl: selectImageUrl(doc),
     areaType: area.areaType,
-    land: resolveLand(doc, area),
+    land,
     resortArea: resolveResortArea(doc, area),
+    worldShowcaseCountry: resolveWorldShowcaseCountry(doc, land),
     resortId,
     // Ordinary Experiences (including resort-area activities) never represent
     // the hotel itself; the resort-representing rows are emitted separately
@@ -834,6 +837,7 @@ function toResortRepresentingExperience(
     areaType: 'Resort',
     land: null,
     resortArea: null,
+    worldShowcaseCountry: null,
     // The representing row both belongs to its hotel (`resortId`) and *is* the
     // hotel's stand-in (`representsResortId`); the discriminator is what keeps
     // it out of the resort-area activity roll-ups.

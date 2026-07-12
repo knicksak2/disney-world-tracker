@@ -89,6 +89,10 @@ const cellArb: fc.Arbitrary<RawCoverageCell> = fc
       fc.constantFrom('Epcot Area', ' epcot area ', 'Magic Kingdom Area', '   '),
       { nil: null },
     ),
+    worldShowcaseCountry: fc.option(
+      fc.constantFrom('Epcot Area', ' epcot area ', 'Magic Kingdom Area', '   '),
+      { nil: null },
+    ),
     isResortRepresentation: fc.boolean(),
     total: fc.nat({ max: 400 }),
     completedRatio: fc.nat({ max: 400 }),

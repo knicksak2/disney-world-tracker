@@ -130,6 +130,18 @@ export default function FriendsListScreen({ navigation }: Props): JSX.Element {
     queryFn: () => apiRequest<FriendsAndRequests>('GET', '/me/friends'),
   });
 
+  // Unread inbox tally for the Inbox button badge, so the Friends page itself
+  // tells the User there are unread Shares waiting behind the Inbox control
+  // (not just the tab-bar dot). Shares the `['inbox', 'unread']` cache with the
+  // tab-bar badge and the Inbox screen — the Inbox screen's
+  // `invalidateQueries(['inbox'])` prefix-matches this key, so opening or
+  // deleting a Share refreshes this badge too.
+  const unreadInboxQuery = useQuery<{ count: number }, ApiError>({
+    queryKey: ['inbox', 'unread'],
+    queryFn: () => apiRequest<{ count: number }>('GET', '/me/inbox/unread-count'),
+  });
+  const unreadInboxCount = unreadInboxQuery.data?.count ?? 0;
+
   const { refetch: refetchFriends } = friendsQuery;
 
   // Refetch whenever the screen gains focus so a friend request that arrived
@@ -137,10 +149,13 @@ export default function FriendsListScreen({ navigation }: Props): JSX.Element {
   // friend-request push notification) shows up without needing an app
   // restart. This covers the case where the screen is already mounted in the
   // stack, so React Query's default refetch-on-mount would not fire.
+  const { refetch: refetchUnreadInbox } = unreadInboxQuery;
+
   useFocusEffect(
     useCallback(() => {
       void refetchFriends();
-    }, [refetchFriends]),
+      void refetchUnreadInbox();
+    }, [refetchFriends, refetchUnreadInbox]),
   );
 
   // Per-row error message from the most recent failed mutation. Keyed by
@@ -226,15 +241,32 @@ export default function FriendsListScreen({ navigation }: Props): JSX.Element {
 
   const headerActions = (
     <View style={styles.headerActions}>
-      <SecondaryButton
-        label="Inbox"
-        icon="mail-outline"
-        onPress={() => {
-          navigation.navigate('Inbox');
-        }}
-        testID="friends-inbox"
-        style={styles.headerBtn}
-      />
+      <View style={styles.inboxBtnWrap}>
+        <SecondaryButton
+          label="Inbox"
+          icon="mail-outline"
+          onPress={() => {
+            navigation.navigate('Inbox');
+          }}
+          testID="friends-inbox"
+          accessibilityLabel={
+            unreadInboxCount > 0
+              ? `Inbox, ${unreadInboxCount} unread`
+              : 'Inbox'
+          }
+        />
+        {unreadInboxCount > 0 ? (
+          <View
+            style={styles.inboxBadge}
+            pointerEvents="none"
+            testID="friends-inbox-badge"
+          >
+            <Text style={styles.inboxBadgeText} numberOfLines={1}>
+              {unreadInboxCount > 99 ? '99+' : String(unreadInboxCount)}
+            </Text>
+          </View>
+        ) : null}
+      </View>
       <SecondaryButton
         label="Sent"
         icon="paper-plane-outline"
@@ -616,6 +648,29 @@ const styles = StyleSheet.create({
   headerBtn: {
     flexGrow: 1,
     flexBasis: 0,
+  },
+  inboxBtnWrap: {
+    flexGrow: 1,
+    flexBasis: 0,
+    position: 'relative',
+  },
+  inboxBadge: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    minWidth: 20,
+    height: 20,
+    paddingHorizontal: 5,
+    borderRadius: 10,
+    backgroundColor: theme.color.danger,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  inboxBadgeText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: '700',
+    lineHeight: 14,
   },
   center: {
     flex: 1,

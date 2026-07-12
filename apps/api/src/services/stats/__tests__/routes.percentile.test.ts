@@ -48,11 +48,11 @@ import type {
 // ---------------------------------------------------------------------------
 
 /** A partial coverage cell; `land`/`resortArea` default to null. */
-type CellInput = Omit<RawCoverageCell, 'land' | 'resortArea'> &
-  Partial<Pick<RawCoverageCell, 'land' | 'resortArea'>>;
+type CellInput = Omit<RawCoverageCell, 'land' | 'resortArea' | 'worldShowcaseCountry'> &
+  Partial<Pick<RawCoverageCell, 'land' | 'resortArea' | 'worldShowcaseCountry'>>;
 
 function cell(input: CellInput): RawCoverageCell {
-  return { land: null, resortArea: null, ...input };
+  return { land: null, resortArea: null, worldShowcaseCountry: null, ...input };
 }
 
 /**

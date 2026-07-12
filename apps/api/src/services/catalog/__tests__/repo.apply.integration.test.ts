@@ -263,6 +263,7 @@ function experienceUpsert(
     category: 'Ride',
     land: null,
     resortArea: null,
+    worldShowcaseCountry: null,
     description: 'plain text',
     imageUrl: null,
     areaType: 'ThemePark',
@@ -350,6 +351,7 @@ describe('Catalog repo applyReconciliation — transactional apply (pg-mem)', ()
     applyMigration(db, '0008_experience_facet_enrichment.sql');
     applyMigration(db, '0009_resort_representing_experiences.sql');
     applyMigration(db, '0010_resort_experience_category.sql');
+    applyMigration(db, '0014_experience_world_showcase_country.sql');
   });
 
   afterEach(async () => {

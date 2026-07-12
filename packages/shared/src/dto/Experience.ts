@@ -112,6 +112,16 @@ export interface ExperienceDTO {
   readonly resortArea?: string | null;
 
   /**
+   * The EPCOT World Showcase country pavilion (e.g. "France", "Japan",
+   * "Mexico"), derived during Catalog_Sync for Experiences whose resolved Land
+   * is "World Showcase" (`resolveWorldShowcaseCountry`). Present only when
+   * resolved; `null`/absent for every non-World-Showcase Experience. Lets the
+   * App group and target the eleven World Showcase pavilions, which Disney's
+   * feed otherwise collapses into a single "World Showcase" Land.
+   */
+  readonly worldShowcaseCountry?: string | null;
+
+  /**
    * Height_Requirement facet value plus derived numeric minimums, mined from
    * the Facility_Document during Catalog_Sync (R2). Present only when a height
    * facet is persisted; `null`/absent otherwise.

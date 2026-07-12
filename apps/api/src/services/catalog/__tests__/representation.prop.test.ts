@@ -136,6 +136,7 @@ function applyDiff(
       areaType: u.areaType,
       resortId: u.resortId,
       resortArea: u.resortArea,
+      worldShowcaseCountry: u.worldShowcaseCountry,
       representsResortId: u.representsResortId,
     });
   }

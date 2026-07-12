@@ -126,6 +126,7 @@ function freshRepo(): { repo: CatalogRepo; pool: DbPool } {
   // 0010 admits the `Resort` category the arbitraries now draw from
   // (`EXPERIENCE_CATEGORIES` includes `Resort`).
   applyMigration(db, '0010_resort_experience_category.sql');
+  applyMigration(db, '0014_experience_world_showcase_country.sql');
 
   return { repo: createCatalogRepo(pool), pool };
 }

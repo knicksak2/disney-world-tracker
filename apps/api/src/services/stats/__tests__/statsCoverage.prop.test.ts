@@ -52,13 +52,13 @@ import { computePercent } from '../computePercent.js';
  * design). The coverage/active-only/percent assertions retain the `overall`,
  * `byPark`, and `byCategory` checks.
  */
-type StatsCell = Omit<RawCoverageCell, 'land' | 'resortArea'>;
+type StatsCell = Omit<RawCoverageCell, 'land' | 'resortArea' | 'worldShowcaseCountry'>;
 interface CoverageCellsSnapshot {
   readonly cells: readonly StatsCell[];
 }
 function buildResponse(snapshot: CoverageCellsSnapshot) {
   return rollUpCoverage(
-    snapshot.cells.map((c) => ({ ...c, land: null, resortArea: null })),
+    snapshot.cells.map((c) => ({ ...c, land: null, resortArea: null, worldShowcaseCountry: null })),
   );
 }
 

@@ -194,6 +194,7 @@ function upsert(
     category: RIDE,
     land: null,
     resortArea: null,
+    worldShowcaseCountry: null,
     description: 'A simple description.',
     imageUrl: null,
     areaType: 'ThemePark',

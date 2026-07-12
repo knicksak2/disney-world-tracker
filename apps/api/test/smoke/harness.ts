@@ -566,6 +566,13 @@ async function applyMigration(db: IMemoryDb): Promise<void> {
     '0003_note_shareable.sql',
     '0004_disney_sources.sql',
     '0006_experience_land.sql',
+    // 0007 adds `experiences.resort_area` and 0008 adds the facet-enrichment
+    // columns (`grouped_facets`, `height_requirement`, `why_this`, `sub_type`).
+    // The Stats coverage snapshot query selects `resort_area`, and the catalog
+    // read projection selects the facet columns, so both must exist or
+    // `/me/stats` and `/catalog` fail (a 503 and a 500 respectively).
+    '0007_experience_resort_area.sql',
+    '0008_experience_facet_enrichment.sql',
     // 0009 adds the additive `experiences.represents_resort_id` column (plus its
     // partial-unique and active indexes) that the stats snapshot query now reads
     // via `(represents_resort_id IS NOT NULL) AS is_resort_representation`. Its
@@ -576,6 +583,13 @@ async function applyMigration(db: IMemoryDb): Promise<void> {
     // now cycles through (`EXPERIENCE_CATEGORIES` includes `Resort`); without it
     // the seeded rows whose category lands on `Resort` violate the constraint.
     '0010_resort_experience_category.sql',
+    // 0013 adds `profiles.avatar_preset` (nullable + CHECK). The GET /me profile
+    // read selects `avatar_preset`, so without it `/me` fails with a 500.
+    '0013_avatar_presets.sql',
+    // 0014 adds the additive `experiences.world_showcase_country` column the
+    // catalog repo now writes on every Experience upsert; without it the
+    // seeding INSERT fails and the whole harness build errors out.
+    '0014_experience_world_showcase_country.sql',
   ];
   for (const name of migrations) {
     const migrationPath = resolve(here, '..', '..', 'migrations', name);

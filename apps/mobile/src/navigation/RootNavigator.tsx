@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import {
   createNativeStackNavigator,
@@ -246,6 +246,103 @@ function ProfileTabIcon({
   );
 }
 
+/**
+ * React Query key for the lightweight unread-inbox tally
+ * (`GET /me/inbox/unread-count`). It is intentionally a child of the Inbox
+ * screen's `['inbox']` key so that screen's `invalidateQueries(['inbox'])`
+ * (a prefix match) also refreshes this count the moment the User opens or
+ * deletes a Share — the badge and the inbox never drift.
+ */
+const INBOX_UNREAD_QUERY_KEY = ['inbox', 'unread'] as const;
+
+/**
+ * How often the tab-bar badge re-polls its two sources while the app is
+ * foregrounded. A minute keeps a freshly arrived Share or friend request
+ * visible app-wide without a restart, while staying light on the API.
+ */
+const NOTIFICATION_POLL_MS = 60_000;
+
+/** `GET /me/inbox/unread-count` response shape. */
+interface InboxUnreadCountResponse {
+  readonly count: number;
+}
+
+/**
+ * `GET /me/friends` response (subset). Only the incoming-request list length
+ * feeds the badge; mirrors the `incomingRequests` field the friends screen
+ * already reads under the shared `['friends']` key.
+ */
+interface FriendsBadgeResponse {
+  readonly incomingRequests: readonly unknown[];
+}
+
+/**
+ * Combined count of things waiting for the User under the Friends tab:
+ * unread inbox Shares plus pending incoming friend requests. Both are the
+ * "messages" a User can receive from another User, so they roll up into one
+ * indicator (the app has no notification surface outside this tab today).
+ *
+ * Reuses the same React Query keys the Inbox and Friends screens use, so the
+ * badge shares their cache and updates immediately when those screens mutate
+ * (accept a request, open a Share). A polling interval keeps it fresh while
+ * the User sits on another tab.
+ */
+function useNotificationBadgeCount(): number {
+  const unreadQuery = useQuery<InboxUnreadCountResponse>({
+    queryKey: INBOX_UNREAD_QUERY_KEY,
+    queryFn: () =>
+      apiRequest<InboxUnreadCountResponse>('GET', '/me/inbox/unread-count'),
+    refetchInterval: NOTIFICATION_POLL_MS,
+  });
+
+  const requestsQuery = useQuery<FriendsBadgeResponse, unknown, number>({
+    queryKey: ['friends'],
+    queryFn: () => apiRequest<FriendsBadgeResponse>('GET', '/me/friends'),
+    refetchInterval: NOTIFICATION_POLL_MS,
+    select: (data) => data.incomingRequests.length,
+  });
+
+  const unreadShares = unreadQuery.data?.count ?? 0;
+  const pendingRequests = requestsQuery.data ?? 0;
+  return unreadShares + pendingRequests;
+}
+
+/**
+ * Friends tab icon with an unread indicator. Renders the standard people
+ * glyph plus a count badge when there are unread inbox Shares or pending
+ * friend requests, so the User can tell — from any tab — that something is
+ * waiting for them. Runs its own queries in the tab bar (like
+ * `ProfileTabIcon`) so the badge shows even before the Friends tab has ever
+ * been opened; the count updates live as the underlying React Query cache
+ * changes.
+ */
+function FriendsTabIcon({
+  focused,
+  color,
+  size,
+}: {
+  readonly focused: boolean;
+  readonly color: string;
+  readonly size: number;
+}): JSX.Element {
+  const count = useNotificationBadgeCount();
+  const glyphs = TAB_ICONS.Friends;
+  const name = focused ? glyphs.focused : glyphs.unfocused;
+
+  return (
+    <View style={styles.tabIconContainer}>
+      <Ionicons name={name} size={size} color={color} />
+      {count > 0 ? (
+        <View style={styles.badge} testID="friends-tab-badge">
+          <Text style={styles.badgeText} numberOfLines={1}>
+            {count > 99 ? '99+' : String(count)}
+          </Text>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
 function MainTabsNavigator(): JSX.Element {
   return (
     <MainTabs.Navigator
@@ -256,6 +353,9 @@ function MainTabsNavigator(): JSX.Element {
         tabBarIcon: ({ focused, color, size }) => {
           if (route.name === 'Profile') {
             return <ProfileTabIcon focused={focused} color={color} size={size} />;
+          }
+          if (route.name === 'Friends') {
+            return <FriendsTabIcon focused={focused} color={color} size={size} />;
           }
           const glyphs = TAB_ICONS[route.name];
           const name = focused ? glyphs.focused : glyphs.unfocused;
@@ -326,6 +426,29 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'hidden',
     borderWidth: 2,
+  },
+  tabIconContainer: {
+    width: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badge: {
+    position: 'absolute',
+    top: -4,
+    right: 4,
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 4,
+    borderRadius: 9,
+    backgroundColor: '#e11d48',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgeText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: '700',
+    lineHeight: 14,
   },
 });
 

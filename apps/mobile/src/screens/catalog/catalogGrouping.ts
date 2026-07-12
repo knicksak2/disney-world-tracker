@@ -75,18 +75,48 @@ function hasNamedLand(land: string | null | undefined): land is string {
 export function groupByLand(
   experiences: readonly ExperienceDTO[],
 ): readonly Section<ExperienceDTO>[] {
-  // Bucket Experiences by their exact persisted Land name; whitespace-only /
-  // absent Land goes to the catch-all bucket.
+  return groupByLandKey(experiences, (experience) => experience.land ?? null);
+}
+
+/**
+ * The browse-land key for a Destination_Screen Land grouping.
+ *
+ * For an EPCOT World Showcase Experience — one that carries a resolved
+ * `worldShowcaseCountry` — the browse land is its country pavilion (e.g.
+ * "France"), so the single upstream "World Showcase" Land expands into per-
+ * pavilion sections. Every other Experience keeps its persisted Land. Returns
+ * `null` when neither is a usable, non-empty name (the Land_Catchall bucket).
+ */
+export function browseLandOf(experience: ExperienceDTO): string | null {
+  if (hasNamedLand(experience.worldShowcaseCountry)) {
+    return experience.worldShowcaseCountry;
+  }
+  return experience.land ?? null;
+}
+
+/**
+ * Shared Land-bucketing fold parameterized by the land accessor `landOf`, so
+ * `groupByLand` (exact persisted Land) and the pavilion-aware browse grouping
+ * (`browseLandOf`) share one implementation and cannot drift on the ordering,
+ * within-section ordering, or catch-all placement guarantees (R6.2, R6.3, R6.6).
+ */
+function groupByLandKey(
+  experiences: readonly ExperienceDTO[],
+  landOf: (experience: ExperienceDTO) => string | null,
+): readonly Section<ExperienceDTO>[] {
+  // Bucket Experiences by their browse-land name; whitespace-only / absent Land
+  // goes to the catch-all bucket.
   const byLand = new Map<string, ExperienceDTO[]>();
   const catchall: ExperienceDTO[] = [];
 
   for (const experience of experiences) {
-    if (hasNamedLand(experience.land)) {
-      const bucket = byLand.get(experience.land);
+    const land = landOf(experience);
+    if (hasNamedLand(land)) {
+      const bucket = byLand.get(land);
       if (bucket) {
         bucket.push(experience);
       } else {
-        byLand.set(experience.land, [experience]);
+        byLand.set(land, [experience]);
       }
     } else {
       catchall.push(experience);
@@ -139,6 +169,33 @@ export function groupByLandFiltered(
     return groupByLand(experiences);
   }
   return groupByLand(experiences.filter((e) => e.category === category));
+}
+
+/**
+ * The pavilion-aware counterpart to {@link groupByLandFiltered} used by the
+ * theme/water-park Destination_Screen.
+ *
+ * Identical to `groupByLandFiltered` except the Land grouping key is
+ * {@link browseLandOf}: an EPCOT World Showcase Experience is grouped under its
+ * country pavilion rather than the single umbrella "World Showcase" Land, so
+ * the eleven pavilions become individually browsable sections interleaved
+ * alphabetically with the other Lands. Experiences outside World Showcase carry
+ * no `worldShowcaseCountry`, so their grouping is byte-for-byte identical to
+ * `groupByLandFiltered` — this is a no-op for every non-EPCOT Destination.
+ *
+ * The Category filter (R6.7–R6.9) behaves exactly as in `groupByLandFiltered`:
+ * a `null` category groups everything; a non-null category filters first, then
+ * groups, omitting any pavilion/Land left empty.
+ */
+export function groupByPavilionFiltered(
+  experiences: readonly ExperienceDTO[],
+  category: ExperienceCategory | null,
+): readonly Section<ExperienceDTO>[] {
+  const scoped =
+    category === null
+      ? experiences
+      : experiences.filter((e) => e.category === category);
+  return groupByLandKey(scoped, browseLandOf);
 }
 
 /**

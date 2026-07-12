@@ -111,6 +111,7 @@ function withEnrichmentDefaults(base: {
     ...base,
     land: null,
     resortArea: null,
+    worldShowcaseCountry: null,
     imageUrl: null,
     areaType: 'ThemePark',
     resortId: null,
@@ -180,6 +181,7 @@ const cacheRowArb: fc.Arbitrary<CatalogCacheRow> = fc.record({
   areaType: fc.constant<'ThemePark'>('ThemePark'),
   resortId: fc.constant<string | null>(null),
   resortArea: fc.constant<string | null>(null),
+  worldShowcaseCountry: fc.constant<string | null>(null),
   representsResortId: fc.constant<string | null>(null),
 });
 

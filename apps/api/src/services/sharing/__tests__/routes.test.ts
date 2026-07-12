@@ -55,6 +55,8 @@ interface FakeRepoOverrides {
     payload: SharePayload,
   ) => Promise<ShareDeliveryResult>;
   readonly listInbox?: (recipientId: string) => Promise<InboxResponse>;
+  readonly countUnreadInbox?: (recipientId: string) => Promise<number>;
+  readonly markAllInboxRead?: (recipientId: string) => Promise<number>;
   readonly openShare?: (
     recipientId: string,
     shareId: string,
@@ -86,6 +88,20 @@ function makeRepo(overrides: FakeRepoOverrides = {}): FakeRepo {
         return overrides.listInbox(recipientId);
       }
       return { unread: 0, items: [] };
+    },
+    async countUnreadInbox(recipientId) {
+      record('countUnreadInbox', [recipientId]);
+      if (overrides.countUnreadInbox) {
+        return overrides.countUnreadInbox(recipientId);
+      }
+      return 0;
+    },
+    async markAllInboxRead(recipientId) {
+      record('markAllInboxRead', [recipientId]);
+      if (overrides.markAllInboxRead) {
+        return overrides.markAllInboxRead(recipientId);
+      }
+      return 0;
     },
     async openShare(recipientId, shareId) {
       record('openShare', [recipientId, shareId]);
@@ -496,6 +512,84 @@ describe('GET /me/inbox', () => {
   it('rejects an unauthenticated request as 401', async () => {
     const { app } = await buildApp();
     const response = await app.inject({ method: 'GET', url: '/me/inbox' });
+    expect(response.statusCode).toBe(401);
+  });
+});
+
+// ===========================================================================
+// GET /me/inbox/unread-count (app-wide unread indicator)
+// ===========================================================================
+
+describe('GET /me/inbox/unread-count', () => {
+  it('returns the recipient unread tally from the repo', async () => {
+    const { app, repo } = await buildApp({
+      repo: makeRepo({
+        async countUnreadInbox() {
+          return 3;
+        },
+      }),
+      defaultUserId: REC_A,
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/me/inbox/unread-count',
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ count: 3 });
+    // The static `unread-count` segment routes here, not to the parametric
+    // `:shareId` handlers, so only the count read runs.
+    expect(repo.events).toEqual([
+      { method: 'countUnreadInbox', args: [REC_A] },
+    ]);
+  });
+
+  it('rejects an unauthenticated request as 401', async () => {
+    const { app } = await buildApp();
+    const response = await app.inject({
+      method: 'GET',
+      url: '/me/inbox/unread-count',
+    });
+    expect(response.statusCode).toBe(401);
+  });
+});
+
+// ===========================================================================
+// POST /me/inbox/read-all (mark all read)
+// ===========================================================================
+
+describe('POST /me/inbox/read-all', () => {
+  it('flips all unread rows and reports the updated count with unread 0', async () => {
+    const { app, repo } = await buildApp({
+      repo: makeRepo({
+        async markAllInboxRead() {
+          return 4;
+        },
+      }),
+      defaultUserId: REC_A,
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/me/inbox/read-all',
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ updated: 4, unread: 0 });
+    // The static `read-all` segment routes here, not to the parametric
+    // `:shareId/open` handler, so only the bulk mark runs.
+    expect(repo.events).toEqual([
+      { method: 'markAllInboxRead', args: [REC_A] },
+    ]);
+  });
+
+  it('rejects an unauthenticated request as 401', async () => {
+    const { app } = await buildApp();
+    const response = await app.inject({
+      method: 'POST',
+      url: '/me/inbox/read-all',
+    });
     expect(response.statusCode).toBe(401);
   });
 });

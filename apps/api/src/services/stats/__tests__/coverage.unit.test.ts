@@ -51,6 +51,7 @@ function makeCell(overrides: Partial<RawCoverageCell> = {}): RawCoverageCell {
     areaType: 'ThemePark',
     land: null,
     resortArea: null,
+    worldShowcaseCountry: null,
     isResortRepresentation: false,
     completed: 0,
     total: 0,

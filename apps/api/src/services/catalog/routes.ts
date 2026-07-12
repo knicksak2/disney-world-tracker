@@ -95,6 +95,12 @@ export interface CatalogListFilters {
    * conjunctively with every other supplied filter (R3.7).
    */
   readonly land?: string;
+  /**
+   * Case-sensitive exact EPCOT World Showcase country filter. When present, the
+   * repo returns only active Experiences whose derived World Showcase pavilion
+   * equals this value, combined conjunctively with every other filter.
+   */
+  readonly worldShowcaseCountry?: string;
 }
 
 /**
@@ -282,6 +288,11 @@ export interface ExperienceDetailResponse {
    */
   readonly resortArea?: string | null;
   /**
+   * EPCOT World Showcase country pavilion, present only when the Experience's
+   * resolved Land is "World Showcase"; `null`/absent otherwise.
+   */
+  readonly worldShowcaseCountry?: string | null;
+  /**
    * Height_Requirement facet value plus derived numeric minimums, present only
    * when a height facet is persisted; `null`/absent otherwise (R2, R10.1).
    */
@@ -383,6 +394,7 @@ const catalogQuerySchema = z
     areaType: z.enum(AREA_TYPES).optional(),
     q: searchQuerySchema.optional(),
     land: z.string().min(1).max(200).optional(),
+    worldShowcaseCountry: z.string().min(1).max(200).optional(),
   })
   .strict();
 
@@ -559,6 +571,9 @@ function parseListQuery(raw: unknown): CatalogListFilters {
   }
   if (parsed.land !== undefined) {
     filters.land = parsed.land;
+  }
+  if (parsed.worldShowcaseCountry !== undefined) {
+    filters.worldShowcaseCountry = parsed.worldShowcaseCountry;
   }
   return filters;
 }

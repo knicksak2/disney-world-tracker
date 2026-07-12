@@ -197,6 +197,12 @@ function makeCaptureRepo(): CaptureRepo {
     async listInbox(): Promise<InboxResponse> {
       return { unread: 0, items: [] };
     },
+    async countUnreadInbox(): Promise<number> {
+      return 0;
+    },
+    async markAllInboxRead(): Promise<number> {
+      return 0;
+    },
     async listSentShares(): Promise<SentShareDTO[]> {
       return [];
     },

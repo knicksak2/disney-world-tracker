@@ -91,6 +91,7 @@ function rawCoverageCellArb(): fc.Arbitrary<RawCoverageCell> {
         areaType: fc.constantFrom(...AREA_TYPES),
         land: fc.option(fc.string(), { nil: null }),
         resortArea: fc.option(fc.string(), { nil: null }),
+        worldShowcaseCountry: fc.option(fc.string(), { nil: null }),
         isResortRepresentation: fc.boolean(),
         completed: fc.nat({ max: total }),
       })
@@ -101,6 +102,7 @@ function rawCoverageCellArb(): fc.Arbitrary<RawCoverageCell> {
           areaType: r.areaType,
           land: r.land,
           resortArea: r.resortArea,
+          worldShowcaseCountry: r.worldShowcaseCountry,
           isResortRepresentation: r.isResortRepresentation,
           completed: r.completed,
           total,
