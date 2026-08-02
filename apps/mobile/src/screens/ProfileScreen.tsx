@@ -50,6 +50,8 @@ import {
 
 import { ApiError, apiRequest } from '../api/client';
 import { invalidatePushRegistration } from '../hooks/usePushRegistration';
+import { AttentionBadge } from '../features/notifications/AttentionBadge';
+import { useAttentionBadge } from '../features/notifications/useAttentionBadge';
 import { renderAvatarPreset } from '../avatars/AvatarPresets';
 import AvatarPicker from './AvatarPicker';
 import ChangePasswordControl from './ChangePasswordControl';
@@ -449,6 +451,12 @@ function ProfileContent({
     [profile.overallCompletionPercent],
   );
 
+  // The four-domain attention count, from the same shared query cache the
+  // Profile-tab badge reads, so the in-screen Notification_Center entry shows
+  // the same waiting-items count as the tab and the open feed (R4.5, R10.3).
+  const { display: notificationBadgeDisplay, count: notificationBadgeCount } =
+    useAttentionBadge();
+
   return (
     <ScreenContainer>
       <GradientHeader
@@ -566,12 +574,21 @@ function ProfileContent({
         {isSelf ? (
           <Card style={styles.securityCard}>
             <Text style={styles.statLabel}>Notification center</Text>
-            <SecondaryButton
-              label="View notifications"
-              icon="notifications-outline"
-              onPress={onOpenNotifications}
-              testID="profile-open-notifications"
-            />
+            <View style={styles.notificationBtnWrap}>
+              <SecondaryButton
+                label="View notifications"
+                icon="notifications-outline"
+                onPress={onOpenNotifications}
+                testID="profile-open-notifications"
+              />
+              <View style={styles.notificationBadgeOverlay} pointerEvents="none">
+                <AttentionBadge
+                  display={notificationBadgeDisplay}
+                  count={notificationBadgeCount}
+                  testID="profile-notifications-badge"
+                />
+              </View>
+            </View>
           </Card>
         ) : null}
 
@@ -712,6 +729,14 @@ const styles = StyleSheet.create({
   },
   securityCard: {
     gap: theme.spacing.md,
+  },
+  notificationBtnWrap: {
+    position: 'relative',
+  },
+  notificationBadgeOverlay: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
   },
   statLabel: {
     ...theme.typography.meta,
