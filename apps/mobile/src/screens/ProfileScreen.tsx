@@ -376,6 +376,7 @@ export default function ProfileScreen(): JSX.Element {
       }}
       saving={saveNameMutation.isPending}
       onViewStats={() => navigation.navigate('Stats')}
+      onOpenNotifications={() => navigation.navigate('NotificationCenter')}
       onLogout={() => logoutMutation.mutate()}
       loggingOut={logoutMutation.isPending}
       onAvatarChanged={(updated) => {
@@ -420,6 +421,7 @@ interface ProfileContentProps {
   readonly onSave: () => void;
   readonly saving: boolean;
   readonly onViewStats: () => void;
+  readonly onOpenNotifications: () => void;
   readonly onLogout: () => void;
   readonly loggingOut: boolean;
   readonly onAvatarChanged: (profile: ProfileDTO) => void;
@@ -437,6 +439,7 @@ function ProfileContent({
   onSave,
   saving,
   onViewStats,
+  onOpenNotifications,
   onLogout,
   loggingOut,
   onAvatarChanged,
@@ -559,6 +562,18 @@ function ProfileContent({
             />
           </View>
         </Card>
+
+        {isSelf ? (
+          <Card style={styles.securityCard}>
+            <Text style={styles.statLabel}>Notification center</Text>
+            <SecondaryButton
+              label="View notifications"
+              icon="notifications-outline"
+              onPress={onOpenNotifications}
+              testID="profile-open-notifications"
+            />
+          </Card>
+        ) : null}
 
         {isSelf ? (
           <Card style={styles.securityCard}>

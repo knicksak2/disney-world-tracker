@@ -50,7 +50,6 @@ import {
   TRIP_RESORT_LIMIT,
   type ResortDTO,
   type TripDTO,
-  type TripIncomingInviteDTO,
   type TripStatus,
 } from '@dwt/shared';
 
@@ -120,9 +119,12 @@ export const tripsListKeys = {
 };
 
 /**
- * Query key for the caller's pending Trip invitations (`GET /me/trip-invites`);
- * invalidated after accept/decline so the section refreshes, and after an
- * accept the Trips list itself is invalidated so the newly-joined Trip appears.
+ * Query key for the caller's pending Trip invitations (`GET /me/trip-invites`).
+ * The Trips list no longer renders an actionable invitations section — the
+ * Notification_Center is the single surface for acting on pending Trip_Invites
+ * (R7.5). This key is retained so the deep-link `TripInviteScreen` can
+ * invalidate the shared invites cache after an accept/decline, keeping the
+ * Notification_Center feed in sync.
  */
 export const tripInvitesKeys = {
   list: () => ['trips', 'invites'] as const,
@@ -289,75 +291,6 @@ export default function TripsListScreen({ navigation }: Props): JSX.Element {
   const createBusy = createMutation.isPending;
 
   // -------------------------------------------------------------------------
-  // Pending invitations (invitee-facing inbox)
-  // -------------------------------------------------------------------------
-  // A friend added to a Trip only becomes a Member after accepting; until then
-  // the Trip does not appear in `GET /me/trips`. This section surfaces those
-  // pending invites so the invited User can accept/decline in-app without
-  // depending on the push-notification deep-link.
-  const invitesQuery = useQuery<readonly TripIncomingInviteDTO[], ApiError>({
-    queryKey: tripInvitesKeys.list(),
-    queryFn: () =>
-      apiRequest<readonly TripIncomingInviteDTO[]>('GET', '/me/trip-invites'),
-    retry: false,
-  });
-
-  const { refetch: refetchInvites } = invitesQuery;
-
-  // Refetch invitations on focus so an invite sent while this screen is mounted
-  // appears without an app restart.
-  useFocusEffect(
-    useCallback(() => {
-      void refetchInvites();
-    }, [refetchInvites]),
-  );
-
-  // Track which invite is mid-action so only its row shows a busy state.
-  const [pendingInviteId, setPendingInviteId] = useState<string | null>(null);
-
-  const acceptInviteMutation = useMutation<{ tripId: string }, ApiError, string>(
-    {
-      mutationFn: (inviteId) =>
-        apiRequest<{ tripId: string }>(
-          'POST',
-          `/me/trip-invites/${inviteId}/accept`,
-        ),
-      onMutate: (inviteId) => {
-        setPendingInviteId(inviteId);
-      },
-      onSuccess: (result) => {
-        void queryClient.invalidateQueries({
-          queryKey: tripInvitesKeys.list(),
-        });
-        // The accepted Trip is now a membership — refresh the list so it shows.
-        void queryClient.invalidateQueries({ queryKey: tripsListKeys.list() });
-        navigation.navigate('TripDetail', { tripId: result.tripId });
-      },
-      onSettled: () => {
-        setPendingInviteId(null);
-      },
-    },
-  );
-
-  const declineInviteMutation = useMutation<void, ApiError, string>({
-    mutationFn: (inviteId) =>
-      apiRequest<void>('POST', `/me/trip-invites/${inviteId}/decline`),
-    onMutate: (inviteId) => {
-      setPendingInviteId(inviteId);
-    },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: tripInvitesKeys.list() });
-    },
-    onSettled: () => {
-      setPendingInviteId(null);
-    },
-  });
-
-  const invites = invitesQuery.data ?? [];
-  const inviteActionBusy =
-    acceptInviteMutation.isPending || declineInviteMutation.isPending;
-
-  // -------------------------------------------------------------------------
   // Loading (R16.7)
   // -------------------------------------------------------------------------
 
@@ -433,19 +366,8 @@ export default function TripsListScreen({ navigation }: Props): JSX.Element {
         <NoticeBanner message={notice} onDismiss={clearTripsListNotice} />
       ) : null}
 
-      {/* Pending invitations: an in-app path to accept/decline. */}
-      {invites.length > 0 ? (
-        <InvitationsSection
-          invites={invites}
-          pendingInviteId={pendingInviteId}
-          actionBusy={inviteActionBusy}
-          onAccept={(inviteId) => acceptInviteMutation.mutate(inviteId)}
-          onDecline={(inviteId) => declineInviteMutation.mutate(inviteId)}
-        />
-      ) : null}
-
       {/* Empty state (R16.9): only after a successful read of zero Trips. */}
-      {totalTrips === 0 && invites.length === 0 ? (
+      {totalTrips === 0 ? (
         <View style={styles.center} testID="trips-empty">
           <EmptyState
             icon="map-outline"
@@ -584,76 +506,6 @@ function SectionHeader({ label }: { readonly label: string }): JSX.Element {
   return (
     <View style={styles.sectionHeader}>
       <Text style={styles.sectionHeaderText}>{label}</Text>
-    </View>
-  );
-}
-
-/**
- * The pending-invitations section shown at the top of the Trips list. Each
- * invite carries who invited the User and to which Trip, plus Accept/Decline
- * controls that post to `/me/trip-invites/:inviteId/{accept,decline}`. Only the
- * invite currently mid-action shows a busy state; all controls disable while
- * any action is in flight to avoid double-submits.
- */
-function InvitationsSection({
-  invites,
-  pendingInviteId,
-  actionBusy,
-  onAccept,
-  onDecline,
-}: {
-  readonly invites: readonly TripIncomingInviteDTO[];
-  readonly pendingInviteId: string | null;
-  readonly actionBusy: boolean;
-  readonly onAccept: (inviteId: string) => void;
-  readonly onDecline: (inviteId: string) => void;
-}): JSX.Element {
-  return (
-    <View style={styles.invitesSection} testID="trips-invitations">
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionHeaderText}>Trip Invitations</Text>
-      </View>
-      {invites.map((invite) => {
-        const rowBusy = pendingInviteId === invite.inviteId;
-        return (
-          <Card
-            key={invite.inviteId}
-            accentColor={theme.color.primary}
-            style={styles.inviteCard}
-            testID={`trips-invite-${invite.inviteId}`}
-          >
-            <Text style={styles.rowName} numberOfLines={1}>
-              {invite.tripName}
-            </Text>
-            <Text style={styles.rowDates}>
-              {invite.startDate === invite.endDate
-                ? invite.startDate
-                : `${invite.startDate} \u2013 ${invite.endDate}`}
-            </Text>
-            <Text style={styles.inviteMeta} numberOfLines={1}>
-              Invited by {invite.inviterDisplayName}
-            </Text>
-            <View style={styles.inviteActions}>
-              <PrimaryButton
-                label={rowBusy ? 'Joining\u2026' : 'Accept'}
-                icon="checkmark-outline"
-                onPress={() => onAccept(invite.inviteId)}
-                disabled={actionBusy}
-                testID={`trips-invite-accept-${invite.inviteId}`}
-                style={styles.flexBtn}
-              />
-              <SecondaryButton
-                label="Decline"
-                icon="close-outline"
-                onPress={() => onDecline(invite.inviteId)}
-                disabled={actionBusy}
-                testID={`trips-invite-decline-${invite.inviteId}`}
-                style={styles.flexBtn}
-              />
-            </View>
-          </Card>
-        );
-      })}
     </View>
   );
 }
@@ -913,24 +765,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.lg,
     paddingTop: theme.spacing.md,
     paddingBottom: theme.spacing.xxl,
-  },
-  invitesSection: {
-    paddingHorizontal: theme.spacing.lg,
-    paddingTop: theme.spacing.md,
-  },
-  inviteCard: {
-    marginBottom: theme.spacing.md,
-    gap: theme.spacing.xs,
-  },
-  inviteMeta: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
-    marginTop: theme.spacing.xs,
-  },
-  inviteActions: {
-    flexDirection: 'row',
-    gap: theme.spacing.sm,
-    marginTop: theme.spacing.sm,
   },
   sectionHeader: {
     paddingVertical: theme.spacing.sm,

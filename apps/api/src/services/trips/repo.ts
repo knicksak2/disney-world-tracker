@@ -43,6 +43,7 @@ import type {
   Park,
   PlannedItemAddInput,
   PlannedItemDTO,
+  PendingRodeWithTagDTO,
   TripCommentDTO,
   TripCreateInput,
   TripDTO,
@@ -618,6 +619,21 @@ export interface TripRepo {
   ): Promise<RodeWithTagTarget | null>;
 
   /**
+   * List every `pending` Rode_With_Tag addressed to `userId` as its
+   * Tagged_Member, for the Notification_Center's per-domain pending read
+   * (`GET /me/rode-with-tags?state=pending`). Scoped to `tagged_member_id =
+   * userId` and filtered to `state = 'pending'` so it never returns tags for
+   * another User or tags in any non-pending state (R3.1, R3.2). Joins the
+   * linked Trip_Log_Entry, the referenced Experience, and the Tagging_Member's
+   * `profiles` row to project the tag identifier, the linked trip-log-entry
+   * identifier, the Experience name, the tagging member's display name, and the
+   * tag's creation timestamp (R3.3). Ordered by `created_at DESC, id ASC` — most
+   * recent first with a deterministic id tie-break (R3.1). A User with no
+   * pending tags yields an empty list (R3.4).
+   */
+  listPendingRodeWithTags(userId: string): Promise<PendingRodeWithTagDTO[]>;
+
+  /**
    * Read the Trip_Feed of `tripId` as an ordered list of {@link TripFeedItemDTO}
    * (R13.1). Each item carries its `type`, the acting Trip_Member's display
    * name (joined from `profiles`), its `createdAt` ISO-8601 timestamp, its
@@ -785,6 +801,8 @@ export function createTripRepo(pool: DbPool, deps: TripRepoDeps): TripRepo {
       declineRodeWithTag(ctx, tagId, callerId),
     getRodeWithTag: (tagId, callerId) =>
       getRodeWithTag(ctx, tagId, callerId),
+    listPendingRodeWithTags: (userId) =>
+      listPendingRodeWithTags(ctx, userId),
     getFeed: (tripId, callerId) => getFeed(ctx, tripId, callerId),
     addReaction: (tripId, targetType, targetId, memberId, reaction) =>
       addReaction(ctx, tripId, targetType, targetId, memberId, reaction),
@@ -1582,6 +1600,7 @@ async function listMyInvites(
     end_date: Date | string;
     inviter_display_name: string;
     inviter_avatar_preset: string | null;
+    created_at: Date | string;
   }>(
     `SELECT ti.id            AS invite_id,
             ti.trip_id       AS trip_id,
@@ -1589,7 +1608,8 @@ async function listMyInvites(
             t.start_date     AS start_date,
             t.end_date       AS end_date,
             p.display_name   AS inviter_display_name,
-            p.avatar_preset  AS inviter_avatar_preset
+            p.avatar_preset  AS inviter_avatar_preset,
+            ti.created_at    AS created_at
        FROM trip_invites ti
        JOIN trips t     ON t.id = ti.trip_id
        JOIN profiles p  ON p.user_id = ti.inviter_id
@@ -1605,6 +1625,7 @@ async function listMyInvites(
     endDate: toIsoDate(row.end_date),
     inviterDisplayName: row.inviter_display_name,
     inviterAvatarPreset: row.inviter_avatar_preset,
+    createdAt: toIsoTimestamp(row.created_at),
   }));
 }
 
@@ -2660,6 +2681,57 @@ async function getRodeWithTag(
     currentRating:
       row.current_rating === null ? null : Number(row.current_rating),
   };
+}
+
+// ---------------------------------------------------------------------------
+// listPendingRodeWithTags (Notification_Center pending read; R3.1–R3.4)
+// ---------------------------------------------------------------------------
+
+/**
+ * List the `pending` Rode_With_Tags addressed to `userId` as their
+ * Tagged_Member for the Notification_Center's per-domain pending read
+ * (`GET /me/rode-with-tags?state=pending`). Modeled on {@link getRodeWithTag}'s
+ * joins and {@link listMyInvites}'s list projection. A plain read needs no
+ * transaction. Scoped to `tagged_member_id = $1` and filtered to
+ * `state = 'pending'` so it never returns another User's tags or a tag in any
+ * non-pending state (R3.1, R3.2). Joins the linked Trip_Log_Entry, the
+ * referenced Experience, and the Tagging_Member's `profiles` row (the log
+ * entry's `member_id`, matching {@link getRodeWithTag}) to project every
+ * required field (R3.3). Ordered by `created_at DESC, id ASC` — most recent
+ * first with a deterministic id tie-break (R3.1). A User with no pending tags
+ * yields an empty list (R3.4).
+ */
+async function listPendingRodeWithTags(
+  ctx: TripRepoContext,
+  userId: string,
+): Promise<PendingRodeWithTagDTO[]> {
+  const result = await ctx.pool.query<{
+    tag_id: string;
+    trip_log_entry_id: string;
+    experience_name: string;
+    tagging_member_display_name: string;
+    created_at: Date | string;
+  }>(
+    `SELECT rwt.id            AS tag_id,
+            tle.id            AS trip_log_entry_id,
+            e.name            AS experience_name,
+            p.display_name    AS tagging_member_display_name,
+            rwt.created_at    AS created_at
+       FROM rode_with_tags rwt
+       JOIN trip_log_entries tle ON tle.id = rwt.log_entry_id
+       JOIN experiences      e   ON e.id = tle.experience_id
+       JOIN profiles         p   ON p.user_id = tle.member_id
+      WHERE rwt.tagged_member_id = $1 AND rwt.state = 'pending'
+      ORDER BY rwt.created_at DESC, rwt.id ASC`,
+    [userId],
+  );
+  return result.rows.map((row) => ({
+    tagId: row.tag_id,
+    tripLogEntryId: row.trip_log_entry_id,
+    experienceName: row.experience_name,
+    taggingMemberDisplayName: row.tagging_member_display_name,
+    createdAt: toIsoTimestamp(row.created_at),
+  }));
 }
 
 // ---------------------------------------------------------------------------

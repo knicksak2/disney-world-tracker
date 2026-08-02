@@ -239,6 +239,20 @@ const inviteCreateBodySchema = z.object({ userId: uuidSchema }).strict();
 const rodeWithTagParamsSchema = z.object({ tagId: uuidSchema }).strict();
 
 /**
+ * Query schema for the Notification_Center pending read
+ * (`GET /me/rode-with-tags?state=pending`). `state` is **required** and must be
+ * exactly the literal `pending`, and `.strict()` rejects any extra query key,
+ * so a missing `state`, a `state` other than `pending`, or an unexpected key is
+ * a client error and the collection path can never accidentally return a full
+ * unfiltered list (R3.6). A failure here surfaces as `validation_failed` (400)
+ * with no tags returned; unlike the Trip-domain input schemas this uses the
+ * generic `validation_failed` code the design specifies for this read.
+ */
+const rodeWithPendingQuerySchema = z
+  .object({ state: z.literal('pending') })
+  .strict();
+
+/**
  * `:targetType` path segment for the Trip_Feed reaction/comment routes. It must
  * be one of the closed `TripFeedTargetType` vocabulary (`feed_item` |
  * `log_entry`, R13.10); anything else is rejected as `trip_validation_failed`
@@ -825,6 +839,38 @@ export function tripRoutes(options: TripRoutesOptions): FastifyPluginAsync {
         const { id } = parseOrAppError(tripIdParamsSchema, request.params);
         await assertTripMember(pool, userId, id);
         return repo.listLogEntries(id);
+      },
+    );
+
+    // -------------------------------------------------------------------
+    // GET /me/rode-with-tags?state=pending — list the caller's pending
+    // Rode_With_Tags for the Notification_Center (Tagged_Member-scoped)
+    // (R3.1, R3.4, R3.5, R3.6)
+    // -------------------------------------------------------------------
+    // Registered BEFORE the parametric `/me/rode-with-tags/:tagId` routes so
+    // the query form on the collection path wins over `:tagId` (mirrors the
+    // `/me/inbox/unread-count` vs `/me/inbox/:shareId` ordering). Scoped to the
+    // caller by the repo (only tags where the caller is the Tagged_Member in
+    // state `pending`, ordered `created_at DESC`), so it never discloses other
+    // users' tags (R3.1, R3.2). `requireSession` yields `unauthorized` (401)
+    // before any repo call (R3.5). The strict query schema makes `state`
+    // required and exactly `pending`; a missing/other `state` or any extra key
+    // is rejected as `validation_failed` (400) and returns no tags (R3.6). An
+    // empty result is returned as `200` with `[]` (R3.4).
+    app.get(
+      '/me/rode-with-tags',
+      { preHandler: requireSession },
+      async (request) => {
+        const userId = requireUser(request);
+        const parsed = rodeWithPendingQuerySchema.safeParse(request.query);
+        if (!parsed.success) {
+          throw new AppError(
+            'validation_failed',
+            'Unsupported "state" query value; only state=pending is supported.',
+            { field: 'state' },
+          );
+        }
+        return repo.listPendingRodeWithTags(userId);
       },
     );
 

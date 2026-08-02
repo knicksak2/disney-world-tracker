@@ -208,6 +208,9 @@ export {
   rodeWithConfirmSchema,
   tripReactionInputSchema,
   tripCommentInputSchema,
+  // DTO schemas
+  pendingRodeWithTagSchema,
+  tripIncomingInviteSchema,
 } from './trips.js';
 export type {
   // value types
@@ -231,6 +234,7 @@ export type {
   TripInviteDTO,
   TripIncomingInviteDTO,
   TripPendingInviteDTO,
+  PendingRodeWithTagDTO,
   PlannedItemDTO,
   TripLogEntryDTO,
   TripFeedItemDTO,
@@ -253,3 +257,44 @@ export type {
   PlannedListProgress,
   PlannedListPresentation,
 } from './plannedCompletion.js';
+
+// Notification_Center pure attention model: domain-agnostic, dependency-free
+// types for the merge / order / badge / failure-handling core shared by the
+// Attention_Feed and the Attention_Badge so the two cannot drift.
+export {
+  SUMMARY_MAX_LENGTH,
+  summarize,
+  toAttentionItem,
+} from './attention.js';
+export type {
+  AttentionDomain,
+  AttentionItemRef,
+  AttentionDestination,
+  AttentionItem,
+  AttentionSourceOutcome,
+  AttentionSourceDTO,
+  SortMode,
+  BadgeDisplay,
+  AttentionState,
+} from './attention.js';
+
+// Notification_Center pure ordering functions (value exports): the fixed domain
+// sequence and the total-order comparator / feed orderer (R1.4–R1.8).
+export { DOMAIN_ORDER, compareItems, orderItems } from './attention.js';
+
+// Notification_Center pure attention functions: badge display derivation and
+// the top-level state reducer that composes the feed + badge from per-source
+// outcomes (R4.2–R4.6, R8.1, R8.4, R8.7).
+export { badgeDisplayFor, buildAttentionState } from './attention.js';
+
+// Notification_Center pure view classifier: the mutually-exclusive
+// loading / empty / error / list view derivation from in-flight status and
+// per-source outcomes (Property 12; R9.2, R9.3, R9.6).
+export { classifyView } from './attention.js';
+export type { AttentionView } from './attention.js';
+
+// Notification_Center pure retry-merge: recompute the state from every source's
+// latest outcome (retried successes replace prior failures and merge with the
+// previously loaded successful items; still-failed sources remain failed)
+// (R8.5, R8.6).
+export { mergeOutcomes, recomputeAfterRetry } from './attention.js';

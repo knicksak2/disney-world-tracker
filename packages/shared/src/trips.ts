@@ -27,6 +27,7 @@ import { z } from 'zod';
 
 import type { Park, TripReactionValue } from './enums.js';
 import {
+  isoTimestampSchema,
   ratingValueSchema,
   tripReactionValueSchema,
   uuidSchema,
@@ -283,6 +284,29 @@ export const tripCommentInputSchema = z
 export type TripCommentInput = z.infer<typeof tripCommentInputSchema>;
 
 // ---------------------------------------------------------------------------
+// DTO schemas (runtime validators for read projections)
+// ---------------------------------------------------------------------------
+
+/**
+ * Validates the shape of a {@link PendingRodeWithTagDTO} as returned by
+ * `GET /me/rode-with-tags?state=pending`. Kept alongside the trips input
+ * schemas so the Trips_API producer and the Notification_Center consumer
+ * cannot drift on the pending rode-with read projection (R3.3). The `tagId`
+ * and `tripLogEntryId` are UUIDs, the names are free-form strings, and
+ * `createdAt` is an ISO-8601 UTC timestamp; the object is `.strict()` so an
+ * unexpected extra field surfaces as a drift error.
+ */
+export const pendingRodeWithTagSchema = z
+  .object({
+    tagId: uuidSchema,
+    tripLogEntryId: uuidSchema,
+    experienceName: z.string(),
+    taggingMemberDisplayName: z.string(),
+    createdAt: isoTimestampSchema,
+  })
+  .strict();
+
+// ---------------------------------------------------------------------------
 // DTOs (types only — no runtime payload)
 // ---------------------------------------------------------------------------
 
@@ -356,6 +380,52 @@ export interface TripIncomingInviteDTO {
   readonly endDate: string;
   readonly inviterDisplayName: string;
   readonly inviterAvatarPreset: string | null;
+  /**
+   * ISO-8601 timestamp the Trip_Invite was created, sourced from the
+   * already-stored `trip_invites.created_at`. Added additively so the invite
+   * can carry a source timestamp for ordering in the Notification_Center; it
+   * reshapes no request contract and removes no existing field (R1.3, R1.4,
+   * R7.3).
+   */
+  readonly createdAt: string;
+}
+
+/**
+ * Runtime validator mirroring {@link TripIncomingInviteDTO} for API/DTO drift
+ * protection. `createdAt` is validated as an ISO-8601 timestamp but kept
+ * `.optional()` so the field is additive: existing producers/consumers that do
+ * not yet carry it still validate, and nothing about the trip-invite contract
+ * is reshaped (R1.3, R1.4, R7.3).
+ */
+export const tripIncomingInviteSchema = z
+  .object({
+    inviteId: uuidSchema,
+    tripId: uuidSchema,
+    tripName: z.string(),
+    startDate: z.string(),
+    endDate: z.string(),
+    inviterDisplayName: z.string(),
+    inviterAvatarPreset: z.string().nullable(),
+    createdAt: isoTimestampSchema.optional(),
+  })
+  .strict();
+
+/**
+ * One `pending` Rode_With_Tag as surfaced to the Tagged_Member in the
+ * Notification_Center (`GET /me/rode-with-tags?state=pending`). Only `pending`
+ * tags are listed, so a row here is always actionable: it carries the `tagId`
+ * the confirm/decline actions post to, the linked `tripLogEntryId`, the
+ * referenced Experience name, the tagging member's display name, and the tag's
+ * creation timestamp used as the Notification_Center source-sort key
+ * (R3.1–R3.3).
+ */
+export interface PendingRodeWithTagDTO {
+  readonly tagId: string;
+  readonly tripLogEntryId: string;
+  readonly experienceName: string;
+  readonly taggingMemberDisplayName: string;
+  /** ISO-8601 timestamp the tag was created; source timestamp + sort key. */
+  readonly createdAt: string;
 }
 
 /**

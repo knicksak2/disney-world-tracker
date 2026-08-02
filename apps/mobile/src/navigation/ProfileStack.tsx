@@ -1,8 +1,10 @@
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import type { NavigatorScreenParams } from '@react-navigation/native';
+import type { AttentionItemRef } from '@dwt/shared';
 
 import ProfileScreen from '../screens/ProfileScreen';
+import NotificationCenterScreen from '../screens/notifications/NotificationCenterScreen';
 import StatsStack, { type StatsStackParamList } from './StatsStack';
 
 /**
@@ -38,6 +40,21 @@ export type ProfileStackParamList = {
    * `StatsResponse` (R3.5).
    */
   Stats: NavigatorScreenParams<StatsStackParamList> | undefined;
+  /**
+   * The Notification_Center's Attention_Feed surface, re-hosted on the Profile
+   * tab's stack and reached through the Profile_Notifications_Entry on the
+   * Profile screen (notification-center R10.2, R10.5). Hosting it here — rather
+   * than as a sixth bottom tab — keeps the tab bar unchanged (Home, Catalog,
+   * Trips, Friends, Profile; R10.1) while the Profile-tab Attention_Badge keeps
+   * the User alerted app-wide.
+   *
+   * Renders the signed-in User's own feed. Optionally carries a `focusRef`
+   * naming a specific Attention_Item to surface when the center is opened from
+   * a tapped push notification (notification-center R13.1, R13.2); the field is
+   * additive/optional so opening the center with no params (from the
+   * Profile_Notifications_Entry) still renders the full feed.
+   */
+  NotificationCenter: { focusRef?: AttentionItemRef } | undefined;
 };
 
 const Stack = createNativeStackNavigator<ProfileStackParamList>();
@@ -47,6 +64,7 @@ export default function ProfileStack(): JSX.Element {
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="ProfileMain" component={ProfileScreen} />
       <Stack.Screen name="Stats" component={StatsStack} />
+      <Stack.Screen name="NotificationCenter" component={NotificationCenterScreen} />
     </Stack.Navigator>
   );
 }

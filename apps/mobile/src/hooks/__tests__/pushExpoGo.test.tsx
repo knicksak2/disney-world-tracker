@@ -52,7 +52,7 @@ jest.mock('../../api/client', () => {
 
 jest.mock('../../navigation/navigationRef', () => ({
   __esModule: true,
-  navigateToInbox: jest.fn(() => true),
+  navigateToNotificationCenter: jest.fn(() => true),
 }));
 
 // ---------------------------------------------------------------------------

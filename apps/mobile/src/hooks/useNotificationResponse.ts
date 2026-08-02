@@ -1,51 +1,41 @@
 /**
- * Notification tap deep-linking handler (task 20.1).
+ * Notification tap deep-linking handler.
  *
  * Mounted once at the app root (`App.tsx`), this hook turns a tapped push
- * notification into an in-app deep link. A Share notification routes to the
- * Inbox per Requirement 10; a friend-request notification (carrying a
- * `friendRequestId`) routes to the `FriendsList` where the incoming request can
- * be accepted or declined; and a Trip notification routes into the Trips tab
- * per Requirement 18 — a Trip_Invite notification (carrying `{ tripInviteId }`)
- * to the invite accept/decline view (R18.2) and a Rode_With_Tag notification
- * (carrying `{ rodeWithTagId, tripLogEntryId }`) to the tag confirm view
- * (R18.3):
+ * notification into an in-app deep link. Following the Notification_Center
+ * consolidation (notification-center task 16.1), a tapped push for any of the
+ * four supported domains — a Share, a friend-request (carrying a
+ * `friendRequestId`), a Trip_Invite (carrying `{ tripInviteId }`), or a
+ * Rode_With_Tag (carrying `{ rodeWithTagId, tripLogEntryId }`) — now opens the
+ * single Notification_Center rather than a per-domain handler screen (R13.1,
+ * R13.4):
  *
  *   - It reacts to a tap whether the App was NOT running (cold start), in the
  *     background, or in the foreground. A cold-start tap is recovered from
  *     `getLastNotificationResponseAsync`; a background/foreground tap arrives
- *     through the response listener (R10.1).
- *   - On a tap it navigates to the `Inbox` as soon as the navigation container
- *     is ready — i.e. within the foreground-interactive window (R10.1) —
- *     forwarding a resolvable `shareId` so the `Inbox` can continue to the
- *     Share's destination and mark it read (R10.2) or show a "no longer
- *     available" message when the Share is gone (R10.4).
+ *     through the response listener.
+ *   - On a tap it navigates to the Notification_Center as soon as the
+ *     navigation container is ready — i.e. within the foreground-interactive
+ *     window (R13.1) — forwarding a `focusRef` derived from the payload so the
+ *     center can surface the referenced Attention_Item while it is still
+ *     pending (R13.2).
  *   - When the App is not authenticated it holds the pending tap and defers
- *     navigation until authentication completes, then opens the target — the
- *     Inbox (R10.3) or the Trip deep-link target (R7.8, R18.4). A tap that is
- *     never authenticated within the session is dropped rather than navigated
- *     (R7.7/R18.7 hold implicitly: the tap is only ever consumed once the store
- *     reports an authenticated session).
- *   - When the notification carries no resolvable Share id it still opens the
- *     Inbox with its current contents (R10.5).
+ *     navigation until authentication completes, then opens the
+ *     Notification_Center. A tap that is never authenticated within the session
+ *     is dropped rather than navigated (the tap is only ever consumed once the
+ *     store reports an authenticated session).
+ *   - When the notification carries no resolvable routing id (e.g. a
+ *     friend-request tap) it still opens the feed with its current contents.
  *
- * A tapped Trip notification is routed to its deep-link target; the
- * "no longer available" fallback (R7.9, R18.5) — navigating to the
- * `Trips_List_Screen` and surfacing the message via the shared Trips-list
- * notice store — is owned by the target screens (`TripInvite` /
- * `RodeWithConfirm`), which already surface a not-available state when their
- * read fails or the User is no longer a Trip_Member. The handler's sole job is
- * to classify the tap and dispatch to the right navigation helper.
+ * Surfacing the referenced item, or the "no longer available" indication when
+ * it is no longer pending (R13.3), is owned by `NotificationCenterScreen`
+ * (task 16.2). The handler's sole job is to classify the tap and dispatch to
+ * `navigateToNotificationCenter` with the appropriate `focusRef`.
  *
- * The navigation itself is delegated to `navigateToInbox` (the shared
- * navigation ref) and, for the destination hop and read-state, to the
- * `InboxScreen`'s existing tap-through wiring (task 8.1) via the `shareId`
- * param — so the Requirement 5 destination logic lives in exactly one place.
+ * `expo-notifications` is imported as a module (not injected) so unit tests can
+ * mock it directly.
  *
- * `expo-notifications` is imported as a module (not injected) so unit tests
- * (task 20.2) can mock it directly.
- *
- * Validates: Requirements 10.1, 10.2, 10.3, 10.4, 10.5
+ * Validates: Requirements 13.1, 13.4
  */
 
 import { useCallback, useEffect, useRef } from 'react';
@@ -53,12 +43,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import type * as NotificationsModule from 'expo-notifications';
 
 import { loadNotifications } from '../env/notifications';
-import {
-  navigateToFriendsList,
-  navigateToInbox,
-  navigateToRodeWithTag,
-  navigateToTripInvite,
-} from '../navigation/navigationRef';
+import { navigateToNotificationCenter } from '../navigation/navigationRef';
 import { useSessionStore } from '../state/sessionStore';
 
 // ---------------------------------------------------------------------------
@@ -218,27 +203,39 @@ export type PendingTap =
  * Dispatch a pending tap to its navigation target through the shared
  * navigation ref. Returns whatever the navigation helper returns — `true` once
  * the dispatch is issued, or `false` when the container is not ready yet so the
- * caller can retry within the foreground-navigation window (R10.1). The
- * exhaustive `switch` ties each `PendingTap` kind to exactly one helper.
+ * caller can retry within the foreground-navigation window (R13.1).
+ *
+ * All four notification kinds — Friend_Request, Trip_Invite, Rode_With_Tag, and
+ * Share — now open the single Notification_Center rather than a per-domain
+ * handler screen (R13.1, R13.4). Each kind forwards the identifiers it carries
+ * as a `focusRef` so the center can surface the referenced Attention_Item while
+ * it is still pending (R13.2); when the referenced item is no longer pending or
+ * otherwise unavailable, the screen shows the "no longer available" indication
+ * (R13.3, owned by the screen — task 16.2). A friend-request tap carries no
+ * routing id, so it opens the feed without a `focusRef`.
  */
 function dispatchPendingTap(pending: PendingTap): boolean {
   switch (pending.kind) {
     case 'friendRequest':
-      return navigateToFriendsList();
+      // The friend-request push carries no request id, so open the feed with
+      // no focus target; the pending request still appears in the list.
+      return navigateToNotificationCenter();
     case 'tripInvite':
-      // R18.2 — open the invite accept/decline view; the target screen surfaces
-      // the "no longer available" fallback (R7.9, R18.5) when its read fails.
-      return navigateToTripInvite({ tripInviteId: pending.tripInviteId });
+      return navigateToNotificationCenter({
+        focusRef: { inviteId: pending.tripInviteId },
+      });
     case 'rodeWithTag':
-      // R18.3 — open the tag confirm view; the target screen surfaces the
-      // "no longer available" fallback (R18.5) when its read fails.
-      return navigateToRodeWithTag({
-        rodeWithTagId: pending.rodeWithTagId,
-        tripLogEntryId: pending.tripLogEntryId,
+      return navigateToNotificationCenter({
+        focusRef: {
+          tagId: pending.rodeWithTagId,
+          tripLogEntryId: pending.tripLogEntryId,
+        },
       });
     case 'share':
-      return navigateToInbox(
-        pending.shareId !== null ? { shareId: pending.shareId } : undefined,
+      return navigateToNotificationCenter(
+        pending.shareId !== null
+          ? { focusRef: { shareId: pending.shareId } }
+          : undefined,
       );
   }
 }

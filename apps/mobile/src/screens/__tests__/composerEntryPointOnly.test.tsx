@@ -164,15 +164,10 @@ describe('Share_Composer opens only from a Share_Entry_Point (R3.2)', () => {
   // -------------------------------------------------------------------------
   // Non-entry-point surface: the Friends page never opens the composer.
   // -------------------------------------------------------------------------
-  test('FriendsListScreen exposes only Inbox + Find and no control navigates to ShareComposer', async () => {
+  test('FriendsListScreen exposes only Sent + Find and no control navigates to ShareComposer', async () => {
     apiRequestMock.mockImplementation(async (_method, path) => {
       if (path === '/me/friends') {
         return FRIENDS_RESPONSE;
-      }
-      // The Friends page reads the unread-inbox tally to badge the Inbox
-      // control; answer it benignly (no unread) so the mock stays quiet.
-      if (path === '/me/inbox/unread-count') {
-        return { count: 0 };
       }
       throw new Error(`unexpected call to ${String(path)}`);
     });
@@ -189,9 +184,12 @@ describe('Share_Composer opens only from a Share_Entry_Point (R3.2)', () => {
     // The friends list resolves asynchronously.
     const friendRow = await screen.findByTestId(`friends-friend-${FRIEND.userId}`);
 
-    // R3.4: the page exposes the Inbox and Find controls...
-    const inbox = screen.getByTestId('friends-inbox');
+    // The page exposes the Sent and Find controls. The Inbox control was moved
+    // to the Notification_Center (notification-center R7.7/R12.2), so it no
+    // longer appears here.
     const find = screen.getByTestId('friends-find');
+    expect(screen.queryByTestId('friends-sent')).toBeTruthy();
+    expect(screen.queryByTestId('friends-inbox')).toBeNull();
 
     // ...and no Share_Entry_Point control (R3.1). Neither entry-point testID
     // from the content screens appears on the Friends page.
@@ -199,13 +197,11 @@ describe('Share_Composer opens only from a Share_Entry_Point (R3.2)', () => {
     expect(screen.queryByTestId('stats-share-button')).toBeNull();
 
     // Exercise every affordance on the page.
-    fireEvent.press(inbox);
     fireEvent.press(find);
     fireEvent.press(friendRow);
 
-    // The Inbox control routes to the Inbox (R3.5) and Find to search; no
-    // control on the page ever opens the Share_Composer (R3.2).
-    expect(friendsNavigate).toHaveBeenCalledWith('Inbox');
+    // Find routes to search; no control on the page ever opens the
+    // Share_Composer (R3.2).
     expect(friendsNavigate).toHaveBeenCalledWith('FriendsSearch');
     expect(composerNavigations(friendsNavigate)).toHaveLength(0);
   });

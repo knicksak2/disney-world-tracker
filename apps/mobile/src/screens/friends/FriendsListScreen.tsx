@@ -3,10 +3,8 @@
 // Validates: Requirements R8.4, R8.5, R8.6, R8.9, R8.11
 //
 // Behavior summary:
-//   - Reads `GET /me/friends` and renders three sections: current Friends,
-//     incoming pending Friend_Requests, and outgoing pending Friend_Requests
-//     (R8.9).
-//   - Each incoming request offers Accept (R8.4) and Decline (R8.5) buttons.
+//   - Reads `GET /me/friends` and renders two sections: current Friends and
+//     outgoing pending Friend_Requests (R8.9).
 //   - Each current friend offers a Remove button (R8.6, R8.11).
 //   - Outgoing requests are read-only (the server has no withdraw endpoint).
 //   - All mutations invalidate the `['friends']` query so the list refreshes
@@ -16,14 +14,24 @@
 //   - A header button navigates to `FriendsSearch` so the user can find
 //     people to add.
 //
+// Feature: notification-center, Task 15.1 — the incoming friend-request
+// accept/decline actionable section was removed from this screen (R7.1). The
+// Notification_Center is now the single in-app surface for acting on pending
+// Friend_Requests; the `['friends']` read is retained for the friends list and
+// outgoing-request display only.
+//
 // Feature: social-sharing-loop, Task 6.1 — the top-level Share control was
 // removed from this screen (R3.1). A Share is now initiated only from a
-// Share_Entry_Point on the content being shared (R3.2). The Friends page
-// retains only the Inbox control (navigates to `Inbox`, R3.5) and the Find
-// control (R3.4).
+// Share_Entry_Point on the content being shared (R3.2).
+//
+// Feature: notification-center — the Inbox control was removed from this
+// screen. The Share_Inbox now lives under the Notification_Center (reachable
+// via the Profile_Notifications_Entry, R12.2), which is the single alerting
+// surface for unread Shares (R7.7), so the Friends page no longer duplicates
+// that entry point. The Friends page retains the Sent and Find controls.
 //
 // Styling: uses the shared "Magical / Whimsical" theme — a gradient hero
-// header with Inbox / Find-friends actions, section labels, rows as
+// header with Sent / Find-friends actions, section labels, rows as
 // `Card`s, and themed PrimaryButton / SecondaryButton controls. Empty
 // sections and the no-friends state use calm muted styling; only mutation
 // failures use danger. See `theme/theme.ts` and `theme/components.tsx`.
@@ -102,11 +110,6 @@ interface FriendRequestListEntry {
 type Row =
   | { readonly kind: 'header'; readonly id: string; readonly label: string }
   | {
-      readonly kind: 'incoming';
-      readonly id: string;
-      readonly request: FriendRequestListEntry;
-    }
-  | {
       readonly kind: 'friend';
       readonly id: string;
       readonly friend: FriendListEntry;
@@ -130,18 +133,6 @@ export default function FriendsListScreen({ navigation }: Props): JSX.Element {
     queryFn: () => apiRequest<FriendsAndRequests>('GET', '/me/friends'),
   });
 
-  // Unread inbox tally for the Inbox button badge, so the Friends page itself
-  // tells the User there are unread Shares waiting behind the Inbox control
-  // (not just the tab-bar dot). Shares the `['inbox', 'unread']` cache with the
-  // tab-bar badge and the Inbox screen — the Inbox screen's
-  // `invalidateQueries(['inbox'])` prefix-matches this key, so opening or
-  // deleting a Share refreshes this badge too.
-  const unreadInboxQuery = useQuery<{ count: number }, ApiError>({
-    queryKey: ['inbox', 'unread'],
-    queryFn: () => apiRequest<{ count: number }>('GET', '/me/inbox/unread-count'),
-  });
-  const unreadInboxCount = unreadInboxQuery.data?.count ?? 0;
-
   const { refetch: refetchFriends } = friendsQuery;
 
   // Refetch whenever the screen gains focus so a friend request that arrived
@@ -149,13 +140,10 @@ export default function FriendsListScreen({ navigation }: Props): JSX.Element {
   // friend-request push notification) shows up without needing an app
   // restart. This covers the case where the screen is already mounted in the
   // stack, so React Query's default refetch-on-mount would not fire.
-  const { refetch: refetchUnreadInbox } = unreadInboxQuery;
-
   useFocusEffect(
     useCallback(() => {
       void refetchFriends();
-      void refetchUnreadInbox();
-    }, [refetchFriends, refetchUnreadInbox]),
+    }, [refetchFriends]),
   );
 
   // Per-row error message from the most recent failed mutation. Keyed by
@@ -184,40 +172,6 @@ export default function FriendsListScreen({ navigation }: Props): JSX.Element {
   // Mutations
   // -------------------------------------------------------------------------
 
-  // R8.4 — accept a pending incoming request, server responds 204 on success.
-  const acceptMutation = useMutation<void, ApiError, string>({
-    mutationFn: async (requestId) => {
-      await apiRequest<null>(
-        'POST',
-        `/me/friend-requests/${encodeURIComponent(requestId)}/accept`,
-      );
-    },
-    onSuccess: (_data, requestId) => {
-      setRowError(requestId, null);
-      invalidateFriends();
-    },
-    onError: (err, requestId) => {
-      setRowError(requestId, friendsErrorMessage(err));
-    },
-  });
-
-  // R8.5 — decline a pending incoming request.
-  const declineMutation = useMutation<void, ApiError, string>({
-    mutationFn: async (requestId) => {
-      await apiRequest<null>(
-        'POST',
-        `/me/friend-requests/${encodeURIComponent(requestId)}/decline`,
-      );
-    },
-    onSuccess: (_data, requestId) => {
-      setRowError(requestId, null);
-      invalidateFriends();
-    },
-    onError: (err, requestId) => {
-      setRowError(requestId, friendsErrorMessage(err));
-    },
-  });
-
   // R8.6 / R8.11 — remove a current friend.
   const removeMutation = useMutation<void, ApiError, string>({
     mutationFn: async (otherUserId) => {
@@ -241,32 +195,6 @@ export default function FriendsListScreen({ navigation }: Props): JSX.Element {
 
   const headerActions = (
     <View style={styles.headerActions}>
-      <View style={styles.inboxBtnWrap}>
-        <SecondaryButton
-          label="Inbox"
-          icon="mail-outline"
-          onPress={() => {
-            navigation.navigate('Inbox');
-          }}
-          testID="friends-inbox"
-          accessibilityLabel={
-            unreadInboxCount > 0
-              ? `Inbox, ${unreadInboxCount} unread`
-              : 'Inbox'
-          }
-        />
-        {unreadInboxCount > 0 ? (
-          <View
-            style={styles.inboxBadge}
-            pointerEvents="none"
-            testID="friends-inbox-badge"
-          >
-            <Text style={styles.inboxBadgeText} numberOfLines={1}>
-              {unreadInboxCount > 99 ? '99+' : String(unreadInboxCount)}
-            </Text>
-          </View>
-        ) : null}
-      </View>
       <SecondaryButton
         label="Sent"
         icon="paper-plane-outline"
@@ -321,10 +249,7 @@ export default function FriendsListScreen({ navigation }: Props): JSX.Element {
   };
 
   const rows = buildRows(data);
-  const totalContent =
-    data.friends.length +
-    data.incomingRequests.length +
-    data.outgoingRequests.length;
+  const totalContent = data.friends.length + data.outgoingRequests.length;
 
   return (
     <ScreenContainer>
@@ -364,27 +289,6 @@ export default function FriendsListScreen({ navigation }: Props): JSX.Element {
                 return <SectionHeader label={item.label} />;
               case 'empty':
                 return <SectionEmpty label={item.label} />;
-              case 'incoming':
-                return (
-                  <IncomingRequestRow
-                    request={item.request}
-                    error={rowErrors[item.request.id] ?? null}
-                    busy={
-                      (acceptMutation.isPending &&
-                        acceptMutation.variables === item.request.id) ||
-                      (declineMutation.isPending &&
-                        declineMutation.variables === item.request.id)
-                    }
-                    onAccept={() => {
-                      setRowError(item.request.id, null);
-                      acceptMutation.mutate(item.request.id);
-                    }}
-                    onDecline={() => {
-                      setRowError(item.request.id, null);
-                      declineMutation.mutate(item.request.id);
-                    }}
-                  />
-                );
               case 'friend':
                 return (
                   <FriendRow
@@ -429,23 +333,6 @@ export default function FriendsListScreen({ navigation }: Props): JSX.Element {
  */
 function buildRows(data: FriendsAndRequests): readonly Row[] {
   const rows: Row[] = [];
-
-  rows.push({
-    kind: 'header',
-    id: 'header-incoming',
-    label: `Incoming requests (${data.incomingRequests.length})`,
-  });
-  if (data.incomingRequests.length === 0) {
-    rows.push({
-      kind: 'empty',
-      id: 'empty-incoming',
-      label: 'No incoming requests.',
-    });
-  } else {
-    for (const request of data.incomingRequests) {
-      rows.push({ kind: 'incoming', id: `incoming-${request.id}`, request });
-    }
-  }
 
   rows.push({
     kind: 'header',
@@ -497,49 +384,6 @@ function SectionEmpty({ label }: { readonly label: string }): JSX.Element {
     <View style={styles.sectionEmpty}>
       <Text style={styles.sectionEmptyText}>{label}</Text>
     </View>
-  );
-}
-
-interface IncomingRequestRowProps {
-  readonly request: FriendRequestListEntry;
-  readonly error: string | null;
-  readonly busy: boolean;
-  readonly onAccept: () => void;
-  readonly onDecline: () => void;
-}
-
-function IncomingRequestRow({
-  request,
-  error,
-  busy,
-  onAccept,
-  onDecline,
-}: IncomingRequestRowProps): JSX.Element {
-  return (
-    <Card style={styles.row} testID={`friends-incoming-${request.id}`}>
-      <View style={styles.rowMain}>
-        <Text style={styles.rowName}>{request.otherDisplayName}</Text>
-      </View>
-      <View style={styles.rowActions}>
-        <PrimaryButton
-          label="Accept"
-          icon="checkmark-outline"
-          onPress={onAccept}
-          disabled={busy}
-          testID={`friends-accept-${request.id}`}
-          style={styles.flexBtn}
-        />
-        <SecondaryButton
-          label="Decline"
-          icon="close-outline"
-          onPress={onDecline}
-          disabled={busy}
-          testID={`friends-decline-${request.id}`}
-          style={styles.flexBtn}
-        />
-      </View>
-      {error !== null ? <Text style={styles.rowError}>{error}</Text> : null}
-    </Card>
   );
 }
 
@@ -649,29 +493,6 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     flexBasis: 0,
   },
-  inboxBtnWrap: {
-    flexGrow: 1,
-    flexBasis: 0,
-    position: 'relative',
-  },
-  inboxBadge: {
-    position: 'absolute',
-    top: -6,
-    right: -6,
-    minWidth: 20,
-    height: 20,
-    paddingHorizontal: 5,
-    borderRadius: 10,
-    backgroundColor: theme.color.danger,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  inboxBadgeText: {
-    color: '#ffffff',
-    fontSize: 11,
-    fontWeight: '700',
-    lineHeight: 14,
-  },
   center: {
     flex: 1,
     alignItems: 'center',
@@ -742,14 +563,6 @@ const styles = StyleSheet.create({
   avatarPlaceholderText: {
     ...theme.typography.subtitle,
     color: theme.color.primary,
-  },
-  rowActions: {
-    flexDirection: 'row',
-    gap: theme.spacing.sm,
-  },
-  flexBtn: {
-    flexGrow: 1,
-    flexBasis: 0,
   },
   rowError: {
     ...theme.typography.meta,
