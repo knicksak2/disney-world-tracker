@@ -34,6 +34,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Image,
   Modal,
   Pressable,
   ScrollView,
@@ -47,9 +48,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import {
   TRIP_REACTION_VALUES,
+  isAvatarPresetId,
   tripCommentInputSchema,
   tripLogEntryCreateSchema,
   tripReactionValueSchema,
+  type ExperienceCategory,
   type RodeWithTagState,
   type TripFeedItemDTO,
   type TripFeedTargetType,
@@ -60,6 +63,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 
 import { ApiError, apiRequest } from '../../api/client';
+import { renderAvatarPreset } from '../../avatars/AvatarPresets';
 import type { TripsStackParamList } from '../../navigation/TripsStack';
 import { theme } from '../../theme/theme';
 import {
@@ -217,7 +221,6 @@ const FEED_TYPE_META: Record<
   member_joined: { label: 'joined the trip', icon: 'person-add', tone: '#2f80ed' },
   completion_logged: { label: 'logged a completion', icon: 'checkmark-circle', tone: '#2e9e6b' },
   rating_recorded: { label: 'recorded a rating', icon: 'star', tone: '#f6a609' },
-  rode_with_confirmed: { label: 'confirmed riding along', icon: 'people', tone: '#d6336c' },
 };
 
 /** Per-state visuals for a rode-with tag chip (R10.3 lifecycle). */
@@ -479,6 +482,9 @@ function FeedItemCard({
   // Human context folded into the feed item by the read projection.
   const experienceName = readString(item.metadata, 'experienceName');
   const park = readString(item.metadata, 'park');
+  const experienceImageUrl = readString(item.metadata, 'experienceImageUrl');
+  const experienceCategory = readString(item.metadata, 'experienceCategory');
+  const experienceLand = readString(item.metadata, 'experienceLand');
   const rating = readNumber(item.metadata, 'rating');
   const rodeWith = readRodeWith(item.metadata);
 
@@ -555,6 +561,9 @@ function FeedItemCard({
             id: `optimistic-${Date.now()}`,
             authorId: '',
             authorDisplayName: 'You',
+            // Populated by the background refetch; the optimistic row falls
+            // back to initials until then.
+            authorAvatarPreset: null,
             body: trimmed,
             createdAt: new Date().toISOString(),
             mine: true,
@@ -609,7 +618,7 @@ function FeedItemCard({
     <Card style={styles.itemCard} testID={`trip-feed-item-${item.id}`}>
       {/* Header: initials avatar, actor + what they did, relative time. */}
       <View style={styles.itemHeader}>
-        <Avatar name={item.actorDisplayName} />
+        <Avatar name={item.actorDisplayName} preset={item.actorAvatarPreset} />
         <View style={styles.itemIdentity}>
           <Text style={styles.itemActorLine} numberOfLines={2}>
             <Text style={styles.itemActor}>{item.actorDisplayName}</Text>
@@ -628,9 +637,10 @@ function FeedItemCard({
           style={styles.experiencePill}
           testID={`trip-feed-experience-${item.id}`}
         >
-          <View style={styles.experienceIcon}>
-            <Ionicons name="rocket" size={16} color={theme.color.primary} />
-          </View>
+          <ExperienceThumb
+            imageUrl={experienceImageUrl}
+            category={experienceCategory}
+          />
           <View style={styles.experienceText}>
             <Text style={styles.experienceName} numberOfLines={2}>
               {experienceName}
@@ -638,6 +648,12 @@ function FeedItemCard({
             <View style={styles.experienceMetaRow}>
               {park !== null ? (
                 <Badge label={park} color={theme.color.primary} />
+              ) : null}
+              {experienceLand !== null ? (
+                <Badge label={experienceLand} color={theme.color.accentDark} />
+              ) : null}
+              {experienceCategory !== null ? (
+                <Badge label={experienceCategory} color={theme.color.textSecondary} />
               ) : null}
               {rating !== null ? (
                 <View style={styles.ratingPill}>
@@ -721,6 +737,11 @@ function FeedItemCard({
               style={styles.commentRow}
               testID={`trip-feed-comment-${comment.id}`}
             >
+              <Avatar
+                name={comment.authorDisplayName}
+                preset={comment.authorAvatarPreset}
+                size={28}
+              />
               <View style={styles.commentContent}>
                 <Text style={styles.commentAuthorLine} numberOfLines={1}>
                   <Text style={styles.commentAuthor}>
@@ -1071,12 +1092,93 @@ export function LogComposerModal({
 // Avatar — initials in a color derived from the actor's name
 // ---------------------------------------------------------------------------
 
-function Avatar({ name }: { readonly name: string }): JSX.Element {
+function Avatar({
+  name,
+  preset = null,
+  size = 40,
+}: {
+  readonly name: string;
+  /** The Member's avatar preset id, or `null` to fall back to initials. */
+  readonly preset?: string | null;
+  readonly size?: number;
+}): JSX.Element {
+  // Render the chosen avatar art when the Member has a valid preset; otherwise
+  // fall back to the name-hashed initials disc so a preset-less Member still
+  // reads clearly.
+  if (isAvatarPresetId(preset)) {
+    return (
+      <View
+        style={[
+          styles.avatar,
+          { width: size, height: size, borderRadius: size / 2, overflow: 'hidden' },
+        ]}
+      >
+        {renderAvatarPreset(preset, size)}
+      </View>
+    );
+  }
   const initials = initialsOf(name);
   const bg = AVATAR_COLORS[hashString(name) % AVATAR_COLORS.length]!;
   return (
-    <View style={[styles.avatar, { backgroundColor: bg }]}>
+    <View
+      style={[
+        styles.avatar,
+        { width: size, height: size, borderRadius: size / 2, backgroundColor: bg },
+      ]}
+    >
       <Text style={styles.avatarText}>{initials}</Text>
+    </View>
+  );
+}
+
+/**
+ * Leading thumbnail for a `completion_logged` item's Experience. Shows the
+ * Disney-sourced image when present; otherwise a category-tinted placeholder
+ * with the category glyph, mirroring the catalog's `ExperienceThumb`, so the
+ * pill has a consistent shape whether or not an image exists.
+ */
+function ExperienceThumb({
+  imageUrl,
+  category,
+}: {
+  readonly imageUrl: string | null;
+  readonly category: string | null;
+}): JSX.Element {
+  const [failed, setFailed] = useState(false);
+  const visual =
+    category !== null && category in theme.categoryVisual
+      ? theme.categoryVisual[category as ExperienceCategory]
+      : null;
+
+  if (imageUrl !== null && imageUrl.length > 0 && !failed) {
+    return (
+      <Image
+        source={{ uri: imageUrl }}
+        style={styles.experienceThumb}
+        resizeMode="cover"
+        onError={() => setFailed(true)}
+        testID="trip-feed-experience-image"
+      />
+    );
+  }
+
+  return (
+    <View
+      style={[
+        styles.experienceThumb,
+        styles.experienceThumbPlaceholder,
+        { backgroundColor: visual?.tint ?? theme.color.surfaceAlt },
+      ]}
+      testID="trip-feed-experience-placeholder"
+    >
+      <Ionicons
+        name={
+          (visual?.glyph as keyof typeof Ionicons.glyphMap | undefined) ??
+          'sparkles'
+        }
+        size={18}
+        color={theme.color.primary}
+      />
     </View>
   );
 }
@@ -1345,13 +1447,15 @@ const styles = StyleSheet.create({
     borderRadius: theme.radius.md,
     backgroundColor: theme.color.surfaceAlt,
   },
-  experienceIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+  experienceThumb: {
+    width: 48,
+    height: 48,
+    borderRadius: theme.radius.md,
+    backgroundColor: theme.color.surface,
+  },
+  experienceThumbPlaceholder: {
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: theme.color.surface,
   },
   experienceText: {
     flex: 1,

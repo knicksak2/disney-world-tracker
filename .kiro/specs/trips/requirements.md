@@ -57,7 +57,7 @@ The following capabilities are explicitly out of scope for v1 and are noted as f
 - **Tagged_Member**: The Trip_Member named by a Rode_With_Tag.
 - **Trickle_Down**: The process by which a confirmed Rode_With_Tag results in a canonical Completion for the Tagged_Member in the Tracking_Service and links that Completion to the Trip.
 - **Trip_Feed**: The reverse-chronological activity feed of a Trip, composed of Trip_Feed_Items.
-- **Trip_Feed_Item**: One event in a Trip_Feed, such as a Member joining, an Invite being accepted, a Completion being logged, a Rating being recorded or updated, or a Rode_With_Tag being confirmed.
+- **Trip_Feed_Item**: One event in a Trip_Feed, such as a Member joining, an Invite being accepted, a Completion being logged, or a Rating being recorded or updated.
 - **Trip_Reaction**: A reaction of a supported reaction type attached by a Trip_Member to a Trip_Feed_Item or Trip_Log_Entry via the Reactions_Service; a Trip_Member holds at most one Trip_Reaction of a given reaction type per target item.
 - **Trip_Comment**: A free-form text comment attached by a Trip_Member to a Trip_Feed_Item or Trip_Log_Entry; comments are not real-time chat.
 - **Trip_Summary**: A derived view over a Trip presenting group counts, top-rated moments, and per-Member contributions.
@@ -241,7 +241,7 @@ The following capabilities are explicitly out of scope for v1 and are noted as f
 7. IF a User who is not the Tagged_Member named by a Rode_With_Tag attempts to confirm or decline that Rode_With_Tag, THEN THE Trip_Service SHALL reject the request with an authorization error and SHALL NOT change the Rode_With_Tag.
 8. IF the Tagged_Member named by a Rode_With_Tag attempts to confirm or decline that Rode_With_Tag while it is in the `confirmed` or `declined` state, THEN THE Trip_Service SHALL reject the request with a conflict validation error and SHALL NOT change the Rode_With_Tag or any associated Completion, Rating, or Note.
 9. IF a Tagged_Member supplies a Rating value that is missing, non-numeric, or not a whole number from 1 to 10 inclusive while confirming a Rode_With_Tag, THEN THE Trip_Service SHALL reject the Rating with a validation error and SHALL leave the Tagged_Member's existing canonical Rating unchanged.
-10. WHEN a Tagged_Member confirms a Rode_With_Tag that is in the `pending` state, THE Trip_Service SHALL set the Rode_With_Tag to `confirmed` and add a Trip_Feed_Item recording that the Tagged_Member confirmed riding the referenced Experience.
+10. WHEN a Tagged_Member confirms a Rode_With_Tag that is in the `pending` state, THE Trip_Service SHALL set the Rode_With_Tag to `confirmed` and SHALL NOT add a Trip_Feed_Item for the confirmation, because the originating `completion_logged` Trip_Feed_Item already records that the tagged Members rode the referenced Experience together.
 
 ### Requirement 12: Single Canonical Rating Referenced by Trips
 
@@ -264,7 +264,7 @@ The following capabilities are explicitly out of scope for v1 and are noted as f
 
 #### Acceptance Criteria
 
-1. THE Trip_Service SHALL maintain a Trip_Feed for each Trip composed of Trip_Feed_Items for Trip_Members joining, Trip_Invites being accepted, Trip_Log_Entries being created, canonical Ratings being recorded or updated through the Trip, and Rode_With_Tags being confirmed.
+1. THE Trip_Service SHALL maintain a Trip_Feed for each Trip composed of Trip_Feed_Items for Trip_Members joining, Trip_Invites being accepted, Trip_Log_Entries being created, and canonical Ratings being recorded or updated through the Trip.
 2. WHEN an event that originates a Trip_Feed_Item occurs, THE Trip_Service SHALL create the corresponding Trip_Feed_Item within 5 seconds of that event.
 3. WHEN the Trip_Detail_View displays the Trip_Feed, THE App SHALL display the Trip_Feed_Items in reverse-chronological order by creation timestamp, breaking ties between Trip_Feed_Items with identical timestamps by descending Trip_Feed_Item identifier so that the order is deterministic.
 4. WHEN a Trip_Member adds a Trip_Reaction of a given reaction type to a Trip_Feed_Item or a Trip_Log_Entry for which that Trip_Member has no existing Trip_Reaction of that type, THE Reactions_Service SHALL persist that Trip_Reaction associated with the Trip_Member and the target item.

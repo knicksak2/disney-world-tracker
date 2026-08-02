@@ -494,6 +494,12 @@ export interface TripCommentDTO {
   readonly id: string;
   readonly authorId: string;
   readonly authorDisplayName: string;
+  /**
+   * The author's chosen avatar preset id (`ProfileDTO.avatarPreset`), or `null`
+   * when they have none — so the feed can render the author's avatar rather
+   * than only initials. Always present on the wire (possibly `null`).
+   */
+  readonly authorAvatarPreset: string | null;
   readonly body: string;
   /** ISO-8601 timestamp; comments are listed oldest-first under their item. */
   readonly createdAt: string;
@@ -510,8 +516,21 @@ export interface TripFeedItemDTO {
   readonly id: string;
   readonly type: string;
   readonly actorDisplayName: string;
+  /**
+   * The acting Member's chosen avatar preset id (`ProfileDTO.avatarPreset`), or
+   * `null` when they have none — so the feed can render the actor's avatar
+   * rather than only initials. Always present on the wire (possibly `null`).
+   */
+  readonly actorAvatarPreset: string | null;
   /** ISO-8601 timestamp; the primary Trip_Feed sort key (R13.3). */
   readonly createdAt: string;
+  /**
+   * Display context folded in by the read projection. For a `completion_logged`
+   * item this includes `experienceName`, `park`, `experienceCategory`,
+   * `experienceLand`, and `experienceImageUrl` (the referenced Experience), the
+   * logging Member's live `rating`, and the `rodeWith` tag states — so the row
+   * can show a rich card, not just a name.
+   */
   readonly metadata: Record<string, unknown>;
   readonly reactions: readonly TripReactionSummary[];
   readonly comments: readonly TripCommentDTO[];

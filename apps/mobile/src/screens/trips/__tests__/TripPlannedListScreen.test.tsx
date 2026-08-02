@@ -113,6 +113,7 @@ const FEED_WITH_DONE: TripFeedItemDTO[] = [
     id: '11111111-1111-4111-8111-111111111111',
     type: 'completion_logged',
     actorDisplayName: 'Ariel',
+    actorAvatarPreset: null,
     createdAt: '2025-08-01T18:00:00.000Z',
     metadata: {
       experienceId: DONE_ITEM.experienceId,

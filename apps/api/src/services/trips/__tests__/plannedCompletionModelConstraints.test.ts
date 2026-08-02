@@ -114,8 +114,14 @@ describe('Planned List Completion Sync — migration / schema is unchanged', () 
     // exhaustive check; this asserts the same for any post-0015 migration.)
     for (const m of migrations.filter((mm) => mm.num > 15)) {
       const sql = read(resolve(migrationsDir, m.name));
-      expect(sql).not.toMatch(/planned[_-]?item/iu);
-      expect(sql).not.toMatch(COMPLETION_TOKEN);
+      // Strip the pre-existing `completion_logged` Trip_Feed_Item type literal
+      // before the completion-token scan: it is a Trips feed-item type (present
+      // since 0015) that later migrations legitimately reference when they touch
+      // the trip_feed_items type constraint, and it has nothing to do with
+      // planned-list completion — the concept this guard actually protects.
+      const scanned = sql.replace(/completion_logged/giu, '');
+      expect(scanned).not.toMatch(/planned[_-]?item/iu);
+      expect(scanned).not.toMatch(COMPLETION_TOKEN);
     }
   });
 

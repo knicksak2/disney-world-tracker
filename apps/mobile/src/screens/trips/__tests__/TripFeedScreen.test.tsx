@@ -63,6 +63,7 @@ const FEED: TripFeedItemDTO[] = [
     id: COMPLETION_ITEM_ID,
     type: 'completion_logged',
     actorDisplayName: 'Me',
+    actorAvatarPreset: null,
     createdAt: '2025-08-01T18:00:00.000Z',
     metadata: {
       experienceId: EXPERIENCE_UUID,
@@ -81,6 +82,7 @@ const FEED: TripFeedItemDTO[] = [
     id: JOIN_ITEM_ID,
     type: 'member_joined',
     actorDisplayName: 'Ariel',
+    actorAvatarPreset: null,
     createdAt: '2025-08-01T17:00:00.000Z',
     metadata: {},
     reactions: [],

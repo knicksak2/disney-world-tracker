@@ -21,18 +21,18 @@
  *     Member previously had one or not (R11.4 / R11.5);
  *   - when no Rating is supplied, leaves the canonical Rating exactly as it was —
  *     absent stays absent, present stays at its old value (R11.5);
- *   - transitions the tag to `confirmed` and records the `rode_with_confirmed`
- *     Trip_Feed_Item.
+ *   - transitions the tag to `confirmed` and writes no Trip_Feed_Item (R11.10).
  *
  * Test strategy
  * -------------
  * A `fast-check` `commands`-style state-machine test driven over the real
  * `createTripRepo` factory (task 10.1) backed by a tiny in-memory fake `pg.Pool`
- * that models exactly the tables `confirmRodeWithTag` touches — `rode_with_tags`,
- * `trip_log_entries` (read for the join) and `trip_feed_items` (the confirm feed
- * row). Per the tasks.md convention the stateful property runs against this
- * in-memory model; the SQL repo is pinned to the same behaviour by the
- * cross-service integration tests.
+ * that models exactly the tables `confirmRodeWithTag` touches — `rode_with_tags`
+ * and `trip_log_entries` (read for the join). Confirm writes no `trip_feed_items`
+ * row (R11.10), so the fake pool has no INSERT branch — a stray feed insert
+ * would surface as an unhandled statement. Per the tasks.md convention the
+ * stateful property runs against this in-memory model; the SQL repo is pinned to
+ * the same behaviour by the cross-service integration tests.
  *
  * The injected canonical Tracking repos are fakes that *record every call* and
  * *apply it* to an in-memory canonical store keyed by `(userId, experienceId)`.
@@ -48,8 +48,8 @@
  * After every command the model re-derives the expected canonical entry for each
  * tag (completed once confirmed; Rating = supplied value if given else the
  * pre-existing Rating) and asserts the real canonical store matches, that the tag
- * reached `confirmed`, that `setRating` was called iff a Rating was supplied, and
- * that a `rode_with_confirmed` feed item was written per confirmation.
+ * reached `confirmed`, and that `setRating` was called iff a Rating was supplied.
+ * The confirm writes no `trip_feed_items` row (R11.10).
  *
  * `numRuns: 100` per the spec convention.
  */
@@ -116,8 +116,6 @@ interface Store {
   readonly canonical: Map<string, CanonicalEntry>;
   /** Every delegated canonical-repo call, in order. */
   readonly calls: CanonicalCall[];
-  /** Count of `rode_with_confirmed` feed rows written. */
-  feedItems: number;
 }
 
 interface FakeClient {
@@ -227,12 +225,8 @@ function makeFakePool(store: Store): FakePool {
             return { rows: [], rowCount: 1 };
           }
 
-          // ---- confirm: record the rode_with_confirmed feed item ---
-          if (sql.startsWith('INSERT INTO trip_feed_items')) {
-            store.feedItems += 1;
-            return ok([]);
-          }
-
+          // Confirm writes no feed item (R11.10); a stray INSERT would fall
+          // through to the guard below and fail the run.
           throw new Error(`unhandled client SQL in fake pool: ${sql.slice(0, 80)}`);
         },
         release(): void {
@@ -423,7 +417,6 @@ function buildStore(scenario: ScenarioTag[]): Store {
     tags,
     canonical,
     calls: [],
-    feedItems: 0,
   };
 }
 
@@ -442,8 +435,6 @@ interface ModelTag {
 interface Model {
   /** tagId → its modelled state and expected canonical projection. */
   readonly tags: Map<string, ModelTag>;
-  /** Expected count of `rode_with_confirmed` feed items. */
-  confirmedCount: number;
 }
 
 interface Real {
@@ -462,14 +453,13 @@ function modelFromScenario(scenario: ScenarioTag[]): Model {
       expected: seeded ? { ...seeded } : null,
     });
   }
-  return { tags, confirmedCount: 0 };
+  return { tags };
 }
 
 /**
  * The property's heart, re-run after every command: the canonical store holds
- * exactly the expected projection for every tag, the tag states match the
- * model, and the number of `rode_with_confirmed` feed rows equals the number of
- * confirmations. The expected projection encodes Property 21: a confirmed tag
+ * exactly the expected projection for every tag and the tag states match the
+ * model. The expected projection encodes Property 21: a confirmed tag
  * is `completed` with a Rating equal to the value supplied at confirm (if any)
  * or the pre-existing Rating (unchanged when skipped); a still-pending tag keeps
  * its seeded canonical state exactly.
@@ -486,7 +476,6 @@ function assertConfirmProjection(m: Model, r: Real): void {
     }
   }
   expect(new Set(r.store.canonical.keys())).toEqual(expectedKeys);
-  expect(r.store.feedItems).toBe(m.confirmedCount);
 }
 
 async function expectAppError(
@@ -584,7 +573,6 @@ class ConfirmCommand implements fc.AsyncCommand<Model, Real> {
         rating: this.withRating ? this.ratingValue : priorRating,
       };
       tag.state = 'confirmed';
-      m.confirmedCount += 1;
     } else {
       const callsBefore = r.store.calls.length;
       await expectAppError(

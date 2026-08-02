@@ -571,9 +571,11 @@ export interface TripRepo {
    * completion repo (insert-on-conflict — an existing Completion is kept and
    * never altered, R11.2, R11.3); the optional canonical Rating is applied via
    * the injected rating repo, which persists the single canonical Rating and
-   * emits `RatingChanged` (R11.4, R11.5); the tag is set `confirmed`; and a
-   * `rode_with_confirmed` feed item is added (R11.10). When no `rating` is
-   * supplied the canonical Rating is left unchanged (R11.5).
+   * emits `RatingChanged` (R11.4, R11.5); and the tag is set `confirmed`
+   * (R11.10). No Trip_Feed_Item is written for the confirm — the originating
+   * `completion_logged` entry already records the rode-with, so a separate
+   * confirm entry would be redundant. When no `rating` is supplied the
+   * canonical Rating is left unchanged (R11.5).
    *
    * Authorization that the caller is the Tagged_Member is enforced here (not by
    * a Trip membership gate) since the endpoint is caller-scoped (`/me/...`,
@@ -2434,8 +2436,9 @@ function rowToTripLogEntryDto(row: TripLogEntryRow): TripLogEntryDTO {
  * Trip-local copy exists (R12.1): `completions.mark` ensures the Completion
  * insert-on-conflict (an existing Completion is kept, never altered — R11.2,
  * R11.3), and `ratings.setRating` applies the optional canonical Rating and
- * emits `RatingChanged` (R11.4, R11.5). Finally the tag is set `confirmed` and
- * a `rode_with_confirmed` feed item is added (R11.10). See
+ * emits `RatingChanged` (R11.4, R11.5). Finally the tag is set `confirmed`
+ * (R11.10); no Trip_Feed_Item is written, since the originating
+ * `completion_logged` entry already records the rode-with. See
  * {@link TripRepo.confirmRodeWithTag} for the deviation note on the injected
  * repos opening their own connections.
  */
@@ -2529,26 +2532,14 @@ async function confirmRodeWithTag(
     }
 
     // R11.10: transition the tag to confirmed — the durable link of the
-    // Tagged_Member's completion to this Trip.
+    // Tagged_Member's completion to this Trip. No Trip_Feed_Item is written:
+    // the originating `completion_logged` entry already records that these
+    // Members rode together, so a separate confirm entry would be redundant.
     await client.query(
       `UPDATE rode_with_tags
           SET state = 'confirmed', updated_at = now()
         WHERE id = $1`,
       [tagId],
-    );
-
-    // R11.10: record that the Tagged_Member confirmed riding the Experience.
-    await client.query(
-      `INSERT INTO trip_feed_items (trip_id, type, actor_id, metadata)
-       VALUES ($1, 'rode_with_confirmed', $2, $3::jsonb)`,
-      [
-        row.trip_id,
-        callerId,
-        JSON.stringify({
-          experienceId: row.experience_id,
-          rodeWithTagId: tagId,
-        }),
-      ],
     );
 
     await client.query('COMMIT');
@@ -2743,6 +2734,8 @@ interface TripFeedItemRow {
   id: string;
   type: string;
   actor_display_name: string;
+  /** Acting Member's avatar preset id (`profiles.avatar_preset`), or `null`. */
+  actor_avatar_preset: string | null;
   created_at: Date | string;
   /** `pg` parses the `jsonb` column to a JS object. */
   metadata: Record<string, unknown>;
@@ -2750,6 +2743,12 @@ interface TripFeedItemRow {
   experience_name: string | null;
   /** Referenced Experience Park (or `null` for a non-Park Experience). */
   experience_park: string | null;
+  /** Referenced Experience classification (`experiences.category`). */
+  experience_category: string | null;
+  /** Referenced Experience themed Land (`experiences.land`), or `null`. */
+  experience_land: string | null;
+  /** Referenced Experience representative image URL, or `null`. */
+  experience_image_url: string | null;
   /** For a `completion_logged` item: the logging Member's live canonical Rating. */
   rating: number | string | null;
   /** For a `completion_logged` item: how many Members were tagged rode-with. */
@@ -2781,6 +2780,8 @@ interface TripCommentRow {
   target_id: string;
   author_id: string;
   author_display_name: string;
+  /** Comment author's avatar preset id (`profiles.avatar_preset`), or `null`. */
+  author_avatar_preset: string | null;
   body: string;
   created_at: Date | string;
 }
@@ -2809,8 +2810,8 @@ async function getFeed(
   //
   // Enrich each item with the human context the feed needs to say *what*
   // happened rather than only *that* something happened: the referenced
-  // Experience's name/Park (for `completion_logged` and `rode_with_confirmed`,
-  // joined live via `metadata->>'experienceId'`), and — for a logged
+  // Experience's name/Park (for `completion_logged`, joined live via
+  // `metadata->>'experienceId'`), and — for a logged
   // Completion — the logging Member's current canonical Rating and how many
   // Members they tagged rode-with (joined via `metadata->>'logEntryId'`). The
   // `NULLIF(...,'')::uuid` guard yields NULL for items that carry no such id
@@ -2820,10 +2821,14 @@ async function getFeed(
       `SELECT fi.id,
               fi.type,
               p.display_name  AS actor_display_name,
+              p.avatar_preset AS actor_avatar_preset,
               fi.created_at,
               fi.metadata,
               e.name          AS experience_name,
               e.park          AS experience_park,
+              e.category      AS experience_category,
+              e.land          AS experience_land,
+              e.image_url     AS experience_image_url,
               r.value         AS rating,
               (SELECT count(*)::int
                  FROM rode_with_tags rwt
@@ -2872,6 +2877,7 @@ async function getFeed(
               c.target_id,
               c.author_id,
               p.display_name AS author_display_name,
+              p.avatar_preset AS author_avatar_preset,
               c.body,
               c.created_at
          FROM trip_comments c
@@ -2902,6 +2908,7 @@ async function getFeed(
       id: row.id,
       authorId: row.author_id,
       authorDisplayName: row.author_display_name,
+      authorAvatarPreset: row.author_avatar_preset,
       body: row.body,
       createdAt: toIsoTimestamp(row.created_at),
       mine: row.author_id === callerId,
@@ -2935,6 +2942,17 @@ function rowToTripFeedItemDto(
   if (row.experience_name !== null) {
     enrichment.experienceName = row.experience_name;
     enrichment.park = row.experience_park;
+    // Additional Experience context so the feed card can show more than the
+    // name: classification, themed Land, and the representative image.
+    if (row.experience_category !== null) {
+      enrichment.experienceCategory = row.experience_category;
+    }
+    if (row.experience_land !== null) {
+      enrichment.experienceLand = row.experience_land;
+    }
+    if (row.experience_image_url !== null) {
+      enrichment.experienceImageUrl = row.experience_image_url;
+    }
   }
   if (row.rating !== null) {
     enrichment.rating = Number(row.rating);
@@ -2951,6 +2969,7 @@ function rowToTripFeedItemDto(
     id: row.id,
     type: row.type,
     actorDisplayName: row.actor_display_name,
+    actorAvatarPreset: row.actor_avatar_preset,
     createdAt: toIsoTimestamp(row.created_at),
     metadata: { ...row.metadata, ...enrichment },
     reactions,

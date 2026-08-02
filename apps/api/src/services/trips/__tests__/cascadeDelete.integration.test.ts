@@ -33,9 +33,9 @@
  *   Member's canonical Completion + Rating through the injected Tracking repos
  *   and creates a Trip_Log_Entry, a pending Rode_With_Tag, and a
  *   `completion_logged` feed item), a confirmed Rode_With_Tag (which trickles
- *   the tagged Member's canonical Completion + Rating down and adds a
- *   `rode_with_confirmed` feed item), plus a Trip_Reaction and a Trip_Comment
- *   on a feed item. Canonical Notes are seeded directly for both Members.
+ *   the tagged Member's canonical Completion + Rating down and writes no feed
+ *   item), plus a Trip_Reaction and a Trip_Comment on a feed item. Canonical
+ *   Notes are seeded directly for both Members.
  *
  *   The test first asserts every Trip child table and every canonical table
  *   holds the expected rows. Then it calls the REAL `repo.deleteTrip(tripId)`
@@ -322,7 +322,7 @@ describe('Trip cascade delete with canonical Tracking survival (integration, pg-
     const tagId = logged.pendingTags[0]!.tagId;
 
     // The tagged Member confirms — trickles their canonical Completion +
-    // Rating down and adds a rode_with_confirmed feed item.
+    // Rating down. The confirm writes no feed item (R11.10).
     await repo.confirmRodeWithTag(tagId, member, 7);
 
     // A reaction + a comment on the trip_created feed item.
@@ -345,8 +345,8 @@ describe('Trip cascade delete with canonical Tracking survival (integration, pg-
     expect(await countRows(rawPool, 'planned_items')).toBe(1);
     expect(await countRows(rawPool, 'trip_log_entries')).toBe(1);
     expect(await countRows(rawPool, 'rode_with_tags')).toBe(1);
-    // trip_created + member_joined + completion_logged + rode_with_confirmed.
-    expect(await countRows(rawPool, 'trip_feed_items')).toBe(4);
+    // trip_created + member_joined + completion_logged (confirm writes none).
+    expect(await countRows(rawPool, 'trip_feed_items')).toBe(3);
     expect(await countRows(rawPool, 'trip_reactions')).toBe(1);
     expect(await countRows(rawPool, 'trip_comments')).toBe(1);
 

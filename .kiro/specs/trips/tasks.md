@@ -198,7 +198,7 @@ existing `RatingChanged` propagation path is reused unchanged.
 
 - [x] 10. Implement rode-with tag confirm / decline (trickle-down)
   - [x] 10.1 Implement `confirmRodeWithTag` and `declineRodeWithTag` in `repo.ts`
-    - Confirm (in one transaction): assert caller is the Tagged_Member and tag is `pending`, ensure the Tagged_Member's canonical Completion linked to the Trip (create when absent, leave existing unaltered), optionally apply a valid canonical Rating via the Tracking rating repo (leave unchanged when skipped, reject invalid), set tag `confirmed`, add `rode_with_confirmed` feed item. Decline: assert caller and pending state, set `declined`, write nothing to the Tagged_Member's data
+    - Confirm (in one transaction): assert caller is the Tagged_Member and tag is `pending`, ensure the Tagged_Member's canonical Completion linked to the Trip (create when absent, leave existing unaltered), optionally apply a valid canonical Rating via the Tracking rating repo (leave unchanged when skipped, reject invalid), set tag `confirmed` (write no feed item — the originating `completion_logged` entry already records the rode-with). Decline: assert caller and pending state, set `declined`, write nothing to the Tagged_Member's data
     - _Requirements: 11.2, 11.3, 11.4, 11.5, 11.6, 11.7, 11.8, 11.9, 11.10_
 
   - [x] 10.2 Write property test for the pending/declined no-write invariant

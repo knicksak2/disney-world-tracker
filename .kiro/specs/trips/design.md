@@ -377,7 +377,8 @@ the mapped `AppError`.
 - **`confirmRodeWithTag`** in one transaction: asserts the caller is the Tagged_Member (R11.7) and the
   tag is `pending` (R11.8); ensures the tagged Member's canonical Completion linked to the Trip (R11.2,
   R11.3); optionally applies a canonical Rating via the rating repo when provided and valid (R11.4,
-  R11.5, R11.9); sets the tag `confirmed`; adds the `rode_with_confirmed` feed item (R11.10).
+  R11.5, R11.9); sets the tag `confirmed` and writes no feed item — the originating `completion_logged`
+  entry already records the rode-with (R11.10).
 - **`leaveTrip` / `removeMember`** delete the membership, then cancel every `pending` rode-with tag the
   former Member created or is named in so they can no longer be confirmed (R8.6, R8.7), while retaining
   their log entries and confirmed tags (R8.5). If the departing Member was the sole Member, the Trip is
@@ -548,7 +549,7 @@ CREATE TABLE trip_feed_items (
     metadata    JSONB       NOT NULL DEFAULT '{}'::jsonb,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT trip_feed_items_type_chk CHECK (type IN (
-        'trip_created','member_joined','completion_logged','rating_recorded','rode_with_confirmed'
+        'trip_created','member_joined','completion_logged','rating_recorded'
     ))
 );
 CREATE INDEX trip_feed_items_trip_order_idx ON trip_feed_items(trip_id, created_at DESC, id DESC);

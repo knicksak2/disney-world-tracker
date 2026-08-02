@@ -407,6 +407,7 @@ function feedDTOs(store: Store): TripFeedItemDTO[] {
     id: randomUUID(),
     type: f.type,
     actorDisplayName: '',
+    actorAvatarPreset: null,
     createdAt: new Date().toISOString(),
     metadata: { experienceId: f.experienceId },
     reactions: [],

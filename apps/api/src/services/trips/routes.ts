@@ -885,9 +885,10 @@ export function tripRoutes(options: TripRoutesOptions): FastifyPluginAsync {
     // optional whole-number 1–10 `rating`); an out-of-range value is rejected
     // by the repo with `rating_out_of_range` (R11.9), and a non-`pending` tag
     // with `trip_tag_state_invalid` (R11.8). On success the repo links the
-    // Tagged_Member's canonical Completion, optionally applies the Rating, sets
-    // the tag `confirmed`, and adds the `rode_with_confirmed` feed item; the
-    // confirmed result (tag + linked Trip/Experience) is returned with 200.
+    // Tagged_Member's canonical Completion, optionally applies the Rating, and
+    // sets the tag `confirmed` (no Trip_Feed_Item is written — the originating
+    // `completion_logged` entry already records the rode-with); the confirmed
+    // result (tag + linked Trip/Experience) is returned with 200.
     app.post<{ Params: { tagId: string } }>(
       '/me/rode-with-tags/:tagId/confirm',
       { preHandler: requireSession },

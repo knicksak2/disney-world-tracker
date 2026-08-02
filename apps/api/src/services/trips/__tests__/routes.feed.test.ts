@@ -105,6 +105,7 @@ describe('GET /trips/:id/feed', () => {
         type: 'trip_created',
         createdAt: '2025-01-02T00:00:00.000Z',
         actorDisplayName: 'Ariel',
+        actorAvatarPreset: null,
         metadata: {},
         reactions: [],
         comments: [],

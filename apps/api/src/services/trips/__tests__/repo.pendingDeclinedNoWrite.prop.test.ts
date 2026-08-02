@@ -26,10 +26,11 @@
  * A `fast-check` `commands`-style state-machine test driven over the real
  * `createTripRepo` factory (task 10.1) backed by a tiny in-memory fake `pg.Pool`
  * that models exactly the tables the confirm/decline operations touch —
- * `rode_with_tags`, `trip_log_entries` (read for the join), and
- * `trip_feed_items` (the confirm feed row). Per the tasks.md convention the
- * stateful property runs against this in-memory model; the SQL repo is pinned
- * to the same behaviour by the cross-service integration tests.
+ * `rode_with_tags` and `trip_log_entries` (read for the join). Neither confirm
+ * nor decline writes a `trip_feed_items` row (R11.10), so the fake pool has no
+ * INSERT branch. Per the tasks.md convention the stateful property runs against
+ * this in-memory model; the SQL repo is pinned to the same behaviour by the
+ * cross-service integration tests.
  *
  * The injected canonical Tracking repos are fakes that both *record every call*
  * and *apply it* to an in-memory canonical store keyed by `(userId,
@@ -120,7 +121,6 @@ interface Store {
   /** Canonical data keyed by `${userId}::${experienceId}`. */
   readonly canonical: Map<string, CanonicalEntry>;
   readonly probe: Probe;
-  feedItems: number;
 }
 
 interface FakeClient {
@@ -250,12 +250,8 @@ function makeFakePool(store: Store): FakePool {
             return { rows: [], rowCount: 1 };
           }
 
-          // ---- confirm: record the rode_with_confirmed feed item ---
-          if (sql.startsWith('INSERT INTO trip_feed_items')) {
-            store.feedItems += 1;
-            return ok([]);
-          }
-
+          // Neither confirm nor decline writes a feed item (R11.10); a stray
+          // INSERT would fall through to the guard below and fail the run.
           throw new Error(`unhandled client SQL in fake pool: ${sql.slice(0, 80)}`);
         },
         release(): void {
@@ -402,7 +398,6 @@ function buildStore(scenario: ScenarioTag[]): Store {
     tags,
     canonical: new Map<string, CanonicalEntry>(),
     probe: { canonicalSql: [], calls: [] },
-    feedItems: 0,
   };
 }
 
