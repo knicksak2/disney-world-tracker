@@ -25,6 +25,7 @@ export {
   parkSchema,
   sharePayloadKindSchema,
   shareReactionValueSchema,
+  tripReactionValueSchema,
   completionPercentSchema,
 } from './primitives.js';
 

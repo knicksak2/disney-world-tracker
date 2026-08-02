@@ -119,3 +119,25 @@ export const SHARE_REACTION_VALUES = [
 ] as const;
 
 export type ShareReactionValue = (typeof SHARE_REACTION_VALUES)[number];
+
+// ---------------------------------------------------------------------------
+// Trip_Reaction vocabulary
+// ---------------------------------------------------------------------------
+//
+// The closed set of values a Trip_Member may attach to a Trip_Feed target as a
+// `Trip_Reaction` (R13.6). A Member holds at most one reaction per type on a
+// given target, drawn exclusively from this vocabulary; any value outside the
+// set is rejected with a validation error and nothing is persisted.
+//
+// The runtime tuple is the source of truth: it seeds the matching Zod
+// primitive (`tripReactionValueSchema`), the migration's CHECK constraint,
+// and property-test arbitraries, so the vocabulary cannot drift between layers.
+
+export const TRIP_REACTION_VALUES = [
+  'like',
+  'love',
+  'celebrate',
+  'wow',
+] as const;
+
+export type TripReactionValue = (typeof TRIP_REACTION_VALUES)[number];

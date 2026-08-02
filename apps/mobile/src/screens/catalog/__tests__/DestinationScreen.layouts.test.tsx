@@ -163,6 +163,15 @@ function stub(
     if (path.startsWith('/catalog')) {
       return { experiences, staleCache: false };
     }
+    // The rows badge visited Experiences: the screen reads `/me` for the
+    // viewer id and `/users/:id/completions` for the completed set. Neither
+    // affects the layout/order assertions here, so serve empty defaults.
+    if (path === '/me') {
+      return { user: { id: 'viewer', email: 'viewer@test.local' } };
+    }
+    if (path.endsWith('/completions')) {
+      return { entries: [] };
+    }
     throw new Error(`unexpected call to ${path}`);
   });
 }

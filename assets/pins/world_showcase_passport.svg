@@ -1,0 +1,33 @@
+<svg width="150" height="150" viewBox="0 0 150 150" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="goldMetal" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#fff2c2" />
+      <stop offset="50%" style="stop-color:#e8b53d" />
+      <stop offset="100%" style="stop-color:#8a5e0c" />
+    </linearGradient>
+    <linearGradient id="enamelGreen" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#2e7d32" />
+      <stop offset="100%" style="stop-color:#1b5e20" />
+    </linearGradient>
+    <linearGradient id="glossSheen" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:white;stop-opacity:0.4" />
+      <stop offset="100%" style="stop-color:white;stop-opacity:0" />
+    </linearGradient>
+    <filter id="pinShadow"><feDropShadow dx="0" dy="4" stdDeviation="3" flood-opacity="0.5"/></filter>
+  </defs>
+  <g filter="url(#pinShadow)">
+    <!-- Book Shape Frame -->
+    <rect x="25" y="15" width="100" height="120" rx="6" fill="url(#goldMetal)" />
+    <!-- Recessed Green Enamel -->
+    <rect x="32" y="22" width="86" height="106" rx="4" fill="url(#enamelGreen)" />
+    <!-- Passport Motif (Raised Gold) -->
+    <circle cx="75" cy="65" r="25" fill="none" stroke="url(#goldMetal)" stroke-width="2" />
+    <path d="M55 65 Q75 45 95 65 Q75 85 55 65" fill="url(#goldMetal)" />
+    <text x="75" y="110" font-family="Arial, sans-serif" font-size="8" fill="url(#goldMetal)" text-anchor="middle" font-weight="900">PASSPORT</text>
+    <!-- Gloss -->
+    <path d="M32 22 Q75 10 118 22 L118 60 Q75 45 32 60 Z" fill="url(#glossSheen)" />
+    <!-- Banner -->
+    <rect x="30" y="115" width="90" height="15" rx="7.5" fill="url(#goldMetal)" />
+    <text x="75" y="126" font-family="Arial, sans-serif" font-size="6" fill="#1b5e20" text-anchor="middle" font-weight="900">WORLD SHOWCASE</text>
+  </g>
+</svg>

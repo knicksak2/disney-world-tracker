@@ -239,8 +239,13 @@ async function openFromHome(): Promise<void> {
 }
 
 async function openFromStats(): Promise<void> {
+  // Stats is re-hosted under the Profile tab (trips R17): reach it via the
+  // Profile tab's nested `Stats` route rather than a top-level Stats tab.
   act(() => {
-    navRef.navigate('MainTabs', { screen: 'Stats' });
+    navRef.navigate('MainTabs', {
+      screen: 'Profile',
+      params: { screen: 'Stats' },
+    });
   });
   await screen.findByTestId('stats-screen');
   // The Overview hub's Experiences entry card pushes the ExperiencesDetail

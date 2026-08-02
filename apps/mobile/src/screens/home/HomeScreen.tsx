@@ -59,6 +59,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { ExperienceCategory, LeaderboardEntryDTO } from '@dwt/shared';
 
 import { ApiError, apiRequest } from '../../api/client';
+import ActiveTripShortcut from '../../components/ActiveTripShortcut';
 import type {
   MainTabParamList,
   RootStackParamList,
@@ -141,6 +142,14 @@ export default function HomeScreen({ navigation }: Props): JSX.Element {
         subtitle="The most magical, ranked by the community."
         icon="trophy"
       />
+
+      {/*
+        R19.1: the Active_Trip_Shortcut sits on the Home surface (outside the
+        Trips tab) whenever the User is a Trip_Member of >= 1 active Trip. It
+        renders nothing otherwise (R19.3), so it is safe to mount here
+        unconditionally above the leaderboard content.
+      */}
+      <ActiveTripShortcut />
 
       {showLoading ? (
         <View style={styles.center} testID="home-leaderboard-loading">

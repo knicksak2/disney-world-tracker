@@ -77,6 +77,10 @@ import {
   leaderboardRoutes,
   type LeaderboardRoutesOptions,
 } from './services/aggregate/leaderboardRoutes.js';
+import {
+  tripRoutes,
+  type TripRoutesOptions,
+} from './services/trips/routes.js';
 import type { RatingChangedEvent } from './services/aggregate/ratingChangedQueue.js';
 
 /**
@@ -159,6 +163,15 @@ export interface BuildServerServices {
    * or Redis.
    */
   readonly leaderboard?: LeaderboardRoutesOptions;
+  /**
+   * Trip_Service routes (task 13.3). Wires the Trip lifecycle, invite,
+   * membership-management, and derived-read endpoints (R15.1, R15.3).
+   * `tripRoutes(...)` applies the shared `requireSession` pre-handler
+   * per-route, so registration mirrors `friends`/`sharing`. Opt-in like
+   * every other service so a focused unit-test harness can register only
+   * the routes it needs without satisfying the Trip repo contract.
+   */
+  readonly trips?: TripRoutesOptions;
   /**
    * Tracking_Service route options. Each tracking sub-domain
    * (`completion`, `rating`, `note`) is opt-in so a focused unit-test
@@ -413,6 +426,10 @@ export function buildServer(
 
   if (services.leaderboard !== undefined) {
     void app.register(leaderboardRoutes(services.leaderboard));
+  }
+
+  if (services.trips !== undefined) {
+    void app.register(tripRoutes(services.trips));
   }
 
   if (services.tracking?.completion !== undefined) {

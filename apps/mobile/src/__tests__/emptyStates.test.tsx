@@ -253,6 +253,15 @@ describe('empty-state renders (R1.23, R1.24, R4.6, R5.9, R10.6, R11.11)', () => 
       if (typeof path === 'string' && path.startsWith('/catalog')) {
         return { experiences: [], staleCache: false };
       }
+      // The catalog list badges visited rows: it reads `/me` for the viewer id
+      // and `/users/:id/completions` for the completed-Experience set. Neither
+      // affects this empty-state assertion, so answer them benignly.
+      if (path === '/me') {
+        return { user: { id: 'u1', email: 'u@x.test' } };
+      }
+      if (typeof path === 'string' && path.endsWith('/completions')) {
+        return { entries: [] };
+      }
       throw new Error(`unexpected call to ${String(path)}`);
     });
 
@@ -281,6 +290,15 @@ describe('empty-state renders (R1.23, R1.24, R4.6, R5.9, R10.6, R11.11)', () => 
           message: 'Catalog upstream unreachable',
           status: 503,
         });
+      }
+      // The catalog list badges visited rows via `/me` + `/users/:id/
+      // completions`; answer them benignly so only the grid's unavailable
+      // state is under test.
+      if (path === '/me') {
+        return { user: { id: 'u1', email: 'u@x.test' } };
+      }
+      if (typeof path === 'string' && path.endsWith('/completions')) {
+        return { entries: [] };
       }
       throw new Error(`unexpected call to ${String(path)}`);
     });

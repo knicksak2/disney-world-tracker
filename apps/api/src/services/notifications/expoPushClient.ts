@@ -41,6 +41,10 @@
  *     (R10.2/R10.4).
  *   - Friend-request variant — `{ friendRequestId }` deep-links to the pending
  *     Friend_Request so a tap can open the incoming-requests view.
+ *   - Trip-invite variant — `{ tripInviteId }` deep-links to the pending
+ *     Trip_Invite so a tap can open the accept/decline view (Trips R6.6, R6.7).
+ *   - Rode-with variant   — `{ rodeWithTagId, tripLogEntryId }` deep-links to
+ *     the pending Rode_With_Tag confirm view (Trips R10.8).
  */
 export type ExpoPushData =
   | {
@@ -50,6 +54,16 @@ export type ExpoPushData =
   | {
       /** The pending Friend_Request's id, used for notification-tap deep-linking. */
       readonly friendRequestId: string;
+    }
+  | {
+      /** The pending Trip_Invite's id, used for notification-tap deep-linking. */
+      readonly tripInviteId: string;
+    }
+  | {
+      /** The pending Rode_With_Tag's id, used for notification-tap deep-linking. */
+      readonly rodeWithTagId: string;
+      /** The Trip_Log_Entry the tag belongs to, for the confirm view. */
+      readonly tripLogEntryId: string;
     };
 
 /**

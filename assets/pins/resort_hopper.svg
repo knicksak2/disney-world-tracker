@@ -1,0 +1,33 @@
+<svg width="150" height="150" viewBox="0 0 150 150" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="goldMetal" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#fff2c2" />
+      <stop offset="50%" style="stop-color:#e8b53d" />
+      <stop offset="100%" style="stop-color:#8a5e0c" />
+    </linearGradient>
+    <linearGradient id="enamelBrown" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#8d6e63" />
+      <stop offset="100%" style="stop-color:#5d4037" />
+    </linearGradient>
+    <linearGradient id="glossSheen" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:white;stop-opacity:0.4" />
+      <stop offset="100%" style="stop-color:white;stop-opacity:0" />
+    </linearGradient>
+    <filter id="pinShadow"><feDropShadow dx="0" dy="4" stdDeviation="3" flood-opacity="0.5"/></filter>
+  </defs>
+  <g filter="url(#pinShadow)">
+    <rect x="15" y="15" width="120" height="120" rx="20" fill="url(#goldMetal)" />
+    <rect x="23" y="23" width="104" height="104" rx="15" fill="url(#enamelBrown)" />
+    <!-- Sign Motif (Raised Gold + Dark Enamel) -->
+    <rect x="50" y="45" width="50" height="6" fill="url(#goldMetal)" />
+    <rect x="55" y="51" width="3" height="10" fill="url(#goldMetal)" />
+    <rect x="92" y="51" width="3" height="10" fill="url(#goldMetal)" />
+    <rect x="40" y="61" width="70" height="35" rx="3" fill="#3e2723" stroke="url(#goldMetal)" stroke-width="2" />
+    <text x="75" y="83" font-family="Arial, sans-serif" font-size="10" fill="url(#goldMetal)" text-anchor="middle" font-weight="900">LODGING</text>
+    <!-- Gloss -->
+    <path d="M23 23 Q75 10 127 23 L127 65 Q75 50 23 65 Z" fill="url(#glossSheen)" />
+    <!-- Banner -->
+    <rect x="35" y="115" width="80" height="15" rx="7.5" fill="url(#goldMetal)" />
+    <text x="75" y="126" font-family="Arial, sans-serif" font-size="7" fill="#3e2723" text-anchor="middle" font-weight="900">RESORT HOPPER</text>
+  </g>
+</svg>

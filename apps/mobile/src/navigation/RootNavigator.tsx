@@ -14,10 +14,10 @@ import { renderAvatarPreset } from '../avatars/AvatarPresets';
 import { useSessionStore } from '../state/sessionStore';
 import CatalogStack, { type CatalogStackParamList } from './CatalogStack';
 import FriendsStack, { type FriendsStackParamList } from './FriendsStack';
-import StatsStack, { type StatsStackParamList } from './StatsStack';
+import ProfileStack, { type ProfileStackParamList } from './ProfileStack';
+import TripsStack, { type TripsStackParamList } from './TripsStack';
 import HomeScreen from '../screens/home/HomeScreen';
 import LoginScreen from '../screens/LoginScreen';
-import ProfileScreen from '../screens/ProfileScreen';
 import RegisterScreen from '../screens/RegisterScreen';
 import ExperienceDetailScreen from '../screens/catalog/ExperienceDetailScreen';
 import MenuScreen from '../screens/catalog/MenuScreen';
@@ -30,7 +30,7 @@ import ShareComposerScreen from '../screens/share/ShareComposerScreen';
  * is present:
  *
  *   - No token  → AuthStack (Login, Register).
- *   - Token set → MainTabs (Home, Catalog, Stats, Friends, Profile).
+ *   - Token set → MainTabs (Home, Catalog, Trips, Friends, Profile).
  *
  * Switching between the two is driven by the `useSessionStore` selector
  * for `token`. When the API client reports a 401, the registered
@@ -53,15 +53,17 @@ export type MainTabParamList = {
    */
   Catalog: NavigatorScreenParams<CatalogStackParamList> | undefined;
   /**
-   * The Stats tab nests its own native stack (`StatsStack`) hosting the
-   * Overview hub and the focused detail screens. Typing the param as
-   * `NavigatorScreenParams<StatsStackParamList>` (matching the Catalog/Friends
-   * tabs) lets a caller holding the root ref deep-link a specific detail route
-   * via `navigation.navigate('MainTabs', { screen: 'Stats', params: { screen:
-   * 'RatingsDetail' } })`. Only small serializable hint params travel through
-   * navigation — never a `StatsResponse` (R3.5).
+   * The Trips tab nests its own native stack (`TripsStack`) hosting the
+   * `Trips_List_Screen` (`TripsList`, the initial route), the `Trip_Detail_View`
+   * hub and its section screens, and the invite / rode-with deep-link targets.
+   * Selecting the tab reaches the Trips list in a single tap (R17.1, R17.2).
+   * Typed as `NavigatorScreenParams<TripsStackParamList>` (matching the other
+   * nested tabs) so a caller holding the root ref — e.g. the notification tap
+   * handler (task 17.8) — can deep-link a specific Trips route via
+   * `navigate('MainTabs', { screen: 'Trips', params: { screen: 'TripInvite',
+   * params: { tripInviteId } } })`.
    */
-  Stats: NavigatorScreenParams<StatsStackParamList> | undefined;
+  Trips: NavigatorScreenParams<TripsStackParamList> | undefined;
   /**
    * The Friends tab nests its own native stack (`FriendsStack`). Same
    * `NavigatorScreenParams` shape as the Catalog tab so callers can
@@ -70,13 +72,18 @@ export type MainTabParamList = {
    */
   Friends: NavigatorScreenParams<FriendsStackParamList> | undefined;
   /**
-   * The Profile tab can be opened with no params (own profile) or with
-   * `{ userId }` to view another User's Profile (e.g., navigated from the
-   * friends list). When `userId` is omitted or matches the signed-in user,
-   * the screen shows the editing affordances; otherwise it renders read-only
-   * (R7.4, R7.8).
+   * The Profile tab nests its own native stack (`ProfileStack`) hosting the
+   * Profile screen (`ProfileMain`, the initial route) and the re-hosted
+   * personal statistics view (`Stats` = the whole `StatsStack`), which is no
+   * longer a top-level tab (R17.1, R17.3). Typing the param as
+   * `NavigatorScreenParams<ProfileStackParamList>` lets callers open the
+   * Profile screen with `{ userId }` — `navigate('Profile', { screen:
+   * 'ProfileMain', params: { userId } })` — or deep-link a Stats detail route
+   * via `navigate('MainTabs', { screen: 'Profile', params: { screen: 'Stats',
+   * params: { screen: 'RatingsDetail' } } })`. Params dispatched to the tab
+   * with no `screen` flow down to `ProfileMain`.
    */
-  Profile: { userId?: string } | undefined;
+  Profile: NavigatorScreenParams<ProfileStackParamList> | undefined;
 };
 
 /**
@@ -175,7 +182,7 @@ const TAB_ICONS: Record<
 > = {
   Home: { focused: 'home', unfocused: 'home-outline' },
   Catalog: { focused: 'compass', unfocused: 'compass-outline' },
-  Stats: { focused: 'stats-chart', unfocused: 'stats-chart-outline' },
+  Trips: { focused: 'map', unfocused: 'map-outline' },
   Friends: { focused: 'people', unfocused: 'people-outline' },
   Profile: { focused: 'person-circle', unfocused: 'person-circle-outline' },
 };
@@ -370,8 +377,8 @@ function MainTabsNavigator(): JSX.Element {
         options={{ headerShown: false }}
       />
       <MainTabs.Screen
-        name="Stats"
-        component={StatsStack}
+        name="Trips"
+        component={TripsStack}
         options={{ headerShown: false }}
       />
       <MainTabs.Screen
@@ -379,7 +386,11 @@ function MainTabsNavigator(): JSX.Element {
         component={FriendsStack}
         options={{ headerShown: false }}
       />
-      <MainTabs.Screen name="Profile" component={ProfileScreen} />
+      <MainTabs.Screen
+        name="Profile"
+        component={ProfileStack}
+        options={{ headerShown: false }}
+      />
     </MainTabs.Navigator>
   );
 }

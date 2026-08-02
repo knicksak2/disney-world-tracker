@@ -1,0 +1,38 @@
+<svg width="150" height="150" viewBox="0 0 150 150" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="goldMetal" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#fff2c2" />
+      <stop offset="50%" style="stop-color:#e8b53d" />
+      <stop offset="100%" style="stop-color:#8a5e0c" />
+    </linearGradient>
+    <linearGradient id="enamelDarkBlue" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#0d47a1" />
+      <stop offset="100%" style="stop-color:#1a237e" />
+    </linearGradient>
+    <linearGradient id="glossSheen" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:white;stop-opacity:0.4" />
+      <stop offset="100%" style="stop-color:white;stop-opacity:0" />
+    </linearGradient>
+    <filter id="pinShadow"><feDropShadow dx="0" dy="4" stdDeviation="3" flood-opacity="0.5"/></filter>
+  </defs>
+  <g filter="url(#pinShadow)">
+    <circle cx="75" cy="75" r="70" fill="url(#goldMetal)" />
+    <circle cx="75" cy="75" r="62" fill="url(#enamelDarkBlue)" />
+    <!-- Firework Burst (Raised Gold + Sparkles) -->
+    <g transform="translate(75, 60)">
+      <path d="M0 -30 L0 -15 M21 -21 L11 -11 M30 0 L15 0 M21 21 L11 11 M0 30 L0 15 M-21 21 L-11 11 M-30 0 L-15 0 M-21 -21 L-11 -11" stroke="url(#goldMetal)" stroke-width="4" stroke-linecap="round" />
+      <circle cx="0" cy="0" r="5" fill="white">
+        <animate attributeName="opacity" values="1;0.4;1" dur="1s" repeatCount="indefinite" />
+      </circle>
+      <!-- Small Sparkles -->
+      <circle cx="15" cy="-25" r="2" fill="#ff80ab" />
+      <circle cx="-20" cy="-15" r="2" fill="#81d4fa" />
+      <circle cx="25" cy="15" r="2" fill="#c6ff00" />
+    </g>
+    <!-- Gloss -->
+    <ellipse cx="75" cy="45" rx="55" ry="25" fill="url(#glossSheen)" transform="rotate(-15 75 45)" />
+    <!-- Banner -->
+    <rect x="35" y="115" width="80" height="15" rx="7.5" fill="url(#goldMetal)" />
+    <text x="75" y="126" font-family="Arial, sans-serif" font-size="6" fill="#1a237e" text-anchor="middle" font-weight="900">FIREWORKS FANATIC</text>
+  </g>
+</svg>

@@ -27,7 +27,8 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import type { RouteProp } from '@react-navigation/native';
-import { useRoute } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
   ActivityIndicator,
   ScrollView,
@@ -53,7 +54,7 @@ import { renderAvatarPreset } from '../avatars/AvatarPresets';
 import AvatarPicker from './AvatarPicker';
 import ChangePasswordControl from './ChangePasswordControl';
 import PushNotificationPreferenceControl from './PushNotificationPreferenceControl';
-import type { MainTabParamList } from '../navigation/RootNavigator';
+import type { ProfileStackParamList } from '../navigation/ProfileStack';
 import { useSessionStore } from '../state/sessionStore';
 import { theme } from '../theme/theme';
 import {
@@ -69,7 +70,11 @@ import {
 // Route + response shapes
 // ---------------------------------------------------------------------------
 
-type ProfileRouteProp = RouteProp<MainTabParamList, 'Profile'>;
+type ProfileRouteProp = RouteProp<ProfileStackParamList, 'ProfileMain'>;
+type ProfileNavigationProp = NativeStackNavigationProp<
+  ProfileStackParamList,
+  'ProfileMain'
+>;
 
 /**
  * Shape of `GET /me`. Matches `MeResponseBody` in
@@ -117,6 +122,7 @@ function formatPercent(value: number): string {
 
 export default function ProfileScreen(): JSX.Element {
   const route = useRoute<ProfileRouteProp>();
+  const navigation = useNavigation<ProfileNavigationProp>();
   const targetUserIdParam = route.params?.userId;
 
   const queryClient = useQueryClient();
@@ -369,6 +375,7 @@ export default function ProfileScreen(): JSX.Element {
         saveNameMutation.mutate(normalized);
       }}
       saving={saveNameMutation.isPending}
+      onViewStats={() => navigation.navigate('Stats')}
       onLogout={() => logoutMutation.mutate()}
       loggingOut={logoutMutation.isPending}
       onAvatarChanged={(updated) => {
@@ -412,6 +419,7 @@ interface ProfileContentProps {
   readonly onChangeDraft: (value: string) => void;
   readonly onSave: () => void;
   readonly saving: boolean;
+  readonly onViewStats: () => void;
   readonly onLogout: () => void;
   readonly loggingOut: boolean;
   readonly onAvatarChanged: (profile: ProfileDTO) => void;
@@ -428,6 +436,7 @@ function ProfileContent({
   onChangeDraft,
   onSave,
   saving,
+  onViewStats,
   onLogout,
   loggingOut,
   onAvatarChanged,
@@ -550,6 +559,18 @@ function ProfileContent({
             />
           </View>
         </Card>
+
+        {isSelf ? (
+          <Card style={styles.securityCard}>
+            <Text style={styles.statLabel}>Your stats</Text>
+            <SecondaryButton
+              label="View your stats"
+              icon="stats-chart-outline"
+              onPress={onViewStats}
+              testID="profile-view-stats"
+            />
+          </Card>
+        ) : null}
 
         {isSelf ? (
           <Card style={styles.securityCard}>

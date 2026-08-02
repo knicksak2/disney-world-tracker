@@ -5,7 +5,11 @@
  * notification into an in-app deep link. A Share notification routes to the
  * Inbox per Requirement 10; a friend-request notification (carrying a
  * `friendRequestId`) routes to the `FriendsList` where the incoming request can
- * be accepted or declined:
+ * be accepted or declined; and a Trip notification routes into the Trips tab
+ * per Requirement 18 — a Trip_Invite notification (carrying `{ tripInviteId }`)
+ * to the invite accept/decline view (R18.2) and a Rode_With_Tag notification
+ * (carrying `{ rodeWithTagId, tripLogEntryId }`) to the tag confirm view
+ * (R18.3):
  *
  *   - It reacts to a tap whether the App was NOT running (cold start), in the
  *     background, or in the foreground. A cold-start tap is recovered from
@@ -17,9 +21,21 @@
  *     Share's destination and mark it read (R10.2) or show a "no longer
  *     available" message when the Share is gone (R10.4).
  *   - When the App is not authenticated it holds the pending tap and defers
- *     navigation until authentication completes, then opens the Inbox (R10.3).
+ *     navigation until authentication completes, then opens the target — the
+ *     Inbox (R10.3) or the Trip deep-link target (R7.8, R18.4). A tap that is
+ *     never authenticated within the session is dropped rather than navigated
+ *     (R7.7/R18.7 hold implicitly: the tap is only ever consumed once the store
+ *     reports an authenticated session).
  *   - When the notification carries no resolvable Share id it still opens the
  *     Inbox with its current contents (R10.5).
+ *
+ * A tapped Trip notification is routed to its deep-link target; the
+ * "no longer available" fallback (R7.9, R18.5) — navigating to the
+ * `Trips_List_Screen` and surfacing the message via the shared Trips-list
+ * notice store — is owned by the target screens (`TripInvite` /
+ * `RodeWithConfirm`), which already surface a not-available state when their
+ * read fails or the User is no longer a Trip_Member. The handler's sole job is
+ * to classify the tap and dispatch to the right navigation helper.
  *
  * The navigation itself is delegated to `navigateToInbox` (the shared
  * navigation ref) and, for the destination hop and read-state, to the
@@ -40,6 +56,8 @@ import { loadNotifications } from '../env/notifications';
 import {
   navigateToFriendsList,
   navigateToInbox,
+  navigateToRodeWithTag,
+  navigateToTripInvite,
 } from '../navigation/navigationRef';
 import { useSessionStore } from '../state/sessionStore';
 
@@ -100,13 +118,75 @@ export function isFriendRequestTap(
 }
 
 /**
- * Classify a tapped notification into its navigation target. Friend-request
- * taps route to the `FriendsList`; everything else is treated as a Share tap
- * (carrying a resolvable `shareId`, or none for the R10.5 open-inbox case).
+ * Extract a routing Trip_Invite id from a tapped notification response. A
+ * Trip_Invite push notification carries `{ tripInviteId }` in its `data`
+ * payload (R6.6, R6.7); its tap opens the invite accept/decline view (R18.2).
+ * Returns the id when present as a non-empty string, or `null` otherwise.
+ */
+export function extractTripInviteId(
+  response: NotificationsModule.NotificationResponse | null | undefined,
+): string | null {
+  const data = response?.notification?.request?.content?.data;
+  if (data === null || typeof data !== 'object') {
+    return null;
+  }
+  const tripInviteId = (data as { tripInviteId?: unknown }).tripInviteId;
+  return typeof tripInviteId === 'string' && tripInviteId.length > 0
+    ? tripInviteId
+    : null;
+}
+
+/**
+ * Extract the routing ids of a Rode_With_Tag tap. A Rode_With_Tag push
+ * notification carries `{ rodeWithTagId, tripLogEntryId }` in its `data`
+ * payload (R10.8); its tap opens the tag confirm view (R18.3). Returns both ids
+ * when each is present as a non-empty string, or `null` when either is absent.
+ */
+export function extractRodeWithTag(
+  response: NotificationsModule.NotificationResponse | null | undefined,
+): { readonly rodeWithTagId: string; readonly tripLogEntryId: string } | null {
+  const data = response?.notification?.request?.content?.data;
+  if (data === null || typeof data !== 'object') {
+    return null;
+  }
+  const rodeWithTagId = (data as { rodeWithTagId?: unknown }).rodeWithTagId;
+  const tripLogEntryId = (data as { tripLogEntryId?: unknown }).tripLogEntryId;
+  if (
+    typeof rodeWithTagId === 'string' &&
+    rodeWithTagId.length > 0 &&
+    typeof tripLogEntryId === 'string' &&
+    tripLogEntryId.length > 0
+  ) {
+    return { rodeWithTagId, tripLogEntryId };
+  }
+  return null;
+}
+
+/**
+ * Classify a tapped notification into its navigation target. A Trip_Invite tap
+ * (carrying `{ tripInviteId }`, R18.2) routes to the invite accept/decline
+ * view; a Rode_With_Tag tap (carrying `{ rodeWithTagId, tripLogEntryId }`,
+ * R18.3) routes to the tag confirm view; a friend-request tap routes to the
+ * `FriendsList`; everything else is treated as a Share tap (carrying a
+ * resolvable `shareId`, or none for the R10.5 open-inbox case). The Trip kinds
+ * are checked first so their routing ids take precedence over the Share
+ * fallback.
  */
 export function classifyTap(
   response: NotificationsModule.NotificationResponse | null | undefined,
 ): PendingTap {
+  const tripInviteId = extractTripInviteId(response);
+  if (tripInviteId !== null) {
+    return { kind: 'tripInvite', tripInviteId };
+  }
+  const rodeWith = extractRodeWithTag(response);
+  if (rodeWith !== null) {
+    return {
+      kind: 'rodeWithTag',
+      rodeWithTagId: rodeWith.rodeWithTagId,
+      tripLogEntryId: rodeWith.tripLogEntryId,
+    };
+  }
   if (isFriendRequestTap(response)) {
     return { kind: 'friendRequest' };
   }
@@ -120,11 +200,48 @@ export function classifyTap(
 /**
  * A tapped notification awaiting navigation. A Share tap carries its resolved
  * Share id (or `null` for the R10.5 open-inbox case); a friend-request tap
- * carries no id and routes to the `FriendsList`.
+ * carries no id and routes to the `FriendsList`; a Trip_Invite tap carries its
+ * `tripInviteId` (R18.2) and a Rode_With_Tag tap its `rodeWithTagId` plus
+ * `tripLogEntryId` (R18.3) and route into the Trips tab.
  */
 export type PendingTap =
   | { readonly kind: 'share'; readonly shareId: string | null }
-  | { readonly kind: 'friendRequest' };
+  | { readonly kind: 'friendRequest' }
+  | { readonly kind: 'tripInvite'; readonly tripInviteId: string }
+  | {
+      readonly kind: 'rodeWithTag';
+      readonly rodeWithTagId: string;
+      readonly tripLogEntryId: string;
+    };
+
+/**
+ * Dispatch a pending tap to its navigation target through the shared
+ * navigation ref. Returns whatever the navigation helper returns — `true` once
+ * the dispatch is issued, or `false` when the container is not ready yet so the
+ * caller can retry within the foreground-navigation window (R10.1). The
+ * exhaustive `switch` ties each `PendingTap` kind to exactly one helper.
+ */
+function dispatchPendingTap(pending: PendingTap): boolean {
+  switch (pending.kind) {
+    case 'friendRequest':
+      return navigateToFriendsList();
+    case 'tripInvite':
+      // R18.2 — open the invite accept/decline view; the target screen surfaces
+      // the "no longer available" fallback (R7.9, R18.5) when its read fails.
+      return navigateToTripInvite({ tripInviteId: pending.tripInviteId });
+    case 'rodeWithTag':
+      // R18.3 — open the tag confirm view; the target screen surfaces the
+      // "no longer available" fallback (R18.5) when its read fails.
+      return navigateToRodeWithTag({
+        rodeWithTagId: pending.rodeWithTagId,
+        tripLogEntryId: pending.tripLogEntryId,
+      });
+    case 'share':
+      return navigateToInbox(
+        pending.shareId !== null ? { shareId: pending.shareId } : undefined,
+      );
+  }
+}
 
 export function useNotificationResponse(): void {
   const token = useSessionStore((state) => state.token);
@@ -138,10 +255,10 @@ export function useNotificationResponse(): void {
   const flushingRef = useRef(false);
 
   /**
-   * Attempt to consume the pending tap: open the Inbox once the App is
-   * authenticated (R10.3) and the navigation container is ready (R10.1). Reads
-   * the session straight from the store so it is never stale across the
-   * listener and effect call sites.
+   * Attempt to consume the pending tap: open its target once the App is
+   * authenticated (R10.3, R7.8, R18.4) and the navigation container is ready
+   * (R10.1). Reads the session straight from the store so it is never stale
+   * across the listener and effect call sites.
    */
   const flush = useCallback((): void => {
     if (flushingRef.current) {
@@ -169,14 +286,7 @@ export function useNotificationResponse(): void {
         flushingRef.current = false;
         return;
       }
-      const navigated =
-        pending.kind === 'friendRequest'
-          ? navigateToFriendsList()
-          : navigateToInbox(
-              pending.shareId !== null
-                ? { shareId: pending.shareId }
-                : undefined,
-            );
+      const navigated = dispatchPendingTap(pending);
       if (navigated) {
         pendingRef.current = null;
         flushingRef.current = false;

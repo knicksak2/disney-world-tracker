@@ -1,0 +1,38 @@
+<svg width="150" height="150" viewBox="0 0 150 150" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="silverMetal" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#f4f6fb" />
+      <stop offset="50%" style="stop-color:#c2c9d6" />
+      <stop offset="100%" style="stop-color:#7d8598" />
+    </linearGradient>
+    <linearGradient id="enamelRed" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#f44336" />
+      <stop offset="100%" style="stop-color:#d32f2f" />
+    </linearGradient>
+    <linearGradient id="glossSheen" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:white;stop-opacity:0.4" />
+      <stop offset="100%" style="stop-color:white;stop-opacity:0" />
+    </linearGradient>
+    <filter id="pinShadow"><feDropShadow dx="0" dy="4" stdDeviation="3" flood-opacity="0.5"/></filter>
+  </defs>
+  <g filter="url(#pinShadow)">
+    <!-- Oval Frame -->
+    <ellipse cx="75" cy="75" rx="70" ry="50" fill="url(#silverMetal)" />
+    <!-- Recessed White Enamel Body -->
+    <ellipse cx="75" cy="75" rx="62" ry="42" fill="white" />
+    <!-- Monorail Stripe (Red Enamel) -->
+    <rect x="13" y="70" width="124" height="10" fill="url(#enamelRed)" />
+    <!-- Windows (Raised Silver) -->
+    <g fill="url(#silverMetal)">
+      <rect x="30" y="60" width="15" height="8" rx="1"/>
+      <rect x="55" y="60" width="15" height="8" rx="1"/>
+      <rect x="80" y="60" width="15" height="8" rx="1"/>
+      <rect x="105" y="60" width="15" height="8" rx="1"/>
+    </g>
+    <!-- Gloss -->
+    <ellipse cx="75" cy="55" rx="55" ry="25" fill="url(#glossSheen)" />
+    <!-- Banner -->
+    <rect x="40" y="110" width="70" height="15" rx="7.5" fill="url(#silverMetal)" />
+    <text x="75" y="121" font-family="Arial, sans-serif" font-size="7" fill="#37474f" text-anchor="middle" font-weight="900">MONORAIL GOLD</text>
+  </g>
+</svg>

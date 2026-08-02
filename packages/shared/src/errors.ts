@@ -91,6 +91,32 @@ export const ERROR_CODES = [
   'stats_timeout',
   'stats_target_not_found',
 
+  // -- Trips (trips R3.3, R3.9, R6.2, R6.4, R6.5, R7.5, R9.5, R11.8, R15.2)
+  // `trip_not_found`: owner-side not-found for an edit/delete of a genuinely
+  // absent Trip/invite/tag surfaced to an authorized-context caller (non-
+  // probing). `trip_forbidden`: caller is not a Member / not an Organizer /
+  // not the addressee; a non-existent Trip and an inaccessible Trip collapse
+  // to this same response so existence cannot be probed.
+  // `trip_validation_failed`: name/description/date/planned/tag/comment
+  // validation failed. `trip_not_friend`: invite target is not a Friend of
+  // the organizer. `trip_invite_duplicate`: target is already a Member or has
+  // a pending invite. `trip_invite_state_invalid`: accept/decline/cancel of a
+  // non-pending invite. `trip_last_organizer`: demote/leave/remove would
+  // leave zero organizers. `trip_role_invalid`: promote an organizer / demote
+  // a member (no-op change). `trip_planned_limit`: Planned_List already holds
+  // 500 items. `trip_tag_state_invalid`: confirm/decline of a non-pending
+  // rode-with tag.
+  'trip_not_found',
+  'trip_forbidden',
+  'trip_validation_failed',
+  'trip_not_friend',
+  'trip_invite_duplicate',
+  'trip_invite_state_invalid',
+  'trip_last_organizer',
+  'trip_role_invalid',
+  'trip_planned_limit',
+  'trip_tag_state_invalid',
+
   // -- Edge / gateway (defense-in-depth, R6.7) --------------------------
   // Emitted by the gateway-level rate limiter (task 13.3) when a caller
   // exceeds the configured request budget for read, mutation, or
@@ -204,6 +230,18 @@ export const errorCodeToHttpStatus: { readonly [K in ErrorCode]: number } = {
   stats_unavailable: 503,
   stats_timeout: 504,
   stats_target_not_found: 404,
+
+  // Trips
+  trip_not_found: 404,
+  trip_forbidden: 403,
+  trip_validation_failed: 400,
+  trip_not_friend: 400,
+  trip_invite_duplicate: 409,
+  trip_invite_state_invalid: 409,
+  trip_last_organizer: 409,
+  trip_role_invalid: 400,
+  trip_planned_limit: 400,
+  trip_tag_state_invalid: 409,
 
   // Edge / gateway
   rate_limit_exceeded: 429,

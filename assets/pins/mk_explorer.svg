@@ -1,0 +1,61 @@
+<svg width="150" height="150" viewBox="0 0 150 150" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Polished Gold Metal (for cloisons/borders) -->
+    <linearGradient id="goldMetal" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#fff7d6"/><stop offset="50%" style="stop-color:#e6ac2e"/><stop offset="100%" style="stop-color:#8f6410"/>
+    </linearGradient>
+    <!-- Deep Twilight Sky -->
+    <linearGradient id="twilightSky" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#1a237e"/><stop offset="100%" style="stop-color:#283593"/>
+    </linearGradient>
+    <!-- Gloss -->
+    <linearGradient id="gloss" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:white;stop-opacity:0.5"/><stop offset="100%" style="stop-color:white;stop-opacity:0"/>
+    </linearGradient>
+    <filter id="shadow"><feDropShadow dx="0" dy="4" stdDeviation="3" flood-opacity="0.5"/></filter>
+  </defs>
+
+  <g filter="url(#shadow)">
+    <!-- Elegant Gold Frame -->
+    <path d="M75 5 L135 25 L135 100 Q135 130 75 145 Q15 130 15 100 L15 25 Z" fill="url(#goldMetal)" />
+    <!-- Recessed Sky Enamel -->
+    <path d="M75 12 L127 30 L127 98 Q127 122 75 138 Q23 122 23 98 L23 30 Z" fill="url(#twilightSky)" />
+
+    <!-- THE CASTLE (Layered Enamel & Gold Metal) -->
+
+    <!-- Castle Background Walls (Light Grey Enamel) -->
+    <path d="M45 105 L45 80 L105 80 L105 105 Z" fill="#E0E0E0" stroke="url(#goldMetal)" stroke-width="1.5" />
+
+    <!-- Central Tower (White Enamel + Blue Roof) -->
+    <path d="M65 80 L65 50 L85 50 L85 80 Z" fill="white" stroke="url(#goldMetal)" stroke-width="1.5" />
+    <path d="M63 50 L75 25 L87 50 Z" fill="#2196F3" stroke="url(#goldMetal)" stroke-width="1.5" />
+
+    <!-- Side Turrets (Blue Roofs) -->
+    <path d="M40 80 L40 65 L50 65 L50 80 Z" fill="white" stroke="url(#goldMetal)" stroke-width="1.5" />
+    <path d="M38 65 L45 50 L52 65 Z" fill="#2196F3" stroke="url(#goldMetal)" stroke-width="1.5" />
+
+    <path d="M100 80 L100 65 L110 65 L110 80 Z" fill="white" stroke="url(#goldMetal)" stroke-width="1.5" />
+    <path d="M98 65 L105 50 L112 65 Z" fill="#2196F3" stroke="url(#goldMetal)" stroke-width="1.5" />
+
+    <!-- Gold Details (Flags & Spire tops) -->
+    <circle cx="75" cy="25" r="2" fill="url(#goldMetal)" />
+    <path d="M75 25 L85 28 L75 31 Z" fill="url(#goldMetal)" /> <!-- Main Flag -->
+
+    <!-- Windows and Gate (Dark Enamel) -->
+    <rect x="72" y="55" width="6" height="8" rx="1" fill="#1a237e" /> <!-- Central Window -->
+    <path d="M70 105 L70 95 Q75 90 80 95 L80 105 Z" fill="#1a237e" stroke="url(#goldMetal)" stroke-width="1" /> <!-- Gate -->
+
+    <!-- Twinkling Pixie Dust -->
+    <circle cx="40" cy="35" r="1.5" fill="white"><animate attributeName="opacity" values="0.2;1;0.2" dur="2s" repeatCount="indefinite"/></circle>
+    <circle cx="110" cy="25" r="1" fill="white"><animate attributeName="opacity" values="1;0.2;1" dur="2.5s" repeatCount="indefinite"/></circle>
+    <circle cx="30" cy="90" r="1" fill="white" opacity="0.4"/>
+    <circle cx="120" cy="110" r="1.5" fill="white" opacity="0.6"/>
+
+    <!-- Gloss Sheen -->
+    <path d="M23 30 Q75 15 127 30 L127 75 Q75 60 23 75 Z" fill="url(#gloss)" />
+
+    <!-- Text Banner (Raised Gold) -->
+    <path d="M40 115 L110 115 L115 130 L35 130 Z" fill="url(#goldMetal)" />
+    <text x="75" y="126" font-family="Arial, sans-serif" font-size="7" fill="#3e2723" text-anchor="middle" font-weight="900">MK EXPLORER</text>
+  </g>
+</svg>

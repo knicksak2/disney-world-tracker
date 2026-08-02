@@ -32,13 +32,12 @@
  *     identical to the detail view's presentation.
  *
  * The three Destination layouts (theme/water-park Land groups, Disney Springs
- * category groups, Resorts resort groups) are wired by later tasks 10.2, 10.3,
- * and 10.4. This base screen leaves a clear seam for them: `renderBody` switches
- * on `destination.kind`, and each branch currently renders the shared flat
- * Experience list as a placeholder. The later tasks replace the individual
- * branches with their grouped/collapsible layouts (using `useDestinationSections`
- * and the `catalogGrouping` cores) without disturbing the data-fetch,
- * stale/unavailable/empty, and row-rendering plumbing established here.
+ * category groups, Resorts resort groups) are dispatched by `renderBody`, which
+ * switches on `destination.kind` and renders the matching grouped/collapsible
+ * layout (`ThemeOrWaterParkLayout`, `DisneySpringsLayout`, `ResortsLayout`)
+ * built on `useDestinationSections` and the `catalogGrouping` cores. They share
+ * the data-fetch, stale/unavailable/empty, and row-rendering plumbing
+ * established here.
  *
  * Validates: Requirements 6.1, 6.10, 7.1, 8.1, 8.5, 9.9, 10.1, 10.2, 10.3, 10.7
  */
@@ -51,6 +50,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -92,6 +92,7 @@ import {
   type Section,
 } from './catalogGrouping';
 import { useDestinationSections } from './useDestinationSections';
+import { useCompletedExperiences } from './useCompletedExperiences';
 import { priceTierListTag, resortAreaLabel } from './infoTags';
 import {
   useAccessibilityFocusOnMount,
@@ -201,6 +202,16 @@ function DestinationBody({
   // focus to the screen's primary heading (the GradientHeader below).
   const headingRef = useAccessibilityFocusOnMount<View>();
 
+  // In-destination search. Unlike the Catalog_Home's global search (which spans
+  // the whole catalog through `GET /catalog?q=...`), this narrows the
+  // Destination's already-loaded Experiences client-side by name, so the search
+  // affordance stays available after drilling into a Destination without a
+  // refetch. A query with ≥1 non-whitespace character replaces the grouped
+  // layout with a flat result list; clearing it restores the grouped layout.
+  const [searchInput, setSearchInput] = useState('');
+  const trimmedQuery = searchInput.trim();
+  const searchActive = trimmedQuery.length > 0;
+
   const catalogQuery = useQuery<CatalogListResponse, ApiError>({
     queryKey: ['catalog', 'destination', destination.id, filter] as const,
     queryFn: () => fetchCatalog(filter),
@@ -211,6 +222,10 @@ function DestinationBody({
   });
 
   const experiences = catalogQuery.data?.experiences ?? [];
+
+  // The signed-in User's completed-Experience id set, used to badge visited
+  // rows. Fails soft to an empty set, so the list renders unmarked on error.
+  const completedIds = useCompletedExperiences();
 
   // R10.2 full-screen error: only when there is no prior cache to fall back on.
   // With prior cache react-query keeps serving `data`, so we fall through to
@@ -235,6 +250,8 @@ function DestinationBody({
   const showStaleBanner = catalogQuery.data?.staleCache === true;
   const showLoading = catalogQuery.isLoading && catalogQuery.data === undefined;
   const showEmpty = !showLoading && experiences.length === 0;
+  // The search control is offered whenever there are Experiences to narrow.
+  const showSearch = !showLoading && !showEmpty;
 
   const onSelectExperience = (experience: ExperienceDTO): void => {
     navigation.navigate('ExperienceDetail', { experienceId: experience.id });
@@ -264,6 +281,14 @@ function DestinationBody({
         </View>
       ) : null}
 
+      {showSearch ? (
+        <DestinationSearchControl
+          value={searchInput}
+          onChangeText={setSearchInput}
+          onClear={() => setSearchInput('')}
+        />
+      ) : null}
+
       {showLoading ? (
         <View style={styles.center} testID="destination-loading">
           <ActivityIndicator color={theme.color.primary} />
@@ -276,38 +301,164 @@ function DestinationBody({
             body="This destination has no experiences right now."
           />
         </View>
+      ) : searchActive ? (
+        <DestinationSearchResults
+          experiences={experiences}
+          query={trimmedQuery}
+          onSelectExperience={onSelectExperience}
+          completedIds={completedIds}
+        />
       ) : (
-        renderBody(destination, experiences, onSelectExperience)
+        renderBody(destination, experiences, onSelectExperience, completedIds)
       )}
     </ScreenContainer>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// In-destination search
+// ---------------------------------------------------------------------------
+
+/**
+ * The always-visible in-destination search control. Mirrors the Catalog_Home
+ * search box (icon, input, clear affordance) so the search affordance reads
+ * identically at both levels, and carries an accessible label identifying it as
+ * the search input.
+ */
+function DestinationSearchControl({
+  value,
+  onChangeText,
+  onClear,
+}: {
+  readonly value: string;
+  readonly onChangeText: (text: string) => void;
+  readonly onClear: () => void;
+}): JSX.Element {
+  return (
+    <View style={styles.controls}>
+      <View style={styles.searchWrap}>
+        <Ionicons
+          name="search"
+          size={18}
+          color={theme.color.textSecondary}
+          style={styles.searchIcon}
+        />
+        <TextInput
+          style={styles.searchInput}
+          value={value}
+          onChangeText={onChangeText}
+          placeholder="Search this destination"
+          placeholderTextColor={theme.color.textSecondary}
+          autoCapitalize="none"
+          autoCorrect={false}
+          returnKeyType="search"
+          accessibilityLabel="Search this destination"
+          testID="destination-search"
+        />
+        {value.length > 0 ? (
+          <Ionicons
+            name="close-circle"
+            size={18}
+            color={theme.color.textSecondary}
+            style={styles.searchClear}
+            onPress={onClear}
+            accessibilityRole="button"
+            accessibilityLabel="Clear search"
+            testID="destination-search-clear"
+          />
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
+/**
+ * The in-destination search results body, shown in place of the grouped layout
+ * while a query is active. Narrows the Destination's already-loaded Experiences
+ * to those whose name contains the query (case-insensitive), preserving source
+ * order, and renders them as a flat, tappable list of `ExperienceRow` — the same
+ * row used by the grouped layouts. When nothing matches, an empty-results state
+ * is shown while the typed query is retained in the control above.
+ *
+ * The matching count is announced to assistive technologies via
+ * `useResultCountAnnouncement`, satisfying the Destination_Screen's requirement
+ * to announce the updated result count when a search action changes the visible
+ * set (R11.8).
+ */
+function DestinationSearchResults({
+  experiences,
+  query,
+  onSelectExperience,
+  completedIds,
+}: {
+  readonly experiences: readonly ExperienceDTO[];
+  readonly query: string;
+  readonly onSelectExperience: (experience: ExperienceDTO) => void;
+  readonly completedIds: ReadonlySet<string>;
+}): JSX.Element {
+  const results = useMemo(() => {
+    const needle = query.toLowerCase();
+    return experiences.filter((experience) =>
+      experience.name.toLowerCase().includes(needle),
+    );
+  }, [experiences, query]);
+
+  useResultCountAnnouncement(results.length);
+
+  if (results.length === 0) {
+    return (
+      <View style={styles.center} testID="destination-search-empty">
+        <EmptyState
+          icon="search-outline"
+          title="No experiences matched"
+          body="Try a different search."
+        />
+      </View>
+    );
+  }
+
+  return (
+    <FlatList
+      data={results as ExperienceDTO[]}
+      keyExtractor={(experience) => experience.id}
+      style={styles.list}
+      contentContainerStyle={styles.listContent}
+      initialNumToRender={12}
+      maxToRenderPerBatch={12}
+      windowSize={11}
+      removeClippedSubviews
+      testID="destination-search-results"
+      renderItem={({ item }) => (
+        <ExperienceRow
+          experience={item}
+          onPress={() => onSelectExperience(item)}
+          completed={completedIds.has(item.id)}
+        />
+      )}
+    />
   );
 }
 
 /**
  * Render the Destination's body by its `kind`.
  *
- * SEAM for tasks 10.2 / 10.3 / 10.4: each branch currently renders the shared
- * flat Experience list as a placeholder. The later tasks replace the individual
- * branches with their grouped, collapsible layouts:
+ * Each branch renders its grouped, collapsible layout, all built on
+ * `useDestinationSections` for collapsible state and the `catalogGrouping`
+ * cores, and sharing the data-fetch / stale / unavailable / empty /
+ * row-rendering plumbing established here:
  *
- *   - `themeOrWaterPark` → task 10.2: `groupByLand` collapsible sections + a
- *     scoped Experience_Category `Chip` filter driving `groupByLandFiltered`.
- *   - `disneySprings`    → task 10.3: `groupByCategory` collapsible sections.
- *   - `resorts`          → task 10.4: also fetch `GET /resorts`, render
- *     `buildResortRows` with scroll-to-group anchors.
- *
- * They should reuse `useDestinationSections` for collapsible state and the
- * `catalogGrouping` cores, keeping the data-fetch / stale / unavailable / empty
- * / row-rendering plumbing established here.
- *
- * Tasks 10.2, 10.3, and 10.4 have landed the `themeOrWaterPark`
- * (`ThemeOrWaterParkLayout`), `disneySprings` (`DisneySpringsLayout`), and
- * `resorts` (`ResortsLayout`) branches.
+ *   - `themeOrWaterPark` → `ThemeOrWaterParkLayout`: Land collapsible sections
+ *     + a scoped Experience_Category `Chip` filter driving `groupByLandFiltered`.
+ *   - `disneySprings`    → `DisneySpringsLayout`: `groupByCategory` collapsible
+ *     sections.
+ *   - `resorts`          → `ResortsLayout`: also fetches `GET /resorts` and
+ *     renders `buildResortRows` with scroll-to-group anchors.
  */
 function renderBody(
   destination: Destination,
   experiences: readonly ExperienceDTO[],
   onSelectExperience: (experience: ExperienceDTO) => void,
+  completedIds: ReadonlySet<string>,
 ): JSX.Element {
   switch (destination.kind) {
     case 'themeOrWaterPark':
@@ -317,6 +468,7 @@ function renderBody(
         <ThemeOrWaterParkLayout
           experiences={experiences}
           onSelectExperience={onSelectExperience}
+          completedIds={completedIds}
         />
       );
     case 'disneySprings':
@@ -326,6 +478,7 @@ function renderBody(
         <DisneySpringsLayout
           experiences={experiences}
           onSelectExperience={onSelectExperience}
+          completedIds={completedIds}
         />
       );
     case 'resorts':
@@ -336,6 +489,7 @@ function renderBody(
         <ResortsLayout
           experiences={experiences}
           onSelectExperience={onSelectExperience}
+          completedIds={completedIds}
         />
       );
   }
@@ -369,9 +523,11 @@ function renderBody(
 function ThemeOrWaterParkLayout({
   experiences,
   onSelectExperience,
+  completedIds,
 }: {
   readonly experiences: readonly ExperienceDTO[];
   readonly onSelectExperience: (experience: ExperienceDTO) => void;
+  readonly completedIds: ReadonlySet<string>;
 }): JSX.Element {
   // R6.7: default to no active category ("All"), so all Experiences are shown.
   const [selectedCategory, setSelectedCategory] =
@@ -438,6 +594,7 @@ function ThemeOrWaterParkLayout({
                 key={experience.id}
                 experience={experience}
                 onPress={() => onSelectExperience(experience)}
+                completed={completedIds.has(experience.id)}
               />
             ))}
           </GroupSection>
@@ -556,9 +713,11 @@ function categoryLabel(category: ExperienceCategory): string {
 function DisneySpringsLayout({
   experiences,
   onSelectExperience,
+  completedIds,
 }: {
   readonly experiences: readonly ExperienceDTO[];
   readonly onSelectExperience: (experience: ExperienceDTO) => void;
+  readonly completedIds: ReadonlySet<string>;
 }): JSX.Element {
   // R7.2/R7.5: derive the category sections client-side over the already-fetched
   // Experiences in canonical order, empties omitted (no refetch).
@@ -601,6 +760,7 @@ function DisneySpringsLayout({
                 key={experience.id}
                 experience={experience}
                 onPress={() => onSelectExperience(experience)}
+                completed={completedIds.has(experience.id)}
               />
             ))}
           </GroupSection>
@@ -648,9 +808,11 @@ function DisneySpringsLayout({
 function ResortsLayout({
   experiences,
   onSelectExperience,
+  completedIds,
 }: {
   readonly experiences: readonly ExperienceDTO[];
   readonly onSelectExperience: (experience: ExperienceDTO) => void;
+  readonly completedIds: ReadonlySet<string>;
 }): JSX.Element {
   // R8.1: fetch the active Resort list. On failure or while loading the list is
   // empty, so `groupByResort` degrades to a catch-all-only layout (R10.5).
@@ -726,6 +888,7 @@ function ResortsLayout({
                   key={experience.id}
                   experience={experience}
                   onPress={() => onSelectExperience(experience)}
+                  completed={completedIds.has(experience.id)}
                 />
               ))
             )}
@@ -782,6 +945,12 @@ function ResortSectionHeader({
 interface ExperienceRowProps {
   readonly experience: ExperienceDTO;
   readonly onPress: () => void;
+  /**
+   * Whether the signed-in User has marked this Experience as visited. When
+   * true the row shows a "Visited" completion badge so the list conveys
+   * completion at a glance without drilling into the detail screen.
+   */
+  readonly completed?: boolean;
 }
 
 /**
@@ -791,8 +960,17 @@ interface ExperienceRowProps {
  * they sit in), and — for a Restaurant with a persisted price tier — the
  * compact price-tier Info_Tag from `priceTierListTag` (R9.9), so the row and the
  * detail view present the price tier identically.
+ *
+ * When `completed` is true the row also surfaces a "Visited" completion badge,
+ * matching the completion visual language (green + `checkmark-circle`) used on
+ * the Experience_Detail_Screen, so a guest can spot the Experiences they have
+ * already done directly from the list.
  */
-function ExperienceRow({ experience, onPress }: ExperienceRowProps): JSX.Element {
+function ExperienceRow({
+  experience,
+  onPress,
+  completed = false,
+}: ExperienceRowProps): JSX.Element {
   const visual = theme.categoryVisual[experience.category];
   // `park` is `null` for a Resort-area Experience with no park ancestor; fall
   // back to the brand accent so the row still reads.
@@ -822,10 +1000,15 @@ function ExperienceRow({ experience, onPress }: ExperienceRowProps): JSX.Element
       testID={`destination-row-${experience.id}`}
     >
       <View style={styles.rowInner}>
-        <ExperienceThumb
-          imageUrl={experience.imageUrl ?? null}
-          category={experience.category}
-        />
+        <View style={styles.thumbWrap}>
+          <ExperienceThumb
+            imageUrl={experience.imageUrl ?? null}
+            category={experience.category}
+          />
+          {completed ? (
+            <VisitedOverlay testID={`destination-visited-${experience.id}`} />
+          ) : null}
+        </View>
         <View style={styles.rowText}>
           <Text style={styles.rowName} numberOfLines={2}>
             {experience.name}
@@ -913,6 +1096,27 @@ function ExperienceThumb({
   );
 }
 
+/**
+ * A completion marker overlaid on the corner of an Experience row's thumbnail:
+ * a solid green disc with a white checkmark and a surface-colored ring so it
+ * reads clearly against any image. Placing it on the thumbnail — rather than
+ * inline with the category / price Info_Tags — keeps the "visited" signal
+ * visually distinct from the tag pills so it is easy to spot when scanning the
+ * list. Exposed as a single accessible "Visited" element for screen readers.
+ */
+function VisitedOverlay({ testID }: { readonly testID: string }): JSX.Element {
+  return (
+    <View
+      style={styles.visitedOverlay}
+      testID={testID}
+      accessible
+      accessibilityLabel="Visited"
+    >
+      <Ionicons name="checkmark" size={14} color={theme.color.textOnPrimary} />
+    </View>
+  );
+}
+
 function DestinationUnavailableState({
   title,
 }: {
@@ -982,6 +1186,33 @@ async function fetchCatalog(
 // ---------------------------------------------------------------------------
 
 const styles = StyleSheet.create({
+  controls: {
+    paddingHorizontal: theme.spacing.lg,
+    paddingTop: theme.spacing.md,
+    paddingBottom: theme.spacing.sm,
+  },
+  searchWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.color.surface,
+    borderRadius: theme.radius.md,
+    paddingHorizontal: theme.spacing.md,
+    borderWidth: 1,
+    borderColor: theme.color.border,
+    ...theme.shadow.card,
+  },
+  searchIcon: {
+    marginRight: theme.spacing.sm,
+  },
+  searchInput: {
+    flex: 1,
+    paddingVertical: theme.spacing.md,
+    fontSize: 16,
+    color: theme.color.textPrimary,
+  },
+  searchClear: {
+    marginLeft: theme.spacing.sm,
+  },
   staleBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1022,16 +1253,32 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  thumbWrap: {
+    position: 'relative',
+    marginRight: theme.spacing.md,
+  },
   thumb: {
     width: 56,
     height: 56,
     borderRadius: theme.radius.md,
-    marginRight: theme.spacing.md,
     backgroundColor: theme.color.surfaceAlt,
   },
   thumbPlaceholder: {
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  visitedOverlay: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: theme.color.success,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: theme.color.surface,
   },
   rowText: {
     flex: 1,

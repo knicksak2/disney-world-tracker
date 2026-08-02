@@ -100,6 +100,13 @@ export default function YourVisitCard({
           void queryClient.invalidateQueries({
             queryKey: ['me-stats'],
           });
+          // ...and the catalog list's completed-Experience id set
+          // (`['me', 'completions']`), so the "Visited" markers on the
+          // Catalog_Home search results and Destination_Screen rows reflect
+          // this mark/unmark on the next visit.
+          void queryClient.invalidateQueries({
+            queryKey: ['me', 'completions'],
+          });
         }}
       />
 

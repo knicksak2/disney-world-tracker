@@ -1,0 +1,30 @@
+<svg width="150" height="150" viewBox="0 0 150 150" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bronzeMetal" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#f0b892" />
+      <stop offset="50%" style="stop-color:#b5713c" />
+      <stop offset="100%" style="stop-color:#7d4718" />
+    </linearGradient>
+    <linearGradient id="enamelBrown" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#4e342e" />
+      <stop offset="100%" style="stop-color:#3e2723" />
+    </linearGradient>
+    <linearGradient id="glossSheen" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:white;stop-opacity:0.4" />
+      <stop offset="100%" style="stop-color:white;stop-opacity:0" />
+    </linearGradient>
+    <filter id="pinShadow"><feDropShadow dx="0" dy="4" stdDeviation="3" flood-opacity="0.5"/></filter>
+  </defs>
+  <g filter="url(#pinShadow)">
+    <path d="M75 5 L120 20 L120 130 L75 145 L30 130 L30 20 Z" fill="url(#bronzeMetal)" />
+    <path d="M75 12 L113 25 L113 125 L75 138 L37 125 L37 25 Z" fill="url(#enamelBrown)" />
+    <g transform="rotate(-30 75 75)" fill="url(#bronzeMetal)">
+      <rect x="72" y="30" width="6" height="60" rx="2" stroke="#5d4037" stroke-width="0.5"/>
+      <rect x="72" y="28" width="6" height="15" rx="2" fill="#d7ccc8" />
+    </g>
+    <path d="M100 35 L103 40 L108 40 L104 43 L105 48 L100 45 L95 48 L96 43 L92 40 L97 40 Z" fill="#ffd180" />
+    <path d="M37 25 Q75 10 113 25 L113 60 Q75 45 37 60 Z" fill="url(#glossSheen)" />
+    <rect x="45" y="110" width="60" height="15" rx="7.5" fill="url(#bronzeMetal)" />
+    <text x="75" y="121" font-family="Arial, sans-serif" font-size="7" fill="#3e2723" text-anchor="middle" font-weight="900">THE SPARK</text>
+  </g>
+</svg>

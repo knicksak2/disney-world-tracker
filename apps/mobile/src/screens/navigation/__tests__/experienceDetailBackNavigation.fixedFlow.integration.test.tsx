@@ -301,10 +301,15 @@ async function openFromHome(): Promise<void> {
   );
 }
 
-/** Navigate to the Stats tab, open ExperiencesDetail from the hub, open the row. */
+/** Navigate to Stats (re-hosted under Profile), open ExperiencesDetail, open the row. */
 async function openFromStats(): Promise<void> {
+  // Stats is re-hosted under the Profile tab (trips R17): reach it via the
+  // Profile tab's nested `Stats` route rather than a top-level Stats tab.
   act(() => {
-    navRef.navigate('MainTabs', { screen: 'Stats' });
+    navRef.navigate('MainTabs', {
+      screen: 'Profile',
+      params: { screen: 'Stats' },
+    });
   });
   await screen.findByTestId('stats-screen');
   fireEvent.press(await screen.findByTestId('stats-highlight-experiences'));
@@ -442,10 +447,14 @@ describe('Fixed flow — prior tab and mode restored after a return', () => {
   test('Stats retains its ExperiencesDetail screen across an open + themed-back round-trip', async () => {
     renderApp();
 
-    // Switch to the Stats tab and drill into the ExperiencesDetail screen
-    // before navigating to the detail (a deliberate non-default tab + screen).
+    // Switch to Stats (re-hosted under the Profile tab, trips R17) and drill
+    // into the ExperiencesDetail screen before navigating to the detail (a
+    // deliberate non-default tab + screen).
     act(() => {
-      navRef.navigate('MainTabs', { screen: 'Stats' });
+      navRef.navigate('MainTabs', {
+        screen: 'Profile',
+        params: { screen: 'Stats' },
+      });
     });
     await screen.findByTestId('stats-screen');
     fireEvent.press(await screen.findByTestId('stats-highlight-experiences'));

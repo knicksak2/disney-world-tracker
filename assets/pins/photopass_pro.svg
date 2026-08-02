@@ -1,0 +1,35 @@
+<svg width="150" height="150" viewBox="0 0 150 150" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="silverMetal" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#f4f6fb" />
+      <stop offset="50%" style="stop-color:#c2c9d6" />
+      <stop offset="100%" style="stop-color:#7d8598" />
+    </linearGradient>
+    <linearGradient id="enamelBlack" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#424242" />
+      <stop offset="100%" style="stop-color:#212121" />
+    </linearGradient>
+    <linearGradient id="glossSheen" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:white;stop-opacity:0.4" />
+      <stop offset="100%" style="stop-color:white;stop-opacity:0" />
+    </linearGradient>
+    <filter id="pinShadow"><feDropShadow dx="0" dy="4" stdDeviation="3" flood-opacity="0.5"/></filter>
+  </defs>
+  <g filter="url(#pinShadow)">
+    <!-- Camera Body Frame -->
+    <rect x="15" y="35" width="120" height="80" rx="8" fill="url(#silverMetal)" />
+    <!-- Recessed Enamel Grip -->
+    <rect x="22" y="45" width="106" height="60" rx="4" fill="url(#enamelBlack)" />
+    <!-- Lens (Raised Silver + Blue Enamel) -->
+    <circle cx="75" cy="75" r="35" fill="url(#silverMetal)" />
+    <circle cx="75" cy="75" r="28" fill="#0d47a1" stroke="#1565c0" stroke-width="2" />
+    <circle cx="65" cy="65" r="10" fill="white" opacity="0.2" />
+    <!-- Flash (Silver) -->
+    <rect x="25" y="40" width="25" height="15" fill="url(#silverMetal)" stroke="#90a4ae" stroke-width="1"/>
+    <!-- Gloss -->
+    <path d="M22 45 Q75 30 128 45 L128 75 Q75 60 22 75 Z" fill="url(#glossSheen)" />
+    <!-- Banner -->
+    <rect x="40" y="110" width="70" height="15" rx="7.5" fill="url(#silverMetal)" />
+    <text x="75" y="121" font-family="Arial, sans-serif" font-size="7" fill="#212121" text-anchor="middle" font-weight="900">PHOTOPASS PRO</text>
+  </g>
+</svg>

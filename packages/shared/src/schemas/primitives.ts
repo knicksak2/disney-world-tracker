@@ -14,6 +14,7 @@ import {
   PARKS,
   SHARE_PAYLOAD_KINDS,
   SHARE_REACTION_VALUES,
+  TRIP_REACTION_VALUES,
 } from '../enums.js';
 
 // ---------------------------------------------------------------------------
@@ -175,6 +176,13 @@ export const sharePayloadKindSchema = z.enum(SHARE_PAYLOAD_KINDS);
  * other value is a validation error and nothing is persisted.
  */
 export const shareReactionValueSchema = z.enum(SHARE_REACTION_VALUES);
+
+/**
+ * Trip_Reaction value from the closed `Trip_Reaction` vocabulary (R13.6). A
+ * candidate value is accepted if and only if it belongs to this set; any other
+ * value is a validation error and nothing is persisted.
+ */
+export const tripReactionValueSchema = z.enum(TRIP_REACTION_VALUES);
 
 // ---------------------------------------------------------------------------
 // Stats primitives

@@ -102,6 +102,23 @@ npm run sync:cloud --workspace apps/api      # bootstrap/refresh the hosted cata
 
 The first paid tier is **$7/month** for an always-on instance. Worth it as soon as you have any real users; the cold start otherwise frustrates anyone opening the app for the first time that day.
 
+### Keeping it warm for free (scheduled pinger)
+
+You can hide the cold start without paying by pinging the service on a schedule so it never goes idle long enough to sleep. This is the recommended free-tier stopgap until the $7 always-on tier is worth it.
+
+**How it works.** A free external scheduler hits `GET /health` (a static `{ status: 'ok' }` route — no database, no auth, cheap) more often than Render's 15-minute idle window. Every ~10 minutes keeps the container awake, so real requests never pay the 30-60s wake.
+
+**Stay inside the 750 instance-hours.** Free instance-hours are only consumed while the service is awake. Pinging 24/7 keeps it awake ~744 hours in a 31-day month — under the 750 cap, but with only ~6 hours of margin, and it uses nearly the whole budget so you can't also run a second always-on free service.
+
+**Day-only schedule (recommended).** Restrict the pinger to waking hours (e.g. **7am-2am**) and let the service sleep overnight (**2am-7am**). That drops usage to ~589 hours/month — a comfortable cushion against redeploy restarts and clock drift — at the cost of the first request before 7am eating a cold start. For a hobby app this window is genuinely quiet, so it's a good trade.
+
+- **Tool:** [cron-job.org](https://cron-job.org) free plan supports per-hour scheduling, which fits the day-only window. UptimeRobot's free tier pings but doesn't do time-windowed schedules as cleanly.
+- **Timezone:** the schedule runs in whatever timezone you configure it in — set it to your users' local time, not UTC, or the overnight window lands in the wrong place.
+- **Use the `HEAD` method, not `GET`.** cron-job.org aborts any response larger than **8 KB** with `Failed (output too large)` and, after enough consecutive failures, auto-disables the job (it won't restart itself — you have to re-enable it manually). A healthy `/health` is ~15 bytes so `GET` is normally fine, but Render sits behind Cloudflare: when the service is cold, mid-deploy, or crashed, Cloudflare returns a **branded error/interstitial HTML page that exceeds 8 KB**. Those show up as fast (~200-600 ms) failures rather than the 30-60 s of a real cold start — the tell that the reply came from the edge, not your app. A `HEAD` request has no body by spec (Fastify auto-registers `HEAD` for the `GET /health` route), so it can never trip the 8 KB limit even during an outage, while still waking the container.
+- **The pinger is not a health monitor.** With `HEAD` it reports success as long as *something* answers, even Cloudflare's error page while your app is down — that's correct for a keep-alive job, whose only purpose is to prevent sleep. If you want real uptime alerts, set up a separate monitor; don't overload this job with that responsibility.
+
+**Do NOT ping the database to kill the Neon wake.** It's tempting to point a second ping at an endpoint that runs `SELECT 1` so Neon never scales to zero. Don't. Neon's Free plan includes **100 CU-hours per project per month** (~400 hours at the default 0.25 CU). Keeping Neon warm ~19 hours/day is ~580 hours of active compute — well past the 400-hour ceiling. When you hit the 100 CU-hour cap, **Neon suspends your compute until the next month resets**, taking the database offline. That's far worse than a 1-3s wake. Let Neon scale to zero; real daytime traffic keeps it warm on its own between the 5-minute idle gaps, and the occasional first-query wake is a couple of seconds, not a lockout. If you truly want zero database delay for free, the only path is self-hosting Postgres on an always-on VM (see [Honest Caveats](#honest-caveats)) — a Postgres you run yourself never scales to zero, but you own the ops.
+
 ---
 
 ## Neon — PostgreSQL
@@ -265,7 +282,7 @@ The provider signups are independent. If any single provider goes down or change
 
 ## Honest Caveats
 
-- **Cold starts** on Render's free tier mean the very first request after a long idle period will be slow. Acceptable for a side project, frustrating for users you want to keep.
+- **Cold starts** on Render's free tier mean the very first request after a long idle period will be slow. Acceptable for a side project, frustrating for users you want to keep. A free scheduled pinger hides this during waking hours without leaving the free tier — see [Keeping it warm for free](#keeping-it-warm-for-free-scheduled-pinger). Just don't extend the same trick to Neon; that backfires against Neon's compute budget.
 - **Free tiers do change.** Fly.io's free tier got removed in 2024. Render, Neon, and Upstash have all been stable, but nothing is forever.
 - **Region selection.** Pick the same region across services where possible (US East is the safe default) to keep latency between Render and Neon low.
 - **Backups.** Free Neon includes point-in-time recovery on the latest 24 hours. For anything important, take periodic `pg_dump` exports yourself.

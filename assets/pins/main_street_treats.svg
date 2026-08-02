@@ -1,0 +1,31 @@
+<svg width="150" height="150" viewBox="0 0 150 150" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="goldMetal" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#fff2c2" />
+      <stop offset="50%" style="stop-color:#e8b53d" />
+      <stop offset="100%" style="stop-color:#8a5e0c" />
+    </linearGradient>
+    <linearGradient id="enamelCream" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#fffde7" />
+      <stop offset="100%" style="stop-color:#fbc02d" />
+    </linearGradient>
+    <linearGradient id="glossSheen" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:white;stop-opacity:0.4" />
+      <stop offset="100%" style="stop-color:white;stop-opacity:0" />
+    </linearGradient>
+    <filter id="pinShadow"><feDropShadow dx="0" dy="4" stdDeviation="3" flood-opacity="0.5"/></filter>
+  </defs>
+  <g filter="url(#pinShadow)">
+    <circle cx="75" cy="75" r="70" fill="url(#goldMetal)" />
+    <circle cx="75" cy="75" r="62" fill="url(#enamelCream)" />
+    <!-- Ice Cream Motif (Raised Pink Enamel + Gold Metal) -->
+    <path d="M55 105 L95 105 L85 55 L65 55 Z" fill="#d7ccc8" stroke="url(#goldMetal)" stroke-width="2"/> <!-- Cone -->
+    <circle cx="75" cy="55" r="25" fill="#f8bbd0" stroke="url(#goldMetal)" stroke-width="2" /> <!-- Scoop -->
+    <circle cx="65" cy="40" r="8" fill="#e91e63" /> <!-- Cherry -->
+    <!-- Gloss -->
+    <ellipse cx="75" cy="45" rx="55" ry="25" fill="url(#glossSheen)" transform="rotate(-15 75 45)" />
+    <!-- Banner -->
+    <rect x="35" y="115" width="80" height="15" rx="7.5" fill="url(#goldMetal)" />
+    <text x="75" y="126" font-family="Arial, sans-serif" font-size="6" fill="#5d4037" text-anchor="middle" font-weight="900">MAIN STREET TREATS</text>
+  </g>
+</svg>

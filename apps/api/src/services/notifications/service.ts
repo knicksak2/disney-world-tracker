@@ -95,6 +95,60 @@ export interface FriendRequestReceivedEvent {
 }
 
 // ---------------------------------------------------------------------------
+// TripInviteCreated event (Trips R6.6, R6.7)
+// ---------------------------------------------------------------------------
+
+/**
+ * Event handed to the Notification_Service after a `pending` Trip_Invite is
+ * durably created (`sendInvite` commits). Structurally identical to the
+ * Trip_Service's `TripInviteCreatedNotice`, so the composition root can hand it
+ * straight through. Carries exactly what the service needs to target and
+ * compose without re-reading the `trip_invites` row: the invited User to
+ * notify, the inviting Organizer to name, and the invite id for tap
+ * deep-linking (Trips R6.6, R6.7).
+ *
+ * Like every push notification, it is gated by the recipient's master push
+ * preference: an invited User who has disabled push receives no notification.
+ */
+export interface TripInviteCreatedEvent {
+  /** The created Trip_Invite's id, used for notification-tap deep-linking. */
+  readonly inviteId: string;
+  /** The Trip the invite is for. */
+  readonly tripId: string;
+  /** The Organizer who sent the invite; named in the notification title. */
+  readonly inviterId: string;
+  /** The invited User; the notification target. */
+  readonly inviteeId: string;
+}
+
+// ---------------------------------------------------------------------------
+// RodeWithTagCreated event (Trips R10.8)
+// ---------------------------------------------------------------------------
+
+/**
+ * Event handed to the Notification_Service after a `pending` Rode_With_Tag is
+ * durably created (`logCompletion` commits). Structurally identical to the
+ * Trip_Service's `RodeWithTagCreatedNotice`, so the composition root can hand
+ * it straight through. Carries exactly what the service needs to target and
+ * compose without re-reading the `rode_with_tags` row: the tagged Member to
+ * notify, the Member who logged the Completion to name, and the tag + log-entry
+ * ids for tap deep-linking to the confirm/decline view (Trips R10.8).
+ *
+ * Like every push notification, it is gated by the recipient's master push
+ * preference: a tagged Member who has disabled push receives no notification.
+ */
+export interface RodeWithTagCreatedEvent {
+  /** The created Rode_With_Tag's id, used for notification-tap deep-linking. */
+  readonly tagId: string;
+  /** The Trip_Log_Entry the tag belongs to, for the confirm view. */
+  readonly tripLogEntryId: string;
+  /** The Member who logged the Completion; named in the notification title. */
+  readonly taggingMemberId: string;
+  /** The tagged Member; the notification target. */
+  readonly taggedMemberId: string;
+}
+
+// ---------------------------------------------------------------------------
 // Structural dependency ports
 // ---------------------------------------------------------------------------
 
@@ -180,6 +234,25 @@ export interface NotificationService {
   handleFriendRequestReceived(
     event: FriendRequestReceivedEvent,
   ): Promise<void>;
+
+  /**
+   * Handle a {@link TripInviteCreatedEvent}: notify the invited User that
+   * `inviterId` invited them to a Trip. Resolves once the recipient has been
+   * processed. Never rejects: all errors are caught and logged so the caller (a
+   * background dispatch) is fully decoupled from push outcome, and the invite
+   * request succeeds regardless of push result (Trips R6.6, R6.7).
+   */
+  handleTripInviteCreated(event: TripInviteCreatedEvent): Promise<void>;
+
+  /**
+   * Handle a {@link RodeWithTagCreatedEvent}: notify the tagged Member that
+   * `taggingMemberId` tagged them on a logged Completion. Resolves once the
+   * recipient has been processed. Never rejects: all errors are caught and
+   * logged so the caller (a background dispatch) is fully decoupled from push
+   * outcome, and the log request succeeds regardless of push result
+   * (Trips R10.8).
+   */
+  handleRodeWithTagCreated(event: RodeWithTagCreatedEvent): Promise<void>;
 }
 
 // ---------------------------------------------------------------------------
@@ -192,6 +265,10 @@ export const MAX_LABEL_LENGTH = 100;
 export const PROGRESS_LABEL = 'Shared their progress';
 /** Fixed body for a Friend_Request notification. */
 export const FRIEND_REQUEST_LABEL = 'Sent you a friend request';
+/** Fixed body for a Trip_Invite notification (Trips R6.6, R6.7). */
+export const TRIP_INVITE_LABEL = 'Invited you to a trip';
+/** Fixed body for a Rode_With_Tag notification (Trips R10.8). */
+export const RODE_WITH_TAG_LABEL = 'Tagged you on a ride';
 /** Neutral fallbacks when a lookup returns null (still discloses nothing extra). */
 const FALLBACK_SENDER_NAME = 'A friend';
 const FALLBACK_EXPERIENCE_LABEL = 'Shared an experience';
@@ -291,6 +368,90 @@ export function createNotificationService(
         deps.logger?.error(
           { err, recipientId: event.recipientId, requestId: event.requestId },
           'friend-request notification delivery failed for recipient',
+        );
+      });
+    },
+
+    async handleTripInviteCreated(
+      event: TripInviteCreatedEvent,
+    ): Promise<void> {
+      // Title = the inviting Organizer's display name; body = a fixed label.
+      // Gated by the recipient's master push preference via notifyRecipient,
+      // exactly like a friend-request notification (Trips R6.6, R6.7).
+      let title: string;
+      try {
+        const name = await deps.resolveSenderDisplayName(event.inviterId);
+        const trimmed = name?.trim();
+        title =
+          trimmed && trimmed.length > 0 ? trimmed : FALLBACK_SENDER_NAME;
+      } catch (err) {
+        deps.logger?.error(
+          { err, inviteId: event.inviteId },
+          'trip-invite notification composition failed',
+        );
+        return;
+      }
+
+      await notifyRecipient(
+        event.inviteeId,
+        { title, body: TRIP_INVITE_LABEL },
+        {
+          deps,
+          ...timing,
+          data: { tripInviteId: event.inviteId },
+          logContext: { inviteId: event.inviteId, tripId: event.tripId },
+        },
+      ).catch((err) => {
+        // Defensive: notifyRecipient already swallows its own errors, but
+        // guarantee handleTripInviteCreated never rejects.
+        deps.logger?.error(
+          { err, recipientId: event.inviteeId, inviteId: event.inviteId },
+          'trip-invite notification delivery failed for recipient',
+        );
+      });
+    },
+
+    async handleRodeWithTagCreated(
+      event: RodeWithTagCreatedEvent,
+    ): Promise<void> {
+      // Title = the tagging Member's display name; body = a fixed label. Gated
+      // by the recipient's master push preference via notifyRecipient, exactly
+      // like a friend-request notification (Trips R10.8).
+      let title: string;
+      try {
+        const name = await deps.resolveSenderDisplayName(event.taggingMemberId);
+        const trimmed = name?.trim();
+        title =
+          trimmed && trimmed.length > 0 ? trimmed : FALLBACK_SENDER_NAME;
+      } catch (err) {
+        deps.logger?.error(
+          { err, tagId: event.tagId },
+          'rode-with notification composition failed',
+        );
+        return;
+      }
+
+      await notifyRecipient(
+        event.taggedMemberId,
+        { title, body: RODE_WITH_TAG_LABEL },
+        {
+          deps,
+          ...timing,
+          data: {
+            rodeWithTagId: event.tagId,
+            tripLogEntryId: event.tripLogEntryId,
+          },
+          logContext: {
+            tagId: event.tagId,
+            tripLogEntryId: event.tripLogEntryId,
+          },
+        },
+      ).catch((err) => {
+        // Defensive: notifyRecipient already swallows its own errors, but
+        // guarantee handleRodeWithTagCreated never rejects.
+        deps.logger?.error(
+          { err, recipientId: event.taggedMemberId, tagId: event.tagId },
+          'rode-with notification delivery failed for recipient',
         );
       });
     },

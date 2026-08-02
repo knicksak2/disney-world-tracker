@@ -71,3 +71,118 @@ export function navigateToFriendsList(): boolean {
   });
   return true;
 }
+
+// ---------------------------------------------------------------------------
+// Trips deep-link routing (trips task 16.3).
+//
+// The Trip notification tap handler (task 17.8) runs at the app root, so — like
+// the Share/friend-request handlers above — it dispatches navigation through
+// this module-level ref rather than a screen-scoped `useNavigation`. Each Trip
+// deep-link target lives at the bottom of the navigator tree:
+//
+//   RootStack ▸ MainTabs ▸ Trips ▸ TripsStack ▸ {TripInvite | RodeWithConfirm}
+//
+// The helpers below issue one nested `navigate` that walks that path in a
+// single call, forwarding only the routing id(s) the notification carries.
+// They return `false` when the container is not yet mounted/ready so the caller
+// can retry within the foreground-navigation window (R18.2–R18.4).
+// ---------------------------------------------------------------------------
+
+/**
+ * Navigate to the `Trip_Invite` accept/decline view for a tapped Trip_Invite
+ * push notification, forwarding the notification's `tripInviteId` (R18.2).
+ *
+ * Returns `true` once the dispatch is issued, or `false` when the navigation
+ * container is not ready yet (the caller should retry within the
+ * foreground-navigation window).
+ */
+export function navigateToTripInvite(params: { readonly tripInviteId: string }): boolean {
+  if (!navigationRef.isReady()) {
+    return false;
+  }
+  navigationRef.navigate('MainTabs', {
+    screen: 'Trips',
+    params: {
+      screen: 'TripInvite',
+      params,
+    },
+  });
+  return true;
+}
+
+/**
+ * Navigate to the `Rode_With_Tag` confirm/decline view for a tapped
+ * Rode_With_Tag push notification, forwarding the notification's `rodeWithTagId`
+ * and `tripLogEntryId` (R18.3).
+ *
+ * Returns `true` once the dispatch is issued, or `false` when the navigation
+ * container is not ready yet (the caller should retry within the
+ * foreground-navigation window).
+ */
+export function navigateToRodeWithTag(params: {
+  readonly rodeWithTagId: string;
+  readonly tripLogEntryId: string;
+}): boolean {
+  if (!navigationRef.isReady()) {
+    return false;
+  }
+  navigationRef.navigate('MainTabs', {
+    screen: 'Trips',
+    params: {
+      screen: 'RodeWithConfirm',
+      params,
+    },
+  });
+  return true;
+}
+
+/**
+ * Navigate to the `Trip_Detail_View` hub for a specific Trip. Used by the
+ * `Active_Trip_Shortcut` (task 17.7) to open the User's active Trip directly
+ * from a surface outside the Trips tab (R19.2) or after a selection from its
+ * chooser (R19.5), and available to any other non-Trips surface that needs to
+ * deep-link into a single Trip.
+ *
+ * Returns `true` once the dispatch is issued, or `false` when the navigation
+ * container is not ready yet (the caller should retry once the app reaches a
+ * foreground-interactive state).
+ */
+export function navigateToTripDetail(params: { readonly tripId: string }): boolean {
+  if (!navigationRef.isReady()) {
+    return false;
+  }
+  navigationRef.navigate('MainTabs', {
+    screen: 'Trips',
+    params: {
+      screen: 'TripDetail',
+      params,
+    },
+  });
+  return true;
+}
+
+/**
+ * Navigate to the `Trips_List_Screen`, the fallback target when a tapped Trip
+ * notification's referenced Trip / Trip_Invite / Rode_With_Tag no longer exists
+ * or the User is no longer a Trip_Member (R18.5), and the fallback for the
+ * `Active_Trip_Shortcut` when its target Trip is no longer `active` or the User
+ * is no longer a Trip_Member (R19.6). The "no longer available" message is
+ * surfaced by the Trips_List_Screen (via the shared Trips-list notice); this
+ * helper only performs the navigation.
+ *
+ * Returns `true` once the dispatch is issued, or `false` when the navigation
+ * container is not ready yet (the caller should retry within the
+ * foreground-navigation window).
+ */
+export function navigateToTripsList(): boolean {
+  if (!navigationRef.isReady()) {
+    return false;
+  }
+  navigationRef.navigate('MainTabs', {
+    screen: 'Trips',
+    params: {
+      screen: 'TripsList',
+    },
+  });
+  return true;
+}

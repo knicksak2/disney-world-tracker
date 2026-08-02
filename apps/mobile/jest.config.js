@@ -30,7 +30,7 @@ module.exports = {
   // unsettled promises (we do not have any).
   forceExit: true,
   transformIgnorePatterns: [
-    'node_modules/(?!((jest-)?react-native|@react-native(-community)?|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-clone-referenced-element|@react-navigation/.*|@unimodules/.*|unimodules|sentry-expo|native-base|react-native-svg|@dwt/shared))',
+    'node_modules/(?!((jest-)?react-native|@react-native(-community)?|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-clone-referenced-element|@react-navigation/.*|@unimodules/.*|unimodules|sentry-expo|native-base|react-native-svg|react-native-calendars|react-native-swipe-gestures|@dwt/shared))',
   ],
   testPathIgnorePatterns: ['/node_modules/', '/android/', '/ios/'],
   moduleNameMapper: {

@@ -1,0 +1,56 @@
+<svg width="150" height="150" viewBox="0 0 150 150" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Polished Silver Metal -->
+    <linearGradient id="silverMetal" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#f4f6fb"/><stop offset="50%" style="stop-color:#c2c9d6"/><stop offset="100%" style="stop-color:#7d8598"/>
+    </linearGradient>
+    <!-- Sunset Festival Sky -->
+    <linearGradient id="festivalSky" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#1a237e"/><stop offset="100%" style="stop-color:#ad1457"/>
+    </linearGradient>
+    <linearGradient id="gloss" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:white;stop-opacity:0.4"/><stop offset="100%" style="stop-color:white;stop-opacity:0"/>
+    </linearGradient>
+    <filter id="shadow"><feDropShadow dx="0" dy="4" stdDeviation="3" flood-opacity="0.5"/></filter>
+  </defs>
+
+  <g filter="url(#shadow)">
+    <!-- Hexagon Frame -->
+    <path d="M75 5 L135 35 L135 115 L75 145 L15 115 L15 35 Z" fill="url(#silverMetal)" />
+    <!-- Recessed Enamel Sky -->
+    <path d="M75 14 L127 40 L127 110 L75 136 L23 110 L23 40 Z" fill="url(#festivalSky)" />
+
+    <!-- THE GEOSPHERE (Background Element - Raised Silver) -->
+    <g transform="translate(75, 55)">
+      <circle cx="0" cy="0" r="35" fill="url(#silverMetal)" stroke="#7d8598" stroke-width="0.5" />
+      <!-- Etched pattern -->
+      <path d="M-35 0 L35 0 M0 -35 L0 35 M-25 -25 L25 25 M25 -25 L-25 25" stroke="white" stroke-width="0.5" opacity="0.3" />
+    </g>
+
+    <!-- THE FOREGROUND CLUSTER (Unified Enamel Group) -->
+
+    <!-- Serving Ledge/Plate (Silver) -->
+    <path d="M35 95 L115 95 Q115 105 75 105 Q35 105 35 95 Z" fill="url(#silverMetal)" />
+
+    <!-- Wine Glass (Gold Enamel) -->
+    <g transform="translate(55, 85)">
+      <path d="M-8 -20 L8 -20 L6 -5 Q0 0 -6 -5 Z" fill="#FFD700" stroke="#8f6410" stroke-width="1" />
+      <rect x="-1" y="-5" width="2" height="15" fill="#8f6410" />
+      <rect x="-6" y="8" width="12" height="2" fill="#8f6410" />
+    </g>
+
+    <!-- Pretzel (Bronze Enamel) -->
+    <path d="M85 80 C75 80 70 90 80 95 C90 100 100 90 95 85 C105 85 110 75 100 70 C90 65 85 75 85 80 Z" fill="#CD7F32" stroke="#5d4037" stroke-width="1.5" />
+    <!-- Salt -->
+    <circle cx="85" cy="85" r="1" fill="white" />
+    <circle cx="95" cy="80" r="1" fill="white" />
+    <circle cx="100" cy="85" r="1" fill="white" />
+
+    <!-- Gloss -->
+    <path d="M23 40 Q75 15 127 40 L127 70 Q75 55 23 70 Z" fill="url(#gloss)" />
+
+    <!-- Banner -->
+    <rect x="40" y="115" width="70" height="15" rx="7.5" fill="url(#silverMetal)" />
+    <text x="75" y="126" font-family="Arial, sans-serif" font-size="7" fill="#263238" text-anchor="middle" font-weight="900">EPCOT FOODIE</text>
+  </g>
+</svg>

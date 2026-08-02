@@ -106,6 +106,7 @@ import {
 } from './destinations';
 import { priceTierListTag, resortAreaLabel } from './infoTags';
 import { useCardFocusRestore, useResultCountAnnouncement } from './catalogFocus';
+import { useCompletedExperiences } from './useCompletedExperiences';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -253,6 +254,11 @@ export default function CatalogScreen({ navigation }: Props): JSX.Element {
     navigation.navigate('ExperienceDetail', { experienceId: experience.id });
   };
 
+  // The signed-in User's completed-Experience id set, used to badge visited
+  // search-result rows. Fails soft to an empty set, so results render unmarked
+  // on error or while loading.
+  const completedIds = useCompletedExperiences();
+
   // R12.7: track a ref per Destination card and the last-activated Destination
   // so focus is restored to the activating card when the Catalog_Home regains
   // focus after returning from a Destination_Screen.
@@ -344,6 +350,7 @@ export default function CatalogScreen({ navigation }: Props): JSX.Element {
         <SearchResultsBody
           query={searchQuery}
           onSelectExperience={onSelectExperience}
+          completedIds={completedIds}
         />
       ) : (
         <GridBody
@@ -508,6 +515,7 @@ function DestinationImage({
 function SearchResultsBody({
   query,
   onSelectExperience,
+  completedIds,
 }: {
   readonly query: {
     readonly isLoading: boolean;
@@ -516,6 +524,7 @@ function SearchResultsBody({
     readonly data: CatalogListResponse | undefined;
   };
   readonly onSelectExperience: (experience: ExperienceDTO) => void;
+  readonly completedIds: ReadonlySet<string>;
 }): JSX.Element {
   const results = query.data?.experiences ?? [];
 
@@ -570,6 +579,7 @@ function SearchResultsBody({
         <SearchResultRow
           experience={item}
           onPress={() => onSelectExperience(item)}
+          completed={completedIds.has(item.id)}
         />
       )}
     />
@@ -579,6 +589,12 @@ function SearchResultsBody({
 interface SearchResultRowProps {
   readonly experience: ExperienceDTO;
   readonly onPress: () => void;
+  /**
+   * Whether the signed-in User has marked this Experience as visited. When
+   * true the row shows a "Visited" completion badge so search results convey
+   * completion at a glance without opening the detail screen.
+   */
+  readonly completed?: boolean;
 }
 
 /**
@@ -591,6 +607,7 @@ interface SearchResultRowProps {
 function SearchResultRow({
   experience,
   onPress,
+  completed = false,
 }: SearchResultRowProps): JSX.Element {
   const visual = theme.categoryVisual[experience.category];
   // `park` is `null` for a Resort-area Experience; fall back to the brand accent
@@ -626,10 +643,15 @@ function SearchResultRow({
       testID={`catalog-search-row-${experience.id}`}
     >
       <View style={styles.rowInner}>
-        <ExperienceThumb
-          imageUrl={experience.imageUrl ?? null}
-          category={experience.category}
-        />
+        <View style={styles.thumbWrap}>
+          <ExperienceThumb
+            imageUrl={experience.imageUrl ?? null}
+            category={experience.category}
+          />
+          {completed ? (
+            <VisitedOverlay testID={`catalog-search-visited-${experience.id}`} />
+          ) : null}
+        </View>
         <View style={styles.rowText}>
           <Text style={styles.rowName} numberOfLines={2}>
             {experience.name}
@@ -706,6 +728,27 @@ function ExperienceThumb({
         size={22}
         color={theme.color.textOnPrimary}
       />
+    </View>
+  );
+}
+
+/**
+ * A completion marker overlaid on the corner of a search-result thumbnail: a
+ * solid green disc with a white checkmark and a surface-colored ring so it
+ * reads clearly against any image. Placing it on the thumbnail — rather than
+ * inline with the category / price Info_Tags — keeps the "visited" signal
+ * visually distinct from the tag pills so it is easy to spot when scanning the
+ * results. Exposed as a single accessible "Visited" element for screen readers.
+ */
+function VisitedOverlay({ testID }: { readonly testID: string }): JSX.Element {
+  return (
+    <View
+      style={styles.visitedOverlay}
+      testID={testID}
+      accessible
+      accessibilityLabel="Visited"
+    >
+      <Ionicons name="checkmark" size={14} color={theme.color.textOnPrimary} />
     </View>
   );
 }
@@ -884,16 +927,32 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  thumbWrap: {
+    position: 'relative',
+    marginRight: theme.spacing.md,
+  },
   thumb: {
     width: 56,
     height: 56,
     borderRadius: theme.radius.md,
-    marginRight: theme.spacing.md,
     backgroundColor: theme.color.surfaceAlt,
   },
   thumbPlaceholder: {
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  visitedOverlay: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: theme.color.success,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: theme.color.surface,
   },
   rowText: {
     flex: 1,
@@ -911,6 +970,7 @@ const styles = StyleSheet.create({
   rowBadges: {
     flexDirection: 'row',
     alignSelf: 'flex-start',
+    flexWrap: 'wrap',
     gap: theme.spacing.sm,
     marginTop: theme.spacing.xs,
   },

@@ -1,0 +1,54 @@
+<svg width="150" height="150" viewBox="0 0 150 150" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="platinumMetal" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ffffff" />
+      <stop offset="50%" style="stop-color:#b4b4b4" />
+      <stop offset="100%" style="stop-color:#707070" />
+    </linearGradient>
+    <linearGradient id="dreamEnamel" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#9575CD" />
+      <stop offset="50%" style="stop-color:#E1F5FE" />
+      <stop offset="100%" style="stop-color:#673AB7" />
+    </linearGradient>
+    <filter id="shadow"><feDropShadow dx="0" dy="4" stdDeviation="3" flood-opacity="0.5"/></filter>
+  </defs>
+  <g filter="url(#shadow)">
+    <!-- Ornate Frame -->
+    <circle cx="75" cy="75" r="72" fill="url(#platinumMetal)" />
+    <circle cx="75" cy="75" r="65" fill="url(#dreamEnamel)" />
+
+    <!-- Swirling Magic (Etched-style subtle lines) -->
+    <path d="M25 75 Q50 50 75 75 T125 75" fill="none" stroke="white" stroke-width="0.5" opacity="0.3" />
+    <path d="M25 85 Q50 60 75 85 T125 85" fill="none" stroke="white" stroke-width="0.5" opacity="0.2" />
+
+    <!-- Detailed Sorcerer Hat -->
+    <g transform="translate(75, 75)">
+       <!-- Hat Body -->
+       <path d="M0 -45 L25 15 L-25 15 Z" fill="#1a237e" stroke="white" stroke-width="1.5"/>
+       <ellipse cx="0" cy="15" rx="35" ry="8" fill="#1a237e" stroke="white" stroke-width="1.5"/>
+
+       <!-- Hat Decals (Crescent & Stars) -->
+       <path d="M-8 -25 A8 8 0 1 1 -8 -10" fill="none" stroke="#E1F5FE" stroke-width="2" />
+       <path d="M8 -15 L10 -12 L13 -15 L10 -18 Z" fill="#E1F5FE" />
+       <circle cx="5" cy="-30" r="2" fill="white" />
+       <circle cx="0" cy="-10" r="1.5" fill="white" />
+    </g>
+
+    <!-- Star Field (Variety of sizes and glows) -->
+    <g fill="white">
+      <path d="M35 35 L38 38 L41 35 L38 32 Z" /> <!-- Large star -->
+      <path d="M115 45 L117 47 L119 45 L117 43 Z" /> <!-- Mid star -->
+      <circle cx="45" cy="25" r="1.5" />
+      <circle cx="105" cy="25" r="1" />
+      <circle cx="120" cy="90" r="2" />
+      <circle cx="30" cy="100" r="1" />
+    </g>
+
+    <!-- Gloss Overlay -->
+    <ellipse cx="75" cy="45" rx="55" ry="30" fill="white" opacity="0.2" transform="rotate(-15 75 45)" />
+
+    <!-- Premium Plate -->
+    <path d="M40 120 L110 120 L115 135 L35 135 Z" fill="url(#platinumMetal)" />
+    <text x="75" y="130" font-family="Arial, sans-serif" font-size="8" fill="#1a237e" text-anchor="middle" font-weight="900">THE DREAM</text>
+  </g>
+</svg>

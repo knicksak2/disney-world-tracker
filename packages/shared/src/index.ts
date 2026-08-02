@@ -19,6 +19,7 @@ export {
   PARKS,
   SHARE_PAYLOAD_KINDS,
   SHARE_REACTION_VALUES,
+  TRIP_REACTION_VALUES,
 } from './enums.js';
 export type {
   ExperienceCategory,
@@ -26,6 +27,7 @@ export type {
   Park,
   SharePayloadKind,
   ShareReactionValue,
+  TripReactionValue,
 } from './enums.js';
 
 // Avatar preset catalog (allowlist of bundled illustration ids).
@@ -127,6 +129,7 @@ export {
   parkSchema,
   sharePayloadKindSchema,
   shareReactionValueSchema,
+  tripReactionValueSchema,
   completionPercentSchema,
   // DTO schemas
   userSchema,
@@ -187,3 +190,66 @@ export type {
   UserSearchInput,
   NotificationPreferenceInput,
 } from './schemas/index.js';
+
+// Trips domain: schemas + input types + DTOs.
+export {
+  // primitives
+  tripNameSchema,
+  tripDescriptionSchema,
+  tripCalendarDateSchema,
+  tripCommentBodySchema,
+  tripResortIdsSchema,
+  TRIP_RESORT_LIMIT,
+  // input schemas
+  tripCreateSchema,
+  tripEditSchema,
+  plannedItemAddSchema,
+  tripLogEntryCreateSchema,
+  rodeWithConfirmSchema,
+  tripReactionInputSchema,
+  tripCommentInputSchema,
+} from './trips.js';
+export type {
+  // value types
+  TripStatus,
+  TripRole,
+  TripInviteState,
+  RodeWithTagState,
+  TripFeedTargetType,
+  // input types
+  TripCreateInput,
+  TripEditInput,
+  PlannedItemAddInput,
+  TripLogEntryCreateInput,
+  RodeWithConfirmInput,
+  TripReactionInput,
+  TripCommentInput,
+  // DTOs
+  TripDTO,
+  TripResortDTO,
+  TripMemberDTO,
+  TripInviteDTO,
+  TripIncomingInviteDTO,
+  TripPendingInviteDTO,
+  PlannedItemDTO,
+  TripLogEntryDTO,
+  TripFeedItemDTO,
+  TripReactionSummary,
+  TripCommentDTO,
+  TripSummaryDTO,
+} from './trips.js';
+
+// Planned List Completion Sync: pure, I/O-free derivation core shared by the
+// mobile Planned_List presentation and the server Trip_Summary planned counts,
+// so the two cannot drift.
+export {
+  completedExperienceIdsFromFeed,
+  derivePlannedListPresentation,
+  derivePlannedCounts,
+} from './plannedCompletion.js';
+export type {
+  PlannedItemCompletionState,
+  PlannedItemView,
+  PlannedListProgress,
+  PlannedListPresentation,
+} from './plannedCompletion.js';

@@ -226,7 +226,15 @@ export async function apiRequest<T = unknown>(
     return null as T;
   }
 
-  return (await response.json()) as T;
+  // Some successful endpoints (e.g. a `201` reaction add) reply with an empty
+  // body. Read the body as text first and only parse when there is something to
+  // parse, so an empty 2xx response resolves to `null` instead of throwing a
+  // JSON parse error that would surface to the caller as a spurious failure.
+  const text = await response.text();
+  if (text.length === 0) {
+    return null as T;
+  }
+  return JSON.parse(text) as T;
 }
 
 /**

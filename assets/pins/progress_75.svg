@@ -1,0 +1,32 @@
+<svg width="150" height="150" viewBox="0 0 150 150" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="goldMetal" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#fff2c2" />
+      <stop offset="50%" style="stop-color:#e8b53d" />
+      <stop offset="100%" style="stop-color:#8a5e0c" />
+    </linearGradient>
+    <linearGradient id="enamelPurple" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#4527a0" />
+      <stop offset="100%" style="stop-color:#311b92" />
+    </linearGradient>
+    <linearGradient id="glossSheen" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:white;stop-opacity:0.4" />
+      <stop offset="100%" style="stop-color:white;stop-opacity:0" />
+    </linearGradient>
+    <filter id="pinShadow"><feDropShadow dx="0" dy="4" stdDeviation="3" flood-opacity="0.5"/></filter>
+  </defs>
+  <g filter="url(#pinShadow)">
+    <path d="M75 5 L125 15 L125 135 L75 145 L25 135 L25 15 Z" fill="url(#goldMetal)" />
+    <path d="M75 12 L118 20 L118 130 L75 138 L32 130 L32 20 Z" fill="url(#enamelPurple)" />
+    <g transform="translate(75, 70) rotate(45)" fill="url(#goldMetal)">
+      <circle cx="0" cy="-35" r="18" fill="none" stroke="url(#goldMetal)" stroke-width="6"/>
+      <circle cx="0" cy="-35" r="8" fill="url(#goldMetal)"/>
+      <rect x="-4" y="-20" width="8" height="60" rx="1"/>
+      <rect x="4" y="20" width="12" height="6" rx="1"/>
+      <rect x="4" y="32" width="12" height="6" rx="1"/>
+    </g>
+    <path d="M32 20 Q75 10 118 20 L118 60 Q75 45 32 60 Z" fill="url(#glossSheen)" />
+    <rect x="45" y="115" width="60" height="15" rx="7.5" fill="url(#goldMetal)" />
+    <text x="75" y="126" font-family="Arial, sans-serif" font-size="7" fill="#3e2723" text-anchor="middle" font-weight="900">THE KEY</text>
+  </g>
+</svg>

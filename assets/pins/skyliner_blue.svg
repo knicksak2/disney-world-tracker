@@ -1,0 +1,33 @@
+<svg width="150" height="150" viewBox="0 0 150 150" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="silverMetal" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#f4f6fb" />
+      <stop offset="50%" style="stop-color:#c2c9d6" />
+      <stop offset="100%" style="stop-color:#7d8598" />
+    </linearGradient>
+    <linearGradient id="enamelBlue" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#03a9f4" />
+      <stop offset="100%" style="stop-color:#0288d1" />
+    </linearGradient>
+    <linearGradient id="glossSheen" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:white;stop-opacity:0.4" />
+      <stop offset="100%" style="stop-color:white;stop-opacity:0" />
+    </linearGradient>
+    <filter id="pinShadow"><feDropShadow dx="0" dy="4" stdDeviation="3" flood-opacity="0.5"/></filter>
+  </defs>
+  <g filter="url(#pinShadow)">
+    <!-- Gondola Shape Frame -->
+    <path d="M25 20 L125 20 L135 110 L15 110 Z" fill="url(#silverMetal)" />
+    <!-- Recessed Enamel Body -->
+    <path d="M32 28 L118 28 L125 102 L25 102 Z" fill="url(#enamelBlue)" />
+    <!-- Window (Raised Silver) -->
+    <rect x="40" y="40" width="70" height="30" rx="4" fill="url(#silverMetal)" opacity="0.3" stroke="white" stroke-width="1"/>
+    <!-- Cables (Silver) -->
+    <line x1="75" y1="20" x2="75" y2="5" stroke="url(#silverMetal)" stroke-width="5" />
+    <!-- Gloss -->
+    <path d="M32 28 Q75 15 118 28 L125 60 Q75 45 25 60 Z" fill="url(#glossSheen)" />
+    <!-- Banner -->
+    <rect x="40" y="110" width="70" height="15" rx="7.5" fill="url(#silverMetal)" />
+    <text x="75" y="121" font-family="Arial, sans-serif" font-size="7" fill="#37474f" text-anchor="middle" font-weight="900">SKYLINER BLUE</text>
+  </g>
+</svg>

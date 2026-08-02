@@ -101,6 +101,12 @@ import type { ShareDeliveredNotice } from './services/sharing/routes.js';
 import { createStatsRepo } from './services/stats/repo.js';
 import { buildCuratedProgressStats } from './services/stats/curatedShare.js';
 
+import { createTripRepo } from './services/trips/repo.js';
+import type {
+  RodeWithTagCreatedNotice,
+  TripInviteCreatedNotice,
+} from './services/trips/events.js';
+
 import { createPushRepo } from './services/push/repo.js';
 import { createNotificationPreferenceRepo } from './services/push/preferenceRepo.js';
 import { createReactionsRepo } from './services/reactions/repo.js';
@@ -174,6 +180,16 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
   const sharingRepo = createSharingRepo(pool);
   const statsRepo = createStatsRepo(pool);
 
+  // The Trip_Service never holds Trip-local copies of Completions or Ratings:
+  // it delegates those canonical writes to the existing Tracking_Service repos
+  // so the single-source-of-truth and the existing `RatingChanged` propagation
+  // are reused unchanged (design decision 2; R12.1). Both repos are already
+  // built above and shared with the Tracking route wiring.
+  const tripRepo = createTripRepo(pool, {
+    completions: completionRepo,
+    ratings: ratingRepo,
+  });
+
   // --- Phase 2 sharing services (push / preferences / reactions / notify) ---
   // All four repos are pool-backed and constructor-injected like every other
   // service. The Push_Registration repo and the preference repo also back the
@@ -241,6 +257,55 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
         notificationLogger.error(
           { err, requestId: event.requestId },
           'FriendRequestReceived dispatch failed',
+        );
+      });
+  };
+
+  /**
+   * Background `TripInviteCreated` dispatch, mirroring `emitFriendRequestReceived`.
+   *
+   * Invoked by the Trip_Service route AFTER a `pending` Trip_Invite commits so
+   * the invited User gets an in-App + push notification whose deep-link target
+   * opens the invite (R6.6, R6.7). The port returns `void`, so the route handler
+   * cannot await it — `POST /trips/:id/invites` returns `201` immediately
+   * regardless of push outcome. `handleTripInviteCreated` already swallows every
+   * internal failure (it never rejects); the trailing `.catch` is defensive
+   * against an unexpected rejection surfacing as an unhandled promise rejection.
+   * `TripInviteCreatedNotice` is structurally identical to the service's
+   * `TripInviteCreatedEvent`, so it is handed across directly.
+   */
+  const emitTripInviteCreated = (event: TripInviteCreatedNotice): void => {
+    void notificationService
+      .handleTripInviteCreated(event)
+      .catch((err: unknown) => {
+        notificationLogger.error(
+          { err, inviteId: event.inviteId },
+          'TripInviteCreated dispatch failed',
+        );
+      });
+  };
+
+  /**
+   * Background `RodeWithTagCreated` dispatch, mirroring `emitTripInviteCreated`.
+   *
+   * Invoked by the Trip_Service route once per `pending` Rode_With_Tag created
+   * by a logged Completion, so each Tagged_Member gets an in-App + push
+   * notification whose deep-link target opens the tag's confirm/decline view
+   * (R10.8). The port returns `void`, so the route handler cannot await it —
+   * `POST /trips/:id/log-entries` returns `201` immediately regardless of push
+   * outcome. `handleRodeWithTagCreated` already swallows every internal failure
+   * (it never rejects); the trailing `.catch` is defensive against an unexpected
+   * rejection surfacing as an unhandled promise rejection.
+   * `RodeWithTagCreatedNotice` is structurally identical to the service's
+   * `RodeWithTagCreatedEvent`, so it is handed across directly.
+   */
+  const emitRodeWithTagCreated = (event: RodeWithTagCreatedNotice): void => {
+    void notificationService
+      .handleRodeWithTagCreated(event)
+      .catch((err: unknown) => {
+        notificationLogger.error(
+          { err, tagId: event.tagId },
+          'RodeWithTagCreated dispatch failed',
         );
       });
   };
@@ -426,6 +491,17 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
         });
         return buildCuratedProgressStats(snapshot);
       },
+    },
+    trips: {
+      repo: tripRepo,
+      requireSession: sessionMiddleware,
+      pool,
+      // Fire-and-forget push to the invited User after a `pending` invite
+      // commits (R6.6, R6.7), and one push per `pending` rode-with tag after a
+      // Completion is logged (R10.8). Both dispatch ports return void and own
+      // their error handling, so the request is never blocked or failed by push.
+      emitTripInviteCreated,
+      emitRodeWithTagCreated,
     },
     push: { repo: pushRepo, requireSession: sessionMiddleware },
     notificationPreferences: {
