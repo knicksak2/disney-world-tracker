@@ -81,6 +81,10 @@ import {
   tripRoutes,
   type TripRoutesOptions,
 } from './services/trips/routes.js';
+import {
+  intelligenceRoutes,
+  type IntelligenceRoutesOptions,
+} from './services/intelligence/routes.js';
 import type { RatingChangedEvent } from './services/aggregate/ratingChangedQueue.js';
 
 /**
@@ -172,6 +176,11 @@ export interface BuildServerServices {
    * the routes it needs without satisfying the Trip repo contract.
    */
   readonly trips?: TripRoutesOptions;
+  /**
+   * Intelligence_Service routes (task 5). Wires the crowd calendar reads and 
+   * the internal sampling cron endpoint (R3, R6, R11).
+   */
+  readonly intelligence?: IntelligenceRoutesOptions;
   /**
    * Tracking_Service route options. Each tracking sub-domain
    * (`completion`, `rating`, `note`) is opt-in so a focused unit-test
@@ -430,6 +439,10 @@ export function buildServer(
 
   if (services.trips !== undefined) {
     void app.register(tripRoutes(services.trips));
+  }
+
+  if (services.intelligence !== undefined) {
+    void app.register(intelligenceRoutes(services.intelligence));
   }
 
   if (services.tracking?.completion !== undefined) {

@@ -51,3 +51,9 @@ services:
       # 256-bit session signing secret — generated once by Render and kept stable.
       - key: SESSION_SECRET
         generateValue: true
+      # Shared secret the keep-alive cron sends (X-Cron-Secret header) to authenticate
+      # POST /internal/sampling/run. REQUIRED — the config loader (and therefore the build's
+      # migrate step and app startup) fails fast without it. Set the same value here and in
+      # the external cron's request header.
+      - key: SAMPLING_CRON_SECRET
+        sync: false

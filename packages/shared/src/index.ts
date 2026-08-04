@@ -91,6 +91,9 @@ export type {
   BoardingGroupState,
   LiveDetailDTO,
   LiveDetailResponseDTO,
+  CrowdCalendarDayDTO,
+  WaitSnapshot,
+  WaitInsightsDTO,
 } from './dto/index.js';
 
 // Disney source-resilience transport-facing types (closed-set value tuples).
@@ -176,6 +179,13 @@ export {
   lightningLaneStateSchema,
   boardingGroupStateSchema,
 } from './schemas/index.js';
+
+export {
+  crowdCalendarDaySchema,
+  waitSnapshotSchema,
+  waitInsightsSchema,
+} from './schemas/index.js';
+
 export type {
   RegisterInput,
   LoginInput,

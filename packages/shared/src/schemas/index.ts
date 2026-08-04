@@ -98,3 +98,9 @@ export {
   lightningLaneStateSchema,
   boardingGroupStateSchema,
 } from './LiveDetail.js';
+
+export {
+  crowdCalendarDaySchema,
+  waitSnapshotSchema,
+  waitInsightsSchema,
+} from './Intelligence.js';

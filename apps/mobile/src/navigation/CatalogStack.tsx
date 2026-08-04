@@ -23,6 +23,10 @@ export type CatalogStackParamList = {
    * the screen and its navigators type-check.
    */
   DestinationScreen: { destination: DestinationId };
+  /**
+   * Month calendar for crowd levels, best-day picks, and day-detail view.
+   */
+  CrowdCalendar: undefined;
 };
 
 const Stack = createNativeStackNavigator<CatalogStackParamList>();
@@ -38,6 +42,11 @@ export default function CatalogStack(): JSX.Element {
       <Stack.Screen
         name="DestinationScreen"
         component={DestinationScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="CrowdCalendar"
+        component={require('../screens/catalog/CrowdCalendarScreen').default}
         options={{ headerShown: false }}
       />
     </Stack.Navigator>

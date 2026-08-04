@@ -1,0 +1,137 @@
+import { createLogger } from '../../logger.js';
+import type { IntelligenceRepo } from './IntelligenceRepo.js';
+import { updateAccuracy } from './calibration.js';
+import { wdwToday } from '../trips/wdwClock.js';
+import type { PredictionService } from './predictionService.js';
+import type { Park } from '@dwt/shared';
+
+/** The four WDW theme parks that have crowd indices. */
+const WDW_THEME_PARKS: readonly Park[] = [
+  'Magic Kingdom', 'EPCOT', 'Hollywood Studios', 'Animal Kingdom'
+] as const;
+
+export interface DerivedStatsServiceDeps {
+  repo: IntelligenceRepo;
+  predictionService: PredictionService;
+  logger?: any;
+  now?: () => Date;
+}
+
+export interface DerivedStatsService {
+  runDailyRecompute(): Promise<void>;
+}
+
+export function createDerivedStatsService(deps: DerivedStatsServiceDeps): DerivedStatsService {
+  const logger = deps.logger ?? createLogger();
+  const { repo } = deps;
+  const clock = deps.now ?? (() => new Date());
+  
+  return {
+    async runDailyRecompute(): Promise<void> {
+      const now = clock();
+      const todayDateStr = wdwToday(now);
+      const yesterday = new Date(new Date(`${todayDateStr}T12:00:00-04:00`).getTime() - 86400000);
+      
+      logger.info('Starting daily derived stats recompute');
+      
+      try {
+        await reconcileForecasts(yesterday);
+        await captureForecasts(now);
+        // Weather sensitivity, event impact, and cascade are stubbed (Task 4.5 partial).
+        // computeWeatherSensitivities — not yet implemented (learned from wait×weather correlation)
+        // computeEventImpacts — not yet implemented (learned from showtimes×wait correlation)
+        // computeRideCascades — not yet implemented (learned from downtime×neighbor-wait correlation)
+        await recomputePercentiles();
+        logger.info('Completed daily derived stats recompute');
+      } catch (err) {
+        logger.error({ err }, 'Failed daily derived stats recompute');
+      }
+    }
+  };
+
+  async function reconcileForecasts(dateToReconcile: Date) {
+    for (const parkKey of WDW_THEME_PARKS) {
+      const observedRows = await repo.getParkCrowdIndices(parkKey, [dateToReconcile]);
+      if (observedRows.length === 0) continue;
+      
+      const observedIndex = observedRows[0]!.crowd_index;
+      
+      const logs = await repo.getForecastLogsToReconcile(parkKey, dateToReconcile);
+      if (logs.length === 0) continue;
+      
+      const accuracies = await repo.getForecastAccuracies(parkKey);
+      
+      for (const log of logs) {
+        log.observed_index = observedIndex;
+        log.error = log.forecast_index - observedIndex; // Bias: forecast - observed
+        
+        let acc = accuracies.find(a => a.lead_days === log.lead_days) || {
+          park: parkKey,
+          lead_days: log.lead_days,
+          mae: 0,
+          bias: 0,
+          sample_count: 0
+        };
+        
+        const weight = 2 / (Math.min(acc.sample_count, 100) + 2);
+        const inputState = { mae: acc.mae, bias: acc.bias, sampleCount: acc.sample_count };
+        const updated = updateAccuracy(inputState, log.error, weight);
+        
+        acc.mae = updated.mae;
+        acc.bias = updated.bias;
+        acc.sample_count = updated.sampleCount;
+        
+        await repo.upsertForecastAccuracies([acc]);
+      }
+      
+      await repo.upsertForecastLogs(logs);
+    }
+  }
+
+  async function captureForecasts(now: Date) {
+    const todayStr = wdwToday(now);
+    const todayEastern = new Date(`${todayStr}T12:00:00-04:00`);
+    const leadDays = [1, 3, 7, 14, 30];
+    
+    for (const parkKey of WDW_THEME_PARKS) {
+      for (const lead of leadDays) {
+        const targetDate = new Date(todayEastern.getTime() + lead * 86400000);
+        try {
+          // Use the raw continuous forecast directly — no display round-trip
+          const rawForecast = await deps.predictionService.getRawForecast(parkKey, targetDate);
+          await repo.upsertForecastLogs([{
+            park: parkKey,
+            date: targetDate,
+            lead_days: lead,
+            forecast_index: rawForecast,
+            forecasted_at: now,
+            observed_index: null,
+            error: null
+          }]);
+        } catch (_err) {
+          // ignore failures for specific leads
+        }
+      }
+    }
+  }
+
+  async function recomputePercentiles() {
+    const thirtyDaysAgo = new Date(clock().getTime() - 30 * 24 * 60 * 60 * 1000);
+    const percentiles = await repo.getRecentPercentiles(thirtyDaysAgo);
+    
+    const exps = await repo.getExperiencesWithUpstreamIds();
+    const expIds = exps.map(e => e.id);
+    const currentShapes = await repo.getRideShapes(expIds);
+    
+    const updatedShapes = [];
+    for (const s of currentShapes) {
+      const p = percentiles.find(p => p.experience_id === s.experience_id && p.day_of_week === s.day_of_week && p.hour === s.hour);
+      if (p) {
+        s.p50_wait = p.p50_wait;
+        s.p90_wait = p.p90_wait;
+        updatedShapes.push(s);
+      }
+    }
+    await repo.upsertRideShapes(updatedShapes);
+  }
+}

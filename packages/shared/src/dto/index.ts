@@ -50,6 +50,12 @@ export type {
   LiveDetailResponseDTO,
 } from './LiveDetail.js';
 
+export type {
+  CrowdCalendarDayDTO,
+  WaitSnapshot,
+  WaitInsightsDTO,
+} from './Intelligence.js';
+
 export {
   SYNC_RUN_OUTCOMES,
   DISNEY_TARGETS,

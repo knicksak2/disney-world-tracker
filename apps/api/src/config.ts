@@ -50,6 +50,11 @@ const envSchema = z.object({
     .string()
     .min(32, 'SESSION_SECRET must be at least 32 characters'),
 
+  // Shared secret for the internal sampling cron (R3).
+  SAMPLING_CRON_SECRET: z
+    .string()
+    .min(1, 'SAMPLING_CRON_SECRET is required and must not be empty'),
+
   // Upstream catalog source. Defaults to the public ThemeParks.wiki v1 base
   // URL per requirements glossary; overridable for tests and local fixtures.
   // Validated as a well-formed absolute URL so a malformed override halts
@@ -119,6 +124,9 @@ const envSchema = z.object({
     .int()
     .min(86_400_000, 'CATALOG_SYNC_INTERVAL_MS must be at least 24h (86400000ms)')
     .default(86_400_000),
+
+  // Directory for historical crowd seed HTML files (Task 7.2)
+  CROWD_SEED_DIR: z.string().default('seed-data/crowd/'),
 });
 
 type EnvShape = z.infer<typeof envSchema>;
@@ -147,6 +155,10 @@ export interface AppConfig {
   };
   readonly session: {
     readonly secret: string;
+  };
+  readonly intelligence: {
+    readonly samplingCronSecret: string;
+    readonly crowdSeedDir: string;
   };
   readonly themeparks: {
     readonly baseUrl: string;
@@ -234,6 +246,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     database: { url: data.DATABASE_URL },
     redis: { url: data.REDIS_URL },
     session: { secret: data.SESSION_SECRET },
+    intelligence: { 
+      samplingCronSecret: data.SAMPLING_CRON_SECRET,
+      crowdSeedDir: data.CROWD_SEED_DIR,
+    },
     themeparks: { baseUrl: data.THEMEPARKS_BASE_URL },
     disney: {
       syncGateway: { baseUrl: data.DISNEY_SYNC_GATEWAY_BASE_URL },

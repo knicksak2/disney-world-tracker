@@ -85,6 +85,7 @@ import { formatCommunityAggregate } from './aggregateFormat';
 import MenuSummaryCard from './MenuSummaryCard';
 import YourVisitCard from './YourVisitCard';
 import AboutSection from './AboutSection';
+import WaitInsightsSection from './WaitInsightsSection';
 import { buildTagGroups } from './infoTags';
 import type { TagGroup } from './infoTags';
 import type { DirectionsPlatform } from './directions';
@@ -471,6 +472,14 @@ export default function ExperienceDetailScreen(): JSX.Element {
           category={experience.category}
           query={liveQ}
         />
+
+        {/* ------------------------------------------------------------ */}
+        {/* Wait Insights (Task 6) - "When to ride"                      */}
+        {/* Rendered only for attractions.                               */}
+        {/* ------------------------------------------------------------ */}
+        {experience.category === 'Ride' && (
+          <WaitInsightsSection experienceId={experienceId} />
+        )}
 
         {/* ------------------------------------------------------------ */}
         {/* Menu_Summary_Card (R7.4, R8.7). Rendered only for a          */}

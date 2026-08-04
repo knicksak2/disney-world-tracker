@@ -78,6 +78,12 @@ function createSpyThemeParksClient(
       calls.push({ externalId, hadSignal: signal !== undefined });
       return response;
     },
+    async getEntitySchedule(
+      _externalId: string,
+      _signal?: AbortSignal,
+    ): Promise<any> {
+      return { schedule: [] };
+    },
   };
 }
 

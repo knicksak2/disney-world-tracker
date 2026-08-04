@@ -62,3 +62,9 @@ android/local.properties
 *.pid
 *.seed
 *.pid.lock
+
+# One-time seed inputs (scraped third-party HTML; read locally by seedCrowdIndex, not needed in git)
+apps/api/seed-data/
+
+# Stray tooling installer (codebase-memory-mcp), not part of this project
+/install.ps1

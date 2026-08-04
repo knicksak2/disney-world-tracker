@@ -70,6 +70,7 @@ function validBaseEnv(): NodeJS.ProcessEnv {
     SESSION_SECRET: 'a'.repeat(32),
     DISNEY_SYNC_GATEWAY_USERNAME: 'disney-user',
     DISNEY_SYNC_GATEWAY_PASSWORD: 'disney-pass',
+    SAMPLING_CRON_SECRET: 'test-cron-secret',
   };
 }
 

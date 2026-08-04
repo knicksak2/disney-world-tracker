@@ -82,6 +82,7 @@ function baseEnv(): NodeJS.ProcessEnv {
     DATABASE_URL: 'postgres://user:pass@localhost:5432/db',
     REDIS_URL: 'redis://localhost:6379',
     SESSION_SECRET: 'x'.repeat(32),
+    SAMPLING_CRON_SECRET: 'test-cron-secret',
   };
 }
 

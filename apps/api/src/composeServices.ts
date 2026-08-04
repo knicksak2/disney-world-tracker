@@ -117,6 +117,12 @@ import {
   createExperienceNameResolver,
 } from './services/notifications/index.js';
 
+import { IntelligenceRepo } from './services/intelligence/IntelligenceRepo.js';
+import { createWeatherClient } from './services/intelligence/weatherClient.js';
+import { createPredictionService } from './services/intelligence/predictionService.js';
+import { createDerivedStatsService } from './services/intelligence/derivedStatsService.js';
+import { createSamplingService } from './services/intelligence/samplingService.js';
+
 import { createLogger } from './logger.js';
 
 /**
@@ -399,6 +405,26 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
     freshnessMs: config.disney.menuFreshnessMs,
   });
 
+  // --- Intelligence Services ------------------------------------------
+  const intelligenceRepo = new IntelligenceRepo(pool);
+  const weatherClient = createWeatherClient();
+  const predictionService = createPredictionService({
+    repo: intelligenceRepo,
+    weatherClient,
+  });
+  const derivedStatsService = createDerivedStatsService({
+    repo: intelligenceRepo,
+    predictionService,
+  });
+  const samplingService = createSamplingService({
+    repo: intelligenceRepo,
+    liveClient: themeParksLiveClient,
+    catalogClient: createThemeParksClient({ baseUrl: config.themeparks.baseUrl }),
+    directory: themeParksDirectory,
+    weatherClient,
+    derivedStatsService,
+  });
+  
   // --- Auth wiring ----------------------------------------------------
   const lockout = createLockoutService(redis as never);
   const sessionMiddleware = createSessionMiddleware({
@@ -463,6 +489,11 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
       // (R11.2). Contacts only ThemeParks.wiki, never a Disney source
       // (R11.10, R12.3).
       getLiveDetail: (id) => liveService.getLiveDetail(id),
+    },
+    intelligence: {
+      samplingService,
+      predictionService,
+      requireSession: sessionMiddleware,
     },
     friends: {
       repo: friendsRepo,

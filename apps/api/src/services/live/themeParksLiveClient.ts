@@ -160,6 +160,34 @@ export interface ThemeParksLiveResponse {
   readonly liveData: readonly ThemeParksLiveEntry[];
 }
 
+export interface ThemeParksPurchase {
+  readonly id?: string;
+  readonly name?: string;
+  readonly type?: string;
+  readonly price?: {
+    readonly amount?: number;
+    readonly currency?: string;
+  };
+  readonly available?: boolean;
+}
+
+export interface ThemeParksScheduleEntry {
+  readonly date?: string;
+  readonly type?: string;
+  readonly openingTime?: string;
+  readonly closingTime?: string;
+  readonly description?: string;
+  readonly purchases?: readonly ThemeParksPurchase[];
+}
+
+export interface ThemeParksScheduleResponse {
+  readonly id?: string;
+  readonly name?: string;
+  readonly entityType?: string;
+  readonly timezone?: string;
+  readonly schedule: readonly ThemeParksScheduleEntry[];
+}
+
 // ---------------------------------------------------------------------------
 // Client
 // ---------------------------------------------------------------------------
@@ -188,6 +216,11 @@ export interface ThemeParksLiveClient {
    * any failure.
    */
   getEntityLive(externalId: string, signal?: AbortSignal): Promise<ThemeParksLiveResponse>;
+  /**
+   * Fetch the schedule feed for the entity. Returns the tolerant parsed body;
+   * raises `UpstreamError` on any failure.
+   */
+  getEntitySchedule(externalId: string, signal?: AbortSignal): Promise<ThemeParksScheduleResponse>;
 }
 
 /**
@@ -222,6 +255,15 @@ export function createThemeParksLiveClient(
       const url = `${baseUrl}/entity/${encodeURIComponent(externalId)}/live`;
       const body = await requestJson(fetchImpl, url, signal);
       return assertLiveResponse(body, url);
+    },
+
+    async getEntitySchedule(
+      externalId: string,
+      signal?: AbortSignal,
+    ): Promise<ThemeParksScheduleResponse> {
+      const url = `${baseUrl}/entity/${encodeURIComponent(externalId)}/schedule`;
+      const body = await requestJson(fetchImpl, url, signal);
+      return assertScheduleResponse(body, url);
     },
   };
 }
@@ -314,6 +356,17 @@ function assertLiveResponse(body: unknown, url: string): ThemeParksLiveResponse 
   // TS that we know more than its narrowing shows. Per-entry fields are
   // deliberately left untyped-tolerant for the projection.
   return body as unknown as ThemeParksLiveResponse;
+}
+
+function assertScheduleResponse(body: unknown, url: string): ThemeParksScheduleResponse {
+  if (!isPlainObject(body)) {
+    throw new UpstreamError('invalid_response', `Upstream ${url} returned a non-object body.`, { url });
+  }
+  const schedule = (body as Record<string, unknown>)['schedule'];
+  if (!Array.isArray(schedule)) {
+    throw new UpstreamError('invalid_response', `Upstream ${url} response is missing the \`schedule\` array.`, { url });
+  }
+  return body as unknown as ThemeParksScheduleResponse;
 }
 
 /** True for plain JSON-like objects (i.e. not arrays, not null). */

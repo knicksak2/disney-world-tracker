@@ -46,6 +46,7 @@ import React from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Pressable,
   StyleSheet,
   Text,
   View,
@@ -142,6 +143,22 @@ export default function HomeScreen({ navigation }: Props): JSX.Element {
         subtitle="The most magical, ranked by the community."
         icon="trophy"
       />
+
+      <Card style={styles.planCard}>
+        <Pressable
+          style={styles.planPressable}
+          onPress={() => navigation.navigate('MainTabs', { screen: 'Catalog', params: { screen: 'CrowdCalendar' } })}
+        >
+          <View style={styles.planIcon}>
+            <Ionicons name="calendar" size={24} color={theme.color.primary} />
+          </View>
+          <View style={styles.planText}>
+            <Text style={styles.planTitle}>Plan your visit</Text>
+            <Text style={styles.planSub}>Crowd calendar & best days to go</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={theme.color.textSecondary} />
+        </Pressable>
+      </Card>
 
       {/*
         R19.1: the Active_Trip_Shortcut sits on the Home surface (outside the
@@ -348,5 +365,37 @@ const styles = StyleSheet.create({
   rowStatsCount: {
     ...theme.typography.meta,
     color: theme.color.textSecondary,
+  },
+  planCard: {
+    marginBottom: theme.spacing.md,
+    padding: 0,
+    overflow: 'hidden',
+  },
+  planPressable: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: theme.spacing.md,
+  },
+  planIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: theme.color.surfaceAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: theme.spacing.sm,
+  },
+  planText: {
+    flex: 1,
+  },
+  planTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: theme.color.textPrimary,
+  },
+  planSub: {
+    fontSize: 13,
+    color: theme.color.textSecondary,
+    marginTop: 2,
   },
 });

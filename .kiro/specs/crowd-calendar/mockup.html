@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Crowd Calendar & Wait Insights — Mockup</title>
+<style>
+  :root {
+    --primary: #5b2a86;
+    --primary-dark: #3d1c5c;
+    --primary-light: #7e57c2;
+    --accent: #f6c343;
+    --accent-dark: #d4a017;
+    --bg: #f5f2fb;
+    --surface: #ffffff;
+    --surface-alt: #efe9f7;
+    --text: #1f1235;
+    --text-secondary: #6b6480;
+    --track: #e7e0f2;
+    /* crowd level scale 1-10 */
+    --c-low: #3fa34d;
+    --c-mod: #f6c343;
+    --c-high: #e8792b;
+    --c-peak: #d64545;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: #2a2140; color: var(--text); padding: 28px 16px 60px;
+  }
+  h1.page-title { color: #fff; text-align: center; font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+  p.page-sub { color: #b7abd6; text-align: center; font-size: 13px; margin-bottom: 26px; }
+  .phones { display: flex; gap: 26px; flex-wrap: wrap; justify-content: center; align-items: flex-start; }
+  .phone-wrap { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .phone-label { color: #cfc3ee; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+  .phone {
+    width: 300px; height: 640px; background: var(--bg);
+    border-radius: 34px; overflow: hidden; position: relative;
+    border: 9px solid #17111f; box-shadow: 0 18px 50px rgba(0,0,0,.5);
+    display: flex; flex-direction: column;
+  }
+  .screen { flex: 1; overflow-y: auto; overflow-x: hidden; }
+  .screen::-webkit-scrollbar { width: 0; }
+  .hdr { background: linear-gradient(135deg, #7e57c2, #5b2a86 55%, #3d1c5c); padding: 44px 18px 18px; color: #fff; position: relative; }
+  .hdr .back { position: absolute; left: 14px; top: 44px; font-size: 20px; color: #fff; opacity: .9; }
+  .hdr h2 { font-size: 20px; font-weight: 800; }
+  .hdr .sub { font-size: 12.5px; opacity: .85; margin-top: 3px; }
+  .body { padding: 14px 14px 30px; }
+  .card { background: var(--surface); border-radius: 18px; padding: 15px; box-shadow: 0 4px 14px rgba(61,28,92,.10); margin-bottom: 13px; }
+  .section-label { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text-secondary); margin: 6px 2px 9px; }
+  /* segmented park selector */
+  .seg { display: flex; background: var(--surface-alt); border-radius: 12px; padding: 4px; margin-bottom: 14px; gap: 2px; }
+  .seg .s { flex: 1; text-align: center; font-size: 11.5px; font-weight: 600; color: var(--text-secondary); padding: 7px 3px; border-radius: 9px; }
+  .seg .s.on { background: var(--surface); color: var(--primary); box-shadow: 0 2px 6px rgba(61,28,92,.12); }
+  /* calendar grid */
+  .cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; }
+  .cal .dow { text-align: center; font-size: 10px; font-weight: 700; color: var(--text-secondary); padding-bottom: 4px; }
+  .cal .day { aspect-ratio: 1; border-radius: 9px; display: flex; align-items: center; justify-content: center; color: #fff; position: relative; }
+  .cal .day .d { font-size: 15px; font-weight: 800; }
+  .cal .day.empty { background: transparent; }
+  .cal .day.sel { outline: 3px solid var(--primary); outline-offset: 1px; }
+  .cal .day.sel .d { text-decoration: none; }
+  .cal .day .star { position: absolute; top: 3px; right: 4px; font-size: 8px; }
+  .daycap { text-align: center; font-size: 12px; color: var(--text-secondary); margin-top: 12px; }
+  .daycap b { color: var(--text); }
+  .daycap .swi { display: inline-block; width: 11px; height: 11px; border-radius: 3px; vertical-align: -1px; margin-right: 2px; }
+  .lvl1,.lvl2,.lvl3 { background: var(--c-low); }
+  .lvl4,.lvl5 { background: #8bbf3f; }
+  .lvl6,.lvl7 { background: var(--c-mod); color: #4a3a00; }
+  .lvl8 { background: var(--c-high); }
+  .lvl9,.lvl10 { background: var(--c-peak); }
+  .legend { display: flex; align-items: center; gap: 4px; justify-content: center; margin-top: 12px; font-size: 10px; color: var(--text-secondary); }
+  .legend .sw { width: 16px; height: 10px; border-radius: 3px; }
+  /* best-day callout */
+  .best { background: linear-gradient(120deg, #f6c343, #f0a93b); color: #3d1c5c; border-radius: 14px; padding: 12px 14px; display: flex; align-items: center; gap: 10px; margin-bottom: 14px; box-shadow: 0 4px 14px rgba(214,160,23,.3); }
+  .best .medal { font-size: 20px; } .best b { font-size: 14px; } .best div .s { font-size: 11px; opacity: .8; }
+  /* big level ring */
+  .levelhero { display: flex; align-items: center; gap: 16px; }
+  .lvlbadge { width: 66px; height: 66px; border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #fff; flex-shrink: 0; }
+  .lvlbadge .n { font-size: 26px; font-weight: 800; line-height: 1; } .lvlbadge .o { font-size: 9px; opacity: .9; }
+  .levelhero .lh .h { font-size: 16px; font-weight: 800; } .levelhero .lh .s { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+  /* rows */
+  .row { padding: 10px 2px; border-bottom: 1px solid #f0ebf7; } .row:last-child { border-bottom: none; }
+  .row .top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+  .row .top .name { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 7px; }
+  .row .top .val { font-size: 12px; color: var(--text-secondary); font-variant-numeric: tabular-nums; font-weight: 700; }
+  .bar { height: 8px; background: var(--track); border-radius: 5px; overflow: hidden; }
+  .bar > i { display: block; height: 100%; border-radius: 5px; }
+  /* info list */
+  .info { display: flex; justify-content: space-between; font-size: 12.5px; padding: 8px 2px; border-bottom: 1px solid #f0ebf7; }
+  .info:last-child { border-bottom: none; }
+  .info .k { color: var(--text-secondary); } .info .v { font-weight: 700; }
+  .flags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+  .flag { font-size: 10px; font-weight: 700; padding: 4px 9px; border-radius: 20px; background: var(--surface-alt); color: var(--primary); }
+  .flag.ll { background: #e9f6ec; color: #2e7d3a; }
+  .flag.evt { background: #fdeede; color: #b5651d; }
+  /* accuracy note */
+  .acc { font-size: 11px; color: var(--text-secondary); text-align: center; margin-top: 6px; }
+  /* hourly sparkline */
+  .spark { display: flex; align-items: flex-end; gap: 3px; height: 66px; margin: 6px 0 4px; }
+  .spark .b { flex: 1; background: var(--primary-light); border-radius: 3px 3px 0 0; position: relative; }
+  .spark .b.best { background: var(--c-low); } .spark .b.worst { background: var(--c-peak); }
+  .spark-x { display: flex; justify-content: space-between; font-size: 9px; color: var(--text-secondary); }
+  .pill { display: inline-flex; align-items: center; gap: 5px; background: var(--surface-alt); border-radius: 10px; padding: 8px 10px; font-size: 12px; }
+  .pill b { color: var(--primary); }
+  .twocol { display: flex; gap: 8px; } .twocol > div { flex: 1; }
+  .stat { background: var(--surface-alt); border-radius: 12px; padding: 10px 12px; }
+  .stat .k { font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: var(--text-secondary); font-weight: 700; }
+  .stat .v { font-size: 16px; font-weight: 800; margin-top: 3px; } .stat .v small { font-size: 11px; font-weight: 600; color: var(--text-secondary); }
+  /* date context chips */
+  .chips { display: flex; gap: 6px; margin-bottom: 13px; }
+  .chip2 { flex: 1; text-align: center; font-size: 11.5px; font-weight: 700; padding: 8px 4px; border-radius: 10px; background: var(--surface-alt); color: var(--text-secondary); }
+  .chip2.on { background: var(--primary); color: #fff; }
+  /* verdict card */
+  .verdict { border-radius: 16px; padding: 15px; margin-bottom: 13px; color: #fff; background: linear-gradient(120deg, #3fa34d, #2e7d3a); box-shadow: 0 4px 14px rgba(46,125,58,.3); }
+  .verdict .k { font-size: 10px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; opacity: .85; }
+  .verdict .h { font-size: 16px; font-weight: 800; margin-top: 4px; }
+  .verdict .s { font-size: 12.5px; opacity: .92; margin-top: 4px; }
+  /* decision rows */
+  .decide { display: flex; align-items: center; justify-content: space-between; padding: 12px 13px; border-radius: 13px; background: var(--surface); box-shadow: 0 4px 14px rgba(61,28,92,.09); margin-bottom: 10px; }
+  .decide .l .h { font-size: 13.5px; font-weight: 700; } .decide .l .s { font-size: 11.5px; color: var(--text-secondary); margin-top: 2px; }
+  .decide .r { font-size: 12.5px; font-weight: 800; text-align: right; } .decide .r .save { color: var(--c-low); } .decide .r .cost { color: var(--text-secondary); font-size: 11px; font-weight: 600; }
+  /* action buttons */
+  .actions { display: flex; gap: 8px; margin: 2px 0 14px; }
+  .btn { flex: 1; text-align: center; font-size: 12.5px; font-weight: 700; padding: 12px 8px; border-radius: 12px; }
+  .btn.primary { background: var(--primary); color: #fff; box-shadow: 0 4px 12px rgba(91,42,134,.3); }
+  .btn.ghost { background: var(--surface); color: var(--primary); border: 1.5px solid var(--track); }
+  .ctx { font-size: 11.5px; color: var(--text-secondary); text-align: center; margin: 2px 2px 12px; }
+</style>
+</head>
+<body>
+<h1 class="page-title">Crowd Calendar &amp; Wait Insights</h1>
+<p class="page-sub">Mockup — where the wait-time model surfaces in the app</p>
+<div class="phones">
+
+  <!-- PHONE 1: Crowd Calendar month view -->
+  <div class="phone-wrap">
+    <div class="phone-label">Crowd Calendar</div>
+    <div class="phone"><div class="screen">
+      <div class="hdr">
+        <span class="back">‹</span>
+        <h2>Crowd Calendar</h2>
+        <div class="sub">July 2026 · Magic Kingdom</div>
+      </div>
+      <div class="body">
+        <div class="seg">
+          <div class="s">All</div><div class="s on">MK</div><div class="s">EPCOT</div><div class="s">HS</div><div class="s">AK</div>
+        </div>
+        <div class="best">
+          <span class="medal">🏆</span>
+          <div><b>Best day this month: Tue Jul 7</b><div class="s">Crowd level 3/10 — head to Magic Kingdom</div></div>
+        </div>
+        <div class="card">
+          <div class="cal">
+            <div class="dow">S</div><div class="dow">M</div><div class="dow">T</div><div class="dow">W</div><div class="dow">T</div><div class="dow">F</div><div class="dow">S</div>
+            <div class="day empty"></div><div class="day empty"></div><div class="day empty"></div>
+            <div class="day lvl6"><span class="d">1</span></div>
+            <div class="day lvl9"><span class="d">2</span></div>
+            <div class="day lvl10"><span class="d">3</span></div>
+            <div class="day lvl9"><span class="d">4</span></div>
+            <div class="day lvl5"><span class="d">5</span></div>
+            <div class="day lvl4"><span class="d">6</span></div>
+            <div class="day lvl3 sel"><span class="d">7</span><span class="star">★</span></div>
+            <div class="day lvl5"><span class="d">8</span></div>
+            <div class="day lvl6"><span class="d">9</span></div>
+            <div class="day lvl7"><span class="d">10</span></div>
+            <div class="day lvl8"><span class="d">11</span></div>
+            <div class="day lvl5"><span class="d">12</span></div>
+            <div class="day lvl4"><span class="d">13</span></div>
+            <div class="day lvl6"><span class="d">14</span></div>
+            <div class="day lvl7"><span class="d">15</span></div>
+            <div class="day lvl8"><span class="d">16</span></div>
+            <div class="day lvl8"><span class="d">17</span></div>
+            <div class="day lvl6"><span class="d">18</span></div>
+            <div class="day lvl5"><span class="d">19</span></div>
+            <div class="day lvl7"><span class="d">20</span></div>
+            <div class="day lvl8"><span class="d">21</span></div>
+            <div class="day lvl9"><span class="d">22</span></div>
+            <div class="day lvl9"><span class="d">23</span></div>
+            <div class="day lvl7"><span class="d">24</span></div>
+            <div class="day lvl6"><span class="d">25</span></div>
+          </div>
+          <div class="legend">
+            <span>Quiet</span><span class="sw lvl2"></span><span class="sw lvl5"></span><span class="sw lvl7"></span><span class="sw lvl9"></span><span>Packed</span>
+          </div>
+          <div class="daycap"><span class="swi lvl3"></span>Selected <b>Jul 7</b> · Level <b>3 / 10</b> — Quiet · tap any day for details</div>
+        </div>
+        <div class="acc">★ = best day this month · forecasts within ±1.2 levels over the last 60 days</div>
+      </div>
+    </div></div>
+  </div>
+
+  <!-- PHONE 2: Day detail -->
+  <div class="phone-wrap">
+    <div class="phone-label">Day detail</div>
+    <div class="phone"><div class="screen">
+      <div class="hdr">
+        <span class="back">‹</span>
+        <h2>Mon, Jul 6</h2>
+        <div class="sub">Magic Kingdom</div>
+      </div>
+      <div class="body">
+        <div class="card">
+          <div class="levelhero">
+            <div class="lvlbadge lvl4"><span class="n">4</span><span class="o">/ 10</span></div>
+            <div class="lh"><div class="h">Below average</div><div class="s">Quieter than a typical July Monday. Good day to go.</div></div>
+          </div>
+        </div>
+        <div class="section-label">All parks today</div>
+        <div class="card">
+          <div class="row"><div class="top"><span class="name">Magic Kingdom</span><span class="val">4/10</span></div><div class="bar"><i class="lvl4" style="width:40%"></i></div></div>
+          <div class="row"><div class="top"><span class="name">EPCOT</span><span class="val">6/10</span></div><div class="bar"><i class="lvl6" style="width:60%"></i></div></div>
+          <div class="row"><div class="top"><span class="name">Hollywood Studios</span><span class="val">8/10</span></div><div class="bar"><i class="lvl8" style="width:80%"></i></div></div>
+          <div class="row"><div class="top"><span class="name">Animal Kingdom</span><span class="val">3/10</span></div><div class="bar"><i class="lvl3" style="width:30%"></i></div></div>
+        </div>
+        <div class="section-label">Park info</div>
+        <div class="card">
+          <div class="info"><span class="k">Hours</span><span class="v">9:00 AM – 10:00 PM</span></div>
+          <div class="info"><span class="k">Lightning Lane Multi Pass</span><span class="v">$21</span></div>
+          <div class="info"><span class="k">Weather</span><span class="v">⛅ 91° · 40% rain PM</span></div>
+          <div class="info"><span class="k">Events</span><span class="v" style="max-width:150px;text-align:right">
+            <span class="flags" style="justify-content:flex-end">
+              <span class="flag">Early Entry</span><span class="flag">Extended Eve</span>
+            </span>
+          </span></div>
+        </div>
+        <div class="acc">We predicted 4/10 · actual so far tracking 4/10 ✓</div>
+      </div>
+    </div></div>
+  </div>
+
+  <!-- PHONE 3: When to ride (wait insights on experience detail) -->
+  <div class="phone-wrap">
+    <div class="phone-label">Experience · When to ride</div>
+    <div class="phone"><div class="screen">
+      <div class="hdr">
+        <span class="back">‹</span>
+        <h2>Space Mountain</h2>
+        <div class="sub">Tomorrowland · Magic Kingdom</div>
+      </div>
+      <div class="body">
+        <div class="chips">
+          <div class="chip2">Now</div><div class="chip2 on">Trip · Jul 6</div><div class="chip2">Typical</div>
+        </div>
+        <div class="verdict">
+          <div class="k">🎯 Best time to ride</div>
+          <div class="h">Rope drop, or after 8 PM</div>
+          <div class="s">~20 min then · avoid 1–3 PM (~85 min). On your Jul 6 visit (crowd 4/10).</div>
+        </div>
+        <div class="actions">
+          <div class="btn primary">＋ Add to my plan</div>
+          <div class="btn ghost">🔔 Alert &lt; 30 min</div>
+        </div>
+        <div class="section-label">Predicted wait — Jul 6</div>
+        <div class="card">
+          <div class="spark">
+            <div class="b best" style="height:24%"></div><div class="b" style="height:44%"></div>
+            <div class="b" style="height:60%"></div><div class="b" style="height:72%"></div>
+            <div class="b worst" style="height:96%"></div><div class="b" style="height:80%"></div>
+            <div class="b" style="height:64%"></div><div class="b" style="height:70%"></div>
+            <div class="b" style="height:50%"></div><div class="b best" style="height:30%"></div>
+          </div>
+          <div class="spark-x"><span>9a</span><span>12p</span><span>3p</span><span>6p</span><span>9p</span></div>
+        </div>
+        <div class="section-label">Skip the line?</div>
+        <div class="decide">
+          <div class="l"><div class="h">Lightning Lane</div><div class="s">Buy ahead · sells out ~11 AM</div></div>
+          <div class="r"><div class="save">saves ~65 min</div><div class="cost">$12 at peak</div></div>
+        </div>
+        <div class="decide">
+          <div class="l"><div class="h">Single rider</div><div class="s">If you're OK splitting up</div></div>
+          <div class="r"><div class="save">~20 min</div><div class="cost">vs 45 standby</div></div>
+        </div>
+        <div class="section-label">Good to know</div>
+        <div class="twocol" style="margin-bottom:10px">
+          <div class="stat"><div class="k">Typical / Worst</div><div class="v">40 <small>/ 85 min</small></div></div>
+          <div class="stat"><div class="k">Reliability</div><div class="v">96% <small>uptime</small></div></div>
+        </div>
+        <div class="card">
+          <div class="info" style="border:none;padding:0"><span class="k">💡 Ride during the fireworks</span><span class="v" style="color:var(--c-low)">−30% wait</span></div>
+        </div>
+      </div>
+    </div></div>
+  </div>
+
+</div>
+</body>
+</html>
