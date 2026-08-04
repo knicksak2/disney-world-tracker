@@ -72,6 +72,28 @@ describe('Intelligence Routes', () => {
     expect(fakeSamplingService.runSamplingPass).toHaveBeenCalled();
   });
 
+  it('HEAD /internal/sampling/run - 401 on missing secret', async () => {
+    const app = buildTestApp();
+    const res = await app.inject({
+      method: 'HEAD',
+      url: '/internal/sampling/run',
+    });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('HEAD /internal/sampling/run - 202 with empty body and runs async', async () => {
+    const app = buildTestApp();
+    const res = await app.inject({
+      method: 'HEAD',
+      url: '/internal/sampling/run',
+      headers: { 'x-cron-secret': 'secret123' },
+    });
+
+    expect(res.statusCode).toBe(202);
+    expect(res.body).toBe(''); // HEAD carries no body — cannot be "too large"
+    expect(fakeSamplingService.runSamplingPass).toHaveBeenCalled();
+  });
+
   it('GET /crowd-calendar - 401 without session', async () => {
     const app = buildTestApp();
     const res = await app.inject({

@@ -41,22 +41,36 @@ function parseOrAppError<T>(schema: z.ZodType<T>, input: unknown): T {
 export function intelligenceRoutes(options: IntelligenceRoutesOptions): FastifyPluginAsync {
   return async function (app: FastifyInstance): Promise<void> {
     
-    app.post('/internal/sampling/run', async (request, reply) => {
+    // Shared cron-secret gate for the sampling trigger.
+    const assertCronSecret = (request: { headers: Record<string, unknown> }): void => {
       const authHeader = request.headers['x-cron-secret'];
       const expectedSecret = app.config.intelligence.samplingCronSecret;
-      
       if (!authHeader || authHeader !== expectedSecret) {
         throw new AppError('unauthorized', 'Missing or invalid cron secret');
       }
+    };
 
-      // Return 202 immediately (fire-and-forget)
-      void reply.code(202).send({ status: 'accepted' });
-      
-      // Run async in-process without awaiting
+    // Fire-and-forget the pass; errors are logged, never surfaced to the caller.
+    const kickOffSamplingPass = (): void => {
       options.samplingService.runSamplingPass().catch(err => {
         app.log.error({ err }, 'Sampling pass failed');
       });
-      
+    };
+
+    // POST returns a tiny JSON ack.
+    app.post('/internal/sampling/run', async (request, reply) => {
+      assertCronSecret(request);
+      void reply.code(202).send({ status: 'accepted' });
+      kickOffSamplingPass();
+      return reply;
+    });
+
+    // HEAD does the same but replies with headers only (no body) — the keep-alive
+    // cron can use HEAD so the response can never be "too large". Same secret gate.
+    app.head('/internal/sampling/run', async (request, reply) => {
+      assertCronSecret(request);
+      void reply.code(202).send();
+      kickOffSamplingPass();
       return reply;
     });
 

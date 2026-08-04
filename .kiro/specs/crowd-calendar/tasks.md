@@ -48,7 +48,7 @@ Implementation is **TypeScript**, reusing existing infrastructure: the `Live_Ser
     - _Requirements: 11.3, 11.4, 10.2_
 
 - [ ] 5. Routes
-  - [ ] 5.1 `POST /internal/sampling/run` — cron-authenticated (shared secret); idempotent and self-throttling (sample at most once per interval, schedule refresh at most daily); returns `202` immediately and runs `runSamplingPass` asynchronously with an overlap guard + internal error handling, so a slow upstream never times out the keep-alive cron.
+  - [ ] 5.1 `POST /internal/sampling/run` (+ `HEAD /internal/sampling/run`) — cron-authenticated (shared `x-cron-secret`); idempotent and self-throttling (sample at most once per interval, schedule refresh at most daily); returns `202` immediately and runs `runSamplingPass` asynchronously with an overlap guard + internal error handling, so a slow upstream never times out the keep-alive cron. `HEAD` shares the secret gate + async kick-off but replies headers-only (no body) so the cron's response can never be too large; `POST` returns a tiny `{status:'accepted'}`.
     - _Requirements: 3.1, 3.2, 3.9, 3.10_
   - [ ] 5.2 `GET /crowd-calendar?park&from&to` — session-authenticated; per-date forecast index, park hours, event flags, LL price, best-park picks, and observed-vs-forecast for past dates.
     - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5_
