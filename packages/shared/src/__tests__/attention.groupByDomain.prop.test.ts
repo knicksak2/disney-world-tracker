@@ -125,7 +125,7 @@ describe('Property 4: Group-by-domain ordering', () => {
         //    (friendRequest, tripInvite, rodeWithTag, share).
         const ranks = blocks.map((d) => DOMAIN_ORDER.indexOf(d));
         for (let i = 1; i < ranks.length; i += 1) {
-          expect(ranks[i]).toBeGreaterThan(ranks[i - 1]);
+          expect(ranks[i]!).toBeGreaterThan(ranks[i - 1]!);
         }
 
         // 3. Within each group: source timestamp descending, with the id as an
@@ -133,12 +133,12 @@ describe('Property 4: Group-by-domain ordering', () => {
         for (const domain of DOMAIN_ORDER) {
           const group = output.filter((item) => item.domain === domain);
           for (let i = 1; i < group.length; i += 1) {
-            const prev = Date.parse(group[i - 1].sourceTimestamp);
-            const cur = Date.parse(group[i].sourceTimestamp);
+            const prev = Date.parse(group[i - 1]!.sourceTimestamp);
+            const cur = Date.parse(group[i]!.sourceTimestamp);
             expect(prev).toBeGreaterThanOrEqual(cur);
             if (prev === cur) {
               // Equal timestamps → ids in ascending lexicographic order.
-              expect(group[i - 1].id <= group[i].id).toBe(true);
+              expect(group[i - 1]!.id <= group[i]!.id).toBe(true);
             }
           }
         }

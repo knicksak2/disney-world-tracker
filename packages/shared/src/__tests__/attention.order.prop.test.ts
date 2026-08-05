@@ -148,7 +148,7 @@ describe('Property 3: Default (timestamp-descending) ordering is a total order',
         const ordered = orderItems(items, 'timestampDesc');
         for (let i = 0; i + 1 < ordered.length; i += 1) {
           // Each adjacent pair must be non-decreasing under the specified order.
-          expect(expectedCompare(ordered[i], ordered[i + 1])).toBeLessThanOrEqual(0);
+          expect(expectedCompare(ordered[i]!, ordered[i + 1]!)).toBeLessThanOrEqual(0);
         }
       }),
       { numRuns: NUM_RUNS },

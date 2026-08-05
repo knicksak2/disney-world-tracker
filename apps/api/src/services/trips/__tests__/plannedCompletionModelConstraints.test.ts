@@ -120,7 +120,14 @@ describe('Planned List Completion Sync — migration / schema is unchanged', () 
       // the trip_feed_items type constraint, and it has nothing to do with
       // planned-list completion — the concept this guard actually protects.
       const scanned = sql.replace(/completion_logged/giu, '');
-      expect(scanned).not.toMatch(/planned[_-]?item/iu);
+      // NOTE: a later migration may legitimately touch `planned_items` for
+      // reasons unrelated to completion — the day-planning-optimization feature
+      // adds scheduling columns (planned_date, is_fixed, priority, item_type,
+      // …) in `0019_planned_item_scheduling.sql`. What this guard actually
+      // protects is that no migration persists a *completion* state or a stored
+      // Planned_Item↔Trip_Log_Entry link, so the invariant is enforced by the
+      // completion-token scan (below) plus the join-table check further down —
+      // not by banning every mention of `planned_items`.
       expect(scanned).not.toMatch(COMPLETION_TOKEN);
     }
   });

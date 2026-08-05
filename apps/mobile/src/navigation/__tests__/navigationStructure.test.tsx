@@ -140,6 +140,8 @@ jest.mock('@react-navigation/bottom-tabs', () => {
 // Modules under test (imported after the mocks above).
 // ---------------------------------------------------------------------------
 
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+
 import RootNavigator from '../RootNavigator';
 import CatalogStack from '../CatalogStack';
 
@@ -149,7 +151,14 @@ beforeEach(() => {
 
 describe('RootStack structure (Requirements 2.1, 2.2, 2.3, 2.5)', () => {
   it('registers MainTabs as the initial route and ExperienceDetail with headerShown: false', () => {
-    render(<RootNavigator />);
+    // RootNavigator reads the shared QueryClient (to clear the cache on a 401),
+    // so it must render under a QueryClientProvider.
+    const queryClient = new QueryClient();
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RootNavigator />
+      </QueryClientProvider>,
+    );
 
     // The root native stack is the navigator that owns ExperienceDetail.
     const rootStack = mockNavCaptures.find((capture) =>
@@ -188,7 +197,8 @@ describe('CatalogStack structure (Requirements 2.5)', () => {
     // ExperienceDetail stays on the root stack, not the Catalog tab stack.
     expect(names).not.toContain('ExperienceDetail');
     // The Level-2 Destination_Screen is registered here (catalog redesign
-    // task 11.1); CatalogList remains the initial route.
-    expect(names).toEqual(['CatalogList', 'DestinationScreen']);
+    // task 11.1) and the CrowdCalendar screen (crowd-calendar feature);
+    // CatalogList remains the initial route.
+    expect(names).toEqual(['CatalogList', 'DestinationScreen', 'CrowdCalendar']);
   });
 });

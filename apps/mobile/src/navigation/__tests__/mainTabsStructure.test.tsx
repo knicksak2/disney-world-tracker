@@ -32,6 +32,7 @@
 
 import React from 'react';
 import { render } from '@testing-library/react-native';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 // ---------------------------------------------------------------------------
 // Capture registry + mocks (declared before the modules under test import).
@@ -196,7 +197,15 @@ const PRIOR_STATS_SCREENS = [
  * `MainTabsNavigator` must be pulled out of the capture and rendered directly.
  */
 function captureMainTabs(): NavigatorCapture {
-  render(<RootNavigator />);
+  // RootNavigator reads the shared QueryClient (to clear the cache on a 401),
+  // so it must render under a QueryClientProvider — the query layer is real
+  // context here, not the component under test.
+  const queryClient = new QueryClient();
+  render(
+    <QueryClientProvider client={queryClient}>
+      <RootNavigator />
+    </QueryClientProvider>,
+  );
 
   const rootStack = mockNavCaptures.find((capture) =>
     capture.screens.some((s) => s.name === 'MainTabs'),
