@@ -142,6 +142,16 @@ export function createPredictionService(deps: PredictionServiceDeps): Prediction
         }
       }
       
+      // Per-date signals (showtimes, Lightning Lane) — populated for near-term/past dates;
+      // empty for far-future dates (shows then fall back to standby per day-planning R6.6).
+      const dailyByExp = new Map<string, { showtimes: unknown; ll_price_cents: number | null; ll_available: boolean | null }>();
+      try {
+        const dailyRows = await repo.getExperienceDailySignals(experienceIds, new Date(targetDateStr));
+        for (const d of dailyRows) dailyByExp.set(d.experience_id, d);
+      } catch (_err) {
+        // proceed without per-date signals
+      }
+
       const result: Record<string, WaitSnapshot> = {};
       
       for (const id of experienceIds) {
@@ -159,7 +169,7 @@ export function createPredictionService(deps: PredictionServiceDeps): Prediction
         // Look up per-experience weather sensitivity from the real table
         const sensitivity = weatherSensMap.get(id) ?? null;
 
-        const waits: { hour: number, predictedWaitMinutes: number }[] = [];
+        const waits: { hour: number, predictedWaitMinutes: number, singleRiderWaitMinutes?: number }[] = [];
         for (let h = 0; h < 24; h++) {
           const shapeH = shapeRows.find(s => s.hour === h);
           const seasonH = seasonRows.find(s => s.hour === h);
@@ -170,16 +180,37 @@ export function createPredictionService(deps: PredictionServiceDeps): Prediction
           let shBuck = null;
           if (shapeH) shBuck = { wait: shapeH.avg_wait_minutes };
           
+          const wAdj = weatherAdjustment(sensitivity, forecastCondition ?? null);
           const rawWait = selectTier(sBuck, shBuck, expTypicalWait, multiplier);
-          const adjustedWait = rawWait * weatherAdjustment(sensitivity, forecastCondition ?? null);
+          const adjustedWait = rawWait * wAdj;
           
-          waits.push({ hour: h, predictedWaitMinutes: Math.max(0, Math.round(adjustedWait)) });
+          const entry: { hour: number, predictedWaitMinutes: number, singleRiderWaitMinutes?: number } = {
+            hour: h,
+            predictedWaitMinutes: Math.max(0, Math.round(adjustedWait)),
+          };
+          // Single-rider wait from the ride's single-rider shape (available for any date).
+          if (shapeH && shapeH.sr_avg_wait_minutes != null) {
+            entry.singleRiderWaitMinutes = Math.max(0, Math.round(shapeH.sr_avg_wait_minutes * multiplier * wAdj));
+          }
+          waits.push(entry);
         }
+        
+        const daily = dailyByExp.get(id);
+        const showtimes = Array.isArray(daily?.showtimes)
+          ? (daily!.showtimes as unknown[]).map(String)
+          : undefined;
         
         result[id] = {
           experienceId: id,
           isVirtualQueue: signal?.uses_virtual_queue ?? false,
-          waits
+          waits,
+          ...(showtimes && showtimes.length > 0 ? { showtimes } : {}),
+          ...(daily ? {
+            lightningLane: {
+              available: daily.ll_available ?? false,
+              ...(daily.ll_price_cents != null ? { priceCents: daily.ll_price_cents } : {}),
+            },
+          } : {}),
         };
       }
       
