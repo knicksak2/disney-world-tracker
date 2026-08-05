@@ -14,7 +14,7 @@ The optimizer solves a Time-Dependent Traveling Salesperson Problem: the cost of
 - **Schedule**: An ordered list of planned activities for a specific calendar day within a Trip.
 - **Fixed_Item**: A planned activity with a user-specified start time the optimizer MUST NOT move (e.g., a Lightning Lane return or dining reservation).
 - **Flexible_Item**: A planned activity whose start time is chosen by the optimizer.
-- **Prediction_Service**: The Crowd Calendar feature's consumable API — `getDaySnapshot(experienceIds, date, park)` and `crowdMultiplier(park, date)` — the sole source of predicted waits.
+- **Prediction_Service**: The Crowd Calendar feature's consumable API. The method actually used here is `getDaySnapshot(experienceIds: string[], park: string, date: Date): Promise<Record<string, WaitSnapshot>>` (note the argument order is **park before date**, and the return is a map keyed by `experienceId`); it is the sole source of predicted waits.
 - **Optimization_Engine**: The backend logic that computes the optimal ordered schedule for a day.
 - **Walking_Pace**: A per-Trip setting (`slow`, `moderate`, `fast`) scaling travel time between experiences.
 - **Transit_Penalty**: A fixed 45-minute cost added when consecutive items are in different Parks (park hopping).
@@ -96,3 +96,4 @@ The optimizer solves a Time-Dependent Traveling Salesperson Problem: the cost of
 3. WHERE an Experience uses a virtual queue, THE optimizer SHALL NOT standby-optimize it; it SHALL flag the item for boarding-group signup and exclude it from standby wait accumulation.
 4. THE Trip_Service SHALL support a per-item `use_single_rider` flag; WHERE set, THE optimizer SHALL use the single-rider wait from the snapshot for that item.
 5. THE optimized timeline SHALL indicate when an item is planned via single-rider, a show slot, or a virtual queue, so the user understands the suggestion.
+6. IF the `WaitSnapshot` for an Experience does not carry the signal a type needs (e.g. `showtimes` is absent for a show on a far-future date), THE optimizer SHALL fall back to treating it as a standby item rather than failing — never read an absent field as a wait. (`getDaySnapshot` now populates `waits[].singleRiderWaitMinutes` for any date, and `showtimes` / `lightningLane` whenever per-date signals exist; only far-future `showtimes` are inherently unavailable, hence this fallback.)

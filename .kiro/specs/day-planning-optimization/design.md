@@ -4,7 +4,7 @@
 
 The Day Planning feature adds automated touring-plan optimization to Trips. It solves a Time-Dependent Traveling Salesperson Problem (TD-TSP): the cost of visiting an attraction depends on when you arrive, because waits vary through the day.
 
-This feature **depends on the Crowd Calendar and Wait-Time Intelligence feature** (`.kiro/specs/crowd-calendar`) for all wait prediction. It calls that feature's `predictionService.getDaySnapshot(experienceIds, date, park)` once per optimize request to get a prefetched per-experience, per-hour wait snapshot, then runs a pure optimizer over it. Day Planning owns only: the scheduling data model, the optimizer, the schedule/optimize routes, and the mobile timeline UI.
+This feature **depends on the Crowd Calendar and Wait-Time Intelligence feature** (`.kiro/specs/crowd-calendar`) for all wait prediction. It calls that feature's `predictionService.getDaySnapshot(experienceIds: string[], park: string, date: Date)` (arg order: **park before date**) once per optimize request; it returns `Record<string, WaitSnapshot>` (keyed by `experienceId`), a prefetched per-experience, per-hour wait snapshot, over which a pure optimizer then runs. Day Planning owns only: the scheduling data model, the optimizer, the schedule/optimize routes, and the mobile timeline UI.
 
 ### Key design decisions
 
@@ -49,18 +49,18 @@ graph TD
 
 ## Data Models
 
-### Migration `0021_planned_item_ride_options.sql`
+### Migration `0022_planned_item_ride_options.sql`
 
 - `planned_items`: add `is_lightning_lane BOOLEAN NOT NULL DEFAULT FALSE` and `use_single_rider BOOLEAN NOT NULL DEFAULT FALSE`.
 
-The other scheduling columns (`planned_date`, `planned_time`, `is_fixed`, `priority`, `item_type`, `duration_minutes`) and the `trips` planning settings (`walking_speed`, `early_entry_eligible`) already exist from migration `0019_planned_item_scheduling.sql`, along with `experiences.duration_minutes`. The wait-intelligence tables are owned by the crowd-calendar feature's migration `0020`.
+**Migration number:** must be `0022` — `0020` (`wait_time_intelligence`) and `0021` (`crowd_index_source`) are already taken by the crowd-calendar feature and are applied/deployed. Never reuse `0021`. The other scheduling columns (`planned_date`, `planned_time`, `is_fixed`, `priority`, `item_type`, `duration_minutes`) and the `trips` planning settings (`walking_speed`, `early_entry_eligible`) already exist from migration `0019_planned_item_scheduling.sql`, along with `experiences.duration_minutes`.
 
 ### Shared DTOs (`@dwt/shared`)
 
 - `PlannedItemDTO` / `PlannedItemAddInput`: add `plannedDate`, `plannedTime`, `isFixed`, `isLightningLane`, `useSingleRider`, `priority`, `itemType`, `durationMinutes`.
 - `TripOptimizationInput`: `{ date }`.
 - `TripOptimizationResult`: `{ items: OptimizedItem[]; totalWaitMinutes; totalWalkMinutes; unfittedItemIds; warnings }`, where `OptimizedItem` carries `plannedItemId`, `suggestedArrival`, `predictedWaitMinutes`, and `travelFromPrev` (`{ kind: 'walk' | 'park_hop'; minutes }`).
-- `WaitSnapshot` is imported from the crowd-calendar shared contracts.
+- `WaitSnapshot` is imported from the crowd-calendar shared contracts. Its real shape is `{ experienceId, isVirtualQueue: boolean, showtimes?: string[], lightningLane?: { available, priceCents?, returnTime? }, waits: { hour, predictedWaitMinutes, singleRiderWaitMinutes? }[] }`. **What `getDaySnapshot` populates:** `experienceId`, `isVirtualQueue`, `waits[].predictedWaitMinutes` always; `waits[].singleRiderWaitMinutes` for any date (from the single-rider shape); and `showtimes` / `lightningLane` whenever per-date signals exist for that date. Only far-future `showtimes` are inherently unavailable — read that field defensively and fall back to standby when absent (R6.6).
 
 ## Correctness Properties
 
@@ -131,4 +131,8 @@ No new env vars. No external APIs are called by this feature — predicted waits
 
 ## Cross-Spec Dependencies & Build Order
 
-Depends on the `crowd-calendar` feature's `predictionService` (`getDaySnapshot`, `crowdMultiplier`) and its `WaitSnapshot` contract — build `crowd-calendar` first. This feature adds only migration `0021` (`is_lightning_lane`, `use_single_rider` on `planned_items`); the intelligence tables belong to `crowd-calendar`'s `0020`. Until `predictionService` exists, the pure `optimizer`/`travel` modules (tasks 2.x) can be built and property-tested against a stubbed `WaitSnapshot`.
+Depends on the `crowd-calendar` feature's `predictionService.getDaySnapshot(experienceIds, park, date)` and its `WaitSnapshot` contract — `crowd-calendar` is already built. This feature adds only migration **`0022`** (`is_lightning_lane`, `use_single_rider` on `planned_items`); `0020`/`0021` belong to `crowd-calendar` and are deployed. The pure `optimizer`/`travel` modules (tasks 2.x) build and property-test against a stubbed `WaitSnapshot` independently of the live service.
+
+**Snapshot signals (resolved — full R6 supported):** `getDaySnapshot` now populates the R6 signals (crowd-calendar R9.5): `isVirtualQueue` (R6.3), `waits[].singleRiderWaitMinutes` for any date from the single-rider shape (R6.4), and `showtimes` / `lightningLane` whenever per-date signals exist (R6.2). The only inherent gap is `showtimes` for a **far-future** date (future showtimes aren't known) — the optimizer must therefore still degrade a show with no showtimes to standby (R6.6) and never read an absent field as a wait. No crowd-calendar changes are required before building this feature.
+
+**Pre-existing test to update:** adding scheduling/LL fields to `PlannedItemDTO` (task 1.1) will break `apps/api/src/services/trips/__tests__/plannedCompletionModelConstraints.test.ts`, which currently asserts `PlannedItemDTO` has exactly its original five fields. That guard is already red against migration `0019` (it forbids any `planned_items` change past `0015`); update its assertions to allow the day-planning scheduling fields (while still forbidding a *completion* field/column/route) as part of this feature.

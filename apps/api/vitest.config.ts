@@ -35,6 +35,26 @@ export default defineConfig({
     // tolerance for slow runs, never test behavior or coverage.
     testTimeout: 30_000,
     hookTimeout: 30_000,
+    // Coverage gate — scoped ONLY to the day-planning pure modules. `all: true` +
+    // this narrow `include` means any planning source file that isn't exercised by a
+    // test counts as 0% and fails the threshold, so untested optimizer/travel code
+    // fails the normal `npm run test` run (it cannot be marked "done"). The rest of the
+    // codebase is not instrumented, so there is no overhead or reporting noise elsewhere.
+    coverage: {
+      enabled: true,
+      provider: 'v8',
+      all: true,
+      include: ['src/services/planning/**/*.ts'],
+      exclude: ['**/*.{test,spec}.ts', '**/__tests__/**'],
+      thresholds: {
+        'src/services/planning/**': {
+          lines: 90,
+          functions: 90,
+          statements: 90,
+          branches: 80,
+        },
+      },
+    },
     server: {
       deps: {
         // Inline the workspace package so its zod import is transformed by
