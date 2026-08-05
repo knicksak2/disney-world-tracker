@@ -104,7 +104,7 @@ graph TD
 ## Testing Strategy
 
 - **Property-based (`fast-check`, ≥100 runs, tagged `Feature: day-planning-optimization, Property N`):** the five properties above, against `optimizer.ts` and `travel.ts` with a stubbed `WaitSnapshot`.
-- **Migration test (`migration0021.test.ts`):** the `planned_items.is_lightning_lane` and `use_single_rider` columns apply.
+- **Migration test (`migration0022.test.ts`):** the `planned_items.is_lightning_lane` and `use_single_rider` columns apply.
 - **Integration (`server.inject`):** optimize and scheduling routes enforce Member auth, persist scheduling fields, reflect the transit penalty and pace scaling, and round-trip `planned_time` through the WDW clock; the optimize route is exercised with a stubbed Prediction_Service.
 - **Mobile:** Timeline and TransitGap rendering (walk vs. park hop, all paces), the Schedule Builder toggles, and the unfitted/over-hours warning.
 
@@ -135,4 +135,4 @@ Depends on the `crowd-calendar` feature's `predictionService.getDaySnapshot(expe
 
 **Snapshot signals (resolved — full R6 supported):** `getDaySnapshot` now populates the R6 signals (crowd-calendar R9.5): `isVirtualQueue` (R6.3), `waits[].singleRiderWaitMinutes` for any date from the single-rider shape (R6.4), and `showtimes` / `lightningLane` whenever per-date signals exist (R6.2). The only inherent gap is `showtimes` for a **far-future** date (future showtimes aren't known) — the optimizer must therefore still degrade a show with no showtimes to standby (R6.6) and never read an absent field as a wait. No crowd-calendar changes are required before building this feature.
 
-**Pre-existing test to update:** adding scheduling/LL fields to `PlannedItemDTO` (task 1.1) will break `apps/api/src/services/trips/__tests__/plannedCompletionModelConstraints.test.ts`, which currently asserts `PlannedItemDTO` has exactly its original five fields. That guard is already red against migration `0019` (it forbids any `planned_items` change past `0015`); update its assertions to allow the day-planning scheduling fields (while still forbidding a *completion* field/column/route) as part of this feature.
+**Pre-existing test to update:** adding scheduling/LL fields to `PlannedItemDTO` (task 1.1) will break `apps/api/src/services/trips/__tests__/plannedCompletionModelConstraints.test.ts`, which asserts `PlannedItemDTO` has exactly its original five fields — widen that one assertion to allow the new scheduling/LL fields (while still forbidding a *completion* field/column/route). The guard's migration-scan half has already been relaxed to allow the shipped `planned_items` scheduling migration (`0019`) while still forbidding a completion column/link, so the suite baseline is green; task 1.1 only owns the `PlannedItemDTO` field assertion.
