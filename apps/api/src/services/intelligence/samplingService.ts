@@ -154,28 +154,46 @@ export function createSamplingService(deps: SamplingServiceDeps): SamplingServic
 
         const schedRes = await liveClient.getEntitySchedule(park.id);
         
-        const schedRows: ScheduleSignalRow[] = [];
+        const schedRowsMap = new Map<string, ScheduleSignalRow>();
         for (const se of schedRes.schedule) {
            if (!se.date) continue;
-           const sDate = new Date(se.date);
-           let openTime = se.openingTime ? new Date(se.openingTime) : null;
-           let closeTime = se.closingTime ? new Date(se.closingTime) : null;
+           const sDate = new Date(se.date as string);
+           const dateKey = sDate.toISOString().split('T')[0] as string;
+           
+           let openTime = se.openingTime ? new Date(se.openingTime as string) : null;
+           let closeTime = se.closingTime ? new Date(se.closingTime as string) : null;
            
            const desc = (se.description || '').toLowerCase();
            const ll = se.purchases?.find(p => p.name === 'Lightning Lane Multi Pass');
            
-           schedRows.push({
-             park: canonicalPark,
-             date: sDate,
-             open_time: openTime,
-             close_time: closeTime,
-             early_entry: desc.includes('early entry'),
-             extended_evening: desc.includes('extended evening'),
-             ticketed_event: desc.includes('special ticketed'),
-             ll_multipass_price_cents: ll?.price?.amount ?? null
-           });
+           if (schedRowsMap.has(dateKey)) {
+             const existing = schedRowsMap.get(dateKey)!;
+             if (openTime && (!existing.open_time || openTime < existing.open_time)) {
+               existing.open_time = openTime;
+             }
+             if (closeTime && (!existing.close_time || closeTime > existing.close_time)) {
+               existing.close_time = closeTime;
+             }
+             existing.early_entry = existing.early_entry || desc.includes('early entry');
+             existing.extended_evening = existing.extended_evening || desc.includes('extended evening');
+             existing.ticketed_event = existing.ticketed_event || desc.includes('special ticketed');
+             if (ll?.price?.amount && !existing.ll_multipass_price_cents) {
+               existing.ll_multipass_price_cents = ll.price.amount;
+             }
+           } else {
+             schedRowsMap.set(dateKey, {
+               park: canonicalPark,
+               date: sDate,
+               open_time: openTime,
+               close_time: closeTime,
+               early_entry: desc.includes('early entry'),
+               extended_evening: desc.includes('extended evening'),
+               ticketed_event: desc.includes('special ticketed'),
+               ll_multipass_price_cents: ll?.price?.amount ?? null
+             });
+           }
         }
-        await repo.upsertParkScheduleSignals(schedRows);
+        await repo.upsertParkScheduleSignals(Array.from(schedRowsMap.values()));
 
         const waitSamples: WaitSampleRow[] = [];
         const dailySignals: DailySignalRow[] = [];
@@ -185,11 +203,14 @@ export function createSamplingService(deps: SamplingServiceDeps): SamplingServic
         
         let parkTotalWait = 0;
         let parkTotalSamples = 0;
+        const seenExpIds = new Set<string>();
 
         for (const entry of liveRes.liveData) {
           if (!entry.id) continue;
           const expId = tpIdToDbId.get(entry.id);
           if (!expId) continue;
+          if (seenExpIds.has(expId)) continue;
+          seenExpIds.add(expId);
 
           const isOperating = entry.status === 'OPERATING';
           const waitMinutes = (isOperating && entry.queue?.STANDBY?.waitTime) || 0;
