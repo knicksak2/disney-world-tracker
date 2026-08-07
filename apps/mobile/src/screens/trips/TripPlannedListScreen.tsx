@@ -415,7 +415,6 @@ export default function TripPlannedListScreen({
       <AddItemModal
         visible={composerVisible}
         tripId={tripId}
-        plannedExperienceIds={items.map((item) => item.experienceId)}
         onClose={() => {
           setComposerVisible(false);
         }}
@@ -565,13 +564,11 @@ function ratingFor(feedItem: TripFeedItemDTO | undefined): number | null {
 function AddItemModal({
   visible,
   tripId,
-  plannedExperienceIds,
   onClose,
   onAdded,
 }: {
   readonly visible: boolean;
   readonly tripId: string;
-  readonly plannedExperienceIds: readonly string[];
   readonly onClose: () => void;
   readonly onAdded: () => void;
 }): JSX.Element {
@@ -579,11 +576,6 @@ function AddItemModal({
   // The Experience currently being added, so the picker can show a per-row
   // spinner and block a second tap while the POST is in flight.
   const [pendingId, setPendingId] = useState<string | null>(null);
-
-  const plannedSet = useMemo(
-    () => new Set(plannedExperienceIds),
-    [plannedExperienceIds],
-  );
 
   const resetForm = (): void => {
     setError(null);
@@ -631,7 +623,9 @@ function AddItemModal({
   };
 
   const onSelect = (experience: ExperienceDTO): void => {
-    if (busy || plannedSet.has(experience.id)) return;
+    // An Experience may be added to the Planned_List more than once (R9.3), so
+    // there is no already-planned guard here; the server accepts the duplicate.
+    if (busy) return;
     setError(null);
     setPendingId(experience.id);
     addMutation.mutate(experience);
@@ -662,8 +656,6 @@ function AddItemModal({
           <ExperiencePicker
             enabled={visible}
             onSelect={onSelect}
-            disabledIds={plannedSet}
-            disabledLabel="Planned"
             pendingId={pendingId}
             busy={busy}
             testIDPrefix="planned-list"

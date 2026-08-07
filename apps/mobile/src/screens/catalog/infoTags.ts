@@ -112,9 +112,8 @@ export const ACCESSIBILITY_LABELS: Record<string, string> = {
  */
 export function relabelTagValue(value: string): string {
   const trimmed = value.trim();
-  const mapped = ACCESSIBILITY_LABELS[trimmed];
-  if (mapped !== undefined) {
-    return mapped;
+  if (Object.prototype.hasOwnProperty.call(ACCESSIBILITY_LABELS, trimmed)) {
+    return ACCESSIBILITY_LABELS[trimmed]!;
   }
   return trimmed.replace(/[-_]+/g, ' ').trim();
 }

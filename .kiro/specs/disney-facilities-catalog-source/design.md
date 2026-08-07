@@ -141,6 +141,9 @@ apps/api/src/services/catalog/disney/
   enrich.ts             coordinates, accessibility facets, price tier, meal periods extraction (pure)
   imagery.ts            detailImageUrl/listImageUrl -> imageUrl selection (pure)
   menu.ts               Menu_Service payload -> Menu DTO projection (pure)
+  earlyEntry.ts         Schedule_Channel docs -> operatesDuringEarlyEntry boolean (pure). During
+                        sync, ride/attraction experiences get a batched Schedule_Channel side-fetch
+                        (the menu-fetch pattern) whose result feeds this pure derivation (R5.8, R5.9)
   liveProject.ts        Disney status/dining-status/forecast/schedule docs -> LiveDetail (pure)
   bridge.ts             build + apply Bridge_Map (enterprise_id -> internal_id)
   __tests__/            unit + property tests
@@ -649,6 +652,14 @@ Meal periods are stored as JSONB on `experiences` for the same reason. All exist
 (`completions`, `ratings`, `notes`, and their FKs to `experiences.id`) are untouched, which is what
 preserves user data across the migration (R10.5, R10.6).
 
+**Early-entry participation (additive, migration `0025_experience_early_entry.sql`).** `0004` is
+already applied, so the Early-Entry flag is added by a new sequential migration:
+`ALTER TABLE experiences ADD COLUMN operates_during_early_entry BOOLEAN` — nullable, where `NULL`
+means never captured. It is written by `Catalog_Sync` from the Schedule_Channel (R5.8, R5.9) and
+exposed on the Experience DTO when set (R5.10). Consumed by the Day Planning optimizer
+(`day-planning-optimization` R3.12) to gate early-entry scheduling; nothing else depends on it, and
+a `NULL` degrades to "not early-entry" at the consumer.
+
 ## Correctness Properties
 
 *A property is a characteristic or behavior that should hold true across all valid executions of a
@@ -878,6 +889,16 @@ non-empty `detailImageUrl`, else the non-empty `listImageUrl`, else `null` — s
 persisted.
 
 **Validates: Requirements 7.1, 7.2, 7.3, 7.4, 14.8, 14.9**
+
+### Property 25: Special-hours participation is derived from the schedule's type and isolated on failure
+
+*For any* set of Schedule_Channel blocks for an Experience, each special-hours flag is TRUE iff at least one block's normalized type is in that window's token set — early entry (`EARLY_ENTRY`, `EARLY_PARK_ENTRY`, `EXTRA_MAGIC_HOURS`, `EXTRA_MAGIC_HOUR`), extended evening (`EXTENDED_EVENING`, `EXTENDED_EVENING_HOURS`), or ticketed event (`SPECIAL_TICKETED_EVENT`, `AFTER_HOURS`) — and FALSE otherwise; *for any* schedule-fetch failure or absent schedule, the previously persisted flags are left unchanged and the catalog run still completes; and the DTO exposes `operatesDuringEarlyEntry` exactly when persisted.
+
+**Validates: Requirements 5.8, 5.9, 5.10, 5.11**
+
+### Migration `0026_experience_special_hours.sql`
+
+- `experiences`: add nullable `operates_during_extended_evening BOOLEAN` and `operates_during_ticketed_event BOOLEAN`, captured together with `operates_during_early_entry` (0025) from the Schedule channel (R5.11). Separate migration because `0025` is already applied — never edit an applied migration.
 
 ## Error Handling
 

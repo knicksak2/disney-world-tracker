@@ -504,14 +504,18 @@ CREATE UNIQUE INDEX trip_invites_one_pending_idx
     ON trip_invites(trip_id, invitee_id) WHERE state = 'pending';
 CREATE INDEX trip_invites_invitee_idx ON trip_invites(invitee_id);
 
--- planned_items: one entry per (trip, experience) (R9.3); adder recorded (R9.1).
+-- planned_items: an Experience may appear more than once per Trip (R9.3);
+-- adder recorded (R9.1). NOTE: the original `planned_items_unique
+-- UNIQUE (trip_id, experience_id)` constraint shown below was dropped in
+-- migration 0019 so the same Experience can be planned multiple times (e.g.
+-- across days); it is retained here only to document the initial 0015 shape.
 CREATE TABLE planned_items (
     id             UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     trip_id        UUID        NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
     experience_id  UUID        NOT NULL REFERENCES experiences(id),
     added_by       UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
-    CONSTRAINT planned_items_unique UNIQUE (trip_id, experience_id)
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+    -- CONSTRAINT planned_items_unique UNIQUE (trip_id, experience_id)  -- dropped in 0019
 );
 CREATE INDEX planned_items_trip_idx ON planned_items(trip_id);
 
@@ -819,12 +823,12 @@ otherwise it is rejected with no invite and no duplicate membership created.
 
 **Validates: Requirements 6.2, 6.4, 6.5**
 
-### Property 16: Planned_List add records the adder and rejects duplicates; removal is by adder or organizer
+### Property 16: Planned_List add records the adder and permits duplicates; removal is by adder or organizer
 
-*For any* Trip_Member adding a catalog Experience not already present, a Planned_Item referencing that
-Experience and recording the adding Member is created; adding an Experience already in the Planned_List is
-rejected with no duplicate; and removing a Planned_Item succeeds for the Member who added it or for any
-Organizer.
+*For any* Trip_Member adding a catalog Experience, a Planned_Item referencing that Experience and
+recording the adding Member is created; adding an Experience already in the Planned_List creates an
+additional Planned_Item (the same Experience may appear more than once, R9.3); and removing a
+Planned_Item succeeds for the Member who added it or for any Organizer.
 
 **Validates: Requirements 9.1, 9.3, 9.6, 9.7**
 

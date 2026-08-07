@@ -12,7 +12,7 @@ into the existing sync/read paths so nothing is left orphaned.
 
 All code is TypeScript in the existing `apps/api` (`services/catalog/disney/`) and `apps/mobile`
 packages, tested with `vitest` and `fast-check`, matching the existing `*.prop.test.ts` conventions.
-Property-based tests reference the design's Correctness Properties (Properties 1–24) and run a
+Property-based tests reference the design's Correctness Properties (Properties 1–25) and run a
 minimum of 100 iterations.
 
 ## Tasks
@@ -279,11 +279,30 @@ minimum of 100 iterations.
 - [x] 14. Final checkpoint - full suite
   - Ensure all tests pass, ask the user if questions arise.
 
+- [ ] 15. Early-entry participation capture (R5.8, R5.9, R5.10)
+  - [x] 15.1 Migration `0025_experience_early_entry.sql` + `migration0025.test.ts`
+    - Add nullable `experiences.operates_during_early_entry BOOLEAN` (`NULL` = never captured). `BEGIN/COMMIT`, inline comment. pg-mem test asserts the column exists and is nullable.
+    - _Requirements: 5.8_
+  - [x] 15.2 Pure `disney/earlyEntry.ts` + property test
+    - `operatesDuringEarlyEntry(scheduleDocs)`: TRUE iff any schedule block's normalized type ∈ `{EARLY_ENTRY, EARLY_PARK_ENTRY, EXTRA_MAGIC_HOURS, EXTRA_MAGIC_HOUR}`, else FALSE (reuse `liveProject`'s type normalization).
+    - **Property 25: Early-entry participation is derived from the schedule's type and isolated on failure**
+    - **Validates: Requirements 5.8, 5.9, 5.10**
+    - Location: `services/catalog/disney/__tests__/earlyEntry.prop.test.ts`
+  - [x] 15.3 Capture during sync + persist (`sync.ts`, `earlyEntrySync.ts`, `repo.ts`)
+    - For each ride/attraction Experience, batched Schedule_Channel side-fetch (the menu-fetch pattern), derive the flag, carry it through reconcile/apply into `operates_during_early_entry`; a fetch failure leaves the prior value unchanged and does not fail the run. pg-mem test: a synced ride with an early-entry schedule persists TRUE and reads back; a fetch failure retains the prior value (R5.9).
+    - _Requirements: 5.8, 5.9_
+  - [ ] 15.4 Expose on `ExperienceDTO` (`@dwt/shared`) + repo projection
+    - Add `operatesDuringEarlyEntry?: boolean` to `ExperienceDTO`; project it from `experiences.operates_during_early_entry` when set. Schema/DTO test with present and absent cases.
+    - _Requirements: 5.10_
+  - [x] 15.5 Extended-evening & ticketed-event capture (R5.11)
+    - Migration `0026_experience_special_hours.sql` (+ `migration0026.test.ts`) adds nullable `operates_during_extended_evening` / `operates_during_ticketed_event`. Generalize the pure derivation (`classifySpecialHours` / `specialHoursByFacility`), the capture step (`captureSpecialHours`), and the repo updater (`updateSpecialHoursParticipation`) to all three windows. Tests: pure classification of all three types, capture maps + persists all three, repo writes all three columns.
+    - _Requirements: 5.11_
+
 ## Notes
 
 - Tasks marked with `*` are optional test tasks and can be skipped for a faster MVP; core implementation tasks are never optional.
 - Each task references specific requirements (granular sub-requirements) for traceability.
-- Property tests implement the design's Correctness Properties (1–24), one property per sub-task, each running a minimum of 100 iterations and tagged `// Feature: disney-facilities-catalog-source, Property {n}: ...`.
+- Property tests implement the design's Correctness Properties (1–25), one property per sub-task, each running a minimum of 100 iterations and tagged `// Feature: disney-facilities-catalog-source, Property {n}: ...`.
 - Presentational/infrastructural/one-time-sequencing criteria are covered by example, component, integration, and smoke tests rather than properties.
 - Checkpoints ensure incremental validation at natural boundaries.
 
@@ -301,7 +320,9 @@ minimum of 100 iterations.
     { "id": 6, "tasks": ["10.2", "10.3"] },
     { "id": 7, "tasks": ["10.4", "10.5", "12.1"] },
     { "id": 8, "tasks": ["12.2", "13.1"] },
-    { "id": 9, "tasks": ["12.3", "13.2"] }
+    { "id": 9, "tasks": ["12.3", "13.2"] },
+    { "id": 10, "tasks": ["15.1", "15.2"] },
+    { "id": 11, "tasks": ["15.3", "15.4"] }
   ]
 }
 ```

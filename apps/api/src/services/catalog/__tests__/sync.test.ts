@@ -262,6 +262,9 @@ function createStubRepo(opts: StubRepoOptions = {}): StubRepo {
     async upsertMenus() {
       return;
     },
+    async updateSpecialHoursParticipation() {
+      return;
+    },
   };
   return repo;
 }
@@ -579,8 +582,12 @@ describe('runSync — happy path', () => {
     // Delta_Sync: enumeration carried the stored checkpoint as `since`.
     expect(sinceSeen).toBe('seq-100');
     // Only the non-deleted changed id was bulk-fetched — no tombstone, no
-    // unchanged document.
-    expect(bulkIds).toEqual([[LE_CELLIER.id]]);
+    // unchanged document. (The separate best-effort early-entry capture fetches
+    // the `wdw.today.1_0.Attraction` schedule doc; exclude it from this
+    // facilities-path assertion.)
+    expect(bulkIds.filter((ids) => !ids.includes('wdw.today.1_0.Attraction'))).toEqual([
+      [LE_CELLIER.id],
+    ]);
     // The tombstone was applied and the checkpoint advanced atomically.
     expect(documentStore.applyDeltaCalls).toHaveLength(1);
     expect(documentStore.applyDeltaCalls[0]?.deletes).toEqual([

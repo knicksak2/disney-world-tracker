@@ -57,6 +57,23 @@ const plannedItemArb: fc.Arbitrary<PlannedItemDTO> = fc.record({
   experienceName: fc.string({ maxLength: 40 }),
   park: parkArb,
   addedByDisplayName: fc.oneof(fc.constant(''), fc.string({ maxLength: 30 })),
+  plannedDate: fc.option(fc.constant('2026-10-01'), { nil: null }),
+  plannedTime: fc.option(fc.constant('2026-10-01T10:00:00Z'), { nil: null }),
+  isFixed: fc.boolean(),
+  isLightningLane: fc.boolean(),
+  useSingleRider: fc.boolean(),
+  priority: fc.integer({ min: 1, max: 3 }),
+  itemType: fc.constantFrom('experience', 'break'),
+  durationMinutes: fc.option(fc.integer({ min: 1, max: 120 }), { nil: null }),
+  predictedWaitMinutes: fc.option(fc.integer({ min: 0, max: 180 }), { nil: null }),
+  travelFromPrev: fc.option(
+    fc.record({
+      kind: fc.constantFrom('walk', 'park_hop'),
+      minutes: fc.integer({ min: 0, max: 60 }),
+    }),
+    { nil: null },
+  ),
+  optimizedAt: fc.option(fc.constant('2026-10-01T12:00:00.000Z'), { nil: null }),
 });
 
 /** A Planned_List: an array of Planned_Items (possibly empty). */

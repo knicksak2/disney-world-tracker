@@ -20,6 +20,8 @@ export {
   SHARE_PAYLOAD_KINDS,
   SHARE_REACTION_VALUES,
   TRIP_REACTION_VALUES,
+  WALKING_SPEEDS,
+  PLANNED_ITEM_TYPES,
 } from './enums.js';
 export type {
   ExperienceCategory,
@@ -28,6 +30,8 @@ export type {
   SharePayloadKind,
   ShareReactionValue,
   TripReactionValue,
+  WalkingSpeed,
+  PlannedItemType,
 } from './enums.js';
 
 // Avatar preset catalog (allowlist of bundled illustration ids).
@@ -211,9 +215,12 @@ export {
   tripResortIdsSchema,
   TRIP_RESORT_LIMIT,
   // input schemas
+  dayTouringHoursSchema,
   tripCreateSchema,
   tripEditSchema,
   plannedItemAddSchema,
+  plannedItemEditSchema,
+  tripOptimizationInputSchema,
   tripLogEntryCreateSchema,
   rodeWithConfirmSchema,
   tripReactionInputSchema,
@@ -229,10 +236,13 @@ export type {
   TripInviteState,
   RodeWithTagState,
   TripFeedTargetType,
+  DayTouringHoursDTO,
   // input types
   TripCreateInput,
   TripEditInput,
   PlannedItemAddInput,
+  PlannedItemEditInput,
+  TripOptimizationInput,
   TripLogEntryCreateInput,
   RodeWithConfirmInput,
   TripReactionInput,
@@ -251,6 +261,9 @@ export type {
   TripReactionSummary,
   TripCommentDTO,
   TripSummaryDTO,
+  TripOptimizationResult,
+  OptimizedItem,
+  TripTravelLeg,
 } from './trips.js';
 
 // Planned List Completion Sync: pure, I/O-free derivation core shared by the

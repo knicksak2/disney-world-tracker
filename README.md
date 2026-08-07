@@ -177,11 +177,24 @@ Runs `expo start` from `apps/mobile`. The Expo dev server reads `apps/mobile/app
 
 | # | Source | When it applies |
 | --- | --- | --- |
-| 1 | `API_BASE_URL` env var | Any context — explicit override |
-| 2 | `PROD_API_BASE_URL` env var (default `https://dwt-api.onrender.com`) | Release builds/exports, where Expo sets `NODE_ENV=production` |
-| 3 | Built-in default `http://10.0.2.2:3000` | Local `expo start` (`NODE_ENV=development`) |
+| 1 | `.env.<APP_ENV>` file's `API_BASE_URL` | When `APP_ENV` is set — `npm run dev:mobile:cloud` sets `APP_ENV=dev` and loads `.env.dev`. Falls back to the Render default if the file is absent. |
+| 2 | `API_BASE_URL` env var | Any other context — explicit override |
+| 3 | `PROD_API_BASE_URL` env var (default `https://dwt-api.onrender.com`) | Release builds/exports, where Expo sets `NODE_ENV=production` |
+| 4 | Built-in default `http://10.0.2.2:3000` | Local `expo start` (`NODE_ENV=development`) |
 
-The upshot: a plain `npm run dev:mobile` hits your **local** API automatically, and a production build (`expo export` / EAS) targets **Render** automatically — no env juggling between them. The hosted default matches the `dwt-api` service in `render.yaml`; if you rename the Render service, set `PROD_API_BASE_URL` to its URL.
+The upshot: a plain `npm run dev:mobile` hits your **local** API automatically, a production build (`expo export` / EAS) targets **Render** automatically, and `npm run dev:mobile:cloud` runs a **dev** build against **Render** — no env juggling between them. The hosted default matches the `dwt-api` service in `render.yaml`; if you rename the Render service, set `PROD_API_BASE_URL` to its URL.
+
+#### Run a dev build against the hosted (Render) backend
+
+`npm run dev:mobile:cloud` starts the Expo dev server (fast refresh, dev bundling) but points the app at the hosted Render API instead of your local one — the mobile analogue of the API's `dev:api:cloud`. It sets `APP_ENV=dev`, which makes `app.config.ts` load `apps/mobile/.env.dev` and, when that file is absent, default to the Render URL. So it works with no setup; create `.env.dev` (gitignored) with `API_BASE_URL=<url>` only if your hosted URL differs from the default:
+
+```bash
+# optional — only to override the default Render URL
+copy apps\mobile\.env.example apps\mobile\.env.dev    # Windows
+cp apps/mobile/.env.example apps/mobile/.env.dev       # macOS / Linux
+```
+
+`APP_ENV=dev` deliberately wins over an `API_BASE_URL` pinned in `.env.local`, so a local override doesn't silently defeat the cloud script. Restart Metro after editing `.env.dev` (the value is read at Expo startup). Note the hosted API talks to Neon/Upstash — if the catalog looks empty, seed it with `npm run sync:cloud` from `apps/api`. Free-tier Render sleeps after ~15 min idle, so the first request after a quiet spell takes 30–60s.
 
 #### Local config with `.env.local` (only to override the local target)
 
@@ -288,7 +301,8 @@ All from the repo root.
 | --- | --- |
 | `npm run dev:api` | Starts the Fastify API in watch mode against the **local** services in `docker-compose.yml` (uses `apps/api/.env`). |
 | `npm run dev:api:cloud` | Starts the Fastify API in watch mode against your **hosted dev** services (uses `apps/api/.env.dev`). |
-| `npm run dev:mobile` | Starts the Expo dev server. |
+| `npm run dev:mobile` | Starts the Expo dev server against your **local** API. |
+| `npm run dev:mobile:cloud` | Starts the Expo dev server (dev build) against the **hosted** Render API (`APP_ENV=dev` → loads `apps/mobile/.env.dev`, defaulting to the Render URL). |
 | `npm run migrate` | Applies any pending SQL migrations from `apps/api/migrations/` to the **local** Postgres (`apps/api/.env`). Idempotent. |
 | `npm run migrate:cloud` | Applies pending migrations to the **hosted** Postgres (`apps/api/.env.dev`). Idempotent. |
 | `npm run lint` | Runs ESLint across the entire repo using the shared `eslint.config.mjs`. |

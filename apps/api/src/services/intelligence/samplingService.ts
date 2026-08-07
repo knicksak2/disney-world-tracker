@@ -19,6 +19,28 @@ import { applyEma, emaVariance, normalizeCrowdIndex } from './waitMath.js';
 /** Cold-start seed for per-park normalization when no history exists yet (R2.1). */
 const DEFAULT_TYPICAL_WAIT = 35;
 
+/**
+ * Minimum spacing between sampling passes (start-to-start), a debounce against
+ * accidental rapid re-fires. Kept well below the ~10-minute cron cadence so a
+ * legitimate 10-minute tick always clears it; must never equal the trigger
+ * interval (see the throttle in `runSamplingPass`).
+ */
+const MIN_SAMPLE_INTERVAL_MS = 5 * 60 * 1000;
+
+/**
+ * The Crowd_Index is a theme-park concept derived from posted standby waits.
+ * Water parks (Blizzard Beach, Typhoon Lagoon) do not post standby waits via the
+ * live feed, so a naive index over their "operating, 0-wait" entries collapses to
+ * a meaningless ~1.0. Restrict Crowd_Index to the four WDW theme parks (values
+ * match `experiences.park`). Ride shapes/signals are still collected for any park.
+ */
+const CROWD_INDEX_PARKS = new Set<string>([
+  'Magic Kingdom',
+  'EPCOT',
+  'Hollywood Studios',
+  'Animal Kingdom',
+]);
+
 export interface SamplingServiceDeps {
   repo: IntelligenceRepo;
   liveClient: ThemeParksLiveClient;
@@ -40,7 +62,7 @@ export function createSamplingService(deps: SamplingServiceDeps): SamplingServic
   const clock = deps.now ?? (() => new Date());
   
   let isRunning = false;
-  let lastSampleTime = 0;
+  let lastSampleStart = 0;
   let lastRecomputeTime = 0;
   
   return {
@@ -51,15 +73,21 @@ export function createSamplingService(deps: SamplingServiceDeps): SamplingServic
       }
       
       const now = clock();
-      if (now.getTime() - lastSampleTime < 10 * 60 * 1000) {
-        logger.debug('Sampling pass throttled (10m interval)');
+      // Debounce accidental rapid re-fires, measured start-to-start. This MUST
+      // stay safely below the cron cadence (~10 min): if the throttle window
+      // equals the trigger interval, clock/pass-duration jitter pushes every
+      // alternate cron hit just under the window and halves the effective
+      // sampling rate. Stamping from the pass START (not completion) makes the
+      // interval independent of how long a pass takes.
+      if (now.getTime() - lastSampleStart < MIN_SAMPLE_INTERVAL_MS) {
+        logger.debug('Sampling pass throttled (min-interval debounce)');
         return;
       }
       
       isRunning = true;
+      lastSampleStart = now.getTime();
       try {
         await executePass(now);
-        lastSampleTime = clock().getTime();
       } catch (err) {
         logger.error({ err }, 'Sampling pass failed fatally');
       } finally {
@@ -102,12 +130,19 @@ export function createSamplingService(deps: SamplingServiceDeps): SamplingServic
 
     // Build ThemeParks GUID → DB experience ID map
     const tpIdToDbId = new Map<string, string>();
+    let unresolvedCount = 0;
     for (const exp of experiences) {
       try {
         const tpId = await directory.resolveEntityId(exp.upstream_entity_id);
-        if (tpId) tpIdToDbId.set(tpId, exp.id);
-      } catch (_err) {
-        // Log and ignore
+        if (tpId) {
+          tpIdToDbId.set(tpId, exp.id);
+        } else {
+          unresolvedCount++;
+          logger.debug({ upstreamEntityId: exp.upstream_entity_id, experienceId: exp.id }, 'Could not resolve entity ID for experience');
+        }
+      } catch (err) {
+        unresolvedCount++;
+        logger.debug({ err, upstreamEntityId: exp.upstream_entity_id, experienceId: exp.id }, 'Failed to resolve entity ID for experience');
       }
     }
 
@@ -132,9 +167,27 @@ export function createSamplingService(deps: SamplingServiceDeps): SamplingServic
     const existingSeasons = await repo.getSeasonHours(allDbIds);
     const existingSignals = await repo.getExperienceSignals(allDbIds);
     
+    const unmappedStandbyEntries = new Map<string, { id: string; name: string; waitTime: number }>();
+    let totalWaitSamplesRecorded = 0;
+    let parksSampledCount = 0;
+
     for (const park of wdwParks) {
       try {
         const liveRes = await liveClient.getEntityLive(park.id);
+
+        for (const entry of liveRes.liveData) {
+          if (!entry.id) continue;
+          if (!tpIdToDbId.has(entry.id)) {
+            const standbyWait = entry.queue?.STANDBY?.waitTime;
+            if (typeof standbyWait === 'number' && !Number.isNaN(standbyWait)) {
+              unmappedStandbyEntries.set(entry.id, {
+                id: entry.id,
+                name: entry.name ?? entry.id,
+                waitTime: standbyWait,
+              });
+            }
+          }
+        }
 
         // Determine canonical Park from experiences.park (not from ThemeParks display name).
         // Pick the canonical park from the first matched experience in this park's live data.
@@ -151,6 +204,8 @@ export function createSamplingService(deps: SamplingServiceDeps): SamplingServic
           logger.debug({ tpPark: park.name }, 'No mapped experiences for park, skipping');
           continue;
         }
+
+        parksSampledCount++;
 
         const schedRes = await liveClient.getEntitySchedule(park.id);
         
@@ -293,13 +348,15 @@ export function createSamplingService(deps: SamplingServiceDeps): SamplingServic
         }
         
         await repo.insertWaitSamples(waitSamples);
+        totalWaitSamplesRecorded += waitSamples.length;
         await repo.upsertExperienceDailySignals(dailySignals);
         await repo.upsertRideShapes(updatedShapes);
         await repo.upsertSeasonHours(updatedSeasons);
         await repo.upsertExperienceSignals(updatedSignals);
 
-        // Park Crowd Index (running daily aggregate, per-park normalization R2.1)
-        if (parkTotalSamples > 0) {
+        // Park Crowd Index (running daily aggregate, per-park normalization R2.1).
+        // Only the four theme parks — see CROWD_INDEX_PARKS.
+        if (parkTotalSamples > 0 && CROWD_INDEX_PARKS.has(canonicalPark)) {
           const parkAvgWait = parkTotalWait / parkTotalSamples;
 
           // Per-park rolling baseline; cold-start seed only when no history exists
@@ -330,7 +387,32 @@ export function createSamplingService(deps: SamplingServiceDeps): SamplingServic
         logger.warn({ err, park: park.name }, 'Failed to sample park');
       }
     }
-    
+
+    if (unmappedStandbyEntries.size > 0) {
+      const unmappedList = Array.from(unmappedStandbyEntries.values());
+      const sample = unmappedList.slice(0, 5).map(e => `${e.name} (${e.id})`);
+      logger.warn(
+        {
+          count: unmappedList.length,
+          sample,
+          unmappedIds: unmappedList.map(e => e.id),
+          unmapped: unmappedList.slice(0, 10),
+        },
+        `Unmapped live experiences with standby waits detected: ${unmappedList.length} (sample: ${sample.join(', ')})`
+      );
+    }
+
+    logger.info(
+      {
+        parksSampled: parksSampledCount,
+        experiencesMapped: tpIdToDbId.size,
+        totalWaitSamples: totalWaitSamplesRecorded,
+        unmappedWithWaitCount: unmappedStandbyEntries.size,
+        unresolvedCount,
+      },
+      `Sampling pass summary: ${parksSampledCount} parks sampled, ${tpIdToDbId.size} experiences mapped, ${totalWaitSamplesRecorded} wait samples recorded, ${unmappedStandbyEntries.size} unmapped with standby waits, ${unresolvedCount} unresolved`
+    );
+
     // Prune old samples (30 days)
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
     await repo.pruneWaitSamples(thirtyDaysAgo);

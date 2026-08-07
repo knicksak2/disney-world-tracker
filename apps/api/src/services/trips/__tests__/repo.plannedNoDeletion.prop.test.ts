@@ -397,6 +397,17 @@ function plannedItemDTOs(store: Store): PlannedItemDTO[] {
       experienceName: exp.name,
       park: exp.park,
       addedByDisplayName: adder.displayName,
+      plannedDate: null,
+      plannedTime: null,
+      isFixed: false,
+      isLightningLane: false,
+      useSingleRider: false,
+      priority: 2,
+      itemType: 'experience',
+      durationMinutes: null,
+      predictedWaitMinutes: null,
+      travelFromPrev: null,
+      optimizedAt: null,
     };
   });
 }

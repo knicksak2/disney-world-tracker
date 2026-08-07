@@ -29,6 +29,12 @@ module.exports = {
   // 1-second hang at the end of every Jest run without masking real
   // unsettled promises (we do not have any).
   forceExit: true,
+  // Parallelism. jest-expo workers are memory-heavy, so we don't let Jest
+  // fan out to all 32 cores (its default of cores-1 risks V8 heap exhaustion).
+  // 8 workers cuts the suite from ~167s (at the previous, over-conservative
+  // maxWorkers=2) to ~35s while staying well within memory — a measured
+  // sweet spot, not a guess.
+  maxWorkers: 8,
   transformIgnorePatterns: [
     'node_modules/(?!((jest-)?react-native|@react-native(-community)?|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-clone-referenced-element|@react-navigation/.*|@unimodules/.*|unimodules|sentry-expo|native-base|react-native-svg|react-native-calendars|react-native-swipe-gestures|@dwt/shared))',
   ],

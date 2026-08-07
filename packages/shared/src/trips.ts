@@ -191,8 +191,24 @@ export const tripCreateSchema = z
 export type TripCreateInput = z.infer<typeof tripCreateSchema>;
 
 /**
+ * Per-date touring/schedule preferences configured in Schedule Builder Settings (`⚙️`).
+ */
+export const dayTouringHoursSchema = z
+  .object({
+    startHour: z.number().int().min(0).max(23).optional(),
+    endHour: z.number().int().min(0).max(23).optional(),
+    useEarlyEntry: z.boolean().optional(),
+    useExtendedEvening: z.boolean().optional(),
+    hasAfterHoursTicket: z.boolean().optional(),
+    startingPark: z.string().optional(),
+  })
+  .strict();
+
+export type DayTouringHoursDTO = z.infer<typeof dayTouringHoursSchema>;
+
+/**
  * Body for `PATCH /trips/:id` (R3.4–R3.6). Every field is optional so an edit
- * may touch any subset of `{name, description, startDate, endDate, resortIds}`;
+ * may touch any subset of `{name, description, startDate, endDate, resortIds, walkingSpeed, earlyEntryEligible, dayTouringHours}`;
  * each supplied field is validated by the identical rule used on create. When
  * both dates are supplied together the `endDate >= startDate` invariant is
  * checked here; an edit that supplies only one date is checked against the
@@ -206,6 +222,9 @@ export const tripEditSchema = z
     startDate: tripCalendarDateSchema.optional(),
     endDate: tripCalendarDateSchema.optional(),
     resortIds: tripResortIdsSchema.optional(),
+    walkingSpeed: z.enum(['slow', 'moderate', 'fast']).optional(),
+    earlyEntryEligible: z.boolean().optional(),
+    dayTouringHours: z.record(z.string(), dayTouringHoursSchema).optional(),
   })
   .strict()
   .superRefine(refineDateOrder);
@@ -223,10 +242,62 @@ export type TripEditInput = z.infer<typeof tripEditSchema>;
 export const plannedItemAddSchema = z
   .object({
     experienceId: uuidSchema,
+    plannedDate: tripCalendarDateSchema.nullable().optional(),
+    plannedTime: isoTimestampSchema.nullable().optional(),
+    isFixed: z.boolean().optional(),
+    isLightningLane: z.boolean().optional(),
+    useSingleRider: z.boolean().optional(),
+    priority: z.number().int().min(1).max(3).optional(),
+    itemType: z.enum(['experience', 'break']).optional(),
+    durationMinutes: z.number().int().min(1).max(480).nullable().optional(),
   })
   .strict();
 
 export type PlannedItemAddInput = z.infer<typeof plannedItemAddSchema>;
+
+export const plannedItemEditSchema = z
+  .object({
+    plannedDate: tripCalendarDateSchema.nullable().optional(),
+    plannedTime: isoTimestampSchema.nullable().optional(),
+    isFixed: z.boolean().optional(),
+    isLightningLane: z.boolean().optional(),
+    useSingleRider: z.boolean().optional(),
+    priority: z.number().int().min(1).max(3).optional(),
+    itemType: z.enum(['experience', 'break']).optional(),
+    durationMinutes: z.number().int().min(1).max(480).nullable().optional(),
+  })
+  .strict();
+
+export type PlannedItemEditInput = z.infer<typeof plannedItemEditSchema>;
+
+export const tripOptimizationInputSchema = z
+  .object({
+    date: tripCalendarDateSchema,
+    startHour: z.number().int().min(0).max(23).optional(),
+    endHour: z.number().int().min(0).max(23).optional(),
+  })
+  .strict();
+
+export type TripOptimizationInput = z.infer<typeof tripOptimizationInputSchema>;
+
+export interface OptimizedItem {
+  readonly plannedItemId: string;
+  readonly suggestedArrival: string;
+  readonly predictedWaitMinutes: number;
+  readonly travelFromPrev: {
+    readonly kind: 'walk' | 'park_hop';
+    readonly minutes: number;
+  } | null;
+}
+
+export interface TripOptimizationResult {
+  readonly items: readonly OptimizedItem[];
+  readonly totalWaitMinutes: number;
+  readonly totalWalkMinutes: number;
+  readonly unfittedItemIds: readonly string[];
+  readonly warnings: readonly string[];
+}
+
 
 /**
  * Body for `POST /trips/:id/log-entries` (R10). `rodeWith` is the list of
@@ -346,6 +417,12 @@ export interface TripDTO {
    * join, never a copy of catalog data.
    */
   readonly resorts: readonly TripResortDTO[];
+  /** Walking pace scaling travel times: 'slow' (50m/min), 'moderate' (80m/min), 'fast' (100m/min). */
+  readonly walkingSpeed?: 'slow' | 'moderate' | 'fast' | undefined;
+  /** Flag indicating whether the party is eligible for 30m Early Entry. */
+  readonly earlyEntryEligible?: boolean | undefined;
+  /** Per-date touring hours and event settings dictionary keyed by YYYY-MM-DD. */
+  readonly dayTouringHours?: Record<string, DayTouringHoursDTO> | undefined;
 }
 
 /** One Trip_Member with their display info and role. */
@@ -443,6 +520,15 @@ export interface TripPendingInviteDTO {
 }
 
 /**
+ * A travel leg between two consecutive scheduled items: how the guest gets
+ * there (`walk` within a park, `park_hop` across parks) and how long it takes.
+ */
+export interface TripTravelLeg {
+  readonly kind: 'walk' | 'park_hop';
+  readonly minutes: number;
+}
+
+/**
  * One Planned_List entry, carrying the referenced Experience's name, its Park,
  * and the display name of the Trip_Member who added it (R9.9).
  */
@@ -452,6 +538,23 @@ export interface PlannedItemDTO {
   readonly experienceName: string;
   readonly park: Park;
   readonly addedByDisplayName: string;
+  readonly plannedDate: string | null;
+  readonly plannedTime: string | null;
+  readonly isFixed: boolean;
+  readonly isLightningLane: boolean;
+  readonly useSingleRider: boolean;
+  readonly priority: number;
+  readonly itemType: 'experience' | 'break';
+  readonly durationMinutes: number | null;
+  /**
+   * Persisted result of the last optimize run for this item (R8.1–R8.4).
+   * All three are `null` when the item has not been optimized (or was edited
+   * since), so the timeline shows a "not optimized yet" state rather than a
+   * placeholder wait. `travelFromPrev` is `null` for the first item of a day.
+   */
+  readonly predictedWaitMinutes: number | null;
+  readonly travelFromPrev: TripTravelLeg | null;
+  readonly optimizedAt: string | null;
 }
 
 /**

@@ -25,7 +25,7 @@ export interface WeatherClient {
 }
 
 export interface WeatherClientOptions {
-  /** Serve a cached result until it is this old. Default: once per day (R10.4). Overridable via WEATHER_REFRESH_MS. */
+  /** Serve a cached result until it is this old. Default: hourly. Overridable via WEATHER_REFRESH_MS. */
   ttlMs?: number;
   /** Injectable clock (ms since epoch). */
   now?: () => number;
@@ -38,7 +38,14 @@ export interface WeatherClientOptions {
 export const WDW_LAT = 28.3852;
 export const WDW_LON = -81.5639;
 
-const DEFAULT_TTL_MS = 24 * 60 * 60 * 1000; // Open-Meteo free tier rate-limits per IP; refresh at most daily.
+// Refresh hourly. This drives how often a fresh observed reading lands in
+// `weather_observations` (the PK is `observed_at`, so passes inside one TTL
+// window are idempotent no-ops). Open-Meteo's free non-commercial tier allows
+// <10k calls/day, 5k/hour, 600/minute — one combined current+forecast call per
+// hour (~17/day) is a rounding error against that, and the client already
+// degrades gracefully on a 429 by serving the stale cache. Overridable via
+// WEATHER_REFRESH_MS.
+const DEFAULT_TTL_MS = 60 * 60 * 1000;
 const defaultSleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
 export function createWeatherClient(

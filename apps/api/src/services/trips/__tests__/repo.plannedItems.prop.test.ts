@@ -1,17 +1,18 @@
-// Feature: trips, Property 16: Planned_List add records the adder and rejects duplicates; removal is by adder or organizer
+// Feature: trips, Property 16: Planned_List add records the adder and permits duplicates; removal is by adder or organizer
 /**
- * Property-based test for the Planned_List add/remove rules (task 8.2).
+ * Property-based test for the Planned_List add/remove rules (task 8.2, 8.4).
  *
  * Validates: Requirements 9.1, 9.3, 9.6, 9.7
  *
  * Design Property 16 (design.md → Correctness Properties):
  *
  *   Adding an Experience to a Trip's Planned_List records the adding
- *   Trip_Member (R9.1) and rejects a duplicate Experience (R9.3), an Experience
- *   absent from the Catalog (R9.4), and any add past the 500-item cap (R9.5).
- *   Removing a Planned_Item is permitted for the Trip_Member who added it
- *   (R9.6) and for any Organizer (R9.7), while a Member removing another
- *   Member's item is rejected with `trip_forbidden` (R9.8).
+ *   Trip_Member (R9.1) and permits the same Experience to appear more than once
+ *   (R9.3), while still rejecting an Experience absent from the Catalog (R9.4)
+ *   and any add past the 500-item cap (R9.5). Removing a Planned_Item is
+ *   permitted for the Trip_Member who added it (R9.6) and for any Organizer
+ *   (R9.7), while a Member removing another Member's item is rejected with
+ *   `trip_forbidden` (R9.8).
  *
  * Test strategy
  * -------------
@@ -21,7 +22,7 @@
  * (row-lock target), `experiences` (Catalog existence, seeded read-only),
  * `planned_items`, and `profiles` (adder display-name join, seeded read-only).
  * The fake pool dispatches the SQL fragments the repo emits (`BEGIN`, the
- * lock/existence/duplicate/count `SELECT`s, the `INSERT ... RETURNING`, the
+ * lock/existence/count `SELECT`s, the `INSERT ... RETURNING`, the
  * read-back join, the `DELETE`, and `COMMIT` / `ROLLBACK`) to a
  * snapshot-per-transaction layer so the property exercises the production code
  * path (`addPlannedItem` / `removePlannedItem`) rather than a re-implementation
@@ -33,9 +34,9 @@
  * Members — and a fixed Catalog of Experiences plus a supply of Experience ids
  * absent from the Catalog. A random interleaving of add/remove commands is
  * generated; after every command a set of global invariants is re-checked:
- * model and store agree on the Planned_List contents, every stored item names a
- * known adder and a Catalog Experience, and no Experience appears twice on the
- * list.
+ * model and store agree on the Planned_List contents, and every stored item
+ * names a known adder and a Catalog Experience (the same Experience may appear
+ * more than once — R9.3).
  *
  * `numRuns: 100` per the spec convention. The 500-item cap (R9.5) is covered by
  * a dedicated seeded property below because it cannot be reached through a
@@ -234,15 +235,6 @@ function makeFakePool(store: Store): FakePool {
           return ok([{ count: String(n) }]);
         }
 
-        // ---- addPlannedItem: duplicate Experience (R9.3) ------------
-        if (sql.startsWith('SELECT 1 FROM planned_items')) {
-          const [tripId, experienceId] = params as [string, string];
-          const hit = tx.plannedItems.some(
-            (i) => i.tripId === tripId && i.experienceId === experienceId,
-          );
-          return ok(hit ? [{ '?column?': 1 }] : []);
-        }
-
         // ---- removePlannedItem: lock + read adder, scoped to Trip ---
         if (sql.startsWith('SELECT added_by FROM planned_items')) {
           const [itemId, tripId] = params as [string, string];
@@ -335,8 +327,10 @@ async function expectAppError(
 /**
  * Global invariants re-checked after every command:
  *   - model and store agree on the set of planned items (by id/experience/adder),
- *   - every stored item references a Catalog Experience and a known adder,
- *   - no Experience appears more than once on the Trip's Planned_List (R9.3).
+ *   - every stored item references a Catalog Experience and a known adder.
+ *
+ * The same Experience may appear more than once on the Planned_List (R9.3), so
+ * uniqueness of `experience_id` is deliberately NOT asserted.
  */
 function assertInvariants(m: Model, r: Real): void {
   const storeItems = r.store.plannedItems.filter((i) => i.tripId === TRIP_ID);
@@ -351,13 +345,10 @@ function assertInvariants(m: Model, r: Real): void {
     expect(si!.addedBy).toBe(mi.addedBy);
   }
 
-  // Every stored item is well-formed and Experiences are unique.
-  const seenExperiences = new Set<string>();
+  // Every stored item is well-formed (a Catalog Experience and a known adder).
   for (const si of storeItems) {
     expect(r.store.experiences.has(si.experienceId)).toBe(true);
     expect(r.store.profiles.has(si.addedBy)).toBe(true);
-    expect(seenExperiences.has(si.experienceId)).toBe(false);
-    seenExperiences.add(si.experienceId);
   }
 }
 
@@ -368,10 +359,10 @@ function assertInvariants(m: Model, r: Real): void {
 /**
  * `AddPlannedItem(adderIndex, experienceIndex, unknownExperience)`: a
  * Trip_Member adds an Experience. A Catalog-absent Experience is rejected with
- * `trip_validation_failed` (R9.4); an Experience already on the list is
- * rejected with `trip_validation_failed` (R9.3); otherwise the item is created,
- * recording the adder (R9.1), and the returned projection carries the
- * Experience name/park and the adder's display name.
+ * `trip_validation_failed` (R9.4); otherwise the item is created, recording the
+ * adder (R9.1), and the returned projection carries the Experience name/park
+ * and the adder's display name. An Experience already on the list is added
+ * again as a second Planned_Item — duplicates are permitted (R9.3).
  */
 class AddPlannedItemCommand implements fc.AsyncCommand<Model, Real> {
   constructor(
@@ -411,16 +402,14 @@ class AddPlannedItemCommand implements fc.AsyncCommand<Model, Real> {
         'trip_validation_failed',
       );
       expect(r.store.plannedItems.length).toBe(before);
-    } else if (m.items.some((i) => i.experienceId === experienceId)) {
-      // R9.3: duplicate Experience is rejected; no duplicate item is created.
-      const before = r.store.plannedItems.length;
-      await expectAppError(
-        () => r.repo.addPlannedItem(TRIP_ID, adder.userId, input),
-        'trip_validation_failed',
-      );
-      expect(r.store.plannedItems.length).toBe(before);
     } else {
+      // R9.3: the same Experience may be added more than once — a repeat add
+      // creates a second Planned_Item rather than being rejected. The item
+      // count always grows by exactly one whether or not the Experience is
+      // already on the list.
+      const before = r.store.plannedItems.length;
       const dto = await r.repo.addPlannedItem(TRIP_ID, adder.userId, input);
+      expect(r.store.plannedItems.length).toBe(before + 1);
 
       // The item references the Experience and records the adder (R9.1, R9.9).
       const exp = CATALOG.find((e) => e.id === experienceId)!;
@@ -507,8 +496,8 @@ class RemovePlannedItemCommand implements fc.AsyncCommand<Model, Real> {
 // Property
 // ---------------------------------------------------------------------------
 
-describe('Planned_List add/remove — Property 16: adder recorded, duplicates rejected, removal by adder or organizer', () => {
-  it('records the adder, rejects duplicate/unknown Experiences, and scopes removal to the adder or an Organizer', async () => {
+describe('Planned_List add/remove — Property 16: adder recorded, duplicates permitted, removal by adder or organizer', () => {
+  it('records the adder, permits duplicate Experiences, rejects unknown Experiences, and scopes removal to the adder or an Organizer', async () => {
     const commandArb = fc.oneof(
       fc
         .tuple(
@@ -544,6 +533,39 @@ describe('Planned_List add/remove — Property 16: adder recorded, duplicates re
 });
 
 // ---------------------------------------------------------------------------
+// Duplicate Experiences are permitted (R9.3)
+// ---------------------------------------------------------------------------
+
+/**
+ * A focused, non-property regression guard for the R9.3 change: adding the same
+ * Experience to a Trip's Planned_List a second time is accepted and creates a
+ * distinct second Planned_Item (it would have thrown `trip_validation_failed`
+ * before the duplicate check was removed).
+ */
+describe('addPlannedItem — Property 16: the same Experience may be added more than once (R9.3)', () => {
+  it('creates a second, distinct Planned_Item when the Experience is already on the list', async () => {
+    const store = makeStore();
+    const repo = createTripRepo(
+      makeFakePool(store) as unknown as DbPool,
+      NOOP_DEPS,
+    );
+    const input: PlannedItemAddInput = { experienceId: CATALOG[0]!.id };
+
+    const first = await repo.addPlannedItem(TRIP_ID, ORGANIZER.userId, input);
+    const second = await repo.addPlannedItem(TRIP_ID, ORGANIZER.userId, input);
+
+    // Two separate rows exist, both referencing the same Experience.
+    expect(first.id).not.toBe(second.id);
+    expect(first.experienceId).toBe(CATALOG[0]!.id);
+    expect(second.experienceId).toBe(CATALOG[0]!.id);
+    const rows = store.plannedItems.filter(
+      (i) => i.tripId === TRIP_ID && i.experienceId === CATALOG[0]!.id,
+    );
+    expect(rows).toHaveLength(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // The 500-item cap (R9.5)
 // ---------------------------------------------------------------------------
 
@@ -560,8 +582,7 @@ describe('addPlannedItem — Property 16: the Planned_List holds at most 500 ite
       fc.asyncProperty(
         fc.integer({ min: PLANNED_ITEM_LIMIT - 3, max: PLANNED_ITEM_LIMIT + 3 }),
         async (fill) => {
-          // Seed `fill` items referencing distinct (synthetic) Catalog rows so
-          // the duplicate check never short-circuits the count check.
+          // Seed `fill` items referencing distinct (synthetic) Catalog rows.
           const seedExperiences = new Map<string, CatalogExperience>();
           const seeded: PlannedItemRow[] = [];
           for (let i = 0; i < fill; i += 1) {

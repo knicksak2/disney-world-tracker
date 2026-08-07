@@ -1,6 +1,10 @@
 import { createLogger } from '../../logger.js';
-import type { IntelligenceRepo } from './IntelligenceRepo.js';
+import type { IntelligenceRepo, ExperienceWeatherSensitivityRow } from './IntelligenceRepo.js';
 import { updateAccuracy } from './calibration.js';
+import {
+  computeWeatherSensitivities as computeWeatherSensitivitiesPure,
+  type ConditionWaitAggregate,
+} from './weatherLearning.js';
 import { wdwToday } from '../trips/wdwClock.js';
 import type { PredictionService } from './predictionService.js';
 import type { Park } from '@dwt/shared';
@@ -9,6 +13,11 @@ import type { Park } from '@dwt/shared';
 const WDW_THEME_PARKS: readonly Park[] = [
   'Magic Kingdom', 'EPCOT', 'Hollywood Studios', 'Animal Kingdom'
 ] as const;
+
+/** Learn weather sensitivity from waits within this recent window (matches the wait_samples retention). */
+const WEATHER_LEARNING_WINDOW_DAYS = 30;
+/** Bounded retention for observed weather (older rows can't join to pruned waits anyway). */
+const WEATHER_OBSERVATION_RETENTION_DAYS = 90;
 
 export interface DerivedStatsServiceDeps {
   repo: IntelligenceRepo;
@@ -37,11 +46,15 @@ export function createDerivedStatsService(deps: DerivedStatsServiceDeps): Derive
       try {
         await reconcileForecasts(yesterday);
         await captureForecasts(now);
-        // Weather sensitivity, event impact, and cascade are stubbed (Task 4.5 partial).
-        // computeWeatherSensitivities — not yet implemented (learned from wait×weather correlation)
+        await learnWeatherSensitivities(now);
+        // Event impact and cascade remain stubbed (Task 4.5 partial):
         // computeEventImpacts — not yet implemented (learned from showtimes×wait correlation)
         // computeRideCascades — not yet implemented (learned from downtime×neighbor-wait correlation)
         await recomputePercentiles();
+        // Keep the observed-weather store bounded (Neon free tier).
+        await repo.pruneWeatherObservations(
+          new Date(now.getTime() - WEATHER_OBSERVATION_RETENTION_DAYS * 86400000),
+        );
         logger.info('Completed daily derived stats recompute');
       } catch (err) {
         logger.error({ err }, 'Failed daily derived stats recompute');
@@ -113,6 +126,38 @@ export function createDerivedStatsService(deps: DerivedStatsServiceDeps): Derive
         }
       }
     }
+  }
+
+  /**
+   * Learn each Experience's per-condition wait multiplier vs its clear-sky
+   * baseline, by joining recent waits to observed weather. Self-activating: it
+   * writes nothing until a condition has enough overlapping observations, so it
+   * is a safe no-op until history accrues.
+   */
+  async function learnWeatherSensitivities(now: Date) {
+    const since = new Date(now.getTime() - WEATHER_LEARNING_WINDOW_DAYS * 86400000);
+    const rows = await repo.getWaitWeatherAggregates(since);
+    if (rows.length === 0) return;
+
+    const byExperience = new Map<string, ConditionWaitAggregate[]>();
+    for (const row of rows) {
+      const list = byExperience.get(row.experience_id) ?? [];
+      list.push({ condition: row.condition, avgWait: row.avg_wait, sampleCount: row.sample_count });
+      byExperience.set(row.experience_id, list);
+    }
+
+    const upserts: ExperienceWeatherSensitivityRow[] = [];
+    for (const [experienceId, aggregates] of byExperience) {
+      for (const s of computeWeatherSensitivitiesPure(aggregates)) {
+        upserts.push({
+          experience_id: experienceId,
+          condition: s.condition,
+          wait_multiplier: s.waitMultiplier,
+          sample_count: s.sampleCount,
+        });
+      }
+    }
+    await repo.upsertWeatherSensitivities(upserts);
   }
 
   async function recomputePercentiles() {

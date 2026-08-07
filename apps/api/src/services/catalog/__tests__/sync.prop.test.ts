@@ -287,6 +287,9 @@ function createOutcomeRepo(sc: OutcomeScenario): OutcomeRepo {
     async upsertMenus() {
       return;
     },
+    async updateSpecialHoursParticipation() {
+      return;
+    },
   };
   return repo;
 }

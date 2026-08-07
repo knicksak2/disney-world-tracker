@@ -382,6 +382,22 @@ export interface CatalogRepo {
     menus: readonly MenuDTO[],
     fetchedAt: Date,
   ): Promise<void>;
+  /**
+   * Set the special-hours participation flags (`operates_during_early_entry`,
+   * `operates_during_extended_evening`, `operates_during_ticketed_event`) for
+   * the given Experiences, keyed by `upstream_entity_id` (= Disney
+   * Enterprise_Id), from the Disney Schedule channel capture
+   * (disney-facilities-catalog-source R5.8). Deduped by id; Experiences not
+   * listed are left unchanged (their prior value or `NULL`). No-op for empty.
+   */
+  updateSpecialHoursParticipation(
+    entries: readonly {
+      upstreamEntityId: string;
+      earlyEntry: boolean;
+      extendedEvening: boolean;
+      ticketedEvent: boolean;
+    }[],
+  ): Promise<void>;
 }
 
 /**
@@ -409,7 +425,65 @@ export function createCatalogRepo(pool: DbPool): CatalogRepo {
     getMenuFetchState: (experienceId) => getMenuFetchState(pool, experienceId),
     upsertMenus: (experienceId, menus, fetchedAt) =>
       upsertMenus(pool, experienceId, menus, fetchedAt),
+    updateSpecialHoursParticipation: (entries) =>
+      updateSpecialHoursParticipation(pool, entries),
   };
+}
+
+// ---------------------------------------------------------------------------
+// updateSpecialHoursParticipation
+// ---------------------------------------------------------------------------
+
+interface SpecialHoursEntry {
+  readonly upstreamEntityId: string;
+  readonly earlyEntry: boolean;
+  readonly extendedEvening: boolean;
+  readonly ticketedEvent: boolean;
+}
+
+/**
+ * Bulk-set the three special-hours flags keyed by `upstream_entity_id`. Deduped
+ * by id (last value wins) so the single UPDATE never touches a row twice, and a
+ * no-op for an empty list. Ids not matching any Experience are silently ignored.
+ */
+async function updateSpecialHoursParticipation(
+  pool: DbPool,
+  entries: readonly SpecialHoursEntry[],
+): Promise<void> {
+  if (entries.length === 0) {
+    return;
+  }
+  const deduped = new Map<string, SpecialHoursEntry>();
+  for (const e of entries) {
+    deduped.set(e.upstreamEntityId, e);
+  }
+  // Deduped, per-row updates in one transaction. The catalog sync runs
+  // occasionally over ~O(100) rides, so a keyed loop is ample and avoids
+  // multi-array `unnest` (which not every Postgres-compatible engine supports).
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    for (const e of deduped.values()) {
+      await client.query(
+        `UPDATE experiences
+            SET operates_during_early_entry = $1,
+                operates_during_extended_evening = $2,
+                operates_during_ticketed_event = $3
+          WHERE upstream_entity_id = $4`,
+        [e.earlyEntry, e.extendedEvening, e.ticketedEvent, e.upstreamEntityId],
+      );
+    }
+    await client.query('COMMIT');
+  } catch (err) {
+    try {
+      await client.query('ROLLBACK');
+    } catch {
+      // Surface the original cause.
+    }
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 // ---------------------------------------------------------------------------

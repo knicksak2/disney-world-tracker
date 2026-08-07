@@ -160,16 +160,20 @@ existing `RatingChanged` propagation path is reused unchanged.
 
 - [x] 8. Implement the shared Planned_List
   - [x] 8.1 Implement planned-item operations in `repo.ts`
-    - `addPlannedItem` (record adder, reject duplicate experience, reject unknown Catalog experience, reject when list holds 500 items), `removePlannedItem` (by adder or any organizer), `listPlannedItems` (join experience name, Park, adder display name)
+    - `addPlannedItem` (record adder, permit the same experience more than once per R9.3, reject unknown Catalog experience, reject when list holds 500 items), `removePlannedItem` (by adder or any organizer), `listPlannedItems` (join experience name, Park, adder display name)
     - _Requirements: 9.1, 9.3, 9.4, 9.5, 9.6, 9.7, 9.8_
 
   - [x] 8.2 Write property test for the Planned_List add/remove rules
-    - **Property 16: Planned_List add records the adder and rejects duplicates; removal is by adder or organizer**
+    - **Property 16: Planned_List add records the adder and permits duplicates; removal is by adder or organizer**
     - **Validates: Requirements 9.1, 9.3, 9.6, 9.7**
 
   - [x] 8.3 Register planned-item routes in `routes.ts`
     - `POST /trips/:id/planned-items`, `DELETE /trips/:id/planned-items/:itemId`, `GET /trips/:id/planned-items`
     - _Requirements: 9.2, 9.9_
+
+  - [x] 8.4 Allow the same Experience to be planned more than once (R9.3)
+    - Remove the duplicate-Experience rejection from `addPlannedItem` (the `planned_items_unique` constraint was already dropped in migration 0019) so a repeat add creates an additional Planned_Item; update Property 16 to assert a duplicate add creates a second row; and remove the `disabledIds`/`disabledLabel` "already added" gating from the `ExperiencePicker` on both the `TripPlannedListScreen` add modal and the `TripScheduleScreen` add modal so an already-planned Experience stays selectable
+    - _Requirements: 9.1, 9.3_
 
 - [x] 9. Implement the Shared_Log and rode-with tagging
   - [x] 9.1 Implement `logCompletion` in `repo.ts`
@@ -412,7 +416,8 @@ existing `RatingChanged` propagation path is reused unchanged.
     { "id": 8, "tasks": ["11.2", "11.3", "12.1"] },
     { "id": 9, "tasks": ["11.4", "12.2", "13.2"] },
     { "id": 10, "tasks": ["13.3"] },
-    { "id": 11, "tasks": ["15.1", "15.2", "15.3"] }
+    { "id": 11, "tasks": ["15.1", "15.2", "15.3"] },
+    { "id": 12, "tasks": ["8.4"] }
   ]
 }
 ```

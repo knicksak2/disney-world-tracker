@@ -201,7 +201,7 @@ The following capabilities are explicitly out of scope for v1 and are noted as f
 
 1. WHEN a Trip_Member adds an Experience to the Planned_List of a Trip, THE Trip_Service SHALL create a Planned_Item referencing that Experience and recording the Trip_Member who added it.
 2. IF a User who is not a Trip_Member of a Trip attempts to add a Planned_Item to that Trip, THEN THE Trip_Service SHALL reject the request with an authorization error and SHALL NOT create a Planned_Item.
-3. IF a Trip_Member adds an Experience to the Planned_List that references an Experience already present in that Trip's Planned_List, THEN THE Trip_Service SHALL reject the request with a validation error and SHALL NOT create a duplicate Planned_Item.
+3. WHEN a Trip_Member adds an Experience to the Planned_List that references an Experience already present in that Trip's Planned_List, THE Trip_Service SHALL create an additional Planned_Item for that Experience, so that the same Experience may appear on a Trip's Planned_List more than once, whether on the same day or across different days.
 4. IF a Trip_Member adds a Planned_Item referencing an Experience that does not exist in the Catalog, THEN THE Trip_Service SHALL reject the request with a validation error and SHALL NOT create a Planned_Item.
 5. IF a Trip_Member adds a Planned_Item to a Planned_List that already contains 500 Planned_Items, THEN THE Trip_Service SHALL reject the request with a validation error and SHALL NOT create a Planned_Item.
 6. WHEN a Trip_Member removes a Planned_Item that Trip_Member added, THE Trip_Service SHALL remove that Planned_Item from the Planned_List.

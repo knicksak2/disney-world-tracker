@@ -68,6 +68,7 @@ interface HubSection {
   readonly key: string;
   readonly route:
     | 'TripPlannedList'
+    | 'TripSchedule'
     | 'TripFeed'
     | 'TripMembers'
     | 'TripSummary';
@@ -100,6 +101,14 @@ const HUB_SECTIONS: readonly HubSection[] = [
     body: 'Experiences the group wants to do together.',
     icon: 'list-outline',
     color: theme.color.primary,
+  },
+  {
+    key: 'schedule',
+    route: 'TripSchedule',
+    title: 'Schedule Builder',
+    body: 'Plan and optimize your day-by-day timeline.',
+    icon: 'calendar-outline',
+    color: theme.color.primaryLight,
   },
   {
     key: 'activity',

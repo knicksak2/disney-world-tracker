@@ -41,7 +41,13 @@ export default defineConfig({
     // fails the normal `npm run test` run (it cannot be marked "done"). The rest of the
     // codebase is not instrumented, so there is no overhead or reporting noise elsewhere.
     coverage: {
-      enabled: true,
+      // Off by default so ad-hoc scoped runs (`vitest run <one-file>`) are not
+      // failed by the planning threshold when they don't touch planning/** —
+      // that false exit-1 broke the single-file inner loop and pushed agents to
+      // re-run the whole suite. The gate is still enforced on the full run: the
+      // `test` script passes `--coverage` (so `npm run test` / `npm run verify`
+      // turn it back on), which is the only place the threshold must hold.
+      enabled: false,
       provider: 'v8',
       all: true,
       include: ['src/services/planning/**/*.ts'],

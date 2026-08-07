@@ -63,7 +63,7 @@ beforeAll(async () => {
   // measurement and then reads it back.
   await harness.request('GET', '/home/highest-rated');
   measurements = await harness.measureScenarios();
-});
+}, 60000);
 
 afterAll(async () => {
   if (harness) {

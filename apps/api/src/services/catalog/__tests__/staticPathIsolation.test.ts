@@ -183,6 +183,9 @@ function createStubRepo(): StubRepo {
     async upsertMenus() {
       return;
     },
+    async updateSpecialHoursParticipation() {
+      return;
+    },
   };
 }
 

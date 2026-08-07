@@ -43,9 +43,10 @@ The optimizer solves a Time-Dependent Traveling Salesperson Problem: the cost of
 1. THE Trip_Service SHALL allow a Trip_Member to assign a `planned_date` and `planned_time` to any item in the Planned_List.
 2. THE Trip_Service SHALL support an `is_fixed` flag indicating that `planned_time` is a hard constraint (e.g., a Lightning Lane return or dining reservation).
 3. THE Trip_Service SHALL support an `is_lightning_lane` flag; a Lightning_Lane item SHALL be modeled with a minimal return-and-board wait rather than the standby prediction.
-4. THE Trip_Service SHALL support an `item_type` discriminator allowing `break` items (e.g., "Lunch") to be placed in the schedule.
+4. THE Trip_Service SHALL support an `item_type` discriminator allowing `break` items (e.g., dining reservations, rest breaks). Break items SHALL link to a catalog experience (e.g. dining location or venue) preserving non-null `experience_id` and geographic coordinates (`latitude`/`longitude`) for walking time calculations, and SHALL support a custom `duration_minutes` (defaulting to 45 minutes).
 5. THE Trip_Service SHALL allow a `priority` per item (1 = Must-Do, 2 = Standard, 3 = Nice-to-Do).
 6. THE Trip_Service SHALL allow multiple instances of the same Experience in a single Trip.
+
 
 ### Requirement 3: Optimization Engine
 
@@ -63,18 +64,24 @@ The optimizer solves a Time-Dependent Traveling Salesperson Problem: the cost of
 8. WHEN the schedule cannot fit all items within operating hours, THE optimizer SHALL keep higher-priority items and drop or defer lower-priority ones, and SHALL report which items were not fitted.
 9. THE Optimization_Engine SHALL accept at most 20 items per day per request and SHALL return within a 2-second latency budget (excluding any Prediction_Service call, which is prefetched once per request).
 10. THE Optimization_Engine SHALL be deterministic: identical inputs (including a fixed random seed for any restarts) SHALL produce an identical result.
+11. WHEN a standby or single-rider item is scheduled within the first 30 minutes of the operating window's open (rope drop — including the early-entry window when `early_entry_eligible` is TRUE, which begins the window 30 minutes early per R3.7), THE optimizer SHALL model its wait as ramping linearly from a near-walk-on floor (5 minutes) at open up to the full predicted wait at the end of that 30-minute window, and SHALL never raise a wait that is already at or below the floor. This makes rope-dropping a headliner read as a near-walk-on wait rather than the hourly-average standby wait.
+12. THE optimizer SHALL take a per-Experience `operatesDuringEarlyEntry` flag (sourced from the catalog per `disney-facilities-catalog-source`; an unknown/absent flag is treated as NOT operating during Early Entry). WHERE the day is `early_entry_eligible` and an Experience does not operate during Early Entry, THE optimizer SHALL clamp that Experience's earliest arrival to official park open (it MUST NOT be scheduled in the [official open − 30 min, official open) early-entry window). WHERE an Experience operates during Early Entry, THE optimizer MAY schedule it from early-entry open. THE rope-drop opening ramp (R3.11) SHALL be anchored per Experience to the time it can first be ridden — early-entry open for Early-Entry Experiences on an early-entry day, official open otherwise — so a ride that opens at park open is modeled with its opening ramp starting at official open, not 30 minutes early. This change does NOT model the elevated waits a non-Early-Entry headliner can have immediately at official open from the early-entry crowd surging over; that remains the deferred per-ride opening-curve calibration.
+13. THE optimizer SHALL take per-Experience `operatesDuringExtendedEvening` and `operatesDuringTicketedEvent` flags (sourced from the catalog; unknown/absent treated as NOT operating). WHERE a day uses Extended Evening hours, only Experiences that operate during Extended Evening MAY be scheduled to complete within the +120-minute evening extension; every other Experience (including unknown-flag) SHALL close at base park hours. WHERE a day has an after-hours Special Ticketed Event, only Experiences that operate during that event MAY be scheduled to complete within the +180-minute extension; others SHALL close at base hours. Concretely, an Experience's latest allowed completion is base close plus only the extensions it is eligible for. (This gates the *end* of the day symmetrically to the Early-Entry start clamp of R3.12; it does not re-model the after-hours event's own park-close/reopen boundary, which remains approximated by the existing mix-in start.)
 
 ### Requirement 4: Day Planner UI
 
-**User Story:** As a Trip_Member, I want a clear timeline view of my suggested day, so that I can follow the plan while in the park.
+**User Story:** As a Trip_Member, I want a clear, interactive date-based schedule builder and timeline view, so that I can easily plan my day, add experiences inline, set dining/LL options, and follow an optimized itinerary in the park.
 
 #### Acceptance Criteria
 
-1. THE App SHALL provide a "Schedule" view within the Trip detail that groups planned items by date and separates unscheduled items.
-2. THE Schedule view SHALL let users toggle an item between Fixed and Flexible, set times for Fixed_Items, mark Lightning_Lane items, add breaks, and set priority.
-3. THE Schedule view SHALL provide an "Optimize Day" action per date with a loading state.
-4. THE optimized timeline SHALL show suggested arrival times, predicted waits, and travel indicators (e.g., "12 min walk", "45 min park hop").
-5. THE App SHALL warn the user when the suggested schedule extends beyond operating hours or when high-priority items could not be fitted.
+1. THE App SHALL provide a "Schedule Builder" view (`TripScheduleScreen`) within the Trip stack that features a horizontal scrollable Date Selector Bar for switching between trip calendar dates.
+2. THE Schedule Builder SHALL provide an inline **"+ Add Experience to [Date]"** action opening an `ExperiencePicker` modal, allowing users to search the Catalog and add attractions, dining spots, or shows directly to the currently selected day (persisting `plannedDate`) without leaving the Schedule Builder.
+3. THE Schedule Builder SHALL render a persistent chronological **Itinerary Timeline** for the selected day, displaying items assigned to that day along with arrival times, predicted wait times, dining/LL badges, and walking time connectors (`+3m walk`) derived from attraction coordinates.
+4. THE Schedule Builder SHALL provide an Item Settings control with a **Native Time Wheel Picker Dialog** (3 wheel columns: Hour 1-12, Minute :00-:45, AM/PM + quick presets), allowing users to pick a Pass/Reservation Time (`plannedTime`) effortlessly, set Fixed Time locks (for dining reservations or show return times), toggle `is_lightning_lane` (⚡ with pass time), toggle `use_single_rider` (👤), set `priority` (1-3), and set custom durations for dining/breaks.
+5. THE Schedule Builder SHALL provide an **"✨ Optimize Day"** action per date with a loading state, which executes the backend optimizer, persists calculated timestamps to the database, refetches updated trip state, and smoothly updates the persistent timeline view.
+6. THE App SHALL format all optimization warning codes (`infeasible_fixed_gap`, `over_constrained`, `expired_lightning_lane`) and experience notes into clean, human-readable user messages using experience names instead of raw internal keys or UUIDs.
+7. WHERE an Experience has `is_lightning_lane` enabled with a start time, THE Optimization_Engine SHALL model its return window as 1 hour starting at `planned_time` with a 5-minute early grace period and 15-minute late grace period (valid arrival range: `[start - 5m, start + 75m]`), and THE Item Settings modal SHALL maintain local form draft state while open, saving to the API only when the user confirms.
+8. THE Schedule Builder SHALL provide a Schedule Settings modal (via header gear action `⚙️`) allowing users to configure per-date Day Touring Hours (start/end hour preset pills e.g. 8:00 AM – 9:00 PM for the active date), toggle Early Entry Eligibility (30m early access), and select Walking Pace (`slow`, `moderate`, `fast`), passing each date's custom hours to the Optimization_Engine.
 
 ### Requirement 5: Authorization and Time Zones
 
@@ -97,3 +104,28 @@ The optimizer solves a Time-Dependent Traveling Salesperson Problem: the cost of
 4. THE Trip_Service SHALL support a per-item `use_single_rider` flag; WHERE set, THE optimizer SHALL use the single-rider wait from the snapshot for that item.
 5. THE optimized timeline SHALL indicate when an item is planned via single-rider, a show slot, or a virtual queue, so the user understands the suggestion.
 6. IF the `WaitSnapshot` for an Experience does not carry the signal a type needs (e.g. `showtimes` is absent for a show on a far-future date), THE optimizer SHALL fall back to treating it as a standby item rather than failing — never read an absent field as a wait. (`getDaySnapshot` now populates `waits[].singleRiderWaitMinutes` for any date, and `showtimes` / `lightningLane` whenever per-date signals exist; only far-future `showtimes` are inherently unavailable, hence this fallback.)
+
+### Requirement 7: Extended Evening Hours, After-Hours Ticket, and Touring Hours Persistence
+
+**User Story:** As a Trip_Member, I want to configure per-date Extended Evening Hours (+120 min), Ticketed After-Hours Events (+180 min / 4 PM mix-in start), Early Entry, and Walking Pace and have them persisted on my Trip record, so that the optimizer generates accurate schedule windows for special park events and custom touring preferences.
+
+#### Acceptance Criteria
+
+1. THE Trip_Service SHALL support persisting `walking_speed`, `early_entry_eligible`, and a JSONB `day_touring_hours` map containing per-date `{ startHour, endHour, useEarlyEntry, useExtendedEvening, hasAfterHoursTicket, startingPark }` settings on `trips`, exposed via `TripDTO` and editable via `PATCH /trips/:id`.
+2. IF `useExtendedEvening` is TRUE for a date, THE Optimization_Engine SHALL extend the operating window closing time by 120 minutes (+2 hours).
+3. IF `hasAfterHoursTicket` is TRUE for a date, THE Optimization_Engine SHALL extend the operating window closing time by 180 minutes (+3 hours) and, WHERE `startHour` is not explicitly customized to an earlier morning hour, SHALL set default mix-in itinerary start time to 16:00 (4:00 PM ET).
+4. THE Schedule Settings Modal SHALL provide interactive controls for Walking Pace (`slow`, `moderate`, `fast`), Early Entry Eligibility, Extended Evening Hours, Ticketed After-Hours Events, and Starting Park selection, persisting all settings to the backend API via `PATCH /trips/:id` on Done.
+5. WHEN `startingPark` is configured for a date, THE Optimization_Engine SHALL prioritize starting the itinerary at `startingPark` and SHALL apply a penalty if the first item is scheduled in a different park.
+6. WHEN a user selects a Starting Park in Schedule Settings, THE App SHALL automatically populate the Day Start Time to that park's official opening time and update the Park Open to Close preset button to match that park's operating schedule.
+
+### Requirement 8: Persisted Optimization Results and Un-Optimized State
+
+**User Story:** As a Trip_Member, I want my optimized plan to be saved so that returning to the Schedule Builder shows my last result instead of resetting, and I want it to be obvious when a day has not been optimized yet so I am never shown placeholder wait times as if they were real predictions.
+
+#### Acceptance Criteria
+
+1. WHEN the Optimization_Engine produces a plan, THE Trip_Service SHALL persist, for each scheduled item, its derived `predicted_wait_minutes`, its travel-from-previous leg (`travel_from_prev_minutes` and `travel_from_prev_kind` ∈ {`walk`, `park_hop`}), and an `optimized_at` timestamp, alongside the already-persisted `planned_time`.
+2. WHEN the Schedule Builder loads a day whose items carry a persisted optimization result, THE App SHALL render those persisted predicted waits and travel connectors (never placeholder constants) and SHALL display when the day was last optimized (from the latest `optimized_at` of that day's items).
+3. WHERE a day's scheduled items have no persisted optimization result, THE App SHALL NOT display a predicted wait time for those items and SHALL indicate that the day has not been optimized yet.
+4. WHEN a Planned_Item's scheduling-relevant fields are edited after an optimization, THE Trip_Service SHALL clear that item's persisted optimization result (`predicted_wait_minutes`, travel legs, and `optimized_at`) so a stale wait or travel time is never shown as current until the day is re-optimized.
+

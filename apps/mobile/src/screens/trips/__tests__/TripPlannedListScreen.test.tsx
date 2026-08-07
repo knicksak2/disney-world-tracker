@@ -76,6 +76,17 @@ const ITEM: PlannedItemDTO = {
   experienceName: 'Space Mountain',
   park: 'Magic Kingdom',
   addedByDisplayName: 'Ariel',
+  plannedDate: null,
+  plannedTime: null,
+  isFixed: false,
+  isLightningLane: false,
+  useSingleRider: false,
+  priority: 2,
+  itemType: 'experience',
+  durationMinutes: null,
+  predictedWaitMinutes: null,
+  travelFromPrev: null,
+  optimizedAt: null,
 };
 
 // A Planned_Item whose Experience has a matching completion in the feed below,
@@ -86,6 +97,17 @@ const DONE_ITEM: PlannedItemDTO = {
   experienceName: 'Big Thunder Mountain',
   park: 'Magic Kingdom',
   addedByDisplayName: 'Ariel',
+  plannedDate: null,
+  plannedTime: null,
+  isFixed: false,
+  isLightningLane: false,
+  useSingleRider: false,
+  priority: 2,
+  itemType: 'experience',
+  durationMinutes: null,
+  predictedWaitMinutes: null,
+  travelFromPrev: null,
+  optimizedAt: null,
 };
 
 // A Planned_Item with no matching completion, so it stays `not_done` and is
@@ -96,6 +118,17 @@ const TODO_ITEM: PlannedItemDTO = {
   experienceName: 'Peter Pan Flight',
   park: 'Magic Kingdom',
   addedByDisplayName: 'Belle',
+  plannedDate: null,
+  plannedTime: null,
+  isFixed: false,
+  isLightningLane: false,
+  useSingleRider: false,
+  priority: 2,
+  itemType: 'experience',
+  durationMinutes: null,
+  predictedWaitMinutes: null,
+  travelFromPrev: null,
+  optimizedAt: null,
 };
 
 const ME = { user: { id: OWN_USER_ID } };
@@ -270,31 +303,37 @@ describe('Planned_List screen', () => {
     );
   });
 
-  test('an Experience already on the planned list is shown disabled, not addable', async () => {
+  test('R9.3: an Experience already on the planned list can be added again', async () => {
     const mutate = jest.fn().mockResolvedValue(undefined);
-    // The search hit shares ITEM's experienceId, so it should read as "Planned".
-    const search = jest
-      .fn()
-      .mockResolvedValue({ experiences: [{ ...SEARCH_HIT, id: ITEM.experienceId }] });
-    installApi([ITEM], { mutate, search });
+    // The already-planned item and the search hit share EXPERIENCE_UUID (a
+    // valid UUID the shared add schema accepts), so the row references an
+    // Experience already on the Planned_List.
+    const plannedDuplicate: PlannedItemDTO = { ...ITEM, experienceId: EXPERIENCE_UUID };
+    const search = jest.fn().mockResolvedValue({ experiences: [SEARCH_HIT] });
+    installApi([plannedDuplicate], { mutate, search });
 
     renderPlanned(makeNavigation());
     fireEvent.press(await screen.findByTestId('planned-list-add-open'));
     fireEvent.changeText(
       await screen.findByTestId('planned-list-search'),
-      'Space',
+      'Thunder',
     );
 
     const row = await screen.findByTestId(
-      `planned-list-result-${ITEM.experienceId}`,
+      `planned-list-result-${EXPERIENCE_UUID}`,
     );
     fireEvent.press(row);
 
-    // Tapping an already-planned row is a no-op: no POST is issued.
+    // The row is not disabled, and tapping it POSTs a second add for the same
+    // Experience — duplicates are permitted (R9.3).
     await waitFor(() => {
-      expect(screen.getByText('Planned')).toBeTruthy();
+      expect(mutate).toHaveBeenCalledWith(
+        'POST',
+        `/trips/${TRIP_ID}/planned-items`,
+        { experienceId: EXPERIENCE_UUID },
+      );
     });
-    expect(mutate).not.toHaveBeenCalled();
+    expect(screen.queryByText('Planned')).toBeNull();
   });
 
   test('R9.6: removing an item calls the delete endpoint', async () => {

@@ -301,6 +301,41 @@ export class IntelligenceRepo {
     await this.pool.query(`DELETE FROM wait_samples WHERE observed_at < $1`, [before]);
   }
 
+  async pruneWeatherObservations(before: Date): Promise<void> {
+    await this.pool.query(`DELETE FROM weather_observations WHERE observed_at < $1`, [before]);
+  }
+
+  /**
+   * Per-(Experience, weather condition) average observed standby wait, computed
+   * by joining retained `wait_samples` to `weather_observations` in the same
+   * clock hour. Only operating, positive-wait samples count. Drives the learned
+   * `experience_weather_sensitivity` in the daily recompute (Task 4.5).
+   */
+  async getWaitWeatherAggregates(
+    since: Date,
+  ): Promise<{ experience_id: string; condition: string; avg_wait: number; sample_count: number }[]> {
+    const res = await this.pool.query(
+      `SELECT ws.experience_id AS experience_id,
+              wo.condition       AS condition,
+              AVG(ws.wait_minutes)::real AS avg_wait,
+              COUNT(*)::int              AS sample_count
+         FROM wait_samples ws
+         JOIN weather_observations wo
+           ON date_trunc('hour', ws.observed_at) = date_trunc('hour', wo.observed_at)
+        WHERE ws.observed_at >= $1
+          AND ws.status = 'OPERATING'
+          AND ws.wait_minutes > 0
+        GROUP BY ws.experience_id, wo.condition`,
+      [since],
+    );
+    return res.rows.map((r) => ({
+      experience_id: r.experience_id,
+      condition: r.condition,
+      avg_wait: typeof r.avg_wait === 'number' ? r.avg_wait : parseFloat(r.avg_wait),
+      sample_count: typeof r.sample_count === 'number' ? r.sample_count : parseInt(r.sample_count, 10),
+    }));
+  }
+
   // A simplified fetch for recent wait samples for percentiles recompute
   async getRecentWaitSamples(experienceId: string, since: Date): Promise<WaitSampleRow[]> {
     const res = await this.pool.query(
@@ -494,7 +529,12 @@ export class IntelligenceRepo {
   }
 
   async getExperiencesWithUpstreamIds(): Promise<{ id: string, upstream_entity_id: string, park: string }[]> {
-    const res = await this.pool.query(`SELECT id, upstream_entity_id, park FROM experiences WHERE upstream_entity_id IS NOT NULL`);
+    // Only ACTIVE experiences: inactive rows are no longer in the catalog and must
+    // not be sampled, recomputed, or shape-seeded. This also excludes legacy rows
+    // orphaned by the historical ThemeParks-GUID -> Enterprise_Id re-keying (whose
+    // GUID upstream ids never resolve), so they don't churn every sampling pass or
+    // inflate the pass's unresolved-experience count.
+    const res = await this.pool.query(`SELECT id, upstream_entity_id, park FROM experiences WHERE upstream_entity_id IS NOT NULL AND active = true`);
     return res.rows;
   }
 

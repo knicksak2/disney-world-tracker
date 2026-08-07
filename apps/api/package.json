@@ -11,7 +11,7 @@
     "start": "node --env-file-if-exists=.env dist/index.js",
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest --run",
+    "test": "vitest --run --coverage",
     "migrate": "tsx --env-file-if-exists=.env src/db/migrate.ts",
     "migrate:cloud": "tsx --env-file=.env.dev src/db/migrate.ts",
     "build-bridge": "tsx --env-file=.env src/scripts/buildBridge.ts",

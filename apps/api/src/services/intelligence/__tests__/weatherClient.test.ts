@@ -56,6 +56,24 @@ describe('weatherClient', () => {
     expect(sleep).toHaveBeenCalledTimes(1);
   });
 
+  it('defaults to an hourly refresh cadence when no ttl is given', async () => {
+    const fetchMock = vi.fn(async () => okResponse(SAMPLE));
+    let t = 0;
+    // No ttlMs → the default hourly cadence applies.
+    const client = createWeatherClient(fetchMock as any, 'https://x', { now: () => t });
+
+    await client.getWDWWeather();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    t = 59 * 60 * 1000; // 59 min later — still within the hour
+    await client.getWDWWeather();
+    expect(fetchMock).toHaveBeenCalledTimes(1); // served from cache
+
+    t = 61 * 60 * 1000; // just past the hour
+    await client.getWDWWeather();
+    expect(fetchMock).toHaveBeenCalledTimes(2); // refetched
+  });
+
   it('serves a stale cache when a later refresh 429s (graceful degrade)', async () => {
     let mode: 'ok' | '429' = 'ok';
     const fetchMock = vi.fn(async () => (mode === 'ok' ? okResponse(SAMPLE) : status429()));

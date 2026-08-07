@@ -226,7 +226,11 @@ const itemArb: fc.Arbitrary<GeneratedItem> = fc.record({
     kind: fc.constantFrom<NoteKind>('absent', 'private', 'shareable'),
     // A present Note's body must satisfy the `notes_body_length_chk` constraint
     // (non-empty); the body is irrelevant when kind === 'absent'.
-    body: fc.string({ minLength: 1, maxLength: 40 }),
+    // Backslashes are filtered out because pg-mem's SQL AST parser has a known
+    // limitation where it throws a JSON.parse syntax error when encountering
+    // escaped backslash sequences in bound parameters, whereas production
+    // Postgres handles arbitrary byte strings in parameterized queries cleanly.
+    body: fc.string({ minLength: 1, maxLength: 40 }).filter((s) => !s.includes('\\')),
   }),
 });
 

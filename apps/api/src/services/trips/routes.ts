@@ -83,6 +83,8 @@ import { ZodError, z } from 'zod';
 
 import {
   plannedItemAddSchema,
+  plannedItemEditSchema,
+  tripOptimizationInputSchema,
   rodeWithConfirmSchema,
   tripCommentInputSchema,
   tripCreateSchema,
@@ -96,6 +98,8 @@ import {
 import type { DbPool } from '../../db/pool.js';
 import { AppError } from '../../errors/AppError.js';
 import { assertTripMember, assertTripOrganizer } from './authz.js';
+import { optimize } from '../planning/optimizer.js';
+import type { OptimizeInput, OptimizeInputItem } from '../planning/optimizer.js';
 import type {
   RodeWithTagCreatedNotice,
   TripInviteCreatedNotice,
@@ -176,6 +180,12 @@ export interface TripRoutesOptions {
    * exercise the notification seam; wired in `composeServices.ts` (task 13.2).
    */
   readonly emitRodeWithTagCreated?: RodeWithTagCreatedDispatch;
+  /**
+   * Prediction service from crowd-calendar feature for day-planning optimization.
+   */
+  readonly predictionService?: {
+    getDaySnapshot(experienceIds: string[], park: string, date: Date): Promise<Record<string, import('@dwt/shared').WaitSnapshot>>;
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -1124,6 +1134,138 @@ export function tripRoutes(options: TripRoutesOptions): FastifyPluginAsync {
         await assertTripMember(pool, userId, id);
         return repo.getSummary(id);
       },
+    );
+
+    // -------------------------------------------------------------------
+    // PATCH /trips/:id/planned-items/:itemId — edit scheduling fields
+    // -------------------------------------------------------------------
+    app.patch<{ Params: { id: string; itemId: string } }>(
+      '/trips/:id/planned-items/:itemId',
+      { preHandler: requireSession },
+      async (request) => {
+        const userId = requireUser(request);
+        const { id, itemId } = parseOrAppError(
+          z.object({ id: z.string().uuid(), itemId: z.string().uuid() }),
+          request.params
+        );
+        await assertTripMember(pool, userId, id);
+        
+        const input = parseOrAppError(plannedItemEditSchema, request.body);
+        return repo.editPlannedItem(id, itemId, input);
+      }
+    );
+
+    // -------------------------------------------------------------------
+    // POST /trips/:id/schedule/optimize — run optimizer
+    // -------------------------------------------------------------------
+    app.post<{ Params: { id: string } }>(
+      '/trips/:id/schedule/optimize',
+      { preHandler: requireSession },
+      async (request) => {
+        const userId = requireUser(request);
+        const { id } = parseOrAppError(
+          z.object({ id: z.string().uuid() }),
+          request.params
+        );
+        await assertTripMember(pool, userId, id);
+        
+        const { date, startHour, endHour } = parseOrAppError(tripOptimizationInputSchema, request.body);
+        
+        const items = await repo.listPlannedItems(id);
+        
+        if (items.length === 0) {
+          return { items: [], totalWaitMinutes: 0, totalWalkMinutes: 0, unfittedItemIds: [], warnings: [] };
+        }
+        
+        const tripRes = await pool.query<{ walking_speed: import('@dwt/shared').WalkingSpeed; early_entry_eligible: boolean; day_touring_hours: any }>(
+          `SELECT walking_speed, early_entry_eligible, day_touring_hours FROM trips WHERE id = $1`,
+          [id]
+        );
+        const tripRow = tripRes.rows[0];
+        const rawDayHours = tripRow?.day_touring_hours;
+        const dayHoursMap = typeof rawDayHours === 'string' ? JSON.parse(rawDayHours) : (rawDayHours ?? {});
+        const dateSettings = dayHoursMap[date];
+
+        const earlyEntryEligible = dateSettings?.useEarlyEntry ?? tripRow?.early_entry_eligible ?? false;
+        const useExtendedEvening = dateSettings?.useExtendedEvening ?? false;
+        const hasAfterHoursTicket = dateSettings?.hasAfterHoursTicket ?? false;
+        const walkingSpeed = tripRow?.walking_speed ?? 'moderate';
+        const resolvedStartHour = dateSettings?.startHour ?? startHour;
+        const resolvedEndHour = dateSettings?.endHour ?? endHour;
+
+        const expIds = items.map((i) => i.experienceId);
+        const coordsRes = await pool.query<{ id: string; latitude: number | null; longitude: number | null; operates_during_early_entry: boolean | null; operates_during_extended_evening: boolean | null; operates_during_ticketed_event: boolean | null }>(
+          `SELECT id, latitude, longitude, operates_during_early_entry, operates_during_extended_evening, operates_during_ticketed_event FROM experiences WHERE id = ANY($1)`,
+          [expIds]
+        );
+        const specialHoursMap = new Map<string, { earlyEntry: boolean | null; extendedEvening: boolean | null; ticketedEvent: boolean | null }>(
+          coordsRes.rows.map((r) => [r.id, {
+            earlyEntry: r.operates_during_early_entry,
+            extendedEvening: r.operates_during_extended_evening,
+            ticketedEvent: r.operates_during_ticketed_event,
+          }])
+        );
+        const coordsMap = new Map<string, { lat: number; lng: number } | null>(
+          coordsRes.rows.map((r) => [
+            r.id, 
+            r.latitude != null && r.longitude != null ? { lat: Number(r.latitude), lng: Number(r.longitude) } : null
+          ])
+        );
+        
+        const optimizeItems: OptimizeInputItem[] = items.map((item) => ({
+          id: item.id,
+          experienceId: item.experienceId,
+          park: item.park,
+          isFixed: item.isFixed ?? false,
+          isLightningLane: item.isLightningLane ?? false,
+          useSingleRider: item.useSingleRider ?? false,
+          priority: item.priority ?? 2,
+          itemType: item.itemType ?? 'experience',
+          durationMinutes: item.durationMinutes ?? null,
+          plannedTime: item.plannedTime ?? null,
+          coords: coordsMap.get(item.experienceId) ?? null,
+          operatesDuringEarlyEntry: specialHoursMap.get(item.experienceId)?.earlyEntry ?? null,
+          operatesDuringExtendedEvening: specialHoursMap.get(item.experienceId)?.extendedEvening ?? null,
+          operatesDuringTicketedEvent: specialHoursMap.get(item.experienceId)?.ticketedEvent ?? null,
+        }));
+        
+        const parks = [...new Set(items.map((i) => i.park))];
+        const snapshots: Record<string, import('@dwt/shared').WaitSnapshot> = {};
+        if (options.predictionService) {
+          for (const park of parks) {
+            const expIds = items.filter((i) => i.park === park).map((i) => i.experienceId);
+            const parkSnap = await options.predictionService.getDaySnapshot(expIds, park, new Date(date));
+            Object.assign(snapshots, parkSnap);
+          }
+        }
+        
+        const optInput: OptimizeInput = {
+          items: optimizeItems,
+          snapshots: snapshots,
+          date,
+          earlyEntryEligible,
+          useExtendedEvening,
+          hasAfterHoursTicket,
+          walkingSpeed,
+          ...(dateSettings?.startingPark ? { startingPark: dateSettings.startingPark } : {}),
+          ...(resolvedStartHour !== undefined ? { startHour: resolvedStartHour } : {}),
+          ...(resolvedEndHour !== undefined ? { endHour: resolvedEndHour } : {}),
+        };
+        
+        const result = optimize(optInput);
+        if (result.items.length > 0) {
+          await repo.updatePlannedItemTimes(
+            id,
+            result.items.map((i) => ({
+              itemId: i.plannedItemId,
+              plannedTime: i.suggestedArrival,
+              predictedWaitMinutes: i.predictedWaitMinutes,
+              travelFromPrev: i.travelFromPrev,
+            }))
+          );
+        }
+        return result;
+      }
     );
 
     // -------------------------------------------------------------------

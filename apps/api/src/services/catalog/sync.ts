@@ -97,6 +97,7 @@ import type {
   DocumentStore,
   StoredFacilityDocument,
 } from './documentStore.js';
+import { captureSpecialHours } from './disney/earlyEntrySync.js';
 import { outcomeFromError } from './outcome.js';
 import { reconcileCatalog } from './reconcile.js';
 import type { CatalogRepo, SyncRunOutcome } from './repo.js';
@@ -405,6 +406,12 @@ async function runSyncWithLock(
     };
     const diff = reconcileCatalog(snapshot, { experiences, resorts });
     await repo.applyReconciliation(diff);
+
+    // ---- 9b. Capture per-ride special-hours participation (R5.8, best-effort) --
+    // Reads today's attraction schedule and persists the early-entry /
+    // extended-evening / ticketed-event flags keyed by Enterprise_Id. Never
+    // fails the run (R5.9).
+    await captureSpecialHours({ client, repo });
 
     // ---- 10. Record success (R12.6) --------------------------------------
     const finishedAt = now();

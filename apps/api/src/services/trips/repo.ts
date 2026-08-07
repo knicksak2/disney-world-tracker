@@ -42,6 +42,7 @@
 import type {
   Park,
   PlannedItemAddInput,
+  PlannedItemEditInput,
   PlannedItemDTO,
   PendingRodeWithTagDTO,
   TripCommentDTO,
@@ -269,6 +270,19 @@ export interface RodeWithTagTarget {
  */
 export type TripListGroup = TripStatusGroup<TripDTO>;
 
+/**
+ * One item's persisted optimize output (R8.1). `plannedTime` is the suggested
+ * arrival; the optional fields carry the derived wait and travel-from-previous
+ * leg the optimizer produced (`travelFromPrev` is `null`/omitted for the first
+ * item of a day). When present, they are stamped with `optimized_at = now()`.
+ */
+export interface PlannedItemTimeUpdate {
+  readonly itemId: string;
+  readonly plannedTime: string;
+  readonly predictedWaitMinutes?: number | null;
+  readonly travelFromPrev?: { readonly kind: 'walk' | 'park_hop'; readonly minutes: number } | null;
+}
+
 /** Persistence surface returned by {@link createTripRepo}. */
 export interface TripRepo {
   /**
@@ -453,13 +467,12 @@ export interface TripRepo {
   /**
    * Add a Planned_Item referencing `input.experienceId` to `tripId`'s
    * Planned_List, recording `adderId` as the Trip_Member who added it (R9.1).
+   * The same Experience may be added to a Trip's Planned_List more than once
+   * (on the same day or across days), so no duplicate check is performed (R9.3).
    * In one transaction, and after serializing concurrent adds for the Trip so
    * the count check is race-safe, it enforces in order:
    *   - the Experience exists in the Catalog — else `trip_validation_failed`
    *     (R9.4);
-   *   - the Experience is not already on the Planned_List — else
-   *     `trip_validation_failed` (R9.3); the `planned_items_unique` index is
-   *     the concurrency backstop, mapping SQLSTATE 23505 to the same error;
    *   - the Planned_List holds fewer than {@link PLANNED_ITEM_LIMIT} items —
    *     else `trip_planned_limit` (R9.5).
    * Membership authorization is enforced upstream by the route's
@@ -470,6 +483,17 @@ export interface TripRepo {
     adderId: string,
     input: PlannedItemAddInput,
   ): Promise<PlannedItemDTO>;
+
+  editPlannedItem(
+    tripId: string,
+    itemId: string,
+    input: PlannedItemEditInput,
+  ): Promise<PlannedItemDTO>;
+
+  updatePlannedItemTimes(
+    tripId: string,
+    updates: PlannedItemTimeUpdate[],
+  ): Promise<void>;
 
   /**
    * Remove the Planned_Item `itemId` from `tripId`'s Planned_List. Removal is
@@ -791,6 +815,10 @@ export function createTripRepo(pool: DbPool, deps: TripRepoDeps): TripRepo {
     listPendingInvites: (tripId) => listPendingInvites(ctx, tripId),
     addPlannedItem: (tripId, adderId, input) =>
       addPlannedItem(ctx, tripId, adderId, input),
+    editPlannedItem: (tripId, itemId, input) =>
+      editPlannedItem(ctx, tripId, itemId, input),
+    updatePlannedItemTimes: (tripId, updates) =>
+      updatePlannedItemTimes(ctx, tripId, updates),
     removePlannedItem: (tripId, itemId, callerId, callerRole) =>
       removePlannedItem(ctx, tripId, itemId, callerId, callerRole),
     listPlannedItems: (tripId) => listPlannedItems(ctx, tripId),
@@ -831,6 +859,9 @@ interface TripRow {
   start_date: Date | string;
   end_date: Date | string;
   created_at: Date | string;
+  walking_speed?: 'slow' | 'moderate' | 'fast';
+  early_entry_eligible?: boolean;
+  day_touring_hours?: Record<string, unknown> | string;
 }
 
 /**
@@ -862,6 +893,18 @@ interface PlannedItemRow {
   experience_name: string;
   park: Park;
   added_by_display_name: string;
+  planned_date: string | null;
+  planned_time: string | null;
+  is_fixed: boolean;
+  is_lightning_lane: boolean;
+  use_single_rider: boolean;
+  priority: number;
+  item_type: 'experience' | 'break';
+  duration_minutes: number | null;
+  predicted_wait_minutes: number | null;
+  travel_from_prev_minutes: number | null;
+  travel_from_prev_kind: 'walk' | 'park_hop' | null;
+  optimized_at: Date | string | null;
 }
 
 /**
@@ -889,6 +932,13 @@ function rowToDto(
 ): TripDTO {
   const startDate = toIsoDate(row.start_date);
   const endDate = toIsoDate(row.end_date);
+  let dayTouringHours: Record<string, any> | undefined = undefined;
+  if (row.day_touring_hours) {
+    dayTouringHours =
+      typeof row.day_touring_hours === 'string'
+        ? JSON.parse(row.day_touring_hours)
+        : row.day_touring_hours;
+  }
   return {
     id: row.id,
     name: row.name,
@@ -898,6 +948,9 @@ function rowToDto(
     status: deriveTripStatus(startDate, endDate, wdwToday(now)),
     createdAt: toIsoTimestamp(row.created_at),
     resorts,
+    ...(row.walking_speed !== undefined ? { walkingSpeed: row.walking_speed } : {}),
+    ...(row.early_entry_eligible !== undefined ? { earlyEntryEligible: row.early_entry_eligible } : {}),
+    ...(dayTouringHours !== undefined ? { dayTouringHours } : {}),
   };
 }
 
@@ -1024,7 +1077,7 @@ async function createTrip(
     const insertTrip = await client.query<TripRow>(
       `INSERT INTO trips (creator_id, name, description, start_date, end_date)
        VALUES ($1, $2, $3, $4, $5)
-       RETURNING id, name, description, start_date, end_date, created_at`,
+       RETURNING id, name, description, start_date, end_date, created_at, walking_speed, early_entry_eligible, day_touring_hours`,
       [creatorId, name, description, input.startDate, input.endDate],
     );
     const row = insertTrip.rows[0];
@@ -1084,7 +1137,7 @@ async function getTripForMember(
   now: Date | undefined,
 ): Promise<TripDTO | null> {
   const result = await ctx.pool.query<TripRow>(
-    `SELECT id, name, description, start_date, end_date, created_at
+    `SELECT id, name, description, start_date, end_date, created_at, walking_speed, early_entry_eligible, day_touring_hours
        FROM trips
       WHERE id = $1`,
     [tripId],
@@ -1124,7 +1177,7 @@ async function editTrip(
     await client.query('BEGIN');
 
     const current = await client.query<TripRow>(
-      `SELECT id, name, description, start_date, end_date, created_at
+      `SELECT id, name, description, start_date, end_date, created_at, walking_speed, early_entry_eligible, day_touring_hours
          FROM trips
         WHERE id = $1
         FOR UPDATE`,
@@ -1170,6 +1223,18 @@ async function editTrip(
       params.push(input.endDate);
       assignments.push(`end_date = $${params.length}`);
     }
+    if (input.walkingSpeed !== undefined) {
+      params.push(input.walkingSpeed);
+      assignments.push(`walking_speed = $${params.length}`);
+    }
+    if (input.earlyEntryEligible !== undefined) {
+      params.push(input.earlyEntryEligible);
+      assignments.push(`early_entry_eligible = $${params.length}`);
+    }
+    if (input.dayTouringHours !== undefined) {
+      params.push(JSON.stringify(input.dayTouringHours));
+      assignments.push(`day_touring_hours = $${params.length}`);
+    }
 
     // Supplying `resortIds` replaces the recorded Resort stay wholesale, even
     // when no scalar Trip field changed; an empty array clears it (R21.1). An
@@ -1189,7 +1254,7 @@ async function editTrip(
       `UPDATE trips
           SET ${assignments.join(', ')}, updated_at = now()
         WHERE id = $${params.length}
-      RETURNING id, name, description, start_date, end_date, created_at`,
+      RETURNING id, name, description, start_date, end_date, created_at, walking_speed, early_entry_eligible, day_touring_hours`,
       params,
     );
     const updatedRow = updated.rows[0];
@@ -1960,17 +2025,16 @@ async function listPendingInvites(
 /**
  * Add a Planned_Item to a Trip's Planned_List, recording the adder (R9.1).
  *
+ * The same Experience may appear on a Trip's Planned_List more than once — on
+ * the same day or across different days (R9.3) — so no duplicate check is made.
+ *
  * All checks and the insert run inside one transaction that first locks the
  * Trip row `FOR UPDATE`, serializing concurrent adds for the same Trip so the
  * 500-item count check cannot be raced past its limit. The checks run in a
  * fixed order:
  *   1. R9.4 — the referenced Experience must exist in the Catalog; an unknown
  *      Experience is rejected with `trip_validation_failed`.
- *   2. R9.3 — the Experience must not already be on the Planned_List; a
- *      duplicate is rejected with `trip_validation_failed`. The
- *      `planned_items_unique` index is the concurrency backstop: a losing
- *      racer's INSERT surfaces SQLSTATE 23505, mapped to the same error.
- *   3. R9.5 — the list must hold fewer than {@link PLANNED_ITEM_LIMIT} items;
+ *   2. R9.5 — the list must hold fewer than {@link PLANNED_ITEM_LIMIT} items;
  *      a full list is rejected with `trip_planned_limit`.
  * On success the new item's read projection (Experience name + Park + adder
  * display name) is read back and returned (R9.9).
@@ -2003,19 +2067,11 @@ async function addPlannedItem(
       );
     }
 
-    // R9.3: the Experience must not already be on this Trip's Planned_List.
-    const duplicate = await client.query(
-      `SELECT 1 FROM planned_items WHERE trip_id = $1 AND experience_id = $2`,
-      [tripId, input.experienceId],
-    );
-    if ((duplicate.rowCount ?? 0) > 0) {
-      await client.query('ROLLBACK');
-      throw new AppError(
-        'trip_validation_failed',
-        'That experience is already on the planned list.',
-        { field: 'experienceId' },
-      );
-    }
+    // R9.3: the same Experience may appear on a Trip's Planned_List more than
+    // once — on the same day or across different days — so there is no
+    // duplicate-rejection check here. The `planned_items_unique` constraint was
+    // dropped in migration 0019 to support this, so the INSERT below can never
+    // trip a unique violation on `(trip_id, experience_id)`.
 
     // R9.5: the Planned_List may hold at most PLANNED_ITEM_LIMIT items.
     const count = await client.query<{ count: string }>(
@@ -2031,10 +2087,34 @@ async function addPlannedItem(
     }
 
     const insert = await client.query<{ id: string }>(
-      `INSERT INTO planned_items (trip_id, experience_id, added_by)
-       VALUES ($1, $2, $3)
+      `INSERT INTO planned_items (
+         trip_id,
+         experience_id,
+         added_by,
+         planned_date,
+         planned_time,
+         is_fixed,
+         is_lightning_lane,
+         use_single_rider,
+         priority,
+         item_type,
+         duration_minutes
+       )
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        RETURNING id`,
-      [tripId, input.experienceId, adderId],
+      [
+        tripId,
+        input.experienceId,
+        adderId,
+        input.plannedDate ?? null,
+        input.plannedTime ?? null,
+        input.isFixed ?? false,
+        input.isLightningLane ?? false,
+        input.useSingleRider ?? false,
+        input.priority ?? 2,
+        input.itemType ?? 'experience',
+        input.durationMinutes ?? null,
+      ],
     );
     const itemId = insert.rows[0]?.id;
     if (!itemId) {
@@ -2057,15 +2137,130 @@ async function addPlannedItem(
     return dto;
   } catch (err) {
     await safeRollback(client);
-    // The unique index is the race backstop for a concurrent duplicate add
-    // that slipped past the check above (R9.3).
-    if (isUniqueViolation(err)) {
-      throw new AppError(
-        'trip_validation_failed',
-        'That experience is already on the planned list.',
-        { field: 'experienceId' },
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+async function editPlannedItem(
+  ctx: TripRepoContext,
+  tripId: string,
+  itemId: string,
+  input: PlannedItemEditInput,
+): Promise<PlannedItemDTO> {
+  const client = await ctx.pool.connect();
+  try {
+    await client.query('BEGIN');
+    const existing = await client.query(
+      'SELECT id FROM planned_items WHERE id = $1 AND trip_id = $2 FOR UPDATE',
+      [itemId, tripId],
+    );
+    if ((existing.rowCount ?? 0) === 0) {
+      await client.query('ROLLBACK');
+      throw new AppError('trip_not_found', 'Item not found');
+    }
+
+    const updates: string[] = [];
+    const values: any[] = [itemId, tripId];
+    let pos = 3;
+
+    if (input.plannedDate !== undefined) {
+      updates.push(`planned_date = $${pos++}`);
+      values.push(input.plannedDate ?? null);
+    }
+    if (input.plannedTime !== undefined) {
+      updates.push(`planned_time = $${pos++}`);
+      values.push(input.plannedTime ?? null);
+    }
+    if (input.isFixed !== undefined) {
+      updates.push(`is_fixed = $${pos++}`);
+      values.push(input.isFixed ?? false);
+    }
+    if (input.isLightningLane !== undefined) {
+      updates.push(`is_lightning_lane = $${pos++}`);
+      values.push(input.isLightningLane ?? false);
+    }
+    if (input.useSingleRider !== undefined) {
+      updates.push(`use_single_rider = $${pos++}`);
+      values.push(input.useSingleRider ?? false);
+    }
+    if (input.priority !== undefined) {
+      updates.push(`priority = $${pos++}`);
+      values.push(input.priority ?? 2);
+    }
+    if (input.itemType !== undefined) {
+      updates.push(`item_type = $${pos++}`);
+      values.push(input.itemType ?? 'experience');
+    }
+    if (input.durationMinutes !== undefined) {
+      updates.push(`duration_minutes = $${pos++}`);
+      values.push(input.durationMinutes ?? null);
+    }
+
+    if (updates.length > 0) {
+      // Every editable field is an optimizer input, so a manual edit makes this
+      // item's persisted optimization result stale — clear it so the timeline
+      // shows "not optimized yet" for it until the day is re-optimized (R8.4).
+      updates.push('predicted_wait_minutes = NULL');
+      updates.push('travel_from_prev_minutes = NULL');
+      updates.push('travel_from_prev_kind = NULL');
+      updates.push('optimized_at = NULL');
+      await client.query(
+        `UPDATE planned_items SET ${updates.join(', ')} WHERE id = $1 AND trip_id = $2`,
+        values,
       );
     }
+
+    const dto = await selectPlannedItem(client, itemId);
+    if (!dto) throw new AppError('internal_error', 'Update failed');
+
+    await client.query('COMMIT');
+    return dto;
+  } catch (err) {
+    await safeRollback(client);
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+async function updatePlannedItemTimes(
+  ctx: TripRepoContext,
+  tripId: string,
+  updates: PlannedItemTimeUpdate[],
+): Promise<void> {
+  if (updates.length === 0) return;
+  const client = await ctx.pool.connect();
+  try {
+    await client.query('BEGIN');
+    
+    // Persist the suggested arrival together with the optimizer's derived
+    // display result (predicted wait + travel leg) so a returning member sees
+    // the last optimized plan, stamped with when it was optimized (R8.1).
+    for (const u of updates) {
+      await client.query(
+        `UPDATE planned_items
+            SET planned_time = $1,
+                predicted_wait_minutes = $2,
+                travel_from_prev_minutes = $3,
+                travel_from_prev_kind = $4,
+                optimized_at = now()
+          WHERE id = $5 AND trip_id = $6`,
+        [
+          u.plannedTime,
+          u.predictedWaitMinutes ?? null,
+          u.travelFromPrev?.minutes ?? null,
+          u.travelFromPrev?.kind ?? null,
+          u.itemId,
+          tripId,
+        ],
+      );
+    }
+
+    await client.query('COMMIT');
+  } catch (err) {
+    await safeRollback(client);
     throw err;
   } finally {
     client.release();
@@ -2149,7 +2344,19 @@ async function listPlannedItems(
             pi.experience_id,
             e.name          AS experience_name,
             e.park          AS park,
-            p.display_name  AS added_by_display_name
+            p.display_name  AS added_by_display_name,
+            pi.planned_date,
+            pi.planned_time,
+            pi.is_fixed,
+            pi.is_lightning_lane,
+            pi.use_single_rider,
+            pi.priority,
+            pi.item_type,
+            pi.duration_minutes,
+            pi.predicted_wait_minutes,
+            pi.travel_from_prev_minutes,
+            pi.travel_from_prev_kind,
+            pi.optimized_at
        FROM planned_items pi
        JOIN experiences e ON e.id = pi.experience_id
        JOIN profiles    p ON p.user_id = pi.added_by
@@ -3357,7 +3564,7 @@ async function listMyTrips(
   now: Date | undefined,
 ): Promise<TripListGroup[]> {
   const result = await ctx.pool.query<TripRow>(
-    `SELECT t.id, t.name, t.description, t.start_date, t.end_date, t.created_at
+    `SELECT t.id, t.name, t.description, t.start_date, t.end_date, t.created_at, t.walking_speed, t.early_entry_eligible, t.day_touring_hours
        FROM trips t
        JOIN trip_memberships tm ON tm.trip_id = t.id
       WHERE tm.user_id = $1`,
@@ -3394,7 +3601,19 @@ async function selectPlannedItem(
             pi.experience_id,
             e.name          AS experience_name,
             e.park          AS park,
-            p.display_name  AS added_by_display_name
+            p.display_name  AS added_by_display_name,
+            pi.planned_date,
+            pi.planned_time,
+            pi.is_fixed,
+            pi.is_lightning_lane,
+            pi.use_single_rider,
+            pi.priority,
+            pi.item_type,
+            pi.duration_minutes,
+            pi.predicted_wait_minutes,
+            pi.travel_from_prev_minutes,
+            pi.travel_from_prev_kind,
+            pi.optimized_at
        FROM planned_items pi
        JOIN experiences e ON e.id = pi.experience_id
        JOIN profiles    p ON p.user_id = pi.added_by
@@ -3413,6 +3632,25 @@ function rowToPlannedItemDto(row: PlannedItemRow): PlannedItemDTO {
     experienceName: row.experience_name,
     park: row.park,
     addedByDisplayName: row.added_by_display_name,
+    plannedDate: row.planned_date,
+    plannedTime: row.planned_time,
+    isFixed: row.is_fixed,
+    isLightningLane: row.is_lightning_lane,
+    useSingleRider: row.use_single_rider,
+    priority: row.priority,
+    itemType: row.item_type,
+    durationMinutes: row.duration_minutes,
+    predictedWaitMinutes: row.predicted_wait_minutes,
+    travelFromPrev:
+      row.travel_from_prev_minutes != null && row.travel_from_prev_kind != null
+        ? { kind: row.travel_from_prev_kind, minutes: row.travel_from_prev_minutes }
+        : null,
+    optimizedAt:
+      row.optimized_at == null
+        ? null
+        : row.optimized_at instanceof Date
+          ? row.optimized_at.toISOString()
+          : new Date(row.optimized_at).toISOString(),
   };
 }
 

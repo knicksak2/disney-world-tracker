@@ -141,3 +141,30 @@ export const TRIP_REACTION_VALUES = [
 ] as const;
 
 export type TripReactionValue = (typeof TRIP_REACTION_VALUES)[number];
+
+// ---------------------------------------------------------------------------
+// Walking_Speed
+// ---------------------------------------------------------------------------
+//
+// The pace at which a Trip party walks between attractions.
+
+export const WALKING_SPEEDS = [
+  'slow',
+  'moderate',
+  'fast',
+] as const;
+
+export type WalkingSpeed = (typeof WALKING_SPEEDS)[number];
+
+// ---------------------------------------------------------------------------
+// Planned_Item_Type
+// ---------------------------------------------------------------------------
+//
+// The type of activity for a Planned_Item.
+
+export const PLANNED_ITEM_TYPES = [
+  'experience',
+  'break',
+] as const;
+
+export type PlannedItemType = (typeof PLANNED_ITEM_TYPES)[number];

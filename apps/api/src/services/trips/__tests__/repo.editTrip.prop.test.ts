@@ -386,6 +386,39 @@ describe('editTrip — fixed regression examples', () => {
     });
   });
 
+  it('editing walkingSpeed, earlyEntryEligible, and dayTouringHours persists and returns on read', async () => {
+    const { store, id } = seed();
+    const repo = createTripRepo(makeInMemoryPool(store), NOOP_DEPS);
+    const dayHoursMap = {
+      '2025-06-10': {
+        startHour: 8,
+        endHour: 23,
+        useEarlyEntry: true,
+        useExtendedEvening: true,
+        hasAfterHoursTicket: true,
+      },
+    };
+    const result = await repo.editTrip(id, {
+      walkingSpeed: 'fast',
+      earlyEntryEligible: true,
+      dayTouringHours: dayHoursMap,
+    });
+    expect(result).toMatchObject({
+      name: 'Original',
+      walkingSpeed: 'fast',
+      earlyEntryEligible: true,
+      dayTouringHours: dayHoursMap,
+    });
+
+    const readBack = await repo.getTripForMember(id);
+    expect(readBack).toMatchObject({
+      name: 'Original',
+      walkingSpeed: 'fast',
+      earlyEntryEligible: true,
+      dayTouringHours: dayHoursMap,
+    });
+  });
+
   it('returns null when the Trip does not exist', async () => {
     const { store } = seed();
     const repo = createTripRepo(makeInMemoryPool(store), NOOP_DEPS);

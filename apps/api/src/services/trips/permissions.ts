@@ -46,6 +46,8 @@ export type TripAction =
   | 'demote'
   | 'delete_trip' // organizer-only (R4.2)
   | 'add_planned_item'
+  | 'edit_planned_item'
+  | 'optimize_day'
   | 'create_log_entry'
   | 'add_rode_with'
   | 'add_comment'
@@ -58,6 +60,8 @@ export type TripAction =
  */
 const MEMBER_ACTIONS: ReadonlySet<TripAction> = new Set<TripAction>([
   'add_planned_item',
+  'edit_planned_item',
+  'optimize_day',
   'create_log_entry',
   'add_rode_with',
   'add_comment',

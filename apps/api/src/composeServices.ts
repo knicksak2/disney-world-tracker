@@ -533,6 +533,7 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
       // their error handling, so the request is never blocked or failed by push.
       emitTripInviteCreated,
       emitRodeWithTagCreated,
+      predictionService,
     },
     push: { repo: pushRepo, requireSession: sessionMiddleware },
     notificationPreferences: {

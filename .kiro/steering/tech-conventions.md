@@ -58,3 +58,17 @@ Every spec (`.kiro/specs/<feature>/`) should be **self-sufficient for a cold-sta
 - An **External Interfaces** section whenever integrating an external or undocumented API: the endpoints used, the response fields relied on, and any id-mapping.
 - Concrete starting formulas for any model/heuristic (not just "a weighted model"), so it isn't reinvented divergently.
 - Explicit cross-spec dependencies and build order.
+
+## When you MUST update the spec before/with the code
+
+If the user asks for behavior that is not already covered by the feature's `requirements.md`, you must amend the spec **as part of the same change** — before or alongside the code, never after. "The user asked for it" is the trigger to update the spec, not a reason to skip it. Concretely, you must add a backing requirement (and its design **Correctness Property** and a task) when your change introduces any of:
+
+- a new user-facing behavior or UI control not described in requirements,
+- a new persisted field / column / DTO field, or a change to how an existing one is modeled (e.g. moving a per-trip column to a per-date structure),
+- a new branch or input flag in a spec'd engine (e.g. a new `OptimizeInput` field or optimizer window rule).
+
+A broadly worded existing requirement (e.g. "a settings modal") does NOT already cover a specific new capability added under it. If you conclude no spec update is needed, state the specific requirement number that already covers each new behavior; if you can't cite one, the spec needs the amendment. Reflect new scope into `tasks.md` too — do not implement net-new behavior only from an ad-hoc plan while `tasks.md` stays silent. This rule is about net-new behavior; it does not fire on ordinary bug fixes or refactors that stay within existing requirements.
+
+## Editing an existing spec — additive by default
+
+When you revise a spec that already exists, **add or amend; do not delete or renumber existing requirements, acceptance criteria, or design sections** unless you were explicitly asked to remove them. Requirements are referenced by number across the spec (design Correctness Properties' `Validates:` lines, tasks' `_Requirements:_` lines), so silently dropping or renumbering one orphans every reference to it. If a requirement is genuinely obsolete, call it out and confirm before removing. After any spec edit, re-run the spec validator (the Kiro Spec Format diagnostics) and confirm every file is clean — this also catches malformed checkboxes (`- [ ]`/`- [x]` only; never `- [/]` or other markers).

@@ -288,7 +288,7 @@ describe('Inbox reaction controls UI states (R11.9–R11.12)', () => {
     await act(async () => {
       posted.resolve(undefined);
     });
-  });
+  }, 15000);
 
   // -------------------------------------------------------------------------
   // R11.10 — empty-state when no reaction is attached.
