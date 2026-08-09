@@ -38,25 +38,36 @@ describe('CrowdCalendarScreen', () => {
     );
   }
 
-  it('renders calendar and days', async () => {
+  it('renders calendar, day detail, and features when data is returned', async () => {
+    const today = new Date().toISOString().split('T')[0];
     mockApiRequest.mockResolvedValue({
       days: [
         {
-          date: new Date().toISOString().split('T')[0],
+          date: today,
           park: 'Magic Kingdom',
-          forecastIndex: 1.2, // Level 6
-          parkHours: { openTime: '2024-01-01T09:00:00Z', closeTime: '2024-01-01T22:00:00Z' },
+          forecastIndex: 1.2, // Level 6 - Moderate
+          parkHours: { openTime: '2026-08-07T09:00:00Z', closeTime: '2026-08-07T22:00:00Z' },
           earlyEntry: true,
           extendedEvening: false,
           ticketedEvent: false,
-        }
-      ]
+          llMultipassPriceCents: 2900,
+        },
+      ],
     });
 
     renderScreen();
 
     await waitFor(() => {
-      expect(screen.getByText('MK')).toBeTruthy(); // The park segment
+      expect(screen.getByText('MK')).toBeTruthy();
+      expect(screen.getByText('Day detail')).toBeTruthy();
+      expect(screen.getByText('Park info')).toBeTruthy();
+      expect(screen.getByText('Early Entry')).toBeTruthy();
+      expect(screen.getByText('$29')).toBeTruthy();
     });
+
+    expect(mockApiRequest).toHaveBeenCalledWith(
+      'GET',
+      expect.stringMatching(/^\/crowd-calendar\?from=.*&to=.*$/),
+    );
   });
 });

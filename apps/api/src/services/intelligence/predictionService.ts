@@ -33,13 +33,14 @@ export function createPredictionService(deps: PredictionServiceDeps): Prediction
    */
   async function computeRawForecast(park: string, date: Date): Promise<number> {
     const clockDateStr = wdwToday(clock());
-    const isToday = date.toISOString().startsWith(clockDateStr);
-    
-    // Check if there is a live observed index for today
-    if (isToday) {
-      const indices = await repo.getParkCrowdIndices(park, [date]);
-      if (indices.length > 0 && indices[0]!.sample_count > 5) {
-         return indices[0]!.crowd_index; // Already a continuous ratio
+    const dateStr = date.toISOString().split('T')[0]!;
+
+    // Check if there is an exact observed or seeded index for this date
+    const indices = await repo.getParkCrowdIndices(park, [date]);
+    if (indices.length > 0) {
+      const idx = indices[0]!;
+      if (idx.crowd_index != null && (idx.source === 'seed' || idx.sample_count > 5 || dateStr <= clockDateStr)) {
+        return idx.crowd_index;
       }
     }
 
@@ -223,13 +224,30 @@ export function createPredictionService(deps: PredictionServiceDeps): Prediction
       
       const rawForecast = await computeRawForecast(park, date);
       
+      const dateStr = date.toISOString().split('T')[0]!;
+      let defaultOpenHour = 9;
+      let defaultCloseHour = 21;
+      if (park === 'Magic Kingdom') {
+        defaultOpenHour = 9;
+        defaultCloseHour = 22;
+      } else if (park === 'Animal Kingdom') {
+        defaultOpenHour = 8;
+        defaultCloseHour = 18;
+      }
+
+      const defaultOpenTime = new Date(`${dateStr}T${String(defaultOpenHour).padStart(2, '0')}:00:00-04:00`).toISOString();
+      const defaultCloseTime = new Date(`${dateStr}T${String(defaultCloseHour).padStart(2, '0')}:00:00-04:00`).toISOString();
+
+      const openTime = s?.open_time ? s.open_time.toISOString() : defaultOpenTime;
+      const closeTime = s?.close_time ? s.close_time.toISOString() : defaultCloseTime;
+
       return {
-        date: date.toISOString().split('T')[0]!,
+        date: dateStr,
         park: park as Park,
         forecastIndex: displayLevel(rawForecast),
         parkHours: {
-          ...(s?.open_time ? { openTime: s.open_time.toISOString() } : {}),
-          ...(s?.close_time ? { closeTime: s.close_time.toISOString() } : {})
+          openTime,
+          closeTime,
         },
         earlyEntry: s?.early_entry ?? false,
         extendedEvening: s?.extended_evening ?? false,

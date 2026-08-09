@@ -42,6 +42,7 @@ interface ScreenCapture {
   readonly name: string;
   readonly options: { readonly headerShown?: boolean } | undefined;
   readonly component: unknown;
+  readonly listeners?: unknown;
 }
 
 interface NavigatorCapture {
@@ -135,11 +136,13 @@ jest.mock('@react-navigation/bottom-tabs', () => {
               name: string;
               options?: { headerShown?: boolean };
               component?: unknown;
+              listeners?: unknown;
             };
             return {
               name: childProps.name,
               options: childProps.options,
               component: childProps.component,
+              listeners: childProps.listeners,
             };
           });
         mockNavCaptures.push({
@@ -234,6 +237,21 @@ describe('MainTabs structure (Requirements 17.1, 17.3)', () => {
     const tabNames = mainTabs.screens.map((s) => s.name);
     // Exactly five tabs, in the required left-to-right order.
     expect(tabNames).toEqual([...EXPECTED_TAB_ORDER]);
+  });
+
+  it('configures Catalog tab tabPress listener to navigate to CatalogList (Experience Catalogue)', () => {
+    const mainTabs = captureMainTabs();
+    const catalogScreen = mainTabs.screens.find((s) => s.name === 'Catalog');
+    expect(catalogScreen).toBeDefined();
+    expect(catalogScreen?.listeners).toBeDefined();
+
+    const mockNavigate = jest.fn();
+    const listenersFactory = catalogScreen?.listeners as (arg: { navigation: { navigate: jest.Mock } }) => { tabPress: () => void };
+    const listeners = listenersFactory({ navigation: { navigate: mockNavigate } });
+    expect(listeners.tabPress).toBeDefined();
+
+    listeners.tabPress();
+    expect(mockNavigate).toHaveBeenCalledWith('Catalog', { screen: 'CatalogList' });
   });
 
   it('does NOT register the personal statistics view (Stats) as a top-level tab', () => {

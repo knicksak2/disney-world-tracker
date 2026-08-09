@@ -144,4 +144,30 @@ describe('Prediction Blending (Task 4.4)', () => {
     // So the wait should be based purely on shape × multiplier, no weather distortion
     expect(h10!.predictedWaitMinutes).toBeGreaterThan(0);
   });
+
+  it('uses seeded park_crowd_index rows for forecast calculations on target dates', async () => {
+    const fakeRepo = {
+      getParkCrowdIndices: async (park: string, dates: Date[]) => {
+        return [{
+          park,
+          date: dates[0]!,
+          crowd_index: 0.6, // Level 3 (Quiet)
+          daily_avg_wait: 25,
+          sample_count: 0,
+          source: 'seed'
+        }];
+      },
+      getParkScheduleSignals: async () => [],
+      getComparableCrowdIndices: async () => []
+    } as any;
+
+    const service = createPredictionService({
+      repo: fakeRepo,
+      weatherClient: { getWDWWeather: async () => ({ current: null, forecast: [] }) } as any,
+      now: () => new Date('2026-08-07T12:00:00Z')
+    });
+
+    const day = await service.getCrowdCalendarDay('Magic Kingdom', new Date('2026-08-15T00:00:00Z'));
+    expect(day.forecastIndex).toBe(3); // displayLevel(0.6) = 3 (Quiet)
+  });
 });

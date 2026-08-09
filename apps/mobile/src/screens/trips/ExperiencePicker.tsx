@@ -29,7 +29,7 @@ import { Ionicons } from '@expo/vector-icons';
 import type { ExperienceDTO } from '@dwt/shared';
 
 import { ApiError, apiRequest } from '../../api/client';
-import { theme } from '../../theme/theme';
+import { theme, categoryVisual } from '../../theme/theme';
 import { Badge } from '../../theme/components';
 
 // ---------------------------------------------------------------------------
@@ -261,9 +261,15 @@ function ExperienceResultRow({
         <Text style={styles.resultName} numberOfLines={2}>
           {experience.name}
         </Text>
-        {experience.park !== null ? (
-          <Badge label={experience.park} color={theme.color.primary} />
-        ) : null}
+        <View style={styles.resultBadges}>
+          <Badge
+            label={categoryVisual[experience.category].label}
+            color={categoryVisual[experience.category].tint}
+          />
+          {experience.park !== null ? (
+            <Badge label={experience.park} color={theme.color.primary} />
+          ) : null}
+        </View>
       </View>
       {pending ? (
         <ActivityIndicator color={theme.color.primary} />
@@ -336,6 +342,11 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     gap: theme.spacing.xs,
     alignItems: 'flex-start',
+  },
+  resultBadges: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: theme.spacing.xs,
   },
   resultName: {
     ...theme.typography.subtitle,

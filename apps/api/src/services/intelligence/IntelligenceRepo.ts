@@ -198,9 +198,10 @@ export class IntelligenceRepo {
 
   async getParkCrowdIndices(park: string, dates: Date[]): Promise<ParkCrowdIndexRow[]> {
     if (dates.length === 0) return [];
+    const dateStrings = dates.map(d => d.toISOString().split('T')[0]!);
     const res = await this.pool.query(
       `SELECT * FROM park_crowd_index WHERE park = $1 AND date = ANY($2::date[])`,
-      [park, dates]
+      [park, dateStrings]
     );
     return res.rows;
   }
@@ -271,9 +272,11 @@ export class IntelligenceRepo {
   }
 
   async getParkScheduleSignals(park: string, fromDate: Date, toDate: Date): Promise<ScheduleSignalRow[]> {
+    const fromStr = fromDate.toISOString().split('T')[0]!;
+    const toStr = toDate.toISOString().split('T')[0]!;
     const res = await this.pool.query(
       `SELECT * FROM park_schedule_signals WHERE park = $1 AND date >= $2 AND date <= $3`,
-      [park, fromDate, toDate]
+      [park, fromStr, toStr]
     );
     return res.rows;
   }

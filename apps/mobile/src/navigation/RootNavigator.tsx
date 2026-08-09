@@ -292,6 +292,11 @@ function MainTabsNavigator(): JSX.Element {
         name="Catalog"
         component={CatalogStack}
         options={{ headerShown: false }}
+        listeners={({ navigation }) => ({
+          tabPress: () => {
+            navigation.navigate('Catalog', { screen: 'CatalogList' });
+          },
+        })}
       />
       <MainTabs.Screen
         name="Trips"

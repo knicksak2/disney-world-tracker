@@ -12,7 +12,7 @@ export interface IntelligenceRoutesOptions {
 }
 
 const calendarQuerySchema = z.object({
-  park: parkSchema,
+  park: parkSchema.optional(),
   from: isoDateSchema,
   to: isoDateSchema,
 });
@@ -90,10 +90,11 @@ export function intelligenceRoutes(options: IntelligenceRoutesOptions): FastifyP
         throw new AppError('validation_failed', 'Date range too large', { field: 'to' });
       }
 
+      const selectedPark = query.park ?? 'Magic Kingdom';
       const days = [];
       const current = new Date(fromDate);
       while (current <= toDate) {
-        const day = await options.predictionService.getCrowdCalendarDay(query.park, new Date(current));
+        const day = await options.predictionService.getCrowdCalendarDay(selectedPark, new Date(current));
         days.push(day);
         current.setUTCDate(current.getUTCDate() + 1);
       }

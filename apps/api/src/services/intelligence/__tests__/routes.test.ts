@@ -115,6 +115,17 @@ describe('Intelligence Routes', () => {
     expect(fakePredictionService.getCrowdCalendarDay).toHaveBeenCalledTimes(2);
   });
 
+  it('GET /crowd-calendar - defaults to Magic Kingdom when park parameter is omitted', async () => {
+    const app = buildTestApp();
+    const res = await app.inject({
+      method: 'GET',
+      url: '/crowd-calendar?from=2024-01-01&to=2024-01-01',
+      headers: { authorization: 'Bearer token' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(fakePredictionService.getCrowdCalendarDay).toHaveBeenCalledWith('Magic Kingdom', expect.any(Date));
+  });
+
   it('GET /experiences/:id/wait-insights - 401 without session', async () => {
     const app = buildTestApp();
     const res = await app.inject({

@@ -129,23 +129,45 @@ function formatDatePill(dateStr: string): string {
   return dateStr;
 }
 
-function generateDateRange(startDateStr?: string, endDateStr?: string): string[] {
+/** Return today's date in YYYY-MM-DD in the WDW (America/New_York) timezone. */
+export function getTodayWDW(): string {
+  const now = new Date();
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: WDW_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(now);
+  const y = parts.find((p) => p.type === 'year')!.value;
+  const m = parts.find((p) => p.type === 'month')!.value;
+  const d = parts.find((p) => p.type === 'day')!.value;
+  return `${y}-${m}-${d}`;
+}
+
+function generateDateRange(startDateStr?: string, endDateStr?: string, filterPastDates = false): string[] {
   if (!startDateStr) return [];
-  if (!endDateStr || endDateStr === startDateStr) return [startDateStr];
+  if (!endDateStr || endDateStr === startDateStr) {
+    if (filterPastDates && startDateStr < getTodayWDW()) return [];
+    return [startDateStr];
+  }
   try {
     const dates: string[] = [];
     const curr = new Date(startDateStr + 'T00:00:00');
     const end = new Date(endDateStr + 'T00:00:00');
+    const todayStr = filterPastDates ? getTodayWDW() : '';
     while (curr <= end && dates.length < 14) {
       const y = curr.getFullYear();
       const m = String(curr.getMonth() + 1).padStart(2, '0');
       const d = String(curr.getDate()).padStart(2, '0');
-      dates.push(`${y}-${m}-${d}`);
+      const dateStr = `${y}-${m}-${d}`;
+      if (!filterPastDates || dateStr >= todayStr) {
+        dates.push(dateStr);
+      }
       curr.setDate(curr.getDate() + 1);
     }
     return dates;
   } catch {
-    return [startDateStr];
+    return filterPastDates && startDateStr < getTodayWDW() ? [] : [startDateStr];
   }
 }
 
@@ -367,9 +389,10 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
 
   React.useEffect(() => {
     if (selectedDate === null && tripQuery.data?.startDate) {
-      setSelectedDate(tripQuery.data.startDate);
+      const futureDates = generateDateRange(tripQuery.data.startDate, tripQuery.data.endDate, true);
+      setSelectedDate(futureDates.length > 0 ? futureDates[0]! : tripQuery.data.startDate);
     }
-  }, [selectedDate, tripQuery.data?.startDate]);
+  }, [selectedDate, tripQuery.data?.startDate, tripQuery.data?.endDate]);
 
   const tripPatchMutation = useMutation<TripDTO, ApiError, TripEditInput>({
     mutationFn: (body) => apiRequest<TripDTO>('PATCH', `/trips/${tripId}`, body),
@@ -387,6 +410,7 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
     mutationFn: (body) => apiRequest<PlannedItemDTO>('POST', `/trips/${tripId}/planned-items`, body),
     onSuccess: () => {
       setShowAddModal(false);
+      optimizeMutation.reset();
       void queryClient.invalidateQueries({
         queryKey: tripPlannedListKeys.items(tripId),
       });
@@ -400,6 +424,7 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
     onSuccess: () => {
       setEditingItem(null);
       setDraftItem(null);
+      optimizeMutation.reset();
       void queryClient.invalidateQueries({
         queryKey: tripPlannedListKeys.items(tripId),
       });
@@ -416,6 +441,7 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
     onSuccess: () => {
       setEditingItem(null);
       setDraftItem(null);
+      optimizeMutation.reset();
       void queryClient.invalidateQueries({
         queryKey: tripPlannedListKeys.items(tripId),
       });
@@ -436,7 +462,7 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
 
   const items = itemsQuery.data ?? [];
   const activeDate = selectedDate ?? tripQuery.data?.startDate ?? 'No Date';
-  const tripDates = generateDateRange(tripQuery.data?.startDate, tripQuery.data?.endDate);
+  const tripDates = generateDateRange(tripQuery.data?.startDate, tripQuery.data?.endDate, true);
 
   const activeDaySettings: DayTouringHoursDTO = (activeDate !== 'No Date' && dayHoursMap[activeDate]) || {};
   const currentStartHour = activeDaySettings.startHour ?? 9;

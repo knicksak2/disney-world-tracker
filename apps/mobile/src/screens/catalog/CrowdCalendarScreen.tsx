@@ -20,18 +20,23 @@ export default function CrowdCalendarScreen(): JSX.Element {
   const [selectedPark, setSelectedPark] = useState<Park | 'All'>('All');
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
-  // We query from the start of the current month up to 90 days out.
-  const queryFrom = useMemo(() => {
-    const d = new Date();
-    d.setDate(1);
-    return d.toISOString().split('T')[0];
-  }, []);
+  const todayStr = useMemo(() => new Date().toISOString().split('T')[0]!, []);
+  const [visibleMonth, setVisibleMonth] = useState<string>(() => todayStr.substring(0, 7));
 
-  const queryTo = useMemo(() => {
-    const d = new Date();
-    d.setDate(d.getDate() + 90);
-    return d.toISOString().split('T')[0];
-  }, []);
+  // Compute a ~70 day query window around the active visible month
+  const { queryFrom, queryTo } = useMemo(() => {
+    const [y, m] = visibleMonth.split('-').map(Number);
+    const startDate = new Date(Date.UTC(y!, m! - 1, 1));
+    startDate.setUTCDate(startDate.getUTCDate() - 15);
+
+    const endDate = new Date(startDate);
+    endDate.setUTCDate(endDate.getUTCDate() + 70);
+
+    return {
+      queryFrom: startDate.toISOString().split('T')[0]!,
+      queryTo: endDate.toISOString().split('T')[0]!,
+    };
+  }, [visibleMonth]);
 
   const { data } = useQuery<CrowdCalendarResponse>({
     queryKey: ['crowd-calendar', selectedPark, queryFrom, queryTo],
@@ -44,29 +49,22 @@ export default function CrowdCalendarScreen(): JSX.Element {
     },
   });
 
+  const activeDate = selectedDate ?? todayStr;
+
   const bestDay = useMemo(() => {
     if (!data?.days || data.days.length === 0) return null;
-    // Just find the lowest forecast index that is in the future
-    const futureDays = data!.days.filter(d => d.date >= new Date().toISOString().split('T')[0]!);
+    const futureDays = data.days.filter((d) => d.date >= todayStr);
     if (futureDays.length === 0) return null;
-    return futureDays.reduce((min, d) => d.forecastIndex < min.forecastIndex ? d : min, futureDays[0]!);
-  }, [data]);
+    return futureDays.reduce((min, d) => (d.forecastIndex < min.forecastIndex ? d : min), futureDays[0]!);
+  }, [data, todayStr]);
 
   const selectedDayInfo = useMemo(() => {
-    if (!selectedDate || !data?.days) return null;
-    if (selectedPark !== 'All') {
-      return data.days.find(d => d.date === selectedDate);
-    }
-    // If 'All', return MK by default or just show an aggregate?
-    // Actually, if 'All', the API returns MK's index as the default response for the "All" park query if we don't supply ?park?
-    // Wait, the API might fail if we don't provide park=...
-    // Let's check `GET /crowd-calendar?park&from&to`. The spec says it needs park? Or is it optional?
-    // If it's optional and returns aggregate? We'll assume the API expects park, or defaults to something.
-    return data.days.find(d => d.date === selectedDate);
-  }, [selectedDate, data, selectedPark]);
+    if (!activeDate || !data?.days) return null;
+    return data.days.find((d) => d.date === activeDate);
+  }, [activeDate, data]);
 
   const getLevelInfo = (index: number) => {
-    const lvl = Math.max(1, Math.min(10, Math.round(index * 5)));
+    const lvl = Math.max(1, Math.min(10, Math.round(index > 2 ? index : index * 5)));
     let color: string = theme.color.textSecondary;
     let label = 'Unknown';
     if (lvl <= 3) { color = '#3fa34d'; label = 'Quiet'; }
@@ -77,24 +75,16 @@ export default function CrowdCalendarScreen(): JSX.Element {
     return { level: lvl, color, label };
   };
 
-  const renderDay = ({ date, state }: any) => {
+  const renderDay = ({ date }: any) => {
     const dateStr = date.dateString;
-    const dayData = data?.days.find(d => d.date === dateStr);
-    const isSelected = dateStr === selectedDate;
+    const dayData = data?.days.find((d) => d.date === dateStr);
+    const isSelected = dateStr === activeDate;
     const isBest = bestDay && dateStr === bestDay.date;
-    
-    if (state === 'disabled') {
-      return (
-        <View style={styles.dayCellEmpty}>
-          <Text style={styles.dayTextEmpty}>{date.day}</Text>
-        </View>
-      );
-    }
 
     if (!dayData) {
       return (
         <View style={styles.dayCell}>
-          <Text style={styles.dayText}>{date.day}</Text>
+          <Text style={[styles.dayText, { color: theme.color.textSecondary }]}>{date.day}</Text>
         </View>
       );
     }
@@ -144,7 +134,7 @@ export default function CrowdCalendarScreen(): JSX.Element {
             <View style={{ flex: 1 }}>
               <Text style={styles.bestBannerTitle}>Best day: {bestDay.date}</Text>
               <Text style={styles.bestBannerSub}>
-                Crowd level {getLevelInfo(bestDay.forecastIndex).level}/10 — head to {bestDay.park || selectedPark}
+                Crowd level {getLevelInfo(bestDay.forecastIndex).level}/10 — head to {selectedPark === 'All' ? 'Magic Kingdom' : selectedPark}
               </Text>
             </View>
           </View>
@@ -152,10 +142,13 @@ export default function CrowdCalendarScreen(): JSX.Element {
 
         <Card style={{ padding: 8 }}>
           <Calendar
-            current={queryFrom!}
-            minDate={queryFrom!}
-            maxDate={queryTo!}
-            hideExtraDays
+            current={todayStr}
+            onMonthChange={(month: any) => {
+              if (month?.dateString) {
+                setVisibleMonth(month.dateString.substring(0, 7));
+              }
+            }}
+            hideExtraDays={false}
             dayComponent={renderDay}
             theme={{
               calendarBackground: 'transparent',
@@ -175,14 +168,14 @@ export default function CrowdCalendarScreen(): JSX.Element {
             <Text style={styles.legendText}>Packed</Text>
           </View>
           
-          {selectedDate && selectedDayInfo && (
+          {activeDate && selectedDayInfo && (
             <Text style={styles.dayCap}>
-              Selected <Text style={{ fontWeight: '700' }}>{selectedDate}</Text> · Level <Text style={{ fontWeight: '700' }}>{getLevelInfo(selectedDayInfo.forecastIndex).level} / 10</Text> — {getLevelInfo(selectedDayInfo.forecastIndex).label}
+              Selected <Text style={{ fontWeight: '700' }}>{activeDate}</Text> · Level <Text style={{ fontWeight: '700' }}>{getLevelInfo(selectedDayInfo.forecastIndex).level} / 10</Text> — {getLevelInfo(selectedDayInfo.forecastIndex).label}
             </Text>
           )}
         </Card>
 
-        {selectedDate && selectedDayInfo && (
+        {activeDate && selectedDayInfo && (
           <>
             <SectionLabel>Day detail</SectionLabel>
             <Card>

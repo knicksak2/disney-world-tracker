@@ -874,7 +874,163 @@ describe('TripScheduleScreen', () => {
       expect(patchPayload.dayTouringHours['2026-10-01'].startHour).toBe(8);
     });
   });
+
+  it('hides past dates from the date selector and defaults to today', async () => {
+    // Fake "now" to 2026-08-09 12:00 ET so Aug 7 & 8 are past, Aug 9 is today.
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-08-09T16:00:00.000Z')); // noon ET
+
+    apiRequestMock.mockImplementation(async (method, path) => {
+      if (method === 'GET' && path === `/trips/${TRIP_ID}`) {
+        return {
+          id: TRIP_ID,
+          name: 'Disney Trip',
+          startDate: '2026-08-07',
+          endDate: '2026-08-11',
+          status: 'upcoming',
+          role: 'organizer',
+        } as any;
+      }
+      if (method === 'GET' && path === `/trips/${TRIP_ID}/planned-items`) {
+        return [
+          { ...PLANNED_ITEM, id: 'item-past', plannedDate: '2026-08-07', experienceName: 'Past Ride' },
+          { ...PLANNED_ITEM, id: 'item-today', plannedDate: '2026-08-09', experienceName: 'Today Ride' },
+          { ...PLANNED_ITEM, id: 'item-future', plannedDate: '2026-08-11', experienceName: 'Future Ride' },
+        ] as any;
+      }
+      if (method === 'GET' && path.startsWith('/catalog')) {
+        return { experiences: [] };
+      }
+      throw new Error(`Unexpected request: ${method} ${path}`);
+    });
+
+    renderScreen();
+
+    // Today and future dates should appear; past dates should not.
+    await waitFor(() => {
+      expect(screen.getByTestId('date-pill-2026-08-09')).toBeTruthy();
+      expect(screen.getByTestId('date-pill-2026-08-10')).toBeTruthy();
+      expect(screen.getByTestId('date-pill-2026-08-11')).toBeTruthy();
+    });
+    expect(screen.queryByTestId('date-pill-2026-08-07')).toBeNull();
+    expect(screen.queryByTestId('date-pill-2026-08-08')).toBeNull();
+
+    // The active date should default to today (2026-08-09), not the trip
+    // startDate (2026-08-07). The "Today Ride" item should be visible.
+    expect(screen.getByText('Today Ride')).toBeTruthy();
+
+    jest.useRealTimers();
+  });
+
+  it('shows a newly added experience after optimize without needing to re-optimize (regression)', async () => {
+    // Start with one item on the day. After optimize, add a second item.
+    // Bug: the stale optResult.items only contained the first item, so
+    // the timeline never rendered the newly added one until the user pressed
+    // Optimize again.
+    let callCount = 0;
+    apiRequestMock.mockImplementation(async (method, path) => {
+      if (method === 'GET' && path === `/trips/${TRIP_ID}`) {
+        return {
+          id: TRIP_ID,
+          name: 'Disney Trip',
+          startDate: '2026-10-01',
+          endDate: '2026-10-02',
+          status: 'upcoming',
+          role: 'organizer',
+        } as any;
+      }
+      if (method === 'GET' && path === `/trips/${TRIP_ID}/planned-items`) {
+        callCount++;
+        // After the add succeeds (callCount >= 3), return both items.
+        if (callCount >= 3) {
+          return [
+            { ...PLANNED_ITEM, plannedDate: '2026-10-01' },
+            {
+              ...PLANNED_ITEM,
+              id: 'item-new',
+              experienceId: 'exp-pirates',
+              experienceName: 'Pirates of the Caribbean',
+              plannedDate: '2026-10-01',
+            },
+          ] as any;
+        }
+        return [{ ...PLANNED_ITEM, plannedDate: '2026-10-01' }] as any;
+      }
+      if (method === 'GET' && path.startsWith('/catalog')) {
+        return {
+          experiences: [
+            {
+              id: 'exp-pirates',
+              name: 'Pirates of the Caribbean',
+              park: 'Magic Kingdom',
+              land: 'Adventureland',
+              category: 'attraction',
+            },
+          ],
+        } as any;
+      }
+      if (method === 'POST' && path === `/trips/${TRIP_ID}/schedule/optimize`) {
+        return {
+          items: [
+            {
+              plannedItemId: 'item-1',
+              suggestedArrival: '2026-10-01T13:00:00.000Z',
+              predictedWaitMinutes: 15,
+              travelFromPrev: { kind: 'walk', minutes: 3 },
+            },
+          ],
+          totalWaitMinutes: 15,
+          totalWalkMinutes: 3,
+          unfittedItemIds: [],
+          warnings: [],
+        } as TripOptimizationResult;
+      }
+      if (method === 'POST' && path === `/trips/${TRIP_ID}/planned-items`) {
+        return {
+          ...PLANNED_ITEM,
+          id: 'item-new',
+          experienceId: 'exp-pirates',
+          experienceName: 'Pirates of the Caribbean',
+          plannedDate: '2026-10-01',
+        } as any;
+      }
+      throw new Error(`Unexpected request: ${method} ${path}`);
+    });
+
+    renderScreen();
+
+    // Wait for initial render with item visible.
+    await waitFor(() => {
+      expect(screen.getByText('Space Mountain')).toBeTruthy();
+    });
+
+    // Optimize
+    fireEvent.press(screen.getByText('✨ Optimize'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Wait: 15 min')).toBeTruthy();
+    });
+
+    // Now add an experience via the add modal.
+    fireEvent.press(screen.getByText('+ Add to Thu, Oct 1'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('schedule-picker-search')).toBeTruthy();
+    });
+
+    fireEvent.changeText(screen.getByTestId('schedule-picker-search'), 'Pirates');
+
+    await waitFor(() => {
+      expect(screen.getByText('Pirates of the Caribbean')).toBeTruthy();
+    });
+    fireEvent.press(screen.getByText('Pirates of the Caribbean'));
+
+    // The new experience should be visible on the schedule WITHOUT needing
+    // to press optimize again. Before the fix, this assertion would fail
+    // because the stale optimizeMutation.data hid it.
+    await waitFor(() => {
+      expect(screen.getByText('Pirates of the Caribbean')).toBeTruthy();
+      expect(screen.getByText('Space Mountain')).toBeTruthy();
+    });
+  });
 });
-
-
-
