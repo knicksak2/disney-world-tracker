@@ -97,7 +97,6 @@ describe('Sampling Deduplication Regression', () => {
       getRideShapes: async () => [],
       getSeasonHours: async () => [],
       getExperienceSignals: async () => [],
-      getParkRollingBaseline: async () => 35
     } as any;
 
     const fakeDirectory = {
@@ -217,7 +216,6 @@ describe('Sampling Deduplication Regression', () => {
       getRideShapes: async () => [],
       getSeasonHours: async () => [],
       getExperienceSignals: async () => [],
-      getParkRollingBaseline: async () => 35,
     } as any;
 
     const fakeDirectory = {

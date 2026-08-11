@@ -60,10 +60,17 @@ describe('Sampling — Crowd_Index restricted to theme parks', () => {
       getParkCrowdIndices: async () => [],
       upsertParkCrowdIndices: async (rows: any[]) => { crowdIndexUpserts.push(...rows); },
       pruneWaitSamples: async () => {},
-      getRideShapes: async () => [],
+      // Provide a shape for the MK ride so the per-ride-relative basket is
+      // non-empty. The test date 2026-08-05T18:00:00Z → DOW 3 (Wed), hour 14 (ET).
+      // avg_wait_minutes = 30 so observed/expected = 30/30 = 1.0 (typical).
+      getRideShapes: async () => [{
+        experience_id: 'mk-ride-db', day_of_week: 3, hour: 14,
+        avg_wait_minutes: 30, sample_count: 10,
+        sr_avg_wait_minutes: null, sr_sample_count: null,
+        stddev_wait: 0, p50_wait: 30, p90_wait: 45, down_rate: 0,
+      }],
       getSeasonHours: async () => [],
       getExperienceSignals: async () => [],
-      getParkRollingBaseline: async () => 35,
     } as any;
 
     const fakeDirectory = { resolveEntityId: async (id: string) => id, prime: async () => {} } as any;
@@ -89,5 +96,7 @@ describe('Sampling — Crowd_Index restricted to theme parks', () => {
     expect(crowdIndexUpserts.length).toBeGreaterThan(0);
     expect(crowdIndexUpserts.every((r) => r.park === 'Magic Kingdom')).toBe(true);
     expect(crowdIndexUpserts.some((r) => r.park === 'Blizzard Beach')).toBe(false);
+    // With observed 30 / expected 30, the per-ride-relative index is 1.0
+    expect(crowdIndexUpserts[0].crowd_index).toBeCloseTo(1.0, 5);
   });
 });

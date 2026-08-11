@@ -81,9 +81,22 @@ Implementation is **TypeScript**, reusing existing infrastructure: the `Live_Ser
   - [x] 8.2 End-to-end manual pass — run a sampling pass against real ThemeParks data, confirm shapes/crowd/signals populate and the calendar renders sane 1–10 levels with LL-price-driven forecasts.
     - _Requirements: 2.2, 3.1, 6.1_
 
+- [ ] 9. Crowd-index accuracy refinement — standby basket + per-ride-relative index
+  - [x] 9.1 `waitMath.ts` pure additions — `isStandbyBasketEntry(liveEntry)` (true iff operating AND a numeric standby wait is posted; walk-on `0` included; false for no-standby / non-operating) and `relativeCrowdIndex(rides)` (mean of per-ride `observed / expected` ratios; exclude rides with expected ≤ 0 or Ride_Shape sample count `< CROWD_INDEX_MIN_SHAPE_SAMPLES`; `1.0` = typical). No I/O.
+    - _Requirements: 2.7, 2.8, 3.5_
+  - [x] 9.2 Property tests — **Property 9** (`relativeCrowdIndex` composition-robust) and **Property 10** (`isStandbyBasketEntry` selects only posted-standby entries); `fast-check` ≥100 runs, tagged `Feature: crowd-calendar, Property 9` / `Property 10`.
+    - _Requirements: 2.7, 2.8, 3.5_
+  - [x] 9.3 `samplingService.runSamplingPass` — gate BOTH the `park_crowd_index` contribution AND the `wait_samples` insert on `isStandbyBasketEntry`; compute the per-pass crowd slice via `relativeCrowdIndex` over the basket (expected from the in-memory Ride_Shape), keeping the day aggregate a running daily average of the slices; stop appending no-standby (show / dining / parade) rows. WHEN the basket is empty for a pass, write no index slice (no park-constant fallback). **Remove `getParkRollingBaseline` and its now-orphaned tests** (superseded — the per-ride-relative index needs no park-level typical). Redefine `daily_avg_wait` as the basket's mean posted wait (informational only; not the numerator). Per-park isolation unchanged.
+    - _Requirements: 2.7, 2.8, 3.5, 3.6_
+  - [x] 9.4 Repo / integration coverage — a pg-mem / `server.inject` test that a pass over a mixed park (headliner ride, walk-on 0-min ride, a show, a restaurant) records `wait_samples` only for the two rides and yields a per-ride-relative index over them. This test MUST fail against the pre-change all-entries average (the guard for the fix, per design Testing Strategy).
+    - _Requirements: 2.7, 2.8, 3.5_
+  - [ ] 9.5 Observed-index rebuild — delete the existing `source='observed'` `park_crowd_index` rows so the index repopulates cleanly on the new per-ride-relative scale. These are **per-date** rows, not an EMA, so they do NOT age out on their own and would otherwise keep feeding `getComparableCrowdIndices` (year-over-year) and predicted-vs-actual on the old scale. Do **NOT** bulk-delete `wait_samples` — the existing 30-day prune ages structural zeros out, and they don't corrupt shape percentiles (a no-standby entity has no matching shape). Seed rows and the forward forecast are untouched and carry the calendar during the ~several-day rebuild. **Destructive step: run only with explicit approval.**
+    - _Requirements: 2.8_
+
 ## Notes
 
-- Test-only tasks (2.3, 4.4, 5.3, 6.3, 8.1) are optional for a faster MVP; core tasks are never optional.
+- Test-only tasks (2.3, 4.4, 5.3, 6.3, 8.1, 9.2, 9.4) are optional for a faster MVP; core tasks are never optional.
+- Task group 9 refines the shipped crowd index (R2.7/R2.8, R3.5): it counts only posted-standby entries and measures them per-ride-relative, which also stops structurally-zero rows from being written to `wait_samples`. It builds on the existing sampling pass and pure math; 9.5 is an operational decision to confirm before running.
 - Property tests reference a design Correctness Property, run ≥100 `fast-check` iterations, and are tagged `Feature: crowd-calendar, Property {n}`.
 - Pure modules (`waitMath`, `crowdForecast`) carry no I/O; data is passed in as prefetched snapshots so properties run directly against the functions.
 - Collection is one cron-driven pass (`/internal/sampling/run`) covering both waits and schedule/LL signals; no BullMQ worker is added.
@@ -103,7 +116,10 @@ Implementation is **TypeScript**, reusing existing infrastructure: the `Live_Ser
     { "id": 4, "tasks": ["4.4", "4.5", "5.1", "5.2"] },
     { "id": 5, "tasks": ["5.3", "5.4", "6.1", "6.2", "6.3"] },
     { "id": 6, "tasks": ["6.4", "7.1", "7.2"] },
-    { "id": 7, "tasks": ["8.1", "8.2"] }
+    { "id": 7, "tasks": ["8.1", "8.2"] },
+    { "id": 8, "tasks": ["9.1"] },
+    { "id": 9, "tasks": ["9.2", "9.3"] },
+    { "id": 10, "tasks": ["9.4", "9.5"] }
   ]
 }
 ```

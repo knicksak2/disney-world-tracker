@@ -14,10 +14,9 @@ import type { ThemeParksDirectory } from '../live/themeParksDirectory.js';
 import type { WeatherClient } from './weatherClient.js';
 import type { DerivedStatsService } from './derivedStatsService.js';
 import { wdwToday } from '../trips/wdwClock.js';
-import { applyEma, emaVariance, normalizeCrowdIndex } from './waitMath.js';
+import { applyEma, emaVariance, isStandbyBasketEntry, relativeCrowdIndex } from './waitMath.js';
+import type { RelativeCrowdRide } from './waitMath.js';
 
-/** Cold-start seed for per-park normalization when no history exists yet (R2.1). */
-const DEFAULT_TYPICAL_WAIT = 35;
 
 /**
  * Minimum spacing between sampling passes (start-to-start), a debounce against
@@ -256,8 +255,10 @@ export function createSamplingService(deps: SamplingServiceDeps): SamplingServic
         const updatedSeasons: SeasonHourRow[] = [];
         const updatedSignals: ExperienceSignalRow[] = [];
         
-        let parkTotalWait = 0;
-        let parkTotalSamples = 0;
+        // Standby basket for the per-ride-relative crowd index (R2.7/R2.8)
+        const basketRides: RelativeCrowdRide[] = [];
+        let basketTotalWait = 0;
+        let basketCount = 0;
         const seenExpIds = new Set<string>();
 
         for (const entry of liveRes.liveData) {
@@ -271,15 +272,33 @@ export function createSamplingService(deps: SamplingServiceDeps): SamplingServic
           const waitMinutes = (isOperating && entry.queue?.STANDBY?.waitTime) || 0;
           const singleRiderWait = (isOperating && entry.queue?.SINGLE_RIDER?.waitTime) || null;
           
-          if (isOperating && typeof waitMinutes === 'number') {
+          // Gate wait_samples on isStandbyBasketEntry: only entries with a
+          // real posted STANDBY queue (shows/dining/parades excluded; walk-on
+          // 0-min included). Shape/season EMA keep the existing gate below.
+          const inBasket = isStandbyBasketEntry(entry);
+          if (inBasket) {
+            const standbyWait = entry.queue!.STANDBY!.waitTime as number;
             waitSamples.push({
               experience_id: expId,
               observed_at: now,
-              wait_minutes: waitMinutes,
-              status: entry.status
+              wait_minutes: standbyWait,
+              status: entry.status!
             });
-            parkTotalWait += waitMinutes;
-            parkTotalSamples++;
+            basketTotalWait += standbyWait;
+            basketCount++;
+
+            // Collect ride data for relativeCrowdIndex: look up this ride's
+            // shape bucket to get the expected wait.
+            const shapeBucket = existingShapes.find(
+              s => s.experience_id === expId && s.day_of_week === currentDow && s.hour === currentHour
+            );
+            if (shapeBucket) {
+              basketRides.push({
+                observed: standbyWait,
+                expected: shapeBucket.avg_wait_minutes,
+                sampleCount: shapeBucket.sample_count,
+              });
+            }
           }
 
           // Daily Signals
@@ -354,33 +373,35 @@ export function createSamplingService(deps: SamplingServiceDeps): SamplingServic
         await repo.upsertSeasonHours(updatedSeasons);
         await repo.upsertExperienceSignals(updatedSignals);
 
-        // Park Crowd Index (running daily aggregate, per-park normalization R2.1).
-        // Only the four theme parks — see CROWD_INDEX_PARKS.
-        if (parkTotalSamples > 0 && CROWD_INDEX_PARKS.has(canonicalPark)) {
-          const parkAvgWait = parkTotalWait / parkTotalSamples;
+        // Park Crowd Index — per-ride-relative aggregate over the standby
+        // basket (R2.7 / R2.8). Only the four theme parks.
+        if (CROWD_INDEX_PARKS.has(canonicalPark)) {
+          const crowdSlice = relativeCrowdIndex(basketRides);
 
-          // Per-park rolling baseline; cold-start seed only when no history exists
-          const rollingBaseline = await repo.getParkRollingBaseline(canonicalPark);
-          const parkTypical = rollingBaseline ?? DEFAULT_TYPICAL_WAIT;
-          const continuousIndex = normalizeCrowdIndex(parkAvgWait, { typical: parkTypical, maxTypical: parkTypical * 2 });
-          
-          const todayDate = new Date(dateStr);
-          const existingIndices = await repo.getParkCrowdIndices(canonicalPark, [todayDate]);
-          let idxRow = existingIndices.length > 0 ? existingIndices[0]! : {
-            park: canonicalPark,
-            date: todayDate,
-            crowd_index: continuousIndex,
-            daily_avg_wait: parkAvgWait,
-            sample_count: 0
-          };
-          
-          // Running average of the day's index slices
-          const iw = 1 / (idxRow.sample_count + 1);
-          idxRow.crowd_index = applyEma(idxRow.crowd_index, continuousIndex, iw);
-          idxRow.daily_avg_wait = applyEma(idxRow.daily_avg_wait, parkAvgWait, iw);
-          idxRow.sample_count++;
-          
-          await repo.upsertParkCrowdIndices([idxRow]);
+          // If the basket is empty for this pass (no ride has an eligible
+          // shape yet), write NO index slice — let the forecast/seed carry.
+          // Guard NaN BEFORE applyEma so NaN never reaches park_crowd_index.
+          if (!Number.isNaN(crowdSlice)) {
+            const basketAvgWait = basketCount > 0 ? basketTotalWait / basketCount : 0;
+
+            const todayDate = new Date(dateStr);
+            const existingIndices = await repo.getParkCrowdIndices(canonicalPark, [todayDate]);
+            let idxRow = existingIndices.length > 0 ? existingIndices[0]! : {
+              park: canonicalPark,
+              date: todayDate,
+              crowd_index: crowdSlice,
+              daily_avg_wait: basketAvgWait,
+              sample_count: 0
+            };
+
+            // Running average of the day's index slices
+            const iw = 1 / (idxRow.sample_count + 1);
+            idxRow.crowd_index = applyEma(idxRow.crowd_index, crowdSlice, iw);
+            idxRow.daily_avg_wait = applyEma(idxRow.daily_avg_wait, basketAvgWait, iw);
+            idxRow.sample_count++;
+
+            await repo.upsertParkCrowdIndices([idxRow]);
+          }
         }
         
       } catch (err) {

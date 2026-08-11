@@ -4,7 +4,6 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DataType, newDb, type IMemoryDb } from 'pg-mem';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { IntelligenceRepo } from '../../services/intelligence/IntelligenceRepo.js';
 
 function buildPgMemDatabase(): IMemoryDb {
   const db = newDb();
@@ -55,8 +54,6 @@ const BASE_MIGRATIONS = [
 
 describe('migration 0021_crowd_index_source', () => {
   let db: IMemoryDb;
-  let pool: any;
-  let repo: IntelligenceRepo;
 
   beforeEach(() => {
     db = buildPgMemDatabase();
@@ -64,20 +61,7 @@ describe('migration 0021_crowd_index_source', () => {
       applyMigration(db, name);
     }
     applyMigration(db, '0021_crowd_index_source.sql');
-    
-    // Create a mock pool that passes queries to pg-mem
-    pool = {
-      query: async (text: string, params: any[] = []) => {
-        let paramIndex = 1;
-        let psql = text;
-        for (const p of params) {
-          psql = psql.split(`$${paramIndex++}`).join(typeof p === 'string' ? `'${p}'` : p);
-        }
-        const res = db.public.query(psql);
-        return { rows: res.rows || res || [] };
-      }
-    };
-    repo = new IntelligenceRepo(pool as any);
+
   });
 
   it('allows valid sources and defaults to observed', async () => {
@@ -107,21 +91,4 @@ describe('migration 0021_crowd_index_source', () => {
     `)).toThrow(/check constraint.*violated/i);
   });
 
-  it('getParkRollingBaseline ignores seed rows', async () => {
-    // Insert observed row
-    db.public.none(`
-      INSERT INTO park_crowd_index (park, date, crowd_index, daily_avg_wait, sample_count, source)
-      VALUES ('Hollywood Studios', '2026-01-03', 1.0, 40, 10, 'observed')
-    `);
-    
-    // Insert seed row with different daily_avg_wait
-    db.public.none(`
-      INSERT INTO park_crowd_index (park, date, crowd_index, daily_avg_wait, sample_count, source)
-      VALUES ('Hollywood Studios', '2026-01-04', 1.0, 0, 0, 'seed')
-    `);
-
-    const baseline = await repo.getParkRollingBaseline('Hollywood Studios');
-    // Baseline should just be the average of the observed row(s), ignoring the seed row (which has daily_avg_wait 0)
-    expect(baseline).toBe(40);
-  });
 });

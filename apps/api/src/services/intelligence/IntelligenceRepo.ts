@@ -522,14 +522,8 @@ export class IntelligenceRepo {
     return res.rows;
   }
 
-  async getParkRollingBaseline(park: string): Promise<number | null> {
-    const res = await this.pool.query(
-      `SELECT AVG(daily_avg_wait) as baseline FROM park_crowd_index WHERE park = $1 AND source = 'observed'`,
-      [park]
-    );
-    if (res.rows.length === 0 || res.rows[0].baseline == null) return null;
-    return parseFloat(res.rows[0].baseline);
-  }
+
+
 
   async getExperiencesWithUpstreamIds(): Promise<{ id: string, upstream_entity_id: string, park: string }[]> {
     // Only ACTIVE experiences: inactive rows are no longer in the catalog and must
