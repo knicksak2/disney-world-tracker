@@ -28,7 +28,10 @@ describe('Prediction Blending (Task 4.4)', () => {
         extended_evening: true,
         ll_multipass_price_cents: 2900
       }],
-      getComparableCrowdIndices: async () => [1.5, 1.6],
+      getComparableCrowdIndices: async () => [
+        { date: new Date('2023-01-02T00:00:00Z'), crowd_index: 1.5 },
+        { date: new Date('2023-01-03T00:00:00Z'), crowd_index: 1.6 },
+      ],
       getRideShapes: async () => [{
         experience_id: 'exp1', day_of_week: 2, hour: 14,
         avg_wait_minutes: 45, sample_count: 50,

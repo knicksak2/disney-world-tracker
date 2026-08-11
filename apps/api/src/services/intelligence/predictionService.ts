@@ -2,7 +2,7 @@ import type { IntelligenceRepo } from './IntelligenceRepo.js';
 import type { WeatherClient } from './weatherClient.js';
 import { wdwToday } from '../trips/wdwClock.js';
 import { selectTier, crowdMultiplier, weatherAdjustment, displayLevel } from './waitMath.js';
-import { forecastIndex } from './crowdForecast.js';
+import { forecastIndex, selectComparableIndices } from './crowdForecast.js';
 import { seasonalPrior } from './seasonalPrior.js';
 import type { WaitSnapshot, CrowdCalendarDayDTO, WaitInsightsDTO } from '@dwt/shared';
 import type { Park } from '@dwt/shared';
@@ -57,10 +57,9 @@ export function createPredictionService(deps: PredictionServiceDeps): Prediction
     const seasonVal = seasonalPrior(date.toISOString().split('T')[0]!);
     
     const targetDateEastern = new Date(`${date.toISOString().split('T')[0]!}T12:00:00-04:00`);
-    const month = targetDateEastern.getMonth() + 1; // 1-12
-    const dow = targetDateEastern.getDay(); // 0-6
     
-    const comparables = await repo.getComparableCrowdIndices(park, month, dow);
+    const comparableRows = await repo.getComparableCrowdIndices(park, targetDateEastern);
+    const comparables = selectComparableIndices(targetDateEastern, comparableRows);
     let historyEstimate: number | null = null;
     if (comparables.length > 0) {
       historyEstimate = comparables.reduce((a, b) => a + b, 0) / comparables.length;

@@ -206,16 +206,32 @@ export class IntelligenceRepo {
     return res.rows;
   }
 
-  async getComparableCrowdIndices(park: string, month: number, dow: number): Promise<number[]> {
+  async getComparableCrowdIndices(park: string, targetDate: Date, _windowDays: number = 7): Promise<{ date: Date; crowd_index: number }[]> {
+    // Fetch all park_crowd_index rows for this park, then let the caller's
+    // pure selectComparableIndices do the day-of-year windowing.
+    // SQL pre-filters to rows whose month is within plausible range of the target
+    // (±1 month to cover the window at month boundaries), keeping the scan bounded.
+    const targetMonth = targetDate.getMonth() + 1; // 1-12
+    const monthLow = targetMonth === 1 ? 12 : targetMonth - 1;
+    const monthHigh = targetMonth === 12 ? 1 : targetMonth + 1;
+
+    let monthFilter: string;
+    if (monthLow > monthHigh) {
+      // Wraps around Dec/Jan: month IN (12, 1, 2) for a Jan target, etc.
+      monthFilter = `EXTRACT(MONTH FROM date) IN (${monthLow}, ${targetMonth}, ${monthHigh})`;
+    } else {
+      monthFilter = `EXTRACT(MONTH FROM date) BETWEEN ${monthLow} AND ${monthHigh}`;
+    }
+
     const res = await this.pool.query(
-      `SELECT crowd_index FROM park_crowd_index 
-       WHERE park = $1 
-       AND EXTRACT(MONTH FROM date) = $2 
-       AND EXTRACT(DOW FROM date) = $3`,
-      [park, month, dow]
+      `SELECT date, crowd_index FROM park_crowd_index
+       WHERE park = $1
+       AND ${monthFilter}`,
+      [park]
     );
-    return res.rows.map(r => r.crowd_index);
+    return res.rows.map((r: any) => ({ date: new Date(r.date), crowd_index: r.crowd_index }));
   }
+
 
   async upsertParkCrowdIndices(indices: ParkCrowdIndexRow[]): Promise<void> {
     if (indices.length === 0) return;

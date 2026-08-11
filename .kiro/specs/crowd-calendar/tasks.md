@@ -90,13 +90,24 @@ Implementation is **TypeScript**, reusing existing infrastructure: the `Live_Ser
     - _Requirements: 2.7, 2.8, 3.5, 3.6_
   - [x] 9.4 Repo / integration coverage — a pg-mem / `server.inject` test that a pass over a mixed park (headliner ride, walk-on 0-min ride, a show, a restaurant) records `wait_samples` only for the two rides and yields a per-ride-relative index over them. This test MUST fail against the pre-change all-entries average (the guard for the fix, per design Testing Strategy).
     - _Requirements: 2.7, 2.8, 3.5_
-  - [ ] 9.5 Observed-index rebuild — delete the existing `source='observed'` `park_crowd_index` rows so the index repopulates cleanly on the new per-ride-relative scale. These are **per-date** rows, not an EMA, so they do NOT age out on their own and would otherwise keep feeding `getComparableCrowdIndices` (year-over-year) and predicted-vs-actual on the old scale. Do **NOT** bulk-delete `wait_samples` — the existing 30-day prune ages structural zeros out, and they don't corrupt shape percentiles (a no-standby entity has no matching shape). Seed rows and the forward forecast are untouched and carry the calendar during the ~several-day rebuild. **Destructive step: run only with explicit approval.**
+  - [x] 9.5 Observed-index rebuild — delete the existing `source='observed'` `park_crowd_index` rows so the index repopulates cleanly on the new per-ride-relative scale. These are **per-date** rows, not an EMA, so they do NOT age out on their own and would otherwise keep feeding `getComparableCrowdIndices` (year-over-year) and predicted-vs-actual on the old scale. Do **NOT** bulk-delete `wait_samples` — the existing 30-day prune ages structural zeros out, and they don't corrupt shape percentiles (a no-standby entity has no matching shape). Seed rows and the forward forecast are untouched and carry the calendar during the ~several-day rebuild. **Destructive step: run only with explicit approval.**
     - _Requirements: 2.8_
+
+- [ ] 10. Date-proximity forecast comparables (R2.9)
+  - [x] 10.1 Pure comparable-selection helper — add `selectComparableIndices(targetDate, history, windowDays)` to `crowdForecast.ts`: given the target date and `{date, crowd_index}[]` history, return the values within ±`COMPARABLE_DAY_WINDOW` (=7) days of the target's day-of-year (wrapping the Dec↔Jan boundary), preferring same-day-of-week when enough samples remain. No I/O.
+    - _Requirements: 2.9_
+  - [x] 10.2 Repo + `predictionService` wiring — change `getComparableCrowdIndices` to return **dated rows** (`date` + `crowd_index`) for the target's calendar-proximity window across years (drop the flat month+day-of-week averaging), and have `predictionService.computeRawForecast` run `selectComparableIndices` and average the result into `historyEstimate`. Preserve seed+observed inclusion and the existing blend-weight logic. Update the existing tests that stub/consume `getComparableCrowdIndices` (e.g. `predictionBlending.test.ts`) to the new dated-row shape — do not leave them failing.
+    - _Requirements: 2.2, 2.9_
+  - [x] 10.3 Property + integration tests — **Property 11** (comparable selection is calendar-proximate and preserves peaks), `fast-check` ≥100 runs, tagged `Feature: crowd-calendar, Property 11`. Plus a `predictionService` test: given seed rows with the late-December peak, a future Christmas-week date forecasts an elevated `displayLevel` (not diluted to green) while an early-December date stays low.
+    - _Requirements: 2.9_
+  - [ ] 10.4 (Optional) Seasonal-prior enrichment — extend `seasonalPrior` (by rule, per year) to lift genuinely busy windows the seed can't reach beyond its ~2.5-year span (e.g. October Food & Wine / Halloween party season, Jersey Week). Secondary to 10.1–10.3, which carry most of this once comparables are fixed.
+    - _Requirements: 2.2_
 
 ## Notes
 
-- Test-only tasks (2.3, 4.4, 5.3, 6.3, 8.1, 9.2, 9.4) are optional for a faster MVP; core tasks are never optional.
+- Test-only tasks (2.3, 4.4, 5.3, 6.3, 8.1, 9.2, 9.4, 10.3) are optional for a faster MVP; core tasks are never optional.
 - Task group 9 refines the shipped crowd index (R2.7/R2.8, R3.5): it counts only posted-standby entries and measures them per-ride-relative, which also stops structurally-zero rows from being written to `wait_samples`. It builds on the existing sampling pass and pure math; 9.5 is an operational decision to confirm before running.
+- Task group 10 fixes the future-date calendar reading uniformly green (R2.9): the forecast's historical comparable feature averaged every same-month, same-weekday date, flattening holiday/festival peaks the seed records correctly (e.g. MK Dec 26 at level 8). Selecting comparables by calendar proximity restores those peaks. It touches `crowdForecast.ts`, `getComparableCrowdIndices`, and `predictionService.computeRawForecast` only.
 - Property tests reference a design Correctness Property, run ≥100 `fast-check` iterations, and are tagged `Feature: crowd-calendar, Property {n}`.
 - Pure modules (`waitMath`, `crowdForecast`) carry no I/O; data is passed in as prefetched snapshots so properties run directly against the functions.
 - Collection is one cron-driven pass (`/internal/sampling/run`) covering both waits and schedule/LL signals; no BullMQ worker is added.
@@ -119,7 +130,10 @@ Implementation is **TypeScript**, reusing existing infrastructure: the `Live_Ser
     { "id": 7, "tasks": ["8.1", "8.2"] },
     { "id": 8, "tasks": ["9.1"] },
     { "id": 9, "tasks": ["9.2", "9.3"] },
-    { "id": 10, "tasks": ["9.4", "9.5"] }
+    { "id": 10, "tasks": ["9.4", "9.5"] },
+    { "id": 11, "tasks": ["10.1"] },
+    { "id": 12, "tasks": ["10.2", "10.3"] },
+    { "id": 13, "tasks": ["10.4"] }
   ]
 }
 ```
