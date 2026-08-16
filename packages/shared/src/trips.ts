@@ -232,8 +232,20 @@ export const tripEditSchema = z
 export type TripEditInput = z.infer<typeof tripEditSchema>;
 
 // ---------------------------------------------------------------------------
-// Planned_List / Shared_Log / tag / reaction / comment inputs
-// ---------------------------------------------------------------------------
+export const MEAL_PERIODS = ['breakfast', 'lunch', 'dinner', 'snack'] as const;
+export type MealPeriod = (typeof MEAL_PERIODS)[number];
+
+export const MEAL_WINDOWS: Partial<Record<MealPeriod, { readonly startMinutes: number; readonly endMinutes: number }>> = {
+  breakfast: { startMinutes: 480, endMinutes: 630 },   // 08:00 - 10:30 (480 - 630 mins)
+  lunch: { startMinutes: 690, endMinutes: 840 },       // 11:30 - 14:00 (690 - 840 mins)
+  dinner: { startMinutes: 1020, endMinutes: 1200 },    // 17:00 - 20:00 (1020 - 1200 mins)
+};
+
+export const MEAL_SERVICE_WINDOWS: Partial<Record<MealPeriod, { readonly startMinutes: number; readonly endMinutes: number }>> = {
+  breakfast: { startMinutes: 420, endMinutes: 660 },   // 07:00 - 11:00 (420 - 660 mins)
+  lunch: { startMinutes: 660, endMinutes: 930 },       // 11:00 - 15:30 (660 - 930 mins)
+  dinner: { startMinutes: 960, endMinutes: 1260 },     // 16:00 - 21:00 (960 - 1260 mins)
+};
 
 /**
  * Body for `POST /trips/:id/planned-items` (R9.1). Catalog existence,
@@ -241,7 +253,8 @@ export type TripEditInput = z.infer<typeof tripEditSchema>;
  */
 export const plannedItemAddSchema = z
   .object({
-    experienceId: uuidSchema,
+    experienceId: uuidSchema.nullable().optional(),
+    customTitle: z.string().trim().min(1).max(255).nullable().optional(),
     plannedDate: tripCalendarDateSchema.nullable().optional(),
     plannedTime: isoTimestampSchema.nullable().optional(),
     isFixed: z.boolean().optional(),
@@ -250,13 +263,54 @@ export const plannedItemAddSchema = z
     priority: z.number().int().min(1).max(3).optional(),
     itemType: z.enum(['experience', 'break']).optional(),
     durationMinutes: z.number().int().min(1).max(480).nullable().optional(),
+    windowStartMinutes: z.number().int().min(0).max(1440).nullable().optional(),
+    windowEndMinutes: z.number().int().min(0).max(1440).nullable().optional(),
+    mealPeriod: z.enum(MEAL_PERIODS).nullable().optional(),
   })
-  .strict();
+  .strict()
+  .transform((data) => {
+    if (data.mealPeriod && data.windowStartMinutes == null && data.windowEndMinutes == null) {
+      const window = MEAL_WINDOWS[data.mealPeriod];
+      if (window) {
+        return {
+          ...data,
+          windowStartMinutes: window.startMinutes,
+          windowEndMinutes: window.endMinutes,
+        };
+      }
+    }
+    return data;
+  })
+  .superRefine((data, ctx) => {
+    if (!data.experienceId && data.itemType !== 'break') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['experienceId'],
+        message: "Unlocated items without an experienceId must have itemType 'break'",
+      });
+    }
+    const hasStart = data.windowStartMinutes != null;
+    const hasEnd = data.windowEndMinutes != null;
+    if ((hasStart && !hasEnd) || (!hasStart && hasEnd)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [hasStart ? 'windowEndMinutes' : 'windowStartMinutes'],
+        message: 'Both windowStartMinutes and windowEndMinutes must be provided together',
+      });
+    } else if (hasStart && hasEnd && data.windowEndMinutes! < data.windowStartMinutes!) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['windowEndMinutes'],
+        message: 'windowEndMinutes must be greater than or equal to windowStartMinutes',
+      });
+    }
+  });
 
 export type PlannedItemAddInput = z.infer<typeof plannedItemAddSchema>;
 
 export const plannedItemEditSchema = z
   .object({
+    customTitle: z.string().trim().min(1).max(255).nullable().optional(),
     plannedDate: tripCalendarDateSchema.nullable().optional(),
     plannedTime: isoTimestampSchema.nullable().optional(),
     isFixed: z.boolean().optional(),
@@ -265,8 +319,41 @@ export const plannedItemEditSchema = z
     priority: z.number().int().min(1).max(3).optional(),
     itemType: z.enum(['experience', 'break']).optional(),
     durationMinutes: z.number().int().min(1).max(480).nullable().optional(),
+    windowStartMinutes: z.number().int().min(0).max(1440).nullable().optional(),
+    windowEndMinutes: z.number().int().min(0).max(1440).nullable().optional(),
+    mealPeriod: z.enum(MEAL_PERIODS).nullable().optional(),
   })
-  .strict();
+  .strict()
+  .transform((data) => {
+    if (data.mealPeriod && data.windowStartMinutes == null && data.windowEndMinutes == null) {
+      const window = MEAL_WINDOWS[data.mealPeriod];
+      if (window) {
+        return {
+          ...data,
+          windowStartMinutes: window.startMinutes,
+          windowEndMinutes: window.endMinutes,
+        };
+      }
+    }
+    return data;
+  })
+  .superRefine((data, ctx) => {
+    const hasStart = data.windowStartMinutes != null;
+    const hasEnd = data.windowEndMinutes != null;
+    if ((hasStart && !hasEnd) || (!hasStart && hasEnd)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [hasStart ? 'windowEndMinutes' : 'windowStartMinutes'],
+        message: 'Both windowStartMinutes and windowEndMinutes must be provided together',
+      });
+    } else if (hasStart && hasEnd && data.windowEndMinutes! < data.windowStartMinutes!) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['windowEndMinutes'],
+        message: 'windowEndMinutes must be greater than or equal to windowStartMinutes',
+      });
+    }
+  });
 
 export type PlannedItemEditInput = z.infer<typeof plannedItemEditSchema>;
 
@@ -284,6 +371,7 @@ export interface OptimizedItem {
   readonly plannedItemId: string;
   readonly suggestedArrival: string;
   readonly predictedWaitMinutes: number;
+  readonly scheduledShowtime?: string | null;
   readonly travelFromPrev: {
     readonly kind: 'walk' | 'park_hop';
     readonly minutes: number;
@@ -534,9 +622,10 @@ export interface TripTravelLeg {
  */
 export interface PlannedItemDTO {
   readonly id: string;
-  readonly experienceId: string;
-  readonly experienceName: string;
-  readonly park: Park;
+  readonly experienceId: string | null;
+  readonly experienceName: string | null;
+  readonly park: Park | null;
+  readonly customTitle: string | null;
   readonly addedByDisplayName: string;
   readonly plannedDate: string | null;
   readonly plannedTime: string | null;
@@ -546,6 +635,11 @@ export interface PlannedItemDTO {
   readonly priority: number;
   readonly itemType: 'experience' | 'break';
   readonly durationMinutes: number | null;
+  readonly windowStartMinutes: number | null;
+  readonly windowEndMinutes: number | null;
+  readonly mealPeriod: MealPeriod | null;
+  readonly scheduledShowtime: string | null;
+  readonly servedMealPeriods?: readonly string[] | undefined;
   /**
    * Persisted result of the last optimize run for this item (R8.1–R8.4).
    * All three are `null` when the item has not been optimized (or was edited

@@ -397,6 +397,7 @@ function plannedItemDTOs(store: Store): PlannedItemDTO[] {
       experienceName: exp.name,
       park: exp.park,
       addedByDisplayName: adder.displayName,
+      customTitle: null,
       plannedDate: null,
       plannedTime: null,
       isFixed: false,
@@ -405,6 +406,10 @@ function plannedItemDTOs(store: Store): PlannedItemDTO[] {
       priority: 2,
       itemType: 'experience',
       durationMinutes: null,
+      windowStartMinutes: null,
+      windowEndMinutes: null,
+      mealPeriod: null,
+      scheduledShowtime: null,
       predictedWaitMinutes: null,
       travelFromPrev: null,
       optimizedAt: null,
@@ -483,7 +488,7 @@ function assertPlannedItemsPreserved(m: Model, r: Real): void {
 
   // A planned item reads `done` iff its Experience was logged in the Trip.
   for (const view of [...presentation.doneSection, ...presentation.notDoneSection]) {
-    const expectedDone = m.completedExperiences.has(view.experienceId);
+    const expectedDone = view.experienceId !== null && m.completedExperiences.has(view.experienceId);
     expect(view.completionState).toBe(expectedDone ? 'done' : 'not_done');
 
     // The derived view preserves the source item's Experience and adder.

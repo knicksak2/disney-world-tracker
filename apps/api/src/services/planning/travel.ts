@@ -64,7 +64,7 @@ export function travelFromPrev(
 
   const distance = haversineDistanceMeters(prevCoords, currCoords);
   const pathDistance = distance * PATH_FACTOR;
-  const speed = WALKING_SPEEDS_M_PER_MIN[pace];
+  const speed = (pace && WALKING_SPEEDS_M_PER_MIN[pace]) || WALKING_SPEEDS_M_PER_MIN.moderate;
 
   const minutes = Math.round(pathDistance / speed);
 

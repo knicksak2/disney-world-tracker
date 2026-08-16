@@ -104,7 +104,9 @@ describe('optimizer late-window availability gating (R3.13)', () => {
       fc.property(fc.uniqueArray(itemArb, { minLength: 1, maxLength: 6, selector: (x) => x.id }), (specs) => {
         const items = specs.map((s) => makeItem(s.id, { ext: s.ext }));
         const snapshots: Record<string, WaitSnapshot> = {};
-        for (const it of items) snapshots[it.experienceId] = snap(it.experienceId, 10);
+        for (const it of items) {
+          if (it.experienceId) snapshots[it.experienceId] = snap(it.experienceId, 10);
+        }
         const res = optimize({
           items, date: '2026-10-01', walkingSpeed: 'moderate', earlyEntryEligible: false,
           useExtendedEvening: true, startHour: 9, endHour: 21, snapshots, seed: 7,

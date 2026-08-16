@@ -72,15 +72,6 @@ function applyMigration(db: IMemoryDb, name: string): void {
   db.public.none(sql);
 }
 
-/** Minimal `resorts` FK-target stub (see migration0016.test.ts for rationale). */
-const RESORTS_STUB = `
-  CREATE TABLE resorts (
-    id     UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name   TEXT NOT NULL,
-    active BOOLEAN NOT NULL DEFAULT TRUE
-  );
-`;
-
 /**
  * pg-mem does not model row-level `FOR UPDATE`; `editTrip` appends it purely for
  * concurrency safety. Strip it on every query so the statements run.
@@ -167,7 +158,14 @@ function makeFixture(): Fixture {
   const rawPool = new PgMemPool() as unknown as DbPool;
 
   applyMigration(db, '0001_init.sql');
-  db.public.none(RESORTS_STUB);
+  db.public.none(`
+    CREATE TABLE resorts (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      name TEXT NOT NULL,
+      active BOOLEAN NOT NULL DEFAULT TRUE
+    );
+    ALTER TABLE experiences ADD COLUMN IF NOT EXISTS meal_periods JSONB NOT NULL DEFAULT '[]';
+  `);
   applyMigration(db, '0015_trips.sql');
   applyMigration(db, '0016_trip_resorts.sql');
   applyMigration(db, '0019_planned_item_scheduling.sql');

@@ -33,8 +33,8 @@ export default defineConfig({
     // loaded machines those legitimately exceed vitest's 5s/10s defaults, so
     // give tests and setup hooks generous headroom. This changes only the
     // tolerance for slow runs, never test behavior or coverage.
-    testTimeout: 30_000,
-    hookTimeout: 30_000,
+    testTimeout: 60_000,
+    hookTimeout: 60_000,
     // Coverage gate — scoped ONLY to the day-planning pure modules. `all: true` +
     // this narrow `include` means any planning source file that isn't exercised by a
     // test counts as 0% and fails the threshold, so untested optimizer/travel code

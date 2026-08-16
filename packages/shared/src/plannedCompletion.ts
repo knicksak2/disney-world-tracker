@@ -98,6 +98,7 @@ export function derivePlannedListPresentation(
   for (const item of plannedItems) {
     const done =
       completedExperienceIds !== null &&
+      item.experienceId !== null &&
       completedExperienceIds.has(item.experienceId);
 
     if (done) {
@@ -127,12 +128,12 @@ export function derivePlannedListPresentation(
  * counts items present in `plannedItems`, so it can never exceed the total.
  */
 export function derivePlannedCounts(
-  plannedItems: readonly { readonly experienceId: string }[],
+  plannedItems: readonly { readonly experienceId: string | null }[],
   completedExperienceIds: ReadonlySet<string>,
 ): { readonly plannedTotalCount: number; readonly plannedCompletedCount: number } {
   let plannedCompletedCount = 0;
   for (const item of plannedItems) {
-    if (completedExperienceIds.has(item.experienceId)) {
+    if (item.experienceId !== null && completedExperienceIds.has(item.experienceId)) {
       plannedCompletedCount += 1;
     }
   }

@@ -156,6 +156,12 @@ Adds `source TEXT NOT NULL DEFAULT 'observed' CHECK (source IN ('observed','seed
 
 **Validates: Requirements 2.9**
 
+### Property 12: Historical showtime patterns derive from past signals with sample and frequency thresholds
+*For any* show experience, `show_time_patterns` retains a `(day_of_week, start_minutes)` slot iff it appeared in at least `SHOWTIME_PATTERN_MIN_FREQUENCY` (50%) of observed dates for that day-of-week over the trailing `SHOWTIME_PATTERN_WINDOW_DAYS` (180 days) AND `sample_count >= SHOWTIME_PATTERN_MIN_SAMPLES` (3); `getDaySnapshot` falls back to these patterns with `showtimesAreTypical = true` exactly when no per-date schedule signal exists for that date.
+
+**Validates: Requirements 12.1, 12.2, 12.3, 12.4**
+
+
 ## Error Handling
 
 - **Slow/failing upstream during a pass:** the endpoint has already returned `202`, so the caller is never blocked; the pass runs async, bounded by the Live_Service deadline, and isolates the failing park (Property 5). Errors are logged, not surfaced to the cron.
@@ -277,6 +283,19 @@ displayLevel(continuousIndex) = clamp(round(5 × continuousIndex), 1, 10)   // d
 
 `tierValue` is the most-specific reliable tier (season-resolved direct → shape × crowd → park-typical, R1.1). `weatherAdjustment`/`eventAdjustment` default to 1.0 when unavailable or out of horizon.
 
+### Migration `0029_show_time_patterns.sql`
+
+- **`show_time_patterns`** — PK `(experience_id, day_of_week, start_minutes)`; `frequency REAL NOT NULL`, `sample_count INTEGER NOT NULL`. Stores derived typical showtimes for shows and parades bucketed to 5-minute increments in Eastern Time, computed by `derivedStatsService.runDailyRecompute` over a trailing 180-day window (`SHOWTIME_PATTERN_WINDOW_DAYS = 180`). Check constraints enforce `day_of_week BETWEEN 0 AND 6` and `start_minutes BETWEEN 0 AND 1440`. Cascades delete on parent experience deletion.
+
+### Property 12: Historical Showtime Patterns and Typical Showtimes Fallback
+
+**Validates:** Requirements 12.1, 12.2, 12.3, 12.4
+
+For any arbitrary set of historical daily showtime signals across trailing dates:
+1. Every emitted pattern in `show_time_patterns` satisfies `sample_count >= 3`, `frequency >= 0.5`, `0 <= day_of_week <= 6`, `0 <= start_minutes <= 1440`, and `start_minutes % 5 === 0` (5-minute bucketing).
+2. Slots appearing in fewer than `SHOWTIME_PATTERN_MIN_SAMPLES` (3) dates or with frequency below `SHOWTIME_PATTERN_MIN_FREQUENCY` (0.50) are excluded.
+3. In `getDaySnapshot`, real per-date showtimes strictly take precedence when present (leaving `showtimesAreTypical` unset), while absent per-date showtimes fall back to `show_time_patterns` for that day of week formatted as ISO instants on the target date with `showtimesAreTypical: true`.
+
 ## Cross-Spec Dependencies & Build Order
 
-Build this feature **before** `day-planning-optimization`, which consumes `predictionService.getDaySnapshot()` / `crowdMultiplier()`. This feature owns migration `0020`; the day planner owns `0021`. No other spec depends on this one.
+Build this feature **before** `day-planning-optimization`, which consumes `predictionService.getDaySnapshot()` / `crowdMultiplier()`. This feature owns migration `0020` and `0029`; the day planner owns `0021` and `0027`. No other spec depends on this one.

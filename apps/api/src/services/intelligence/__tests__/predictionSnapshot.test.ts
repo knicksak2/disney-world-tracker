@@ -34,7 +34,7 @@ describe('getDaySnapshot signal enrichment (R9.5)', () => {
       getExperienceDailySignals: async () => [{
         experience_id: 'exp1', date: new Date('2024-06-12T00:00:00Z'),
         ll_price_cents: 1500, ll_available: true, used_virtual_queue: null,
-        showtimes: ['12:00', '15:00', '18:00'],
+        showtimes: ['2024-06-12T16:00:00.000Z', '2024-06-12T19:00:00.000Z', '2024-06-12T22:00:00.000Z'],
       }],
       ...overrides,
     } as any;
@@ -56,7 +56,7 @@ describe('getDaySnapshot signal enrichment (R9.5)', () => {
     expect(h10.singleRiderWaitMinutes!).toBeLessThan(h10.predictedWaitMinutes);
 
     // showtimes + lightningLane carried from the per-date signal.
-    expect(s.showtimes).toEqual(['12:00', '15:00', '18:00']);
+    expect(s.showtimes).toEqual(['2024-06-12T16:00:00.000Z', '2024-06-12T19:00:00.000Z', '2024-06-12T22:00:00.000Z']);
     expect(s.lightningLane?.available).toBe(true);
     expect(s.lightningLane?.priceCents).toBe(1500);
   });

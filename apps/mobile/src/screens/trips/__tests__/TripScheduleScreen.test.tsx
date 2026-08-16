@@ -8,7 +8,10 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react-nativ
 
 import { PlannedItemDTO, TripOptimizationResult } from '@dwt/shared';
 
-import TripScheduleScreen from '../TripScheduleScreen';
+import TripScheduleScreen, {
+  getMealWindowLabel,
+  getMealServiceWindowLabel,
+} from '../TripScheduleScreen';
 import { apiRequest as mockedApiRequest } from '../../../api/client';
 
 jest.mock('expo-constants', () => ({
@@ -38,6 +41,7 @@ const PLANNED_ITEM: PlannedItemDTO = {
   experienceId: 'exp-1',
   experienceName: 'Space Mountain',
   park: 'Magic Kingdom',
+  customTitle: null,
   addedByDisplayName: 'Ada',
   plannedDate: null,
   plannedTime: null,
@@ -47,6 +51,10 @@ const PLANNED_ITEM: PlannedItemDTO = {
   priority: 2,
   itemType: 'experience',
   durationMinutes: 15,
+  windowStartMinutes: null,
+  windowEndMinutes: null,
+  mealPeriod: null,
+  scheduledShowtime: null,
   predictedWaitMinutes: null,
   travelFromPrev: null,
   optimizedAt: null,
@@ -386,6 +394,90 @@ describe('TripScheduleScreen', () => {
     });
   });
 
+  it('allows selecting multiple experiences consecutively to the schedule date without modal closing', async () => {
+    const postedItems: any[] = [];
+    apiRequestMock.mockImplementation(async (method, path, body) => {
+      if (method === 'GET' && path === `/trips/${TRIP_ID}`) {
+        return {
+          id: TRIP_ID,
+          name: 'Disney Trip',
+          startDate: '2026-10-01',
+          endDate: '2026-10-02',
+        } as any;
+      }
+      if (method === 'GET' && path === `/trips/${TRIP_ID}/planned-items`) {
+        return [];
+      }
+      if (method === 'GET' && path.startsWith('/catalog')) {
+        return {
+          experiences: [
+            {
+              id: 'exp-pirates',
+              name: 'Pirates of the Caribbean',
+              park: 'Magic Kingdom',
+              land: 'Adventureland',
+              category: 'attraction',
+            },
+            {
+              id: 'exp-haunted',
+              name: 'Haunted Mansion',
+              park: 'Magic Kingdom',
+              land: 'Liberty Square',
+              category: 'attraction',
+            },
+          ],
+        } as any;
+      }
+      if (method === 'POST' && path === `/trips/${TRIP_ID}/planned-items`) {
+        postedItems.push(body);
+        return { ...PLANNED_ITEM, id: `item-${postedItems.length}`, plannedDate: '2026-10-01' } as any;
+      }
+      throw new Error(`Unexpected request: ${method} ${path}`);
+    });
+
+    renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByText('+ Add to Thu, Oct 1')).toBeTruthy();
+    });
+
+    // Open add modal
+    fireEvent.press(screen.getByText('+ Add to Thu, Oct 1'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('schedule-picker-search')).toBeTruthy();
+    });
+    fireEvent.changeText(screen.getByTestId('schedule-picker-search'), 'Magic');
+
+    // Add first experience
+    const row1 = await screen.findByTestId('schedule-picker-result-exp-pirates');
+    fireEvent.press(row1);
+
+    await waitFor(() => {
+      expect(postedItems).toContainEqual({
+        experienceId: 'exp-pirates',
+        plannedDate: '2026-10-01',
+      });
+    });
+
+    // Modal is still open and search input is present; add second experience
+    expect(screen.getByTestId('schedule-picker-search')).toBeTruthy();
+    const row2 = await screen.findByTestId('schedule-picker-result-exp-haunted');
+    fireEvent.press(row2);
+
+    await waitFor(() => {
+      expect(postedItems).toContainEqual({
+        experienceId: 'exp-haunted',
+        plannedDate: '2026-10-01',
+      });
+    });
+
+    expect(postedItems).toHaveLength(2);
+
+    // Tap Done to close modal
+    fireEvent.press(screen.getByTestId('schedule-add-done-btn'));
+  });
+
   it('opens item settings modal, toggles dining/break, fixed time, LL, single rider, priority, and patches item', async () => {
     let patchPayload: any = null;
     apiRequestMock.mockImplementation(async (method, path, body) => {
@@ -413,26 +505,32 @@ describe('TripScheduleScreen', () => {
       expect(screen.getByText('Space Mountain')).toBeTruthy();
     });
 
-    // Open Edit Settings Modal, toggle Dining / Break, and tap Done
+    // Open Edit Settings Modal, select Soft Window (Breakfast), and tap Done
     fireEvent.press(screen.getByText('Edit Settings'));
     await waitFor(() => {
-      expect(screen.getByText(/Dining \/ Break/)).toBeTruthy();
+      expect(screen.getByTestId('timing-mode-soft_window')).toBeTruthy();
     });
-    fireEvent.press(screen.getByText(/Dining \/ Break/));
+    fireEvent.press(screen.getByTestId('timing-mode-soft_window'));
+    fireEvent.press(screen.getByTestId('meal-period-breakfast'));
     fireEvent.press(screen.getByText('Done'));
     await waitFor(() => {
-      expect(patchPayload).toMatchObject({ itemType: 'break' });
+      expect(patchPayload).toMatchObject({
+        mealPeriod: 'breakfast',
+        windowStartMinutes: 480,
+        windowEndMinutes: 630,
+      });
     });
 
-    // Re-open Edit Settings Modal, toggle Fixed Time, and tap Done
+    // Re-open Edit Settings Modal, select Exact Time, and tap Done
     await waitFor(() => {
       expect(screen.getByText('Edit Settings')).toBeTruthy();
     });
     fireEvent.press(screen.getByText('Edit Settings'));
     await waitFor(() => {
-      expect(screen.getByText(/Set Fixed Reservation Time/)).toBeTruthy();
+      expect(screen.getByTestId('timing-mode-exact_time')).toBeTruthy();
     });
-    fireEvent.press(screen.getByText(/Set Fixed Reservation Time/));
+    fireEvent.press(screen.getByTestId('timing-mode-exact_time'));
+    fireEvent.press(screen.getByText('12:00 PM'));
     fireEvent.press(screen.getByText('Done'));
     await waitFor(() => {
       expect(patchPayload).toMatchObject({ isFixed: true });
@@ -1031,6 +1129,801 @@ describe('TripScheduleScreen', () => {
     await waitFor(() => {
       expect(screen.getByText('Pirates of the Caribbean')).toBeTruthy();
       expect(screen.getByText('Space Mountain')).toBeTruthy();
+    });
+  });
+
+  describe('Unit 2 - Meal Preference & Service Windows, Snack Period & Generic Window Control', () => {
+    it('formats meal preference and service window labels correctly', () => {
+      expect(getMealWindowLabel('breakfast')).toBe('8:00 AM – 10:30 AM');
+      expect(getMealWindowLabel('lunch')).toBe('11:30 AM – 2:00 PM');
+      expect(getMealWindowLabel('dinner')).toBe('5:00 PM – 8:00 PM');
+
+      expect(getMealServiceWindowLabel('breakfast')).toBe('7:00 AM – 11:00 AM');
+      expect(getMealServiceWindowLabel('lunch')).toBe('11:00 AM – 3:30 PM');
+      expect(getMealServiceWindowLabel('dinner')).toBe('4:00 PM – 9:00 PM');
+    });
+
+    it('allows selecting meal preference preset and saves window bounds', async () => {
+      let savedBody: any = null;
+      apiRequestMock.mockImplementation(async (method, path, body) => {
+        if (method === 'GET' && path === `/trips/${TRIP_ID}`) {
+          return {
+            id: TRIP_ID,
+            startDate: '2026-10-01',
+            endDate: '2026-10-03',
+            dayTouringHours: {
+              '2026-10-01': { startHour: 9, endHour: 21 },
+            },
+          } as any;
+        }
+        if (method === 'GET' && path === `/trips/${TRIP_ID}/planned-items`) {
+          return [
+            {
+              ...PLANNED_ITEM,
+              plannedDate: '2026-10-01',
+              itemType: 'break',
+              customTitle: 'Quick Lunch',
+            },
+          ] as any;
+        }
+        if (method === 'PATCH' && path === `/trips/${TRIP_ID}/planned-items/item-1`) {
+          savedBody = body;
+          return { ...PLANNED_ITEM, ...(body as any) };
+        }
+        throw new Error(`Unexpected request: ${method} ${path}`);
+      });
+
+      renderScreen();
+
+      await waitFor(() => {
+        expect(screen.getByText('Quick Lunch')).toBeTruthy();
+      });
+
+      // Open Edit Settings
+      fireEvent.press(screen.getByText('Edit Settings'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('timing-mode-soft_window')).toBeTruthy();
+      });
+
+      // Switch to Soft Window (Around...) mode
+      fireEvent.press(screen.getByTestId('timing-mode-soft_window'));
+
+      // Press Lunch meal period preset
+      fireEvent.press(screen.getByTestId('meal-period-lunch'));
+
+      // Press Done to save
+      fireEvent.press(screen.getByText('Done'));
+
+      await waitFor(() => {
+        expect(savedBody).toEqual(
+          expect.objectContaining({
+            mealPeriod: 'lunch',
+            windowStartMinutes: 690,
+            windowEndMinutes: 840,
+            plannedTime: null,
+            isFixed: false,
+          }),
+        );
+      });
+    });
+
+    it('allows selecting snack period with flexible null window', async () => {
+      let savedBody: any = null;
+      apiRequestMock.mockImplementation(async (method, path, body) => {
+        if (method === 'GET' && path === `/trips/${TRIP_ID}`) {
+          return {
+            id: TRIP_ID,
+            startDate: '2026-10-01',
+            endDate: '2026-10-03',
+          } as any;
+        }
+        if (method === 'GET' && path === `/trips/${TRIP_ID}/planned-items`) {
+          return [
+            {
+              ...PLANNED_ITEM,
+              plannedDate: '2026-10-01',
+              itemType: 'break',
+              customTitle: 'Dole Whip Snack',
+            },
+          ] as any;
+        }
+        if (method === 'PATCH' && path === `/trips/${TRIP_ID}/planned-items/item-1`) {
+          savedBody = body;
+          return { ...PLANNED_ITEM, ...(body as any) };
+        }
+        throw new Error(`Unexpected request: ${method} ${path}`);
+      });
+
+      renderScreen();
+
+      await waitFor(() => {
+        expect(screen.getByText('Dole Whip Snack')).toBeTruthy();
+      });
+
+      fireEvent.press(screen.getByText('Edit Settings'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('timing-mode-soft_window')).toBeTruthy();
+      });
+
+      fireEvent.press(screen.getByTestId('timing-mode-soft_window'));
+      fireEvent.press(screen.getByTestId('meal-period-snack'));
+
+      fireEvent.press(screen.getByText('Done'));
+
+      await waitFor(() => {
+        expect(savedBody).toEqual(
+          expect.objectContaining({
+            mealPeriod: 'snack',
+            windowStartMinutes: null,
+            windowEndMinutes: null,
+            plannedTime: null,
+            isFixed: false,
+          }),
+        );
+      });
+    });
+
+    it('allows selecting full service window preset', async () => {
+      let savedBody: any = null;
+      apiRequestMock.mockImplementation(async (method, path, body) => {
+        if (method === 'GET' && path === `/trips/${TRIP_ID}`) {
+          return {
+            id: TRIP_ID,
+            startDate: '2026-10-01',
+            endDate: '2026-10-03',
+          } as any;
+        }
+        if (method === 'GET' && path === `/trips/${TRIP_ID}/planned-items`) {
+          return [
+            {
+              ...PLANNED_ITEM,
+              plannedDate: '2026-10-01',
+              itemType: 'break',
+              customTitle: 'Table Service Dinner',
+            },
+          ] as any;
+        }
+        if (method === 'PATCH' && path === `/trips/${TRIP_ID}/planned-items/item-1`) {
+          savedBody = body;
+          return { ...PLANNED_ITEM, ...(body as any) };
+        }
+        throw new Error(`Unexpected request: ${method} ${path}`);
+      });
+
+      renderScreen();
+
+      await waitFor(() => {
+        expect(screen.getByText('Table Service Dinner')).toBeTruthy();
+      });
+
+      fireEvent.press(screen.getByText('Edit Settings'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('timing-mode-soft_window')).toBeTruthy();
+      });
+
+      fireEvent.press(screen.getByTestId('timing-mode-soft_window'));
+      fireEvent.press(screen.getByTestId('meal-service-dinner'));
+
+      fireEvent.press(screen.getByText('Done'));
+
+      await waitFor(() => {
+        expect(savedBody).toEqual(
+          expect.objectContaining({
+            mealPeriod: 'dinner',
+            windowStartMinutes: 960,
+            windowEndMinutes: 1260,
+          }),
+        );
+      });
+    });
+
+    it('allows selecting time of day preset for any item type', async () => {
+      let savedBody: any = null;
+      apiRequestMock.mockImplementation(async (method, path, body) => {
+        if (method === 'GET' && path === `/trips/${TRIP_ID}`) {
+          return {
+            id: TRIP_ID,
+            startDate: '2026-10-01',
+            endDate: '2026-10-03',
+          } as any;
+        }
+        if (method === 'GET' && path === `/trips/${TRIP_ID}/planned-items`) {
+          return [
+            {
+              ...PLANNED_ITEM,
+              plannedDate: '2026-10-01',
+              experienceName: 'Big Thunder Mountain',
+            },
+          ] as any;
+        }
+        if (method === 'PATCH' && path === `/trips/${TRIP_ID}/planned-items/item-1`) {
+          savedBody = body;
+          return { ...PLANNED_ITEM, ...(body as any) };
+        }
+        throw new Error(`Unexpected request: ${method} ${path}`);
+      });
+
+      renderScreen();
+
+      await waitFor(() => {
+        expect(screen.getByText('Big Thunder Mountain')).toBeTruthy();
+      });
+
+      fireEvent.press(screen.getByText('Edit Settings'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('timing-mode-soft_window')).toBeTruthy();
+      });
+
+      fireEvent.press(screen.getByTestId('timing-mode-soft_window'));
+      fireEvent.press(screen.getByTestId('time-of-day-540'));
+
+      fireEvent.press(screen.getByText('Done'));
+
+      await waitFor(() => {
+        expect(savedBody).toEqual(
+          expect.objectContaining({
+            mealPeriod: null,
+            windowStartMinutes: 540,
+            windowEndMinutes: 720,
+          }),
+        );
+      });
+    });
+
+    it('displays unserved meal warning when restaurant does not list meal period', async () => {
+      apiRequestMock.mockImplementation(async (method, path) => {
+        if (method === 'GET' && path === `/trips/${TRIP_ID}`) {
+          return {
+            id: TRIP_ID,
+            startDate: '2026-10-01',
+            endDate: '2026-10-03',
+          } as any;
+        }
+        if (method === 'GET' && path === `/trips/${TRIP_ID}/planned-items`) {
+          return [
+            {
+              ...PLANNED_ITEM,
+              plannedDate: '2026-10-01',
+              experienceName: 'Be Our Guest Restaurant',
+              servedMealPeriods: ['lunch', 'dinner'],
+            },
+          ] as any;
+        }
+        throw new Error(`Unexpected request: ${method} ${path}`);
+      });
+
+      renderScreen();
+
+      await waitFor(() => {
+        expect(screen.getByText('Be Our Guest Restaurant')).toBeTruthy();
+      });
+
+      fireEvent.press(screen.getByText('Edit Settings'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('timing-mode-soft_window')).toBeTruthy();
+      });
+
+      fireEvent.press(screen.getByTestId('timing-mode-soft_window'));
+      fireEvent.press(screen.getByTestId('meal-period-breakfast'));
+
+      // Warning should be displayed
+      expect(screen.getByTestId('unserved-meal-warning')).toBeTruthy();
+      expect(
+        screen.getByText(/Breakfast is not listed as a served meal period for this restaurant/i),
+      ).toBeTruthy();
+
+      // Selecting Lunch should clear the warning
+      fireEvent.press(screen.getByTestId('meal-period-lunch'));
+      expect(screen.queryByTestId('unserved-meal-warning')).toBeNull();
+    });
+
+    it('Property 17: steps custom start/end and sends updated window bounds in PATCH payload', async () => {
+      let savedBody: any = null;
+      apiRequestMock.mockImplementation(async (method, path, body) => {
+        if (method === 'GET' && path === `/trips/${TRIP_ID}`) {
+          return {
+            id: TRIP_ID,
+            startDate: '2026-10-01',
+            endDate: '2026-10-03',
+          } as any;
+        }
+        if (method === 'GET' && path === `/trips/${TRIP_ID}/planned-items`) {
+          return [
+            {
+              ...PLANNED_ITEM,
+              plannedDate: '2026-10-01',
+              experienceName: 'Space Mountain',
+              windowStartMinutes: 540,
+              windowEndMinutes: 660,
+            },
+          ] as any;
+        }
+        if (method === 'PATCH' && path === `/trips/${TRIP_ID}/planned-items/item-1`) {
+          savedBody = body;
+          return { ...PLANNED_ITEM, ...(body as any) };
+        }
+        throw new Error(`Unexpected request: ${method} ${path}`);
+      });
+
+      renderScreen();
+
+      await waitFor(() => {
+        expect(screen.getByText('Space Mountain')).toBeTruthy();
+      });
+
+      fireEvent.press(screen.getByText('Edit Settings'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('timing-mode-soft_window')).toBeTruthy();
+      });
+
+      fireEvent.press(screen.getByTestId('timing-mode-soft_window'));
+
+      // Step start time +30m
+      fireEvent.press(screen.getByTestId('stepper-start-plus'));
+      // Step end time +30m
+      fireEvent.press(screen.getByTestId('stepper-end-plus'));
+
+      expect(screen.getByTestId('custom-start-val').props.children).toBe('9:30 AM');
+      expect(screen.getByTestId('custom-end-val').props.children).toBe('11:30 AM');
+
+      fireEvent.press(screen.getByText('Done'));
+
+      await waitFor(() => {
+        expect(savedBody).toEqual(
+          expect.objectContaining({
+            windowStartMinutes: 570,
+            windowEndMinutes: 690,
+          }),
+        );
+      });
+    });
+
+    it('Property 17: clamps custom range to MEAL_SERVICE_WINDOWS when mealPeriod is set (cannot make a 4:00 PM lunch)', async () => {
+      let savedBody: any = null;
+      apiRequestMock.mockImplementation(async (method, path, body) => {
+        if (method === 'GET' && path === `/trips/${TRIP_ID}`) {
+          return {
+            id: TRIP_ID,
+            startDate: '2026-10-01',
+            endDate: '2026-10-03',
+          } as any;
+        }
+        if (method === 'GET' && path === `/trips/${TRIP_ID}/planned-items`) {
+          return [
+            {
+              ...PLANNED_ITEM,
+              plannedDate: '2026-10-01',
+              itemType: 'break',
+              customTitle: 'Lunch Table Reservation',
+              mealPeriod: 'lunch',
+              windowStartMinutes: 690, // 11:30 AM
+              windowEndMinutes: 840,   // 2:00 PM
+            },
+          ] as any;
+        }
+        if (method === 'PATCH' && path === `/trips/${TRIP_ID}/planned-items/item-1`) {
+          savedBody = body;
+          return { ...PLANNED_ITEM, ...(body as any) };
+        }
+        throw new Error(`Unexpected request: ${method} ${path}`);
+      });
+
+      renderScreen();
+
+      await waitFor(() => {
+        expect(screen.getByText('Lunch Table Reservation')).toBeTruthy();
+      });
+
+      fireEvent.press(screen.getByText('Edit Settings'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('timing-mode-soft_window')).toBeTruthy();
+      });
+
+      fireEvent.press(screen.getByTestId('timing-mode-soft_window'));
+
+      // Attempt to step start earlier than lunch service span (11:00 AM = 660 mins)
+      fireEvent.press(screen.getByTestId('stepper-start-minus')); // 11:00 AM
+      fireEvent.press(screen.getByTestId('stepper-start-minus')); // Clamped at 11:00 AM
+      fireEvent.press(screen.getByTestId('stepper-start-minus')); // Clamped at 11:00 AM
+      expect(screen.getByTestId('custom-start-val').props.children).toBe('11:00 AM');
+
+      // Attempt to step end later than lunch service span (3:30 PM = 930 mins, e.g. 4:00 PM)
+      fireEvent.press(screen.getByTestId('stepper-end-plus')); // 2:30 PM
+      fireEvent.press(screen.getByTestId('stepper-end-plus')); // 3:00 PM
+      fireEvent.press(screen.getByTestId('stepper-end-plus')); // 3:30 PM
+      fireEvent.press(screen.getByTestId('stepper-end-plus')); // Clamped at 3:30 PM
+      fireEvent.press(screen.getByTestId('stepper-end-plus')); // Clamped at 3:30 PM
+      expect(screen.getByTestId('custom-end-val').props.children).toBe('3:30 PM');
+
+      fireEvent.press(screen.getByText('Done'));
+
+      await waitFor(() => {
+        expect(savedBody).toEqual(
+          expect.objectContaining({
+            mealPeriod: 'lunch',
+            windowStartMinutes: 660,
+            windowEndMinutes: 930,
+          }),
+        );
+      });
+    });
+
+    it('Property 17: clamps custom range to day touring hours when no mealPeriod is set', async () => {
+      let savedBody: any = null;
+      apiRequestMock.mockImplementation(async (method, path, body) => {
+        if (method === 'GET' && path === `/trips/${TRIP_ID}`) {
+          return {
+            id: TRIP_ID,
+            startDate: '2026-10-01',
+            endDate: '2026-10-03',
+          } as any;
+        }
+        if (method === 'GET' && path === `/trips/${TRIP_ID}/planned-items`) {
+          return [
+            {
+              ...PLANNED_ITEM,
+              plannedDate: '2026-10-01',
+              experienceName: 'Haunted Mansion',
+              mealPeriod: null,
+              windowStartMinutes: 660, // 11:00 AM
+              windowEndMinutes: 840,   // 2:00 PM
+            },
+          ] as any;
+        }
+        if (method === 'PATCH' && path === `/trips/${TRIP_ID}/planned-items/item-1`) {
+          savedBody = body;
+          return { ...PLANNED_ITEM, ...(body as any) };
+        }
+        throw new Error(`Unexpected request: ${method} ${path}`);
+      });
+
+      renderScreen();
+
+      await waitFor(() => {
+        expect(screen.getByText('Haunted Mansion')).toBeTruthy();
+      });
+
+      fireEvent.press(screen.getByText('Edit Settings'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('timing-mode-soft_window')).toBeTruthy();
+      });
+
+      fireEvent.press(screen.getByTestId('timing-mode-soft_window'));
+
+      // Attempt to step start earlier than touring day start (9:00 AM = 540 mins)
+      for (let i = 0; i < 10; i++) {
+        fireEvent.press(screen.getByTestId('stepper-start-minus'));
+      }
+      expect(screen.getByTestId('custom-start-val').props.children).toBe('9:00 AM');
+
+      // Attempt to step end later than touring day end (9:00 PM = 1260 mins)
+      for (let i = 0; i < 20; i++) {
+        fireEvent.press(screen.getByTestId('stepper-end-plus'));
+      }
+      expect(screen.getByTestId('custom-end-val').props.children).toBe('9:00 PM');
+
+      fireEvent.press(screen.getByText('Done'));
+
+      await waitFor(() => {
+        expect(savedBody).toEqual(
+          expect.objectContaining({
+            mealPeriod: null,
+            windowStartMinutes: 540,
+            windowEndMinutes: 1260,
+          }),
+        );
+      });
+    });
+  });
+
+  describe('Showtime Pills and Typical Showtimes Notice (crowd-calendar R12 / day-planning R13.4)', () => {
+    it('renders showtime pills in Item Settings modal for a Show experience and locks performance on selection', async () => {
+      let savedBody: any = null;
+      apiRequestMock.mockImplementation(async (method, path, body) => {
+        if (method === 'GET' && path === `/trips/${TRIP_ID}`) {
+          return {
+            id: TRIP_ID,
+            startDate: '2026-10-01',
+            endDate: '2026-10-03',
+          } as any;
+        }
+        if (method === 'GET' && path === '/catalog') {
+          return {
+            experiences: [
+              {
+                id: 'exp-show-1',
+                name: 'Festival of the Lion King',
+                category: 'Show',
+                park: "Disney's Animal Kingdom",
+              },
+            ],
+          } as any;
+        }
+        if (method === 'GET' && path === `/trips/${TRIP_ID}/planned-items`) {
+          return [
+            {
+              ...PLANNED_ITEM,
+              id: 'item-show-1',
+              experienceId: 'exp-show-1',
+              experienceName: 'Festival of the Lion King',
+              park: "Disney's Animal Kingdom",
+              plannedDate: '2026-10-01',
+            },
+          ] as any;
+        }
+        if (method === 'GET' && path.startsWith('/crowd-calendar')) {
+          return [
+            {
+              date: '2026-10-01',
+              park: "Disney's Animal Kingdom",
+              rideSignals: [
+                {
+                  experienceId: 'exp-show-1',
+                  reliability: 1,
+                  showtimes: ['2026-10-01T14:00:00.000Z', '2026-10-01T18:00:00.000Z'],
+                },
+              ],
+            },
+          ] as any;
+        }
+        if (method === 'PATCH' && path === `/trips/${TRIP_ID}/planned-items/item-show-1`) {
+          savedBody = body;
+          return { ...PLANNED_ITEM, ...(body as any) };
+        }
+        throw new Error(`Unexpected request: ${method} ${path}`);
+      });
+
+      renderScreen();
+
+      await waitFor(() => {
+        expect(screen.getByText('Festival of the Lion King')).toBeTruthy();
+      });
+
+      fireEvent.press(screen.getByText('Edit Settings'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('showtimes-section')).toBeTruthy();
+        expect(screen.getByTestId('showtime-autofit-pill')).toBeTruthy();
+        expect(screen.getByTestId('showtime-pill-10:00-am')).toBeTruthy();
+        expect(screen.getByTestId('showtime-pill-2:00-pm')).toBeTruthy();
+      });
+
+      // Tap 10:00 AM showtime pill
+      fireEvent.press(screen.getByTestId('showtime-pill-10:00-am'));
+      fireEvent.press(screen.getByText('Done'));
+
+      await waitFor(() => {
+        expect(savedBody).toEqual(
+          expect.objectContaining({
+            isFixed: true,
+            plannedTime: '2026-10-01T14:00:00.000Z',
+          }),
+        );
+      });
+    });
+
+    it('clears plannedTime and isFixed when Auto-fit pill is pressed', async () => {
+      let savedBody: any = null;
+      apiRequestMock.mockImplementation(async (method, path, body) => {
+        if (method === 'GET' && path === `/trips/${TRIP_ID}`) {
+          return {
+            id: TRIP_ID,
+            startDate: '2026-10-01',
+            endDate: '2026-10-03',
+          } as any;
+        }
+        if (method === 'GET' && path === '/catalog') {
+          return {
+            experiences: [
+              {
+                id: 'exp-show-1',
+                name: 'Festival of the Lion King',
+                category: 'Show',
+                park: "Disney's Animal Kingdom",
+              },
+            ],
+          } as any;
+        }
+        if (method === 'GET' && path === `/trips/${TRIP_ID}/planned-items`) {
+          return [
+            {
+              ...PLANNED_ITEM,
+              id: 'item-show-1',
+              experienceId: 'exp-show-1',
+              experienceName: 'Festival of the Lion King',
+              park: "Disney's Animal Kingdom",
+              plannedDate: '2026-10-01',
+              plannedTime: '2026-10-01T14:00:00.000Z',
+              isFixed: true,
+            },
+          ] as any;
+        }
+        if (method === 'GET' && path.startsWith('/crowd-calendar')) {
+          return [
+            {
+              date: '2026-10-01',
+              park: "Disney's Animal Kingdom",
+              rideSignals: [
+                {
+                  experienceId: 'exp-show-1',
+                  reliability: 1,
+                  showtimes: ['2026-10-01T14:00:00.000Z', '2026-10-01T18:00:00.000Z'],
+                },
+              ],
+            },
+          ] as any;
+        }
+        if (method === 'PATCH' && path === `/trips/${TRIP_ID}/planned-items/item-show-1`) {
+          savedBody = body;
+          return { ...PLANNED_ITEM, ...(body as any) };
+        }
+        throw new Error(`Unexpected request: ${method} ${path}`);
+      });
+
+      renderScreen();
+
+      await waitFor(() => {
+        expect(screen.getByText('Festival of the Lion King')).toBeTruthy();
+      });
+
+      // Item has plannedTime, so tapping its name in the timeline opens the edit modal
+      fireEvent.press(screen.getByText('Festival of the Lion King'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('showtimes-section')).toBeTruthy();
+        expect(screen.getByTestId('showtime-autofit-pill')).toBeTruthy();
+      });
+
+      // Tap Auto-fit pill
+      fireEvent.press(screen.getByTestId('showtime-autofit-pill'));
+      fireEvent.press(screen.getByText('Done'));
+
+      await waitFor(() => {
+        expect(savedBody).toEqual(
+          expect.objectContaining({
+            isFixed: false,
+            plannedTime: null,
+          }),
+        );
+      });
+    });
+
+    it('renders empty state when no showtimes are published for that date', async () => {
+      apiRequestMock.mockImplementation(async (method, path) => {
+        if (method === 'GET' && path === `/trips/${TRIP_ID}`) {
+          return {
+            id: TRIP_ID,
+            startDate: '2026-10-01',
+            endDate: '2026-10-03',
+          } as any;
+        }
+        if (method === 'GET' && path === '/catalog') {
+          return {
+            experiences: [
+              {
+                id: 'exp-show-1',
+                name: 'Festival of the Lion King',
+                category: 'Show',
+                park: "Disney's Animal Kingdom",
+              },
+            ],
+          } as any;
+        }
+        if (method === 'GET' && path === `/trips/${TRIP_ID}/planned-items`) {
+          return [
+            {
+              ...PLANNED_ITEM,
+              id: 'item-show-1',
+              experienceId: 'exp-show-1',
+              experienceName: 'Festival of the Lion King',
+              park: "Disney's Animal Kingdom",
+              plannedDate: '2026-10-01',
+            },
+          ] as any;
+        }
+        if (method === 'GET' && path.startsWith('/crowd-calendar')) {
+          return [
+            {
+              date: '2026-10-01',
+              park: "Disney's Animal Kingdom",
+              rideSignals: [],
+            },
+          ] as any;
+        }
+        throw new Error(`Unexpected request: ${method} ${path}`);
+      });
+
+      renderScreen();
+
+      await waitFor(() => {
+        expect(screen.getByText('Festival of the Lion King')).toBeTruthy();
+      });
+
+      fireEvent.press(screen.getByText('Edit Settings'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('showtimes-section')).toBeTruthy();
+        expect(screen.getByTestId('showtimes-empty-state')).toBeTruthy();
+        expect(screen.getByText('Showtimes are not published yet for this date.')).toBeTruthy();
+      });
+    });
+
+    it('renders typical showtime notice when optimization warning contains typical_showtimes', async () => {
+      apiRequestMock.mockImplementation(async (method, path) => {
+        if (method === 'GET' && path === `/trips/${TRIP_ID}`) {
+          return {
+            id: TRIP_ID,
+            startDate: '2026-10-01',
+            endDate: '2026-10-03',
+          } as any;
+        }
+        if (method === 'GET' && path === '/catalog') {
+          return {
+            experiences: [
+              {
+                id: 'exp-show-1',
+                name: 'Festival of the Lion King',
+                category: 'Show',
+                park: "Disney's Animal Kingdom",
+              },
+            ],
+          } as any;
+        }
+        if (method === 'GET' && path === `/trips/${TRIP_ID}/planned-items`) {
+          return [
+            {
+              ...PLANNED_ITEM,
+              id: 'item-show-1',
+              experienceId: 'exp-show-1',
+              experienceName: 'Festival of the Lion King',
+              park: "Disney's Animal Kingdom",
+              plannedDate: '2026-10-01',
+              plannedTime: '2026-10-01T14:00:00.000Z',
+            },
+          ] as any;
+        }
+        if (method === 'POST' && path === `/trips/${TRIP_ID}/schedule/optimize`) {
+          return {
+            tripId: TRIP_ID,
+            date: '2026-10-01',
+            totalWaitMinutes: 0,
+            totalTransitMinutes: 0,
+            totalWalkMinutes: 0,
+            unfittedItemIds: [],
+            items: [
+              {
+                plannedItemId: 'item-show-1',
+                suggestedArrival: '2026-10-01T13:45:00.000Z',
+                predictedWaitMinutes: 0,
+                travelFromPrev: null,
+              },
+            ],
+            warnings: ['typical_showtimes:item-show-1'],
+          } as TripOptimizationResult;
+        }
+        throw new Error(`Unexpected request: ${method} ${path}`);
+      });
+
+      renderScreen();
+
+      await waitFor(() => {
+        expect(screen.getByText('Festival of the Lion King')).toBeTruthy();
+      });
+
+      fireEvent.press(screen.getByText('✨ Optimize'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('typical-showtime-notice-item-show-1')).toBeTruthy();
+        expect(screen.getByText('• 🎭 Estimated showtime based on past schedule for Festival of the Lion King')).toBeTruthy();
+      });
     });
   });
 });

@@ -93,18 +93,39 @@ graph TD
   - `travel_from_prev_minutes INTEGER` — the travel leg from the previous scheduled item (null for the first item of the day).
   - `travel_from_prev_kind TEXT CHECK (travel_from_prev_kind IN ('walk','park_hop'))` — leg type.
   - `optimized_at TIMESTAMPTZ` — when this item was last part of an optimize run.
-- **Migration number:** must be `0024` — `0023` (`trip_touring_hours`) is the latest applied migration. Never reuse an applied number.
 - These columns are set together by the optimize route's persistence step and cleared together when an item is manually edited (R8.4).
 
-**Migration number:** must be `0022` — `0020` (`wait_time_intelligence`) and `0021` (`crowd_index_source`) are already taken by the crowd-calendar feature and are applied/deployed. Never reuse `0021`. The other scheduling columns (`planned_date`, `planned_time`, `is_fixed`, `priority`, `item_type`, `duration_minutes`) and the `trips` planning settings (`walking_speed`, `early_entry_eligible`) already exist from migration `0019_planned_item_scheduling.sql`, along with `experiences.duration_minutes`.
+### Migration `0027_planned_items_soft_windows.sql`
+
+- `planned_items`:
+  - `ALTER COLUMN experience_id DROP NOT NULL` to allow unlocated standalone breaks.
+  - `custom_title TEXT` — title for unlocated breaks.
+  - `window_start_minutes INTEGER` — soft time-of-day window start (0..1440).
+  - `window_end_minutes INTEGER` — soft time-of-day window end (0..1440).
+  - `meal_period TEXT` — display-only label ('breakfast', 'lunch', 'dinner', 'snack').
+  - `scheduled_showtime TIMESTAMPTZ` — persisted matched showtime from optimization run.
 
 ### Shared DTOs (`@dwt/shared`)
 
-- `PlannedItemDTO` / `PlannedItemAddInput`: add `plannedDate`, `plannedTime`, `isFixed`, `isLightningLane`, `useSingleRider`, `priority`, `itemType`, `durationMinutes`.
-- `PlannedItemDTO` (read projection only): add the persisted last-optimization result — `predictedWaitMinutes: number | null`, `travelFromPrev: { kind: 'walk' | 'park_hop'; minutes: number } | null`, and `optimizedAt: string | null` (ISO UTC). These are populated by the optimize run and cleared on manual edit; a `null` `optimizedAt` means the item has not been optimized (R8.1–R8.4). They are not client inputs, so no request-schema change accompanies them.
+- `PlannedItemDTO`:
+  - `experienceId: string | null`
+  - `park: Park | null`
+  - `category: ExperienceCategory | null`
+  - `subType: string | null`
+  - `customTitle?: string | null`
+  - `windowStartMinutes?: number | null`
+  - `windowEndMinutes?: number | null`
+  - `mealPeriod?: MealPeriod | null`
+  - `scheduledShowtime?: string | null`
+  - `predictedWaitMinutes: number | null`
+  - `travelFromPrev: { kind: 'walk' | 'park_hop'; minutes: number } | null`
+  - `optimizedAt: string | null`
+- `plannedItemAddSchema` / `plannedItemEditSchema`:
+  - `superRefine` rule: when `experienceId == null`, require `itemType === 'break'` and a non-empty `customTitle`.
+  - Window validation: `windowEndMinutes >= windowStartMinutes`.
 - `TripOptimizationInput`: `{ date }`.
-- `TripOptimizationResult`: `{ items: OptimizedItem[]; totalWaitMinutes; totalWalkMinutes; unfittedItemIds; warnings }`, where `OptimizedItem` carries `plannedItemId`, `suggestedArrival`, `predictedWaitMinutes`, and `travelFromPrev` (`{ kind: 'walk' | 'park_hop'; minutes }`).
-- `WaitSnapshot` is imported from the crowd-calendar shared contracts. Its real shape is `{ experienceId, isVirtualQueue: boolean, showtimes?: string[], lightningLane?: { available, priceCents?, returnTime? }, waits: { hour, predictedWaitMinutes, singleRiderWaitMinutes? }[] }`. **What `getDaySnapshot` populates:** `experienceId`, `isVirtualQueue`, `waits[].predictedWaitMinutes` always; `waits[].singleRiderWaitMinutes` for any date (from the single-rider shape); and `showtimes` / `lightningLane` whenever per-date signals exist for that date. Only far-future `showtimes` are inherently unavailable — read that field defensively and fall back to standby when absent (R6.6).
+- `TripOptimizationResult`: `{ items: OptimizedItem[]; totalWaitMinutes; totalWalkMinutes; unfittedItemIds; warnings }`, where `OptimizedItem` carries `plannedItemId`, `suggestedArrival`, `predictedWaitMinutes`, `scheduledShowtime`, and `travelFromPrev`.
+- `WaitSnapshot` is imported from the crowd-calendar shared contracts, carrying `showtimesAreTypical?: boolean`.
 
 ## Correctness Properties
 
@@ -129,7 +150,7 @@ graph TD
 **Validates: Requirements 3.8**
 
 ### Property 5: Travel cost is symmetric, pace-scaled, and penalizes hops
-*For any* two experiences, `travelMinutes` is symmetric, decreases as pace increases, and includes the 45-minute penalty exactly when parks differ.
+*For any* two experiences, `travelMinutes` is symmetric, decreases as pace increases, and includes the 45-minute penalty exactly when parks differ (treating `null` resort venue as a distinct park value).
 
 **Validates: Requirements 3.4, 3.5, 3.6**
 
@@ -163,49 +184,68 @@ graph TD
 
 **Validates: Requirements 3.13**
 
+### Property 12: Soft time windows are respected with graded penalty
+*For any* item with `window_start_minutes` and `window_end_minutes` (including meal periods with derived or custom windows, and snack items with custom windows or null windows), arrival before `window_start_minutes` clamps up and charges idle wait; arrival after `window_end_minutes` applies `100 * (arrival - window_end_minutes)` penalty and emits `outside_window:<id>`. An item with null window columns (such as a snack with no custom window) incurs no window clamping or penalty.
+
+**Validates: Requirements 2.7, 2.8, 3.15**
+
+### Property 13: Duration precedence and zero queue wait for dining and breaks
+*For any* item, duration precedence is strictly: (1) `item.durationMinutes` override if non-null; (2) `DEFAULT_BREAK_DUR` (60) for breaks; (3) `sub_type` defaults (30 Quick / 60 Table / 90 Signature) for dining; (4) `catalogDurationMinutes ?? DEFAULT_SHOW_DURATION_MIN` (30) for shows and parades; (5) `DEFAULT_RIDE_DUR` (15) for rides. Queue wait is `0` for dining and breaks.
+
+**Validates: Requirements 2.4, 3.14, 3.16**
+
+### Property 14: Unlocated breaks are travel-neutral
+*For any* unlocated break (`experience_id = null`), travel duration from the previous located item is computed directly to the next located item, without charging park hop or intra-park walking time for the unlocated break itself.
+
+**Validates: Requirements 2.4, 3.4**
+
+### Property 15: Showtimes slot with 15-minute buffer and miss penalty
+*For any* show item with valid showtimes, arrival is clamped to the doors time (`showtime - 15`), charging `idleGap` for the difference, wait equals 15, and completion is `showtime + duration`. If arrival exceeds the last doors time, a graded penalty (`1000 * (arrival - lastDoors)`) is applied, `scheduledShowtime` is `null`, and `show_missed:<id>` is emitted.
+
+**Validates: Requirements 3.16, 6.2, 8.1**
+
+### Property 16: Timing modes are mutually exclusive
+*For any* item edit payload that carries an exact time (`plannedTime` / `isFixed`), soft window columns (`window_start_minutes`, `window_end_minutes`, `meal_period`) are cleared to null; *for any* edit payload that carries a soft window, `planned_time` is cleared to null and `is_fixed` set to false; *for any* edit payload omitting all timing fields, all existing stored timing columns remain unmodified.
+
+**Validates: Requirements 2.2, 2.8**
+
+### Property 17: Custom soft window range clamping
+*For any* item with a `meal_period` having a service span defined in `MEAL_SERVICE_WINDOWS`, custom soft window selections are clamped within `[serviceWindow.startMinutes, serviceWindow.endMinutes]`. For items without a bounded meal service span, custom soft window selections are clamped within the active day's touring hours.
+
+**Validates: Requirements 2.9, 4.4**
+
 ## Error Handling
 
 - **Prediction_Service fallback/failure:** the optimizer uses whatever snapshot is returned (including a model-only fallback for far-future dates) and never fails for want of live data (R1.3).
 - **Missing coordinates:** an Experience with null lat/long uses a default intra-park travel time rather than producing `NaN`.
 - **Over-constrained day:** items that cannot fit are excluded from the timeline, returned in `unfittedItemIds`, and surfaced as a UI warning (R4.5).
 - **Infeasible fixed items:** two Fixed_Items impossible to make in sequence are both kept at their times and the unreachable gap is flagged as a warning rather than silently reordered.
-- **Early-entry availability (R3.12):** an unknown `operatesDuringEarlyEntry` (never captured) is treated conservatively as not operating during Early Entry, so an un-flagged ride is scheduled from official open rather than being placed in the early-entry window on a guess. **Known limitation:** the opening ramp still models a non-early-entry ride at official open as a near-walk-on climb; it does not yet raise that ride's open-time wait to reflect the early-entry crowd surging onto it at official open — that awaits the per-ride opening-curve calibration (thin pre-open sampling data today).
+- **Early-entry availability (R3.12):** an unknown `operatesDuringEarlyEntry` (never captured) is treated conservatively as not operating during Early Entry, so an un-flagged ride is scheduled from official open rather than being placed in the early-entry window on a guess.
 
 ## Testing Strategy
 
-- **Property-based (`fast-check`, ≥100 runs, tagged `Feature: day-planning-optimization, Property N`):** the five properties above, against `optimizer.ts` and `travel.ts` with a stubbed `WaitSnapshot`.
-- **Migration test (`migration0022.test.ts`):** the `planned_items.is_lightning_lane` and `use_single_rider` columns apply.
-- **Migration test (`migration0024.test.ts`):** the `planned_items` optimization-result columns (`predicted_wait_minutes`, `travel_from_prev_minutes`, `travel_from_prev_kind`, `optimized_at`) apply, are nullable, and enforce the `travel_from_prev_kind` CHECK.
-- **Repo (pg-mem):** `updatePlannedItemTimes` persists the optimization result and `listPlannedItems` reads it back (Property 8); a manual `editPlannedItem` clears the persisted result to null (R8.4).
-- **Integration (`server.inject`):** optimize and scheduling routes enforce Member auth, persist scheduling fields, reflect the transit penalty and pace scaling, and round-trip `planned_time` through the WDW clock; the optimize route is exercised with a stubbed Prediction_Service. An optimize call followed by `GET /trips/:id/planned-items` returns the persisted `predictedWaitMinutes` / `travelFromPrev` / `optimizedAt` (R8.1, R8.2).
-- **Mobile:** Timeline and TransitGap rendering (walk vs. park hop, all paces), the Schedule Builder toggles, and the unfitted/over-hours warning. Returning to an already-optimized day renders the persisted waits and the "Last optimized" hint; a never-optimized day omits the wait pill and shows the "Not optimized yet" notice (R8.2, R8.3).
-
-## UI Surfaces & Navigation
-
-- **`TripSchedule`** — a new screen in `TripsStack`, reached from `TripDetail` / `TripPlannedList`. `TripPlannedList` remains the "bucket" of everything the party wants to do; `TripSchedule` is the day-by-day surface that hosts the Schedule Builder (assign date, Fixed/Flexible, fixed times, Lightning Lane, single-rider, breaks, priority) and the "Optimize Day" action with the resulting timeline (arrivals, predicted waits, walk / park-hop gaps, single-rider / show-slot / virtual-queue labels, and over-hours / unfitted-priority warnings). It optionally links to the Crowd Calendar so a user can pick a low-crowd date before optimizing.
-- Predicted waits shown here come from the crowd-calendar `predictionService`; this feature renders the result, it does not compute waits.
+- **Property-based (`fast-check`, ≥100 runs, tagged `Feature: day-planning-optimization, Property N`):** the properties above, against `optimizer.ts` and `travel.ts` with a stubbed `WaitSnapshot`.
+- **Migration test (`migration0027.test.ts`):** `planned_items` columns (`custom_title`, `window_start_minutes`, `window_end_minutes`, `meal_period`, `scheduled_showtime`) apply, and `experience_id` is nullable.
+- **Migration test (`migration0028.test.ts`):** `chk_planned_items_meal_period` accepts `'snack'` and rejects unknown values.
+- **Repo (pg-mem):** `addPlannedItem` and `editPlannedItem` persist and read back soft window columns, `meal_period`, `custom_title`, null `experience_id`, `scheduled_showtime`, and enforce mutual exclusion between exact times and soft windows.
+- **Integration (`server.inject`):** optimize route scopes items to `planned_date = date`, leaving other dates untouched.
+- **Mobile:** `@testing-library/react-native` tests driving tab switching (Rides, Shows, Dining, Break), break addition, meal period selection, showtime selection, and 3-state timing mode.
 
 ## Configuration & Constants
 
-Concrete defaults for the optimizer so nothing is invented.
-
+- **Meal Preference Windows (`MEAL_WINDOWS`, minutes from midnight ET):** `breakfast` 480–630 (8:00–10:30 AM), `lunch` 690–840 (11:30 AM–2:00 PM), `dinner` 1020–1200 (5:00–8:00 PM), `snack` has no preset window (valid with null window columns).
+- **Meal Service Windows (`MEAL_SERVICE_WINDOWS`, outer bounds of generalized WDW service times):** `breakfast` 420–660 (7:00–11:00 AM), `lunch` 660–930 (11:00 AM–3:30 PM), `dinner` 960–1260 (4:00–9:00 PM), `snack` has no bounded service window (available all day). Note: these are generalizations pending per-restaurant capture from facility documents.
+- **Time-of-Day Presets (minutes from midnight ET):** `Morning` 540–720 (9:00 AM–12:00 PM), `Midday` 660–840 (11:00 AM–2:00 PM), `Afternoon` 780–960 (1:00–4:00 PM), `Evening` 1020–1200 (5:00–8:00 PM).
+- **Penalties:** `WINDOW_MISS_PENALTY_PER_MIN = 100`, `SHOW_MISS_PENALTY_PER_MIN = 1000`.
+- **Show Arrival Buffer:** `SHOW_ARRIVAL_BUFFER_MIN = 15`.
+- **Durations:** `DEFAULT_SHOW_DURATION_MIN = 30`, `DEFAULT_RIDE_DUR = 15`, `BREAK_DURATION_DEFAULT = 60`.
+- **Dining Duration Defaults:** `Quick Service` 30, `Table Service` 60, `Signature Dining` 90, `unknown` 60.
+- **Typical Showtime Derivation:** `SHOWTIME_PATTERN_MIN_SAMPLES = 3`, `SHOWTIME_PATTERN_MIN_FREQUENCY = 0.5`, `SHOWTIME_PATTERN_WINDOW_DAYS = 180`.
 - **Walking speeds (absolute):** `slow` 50, `moderate` 80, `fast` 100 m/min. **Path factor:** 1.4× straight-line Haversine.
 - **Missing coordinates fallback:** default intra-park travel `8` min between two same-park items with unknown coords.
 - **Transit penalty:** `45` min whenever consecutive items are in different Parks.
-- **Early entry:** start `30` min before official open when `early_entry_eligible`. Only Experiences with `operatesDuringEarlyEntry === true` may be scheduled in that 30-min pre-open window (R3.12); every other Experience (including unknown-flag ones) is clamped to official open. `OptimizeInputItem` carries `operatesDuringEarlyEntry`, `operatesDuringExtendedEvening`, and `operatesDuringTicketedEvent` (each `boolean | null`) sourced from the matching `experiences.operates_during_*` columns; `official open = early_entry_eligible ? startMins + 30 : startMins`. **Per-item close (R3.13):** `base close + (useExtendedEvening && operatesDuringExtendedEvening ? 120 : 0) + (hasAfterHoursTicket && operatesDuringTicketedEvent ? 180 : 0)` — a completion past this is infeasible, so a non-eligible ride cannot be scheduled into an extension.
-- **Rope-drop window (R3.7, R3.11):** `ROPE_DROP_WINDOW_MINUTES = 30` from the operating window's effective open (already shifted 30 min earlier under early entry). **Walk-on floor:** `ROPE_DROP_WALKON_MINS = 5`. Within the window a standby/single-rider wait is `round(5 + (rawWait − 5) × (minutesIntoWindow / 30))` when `rawWait > 5`, else `rawWait`; outside the window it is `rawWait` unchanged. Applies only to shape-derived standby/single-rider waits — Lightning Lane (fixed 10), virtual queue (0), and show (time-to-next-show) waits are unaffected.
-- **Lightning Lane item wait:** modeled as a fixed `10` min (return + board), not the standby prediction.
-- **Default durations (when `duration_minutes` null):** ride `15`, break `60`; a show uses time-to-next-show from its `showtimes`.
-- **Limits & budget:** max `20` items per day per request; return within `2` s (excludes the single prefetched `getDaySnapshot` call).
-- **Search:** greedy seed → or-opt + 2-opt local search; `50` iterations cap and `5` seeded random restarts (fixed seed `42` for determinism); keep the lowest-cost feasible result.
-- **Standard Operating Hours fallback:** inherited from the Prediction_Service (9 AM–9 PM ET) when park hours are unavailable.
-
-No new env vars. No external APIs are called by this feature — predicted waits come in-process from the crowd-calendar `predictionService`.
-
-## Cross-Spec Dependencies & Build Order
-
-Depends on the `crowd-calendar` feature's `predictionService.getDaySnapshot(experienceIds, park, date)` and its `WaitSnapshot` contract — `crowd-calendar` is already built. This feature adds only migration **`0022`** (`is_lightning_lane`, `use_single_rider` on `planned_items`); `0020`/`0021` belong to `crowd-calendar` and are deployed. The pure `optimizer`/`travel` modules (tasks 2.x) build and property-test against a stubbed `WaitSnapshot` independently of the live service.
-
-**Snapshot signals (resolved — full R6 supported):** `getDaySnapshot` now populates the R6 signals (crowd-calendar R9.5): `isVirtualQueue` (R6.3), `waits[].singleRiderWaitMinutes` for any date from the single-rider shape (R6.4), and `showtimes` / `lightningLane` whenever per-date signals exist (R6.2). The only inherent gap is `showtimes` for a **far-future** date (future showtimes aren't known) — the optimizer must therefore still degrade a show with no showtimes to standby (R6.6) and never read an absent field as a wait. No crowd-calendar changes are required before building this feature.
-
-**Pre-existing test to update:** adding scheduling/LL fields to `PlannedItemDTO` (task 1.1) will break `apps/api/src/services/trips/__tests__/plannedCompletionModelConstraints.test.ts`, which asserts `PlannedItemDTO` has exactly its original five fields — widen that one assertion to allow the new scheduling/LL fields (while still forbidding a *completion* field/column/route). The guard's migration-scan half has already been relaxed to allow the shipped `planned_items` scheduling migration (`0019`) while still forbidding a completion column/link, so the suite baseline is green; task 1.1 only owns the `PlannedItemDTO` field assertion.
+- **Early entry:** start `30` min before official open when `early_entry_eligible`.
+- **Rope-drop window:** `ROPE_DROP_WINDOW_MINUTES = 30`, `ROPE_DROP_WALKON_MINS = 5`.
+- **Lightning Lane item wait:** modeled as a fixed `10` min (return + board).
+- **Limits & budget:** max `20` items per day per request; return within `2` s.
+- **Search:** greedy seed → or-opt + 2-opt local search; `50` iterations cap and `5` seeded random restarts (fixed seed `42` for determinism).

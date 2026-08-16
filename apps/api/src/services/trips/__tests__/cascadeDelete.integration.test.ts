@@ -242,11 +242,14 @@ async function setup(): Promise<Fixture> {
   const rawPool = new Pool() as unknown as DbPool;
 
   applyInitMigration(db);
+  db.public.none("ALTER TABLE experiences ADD COLUMN IF NOT EXISTS meal_periods JSONB NOT NULL DEFAULT '[]';");
   applyMigration(db, '0015_trips.sql');
   applyMigration(db, '0019_planned_item_scheduling.sql');
   applyMigration(db, '0022_planned_item_ride_options.sql');
   applyMigration(db, '0023_trip_touring_hours.sql');
   applyMigration(db, '0024_planned_item_optimization_result.sql');
+  applyMigration(db, '0027_planned_items_soft_windows.sql');
+  applyMigration(db, '0028_planned_items_meal_period_snack.sql');
 
   // The repo and the canonical Tracking repos all run against the same pool,
   // wrapped so `FOR UPDATE` clauses are stripped for pg-mem.

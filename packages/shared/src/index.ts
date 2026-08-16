@@ -214,6 +214,9 @@ export {
   tripCommentBodySchema,
   tripResortIdsSchema,
   TRIP_RESORT_LIMIT,
+  MEAL_PERIODS,
+  MEAL_WINDOWS,
+  MEAL_SERVICE_WINDOWS,
   // input schemas
   dayTouringHoursSchema,
   tripCreateSchema,
@@ -237,6 +240,7 @@ export type {
   RodeWithTagState,
   TripFeedTargetType,
   DayTouringHoursDTO,
+  MealPeriod,
   // input types
   TripCreateInput,
   TripEditInput,

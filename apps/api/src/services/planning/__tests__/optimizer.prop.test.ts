@@ -2,6 +2,7 @@
 
 import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
+import type { WaitSnapshot } from '@dwt/shared';
 import { optimize, type OptimizeInput, type OptimizeInputItem } from '../optimizer.js';
 import { travelFromPrev } from '../travel.js';
 
@@ -270,4 +271,144 @@ describe('Feature: day-planning-optimization', () => {
     // The flexible ride should be scheduled at 9:00 AM (13:00 UTC), filling the morning gap
     expect(flex!.suggestedArrival).toBe('2024-05-01T13:00:00.000Z');
   });
+
+  it('Property 12: Soft window adherence clamps early arrival up to window start and flags late arrival', () => {
+    // Window from 11:30 AM (690 min) to 2:30 PM (870 min)
+    const input: OptimizeInput = {
+      items: [
+        {
+          id: 'lunch-window',
+          experienceId: 'exp-lunch',
+          park: 'Magic Kingdom',
+          coords: null,
+          plannedTime: null,
+          isFixed: false,
+          isLightningLane: false,
+          useSingleRider: false,
+          priority: 1,
+          itemType: 'experience',
+          category: 'Restaurant',
+          durationMinutes: 60,
+          windowStartMinutes: 690,
+          windowEndMinutes: 870,
+          mealPeriod: 'lunch',
+        },
+      ],
+      date: mockDate,
+      startHour: 9,
+      endHour: 21,
+      walkingSpeed: 'moderate',
+      earlyEntryEligible: false,
+      snapshots: {},
+      seed: 42,
+    };
+
+    const res = optimize(input);
+    const item = res.items.find((i) => i.plannedItemId === 'lunch-window');
+    expect(item).toBeDefined();
+    // Clamped up to 11:30 AM (15:30 UTC)
+    expect(item!.suggestedArrival).toBe('2024-05-01T15:30:00.000Z');
+    expect(item!.predictedWaitMinutes).toBe(0);
+    expect(res.warnings).not.toContain('outside_window:lunch-window');
+  });
+
+  it('Property 16: Unlocated and located breaks schedule with zero wait and honor explicit duration', () => {
+    const input: OptimizeInput = {
+      items: [
+        {
+          id: 'unlocated-break',
+          experienceId: null,
+          park: null,
+          coords: null,
+          plannedTime: null,
+          isFixed: false,
+          isLightningLane: false,
+          useSingleRider: false,
+          priority: 2,
+          itemType: 'break',
+          durationMinutes: 45,
+          windowStartMinutes: 780,
+          windowEndMinutes: 960,
+        },
+      ],
+      date: mockDate,
+      startHour: 9,
+      endHour: 21,
+      walkingSpeed: 'moderate',
+      earlyEntryEligible: false,
+      snapshots: {},
+      seed: 42,
+    };
+
+    const res = optimize(input);
+    const item = res.items.find((i) => i.plannedItemId === 'unlocated-break');
+    expect(item).toBeDefined();
+    expect(item!.predictedWaitMinutes).toBe(0);
+    expect(item!.suggestedArrival).toBe('2024-05-01T17:00:00.000Z'); // 1:00 PM (780 min -> 17:00 UTC)
+  });
+
+  it('Property 15: For show items with showtimes, arrival is scheduled to the doors time (15 mins before showtime)', () => {
+    fc.assert(
+      fc.property(
+        fc.integer({ min: 11, max: 18 }),
+        (showHour) => {
+          // mockDate 2024-05-01 is EDT (UTC-4), so showHour ET = showHour + 4 UTC
+          const expectedShowUTCHour = String(showHour + 4).padStart(2, '0');
+          const showTimeISO = `2024-05-01T${expectedShowUTCHour}:00:00.000Z`;
+          const showSnapshots: Record<string, WaitSnapshot> = {
+            'exp-show-prop': {
+              experienceId: 'exp-show-prop',
+              isVirtualQueue: false,
+              waits: Array.from({ length: 14 }, (_, i) => ({
+                hour: i + 8,
+                predictedWaitMinutes: 0,
+              })),
+              showtimes: [showTimeISO],
+            },
+          };
+
+          const input: OptimizeInput = {
+            items: [
+              {
+                id: 'show-item',
+                experienceId: 'exp-show-prop',
+                park: 'Magic Kingdom',
+                coords: null,
+                plannedTime: null,
+                isFixed: false,
+                isLightningLane: false,
+                useSingleRider: false,
+                priority: 2,
+                itemType: 'experience',
+                category: 'Show',
+                durationMinutes: 30,
+              },
+            ],
+            date: mockDate,
+            startHour: 9,
+            endHour: 21,
+            walkingSpeed: 'moderate',
+            earlyEntryEligible: false,
+            snapshots: showSnapshots,
+            seed: 42,
+          };
+
+          const res = optimize(input);
+          const item = res.items.find((i) => i.plannedItemId === 'show-item');
+          expect(item).toBeDefined();
+          expect(item!.predictedWaitMinutes).toBe(15);
+          expect(res.warnings).toContain('show:show-item');
+
+          // UTC offset for mockDate 2024-05-01 (EDT is UTC-4).
+          // Show is at showHour:00 ET -> doors at (showHour - 1):45 ET -> in UTC: (showHour + 3):45 UTC.
+          const expectedDoorsUTCHour = String(showHour + 3).padStart(2, '0');
+          expect(item!.suggestedArrival).toBe(`2024-05-01T${expectedDoorsUTCHour}:45:00.000Z`);
+          expect(item!.scheduledShowtime).toBe(`2024-05-01T${expectedShowUTCHour}:00:00.000Z`);
+        },
+      ),
+      { numRuns: 100 },
+    );
+  });
 });
+
+

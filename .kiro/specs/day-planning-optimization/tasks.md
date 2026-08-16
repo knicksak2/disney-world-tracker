@@ -137,12 +137,111 @@ Implementation is **TypeScript**. It reuses `experiences.latitude/longitude` for
     - Add `operatesDuringExtendedEvening` / `operatesDuringTicketedEvent` to `OptimizeInputItem`; gate the +120 / +180 extensions per item (non-eligible rides close at base hours). Unit tests (non-eligible dropped, eligible fit, both windows) + Property 11 `fast-check` test in `optimizer.lateWindow.test.ts`.
     - _Requirements: 3.13_
 
+- [x] 10. Phase 1: Core Optimizer Bug Fixes (Zero Queue Wait, Catalog Duration Precedence & Scope by Date)
+  - [x] 10.1 Zero queue wait for dining (`Restaurant`) and breaks (`itemType = 'break'`) in `optimizer.ts`.
+    - Set `wait = 0` for dining and breaks; add `catalogDurationMinutes` to `OptimizeInputItem`; precedence in duration: `item.durationMinutes` (user override) ?? `item.catalogDurationMinutes` ?? `sub_type` defaults (Quick Service 30, Table Service 60, Signature Dining 90, unknown 60, Show/Parade 30, Ride 15).
+    - Unit tests in `optimizer.diningAndBreaks.test.ts` asserting zero wait, catalog duration precedence, and sub_type durations.
+    - _Requirements: 2.4, 3.14_
+  - [x] 10.2 Scope `POST /trips/:id/schedule/optimize` strictly to requested `date` (`routes.ts`).
+    - Filter items to `planned_date = date`; exclude items with `planned_date = null` or different dates.
+    - Integration test asserting unassigned/other-date items are not scheduled or updated.
+    - _Requirements: 3.1_
+  - [x] 10.3 Phase 1 Checkpoint
+    - Run `npm run verify:api` to verify zero wait, catalog duration precedence, and date scoping.
+
+- [x] 11. Phase 2: Migration 0027 & Soft Time Windows Primitive
+  - [x] 11.1 Migration `0027_planned_items_soft_windows.sql` + `migration0027.test.ts`
+    - Make `experience_id` nullable on `planned_items`; add `custom_title`, `window_start_minutes`, `window_end_minutes`, `meal_period`, `scheduled_showtime`.
+    - Test in `apps/api/src/db/__tests__/migration0027.test.ts`.
+    - _Requirements: 2.7, 8.1_
+  - [x] 11.2 Shared contracts (`@dwt/shared`)
+    - Add `MEAL_PERIODS`, `MEAL_WINDOWS`, `windowStartMinutes`, `windowEndMinutes`, `mealPeriod`, `customTitle`, `scheduledShowtime` to schemas and `PlannedItemDTO`.
+    - Add `superRefine` on `plannedItemAddSchema`/`plannedItemEditSchema`: when `experienceId == null`, require `itemType === 'break'` and non-empty `customTitle`.
+    - _Requirements: 2.7_
+  - [x] 11.3 Repo read/write for soft window columns & mutual exclusion (`repo.ts`)
+    - Update `addPlannedItem`, `editPlannedItem`, `listPlannedItems` (using `LEFT JOIN experiences`), and `updatePlannedItemTimes`.
+    - Enforce timing mode mutual exclusion in repo write paths: exact time clears window; window clears exact time.
+    - pg-mem repo tests in `repo.plannedItems.test.ts` verifying mutual exclusion in both directions.
+    - _Requirements: 2.2, 2.7, 8.1_
+  - [x] 11.4 Soft window simulation & 100/min penalty in `optimizer.ts`
+    - Clamp early arrival and charge idle gap to total wait; apply graded 100/min penalty on late arrival and emit `outside_window:<id>`.
+    - Fast-check property test for Property 12 (`Feature: day-planning-optimization, Property 12`).
+    - _Requirements: 3.15_
+  - [x] 11.5 Phase 2 Checkpoint
+    - Run `npm run verify:shared` and `npm run verify:api`.
+
+- [x] 12. Phase 3: Located/Unlocated Breaks, Travel Linkage & Mobile UI Redesign
+  - [x] 12.1 Travel linkage & travel-neutral unlocated breaks in `travel.ts` & `optimizer.ts`
+    - Make `travelFromPrev` accept `Park | null` (resorts / null parks hop when different, 8m intra-resort default when missing coords).
+    - Unlocated breaks (`experienceId == null`) are skipped in the travel chain entirely.
+    - Fast-check property test for Property 14 (`Feature: day-planning-optimization, Property 14`).
+    - _Requirements: 2.4, 3.4_
+  - [x] 12.2 Expose `category` and `subType` on `PlannedItemDTO` and audit consumers
+    - Map `e.category` and `e.sub_type` in `selectPlannedItem`, `listPlannedItems`, and `rowToPlannedItemDto`.
+    - Update all mobile/API consumers for nullable `experienceId`, `park`, and required `category: ExperienceCategory | null`.
+    - _Requirements: 4.4_
+  - [x] 12.3 Tabbed `ExperiencePicker.tsx` (Rides, Shows, Dining, Break)
+    - Segmented tab bar; category filters for Rides, Shows, Dining; inline standalone break creation form with duration chips.
+    - _Requirements: 4.2_
+  - [x] 12.4 Item Settings 3-state Timing Mode (Any time / Around / At) (`TripScheduleScreen.tsx`)
+    - Derive 3-state timing mode; support meal period presets and custom soft windows; remove "Attraction vs Dining/Break" toggle chip.
+    - Mobile `@testing-library/react-native` component tests.
+    - _Requirements: 4.4_
+  - [x] 12.5 Phase 3 Checkpoint
+    - Run `npm run verify:shared`, `npm run verify:api`, and `npm run verify:mobile`.
+
+- [x] 13. Phase 4: Showtime Optimization, Showtime Patterns & Mobile Showtime Controls
+  - [x] 13.1 Optimizer showtime slotting & scheduled_showtime instant (superseded by 14.1)
+    - _Requirements: 3.16, 8.1_
+  - [x] 13.2 Graded show-miss penalty and show_missed warning (superseded by 14.2)
+    - _Requirements: 3.16, 4.6_
+  - [x] 13.3 Historical showtime patterns & typical showtimes fallback (moved to crowd-calendar task 11)
+    - _Requirements: 6.7, 8.1_
+  - [x] 13.4 Mobile showtime pills and typical-showtimes notice (`TripScheduleScreen.tsx`)
+    - List the day's showtimes as tappable pills (plus "Auto-fit best showtime") in the Item Settings modal for a Show/Parade; lock selection via `plannedTime` + `isFixed = true`; auto-fit clears them. Show not-published-yet notice when empty.
+    - Render human-readable typical-showtimes warning notice when optimize response returns `typical_showtimes:<id>`.
+    - Mobile `@testing-library/react-native` component tests.
+    - _Requirements: 4.6, 6.7_
+
+- [x] 14. Unit 1: Optimizer Showtime Work (ISO Scheduled Showtime & Graded Miss Penalty)
+  - [x] 14.1 Optimizer `scheduledShowtime` instant conversion in `optimizer.ts`
+    - Pull `scheduledShowtime` in `simulate`'s destructuring, convert to ISO instant using `toISOString(date, scheduledShowtimeMinutes)`, and attach to `OptimizedItem`.
+    - Change declared type on `WaitAndDurationResult` to explicit `scheduledShowtimeMinutes?: number`.
+    - Unit/property tests asserting `scheduledShowtime` equals the ISO instant of the matched showtime (15 min after arrival).
+    - _Requirements: 3.16, 8.1_
+  - [x] 14.2 Graded show-miss penalty and `show_missed` warning in `optimizer.ts`
+    - Compute `lastDoors` as explicit max across `snap.showtimes`; return `missMinutes = arrivalMins - lastDoors` when `arrivalMins > lastDoors`.
+    - Charge `penalty += missMinutes * SHOW_MISS_PENALTY_PER_MIN` (`SHOW_MISS_PENALTY_PER_MIN = 1000`), return `scheduledShowtime = null`, and emit `show_missed:<id>`.
+    - Unit tests driving arrival past last doors time, asserting `show_missed` warning and that gradient moves item earlier.
+    - _Requirements: 3.16, 4.6_
+  - [x] 14.3 Unit 1 Checkpoint
+    - Run `npm run verify:api`.
+
+- [x] 15. Unit 2: Meal Preference & Service Windows, Snack Period & Generic Window Control
+  - [x] 15.1 Shared contracts & constants in `packages/shared/src/trips.ts`
+    - Update `MEAL_WINDOWS` preference defaults (breakfast 480–630, lunch 690–840, dinner 1020–1200, snack: no preset).
+    - Add `MEAL_SERVICE_WINDOWS` (breakfast 420–660, lunch 660–930, dinner 960–1260).
+    - Add `'snack'` to `MEAL_PERIODS` (`MealPeriod = 'breakfast' | 'lunch' | 'dinner' | 'snack'`).
+    - Make `MEAL_WINDOWS: Partial<Record<MealPeriod, { startMinutes: number; endMinutes: number }>>`; guard schema transforms so snack allows null window columns.
+    - _Requirements: 2.8, 2.9_
+  - [x] 15.2 Migration `0028_planned_items_meal_period_snack.sql` + `migration0028.test.ts`
+    - Drop constraint `chk_planned_items_meal_period` and recreate with `('breakfast','lunch','dinner','snack')`.
+    - Test in `apps/api/src/db/__tests__/migration0028.test.ts` asserting 'snack' is accepted and unknown values rejected.
+    - _Requirements: 2.8_
+  - [x] 15.3 Generic Window Control & served meal period warning in `TripScheduleScreen.tsx`
+    - Add generic window selector to "Around..." mode: preference meal presets, full-service window presets, time-of-day presets (Morning, Midday, Afternoon, Evening), and custom range clamped to service span or touring hours.
+    - Derive mobile preset labels directly from `MEAL_WINDOWS`.
+    - Project `servedMealPeriods` from `experiences.meal_periods` on `PlannedItemDTO` and warn when restaurant does not serve the selected meal period.
+    - Mobile component tests for generic window choices, clamping, and snack selection.
+    - _Requirements: 2.9, 3.17, 4.4_
+  - [x] 15.4 Unit 2 Checkpoint
+    - Full root `npm run verify`.
+
 ## Notes
 
-- Test tasks (1.4, 2.4, 4.4, 5.3, 6.1) are **required, not optional** — a feature task is not complete until its tests exist and pass. Per the execution-discipline steering: every new pure module gets unit + property tests, every route a `server.inject` integration test, every migration a `migrationNNNN.test.ts`, and every mobile component a `@testing-library/react-native` render test. Do not defer, skip, or mark a task done without them.
+- Test tasks are **required, not optional** — a feature task is not complete until its tests exist and pass.
 - Property tests reference a design Correctness Property, run ≥100 `fast-check` iterations, and are tagged `Feature: day-planning-optimization, Property {n}`.
 - The pure modules (`travel`, `optimizer`) carry no I/O; the `WaitSnapshot` is injected, so properties run directly against the functions with a stub.
-- **Dependency:** the crowd-calendar feature's `predictionService` must exist before task 4.3; until then, task 2 can proceed against a stubbed snapshot.
 - `permissions.ts` and `wdwClock.ts` are reused; this plan adds no new auth or time-zone logic and no wait-model logic.
 
 ## Task Dependency Graph
@@ -150,19 +249,16 @@ Implementation is **TypeScript**. It reuses `experiences.latitude/longitude` for
 ```json
 {
   "waves": [
-    { "id": 0, "tasks": ["1.1", "1.2", "1.3", "2.1"] },
-    { "id": 1, "tasks": ["1.4", "2.2"] },
-    { "id": 2, "tasks": ["2.3"] },
-    { "id": 3, "tasks": ["2.4", "3"] },
-    { "id": 4, "tasks": ["4.1", "4.2", "4.3"] },
-    { "id": 5, "tasks": ["4.4", "5.1", "5.2"] },
-    { "id": 6, "tasks": ["5.3", "6.1"] },
-    { "id": 7, "tasks": ["6.2"] },
-    { "id": 8, "tasks": ["7.1", "7.2"] },
-    { "id": 9, "tasks": ["7.3", "7.4"] },
-    { "id": 10, "tasks": ["7.5"] },
-    { "id": 11, "tasks": ["8.1"] },
-    { "id": 12, "tasks": ["9.1", "9.2", "9.3"] }
+    { "id": 0, "tasks": ["10.1", "10.2"] },
+    { "id": 1, "tasks": ["10.3", "11.1", "11.2"] },
+    { "id": 2, "tasks": ["11.3", "11.4"] },
+    { "id": 3, "tasks": ["11.5", "12.1", "12.2"] },
+    { "id": 4, "tasks": ["12.3", "12.4"] },
+    { "id": 5, "tasks": ["12.5", "13.1", "13.2", "13.3"] },
+    { "id": 6, "tasks": ["14.1", "14.2"] },
+    { "id": 7, "tasks": ["14.3", "15.1", "15.2"] },
+    { "id": 8, "tasks": ["15.3"] },
+    { "id": 9, "tasks": ["15.4", "13.4"] }
   ]
 }
 ```

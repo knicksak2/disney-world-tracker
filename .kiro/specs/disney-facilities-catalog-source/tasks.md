@@ -297,6 +297,9 @@ minimum of 100 iterations.
   - [x] 15.5 Extended-evening & ticketed-event capture (R5.11)
     - Migration `0026_experience_special_hours.sql` (+ `migration0026.test.ts`) adds nullable `operates_during_extended_evening` / `operates_during_ticketed_event`. Generalize the pure derivation (`classifySpecialHours` / `specialHoursByFacility`), the capture step (`captureSpecialHours`), and the repo updater (`updateSpecialHoursParticipation`) to all three windows. Tests: pure classification of all three types, capture maps + persists all three, repo writes all three columns.
     - _Requirements: 5.11_
+  - [ ] 15.6 Facility_Document per-meal service times verification (Future — DO NOT IMPLEMENT NOW)
+    - Verify whether the Sync Gateway Facility_Document carries per-meal service times (start/end), and if confirmed, capture them onto `meal_periods` JSONB entries during Catalog_Sync, falling back to `MEAL_SERVICE_WINDOWS` when absent.
+    - _Requirements: 5.6_
 
 ## Notes
 

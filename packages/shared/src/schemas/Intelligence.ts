@@ -27,6 +27,7 @@ export const waitSnapshotSchema = z.object({
   experienceId: z.string().uuid(),
   isVirtualQueue: z.boolean(),
   showtimes: z.array(z.string()).optional(),
+  showtimesAreTypical: z.boolean().optional(),
   lightningLane: z.object({
     available: z.boolean(),
     priceCents: z.number().optional(),

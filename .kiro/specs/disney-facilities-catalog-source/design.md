@@ -1056,3 +1056,13 @@ Target locations:
 - **Migration completeness (R14.5):** assert the completeness predicate flips only after the
   `Bridge_Map` is built and at least one Disney-only sync has succeeded and persisted; and that once
   complete, no ThemeParks.wiki request is issued (R14.2, R14.3, R14.4).
+
+## External Interfaces
+
+### Facility Document Meal Service Times (Unverified)
+
+- **Sync Gateway `wdw.facilities.1_0.en_us` Facility_Document:**
+  - Status: **Unverified** pending live response confirmation against the real Disney Sync Gateway API.
+  - Objective: Verify whether facility documents carry per-meal service time boundaries (e.g. `start_time` / `end_time` within meal period definitions).
+  - Fallback: When per-restaurant service times are absent upstream, the planner and catalog layers fall back to `MEAL_SERVICE_WINDOWS` generalized WDW boundaries.
+

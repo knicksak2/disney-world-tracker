@@ -129,11 +129,14 @@ function makeFixture(): Fixture {
   const rawPool = new PgMemPool() as unknown as DbPool;
 
   applyMigration(db, '0001_init.sql');
+  db.public.none("ALTER TABLE experiences ADD COLUMN IF NOT EXISTS meal_periods JSONB NOT NULL DEFAULT '[]';");
   applyMigration(db, '0015_trips.sql');
   applyMigration(db, '0019_planned_item_scheduling.sql');
   applyMigration(db, '0022_planned_item_ride_options.sql');
   applyMigration(db, '0023_trip_touring_hours.sql');
   applyMigration(db, '0024_planned_item_optimization_result.sql');
+  applyMigration(db, '0027_planned_items_soft_windows.sql');
+  applyMigration(db, '0028_planned_items_meal_period_snack.sql');
 
   const pool = withForUpdateCompat(rawPool);
   const repo = createTripRepo(pool, NOOP_DEPS);
@@ -260,5 +263,49 @@ describe('Planned_Item optimization result (integration, pg-mem)', () => {
         ['bogus', item.id],
       ),
     ).rejects.toThrow();
+  });
+
+  it('projects planned_date as exact YYYY-MM-DD string matching strict equality (R3.1)', async () => {
+    const user = await seedUser(fx.pool, 'Organizer');
+    const expId1 = await seedExperience(fx.pool, 'Space Mountain');
+    const expId2 = await seedExperience(fx.pool, 'Big Thunder');
+    const expId3 = await seedExperience(fx.pool, 'Haunted Mansion');
+    const trip = await fx.repo.createTrip(user, { ...VALID_TRIP });
+
+    const itemDay1 = await fx.repo.addPlannedItem(trip.id, user, {
+      experienceId: expId1,
+      plannedDate: '2026-10-01',
+    });
+    const itemDay2 = await fx.repo.addPlannedItem(trip.id, user, {
+      experienceId: expId2,
+      plannedDate: '2026-10-02',
+    });
+    const itemUnassigned = await fx.repo.addPlannedItem(trip.id, user, {
+      experienceId: expId3,
+    });
+
+    // 1. Strict equality on addPlannedItem return
+    expect(itemDay1.plannedDate).toBe('2026-10-01');
+    expect(itemDay2.plannedDate).toBe('2026-10-02');
+    expect(itemUnassigned.plannedDate).toBeNull();
+
+    // 2. Strict equality on listPlannedItems read projection
+    const allItems = await fx.repo.listPlannedItems(trip.id);
+    expect(allItems).toHaveLength(3);
+
+    const readDay1 = allItems.find((i) => i.id === itemDay1.id)!;
+    const readDay2 = allItems.find((i) => i.id === itemDay2.id)!;
+    const readUnassigned = allItems.find((i) => i.id === itemUnassigned.id)!;
+
+    expect(readDay1.plannedDate).toBe('2026-10-01');
+    expect(readDay2.plannedDate).toBe('2026-10-02');
+    expect(readUnassigned.plannedDate).toBeNull();
+
+    // 3. Exact matching in route date filter
+    const targetDate = '2026-10-01';
+    const dayItems = allItems.filter((i) => i.plannedDate === targetDate);
+    expect(dayItems).toHaveLength(1);
+    expect(dayItems[0]!.id).toBe(itemDay1.id);
+    expect(dayItems[0]!.experienceName).toBe('Space Mountain');
   });
 });

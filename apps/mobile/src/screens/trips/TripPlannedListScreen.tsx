@@ -279,7 +279,10 @@ export default function TripPlannedListScreen({
   };
 
   const prefill: PickedExperience | null =
-    loggingItem !== null
+    loggingItem !== null &&
+    loggingItem.experienceId !== null &&
+    loggingItem.experienceName !== null &&
+    loggingItem.park !== null
       ? {
           id: loggingItem.experienceId,
           name: loggingItem.experienceName,
@@ -392,9 +395,11 @@ export default function TripPlannedListScreen({
                 <PlannedItemCard
                   key={item.id}
                   item={item}
-                  rating={ratingFor(
-                    completionByExperience.get(item.experienceId),
-                  )}
+                  rating={
+                    item.experienceId
+                      ? ratingFor(completionByExperience.get(item.experienceId))
+                      : null
+                  }
                   onLog={openLogComposer}
                   onRemove={onRemove}
                 />
@@ -417,9 +422,9 @@ export default function TripPlannedListScreen({
         tripId={tripId}
         onClose={() => {
           setComposerVisible(false);
+          invalidateItems();
         }}
         onAdded={() => {
-          setComposerVisible(false);
           invalidateItems();
         }}
       />
@@ -497,9 +502,9 @@ function PlannedItemCard({
             </View>
           ) : null}
           <Text style={styles.itemName} numberOfLines={2}>
-            {item.experienceName}
+            {item.customTitle || item.experienceName || 'Custom Item'}
           </Text>
-          <Badge label={item.park} color={theme.color.primary} />
+          {item.park ? <Badge label={item.park} color={theme.color.primary} /> : null}
           <Text style={styles.itemMeta}>{attribution}</Text>
           {done ? (
             rating !== null ? (
@@ -576,10 +581,12 @@ function AddItemModal({
   // The Experience currently being added, so the picker can show a per-row
   // spinner and block a second tap while the POST is in flight.
   const [pendingId, setPendingId] = useState<string | null>(null);
+  const [addedCounts, setAddedCounts] = useState<ReadonlyMap<string, number>>(new Map());
 
   const resetForm = (): void => {
     setError(null);
     setPendingId(null);
+    setAddedCounts(new Map());
   };
 
   const addMutation = useMutation<void, ApiError, ExperienceDTO>({
@@ -604,8 +611,14 @@ function AddItemModal({
         parsed.data,
       );
     },
-    onSuccess: () => {
-      resetForm();
+    onSuccess: (_data, experience) => {
+      setPendingId(null);
+      setError(null);
+      setAddedCounts((prev) => {
+        const next = new Map(prev);
+        next.set(experience.id, (next.get(experience.id) ?? 0) + 1);
+        return next;
+      });
       onAdded();
     },
     onError: (err) => {
@@ -614,7 +627,37 @@ function AddItemModal({
     },
   });
 
-  const busy = addMutation.isPending;
+  const addBreakMutation = useMutation<void, ApiError, { customTitle: string; durationMinutes: number }>({
+    mutationFn: async ({ customTitle, durationMinutes }) => {
+      const parsed = plannedItemAddSchema.safeParse({
+        itemType: 'break',
+        customTitle,
+        durationMinutes,
+      });
+      if (!parsed.success) {
+        throw new ApiError({
+          code: 'trip_validation_failed',
+          message: 'trip_validation_failed',
+          status: 400,
+        });
+      }
+      await apiRequest<void>(
+        'POST',
+        `/trips/${tripId}/planned-items`,
+        parsed.data,
+      );
+    },
+    onSuccess: () => {
+      setError(null);
+      onAdded();
+      onClose();
+    },
+    onError: (err) => {
+      setError(addErrorMessage(err));
+    },
+  });
+
+  const busy = addMutation.isPending || addBreakMutation.isPending;
 
   const closeAndReset = (): void => {
     if (busy) return;
@@ -656,13 +699,18 @@ function AddItemModal({
           <ExperiencePicker
             enabled={visible}
             onSelect={onSelect}
+            onSelectUnlocatedBreak={(title, dur) => {
+              if (busy) return;
+              addBreakMutation.mutate({ customTitle: title, durationMinutes: dur });
+            }}
             pendingId={pendingId}
+            addedCounts={addedCounts}
             busy={busy}
             testIDPrefix="planned-list"
           />
 
           <SecondaryButton
-            label="Cancel"
+            label={addedCounts.size > 0 ? 'Done' : 'Cancel'}
             onPress={closeAndReset}
             disabled={busy}
             testID="planned-list-cancel"

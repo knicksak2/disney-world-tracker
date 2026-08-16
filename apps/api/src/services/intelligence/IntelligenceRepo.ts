@@ -109,6 +109,14 @@ export interface WaitSampleRow {
   status: string;
 }
 
+export interface ShowTimePatternRow {
+  experience_id: string;
+  day_of_week: number;
+  start_minutes: number;
+  frequency: number;
+  sample_count: number;
+}
+
 export class IntelligenceRepo {
   constructor(private pool: Pool) {}
 
@@ -559,6 +567,14 @@ export class IntelligenceRepo {
     return res.rows.length > 0 ? res.rows[0].park : null;
   }
 
+  async getExperiencesByPark(park: string): Promise<{ id: string; name: string; category: string }[]> {
+    const res = await this.pool.query(
+      `SELECT id, name, category FROM experiences WHERE park = $1 AND active = true`,
+      [park]
+    );
+    return res.rows;
+  }
+
   async upsertWeatherSensitivities(rows: ExperienceWeatherSensitivityRow[]): Promise<void> {
     if (rows.length === 0) return;
     const query = `
@@ -624,5 +640,90 @@ export class IntelligenceRepo {
       rows.map(r => r.baseline_wait),
       rows.map(r => r.sample_count),
     ]);
+  }
+
+  async getTrailingShowtimeSignals(sinceDate: Date): Promise<{ experience_id: string; date: Date | string; showtimes: any }[]> {
+    const res = await this.pool.query(
+      `SELECT experience_id, date, showtimes
+       FROM experience_daily_signals
+       WHERE date >= $1 AND showtimes IS NOT NULL`,
+      [sinceDate]
+    );
+    return res.rows;
+  }
+
+  async getShowTimePatterns(experienceIds: string[], dayOfWeek: number): Promise<ShowTimePatternRow[]> {
+    if (experienceIds.length === 0) return [];
+    const res = await this.pool.query(
+      `SELECT experience_id, day_of_week, start_minutes, frequency, sample_count
+       FROM show_time_patterns
+       WHERE experience_id = ANY($1::uuid[]) AND day_of_week = $2
+       ORDER BY start_minutes ASC`,
+      [experienceIds, dayOfWeek]
+    );
+    return res.rows;
+  }
+
+  async upsertShowTimePatterns(patterns: ShowTimePatternRow[]): Promise<void> {
+    if (patterns.length === 0) return;
+    
+    // Deduplicate by conflict key (experience_id, day_of_week, start_minutes) to avoid Postgres error 21000
+    const dedupedMap = new Map<string, ShowTimePatternRow>();
+    for (const p of patterns) {
+      const key = `${p.experience_id}:${p.day_of_week}:${p.start_minutes}`;
+      dedupedMap.set(key, p);
+    }
+    const deduped = Array.from(dedupedMap.values());
+
+    const valueClauses: string[] = [];
+    const params: any[] = [];
+    let idx = 1;
+
+    for (const p of deduped) {
+      valueClauses.push(`($${idx++}::uuid, $${idx++}::int, $${idx++}::int, $${idx++}::real, $${idx++}::int)`);
+      params.push(p.experience_id, p.day_of_week, p.start_minutes, p.frequency, p.sample_count);
+    }
+
+    const query = `
+      INSERT INTO show_time_patterns (
+        experience_id, day_of_week, start_minutes, frequency, sample_count
+      )
+      VALUES ${valueClauses.join(', ')}
+      ON CONFLICT (experience_id, day_of_week, start_minutes) DO UPDATE SET
+        frequency = EXCLUDED.frequency,
+        sample_count = EXCLUDED.sample_count
+    `;
+    await this.pool.query(query, params);
+  }
+
+  async pruneStaleShowTimePatterns(
+    experienceIds: string[],
+    validPatterns: readonly ShowTimePatternRow[]
+  ): Promise<void> {
+    if (experienceIds.length === 0) return;
+
+    if (validPatterns.length === 0) {
+      await this.pool.query(
+        `DELETE FROM show_time_patterns WHERE experience_id = ANY($1::uuid[])`,
+        [experienceIds]
+      );
+      return;
+    }
+
+    const conds: string[] = [];
+    const params: any[] = [experienceIds];
+    let idx = 2;
+
+    for (const p of validPatterns) {
+      conds.push(`(experience_id = $${idx++}::uuid AND day_of_week = $${idx++}::int AND start_minutes = $${idx++}::int)`);
+      params.push(p.experience_id, p.day_of_week, p.start_minutes);
+    }
+
+    const query = `
+      DELETE FROM show_time_patterns
+      WHERE experience_id = ANY($1::uuid[])
+        AND NOT (${conds.join(' OR ')})
+    `;
+    await this.pool.query(query, params);
   }
 }

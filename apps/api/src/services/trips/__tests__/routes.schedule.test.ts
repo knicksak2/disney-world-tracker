@@ -14,6 +14,7 @@ import type { PlannedItemDTO, TripOptimizationResult } from '@dwt/shared';
 
 import type { DbPool } from '../../../db/pool.js';
 import { registerErrorHandler } from '../../../errors/handler.js';
+import type { PredictionService } from '../../intelligence/predictionService.js';
 import type { TripRepo } from '../repo.js';
 import { tripRoutes } from '../routes.js';
 
@@ -29,6 +30,7 @@ function pi(overrides: Partial<PlannedItemDTO> = {}): PlannedItemDTO {
     experienceId: EXP_ID,
     experienceName: 'Space Mountain',
     park: 'Magic Kingdom',
+    customTitle: null,
     addedByDisplayName: 'Tester',
     plannedDate: '2026-10-01',
     plannedTime: null,
@@ -38,6 +40,10 @@ function pi(overrides: Partial<PlannedItemDTO> = {}): PlannedItemDTO {
     priority: 2,
     itemType: 'experience',
     durationMinutes: 15,
+    windowStartMinutes: null,
+    windowEndMinutes: null,
+    mealPeriod: null,
+    scheduledShowtime: null,
     predictedWaitMinutes: null,
     travelFromPrev: null,
     optimizedAt: null,
@@ -221,6 +227,93 @@ describe('Schedule optimization & planned item edit routes', () => {
       expect(captured[0]!.travelFromPrev ?? null).toEqual(body.items[0]!.travelFromPrev);
     });
 
+    it('persists scheduled_showtime for show experiences on optimize run (R8.1)', async () => {
+      const showExpId = 'exp-show-1';
+      const showItemId = 'item-show-1';
+      const poolForCapture = {
+        query: vi.fn(async (text: string) => {
+          if (text.includes('FROM trip_memberships')) {
+            return { rows: [{ role: 'member' }], rowCount: 1 };
+          }
+          if (text.includes('FROM trips WHERE id = $1')) {
+            return { rows: [{ walking_speed: 'moderate', early_entry_eligible: false, day_touring_hours: {} }], rowCount: 1 };
+          }
+          if (text.includes('FROM experiences WHERE id = ANY')) {
+            return {
+              rows: [{ id: showExpId, latitude: 28.4177, longitude: -81.5812, category: 'Show' }],
+              rowCount: 1,
+            };
+          }
+          return { rows: [], rowCount: 0 };
+        }),
+      } as unknown as DbPool;
+
+      const dummyRequireSession: preHandlerHookHandler = async (request) => {
+        (request as unknown as { userId: string }).userId = CALLER_ID;
+      };
+
+      let captured: Array<{
+        itemId: string;
+        plannedTime: string;
+        predictedWaitMinutes?: number | null;
+        travelFromPrev?: { kind: 'walk' | 'park_hop'; minutes: number } | null;
+        scheduledShowtime?: string | null;
+      }> = [];
+
+      const captureApp = Fastify();
+      registerErrorHandler(captureApp);
+      const repo = makeRepo({
+        listPlannedItems: async () => [
+          pi({
+            id: showItemId,
+            experienceId: showExpId,
+            plannedDate: '2026-10-01',
+          }),
+        ],
+        updatePlannedItemTimes: async (_id, times) => {
+          captured = times as typeof captured;
+        },
+      });
+
+      const predictionServiceWithShow = {
+        getDaySnapshot: vi.fn(async () => ({
+          [showExpId]: {
+            experienceId: showExpId,
+            isVirtualQueue: false,
+            showtimes: ['2026-10-01T18:00:00.000Z'], // 2:00 PM EDT
+            waits: Array.from({ length: 14 }, (_, i) => ({
+              hour: i + 8,
+              predictedWaitMinutes: 0,
+            })),
+          },
+        })),
+        crowdMultiplier: vi.fn(async () => 1.0),
+      } as unknown as PredictionService;
+
+      await captureApp.register(
+        tripRoutes({
+          pool: poolForCapture,
+          repo,
+          requireSession: dummyRequireSession,
+          predictionService: predictionServiceWithShow,
+        })
+      );
+
+      const res = await captureApp.inject({
+        method: 'POST',
+        url: `/trips/${TRIP_ID}/schedule/optimize`,
+        payload: { date: '2026-10-01' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json() as TripOptimizationResult;
+      expect(captured).toHaveLength(1);
+      expect(captured[0]!.itemId).toBe(showItemId);
+      // 2:00 PM ET on 2026-10-01 is 18:00:00.000Z (UTC-4) -> 14:00 ET = 18:00 UTC
+      expect(captured[0]!.scheduledShowtime).toBe('2026-10-01T18:00:00.000Z');
+      expect(body.items[0]!.scheduledShowtime).toBe('2026-10-01T18:00:00.000Z');
+    });
+
     it('does not schedule a non-early-entry ride before official open (R3.12)', async () => {
       // Early-entry-eligible day, default start 9:00 → early-entry open 8:30,
       // official open 9:00. A ride flagged not-early-entry must land at 9:00.
@@ -398,6 +491,69 @@ describe('Schedule optimization & planned item edit routes', () => {
       // 4 PM ET (16:00) on 2026-10-01 is 20:00:00Z
       expect(body.items[0]!.suggestedArrival).toContain('T20:00:00');
       expect(updatedTimes[0]!.plannedTime).toContain('T20:00:00');
+    });
+
+    it('strictly scopes optimization to requested date and leaves other dates and unassigned items untouched (R3.1)', async () => {
+      const itemDay1 = pi({ id: 'item-day-1', plannedDate: '2026-10-01', plannedTime: null });
+      const itemDay2 = pi({ id: 'item-day-2', plannedDate: '2026-10-02', plannedTime: '2026-10-02T14:00:00.000Z' });
+      const itemUnassigned = pi({ id: 'item-unassigned', plannedDate: null, plannedTime: null });
+
+      const poolScope = {
+        query: vi.fn(async (text: string) => {
+          if (text.includes('FROM trip_memberships')) {
+            return { rows: [{ role: 'member' }], rowCount: 1 };
+          }
+          if (text.includes('FROM trips WHERE id = $1')) {
+            return { rows: [{ walking_speed: 'moderate', early_entry_eligible: false }], rowCount: 1 };
+          }
+          if (text.includes('FROM experiences WHERE id = ANY')) {
+            return { rows: [{ id: EXP_ID, latitude: 28.4177, longitude: -81.5812 }], rowCount: 1 };
+          }
+          return { rows: [], rowCount: 0 };
+        }),
+      } as unknown as DbPool;
+
+      const dummyRequireSession: preHandlerHookHandler = async (request) => {
+        (request as unknown as { userId: string }).userId = CALLER_ID;
+      };
+
+      let updatedTimes: Array<{ itemId: string; plannedTime: string }> = [];
+      const scopeApp = Fastify();
+      registerErrorHandler(scopeApp);
+
+      const repo = makeRepo({
+        listPlannedItems: async () => [itemDay1, itemDay2, itemUnassigned],
+        updatePlannedItemTimes: async (_id, times) => {
+          updatedTimes = times;
+        },
+      });
+
+      await scopeApp.register(
+        tripRoutes({
+          pool: poolScope,
+          repo,
+          requireSession: dummyRequireSession,
+        })
+      );
+
+      const res = await scopeApp.inject({
+        method: 'POST',
+        url: `/trips/${TRIP_ID}/schedule/optimize`,
+        payload: { date: '2026-10-01' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json() as TripOptimizationResult;
+      // Only itemDay1 should be in the optimization result
+      expect(body.items).toHaveLength(1);
+      expect(body.items[0]!.plannedItemId).toBe('item-day-1');
+
+      // Persistence call must only update itemDay1
+      expect(updatedTimes).toHaveLength(1);
+      expect(updatedTimes[0]!.itemId).toBe('item-day-1');
+      // itemDay2 and itemUnassigned are NOT passed to updatePlannedItemTimes
+      expect(updatedTimes.some((t) => t.itemId === 'item-day-2')).toBe(false);
+      expect(updatedTimes.some((t) => t.itemId === 'item-unassigned')).toBe(false);
     });
   });
 

@@ -1,9 +1,10 @@
-import type { IntelligenceRepo } from './IntelligenceRepo.js';
+import type { IntelligenceRepo, ShowTimePatternRow } from './IntelligenceRepo.js';
 import type { WeatherClient } from './weatherClient.js';
 import { wdwToday } from '../trips/wdwClock.js';
 import { selectTier, crowdMultiplier, weatherAdjustment, displayLevel } from './waitMath.js';
 import { forecastIndex, selectComparableIndices } from './crowdForecast.js';
 import { seasonalPrior } from './seasonalPrior.js';
+import { getETDayOfWeek, minutesFromMidnightETToISO } from './showtimePatterns.js';
 import type { WaitSnapshot, CrowdCalendarDayDTO, WaitInsightsDTO } from '@dwt/shared';
 import type { Park } from '@dwt/shared';
 
@@ -143,13 +144,26 @@ export function createPredictionService(deps: PredictionServiceDeps): Prediction
       }
       
       // Per-date signals (showtimes, Lightning Lane) — populated for near-term/past dates;
-      // empty for far-future dates (shows then fall back to standby per day-planning R6.6).
+      // empty for far-future dates (shows then fall back to typical showtimes).
       const dailyByExp = new Map<string, { showtimes: unknown; ll_price_cents: number | null; ll_available: boolean | null }>();
       try {
         const dailyRows = await repo.getExperienceDailySignals(experienceIds, new Date(targetDateStr));
         for (const d of dailyRows) dailyByExp.set(d.experience_id, d);
       } catch (_err) {
         // proceed without per-date signals
+      }
+
+      // Pattern fallback for typical showtimes when per-date showtimes are absent
+      const patternsByExp = new Map<string, ShowTimePatternRow[]>();
+      try {
+        const patternRows = await repo.getShowTimePatterns(experienceIds, dow);
+        for (const p of patternRows) {
+          const list = patternsByExp.get(p.experience_id) ?? [];
+          list.push(p);
+          patternsByExp.set(p.experience_id, list);
+        }
+      } catch (_err) {
+        // proceed without pattern fallback
       }
 
       const result: Record<string, WaitSnapshot> = {};
@@ -196,15 +210,28 @@ export function createPredictionService(deps: PredictionServiceDeps): Prediction
         }
         
         const daily = dailyByExp.get(id);
-        const showtimes = Array.isArray(daily?.showtimes)
-          ? (daily!.showtimes as unknown[]).map(String)
-          : undefined;
+        const hasPerDateShowtimes = Array.isArray(daily?.showtimes) && daily.showtimes.length > 0;
+
+        let showtimes: readonly string[] | undefined;
+        let showtimesAreTypical: boolean | undefined;
+
+        if (hasPerDateShowtimes) {
+          showtimes = (daily!.showtimes as unknown[]).map(String);
+        } else {
+          const expPatterns = patternsByExp.get(id);
+          if (expPatterns && expPatterns.length > 0) {
+            expPatterns.sort((a, b) => a.start_minutes - b.start_minutes);
+            showtimes = expPatterns.map((p) => minutesFromMidnightETToISO(targetDateStr, p.start_minutes));
+            showtimesAreTypical = true;
+          }
+        }
         
         result[id] = {
           experienceId: id,
           isVirtualQueue: signal?.uses_virtual_queue ?? false,
           waits,
           ...(showtimes && showtimes.length > 0 ? { showtimes } : {}),
+          ...(showtimesAreTypical ? { showtimesAreTypical: true } : {}),
           ...(daily ? {
             lightningLane: {
               available: daily.ll_available ?? false,
@@ -240,6 +267,60 @@ export function createPredictionService(deps: PredictionServiceDeps): Prediction
       const openTime = s?.open_time ? s.open_time.toISOString() : defaultOpenTime;
       const closeTime = s?.close_time ? s.close_time.toISOString() : defaultCloseTime;
 
+      // Populate rideSignals for experiences in this park
+      let rideSignals: Array<{
+        experienceId: string;
+        reliability: number;
+        llSelloutMedianHour?: number;
+        showtimes?: readonly string[];
+      }> | undefined;
+
+      if (typeof repo.getExperiencesByPark === 'function') {
+        const exps = await repo.getExperiencesByPark(park);
+        const expIds = exps.map((e) => e.id);
+
+        if (expIds.length > 0) {
+          const signals = typeof repo.getExperienceSignals === 'function' ? await repo.getExperienceSignals(expIds) : [];
+          const signalsMap = new Map(signals.map((sig) => [sig.experience_id, sig]));
+
+          const dailyRows = typeof repo.getExperienceDailySignals === 'function' ? await repo.getExperienceDailySignals(expIds, new Date(dateStr)) : [];
+          const dailyMap = new Map(dailyRows.map((d) => [d.experience_id, d]));
+
+          const dow = getETDayOfWeek(dateStr);
+          const patternRows = typeof repo.getShowTimePatterns === 'function' ? await repo.getShowTimePatterns(expIds, dow) : [];
+          const patternMap = new Map<string, ShowTimePatternRow[]>();
+          for (const p of patternRows) {
+            const list = patternMap.get(p.experience_id) ?? [];
+            list.push(p);
+            patternMap.set(p.experience_id, list);
+          }
+
+          rideSignals = exps.map((e) => {
+            const sig = signalsMap.get(e.id);
+            const daily = dailyMap.get(e.id);
+            const reliability = 1 - (sig?.downtime_rate ?? 0);
+
+            let showtimes: readonly string[] | undefined;
+            if (Array.isArray(daily?.showtimes) && daily.showtimes.length > 0) {
+              showtimes = (daily.showtimes as unknown[]).map(String);
+            } else {
+              const expPatterns = patternMap.get(e.id);
+              if (expPatterns && expPatterns.length > 0) {
+                expPatterns.sort((a, b) => a.start_minutes - b.start_minutes);
+                showtimes = expPatterns.map((p) => minutesFromMidnightETToISO(dateStr, p.start_minutes));
+              }
+            }
+
+            return {
+              experienceId: e.id,
+              reliability,
+              ...(sig?.ll_sellout_median_hour != null ? { llSelloutMedianHour: sig.ll_sellout_median_hour } : {}),
+              ...(showtimes && showtimes.length > 0 ? { showtimes } : {}),
+            };
+          });
+        }
+      }
+
       return {
         date: dateStr,
         park: park as Park,
@@ -251,7 +332,8 @@ export function createPredictionService(deps: PredictionServiceDeps): Prediction
         earlyEntry: s?.early_entry ?? false,
         extendedEvening: s?.extended_evening ?? false,
         ticketedEvent: s?.ticketed_event ?? false,
-        ...(s?.ll_multipass_price_cents != null ? { llMultipassPriceCents: s.ll_multipass_price_cents } : {})
+        ...(s?.ll_multipass_price_cents != null ? { llMultipassPriceCents: s.ll_multipass_price_cents } : {}),
+        ...(rideSignals && rideSignals.length > 0 ? { rideSignals } : {}),
       };
     },
 

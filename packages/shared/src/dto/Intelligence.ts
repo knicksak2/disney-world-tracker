@@ -27,6 +27,7 @@ export interface WaitSnapshot {
   readonly experienceId: string;
   readonly isVirtualQueue: boolean;
   readonly showtimes?: readonly string[];
+  readonly showtimesAreTypical?: boolean;
   readonly lightningLane?: {
     readonly available: boolean;
     readonly priceCents?: number;

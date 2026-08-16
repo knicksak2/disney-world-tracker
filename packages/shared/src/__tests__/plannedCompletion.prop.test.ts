@@ -53,9 +53,10 @@ const parkArb: fc.Arbitrary<Park> = fc.constantFrom(...PARKS);
  */
 const plannedItemArb: fc.Arbitrary<PlannedItemDTO> = fc.record({
   id: fc.uuid(),
-  experienceId: experienceIdArb,
-  experienceName: fc.string({ maxLength: 40 }),
-  park: parkArb,
+  experienceId: fc.option(experienceIdArb, { nil: null }),
+  experienceName: fc.option(fc.string({ maxLength: 40 }), { nil: null }),
+  park: fc.option(parkArb, { nil: null }),
+  customTitle: fc.option(fc.string({ maxLength: 40 }), { nil: null }),
   addedByDisplayName: fc.oneof(fc.constant(''), fc.string({ maxLength: 30 })),
   plannedDate: fc.option(fc.constant('2026-10-01'), { nil: null }),
   plannedTime: fc.option(fc.constant('2026-10-01T10:00:00Z'), { nil: null }),
@@ -65,6 +66,10 @@ const plannedItemArb: fc.Arbitrary<PlannedItemDTO> = fc.record({
   priority: fc.integer({ min: 1, max: 3 }),
   itemType: fc.constantFrom('experience', 'break'),
   durationMinutes: fc.option(fc.integer({ min: 1, max: 120 }), { nil: null }),
+  windowStartMinutes: fc.option(fc.integer({ min: 0, max: 1440 }), { nil: null }),
+  windowEndMinutes: fc.option(fc.integer({ min: 0, max: 1440 }), { nil: null }),
+  mealPeriod: fc.option(fc.constantFrom('breakfast', 'lunch', 'dinner'), { nil: null }),
+  scheduledShowtime: fc.option(fc.constant('2026-10-01T14:00:00.000Z'), { nil: null }),
   predictedWaitMinutes: fc.option(fc.integer({ min: 0, max: 180 }), { nil: null }),
   travelFromPrev: fc.option(
     fc.record({
@@ -137,18 +142,18 @@ describe('Property 1: A Planned_Item is done exactly when its Experience was com
         for (const item of plannedItems) {
           const view = byId.get(item.id);
           expect(view).toBeDefined();
-          const expectedDone = completedIds.has(item.experienceId);
+          const expectedDone = item.experienceId !== null && completedIds.has(item.experienceId);
           expect(view!.completionState).toBe(expectedDone ? 'done' : 'not_done');
         }
 
         // The Done_Section is exactly the items whose Experience is completed.
         for (const view of presentation.doneSection) {
           expect(view.completionState).toBe('done');
-          expect(completedIds.has(view.experienceId)).toBe(true);
+          expect(view.experienceId !== null && completedIds.has(view.experienceId)).toBe(true);
         }
         for (const view of presentation.notDoneSection) {
           expect(view.completionState).toBe('not_done');
-          expect(completedIds.has(view.experienceId)).toBe(false);
+          expect(view.experienceId === null || !completedIds.has(view.experienceId)).toBe(true);
         }
 
         // completionAvailable is true whenever the completed set is known.
@@ -176,9 +181,9 @@ describe('Property 1: A Planned_Item is done exactly when its Experience was com
         completedSetArb,
         fc.nat(),
         (plannedItems, completedIds, pick) => {
-          // Choose an item that is currently not_done, if one exists.
+          // Choose an item that is currently not_done and has a valid experienceId, if one exists.
           const notDone = plannedItems.filter(
-            (item) => !completedIds.has(item.experienceId),
+            (item) => item.experienceId !== null && !completedIds.has(item.experienceId),
           );
           fc.pre(notDone.length > 0);
           const target = notDone[pick % notDone.length]!;
@@ -188,7 +193,7 @@ describe('Property 1: A Planned_Item is done exactly when its Experience was com
           // Add the target's Experience to the completed set (recompute).
           const after = derivePlannedListPresentation(
             plannedItems,
-            new Set([...completedIds, target.experienceId]),
+            new Set([...completedIds, target.experienceId!]),
           );
 
           // Every item sharing the target Experience flips to done; all others
@@ -317,10 +322,10 @@ describe('Property 2: The Planned_List is a total, attribution-preserving partit
 
         // Done_Section contains exactly the items whose Experience is completed.
         const expectedDoneIds = plannedItems
-          .filter((item) => completedIds.has(item.experienceId))
+          .filter((item) => item.experienceId !== null && completedIds.has(item.experienceId))
           .map((item) => item.id);
         const expectedNotDoneIds = plannedItems
-          .filter((item) => !completedIds.has(item.experienceId))
+          .filter((item) => item.experienceId === null || !completedIds.has(item.experienceId))
           .map((item) => item.id);
 
         expect([...presentation.doneSection.map((v) => v.id)].sort()).toEqual(
@@ -393,7 +398,7 @@ describe('Property 4: Planned_List_Progress is a clamped completed-of-total coun
         const { progress } = derivePlannedListPresentation(plannedItems, completedIds);
 
         const expectedCompleted = plannedItems.filter((item) =>
-          completedIds.has(item.experienceId),
+          item.experienceId !== null && completedIds.has(item.experienceId),
         ).length;
 
         // total counts every Planned_Item once regardless of completion state.
@@ -467,7 +472,7 @@ describe('Property 4: Planned_List_Progress is a clamped completed-of-total coun
         // items whose Experience is completed.
         const distinctCompletedItemIds = new Set(
           plannedItems
-            .filter((item) => setTwice.has(item.experienceId))
+            .filter((item) => item.experienceId !== null && setTwice.has(item.experienceId))
             .map((item) => item.id),
         );
         expect(twice.completed).toBe(distinctCompletedItemIds.size);
@@ -495,12 +500,12 @@ describe('Property 4: Planned_List_Progress is a clamped completed-of-total coun
           // Case A: adding an Experience already in the completed set changes
           // nothing (idempotent — no newly completed item).
           const alreadyCompleted = plannedItems.find((item) =>
-            completedIds.has(item.experienceId),
+            item.experienceId !== null && completedIds.has(item.experienceId),
           );
           if (alreadyCompleted) {
             const afterSame = derivePlannedListPresentation(
               plannedItems,
-              new Set([...completedIds, alreadyCompleted.experienceId]),
+              new Set([...completedIds, alreadyCompleted.experienceId!]),
             ).progress.completed;
             expect(afterSame).toBe(before);
           }
@@ -509,7 +514,7 @@ describe('Property 4: Planned_List_Progress is a clamped completed-of-total coun
           // not_done item, where exactly one Planned_Item references it, raises
           // completed by exactly one.
           const notDone = plannedItems.filter(
-            (item) => !completedIds.has(item.experienceId),
+            (item) => item.experienceId !== null && !completedIds.has(item.experienceId),
           );
           fc.pre(notDone.length > 0);
           const target = notDone[pick % notDone.length]!;
@@ -520,7 +525,7 @@ describe('Property 4: Planned_List_Progress is a clamped completed-of-total coun
 
           const afterAdd = derivePlannedListPresentation(
             plannedItems,
-            new Set([...completedIds, target.experienceId]),
+            new Set([...completedIds, target.experienceId!]),
           ).progress.completed;
           expect(afterAdd - before).toBe(1);
         },

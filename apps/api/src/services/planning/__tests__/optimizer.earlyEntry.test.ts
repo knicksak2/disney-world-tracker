@@ -127,7 +127,9 @@ describe('optimizer early-entry availability (R3.12)', () => {
       fc.property(fc.uniqueArray(itemArb, { minLength: 1, maxLength: 6, selector: (x) => x.id }), (specs) => {
         const items = specs.map((s) => makeItem(s.id, s.ee));
         const snaps: Record<string, WaitSnapshot> = {};
-        for (const it of items) snaps[it.experienceId] = snapshotWithWait(it.experienceId, 30);
+        for (const it of items) {
+          if (it.experienceId) snaps[it.experienceId] = snapshotWithWait(it.experienceId, 30);
+        }
 
         const res = optimize(baseInput(items, snaps));
         const eeById = new Map(specs.map((s) => [s.id, s.ee]));

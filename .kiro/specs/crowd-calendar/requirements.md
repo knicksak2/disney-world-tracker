@@ -173,3 +173,16 @@ This feature owns data collection, the wait-time model, the crowd index and fore
 9. THE wait-insights surface SHALL lead with an actionable best-time-to-ride recommendation, present decision helpers comparing standby versus Lightning Lane (estimated time saved vs. price) and single-rider (estimated time saved), and offer to add the Experience to a Trip's Schedule at its recommended time.
 10. THE wait-insights surface MAY offer a wait-drop alert (notify when the predicted/live wait falls below a threshold), reusing the app's existing notification mechanism where available.
 11. THE best-time-to-ride recommendation SHALL scale its certainty to the underlying data confidence (bucket sample count and wait volatility): a definitive, prescriptive verdict when confidence is high (e.g., "Ride after 8 PM"), graded hedging ("usually" / "typically") when moderate, and a soft, observational pattern statement when low (e.g., "Evenings are usually calmer"). It SHALL always give the best available guidance and SHALL hedge the confidence of the *claim* without disparaging the app — no doubt-inducing or apologetic copy (e.g., "still learning", "not enough data"); a low-confidence state MAY show a small neutral "early estimate" indicator. THE forecast chart SHALL remain visible as evidence at every confidence level, carrying any genuine uncertainty rather than the headline.
+
+### Requirement 12: Historical Showtime Patterns and Typical Showtimes
+
+**User Story:** As a Trip_Member planning far in advance, I want the app to predict typical showtimes for shows and parades when future schedule feeds are not yet published, so that touring plans can slot shows accurately rather than falling back to standby wait queues.
+
+#### Acceptance Criteria
+
+1. THE System SHALL maintain a `show_time_patterns` store containing derived typical showtimes by `(experience_id, day_of_week, start_minutes)` where `day_of_week` uses the 0–6 ET-derived convention (`0 = Sunday`, `6 = Saturday`), `start_minutes` is minutes from midnight ET, and records `frequency` (proportion of observed matching dates that ran this showtime) and `sample_count`.
+2. THE `derivedStatsService.runDailyRecompute` process SHALL recompute `show_time_patterns` across a trailing 180-day window (`SHOWTIME_PATTERN_WINDOW_DAYS = 180`) from `experience_daily_signals.showtimes`, emitting a slot if and only if `sample_count >= SHOWTIME_PATTERN_MIN_SAMPLES` (default 3) AND `frequency >= SHOWTIME_PATTERN_MIN_FREQUENCY` (default 0.50).
+3. WHERE no per-date schedule signal showtimes exist for an Experience on a requested date (e.g. far-future dates), THE `Prediction_Service` (`getDaySnapshot`) SHALL populate `showtimes` from `show_time_patterns` and SHALL set `showtimesAreTypical: true` on the `WaitSnapshot`.
+4. WHERE per-date schedule feed showtimes DO exist for an Experience on the requested date, they SHALL take precedence over derived patterns, and `showtimesAreTypical` SHALL NOT be set (or set to `false`).
+5. All showtime pattern stores SHALL remain bounded per Requirement 3.6.
+

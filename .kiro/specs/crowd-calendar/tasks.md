@@ -103,6 +103,18 @@ Implementation is **TypeScript**, reusing existing infrastructure: the `Live_Ser
   - [ ] 10.4 (Optional) Seasonal-prior enrichment — extend `seasonalPrior` (by rule, per year) to lift genuinely busy windows the seed can't reach beyond its ~2.5-year span (e.g. October Food & Wine / Halloween party season, Jersey Week). Secondary to 10.1–10.3, which carry most of this once comparables are fixed.
     - _Requirements: 2.2_
 
+- [x] 11. Historical showtime patterns derivation and typical showtimes fallback
+  - [x] 11.1 Migration `0029_show_time_patterns.sql` + `migration0029.test.ts` & recompute `show_time_patterns` in `derivedStatsService.runDailyRecompute` (`apps/api/src/services/intelligence/derivedStatsService.ts`)
+    - Create `show_time_patterns(experience_id, day_of_week, start_minutes, frequency, sample_count)`.
+    - Query `experience_daily_signals.showtimes` over trailing 180 days; convert canonical ISO showtime instants to minutes-from-midnight ET; bucket start times to nearest 5 minutes; group by `(experience_id, day_of_week, start_minutes)`; emit slots where `sample_count >= 3` and `frequency >= 0.5`. Dedup conflict key before upsert.
+    - Unit tests in `derivedStatsService.test.ts` and fast-check Property 12 (`Feature: crowd-calendar, Property 12`).
+    - _Requirements: 12.1, 12.2_
+  - [x] 11.2 Fallback to typical showtimes in `getDaySnapshot` (`apps/api/src/services/intelligence/predictionService.ts`)
+    - Add `showtimesAreTypical?: boolean` to `WaitSnapshot` in `@dwt/shared`.
+    - When `daily?.showtimes` is absent/empty, query `repo.getShowTimePatterns(experienceIds, dow)` and format ISO strings on the requested date, setting `showtimesAreTypical: true` on `WaitSnapshot`.
+    - Integration test in `predictionService.test.ts`.
+    - _Requirements: 12.3, 12.4_
+
 ## Notes
 
 - Test-only tasks (2.3, 4.4, 5.3, 6.3, 8.1, 9.2, 9.4, 10.3) are optional for a faster MVP; core tasks are never optional.
@@ -133,7 +145,9 @@ Implementation is **TypeScript**, reusing existing infrastructure: the `Live_Ser
     { "id": 10, "tasks": ["9.4", "9.5"] },
     { "id": 11, "tasks": ["10.1"] },
     { "id": 12, "tasks": ["10.2", "10.3"] },
-    { "id": 13, "tasks": ["10.4"] }
+    { "id": 13, "tasks": ["10.4"] },
+    { "id": 14, "tasks": ["11.1", "11.2"] }
   ]
 }
 ```
+

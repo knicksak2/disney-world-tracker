@@ -63,7 +63,7 @@ import type {
   TripSummaryDTO,
   RodeWithTagState,
 } from '@dwt/shared';
-import { tripReactionValueSchema } from '@dwt/shared';
+import { MEAL_WINDOWS, tripReactionValueSchema } from '@dwt/shared';
 import type { PoolClient } from 'pg';
 
 import type { DbPool } from '../../db/pool.js';
@@ -281,6 +281,7 @@ export interface PlannedItemTimeUpdate {
   readonly plannedTime: string;
   readonly predictedWaitMinutes?: number | null;
   readonly travelFromPrev?: { readonly kind: 'walk' | 'park_hop'; readonly minutes: number } | null;
+  readonly scheduledShowtime?: string | null;
 }
 
 /** Persistence surface returned by {@link createTripRepo}. */
@@ -889,18 +890,24 @@ type Queryable = Pick<PoolClient, 'query'>;
  */
 interface PlannedItemRow {
   id: string;
-  experience_id: string;
-  experience_name: string;
-  park: Park;
+  experience_id: string | null;
+  experience_name: string | null;
+  park: Park | null;
+  experience_meal_periods?: unknown;
   added_by_display_name: string;
-  planned_date: string | null;
-  planned_time: string | null;
+  custom_title: string | null;
+  planned_date: string | Date | null;
+  planned_time: string | Date | null;
   is_fixed: boolean;
   is_lightning_lane: boolean;
   use_single_rider: boolean;
   priority: number;
   item_type: 'experience' | 'break';
   duration_minutes: number | null;
+  window_start_minutes: number | null;
+  window_end_minutes: number | null;
+  meal_period: import('@dwt/shared').MealPeriod | null;
+  scheduled_showtime: Date | string | null;
   predicted_wait_minutes: number | null;
   travel_from_prev_minutes: number | null;
   travel_from_prev_kind: 'walk' | 'park_hop' | null;
@@ -2053,16 +2060,25 @@ async function addPlannedItem(
     // race-safe against the 500-item cap (R9.5).
     await client.query(`SELECT 1 FROM trips WHERE id = $1 FOR UPDATE`, [tripId]);
 
-    // R9.4: the Experience must exist in the Catalog.
-    const experience = await client.query(
-      `SELECT 1 FROM experiences WHERE id = $1`,
-      [input.experienceId],
-    );
-    if ((experience.rowCount ?? 0) === 0) {
+    // R9.4: If an experienceId is provided, it must exist in the Catalog.
+    if (input.experienceId != null) {
+      const experience = await client.query(
+        `SELECT 1 FROM experiences WHERE id = $1`,
+        [input.experienceId],
+      );
+      if ((experience.rowCount ?? 0) === 0) {
+        await client.query('ROLLBACK');
+        throw new AppError(
+          'trip_validation_failed',
+          'That experience does not exist in the catalog.',
+          { field: 'experienceId' },
+        );
+      }
+    } else if (input.itemType !== 'break') {
       await client.query('ROLLBACK');
       throw new AppError(
         'trip_validation_failed',
-        'That experience does not exist in the catalog.',
+        "Unlocated items without an experienceId must have itemType 'break'",
         { field: 'experienceId' },
       );
     }
@@ -2086,11 +2102,38 @@ async function addPlannedItem(
       );
     }
 
+    // Timing mutual exclusion on add:
+    let plannedTime: string | null = null;
+    let isFixed = false;
+    let windowStartMinutes: number | null = null;
+    let windowEndMinutes: number | null = null;
+    let mealPeriod: string | null = null;
+
+    if (input.plannedTime != null && (input.isFixed === true || (input.isFixed === undefined && !input.isLightningLane))) {
+      plannedTime = input.plannedTime;
+      isFixed = true;
+    } else if (input.isLightningLane && input.plannedTime != null) {
+      plannedTime = input.plannedTime;
+      isFixed = false;
+    } else if (input.windowStartMinutes != null && input.windowEndMinutes != null) {
+      windowStartMinutes = input.windowStartMinutes;
+      windowEndMinutes = input.windowEndMinutes;
+      mealPeriod = input.mealPeriod ?? null;
+    } else if (input.mealPeriod != null) {
+      mealPeriod = input.mealPeriod;
+      const preset = MEAL_WINDOWS[input.mealPeriod as keyof typeof MEAL_WINDOWS];
+      if (preset) {
+        windowStartMinutes = preset.startMinutes;
+        windowEndMinutes = preset.endMinutes;
+      }
+    }
+
     const insert = await client.query<{ id: string }>(
       `INSERT INTO planned_items (
          trip_id,
          experience_id,
          added_by,
+         custom_title,
          planned_date,
          planned_time,
          is_fixed,
@@ -2098,22 +2141,29 @@ async function addPlannedItem(
          use_single_rider,
          priority,
          item_type,
-         duration_minutes
+         duration_minutes,
+         window_start_minutes,
+         window_end_minutes,
+         meal_period
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
        RETURNING id`,
       [
         tripId,
-        input.experienceId,
+        input.experienceId ?? null,
         adderId,
+        input.customTitle ?? null,
         input.plannedDate ?? null,
-        input.plannedTime ?? null,
-        input.isFixed ?? false,
+        plannedTime,
+        isFixed,
         input.isLightningLane ?? false,
         input.useSingleRider ?? false,
         input.priority ?? 2,
         input.itemType ?? 'experience',
         input.durationMinutes ?? null,
+        windowStartMinutes,
+        windowEndMinutes,
+        mealPeriod,
       ],
     );
     const itemId = insert.rows[0]?.id;
@@ -2152,34 +2202,46 @@ async function editPlannedItem(
   const client = await ctx.pool.connect();
   try {
     await client.query('BEGIN');
-    const existing = await client.query(
-      'SELECT id FROM planned_items WHERE id = $1 AND trip_id = $2 FOR UPDATE',
+    const existing = await client.query<{
+      id: string;
+      experience_id: string | null;
+      is_lightning_lane: boolean;
+      is_fixed: boolean;
+      planned_time: string | null;
+      window_start_minutes: number | null;
+      window_end_minutes: number | null;
+      meal_period: string | null;
+    }>(
+      'SELECT id, experience_id, is_lightning_lane, is_fixed, planned_time, window_start_minutes, window_end_minutes, meal_period FROM planned_items WHERE id = $1 AND trip_id = $2 FOR UPDATE',
       [itemId, tripId],
     );
     if ((existing.rowCount ?? 0) === 0) {
       await client.query('ROLLBACK');
       throw new AppError('trip_not_found', 'Item not found');
     }
+    const currentRow = existing.rows[0]!;
+
+    // Unlocated items must stay 'break'
+    if (currentRow.experience_id == null && input.itemType !== undefined && input.itemType !== 'break') {
+      await client.query('ROLLBACK');
+      throw new AppError(
+        'trip_validation_failed',
+        "Unlocated items cannot change itemType away from 'break'",
+        { field: 'itemType' },
+      );
+    }
 
     const updates: string[] = [];
     const values: any[] = [itemId, tripId];
     let pos = 3;
 
+    if (input.customTitle !== undefined) {
+      updates.push(`custom_title = $${pos++}`);
+      values.push(input.customTitle ?? null);
+    }
     if (input.plannedDate !== undefined) {
       updates.push(`planned_date = $${pos++}`);
       values.push(input.plannedDate ?? null);
-    }
-    if (input.plannedTime !== undefined) {
-      updates.push(`planned_time = $${pos++}`);
-      values.push(input.plannedTime ?? null);
-    }
-    if (input.isFixed !== undefined) {
-      updates.push(`is_fixed = $${pos++}`);
-      values.push(input.isFixed ?? false);
-    }
-    if (input.isLightningLane !== undefined) {
-      updates.push(`is_lightning_lane = $${pos++}`);
-      values.push(input.isLightningLane ?? false);
     }
     if (input.useSingleRider !== undefined) {
       updates.push(`use_single_rider = $${pos++}`);
@@ -2197,6 +2259,104 @@ async function editPlannedItem(
       updates.push(`duration_minutes = $${pos++}`);
       values.push(input.durationMinutes ?? null);
     }
+    if (input.isLightningLane !== undefined) {
+      updates.push(`is_lightning_lane = $${pos++}`);
+      values.push(input.isLightningLane ?? false);
+    }
+
+    // Mutual-exclusion write rules gated on PRESENCE of timing fields in input
+    const hasTimingField =
+      'plannedTime' in input ||
+      'isFixed' in input ||
+      'windowStartMinutes' in input ||
+      'windowEndMinutes' in input ||
+      'mealPeriod' in input;
+
+    if (hasTimingField) {
+      const hasPlannedTime = input.plannedTime !== undefined && input.plannedTime !== null;
+      const isLL = input.isLightningLane !== undefined ? input.isLightningLane : currentRow.is_lightning_lane;
+      const hasWindow = input.windowStartMinutes != null && input.windowEndMinutes != null;
+
+      if (hasPlannedTime && (input.isFixed === true || (input.isFixed === undefined && !isLL))) {
+        // Exact Time Mode
+        updates.push(`planned_time = $${pos++}`);
+        values.push(input.plannedTime);
+        updates.push(`is_fixed = $${pos++}`);
+        values.push(true);
+        updates.push('window_start_minutes = NULL');
+        updates.push('window_end_minutes = NULL');
+        updates.push('meal_period = NULL');
+      } else if (hasPlannedTime && isLL) {
+        // Lightning Lane Mode
+        updates.push(`planned_time = $${pos++}`);
+        values.push(input.plannedTime);
+        updates.push(`is_fixed = $${pos++}`);
+        values.push(false);
+        updates.push('window_start_minutes = NULL');
+        updates.push('window_end_minutes = NULL');
+        updates.push('meal_period = NULL');
+      } else if (hasWindow) {
+        // Soft Window Mode
+        updates.push(`window_start_minutes = $${pos++}`);
+        values.push(input.windowStartMinutes);
+        updates.push(`window_end_minutes = $${pos++}`);
+        values.push(input.windowEndMinutes);
+        updates.push(`meal_period = $${pos++}`);
+        values.push(input.mealPeriod ?? null);
+        updates.push('planned_time = NULL');
+        updates.push('is_fixed = FALSE');
+      } else if (
+        input.mealPeriod != null &&
+        (input.windowStartMinutes === null || input.windowStartMinutes === undefined) &&
+        (input.windowEndMinutes === null || input.windowEndMinutes === undefined)
+      ) {
+        // Meal period preset derivation or flexible snack
+        const preset = MEAL_WINDOWS[input.mealPeriod as keyof typeof MEAL_WINDOWS];
+        updates.push(`meal_period = $${pos++}`);
+        values.push(input.mealPeriod);
+        if (preset) {
+          updates.push(`window_start_minutes = $${pos++}`);
+          values.push(preset.startMinutes);
+          updates.push(`window_end_minutes = $${pos++}`);
+          values.push(preset.endMinutes);
+        } else {
+          updates.push('window_start_minutes = NULL');
+          updates.push('window_end_minutes = NULL');
+        }
+        updates.push('planned_time = NULL');
+        updates.push('is_fixed = FALSE');
+      } else if (
+        input.windowStartMinutes === null &&
+        input.windowEndMinutes === null &&
+        !('plannedTime' in input) &&
+        !('isFixed' in input)
+      ) {
+        // Selective Window Clear: clear window, leave exact time intact
+        updates.push('window_start_minutes = NULL');
+        updates.push('window_end_minutes = NULL');
+        updates.push('meal_period = NULL');
+      } else if (
+        (input.plannedTime === null || input.isFixed === false) &&
+        !('windowStartMinutes' in input) &&
+        !('windowEndMinutes' in input) &&
+        !('mealPeriod' in input)
+      ) {
+        // Selective Exact Time Clear: clear exact time, leave window intact
+        updates.push('planned_time = NULL');
+        updates.push('is_fixed = FALSE');
+      } else {
+        // Explicit Any Time Clear or general clear
+        if (input.plannedTime !== undefined || input.isFixed !== undefined) {
+          updates.push('planned_time = NULL');
+          updates.push('is_fixed = FALSE');
+        }
+        if (input.windowStartMinutes !== undefined || input.windowEndMinutes !== undefined || input.mealPeriod !== undefined) {
+          updates.push('window_start_minutes = NULL');
+          updates.push('window_end_minutes = NULL');
+          updates.push('meal_period = NULL');
+        }
+      }
+    }
 
     if (updates.length > 0) {
       // Every editable field is an optimizer input, so a manual edit makes this
@@ -2205,6 +2365,7 @@ async function editPlannedItem(
       updates.push('predicted_wait_minutes = NULL');
       updates.push('travel_from_prev_minutes = NULL');
       updates.push('travel_from_prev_kind = NULL');
+      updates.push('scheduled_showtime = NULL');
       updates.push('optimized_at = NULL');
       await client.query(
         `UPDATE planned_items SET ${updates.join(', ')} WHERE id = $1 AND trip_id = $2`,
@@ -2245,13 +2406,15 @@ async function updatePlannedItemTimes(
                 predicted_wait_minutes = $2,
                 travel_from_prev_minutes = $3,
                 travel_from_prev_kind = $4,
+                scheduled_showtime = $5,
                 optimized_at = now()
-          WHERE id = $5 AND trip_id = $6`,
+          WHERE id = $6 AND trip_id = $7`,
         [
           u.plannedTime,
           u.predictedWaitMinutes ?? null,
           u.travelFromPrev?.minutes ?? null,
           u.travelFromPrev?.kind ?? null,
+          u.scheduledShowtime ?? null,
           u.itemId,
           tripId,
         ],
@@ -2344,7 +2507,9 @@ async function listPlannedItems(
             pi.experience_id,
             e.name          AS experience_name,
             e.park          AS park,
+            e.meal_periods  AS experience_meal_periods,
             p.display_name  AS added_by_display_name,
+            pi.custom_title,
             pi.planned_date,
             pi.planned_time,
             pi.is_fixed,
@@ -2353,12 +2518,16 @@ async function listPlannedItems(
             pi.priority,
             pi.item_type,
             pi.duration_minutes,
+            pi.window_start_minutes,
+            pi.window_end_minutes,
+            pi.meal_period,
+            pi.scheduled_showtime,
             pi.predicted_wait_minutes,
             pi.travel_from_prev_minutes,
             pi.travel_from_prev_kind,
             pi.optimized_at
        FROM planned_items pi
-       JOIN experiences e ON e.id = pi.experience_id
+  LEFT JOIN experiences e ON e.id = pi.experience_id
        JOIN profiles    p ON p.user_id = pi.added_by
       WHERE pi.trip_id = $1
       ORDER BY pi.created_at ASC, pi.id ASC`,
@@ -3601,7 +3770,9 @@ async function selectPlannedItem(
             pi.experience_id,
             e.name          AS experience_name,
             e.park          AS park,
+            e.meal_periods  AS experience_meal_periods,
             p.display_name  AS added_by_display_name,
+            pi.custom_title,
             pi.planned_date,
             pi.planned_time,
             pi.is_fixed,
@@ -3610,12 +3781,16 @@ async function selectPlannedItem(
             pi.priority,
             pi.item_type,
             pi.duration_minutes,
+            pi.window_start_minutes,
+            pi.window_end_minutes,
+            pi.meal_period,
+            pi.scheduled_showtime,
             pi.predicted_wait_minutes,
             pi.travel_from_prev_minutes,
             pi.travel_from_prev_kind,
             pi.optimized_at
        FROM planned_items pi
-       JOIN experiences e ON e.id = pi.experience_id
+  LEFT JOIN experiences e ON e.id = pi.experience_id
        JOIN profiles    p ON p.user_id = pi.added_by
       WHERE pi.id = $1`,
     [itemId],
@@ -3624,22 +3799,73 @@ async function selectPlannedItem(
   return row ? rowToPlannedItemDto(row) : null;
 }
 
+export function formatCalendarDate(val: string | Date | null | undefined): string | null {
+  if (!val) return null;
+  if (typeof val === 'string') {
+    return val.includes('T') ? val.split('T')[0]! : val;
+  }
+  if (val instanceof Date) {
+    // 1. If UTC midnight (e.g. pg-mem), read UTC components
+    if (val.getUTCHours() === 0 && val.getUTCMinutes() === 0 && val.getUTCSeconds() === 0) {
+      const y = val.getUTCFullYear();
+      const m = String(val.getUTCMonth() + 1).padStart(2, '0');
+      const d = String(val.getUTCDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+    // 2. If local midnight (e.g. postgres-date on non-UTC host), read local components
+    const y = val.getFullYear();
+    const m = String(val.getMonth() + 1).padStart(2, '0');
+    const d = String(val.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+  return String(val);
+}
+
 /** Project a `planned_items` join row to the shared `PlannedItemDTO` (R9.9). */
 function rowToPlannedItemDto(row: PlannedItemRow): PlannedItemDTO {
+  let servedMealPeriods: readonly string[] | undefined;
+  if (row.experience_meal_periods) {
+    const raw =
+      typeof row.experience_meal_periods === 'string'
+        ? JSON.parse(row.experience_meal_periods)
+        : row.experience_meal_periods;
+    if (Array.isArray(raw) && raw.length > 0) {
+      servedMealPeriods = raw
+        .map((m: any) => (typeof m?.type === 'string' ? m.type.toLowerCase() : ''))
+        .filter(Boolean);
+    }
+  }
+
   return {
     id: row.id,
-    experienceId: row.experience_id,
-    experienceName: row.experience_name,
-    park: row.park,
+    experienceId: row.experience_id ?? null,
+    experienceName: row.experience_name ?? null,
+    park: row.park ?? null,
+    customTitle: row.custom_title ?? null,
     addedByDisplayName: row.added_by_display_name,
-    plannedDate: row.planned_date,
-    plannedTime: row.planned_time,
+    plannedDate: formatCalendarDate(row.planned_date),
+    plannedTime:
+      row.planned_time == null
+        ? null
+        : row.planned_time instanceof Date
+          ? row.planned_time.toISOString()
+          : new Date(row.planned_time).toISOString(),
     isFixed: row.is_fixed,
     isLightningLane: row.is_lightning_lane,
     useSingleRider: row.use_single_rider,
     priority: row.priority,
     itemType: row.item_type,
     durationMinutes: row.duration_minutes,
+    windowStartMinutes: row.window_start_minutes != null ? Number(row.window_start_minutes) : null,
+    windowEndMinutes: row.window_end_minutes != null ? Number(row.window_end_minutes) : null,
+    mealPeriod: row.meal_period ?? null,
+    scheduledShowtime:
+      row.scheduled_showtime == null
+        ? null
+        : row.scheduled_showtime instanceof Date
+          ? row.scheduled_showtime.toISOString()
+          : new Date(row.scheduled_showtime).toISOString(),
+    ...(servedMealPeriods && servedMealPeriods.length > 0 ? { servedMealPeriods } : {}),
     predictedWaitMinutes: row.predicted_wait_minutes,
     travelFromPrev:
       row.travel_from_prev_minutes != null && row.travel_from_prev_kind != null

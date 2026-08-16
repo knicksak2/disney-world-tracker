@@ -1,10 +1,13 @@
-import type { Park, PlannedItemType, WalkingSpeed, WaitSnapshot } from '@dwt/shared';
+import type { ExperienceCategory, Park, PlannedItemType, WalkingSpeed, WaitSnapshot } from '@dwt/shared';
 import { travelFromPrev, type Coordinates } from './travel.js';
 
 export interface OptimizeInputItem {
   readonly id: string;
-  readonly experienceId: string;
-  readonly park: Park;
+  readonly experienceId: string | null;
+  readonly park: Park | null;
+  readonly category?: ExperienceCategory | null;
+  readonly subType?: string | null;
+  readonly catalogDurationMinutes?: number | null;
   readonly coords: Coordinates | null;
   readonly plannedTime: string | null;
   readonly isFixed: boolean;
@@ -13,6 +16,9 @@ export interface OptimizeInputItem {
   readonly priority: number;
   readonly itemType: PlannedItemType;
   readonly durationMinutes: number | null;
+  readonly windowStartMinutes?: number | null;
+  readonly windowEndMinutes?: number | null;
+  readonly mealPeriod?: string | null;
   /**
    * Whether this Experience operates during the park's Early Entry window
    * (sourced from `experiences.operates_during_early_entry`; R3.12). `true`
@@ -52,6 +58,7 @@ export interface OptimizedItem {
   readonly plannedItemId: string;
   readonly suggestedArrival: string;
   readonly predictedWaitMinutes: number;
+  readonly scheduledShowtime?: string | null;
   readonly travelFromPrev: {
     readonly kind: 'walk' | 'park_hop';
     readonly minutes: number;
@@ -70,10 +77,35 @@ const DEFAULT_START_HOUR = 9;
 const DEFAULT_END_HOUR = 21;
 const EARLY_ENTRY_MINUTES = 30;
 const LL_WAIT_MINS = 10;
-const DEFAULT_RIDE_DUR = 15;
-const DEFAULT_BREAK_DUR = 60;
+export const DEFAULT_RIDE_DUR = 15;
+export const DEFAULT_BREAK_DUR = 60;
+export const DEFAULT_SHOW_DURATION_MIN = 30;
 const ROPE_DROP_WINDOW_MINUTES = 30;
 const ROPE_DROP_WALKON_MINS = 5;
+
+export function resolveDefaultDuration(item: OptimizeInputItem): number {
+  // 1. User override always wins
+  if (item.durationMinutes != null) return item.durationMinutes;
+
+  // 2. Break items default to 60 minutes
+  if (item.itemType === 'break') return DEFAULT_BREAK_DUR;
+
+  // 3. Dining items derive default from sub_type
+  if (item.category === 'Restaurant') {
+    const sub = (item.subType ?? '').toLowerCase();
+    if (sub.includes('quick service') || sub.includes('counter')) return 30;
+    if (sub.includes('signature') || sub.includes('fine')) return 90;
+    return 60; // Table Service / default restaurant
+  }
+
+  // 4. Show and Parade items derive from catalog duration if present, else default show duration
+  if (item.category === 'Show' || item.category === 'Parade') {
+    return item.catalogDurationMinutes ?? DEFAULT_SHOW_DURATION_MIN;
+  }
+
+  // 5. Rides/attractions default to 15 minutes (covers ride length + load/unload)
+  return DEFAULT_RIDE_DUR;
+}
 
 export function ropeDropAdjust(rawWait: number, arrivalMins: number, dayStartMins: number): number {
   const minutesIntoWindow = arrivalMins - dayStartMins;
@@ -128,12 +160,27 @@ function toISOString(dateString: string, minutesFromMidnightET: number): string 
   return new Date(targetUTC).toISOString();
 }
 
-function parseMinutesFromMidnightET(dateString: string, isoString: string): number {
-  const targetTime = new Date(isoString).getTime();
+function parseMinutesFromMidnightET(dateString: string, isoStr: string): number {
+  const targetTime = new Date(isoStr).getTime();
   const offsetMins = getETOffsetMinutes(dateString);
   const d = new Date(`${dateString}T00:00:00Z`);
   const midnightET_UTC = d.getTime() - offsetMins * 60000;
   return Math.round((targetTime - midnightET_UTC) / 60000);
+}
+
+export const SHOW_ARRIVAL_BUFFER_MIN = 15;
+export const SHOW_MISS_PENALTY_PER_MIN = 1000;
+
+export interface WaitAndDurationResult {
+  readonly wait: number;
+  readonly dur: number;
+  readonly isVQ: boolean;
+  readonly isShow: boolean;
+  readonly isSingleRider: boolean;
+  readonly slotArrival?: number;
+  readonly scheduledShowtimeMinutes?: number;
+  readonly missMinutes?: number;
+  readonly showtimesUnavailable?: boolean;
 }
 
 function getWaitAndDuration(
@@ -142,14 +189,19 @@ function getWaitAndDuration(
   date: string,
   snapshots: Record<string, WaitSnapshot>,
   dayStartMins: number,
-) {
-  let dur = item.durationMinutes ?? (item.itemType === 'break' ? DEFAULT_BREAK_DUR : DEFAULT_RIDE_DUR);
+): WaitAndDurationResult {
+  const dur = resolveDefaultDuration(item);
+
+  // Dining and Break items have ZERO queue wait. Cost is duration only (R3.14).
+  if (item.itemType === 'break' || item.category === 'Restaurant') {
+    return { wait: 0, dur, isVQ: false, isShow: false, isSingleRider: false };
+  }
 
   if (item.isLightningLane) {
     return { wait: LL_WAIT_MINS, dur, isVQ: false, isShow: false, isSingleRider: false };
   }
 
-  const snap = snapshots[item.experienceId];
+  const snap = item.experienceId ? snapshots[item.experienceId] : undefined;
   if (!snap) {
     return { wait: 30, dur, isVQ: false, isShow: false, isSingleRider: false };
   }
@@ -160,19 +212,53 @@ function getWaitAndDuration(
 
   if (snap.showtimes && snap.showtimes.length > 0) {
     let nextShow = Infinity;
+    let lastDoors = -Infinity;
     for (const st of snap.showtimes) {
       const showMins = parseMinutesFromMidnightET(date, st);
-      if (showMins >= arrivalMins && showMins < nextShow) {
+      const doorsMins = showMins - SHOW_ARRIVAL_BUFFER_MIN;
+      if (doorsMins > lastDoors) {
+        lastDoors = doorsMins;
+      }
+      if (doorsMins >= arrivalMins && showMins < nextShow) {
         nextShow = showMins;
       }
     }
     if (nextShow !== Infinity) {
-      return { wait: nextShow - arrivalMins, dur, isVQ: false, isShow: true, isSingleRider: false };
+      const slotArrival = nextShow - SHOW_ARRIVAL_BUFFER_MIN;
+      return {
+        wait: SHOW_ARRIVAL_BUFFER_MIN,
+        dur,
+        isVQ: false,
+        isShow: true,
+        isSingleRider: false,
+        slotArrival,
+        scheduledShowtimeMinutes: nextShow,
+      };
+    } else {
+      const missMinutes = Math.max(0, arrivalMins - lastDoors);
+      return {
+        wait: SHOW_ARRIVAL_BUFFER_MIN,
+        dur,
+        isVQ: false,
+        isShow: true,
+        isSingleRider: false,
+        missMinutes,
+        showtimesUnavailable: true,
+      };
     }
+  } else if (item.category === 'Show' || item.category === 'Parade') {
+    return {
+      wait: 0,
+      dur,
+      isVQ: false,
+      isShow: true,
+      isSingleRider: false,
+      showtimesUnavailable: true,
+    };
   }
 
   const hour = Math.floor(arrivalMins / 60);
-  const hourEntry = snap.waits.find((w) => w.hour === hour) || snap.waits[snap.waits.length - 1];
+  const hourEntry = snap.waits.find((w: { hour: number }) => w.hour === hour) || snap.waits[snap.waits.length - 1];
 
   let wait = 30;
   let isSingleRider = false;
@@ -197,7 +283,7 @@ function simulate(
   const {
     date,
     snapshots,
-    walkingSpeed,
+    walkingSpeed = 'moderate',
     earlyEntryEligible,
     useExtendedEvening,
     hasAfterHoursTicket,
@@ -231,9 +317,10 @@ function simulate(
   }
 
   for (const item of sequence) {
-    const travel = prevItem
-      ? travelFromPrev(prevItem.coords, prevItem.park, item.coords, item.park, walkingSpeed)
-      : null;
+    const travel =
+      prevItem && prevItem.park && item.park
+        ? travelFromPrev(prevItem.coords, prevItem.park, item.coords, item.park, walkingSpeed)
+        : null;
     const travelMins = travel ? travel.minutes : 0;
 
     let arrival = currentMins + travelMins;
@@ -262,6 +349,15 @@ function simulate(
         penalty += (arrival - llMaxArrival) * 10000;
         warnings.add('expired_lightning_lane');
       }
+    } else if (item.windowStartMinutes != null && item.windowEndMinutes != null) {
+      if (arrival < item.windowStartMinutes) {
+        idleGap = item.windowStartMinutes - arrival;
+        arrival = item.windowStartMinutes;
+      } else if (arrival > item.windowEndMinutes) {
+        const lateMinutes = arrival - item.windowEndMinutes;
+        penalty += lateMinutes * 100;
+        warnings.add(`outside_window:${item.id}`);
+      }
     }
 
     // Early-entry availability (R3.12): a flexible standby item that does NOT
@@ -269,7 +365,8 @@ function simulate(
     // its arrival up. The pre-open idle is charged like other idle so the
     // optimizer prefers to fill the early-entry window with eligible rides.
     const itemEarlyEntry = earlyEntryEligible && item.operatesDuringEarlyEntry === true;
-    if (earlyEntryEligible && !itemEarlyEntry && !item.isFixed && !item.isLightningLane) {
+    const hasWindow = item.windowStartMinutes != null && item.windowEndMinutes != null;
+    if (earlyEntryEligible && !itemEarlyEntry && !item.isFixed && !item.isLightningLane && !hasWindow) {
       if (arrival < officialOpenMins) {
         idleGap += officialOpenMins - arrival;
         arrival = officialOpenMins;
@@ -281,7 +378,31 @@ function simulate(
     // open — so a ride that opens at park open ramps from official open (R3.12).
     const itemOpenMins = itemEarlyEntry ? startMins : officialOpenMins;
 
-    const { wait, dur, isVQ, isShow, isSingleRider } = getWaitAndDuration(item, arrival, date, snapshots, itemOpenMins);
+    const {
+      wait,
+      dur,
+      isVQ,
+      isShow,
+      isSingleRider,
+      slotArrival,
+      scheduledShowtimeMinutes,
+      missMinutes,
+      showtimesUnavailable,
+    } = getWaitAndDuration(item, arrival, date, snapshots, itemOpenMins);
+
+    if (slotArrival != null && slotArrival > arrival) {
+      idleGap += slotArrival - arrival;
+      arrival = slotArrival;
+    }
+
+    if (missMinutes != null && missMinutes > 0) {
+      penalty += missMinutes * SHOW_MISS_PENALTY_PER_MIN;
+      warnings.add(`show_missed:${item.id}`);
+    } else if (showtimesUnavailable) {
+      penalty += 10000;
+      warnings.add(`showtimes_unavailable:${item.id}`);
+    }
+
     const completion = arrival + wait + dur;
 
     // Per-item close: a ride may run into the Extended Evening / after-hours
@@ -300,6 +421,8 @@ function simulate(
       plannedItemId: item.id,
       suggestedArrival: toISOString(date, arrival),
       predictedWaitMinutes: wait,
+      scheduledShowtime:
+        scheduledShowtimeMinutes != null ? toISOString(date, scheduledShowtimeMinutes) : null,
       travelFromPrev: travel ? { kind: travel.kind, minutes: travel.minutes } : null,
     });
 
@@ -307,12 +430,19 @@ function simulate(
     totalWalk += travelMins;
 
     if (isVQ) warnings.add(`virtual_queue:${item.id}`);
-    if (isShow) warnings.add(`show:${item.id}`);
+    if (isShow) {
+      warnings.add(`show:${item.id}`);
+      if (item.experienceId && snapshots[item.experienceId]?.showtimesAreTypical) {
+        warnings.add(`typical_showtimes:${item.id}`);
+      }
+    }
     if (isSingleRider) warnings.add(`single_rider:${item.id}`);
     if (item.isLightningLane) warnings.add(`lightning_lane:${item.id}`);
 
     currentMins = completion;
-    prevItem = item;
+    if (item.park != null) {
+      prevItem = item;
+    }
   }
 
   return {

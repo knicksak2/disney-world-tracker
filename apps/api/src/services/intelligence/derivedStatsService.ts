@@ -8,6 +8,11 @@ import {
 import { wdwToday } from '../trips/wdwClock.js';
 import type { PredictionService } from './predictionService.js';
 import type { Park } from '@dwt/shared';
+import {
+  SHOWTIME_PATTERN_WINDOW_DAYS,
+  deriveShowTimePatterns,
+  type RawShowtimeSignal,
+} from './showtimePatterns.js';
 
 /** The four WDW theme parks that have crowd indices. */
 const WDW_THEME_PARKS: readonly Park[] = [
@@ -44,17 +49,14 @@ export function createDerivedStatsService(deps: DerivedStatsServiceDeps): Derive
       logger.info('Starting daily derived stats recompute');
       
       try {
-        await reconcileForecasts(yesterday);
-        await captureForecasts(now);
-        await learnWeatherSensitivities(now);
-        // Event impact and cascade remain stubbed (Task 4.5 partial):
-        // computeEventImpacts — not yet implemented (learned from showtimes×wait correlation)
-        // computeRideCascades — not yet implemented (learned from downtime×neighbor-wait correlation)
-        await recomputePercentiles();
-        // Keep the observed-weather store bounded (Neon free tier).
+        await reconcileForecasts(yesterday).catch((err) => logger.error({ err }, 'Failed reconcileForecasts'));
+        await captureForecasts(now).catch((err) => logger.error({ err }, 'Failed captureForecasts'));
+        await learnWeatherSensitivities(now).catch((err) => logger.error({ err }, 'Failed learnWeatherSensitivities'));
+        await recomputePercentiles().catch((err) => logger.error({ err }, 'Failed recomputePercentiles'));
+        await recomputeShowtimePatterns(now).catch((err) => logger.error({ err }, 'Failed recomputeShowtimePatterns'));
         await repo.pruneWeatherObservations(
           new Date(now.getTime() - WEATHER_OBSERVATION_RETENTION_DAYS * 86400000),
-        );
+        ).catch((err) => logger.error({ err }, 'Failed pruneWeatherObservations'));
         logger.info('Completed daily derived stats recompute');
       } catch (err) {
         logger.error({ err }, 'Failed daily derived stats recompute');
@@ -178,5 +180,28 @@ export function createDerivedStatsService(deps: DerivedStatsServiceDeps): Derive
       }
     }
     await repo.upsertRideShapes(updatedShapes);
+  }
+
+  async function recomputeShowtimePatterns(now: Date) {
+    if (typeof repo.getTrailingShowtimeSignals !== 'function') return;
+    const sinceDate = new Date(now.getTime() - SHOWTIME_PATTERN_WINDOW_DAYS * 86400000);
+    const rawSignals = await repo.getTrailingShowtimeSignals(sinceDate);
+    if (!rawSignals || rawSignals.length === 0) return;
+
+    const signals: RawShowtimeSignal[] = rawSignals.map((r) => ({
+      experience_id: r.experience_id,
+      date: typeof r.date === 'string' ? r.date.split('T')[0]! : (r.date instanceof Date ? r.date.toISOString().split('T')[0]! : String(r.date).split('T')[0]!),
+      showtimes: Array.isArray(r.showtimes) ? (r.showtimes as unknown[]).map(String) : [],
+    }));
+
+    const patterns = deriveShowTimePatterns(signals);
+    const distinctExpIds = Array.from(new Set(signals.map((s) => s.experience_id)));
+
+    if (patterns.length > 0 && typeof repo.upsertShowTimePatterns === 'function') {
+      await repo.upsertShowTimePatterns(patterns);
+    }
+    if (typeof repo.pruneStaleShowTimePatterns === 'function') {
+      await repo.pruneStaleShowTimePatterns(distinctExpIds, patterns);
+    }
   }
 }

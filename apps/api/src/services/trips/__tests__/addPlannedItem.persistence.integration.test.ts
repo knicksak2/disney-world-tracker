@@ -124,11 +124,14 @@ describe('addPlannedItem — SQL INSERT persistence regression test', () => {
   it('persists all scheduling, queue, and category fields on INSERT without dropping columns', async () => {
     const memDb = buildPgMemDatabase();
     applyInitMigration(memDb);
+    memDb.public.none("ALTER TABLE experiences ADD COLUMN IF NOT EXISTS meal_periods JSONB NOT NULL DEFAULT '[]';");
     applyMigration(memDb, '0015_trips.sql');
     applyMigration(memDb, '0019_planned_item_scheduling.sql');
     applyMigration(memDb, '0022_planned_item_ride_options.sql');
     applyMigration(memDb, '0023_trip_touring_hours.sql');
     applyMigration(memDb, '0024_planned_item_optimization_result.sql');
+    applyMigration(memDb, '0027_planned_items_soft_windows.sql');
+    applyMigration(memDb, '0028_planned_items_meal_period_snack.sql');
 
     const { Pool } = memDb.adapters.createPg();
     const rawPool = new Pool() as unknown as DbPool;
@@ -186,7 +189,7 @@ describe('addPlannedItem — SQL INSERT persistence regression test', () => {
     expect(createdDto.priority).toBe(1);
     expect(createdDto.itemType).toBe('break');
     expect(createdDto.durationMinutes).toBe(45);
-    expect(new Date(createdDto.plannedDate!).toISOString()).toContain('2026-10-01');
+    expect(createdDto.plannedDate).toBe('2026-10-01');
     expect(new Date(createdDto.plannedTime!).toISOString()).toBe('2026-10-01T10:30:00.000Z');
 
     // 6. Direct SQL query against database table to prove actual columns were persisted

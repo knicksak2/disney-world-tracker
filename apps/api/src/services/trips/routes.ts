@@ -1171,9 +1171,10 @@ export function tripRoutes(options: TripRoutesOptions): FastifyPluginAsync {
         
         const { date, startHour, endHour } = parseOrAppError(tripOptimizationInputSchema, request.body);
         
-        const items = await repo.listPlannedItems(id);
+        const allItems = await repo.listPlannedItems(id);
+        const dayItems = allItems.filter((i) => i.plannedDate === date);
         
-        if (items.length === 0) {
+        if (dayItems.length === 0) {
           return { items: [], totalWaitMinutes: 0, totalWalkMinutes: 0, unfittedItemIds: [], warnings: [] };
         }
         
@@ -1193,48 +1194,55 @@ export function tripRoutes(options: TripRoutesOptions): FastifyPluginAsync {
         const resolvedStartHour = dateSettings?.startHour ?? startHour;
         const resolvedEndHour = dateSettings?.endHour ?? endHour;
 
-        const expIds = items.map((i) => i.experienceId);
-        const coordsRes = await pool.query<{ id: string; latitude: number | null; longitude: number | null; operates_during_early_entry: boolean | null; operates_during_extended_evening: boolean | null; operates_during_ticketed_event: boolean | null }>(
-          `SELECT id, latitude, longitude, operates_during_early_entry, operates_during_extended_evening, operates_during_ticketed_event FROM experiences WHERE id = ANY($1)`,
+        const expIds = dayItems.map((i) => i.experienceId);
+        const expRes = await pool.query<{
+          id: string;
+          latitude: number | null;
+          longitude: number | null;
+          category: import('@dwt/shared').ExperienceCategory | null;
+          sub_type: string | null;
+          duration_minutes: number | null;
+          operates_during_early_entry: boolean | null;
+          operates_during_extended_evening: boolean | null;
+          operates_during_ticketed_event: boolean | null;
+        }>(
+          `SELECT id, latitude, longitude, category, sub_type, duration_minutes, operates_during_early_entry, operates_during_extended_evening, operates_during_ticketed_event FROM experiences WHERE id = ANY($1)`,
           [expIds]
         );
-        const specialHoursMap = new Map<string, { earlyEntry: boolean | null; extendedEvening: boolean | null; ticketedEvent: boolean | null }>(
-          coordsRes.rows.map((r) => [r.id, {
-            earlyEntry: r.operates_during_early_entry,
-            extendedEvening: r.operates_during_extended_evening,
-            ticketedEvent: r.operates_during_ticketed_event,
-          }])
-        );
-        const coordsMap = new Map<string, { lat: number; lng: number } | null>(
-          coordsRes.rows.map((r) => [
-            r.id, 
-            r.latitude != null && r.longitude != null ? { lat: Number(r.latitude), lng: Number(r.longitude) } : null
-          ])
-        );
+        const expMap = new Map(expRes.rows.map((r) => [r.id, r]));
         
-        const optimizeItems: OptimizeInputItem[] = items.map((item) => ({
-          id: item.id,
-          experienceId: item.experienceId,
-          park: item.park,
-          isFixed: item.isFixed ?? false,
-          isLightningLane: item.isLightningLane ?? false,
-          useSingleRider: item.useSingleRider ?? false,
-          priority: item.priority ?? 2,
-          itemType: item.itemType ?? 'experience',
-          durationMinutes: item.durationMinutes ?? null,
-          plannedTime: item.plannedTime ?? null,
-          coords: coordsMap.get(item.experienceId) ?? null,
-          operatesDuringEarlyEntry: specialHoursMap.get(item.experienceId)?.earlyEntry ?? null,
-          operatesDuringExtendedEvening: specialHoursMap.get(item.experienceId)?.extendedEvening ?? null,
-          operatesDuringTicketedEvent: specialHoursMap.get(item.experienceId)?.ticketedEvent ?? null,
-        }));
+        const optimizeItems: OptimizeInputItem[] = dayItems.map((item) => {
+          const exp = item.experienceId ? expMap.get(item.experienceId) : undefined;
+          return {
+            id: item.id,
+            experienceId: item.experienceId ?? null,
+            park: item.park ?? null,
+            category: exp?.category ?? null,
+            subType: exp?.sub_type ?? null,
+            catalogDurationMinutes: exp?.duration_minutes ?? null,
+            isFixed: item.isFixed ?? false,
+            isLightningLane: item.isLightningLane ?? false,
+            useSingleRider: item.useSingleRider ?? false,
+            priority: item.priority ?? 2,
+            itemType: item.itemType ?? 'experience',
+            durationMinutes: item.durationMinutes ?? null,
+            windowStartMinutes: item.windowStartMinutes ?? null,
+            windowEndMinutes: item.windowEndMinutes ?? null,
+            mealPeriod: item.mealPeriod ?? null,
+            plannedTime: item.plannedTime ?? null,
+            coords: exp?.latitude != null && exp?.longitude != null ? { lat: Number(exp.latitude), lng: Number(exp.longitude) } : null,
+            operatesDuringEarlyEntry: exp?.operates_during_early_entry ?? null,
+            operatesDuringExtendedEvening: exp?.operates_during_extended_evening ?? null,
+            operatesDuringTicketedEvent: exp?.operates_during_ticketed_event ?? null,
+          };
+        });
         
-        const parks = [...new Set(items.map((i) => i.park))];
+        const parks = [...new Set(dayItems.map((i) => i.park).filter((p): p is import('@dwt/shared').Park => p != null))];
         const snapshots: Record<string, import('@dwt/shared').WaitSnapshot> = {};
         if (options.predictionService) {
           for (const park of parks) {
-            const expIds = items.filter((i) => i.park === park).map((i) => i.experienceId);
-            const parkSnap = await options.predictionService.getDaySnapshot(expIds, park, new Date(date));
+            const parkExpIds = dayItems.filter((i) => i.park === park && i.experienceId != null).map((i) => i.experienceId as string);
+            const parkSnap = await options.predictionService.getDaySnapshot(parkExpIds, park, new Date(date));
             Object.assign(snapshots, parkSnap);
           }
         }
@@ -1261,6 +1269,7 @@ export function tripRoutes(options: TripRoutesOptions): FastifyPluginAsync {
               plannedTime: i.suggestedArrival,
               predictedWaitMinutes: i.predictedWaitMinutes,
               travelFromPrev: i.travelFromPrev,
+              scheduledShowtime: i.scheduledShowtime ?? null,
             }))
           );
         }

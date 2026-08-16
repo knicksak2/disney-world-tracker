@@ -75,6 +75,7 @@ const ITEM: PlannedItemDTO = {
   experienceId: 'exp-1',
   experienceName: 'Space Mountain',
   park: 'Magic Kingdom',
+  customTitle: null,
   addedByDisplayName: 'Ariel',
   plannedDate: null,
   plannedTime: null,
@@ -84,6 +85,10 @@ const ITEM: PlannedItemDTO = {
   priority: 2,
   itemType: 'experience',
   durationMinutes: null,
+  windowStartMinutes: null,
+  windowEndMinutes: null,
+  mealPeriod: null,
+  scheduledShowtime: null,
   predictedWaitMinutes: null,
   travelFromPrev: null,
   optimizedAt: null,
@@ -96,6 +101,7 @@ const DONE_ITEM: PlannedItemDTO = {
   experienceId: 'exp-done',
   experienceName: 'Big Thunder Mountain',
   park: 'Magic Kingdom',
+  customTitle: null,
   addedByDisplayName: 'Ariel',
   plannedDate: null,
   plannedTime: null,
@@ -105,6 +111,10 @@ const DONE_ITEM: PlannedItemDTO = {
   priority: 2,
   itemType: 'experience',
   durationMinutes: null,
+  windowStartMinutes: null,
+  windowEndMinutes: null,
+  mealPeriod: null,
+  scheduledShowtime: null,
   predictedWaitMinutes: null,
   travelFromPrev: null,
   optimizedAt: null,
@@ -117,6 +127,7 @@ const TODO_ITEM: PlannedItemDTO = {
   experienceId: 'exp-todo',
   experienceName: 'Peter Pan Flight',
   park: 'Magic Kingdom',
+  customTitle: null,
   addedByDisplayName: 'Belle',
   plannedDate: null,
   plannedTime: null,
@@ -126,6 +137,10 @@ const TODO_ITEM: PlannedItemDTO = {
   priority: 2,
   itemType: 'experience',
   durationMinutes: null,
+  windowStartMinutes: null,
+  windowEndMinutes: null,
+  mealPeriod: null,
+  scheduledShowtime: null,
   predictedWaitMinutes: null,
   travelFromPrev: null,
   optimizedAt: null,
@@ -336,6 +351,64 @@ describe('Planned_List screen', () => {
     expect(screen.queryByText('Planned')).toBeNull();
   });
 
+  test('allows selecting multiple experiences consecutively without the add modal closing', async () => {
+    const EXPERIENCE_UUID_2 = '88888888-8888-4888-8888-888888888888';
+    const SEARCH_HIT_2 = {
+      id: EXPERIENCE_UUID_2,
+      name: 'Space Mountain',
+      park: 'Magic Kingdom',
+      category: 'Ride',
+      description: '',
+      active: true,
+      imageUrl: null,
+      areaType: 'ThemePark',
+    };
+
+    const mutate = jest.fn().mockResolvedValue(undefined);
+    const search = jest.fn().mockResolvedValue({
+      experiences: [SEARCH_HIT, SEARCH_HIT_2],
+    });
+    installApi([ITEM], { mutate, search });
+
+    renderPlanned(makeNavigation());
+    fireEvent.press(await screen.findByTestId('planned-list-add-open'));
+
+    fireEvent.changeText(
+      await screen.findByTestId('planned-list-search'),
+      'Mountain',
+    );
+
+    // Select first item
+    const row1 = await screen.findByTestId(`planned-list-result-${SEARCH_HIT.id}`);
+    fireEvent.press(row1);
+
+    await waitFor(() => {
+      expect(mutate).toHaveBeenCalledWith(
+        'POST',
+        `/trips/${TRIP_ID}/planned-items`,
+        { experienceId: SEARCH_HIT.id },
+      );
+    });
+
+    // The modal is still open and the second item is selectable immediately
+    expect(screen.getByTestId('planned-list-composer')).toBeTruthy();
+    const row2 = await screen.findByTestId(`planned-list-result-${EXPERIENCE_UUID_2}`);
+    fireEvent.press(row2);
+
+    await waitFor(() => {
+      expect(mutate).toHaveBeenCalledWith(
+        'POST',
+        `/trips/${TRIP_ID}/planned-items`,
+        { experienceId: EXPERIENCE_UUID_2 },
+      );
+    });
+
+    // The Done button appears once items are added, and pressing it closes the modal
+    const doneButton = screen.getByTestId('planned-list-cancel');
+    expect(screen.getByText('Done')).toBeTruthy();
+    fireEvent.press(doneButton);
+  });
+
   test('R9.6: removing an item calls the delete endpoint', async () => {
     const mutate = jest.fn().mockResolvedValue(undefined);
     installApi([ITEM], { mutate });
@@ -464,7 +537,7 @@ describe('Planned_List completion sync presentation', () => {
     expect(await screen.findByTestId('activity-log-composer')).toBeTruthy();
     const selected = await screen.findByTestId('activity-log-selected');
     // The pre-filled selection row shows the item's Experience name.
-    expect(within(selected).getByText(TODO_ITEM.experienceName)).toBeTruthy();
+    expect(within(selected).getByText(TODO_ITEM.experienceName!)).toBeTruthy();
   });
 
   test('R2.7: an unavailable feed shows the undetermined indication with retry and no done badge', async () => {

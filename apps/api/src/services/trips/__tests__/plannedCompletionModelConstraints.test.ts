@@ -202,6 +202,7 @@ describe('Planned List Completion Sync — derived state lives off the persisted
     expect(fields.sort()).toEqual(
       [
         'addedByDisplayName',
+        'customTitle',
         'durationMinutes',
         'experienceId',
         'experienceName',
@@ -209,14 +210,19 @@ describe('Planned List Completion Sync — derived state lives off the persisted
         'isFixed',
         'isLightningLane',
         'itemType',
+        'mealPeriod',
         'optimizedAt',
         'park',
         'plannedDate',
         'plannedTime',
         'predictedWaitMinutes',
         'priority',
+        'scheduledShowtime',
+        'servedMealPeriods',
         'travelFromPrev',
         'useSingleRider',
+        'windowEndMinutes',
+        'windowStartMinutes',
       ].sort(),
     );
 
