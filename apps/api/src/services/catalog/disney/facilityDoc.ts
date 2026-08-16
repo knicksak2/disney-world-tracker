@@ -549,9 +549,19 @@ function buildMealPeriods(
     }
     const rec = entry as Record<string, unknown>;
     // Real documents label the meal period under `mealType` and carry `price`;
-    // the fixture shape uses `type`/`priceTier`. Prefer the real fields, then
-    // fall back so both shapes normalize identically.
-    const type = readNonEmptyString(rec['mealType']) ?? readNonEmptyString(rec['type']);
+    // the fixture shape uses `type`/`priceTier`. In raw Disney documents, the
+    // document-level entity type `"MealPeriod"` sometimes appears as `type`.
+    // We must ignore `"MealPeriod"` / `"meal_period"` as a meal type name (D1).
+    const rawMealType = readNonEmptyString(rec['mealType']);
+    const rawType = readNonEmptyString(rec['type']);
+    const candidateType = rawMealType ?? rawType;
+    const type =
+      candidateType &&
+      candidateType.toLowerCase() !== 'mealperiod' &&
+      candidateType.toLowerCase() !== 'meal period' &&
+      candidateType.toLowerCase() !== 'meal_period'
+        ? candidateType
+        : undefined;
     const priceTier =
       readNonEmptyString(rec['price']) ?? readNonEmptyString(rec['priceTier']);
     if (type !== undefined) {

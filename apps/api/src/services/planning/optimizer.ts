@@ -80,6 +80,7 @@ const LL_WAIT_MINS = 10;
 export const DEFAULT_RIDE_DUR = 15;
 export const DEFAULT_BREAK_DUR = 60;
 export const DEFAULT_SHOW_DURATION_MIN = 30;
+export const SAME_KIND_ADJACENCY_PENALTY = 500;
 const ROPE_DROP_WINDOW_MINUTES = 30;
 const ROPE_DROP_WALKON_MINS = 5;
 
@@ -103,7 +104,18 @@ export function resolveDefaultDuration(item: OptimizeInputItem): number {
     return item.catalogDurationMinutes ?? DEFAULT_SHOW_DURATION_MIN;
   }
 
-  // 5. Rides/attractions default to 15 minutes (covers ride length + load/unload)
+  // 5. Non-ride catalog categories (Resort, Recreation, Spa, Tour, Event)
+  if (
+    item.category === 'Resort' ||
+    item.category === 'Recreation' ||
+    item.category === 'Spa' ||
+    item.category === 'Tour' ||
+    item.category === 'Event'
+  ) {
+    return item.catalogDurationMinutes ?? 60;
+  }
+
+  // 6. Rides/attractions/Character_Meet default to 15 minutes (covers ride length + load/unload)
   return DEFAULT_RIDE_DUR;
 }
 
@@ -192,11 +204,69 @@ function getWaitAndDuration(
 ): WaitAndDurationResult {
   const dur = resolveDefaultDuration(item);
 
-  // Dining and Break items have ZERO queue wait. Cost is duration only (R3.14).
-  if (item.itemType === 'break' || item.category === 'Restaurant') {
+  // Break items have ZERO queue wait (R3.14). Cost is duration only.
+  if (item.itemType === 'break') {
     return { wait: 0, dur, isVQ: false, isShow: false, isSingleRider: false };
   }
 
+  // Shows and Parades follow showtime path
+  if (item.category === 'Show' || item.category === 'Parade') {
+    const snap = item.experienceId ? snapshots[item.experienceId] : undefined;
+    if (snap?.showtimes && snap.showtimes.length > 0) {
+      let nextShow = Infinity;
+      let lastDoors = -Infinity;
+      for (const st of snap.showtimes) {
+        const showMins = parseMinutesFromMidnightET(date, st);
+        const doorsMins = showMins - SHOW_ARRIVAL_BUFFER_MIN;
+        if (doorsMins > lastDoors) {
+          lastDoors = doorsMins;
+        }
+        if (doorsMins >= arrivalMins && showMins < nextShow) {
+          nextShow = showMins;
+        }
+      }
+      if (nextShow !== Infinity) {
+        const slotArrival = nextShow - SHOW_ARRIVAL_BUFFER_MIN;
+        return {
+          wait: SHOW_ARRIVAL_BUFFER_MIN,
+          dur,
+          isVQ: false,
+          isShow: true,
+          isSingleRider: false,
+          slotArrival,
+          scheduledShowtimeMinutes: nextShow,
+        };
+      } else {
+        const missMinutes = Math.max(0, arrivalMins - lastDoors);
+        return {
+          wait: SHOW_ARRIVAL_BUFFER_MIN,
+          dur,
+          isVQ: false,
+          isShow: true,
+          isSingleRider: false,
+          missMinutes,
+          showtimesUnavailable: true,
+        };
+      }
+    } else {
+      return {
+        wait: 0,
+        dur,
+        isVQ: false,
+        isShow: true,
+        isSingleRider: false,
+        showtimesUnavailable: true,
+      };
+    }
+  }
+
+  // Non-ride categories (Restaurant, Resort, Recreation, Spa, Tour, Event, Other) have ZERO queue wait (A2, R3.14).
+  const isRideLike = item.category === 'Ride' || item.category === 'Character_Meet';
+  if (!isRideLike) {
+    return { wait: 0, dur, isVQ: false, isShow: false, isSingleRider: false };
+  }
+
+  // Ride-like categories (Ride, Character_Meet):
   if (item.isLightningLane) {
     return { wait: LL_WAIT_MINS, dur, isVQ: false, isShow: false, isSingleRider: false };
   }
@@ -208,53 +278,6 @@ function getWaitAndDuration(
 
   if (snap.isVirtualQueue) {
     return { wait: 0, dur, isVQ: true, isShow: false, isSingleRider: false };
-  }
-
-  if (snap.showtimes && snap.showtimes.length > 0) {
-    let nextShow = Infinity;
-    let lastDoors = -Infinity;
-    for (const st of snap.showtimes) {
-      const showMins = parseMinutesFromMidnightET(date, st);
-      const doorsMins = showMins - SHOW_ARRIVAL_BUFFER_MIN;
-      if (doorsMins > lastDoors) {
-        lastDoors = doorsMins;
-      }
-      if (doorsMins >= arrivalMins && showMins < nextShow) {
-        nextShow = showMins;
-      }
-    }
-    if (nextShow !== Infinity) {
-      const slotArrival = nextShow - SHOW_ARRIVAL_BUFFER_MIN;
-      return {
-        wait: SHOW_ARRIVAL_BUFFER_MIN,
-        dur,
-        isVQ: false,
-        isShow: true,
-        isSingleRider: false,
-        slotArrival,
-        scheduledShowtimeMinutes: nextShow,
-      };
-    } else {
-      const missMinutes = Math.max(0, arrivalMins - lastDoors);
-      return {
-        wait: SHOW_ARRIVAL_BUFFER_MIN,
-        dur,
-        isVQ: false,
-        isShow: true,
-        isSingleRider: false,
-        missMinutes,
-        showtimesUnavailable: true,
-      };
-    }
-  } else if (item.category === 'Show' || item.category === 'Parade') {
-    return {
-      wait: 0,
-      dur,
-      isVQ: false,
-      isShow: true,
-      isSingleRider: false,
-      showtimesUnavailable: true,
-    };
   }
 
   const hour = Math.floor(arrivalMins / 60);
@@ -305,6 +328,7 @@ function simulate(
 
   let currentMins = startMins;
   let prevItem: OptimizeInputItem | null = null;
+  let prevDowntimeKind: 'dining' | 'break' | null = null;
 
   let totalWait = 0;
   let totalWalk = 0;
@@ -317,14 +341,31 @@ function simulate(
   }
 
   for (const item of sequence) {
+    // Travel calculation keyed on linkage (experienceId != null, A1, R3.4)
     const travel =
-      prevItem && prevItem.park && item.park
+      prevItem != null && prevItem.experienceId != null && item.experienceId != null
         ? travelFromPrev(prevItem.coords, prevItem.park, item.coords, item.park, walkingSpeed)
         : null;
     const travelMins = travel ? travel.minutes : 0;
 
     let arrival = currentMins + travelMins;
     let idleGap = 0;
+
+    // Same-kind downtime adjacency penalty (A3, R3.18)
+    const currentDowntimeKind: 'dining' | 'break' | null =
+      item.itemType === 'break' ? 'break' : item.category === 'Restaurant' ? 'dining' : null;
+
+    if (
+      prevDowntimeKind != null &&
+      currentDowntimeKind != null &&
+      prevDowntimeKind === currentDowntimeKind &&
+      !(prevItem?.isFixed && item.isFixed)
+    ) {
+      penalty += SAME_KIND_ADJACENCY_PENALTY;
+      warnings.add(`adjacent_${currentDowntimeKind}:${item.id}`);
+    }
+
+    prevDowntimeKind = currentDowntimeKind;
 
     if (item.isFixed && item.plannedTime) {
       const fixedArrival = parseMinutesFromMidnightET(date, item.plannedTime);
@@ -440,7 +481,7 @@ function simulate(
     if (item.isLightningLane) warnings.add(`lightning_lane:${item.id}`);
 
     currentMins = completion;
-    if (item.park != null) {
+    if (item.experienceId != null) {
       prevItem = item;
     }
   }

@@ -56,6 +56,7 @@ function makeItem(id: string, operatesDuringEarlyEntry: boolean | null): Optimiz
     useSingleRider: false,
     priority: 2,
     itemType: 'experience',
+    category: 'Ride',
     durationMinutes: 15,
     operatesDuringEarlyEntry,
   };

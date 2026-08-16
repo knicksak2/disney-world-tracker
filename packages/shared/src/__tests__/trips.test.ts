@@ -23,6 +23,7 @@ import { describe, expect, it } from 'vitest';
 import {
   pendingRodeWithTagSchema,
   tripIncomingInviteSchema,
+  isMealPeriodServed,
 } from '../trips.js';
 
 // A stable, well-formed pending rode-with tag DTO (all fields present, valid).
@@ -125,3 +126,44 @@ describe('tripIncomingInviteSchema: additive createdAt (R7.3)', () => {
     expect(tripIncomingInviteSchema.safeParse(body).success).toBe(false);
   });
 });
+
+describe('isMealPeriodServed (B3, R3.17)', () => {
+  it('correctly matches compound meal periods like Pecos Bill (Lunch And Dinner)', () => {
+    const pecosBill = ['Lunch And Dinner'];
+    expect(isMealPeriodServed(pecosBill, 'lunch')).toBe(true);
+    expect(isMealPeriodServed(pecosBill, 'dinner')).toBe(true);
+    expect(isMealPeriodServed(pecosBill, 'breakfast')).toBe(false);
+  });
+
+  it('matches All Day token for all meal periods', () => {
+    const allDay = ['All Day'];
+    expect(isMealPeriodServed(allDay, 'breakfast')).toBe(true);
+    expect(isMealPeriodServed(allDay, 'lunch')).toBe(true);
+    expect(isMealPeriodServed(allDay, 'dinner')).toBe(true);
+    expect(isMealPeriodServed(allDay, 'snack')).toBe(true);
+  });
+
+  it('matches Brunch token for both breakfast and lunch', () => {
+    const brunch = ['Brunch'];
+    expect(isMealPeriodServed(brunch, 'breakfast')).toBe(true);
+    expect(isMealPeriodServed(brunch, 'lunch')).toBe(true);
+    expect(isMealPeriodServed(brunch, 'dinner')).toBe(false);
+  });
+
+  it('matches Late Night Dining token for dinner', () => {
+    const lateNight = ['Late Night Dining'];
+    expect(isMealPeriodServed(lateNight, 'dinner')).toBe(true);
+    expect(isMealPeriodServed(lateNight, 'lunch')).toBe(false);
+  });
+
+  it('does not warn (returns true) when servedMealPeriods is empty, null, or undefined', () => {
+    expect(isMealPeriodServed([], 'dinner')).toBe(true);
+    expect(isMealPeriodServed(null, 'dinner')).toBe(true);
+    expect(isMealPeriodServed(undefined, 'dinner')).toBe(true);
+  });
+
+  it('always returns true for snack target', () => {
+    expect(isMealPeriodServed(['Breakfast'], 'snack')).toBe(true);
+  });
+});
+

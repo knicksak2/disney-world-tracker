@@ -155,6 +155,15 @@ describe('adaptFacilityDocument', () => {
     expect(doc.mealPeriods).toEqual([{ type: 'Snack', priceTier: '$ (…)' }]);
   });
 
+  it('does not leak "MealPeriod" as the meal period type when mealType is absent', () => {
+    const doc = adaptFacilityDocument({
+      id: 'x',
+      type: 'restaurant',
+      mealPeriods: [{ id: '1', type: 'MealPeriod', price: '$$' }],
+    });
+    expect(doc.mealPeriods).toBeUndefined();
+  });
+
   it('is idempotent for a document already in the expected (fixture) shape', () => {
     
     const fixture = {

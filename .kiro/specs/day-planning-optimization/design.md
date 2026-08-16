@@ -189,15 +189,15 @@ graph TD
 
 **Validates: Requirements 2.7, 2.8, 3.15**
 
-### Property 13: Duration precedence and zero queue wait for dining and breaks
-*For any* item, duration precedence is strictly: (1) `item.durationMinutes` override if non-null; (2) `DEFAULT_BREAK_DUR` (60) for breaks; (3) `sub_type` defaults (30 Quick / 60 Table / 90 Signature) for dining; (4) `catalogDurationMinutes ?? DEFAULT_SHOW_DURATION_MIN` (30) for shows and parades; (5) `DEFAULT_RIDE_DUR` (15) for rides. Queue wait is `0` for dining and breaks.
+### Property 13: Duration precedence and zero queue wait for non-ride categories
+*For any* item, queue wait is `0` for all non-ride categories (dining, resorts, recreation, spas, tours, events, other) and breaks (`item_type = 'break'`). ONLY ride-like categories (`category === 'Ride'` or `'Character_Meet'`) model standby queue wait and `DEFAULT_RIDE_DUR` (15). Duration precedence is strictly: (1) `item.durationMinutes` override if non-null; (2) `DEFAULT_BREAK_DUR` (60) for breaks; (3) `sub_type` defaults (30 Quick / 60 Table / 90 Signature) for dining; (4) `catalogDurationMinutes ?? DEFAULT_SHOW_DURATION_MIN` (30) for shows and parades; (5) `item.catalogDurationMinutes ?? 60` for non-ride catalog categories (Resort, Recreation, Spa, Tour, Event); (6) `DEFAULT_RIDE_DUR` (15) for rides.
 
 **Validates: Requirements 2.4, 3.14, 3.16**
 
-### Property 14: Unlocated breaks are travel-neutral
-*For any* unlocated break (`experience_id = null`), travel duration from the previous located item is computed directly to the next located item, without charging park hop or intra-park walking time for the unlocated break itself.
+### Property 14: Linkage-based travel chain and travel-neutral unlocated breaks
+*For any* sequence of items, travel legs and `prevItem` tracking are strictly keyed on linkage (`experience_id != null`). A located item with a null park (a resort) participates in the travel chain, charging `TRANSIT_PENALTY_MINUTES` (45 min) `park_hop` on arrival from a park and on departure back to a park. For any unlocated break (`experience_id = null`), the break is travel-neutral (skipped in the travel chain, routing travel directly between adjacent located items).
 
-**Validates: Requirements 2.4, 3.4**
+**Validates: Requirements 2.4, 3.4, 3.6**
 
 ### Property 15: Showtimes slot with 15-minute buffer and miss penalty
 *For any* show item with valid showtimes, arrival is clamped to the doors time (`showtime - 15`), charging `idleGap` for the difference, wait equals 15, and completion is `showtime + duration`. If arrival exceeds the last doors time, a graded penalty (`1000 * (arrival - lastDoors)`) is applied, `scheduledShowtime` is `null`, and `show_missed:<id>` is emitted.
@@ -213,6 +213,11 @@ graph TD
 *For any* item with a `meal_period` having a service span defined in `MEAL_SERVICE_WINDOWS`, custom soft window selections are clamped within `[serviceWindow.startMinutes, serviceWindow.endMinutes]`. For items without a bounded meal service span, custom soft window selections are clamped within the active day's touring hours.
 
 **Validates: Requirements 2.9, 4.4**
+
+### Property 18: Same-kind downtime adjacency penalty
+*For any* simulated sequence, two consecutive items of the same downtime kind (where kind is `dining` for `category === 'Restaurant'` and `break` for `item_type === 'break'`) incur a flat `SAME_KIND_ADJACENCY_PENALTY = 500` penalty and emit `adjacent_dining:<id>` or `adjacent_break:<id>`, unless BOTH adjacent items are user-pinned (`is_fixed = true`). A break adjacent to a meal incurs no adjacency penalty, and a schedule composed entirely of downtime items is never rejected (soft penalty).
+
+**Validates: Requirements 3.18, 4.6**
 
 ## Error Handling
 
@@ -236,9 +241,9 @@ graph TD
 - **Meal Preference Windows (`MEAL_WINDOWS`, minutes from midnight ET):** `breakfast` 480–630 (8:00–10:30 AM), `lunch` 690–840 (11:30 AM–2:00 PM), `dinner` 1020–1200 (5:00–8:00 PM), `snack` has no preset window (valid with null window columns).
 - **Meal Service Windows (`MEAL_SERVICE_WINDOWS`, outer bounds of generalized WDW service times):** `breakfast` 420–660 (7:00–11:00 AM), `lunch` 660–930 (11:00 AM–3:30 PM), `dinner` 960–1260 (4:00–9:00 PM), `snack` has no bounded service window (available all day). Note: these are generalizations pending per-restaurant capture from facility documents.
 - **Time-of-Day Presets (minutes from midnight ET):** `Morning` 540–720 (9:00 AM–12:00 PM), `Midday` 660–840 (11:00 AM–2:00 PM), `Afternoon` 780–960 (1:00–4:00 PM), `Evening` 1020–1200 (5:00–8:00 PM).
-- **Penalties:** `WINDOW_MISS_PENALTY_PER_MIN = 100`, `SHOW_MISS_PENALTY_PER_MIN = 1000`.
+- **Penalties:** `WINDOW_MISS_PENALTY_PER_MIN = 100`, `SHOW_MISS_PENALTY_PER_MIN = 1000`, `SAME_KIND_ADJACENCY_PENALTY = 500`.
 - **Show Arrival Buffer:** `SHOW_ARRIVAL_BUFFER_MIN = 15`.
-- **Durations:** `DEFAULT_SHOW_DURATION_MIN = 30`, `DEFAULT_RIDE_DUR = 15`, `BREAK_DURATION_DEFAULT = 60`.
+- **Durations:** `DEFAULT_SHOW_DURATION_MIN = 30`, `DEFAULT_RIDE_DUR = 15`, `DEFAULT_BREAK_DUR = 60`.
 - **Dining Duration Defaults:** `Quick Service` 30, `Table Service` 60, `Signature Dining` 90, `unknown` 60.
 - **Typical Showtime Derivation:** `SHOWTIME_PATTERN_MIN_SAMPLES = 3`, `SHOWTIME_PATTERN_MIN_FREQUENCY = 0.5`, `SHOWTIME_PATTERN_WINDOW_DAYS = 180`.
 - **Walking speeds (absolute):** `slow` 50, `moderate` 80, `fast` 100 m/min. **Path factor:** 1.4× straight-line Haversine.

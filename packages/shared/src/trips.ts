@@ -248,6 +248,39 @@ export const MEAL_SERVICE_WINDOWS: Partial<Record<MealPeriod, { readonly startMi
 };
 
 /**
+ * Checks whether a target meal period is served by a restaurant given its served meal periods (B3, R3.17).
+ * Supports token matching, compound names (e.g. "Lunch And Dinner"), special tokens ("All Day", "Brunch", "Late Night"),
+ * and guards against false warnings when servedMealPeriods is empty, null, or undefined.
+ */
+export function isMealPeriodServed(
+  servedMealPeriods: readonly string[] | null | undefined,
+  targetPeriod: MealPeriod | string | null | undefined,
+): boolean {
+  if (!targetPeriod) return true;
+  if (!servedMealPeriods || servedMealPeriods.length === 0) return true;
+
+  const target = targetPeriod.toLowerCase().trim();
+  if (target === 'snack') return true;
+
+  return servedMealPeriods.some((served) => {
+    const s = served.toLowerCase().trim();
+    if (s === 'all day' || s.includes('all day')) return true;
+
+    if (target === 'breakfast') {
+      return s.includes('breakfast') || s.includes('brunch') || s.includes('morning');
+    }
+    if (target === 'lunch') {
+      return s.includes('lunch') || s.includes('brunch') || s.includes('midday');
+    }
+    if (target === 'dinner') {
+      return s.includes('dinner') || s.includes('late night') || s.includes('evening');
+    }
+
+    return s.includes(target);
+  });
+}
+
+/**
  * Body for `POST /trips/:id/planned-items` (R9.1). Catalog existence,
  * duplicate, and 500-item-limit checks are enforced in the repo (R9.3–R9.5).
  */

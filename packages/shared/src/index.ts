@@ -217,6 +217,7 @@ export {
   MEAL_PERIODS,
   MEAL_WINDOWS,
   MEAL_SERVICE_WINDOWS,
+  isMealPeriodServed,
   // input schemas
   dayTouringHoursSchema,
   tripCreateSchema,

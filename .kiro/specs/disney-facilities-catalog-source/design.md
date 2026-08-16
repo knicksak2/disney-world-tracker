@@ -1066,3 +1066,11 @@ Target locations:
   - Objective: Verify whether facility documents carry per-meal service time boundaries (e.g. `start_time` / `end_time` within meal period definitions).
   - Fallback: When per-restaurant service times are absent upstream, the planner and catalog layers fall back to `MEAL_SERVICE_WINDOWS` generalized WDW boundaries.
 
+## Known Limitations
+
+### Resort Coordinates & Travel Modeling
+
+All 54 `Resort` experiences currently have `park = NULL` and `latitude = NULL` / `longitude = NULL` in catalog data. As a result, travel to and from a resort in the Day Planning optimizer cannot model geographic distance and is charged as a flat 45-minute `park_hop` (`TRANSIT_PENALTY_MINUTES`) in each direction.
+Future task: inspect raw Disney facility documents for resort facilities to determine whether coordinates are available for extraction and storage, and evaluate a dedicated resort transit constant (e.g. 15–30 min) to reflect monorail/bus differences.
+
+

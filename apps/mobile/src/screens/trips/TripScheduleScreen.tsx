@@ -27,6 +27,7 @@ import {
   type WalkingSpeed,
   MEAL_WINDOWS,
   MEAL_SERVICE_WINDOWS,
+  isMealPeriodServed,
 } from '@dwt/shared';
 
 import { ApiError, apiRequest } from '../../api/client';
@@ -609,6 +610,9 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
       : null;
 
   const editingExpInfo = draftItem?.experienceId ? catalogMap.get(draftItem.experienceId) : undefined;
+  const isEditingRideLike = Boolean(
+    draftItem && draftItem.itemType !== 'break' && (editingExpInfo?.category === 'Ride' || editingExpInfo?.category === 'Character_Meet')
+  );
   const isEditingShowOrParade = Boolean(
     editingExpInfo?.category === 'Show' || editingExpInfo?.category === 'Parade'
   );
@@ -664,19 +668,44 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
     });
   };
 
+  function getEffectiveDefaultDuration(item: PlannedItemDTO | null, exp: ExperienceDTO | undefined): number {
+    if (!item) return 15;
+    if (item.durationMinutes != null) return item.durationMinutes;
+    if (item.itemType === 'break') return 60;
+    if (exp?.category === 'Restaurant') {
+      const sub = (exp.subType ?? '').toLowerCase();
+      if (sub.includes('quick service') || sub.includes('counter')) return 30;
+      if (sub.includes('signature') || sub.includes('fine')) return 90;
+      return 60;
+    }
+    if (exp?.category === 'Show' || exp?.category === 'Parade') {
+      return 30;
+    }
+    if (
+      exp?.category === 'Resort' ||
+      exp?.category === 'Recreation' ||
+      exp?.category === 'Spa' ||
+      exp?.category === 'Tour' ||
+      exp?.category === 'Event'
+    ) {
+      return 60;
+    }
+    return 15;
+  }
+
   type TimingMode = 'any_time' | 'soft_window' | 'exact_time';
   const [timingMode, setTimingMode] = useState<TimingMode>('any_time');
   const [selectedMealPeriod, setSelectedMealPeriod] = useState<MealPeriod | null>(null);
   const [windowStartMins, setWindowStartMins] = useState<number | null>(null);
   const [windowEndMins, setWindowEndMins] = useState<number | null>(null);
   const [draftCustomTitle, setDraftCustomTitle] = useState<string>('');
-  const [draftDuration, setDraftDuration] = useState<number>(15);
+  const [draftDuration, setDraftDuration] = useState<number | null>(null);
 
   const openEditModal = (item: PlannedItemDTO) => {
     setEditingItem(item);
     setDraftItem({ ...item });
     setDraftCustomTitle(item.customTitle ?? '');
-    setDraftDuration(item.durationMinutes ?? (item.itemType === 'break' ? 45 : 15));
+    setDraftDuration(item.durationMinutes ?? null);
     if (item.isFixed || item.isLightningLane || item.plannedTime) {
       setTimingMode('exact_time');
       setSelectedMealPeriod(null);
@@ -706,13 +735,16 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
       return;
     }
 
+    const expInfo = draftItem.experienceId ? catalogMap.get(draftItem.experienceId) : undefined;
+    const isRideLike = draftItem.itemType !== 'break' && (expInfo?.category === 'Ride' || expInfo?.category === 'Character_Meet');
+
     const normDate = normalizeDateStr(draftItem.plannedDate);
     const body: PlannedItemEditInput = {
       ...(normDate ? { plannedDate: normDate } : {}),
-      useSingleRider: draftItem.useSingleRider ?? false,
+      useSingleRider: isRideLike ? (draftItem.useSingleRider ?? false) : false,
       priority: draftItem.priority ?? 2,
       itemType: draftItem.itemType ?? 'experience',
-      durationMinutes: draftDuration,
+      ...(draftDuration != null ? { durationMinutes: draftDuration } : {}),
       ...(draftItem.itemType === 'break' ? { customTitle: draftCustomTitle.trim() || null } : {}),
     };
 
@@ -742,8 +774,8 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
       } else {
         body.plannedTime = null;
       }
-      body.isLightningLane = draftItem.isLightningLane ?? false;
-      body.isFixed = !draftItem.isLightningLane;
+      body.isLightningLane = isRideLike ? (draftItem.isLightningLane ?? false) : false;
+      body.isFixed = !body.isLightningLane;
       body.windowStartMinutes = null;
       body.windowEndMinutes = null;
       body.mealPeriod = null;
@@ -762,11 +794,12 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
     });
   };
 
-  const handleSelectUnlocatedBreak = (customTitle: string, durationMinutes: number) => {
+  const handleSelectUnlocatedBreak = (customTitle: string, durationMinutes: number, experienceId?: string | null) => {
     addMutation.mutate({
       itemType: 'break',
       customTitle,
       durationMinutes,
+      ...(experienceId ? { experienceId } : {}),
       ...(activeDate !== 'No Date' ? { plannedDate: activeDate } : {}),
     });
   };
@@ -1399,10 +1432,8 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
 
                     {timingMode === 'soft_window' && (
                       <View style={styles.timeSection}>
-                        {draftItem.servedMealPeriods &&
-                          selectedMealPeriod &&
-                          selectedMealPeriod !== 'snack' &&
-                          !draftItem.servedMealPeriods.includes(selectedMealPeriod.toLowerCase()) && (
+                        {selectedMealPeriod &&
+                          !isMealPeriodServed(draftItem.servedMealPeriods, selectedMealPeriod) && (
                             <View style={styles.unservedWarningBox} testID="unserved-meal-warning">
                               <Text style={styles.unservedWarningText}>
                                 ⚠️ {selectedMealPeriod.charAt(0).toUpperCase() + selectedMealPeriod.slice(1)} is not listed as a served meal period for this restaurant.
@@ -1659,25 +1690,27 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
 
                     {timingMode === 'exact_time' && (
                       <View style={styles.timeSection}>
-                        <View style={styles.modalActions}>
-                          <SecondaryButton
-                            label={draftItem.isLightningLane ? '⚡ Mode: Lightning Lane Return Window' : '🔒 Mode: Fixed Reservation (ADR / Showtime)'}
-                            onPress={() =>
-                              setDraftItem((prev) =>
-                                prev
-                                  ? {
-                                      ...prev,
-                                      isLightningLane: !prev.isLightningLane,
-                                      isFixed: !prev.isLightningLane ? false : true,
-                                    }
-                                  : null,
-                              )
-                            }
-                          />
-                        </View>
+                        {isEditingRideLike && (
+                          <View style={styles.modalActions}>
+                            <SecondaryButton
+                              label={draftItem.isLightningLane ? '⚡ Mode: Lightning Lane Return Window' : '🔒 Mode: Fixed Reservation (ADR / Showtime)'}
+                              onPress={() =>
+                                setDraftItem((prev) =>
+                                  prev
+                                    ? {
+                                        ...prev,
+                                        isLightningLane: !prev.isLightningLane,
+                                        isFixed: !prev.isLightningLane ? false : true,
+                                      }
+                                    : null,
+                                )
+                              }
+                            />
+                          </View>
+                        )}
 
                         <Text style={styles.label}>
-                          {draftItem.isLightningLane ? '⚡ Lightning Lane Window Start Time' : '🔒 Reservation / Show Time'}
+                          {isEditingRideLike && draftItem.isLightningLane ? '⚡ Lightning Lane Window Start Time' : '🔒 Reservation / Show Time'}
                         </Text>
 
                         {(() => {
@@ -1821,21 +1854,25 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
 
                     <Text style={styles.label}>Duration</Text>
                     <View style={styles.chipRow}>
-                      {[15, 30, 45, 60, 90, 120].map((d) => (
-                        <Pressable
-                          key={d}
-                          style={[styles.optionChip, draftDuration === d && styles.optionChipActive]}
-                          onPress={() => setDraftDuration(d)}
-                          testID={`duration-chip-${d}`}
-                        >
-                          <Text style={[styles.optionChipText, draftDuration === d && styles.optionChipTextActive]}>
-                            {d} min
-                          </Text>
-                        </Pressable>
-                      ))}
+                      {[15, 30, 45, 60, 90, 120].map((d) => {
+                        const effectiveDur = draftDuration ?? getEffectiveDefaultDuration(draftItem, editingExpInfo);
+                        const isChipActive = effectiveDur === d;
+                        return (
+                          <Pressable
+                            key={d}
+                            style={[styles.optionChip, isChipActive && styles.optionChipActive]}
+                            onPress={() => setDraftDuration(d)}
+                            testID={`duration-chip-${d}`}
+                          >
+                            <Text style={[styles.optionChipText, isChipActive && styles.optionChipTextActive]}>
+                              {d} min
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
                     </View>
 
-                    {draftItem.itemType !== 'break' && (
+                    {isEditingRideLike && (
                       <>
                         <Text style={styles.label}>Options</Text>
                         <View style={styles.modalActions}>

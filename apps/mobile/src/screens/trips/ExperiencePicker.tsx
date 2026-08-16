@@ -65,8 +65,8 @@ export interface ExperiencePickerProps {
   readonly enabled: boolean;
   /** Called with the tapped Experience when a selectable row is pressed. */
   readonly onSelect: (experience: ExperienceDTO) => void;
-  /** Optional callback to create an unlocated break directly. */
-  readonly onSelectUnlocatedBreak?: (customTitle: string, durationMinutes: number) => void;
+  /** Optional callback to create a break directly (with optional attached location). */
+  readonly onSelectUnlocatedBreak?: (customTitle: string, durationMinutes: number, experienceId?: string | null) => void;
   /** Whether to show category filter tabs. Defaults to true. */
   readonly showTabs?: boolean;
   /**
@@ -111,7 +111,9 @@ export function ExperiencePicker({
   const [searchInput, setSearchInput] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [breakTitle, setBreakTitle] = useState('Midday Break');
-  const [breakDuration, setBreakDuration] = useState(45);
+  const [breakDuration, setBreakDuration] = useState(60);
+  const [stagedLocation, setStagedLocation] = useState<ExperienceDTO | null>(null);
+  const [breakAddedFeedback, setBreakAddedFeedback] = useState<boolean>(false);
 
   const disabledSet = disabledIds ?? EMPTY_SET;
   const addedSet = addedIds ?? EMPTY_SET;
@@ -125,15 +127,41 @@ export function ExperiencePicker({
     return () => clearTimeout(handle);
   }, [searchInput]);
 
-  const searchActive = debouncedQuery.length >= SEARCH_MIN_CHARS;
+  const searchActive = activeTab !== 'all' || debouncedQuery.length >= SEARCH_MIN_CHARS;
+
+  const getCategoryQueryParam = (tab: ExperiencePickerTab): string | null => {
+    switch (tab) {
+      case 'attractions':
+        return 'Ride';
+      case 'dining':
+        return 'Restaurant';
+      case 'shows':
+        return 'Show';
+      case 'breaks':
+        return 'Resort';
+      default:
+        return null;
+    }
+  };
+
+  const categoryParam = getCategoryQueryParam(activeTab);
 
   const searchQuery = useQuery<CatalogSearchResponse, ApiError>({
-    queryKey: ['catalog', 'search', debouncedQuery] as const,
-    queryFn: () =>
-      apiRequest<CatalogSearchResponse>(
+    queryKey: ['catalog', 'search', activeTab, debouncedQuery] as const,
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (categoryParam) {
+        params.append('category', categoryParam);
+      }
+      if (debouncedQuery.length > 0) {
+        params.append('q', debouncedQuery);
+      }
+      const qs = params.toString();
+      return apiRequest<CatalogSearchResponse>(
         'GET',
-        `/catalog?q=${encodeURIComponent(debouncedQuery)}`,
-      ),
+        `/catalog${qs ? `?${qs}` : ''}`,
+      );
+    },
     enabled: enabled && searchActive,
   });
 
@@ -215,6 +243,22 @@ export function ExperiencePicker({
             placeholderTextColor={theme.color.textSecondary}
             testID={`${testIDPrefix}-break-title-input`}
           />
+
+          {stagedLocation && (
+            <View style={styles.stagedLocationBox} testID={`${testIDPrefix}-staged-location`}>
+              <Text style={styles.stagedLocationText} numberOfLines={1}>
+                📍 {stagedLocation.name}
+              </Text>
+              <Pressable
+                style={styles.clearStagedBtn}
+                onPress={() => setStagedLocation(null)}
+                testID={`${testIDPrefix}-clear-staged-location`}
+              >
+                <Ionicons name="close-circle" size={18} color={theme.color.textSecondary} />
+              </Pressable>
+            </View>
+          )}
+
           <Text style={styles.subLabel}>Duration (Minutes)</Text>
           <View style={styles.durationPresetsRow}>
             {[30, 45, 60, 90, 120].map((dur) => (
@@ -230,16 +274,28 @@ export function ExperiencePicker({
               </Pressable>
             ))}
           </View>
+
+          {breakAddedFeedback && (
+            <View style={styles.breakFeedbackBox} testID={`${testIDPrefix}-break-feedback`}>
+              <Text style={styles.breakFeedbackText}>✓ Break Added!</Text>
+            </View>
+          )}
+
           <Pressable
-            style={styles.addBreakBtn}
+            style={[styles.addBreakBtn, breakAddedFeedback && styles.addBreakBtnSuccess]}
             onPress={() => {
               if (busy || !breakTitle.trim()) return;
-              onSelectUnlocatedBreak(breakTitle.trim(), breakDuration);
+              onSelectUnlocatedBreak(breakTitle.trim(), breakDuration, stagedLocation?.id ?? null);
+              setBreakAddedFeedback(true);
+              setStagedLocation(null);
+              setTimeout(() => {
+                setBreakAddedFeedback(false);
+              }, 2000);
             }}
             disabled={busy || !breakTitle.trim()}
             testID={`${testIDPrefix}-add-break-btn`}
           >
-            <Ionicons name="add-circle" size={18} color="#FFFFFF" />
+            <Ionicons name={breakAddedFeedback ? "checkmark-circle" : "add-circle"} size={18} color="#FFFFFF" />
             <Text style={styles.addBreakBtnText}>Add Break ({breakDuration} min)</Text>
           </Pressable>
         </View>
@@ -301,6 +357,7 @@ export function ExperiencePicker({
           >
             {results.map((item) => {
               const count = addedCounts?.get(item.id) ?? (addedSet.has(item.id) ? 1 : 0);
+              const isStagedOnBreaks = activeTab === 'breaks' && stagedLocation?.id === item.id;
               return (
                 <ExperienceResultRow
                   key={item.id}
@@ -309,8 +366,15 @@ export function ExperiencePicker({
                   disabledLabel={disabledLabel}
                   pending={pendingId === item.id && busy}
                   addedCount={count}
+                  isStaged={isStagedOnBreaks}
                   busy={busy}
-                  onPress={() => onSelect(item)}
+                  onPress={() => {
+                    if (activeTab === 'breaks') {
+                      setStagedLocation(item);
+                    } else {
+                      onSelect(item);
+                    }
+                  }}
                   testID={`${testIDPrefix}-result-${item.id}`}
                 />
               );
@@ -337,6 +401,7 @@ function ExperienceResultRow({
   disabledLabel,
   pending,
   addedCount = 0,
+  isStaged = false,
   busy,
   onPress,
   testID,
@@ -346,6 +411,7 @@ function ExperienceResultRow({
   readonly disabledLabel: string;
   readonly pending: boolean;
   readonly addedCount?: number;
+  readonly isStaged?: boolean;
   readonly busy: boolean;
   readonly onPress: () => void;
   readonly testID: string;
@@ -371,6 +437,7 @@ function ExperienceResultRow({
         styles.resultRow,
         pressed && !inactive ? styles.resultRowPressed : null,
         disabled ? styles.resultRowDisabled : null,
+        isStaged ? styles.resultRowStaged : null,
       ]}
       testID={testID}
     >
@@ -395,12 +462,17 @@ function ExperienceResultRow({
               color={theme.color.success}
             />
           ) : null}
+          {isStaged ? (
+            <Badge label="📍 Attached Location" color={theme.color.primary} />
+          ) : null}
         </View>
       </View>
       {pending ? (
         <ActivityIndicator color={theme.color.primary} />
       ) : disabled ? (
         <Text style={styles.disabledTag}>{disabledLabel}</Text>
+      ) : isStaged ? (
+        <Ionicons name="checkmark-circle" size={22} color={theme.color.primary} />
       ) : (
         <Ionicons
           name="add-circle-outline"
@@ -580,5 +652,45 @@ const styles = StyleSheet.create({
   disabledTag: {
     ...theme.typography.meta,
     color: theme.color.textSecondary,
+  },
+  stagedLocationBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: theme.color.surface,
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: 6,
+    borderRadius: theme.radius.sm,
+    borderWidth: 1,
+    borderColor: theme.color.primary,
+  },
+  stagedLocationText: {
+    ...theme.typography.meta,
+    color: theme.color.primary,
+    fontWeight: '600',
+    flex: 1,
+  },
+  clearStagedBtn: {
+    padding: 2,
+    marginLeft: theme.spacing.xs,
+  },
+  breakFeedbackBox: {
+    backgroundColor: '#dcfce7',
+    paddingVertical: 6,
+    paddingHorizontal: theme.spacing.sm,
+    borderRadius: theme.radius.sm,
+    alignItems: 'center',
+  },
+  breakFeedbackText: {
+    ...theme.typography.meta,
+    color: '#15803d',
+    fontWeight: '700',
+  },
+  addBreakBtnSuccess: {
+    backgroundColor: theme.color.success,
+  },
+  resultRowStaged: {
+    backgroundColor: '#eff6ff',
+    borderColor: theme.color.primary,
   },
 });

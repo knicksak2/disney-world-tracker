@@ -57,6 +57,7 @@ function makeItem(id: string, durationMinutes = 15): OptimizeInputItem {
     useSingleRider: false,
     priority: 2,
     itemType: 'experience',
+    category: 'Ride',
     durationMinutes,
     // These rope-drop tests are about rides that DO open for early entry; the
     // early-entry availability clamp (R3.12) is exercised separately in

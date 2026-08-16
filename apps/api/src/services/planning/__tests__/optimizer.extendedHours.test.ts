@@ -40,6 +40,7 @@ function makeItem(id: string, durationMinutes = 45): OptimizeInputItem {
     useSingleRider: false,
     priority: 2,
     itemType: 'experience',
+    category: 'Ride',
     durationMinutes,
     // These tests exercise the window *extension*, so the rides operate during
     // the extended-evening / after-hours windows (R3.13). Availability gating is

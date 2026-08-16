@@ -237,6 +237,53 @@ Implementation is **TypeScript**. It reuses `experiences.latitude/longitude` for
   - [x] 15.4 Unit 2 Checkpoint
     - Full root `npm run verify`.
 
+- [x] 16. Unit A — Optimizer (Backend)
+  - [x] 16.1 Travel chain linkage gating (`experienceId != null`) in `optimizer.ts` and `travel.ts` (A1)
+    - Key travel calculation and `prevItem` tracking on `experienceId != null`. Located items with null park (resort) incur 45m `park_hop` in both directions; unlocated breaks remain travel-neutral.
+    - Tests: located item with null park test (failing before fix), Property 14 fast-check test.
+    - _Requirements: 3.4, 3.6_
+  - [x] 16.2 Invert zero-wait rule to ride-like whitelist in `optimizer.ts` (A2)
+    - Only `Ride` and `Character_Meet` model standby waits and default to 15m; all other categories receive `wait = 0` and category/sub_type duration defaults.
+    - Tests: Resort and other non-ride category zero wait & duration tests (failing before fix).
+    - _Requirements: 3.14_
+  - [x] 16.3 Same-kind downtime adjacency penalty (`SAME_KIND_ADJACENCY_PENALTY = 500`) in `optimizer.ts` (A3)
+    - Penalize consecutive same-kind downtime items (`dining` or `break`); exempt adjacent pinned items; emit `adjacent_dining:<id>` / `adjacent_break:<id>`.
+    - Tests: snack separated from meal, breaks separated, meal+break allowed, downtime-only day produces plan, pinned items exempt, Property 18 fast-check test.
+    - _Requirements: 3.18, 4.6_
+  - [x] 16.4 Checkpoint A
+    - `npm run verify:api` (Vitest tests + coverage threshold + typecheck).
+
+- [x] 17. Unit B — Mobile UI & Shared Contracts
+  - [x] 17.1 Gate Single Rider and Lightning Lane toggles on ride-like categories in `TripScheduleScreen.tsx` (B1)
+    - Only render Single Rider and Lightning Lane toggles for `Ride` and `Character_Meet`.
+    - _Requirements: 4.4_
+  - [x] 17.2 Stage locations on Breaks tab in `ExperiencePicker.tsx` / `TripScheduleScreen.tsx` (B2)
+    - Tapping a search result on the Breaks tab stages the location into the break creation form rather than immediately adding a plain experience; single Add Break button creates the item.
+    - _Requirements: 4.2_
+  - [x] 17.3 Token-matching meal-period helper in `packages/shared` (B3)
+    - Pure `isMealPeriodServed` helper supporting token matching ("Lunch And Dinner"), "All Day", "Brunch", "Late Night Dining", and empty-array guard. Unit tests with Pecos Bill fixture.
+    - _Requirements: 3.17_
+  - [x] 17.4 Preserve unchosen durations in `TripScheduleScreen.tsx` (B4)
+    - Only send `durationMinutes` when actively selected; draft effective default; reconcile break default to 60.
+    - _Requirements: 4.9_
+  - [x] 17.5 Feedback for break additions (B5)
+    - Add confirmation feedback for adding breaks.
+    - _Requirements: 4.2_
+  - [x] 17.6 Checkpoint B
+    - `npm run verify:shared && npm run verify:api && npm run verify:mobile`.
+
+- [x] 18. Unit C — Browse by Category Without Typing
+  - [x] 18.1 Category tab query without search text in `ExperiencePicker.tsx`
+    - Non-All tabs query `GET /catalog?category=...` without requiring 2 characters; mobile tests asserting results render without typing.
+    - _Requirements: 4.10_
+
+- [x] 19. Unit D — Catalog Data Defect & Spec Limitations
+  - [x] 19.1 Fix `"MealPeriod"` entity type leak in `facilityDoc.ts`
+    - Extract from `name`, `label`, `title`, or non-`MealPeriod` `type`; add normalization test.
+  - [x] 19.2 Record resort-coordinates limitation in `disney-facilities-catalog-source`
+  - [x] 19.3 Final Verification Gate
+    - `npm run verify` across all workspaces.
+
 ## Notes
 
 - Test tasks are **required, not optional** — a feature task is not complete until its tests exist and pass.
@@ -258,7 +305,11 @@ Implementation is **TypeScript**. It reuses `experiences.latitude/longitude` for
     { "id": 6, "tasks": ["14.1", "14.2"] },
     { "id": 7, "tasks": ["14.3", "15.1", "15.2"] },
     { "id": 8, "tasks": ["15.3"] },
-    { "id": 9, "tasks": ["15.4", "13.4"] }
+    { "id": 9, "tasks": ["15.4", "13.4"] },
+    { "id": 10, "tasks": ["16.1", "16.2", "16.3"] },
+    { "id": 11, "tasks": ["16.4", "17.1", "17.2", "17.3", "17.4", "17.5"] },
+    { "id": 12, "tasks": ["17.6", "18.1", "19.1", "19.2"] },
+    { "id": 13, "tasks": ["19.3"] }
   ]
 }
 ```

@@ -43,9 +43,9 @@ export interface TravelResult {
 
 export function travelFromPrev(
   prevCoords: Coordinates | null,
-  prevPark: Park,
+  prevPark: Park | null,
   currCoords: Coordinates | null,
-  currPark: Park,
+  currPark: Park | null,
   pace: WalkingSpeed,
 ): TravelResult {
   if (prevPark !== currPark) {

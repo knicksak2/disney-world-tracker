@@ -54,6 +54,7 @@ function makeItem(
     useSingleRider: false,
     priority: 2,
     itemType: 'experience',
+    category: 'Ride',
     durationMinutes: 45,
     operatesDuringExtendedEvening: flags.ext ?? null,
     operatesDuringTicketedEvent: flags.tick ?? null,

@@ -1926,4 +1926,189 @@ describe('TripScheduleScreen', () => {
       });
     });
   });
+
+  describe('Real-Device Fixes (Units B1, B3, B4)', () => {
+    it('B1: gates Single Rider and Lightning Lane toggles strictly on ride-like categories', async () => {
+      // Setup a Quick Service dining item (category: Restaurant)
+      const diningItem: PlannedItemDTO = {
+        ...PLANNED_ITEM,
+        id: 'item-dining-1',
+        experienceId: 'exp-dining-1',
+        experienceName: 'Pecos Bill Tall Tale Inn and Cafe',
+        plannedDate: '2026-10-01',
+      };
+
+      apiRequestMock.mockImplementation(async (method, path) => {
+        if (method === 'GET' && path === `/trips/${TRIP_ID}`) {
+          return { id: TRIP_ID, name: 'Disney Trip', startDate: '2026-10-01' } as any;
+        }
+        if (method === 'GET' && path === `/trips/${TRIP_ID}/planned-items`) {
+          return [diningItem];
+        }
+        if (method === 'GET' && path === '/catalog') {
+          return {
+            experiences: [
+              {
+                id: 'exp-dining-1',
+                name: 'Pecos Bill Tall Tale Inn and Cafe',
+                category: 'Restaurant',
+                subType: 'Quick Service',
+                park: 'Magic Kingdom',
+              },
+            ],
+          };
+        }
+        throw new Error(`Unexpected request: ${method} ${path}`);
+      });
+
+      renderScreen();
+
+      await waitFor(() => {
+        expect(screen.getByText('Pecos Bill Tall Tale Inn and Cafe')).toBeTruthy();
+      });
+
+      // Open Edit Settings
+      fireEvent.press(screen.getByText('Edit Settings'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('timing-mode-exact_time')).toBeTruthy();
+      });
+
+      // Single Rider toggle should NOT be rendered for dining
+      expect(screen.queryByText(/Single Rider Line:/)).toBeNull();
+
+      // Switch to exact time mode
+      fireEvent.press(screen.getByTestId('timing-mode-exact_time'));
+
+      // Lightning Lane toggle should NOT be rendered for dining
+      expect(screen.queryByText(/Mode: Lightning Lane/)).toBeNull();
+    });
+
+    it('B3: does not warn for lunch/dinner when restaurant serves compound "Lunch And Dinner" (Pecos Bill)', async () => {
+      const pecosBillItem: PlannedItemDTO = {
+        ...PLANNED_ITEM,
+        id: 'item-pecos',
+        experienceId: 'exp-pecos',
+        experienceName: 'Pecos Bill Tall Tale Inn and Cafe',
+        plannedDate: '2026-10-01',
+        servedMealPeriods: ['Lunch And Dinner'],
+      };
+
+      apiRequestMock.mockImplementation(async (method, path) => {
+        if (method === 'GET' && path === `/trips/${TRIP_ID}`) {
+          return { id: TRIP_ID, name: 'Disney Trip', startDate: '2026-10-01' } as any;
+        }
+        if (method === 'GET' && path === `/trips/${TRIP_ID}/planned-items`) {
+          return [pecosBillItem];
+        }
+        if (method === 'GET' && path === '/catalog') {
+          return {
+            experiences: [
+              {
+                id: 'exp-pecos',
+                name: 'Pecos Bill Tall Tale Inn and Cafe',
+                category: 'Restaurant',
+                subType: 'Quick Service',
+                park: 'Magic Kingdom',
+                mealPeriods: [{ type: 'Lunch And Dinner' }],
+              },
+            ],
+          };
+        }
+        throw new Error(`Unexpected request: ${method} ${path}`);
+      });
+
+      renderScreen();
+
+      await waitFor(() => {
+        expect(screen.getByText('Pecos Bill Tall Tale Inn and Cafe')).toBeTruthy();
+      });
+
+      fireEvent.press(screen.getByText('Edit Settings'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('timing-mode-soft_window')).toBeTruthy();
+      });
+
+      fireEvent.press(screen.getByTestId('timing-mode-soft_window'));
+
+      // Select Lunch: compound "Lunch And Dinner" MUST match lunch without warning
+      fireEvent.press(screen.getByTestId('meal-period-lunch'));
+      expect(screen.queryByTestId('unserved-meal-warning')).toBeNull();
+
+      // Select Dinner: compound "Lunch And Dinner" MUST match dinner without warning
+      fireEvent.press(screen.getByTestId('meal-period-dinner'));
+      expect(screen.queryByTestId('unserved-meal-warning')).toBeNull();
+
+      // Select Breakfast: Pecos Bill does not serve breakfast -> warning MUST appear
+      fireEvent.press(screen.getByTestId('meal-period-breakfast'));
+      expect(screen.getByTestId('unserved-meal-warning')).toBeTruthy();
+    });
+
+    it('B4: does not overwrite duration with 15 when modifying only priority on Quick Service dining', async () => {
+      let patchPayload: any = null;
+      const diningItem: PlannedItemDTO = {
+        ...PLANNED_ITEM,
+        id: 'item-qs',
+        experienceId: 'exp-qs',
+        experienceName: 'Cosmic Ray’s Starlight Café',
+        plannedDate: '2026-10-01',
+        durationMinutes: null, // default duration is derived by optimizer (30 min for QS)
+      };
+
+      apiRequestMock.mockImplementation(async (method, path, body) => {
+        if (method === 'GET' && path === `/trips/${TRIP_ID}`) {
+          return { id: TRIP_ID, name: 'Disney Trip', startDate: '2026-10-01' } as any;
+        }
+        if (method === 'GET' && path === `/trips/${TRIP_ID}/planned-items`) {
+          return [diningItem];
+        }
+        if (method === 'GET' && path === '/catalog') {
+          return {
+            experiences: [
+              {
+                id: 'exp-qs',
+                name: 'Cosmic Ray’s Starlight Café',
+                category: 'Restaurant',
+                subType: 'Quick Service',
+                park: 'Magic Kingdom',
+              },
+            ],
+          };
+        }
+        if (method === 'PATCH' && path === `/trips/${TRIP_ID}/planned-items/item-qs`) {
+          patchPayload = body;
+          return;
+        }
+        throw new Error(`Unexpected request: ${method} ${path}`);
+      });
+
+      renderScreen();
+
+      await waitFor(() => {
+        expect(screen.getByText('Cosmic Ray’s Starlight Café')).toBeTruthy();
+      });
+
+      fireEvent.press(screen.getByText('Edit Settings'));
+
+      await waitFor(() => {
+        expect(screen.getByText('Must Do (1)')).toBeTruthy();
+      });
+
+      // User only changes Priority to 1
+      fireEvent.press(screen.getByText('Must Do (1)'));
+
+      // User saves modal
+      fireEvent.press(screen.getByText('Done'));
+
+      await waitFor(() => {
+        expect(patchPayload).toBeTruthy();
+      });
+
+      expect(patchPayload.priority).toBe(1);
+      // durationMinutes MUST NOT be sent as 15 (which destroys the 30m QS default)
+      expect(patchPayload.durationMinutes).toBeUndefined();
+    });
+  });
 });
+

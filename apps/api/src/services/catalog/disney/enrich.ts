@@ -176,7 +176,13 @@ function extractMealPeriods(doc: FacilityDocument): readonly MealPeriodDTO[] {
   }
   const projected: MealPeriodDTO[] = [];
   for (const period of periods) {
-    if (typeof period.type === 'string' && period.type !== '') {
+    if (
+      typeof period.type === 'string' &&
+      period.type !== '' &&
+      period.type.toLowerCase() !== 'mealperiod' &&
+      period.type.toLowerCase() !== 'meal period' &&
+      period.type.toLowerCase() !== 'meal_period'
+    ) {
       projected.push({ type: period.type, priceTier: period.priceTier ?? null });
     }
   }

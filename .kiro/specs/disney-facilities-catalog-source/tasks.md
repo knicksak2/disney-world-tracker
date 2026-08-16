@@ -300,6 +300,8 @@ minimum of 100 iterations.
   - [ ] 15.6 Facility_Document per-meal service times verification (Future — DO NOT IMPLEMENT NOW)
     - Verify whether the Sync Gateway Facility_Document carries per-meal service times (start/end), and if confirmed, capture them onto `meal_periods` JSONB entries during Catalog_Sync, falling back to `MEAL_SERVICE_WINDOWS` when absent.
     - _Requirements: 5.6_
+  - [ ] 15.7 Resort coordinates capture verification (Future — DO NOT IMPLEMENT NOW)
+    - Inspect raw Disney facility documents for resort facilities to determine whether coordinates can be extracted and stored.
 
 ## Notes
 

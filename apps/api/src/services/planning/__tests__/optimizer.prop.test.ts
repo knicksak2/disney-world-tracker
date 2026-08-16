@@ -2,7 +2,7 @@
 
 import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
-import type { WaitSnapshot } from '@dwt/shared';
+import type { Park, WaitSnapshot } from '@dwt/shared';
 import { optimize, type OptimizeInput, type OptimizeInputItem } from '../optimizer.js';
 import { travelFromPrev } from '../travel.js';
 
@@ -25,6 +25,7 @@ const itemArb = fc.record({
   useSingleRider: fc.boolean(),
   priority: fc.integer({ min: 1, max: 3 }),
   itemType: fc.constantFrom('experience', 'break'),
+  category: fc.constantFrom('Ride', 'Restaurant', 'Show', 'Resort', 'Character_Meet'),
   durationMinutes: fc.option(fc.integer({ min: 5, max: 120 }), { nil: null }),
 }) as fc.Arbitrary<OptimizeInputItem>;
 
@@ -138,6 +139,7 @@ describe('Feature: day-planning-optimization', () => {
           useSingleRider: false,
           priority: 2,
           itemType: 'experience',
+          category: 'Ride',
           durationMinutes: null,
         },
         {
@@ -151,6 +153,7 @@ describe('Feature: day-planning-optimization', () => {
           useSingleRider: false,
           priority: 2,
           itemType: 'experience',
+          category: 'Ride',
           durationMinutes: null,
         },
       ],
@@ -201,6 +204,7 @@ describe('Feature: day-planning-optimization', () => {
           useSingleRider: false,
           priority: 2,
           itemType: 'experience',
+          category: 'Ride',
           durationMinutes: null,
         },
       ],
@@ -409,6 +413,154 @@ describe('Feature: day-planning-optimization', () => {
       { numRuns: 100 },
     );
   });
+
+  // Feature: day-planning-optimization, Property 14: Linkage-based travel chain and travel-neutral unlocated breaks
+  it('Property 14: Linkage-based travel chain and travel-neutral unlocated breaks', () => {
+    fc.assert(
+      fc.property(
+        fc.constantFrom('Magic Kingdom', 'EPCOT', 'Hollywood Studios', 'Animal Kingdom') as fc.Arbitrary<Park>,
+        fc.boolean(),
+        (parkName, isUnlocated) => {
+          const input: OptimizeInput = {
+            date: mockDate,
+            startHour: 9,
+            endHour: 21,
+            walkingSpeed: 'moderate',
+            earlyEntryEligible: false,
+            snapshots: {},
+            seed: 42,
+            items: [
+              {
+                id: 'item-park-1',
+                experienceId: 'exp-park-1',
+                park: parkName,
+                coords: { lat: 28.4177, lng: -81.5812 },
+                plannedTime: `${mockDate}T13:00:00.000Z`,
+                isFixed: true,
+                isLightningLane: false,
+                useSingleRider: false,
+                priority: 2,
+                itemType: 'experience',
+                category: 'Ride',
+                durationMinutes: 15,
+              },
+              {
+                id: 'middle-item',
+                experienceId: isUnlocated ? null : 'exp-resort-middle',
+                park: null,
+                coords: null,
+                plannedTime: `${mockDate}T14:00:00.000Z`,
+                isFixed: true,
+                isLightningLane: false,
+                useSingleRider: false,
+                priority: 2,
+                itemType: isUnlocated ? 'break' : 'experience',
+                category: isUnlocated ? null : 'Resort',
+                durationMinutes: 45,
+              },
+              {
+                id: 'item-park-2',
+                experienceId: 'exp-park-2',
+                park: parkName,
+                coords: { lat: 28.4180, lng: -81.5815 },
+                plannedTime: `${mockDate}T16:00:00.000Z`,
+                isFixed: true,
+                isLightningLane: false,
+                useSingleRider: false,
+                priority: 2,
+                itemType: 'experience',
+                category: 'Ride',
+                durationMinutes: 15,
+              },
+            ],
+          };
+
+          const res = optimize(input);
+          const mid = res.items.find((i) => i.plannedItemId === 'middle-item')!;
+          const park2 = res.items.find((i) => i.plannedItemId === 'item-park-2')!;
+
+          if (isUnlocated) {
+            // Unlocated break is travel-neutral
+            expect(mid.travelFromPrev).toBeNull();
+            // Next park item measures travel directly from previous located item (walk)
+            expect(park2.travelFromPrev?.kind).toBe('walk');
+          } else {
+            // Located resort (null park) incurs park_hop transit on arrival and departure
+            expect(mid.travelFromPrev).toEqual({ kind: 'park_hop', minutes: 45 });
+            expect(park2.travelFromPrev).toEqual({ kind: 'park_hop', minutes: 45 });
+          }
+        },
+      ),
+      { numRuns: 100 },
+    );
+  });
+
+  // Feature: day-planning-optimization, Property 18: Same-kind downtime adjacency penalty
+  it('Property 18: Same-kind downtime adjacency penalty', () => {
+    fc.assert(
+      fc.property(
+        fc.constantFrom('dining', 'break'),
+        fc.boolean(),
+        (kind, bothFixed) => {
+          const item1: OptimizeInputItem = {
+            id: 'downtime-1',
+            experienceId: kind === 'dining' ? 'exp-d-1' : 'exp-b-1',
+            park: 'Magic Kingdom',
+            coords: null,
+            plannedTime: bothFixed ? `${mockDate}T14:00:00.000Z` : null,
+            isFixed: bothFixed,
+            isLightningLane: false,
+            useSingleRider: false,
+            priority: 1,
+            itemType: kind === 'break' ? 'break' : 'experience',
+            category: kind === 'dining' ? 'Restaurant' : null,
+            durationMinutes: 60,
+          };
+
+          const item2: OptimizeInputItem = {
+            id: 'downtime-2',
+            experienceId: kind === 'dining' ? 'exp-d-2' : 'exp-b-2',
+            park: 'Magic Kingdom',
+            coords: null,
+            plannedTime: bothFixed ? `${mockDate}T15:30:00.000Z` : null,
+            isFixed: bothFixed,
+            isLightningLane: false,
+            useSingleRider: false,
+            priority: 2,
+            itemType: kind === 'break' ? 'break' : 'experience',
+            category: kind === 'dining' ? 'Restaurant' : null,
+            durationMinutes: 60,
+          };
+
+          const input: OptimizeInput = {
+            date: mockDate,
+            startHour: 9,
+            endHour: 21,
+            walkingSpeed: 'moderate',
+            earlyEntryEligible: false,
+            snapshots: {},
+            seed: 42,
+            items: [item1, item2],
+          };
+
+          const res = optimize(input);
+          expect(res.unfittedItemIds).toEqual([]);
+          expect(res.items).toHaveLength(2);
+
+          const hasWarning = res.warnings.some((w) => w.startsWith(`adjacent_${kind}`));
+          if (bothFixed) {
+            // User-pinned adjacent items are exempt
+            expect(hasWarning).toBe(false);
+          } else {
+            // Flexible adjacent same-kind downtime items emit warning and are soft-penalized
+            expect(hasWarning).toBe(true);
+          }
+        },
+      ),
+      { numRuns: 100 },
+    );
+  });
 });
+
 
 
