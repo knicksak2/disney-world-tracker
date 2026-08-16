@@ -323,11 +323,20 @@ export function createSamplingService(deps: SamplingServiceDeps): SamplingServic
           
           sig.has_single_rider = sig.has_single_rider || entry.queue?.SINGLE_RIDER !== undefined;
           sig.uses_virtual_queue = sig.uses_virtual_queue || entry.queue?.BOARDING_GROUP !== undefined;
-          // Downtime rate EMA
-          const downSample = (entry.status === 'DOWN' || entry.status === 'CLOSED') ? 1.0 : 0.0;
-          const sigWeight = 2 / (Math.min(sig.sample_count, 100) + 2); // Cap alpha
-          sig.downtime_rate = applyEma(sig.downtime_rate, downSample, sigWeight);
-          sig.sample_count++;
+          // Downtime/reliability rate EMA (R9.2). Only fold in statuses that
+          // reflect operational reliability: OPERATING (up) and DOWN (an
+          // unexpected mid-day breakdown). Scheduled non-operation — CLOSED
+          // (before open, after close, seasonal) and REFURBISHMENT — is NOT a
+          // reliability signal; folding it in collapses the metric into a
+          // "not-currently-open" rate dominated by overnight/pre-open passes
+          // (observed ~22% before this fix). The denominator (sample_count)
+          // therefore counts only reliability observations, not total passes.
+          if (entry.status === 'OPERATING' || entry.status === 'DOWN') {
+            const downSample = entry.status === 'DOWN' ? 1.0 : 0.0;
+            const sigWeight = 2 / (Math.min(sig.sample_count, 100) + 2); // Cap alpha
+            sig.downtime_rate = applyEma(sig.downtime_rate, downSample, sigWeight);
+            sig.sample_count++;
+          }
           updatedSignals.push(sig);
 
           // Only update shapes if OPERATING and valid wait
