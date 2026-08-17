@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { WaitSnapshot } from '@dwt/shared';
+import { createPredictionService } from '../../intelligence/predictionService.js';
 import {
   optimize,
   SHOW_ARRIVAL_BUFFER_MIN,
@@ -225,5 +226,91 @@ describe('Optimizer Showtime Scheduling (R8.1, Property 15)', () => {
     expect(showItem).toBeDefined();
     expect(showItem.scheduledShowtime).toBe('2026-10-01T14:00:00.000Z');
     expect(result.warnings).not.toContain('show_missed:item-show-1');
+  });
+
+  it('slots a show end-to-end when snapshots are produced by getDaySnapshot from raw object-shaped daily signals', async () => {
+    const expId = 'exp-indiana-jones';
+    // Raw Indiana Jones fixture from dev/prod DB:
+    const rawShowtimes = [
+      { type: 'Performance Time', startTime: '2026-08-17T10:45:00-04:00', endTime: '2026-08-17T10:45:00-04:00' },
+      { type: 'Performance Time', startTime: '2026-08-17T12:00:00-04:00', endTime: '2026-08-17T12:00:00-04:00' },
+      { type: 'Performance Time', startTime: '2026-08-17T13:15:00-04:00', endTime: '2026-08-17T13:15:00-04:00' },
+      { type: 'Performance Time', startTime: '2026-08-17T15:15:00-04:00', endTime: '2026-08-17T15:15:00-04:00' },
+      { type: 'Performance Time', startTime: '2026-08-17T16:30:00-04:00', endTime: '2026-08-17T16:30:00-04:00' },
+    ];
+
+    const mockRepo: any = {
+      getParkCrowdIndices: vi.fn().mockResolvedValue([]),
+      getParkScheduleSignals: vi.fn().mockResolvedValue([]),
+      getComparableCrowdIndices: vi.fn().mockResolvedValue([]),
+      getForecastAccuracies: vi.fn().mockResolvedValue([]),
+      getRideShapes: vi.fn().mockResolvedValue([]),
+      getSeasonHours: vi.fn().mockResolvedValue([]),
+      getExperienceSignals: vi.fn().mockResolvedValue([]),
+      getWeatherSensitivities: vi.fn().mockResolvedValue([]),
+      getExperienceDailySignals: vi.fn().mockResolvedValue([
+        {
+          experience_id: expId,
+          date: new Date('2026-08-17'),
+          ll_price_cents: null,
+          ll_available: false,
+          used_virtual_queue: false,
+          showtimes: rawShowtimes,
+        },
+      ]),
+      getShowTimePatterns: vi.fn().mockResolvedValue([]),
+    };
+
+    const mockWeatherClient: any = {
+      getWDWWeather: vi.fn().mockResolvedValue({
+        current: { condition: 'Clear', tempF: 75, precip: 0 },
+        forecast: [],
+      }),
+    };
+
+    const predictionService = createPredictionService({
+      repo: mockRepo,
+      weatherClient: mockWeatherClient,
+    });
+
+    const targetDate = new Date('2026-08-17T12:00:00-04:00');
+    const snapshots = await predictionService.getDaySnapshot([expId], 'Hollywood Studios', targetDate);
+
+    // Verify getDaySnapshot produced valid ISO strings, not "[object Object]"
+    expect(snapshots[expId]!.showtimes).toEqual([
+      '2026-08-17T14:45:00.000Z',
+      '2026-08-17T16:00:00.000Z',
+      '2026-08-17T17:15:00.000Z',
+      '2026-08-17T19:15:00.000Z',
+      '2026-08-17T20:30:00.000Z',
+    ]);
+
+    const input: OptimizeInput = {
+      items: [
+        makeItem({
+          id: 'item-indiana-jones',
+          experienceId: expId,
+          durationMinutes: 30,
+          park: 'Hollywood Studios',
+        }),
+      ],
+      date: '2026-08-17',
+      snapshots,
+      startHour: 9,
+      endHour: 21,
+      walkingSpeed: 'moderate',
+      earlyEntryEligible: false,
+    };
+
+    const result = optimize(input);
+
+    expect(result.items.length).toBe(1);
+    const item = result.items[0]!;
+    // Day starts at 9:00 AM (540m). Earliest show is 10:45 AM ET (645m, 14:45:00.000Z).
+    // Doors open 15m before showtime = 10:30 AM ET (630m, 14:30:00.000Z).
+    expect(item.scheduledShowtime).toBe('2026-08-17T14:45:00.000Z');
+    expect(item.suggestedArrival).toBe('2026-08-17T14:30:00.000Z');
+    expect(item.predictedWaitMinutes).toBe(SHOW_ARRIVAL_BUFFER_MIN);
+    expect(result.warnings).not.toContain('show_missed:item-indiana-jones');
   });
 });

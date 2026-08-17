@@ -139,6 +139,21 @@ Implementation is **TypeScript**, reusing existing infrastructure: the `Live_Ser
 - [x] 14. Checkpoint — Live DB percentiles test and recompute visibility complete
   - Verify all unit, live-db, and migration tests pass cleanly.
 
+- [x] 15. Showtime slotting & pattern derivation shape tolerance
+  - [x] 15.1 Pure showtime normalizer `normalizeShowtimeEntries` (`apps/api/src/services/intelligence/showtimePatterns.ts`)
+    - Support 3 shapes: raw upstream objects (`{ startTime, endTime, type }`), projected objects (`{ start }`), and bare ISO strings. Emit canonical UTC ISO instants, ascending sort, and count unparseable entries in `skipped`.
+    - Unit tests covering all 3 shapes, mixed arrays, non-array/nulls, unparseable count incrementing `skipped`, offset-bearing instant preservation, and ascending sort.
+    - _Requirements: 12.1, 12.2_
+  - [x] 15.2 Integrate normalizer into `getDaySnapshot` and `deriveShowTimePatterns` with skipped warnings (`predictionService.ts`, `derivedStatsService.ts`, `showtimePatterns.ts`)
+    - Replace `.map(String)` in `getDaySnapshot` with `normalizeShowtimeEntries`; log at `warn` when `skipped > 0`.
+    - Pass unmolested raw showtimes in `derivedStatsService.ts` and normalize in `deriveShowTimePatterns`.
+    - pg-mem integration test in `showtimePatternsRecompute.integration.test.ts` inserting raw object JSONB and asserting patterns derive.
+    - `predictionService.showtimes.test.ts` asserting canonical ISO instants, no `"[object Object]"`, and logger warn on skipped entries.
+    - `optimizer.shows.test.ts` end-to-end test with `getDaySnapshot` output derived from raw objects.
+    - _Requirements: 12.2, 12.3, 12.4_
+  - [x] 15.3 Checkpoint — Showtime shape tolerance verification
+    - Verify all showtime unit, integration, and optimizer tests pass cleanly.
+
 ## Notes
 
 - Test-only tasks (2.3, 4.4, 5.3, 6.3, 8.1, 9.2, 9.4, 10.3, 12.1) are optional for a faster MVP; core tasks are never optional.

@@ -237,10 +237,10 @@ export function createDerivedStatsService(deps: DerivedStatsServiceDeps): Derive
     const signals: RawShowtimeSignal[] = rawSignals.map((r) => ({
       experience_id: r.experience_id,
       date: typeof r.date === 'string' ? r.date.split('T')[0]! : (r.date instanceof Date ? r.date.toISOString().split('T')[0]! : String(r.date).split('T')[0]!),
-      showtimes: Array.isArray(r.showtimes) ? (r.showtimes as unknown[]).map(String) : [],
+      showtimes: r.showtimes,
     }));
 
-    const patterns = deriveShowTimePatterns(signals);
+    const patterns = deriveShowTimePatterns(signals, logger);
     const distinctExpIds = Array.from(new Set(signals.map((s) => s.experience_id)));
 
     if (patterns.length > 0 && typeof repo.upsertShowTimePatterns === 'function') {

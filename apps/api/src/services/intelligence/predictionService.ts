@@ -1,10 +1,11 @@
 import type { IntelligenceRepo, ShowTimePatternRow } from './IntelligenceRepo.js';
 import type { WeatherClient } from './weatherClient.js';
+import { createLogger } from '../../logger.js';
 import { wdwToday } from '../trips/wdwClock.js';
 import { selectTier, crowdMultiplier, weatherAdjustment, displayLevel } from './waitMath.js';
 import { forecastIndex, selectComparableIndices } from './crowdForecast.js';
 import { seasonalPrior } from './seasonalPrior.js';
-import { getETDayOfWeek, minutesFromMidnightETToISO } from './showtimePatterns.js';
+import { getETDayOfWeek, minutesFromMidnightETToISO, normalizeShowtimeEntries } from './showtimePatterns.js';
 import type { WaitSnapshot, CrowdCalendarDayDTO, WaitInsightsDTO } from '@dwt/shared';
 import type { Park } from '@dwt/shared';
 
@@ -12,6 +13,7 @@ export interface PredictionServiceDeps {
   repo: IntelligenceRepo;
   weatherClient: WeatherClient;
   now?: () => Date;
+  logger?: any;
 }
 
 export interface PredictionService {
@@ -25,6 +27,7 @@ export interface PredictionService {
 
 export function createPredictionService(deps: PredictionServiceDeps): PredictionService {
   const { repo } = deps;
+  const logger = deps.logger ?? createLogger();
   const clock = deps.now ?? (() => new Date());
 
   /**
@@ -210,13 +213,20 @@ export function createPredictionService(deps: PredictionServiceDeps): Prediction
         }
         
         const daily = dailyByExp.get(id);
-        const hasPerDateShowtimes = Array.isArray(daily?.showtimes) && daily.showtimes.length > 0;
+        const { instants: perDateInstants, skipped: perDateSkipped } = normalizeShowtimeEntries(daily?.showtimes);
+        if (perDateSkipped > 0 && logger?.warn) {
+          logger.warn(
+            { experienceId: id, date: targetDateStr, skipped: perDateSkipped },
+            `getDaySnapshot skipped ${perDateSkipped} unparseable showtime entries for experience ${id}`,
+          );
+        }
+        const hasPerDateShowtimes = perDateInstants.length > 0;
 
         let showtimes: readonly string[] | undefined;
         let showtimesAreTypical: boolean | undefined;
 
         if (hasPerDateShowtimes) {
-          showtimes = (daily!.showtimes as unknown[]).map(String);
+          showtimes = perDateInstants;
         } else {
           const expPatterns = patternsByExp.get(id);
           if (expPatterns && expPatterns.length > 0) {

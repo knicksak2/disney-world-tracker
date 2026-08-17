@@ -11,9 +11,13 @@ describe('predictionService showtimes fallback and typical showtimes flag', () =
     }),
   };
 
-  it('prefers real per-date showtimes over historical patterns and leaves showtimesAreTypical unset', async () => {
-    const expId = 'exp-show-1';
-    const perDateShowtime = '2026-10-01T14:00:00.000Z'; // 10:00 AM EDT
+  it('normalizes real upstream object-shaped showtimes into canonical ISO instants and never produces "[object Object]"', async () => {
+    const expId = 'exp-indiana-jones';
+    const rawShowtimes = [
+      { type: 'Performance Time', startTime: '2026-08-17T10:45:00-04:00', endTime: '2026-08-17T10:45:00-04:00' },
+      { type: 'Performance Time', startTime: '2026-08-17T12:00:00-04:00', endTime: '2026-08-17T12:00:00-04:00' },
+      { type: 'Performance Time', startTime: '2026-08-17T13:15:00-04:00', endTime: '2026-08-17T13:15:00-04:00' },
+    ];
 
     const mockRepo = {
       getParkCrowdIndices: vi.fn().mockResolvedValue([]),
@@ -27,22 +31,14 @@ describe('predictionService showtimes fallback and typical showtimes flag', () =
       getExperienceDailySignals: vi.fn().mockResolvedValue([
         {
           experience_id: expId,
-          date: new Date('2026-10-01'),
+          date: new Date('2026-08-17'),
           ll_price_cents: null,
           ll_available: false,
           used_virtual_queue: false,
-          showtimes: [perDateShowtime],
+          showtimes: rawShowtimes,
         },
       ]),
-      getShowTimePatterns: vi.fn().mockResolvedValue([
-        {
-          experience_id: expId,
-          day_of_week: 4, // Thursday
-          start_minutes: 720, // 12:00 PM (different from per-date)
-          frequency: 1.0,
-          sample_count: 5,
-        } as ShowTimePatternRow,
-      ]),
+      getShowTimePatterns: vi.fn().mockResolvedValue([]),
     } as unknown as IntelligenceRepo;
 
     const service = createPredictionService({
@@ -50,12 +46,74 @@ describe('predictionService showtimes fallback and typical showtimes flag', () =
       weatherClient: mockWeatherClient,
     });
 
-    const targetDate = new Date('2026-10-01T12:00:00-04:00');
-    const snapshot = await service.getDaySnapshot([expId], 'Animal Kingdom', targetDate);
+    const targetDate = new Date('2026-08-17T12:00:00-04:00');
+    const snapshot = await service.getDaySnapshot([expId], 'Hollywood Studios', targetDate);
 
     expect(snapshot[expId]).toBeDefined();
-    expect(snapshot[expId]!.showtimes).toEqual([perDateShowtime]);
+    expect(snapshot[expId]!.showtimes).toEqual([
+      '2026-08-17T14:45:00.000Z',
+      '2026-08-17T16:00:00.000Z',
+      '2026-08-17T17:15:00.000Z',
+    ]);
+    expect(snapshot[expId]!.showtimes).not.toContain('[object Object]');
     expect(snapshot[expId]!.showtimesAreTypical).toBeUndefined();
+  });
+
+  it('logs at warn when unparseable showtime entries are skipped in getDaySnapshot', async () => {
+    const expId = 'exp-dirty-show';
+    const dirtyShowtimes = [
+      { type: 'Performance Time', startTime: '2026-08-17T10:45:00-04:00', endTime: '2026-08-17T10:45:00-04:00' },
+      { invalid: true },
+      'not-a-date',
+    ];
+
+    const mockLogger = {
+      warn: vi.fn(),
+      info: vi.fn(),
+      error: vi.fn(),
+      debug: vi.fn(),
+    };
+
+    const mockRepo = {
+      getParkCrowdIndices: vi.fn().mockResolvedValue([]),
+      getParkScheduleSignals: vi.fn().mockResolvedValue([]),
+      getComparableCrowdIndices: vi.fn().mockResolvedValue([]),
+      getForecastAccuracies: vi.fn().mockResolvedValue([]),
+      getRideShapes: vi.fn().mockResolvedValue([]),
+      getSeasonHours: vi.fn().mockResolvedValue([]),
+      getExperienceSignals: vi.fn().mockResolvedValue([]),
+      getWeatherSensitivities: vi.fn().mockResolvedValue([]),
+      getExperienceDailySignals: vi.fn().mockResolvedValue([
+        {
+          experience_id: expId,
+          date: new Date('2026-08-17'),
+          ll_price_cents: null,
+          ll_available: false,
+          used_virtual_queue: false,
+          showtimes: dirtyShowtimes,
+        },
+      ]),
+      getShowTimePatterns: vi.fn().mockResolvedValue([]),
+    } as unknown as IntelligenceRepo;
+
+    const service = createPredictionService({
+      repo: mockRepo,
+      weatherClient: mockWeatherClient,
+      logger: mockLogger,
+    });
+
+    const targetDate = new Date('2026-08-17T12:00:00-04:00');
+    const snapshot = await service.getDaySnapshot([expId], 'Hollywood Studios', targetDate);
+
+    expect(snapshot[expId]!.showtimes).toEqual(['2026-08-17T14:45:00.000Z']);
+    expect(mockLogger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        experienceId: expId,
+        date: '2026-08-17',
+        skipped: 2,
+      }),
+      expect.stringContaining('skipped 2 unparseable showtime entries'),
+    );
   });
 
   it('falls back to show_time_patterns on the requested date in ET when per-date showtimes are absent, setting showtimesAreTypical to true', async () => {

@@ -73,6 +73,7 @@ const ALL_MIGRATIONS = [
   '0001_init.sql',
   '0020_wait_time_intelligence.sql',
   '0029_show_time_patterns.sql',
+  '0030_derived_stat_runs.sql',
 ];
 
 describe('showtimePatterns derivation real SQL integration test', () => {
@@ -95,17 +96,17 @@ describe('showtimePatterns derivation real SQL integration test', () => {
        VALUES ('${expId}', '${expId}', 'Festival of the Lion King', 'Animal Kingdom', 'Show', true);`,
     );
 
-    // Seed 4 Sundays with 10:00 AM showtimes:
-    // Oct 4, Oct 11, Oct 18 are EDT (UTC-4) -> 14:00:00.000Z
-    // Nov 8 is EST (UTC-5) -> 15:00:00.000Z
-    // Nov 8 also has a 1:00 PM EST show -> 18:00:00.000Z (780m) on only 1 date (excluded)
+    // Seed 4 Sundays with 10:00 AM showtimes stored as raw ThemeParks objects:
+    // Oct 4, Oct 11, Oct 18 are EDT (UTC-4) -> 10:00:00-04:00 (14:00:00.000Z)
+    // Nov 8 is EST (UTC-5) -> 10:00:00-05:00 (15:00:00.000Z)
+    // Nov 8 also has a 1:00 PM EST show -> 13:00:00-05:00 (18:00:00.000Z / 780m) on only 1 date (excluded)
     db.public.none(`
       INSERT INTO experience_daily_signals (experience_id, date, showtimes)
       VALUES
-        ('${expId}', '2026-10-04', '["2026-10-04T14:00:00.000Z"]'::jsonb),
-        ('${expId}', '2026-10-11', '["2026-10-11T14:00:00.000Z"]'::jsonb),
-        ('${expId}', '2026-10-18', '["2026-10-18T14:02:00.000Z"]'::jsonb),
-        ('${expId}', '2026-11-08', '["2026-11-08T15:00:00.000Z", "2026-11-08T18:00:00.000Z"]'::jsonb);
+        ('${expId}', '2026-10-04', '[{"type":"Performance Time","startTime":"2026-10-04T10:00:00-04:00","endTime":"2026-10-04T10:00:00-04:00"}]'::jsonb),
+        ('${expId}', '2026-10-11', '[{"type":"Performance Time","startTime":"2026-10-11T10:00:00-04:00","endTime":"2026-10-11T10:00:00-04:00"}]'::jsonb),
+        ('${expId}', '2026-10-18', '[{"type":"Performance Time","startTime":"2026-10-18T10:02:00-04:00","endTime":"2026-10-18T10:02:00-04:00"}]'::jsonb),
+        ('${expId}', '2026-11-08', '[{"type":"Performance Time","startTime":"2026-11-08T10:00:00-05:00","endTime":"2026-11-08T10:00:00-05:00"}, {"type":"Performance Time","startTime":"2026-11-08T13:00:00-05:00","endTime":"2026-11-08T13:00:00-05:00"}]'::jsonb);
     `);
 
     const dummyPredictionService = {

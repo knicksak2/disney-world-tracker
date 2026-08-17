@@ -82,7 +82,7 @@ graph TD
 - **`crowd_forecast_log`** — PK `(park, date, lead_days)`; `forecast_index REAL`, `forecasted_at TIMESTAMPTZ`, `observed_index REAL` (null until reconciled), `error REAL` (null until reconciled). The frozen forecast as issued; reconciled after the date closes; pruned beyond a retention window.
 - **`crowd_forecast_accuracy`** — PK `(park, lead_days)`; `mae REAL`, `bias REAL`, `sample_count INTEGER`. Recency-weighted rolling accuracy that feeds the bias correction.
 - **`experience_signals`** — PK `experience_id`; slowly-changing rolling per-ride facts: `has_single_rider BOOLEAN`, `uses_virtual_queue BOOLEAN`, `downtime_rate REAL`, `ll_sellout_median_hour REAL`, `sample_count INTEGER`. One row per experience (~100 rows).
-- **`experience_daily_signals`** — PK `(experience_id, date)`; per-date facts from the live/schedule feeds: `ll_price_cents INTEGER`, `ll_available BOOLEAN`, `used_virtual_queue BOOLEAN`, `showtimes JSONB` (for shows). Pruned to a forward + recent window.
+- **`experience_daily_signals`** — PK `(experience_id, date)`; per-date facts from the live/schedule feeds: `ll_price_cents INTEGER`, `ll_available BOOLEAN`, `used_virtual_queue BOOLEAN`, `showtimes JSONB` (for shows). Holds the RAW upstream `ThemeParksShowtime[]` objects (`{type, startTime, endTime}`), NOT ISO strings. All readers (`predictionService.getDaySnapshot`, `derivedStatsService` / `deriveShowTimePatterns`) must normalize through `normalizeShowtimeEntries`. Pruned to a forward + recent window.
 - **`weather_observations`** — PK `observed_at` (one WDW location); `temp_f REAL`, `precip REAL`, `condition TEXT`. Bounded recent-window retention; plus a small cached near-term forecast (by date).
 - **`experience_weather_sensitivity`** — PK `(experience_id, condition)`; `wait_multiplier REAL` versus a clear-sky baseline, `sample_count INTEGER`. ~100 rides × few conditions ≈ small, bounded.
 - **`experience_event_impact`** — PK `(experience_id, event_type)`; `wait_multiplier REAL` during nearby entertainment vs baseline, `sample_count INTEGER`. Learned from showtimes + waits.
@@ -229,10 +229,18 @@ Concrete defaults so nothing is left to guess. Override via env where noted.
 - **Retention:** `wait_samples` pruned to `30` days; `crowd_forecast_log` retained until reconciled + `90` days; `experience_daily_signals` retained `400` days (year-over-year), forward window `120` days.
 - **Money:** all prices stored in integer cents.
 - **Historical crowd seed (WDW Passport):** convert their 1–10 level to a ratio via `crowd_index = clamp(level / 5, 0.4, 3.0)` (level 5 ≈ typical, ratio 1.0). Seeded rows use `source='seed'`, `daily_avg_wait=0`, `sample_count=0`; ~2 recent years (post-2021 to avoid COVID distortion) is ample for the comparable-dates feature.
+- **Showtime pattern derivation & threshold warm-up (R12):** `SHOWTIME_PATTERN_WINDOW_DAYS = 180` days, `SHOWTIME_PATTERN_MIN_SAMPLES = 3` observations per `(experience_id, day_of_week)`, `SHOWTIME_PATTERN_MIN_FREQUENCY = 0.50`. Because sampling captures only the current park day, pattern derivation requires at least 3 same-weekday observations (approx. 3 weeks of ongoing sampling) before typical showtimes appear for a given weekday. During this warm-up period, shows on dates lacking per-date showtimes honestly emit `showtimes_unavailable`.
 
 ## External Interfaces
 
 Endpoint shapes and the id-mapping relied on. Live/schedule reads go through the existing `Live_Service`; the seed script is standalone.
+
+### Showtime Data Shapes Across Layers
+
+There are three distinct showtime data shapes in play across the layers:
+- **Raw Upstream Form:** `{ startTime: string, endTime?: string, type?: string }` — produced by the live upstream ThemeParks feed; persisted verbatim in `experience_daily_signals.showtimes`.
+- **Projected Form:** `{ start: string, end?: string, type?: string }` — `Showtime` in `LiveDetail.ts`, produced by `projectShowtimes` for client-facing live view.
+- **Canonical ISO Instants:** `'2026-08-17T14:45:00.000Z'` — emitted by `normalizeShowtimeEntries`, consumed by `getDaySnapshot` (`WaitSnapshot.showtimes`) and the Day Planning optimizer.
 
 ### Id mapping (critical)
 `experiences.upstream_entity_id` holds the **Enterprise_Id** (== ThemeParks `externalId`, e.g. `411499845;entityType=Attraction`). The ThemeParks entity **GUID** is obtained via `themeParksDirectory.resolveEntityId(enterpriseId)`. RopeDrop's `entity_id` **is** that GUID. Never join RopeDrop on `upstream_entity_id` directly.
@@ -301,10 +309,10 @@ displayLevel(continuousIndex) = clamp(round(5 × continuousIndex), 1, 10)   // d
 
 **Validates:** Requirements 12.1, 12.2, 12.3, 12.4
 
-For any arbitrary set of historical daily showtime signals across trailing dates:
-1. Every emitted pattern in `show_time_patterns` satisfies `sample_count >= 3`, `frequency >= 0.5`, `0 <= day_of_week <= 6`, `0 <= start_minutes <= 1440`, and `start_minutes % 5 === 0` (5-minute bucketing).
+For any arbitrary set of historical daily showtime signals across trailing dates (supporting raw upstream objects, projected objects, or ISO strings):
+1. Every emitted pattern in `show_time_patterns` satisfies `sample_count >= 3`, `frequency >= 0.5`, `0 <= day_of_week <= 6`, `0 <= start_minutes <= 1440`, and `start_minutes % 5 === 0` (5-minute bucketing in Eastern Time).
 2. Slots appearing in fewer than `SHOWTIME_PATTERN_MIN_SAMPLES` (3) dates or with frequency below `SHOWTIME_PATTERN_MIN_FREQUENCY` (0.50) are excluded.
-3. In `getDaySnapshot`, real per-date showtimes strictly take precedence when present (leaving `showtimesAreTypical` unset), while absent per-date showtimes fall back to `show_time_patterns` for that day of week formatted as ISO instants on the target date with `showtimesAreTypical: true`.
+3. In `getDaySnapshot`, real per-date showtimes (normalized from stored raw objects via `normalizeShowtimeEntries`) strictly take precedence when present (leaving `showtimesAreTypical` unset and never emitting `"[object Object]"`), while absent per-date showtimes fall back to `show_time_patterns` for that day of week formatted as ISO instants on the target date with `showtimesAreTypical: true`. Unparseable entries increment `skipped` and log a warning rather than silently dropping.
 
 ## Cross-Spec Dependencies & Build Order
 

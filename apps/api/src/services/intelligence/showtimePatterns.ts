@@ -22,7 +22,7 @@ export const SHOWTIME_PATTERN_MIN_FREQUENCY = 0.5;
 export interface RawShowtimeSignal {
   readonly experience_id: string;
   readonly date: string; // YYYY-MM-DD
-  readonly showtimes: readonly string[]; // Canonical ISO instant strings
+  readonly showtimes: unknown; // Raw upstream objects, projected objects, or ISO strings
 }
 
 export interface DerivedShowTimePattern {
@@ -31,6 +31,55 @@ export interface DerivedShowTimePattern {
   readonly start_minutes: number; // Minutes from midnight ET (0-1440), bucketed to 5m
   readonly frequency: number;
   readonly sample_count: number;
+}
+
+/**
+ * Normalizes an array of showtime entries across all 3 shapes in the codebase:
+ *   1. Raw upstream object: `{ startTime: string, endTime?: string, type?: string }` (stored in DB)
+ *   2. Projected object: `{ start: string, ... }` (Showtime in LiveDetail.ts)
+ *   3. Bare ISO string: `'2026-08-17T14:45:00.000Z'` or offset string `'2026-08-17T10:45:00-04:00'`
+ *
+ * Emits canonical UTC ISO instants (`.toISOString()`), sorted ascending.
+ * Non-arrays yield `{ instants: [], skipped: 0 }`. Unparseable entries increment `skipped`.
+ */
+export function normalizeShowtimeEntries(raw: unknown): { instants: string[]; skipped: number } {
+  if (!Array.isArray(raw)) {
+    return { instants: [], skipped: 0 };
+  }
+
+  const instants: string[] = [];
+  let skipped = 0;
+
+  for (const entry of raw) {
+    let candidate: unknown;
+    if (typeof entry === 'string') {
+      candidate = entry;
+    } else if (entry !== null && typeof entry === 'object') {
+      const obj = entry as Record<string, unknown>;
+      if (typeof obj['startTime'] === 'string') {
+        candidate = obj['startTime'];
+      } else if (typeof obj['start'] === 'string') {
+        candidate = obj['start'];
+      }
+    }
+
+    if (typeof candidate !== 'string' || candidate.trim() === '') {
+      skipped++;
+      continue;
+    }
+
+    const d = new Date(candidate);
+    if (Number.isNaN(d.getTime())) {
+      skipped++;
+      continue;
+    }
+
+    instants.push(d.toISOString());
+  }
+
+  instants.sort((a, b) => a.localeCompare(b));
+
+  return { instants, skipped };
 }
 
 /**
@@ -43,12 +92,16 @@ export function bucketStartMinutes(minutes: number): number {
 /**
  * Derive typical showtime patterns from historical daily signals across trailing days.
  */
-export function deriveShowTimePatterns(signals: readonly RawShowtimeSignal[]): DerivedShowTimePattern[] {
+export function deriveShowTimePatterns(signals: readonly RawShowtimeSignal[], logger?: any): DerivedShowTimePattern[] {
   // 1. Group signals by (experience_id, day_of_week)
   const grouped = new Map<string, { experience_id: string; day_of_week: number; dates: Map<string, Set<number>> }>();
 
   for (const sig of signals) {
-    if (!sig.showtimes || !Array.isArray(sig.showtimes) || sig.showtimes.length === 0) {
+    const { instants, skipped } = normalizeShowtimeEntries(sig.showtimes);
+    if (skipped > 0 && logger?.warn) {
+      logger.warn({ experience_id: sig.experience_id, date: sig.date, skipped }, `deriveShowTimePatterns skipped ${skipped} unparseable showtime entries`);
+    }
+    if (instants.length === 0) {
       continue;
     }
     const dow = getETDayOfWeek(sig.date);
@@ -66,8 +119,7 @@ export function deriveShowTimePatterns(signals: readonly RawShowtimeSignal[]): D
       entry.dates.set(sig.date, bucketsForDate);
     }
 
-    for (const isoStr of sig.showtimes) {
-      if (typeof isoStr !== 'string') continue;
+    for (const isoStr of instants) {
       const rawMins = isoInstantToMinutesFromMidnightET(sig.date, isoStr);
       if (Number.isNaN(rawMins) || rawMins < 0 || rawMins > 1440) continue;
       const bucket = bucketStartMinutes(rawMins);

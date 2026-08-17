@@ -511,13 +511,13 @@ describe('TripScheduleScreen', () => {
       expect(screen.getByTestId('timing-mode-soft_window')).toBeTruthy();
     });
     fireEvent.press(screen.getByTestId('timing-mode-soft_window'));
-    fireEvent.press(screen.getByTestId('meal-period-breakfast'));
+    fireEvent.press(screen.getByTestId('time-of-day-540'));
     fireEvent.press(screen.getByText('Done'));
     await waitFor(() => {
       expect(patchPayload).toMatchObject({
-        mealPeriod: 'breakfast',
-        windowStartMinutes: 480,
-        windowEndMinutes: 630,
+        mealPeriod: null,
+        windowStartMinutes: 540,
+        windowEndMinutes: 720,
       });
     });
 
@@ -1976,12 +1976,15 @@ describe('TripScheduleScreen', () => {
 
       // Single Rider toggle should NOT be rendered for dining
       expect(screen.queryByText(/Single Rider Line:/)).toBeNull();
+      expect(screen.queryByTestId('single-rider-toggle')).toBeNull();
 
       // Switch to exact time mode
       fireEvent.press(screen.getByTestId('timing-mode-exact_time'));
 
       // Lightning Lane toggle should NOT be rendered for dining
       expect(screen.queryByText(/Mode: Lightning Lane/)).toBeNull();
+      expect(screen.queryByTestId('timing-mode-lightning-lane')).toBeNull();
+      expect(screen.queryByTestId('ll-option-toggle')).toBeNull();
     });
 
     it('B3: does not warn for lunch/dinner when restaurant serves compound "Lunch And Dinner" (Pecos Bill)', async () => {
@@ -2108,6 +2111,283 @@ describe('TripScheduleScreen', () => {
       expect(patchPayload.priority).toBe(1);
       // durationMinutes MUST NOT be sent as 15 (which destroys the 30m QS default)
       expect(patchPayload.durationMinutes).toBeUndefined();
+    });
+
+    it('renders Time Window presets without meal periods and renders Lightning Lane & Single Rider options for a Ride', async () => {
+      const rideItem: PlannedItemDTO = {
+        ...PLANNED_ITEM,
+        id: 'item-ride-1',
+        experienceId: 'exp-ride-1',
+        experienceName: 'Space Mountain',
+        plannedDate: '2026-10-01',
+      };
+
+      apiRequestMock.mockImplementation(async (method, path) => {
+        if (method === 'GET' && path === `/trips/${TRIP_ID}`) {
+          return { id: TRIP_ID, name: 'Disney Trip', startDate: '2026-10-01' } as any;
+        }
+        if (method === 'GET' && path === `/trips/${TRIP_ID}/planned-items`) {
+          return [rideItem];
+        }
+        if (method === 'GET' && path === '/catalog') {
+          return {
+            experiences: [
+              {
+                id: 'exp-ride-1',
+                name: 'Space Mountain',
+                category: 'Ride',
+                park: 'Magic Kingdom',
+              },
+            ],
+          };
+        }
+        throw new Error(`Unexpected request: ${method} ${path}`);
+      });
+
+      renderScreen();
+
+      await waitFor(() => {
+        expect(screen.getByText('Space Mountain')).toBeTruthy();
+      });
+
+      fireEvent.press(screen.getByText('Edit Settings'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('timing-mode-soft_window')).toBeTruthy();
+      });
+
+      // Switch to Time Window
+      fireEvent.press(screen.getByTestId('timing-mode-soft_window'));
+
+      // Meal preference and service presets MUST NOT appear for a ride
+      expect(screen.queryByText('Meal Preference Presets')).toBeNull();
+      expect(screen.queryByText('Full Service Window Presets')).toBeNull();
+      expect(screen.queryByTestId('meal-period-breakfast')).toBeNull();
+
+      // Generic Time of Day presets MUST appear
+      expect(screen.getByText('Time of Day Presets')).toBeTruthy();
+      expect(screen.getByTestId('time-of-day-540')).toBeTruthy();
+
+      // Options section MUST show both Lightning Lane and Single Rider for rides
+      expect(screen.getByTestId('ll-option-toggle')).toBeTruthy();
+      expect(screen.getByTestId('single-rider-toggle')).toBeTruthy();
+
+      // Duration section MUST NOT appear for a ride
+      expect(screen.queryByText('Duration')).toBeNull();
+      expect(screen.queryByTestId('duration-chip-15')).toBeNull();
+    });
+
+    it('renders Time Window presets without meal periods and renders Lightning Lane option for a Show (Indiana Jones)', async () => {
+      let patchPayload: any = null;
+      const showItem: PlannedItemDTO = {
+        ...PLANNED_ITEM,
+        id: 'item-indy',
+        experienceId: 'exp-indy',
+        experienceName: 'Indiana Jones™ Epic Stunt Spectacular!',
+        park: 'Hollywood Studios',
+        plannedDate: '2026-10-01',
+      };
+
+      apiRequestMock.mockImplementation(async (method, path, body) => {
+        if (method === 'GET' && path === `/trips/${TRIP_ID}`) {
+          return { id: TRIP_ID, name: 'Disney Trip', startDate: '2026-10-01' } as any;
+        }
+        if (method === 'GET' && path === `/trips/${TRIP_ID}/planned-items`) {
+          return [showItem];
+        }
+        if (method === 'GET' && path === '/catalog') {
+          return {
+            experiences: [
+              {
+                id: 'exp-indy',
+                name: 'Indiana Jones™ Epic Stunt Spectacular!',
+                category: 'Show',
+                park: 'Hollywood Studios',
+              },
+            ],
+          };
+        }
+        if (method === 'PATCH' && path === `/trips/${TRIP_ID}/planned-items/item-indy`) {
+          patchPayload = body;
+          return;
+        }
+        throw new Error(`Unexpected request: ${method} ${path}`);
+      });
+
+      renderScreen();
+
+      await waitFor(() => {
+        expect(screen.getByText('Indiana Jones™ Epic Stunt Spectacular!')).toBeTruthy();
+      });
+
+      fireEvent.press(screen.getByText('Edit Settings'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('timing-mode-soft_window')).toBeTruthy();
+      });
+
+      // Duration section MUST NOT appear for a show
+      expect(screen.queryByText('Duration')).toBeNull();
+      expect(screen.queryByTestId('duration-chip-30')).toBeNull();
+
+      // Switch to Time Window
+      fireEvent.press(screen.getByTestId('timing-mode-soft_window'));
+
+      // Meal presets MUST NOT be shown for Indiana Jones (Show)
+      expect(screen.queryByText('Meal Preference Presets')).toBeNull();
+      expect(screen.queryByText('Full Service Window Presets')).toBeNull();
+      expect(screen.queryByTestId('meal-period-lunch')).toBeNull();
+
+      // Time of Day presets MUST be shown
+      expect(screen.getByText('Time of Day Presets')).toBeTruthy();
+
+      // Lightning Lane option MUST be available for Show
+      expect(screen.getByTestId('ll-option-toggle')).toBeTruthy();
+
+      // Switch to Exact Time mode
+      fireEvent.press(screen.getByTestId('timing-mode-exact_time'));
+
+      // Exact mode toggle row MUST show Lightning Lane and Fixed Time options
+      expect(screen.getByTestId('timing-mode-lightning-lane')).toBeTruthy();
+      expect(screen.getByTestId('timing-mode-fixed-lock')).toBeTruthy();
+
+      // Select Lightning Lane
+      fireEvent.press(screen.getByTestId('timing-mode-lightning-lane'));
+      expect(screen.getByText('⚡ Lightning Lane Window Start Time')).toBeTruthy();
+
+      // Pick preset time 12:00 PM
+      fireEvent.press(screen.getByText('12:00 PM'));
+
+      // Return window breakdown MUST be visible
+      expect(screen.getByTestId('ll-window-info')).toBeTruthy();
+      expect(screen.getByText(/Return Window: 12:00 PM – 1:00 PM/)).toBeTruthy();
+
+      // Save
+      fireEvent.press(screen.getByText('Done'));
+
+      await waitFor(() => {
+        expect(patchPayload).toBeTruthy();
+      });
+
+      expect(patchPayload.isLightningLane).toBe(true);
+      expect(patchPayload.isFixed).toBe(false);
+      expect(patchPayload.plannedTime).toBe('2026-10-01T16:00:00.000Z');
+      expect(patchPayload.durationMinutes).toBeUndefined();
+    });
+
+    it('enabling Lightning Lane via Options toggle switches to exact time mode and sets pass', async () => {
+      let patchPayload: any = null;
+      const rideItem: PlannedItemDTO = {
+        ...PLANNED_ITEM,
+        id: 'item-ride-2',
+        experienceId: 'exp-ride-2',
+        experienceName: 'Big Thunder Mountain Railroad',
+        plannedDate: '2026-10-01',
+      };
+
+      apiRequestMock.mockImplementation(async (method, path, body) => {
+        if (method === 'GET' && path === `/trips/${TRIP_ID}`) {
+          return { id: TRIP_ID, name: 'Disney Trip', startDate: '2026-10-01' } as any;
+        }
+        if (method === 'GET' && path === `/trips/${TRIP_ID}/planned-items`) {
+          return [rideItem];
+        }
+        if (method === 'GET' && path === '/catalog') {
+          return {
+            experiences: [
+              {
+                id: 'exp-ride-2',
+                name: 'Big Thunder Mountain Railroad',
+                category: 'Ride',
+                park: 'Magic Kingdom',
+              },
+            ],
+          };
+        }
+        if (method === 'PATCH' && path === `/trips/${TRIP_ID}/planned-items/item-ride-2`) {
+          patchPayload = body;
+          return;
+        }
+        throw new Error(`Unexpected request: ${method} ${path}`);
+      });
+
+      renderScreen();
+
+      await waitFor(() => {
+        expect(screen.getByText('Big Thunder Mountain Railroad')).toBeTruthy();
+      });
+
+      fireEvent.press(screen.getByText('Edit Settings'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('ll-option-toggle')).toBeTruthy();
+      });
+
+      // Tap LL Option toggle
+      fireEvent.press(screen.getByTestId('ll-option-toggle'));
+
+      // Saves modal
+      fireEvent.press(screen.getByText('Done'));
+
+      await waitFor(() => {
+        expect(patchPayload).toBeTruthy();
+      });
+
+      expect(patchPayload.isLightningLane).toBe(true);
+      expect(patchPayload.isFixed).toBe(false);
+      expect(patchPayload.durationMinutes).toBeUndefined();
+    });
+
+    it('renders duration chips and allows customizing duration for breaks and dining', async () => {
+      let patchPayload: any = null;
+      const breakItem: PlannedItemDTO = {
+        ...PLANNED_ITEM,
+        id: 'item-break-1',
+        itemType: 'break',
+        customTitle: 'Resort Pool Break',
+        plannedDate: '2026-10-01',
+      };
+
+      apiRequestMock.mockImplementation(async (method, path, body) => {
+        if (method === 'GET' && path === `/trips/${TRIP_ID}`) {
+          return { id: TRIP_ID, name: 'Disney Trip', startDate: '2026-10-01' } as any;
+        }
+        if (method === 'GET' && path === `/trips/${TRIP_ID}/planned-items`) {
+          return [breakItem];
+        }
+        if (method === 'GET' && path === '/catalog') {
+          return { experiences: [] };
+        }
+        if (method === 'PATCH' && path === `/trips/${TRIP_ID}/planned-items/item-break-1`) {
+          patchPayload = body;
+          return;
+        }
+        throw new Error(`Unexpected request: ${method} ${path}`);
+      });
+
+      renderScreen();
+
+      await waitFor(() => {
+        expect(screen.getByText('Resort Pool Break')).toBeTruthy();
+      });
+
+      fireEvent.press(screen.getByText('Edit Settings'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('duration-chip-45')).toBeTruthy();
+      });
+
+      // Select 45 min duration chip
+      fireEvent.press(screen.getByTestId('duration-chip-45'));
+
+      // Save modal
+      fireEvent.press(screen.getByText('Done'));
+
+      await waitFor(() => {
+        expect(patchPayload).toBeTruthy();
+      });
+
+      expect(patchPayload.durationMinutes).toBe(45);
     });
   });
 });

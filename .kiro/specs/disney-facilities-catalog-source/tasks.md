@@ -302,6 +302,9 @@ minimum of 100 iterations.
     - _Requirements: 5.6_
   - [ ] 15.7 Resort coordinates capture verification (Future — DO NOT IMPLEMENT NOW)
     - Inspect raw Disney facility documents for resort facilities to determine whether coordinates can be extracted and stored.
+  - [ ] 15.8 Duplicate catalog identity investigation (Known Issue — DO NOT MERGE/DELETE NOW)
+    - Investigate dual catalog rows for `Indiana Jones™ Epic Stunt Spectacular!` (`upstream_entity_id = '136;entityType=Entertainment'`, `sub_type = 'Stage Show'` vs `upstream_entity_id = '7357772c-6b11-4a8d-af97-05a1bb45f001'`, `sub_type = NULL`).
+    - Only one carries daily signals while both have `duration_minutes = NULL`. Reconcile legacy `;entityType=` form and GUID representation for the same facility during catalog sync.
 
 ## Notes
 
