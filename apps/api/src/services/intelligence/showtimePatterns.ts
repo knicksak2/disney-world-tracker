@@ -1,6 +1,19 @@
 /**
- * Pure calculation and conversions for historical showtime pattern derivation (crowd-calendar R12).
+ * Pure derivation of historical showtime patterns (crowd-calendar R12).
+ *
+ * WDW-local time conversions come from the shared `wdwClock` rather than a
+ * private copy — see the "Reuse these" steering note. Re-exported here for the
+ * modules that consume them alongside this derivation.
  */
+
+import {
+  wdwDayOfWeek as getETDayOfWeek,
+  wdwIsoAtMinutes as minutesFromMidnightETToISO,
+  wdwMinutesFromMidnight as isoInstantToMinutesFromMidnightET,
+  wdwOffsetMinutes as getETOffsetMinutes,
+} from '../trips/wdwClock.js';
+
+export { getETDayOfWeek, getETOffsetMinutes, isoInstantToMinutesFromMidnightET, minutesFromMidnightETToISO };
 
 export const SHOWTIME_PATTERN_WINDOW_DAYS = 180;
 export const SHOWTIME_PATTERN_MIN_SAMPLES = 3;
@@ -18,75 +31,6 @@ export interface DerivedShowTimePattern {
   readonly start_minutes: number; // Minutes from midnight ET (0-1440), bucketed to 5m
   readonly frequency: number;
   readonly sample_count: number;
-}
-
-/**
- * Get Eastern Time offset in minutes (-240 for EDT, -300 for EST).
- */
-export function getETOffsetMinutes(dateStringOrInstant: string | Date): number {
-  const targetDate = typeof dateStringOrInstant === 'string'
-    ? (dateStringOrInstant.includes('T') ? new Date(dateStringOrInstant) : new Date(`${dateStringOrInstant}T12:00:00Z`))
-    : dateStringOrInstant;
-  
-  const formatter = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/New_York',
-    timeZoneName: 'shortOffset',
-  });
-  const parts = formatter.formatToParts(targetDate);
-  const tzPart = parts.find((p) => p.type === 'timeZoneName')?.value;
-  if (tzPart) {
-    const match = tzPart.match(/GMT([+-]\d+)(?::(\d+))?/);
-    if (match) {
-      const hours = parseInt(match[1]!, 10);
-      const mins = match[2] ? parseInt(match[2], 10) : 0;
-      return hours * 60 + (hours < 0 ? -mins : mins);
-    }
-  }
-  const str = targetDate.toLocaleString('en-US', { timeZone: 'America/New_York', timeZoneName: 'short' });
-  return str.includes('EDT') || str.includes('GMT-4') ? -240 : -300;
-}
-
-/**
- * Convert a canonical ISO instant string to minutes from midnight ET on that date.
- */
-export function isoInstantToMinutesFromMidnightET(dateString: string, isoStr: string): number {
-  const targetTime = new Date(isoStr).getTime();
-  const offsetMins = getETOffsetMinutes(dateString);
-  const d = new Date(`${dateString}T00:00:00Z`);
-  const midnightET_UTC = d.getTime() - offsetMins * 60000;
-  return Math.round((targetTime - midnightET_UTC) / 60000);
-}
-
-/**
- * Convert minutes from midnight ET back to an ISO instant on the specified date.
- */
-export function minutesFromMidnightETToISO(dateString: string, minutesFromMidnightET: number): string {
-  const offsetMins = getETOffsetMinutes(dateString);
-  const d = new Date(`${dateString}T00:00:00Z`);
-  const targetUTC = d.getTime() - offsetMins * 60000 + minutesFromMidnightET * 60000;
-  return new Date(targetUTC).toISOString();
-}
-
-/**
- * Derive 0-6 weekday in America/New_York (0 = Sunday, ..., 6 = Saturday).
- */
-export function getETDayOfWeek(dateString: string): number {
-  const d = new Date(`${dateString}T12:00:00-04:00`);
-  const formatter = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/New_York',
-    weekday: 'short',
-  });
-  const dayStr = formatter.format(d);
-  const map: Record<string, number> = {
-    Sun: 0,
-    Mon: 1,
-    Tue: 2,
-    Wed: 3,
-    Thu: 4,
-    Fri: 5,
-    Sat: 6,
-  };
-  return map[dayStr] ?? d.getUTCDay();
 }
 
 /**

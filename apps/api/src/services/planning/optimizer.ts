@@ -1,5 +1,9 @@
 import type { ExperienceCategory, Park, PlannedItemType, WalkingSpeed, WaitSnapshot } from '@dwt/shared';
 import { travelFromPrev, type Coordinates } from './travel.js';
+import {
+  wdwIsoAtMinutes as toISOString,
+  wdwMinutesFromMidnight as parseMinutesFromMidnightET,
+} from '../trips/wdwClock.js';
 
 export interface OptimizeInputItem {
   readonly id: string;
@@ -131,54 +135,9 @@ export function ropeDropAdjust(rawWait: number, arrivalMins: number, dayStartMin
   return Math.round(ROPE_DROP_WALKON_MINS + (rawWait - ROPE_DROP_WALKON_MINS) * frac);
 }
 
-const etOffsetCache = new Map<string, number>();
-
-function getETOffsetMinutes(dateString: string): number {
-  if (etOffsetCache.has(dateString)) {
-    return etOffsetCache.get(dateString)!;
-  }
-  const d = new Date(`${dateString}T12:00:00Z`);
-  const formatter = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/New_York',
-    year: 'numeric',
-    month: 'numeric',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: 'numeric',
-    second: 'numeric',
-    hour12: false,
-  });
-  const parts = formatter.formatToParts(d);
-  let y = 0, mo = 0, day = 0, h = 0, m = 0, s = 0;
-  for (const part of parts) {
-    if (part.type === 'year') y = parseInt(part.value, 10);
-    if (part.type === 'month') mo = parseInt(part.value, 10);
-    if (part.type === 'day') day = parseInt(part.value, 10);
-    if (part.type === 'hour') h = parseInt(part.value, 10);
-    if (part.type === 'minute') m = parseInt(part.value, 10);
-    if (part.type === 'second') s = parseInt(part.value, 10);
-  }
-  if (h === 24) h = 0;
-  const localDate = Date.UTC(y, mo - 1, day, h, m, s);
-  const offset = Math.round((localDate - d.getTime()) / 60000);
-  etOffsetCache.set(dateString, offset);
-  return offset;
-}
-
-function toISOString(dateString: string, minutesFromMidnightET: number): string {
-  const offsetMins = getETOffsetMinutes(dateString);
-  const d = new Date(`${dateString}T00:00:00Z`);
-  const targetUTC = d.getTime() - offsetMins * 60000 + minutesFromMidnightET * 60000;
-  return new Date(targetUTC).toISOString();
-}
-
-function parseMinutesFromMidnightET(dateString: string, isoStr: string): number {
-  const targetTime = new Date(isoStr).getTime();
-  const offsetMins = getETOffsetMinutes(dateString);
-  const d = new Date(`${dateString}T00:00:00Z`);
-  const midnightET_UTC = d.getTime() - offsetMins * 60000;
-  return Math.round((targetTime - midnightET_UTC) / 60000);
-}
+// WDW-local time conversions come from the shared `wdwClock` (see the
+// "Reuse these" steering note). Aliased to the names this module already uses
+// so the call sites below read unchanged.
 
 export const SHOW_ARRIVAL_BUFFER_MIN = 15;
 export const SHOW_MISS_PENALTY_PER_MIN = 1000;
