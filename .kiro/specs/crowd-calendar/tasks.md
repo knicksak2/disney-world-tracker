@@ -115,9 +115,33 @@ Implementation is **TypeScript**, reusing existing infrastructure: the `Live_Ser
     - Integration test in `predictionService.test.ts`.
     - _Requirements: 12.3, 12.4_
 
+- [x] 12. Real-Postgres scratch DB test for percentiles
+  - [x] 12.1 Live-Postgres integration test for `IntelligenceRepo.getRecentPercentiles` (`apps/api/src/services/intelligence/__tests__/intelligenceRepo.percentiles.livedb.test.ts`)
+    - Create scratch database, apply all migrations verbatim, seed `experiences` and `wait_samples`.
+    - Assert (a) ET bucketing (2026-10-02T02:00:00Z UTC -> Thursday 22:00 EDT, DOW 4, hour 22); (b) DST invariance (winter EST and summer EDT both land in DOW 4, hour 10); (c) Sunday day-of-week encoding (DOW = 0); (d) percentile values (p50 = 30, p90 = 46 for 10..50 distribution); (e) cutoff filter excludes older samples.
+    - _Requirements: 1.1, 11.1_
+
+- [x] 13. Daily recompute per-leg run isolation and outcome recording
+  - [x] 13.1 Migration `0030_derived_stat_runs.sql` + `migration0030.test.ts`
+    - Create `derived_stat_runs(leg TEXT PRIMARY KEY, last_success_at TIMESTAMPTZ, last_error_at TIMESTAMPTZ, last_error TEXT, consecutive_failures INTEGER NOT NULL DEFAULT 0 CHECK (consecutive_failures >= 0))`.
+    - Unit test in `migration0030.test.ts` asserting DDL, PK, and CHECK constraints.
+    - _Requirements: 13.2_
+  - [x] 13.2 Repo method `IntelligenceRepo.recordDerivedStatRun` & pg-mem tests (`apps/api/src/services/intelligence/__tests__/intelligenceRepoRuns.test.ts`)
+    - On success: `last_success_at = now()`, `consecutive_failures = 0`, `last_error = NULL`, preserve `last_error_at`.
+    - On failure: `last_error_at = now()`, `consecutive_failures = consecutive_failures + 1`, `last_error` truncated to ≤500 characters, preserve `last_success_at`.
+    - Test driving success -> failure -> failure -> success, error truncation, and cold start.
+    - _Requirements: 13.2, 13.3, 13.4_
+  - [x] 13.3 `derivedStatsService.runDailyRecompute` wiring and structured logging (`apps/api/src/services/intelligence/derivedStatsService.ts` & `derivedStatsService.runs.test.ts`)
+    - Wrap all 6 legs with per-leg execution and outcome recording, swallow recording errors, and replace unconditional success log with structured summary logged at `warn` if any leg failed or `info` if all succeeded.
+    - Unit test with fake repo verifying isolation, failure recording, and warn summary log.
+    - _Requirements: 13.1, 13.5, 13.6_
+
+- [x] 14. Checkpoint — Live DB percentiles test and recompute visibility complete
+  - Verify all unit, live-db, and migration tests pass cleanly.
+
 ## Notes
 
-- Test-only tasks (2.3, 4.4, 5.3, 6.3, 8.1, 9.2, 9.4, 10.3) are optional for a faster MVP; core tasks are never optional.
+- Test-only tasks (2.3, 4.4, 5.3, 6.3, 8.1, 9.2, 9.4, 10.3, 12.1) are optional for a faster MVP; core tasks are never optional.
 - Task group 9 refines the shipped crowd index (R2.7/R2.8, R3.5): it counts only posted-standby entries and measures them per-ride-relative, which also stops structurally-zero rows from being written to `wait_samples`. It builds on the existing sampling pass and pure math; 9.5 is an operational decision to confirm before running.
 - Task group 10 fixes the future-date calendar reading uniformly green (R2.9): the forecast's historical comparable feature averaged every same-month, same-weekday date, flattening holiday/festival peaks the seed records correctly (e.g. MK Dec 26 at level 8). Selecting comparables by calendar proximity restores those peaks. It touches `crowdForecast.ts`, `getComparableCrowdIndices`, and `predictionService.computeRawForecast` only.
 - Property tests reference a design Correctness Property, run ≥100 `fast-check` iterations, and are tagged `Feature: crowd-calendar, Property {n}`.
@@ -146,8 +170,11 @@ Implementation is **TypeScript**, reusing existing infrastructure: the `Live_Ser
     { "id": 11, "tasks": ["10.1"] },
     { "id": 12, "tasks": ["10.2", "10.3"] },
     { "id": 13, "tasks": ["10.4"] },
-    { "id": 14, "tasks": ["11.1", "11.2"] }
+    { "id": 14, "tasks": ["11.1", "11.2"] },
+    { "id": 15, "tasks": ["12.1", "13.1", "13.2", "13.3"] },
+    { "id": 16, "tasks": ["14"] }
   ]
 }
 ```
+
 

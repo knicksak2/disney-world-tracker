@@ -39,6 +39,34 @@ export function createDerivedStatsService(deps: DerivedStatsServiceDeps): Derive
   const logger = deps.logger ?? createLogger();
   const { repo } = deps;
   const clock = deps.now ?? (() => new Date());
+
+  async function recordLegOutcome(
+    leg: string,
+    outcome: { ok: true } | { ok: false; error: unknown }
+  ): Promise<void> {
+    if (typeof repo.recordDerivedStatRun !== 'function') return;
+    try {
+      await repo.recordDerivedStatRun(leg, outcome);
+    } catch (recordErr) {
+      logger.error({ err: recordErr, leg }, 'Failed to record derived stat run outcome');
+    }
+  }
+
+  async function runLeg(
+    leg: string,
+    action: () => Promise<void>,
+    legOutcomes: { leg: string; ok: boolean; error?: unknown }[]
+  ): Promise<void> {
+    try {
+      await action();
+      legOutcomes.push({ leg, ok: true });
+      await recordLegOutcome(leg, { ok: true });
+    } catch (err) {
+      logger.error({ err }, `Failed ${leg}`);
+      legOutcomes.push({ leg, ok: false, error: err });
+      await recordLegOutcome(leg, { ok: false, error: err });
+    }
+  }
   
   return {
     async runDailyRecompute(): Promise<void> {
@@ -48,16 +76,34 @@ export function createDerivedStatsService(deps: DerivedStatsServiceDeps): Derive
       
       logger.info('Starting daily derived stats recompute');
       
+      const legOutcomes: { leg: string; ok: boolean; error?: unknown }[] = [];
+
       try {
-        await reconcileForecasts(yesterday).catch((err) => logger.error({ err }, 'Failed reconcileForecasts'));
-        await captureForecasts(now).catch((err) => logger.error({ err }, 'Failed captureForecasts'));
-        await learnWeatherSensitivities(now).catch((err) => logger.error({ err }, 'Failed learnWeatherSensitivities'));
-        await recomputePercentiles().catch((err) => logger.error({ err }, 'Failed recomputePercentiles'));
-        await recomputeShowtimePatterns(now).catch((err) => logger.error({ err }, 'Failed recomputeShowtimePatterns'));
-        await repo.pruneWeatherObservations(
-          new Date(now.getTime() - WEATHER_OBSERVATION_RETENTION_DAYS * 86400000),
-        ).catch((err) => logger.error({ err }, 'Failed pruneWeatherObservations'));
-        logger.info('Completed daily derived stats recompute');
+        await runLeg('reconcileForecasts', () => reconcileForecasts(yesterday), legOutcomes);
+        await runLeg('captureForecasts', () => captureForecasts(now), legOutcomes);
+        await runLeg('learnWeatherSensitivities', () => learnWeatherSensitivities(now), legOutcomes);
+        await runLeg('recomputePercentiles', () => recomputePercentiles(), legOutcomes);
+        await runLeg('recomputeShowtimePatterns', () => recomputeShowtimePatterns(now), legOutcomes);
+        await runLeg(
+          'pruneWeatherObservations',
+          () => repo.pruneWeatherObservations(new Date(now.getTime() - WEATHER_OBSERVATION_RETENTION_DAYS * 86400000)),
+          legOutcomes
+        );
+
+        const succeededLegs = legOutcomes.filter((o) => o.ok).map((o) => o.leg);
+        const failedLegs = legOutcomes.filter((o) => !o.ok).map((o) => o.leg);
+
+        if (failedLegs.length > 0) {
+          logger.warn(
+            { succeededLegs, failedLegs, total: legOutcomes.length },
+            `Completed daily derived stats recompute with failures (${failedLegs.length}/${legOutcomes.length} legs failed)`
+          );
+        } else {
+          logger.info(
+            { succeededLegs, total: legOutcomes.length },
+            'Completed daily derived stats recompute successfully'
+          );
+        }
       } catch (err) {
         logger.error({ err }, 'Failed daily derived stats recompute');
       }

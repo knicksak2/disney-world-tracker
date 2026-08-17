@@ -161,6 +161,11 @@ Adds `source TEXT NOT NULL DEFAULT 'observed' CHECK (source IN ('observed','seed
 
 **Validates: Requirements 12.1, 12.2, 12.3, 12.4**
 
+### Property 13: Daily recompute leg isolation and outcome recording
+*For any* daily recompute run where a subset of legs fails: (1) every leg is executed regardless of failures in preceding legs (full isolation); (2) each leg's outcome is recorded in `derived_stat_runs` — successful legs set `consecutive_failures = 0` and clear `last_error` while preserving `last_error_at`; failing legs increment `consecutive_failures` and record `last_error` truncated to ≤500 characters while preserving `last_success_at`; (3) a failure during `recordDerivedStatRun` is caught and swallowed without failing the run; and (4) the recompute run logs a `warn` structured summary when any leg failed, and `info` only when all legs succeeded.
+
+**Validates: Requirements 13.1, 13.2, 13.3, 13.4, 13.5, 13.6**
+
 
 ## Error Handling
 
@@ -174,8 +179,9 @@ Adds `source TEXT NOT NULL DEFAULT 'observed' CHECK (source IN ('observed','seed
 
 - **Property-based (`fast-check`, ≥100 runs, tagged `Feature: crowd-calendar, Property N`):** the properties above, against `waitMath.ts` and `crowdForecast.ts` — including **Property 9** (`relativeCrowdIndex` composition-robust) and **Property 10** (`isStandbyBasketEntry` selects only posted-standby entries).
 - **Crowd-index basket (regression):** a repo/`server.inject` test drives a sampling pass over a mixed park (a headliner ride, a walk-on 0-min ride, a show, and a restaurant) and asserts `wait_samples` is written **only** for the two rides and that `crowd_index` is the per-ride-relative aggregate over them. This test MUST fail against the pre-change all-entries average (which read the show/restaurant zeros and understated the park), so it genuinely guards the fix.
-- **Migration test (`migration0020.test.ts`):** all stores, PKs, and bounded retention.
+- **Migration test (`migration0020.test.ts`, `migration0030.test.ts`):** all stores, PKs, CHECK constraints, and bounded retention.
 - **Integration (`server.inject`):** `/internal/sampling/run` updates stores and isolates a failing park; `/crowd-calendar` returns forecast + signals and is session-gated; same-day correction path in `predictionService`.
+- **Live-Postgres testing & pg-mem limitations:** pg-mem cannot execute the `AT TIME ZONE` operator or ordered-set aggregates (`percentile_cont … WITHIN GROUP`), so any repo query using them CANNOT be covered by the pg-mem suites and MUST use the live-Postgres scratch-database pattern from `repo.performance.test.ts`. `IntelligenceRepo.getRecentPercentiles` is the known case that requires this live DB harness.
 - **Unit:** `crowdForecast` feature weighting (LL price / park hours / holidays / school breaks), the seed script's RopeDrop mapping, and `normalizeCrowdIndex`.
 - **Mobile:** the calendar month view, day-detail, best-park pick, and predicted-vs-actual rendering.
 
@@ -287,6 +293,10 @@ displayLevel(continuousIndex) = clamp(round(5 × continuousIndex), 1, 10)   // d
 
 - **`show_time_patterns`** — PK `(experience_id, day_of_week, start_minutes)`; `frequency REAL NOT NULL`, `sample_count INTEGER NOT NULL`. Stores derived typical showtimes for shows and parades bucketed to 5-minute increments in Eastern Time, computed by `derivedStatsService.runDailyRecompute` over a trailing 180-day window (`SHOWTIME_PATTERN_WINDOW_DAYS = 180`). Check constraints enforce `day_of_week BETWEEN 0 AND 6` and `start_minutes BETWEEN 0 AND 1440`. Cascades delete on parent experience deletion.
 
+### Migration `0030_derived_stat_runs.sql`
+
+- **`derived_stat_runs`** — PK `leg TEXT`; `last_success_at TIMESTAMPTZ`, `last_error_at TIMESTAMPTZ`, `last_error TEXT`, `consecutive_failures INTEGER NOT NULL DEFAULT 0 CHECK (consecutive_failures >= 0)`. Bounded at one row per daily-recompute leg (6 rows total). Stores execution health, timestamp of last success, timestamp of last failure, truncated last error message (≤ 500 characters), and consecutive failure counter for visibility on free-tier hosting.
+
 ### Property 12: Historical Showtime Patterns and Typical Showtimes Fallback
 
 **Validates:** Requirements 12.1, 12.2, 12.3, 12.4
@@ -298,4 +308,5 @@ For any arbitrary set of historical daily showtime signals across trailing dates
 
 ## Cross-Spec Dependencies & Build Order
 
-Build this feature **before** `day-planning-optimization`, which consumes `predictionService.getDaySnapshot()` / `crowdMultiplier()`. This feature owns migration `0020` and `0029`; the day planner owns `0021` and `0027`. No other spec depends on this one.
+Build this feature **before** `day-planning-optimization`, which consumes `predictionService.getDaySnapshot()` / `crowdMultiplier()`. This feature owns migration `0020`, `0029`, and `0030`; the day planner owns `0021` and `0027`. No other spec depends on this one.
+

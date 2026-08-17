@@ -186,3 +186,17 @@ This feature owns data collection, the wait-time model, the crowd index and fore
 4. WHERE per-date schedule feed showtimes DO exist for an Experience on the requested date, they SHALL take precedence over derived patterns, and `showtimesAreTypical` SHALL NOT be set (or set to `false`).
 5. All showtime pattern stores SHALL remain bounded per Requirement 3.6.
 
+### Requirement 13: Daily Recompute Leg Isolation and Outcome Recording
+
+**User Story:** As an App Developer, I want each leg of the daily derived stats recompute to isolate failures, record its outcome in a bounded store, and accurately report whether any leg failed, so that recompute health is visible without relying only on aging logs.
+
+#### Acceptance Criteria
+
+1. THE `derivedStatsService.runDailyRecompute` process SHALL execute all daily recompute legs (`reconcileForecasts`, `captureForecasts`, `learnWeatherSensitivities`, `recomputePercentiles`, `recomputeShowtimePatterns`, `pruneWeatherObservations`) with per-leg error isolation, so that a failure in one leg does NOT stop or abort the remaining legs.
+2. THE System SHALL maintain a `derived_stat_runs` store bounded at one row per leg, storing `leg` (PK), `last_success_at`, `last_error_at`, `last_error` (truncated to 500 characters), and `consecutive_failures` (non-negative integer).
+3. WHEN a leg completes successfully, THE System SHALL record `last_success_at = now()`, reset `consecutive_failures = 0`, clear `last_error = NULL`, and preserve any existing `last_error_at`.
+4. WHEN a leg fails, THE System SHALL record `last_error_at = now()`, increment `consecutive_failures`, truncate the error message to at most 500 characters into `last_error`, and preserve any existing `last_success_at`.
+5. IF recording a leg's outcome fails, THE System SHALL log the error and swallow it, ensuring outcome-recording errors never fail the recompute run itself.
+6. THE `derivedStatsService.runDailyRecompute` SHALL log a structured summary naming which legs succeeded and which failed, logged at `warn` severity when one or more legs failed, and logged at `info` severity ONLY when all legs succeeded — it SHALL NOT report overall success when any leg failed.
+
+

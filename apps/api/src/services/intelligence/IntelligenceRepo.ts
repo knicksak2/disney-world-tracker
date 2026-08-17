@@ -117,6 +117,14 @@ export interface ShowTimePatternRow {
   sample_count: number;
 }
 
+export interface DerivedStatRunRow {
+  leg: string;
+  last_success_at: Date | null;
+  last_error_at: Date | null;
+  last_error: string | null;
+  consecutive_failures: number;
+}
+
 export class IntelligenceRepo {
   constructor(private pool: Pool) {}
 
@@ -726,4 +734,79 @@ export class IntelligenceRepo {
     `;
     await this.pool.query(query, params);
   }
+
+  async recordDerivedStatRun(
+    leg: string,
+    outcome: { ok: true } | { ok: false; error: unknown }
+  ): Promise<void> {
+    if (outcome.ok) {
+      await this.pool.query(
+        `INSERT INTO derived_stat_runs (leg, last_success_at, last_error_at, last_error, consecutive_failures)
+         VALUES ($1, NOW(), NULL, NULL, 0)
+         ON CONFLICT (leg) DO UPDATE SET
+           last_success_at = EXCLUDED.last_success_at,
+           consecutive_failures = 0,
+           last_error = NULL`,
+        [leg]
+      );
+    } else {
+      const rawMessage =
+        outcome.error instanceof Error
+          ? outcome.error.message
+          : typeof outcome.error === 'string'
+            ? outcome.error
+            : String(outcome.error ?? 'Unknown error');
+      const truncated = rawMessage.slice(0, 500);
+
+      await this.pool.query(
+        `INSERT INTO derived_stat_runs (leg, last_success_at, last_error_at, last_error, consecutive_failures)
+         VALUES ($1, NULL, NOW(), $2, 1)
+         ON CONFLICT (leg) DO UPDATE SET
+           last_error_at = EXCLUDED.last_error_at,
+           last_error = EXCLUDED.last_error,
+           consecutive_failures = derived_stat_runs.consecutive_failures + 1`,
+        [leg, truncated]
+      );
+    }
+  }
+
+  async getDerivedStatRun(leg: string): Promise<DerivedStatRunRow | null> {
+    const res = await this.pool.query(
+      `SELECT leg, last_success_at, last_error_at, last_error, consecutive_failures
+       FROM derived_stat_runs
+       WHERE leg = $1`,
+      [leg]
+    );
+    if (res.rows.length === 0) return null;
+    const r = res.rows[0];
+    return {
+      leg: r.leg,
+      last_success_at: r.last_success_at ? new Date(r.last_success_at) : null,
+      last_error_at: r.last_error_at ? new Date(r.last_error_at) : null,
+      last_error: r.last_error ?? null,
+      consecutive_failures:
+        typeof r.consecutive_failures === 'number'
+          ? r.consecutive_failures
+          : parseInt(r.consecutive_failures, 10),
+    };
+  }
+
+  async getDerivedStatRuns(): Promise<DerivedStatRunRow[]> {
+    const res = await this.pool.query(
+      `SELECT leg, last_success_at, last_error_at, last_error, consecutive_failures
+       FROM derived_stat_runs
+       ORDER BY leg ASC`
+    );
+    return res.rows.map((r: any) => ({
+      leg: r.leg,
+      last_success_at: r.last_success_at ? new Date(r.last_success_at) : null,
+      last_error_at: r.last_error_at ? new Date(r.last_error_at) : null,
+      last_error: r.last_error ?? null,
+      consecutive_failures:
+        typeof r.consecutive_failures === 'number'
+          ? r.consecutive_failures
+          : parseInt(r.consecutive_failures, 10),
+    }));
+  }
 }
+
