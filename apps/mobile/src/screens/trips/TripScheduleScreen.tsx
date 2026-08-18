@@ -646,19 +646,19 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
   const targetDateForModal = normalizeDateStr(draftItem?.plannedDate) ?? normalizeDateStr(activeDate);
   const targetParkForModal = draftItem?.park ?? editingExpInfo?.park ?? 'Magic Kingdom';
 
+  // `GET /crowd-calendar` responds with `{ days: [...] }`, not a bare array — see
+  // `CrowdCalendarScreen`, which consumes the same endpoint. Unwrapping `days` is
+  // required; indexing the envelope directly yields `undefined` and silently
+  // renders as "showtimes not published yet" even when patterns exist.
   const crowdCalendarQuery = useQuery<readonly CrowdCalendarDayDTO[], ApiError>({
     queryKey: ['crowd-calendar', targetParkForModal, targetDateForModal],
     queryFn: async () => {
       if (!targetDateForModal) return [];
-      try {
-        const res = await apiRequest<readonly CrowdCalendarDayDTO[]>(
-          'GET',
-          `/crowd-calendar?park=${encodeURIComponent(targetParkForModal)}&from=${targetDateForModal}&to=${targetDateForModal}`
-        );
-        return res ?? [];
-      } catch {
-        return [];
-      }
+      const res = await apiRequest<{ readonly days: readonly CrowdCalendarDayDTO[] }>(
+        'GET',
+        `/crowd-calendar?park=${encodeURIComponent(targetParkForModal)}&from=${targetDateForModal}&to=${targetDateForModal}`
+      );
+      return res?.days ?? [];
     },
     enabled: Boolean(editingItem && isEditingShowOrParade && targetDateForModal),
   });
@@ -1335,6 +1335,12 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
 
                         {crowdCalendarQuery.isLoading ? (
                           <Text style={styles.showtimesLoadingText}>Loading showtimes...</Text>
+                        ) : crowdCalendarQuery.isError ? (
+                          <View style={styles.emptyShowtimesBox} testID="showtimes-error-state">
+                            <Text style={styles.emptyShowtimesText}>
+                              We couldn&apos;t load showtimes right now. Please try again.
+                            </Text>
+                          </View>
                         ) : showtimesList.length === 0 ? (
                           <View style={styles.emptyShowtimesBox} testID="showtimes-empty-state">
                             <Text style={styles.emptyShowtimesText}>

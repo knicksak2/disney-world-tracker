@@ -1660,7 +1660,8 @@ describe('TripScheduleScreen', () => {
           ] as any;
         }
         if (method === 'GET' && path.startsWith('/crowd-calendar')) {
-          return [
+          // The real endpoint responds with a `{ days: [...] }` envelope, not a bare array.
+          return { days: [
             {
               date: '2026-10-01',
               park: "Disney's Animal Kingdom",
@@ -1672,7 +1673,7 @@ describe('TripScheduleScreen', () => {
                 },
               ],
             },
-          ] as any;
+          ] } as any;
         }
         if (method === 'PATCH' && path === `/trips/${TRIP_ID}/planned-items/item-show-1`) {
           savedBody = body;
@@ -1747,7 +1748,8 @@ describe('TripScheduleScreen', () => {
           ] as any;
         }
         if (method === 'GET' && path.startsWith('/crowd-calendar')) {
-          return [
+          // The real endpoint responds with a `{ days: [...] }` envelope, not a bare array.
+          return { days: [
             {
               date: '2026-10-01',
               park: "Disney's Animal Kingdom",
@@ -1759,7 +1761,7 @@ describe('TripScheduleScreen', () => {
                 },
               ],
             },
-          ] as any;
+          ] } as any;
         }
         if (method === 'PATCH' && path === `/trips/${TRIP_ID}/planned-items/item-show-1`) {
           savedBody = body;
@@ -1830,13 +1832,14 @@ describe('TripScheduleScreen', () => {
           ] as any;
         }
         if (method === 'GET' && path.startsWith('/crowd-calendar')) {
-          return [
+          // The real endpoint responds with a `{ days: [...] }` envelope, not a bare array.
+          return { days: [
             {
               date: '2026-10-01',
               park: "Disney's Animal Kingdom",
               rideSignals: [],
             },
-          ] as any;
+          ] } as any;
         }
         throw new Error(`Unexpected request: ${method} ${path}`);
       });
@@ -1854,6 +1857,60 @@ describe('TripScheduleScreen', () => {
         expect(screen.getByTestId('showtimes-empty-state')).toBeTruthy();
         expect(screen.getByText('Showtimes are not published yet for this date.')).toBeTruthy();
       });
+    });
+
+    // A failing crowd-calendar read must NOT be indistinguishable from "no showtimes".
+    // This screen previously swallowed the error and rendered the empty state, which is
+    // what hid a response-shape mismatch: the endpoint returns `{ days: [...] }` and the
+    // client was indexing the envelope as an array.
+    it('renders a distinct error state when the crowd-calendar read fails', async () => {
+      apiRequestMock.mockImplementation(async (method, path) => {
+        if (method === 'GET' && path === `/trips/${TRIP_ID}`) {
+          return { id: TRIP_ID, startDate: '2026-10-01', endDate: '2026-10-03' } as any;
+        }
+        if (method === 'GET' && path === '/catalog') {
+          return {
+            experiences: [
+              {
+                id: 'exp-show-1',
+                name: 'Festival of the Lion King',
+                category: 'Show',
+                park: "Disney's Animal Kingdom",
+              },
+            ],
+          } as any;
+        }
+        if (method === 'GET' && path === `/trips/${TRIP_ID}/planned-items`) {
+          return [
+            {
+              ...PLANNED_ITEM,
+              id: 'item-show-1',
+              experienceId: 'exp-show-1',
+              experienceName: 'Festival of the Lion King',
+              park: "Disney's Animal Kingdom",
+              plannedDate: '2026-10-01',
+            },
+          ] as any;
+        }
+        if (method === 'GET' && path.startsWith('/crowd-calendar')) {
+          throw new Error('crowd-calendar unavailable');
+        }
+        throw new Error(`Unexpected request: ${method} ${path}`);
+      });
+
+      renderScreen();
+
+      await waitFor(() => {
+        expect(screen.getByText('Festival of the Lion King')).toBeTruthy();
+      });
+
+      fireEvent.press(screen.getByText('Edit Settings'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('showtimes-error-state')).toBeTruthy();
+      });
+      // The failure must not be reported as "not published yet".
+      expect(screen.queryByTestId('showtimes-empty-state')).toBeNull();
     });
 
     it('renders typical showtime notice when optimization warning contains typical_showtimes', async () => {
