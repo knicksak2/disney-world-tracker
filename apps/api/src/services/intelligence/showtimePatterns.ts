@@ -16,7 +16,7 @@ import {
 export { getETDayOfWeek, getETOffsetMinutes, isoInstantToMinutesFromMidnightET, minutesFromMidnightETToISO };
 
 export const SHOWTIME_PATTERN_WINDOW_DAYS = 180;
-export const SHOWTIME_PATTERN_MIN_SAMPLES = 3;
+export const SHOWTIME_PATTERN_MIN_SAMPLES = 2;
 export const SHOWTIME_PATTERN_MIN_FREQUENCY = 0.5;
 
 export interface RawShowtimeSignal {
@@ -83,11 +83,92 @@ export function normalizeShowtimeEntries(raw: unknown): { instants: string[]; sk
 }
 
 /**
+ * Merges and deduplicates existing and incoming showtime entries.
+ * Deduplicates by entry startTime (falling back to start, then raw value string).
+ * Preserves the original entry shapes and keeps results sorted ascending by start time.
+ * Returns null if no valid entries are present.
+ */
+export function mergeShowtimeEntries(existing: unknown, incoming: unknown): unknown[] | null {
+  const existingArr = Array.isArray(existing) ? existing : [];
+  const incomingArr = Array.isArray(incoming) ? incoming : [];
+
+  if (existingArr.length === 0 && incomingArr.length === 0) {
+    return null;
+  }
+
+  const map = new Map<string, unknown>();
+
+  function extractKey(entry: unknown): string {
+    if (typeof entry === 'string') {
+      return entry;
+    }
+    if (entry !== null && typeof entry === 'object') {
+      const obj = entry as Record<string, unknown>;
+      if (typeof obj['startTime'] === 'string') {
+        return obj['startTime'];
+      }
+      if (typeof obj['start'] === 'string') {
+        return obj['start'];
+      }
+    }
+    return String(entry);
+  }
+
+  function getDedupeKey(entry: unknown): string {
+    const raw = extractKey(entry);
+    if (!raw || raw.trim() === '' || raw === '[object Object]') {
+      return '';
+    }
+    const d = new Date(raw);
+    if (!Number.isNaN(d.getTime())) {
+      return d.toISOString();
+    }
+    return raw.trim();
+  }
+
+  // Populate from existing first
+  for (const entry of existingArr) {
+    const key = getDedupeKey(entry);
+    if (key !== '') {
+      map.set(key, entry);
+    }
+  }
+
+  // Incoming entries merge with existing (incoming overwrites existing for same key)
+  for (const entry of incomingArr) {
+    const key = getDedupeKey(entry);
+    if (key !== '') {
+      map.set(key, entry);
+    }
+  }
+
+  if (map.size === 0) {
+    return null;
+  }
+
+  const merged = Array.from(map.values());
+
+  merged.sort((a, b) => {
+    const keyA = extractKey(a);
+    const keyB = extractKey(b);
+    const dateA = new Date(keyA).getTime();
+    const dateB = new Date(keyB).getTime();
+    if (!Number.isNaN(dateA) && !Number.isNaN(dateB)) {
+      if (dateA !== dateB) return dateA - dateB;
+    }
+    return keyA.localeCompare(keyB);
+  });
+
+  return merged;
+}
+
+/**
  * Bucket minutes from midnight to nearest 5 minutes.
  */
 export function bucketStartMinutes(minutes: number): number {
   return Math.max(0, Math.min(1440, Math.round(minutes / 5) * 5));
 }
+
 
 /**
  * Derive typical showtime patterns from historical daily signals across trailing days.
@@ -144,7 +225,7 @@ export function deriveShowTimePatterns(signals: readonly RawShowtimeSignal[], lo
 
     for (const [start_minutes, sample_count] of bucketCounts.entries()) {
       const frequency = sample_count / totalObservedDates;
-      if (sample_count >= SHOWTIME_PATTERN_MIN_SAMPLES && frequency >= SHOWTIME_PATTERN_MIN_FREQUENCY) {
+      if (frequency >= SHOWTIME_PATTERN_MIN_FREQUENCY) {
         results.push({
           experience_id,
           day_of_week,

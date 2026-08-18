@@ -154,6 +154,28 @@ Implementation is **TypeScript**, reusing existing infrastructure: the `Live_Ser
   - [x] 15.3 Checkpoint — Showtime shape tolerance verification
     - Verify all showtime unit, integration, and optimizer tests pass cleanly.
 
+- [x] 16. Showtime persistence union, normalization in getCrowdCalendarDay, and threshold refinement
+  - [x] 16.1 Fix 1: Normalize showtimes in `getCrowdCalendarDay`'s `rideSignals` (`predictionService.ts` & `predictionService.showtimes.test.ts`)
+    - Replace `.map(String)` with `normalizeShowtimeEntries` and log at `warn` when `skipped > 0`.
+    - Unit test seeding real upstream `{type, startTime, endTime}` objects and asserting canonical ISO instants and never `"[object Object]"`.
+    - _Requirements: 12.4, 12.7_
+  - [x] 16.2 Fix 2: Accumulate showtimes as a per-date UNION across sampling passes (`showtimePatterns.ts`, `IntelligenceRepo.ts`, `intelligenceRepoShowtimes.test.ts`, `showtimePatterns.test.ts`)
+    - Add pure `mergeShowtimeEntries(existing, incoming)` helper with start time deduplication and chronological ordering.
+    - Update `IntelligenceRepo.upsertExperienceDailySignals` to union showtimes across passes while updating non-showtime columns to newest values, deduplicating within batch to prevent Postgres error 21000.
+    - Unit test `mergeShowtimeEntries` and pg-mem integration test `upsertExperienceDailySignals`.
+    - _Requirements: 12.6, 12.7_
+  - [x] 16.3 Fix 3: Lower `SHOWTIME_PATTERN_MIN_SAMPLES` to 2 (`showtimePatterns.ts`, `showtimePatterns.test.ts`)
+    - Change threshold constant from 3 to 2; update Property 12 and unit tests.
+    - _Requirements: 12.2_
+  - [x] 16.4 Checkpoint — Showtime persistence and pattern derivation verification
+    - Verify all showtime unit, integration, and property tests pass cleanly and run empirical dry-run verification on dev data.
+  - [x] 16.5 Fix per-slot sample count duplication in `deriveShowTimePatterns` (`showtimePatterns.ts`, `showtimePatterns.test.ts`)
+    - Remove duplicate per-slot `sample_count >= SHOWTIME_PATTERN_MIN_SAMPLES` check, retaining it strictly as a group gate and evaluating candidate slots by `frequency >= SHOWTIME_PATTERN_MIN_FREQUENCY`.
+    - Unit tests: rewrite test 1 to assert 2-gate division, add test 2 (Thursday 4 slots emitted with 1.0 and 0.5 frequencies), test 3 (frequency gate excludes at 0.25), test 4 (group gate drops group with 1 observed date), and update Property 12 fast-check for soundness and completeness.
+    - _Requirements: 12.2_
+  - [x] 16.6 Checkpoint — Two-gate showtime derivation verification
+    - Verify all showtime tests pass and perform empirical dry-run verification against dev database confirming Thursday derives 4 slots and all experiences produce 2,504 patterns with a mix of 1.00 and 0.50 frequencies.
+
 ## Notes
 
 - Test-only tasks (2.3, 4.4, 5.3, 6.3, 8.1, 9.2, 9.4, 10.3, 12.1) are optional for a faster MVP; core tasks are never optional.
@@ -187,9 +209,12 @@ Implementation is **TypeScript**, reusing existing infrastructure: the `Live_Ser
     { "id": 13, "tasks": ["10.4"] },
     { "id": 14, "tasks": ["11.1", "11.2"] },
     { "id": 15, "tasks": ["12.1", "13.1", "13.2", "13.3"] },
-    { "id": 16, "tasks": ["14"] }
+    { "id": 16, "tasks": ["14"] },
+    { "id": 17, "tasks": ["15.1", "15.2", "15.3"] },
+    { "id": 18, "tasks": ["16.1", "16.2", "16.3", "16.4"] }
   ]
 }
 ```
+
 
 

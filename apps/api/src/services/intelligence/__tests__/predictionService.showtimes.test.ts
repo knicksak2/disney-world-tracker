@@ -172,4 +172,114 @@ describe('predictionService showtimes fallback and typical showtimes flag', () =
     ]);
     expect(estSnapshot[expId]!.showtimesAreTypical).toBe(true);
   });
+
+  it('getCrowdCalendarDay normalizes real upstream object-shaped showtimes into canonical ISO instants and never produces "[object Object]"', async () => {
+    const expId = 'exp-indiana-jones';
+    const realFixture = [
+      { type: 'Performance Time', startTime: '2026-08-17T10:45:00-04:00', endTime: '2026-08-17T10:45:00-04:00' },
+      { type: 'Performance Time', startTime: '2026-08-17T12:00:00-04:00', endTime: '2026-08-17T12:00:00-04:00' },
+    ];
+
+    const mockRepo = {
+      getParkCrowdIndices: vi.fn().mockResolvedValue([]),
+      getParkScheduleSignals: vi.fn().mockResolvedValue([]),
+      getComparableCrowdIndices: vi.fn().mockResolvedValue([]),
+      getForecastAccuracies: vi.fn().mockResolvedValue([]),
+      getRideShapes: vi.fn().mockResolvedValue([]),
+      getSeasonHours: vi.fn().mockResolvedValue([]),
+      getExperienceSignals: vi.fn().mockResolvedValue([]),
+      getWeatherSensitivities: vi.fn().mockResolvedValue([]),
+      getExperiencesByPark: vi.fn().mockResolvedValue([
+        { id: expId, name: 'Indiana Jones Epic Stunt Spectacular!', park: 'Hollywood Studios' },
+      ]),
+      getExperienceDailySignals: vi.fn().mockResolvedValue([
+        {
+          experience_id: expId,
+          date: new Date('2026-08-17'),
+          ll_price_cents: null,
+          ll_available: false,
+          used_virtual_queue: false,
+          showtimes: realFixture,
+        },
+      ]),
+      getShowTimePatterns: vi.fn().mockResolvedValue([]),
+    } as unknown as IntelligenceRepo;
+
+    const service = createPredictionService({
+      repo: mockRepo,
+      weatherClient: mockWeatherClient,
+    });
+
+    const targetDate = new Date('2026-08-17T12:00:00-04:00');
+    const day = await service.getCrowdCalendarDay('Hollywood Studios', targetDate);
+
+    expect(day.rideSignals).toBeDefined();
+    expect(day.rideSignals).toHaveLength(1);
+    expect(day.rideSignals![0]!.showtimes).toEqual([
+      '2026-08-17T14:45:00.000Z',
+      '2026-08-17T16:00:00.000Z',
+    ]);
+    expect(day.rideSignals![0]!.showtimes).not.toContain('[object Object]');
+  });
+
+  it('getCrowdCalendarDay logs at warn when unparseable showtime entries are skipped', async () => {
+    const expId = 'exp-dirty-show';
+    const dirtyShowtimes = [
+      { type: 'Performance Time', startTime: '2026-08-17T10:45:00-04:00', endTime: '2026-08-17T10:45:00-04:00' },
+      { invalid: true },
+    ];
+
+    const mockLogger = {
+      warn: vi.fn(),
+      info: vi.fn(),
+      error: vi.fn(),
+      debug: vi.fn(),
+    };
+
+    const mockRepo = {
+      getParkCrowdIndices: vi.fn().mockResolvedValue([]),
+      getParkScheduleSignals: vi.fn().mockResolvedValue([]),
+      getComparableCrowdIndices: vi.fn().mockResolvedValue([]),
+      getForecastAccuracies: vi.fn().mockResolvedValue([]),
+      getRideShapes: vi.fn().mockResolvedValue([]),
+      getSeasonHours: vi.fn().mockResolvedValue([]),
+      getExperienceSignals: vi.fn().mockResolvedValue([]),
+      getWeatherSensitivities: vi.fn().mockResolvedValue([]),
+      getExperiencesByPark: vi.fn().mockResolvedValue([
+        { id: expId, name: 'Dirty Show', park: 'Hollywood Studios' },
+      ]),
+      getExperienceDailySignals: vi.fn().mockResolvedValue([
+        {
+          experience_id: expId,
+          date: new Date('2026-08-17'),
+          ll_price_cents: null,
+          ll_available: false,
+          used_virtual_queue: false,
+          showtimes: dirtyShowtimes,
+        },
+      ]),
+      getShowTimePatterns: vi.fn().mockResolvedValue([]),
+    } as unknown as IntelligenceRepo;
+
+    const service = createPredictionService({
+      repo: mockRepo,
+      weatherClient: mockWeatherClient,
+      logger: mockLogger,
+    });
+
+    const targetDate = new Date('2026-08-17T12:00:00-04:00');
+    const day = await service.getCrowdCalendarDay('Hollywood Studios', targetDate);
+
+    expect(day.rideSignals![0]!.showtimes).toEqual(['2026-08-17T14:45:00.000Z']);
+    expect(mockLogger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        experienceId: expId,
+        date: '2026-08-17',
+        skipped: 1,
+      }),
+      expect.stringContaining('skipped 1 unparseable showtime entries'),
+    );
+  });
 });
+
+

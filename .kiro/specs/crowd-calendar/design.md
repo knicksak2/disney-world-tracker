@@ -82,8 +82,9 @@ graph TD
 - **`crowd_forecast_log`** — PK `(park, date, lead_days)`; `forecast_index REAL`, `forecasted_at TIMESTAMPTZ`, `observed_index REAL` (null until reconciled), `error REAL` (null until reconciled). The frozen forecast as issued; reconciled after the date closes; pruned beyond a retention window.
 - **`crowd_forecast_accuracy`** — PK `(park, lead_days)`; `mae REAL`, `bias REAL`, `sample_count INTEGER`. Recency-weighted rolling accuracy that feeds the bias correction.
 - **`experience_signals`** — PK `experience_id`; slowly-changing rolling per-ride facts: `has_single_rider BOOLEAN`, `uses_virtual_queue BOOLEAN`, `downtime_rate REAL`, `ll_sellout_median_hour REAL`, `sample_count INTEGER`. One row per experience (~100 rows).
-- **`experience_daily_signals`** — PK `(experience_id, date)`; per-date facts from the live/schedule feeds: `ll_price_cents INTEGER`, `ll_available BOOLEAN`, `used_virtual_queue BOOLEAN`, `showtimes JSONB` (for shows). Holds the RAW upstream `ThemeParksShowtime[]` objects (`{type, startTime, endTime}`), NOT ISO strings. All readers (`predictionService.getDaySnapshot`, `derivedStatsService` / `deriveShowTimePatterns`) must normalize through `normalizeShowtimeEntries`. Pruned to a forward + recent window.
+- **`experience_daily_signals`** — PK `(experience_id, date)`; per-date facts from the live/schedule feeds: `ll_price_cents INTEGER`, `ll_available BOOLEAN`, `used_virtual_queue BOOLEAN`, `showtimes JSONB` (for shows). Holds the RAW upstream `ThemeParksShowtime[]` objects (`{type, startTime, endTime}`), NOT ISO strings. Showtimes accumulate across sampling passes as a per-date UNION deduplicated by `startTime` (sorted ascending) rather than being overwritten on each pass, preventing morning showtime erosion as upstream drops elapsed performances. All readers (`predictionService.getDaySnapshot`, `predictionService.getCrowdCalendarDay`, `derivedStatsService` / `deriveShowTimePatterns`) must normalize through `normalizeShowtimeEntries`. Pruned to a forward + recent window.
 - **`weather_observations`** — PK `observed_at` (one WDW location); `temp_f REAL`, `precip REAL`, `condition TEXT`. Bounded recent-window retention; plus a small cached near-term forecast (by date).
+
 - **`experience_weather_sensitivity`** — PK `(experience_id, condition)`; `wait_multiplier REAL` versus a clear-sky baseline, `sample_count INTEGER`. ~100 rides × few conditions ≈ small, bounded.
 - **`experience_event_impact`** — PK `(experience_id, event_type)`; `wait_multiplier REAL` during nearby entertainment vs baseline, `sample_count INTEGER`. Learned from showtimes + waits.
 - **`ride_cascade`** — PK `(down_experience_id, affected_experience_id)`; `wait_delta REAL`, `wait_pct_delta REAL`, `baseline_wait REAL`, `sample_count INTEGER`. Same-park pairwise effect of a breakdown; recomputed at reduced cadence (daily). Bounded to same-park pairs.
@@ -156,10 +157,13 @@ Adds `source TEXT NOT NULL DEFAULT 'observed' CHECK (source IN ('observed','seed
 
 **Validates: Requirements 2.9**
 
-### Property 12: Historical showtime patterns derive from past signals with sample and frequency thresholds
-*For any* show experience, `show_time_patterns` retains a `(day_of_week, start_minutes)` slot iff it appeared in at least `SHOWTIME_PATTERN_MIN_FREQUENCY` (50%) of observed dates for that day-of-week over the trailing `SHOWTIME_PATTERN_WINDOW_DAYS` (180 days) AND `sample_count >= SHOWTIME_PATTERN_MIN_SAMPLES` (3); `getDaySnapshot` falls back to these patterns with `showtimesAreTypical = true` exactly when no per-date schedule signal exists for that date.
+### Property 12: Historical showtime patterns derive from past signals with separate group and slot gates
+*For any* show experience:
+1. **Group Gate:** An `(experience_id, day_of_week)` group derives patterns iff `totalObservedDates >= SHOWTIME_PATTERN_MIN_SAMPLES` (2) distinct dates with showtimes were observed over the trailing `SHOWTIME_PATTERN_WINDOW_DAYS` (180 days); groups with fewer observed dates emit no patterns.
+2. **Slot Gate:** Within a qualifying group, a candidate 5m showtime bucket is retained iff `frequency >= SHOWTIME_PATTERN_MIN_FREQUENCY` (0.50), where `frequency = sample_count / totalObservedDates` and `sample_count` is the count of observed dates running that performance time. `SHOWTIME_PATTERN_MIN_SAMPLES` is strictly a group gate and is not applied per-slot.
+3. **Fallback & Accumulation:** `getDaySnapshot` and `getCrowdCalendarDay` fall back to these patterns with `showtimesAreTypical = true` exactly when no per-date schedule signal exists for that date; and per-date showtimes accumulate across sampling passes as a per-date UNION deduplicated by start time.
 
-**Validates: Requirements 12.1, 12.2, 12.3, 12.4**
+**Validates: Requirements 12.1, 12.2, 12.3, 12.4, 12.6, 12.7**
 
 ### Property 13: Daily recompute leg isolation and outcome recording
 *For any* daily recompute run where a subset of legs fails: (1) every leg is executed regardless of failures in preceding legs (full isolation); (2) each leg's outcome is recorded in `derived_stat_runs` — successful legs set `consecutive_failures = 0` and clear `last_error` while preserving `last_error_at`; failing legs increment `consecutive_failures` and record `last_error` truncated to ≤500 characters while preserving `last_success_at`; (3) a failure during `recordDerivedStatRun` is caught and swallowed without failing the run; and (4) the recompute run logs a `warn` structured summary when any leg failed, and `info` only when all legs succeeded.
@@ -229,21 +233,30 @@ Concrete defaults so nothing is left to guess. Override via env where noted.
 - **Retention:** `wait_samples` pruned to `30` days; `crowd_forecast_log` retained until reconciled + `90` days; `experience_daily_signals` retained `400` days (year-over-year), forward window `120` days.
 - **Money:** all prices stored in integer cents.
 - **Historical crowd seed (WDW Passport):** convert their 1–10 level to a ratio via `crowd_index = clamp(level / 5, 0.4, 3.0)` (level 5 ≈ typical, ratio 1.0). Seeded rows use `source='seed'`, `daily_avg_wait=0`, `sample_count=0`; ~2 recent years (post-2021 to avoid COVID distortion) is ample for the comparable-dates feature.
-- **Showtime pattern derivation & threshold warm-up (R12):** `SHOWTIME_PATTERN_WINDOW_DAYS = 180` days, `SHOWTIME_PATTERN_MIN_SAMPLES = 3` observations per `(experience_id, day_of_week)`, `SHOWTIME_PATTERN_MIN_FREQUENCY = 0.50`. Because sampling captures only the current park day, pattern derivation requires at least 3 same-weekday observations (approx. 3 weeks of ongoing sampling) before typical showtimes appear for a given weekday. During this warm-up period, shows on dates lacking per-date showtimes honestly emit `showtimes_unavailable`.
+- **Showtime pattern derivation & threshold warm-up (R12):** `SHOWTIME_PATTERN_WINDOW_DAYS = 180` days, `SHOWTIME_PATTERN_MIN_SAMPLES = 2` observed dates per `(experience_id, day_of_week)` group, `SHOWTIME_PATTERN_MIN_FREQUENCY = 0.50` per slot within a qualifying group.
+  - `SHOWTIME_PATTERN_MIN_SAMPLES` governs the **Group Gate** (requiring at least 2 distinct observed dates for that weekday before claiming any typical pattern, ~2 weeks of warm-up).
+  - `SHOWTIME_PATTERN_MIN_FREQUENCY` governs the **Slot Gate** (requiring a specific performance time to occur on at least 50% of the observed dates in that qualifying group). It is never combined with a per-slot sample count minimum.
+  - During this warm-up period, shows on dates lacking per-date showtimes honestly emit `showtimes_unavailable`.
+
 
 ## External Interfaces
 
 Endpoint shapes and the id-mapping relied on. Live/schedule reads go through the existing `Live_Service`; the seed script is standalone.
+
+### Verified Upstream Live/Schedule Characteristics for Shows
+- **Upstream `/entity/{id}/schedule` publishes NO future showtimes:** querying schedule for Entertainment entities yields 0 entries. Deriving historical patterns from past observed daily signals is therefore the only mechanism to predict showtimes on future dates.
+- **Upstream `/entity/{id}/live` publishes only REMAINING performances of the current park day:** as performances conclude, they drop off the live feed. Consequently, daily signals must union/accumulate showtimes across sampling passes rather than overwriting the row, so morning performances are preserved in the historical daily record.
 
 ### Showtime Data Shapes Across Layers
 
 There are three distinct showtime data shapes in play across the layers:
 - **Raw Upstream Form:** `{ startTime: string, endTime?: string, type?: string }` — produced by the live upstream ThemeParks feed; persisted verbatim in `experience_daily_signals.showtimes`.
 - **Projected Form:** `{ start: string, end?: string, type?: string }` — `Showtime` in `LiveDetail.ts`, produced by `projectShowtimes` for client-facing live view.
-- **Canonical ISO Instants:** `'2026-08-17T14:45:00.000Z'` — emitted by `normalizeShowtimeEntries`, consumed by `getDaySnapshot` (`WaitSnapshot.showtimes`) and the Day Planning optimizer.
+- **Canonical ISO Instants:** `'2026-08-17T14:45:00.000Z'` — emitted by `normalizeShowtimeEntries`, consumed by `getDaySnapshot` (`WaitSnapshot.showtimes`), `getCrowdCalendarDay` (`rideSignals[].showtimes`), and the Day Planning optimizer.
 
 ### Id mapping (critical)
 `experiences.upstream_entity_id` holds the **Enterprise_Id** (== ThemeParks `externalId`, e.g. `411499845;entityType=Attraction`). The ThemeParks entity **GUID** is obtained via `themeParksDirectory.resolveEntityId(enterpriseId)`. RopeDrop's `entity_id` **is** that GUID. Never join RopeDrop on `upstream_entity_id` directly.
+
 
 ### ThemeParks.wiki — live (`GET {THEMEPARKS_BASE_URL}/entity/{guid}/live`)
 Fields used per attraction: `status` (`OPERATING`/`CLOSED`/`DOWN`/`REFURBISHMENT`), `queue.STANDBY.waitTime`, `queue.SINGLE_RIDER.waitTime`, `queue.PAID_RETURN_TIME`/`queue.RETURN_TIME` (Lightning Lane), `queue.BOARDING_GROUP` (virtual queue), `showtimes[]`, `operatingHours[]`, `forecast[]`. Prefer the park-level live feed to get all attractions in one call.

@@ -310,9 +310,18 @@ export function createPredictionService(deps: PredictionServiceDeps): Prediction
             const daily = dailyMap.get(e.id);
             const reliability = 1 - (sig?.downtime_rate ?? 0);
 
+            const { instants: perDateInstants, skipped: perDateSkipped } = normalizeShowtimeEntries(daily?.showtimes);
+            if (perDateSkipped > 0 && logger?.warn) {
+              logger.warn(
+                { experienceId: e.id, date: dateStr, skipped: perDateSkipped },
+                `getCrowdCalendarDay skipped ${perDateSkipped} unparseable showtime entries for experience ${e.id}`,
+              );
+            }
+            const hasPerDateShowtimes = perDateInstants.length > 0;
+
             let showtimes: readonly string[] | undefined;
-            if (Array.isArray(daily?.showtimes) && daily.showtimes.length > 0) {
-              showtimes = (daily.showtimes as unknown[]).map(String);
+            if (hasPerDateShowtimes) {
+              showtimes = perDateInstants;
             } else {
               const expPatterns = patternMap.get(e.id);
               if (expPatterns && expPatterns.length > 0) {
@@ -320,6 +329,7 @@ export function createPredictionService(deps: PredictionServiceDeps): Prediction
                 showtimes = expPatterns.map((p) => minutesFromMidnightETToISO(dateStr, p.start_minutes));
               }
             }
+
 
             return {
               experienceId: e.id,

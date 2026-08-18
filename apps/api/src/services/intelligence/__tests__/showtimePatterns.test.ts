@@ -6,8 +6,11 @@ import {
   getETDayOfWeek,
   getETOffsetMinutes,
   isoInstantToMinutesFromMidnightET,
+  mergeShowtimeEntries,
   minutesFromMidnightETToISO,
   normalizeShowtimeEntries,
+  SHOWTIME_PATTERN_MIN_FREQUENCY,
+  SHOWTIME_PATTERN_MIN_SAMPLES,
   type RawShowtimeSignal,
 } from '../showtimePatterns.js';
 
@@ -124,6 +127,110 @@ describe('normalizeShowtimeEntries', () => {
   });
 });
 
+describe('mergeShowtimeEntries', () => {
+  it('merges overlapping sets and preserves all entries sorted chronologically without duplicates', () => {
+    const existing = [
+      { type: 'Performance Time', startTime: '2026-08-17T10:45:00-04:00', endTime: '2026-08-17T10:45:00-04:00' },
+      { type: 'Performance Time', startTime: '2026-08-17T12:00:00-04:00', endTime: '2026-08-17T12:00:00-04:00' },
+      { type: 'Performance Time', startTime: '2026-08-17T13:15:00-04:00', endTime: '2026-08-17T13:15:00-04:00' },
+    ];
+    const incoming = [
+      { type: 'Performance Time', startTime: '2026-08-17T13:15:00-04:00', endTime: '2026-08-17T13:15:00-04:00' },
+      { type: 'Performance Time', startTime: '2026-08-17T15:15:00-04:00', endTime: '2026-08-17T15:15:00-04:00' },
+      { type: 'Performance Time', startTime: '2026-08-17T16:30:00-04:00', endTime: '2026-08-17T16:30:00-04:00' },
+    ];
+
+    const result = mergeShowtimeEntries(existing, incoming);
+    expect(result).toHaveLength(5);
+    expect(result).toEqual([
+      { type: 'Performance Time', startTime: '2026-08-17T10:45:00-04:00', endTime: '2026-08-17T10:45:00-04:00' },
+      { type: 'Performance Time', startTime: '2026-08-17T12:00:00-04:00', endTime: '2026-08-17T12:00:00-04:00' },
+      { type: 'Performance Time', startTime: '2026-08-17T13:15:00-04:00', endTime: '2026-08-17T13:15:00-04:00' },
+      { type: 'Performance Time', startTime: '2026-08-17T15:15:00-04:00', endTime: '2026-08-17T15:15:00-04:00' },
+      { type: 'Performance Time', startTime: '2026-08-17T16:30:00-04:00', endTime: '2026-08-17T16:30:00-04:00' },
+    ]);
+  });
+
+  it('merges disjoint sets sorted ascending by start time', () => {
+    const existing = [
+      { startTime: '2026-08-17T10:45:00-04:00' },
+      { startTime: '2026-08-17T12:00:00-04:00' },
+    ];
+    const incoming = [
+      { startTime: '2026-08-17T15:15:00-04:00' },
+      { startTime: '2026-08-17T16:30:00-04:00' },
+    ];
+
+    const result = mergeShowtimeEntries(existing, incoming);
+    expect(result).toEqual([
+      { startTime: '2026-08-17T10:45:00-04:00' },
+      { startTime: '2026-08-17T12:00:00-04:00' },
+      { startTime: '2026-08-17T15:15:00-04:00' },
+      { startTime: '2026-08-17T16:30:00-04:00' },
+    ]);
+  });
+
+  it('returns existing entries when incoming is empty or null/undefined', () => {
+    const existing = [
+      { startTime: '2026-08-17T10:45:00-04:00' },
+      { startTime: '2026-08-17T12:00:00-04:00' },
+    ];
+    expect(mergeShowtimeEntries(existing, null)).toEqual(existing);
+    expect(mergeShowtimeEntries(existing, undefined)).toEqual(existing);
+    expect(mergeShowtimeEntries(existing, [])).toEqual(existing);
+  });
+
+  it('returns incoming entries when existing is empty or null/undefined', () => {
+    const incoming = [
+      { startTime: '2026-08-17T10:45:00-04:00' },
+      { startTime: '2026-08-17T12:00:00-04:00' },
+    ];
+    expect(mergeShowtimeEntries(null, incoming)).toEqual(incoming);
+    expect(mergeShowtimeEntries(undefined, incoming)).toEqual(incoming);
+    expect(mergeShowtimeEntries([], incoming)).toEqual(incoming);
+  });
+
+  it('returns null when both existing and incoming are null or empty', () => {
+    expect(mergeShowtimeEntries(null, null)).toBeNull();
+    expect(mergeShowtimeEntries(undefined, undefined)).toBeNull();
+    expect(mergeShowtimeEntries([], [])).toBeNull();
+    expect(mergeShowtimeEntries(null, [])).toBeNull();
+  });
+
+  it('deduplicates duplicate startTime entries within incoming or across existing and incoming', () => {
+    const existing = [
+      { type: 'Performance Time', startTime: '2026-08-17T10:45:00-04:00' },
+    ];
+    const incoming = [
+      { type: 'Performance Time', startTime: '2026-08-17T10:45:00-04:00' },
+      { type: 'Performance Time', startTime: '2026-08-17T10:45:00-04:00' },
+    ];
+
+    const result = mergeShowtimeEntries(existing, incoming);
+    expect(result).toHaveLength(1);
+    expect(result).toEqual([
+      { type: 'Performance Time', startTime: '2026-08-17T10:45:00-04:00' },
+    ]);
+  });
+
+  it('handles mixed shapes (raw object, projected object, ISO string) preserving shapes and sorting by time', () => {
+    const existing = [
+      { type: 'Performance Time', startTime: '2026-08-17T16:30:00-04:00' },
+      '2026-08-17T14:45:00.000Z',
+    ];
+    const incoming = [
+      { start: '2026-08-17T16:00:00.000Z' },
+    ];
+
+    const result = mergeShowtimeEntries(existing, incoming);
+    expect(result).toEqual([
+      '2026-08-17T14:45:00.000Z',
+      { start: '2026-08-17T16:00:00.000Z' },
+      { type: 'Performance Time', startTime: '2026-08-17T16:30:00-04:00' },
+    ]);
+  });
+});
+
 describe('showtimePatterns pure unit tests', () => {
   it('correctly maps date strings to 0-6 weekday in Eastern Time', () => {
     // 2026-10-04 is a Sunday -> 0
@@ -164,7 +271,7 @@ describe('showtimePatterns pure unit tests', () => {
     expect(bucketStartMinutes(605)).toBe(605); // 10:05 -> 10:05
   });
 
-  it('excludes a slot appearing on 2 of 5 same-weekday dates (frequency 0.4) and includes 3 of 5 (frequency 0.6) with raw object signals', () => {
+  it('excludes a slot appearing on 2 of 5 same-weekday dates (frequency 0.4 < 0.5) and includes 3 of 5 (frequency 0.6 >= 0.5) with MIN_SAMPLES = 2', () => {
     // 5 consecutive Sundays in Oct/Nov 2026 (Oct 4, 11, 18, 25, Nov 1)
     // Oct 4, 11, 18, 25 are EDT (UTC-4), Nov 1 is EST (UTC-5)
     const expId = 'exp-show-lion-king';
@@ -198,8 +305,10 @@ describe('showtimePatterns pure unit tests', () => {
 
     const patterns = deriveShowTimePatterns(signals);
 
-    // 600m slot appears on 3 of 5 dates (Oct 4, Oct 11, Oct 18) -> sample_count 3, frequency 0.6 -> INCLUDED
-    // 780m slot appears on 2 of 5 dates (Oct 25, Nov 1) -> sample_count 2, frequency 0.4 -> EXCLUDED (< 0.5 & < 3)
+    // 600m slot appears on 3 of 5 dates (Oct 4, Oct 11, Oct 18):
+    //   sample_count = 3 (>= MIN_SAMPLES = 2), frequency = 3/5 = 0.6 (>= MIN_FREQ = 0.5) -> INCLUDED
+    // 780m slot appears on 2 of 5 dates (Oct 25, Nov 1):
+    //   sample_count = 2 (>= MIN_SAMPLES = 2), but frequency = 2/5 = 0.4 (< MIN_FREQ = 0.5) -> EXCLUDED by frequency gate
     expect(patterns).toHaveLength(1);
     expect(patterns[0]!).toEqual({
       experience_id: expId,
@@ -210,8 +319,205 @@ describe('showtimePatterns pure unit tests', () => {
     });
   });
 
+  it('two-gate division: group gate requires >= 2 observed dates; slot gate includes slots with frequency >= 0.5 (even when sample_count is 1 of 2)', () => {
+    const expId = 'exp-indiana-jones';
+    const signals: RawShowtimeSignal[] = [
+      {
+        experience_id: expId,
+        date: '2026-08-10', // Monday
+        showtimes: [
+          { type: 'Performance Time', startTime: '2026-08-10T10:45:00-04:00', endTime: '2026-08-10T10:45:00-04:00' }, // 10:45 AM EDT (645m)
+          { type: 'Performance Time', startTime: '2026-08-10T12:00:00-04:00', endTime: '2026-08-10T12:00:00-04:00' }, // 12:00 PM EDT (720m)
+        ],
+      },
+      {
+        experience_id: expId,
+        date: '2026-08-17', // Monday
+        showtimes: [
+          { type: 'Performance Time', startTime: '2026-08-17T10:45:00-04:00', endTime: '2026-08-17T10:45:00-04:00' }, // 10:45 AM EDT (645m)
+          { type: 'Performance Time', startTime: '2026-08-17T13:15:00-04:00', endTime: '2026-08-17T13:15:00-04:00' }, // 1:15 PM EDT (795m)
+        ],
+      },
+    ];
+
+    const patterns = deriveShowTimePatterns(signals);
+
+    // Group gate: total observed Mondays = 2 (>= MIN_SAMPLES = 2) -> passes group threshold
+    // Slot gate (frequency >= 0.5):
+    //   645m (10:45 AM): appears on 2 of 2 dates -> frequency = 2/2 = 1.0 (>= 0.5), sample_count = 2 -> INCLUDED
+    //   720m (12:00 PM): appears on 1 of 2 dates -> frequency = 1/2 = 0.5 (>= 0.5), sample_count = 1 -> INCLUDED
+    //   795m (1:15 PM): appears on 1 of 2 dates -> frequency = 1/2 = 0.5 (>= 0.5), sample_count = 1 -> INCLUDED
+    expect(patterns).toHaveLength(3);
+    expect(patterns).toEqual([
+      {
+        experience_id: expId,
+        day_of_week: 1, // Monday
+        start_minutes: 645,
+        frequency: 1.0,
+        sample_count: 2,
+      },
+      {
+        experience_id: expId,
+        day_of_week: 1, // Monday
+        start_minutes: 720,
+        frequency: 0.5,
+        sample_count: 1,
+      },
+      {
+        experience_id: expId,
+        day_of_week: 1, // Monday
+        start_minutes: 795,
+        frequency: 0.5,
+        sample_count: 1,
+      },
+    ]);
+  });
+
+  it('Thursday case: two observed dates with 2 showtimes and 4 showtimes emit all 4 slots with frequencies 1.0 and 0.5', () => {
+    const expId = '4ac8c59c-15e5-593e-ae4a-5bb3fbaa0ff9';
+    const signals: RawShowtimeSignal[] = [
+      {
+        experience_id: expId,
+        date: '2026-08-06', // Thursday
+        showtimes: [
+          { type: 'Performance Time', startTime: '2026-08-06T10:45:00-04:00', endTime: '2026-08-06T10:45:00-04:00' }, // 645m
+          { type: 'Performance Time', startTime: '2026-08-06T12:00:00-04:00', endTime: '2026-08-06T12:00:00-04:00' }, // 720m
+        ],
+      },
+      {
+        experience_id: expId,
+        date: '2026-08-13', // Thursday
+        showtimes: [
+          { type: 'Performance Time', startTime: '2026-08-13T10:45:00-04:00', endTime: '2026-08-13T10:45:00-04:00' }, // 645m
+          { type: 'Performance Time', startTime: '2026-08-13T12:00:00-04:00', endTime: '2026-08-13T12:00:00-04:00' }, // 720m
+          { type: 'Performance Time', startTime: '2026-08-13T13:15:00-04:00', endTime: '2026-08-13T13:15:00-04:00' }, // 795m
+          { type: 'Performance Time', startTime: '2026-08-13T15:15:00-04:00', endTime: '2026-08-13T15:15:00-04:00' }, // 915m
+        ],
+      },
+    ];
+
+    const patterns = deriveShowTimePatterns(signals);
+
+    // Group has 2 observed Thursdays (passes group gate).
+    // All 4 distinct slots satisfy frequency >= 0.5 and must be emitted.
+    expect(patterns).toHaveLength(4);
+    expect(patterns).toEqual([
+      {
+        experience_id: expId,
+        day_of_week: 4, // Thursday
+        start_minutes: 645,
+        frequency: 1.0,
+        sample_count: 2,
+      },
+      {
+        experience_id: expId,
+        day_of_week: 4, // Thursday
+        start_minutes: 720,
+        frequency: 1.0,
+        sample_count: 2,
+      },
+      {
+        experience_id: expId,
+        day_of_week: 4, // Thursday
+        start_minutes: 795,
+        frequency: 0.5,
+        sample_count: 1,
+      },
+      {
+        experience_id: expId,
+        day_of_week: 4, // Thursday
+        start_minutes: 915,
+        frequency: 0.5,
+        sample_count: 1,
+      },
+    ]);
+  });
+
+  it('frequency gate: with 4 observed dates, excludes frequency 0.25 (1 of 4) and includes frequency 0.5 (2 of 4)', () => {
+    const expId = 'exp-show';
+    const signals: RawShowtimeSignal[] = [
+      {
+        experience_id: expId,
+        date: '2026-08-04', // Tuesday
+        showtimes: [
+          { type: 'Performance Time', startTime: '2026-08-04T10:45:00-04:00', endTime: '2026-08-04T10:45:00-04:00' }, // 645m
+          { type: 'Performance Time', startTime: '2026-08-04T12:00:00-04:00', endTime: '2026-08-04T12:00:00-04:00' }, // 720m (only on this date -> 1/4 = 0.25)
+          { type: 'Performance Time', startTime: '2026-08-04T13:15:00-04:00', endTime: '2026-08-04T13:15:00-04:00' }, // 795m
+        ],
+      },
+      {
+        experience_id: expId,
+        date: '2026-08-11', // Tuesday
+        showtimes: [
+          { type: 'Performance Time', startTime: '2026-08-11T10:45:00-04:00', endTime: '2026-08-11T10:45:00-04:00' }, // 645m
+          { type: 'Performance Time', startTime: '2026-08-11T13:15:00-04:00', endTime: '2026-08-11T13:15:00-04:00' }, // 795m
+        ],
+      },
+      {
+        experience_id: expId,
+        date: '2026-08-18', // Tuesday
+        showtimes: [
+          { type: 'Performance Time', startTime: '2026-08-18T10:45:00-04:00', endTime: '2026-08-18T10:45:00-04:00' }, // 645m
+          { type: 'Performance Time', startTime: '2026-08-18T13:15:00-04:00', endTime: '2026-08-18T13:15:00-04:00' }, // 795m
+        ],
+      },
+      {
+        experience_id: expId,
+        date: '2026-08-25', // Tuesday
+        showtimes: [
+          { type: 'Performance Time', startTime: '2026-08-25T10:45:00-04:00', endTime: '2026-08-25T10:45:00-04:00' }, // 645m (seen on 4/4 = 1.0)
+        ],
+      },
+    ];
+
+    const patterns = deriveShowTimePatterns(signals);
+
+    // Total observed Tuesdays = 4
+    // 645m: 4 of 4 dates -> freq = 1.0 (>= 0.5) -> INCLUDED, sample_count = 4
+    // 720m: 1 of 4 dates -> freq = 0.25 (< 0.5) -> EXCLUDED by frequency gate, sample_count = 1
+    // 795m: 3 of 4 dates -> freq = 0.75 (>= 0.5) -> INCLUDED, sample_count = 3
+    expect(patterns).toHaveLength(2);
+    expect(patterns).toEqual([
+      {
+        experience_id: expId,
+        day_of_week: 2, // Tuesday
+        start_minutes: 645,
+        frequency: 1.0,
+        sample_count: 4,
+      },
+      {
+        experience_id: expId,
+        day_of_week: 2, // Tuesday
+        start_minutes: 795,
+        frequency: 0.75,
+        sample_count: 3,
+      },
+    ]);
+  });
+
+  it('group gate: does not emit patterns for a weekday with fewer than SHOWTIME_PATTERN_MIN_SAMPLES (2) observed dates', () => {
+    const expId = 'exp-single-date';
+    const signals: RawShowtimeSignal[] = [
+      {
+        experience_id: expId,
+        date: '2026-08-05', // Wednesday (only 1 date observed)
+        showtimes: [
+          { type: 'Performance Time', startTime: '2026-08-05T10:45:00-04:00', endTime: '2026-08-05T10:45:00-04:00' },
+          { type: 'Performance Time', startTime: '2026-08-05T12:00:00-04:00', endTime: '2026-08-05T12:00:00-04:00' },
+          { type: 'Performance Time', startTime: '2026-08-05T13:15:00-04:00', endTime: '2026-08-05T13:15:00-04:00' },
+          { type: 'Performance Time', startTime: '2026-08-05T15:15:00-04:00', endTime: '2026-08-05T15:15:00-04:00' },
+          { type: 'Performance Time', startTime: '2026-08-05T16:30:00-04:00', endTime: '2026-08-05T16:30:00-04:00' },
+        ],
+      },
+    ];
+
+    const patterns = deriveShowTimePatterns(signals);
+    // Group gate (totalObservedDates = 1 < 2) drops the entire group
+    expect(patterns).toHaveLength(0);
+  });
+
   // Feature: crowd-calendar, Property 12: Historical showtime patterns derivation thresholds and bucketing
-  it('Property 12: all derived patterns satisfy sample count >= 3, frequency >= 0.5, 5m bucketing, and exact sample frequency across raw object, projected, and string shapes', () => {
+  it('Property 12: all derived patterns satisfy group gate (observed dates >= 2), slot gate (frequency >= 0.5), sample_count >= 1, and 5m bucketing', () => {
     fc.assert(
       fc.property(
         fc.array(
@@ -251,17 +557,80 @@ describe('showtimePatterns pure unit tests', () => {
             };
           });
 
+          // Compute observed dates and bucket frequencies per (experience_id, day_of_week) group
+          const groupDates = new Map<string, Set<string>>();
+          const groupBuckets = new Map<string, Map<number, Set<string>>>();
+
+          for (const s of signals) {
+            const { instants } = normalizeShowtimeEntries(s.showtimes);
+            if (instants.length === 0) continue;
+
+            const dow = getETDayOfWeek(s.date);
+            const groupKey = `${s.experience_id}:${dow}`;
+            if (!groupDates.has(groupKey)) {
+              groupDates.set(groupKey, new Set());
+              groupBuckets.set(groupKey, new Map());
+            }
+            groupDates.get(groupKey)!.add(s.date);
+
+            for (const iso of instants) {
+              const rawMins = isoInstantToMinutesFromMidnightET(s.date, iso);
+              if (Number.isNaN(rawMins) || rawMins < 0 || rawMins > 1440) continue;
+              const b = bucketStartMinutes(rawMins);
+              const bucketMap = groupBuckets.get(groupKey)!;
+              if (!bucketMap.has(b)) {
+                bucketMap.set(b, new Set());
+              }
+              bucketMap.get(b)!.add(s.date);
+            }
+          }
+
           const patterns = deriveShowTimePatterns(signals);
 
+          // 1. Soundness: Every emitted pattern must satisfy the group gate and slot gate
           for (const pattern of patterns) {
-            expect(pattern.sample_count).toBeGreaterThanOrEqual(3);
-            expect(pattern.frequency).toBeGreaterThanOrEqual(0.5);
+            const key = `${pattern.experience_id}:${pattern.day_of_week}`;
+            const totalObserved = groupDates.get(key)?.size ?? 0;
+
+            // Group gate: must have at least SHOWTIME_PATTERN_MIN_SAMPLES (2) observed dates
+            expect(totalObserved).toBeGreaterThanOrEqual(SHOWTIME_PATTERN_MIN_SAMPLES);
+
+            // Slot gate: frequency must be >= SHOWTIME_PATTERN_MIN_FREQUENCY (0.5)
+            expect(pattern.frequency).toBeGreaterThanOrEqual(SHOWTIME_PATTERN_MIN_FREQUENCY);
             expect(pattern.frequency).toBeLessThanOrEqual(1.0);
+
+            // sample_count must be at least 1 and match frequency * totalObserved
+            expect(pattern.sample_count).toBeGreaterThanOrEqual(1);
+            expect(pattern.frequency).toBeCloseTo(pattern.sample_count / totalObserved, 5);
+
             expect(pattern.day_of_week).toBeGreaterThanOrEqual(0);
             expect(pattern.day_of_week).toBeLessThanOrEqual(6);
             expect(pattern.start_minutes).toBeGreaterThanOrEqual(0);
             expect(pattern.start_minutes).toBeLessThanOrEqual(1440);
             expect(pattern.start_minutes % 5).toBe(0);
+          }
+
+          // 2. Completeness: Every qualifying slot across qualifying groups MUST be emitted
+          for (const [groupKey, datesSet] of groupDates.entries()) {
+            if (datesSet.size >= SHOWTIME_PATTERN_MIN_SAMPLES) {
+              const [expId, dowStr] = groupKey.split(':');
+              const dow = Number(dowStr);
+              const bucketMap = groupBuckets.get(groupKey) ?? new Map();
+
+              for (const [bucket, dateOccurrences] of bucketMap.entries()) {
+                const freq = dateOccurrences.size / datesSet.size;
+                if (freq >= SHOWTIME_PATTERN_MIN_FREQUENCY) {
+                  const found = patterns.some(
+                    (p) =>
+                      p.experience_id === expId &&
+                      p.day_of_week === dow &&
+                      p.start_minutes === bucket &&
+                      p.sample_count === dateOccurrences.size,
+                  );
+                  expect(found).toBe(true);
+                }
+              }
+            }
           }
         },
       ),
@@ -269,3 +638,6 @@ describe('showtimePatterns pure unit tests', () => {
     );
   });
 });
+
+
+

@@ -1,4 +1,5 @@
 import type { Pool } from 'pg';
+import { mergeShowtimeEntries } from './showtimePatterns.js';
 
 export interface RideShapeRow {
   experience_id: string;
@@ -442,28 +443,84 @@ export class IntelligenceRepo {
 
   async upsertExperienceDailySignals(signals: DailySignalRow[]): Promise<void> {
     if (signals.length === 0) return;
+
+    // Deduplicate and merge within batch first to avoid Postgres error 21000
+    const dedupedMap = new Map<string, DailySignalRow>();
+    for (const sig of signals) {
+      const dateStr = sig.date instanceof Date ? sig.date.toISOString().split('T')[0]! : String(sig.date).split('T')[0]!;
+      const key = `${sig.experience_id}:${dateStr}`;
+      const existingInBatch = dedupedMap.get(key);
+      if (existingInBatch) {
+        dedupedMap.set(key, {
+          experience_id: sig.experience_id,
+          date: sig.date,
+          ll_price_cents: sig.ll_price_cents !== undefined ? sig.ll_price_cents : existingInBatch.ll_price_cents,
+          ll_available: sig.ll_available !== undefined ? sig.ll_available : existingInBatch.ll_available,
+          used_virtual_queue: sig.used_virtual_queue !== undefined ? sig.used_virtual_queue : existingInBatch.used_virtual_queue,
+          showtimes: mergeShowtimeEntries(existingInBatch.showtimes, sig.showtimes),
+        });
+      } else {
+        dedupedMap.set(key, { ...sig });
+      }
+    }
+    const batch = Array.from(dedupedMap.values());
+
+    // Query existing rows to union showtimes across passes
+    const expIds = batch.map(s => s.experience_id);
+    const dates = batch.map(s => s.date instanceof Date ? s.date.toISOString().split('T')[0]! : String(s.date).split('T')[0]!);
+
+    const existingRes = await this.pool.query(
+      `SELECT experience_id, date, showtimes FROM experience_daily_signals
+       WHERE experience_id = ANY($1::uuid[]) AND date = ANY($2::date[])`,
+      [expIds, dates],
+    );
+
+    const existingMap = new Map<string, any>();
+    for (const row of existingRes.rows) {
+      const dateStr = row.date instanceof Date ? row.date.toISOString().split('T')[0]! : String(row.date).split('T')[0]!;
+      existingMap.set(`${row.experience_id}:${dateStr}`, row.showtimes);
+    }
+
+    const finalSignals = batch.map(s => {
+      const dateStr = s.date instanceof Date ? s.date.toISOString().split('T')[0]! : String(s.date).split('T')[0]!;
+      const existingShowtimes = existingMap.get(`${s.experience_id}:${dateStr}`);
+      const mergedShowtimes = mergeShowtimeEntries(existingShowtimes, s.showtimes);
+      return {
+        ...s,
+        showtimes: mergedShowtimes,
+      };
+    });
+
+    const valuePlaceholders: string[] = [];
+    const params: unknown[] = [];
+    for (let i = 0; i < finalSignals.length; i++) {
+      const s = finalSignals[i]!;
+      const offset = i * 6;
+      valuePlaceholders.push(`($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 5}, $${offset + 6})`);
+      params.push(
+        s.experience_id,
+        s.date,
+        s.ll_price_cents,
+        s.ll_available,
+        s.used_virtual_queue,
+        s.showtimes ? JSON.stringify(s.showtimes) : null,
+      );
+    }
+
     const query = `
       INSERT INTO experience_daily_signals (
         experience_id, date, ll_price_cents, ll_available, used_virtual_queue, showtimes
       )
-      SELECT * FROM unnest(
-        $1::uuid[], $2::date[], $3::int[], $4::boolean[], $5::boolean[], $6::jsonb[]
-      ) AS t(experience_id, date, ll_price_cents, ll_available, used_virtual_queue, showtimes)
+      VALUES ${valuePlaceholders.join(', ')}
       ON CONFLICT (experience_id, date) DO UPDATE SET
         ll_price_cents = EXCLUDED.ll_price_cents,
         ll_available = EXCLUDED.ll_available,
         used_virtual_queue = EXCLUDED.used_virtual_queue,
         showtimes = EXCLUDED.showtimes
     `;
-    await this.pool.query(query, [
-      signals.map(s => s.experience_id),
-      signals.map(s => s.date),
-      signals.map(s => s.ll_price_cents),
-      signals.map(s => s.ll_available),
-      signals.map(s => s.used_virtual_queue),
-      signals.map(s => s.showtimes ? JSON.stringify(s.showtimes) : null), // Note: array of jsonb strings
-    ]);
+    await this.pool.query(query, params);
   }
+
 
   async upsertForecastLogs(logs: ForecastLogRow[]): Promise<void> {
     if (logs.length === 0) return;
