@@ -48,8 +48,8 @@ graph TD
 
 3. **Persistent Itinerary Timeline**:
    - Renders scheduled items chronologically with arrival times formatted via `formatTimeDisplay` (e.g., `1:00 PM`).
-   - Displays dynamic walking connectors between items (`+3m walk`, `+5m walk`) computed from `travelFromPrev`.
-   - Displays clear visual badges for Fixed Times, Lightning Lanes (⚡), Single Rider (👤), and Dining Reservations.
+   - Displays dynamic walking connectors between items (`+3m walk`, `+5m walk`) computed from `travelFromPrev`, and formats transit legs to venues or resorts without a park as `Transit to <Destination>` instead of empty park names.
+   - Displays clear visual badges for Fixed Times, Lightning Lanes (⚡), Single Rider (👤), and Dining Reservations (omitting queue wait pills for breaks, dining, and non-queue items), and displays the attached location name (`📍 <Location Name>`) on attraction and break cards when a custom title is set.
    - **Persisted vs. un-optimized (R8.2, R8.3):** predicted waits and travel legs come from the freshly-returned `TripOptimizationResult` when the user just optimized this session, otherwise from each item's persisted `predictedWaitMinutes` / `travelFromPrev`. It never fabricates placeholder wait/travel constants. When a day's scheduled items carry a persisted result, the timeline shows a "Last optimized {time}" hint (from the latest `optimizedAt`). When they do not, the wait pill is omitted and a "Not optimized yet — tap Optimize Day" notice is shown so a user is never shown a fake number.
    - Formats raw optimizer warning codes (`infeasible_fixed_gap`, `over_constrained`, `expired_lightning_lane`) and experience notes into clean, human-readable user messages resolving item IDs to experience names.
 
@@ -218,6 +218,11 @@ graph TD
 *For any* simulated sequence, two consecutive items of the same downtime kind (where kind is `dining` for `category === 'Restaurant'` and `break` for `item_type === 'break'`) incur a flat `SAME_KIND_ADJACENCY_PENALTY = 500` penalty and emit `adjacent_dining:<id>` or `adjacent_break:<id>`, unless BOTH adjacent items are user-pinned (`is_fixed = true`). A break adjacent to a meal incurs no adjacency penalty, and a schedule composed entirely of downtime items is never rejected (soft penalty).
 
 **Validates: Requirements 3.18, 4.6**
+
+### Property 19: ExperiencePicker multi-select filtering, price tiers, quick-chips derivation, and park scoping
+*For any* list of loaded Experiences, `deriveFilterChips` returns a partitioned list of unique `landChips`, unique `priceChips`, and unique `attributeChips`. `landChips` contains every unique non-empty `land` or pavilion present in the experiences, formatted with a `📍` prefix. `priceChips` contains every unique non-null `priceTier` present in the experiences, formatted with a `💵` prefix and sorted ascending by price scale (`$`, `$$`, `$$$`, `$$$$`). `attributeChips` contains every unique facet tag from whitelisted high-signal facet groups (`interests`, `thrillFactor`, `parkInterests`, `disneyFavorites`, `tableService`, `quickService`, `dining`) plus any non-null `subType`, explicitly excluding `age` and `height` facet groups, and deduplicated by `id` OR case-insensitive trimmed `name`. `deriveQuickChips` takes the derived chips and `activeTab` and extracts at most 4 top-priority quick-toggle chips (including service styles and price tiers) present in the current results. *For any* `DestinationId | 'all'`, `resolveParkScope` exhaustively resolves to `{}` for `'all'`, to `{ areaType: 'Resort' }` for `'Resorts'`, and to `{ parkId: destination.id }` for park destinations, with exactly one or zero filter keys set. *For any* set of `selectedLands` and set of `selectedTags` (matching attributes or price tiers), `filterExperiencesMulti` produces a subset of experiences that match at least one selected land (when `selectedLands` is non-empty) AND match at least one selected tag (when `selectedTags` is non-empty), acting as the identity function when both sets are empty, and is idempotent. *For any* input, `isKnownPark` strictly narrows only canonical members of `PARKS`.
+
+**Validates: Requirements 4.12, 4.15**
 
 ## Error Handling
 

@@ -441,6 +441,11 @@ export const PERSISTED_FACET_GROUPS: ReadonlySet<string> = new Set([
   'age',
   'parkInterests',
   'disneyFavorites',
+  'diningInterests',
+  'cuisine',
+  'dining',
+  'quickService',
+  'tableService',
 ]);
 
 /**
@@ -454,6 +459,11 @@ export const INTEREST_FACET_GROUPS: readonly string[] = [
   'age',
   'parkInterests',
   'disneyFavorites',
+  'diningInterests',
+  'cuisine',
+  'dining',
+  'quickService',
+  'tableService',
 ];
 
 /**

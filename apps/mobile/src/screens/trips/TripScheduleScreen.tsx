@@ -45,6 +45,7 @@ import {
 import { tripPlannedListKeys } from './TripPlannedListScreen';
 import { tripDetailKeys } from './TripDetailScreen';
 import { ExperiencePicker } from './ExperiencePicker';
+import { isKnownPark } from './experiencePickerFilters';
 
 type Props = NativeStackScreenProps<TripsStackParamList, 'TripSchedule'>;
 
@@ -733,7 +734,7 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
     setDraftItem({ ...item });
     setDraftCustomTitle(item.customTitle ?? '');
     setDraftDuration(item.durationMinutes ?? null);
-    if (item.isFixed || item.isLightningLane || item.plannedTime) {
+    if (item.isFixed || item.isLightningLane) {
       setTimingMode('exact_time');
       setSelectedMealPeriod(null);
       setWindowStartMins(null);
@@ -756,7 +757,7 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
   };
 
   const handleSaveModal = () => {
-    if (!draftItem) {
+    if (!draftItem || !editingItem) {
       setEditingItem(null);
       setDraftItem(null);
       return;
@@ -783,23 +784,99 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
     const isLLAllowed = !isBreak && !isRestaurant;
     const isSingleRiderAllowed = !isBreak && (expInfo?.category === 'Ride' || (!expInfo?.category && (draftItem.useSingleRider ?? false)));
 
+    const origTimingMode: TimingMode =
+      editingItem.isFixed || editingItem.isLightningLane
+        ? 'exact_time'
+        : editingItem.mealPeriod || editingItem.windowStartMinutes != null || editingItem.windowEndMinutes != null
+        ? 'soft_window'
+        : 'any_time';
+
+    const targetDate = normalizeDateStr(draftItem.plannedDate) ?? normalizeDateStr(activeDate) ?? '2026-08-20';
+    let exactTimeIso: string | null = null;
+    if (timingMode === 'exact_time' && passTimeText.trim()) {
+      exactTimeIso = parseTimeInputToIso(passTimeText, targetDate);
+      if (!exactTimeIso) {
+        setTimeError('Enter time as HH:MM AM/PM (e.g. 10:30 AM)');
+        return;
+      }
+    }
+
+    // Check if any fields changed compared to the original item before modal opened
+    let hasTimingChanged = false;
+    if (timingMode !== origTimingMode) {
+      hasTimingChanged = true;
+    } else if (timingMode === 'exact_time') {
+      const origLL = Boolean(editingItem.isLightningLane);
+      const newLL = isLLAllowed ? Boolean(draftItem.isLightningLane) : false;
+      const origIsoTimeStr = editingItem.plannedTime ? formatTimeDisplay(editingItem.plannedTime) : '';
+      const newIsoTimeStr = passTimeText.trim() ? formatTimeDisplay(exactTimeIso) : '';
+      if (origLL !== newLL || origIsoTimeStr !== newIsoTimeStr) {
+        hasTimingChanged = true;
+      }
+    } else if (timingMode === 'soft_window') {
+      const origMeal = editingItem.mealPeriod ?? null;
+      const newMeal = isRestaurant ? (selectedMealPeriod ?? null) : null;
+      const origStart = editingItem.windowStartMinutes ?? null;
+      const origEnd = editingItem.windowEndMinutes ?? null;
+      const newStart = windowStartMins ?? null;
+      const newEnd = windowEndMins ?? null;
+      if (origMeal !== newMeal || origStart !== newStart || origEnd !== newEnd) {
+        hasTimingChanged = true;
+      }
+    }
+
     const normDate = normalizeDateStr(draftItem.plannedDate);
+    const origDate = normalizeDateStr(editingItem.plannedDate);
+    const hasDateChanged = normDate !== origDate;
+
+    const newPriority = draftItem.priority ?? 2;
+    const origPriority = editingItem.priority ?? 2;
+    const hasPriorityChanged = newPriority !== origPriority;
+
+    const newSingleRider = isSingleRiderAllowed ? Boolean(draftItem.useSingleRider) : false;
+    const origSingleRider = Boolean(editingItem.useSingleRider);
+    const hasSingleRiderChanged = newSingleRider !== origSingleRider;
+
+    const newCustomTitle = draftItem.itemType === 'break' ? (draftCustomTitle.trim() || null) : null;
+    const origCustomTitle = editingItem.customTitle || null;
+    const hasCustomTitleChanged = newCustomTitle !== origCustomTitle;
+
+    const newDuration = !isAttractionExp && draftDuration != null ? draftDuration : null;
+    const origDuration = editingItem.durationMinutes ?? null;
+    const hasDurationChanged = newDuration !== origDuration;
+
+    const hasAnyChange =
+      hasTimingChanged ||
+      hasDateChanged ||
+      hasPriorityChanged ||
+      hasSingleRiderChanged ||
+      hasCustomTitleChanged ||
+      hasDurationChanged;
+
+    if (!hasAnyChange) {
+      setEditingItem(null);
+      setDraftItem(null);
+      return;
+    }
+
     const body: PlannedItemEditInput = {
-      ...(normDate ? { plannedDate: normDate } : {}),
-      useSingleRider: isSingleRiderAllowed ? (draftItem.useSingleRider ?? false) : false,
-      priority: draftItem.priority ?? 2,
+      ...(draftItem.plannedDate !== undefined ? { plannedDate: normDate } : {}),
+      useSingleRider: newSingleRider,
+      priority: newPriority,
       itemType: draftItem.itemType ?? 'experience',
       ...(!isAttractionExp && draftDuration != null ? { durationMinutes: draftDuration } : {}),
       ...(draftItem.itemType === 'break' ? { customTitle: draftCustomTitle.trim() || null } : {}),
     };
 
     if (timingMode === 'any_time') {
-      body.plannedTime = null;
-      body.isFixed = false;
-      body.isLightningLane = false;
-      body.windowStartMinutes = null;
-      body.windowEndMinutes = null;
-      body.mealPeriod = null;
+      if (origTimingMode !== 'any_time') {
+        body.plannedTime = null;
+        body.isFixed = false;
+        body.isLightningLane = false;
+        body.windowStartMinutes = null;
+        body.windowEndMinutes = null;
+        body.mealPeriod = null;
+      }
     } else if (timingMode === 'soft_window') {
       body.plannedTime = null;
       body.isFixed = false;
@@ -808,17 +885,7 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
       body.windowStartMinutes = windowStartMins;
       body.windowEndMinutes = windowEndMins;
     } else if (timingMode === 'exact_time') {
-      if (passTimeText.trim()) {
-        const targetDate = normalizeDateStr(draftItem.plannedDate) ?? normalizeDateStr(activeDate) ?? '2026-08-20';
-        const iso = parseTimeInputToIso(passTimeText, targetDate);
-        if (!iso) {
-          setTimeError('Enter time as HH:MM AM/PM (e.g. 10:30 AM)');
-          return;
-        }
-        body.plannedTime = iso;
-      } else {
-        body.plannedTime = null;
-      }
+      body.plannedTime = exactTimeIso;
       body.isLightningLane = isLLAllowed ? (draftItem.isLightningLane ?? false) : false;
       body.isFixed = !body.isLightningLane;
       body.windowStartMinutes = null;
@@ -1033,7 +1100,16 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
                                 <View style={styles.dashedParkHopBox}>
                                   <Text style={styles.dashedParkHopText}>
                                     <Text style={styles.boldMins}>+{travelMins}m </Text>
-                                    Park Hop to {item.park} (Open til {getParkHoursDetails(item.park ?? '').openTimeText.split(' - ')[1] ?? '9:00 PM'})
+                                    {item.park ? (
+                                      <>
+                                        Park Hop to {item.park}
+                                        {getParkHoursDetails(item.park ?? '').openTimeText.includes(' - ')
+                                          ? ` (Open til ${getParkHoursDetails(item.park ?? '').openTimeText.split(' - ')[1] ?? '9:00 PM'})`
+                                          : ''}
+                                      </>
+                                    ) : (
+                                      `Transit to ${item.experienceName || item.customTitle || 'Break'}`
+                                    )}
                                   </Text>
                                 </View>
                               </View>
@@ -1090,14 +1166,27 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
 
                             <View style={styles.mockupCardBody}>
                               <Text style={styles.mockupCardTitle}>{item.customTitle || item.experienceName || 'Planned Item'}</Text>
+                              {item.customTitle && (item.experienceName || expInfo?.name) ? (
+                                <View style={styles.mockupCardLocationRow} testID={`item-location-${item.id}`}>
+                                  <Ionicons name="location-sharp" size={12} color="#64748b" />
+                                  <Text style={styles.mockupCardLocationText} numberOfLines={1}>
+                                    {item.experienceName || expInfo?.name}{expInfo?.land ? ` • ${expInfo.land}` : ''}
+                                  </Text>
+                                </View>
+                              ) : null}
 
                               {/* Badges Row */}
                               <View style={styles.mockupBadgeRow}>
-                                {predictedWaitMinutes != null && (
-                                  <View style={styles.waitPillGray}>
-                                    <Text style={styles.waitPillText}>Wait: {predictedWaitMinutes} min</Text>
-                                  </View>
-                                )}
+                                {predictedWaitMinutes != null &&
+                                  item.itemType !== 'break' &&
+                                  expInfo?.category !== 'Restaurant' &&
+                                  expInfo?.category !== 'Resort' &&
+                                  expInfo?.category !== 'Spa' &&
+                                  expInfo?.category !== 'Recreation' && (
+                                    <View style={styles.waitPillGray}>
+                                      <Text style={styles.waitPillText}>Wait: {predictedWaitMinutes} min</Text>
+                                    </View>
+                                  )}
                                 <View style={styles.durationPillGray}>
                                   <Text style={styles.durationPillText}>
                                     {item.itemType === 'break'
@@ -1178,6 +1267,11 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
                 {unscheduledDayItems.map((item) => (
                   <Card key={item.id} style={styles.itemCard}>
                     <Text style={styles.itemName}>{item.customTitle || item.experienceName || 'Planned Item'}</Text>
+                    {item.customTitle && item.experienceName ? (
+                      <Text style={styles.itemMeta} testID={`unscheduled-item-location-${item.id}`}>
+                        📍 {item.experienceName}
+                      </Text>
+                    ) : null}
                     <View style={styles.itemProps}>
                       {item.isFixed && <Badge label="Fixed" color={theme.color.primary} />}
                       {item.isLightningLane && <Badge label="⚡ LL" color={theme.color.accent} />}
@@ -1213,6 +1307,11 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
                 {unscheduledDayItems.map((item) => (
                   <Card key={item.id} style={styles.itemCard}>
                     <Text style={styles.itemName}>{item.customTitle || item.experienceName || 'Planned Item'}</Text>
+                    {item.customTitle && item.experienceName ? (
+                      <Text style={styles.itemMeta} testID={`unscheduled-day-item-location-${item.id}`}>
+                        📍 {item.experienceName}
+                      </Text>
+                    ) : null}
                     <View style={styles.itemProps}>
                       {item.isFixed && <Badge label="Fixed" color={theme.color.primary} />}
                       {item.isLightningLane && <Badge label="⚡ LL" color={theme.color.accent} />}
@@ -1240,6 +1339,11 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
               unassignedItems.map((item) => (
                 <Card key={item.id} style={styles.itemCard}>
                   <Text style={styles.itemName}>{item.customTitle || item.experienceName || 'Planned Item'}</Text>
+                  {item.customTitle && item.experienceName ? (
+                    <Text style={styles.itemMeta} testID={`unassigned-item-location-${item.id}`}>
+                      📍 {item.experienceName}
+                    </Text>
+                  ) : null}
                   <View style={styles.itemProps}>
                     {item.isFixed && <Badge label="Fixed" color={theme.color.primary} />}
                     {item.isLightningLane && <Badge label="⚡ LL" color={theme.color.accent} />}
@@ -1288,6 +1392,9 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
                   addedCounts={addedScheduleCounts}
                   busy={addMutation.isPending}
                   testIDPrefix="schedule-picker"
+                  showParkFilter={true}
+                  defaultPark={isKnownPark(activeDaySettings.startingPark) ? activeDaySettings.startingPark : null}
+                  fillContainer
                 />
               </View>
             </ScreenContainer>
@@ -1322,6 +1429,14 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
                           placeholderTextColor={theme.color.textSecondary}
                           testID="item-custom-title-input"
                         />
+                        {(draftItem.experienceName || editingExpInfo?.name) && (
+                          <View style={styles.modalLocationBox} testID="item-modal-location">
+                            <Ionicons name="location-sharp" size={14} color={theme.color.textSecondary} />
+                            <Text style={styles.modalLocationText} numberOfLines={1}>
+                              {draftItem.experienceName || editingExpInfo?.name}
+                            </Text>
+                          </View>
+                        )}
                       </View>
                     )}
 
@@ -1375,7 +1490,7 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
                               <Text
                                 style={[
                                   styles.showtimePillText,
-                                  (timingMode === 'any_time' || (!draftItem?.isFixed && !draftItem?.plannedTime)) &&
+                                  (timingMode === 'any_time' || (!draftItem?.isFixed && !draftItem?.isLightningLane)) &&
                                     styles.showtimePillTextActive,
                                 ]}
                               >
@@ -1459,7 +1574,16 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
                       </Pressable>
                       <Pressable
                         style={[styles.timingModeBtn, timingMode === 'exact_time' && styles.timingModeBtnActive]}
-                        onPress={() => setTimingMode('exact_time')}
+                        onPress={() => {
+                          setTimingMode('exact_time');
+                          if (!passTimeText.trim()) {
+                            if (draftItem?.plannedTime) {
+                              setPassTimeText(formatTimeDisplay(draftItem.plannedTime));
+                            } else {
+                              setPassTimeText('10:00 AM');
+                            }
+                          }
+                        }}
                         testID="timing-mode-exact_time"
                       >
                         <Ionicons
@@ -2732,6 +2856,18 @@ const styles = StyleSheet.create({
     color: '#0f172a',
     marginTop: 1,
   },
+  mockupCardLocationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
+  },
+  mockupCardLocationText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#64748b',
+    flexShrink: 1,
+  },
   mockupBadgeRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -2811,6 +2947,11 @@ const styles = StyleSheet.create({
   itemName: {
     ...theme.typography.subtitle,
     color: theme.color.textPrimary,
+    marginBottom: theme.spacing.xs,
+  },
+  itemMeta: {
+    ...theme.typography.meta,
+    color: theme.color.textSecondary,
     marginBottom: theme.spacing.xs,
   },
   itemProps: {
@@ -3088,6 +3229,21 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: theme.color.textPrimary,
     marginTop: 4,
+  },
+  modalLocationBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: theme.color.surfaceAlt,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    borderRadius: theme.radius.md,
+    marginTop: theme.spacing.xs,
+  },
+  modalLocationText: {
+    ...theme.typography.meta,
+    color: theme.color.textSecondary,
+    flexShrink: 1,
   },
   timingModeRow: {
     flexDirection: 'row',

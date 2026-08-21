@@ -571,4 +571,87 @@ describe('Planned_List completion sync presentation', () => {
       expect(feedCalls).toBeGreaterThan(callsBeforeRetry);
     });
   });
+
+  test('R4.11: renders location on PlannedItemCard when customTitle is present', async () => {
+    const breakItem: PlannedItemDTO = {
+      ...TODO_ITEM,
+      id: 'item-break-with-loc',
+      customTitle: 'Back to the hotel',
+      experienceId: 'exp-resort-poly',
+      experienceName: "Disney's Polynesian Village Resort",
+      itemType: 'break',
+    };
+
+    installApi([breakItem], { feed: async () => [] });
+    renderPlanned(makeNavigation());
+
+    expect(await screen.findByText('Back to the hotel')).toBeTruthy();
+    expect(screen.getByTestId('planned-item-location-item-break-with-loc')).toBeTruthy();
+    expect(screen.getByText("📍 Disney's Polynesian Village Resort")).toBeTruthy();
+  });
+
+  test('R4.11 / AC 4.11: staging a break location in the picker submits both customTitle and experienceId in the POST body', async () => {
+    const RESORT_UUID = '88888888-8888-4888-8888-888888888888';
+    let capturedBody: unknown = null;
+    installApi([TODO_ITEM], {
+      feed: async () => [],
+      search: async () => ({
+        experiences: [
+          {
+            id: RESORT_UUID,
+            name: "Disney's Polynesian Village Resort",
+            category: 'Resort',
+            park: null,
+            land: null,
+            entityType: 'Resort',
+          },
+        ],
+      }),
+      mutate: async (_method, _path, body) => {
+        capturedBody = body;
+        return {
+          id: 'item-new-break',
+          tripId: TRIP_ID,
+          experienceId: RESORT_UUID,
+          experienceName: "Disney's Polynesian Village Resort",
+          customTitle: 'Pool Rest',
+          durationMinutes: 60,
+          itemType: 'break',
+        };
+      },
+    });
+
+    renderPlanned(makeNavigation());
+
+    // Open add modal
+    fireEvent.press(await screen.findByTestId('planned-list-add-open'));
+    expect(await screen.findByTestId('planned-list-composer')).toBeTruthy();
+
+    // Guard: showParkFilter defaults to false so park filter bar is omitted
+    expect(screen.queryByTestId('planned-list-park-filters')).toBeNull();
+
+    // Switch to Breaks tab
+    fireEvent.press(screen.getByTestId('planned-list-tab-breaks'));
+
+    // Search and tap location to stage it
+    fireEvent.changeText(screen.getByTestId('planned-list-search'), 'Poly');
+    fireEvent.press(await screen.findByText("Disney's Polynesian Village Resort"));
+
+    // Enter custom title
+    fireEvent.changeText(screen.getByTestId('planned-list-break-title-input'), 'Pool Rest');
+
+    // Submit break
+    fireEvent.press(screen.getByTestId('planned-list-add-break-btn'));
+
+    await waitFor(() => {
+      expect(capturedBody).toEqual(
+        expect.objectContaining({
+          customTitle: 'Pool Rest',
+          durationMinutes: 60,
+          experienceId: RESORT_UUID,
+          itemType: 'break',
+        }),
+      );
+    });
+  });
 });

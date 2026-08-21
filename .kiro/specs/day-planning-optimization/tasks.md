@@ -98,6 +98,10 @@ Implementation is **TypeScript**. It reuses `experiences.latitude/longitude` for
     - Add a header gear icon `⚙️` opening Schedule Settings Modal with Day Start/End hour presets (e.g. 8:00 AM – 9:00 PM), Early Entry Eligibility toggle, and Walking Pace selection.
     - Pass `startHour` and `endHour` to optimizer and update trip settings via `PATCH /trips/:id`.
     - _Requirements: 4.8_
+  - [x] 5.11 Display Break & Item Locations on Cards and in Transit Legs (`TripScheduleScreen.tsx`, `TripPlannedListScreen.tsx`)
+    - Display location (`📍 <Location Name>`) on timeline attraction cards, unscheduled item cards, unassigned item cards, and inside Item Settings modal when a custom title is set.
+    - Format park hop / transit legs to items without a park as `Transit to <Destination>` instead of empty park names.
+    - _Requirements: 4.11_
 - [x] 6. Verification
   - [x] 6.1 `migration0022.test.ts` — the `is_lightning_lane` and `use_single_rider` columns apply (pg-mem, modeled on the existing `migrationNNNN.test.ts` files).
     - _Requirements: 2.3, 6.4_
@@ -284,12 +288,38 @@ Implementation is **TypeScript**. It reuses `experiences.latitude/longitude` for
   - [x] 19.3 Final Verification Gate
     - `npm run verify` across all workspaces.
 
+- [x] 20. Unit E — ExperiencePicker Multi-Tier Filtering & Grouping
+  - [x] 20.1 Pure filter/derive module and property test (`experiencePickerFilters.ts`)
+    - Implement `deriveFilterChips` (deriving unique `landChips`, `priceChips`, and unique whitelisted `attributeChips` deduped by `id` OR case-insensitive trimmed `name`, excluding `age` and `height`), `deriveQuickChips` (extracting top 3–4 high-signal category chips for the active tab including dining service styles and price tiers), `filterExperiencesMulti` (conjunctive `AND` across lands and attributes/price, disjunctive `OR` within), `resolveParkScope`, `isKnownPark`, `formatEmptyFilterMessage`, and `formatSearchHintMessage`.
+    - Write fast-check property test (`experiencePickerFilters.prop.test.ts`) validating **Property 19** at ≥100 runs.
+    - _Requirements: 4.12, 4.15_
+  - [x] 20.2 Tabbed ExperiencePicker multi-tier filtering & Land grouping (`ExperiencePicker.tsx`)
+    - Define `TAB_CATEGORIES` and query `GET /catalog` using `categories` parameter when non-empty.
+    - Gate Breaks tab location queries behind `debouncedQuery.length >= SEARCH_MIN_CHARS` (AC 4.14).
+    - Render `ParkFilterBar` with `DESTINATIONS` chips and compact Quick-Chips bar with `[ ⚙️ Filters (N) ]` button, top quick-chips (including dining service styles and price tiers), and `[ ✕ Reset ]` chip.
+    - Render `FilterBottomSheetModal` with dedicated scrollable sections for Lands, Price Range (`$`, `$$`, `$$$`, `$$$$`), and Attributes & Dining tags, "Clear All" action, and "Apply Filters" button.
+    - Render Land and EPCOT pavilion section headers using `groupByPavilionFiltered`.
+    - Support `showParkFilter?: boolean` (defaulting to false) and `defaultPark?: Park | null`.
+    - Include full accessibility annotations (`accessibilityRole="checkbox"` / `"button"`, `accessibilityState={{ checked: isSelected }}`, and descriptive `accessibilityLabel`).
+    - _Requirements: 4.10, 4.12, 4.13, 4.14, 4.15_
+  - [x] 20.3 Pass startingPark to ExperiencePicker in `TripScheduleScreen.tsx`
+    - Extract `configuredPark = dayHoursMap[activeDate]?.startingPark` and pass narrowed `defaultPark = isKnownPark(configuredPark) ? configuredPark : null` alongside `showParkFilter={true}`.
+    - _Requirements: 4.13_
+  - [x] 20.4 Component and integration tests for ExperiencePicker
+    - Update `ExperiencePicker.test.tsx` asserting multi-category Shows tab queries, break location search non-empty under park chip, quick-chip and bottom sheet multi-select toggles, filter reset on tab/park change and reset chip, on-screen row cache segregation, defaultPark pre-selection, and accessibility.
+    - Verify `TripScheduleScreen.test.tsx`, `TripPlannedListScreen.test.tsx`, and `TripFeedScreen.test.tsx`.
+    - _Requirements: 4.10, 4.12, 4.13, 4.14, 4.15_
+  - [x] 20.5 Checkpoint & Verification Gate
+    - `npm run verify` across all workspaces.
+    - _Requirements: 4.12, 4.13, 4.14, 4.15_
+
 ## Notes
 
 - Test tasks are **required, not optional** — a feature task is not complete until its tests exist and pass.
 - Property tests reference a design Correctness Property, run ≥100 `fast-check` iterations, and are tagged `Feature: day-planning-optimization, Property {n}`.
 - The pure modules (`travel`, `optimizer`) carry no I/O; the `WaitSnapshot` is injected, so properties run directly against the functions with a stub.
 - `permissions.ts` and `wdwClock.ts` are reused; this plan adds no new auth or time-zone logic and no wait-model logic.
+- Task 20 depends on `catalog-navigation-redesign` Requirement 13 (the `categories` multi-category filter on `GET /catalog`). The ExperiencePicker's Shows tab spans several Experience_Categories and the single `category` parameter cannot express that — build Requirement 13 first.
 
 ## Task Dependency Graph
 
@@ -309,7 +339,8 @@ Implementation is **TypeScript**. It reuses `experiences.latitude/longitude` for
     { "id": 10, "tasks": ["16.1", "16.2", "16.3"] },
     { "id": 11, "tasks": ["16.4", "17.1", "17.2", "17.3", "17.4", "17.5"] },
     { "id": 12, "tasks": ["17.6", "18.1", "19.1", "19.2"] },
-    { "id": 13, "tasks": ["19.3"] }
+    { "id": 13, "tasks": ["19.3"] },
+    { "id": 14, "tasks": ["20.1", "20.2", "20.3", "20.4", "20.5"] }
   ]
 }
 ```

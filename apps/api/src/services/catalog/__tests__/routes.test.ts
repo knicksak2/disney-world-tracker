@@ -275,6 +275,82 @@ describe('GET /catalog', () => {
     await app.close();
   });
 
+  it('forwards comma-separated categories to the repo as an array and dedupes members (R13.1, R13.2, R13.7)', async () => {
+    const { app, listFilters } = await buildApp();
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/catalog?categories=Show,Parade,Character_Meet,Event,Show',
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(listFilters).toEqual([
+      { categories: ['Show', 'Parade', 'Character_Meet', 'Event'] },
+    ]);
+    await app.close();
+  });
+
+  it('forwards categories conjunctively alongside parkId, category, areaType, land, and q (R13.3)', async () => {
+    const { app, listFilters } = await buildApp();
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/catalog?parkId=Magic%20Kingdom&categories=Show,Parade&category=Show&areaType=ThemePark&land=Tomorrowland&q=Space',
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(listFilters).toEqual([
+      {
+        park: 'Magic Kingdom',
+        categories: ['Show', 'Parade'],
+        category: 'Show',
+        areaType: 'ThemePark',
+        land: 'Tomorrowland',
+        q: 'Space',
+      },
+    ]);
+    await app.close();
+  });
+
+  it('rejects an invalid member in categories with validation_failed naming categories (R13.5)', async () => {
+    const { app } = await buildApp();
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/catalog?categories=Show,NotACategory',
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({
+      error: { code: 'validation_failed', field: 'categories' },
+    });
+    await app.close();
+  });
+
+  it('rejects an empty or whitespace-only categories parameter with validation_failed naming categories (R13.6)', async () => {
+    const { app } = await buildApp();
+
+    const res1 = await app.inject({
+      method: 'GET',
+      url: '/catalog?categories=',
+    });
+    expect(res1.statusCode).toBe(400);
+    expect(res1.json()).toMatchObject({
+      error: { code: 'validation_failed', field: 'categories' },
+    });
+
+    const res2 = await app.inject({
+      method: 'GET',
+      url: '/catalog?categories=%20%20',
+    });
+    expect(res2.statusCode).toBe(400);
+    expect(res2.json()).toMatchObject({
+      error: { code: 'validation_failed', field: 'categories' },
+    });
+
+    await app.close();
+  });
+
   it('propagates catalog_unavailable from the read decision as HTTP 503 (R1.24)', async () => {
     const { app } = await buildApp({
       decideRead: async () => {

@@ -229,6 +229,9 @@ No structural change to the generic `diffRows` engine is required.
   appends a **case-sensitive exact** predicate `land = $n` (R3.4). Because SQL `=` on `TEXT` is
   case-sensitive by default, this needs no `lower()` wrapping — contrast the `q` filter's `ILIKE`. It
   combines conjunctively with every other filter (R3.7); no match yields an empty list (R3.8).
+- **`CatalogListFilters`** also gains `categories?: readonly ExperienceCategory[]` (R13.1, R13.2). When present,
+  `listActiveExperiences` appends `category = ANY($n::text[])` to match any category in the supplied array,
+  combining conjunctively with every other filter (R13.3) and preserving catalog ordering (R13.9).
 - **`listDestinationCounts`** (new) returns the active-Experience count per Destination:
 
 ```ts
@@ -251,7 +254,11 @@ listDestinationCounts(): Promise<readonly DestinationCount[]>;
 
 - **`GET /catalog`** — `catalogQuerySchema` gains `land: z.string().min(1).max(200).optional()`;
   `parseListQuery` maps it onto `filters.land`. Existing parameters keep their behavior (R3.5).
+  `catalogQuerySchema` also gains `categories` (R13.1), validated as a non-empty comma-separated string transformed to
+  a deduped array of `ExperienceCategory` members (`z.array(experienceCategorySchema).min(1).max(EXPERIENCE_CATEGORIES.length)`)
+  and mapped onto `filters.categories`. Empty/blank or invalid members reject with 400 `validation_failed` (R13.5, R13.6).
 - **`GET /catalog/:experienceId`** — `ExperienceDetailResponse` gains `land?: string | null`;
+
   `toDetailResponse` carries it through (R3.3).
 - **`GET /catalog/destinations`** (new) — returns `{ destinations: DestinationCount[], staleCache,
   cacheAgeHours }`. Like `/catalog`, it calls `decideRead()` first so a `catalog_unavailable` with no

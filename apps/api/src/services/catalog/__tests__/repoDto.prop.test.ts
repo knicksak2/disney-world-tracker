@@ -86,6 +86,11 @@ const PERSISTED_FACET_GROUPS = [
   'age',
   'parkInterests',
   'disneyFavorites',
+  'diningInterests',
+  'cuisine',
+  'dining',
+  'quickService',
+  'tableService',
 ] as const;
 
 const facetValueArb: fc.Arbitrary<FacetValueDTO> = fc.record({

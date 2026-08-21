@@ -68,6 +68,7 @@ const NUM_RUNS = 100;
 interface FilterSelection {
   readonly park?: Park;
   readonly category?: ExperienceCategory;
+  readonly categories?: readonly ExperienceCategory[];
   readonly areaType?: AreaType;
   /** Raw, pre-trim `q` value as it would arrive on the query string. */
   readonly qRaw?: string;
@@ -85,6 +86,9 @@ function toEffectiveFilters(sel: FilterSelection): CatalogListFilters {
   } = {};
   if (sel.park !== undefined) filters.park = sel.park;
   if (sel.category !== undefined) filters.category = sel.category;
+  if (sel.categories !== undefined && sel.categories.length > 0) {
+    filters.categories = Array.from(new Set(sel.categories));
+  }
   if (sel.areaType !== undefined) filters.areaType = sel.areaType;
   if (sel.qRaw !== undefined) {
     const trimmed = sel.qRaw.trim();
@@ -102,6 +106,13 @@ function matches(exp: ExperienceDTO, filters: CatalogListFilters): boolean {
   if (!exp.active) return false;
   if (filters.park !== undefined && exp.park !== filters.park) return false;
   if (filters.category !== undefined && exp.category !== filters.category) {
+    return false;
+  }
+  if (
+    filters.categories !== undefined &&
+    filters.categories.length > 0 &&
+    !filters.categories.includes(exp.category)
+  ) {
     return false;
   }
   if (filters.areaType !== undefined && exp.areaType !== filters.areaType) {
@@ -125,6 +136,9 @@ function buildCatalogUrl(sel: FilterSelection): string {
   const params = new URLSearchParams();
   if (sel.park !== undefined) params.set('parkId', sel.park);
   if (sel.category !== undefined) params.set('category', sel.category);
+  if (sel.categories !== undefined && sel.categories.length > 0) {
+    params.set('categories', sel.categories.join(','));
+  }
   if (sel.areaType !== undefined) params.set('areaType', sel.areaType);
   if (sel.qRaw !== undefined) params.set('q', sel.qRaw);
   const qs = params.toString();
@@ -194,6 +208,10 @@ const filterSelectionArb: fc.Arbitrary<FilterSelection> = fc.record(
   {
     park: fc.constantFrom<Park>(...PARKS),
     category: fc.constantFrom<ExperienceCategory>(...EXPERIENCE_CATEGORIES),
+    categories: fc.array(
+      fc.constantFrom<ExperienceCategory>(...EXPERIENCE_CATEGORIES),
+      { minLength: 1, maxLength: 4 },
+    ),
     areaType: fc.constantFrom<AreaType>(...AREA_TYPES),
     qRaw: qRawArb,
   },
@@ -204,8 +222,9 @@ const filterSelectionArb: fc.Arbitrary<FilterSelection> = fc.record(
 // Property
 // ---------------------------------------------------------------------------
 
-describe('GET /catalog filtering — Property 23: returns only items matching the requested facets', () => {
-  it('every returned Experience matches all supplied facets, and no matching row is dropped (R16.3, R16.4)', async () => {
+// Feature: catalog-navigation-redesign, Property 17: Multi-category conjunctive filter
+describe('GET /catalog filtering — Property 17: Multi-category conjunctive filter', () => {
+  it('for any set of active Experiences and any non-empty set of Experience_Categories combined with any subset of filters, returned list matches all filters (R13.2, R13.3, R13.7, R13.8, R13.9)', async () => {
     await fc.assert(
       fc.asyncProperty(
         datasetArb,
@@ -223,15 +242,12 @@ describe('GET /catalog filtering — Property 23: returns only items matching th
 
             const effective = toEffectiveFilters(selection);
 
-            // Soundness (Property 23 proper): every returned item matches
-            // every effective filter.
+            // Soundness: every returned item matches every effective filter.
             for (const exp of returned) {
               expect(matches(exp, effective)).toBe(true);
             }
 
-            // Completeness cross-check: the returned set is exactly the set
-            // of active rows matching the effective filters — the route does
-            // not drop matching rows nor over-filter.
+            // Completeness cross-check: returned equals expected
             const expected = dataset.filter((exp) => matches(exp, effective));
             const sortById = (a: ExperienceDTO, b: ExperienceDTO) =>
               a.id < b.id ? -1 : a.id > b.id ? 1 : 0;

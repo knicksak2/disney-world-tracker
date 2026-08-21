@@ -150,6 +150,29 @@ You can point the API at either your local Docker stack or your hosted managed s
 
 Copy `.env.example` to `.env.dev` and fill in your managed-service credentials there. The two files never interfere, so switching environments is just a matter of which command you run. (`migrate:cloud` only needs `DATABASE_URL`; running the full API with `dev:api:cloud` needs the Redis value filled in too.) The Disney Sync Gateway credentials are the exception — don't hand-copy them; `node tools/pull-disney-creds.mjs` writes the current values into **both** `.env` and `.env.dev` (a stale placeholder in `.env.dev` is what makes `sync:cloud` fail with `auth_failure`/401). All `.env*` files except `.env.example` are gitignored.
 
+#### Database sync & backfill commands
+
+The catalog service provides dedicated commands to seed raw Disney documents and compute facet enrichment (service types, cuisines, price tiers, height requirements, physical advisories) for both environments:
+
+| Action | Local DB (`apps/api/.env`) | Hosted Dev DB (`apps/api/.env.dev`) |
+| --- | --- | --- |
+| **Catalog Sync** (fetch Disney documents) | `npm run sync` | `npm run sync:cloud` |
+| **Facet Backfill** (re-enrich experience facets) | `npm run backfill-facets` | `npm run backfill-facets:cloud` |
+
+*(Run these scripts from `apps/api`, or with `--workspace apps/api` from the repo root).*
+
+##### Cloning Hosted Dev Data into Local Postgres
+
+To replicate the hosted Neon dev database directly into your local Docker Postgres:
+
+```bash
+# 1. Dump hosted dev database:
+pg_dump "<DATABASE_URL from apps/api/.env.dev>" --no-owner --no-privileges --clean --if-exists -f neon_dump.sql
+
+# 2. Restore into local Postgres:
+psql -U dwt -d dwt -h localhost -p 5432 -f neon_dump.sql
+```
+
 ### API `dev` script
 
 ```json

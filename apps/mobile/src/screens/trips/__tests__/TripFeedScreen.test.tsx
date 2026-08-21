@@ -199,6 +199,8 @@ describe('Trip_Activity screen', () => {
     renderActivity();
 
     fireEvent.press(await screen.findByTestId('trip-activity-log-cta'));
+    // Guard: showParkFilter defaults to false so park filter bar is omitted in 320px composer
+    expect(screen.queryByTestId('activity-log-park-filters')).toBeNull();
     fireEvent.changeText(await screen.findByTestId('activity-log-search'), 'Thunder');
     fireEvent.press(await screen.findByTestId(`activity-log-result-${SEARCH_HIT.id}`));
     await screen.findByTestId('activity-log-selected');

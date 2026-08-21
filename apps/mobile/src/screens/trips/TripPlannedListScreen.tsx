@@ -504,6 +504,11 @@ function PlannedItemCard({
           <Text style={styles.itemName} numberOfLines={2}>
             {item.customTitle || item.experienceName || 'Custom Item'}
           </Text>
+          {item.customTitle && item.experienceName ? (
+            <Text style={styles.itemMeta} testID={`planned-item-location-${item.id}`}>
+              📍 {item.experienceName}
+            </Text>
+          ) : null}
           {item.park ? <Badge label={item.park} color={theme.color.primary} /> : null}
           <Text style={styles.itemMeta}>{attribution}</Text>
           {done ? (
@@ -627,12 +632,13 @@ function AddItemModal({
     },
   });
 
-  const addBreakMutation = useMutation<void, ApiError, { customTitle: string; durationMinutes: number }>({
-    mutationFn: async ({ customTitle, durationMinutes }) => {
+  const addBreakMutation = useMutation<void, ApiError, { customTitle: string; durationMinutes: number; experienceId?: string | null | undefined }>({
+    mutationFn: async ({ customTitle, durationMinutes, experienceId }) => {
       const parsed = plannedItemAddSchema.safeParse({
         itemType: 'break',
         customTitle,
         durationMinutes,
+        ...(experienceId ? { experienceId } : {}),
       });
       if (!parsed.success) {
         throw new ApiError({
@@ -699,9 +705,9 @@ function AddItemModal({
           <ExperiencePicker
             enabled={visible}
             onSelect={onSelect}
-            onSelectUnlocatedBreak={(title, dur) => {
+            onSelectUnlocatedBreak={(title, dur, expId) => {
               if (busy) return;
-              addBreakMutation.mutate({ customTitle: title, durationMinutes: dur });
+              addBreakMutation.mutate({ customTitle: title, durationMinutes: dur, experienceId: expId });
             }}
             pendingId={pendingId}
             addedCounts={addedCounts}

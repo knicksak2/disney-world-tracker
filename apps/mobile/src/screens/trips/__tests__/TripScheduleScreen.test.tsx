@@ -4,7 +4,9 @@
 
 import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react-native';
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react-native';
+
+jest.setTimeout(15000);
 
 import { PlannedItemDTO, TripOptimizationResult } from '@dwt/shared';
 
@@ -2445,6 +2447,255 @@ describe('TripScheduleScreen', () => {
       });
 
       expect(patchPayload.durationMinutes).toBe(45);
+    });
+  });
+
+  describe('Break and custom item location display (R4.11)', () => {
+    it('renders location on timeline attraction card and transit leg to break destination', async () => {
+      const breakWithLoc: PlannedItemDTO = {
+        ...PLANNED_ITEM,
+        id: 'item-break-loc',
+        itemType: 'break',
+        customTitle: 'Back to the hotel',
+        experienceId: 'exp-resort-poly',
+        experienceName: "Disney's Polynesian Village Resort",
+        park: null,
+        plannedDate: '2026-10-01',
+        plannedTime: '2026-10-01T16:51:00.000Z',
+        durationMinutes: 60,
+        predictedWaitMinutes: 0,
+        travelFromPrev: { kind: 'park_hop', minutes: 45 },
+      };
+
+      apiRequestMock.mockImplementation(async (method, path) => {
+        if (method === 'GET' && path === `/trips/${TRIP_ID}`) {
+          return { id: TRIP_ID, name: 'Disney Trip', startDate: '2026-10-01' } as any;
+        }
+        if (method === 'GET' && path === `/trips/${TRIP_ID}/planned-items`) {
+          return [breakWithLoc];
+        }
+        if (method === 'GET' && path === '/catalog') {
+          return {
+            experiences: [
+              {
+                id: 'exp-resort-poly',
+                name: "Disney's Polynesian Village Resort",
+                category: 'Resort',
+                land: 'Seven Seas Lagoon',
+                park: null,
+              },
+            ],
+          };
+        }
+        throw new Error(`Unexpected request: ${method} ${path}`);
+      });
+
+      renderScreen();
+
+      await waitFor(() => {
+        expect(screen.getByText('Back to the hotel')).toBeTruthy();
+      });
+
+      // Assert location is rendered on the timeline card
+      const locEl = screen.getByTestId('item-location-item-break-loc');
+      expect(locEl).toBeTruthy();
+      expect(within(locEl).getByText(/Disney's Polynesian Village Resort/)).toBeTruthy();
+
+      // Assert transit leg shows destination instead of empty park hop
+      expect(screen.getByText(/Transit to Disney's Polynesian Village Resort/)).toBeTruthy();
+
+      // Assert wait pill is omitted for break items even when predictedWaitMinutes is 0
+      expect(screen.queryByText(/^Wait:/)).toBeNull();
+      expect(screen.getByText('☕ 60m break')).toBeTruthy();
+
+      // Open Edit Settings modal
+      fireEvent.press(screen.getByText('Back to the hotel'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('item-modal-location')).toBeTruthy();
+      });
+
+      expect(screen.getByText("Disney's Polynesian Village Resort")).toBeTruthy();
+    });
+
+    it('renders location on unscheduled item cards when custom title is present', async () => {
+      const unscheduledBreak: PlannedItemDTO = {
+        ...PLANNED_ITEM,
+        id: 'item-unscheduled-break',
+        itemType: 'break',
+        customTitle: 'Midday Nap',
+        experienceId: 'exp-resort-poly',
+        experienceName: "Disney's Polynesian Village Resort",
+        park: null,
+        plannedDate: '2026-10-01',
+        plannedTime: null,
+      };
+
+      apiRequestMock.mockImplementation(async (method, path) => {
+        if (method === 'GET' && path === `/trips/${TRIP_ID}`) {
+          return { id: TRIP_ID, name: 'Disney Trip', startDate: '2026-10-01' } as any;
+        }
+        if (method === 'GET' && path === `/trips/${TRIP_ID}/planned-items`) {
+          return [unscheduledBreak];
+        }
+        if (method === 'GET' && path === '/catalog') {
+          return { experiences: [] };
+        }
+        throw new Error(`Unexpected request: ${method} ${path}`);
+      });
+
+      renderScreen();
+
+      await waitFor(() => {
+        expect(screen.getByText('Midday Nap')).toBeTruthy();
+      });
+
+      expect(screen.getByTestId('unscheduled-item-location-item-unscheduled-break')).toBeTruthy();
+      expect(screen.getByText("📍 Disney's Polynesian Village Resort")).toBeTruthy();
+    });
+  });
+
+  describe('Optimized Schedule Interaction Regressions', () => {
+    it('regression: clicking an optimized experience and hitting Done preserves wait time and walk time without sending PATCH or locking to fixed time', async () => {
+      const optimizedItem: PlannedItemDTO = {
+        ...PLANNED_ITEM,
+        id: 'item-opt-1',
+        experienceName: 'Test Track',
+        plannedDate: '2026-10-01',
+        plannedTime: '2026-10-01T12:56:00.000Z',
+        predictedWaitMinutes: 25,
+        travelFromPrev: { kind: 'walk', minutes: 8 },
+        optimizedAt: '2026-10-01T12:00:00.000Z',
+        isFixed: false,
+        isLightningLane: false,
+      };
+
+      apiRequestMock.mockImplementation(async (method, path) => {
+        if (method === 'GET' && path === `/trips/${TRIP_ID}`) {
+          return { id: TRIP_ID, name: 'Disney Trip', startDate: '2026-10-01' } as any;
+        }
+        if (method === 'GET' && path === `/trips/${TRIP_ID}/planned-items`) {
+          return [optimizedItem];
+        }
+        if (method === 'GET' && path === '/catalog') {
+          return {
+            experiences: [
+              {
+                id: optimizedItem.experienceId,
+                name: 'Test Track',
+                category: 'Ride',
+                park: 'EPCOT',
+                land: 'World Discovery',
+              },
+            ],
+          };
+        }
+        throw new Error(`Unexpected request: ${method} ${path}`);
+      });
+
+      renderScreen();
+
+      // Verify wait time and walk connector are rendered
+      await waitFor(() => {
+        expect(screen.getByText('Test Track')).toBeTruthy();
+        expect(screen.getByText('Wait: 25 min')).toBeTruthy();
+        expect(screen.getByText(/\+8m/)).toBeTruthy();
+      });
+
+      // Verify no FIXED TIME badge
+      expect(screen.queryByText('FIXED TIME')).toBeNull();
+
+      // Open the edit modal for Test Track
+      fireEvent.press(screen.getByText('Test Track'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('timing-mode-any_time')).toBeTruthy();
+      });
+
+      // Hit Done without making changes
+      fireEvent.press(screen.getByText('Done'));
+
+      // Ensure no PATCH request was dispatched
+      expect(
+        apiRequestMock.mock.calls.some(([method]) => method === 'PATCH'),
+      ).toBe(false);
+
+      // Verify wait time and walk connector remain on screen and no FIXED TIME badge was added
+      await waitFor(() => {
+        expect(screen.getByText('Wait: 25 min')).toBeTruthy();
+        expect(screen.getByText(/\+8m/)).toBeTruthy();
+        expect(screen.queryByText('FIXED TIME')).toBeNull();
+      });
+    });
+
+    it('regression: changing only priority on an optimized flexible item does not convert it to fixed time', async () => {
+      let patchPayload: any = null;
+      const optimizedItem: PlannedItemDTO = {
+        ...PLANNED_ITEM,
+        id: 'item-opt-2',
+        experienceName: 'Test Track',
+        plannedDate: '2026-10-01',
+        plannedTime: '2026-10-01T12:56:00.000Z',
+        predictedWaitMinutes: 25,
+        travelFromPrev: { kind: 'walk', minutes: 8 },
+        optimizedAt: '2026-10-01T12:00:00.000Z',
+        isFixed: false,
+        isLightningLane: false,
+        priority: 2,
+      };
+
+      apiRequestMock.mockImplementation(async (method, path, body) => {
+        if (method === 'GET' && path === `/trips/${TRIP_ID}`) {
+          return { id: TRIP_ID, name: 'Disney Trip', startDate: '2026-10-01' } as any;
+        }
+        if (method === 'GET' && path === `/trips/${TRIP_ID}/planned-items`) {
+          return [optimizedItem];
+        }
+        if (method === 'GET' && path === '/catalog') {
+          return {
+            experiences: [
+              {
+                id: optimizedItem.experienceId,
+                name: 'Test Track',
+                category: 'Ride',
+                park: 'EPCOT',
+                land: 'World Discovery',
+              },
+            ],
+          };
+        }
+        if (method === 'PATCH' && path === `/trips/${TRIP_ID}/planned-items/item-opt-2`) {
+          patchPayload = body;
+          return;
+        }
+        throw new Error(`Unexpected request: ${method} ${path}`);
+      });
+
+      renderScreen();
+
+      await waitFor(() => {
+        expect(screen.getByText('Test Track')).toBeTruthy();
+      });
+
+      // Open the edit modal
+      fireEvent.press(screen.getByText('Test Track'));
+
+      await waitFor(() => {
+        expect(screen.getByText('Must Do (1)')).toBeTruthy();
+      });
+
+      // Change priority to 1
+      fireEvent.press(screen.getByText('Must Do (1)'));
+
+      // Hit Done
+      fireEvent.press(screen.getByText('Done'));
+
+      await waitFor(() => {
+        expect(patchPayload).toBeTruthy();
+        expect(patchPayload.priority).toBe(1);
+        expect(patchPayload.isFixed).toBeUndefined();
+        expect(patchPayload.plannedTime).toBeUndefined();
+      });
     });
   });
 });

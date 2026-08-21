@@ -216,3 +216,20 @@ This feature builds directly on the completed `disney-facilities-catalog-source`
 6. WHEN a guest navigates from the Catalog_Home into a Destination_Screen, THE App SHALL move keyboard and screen-reader focus to the Destination_Screen's primary heading.
 7. WHEN a guest navigates back from a Destination_Screen to the Catalog_Home, THE App SHALL restore focus to the Destination card that was activated to open that Destination_Screen.
 8. WHEN the set of visible Experiences on the Destination_Screen changes as a result of a filter or search action, THE App SHALL announce the updated result count to assistive technologies within 1 second.
+
+### Requirement 13: Multi-Category Filtering on the Catalog List
+
+**User Story:** As a mobile developer, I want `GET /catalog` to accept a set of Experience_Categories in one request, so that a grouping which spans several Experience_Categories can be loaded in a single query without silently dropping the categories it does not name.
+
+#### Acceptance Criteria
+
+1. THE API SHALL accept an optional `categories` query parameter on `GET /catalog` carrying one or more Experience_Category values as a comma-separated list.
+2. WHERE a `GET /catalog` request carries a `categories` value, THE API SHALL return only active Experiences whose persisted Experience_Category is a member of the supplied set.
+3. WHERE a `GET /catalog` request carries a `categories` value together with any combination of the `parkId`, `category`, `areaType`, `land`, or `q` query parameters, THE API SHALL return only active Experiences that simultaneously satisfy the `categories` set and every other supplied parameter.
+4. THE API SHALL continue to accept the existing single `category` query parameter on `GET /catalog` with its current behavior, whether or not `categories` is also present.
+5. IF a `GET /catalog` request carries a `categories` value in which any member is not a valid Experience_Category, THEN THE API SHALL reject the request with a validation error naming `categories` as the offending field.
+6. IF a `GET /catalog` request carries a `categories` value that is empty or contains no non-whitespace member, THEN THE API SHALL reject the request with a validation error naming `categories` as the offending field.
+7. WHERE a `GET /catalog` request carries a `categories` value listing the same Experience_Category more than once, THE API SHALL treat the repeated value as a single member and return each matching Experience exactly once.
+8. IF a `GET /catalog` request carries a `categories` value that matches no active Experiences, THEN THE API SHALL return an empty Experience list in a success response without an error.
+9. THE API SHALL preserve the established catalog list ordering when `categories` is present.
+

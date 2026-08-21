@@ -66,6 +66,7 @@ import type {
 } from '@dwt/shared';
 import {
   AREA_TYPES,
+  EXPERIENCE_CATEGORIES,
   experienceCategorySchema,
   parkSchema,
   searchQuerySchema,
@@ -87,6 +88,7 @@ import { AppError } from '../../errors/AppError.js';
 export interface CatalogListFilters {
   readonly park?: Park;
   readonly category?: ExperienceCategory;
+  readonly categories?: readonly ExperienceCategory[];
   readonly areaType?: AreaType;
   readonly q?: string;
   /**
@@ -391,6 +393,37 @@ const catalogQuerySchema = z
   .object({
     parkId: parkSchema.optional(),
     category: experienceCategorySchema.optional(),
+    categories: z
+      .string()
+      .refine((val) => val.trim().length > 0, { message: 'validation_failed' })
+      .refine(
+        (val) => {
+          const parts = val.split(',').map((s) => s.trim());
+          return (
+            parts.length > 0 &&
+            parts.every((p) =>
+              (EXPERIENCE_CATEGORIES as readonly string[]).includes(p),
+            )
+          );
+        },
+        { message: 'validation_failed' },
+      )
+      .transform((val) =>
+        Array.from(
+          new Set(
+            val
+              .split(',')
+              .map((s) => s.trim()) as readonly ExperienceCategory[],
+          ),
+        ),
+      )
+      .pipe(
+        z
+          .array(experienceCategorySchema)
+          .min(1)
+          .max(EXPERIENCE_CATEGORIES.length),
+      )
+      .optional(),
     areaType: z.enum(AREA_TYPES).optional(),
     q: searchQuerySchema.optional(),
     land: z.string().min(1).max(200).optional(),
@@ -559,6 +592,9 @@ function parseListQuery(raw: unknown): CatalogListFilters {
   }
   if (parsed.category !== undefined) {
     filters.category = parsed.category;
+  }
+  if (parsed.categories !== undefined) {
+    filters.categories = parsed.categories;
   }
   if (parsed.areaType !== undefined) {
     filters.areaType = parsed.areaType;

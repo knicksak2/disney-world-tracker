@@ -179,6 +179,25 @@ sub-tasks are marked optional with `*`.
 - [x] 15. Final checkpoint
   - Ensure all tests pass, ask the user if questions arise.
 
+- [x] 16. Add a multi-category filter to the catalog list endpoint
+  - [x] 16.1 Extend the repository filter (`services/catalog/repo.ts`)
+    - Add `readonly categories?: readonly ExperienceCategory[]` to `CatalogListFilters`; in `listActiveExperiences` push the array as a single parameter and append a `category = ANY($n::text[])` predicate alongside the existing `park`/`category`/`areaType`/`land` predicates, leaving the `park ASC, lower(name) ASC` ordering untouched
+    - _Requirements: 13.2, 13.3, 13.9_
+  - [x] 16.2 Accept and validate `categories` on the route (`services/catalog/routes.ts`)
+    - Add `categories` to `catalogQuerySchema` as a comma-separated string transformed to a deduped array and piped through `z.array(experienceCategorySchema).min(1).max(EXPERIENCE_CATEGORIES.length)`; map it onto `filters.categories` in the handler beside the existing `parsed.category` / `parsed.areaType` blocks; leave the single `category` parameter unchanged so both intersect conjunctively
+    - No `packages/shared` change is required: the filter travels as a URL string and `experienceCategorySchema` / `EXPERIENCE_CATEGORIES` are already exported
+    - _Requirements: 13.1, 13.4, 13.5, 13.6, 13.7_
+  - [x] 16.3 Write repo tests for the multi-category filter (pg-mem)
+    - Seed active Experiences across several Experience_Categories and assert the real `category = ANY(...)` SQL returns exactly the requested set, that a repeated member yields each row once, that a non-matching set yields an empty list, and that ordering is preserved — this is the layer the single-category limitation lived at, so a route test with a mocked repo does not cover it
+    - _Requirements: 13.2, 13.7, 13.8, 13.9_
+  - [x] 16.4 Write route tests for `categories` (`server.inject`)
+    - Assert a four-member `categories` value forwards all four to the repo; that `categories` forwards conjunctively alongside `parkId`, `category`, `areaType`, `land`, and `q`; that an invalid member returns `400 validation_failed` with `field: 'categories'`; and that an empty value returns the same validation error rather than collapsing to no filter
+    - _Requirements: 13.1, 13.3, 13.4, 13.5, 13.6_
+  - [x] 16.5 Extend the catalog route property test
+    - Extend the existing filter generator and faithful fake in `services/catalog/__tests__/routes.prop.test.ts` to include `categories`, so the new filter is proven at the same layer as the others
+    - **Property 17: Multi-category conjunctive filter** — for any set of active Experiences and any non-empty set of Experience_Categories combined with any subset of the `parkId`, `category`, `areaType`, `land`, and `q` parameters, the returned list is exactly the active Experiences whose category is a member of the supplied set and that satisfy every other supplied parameter, each appearing exactly once, in the established `park ASC, lower(name) ASC` order. **Validates: Requirements 13.2, 13.3, 13.7, 13.8, 13.9**
+    - _Requirements: 13.2, 13.3, 13.7, 13.8, 13.9_
+
 ## Notes
 
 - Tasks marked with `*` are optional test sub-tasks and can be skipped for a faster MVP.
@@ -202,7 +221,9 @@ sub-tasks are marked optional with `*`.
     { "id": 7, "tasks": ["10.3", "11.1"] },
     { "id": 8, "tasks": ["10.4"] },
     { "id": 9, "tasks": ["14.1"] },
-    { "id": 10, "tasks": ["9.3", "10.5", "14.2"] }
+    { "id": 10, "tasks": ["9.3", "10.5", "14.2"] },
+    { "id": 11, "tasks": ["16.1", "16.2"] },
+    { "id": 12, "tasks": ["16.3", "16.4", "16.5"] }
   ]
 }
 ```

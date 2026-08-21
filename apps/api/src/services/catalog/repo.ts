@@ -163,6 +163,7 @@ export interface CatalogListFilters {
   readonly areaType?: AreaType;
   readonly q?: string;
   readonly land?: string;
+  readonly categories?: readonly ExperienceCategory[];
   /**
    * Case-sensitive exact match on `experiences.world_showcase_country` — the
    * derived EPCOT World Showcase pavilion. Combines conjunctively with every
@@ -942,6 +943,11 @@ async function listActiveExperiences(
   if (filters.category !== undefined) {
     params.push(filters.category);
     where.push(`category = $${params.length}`);
+  }
+
+  if (filters.categories !== undefined && filters.categories.length > 0) {
+    params.push(filters.categories);
+    where.push(`category = ANY($${params.length}::text[])`);
   }
 
   if (filters.areaType !== undefined) {
