@@ -25,7 +25,8 @@
 
 import { z } from 'zod';
 
-import type { Park, TripReactionValue } from './enums.js';
+import type { Park, ReservationKind, TripReactionValue } from './enums.js';
+import { RESERVATION_KINDS } from './enums.js';
 import {
   isoTimestampSchema,
   ratingValueSchema,
@@ -280,6 +281,53 @@ export function isMealPeriodServed(
   });
 }
 
+// ---------------------------------------------------------------------------
+// Reservation bounds (trip-reservations R1.4)
+// ---------------------------------------------------------------------------
+
+/**
+ * Maximum length of a Confirmation_Number, matching the
+ * `planned_items.confirmation_number VARCHAR(40)` column. The value is free
+ * text: Disney's confirmation formats are undocumented and vary by booking
+ * channel, so a length bound is the only safe rule.
+ */
+export const CONFIRMATION_NUMBER_MAX = 40;
+
+/** Minimum Party_Size on a Reservation, matching the DB `CHECK`. */
+export const PARTY_SIZE_MIN = 1;
+
+/** Maximum Party_Size on a Reservation, matching the DB `CHECK`. */
+export const PARTY_SIZE_MAX = 50;
+
+/**
+ * The reservation fields shared by the Planned_Item add and edit schemas
+ * (trip-reservations R1.2, R1.4, R7.1). Declared once so the two `.strict()`
+ * schemas cannot drift.
+ *
+ * `reservationKind` is orthogonal to the timing flags: a non-null kind marks
+ * the item as a real booking, and the repo derives `isFixed` /
+ * `isLightningLane` from it on write (R1.7). `partySize` and
+ * `confirmationNumber` are display/reference only and never reach the
+ * Optimization_Engine.
+ */
+const reservationFields = {
+  reservationKind: z.enum(RESERVATION_KINDS).nullable().optional(),
+  confirmationNumber: z
+    .string()
+    .trim()
+    .min(1)
+    .max(CONFIRMATION_NUMBER_MAX)
+    .nullable()
+    .optional(),
+  partySize: z
+    .number()
+    .int()
+    .min(PARTY_SIZE_MIN)
+    .max(PARTY_SIZE_MAX)
+    .nullable()
+    .optional(),
+} as const;
+
 /**
  * Body for `POST /trips/:id/planned-items` (R9.1). Catalog existence,
  * duplicate, and 500-item-limit checks are enforced in the repo (R9.3–R9.5).
@@ -299,6 +347,7 @@ export const plannedItemAddSchema = z
     windowStartMinutes: z.number().int().min(0).max(1440).nullable().optional(),
     windowEndMinutes: z.number().int().min(0).max(1440).nullable().optional(),
     mealPeriod: z.enum(MEAL_PERIODS).nullable().optional(),
+    ...reservationFields,
   })
   .strict()
   .transform((data) => {
@@ -321,6 +370,32 @@ export const plannedItemAddSchema = z
         path: ['experienceId'],
         message: "Unlocated items without an experienceId must have itemType 'break'",
       });
+    }
+    // A Reservation is a real booking, so it is always anchored to a date and
+    // a time (trip-reservations R1.5) and always names a venue — either a
+    // Catalog Experience or a Custom_Title for an off-property one (R5.4).
+    if (data.reservationKind != null) {
+      if (data.plannedDate == null) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['plannedDate'],
+          message: 'A reservation requires a plannedDate',
+        });
+      }
+      if (data.plannedTime == null) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['plannedTime'],
+          message: 'A reservation requires a plannedTime',
+        });
+      }
+      if (!data.experienceId && !data.customTitle) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['customTitle'],
+          message: 'A reservation requires either an experienceId or a customTitle',
+        });
+      }
     }
     const hasStart = data.windowStartMinutes != null;
     const hasEnd = data.windowEndMinutes != null;
@@ -355,6 +430,7 @@ export const plannedItemEditSchema = z
     windowStartMinutes: z.number().int().min(0).max(1440).nullable().optional(),
     windowEndMinutes: z.number().int().min(0).max(1440).nullable().optional(),
     mealPeriod: z.enum(MEAL_PERIODS).nullable().optional(),
+    ...reservationFields,
   })
   .strict()
   .transform((data) => {
@@ -371,6 +447,27 @@ export const plannedItemEditSchema = z
     return data;
   })
   .superRefine((data, ctx) => {
+    // The edit schema cannot see the stored row, so the "must not clear the
+    // date/time of a Reservation" rule (trip-reservations R1.6) is enforced in
+    // `editPlannedItem`, where the current `reservation_kind` is known. What is
+    // checkable here: an edit that *sets* a kind must not simultaneously clear
+    // the anchor.
+    if (data.reservationKind != null) {
+      if (data.plannedDate === null) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['plannedDate'],
+          message: 'A reservation requires a plannedDate',
+        });
+      }
+      if (data.plannedTime === null) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['plannedTime'],
+          message: 'A reservation requires a plannedTime',
+        });
+      }
+    }
     const hasStart = data.windowStartMinutes != null;
     const hasEnd = data.windowEndMinutes != null;
     if ((hasStart && !hasEnd) || (!hasStart && hasEnd)) {
@@ -673,6 +770,17 @@ export interface PlannedItemDTO {
   readonly mealPeriod: MealPeriod | null;
   readonly scheduledShowtime: string | null;
   readonly servedMealPeriods?: readonly string[] | undefined;
+  /**
+   * Booking facet (trip-reservations R1.1–R1.4, R7.1). `reservationKind` is
+   * `null` for an ordinary planned item — including one with a self-pinned
+   * `plannedTime` — and non-null only when the item is a Reservation the group
+   * actually holds. `confirmationNumber` and `partySize` are shared Trip data,
+   * visible to every Trip_Member and to nobody else (R6.2); they are display
+   * and reference only and never reach the Optimization_Engine.
+   */
+  readonly reservationKind: ReservationKind | null;
+  readonly confirmationNumber: string | null;
+  readonly partySize: number | null;
   /**
    * Persisted result of the last optimize run for this item (R8.1–R8.4).
    * All three are `null` when the item has not been optimized (or was edited

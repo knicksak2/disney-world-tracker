@@ -29,6 +29,7 @@ import TripSummaryScreen from '../screens/trips/TripSummaryScreen';
 import TripInviteScreen from '../screens/trips/TripInviteScreen';
 import RodeWithConfirmScreen from '../screens/trips/RodeWithConfirmScreen';
 import TripScheduleScreen from '../screens/trips/TripScheduleScreen';
+import TripReservationsScreen from '../screens/trips/TripReservationsScreen';
 
 /**
  * Trips tab stack param list.
@@ -53,6 +54,12 @@ export type TripsStackParamList = {
   TripPlannedList: { tripId: string };
   /** Schedule Builder and Optimization section. */
   TripSchedule: { tripId: string };
+  /**
+   * Reservations section of a Trip: every booking the group holds — dining,
+   * Lightning Lane, and other timed reservations — grouped by date
+   * (trip-reservations R2.6).
+   */
+  TripReservations: { tripId: string };
   /** Trip_Activity section of a Trip — the consolidated feed + logging (R20). */
   TripFeed: { tripId: string };
   /** Trip_Members section of a Trip (R18.1, R18.6). */
@@ -84,6 +91,7 @@ export default function TripsStack(): JSX.Element {
       <Stack.Screen name="TripEdit" component={TripEditScreen} />
       <Stack.Screen name="TripPlannedList" component={TripPlannedListScreen} />
       <Stack.Screen name="TripSchedule" component={TripScheduleScreen} />
+      <Stack.Screen name="TripReservations" component={TripReservationsScreen} />
       <Stack.Screen name="TripFeed" component={TripFeedScreen} />
       <Stack.Screen name="TripMembers" component={TripMembersScreen} />
       <Stack.Screen name="TripSummary" component={TripSummaryScreen} />

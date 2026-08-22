@@ -62,6 +62,7 @@ import type {
   TripResortDTO,
   TripSummaryDTO,
   RodeWithTagState,
+  ReservationKind,
 } from '@dwt/shared';
 import { MEAL_WINDOWS, tripReactionValueSchema } from '@dwt/shared';
 import type { PoolClient } from 'pg';
@@ -912,6 +913,9 @@ interface PlannedItemRow {
   travel_from_prev_minutes: number | null;
   travel_from_prev_kind: 'walk' | 'park_hop' | null;
   optimized_at: Date | string | null;
+  reservation_kind: ReservationKind | null;
+  confirmation_number: string | null;
+  party_size: number | null;
 }
 
 /**
@@ -2105,11 +2109,25 @@ async function addPlannedItem(
     // Timing mutual exclusion on add:
     let plannedTime: string | null = null;
     let isFixed = false;
+    let isLightningLane = input.isLightningLane ?? false;
     let windowStartMinutes: number | null = null;
     let windowEndMinutes: number | null = null;
     let mealPeriod: string | null = null;
 
-    if (input.plannedTime != null && (input.isFixed === true || (input.isFixed === undefined && !input.isLightningLane))) {
+    // A Reservation's timing mode is fully determined by its kind, whatever
+    // timing flags the client sent (trip-reservations R1.7). `lightning_lane`
+    // means `planned_time` is a return-window start, so the item is NOT fixed;
+    // every other kind is a hard booking the optimizer must not move. Either
+    // way a Reservation never carries a soft window or a meal period — the
+    // timing modes stay mutually exclusive (day-planning Property 16).
+    const reservationKind = input.reservationKind ?? null;
+    if (reservationKind != null) {
+      // The add schema guarantees a non-null `plannedTime` here (R1.5), and the
+      // `chk_planned_items_reservation_anchored` constraint is the backstop.
+      plannedTime = input.plannedTime ?? null;
+      isFixed = reservationKind !== 'lightning_lane';
+      isLightningLane = reservationKind === 'lightning_lane';
+    } else if (input.plannedTime != null && (input.isFixed === true || (input.isFixed === undefined && !input.isLightningLane))) {
       plannedTime = input.plannedTime;
       isFixed = true;
     } else if (input.isLightningLane && input.plannedTime != null) {
@@ -2144,9 +2162,12 @@ async function addPlannedItem(
          duration_minutes,
          window_start_minutes,
          window_end_minutes,
-         meal_period
+         meal_period,
+         reservation_kind,
+         confirmation_number,
+         party_size
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
        RETURNING id`,
       [
         tripId,
@@ -2156,7 +2177,7 @@ async function addPlannedItem(
         input.plannedDate ?? null,
         plannedTime,
         isFixed,
-        input.isLightningLane ?? false,
+        isLightningLane,
         input.useSingleRider ?? false,
         input.priority ?? 2,
         input.itemType ?? 'experience',
@@ -2164,6 +2185,9 @@ async function addPlannedItem(
         windowStartMinutes,
         windowEndMinutes,
         mealPeriod,
+        reservationKind,
+        input.confirmationNumber ?? null,
+        input.partySize ?? null,
       ],
     );
     const itemId = insert.rows[0]?.id;
@@ -2207,12 +2231,14 @@ async function editPlannedItem(
       experience_id: string | null;
       is_lightning_lane: boolean;
       is_fixed: boolean;
+      planned_date: string | Date | null;
       planned_time: string | null;
       window_start_minutes: number | null;
       window_end_minutes: number | null;
       meal_period: string | null;
+      reservation_kind: ReservationKind | null;
     }>(
-      'SELECT id, experience_id, is_lightning_lane, is_fixed, planned_time, window_start_minutes, window_end_minutes, meal_period FROM planned_items WHERE id = $1 AND trip_id = $2 FOR UPDATE',
+      'SELECT id, experience_id, is_lightning_lane, is_fixed, planned_date, planned_time, window_start_minutes, window_end_minutes, meal_period, reservation_kind FROM planned_items WHERE id = $1 AND trip_id = $2 FOR UPDATE',
       [itemId, tripId],
     );
     if ((existing.rowCount ?? 0) === 0) {
@@ -2229,6 +2255,41 @@ async function editPlannedItem(
         "Unlocated items cannot change itemType away from 'break'",
         { field: 'itemType' },
       );
+    }
+
+    // The kind this item will have after the edit: the incoming value when the
+    // edit names one (including an explicit `null`, which demotes a Reservation
+    // back to an ordinary planned item), otherwise the stored kind.
+    const effectiveKind: ReservationKind | null =
+      input.reservationKind !== undefined ? input.reservationKind : currentRow.reservation_kind;
+
+    // A Reservation is a real booking, so it always keeps a date and a time
+    // (trip-reservations R1.5, R1.6). This covers both clearing the anchor of
+    // an existing Reservation and promoting an unanchored item to one. The
+    // `chk_planned_items_reservation_anchored` constraint is only a backstop: a
+    // raw 23514 would surface as `internal_error`, so the check must happen
+    // here, inside the transaction, leaving the row untouched.
+    if (effectiveKind != null) {
+      const resolvedDate =
+        input.plannedDate !== undefined ? input.plannedDate : currentRow.planned_date;
+      const resolvedTime =
+        input.plannedTime !== undefined ? input.plannedTime : currentRow.planned_time;
+      if (resolvedDate == null) {
+        await client.query('ROLLBACK');
+        throw new AppError(
+          'trip_validation_failed',
+          'A reservation requires a planned date.',
+          { field: 'plannedDate' },
+        );
+      }
+      if (resolvedTime == null) {
+        await client.query('ROLLBACK');
+        throw new AppError(
+          'trip_validation_failed',
+          'A reservation requires a planned time.',
+          { field: 'plannedTime' },
+        );
+      }
     }
 
     const updates: string[] = [];
@@ -2259,9 +2320,29 @@ async function editPlannedItem(
       updates.push(`duration_minutes = $${pos++}`);
       values.push(input.durationMinutes ?? null);
     }
-    if (input.isLightningLane !== undefined) {
+    // A Reservation's `is_lightning_lane` is derived from its kind below, so the
+    // client-supplied flag is ignored for one (R1.7). Honouring both here would
+    // also emit two assignments to the same column in one `SET`, which Postgres
+    // rejects outright.
+    if (input.isLightningLane !== undefined && effectiveKind == null) {
       updates.push(`is_lightning_lane = $${pos++}`);
       values.push(input.isLightningLane ?? false);
+    }
+
+    // Booking facet (trip-reservations R1.4). `reservationKind` is written
+    // whenever the edit names it, including an explicit `null` that demotes the
+    // Reservation back to an ordinary planned item.
+    if (input.reservationKind !== undefined) {
+      updates.push(`reservation_kind = $${pos++}`);
+      values.push(input.reservationKind ?? null);
+    }
+    if (input.confirmationNumber !== undefined) {
+      updates.push(`confirmation_number = $${pos++}`);
+      values.push(input.confirmationNumber ?? null);
+    }
+    if (input.partySize !== undefined) {
+      updates.push(`party_size = $${pos++}`);
+      values.push(input.partySize ?? null);
     }
 
     // Mutual-exclusion write rules gated on PRESENCE of timing fields in input
@@ -2272,7 +2353,25 @@ async function editPlannedItem(
       'windowEndMinutes' in input ||
       'mealPeriod' in input;
 
-    if (hasTimingField) {
+    if (effectiveKind != null) {
+      // Reservation timing is decided entirely by the kind (R1.7), so the
+      // generic mutual-exclusion chain below is bypassed: it could otherwise
+      // assign the same column twice in one `SET`, and it could put a booking
+      // into a soft window. `planned_time` is only reassigned when the edit
+      // supplies one — the anchor check above already guaranteed a non-null
+      // resolved time, so omitting it here preserves the stored Booked_Time.
+      if (input.plannedTime !== undefined && input.plannedTime !== null) {
+        updates.push(`planned_time = $${pos++}`);
+        values.push(input.plannedTime);
+      }
+      updates.push(`is_fixed = $${pos++}`);
+      values.push(effectiveKind !== 'lightning_lane');
+      updates.push(`is_lightning_lane = $${pos++}`);
+      values.push(effectiveKind === 'lightning_lane');
+      updates.push('window_start_minutes = NULL');
+      updates.push('window_end_minutes = NULL');
+      updates.push('meal_period = NULL');
+    } else if (hasTimingField) {
       const hasPlannedTime = input.plannedTime !== undefined && input.plannedTime !== null;
       const isLL = input.isLightningLane !== undefined ? input.isLightningLane : currentRow.is_lightning_lane;
       const hasWindow = input.windowStartMinutes != null && input.windowEndMinutes != null;
@@ -2399,10 +2498,25 @@ async function updatePlannedItemTimes(
     // Persist the suggested arrival together with the optimizer's derived
     // display result (predicted wait + travel leg) so a returning member sees
     // the last optimized plan, stamped with when it was optimized (R8.1).
+    //
+    // A Reservation's `planned_time` is a fact about the world — the time the
+    // guest is actually expected — so it is NEVER overwritten by the simulated
+    // arrival (trip-reservations R4.4). This matters because the optimizer
+    // returns `max(travelArrival, fixedArrival)` for a fixed item: on an
+    // infeasible day the suggested arrival is *later* than the booking, and
+    // writing it back would silently move a real 6:00 PM dinner to 6:12 PM. The
+    // run still records that item's predicted wait, travel leg, and
+    // `optimized_at`, and still surfaces its `infeasible_fixed_gap` warning.
+    //
+    // The guard is expressed in SQL rather than in the caller so it holds for
+    // every caller of this method, not just the optimize route.
     for (const u of updates) {
       await client.query(
         `UPDATE planned_items
-            SET planned_time = $1,
+            SET planned_time = CASE
+                                 WHEN reservation_kind IS NULL THEN $1
+                                 ELSE planned_time
+                               END,
                 predicted_wait_minutes = $2,
                 travel_from_prev_minutes = $3,
                 travel_from_prev_kind = $4,
@@ -2525,7 +2639,10 @@ async function listPlannedItems(
             pi.predicted_wait_minutes,
             pi.travel_from_prev_minutes,
             pi.travel_from_prev_kind,
-            pi.optimized_at
+            pi.optimized_at,
+            pi.reservation_kind,
+            pi.confirmation_number,
+            pi.party_size
        FROM planned_items pi
   LEFT JOIN experiences e ON e.id = pi.experience_id
        JOIN profiles    p ON p.user_id = pi.added_by
@@ -3788,7 +3905,10 @@ async function selectPlannedItem(
             pi.predicted_wait_minutes,
             pi.travel_from_prev_minutes,
             pi.travel_from_prev_kind,
-            pi.optimized_at
+            pi.optimized_at,
+            pi.reservation_kind,
+            pi.confirmation_number,
+            pi.party_size
        FROM planned_items pi
   LEFT JOIN experiences e ON e.id = pi.experience_id
        JOIN profiles    p ON p.user_id = pi.added_by
@@ -3877,6 +3997,12 @@ function rowToPlannedItemDto(row: PlannedItemRow): PlannedItemDTO {
         : row.optimized_at instanceof Date
           ? row.optimized_at.toISOString()
           : new Date(row.optimized_at).toISOString(),
+    // Booking facet (trip-reservations R7.1). `reservationKind` is null for an
+    // ordinary planned item, so the Reservations screen can select Reservations
+    // without a second read.
+    reservationKind: row.reservation_kind ?? null,
+    confirmationNumber: row.confirmation_number ?? null,
+    partySize: row.party_size != null ? Number(row.party_size) : null,
   };
 }
 

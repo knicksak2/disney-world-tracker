@@ -47,6 +47,10 @@ function pi(overrides: Partial<PlannedItemDTO> = {}): PlannedItemDTO {
     predictedWaitMinutes: null,
     travelFromPrev: null,
     optimizedAt: null,
+    // Not a Reservation by default; a case that needs one overrides these.
+    reservationKind: null,
+    confirmationNumber: null,
+    partySize: null,
     ...overrides,
   };
 }

@@ -84,6 +84,14 @@ export interface ExperiencePickerProps {
   ) => void;
   /** Whether to show category filter tabs. Defaults to true. */
   readonly showTabs?: boolean;
+  /**
+   * The tab the picker opens on. Defaults to `all`. Combined with
+   * `showTabs={false}` this scopes the picker to one category with no way to
+   * widen it — used by the Reservations screen so a dining booking can only
+   * choose a restaurant and a Lightning Lane booking only a ride
+   * (trip-reservations R3.2, R3.3).
+   */
+  readonly defaultTab?: ExperiencePickerTab;
   /** Whether to show Destination/Park filter chips. Defaults to false. */
   readonly showParkFilter?: boolean;
   /** Pre-selected park filter chip. Defaults to null. */
@@ -119,6 +127,7 @@ export function ExperiencePicker({
   onSelect,
   onSelectUnlocatedBreak,
   showTabs = true,
+  defaultTab = 'all',
   showParkFilter = false,
   defaultPark = null,
   disabledIds,
@@ -131,7 +140,7 @@ export function ExperiencePicker({
   style,
   fillContainer = false,
 }: ExperiencePickerProps): JSX.Element {
-  const [activeTab, setActiveTab] = useState<ExperiencePickerTab>('all');
+  const [activeTab, setActiveTab] = useState<ExperiencePickerTab>(defaultTab);
   const [selectedPark, setSelectedPark] = useState<DestinationId | 'all'>(
     defaultPark && isKnownPark(defaultPark) ? defaultPark : 'all',
   );

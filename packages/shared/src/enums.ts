@@ -168,3 +168,32 @@ export const PLANNED_ITEM_TYPES = [
 ] as const;
 
 export type PlannedItemType = (typeof PLANNED_ITEM_TYPES)[number];
+// ---------------------------------------------------------------------------
+// Reservation_Kind
+// ---------------------------------------------------------------------------
+//
+// The kind of real-world booking a Planned_Item represents (trip-reservations
+// R1.2). A Planned_Item whose `reservationKind` is `null` is an ordinary
+// planned item, even when it carries a pinned `plannedTime`; only a non-null
+// kind marks the item as a Reservation the group actually holds.
+//
+// This vocabulary is deliberately orthogonal to the timing flags: `isFixed` /
+// `isLightningLane` say *how the optimizer should time* an item, while
+// Reservation_Kind says *what kind of booking it is*. That separation is what
+// lets the timeline distinguish "we hold a 6 PM dining reservation" from "I'd
+// like to ride this at 6 PM" (R4.3). The repo derives the timing flags from
+// the kind on write, so a client cannot store a `dining` Reservation that the
+// optimizer would treat as flexible (R1.7).
+//
+// The runtime tuple is the source of truth: it seeds the Zod enum, the
+// migration's CHECK constraint text, the mobile presentation map, and
+// property-test arbitraries, so the vocabulary cannot drift between layers.
+
+export const RESERVATION_KINDS = [
+  'dining',
+  'lightning_lane',
+  'activity',
+  'other',
+] as const;
+
+export type ReservationKind = (typeof RESERVATION_KINDS)[number];

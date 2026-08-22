@@ -22,6 +22,7 @@ export {
   TRIP_REACTION_VALUES,
   WALKING_SPEEDS,
   PLANNED_ITEM_TYPES,
+  RESERVATION_KINDS,
 } from './enums.js';
 export type {
   ExperienceCategory,
@@ -32,6 +33,7 @@ export type {
   TripReactionValue,
   WalkingSpeed,
   PlannedItemType,
+  ReservationKind,
 } from './enums.js';
 
 // Avatar preset catalog (allowlist of bundled illustration ids).
@@ -218,6 +220,9 @@ export {
   MEAL_WINDOWS,
   MEAL_SERVICE_WINDOWS,
   isMealPeriodServed,
+  CONFIRMATION_NUMBER_MAX,
+  PARTY_SIZE_MIN,
+  PARTY_SIZE_MAX,
   // input schemas
   dayTouringHoursSchema,
   tripCreateSchema,

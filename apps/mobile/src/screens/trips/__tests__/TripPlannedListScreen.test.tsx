@@ -92,6 +92,9 @@ const ITEM: PlannedItemDTO = {
   predictedWaitMinutes: null,
   travelFromPrev: null,
   optimizedAt: null,
+  reservationKind: null,
+  confirmationNumber: null,
+  partySize: null,
 };
 
 // A Planned_Item whose Experience has a matching completion in the feed below,
@@ -118,6 +121,9 @@ const DONE_ITEM: PlannedItemDTO = {
   predictedWaitMinutes: null,
   travelFromPrev: null,
   optimizedAt: null,
+  reservationKind: null,
+  confirmationNumber: null,
+  partySize: null,
 };
 
 // A Planned_Item with no matching completion, so it stays `not_done` and is
@@ -144,6 +150,9 @@ const TODO_ITEM: PlannedItemDTO = {
   predictedWaitMinutes: null,
   travelFromPrev: null,
   optimizedAt: null,
+  reservationKind: null,
+  confirmationNumber: null,
+  partySize: null,
 };
 
 const ME = { user: { id: OWN_USER_ID } };

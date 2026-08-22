@@ -78,6 +78,8 @@ const SECTIONS: ReadonlyArray<{
   readonly route: string;
 }> = [
   { testId: 'trip-detail-section-planned', route: 'TripPlannedList' },
+  // The Reservations section opens the bookings screen (trip-reservations R2.6).
+  { testId: 'trip-detail-section-reservations', route: 'TripReservations' },
   { testId: 'trip-detail-section-activity', route: 'TripFeed' },
   { testId: 'trip-detail-section-members', route: 'TripMembers' },
   { testId: 'trip-detail-section-summary', route: 'TripSummary' },

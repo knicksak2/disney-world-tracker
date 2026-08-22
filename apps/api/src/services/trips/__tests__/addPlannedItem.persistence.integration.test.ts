@@ -132,6 +132,7 @@ describe('addPlannedItem — SQL INSERT persistence regression test', () => {
     applyMigration(memDb, '0024_planned_item_optimization_result.sql');
     applyMigration(memDb, '0027_planned_items_soft_windows.sql');
     applyMigration(memDb, '0028_planned_items_meal_period_snack.sql');
+    applyMigration(memDb, '0031_planned_item_reservations.sql');
 
     const { Pool } = memDb.adapters.createPg();
     const rawPool = new Pool() as unknown as DbPool;
@@ -219,5 +220,88 @@ describe('addPlannedItem — SQL INSERT persistence regression test', () => {
     expect(row.priority).toBe(1);
     expect(row.item_type).toBe('break');
     expect(row.duration_minutes).toBe(45);
+  });
+
+  it('persists the reservation booking columns on INSERT without dropping them', async () => {
+    const memDb = buildPgMemDatabase();
+    applyInitMigration(memDb);
+    memDb.public.none(
+      "ALTER TABLE experiences ADD COLUMN IF NOT EXISTS meal_periods JSONB NOT NULL DEFAULT '[]';",
+    );
+    applyMigration(memDb, '0015_trips.sql');
+    applyMigration(memDb, '0019_planned_item_scheduling.sql');
+    applyMigration(memDb, '0022_planned_item_ride_options.sql');
+    applyMigration(memDb, '0023_trip_touring_hours.sql');
+    applyMigration(memDb, '0024_planned_item_optimization_result.sql');
+    applyMigration(memDb, '0027_planned_items_soft_windows.sql');
+    applyMigration(memDb, '0028_planned_items_meal_period_snack.sql');
+    applyMigration(memDb, '0031_planned_item_reservations.sql');
+
+    const { Pool } = memDb.adapters.createPg();
+    const rawPool = new Pool() as unknown as DbPool;
+    const pool = withForUpdateCompat(rawPool);
+    const completions = createCompletionRepo(pool);
+    const ratings = createRatingRepo({ pool, emitRatingChanged: async () => {} });
+    const repo = createTripRepo(pool, { completions, ratings });
+
+    const userId = randomUUID();
+    await pool.query(`INSERT INTO users (id, email, password_hash) VALUES ($1, $2, $3)`, [
+      userId,
+      'reservation@example.com',
+      'hash',
+    ]);
+    await pool.query(`INSERT INTO profiles (user_id, display_name) VALUES ($1, $2)`, [
+      userId,
+      'Test Explorer',
+    ]);
+
+    const experienceId = randomUUID();
+    await pool.query(
+      `INSERT INTO experiences (id, upstream_entity_id, name, park, category)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [experienceId, `upstream-${experienceId}`, 'Be Our Guest', 'Magic Kingdom', 'Restaurant'],
+    );
+
+    const trip = await repo.createTrip(userId, {
+      name: 'Disney 2026',
+      startDate: '2026-10-01',
+      endDate: '2026-10-05',
+    });
+
+    const createdDto = await repo.addPlannedItem(trip.id, userId, {
+      experienceId,
+      plannedDate: '2026-10-01',
+      plannedTime: '2026-10-01T22:00:00.000Z',
+      reservationKind: 'dining',
+      confirmationNumber: 'ABC123456',
+      partySize: 4,
+    });
+
+    expect(createdDto.reservationKind).toBe('dining');
+    expect(createdDto.confirmationNumber).toBe('ABC123456');
+    expect(createdDto.partySize).toBe(4);
+
+    // Direct SQL read: the three booking columns must actually be in the INSERT,
+    // not merely present on the returned DTO.
+    const dbRowRes = await pool.query<{
+      reservation_kind: string | null;
+      confirmation_number: string | null;
+      party_size: number | null;
+      is_fixed: boolean;
+      is_lightning_lane: boolean;
+    }>(
+      `SELECT reservation_kind, confirmation_number, party_size, is_fixed, is_lightning_lane
+         FROM planned_items
+        WHERE id = $1`,
+      [createdDto.id],
+    );
+
+    const row = dbRowRes.rows[0]!;
+    expect(row.reservation_kind).toBe('dining');
+    expect(row.confirmation_number).toBe('ABC123456');
+    expect(row.party_size).toBe(4);
+    // A dining reservation is a fixed anchor, derived from the kind (R1.7).
+    expect(row.is_fixed).toBe(true);
+    expect(row.is_lightning_lane).toBe(false);
   });
 });

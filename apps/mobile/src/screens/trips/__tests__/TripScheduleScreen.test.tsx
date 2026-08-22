@@ -60,6 +60,10 @@ const PLANNED_ITEM: PlannedItemDTO = {
   predictedWaitMinutes: null,
   travelFromPrev: null,
   optimizedAt: null,
+  // Not a Reservation: an ordinary planned item carries a null booking facet.
+  reservationKind: null,
+  confirmationNumber: null,
+  partySize: null,
 };
 
 function renderScreen() {
@@ -661,7 +665,10 @@ describe('TripScheduleScreen', () => {
     });
   });
 
-  it('selects time via preset pill / wheel columns, renders return window, and patches plannedTime with 24h conversion', async () => {
+  // NOTE: this case drives the *preset pill* only. The wheel columns are covered
+  // separately in the "shared time wheel" describe block at the end of this file
+  // — the name previously claimed wheel coverage it did not have.
+  it('selects time via a preset pill, renders the return window, and patches plannedTime with 24h conversion', async () => {
     let patchPayload: any = null;
     const llItem = {
       ...PLANNED_ITEM,
@@ -2700,3 +2707,224 @@ describe('TripScheduleScreen', () => {
   });
 });
 
+
+// ---------------------------------------------------------------------------
+// trip-reservations R4.3 / R5.2 — a Reservation is badged by its kind on the
+// timeline, so a real booking is distinguishable from a self-pinned time.
+// ---------------------------------------------------------------------------
+
+describe('TripScheduleScreen — reservation badges (trip-reservations R4.3, R5.2)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  function mockDayWith(items: readonly PlannedItemDTO[]): void {
+    apiRequestMock.mockImplementation(async (method, path) => {
+      if (method === 'GET' && path === `/trips/${TRIP_ID}`) {
+        return {
+          id: TRIP_ID,
+          name: 'Disney Trip',
+          startDate: '2026-10-01',
+          endDate: '2026-10-03',
+          status: 'upcoming',
+          role: 'organizer',
+        } as any;
+      }
+      if (method === 'GET' && path === `/trips/${TRIP_ID}/planned-items`) {
+        return items as any;
+      }
+      if (method === 'GET' && String(path).startsWith('/catalog')) {
+        return { experiences: [] } as any;
+      }
+      if (method === 'GET' && String(path).startsWith('/crowd-calendar')) {
+        return {} as any;
+      }
+      throw new Error(`Unexpected request: ${method} ${path}`);
+    });
+  }
+
+  it('renders a kind badge for a Reservation on the timeline', async () => {
+    mockDayWith([
+      {
+        ...PLANNED_ITEM,
+        id: 'booking',
+        experienceName: 'Be Our Guest',
+        plannedDate: '2026-10-01',
+        plannedTime: '2026-10-01T22:00:00.000Z',
+        isFixed: true,
+        reservationKind: 'dining',
+        confirmationNumber: 'ABC123456',
+        partySize: 4,
+      },
+    ]);
+
+    renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('item-reservation-badge-booking')).toBeTruthy();
+    });
+    expect(screen.getByTestId('item-reservation-badge-booking').props.children).toContain(
+      'Dining',
+    );
+  });
+
+  it('does NOT render a kind badge for a self-pinned fixed item that is not a Reservation', async () => {
+    mockDayWith([
+      {
+        ...PLANNED_ITEM,
+        id: 'self-pinned',
+        experienceName: 'Space Mountain',
+        plannedDate: '2026-10-01',
+        plannedTime: '2026-10-01T22:00:00.000Z',
+        // Fixed, but no booking behind it.
+        isFixed: true,
+        reservationKind: null,
+        confirmationNumber: null,
+        partySize: null,
+      },
+    ]);
+
+    renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByText('Space Mountain')).toBeTruthy();
+    });
+    expect(screen.queryByTestId('item-reservation-badge-self-pinned')).toBeNull();
+  });
+
+  it('shows a non-catalog Reservation as reserved rather than as a break (R5.2)', async () => {
+    mockDayWith([
+      {
+        ...PLANNED_ITEM,
+        id: 'off-prop',
+        experienceId: null,
+        experienceName: null,
+        park: null,
+        itemType: 'break',
+        customTitle: 'Off-property steakhouse',
+        plannedDate: '2026-10-01',
+        plannedTime: '2026-10-01T22:00:00.000Z',
+        isFixed: true,
+        durationMinutes: 90,
+        reservationKind: 'dining',
+      },
+    ]);
+
+    renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('item-reservation-badge-off-prop')).toBeTruthy();
+    });
+    // The duration pill reads as dining, not as a break.
+    expect(screen.getByText('🍽️ 90m dining')).toBeTruthy();
+    expect(screen.queryByText(/m break/u)).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// trip-reservations task 8.1 — the hour/minute/AM-PM wheel moved into the shared
+// `TimeWheelPicker`. The pre-existing suite only ever pressed the preset pills,
+// so the wheel itself was executed but never asserted; this drives the three
+// columns directly so the extraction is genuinely guarded here too.
+// ---------------------------------------------------------------------------
+
+describe('TripScheduleScreen — shared time wheel (trip-reservations task 8.1)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('picks a time via the wheel columns and PATCHes the 24-hour conversion', async () => {
+    let patchPayload: any = null;
+    const llItem = {
+      ...PLANNED_ITEM,
+      id: 'item-wheel',
+      plannedDate: '2026-10-01',
+      experienceName: 'Seven Dwarfs Mine Train',
+      isLightningLane: true,
+    };
+
+    apiRequestMock.mockImplementation(async (method, path, body) => {
+      if (method === 'GET' && path === `/trips/${TRIP_ID}`) {
+        return { id: TRIP_ID, name: 'Disney Trip', startDate: '2026-10-01' } as any;
+      }
+      if (method === 'GET' && path === `/trips/${TRIP_ID}/planned-items`) {
+        return [llItem] as any;
+      }
+      if (method === 'PATCH' && path === `/trips/${TRIP_ID}/planned-items/item-wheel`) {
+        patchPayload = body;
+        return undefined as any;
+      }
+      if (method === 'GET' && String(path).startsWith('/catalog')) {
+        return { experiences: [] } as any;
+      }
+      if (method === 'GET' && String(path).startsWith('/crowd-calendar')) {
+        return {} as any;
+      }
+      throw new Error(`Unexpected request: ${method} ${path}`);
+    });
+
+    renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByText('Seven Dwarfs Mine Train')).toBeTruthy();
+    });
+    fireEvent.press(screen.getByText('Edit Settings'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('schedule-time-wheel')).toBeTruthy();
+    });
+
+    // Drive all three columns: 4:45 PM park time.
+    fireEvent.press(screen.getByTestId('schedule-time-hour-4'));
+    fireEvent.press(screen.getByTestId('schedule-time-minute-45'));
+    fireEvent.press(screen.getByTestId('schedule-time-meridiem-PM'));
+
+    fireEvent.press(screen.getByText('Done'));
+
+    await waitFor(() => {
+      expect(patchPayload).toBeTruthy();
+      // 4:45 PM Eastern on 2026-10-01 (EDT, UTC-4) is 20:45Z.
+      expect(patchPayload.plannedTime).toBe('2026-10-01T20:45:00.000Z');
+    });
+  });
+
+  it('keeps quarter-hour granularity in the Schedule Builder', async () => {
+    apiRequestMock.mockImplementation(async (method, path) => {
+      if (method === 'GET' && path === `/trips/${TRIP_ID}`) {
+        return { id: TRIP_ID, name: 'Disney Trip', startDate: '2026-10-01' } as any;
+      }
+      if (method === 'GET' && path === `/trips/${TRIP_ID}/planned-items`) {
+        return [
+          {
+            ...PLANNED_ITEM,
+            id: 'item-wheel-granularity',
+            plannedDate: '2026-10-01',
+            experienceName: 'Seven Dwarfs Mine Train',
+            isLightningLane: true,
+          },
+        ] as any;
+      }
+      if (method === 'GET' && String(path).startsWith('/catalog')) {
+        return { experiences: [] } as any;
+      }
+      if (method === 'GET' && String(path).startsWith('/crowd-calendar')) {
+        return {} as any;
+      }
+      throw new Error(`Unexpected request: ${method} ${path}`);
+    });
+
+    renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByText('Seven Dwarfs Mine Train')).toBeTruthy();
+    });
+    fireEvent.press(screen.getByText('Edit Settings'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('schedule-time-wheel')).toBeTruthy();
+    });
+    // A touring preference does not need 5-minute steps; reservations do.
+    expect(screen.getByTestId('schedule-time-minute-30')).toBeTruthy();
+    expect(screen.queryByTestId('schedule-time-minute-25')).toBeNull();
+  });
+});

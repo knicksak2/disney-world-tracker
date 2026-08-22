@@ -69,6 +69,7 @@ interface HubSection {
   readonly route:
     | 'TripPlannedList'
     | 'TripSchedule'
+    | 'TripReservations'
     | 'TripFeed'
     | 'TripMembers'
     | 'TripSummary';
@@ -109,6 +110,14 @@ const HUB_SECTIONS: readonly HubSection[] = [
     body: 'Plan and optimize your day-by-day timeline.',
     icon: 'calendar-outline',
     color: theme.color.primaryLight,
+  },
+  {
+    key: 'reservations',
+    route: 'TripReservations',
+    title: 'Reservations',
+    body: 'Dining, Lightning Lane, and other bookings you hold.',
+    icon: 'ticket-outline',
+    color: theme.color.accent,
   },
   {
     key: 'activity',

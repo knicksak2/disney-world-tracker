@@ -137,6 +137,7 @@ function makeFixture(): Fixture {
   applyMigration(db, '0024_planned_item_optimization_result.sql');
   applyMigration(db, '0027_planned_items_soft_windows.sql');
   applyMigration(db, '0028_planned_items_meal_period_snack.sql');
+  applyMigration(db, '0031_planned_item_reservations.sql');
 
   const pool = withForUpdateCompat(rawPool);
   const repo = createTripRepo(pool, NOOP_DEPS);

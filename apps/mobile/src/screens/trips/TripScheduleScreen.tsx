@@ -21,6 +21,7 @@ import {
   type MealPeriod,
   type PlannedItemDTO,
   type PlannedItemEditInput,
+  type ReservationKind,
   type TripDTO,
   type TripEditInput,
   type TripOptimizationResult,
@@ -46,6 +47,17 @@ import { tripPlannedListKeys } from './TripPlannedListScreen';
 import { tripDetailKeys } from './TripDetailScreen';
 import { ExperiencePicker } from './ExperiencePicker';
 import { isKnownPark } from './experiencePickerFilters';
+import { reservationKindPresentation } from './reservations';
+import { TimeWheelPicker } from '../../components/TimeWheelPicker';
+
+/**
+ * Timeline badge label for a Reservation (trip-reservations R4.3). Carries the
+ * kind as words, not just an icon or a color, so a real booking is
+ * distinguishable from a self-pinned time for every user.
+ */
+function reservationBadgeLabel(kind: ReservationKind): string {
+  return `🎟️ ${reservationKindPresentation(kind).label}`;
+}
 
 type Props = NativeStackScreenProps<TripsStackParamList, 'TripSchedule'>;
 
@@ -255,21 +267,9 @@ export function getMealServiceWindowLabel(period: MealPeriod): string {
   return `${formatMinutesToTime(w.startMinutes)} – ${formatMinutesToTime(w.endMinutes)}`;
 }
 
-const HOURS_12 = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'];
-const MINUTES_15 = ['00', '15', '30', '45'];
-const AMPM_LIST = ['AM', 'PM'];
-
-function parseTimeToWheelState(timeStr: string): { hour: string; minute: string; ampm: string } {
-  if (!timeStr.trim()) return { hour: '10', minute: '30', ampm: 'AM' };
-  const match = timeStr.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
-  if (!match) return { hour: '10', minute: '30', ampm: 'AM' };
-  const hNum = parseInt(match[1]!, 10);
-  const mStr = match[2]!;
-  const ampm = match[3]!.toUpperCase();
-  const hourStr = String(hNum % 12 || 12);
-  const minStr = MINUTES_15.includes(mStr) ? mStr : '00';
-  return { hour: hourStr, minute: minStr, ampm };
-}
+// The hour / minute / AM-PM wheel and its value parsing now live in the shared
+// `TimeWheelPicker` component (trip-reservations task 8.1), so this screen and
+// the Reservations screen cannot drift apart.
 
 function formatOptimizationWarning(warningKey: string, items: readonly PlannedItemDTO[]): string {
   if (warningKey === 'infeasible_fixed_gap') {
@@ -1187,9 +1187,29 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
                                       <Text style={styles.waitPillText}>Wait: {predictedWaitMinutes} min</Text>
                                     </View>
                                   )}
+                                {/* A Reservation is badged by its kind so a real
+                                    booking is distinguishable from a time the
+                                    member pinned themselves (trip-reservations
+                                    R4.3). */}
+                                {item.reservationKind != null && (
+                                  <View style={styles.reservationPill}>
+                                    <Text
+                                      style={styles.reservationPillText}
+                                      testID={`item-reservation-badge-${item.id}`}
+                                    >
+                                      {reservationBadgeLabel(item.reservationKind)}
+                                    </Text>
+                                  </View>
+                                )}
                                 <View style={styles.durationPillGray}>
                                   <Text style={styles.durationPillText}>
-                                    {item.itemType === 'break'
+                                    {/* An off-property booking is stored as a break,
+                                        but must never be presented as one (R5.2). */}
+                                    {item.reservationKind === 'dining'
+                                      ? `🍽️ ${item.durationMinutes || 60}m dining`
+                                      : item.itemType === 'break' && item.reservationKind != null
+                                      ? `🎟️ ${item.durationMinutes || 60}m reserved`
+                                      : item.itemType === 'break'
                                       ? `☕ ${item.durationMinutes || 45}m break`
                                       : expInfo?.category === 'Restaurant'
                                       ? `🍽️ ${item.durationMinutes || 60}m dining`
@@ -1273,10 +1293,13 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
                       </Text>
                     ) : null}
                     <View style={styles.itemProps}>
-                      {item.isFixed && <Badge label="Fixed" color={theme.color.primary} />}
+                      {item.reservationKind != null && (
+                        <Badge label={reservationBadgeLabel(item.reservationKind)} color={theme.color.accentDark} />
+                      )}
+                      {item.isFixed && item.reservationKind == null && <Badge label="Fixed" color={theme.color.primary} />}
                       {item.isLightningLane && <Badge label="⚡ LL" color={theme.color.accent} />}
                       {item.useSingleRider && <Badge label="👤 Single Rider" color={theme.color.primaryLight} />}
-                      {item.itemType === 'break' && <Badge label={`☕ Break (${item.durationMinutes || 45}m)`} color={theme.color.success} />}
+                      {item.itemType === 'break' && item.reservationKind == null && <Badge label={`☕ Break (${item.durationMinutes || 45}m)`} color={theme.color.success} />}
                       {item.mealPeriod && <Badge label={`🍽️ ${item.mealPeriod}`} color="#f97316" />}
                       <Badge label={`Priority: ${item.priority ?? 2}`} color={theme.color.textSecondary} />
                     </View>
@@ -1313,10 +1336,13 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
                       </Text>
                     ) : null}
                     <View style={styles.itemProps}>
-                      {item.isFixed && <Badge label="Fixed" color={theme.color.primary} />}
+                      {item.reservationKind != null && (
+                        <Badge label={reservationBadgeLabel(item.reservationKind)} color={theme.color.accentDark} />
+                      )}
+                      {item.isFixed && item.reservationKind == null && <Badge label="Fixed" color={theme.color.primary} />}
                       {item.isLightningLane && <Badge label="⚡ LL" color={theme.color.accent} />}
                       {item.useSingleRider && <Badge label="👤 Single Rider" color={theme.color.primaryLight} />}
-                      {item.itemType === 'break' && <Badge label={`☕ Break (${item.durationMinutes || 45}m)`} color={theme.color.success} />}
+                      {item.itemType === 'break' && item.reservationKind == null && <Badge label={`☕ Break (${item.durationMinutes || 45}m)`} color={theme.color.success} />}
                       {item.mealPeriod && <Badge label={`🍽️ ${item.mealPeriod}`} color="#f97316" />}
                       <Badge label={`Priority: ${item.priority ?? 2}`} color={theme.color.textSecondary} />
                     </View>
@@ -1345,10 +1371,13 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
                     </Text>
                   ) : null}
                   <View style={styles.itemProps}>
-                    {item.isFixed && <Badge label="Fixed" color={theme.color.primary} />}
+                    {item.reservationKind != null && (
+                      <Badge label={reservationBadgeLabel(item.reservationKind)} color={theme.color.accentDark} />
+                    )}
+                    {item.isFixed && item.reservationKind == null && <Badge label="Fixed" color={theme.color.primary} />}
                     {item.isLightningLane && <Badge label="⚡ LL" color={theme.color.accent} />}
                     {item.useSingleRider && <Badge label="👤 Single Rider" color={theme.color.primaryLight} />}
-                    {item.itemType === 'break' && <Badge label={`☕ Break (${item.durationMinutes || 45}m)`} color={theme.color.success} />}
+                    {item.itemType === 'break' && item.reservationKind == null && <Badge label={`☕ Break (${item.durationMinutes || 45}m)`} color={theme.color.success} />}
                     {item.mealPeriod && <Badge label={`🍽️ ${item.mealPeriod}`} color="#f97316" />}
                     <Badge label={`Priority: ${item.priority ?? 2}`} color={theme.color.textSecondary} />
                   </View>
@@ -1933,8 +1962,6 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
                         </Text>
 
                         {(() => {
-                          const { hour, minute, ampm } = parseTimeToWheelState(passTimeText);
-
                           return (
                             <View style={styles.wheelCard}>
                               <Text style={styles.subLabel}>Quick Presets</Text>
@@ -1958,76 +1985,19 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
                                 })}
                               </View>
 
-                              <View style={styles.wheelGrid}>
-                                <View style={styles.wheelColumn}>
-                                  <Text style={styles.wheelColHeader}>Hour</Text>
-                                  <ScrollView style={styles.wheelScroll} nestedScrollEnabled showsVerticalScrollIndicator={false}>
-                                    {HOURS_12.map((h) => {
-                                      const isSel = hour === h;
-                                      return (
-                                        <Pressable
-                                          key={h}
-                                          style={[styles.wheelItem, isSel && styles.wheelItemActive]}
-                                          onPress={() => {
-                                            setPassTimeText(`${h}:${minute} ${ampm}`);
-                                            setTimeError(null);
-                                          }}
-                                        >
-                                          <Text style={[styles.wheelItemText, isSel && styles.wheelItemTextActive]}>
-                                            {h}
-                                          </Text>
-                                        </Pressable>
-                                      );
-                                    })}
-                                  </ScrollView>
-                                </View>
-
-                                <View style={styles.wheelColumn}>
-                                  <Text style={styles.wheelColHeader}>Min</Text>
-                                  <ScrollView style={styles.wheelScroll} nestedScrollEnabled showsVerticalScrollIndicator={false}>
-                                    {MINUTES_15.map((m) => {
-                                      const isSel = minute === m;
-                                      return (
-                                        <Pressable
-                                          key={m}
-                                          style={[styles.wheelItem, isSel && styles.wheelItemActive]}
-                                          onPress={() => {
-                                            setPassTimeText(`${hour}:${m} ${ampm}`);
-                                            setTimeError(null);
-                                          }}
-                                        >
-                                          <Text style={[styles.wheelItemText, isSel && styles.wheelItemTextActive]}>
-                                            :{m}
-                                          </Text>
-                                        </Pressable>
-                                      );
-                                    })}
-                                  </ScrollView>
-                                </View>
-
-                                <View style={styles.wheelColumn}>
-                                  <Text style={styles.wheelColHeader}>AM / PM</Text>
-                                  <View style={styles.ampmBox}>
-                                    {AMPM_LIST.map((ap) => {
-                                      const isSel = ampm === ap;
-                                      return (
-                                        <Pressable
-                                          key={ap}
-                                          style={[styles.ampmBtn, isSel && styles.ampmBtnActive]}
-                                          onPress={() => {
-                                            setPassTimeText(`${hour}:${minute} ${ap}`);
-                                            setTimeError(null);
-                                          }}
-                                        >
-                                          <Text style={[styles.ampmText, isSel && styles.ampmTextActive]}>
-                                            {ap}
-                                          </Text>
-                                        </Pressable>
-                                      );
-                                    })}
-                                  </View>
-                                </View>
-                              </View>
+                              {/* Shared wheel (trip-reservations task 8.1). The
+                                  Schedule Builder keeps 15-minute granularity:
+                                  it is choosing a touring preference, not
+                                  recording a booking. */}
+                              <TimeWheelPicker
+                                value={passTimeText}
+                                minuteStep={15}
+                                onChange={(next) => {
+                                  setPassTimeText(next);
+                                  setTimeError(null);
+                                }}
+                                testIDPrefix="schedule-time"
+                              />
                             </View>
                           );
                         })()}
@@ -2895,6 +2865,20 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
     color: '#92400e',
+  },
+  // Reservation kind pill (trip-reservations R4.3). Distinct fill from the
+  // Lightning-Lane pill, and always accompanied by its kind in words so the
+  // distinction is never carried by color alone.
+  reservationPill: {
+    backgroundColor: '#ede9fe',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  reservationPillText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#5b21b6',
   },
   earlyEntryPillCyan: {
     backgroundColor: '#a5f3fc',

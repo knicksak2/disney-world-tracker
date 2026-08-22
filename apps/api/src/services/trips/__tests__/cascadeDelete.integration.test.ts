@@ -250,6 +250,7 @@ async function setup(): Promise<Fixture> {
   applyMigration(db, '0024_planned_item_optimization_result.sql');
   applyMigration(db, '0027_planned_items_soft_windows.sql');
   applyMigration(db, '0028_planned_items_meal_period_snack.sql');
+  applyMigration(db, '0031_planned_item_reservations.sql');
 
   // The repo and the canonical Tracking repos all run against the same pool,
   // wrapped so `FOR UPDATE` clauses are stripped for pg-mem.

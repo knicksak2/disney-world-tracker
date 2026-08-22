@@ -413,6 +413,9 @@ function plannedItemDTOs(store: Store): PlannedItemDTO[] {
       predictedWaitMinutes: null,
       travelFromPrev: null,
       optimizedAt: null,
+      reservationKind: null,
+      confirmationNumber: null,
+      partySize: null,
     };
   });
 }

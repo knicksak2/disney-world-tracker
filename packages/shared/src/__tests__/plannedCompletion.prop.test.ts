@@ -13,7 +13,7 @@
 import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
 
-import { PARKS } from '../enums.js';
+import { PARKS, RESERVATION_KINDS } from '../enums.js';
 import type { Park } from '../enums.js';
 import type { PlannedItemDTO, TripFeedItemDTO } from '../trips.js';
 import {
@@ -79,6 +79,12 @@ const plannedItemArb: fc.Arbitrary<PlannedItemDTO> = fc.record({
     { nil: null },
   ),
   optimizedAt: fc.option(fc.constant('2026-10-01T12:00:00.000Z'), { nil: null }),
+  // Booking facet (trip-reservations R7.1). Generated freely here: the
+  // Planned_List completion derivation must ignore it entirely, so a
+  // Reservation is treated exactly like any other Planned_Item.
+  reservationKind: fc.option(fc.constantFrom(...RESERVATION_KINDS), { nil: null }),
+  confirmationNumber: fc.option(fc.string({ maxLength: 40 }), { nil: null }),
+  partySize: fc.option(fc.integer({ min: 1, max: 50 }), { nil: null }),
 });
 
 /** A Planned_List: an array of Planned_Items (possibly empty). */
