@@ -291,15 +291,66 @@ Pure derivation of the `Trip_Summary` from the Trip's log entries, confirmed rod
 referenced canonical Ratings:
 
 ```ts
+export interface TripSuperlative {
+  readonly id: string;
+  readonly title: string;
+  readonly description: string;
+  readonly icon: string;
+  readonly memberId?: string;
+  readonly memberDisplayName?: string;
+  readonly experienceName?: string;
+  readonly value?: string | number;
+}
 export interface TripSummaryInput {
-  readonly logEntries: readonly { memberId: string; experienceId: string; experienceName: string }[];
-  readonly confirmedTags: readonly { memberId: string; experienceId: string }[];
-  readonly ratings: readonly { experienceId: string; value: number }[]; // canonical, referenced
+  readonly logEntries: readonly {
+    memberId: string;
+    experienceId: string;
+    experienceName: string;
+    park?: string;
+    category?: string;
+    imageUrl?: string | null;
+  }[];
+  readonly confirmedTags: readonly {
+    memberId: string;
+    experienceId: string;
+    experienceName?: string;
+    park?: string;
+    category?: string;
+    imageUrl?: string | null;
+  }[];
+  readonly ratings: readonly {
+    memberId?: string;
+    experienceId: string;
+    value: number;
+  }[]; // canonical, referenced
+  readonly plannedItems?: readonly { experienceId: string }[];
 }
 export interface TripSummary {
   readonly distinctExperienceCount: number;                    // R14.1
-  readonly topRated: readonly { experienceId: string; experienceName: string; meanRating: number; ratingCount: number }[]; // <=5, R14.2
-  readonly perMember: readonly { memberId: string; logEntryCount: number; confirmedTagCount: number }[]; // R14.4, R14.5
+  readonly topRated: readonly {
+    experienceId: string;
+    experienceName: string;
+    meanRating: number;
+    ratingCount: number;
+    park?: string | null;
+    category?: string | null;
+    imageUrl?: string | null;
+  }[]; // <=5, R14.2
+  readonly perMember: readonly {
+    memberId: string;
+    logEntryCount: number;
+    confirmedTagCount: number;
+    totalCompletedCount?: number;
+    topRatedExperienceName?: string | null;
+    topRating?: number | null;
+  }[]; // R14.4, R14.5, R14.12
+  readonly plannedTotalCount: number;
+  readonly plannedCompletedCount: number;
+  readonly totalCompletionsCount?: number;
+  readonly totalRatingsCount?: number;
+  readonly parkBreakdown?: readonly { park: string; count: number }[]; // R14.9
+  readonly categoryBreakdown?: readonly { category: string; count: number }[]; // R14.10
+  readonly superlatives?: readonly TripSuperlative[]; // R14.11
 }
 export function deriveTripSummary(input: TripSummaryInput): TripSummary;
 ```
@@ -307,9 +358,11 @@ export function deriveTripSummary(input: TripSummaryInput): TripSummary;
 `distinctExperienceCount` counts each Experience completed in the Trip context (via a log entry **or** a
 confirmed tag) at most once, `0` when none (R14.1). `topRated` ranks by descending mean of referenced
 canonical Ratings, tie-broken by descending rating count then ascending Experience name, capped at 5
-(R14.2); empty when no rated Experience exists (R14.3). `perMember` counts each Member's log entries and
-confirmed contributed tags, `0` where none (R14.4, R14.5). The shape exposes per-Trip aggregates and
-per-Member counts so a future trip-to-trip comparison can consume it (R14.7).
+(R14.2); empty when no rated Experience exists (R14.3), and enriched with Park, Category, and image URL.
+`perMember` counts each Member's log entries and confirmed contributed tags, `0` where none (R14.4, R14.5),
+and optionally includes each Member's personal top-rated Experience (R14.12). Additive summary fields include
+Park breakdown (R14.9), Category breakdown (R14.10), group superlatives (R14.11), and total completions count.
+The shape exposes per-Trip aggregates and per-Member counts so a future trip-to-trip comparison can consume it (R14.7).
 
 #### `tripsList.ts`
 
@@ -907,11 +960,11 @@ ordering.
 *For any* Trip's Trip_Log_Entries, confirmed Rode_With_Tags, and referenced canonical Ratings, the
 Trip_Summary reports the count of distinct Experiences completed in the Trip context (each counted at most
 once, `0` when none), at most 5 top-rated Experiences ranked by descending mean of referenced canonical
-Ratings then descending rating count then ascending Experience name, and per-Member counts of created
-Trip_Log_Entries and contributed confirmed Rode_With_Tags (`0` where none); recomputing from the same
-inputs yields the same result.
+Ratings then descending rating count then ascending Experience name, per-Member counts of created
+Trip_Log_Entries and contributed confirmed Rode_With_Tags (`0` where none), park and category breakdowns,
+group superlatives, and member favorite ratings; recomputing from the same inputs yields the same result.
 
-**Validates: Requirements 14.1, 14.2, 14.4, 14.5, 14.6**
+**Validates: Requirements 14.1, 14.2, 14.4, 14.5, 14.6, 14.9, 14.10, 14.11, 14.12**
 
 ### Property 26: The Trips list shows exactly the caller's Trips grouped and ordered by status
 

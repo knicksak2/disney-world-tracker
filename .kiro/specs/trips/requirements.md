@@ -291,6 +291,11 @@ The following capabilities are explicitly out of scope for v1 and are noted as f
 6. THE Trip_Service SHALL derive the Trip_Summary from Trip_Log_Entries, confirmed Rode_With_Tags, and referenced canonical Ratings, and SHALL NOT store precomputed Trip_Summary values as an independent editable field.
 7. THE Trip_Summary data model SHALL expose per-Trip aggregate counts and per-Member contribution counts in a form that supports a future trip-to-trip comparison across two or more Trips.
 8. IF a User who is not a Trip_Member of a Trip requests that Trip's Trip_Summary, THEN THE Trip_Service SHALL reject the request with an authorization error and SHALL withhold the Trip_Summary.
+9. WHEN the Trip_Detail_View displays the Trip_Summary, THE App SHALL display a breakdown of completed Experiences by Walt Disney World Park, showing the count of completed Experiences for each Park visited.
+10. WHEN the Trip_Detail_View displays the Trip_Summary, THE App SHALL display a breakdown of completed Experiences by Category (such as Rides, Dining, Shows).
+11. WHEN the Trip_Detail_View displays the Trip_Summary, THE App SHALL display group superlatives derived from Trip activity highlighting standout achievements and favorites (such as Group MVP, Lead Explorer, Best Co-Pilot, Chief Critic, and Crowd Favorite).
+12. WHEN the Trip_Detail_View displays the Trip_Summary, THE App SHALL display each Trip_Member's personal top-rated Experience on the Trip alongside their contribution counts and avatar.
+13. WHEN the Trip_Detail_View displays the Trip_Summary, THE App SHALL provide a share control to allow Members to export or share a summary of the group's accomplishments.
 
 ### Requirement 15: Trip Authorization and Visibility
 

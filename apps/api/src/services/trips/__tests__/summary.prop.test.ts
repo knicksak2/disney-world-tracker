@@ -62,11 +62,29 @@ function expectedSummary(input: TripSummaryInput): TripSummary {
   for (const entry of input.logEntries) completed.add(entry.experienceId);
   for (const tag of input.confirmedTags) completed.add(tag.experienceId);
 
-  // Experience names are sourced from the log entries (first observed).
-  const nameByExperience = new Map<string, string>();
+  // Experience names, parks, categories, and images are sourced from log entries / tags.
+  const metaByExperience = new Map<
+    string,
+    { name: string; park?: any; category?: any; imageUrl?: any }
+  >();
   for (const entry of input.logEntries) {
-    if (!nameByExperience.has(entry.experienceId)) {
-      nameByExperience.set(entry.experienceId, entry.experienceName);
+    if (!metaByExperience.has(entry.experienceId)) {
+      metaByExperience.set(entry.experienceId, {
+        name: entry.experienceName,
+        park: entry.park ?? null,
+        category: entry.category ?? null,
+        imageUrl: entry.imageUrl ?? null,
+      });
+    }
+  }
+  for (const tag of input.confirmedTags) {
+    if (!metaByExperience.has(tag.experienceId)) {
+      metaByExperience.set(tag.experienceId, {
+        name: tag.experienceName ?? '',
+        park: tag.park ?? null,
+        category: tag.category ?? null,
+        imageUrl: tag.imageUrl ?? null,
+      });
     }
   }
 
@@ -79,12 +97,18 @@ function expectedSummary(input: TripSummaryInput): TripSummary {
     agg.set(rating.experienceId, cur);
   }
 
-  const ranked = [...agg.entries()].map(([experienceId, { sum, count }]) => ({
-    experienceId,
-    experienceName: nameByExperience.get(experienceId) ?? '',
-    meanRating: sum / count,
-    ratingCount: count,
-  }));
+  const ranked = [...agg.entries()].map(([experienceId, { sum, count }]) => {
+    const meta = metaByExperience.get(experienceId);
+    return {
+      experienceId,
+      experienceName: meta?.name ?? '',
+      meanRating: sum / count,
+      ratingCount: count,
+      ...(meta?.park !== undefined ? { park: meta.park } : {}),
+      ...(meta?.category !== undefined ? { category: meta.category } : {}),
+      ...(meta?.imageUrl !== undefined ? { imageUrl: meta.imageUrl } : {}),
+    };
+  });
 
   // Descending mean, then descending rating count, then ascending name.
   ranked.sort((a, b) => {
@@ -95,6 +119,16 @@ function expectedSummary(input: TripSummaryInput): TripSummary {
   });
 
   const topRated = ranked.slice(0, 5);
+
+  // Ratings map per member
+  const memberRatings = new Map<string, { experienceId: string; value: number }[]>();
+  for (const r of input.ratings) {
+    if (r.memberId) {
+      const list = memberRatings.get(r.memberId) ?? [];
+      list.push({ experienceId: r.experienceId, value: r.value });
+      memberRatings.set(r.memberId, list);
+    }
+  }
 
   // R14.4 / R14.5 — per-Member log-entry and confirmed-tag counts.
   const logCounts = new Map<string, number>();
@@ -108,11 +142,35 @@ function expectedSummary(input: TripSummaryInput): TripSummary {
   const memberIds = new Set<string>([...logCounts.keys(), ...tagCounts.keys()]);
   const perMember = [...memberIds]
     .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
-    .map((memberId) => ({
-      memberId,
-      logEntryCount: logCounts.get(memberId) ?? 0,
-      confirmedTagCount: tagCounts.get(memberId) ?? 0,
-    }));
+    .map((memberId) => {
+      const logEntryCount = logCounts.get(memberId) ?? 0;
+      const confirmedTagCount = tagCounts.get(memberId) ?? 0;
+      const totalCompletedCount = logEntryCount + confirmedTagCount;
+
+      let topRatedExperienceName: string | null = null;
+      let topRating: number | null = null;
+
+      const userRatings = memberRatings.get(memberId);
+      if (userRatings && userRatings.length > 0) {
+        userRatings.sort((a, b) => {
+          if (b.value !== a.value) return b.value - a.value;
+          const nameA = metaByExperience.get(a.experienceId)?.name ?? '';
+          const nameB = metaByExperience.get(b.experienceId)?.name ?? '';
+          return nameA.localeCompare(nameB);
+        });
+        topRating = userRatings[0]!.value;
+        topRatedExperienceName = metaByExperience.get(userRatings[0]!.experienceId)?.name ?? null;
+      }
+
+      return {
+        memberId,
+        logEntryCount,
+        confirmedTagCount,
+        totalCompletedCount,
+        topRatedExperienceName,
+        topRating,
+      };
+    });
 
   // planned-list-completion-sync R5 — the planned counts derive from the
   // Planned_Items and the Trip_Log_Entries only. The completed set for the
@@ -126,12 +184,146 @@ function expectedSummary(input: TripSummaryInput): TripSummary {
     loggedExperiences.has(p.experienceId),
   ).length;
 
+  // Park breakdown
+  const parkByExperience = new Map<string, any>();
+  for (const entry of input.logEntries) {
+    if (entry.park && !parkByExperience.has(entry.experienceId)) {
+      parkByExperience.set(entry.experienceId, entry.park);
+    }
+  }
+  for (const tag of input.confirmedTags) {
+    if (tag.park && !parkByExperience.has(tag.experienceId)) {
+      parkByExperience.set(tag.experienceId, tag.park);
+    }
+  }
+  const parkCounts = new Map<any, number>();
+  for (const [, p] of parkByExperience) {
+    parkCounts.set(p, (parkCounts.get(p) ?? 0) + 1);
+  }
+  const parkBreakdown = [...parkCounts.entries()]
+    .map(([park, count]) => ({ park, count }))
+    .sort((a, b) => b.count - a.count || a.park.localeCompare(b.park));
+
+  // Category breakdown
+  const catByExperience = new Map<string, string>();
+  for (const entry of input.logEntries) {
+    if (entry.category && !catByExperience.has(entry.experienceId)) {
+      catByExperience.set(entry.experienceId, entry.category);
+    }
+  }
+  for (const tag of input.confirmedTags) {
+    if (tag.category && !catByExperience.has(tag.experienceId)) {
+      catByExperience.set(tag.experienceId, tag.category);
+    }
+  }
+  const catCounts = new Map<string, number>();
+  for (const [, c] of catByExperience) {
+    catCounts.set(c, (catCounts.get(c) ?? 0) + 1);
+  }
+  const categoryBreakdown = [...catCounts.entries()]
+    .map(([category, count]) => ({ category, count }))
+    .sort((a, b) => b.count - a.count || a.category.localeCompare(b.category));
+
+  // Superlatives
+  const superlatives: any[] = [];
+  if (perMember.length > 0) {
+    const sortedByTotal = [...perMember].sort(
+      (a, b) => (b.totalCompletedCount ?? 0) - (a.totalCompletedCount ?? 0) || a.memberId.localeCompare(b.memberId),
+    );
+    if (sortedByTotal[0] && (sortedByTotal[0].totalCompletedCount ?? 0) > 0) {
+      superlatives.push({
+        id: 'group_mvp',
+        title: 'Group MVP',
+        description: 'Most experiences completed across the entire trip',
+        icon: 'trophy',
+        memberId: sortedByTotal[0].memberId,
+        value: sortedByTotal[0].totalCompletedCount,
+      });
+    }
+
+    const sortedByLogs = [...perMember].sort(
+      (a, b) => b.logEntryCount - a.logEntryCount || a.memberId.localeCompare(b.memberId),
+    );
+    if (sortedByLogs[0] && sortedByLogs[0].logEntryCount > 0) {
+      superlatives.push({
+        id: 'lead_explorer',
+        title: 'Lead Explorer',
+        description: 'Logged the most completions for the party',
+        icon: 'compass',
+        memberId: sortedByLogs[0].memberId,
+        value: sortedByLogs[0].logEntryCount,
+      });
+    }
+
+    const sortedByTags = [...perMember].sort(
+      (a, b) => b.confirmedTagCount - a.confirmedTagCount || a.memberId.localeCompare(b.memberId),
+    );
+    if (sortedByTags[0] && sortedByTags[0].confirmedTagCount > 0) {
+      superlatives.push({
+        id: 'best_copilot',
+        title: 'Best Co-Pilot',
+        description: 'Most confirmed rode-with tags on group rides',
+        icon: 'people',
+        memberId: sortedByTags[0].memberId,
+        value: sortedByTags[0].confirmedTagCount,
+      });
+    }
+
+    const ratingsCountByMember = new Map<string, number>();
+    for (const r of input.ratings) {
+      if (r.memberId) {
+        ratingsCountByMember.set(r.memberId, (ratingsCountByMember.get(r.memberId) ?? 0) + 1);
+      }
+    }
+    const sortedCritics = [...ratingsCountByMember.entries()].sort(
+      (a, b) => b[1] - a[1] || a[0].localeCompare(b[0]),
+    );
+    if (sortedCritics[0] && sortedCritics[0][1] > 0) {
+      superlatives.push({
+        id: 'chief_critic',
+        title: 'Chief Critic',
+        description: 'Submitted the most experience ratings',
+        icon: 'star',
+        memberId: sortedCritics[0][0],
+        value: sortedCritics[0][1],
+      });
+    }
+
+    if (topRated.length > 0 && topRated[0]) {
+      const formatted = Math.round(topRated[0].meanRating * 10) / 10;
+      const ratingStr = Number.isInteger(formatted) ? String(formatted) : formatted.toFixed(1);
+      superlatives.push({
+        id: 'crowd_favorite',
+        title: 'Crowd Favorite',
+        description: 'Highest average rating from the group',
+        icon: 'sparkles',
+        experienceName: topRated[0].experienceName,
+        value: `${ratingStr} ★`,
+      });
+    }
+
+    if (parkBreakdown.length > 0 && parkBreakdown[0]) {
+      superlatives.push({
+        id: 'top_park',
+        title: 'Top Park Explored',
+        description: 'Park with the most completed experiences',
+        icon: 'map',
+        value: `${parkBreakdown[0].park} (${parkBreakdown[0].count})`,
+      });
+    }
+  }
+
   return {
     distinctExperienceCount: completed.size,
     topRated,
     perMember,
     plannedTotalCount,
     plannedCompletedCount,
+    totalCompletionsCount: input.logEntries.length + input.confirmedTags.length,
+    totalRatingsCount: input.ratings.length,
+    parkBreakdown,
+    categoryBreakdown,
+    superlatives,
   };
 }
 
@@ -395,6 +587,11 @@ describe('deriveTripSummary — fixed regression examples', () => {
       perMember: [],
       plannedTotalCount: 0,
       plannedCompletedCount: 0,
+      totalCompletionsCount: 0,
+      totalRatingsCount: 0,
+      parkBreakdown: [],
+      categoryBreakdown: [],
+      superlatives: [],
     });
   });
 
@@ -445,8 +642,58 @@ describe('deriveTripSummary — fixed regression examples', () => {
       plannedItems: [],
     });
     expect(summary.perMember).toEqual([
-      { memberId: 'a', logEntryCount: 2, confirmedTagCount: 0 },
-      { memberId: 'b', logEntryCount: 0, confirmedTagCount: 1 },
+      {
+        memberId: 'a',
+        logEntryCount: 2,
+        confirmedTagCount: 0,
+        totalCompletedCount: 2,
+        topRatedExperienceName: null,
+        topRating: null,
+      },
+      {
+        memberId: 'b',
+        logEntryCount: 0,
+        confirmedTagCount: 1,
+        totalCompletedCount: 1,
+        topRatedExperienceName: null,
+        topRating: null,
+      },
+    ]);
+  });
+
+  it('derives park and category breakdown and group superlatives (R14.9, R14.10, R14.11)', () => {
+    const summary = deriveTripSummary({
+      logEntries: [
+        { memberId: 'a', experienceId: 'e1', experienceName: 'Space Mountain', park: 'Magic Kingdom', category: 'Ride' },
+        { memberId: 'a', experienceId: 'e2', experienceName: 'Cinderella Royal Table', park: 'Magic Kingdom', category: 'Restaurant' },
+      ],
+      confirmedTags: [
+        { memberId: 'b', experienceId: 'e1', experienceName: 'Space Mountain', park: 'Magic Kingdom', category: 'Ride' },
+        { memberId: 'b', experienceId: 'e3', experienceName: 'Soarin', park: 'Epcot', category: 'Ride' },
+      ],
+      ratings: [
+        { memberId: 'a', experienceId: 'e1', value: 10 },
+        { memberId: 'b', experienceId: 'e1', value: 8 },
+        { memberId: 'b', experienceId: 'e3', value: 9 },
+      ],
+      plannedItems: [],
+    });
+
+    expect(summary.parkBreakdown).toEqual([
+      { park: 'Magic Kingdom', count: 2 },
+      { park: 'Epcot', count: 1 },
+    ]);
+    expect(summary.categoryBreakdown).toEqual([
+      { category: 'Ride', count: 2 },
+      { category: 'Restaurant', count: 1 },
+    ]);
+    expect(summary.superlatives?.map((s) => s.id)).toEqual([
+      'group_mvp',
+      'lead_explorer',
+      'best_copilot',
+      'chief_critic',
+      'crowd_favorite',
+      'top_park',
     ]);
   });
 });

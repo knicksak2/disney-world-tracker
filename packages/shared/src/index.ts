@@ -271,6 +271,7 @@ export type {
   TripReactionSummary,
   TripCommentDTO,
   TripSummaryDTO,
+  TripSuperlativeDTO,
   TripOptimizationResult,
   OptimizedItem,
   TripTravelLeg,

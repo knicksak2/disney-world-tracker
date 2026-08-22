@@ -875,6 +875,20 @@ export interface TripFeedItemDTO {
 }
 
 /**
+ * A fun superlative or highlight badge awarded to a member or experience on a Trip (R14.11).
+ */
+export interface TripSuperlativeDTO {
+  readonly id: string;
+  readonly title: string;
+  readonly description: string;
+  readonly icon: string;
+  readonly memberId?: string | undefined;
+  readonly memberDisplayName?: string | undefined;
+  readonly experienceName?: string | undefined;
+  readonly value?: string | number | undefined;
+}
+
+/**
  * The derived Trip_Summary (R14). Exposes per-Trip aggregates and per-Member
  * counts so a future trip-to-trip comparison can consume the same shape
  * (R14.7).
@@ -888,13 +902,20 @@ export interface TripSummaryDTO {
     readonly experienceName: string;
     readonly meanRating: number;
     readonly ratingCount: number;
+    readonly park?: Park | null | undefined;
+    readonly category?: string | null | undefined;
+    readonly imageUrl?: string | null | undefined;
   }[];
-  /** Per-Member log-entry and confirmed-tag counts, `0` where none (R14.4, R14.5). */
+  /** Per-Member log-entry and confirmed-tag counts, `0` where none (R14.4, R14.5, R14.12). */
   readonly perMember: readonly {
     readonly memberId: string;
     readonly displayName: string;
+    readonly avatarPreset?: string | null | undefined;
     readonly logEntryCount: number;
     readonly confirmedTagCount: number;
+    readonly totalCompletedCount?: number | undefined;
+    readonly topRatedExperienceName?: string | null | undefined;
+    readonly topRating?: number | null | undefined;
   }[];
   /**
    * Total number of Planned_Items in the Trip's Planned_List, a non-negative
@@ -911,4 +932,20 @@ export interface TripSummaryDTO {
    * Derived at read time; never stored (Planned List Completion Sync R5.2, R5.5, R5.6).
    */
   readonly plannedCompletedCount: number;
+  /** Total completions across all members (sum of all log entries + confirmed tags). */
+  readonly totalCompletionsCount?: number | undefined;
+  /** Total ratings referenced by completions in this trip. */
+  readonly totalRatingsCount?: number | undefined;
+  /** Completed experiences broken down by Walt Disney World Park (R14.9). */
+  readonly parkBreakdown?: readonly {
+    readonly park: Park;
+    readonly count: number;
+  }[] | undefined;
+  /** Completed experiences broken down by category (R14.10). */
+  readonly categoryBreakdown?: readonly {
+    readonly category: string;
+    readonly count: number;
+  }[] | undefined;
+  /** Group superlatives and badges derived from trip activity (R14.11). */
+  readonly superlatives?: readonly TripSuperlativeDTO[] | undefined;
 }

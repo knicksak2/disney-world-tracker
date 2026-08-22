@@ -391,6 +391,16 @@ existing `RatingChanged` propagation path is reused unchanged.
     - `TripEditScreen.test.tsx`: pre-fill from the Trip + stay, `PATCH` carries the edited `resortIds` (add and clear), and the `trip_forbidden` friendly-copy path. `TripDetailScreen.test.tsx`: an Organizer sees the Edit control and it opens `TripEdit`; a plain Member does not
     - _Requirements: 3.1, 3.8, 21.1, 21.5_
 
+- [x] 23. Enrich and redesign the Trip Summary screen (R14.9–R14.13)
+  - [x] 23.1 Extend `TripSummaryDTO` with park/category breakdowns, superlatives, and member favorites in `@dwt/shared` and `summary.ts`
+    - _Requirements: 14.1, 14.2, 14.4, 14.5, 14.6, 14.9, 14.10, 14.11, 14.12_
+  - [x] 23.2 Update `getSummary` in `apps/api/src/services/trips/repo.ts` to query and pass image/park/category metadata and member favorites
+    - _Requirements: 14.6, 14.7, 14.9, 14.10, 14.11, 14.12_
+  - [x] 23.3 Redesign `TripSummaryScreen.tsx` with celebration hero, itinerary progress ring, superlatives, park breakdown, member spotlights, and sharing
+    - _Requirements: 14.1, 14.2, 14.3, 14.4, 14.5, 14.9, 14.10, 14.11, 14.12, 14.13_
+  - [x] 23.4 Add backend and mobile tests for the enriched summary derivations and UI components
+    - _Requirements: 14.1, 14.2, 14.4, 14.5, 14.9, 14.10, 14.11, 14.12, 14.13_
+
 ## Notes
 
 - Tasks marked with `*` are optional (property, unit, integration, and mobile tests) and can be skipped for a faster MVP; core implementation tasks are never optional.

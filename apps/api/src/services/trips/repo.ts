@@ -3721,20 +3721,38 @@ async function getSummary(
         member_id: string;
         experience_id: string;
         experience_name: string;
+        park: string;
+        category: string;
+        image_url: string | null;
       }>(
         `SELECT le.member_id,
                 le.experience_id,
-                e.name AS experience_name
+                e.name AS experience_name,
+                e.park,
+                e.category,
+                e.image_url
            FROM trip_log_entries le
            JOIN experiences e ON e.id = le.experience_id
           WHERE le.trip_id = $1`,
         [tripId],
       ),
-      ctx.pool.query<{ member_id: string; experience_id: string }>(
+      ctx.pool.query<{
+        member_id: string;
+        experience_id: string;
+        experience_name: string;
+        park: string;
+        category: string;
+        image_url: string | null;
+      }>(
         `SELECT rwt.tagged_member_id AS member_id,
-                tle.experience_id
+                tle.experience_id,
+                e.name AS experience_name,
+                e.park,
+                e.category,
+                e.image_url
            FROM rode_with_tags rwt
            JOIN trip_log_entries tle ON tle.id = rwt.log_entry_id
+           JOIN experiences e ON e.id = tle.experience_id
           WHERE tle.trip_id = $1 AND rwt.state = 'confirmed'`,
         [tripId],
       ),
@@ -3744,8 +3762,9 @@ async function getSummary(
       // single canonical Rating for that Experience when one exists. `UNION`
       // deduplicates so a Member who both logged and was tagged on the same
       // Experience contributes their Rating once.
-      ctx.pool.query<{ experience_id: string; value: number | string }>(
-        `SELECT participation.experience_id,
+      ctx.pool.query<{ member_id: string; experience_id: string; value: number | string }>(
+        `SELECT participation.member_id,
+                participation.experience_id,
                 r.value
            FROM (
                   SELECT le.member_id, le.experience_id
@@ -3776,12 +3795,20 @@ async function getSummary(
       memberId: row.member_id,
       experienceId: row.experience_id,
       experienceName: row.experience_name,
+      park: row.park,
+      category: row.category,
+      imageUrl: row.image_url,
     })),
     confirmedTags: confirmedTagsResult.rows.map((row) => ({
       memberId: row.member_id,
       experienceId: row.experience_id,
+      experienceName: row.experience_name,
+      park: row.park,
+      category: row.category,
+      imageUrl: row.image_url,
     })),
     ratings: ratingsResult.rows.map((row) => ({
+      memberId: row.member_id,
       experienceId: row.experience_id,
       value: Number(row.value),
     })),
@@ -3790,22 +3817,23 @@ async function getSummary(
     })),
   });
 
-  // Resolve a display name for every Member the summary reports. A Member who
-  // has since left the Trip may still appear (their log entries and confirmed
-  // tags are retained, R8.5), so names are looked up by the reported ids
-  // against the durable `profiles` table rather than the current membership.
+  // Resolve a display name and avatar preset for every Member the summary reports.
   const memberIds = summary.perMember.map((m) => m.memberId);
-  const displayNameById = new Map<string, string>();
+  const profileById = new Map<string, { displayName: string; avatarPreset: string | null }>();
   if (memberIds.length > 0) {
     const profiles = await ctx.pool.query<{
       user_id: string;
       display_name: string;
+      avatar_preset: string | null;
     }>(
-      `SELECT user_id, display_name FROM profiles WHERE user_id = ANY($1)`,
+      `SELECT user_id, display_name, avatar_preset FROM profiles WHERE user_id = ANY($1)`,
       [memberIds],
     );
     for (const row of profiles.rows) {
-      displayNameById.set(row.user_id, row.display_name);
+      profileById.set(row.user_id, {
+        displayName: row.display_name,
+        avatarPreset: row.avatar_preset,
+      });
     }
   }
 
@@ -3816,15 +3844,39 @@ async function getSummary(
       experienceName: top.experienceName,
       meanRating: top.meanRating,
       ratingCount: top.ratingCount,
+      ...(top.park !== undefined ? { park: top.park } : {}),
+      ...(top.category !== undefined ? { category: top.category } : {}),
+      ...(top.imageUrl !== undefined ? { imageUrl: top.imageUrl } : {}),
     })),
-    perMember: summary.perMember.map((member) => ({
-      memberId: member.memberId,
-      displayName: displayNameById.get(member.memberId) ?? '',
-      logEntryCount: member.logEntryCount,
-      confirmedTagCount: member.confirmedTagCount,
-    })),
+    perMember: summary.perMember.map((member) => {
+      const profile = profileById.get(member.memberId);
+      return {
+        memberId: member.memberId,
+        displayName: profile?.displayName ?? '',
+        avatarPreset: profile?.avatarPreset ?? null,
+        logEntryCount: member.logEntryCount,
+        confirmedTagCount: member.confirmedTagCount,
+        totalCompletedCount: member.totalCompletedCount,
+        topRatedExperienceName: member.topRatedExperienceName,
+        topRating: member.topRating,
+      };
+    }),
     plannedTotalCount: summary.plannedTotalCount,
     plannedCompletedCount: summary.plannedCompletedCount,
+    totalCompletionsCount: summary.totalCompletionsCount,
+    totalRatingsCount: summary.totalRatingsCount,
+    parkBreakdown: summary.parkBreakdown,
+    categoryBreakdown: summary.categoryBreakdown,
+    superlatives: summary.superlatives?.map((s) => ({
+      id: s.id,
+      title: s.title,
+      description: s.description,
+      icon: s.icon,
+      memberId: s.memberId,
+      memberDisplayName: s.memberId ? profileById.get(s.memberId)?.displayName : undefined,
+      experienceName: s.experienceName,
+      value: s.value,
+    })),
   };
 }
 
