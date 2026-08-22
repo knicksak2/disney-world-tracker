@@ -127,6 +127,10 @@ This feature builds directly on the completed `disney-facilities-catalog-source`
 8. WHILE an Experience_Category filter is active, THE Destination_Screen SHALL display only Experiences of the selected Experience_Category while preserving the Land grouping and section ordering.
 9. WHILE an Experience_Category filter is active, IF a Land section contains no Experience of the selected Experience_Category, THEN THE Destination_Screen SHALL omit that Land section from the display.
 10. WHEN a user selects an Experience row, THE App SHALL navigate to the Experience_Detail_Screen for that Experience.
+11. THE Destination_Screen SHALL provide a Category Tab bar supporting `All`, `Rides`, `Dining`, and `Shows` tabs matching the schedule builder picker structure.
+12. THE Destination_Screen SHALL provide a dynamic filter bar with a Filters modal trigger and quick attribute filter chips derived from active experiences.
+13. WHEN a user opens the Filters modal, THE Destination_Screen SHALL present multi-select options for Lands/Pavilions, Price Tiers, and high-signal Attributes.
+14. WHEN filters are applied, THE Destination_Screen SHALL display experiences matching the active tab, selected lands, and selected attributes while preserving Land grouping and section ordering.
 
 ### Requirement 7: Disney Springs Destination Screen
 

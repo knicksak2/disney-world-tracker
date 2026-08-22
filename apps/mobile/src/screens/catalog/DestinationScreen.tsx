@@ -47,6 +47,8 @@ import {
   ActivityIndicator,
   FlatList,
   Image,
+  Modal,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -58,7 +60,6 @@ import { useQuery } from '@tanstack/react-query';
 import type { CompositeScreenProps } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
-import { EXPERIENCE_CATEGORIES } from '@dwt/shared';
 import type { ExperienceCategory, ExperienceDTO, ResortDTO } from '@dwt/shared';
 
 import { ApiError, apiRequest } from '../../api/client';
@@ -68,7 +69,6 @@ import { theme } from '../../theme/theme';
 import {
   Badge,
   Card,
-  Chip,
   EmptyState,
   GradientHeader,
   ScreenContainer,
@@ -91,6 +91,12 @@ import {
   RESORT_CATCHALL_ID,
   type Section,
 } from './catalogGrouping';
+import {
+  deriveFilterChips,
+  deriveQuickChips,
+  filterExperiencesMulti,
+  type ExperiencePickerTab,
+} from '../trips/experiencePickerFilters';
 import { useDestinationSections } from './useDestinationSections';
 import { useCompletedExperiences } from './useCompletedExperiences';
 import { priceTierListTag, resortAreaLabel } from './infoTags';
@@ -529,27 +535,97 @@ function ThemeOrWaterParkLayout({
   readonly onSelectExperience: (experience: ExperienceDTO) => void;
   readonly completedIds: ReadonlySet<string>;
 }): JSX.Element {
-  // R6.7: default to no active category ("All"), so all Experiences are shown.
-  const [selectedCategory, setSelectedCategory] =
-    useState<ExperienceCategory | null>(null);
+  // Category tabs matching the schedule builder picker: 'all' | 'attractions' | 'dining' | 'shows'
+  const [activeTab, setActiveTab] = useState<ExperiencePickerTab>('all');
+  const [selectedLands, setSelectedLands] = useState<Set<string>>(new Set());
+  const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
+  const [isFilterModalOpen, setIsFilterModalOpen] = useState<boolean>(false);
 
-  // R6.8/R6.9: re-derive the Land sections client-side over the already-fetched
-  // Experiences whenever the data or the active category changes (no refetch).
-  const sections = useMemo(
-    () => groupByPavilionFiltered(experiences, selectedCategory),
-    [experiences, selectedCategory],
+  const clearAllFilters = useCallback(() => {
+    setSelectedLands(new Set());
+    setSelectedTags(new Set());
+  }, []);
+
+  const toggleLandFilter = useCallback((land: string) => {
+    setSelectedLands((prev) => {
+      const next = new Set(prev);
+      if (next.has(land)) {
+        next.delete(land);
+      } else {
+        next.add(land);
+      }
+      return next;
+    });
+  }, []);
+
+  const toggleTagFilter = useCallback((tag: string) => {
+    setSelectedTags((prev) => {
+      const next = new Set(prev);
+      if (next.has(tag)) {
+        next.delete(tag);
+      } else {
+        next.add(tag);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleTabChange = useCallback(
+    (tab: ExperiencePickerTab) => {
+      setActiveTab(tab);
+      clearAllFilters();
+    },
+    [clearAllFilters],
   );
 
-  // R6.4: seed the collapsible state with every current section key so the
-  // first render is fully expanded; keys added by a filter change are seeded
-  // expanded too by the hook.
+  // Tab category filter
+  const tabFilteredResults = useMemo(() => {
+    return experiences.filter((item) => {
+      if (activeTab === 'all') return true;
+      if (activeTab === 'attractions') return item.category === 'Ride';
+      if (activeTab === 'dining') return item.category === 'Restaurant';
+      if (activeTab === 'shows') {
+        return (
+          item.category === 'Show' ||
+          item.category === 'Parade' ||
+          item.category === 'Character_Meet' ||
+          item.category === 'Event'
+        );
+      }
+      return true;
+    });
+  }, [experiences, activeTab]);
+
+  // Dynamic filter chips derived directly from loaded tab results
+  const { landChips, priceChips, attributeChips, allChips } = useMemo(
+    () => deriveFilterChips(tabFilteredResults),
+    [tabFilteredResults],
+  );
+  const quickChips = useMemo(
+    () => deriveQuickChips(attributeChips, activeTab, priceChips),
+    [attributeChips, activeTab, priceChips],
+  );
+
+  // Multi-filter by selected lands and attribute/price tags
+  const filteredResults = useMemo(
+    () =>
+      filterExperiencesMulti(tabFilteredResults, selectedLands, selectedTags),
+    [tabFilteredResults, selectedLands, selectedTags],
+  );
+
+  const activeFilterCount = selectedLands.size + selectedTags.size;
+
+  // Re-derive Land sections client-side
+  const sections = useMemo(
+    () => groupByPavilionFiltered(filteredResults, null),
+    [filteredResults],
+  );
+
+  // Seed collapsible state
   const sectionKeys = useMemo(() => sections.map((s) => s.key), [sections]);
   const { isExpanded, toggle } = useDestinationSections(sectionKeys);
 
-  // R12.8: announce the updated visible-Experience count to assistive tech
-  // within 1 second whenever the category filter re-partitions the sections.
-  // Derived in the same recomputation that produces the visible sections, so
-  // the announcement fires as soon as the visible set changes.
+  // Accessible announcement of visible count
   const visibleCount = useMemo(
     () => sections.reduce((total, section) => total + section.items.length, 0),
     [sections],
@@ -557,90 +633,459 @@ function ThemeOrWaterParkLayout({
   useResultCountAnnouncement(visibleCount);
 
   return (
-    <FlatList
-      data={sections as Section<ExperienceDTO>[]}
-      keyExtractor={(section) => section.key}
-      style={styles.list}
-      contentContainerStyle={styles.listContent}
-      initialNumToRender={8}
-      windowSize={11}
-      ListHeaderComponent={
-        <CategoryFilterRow
-          selectedCategory={selectedCategory}
-          onSelectCategory={setSelectedCategory}
-        />
-      }
-      renderItem={({ item: section }) => {
-        const expanded = isExpanded(section.key);
-        return (
-          <GroupSection
-            sectionKey={section.key}
-            expanded={expanded}
-            onToggle={toggle}
-            accessibilityLabel={`${section.title}, ${
-              expanded ? 'expanded' : 'collapsed'
-            }`}
-            header={
-              <SectionHeader
-                title={section.title}
-                count={section.items.length}
-                expanded={expanded}
-              />
-            }
-            testID={`destination-section-${section.key}`}
-          >
-            {section.items.map((experience) => (
-              <ExperienceRow
-                key={experience.id}
-                experience={experience}
-                onPress={() => onSelectExperience(experience)}
-                completed={completedIds.has(experience.id)}
-              />
-            ))}
-          </GroupSection>
-        );
-      }}
-    />
-  );
-}
-
-/**
- * The scoped Experience_Category filter row for the theme/water-park layout
- * (R6.7). An "All" chip (no active category) plus one chip per
- * `EXPERIENCE_CATEGORIES` entry; the active chip reflects the current selection.
- * Selecting a chip only updates local state — the parent re-derives the sections
- * client-side (R6.8), never refetching.
- */
-function CategoryFilterRow({
-  selectedCategory,
-  onSelectCategory,
-}: {
-  readonly selectedCategory: ExperienceCategory | null;
-  readonly onSelectCategory: (category: ExperienceCategory | null) => void;
-}): JSX.Element {
-  return (
-    <View style={styles.filterRow} testID="destination-category-filter">
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.chipRow}
+    <View style={styles.tabLayoutContainer}>
+      {/* Category Tabs */}
+      <View
+        style={styles.tabBar}
+        testID="destination-category-filter"
       >
-        <Chip
-          label="All"
-          active={selectedCategory === null}
-          onPress={() => onSelectCategory(null)}
+        <Pressable
+          style={[styles.tabBtn, activeTab === 'all' && styles.tabBtnActive]}
+          onPress={() => handleTabChange('all')}
+          accessibilityRole="button"
+          accessibilityState={{ selected: activeTab === 'all' }}
+          accessibilityLabel={`All, ${
+            activeTab === 'all' ? 'selected' : 'not selected'
+          }`}
           testID="destination-category-All"
-        />
-        {EXPERIENCE_CATEGORIES.map((category) => (
-          <Chip
-            key={category}
-            label={categoryLabel(category)}
-            active={selectedCategory === category}
-            onPress={() => onSelectCategory(category)}
-            testID={`destination-category-${category}`}
+        >
+          <Text
+            style={[
+              styles.tabText,
+              activeTab === 'all' && styles.tabTextActive,
+            ]}
+          >
+            All
+          </Text>
+        </Pressable>
+        <Pressable
+          style={[
+            styles.tabBtn,
+            activeTab === 'attractions' && styles.tabBtnActive,
+          ]}
+          onPress={() => handleTabChange('attractions')}
+          accessibilityRole="button"
+          accessibilityState={{ selected: activeTab === 'attractions' }}
+          accessibilityLabel={`Ride, ${
+            activeTab === 'attractions' ? 'selected' : 'not selected'
+          }`}
+          testID="destination-category-Ride"
+        >
+          <Text
+            style={[
+              styles.tabText,
+              activeTab === 'attractions' && styles.tabTextActive,
+            ]}
+          >
+            Rides
+          </Text>
+        </Pressable>
+        <Pressable
+          style={[
+            styles.tabBtn,
+            activeTab === 'dining' && styles.tabBtnActive,
+          ]}
+          onPress={() => handleTabChange('dining')}
+          accessibilityRole="button"
+          accessibilityState={{ selected: activeTab === 'dining' }}
+          accessibilityLabel={`Restaurant, ${
+            activeTab === 'dining' ? 'selected' : 'not selected'
+          }`}
+          testID="destination-category-Restaurant"
+        >
+          <Text
+            style={[
+              styles.tabText,
+              activeTab === 'dining' && styles.tabTextActive,
+            ]}
+          >
+            Dining
+          </Text>
+        </Pressable>
+        <Pressable
+          style={[styles.tabBtn, activeTab === 'shows' && styles.tabBtnActive]}
+          onPress={() => handleTabChange('shows')}
+          accessibilityRole="button"
+          accessibilityState={{ selected: activeTab === 'shows' }}
+          accessibilityLabel={`Show, ${
+            activeTab === 'shows' ? 'selected' : 'not selected'
+          }`}
+          testID="destination-category-Show"
+        >
+          <Text
+            style={[
+              styles.tabText,
+              activeTab === 'shows' && styles.tabTextActive,
+            ]}
+          >
+            Shows
+          </Text>
+        </Pressable>
+      </View>
+
+      {/* Sub-Filters / Quick Chips Bar */}
+      {allChips.length > 0 && (
+        <View style={styles.filterBarWrap} testID="destination-sub-filters">
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.filterBarScroll}
+          >
+            {/* Filters Modal Button */}
+            <Pressable
+              style={[
+                styles.filterChip,
+                styles.filterModalBtn,
+                activeFilterCount > 0 && styles.filterModalBtnActive,
+              ]}
+              onPress={() => setIsFilterModalOpen(true)}
+              accessibilityRole="button"
+              accessibilityLabel={`Open filters sheet${
+                activeFilterCount > 0 ? `, ${activeFilterCount} active` : ''
+              }`}
+              testID="destination-open-filters-modal"
+            >
+              <Ionicons
+                name="options-outline"
+                size={14}
+                color={
+                  activeFilterCount > 0 ? '#FFFFFF' : theme.color.textSecondary
+                }
+              />
+              <Text
+                style={[
+                  styles.filterChipText,
+                  styles.filterModalBtnText,
+                  activeFilterCount > 0 && styles.filterChipTextActive,
+                ]}
+              >
+                Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
+              </Text>
+            </Pressable>
+
+            {/* Quick Filter Chips */}
+            {quickChips.map((chip) => {
+              const isSelected = selectedTags.has(chip.rawValue);
+              return (
+                <Pressable
+                  key={chip.id}
+                  style={[
+                    styles.filterChip,
+                    isSelected && styles.filterChipActive,
+                  ]}
+                  onPress={() => toggleTagFilter(chip.rawValue)}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: isSelected }}
+                  accessibilityLabel={`${chip.rawValue}, quick attribute filter${
+                    isSelected ? ', selected' : ''
+                  }`}
+                  testID={`destination-subfilter-${chip.id}`}
+                >
+                  <Text
+                    style={[
+                      styles.filterChipText,
+                      isSelected && styles.filterChipTextActive,
+                    ]}
+                  >
+                    {chip.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+
+            {/* Reset Button */}
+            {activeFilterCount > 0 && (
+              <Pressable
+                style={[styles.filterChip, styles.resetChip]}
+                onPress={clearAllFilters}
+                accessibilityRole="button"
+                accessibilityLabel="Reset all active filters"
+                testID="destination-subfilter-reset"
+              >
+                <Text style={[styles.filterChipText, styles.resetChipText]}>
+                  ✕ Reset
+                </Text>
+              </Pressable>
+            )}
+          </ScrollView>
+        </View>
+      )}
+
+      {/* Filters Bottom Sheet Modal */}
+      <Modal
+        visible={isFilterModalOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setIsFilterModalOpen(false)}
+        testID="destination-filters-modal"
+      >
+        <View style={styles.modalBackdrop}>
+          <Pressable
+            style={styles.modalBackdropDismiss}
+            onPress={() => setIsFilterModalOpen(false)}
+            accessibilityRole="button"
+            accessibilityLabel="Close filters modal"
           />
-        ))}
-      </ScrollView>
+          <View
+            style={styles.modalContent}
+            testID="destination-filters-modal-content"
+          >
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Filters</Text>
+              <View style={styles.modalHeaderActions}>
+                {activeFilterCount > 0 && (
+                  <Pressable
+                    onPress={clearAllFilters}
+                    style={styles.modalClearBtn}
+                    accessibilityRole="button"
+                    accessibilityLabel="Clear all filters"
+                    testID="destination-modal-clear-all"
+                  >
+                    <Text style={styles.modalClearText}>Clear All</Text>
+                  </Pressable>
+                )}
+                <Pressable
+                  onPress={() => setIsFilterModalOpen(false)}
+                  style={styles.modalCloseBtn}
+                  accessibilityRole="button"
+                  accessibilityLabel="Close filters sheet"
+                  testID="destination-modal-close"
+                >
+                  <Ionicons
+                    name="close"
+                    size={22}
+                    color={theme.color.textPrimary}
+                  />
+                </Pressable>
+              </View>
+            </View>
+
+            <ScrollView
+              style={styles.modalScroll}
+              contentContainerStyle={styles.modalScrollContent}
+              showsVerticalScrollIndicator={false}
+            >
+              {/* Lands Section */}
+              {landChips.length > 0 && (
+                <View
+                  style={styles.modalSection}
+                  testID="destination-modal-lands-section"
+                >
+                  <Text style={styles.modalSectionTitle}>
+                    LANDS{' '}
+                    {selectedLands.size > 0 ? `(${selectedLands.size})` : ''}
+                  </Text>
+                  <View style={styles.chipGrid}>
+                    {landChips.map((chip) => {
+                      const isSelected = selectedLands.has(chip.rawValue);
+                      return (
+                        <Pressable
+                          key={`modal-${chip.id}`}
+                          style={[
+                            styles.modalChip,
+                            isSelected && styles.modalChipActive,
+                          ]}
+                          onPress={() => toggleLandFilter(chip.rawValue)}
+                          accessibilityRole="checkbox"
+                          accessibilityState={{ checked: isSelected }}
+                          accessibilityLabel={`${chip.rawValue}, land filter${
+                            isSelected ? ', selected' : ''
+                          }`}
+                          testID={`destination-modal-filter-${chip.id}`}
+                        >
+                          <Text
+                            style={[
+                              styles.modalChipText,
+                              isSelected && styles.modalChipTextActive,
+                            ]}
+                          >
+                            {chip.label}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
+              )}
+
+              {/* Price Range Section */}
+              {priceChips.length > 0 && (
+                <View
+                  style={styles.modalSection}
+                  testID="destination-modal-price-section"
+                >
+                  <Text style={styles.modalSectionTitle}>
+                    PRICE RANGE{' '}
+                    {selectedTags.size > 0
+                      ? `(${
+                          Array.from(selectedTags).filter((t) =>
+                            priceChips.some((p) => p.rawValue === t),
+                          ).length
+                        })`
+                      : ''}
+                  </Text>
+                  <View style={styles.chipGrid}>
+                    {priceChips.map((chip) => {
+                      const isSelected = selectedTags.has(chip.rawValue);
+                      return (
+                        <Pressable
+                          key={`modal-${chip.id}`}
+                          style={[
+                            styles.modalChip,
+                            isSelected && styles.modalChipActive,
+                          ]}
+                          onPress={() => toggleTagFilter(chip.rawValue)}
+                          accessibilityRole="checkbox"
+                          accessibilityState={{ checked: isSelected }}
+                          accessibilityLabel={`${chip.rawValue}, price filter${
+                            isSelected ? ', selected' : ''
+                          }`}
+                          testID={`destination-modal-filter-${chip.id}`}
+                        >
+                          <Text
+                            style={[
+                              styles.modalChipText,
+                              isSelected && styles.modalChipTextActive,
+                            ]}
+                          >
+                            {chip.label}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
+              )}
+
+              {/* Attributes Section */}
+              {attributeChips.length > 0 && (
+                <View
+                  style={styles.modalSection}
+                  testID="destination-modal-attributes-section"
+                >
+                  <Text style={styles.modalSectionTitle}>
+                    ATTRIBUTES & DINING{' '}
+                    {selectedTags.size > 0
+                      ? `(${
+                          Array.from(selectedTags).filter((t) =>
+                            attributeChips.some((a) => a.rawValue === t),
+                          ).length
+                        })`
+                      : ''}
+                  </Text>
+                  <View style={styles.chipGrid}>
+                    {attributeChips.map((chip) => {
+                      const isSelected = selectedTags.has(chip.rawValue);
+                      return (
+                        <Pressable
+                          key={`modal-${chip.id}`}
+                          style={[
+                            styles.modalChip,
+                            isSelected && styles.modalChipActive,
+                          ]}
+                          onPress={() => toggleTagFilter(chip.rawValue)}
+                          accessibilityRole="checkbox"
+                          accessibilityState={{ checked: isSelected }}
+                          accessibilityLabel={`${
+                            chip.rawValue
+                          }, attribute filter${isSelected ? ', selected' : ''}`}
+                          testID={`destination-modal-filter-${chip.id}`}
+                        >
+                          <Text
+                            style={[
+                              styles.modalChipText,
+                              isSelected && styles.modalChipTextActive,
+                            ]}
+                          >
+                            {chip.label}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
+              )}
+            </ScrollView>
+
+            <View style={styles.modalFooter}>
+              <Pressable
+                style={styles.modalApplyBtn}
+                onPress={() => setIsFilterModalOpen(false)}
+                accessibilityRole="button"
+                accessibilityLabel={`Apply filters, ${filteredResults.length} experiences found`}
+                testID="destination-modal-apply-btn"
+              >
+                <Text style={styles.modalApplyBtnText}>
+                  {filteredResults.length > 0
+                    ? `Show ${filteredResults.length} Result${
+                        filteredResults.length === 1 ? '' : 's'
+                      }`
+                    : 'Show 0 Results'}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Content List or Empty State */}
+      {filteredResults.length === 0 ? (
+        <View style={styles.center} testID="destination-filter-empty">
+          <EmptyState
+            icon="search-outline"
+            title="No experiences matched"
+            body="Try resetting your active filters."
+          />
+          <Pressable
+            style={styles.resetFilterEmptyBtn}
+            onPress={clearAllFilters}
+            accessibilityRole="button"
+            accessibilityLabel="Reset active filters"
+            testID="destination-filter-empty-reset"
+          >
+            <Text style={styles.resetFilterEmptyBtnText}>Reset Filters</Text>
+          </Pressable>
+        </View>
+      ) : (
+        <FlatList
+          data={sections as Section<ExperienceDTO>[]}
+          keyExtractor={(section) => section.key}
+          style={styles.list}
+          contentContainerStyle={styles.listContent}
+          initialNumToRender={8}
+          windowSize={11}
+          renderItem={({ item: section }) => {
+            const expanded = isExpanded(section.key);
+            return (
+              <GroupSection
+                sectionKey={section.key}
+                expanded={expanded}
+                onToggle={toggle}
+                accessibilityLabel={`${section.title}, ${
+                  expanded ? 'expanded' : 'collapsed'
+                }`}
+                header={
+                  <SectionHeader
+                    title={section.title}
+                    count={section.items.length}
+                    expanded={expanded}
+                  />
+                }
+                testID={`destination-section-${section.key}`}
+              >
+                {section.items.map((experience) => (
+                  <ExperienceRow
+                    key={experience.id}
+                    experience={experience}
+                    onPress={() => onSelectExperience(experience)}
+                    completed={completedIds.has(experience.id)}
+                  />
+                ))}
+              </GroupSection>
+            );
+          }}
+        />
+      )}
     </View>
   );
 }
@@ -1334,6 +1779,218 @@ const styles = StyleSheet.create({
     ...theme.typography.meta,
     color: theme.color.textSecondary,
     marginLeft: theme.spacing.sm,
+  },
+  tabLayoutContainer: {
+    flex: 1,
+  },
+  tabBar: {
+    flexDirection: 'row',
+    backgroundColor: theme.color.surface,
+    borderRadius: theme.radius.md,
+    padding: 3,
+    marginHorizontal: theme.spacing.lg,
+    marginTop: theme.spacing.xs,
+    marginBottom: theme.spacing.sm,
+    borderWidth: 1,
+    borderColor: theme.color.border,
+    ...theme.shadow.card,
+  },
+  tabBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: theme.radius.sm,
+  },
+  tabBtnActive: {
+    backgroundColor: theme.color.primary,
+  },
+  tabText: {
+    ...theme.typography.meta,
+    color: theme.color.textSecondary,
+    fontWeight: '600',
+  },
+  tabTextActive: {
+    color: theme.color.textOnPrimary,
+    fontWeight: '700',
+  },
+  hiddenCompatibilityRow: {
+    display: 'none',
+  },
+  filterBarWrap: {
+    paddingHorizontal: theme.spacing.lg,
+    paddingBottom: theme.spacing.xs,
+  },
+  filterBarScroll: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.xs,
+    paddingRight: theme.spacing.lg,
+  },
+  filterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: theme.color.surfaceAlt,
+    borderWidth: 1,
+    borderColor: theme.color.border,
+  },
+  filterChipActive: {
+    backgroundColor: theme.color.primary,
+    borderColor: theme.color.primary,
+  },
+  filterChipText: {
+    ...theme.typography.meta,
+    fontSize: 12,
+    color: theme.color.textSecondary,
+    fontWeight: '500',
+  },
+  filterChipTextActive: {
+    color: theme.color.textOnPrimary,
+    fontWeight: '700',
+  },
+  filterModalBtn: {
+    backgroundColor: theme.color.surface,
+    borderColor: theme.color.border,
+  },
+  filterModalBtnActive: {
+    backgroundColor: theme.color.primary,
+    borderColor: theme.color.primary,
+  },
+  filterModalBtnText: {
+    fontWeight: '600',
+  },
+  resetChip: {
+    backgroundColor: '#fee2e2',
+    borderColor: '#fca5a5',
+  },
+  resetChipText: {
+    color: '#b91c1c',
+    fontWeight: '700',
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalBackdropDismiss: {
+    flex: 1,
+  },
+  modalContent: {
+    backgroundColor: theme.color.surface,
+    borderTopLeftRadius: theme.radius.xl,
+    borderTopRightRadius: theme.radius.xl,
+    paddingTop: theme.spacing.md,
+    paddingBottom: theme.spacing.xxl,
+    maxHeight: '80%',
+    ...theme.shadow.card,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: theme.spacing.lg,
+    paddingBottom: theme.spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.color.border,
+  },
+  modalTitle: {
+    ...theme.typography.title,
+    color: theme.color.textPrimary,
+  },
+  modalHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.md,
+  },
+  modalClearBtn: {
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  modalClearText: {
+    ...theme.typography.meta,
+    color: theme.color.primary,
+    fontWeight: '600',
+  },
+  modalCloseBtn: {
+    padding: 4,
+  },
+  modalScroll: {
+    maxHeight: 400,
+  },
+  modalScrollContent: {
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.md,
+    gap: theme.spacing.lg,
+  },
+  modalSection: {
+    gap: theme.spacing.sm,
+  },
+  modalSectionTitle: {
+    ...theme.typography.meta,
+    fontSize: 12,
+    fontWeight: '700',
+    color: theme.color.textSecondary,
+    letterSpacing: 0.5,
+  },
+  chipGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: theme.spacing.xs,
+  },
+  modalChip: {
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: theme.color.surfaceAlt,
+    borderWidth: 1,
+    borderColor: theme.color.border,
+  },
+  modalChipActive: {
+    backgroundColor: theme.color.primary,
+    borderColor: theme.color.primary,
+  },
+  modalChipText: {
+    ...theme.typography.meta,
+    color: theme.color.textPrimary,
+    fontWeight: '500',
+  },
+  modalChipTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  modalFooter: {
+    paddingHorizontal: theme.spacing.lg,
+    paddingTop: theme.spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: theme.color.border,
+  },
+  modalApplyBtn: {
+    backgroundColor: theme.color.primary,
+    paddingVertical: 14,
+    borderRadius: theme.radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...theme.shadow.card,
+  },
+  modalApplyBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 15,
+  },
+  resetFilterEmptyBtn: {
+    marginTop: theme.spacing.md,
+    backgroundColor: theme.color.primary,
+    paddingVertical: 10,
+    paddingHorizontal: theme.spacing.lg,
+    borderRadius: theme.radius.md,
+  },
+  resetFilterEmptyBtnText: {
+    color: theme.color.textOnPrimary,
+    ...theme.typography.button,
   },
   resortAnchor: {
     flexDirection: 'row',

@@ -410,6 +410,133 @@ describe('DestinationScreen layouts (R6, R7, R8)', () => {
         screen.queryByTestId('destination-section-__land_catchall__'),
       ).toBeNull();
     });
+
+    // ---------------------------------------------------------------------
+    // R6.11 — Category tab switching (Rides tab reveals park rides directly)
+    // ---------------------------------------------------------------------
+    test('R6.11: Rides tab filters directly to rides under their respective lands without restaurant clutter', async () => {
+      stub([
+        experience({
+          id: 'epcot-guardians',
+          areaType: 'ThemePark',
+          park: 'EPCOT',
+          name: 'Guardians of the Galaxy: Cosmic Rewind',
+          land: 'World Discovery',
+          category: 'Ride',
+          groupedFacets: {
+            thrillFactor: [{ id: 'thrill-rides', name: 'Thrill Rides' }],
+          },
+        }),
+        experience({
+          id: 'epcot-remy',
+          areaType: 'ThemePark',
+          park: 'EPCOT',
+          name: "Remy's Ratatouille Adventure",
+          land: 'World Showcase',
+          worldShowcaseCountry: 'France',
+          category: 'Ride',
+        }),
+        experience({
+          id: 'epcot-le-cellier',
+          areaType: 'ThemePark',
+          park: 'EPCOT',
+          name: 'Le Cellier Steakhouse',
+          land: 'World Showcase',
+          worldShowcaseCountry: 'Canada',
+          category: 'Restaurant',
+          priceTier: '$$$',
+        }),
+        experience({
+          id: 'epcot-popcorn-canada',
+          areaType: 'ThemePark',
+          park: 'EPCOT',
+          name: 'Canada Popcorn Cart',
+          land: 'World Showcase',
+          worldShowcaseCountry: 'Canada',
+          category: 'Restaurant',
+          priceTier: '$',
+        }),
+      ]);
+
+      renderDestination('EPCOT');
+
+      await screen.findByTestId('destination-category-filter');
+      // On All tab initially, Canada restaurant is rendered
+      expect(screen.getByTestId('destination-row-epcot-le-cellier')).toBeTruthy();
+
+      // Tap the Rides tab
+      fireEvent.press(screen.getByTestId('destination-category-Ride'));
+
+      // Both rides (in World Discovery and France) render immediately
+      expect(screen.getByTestId('destination-row-epcot-guardians')).toBeTruthy();
+      expect(screen.getByTestId('destination-row-epcot-remy')).toBeTruthy();
+
+      // Canada (which only had restaurants) is completely omitted
+      expect(screen.queryByTestId('destination-section-Canada')).toBeNull();
+      expect(screen.queryByTestId('destination-row-epcot-le-cellier')).toBeNull();
+      expect(screen.queryByTestId('destination-row-epcot-popcorn-canada')).toBeNull();
+    });
+
+    // ---------------------------------------------------------------------
+    // R6.12/R6.13/R6.14 — Filters modal & multi-filtering by Land & Attribute
+    // ---------------------------------------------------------------------
+    test('R6.12/R6.13/R6.14: opening filters modal and selecting Land filters narrows destination experiences', async () => {
+      stub([
+        experience({
+          id: 'epcot-guardians',
+          areaType: 'ThemePark',
+          park: 'EPCOT',
+          name: 'Guardians of the Galaxy: Cosmic Rewind',
+          land: 'World Discovery',
+          category: 'Ride',
+          groupedFacets: {
+            thrillFactor: [{ id: 'thrill-rides', name: 'Thrill Rides' }],
+          },
+        }),
+        experience({
+          id: 'epcot-remy',
+          areaType: 'ThemePark',
+          park: 'EPCOT',
+          name: "Remy's Ratatouille Adventure",
+          land: 'World Showcase',
+          worldShowcaseCountry: 'France',
+          category: 'Ride',
+        }),
+        experience({
+          id: 'epcot-boulangerie',
+          areaType: 'ThemePark',
+          park: 'EPCOT',
+          name: 'Les Halles Boulangerie-Patisserie',
+          land: 'World Showcase',
+          worldShowcaseCountry: 'France',
+          category: 'Restaurant',
+        }),
+      ]);
+
+      renderDestination('EPCOT');
+
+      await screen.findByTestId('destination-open-filters-modal');
+
+      // Open the filters modal
+      fireEvent.press(screen.getByTestId('destination-open-filters-modal'));
+      expect(screen.getByTestId('destination-filters-modal-content')).toBeTruthy();
+
+      // Select the France land chip inside modal
+      const franceChip = screen.getByTestId('destination-modal-filter-land-france');
+      fireEvent.press(franceChip);
+
+      // Apply filters
+      fireEvent.press(screen.getByTestId('destination-modal-apply-btn'));
+
+      // Only France experiences remain visible
+      expect(screen.getByTestId('destination-row-epcot-remy')).toBeTruthy();
+      expect(screen.getByTestId('destination-row-epcot-boulangerie')).toBeTruthy();
+      expect(screen.queryByTestId('destination-row-epcot-guardians')).toBeNull();
+
+      // Reset button clears the filters
+      fireEvent.press(screen.getByTestId('destination-subfilter-reset'));
+      expect(screen.getByTestId('destination-row-epcot-guardians')).toBeTruthy();
+    });
   });
 
   // =========================================================================
