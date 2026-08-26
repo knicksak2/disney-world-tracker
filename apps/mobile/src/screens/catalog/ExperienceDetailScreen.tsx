@@ -90,7 +90,7 @@ import { buildTagGroups } from './infoTags';
 import type { TagGroup } from './infoTags';
 import type { DirectionsPlatform } from './directions';
 import { directionsUrl, hasValidCoordinates, staticMapUrl } from './directions';
-import { liveSectionFor } from './gating';
+import { liveSectionFor, NO_LIVE_SHAPE, type LiveShape } from './gating';
 import RideLiveSection from './live/RideLiveSection';
 import ShowtimesSection from './live/ShowtimesSection';
 import DiningSection from './live/DiningSection';
@@ -954,9 +954,22 @@ function LiveOperationalSection({
   readonly category: ExperienceCategory;
   readonly query: QueryLike<LiveDetailResponseDTO>;
 }): JSX.Element | null {
-  const section = liveSectionFor(category);
+  const detail = query.data?.liveDetail;
+  // No loaded Live_Detail means "nothing known", which gates identically to the
+  // category-only behavior; the shape is always passed so the compiler can catch
+  // a call site that forgets it (see `NO_LIVE_SHAPE`).
+  const liveShape: LiveShape = detail
+    ? {
+        hasStandbyWait:
+          typeof detail.waitMinutes === 'number' && !Number.isNaN(detail.waitMinutes),
+        hasShowtimes:
+          Array.isArray(detail.showtimes) && detail.showtimes.length > 0,
+      }
+    : NO_LIVE_SHAPE;
 
-  // R7.1: `Other` (and any non-live category) shows no live section at all.
+  const section = liveSectionFor(category, liveShape);
+
+  // R7.1 / R5.2 / R5.5: `Other` (and any non-live category) shows no live section at all.
   if (section === 'none') {
     return null;
   }

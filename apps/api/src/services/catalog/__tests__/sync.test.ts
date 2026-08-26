@@ -299,9 +299,10 @@ const SPACE_MOUNTAIN: FacilityDocument = {
 };
 
 const FESTIVAL_PARADE: FacilityDocument = {
-  id: '80010200;entityType=Attraction',
+  id: '80010999;entityType=Attraction',
   name: 'Festival of Fantasy Parade',
   type: 'attraction',
+  subType: 'Parade',
   ancestors: [MK_ANCESTOR],
 };
 

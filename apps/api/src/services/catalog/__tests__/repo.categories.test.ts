@@ -132,6 +132,7 @@ function freshRepo(): { repo: CatalogRepo; pool: DbPool } {
   applyMigration(db, '0008_experience_facet_enrichment.sql');
   applyMigration(db, '0010_resort_experience_category.sql');
   applyMigration(db, '0014_experience_world_showcase_country.sql');
+  applyMigration(db, '0032_experience_category_taxonomy.sql');
 
   return { repo: createCatalogRepo(pool), pool };
 }

@@ -209,9 +209,14 @@ describe('Zero Queue Wait for Dining and Breaks (R3.14, Property 13)', () => {
       'exp-dining': {
         experienceId: 'exp-dining',
         isVirtualQueue: false,
+        waits: [], // non-bearing snapshot for dining -> 0 queue wait (R3.19)
+      },
+      'exp-break': {
+        experienceId: 'exp-break',
+        isVirtualQueue: false,
         waits: Array.from({ length: 24 }, (_, hour) => ({
           hour,
-          predictedWaitMinutes: 45, // even if snapshot carries waits, dining must have 0 wait
+          predictedWaitMinutes: 45, // break items always have 0 queue wait regardless of snapshot (R3.19a)
         })),
       },
     };

@@ -590,6 +590,8 @@ async function applyMigration(db: IMemoryDb): Promise<void> {
     // catalog repo now writes on every Experience upsert; without it the
     // seeding INSERT fails and the whole harness build errors out.
     '0014_experience_world_showcase_country.sql',
+    // 0032 widens the category CHECK to admit Walkthrough, PlayArea, Game
+    '0032_experience_category_taxonomy.sql',
   ];
   for (const name of migrations) {
     const migrationPath = resolve(here, '..', '..', 'migrations', name);

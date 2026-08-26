@@ -286,3 +286,23 @@ The Disney sources are undocumented, protected by static reverse-engineered cred
 3. WHEN the App offers catalog filtering, THE App SHALL allow the user to filter Experiences by Area_Type.
 4. THE App SHALL continue to allow filtering Experiences by Experience_Category within any Area_Type section.
 5. WHERE a Resort has no associated Experiences, THE App SHALL still present the Resort as a browsable item.
+
+### Requirement 17: Non-Experience Exclusion and Curated Re-Categorization
+
+**User Story:** As a user, I want the catalog to hold things a guest actually does and logs, classified as what they really are, so that browsing, search, and completion stats are not diluted by resort amenities, audio-clip snippets, informational pages, and pavilion sub-components mislabeled as rides.
+
+This requirement narrows Requirement 4 without replacing it. R4.1 admits every `Experience_Eligible_Type` as a candidate Experience, and R4.2–R4.10 derive the category from the Facility_Type; both remain in force for every Facility_Document not addressed here. The concrete rules, the curated override list, and the constants live in the `catalog-taxonomy-cleanup` feature, which owns this behavior and its tests.
+
+#### Acceptance Criteria
+
+1. THE Catalog_Sync SHALL withhold from the upstream Experience set every Facility_Document matched by an Exclusion_Rule defined in `catalog-taxonomy-cleanup` Requirement 1, notwithstanding that document's membership in `Experience_Eligible_Type` per R4.1. This covers Facility_Type `audio-tour`, the closed set of resort-amenity Facility_SubTypes (pools, hot tubs, water play areas, playgrounds, arcades, fitness centers, health clubs), individual animal placards, rental-inventory SKUs, community halls, informational pages, and a small curated exact-name list.
+2. WHERE a Facility_Document has a Category_Override per `catalog-taxonomy-cleanup` Requirement 2, THE Catalog_Sync SHALL admit it as an Experience even when an Exclusion_Rule matches it, so that a curated keep always outranks a rule-based drop.
+3. THE Catalog_Sync SHALL NOT delete any `experiences` row as a consequence of exclusion; an excluded document that has a persisted row SHALL be soft-deleted by the reconciliation of Requirement 11, preserving the row, its Internal_Id, and every Completion, Rating, Note, and planned item referencing it, consistent with R10.6 and R11.5.
+4. WHEN a previously excluded Facility_Document ceases to match every Exclusion_Rule, THE Catalog_Sync SHALL reactivate the existing row under the same Internal_Id per the reactivation rule of R11.2.
+5. THE Experience_Category set SHALL be extended with `Walkthrough`, `PlayArea`, and `Game`, retaining every existing member, and THE Catalog_Cache SHALL accept those three as valid `experiences.category` values.
+6. WHEN the Catalog_Sync classifies a Facility_Document whose Enterprise_Id appears in the curated Category_Override list, THE Catalog_Sync SHALL assign the overridden Experience_Category instead of the Facility_Type-derived category of R4.2–R4.10.
+7. WHERE a Facility_Document's Enterprise_Id does not appear in the Category_Override list, THE Catalog_Sync SHALL classify it exactly as R4.2–R4.10 already specify, so re-categorization is confined to the curated entries.
+8. THE Category_Override list SHALL be a curated, hand-maintained constant keyed on Enterprise_Id, and THE Catalog_Sync SHALL NOT infer a re-categorization from Facets, names, or any other runtime heuristic.
+9. WHEN a Catalog_Sync run completes, THE Catalog_Sync SHALL record the count of excluded documents broken down by matching rule, the count of applied Category_Overrides, and any Category_Override entries that matched no Facility_Document, through the existing sync logging path.
+10. WHEN a Category_Override entry matches no Facility_Document in an otherwise successful run, THE Catalog_Sync SHALL record a warning identifying that Enterprise_Id and SHALL complete the run successfully.
+11. WHERE an Experience is classified `Walkthrough`, `PlayArea`, or `Game` and its `imageUrl` is `null`, THE App SHALL display a placeholder image corresponding to that category, satisfying R7.5 for the new members.

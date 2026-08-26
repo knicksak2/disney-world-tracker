@@ -419,4 +419,47 @@ describe('leaderboard module defaults', () => {
     });
     await expect(service.getLeaderboard()).resolves.toEqual(EXPECTED_ENTRIES);
   });
+
+  it('Requirement 6.4: admits and validates Walkthrough, PlayArea, and Game experiences', async () => {
+    const rows = [
+      {
+        id: '11111111-1111-1111-1111-111111111111',
+        name: 'Swiss Family Treehouse',
+        park: 'Magic Kingdom',
+        category: 'Walkthrough',
+        value: 8.8,
+        count: 10,
+      },
+      {
+        id: '22222222-2222-2222-2222-222222222222',
+        name: 'Dumbo Play Area',
+        park: 'Magic Kingdom',
+        category: 'PlayArea',
+        value: 8.5,
+        count: 15,
+      },
+      {
+        id: '33333333-3333-3333-3333-333333333333',
+        name: 'A Pirate’s Adventure',
+        park: 'Magic Kingdom',
+        category: 'Game',
+        value: 8.0,
+        count: 20,
+      },
+    ];
+
+    const redis = new FakeRedis();
+    const pool = makePool(rows);
+    const service = createLeaderboard({ pool: asPool(pool), redis });
+
+    const result = await service.getLeaderboard();
+    expect(result).toHaveLength(3);
+    expect(result[0]?.category).toBe('Walkthrough');
+    expect(result[1]?.category).toBe('PlayArea');
+    expect(result[2]?.category).toBe('Game');
+
+    // And verify cached entry round-trip
+    const cachedResult = await service.getLeaderboard();
+    expect(cachedResult).toEqual(result);
+  });
 });

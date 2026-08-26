@@ -23,19 +23,50 @@ import type { ExperienceCategory } from '@dwt/shared';
 export type LiveSection = 'wait_status' | 'showtimes' | 'dining' | 'none';
 
 /**
- * Map an `ExperienceCategory` to the at-most-one `LiveSection` it presents.
+ * What the loaded Live_Detail actually carries, which the gate consults for the
+ * fallback cases in R5.1–R5.3.
+ *
+ * When no Live_Detail has loaded, callers pass `NO_LIVE_SHAPE` (both flags
+ * false) rather than omitting the argument: a caller that forgot to pass the
+ * shape would otherwise silently revert to category-only gating and re-introduce
+ * the empty-panel bug this parameter exists to fix, so the argument is required
+ * and the compiler enforces it at every call site.
+ */
+export interface LiveShape {
+  readonly hasStandbyWait: boolean;
+  readonly hasShowtimes: boolean;
+}
+
+/** "Nothing loaded yet" shape; yields the same sections as category-only gating. */
+export const NO_LIVE_SHAPE: LiveShape = {
+  hasStandbyWait: false,
+  hasShowtimes: false,
+};
+
+/**
+ * Map an `ExperienceCategory` plus the loaded `LiveShape` to the at-most-one
+ * `LiveSection` it presents.
  *
  * Total over the `ExperienceCategory` union — every member resolves to a
- * single section, satisfying "at most one live operational section,
- * determined solely by the Experience's Experience_Category" (R7.5).
+ * single section (Requirements 5.1–5.5).
  */
-export function liveSectionFor(category: ExperienceCategory): LiveSection {
+export function liveSectionFor(
+  category: ExperienceCategory,
+  live: LiveShape,
+): LiveSection {
   switch (category) {
     case 'Ride':
     case 'Character_Meet':
-      return 'wait_status'; // R7.2
+      return 'wait_status'; // R7.2 / R5.1
+    case 'Walkthrough':
+    case 'PlayArea':
+    case 'Game':
+      return live.hasStandbyWait ? 'wait_status' : 'none'; // R5.1, R5.2
     case 'Show':
     case 'Parade':
+      if (!live.hasShowtimes && live.hasStandbyWait) {
+        return 'wait_status'; // R5.3: show with no showtimes but standby wait presents wait section
+      }
       return 'showtimes'; // R7.3
     case 'Restaurant':
       return 'dining'; // R7.4
@@ -45,12 +76,8 @@ export function liveSectionFor(category: ExperienceCategory): LiveSection {
     case 'Event':
     case 'Other':
     case 'Resort':
-      return 'none'; // R7.1 — no live operational section for these categories
-      // (a resort-representing stand-in has no live wait/showtime/dining data)
+      return 'none'; // R7.1 / R5.5 — no live operational section for structural categories
     default: {
-      // Exhaustiveness guard: if a new category is added to the shared
-      // union, this assignment fails to compile, flagging that the gating
-      // map must be updated rather than silently defaulting.
       const _exhaustive: never = category;
       return _exhaustive;
     }

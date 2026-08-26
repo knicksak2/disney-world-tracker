@@ -34,7 +34,7 @@ import fc from 'fast-check';
 import { EXPERIENCE_CATEGORIES } from '@dwt/shared';
 import type { ExperienceCategory } from '@dwt/shared';
 
-import { liveSectionFor } from '../../gating';
+import { liveSectionFor, NO_LIVE_SHAPE } from '../../gating';
 import type { LiveSection } from '../../gating';
 
 // ---------------------------------------------------------------------------
@@ -46,6 +46,9 @@ import type { LiveSection } from '../../gating';
 const EXPECTED_SECTION: Readonly<Record<ExperienceCategory, LiveSection>> = {
   Ride: 'wait_status', // R7.2
   Character_Meet: 'wait_status', // R7.2
+  Walkthrough: 'none', // R5.2 (default without live standby wait)
+  PlayArea: 'none', // R5.2
+  Game: 'none', // R5.2
   Show: 'showtimes', // R7.3
   Parade: 'showtimes', // R7.3
   Restaurant: 'dining', // R7.4
@@ -65,15 +68,23 @@ const ALL_SECTIONS: readonly LiveSection[] = ['wait_status', 'showtimes', 'dinin
 
 const categoryArb: fc.Arbitrary<ExperienceCategory> = fc.constantFrom(...EXPERIENCE_CATEGORIES);
 
+const liveShapeArb = fc.record({
+  hasStandbyWait: fc.boolean(),
+  hasShowtimes: fc.boolean(),
+});
+
 // ---------------------------------------------------------------------------
 // Property
 // ---------------------------------------------------------------------------
 
 describe('Property 15: Category gating yields at most one live section, determined solely by category (R7.1-R7.5)', () => {
+  // With no Live_Detail loaded (`NO_LIVE_SHAPE`) the gate reduces to the
+  // original category-only mapping, so this property holds verbatim; the
+  // live-shape fallbacks are covered by catalog-taxonomy-cleanup Property 9.
   test('every category maps to exactly one valid section, solely by category, deterministically', () => {
     fc.assert(
       fc.property(categoryArb, (category) => {
-        const section = liveSectionFor(category);
+        const section = liveSectionFor(category, NO_LIVE_SHAPE);
 
         // Exactly one valid LiveSection value: the return is a single scalar
         // that is a member of the allowed set (never "multiple" sections).
@@ -83,9 +94,42 @@ describe('Property 15: Category gating yields at most one live section, determin
         expect(section).toBe(EXPECTED_SECTION[category]);
 
         // Determinism: the same category always yields the same section.
-        expect(liveSectionFor(category)).toBe(section);
+        expect(liveSectionFor(category, NO_LIVE_SHAPE)).toBe(section);
       }),
       { numRuns: 100 },
+    );
+  });
+
+  // Feature: catalog-taxonomy-cleanup, Property 9: Live section gating for new categories and show fallbacks
+  test('Property 9: Live section gating for new categories and show fallbacks (R5.1-R5.5)', () => {
+    fc.assert(
+      fc.property(categoryArb, liveShapeArb, (category, live) => {
+        const section = liveSectionFor(category, live);
+
+        expect(ALL_SECTIONS).toContain(section);
+
+        if (category === 'Ride' || category === 'Character_Meet') {
+          expect(section).toBe('wait_status');
+        } else if (
+          category === 'Walkthrough' ||
+          category === 'PlayArea' ||
+          category === 'Game'
+        ) {
+          expect(section).toBe(live.hasStandbyWait ? 'wait_status' : 'none');
+        } else if (category === 'Show' || category === 'Parade') {
+          if (!live.hasShowtimes && live.hasStandbyWait) {
+            expect(section).toBe('wait_status');
+          } else {
+            expect(section).toBe('showtimes');
+          }
+        } else if (category === 'Restaurant') {
+          expect(section).toBe('dining');
+        } else {
+          // Structural categories: Tour, Recreation, Spa, Event, Other, Resort
+          expect(section).toBe('none');
+        }
+      }),
+      { numRuns: 200 },
     );
   });
 });

@@ -35,7 +35,7 @@ export const TAB_CATEGORIES: Record<
   readonly ExperienceCategory[]
 > = {
   all: [],
-  attractions: ['Ride'],
+  attractions: ['Ride', 'Walkthrough', 'PlayArea', 'Game'],
   dining: ['Restaurant'],
   shows: ['Show', 'Parade', 'Character_Meet', 'Event'],
   breaks: [], // Unrestricted location search for breaks

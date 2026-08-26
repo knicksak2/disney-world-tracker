@@ -352,6 +352,7 @@ describe('Catalog repo applyReconciliation — transactional apply (pg-mem)', ()
     applyMigration(db, '0009_resort_representing_experiences.sql');
     applyMigration(db, '0010_resort_experience_category.sql');
     applyMigration(db, '0014_experience_world_showcase_country.sql');
+    applyMigration(db, '0032_experience_category_taxonomy.sql');
   });
 
   afterEach(async () => {

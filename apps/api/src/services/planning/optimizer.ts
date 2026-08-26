@@ -84,6 +84,9 @@ const LL_WAIT_MINS = 10;
 export const DEFAULT_RIDE_DUR = 15;
 export const DEFAULT_BREAK_DUR = 60;
 export const DEFAULT_SHOW_DURATION_MIN = 30;
+export const DEFAULT_WALKTHROUGH_DUR = 25;
+export const DEFAULT_PLAY_AREA_DUR = 30;
+export const DEFAULT_GAME_DUR = 20;
 export const SAME_KIND_ADJACENCY_PENALTY = 500;
 const ROPE_DROP_WINDOW_MINUTES = 30;
 const ROPE_DROP_WALKON_MINS = 5;
@@ -108,19 +111,67 @@ export function resolveDefaultDuration(item: OptimizeInputItem): number {
     return item.catalogDurationMinutes ?? DEFAULT_SHOW_DURATION_MIN;
   }
 
-  // 5. Non-ride catalog categories (Resort, Recreation, Spa, Tour, Event)
+  // 5. New categories (R4.1–R4.5)
+  if (item.category === 'Walkthrough') {
+    return item.catalogDurationMinutes ?? DEFAULT_WALKTHROUGH_DUR;
+  }
+  if (item.category === 'PlayArea') {
+    return item.catalogDurationMinutes ?? DEFAULT_PLAY_AREA_DUR;
+  }
+  if (item.category === 'Game') {
+    return item.catalogDurationMinutes ?? DEFAULT_GAME_DUR;
+  }
+
+  // 6. Non-ride catalog categories (Resort, Recreation, Spa, Tour, Event, Other)
   if (
     item.category === 'Resort' ||
     item.category === 'Recreation' ||
     item.category === 'Spa' ||
     item.category === 'Tour' ||
-    item.category === 'Event'
+    item.category === 'Event' ||
+    item.category === 'Other'
   ) {
     return item.catalogDurationMinutes ?? 60;
   }
 
-  // 6. Rides/attractions/Character_Meet default to 15 minutes (covers ride length + load/unload)
+  // 7. Rides/attractions/Character_Meet default to 15 minutes (covers ride length + load/unload)
   return DEFAULT_RIDE_DUR;
+}
+
+/**
+ * Does this snapshot carry a usable posted wait? Pure; the single place the
+ * optimizer decides whether an item has a queue (R3.1).
+ *
+ * TRUE when the snapshot exists and carries a numeric, non-negative standby
+ * wait (or the single-rider wait when the item requests it). Virtual-queue and
+ * Lightning Lane items remain Standby_Bearing so their existing substitutions
+ * (LL_WAIT_MINS, VQ handling) continue to apply.
+ */
+export function isStandbyBearing(
+  snapshot: WaitSnapshot | undefined,
+  useSingleRider: boolean,
+): boolean {
+  if (!snapshot) {
+    return false;
+  }
+  if (snapshot.isVirtualQueue) {
+    return true;
+  }
+  if (snapshot.waits && snapshot.waits.length > 0) {
+    return snapshot.waits.some((w) => {
+      if (useSingleRider && w.singleRiderWaitMinutes !== undefined) {
+        return (
+          typeof w.singleRiderWaitMinutes === 'number' &&
+          w.singleRiderWaitMinutes >= 0
+        );
+      }
+      return (
+        typeof w.predictedWaitMinutes === 'number' &&
+        w.predictedWaitMinutes >= 0
+      );
+    });
+  }
+  return false;
 }
 
 export function ropeDropAdjust(rawWait: number, arrivalMins: number, dayStartMins: number): number {
@@ -163,14 +214,15 @@ function getWaitAndDuration(
 ): WaitAndDurationResult {
   const dur = resolveDefaultDuration(item);
 
-  // Break items have ZERO queue wait (R3.14). Cost is duration only.
+  // Break items have ZERO queue wait (R3.4). Cost is duration only.
   if (item.itemType === 'break') {
     return { wait: 0, dur, isVQ: false, isShow: false, isSingleRider: false };
   }
 
-  // Shows and Parades follow showtime path
+  const snap = item.experienceId ? snapshots[item.experienceId] : undefined;
+
+  // Shows and Parades follow showtime path when showtimes exist (R3.5)
   if (item.category === 'Show' || item.category === 'Parade') {
-    const snap = item.experienceId ? snapshots[item.experienceId] : undefined;
     if (snap?.showtimes && snap.showtimes.length > 0) {
       let nextShow = Infinity;
       let lastDoors = -Infinity;
@@ -207,7 +259,10 @@ function getWaitAndDuration(
           showtimesUnavailable: true,
         };
       }
-    } else {
+    }
+
+    // R3.6: Show/Parade without showtimes but Standby_Bearing falls through to standby path
+    if (!isStandbyBearing(snap, item.useSingleRider)) {
       return {
         wait: 0,
         dur,
@@ -219,20 +274,26 @@ function getWaitAndDuration(
     }
   }
 
-  // Non-ride categories (Restaurant, Resort, Recreation, Spa, Tour, Event, Other) have ZERO queue wait (A2, R3.14).
-  const isRideLike = item.category === 'Ride' || item.category === 'Character_Meet';
-  if (!isRideLike) {
+  // Missing snapshot entirely: keep existing default wait ONLY for Ride/Character_Meet (R3.7, R3.8)
+  if (!snap) {
+    const isRideLike = item.category === 'Ride' || item.category === 'Character_Meet';
+    if (isRideLike) {
+      if (item.isLightningLane) {
+        return { wait: LL_WAIT_MINS, dur, isVQ: false, isShow: false, isSingleRider: false };
+      }
+      return { wait: 30, dur, isVQ: false, isShow: false, isSingleRider: false };
+    }
     return { wait: 0, dur, isVQ: false, isShow: false, isSingleRider: false };
   }
 
-  // Ride-like categories (Ride, Character_Meet):
-  if (item.isLightningLane) {
-    return { wait: LL_WAIT_MINS, dur, isVQ: false, isShow: false, isSingleRider: false };
+  // Standby Bearing gate (R3.1, R3.2, R3.3):
+  if (!isStandbyBearing(snap, item.useSingleRider)) {
+    return { wait: 0, dur, isVQ: false, isShow: false, isSingleRider: false };
   }
 
-  const snap = item.experienceId ? snapshots[item.experienceId] : undefined;
-  if (!snap) {
-    return { wait: 30, dur, isVQ: false, isShow: false, isSingleRider: false };
+  // Standby path:
+  if (item.isLightningLane) {
+    return { wait: LL_WAIT_MINS, dur, isVQ: false, isShow: false, isSingleRider: false };
   }
 
   if (snap.isVirtualQueue) {

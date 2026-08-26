@@ -123,10 +123,11 @@ function freshRepo(): { repo: CatalogRepo; pool: DbPool } {
   applyMigration(db, '0006_experience_land.sql');
   applyMigration(db, '0007_experience_resort_area.sql');
   applyMigration(db, '0008_experience_facet_enrichment.sql');
-  // 0010 admits the `Resort` category the arbitraries now draw from
-  // (`EXPERIENCE_CATEGORIES` includes `Resort`).
+  // 0010 and 0032 admit the expanded categories the arbitraries now draw from
+  // (`EXPERIENCE_CATEGORIES` includes `Resort`, `Walkthrough`, `PlayArea`, `Game`).
   applyMigration(db, '0010_resort_experience_category.sql');
   applyMigration(db, '0014_experience_world_showcase_country.sql');
+  applyMigration(db, '0032_experience_category_taxonomy.sql');
 
   return { repo: createCatalogRepo(pool), pool };
 }

@@ -242,9 +242,10 @@ describe('friend completions — Property 1: Experience_Id projection', () => {
         applyMigration(db, '0002_experience_images.sql');
         applyMigration(db, '0003_note_shareable.sql');
         applyMigration(db, '0004_disney_sources.sql');
-        // 0010 admits the `Resort` category the arbitraries draw from
-        // (`EXPERIENCE_CATEGORIES` now includes `Resort`).
+        // 0010 and 0032 admit the expanded categories the arbitraries draw from
+        // (`EXPERIENCE_CATEGORIES` includes `Resort`, `Walkthrough`, `PlayArea`, `Game`).
         applyMigration(db, '0010_resort_experience_category.sql');
+        applyMigration(db, '0032_experience_category_taxonomy.sql');
 
         const userId = await insertUser(pool);
 

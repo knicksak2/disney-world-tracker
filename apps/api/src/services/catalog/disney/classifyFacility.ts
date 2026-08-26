@@ -46,6 +46,7 @@
 
 import type { ExperienceCategory } from '@dwt/shared';
 
+import { categoryOverrideFor } from './categoryOverrides.js';
 import { EXPERIENCE_ELIGIBLE_TYPES } from './facilityDoc.js';
 import type { FacilityDocument } from './facilityDoc.js';
 
@@ -75,6 +76,12 @@ const CHARACTER_MEET_PATTERN = /character|meet[- ]?(?:and[- ]?)?greet/i;
 export function classifyFacility(
   doc: FacilityDocument,
 ): ExperienceCategory | null {
+  // R2.3: consult curated Category_Overrides first.
+  const override = categoryOverrideFor(doc.id);
+  if (override !== null) {
+    return override;
+  }
+
   const type = doc.type;
 
   // R4.1: only an Experience_Eligible_Type is a candidate Experience. Every

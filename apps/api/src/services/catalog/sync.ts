@@ -107,6 +107,17 @@ import type {
   UpstreamResort,
 } from './types.js';
 
+import { createLogger } from '../../logger.js';
+import {
+  exclusionRuleFor,
+  type ExclusionRule,
+} from './disney/facilityExclusion.js';
+import {
+  CATEGORY_OVERRIDES,
+  categoryOverrideFor,
+} from './disney/categoryOverrides.js';
+import { detectDuplicateGroups } from './disney/duplicateDetector.js';
+
 // ---------------------------------------------------------------------------
 // Tunable constants
 // ---------------------------------------------------------------------------
@@ -123,12 +134,34 @@ export const CATALOG_SYNC_LOCK_KEY = 'catalog:sync:lock';
  */
 export const CATALOG_SYNC_LOCK_TTL_MS = 10 * 60 * 1000;
 
+/**
+ * Safety threshold for a single sync run's blast radius (R7.3).
+ *
+ * Measured against the number of **newly soft-deleted Experience rows** — i.e.
+ * `diff.experiences.softDeletes.length` — not against the count of excluded
+ * upstream documents. Those two numbers differ substantially: a document-level
+ * count includes documents whose rows were already inactive from an earlier run,
+ * so it runs well ahead of the real effect (the first production run excluded 462
+ * documents while deactivating exactly 326 rows). Comparing against the
+ * document count therefore both fires spuriously as upstream grows and fails to
+ * detect a genuine over-match. The soft-delete count is what actually reflects
+ * how many rows a run removed from every read surface.
+ */
+export const DEACTIVATION_SAFETY_THRESHOLD = 450;
+
 /** The Facility_Type of a restaurant, whose menus are fetched best-effort (R8.1). */
 const RESTAURANT_TYPE = 'restaurant';
 
 // ---------------------------------------------------------------------------
 // Public surface
 // ---------------------------------------------------------------------------
+
+/** Minimal logger surface for sync audit logs (R7.1–R7.4). */
+export interface SyncLogger {
+  readonly info?: (obj: unknown, msg?: string) => void;
+  readonly warn?: (obj: unknown, msg?: string) => void;
+  readonly error?: (obj: unknown, msg?: string) => void;
+}
 
 /**
  * What triggered a `runSync` invocation. Only a `'scheduled'` run is subject to
@@ -179,6 +212,8 @@ export interface RunSyncOptions {
    * consulted for a `'scheduled'` trigger.
    */
   readonly freshnessIntervalMs?: number;
+  /** Logger for sync audit and diagnostics. Defaults to shared logger. */
+  readonly logger?: SyncLogger;
 }
 
 /** Outcome reported by `runSync`. */
@@ -260,6 +295,8 @@ export async function runSync(
   const client = options.client ?? (await loadDefaultClient());
   const lockTtlMs = options.lockTtlMs ?? CATALOG_SYNC_LOCK_TTL_MS;
 
+  const logger = options.logger ?? createLogger();
+
   // ---- 1. Acquire the cluster-wide sync lock -----------------------------
   const lockToken = randomUUID();
   const acquired = await acquireLock(redis, lockToken, lockTtlMs);
@@ -268,7 +305,7 @@ export async function runSync(
   }
 
   try {
-    return await runSyncWithLock(client, repo, documentStore, now);
+    return await runSyncWithLock(client, repo, documentStore, now, logger);
   } finally {
     // Best-effort release. If Redis is unreachable here, the TTL will expire
     // the lock; we never throw out of `finally`.
@@ -323,6 +360,7 @@ async function runSyncWithLock(
   repo: CatalogRepo,
   documentStore: DocumentStore,
   now: () => Date,
+  logger?: SyncLogger,
 ): Promise<RunSyncSuccess | RunSyncFailure> {
   const startedAt = now();
   let entitiesProcessed = 0;
@@ -390,14 +428,69 @@ async function runSyncWithLock(
       // are back-of-house locations no guest can visit.
       .filter((doc) => !isWorkingCastDocument(doc));
 
+    // ---- 6b. Apply facility exclusion and track category overrides (R1, R2, R7, R8) ----
+    const exclusionCounts: Record<ExclusionRule, number> = {
+      audio_tour: 0,
+      amenity_sub_type: 0,
+      animal_placard: 0,
+      rental_inventory: 0,
+      community_hall: 0,
+      informational_page: 0,
+      excluded_name: 0,
+      service_facility: 0,
+      duplicate_clone: 0,
+    };
+    let totalExcluded = 0;
+    let appliedOverridesCount = 0;
+    const matchedOverrideKeys = new Set<string>();
+
+    const admissibleDocs: FacilityDocument[] = [];
+
+    for (const doc of normalized) {
+      const override = categoryOverrideFor(doc.id);
+      if (override !== null) {
+        appliedOverridesCount++;
+        matchedOverrideKeys.add(doc.id);
+        // R1.10: A curated override always outranks a rule-based drop.
+        admissibleDocs.push(doc);
+        continue;
+      }
+
+      const rule = exclusionRuleFor(doc);
+      if (rule !== null) {
+        exclusionCounts[rule]++;
+        totalExcluded++;
+        // Withheld from upstream Experience set (R1.1)
+        continue;
+      }
+
+      admissibleDocs.push(doc);
+    }
+
+    const unmatchedOverrideKeys = [...CATEGORY_OVERRIDES.keys()].filter(
+      (k) => !matchedOverrideKeys.has(k),
+    );
+
     // ---- 7. Bridge map for identity continuity (R10.1, R10.3, R10.4) -----
     const bridge = await repo.getBridgeMap();
 
     // ---- 8. Split + transform (R4, R5, R6, R7) ---------------------------
     // NOTE: no per-restaurant menu fetch happens here — menus are demand-driven
     // now (R8.1 / R10.4). The sync issues no Menu_Service requests.
-    const { experiences, resorts } = buildUpstreamCatalog(normalized, bridge);
+    const { experiences, resorts } = buildUpstreamCatalog(admissibleDocs, bridge);
     entitiesProcessed = experiences.length + resorts.length;
+
+    // ---- 8b. Duplicate experience detection (R8.7, R8.8, R8.9) -----------
+    const duplicateGroups = detectDuplicateGroups(experiences);
+    for (const group of duplicateGroups) {
+      logger?.warn?.(
+        {
+          normalizedName: group.normalizedName,
+          members: group.members,
+        },
+        'Duplicate experience group detected',
+      );
+    }
 
     // ---- 9. Reconcile + transactional apply (R11.6, R11.7) ---------------
     const snapshot = {
@@ -407,13 +500,65 @@ async function runSyncWithLock(
     const diff = reconcileCatalog(snapshot, { experiences, resorts });
     await repo.applyReconciliation(diff);
 
-    // ---- 9b. Capture per-ride special-hours participation (R5.8, best-effort) --
-    // Reads today's attraction schedule and persists the early-entry /
-    // extended-evening / ticketed-event flags keyed by Enterprise_Id. Never
-    // fails the run (R5.9).
-    await captureSpecialHours({ client, repo });
+    await captureSpecialHours({
+      client,
+      repo,
+      ...(logger
+        ? {
+            logger: {
+              warn: (obj: unknown, msg?: string) => logger.warn?.(obj, msg),
+              info: (obj: unknown, msg?: string) => logger.info?.(obj, msg),
+            },
+          }
+        : {}),
+    });
 
-    // ---- 10. Record success (R12.6) --------------------------------------
+    // ---- 10. Record success (R12.6) + Audit Logging (R7.1, R7.2, R7.3) ----
+    logger?.info?.(
+      { exclusionCounts, totalExcluded },
+      'Facility exclusions applied',
+    );
+
+    // R7.3: the safety check measures this run's real blast radius — the rows it
+    // newly soft-deleted — rather than the count of excluded documents, which
+    // includes rows that were already inactive before this run.
+    const deactivatedCount = diff.experiences.softDeletes.length;
+    if (deactivatedCount > DEACTIVATION_SAFETY_THRESHOLD) {
+      let topRule: ExclusionRule | null = null;
+      let maxCount = -1;
+      for (const [r, count] of Object.entries(exclusionCounts) as [ExclusionRule, number][]) {
+        if (count > maxCount) {
+          maxCount = count;
+          topRule = r;
+        }
+      }
+      logger?.error?.(
+        {
+          deactivatedCount,
+          totalExcluded,
+          topRule,
+          topRuleCount: maxCount,
+          threshold: DEACTIVATION_SAFETY_THRESHOLD,
+        },
+        'Catalog deactivation count exceeded safety threshold',
+      );
+    }
+
+    logger?.info?.(
+      {
+        appliedOverridesCount,
+        unmatchedOverridesCount: unmatchedOverrideKeys.length,
+      },
+      'Category overrides applied',
+    );
+
+    if (unmatchedOverrideKeys.length > 0) {
+      logger?.warn?.(
+        { unmatchedOverrides: unmatchedOverrideKeys },
+        'Category override entries matched no upstream facility document',
+      );
+    }
+
     const finishedAt = now();
     const run = await repo.recordSyncRun({
       status: 'success',

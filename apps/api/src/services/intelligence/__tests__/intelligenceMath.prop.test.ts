@@ -439,6 +439,25 @@ describe('Feature: crowd-calendar', () => {
         queue: { STANDBY: { waitTime: null } },
       })).toBe(false);
     });
+
+    it('wait-sampling basket membership is decided purely on live feed STANDBY status, independent of category (R3.9)', () => {
+      // An operating entry with posted STANDBY wait is always in the basket regardless of whether
+      // it is a Ride, Show, Walkthrough, PlayArea, or Game
+      const liveEntryWithStandby = {
+        id: 'attraction-1',
+        status: 'OPERATING' as const,
+        queue: { STANDBY: { waitTime: 25 } },
+      };
+      expect(isStandbyBasketEntry(liveEntryWithStandby)).toBe(true);
+
+      // An operating entry without STANDBY queue is excluded regardless of category
+      const liveEntryWithoutStandby = {
+        id: 'attraction-2',
+        status: 'OPERATING' as const,
+        queue: {},
+      };
+      expect(isStandbyBasketEntry(liveEntryWithoutStandby)).toBe(false);
+    });
   });
 });
 

@@ -432,6 +432,10 @@ function applyMigrations(db: IMemoryDb): void {
   db.public.none(
     readFileSync(migrationPath('0014_experience_world_showcase_country.sql'), 'utf8'),
   );
+  // 0032 widens the category CHECK to admit Walkthrough, PlayArea, Game.
+  db.public.none(
+    readFileSync(migrationPath('0032_experience_category_taxonomy.sql'), 'utf8'),
+  );
 }
 
 // ---------------------------------------------------------------------------
