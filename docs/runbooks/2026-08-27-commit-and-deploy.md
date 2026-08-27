@@ -72,6 +72,35 @@ FROM ride_shapes;
 
 On the `.env.dev` database on 2026-08-27 this was 7,928 rows / 0 null / **7,556 eligible** — identical to the pre-migration eligible count, which is the point: swapping the denominator dropped no ride.
 
+### 4b. Confirm the new code is actually LIVE, not just pushed
+
+Schema-ahead-of-code is harmless (the new columns are additive and nullable, so old code ignores them), which means the schema checks above pass **even if the deploy never happened**. Two signals distinguish pushed from deployed.
+
+The definitive one — this leg was added after the only manual recompute run, so a row here can only come from deployed code:
+
+```sql
+SELECT leg, last_success_at FROM derived_stat_runs WHERE leg = 'pruneCrowdForecastLog';
+```
+
+Zero rows → the new code is not running. Expect 12 legs total once it is.
+
+The second, visible within a pass or two of park opening — only the new sampling code writes this column:
+
+```sql
+SELECT SUM(CASE WHEN avg_crowd_index IS NOT NULL THEN 1 ELSE 0 END) AS with_crowd_level
+FROM experience_season_hour;
+```
+
+`0` → old sampling code is still deployed. It should climb once the new pass runs.
+
+Checked on 2026-08-27 at ~06:00Z: both were `0` / absent while the sampler was otherwise healthy — i.e. committed and pushed, but not yet deployed. That is the expected state before the deploy, and a useful reference for what "not live yet" looks like.
+
+**Allow up to 24 hours, not a couple of hours.** The daily recompute is self-scheduled from a 24-hour in-process timer inside the sampling pass, measured from the *last* recompute rather than from a fixed hour — so it drifts. Measured firing times over 2026-08-11..26 were `07:10, 07:10, 07:00, 07:10, 19:00, 23:30, 23:40, 07:10, 21:50, 15:10, 14:30, 23:16`. If yesterday's ran late in the evening, today's cannot fire until late evening either. Absent after 24+ hours means something is genuinely wrong; absent after two hours means nothing.
+
+**Verified cadence (2026-08-11..26, 16 days):** exactly **one** recompute per day, every day — confirmed by `COUNT(DISTINCT forecasted_at)` per ET day in `crowd_forecast_log`. The keep-alive cron runs roughly `07:40`–`00:50` ET at a steady ~10-minute spacing (87–100 passes/day) with a single ~7.7-hour overnight gap, so the process stays warm through the day and the timer is not reset by mid-window sleeps.
+
+This matters for one latent issue: `upsertForecastLogs` (crowd, not wait) includes `forecast_index` and `forecasted_at` in its `ON CONFLICT DO UPDATE` clause, so a **second** recompute in the same day would overwrite the supposedly frozen capture, weakening R7.1. Since the measured cadence is one per day, this does not occur in practice. If the cadence ever changes — a busier keep-alive, more frequent restarts, or moving the recompute to its own trigger — fix that clause first by mirroring `upsertWaitForecastLogs`, which deliberately omits both columns.
+
 ### 5. Confirm sampling still works after deploy
 
 During park hours (roughly 8 AM – 11 PM ET):
