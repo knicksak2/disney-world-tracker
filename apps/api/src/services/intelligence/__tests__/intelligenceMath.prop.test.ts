@@ -8,6 +8,16 @@ import {
   weatherAdjustment,
   isStandbyBasketEntry,
   relativeCrowdIndex,
+  shrinkToPooled,
+  clampCrowdMultiplier,
+  CROWD_MULTIPLIER_MIN,
+  CROWD_MULTIPLIER_MAX,
+  establishBaseline,
+  isBaselineEstablished,
+  shapeEmaWeight,
+  BASELINE_ESTABLISH_MIN_SHAPE_SAMPLES,
+  BASELINE_SAMPLE_COUNT_CAP,
+  CROWD_INDEX_DRIFT_HORIZON_PASSES,
 } from '../waitMath.js';
 import { forecastIndex } from '../crowdForecast.js';
 import { updateAccuracy, applyBiasCorrection } from '../calibration.js';
@@ -27,22 +37,360 @@ describe('Feature: crowd-calendar', () => {
           fc.double({ min: 0, max: 300, noNaN: true }),
           fc.double({ min: 0.4, max: 2.0, noNaN: true }),
           fc.integer({ min: 1, max: 50 }),
-          (season, shape, typical, crowd, threshold) => {
-            const result = selectTier(season, shape, typical, crowd, threshold);
+          (season, shape, typical, forecast, threshold) => {
+            // No pooled mean and no avgCrowdIndex supplied, so this exercises
+            // the tier LADDER itself, unshrunk and un-de-meaned.
+            const result = selectTier({
+              seasonBucket: season,
+              shapeBucket: shape,
+              parkTypical: typical,
+              forecastIndex: forecast,
+              threshold,
+            });
             expect(Number.isFinite(result)).toBe(true);
             expect(result).toBeGreaterThanOrEqual(0);
 
+            const absolute = clampCrowdMultiplier(forecast);
             if (season.sampleCount >= threshold) {
+              // avgCrowdIndex absent → raw average (R15.3 fallback)
               expect(result).toBe(season.wait);
             } else if (shape.wait > 0) {
-              expect(result).toBe(shape.wait * crowd);
+              expect(result).toBe(shape.wait * absolute);
             } else {
-              expect(result).toBe(typical * crowd);
+              expect(result).toBe(typical * absolute);
             }
           }
         ),
         { numRuns: 100 }
       );
+    });
+  });
+
+  // Feature: crowd-calendar, Property 15: A mature season bucket still responds
+  // to the date's crowd forecast.
+  describe('Property 15: A mature season bucket still responds to the date\'s crowd forecast', () => {
+    it('is strictly increasing in forecastIndex over the unclamped range', () => {
+      fc.assert(
+        fc.property(
+          fc.double({ min: 5, max: 300, noNaN: true }),      // bucket wait
+          fc.double({ min: 0.6, max: 1.4, noNaN: true }),    // embedded crowd level
+          fc.double({ min: 0.5, max: 1.0, noNaN: true }),    // lower forecast
+          fc.double({ min: 1.05, max: 1.5, noNaN: true }),   // higher forecast
+          (wait, avgCrowdIndex, lowForecast, highForecast) => {
+            const base = {
+              seasonBucket: { wait, sampleCount: 30, avgCrowdIndex },
+              parkTypical: 30,
+            };
+            const quiet = selectTier({ ...base, forecastIndex: lowForecast });
+            const busy = selectTier({ ...base, forecastIndex: highForecast });
+
+            // Both factors must be strictly inside the clamp band for the
+            // comparison to be about the formula rather than the clamp.
+            const quietFactor = lowForecast / avgCrowdIndex;
+            const busyFactor = highForecast / avgCrowdIndex;
+            fc.pre(
+              quietFactor > CROWD_MULTIPLIER_MIN &&
+                busyFactor < CROWD_MULTIPLIER_MAX &&
+                quietFactor < busyFactor,
+            );
+
+            expect(busy).toBeGreaterThan(quiet);
+          }
+        ),
+        { numRuns: 200 }
+      );
+    });
+
+    it('returns exactly the raw average when the forecast equals the embedded level', () => {
+      fc.assert(
+        fc.property(
+          fc.double({ min: 5, max: 300, noNaN: true }),
+          fc.double({ min: 0.5, max: 2.0, noNaN: true }),
+          (wait, level) => {
+            const result = selectTier({
+              seasonBucket: { wait, sampleCount: 30, avgCrowdIndex: level },
+              parkTypical: 30,
+              forecastIndex: level,
+            });
+            expect(result).toBeCloseTo(wait, 6);
+          }
+        ),
+        { numRuns: 100 }
+      );
+    });
+
+    it('falls back to the raw average when the embedded level is unknown or invalid', () => {
+      fc.assert(
+        fc.property(
+          fc.double({ min: 5, max: 300, noNaN: true }),
+          fc.double({ min: 0.4, max: 3.0, noNaN: true }),
+          fc.constantFrom<number | null | undefined>(null, undefined, 0, -1),
+          (wait, forecast, badLevel) => {
+            const result = selectTier({
+              seasonBucket: { wait, sampleCount: 30, avgCrowdIndex: badLevel as number | null },
+              parkTypical: 30,
+              forecastIndex: forecast,
+            });
+            expect(result).toBe(wait);
+          }
+        ),
+        { numRuns: 100 }
+      );
+    });
+
+    // R15.5 — the mandatory deterministic regression. Every pre-existing tier
+    // test sits BELOW the tier-1 threshold, so this branch was executed by no
+    // assertion. Written as concrete numbers (not a property) so the expected
+    // values are visible and it would plainly have failed before the change.
+    it('regression: a mature bucket predicts differently on a busy vs a quiet date', () => {
+      // Seven Dwarfs Mine Train, Saturday 2 PM: bucket averaged 45 min over
+      // samples taken on days averaging 0.90 (slightly quieter than typical).
+      const bucket = { wait: 45, sampleCount: 42, avgCrowdIndex: 0.9 };
+
+      const quietDay = selectTier({ seasonBucket: bucket, parkTypical: 30, forecastIndex: 0.75 });
+      const busyDay = selectTier({ seasonBucket: bucket, parkTypical: 30, forecastIndex: 1.35 });
+
+      // 45 * (0.75 / 0.90) = 37.5 ; 45 * (1.35 / 0.90) = 67.5
+      expect(quietDay).toBeCloseTo(37.5, 6);
+      expect(busyDay).toBeCloseTo(67.5, 6);
+
+      // The behavior that was broken: both used to return the bucket's raw 45.
+      expect(quietDay).not.toBeCloseTo(45, 6);
+      expect(busyDay).not.toBeCloseTo(45, 6);
+      expect(busyDay).toBeGreaterThan(quietDay);
+
+      // And a date matching the bucket's own embedded level returns it exactly.
+      expect(
+        selectTier({ seasonBucket: bucket, parkTypical: 30, forecastIndex: 0.9 }),
+      ).toBeCloseTo(45, 6);
+    });
+
+    it('keeps the relative scaling factor inside the shared clamp band', () => {
+      fc.assert(
+        fc.property(
+          fc.double({ min: 5, max: 300, noNaN: true }),
+          fc.double({ min: 0.05, max: 5, noNaN: true }),
+          fc.double({ min: 0.05, max: 5, noNaN: true }),
+          (wait, avgCrowdIndex, forecast) => {
+            const result = selectTier({
+              seasonBucket: { wait, sampleCount: 30, avgCrowdIndex },
+              parkTypical: 30,
+              forecastIndex: forecast,
+            });
+            expect(result).toBeGreaterThanOrEqual(wait * CROWD_MULTIPLIER_MIN - 1e-9);
+            expect(result).toBeLessThanOrEqual(wait * CROWD_MULTIPLIER_MAX + 1e-9);
+          }
+        ),
+        { numRuns: 100 }
+      );
+    });
+  });
+
+  // Feature: crowd-calendar, Property 16: Day-of-week shrinkage is bounded,
+  // monotone, and converges to the raw bucket.
+  describe('Property 16: Day-of-week shrinkage is bounded, monotone and convergent', () => {
+    it('always lies within the interval spanned by the bucket and pooled means', () => {
+      fc.assert(
+        fc.property(
+          fc.double({ min: 0, max: 300, noNaN: true }),
+          fc.double({ min: 0, max: 300, noNaN: true }),
+          fc.integer({ min: 0, max: 500 }),
+          fc.integer({ min: 1, max: 40 }),
+          (bucketWait, pooledWait, n, k) => {
+            const result = shrinkToPooled(bucketWait, n, pooledWait, k);
+            const lo = Math.min(bucketWait, pooledWait);
+            const hi = Math.max(bucketWait, pooledWait);
+            expect(result).toBeGreaterThanOrEqual(lo - 1e-9);
+            expect(result).toBeLessThanOrEqual(hi + 1e-9);
+          }
+        ),
+        { numRuns: 200 }
+      );
+    });
+
+    it('equals the pooled mean at zero samples and approaches the bucket as samples grow', () => {
+      fc.assert(
+        fc.property(
+          fc.double({ min: 1, max: 300, noNaN: true }),
+          fc.double({ min: 1, max: 300, noNaN: true }),
+          (bucketWait, pooledWait) => {
+            expect(shrinkToPooled(bucketWait, 0, pooledWait)).toBeCloseTo(pooledWait, 9);
+
+            const far = shrinkToPooled(bucketWait, 1_000_000, pooledWait);
+            expect(Math.abs(far - bucketWait)).toBeLessThan(
+              Math.abs(pooledWait - bucketWait) / 1000 + 1e-6,
+            );
+          }
+        ),
+        { numRuns: 100 }
+      );
+    });
+
+    it('moves monotonically toward the bucket as its sample count rises', () => {
+      fc.assert(
+        fc.property(
+          fc.double({ min: 1, max: 300, noNaN: true }),
+          fc.double({ min: 1, max: 300, noNaN: true }),
+          fc.integer({ min: 0, max: 200 }),
+          fc.integer({ min: 1, max: 200 }),
+          (bucketWait, pooledWait, n, delta) => {
+            fc.pre(Math.abs(bucketWait - pooledWait) > 1e-6);
+            const lower = shrinkToPooled(bucketWait, n, pooledWait);
+            const higher = shrinkToPooled(bucketWait, n + delta, pooledWait);
+
+            if (bucketWait > pooledWait) {
+              expect(higher).toBeGreaterThanOrEqual(lower - 1e-9);
+            } else {
+              expect(higher).toBeLessThanOrEqual(lower + 1e-9);
+            }
+          }
+        ),
+        { numRuns: 200 }
+      );
+    });
+
+    it('leaves the season-resolved and park-typical tiers numerically untouched', () => {
+      fc.assert(
+        fc.property(
+          fc.double({ min: 1, max: 300, noNaN: true }),
+          fc.double({ min: 1, max: 300, noNaN: true }),
+          fc.double({ min: 0.5, max: 1.5, noNaN: true }),
+          fc.integer({ min: 1, max: 40 }),
+          fc.integer({ min: 1, max: 40 }),
+          (wait, pooled, forecast, kA, kB) => {
+            // Tier 1 — shrinkage must not participate.
+            const t1a = selectTier({
+              seasonBucket: { wait, sampleCount: 30, avgCrowdIndex: 1.0 },
+              pooledWait: pooled,
+              parkTypical: 42,
+              forecastIndex: forecast,
+              shrinkageK: kA,
+            });
+            const t1b = selectTier({
+              seasonBucket: { wait, sampleCount: 30, avgCrowdIndex: 1.0 },
+              pooledWait: pooled,
+              parkTypical: 42,
+              forecastIndex: forecast,
+              shrinkageK: kB,
+            });
+            expect(t1a).toBe(t1b);
+
+            // Tier 3 — no shape bucket and no pooled mean at all.
+            const t3a = selectTier({
+              parkTypical: 42,
+              forecastIndex: forecast,
+              shrinkageK: kA,
+            });
+            const t3b = selectTier({
+              parkTypical: 42,
+              forecastIndex: forecast,
+              shrinkageK: kB,
+            });
+            expect(t3a).toBe(t3b);
+            expect(t3a).toBeCloseTo(42 * clampCrowdMultiplier(forecast), 9);
+          }
+        ),
+        { numRuns: 100 }
+      );
+    });
+  });
+
+  // Feature: crowd-calendar, Property 14: The crowd index's denominator adapts
+  // an order of magnitude slower than its numerator.
+  describe('Property 14: An established Ride_Baseline is frozen', () => {
+    it('is idempotent on an established bucket, for any shape state', () => {
+      fc.assert(
+        fc.property(
+          fc.double({ min: 1, max: 200, noNaN: true }),
+          fc.integer({ min: 1, max: 600 }),
+          fc.double({ min: 0, max: 300, noNaN: true }),
+          fc.integer({ min: 0, max: 600 }),
+          (established, establishedCount, shapeAvg, shapeCount) => {
+            const next = establishBaseline(established, establishedCount, shapeAvg, shapeCount);
+            expect(next.baselineWaitMinutes).toBe(established);
+            expect(next.baselineSampleCount).toBe(establishedCount);
+
+            // Applying it again changes nothing either.
+            const again = establishBaseline(
+              next.baselineWaitMinutes,
+              next.baselineSampleCount,
+              shapeAvg,
+              shapeCount,
+            );
+            expect(again.baselineWaitMinutes).toBe(established);
+            expect(again.baselineSampleCount).toBe(establishedCount);
+          }
+        ),
+        { numRuns: 200 }
+      );
+    });
+
+    it('establishes from a settled shape average, and stays null while the shape is thin', () => {
+      fc.assert(
+        fc.property(
+          fc.double({ min: 1, max: 300, noNaN: true }),
+          fc.integer({ min: 0, max: 600 }),
+          fc.constantFrom<number | null | undefined>(null, undefined, 0),
+          (shapeAvg, shapeCount, absentBaseline) => {
+            const next = establishBaseline(absentBaseline as number | null, 0, shapeAvg, shapeCount);
+
+            if (shapeCount >= BASELINE_ESTABLISH_MIN_SHAPE_SAMPLES) {
+              expect(next.baselineWaitMinutes).toBeCloseTo(shapeAvg, 9);
+              expect(next.baselineSampleCount).toBe(
+                Math.min(shapeCount, BASELINE_SAMPLE_COUNT_CAP),
+              );
+            } else {
+              // Thin shape → refuse to freeze a noisy level (R14.4).
+              expect(next.baselineWaitMinutes).toBeNull();
+            }
+          }
+        ),
+        { numRuns: 200 }
+      );
+    });
+
+    it('gates basket eligibility on the baseline\'s own columns', () => {
+      // A dense fast shape is irrelevant — only the baseline's columns count.
+      expect(isBaselineEstablished(60, 50)).toBe(true);
+      expect(isBaselineEstablished(60, 4)).toBe(false);   // too few baseline samples
+      expect(isBaselineEstablished(4, 500)).toBe(false);  // expected too small
+      expect(isBaselineEstablished(null, 500)).toBe(false);
+      expect(isBaselineEstablished(undefined, 500)).toBe(false);
+      expect(isBaselineEstablished(Number.NaN, 500)).toBe(false);
+    });
+
+    it('leaves the index EXACTLY unchanged over a long constant-wait run, while the fast denominator collapses it', () => {
+      // Observed waits held constant at a level 25% above the ride's baseline.
+      // The fast shape converges onto them within weeks, so a shape-denominated
+      // index slides to ~1.0 and the signal disappears. The frozen baseline
+      // cannot move at all.
+      const observed = 60;
+      let baseline: number | null = 48;
+      let baselineCount = 100;
+      let shape = 48;
+      let shapeCount = 100;
+
+      const indexFrom = (expected: number) => observed / expected;
+      const firstBaselineIndex = indexFrom(baseline);
+      const firstShapeIndex = indexFrom(shape);
+
+      for (let pass = 0; pass < CROWD_INDEX_DRIFT_HORIZON_PASSES; pass++) {
+        shape = applyEma(shape, observed, shapeEmaWeight(shapeCount));
+        shapeCount += 1;
+
+        const next = establishBaseline(baseline, baselineCount, shape, shapeCount);
+        baseline = next.baselineWaitMinutes;
+        baselineCount = next.baselineSampleCount;
+      }
+
+      // Exact equality — no tolerance. This is the R14.8 guarantee.
+      expect(baseline).toBe(48);
+      expect(indexFrom(baseline as number)).toBe(firstBaselineIndex);
+
+      // The denominator being replaced really does destroy the signal: a ride
+      // reliably 25% above its baseline now reads as a typical day.
+      expect(indexFrom(shape)).toBeCloseTo(1.0, 2);
+      expect(Math.abs(indexFrom(shape) - firstShapeIndex)).toBeGreaterThan(0.2);
     });
   });
 

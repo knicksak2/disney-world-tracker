@@ -68,6 +68,11 @@ describe('Sampling — Crowd_Index restricted to theme parks', () => {
         avg_wait_minutes: 30, sample_count: 10,
         sr_avg_wait_minutes: null, sr_sample_count: null,
         stddev_wait: 0, p50_wait: 30, p90_wait: 45, down_rate: 0,
+        // R14: the basket's `expected` is now the frozen Ride_Baseline, so a
+        // ride is only basket-eligible once one exists. Set equal to
+        // avg_wait_minutes to keep this fixture's index at 1.0 — this test is
+        // about which PARKS get an index, not about baseline mechanics.
+        baseline_wait_minutes: 30, baseline_sample_count: 10,
       }],
       getSeasonHours: async () => [],
       getExperienceSignals: async () => [],

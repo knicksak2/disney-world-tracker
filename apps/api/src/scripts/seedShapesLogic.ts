@@ -92,6 +92,13 @@ export async function runSeedShapes(deps: SeedShapesDeps): Promise<void> {
           hour: row.hour_et,
           avg_wait_minutes: row.avg_wait,
           sample_count: row.n,
+          // R14: RopeDrop's `avg_wait` is a multi-year average, which is exactly
+          // the season-neutral absolute level the frozen Ride_Baseline wants as
+          // its yardstick — so seed the baseline from it directly rather than
+          // waiting for live samples to establish one. `n` is capped at
+          // BASELINE_SAMPLE_COUNT_CAP to match migration 0033's backfill.
+          baseline_wait_minutes: row.avg_wait,
+          baseline_sample_count: Math.min(row.n, 500),
           sr_avg_wait_minutes: null,
           sr_sample_count: null,
           stddev_wait: 0,

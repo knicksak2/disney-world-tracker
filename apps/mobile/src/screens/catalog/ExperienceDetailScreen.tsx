@@ -89,7 +89,11 @@ import WaitInsightsSection from './WaitInsightsSection';
 import { buildTagGroups } from './infoTags';
 import type { TagGroup } from './infoTags';
 import type { DirectionsPlatform } from './directions';
-import { directionsUrl, hasValidCoordinates, staticMapUrl } from './directions';
+import {
+  directionsUrlCandidates,
+  hasValidCoordinates,
+  staticMapUrl,
+} from './directions';
 import { liveSectionFor, NO_LIVE_SHAPE, type LiveShape } from './gating';
 import RideLiveSection from './live/RideLiveSection';
 import ShowtimesSection from './live/ShowtimesSection';
@@ -679,14 +683,19 @@ function mapsPlatform(): DirectionsPlatform {
  * the action is omitted entirely when the coordinates are absent or out of
  * range (R4.3).
  *
- * Activating the action opens the OS maps app at the stored coordinates via
- * `Linking.openURL(directionsUrl(...))` (R4.4). The call is wrapped in a
- * `try/catch` (after a `Linking.canOpenURL` check): if the maps app cannot be
- * opened the section sets a local error flag that renders an inline,
- * non-blocking error indication (matching the existing danger-text pattern)
- * while every other section of the screen stays intact (R4.5). The action
- * always exposes a non-empty accessibility label describing the Experience it
- * routes to (R4.6).
+ * Activating the action opens the OS maps app at the stored coordinates (R4.4).
+ * It walks the ordered `directionsUrlCandidates(...)` — the platform-native maps
+ * URL first, then the universal `https` web maps URL — awaiting
+ * `Linking.openURL(candidate)` inside a `try/catch` and stopping at the first
+ * candidate that opens (R4.7). There is deliberately no `Linking.canOpenURL`
+ * pre-check (R4.8): on Android 11+ package-visibility filtering makes it resolve
+ * `false` for the `geo:` scheme unless declared in a native `<queries>` manifest
+ * element, which suppressed an `openURL` call that in fact succeeds. Only when
+ * every candidate rejects does the section set a local error flag that renders an
+ * inline, non-blocking error indication (matching the existing danger-text
+ * pattern) while every other section of the screen stays intact (R4.5, R4.9).
+ * The action always exposes a non-empty accessibility label describing the
+ * Experience it routes to (R4.6).
  *
  * When the coordinates are valid it additionally renders the Static_Map_Preview
  * (R10.1-R10.8): a tappable `<Image>` (wrapped in a `Pressable`) sourced from
@@ -726,26 +735,34 @@ function LocationGroupSection({
   const handleGetDirections = async (): Promise<void> => {
     // `canGetDirections` already gates the coordinate range, so a truthy value
     // here means both are finite and in range (R4.2).
-    const url = directionsUrl(
+    const candidates = directionsUrlCandidates(
       latitude as number,
       longitude as number,
       mapsPlatform(),
     );
-    try {
-      const canOpen = await Linking.canOpenURL(url);
-      if (!canOpen) {
-        // R4.5: the OS reports it cannot open the maps URL.
-        setFailed(true);
+
+    // R4.7/R4.8: attempt each candidate unconditionally, in order, stopping at
+    // the first that opens. There is deliberately NO `Linking.canOpenURL`
+    // pre-check: from Android 11 (API 30) package-visibility filtering makes
+    // `canOpenURL` resolve `false` for the `geo:` scheme unless it is declared
+    // in a native `<queries>` manifest element (Expo Go declares none), even
+    // though `openURL` for the same URL succeeds — launching an implicit intent
+    // is not subject to that filtering. Gating on it therefore suppressed a
+    // working open on every Android client.
+    for (const url of candidates) {
+      try {
+        await Linking.openURL(url);
+        // Clear any prior failure on a successful open.
+        setFailed(false);
         return;
+      } catch {
+        // This candidate has no handler; fall through to the next one.
       }
-      await Linking.openURL(url);
-      // Clear any prior failure on a successful open.
-      setFailed(false);
-    } catch {
-      // R4.5: opening the maps app rejected — surface the inline error and
-      // preserve all other screen state.
-      setFailed(true);
     }
+
+    // R4.5/R4.9: every candidate rejected — surface the inline error and
+    // preserve all other screen state.
+    setFailed(true);
   };
 
   return (

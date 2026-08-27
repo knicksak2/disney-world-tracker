@@ -59,6 +59,10 @@ threshold, and accessibility behaviors are preserved.
 - **Your_Visit_Card**: The single consolidated card combining completion, rating, and note controls.
 - **Get_Directions_Action**: A control that opens the operating system maps application at the Experience's
   stored latitude/longitude.
+- **Directions_Url_Candidates**: The ordered, duplicate-free list of maps URLs the Get_Directions_Action and
+  Static_Map_Preview attempt when activated, built by a pure, framework-free function from the Experience's
+  Latitude and Longitude and the running platform. The first entry is the platform-native maps URL; the last
+  entry is the universal `https` web maps URL, which any device with a browser can open.
 - **Static_Map_Preview**: A static, non-interactive map image rendered in the Location area as an `<Image>`,
   centered on the Experience's stored Latitude and Longitude with a marker overlaid at the image center
   (which coincides with the coordinate), that opens the operating system maps application when activated.
@@ -162,6 +166,15 @@ navigate to the Experience without reading noisy numbers.
    THEN THE Experience_Detail_Screen SHALL render an error indication and preserve the current screen state.
 6. THE Get_Directions_Action SHALL provide a non-empty accessibility label describing the directions action
    for the Experience.
+7. WHEN the user activates the Get_Directions_Action or the Static_Map_Preview, THE Experience_Detail_Screen
+   SHALL attempt the Directions_Url_Candidates in order and stop at the first candidate that opens
+   successfully.
+8. THE Experience_Detail_Screen SHALL attempt to open each Directions_Url_Candidate unconditionally, and
+   SHALL NOT make the attempt conditional on an operating-system reachability probe of the maps URL, because
+   on Android 11 and later such a probe reports every non-`http(s)` scheme as unopenable unless the scheme is
+   declared in the native manifest — a false negative that suppresses an open that would otherwise succeed.
+9. IF every Directions_Url_Candidate fails to open, THEN THE Experience_Detail_Screen SHALL render the error
+   indication and preserve the current screen state.
 
 ### Requirement 5: Collapse the About description
 

@@ -111,6 +111,9 @@ describe('showtimePatterns derivation real SQL integration test', () => {
 
     const dummyPredictionService = {
       getRawForecast: async () => 1.0,
+    // captureForecasts freezes the CALIBRATED forecast (R7.7); without this the
+    // leg would throw, be swallowed per-lead, and capture nothing silently.
+    getCalibratedForecast: async () => 1.0,
     } as unknown as PredictionService;
 
     const service = createDerivedStatsService({

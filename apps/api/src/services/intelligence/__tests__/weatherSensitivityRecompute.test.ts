@@ -31,6 +31,9 @@ describe('derivedStatsService — weather sensitivity recompute (Task 4.5)', () 
 
   const fakePrediction: PredictionService = {
     getRawForecast: async () => 1.0,
+    // captureForecasts freezes the CALIBRATED forecast (R7.7); without this the
+    // leg would throw, be swallowed per-lead, and capture nothing silently.
+    getCalibratedForecast: async () => 1.0,
     getDaySnapshot: vi.fn(),
     getCrowdMultiplier: vi.fn(),
     getCrowdCalendarDay: vi.fn(),

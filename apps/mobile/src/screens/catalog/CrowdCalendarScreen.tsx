@@ -217,9 +217,42 @@ export default function CrowdCalendarScreen(): JSX.Element {
               )}
             </Card>
             {selectedDayInfo.observedIndex != null && (
-              <Text style={styles.accNote}>
-                We predicted {getLevelInfo(selectedDayInfo.forecastIndex).level}/10 · actual was {getLevelInfo(selectedDayInfo.observedIndex).level}/10
-              </Text>
+              <>
+                <SectionLabel>How we did</SectionLabel>
+                <Card>
+                  <Text
+                    style={styles.accNote}
+                    accessibilityLabel={
+                      selectedDayInfo.capturedForecast
+                        ? `We predicted ${selectedDayInfo.capturedForecast.index} out of 10, ${selectedDayInfo.capturedForecast.leadDays} days ahead. Actual was ${selectedDayInfo.observedIndex} out of 10.`
+                        : `Actual was ${selectedDayInfo.observedIndex} out of 10.`
+                    }
+                  >
+                    {/*
+                      R7.5: the "we predicted" figure is the FROZEN capture, not
+                      today's recomputed forecast. Recomputing would let the
+                      model see the observed index and echo it back, which would
+                      make this line meaningless.
+                    */}
+                    {selectedDayInfo.capturedForecast
+                      ? `We predicted ${selectedDayInfo.capturedForecast.index}/10 · actual was ${selectedDayInfo.observedIndex}/10`
+                      : `Actual was ${selectedDayInfo.observedIndex}/10`}
+                  </Text>
+                  {selectedDayInfo.capturedForecast && (
+                    <Text style={styles.accSub}>
+                      Forecast made {selectedDayInfo.capturedForecast.leadDays}{' '}
+                      {selectedDayInfo.capturedForecast.leadDays === 1 ? 'day' : 'days'} ahead
+                    </Text>
+                  )}
+                  {selectedDayInfo.forecastAccuracy && (
+                    <Text style={styles.accSub}>
+                      Typically within {selectedDayInfo.forecastAccuracy.meanAbsoluteErrorLevels} levels at
+                      this range ({selectedDayInfo.forecastAccuracy.sampleCount}{' '}
+                      {selectedDayInfo.forecastAccuracy.sampleCount === 1 ? 'day' : 'days'} scored)
+                    </Text>
+                  )}
+                </Card>
+              </>
             )}
           </>
         )}
@@ -402,9 +435,15 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   accNote: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.color.textPrimary,
+    textAlign: 'center',
+  },
+  accSub: {
     fontSize: 12,
     color: theme.color.textSecondary,
     textAlign: 'center',
-    marginTop: theme.spacing.sm,
+    marginTop: 4,
   },
 });

@@ -10,11 +10,15 @@
 //       Validates: Requirements 4.2, 4.3
 //   - Property 10 — Directions URL encodes coordinates (directionsUrl).
 //       Validates: Requirements 4.4
+//   - Property 19 — Directions URL candidates are ordered, non-empty, and
+//       coordinate-preserving (directionsUrlCandidates).
+//       Validates: Requirements 4.7, 4.9
 
 import fc from 'fast-check';
 
 import {
   directionsUrl,
+  directionsUrlCandidates,
   hasValidCoordinates,
   staticMapUrl,
   type DirectionsPlatform,
@@ -218,6 +222,67 @@ describe('Property 18: staticMapUrl is total and deterministic for valid inputs'
         const again = staticMapUrl(latitude, longitude);
         expect(again).toBe(url);
       }),
+      { numRuns: NUM_RUNS },
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Property 19 — Directions URL candidates are ordered, non-empty, and
+// coordinate-preserving
+//
+// Feature: experience-detail-redesign, Property 19: For any valid latitude,
+// longitude, and platform, `directionsUrlCandidates` returns a non-empty,
+// duplicate-free list whose first element equals `directionsUrl(latitude,
+// longitude, platform)`, whose last element equals the universal web maps URL
+// `directionsUrl(latitude, longitude, 'web')`, and every element of which
+// encodes the exact latitude and longitude values that were passed in.
+//
+// Validates: Requirements 4.7, 4.9
+// ---------------------------------------------------------------------------
+
+describe('Property 19: directionsUrlCandidates is ordered, non-empty, duplicate-free, and coordinate-preserving', () => {
+  it('leads with the platform-native URL, ends with the web URL, and encodes the exact coordinates in every element', () => {
+    fc.assert(
+      fc.property(
+        validLatitudeArb,
+        validLongitudeArb,
+        platformArb,
+        (latitude, longitude, platform) => {
+          const candidates =
+            platform === undefined
+              ? directionsUrlCandidates(latitude, longitude)
+              : directionsUrlCandidates(latitude, longitude, platform);
+
+          // Non-empty — there is always at least one URL to attempt, so the
+          // screen never silently does nothing (R4.7).
+          expect(candidates.length).toBeGreaterThan(0);
+
+          // Duplicate-free — the screen never opens the same URL twice.
+          expect(new Set(candidates).size).toBe(candidates.length);
+
+          // Ordered: the platform-native URL is attempted first. `platform`
+          // defaults to 'web' in both functions, so an undefined platform must
+          // agree with the same default.
+          const primary =
+            platform === undefined
+              ? directionsUrl(latitude, longitude)
+              : directionsUrl(latitude, longitude, platform);
+          expect(candidates[0]).toBe(primary);
+
+          // The universal https web maps URL is always the last resort (R4.9).
+          const web = directionsUrl(latitude, longitude, 'web');
+          expect(candidates[candidates.length - 1]).toBe(web);
+
+          // Every candidate encodes the exact coordinates passed in — the
+          // fallback must not drift from the requested location.
+          const lat = String(latitude);
+          const lng = String(longitude);
+          for (const url of candidates) {
+            expect(url).toContain(`${lat},${lng}`);
+          }
+        },
+      ),
       { numRuns: NUM_RUNS },
     );
   });

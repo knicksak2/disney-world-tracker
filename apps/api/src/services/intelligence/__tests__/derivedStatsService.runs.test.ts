@@ -27,6 +27,9 @@ describe('derivedStatsService — per-leg run isolation and outcome recording', 
 
   const fakePrediction: PredictionService = {
     getRawForecast: async () => 1.0,
+    // captureForecasts freezes the CALIBRATED forecast (R7.7); without this the
+    // leg would throw, be swallowed per-lead, and capture nothing silently.
+    getCalibratedForecast: async () => 1.0,
     getDaySnapshot: vi.fn(),
     getCrowdMultiplier: vi.fn(),
     getCrowdCalendarDay: vi.fn(),
@@ -66,8 +69,10 @@ describe('derivedStatsService — per-leg run isolation and outcome recording', 
     // Assert the last leg (pruneWeatherObservations) still executed despite percentiles failing
     expect(pruneWeatherObservations).toHaveBeenCalledTimes(1);
 
-    // Assert all 6 legs had their outcome recorded
-    expect(recordDerivedStatRun).toHaveBeenCalledTimes(6);
+    // Assert all 12 legs had their outcome recorded (R17 added archiveWaitSamples
+    // + pruneWaitArchive; R18 added the three wait-forecast legs. R13.1's bound
+    // is one row per leg, not a fixed count.)
+    expect(recordDerivedStatRun).toHaveBeenCalledTimes(12);
 
     const recordedCalls = recordDerivedStatRun.mock.calls.map(([leg, outcome]) => ({
       leg,
@@ -80,15 +85,21 @@ describe('derivedStatsService — per-leg run isolation and outcome recording', 
     expect(failingRecorded?.outcome.ok).toBe(false);
     expect((failingRecorded?.outcome as any).error.message).toContain('Postgres connection terminated');
 
-    // All other 5 legs should be recorded as successes
+    // All other 7 legs should be recorded as successes
     const successfulLegs = recordedCalls.filter((c) => c.outcome.ok === true);
-    expect(successfulLegs).toHaveLength(5);
+    expect(successfulLegs).toHaveLength(11);
     expect(successfulLegs.map((c) => c.leg)).toEqual([
       'reconcileForecasts',
       'captureForecasts',
       'learnWeatherSensitivities',
       'recomputeShowtimePatterns',
       'pruneWeatherObservations',
+      'archiveWaitSamples',
+      'pruneWaitArchive',
+      'pruneCrowdForecastLog',
+      'reconcileWaitForecasts',
+      'captureWaitForecasts',
+      'pruneWaitForecastLog',
     ]);
 
     // Assert logger logged at warn with structured summary, and did NOT log overall success at info
@@ -101,18 +112,24 @@ describe('derivedStatsService — per-leg run isolation and outcome recording', 
         'learnWeatherSensitivities',
         'recomputeShowtimePatterns',
         'pruneWeatherObservations',
+        'archiveWaitSamples',
+        'pruneWaitArchive',
+        'pruneCrowdForecastLog',
+        'reconcileWaitForecasts',
+        'captureWaitForecasts',
+        'pruneWaitForecastLog',
       ],
       failedLegs: ['recomputePercentiles'],
-      total: 6,
+      total: 12,
     });
-    expect(warnCall[1]).toContain('Completed daily derived stats recompute with failures (1/6 legs failed)');
+    expect(warnCall[1]).toContain('Completed daily derived stats recompute with failures (1/12 legs failed)');
 
     // Ensure success summary was not logged at info
     const infoMessages = logger.info.mock.calls.map((c) => c[1] ?? c[0]);
     expect(infoMessages).not.toContain('Completed daily derived stats recompute successfully');
   });
 
-  it('logs at info with all succeeded legs when all 6 legs pass', async () => {
+  it('logs at info with all succeeded legs when all 12 legs pass', async () => {
     const recordDerivedStatRun = vi.fn<
       (leg: string, outcome: { ok: true } | { ok: false; error: unknown }) => Promise<void>
     >(async () => {});
@@ -136,7 +153,7 @@ describe('derivedStatsService — per-leg run isolation and outcome recording', 
 
     await service.runDailyRecompute();
 
-    expect(recordDerivedStatRun).toHaveBeenCalledTimes(6);
+    expect(recordDerivedStatRun).toHaveBeenCalledTimes(12);
     expect(recordDerivedStatRun.mock.calls.every(([_, outcome]) => outcome.ok === true)).toBe(true);
 
     expect(logger.warn).not.toHaveBeenCalled();
@@ -149,8 +166,14 @@ describe('derivedStatsService — per-leg run isolation and outcome recording', 
           'recomputePercentiles',
           'recomputeShowtimePatterns',
           'pruneWeatherObservations',
+          'archiveWaitSamples',
+          'pruneWaitArchive',
+          'pruneCrowdForecastLog',
+          'reconcileWaitForecasts',
+          'captureWaitForecasts',
+          'pruneWaitForecastLog',
         ],
-        total: 6,
+        total: 12,
       },
       'Completed daily derived stats recompute successfully',
     );
@@ -182,5 +205,79 @@ describe('derivedStatsService — per-leg run isolation and outcome recording', 
 
     // Logger should have logged error for recording failures
     expect(logger.error).toHaveBeenCalled();
+  });
+});
+
+/**
+ * Feature: crowd-calendar, Property 19.1 — R7.1 / R7.4 / R7.7.
+ *
+ * Accuracy must be measured against the forecast **as issued**. The calendar
+ * publishes the bias-calibrated value, so `captureForecasts` has to freeze that
+ * same number. Freezing the uncalibrated model output instead would score a
+ * forecast no user ever saw, and the calibration loop would never converge —
+ * every cycle would re-measure the raw model's bias and re-apply it forever.
+ *
+ * The fake below returns deliberately DIFFERENT values for the two methods so
+ * this test can tell which one was called. It fails against a `captureForecasts`
+ * wired to `getRawForecast`.
+ */
+describe('derivedStatsService — captureForecasts freezes the calibrated forecast', () => {
+  const RAW = 1.0;
+  const CALIBRATED = 0.8;
+
+  function makeFakeRepo(overrides: Record<string, unknown> = {}) {
+    return {
+      getParkCrowdIndices: async () => [],
+      getForecastLogsToReconcile: async () => [],
+      getForecastAccuracies: async () => [],
+      upsertForecastAccuracies: async () => {},
+      upsertForecastLogs: async () => {},
+      getRecentPercentiles: async () => [],
+      getExperiencesWithUpstreamIds: async () => [],
+      getRideShapes: async () => [],
+      upsertRideShapes: async () => {},
+      getWaitWeatherAggregates: async () => [],
+      upsertWeatherSensitivities: async () => {},
+      getTrailingShowtimeSignals: async () => [],
+      upsertShowTimePatterns: async () => {},
+      pruneStaleShowTimePatterns: async () => {},
+      pruneWeatherObservations: async () => {},
+      recordDerivedStatRun: vi.fn(async () => {}),
+      ...overrides,
+    } as any;
+  }
+
+  it('logs the calibrated value, never the raw model output', async () => {
+    const logged: Array<{ park: string; lead_days: number; forecast_index: number }> = [];
+    const repo = makeFakeRepo({
+      upsertForecastLogs: async (rows: Array<{ park: string; lead_days: number; forecast_index: number }>) => {
+        logged.push(...rows);
+      },
+    });
+
+    const prediction = {
+      getRawForecast: async () => RAW,
+      getCalibratedForecast: async () => CALIBRATED,
+      getDaySnapshot: vi.fn(),
+      getCrowdMultiplier: vi.fn(),
+      getCrowdCalendarDay: vi.fn(),
+      getWaitInsights: vi.fn(),
+    } as unknown as PredictionService;
+
+    const service = createDerivedStatsService({
+      repo,
+      predictionService: prediction,
+      logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+      now: () => new Date('2026-08-26T12:00:00Z'),
+    });
+
+    await service.runDailyRecompute();
+
+    // 4 theme parks x 5 lead times.
+    expect(logged.length).toBe(20);
+    for (const row of logged) {
+      expect(row.forecast_index).toBe(CALIBRATED);
+      expect(row.forecast_index).not.toBe(RAW);
+    }
   });
 });

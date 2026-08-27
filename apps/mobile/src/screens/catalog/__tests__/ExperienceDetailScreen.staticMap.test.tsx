@@ -2,18 +2,22 @@
  * ExperienceDetailScreen Static_Map_Preview render tests
  * (experience-detail-redesign → tasks.md 10.2).
  *
- * Validates: Requirements 10.1, 10.2, 10.5, 10.6, 10.7, 10.8
+ * Validates: Requirements 4.7, 4.8, 4.9, 10.1, 10.2, 10.5, 10.6, 10.7, 10.8
  *
  * The Static_Map_Preview lives inside `LocationGroupSection`: a tappable
  * `<Image>` wrapped in a `Pressable` (`testID="experience-static-map"`,
  * `accessibilityRole="imagebutton"`) sourced from `staticMapUrl(lat, lng)`,
  * rendered only when `hasValidCoordinates(lat, lng)` is true AND the image has
  * not failed to load. Tapping it opens the OS maps app through the SAME
- * `Linking.canOpenURL` → `Linking.openURL(directionsUrl(...))` path (wrapped in
- * try/catch) as the Get directions button; on failure it shows the inline
- * `experience-directions-error` while preserving the rest of the screen. The
- * `<Image>` `onError` handler hides ONLY the image (via `mapImageFailed`) while
- * the Get directions button and the remaining Location content stay rendered.
+ * `handleGetDirections` path as the Get directions button: the handler walks the
+ * ordered `directionsUrlCandidates(...)` (platform-native URL first, then the
+ * universal `https` web maps URL), awaiting `Linking.openURL(candidate)` inside
+ * `try/catch` and stopping at the first success. It performs NO
+ * `Linking.canOpenURL` pre-check (R4.8), and shows the inline
+ * `experience-directions-error` only after every candidate rejects (R4.9), while
+ * preserving the rest of the screen. The `<Image>` `onError` handler hides ONLY
+ * the image (via `mapImageFailed`) while the Get directions button and the
+ * remaining Location content stay rendered.
  *
  * These example tests assert:
  *   - **R10.1** the preview renders when the Experience has valid coordinates.
@@ -21,9 +25,15 @@
  *     range (only latitude present; latitude > 90).
  *   - **R10.5** tapping the preview opens the OS maps app with the directions
  *     URL — identical behavior to the Get directions button.
- *   - **R10.6** when the maps app cannot be opened (`canOpenURL` false or
- *     `openURL` rejects) the inline error indication renders while the rest of
- *     the screen state is preserved.
+ *   - **R4.8** a `canOpenURL` result of `false` does NOT suppress the open — the
+ *     regression guard for the Android 11+ package-visibility false negative
+ *     that made every Android client show the error without ever calling
+ *     `openURL`.
+ *   - **R4.7** a first-candidate rejection falls back to the `https` web maps
+ *     URL and still opens, with no error indication.
+ *   - **R4.9 / R10.6** the inline error indication renders only after EVERY
+ *     candidate rejects, while the rest of the screen state is preserved — for
+ *     both the preview and the Get directions button.
  *   - **R10.7** firing the `<Image>` `onError` hides only the preview image
  *     while the Get directions button remains rendered.
  *   - **R10.8** the preview exposes a non-empty accessibility label.
@@ -219,7 +229,7 @@ function validCoordinatesFixture(id: string): DetailFixture {
 // Suite
 // ---------------------------------------------------------------------------
 
-describe('ExperienceDetailScreen Static_Map_Preview (R10.1, R10.2, R10.5, R10.6, R10.7, R10.8)', () => {
+describe('ExperienceDetailScreen Static_Map_Preview and directions open path (R4.7, R4.8, R4.9, R10.1, R10.2, R10.5, R10.6, R10.7, R10.8)', () => {
   let canOpenSpy: jest.SpyInstance;
   let openSpy: jest.SpyInstance;
 
@@ -357,11 +367,22 @@ describe('ExperienceDetailScreen Static_Map_Preview (R10.1, R10.2, R10.5, R10.6,
   });
 
   // -------------------------------------------------------------------------
-  // R10.6 — canOpenURL false shows the inline error, preserving screen state
+  // R4.8 — a `canOpenURL` false must NOT suppress the open (regression guard)
+  //
+  // This is the defect this suite previously enshrined: the screen gated
+  // `openURL` behind `canOpenURL`, and on Android 11+ package-visibility
+  // filtering makes `canOpenURL` resolve `false` for the `geo:` scheme unless
+  // it is declared in a native `<queries>` manifest element (Expo Go declares
+  // none) — even though `openURL` for the same URL succeeds. Every Android
+  // client therefore saw "Couldn't open the maps app" and never attempted the
+  // open. Against the pre-fix implementation this test fails: `openURL` was
+  // never called and `experience-directions-error` rendered.
   // -------------------------------------------------------------------------
-  test('R10.6: shows the inline error when the OS reports it cannot open the maps app, preserving screen state', async () => {
-    const experienceId = 'exp-map-cannot-open';
+  test('R4.8: a canOpenURL result of false does not suppress the open — the maps URL is still opened with no error indication', async () => {
+    const experienceId = 'exp-map-cannot-open-probe';
     stubDetail(validCoordinatesFixture(experienceId));
+    // The OS reachability probe reports the URL as unopenable (the Android 11+
+    // false negative). Opening still succeeds.
     canOpenSpy.mockResolvedValue(false);
 
     renderDetail(experienceId);
@@ -370,21 +391,60 @@ describe('ExperienceDetailScreen Static_Map_Preview (R10.1, R10.2, R10.5, R10.6,
 
     fireEvent.press(preview);
 
-    // R10.6: the inline error indication renders...
-    await screen.findByTestId('experience-directions-error');
-    // ...openURL is never reached...
-    expect(openSpy).not.toHaveBeenCalled();
-    // ...and the rest of the screen state is preserved (preview + Get
-    // directions + Location group all remain rendered).
+    // The open is attempted regardless of the probe, and it carries the exact
+    // stored coordinates.
+    await waitFor(() => {
+      expect(openSpy).toHaveBeenCalledTimes(1);
+    });
+    const opened = openSpy.mock.calls[0][0] as string;
+    expect(opened).toContain('28.4072');
+    expect(opened).toContain('-81.5836');
+
+    // No error indication is shown, and the screen is intact.
+    expect(screen.queryByTestId('experience-directions-error')).toBeNull();
     expect(screen.getByTestId('experience-static-map')).toBeTruthy();
     expect(screen.getByTestId('experience-get-directions')).toBeTruthy();
     expect(screen.getByTestId('experience-location-group')).toBeTruthy();
   });
 
   // -------------------------------------------------------------------------
-  // R10.6 — openURL rejecting shows the inline error, preserving screen state
+  // R4.7 — a first-candidate rejection falls back to the https web maps URL
   // -------------------------------------------------------------------------
-  test('R10.6: shows the inline error when opening the maps app rejects, preserving screen state', async () => {
+  test('R4.7: when the platform-native maps URL rejects, it falls back to the https web maps URL with no error indication', async () => {
+    const experienceId = 'exp-map-fallback';
+    stubDetail(validCoordinatesFixture(experienceId));
+    // The first (platform-native) candidate has no handler; the universal web
+    // maps URL opens.
+    openSpy
+      .mockRejectedValueOnce(new Error('no native maps app'))
+      .mockResolvedValueOnce(undefined);
+
+    renderDetail(experienceId);
+
+    const preview = await screen.findByTestId('experience-static-map');
+
+    fireEvent.press(preview);
+
+    await waitFor(() => {
+      expect(openSpy).toHaveBeenCalledTimes(2);
+    });
+
+    // The second attempt is the universal https web maps URL carrying the exact
+    // stored coordinates.
+    const fallbackUrl = openSpy.mock.calls[1][0] as string;
+    expect(fallbackUrl).toBe(
+      'https://www.google.com/maps/search/?api=1&query=28.4072,-81.5836',
+    );
+
+    // A successful fallback is not an error.
+    expect(screen.queryByTestId('experience-directions-error')).toBeNull();
+    expect(screen.getByTestId('experience-static-map')).toBeTruthy();
+  });
+
+  // -------------------------------------------------------------------------
+  // R4.9 / R10.6 — the error shows only after EVERY candidate rejects
+  // -------------------------------------------------------------------------
+  test('R4.9/R10.6: shows the inline error only after every candidate fails to open, preserving screen state', async () => {
     const experienceId = 'exp-map-open-rejects';
     stubDetail(validCoordinatesFixture(experienceId));
     openSpy.mockRejectedValue(new Error('no maps app'));
@@ -396,10 +456,36 @@ describe('ExperienceDetailScreen Static_Map_Preview (R10.1, R10.2, R10.5, R10.6,
     fireEvent.press(preview);
 
     await screen.findByTestId('experience-directions-error');
-    expect(openSpy).toHaveBeenCalledTimes(1);
+    // Both candidates (platform-native, then the https web maps URL) were tried
+    // before the error was surfaced — the error is a last resort, not a gate.
+    expect(openSpy).toHaveBeenCalledTimes(2);
     // Screen state preserved.
     expect(screen.getByTestId('experience-static-map')).toBeTruthy();
     expect(screen.getByTestId('experience-get-directions')).toBeTruthy();
+    expect(screen.getByTestId('experience-location-group')).toBeTruthy();
+  });
+
+  // -------------------------------------------------------------------------
+  // R4.9 — the Get directions button shares the same candidate-walking handler
+  // -------------------------------------------------------------------------
+  test('R4.9: the Get directions button walks the same candidate list and surfaces the error only after all fail', async () => {
+    const experienceId = 'exp-directions-button-rejects';
+    stubDetail(validCoordinatesFixture(experienceId));
+    openSpy.mockRejectedValue(new Error('no maps app'));
+
+    renderDetail(experienceId);
+
+    const getDirections = await screen.findByTestId(
+      'experience-get-directions',
+    );
+
+    fireEvent.press(getDirections);
+
+    await screen.findByTestId('experience-directions-error');
+    expect(openSpy).toHaveBeenCalledTimes(2);
+    expect(openSpy.mock.calls[1][0]).toBe(
+      'https://www.google.com/maps/search/?api=1&query=28.4072,-81.5836',
+    );
   });
 
   // -------------------------------------------------------------------------

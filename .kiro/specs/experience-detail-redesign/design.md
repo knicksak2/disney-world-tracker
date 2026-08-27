@@ -51,6 +51,22 @@ React Native Testing Library render tests.
   a universal web fallback; `geo:<lat>,<lng>?q=<lat>,<lng>` is the Android convention. A
   `https://www.google.com/maps/search/?api=1&query=<lat>,<lng>` URL is a robust cross-platform
   fallback that every device can open in a browser if no native maps app handles the scheme.
+- **`Linking.canOpenURL` must NOT gate the open attempt (R4.8)**: from Android 11 (API 30) onward,
+  package-visibility filtering makes `canOpenURL` resolve `false` for any non-`http(s)` scheme unless
+  that scheme is declared in a native `<queries>` manifest element. Expo Go's manifest declares no
+  `geo` scheme and the app registers no custom config plugin adding one, so `canOpenURL('geo:…')`
+  resolves `false` on every Android dev client — while `openURL('geo:…')` succeeds, because launching
+  an implicit intent is *not* subject to package-visibility filtering. A `canOpenURL` pre-check is
+  therefore a false-negative gate that suppresses a working open. `openURL` already rejects when no
+  activity can handle the URL, so `try/catch` around `openURL` is both sufficient and strictly more
+  accurate. Cross-platform reference for the `canOpenURL`/`openURL` divergence:
+  [react-native issue #32311](https://github.com/facebook/react-native/issues/32311) and the
+  [react-native-phone-call notes on the `<queries>` requirement](https://github.com/tiaanduplessis/react-native-phone-call).
+  (Content was rephrased for compliance with licensing restrictions.)
+- **Ordered candidate list (R4.7, R4.9)**: the screen tries the platform-native URL first and falls
+  back to the universal `https` web maps URL, so a device with no native maps handler (a bare Android
+  emulator without Google Maps, for instance) still gets a map in the browser instead of an error. The
+  error indication is reserved for the case where every candidate rejects.
 - **Line-clamp / overflow detection in React Native**: `Text` supports `numberOfLines` for visual
   clamping, and the `onTextLayout` event reports the actual laid-out `lines` array. Rendering the
   text once unclamped (or reading `nativeEvent.lines.length` on first layout) is the standard way to
@@ -195,6 +211,19 @@ export function directionsUrl(
 ): string;
 
 /**
+ * The ordered, duplicate-free Directions_Url_Candidates the screen attempts on
+ * activation (R4.7): the platform-native URL first, then the universal `https`
+ * web maps URL. When `platform` is already `'web'` the two coincide and a
+ * single-element list is returned. Never empty; always encodes the exact
+ * coordinates in every element.
+ */
+export function directionsUrlCandidates(
+  latitude: number,
+  longitude: number,
+  platform?: 'ios' | 'android' | 'web',
+): readonly string[];
+
+/**
  * Build a keyless static map image URL whose requested bbox is centered on the
  * given coordinates (R10.3, R10.4). Pure, framework-free, total, and
  * deterministic for valid finite inputs (R10.9, R10.10). A marker is overlaid
@@ -214,8 +243,11 @@ export function staticMapUrl(
 ): string;
 ```
 
-Only the actual `Linking.openURL(directionsUrl(...))` call, its `catch`, and the resulting error
-indication live in the screen (R4.4, R4.5).
+Only the actual `Linking.openURL(...)` calls, their `catch`, and the resulting error indication live
+in the screen (R4.4, R4.5). The screen iterates `directionsUrlCandidates(lat, lng, Platform.OS)`,
+awaiting `Linking.openURL(candidate)` inside `try/catch` and returning on the first success (R4.7);
+it does **not** call `Linking.canOpenURL` (R4.8 — see the Research Note on Android 11 package
+visibility), and it sets the error flag only after every candidate has rejected (R4.9).
 
 **`staticMapUrl` provider and encoding (R10.3, R10.4, R10.9, R10.10):** the builder targets the
 keyless ArcGIS basemap export endpoint at
@@ -298,10 +330,11 @@ already used for Get directions (R10.1, R10.2). When coordinates are valid the s
 - **Image source (R10.3, R10.4):** the `<Image source={{ uri: staticMapUrl(...) }}>` displays the
   keyless ArcGIS static map whose bbox is centered on the coordinates, with a pin `<Ionicons>` overlaid
   at the image center (which coincides with the coordinate) since the ArcGIS export has no built-in marker.
-- **Tap behavior (R10.5, R10.6):** activating the touchable invokes the **same** open-OS-maps behavior
-  as the `Get_Directions_Action` — `Linking.openURL(directionsUrl(...))` wrapped in the same
-  `try/catch` (and/or `canOpenURL`), so a failure to open sets the same inline error indication and
-  preserves the current screen state.
+- **Tap behavior (R10.5, R10.6, R4.7-R4.9):** activating the touchable invokes the **same**
+  open-OS-maps behavior as the `Get_Directions_Action` — the shared `handleGetDirections` handler that
+  walks `directionsUrlCandidates(...)` with `Linking.openURL` in `try/catch` and no `canOpenURL`
+  pre-check — so the inline error indication appears only when every candidate rejects, and the
+  current screen state is preserved.
 - **Load-error degradation (R10.7):** the `<Image>` `onError` handler sets a local
   `mapImageFailed` state flag; when set, the screen omits the `<Image>` while continuing to render the
   rest of the Location group content, including the `Get_Directions_Action`. Only the image is hidden.
@@ -486,13 +519,26 @@ equal inputs yields equal URLs.
 
 **Validates: Requirements 10.9, 10.10**
 
+### Property 19: Directions URL candidates are ordered, non-empty, and coordinate-preserving
+
+*For any* valid latitude, longitude, and platform, `directionsUrlCandidates` returns a non-empty,
+duplicate-free list whose first element equals `directionsUrl(latitude, longitude, platform)`, whose
+last element equals the universal web maps URL `directionsUrl(latitude, longitude, 'web')`, and every
+element of which encodes the exact latitude and longitude values that were passed in.
+
+**Validates: Requirements 4.7, 4.9**
+
 ## Error Handling
 
-- **Get directions failure (R4.5):** the screen wraps `Linking.openURL(directionsUrl(...))` in a
-  `try/catch` (and/or checks `Linking.canOpenURL`). On rejection or an unopenable URL it sets a
-  local error flag that renders an inline, non-blocking error indication (matching the existing
-  danger-text pattern) and leaves every other section of the screen intact. The action is never
-  rendered at all when coordinates are invalid (R4.3), so this path only handles genuine OS failures.
+- **Get directions failure (R4.5, R4.7-R4.9):** the screen awaits `Linking.openURL(candidate)` inside
+  a `try/catch` for each entry of `directionsUrlCandidates(...)` in order, returning on the first
+  success. It performs **no** `Linking.canOpenURL` pre-check, because on Android 11+ that probe
+  reports `geo:` as unopenable unless the scheme is declared in a native `<queries>` manifest element
+  — a false negative that blocked an `openURL` call which in fact succeeds. Only when every candidate
+  rejects does it set a local error flag that renders an inline, non-blocking error indication
+  (matching the existing danger-text pattern), leaving every other section of the screen intact. The
+  action is never rendered at all when coordinates are invalid (R4.3), so this path only handles
+  genuine OS failures.
 - **Static map preview failures (R10.6, R10.7):** a failure to open the OS maps app on tap reuses the
   same Get-directions error path above (inline error indication, screen state preserved). An image
   load failure (`<Image>` `onError`) sets a local `mapImageFailed` flag that hides only the map image
@@ -531,9 +577,9 @@ Property tests target the pure cores. Each property test:
   duplicate values (extending the generators already in `infoTags.prop.test.ts`).
 
 Coverage: Properties 1–8 and 14–16 against `infoTags.ts` (`buildTagGroups`, `relabelTagValue`,
-`priceTierListTag`, `resortAreaLabel`); Properties 9–10 and 17–18 against `directions.ts`
-(`hasValidCoordinates`, `directionsUrl`, and `staticMapUrl`), each run with fast-check at 100+
-iterations; Property 11 against `shareEntryPoint.ts`; Property 12 against `gating.ts` (already
+`priceTierListTag`, `resortAreaLabel`); Properties 9–10 and 17–19 against `directions.ts`
+(`hasValidCoordinates`, `directionsUrl`, `directionsUrlCandidates`, and `staticMapUrl`), each run with
+fast-check at 100+ iterations; Property 11 against `shareEntryPoint.ts`; Property 12 against `gating.ts` (already
 largely covered — extend if needed); Property 13 against the aggregate formatting helper.
 
 ### Unit / example-based render tests
@@ -543,9 +589,12 @@ that are not universal properties:
 
 - **Info-tag rendering (R1.7, R2.2):** exact group labels; `no-service-animals` renders as
   "Service animals not permitted".
-- **Get directions (R4.5, R4.6):** with `Linking.openURL` mocked — success calls it with the built
-  URL; rejection/`canOpenURL` false shows the error indication while other content persists; the
-  control exposes a non-empty accessibility label.
+- **Get directions (R4.5, R4.6, R4.7, R4.8, R4.9):** with `Linking.openURL` mocked — success calls it
+  with the built URL; a `canOpenURL` stub resolving `false` does **not** suppress the open (R4.8
+  regression guard: the URL is still opened and no error indication appears); a first-candidate
+  rejection falls back to the next candidate and still opens without an error (R4.7); only when every
+  candidate rejects does the error indication show while other content persists (R4.9); the control
+  exposes a non-empty accessibility label.
 - **Static map preview (R10.1, R10.2, R10.5, R10.6, R10.7, R10.8):** renders the `<Image>` preview when
   coordinates are valid and omits it when latitude/longitude are missing or out of range; tapping the
   preview (with `Linking.openURL` mocked) invokes the same open-OS-maps behavior as Get directions and

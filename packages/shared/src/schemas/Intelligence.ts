@@ -6,6 +6,17 @@ export const crowdCalendarDaySchema = z.object({
   park: parkSchema,
   forecastIndex: z.number(),
   observedIndex: z.number().optional(),
+  // R7.5 — the frozen forecast as issued, never recomputed with hindsight.
+  capturedForecast: z.object({
+    index: z.number(),
+    leadDays: z.number().int().nonnegative(),
+    capturedAt: z.string(),
+  }).optional(),
+  forecastAccuracy: z.object({
+    meanAbsoluteErrorLevels: z.number().nonnegative(),
+    leadDays: z.number().int().nonnegative(),
+    sampleCount: z.number().int().nonnegative(),
+  }).optional(),
   parkHours: z.object({
     openTime: z.string().optional(),
     closeTime: z.string().optional(),

@@ -117,6 +117,13 @@ This feature owns data collection, the wait-time model, the crowd index and fore
 4. THE System SHALL apply the measured systematic bias as a correction to future Crowd_Forecasts, in continuous ratio-scale units and bounded so the corrected forecast stays within the ratio band (R2.6), closing the calibration loop.
 5. THE Crowd Calendar SHALL surface forecast accuracy (e.g., recent mean absolute error) and, for a past date, the originally-captured forecast versus the actual — not a recomputed forecast.
 6. THE forecast-log storage SHALL be bounded, pruned after reconciliation beyond a retention window.
+7. THE measured bias correction of R7.4 SHALL apply to the **Crowd_Forecast as published and scored**, and SHALL NOT propagate into the wait-prediction tiers of R1.1, until wait-side accuracy is measurable per R18.
+
+   **Scope, precisely.** The correction is applied by exactly two consumers, which MUST see the same number so that published accuracy describes the forecast a user was actually shown (R7.1): the Crowd Calendar's displayed `forecastIndex`, and the frozen capture of R7.1. The uncalibrated model output SHALL be what feeds `getDaySnapshot`, `getWaitInsights`, and the `Crowd_Multiplier` exposed to the Day Planning feature.
+
+   **Why the asymmetry is deliberate and not an inconsistency.** The bias is measured against the observed Crowd_Index — a park-level ratio — and is large relative to its own metric: Magic Kingdom's `+0.236` and Animal Kingdom's `−0.203` account for roughly 90% of each park's crowd MAE, so correcting the calendar is a measured, high-confidence win. Propagating that same `0.236` through the Crowd_Multiplier, however, shifts every Magic Kingdom wait prediction by about 24% — on the order of 11 minutes for a 45-minute headliner, which **exceeds the wait model's own measured MAE of ~10 minutes on those rides**. No evidence exists that a crowd-index-derived correction improves wait predictions, and the available evidence points the other way: a holdout test found the day-to-day component of the index carried no usable wait signal at all (de-meaning it raised wait MAE from `5.87` to `6.52` minutes). Applying an unvalidated correction whose magnitude exceeds the target metric's error is not a calibration; it is a coin flip.
+
+   THE asymmetry SHALL be revisited once R18's wait-forecast log can score both variants, and SHALL NOT be "tidied up" into a single path before then. A future change that unifies them without wait-side evidence reintroduces this risk silently, which is why the scope is stated as a requirement rather than left as a code comment.
 
 ### Requirement 8: Hosting and Cost Constraints
 
@@ -198,7 +205,7 @@ This feature owns data collection, the wait-time model, the crowd index and fore
 
 #### Acceptance Criteria
 
-1. THE `derivedStatsService.runDailyRecompute` process SHALL execute all daily recompute legs (`reconcileForecasts`, `captureForecasts`, `learnWeatherSensitivities`, `recomputePercentiles`, `recomputeShowtimePatterns`, `pruneWeatherObservations`) with per-leg error isolation, so that a failure in one leg does NOT stop or abort the remaining legs.
+1. THE `derivedStatsService.runDailyRecompute` process SHALL execute all daily recompute legs (`reconcileForecasts`, `captureForecasts`, `learnWeatherSensitivities`, `recomputePercentiles`, `recomputeShowtimePatterns`, `pruneWeatherObservations`, and — added by R17 and R18 — `archiveWaitSamples`, `pruneWaitArchive`, `pruneCrowdForecastLog`, `reconcileWaitForecasts`, `captureWaitForecasts`, `pruneWaitForecastLog`) with per-leg error isolation, so that a failure in one leg does NOT stop or abort the remaining legs. THE leg list is extensible: any leg added by a later requirement inherits the same isolation and outcome-recording obligations, and the store of R13.2 stays bounded at one row per leg regardless of how many legs exist.
 2. THE System SHALL maintain a `derived_stat_runs` store bounded at one row per leg, storing `leg` (PK), `last_success_at`, `last_error_at`, `last_error` (truncated to 500 characters), and `consecutive_failures` (non-negative integer).
 3. WHEN a leg completes successfully, THE System SHALL record `last_success_at = now()`, reset `consecutive_failures = 0`, clear `last_error = NULL`, and preserve any existing `last_error_at`.
 4. WHEN a leg fails, THE System SHALL record `last_error_at = now()`, increment `consecutive_failures`, truncate the error message to at most 500 characters into `last_error`, and preserve any existing `last_success_at`.
@@ -206,3 +213,79 @@ This feature owns data collection, the wait-time model, the crowd index and fore
 6. THE `derivedStatsService.runDailyRecompute` SHALL log a structured summary naming which legs succeeded and which failed, logged at `warn` severity when one or more legs failed, and logged at `info` severity ONLY when all legs succeeded — it SHALL NOT report overall success when any leg failed.
 
 
+### Requirement 14: Stable Crowd-Index Baseline
+
+**User Story:** As an App Developer, I want the observed Crowd_Index measured against a stable per-ride baseline rather than the fast-moving Ride_Shape, so that the index means the same thing in December as it does in August and can therefore carry real seasonal signal into the Crowd_Forecast.
+
+#### Acceptance Criteria
+
+1. THE per-ride `expected` denominator of the observed Crowd_Index (R2.8) SHALL be a **Ride_Baseline** — a slow-moving per-`(experience_id, day_of_week, hour)` expected posted wait — and SHALL NOT be `ride_shapes.avg_wait_minutes`. The Ride_Shape is recency-weighted toward the same observations that form the index's numerator, so dividing by it makes the ratio self-referential: the index measures the decay of its own denominator rather than the day's busyness.
+2. THE self-referential form SHALL be treated as a defect with measured evidence, not a tuning preference: over the two sampling windows Aug 11–18 → Aug 19–25 the observed index rose in **all four** parks (Magic Kingdom `0.819 → 0.909`, Hollywood Studios `0.855 → 0.933`, EPCOT `0.858 → 0.903`, Animal Kingdom `0.881 → 0.901`) while the raw mean posted wait across the same samples **fell** (`23.85 → 23.25` minutes). A correct index MUST NOT move opposite to the waits it summarizes.
+3. THE Ride_Baseline SHALL be **established once and then frozen** until deliberately re-anchored (R14.9). It SHALL NOT be maintained as a recency-weighted average of incoming observations, however long its memory.
+
+   A long-memory EMA was evaluated and **rejected on measured grounds**: with a 500-sample cap, a bucket sitting at count `100` and a persistently different observed level drifts `0.197` ratio units over `100` passes — only `1.27×` better than the fast shape it replaces over the same horizon, because both eventually converge on the observations. More fundamentally, *any* exponential memory over-weights the most recent season and so can never be season-neutral, which is the entire property the Crowd_Index needs in order to compare December with August. Slowing the EMA down does not fix a mechanism that is wrong in kind.
+4. THE Ride_Baseline SHALL be established from the bucket's `ride_shapes.avg_wait_minutes` — which carries the Model_Seed's multi-year absolute level — and only once that fast shape has accumulated at least `BASELINE_ESTABLISH_MIN_SHAPE_SAMPLES` (default `20`, the point at which the shape's own capped alpha saturates) so that the frozen level rests on a settled estimate rather than on one pass's reading. Until then the bucket has no baseline and is simply excluded from the basket.
+   `baseline_sample_count` SHALL record the evidence behind the frozen value at establishment time and SHALL NOT be incremented afterwards, since no later sample informs it.
+5. A ride SHALL be eligible for the standby basket (R2.8) only once its Ride_Baseline is established — `baseline_sample_count >= CROWD_INDEX_MIN_SHAPE_SAMPLES` and `baseline_wait_minutes >= CROWD_INDEX_MIN_EXPECTED_MINUTES` — and this baseline gate SHALL replace the Ride_Shape sample-count gate for basket eligibility. The Ride_Shape gate remains unchanged everywhere else.
+6. THE Crowd_Index SHALL remain on the continuous ratio scale of R2.1 / R2.6, where **1.0 = every basket ride sitting at its own baseline level** for that `(day_of_week, hour)`.
+7. THE Ride_Baseline SHALL NOT be consumed by the wait-prediction tiers of R1.1, which continue to read the fast-learning Ride_Shape. The baseline exists to denominate the Crowd_Index, not to predict waits.
+8. THE observed Crowd_Index SHALL NOT drift at all in the absence of a change in observed waits: holding a basket's observed waits fixed across an **arbitrary** number of sampling passes, the computed index SHALL be exactly unchanged, because an established Ride_Baseline is frozen (R14.3) and no sample moves it. This is an exact equality, not a tolerance.
+
+   THE contrast is the behavior being removed: over the same run, a shape-denominated index converges to `1.0` regardless of the actual level, so a ride reliably running 25% above its baseline reads as a typical day within weeks.
+9. THE frozen baseline SHALL be re-anchored deliberately rather than continuously, from a trailing 365-day window of the wait archive (R17), on a low cadence. A 365-day mean is **season-neutral by construction**, which is precisely why it is the correct re-anchoring source and an exponential average is not. Re-anchoring is how R14.3's genuine multi-season change (a ride's capacity or popularity changing for real) is absorbed; freezing alone would go stale.
+   UNTIL the archive holds a full year, the re-anchor SHALL be a no-op and the seeded/established baseline SHALL stand. A stale-but-stable yardstick is strictly preferable to a self-referential one: the former misprices the level, the latter destroys the signal.
+
+### Requirement 15: Season-Tier Crowd Responsiveness
+
+**User Story:** As a Trip_Member, I want a mature seasonal wait estimate to still respond to how busy my specific date is, so that a packed Saturday and a dead Tuesday in the same season are not predicted identically.
+
+#### Acceptance Criteria
+
+1. WHEN the season-resolved tier (R1.1a) is selected, THE System SHALL scale that bucket's direct average by the date's Crowd_Multiplier **relative to the average crowd level already embedded in the bucket's own samples** — neither by the absolute multiplier (which double-counts the crowd level a direct average already contains) nor by `1.0` (which makes a mature bucket ignore the date entirely).
+2. THE System SHALL maintain, per season-resolved bucket, the recency-weighted mean observed Crowd_Index of the samples that formed it (`avg_crowd_index`, on the continuous ratio scale of R2.6), updated by the same EMA weight as that bucket's wait so the two stay in step.
+3. THE season-tier estimate SHALL therefore be `seasonBucket.avg_wait_minutes × clamp(forecastIndex / seasonBucket.avg_crowd_index, CROWD_MULTIPLIER_MIN, CROWD_MULTIPLIER_MAX)`, and SHALL fall back to the unscaled direct average WHEN `avg_crowd_index` is absent, non-finite, or `<= 0`.
+4. THE tier transition SHALL be continuous in behavior: crossing the tier-1 reliability threshold SHALL NOT remove a prediction's sensitivity to the date's Crowd_Forecast. A ride whose bucket matures mid-season MUST NOT silently stop responding to whether the requested date is busy or quiet.
+5. THE requirement SHALL be regression-tested by a case that drives the tier-1 branch specifically — a season bucket at or above the reliability threshold, evaluated at two different forecast indices, asserting the two predictions differ in the expected direction. A test suite in which every season bucket sits below the threshold does NOT cover this behavior.
+
+### Requirement 16: Day-of-Week Shrinkage in Tier Selection
+
+**User Story:** As a Trip_Member, I want weekday-specific wait predictions that lean on weekday history only once there is enough of it, so that a thin weekday bucket does not make my prediction worse than ignoring the weekday would have.
+
+#### Acceptance Criteria
+
+1. WHEN the shape tier (R1.1b) is selected, THE System SHALL use a **shrunk** shape estimate that blends the `(experience_id, day_of_week, hour)` bucket toward the day-of-week-pooled `(experience_id, hour)` mean, weighted by the bucket's own sample count:
+   `shrunkWait = (bucket.wait × bucket.sampleCount + pooled.wait × DOW_SHRINKAGE_K) / (bucket.sampleCount + DOW_SHRINKAGE_K)`
+2. `DOW_SHRINKAGE_K` SHALL default to `8`. This is holdout-measured, not guessed: on a train Aug 4–18 / test Aug 19–25 split, mean absolute error was `5.87` min with the raw weekday bucket (`k = 0`), `5.65` min at `k = 5` and `k = 10`, `5.72` at `k = 20`, and `6.04` when the weekday dimension was ignored entirely (`k = ∞`) — so the optimum is interior and the raw bucket is measurably worse than a shrunk one.
+3. THE shrinkage SHALL be justified by data thinness rather than by weekday effects being absent: weekday effects are large and real (over the sampled window, Star Wars: Rise of the Resistance spans `63%` of its own mean between its busiest and quietest weekday, TRON Lightcycle / Run `43%`, Seven Dwarfs Mine Train `38%`), but a weekday bucket held only `9.18` samples on average with `56.7%` of buckets at `<= 10` samples, so the per-weekday estimate is dominated by noise at present.
+4. WHEN the pooled mean is unavailable, THE System SHALL use the raw bucket value. WHEN the bucket is absent but a pooled mean exists, THE System SHALL use the pooled mean. WHEN both are absent, THE System SHALL fall through to the park-typical tier (R1.1c).
+5. THE shrinkage SHALL be sample-count driven so that it converges to the raw weekday bucket as data accrues, with no threshold flip and no code change required as the model matures.
+6. THE shrinkage SHALL apply only to the shape tier. It SHALL NOT alter the season-resolved tier (R15) or the park-typical tier.
+
+### Requirement 17: Bounded Historical Wait Archive
+
+**User Story:** As an App Developer, I want the day-to-day variation in observed waits retained beyond the raw-sample window, so that a future day-level model has a training set instead of only the most recent 30 days.
+
+#### Acceptance Criteria
+
+1. THE System SHALL maintain a bounded `wait_archive` store of per-`(experience_id, date, hour)` aggregates derived from `wait_samples`: at least the mean observed standby wait, the sample count, and the observed minimum and maximum for that hour.
+2. THE archive SHALL be written by `derivedStatsService.runDailyRecompute` as an additional per-leg-isolated leg per R13.1, recorded in `derived_stat_runs` per R13.2, and SHALL be idempotent per `(experience_id, date, hour)` so re-running a day neither duplicates nor double-counts rows.
+3. THE archive SHALL be written for dates still inside the `wait_samples` retention window, so that every day is captured before R3.6 pruning removes its raw rows. The archive leg SHALL therefore run before the prune for the same day, or cover a trailing window wide enough that no day can be pruned unarchived.
+4. THE archive SHALL be retained far longer than `wait_samples` (`WAIT_ARCHIVE_RETENTION_DAYS`, default `1100` — about three years) while remaining within the Postgres free-tier budget per R8.3. At the observed collection rate (~81 rides posting standby waits across ~18 operating hours) this is on the order of `0.5M` rows per year.
+5. THE archive SHALL NOT be read by any prediction path. Its presence, absence, or contents SHALL NOT change any value returned by the Prediction_Service — it exists for offline analysis, accuracy measurement, and future model training only.
+6. WHEN a date's raw samples have already been pruned, THE System SHALL leave any existing archive rows for that date unchanged rather than deleting, zeroing, or recomputing them from the now-empty raw store.
+
+### Requirement 18: Wait Prediction Accuracy Logging and Shadow Evaluation
+
+**User Story:** As an App Developer, I want predicted waits frozen and later scored against what actually happened, so that wait-model accuracy is continuously measurable and a replacement model can be evaluated before it is ever served to a user.
+
+#### Acceptance Criteria
+
+1. THE System SHALL capture frozen wait predictions for a bounded set of Experiences at defined lead times (`WAIT_FORECAST_LEAD_DAYS`, default `[7, 3, 1]`) and hours (`WAIT_FORECAST_HOURS`, default `[10, 13, 16, 19]` ET), each stored with the timestamp it was issued — never a value recomputed with hindsight. This mirrors the crowd-forecast discipline of R7.1 and carries the same prohibition.
+2. THE captured set SHALL be bounded to the Experiences whose accuracy matters most (`WAIT_FORECAST_MAX_EXPERIENCES`, default `40`, selected by descending Ride_Baseline wait) so the store stays comfortably within R8.3.
+3. WHEN a logged target date and hour has passed and observed data exists for it, THE System SHALL reconcile each captured prediction against the observed mean standby wait for that `(experience_id, date, hour)` — sourced from `wait_archive` (R17) so reconciliation still works after raw samples are pruned — and record the signed error in minutes as `predicted − observed`.
+4. THE System SHALL maintain a recency-weighted accuracy summary per Experience and lead time — at least mean absolute error and mean bias, both in minutes — using the same capped-alpha EMA form as R7.3.
+5. THE log SHALL carry an optional **challenger** prediction alongside the served prediction, so an alternative model can be scored in shadow on identical inputs without being served to any user. WHERE a challenger value is absent, its error columns SHALL remain null and SHALL NOT contribute to any accuracy summary.
+6. THE System SHALL NOT promote a challenger model automatically. Promotion SHALL be a deliberate developer action informed by the logged comparison; the serving path SHALL be unaffected by challenger values.
+7. THE wait-forecast log SHALL be bounded, pruned after reconciliation beyond a retention window (`WAIT_FORECAST_RETENTION_DAYS`, default `180`), per R3.6 and R8.3.
+8. Capture, reconcile, and prune SHALL each run as isolated daily-recompute legs per R13.1, so a failure in wait-accuracy bookkeeping cannot stop crowd reconciliation or any other leg.
+9. THE accuracy summary SHALL be readable by the developer-facing surface without being required by any user-facing path, so that the absence of a UI never blocks the measurement from accruing.

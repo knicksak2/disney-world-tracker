@@ -51,6 +51,18 @@ graph TD
 - `calibration.ts` — `updateAccuracy(prev, error, weight)` (recency-weighted MAE + bias) and `applyBiasCorrection(rawIndex, bias)` clamped to the ratio band `[0.4, 3.0]` per R2.6 (the 1–10 scale is display-only via `displayLevel`).
 - `seasonalPrior.ts` — `seasonalPrior(date)` computed by rule per year, **not** hardcoded: US federal holidays via nth-weekday formulas, Easter via the Computus algorithm, an Easter-anchored spring-break window, plus summer / winter / Thanksgiving windows. Recomputes correctly every year, so it never goes stale. Weak feature within Disney's publication window; primary only for far-future dates.
 
+Added by R14–R16 (all pure, no I/O, in `waitMath.ts` unless noted):
+
+- `establishBaseline(prevBaseline, prevBaselineCount, shapeAvgWaitMinutes, shapeSampleCount)` (R14) — **establish-once-then-freeze**, not an EMA. Returns an already-established baseline completely untouched (value *and* count), so no observation can ever move it. When unestablished, it freezes `shapeAvgWaitMinutes` once `shapeSampleCount >= BASELINE_ESTABLISH_MIN_SHAPE_SAMPLES` (20) and otherwise leaves the baseline `null`.
+
+  A long-memory EMA was implemented first and then discarded on measured grounds: at `count = 100` with a persistently different observed level it drifts `0.197` ratio units over `100` passes — only `1.27×` better than the fast shape over the same horizon, since both converge on the observations eventually. Beyond that, *any* exponential memory over-weights the recent season and therefore cannot be season-neutral, which is the one property the index actually needs. Genuine multi-season change is absorbed by the deliberate re-anchor of R14.9 instead.
+- `isBaselineEstablished(baselineWait, baselineCount)` (R14.5) — the basket-eligibility predicate, replacing the Ride_Shape sample-count check inside `relativeCrowdIndex`'s input construction.
+- `relativeCrowdIndex(rides)` — **behavioral change**: each ride's `expected` is now its Ride_Baseline rather than its Ride_Shape average, and the per-ride eligibility gate reads the baseline's sample count. The function's signature and its existing composition-robustness guarantees (Property 9) are unchanged; only the meaning of `expected` at the call site changes. `CROWD_INDEX_MIN_EXPECTED_MINUTES` and the `MAX_RIDE_RATIO` clamp still apply.
+- `shrinkToPooled(bucketWait, bucketSampleCount, pooledWait, k)` (R16) — the day-of-week shrinkage blend. Returns `pooledWait` at `sampleCount = 0`, the raw bucket as `sampleCount → ∞`, and never a value outside the interval spanned by its two inputs.
+- `selectTier(...)` — **signature change**. Tier 1 now takes the bucket's `avgCrowdIndex` and the raw `forecastIndex` so it can de-mean (R15); tier 2 now takes the day-of-week-pooled per-hour mean and the bucket's sample count so it can shrink (R16). The tier *ordering* and the park-typical fallback are unchanged, so Property 1 still holds. `predictionService.getDaySnapshot` supplies the pooled mean by grouping the already-fetched all-day-of-week shape rows by hour — no extra query.
+
+Note the two multipliers are deliberately different quantities and must not be conflated: tier 2 scales by `crowdMultiplier(forecastIndex, 1.0)` — an *absolute* level factor, because a Ride_Shape average is season-agnostic — while tier 1 scales by `forecastIndex / bucket.avg_crowd_index` — a *relative* factor, because a season-resolved average already contains that season's typical crowd level. Applying the absolute multiplier to tier 1 would double-count it.
+
 ### Services (`services/intelligence/`)
 
 - `predictionService.ts` — `getDaySnapshot(experienceIds, date, park)` and `crowdMultiplier(park, date)`; applies same-day live correction (via `Live_Service`) for today/tomorrow, and — for dates inside the ~14-day forecast horizon — a bounded per-Experience weather adjustment; falls back to model + Standard Operating Hours.
@@ -96,7 +108,15 @@ Adds `source TEXT NOT NULL DEFAULT 'observed' CHECK (source IN ('observed','seed
 
 ### Shared DTOs (`@dwt/shared`)
 
-- `CrowdCalendarDayDTO` — `{ date, park, forecastIndex, observedIndex?, parkHours, earlyEntry, extendedEvening, ticketedEvent, llMultipassPriceCents?, festival? }`, plus optional per-ride surfacing of reliability, typical LL sell-out hour, and showtimes in the day-detail projection.
+- `CrowdCalendarDayDTO` — `{ date, park, forecastIndex, observedIndex?, capturedForecast?, forecastAccuracy?, parkHours, earlyEntry, extendedEvening, ticketedEvent, llMultipassPriceCents?, festival? }`, plus optional per-ride surfacing of reliability, typical LL sell-out hour, and showtimes in the day-detail projection.
+
+  `forecastIndex` and `observedIndex` are both on the **display 1–10 scale** (the continuous ratio is projected via `displayLevel` at the DTO boundary). `observedIndex` is set only for a past date whose observed index is finalized from the app's own sampling — a `source='seed'` row is history, not "how we did", and does not populate it.
+
+  The two accuracy fields exist because R7.5 requires predicted-versus-actual to be honest, and the naive implementation is not:
+  - `capturedForecast: { index, leadDays, capturedAt }` — the forecast **as issued**, read from the frozen `crowd_forecast_log`. Critically NOT a recomputed value: for a past date `computeRawForecast` returns the observed index verbatim (its first branch), so a recomputed "prediction" would always equal the actual and the comparison would be vacuous. `getCapturedForecast` returns the **earliest-issued** surviving capture (largest `lead_days`) — the strongest honest claim, and the one least contaminated by the R4.3 same-day live correction. `leadDays` travels with it so the UI can state how far ahead the claim was made.
+  - `forecastAccuracy: { meanAbsoluteErrorLevels, leadDays, sampleCount }` — the measured rolling error at the **same** lead time, so the figure carries its own error bar. Ratio-scale MAE is multiplied by 5 to express it in display levels (since `displayLevel` is `round(5 × ratio)`), and `sampleCount` is exposed so a one-day-old average is not read as an established one. Omitted entirely when nothing has been scored at that lead.
+
+  **Date-key convention (`toDateKey`).** Values bound to a `DATE` column are keyed off the instant's **UTC** calendar date. Both callers supply an instant whose UTC date already equals the intended park day: the calendar route passes midnight-UTC dates, and `captureForecasts` passes ET-noon (`16:00Z`). Converting to Eastern instead would shift a midnight-UTC date back a day (`00:00Z Aug 20` is `20:00 ET Aug 19`) and break every calendar read, so the convention is pinned by two live-Postgres tests rather than left to be "fixed" later.
 - `WaitSnapshot` — per-experience view carrying, per hour, the predicted standby wait, plus the single-rider wait (when offered), `isVirtualQueue`, `showtimes` (for shows), and Lightning Lane info — so consumers model each experience type correctly. Consumed internally and by Day Planning.
 - `WaitInsightsDTO` — per-ride derived wait insights for the "When to ride" surface (named *wait insights*, distinct from the personal Stats tab): `p50`/`p90` (day-representative percentiles, aggregated across the day's operating-hour buckets — NOT read from a single arbitrary hour bucket such as `shape[0]`) and coefficient of variation, `bestHour`/`worstHour`, `escalationRate` (rope-drop value), reliability (`downRate`), typical LL sell-out hour, and event/cascade highlights. It also carries the fields the UI needs so it never hardcodes or fabricates values: `waits` (the real per-hour predicted-wait curve for the requested date-context — the always-visible forecast chart binds to this, per R11.11), `sampleCount` (the representative bucket sample count backing the verdict, so the UI can scale the verdict's certainty per R11.11 alongside `cv`), `hasSingleRider` and `singleRiderP50WaitMinutes?` (to render the single-rider decision helper's estimated time saved per R11.9 — absent when the ride has no single-rider line), and `llMultipassPriceCents?` (the ride's Lightning Lane price for the LL decision helper — the UI MUST render this, not a hardcoded price). The ride's `park` used to compute the crowd multiplier for this DTO is resolved from `experiences.park` (via the repo), never from a fabricated directory method or a hardcoded park default.
 
@@ -131,6 +151,14 @@ Adds `source TEXT NOT NULL DEFAULT 'observed' CHECK (source IN ('observed','seed
 *For any* captured forecast and later observed index, reconciliation pairs them by `(park, date, lead_days)` and records `error = forecast − observed`; `updateAccuracy` keeps a recency-weighted MAE/bias, and `applyBiasCorrection` returns a continuous ratio clamped to the ratio band `[0.4, 3.0]` (ratio-scale units — NOT [1, 10]).
 
 **Validates: Requirements 7.1, 7.2, 7.3, 7.4**
+
+### Property 19: The bias correction reaches the published forecast and nothing on the wait path
+*For any* park with a scored accuracy row, the calibrated forecast differs from the raw forecast by exactly the clamped measured bias, and:
+1. **Both published consumers agree.** The value returned by `getCalibratedForecast` (what `captureForecasts` freezes) equals the continuous value behind `getCrowdCalendarDay`'s displayed `forecastIndex`. If these diverged, published accuracy would describe a forecast nobody was shown.
+2. **No wait consumer is affected.** `getRawForecast`, `getCrowdMultiplier`, `getDaySnapshot`'s per-hour `predictedWaitMinutes`, and `getWaitInsights` are **bit-identical** whether or not an accuracy row exists — so the correction cannot move a wait prediction (R7.7).
+3. **Absence is not zero.** A park with no reconciled rows (`sample_count = 0`), or an unavailable accuracy store, yields the raw forecast unchanged rather than a correction of `0` applied to a fabricated bias.
+
+**Validates: Requirements 7.4, 7.7**
 
 ### Property 7: Weather adjustment is bounded and horizon-limited
 *For any* Experience and date, `weatherAdjustment` returns a bounded multiplier, and returns exactly 1.0 (no effect) when the date is outside the forecast horizon or no sensitivity is known — so weather never distorts a far-future prediction.
@@ -171,6 +199,36 @@ Adds `source TEXT NOT NULL DEFAULT 'observed' CHECK (source IN ('observed','seed
 **Validates: Requirements 13.1, 13.2, 13.3, 13.4, 13.5, 13.6**
 
 
+### Property 14: An established Ride_Baseline is frozen, so the crowd index cannot self-drift
+*For any* basket of rides and *any* run of repeated passes in which each ride's observed wait is held constant while the fast Ride_Shape is updated toward those observations between passes:
+1. **Exact stability.** The baseline-denominated index is **exactly unchanged** across the entire run — not merely within a tolerance — because `establishBaseline` returns an already-established baseline untouched. Over the same run the shape-denominated index converges to `1.0`, so a ride reliably running 25% above its baseline reads as a typical day. That collapse is the defect.
+2. **Idempotence.** `establishBaseline` is idempotent on an established bucket: for any sample and any shape state, both the returned value and `baseline_sample_count` equal the inputs.
+3. **Establishes from a settled shape, never from a sample.** A bucket with no baseline establishes to `avg_wait_minutes` — carrying the Model_Seed's absolute level — and only once `shapeSampleCount >= BASELINE_ESTABLISH_MIN_SHAPE_SAMPLES`. Below that it stays unestablished (`null`) rather than freezing a noisy level, and it is never set to the observation.
+4. **Eligibility reads the baseline's own columns.** A ride with `baseline_sample_count < CROWD_INDEX_MIN_SHAPE_SAMPLES` or `baseline_wait_minutes < CROWD_INDEX_MIN_EXPECTED_MINUTES` is excluded from the basket, independently of how dense its fast shape is.
+
+**Validates: Requirements 14.1, 14.3, 14.4, 14.5, 14.6, 14.8**
+
+### Property 15: A mature season bucket still responds to the date's crowd forecast
+*For any* season-resolved bucket at or above the tier-1 reliability threshold with a positive `avg_crowd_index`, `selectTier` returns a value that is **strictly increasing in `forecastIndex`** over the unclamped range — so two dates with different crowd forecasts never receive the same tier-1 wait. The returned value equals the bucket's raw average exactly when `forecastIndex == avg_crowd_index` (the bucket's own embedded crowd level), and falls back to the raw average when `avg_crowd_index` is absent, non-finite, or `<= 0`. The scaling factor stays within `[CROWD_MULTIPLIER_MIN, CROWD_MULTIPLIER_MAX]`.
+
+**Validates: Requirements 15.1, 15.2, 15.3, 15.4**
+
+### Property 16: Day-of-week shrinkage is bounded, monotone, and converges to the raw bucket
+*For any* weekday bucket wait, pooled per-hour mean, and non-negative sample count, the shrunk shape estimate (a) lies within the closed interval bounded by the two inputs (never outside it), (b) is non-decreasing in the bucket's sample count when the bucket exceeds the pooled mean and non-increasing when it is below, (c) equals the pooled mean at `sampleCount = 0` and tends to the raw bucket as `sampleCount → ∞`, and (d) is applied only in the shape tier — the season-resolved and park-typical tiers are numerically unchanged by the shrinkage parameter.
+
+**Validates: Requirements 16.1, 16.4, 16.5, 16.6**
+
+### Property 17: The wait archive is bounded, idempotent, and prediction-neutral
+*For any* set of raw samples, the archive aggregation for an `(experience_id, date, hour)` key yields `sampleCount >= 1`, `min <= mean <= max`, and re-running the aggregation over the same samples produces an identical row (idempotent per key, no double-counting). Archive contents are **prediction-neutral**: for any two archive states, `getDaySnapshot` and `getCrowdMultiplier` return identical values for the same inputs.
+
+**Validates: Requirements 17.1, 17.2, 17.5, 17.6**
+
+### Property 18: Wait forecasts are frozen, scored by key, and challengers never leak into serving
+*For any* captured wait prediction and later observed hourly mean, reconciliation pairs them by `(experience_id, date, hour, lead_days)` and records `error = predicted − observed` in minutes; the recency-weighted per-`(experience, lead)` MAE and bias update by the same capped-alpha form as Property 6. A captured row's `predicted_wait_minutes` is never rewritten by a later recompute (frozen). A present `challenger_wait_minutes` contributes only to challenger error columns and **never** to the served prediction or to the primary accuracy summary; an absent challenger leaves its error columns null and is excluded from every challenger aggregate.
+
+**Validates: Requirements 18.1, 18.3, 18.4, 18.5, 18.6**
+
+
 ## Error Handling
 
 - **Slow/failing upstream during a pass:** the endpoint has already returned `202`, so the caller is never blocked; the pass runs async, bounded by the Live_Service deadline, and isolates the failing park (Property 5). Errors are logged, not surfaced to the cron.
@@ -185,9 +243,16 @@ Adds `source TEXT NOT NULL DEFAULT 'observed' CHECK (source IN ('observed','seed
 - **Crowd-index basket (regression):** a repo/`server.inject` test drives a sampling pass over a mixed park (a headliner ride, a walk-on 0-min ride, a show, and a restaurant) and asserts `wait_samples` is written **only** for the two rides and that `crowd_index` is the per-ride-relative aggregate over them. This test MUST fail against the pre-change all-entries average (which read the show/restaurant zeros and understated the park), so it genuinely guards the fix.
 - **Migration test (`migration0020.test.ts`, `migration0030.test.ts`):** all stores, PKs, CHECK constraints, and bounded retention.
 - **Integration (`server.inject`):** `/internal/sampling/run` updates stores and isolates a failing park; `/crowd-calendar` returns forecast + signals and is session-gated; same-day correction path in `predictionService`.
-- **Live-Postgres testing & pg-mem limitations:** pg-mem cannot execute the `AT TIME ZONE` operator or ordered-set aggregates (`percentile_cont … WITHIN GROUP`), so any repo query using them CANNOT be covered by the pg-mem suites and MUST use the live-Postgres scratch-database pattern from `repo.performance.test.ts`. `IntelligenceRepo.getRecentPercentiles` is the known case that requires this live DB harness.
+- **Live-Postgres testing & pg-mem limitations:** pg-mem cannot execute the `AT TIME ZONE` operator, ordered-set aggregates (`percentile_cont … WITHIN GROUP`), or **multi-argument `unnest`** (`unnest($1::uuid[], $2::int[], …)` fails with "unnest expects 1 arguments, given 13"). Any repo query using them CANNOT be covered by the pg-mem suites and MUST use the live-Postgres scratch-database pattern from `repo.performance.test.ts`. Known cases requiring the live DB harness: `IntelligenceRepo.getRecentPercentiles` (`AT TIME ZONE` + `percentile_cont`), and the bulk upserts `upsertRideShapes` / `upsertSeasonHours` / `upsertParkCrowdIndices` / `upsertForecastLogs` (multi-array `unnest`).
+
+  A second, independent reason the bulk upserts need live Postgres: the `21000` error they guard against (`ON CONFLICT DO UPDATE command cannot affect row a second time`) **only exists on real Postgres**. pg-mem happily accepts a batch containing a duplicated conflict key, so a pg-mem test could not guard the `dedupeByKey` call even if it could run the query.
 - **Unit:** `crowdForecast` feature weighting (LL price / park hours / holidays / school breaks), the seed script's RopeDrop mapping, and `normalizeCrowdIndex`.
 - **Mobile:** the calendar month view, day-detail, best-park pick, and predicted-vs-actual rendering.
+- **Season-tier regression (R15.5) — mandatory, not optional.** The existing tier tests all sit *below* the tier-1 reliability threshold, so the tier-1 branch is currently executed by no assertion. The new test MUST construct a season bucket at `sample_count >= 30` with a positive `avg_crowd_index` and assert the returned wait **differs** between two forecast indices, in the correct direction. A test that leaves every bucket under the threshold does not cover R15 no matter how green it runs — this is the executed-but-unasserted trap.
+- **Crowd-index drift regression (R14.8).** A test MUST run `relativeCrowdIndex` across repeated passes with observed waits held constant while the *fast shape* is updated toward those observations between passes, and assert the index does not move. This test fails against the pre-change denominator (which drifts upward) and passes after, so it genuinely guards the fix rather than restating it.
+- **Migration test (`migration0033.test.ts`).** Asserts the two new `ride_shapes` columns and their backfill (`baseline_wait_minutes = avg_wait_minutes` for pre-existing rows, `baseline_sample_count = LEAST(sample_count, 500)`), the nullable `experience_season_hour.avg_crowd_index` (and that it is **not** defaulted to `1.0`), and the `wait_archive` / `wait_forecast_log` / `wait_forecast_accuracy` PKs and CHECK constraints.
+- **Repo tests (pg-mem or live-Postgres per the limitation above).** The archive upsert must be exercised as **real SQL** and read back — a route or service test with a mocked repo does not cover an aggregation bug in the query. Note the archive aggregation groups by ET hour and so uses `AT TIME ZONE`, which pg-mem cannot execute; it therefore requires the live-Postgres scratch-database harness.
+- **Prediction-neutrality (R17.5 / Property 17).** A test asserts `getDaySnapshot` returns byte-identical output with an empty and a populated `wait_archive`, so the archive can never quietly become a prediction input.
 
 ## UI Surfaces & Navigation
 
@@ -237,6 +302,15 @@ Concrete defaults so nothing is left to guess. Override via env where noted.
   - `SHOWTIME_PATTERN_MIN_SAMPLES` governs the **Group Gate** (requiring at least 2 distinct observed dates for that weekday before claiming any typical pattern, ~2 weeks of warm-up).
   - `SHOWTIME_PATTERN_MIN_FREQUENCY` governs the **Slot Gate** (requiring a specific performance time to occur on at least 50% of the observed dates in that qualifying group). It is never combined with a per-slot sample count minimum.
   - During this warm-up period, shows on dates lacking per-date showtimes honestly emit `showtimes_unavailable`.
+- **Stable Ride_Baseline (R14):** `BASELINE_ESTABLISH_MIN_SHAPE_SAMPLES = 20` — the fast shape must hold at least this many samples before its average is frozen as the baseline. `20` is deliberately `SHAPE_EMA_MAX_SAMPLES`, the point at which the shape's own capped alpha saturates and its average has settled. `BASELINE_SAMPLE_COUNT_CAP = 500` caps the recorded evidence count (and matches the migration's backfill cap). Once established, the baseline is **frozen** — no EMA, no alpha, no drift — and only the R14.9 archive re-anchor may change it. Basket eligibility reuses `CROWD_INDEX_MIN_SHAPE_SAMPLES = 5` and `CROWD_INDEX_MIN_EXPECTED_MINUTES = 5`, read against the baseline's own columns. `CROWD_INDEX_DRIFT_HORIZON_PASSES = 100` is retained only as the length of the run the regression test exercises; the asserted drift is exactly `0`.
+- **Crowd multiplier bounds (named):** `CROWD_MULTIPLIER_MIN = 0.4`, `CROWD_MULTIPLIER_MAX = 2.0` — the existing clamp, named here because both the tier-2 absolute multiplier and the R15 tier-1 relative factor share it.
+- **Day-of-week shrinkage (R16):** `DOW_SHRINKAGE_K = 8` pseudo-observations of the pooled per-hour mean. Holdout-measured on train Aug 4–18 / test Aug 19–25: MAE `5.87` at `k = 0` (raw bucket), `5.65` at `k = 5` and `k = 10`, `5.72` at `k = 20`, `5.82` at `k = 40`, `6.04` at `k = ∞` (weekday ignored). `8` sits in the measured optimum; the curve is flat between 5 and 10, so this is not a knife-edge.
+- **Wait archive (R17):** `WAIT_ARCHIVE_RETENTION_DAYS = 1100` (~3 years). The archive leg aggregates a trailing `WAIT_ARCHIVE_LOOKBACK_DAYS = 3` days each run — wider than one day so a missed recompute cannot leave a day unarchived before the `30`-day raw prune, and narrow enough to stay cheap. Idempotent per `(experience_id, date, hour)` via `ON CONFLICT DO UPDATE`.
+- **Wait forecast accuracy (R18):** `WAIT_FORECAST_LEAD_DAYS = [7, 3, 1]`, `WAIT_FORECAST_HOURS = [10, 13, 16, 19]` ET, `WAIT_FORECAST_MAX_EXPERIENCES = 40` (highest Ride_Baseline wait first), `WAIT_FORECAST_RETENTION_DAYS = 180`. Store size ≈ `40 × 4 × 3 = 480` rows per capture day — trivial against R8.3. Accuracy EMA uses the same capped alpha as R7.3: `2 / (min(sample_count, 100) + 2)`.
+
+### Expected accuracy after these changes — stated so it is not over-sold
+
+The holdout backtest bounds what R15/R16 can deliver, and the honest number is small. On train Aug 4–18 / test Aug 19–25 the shipped granularity scored `5.87` min MAE; the *ceiling* for any model using only ride, hour, and weekday — fitted with perfect hindsight on the test period — was `5.58` min. The shrinkage of R16 recovers roughly `0.22` min of that `0.29` min gap. The remaining headroom down to the `2.95` min noise floor is **day-level** signal that no ride/hour/weekday average can express, which is precisely why R14 (a Crowd_Index that actually means something across seasons) and R17/R18 (retained day-level data and a way to measure it) matter more to long-run accuracy than any refinement of the tier arithmetic. On headliners (test mean wait `43.3` min) the same split gave `10.13` min MAE against a `9.29` min ceiling and a `4.91` min floor. All figures come from a single low-crowd late-August window with no holiday or capacity event, so they bound this régime only.
 
 
 ## External Interfaces
@@ -310,13 +384,62 @@ displayLevel(continuousIndex) = clamp(round(5 × continuousIndex), 1, 10)   // d
 
 `tierValue` is the most-specific reliable tier (season-resolved direct → shape × crowd → park-typical, R1.1). `weatherAdjustment`/`eventAdjustment` default to 1.0 when unavailable or out of horizon.
 
+**`tierValue` expanded (R15 / R16).** The crowd factor lives *inside* `tierValue`, applied once and differently per tier — the outer `predictedWait` line above must NOT be read as multiplying by `crowdMultiplier` a second time:
+
+```
+tierValue(ride, date, hour) =
+  // Tier 1 — season-resolved direct average, RELATIVE crowd factor (R15)
+  season.n >= 30 && season.avgCrowdIndex > 0
+    ? season.wait × clamp(forecastIndex / season.avgCrowdIndex, 0.4, 2.0)
+
+  // Tier 1 fallback — no embedded crowd level known, use the raw average
+  : season.n >= 30
+    ? season.wait
+
+  // Tier 2 — day-of-week-shrunk shape, ABSOLUTE crowd factor (R16)
+  : shape != null || pooled != null
+    ? shrinkToPooled(shape.wait, shape.n, pooled.wait, DOW_SHRINKAGE_K) × clamp(forecastIndex / 1.0, 0.4, 2.0)
+
+  // Tier 3 — park-typical, ABSOLUTE crowd factor (unchanged)
+  : parkTypical × clamp(forecastIndex / 1.0, 0.4, 2.0)
+
+shrinkToPooled(w, n, pooled, k) = (w × n + pooled × k) / (n + k)
+
+pooled(ride, hour) = mean over day_of_week of ride_shapes[ride, *, hour].avg_wait_minutes
+```
+
+**Crowd_Index denominator (R14).** The observed index divides by the *stable baseline*, never the fast shape:
+
+```
+relativeCrowdIndex(basket) = mean over eligible rides of clamp(observed_i / baseline_i, 0, 5.0)
+  eligible_i  ⟺  baseline_sample_count_i >= 5 AND baseline_i >= 5 minutes
+
+establishBaseline(prev, prevN, shapeAvg, shapeN) =
+  prev is established                    → (prev, prevN)        // FROZEN. No sample moves it.
+  shapeN >= BASELINE_ESTABLISH_MIN_SHAPE_SAMPLES → (shapeAvg, min(shapeN, 500))
+  otherwise                              → (null, prevN)        // not yet; ride stays out of the basket
+```
+
+The fast shape keeps its 4-week memory (`alpha` floor `2/22 ≈ 0.091`) so that *predictions* track current conditions. The baseline has no memory parameter at all, because the correct yardstick is not a slower average of the same signal — it is a value that does not respond to the signal. Using one store for both roles is what produced the measured drift in R14.2; using a slower EMA for the second role was measured to reduce that drift by only `1.27×` and was discarded (R14.3).
+
 ### Migration `0029_show_time_patterns.sql`
 
 - **`show_time_patterns`** — PK `(experience_id, day_of_week, start_minutes)`; `frequency REAL NOT NULL`, `sample_count INTEGER NOT NULL`. Stores derived typical showtimes for shows and parades bucketed to 5-minute increments in Eastern Time, computed by `derivedStatsService.runDailyRecompute` over a trailing 180-day window (`SHOWTIME_PATTERN_WINDOW_DAYS = 180`). Check constraints enforce `day_of_week BETWEEN 0 AND 6` and `start_minutes BETWEEN 0 AND 1440`. Cascades delete on parent experience deletion.
 
 ### Migration `0030_derived_stat_runs.sql`
 
-- **`derived_stat_runs`** — PK `leg TEXT`; `last_success_at TIMESTAMPTZ`, `last_error_at TIMESTAMPTZ`, `last_error TEXT`, `consecutive_failures INTEGER NOT NULL DEFAULT 0 CHECK (consecutive_failures >= 0)`. Bounded at one row per daily-recompute leg (6 rows total). Stores execution health, timestamp of last success, timestamp of last failure, truncated last error message (≤ 500 characters), and consecutive failure counter for visibility on free-tier hosting.
+- **`derived_stat_runs`** — PK `leg TEXT`; `last_success_at TIMESTAMPTZ`, `last_error_at TIMESTAMPTZ`, `last_error TEXT`, `consecutive_failures INTEGER NOT NULL DEFAULT 0 CHECK (consecutive_failures >= 0)`. Bounded at one row per daily-recompute leg (12 rows as of R18: R17 adds `archiveWaitSamples` + `pruneWaitArchive`, R7.6 adds `pruneCrowdForecastLog`, R18 adds `reconcileWaitForecasts` + `captureWaitForecasts` + `pruneWaitForecastLog`; the bound is "one per leg", not a fixed count). Stores execution health, timestamp of last success, timestamp of last failure, truncated last error message (≤ 500 characters), and consecutive failure counter for visibility on free-tier hosting.
+
+### Migration `0033_stable_baseline_and_wait_archive.sql`
+
+Four additive changes; no existing column is dropped or retyped.
+
+- **`ride_shapes` gains `baseline_wait_minutes REAL` and `baseline_sample_count INTEGER NOT NULL DEFAULT 0`** (R14) — the slow-moving Ride_Baseline that denominates the Crowd_Index. The migration **backfills `baseline_wait_minutes = avg_wait_minutes`** so every existing bucket starts from the level currently in the store (which still carries most of the Model_Seed's multi-year RopeDrop average) instead of from a cold start, and backfills `baseline_sample_count = LEAST(sample_count, BASELINE_EMA_MAX_SAMPLES)` so an already-dense bucket is immediately basket-eligible. `baseline_wait_minutes` stays nullable to represent "not yet established" for buckets created after this migration.
+- **`experience_season_hour` gains `avg_crowd_index REAL`** (R15) — the recency-weighted mean observed Crowd_Index of the samples that formed the bucket, so the season tier can de-mean its own embedded crowd level. Nullable; a null means "fall back to the unscaled direct average." Deliberately **not** backfilled to `1.0`: existing buckets accumulated under an unknown crowd level, and asserting `1.0` would bake in a false premise. They re-establish it from the next samples.
+- **`wait_archive`** (R17) — PK `(experience_id, date, hour)`; `avg_wait_minutes REAL NOT NULL`, `sample_count INTEGER NOT NULL`, `min_wait_minutes REAL NOT NULL`, `max_wait_minutes REAL NOT NULL`. `CHECK (hour BETWEEN 0 AND 23)`, `CHECK (sample_count > 0)`, `CHECK (min_wait_minutes <= max_wait_minutes)`, `ON DELETE CASCADE` on the parent Experience. Bounded by `WAIT_ARCHIVE_RETENTION_DAYS`; ~0.5M rows/year at the observed rate. Written by a daily-recompute leg; **read by nothing on the prediction path**.
+- **`wait_forecast_log`** and **`wait_forecast_accuracy`** (R18) — the wait-side mirror of `crowd_forecast_log` / `crowd_forecast_accuracy`.
+  - `wait_forecast_log` — PK `(experience_id, date, hour, lead_days)`; `predicted_wait_minutes REAL NOT NULL`, `forecasted_at TIMESTAMPTZ NOT NULL`, `challenger_wait_minutes REAL` (nullable — shadow mode), `observed_wait_minutes REAL`, `error REAL`, `challenger_error REAL`. The `predicted_*` value is written once and never rewritten; reconciliation fills only the observed/error columns.
+  - `wait_forecast_accuracy` — PK `(experience_id, lead_days)`; `mae REAL NOT NULL DEFAULT 0`, `bias REAL NOT NULL DEFAULT 0`, `sample_count INTEGER NOT NULL DEFAULT 0`, plus `challenger_mae REAL`, `challenger_bias REAL`, `challenger_sample_count INTEGER NOT NULL DEFAULT 0` kept as a separate tally so a challenger can never contaminate the served model's numbers.
 
 ### Property 12: Historical Showtime Patterns and Typical Showtimes Fallback
 

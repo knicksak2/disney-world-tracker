@@ -225,6 +225,44 @@ involved.
 - [x] 11. Final checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
+- [x] 12. Fix the directions open path — drop the `canOpenURL` gate, add an ordered candidate fallback
+  - [x] 12.1 Add `directionsUrlCandidates` to `directions.ts`
+    - Export `directionsUrlCandidates(latitude, longitude, platform?)` returning the ordered,
+      duplicate-free Directions_Url_Candidates: `directionsUrl(lat, lng, platform)` first, then the
+      universal web maps URL `directionsUrl(lat, lng, 'web')`; when `platform` is `'web'` the two
+      coincide and a single-element list is returned
+    - Keep the module pure and framework-free (no `Linking`, no `Platform`); preserve the existing
+      `hasValidCoordinates`, `directionsUrl`, and `staticMapUrl` exports unchanged
+    - _Requirements: 4.7, 4.9_
+
+  - [x] 12.2 Rewrite `handleGetDirections` in `ExperienceDetailScreen.tsx`
+    - Remove the `Linking.canOpenURL` pre-check entirely — on Android 11+ package visibility makes it
+      resolve `false` for the `geo:` scheme unless declared in a native `<queries>` manifest element,
+      which suppressed an `openURL` call that in fact succeeds
+    - Iterate `directionsUrlCandidates(latitude, longitude, Platform.OS)`, awaiting
+      `Linking.openURL(candidate)` inside `try/catch` and returning on the first success (clearing any
+      prior error flag)
+    - Set the error flag only after every candidate has rejected; keep all other screen state intact
+    - Keep the `Static_Map_Preview` and the Get directions button sharing this single handler
+    - _Requirements: 4.4, 4.5, 4.7, 4.8, 4.9, 10.5, 10.6_
+
+  - [x] 12.3 Write the property test for `directionsUrlCandidates`
+    - **Property 19: Directions URL candidates are ordered, non-empty, and coordinate-preserving**
+      (Validates: Requirements 4.7, 4.9)
+    - Add as its own single property-based test at 100+ iterations in
+      `apps/mobile/src/screens/catalog/__tests__/directions.prop.test.ts`, tagged
+      `Feature: experience-detail-redesign, Property 19: {property_text}`
+
+  - [x] 12.4 Write regression render tests for the open path
+    - Update `ExperienceDetailScreen.staticMap.test.tsx`: a `canOpenURL` stub resolving `false` must
+      **not** suppress the open — assert `Linking.openURL` is still called and no
+      `experience-directions-error` renders (this test fails against the pre-fix code)
+    - Assert a first-candidate rejection falls back to the second candidate (two `openURL` calls, the
+      second being the `https` web maps URL) with no error indication
+    - Assert the error indication renders only when **every** candidate rejects, with screen state
+      preserved
+    - _Requirements: 4.5, 4.7, 4.8, 4.9, 10.5, 10.6_
+
 ## Notes
 
 - Tasks marked with `*` are optional test tasks and can be skipped for a faster MVP.
@@ -249,7 +287,10 @@ involved.
     { "id": 4, "tasks": ["7.3", "7.4", "7.5"] },
     { "id": 5, "tasks": ["9.1"] },
     { "id": 6, "tasks": ["9.2", "10.1"] },
-    { "id": 7, "tasks": ["10.2"] }
+    { "id": 7, "tasks": ["10.2"] },
+    { "id": 8, "tasks": ["12.1"] },
+    { "id": 9, "tasks": ["12.2", "12.3"] },
+    { "id": 10, "tasks": ["12.4"] }
   ]
 }
 ```

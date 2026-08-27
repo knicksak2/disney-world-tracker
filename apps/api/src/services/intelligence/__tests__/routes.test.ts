@@ -16,6 +16,7 @@ describe('Intelligence Routes', () => {
     getCrowdMultiplier: vi.fn(),
     getCrowdCalendarDay: vi.fn().mockResolvedValue({}),
     getRawForecast: vi.fn(),
+    getCalibratedForecast: vi.fn(),
     getWaitInsights: vi.fn().mockResolvedValue({}),
   };
 

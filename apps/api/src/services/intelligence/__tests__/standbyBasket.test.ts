@@ -34,12 +34,18 @@ describe('Feature: crowd-calendar — standby basket crowd-index regression', ()
         avg_wait_minutes: 60, sample_count: 50,
         sr_avg_wait_minutes: null, sr_sample_count: null,
         stddev_wait: 10, p50_wait: 55, p90_wait: 80, down_rate: 0.02,
+        // R14: the Crowd_Index now divides by the slow baseline, not
+        // avg_wait_minutes. Set equal here so this fixture's expected index is
+        // unchanged by the denominator swap and keeps testing what it was
+        // written to test (basket membership, not baseline mechanics).
+        baseline_wait_minutes: 60, baseline_sample_count: 50,
       },
       {
         experience_id: 'walkOn-db', day_of_week: 3, hour: 12,
         avg_wait_minutes: 10, sample_count: 30,
         sr_avg_wait_minutes: null, sr_sample_count: null,
         stddev_wait: 3, p50_wait: 8, p90_wait: 15, down_rate: 0.01,
+        baseline_wait_minutes: 10, baseline_sample_count: 30,
       },
     ];
 

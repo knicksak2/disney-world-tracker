@@ -33,6 +33,8 @@ describe('getWaitInsights (Task 6 backend)', () => {
           p50_wait: h.avg,
           p90_wait: h.avg + 10,
           down_rate: 0,
+          baseline_wait_minutes: h.avg,
+          baseline_sample_count: h.count,
         });
       }
     }

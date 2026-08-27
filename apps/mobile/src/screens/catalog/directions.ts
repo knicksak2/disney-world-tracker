@@ -67,6 +67,40 @@ export function directionsUrl(
 }
 
 /**
+ * The ordered, duplicate-free Directions_Url_Candidates the screen attempts on
+ * activation (R4.7, R4.9).
+ *
+ *   - Element 0 is the platform-native maps URL — `directionsUrl(lat, lng,
+ *     platform)`. On Android that is the `geo:` intent URL, which launches the
+ *     installed maps app.
+ *   - The last element is always the universal `https` web maps URL —
+ *     `directionsUrl(lat, lng, 'web')` — which any device with a browser can
+ *     open. It is the fallback for a device with no native maps handler (a bare
+ *     Android emulator without Google Maps, for instance).
+ *
+ * When `platform` is already `'web'` the two coincide and a single-element list
+ * is returned, so the list is never empty and never contains duplicates. Every
+ * element encodes the exact latitude and longitude passed in.
+ *
+ * Deliberately framework-free: the screen resolves `Platform.OS` and passes it
+ * in, and the screen — not this module — performs the `Linking.openURL` calls.
+ * Note that the screen must NOT gate those calls on `Linking.canOpenURL`: from
+ * Android 11 (API 30) package-visibility filtering makes `canOpenURL` resolve
+ * `false` for any non-`http(s)` scheme that is not declared in a native
+ * `<queries>` manifest element, while `openURL` for the same URL succeeds
+ * (launching an implicit intent is not subject to that filtering). See R4.8.
+ */
+export function directionsUrlCandidates(
+  latitude: number,
+  longitude: number,
+  platform: DirectionsPlatform = 'web',
+): readonly string[] {
+  const primary = directionsUrl(latitude, longitude, platform);
+  const web = directionsUrl(latitude, longitude, 'web');
+  return primary === web ? [primary] : [primary, web];
+}
+
+/**
  * Build a keyless static map image URL centered on the given coordinates
  * (R10.3, R10.4). Pure, framework-free, total, and deterministic for valid
  * finite inputs (R10.9, R10.10).

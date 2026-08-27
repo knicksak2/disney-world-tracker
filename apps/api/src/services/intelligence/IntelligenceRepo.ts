@@ -1,6 +1,61 @@
 import type { Pool } from 'pg';
 import { mergeShowtimeEntries } from './showtimePatterns.js';
 
+/**
+ * Collapses a batch to one row per conflict key, last write winning.
+ *
+ * Required before any `INSERT ... ON CONFLICT DO UPDATE`: Postgres refuses to
+ * update the same row twice within one command and raises `21000`
+ * ("ON CONFLICT DO UPDATE command cannot affect row a second time"). A
+ * sampling pass can legitimately produce two entries for the same bucket, so
+ * this is a correctness requirement, not a micro-optimization.
+ */
+function dedupeByKey<T>(rows: readonly T[], keyOf: (row: T) => string): T[] {
+  const map = new Map<string, T>();
+  for (const row of rows) {
+    map.set(keyOf(row), row);
+  }
+  return Array.from(map.values());
+}
+
+/**
+ * Renders a value destined for a `DATE` column as `YYYY-MM-DD`.
+ *
+ * Sending a `Date` straight through would serialize a full timestamp, and a
+ * late-evening Eastern instant carries the FOLLOWING UTC date — so a forecast
+ * captured for Tuesday would silently land on Wednesday's row. Callers pass ET
+ * mid-day instants, so taking the ISO date component is correct and explicit.
+ */
+function toDateKey(value: Date | string): string {
+  if (typeof value === 'string') return value.split('T')[0]!;
+  return value.toISOString().split('T')[0]!;
+}
+
+export interface WaitForecastLogRow {
+  experience_id: string;
+  date: Date;
+  hour: number;
+  lead_days: number;
+  predicted_wait_minutes: number;
+  forecasted_at: Date;
+  /** R18.5: a shadow model's prediction on identical inputs. Never served. */
+  challenger_wait_minutes: number | null;
+  observed_wait_minutes: number | null;
+  error: number | null;
+  challenger_error: number | null;
+}
+
+export interface WaitForecastAccuracyRow {
+  experience_id: string;
+  lead_days: number;
+  mae: number;
+  bias: number;
+  sample_count: number;
+  challenger_mae: number | null;
+  challenger_bias: number | null;
+  challenger_sample_count: number;
+}
+
 export interface RideShapeRow {
   experience_id: string;
   day_of_week: number;
@@ -13,6 +68,14 @@ export interface RideShapeRow {
   p50_wait: number;
   p90_wait: number;
   down_rate: number;
+  /**
+   * R14: slow-moving (~500-sample memory) expected wait that denominates the
+   * Crowd_Index. `null` = not yet established. NEVER read by the wait
+   * prediction tiers — those use the fast `avg_wait_minutes`.
+   */
+  baseline_wait_minutes: number | null;
+  /** R14: sample count backing `baseline_wait_minutes`; gates basket eligibility. */
+  baseline_sample_count: number;
 }
 
 export interface SeasonHourRow {
@@ -22,6 +85,12 @@ export interface SeasonHourRow {
   hour: number;
   avg_wait_minutes: number;
   sample_count: number;
+  /**
+   * R15: recency-weighted mean observed Crowd_Index of the samples that formed
+   * this bucket. `null` = unknown, in which case the season tier falls back to
+   * the unscaled direct average rather than asserting a level.
+   */
+  avg_crowd_index: number | null;
 }
 
 export interface ParkCrowdIndexRow {
@@ -145,14 +214,17 @@ export class IntelligenceRepo {
     const query = `
       INSERT INTO ride_shapes (
         experience_id, day_of_week, hour, avg_wait_minutes, sample_count,
-        sr_avg_wait_minutes, sr_sample_count, stddev_wait, p50_wait, p90_wait, down_rate
+        sr_avg_wait_minutes, sr_sample_count, stddev_wait, p50_wait, p90_wait, down_rate,
+        baseline_wait_minutes, baseline_sample_count
       )
       SELECT * FROM unnest(
         $1::uuid[], $2::int[], $3::int[], $4::real[], $5::int[],
-        $6::real[], $7::int[], $8::real[], $9::real[], $10::real[], $11::real[]
+        $6::real[], $7::int[], $8::real[], $9::real[], $10::real[], $11::real[],
+        $12::real[], $13::int[]
       ) AS t(
         experience_id, day_of_week, hour, avg_wait_minutes, sample_count,
-        sr_avg_wait_minutes, sr_sample_count, stddev_wait, p50_wait, p90_wait, down_rate
+        sr_avg_wait_minutes, sr_sample_count, stddev_wait, p50_wait, p90_wait, down_rate,
+        baseline_wait_minutes, baseline_sample_count
       )
       ON CONFLICT (experience_id, day_of_week, hour) DO UPDATE SET
         avg_wait_minutes = EXCLUDED.avg_wait_minutes,
@@ -162,22 +234,30 @@ export class IntelligenceRepo {
         stddev_wait = EXCLUDED.stddev_wait,
         p50_wait = EXCLUDED.p50_wait,
         p90_wait = EXCLUDED.p90_wait,
-        down_rate = EXCLUDED.down_rate
+        down_rate = EXCLUDED.down_rate,
+        baseline_wait_minutes = EXCLUDED.baseline_wait_minutes,
+        baseline_sample_count = EXCLUDED.baseline_sample_count
     `;
 
-    const e = shapes.map(s => s.experience_id);
-    const d = shapes.map(s => s.day_of_week);
-    const h = shapes.map(s => s.hour);
-    const a = shapes.map(s => s.avg_wait_minutes);
-    const c = shapes.map(s => s.sample_count);
-    const sra = shapes.map(s => s.sr_avg_wait_minutes);
-    const src = shapes.map(s => s.sr_sample_count);
-    const std = shapes.map(s => s.stddev_wait);
-    const p50 = shapes.map(s => s.p50_wait);
-    const p90 = shapes.map(s => s.p90_wait);
-    const dr = shapes.map(s => s.down_rate);
+    // Postgres refuses to update the same row twice in one command (21000), so
+    // the batch must be deduped by its conflict key first. Last write wins.
+    const deduped = dedupeByKey(shapes, s => `${s.experience_id}|${s.day_of_week}|${s.hour}`);
 
-    await this.pool.query(query, [e, d, h, a, c, sra, src, std, p50, p90, dr]);
+    const e = deduped.map(s => s.experience_id);
+    const d = deduped.map(s => s.day_of_week);
+    const h = deduped.map(s => s.hour);
+    const a = deduped.map(s => s.avg_wait_minutes);
+    const c = deduped.map(s => s.sample_count);
+    const sra = deduped.map(s => s.sr_avg_wait_minutes);
+    const src = deduped.map(s => s.sr_sample_count);
+    const std = deduped.map(s => s.stddev_wait);
+    const p50 = deduped.map(s => s.p50_wait);
+    const p90 = deduped.map(s => s.p90_wait);
+    const dr = deduped.map(s => s.down_rate);
+    const bw = deduped.map(s => s.baseline_wait_minutes ?? null);
+    const bc = deduped.map(s => s.baseline_sample_count ?? 0);
+
+    await this.pool.query(query, [e, d, h, a, c, sra, src, std, p50, p90, dr, bw, bc]);
   }
 
   // Same pattern for season hours...
@@ -194,22 +274,29 @@ export class IntelligenceRepo {
     if (hours.length === 0) return;
     const query = `
       INSERT INTO experience_season_hour (
-        experience_id, season, day_of_week, hour, avg_wait_minutes, sample_count
+        experience_id, season, day_of_week, hour, avg_wait_minutes, sample_count, avg_crowd_index
       )
       SELECT * FROM unnest(
-        $1::uuid[], $2::int[], $3::int[], $4::int[], $5::real[], $6::int[]
-      ) AS t(experience_id, season, day_of_week, hour, avg_wait_minutes, sample_count)
+        $1::uuid[], $2::int[], $3::int[], $4::int[], $5::real[], $6::int[], $7::real[]
+      ) AS t(experience_id, season, day_of_week, hour, avg_wait_minutes, sample_count, avg_crowd_index)
       ON CONFLICT (experience_id, season, day_of_week, hour) DO UPDATE SET
         avg_wait_minutes = EXCLUDED.avg_wait_minutes,
-        sample_count = EXCLUDED.sample_count
+        sample_count = EXCLUDED.sample_count,
+        avg_crowd_index = EXCLUDED.avg_crowd_index
     `;
+    // Dedupe by conflict key before the query (Postgres 21000).
+    const deduped = dedupeByKey(
+      hours,
+      h => `${h.experience_id}|${h.season}|${h.day_of_week}|${h.hour}`,
+    );
     await this.pool.query(query, [
-      hours.map(h => h.experience_id),
-      hours.map(h => h.season),
-      hours.map(h => h.day_of_week),
-      hours.map(h => h.hour),
-      hours.map(h => h.avg_wait_minutes),
-      hours.map(h => h.sample_count),
+      deduped.map(h => h.experience_id),
+      deduped.map(h => h.season),
+      deduped.map(h => h.day_of_week),
+      deduped.map(h => h.hour),
+      deduped.map(h => h.avg_wait_minutes),
+      deduped.map(h => h.sample_count),
+      deduped.map(h => h.avg_crowd_index ?? null),
     ]);
   }
 
@@ -335,6 +422,287 @@ export class IntelligenceRepo {
 
   async pruneWaitSamples(before: Date): Promise<void> {
     await this.pool.query(`DELETE FROM wait_samples WHERE observed_at < $1`, [before]);
+  }
+
+  /**
+   * R17: fold raw `wait_samples` into the bounded `wait_archive` aggregate, one
+   * row per `(experience_id, ET date, ET hour)`.
+   *
+   * Runs entirely server-side as a single statement — the whole point is to
+   * avoid streaming ~176k rows into Node to average them. `GROUP BY` guarantees
+   * one row per conflict key, so no client-side dedupe is needed here (unlike the
+   * batch upserts, which can legitimately carry duplicates).
+   *
+   * Idempotent: re-running over the same window recomputes each aggregate from
+   * the raw rows and overwrites, so a day can be archived repeatedly without
+   * double-counting. Days whose raw samples have already been pruned simply
+   * produce no rows and their existing archive entries are left untouched
+   * (R17.6) — the `WHERE observed_at >= $1` window can only ever narrow what is
+   * recomputed, never delete.
+   *
+   * Bucketing is by **Eastern** calendar date and hour, matching `ride_shapes`;
+   * a UTC bucketing would split a park evening across two dates. This is why the
+   * query needs `AT TIME ZONE`, and therefore why it cannot be covered by the
+   * pg-mem suites.
+   *
+   * Returns the number of archive rows written.
+   */
+  async archiveWaitSamples(since: Date): Promise<number> {
+    const res = await this.pool.query(
+      `INSERT INTO wait_archive (
+         experience_id, date, hour, avg_wait_minutes, sample_count, min_wait_minutes, max_wait_minutes
+       )
+       SELECT
+         ws.experience_id,
+         (ws.observed_at AT TIME ZONE 'America/New_York')::date            AS date,
+         EXTRACT(HOUR FROM ws.observed_at AT TIME ZONE 'America/New_York')::int AS hour,
+         AVG(ws.wait_minutes)::real                                        AS avg_wait_minutes,
+         COUNT(*)::int                                                     AS sample_count,
+         MIN(ws.wait_minutes)::real                                        AS min_wait_minutes,
+         MAX(ws.wait_minutes)::real                                        AS max_wait_minutes
+       FROM wait_samples ws
+       WHERE ws.observed_at >= $1
+         AND ws.status = 'OPERATING'
+       GROUP BY ws.experience_id, 2, 3
+       ON CONFLICT (experience_id, date, hour) DO UPDATE SET
+         avg_wait_minutes = EXCLUDED.avg_wait_minutes,
+         sample_count     = EXCLUDED.sample_count,
+         min_wait_minutes = EXCLUDED.min_wait_minutes,
+         max_wait_minutes = EXCLUDED.max_wait_minutes`,
+      [since],
+    );
+    return res.rowCount ?? 0;
+  }
+
+  /** R17.4: bounded retention for the archive. */
+  async pruneWaitArchive(before: Date): Promise<void> {
+    await this.pool.query(`DELETE FROM wait_archive WHERE date < $1`, [before]);
+  }
+
+  // -------------------------------------------------------------------------
+  // R18: wait prediction accuracy logging + shadow evaluation
+  // -------------------------------------------------------------------------
+
+  /**
+   * R18.2: the Experiences whose wait accuracy is worth measuring, ranked by
+   * their frozen Ride_Baseline.
+   *
+   * Ranked by baseline rather than by the fast shape deliberately: the fast
+   * shape moves with recent conditions, so ranking on it would quietly change
+   * *which* rides are tracked from week to week and make the accuracy series
+   * incomparable over time. The baseline is frozen, so the tracked set is stable.
+   */
+  async getTopExperiencesByBaseline(
+    limit: number,
+  ): Promise<Array<{ experience_id: string; park: string; peak_baseline: number }>> {
+    const res = await this.pool.query(
+      `SELECT rs.experience_id, e.park, MAX(rs.baseline_wait_minutes)::real AS peak_baseline
+       FROM ride_shapes rs
+       JOIN experiences e ON e.id = rs.experience_id
+       WHERE rs.baseline_wait_minutes IS NOT NULL
+         AND e.park IS NOT NULL
+       GROUP BY rs.experience_id, e.park
+       ORDER BY peak_baseline DESC
+       LIMIT $1`,
+      [limit],
+    );
+    return res.rows;
+  }
+
+  /**
+   * Freezes wait predictions (R18.1).
+   *
+   * `predicted_wait_minutes` and `forecasted_at` are deliberately absent from the
+   * ON CONFLICT UPDATE clause: accuracy must be measured against the forecast as
+   * issued, so a re-run on the same day must NOT overwrite an earlier capture
+   * with a fresher number. Only the challenger column is updatable, and only
+   * when a challenger value is actually supplied — `COALESCE` keeps an existing
+   * challenger rather than nulling it out (R18.5).
+   */
+  async upsertWaitForecastLogs(rows: WaitForecastLogRow[]): Promise<void> {
+    if (rows.length === 0) return;
+    const deduped = dedupeByKey(
+      rows,
+      r => `${r.experience_id}|${toDateKey(r.date)}|${r.hour}|${r.lead_days}`,
+    );
+    await this.pool.query(
+      `INSERT INTO wait_forecast_log (
+         experience_id, date, hour, lead_days, predicted_wait_minutes, forecasted_at, challenger_wait_minutes
+       )
+       SELECT * FROM unnest(
+         $1::uuid[], $2::date[], $3::int[], $4::int[], $5::real[], $6::timestamptz[], $7::real[]
+       ) AS t(experience_id, date, hour, lead_days, predicted_wait_minutes, forecasted_at, challenger_wait_minutes)
+       ON CONFLICT (experience_id, date, hour, lead_days) DO UPDATE SET
+         challenger_wait_minutes =
+           COALESCE(EXCLUDED.challenger_wait_minutes, wait_forecast_log.challenger_wait_minutes)`,
+      [
+        deduped.map(r => r.experience_id),
+        deduped.map(r => toDateKey(r.date)),
+        deduped.map(r => r.hour),
+        deduped.map(r => r.lead_days),
+        deduped.map(r => r.predicted_wait_minutes),
+        deduped.map(r => r.forecasted_at),
+        deduped.map(r => r.challenger_wait_minutes ?? null),
+      ],
+    );
+  }
+
+  /** Unreconciled frozen predictions whose target day has fully elapsed. */
+  async getWaitForecastLogsToReconcile(beforeDate: Date): Promise<WaitForecastLogRow[]> {
+    const res = await this.pool.query(
+      `SELECT experience_id, date, hour, lead_days, predicted_wait_minutes, forecasted_at,
+              challenger_wait_minutes, observed_wait_minutes, error, challenger_error
+       FROM wait_forecast_log
+       WHERE observed_wait_minutes IS NULL AND date <= $1`,
+      [toDateKey(beforeDate)],
+    );
+    return res.rows;
+  }
+
+  /**
+   * Writes reconciliation results. Touches ONLY the observed/error columns, so a
+   * frozen prediction can never be rewritten by scoring it (Property 18).
+   */
+  async updateWaitForecastReconciliation(
+    rows: Array<{
+      experience_id: string;
+      date: Date;
+      hour: number;
+      lead_days: number;
+      observed_wait_minutes: number;
+      error: number;
+      challenger_error: number | null;
+    }>,
+  ): Promise<void> {
+    if (rows.length === 0) return;
+    const deduped = dedupeByKey(
+      rows,
+      r => `${r.experience_id}|${toDateKey(r.date)}|${r.hour}|${r.lead_days}`,
+    );
+    await this.pool.query(
+      `UPDATE wait_forecast_log AS w SET
+         observed_wait_minutes = t.observed_wait_minutes,
+         error = t.error,
+         challenger_error = t.challenger_error
+       FROM unnest(
+         $1::uuid[], $2::date[], $3::int[], $4::int[], $5::real[], $6::real[], $7::real[]
+       ) AS t(experience_id, date, hour, lead_days, observed_wait_minutes, error, challenger_error)
+       WHERE w.experience_id = t.experience_id
+         AND w.date = t.date
+         AND w.hour = t.hour
+         AND w.lead_days = t.lead_days`,
+      [
+        deduped.map(r => r.experience_id),
+        deduped.map(r => toDateKey(r.date)),
+        deduped.map(r => r.hour),
+        deduped.map(r => r.lead_days),
+        deduped.map(r => r.observed_wait_minutes),
+        deduped.map(r => r.error),
+        deduped.map(r => r.challenger_error ?? null),
+      ],
+    );
+  }
+
+  async getWaitForecastAccuracies(experienceIds: string[]): Promise<WaitForecastAccuracyRow[]> {
+    if (experienceIds.length === 0) return [];
+    const res = await this.pool.query(
+      `SELECT * FROM wait_forecast_accuracy WHERE experience_id = ANY($1::uuid[])`,
+      [experienceIds],
+    );
+    return res.rows;
+  }
+
+  async upsertWaitForecastAccuracies(rows: WaitForecastAccuracyRow[]): Promise<void> {
+    if (rows.length === 0) return;
+    const deduped = dedupeByKey(rows, r => `${r.experience_id}|${r.lead_days}`);
+    await this.pool.query(
+      `INSERT INTO wait_forecast_accuracy (
+         experience_id, lead_days, mae, bias, sample_count,
+         challenger_mae, challenger_bias, challenger_sample_count
+       )
+       SELECT * FROM unnest(
+         $1::uuid[], $2::int[], $3::real[], $4::real[], $5::int[], $6::real[], $7::real[], $8::int[]
+       ) AS t(experience_id, lead_days, mae, bias, sample_count,
+              challenger_mae, challenger_bias, challenger_sample_count)
+       ON CONFLICT (experience_id, lead_days) DO UPDATE SET
+         mae = EXCLUDED.mae,
+         bias = EXCLUDED.bias,
+         sample_count = EXCLUDED.sample_count,
+         challenger_mae = EXCLUDED.challenger_mae,
+         challenger_bias = EXCLUDED.challenger_bias,
+         challenger_sample_count = EXCLUDED.challenger_sample_count`,
+      [
+        deduped.map(r => r.experience_id),
+        deduped.map(r => r.lead_days),
+        deduped.map(r => r.mae),
+        deduped.map(r => r.bias),
+        deduped.map(r => r.sample_count),
+        deduped.map(r => r.challenger_mae ?? null),
+        deduped.map(r => r.challenger_bias ?? null),
+        deduped.map(r => r.challenger_sample_count ?? 0),
+      ],
+    );
+  }
+
+  /**
+   * R7.5: the forecast as ORIGINALLY ISSUED for a park+date.
+   *
+   * Returns the **earliest-issued** surviving capture (largest `lead_days`),
+   * because that is the strongest honest claim — "this is what we said a week
+   * out" — and because the shortest lead is the one most contaminated by the
+   * same-day live correction of R4.3.
+   */
+  async getCapturedForecast(
+    park: string,
+    date: Date,
+  ): Promise<{ forecast_index: number; lead_days: number; forecasted_at: Date } | null> {
+    const res = await this.pool.query(
+      `SELECT forecast_index, lead_days, forecasted_at
+       FROM crowd_forecast_log
+       WHERE park = $1 AND date = $2
+       ORDER BY lead_days DESC
+       LIMIT 1`,
+      [park, toDateKey(date)],
+    );
+    return res.rows.length > 0 ? res.rows[0] : null;
+  }
+
+  /** R7.6: bounded retention for the crowd forecast log; scored rows only. */
+  async pruneCrowdForecastLog(before: Date): Promise<void> {
+    await this.pool.query(
+      `DELETE FROM crowd_forecast_log
+       WHERE date < $1 AND observed_index IS NOT NULL`,
+      [toDateKey(before)],
+    );
+  }
+
+  /** R18.7: bounded retention, only for rows that have already been scored. */
+  async pruneWaitForecastLog(before: Date): Promise<void> {
+    await this.pool.query(
+      `DELETE FROM wait_forecast_log
+       WHERE date < $1 AND observed_wait_minutes IS NOT NULL`,
+      [toDateKey(before)],
+    );
+  }
+
+  /**
+   * Reads archived hourly means for reconciling frozen wait predictions (R18.3).
+   * Sourced from the archive rather than `wait_samples` so reconciliation still
+   * works after the 30-day raw prune.
+   */
+  async getWaitArchiveHours(
+    experienceIds: string[],
+    from: Date,
+    to: Date,
+  ): Promise<Array<{ experience_id: string; date: Date; hour: number; avg_wait_minutes: number; sample_count: number }>> {
+    if (experienceIds.length === 0) return [];
+    const res = await this.pool.query(
+      `SELECT experience_id, date, hour, avg_wait_minutes, sample_count
+       FROM wait_archive
+       WHERE experience_id = ANY($1::uuid[]) AND date >= $2 AND date <= $3`,
+      [experienceIds, from, to],
+    );
+    return res.rows;
   }
 
   async pruneWeatherObservations(before: Date): Promise<void> {
