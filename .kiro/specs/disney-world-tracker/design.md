@@ -641,9 +641,9 @@ The properties below are written so each one drives one or more property-based t
 
 ### Property 6: Catalog presentation respects grouping, ordering, filters, and search
 
-*For any* list of Experiences, optional `parkFilter`, optional `categoryFilter`, and optional search `query`, the rendered catalog list is exactly the subset of `active` Experiences that satisfy every selected predicate (Park equals `parkFilter`, Experience_Category equals `categoryFilter`, name contains the trimmed `query` as a case-insensitive substring when `query` has at least one non-whitespace character), grouped by Park, sorted within each group by `lower(name)` ascending.
+*For any* list of Experiences, optional `parkFilter`, and optional `categoryFilter` when no search query `q` is present, the rendered catalog list is exactly the subset of `active` Experiences that satisfy every selected predicate (Park equals `parkFilter`, Experience_Category equals `categoryFilter`), grouped by Park, sorted within each group by `lower(name)` ascending. (When `q` is present, search matching, filtering, and relevance ordering are governed by Property 30).
 
-**Validates: Requirements 1.17, 1.18, 1.19, 1.20, 1.21**
+**Validates: Requirements 1.17, 1.18, 1.19, 1.21**
 
 ### Property 7: Completion state machine and cardinality
 
@@ -782,6 +782,20 @@ The properties below are written so each one drives one or more property-based t
 *For any* Experience row carrying a non-null `image_url` / `image_attribution` and *any* sequence of catalog reconciliations applied to it (upserts of changed name/Park/Experience_Category, soft-delete, and re-appearance), the row's `image_url` and `image_attribution` values remain unchanged after every reconciliation step; and *for any* upstream entity id absent from the cache, the Experience inserted for it has `image_url` and `image_attribution` both null.
 
 **Validates: Requirements 12.3, 12.4**
+
+### Property 30: Experience Search Normalization, Prefix Matching, Substring Superset Preservation, and Relevance Ordering
+
+*For any* candidate population of Experiences and non-empty trimmed search query $q$:
+1. **Superset Invariant**: Every active Experience whose normalized name contains the normalized query as a contiguous substring MUST be included in the result and assigned a score of at least 60.
+2. **Prefix-Token Invariant**: Every active Experience where every token of $q$ is a prefix of some token in the normalized name MUST be included with a score of at least 40.
+3. **Ranking Monotonicity & Ordering**: The returned array's scores MUST be non-increasing; every name match (score $\ge 40$) MUST precede every metadata match (score 20); and within any run of equal scores, rows MUST be ordered strictly by `lower(name)` ascending then `id` ascending.
+4. **Metadata Cap & Sort**: Experiences matching only on metadata (`land`, `world_showcase_country`, `sub_type`) MUST score 20, be sorted by `lower(name)` ascending then `id` ascending, and be sliced to at most `MAX_METADATA_FALLBACK_ROWS` (25) entries.
+
+**Validates: Requirements 1.20, 1.25, 1.26, 1.27, 1.28**
+
+## Configuration & Constants
+
+- `MAX_METADATA_FALLBACK_ROWS = 25`: Maximum number of metadata-only fallback matches returned for any search query.
 
 ## Error Handling
 

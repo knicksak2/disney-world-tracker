@@ -456,16 +456,96 @@ describe('CatalogRepo.listActiveExperiences', () => {
     expect(call?.params).toEqual([MAGIC_KINGDOM, RIDE]);
   });
 
-  it('escapes ILIKE metacharacters in the query parameter', async () => {
-    const pool = makePool(() => ({ rows: [] }));
+  it('filters and ranks experiences by relevance using normalized search', async () => {
+    const pool = makePool(() => ({
+      rows: [
+        {
+          id: 'exp-1',
+          upstream_entity_id: 'u1',
+          name: "Mickey & Minnie's Runaway Railway",
+          park: 'Hollywood Studios',
+          category: 'Ride',
+          description: '',
+          active: true,
+          image_url: null,
+          latitude: null,
+          longitude: null,
+          area_type: 'ThemePark',
+          resort_id: null,
+          accessibility: [],
+          price_tier: null,
+          meal_periods: [],
+        },
+        {
+          id: 'exp-2',
+          upstream_entity_id: 'u2',
+          name: "Rock 'n' Roller Coaster Starring Aerosmith",
+          park: 'Hollywood Studios',
+          category: 'Ride',
+          description: '',
+          active: true,
+          image_url: null,
+          latitude: null,
+          longitude: null,
+          area_type: 'ThemePark',
+          resort_id: null,
+          accessibility: [],
+          price_tier: null,
+          meal_periods: [],
+        },
+        {
+          id: 'exp-3',
+          upstream_entity_id: 'u3',
+          name: 'San Ángel Inn Restaurante',
+          park: 'EPCOT',
+          category: 'Restaurant',
+          description: '',
+          active: true,
+          image_url: null,
+          latitude: null,
+          longitude: null,
+          area_type: 'ThemePark',
+          resort_id: null,
+          accessibility: [],
+          price_tier: null,
+          meal_periods: [],
+        },
+        {
+          id: 'exp-4',
+          upstream_entity_id: 'u4',
+          name: 'TRON Lightcycle / Run',
+          park: 'Magic Kingdom',
+          category: 'Ride',
+          description: '',
+          active: true,
+          image_url: null,
+          latitude: null,
+          longitude: null,
+          area_type: 'ThemePark',
+          resort_id: null,
+          accessibility: [],
+          price_tier: null,
+          meal_periods: [],
+        },
+      ],
+    }));
     const repo = createCatalogRepo(pool as never);
 
-    await repo.listActiveExperiences({ q: '100% _great\\stuff' });
+    const res1 = await repo.listActiveExperiences({ q: 'Mickey and Minnie' });
+    expect(res1).toHaveLength(1);
+    expect(res1[0]?.id).toBe('exp-1');
 
-    const call = pool.calls[0];
-    expect(call?.text).toMatch(/name ILIKE \$1 ESCAPE '\\'/);
-    // % -> \%, _ -> \_, \ -> \\, wrapped in % wildcards.
-    expect(call?.params[0]).toBe('%100\\% \\_great\\\\stuff%');
+    const res2 = await repo.listActiveExperiences({ q: 'Rock n Roller' });
+    expect(res2).toHaveLength(1);
+    expect(res2[0]?.id).toBe('exp-2');
+
+    const res3 = await repo.listActiveExperiences({ q: 'San Angel' });
+    expect(res3).toHaveLength(1);
+    expect(res3[0]?.id).toBe('exp-3');
+
+    const res4 = await repo.listActiveExperiences({ q: 'cycle' });
+    expect(res4).toHaveLength(1);
+    expect(res4[0]?.id).toBe('exp-4');
   });
 
   it('treats whitespace-only `q` as no filter', async () => {
@@ -477,15 +557,6 @@ describe('CatalogRepo.listActiveExperiences', () => {
     const call = pool.calls[0];
     expect(call?.text).not.toMatch(/ILIKE/);
     expect(call?.params).toHaveLength(0);
-  });
-
-  it('trims the query value before substituting', async () => {
-    const pool = makePool(() => ({ rows: [] }));
-    const repo = createCatalogRepo(pool as never);
-
-    await repo.listActiveExperiences({ q: '  pirates  ' });
-
-    expect(pool.calls[0]?.params[0]).toBe('%pirates%');
   });
 });
 

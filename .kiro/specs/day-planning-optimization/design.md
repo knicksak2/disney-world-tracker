@@ -239,7 +239,7 @@ graph TD
 - **Migration test (`migration0028.test.ts`):** `chk_planned_items_meal_period` accepts `'snack'` and rejects unknown values.
 - **Repo (pg-mem):** `addPlannedItem` and `editPlannedItem` persist and read back soft window columns, `meal_period`, `custom_title`, null `experience_id`, `scheduled_showtime`, and enforce mutual exclusion between exact times and soft windows.
 - **Integration (`server.inject`):** optimize route scopes items to `planned_date = date`, leaving other dates untouched.
-- **Mobile:** `@testing-library/react-native` tests driving tab switching (Rides, Shows, Dining, Break), break addition, meal period selection, showtime selection, and 3-state timing mode.
+- **Mobile:** `@testing-library/react-native` tests driving tab switching (Rides, Shows, Dining, Break), break addition, meal period selection, showtime selection, 3-state timing mode, and ExperiencePicker search query integration without secondary destructive client filtering (R4.16).
 
 ## Configuration & Constants
 

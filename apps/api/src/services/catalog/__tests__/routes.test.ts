@@ -33,7 +33,7 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import { describe, expect, it } from 'vitest';
 
-import type { ExperienceDTO, MenuDTO, ResortDTO } from '@dwt/shared';
+import { filterAndRankExperiences, type ExperienceDTO, type MenuDTO, type ResortDTO } from '@dwt/shared';
 
 import { registerErrorHandler } from '../../../errors/handler.js';
 import { AppError } from '../../../errors/AppError.js';
@@ -213,6 +213,43 @@ describe('GET /catalog', () => {
     expect(listFilters).toEqual([
       { park: 'EPCOT', category: 'Restaurant', q: 'Space' },
     ]);
+    await app.close();
+  });
+
+  it('returns experiences matching search query q through relevance search (R1.20, R1.25)', async () => {
+    const runawayRailway = makeExperience({
+      id: '00000000-0000-4000-8000-000000000010',
+      name: "Mickey & Minnie's Runaway Railway",
+      park: 'Hollywood Studios',
+      category: 'Ride',
+    });
+    const towerOfTerror = makeExperience({
+      id: '00000000-0000-4000-8000-000000000020',
+      name: 'The Twilight Zone Tower of Terror™',
+      park: 'Hollywood Studios',
+      category: 'Ride',
+    });
+
+    const { app } = await buildApp({
+      listActiveExperiences: async (filters) => {
+        const candidates = [towerOfTerror, runawayRailway];
+        if (filters.q !== undefined && filters.q.trim().length > 0) {
+          return filterAndRankExperiences(candidates, filters.q);
+        }
+        return candidates;
+      },
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/catalog?q=Mickey%20and%20Minnie',
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { experiences: ExperienceDTO[] };
+    expect(body.experiences).toHaveLength(1);
+    expect(body.experiences[0]?.name).toBe("Mickey & Minnie's Runaway Railway");
+    expect(body.experiences[0]?.id).toBe('00000000-0000-4000-8000-000000000010');
     await app.close();
   });
 

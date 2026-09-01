@@ -1,0 +1,1710 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Disney World Tracker — Pin Collection Catalog Mockup</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="motifs/motif-paths.js"></script>
+  <style>
+    :root {
+      --bg-dark: #090514;
+      --bg-card: rgba(20, 14, 38, 0.85);
+      --bg-card-hover: rgba(34, 23, 62, 0.95);
+      --border-card: rgba(147, 112, 219, 0.22);
+      --text-main: #f7fafc;
+      --text-muted: #a0aec0;
+      --accent-purple: #9f7aea;
+      --gold: #f6c343;
+      --prism-gradient: linear-gradient(135deg, #fff0c4, #ffc2e8, #c9a8ff, #8ed8ff, #a8f0c8, #ffe07a, #b06fd8);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: radial-gradient(circle at 50% 0%, #25124d 0%, var(--bg-dark) 80%);
+      color: var(--text-main);
+      min-height: 100vh;
+      padding: 32px 24px 80px;
+    }
+
+    header {
+      max-width: 1360px;
+      margin: 0 auto 36px;
+      text-align: center;
+    }
+
+    .badge-sub {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(159, 122, 234, 0.15);
+      border: 1px solid rgba(159, 122, 234, 0.35);
+      color: var(--accent-purple);
+      padding: 4px 14px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+
+    h1 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 42px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      margin-bottom: 12px;
+      background: linear-gradient(135deg, #ffffff 40%, #c4b5fd 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .subtitle {
+      font-size: 16px;
+      color: var(--text-muted);
+      max-width: 860px;
+      margin: 0 auto 28px;
+      line-height: 1.6;
+    }
+
+    /* Stats Filter Bar */
+    .stats-row {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 12px;
+      max-width: 1200px;
+      margin: 0 auto 32px;
+    }
+    .stat-pill {
+      background: var(--bg-card);
+      border: 1px solid var(--border-card);
+      backdrop-filter: blur(12px);
+      padding: 10px 18px;
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      transition: all 0.2s ease;
+      cursor: pointer;
+    }
+    .stat-pill:hover, .stat-pill.active {
+      background: var(--bg-card-hover);
+      border-color: var(--accent-purple);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(159, 122, 234, 0.25);
+    }
+    .stat-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+    }
+    .dot-bronze   { background: linear-gradient(135deg, #eec4a0, #9a5526); }
+    .dot-silver   { background: linear-gradient(135deg, #ffffff, #b0b9c8); }
+    .dot-gold     { background: linear-gradient(135deg, #fff8db, #e5ab2c); }
+    .dot-amethyst { background: linear-gradient(135deg, #f7e4ff, #8a45c9); }
+    .dot-pearl    { background: linear-gradient(135deg, #fff6fb, #c2bcdd); }
+    .dot-prism    { background: var(--prism-gradient); }
+
+    
+    /* === ANIMATED TIERS (Rarity Motion Signals) === */
+    /* Pearl: 5.5s slow glow | Prismatic: 2.4s sweep | Tiers 1-4: Still by design */
+    @keyframes shmr { 
+      0%   { transform: translateX(0); } 
+      100% { transform: translateX(340px); } 
+    }
+    .shmr { 
+      animation: shmr 2.4s linear infinite; 
+    }
+    .shmr.slow { 
+      animation-duration: 5.5s; 
+      opacity: 0.65; 
+    }
+    @media (prefers-reduced-motion: reduce) { 
+      .shmr { 
+        animation: none !important; 
+        opacity: 0.35 !important; 
+      } 
+    }
+
+    /* Controls Bar */
+    .controls {
+      max-width: 1360px;
+      margin: 0 auto 28px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .search-box {
+      flex: 1;
+      min-width: 280px;
+      max-width: 440px;
+      position: relative;
+    }
+    .search-box input {
+      width: 100%;
+      background: var(--bg-card);
+      border: 1px solid var(--border-card);
+      border-radius: 12px;
+      padding: 12px 18px 12px 42px;
+      color: #fff;
+      font-size: 14px;
+      outline: none;
+      transition: border 0.2s;
+    }
+    .search-box input:focus {
+      border-color: var(--accent-purple);
+    }
+    .search-icon {
+      position: absolute;
+      left: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-muted);
+      font-size: 16px;
+    }
+    .filter-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .tab-btn {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: var(--text-muted);
+      padding: 8px 16px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .tab-btn:hover, .tab-btn.active {
+      background: rgba(159, 122, 234, 0.25);
+      border-color: var(--accent-purple);
+      color: #fff;
+    }
+
+    /* Pin Grid */
+    .pin-grid {
+      max-width: 1360px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(295px, 1fr));
+      gap: 20px;
+    }
+
+    .pin-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-card);
+      border-radius: 18px;
+      padding: 24px 18px 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      min-height: 285px;
+      backdrop-filter: blur(12px);
+      transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.25s, box-shadow 0.25s;
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+    }
+    .pin-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0; height: 3px;
+      opacity: 0.85;
+    }
+    .pin-card[data-tier="bronze"]::before   { background: linear-gradient(90deg, #eec4a0, #9a5526); }
+    .pin-card[data-tier="silver"]::before   { background: linear-gradient(90deg, #ffffff, #b0b9c8); }
+    .pin-card[data-tier="gold"]::before     { background: linear-gradient(90deg, #fff8db, #e5ab2c); }
+    .pin-card[data-tier="amethyst"]::before { background: linear-gradient(90deg, #f7e4ff, #8a45c9); }
+    .pin-card[data-tier="pearl"]::before    { background: linear-gradient(90deg, #fff6fb, #c2bcdd); }
+    .pin-card[data-tier="prism"]::before    { background: var(--prism-gradient); }
+
+    .pin-card:hover {
+      transform: translateY(-6px);
+      border-color: rgba(159, 122, 234, 0.6);
+      box-shadow: 0 16px 36px rgba(0, 0, 0, 0.55);
+      background: var(--bg-card-hover);
+    }
+
+    .pin-art-wrapper {
+      width: 130px;
+      height: 130px;
+      margin: 0 auto 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.7));
+      transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    .pin-card:hover .pin-art-wrapper {
+      transform: scale(1.08) rotate(1.5deg);
+    }
+
+    .pin-badge-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+    .tier-badge {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding: 3px 10px;
+      border-radius: 999px;
+    }
+    .tier-badge.bronze   { background: rgba(201, 127, 74, 0.25); color: #eec4a0; border: 1px solid rgba(201, 127, 74, 0.5); }
+    .tier-badge.silver   { background: rgba(226, 232, 240, 0.25); color: #ffffff; border: 1px solid rgba(226, 232, 240, 0.5); }
+    .tier-badge.gold     { background: rgba(246, 195, 67, 0.25); color: #f6c343; border: 1px solid rgba(246, 195, 67, 0.5); }
+    .tier-badge.amethyst { background: rgba(183, 148, 244, 0.25); color: #d6bcfa; border: 1px solid rgba(183, 148, 244, 0.5); }
+    .tier-badge.pearl    { background: rgba(240, 228, 250, 0.25); color: #fff6fb; border: 1px solid rgba(240, 228, 250, 0.5); }
+    .tier-badge.prism    { background: rgba(255, 215, 0, 0.25); color: #ffd700; border: 1px solid #ffd700; }
+
+    .style-badge {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      background: rgba(255, 255, 255, 0.08);
+      padding: 3px 8px;
+      border-radius: 6px;
+    }
+    .style-badge.die-cut {
+      color: #90cdf4;
+      background: rgba(49, 130, 206, 0.18);
+      border: 1px solid rgba(49, 130, 206, 0.35);
+    }
+    .style-badge.contained {
+      color: #d6bcfa;
+      background: rgba(159, 122, 234, 0.18);
+      border: 1px solid rgba(159, 122, 234, 0.35);
+    }
+
+    .pin-name {
+      font-family: 'Outfit', sans-serif;
+      font-size: 17px;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 6px;
+      line-height: 1.3;
+    }
+
+    .pin-criteria {
+      font-size: 13px;
+      color: var(--text-muted);
+      line-height: 1.45;
+      margin-top: auto;
+    }
+
+    /* Modal */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.85);
+      backdrop-filter: blur(16px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      z-index: 1000;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease;
+    }
+    .modal-overlay.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .modal-card {
+      background: #150f29;
+      border: 1px solid rgba(159, 122, 234, 0.4);
+      border-radius: 24px;
+      width: 100%;
+      max-width: 520px;
+      padding: 36px 32px;
+      text-align: center;
+      position: relative;
+      transform: scale(0.95);
+      transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+      box-shadow: 0 24px 64px rgba(0, 0, 0, 0.75);
+    }
+    .modal-overlay.open .modal-card {
+      transform: scale(1);
+    }
+    .modal-close {
+      position: absolute;
+      top: 16px;
+      right: 18px;
+      background: rgba(255, 255, 255, 0.1);
+      border: none;
+      color: #fff;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    .modal-art {
+      width: 180px;
+      height: 180px;
+      margin: 0 auto 20px;
+      filter: drop-shadow(0 14px 28px rgba(0, 0, 0, 0.75));
+    }
+    .modal-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 24px;
+      font-weight: 800;
+      margin-bottom: 10px;
+      color: #fff;
+    }
+    .modal-criteria-box {
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 14px;
+      padding: 16px;
+      margin: 20px 0;
+      text-align: left;
+    }
+    .modal-criteria-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      font-weight: 700;
+      color: var(--accent-purple);
+      margin-bottom: 6px;
+      letter-spacing: 0.5px;
+    }
+    .modal-criteria-text {
+      font-size: 14px;
+      color: #e2e8f0;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="badge-sub">🏆 Disney World Tracker • Series 1</div>
+    <h1>The <span id="headline-count">&mdash;</span>-Pin Challenge Collection</h1>
+    <p class="subtitle">
+      Explore the entire resort to unlock <span id="subtitle-count">&mdash;</span> collectible metal trading pins. The <b>Lifetime Experience Ladder</b> features the authentic <b>Contained Firework Progression (B4)</b> on an Arch Plaque over Night Sky, while Park Emblems and Physical Landmarks render as <b>True Die-Cut Contour Silhouettes</b>!
+    </p>
+
+    <!-- Rarity Pyramid Filter Bar -->
+        <div class="stats-row" id="tierFilters">
+      <div class="stat-pill active" data-filter="all">
+        <span>All Pins</span>
+        <strong id="count-all">&mdash;</strong>
+      </div>
+      <div class="stat-pill" data-filter="prism">
+        <span class="stat-dot dot-prism"></span>
+        <span>Prism (Mythic)</span>
+        <strong id="count-prism">&mdash;</strong>
+      </div>
+      <div class="stat-pill" data-filter="pearl">
+        <span class="stat-dot dot-pearl"></span>
+        <span>Pearl (Legendary)</span>
+        <strong id="count-pearl">&mdash;</strong>
+      </div>
+      <div class="stat-pill" data-filter="amethyst">
+        <span class="stat-dot dot-amethyst"></span>
+        <span>Amethyst (Distinguished)</span>
+        <strong id="count-amethyst">&mdash;</strong>
+      </div>
+      <div class="stat-pill" data-filter="gold">
+        <span class="stat-dot dot-gold"></span>
+        <span>Gold (Expert)</span>
+        <strong id="count-gold">&mdash;</strong>
+      </div>
+      <div class="stat-pill" data-filter="silver">
+        <span class="stat-dot dot-silver"></span>
+        <span>Silver (Dedicated)</span>
+        <strong id="count-silver">&mdash;</strong>
+      </div>
+      <div class="stat-pill" data-filter="bronze">
+        <span class="stat-dot dot-bronze"></span>
+        <span>Bronze (Discovery)</span>
+        <strong id="count-bronze">&mdash;</strong>
+      </div>
+    </div>
+  </header>
+
+  <!-- Controls -->
+  <div class="controls">
+    <div class="search-box">
+      <span class="search-icon">🔍</span>
+      <input type="text" id="searchInput" placeholder="Search by name, motif, or challenge rules..." />
+    </div>
+
+        <div class="filter-tabs" id="categoryFilters">
+      <button class="tab-btn active" data-cat="all">All Categories (<span id="cat-count-all">&mdash;</span>)</button>
+      <button class="tab-btn" data-cat="ladder">🎆 Experience Ladder (<span id="cat-count-ladder">&mdash;</span>)</button>
+      <button class="tab-btn" data-cat="land">🗺️ Land Mastery (<span id="cat-count-land">&mdash;</span>)</button>
+      <button class="tab-btn" data-cat="park">🏰 Park Mastery (<span id="cat-count-park">&mdash;</span>)</button>
+      <button class="tab-btn" data-cat="touring">⏱️ Touring & Speed (<span id="cat-count-touring">&mdash;</span>)</button>
+      <button class="tab-btn" data-cat="sets">🎯 Thematic Sets (<span id="cat-count-sets">&mdash;</span>)</button>
+      <button class="tab-btn" data-cat="dining">🍽️ Dining & Resorts (<span id="cat-count-dining">&mdash;</span>)</button>
+      <button class="tab-btn" data-cat="social">🤝 Social & Guide (<span id="cat-count-social">&mdash;</span>)</button>
+    </div>
+  </div>
+
+  <!-- Main Grid -->
+  <div class="pin-grid" id="pinGrid"></div>
+
+  <!-- Detail Modal -->
+  <div class="modal-overlay" id="detailModal">
+    <div class="modal-card">
+      <button class="modal-close" id="modalClose">&times;</button>
+      <div class="modal-art" id="modalArt"></div>
+      <div class="pin-badge-row" id="modalBadges" style="justify-content: center;"></div>
+      <h2 class="modal-title" id="modalTitle">Pin Title</h2>
+      <div class="modal-criteria-box">
+        <div class="modal-criteria-title">Challenge Objective & Formula</div>
+        <div class="modal-criteria-text" id="modalCriteria"></div>
+        <div class="modal-motif-info" id="modalMotif" style="font-size: 12px; color: var(--text-muted); margin-top: 10px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 8px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- motif-paths.js is already loaded in <head>; a second include parsed 226KB twice. -->
+  <script>
+/* =============================================================================
+   CANONICAL PIN FRAME SYSTEM (from pin-frame-sample.html)
+   ============================================================================= */
+const METALS = {
+  dead:     ['#5c5366','#443d4d','#2e2838','#1b1724'],
+  bronze:   ['#eec4a0','#c97f4a','#9a5526','#5e2f10'],
+  silver:   ['#ffffff','#e2e8f0','#b0b9c8','#727b8b'],
+  gold:     ['#fff8db','#f8db79','#e5ab2c','#8c620f'],
+  amethyst: ['#f7e4ff','#cba2f0','#8a45c9','#41185f'],
+  pearl:    ['#fff6fb','#f0e4fa','#dcecf6','#c2bcdd','#9d95bd'],
+  prism:    ['#fff0c4','#ffc2e8','#c9a8ff','#8ed8ff','#a8f0c8','#ffe07a','#b06fd8']
+};
+
+const RIM_BY_TIER = {
+  bronze: 4.2, silver: 5.2, gold: 6.2, amethyst: 7.2, pearl: 8.2, prism: 9.2
+};
+
+const PALETTES = {
+  royal: {
+    royal:'#4a2a7a', plum:'#6a3fb0', teal:'#14727f', forest:'#2f7d3e',
+    crimson:'#a8323f', amber:'#b5721a', sky:'#2f6bb0', ink:'#241a3a'
+  }
+};
+
+const SKIES = {
+  day:   ['#8fc4f0','#dfeaf7'],
+  dusk:  ['#3f2f78','#c47a8e'],
+  night: ['#1b1a4a','#4b3f8f']
+};
+
+const FIREWORK_COLOURS = ['#ffd86b','#ff7fa8','#66dcec','#b6e86a','#ff9d55','#c9b3ff'];
+const SPARK_COLOUR = '#ffffff';
+
+const SHAPES = {
+  disc:    { d:'M9 75 A66 66 0 1 0 141 75 A66 66 0 1 0 9 75 Z',
+             inset:.86, mk:0.95, mcx:75, mcy:75, groundY:128, bannerY:116, bannerW:74 },
+  crest:   { d:'M19 17 H131 V71 C131 107 108 131 75 143 C42 131 19 107 19 71 Z',
+             inset:.87, mk:.88, mcx:75, mcy:72, groundY:130, bannerY:114, bannerW:74 },
+  star:    { d:'M75 7 L92.1 51.5 L139.7 54 L102.6 84 L115 130 L75 104 L35 130 L47.4 84 L10.3 54 L57.9 51.5 Z',
+             inset:.78, mk:.66, mcx:75, mcy:78, groundY:98,  bannerY:null },
+  gem:     { d:'M75 7 L127 38 L127 104 L75 143 L23 104 L23 38 Z',
+             inset:.83, mk:.80, mcx:75, mcy:75, groundY:124, bannerY:110, bannerW:64 },
+  arch:    { d:'M75 6 C104 6 128 30 128 59 V126 A10 10 0 0 1 118 136 H32 A10 10 0 0 1 22 126 V59 C22 30 46 6 75 6 Z',
+             inset:.87, mk:.84, mcx:75, mcy:72, groundY:127, bannerY:117, bannerW:78 },
+  rosette: { d:'M56 99 L70 99 L67 143 L61 132 L55 143 Z M94 99 L80 99 L83 143 L89 132 L95 143 Z M75 10 A52 52 0 1 0 75 114 A52 52 0 1 0 75 10 Z',
+             insetD:'M75 21 A41 41 0 1 0 75 103 A41 41 0 1 0 75 21 Z',
+             mk:.62, mcx:75, mcy:62, groundY:100, bannerY:95, bannerW:66 }
+};
+
+const MOTIFS = Object.assign({}, window.MOTIF_LIB || {}, {
+});
+
+const SCENES = {
+  grandSlam: {
+    top: 0,
+    rule: 'nonzero',
+    d: 'M0 0h512v512H0z'
+  },
+
+  ikranBanshee: {
+    top: 30,
+    rule: 'evenodd',
+    d: `M256 160 C240 120 220 70 160 50 C90 30 50 80 40 120 C30 160 80 180 140 200 C200 220 230 250 256 290 C282 250 312 220 372 200 C432 180 482 160 472 120 C462 80 422 30 352 50 C292 70 272 120 256 160 Z
+        M240 290 L200 460 L248 410 L256 470 L264 410 L312 460 L272 290 Z
+        M140 120 C180 150 200 180 230 200 L180 230 C130 200 100 160 140 120 Z
+        M372 120 C332 150 312 180 282 200 L332 230 C382 200 412 160 372 120 Z`
+  },
+  pandoraBanshee: {
+    top: 20,
+    rule: 'nonzero',
+    d: `M324.97 17.54c.03.034.057.07.086.104.22.257.545.698.88 1.258.67 1.122 1.458 2.684 2.115 4.545 1.314 3.722 2.215 8.595 1.63 13.998-1.077 9.948-6.732 20.306-15.655 27.246-17.786 13.83-47.534 11.233-77.94 1.442-1.928 2.45-3.87 4.908-5.83 7.37-7.904 9.932-15.938 19.89-23.774 29.508 17.653 9.774 37.03 17.604 57.008 23.36 10.378 2.99 21.056 5.378 31.848 7.084 10.79 1.707 21.697 2.705 32.553 2.894 11.393.2 22.753-.62 33.72-2.128 10.967-1.51 21.518-3.714 31.255-6.613l2.805 17.778c-10.42 3.102-21.68 5.437-33.342 7.042-11.662 1.605-23.714 2.47-35.79 2.26-11.44-.2-22.896-1.25-34.214-3.04-11.318-1.79-22.42-4.28-33.197-7.39-19.46-5.61-38.39-13.1-56.12-22.18-7.3 8.79-14.39 17.1-21.2 24.81 12.35 10.15 25.99 18.72 40.54 25.5 15.34 7.15 31.82 12.63 48.91 16.27 17.09 3.63 34.8 5.42 52.61 5.33 17.81-.08 35.7-1.96 53.2-5.74l3.81 17.59c-18.74 4.05-37.89 6.06-56.96 6.14-19.06.08-38.03-1.84-56.32-5.73-18.29-3.9-35.9-9.76-52.28-17.4-15.01-7-29.07-15.7-41.97-25.9-6.08 6.7-11.83 12.7-17.22 17.9 6.64 8.7 13.99 16.5 21.91 23.3 16.14 13.9 34.75 24.6 54.77 31.9 20.02 7.3 41.44 11.2 63.09 11.6 21.66.4 43.51-2.7 64.64-9.3l5.3 17.2c-22.5 7.1-45.8 10.4-69 10-23.2-.4-46.1-4.6-67.6-12.4-21.4-7.8-41.4-19.3-58.8-34.2-7.8-6.7-15.1-14.2-21.7-22.4-12.7 11.7-23.3 19.8-31 24.3l-9.4-15.4c9.1-5.5 21.5-15.1 35.7-28.7-22.2-27.1-39.7-57.9-50.5-90.8-10.8-32.9-15.4-67.6-12.2-101.4l17.9 1.7c-3 31.9 1.4 64.6 11.5 95.5 9.7 29.5 25.1 57.1 44.8 81.5 11.7-13.8 23.5-28.7 35.2-44.2 11.7-15.5 23.3-31.5 34.6-47.5 1.5-2.2 3.1-4.4 4.6-6.6-18.1-2.7-35.7-8.3-51.8-16.5-16.1-8.2-30.7-19-42.9-32.1-12.2-13.1-21.9-28.4-28-45.3-6.1-16.9-8.4-35.3-6-53.6l17.8 2.4c-2.2 16.5-.2 33 5.3 48.2 5.5 15.2 14.2 29 25.2 40.7 11 11.7 24.1 21.4 38.6 28.7 14.5 7.3 30.3 12.3 46.6 14.8 3.5-5 6.9-10 10.2-15 10.1-15.1 19.6-30.3 27.9-45.2-3.1-2.2-6.1-4.4-8.8-6.7-10.9-9.1-19.9-20.1-25.9-32.5-6-12.4-8.9-26.2-7.8-40.3l17.9 1.4c-1 12.5 1.6 24.7 6.9 35.6 5.3 10.9 13.2 20.6 22.8 28.6 3.6 3 7.5 5.8 11.6 8.3 14.3-24.8 24.3-50.5 28.5-75.9l17.7 2.9c-4.6 27.9-15.6 56.1-31.3 83.2 18.2 5.2 35.9 5.8 47.7-3.4 4.5-3.5 7.3-8.7 7.9-14.2.6-5.5-.9-10.8-3.4-14.8-1.3-2-2.9-3.7-4.8-5.1z`
+  },
+  drumKit: {
+    top: 30,
+    rule: 'nonzero',
+    d: `m111 58.3-87.37.4-.61 8.3L192.4 92.6l1.8-8.1zm310.8 18.8-.3 29.7 5-.8 4.9.8-.3-29.7zM96.33 92.8l-1.81 13-33.17 26.4 1.84 115.6 6.16-40.4 9.55-2.3h.28l-1.03-65 31.95-25.4 2.7-19.4zm330.17 25.9-66.6 10.4.6 8.3h132l.6-8.3zm-66 33.3-.6 8.3 66.6 10.4 66.6-10.4-.6-8.3zm60.3 30.5-.2 20.8c2.8.5 5.6 1.2 8.5 1.8l3.3.8-.2-23.4-5.7.9zm-287.4 30.7c-16.5-.2-33.5 1.9-51.1 6.1l-2.86 18.8c23.26-3.3 75.96-6.9 127.56 14.6 4-1.6 8.2-3.1 12.4-4.3l1.2-8c-26.6-18.2-55.8-26.8-87.2-27.2zm241.2 0c-31.4.4-60.6 9-87.2 27.2l1.2 8c4.2 1.2 8.4 2.7 12.4 4.3 51.6-21.5 104.3-17.9 127.6-14.6l-2.9-18.8c-17.6-4.2-34.6-6.3-51.1-6.1zm-258.1 39c-17.91 0-32.1 1.8-39.69 3.1l-7.05 46.3 72.94 11.1c10.1-20.3 25.5-37.5 44.5-49.6-25.4-8.5-50.4-10.9-70.7-10.9zm275 0c-20.3 0-45.3 2.4-70.7 10.9 19 12.1 34.4 29.3 44.5 49.6l72.9-11.1-7-46.3c-7.6-1.3-21.8-3.1-39.7-3.1zm-137.5 10c-49.9 0-90.4 40.5-90.4 90.4 0 49.9 40.5 90.4 90.4 90.4 49.9 0 90.4-40.5 90.4-90.4 0-49.9-40.5-90.4-90.4-90.4zM64.27 315.5l1.36 85.5-46.73 87h18.94l33.24-62 15.19 62h17.23l-21.19-86-1.33-84zM433.6 317l-14.2 2.2-.8 74.1-24.2 55.7 7.4 25 24.7-57 30.9 71h18.2l-41.2-94.7zm-279.7 11.6c-4.7 12.1-7.2 25.2-7.2 38.9C146.7 427 194.8 475 254 475c59.2 0 107.3-48 107.3-107.5 0-13.7-2.5-26.8-7.2-38.9 1.8 7.7 2.8 15.8 2.8 24C356.9 409 310.8 456 254 456c-56.8 0-102.9-47-102.9-103.4 0-8.2 1-16.3 2.8-24zm-18 77.4-20.2 82h25.7l11.8-48c-7.4-11-13.3-22-17.3-34zm236.2 0c-4 12-9.9 23-17.3 34l11.8 48h25.7z`
+  },
+  crossedLightsabers: {
+    top: 30,
+    rule: 'evenodd',
+    d: `M184 304 L394 94 A12 12 0 0 1 418 118 L208 328 Z
+        M328 304 L118 94 A12 12 0 0 0 94 118 L304 328 Z
+        M90 390 L180 300 L212 332 L122 422 Z
+        M422 390 L332 300 L300 332 L390 422 Z
+        M256 226 L276 256 L256 286 L236 256 Z`
+  },
+  towerOfTerror: {
+    top: 30,
+    rule: 'evenodd',
+    d: `M80 460 L80 330 L110 330 L110 230 L150 230 L150 140 L220 140 L220 70 L300 70 L300 110 L370 110 L370 200 L400 200 L400 330 L432 330 L432 460 Z
+        M200 50 h110 v30 h-110 Z
+        M290 60 h80 v50 h-80 Z
+        M210 160 h92 v270 h-92 Z
+        M228 180 h56 v40 h-56 Z  M228 240 h56 v40 h-56 Z  M228 300 h56 v40 h-56 Z
+        M126 250 h20 v35 h-20 Z  M374 220 h20 v35 h-20 Z
+        M96 350 h20 v45 h-20 Z  M396 350 h20 v45 h-20 Z
+        M166 160 h30 v35 h-30 Z  M316 130 h30 v35 h-30 Z`
+  },
+  castle: {
+    top: 40,
+    rule: 'evenodd',
+    d: `M96 480 L96 380 L112 380 L112 250 L104 250 L144 150 L184 250 L176 250 L176 380
+        L208 380 L208 205 L198 205 L256 80 L314 205 L304 205 L304 380
+        L336 380 L336 250 L328 250 L368 150 L408 250 L400 250 L400 380 L416 380 L416 480 Z
+        M232 480 L232 432 A24 24 0 0 1 280 432 L280 480 Z
+        M241 244 h30 v42 h-30 Z
+        M129 292 h30 v38 h-30 Z  M353 292 h30 v38 h-30 Z
+        M136 404 h26 v34 h-26 Z  M350 404 h26 v34 h-26 Z
+        M253 40 h6 v42 h-6 Z  M259 44 L298 55 L259 66 Z`
+  },
+  spaceMountain: {
+    top: 40,
+    rule: 'evenodd',
+    d: `M256 40 L262 90 L278 140 C340 180 410 270 472 440 L40 440 C102 270 172 180 234 140 L250 90 Z
+        M256 120 L270 210 L278 440 L234 440 L242 210 Z
+        M294 235 C345 285 390 360 418 440 L346 440 C322 375 292 310 278 260 Z
+        M218 235 C167 285 122 360 94 440 L166 440 C190 375 220 310 234 260 Z
+        M248 20 h16 v36 h-16 Z`
+  },
+  sheriffBadge: {
+    top: 40,
+    rule: 'evenodd',
+    d: `M256 40 A18 18 0 1 1 256 76 L256 80 L310 160 L400 135 L404 135 A18 18 0 1 1 422 166 L418 170 L380 256 L418 342 L422 346 A18 18 0 1 1 404 377 L400 377 L310 352 L256 432 L256 436 A18 18 0 1 1 256 472 A18 18 0 0 1 256 436 L256 432 L202 352 L112 377 L108 377 A18 18 0 1 1 90 346 L94 342 L132 256 L94 170 L90 166 A18 18 0 1 1 108 135 L112 135 L202 160 L256 80 Z
+        M256 180 A76 76 0 1 0 256 332 A76 76 0 1 0 256 180 Z
+        M256 206 L270 248 L314 248 L278 274 L292 316 L256 290 L220 316 L234 274 L198 248 L242 248 Z`
+  },
+  millenniumFalcon: {
+    top: 40,
+    rule: 'evenodd',
+    d: `M220 50 L220 180 C200 185 180 195 160 210 L80 160 L60 190 L125 245 C80 290 60 360 70 430 L442 430 C452 360 432 290 387 245 L452 190 L432 160 L352 210 C332 195 312 185 292 180 L292 50 L260 50 L260 150 L252 150 L252 50 Z
+        M256 240 A50 50 0 1 0 256 340 A50 50 0 1 0 256 240 Z
+        M390 190 L420 220 L440 270 L400 270 Z
+        M160 380 h192 v26 h-192 Z`
+  },
+  towerOfTerror: {
+    top: 40,
+    rule: 'evenodd',
+    d: `M64 450 L64 320 L104 320 L104 220 L144 220 L144 140 L214 140 L214 80 L298 80 L298 140 L368 140 L368 220 L408 220 L408 320 L448 320 L448 450 Z
+        M230 40 h52 v40 h-52 Z
+        M160 165 h36 v40 h-36 Z  M316 165 h36 v40 h-36 Z
+        M120 245 h30 v45 h-30 Z  M362 245 h30 v45 h-30 Z
+        M80 345 h30 v55 h-30 Z  M402 345 h30 v55 h-30 Z
+        M220 160 h72 v290 h-72 Z
+        M236 185 h40 v40 h-40 Z  M236 245 h40 v40 h-40 Z  M236 305 h40 v40 h-40 Z`
+  },
+  libertyBell: {
+    top: 40,
+    rule: 'evenodd',
+    d: `M120 70 L392 70 C410 70 420 85 410 100 L380 130 L340 130 C340 150 355 180 370 240 C390 320 420 370 436 400 C446 420 430 440 406 440 L106 440 C82 440 66 420 76 400 C92 370 122 320 142 240 C157 180 172 150 172 130 L132 130 L102 100 C92 85 102 70 120 70 Z
+        M230 30 h52 v40 h-52 Z
+        M256 440 A30 30 0 0 1 256 500 A30 30 0 0 1 256 440 Z
+        M270 280 L290 330 L260 370 L286 440 h-30 L236 380 L266 335 L248 280 Z`
+  },
+  piratesCutlasses: {
+    top: 40,
+    rule: 'evenodd',
+    d: `M70 110 C140 100 230 140 320 230 L380 170 C420 130 450 70 450 70 C450 70 390 100 350 140 L290 200 C200 110 140 70 70 110 Z
+        M442 110 C372 100 282 140 192 230 L132 170 C92 130 62 70 62 70 C62 70 122 100 162 140 L222 200 C312 110 372 70 442 110 Z
+        M330 250 L420 340 C440 360 440 390 420 410 C400 430 370 430 350 410 L260 320 Z
+        M182 250 L92 340 C72 360 72 390 92 410 C112 430 142 430 162 410 L252 320 Z`
+  },
+  bigThunder: {
+    top: 40,
+    rule: 'evenodd',
+    d: `M40 450 L110 310 L140 340 L190 220 L230 250 L270 110 L320 230 L360 180 L400 280 L430 240 L472 450 Z
+        M220 450 L220 360 L280 360 L280 450 Z
+        M130 450 L150 380 L180 450 Z
+        M330 450 L350 370 L380 450 Z`
+  },
+  pandoraMountain: {
+    top: 40,
+    rule: 'evenodd',
+    d: `M90 230 C70 170 140 130 220 120 C310 110 420 140 440 210 C450 250 400 280 350 290 C290 370 230 420 210 440 C200 410 180 350 140 290 C100 280 80 250 90 230 Z
+        M170 290 C165 340 150 390 140 430 L130 425 C140 385 155 335 160 290 Z
+        M270 290 C285 340 310 390 330 430 L340 425 C320 385 295 335 280 290 Z`
+  },
+  cosmicStar: {
+    top: 40,
+    rule: 'evenodd',
+    d: `M256 40 L280 190 L430 214 L310 290 L350 440 L256 340 L162 440 L202 290 L82 214 L232 190 Z
+        M256 160 A96 96 0 1 0 256 352 A96 96 0 1 0 256 160 Z
+        M256 200 A56 56 0 1 1 256 312 A56 56 0 1 1 256 200 Z`
+  },
+  oceanWave: {
+    top: 40,
+    rule: 'evenodd',
+    d: `M60 440 C140 440 220 390 270 330 C320 270 350 190 320 130 C290 70 210 80 180 130 C150 180 190 240 240 230 C270 220 280 190 260 170 C250 160 230 170 230 180 C230 190 250 200 240 205 C210 210 180 170 200 135 C220 100 270 100 290 140 C310 180 280 240 240 280 C190 330 130 360 60 370 Z`
+  }
+};
+
+function transformSVGPath(d, scale, tx, ty) {
+  if (!d) return '';
+  return d.replace(/([MmLlHhVvCcSsQqTtAaZz])([^MmLlHhVvCcSsQqTtAaZz]*)/g, (match, cmd, args) => {
+    if (cmd.toUpperCase() === 'Z') return cmd;
+    const nums = args.trim().split(/[\s,]+/).filter(Boolean).map(Number);
+    if (cmd === 'H' || cmd === 'h') {
+      const isRel = cmd === 'h';
+      const transformed = nums.map(x => (isRel ? x * scale : x * scale + tx).toFixed(1));
+      return cmd + transformed.join(' ');
+    }
+    if (cmd === 'V' || cmd === 'v') {
+      const isRel = cmd === 'v';
+      const transformed = nums.map(y => (isRel ? y * scale : y * scale + ty).toFixed(1));
+      return cmd + transformed.join(' ');
+    }
+    if (cmd === 'A' || cmd === 'a') {
+      const out = [];
+      for (let i = 0; i < nums.length; i += 7) {
+        const rx = (nums[i] * scale).toFixed(1);
+        const ry = (nums[i+1] * scale).toFixed(1);
+        const rot = nums[i+2];
+        const laf = nums[i+3];
+        const sf = nums[i+4];
+        const isRel = cmd === 'a';
+        const x = (isRel ? nums[i+5] * scale : nums[i+5] * scale + tx).toFixed(1);
+        const y = (isRel ? nums[i+6] * scale : nums[i+6] * scale + ty).toFixed(1);
+        out.push(`${rx} ${ry} ${rot} ${laf} ${sf} ${x} ${y}`);
+      }
+      return cmd + out.join(' ');
+    }
+    const isRel = cmd >= 'a' && cmd <= 'z';
+    const out = [];
+    for (let i = 0; i < nums.length; i += 2) {
+      if (nums[i] == null || isNaN(nums[i])) continue;
+      const x = (isRel ? nums[i] * scale : nums[i] * scale + tx).toFixed(1);
+      const y = (isRel ? nums[i+1] * scale : nums[i+1] * scale + ty).toFixed(1);
+      out.push(`${x} ${y}`);
+    }
+    return cmd + out.join(' ');
+  });
+}
+
+function buildFourParksStainedGlass() {
+  const lib = window.MOTIF_LIB || {};
+  
+  // 1. Authentic vector paths from motif library
+  const castlePath = transformSVGPath(lib['castle'] || SCENES.castle.d, 0.34, 46, 44);
+  const globePath  = transformSVGPath(lib['wireframeGlobe'] || '', 0.35, 275, 40);
+  const clapper    = transformSVGPath(lib['clapperboard'] || '', 0.33, 46, 272);
+  const oakPath    = transformSVGPath(lib['holyOak'] || '', 0.35, 270, 268);
+  
+  // 2. Grand Cathedral Quatrefoil Outer Frame & Prominent Foundation Cross Tracery
+  const frameTracery = `
+    M256 16 C380 16 496 116 496 256 C496 396 380 496 256 496 C132 496 16 396 16 256 C16 116 132 16 256 16 Z
+    M256 16 L284 210 L496 256 L284 302 L256 496 L228 302 L16 256 L228 210 Z
+    M256 168 L282 230 L344 256 L282 282 L256 344 L230 282 L168 256 L230 230 Z
+  `;
+
+  return `${frameTracery} ${castlePath} ${globePath} ${clapper} ${oakPath}`;
+}
+
+SCENES.fourParksCompass = {
+  top: 35,
+  rule: 'nonzero',
+  d: `M256 28 L288 214 L474 246 L288 278 L256 464 L224 278 L38 246 L224 214 Z
+      M256 100 L392 246 L256 392 L120 246 Z
+      M256 190 L302 246 L256 302 L210 246 Z`
+};
+
+SCENES.fourParksMaster = {
+  top: 16,
+  rule: 'evenodd',
+  get d() {
+    return buildFourParksStainedGlass();
+  }
+};
+
+function circlePath(cx, cy, r){
+  return `M${cx} ${(cy-r).toFixed(1)} A${r} ${r} 0 0 1 ${cx} ${(cy+r).toFixed(1)} `
+       + `A${r} ${r} 0 0 1 ${cx} ${(cy-r).toFixed(1)} Z `;
+}
+
+function burstShape(cx, cy, r, rays = 8, innerRatio = 0.35){
+  const inner = r * innerRatio, step = 360 / rays, pts = [];
+  for (let i = 0; i < rays; i++) {
+    const ao = (i * step) * Math.PI / 180, ai = (i * step + step / 2) * Math.PI / 180;
+    pts.push([cx + r * Math.cos(ao),     cy + r * Math.sin(ao)]);
+    pts.push([cx + inner * Math.cos(ai), cy + inner * Math.sin(ai)]);
+  }
+  return 'M' + pts.map(([x,y],i) => `${i?'L':''}${x.toFixed(1)} ${y.toFixed(1)}`).join(' ') + ' Z ';
+}
+
+function tipDots(cx, cy, r, rays, dr){
+  let s = '';
+  for (let i = 0; i < rays; i++) {
+    const a = (i * 360 / rays) * Math.PI / 180;
+    s += circlePath(+(cx + r * 0.98 * Math.cos(a)).toFixed(1),
+                    +(cy + r * 0.98 * Math.sin(a)).toFixed(1), dr);
+  }
+  return s;
+}
+
+function starScatter(count, avoid, seed = 4242){
+  let s = seed >>> 0;
+  const rnd = () => ((s = (Math.imul(s, 1103515245) + 12345) >>> 0) & 0x7fffffff) / 0x7fffffff;
+  const out = [];
+  let guard = 0;
+  while (out.length < count && guard++ < count * 120) {
+    const a = rnd() * Math.PI * 2, rr = 96 + rnd() * 150;
+    const x = 256 + rr * Math.cos(a), y = 240 + rr * Math.sin(a) * 0.94;
+    if (x < 52 || x > 460 || y < 36 || y > 424) continue;
+    if (avoid.some(([ax,ay,ar]) => Math.hypot(x-ax, y-ay) < ar + 24)) continue;
+    if (out.some(([bx,by]) => Math.hypot(x-bx, y-by) < 44)) continue;
+    out.push([Math.round(x), Math.round(y)]);
+  }
+  return out;
+}
+
+// Tier-Specific Harmonious Palettes for Regal Collectible Aesthetics
+const LADDER_PALETTES = {
+  bronze:   ['#f8db79', '#e5ab2c', '#ffc766', '#ffffff'],
+  silver:   ['#ffffff', '#bde0fe', '#90cdf4', '#e2e8f0'],
+  gold:     ['#fff8db', '#ffd700', '#f6ad55', '#ffffff'],
+  amethyst: ['#f7e4ff', '#cba2f0', '#9f7aea', '#ffffff'],
+  pearl:    ['#ffffff', '#dcecf6', '#f0e4fa', '#c2bcdd'],
+  prism:    ['#ffd86b', '#ff7fa8', '#66dcec', '#c9b3ff', '#ffffff']
+};
+
+function getTierForRung(n) {
+  if (n <= 8) return 'bronze';
+  if (n <= 13) return 'silver';
+  if (n <= 16) return 'gold';
+  if (n <= 18) return 'amethyst';
+  if (n <= 19) return 'pearl';
+  return 'prism';
+}
+
+function b4Stage(n, opt = {}){
+  const tier = getTierForRung(n);
+  const pal = opt.palette || LADDER_PALETTES[tier] || LADDER_PALETTES.gold;
+  const nStars = opt.stars != null ? opt.stars : Math.min(22, Math.round(4 + n * 0.9));
+  const sparks = opt.sparks !== false;
+  const parts = [];
+  
+  // Controlled core radius so it never overflows or clutters
+  const coreR = Math.round(98 + Math.min(28, n * 1.4));
+  const coreRays = Math.min(18, Math.round(10 + n * 0.4));
+  const innerRatio = 0.32;
+  const sparkR = Math.round(6 + Math.min(5, n * 0.25));
+  const avoid = [[256, 246, coreR + 8]];
+  
+  // 1. Central Hero Burst
+  parts.push({ d: burstShape(256, 246, coreR, coreRays, innerRatio), col: pal[0] });
+  if (sparks) {
+    parts.push({ d: tipDots(256, 246, coreR, coreRays, sparkR), col: pal[0], cells: coreRays });
+  }
+  
+  // 2. Elegant, non-overlapping satellite bursts (max 4, gracefully positioned)
+  const satCount = n <= 2 ? 0 : n <= 6 ? 1 : n <= 10 ? 2 : n <= 15 ? 3 : 4;
+  const ringDist = 175;
+
+  for (let k = 0; k < satCount; k++) {
+    const frac = satCount === 1 ? 0.5 : k / (satCount - 1);
+    const a  = (172 + frac * 196) * Math.PI / 180;
+    const rr = ringDist * (k % 2 ? 0.88 : 1);
+    const sr = Math.round(36 + Math.min(16, n * 0.8));
+    const satRays = 10;
+    const cx = Math.round(256 + rr * Math.cos(a));
+    const cy = Math.round(246 + rr * Math.sin(a) * 0.82);
+    avoid.push([cx, cy, sr + 6]);
+    parts.push({ d: burstShape(cx, cy, sr, satRays, innerRatio), col: pal[(k + 1) % pal.length] });
+    if (sparks && n >= 5) {
+      parts.push({ d: tipDots(cx, cy, sr, satRays, Math.round(sparkR * 0.7)), col: pal[(k + 1) % pal.length], cells: satRays });
+    }
+  }
+  
+  // 3. Crisp, delicate starlight scatter
+  for (const [x,y] of starScatter(nStars, avoid, 9781 + n * 37)) {
+    parts.push({ d: circlePath(x, y, 4.5), col: '#ffffff' });
+  }
+
+  const cols = [], groups = [];
+  for (const p of parts) {
+    const c = p.cells != null ? p.cells : splitCells(p.d).length;
+    for (let i = 0; i < c; i++) cols.push(p.col);
+    groups.push(c);
+  }
+  return { d: parts.map(p => p.d).join(''), cols, groups };
+}
+
+const B4_STAGES = {};
+for (let n = 1; n <= 20; n++) {
+  const s = b4Stage(n);
+  SCENES['b4fire' + n] = { rule:'nonzero', d:s.d, cols:s.cols, groups:s.groups };
+  B4_STAGES[n] = SCENES['b4fire' + n];
+}
+
+function tokenizePath(d){
+  const tokens = [];
+  const re = /([a-df-z])|([+-]?(?:\d*\.\d+|\d+)(?:[eE][+-]?\d+)?)/gi;
+  let m, curCmd = null, nums = [];
+  while ((m = re.exec(d)) !== null) {
+    if (m[1]) {
+      if (curCmd) tokens.push({ cmd: curCmd, nums });
+      curCmd = m[1]; nums = [];
+    } else nums.push(parseFloat(m[2]));
+  }
+  if (curCmd) tokens.push({ cmd: curCmd, nums });
+  return tokens;
+}
+
+function splitCells(d){
+  const cells = [];
+  let cur = null, cx = 0, cy = 0, sx = 0, sy = 0;
+  for (const { cmd, nums } of tokenizePath(d)) {
+    const rel = cmd === cmd.toLowerCase(), k = cmd.toLowerCase();
+    if (k === 'm') {
+      const nx = rel ? cx + nums[0] : nums[0], ny = rel ? cy + nums[1] : nums[1];
+      cx = sx = nx; cy = sy = ny;
+      cur = { d: `M${+nx.toFixed(3)} ${+ny.toFixed(3)}` };
+      cells.push(cur);
+      for (let i = 2; i + 1 < nums.length; i += 2) {
+        const lx = rel ? cx + nums[i] : nums[i], ly = rel ? cy + nums[i+1] : nums[i+1];
+        cur.d += ` L${+lx.toFixed(3)} ${+ly.toFixed(3)}`; cx = lx; cy = ly;
+      }
+      continue;
+    }
+    if (!cur) { cur = { d: 'M0 0' }; cells.push(cur); }
+    cur.d += ` ${cmd}${nums.join(' ')}`;
+    const step = { l:2, h:1, v:1, c:6, s:4, q:4, t:2, a:7, z:0 }[k];
+    if (k === 'z') { cx = sx; cy = sy; }
+    else for (let i = 0; step && i + step <= nums.length; i += step) {
+      const a = nums.slice(i, i + step);
+      if (k === 'h')      cx = rel ? cx + a[0] : a[0];
+      else if (k === 'v') cy = rel ? cy + a[0] : a[0];
+      else if (k === 'a') { cx = rel ? cx + a[5] : a[5]; cy = rel ? cy + a[6] : a[6]; }
+      else { cx = rel ? cx + a[step-2] : a[step-2]; cy = rel ? cy + a[step-1] : a[step-1]; }
+    }
+  }
+  return cells.map(c => c.d);
+}
+
+function pathBBox(d){
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  let cx = 0, cy = 0, sx = 0, sy = 0;
+  
+  function update(x, y) {
+    minX = Math.min(minX, x); maxX = Math.max(maxX, x);
+    minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+  }
+
+  for (const { cmd, nums } of tokenizePath(d)) {
+    const rel = cmd === cmd.toLowerCase();
+    const k = cmd.toLowerCase();
+    
+    if (k === 'm') {
+      for (let i = 0; i + 1 < nums.length; i += 2) {
+        cx = rel ? cx + nums[i] : nums[i];
+        cy = rel ? cy + nums[i+1] : nums[i+1];
+        if (i === 0) { sx = cx; sy = cy; }
+        update(cx, cy);
+      }
+    } else if (k === 'l' || k === 't') {
+      for (let i = 0; i + 1 < nums.length; i += 2) {
+        cx = rel ? cx + nums[i] : nums[i];
+        cy = rel ? cy + nums[i+1] : nums[i+1];
+        update(cx, cy);
+      }
+    } else if (k === 'h') {
+      for (let i = 0; i < nums.length; i++) {
+        cx = rel ? cx + nums[i] : nums[i];
+        update(cx, cy);
+      }
+    } else if (k === 'v') {
+      for (let i = 0; i < nums.length; i++) {
+        cy = rel ? cy + nums[i] : nums[i];
+        update(cx, cy);
+      }
+    } else if (k === 'c') {
+      for (let i = 0; i + 5 < nums.length; i += 6) {
+        const x1 = rel ? cx + nums[i] : nums[i], y1 = rel ? cy + nums[i+1] : nums[i+1];
+        const x2 = rel ? cx + nums[i+2] : nums[i+2], y2 = rel ? cy + nums[i+3] : nums[i+3];
+        const x  = rel ? cx + nums[i+4] : nums[i+4], y  = rel ? cy + nums[i+5] : nums[i+5];
+        update(x1, y1); update(x2, y2); update(x, y);
+        cx = x; cy = y;
+      }
+    } else if (k === 's' || k === 'q') {
+      for (let i = 0; i + 3 < nums.length; i += 4) {
+        const x1 = rel ? cx + nums[i] : nums[i], y1 = rel ? cy + nums[i+1] : nums[i+1];
+        const x  = rel ? cx + nums[i+2] : nums[i+2], y  = rel ? cy + nums[i+3] : nums[i+3];
+        update(x1, y1); update(x, y);
+        cx = x; cy = y;
+      }
+    } else if (k === 'a') {
+      for (let i = 0; i + 6 < nums.length; i += 7) {
+        const x = rel ? cx + nums[i+5] : nums[i+5], y = rel ? cy + nums[i+6] : nums[i+6];
+        update(x, y);
+        cx = x; cy = y;
+      }
+    } else if (k === 'z') {
+      cx = sx; cy = sy;
+    }
+  }
+
+  if (minX === Infinity) { minX = 0; minY = 0; maxX = 512; maxY = 512; }
+  return { minX, minY, maxX, maxY, w: maxX - minX, h: maxY - minY, cx: (minX+maxX)/2, cy: (minY+maxY)/2 };
+}
+
+function classifyCells(d){
+  const cells = splitCells(d);
+  if (cells.length < 2) return cells.map(() => false);
+  return cells.map((c, i) => i > 0);
+}
+
+function stops(cols){
+  return cols.map((c,i) => `<stop offset="${(i/(cols.length-1)).toFixed(4)}" stop-color="${c}"/>`).join('');
+}
+
+let uid = 0;
+
+function renderFourParksMaster(o) {
+  const size = o.size || 138;
+  const metal = METALS[o.locked ? 'dead' : 'pearl'];
+  const id = 'p' + (++uid);
+  const lib = window.MOTIF_LIB || {};
+
+  const mkCastle = SCENES.castle.d;
+  const epGlobe  = lib['wireframeGlobe'] || '';
+  const hsClap   = lib['clapperboard'] || '';
+  const akTree   = lib['holyOak'] || '';
+
+  // Grand Regal Contained Crest / Medallion with ample room in all 4 quadrants
+  const crestPath = `M75 6 C124 6 144 26 144 75 C144 124 124 144 75 144 C26 144 6 124 6 75 C6 26 26 6 75 6 Z`;
+
+  return `
+<svg width="${size}" height="${size}" viewBox="-4 -4 158 158" style="overflow:visible" role="img">
+  <defs>
+    <linearGradient id="g-${id}-p" x1=".15" y1="0" x2=".85" y2="1">${stops(metal)}</linearGradient>
+    <linearGradient id="g-${id}-m" x1=".2" y1="0" x2=".8" y2="1">${stops(metal.slice(0, 4))}</linearGradient>
+    <linearGradient id="g-${id}-gl" x1="0" y1="0" x2=".3" y2="1">
+      <stop offset="0" stop-color="#fff" stop-opacity=".55"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="g-${id}-sh" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#fff" stop-opacity="0"/>
+      <stop offset=".5" stop-color="#fff" stop-opacity=".55"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="f-${id}" x="-25%" y="-25%" width="150%" height="160%">
+      <feDropShadow dx="0" dy="3.5" stdDeviation="3.2" flood-color="#000" flood-opacity=".65"/>
+    </filter>
+    <clipPath id="c-${id}"><path d="${crestPath}"/></clipPath>
+  </defs>
+  <g filter="url(#f-${id})">
+    <!-- Outer Pearl Rim -->
+    <path d="${crestPath}" fill="none" stroke="url(#g-${id}-p)" stroke-width="8" stroke-linejoin="round"/>
+    
+    <!-- 4 Enamel Quadrants inside Grand Crest -->
+    <g clip-path="url(#c-${id})">
+      <!-- Top-Left Window: Magic Kingdom (Sky Blue) -->
+      <rect x="0" y="0" width="75" height="75" fill="${PALETTES.royal.sky}"/>
+      <!-- Top-Right Window: EPCOT (Teal) -->
+      <rect x="75" y="0" width="75" height="75" fill="${PALETTES.royal.teal}"/>
+      <!-- Bottom-Left Window: Hollywood Studios (Crimson) -->
+      <rect x="0" y="75" width="75" height="75" fill="${PALETTES.royal.crimson}"/>
+      <!-- Bottom-Right Window: Animal Kingdom (Forest Green) -->
+      <rect x="75" y="75" width="75" height="75" fill="${PALETTES.royal.forest}"/>
+
+      <!-- 4 Large, Clear Raised Metal Park Emblems -->
+      <g fill="url(#g-${id}-m)">
+        <!-- Cinderella Castle (Exact Magic Kingdom Explorer vector) -->
+        <g transform="translate(42, 43) scale(0.108) translate(-256, -280)"><path d="${mkCastle}" fill-rule="evenodd"/></g>
+        <!-- Spaceship Earth Geodesic Globe (EPCOT) -->
+        <g transform="translate(108, 42) scale(0.108) translate(-256, -256)"><path d="${epGlobe}"/></g>
+        <!-- Hollywood Studios Clapperboard (HS) -->
+        <g transform="translate(42, 108) scale(0.108) translate(-256, -256)"><path d="${hsClap}"/></g>
+        <!-- Tree of Life (AK) -->
+        <g transform="translate(108, 108) scale(0.108) translate(-256, -256)"><path d="${akTree}"/></g>
+      </g>
+
+      <!-- The Four Park Foundation 4-Point Star Divider -->
+      <!-- Vertical Spire (Tapering) -->
+      <path d="M75 6 L79 66 L75 75 L71 66 Z M75 144 L79 84 L75 75 L71 84 Z" fill="url(#g-${id}-p)"/>
+      <line x1="75" y1="6" x2="75" y2="144" stroke="url(#g-${id}-p)" stroke-width="4.5"/>
+
+      <!-- Horizontal Spire (Tapering) -->
+      <path d="M6 75 L66 71 L75 75 L66 79 Z M144 75 L84 71 L75 75 L84 79 Z" fill="url(#g-${id}-p)"/>
+      <line x1="6" y1="75" x2="144" y2="75" stroke="url(#g-${id}-p)" stroke-width="4.5"/>
+
+      <!-- Foundation Center Diamond Core -->
+      <path d="M75 64 L86 75 L75 86 L64 75 Z"
+            fill="${PALETTES.royal.ink}" stroke="url(#g-${id}-p)" stroke-width="3"/>
+      <path d="M75 69 L81 75 L75 81 L69 75 Z"
+            fill="#ffffff"/>
+
+      <!-- Gloss Glass Highlight -->
+      <ellipse cx="54" cy="46" rx="55" ry="30" transform="rotate(-26 54 46)" fill="url(#g-${id}-gl)"/>
+      <rect class="shmr slow" x="-150" y="0" width="90" height="150" fill="url(#g-${id}-sh)"/>
+    </g>
+
+    <!-- Inner Metallic Rim Highlight -->
+    <path d="${crestPath}" fill="none" stroke="#fff" stroke-opacity=".4" stroke-width="1.2"/>
+  </g>
+</svg>`;
+}
+
+function renderGrandSlam(o) {
+  const size = o.size || 138;
+  const metal = METALS[o.locked ? 'dead' : 'prism'];
+  const id = 'p' + (++uid);
+  const k = 0.245;
+  const tx = 75 - 256 * k;
+  const ty = 75 - 256 * k;
+  const t = `translate(${tx.toFixed(2)},${ty.toFixed(2)}) scale(${k.toFixed(5)})`;
+  const rim = 9.2 / k;
+  const octPath = `M140 24 H372 L488 140 V372 L372 488 H140 L24 372 V140 Z`;
+  const starTL = `125.0,104.0 130.3,117.7 145.0,118.5 133.6,127.8 137.3,142.0 125.0,134.0 112.7,142.0 116.4,127.8 105.0,118.5 119.7,117.7`;
+  const starTR = `387.0,104.0 392.3,117.7 407.0,118.5 395.6,127.8 399.3,142.0 387.0,134.0 374.7,142.0 378.4,127.8 367.0,118.5 381.7,117.7`;
+  const starBL = `90.0,284.0 95.3,297.7 110.0,298.5 98.6,307.8 102.3,322.0 90.0,314.0 77.7,322.0 81.4,307.8 70.0,298.5 84.7,297.7`;
+  const starBR = `422.0,284.0 427.3,297.7 442.0,298.5 430.6,307.8 434.3,322.0 422.0,314.0 409.7,322.0 413.4,307.8 402.0,298.5 416.7,297.7`;
+
+  return `
+<svg width="${size}" height="${size}" viewBox="-4 -4 158 158" style="overflow:visible" role="img">
+  <defs>
+    <linearGradient id="g-${id}-p" x1=".15" y1="0" x2=".85" y2="1">${stops(metal)}</linearGradient>
+    <linearGradient id="g-${id}-gl" x1="0" y1="0" x2=".3" y2="1">
+      <stop offset="0" stop-color="#fff" stop-opacity=".55"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="g-${id}-sh" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#fff" stop-opacity="0"/>
+      <stop offset=".5" stop-color="#fff" stop-opacity=".55"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+    <clipPath id="cw-${id}"><path d="${octPath}" transform="${t}"/></clipPath>
+    <filter id="f-${id}" x="-25%" y="-25%" width="150%" height="160%">
+      <feDropShadow dx="0" dy="3.5" stdDeviation="3.2" flood-color="#000" flood-opacity=".65"/>
+    </filter>
+  </defs>
+  <g filter="url(#f-${id})">
+    <!-- Inner Enamel Well (Clipped strictly inside the Octagon to prevent any border bleed) -->
+    <g clip-path="url(#cw-${id})">
+      <g transform="${t}">
+        <!-- 4 Solid Cloisonné Park Quadrants -->
+        <!-- 🏰 Top-Left: Magic Kingdom Sky Blue -->
+        <path d="M140 24 H256 V256 H24 V140 Z" fill="${PALETTES.royal.sky}"/>
+        <!-- 🌐 Top-Right: EPCOT Teal -->
+        <path d="M256 24 H372 L488 140 V256 H256 Z" fill="${PALETTES.royal.teal}"/>
+        <!-- 🎬 Bottom-Left: Hollywood Studios Crimson -->
+        <path d="M24 256 H256 V488 H140 L24 372 Z" fill="${PALETTES.royal.crimson}"/>
+        <!-- 🌳 Bottom-Right: Animal Kingdom Forest Green -->
+        <path d="M256 256 H488 V372 L372 488 H256 Z" fill="${PALETTES.royal.forest}"/>
+
+        <!-- Quadrant Dividing Raised PRISM Rainbow Ribs -->
+        <line x1="256" y1="24" x2="256" y2="488" stroke="url(#g-${id}-p)" stroke-width="8"/>
+        <line x1="24" y1="256" x2="488" y2="256" stroke="url(#g-${id}-p)" stroke-width="8"/>
+
+        <!-- 4 Corner Speed Lines (Extend continuously to outer border, seated underneath raised rim) -->
+        <path d="M10 115 L180 200 M502 115 L332 200 M10 382 L180 320 M502 382 L332 320" stroke="url(#g-${id}-p)" stroke-width="10" stroke-linecap="round"/>
+
+        <!-- Concrete Beamway -->
+        <path d="M60 460 L220 340 H292 L452 460 L380 490 H132 Z" fill="#64748b" stroke="url(#g-${id}-p)" stroke-width="10"/>
+
+        <!-- 3D Monorail Mark VI Cab (Polished Ink Fuselage) -->
+        <path d="M160 330 C150 260 190 140 256 140 C322 140 362 260 352 330 L320 350 H192 Z"
+              fill="${PALETTES.royal.ink}" stroke="url(#g-${id}-p)" stroke-width="${rim.toFixed(1)}" stroke-linejoin="round"/>
+
+        <!-- Sky Blue Panoramic Windshield -->
+        <path d="M180 220 C180 180 210 160 256 160 C302 160 332 180 332 220 L320 250 H192 Z"
+              fill="${PALETTES.royal.sky}" stroke="url(#g-${id}-p)" stroke-width="8"/>
+
+        <!-- Crimson Racing Stripe -->
+        <path d="M166 268 H346 V298 H166 Z" fill="${PALETTES.royal.crimson}" stroke="url(#g-${id}-p)" stroke-width="8"/>
+
+        <!-- Dual Headlights -->
+        <circle cx="204" cy="320" r="14" fill="#ffffff" stroke="url(#g-${id}-p)" stroke-width="6"/>
+        <circle cx="308" cy="320" r="14" fill="#ffffff" stroke="url(#g-${id}-p)" stroke-width="6"/>
+
+        <!-- 4 Filled Milestone Stars (Porcelain White with PRISM Metal Rim) -->
+        <polygon points="${starTL}" fill="#ffffff" stroke="url(#g-${id}-p)" stroke-width="4.5" stroke-linejoin="round"/>
+        <polygon points="${starTR}" fill="#ffffff" stroke="url(#g-${id}-p)" stroke-width="4.5" stroke-linejoin="round"/>
+        <polygon points="${starBL}" fill="#ffffff" stroke="url(#g-${id}-p)" stroke-width="4.5" stroke-linejoin="round"/>
+        <polygon points="${starBR}" fill="#ffffff" stroke="url(#g-${id}-p)" stroke-width="4.5" stroke-linejoin="round"/>
+      </g>
+      <!-- Prismatic Shimmer Highlight -->
+      <ellipse cx="54" cy="46" rx="55" ry="32" transform="rotate(-26 54 46)" fill="url(#g-${id}-gl)"/>
+      <rect class="shmr" x="-150" y="0" width="90" height="150" fill="url(#g-${id}-sh)"/>
+    </g>
+    <!-- Outer Raised PRISM Metal Octagon Rim (Rendered crisp on top with ZERO bleed) -->
+    <g transform="${t}">
+      <path d="${octPath}" fill="none" stroke="url(#g-${id}-p)" stroke-width="${rim.toFixed(1)}" stroke-linejoin="round"/>
+    </g>
+  </g>
+</svg>`;
+}
+
+function renderPin(o){
+  if (o.id === 'pearl_four_parks_master') return renderFourParksMaster(o);
+  if (o.id === 'prism_grand_slam') return renderGrandSlam(o);
+  const size    = o.size || 138;
+  const shape   = SHAPES[o.shape] || SHAPES.disc;
+  const metal   = METALS[o.locked ? 'dead' : (o.tier || 'gold')];
+  const enamel  = o.locked ? '#2b2536' : (PALETTES.royal[o.enamel] || o.enamel || PALETTES.royal.royal);
+  const id      = 'p' + (++uid);
+  const insetT  = `translate(75,75) scale(${shape.inset || 1}) translate(-75,-75)`;
+
+  const well = shape.insetD
+    ? `<path d="${shape.insetD}"/>`
+    : `<path d="${shape.d}" transform="${insetT}"/>`;
+
+  const hasBanner = !!(o.banner && shape.bannerY);
+
+  const scene  = o.scene ? SCENES[o.scene] : null;
+  const dPath  = scene ? scene.d : (MOTIFS[o.motif] || '');
+  const anchor = o.anchor || (scene ? 'ground' : 'center');
+
+  if (o.mode === 'diecut') return renderDieCut(o, {
+    id, metal, enamel, dPath, size,
+    top: o.dieTop ?? (scene && scene.top != null ? scene.top : 40)
+  });
+
+  const rule = scene ? scene.rule : 'nonzero';
+  const bb = (dPath && anchor === 'center') ? pathBBox(dPath) : null;
+  const mk = 0.1875 * (shape.mk || 1) * (o.motifScale || 1) * (hasBanner ? 0.88 : 1);
+  const mcx = shape.mcx;
+  const mcy = shape.mcy - (hasBanner ? 6 : 0);
+  
+  const tx = bb ? (mcx - bb.cx * mk) : (mcx - 256 * mk);
+  const ty = bb 
+    ? (mcy - bb.cy * mk) 
+    : (anchor === 'ground' ? (shape.groundY - (hasBanner ? 16 : 0)) - 480 * mk : mcy - 256 * mk);
+  const mtx = `translate(${tx.toFixed(2)},${ty.toFixed(2)}) scale(${mk.toFixed(5)})`;
+
+  const motifFill = o.locked ? 'rgba(255,255,255,.10)' : `url(#g-${id}-m)`;
+  const mEnamel = (!o.locked && o.motifEnamel) ? o.motifEnamel : null;
+
+  const motifEl = o.text
+    ? `<text x="${mcx}" y="${(shape.mcy - (hasBanner?6:0))+1}" text-anchor="middle"
+            dominant-baseline="central" font-family="Arial,Helvetica,sans-serif" font-weight="900"
+            font-size="${o.textSize||40}" fill="${motifFill}">${o.text}</text>`
+    : mEnamel
+    ? `<g transform="${mtx}" fill-rule="${rule}">${splitCells(dPath).map((c,i) =>
+         `<path d="${c}" fill="${Array.isArray(mEnamel) ? mEnamel[i % mEnamel.length] : mEnamel}"/>`
+       ).join('')}</g>`
+    : `<g transform="${mtx}" fill="${motifFill}" fill-rule="${rule}"><path d="${dPath}"/></g>`;
+
+  const sky = (!o.locked && o.sky) ? SKIES[o.sky] : null;
+  const wellFill = sky ? `url(#g-${id}-sky)` : enamel;
+  const groundBar = (sky && !o.locked && o.ground)
+    ? `<g clip-path="url(#cw-${id})"><rect x="0" y="${shape.groundY - 6}" width="150" height="34"
+         fill="${o.ground || '#27612f'}"/></g>` : '';
+
+  const bannerEl = hasBanner ? (() => {
+    const y = shape.bannerY, w = shape.bannerW, h = 19, n = 9;
+    const x0 = 75 - w/2, x1 = 75 + w/2;
+    const d = `M${x0} ${y-h/2} H${x1} L${x1-n} ${y} L${x1} ${y+h/2} H${x0} L${x0+n} ${y} Z`;
+    const fs = o.banner.length > 3 ? 10 : 12.5;
+    return `<g>
+      <path d="${d}" fill="url(#g-${id}-p)" stroke="#000" stroke-opacity=".32" stroke-width="1"/>
+      <text x="75" y="${y+2.4}" text-anchor="middle" dominant-baseline="central"
+        font-family="Georgia,'Times New Roman',serif" font-weight="700" letter-spacing="1.1"
+        font-size="${fs}" fill="#fff" fill-opacity=".30">${o.banner}</text>
+      <text x="75" y="${y+1}" text-anchor="middle" dominant-baseline="central"
+        font-family="Georgia,'Times New Roman',serif" font-weight="700" letter-spacing="1.1"
+        font-size="${fs}" fill="#000" fill-opacity=".62">${o.banner}</text>
+    </g>` })() : '';
+
+  const shimmer = (!o.locked && (o.tier === 'pearl' || o.tier === 'prism'))
+    ? `<g clip-path="url(#c-${id})"><rect class="shmr ${o.tier === 'pearl' ? 'slow' : ''}"
+         x="-150" y="0" width="90" height="150" fill="url(#g-${id}-sh)"/></g>` : '';
+
+  return `
+<svg width="${size}" height="${size}" viewBox="-4 -4 158 158" style="overflow:visible" role="img">
+  <defs>
+    <linearGradient id="g-${id}-p" x1=".15" y1="0" x2=".85" y2="1">${stops(metal)}</linearGradient>
+    <linearGradient id="g-${id}-m" x1=".2" y1="0" x2=".8" y2="1">${stops(metal.slice(0, Math.max(3, metal.length-1)))}</linearGradient>
+    <linearGradient id="g-${id}-sh" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#fff" stop-opacity="0"/>
+      <stop offset=".5" stop-color="#fff" stop-opacity=".5"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="g-${id}-gl" x1="0" y1="0" x2=".3" y2="1">
+      <stop offset="0" stop-color="#fff" stop-opacity=".55"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+    ${sky ? `<linearGradient id="g-${id}-sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="${sky[0]}"/><stop offset="1" stop-color="${sky[1]}"/>
+    </linearGradient>` : ''}
+    <clipPath id="c-${id}"><path d="${shape.d}"/></clipPath>
+    <clipPath id="cw-${id}">${well}</clipPath>
+    <filter id="f-${id}" x="-25%" y="-25%" width="150%" height="160%">
+      <feDropShadow dx="0" dy="3.5" stdDeviation="3.2" flood-color="#000" flood-opacity=".55"/>
+    </filter>
+  </defs>
+
+  <g filter="url(#f-${id})">
+    <path d="${shape.d}" fill="url(#g-${id}-p)"/>
+    <g fill="${wellFill}">${well}</g>
+    ${groundBar}
+    <g clip-path="url(#cw-${id})" fill="none" stroke="#000" stroke-opacity=".38" stroke-width="5">${well}</g>
+    ${motifEl}
+    ${bannerEl}
+    ${o.locked ? '' : `<g clip-path="url(#c-${id})">
+      <ellipse cx="54" cy="44" rx="48" ry="30" transform="rotate(-26 54 44)" fill="url(#g-${id}-gl)"/>
+    </g>`}
+    ${shimmer}
+    <g clip-path="url(#c-${id})" fill="none">
+      <path d="${shape.d}" stroke="#fff" stroke-opacity=".42" stroke-width="2"/>
+    </g>
+    <path d="${shape.d}" fill="none" stroke="#000" stroke-opacity=".35" stroke-width="1"/>
+  </g>
+</svg>`;
+}
+
+function renderDieCut(o, ctx){
+  const { id, metal, enamel, dPath, size, top } = ctx;
+  const boxFit = o.dieFit === 'box' || !o.scene;
+  const bb = boxFit ? pathBBox(dPath) : null;
+  const k  = o.dieK || ((boxFit ? (o.dieBox || 126) / Math.max(bb.w, bb.h) : 124 / (480 - top)) * (o.motifScale || 1));
+  const tx = boxFit ? 75 - bb.cx * k : 75  - 256 * k;
+  const ty = boxFit ? 75 - bb.cy * k : 134 - 480 * k;
+  const t   = `translate(${tx.toFixed(2)},${ty.toFixed(2)}) scale(${k.toFixed(5)})`;
+  const rimPx = o.rim || (RIM_BY_TIER[o.tier] || 5.5);
+  const rim   = rimPx / k;
+
+  const noSplit  = !!(o.noSplit || (o.scene && SCENES[o.scene] && SCENES[o.scene].noSplit));
+  const cellList = noSplit ? [dPath] : splitCells(dPath);
+  const interior = noSplit ? [false] : classifyCells(dPath);
+  const outerD = cellList.filter((c,i) => !interior[i]).join(' ');
+  const shimmer = (!o.locked && (o.tier === 'pearl' || o.tier === 'prism'))
+    ? `<g clip-path="url(#c-${id})"><rect class="shmr ${o.tier === 'pearl' ? 'slow' : ''}"
+         x="-150" y="0" width="90" height="150" fill="url(#g-${id}-sh)"/></g>` : '';
+  const innerD = cellList.filter((c,i) =>  interior[i]).join(' ');
+  const bodyRule = noSplit ? (o.scene && SCENES[o.scene] ? SCENES[o.scene].rule : 'nonzero') : 'nonzero';
+
+  return `
+<svg width="${size}" height="${size}" viewBox="-4 -4 158 158" style="overflow:visible" role="img">
+  <defs>
+    <linearGradient id="g-${id}-p" x1=".15" y1="0" x2=".85" y2="1">${stops(metal)}</linearGradient>
+    <linearGradient id="g-${id}-m" x1=".2" y1="0" x2=".8" y2="1">${stops(metal.slice(0, Math.max(3, metal.length-1)))}</linearGradient>
+    <linearGradient id="g-${id}-gl" x1="0" y1="0" x2=".3" y2="1">
+      <stop offset="0" stop-color="#fff" stop-opacity=".5"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="g-${id}-sh" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#fff" stop-opacity="0"/>
+      <stop offset=".5" stop-color="#fff" stop-opacity=".55"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+    <clipPath id="c-${id}"><path d="${dPath}" transform="${t}"/></clipPath>
+    <filter id="f-${id}" x="-25%" y="-25%" width="150%" height="160%">
+      <feDropShadow dx="0" dy="3.5" stdDeviation="3.2" flood-color="#000" flood-opacity=".55"/>
+    </filter>
+  </defs>
+  <g filter="url(#f-${id})">
+    <g transform="${t}">
+      ${o.metalRelief ? `
+        <path d="${outerD}" fill="${Array.isArray(enamel) ? enamel[0] : enamel}" fill-rule="${bodyRule}"/>
+        <path d="${dPath}" fill="url(#g-${id}-m)" fill-rule="${bodyRule}"/>
+      ` : cellList.map((cell,i) =>
+          `<path d="${cell}" fill="${Array.isArray(enamel) ? enamel[i % enamel.length] : enamel}" fill-rule="${bodyRule}"/>`).join('')}
+      ${innerD ? `<path d="${innerD}" fill="none" stroke="url(#g-${id}-p)"
+            stroke-width="${(rim * (o.innerRim ?? 0.32)).toFixed(1)}"
+            stroke-linejoin="round" stroke-linecap="round"/>` : ''}
+      <path d="${outerD}" fill="none" stroke="url(#g-${id}-p)" stroke-width="${rim.toFixed(1)}"
+            stroke-linejoin="round" stroke-linecap="round"/>
+      <path d="${outerD}" fill="none" stroke="#000" stroke-opacity=".38"
+            stroke-width="${(rim*0.22).toFixed(1)}" stroke-linejoin="round"/>
+      ${o.scene === 'pandoraBanshee' ? `<path d="${dPath}" fill="none" stroke="url(#g-${id}-p)" stroke-width="${(rim*0.65).toFixed(1)}" stroke-linejoin="round" stroke-linecap="round"/>` : ''}
+    </g>
+    <g clip-path="url(#c-${id})">
+      <ellipse cx="54" cy="46" rx="48" ry="30" transform="rotate(-26 54 46)" fill="url(#g-${id}-gl)"/>
+    </g>
+    <g clip-path="url(#c-${id})" fill="none">
+      <path d="${outerD}" transform="${t}" stroke="#fff" stroke-opacity=".35" stroke-width="1"/>
+    </g>
+    ${shimmer}
+  </g>
+</svg>`;
+}
+/* =============================================================================
+   THE FULL CHALLENGE CATALOG (Strictly mapped to design rules)
+   ============================================================================= */
+const PINS = [
+  // Section headers carry no pin count on purpose: a typed count is a derived value
+  // and would go stale the moment a pin is added. verify/catalog.js asserts the
+  // invariant instead - every pin sits under the header matching its own tier.
+  // === PRISM ===
+  { id: 'prism_grand_master', name: 'Walt Disney World Grand Master', tier: 'prism', cat: 'ladder', shape: 'arch', scene: 'b4fire20', sky: 'night', banner: '400', motifEnamel: B4_STAGES[20].cols, motifScale: 1.4, criteria: '100% of the active WDW catalog completed (400+ experiences)' },
+  { id: 'prism_grand_slam', name: 'Four Parks Grand Slam', tier: 'prism', cat: 'touring', shape: 'crest', scene: 'grandSlam', criteria: 'Experience at least 1 major attraction in all 4 theme parks in a single calendar day' },
+  { id: 'prism_global_ambassador', name: 'The Global Ambassador', tier: 'prism', cat: 'sets', mode: 'diecut', motif: 'passport', enamel: ["#f8fafc","#f8fafc","#0f172a","#f59e0b","#f59e0b","#f59e0b","#f59e0b","#f59e0b","#f59e0b","#f59e0b","#f59e0b","#f59e0b","#f59e0b","#f59e0b","#f59e0b"], criteria: '11 World Showcase Countries + All 3 360-Films + World Discovery 100% + World Nature 100%' },
+  { id: 'prism_grand_hotelier', name: 'Grand Hotelier Legend', tier: 'prism', cat: 'dining', mode: 'diecut', motif: 'grandHotelEstate', enamel: ['#0F172A', '#D97706', '#F8FAFC'], criteria: 'Completed stays or visits across 20+ Disney Resorts' },
+  { id: 'prism_legendary_guide', name: 'The Legendary Disney Guide', tier: 'prism', cat: 'social', mode: 'diecut', motif: 'flatStar', enamel: ['#F59E0B', '#4A2A7A', '#FFFFFF', '#0284C7'], criteria: '50+ Friend Rides logged + 5+ Completed Trips organized' },
+
+  // === PEARL ===
+  { id: 'pearl_centurion_350', name: 'Centurion 350', tier: 'pearl', cat: 'ladder', shape: 'arch', scene: 'b4fire19', sky: 'night', banner: '350', motifEnamel: B4_STAGES[19].cols, motifScale: 1.4, criteria: 'Log 350+ unique lifetime Disney experiences' },
+  { id: 'pearl_four_parks_master', name: 'Four Theme Parks 100% Master', tier: 'pearl', cat: 'park', shape: 'crest', scene: 'fourParksMaster', criteria: '100% of all rides completed across Magic Kingdom, EPCOT, Hollywood Studios, and Animal Kingdom' },
+  { id: 'pearl_15_ride_marathon', name: '15-Ride Single Day Marathon', tier: 'pearl', cat: 'touring', mode: 'diecut', motif: 'stopwatch', enamel: ['#1E293B', '#DC2626', '#FFFFFF', '#F59E0B'], criteria: 'Log 15 or more attraction visits on a single calendar date' },
+  { id: 'pearl_ws_master', name: 'World Showcase Master', tier: 'pearl', cat: 'sets', mode: 'diecut', motif: 'earthAfricaEurope', motifScale: 1.15, enamel: [PALETTES.royal.sky, PALETTES.royal.forest, PALETTES.royal.teal, PALETTES.royal.royal], criteria: 'Log an experience in all 11 World Showcase country pavilions' },
+  { id: 'pearl_all_lands_starter', name: 'All 20 Lands Explorer', tier: 'pearl', cat: 'sets', mode: 'diecut', motif: 'compassRose', enamel: ["#d97706","#dc2626","#ffffff","#0f172a"], criteria: 'Experience at least one attraction in all 20 theme park lands across Walt Disney World' },
+  { id: 'pearl_deluxe_royalty', name: 'Deluxe Resort Royalty', tier: 'pearl', cat: 'dining', mode: 'diecut', motif: 'deluxeChandelier', enamel: ['#F59E0B', '#F8FAFC', '#D97706'], criteria: 'Visit or stay at all 8 Deluxe Disney Resorts' },
+  { id: 'pearl_royal_banquet_grand_slam', name: 'Royal Banquet Grand Slam', tier: 'pearl', cat: 'dining', mode: 'diecut', motif: 'tiara', enamel: ['#F59E0B', '#DC2626'], criteria: 'Dine at all 4 signature royal character banquets: Cinderella\'s Royal Table, Be Our Guest, Akershus, and Story Book Dining' },
+  { id: 'pearl_1971_heritage', name: '1971 Heritage Club', tier: 'pearl', cat: 'sets', mode: 'diecut', motif: 'pocketWatch', enamel: ["#f8fafc","#0f172a","#f59e0b","#0f172a","#f59e0b","#f8fafc","#f59e0b","#f59e0b","#f59e0b","#f59e0b","#f59e0b","#f59e0b","#f59e0b","#f59e0b"], criteria: 'Complete all 9 opening year 1971 classic attractions' },
+  { id: 'pearl_ultimate_critic', name: 'The Ultimate Critic', tier: 'pearl', cat: 'social', mode: 'diecut', motif: 'quill', enamel: ['#DC2626', '#F59E0B'], criteria: 'Submit 50+ ratings and 25+ detailed visit notes' },
+  { id: 'pearl_squad_master', name: 'Squad Master', tier: 'pearl', cat: 'social', mode: 'diecut', motif: 'highFive', enamel: ['#4A2A7A'], criteria: 'Log 30+ group rides with confirmed friends' },
+
+  // === AMETHYST ===
+  // === AMETHYST 100% TOTAL PARK SOVEREIGNS (All 4 Theme Parks — Rides + Dining + Meets) ===
+  { id: 'amethyst_magic_kingdom_complete', name: 'Magic Kingdom Sovereign', tier: 'amethyst', cat: 'park', mode: 'diecut', scene: 'castle', enamel: ['#2f6bb0', '#e2e8f0', '#8a45c9'], criteria: 'Complete 100% of all catalog experiences in Magic Kingdom (Attractions + Dining + Meets)' },
+  { id: 'amethyst_epcot_complete', name: 'EPCOT Sovereign', tier: 'amethyst', cat: 'park', mode: 'diecut', motif: 'wireframeGlobe', enamel: ['#14727f', '#e2e8f0', '#8a45c9'], criteria: 'Complete 100% of all catalog experiences in EPCOT (All 4 Neighborhoods + All 11 Country Dining)' },
+  { id: 'amethyst_hollywood_complete', name: 'Hollywood Studios Sovereign', tier: 'amethyst', cat: 'park', mode: 'diecut', motif: 'clapperboard', enamel: ['#a8323f', '#e2e8f0', '#8a45c9'], criteria: 'Complete 100% of all catalog experiences in Disney Hollywood Studios (Attractions + Dining)' },
+  { id: 'amethyst_animal_kingdom_complete', name: 'Animal Kingdom Sovereign', tier: 'amethyst', cat: 'park', mode: 'diecut', motif: 'holyOak', enamel: ['#2f7d3e', '#e2e8f0', '#8a45c9'], criteria: 'Complete 100% of all catalog experiences in Disney Animal Kingdom (Attractions + Dining + Trails)' },
+  { id: 'amethyst_disney_springs_complete', name: 'Disney Springs Sovereign', tier: 'amethyst', cat: 'park', mode: 'diecut', motif: 'waterTower', enamel: ['#14727F', '#78350F', '#334155', '#F59E0B'], criteria: '100% of active attractions & 100% of dining catalog in Disney Springs completed' },
+
+  { id: 'amethyst_centurion_300', name: 'Centurion 300', tier: 'amethyst', cat: 'ladder', shape: 'arch', scene: 'b4fire18', sky: 'night', banner: '300', motifEnamel: B4_STAGES[18].cols, motifScale: 1.4, criteria: 'Log 300+ unique lifetime Disney experiences' },
+  { id: 'amethyst_centurion_250', name: 'Centurion 250', tier: 'amethyst', cat: 'ladder', shape: 'arch', scene: 'b4fire17', sky: 'night', banner: '250', motifEnamel: B4_STAGES[17].cols, motifScale: 1.4, criteria: 'Log 250+ unique lifetime Disney experiences' },
+  { id: 'amethyst_centurion_200', name: 'Centurion 200', tier: 'amethyst', cat: 'ladder', shape: 'arch', scene: 'b4fire16', sky: 'night', banner: '200', motifEnamel: B4_STAGES[16].cols, motifScale: 1.4, criteria: 'Log 200+ unique lifetime Disney experiences' },
+  { id: 'amethyst_centurion_175', name: 'Centurion 175', tier: 'amethyst', cat: 'ladder', shape: 'arch', scene: 'b4fire15', sky: 'night', banner: '175', motifEnamel: B4_STAGES[15].cols, motifScale: 1.4, criteria: 'Log 175+ unique lifetime Disney experiences' },
+  { id: 'amethyst_centurion_150', name: 'Centurion 150', tier: 'amethyst', cat: 'ladder', shape: 'arch', scene: 'b4fire14', sky: 'night', banner: '150', motifEnamel: B4_STAGES[14].cols, motifScale: 1.4, criteria: 'Log 150+ unique lifetime Disney experiences' },
+  { id: 'amethyst_four_parks_50', name: 'Four Park Foundation', tier: 'amethyst', cat: 'park', mode: 'diecut', scene: 'fourParksCompass', enamel: [PALETTES.royal.sky, PALETTES.royal.teal, PALETTES.royal.forest, PALETTES.royal.crimson], criteria: 'Achieve at least 50% completion across all 4 theme parks' },
+  { id: 'amethyst_four_parks_day', name: 'Four Parks in One Day', tier: 'amethyst', cat: 'touring', mode: 'diecut', motif: 'subway', enamel: ['#0284C7', '#F59E0B', '#FFFFFF', '#1E293B'], criteria: 'Log at least one attraction visit in MK, EPCOT, HS, and DAK on the same calendar day' },
+  { id: 'amethyst_stage_connoisseur_15', name: 'Grand Stage Connoisseur (15 Shows)', tier: 'amethyst', cat: 'sets', mode: 'diecut', motif: 'dramaMasks', enamel: ["#fef3c7","#991b1b","#0f172a","#0f172a","#fef3c7","#991b1b","#0f172a","#0f172a"], criteria: 'Experience 15 distinct live stage shows, theater presentations, or musical performances across Walt Disney World' },
+  { id: 'amethyst_12_ride_marathon', name: '12-Ride Single Day Challenge', tier: 'amethyst', cat: 'touring', mode: 'diecut', motif: 'hourglass', enamel: ['#D97706', '#FDE047', '#E0F2FE', '#1E293B'], criteria: 'Log 12 or more attraction visits on a single calendar date' },
+  
+  { id: 'amethyst_mountain_conqueror', name: 'Triple Mountain Conqueror', tier: 'amethyst', cat: 'sets', mode: 'diecut', motif: 'peaks', enamel: ["#ffffff","#f1f5f9","#475569","#1e293b"], criteria: 'Space Mountain + Big Thunder Mountain + Expedition Everest' },
+  { id: 'amethyst_meets_25', name: 'Character Royalty (25 Meets)', tier: 'amethyst', cat: 'sets', mode: 'diecut', motif: 'queenCrown', enamel: ["#f59e0b","#581c87"], criteria: 'Log 25 character meet-and-greets' },
+  { id: 'amethyst_resorts_15', name: 'Resort Explorer (15 Resorts)', tier: 'amethyst', cat: 'dining', mode: 'diecut', motif: 'key', enamel: ['#F59E0B', '#0284C7', '#78350F', '#DC2626'], criteria: 'Visit or stay at 15 distinct Walt Disney World resort hotels' },
+  { id: 'amethyst_fine_dining_critic', name: 'Fine Dining Critic', tier: 'amethyst', cat: 'dining', mode: 'diecut', motif: 'wineGlass', enamel: ['#881337', '#E2E8F0', '#F59E0B'], criteria: 'Submit ratings or visit notes for 10 or more table service restaurants' },
+  { id: 'amethyst_critic_50', name: 'Senior Critic (50 Reviews)', tier: 'amethyst', cat: 'social', mode: 'diecut', motif: 'scrollUnfurled', enamel: ['#FEF3C7', '#DC2626', '#F59E0B', '#1E293B'], criteria: 'Submit 50 or more ratings across any Disney experiences' },
+  { id: 'amethyst_squad_20', name: 'Squad Leader (20 Group Rides)', tier: 'amethyst', cat: 'social', mode: 'diecut', motif: 'partyPopper', enamel: ['#14727F', '#F59E0B', '#EC4899', '#38BDF8', '#FFFFFF'], criteria: 'Log 20 group rides with friends' },
+  { id: 'amethyst_trip_captain_5', name: 'Trip Captain (5 Trips)', tier: 'amethyst', cat: 'social', mode: 'diecut', motif: 'vintageSuitcase', enamel: ['#78350F', '#D97706', '#F8FAFC'], criteria: 'Organize or log activity across 5 distinct Disney trips' },
+
+  // === GOLD ===
+  // === GOLD 100% TOTAL LAND COMPLETIONISTS (20 Lands — Rides + Shows + Dining + Meets) ===
+  // Magic Kingdom (6)
+  { id: 'gold_main_street_complete', name: 'Main Street, U.S.A. Complete', tier: 'gold', cat: 'land', mode: 'diecut', motif: 'trainStation', enamel: ['#DC2626', '#F59E0B', '#334155'], criteria: 'Complete 100% of all catalog experiences on Main Street, U.S.A. (Attractions + Dining + Shops)' },
+  { id: 'gold_tomorrowland_complete', name: 'Tomorrowland Complete', tier: 'gold', cat: 'land', mode: 'diecut', motif: 'rocket', enamel: ['#4A90E2', '#FFFFFF', '#F59E0B', '#1E3A8A', '#EF4444'], criteria: 'Complete 100% of all catalog experiences in Tomorrowland (Attractions + Dining + Meets)' },
+  { id: 'gold_fantasyland_complete', name: 'Fantasyland Complete', tier: 'gold', cat: 'land', mode: 'diecut', motif: 'fairyWand', enamel: ['#A855F7', '#F59E0B', '#FFFFFF', '#EC4899', '#38BDF8'], criteria: 'Complete 100% of all catalog experiences in Fantasyland (Attractions + Dining + Character Meets)' },
+  { id: 'gold_adventureland_complete', name: 'Adventureland Complete', tier: 'gold', cat: 'land', mode: 'diecut', motif: 'treasureMap', enamel: ['#FEF3C7', '#16A34A', '#DC2626', '#DC2626', '#DC2626', '#DC2626', '#DC2626', '#DC2626', '#DC2626', '#DC2626', '#DC2626', '#DC2626', '#DC2626', '#DC2626', '#DC2626', '#DC2626', '#DC2626'], criteria: 'Complete 100% of all catalog experiences in Adventureland (Attractions + Dining)' },
+  { id: 'gold_frontierland_complete', name: 'Frontierland Complete', tier: 'gold', cat: 'land', mode: 'diecut', motif: 'mineWagon', enamel: ['#78350F', '#F59E0B', '#B45309', '#1E293B'], criteria: 'Complete 100% of all catalog experiences in Frontierland (Attractions + Dining)' },
+  { id: 'gold_liberty_square_complete', name: 'Liberty Square Complete', tier: 'gold', cat: 'land', mode: 'diecut', scene: 'libertyBell', enamel: ['#D97706', '#78350F', '#334155', '#475569'], criteria: 'Complete 100% of all catalog experiences in Liberty Square (Attractions + Dining)' },
+
+  // EPCOT Neighborhoods (4)
+  { id: 'gold_world_celebration_complete', name: 'World Celebration Complete', tier: 'gold', cat: 'land', mode: 'diecut', motif: 'globe', enamel: ['#0284C7', '#059669', '#38BDF8'], criteria: 'Complete 100% of all catalog experiences in World Celebration (Attractions + Dining)' },
+  { id: 'gold_world_discovery_complete', name: 'World Discovery Complete', tier: 'gold', cat: 'land', mode: 'diecut', motif: 'spaceship', motifScale: 1.35, enamel: ['#0284C7', '#F59E0B', '#DC2626', '#FFFFFF', '#0F172A'], criteria: 'Complete 100% of all catalog experiences in World Discovery (Attractions + Dining)' },
+  { id: 'gold_world_nature_complete', name: 'World Nature Complete', tier: 'gold', cat: 'land', mode: 'diecut', motif: 'turtle', enamel: ['#0284C7', '#16A34A', '#FEF3C7', '#0F766E'], criteria: 'Complete 100% of all catalog experiences in World Nature (Attractions + Dining)' },
+  { id: 'gold_world_showcase_complete', name: 'World Showcase Complete', tier: 'gold', cat: 'land', mode: 'diecut', motif: 'world', enamel: ['#0284C7', '#10B981', '#38BDF8', '#F59E0B'], criteria: 'Complete 100% of all catalog experiences in World Showcase (All 11 Country Pavilions + All Dining)' },
+
+  // Hollywood Studios (6)
+  { id: 'gold_hollywood_blvd_complete', name: 'Hollywood Boulevard Complete', tier: 'gold', cat: 'land', mode: 'diecut', motif: 'directorChair', enamel: ['#1E293B', '#FFFFFF', '#DC2626', '#F59E0B'], criteria: 'Complete 100% of all catalog experiences on Hollywood Boulevard (Attractions + Dining)' },
+  { id: 'gold_sunset_blvd_complete', name: 'Sunset Boulevard Complete', tier: 'gold', cat: 'land', mode: 'diecut', scene: 'drumKit', enamel: ['#F59E0B', '#DC2626', '#E2E8F0', '#1E293B', '#FFFFFF'], criteria: 'Complete 100% of all catalog experiences on Sunset Boulevard (Attractions + Dining)' },
+  { id: 'gold_echo_lake_complete', name: 'Echo Lake Complete', tier: 'gold', cat: 'land', mode: 'diecut', motif: 'fedora', enamel: ['#78350F', '#0F172A', '#F59E0B'], criteria: 'Complete 100% of all catalog experiences in Echo Lake (Attractions + Dining)' },
+  { id: 'gold_toy_story_complete', name: 'Toy Story Land Complete', tier: 'gold', cat: 'land', mode: 'diecut', scene: 'sheriffBadge', enamel: ['#EAB308', '#B91C1C', '#FFFFFF', '#1E3A8A'], criteria: 'Complete 100% of all catalog experiences in Toy Story Land (Attractions + Dining)' },
+  { id: 'gold_galaxys_edge_complete', name: "Galaxy's Edge Complete", tier: 'gold', cat: 'land', mode: 'diecut', scene: 'crossedLightsabers', enamel: ['#00E5FF', '#FF1744', '#475569', '#475569', '#FFFFFF'], criteria: "Complete 100% of all catalog experiences in Star Wars: Galaxy's Edge (Attractions + Dining)" },
+  { id: 'gold_animation_courtyard_complete', name: 'Animation Courtyard Complete', tier: 'gold', cat: 'land', mode: 'diecut', motif: 'filmProjector', enamel: ['#334155', '#F59E0B', '#DC2626', '#FFFFFF'], criteria: 'Complete 100% of all catalog experiences in Animation Courtyard (Shows + Character Encounters)' },
+
+  // Animal Kingdom (4)
+  { id: 'gold_discovery_island_complete', name: 'Discovery Island Complete', tier: 'gold', cat: 'land', mode: 'diecut', motif: 'flamingo', enamel: ['#EC4899', '#F43F5E'], criteria: 'Complete 100% of all catalog experiences on Discovery Island (Attractions + Dining)' },
+  { id: 'gold_pandora_complete', name: 'Pandora Complete', tier: 'gold', cat: 'land', mode: 'diecut', motif: 'wyvern', noSplit: true, motifScale: 1.25, enamel: ['#00E5FF'], criteria: 'Complete 100% of all catalog experiences in Pandora (Attractions + Dining)' },
+  { id: 'gold_africa_complete', name: 'Africa Complete', tier: 'gold', cat: 'land', mode: 'diecut', motif: 'elephant', enamel: ['#64748B', '#64748B', '#FFFFFF', '#64748B', '#64748B', '#64748B', '#64748B'], criteria: 'Complete 100% of all catalog experiences in Africa (Attractions + Dining + Trails)' },
+  { id: 'gold_asia_complete', name: 'Asia Complete', tier: 'gold', cat: 'land', mode: 'diecut', motif: 'tiger', enamel: ['#EA580C', '#FFFFFF', '#0F172A', '#FFFFFF', '#EA580C', '#0F172A', '#0F172A', '#0F172A'], criteria: 'Complete 100% of all catalog experiences in Asia (Attractions + Dining + Treks)' },
+
+  { id: 'gold_centurion_125', name: 'Centurion 125', tier: 'gold', cat: 'ladder', shape: 'arch', scene: 'b4fire13', sky: 'night', banner: '125', motifEnamel: B4_STAGES[13].cols, motifScale: 1.4, criteria: 'Log 125+ unique lifetime Disney experiences' },
+  { id: 'gold_centurion_100', name: 'Centurion 100', tier: 'gold', cat: 'ladder', shape: 'arch', scene: 'b4fire12', sky: 'night', banner: '100', motifEnamel: B4_STAGES[12].cols, motifScale: 1.4, criteria: 'Log 100+ unique lifetime Disney experiences' },
+  { id: 'gold_centurion_80', name: 'Centurion 80', tier: 'gold', cat: 'ladder', shape: 'arch', scene: 'b4fire11', sky: 'night', banner: '80', motifEnamel: B4_STAGES[11].cols, motifScale: 1.4, criteria: 'Log 80+ unique lifetime Disney experiences' },
+  { id: 'gold_centurion_70', name: 'Centurion 70', tier: 'gold', cat: 'ladder', shape: 'arch', scene: 'b4fire10', sky: 'night', banner: '70', motifEnamel: B4_STAGES[10].cols, motifScale: 1.4, criteria: 'Log 70+ unique lifetime Disney experiences' },
+  
+  // Park Mastery (Gold - Die-Cut Silhouettes)
+  { id: 'gold_magic_kingdom_explorer', name: 'Magic Kingdom Master', tier: 'gold', cat: 'park', mode: 'diecut', scene: 'castle', enamel: ['#2F6BB0', '#F8FAFC', '#F59E0B'], criteria: 'Complete 100% of all Magic Kingdom rides and attractions' },
+  { id: 'gold_epcot_visionary', name: 'EPCOT Visionary', tier: 'gold', cat: 'park', mode: 'diecut', motif: 'wireframeGlobe', enamel: ['#94A3B8', '#14727F', '#0284C7', '#FFFFFF'], criteria: 'Complete 100% of all EPCOT rides and pavilions' },
+  { id: 'gold_hollywood_star', name: 'Hollywood Studios VIP', tier: 'gold', cat: 'park', mode: 'diecut', motif: 'clapperboard', enamel: ['#0F172A', '#FFFFFF', '#F59E0B', '#DC2626'], criteria: 'Complete 100% of all Disney Hollywood Studios attractions' },
+  { id: 'gold_wilderness_guardian', name: 'Animal Kingdom Explorer', tier: 'gold', cat: 'park', mode: 'diecut', motif: 'holyOak', enamel: ['#15803D', '#78350F', '#F59E0B', '#059669'], criteria: 'Complete 100% of all Disney Animal Kingdom attractions' },
+  { id: 'gold_disney_springs_master', name: 'Disney Springs Visionary', tier: 'gold', cat: 'park', mode: 'diecut', motif: 'waterTower', enamel: ['#14727F', '#78350F', '#334155', '#F59E0B'], criteria: 'Complete 100% of all active attractions & entertainment at Disney Springs' },
+  
+  // Touring & Speed (Gold)
+  { id: 'gold_rope_drop_to_fireworks', name: 'Rope Drop to Fireworks Marathon', tier: 'gold', cat: 'touring', mode: 'diecut', motif: 'sunrise', enamel: ['#F59E0B', '#DC2626', '#581C87', '#FFFFFF'], criteria: 'Log an attraction within 30 min of park open AND after evening fireworks start' },
+  { id: 'gold_three_parks_day', name: 'Three Parks in One Day', tier: 'gold', cat: 'touring', mode: 'diecut', motif: 'skyliner', enamel: ['#EAB308', '#38BDF8', '#DC2626', '#475569'], criteria: 'Log an experience in 3 distinct theme parks on a single calendar day' },
+  { id: 'gold_10_ride_marathon', name: '10-Ride Single Day Sprint', tier: 'gold', cat: 'touring', mode: 'diecut', motif: 'sprint', enamel: ['#F59E0B'], criteria: 'Log 10 or more attraction visits on a single calendar date' },
+  
+  { id: 'gold_coaster_king', name: 'Coaster Royalty', tier: 'gold', cat: 'sets', mode: 'diecut', motif: 'coasterLoop', enamel: ["#475569","#94a3b8","#dc2626","#f59e0b"], criteria: 'Space Mountain + Big Thunder + Seven Dwarfs + Cosmic Rewind + Everest + Slinky Dog' },
+  
+  // === SILVER ===
+  { id: 'silver_centurion_60', name: 'Centurion 60', tier: 'silver', cat: 'ladder', shape: 'arch', scene: 'b4fire9', sky: 'night', banner: '60', motifEnamel: B4_STAGES[9].cols, motifScale: 1.4, criteria: 'Log 60+ unique lifetime Disney experiences' },
+  { id: 'silver_centurion_50', name: 'Centurion 50', tier: 'silver', cat: 'ladder', shape: 'arch', scene: 'b4fire8', sky: 'night', banner: '50', motifEnamel: B4_STAGES[8].cols, motifScale: 1.4, criteria: 'Log 50+ unique lifetime Disney experiences' },
+  
+  // === SILVER 100% LAND MASTERY (20 Lands Across All 4 Parks) ===
+  // Magic Kingdom (6)
+  { id: 'silver_main_street_100', name: 'Main Street, U.S.A. 100%', tier: 'silver', cat: 'land', mode: 'diecut', motif: 'trainStation', enamel: ['#DC2626', '#F59E0B', '#334155'], criteria: 'Complete 100% of all active rides & attractions on Main Street, U.S.A.' },
+  { id: 'silver_tomorrowland_100', name: 'Tomorrowland 100%', tier: 'silver', cat: 'land', mode: 'diecut', motif: 'rocket', enamel: ['#4A90E2', '#FFFFFF', '#F59E0B', '#1E3A8A', '#EF4444'], criteria: 'Complete 100% of all active rides & attractions in Tomorrowland' },
+  { id: 'silver_fantasyland_100', name: 'Fantasyland 100%', tier: 'silver', cat: 'land', mode: 'diecut', motif: 'fairyWand', enamel: ['#A855F7', '#F59E0B', '#FFFFFF', '#EC4899', '#38BDF8'], criteria: 'Complete 100% of all active rides & attractions in Fantasyland' },
+  { id: 'silver_adventureland_100', name: 'Adventureland 100%', tier: 'silver', cat: 'land', mode: 'diecut', motif: 'treasureMap', enamel: ['#FEF3C7', '#16A34A', '#DC2626', '#DC2626', '#DC2626', '#DC2626', '#DC2626', '#DC2626', '#DC2626', '#DC2626', '#DC2626', '#DC2626', '#DC2626', '#DC2626', '#DC2626', '#DC2626', '#DC2626'], criteria: 'Complete 100% of all active rides & attractions in Adventureland' },
+  { id: 'silver_frontierland_100', name: 'Frontierland 100%', tier: 'silver', cat: 'land', mode: 'diecut', motif: 'mineWagon', enamel: ['#78350F', '#F59E0B', '#B45309', '#1E293B'], criteria: 'Complete 100% of all active rides & attractions in Frontierland' },
+  { id: 'silver_liberty_square_100', name: 'Liberty Square 100%', tier: 'silver', cat: 'land', mode: 'diecut', scene: 'libertyBell', enamel: ['#D97706', '#78350F', '#334155', '#475569'], criteria: 'Complete 100% of all active attractions in Liberty Square' },
+
+  // EPCOT Neighborhoods (4)
+  { id: 'silver_world_celebration_100', name: 'World Celebration 100%', tier: 'silver', cat: 'land', mode: 'diecut', motif: 'globe', enamel: ['#0284C7', '#059669', '#38BDF8'], criteria: 'Complete 100% of all active attractions in World Celebration' },
+  { id: 'silver_world_discovery_100', name: 'World Discovery 100%', tier: 'silver', cat: 'land', mode: 'diecut', motif: 'spaceship', motifScale: 1.35, enamel: ['#0284C7', '#F59E0B', '#DC2626', '#FFFFFF', '#0F172A'], criteria: 'Complete 100% of all active rides & attractions in World Discovery' },
+  { id: 'silver_world_nature_100', name: 'World Nature 100%', tier: 'silver', cat: 'land', mode: 'diecut', motif: 'turtle', enamel: ['#0284C7', '#16A34A', '#FEF3C7', '#0F766E'], criteria: 'Complete 100% of all active rides & attractions in World Nature' },
+  { id: 'silver_world_showcase_100', name: 'World Showcase 100%', tier: 'silver', cat: 'land', mode: 'diecut', motif: 'world', enamel: ['#0284C7', '#10B981', '#38BDF8', '#F59E0B'], criteria: 'Complete 100% of all active rides & theater shows in World Showcase' },
+
+  // Hollywood Studios (6)
+  { id: 'silver_hollywood_blvd_100', name: 'Hollywood Boulevard 100%', tier: 'silver', cat: 'land', mode: 'diecut', motif: 'directorChair', enamel: ['#1E293B', '#FFFFFF', '#DC2626', '#F59E0B'], criteria: 'Complete 100% of all active attractions on Hollywood Boulevard' },
+  { id: 'silver_sunset_blvd_100', name: 'Sunset Boulevard 100%', tier: 'silver', cat: 'land', mode: 'diecut', scene: 'drumKit', enamel: ['#F59E0B', '#DC2626', '#E2E8F0', '#1E293B', '#FFFFFF'], criteria: 'Complete 100% of all active rides & theater shows on Sunset Boulevard' },
+  { id: 'silver_echo_lake_100', name: 'Echo Lake 100%', tier: 'silver', cat: 'land', mode: 'diecut', motif: 'fedora', enamel: ['#78350F', '#0F172A', '#F59E0B'], criteria: 'Complete 100% of all active rides & theater shows in Echo Lake' },
+  { id: 'silver_toy_story_100', name: 'Toy Story Land 100%', tier: 'silver', cat: 'land', mode: 'diecut', scene: 'sheriffBadge', enamel: ['#EAB308', '#B91C1C', '#FFFFFF', '#1E3A8A'], criteria: 'Complete 100% of all active rides & attractions in Toy Story Land' },
+  { id: 'silver_galaxys_edge_100', name: "Galaxy's Edge 100%", tier: 'silver', cat: 'land', mode: 'diecut', scene: 'crossedLightsabers', enamel: ['#00E5FF', '#FF1744', '#475569', '#475569', '#FFFFFF'], criteria: "Complete 100% of all active rides & attractions in Star Wars: Galaxy's Edge" },
+  { id: 'silver_animation_courtyard_100', name: 'Animation Courtyard 100%', tier: 'silver', cat: 'land', mode: 'diecut', motif: 'filmProjector', enamel: ['#334155', '#F59E0B', '#DC2626', '#FFFFFF'], criteria: 'Complete 100% of all active stage shows & walkthroughs in Animation Courtyard' },
+
+  // Animal Kingdom (4)
+  { id: 'silver_discovery_island_100', name: 'Discovery Island 100%', tier: 'silver', cat: 'land', mode: 'diecut', motif: 'flamingo', enamel: ['#EC4899', '#F43F5E'], criteria: 'Complete 100% of all active attractions & discovery trails on Discovery Island' },
+  { id: 'silver_pandora_100', name: 'Pandora 100%', tier: 'silver', cat: 'land', mode: 'diecut', motif: 'wyvern', noSplit: true, motifScale: 1.25, enamel: ['#00E5FF'], criteria: 'Complete 100% of all active rides & attractions in Pandora – The World of Avatar' },
+  { id: 'silver_africa_100', name: 'Africa 100%', tier: 'silver', cat: 'land', mode: 'diecut', motif: 'elephant', enamel: ['#64748B', '#64748B', '#FFFFFF', '#64748B', '#64748B', '#64748B', '#64748B'], criteria: 'Complete 100% of all active rides, shows & safari trails in Africa' },
+  { id: 'silver_asia_100', name: 'Asia 100%', tier: 'silver', cat: 'land', mode: 'diecut', motif: 'tiger', enamel: ['#EA580C', '#FFFFFF', '#0F172A', '#FFFFFF', '#EA580C', '#0F172A', '#0F172A', '#0F172A'], criteria: 'Complete 100% of all active rides, water rapids & jungle treks in Asia' },
+
+  // Thematic Sets (Silver)
+  { id: 'silver_interstellar_pilot', name: 'Interstellar Pilot', tier: 'silver', cat: 'sets', mode: 'diecut', motif: 'spaceSatellite', enamel: ['#0284C7', '#0369A1', '#0284C7', '#0369A1', '#0284C7', '#0369A1', '#0284C7', '#0369A1', '#F8FAFC', '#F59E0B', '#0284C7', '#0369A1', '#0284C7', '#0369A1', '#0284C7', '#0369A1', '#0284C7', '#0369A1', '#0284C7', '#94A3B8', '#0369A1', '#0284C7', '#1E293B'], criteria: 'Space Mountain + Mission: SPACE + Star Tours' },
+  { id: 'silver_dark_ride_aficionado', name: 'Dark Ride Connoisseur', tier: 'silver', cat: 'sets', mode: 'diecut', motif: 'magicLantern', enamel: ['#FDE047', '#FFFFFF', '#FDE047', '#1E1B4B', '#F59E0B'], criteria: 'Complete 6+ classic Disney dark rides' },
+  { id: 'silver_flight_sim_ace', name: 'Flight Simulator Ace', tier: 'silver', cat: 'sets', mode: 'diecut', motif: 'soarinGliderWings', enamel: ['#334155', '#475569', '#334155', '#475569', '#334155', '#475569', '#334155', '#0284C7', '#38BDF8', '#E0F2FE', '#FFFFFF'], criteria: 'Soarin\' + Flight of Passage + Star Tours + Smugglers Run' },
+  { id: 'silver_rail_transit', name: 'Rail & Transit Enthusiast', tier: 'silver', cat: 'sets', mode: 'diecut', motif: 'steamTrain', enamel: ['#E2E8F0', '#DC2626', '#1E293B', '#93C5FD', '#93C5FD', '#1E293B', '#0F172A', '#B91C1C', '#1E293B', '#DC2626', '#DC2626', '#DC2626', '#94A3B8', '#CBD5E1', '#CBD5E1', '#DC2626', '#334155', '#F59E0B'], criteria: 'WDW Railroad + PeopleMover + Wildlife Express Train' },
+  { id: 'silver_typhoon_lagoon_master', name: 'Typhoon Lagoon Wave Master', tier: 'silver', cat: 'park', mode: 'diecut', motif: 'waterSplash', enamel: ['#06B6D4', '#0C4A6E', '#FFFFFF', '#F59E0B'], criteria: 'Complete 100% of all active slides & attractions at Disney Typhoon Lagoon' },
+  { id: 'silver_blizzard_beach_master', name: 'Blizzard Beach Summit Master', tier: 'silver', cat: 'park', mode: 'diecut', motif: 'snowflake', enamel: ['#38BDF8', '#0284C7'], criteria: 'Complete 100% of all active slides & runs at Disney Blizzard Beach' },
+  { id: 'silver_boat_transit', name: 'Legendary Waterway Voyage', tier: 'silver', cat: 'sets', mode: 'diecut', motif: 'riverboatCruise', enamel: ['#78350F'], criteria: 'Pirates of the Caribbean + "It\'s a small world" + Jungle Cruise + Gran Fiesta Tour + Living with the Land' },
+  { id: 'silver_water_ride_splash', name: 'Water Ride Splasher', tier: 'silver', cat: 'sets', mode: 'diecut', motif: 'waterfallFlume', enamel: ['#334155', '#334155', '#0284C7', '#38BDF8', '#38BDF8', '#38BDF8', '#0EA5E9', '#FFFFFF', '#FFFFFF', '#FFFFFF', '#FFFFFF', '#F0FDF4', '#FFFFFF'], criteria: 'Kali River Rapids + Tiana\'s Bayou Adventure' },
+  { id: 'silver_animatronics_veteran', name: 'Audio-Animatronics Fan', tier: 'silver', cat: 'sets', mode: 'diecut', motif: 'tikiMacaw', motifScale: 1.15, enamel: [PALETTES.royal.crimson, PALETTES.royal.amber, PALETTES.royal.teal, PALETTES.royal.royal], criteria: 'Carousel of Progress + Hall of Presidents + Tiki Room' },
+  { id: 'silver_character_hunter_10', name: 'Character Hunter (10 Meets)', tier: 'silver', cat: 'sets', mode: 'diecut', motif: 'photoCamera', motifScale: 1.1, enamel: [PALETTES.royal.crimson, PALETTES.royal.amber, PALETTES.royal.sky, PALETTES.royal.royal], criteria: 'Log 10 character meet-and-greets' },
+  { id: 'silver_meets_15', name: 'Character Collector (15 Meets)', tier: 'silver', cat: 'sets', mode: 'diecut', motif: 'autographQuill', enamel: ['#FEF3C7', '#FDE68A', '#DC2626', '#F59E0B', '#6B21A8'], criteria: 'Log 15 character meet-and-greets' },
+  { id: 'silver_princess_court', name: 'Princess Royal Court', tier: 'silver', cat: 'sets', mode: 'diecut', motif: 'enchantedRose', motifScale: 1.15, enamel: [PALETTES.royal.crimson, PALETTES.royal.crimson, PALETTES.royal.forest, PALETTES.royal.forest, PALETTES.royal.forest, PALETTES.royal.forest, PALETTES.royal.forest], criteria: 'Meet or dine with 4 Disney Princesses' },
+  
+  // Touring & Dining (Silver)
+  { id: 'silver_6_ride_sprint', name: '6-Ride Morning Sprint', tier: 'silver', cat: 'touring', mode: 'diecut', motif: 'speedometer', enamel: ['#1E293B', '#DC2626', '#00E5FF', '#FFFFFF', '#F59E0B'], criteria: 'Log 6 or more attraction visits before 1:00 PM' },
+  { id: 'silver_epcot_showcase_6', name: 'World Showcase Explorer', tier: 'silver', cat: 'sets', mode: 'diecut', motif: 'pagoda', motifScale: 1.15, enamel: [PALETTES.royal.crimson, PALETTES.royal.amber, PALETTES.royal.ink, PALETTES.royal.forest], criteria: 'Log experiences in at least 6 World Showcase pavilions' },
+  { id: 'silver_signature_dining_2', name: 'Signature Gourmet (2 Venues)', tier: 'silver', cat: 'dining', mode: 'diecut', motif: 'chefToque', enamel: ['#FFFFFF', '#F59E0B', '#DC2626'], criteria: 'Dine at 2 Signature fine dining restaurants' },
+  { id: 'silver_signature_4', name: 'Signature Gourmet (4 Venues)', tier: 'silver', cat: 'dining', mode: 'diecut', motif: 'cutDiamond', enamel: ['#E0F2FE', '#38BDF8', '#FFFFFF', '#94A3B8'], criteria: 'Dine at 4 Signature fine dining restaurants' },
+  { id: 'silver_skyliner_resorts', name: 'Skyliner Tour (4 Resorts)', tier: 'silver', cat: 'dining', mode: 'diecut', motif: 'skylinerCabin', enamel: ['#0284C7', '#F59E0B', '#DC2626'], criteria: 'Visit Riviera + Caribbean Beach + Pop Century + Art of Animation' },
+  { id: 'silver_resorts_12', name: 'Resort Voyager (12 Resorts)', tier: 'silver', cat: 'dining', mode: 'diecut', motif: 'padlock', enamel: ['#F59E0B', '#E2E8F0', '#0284C7'], criteria: 'Visit or stay at 12 distinct Disney Resorts' },
+  { id: 'silver_dining_reviewer_10', name: 'Foodie Reviewer (10 Reviews)', tier: 'silver', cat: 'dining', mode: 'diecut', motif: 'cupcake', enamel: ['#EC4899', '#DC2626', '#F59E0B', '#D97706', '#FEF3C7'], criteria: 'Submit 10 or more dining ratings or reviews' },
+  { id: 'silver_critic_10', name: 'Park Reviewer (10 Reviews)', tier: 'silver', cat: 'social', mode: 'diecut', motif: 'filmStrip', enamel: ['#1E293B', '#F59E0B', '#FFFFFF'], criteria: 'Submit 10 or more ratings or reviews' },
+  { id: 'silver_critic_25', name: 'Active Reviewer (25 Reviews)', tier: 'silver', cat: 'social', mode: 'diecut', motif: 'megaphone', enamel: ['#DC2626', '#FEF3C7', '#F59E0B', '#0284C7'], criteria: 'Submit 25 or more ratings or reviews' },
+  { id: 'silver_squad_10', name: 'Squad Ally (10 Group Rides)', tier: 'silver', cat: 'social', mode: 'diecut', motif: 'celebrationCheers', enamel: ['#F59E0B', '#EC4899', '#38BDF8'], criteria: 'Log 10 group rides with friends' },
+  { id: 'silver_squad_15', name: 'Squad Companion (15 Group Rides)', tier: 'silver', cat: 'social', mode: 'diecut', motif: 'balloons', enamel: ['#DC2626'], criteria: 'Log 15 group rides with friends' },
+  { id: 'silver_trip_planner_3', name: 'Trip Coordinator (3 Trips)', tier: 'silver', cat: 'social', shape: 'rosette', motif: 'directionSigns', enamel: ['#78350F', '#F59E0B', '#FEF3C7', '#DC2626'], criteria: 'Organize or participate in 3 distinct Disney trips' },
+
+  // === BRONZE ===
+  { id: 'bronze_centurion_40', name: 'Centurion 40', tier: 'bronze', cat: 'ladder', shape: 'arch', scene: 'b4fire7', sky: 'night', banner: '40', motifEnamel: B4_STAGES[7].cols, motifScale: 1.4, criteria: 'Log 40+ unique lifetime Disney experiences' },
+  { id: 'bronze_centurion_35', name: 'Centurion 35', tier: 'bronze', cat: 'ladder', shape: 'arch', scene: 'b4fire6', sky: 'night', banner: '35', motifEnamel: B4_STAGES[6].cols, motifScale: 1.4, criteria: 'Log 35+ unique lifetime Disney experiences' },
+  { id: 'bronze_centurion_30', name: 'Centurion 30', tier: 'bronze', cat: 'ladder', shape: 'arch', scene: 'b4fire5', sky: 'night', banner: '30', motifEnamel: B4_STAGES[5].cols, motifScale: 1.4, criteria: 'Log 30+ unique lifetime Disney experiences' },
+  { id: 'bronze_centurion_25', name: 'Centurion 25', tier: 'bronze', cat: 'ladder', shape: 'arch', scene: 'b4fire4', sky: 'night', banner: '25', motifEnamel: B4_STAGES[4].cols, motifScale: 1.4, criteria: 'Log 25+ unique lifetime Disney experiences' },
+  { id: 'bronze_centurion_20', name: 'Centurion 20', tier: 'bronze', cat: 'ladder', shape: 'arch', scene: 'b4fire3', sky: 'night', banner: '20', motifEnamel: B4_STAGES[3].cols, motifScale: 1.4, criteria: 'Log 20+ unique lifetime Disney experiences' },
+  { id: 'bronze_centurion_15', name: 'Centurion 15', tier: 'bronze', cat: 'ladder', shape: 'arch', scene: 'b4fire2', sky: 'night', banner: '15', motifEnamel: B4_STAGES[2].cols, motifScale: 1.4, criteria: 'Log 15+ unique lifetime Disney experiences' },
+  { id: 'bronze_centurion_10', name: 'Centurion 10', tier: 'bronze', cat: 'ladder', shape: 'arch', scene: 'b4fire1', sky: 'night', banner: '10', motifEnamel: B4_STAGES[1].cols, motifScale: 1.4, criteria: 'Log 10+ unique lifetime Disney experiences' },
+  
+  // Park Starters (Bronze Contained Discs with Park Banner)
+  { id: 'bronze_mk_starter', name: 'Magic Kingdom Starter', tier: 'bronze', cat: 'park', shape: 'disc', scene: 'castle', anchor: 'center', motifScale: 1.0, enamel: 'sky', criteria: 'Complete 1 attraction in Magic Kingdom' },
+  { id: 'bronze_epcot_starter', name: 'EPCOT Starter', tier: 'bronze', cat: 'park', shape: 'disc', motif: 'wireframeGlobe', motifScale: 1.0, enamel: 'teal', criteria: 'Complete 1 attraction in EPCOT' },
+  { id: 'bronze_hs_starter', name: 'Hollywood Studios Starter', tier: 'bronze', cat: 'park', shape: 'disc', motif: 'clapperboard', motifScale: 0.95, enamel: 'crimson', criteria: 'Complete 1 attraction in Hollywood Studios' },
+  { id: 'bronze_ak_starter', name: 'Animal Kingdom Starter', tier: 'bronze', cat: 'park', shape: 'disc', motif: 'holyOak', motifScale: 1.0, enamel: 'forest', criteria: 'Complete 1 attraction in Animal Kingdom' },
+  { id: 'bronze_typhoon_lagoon', name: 'Typhoon Lagoon Splash', tier: 'bronze', cat: 'park', shape: 'disc', motif: 'waterSplash', motifScale: 0.92, enamel: 'teal', criteria: 'Log 1 attraction or slide at Disney Typhoon Lagoon' },
+  { id: 'bronze_blizzard_beach', name: 'Blizzard Beach Slopes', tier: 'bronze', cat: 'park', shape: 'disc', motif: 'snowflake', motifScale: 0.92, enamel: 'sky', criteria: 'Log 1 attraction or slide at Disney Blizzard Beach' },
+  { id: 'bronze_disney_springs', name: 'Disney Springs Explorer', tier: 'bronze', cat: 'park', shape: 'disc', motif: 'waterTower', motifScale: 0.98, enamel: 'teal', criteria: 'Log 1 shopping, dining, or entertainment venue at Disney Springs' },
+  
+  // === BRONZE LAND STARTERS (20 Matched Pairs Across All 4 Parks) ===
+  // Magic Kingdom (6)
+  { id: 'bronze_main_street_starter', name: 'Main Street Starter', tier: 'bronze', cat: 'land', shape: 'disc', motif: 'trainStation', enamel: 'crimson', criteria: 'Complete 1 experience on Main Street, U.S.A.' },
+  { id: 'bronze_tomorrowland_starter', name: 'Tomorrowland Starter', tier: 'bronze', cat: 'land', shape: 'disc', motif: 'rocket', enamel: 'royal', criteria: 'Complete 1 experience in Tomorrowland' },
+  { id: 'bronze_fantasyland_starter', name: 'Fantasyland Starter', tier: 'bronze', cat: 'land', shape: 'disc', motif: 'fairyWand', enamel: 'royal', criteria: 'Complete 1 experience in Fantasyland' },
+  { id: 'bronze_adventureland_starter', name: 'Adventureland Starter', tier: 'bronze', cat: 'land', shape: 'disc', motif: 'treasureMap', enamel: 'forest', criteria: 'Complete 1 experience in Adventureland' },
+  { id: 'bronze_frontierland_starter', name: 'Frontierland Starter', tier: 'bronze', cat: 'land', shape: 'disc', motif: 'mineWagon', enamel: 'crimson', criteria: 'Complete 1 experience in Frontierland' },
+  { id: 'bronze_liberty_square_starter', name: 'Liberty Square Starter', tier: 'bronze', cat: 'land', shape: 'disc', scene: 'libertyBell', enamel: 'crimson', criteria: 'Complete 1 experience in Liberty Square' },
+  
+  // EPCOT Land Starters (4)
+  { id: 'bronze_world_celebration', name: 'World Celebration Starter', tier: 'bronze', cat: 'land', shape: 'disc', motif: 'globe', enamel: 'royal', criteria: 'Complete 1 experience in World Celebration' },
+  { id: 'bronze_world_discovery', name: 'World Discovery Starter', tier: 'bronze', cat: 'land', shape: 'disc', motif: 'spaceship', enamel: 'royal', criteria: 'Complete 1 experience in World Discovery' },
+  { id: 'bronze_world_nature', name: 'World Nature Starter', tier: 'bronze', cat: 'land', shape: 'disc', motif: 'turtle', enamel: 'teal', criteria: 'Complete 1 experience in World Nature' },
+  { id: 'bronze_world_showcase_starter', name: 'World Showcase Starter', tier: 'bronze', cat: 'land', shape: 'disc', motif: 'world', enamel: 'teal', criteria: 'Complete 1 ride or show in World Showcase' },
+  
+  // Studios Land Starters (6)
+  { id: 'bronze_hollywood_blvd_starter', name: 'Hollywood Boulevard Starter', tier: 'bronze', cat: 'land', shape: 'disc', motif: 'directorChair', enamel: 'crimson', criteria: 'Complete 1 experience on Hollywood Boulevard' },
+  { id: 'bronze_sunset_blvd_starter', name: 'Sunset Boulevard Starter', tier: 'bronze', cat: 'land', shape: 'disc', scene: 'drumKit', enamel: 'crimson', criteria: 'Complete 1 experience on Sunset Boulevard' },
+  { id: 'bronze_echo_lake_starter', name: 'Echo Lake Starter', tier: 'bronze', cat: 'land', shape: 'disc', motif: 'fedora', enamel: 'crimson', criteria: 'Complete 1 experience in Echo Lake' },
+  { id: 'bronze_toy_story_starter', name: 'Toy Story Starter', tier: 'bronze', cat: 'land', shape: 'disc', scene: 'sheriffBadge', enamel: 'crimson', criteria: 'Complete 1 experience in Toy Story Land' },
+  { id: 'bronze_galaxys_edge_starter', name: "Galaxy's Edge Starter", tier: 'bronze', cat: 'land', shape: 'disc', scene: 'crossedLightsabers', enamel: 'royal', criteria: "Complete 1 experience in Star Wars: Galaxy's Edge" },
+  { id: 'bronze_animation_courtyard_starter', name: 'Animation Courtyard Starter', tier: 'bronze', cat: 'land', shape: 'disc', motif: 'filmProjector', enamel: 'crimson', criteria: 'Complete 1 experience in Animation Courtyard' },
+  
+  // DAK Land Starters (4)
+  { id: 'bronze_discovery_island_starter', name: 'Discovery Island Starter', tier: 'bronze', cat: 'land', shape: 'disc', motif: 'flamingo', enamel: 'forest', criteria: 'Complete 1 experience on Discovery Island' },
+  { id: 'bronze_pandora_starter', name: 'Pandora Starter', tier: 'bronze', cat: 'land', shape: 'disc', motif: 'wyvern', enamel: 'forest', criteria: 'Complete 1 experience in Pandora' },
+  { id: 'bronze_africa_starter', name: 'Africa Starter', tier: 'bronze', cat: 'land', shape: 'disc', motif: 'elephant', enamel: 'forest', criteria: 'Complete 1 experience in Africa' },
+  { id: 'bronze_asia_starter', name: 'Asia Starter', tier: 'bronze', cat: 'land', shape: 'disc', motif: 'tiger', enamel: 'forest', criteria: 'Complete 1 experience in Asia' },
+  
+  // Thematic Sets, Dining, Social (Bronze)
+  { id: 'bronze_first_ride', name: 'First Attraction Logged', tier: 'bronze', cat: 'touring', shape: 'crest', motif: 'ticket', enamel: 'royal', criteria: 'Log your very first attraction on any trip' },
+  { id: 'bronze_coaster_rookie', name: 'Coaster Rookie (First Coaster)', tier: 'bronze', cat: 'sets', shape: 'crest', motif: 'coasterLoop', motifScale: 0.78, enamel: 'crimson', criteria: 'Log your first roller coaster' },
+  { id: 'bronze_boat_ride', name: 'Water Transit Voyage', tier: 'bronze', cat: 'sets', mode: 'diecut', motif: 'submarine', enamel: ['#0F766E', '#F59E0B'], criteria: 'Log It a Small World, Pirates, or Gran Fiesta Tour' },
+  { id: 'bronze_theater_spectacular', name: 'Stage Spectacular (First Show)', tier: 'bronze', cat: 'sets', mode: 'diecut', motif: 'theater', enamel: ['#991B1B', '#F59E0B', '#1E293B', '#FFFFFF'], criteria: 'Log your first stage show or theater presentation' },
+  { id: 'bronze_360_cinema', name: 'Circle-Vision 360 Explorer', tier: 'bronze', cat: 'sets', mode: 'diecut', motif: 'filmSpool', enamel: ['#94A3B8', '#0F172A', '#F59E0B', '#FFFFFF'], criteria: 'Canada Far and Wide + Reflections of China' },
+  { id: 'bronze_animatronics_fan', name: 'Animatronic Admirer', tier: 'bronze', cat: 'sets', shape: 'crest', motif: 'tikiMacaw', motifScale: 0.78, enamel: 'forest', criteria: 'Log your first classic Audio-Animatronic show' },
+  { id: 'bronze_laugh_out_loud', name: 'Comedy & Laughs', tier: 'bronze', cat: 'sets', mode: 'diecut', motif: 'microphone', enamel: ['#94A3B8', '#F59E0B', '#DC2626', '#0284C7'], criteria: 'Log Monsters, Inc. Laugh Floor or Turtle Talk' },
+  { id: 'bronze_animal_spotter', name: 'Wildlife Spotter', tier: 'bronze', cat: 'sets', mode: 'diecut', motif: 'lion', enamel: ['#D97706', '#78350F', '#FEF3C7'], criteria: 'Log Kilimanjaro Safaris or a wildlife walking trek' },
+  { id: 'bronze_character_hug_1', name: 'Character Encounter (1st Meet)', tier: 'bronze', cat: 'sets', shape: 'star', motif: 'magicLamp', enamel: ['#F59E0B', '#581C87', '#00E5FF', '#FEF3C7'], criteria: 'Log your first character meet-and-greet' },
+  { id: 'bronze_character_trio_3', name: 'Character Trio (3 Meets)', tier: 'bronze', cat: 'sets', shape: 'star', motif: 'dominoMask', enamel: ['#581C87', '#F59E0B', '#FFFFFF', '#DC2626'], criteria: 'Log 3 character meet-and-greets' },
+  { id: 'bronze_character_friend_5', name: 'Character Friend (5 Meets)', tier: 'bronze', cat: 'sets', mode: 'diecut', motif: 'autographBook', enamel: ['#2563EB', '#F59E0B', '#F8FAFC'], criteria: 'Log 5 character meet-and-greets' },
+  { id: 'bronze_royal_encounter_1', name: 'Royal Encounter (1 Princess)', tier: 'bronze', cat: 'sets', mode: 'diecut', motif: 'crown', enamel: ['#F59E0B', '#DC2626', '#FFFFFF', '#9333EA'], criteria: 'Meet or dine with 1 Disney Princess' },
+  { id: 'bronze_target_blaster', name: 'Target Blaster (Shooters)', tier: 'bronze', cat: 'sets', mode: 'diecut', motif: 'rayGun', enamel: ['#581C87'], criteria: 'Buzz Lightyear Space Ranger Spin + Toy Story Mania!' },
+  { id: 'bronze_diner_1', name: 'Disney Diner (First Meal)', tier: 'bronze', cat: 'dining', shape: 'crest', motif: 'hotDog', enamel: ['#78350F', '#F59E0B', '#DC2626', '#FEF3C7'], criteria: 'Log your first dining experience at a Disney restaurant' },
+  { id: 'bronze_quick_service_3', name: 'Quick Service Regular (3 Spots)', tier: 'bronze', cat: 'dining', shape: 'crest', motif: 'pizzaSlice', enamel: ['#D97706', '#FEF3C7', '#DC2626', '#15803D'], criteria: 'Log meals at 3 quick service dining locations' },
+  { id: 'bronze_monorail_resorts', name: 'Monorail Crawl (3 Resorts)', tier: 'bronze', cat: 'dining', mode: 'diecut', motif: 'monorailBeam', enamel: ['#DC2626', '#3B82F6', '#10B981'], criteria: 'Visit Contemporary + Polynesian + Grand Floridian' },
+  { id: 'bronze_crescent_lake_resorts', name: 'Crescent Lake Promenade', tier: 'bronze', cat: 'dining', mode: 'diecut', motif: 'sailboat', enamel: ['#FFFFFF', '#1E3A8A', '#F59E0B'], criteria: 'Visit Boardwalk + Yacht Club + Beach Club' },
+  { id: 'bronze_two_parks_day', name: 'Two Parks in One Day', tier: 'bronze', cat: 'touring', mode: 'diecut', motif: 'bus', enamel: ['#FFFFFF', '#DC2626', '#1E3A8A', '#F59E0B', '#475569'], criteria: 'Log experiences in 2 distinct theme parks on the same calendar day' }
+];
+
+const pinGrid = document.getElementById('pinGrid');
+let currentTier = 'all';
+let currentCat = 'all';
+let searchQuery = '';
+
+function filterAndRender() {
+  pinGrid.innerHTML = '';
+  
+  const filtered = PINS.filter(p => {
+    const matchTier = (currentTier === 'all' || p.tier === currentTier);
+    const matchCat = (currentCat === 'all' || p.cat === currentCat);
+    const matchSearch = searchQuery === '' || 
+      p.name.toLowerCase().includes(searchQuery) ||
+      p.criteria.toLowerCase().includes(searchQuery) ||
+      p.id.toLowerCase().includes(searchQuery);
+    return matchTier && matchCat && matchSearch;
+  });
+
+  filtered.forEach(pin => {
+    const card = document.createElement('div');
+    card.className = 'pin-card';
+    card.setAttribute('data-tier', pin.tier);
+    
+    let styleLabel = '';
+    if (pin.mode === 'diecut') {
+      styleLabel = `✂️ Die-Cut Silhouette`;
+    } else {
+      styleLabel = `🛡️ Contained (${pin.shape.toUpperCase()})`;
+    }
+
+    card.innerHTML = `
+      <div class="pin-art-wrapper">
+        ${renderPin({ ...pin, size: 120 })}
+      </div>
+      <div class="pin-badge-row">
+        <span class="tier-badge ${pin.tier}">${pin.tier}</span>
+        <span class="style-badge ${pin.mode === 'diecut' ? 'die-cut' : 'contained'}">${styleLabel}</span>
+      </div>
+      <div class="pin-name">${pin.name}</div>
+      <div class="pin-criteria">${pin.criteria}</div>
+    `;
+    card.addEventListener('click', () => openModal(pin));
+    pinGrid.appendChild(card);
+  });
+}
+
+const modal = document.getElementById('detailModal');
+const modalClose = document.getElementById('modalClose');
+const modalArt = document.getElementById('modalArt');
+const modalTitle = document.getElementById('modalTitle');
+const modalBadges = document.getElementById('modalBadges');
+const modalCriteria = document.getElementById('modalCriteria');
+const modalMotif = document.getElementById('modalMotif');
+
+function openModal(pin) {
+  modalArt.innerHTML = renderPin({ ...pin, size: 180 });
+  modalTitle.textContent = pin.name;
+  
+  const styleLabel = pin.mode === 'diecut' 
+    ? `✂️ True Die-Cut Contour Pin`
+    : `🛡️ Contained Plaque (${pin.shape.toUpperCase()})`;
+
+  modalBadges.innerHTML = `
+    <span class="tier-badge ${pin.tier}">${pin.tier}</span>
+    <span class="style-badge ${pin.mode === 'diecut' ? 'die-cut' : 'contained'}">${styleLabel}</span>
+    <span class="style-badge">Category: ${pin.cat.toUpperCase()}</span>
+  `;
+  if (modalCriteria) modalCriteria.textContent = pin.criteria;
+  if (modalMotif) modalMotif.textContent = `Pin ID: ${pin.id} • ${pin.scene ? 'Scene: ' + pin.scene : 'Motif: ' + (pin.motif || 'none')} • Tier: ${pin.tier.toUpperCase()}`;
+  if (modal) modal.classList.add('open');
+}
+
+modalClose.addEventListener('click', () => modal.classList.remove('open'));
+modal.addEventListener('click', (e) => {
+  if (e.target === modal) modal.classList.remove('open');
+});
+
+document.querySelectorAll('#tierFilters .stat-pill').forEach(pill => {
+  pill.addEventListener('click', () => {
+    document.querySelectorAll('#tierFilters .stat-pill').forEach(p => p.classList.remove('active'));
+    pill.classList.add('active');
+    currentTier = pill.getAttribute('data-filter');
+    updateTabCounts();
+    filterAndRender();
+  });
+});
+
+/* Declared at top level on purpose. This used to sit INSIDE the tier-pill click
+   handler above, so it never ran on load and every count in the header showed the
+   stale hardcoded literal from the markup until you happened to click a pill.
+   The literals are now em-dashes, so a stale count cannot be read out of source. */
+function updateTabCounts() {
+  document.getElementById('count-all').textContent = PINS.length;
+  ['headline-count', 'subtitle-count'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = PINS.length;
+  });
+  ['prism', 'pearl', 'amethyst', 'gold', 'silver', 'bronze'].forEach(t => {
+    const el = document.getElementById('count-' + t);
+    if (el) el.textContent = PINS.filter(p => p.tier === t).length;
+  });
+
+  const catAllEl = document.getElementById('cat-count-all');
+  if (catAllEl) catAllEl.textContent = PINS.length;
+  ['ladder', 'land', 'park', 'touring', 'sets', 'dining', 'social'].forEach(c => {
+    const el = document.getElementById('cat-count-' + c);
+    if (el) el.textContent = PINS.filter(p => p.cat === c).length;
+  });
+}
+
+document.querySelectorAll('#categoryFilters .tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#categoryFilters .tab-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentCat = btn.getAttribute('data-cat');
+    filterAndRender();
+  });
+});
+
+document.getElementById('searchInput').addEventListener('input', (e) => {
+  searchQuery = e.target.value.toLowerCase().trim();
+  filterAndRender();
+});
+
+updateTabCounts();
+filterAndRender();
+  </script>
+</body>
+</html>

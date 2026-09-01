@@ -312,6 +312,9 @@ Implementation is **TypeScript**. It reuses `experiences.latitude/longitude` for
   - [x] 20.5 Checkpoint & Verification Gate
     - `npm run verify` across all workspaces.
     - _Requirements: 4.12, 4.13, 4.14, 4.15_
+  - [x] 20.6 ExperiencePicker search normalization integration
+    - Verify ExperiencePicker forwards free-text search queries to the enhanced catalog endpoint without client-side text filtering
+    - _Requirements: 4.16_
 
 ## Notes
 

@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Four Parks Grand Slam — Refined Speed Lines & Star Spacing</title>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #090712;
+      --card-bg: #130d24;
+      --card-border: #2e2350;
+      --accent: #c9a8ff;
+      --accent-gold: #f8db79;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      padding: 40px 24px 80px;
+      min-height: 100vh;
+    }
+    header {
+      text-align: center;
+      max-width: 960px;
+      margin: 0 auto 40px;
+    }
+    .badge-tier {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: linear-gradient(135deg, rgba(255, 240, 196, 0.2), rgba(176, 111, 216, 0.25));
+      border: 1px solid rgba(201, 168, 255, 0.5);
+      color: #ffe07a;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      padding: 6px 18px;
+      border-radius: 999px;
+      margin-bottom: 16px;
+    }
+    h1 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 38px;
+      font-weight: 800;
+      color: #fff;
+      margin-bottom: 12px;
+      background: linear-gradient(135deg, #ffffff 30%, #c9a8ff 70%, #f8db79 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    p.sub {
+      color: var(--text-muted);
+      font-size: 16px;
+      line-height: 1.6;
+    }
+    .challenge-box {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 14px;
+      padding: 16px 24px;
+      max-width: 720px;
+      margin: 22px auto 0;
+      text-align: left;
+      font-size: 14.5px;
+    }
+    .challenge-box b { color: #f8db79; }
+
+    .comparison-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+      gap: 30px;
+      max-width: 1280px;
+      margin: 0 auto;
+    }
+    .card {
+      background: var(--card-bg);
+      border: 2px solid var(--card-border);
+      border-radius: 26px;
+      padding: 34px 28px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      position: relative;
+      transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+      box-shadow: 0 14px 36px rgba(0,0,0,0.55);
+    }
+    .card:hover {
+      transform: translateY(-6px);
+      border-color: var(--accent);
+      box-shadow: 0 20px 50px rgba(176, 111, 216, 0.32);
+    }
+    .card.highlight {
+      border-color: #f8db79;
+      background: linear-gradient(180deg, rgba(248, 219, 121, 0.08) 0%, rgba(19, 13, 36, 1) 100%);
+      box-shadow: 0 18px 46px rgba(248, 219, 121, 0.18);
+    }
+    .card-tag {
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+      padding: 5px 14px;
+      border-radius: 6px;
+      margin-bottom: 18px;
+    }
+    .tag-gold { background: #713f12; color: #fef08a; border: 1px solid #eab308; }
+
+    .pin-stage {
+      width: 220px;
+      height: 220px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 22px;
+      filter: drop-shadow(0 16px 32px rgba(0,0,0,0.75));
+    }
+    .card-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 22px;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 6px;
+    }
+    .card-concept {
+      font-size: 12px;
+      color: #c9a8ff;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 12px;
+    }
+    .card-desc {
+      font-size: 14px;
+      color: var(--text-muted);
+      line-height: 1.6;
+      margin-bottom: 18px;
+      text-align: left;
+    }
+
+    .palette-pills {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      margin-top: auto;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255,255,255,0.06);
+      width: 100%;
+    }
+    .color-dot {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      border: 1px solid rgba(255,255,255,0.3);
+    }
+
+    @keyframes shmrSweep {
+      0% { transform: translateX(-180px) rotate(-25deg); }
+      100% { transform: translateX(360px) rotate(-25deg); }
+    }
+    .shmr {
+      animation: shmrSweep 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="badge-tier">✨ PRISM TIER • FOUR PARKS GRAND SLAM</div>
+    <h1>Four Parks Grand Slam — Refined Final</h1>
+    <p class="sub">
+      Speed lines extend continuously to the outer border beneath the raised PRISM rim, with all 4 milestone stars harmoniously spaced inside their quadrants.
+    </p>
+    <div class="challenge-box">
+      <b>🎯 Challenge:</b> Experience at least 1 major attraction in all 4 theme parks (Magic Kingdom, EPCOT, Hollywood Studios, Animal Kingdom) on a single calendar day.
+    </div>
+  </header>
+
+  <div class="comparison-grid" style="max-width: 800px; margin: 0 auto;">
+
+    <!-- REFINED FINAL: Diamond White Stars with Full Border-Reaching Speed Lines -->
+    <div class="card highlight">
+      <span class="card-tag tag-gold">Style 1A • Diamond White Stars (Refined)</span>
+      <div class="pin-stage" id="pin-refined"></div>
+      <div class="card-title">Diamond White Stars — Full Speed Stream</div>
+      <div class="card-concept">Pure Porcelain Stars • Bezel-Seated Speed Rays</div>
+      <div class="card-desc">
+        • <b>Speed Lines:</b> Radiate continuously from the monorail cab out to the border, cleanly clipped below the raised PRISM bezel so they never draw on top of the rim.<br>
+        • <b>Star Spacing:</b> All 4 stars are positioned with generous, balanced margins away from ribs, borders, and the monorail track.
+      </div>
+      <div class="palette-pills">
+        <div class="color-dot" style="background:#ffffff" title="Porcelain White Star"></div>
+        <div class="color-dot" style="background:#2f6bb0" title="MK Sky Blue"></div>
+        <div class="color-dot" style="background:#14727f" title="EPCOT Teal"></div>
+        <div class="color-dot" style="background:#a8323f" title="HS Crimson"></div>
+        <div class="color-dot" style="background:#2f7d3e" title="DAK Forest Green"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    const PRISM_METAL = ['#fff0c4','#ffc2e8','#c9a8ff','#8ed8ff','#a8f0c8','#ffe07a','#b06fd8'];
+    const PAL = {
+      midnight: '#130d24',
+      slate: '#64748b',
+      ink: '#241a3a',
+      sky: '#2f6bb0',
+      teal: '#14727f',
+      crimson: '#a8323f',
+      forest: '#2f7d3e',
+      redStripe: '#a8323f',
+      white: '#ffffff'
+    };
+
+    function stops(cols){
+      return cols.map((c,i) => `<stop offset="${(i/(cols.length-1)).toFixed(4)}" stop-color="${c}"/>`).join('');
+    }
+
+    // Helper to generate precise 5-point star polygon points
+    function starPoints(cx, cy, R = 22, r = 9.5) {
+      const pts = [];
+      for (let i = 0; i < 10; i++) {
+        const angle = -Math.PI / 2 + (i * Math.PI / 5);
+        const rad = (i % 2 === 0) ? R : r;
+        const x = (cx + rad * Math.cos(angle)).toFixed(1);
+        const y = (cy + rad * Math.sin(angle)).toFixed(1);
+        pts.push(`${x},${y}`);
+      }
+      return pts.join(' ');
+    }
+
+    let uid = 0;
+
+    function renderFinalGrandSlam() {
+      const id = 'ref_' + (++uid);
+      const k = 0.245;
+      const tx = 75 - 256 * k;
+      const ty = 75 - 256 * k;
+      const t = `translate(${tx.toFixed(2)},${ty.toFixed(2)}) scale(${k.toFixed(5)})`;
+      const rim = 9.2 / k;
+
+      // Octagon geometry
+      const octPath = `M140 24 H372 L488 140 V372 L372 488 H140 L24 372 V140 Z`;
+
+      // 4 Star Coordinates - top stars inset, bottom stars moved outward into the open quadrant fields
+      const starTL = starPoints(125, 125, 21, 9);
+      const starTR = starPoints(387, 125, 21, 9);
+      const starBL = starPoints(90, 305, 21, 9);
+      const starBR = starPoints(422, 305, 21, 9);
+
+      return `
+      <svg width="220" height="220" viewBox="-4 -4 158 158" style="overflow:visible">
+        <defs>
+          <linearGradient id="g-p-${id}" x1=".15" y1="0" x2=".85" y2="1">${stops(PRISM_METAL)}</linearGradient>
+          <linearGradient id="g-gl-${id}" x1="0" y1="0" x2=".3" y2="1">
+            <stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/>
+          </linearGradient>
+          <linearGradient id="g-sh-${id}" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".5" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/>
+          </linearGradient>
+          <!-- Strict inner well clip to guarantee speed lines and fills terminate cleanly at the border -->
+          <clipPath id="c-well-${id}"><path d="${octPath}" transform="${t}"/></clipPath>
+          <filter id="f-${id}" x="-25%" y="-25%" width="150%" height="160%">
+            <feDropShadow dx="0" dy="3.5" stdDeviation="3.2" flood-color="#000" flood-opacity=".65"/>
+          </filter>
+        </defs>
+        <g filter="url(#f-${id})">
+          
+          <!-- Layer 1: The 4 Quadrant Backgrounds & 4 Corner Speed Lines (Clipped strictly inside the Octagon) -->
+          <g clip-path="url(#c-well-${id})">
+            <g transform="${t}">
+              <!-- 4 Solid Cloisonné Park Quadrants -->
+              <!-- 🏰 Top-Left: Magic Kingdom Sky Blue -->
+              <path d="M140 24 H256 V256 H24 V140 Z" fill="${PAL.sky}"/>
+              <!-- 🌐 Top-Right: EPCOT Teal -->
+              <path d="M256 24 H372 L488 140 V256 H256 Z" fill="${PAL.teal}"/>
+              <!-- 🎬 Bottom-Left: Hollywood Studios Crimson -->
+              <path d="M24 256 H256 V488 H140 L24 372 Z" fill="${PAL.crimson}"/>
+              <!-- 🌳 Bottom-Right: Animal Kingdom Forest Green -->
+              <path d="M256 256 H488 V372 L372 488 H256 Z" fill="${PAL.forest}"/>
+
+              <!-- Quadrant Dividing Raised PRISM Rainbow Ribs -->
+              <line x1="256" y1="24" x2="256" y2="488" stroke="url(#g-p-${id})" stroke-width="8"/>
+              <line x1="24" y1="256" x2="488" y2="256" stroke="url(#g-p-${id})" stroke-width="8"/>
+
+              <!-- 4 Corner Speed Lines (Extend continuously to outer border, seated underneath raised rim) -->
+              <path d="M10 115 L180 200 M502 115 L332 200 M10 382 L180 320 M502 382 L332 320" stroke="url(#g-p-${id})" stroke-width="10" stroke-linecap="round"/>
+
+              <!-- Concrete Beamway -->
+              <path d="M60 460 L220 340 H292 L452 460 L380 490 H132 Z" fill="${PAL.slate}" stroke="url(#g-p-${id})" stroke-width="10"/>
+
+              <!-- 3D Monorail Mark VI Cab (Polished Ink Fuselage) -->
+              <path d="M160 330 C150 260 190 140 256 140 C322 140 362 260 352 330 L320 350 H192 Z"
+                    fill="${PAL.ink}" stroke="url(#g-p-${id})" stroke-width="${rim.toFixed(1)}" stroke-linejoin="round"/>
+
+              <!-- Sky Blue Windshield -->
+              <path d="M180 220 C180 180 210 160 256 160 C302 160 332 180 332 220 L320 250 H192 Z"
+                    fill="${PAL.sky}" stroke="url(#g-p-${id})" stroke-width="8"/>
+
+              <!-- Crimson Racing Stripe -->
+              <path d="M166 268 H346 V298 H166 Z" fill="${PAL.redStripe}" stroke="url(#g-p-${id})" stroke-width="8"/>
+
+              <!-- Dual Headlights -->
+              <circle cx="204" cy="320" r="14" fill="#ffffff" stroke="url(#g-p-${id})" stroke-width="6"/>
+              <circle cx="308" cy="320" r="14" fill="#ffffff" stroke="url(#g-p-${id})" stroke-width="6"/>
+
+              <!-- 4 Filled Milestone Stars (Pure Porcelain White with PRISM Metal Rim) -->
+              <polygon points="${starTL}" fill="${PAL.white}" stroke="url(#g-p-${id})" stroke-width="4.5" stroke-linejoin="round"/>
+              <polygon points="${starTR}" fill="${PAL.white}" stroke="url(#g-p-${id})" stroke-width="4.5" stroke-linejoin="round"/>
+              <polygon points="${starBL}" fill="${PAL.white}" stroke="url(#g-p-${id})" stroke-width="4.5" stroke-linejoin="round"/>
+              <polygon points="${starBR}" fill="${PAL.white}" stroke="url(#g-p-${id})" stroke-width="4.5" stroke-linejoin="round"/>
+            </g>
+
+            <!-- Prismatic Shimmer Highlight -->
+            <ellipse cx="54" cy="46" rx="55" ry="32" transform="rotate(-26 54 46)" fill="url(#g-gl-${id})"/>
+            <rect class="shmr" x="-150" y="0" width="90" height="150" fill="url(#g-sh-${id})"/>
+          </g>
+
+          <!-- Layer 2: Outer Raised PRISM Metal Octagon Rim (Rendered crisp on top with ZERO bleed) -->
+          <g transform="${t}">
+            <path d="${octPath}" fill="none" stroke="url(#g-p-${id})" stroke-width="${rim.toFixed(1)}" stroke-linejoin="round"/>
+          </g>
+
+        </g>
+      </svg>`;
+    }
+
+    document.getElementById('pin-refined').innerHTML = renderFinalGrandSlam();
+  </script>
+</body>
+</html>

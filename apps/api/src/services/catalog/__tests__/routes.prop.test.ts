@@ -43,6 +43,10 @@ import {
   AREA_TYPES,
   EXPERIENCE_CATEGORIES,
   PARKS,
+  filterAndRankExperiences,
+  scoreExperienceSearch,
+  normalizeSearchText,
+  tokenizeSearchQuery,
   type AreaType,
   type ExperienceCategory,
   type ExperienceDTO,
@@ -99,32 +103,38 @@ function toEffectiveFilters(sel: FilterSelection): CatalogListFilters {
 
 /**
  * Faithful reimplementation of the repo's active-list filter semantics.
- * `listActiveExperiences` returns active rows matching every supplied
- * filter; the `q` match is a case-insensitive substring over `name`.
+ * Note on Oracle Boundaries: This test verifies route decoding, HTTP parameter
+ * normalization, filter conjunction, and endpoint serialization. Detailed semantic
+ * search correctness is verified by `packages/shared/src/__tests__/experienceSearch.prop.test.ts`
+ * and `experienceSearch.test.ts`.
  */
-function matches(exp: ExperienceDTO, filters: CatalogListFilters): boolean {
-  if (!exp.active) return false;
-  if (filters.park !== undefined && exp.park !== filters.park) return false;
-  if (filters.category !== undefined && exp.category !== filters.category) {
-    return false;
+function filterDataset(
+  dataset: readonly ExperienceDTO[],
+  filters: CatalogListFilters,
+): readonly ExperienceDTO[] {
+  const filtered = dataset.filter((exp) => {
+    if (!exp.active) return false;
+    if (filters.park !== undefined && exp.park !== filters.park) return false;
+    if (filters.category !== undefined && exp.category !== filters.category) {
+      return false;
+    }
+    if (
+      filters.categories !== undefined &&
+      filters.categories.length > 0 &&
+      !filters.categories.includes(exp.category)
+    ) {
+      return false;
+    }
+    if (filters.areaType !== undefined && exp.areaType !== filters.areaType) {
+      return false;
+    }
+    return true;
+  });
+
+  if (filters.q !== undefined && filters.q.trim().length > 0) {
+    return filterAndRankExperiences(filtered, filters.q);
   }
-  if (
-    filters.categories !== undefined &&
-    filters.categories.length > 0 &&
-    !filters.categories.includes(exp.category)
-  ) {
-    return false;
-  }
-  if (filters.areaType !== undefined && exp.areaType !== filters.areaType) {
-    return false;
-  }
-  if (
-    filters.q !== undefined &&
-    !exp.name.toLowerCase().includes(filters.q.toLowerCase())
-  ) {
-    return false;
-  }
-  return true;
+  return filtered;
 }
 
 // ---------------------------------------------------------------------------
@@ -159,8 +169,9 @@ async function buildApp(
       decideRead: async () => ({ staleCache: false, cacheAgeHours: null }),
       // Faithful repo fake: apply the documented filter semantics over the
       // generated set so the route's parse/forward path is what is exercised.
-      listActiveExperiences: async (filters) =>
-        dataset.filter((exp) => matches(exp, filters)),
+      listActiveExperiences: async (filters) => [
+        ...filterDataset(dataset, filters),
+      ],
       getExperience: async () => null,
     }),
   );
@@ -219,12 +230,11 @@ const filterSelectionArb: fc.Arbitrary<FilterSelection> = fc.record(
 );
 
 // ---------------------------------------------------------------------------
-// Property
+// Property test
 // ---------------------------------------------------------------------------
 
-// Feature: catalog-navigation-redesign, Property 17: Multi-category conjunctive filter
-describe('GET /catalog filtering — Property 17: Multi-category conjunctive filter', () => {
-  it('for any set of active Experiences and any non-empty set of Experience_Categories combined with any subset of filters, returned list matches all filters (R13.2, R13.3, R13.7, R13.8, R13.9)', async () => {
+describe('Property 23: Catalog route filtering soundness and completeness', () => {
+  it('returns exactly the active experiences matching every effective filter', async () => {
     await fc.assert(
       fc.asyncProperty(
         datasetArb,
@@ -242,18 +252,37 @@ describe('GET /catalog filtering — Property 17: Multi-category conjunctive fil
 
             const effective = toEffectiveFilters(selection);
 
-            // Soundness: every returned item matches every effective filter.
+            // Soundness: every returned item matches structural filters and search
             for (const exp of returned) {
-              expect(matches(exp, effective)).toBe(true);
+              expect(exp.active).toBe(true);
+              if (effective.park !== undefined) {
+                expect(exp.park).toBe(effective.park);
+              }
+              if (effective.category !== undefined) {
+                expect(exp.category).toBe(effective.category);
+              }
+              if (
+                effective.categories !== undefined &&
+                effective.categories.length > 0
+              ) {
+                expect(effective.categories).toContain(exp.category);
+              }
+              if (effective.areaType !== undefined) {
+                expect(exp.areaType).toBe(effective.areaType);
+              }
+              if (effective.q !== undefined) {
+                const score = scoreExperienceSearch(
+                  exp,
+                  normalizeSearchText(effective.q),
+                  tokenizeSearchQuery(effective.q),
+                ).score;
+                expect(score).toBeGreaterThan(0);
+              }
             }
 
             // Completeness cross-check: returned equals expected
-            const expected = dataset.filter((exp) => matches(exp, effective));
-            const sortById = (a: ExperienceDTO, b: ExperienceDTO) =>
-              a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
-            expect([...returned].sort(sortById)).toEqual(
-              [...expected].sort(sortById),
-            );
+            const expected = filterDataset(dataset, effective);
+            expect(returned).toEqual(expected);
           } finally {
             await app.close();
           }

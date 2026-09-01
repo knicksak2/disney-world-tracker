@@ -30,7 +30,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-import type { ResortDTO } from '@dwt/shared';
+import { filterAndRankExperiences, type ResortDTO } from '@dwt/shared';
 
 import { theme } from '../theme/theme';
 
@@ -45,11 +45,6 @@ interface ResortPickerProps {
   readonly disabled?: boolean;
   /** Namespaces the emitted testIDs so multiple hosts stay distinct. */
   readonly testIDPrefix: string;
-}
-
-/** Case-insensitive substring match on the Resort name. */
-function matches(resort: ResortDTO, query: string): boolean {
-  return resort.name.toLowerCase().includes(query);
 }
 
 export function ResortPicker({
@@ -67,11 +62,9 @@ export function ResortPicker({
     [resorts, selectedIds],
   );
 
-  // The list filtered by the trimmed, lower-cased query. An empty query shows
-  // every Resort so the picker still works without typing.
+  // The list filtered and ranked by the search query using the shared normalization pipeline.
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return q.length === 0 ? resorts : resorts.filter((r) => matches(r, q));
+    return filterAndRankExperiences(resorts, query);
   }, [resorts, query]);
 
   return (

@@ -68,6 +68,7 @@ import fc from 'fast-check';
 import {
   EXPERIENCE_CATEGORIES,
   PARKS,
+  filterAndRankExperiences,
   type ExperienceCategory,
   type ExperienceDTO,
   type Park,
@@ -217,58 +218,16 @@ const filterArb: fc.Arbitrary<RouteFilter> = fc
 
 /**
  * Detect which optional WHERE clauses are present in the SQL produced
- * by `repo.listActiveExperiences`. The repo always pushes parameters in
- * a fixed order: `park`, then `category`, then the `ILIKE` pattern.
- * That positional contract is what lets the fake pool map params back
- * to filter values.
+ * by `repo.listActiveExperiences`.
  */
 function parseListSql(text: string): {
   hasPark: boolean;
   hasCategory: boolean;
-  hasLike: boolean;
 } {
   return {
     hasPark: /park = \$\d+/.test(text),
     hasCategory: /category = \$\d+/.test(text),
-    hasLike: /ILIKE \$\d+ ESCAPE '\\'/.test(text),
   };
-}
-
-/**
- * Compile a Postgres `LIKE` pattern with backslash escape into a
- * regular expression that performs the same match. Postgres
- * `ESCAPE '\\'` semantics:
- *
- *   - `\\`, `\%`, `\_` match the literal `\`, `%`, `_`.
- *   - unescaped `%` matches any (including empty) sequence of chars.
- *   - unescaped `_` matches exactly one char.
- *   - everything else matches literally.
- *
- * The repo's pattern is always shaped `%<escaped_q>%`, so the
- * resulting regex is anchored and effectively performs a case-
- * insensitive substring match (case-insensitivity is applied via the
- * `i` flag, mirroring `ILIKE`).
- */
-function compileLikeToRegex(pattern: string): RegExp {
-  let regex = '';
-  for (let i = 0; i < pattern.length; i++) {
-    const ch = pattern[i];
-    if (ch === '\\' && i + 1 < pattern.length) {
-      regex += escapeRegex(pattern[i + 1]!);
-      i += 1;
-    } else if (ch === '%') {
-      regex += '.*';
-    } else if (ch === '_') {
-      regex += '.';
-    } else {
-      regex += escapeRegex(ch!);
-    }
-  }
-  return new RegExp(`^${regex}$`, 'i');
-}
-
-function escapeRegex(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 /** Stable comparator emulating `ORDER BY park ASC, lower(name) ASC, id ASC`. */
@@ -307,26 +266,22 @@ function toSqlRow(r: PopulationRow): Record<string, unknown> {
 }
 
 /**
- * Build a fake `pg.Pool` whose `query` runs the same filter+sort
- * pipeline the repo's SQL would run on Postgres. `connect` is
+ * Build a fake `pg.Pool` whose `query` runs the structural filter+sort
+ * pipeline the repo's SQL runs on Postgres. `connect` is
  * intentionally unimplemented because `listActiveExperiences` does not
- * use a transaction client; if a future code change starts using one,
- * the test will fail loudly here rather than silently passing on
- * stub-default rows.
+ * use a transaction client.
  */
 function makeFakePool(population: readonly PopulationRow[]): DbPool {
   const fake = {
     async query(text: string, params: ReadonlyArray<unknown> = []) {
-      const { hasPark, hasCategory, hasLike } = parseListSql(text);
+      const { hasPark, hasCategory } = parseListSql(text);
 
       // Consume parameters in the order the repo pushes them.
       let idx = 0;
       let parkVal: Park | undefined;
       let categoryVal: ExperienceCategory | undefined;
-      let likePattern: string | undefined;
       if (hasPark) parkVal = params[idx++] as Park;
       if (hasCategory) categoryVal = params[idx++] as ExperienceCategory;
-      if (hasLike) likePattern = params[idx++] as string;
 
       let rows: PopulationRow[] = population.filter((r) => r.active);
       if (parkVal !== undefined) {
@@ -334,10 +289,6 @@ function makeFakePool(population: readonly PopulationRow[]): DbPool {
       }
       if (categoryVal !== undefined) {
         rows = rows.filter((r) => r.category === categoryVal);
-      }
-      if (likePattern !== undefined) {
-        const re = compileLikeToRegex(likePattern);
-        rows = rows.filter((r) => re.test(r.name));
       }
       rows = [...rows].sort(compareRows);
 
@@ -358,49 +309,50 @@ function makeFakePool(population: readonly PopulationRow[]): DbPool {
 
 /**
  * Compute the expected `experiences` array for a (population, filter)
- * pair using the requirement text directly:
+ * pair:
  *
  *   - keep only `active === true` rows (R1.17, R1.18, R1.19, R1.20);
  *   - if `parkId` is set, keep rows with matching `park` (R1.19);
  *   - if `category` is set, keep rows with matching `category` (R1.18);
+ *   - sort by Park ASC, then `lower(name)` ASC, then `id` ASC (R1.17);
  *   - if `q` has at least one non-whitespace character (after trim),
- *     keep rows whose `name.toLowerCase()` includes
- *     `q.trim().toLowerCase()` (R1.20, R1.21);
- *   - sort by Park ASC, then `lower(name)` ASC, then `id` ASC (R1.17).
+ *     rank results using the shared search normalization pipeline (R1.25-R1.28).
+ *
+ * Note on Oracle Boundaries: This test verifies route decoding, HTTP parameter
+ * normalization, filter conjunction, and endpoint serialization. Detailed semantic
+ * search correctness (normalization, prefix matching, diacritics, ranking tiers)
+ * is verified by `packages/shared/src/__tests__/experienceSearch.prop.test.ts`
+ * and `experienceSearch.test.ts`.
  */
 function computeOracle(
   population: readonly PopulationRow[],
   filter: RouteFilter,
 ): ExperienceDTO[] {
-  const trimmedQ =
-    filter.q !== undefined && filter.q.trim().length > 0
-      ? filter.q.trim()
-      : null;
-  const qLower = trimmedQ === null ? null : trimmedQ.toLowerCase();
-
   const matched = population.filter((r) => {
     if (!r.active) return false;
     if (filter.parkId !== undefined && r.park !== filter.parkId) return false;
     if (filter.category !== undefined && r.category !== filter.category)
       return false;
-    if (qLower !== null && !r.name.toLowerCase().includes(qLower)) return false;
     return true;
   });
 
   const sorted = [...matched].sort(compareRows);
-  return sorted.map((r) => ({
+  const dtos: ExperienceDTO[] = sorted.map((r) => ({
     id: r.id,
     name: r.name,
     park: r.park,
     category: r.category,
     description: r.description,
     active: r.active,
-    // Mirror `repo.rowToDto`: `imageUrl` and `areaType` are always present;
-    // the remaining enrichment fields are absent when not persisted (the
-    // defaults set by `toSqlRow`), so they are omitted here.
     imageUrl: null,
     areaType: 'ThemePark',
   }));
+
+  if (filter.q !== undefined && filter.q.trim().length > 0) {
+    return [...filterAndRankExperiences(dtos, filter.q)];
+  }
+
+  return dtos;
 }
 
 // ---------------------------------------------------------------------------
@@ -567,11 +519,16 @@ describe('catalog presentation — Property 6: filter, group, and sort', () => {
     );
   });
 
-  it('list is non-decreasing under (park, lower(name), id) ordering', async () => {
+  it('list is non-decreasing under (park, lower(name), id) ordering when q is absent', async () => {
     await fc.assert(
       fc.asyncProperty(
         populationArb,
-        filterArb,
+        filterArb.map((f) => {
+          const out: { -readonly [K in keyof RouteFilter]: RouteFilter[K] } = {};
+          if (f.parkId !== undefined) out.parkId = f.parkId;
+          if (f.category !== undefined) out.category = f.category;
+          return out;
+        }),
         async (population, filter) => {
           const app = await buildApp(population);
           try {

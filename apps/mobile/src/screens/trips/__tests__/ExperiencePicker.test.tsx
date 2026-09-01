@@ -18,8 +18,11 @@ const mockExperiences: ExperienceDTO[] = [
     park: 'Magic Kingdom',
     land: 'Tomorrowland',
     subType: 'Roller Coaster',
-    entityType: 'Attraction',
-  } as unknown as ExperienceDTO,
+    description: '',
+    active: true,
+    imageUrl: null,
+    areaType: 'ThemePark',
+  },
   {
     id: 'exp-dining-1',
     name: 'Be Our Guest',
@@ -27,8 +30,11 @@ const mockExperiences: ExperienceDTO[] = [
     park: 'Magic Kingdom',
     land: 'Fantasyland',
     subType: 'Table Service',
-    entityType: 'Restaurant',
-  } as unknown as ExperienceDTO,
+    description: '',
+    active: true,
+    imageUrl: null,
+    areaType: 'ThemePark',
+  },
   {
     id: 'exp-show-1',
     name: 'Festival of the Lion King',
@@ -36,8 +42,11 @@ const mockExperiences: ExperienceDTO[] = [
     park: 'Animal Kingdom',
     land: 'Africa',
     subType: 'Stage Show',
-    entityType: 'Entertainment',
-  } as unknown as ExperienceDTO,
+    description: '',
+    active: true,
+    imageUrl: null,
+    areaType: 'ThemePark',
+  },
   {
     id: 'exp-show-2',
     name: 'Festival of Fantasy Parade',
@@ -45,8 +54,11 @@ const mockExperiences: ExperienceDTO[] = [
     park: 'Magic Kingdom',
     land: 'Main Street, U.S.A.',
     subType: 'Parade',
-    entityType: 'Entertainment',
-  } as unknown as ExperienceDTO,
+    description: '',
+    active: true,
+    imageUrl: null,
+    areaType: 'ThemePark',
+  },
 ];
 
 function renderPicker(props: Partial<React.ComponentProps<typeof ExperiencePicker>> = {}) {
@@ -122,8 +134,11 @@ describe('ExperiencePicker Component', () => {
         park: 'Animal Kingdom',
         land: 'Africa',
         subType: 'Stage Show',
-        entityType: 'Entertainment',
-      } as unknown as ExperienceDTO,
+        description: '',
+        active: true,
+        imageUrl: null,
+        areaType: 'ThemePark',
+      },
       {
         id: 'exp-show-2',
         name: 'Festival of Fantasy Parade',
@@ -131,8 +146,11 @@ describe('ExperiencePicker Component', () => {
         park: 'Magic Kingdom',
         land: 'Main Street, U.S.A.',
         subType: 'Parade',
-        entityType: 'Entertainment',
-      } as unknown as ExperienceDTO,
+        description: '',
+        active: true,
+        imageUrl: null,
+        areaType: 'ThemePark',
+      },
       {
         id: 'exp-show-3',
         name: 'Meet Mickey at Town Square',
@@ -140,8 +158,11 @@ describe('ExperiencePicker Component', () => {
         park: 'Magic Kingdom',
         land: 'Main Street, U.S.A.',
         subType: 'Character Meet',
-        entityType: 'Entertainment',
-      } as unknown as ExperienceDTO,
+        description: '',
+        active: true,
+        imageUrl: null,
+        areaType: 'ThemePark',
+      },
       {
         id: 'exp-show-4',
         name: 'Disney After Hours Event',
@@ -149,8 +170,11 @@ describe('ExperiencePicker Component', () => {
         park: 'Magic Kingdom',
         land: 'Fantasyland',
         subType: 'Special Event',
-        entityType: 'Entertainment',
-      } as unknown as ExperienceDTO,
+        description: '',
+        active: true,
+        imageUrl: null,
+        areaType: 'ThemePark',
+      },
     ];
 
     (apiRequest as jest.Mock).mockResolvedValue({ experiences: multiCategoryShows });
@@ -193,7 +217,10 @@ describe('ExperiencePicker Component', () => {
               park: 'Magic Kingdom',
               land: 'Tomorrowland',
               subType: 'Roller Coaster',
-              entityType: 'Attraction',
+              description: '',
+              active: true,
+              imageUrl: null,
+              areaType: 'ThemePark',
             },
           ],
         };
@@ -208,7 +235,10 @@ describe('ExperiencePicker Component', () => {
               park: 'EPCOT',
               land: 'World Celebration',
               subType: 'Dark Ride',
-              entityType: 'Attraction',
+              description: '',
+              active: true,
+              imageUrl: null,
+              areaType: 'ThemePark',
             },
           ],
         };
@@ -253,7 +283,10 @@ describe('ExperiencePicker Component', () => {
               park: 'Magic Kingdom',
               land: 'Fantasyland',
               subType: 'Table Service',
-              entityType: 'Restaurant',
+              description: '',
+              active: true,
+              imageUrl: null,
+              areaType: 'ThemePark',
             },
           ],
         };
@@ -268,7 +301,10 @@ describe('ExperiencePicker Component', () => {
               park: 'Magic Kingdom',
               land: 'Fantasyland',
               priceTier: '$$$',
-              entityType: 'Restaurant',
+              description: '',
+              active: true,
+              imageUrl: null,
+              areaType: 'ThemePark',
               groupedFacets: {
                 diningInterests: [{ id: 'table-service-rec', name: 'Table Service' }],
                 cuisine: [{ id: 'french-cuisine', name: 'French' }],
@@ -282,7 +318,10 @@ describe('ExperiencePicker Component', () => {
               park: 'Magic Kingdom',
               land: 'Fantasyland',
               priceTier: '$$$$',
-              entityType: 'Restaurant',
+              description: '',
+              active: true,
+              imageUrl: null,
+              areaType: 'ThemePark',
               groupedFacets: {
                 diningInterests: [{ id: 'table-service-rec', name: 'Table Service' }, { id: 'character-dining-rec', name: 'Character Dining' }],
                 cuisine: [{ id: 'american-cuisine', name: 'American' }],
@@ -296,7 +335,10 @@ describe('ExperiencePicker Component', () => {
               park: 'Magic Kingdom',
               land: 'Frontierland',
               priceTier: '$',
-              entityType: 'Restaurant',
+              description: '',
+              active: true,
+              imageUrl: null,
+              areaType: 'ThemePark',
               groupedFacets: {
                 diningInterests: [{ id: 'quick-service-rec', name: 'Quick Service' }],
                 cuisine: [{ id: 'mexican-cuisine', name: 'Mexican' }],
@@ -445,8 +487,11 @@ describe('ExperiencePicker Component', () => {
       category: 'Resort',
       park: null,
       land: null,
-      entityType: 'Resort',
-    } as unknown as ExperienceDTO;
+      description: '',
+      active: true,
+      imageUrl: null,
+      areaType: 'Resort',
+    };
 
     (apiRequest as jest.Mock).mockResolvedValue({
       experiences: [mockResort],
@@ -521,6 +566,38 @@ describe('ExperiencePicker Component', () => {
     await waitFor(() => {
       const resultsScroll = screen.getByTestId('picker-results');
       expect(resultsScroll.props.style).toEqual(expect.objectContaining({ flex: 1 }));
+    });
+  });
+
+  it('forwards search text to GET /catalog without client-side name filtering (R4.16)', async () => {
+    const towerOfTerror: ExperienceDTO = {
+      id: 'exp-tower',
+      name: 'The Twilight Zone Tower of Terror™',
+      category: 'Ride',
+      park: 'Hollywood Studios',
+      land: 'Sunset Boulevard',
+      description: 'Haunted elevator drop',
+      active: true,
+      imageUrl: null,
+      areaType: 'ThemePark',
+      subType: 'Drop Ride',
+    };
+
+    (apiRequest as jest.Mock).mockResolvedValue({ experiences: [towerOfTerror] });
+
+    renderPicker();
+
+    // Type query with "and" connector
+    fireEvent.changeText(screen.getByTestId('picker-search'), 'Mickey and Minnie');
+
+    await waitFor(() => {
+      // Assert endpoint was queried with encoded q
+      expect(apiRequest).toHaveBeenCalledWith(
+        'GET',
+        expect.stringMatching(/\/catalog\?q=Mickey(\+|%20)and(\+|%20)Minnie/),
+      );
+      // Assert the returned experience (even with non-matching name string) is displayed in the picker results
+      expect(screen.getByText('The Twilight Zone Tower of Terror™')).toBeTruthy();
     });
   });
 });

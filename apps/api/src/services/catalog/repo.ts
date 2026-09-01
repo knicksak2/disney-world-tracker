@@ -57,7 +57,7 @@
  */
 
 import type { QueryResultRow } from 'pg';
-import { PARKS } from '@dwt/shared';
+import { PARKS, filterAndRankExperiences } from '@dwt/shared';
 import type {
   AreaType,
   ExperienceCategory,
@@ -921,12 +921,13 @@ async function recordSyncRun(
  *
  * Filter handling:
  *
- *   - `park` and `category` translate directly to equality predicates.
- *   - `q` is matched with `name ILIKE '%' || $n || '%'`. We escape the
- *     SQL-LIKE metacharacters `%`, `_`, and `\` in the user-supplied
- *     value so `q = "100%"` does not become a wildcard match.
- *   - A `q` value that is empty or whitespace-only is treated as "no
- *     filter" — see {@link CatalogListFilters} for the rationale.
+ *   - Structural filters (`park`, `category`, `categories`, `areaType`, `land`,
+ *     `worldShowcaseCountry`) run as SQL WHERE predicates.
+ *   - When `q` is provided and non-empty, search matching and flat-tier relevance
+ *     ranking (exact > startsWith > phrase/substring > prefix tokens > metadata
+ *     fallback) are applied in memory via `filterAndRankExperiences`
+ *     (Property 30, R1.20, R1.25-R1.28).
+ *   - A `q` value that is empty or whitespace-only is treated as "no filter".
  */
 async function listActiveExperiences(
   pool: DbPool,
@@ -957,7 +958,7 @@ async function listActiveExperiences(
 
   if (filters.land !== undefined) {
     // Case-sensitive exact match (R3.4): SQL `=` on TEXT is case-sensitive by
-    // default, so this is a literal equality, contrasting the `q` ILIKE below.
+    // default, so this is a literal equality.
     params.push(filters.land);
     where.push(`land = $${params.length}`);
   }
@@ -967,20 +968,6 @@ async function listActiveExperiences(
     // `land` filter and combining conjunctively with every other filter.
     params.push(filters.worldShowcaseCountry);
     where.push(`world_showcase_country = $${params.length}`);
-  }
-
-  const trimmedQuery =
-    filters.q !== undefined && filters.q.trim().length > 0
-      ? filters.q.trim()
-      : null;
-
-  if (trimmedQuery !== null) {
-    params.push(`%${escapeLikePattern(trimmedQuery)}%`);
-    // ESCAPE '\\' makes the escapes inserted by escapeLikePattern effective
-    // even though Postgres's default for LIKE is already '\'; spelling it
-    // out keeps the behavior portable across `standard_conforming_strings`
-    // settings.
-    where.push(`name ILIKE $${params.length} ESCAPE '\\'`);
   }
 
   const sql = `
@@ -993,7 +980,13 @@ async function listActiveExperiences(
      ORDER BY park ASC, lower(name) ASC, id ASC`;
 
   const result = await pool.query<ExperienceRow>(sql, params);
-  return result.rows.map(rowToDto);
+  const dtos = result.rows.map(rowToDto);
+
+  if (filters.q !== undefined && filters.q.trim().length > 0) {
+    return filterAndRankExperiences(dtos, filters.q);
+  }
+
+  return dtos;
 }
 
 // ---------------------------------------------------------------------------
@@ -1283,16 +1276,4 @@ function rowToResortDto(row: ResortRow): ResortDTO {
   };
 }
 
-/**
- * Escape SQL-LIKE metacharacters so a user-supplied substring search
- * matches the literal characters rather than acting as a wildcard.
- *
- * Order matters: the backslash must be escaped first so subsequent
- * replacements do not double-escape it.
- */
-function escapeLikePattern(input: string): string {
-  return input
-    .replace(/\\/g, '\\\\')
-    .replace(/%/g, '\\%')
-    .replace(/_/g, '\\_');
-}
+

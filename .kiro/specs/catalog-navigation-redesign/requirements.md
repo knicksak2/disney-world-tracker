@@ -110,6 +110,8 @@ This feature builds directly on the completed `disney-facilities-catalog-source`
 5. WHEN the search query is cleared to contain no non-whitespace characters, THE Catalog_Home SHALL restore the Destination grid in place of the result list.
 6. WHERE an active search query matches no Experiences, THE Catalog_Home SHALL display an empty-results state indicating that no Experiences matched the query while retaining the active search query in the search control.
 7. IF a search request fails to return matching Experiences, THEN THE Catalog_Home SHALL display a search-error state indicating that the search could not be completed while retaining the active search query in the search control.
+8. THE Catalog_Home SHALL display matching Experiences ordered by flat relevance tier score descending according to the shared search normalization pipeline.
+9. THE Destination_Screen SHALL filter and rank loaded Destination experiences in flat relevance tier score descending order using the shared search normalization pipeline.
 
 ### Requirement 6: Theme Park and Water Park Destination Screen
 

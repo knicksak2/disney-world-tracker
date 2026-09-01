@@ -32,6 +32,10 @@ When implementing a spec:
 
 Some specs also include a `mockup.html` — a visual reference for the intended UI, not a literal implementation target.
 
+## If the task involves creating or changing a pin, gamification, badges, or achievements
+
+When creating or changing any collectible pin, badge, motif artwork, or challenge definition, read **[`docs/pin-art-direction.md`](docs/pin-art-direction.md)** and **[`.kiro/steering/pin-collection.md`](.kiro/steering/pin-collection.md)** in full before designing or editing assets or definitions.
+
 ## Scope of a change
 
 Implement what the current spec/task defines. Do not expand scope, refactor unrelated code, or add features beyond the task without being asked.

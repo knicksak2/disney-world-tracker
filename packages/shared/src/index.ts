@@ -332,3 +332,18 @@ export type { AttentionView } from './attention.js';
 // previously loaded successful items; still-failed sources remain failed)
 // (R8.5, R8.6).
 export { mergeOutcomes, recomputeAfterRetry } from './attention.js';
+
+// Experience search pure normalizer, union matching, and flat-tier relevance ranking.
+export {
+  MAX_METADATA_FALLBACK_ROWS,
+  normalizeSearchText,
+  tokenizeSearchQuery,
+  scoreExperienceSearch,
+  filterAndRankExperiences,
+} from './search/index.js';
+export type {
+  SearchableExperience,
+  SearchMatchTier,
+  SearchScoredResult,
+} from './search/index.js';
+

@@ -198,6 +198,14 @@ sub-tasks are marked optional with `*`.
     - **Property 17: Multi-category conjunctive filter** — for any set of active Experiences and any non-empty set of Experience_Categories combined with any subset of the `parkId`, `category`, `areaType`, `land`, and `q` parameters, the returned list is exactly the active Experiences whose category is a member of the supplied set and that satisfy every other supplied parameter, each appearing exactly once, in the established `park ASC, lower(name) ASC` order. **Validates: Requirements 13.2, 13.3, 13.7, 13.8, 13.9**
     - _Requirements: 13.2, 13.3, 13.7, 13.8, 13.9_
 
+- [x] 18. Catalog search relevance ordering and in-destination search
+  - [x] 18.1 Wire shared search pipeline into DestinationScreen
+    - Update `DestinationSearchResults` to use `filterAndRankExperiences(experiences, query)`
+    - _Requirements: 5.9_
+  - [x] 18.2 Write component tests for in-destination search and accessibility announcement
+    - Create `apps/mobile/src/screens/catalog/__tests__/DestinationScreen.render.test.tsx` asserting in-destination search matches by relevance order and fires count announcement
+    - _Requirements: 5.9, 12.8_
+
 ## Notes
 
 - Tasks marked with `*` are optional test sub-tasks and can be skipped for a faster MVP.

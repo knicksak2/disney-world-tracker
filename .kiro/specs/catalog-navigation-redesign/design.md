@@ -539,3 +539,9 @@ Notes:
   exactly like the other `experiences` enrichment columns.
 
 ## Correctness Properties
+
+### Property 1: Catalog Search Relevance Ordering and Normalization Consistency
+
+*For any* loaded set of Destination Experiences and search query $q$, the in-destination search result set equals the experiences matching $q$ under the shared search normalization pipeline, ordered strictly by relevance tier score descending, tie-breaking by `lower(name)` ascending then `id` ascending.
+
+**Validates: Requirements 5.2, 5.8, 5.9**

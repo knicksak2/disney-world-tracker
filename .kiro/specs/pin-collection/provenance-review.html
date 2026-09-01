@@ -1,0 +1,149 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"/>
+<title>Pin motifs still unresolved</title><style>
+body{margin:0;background:#0b0712;color:#eee7f5;font:15px/1.55 system-ui,sans-serif;padding:28px}
+h1{font-size:24px;margin:0 0 6px}h2{font-size:18px;margin:32px 0 6px}
+.sub{color:#b6a8cd;max-width:80ch}
+.ask{background:#1d1430;border-left:3px solid #a179e0;padding:11px 15px;margin:12px 0 20px;max-width:84ch;border-radius:0 6px 6px 0}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:16px}
+.card{background:#150e24;border:1px solid #2f2247;border-radius:10px;padding:14px}
+.key{font-weight:700;font-size:16px;color:#ffd86b;margin-bottom:8px;font-family:ui-monospace,monospace}
+.renders{display:flex;gap:10px}.r{text-align:center}
+.lbl{font-size:10px;color:#8d7ea8;margin-bottom:3px;font-family:ui-monospace,monospace;max-width:124px;word-break:break-all}
+.dark{background:#241a3a;border-radius:8px}
+.score{margin:9px 0 5px;padding:6px 10px;border-radius:6px;font-size:12.5px;font-weight:600;line-height:1.4}
+.score.hi{background:#14532d;color:#a7f3c0}.score.mid{background:#4a3410;color:#fcd77f}
+.score.lo{background:#3b1220;color:#f3a9bd}.score.none{background:#241a3a;color:#a294bd}
+.score.known{background:#1e3a5f;color:#a5cdf5}
+.meta{display:flex;flex-wrap:wrap;gap:7px;margin:6px 0}
+.meta span{background:#241a3a;border-radius:20px;padding:2px 9px;font-size:11.5px;color:#c9bce0}
+.pins{font-size:12.5px;color:#c2b5d8;border-top:1px solid #2b2043;padding-top:7px}.pins i{color:#8d7ea8}
+</style></head><body>
+<h1>Pin motifs still unresolved</h1>
+<p class="sub">10 of 88 remaining. Everything with a known origin is credited.</p>
+<div class="ask"><b>How to read the number.</b> Filled-area overlap after normalising both shapes
+into the same box — invariant to scale and position. Above 0.99 <i>on a complex shape</i> means the
+same artwork. On a simple shape it means nothing: any two rounded blocks score 0.94+, which is how
+an earlier pass of mine confidently matched a book to an oven and a suitcase to a garage. Each card
+says which case it is.
+<br><br>This search fixes three bugs that produced false negatives earlier: it searches by subject
+name rather than guessing filenames from our key, it always tries the <b>union</b> of a source
+icon's paths (a two-path coaster could never match one combined motif — that read 0.246 against art
+it matches at 0.998), and it applies no vertex-count prefilter.
+<br><br><b>For the simple ones there is no measurement that can ever settle this.</b> Either you
+recall the source — that has worked 3 times out of 4, and <code>verify/trace.js &lt;key&gt; &lt;terms&gt;</code>
+verifies a guess in seconds — or the honest move is to replace the motif with a game-icons
+equivalent and stop paying for the uncertainty.</div>
+
+<h2>Unresolved Motifs (10 remaining)</h2>
+<div class="grid"><div class="card">
+   <div class="key">autographBook</div>
+   <div class="renders">
+     <div class="r"><div class="lbl">ours</div><div class="dark"><svg viewBox="0 0 124 124" width="124" height="124"><path d="M120 80 H376 C400 80 416 96 416 120 V416 C416 440 400 456 376 456 H120 C96 456 80 440 80 416 V120 C80 96 96 80 120 80 Z M120 80 H152 V456 H120 Z M220 220 L248 280 L310 288 L264 330 L276 392 L220 360 L164 392 L176 330 L130 288 L192 280 Z" transform="translate(-14.39,-18.25) scale(0.29762)" fill="#f4efe4"/></svg></div></div>
+     <div class="r"><div class="lbl">game-icons:bookmarklet#0</div><div class="dark"><svg viewBox="0 0 124 124" width="124" height="124"><path d="M109 23v466l147-73.5L403 489V23H109zm36 36h222v357.5l-111-55.5-111 55.5V59z" transform="translate(10.16,6.00) scale(0.21875)" fill="#8fd6a8"/></svg></div></div>
+   </div>
+   <div class="score mid">closest is 0.743 — related family at best</div>
+   <div class="meta"><span>45 path numbers</span><span>3 cells</span>
+     <span>too simple to fingerprint</span>
+     <span>734 names searched</span></div>
+   <div class="pins"><b>1 pin:</b> Character Autograph Hunter <i>(bronze)</i></div>
+  </div><div class="card">
+   <div class="key">celebrationCheers</div>
+   <div class="renders">
+     <div class="r"><div class="lbl">ours</div><div class="dark"><svg viewBox="0 0 124 124" width="124" height="124"><path d="M192 140 C192 120 208 104 228 104 C248 104 264 120 264 140 V260 H192 Z M128 180 C128 160 144 144 164 144 C184 144 200 160 200 180 V260 H128 Z M256 180 C256 160 272 144 292 144 C312 144 328 160 328 180 V260 H256 Z M320 220 C320 200 336 184 356 184 C376 184 392 200 392 220 V300 C392 380 320 432 240 432 C160 432 108 380 108 300 V260 C108 260 128 260 148 280 Z" transform="translate(-17.38,-15.80) scale(0.31707)" fill="#f4efe4"/></svg></div></div>
+     <div class="r"><div class="lbl">game-icons:clinking-glasses#0</div><div class="dark"><svg viewBox="0 0 124 124" width="124" height="124"><path d="M199.1 19.38L158.4 203.8c-1.3 5.9-1.4 12.1-.3 18.2 3.1 18.3 16 33.3 33.7 39.5l30.8 10.7-38.3 109.8-74.8-26.1-5.9 17 74.8 26.1-23.7 67.9 17 5.9 76.6-219.5c15.8-9.4 25.8-26 27.2-44.4.5-6.1-.2-12.2-2.1-18.1L217.1 25.32 199.1 19.38zm113.8 0l-18 5.94 39.9 180.48c-1.9 5.9-2.6 12-2.1 18.1 1.4 18.4 11.4 35 27.2 44.4l76.6 219.5 17-5.9-23.7-67.9 74.8-26.1-5.9-17-74.8 26.1-38.3-109.8 30.8-10.7c17.7-6.2 30.6-21.2 33.7-39.5 1.1-6.1 1-12.3-.3-18.2L413.2 19.38 312.9 19.38zm-96.1 19.8l1.6.55 35.8 162.27c1.4 4.5 1.9 9.1 1.5 13.8-1.1 13.9-8.7 26.4-20.6 33.5l-28.7-10-33.8-11.8c-13.4-4.7-23.2-16.1-25.5-30-1-4.7-.9-9.3.1-13.8L183.7 41.73l33.1 11.55-1.3-14.1zm179.3 0l-1.3 14.1 33.1-11.55 37.5 170.07c1 4.5 1.1 9.1.1 13.8-2.3 13.9-12.1 25.3-25.5 30l-33.8 11.8-28.7 10c-11.9-7.1-19.5-19.6-20.6-33.5-.4-4.7.1-9.3 1.5-13.8L394.5 39.73l1.6-.55z" transform="translate(6.00,6.00) scale(0.21875)" fill="#8fd6a8"/></svg></div></div>
+   </div>
+   <div class="score mid">closest is 0.707 — related family at best</div>
+   <div class="meta"><span>52 path numbers</span><span>4 cells</span>
+     <span>too simple to fingerprint</span>
+     <span>218 names searched</span></div>
+   <div class="pins"><b>1 pin:</b> Celebration Legend <i>(gold)</i></div>
+  </div><div class="card">
+   <div class="key">deluxeChandelier</div>
+   <div class="renders">
+     <div class="r"><div class="lbl">ours</div><div class="dark"><svg viewBox="0 0 124 124" width="124" height="124"><path d="M244 64 H268 V140 H244 Z M160 140 C160 220 200 280 256 320 C312 280 352 220 352 140 Z M100 240 C100 320 180 380 256 420 C332 380 412 320 412 240 Z M240 420 H272 V464 H240 Z" transform="translate(-16.00,-9.60) scale(0.27861)" fill="#f4efe4"/></svg></div></div>
+     <div class="r"><div class="lbl">game-icons:chandelier#0</div><div class="dark"><svg viewBox="0 0 124 124" width="124" height="124"><path d="M247 15v51.13h-44.5l-6.8-20.44-17.1 5.68 5.7 17.06-88.6 15.65-8.2-16-16.1 8.24 8.2 16.08H31.5v18h20.6l-7.7 77.2h18.1l6.1-61 80.9-14.28V169h-4.3c-18.7 0-33.8 15.2-33.8 33.8 0 8.7 3.3 16.6 8.7 22.6l-50.6 84.3 15.4 9.3 52.8-88.1c2.4.9 4.9 1.6 7.5 1.9l-11.8 141.4-86.4 72 11.6 13.8 84.4-70.3 84.4 70.3 11.6-13.8-86.4-72-11.8-141.4c2.6-.3 5.1-1 7.5-1.9l52.8 88.1 15.4-9.3-50.6-84.3c5.4-6 8.7-13.9 8.7-22.6 0-18.6-15.1-33.8-33.8-33.8h-4.3v-59.54l80.9 14.28 6.1 61h18.1l-7.7-77.2h20.6v-18h-48.2l8.2-16.08-16.1-8.24-8.2 16-88.6-15.65 5.7-17.06-17.1-5.68-6.8 20.44H265V15h-18zm-97.5 187.8c8.8 0 15.8 7 15.8 15.8 0 8.7-7 15.7-15.8 15.7s-15.7-7-15.7-15.7c0-8.8 6.9-15.8 15.7-15.8zm213 0c8.8 0 15.8 7 15.8 15.8 0 8.7-7 15.7-15.8 15.7-8.7 0-15.7-7-15.7-15.7 0-8.8 7-15.8 15.7-15.8z" transform="translate(6.00,6.00) scale(0.21875)" fill="#8fd6a8"/></svg></div></div>
+   </div>
+   <div class="score lo">closest is 0.597 — nothing resembles it</div>
+   <div class="meta"><span>38 path numbers</span><span>4 cells</span>
+     <span>too simple to fingerprint</span>
+     <span>734 names searched</span></div>
+   <div class="pins"><b>1 pin:</b> Deluxe Resort Connoisseur <i>(gold)</i></div>
+  </div><div class="card">
+   <div class="key">grandHotelEstate</div>
+   <div class="renders">
+     <div class="r"><div class="lbl">ours</div><div class="dark"><svg viewBox="0 0 124 124" width="124" height="124"><path d="M64 432 H448 V400 H64 Z M96 400 H144 V260 H96 Z M184 400 H232 V260 H184 Z M280 400 H328 V260 H280 Z M368 400 H416 V260 H368 Z M64 260 H448 L384 190 H128 Z M200 190 H312 L256 100 Z M220 310 H292 V400 H220 Z" transform="translate(-13.06,-17.07) scale(0.29762)" fill="#f4efe4"/></svg></div></div>
+     <div class="r"><div class="lbl">game-icons:village#0</div><div class="dark"><svg viewBox="0 0 124 124" width="124" height="124"><path d="M256 31.81L163.6 124.2v29.5l26-26v99.6h-59.3l-26.6-26.6V164l-26 26v41.6l-50.6 50.6V443h78.3v-99.6h59.3V443H419V292.1l-60.6-60.6v-29.5l-26 26V327h-59.3V127.3l26 26V124.2L256 31.81zM238.9 141.5v42.7H207v-42.7h31.9zm-136.6 99.6v42.7H70.4v-42.7h31.9zm273.2 28.4v42.7h-31.9v-42.7h31.9zm-136.6 14.3v42.6H207v-42.6h31.9z" transform="translate(6.00,6.00) scale(0.21875)" fill="#8fd6a8"/></svg></div></div>
+   </div>
+   <div class="score mid">closest is 0.729 — related family at best</div>
+   <div class="meta"><span>67 path numbers</span><span>8 cells</span>
+     <span>too simple to fingerprint</span>
+     <span>734 names searched</span></div>
+   <div class="pins"><b>1 pin:</b> Grand Floridian Explorer <i>(gold)</i></div>
+  </div><div class="card">
+   <div class="key">imagineerGears</div>
+   <div class="renders">
+     <div class="r"><div class="lbl">ours</div><div class="dark"><svg viewBox="0 0 124 124" width="124" height="124"><path d="M232 64 H280 L288 112 C304 118 318 126 332 136 L376 116 L404 154 L376 192 C382 208 386 224 386 242 L434 256 L422 302 L376 308 C370 324 360 338 348 350 L364 394 L324 418 L288 386 C272 390 256 392 240 390 L216 434 L170 422 L172 374 C158 366 144 356 134 344 L88 360 L64 320 L96 284 C92 268 90 252 92 236 L48 212 L60 166 L106 172 C116 158 128 146 142 136 L128 92 L168 68 L202 98 C218 94 234 94 250 96 Z M216 216 C216 194 234 176 256 176 C278 176 296 194 296 216 C296 238 278 256 256 256 C234 256 216 238 216 216 Z" transform="translate(-10.82,-14.94) scale(0.29070)" fill="#f4efe4"/></svg></div></div>
+     <div class="r"><div class="lbl">game-icons:cog#0</div><div class="dark"><svg viewBox="0 0 124 124" width="124" height="124"><path d="M228.6 19.12l-7.3 54.44c-14.7 4.15-28.5 10.37-41 18.27l-41.5-35.79-37.3 37.36 35.8 41.5c-7.9 12.5-14.1 26.3-18.3 41l-54.41 7.3v52.8l54.41 7.3c4.2 14.7 10.4 28.5 18.3 41l-35.8 41.5 37.3 37.4 41.5-35.8c12.5 7.9 26.3 14.1 41 18.3l7.3 54.4h52.8l7.3-54.4c14.7-4.2 28.5-10.4 41-18.3l41.5 35.8 37.4-37.4-35.8-41.5c7.9-12.5 14.1-26.3 18.3-41l54.4-7.3v-52.8l-54.4-7.3c-4.2-14.7-10.4-28.5-18.3-41l35.8-41.5-37.4-37.36-41.5 35.79c-12.5-7.9-26.3-14.12-41-18.27l-7.3-54.44h-52.8zm26.4 148.88c48.6 0 88 39.4 88 88s-39.4 88-88 88-88-39.4-88-88 39.4-88 88-88z" transform="translate(6.00,6.00) scale(0.21875)" fill="#8fd6a8"/></svg></div></div>
+   </div>
+   <div class="score mid">closest is 0.771 — related family at best</div>
+   <div class="meta"><span>76 path numbers</span><span>2 cells</span>
+     <span>too simple to fingerprint</span>
+     <span>218 names searched</span></div>
+   <div class="pins"><b>1 pin:</b> Behind the Magic Tour <i>(gold)</i></div>
+  </div><div class="card">
+   <div class="key">monorail</div>
+   <div class="renders">
+     <div class="r"><div class="lbl">ours</div><div class="dark"><svg viewBox="0 0 124 124" width="124" height="124"><path d="M 40 280 Q 256 160 472 280 L 472 320 Q 256 200 40 320 Z M 120 180 C 140 180 200 190 320 230 L 390 260 C 410 270 420 285 410 295 C 400 305 380 300 360 290 L 160 220 C 130 210 110 200 110 190 C 110 185 115 180 120 180 Z M 160 195 L 200 205 L 195 215 L 155 205 Z M 215 210 L 255 220 L 250 230 L 210 220 Z M 270 225 L 310 238 L 305 248 L 265 235 Z M 325 242 L 365 258 L 360 268 L 320 252 Z M 244 260 H 268 V 440 H 244 Z" transform="translate(-4.37,-18.37) scale(0.25926)" fill="#f4efe4"/></svg></div></div>
+     <div class="r"><div class="lbl">tabler:train#1</div><div class="dark"><svg viewBox="0 0 124 124" width="124" height="124"><path d="M3 6v5h17.5M3 11v4m5-4V6m5 5V6.5M3 19h18" transform="translate(-12.67,-15.78) scale(6.22222)" fill="#8fd6a8"/></svg></div></div>
+   </div>
+   <div class="score lo">closest is 0.420 — nothing resembles it</div>
+   <div class="meta"><span>85 path numbers</span><span>7 cells</span>
+     <span>too simple to fingerprint</span>
+     <span>403 names searched</span></div>
+   <div class="pins"><b>1 pin:</b> Four Parks Grand Slam <i>(prism)</i></div>
+  </div><div class="card">
+   <div class="key">monorailBeam</div>
+   <div class="renders">
+     <div class="r"><div class="lbl">ours</div><div class="dark"><svg viewBox="0 0 124 124" width="124" height="124"><path d="M64 220 C64 160 120 120 256 120 C392 120 448 160 448 220 L448 300 C448 320 430 336 408 336 L104 336 C82 336 64 320 64 300 Z M112 180 H224 V240 H112 Z M248 180 H360 V240 H248 Z M220 336 H292 V448 H220 Z" transform="translate(-13.48,-15.91) scale(0.30435)" fill="#f4efe4"/></svg></div></div>
+     <div class="r"><div class="lbl">game-icons:tramcar#0</div><div class="dark"><svg viewBox="0 0 124 124" width="124" height="124"><path d="M47 145c-10 0-23 12.4-23 24.9v134.3l52.49 7.5C84.97 297 100.9 287 119 287c21 0 39 13.3 45.9 32h188.2c6.9-18.7 24.9-32 45.9-32s39 13.3 45.9 32H488v-77.2L456.5 145H47zm-9 14h405.6l25.6 82H296v64h-98v-64H38v-82zm18 18v46h62v-46H56zm80 0v46h62v-46h-62zm80 0v110h22V177h-22zm40 0v110h22V177h-22zm40 0v46h62v-46h-62zm86.6 0v46h62.2l-14.4-46h-47.8zM119 305c-17.2 0-31 13.8-31 31s13.8 31 31 31 31-13.8 31-31-13.8-31-31-31zm280 0c-17.2 0-31 13.8-31 31s13.8 31 31 31 31-13.8 31-31-13.8-31-31-31zm-280 23a8 8 0 0 1 8 8 8 8 0 0 1-8 8 8 8 0 0 1-8-8 8 8 0 0 1 8-8zm280 0a8 8 0 0 1 8 8 8 8 0 0 1-8 8 8 8 0 0 1-8-8 8 8 0 0 1 8-8z" transform="translate(6.00,6.00) scale(0.21875)" fill="#8fd6a8"/></svg></div></div>
+   </div>
+   <div class="score mid">closest is 0.735 — related family at best</div>
+   <div class="meta"><span>45 path numbers</span><span>4 cells</span>
+     <span>too simple to fingerprint</span>
+     <span>268 names searched</span></div>
+   <div class="pins"><b>1 pin:</b> Monorail Crawl (3 Resorts) <i>(bronze)</i></div>
+  </div><div class="card">
+   <div class="key">tikiTotem</div>
+   <div class="renders">
+     <div class="r"><div class="lbl">ours</div><div class="dark"><svg viewBox="0 0 124 124" width="124" height="124"><path d="M160 80 H352 C376 80 396 100 396 124 L384 416 C384 436 364 452 344 452 H168 C148 452 128 436 128 416 L116 124 C116 100 136 80 160 80 Z M160 144 L224 192 L160 240 Z M352 144 L288 192 L352 240 Z M192 290 H320 V330 H192 Z M180 370 H332 L312 416 H200 Z" transform="translate(-15.08,-18.09) scale(0.30108)" fill="#f4efe4"/></svg></div></div>
+     <div class="r"><div class="lbl">game-icons:colombian-statue#0</div><div class="dark"><svg viewBox="0 0 124 124" width="124" height="124"><path d="M0 0h512v512H0z" transform="translate(6.00,6.00) scale(0.21875)" fill="#8fd6a8"/></svg></div></div>
+   </div>
+   <div class="score mid">closest is 0.688 — related family at best</div>
+   <div class="meta"><span>55 path numbers</span><span>5 cells</span>
+     <span>too simple to fingerprint</span>
+     <span>842 names searched</span></div>
+   <div class="pins"><b>1 pin:</b> Enchanted Tiki Room Explorer <i>(bronze)</i></div>
+  </div><div class="card">
+   <div class="key">toriiGate</div>
+   <div class="renders">
+     <div class="r"><div class="lbl">ours</div><div class="dark"><svg viewBox="0 0 124 124" width="124" height="124"><path d="M100 80 H412 V110 H380 V420 H340 V110 H172 V420 H132 V110 H100 Z M80 50 H432 V80 H80 Z" transform="translate(-15.91,-15.91) scale(0.30435)" fill="#f4efe4"/></svg></div></div>
+     <div class="r"><div class="lbl">game-icons:torii#0</div><div class="dark"><svg viewBox="0 0 124 124" width="124" height="124"><path d="M0 0h512v512H0z" transform="translate(6.00,6.00) scale(0.21875)" fill="#8fd6a8"/></svg></div></div>
+   </div>
+   <div class="score mid">closest is 0.820 — related family at best</div>
+   <div class="meta"><span>24 path numbers</span><span>2 cells</span>
+     <span>too simple to fingerprint</span>
+     <span>182 names searched</span></div>
+   <div class="pins"><b>1 pin:</b> World Showcase Explorer <i>(silver)</i></div>
+  </div><div class="card">
+   <div class="key">vintageSuitcase</div>
+   <div class="renders">
+     <div class="r"><div class="lbl">ours</div><div class="dark"><svg viewBox="0 0 124 124" width="124" height="124"><path d="M192 80 H320 V128 H192 Z M96 128 H416 C436 128 452 144 452 164 V396 C452 416 436 432 416 432 H96 C76 432 60 416 60 396 V164 C60 144 76 128 96 128 Z M160 128 H196 V432 H160 Z M316 128 H352 V432 H316 Z M236 260 H276 V300 H236 Z" transform="translate(-13.06,-18.25) scale(0.29762)" fill="#f4efe4"/></svg></div></div>
+     <div class="r"><div class="lbl">game-icons:briefcase#0</div><div class="dark"><svg viewBox="0 0 124 124" width="124" height="124"><path d="M182.2 46.59c-8.9 0-16.1 7.23-16.1 16.1v42.91H41.5v307.8h429V105.6H345.9V62.69c0-8.87-7.2-16.1-16.1-16.1zm2 18h143.6v41.01H184.2zm-124.7 59h86.7v30h-86.7zm140.7 0h111.6v30H200.2zm165.6 0h86.7v30h-86.7zm-110.6 57v54h45.8l6-54zm-98.9 2.5l-3.8 28.5-56.9 14.8-4.6-28.6zm242 0l65.3 14.7-4.6 28.6-56.9-14.8zm-119.5 73.5v28h18.2v-28z" transform="translate(6.00,6.00) scale(0.21875)" fill="#8fd6a8"/></svg></div></div>
+   </div>
+   <div class="score mid">closest is 0.741 — related family at best</div>
+   <div class="meta"><span>52 path numbers</span><span>7 cells</span>
+     <span>too simple to fingerprint</span>
+     <span>734 names searched</span></div>
+   <div class="pins"><b>1 pin:</b> Resort Hopper Elite <i>(gold)</i></div>
+  </div></div>
+</body></html>

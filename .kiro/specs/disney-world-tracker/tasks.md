@@ -730,6 +730,19 @@ flowchart LR
     - Assert that `image_url` / `image_attribution` on a row with non-null image data are unchanged across any sequence of upsert / soft-delete / re-appearance, and that newly-inserted rows have null image fields
     - `numRuns: 100`
 
+- [x] 25. Experience search normalization, prefix token matching, and relevance ranking
+  - [x] 25.1 Implement shared search engine in `packages/shared/src/search/`
+    - Implement `normalizeSearchText`, `tokenizeSearchQuery`, `scoreExperienceSearch`, and `filterAndRankExperiences`
+    - Implement strict 6-step normalization pipeline (NFD diacritic stripping, connector normalization, apostrophe stripping, punctuation spaces, whitespace collapse)
+    - Implement union matching, prefix token matching, and flat relevance tiers (100 > 80 > 60 > 40 > 20) with tie-breaks
+    - _Requirements: R1.20, R1.25, R1.26, R1.27, R1.28_
+  - [x] 25.2 Write property test for experience search normalization and superset preservation
+    - **Property 30: Experience Search Normalization, Prefix Matching, Substring Superset Preservation, and Relevance Ordering**
+    - **Validates: Requirements 1.20, 1.25, 1.26, 1.27, 1.28**
+    - File: `packages/shared/src/__tests__/experienceSearch.prop.test.ts`
+    - Tag header: `// Feature: catalog-experience-search, Property 30: search normalization preserves substring superset and enforces monotonic relevance ranking`
+    - `numRuns: 100`
+
 ## Notes
 
 - Tasks marked with `*` are optional test sub-tasks. Skipping them speeds up an MVP cut at the cost of correctness coverage; the property tests are how the design's 28 properties are mechanically pinned down.

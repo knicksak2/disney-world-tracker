@@ -60,7 +60,12 @@ import { useQuery } from '@tanstack/react-query';
 import type { CompositeScreenProps } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
-import type { ExperienceCategory, ExperienceDTO, ResortDTO } from '@dwt/shared';
+import {
+  filterAndRankExperiences,
+  type ExperienceCategory,
+  type ExperienceDTO,
+  type ResortDTO,
+} from '@dwt/shared';
 
 import { ApiError, apiRequest } from '../../api/client';
 import type { CatalogStackParamList } from '../../navigation/CatalogStack';
@@ -403,10 +408,7 @@ function DestinationSearchResults({
   readonly completedIds: ReadonlySet<string>;
 }): JSX.Element {
   const results = useMemo(() => {
-    const needle = query.toLowerCase();
-    return experiences.filter((experience) =>
-      experience.name.toLowerCase().includes(needle),
-    );
+    return filterAndRankExperiences(experiences, query);
   }, [experiences, query]);
 
   useResultCountAnnouncement(results.length);

@@ -249,7 +249,7 @@ The following capabilities are explicitly out of scope for v1 and are noted as f
 
 #### Acceptance Criteria
 
-1. THE Trip_Service SHALL reference a Trip_Member's canonical Rating for an Experience from the Tracking_Service and SHALL NOT store a Trip-local copy of that Rating.
+1. THE Trip_Service SHALL reference a Trip_Member's canonical Rating for an Experience from the Tracking_Service and SHALL NOT store a Trip-local copy of that Rating (per-visit ratings are persisted on the underlying Experience_Log in the Tracking_Service, not within the Trip entity).
 2. WHEN a Trip_Member records or updates a Rating for an Experience through a Trip, THE Tracking_Service SHALL persist that value as the Trip_Member's single canonical Rating for that Experience.
 3. WHEN a canonical Rating is recorded or updated through a Trip, THE Stats_Service, the Catalog Experience view, and the Aggregate_Rating SHALL reflect the updated canonical Rating within 60 seconds of the Rating being persisted.
 4. WHEN the Trip_Detail_View displays a Rating within the Trip_Activity feed or Trip_Summary for a Trip_Member who has a canonical Rating for the referenced Experience, THE App SHALL display the current canonical Rating from the Tracking_Service as a whole number from 1 to 10 inclusive.

@@ -436,38 +436,46 @@ describe('Property 8: destination counts', () => {
 // conjunction of a Land filter with a `q` filter (R3.7) is verified here at the
 // SQL-shape level: both predicates must be ANDed into the same WHERE clause.
 
-interface RecordedCall {
-  readonly text: string;
-  readonly params: readonly unknown[];
-}
-
-function recordingPool(): { pool: DbPool; calls: RecordedCall[] } {
-  const calls: RecordedCall[] = [];
-  const pool = {
-    async query(text: string, params: readonly unknown[] = []) {
-      calls.push({ text, params });
-      return { rows: [] };
-    },
-  } as unknown as DbPool;
-  return { pool, calls };
-}
-
 describe('Property 7 (q dimension): Land and q combine conjunctively', () => {
-  it('ANDs a case-sensitive land predicate with the ILIKE query predicate', async () => {
-    const { pool, calls } = recordingPool();
-    const repo = createCatalogRepo(pool);
+  it('filters by Land in SQL and ranks by q via normalized search in memory', async () => {
+    const { repo, pool } = freshRepo();
 
-    await repo.listActiveExperiences({ land: 'Fantasyland', q: 'pirates' });
+    await seed(pool, [
+      {
+        id: '00000000-0000-0000-0000-000000000001',
+        name: "Peter Pan's Flight",
+        park: 'Magic Kingdom',
+        category: 'Ride',
+        areaType: 'ThemePark',
+        land: 'Fantasyland',
+        active: true,
+      },
+      {
+        id: '00000000-0000-0000-0000-000000000002',
+        name: 'Pirates of the Caribbean',
+        park: 'Magic Kingdom',
+        category: 'Ride',
+        areaType: 'ThemePark',
+        land: 'Adventureland',
+        active: true,
+      },
+      {
+        id: '00000000-0000-0000-0000-000000000003',
+        name: 'Seven Dwarfs Mine Train',
+        park: 'Magic Kingdom',
+        category: 'Ride',
+        areaType: 'ThemePark',
+        land: 'Fantasyland',
+        active: true,
+      },
+    ]);
 
-    const sql = calls[0]?.text ?? '';
-    // Case-sensitive exact match on land (no lower() wrapping), ANDed with the
-    // ILIKE substring match on name — both under the single WHERE clause.
-    expect(sql).toMatch(/land = \$\d+/);
-    expect(sql).toMatch(/name ILIKE \$\d+ ESCAPE/);
-    expect(sql).toMatch(
-      /active = TRUE AND land = \$\d+ AND name ILIKE \$\d+/,
-    );
-    expect(calls[0]?.params).toContain('Fantasyland');
-    expect(calls[0]?.params).toContain('%pirates%');
+    const results = await repo.listActiveExperiences({
+      land: 'Fantasyland',
+      q: 'Peter',
+    });
+    expect(results).toHaveLength(1);
+    expect(results[0]?.id).toBe('00000000-0000-0000-0000-000000000001');
+    expect(results[0]?.name).toBe("Peter Pan's Flight");
   });
 });
