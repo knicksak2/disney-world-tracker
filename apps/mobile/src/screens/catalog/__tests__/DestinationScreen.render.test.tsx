@@ -205,4 +205,25 @@ describe('DestinationScreen in-destination search', () => {
       expect.stringContaining('1 experience'),
     );
   });
+
+  it('renders the updated search placeholder and matches by land metadata', async () => {
+    renderScreen('Magic Kingdom');
+
+    await screen.findByTestId('destination-search');
+    expect(
+      screen.getByPlaceholderText('Search by name, land, or facet...'),
+    ).toBeTruthy();
+
+    const searchInput = screen.getByTestId('destination-search');
+
+    // Searching by compound land with spaces
+    fireEvent.changeText(searchInput, 'fantasy land');
+
+    const row = await screen.findByTestId('destination-row-exp-peter');
+    expect(row).toBeTruthy();
+
+    // R6.15: ExperienceRow renders the location subtitle
+    const location = screen.getByTestId('destination-location-exp-peter');
+    expect(location).toHaveTextContent('Fantasyland');
+  });
 });

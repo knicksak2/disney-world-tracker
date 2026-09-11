@@ -445,12 +445,25 @@ describe('Catalog_Home grid + global search (R4.1, R4.4, R4.7, R5.2, R5.3, R5.5,
             category: 'Restaurant',
             name: "'Ohana",
           }),
+          experience({
+            id: 'chefs-france',
+            areaType: 'ThemePark',
+            park: 'EPCOT',
+            category: 'Restaurant',
+            name: 'Chefs de France',
+            land: 'World Showcase',
+            worldShowcaseCountry: 'France',
+          }),
         ],
       },
     });
 
     renderCatalog();
     await screen.findByTestId('catalog-destination-grid');
+
+    expect(
+      screen.getByPlaceholderText('Search experiences, lands, or facets...'),
+    ).toBeTruthy();
 
     fireEvent.changeText(screen.getByTestId('catalog-search'), 'a');
 
@@ -460,6 +473,7 @@ describe('Catalog_Home grid + global search (R4.1, R4.4, R4.7, R5.2, R5.3, R5.5,
 
     expect(screen.getByTestId('catalog-search-row-space')).toBeTruthy();
     expect(screen.getByTestId('catalog-search-row-ohana')).toBeTruthy();
+    expect(screen.getByTestId('catalog-search-row-chefs-france')).toBeTruthy();
 
     // A park Experience shows its Destination and, when present, its Land.
     expect(screen.getByTestId('catalog-search-meta-space')).toHaveTextContent(
@@ -469,6 +483,10 @@ describe('Catalog_Home grid + global search (R4.1, R4.4, R4.7, R5.2, R5.3, R5.5,
     expect(screen.getByTestId('catalog-search-meta-ohana')).toHaveTextContent(
       'Resorts',
     );
+    // A World Showcase experience shows its pavilion name instead of 'World Showcase' (R5.3 amended).
+    expect(
+      screen.getByTestId('catalog-search-meta-chefs-france'),
+    ).toHaveTextContent('EPCOT · France');
   });
 
   // -------------------------------------------------------------------------

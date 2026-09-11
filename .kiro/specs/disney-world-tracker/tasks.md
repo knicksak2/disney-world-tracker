@@ -742,6 +742,13 @@ flowchart LR
     - File: `packages/shared/src/__tests__/experienceSearch.prop.test.ts`
     - Tag header: `// Feature: catalog-experience-search, Property 30: search normalization preserves substring superset and enforces monotonic relevance ranking`
     - `numRuns: 100`
+  - [x] 25.3 Expand metadata search to include generic land compound splitting, facets, height requirements, and accessibility tags
+    - Update `SearchableExperience` interface and `scoreExperienceSearch` in `packages/shared/src/search/experienceSearch.ts`
+    - Extract display names only for `groupedFacets`, `interestFacets`, `physicalConsiderations`, and `heightRequirement`
+    - Scope generic land compound splitting (`/(?<=\p{L})land$/iu`) strictly to `exp.land`
+    - Wire `accessibility` tags into metadata corpus
+    - Add unit tests in `packages/shared/src/__tests__/experienceSearch.test.ts` and extend property test in `experienceSearch.prop.test.ts`
+    - _Requirements: R1.25, R1.27, R1.28_
 
 ## Notes
 

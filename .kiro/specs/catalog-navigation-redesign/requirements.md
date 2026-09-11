@@ -105,7 +105,7 @@ This feature builds directly on the completed `disney-facilities-catalog-source`
 
 1. THE Catalog_Home SHALL present a search control at the top level.
 2. WHEN the search query changes and contains at least one non-whitespace character, THE App SHALL, no earlier than 300 milliseconds after the most recent change to the search query, request matching active Experiences across the entire catalog — including Experiences of every Area_Type (`ThemePark`, `WaterPark`, `DisneySprings`, and `Resort`) — through the `q` query parameter.
-3. WHILE a search query containing at least one non-whitespace character is active, THE Catalog_Home SHALL present the matching Experiences as a flat, tappable result list in place of the Destination grid, and SHALL display on each result row the Experience's Destination and, where the Experience has a persisted Land, its Land.
+3. WHILE a search query containing at least one non-whitespace character is active, THE Catalog_Home SHALL present the matching Experiences as a flat, tappable result list in place of the Destination grid, and SHALL display on each result row the Experience's Destination and, where the Experience has a persisted Land or country pavilion, its pavilion-aware Land.
 4. WHEN a user selects a search result, THE App SHALL navigate to the Experience_Detail_Screen for that Experience.
 5. WHEN the search query is cleared to contain no non-whitespace characters, THE Catalog_Home SHALL restore the Destination grid in place of the result list.
 6. WHERE an active search query matches no Experiences, THE Catalog_Home SHALL display an empty-results state indicating that no Experiences matched the query while retaining the active search query in the search control.
@@ -133,6 +133,7 @@ This feature builds directly on the completed `disney-facilities-catalog-source`
 12. THE Destination_Screen SHALL provide a dynamic filter bar with a Filters modal trigger and quick attribute filter chips derived from active experiences.
 13. WHEN a user opens the Filters modal, THE Destination_Screen SHALL present multi-select options for Lands/Pavilions, Price Tiers, and high-signal Attributes.
 14. WHEN filters are applied, THE Destination_Screen SHALL display experiences matching the active tab, selected lands, and selected attributes while preserving Land grouping and section ordering.
+15. THE Destination_Screen SHALL display on each Experience row its resolved Land or country pavilion when present.
 
 ### Requirement 7: Disney Springs Destination Screen
 

@@ -7,6 +7,12 @@
  *   - day-planning-optimization (Requirement 4.16)
  */
 
+import type {
+  FacetValueDTO,
+  GroupedFacetsDTO,
+  HeightRequirementDTO,
+} from '../dto/Facet.js';
+
 export const MAX_METADATA_FALLBACK_ROWS = 25;
 
 export interface SearchableExperience {
@@ -15,6 +21,18 @@ export interface SearchableExperience {
   readonly land?: string | null | undefined;
   readonly worldShowcaseCountry?: string | null | undefined;
   readonly subType?: string | null | undefined;
+  readonly groupedFacets?: GroupedFacetsDTO | null | undefined;
+  readonly interestFacets?: GroupedFacetsDTO | null | undefined;
+  readonly physicalConsiderations?:
+    | readonly (FacetValueDTO | string)[]
+    | null
+    | undefined;
+  readonly heightRequirement?:
+    | HeightRequirementDTO
+    | { readonly name: string }
+    | null
+    | undefined;
+  readonly accessibility?: readonly string[] | null | undefined;
 }
 
 export type SearchMatchTier =
@@ -137,12 +155,102 @@ export function scoreExperienceSearch(
     return { score: 40, tier: 'tokens' };
   }
 
-  // Tier 20: Fallback metadata matching across land, worldShowcaseCountry, subType
+  // Tier 20: Fallback metadata matching across land (with generic compound splitting),
+  // worldShowcaseCountry, subType, facet names, height requirements, and accessibility tags
   const metaParts: string[] = [];
-  if (exp.land) metaParts.push(normalizeSearchText(exp.land));
-  if (exp.worldShowcaseCountry)
-    metaParts.push(normalizeSearchText(exp.worldShowcaseCountry));
-  if (exp.subType) metaParts.push(normalizeSearchText(exp.subType));
+
+  if (exp.land) {
+    const normLand = normalizeSearchText(exp.land);
+    if (normLand.length > 0) {
+      metaParts.push(normLand);
+      // Generic compound land split: if a word ends in "land" preceded by a letter, also add the split form
+      // e.g. "fantasyland" -> "fantasy land", "tomorrowland" -> "tomorrow land"
+      const splitLand = normLand.replace(/(?<=\p{L})land\b/gu, ' land');
+      if (splitLand !== normLand) {
+        metaParts.push(splitLand);
+      }
+    }
+  }
+
+  if (exp.worldShowcaseCountry) {
+    const normCountry = normalizeSearchText(exp.worldShowcaseCountry);
+    if (normCountry.length > 0) {
+      metaParts.push(normCountry);
+    }
+  }
+
+  if (exp.subType) {
+    const normSubType = normalizeSearchText(exp.subType);
+    if (normSubType.length > 0) {
+      metaParts.push(normSubType);
+    }
+  }
+
+  function appendFacetNames(
+    grouped?:
+      | GroupedFacetsDTO
+      | Record<string, readonly FacetValueDTO[] | undefined>
+      | readonly FacetValueDTO[]
+      | null,
+  ): void {
+    if (!grouped || typeof grouped !== 'object') return;
+    if (Array.isArray(grouped)) {
+      for (const facet of grouped) {
+        if (typeof facet?.name === 'string') {
+          const norm = normalizeSearchText(facet.name);
+          if (norm.length > 0) {
+            metaParts.push(norm);
+          }
+        }
+      }
+      return;
+    }
+    for (const group of Object.values(grouped)) {
+      if (Array.isArray(group)) {
+        for (const facet of group) {
+          if (typeof facet?.name === 'string') {
+            const norm = normalizeSearchText(facet.name);
+            if (norm.length > 0) {
+              metaParts.push(norm);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  appendFacetNames(exp.groupedFacets);
+  appendFacetNames(exp.interestFacets);
+
+  if (Array.isArray(exp.physicalConsiderations)) {
+    for (const item of exp.physicalConsiderations) {
+      const name = typeof item === 'string' ? item : item?.name;
+      if (typeof name === 'string') {
+        const norm = normalizeSearchText(name);
+        if (norm.length > 0) {
+          metaParts.push(norm);
+        }
+      }
+    }
+  }
+
+  if (exp.heightRequirement && typeof exp.heightRequirement.name === 'string') {
+    const normHeight = normalizeSearchText(exp.heightRequirement.name);
+    if (normHeight.length > 0) {
+      metaParts.push(normHeight);
+    }
+  }
+
+  if (Array.isArray(exp.accessibility)) {
+    for (const tag of exp.accessibility) {
+      if (typeof tag === 'string') {
+        const normTag = normalizeSearchText(tag);
+        if (normTag.length > 0) {
+          metaParts.push(normTag);
+        }
+      }
+    }
+  }
 
   if (metaParts.length > 0) {
     const combinedMeta = metaParts.join(' ');

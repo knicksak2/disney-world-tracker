@@ -60,12 +60,27 @@ describe('Property 30: Experience Search Normalization, Prefix Matching, Substri
     .string({ minLength: 1, maxLength: 30 })
     .filter((s) => normalizeSearchText(s).length > 0);
 
+  const facetValueArb = fc.record({
+    id: fc.uuid(),
+    name: textArb.filter((s) => s.trim().length > 0),
+  });
+
+  const groupedFacetsArb = fc.dictionary(
+    fc.constantFrom('thrill', 'interests', 'cuisine'),
+    fc.array(facetValueArb, { minLength: 0, maxLength: 3 }),
+  );
+
   const searchableExperienceArb: fc.Arbitrary<SearchableExperience> = fc.record({
     id: fc.uuid(),
     name: textArb.filter((s) => s.trim().length > 0),
     land: fc.option(textArb, { nil: undefined }),
     worldShowcaseCountry: fc.option(textArb, { nil: undefined }),
     subType: fc.option(textArb, { nil: undefined }),
+    groupedFacets: fc.option(groupedFacetsArb, { nil: undefined }),
+    interestFacets: fc.option(groupedFacetsArb, { nil: undefined }),
+    physicalConsiderations: fc.option(fc.array(textArb, { minLength: 0, maxLength: 3 }), { nil: undefined }),
+    heightRequirement: fc.option(fc.record({ name: textArb }), { nil: undefined }),
+    accessibility: fc.option(fc.array(textArb, { minLength: 0, maxLength: 3 }), { nil: undefined }),
   });
 
   it('Property 1: Normalization is idempotent for any input string', () => {
@@ -178,6 +193,62 @@ describe('Property 30: Experience Search Normalization, Prefix Matching, Substri
         },
       ),
       { numRuns: 100 },
+    );
+  });
+
+  it('Property 5: Metadata Union Matching — facet or metadata token match scores at least 20', () => {
+    const validFacetNameArb = fc
+      .string({ minLength: 3, maxLength: 20 })
+      .filter((s) => /^[a-zA-Z0-9 ]+$/.test(s) && normalizeSearchText(s).length >= 3);
+
+    fc.assert(
+      fc.property(validFacetNameArb, (facetName) => {
+        const normFacet = normalizeSearchText(facetName);
+        const exp: SearchableExperience = {
+          id: 'exp-metadata',
+          name: 'Completely Different Name Unrelated',
+          groupedFacets: { category1: [{ id: 'f-1', name: facetName }] },
+        };
+
+        const result = scoreExperienceSearch(
+          exp,
+          normFacet,
+          tokenizeSearchQuery(normFacet),
+        );
+        expect(result.score).toBeGreaterThanOrEqual(20);
+      }),
+      { numRuns: 100 },
+    );
+  });
+
+  it('Property 5b: Compound Land Splitting — "fantasy land" query matches "Fantasyland" land field', () => {
+    const landPrefixArb = fc.constantFrom(
+      'Fantasy',
+      'Tomorrow',
+      'Adventure',
+      'Frontier',
+      'Dino',
+    );
+
+    fc.assert(
+      fc.property(landPrefixArb, (prefix) => {
+        const landName = `${prefix}land`;
+        const query = `${prefix.toLowerCase()} land`;
+        const exp: SearchableExperience = {
+          id: 'exp-compound-land',
+          name: 'Unique Ride Attraction',
+          land: landName,
+        };
+
+        const normQuery = normalizeSearchText(query);
+        const result = scoreExperienceSearch(
+          exp,
+          normQuery,
+          tokenizeSearchQuery(normQuery),
+        );
+        expect(result.score).toBeGreaterThanOrEqual(20);
+      }),
+      { numRuns: 50 },
     );
   });
 });

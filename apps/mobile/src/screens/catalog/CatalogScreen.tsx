@@ -105,6 +105,7 @@ import {
   type DestinationId,
 } from './destinations';
 import { priceTierListTag, resortAreaLabel } from './infoTags';
+import { browseLandOf } from './catalogGrouping';
 import { useCardFocusRestore, useResultCountAnnouncement } from './catalogFocus';
 import { useCompletedExperiences } from './useCompletedExperiences';
 
@@ -311,7 +312,7 @@ export default function CatalogScreen({ navigation }: Props): JSX.Element {
             style={styles.searchInput}
             value={searchInput}
             onChangeText={setSearchInput}
-            placeholder="Search experiences"
+            placeholder="Search experiences, lands, or facets..."
             placeholderTextColor={theme.color.textSecondary}
             autoCapitalize="none"
             autoCorrect={false}
@@ -618,10 +619,7 @@ function SearchResultRow({
       : theme.color.primary;
 
   const destinationLabel = resultDestinationLabel(experience);
-  const land =
-    typeof experience.land === 'string' && experience.land.trim().length > 0
-      ? experience.land.trim()
-      : null;
+  const land = browseLandOf(experience);
   // A Resort-area result has no Land; surface its Resort_Area zone instead so
   // the row conveys which part of the property it sits in.
   const detail = land ?? resortAreaLabel(experience);

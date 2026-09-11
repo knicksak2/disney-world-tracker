@@ -57,3 +57,8 @@ services:
       # the external cron's request header.
       - key: SAMPLING_CRON_SECRET
         sync: false
+      # Shared secret gating POST/HEAD /internal/pins/reconcile (x-cron-secret header).
+      # REQUIRED — same fail-fast config loader as SAMPLING_CRON_SECRET. Must be a
+      # dedicated value, not reused from SAMPLING_CRON_SECRET.
+      - key: PIN_RECONCILE_CRON_SECRET
+        sync: false

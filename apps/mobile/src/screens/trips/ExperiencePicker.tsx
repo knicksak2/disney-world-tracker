@@ -755,19 +755,19 @@ export function ExperiencePicker({
           onChangeText={setSearchInput}
           placeholder={
             activeTab === 'dining'
-              ? 'Search restaurants...'
+              ? 'Search restaurants, cuisines, or locations...'
               : activeTab === 'shows'
-              ? 'Search shows...'
+              ? 'Search shows or locations...'
               : activeTab === 'breaks'
               ? 'Search break locations...'
-              : 'Search by name...'
+              : 'Search experiences, lands, or facets...'
           }
           placeholderTextColor={theme.color.textSecondary}
           autoCapitalize="none"
           autoCorrect={false}
           editable={!busy}
           style={styles.searchInput}
-          accessibilityLabel="Search experiences"
+          accessibilityLabel="Search experiences, lands, or facets"
           testID={`${testIDPrefix}-search`}
         />
         {searchInput.length > 0 ? (

@@ -313,4 +313,161 @@ describe('filterAndRankExperiences', () => {
     expect(filterAndRankExperiences(experiences, '')).toBe(experiences);
     expect(filterAndRankExperiences(experiences, '   \t  ')).toBe(experiences);
   });
+
+  describe('enriched metadata matching (lands, facets, pavilions, accessibility)', () => {
+    const metaTestPool: SearchableExperience[] = [
+      {
+        id: 'space-mtn',
+        name: 'Space Mountain',
+        land: 'Tomorrowland',
+        subType: 'Roller Coaster',
+        groupedFacets: {
+          thrillFactor: [
+            { id: 'thrill', name: 'Thrill Rides' },
+            { id: 'big-drops', name: 'Big Drops' },
+          ],
+          interests: [{ id: 'indoor', name: 'Indoor' }],
+        },
+        heightRequirement: {
+          id: 'h-44in',
+          name: '44 inches (112 cm) or taller',
+          minInches: 44,
+          minCentimeters: 112,
+        },
+        accessibility: ['Must Transfer from Wheelchair'],
+      },
+      {
+        id: 'peter-pan',
+        name: "Peter Pan's Flight",
+        land: 'Fantasyland',
+        groupedFacets: {
+          thrillFactor: [{ id: 'slow-rides', name: 'Slow Rides' }],
+          interests: [{ id: 'classics', name: 'Disney Classics' }],
+        },
+        physicalConsiderations: [
+          { id: 'pc-expectant', name: 'Expectant Mothers Advisory' },
+        ],
+      },
+      {
+        id: 'cinderella-table',
+        name: "Cinderella's Royal Table",
+        land: 'Fantasyland',
+        groupedFacets: {
+          diningInterests: [{ id: 'opq-char-dining', name: 'Character Dining' }],
+          cuisine: [{ id: 'american', name: 'American' }],
+        },
+      },
+      {
+        id: 'san-angel',
+        name: 'San Ángel Inn Restaurante',
+        land: 'World Showcase',
+        worldShowcaseCountry: 'Mexico',
+        groupedFacets: {
+          cuisine: [{ id: 'mexican', name: 'Mexican' }],
+          dining: [{ id: 'table-service', name: 'Table Service' }],
+        },
+        accessibility: ['Audio Description', 'Handheld Captioning'],
+      },
+      {
+        id: 'dino-spin',
+        name: 'TriceraTop Spin',
+        land: 'DinoLand U.S.A.',
+        groupedFacets: {
+          thrillFactor: [{ id: 'spinning', name: 'Spinning' }],
+        },
+      },
+      {
+        id: 'rise-resistance',
+        name: 'Star Wars: Rise of the Resistance',
+        land: "Star Wars: Galaxy's Edge",
+        interestFacets: {
+          franchise: [{ id: 'star-wars', name: 'Star Wars' }],
+        },
+      },
+    ];
+
+    it('matches compound land names when queried with spaces ("fantasy land" -> "Fantasyland")', () => {
+      const res = filterAndRankExperiences(metaTestPool, 'fantasy land');
+      expect(res.map((r) => r.id)).toEqual(['cinderella-table', 'peter-pan']);
+    });
+
+    it('matches compound land names when queried with spaces ("tomorrow land" -> "Tomorrowland")', () => {
+      const res = filterAndRankExperiences(metaTestPool, 'tomorrow land');
+      expect(res.map((r) => r.id)).toEqual(['space-mtn']);
+    });
+
+    it('matches compound land names when queried with spaces ("dino land" -> "DinoLand U.S.A.")', () => {
+      const res = filterAndRankExperiences(metaTestPool, 'dino land');
+      expect(res.map((r) => r.id)).toEqual(['dino-spin']);
+    });
+
+    it('matches facet names: thrillFactor ("thrill", "big drops", "spinning")', () => {
+      const thrillHits = filterAndRankExperiences(metaTestPool, 'thrill');
+      expect(thrillHits.some((r) => r.id === 'space-mtn')).toBe(true);
+
+      const dropsHits = filterAndRankExperiences(metaTestPool, 'big drops');
+      expect(dropsHits.map((r) => r.id)).toEqual(['space-mtn']);
+
+      const spinHits = filterAndRankExperiences(metaTestPool, 'spinning');
+      expect(spinHits.map((r) => r.id)).toEqual(['dino-spin']);
+    });
+
+    it('matches facet names: dining & cuisine ("character dining", "mexican", "table service")', () => {
+      const charHits = filterAndRankExperiences(
+        metaTestPool,
+        'character dining',
+      );
+      expect(charHits.map((r) => r.id)).toEqual(['cinderella-table']);
+
+      const mexicanHits = filterAndRankExperiences(metaTestPool, 'mexican');
+      expect(mexicanHits.map((r) => r.id)).toEqual(['san-angel']);
+
+      const tableHits = filterAndRankExperiences(metaTestPool, 'table service');
+      expect(tableHits.map((r) => r.id)).toEqual(['san-angel']);
+    });
+
+    it('matches interest facets ("star wars")', () => {
+      const starWarsHits = filterAndRankExperiences(metaTestPool, 'star wars');
+      expect(starWarsHits.some((r) => r.id === 'rise-resistance')).toBe(true);
+    });
+
+    it('matches physical considerations ("expectant mothers")', () => {
+      const expectantHits = filterAndRankExperiences(
+        metaTestPool,
+        'expectant mothers',
+      );
+      expect(expectantHits.map((r) => r.id)).toEqual(['peter-pan']);
+    });
+
+    it('matches height requirements ("44 inches")', () => {
+      const heightHits = filterAndRankExperiences(metaTestPool, '44 inches');
+      expect(heightHits.map((r) => r.id)).toEqual(['space-mtn']);
+    });
+
+    it('matches accessibility tags ("audio description", "wheelchair")', () => {
+      const audioHits = filterAndRankExperiences(
+        metaTestPool,
+        'audio description',
+      );
+      expect(audioHits.map((r) => r.id)).toEqual(['san-angel']);
+
+      const wheelchairHits = filterAndRankExperiences(metaTestPool, 'wheelchair');
+      expect(wheelchairHits.map((r) => r.id)).toEqual(['space-mtn']);
+    });
+
+    it('does NOT match opaque facet IDs (e.g. "pc-expectant", "h-44in", "opq-char-dining")', () => {
+      expect(filterAndRankExperiences(metaTestPool, 'pc-expectant')).toHaveLength(
+        0,
+      );
+      expect(filterAndRankExperiences(metaTestPool, 'h-44in')).toHaveLength(0);
+      expect(
+        filterAndRankExperiences(metaTestPool, 'opq-char-dining'),
+      ).toHaveLength(0);
+    });
+
+    it('keeps worldShowcaseCountry matched as plain text without spurious suffix splitting', () => {
+      const mexicoHits = filterAndRankExperiences(metaTestPool, 'Mexico');
+      expect(mexicoHits.map((r) => r.id)).toEqual(['san-angel']);
+    });
+  });
 });

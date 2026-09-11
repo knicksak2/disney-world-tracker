@@ -90,6 +90,7 @@ import {
   type Destination,
 } from './destinations';
 import {
+  browseLandOf,
   groupByCategory,
   groupByPavilionFiltered,
   groupByResort,
@@ -358,12 +359,12 @@ function DestinationSearchControl({
           style={styles.searchInput}
           value={value}
           onChangeText={onChangeText}
-          placeholder="Search this destination"
+          placeholder="Search by name, land, or facet..."
           placeholderTextColor={theme.color.textSecondary}
           autoCapitalize="none"
           autoCorrect={false}
           returnKeyType="search"
-          accessibilityLabel="Search this destination"
+          accessibilityLabel="Search by name, land, or facet"
           testID="destination-search"
         />
         {value.length > 0 ? (
@@ -1435,9 +1436,15 @@ function ExperienceRow({
     ? priceTierListTag((experience.priceTier as string).trim())
     : null;
 
-  // The Resort_Area zone tag (e.g. "EPCOT Resort Area"), shown only for a
-  // Resort-area Experience that carries one.
+  // The location subtitle: browseLandOf(experience) for Land / EPCOT Pavilion,
+  // or resortAreaLabel(experience) for Resort-area experiences (R6.15).
+  const browseLand = browseLandOf(experience);
   const resortArea = resortAreaLabel(experience);
+  const locationText = browseLand ?? resortArea;
+  const isResortAreaOnly = browseLand === null && resortArea !== null;
+  const locationTestId = isResortAreaOnly
+    ? `destination-resort-area-${experience.id}`
+    : `destination-location-${experience.id}`;
 
   return (
     <Card
@@ -1460,10 +1467,10 @@ function ExperienceRow({
           <Text style={styles.rowName} numberOfLines={2}>
             {experience.name}
           </Text>
-          {resortArea !== null ? (
+          {locationText !== null ? (
             <View
               style={styles.rowMetaLine}
-              testID={`destination-resort-area-${experience.id}`}
+              testID={locationTestId}
             >
               <Ionicons
                 name="location"
@@ -1472,7 +1479,7 @@ function ExperienceRow({
                 style={styles.rowMetaIcon}
               />
               <Text style={styles.rowMeta} numberOfLines={1}>
-                {resortArea}
+                {locationText}
               </Text>
             </View>
           ) : null}

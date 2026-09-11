@@ -789,7 +789,7 @@ The properties below are written so each one drives one or more property-based t
 1. **Superset Invariant**: Every active Experience whose normalized name contains the normalized query as a contiguous substring MUST be included in the result and assigned a score of at least 60.
 2. **Prefix-Token Invariant**: Every active Experience where every token of $q$ is a prefix of some token in the normalized name MUST be included with a score of at least 40.
 3. **Ranking Monotonicity & Ordering**: The returned array's scores MUST be non-increasing; every name match (score $\ge 40$) MUST precede every metadata match (score 20); and within any run of equal scores, rows MUST be ordered strictly by `lower(name)` ascending then `id` ascending.
-4. **Metadata Cap & Sort**: Experiences matching only on metadata (`land`, `world_showcase_country`, `sub_type`) MUST score 20, be sorted by `lower(name)` ascending then `id` ascending, and be sliced to at most `MAX_METADATA_FALLBACK_ROWS` (25) entries.
+4. **Metadata Cap & Sort**: Experiences matching only on metadata (`land` including generic trailing "land" compound splitting, `world_showcase_country`, `sub_type`, `grouped_facets` display names, `interest_facets` display names, `physical_considerations` display names, `height_requirement` display name, `accessibility` tags) MUST score 20, be sorted by `lower(name)` ascending then `id` ascending, and be sliced to at most `MAX_METADATA_FALLBACK_ROWS` (25) entries.
 
 **Validates: Requirements 1.20, 1.25, 1.26, 1.27, 1.28**
 
