@@ -9,6 +9,7 @@ import { describe, expect, it } from 'vitest';
 import {
   overlapsAnyOtherPin,
   placementToReferencePx,
+  SHOWCASE_BOARD_MARGIN,
   SHOWCASE_MAX_PINS,
   SHOWCASE_MIN_PIN_CLEARANCE,
   SHOWCASE_PIN_SIZE,
@@ -196,7 +197,8 @@ describe('Showcase Constants & Collision Geometry', () => {
   it('defines expected constants', () => {
     expect(SHOWCASE_MAX_PINS).toBe(24);
     expect(SHOWCASE_PIN_SIZE).toBe(72);
-    expect(SHOWCASE_MIN_PIN_CLEARANCE).toBe(46);
+    expect(SHOWCASE_BOARD_MARGIN).toBe(0);
+    expect(SHOWCASE_MIN_PIN_CLEARANCE).toBe(60);
     expect(SHOWCASE_REFERENCE_SIZE).toEqual({ width: 360, height: 640 });
   });
 
@@ -212,19 +214,19 @@ describe('Showcase Constants & Collision Geometry', () => {
       { pinId: 'pin2', x: 200, y: 200 },
     ];
 
-    // Candidate too close to pin1 (distance = 25 < 46)
+    // Candidate too close to pin1 (distance = 25 < 60)
     expect(overlapsAnyOtherPin({ pinId: 'candidate', x: 120, y: 115 }, existing)).toBe(true);
 
     // Candidate identical to pin1's position but same pinId is ignored
     expect(overlapsAnyOtherPin({ pinId: 'pin1', x: 100, y: 100 }, existing)).toBe(false);
 
-    // Candidate well away from all pins (distance > 46)
+    // Candidate well away from all pins (distance > 60)
     expect(overlapsAnyOtherPin({ pinId: 'candidate', x: 100, y: 300 }, existing)).toBe(false);
 
-    // Candidate just outside clearance (distance = 47 > 46)
-    expect(overlapsAnyOtherPin({ pinId: 'candidate', x: 100, y: 147 }, existing)).toBe(false);
+    // Candidate just outside clearance (distance = 61 > 60)
+    expect(overlapsAnyOtherPin({ pinId: 'candidate', x: 100, y: 161 }, existing)).toBe(false);
 
-    // Candidate just inside clearance (distance = 45 < 46)
-    expect(overlapsAnyOtherPin({ pinId: 'candidate', x: 100, y: 145 }, existing)).toBe(true);
+    // Candidate just inside clearance (distance = 59 < 60)
+    expect(overlapsAnyOtherPin({ pinId: 'candidate', x: 100, y: 159 }, existing)).toBe(true);
   });
 });

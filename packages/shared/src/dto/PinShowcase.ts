@@ -32,7 +32,8 @@ export interface PlacePinRequest {
 
 export const SHOWCASE_MAX_PINS = 24;
 export const SHOWCASE_PIN_SIZE = 72;
-export const SHOWCASE_MIN_PIN_CLEARANCE = 46; // ~64% of pin size, allowing rims to touch/nestle without dead-center collision
+export const SHOWCASE_BOARD_MARGIN = 0; // Inner margin (px) keeping pins safely inside the corkboard frame bounds
+export const SHOWCASE_MIN_PIN_CLEARANCE = 60; // Outer visual metal rims (~60px diameter in 72px box) touch tangent with zero gap/overlap (Requirement 24.11)
 export const SHOWCASE_REFERENCE_SIZE = { width: 360, height: 640 } as const;
 
 /**

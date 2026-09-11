@@ -114,4 +114,46 @@ describe('PinCelebrationModal', () => {
 
     expect(screen.queryByTestId('pin-celebration-skip-all')).toBeNull();
   });
+
+  it('renders "Awesome!" on the primary button for a single/non-batched claim', () => {
+    render(<PinCelebrationModal visible onClose={jest.fn()} pinIds={[pin.id]} />);
+    expect(screen.getByTestId('pin-celebration-dismiss')).toHaveTextContent('Awesome!');
+  });
+
+  it('renders "Next" on the primary button when more pins remain in the queue (index < total)', () => {
+    render(
+      <PinCelebrationModal
+        visible
+        onClose={jest.fn()}
+        pinIds={[pin.id]}
+        position={{ index: 1, total: 3 }}
+      />,
+    );
+    expect(screen.getByTestId('pin-celebration-dismiss')).toHaveTextContent('Next');
+  });
+
+  it('renders "Awesome!" on the primary button on the final pin of a batch (index === total)', () => {
+    render(
+      <PinCelebrationModal
+        visible
+        onClose={jest.fn()}
+        pinIds={[pin.id]}
+        position={{ index: 3, total: 3 }}
+      />,
+    );
+    expect(screen.getByTestId('pin-celebration-dismiss')).toHaveTextContent('Awesome!');
+  });
+
+  it('honors a custom dismissLabel prop if provided', () => {
+    render(
+      <PinCelebrationModal
+        visible
+        onClose={jest.fn()}
+        pinIds={[pin.id]}
+        dismissLabel="Continue"
+      />,
+    );
+    expect(screen.getByTestId('pin-celebration-dismiss')).toHaveTextContent('Continue');
+  });
 });
+

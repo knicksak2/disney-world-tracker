@@ -233,17 +233,17 @@ describe('PinShowcaseRepo Integration (pg-mem)', () => {
     // Place pin_center at (0.5, 0.5) -> (180px, 320px) in 360x640 space
     await repo.placePin(userA, 'pin_center', 0.5, 0.5);
 
-    // Clearance is 46px.
-    // 30px delta X is (30 / 360) = 0.0833... -> distance 30px < 46px -> OVERLAP!
-    const tooCloseX = 0.5 + 30 / SHOWCASE_REFERENCE_SIZE.width;
+    // Clearance is 60px.
+    // 40px delta X is (40 / 360) -> distance 40px < 60px -> OVERLAP!
+    const tooCloseX = 0.5 + 40 / SHOWCASE_REFERENCE_SIZE.width;
     await expect(
       repo.placePin(userA, 'pin_close', tooCloseX, 0.5),
     ).rejects.toMatchObject({
       code: 'showcase_position_overlap',
     });
 
-    // 60px delta X is (60 / 360) = 0.1666... -> distance 60px >= 46px -> SUCCEEDS!
-    const clearX = 0.5 + 60 / SHOWCASE_REFERENCE_SIZE.width;
+    // 75px delta X is (75 / 360) -> distance 75px >= 60px -> SUCCEEDS!
+    const clearX = 0.5 + 75 / SHOWCASE_REFERENCE_SIZE.width;
     const placedFar = await repo.placePin(userA, 'pin_far', clearX, 0.5);
     expect(placedFar.pinId).toBe('pin_far');
 

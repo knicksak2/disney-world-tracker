@@ -288,7 +288,7 @@ a second `Animated.Value`, so the reveal is visible rather than an instant swap;
 
 `PinCelebrationModal`'s heading changes from "New pin unlocked!" / "N new pins unlocked!" to
 "Pin claimed!" / "N pins claimed!", and the primary button's label changes from "Add to collection"
-(describes a still-pending action) to "Nice!" (acknowledges a completed one). Both are static copy
+(describes a still-pending action) to "Awesome!" ("Next" when advancing through a multi-pin queue). Both are static copy
 changes; the modal's data contract (`pinIds`, `onViewDetails`) is unchanged.
 
 ### Claim-all bulk action (Requirement 23.4)
@@ -1061,7 +1061,7 @@ the same claimable-first catalog order the grid already renders them in.*
     asserting the prop/render change rather than just the absence of the ready-badge (Requirement
     23.2 — this is already partially covered by the existing "claiming clears the ready-to-claim
     badge" test; extend it to also assert the `unlocked` prop transition).
-  - Test `PinCelebrationModal`'s heading and primary button read "Pin claimed!" / "Nice!" rather
+  - Test `PinCelebrationModal`'s heading and primary button read "Pin claimed!" / "Awesome!" (or "Next" when queued) rather
     than "New pin unlocked!" / "Add to collection" (Requirement 23.3).
   - Test the `pin-board-claim-all` button is absent with 0 or 1 ready-to-claim pins, shows the
     exact count with 2+, and pressing it fires a claim call for every ready-to-claim pin id
@@ -1215,7 +1215,7 @@ distance test is exact and cheap, unlike a rectangular AABB test which would be 
 round pin):
 
 ```ts
-const SHOWCASE_MIN_PIN_CLEARANCE = 46; // ~64% of pin size (46px), allowing rims to touch/nestle without center collision, Requirement 24.11
+const SHOWCASE_MIN_PIN_CLEARANCE = 60; // Outer visual metal rims (~60px diameter in 72px box) touch tangent with zero gap/overlap, Requirement 24.11
 
 function overlapsAnyOtherPin(
   candidate: { readonly pinId: string; readonly x: number; readonly y: number }, // px, board-space
@@ -1328,7 +1328,7 @@ read endpoint from task 16 always returns.
 |---|---|---|
 | `SHOWCASE_MAX_PINS` | `24` | Maximum Pins a User may place on their Showcase at once (Requirement 24.5) — enough for a real display case's worth of favorites, not a duplicate of the ~174-pin full collection. |
 | `SHOWCASE_PIN_SIZE` | `72` px | Fixed on-screen diameter of a placed Pin on the Showcase board (distinct from the Pin Board grid's responsive `tileSize`), used by both the client's optimistic overlap check and to derive `SHOWCASE_MIN_PIN_CLEARANCE`. |
-| `SHOWCASE_MIN_PIN_CLEARANCE` | `46` px (~64% of `SHOWCASE_PIN_SIZE`) | Minimum center-to-center distance between two placed Pins (Requirement 24.11), allowing pins to sit snug and touch rims without dead-center collision; enforced identically client-side (instant UX) and server-side (authority, Property 22). |
+| `SHOWCASE_MIN_PIN_CLEARANCE` | `60` px | Minimum center-to-center distance between two placed Pins (Requirement 24.11), allowing outer metal rims (~60px visual diameter in 72px container) to touch tangent with zero gap or visual overlap; enforced identically client-side (instant UX) and server-side (authority, Property 22). |
 | `SHOWCASE_REFERENCE_SIZE` | `{ width: 360, height: 640 }` px | The fixed reference board size both the server's overlap check and the `0.0-1.0` fraction storage assume, so a clearance distance in pixels means the same thing however large a given device actually renders the board. |
 
 ### Error Handling (additive to the existing list)
@@ -1386,6 +1386,10 @@ placements as they exist at OPEN time, never the placements as they existed at S
 `GET /users/:userId/pin-showcase` never consults `shares.payload_snapshot` and a `pinShowcase`
 payload carries no placement data to consult.*
 **Validates: Requirement 24.14**
+
+### Property 24: Unplaced Pin Tray Filtering, Sorting, and Non-Overlapping Auto-Placement
+*For any set of unplaced pins, search filtering by query string matches pins whose name, description, or track contains the query (case-insensitive); sorting by catalog order preserves catalog index, sorting by name orders alphabetically, and sorting by tier ranks Prism > Amethyst > Gold > Silver > Bronze. When auto-placing a pin via tap, `findAvailablePlacement` returns a coordinate that maintains >= `SHOWCASE_MIN_PIN_CLEARANCE` from all existing placements, or `null` if the board is saturated.*
+**Validates: Requirement 24.15, 24.16, 24.17**
 
 ## Testing Strategy — Pin Showcase (additive to the existing Testing Strategy section)
 

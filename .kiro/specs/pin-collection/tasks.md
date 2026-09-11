@@ -102,7 +102,7 @@ mobile Pin Board UI — gated by the backend suite, the pin gate, and a final fu
 - [x] 14. Claim reveal, bulk claim, and celebration fanfare (Requirement 23 — additive)
   - [x] 14.1 `PinBoardScreen.tsx` / `PinCell`: pass `unlocked={item.unlocked && !readyToClaim}` to `PinView` instead of `unlocked={item.unlocked}`, so a ready-to-claim tile renders the locked/dimmed treatment until claimed, distinguished only by the existing "Tap to claim" badge (R23.1) _(implemented as `cellUnlocked`)_
   - [x] 14.2 `PinCell`: cross-fade the locked→unlocked art on a successful claim (a second `Animated.Value` opacity swap over ~180ms, driven by the `readyToClaim` transition) so the reveal is visible rather than an instant swap (R23.2) _(a `crossfading` state renders both the locked and unlocked `PinView` stacked, animating their opposing opacities via `Animated.timing`, for the transition's duration only; steady-state renders a single `PinView` as before)_
-  - [x] 14.3 `PinCelebrationModal.tsx`: change the heading to "Pin claimed!" / "N pins claimed!" and the primary button label to "Nice!" (R23.3) _(implemented)_
+  - [x] 14.3 `PinCelebrationModal.tsx`: change the heading to "Pin claimed!" / "N pins claimed!" and the primary button label to "Awesome!" ("Next" when advancing through a multi-pin queue) (R23.3) _(implemented)_
   - [x] 14.4 `PinBoardScreen.tsx`: add a "Claim all (N)" `SecondaryButton` near the summary header, visible when `readyIds.length >= 2` (computed via `isReadyToClaim` over `board.data.pins`, same predicate `useClaimablePinsBadge` uses); pressing it calls `enqueueClaim` for every ready id in claimable-first catalog order (R23.4, Property 17) _(`readyIds` memoized in catalog order; `enqueueAll` feeds them into the existing queue; testID `pin-board-claim-all`)_
   - [x] 14.5 `PinBoardScreen.tsx`: track `queueTotal` (captured once when a claim batch begins, not shrinking as the queue drains) and compute `{ index, total }` for the celebration currently shown; pass it to `PinCelebrationModal` as a new optional `position` prop (R23.5) _(implemented; `queueTotal` resets to 0 once a batch fully drains so the next fresh batch starts clean)_
   - [x] 14.6 `PinCelebrationModal.tsx`: render an "`{index} of {total}`" line under the heading when `position` is provided and `total > 1`; render nothing extra when `position` is omitted or `total <= 1` (R23.5) _(testID `pin-celebration-position`)_
@@ -138,9 +138,15 @@ mobile Pin Board UI — gated by the backend suite, the pin gate, and a final fu
 
 - [x] 18. Faster claim transition and "Skip all" action in celebration queue (Requirement 23.6, 23.8 — additive)
   - [x] 18.1 `PinCelebrationModal.tsx`: add `onSkipAll?: () => void` prop; render `SecondaryButton` with `label="Skip all"` (`testID="pin-celebration-skip-all"`) when `onSkipAll` is provided, `position.total > 1`, and `position.index < position.total` (R23.8)
-  - [x] 18.2 `PinBoardScreen.tsx` & `PinCelebrationModal.tsx`: reduce `PACE_MS` to 40ms and eliminate native modal fade delay with `animationType="none"` for snappier queue transitions (R23.6); implement `handleSkipAll` to close modal, clear queue, optimistically mark remaining pins claimed in cache, fire haptics, and trigger claim mutation in parallel in the background (R23.8)
+  - [x] 18.2 `PinBoardScreen.tsx` & `PinCelebrationModal.tsx`: update celebration primary button label to "Next" in queue and "Awesome!" on completion; trigger next celebration immediately upon advance without blocking on network latency (R23.6, R23.8)
   - [x] 18.3 Tests: extend `PinCelebrationModal.test.tsx` and `PinBoardScreen.test.tsx` for "Skip all" rendering, button press, batch claiming, and fast paced advancement (R23.6, R23.8)
   - [x] 18.4 Checkpoint — run verification gate
+
+- [x] 19. Enhanced Unplaced Pins Tray & Expanded Browser (Requirement 24.15–24.17, Property 24 — additive)
+  - [x] 19.1 Mobile: implement `findAvailablePlacement.ts` (`apps/mobile/src/screens/profile/`) — pure algorithm scanning reference board space for the first non-overlapping position, and add unit tests `findAvailablePlacement.test.ts` (R24.17, Property 24)
+  - [x] 19.2 Mobile: enhance `PinShowcaseScreen.tsx` — add search filtering (by pin name, track, description), multi-option sorting (Catalog, Name A-Z, Tier High-Low, Tier Low-High), tier filter chips, larger 64px tray pins, tap-to-place integration, and an expandable 2-column grid modal ("Available Pins") with 72px PinViews, metadata, and "Place on Board" actions (R24.15, R24.16, R24.17)
+  - [x] 19.3 Mobile tests: extend `PinShowcaseScreen.test.tsx` with coverage for searching, sorting, expanding the browse sheet, tap-to-place non-overlapping placement, and existing drag gestures (R24.15–24.17)
+  - [x] 19.4 Checkpoint — run verification gate
 
 ## Task Dependency Graph
 
@@ -189,10 +195,13 @@ track after the shared catalog exists.
     { "wave": 36, "tasks": ["16.9", "16.14"] },
     { "wave": 37, "tasks": ["16.10", "16.15"] },
     { "wave": 38, "tasks": ["16.16"] },
-    { "wave": 39, "tasks": ["17.1"] }
+    { "wave": 39, "tasks": ["17.1"] },
+    { "wave": 40, "tasks": ["18.1", "18.2", "18.3", "18.4"] },
+    { "wave": 41, "tasks": ["19.1", "19.2", "19.3", "19.4"] }
   ]
 }
 ```
+
 
 ## Notes
 

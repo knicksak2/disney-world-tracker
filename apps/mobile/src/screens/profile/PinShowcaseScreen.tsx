@@ -25,14 +25,17 @@ import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
+  FlatList,
   ImageBackground,
   ImageSourcePropType,
   LayoutChangeEvent,
+  Modal,
   PanResponder,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -40,6 +43,8 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   PINS,
+  PIN_TIERS,
+  SHOWCASE_BOARD_MARGIN,
   SHOWCASE_MAX_PINS,
   SHOWCASE_MIN_PIN_CLEARANCE,
   SHOWCASE_PIN_SIZE,
@@ -48,12 +53,17 @@ import {
   type PinDTO,
   type PinShowcaseDTO,
   type PinShowcasePlacementDTO,
+  type PinTier,
 } from '@dwt/shared';
 
 import { ApiError, apiRequest } from '../../api/client';
 import { PinView } from '../../components/pins/PinView';
+import { TIER_COLOR, TIER_LABEL, TRACK_LABEL } from '../../components/pins/pinTierMeta';
+import { findAvailablePlacement } from './findAvailablePlacement';
 import { theme } from '../../theme/theme';
 import {
+  Badge,
+  Chip,
   EmptyState,
   GradientHeader,
   ScreenContainer,
@@ -64,6 +74,19 @@ const corkTexture: ImageSourcePropType = require('../../../assets/cork.png');
 
 /** Static catalog lookup. */
 const CATALOG: ReadonlyMap<string, PinDTO> = new Map(PINS.map((p) => [p.id, p]));
+const ORDER: ReadonlyMap<string, number> = new Map(PINS.map((p, i) => [p.id, i]));
+
+const TIER_RANK: Record<string, number> = {
+  mythic: 7,
+  prism: 6,
+  pearl: 5,
+  amethyst: 4,
+  gold: 3,
+  silver: 2,
+  bronze: 1,
+};
+
+export type PinSortOption = 'catalog' | 'name-asc' | 'tier-desc' | 'tier-asc';
 
 export interface PinShowcaseScreenProps {
   readonly navigation?: any;
@@ -115,9 +138,29 @@ function PlacedPinItem({
   const baseX = placement.posX * boardSize.width;
   const baseY = placement.posY * boardSize.height;
 
+  const minLeft = SHOWCASE_BOARD_MARGIN;
+  const maxLeft = Math.max(minLeft, boardSize.width - SHOWCASE_PIN_SIZE - SHOWCASE_BOARD_MARGIN);
+  const minTop = SHOWCASE_BOARD_MARGIN;
+  const maxTop = Math.max(minTop, boardSize.height - SHOWCASE_PIN_SIZE - SHOWCASE_BOARD_MARGIN);
+
+  const left = Math.max(
+    minLeft,
+    Math.min(maxLeft, baseX - SHOWCASE_PIN_SIZE / 2),
+  );
+  const top = Math.max(
+    minTop,
+    Math.min(maxTop, baseY - SHOWCASE_PIN_SIZE / 2),
+  );
+
   const stateRef = useRef({
     baseX,
     baseY,
+    left,
+    top,
+    minLeft,
+    maxLeft,
+    minTop,
+    maxTop,
     placement,
     allPlacements,
     boardSize,
@@ -128,6 +171,12 @@ function PlacedPinItem({
   stateRef.current = {
     baseX,
     baseY,
+    left,
+    top,
+    minLeft,
+    maxLeft,
+    minTop,
+    maxTop,
     placement,
     allPlacements,
     boardSize,
@@ -144,9 +193,23 @@ function PlacedPinItem({
         setIsDragging(true);
         pan.setValue({ x: 0, y: 0 });
       },
-      onPanResponderMove: Animated.event([null, { dx: pan.x, dy: pan.y }], {
-        useNativeDriver: false,
-      }),
+      onPanResponderMove: (_e, gestureState) => {
+        const {
+          left: curLeft,
+          top: curTop,
+          minLeft: curMinLeft,
+          maxLeft: curMaxLeft,
+          minTop: curMinTop,
+          maxTop: curMaxTop,
+        } = stateRef.current;
+        const minDx = curMinLeft - curLeft;
+        const maxDx = curMaxLeft - curLeft;
+        const minDy = curMinTop - curTop;
+        const maxDy = curMaxTop - curTop;
+        const clampedDx = Math.max(minDx, Math.min(maxDx, gestureState.dx));
+        const clampedDy = Math.max(minDy, Math.min(maxDy, gestureState.dy));
+        pan.setValue({ x: clampedDx, y: clampedDy });
+      },
       onPanResponderRelease: (_e, gestureState) => {
         setIsDragging(false);
         const {
@@ -171,11 +234,30 @@ function PlacedPinItem({
         const finalCenterX = currentBaseX + gestureState.dx;
         const finalCenterY = currentBaseY + gestureState.dy;
 
+        const curMinLeft = SHOWCASE_BOARD_MARGIN;
+        const curMaxLeft = Math.max(
+          curMinLeft,
+          currentBoardSize.width - SHOWCASE_PIN_SIZE - SHOWCASE_BOARD_MARGIN,
+        );
+        const curMinTop = SHOWCASE_BOARD_MARGIN;
+        const curMaxTop = Math.max(
+          curMinTop,
+          currentBoardSize.height - SHOWCASE_PIN_SIZE - SHOWCASE_BOARD_MARGIN,
+        );
+
+        const minCenterX = curMinLeft + SHOWCASE_PIN_SIZE / 2;
+        const maxCenterX = curMaxLeft + SHOWCASE_PIN_SIZE / 2;
+        const minCenterY = curMinTop + SHOWCASE_PIN_SIZE / 2;
+        const maxCenterY = curMaxTop + SHOWCASE_PIN_SIZE / 2;
+
+        const clampedCenterX = Math.max(minCenterX, Math.min(maxCenterX, finalCenterX));
+        const clampedCenterY = Math.max(minCenterY, Math.min(maxCenterY, finalCenterY));
+
         // Convert to reference space for exact clearance test
         const candRef = {
           pinId: currentPlacement.pinId,
-          x: (finalCenterX / currentBoardSize.width) * SHOWCASE_REFERENCE_SIZE.width,
-          y: (finalCenterY / currentBoardSize.height) * SHOWCASE_REFERENCE_SIZE.height,
+          x: (clampedCenterX / currentBoardSize.width) * SHOWCASE_REFERENCE_SIZE.width,
+          y: (clampedCenterY / currentBoardSize.height) * SHOWCASE_REFERENCE_SIZE.height,
         };
         const othersRef = currentAllPlacements
           .filter((o) => o.pinId !== currentPlacement.pinId)
@@ -194,8 +276,8 @@ function PlacedPinItem({
             useNativeDriver: false,
           }).start();
         } else {
-          const newPosX = Math.max(0, Math.min(1, finalCenterX / currentBoardSize.width));
-          const newPosY = Math.max(0, Math.min(1, finalCenterY / currentBoardSize.height));
+          const newPosX = clampedCenterX / currentBoardSize.width;
+          const newPosY = clampedCenterY / currentBoardSize.height;
           pan.setValue({ x: 0, y: 0 });
           currentOnMove(currentPlacement.pinId, newPosX, newPosY);
         }
@@ -209,15 +291,6 @@ function PlacedPinItem({
       },
     }),
   ).current;
-
-  const left = Math.max(
-    0,
-    Math.min(boardSize.width - SHOWCASE_PIN_SIZE, baseX - SHOWCASE_PIN_SIZE / 2),
-  );
-  const top = Math.max(
-    0,
-    Math.min(boardSize.height - SHOWCASE_PIN_SIZE, baseY - SHOWCASE_PIN_SIZE / 2),
-  );
 
   if (isReadOnly) {
     return (
@@ -292,6 +365,7 @@ interface TrayPinItemProps {
   readonly boardOffset: { readonly x: number; readonly y: number };
   readonly containerOffset: { readonly x: number; readonly y: number };
   readonly onPlace: (pinId: string, posX: number, posY: number) => void;
+  readonly onTapPlace?: (pinId: string) => void;
   readonly onDragStart: (dragState: {
     pinId: string;
     pan: Animated.ValueXY;
@@ -309,6 +383,7 @@ function TrayPinItem({
   boardOffset,
   containerOffset,
   onPlace,
+  onTapPlace,
   onDragStart,
   onDragEnd,
   isDragging,
@@ -323,6 +398,7 @@ function TrayPinItem({
     boardOffset,
     containerOffset,
     onPlace,
+    onTapPlace,
     onDragStart,
     onDragEnd,
   });
@@ -333,6 +409,7 @@ function TrayPinItem({
     boardOffset,
     containerOffset,
     onPlace,
+    onTapPlace,
     onDragStart,
     onDragEnd,
   };
@@ -378,8 +455,19 @@ function TrayPinItem({
           boardSize: currentBoardSize,
           boardOffset: currentBoardOffset,
           onPlace: currentOnPlace,
+          onTapPlace: currentOnTapPlace,
           onDragEnd: currentOnDragEnd,
         } = stateRef.current;
+
+        // If tap without significant drag, place at first available position
+        if (Math.abs(gestureState.dx) < 5 && Math.abs(gestureState.dy) < 5) {
+          pan.setValue({ x: 0, y: 0 });
+          currentOnDragEnd();
+          if (currentOnTapPlace) {
+            currentOnTapPlace(currentPinId);
+          }
+          return;
+        }
 
         let dropX = currentBoardSize.width / 2;
         let dropY = currentBoardSize.height / 2;
@@ -392,11 +480,25 @@ function TrayPinItem({
           dropY = currentBoardSize.height / 2 + gestureState.dy;
         }
 
+        const minCenterX = SHOWCASE_BOARD_MARGIN + SHOWCASE_PIN_SIZE / 2;
+        const maxCenterX = Math.max(
+          minCenterX,
+          currentBoardSize.width - SHOWCASE_BOARD_MARGIN - SHOWCASE_PIN_SIZE / 2,
+        );
+        const minCenterY = SHOWCASE_BOARD_MARGIN + SHOWCASE_PIN_SIZE / 2;
+        const maxCenterY = Math.max(
+          minCenterY,
+          currentBoardSize.height - SHOWCASE_BOARD_MARGIN - SHOWCASE_PIN_SIZE / 2,
+        );
+
+        const clampedDropX = Math.max(minCenterX, Math.min(maxCenterX, dropX));
+        const clampedDropY = Math.max(minCenterY, Math.min(maxCenterY, dropY));
+
         // Check clearance in reference space
         const candRef = {
           pinId: currentPinId,
-          x: (dropX / currentBoardSize.width) * SHOWCASE_REFERENCE_SIZE.width,
-          y: (dropY / currentBoardSize.height) * SHOWCASE_REFERENCE_SIZE.height,
+          x: (clampedDropX / currentBoardSize.width) * SHOWCASE_REFERENCE_SIZE.width,
+          y: (clampedDropY / currentBoardSize.height) * SHOWCASE_REFERENCE_SIZE.height,
         };
         const existingRef = currentAllPlacements.map((o) => ({
           pinId: o.pinId,
@@ -414,8 +516,8 @@ function TrayPinItem({
             currentOnDragEnd();
           });
         } else {
-          const newPosX = Math.max(0, Math.min(1, dropX / currentBoardSize.width));
-          const newPosY = Math.max(0, Math.min(1, dropY / currentBoardSize.height));
+          const newPosX = clampedDropX / currentBoardSize.width;
+          const newPosY = clampedDropY / currentBoardSize.height;
           pan.setValue({ x: 0, y: 0 });
           currentOnDragEnd();
           currentOnPlace(currentPinId, newPosX, newPosY);
@@ -441,7 +543,10 @@ function TrayPinItem({
         isDragging && styles.trayPinDragging,
       ]}
     >
-      <PinView pinId={pinId} tier={pin?.tier ?? 'bronze'} unlocked={true} size={56} />
+      <PinView pinId={pinId} tier={pin?.tier ?? 'bronze'} unlocked={true} size={64} />
+      <Text style={styles.trayPinName} numberOfLines={1}>
+        {pin?.name ?? pinId}
+      </Text>
     </View>
   );
 }
@@ -626,6 +731,22 @@ export default function PinShowcaseScreen(props: PinShowcaseScreenProps): React.
     },
   });
 
+  // Unplaced pins tray state: search, sort, filter, and expanded view
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [sortOption, setSortOption] = useState<PinSortOption>('catalog');
+  const [tierFilter, setTierFilter] = useState<PinTier | 'all'>('all');
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  const handleCycleSort = useCallback(() => {
+    setSortOption((prev) => {
+      if (prev === 'catalog') return 'name-asc';
+      if (prev === 'name-asc') return 'tier-desc';
+      if (prev === 'tier-desc') return 'tier-asc';
+      return 'catalog';
+    });
+  }, []);
+
   const handleMovePin = useCallback(
     (pinId: string, posX: number, posY: number) => {
       placePinMutation.mutate({ pinId, posX, posY });
@@ -653,6 +774,57 @@ export default function PinShowcaseScreen(props: PinShowcaseScreenProps): React.
 
   const placements = showcaseQuery.data?.placements ?? [];
   const unplaced = showcaseQuery.data?.unplaced ?? [];
+
+  const handleTapPlace = useCallback(
+    (pinId: string) => {
+      if (placements.length >= SHOWCASE_MAX_PINS) return;
+      const spot = findAvailablePlacement(pinId, placements, boardSize);
+      if (spot) {
+        placePinMutation.mutate({ pinId, posX: spot.posX, posY: spot.posY });
+      }
+    },
+    [placements, boardSize, placePinMutation],
+  );
+
+  // Filtered and sorted unplaced pins list
+  const filteredUnplaced = useMemo(() => {
+    let list = [...unplaced];
+    if (tierFilter !== 'all') {
+      list = list.filter((id) => CATALOG.get(id)?.tier === tierFilter);
+    }
+    if (searchQuery.trim().length > 0) {
+      const q = searchQuery.trim().toLowerCase();
+      list = list.filter((id) => {
+        const p = CATALOG.get(id);
+        if (!p) return false;
+        return (
+          p.name.toLowerCase().includes(q) ||
+          p.description.toLowerCase().includes(q) ||
+          p.track.toLowerCase().includes(q) ||
+          p.tier.toLowerCase().includes(q)
+        );
+      });
+    }
+    list.sort((aId, bId) => {
+      const a = CATALOG.get(aId);
+      const b = CATALOG.get(bId);
+      if (sortOption === 'name-asc') {
+        return (a?.name ?? '').localeCompare(b?.name ?? '');
+      }
+      if (sortOption === 'tier-desc') {
+        const rankDiff = (TIER_RANK[b?.tier ?? 'bronze'] ?? 0) - (TIER_RANK[a?.tier ?? 'bronze'] ?? 0);
+        if (rankDiff !== 0) return rankDiff;
+        return (ORDER.get(aId) ?? 0) - (ORDER.get(bId) ?? 0);
+      }
+      if (sortOption === 'tier-asc') {
+        const rankDiff = (TIER_RANK[a?.tier ?? 'bronze'] ?? 0) - (TIER_RANK[b?.tier ?? 'bronze'] ?? 0);
+        if (rankDiff !== 0) return rankDiff;
+        return (ORDER.get(aId) ?? 0) - (ORDER.get(bId) ?? 0);
+      }
+      return (ORDER.get(aId) ?? 0) - (ORDER.get(bId) ?? 0);
+    });
+    return list;
+  }, [unplaced, tierFilter, searchQuery, sortOption]);
 
   const headerNavProps = nav ? { onBack: () => (nav as any).goBack() } : {};
   const headerActionProps = !isReadOnly
@@ -762,25 +934,32 @@ export default function PinShowcaseScreen(props: PinShowcaseScreenProps): React.
           </View>
         ) : (
           <View style={styles.boardOuter}>
-            <View style={styles.boardFrame} ref={boardRef} onLayout={onBoardLayout}>
+            <View style={styles.boardFrame}>
               <ImageBackground
                 source={corkTexture}
                 resizeMode="repeat"
                 style={styles.corkBoard}
                 testID="pin-showcase-board"
               >
-                {placements.map((p) => (
-                  <PlacedPinItem
-                    key={p.pinId}
-                    placement={p}
-                    allPlacements={placements}
-                    boardSize={boardSize}
-                    boardOffset={boardOffset}
-                    isReadOnly={isReadOnly}
-                    onMove={handleMovePin}
-                    onRemove={handleRemovePin}
-                  />
-                ))}
+                <View
+                  ref={boardRef}
+                  onLayout={onBoardLayout}
+                  style={styles.boardContent}
+                  collapsable={false}
+                >
+                  {placements.map((p) => (
+                    <PlacedPinItem
+                      key={p.pinId}
+                      placement={p}
+                      allPlacements={placements}
+                      boardSize={boardSize}
+                      boardOffset={boardOffset}
+                      isReadOnly={isReadOnly}
+                      onMove={handleMovePin}
+                      onRemove={handleRemovePin}
+                    />
+                  ))}
+                </View>
               </ImageBackground>
             </View>
           </View>
@@ -790,18 +969,115 @@ export default function PinShowcaseScreen(props: PinShowcaseScreenProps): React.
         {!isReadOnly && (
           <View style={styles.trayContainer} testID="pin-showcase-tray">
             <View style={styles.trayHeader}>
-              <Text style={styles.trayTitle}>Unplaced Pins</Text>
-              <Text style={styles.trayCount}>{unplaced.length} available</Text>
+              <View style={styles.trayHeaderLeft}>
+                <Text style={styles.trayTitle}>Unplaced Pins</Text>
+                <Text style={styles.trayCount}>
+                  {filteredUnplaced.length === unplaced.length
+                    ? `${unplaced.length} available`
+                    : `${filteredUnplaced.length} of ${unplaced.length}`}
+                </Text>
+              </View>
+              <View style={styles.trayHeaderActions}>
+                <Pressable
+                  testID="pin-showcase-search-toggle"
+                  onPress={() => setIsSearchOpen((prev) => !prev)}
+                  style={({ pressed }) => [
+                    styles.trayActionBtn,
+                    isSearchOpen && styles.trayActionBtnActive,
+                    pressed && styles.btnPressed,
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Search unplaced pins"
+                  hitSlop={6}
+                >
+                  <Ionicons
+                    name="search"
+                    size={16}
+                    color={isSearchOpen ? theme.color.accent : theme.color.textSecondary}
+                  />
+                </Pressable>
+                <Pressable
+                  testID="pin-showcase-sort-toggle"
+                  onPress={handleCycleSort}
+                  style={({ pressed }) => [
+                    styles.trayActionBtn,
+                    sortOption !== 'catalog' && styles.trayActionBtnActive,
+                    pressed && styles.btnPressed,
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Sort unplaced pins: currently ${sortOption}`}
+                  hitSlop={6}
+                >
+                  <Ionicons
+                    name="swap-vertical"
+                    size={16}
+                    color={sortOption !== 'catalog' ? theme.color.accent : theme.color.textSecondary}
+                  />
+                  {sortOption !== 'catalog' && (
+                    <Text style={styles.traySortBadgeText}>
+                      {sortOption === 'name-asc' ? 'A-Z' : sortOption === 'tier-desc' ? 'Tier↓' : 'Tier↑'}
+                    </Text>
+                  )}
+                </Pressable>
+                <Pressable
+                  testID="pin-showcase-expand-button"
+                  onPress={() => setIsExpanded(true)}
+                  style={({ pressed }) => [
+                    styles.trayActionBtn,
+                    styles.browseAllBtn,
+                    pressed && styles.btnPressed,
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Browse all unplaced pins"
+                  hitSlop={6}
+                >
+                  <Ionicons name="apps-outline" size={15} color={theme.color.accent} />
+                  <Text style={styles.browseAllBtnText}>Browse All</Text>
+                </Pressable>
+              </View>
             </View>
+
+            {isSearchOpen && (
+              <View style={styles.inlineSearchBar}>
+                <Ionicons
+                  name="search"
+                  size={14}
+                  color={theme.color.textSecondary}
+                  style={{ marginRight: 6 }}
+                />
+                <TextInput
+                  testID="pin-showcase-search-input"
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  placeholder="Search pins..."
+                  placeholderTextColor={theme.color.textSecondary}
+                  style={styles.inlineSearchInput}
+                  autoCorrect={false}
+                  autoCapitalize="none"
+                />
+                {searchQuery.length > 0 && (
+                  <Pressable
+                    testID="pin-showcase-search-clear"
+                    onPress={() => setSearchQuery('')}
+                    hitSlop={8}
+                  >
+                    <Ionicons name="close-circle" size={16} color={theme.color.textSecondary} />
+                  </Pressable>
+                )}
+              </View>
+            )}
+
             {unplaced.length === 0 ? (
               <Text style={styles.trayEmptyText}>All claimed pins are currently on your board.</Text>
+            ) : filteredUnplaced.length === 0 ? (
+              <Text style={styles.trayEmptyText}>No unplaced pins match your search or filter.</Text>
             ) : (
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.trayScrollContent}
               >
-                {unplaced.map((pinId) => (
+                {filteredUnplaced.map((pinId) => (
                   <TrayPinItem
                     key={pinId}
                     pinId={pinId}
@@ -810,6 +1086,7 @@ export default function PinShowcaseScreen(props: PinShowcaseScreenProps): React.
                     boardOffset={boardOffset}
                     containerOffset={containerOffset}
                     onPlace={handlePlaceTrayPin}
+                    onTapPlace={handleTapPlace}
                     onDragStart={handleDragStart}
                     onDragEnd={handleDragEnd}
                     isDragging={draggingTrayPin?.pinId === pinId}
@@ -819,6 +1096,190 @@ export default function PinShowcaseScreen(props: PinShowcaseScreenProps): React.
             )}
           </View>
         )}
+
+        {/* Expanded Available Pins Sheet / Modal */}
+        <Modal
+          visible={isExpanded}
+          animationType="slide"
+          transparent
+          onRequestClose={() => setIsExpanded(false)}
+        >
+          <View style={styles.modalBackdrop}>
+            <View style={styles.modalContent} testID="pin-showcase-modal">
+              {/* Modal Header */}
+              <View style={styles.modalHeader}>
+                <View>
+                  <Text style={styles.modalTitle}>Available Pins</Text>
+                  <Text style={styles.modalSubtitle}>
+                    Board: {placements.length}/{SHOWCASE_MAX_PINS} placed • {filteredUnplaced.length} available
+                  </Text>
+                </View>
+                <Pressable
+                  testID="pin-showcase-modal-close"
+                  onPress={() => setIsExpanded(false)}
+                  style={styles.modalCloseBtn}
+                  accessibilityRole="button"
+                  accessibilityLabel="Close available pins"
+                  hitSlop={8}
+                >
+                  <Ionicons name="close" size={22} color={theme.color.textPrimary} />
+                </Pressable>
+              </View>
+
+              {/* Modal Search Bar */}
+              <View style={styles.modalSearchBar}>
+                <Ionicons name="search" size={18} color={theme.color.textSecondary} style={{ marginRight: 8 }} />
+                <TextInput
+                  testID="pin-showcase-modal-search-input"
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  placeholder="Search by name, description, or track..."
+                  placeholderTextColor={theme.color.textSecondary}
+                  style={styles.modalSearchInput}
+                  autoCorrect={false}
+                  autoCapitalize="none"
+                />
+                {searchQuery.length > 0 && (
+                  <Pressable
+                    testID="pin-showcase-modal-search-clear"
+                    onPress={() => setSearchQuery('')}
+                    hitSlop={8}
+                  >
+                    <Ionicons name="close-circle" size={18} color={theme.color.textSecondary} />
+                  </Pressable>
+                )}
+              </View>
+
+              {/* Sort Chips */}
+              <View style={styles.modalSortRow}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsScroll}>
+                  <Chip
+                    testID="pin-showcase-sort-catalog"
+                    label="Catalog"
+                    active={sortOption === 'catalog'}
+                    onPress={() => setSortOption('catalog')}
+                  />
+                  <Chip
+                    testID="pin-showcase-sort-name"
+                    label="Name A–Z"
+                    active={sortOption === 'name-asc'}
+                    onPress={() => setSortOption('name-asc')}
+                  />
+                  <Chip
+                    testID="pin-showcase-sort-tier"
+                    label="Tier: High to Low"
+                    active={sortOption === 'tier-desc'}
+                    onPress={() => setSortOption('tier-desc')}
+                  />
+                  <Chip
+                    testID="pin-showcase-sort-tier-asc"
+                    label="Tier: Low to High"
+                    active={sortOption === 'tier-asc'}
+                    onPress={() => setSortOption('tier-asc')}
+                  />
+                </ScrollView>
+              </View>
+
+              {/* Tier Filter Chips */}
+              <View style={styles.modalFilterRow}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsScroll}>
+                  <Chip
+                    testID="pin-showcase-tier-all"
+                    label="All Tiers"
+                    active={tierFilter === 'all'}
+                    onPress={() => setTierFilter('all')}
+                  />
+                  {PIN_TIERS.map((t) => (
+                    <Chip
+                      key={t}
+                      testID={`pin-showcase-tier-${t}`}
+                      label={TIER_LABEL[t]}
+                      active={tierFilter === t}
+                      onPress={() => setTierFilter(t)}
+                    />
+                  ))}
+                </ScrollView>
+              </View>
+
+              {/* Grid of Pins */}
+              {filteredUnplaced.length === 0 ? (
+                <View style={styles.modalEmptyWrap}>
+                  <EmptyState
+                    icon="search-outline"
+                    title="No pins found"
+                    body={
+                      searchQuery.length > 0 || tierFilter !== 'all'
+                        ? 'Try clearing your search query or tier filter.'
+                        : 'All claimed pins are placed on your board.'
+                    }
+                  />
+                </View>
+              ) : (
+                <FlatList
+                  data={filteredUnplaced}
+                  keyExtractor={(item) => item}
+                  numColumns={2}
+                  contentContainerStyle={styles.modalGridContent}
+                  columnWrapperStyle={styles.modalGridRow}
+                  renderItem={({ item: pinId }) => {
+                    const p = CATALOG.get(pinId);
+                    const isBoardFull = placements.length >= SHOWCASE_MAX_PINS;
+                    return (
+                      <View testID={`pin-showcase-card-${pinId}`} style={styles.pinCard}>
+                        <View style={styles.cardHeader}>
+                          <Badge
+                            label={TIER_LABEL[p?.tier ?? 'bronze']}
+                            color={TIER_COLOR[p?.tier ?? 'bronze']}
+                          />
+                          <Text style={styles.cardTrackText} numberOfLines={1}>
+                            {p ? TRACK_LABEL[p.track] : ''}
+                          </Text>
+                        </View>
+                        <View style={styles.cardPinWrap}>
+                          <PinView
+                            pinId={pinId}
+                            tier={p?.tier ?? 'bronze'}
+                            unlocked={true}
+                            size={SHOWCASE_PIN_SIZE}
+                          />
+                        </View>
+                        <Text style={styles.cardPinName} numberOfLines={2}>
+                          {p?.name ?? pinId}
+                        </Text>
+                        <Pressable
+                          testID={`pin-showcase-card-place-${pinId}`}
+                          onPress={() => handleTapPlace(pinId)}
+                          disabled={isBoardFull}
+                          style={({ pressed }) => [
+                            styles.cardPlaceBtn,
+                            isBoardFull && styles.cardPlaceBtnDisabled,
+                            pressed && styles.btnPressed,
+                          ]}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Place ${p?.name ?? pinId} on board`}
+                        >
+                          <Ionicons
+                            name={isBoardFull ? 'lock-closed' : 'add-circle-outline'}
+                            size={16}
+                            color={isBoardFull ? theme.color.textSecondary : theme.color.textOnPrimary}
+                          />
+                          <Text
+                            style={[
+                              styles.cardPlaceBtnText,
+                              isBoardFull && styles.cardPlaceBtnTextDisabled,
+                            ]}
+                          >
+                            {isBoardFull ? 'Board Full' : 'Place on Board'}
+                          </Text>
+                        </Pressable>
+                      </View>
+                    );
+                  }}
+                />
+              )}
+            </View>
+          </View>
+        </Modal>
 
         {/* Floating drag overlay: renders above board and tray when dragging a new pin */}
         {draggingTrayPin && (
@@ -916,6 +1377,9 @@ const styles = StyleSheet.create({
     flex: 1,
     position: 'relative',
   },
+  boardContent: {
+    ...StyleSheet.absoluteFill,
+  },
   placedPin: {
     position: 'absolute',
     width: SHOWCASE_PIN_SIZE,
@@ -937,8 +1401,8 @@ const styles = StyleSheet.create({
   },
   removeBadge: {
     position: 'absolute',
-    top: -4,
-    right: -4,
+    top: 0,
+    right: 0,
     backgroundColor: '#ffffff',
     borderRadius: 12,
   },
@@ -954,6 +1418,66 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: theme.spacing.xs,
+  },
+  trayHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+  },
+  trayHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.xs,
+  },
+  trayActionBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: theme.radius.sm,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 4,
+  },
+  trayActionBtnActive: {
+    backgroundColor: 'rgba(230,195,92,0.15)',
+    borderColor: theme.color.accent,
+    borderWidth: 1,
+  },
+  traySortBadgeText: {
+    ...theme.typography.meta,
+    fontSize: 10,
+    color: theme.color.accent,
+    fontWeight: '700',
+  },
+  browseAllBtn: {
+    backgroundColor: 'rgba(230,195,92,0.12)',
+    paddingHorizontal: theme.spacing.sm,
+  },
+  browseAllBtnText: {
+    ...theme.typography.meta,
+    color: theme.color.accent,
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  btnPressed: {
+    opacity: 0.7,
+  },
+  inlineSearchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.25)',
+    borderRadius: theme.radius.md,
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: 4,
+    marginVertical: theme.spacing.xs,
+  },
+  inlineSearchInput: {
+    flex: 1,
+    ...theme.typography.body,
+    color: theme.color.textPrimary,
+    paddingVertical: 2,
+    fontSize: 13,
   },
   trayTitle: {
     ...theme.typography.meta,
@@ -972,15 +1496,151 @@ const styles = StyleSheet.create({
   },
   trayScrollContent: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     paddingVertical: theme.spacing.xs,
     gap: theme.spacing.md,
   },
   trayPinItem: {
-    width: 56,
-    height: 56,
+    width: 72,
+    alignItems: 'center',
+    gap: 4,
+  },
+  trayPinName: {
+    ...theme.typography.meta,
+    fontSize: 10,
+    color: theme.color.textSecondary,
+    textAlign: 'center',
+    width: 72,
+    marginTop: 2,
   },
   trayPinDragging: {
     opacity: 0.25,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: theme.color.surface,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    height: '82%',
+    paddingHorizontal: theme.spacing.md,
+    paddingTop: theme.spacing.md,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: theme.spacing.sm,
+  },
+  modalTitle: {
+    ...theme.typography.title,
+    color: theme.color.textPrimary,
+    fontWeight: '800',
+  },
+  modalSubtitle: {
+    ...theme.typography.meta,
+    color: theme.color.textSecondary,
+    marginTop: 2,
+  },
+  modalCloseBtn: {
+    padding: 6,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+  modalSearchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.25)',
+    borderRadius: theme.radius.md,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: 8,
+    marginVertical: theme.spacing.xs,
+  },
+  modalSearchInput: {
+    flex: 1,
+    ...theme.typography.body,
+    color: theme.color.textPrimary,
+  },
+  modalSortRow: {
+    marginVertical: 4,
+  },
+  modalFilterRow: {
+    marginVertical: 4,
+  },
+  chipsScroll: {
+    gap: theme.spacing.xs,
+    paddingVertical: 2,
+  },
+  modalEmptyWrap: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: theme.spacing.xxl,
+  },
+  modalGridContent: {
+    paddingVertical: theme.spacing.md,
+    paddingBottom: 40,
+  },
+  modalGridRow: {
+    justifyContent: 'space-between',
+    gap: theme.spacing.md,
+  },
+  pinCard: {
+    flex: 1,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    borderRadius: theme.radius.lg,
+    padding: theme.spacing.md,
+    alignItems: 'center',
+    marginBottom: theme.spacing.md,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    width: '100%',
+    marginBottom: theme.spacing.xs,
+  },
+  cardTrackText: {
+    ...theme.typography.meta,
+    fontSize: 10,
+    color: theme.color.textSecondary,
+  },
+  cardPinWrap: {
+    marginVertical: theme.spacing.sm,
+  },
+  cardPinName: {
+    ...theme.typography.meta,
+    fontWeight: '700',
+    color: theme.color.textPrimary,
+    textAlign: 'center',
+    minHeight: 32,
+    marginBottom: theme.spacing.sm,
+  },
+  cardPlaceBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    backgroundColor: theme.color.primary,
+    borderRadius: theme.radius.md,
+    paddingVertical: 8,
+    paddingHorizontal: theme.spacing.sm,
+    width: '100%',
+  },
+  cardPlaceBtnDisabled: {
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+  cardPlaceBtnText: {
+    ...theme.typography.meta,
+    color: theme.color.textOnPrimary,
+    fontWeight: '700',
+  },
+  cardPlaceBtnTextDisabled: {
+    color: theme.color.textSecondary,
   },
 });

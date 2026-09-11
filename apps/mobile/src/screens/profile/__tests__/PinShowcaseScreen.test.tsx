@@ -32,6 +32,9 @@ import PinShowcaseScreen from '../PinShowcaseScreen';
 import { ApiError, apiRequest as mockedApiRequest } from '../../../api/client';
 import {
   PINS,
+  SHOWCASE_BOARD_MARGIN,
+  SHOWCASE_PIN_SIZE,
+  SHOWCASE_REFERENCE_SIZE,
   type PinDTO,
   type PinShowcaseDTO,
 } from '@dwt/shared';
@@ -271,9 +274,9 @@ describe('PinShowcaseScreen (Task 16.10)', () => {
 
     const pinBView = await screen.findByTestId(`pin-showcase-placed-${pinB.id}`);
 
-    // Try to drop pin B at (200, 320) which is 20px from Pin A (center 180, 320)
-    // 20px < SHOWCASE_MIN_PIN_CLEARANCE (46px) -> Overlap!
-    simulateDrag(pinBView, { x: 288, y: 512 }, { x: 200, y: 320 });
+    // Try to drop pin B at (230, 320) which is 50px from Pin A (center 180, 320)
+    // 50px < SHOWCASE_MIN_PIN_CLEARANCE (60px) -> Overlap!
+    simulateDrag(pinBView, { x: 288, y: 512 }, { x: 230, y: 320 });
 
     // Ensure NO PUT was called
     expect(apiRequestMock).not.toHaveBeenCalledWith(
@@ -298,7 +301,7 @@ describe('PinShowcaseScreen (Task 16.10)', () => {
     apiRequestMock.mockImplementation(async (method: string, path: string) => {
       if (method === 'GET' && path === '/me/pin-showcase') return showcase as never;
       if (method === 'PUT' && path === `/me/pin-showcase/${pinB.id}`) {
-        return { pinId: pinB.id, posX: 230 / 360, posY: 0.5, zIndex: 2 } as never;
+        return { pinId: pinB.id, posX: 245 / 360, posY: 0.5, zIndex: 2 } as never;
       }
       throw new Error(`Unexpected ${method} ${path}`);
     });
@@ -307,13 +310,13 @@ describe('PinShowcaseScreen (Task 16.10)', () => {
 
     const pinBView = await screen.findByTestId(`pin-showcase-placed-${pinB.id}`);
 
-    // Drop pin B at (230, 320) which is 50px from Pin A (180, 320)
-    // 50px >= SHOWCASE_MIN_PIN_CLEARANCE (46px) -> Valid drop!
-    simulateDrag(pinBView, { x: 288, y: 512 }, { x: 230, y: 320 });
+    // Drop pin B at (245, 320) which is 65px from Pin A (180, 320)
+    // 65px >= SHOWCASE_MIN_PIN_CLEARANCE (60px) -> Valid drop!
+    simulateDrag(pinBView, { x: 288, y: 512 }, { x: 245, y: 320 });
 
     await waitFor(() => {
       expect(apiRequestMock).toHaveBeenCalledWith('PUT', `/me/pin-showcase/${pinB.id}`, {
-        posX: 230 / 360,
+        posX: 245 / 360,
         posY: 0.5,
       });
     });
@@ -624,4 +627,282 @@ describe('PinShowcaseScreen (Task 16.10)', () => {
       expect.anything(),
     );
   });
+
+  it('searching unplaced pins filters by name in tray (Requirement 24.15)', async () => {
+    const showcase: PinShowcaseDTO = {
+      ownerId: 'user-123',
+      placements: [],
+      unplaced: [pinA.id, pinB.id],
+    };
+
+    apiRequestMock.mockImplementation(async (method: string, path: string) => {
+      if (method === 'GET' && path === '/me/pin-showcase') return showcase as never;
+      throw new Error(`Unexpected ${method} ${path}`);
+    });
+
+    renderScreen();
+
+    await screen.findByTestId('pin-showcase-tray');
+    expect(screen.getByTestId(`pin-showcase-tray-pin-${pinA.id}`)).toBeTruthy();
+    expect(screen.getByTestId(`pin-showcase-tray-pin-${pinB.id}`)).toBeTruthy();
+
+    // Toggle search bar
+    fireEvent.press(screen.getByTestId('pin-showcase-search-toggle'));
+    const searchInput = await screen.findByTestId('pin-showcase-search-input');
+
+    // Filter to pinA's name
+    fireEvent.changeText(searchInput, pinA.name);
+
+    expect(screen.getByTestId(`pin-showcase-tray-pin-${pinA.id}`)).toBeTruthy();
+    expect(screen.queryByTestId(`pin-showcase-tray-pin-${pinB.id}`)).toBeNull();
+
+    // Clear search
+    fireEvent.press(screen.getByTestId('pin-showcase-search-clear'));
+    expect(screen.getByTestId(`pin-showcase-tray-pin-${pinA.id}`)).toBeTruthy();
+    expect(screen.getByTestId(`pin-showcase-tray-pin-${pinB.id}`)).toBeTruthy();
+  });
+
+  it('sorting unplaced pins reorders tray pins by name and tier (Requirement 24.15)', async () => {
+    const pinCenturion = PINS[0]!; // 'Centurion 5', bronze
+    const pinAllAttractions = PINS[11]!; // 'All Attractions', prism
+
+    const showcase: PinShowcaseDTO = {
+      ownerId: 'user-123',
+      placements: [],
+      unplaced: [pinCenturion.id, pinAllAttractions.id],
+    };
+
+    apiRequestMock.mockImplementation(async (method: string, path: string) => {
+      if (method === 'GET' && path === '/me/pin-showcase') return showcase as never;
+      throw new Error(`Unexpected ${method} ${path}`);
+    });
+
+    renderScreen();
+
+    // In catalog order, pinCenturion is first
+    let trayPins = await screen.findAllByTestId(/pin-showcase-tray-pin-/);
+    expect(trayPins[0]?.props.testID).toBe(`pin-showcase-tray-pin-${pinCenturion.id}`);
+
+    // Cycle sort once -> name-asc ('All Attractions' < 'Centurion 5')
+    fireEvent.press(screen.getByTestId('pin-showcase-sort-toggle'));
+
+    trayPins = await screen.findAllByTestId(/pin-showcase-tray-pin-/);
+    expect(trayPins[0]?.props.testID).toBe(`pin-showcase-tray-pin-${pinAllAttractions.id}`);
+
+    // Cycle sort again -> tier-desc ('prism' > 'bronze')
+    fireEvent.press(screen.getByTestId('pin-showcase-sort-toggle'));
+
+    trayPins = await screen.findAllByTestId(/pin-showcase-tray-pin-/);
+    expect(trayPins[0]?.props.testID).toBe(`pin-showcase-tray-pin-${pinAllAttractions.id}`);
+  });
+
+  it('opening the expanded modal displays full pin cards and metadata (Requirement 24.16)', async () => {
+    const showcase: PinShowcaseDTO = {
+      ownerId: 'user-123',
+      placements: [],
+      unplaced: [pinA.id, pinB.id],
+    };
+
+    apiRequestMock.mockImplementation(async (method: string, path: string) => {
+      if (method === 'GET' && path === '/me/pin-showcase') return showcase as never;
+      throw new Error(`Unexpected ${method} ${path}`);
+    });
+
+    renderScreen();
+
+    // Tap "Browse All" button
+    const expandBtn = await screen.findByTestId('pin-showcase-expand-button');
+    fireEvent.press(expandBtn);
+
+    // Modal and cards should be visible
+    expect(await screen.findByTestId('pin-showcase-modal')).toBeTruthy();
+    expect(screen.getByTestId(`pin-showcase-card-${pinA.id}`)).toBeTruthy();
+    expect(screen.getByTestId(`pin-showcase-card-${pinB.id}`)).toBeTruthy();
+    expect(screen.getByTestId(`pin-showcase-card-place-${pinA.id}`)).toBeTruthy();
+
+    // Close modal
+    fireEvent.press(screen.getByTestId('pin-showcase-modal-close'));
+  });
+
+  it('tapping "Place on Board" in the modal auto-places the pin (Requirement 24.17)', async () => {
+    const showcase: PinShowcaseDTO = {
+      ownerId: 'user-123',
+      placements: [],
+      unplaced: [pinB.id],
+    };
+
+    apiRequestMock.mockImplementation(async (method: string, path: string) => {
+      if (method === 'GET' && path === '/me/pin-showcase') return showcase as never;
+      if (method === 'PUT' && path === `/me/pin-showcase/${pinB.id}`) {
+        return { pinId: pinB.id, posX: 0.133, posY: 0.081, zIndex: 0 } as never;
+      }
+      throw new Error(`Unexpected ${method} ${path}`);
+    });
+
+    renderScreen();
+
+    // Open modal
+    const expandBtn = await screen.findByTestId('pin-showcase-expand-button');
+    fireEvent.press(expandBtn);
+
+    // Press Place on Board
+    const placeBtn = await screen.findByTestId(`pin-showcase-card-place-${pinB.id}`);
+    fireEvent.press(placeBtn);
+
+    await waitFor(() => {
+      expect(apiRequestMock).toHaveBeenCalledWith(
+        'PUT',
+        `/me/pin-showcase/${pinB.id}`,
+        expect.objectContaining({
+          posX: expect.any(Number),
+          posY: expect.any(Number),
+        }),
+      );
+    });
+  });
+
+  it('tapping a tray pin directly auto-places it on the board (Requirement 24.17)', async () => {
+    const showcase: PinShowcaseDTO = {
+      ownerId: 'user-123',
+      placements: [],
+      unplaced: [pinB.id],
+    };
+
+    apiRequestMock.mockImplementation(async (method: string, path: string) => {
+      if (method === 'GET' && path === '/me/pin-showcase') return showcase as never;
+      if (method === 'PUT' && path === `/me/pin-showcase/${pinB.id}`) {
+        return { pinId: pinB.id, posX: 0.133, posY: 0.081, zIndex: 0 } as never;
+      }
+      throw new Error(`Unexpected ${method} ${path}`);
+    });
+
+    renderScreen();
+
+    const trayPin = await screen.findByTestId(`pin-showcase-tray-pin-${pinB.id}`);
+
+    // Simulate tap (dx=0, dy=0)
+    simulateDrag(trayPin, { x: 180, y: 700 }, { x: 180, y: 700 });
+
+      await waitFor(() => {
+      expect(apiRequestMock).toHaveBeenCalledWith(
+        'PUT',
+        `/me/pin-showcase/${pinB.id}`,
+        expect.objectContaining({
+          posX: expect.any(Number),
+          posY: expect.any(Number),
+        }),
+      );
+    });
+  });
+
+  it('pins placed at extreme edges (e.g. bottom-left corner with posX: 0, posY: 1) are clamped to SHOWCASE_BOARD_MARGIN and do not go under the border', async () => {
+    const showcase: PinShowcaseDTO = {
+      ownerId: 'user-123',
+      placements: [
+        { pinId: pinA.id, posX: 0.0, posY: 1.0, zIndex: 0 },
+        { pinId: pinB.id, posX: 1.0, posY: 0.0, zIndex: 1 },
+      ],
+      unplaced: [],
+    };
+
+    apiRequestMock.mockImplementation(async (method: string, path: string) => {
+      if (method === 'GET' && path === '/me/pin-showcase') return showcase as never;
+      throw new Error(`Unexpected ${method} ${path}`);
+    });
+
+    renderScreen();
+
+    const placedA = await screen.findByTestId(`pin-showcase-placed-${pinA.id}`);
+    const placedB = await screen.findByTestId(`pin-showcase-placed-${pinB.id}`);
+
+    const styleA = StyleSheet.flatten(placedA.props.style);
+    const styleB = StyleSheet.flatten(placedB.props.style);
+
+    // Pin A at bottom-left:
+    // left clamped to at least SHOWCASE_BOARD_MARGIN (0)
+    expect(styleA.left).toBe(SHOWCASE_BOARD_MARGIN);
+    // top clamped so bottom of pin (top + 72) stays within boardHeight - SHOWCASE_BOARD_MARGIN
+    // 640 - 72 - 0 = 568
+    expect(styleA.top).toBe(SHOWCASE_REFERENCE_SIZE.height - SHOWCASE_PIN_SIZE - SHOWCASE_BOARD_MARGIN);
+
+    // Pin B at top-right:
+    // left clamped so right edge of pin (left + 72) stays within boardWidth - SHOWCASE_BOARD_MARGIN
+    // 360 - 72 - 0 = 288
+    expect(styleB.left).toBe(SHOWCASE_REFERENCE_SIZE.width - SHOWCASE_PIN_SIZE - SHOWCASE_BOARD_MARGIN);
+    // top clamped to at least SHOWCASE_BOARD_MARGIN (0)
+    expect(styleB.top).toBe(SHOWCASE_BOARD_MARGIN);
+  });
+
+  it('dragging a placed pin toward the border clamps movement and drop coordinates to SHOWCASE_BOARD_MARGIN without slipping under the border', async () => {
+    const showcase: PinShowcaseDTO = {
+      ownerId: 'user-123',
+      placements: [
+        { pinId: pinA.id, posX: 0.5, posY: 0.5, zIndex: 0 },
+      ],
+      unplaced: [],
+    };
+
+    const expectedMaxPosY =
+      (SHOWCASE_REFERENCE_SIZE.height - SHOWCASE_BOARD_MARGIN - SHOWCASE_PIN_SIZE / 2) /
+      SHOWCASE_REFERENCE_SIZE.height;
+
+    apiRequestMock.mockImplementation(async (method: string, path: string) => {
+      if (method === 'GET' && path === '/me/pin-showcase') return showcase as never;
+      if (method === 'PUT' && path === `/me/pin-showcase/${pinA.id}`) {
+        return { pinId: pinA.id, posX: 0.5, posY: expectedMaxPosY, zIndex: 1 } as never;
+      }
+      throw new Error(`Unexpected ${method} ${path}`);
+    });
+
+    renderScreen();
+
+    const placedPin = await screen.findByTestId(`pin-showcase-placed-${pinA.id}`);
+
+    // Pin starts at center: (180, 320). Drag it far below bottom of board to (180, 999)
+    simulateDrag(placedPin, { x: 180, y: 320 }, { x: 180, y: 999 });
+
+    // The saved coordinate must be clamped so pin stays inside cork margin (maxCenterY = 640 - 36 = 604)
+    // 604 / 640 = 0.94375, NOT 1.0 or beyond
+    await waitFor(() => {
+      expect(apiRequestMock).toHaveBeenCalledWith('PUT', `/me/pin-showcase/${pinA.id}`, {
+        posX: 0.5,
+        posY: expectedMaxPosY,
+      });
+    });
+  });
+
+  it('dragging an unplaced tray pin and dropping it at the bottom edge clamps to safe board bounds without going under the border', async () => {
+    const showcase: PinShowcaseDTO = {
+      ownerId: 'user-123',
+      placements: [],
+      unplaced: [pinB.id],
+    };
+
+    const expectedMaxPosY =
+      (SHOWCASE_REFERENCE_SIZE.height - SHOWCASE_BOARD_MARGIN - SHOWCASE_PIN_SIZE / 2) /
+      SHOWCASE_REFERENCE_SIZE.height;
+
+    apiRequestMock.mockImplementation(async (method: string, path: string) => {
+      if (method === 'GET' && path === '/me/pin-showcase') return showcase as never;
+      if (method === 'PUT' && path === `/me/pin-showcase/${pinB.id}`) {
+        return { pinId: pinB.id, posX: 0.5, posY: expectedMaxPosY, zIndex: 0 } as never;
+      }
+      throw new Error(`Unexpected ${method} ${path}`);
+    });
+
+    renderScreen();
+
+    const trayPin = await screen.findByTestId(`pin-showcase-tray-pin-${pinB.id}`);
+
+    // Drop tray pin at bottom edge (180, 640)
+    simulateDrag(trayPin, { x: 180, y: 700 }, { x: 180, y: 640 });
+
+    await waitFor(() => {
+      expect(apiRequestMock).toHaveBeenCalledWith('PUT', `/me/pin-showcase/${pinB.id}`, {
+        posX: 0.5,
+        posY: expectedMaxPosY,
+      });
+    });
+  });
 });
+

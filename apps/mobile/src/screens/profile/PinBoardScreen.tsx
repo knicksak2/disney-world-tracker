@@ -66,6 +66,7 @@ import {
 } from '../../theme/components';
 import PinDetailModal from './PinDetailModal';
 import PinCelebrationModal, { type CelebrationPosition } from './PinCelebrationModal';
+import { Ionicons } from '@expo/vector-icons';
 
 type Props = NativeStackScreenProps<ProfileStackParamList, 'PinBoard'>;
 
@@ -89,7 +90,7 @@ interface ClaimResponse {
 type OwnershipFilter = 'all' | 'unlocked' | 'locked';
 
 /** Delay between one queued celebration dismissing and the next claim firing (R23.6). */
-const PACE_MS = 40;
+const PACE_MS = 30;
 
 /**
  * Awarded but not yet claimed (Requirement 20.2) — the tap target for claiming. Exported so
@@ -139,9 +140,8 @@ export default function PinBoardScreen({ navigation, route }: Props): JSX.Elemen
   const [queueTotal, setQueueTotal] = useState<number>(initialQueue.length);
   const [celebratingId, setCelebratingId] = useState<string | null>(null);
   const [celebratingIndex, setCelebratingIndex] = useState<number>(0);
-  const claimingRef = useRef(false);
   const pacingRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // True for a brief window after dismissing a celebration that still has more queued behind it
+  // True for a brief window after dismissing a celebration or detail modal that still has more queued behind it
   // (Requirement 23.6) — blocks the drain effect from immediately firing the next claim.
   const [pacing, setPacing] = useState(false);
 
@@ -171,24 +171,23 @@ export default function PinBoardScreen({ navigation, route }: Props): JSX.Elemen
   });
 
   // Drain the queue: claim the head id, then celebrate it. One at a time,
-  // paced so consecutive celebrations in a batch are visibly sequential.
+  // paced so consecutive celebrations in a batch are visibly sequential (R23.6).
+  // The celebration updates immediately as the claim mutation begins in the
+  // background, eliminating network-latency delays between consecutive celebrations.
+  // When viewing details on an unlocked pin (`selected !== null`), queue draining is paused
+  // until the detail modal is closed.
   useEffect(() => {
-    if (celebratingId !== null || queue.length === 0 || claimingRef.current || pacing) return;
+    if (celebratingId !== null || selected !== null || queue.length === 0 || pacing) return;
     const nextId = queue[0]!;
     const nextIndex = queueTotal - queue.length + 1;
-    claimingRef.current = true;
-    claimMutation.mutate(nextId, {
-      onSettled: () => {
-        claimingRef.current = false;
-        setCelebratingId(nextId);
-        setCelebratingIndex(nextIndex);
-        setQueue((q) => q.slice(1));
-      },
-    });
+    setCelebratingId(nextId);
+    setCelebratingIndex(nextIndex);
+    setQueue((q) => q.slice(1));
+    claimMutation.mutate(nextId);
     // claimMutation is intentionally omitted: it is stable across renders and
     // including it would re-run this effect on every mutation state change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [queue, celebratingId, queueTotal, pacing]);
+  }, [queue, celebratingId, selected, queueTotal, pacing]);
 
   useEffect(() => {
     return () => {
@@ -227,6 +226,7 @@ export default function PinBoardScreen({ navigation, route }: Props): JSX.Elemen
       // More celebrations are queued behind this one: pace the advance so
       // consecutive celebrations in a batch are visibly sequential (R23.6)
       // rather than the next one appearing the instant this one closes.
+      if (pacingRef.current) clearTimeout(pacingRef.current);
       setPacing(true);
       pacingRef.current = setTimeout(() => setPacing(false), PACE_MS);
     } else {
@@ -237,8 +237,36 @@ export default function PinBoardScreen({ navigation, route }: Props): JSX.Elemen
 
   function openDetailsFromCelebration(pinId: string): void {
     setCelebratingId(null);
-    const progress = board.data?.pins.find((p) => p.pinId === pinId) ?? null;
-    if (progress) setSelected(progress);
+    const progress = board.data?.pins.find((p) => p.pinId === pinId);
+    // Pin was just unlocked/claimed; ensure it renders as unlocked with lore in the viewer
+    setSelected(
+      progress
+        ? {
+            ...progress,
+            unlocked: true,
+            claimedAt: progress.claimedAt ?? new Date().toISOString(),
+          }
+        : {
+            pinId,
+            unlocked: true,
+            claimedAt: new Date().toISOString(),
+            awardedAt: new Date().toISOString(),
+            currentValue: null,
+            targetValue: null,
+            percentComplete: 100,
+          },
+    );
+  }
+
+  function handleCloseDetail(): void {
+    setSelected(null);
+    if (queue.length > 0) {
+      if (pacingRef.current) clearTimeout(pacingRef.current);
+      setPacing(true);
+      pacingRef.current = setTimeout(() => setPacing(false), PACE_MS);
+    } else {
+      setQueueTotal(0);
+    }
   }
 
   /**
@@ -252,6 +280,7 @@ export default function PinBoardScreen({ navigation, route }: Props): JSX.Elemen
     setQueue([]);
     setQueueTotal(0);
     setCelebratingId(null);
+    setSelected(null);
 
     if (remaining.length === 0) return;
 
@@ -416,21 +445,30 @@ export default function PinBoardScreen({ navigation, route }: Props): JSX.Elemen
         title="Pin Collection"
         {...(summary ? { subtitle: `${summary.totalUnlocked}/${summary.totalPins} collected` } : {})}
         icon="ribbon"
+        compact
         onBack={() => navigation.goBack()}
         right={
-          <View style={{ flexDirection: 'row', gap: theme.spacing.xs, alignItems: 'center' }}>
-            <SecondaryButton
-              label="Showcase"
-              icon="images-outline"
+          <View style={styles.headerActions}>
+            <Pressable
               onPress={() => navigation.navigate('PinShowcase')}
+              accessibilityRole="button"
+              accessibilityLabel="Showcase"
+              hitSlop={8}
+              style={({ pressed }) => [styles.headerBtn, pressed && styles.headerBtnPressed]}
               testID="pin-board-showcase"
-            />
-            <SecondaryButton
-              label="Credits"
-              icon="information-circle-outline"
+            >
+              <Ionicons name="images-outline" size={20} color={theme.color.textOnPrimary} />
+            </Pressable>
+            <Pressable
               onPress={() => navigation.navigate('PinAttribution')}
+              accessibilityRole="button"
+              accessibilityLabel="Art credits"
+              hitSlop={8}
+              style={({ pressed }) => [styles.headerBtn, pressed && styles.headerBtnPressed]}
               testID="pin-board-credits"
-            />
+            >
+              <Ionicons name="information-circle-outline" size={22} color={theme.color.textOnPrimary} />
+            </Pressable>
           </View>
         }
       />
@@ -475,7 +513,7 @@ export default function PinBoardScreen({ navigation, route }: Props): JSX.Elemen
 
       <PinDetailModal
         visible={selected !== null}
-        onClose={() => setSelected(null)}
+        onClose={handleCloseDetail}
         pin={selectedPin}
         progress={selected}
       />
@@ -642,5 +680,22 @@ const styles = StyleSheet.create({
     ...theme.typography.meta,
     color: '#fff',
     fontWeight: '700',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+  },
+  headerBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.16)',
+  },
+  headerBtnPressed: {
+    backgroundColor: 'rgba(255, 255, 255, 0.28)',
+    opacity: 0.85,
   },
 });

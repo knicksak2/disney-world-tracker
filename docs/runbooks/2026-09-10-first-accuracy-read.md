@@ -136,15 +136,86 @@ Now check they move **together**: eyeball whether `crowd_index` and `avg_wait` t
 Fill this in — the October runbook reads it.
 
 ```
-Date run:
-Mean MAE by lead (min):        lead 1 = ____   lead 3 = ____   lead 7 = ____
-Mean bias by lead (min):       lead 1 = ____   lead 3 = ____   lead 7 = ____
-Scored points total:           ____
-Season buckets active (>=30):  ____   of which no avg_crowd_index: ____
-Crowd bias, lead 1:            MK ____  AK ____  HS ____  EPCOT ____
-Index vs waits moving together? yes / no
+Date run:                      2026-09-11 (run against hosted Neon DB, .env.dev; local Docker
+                                dwt DB has no accuracy data — the sampling cron only runs
+                                against the hosted environment)
+Mean MAE by lead (min):        lead 1 = 10.19   lead 3 = 11.04   lead 7 = 10.75
+Mean bias by lead (min):       lead 1 = -0.89   lead 3 = -2.90   lead 7 = +1.39
+Scored points total:           4988  (2015 @ lead1, 1756 @ lead3, 1217 @ lead7)
+Season buckets active (>=30):  3625 of 7628 total   of which no avg_crowd_index: 0
+Crowd bias, lead 1:            MK +0.132  AK -0.109  HS +0.027  EPCOT -0.067
+Index vs waits moving together? yes — eyeballed the 21-day window per park; day-to-day
+                                direction matches (e.g. the 09-06 spike: all four parks'
+                                crowd_index AND avg_wait jump together — AK 1.289/30.8,
+                                EPCOT 1.510/34.3, HS 1.193/41.3, MK 1.316/24.2). No
+                                persistent inverse relationship like the pre-fix defect.
+
 Anything anomalous:
+- All three per-lead mean MAEs (10.19 / 11.04 / 10.75) land right at the 10.13 headliner
+  reference, not the 5.87 overall figure — consistent with the runbook's own note that this
+  view skews toward headliners. Per the read guide ("around 10 → consistent with the
+  holdout"), nothing here says regression on average.
+- Guardians of the Galaxy: Cosmic Rewind is a clear outlier and the one ride that crosses the
+  "materially above ~12 → something regressed" line: MAE 20.4 / 25.6 / 22.9 min at leads
+  1/3/7, bias -18.8 / -24.9 / -19.9 (model reads it low, and increasingly so with lead — the
+  opposite of noise averaging out). No other ride comes close (next worst is Flight of
+  Passage at MAE 16.0/18.7/10.9). Worth a follow-up investigation independent of the October
+  runbook — the shape or baseline for this ride looks mispriced rather than this being lead-
+  time noise.
+- Crowd calibration: MK, AK, HS bias visibly shrank toward 0 vs. the pre-correction baseline
+  (MK +0.236→+0.132, AK -0.203→-0.109, HS +0.071→+0.027) and MAE dropped with it — the
+  negative-feedback loop is converging as designed. EPCOT is the exception: bias moved
+  slightly *away* from zero (-0.040→-0.067) and MAE rose (0.109→0.143). Magnitude is still
+  smallest of the four parks and lead 1-7 there stays in a tight -0.067..-0.085 band (not
+  oscillating), so this reads as noise rather than over-correction, but it's the one park to
+  re-check in October rather than assume converged.
+- experience_season_hour: 3625/7628 buckets (~47%) have already crossed the 30-sample tier-1
+  threshold after only ~15 days, and active_no_crowd_level is 0 — every activated bucket
+  already carries a real avg_crowd_index, so none are falling back to the unscaled average.
+  Per the runbook's own caveat, the early-maturing cohort's wait average still partly reflects
+  pre-08-27 samples under unknown crowd levels vs. an avg_crowd_index computed only from
+  samples since — this is the most likely partial explanation for the lead-3 aggregate bias
+  swinging to -2.90 (several headliners, e.g. Cosmic Rewind, Na'vi River Journey, Kilimanjaro
+  Safaris, Flight of Passage, all bias strongly negative at lead 3) — but per the runbook this
+  self-resolves with time, not code.
 
 PER-RIDE BIAS AT LEAD 3 (ride -> bias_min, sample_count) — REQUIRED for October:
 
+Guardians of the Galaxy: Cosmic Rewind -24.88 (50)
+Avatar Flight of Passage -12.66 (44)
+Na'vi River Journey -12.64 (44)
+Kilimanjaro Safaris -10.52 (42)
+Remy's Ratatouille Adventure -10.45 (52)
+Frozen Ever After -10.15 (49)
+Star Wars: Rise of the Resistance -10.33 (49)
+Meet Anna and Elsa at Royal Sommerhus -9.36 (39)
+Mickey & Minnie's Runaway Railway -9.23 (50)
+Buzz Lightyear's Space Ranger Spin +9.69 (52)
+Meet Favorite Disney Pals at Adventurers Outpost -7.82 (39)
+Space Mountain +7.70 (51)
+Rock 'n' Roller Coaster Starring The Muppets — New! -8.08 (51)
+Toy Story Mania! -8.77 (52)
+Expedition Everest - Legend of the Forbidden Mountain -6.61 (40)
+Meet Disney Stars at Red Carpet Dreams -5.90 (52)
+Soarin' Across America — New! -5.49 (52)
+Tiana's Bayou Adventure +5.54 (45)
+Seven Dwarfs Mine Train +4.96 (51)
+Meet Princess Tiana and a Visiting Princess at Princess Fairytale Hall +4.68 (48)
+Meet Daring Disney Pals as Circus Stars at Pete's Silly Sideshow +5.82 (48)
+Meet Dashing Disney Pals as Circus Stars at Pete's Silly Sideshow +4.53 (48)
+Meet Cinderella and a Visiting Princess at Princess Fairytale Hall +4.51 (48)
+The Many Adventures of Winnie the Pooh +4.30 (50)
+The Twilight Zone Tower of Terror -4.33 (51)
+Slinky Dog Dash -4.41 (28)
+Jungle Cruise +4.02 (49)
+TRON Lightcycle / Run +4.08 (49)
+Test Track -3.75 (41)
+Kali River Rapids -3.50 (40)
+Alien Swirling Saucers -3.22 (52)
+Big Thunder Mountain Railroad +3.57 (49)
+Meet Mickey at Town Square Theater -2.06 (48)
+Peter Pan's Flight +1.91 (52)
+Meet Ariel at Her Grotto +1.92 (48)
+Millennium Falcon: Smugglers Run -0.38 (52)
+Haunted Mansion -0.09 (51)
 ```

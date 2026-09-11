@@ -51,13 +51,8 @@ jest.mock('../../../api/client', () => {
 import PinBoardScreen from '../PinBoardScreen';
 import { apiRequest as mockedApiRequest } from '../../../api/client';
 import * as Haptics from 'expo-haptics';
-import {
-  PINS,
-  PIN_TIERS,
-  type PinBoardDTO,
-  type PinDTO,
-  type UserPinProgressDTO,
-} from '@dwt/shared';
+import { PINS, PIN_TIERS } from '@dwt/shared';
+import type { PinBoardDTO, PinDTO, UserPinProgressDTO } from '@dwt/shared';
 
 const apiRequestMock = mockedApiRequest as jest.MockedFunction<typeof mockedApiRequest>;
 const notificationAsyncMock = Haptics.notificationAsync as jest.MockedFunction<
@@ -272,7 +267,7 @@ describe('PinBoardScreen', () => {
     });
   });
 
-  it('shows "Pin claimed!" / "Nice!" copy on the celebration modal, not "New pin unlocked!" / "Add to collection" (Requirement 23.3)', async () => {
+  it('shows "Pin claimed!" / "Awesome!" copy on the celebration modal, not "New pin unlocked!" / "Add to collection" (Requirement 23.3)', async () => {
     mockApi(BOARD_WITH_READY);
     renderBoard();
     await screen.findByTestId('pin-board');
@@ -281,7 +276,7 @@ describe('PinBoardScreen', () => {
     await screen.findByTestId('pin-celebration-modal');
 
     expect(screen.getByTestId('pin-celebration-heading')).toHaveTextContent('Pin claimed!');
-    expect(screen.getByTestId('pin-celebration-dismiss')).toHaveTextContent('Nice!');
+    expect(screen.getByTestId('pin-celebration-dismiss')).toHaveTextContent('Awesome!');
   });
 
   it('tapping a ready-to-claim pin calls the claim endpoint and shows the celebration (not the detail modal)', async () => {
@@ -355,11 +350,52 @@ describe('PinBoardScreen', () => {
     expect(screen.queryByTestId('pin-celebration-modal')).toBeNull();
   });
 
+  it('viewing details during a multi-pin batch pauses the queue and does not pop the next celebration until details are closed', async () => {
+    const boardTwoReady: PinBoardDTO = {
+      ...BOARD,
+      pins: [readyToClaimProg(pinA), readyToClaimProg(pinB), unlockedProg(pinC)],
+    };
+    mockApi(boardTwoReady);
+    renderBoard({ celebratePinIds: [pinA.id, pinB.id] });
+
+    // Pin A starts celebrating ("1 of 2")
+    await screen.findByTestId('pin-celebration-modal');
+    expect(screen.getByTestId(`pin-celebration-${pinA.id}`)).toBeTruthy();
+    expect(screen.getByTestId('pin-celebration-position')).toHaveTextContent('1 of 2');
+
+    // Press "View details" on Pin A
+    fireEvent.press(screen.getByTestId('pin-celebration-view-details'));
+
+    // Pin A detail modal is presented; celebration modal is dismissed
+    await screen.findByTestId('pin-detail-modal');
+    expect(screen.getByTestId('pin-detail-name')).toHaveTextContent(pinA.name);
+    expect(screen.queryByTestId('pin-celebration-modal')).toBeNull();
+
+    // Pin B does NOT hijack the screen while Pin A details are open
+    expect(screen.queryByTestId(`pin-celebration-${pinB.id}`)).toBeNull();
+
+    // Now close the detail modal
+    fireEvent.press(screen.getByTestId('pin-detail-close'));
+
+    // The queue resumes: Pin B celebration modal now appears ("2 of 2")
+    await screen.findByTestId('pin-celebration-modal');
+    expect(screen.getByTestId(`pin-celebration-${pinB.id}`)).toBeTruthy();
+    expect(screen.getByTestId('pin-celebration-position')).toHaveTextContent('2 of 2');
+    expect(screen.queryByTestId('pin-detail-modal')).toBeNull();
+  });
+
   it('navigates to the attribution screen from the credits control', async () => {
     const { navigation } = renderBoard();
     await screen.findByTestId('pin-board');
     fireEvent.press(screen.getByTestId('pin-board-credits'));
     expect(navigation.navigate).toHaveBeenCalledWith('PinAttribution');
+  });
+
+  it('navigates to the showcase screen from the showcase control', async () => {
+    const { navigation } = renderBoard();
+    await screen.findByTestId('pin-board');
+    fireEvent.press(screen.getByTestId('pin-board-showcase'));
+    expect(navigation.navigate).toHaveBeenCalledWith('PinShowcase');
   });
 
   it('sorts a ready-to-claim pin ahead of a catalog-earlier locked pin (Requirement 22.1)', async () => {
@@ -463,11 +499,13 @@ describe('PinBoardScreen', () => {
 
       await screen.findByTestId('pin-celebration-modal');
       expect(screen.getByTestId('pin-celebration-position')).toHaveTextContent('1 of 2');
+      expect(screen.getByTestId('pin-celebration-dismiss')).toHaveTextContent('Next');
 
       fireEvent.press(screen.getByTestId('pin-celebration-dismiss'));
       await waitFor(() => expect(screen.queryByTestId('pin-celebration-modal')).toBeTruthy());
       // "of 2" persists on the second pin — the total does not shrink as the queue drains.
       expect(screen.getByTestId('pin-celebration-position')).toHaveTextContent('2 of 2');
+      expect(screen.getByTestId('pin-celebration-dismiss')).toHaveTextContent('Awesome!');
     });
 
     it('does not show a position line for a single, non-batched claim', async () => {

@@ -44,6 +44,8 @@ export interface PinCelebrationModalProps {
   readonly position?: CelebrationPosition | null;
   /** Skip remaining celebrations in a batch and claim them all immediately (Requirement 23.8). */
   readonly onSkipAll?: () => void;
+  /** Optional override for the primary action button label (defaults to "Next" in multi-pin queue, "Awesome!" otherwise). */
+  readonly dismissLabel?: string;
 }
 
 const CATALOG: ReadonlyMap<string, PinDTO> = new Map(PINS.map((p) => [p.id, p]));
@@ -118,6 +120,7 @@ export default function PinCelebrationModal({
   onViewDetails,
   position,
   onSkipAll,
+  dismissLabel,
 }: PinCelebrationModalProps): JSX.Element | null {
   const awarded = useMemo(
     () => pinIds.map((id) => CATALOG.get(id)).filter((p): p is PinDTO => p != null),
@@ -196,7 +199,11 @@ export default function PinCelebrationModal({
               </View>
             ))}
           </ScrollView>
-          <PrimaryButton label="Nice!" onPress={onClose} testID="pin-celebration-dismiss" />
+          <PrimaryButton
+            label={dismissLabel ?? (showPosition && position && position.index < position.total ? 'Next' : 'Awesome!')}
+            onPress={onClose}
+            testID="pin-celebration-dismiss"
+          />
           {onSkipAll && position && position.total > 1 && position.index < position.total ? (
             <View style={styles.skipAllWrap}>
               <SecondaryButton
