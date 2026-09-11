@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Dining Ladder — Option C: emblem + accumulating stars</title>
+<style>
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:#0d0a17; color:#f1f5f9; font-family:'Segoe UI',system-ui,sans-serif; padding:36px 28px 90px; }
+  header { max-width:1000px; margin:0 auto 20px; }
+  h1 { font-size:28px; font-weight:800; margin-bottom:10px;
+       background:linear-gradient(120deg,#fff,#f8db79 70%); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+  p { color:#a8b0c0; line-height:1.6; font-size:15px; max-width:840px; }
+  .note { background:rgba(248,219,121,.06); border:1px solid rgba(248,219,121,.25); border-radius:12px;
+          padding:14px 20px; margin:16px auto 0; max-width:960px; font-size:14px; line-height:1.6; }
+  .note b { color:#f8db79; }
+  h2 { max-width:1000px; margin:40px auto 6px; font-size:19px; color:#fff; }
+  .row { display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:26px; max-width:1000px; margin:16px auto 0; }
+  .card { background:#161226; border:1px solid #2a2140; border-radius:18px; padding:22px 16px 16px; text-align:center; }
+  .card.alt { border-color:#3a2b52; }
+  .stage { width:200px; height:200px; margin:0 auto 12px; filter:drop-shadow(0 10px 22px rgba(0,0,0,.6)); }
+  .cap { font-size:15px; font-weight:700; color:#fff; }
+  .sub { font-size:12px; color:#94a3b8; margin-top:4px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Dining Ladder — Option C prototype</h1>
+  <p>Constant emblem (crossed fork &amp; knife = "restaurant") + a growing count of stars + the exact number on the banner + the tier metal climbing underneath. The stars accumulate across the whole 12-rung ladder (Diner 3 = 1★ … Culinary Legend = 12★), so each rung visibly "levels up" like the fireworks sky filling in.</p>
+  <div class="note">
+    <b>Judge:</b> does the star climb read as progression, and is the crossed fork&amp;knife the right anchor? The last card swaps in a <b>plate</b> emblem so you can compare the anchor. <br>
+    Open questions I need your call on: <b>(1)</b> emblem = crossed fork&amp;knife or plate? <b>(2)</b> keep Diner 3 as the charming <b>hotDog</b> "first meal," or unify it into the emblem+1★ so the whole ladder is consistent? <b>(3)</b> apex (Culinary Legend) — plain 12★ arc, or a special <b>crown of stars</b>? (shown here as a fuller crown.)
+  </div>
+</header>
+
+<h2>Emblem anchor — pick one (all shown at gold · 7★)</h2>
+<div class="row" id="emblems"></div>
+
+<h2>The climb with the crossed fork&knife — low → mid → apex</h2>
+<div class="row" id="row"></div>
+
+<script src="dining-candidates.js"></script>
+<script>
+  // Cross-set emblem candidates. vb-aware: transform = translate(100,110) scale(s) translate(-cx,-cy)
+  const EMBLEMS = {
+    knifeFork:    { d: window.DINING_CANDIDATES.knifeFork.d, cx:256, cy:256, s:0.19, label:'Crossed fork & knife', src:'game-icons (CC BY)' },
+    clocheMs:     { d:"M2 19v-2h20v2zm1-3v-1q0-3.2 1.963-5.65T10 6.25V6q0-.825.588-1.412T12 4t1.413.588T14 6v.25q3.1.65 5.05 3.1T21 15v1z", cx:12, cy:12, s:3.9, label:'Cloche + bell (room service)', src:'material-symbols (Apache-2.0)' },
+    clocheMdi:    { d:"M12 5a2 2 0 0 1 2 2q0 .36-.12.69C17.95 8.5 21 11.91 21 16H3c0-4.09 3.05-7.5 7.12-8.31Q10 7.36 10 7a2 2 0 0 1 2-2m10 14H2v-2h20z", cx:12, cy:12, s:3.9, label:'Cloche (simpler)', src:'mdi (Apache-2.0)' },
+    forkKnifeMs:  { d:"M7 22v-9.15q-1.275-.35-2.137-1.4T4 9V2h2v7h1V2h2v7h1V2h2v7q0 1.4-.862 2.45T9 12.85V22zm10 0v-8h-3V7q0-2.075 1.463-3.537T19 2v20z", cx:12, cy:12, s:3.9, label:'Fork & knife (upright)', src:'material-symbols (Apache-2.0)' },
+  };
+
+  const METALS = {
+    bronze: ['#f6dcb4','#e3b277','#c07f38','#8f571f'],
+    silver: ['#ffffff','#e6edf5','#b9c4d4','#8493a8'],
+    gold:   ['#fff6da','#ffe08a','#f4bf45','#c9891c'],
+    amethyst:['#f0e0ff','#c9a0f0','#9a5ad0','#5f2f8a'],
+    pearl:  ['#ffffff','#f3f0ff','#dcd0f0','#b7a8d0'],
+    prism:  ['#fff0c4','#ffc2e8','#c9a8ff','#8ed8ff','#a8f0c8','#ffe07a','#b06fd8'],
+  };
+  const ENAMEL = { bronze:'#5a2a17', silver:'#243247', gold:'#7a2d1f', amethyst:'#2e1a44', pearl:'#241a3a', prism:'#150f28' };
+  const stops = c => c.map((x,i)=>`<stop offset="${(i/(c.length-1)).toFixed(3)}" stop-color="${x}"/>`).join('');
+
+  // N stars along a top arc above the emblem; no empty slots (like fireworks density).
+  function starArc(n, cx, cy, R, size) {
+    if (n <= 0) return '';
+    const a0 = -168 * Math.PI/180, a1 = -12 * Math.PI/180;
+    let out = '';
+    for (let i = 0; i < n; i++) {
+      const t = n === 1 ? 0.5 : i/(n-1);
+      const a = a0 + (a1-a0)*t;
+      const x = cx + R*Math.cos(a), y = cy + R*Math.sin(a);
+      out += star(x, y, size);
+    }
+    return out;
+  }
+  function star(cx, cy, R) {
+    const r = R*0.42, pts=[];
+    for (let i=0;i<10;i++){ const ang=-Math.PI/2+i*Math.PI/5; const rad=(i%2===0)?R:r;
+      pts.push(`${(cx+rad*Math.cos(ang)).toFixed(1)},${(cy+rad*Math.sin(ang)).toFixed(1)}`); }
+    return `<polygon points="${pts.join(' ')}" fill="#ffe08a" stroke="#a5641a" stroke-width="1.1" stroke-linejoin="round"/>`;
+  }
+
+  function pin(opts) {
+    const { tier, emblem, banner, starN, crown } = opts;
+    const m = METALS[tier], en = ENAMEL[tier];
+    const em = EMBLEMS[emblem];
+    const size = crown ? 11 : Math.max(7.5, 13 - starN*0.42);
+    const R = crown ? 66 : 62;
+    const stars = starArc(starN, 100, crown?126:120, R, size);
+    return `<svg viewBox="0 0 200 200" width="200" height="200">
+      <defs>
+        <linearGradient id="rim-${tier}-${banner}" x1="0" y1="0" x2="1" y2="1">${stops(m)}</linearGradient>
+        <clipPath id="clip-${tier}-${banner}"><circle cx="100" cy="100" r="82"/></clipPath>
+      </defs>
+      <circle cx="100" cy="100" r="90" fill="url(#rim-${tier}-${banner})"/>
+      <circle cx="100" cy="100" r="82" fill="${en}"/>
+      <g clip-path="url(#clip-${tier}-${banner})">
+        ${stars}
+        <g transform="translate(100,110) scale(${em.s}) translate(${-em.cx},${-em.cy})">
+          <path d="${em.d}" fill="#ffe9c7" fill-rule="evenodd"/>
+        </g>
+      </g>
+      <rect x="56" y="150" width="88" height="30" rx="7" fill="#120b16" stroke="url(#rim-${tier}-${banner})" stroke-width="3"/>
+      <text x="100" y="171" text-anchor="middle" font-family="Segoe UI" font-weight="800" font-size="18" fill="#ffe08a">${banner}</text>
+    </svg>`;
+  }
+
+  const cards = [
+    { title:'Diner 10', sub:'bronze · 2★ · crossed fork&knife', tier:'bronze', emblem:'knifeFork', banner:'10', starN:2 },
+    { title:'Gourmand 80', sub:'gold · 7★ · crossed fork&knife', tier:'gold', emblem:'knifeFork', banner:'80', starN:7 },
+    { title:'Culinary Legend', sub:'prism · crown of 12★', tier:'prism', emblem:'knifeFork', banner:'ALL', starN:12, crown:true },
+    { title:'Gourmand 80 (cloche emblem)', sub:'gold · 7★ · cloche instead', tier:'gold', emblem:'clocheMs', banner:'80', starN:7, alt:true },
+  ];
+  const row = document.getElementById('row');
+  for (const c of cards) {
+    row.insertAdjacentHTML('beforeend',
+      `<div class="card ${c.alt?'alt':''}"><div class="stage">${pin(c)}</div>
+       <div class="cap">${c.title}</div><div class="sub">${c.sub}</div></div>`);
+  }
+
+  const emRow = document.getElementById('emblems');
+  for (const key of Object.keys(EMBLEMS)) {
+    const e = EMBLEMS[key];
+    emRow.insertAdjacentHTML('beforeend',
+      `<div class="card"><div class="stage">${pin({tier:'gold', emblem:key, banner:'80', starN:7})}</div>
+       <div class="cap">${e.label}</div><div class="sub">${e.src}</div></div>`);
+  }
+</script>
+</body>
+</html>

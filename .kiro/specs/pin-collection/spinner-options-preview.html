@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Spin Cycle — Pin Art Redesign Options</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #090514;
+      --card-bg: rgba(20, 14, 38, 0.88);
+      --card-border: rgba(147, 112, 219, 0.22);
+      --card-hover: rgba(32, 22, 58, 0.95);
+      --accent: #9f7aea;
+      --bronze: #d97706;
+      --bronze-light: #f6c343;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: radial-gradient(circle at 50% 0%, #25124d 0%, var(--bg) 80%);
+      color: var(--text-main);
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      min-height: 100vh;
+      padding: 40px 24px 80px;
+    }
+    header {
+      max-width: 1100px;
+      margin: 0 auto 40px;
+      text-align: center;
+    }
+    .badge-sub {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(159, 122, 234, 0.15);
+      border: 1px solid rgba(159, 122, 234, 0.35);
+      color: var(--accent);
+      padding: 5px 16px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      margin-bottom: 14px;
+    }
+    h1 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 40px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      margin-bottom: 12px;
+      background: linear-gradient(135deg, #ffffff 40%, #c4b5fd 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .subtitle {
+      font-size: 16px;
+      color: var(--text-muted);
+      max-width: 800px;
+      margin: 0 auto;
+      line-height: 1.6;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
+      gap: 28px;
+      max-width: 1550px;
+      margin: 0 auto 48px;
+    }
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 24px;
+      padding: 28px 22px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      box-shadow: 0 16px 36px rgba(0,0,0,0.5);
+      transition: all 0.25s ease;
+      position: relative;
+    }
+    .card:hover {
+      transform: translateY(-4px);
+      border-color: rgba(159, 122, 234, 0.45);
+      box-shadow: 0 20px 45px rgba(0,0,0,0.65);
+    }
+    .card.final-approved {
+      border-color: rgba(34, 197, 94, 0.7);
+      background: linear-gradient(180deg, rgba(30, 48, 40, 0.95) 0%, rgba(18, 28, 24, 0.95) 100%);
+      box-shadow: 0 16px 40px rgba(34, 197, 94, 0.25);
+    }
+    .card.final-approved::before {
+      content: '✓ FULLY POLISHED & GROUNDED';
+      position: absolute;
+      top: -12px;
+      background: linear-gradient(135deg, #22c55e, #16a34a);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.8px;
+      padding: 4px 16px;
+      border-radius: 999px;
+      box-shadow: 0 4px 12px rgba(22, 163, 74, 0.4);
+    }
+    .card.iteration {
+      opacity: 0.82;
+    }
+    .card.iteration:hover { opacity: 1; }
+    .card.baseline {
+      border-style: dashed;
+      border-color: rgba(239, 68, 68, 0.35);
+      opacity: 0.75;
+    }
+    .card.baseline:hover { opacity: 1; }
+    .card-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 19px;
+      font-weight: 800;
+      color: #fff;
+      margin-bottom: 4px;
+    }
+    .card-flavor {
+      font-size: 12px;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-weight: 700;
+      margin-bottom: 18px;
+    }
+    .art-frame {
+      width: 175px;
+      height: 175px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 20px;
+      background: rgba(0, 0, 0, 0.35);
+      border-radius: 20px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    .badge-row {
+      display: flex;
+      gap: 6px;
+      justify-content: center;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+    .badge {
+      font-size: 10px;
+      font-weight: 800;
+      padding: 3px 9px;
+      border-radius: 999px;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+    .badge.bronze {
+      background: rgba(201, 127, 74, 0.22);
+      color: #eec4a0;
+      border: 1px solid rgba(201, 127, 74, 0.45);
+    }
+    .badge.diecut {
+      background: rgba(147, 112, 219, 0.18);
+      color: #c4b5fd;
+      border: 1px solid rgba(147, 112, 219, 0.35);
+    }
+    .badge.approved {
+      background: #15803d;
+      color: #fff;
+    }
+    .badge.iter {
+      background: rgba(148, 163, 184, 0.2);
+      color: #94a3b8;
+    }
+    .badge.current {
+      background: rgba(239, 68, 68, 0.2);
+      color: #fca5a5;
+      border: 1px solid rgba(239, 68, 68, 0.4);
+    }
+    .pin-name {
+      font-family: 'Outfit', sans-serif;
+      font-size: 18px;
+      font-weight: 800;
+      color: #fff;
+      margin-bottom: 4px;
+    }
+    .pin-crit {
+      font-size: 12.5px;
+      color: var(--text-muted);
+      margin-bottom: 16px;
+    }
+    .card-notes {
+      font-size: 12.5px;
+      color: #cbd5e1;
+      background: rgba(0, 0, 0, 0.45);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 14px;
+      padding: 13px;
+      text-align: left;
+      line-height: 1.5;
+      margin-top: auto;
+      width: 100%;
+    }
+    .card-notes strong {
+      color: #fff;
+    }
+    .card-notes ul {
+      margin-left: 15px;
+      margin-top: 5px;
+    }
+    .card-notes li {
+      margin-bottom: 3px;
+    }
+    .specs-table-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 24px;
+      padding: 32px;
+      max-width: 1550px;
+      margin: 0 auto;
+    }
+    .specs-table-card h2 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 22px;
+      font-weight: 800;
+      margin-bottom: 16px;
+      color: #fff;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    th, td {
+      padding: 11px 13px;
+      text-align: left;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    th {
+      color: var(--accent);
+      font-weight: 700;
+      text-transform: uppercase;
+      font-size: 11px;
+      letter-spacing: 0.5px;
+    }
+    td { color: #cbd5e1; }
+    tr.highlight-row {
+      background: rgba(34, 197, 94, 0.12);
+    }
+    tr.highlight-row td {
+      color: #fff;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="badge-sub">✨ Series 1 Pin Art Direction • Design Evolution</div>
+    <h1>Spin Cycle — Pin Art Evolution</h1>
+    <p class="subtitle">
+      Addressing your feedback: grounding the cup firmly into the saucer, eliminating the floating hover gap, removing the uncanny gold eyeball, piercing the handle loop with shadow, and applying a true dynamic ~40° swirling spiral across the porcelain belly.
+    </p>
+  </header>
+
+  <div class="grid">
+
+    <!-- HERO CARD: APPROVED & POLISHED FINAL DESIGN -->
+    <div class="card final-approved">
+      <div class="card-title">Grounded Swirl Teacup</div>
+      <div class="card-flavor">Mad Tea Party • Dynamic ~40° Spiral &amp; Clean Depth</div>
+      
+      <div class="art-frame">
+        <svg width="155" height="155" viewBox="-6 -6 162 162" style="overflow:visible">
+          <defs>
+            <linearGradient id="g-b-fin3" x1=".15" y1="0" x2=".85" y2="1">
+              <stop offset="0" stop-color="#fff0db"/>
+              <stop offset=".3" stop-color="#eec4a0"/>
+              <stop offset=".65" stop-color="#c97f4a"/>
+              <stop offset="1" stop-color="#5e2f10"/>
+            </linearGradient>
+            <filter id="sh-fin3" x="-30%" y="-30%" width="160%" height="170%">
+              <feDropShadow dx="0" dy="4" stdDeviation="3.6" flood-color="#000" flood-opacity=".7"/>
+            </filter>
+            <linearGradient id="g-gl-fin3" x1="0" y1="0" x2=".3" y2="1">
+              <stop offset="0" stop-color="#fff" stop-opacity=".45"/>
+              <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+            </linearGradient>
+            <clipPath id="c-cup-body3">
+              <!-- Full Cup Body & Pedestal Foot -->
+              <path d="M24 37 C24 30 46 26 75 26 C104 26 126 30 126 37 C124 64 110 84 94 92 C96 98 100 102 101 106 C88 108 62 108 49 106 C50 102 54 98 56 92 C40 84 26 64 24 37 Z"/>
+            </clipPath>
+          </defs>
+          <g filter="url(#sh-fin3)">
+            <!-- 1. BASE BRONZE DIE-CUT PLATE (4.2px Rim) -->
+            <!-- Saucer Base -->
+            <path d="M14 111 C14 102 41 96 75 96 C109 96 136 102 136 111 C136 120 109 126 75 126 C41 126 14 120 14 111 Z" fill="url(#g-b-fin3)" stroke="url(#g-b-fin3)" stroke-width="4.2" stroke-linejoin="round"/>
+            
+            <!-- Handle outer loop (Seamlessly blends into rim and waist) -->
+            <path d="M118 36 C132 38 144 48 144 64 C144 80 128 90 104 92 L102 82 C118 80 130 74 130 64 C130 54 120 48 112 46 Z" fill="url(#g-b-fin3)" stroke="url(#g-b-fin3)" stroke-width="4.2" stroke-linejoin="round"/>
+
+            <!-- Cup body & pedestal contour -->
+            <path d="M24 37 C24 30 46 26 75 26 C104 26 126 30 126 37 C124 64 110 84 94 92 C96 98 100 102 101 106 C88 108 62 108 49 106 C50 102 54 98 56 92 C40 84 26 64 24 37 Z" fill="url(#g-b-fin3)" stroke="url(#g-b-fin3)" stroke-width="4.2" stroke-linejoin="round"/>
+
+            <!-- 2. ENAMEL CLOISONNÉ CELLS -->
+
+            <!-- Saucer outer tier: Turquoise Teal -->
+            <path d="M14 111 C14 102 41 96 75 96 C109 96 136 102 136 111 C136 120 109 126 75 126 C41 126 14 120 14 111 Z" fill="#14727f"/>
+            
+            <!-- Saucer inner well: Cream Porcelain (Grounds the cup!) -->
+            <path d="M26 111 C26 103 44 99 75 99 C106 99 124 103 124 111 C124 119 106 123 75 123 C44 123 26 119 26 111 Z" fill="#fbf7ee"/>
+
+            <!-- Main Cup Body & Fluted Foot: Porcelain Cream Base -->
+            <path d="M24 37 C24 30 46 26 75 26 C104 26 126 30 126 37 C124 64 110 84 94 92 C96 98 100 102 101 106 C88 108 62 108 49 106 C50 102 54 98 56 92 C40 84 26 64 24 37 Z" fill="#fbf7ee"/>
+
+            <!-- DYNAMIC ~40° ROTATIONAL SWIRL FLUTES (Spin Cycle Motion) -->
+            <g clip-path="url(#c-cup-body3)">
+              <!-- Flute 1: Plum (Far Left Sweep) -->
+              <path d="M0 24 Q30 58 52 108 L66 108 Q44 58 14 24 Z" fill="#6a3fb0"/>
+              <!-- Flute 2: Teal (Left-Mid Sweep) -->
+              <path d="M20 24 Q50 58 72 108 L84 108 Q62 58 34 24 Z" fill="#14727f"/>
+              <!-- Flute 3: Plum (Center-Left Sweep) -->
+              <path d="M40 24 Q70 58 88 108 L98 108 Q80 58 54 24 Z" fill="#6a3fb0"/>
+              <!-- Flute 4: Teal (Center-Right Sweep) -->
+              <path d="M60 24 Q88 58 102 108 L110 108 Q96 58 74 24 Z" fill="#14727f"/>
+              <!-- Flute 5: Plum (Right-Mid Sweep) -->
+              <path d="M80 24 Q106 58 116 108 L124 108 Q112 58 94 24 Z" fill="#6a3fb0"/>
+              <!-- Flute 6: Amber Gold (Right Flank Flare) -->
+              <path d="M100 24 Q122 55 126 88 L134 76 Q128 46 114 24 Z" fill="#b5721a"/>
+
+              <!-- Raised Bronze Wireline Ribs between flutes (1.2px) following the ~40° swirl -->
+              <path d="M0 24 Q30 58 52 108" fill="none" stroke="url(#g-b-fin3)" stroke-width="1.2"/>
+              <path d="M14 24 Q44 58 66 108" fill="none" stroke="url(#g-b-fin3)" stroke-width="1.2"/>
+              <path d="M20 24 Q50 58 72 108" fill="none" stroke="url(#g-b-fin3)" stroke-width="1.2"/>
+              <path d="M34 24 Q62 58 84 108" fill="none" stroke="url(#g-b-fin3)" stroke-width="1.2"/>
+              <path d="M40 24 Q70 58 88 108" fill="none" stroke="url(#g-b-fin3)" stroke-width="1.2"/>
+              <path d="M54 24 Q80 58 98 108" fill="none" stroke="url(#g-b-fin3)" stroke-width="1.2"/>
+              <path d="M60 24 Q88 58 102 108" fill="none" stroke="url(#g-b-fin3)" stroke-width="1.2"/>
+              <path d="M74 24 Q96 58 110 108" fill="none" stroke="url(#g-b-fin3)" stroke-width="1.2"/>
+              <path d="M80 24 Q106 58 116 108" fill="none" stroke="url(#g-b-fin3)" stroke-width="1.2"/>
+              <path d="M94 24 Q112 58 124 108" fill="none" stroke="url(#g-b-fin3)" stroke-width="1.2"/>
+              <path d="M100 24 Q122 55 126 88" fill="none" stroke="url(#g-b-fin3)" stroke-width="1.2"/>
+            </g>
+
+            <!-- Top Rim Opening: Clean Sculpted Porcelain & Crescent Depth (No Floating Eyeball!) -->
+            <!-- Back Rim Porcelain Lip -->
+            <path d="M24 37 C24 29 46 25 75 25 C104 25 126 29 126 37 C126 42 104 46 75 46 C46 46 24 42 24 37 Z" fill="#fbf7ee"/>
+            
+            <!-- Ride Vehicle Hollow Interior Well: Deep Royal Background Shadow -->
+            <ellipse cx="75" cy="36" rx="46" ry="8.5" fill="#241a3a"/>
+            <!-- Interior Porcelain Wall (Soft Lavender Plum Depth) -->
+            <path d="M29 36 C34 31 52 28 75 28 C98 28 116 31 121 36 C116 40 98 43 75 43 C52 43 34 40 29 36 Z" fill="#4a2a7a"/>
+            
+            <!-- Interior Center Floor Shadow Crescent (Clean, Natural Depth — No Floating Coin!) -->
+            <path d="M42 36 C42 33 56 31 75 31 C94 31 108 33 108 36 C108 38 94 40 75 40 C56 40 42 38 42 36 Z" fill="#241a3a" opacity="0.6"/>
+
+            <!-- Front Rim Lip Collar Band: Royal Plum with Scalloped Edge -->
+            <path d="M24 37 C34 43 54 47 75 47 C96 47 116 43 126 37 L125 42 C115 48 95 52 75 52 C55 52 35 48 25 42 Z" fill="#4a2a7a"/>
+
+            <!-- Handle: Seamlessly Integrated Pierced Loop -->
+            <!-- Handle outer loop body: Turquoise Teal with Royal Plum inner root -->
+            <path d="M120 42 C131 44 140 51 140 64 C140 76 127 84 108 86 L106 80 C121 78 132 72 132 64 C132 56 125 50 116 48 Z" fill="#14727f"/>
+            <!-- Handle pierced negative space cutout (Deep Shadow #241a3a reads as an authentic open loop) -->
+            <path d="M116 48 C124 50 132 56 132 64 C132 72 121 78 106 80 L104 74 C115 72 124 68 124 64 C124 58 118 54 112 52 Z" fill="#241a3a"/>
+
+            <!-- 3. RAISED BRONZE WIRELINES -->
+            <!-- Saucer inner well wire (Shows saucer curving in front of the nested cup foot!) -->
+            <path d="M26 111 C26 103 44 99 75 99 C106 99 124 103 124 111 C124 119 106 123 75 123 C44 123 26 119 26 111 Z" fill="none" stroke="url(#g-b-fin3)" stroke-width="1.1"/>
+            
+            <!-- Pedestal base collar wireline (Firmly grounds the cup into the saucer) -->
+            <path d="M56 92 C64 95 86 95 94 92" fill="none" stroke="url(#g-b-fin3)" stroke-width="1.1"/>
+            <path d="M49 106 C60 108 90 108 101 106" fill="none" stroke="url(#g-b-fin3)" stroke-width="1.1"/>
+
+            <!-- Front cup lip collar wire -->
+            <path d="M25 42 C35 48 55 52 75 52 C95 52 115 48 125 42" fill="none" stroke="url(#g-b-fin3)" stroke-width="1.1"/>
+            <path d="M24 37 C34 43 54 47 75 47 C96 47 116 43 126 37" fill="none" stroke="url(#g-b-fin3)" stroke-width="1.1"/>
+
+            <!-- Subtle Glossy Highlight across Porcelain Curve -->
+            <g clip-path="url(#c-cup-body3)">
+              <ellipse cx="50" cy="46" rx="42" ry="24" transform="rotate(-28 50 46)" fill="url(#g-gl-fin3)"/>
+            </g>
+          </g>
+        </svg>
+      </div>
+
+      <div class="badge-row">
+        <span class="badge bronze">BRONZE</span>
+        <span class="badge diecut">✂ DIE-CUT</span>
+        <span class="badge approved">✓ FINAL POLISHED</span>
+      </div>
+      <div class="pin-name">Spin Cycle</div>
+      <div class="pin-crit">Your first spinner.</div>
+
+      <div class="card-notes">
+        <strong>V3 Polish Highlights:</strong>
+        <ul>
+          <li><strong>True ~40° Spiral:</strong> Dynamic swirling flutes wrap around the curved belly, delivering authentic rotational "Spin Cycle" motion.</li>
+          <li><strong>Natural Sculpted Depth:</strong> Replaced the floating yellow eyeball/medallion with a clean, soft porcelain interior well and crescent shadow.</li>
+          <li><strong>Clean Seamless Handle:</strong> Eliminated the glitchy diagonal bite; handle now flows naturally out of the porcelain rim.</li>
+          <li><strong>Firmly Grounded in Saucer:</strong> Fluted porcelain foot nests directly into the saucer's central recessed well in true perspective.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- HERO OPTION B: V3.1 CLEAN SOLID PEDESTAL FOOT -->
+    <div class="card final-approved" style="border-color: rgba(99, 102, 241, 0.7); background: linear-gradient(180deg, rgba(30, 36, 60, 0.95) 0%, rgba(18, 20, 35, 0.95) 100%); box-shadow: 0 16px 40px rgba(99, 102, 241, 0.25);">
+      <div class="card-title">Solid Pedestal Swirl</div>
+      <div class="card-flavor">Mad Tea Party • Clean Porcelain Foot &amp; Architectural Anchor</div>
+      
+      <div class="art-frame">
+        <svg width="155" height="155" viewBox="-6 -6 162 162" style="overflow:visible">
+          <defs>
+            <linearGradient id="g-b-fin31" x1=".15" y1="0" x2=".85" y2="1">
+              <stop offset="0" stop-color="#fff0db"/>
+              <stop offset=".3" stop-color="#eec4a0"/>
+              <stop offset=".65" stop-color="#c97f4a"/>
+              <stop offset="1" stop-color="#5e2f10"/>
+            </linearGradient>
+            <filter id="sh-fin31" x="-30%" y="-30%" width="160%" height="170%">
+              <feDropShadow dx="0" dy="4" stdDeviation="3.6" flood-color="#000" flood-opacity=".7"/>
+            </filter>
+            <linearGradient id="g-gl-fin31" x1="0" y1="0" x2=".3" y2="1">
+              <stop offset="0" stop-color="#fff" stop-opacity=".45"/>
+              <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+            </linearGradient>
+            <clipPath id="c-cup-bowl31">
+              <!-- Upper Cup Bowl Only (terminates at Y=92 collar) -->
+              <path d="M24 37 C24 30 46 26 75 26 C104 26 126 30 126 37 C124 64 110 84 94 92 C82 94 68 94 56 92 C40 84 26 64 24 37 Z"/>
+            </clipPath>
+            <clipPath id="c-cup-full31">
+              <!-- Entire Cup and Pedestal for highlight -->
+              <path d="M24 37 C24 30 46 26 75 26 C104 26 126 30 126 37 C124 64 110 84 94 92 C96 98 100 102 101 106 C88 108 62 108 49 106 C50 102 54 98 56 92 C40 84 26 64 24 37 Z"/>
+            </clipPath>
+          </defs>
+          <g filter="url(#sh-fin31)">
+            <!-- 1. BASE BRONZE DIE-CUT PLATE (4.2px Rim) -->
+            <!-- Saucer Base -->
+            <path d="M14 111 C14 102 41 96 75 96 C109 96 136 102 136 111 C136 120 109 126 75 126 C41 126 14 120 14 111 Z" fill="url(#g-b-fin31)" stroke="url(#g-b-fin31)" stroke-width="4.2" stroke-linejoin="round"/>
+            
+            <!-- Handle outer loop -->
+            <path d="M118 36 C132 38 144 48 144 64 C144 80 128 90 104 92 L102 82 C118 80 130 74 130 64 C130 54 120 48 112 46 Z" fill="url(#g-b-fin31)" stroke="url(#g-b-fin31)" stroke-width="4.2" stroke-linejoin="round"/>
+
+            <!-- Cup body & pedestal contour -->
+            <path d="M24 37 C24 30 46 26 75 26 C104 26 126 30 126 37 C124 64 110 84 94 92 C96 98 100 102 101 106 C88 108 62 108 49 106 C50 102 54 98 56 92 C40 84 26 64 24 37 Z" fill="url(#g-b-fin31)" stroke="url(#g-b-fin31)" stroke-width="4.2" stroke-linejoin="round"/>
+
+            <!-- 2. ENAMEL CLOISONNÉ CELLS -->
+
+            <!-- Saucer outer tier: Turquoise Teal -->
+            <path d="M14 111 C14 102 41 96 75 96 C109 96 136 102 136 111 C136 120 109 126 75 126 C41 126 14 120 14 111 Z" fill="#14727f"/>
+            
+            <!-- Saucer inner well: Cream Porcelain -->
+            <path d="M26 111 C26 103 44 99 75 99 C106 99 124 103 124 111 C124 119 106 123 75 123 C44 123 26 119 26 111 Z" fill="#fbf7ee"/>
+
+            <!-- Main Cup Body & Solid Porcelain Foot Base: Antique Cream -->
+            <path d="M24 37 C24 30 46 26 75 26 C104 26 126 30 126 37 C124 64 110 84 94 92 C96 98 100 102 101 106 C88 108 62 108 49 106 C50 102 54 98 56 92 C40 84 26 64 24 37 Z" fill="#fbf7ee"/>
+
+            <!-- DYNAMIC ~40° ROTATIONAL SWIRL FLUTES (Clipped to Bowl Above Waist) -->
+            <g clip-path="url(#c-cup-bowl31)">
+              <!-- Flute 1: Plum -->
+              <path d="M0 24 Q30 58 52 94 L64 94 Q44 58 14 24 Z" fill="#6a3fb0"/>
+              <!-- Flute 2: Teal -->
+              <path d="M20 24 Q50 58 70 94 L80 94 Q62 58 34 24 Z" fill="#14727f"/>
+              <!-- Flute 3: Plum -->
+              <path d="M40 24 Q70 58 84 94 L92 94 Q80 58 54 24 Z" fill="#6a3fb0"/>
+              <!-- Flute 4: Teal -->
+              <path d="M60 24 Q86 58 96 94 L104 94 Q94 58 74 24 Z" fill="#14727f"/>
+              <!-- Flute 5: Plum -->
+              <path d="M80 24 Q104 58 108 94 L114 94 Q110 58 94 24 Z" fill="#6a3fb0"/>
+              <!-- Flute 6: Amber Gold -->
+              <path d="M100 24 Q122 55 126 88 L134 76 Q128 46 114 24 Z" fill="#b5721a"/>
+
+              <!-- Raised Bronze Wirelines between flutes -->
+              <path d="M0 24 Q30 58 52 94" fill="none" stroke="url(#g-b-fin31)" stroke-width="1.2"/>
+              <path d="M14 24 Q44 58 64 94" fill="none" stroke="url(#g-b-fin31)" stroke-width="1.2"/>
+              <path d="M20 24 Q50 58 70 94" fill="none" stroke="url(#g-b-fin31)" stroke-width="1.2"/>
+              <path d="M34 24 Q62 58 80 94" fill="none" stroke="url(#g-b-fin31)" stroke-width="1.2"/>
+              <path d="M40 24 Q70 58 84 94" fill="none" stroke="url(#g-b-fin31)" stroke-width="1.2"/>
+              <path d="M54 24 Q80 58 92 94" fill="none" stroke="url(#g-b-fin31)" stroke-width="1.2"/>
+              <path d="M60 24 Q86 58 96 94" fill="none" stroke="url(#g-b-fin31)" stroke-width="1.2"/>
+              <path d="M74 24 Q94 58 104 94" fill="none" stroke="url(#g-b-fin31)" stroke-width="1.2"/>
+              <path d="M80 24 Q104 58 108 94" fill="none" stroke="url(#g-b-fin31)" stroke-width="1.2"/>
+              <path d="M94 24 Q110 58 114 94" fill="none" stroke="url(#g-b-fin31)" stroke-width="1.2"/>
+              <path d="M100 24 Q122 55 126 88" fill="none" stroke="url(#g-b-fin31)" stroke-width="1.2"/>
+            </g>
+
+            <!-- Top Rim Opening: Clean Sculpted Porcelain & Crescent Depth -->
+            <path d="M24 37 C24 29 46 25 75 25 C104 25 126 29 126 37 C126 42 104 46 75 46 C46 46 24 42 24 37 Z" fill="#fbf7ee"/>
+            <ellipse cx="75" cy="36" rx="46" ry="8.5" fill="#241a3a"/>
+            <path d="M29 36 C34 31 52 28 75 28 C98 28 116 31 121 36 C116 40 98 43 75 43 C52 43 34 40 29 36 Z" fill="#4a2a7a"/>
+            <path d="M42 36 C42 33 56 31 75 31 C94 31 108 33 108 36 C108 38 94 40 75 40 C56 40 42 38 42 36 Z" fill="#241a3a" opacity="0.6"/>
+
+            <!-- Front Rim Lip Collar Band -->
+            <path d="M24 37 C34 43 54 47 75 47 C96 47 116 43 126 37 L125 42 C115 48 95 52 75 52 C55 52 35 48 25 42 Z" fill="#4a2a7a"/>
+
+            <!-- Handle -->
+            <path d="M120 42 C131 44 140 51 140 64 C140 76 127 84 108 86 L106 80 C121 78 132 72 132 64 C132 56 125 50 116 48 Z" fill="#14727f"/>
+            <path d="M116 48 C124 50 132 56 132 64 C132 72 121 78 106 80 L104 74 C115 72 124 68 124 64 C124 58 118 54 112 52 Z" fill="#241a3a"/>
+
+            <!-- 3. RAISED BRONZE WIRELINES -->
+            <!-- Saucer inner well wire -->
+            <path d="M26 111 C26 103 44 99 75 99 C106 99 124 103 124 111 C124 119 106 123 75 123 C44 123 26 119 26 111 Z" fill="none" stroke="url(#g-b-fin31)" stroke-width="1.1"/>
+            
+            <!-- Pedestal Waist Collar Wireline (Clean architectural separation) -->
+            <path d="M56 92 C68 94 82 94 94 92" fill="none" stroke="url(#g-b-fin31)" stroke-width="1.3"/>
+            <!-- Pedestal Foot Rim Wireline -->
+            <path d="M49 106 C60 108 90 108 101 106" fill="none" stroke="url(#g-b-fin31)" stroke-width="1.3"/>
+
+            <!-- Front cup lip collar wire -->
+            <path d="M25 42 C35 48 55 52 75 52 C95 52 115 48 125 42" fill="none" stroke="url(#g-b-fin31)" stroke-width="1.1"/>
+            <path d="M24 37 C34 43 54 47 75 47 C96 47 116 43 126 37" fill="none" stroke="url(#g-b-fin31)" stroke-width="1.1"/>
+
+            <!-- Subtle Glossy Highlight -->
+            <g clip-path="url(#c-cup-full31)">
+              <ellipse cx="50" cy="46" rx="42" ry="24" transform="rotate(-28 50 46)" fill="url(#g-gl-fin31)"/>
+            </g>
+          </g>
+        </svg>
+      </div>
+
+      <div class="badge-row">
+        <span class="badge bronze">BRONZE</span>
+        <span class="badge diecut">✂ DIE-CUT</span>
+        <span class="badge iter">EVALUATED ALTERNATIVE</span>
+      </div>
+      <div class="pin-name">Spin Cycle (V3.1 Test)</div>
+      <div class="pin-crit">Solid porcelain pedestal foot test.</div>
+
+      <div class="card-notes">
+        <strong>A/B Evaluation Outcome:</strong>
+        <ul>
+          <li><strong>Outcome:</strong> Discarded in favor of V3.</li>
+          <li><strong>Contrast Finding:</strong> Solid Antique Cream foot visually bled into the Antique Cream saucer inner well, losing edge definition.</li>
+          <li><strong>V3 Advantage:</strong> V3's flutes continuing through the base provide crisp color contrast against the saucer and stronger rotational kinetic flow.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- PREVIOUS REFINED ITERATION (FOR COMPARISON) -->
+    <div class="card iteration">
+      <div class="card-title">Previous Draft: Swirl Teacup</div>
+      <div class="card-flavor">Mad Tea Party • Earlier Iteration</div>
+      
+      <div class="art-frame">
+        <svg width="140" height="140" viewBox="-6 -6 162 162" style="overflow:visible">
+          <defs>
+            <linearGradient id="g-b-prev" x1=".15" y1="0" x2=".85" y2="1">
+              <stop offset="0" stop-color="#fff0db"/><stop offset=".3" stop-color="#eec4a0"/><stop offset=".65" stop-color="#c97f4a"/><stop offset="1" stop-color="#5e2f10"/>
+            </linearGradient>
+            <filter id="sh-prev" x="-30%" y="-30%" width="160%" height="170%"><feDropShadow dx="0" dy="4" stdDeviation="3.6" flood-color="#000" flood-opacity=".7"/></filter>
+            <clipPath id="c-prev-cup">
+              <path d="M25 42 C23 68 38 90 52 98 C58 100 66 101 75 101 C84 101 92 100 98 98 C112 90 127 68 125 42 C114 47 95 50 75 50 C55 50 36 47 25 42 Z"/>
+            </clipPath>
+          </defs>
+          <g filter="url(#sh-prev)">
+            <path d="M18 112 C18 103 36 99 75 99 C114 99 132 103 132 112 C132 121 114 125 75 125 C36 125 18 121 18 112 Z" fill="url(#g-b-prev)" stroke="url(#g-b-prev)" stroke-width="4.2" stroke-linejoin="round"/>
+            <path d="M112 46 C126 46 142 54 142 71 C142 88 125 97 107 99 L105 85 C116 83 128 77 128 71 C128 61 119 57 111 57 Z" fill="url(#g-b-prev)" stroke="url(#g-b-prev)" stroke-width="4.2" stroke-linejoin="round"/>
+            <path d="M25 42 C23 68 38 90 52 98 C58 100 66 101 75 101 C84 101 92 100 98 98 C112 90 127 68 125 42 C114 47 95 50 75 50 C55 50 36 47 25 42 Z" fill="url(#g-b-prev)" stroke="url(#g-b-prev)" stroke-width="4.2" stroke-linejoin="round"/>
+            <path d="M18 112 C18 103 36 99 75 99 C114 99 132 103 132 112 C132 121 114 125 75 125 C36 125 18 121 18 112 Z" fill="#14727f"/>
+            <path d="M28 112 C28 105 44 102 75 102 C106 102 122 105 122 112 C122 119 106 122 75 122 C44 122 28 119 28 112 Z" fill="#fbf7ee"/>
+            <path d="M52 96 L48 106 C60 108 90 108 102 106 L98 96 Z" fill="#4a2a7a"/>
+            <path d="M25 42 C23 68 38 90 52 98 C58 100 66 101 75 101 C84 101 92 100 98 98 C112 90 127 68 125 42 C114 47 95 50 75 50 C55 50 36 47 25 42 Z" fill="#fbf7ee"/>
+            <g clip-path="url(#c-prev-cup)">
+              <path d="M20 32 Q46 68 58 102 L70 102 Q55 68 34 32 Z" fill="#6a3fb0"/>
+              <path d="M46 32 Q68 68 82 102 L94 102 Q80 68 60 32 Z" fill="#14727f"/>
+              <path d="M72 32 Q90 68 102 102 L110 102 Q98 68 84 32 Z" fill="#6a3fb0"/>
+              <path d="M98 32 Q112 55 120 80 L126 70 Q118 45 110 32 Z" fill="#b5721a"/>
+            </g>
+            <path d="M25 42 C35 47 55 50 75 50 C95 50 115 47 125 42 L124 47 C114 52 95 55 75 55 C55 55 36 52 26 47 Z" fill="#4a2a7a"/>
+            <ellipse cx="75" cy="40" rx="46" ry="8.5" fill="#b5721a"/>
+            <path d="M113 49 C123 49 136 56 136 71 C136 84 124 92 110 94 L108 87 C118 85 126 79 126 71 C126 62 118 58 112 57 Z" fill="#14727f"/>
+          </g>
+        </svg>
+      </div>
+
+      <div class="badge-row">
+        <span class="badge bronze">BRONZE</span>
+        <span class="badge diecut">✂ DIE-CUT</span>
+        <span class="badge iter">EARLIER DRAFT</span>
+      </div>
+      <div class="pin-name">Spin Cycle</div>
+      <div class="pin-crit">Your first spinner.</div>
+
+      <div class="card-notes">
+        <strong>Issues Identified:</strong>
+        <ul>
+          <li>Felt like it was hovering above the saucer.</li>
+          <li>Top looked like a brown wooden lid.</li>
+          <li>Handle hole was bright teal instead of open shadow.</li>
+          <li>Left body had a blank empty cream patch.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- OPTION C (ALTERNATIVE ICON) -->
+    <div class="card iteration">
+      <div class="card-title">Concept C: Magic Carpet</div>
+      <div class="card-flavor">Adventureland • Reserved for Dizzy Devotee</div>
+      
+      <div class="art-frame">
+        <svg width="140" height="140" viewBox="-6 -6 162 162" style="overflow:visible">
+          <defs>
+            <linearGradient id="g-b3" x1=".15" y1="0" x2=".85" y2="1">
+              <stop offset="0" stop-color="#fff0db"/><stop offset=".3" stop-color="#eec4a0"/><stop offset=".65" stop-color="#c97f4a"/><stop offset="1" stop-color="#5e2f10"/>
+            </linearGradient>
+            <filter id="sh-3" x="-30%" y="-30%" width="160%" height="170%"><feDropShadow dx="0" dy="4" stdDeviation="3.5" flood-color="#000" flood-opacity=".65"/></filter>
+          </defs>
+          <g filter="url(#sh-3)">
+            <path d="M18 30 L26 40 L16 44 Z M132 26 L124 36 L134 40 Z M20 124 L28 114 L18 110 Z M128 122 L120 112 L130 108 Z" fill="url(#g-b3)" stroke="url(#g-b3)" stroke-width="3.5" stroke-linejoin="round"/>
+            <path d="M24 38 Q75 52 126 34 Q132 75 122 114 Q75 100 28 116 Q20 75 24 38 Z" fill="url(#g-b3)" stroke="url(#g-b3)" stroke-width="4.2" stroke-linejoin="round"/>
+            <path d="M26 40 Q75 54 124 36 Q130 75 120 112 Q75 98 30 114 Q22 75 26 40 Z" fill="#4a2a7a"/>
+            <path d="M32 46 Q75 58 118 42 Q123 75 115 106 Q75 93 35 108 Q28 75 32 46 Z" fill="#14727f" stroke="url(#g-b3)" stroke-width="1.2"/>
+            <path d="M38 52 Q75 62 112 48 Q116 75 110 100 Q75 88 40 102 Q34 75 38 52 Z" fill="#6a3fb0" stroke="url(#g-b3)" stroke-width="1.2"/>
+            <polygon points="75,56 94,74 75,92 56,74" fill="#b5721a" stroke="url(#g-b3)" stroke-width="1.2"/>
+            <polygon points="75,63 85,74 75,85 65,74" fill="#fbf7ee" stroke="url(#g-b3)" stroke-width="1.1"/>
+            <circle cx="75" cy="74" r="4" fill="#4a2a7a"/>
+            <polygon points="42,56 48,58 44,64" fill="#fbf7ee" stroke="url(#g-b3)" stroke-width="1"/>
+            <polygon points="108,52 102,54 106,60" fill="#fbf7ee" stroke="url(#g-b3)" stroke-width="1"/>
+            <polygon points="44,98 50,96 46,90" fill="#fbf7ee" stroke="url(#g-b3)" stroke-width="1"/>
+            <polygon points="106,96 100,94 104,88" fill="#fbf7ee" stroke="url(#g-b3)" stroke-width="1"/>
+          </g>
+        </svg>
+      </div>
+
+      <div class="badge-row">
+        <span class="badge bronze">BRONZE</span>
+        <span class="badge diecut">✂ DIE-CUT</span>
+        <span class="badge iter">RESERVED</span>
+      </div>
+      <div class="pin-name">Dizzy Devotee Candidate</div>
+      <div class="pin-crit">All spinners candidate.</div>
+
+      <div class="card-notes">
+        <strong>Status:</strong>
+        <ul>
+          <li>Reserved for <code>silver_spinners_all</code> ("Dizzy Devotee"), matching the spec's open Aladdin spinner option.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- CARD 0: Baseline (What the user saw originally) -->
+    <div class="card baseline">
+      <div class="card-title">Original Baseline</div>
+      <div class="card-flavor">Mingcute:teacup-fill • Flat stamp</div>
+      
+      <div class="art-frame">
+        <svg width="130" height="130" viewBox="-4 -4 158 158" style="overflow:visible">
+          <defs>
+            <linearGradient id="g-b0" x1=".15" y1="0" x2=".85" y2="1">
+              <stop offset="0" stop-color="#eec4a0"/><stop offset=".33" stop-color="#c97f4a"/><stop offset=".66" stop-color="#9a5526"/><stop offset="1" stop-color="#5e2f10"/>
+            </linearGradient>
+            <filter id="sh-0" x="-30%" y="-30%" width="160%" height="170%"><feDropShadow dx="0" dy="3.5" stdDeviation="3.2" flood-color="#000" flood-opacity=".6"/></filter>
+          </defs>
+          <g filter="url(#sh-0)" transform="translate(19, 19) scale(5.8)">
+            <path d="M2 6a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2v2.035A3.5 3.5 0 0 1 18.5 15h-.788a8.54 8.54 0 0 1-3.208 3H17a1 1 0 1 1 0 2H4a1 1 0 1 1 0-2h2.496A8.5 8.5 0 0 1 2 10.5zm17 4.5v-.415a1.5 1.5 0 0 1-.372 2.91A8.5 8.5 0 0 0 19 10.5" fill="url(#g-b0)" stroke="url(#g-b0)" stroke-width="1.1" stroke-linejoin="round"/>
+            <path d="M2 6a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2v2.035A3.5 3.5 0 0 1 18.5 15h-.788a8.54 8.54 0 0 1-3.208 3H17a1 1 0 1 1 0 2H4a1 1 0 1 1 0-2h2.496A8.5 8.5 0 0 1 2 10.5z" fill="#6a3fb0"/>
+          </g>
+        </svg>
+      </div>
+
+      <div class="badge-row">
+        <span class="badge bronze">BRONZE</span>
+        <span class="badge diecut">✂ DIE-CUT</span>
+        <span class="badge current">SUPERSEDED</span>
+      </div>
+      <div class="pin-name">Spin Cycle</div>
+      <div class="pin-crit">Your first spinner.</div>
+
+      <div class="card-notes">
+        <strong>Superseded:</strong>
+        <ul>
+          <li>Single flat purple polygon from 24px glyph. Replaced by multi-cell cloisonné above.</li>
+        </ul>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- COMPARISON SPECIFICATIONS TABLE -->
+  <div class="specs-table-card">
+    <h2>Design &amp; Fabrication Progression</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Version</th>
+          <th>Subject &amp; Motif</th>
+          <th>emblemGate Metrics</th>
+          <th>Palette Enamels</th>
+          <th>Status / Verdict</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="highlight-row">
+          <td><strong>Final Polished (V3)</strong></td>
+          <td>Grounded Swirl Teacup (firm saucer well footing, ~40° spiral flutes, clean interior crescent depth, seamless pierced handle)</td>
+          <td>1 piece, 70% enamel, aspect 1.30, disc 0.54 (PASS)</td>
+          <td>Plum, Teal, Cream, Amber, Royal, Shadow</td>
+          <td><strong>AUTHENTIC DISNEY CLOISONNÉ:</strong> True spinning motion, zero floating artifacts, flawless physical connections.</td>
+        </tr>
+        <tr>
+          <td><strong>V2 Draft</strong></td>
+          <td>Grounded Teacup with straight flutes and interior gold circle</td>
+          <td>1 piece, 73% enamel, aspect 1.34, disc 0.56 (PASS)</td>
+          <td>Plum, Teal, Cream, Amber, Royal</td>
+          <td>Vertical stripes lacked spin motion; center gold medallion looked like an eyeball/lemon.</td>
+        </tr>
+        <tr>
+          <td><strong>Concept C</strong></td>
+          <td>The Magic Carpet (Adventureland aerial spinner)</td>
+          <td>1 piece, 78% enamel, aspect 1.20 (PASS)</td>
+          <td>Royal, Teal, Plum, Amber, Cream</td>
+          <td>Reserved for <code>silver_spinners_all</code> ("Dizzy Devotee") per spec candidate list.</td>
+        </tr>
+        <tr>
+          <td><strong>Original Baseline</strong></td>
+          <td>Mingcute 24px teacup glyph</td>
+          <td>1 piece, 82% enamel, aspect 1.02</td>
+          <td>1 color (Plum)</td>
+          <td>Superseded. Flat blob, lacked attraction identity.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+</body>
+</html>

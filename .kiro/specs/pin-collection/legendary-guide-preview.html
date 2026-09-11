@@ -1,0 +1,1322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Legendary Guide (Prism Tier) — Pin Redesign Revision 2</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #090514;
+      --bg-card: rgba(20, 14, 38, 0.88);
+      --bg-card-hover: rgba(34, 23, 62, 0.98);
+      --border-card: rgba(159, 122, 234, 0.25);
+      --text-main: #f7fafc;
+      --text-muted: #a0aec0;
+      --accent-purple: #9f7aea;
+      --gold: #f6c343;
+      --prism-gradient: linear-gradient(135deg, #fff0c4, #ffc2e8, #c9a8ff, #8ed8ff, #a8f0c8, #ffe07a, #b06fd8);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: radial-gradient(circle at 50% 0%, #25124d 0%, var(--bg-dark) 80%);
+      color: var(--text-main);
+      min-height: 100vh;
+      padding: 40px 24px 80px;
+    }
+
+    header {
+      max-width: 1200px;
+      margin: 0 auto 36px;
+      text-align: center;
+    }
+
+    .badge-sub {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(255, 215, 0, 0.15);
+      border: 1px solid rgba(255, 215, 0, 0.4);
+      color: #ffd700;
+      padding: 5px 16px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.6px;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+
+    h1 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 38px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 10px;
+      background: linear-gradient(135deg, #ffffff 40%, #ffd700 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .subtitle {
+      max-width: 820px;
+      margin: 0 auto;
+      font-size: 15px;
+      line-height: 1.6;
+      color: var(--text-muted);
+    }
+    .subtitle b { color: #fff; }
+
+    /* Keyframe shimmer for Prismatic tier */
+    @keyframes shmr { 
+      0%   { transform: translateX(0); } 
+      100% { transform: translateX(360px); } 
+    }
+    .shmr { 
+      animation: shmr 2.4s linear infinite; 
+    }
+    @media (prefers-reduced-motion: reduce) { 
+      .shmr { animation: none !important; opacity: 0.35 !important; } 
+    }
+
+    /* Feedback & Action Board */
+    .feedback-banner {
+      max-width: 1280px;
+      margin: 0 auto 36px;
+      background: rgba(30, 20, 55, 0.85);
+      border: 1px solid rgba(255, 215, 0, 0.4);
+      border-radius: 20px;
+      padding: 24px 30px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    }
+    .fb-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 20px;
+      font-weight: 700;
+      color: #ffd700;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .fb-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 18px;
+    }
+    .fb-item {
+      background: rgba(15, 10, 28, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 16px;
+    }
+    .fb-item h4 {
+      font-size: 14px;
+      font-weight: 700;
+      color: #38bdf8;
+      margin-bottom: 6px;
+    }
+    .fb-item p {
+      font-size: 13px;
+      color: #cbd5e1;
+      line-height: 1.5;
+    }
+
+    /* Grid of Main Options */
+    .candidates-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+      gap: 28px;
+      max-width: 1280px;
+      margin: 0 auto 48px;
+    }
+
+    .candidate-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-card);
+      border-radius: 24px;
+      padding: 26px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+      position: relative;
+    }
+    .candidate-card:hover {
+      transform: translateY(-5px);
+      border-color: rgba(255, 215, 0, 0.5);
+      box-shadow: 0 16px 36px rgba(255, 215, 0, 0.2);
+    }
+    .candidate-card.spotlight {
+      border: 2px solid #ffd700;
+      box-shadow: 0 12px 32px rgba(255, 215, 0, 0.25);
+    }
+    .spotlight-pill {
+      position: absolute;
+      top: -13px;
+      background: linear-gradient(90deg, #ffd700, #ffb347);
+      color: #0f172a;
+      font-size: 11px;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      padding: 4px 16px;
+      border-radius: 999px;
+      box-shadow: 0 4px 12px rgba(255, 215, 0, 0.4);
+    }
+
+    .card-art-box {
+      width: 180px;
+      height: 180px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 16px;
+      filter: drop-shadow(0 10px 24px rgba(0, 0, 0, 0.85));
+    }
+
+    .card-name {
+      font-family: 'Outfit', sans-serif;
+      font-size: 22px;
+      font-weight: 800;
+      color: #fff;
+      margin-bottom: 6px;
+    }
+    .card-palette-tag {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--gold);
+      background: rgba(246, 195, 67, 0.15);
+      border: 1px solid rgba(246, 195, 67, 0.35);
+      padding: 4px 12px;
+      border-radius: 999px;
+      margin-bottom: 12px;
+    }
+    .plaid-sub-toggle {
+      display: inline-flex;
+      background: rgba(255, 255, 255, 0.07);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      padding: 3px;
+      border-radius: 999px;
+      margin-bottom: 14px;
+      gap: 3px;
+    }
+    .plaid-sub-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      padding: 4px 11px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .plaid-sub-btn.active {
+      background: #ffd700;
+      color: #0f172a;
+      box-shadow: 0 2px 8px rgba(255, 215, 0, 0.35);
+    }
+    .plaid-sub-btn:hover:not(.active) {
+      color: #fff;
+    }
+    .swatches {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+    .swatch {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      border: 1.5px solid rgba(255, 255, 255, 0.4);
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+    }
+
+    .card-desc {
+      font-size: 13px;
+      color: #cbd5e1;
+      line-height: 1.55;
+      text-align: left;
+      margin-bottom: 20px;
+      flex-grow: 1;
+    }
+    .card-desc ul {
+      margin-left: 18px;
+      margin-top: 8px;
+      color: #94a3b8;
+    }
+    .card-desc li {
+      margin-bottom: 4px;
+    }
+    .card-desc li b {
+      color: #f1f5f9;
+    }
+
+    .card-actions {
+      width: 100%;
+      margin-top: auto;
+    }
+    .btn-choose {
+      width: 100%;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: #fff;
+      padding: 11px 16px;
+      border-radius: 12px;
+      font-weight: 700;
+      font-size: 13.5px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-choose:hover {
+      background: #ffd700;
+      color: #0f172a;
+      border-color: #ffd700;
+      box-shadow: 0 4px 14px rgba(255, 215, 0, 0.35);
+    }
+
+    /* Interactive Live Catalog Card Preview */
+    .catalog-preview-section {
+      max-width: 1280px;
+      margin: 0 auto 60px;
+      background: rgba(18, 12, 34, 0.95);
+      border: 1px solid var(--border-card);
+      border-radius: 24px;
+      padding: 36px 30px;
+      text-align: center;
+    }
+    .section-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 26px;
+      font-weight: 800;
+      margin-bottom: 8px;
+      color: #fff;
+    }
+    .section-sub {
+      font-size: 14px;
+      color: var(--text-muted);
+      margin-bottom: 28px;
+    }
+    .interactive-card-container {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 36px;
+      align-items: center;
+    }
+
+    /* Exact catalog card style from pin-catalog-v2-progress.html */
+    .pin-card-preview {
+      background: var(--bg-card);
+      border: 1px solid var(--border-card);
+      border-radius: 18px;
+      padding: 24px 20px;
+      width: 330px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.75);
+    }
+    .pin-badge-row {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+    .tier-badge-prism {
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding: 3px 10px;
+      border-radius: 6px;
+      background: linear-gradient(135deg, #fff0c4, #ffc2e8, #c9a8ff, #8ed8ff, #ffe07a);
+      color: #0f172a;
+    }
+    .style-badge-diecut {
+      font-size: 11px;
+      font-weight: 600;
+      color: #90cdf4;
+      background: rgba(49, 130, 206, 0.25);
+      border: 1px solid rgba(49, 130, 206, 0.45);
+      padding: 3px 8px;
+      border-radius: 6px;
+    }
+    .style-badge-status {
+      font-size: 11px;
+      font-weight: 700;
+      color: #fff;
+      background: #1e6b3a;
+      padding: 3px 8px;
+      border-radius: 6px;
+    }
+    .pin-name {
+      font-family: 'Outfit', sans-serif;
+      font-size: 20px;
+      font-weight: 800;
+      color: #fff;
+      margin-bottom: 8px;
+    }
+    .pin-criteria {
+      font-size: 13.5px;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    .selector-box {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      text-align: left;
+      max-width: 480px;
+    }
+    .btn-select {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: #f7fafc;
+      padding: 13px 18px;
+      border-radius: 12px;
+      font-size: 13.5px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .btn-select:hover, .btn-select.active {
+      background: rgba(159, 122, 234, 0.25);
+      border-color: #ffd700;
+      color: #fff;
+    }
+    .btn-select .dot {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    /* Comparison Table */
+    .matrix-table {
+      width: 100%;
+      max-width: 1280px;
+      margin: 0 auto;
+      border-collapse: collapse;
+      font-size: 13px;
+      background: var(--bg-card);
+      border-radius: 16px;
+      overflow: hidden;
+      border: 1px solid var(--border-card);
+    }
+    .matrix-table th, .matrix-table td {
+      padding: 14px 18px;
+      text-align: left;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    }
+    .matrix-table th {
+      background: rgba(159, 122, 234, 0.15);
+      color: #fff;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* Evolution Showcase */
+    .evolution-section {
+      max-width: 1280px;
+      margin: 0 auto 50px;
+    }
+    .evo-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+    }
+    .evo-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-card);
+      border-radius: 18px;
+      padding: 20px;
+      display: flex;
+      gap: 20px;
+      align-items: center;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="badge-sub">🌟 Social Pinnacle • Prism Tier</div>
+    <h1>Legendary Guide Pin Redesign — Revision 2</h1>
+    <p class="subtitle">
+      Directly addressing user feedback: Elevating <b>The Plaid</b> into a tailored Disney VIP Tour Guide uniform with Cast Member nametag, and redesigning <b>The Guidemap</b> with authentic Disney World Cinderella Castle iconography.
+    </p>
+  </header>
+
+  <!-- User Feedback Directives Board -->
+  <div class="feedback-banner">
+    <div class="fb-title">
+      <span>🎨 User Feedback Addressed & Applied</span>
+    </div>
+    <div class="fb-grid">
+      <div class="fb-item">
+        <h4>1. The Plaid 2.0 (VIP Waistcoat)</h4>
+        <p><b>User Feedback:</b> <i>"the idea of a plaid vest is a great idea it doesnt look very good at least currently not sure if you can make that better."</i><br>
+        <b>Revamp:</b> Completely reconstructed from scratch! Now features a crisp white collared dress shirt, royal navy necktie with gold clip, tailored double-pointed waistcoat hem, rich woven cloisonné tartan, polished brass buttons, Albert watch chain, and the iconic Walt Disney World <b>"GUIDE"</b> oval nametag with Castle crest.</p>
+      </div>
+      <div class="fb-item">
+        <h4>2. The Disney Guidemap 2.0</h4>
+        <p><b>User Feedback:</b> <i>"the second one has potential but the compass on it doesnt really make sense for disney."</i><br>
+        <b>Revamp:</b> Replaced the nautical mariner compass with an unmistakably Disney centerpiece: a magnificent golden <b>Cinderella Castle Guide Crest</b> with pixie-dust starbursts, a golden <b>Mickey Mouse location marker pin</b> on the map fold, and an arched <b>"PARK GUIDE"</b> ribbon banner.</p>
+      </div>
+      <div class="fb-item">
+        <h4>3. Follow the Flag & The Beacon</h4>
+        <p><b>User Feedback:</b> <i>"i dont know if the first one is that obvious what it is... and the 4th one is no good."</i><br>
+        <b>Action:</b> The Beacon (lantern) is completely dropped. Candidate 1 ("Follow the Flag") is kept available in the selector as an alternate, but focus moves to the two top contenders.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Candidates Grid -->
+  <div class="candidates-grid">
+
+    <!-- CANDIDATE 3.1: The Plaid 2.0 (Top Contender) -->
+    <div class="candidate-card spotlight">
+      <div class="spotlight-pill">Top Contender • Revamped</div>
+      <div class="card-art-box" id="art-plaid2"></div>
+      <div class="card-name">The Plaid 2.0</div>
+      <div class="card-palette-tag">VIP Tour Guide Uniform & Nametag</div>
+      
+      <!-- Variant Toggle -->
+      <div class="plaid-sub-toggle">
+        <button class="plaid-sub-btn active" id="psb-authentic" onclick="setPlaidVariant('authentic')">⭐ Real Uniform (Photo Matched)</button>
+        <button class="plaid-sub-btn" id="psb-clean" onclick="setPlaidVariant('clean')">✨ Clean Black Watch</button>
+        <button class="plaid-sub-btn" id="psb-red" onclick="setPlaidVariant('red')">With Red Grid</button>
+      </div>
+
+      <div class="swatches" id="plaid-swatches">
+        <div class="swatch" style="background:#c81e1e" title="Crimson Red Field"></div>
+        <div class="swatch" style="background:#1d4ed8" title="Royal Cobalt Blue"></div>
+        <div class="swatch" style="background:#15803d" title="Forest Green"></div>
+        <div class="swatch" style="background:#ffd700" title="Gold Disney 'D' Pin"></div>
+        <div class="swatch" style="background:#ffffff" title="White Ascot Shirt & Nametag"></div>
+      </div>
+      <div class="card-desc">
+        The authentic Disneyland & Walt Disney World VIP Tour Guide uniform, matched directly to the real costume:
+        <ul>
+          <li><b>Real Disney Guide Tartan:</b> Rich fields of vibrant crimson red, royal cobalt blue, and forest green.</li>
+          <li><b>Fine Double White & Gold Gridlines:</b> Authentic woven tartan pinstripes running through the dark bands.</li>
+          <li><b>Dual Chest Insignia:</b> The famous sculpted <b>Gold Disney "D" VIP Guide Pin</b> mounted directly above the <b>White Cast Member Oval Nametag</b> (<code>GUIDE</code>)!</li>
+          <li><b>White Ascot Shirt & Collar Pin:</b> High ruffled ascot collar with a polished gold bar pin.</li>
+          <li><b>6 Polished Brass Buttons:</b> Straight down the front center placket with lower welt pockets.</li>
+        </ul>
+      </div>
+      <div class="card-actions">
+        <button class="btn-choose" onclick="selectCandidate('plaid2')">Preview in Live Card</button>
+      </div>
+    </div>
+
+    <!-- CANDIDATE 2.1: The Disney Guidemap 2.0 (Top Contender) -->
+    <div class="candidate-card spotlight">
+      <div class="spotlight-pill">Top Contender • Revamped</div>
+      <div class="card-art-box" id="art-map2"></div>
+      <div class="card-name">The Disney Guidemap 2.0</div>
+      <div class="card-palette-tag">Park Map & Cinderella Castle Crest</div>
+      <div class="swatches">
+        <div class="swatch" style="background:#fef3c7" title="Parchment Map"></div>
+        <div class="swatch" style="background:#1e3a8a" title="Royal Blue Medallion"></div>
+        <div class="swatch" style="background:#ffd700" title="Golden Castle Spire"></div>
+        <div class="swatch" style="background:#dc2626" title="Park Route Waypoint"></div>
+      </div>
+      <div class="card-desc">
+        Pure Walt Disney World park guiding iconography — no out-of-place nautical instruments:
+        <ul>
+          <li><b>Folded Park Guidemap:</b> 3-panel accordion fold showing park lands and winding route trails.</li>
+          <li><b>Golden Cinderella Castle Crest:</b> Centered royal blue & gold medallion with the silhouette of Cinderella Castle and pixie-dust stars.</li>
+          <li><b>Mickey Location Pin:</b> A golden Mickey Mouse icon waypoint pin marking the start of your tour route.</li>
+          <li><b>"PARK GUIDE" Banner:</b> Embossed gold guide ribbon anchoring the bottom of the medallion.</li>
+        </ul>
+      </div>
+      <div class="card-actions">
+        <button class="btn-choose" onclick="selectCandidate('map2')">Preview in Live Card</button>
+      </div>
+    </div>
+
+    <!-- CANDIDATE 1.1: Follow the Flag (Alternate) -->
+    <div class="candidate-card">
+      <div class="card-art-box" id="art-flag1"></div>
+      <div class="card-name">Follow the Flag (1.1)</div>
+      <div class="card-palette-tag">Tour Guide Pennant & Compass</div>
+      <div class="swatches">
+        <div class="swatch" style="background:#0284c7" title="VIP Sky Blue"></div>
+        <div class="swatch" style="background:#f59e0b" title="Amber Gold"></div>
+        <div class="swatch" style="background:#dc2626" title="Crimson Chevron"></div>
+        <div class="swatch" style="background:#ffffff" title="Pure White"></div>
+      </div>
+      <div class="card-desc">
+        The guidon pennant held high above the crowd to lead a tour party:
+        <ul>
+          <li><b>Staff & Spearhead:</b> Centered brass flagpole with spearhead finial.</li>
+          <li><b>Rippling Pennant:</b> Swallowtail pennant with guide star and chevron stripes.</li>
+          <li><b>Anchored Compass:</b> Centered 8-point navigation dial with "GUIDE" banner.</li>
+        </ul>
+      </div>
+      <div class="card-actions">
+        <button class="btn-choose" onclick="selectCandidate('flag1')">Preview in Live Card</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Interactive Live Catalog Card Preview -->
+  <div class="catalog-preview-section">
+    <div class="section-title">Interactive Catalog Card Preview</div>
+    <div class="section-sub">See how each redesigned candidate renders live inside the official Disney World Tracker catalog card:</div>
+
+    <div class="interactive-card-container">
+      
+      <!-- Live Card -->
+      <div class="pin-card-preview" id="liveCard">
+        <div style="width:140px;height:140px;display:flex;align-items:center;justify-content:center;margin-bottom:12px;" id="liveCardArt"></div>
+        <div class="pin-badge-row">
+          <span class="tier-badge-prism">PRISM</span>
+          <span class="style-badge-diecut" id="liveCardStyle">✂️ Die-Cut Silhouette</span>
+          <span class="style-badge-status" id="liveCardStatus" style="background:#1e6b3a;">NEW ART (RECOMMENDED)</span>
+        </div>
+        <div class="pin-name" id="liveCardName">Legendary Guide</div>
+        <div class="pin-criteria" id="liveCardCriteria">50 friend rides and 5 organized trips — the Social pinnacle.</div>
+      </div>
+
+      <!-- Selector Buttons -->
+      <div class="selector-box">
+        <button class="btn-select active" id="btn-plaid_authentic" onclick="selectCandidate('plaid_authentic')">
+          <span class="dot" style="background:#ffd700;"></span>
+          <span><strong>The Plaid (Real Disney VIP Uniform — Photo Matched) [Recommended]</strong></span>
+        </button>
+        <button class="btn-select" id="btn-plaid2" onclick="selectCandidate('plaid2')">
+          <span class="dot" style="background:#15803d;"></span>
+          <span>The Plaid (Clean Black Watch — Green & Navy)</span>
+        </button>
+        <button class="btn-select" id="btn-map2" onclick="selectCandidate('map2')">
+          <span class="dot" style="background:#38bdf8;"></span>
+          <span><strong>The Disney Guidemap 2.0 (Map & Castle Crest)</strong></span>
+        </button>
+        <button class="btn-select" id="btn-flag1" onclick="selectCandidate('flag1')">
+          <span class="dot" style="background:#f59e0b;"></span>
+          <span>Follow the Flag 1.1 (Pennant & Guide Compass)</span>
+        </button>
+        <button class="btn-select" id="btn-plaid1" onclick="selectCandidate('plaid1')">
+          <span class="dot" style="background:#4a2a7a;"></span>
+          <span>Previous Plaid 1.0 (Initial Blob Vest)</span>
+        </button>
+        <button class="btn-select" id="btn-before" onclick="selectCandidate('before')">
+          <span class="dot" style="background:#64748b;"></span>
+          <span>Current (Before: Abstract flatStar Placeholder)</span>
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Technical Verification Matrix -->
+  <table class="matrix-table">
+    <thead>
+      <tr>
+        <th>Specification</th>
+        <th>Current Baseline</th>
+        <th>The Plaid 2.0 (Revamped)</th>
+        <th>The Disney Guidemap 2.0</th>
+        <th>Follow the Flag 1.1</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><b>Motif Provenance</b></td>
+        <td><code>flatStar</code> (Game-Icons)</td>
+        <td>Project Original (Disney App Team)</td>
+        <td>Project Original (Disney App Team)</td>
+        <td>Project Original (Disney App Team)</td>
+      </tr>
+      <tr>
+        <td><b>Thematic Narrative</b></td>
+        <td>Abstract sparkle (no story)</td>
+        <td>Disney VIP Tour Guide ("The Plaids")</td>
+        <td>Disney World Guidemap & Castle Crest</td>
+        <td>Tour Party Guidon & Navigation Base</td>
+      </tr>
+      <tr>
+        <td><b>emblemGate: Pieces</b></td>
+        <td>1 piece (Pass)</td>
+        <td><b>1 piece (Pass)</b></td>
+        <td><b>1 piece (Pass)</b></td>
+        <td><b>1 piece (Pass)</b></td>
+      </tr>
+      <tr>
+        <td><b>emblemGate: Disc Likeness</b></td>
+        <td>0.573 (< 0.9 Pass)</td>
+        <td><b>0.665 (< 0.9 Pass)</b></td>
+        <td><b>0.628 (< 0.9 Pass)</b></td>
+        <td><b>0.412 (< 0.9 Pass)</b></td>
+      </tr>
+      <tr>
+        <td><b>emblemGate: Aspect Ratio</b></td>
+        <td>1.082 (0.55–1.8 Pass)</td>
+        <td><b>0.766 (0.55–1.8 Pass)</b></td>
+        <td><b>1.006 (0.55–1.8 Pass)</b></td>
+        <td><b>0.820 (0.55–1.8 Pass)</b></td>
+      </tr>
+      <tr>
+        <td><b>Enamel Color Scheme</b></td>
+        <td>Amber, Sky, Royal, White</td>
+        <td>Forest, Navy, Crimson, Gold, Shirt White</td>
+        <td>Parchment, Navy, Castle Gold, Crimson</td>
+        <td>VIP Sky, Amber, Crimson, Silk White</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- Render Scripts -->
+  <script>
+    let uid = 0;
+
+    const PRISM_STOPS = [
+      { off: '0.000', col: '#fff0c4' },
+      { off: '0.166', col: '#ffc2e8' },
+      { off: '0.333', col: '#c9a8ff' },
+      { off: '0.500', col: '#8ed8ff' },
+      { off: '0.666', col: '#a8f0c8' },
+      { off: '0.833', col: '#ffe07a' },
+      { off: '1.000', col: '#b06fd8' }
+    ];
+
+    function getPrismMetalStops() {
+      return PRISM_STOPS.map(s => `<stop offset="${s.off}" stop-color="${s.col}"/>`).join('');
+    }
+
+    /*
+     * 0. THE AUTHENTIC DISNEY VIP TOUR GUIDE UNIFORM (PHOTO-MATCHED)
+     * Matches the official Disneyland & WDW VIP Tour Guide costume:
+     * - Tartan: Vibrant Crimson Red, Royal Cobalt Blue, Forest Green blocks
+     * - Grid: Fine double white lines and gold accent lines
+     * - Neck: White ruffled ascot dress shirt with golden collar pin
+     * - Chest: Gold sculpted Disney "D" VIP Tour Guide pin above the white CM oval nametag
+     * - Front: 6 round polished brass buttons down center placket
+     * - Pockets: Welt pockets with gold piping
+     */
+    function renderPlaidAuthentic(size = 140) {
+      const id = 'pa-' + (++uid);
+      const vestPath = 'M 190 95 L 120 130 Q 142 200 132 340 L 142 390 L 192 450 L 256 405 L 320 450 L 370 390 L 380 340 Q 370 200 392 130 L 322 95 Q 289 120 256 120 Q 223 120 190 95 Z';
+      return `
+      <svg width="${size}" height="${size}" viewBox="0 0 512 512" style="overflow:visible">
+        <defs>
+          <linearGradient id="g-${id}-prism" x1="0" y1="0" x2="1" y2="1">
+            ${getPrismMetalStops()}
+          </linearGradient>
+          <linearGradient id="g-${id}-gold" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#fff5c0"/>
+            <stop offset="45%" stop-color="#f59e0b"/>
+            <stop offset="100%" stop-color="#b45309"/>
+          </linearGradient>
+          <linearGradient id="g-${id}-sh" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="#fff" stop-opacity="0"/>
+            <stop offset="50%" stop-color="#fff" stop-opacity="0.85"/>
+            <stop offset="100%" stop-color="#fff" stop-opacity="0"/>
+          </linearGradient>
+          <clipPath id="c-${id}">
+            <path d="${vestPath}"/>
+          </clipPath>
+          <filter id="f-${id}">
+            <feDropShadow dx="0" dy="8" stdDeviation="7" flood-color="#000" flood-opacity="0.8"/>
+          </filter>
+        </defs>
+        <g filter="url(#f-${id})">
+          <!-- Outer Die-Cut Waistcoat Rim (9.2px Prism Iridescent Metal) -->
+          <path d="${vestPath}"
+                fill="#c81e1e" stroke="url(#g-${id}-prism)" stroke-width="18" stroke-linejoin="round"/>
+
+          <!-- 1. AUTHENTIC DISNEY VIP TARTAN ENAMEL WEAVE BLOCKS -->
+          <!-- Vertical Columns -->
+          <rect x="120" y="110" width="48" height="340" fill="#15803d" opacity="0.95"/>
+          <rect x="186" y="110" width="54" height="340" fill="#1d4ed8" opacity="0.92"/>
+          <rect x="240" y="140" width="32" height="280" fill="#15803d" opacity="0.95"/>
+          <rect x="272" y="110" width="54" height="340" fill="#1d4ed8" opacity="0.92"/>
+          <rect x="344" y="110" width="48" height="340" fill="#15803d" opacity="0.95"/>
+
+          <!-- Horizontal Bands (Crossing the vertical columns) -->
+          <rect x="100" y="170" width="312" height="48" fill="#15803d" opacity="0.85"/>
+          <rect x="100" y="170" width="312" height="24" fill="#1d4ed8" opacity="0.6"/>
+          <rect x="100" y="270" width="312" height="54" fill="#15803d" opacity="0.85"/>
+          <rect x="100" y="270" width="312" height="27" fill="#1d4ed8" opacity="0.6"/>
+          <rect x="100" y="375" width="312" height="48" fill="#15803d" opacity="0.85"/>
+          <rect x="100" y="375" width="312" height="24" fill="#1d4ed8" opacity="0.6"/>
+
+          <!-- Vibrant Crimson Red Enamel Windows (from photo) -->
+          <rect x="136" y="218" width="50" height="52" fill="#dc2626" stroke="url(#g-${id}-prism)" stroke-width="2"/>
+          <rect x="240" y="218" width="32" height="52" fill="#b91c1c" stroke="url(#g-${id}-prism)" stroke-width="2"/>
+          <rect x="326" y="218" width="50" height="52" fill="#dc2626" stroke="url(#g-${id}-prism)" stroke-width="2"/>
+
+          <rect x="136" y="324" width="50" height="51" fill="#dc2626" stroke="url(#g-${id}-prism)" stroke-width="2"/>
+          <rect x="240" y="324" width="32" height="51" fill="#b91c1c" stroke="url(#g-${id}-prism)" stroke-width="2"/>
+          <rect x="326" y="324" width="50" height="51" fill="#dc2626" stroke="url(#g-${id}-prism)" stroke-width="2"/>
+
+          <!-- Crisp Double White Pinstripes (from photo) -->
+          <line x1="140" y1="120" x2="140" y2="440" stroke="#ffffff" stroke-width="2" stroke-opacity="0.95"/>
+          <line x1="148" y1="120" x2="148" y2="440" stroke="#ffffff" stroke-width="2" stroke-opacity="0.95"/>
+          <line x1="210" y1="120" x2="210" y2="440" stroke="#ffffff" stroke-width="2" stroke-opacity="0.95"/>
+          <line x1="218" y1="120" x2="218" y2="440" stroke="#ffffff" stroke-width="2" stroke-opacity="0.95"/>
+          <line x1="294" y1="120" x2="294" y2="440" stroke="#ffffff" stroke-width="2" stroke-opacity="0.95"/>
+          <line x1="302" y1="120" x2="302" y2="440" stroke="#ffffff" stroke-width="2" stroke-opacity="0.95"/>
+          <line x1="364" y1="120" x2="364" y2="440" stroke="#ffffff" stroke-width="2" stroke-opacity="0.95"/>
+          <line x1="372" y1="120" x2="372" y2="440" stroke="#ffffff" stroke-width="2" stroke-opacity="0.95"/>
+
+          <line x1="110" y1="180" x2="400" y2="180" stroke="#ffffff" stroke-width="2" stroke-opacity="0.95"/>
+          <line x1="110" y1="188" x2="400" y2="188" stroke="#ffffff" stroke-width="2" stroke-opacity="0.95"/>
+          <line x1="110" y1="280" x2="400" y2="280" stroke="#ffffff" stroke-width="2" stroke-opacity="0.95"/>
+          <line x1="110" y1="288" x2="400" y2="288" stroke="#ffffff" stroke-width="2" stroke-opacity="0.95"/>
+          <line x1="110" y1="384" x2="400" y2="384" stroke="#ffffff" stroke-width="2" stroke-opacity="0.95"/>
+          <line x1="110" y1="392" x2="400" y2="392" stroke="#ffffff" stroke-width="2" stroke-opacity="0.95"/>
+
+          <!-- Fine Yellow / Gold Gridlines (from photo) -->
+          <line x1="144" y1="120" x2="144" y2="440" stroke="#ffd700" stroke-width="1.8" stroke-opacity="0.95"/>
+          <line x1="214" y1="120" x2="214" y2="440" stroke="#ffd700" stroke-width="1.8" stroke-opacity="0.95"/>
+          <line x1="298" y1="120" x2="298" y2="440" stroke="#ffd700" stroke-width="1.8" stroke-opacity="0.95"/>
+          <line x1="368" y1="120" x2="368" y2="440" stroke="#ffd700" stroke-width="1.8" stroke-opacity="0.95"/>
+
+          <line x1="110" y1="184" x2="400" y2="184" stroke="#ffd700" stroke-width="1.8" stroke-opacity="0.95"/>
+          <line x1="110" y1="284" x2="400" y2="284" stroke="#ffd700" stroke-width="1.8" stroke-opacity="0.95"/>
+          <line x1="110" y1="388" x2="400" y2="388" stroke="#ffd700" stroke-width="1.8" stroke-opacity="0.95"/>
+
+          <!-- 2. CRISP WHITE ASCOT / RUFFLE SHIRT COLLAR IN V-NECK (from photo) -->
+          <path d="M 190 95 Q 223 120 256 120 Q 289 120 322 95 L 256 222 Z" fill="#ffffff" stroke="url(#g-${id}-prism)" stroke-width="4"/>
+          <!-- Ascot folds -->
+          <path d="M 205 98 Q 230 115 256 145 Q 282 115 307 98" fill="none" stroke="#cbd5e1" stroke-width="2"/>
+          <path d="M 235 110 L 256 160 L 277 110" fill="#f8fafc" stroke="url(#g-${id}-prism)" stroke-width="2"/>
+          <path d="M 246 160 Q 256 185 248 215" stroke="#cbd5e1" stroke-width="2" fill="none"/>
+          <path d="M 266 160 Q 256 185 264 215" stroke="#cbd5e1" stroke-width="2" fill="none"/>
+          <!-- Golden Ascot Bar Pin (from photo) -->
+          <line x1="244" y1="135" x2="268" y2="135" stroke="url(#g-${id}-gold)" stroke-width="3.5" stroke-linecap="round"/>
+          <circle cx="256" cy="135" r="2.5" fill="#fff"/>
+
+          <!-- 3. NOTCHED LAPEL FACINGS -->
+          <path d="M 190 95 L 202 165 L 180 180 L 256 225 L 246 210 L 200 102 Z" fill="#c81e1e" stroke="url(#g-${id}-prism)" stroke-width="5" stroke-linejoin="round"/>
+          <path d="M 322 95 L 310 165 L 332 180 L 256 225 L 266 210 L 312 102 Z" fill="#c81e1e" stroke="url(#g-${id}-prism)" stroke-width="5" stroke-linejoin="round"/>
+
+          <!-- 4. CENTER BUTTON PLACKET & 6 BRASS BUTTONS (from photo) -->
+          <rect x="246" y="215" width="20" height="195" fill="#15803d" stroke="url(#g-${id}-prism)" stroke-width="4"/>
+          <circle cx="256" cy="235" r="5" fill="url(#g-${id}-gold)" stroke="url(#g-${id}-prism)" stroke-width="2"/>
+          <circle cx="256" cy="268" r="5" fill="url(#g-${id}-gold)" stroke="url(#g-${id}-prism)" stroke-width="2"/>
+          <circle cx="256" cy="301" r="5" fill="url(#g-${id}-gold)" stroke="url(#g-${id}-prism)" stroke-width="2"/>
+          <circle cx="256" cy="334" r="5" fill="url(#g-${id}-gold)" stroke="url(#g-${id}-prism)" stroke-width="2"/>
+          <circle cx="256" cy="367" r="5" fill="url(#g-${id}-gold)" stroke="url(#g-${id}-prism)" stroke-width="2"/>
+          <circle cx="256" cy="400" r="5" fill="url(#g-${id}-gold)" stroke="url(#g-${id}-prism)" stroke-width="2"/>
+
+          <!-- 5. LOWER WELT POCKETS (Left & Right) -->
+          <rect x="145" y="380" width="46" height="7" rx="2" fill="#c81e1e" stroke="url(#g-${id}-gold)" stroke-width="2"/>
+          <rect x="321" y="380" width="46" height="7" rx="2" fill="#c81e1e" stroke="url(#g-${id}-gold)" stroke-width="2"/>
+
+          <!-- 6. CHEST ACCENTS: GOLD 'D' VIP PIN & CAST MEMBER OVAL NAMETAG (from photo) -->
+          <!-- Top Pin: The Legendary Gold Disney 'D' VIP Tour Guide Crest Pin -->
+          <g transform="translate(340, 168)">
+            <path d="M -12 -14 L -2 -14 Q 14 -14 14 0 Q 14 14 -2 14 L -12 14 Z M -6 -8 L -2 -8 Q 8 -8 8 0 Q 8 8 -2 8 L -6 8 Z" 
+                  fill="url(#g-${id}-gold)" stroke="url(#g-${id}-prism)" stroke-width="3" stroke-linejoin="round"/>
+            <circle cx="-12" cy="-14" r="2.5" fill="#fff"/>
+            <circle cx="-12" cy="14" r="2.5" fill="#fff"/>
+            <polygon points="14,0 16,-3 19,0 16,3" fill="#ffd700"/>
+          </g>
+
+          <!-- Bottom Pin: The White Disney Cast Member Oval Nametag -->
+          <g transform="translate(340, 215)">
+            <ellipse cx="0" cy="0" rx="36" ry="22" fill="url(#g-${id}-gold)" stroke="url(#g-${id}-prism)" stroke-width="3"/>
+            <ellipse cx="0" cy="0" rx="32" ry="18" fill="#ffffff" stroke="url(#g-${id}-prism)" stroke-width="1.5"/>
+            <path d="M -8 -6 L -8 -3 L -6 -3 L -6 -8 L -3 -8 L -3 -3 L 3 -3 L 3 -8 L 6 -8 L 6 -3 L 8 -3 L 8 -6 Z M -2 -12 L 2 -12 L 0 -15 Z" fill="#1d4ed8"/>
+            <text x="0" y="8" font-family="'Outfit', sans-serif" font-size="10.5" font-weight="900" fill="#0f172a" text-anchor="middle" letter-spacing="1.5">GUIDE</text>
+          </g>
+
+          <!-- Prismatic Shimmer Sweep (Clipped) -->
+          <g clip-path="url(#c-${id})">
+            <rect x="-100" y="50" width="75" height="420" fill="url(#g-${id}-sh)" opacity="0.45" transform="rotate(25 256 256)" class="shmr" pointer-events="none"/>
+          </g>
+        </g>
+      </svg>`;
+    }
+
+    /*
+     * 1. THE PLAID 2.0 (BLACK WATCH VARIANT): Deep Green & Navy
+     */
+    function renderPlaid2(size = 140, variant = 'clean') {
+      const id = 'p2-' + (++uid);
+      const vestPath = 'M 190 95 L 120 130 Q 142 200 132 340 L 142 390 L 192 450 L 256 405 L 320 450 L 370 390 L 380 340 Q 370 200 392 130 L 322 95 Q 289 120 256 120 Q 223 120 190 95 Z';
+      return `
+      <svg width="${size}" height="${size}" viewBox="0 0 512 512" style="overflow:visible">
+        <defs>
+          <linearGradient id="g-${id}-prism" x1="0" y1="0" x2="1" y2="1">
+            ${getPrismMetalStops()}
+          </linearGradient>
+          <linearGradient id="g-${id}-gold" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#fff5c0"/>
+            <stop offset="45%" stop-color="#f59e0b"/>
+            <stop offset="100%" stop-color="#b45309"/>
+          </linearGradient>
+          <linearGradient id="g-${id}-sh" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="#fff" stop-opacity="0"/>
+            <stop offset="50%" stop-color="#fff" stop-opacity="0.85"/>
+            <stop offset="100%" stop-color="#fff" stop-opacity="0"/>
+          </linearGradient>
+          <clipPath id="c-${id}">
+            <path d="${vestPath}"/>
+          </clipPath>
+          <filter id="f-${id}">
+            <feDropShadow dx="0" dy="8" stdDeviation="7" flood-color="#000" flood-opacity="0.8"/>
+          </filter>
+        </defs>
+        <g filter="url(#f-${id})">
+          <!-- Outer Die-Cut Waistcoat Rim (9.2px Prism Iridescent Metal) -->
+          <path d="${vestPath}"
+                fill="#14532d" stroke="url(#g-${id}-prism)" stroke-width="18" stroke-linejoin="round"/>
+
+          <!-- 1. CRISP WHITE DRESS SHIRT & V-NECK INSET -->
+          <path d="M 190 95 Q 223 120 256 120 Q 289 120 322 95 L 256 225 Z" fill="#ffffff" stroke="url(#g-${id}-prism)" stroke-width="4"/>
+
+          <!-- Shirt Collar Wings -->
+          <polygon points="200,98 256,155 240,105" fill="#f8fafc" stroke="url(#g-${id}-prism)" stroke-width="3" stroke-linejoin="round"/>
+          <polygon points="312,98 256,155 272,105" fill="#f8fafc" stroke="url(#g-${id}-prism)" stroke-width="3" stroke-linejoin="round"/>
+
+          <!-- 2. FOUR-IN-HAND ROYAL NAVY NECKTIE & GOLD CLIP -->
+          <!-- Tie Knot -->
+          <polygon points="247,125 265,125 261,146 251,146" fill="#1e3a8a" stroke="url(#g-${id}-prism)" stroke-width="2"/>
+          <!-- Tie Body -->
+          <polygon points="251,146 261,146 266,220 256,232 246,220" fill="#1e3a8a" stroke="url(#g-${id}-prism)" stroke-width="3"/>
+          <!-- Gold Tie Bar Clip -->
+          <rect x="249" y="172" width="16" height="4" rx="1" fill="url(#g-${id}-gold)" stroke="url(#g-${id}-prism)" stroke-width="1.5"/>
+
+          <!-- 3. NOTCHED WAISTCOAT LAPELS -->
+          <!-- Left Lapel -->
+          <path d="M 190 95 L 202 165 L 180 180 L 256 225 L 246 210 L 200 102 Z" fill="#0f172a" stroke="url(#g-${id}-prism)" stroke-width="6" stroke-linejoin="round"/>
+          <!-- Right Lapel -->
+          <path d="M 322 95 L 310 165 L 332 180 L 256 225 L 266 210 L 312 102 Z" fill="#0f172a" stroke="url(#g-${id}-prism)" stroke-width="6" stroke-linejoin="round"/>
+
+          <!-- 4. WOVEN TARTAN ENAMEL BLOCKS (Forest Green & Midnight Navy) -->
+          <!-- Left Waistcoat Body Blocks -->
+          <rect x="135" y="215" width="55" height="60" fill="#14532d" stroke="url(#g-${id}-prism)" stroke-width="4"/>
+          <rect x="190" y="215" width="56" height="60" fill="#0f172a" stroke="url(#g-${id}-prism)" stroke-width="4"/>
+          <rect x="135" y="275" width="55" height="60" fill="#0f172a" stroke="url(#g-${id}-prism)" stroke-width="4"/>
+          <rect x="190" y="275" width="56" height="60" fill="#14532d" stroke="url(#g-${id}-prism)" stroke-width="4"/>
+          <path d="M 135 335 L 190 335 L 190 445 L 142 390 Z" fill="#14532d" stroke="url(#g-${id}-prism)" stroke-width="4"/>
+          <path d="M 190 335 L 246 335 L 246 395 L 192 445 Z" fill="#0f172a" stroke="url(#g-${id}-prism)" stroke-width="4"/>
+
+          <!-- Right Waistcoat Body Blocks -->
+          <rect x="266" y="215" width="56" height="60" fill="#0f172a" stroke="url(#g-${id}-prism)" stroke-width="4"/>
+          <rect x="322" y="215" width="55" height="60" fill="#14532d" stroke="url(#g-${id}-prism)" stroke-width="4"/>
+          <rect x="266" y="275" width="56" height="60" fill="#14532d" stroke="url(#g-${id}-prism)" stroke-width="4"/>
+          <rect x="322" y="275" width="55" height="60" fill="#0f172a" stroke="url(#g-${id}-prism)" stroke-width="4"/>
+          <path d="M 266 335 L 322 335 L 320 445 L 266 395 Z" fill="#14532d" stroke="url(#g-${id}-prism)" stroke-width="4"/>
+          <path d="M 322 335 L 377 335 L 370 390 L 320 445 Z" fill="#0f172a" stroke="url(#g-${id}-prism)" stroke-width="4"/>
+
+          <!-- Optional Tartan Pinstripes (Clean by default; Red or Gold on demand) -->
+          ${variant === 'red' ? `
+            <line x1="162" y1="130" x2="162" y2="410" stroke="#dc2626" stroke-width="4" stroke-linecap="round"/>
+            <line x1="218" y1="120" x2="218" y2="430" stroke="#dc2626" stroke-width="4" stroke-linecap="round"/>
+            <line x1="294" y1="120" x2="294" y2="430" stroke="#dc2626" stroke-width="4" stroke-linecap="round"/>
+            <line x1="350" y1="130" x2="350" y2="410" stroke="#dc2626" stroke-width="4" stroke-linecap="round"/>
+            <line x1="125" y1="245" x2="387" y2="245" stroke="#dc2626" stroke-width="4" stroke-linecap="round"/>
+            <line x1="130" y1="305" x2="382" y2="305" stroke="#dc2626" stroke-width="4" stroke-linecap="round"/>
+            <line x1="140" y1="365" x2="372" y2="365" stroke="#dc2626" stroke-width="4" stroke-linecap="round"/>
+          ` : variant === 'gold' ? `
+            <line x1="162" y1="130" x2="162" y2="410" stroke="#ffd700" stroke-width="1.8" stroke-opacity="0.55"/>
+            <line x1="218" y1="120" x2="218" y2="430" stroke="#ffd700" stroke-width="1.8" stroke-opacity="0.55"/>
+            <line x1="294" y1="120" x2="294" y2="430" stroke="#ffd700" stroke-width="1.8" stroke-opacity="0.55"/>
+            <line x1="350" y1="130" x2="350" y2="410" stroke="#ffd700" stroke-width="1.8" stroke-opacity="0.55"/>
+            <line x1="125" y1="245" x2="387" y2="245" stroke="#ffd700" stroke-width="1.8" stroke-opacity="0.55"/>
+            <line x1="130" y1="305" x2="382" y2="305" stroke="#ffd700" stroke-width="1.8" stroke-opacity="0.55"/>
+            <line x1="140" y1="365" x2="372" y2="365" stroke="#ffd700" stroke-width="1.8" stroke-opacity="0.55"/>
+          ` : ''}
+
+          <!-- Subtle Tartan Gold Grid Wirelines -->
+          <line x1="190" y1="130" x2="190" y2="445" stroke="#ffd700" stroke-width="2" stroke-opacity="0.7"/>
+          <line x1="322" y1="130" x2="322" y2="445" stroke="#ffd700" stroke-width="2" stroke-opacity="0.7"/>
+          <line x1="135" y1="275" x2="377" y2="275" stroke="#ffd700" stroke-width="2" stroke-opacity="0.7"/>
+          <line x1="140" y1="335" x2="372" y2="335" stroke="#ffd700" stroke-width="2" stroke-opacity="0.7"/>
+
+          <!-- 5. CENTER BUTTON PLACKET -->
+          <rect x="246" y="225" width="20" height="180" fill="#0f172a" stroke="url(#g-${id}-prism)" stroke-width="5"/>
+          <!-- Polished Brass Buttons -->
+          <circle cx="256" cy="250" r="6" fill="url(#g-${id}-gold)" stroke="url(#g-${id}-prism)" stroke-width="2.5"/>
+          <circle cx="256" cy="290" r="6" fill="url(#g-${id}-gold)" stroke="url(#g-${id}-prism)" stroke-width="2.5"/>
+          <circle cx="256" cy="330" r="6" fill="url(#g-${id}-gold)" stroke="url(#g-${id}-prism)" stroke-width="2.5"/>
+          <circle cx="256" cy="370" r="6" fill="url(#g-${id}-gold)" stroke="url(#g-${id}-prism)" stroke-width="2.5"/>
+
+          <!-- 6. LEFT WELT WATCH POCKET & ALBERT CHAIN -->
+          <rect x="150" y="325" width="46" height="8" rx="2" fill="url(#g-${id}-gold)" stroke="url(#g-${id}-prism)" stroke-width="2"/>
+          <path d="M 256 290 Q 215 350 175 330" fill="none" stroke="url(#g-${id}-gold)" stroke-width="4.5" stroke-linecap="round"/>
+          <circle cx="175" cy="330" r="4" fill="#ffd700" stroke="url(#g-${id}-prism)" stroke-width="1.5"/>
+
+          <!-- 7. WALT DISNEY WORLD CAST MEMBER OVAL NAMETAG (Left Chest) -->
+          <g transform="translate(336, 215)">
+            <!-- Outer Gold Bezel -->
+            <ellipse cx="0" cy="0" rx="38" ry="24" fill="url(#g-${id}-gold)" stroke="url(#g-${id}-prism)" stroke-width="4"/>
+            <!-- Inner White Enamel Face -->
+            <ellipse cx="0" cy="0" rx="33" ry="19" fill="#ffffff" stroke="url(#g-${id}-prism)" stroke-width="2"/>
+            <!-- Cinderella Castle Crest Silhouette in Royal Blue -->
+            <path d="M -9 -7 L -9 -4 L -7 -4 L -7 -10 L -4 -10 L -4 -4 L 4 -4 L 4 -10 L 7 -10 L 7 -4 L 9 -4 L 9 -7 L 11 -7 L 11 0 L -11 0 L -11 -7 Z M -2 -14 L 2 -14 L 0 -17 Z" fill="#1e3a8a"/>
+            <!-- Text: GUIDE -->
+            <text x="0" y="10" font-family="'Outfit', sans-serif" font-size="11" font-weight="900" fill="#0f172a" text-anchor="middle" letter-spacing="1.5">GUIDE</text>
+          </g>
+
+          <!-- Prismatic Shimmer Sweep (Clipped) -->
+          <g clip-path="url(#c-${id})">
+            <rect x="-100" y="50" width="75" height="420" fill="url(#g-${id}-sh)" opacity="0.45" transform="rotate(25 256 256)" class="shmr" pointer-events="none"/>
+          </g>
+        </g>
+      </svg>`;
+    }
+
+    /*
+     * 2. THE DISNEY GUIDEMAP 2.0 (REVAMPED): Park Guidemap & Cinderella Castle Crest
+     */
+    function renderGuidemap2(size = 140) {
+      const id = 'm2-' + (++uid);
+      const mapPath = 'M 100 120 Q 145 95 190 115 Q 256 85 322 115 Q 367 95 412 120 L 412 410 Q 367 385 322 405 Q 256 375 190 405 Q 145 385 100 410 Z';
+      return `
+      <svg width="${size}" height="${size}" viewBox="0 0 512 512" style="overflow:visible">
+        <defs>
+          <linearGradient id="g-${id}-prism" x1="0" y1="0" x2="1" y2="1">
+            ${getPrismMetalStops()}
+          </linearGradient>
+          <linearGradient id="g-${id}-gold" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#fff5c0"/>
+            <stop offset="45%" stop-color="#f59e0b"/>
+            <stop offset="100%" stop-color="#b45309"/>
+          </linearGradient>
+          <linearGradient id="g-${id}-sh" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="#fff" stop-opacity="0"/>
+            <stop offset="50%" stop-color="#fff" stop-opacity="0.85"/>
+            <stop offset="100%" stop-color="#fff" stop-opacity="0"/>
+          </linearGradient>
+          <clipPath id="c-${id}">
+            <path d="${mapPath}"/>
+          </clipPath>
+          <filter id="f-${id}">
+            <feDropShadow dx="0" dy="8" stdDeviation="7" flood-color="#000" flood-opacity="0.8"/>
+          </filter>
+        </defs>
+        <g filter="url(#f-${id})">
+          <!-- Outer Die-Cut Folded Map Rim -->
+          <path d="${mapPath}" fill="#fef3c7" stroke="url(#g-${id}-prism)" stroke-width="18" stroke-linejoin="round"/>
+
+          <!-- Panel 1 (Left Fold - Frontierland / Adventureland Parchment) -->
+          <path d="M 100 120 Q 145 95 190 115 L 190 405 Q 145 385 100 410 Z" fill="#fde68a" stroke="url(#g-${id}-prism)" stroke-width="8"/>
+          <!-- Panel 2 (Center Fold - Main Street & Hub Parchment) -->
+          <path d="M 190 115 Q 256 85 322 115 L 322 405 Q 256 375 190 405 Z" fill="#fef3c7" stroke="url(#g-${id}-prism)" stroke-width="8"/>
+          <!-- Panel 3 (Right Fold - Fantasyland / Tomorrowland Parchment) -->
+          <path d="M 322 115 Q 367 95 412 120 L 412 410 Q 367 385 322 405 Z" fill="#fef08a" stroke="url(#g-${id}-prism)" stroke-width="8"/>
+
+          <!-- Stylized Park Land Polygons (Subtle Pastel Enamels) -->
+          <!-- Adventureland Green Patch -->
+          <path d="M 115 280 Q 140 260 165 290 L 160 360 Q 125 365 115 280 Z" fill="#86efac" opacity="0.6"/>
+          <!-- Tomorrowland Blue Patch -->
+          <path d="M 345 160 Q 380 150 395 180 L 390 240 Q 350 230 345 160 Z" fill="#93c5fd" opacity="0.6"/>
+
+          <!-- Winding Dotted Park Route Trail (Crimson Cloisonné Path) -->
+          <path d="M 140 340 Q 150 220 210 210 Q 256 160 300 210 Q 370 230 375 320" 
+                fill="none" stroke="#dc2626" stroke-width="6" stroke-dasharray="10 8" stroke-linecap="round"/>
+
+          <!-- Route Waypoints -->
+          <circle cx="140" cy="340" r="7" fill="#dc2626" stroke="#fff" stroke-width="2"/>
+          <circle cx="210" cy="210" r="6" fill="#f59e0b" stroke="#fff" stroke-width="2"/>
+          <circle cx="375" cy="320" r="8" fill="#dc2626" stroke="#ffd700" stroke-width="2.5"/>
+
+          <!-- Golden Mickey Mouse Location Marker Pin on Top Left Fold -->
+          <g transform="translate(155, 140)">
+            <circle cx="0" cy="0" r="14" fill="url(#g-${id}-gold)" stroke="url(#g-${id}-prism)" stroke-width="3"/>
+            <circle cx="-11" cy="-11" r="7.5" fill="url(#g-${id}-gold)" stroke="url(#g-${id}-prism)" stroke-width="2"/>
+            <circle cx="11" cy="-11" r="7.5" fill="url(#g-${id}-gold)" stroke="url(#g-${id}-prism)" stroke-width="2"/>
+            <circle cx="0" cy="0" r="4" fill="#dc2626"/>
+          </g>
+
+          <!-- 2. CENTRAL GOLDEN CINDERELLA CASTLE GUIDE CREST (Replacing the Nautical Compass) -->
+          <!-- Outer Gold Bezel Ring -->
+          <circle cx="256" cy="275" r="70" fill="url(#g-${id}-gold)" stroke="url(#g-${id}-prism)" stroke-width="14"/>
+          <!-- Inner Royal Navy Enamel Dial -->
+          <circle cx="256" cy="275" r="58" fill="#1e3a8a" stroke="url(#g-${id}-prism)" stroke-width="6"/>
+
+          <!-- Majestic Cinderella Castle Silhouette in Burnished Gold -->
+          <!-- Main Castle Base & Walls -->
+          <path d="M 226 312 L 286 312 L 286 280 L 278 280 L 278 265 L 268 265 L 268 245 L 262 245 L 256 220 L 250 245 L 244 245 L 244 265 L 234 265 L 234 280 L 226 280 Z" 
+                fill="url(#g-${id}-gold)" stroke="url(#g-${id}-prism)" stroke-width="3" stroke-linejoin="round"/>
+          <!-- Castle Gateway Arch -->
+          <path d="M 250 312 A 6 6 0 0 1 262 312 Z" fill="#1e3a8a"/>
+          <!-- Flanking Spires -->
+          <polygon points="230,280 234,250 238,280" fill="url(#g-${id}-gold)" stroke="url(#g-${id}-prism)" stroke-width="2"/>
+          <polygon points="274,280 278,250 282,280" fill="url(#g-${id}-gold)" stroke="url(#g-${id}-prism)" stroke-width="2"/>
+          <!-- Soaring Main Central Spire Finial -->
+          <line x1="256" y1="220" x2="256" y2="212" stroke="url(#g-${id}-gold)" stroke-width="3"/>
+          <polygon points="256,212 260,214 256,217" fill="#ffd700"/>
+
+          <!-- Pixie-Dust Guiding Stars / Fireworks over Castle Spire -->
+          <polygon points="256,196 258,202 264,204 258,206 256,212 254,206 248,204 254,202" fill="#ffd700"/>
+          <polygon points="236,215 237,219 241,220 237,221 236,225 235,221 231,220 235,219" fill="#fff"/>
+          <polygon points="276,215 277,219 281,220 277,221 276,225 275,221 271,220 275,219" fill="#fff"/>
+
+          <!-- Embossed Golden Guide Ribbon Banner across Lower Dial -->
+          <path d="M 174 340 Q 256 368 338 340 L 330 372 Q 256 396 182 372 Z" 
+                fill="url(#g-${id}-gold)" stroke="url(#g-${id}-prism)" stroke-width="6" stroke-linejoin="round"/>
+          <text x="256" y="364" font-family="'Outfit', sans-serif" font-size="13" font-weight="900" fill="#0f172a" text-anchor="middle" letter-spacing="2">PARK GUIDE</text>
+
+          <!-- Prismatic Shimmer Sweep (Clipped) -->
+          <g clip-path="url(#c-${id})">
+            <rect x="-100" y="50" width="75" height="420" fill="url(#g-${id}-sh)" opacity="0.45" transform="rotate(25 256 256)" class="shmr" pointer-events="none"/>
+          </g>
+        </g>
+      </svg>`;
+    }
+
+    /*
+     * 3. CANDIDATE 1.1: Follow the Flag (Centered Guidon & Compass Base)
+     */
+    function renderFlag1(size = 140) {
+      const id = 'f1-' + (++uid);
+      const flagPath = 'M 256 20 L 276 64 L 264 64 L 264 190 Q 360 170 450 200 L 400 260 L 460 320 Q 360 290 264 310 L 264 340 A 84 84 0 1 1 248 340 L 248 64 L 236 64 Z';
+      return `
+      <svg width="${size}" height="${size}" viewBox="0 0 512 512" style="overflow:visible">
+        <defs>
+          <linearGradient id="g-${id}-prism" x1="0" y1="0" x2="1" y2="1">
+            ${getPrismMetalStops()}
+          </linearGradient>
+          <linearGradient id="g-${id}-gold" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#fff5c0"/>
+            <stop offset="45%" stop-color="#f59e0b"/>
+            <stop offset="100%" stop-color="#b45309"/>
+          </linearGradient>
+          <linearGradient id="g-${id}-sh" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="#fff" stop-opacity="0"/>
+            <stop offset="50%" stop-color="#fff" stop-opacity="0.85"/>
+            <stop offset="100%" stop-color="#fff" stop-opacity="0"/>
+          </linearGradient>
+          <clipPath id="c-${id}">
+            <path d="${flagPath}"/>
+          </clipPath>
+          <filter id="f-${id}">
+            <feDropShadow dx="0" dy="8" stdDeviation="7" flood-color="#000" flood-opacity="0.8"/>
+          </filter>
+        </defs>
+        <g filter="url(#f-${id})">
+          <polygon points="256,18 276,64 236,64" fill="url(#g-${id}-gold)" stroke="url(#g-${id}-prism)" stroke-width="14" stroke-linejoin="round"/>
+          <circle cx="256" cy="64" r="8" fill="url(#g-${id}-gold)" stroke="url(#g-${id}-prism)" stroke-width="6"/>
+          <rect x="248" y="64" width="16" height="290" rx="4" fill="url(#g-${id}-gold)" stroke="url(#g-${id}-prism)" stroke-width="12"/>
+
+          <!-- Outer Pennant -->
+          <path d="M 256 76 Q 360 55 456 86 L 398 160 L 468 234 Q 360 205 256 226 Z" 
+                fill="#0284c7" stroke="url(#g-${id}-prism)" stroke-width="18" stroke-linejoin="round"/>
+
+          <path d="M 260 84 Q 330 72 360 80 L 325 214 Q 290 218 260 220 Z" fill="#0284c7" stroke="url(#g-${id}-prism)" stroke-width="6"/>
+          <path d="M 356 80 Q 385 86 400 92 L 360 210 Q 345 212 322 214 Z" fill="#f59e0b" stroke="url(#g-${id}-prism)" stroke-width="6"/>
+          <path d="M 396 92 Q 418 98 428 104 L 388 206 Q 375 208 356 210 Z" fill="#dc2626" stroke="url(#g-${id}-prism)" stroke-width="6"/>
+          <path d="M 424 103 Q 440 108 452 114 L 395 160 L 458 226 Q 425 216 384 206 Z" fill="#f8fafc" stroke="url(#g-${id}-prism)" stroke-width="6"/>
+
+          <polygon points="296,118 302,138 322,144 302,150 296,170 290,150 270,144 290,138" 
+                   fill="#ffd700" stroke="url(#g-${id}-prism)" stroke-width="4" stroke-linejoin="round"/>
+          <circle cx="296" cy="144" r="4" fill="#fff"/>
+
+          <!-- Centered Compass Crest at Base -->
+          <circle cx="256" cy="390" r="74" fill="url(#g-${id}-gold)" stroke="url(#g-${id}-prism)" stroke-width="18"/>
+          <circle cx="256" cy="390" r="58" fill="#1e293b" stroke="url(#g-${id}-prism)" stroke-width="8"/>
+
+          <polygon points="256,336 266,384 256,390" fill="#dc2626" stroke="url(#g-${id}-prism)" stroke-width="3"/>
+          <polygon points="256,336 246,384 256,390" fill="#f8fafc" stroke="url(#g-${id}-prism)" stroke-width="3"/>
+          <polygon points="256,444 266,396 256,390" fill="#f8fafc" stroke="url(#g-${id}-prism)" stroke-width="3"/>
+          <polygon points="256,444 246,396 256,390" fill="#94a3b8" stroke="url(#g-${id}-prism)" stroke-width="3"/>
+          <polygon points="310,390 262,400 256,390" fill="#f59e0b" stroke="url(#g-${id}-prism)" stroke-width="3"/>
+          <polygon points="310,390 262,380 256,390" fill="#fff" stroke="url(#g-${id}-prism)" stroke-width="3"/>
+          <polygon points="202,390 250,400 256,390" fill="#94a3b8" stroke="url(#g-${id}-prism)" stroke-width="3"/>
+          <polygon points="202,390 250,380 256,390" fill="#fff" stroke="url(#g-${id}-prism)" stroke-width="3"/>
+          <circle cx="256" cy="390" r="10" fill="#ffd700" stroke="url(#g-${id}-prism)" stroke-width="4"/>
+
+          <path d="M 170 450 Q 256 475 342 450 L 334 480 Q 256 502 178 480 Z" 
+                fill="url(#g-${id}-gold)" stroke="url(#g-${id}-prism)" stroke-width="8" stroke-linejoin="round"/>
+          <text x="256" y="473" font-family="'Outfit', sans-serif" font-size="16" font-weight="900" fill="#0f172a" text-anchor="middle" letter-spacing="3">GUIDE</text>
+
+          <g clip-path="url(#c-${id})">
+            <rect x="-100" y="50" width="75" height="420" fill="url(#g-${id}-sh)" opacity="0.45" transform="rotate(25 256 256)" class="shmr" pointer-events="none"/>
+          </g>
+        </g>
+      </svg>`;
+    }
+
+    /*
+     * 4. PREVIOUS CANDIDATE 3 (INITIAL PASS)
+     */
+    function renderPlaid1(size = 140) {
+      const id = 'p1-' + (++uid);
+      const vestPath = "M 170 80 L 256 120 L 342 80 L 402 120 L 420 220 L 396 350 L 342 470 L 256 426 L 170 470 L 116 350 L 92 220 L 110 120 Z";
+      return `
+      <svg width="${size}" height="${size}" viewBox="0 0 512 512" style="overflow:visible">
+        <defs>
+          <linearGradient id="g-${id}-prism" x1="0" y1="0" x2="1" y2="1">
+            ${getPrismMetalStops()}
+          </linearGradient>
+          <linearGradient id="g-${id}-gold" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#fff5c0"/>
+            <stop offset="45%" stop-color="#f59e0b"/>
+            <stop offset="100%" stop-color="#b45309"/>
+          </linearGradient>
+          <clipPath id="c-${id}">
+            <path d="${vestPath}"/>
+          </clipPath>
+          <filter id="f-${id}">
+            <feDropShadow dx="0" dy="8" stdDeviation="7" flood-color="#000" flood-opacity="0.8"/>
+          </filter>
+        </defs>
+        <g filter="url(#f-${id})">
+          <path d="${vestPath}" fill="#15803d" stroke="url(#g-${id}-prism)" stroke-width="18" stroke-linejoin="round"/>
+          <polygon points="200,86 256,150 220,150" fill="#ffffff" stroke="url(#g-${id}-prism)" stroke-width="8"/>
+          <polygon points="312,86 256,150 292,150" fill="#ffffff" stroke="url(#g-${id}-prism)" stroke-width="8"/>
+          <polygon points="246,146 266,146 262,170 250,170" fill="#0f172a" stroke="url(#g-${id}-prism)" stroke-width="5"/>
+          <polygon points="250,170 262,170 268,270 256,290 244,270" fill="#0f172a" stroke="url(#g-${id}-prism)" stroke-width="6"/>
+          <rect x="236" y="160" width="40" height="260" fill="#1e293b" stroke="url(#g-${id}-prism)" stroke-width="8"/>
+          <circle cx="256" cy="200" r="7" fill="url(#g-${id}-gold)"/>
+          <circle cx="256" cy="250" r="7" fill="url(#g-${id}-gold)"/>
+          <circle cx="256" cy="300" r="7" fill="url(#g-${id}-gold)"/>
+          <circle cx="256" cy="350" r="7" fill="url(#g-${id}-gold)"/>
+        </g>
+      </svg>`;
+    }
+
+    /*
+     * 5. CURRENT (BEFORE): flatStar
+     */
+    function renderCurrentFlatStar(size = 140) {
+      const id = 'cur-' + (++uid);
+      const dPath = "M16.076 67.537L144.82 235.373l-45.326 130.8L277.96 341.92l215.024 107.277L364.242 281.36l46.184-130.618-177.946 24.67L16.076 67.537zm149.23 100.42l62.15 13.113c-11.693.526-22.448 3.494-31.317 9.64-9.893 6.852-15.327 17.176-16.605 28.442l-14.23-51.195zm116.85 24.654l54.97 11.6 13.044 46.92c-6.8-12.757-17.554-25.255-31.71-36.583-11.34-9.076-23.714-16.437-36.304-21.936zm-49.168 7.204c5.38.072 11.194.718 17.274 2 18.528 3.91 39.11 13.393 56.52 27.327 17.41 13.934 28.062 29.583 31.566 42.188 3.504 12.606 1.27 20.912-7.63 27.08-8.903 6.168-24.952 8.17-43.48 4.26-18.528-3.91-39.11-13.395-56.52-27.328-17.41-13.934-28.062-29.58-31.566-42.186-3.504-12.605-1.27-20.914 7.63-27.082 5.565-3.855 13.92-6.08 23.927-6.254.75-.013 1.51-.014 2.278-.004zm-42.37 59.207c6.783 10.78 16.37 21.272 28.42 30.916 8.68 6.946 17.966 12.89 27.49 17.765l-45.018-9.497-10.893-39.182zM358.26 280.24l15.072 54.22-55.748-11.765c8.772-1.275 16.852-4.12 23.777-8.92 11.367-7.875 16.85-20.33 16.9-33.535z";
+      return `
+      <svg width="${size}" height="${size}" viewBox="0 0 512 512" style="overflow:visible">
+        <defs>
+          <linearGradient id="g-${id}-prism" x1="0" y1="0" x2="1" y2="1">
+            ${getPrismMetalStops()}
+          </linearGradient>
+          <clipPath id="c-${id}">
+            <path d="${dPath}"/>
+          </clipPath>
+          <filter id="f-${id}">
+            <feDropShadow dx="0" dy="7" stdDeviation="6" flood-color="#000" flood-opacity="0.75"/>
+          </filter>
+        </defs>
+        <g filter="url(#f-${id})">
+          <path d="${dPath}" fill="#f59e0b" stroke="url(#g-${id}-prism)" stroke-width="16" stroke-linejoin="round"/>
+          <path d="M165.3 167.9 L227.4 181 C215.7 181.5 205 184.5 196.1 190.6 C186.2 197.5 180.8 207.8 179.5 219 L165.3 167.9 Z" fill="#4a2a7a"/>
+          <path d="M282.1 192.6 L337.1 204.2 L350.1 251.1 C343.3 238.3 332.5 225.8 318.4 214.5 C307.1 205.4 294.7 198.1 282.1 192.6 Z" fill="#ffffff"/>
+          <path d="M233 199.8 C238.4 199.9 244.2 200.5 250.3 201.8 C268.8 205.7 289.4 215.2 306.8 229.1 C324.2 243 334.9 258.6 338.4 271.2 C341.9 283.8 339.7 292.1 330.8 298.3 C321.9 304.5 305.9 306.5 287.3 302.6 C268.8 298.7 248.2 289.2 230.8 275.3 C213.4 261.4 202.7 245.7 199.2 233.1 C195.7 220.5 198 212.2 206.8 206 C212.4 202.1 220.8 199.9 230.8 199.7 Z" fill="#0284c7"/>
+        </g>
+      </svg>`;
+    }
+
+    // Mount candidate SVGs in cards
+    document.getElementById('art-plaid2').innerHTML = renderPlaidAuthentic(170);
+    document.getElementById('art-map2').innerHTML = renderGuidemap2(170);
+    document.getElementById('art-flag1').innerHTML = renderFlag1(170);
+
+    let currentPlaidVariant = 'authentic';
+    function setPlaidVariant(v) {
+      currentPlaidVariant = v;
+      document.querySelectorAll('.plaid-sub-btn').forEach(b => b.classList.remove('active'));
+      const btn = document.getElementById('psb-' + v);
+      if (btn) btn.classList.add('active');
+
+      const art = (v === 'authentic') ? renderPlaidAuthentic(170) : renderPlaid2(170, v);
+      document.getElementById('art-plaid2').innerHTML = art;
+
+      // Update live card if a plaid variant is currently selected
+      const liveArt = (v === 'authentic') ? renderPlaidAuthentic(140) : renderPlaid2(140, v);
+      if (document.getElementById('btn-plaid_authentic').classList.contains('active') ||
+          document.getElementById('btn-plaid2').classList.contains('active')) {
+        document.getElementById('liveCardArt').innerHTML = liveArt;
+      }
+    }
+
+    // Live preview selector
+    const candidates = {
+      plaid_authentic: {
+        name: 'Legendary Guide',
+        criteria: '50 friend rides and 5 organized trips — the Social pinnacle.',
+        style: '✂️ Die-Cut Silhouette',
+        status: 'NEW ART (PHOTO MATCHED)',
+        statusColor: '#1e6b3a',
+        render: () => renderPlaidAuthentic(130)
+      },
+      plaid2: {
+        name: 'Legendary Guide (Clean Black Watch)',
+        criteria: '50 friend rides and 5 organized trips — the Social pinnacle.',
+        style: '✂️ Die-Cut Silhouette',
+        status: 'NEW ART (GREEN & NAVY)',
+        statusColor: '#15803d',
+        render: () => renderPlaid2(130, 'clean')
+      },
+      map2: {
+        name: 'Legendary Guide',
+        criteria: '50 friend rides and 5 organized trips — the Social pinnacle.',
+        style: '✂️ Die-Cut Silhouette',
+        status: 'NEW ART (TOP CONTENDER)',
+        statusColor: '#0284c7',
+        render: () => renderGuidemap2(130)
+      },
+      flag1: {
+        name: 'Legendary Guide',
+        criteria: '50 friend rides and 5 organized trips — the Social pinnacle.',
+        style: '✂️ Die-Cut Silhouette',
+        status: 'ALTERNATE',
+        statusColor: '#b45309',
+        render: () => renderFlag1(130)
+      },
+      plaid1: {
+        name: 'Legendary Guide (Plaid 1.0)',
+        criteria: '50 friend rides and 5 organized trips — the Social pinnacle.',
+        style: '✂️ Die-Cut Silhouette',
+        status: 'INITIAL CONCEPT',
+        statusColor: '#4a2a7a',
+        render: () => renderPlaid1(130)
+      },
+      before: {
+        name: 'Legendary Guide (Before)',
+        criteria: '50 friend rides and 5 organized trips — the Social pinnacle.',
+        style: '✂️ Die-Cut Silhouette',
+        status: 'REUSE (OLD)',
+        statusColor: '#7a2d1f',
+        render: () => renderCurrentFlatStar(130)
+      }
+    };
+
+    function selectCandidate(key) {
+      document.querySelectorAll('.selector-box .btn-select').forEach(b => b.classList.remove('active'));
+      const activeBtn = document.getElementById('btn-' + key);
+      if (activeBtn) activeBtn.classList.add('active');
+
+      const data = candidates[key];
+      if (!data) return;
+
+      document.getElementById('liveCardArt').innerHTML = data.render();
+      document.getElementById('liveCardName').textContent = data.name;
+      document.getElementById('liveCardCriteria').textContent = data.criteria;
+      document.getElementById('liveCardStyle').textContent = data.style;
+      const statusEl = document.getElementById('liveCardStatus');
+      statusEl.textContent = data.status;
+      statusEl.style.background = data.statusColor;
+
+      // scroll preview into view smoothly
+      const previewSection = document.querySelector('.catalog-preview-section');
+      if (previewSection && window.scrollY > 500) {
+        previewSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
+
+    // Default select Authentic Photo-Matched
+    selectCandidate('plaid_authentic');
+  </script>
+</body>
+</html>

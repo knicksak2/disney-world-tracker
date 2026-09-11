@@ -1,0 +1,970 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Around the World — Refined Pin Designs (No Words)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600;700&family=Cinzel:wght@600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #080612;
+      --bg-card: rgba(22, 16, 40, 0.92);
+      --border-card: rgba(176, 185, 200, 0.25);
+      --silver-glow: rgba(213, 220, 230, 0.45);
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: radial-gradient(circle at 50% 0%, #1c1438 0%, var(--bg-dark) 80%);
+      color: var(--text-main);
+      min-height: 100vh;
+      padding: 40px 24px 80px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    header {
+      max-width: 1200px;
+      margin-bottom: 28px;
+      text-align: center;
+    }
+
+    .badge-sub {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(176, 185, 200, 0.15);
+      border: 1px solid rgba(213, 220, 230, 0.35);
+      color: #e2e8f0;
+      padding: 6px 18px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 14px;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+    }
+
+    h1 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 34px;
+      font-weight: 800;
+      color: #fff;
+      margin-bottom: 10px;
+      background: linear-gradient(135deg, #ffffff 0%, #d5dce6 50%, #8d99ae 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .subtitle {
+      color: var(--text-muted);
+      font-size: 15px;
+      max-width: 820px;
+      margin: 0 auto 20px;
+      line-height: 1.6;
+    }
+
+    .callout-box {
+      max-width: 840px;
+      background: rgba(47, 107, 176, 0.18);
+      border: 1px solid rgba(147, 197, 253, 0.35);
+      border-radius: 12px;
+      padding: 12px 20px;
+      margin: 0 auto 28px;
+      font-size: 13.5px;
+      color: #bfdbfe;
+      line-height: 1.5;
+    }
+
+    /* Challenge spec card */
+    .spec-banner {
+      max-width: 960px;
+      width: 100%;
+      background: rgba(26, 18, 48, 0.88);
+      border: 1px solid rgba(213, 220, 230, 0.3);
+      border-radius: 16px;
+      padding: 18px 24px;
+      margin-bottom: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+    }
+    .spec-info {
+      text-align: left;
+    }
+    .spec-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 19px;
+      font-weight: 800;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .spec-criteria {
+      color: #cbd5e1;
+      font-size: 14px;
+      margin-top: 4px;
+    }
+    .spec-meta {
+      display: flex;
+      gap: 8px;
+    }
+    .pill {
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      padding: 4px 12px;
+      border-radius: 999px;
+    }
+    .pill-silver {
+      background: linear-gradient(135deg, #ffffff, #8d99ae);
+      color: #0f172a;
+    }
+    .pill-mode {
+      background: rgba(138, 69, 201, 0.3);
+      border: 1px solid rgba(203, 162, 240, 0.4);
+      color: #d8b4fe;
+    }
+    .pill-tbd {
+      background: #3a1f1f;
+      color: #ffb3b3;
+      border: 1px solid #7a2d1f;
+    }
+
+    /* Candidates grid */
+    .candidates-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+      gap: 28px;
+      max-width: 1400px;
+      width: 100%;
+      margin-bottom: 50px;
+    }
+
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-card);
+      border-radius: 20px;
+      padding: 28px 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 12px 36px rgba(0,0,0,0.5);
+      transition: all 0.25s ease;
+    }
+    .card:hover {
+      border-color: rgba(213, 220, 230, 0.6);
+      transform: translateY(-4px);
+      box-shadow: 0 18px 48px rgba(0,0,0,0.65), 0 0 30px var(--silver-glow);
+    }
+
+    .card-tag {
+      position: absolute;
+      top: 14px;
+      right: 14px;
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      padding: 4px 10px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: #e2e8f0;
+    }
+
+    .card-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 20px;
+      font-weight: 800;
+      color: #fff;
+      margin-top: 10px;
+      margin-bottom: 4px;
+      text-align: center;
+    }
+
+    .card-flavor {
+      font-size: 12px;
+      color: #c084fc;
+      font-weight: 600;
+      margin-bottom: 20px;
+      text-align: center;
+    }
+
+    .art-frame {
+      width: 200px;
+      height: 200px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(circle, rgba(40, 30, 70, 0.6) 0%, rgba(10, 8, 20, 0.9) 70%);
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      border-radius: 18px;
+      margin-bottom: 20px;
+      position: relative;
+    }
+
+    .pin-svg {
+      transition: transform 0.2s ease;
+    }
+    .art-frame:hover .pin-svg {
+      transform: scale(1.08);
+    }
+
+    /* Live In-Catalog Card Mockup */
+    .catalog-mock-box {
+      width: 100%;
+      background: #171324;
+      border: 1.5px solid #3b3154;
+      border-radius: 14px;
+      padding: 16px;
+      margin-bottom: 18px;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .mock-label {
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: #a78bfa;
+      margin-bottom: 8px;
+      align-self: flex-start;
+    }
+    .mock-badges-row {
+      display: flex;
+      gap: 6px;
+      justify-content: center;
+      margin-top: 10px;
+      margin-bottom: 8px;
+    }
+    .mock-tier-badge {
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      padding: 3px 8px;
+      border-radius: 5px;
+      background: linear-gradient(135deg, #ffffff, #8d99ae);
+      color: #0f172a;
+    }
+    .mock-mode-badge {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 5px;
+      background: rgba(138, 69, 201, 0.35);
+      border: 1px solid rgba(203, 162, 240, 0.4);
+      color: #d8b4fe;
+    }
+    .mock-status-badge {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 5px;
+      background: #1e6b3a;
+      color: #bbf7d0;
+    }
+    .mock-pin-name {
+      font-family: 'Outfit', sans-serif;
+      font-size: 15px;
+      font-weight: 800;
+      color: #fff;
+    }
+    .mock-pin-crit {
+      font-size: 12px;
+      color: #94a3b8;
+      margin-top: 4px;
+      line-height: 1.35;
+    }
+
+    .card-desc {
+      font-size: 13.5px;
+      color: #cbd5e1;
+      line-height: 1.55;
+      text-align: left;
+      width: 100%;
+      margin-bottom: 16px;
+    }
+
+    .card-notes {
+      font-size: 12px;
+      color: #94a3b8;
+      width: 100%;
+      background: rgba(15, 23, 42, 0.45);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 10px;
+      padding: 12px;
+    }
+    .card-notes ul {
+      padding-left: 18px;
+      margin-top: 6px;
+    }
+    .card-notes li {
+      margin-bottom: 4px;
+    }
+
+    /* Comparison Table */
+    .comparison-section {
+      max-width: 1200px;
+      width: 100%;
+      background: var(--bg-card);
+      border: 1px solid var(--border-card);
+      border-radius: 20px;
+      padding: 30px;
+      margin-top: 20px;
+      box-shadow: 0 12px 36px rgba(0,0,0,0.5);
+    }
+    .comparison-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 22px;
+      font-weight: 800;
+      margin-bottom: 18px;
+      color: #fff;
+    }
+    table.comp-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    table.comp-table th, table.comp-table td {
+      padding: 12px 14px;
+      text-align: left;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+    }
+    table.comp-table th {
+      color: #a78bfa;
+      font-weight: 700;
+      text-transform: uppercase;
+      font-size: 11px;
+      letter-spacing: 0.8px;
+    }
+    table.comp-table tr:hover td {
+      background: rgba(255, 255, 255, 0.02);
+    }
+    .badge-ok {
+      color: #4ade80;
+      font-weight: 700;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="badge-sub">🌟 Series 1 Touring Feats • Refined Art Direction</div>
+    <h1>Around the World</h1>
+    <p class="subtitle">
+      EPCOT World Showcase Single-Day circumnavigation feat: <strong>An experience in all 11 World Showcase countries, same day.</strong>
+    </p>
+    <div class="callout-box">
+      ✨ <strong>Text Removal Update:</strong> All long text banners ("11 COUNTRIES", "PASSPORT", "AROUND THE WORLD") have been completely removed. The pins now rely purely on authentic Disney cloisonné visual symbolism, 11-country geometric markers, and silver metal craftsmanship.
+    </div>
+
+    <!-- Spec banner matching screenshot -->
+    <div class="spec-banner">
+      <div class="spec-info">
+        <div class="spec-title">
+          <span>Around the World</span>
+          <span class="pill pill-silver">Silver Tier</span>
+        </div>
+        <div class="spec-criteria">An experience in all 11 World Showcase countries, same day.</div>
+      </div>
+      <div class="spec-meta">
+        <span class="pill pill-silver">SILVER (5.2px)</span>
+        <span class="pill pill-mode">🛡️ Contained (DISC)</span>
+        <span class="pill pill-tbd">ART TBD</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- =========================================================================
+       CANDIDATES GRID
+       ========================================================================= -->
+  <div class="candidates-grid">
+
+    <!-- =========================================================================
+         CANDIDATE 1: THE 11-PAVILION PROMENADE COMPASS (CONTAINED DISC)
+         ========================================================================= -->
+    <div class="card">
+      <div class="card-tag">Candidate 1 • 100% Badge Match</div>
+      <div class="card-title">The Promenade Compass</div>
+      <div class="card-flavor">11-Star World Showcase Bezel • Lagoon Navigation Rose</div>
+      
+      <div class="art-frame">
+        <svg class="pin-svg" width="168" height="168" viewBox="-4 -4 160 160">
+          <defs>
+            <linearGradient id="g-silver-1" x1=".15" y1="0" x2=".85" y2="1">
+              <stop offset="0" stop-color="#ffffff"/>
+              <stop offset=".25" stop-color="#e2e8f0"/>
+              <stop offset=".7" stop-color="#94a3b8"/>
+              <stop offset="1" stop-color="#475569"/>
+            </linearGradient>
+            <linearGradient id="g-lagoon-1" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#14727f"/>
+              <stop offset="50%" stop-color="#1b1a4a"/>
+              <stop offset="100%" stop-color="#241a3a"/>
+            </linearGradient>
+            <linearGradient id="g-gl" x1="0" y1="0" x2=".3" y2="1">
+              <stop offset="0" stop-color="#fff" stop-opacity=".55"/>
+              <stop offset=".4" stop-color="#fff" stop-opacity=".12"/>
+              <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+            </linearGradient>
+            <filter id="sh-card-1" x="-30%" y="-30%" width="160%" height="160%">
+              <feDropShadow dx="0" dy="4" stdDeviation="3.8" flood-color="#000" flood-opacity=".75"/>
+            </filter>
+            <clipPath id="cp-disc-1">
+              <circle cx="76" cy="76" r="58"/>
+            </clipPath>
+          </defs>
+
+          <g filter="url(#sh-card-1)">
+            <!-- Outer Raised Silver Bezel with 5.2px rim -->
+            <circle cx="76" cy="76" r="62" fill="url(#g-silver-1)" stroke="url(#g-silver-1)" stroke-width="4"/>
+            <!-- Outer Milled Track Ring -->
+            <circle cx="76" cy="76" r="59.5" fill="none" stroke="#241a3a" stroke-width="1.2" opacity="0.45"/>
+            
+            <!-- Recessed Cloisonné Lagoon & Promenade Well -->
+            <g clip-path="url(#cp-disc-1)">
+              <!-- Deep Royal Lagoon Water -->
+              <rect x="18" y="18" width="116" height="116" fill="url(#g-lagoon-1)"/>
+
+              <!-- Concentric Navigational Promenade Tracks -->
+              <circle cx="76" cy="76" r="51" fill="none" stroke="url(#g-silver-1)" stroke-width="1.8" opacity="0.9"/>
+              <circle cx="76" cy="76" r="45" fill="none" stroke="url(#g-silver-1)" stroke-width="1.0" opacity="0.6" stroke-dasharray="3 2"/>
+              <circle cx="76" cy="76" r="34" fill="none" stroke="url(#g-silver-1)" stroke-width="1.4" opacity="0.8"/>
+
+              <!-- 11 Radial Promenade Heading Rays radiating to the 11 Country Stations -->
+              <g stroke="url(#g-silver-1)" stroke-width="0.9" opacity="0.55">
+                <line x1="76" y1="76" x2="76" y2="25"/>
+                <line x1="76" y1="76" x2="103" y2="33"/>
+                <line x1="76" y1="76" x2="122" y2="54"/>
+                <line x1="76" y1="76" x2="126" y2="83"/>
+                <line x1="76" y1="76" x2="114" y2="109"/>
+                <line x1="76" y1="76" x2="91" y2="125"/>
+                <line x1="76" y1="76" x2="61" y2="125"/>
+                <line x1="76" y1="76" x2="38" y2="109"/>
+                <line x1="76" y1="76" x2="26" y2="83"/>
+                <line x1="76" y1="76" x2="30" y2="54"/>
+                <line x1="76" y1="76" x2="49" y2="33"/>
+              </g>
+
+              <!-- Central Geodesic Globe Core (Spaceship Earth Latitude/Longitude Latticework) -->
+              <circle cx="76" cy="76" r="24" fill="#14727f" stroke="url(#g-silver-1)" stroke-width="2.2"/>
+              <!-- Longitude Curves -->
+              <ellipse cx="76" cy="76" rx="16" ry="24" fill="none" stroke="url(#g-silver-1)" stroke-width="1.1"/>
+              <ellipse cx="76" cy="76" rx="8" ry="24" fill="none" stroke="url(#g-silver-1)" stroke-width="0.9"/>
+              <line x1="76" y1="52" x2="76" y2="100" stroke="url(#g-silver-1)" stroke-width="1.4"/>
+              <!-- Latitude Lines -->
+              <line x1="52" y1="76" x2="100" y2="76" stroke="url(#g-silver-1)" stroke-width="1.4"/>
+              <line x1="56" y1="66" x2="96" y2="66" stroke="url(#g-silver-1)" stroke-width="0.9"/>
+              <line x1="56" y1="86" x2="96" y2="86" stroke="url(#g-silver-1)" stroke-width="0.9"/>
+
+              <!-- Central 8-Point Expedition Compass Rose Over Geodesic Sphere -->
+              <!-- Primary North-South Needle -->
+              <polygon points="76,38 81,72 76,68 71,72" fill="url(#g-silver-1)" stroke="#241a3a" stroke-width="0.8"/>
+              <polygon points="76,114 81,80 76,84 71,80" fill="#a8323f" stroke="#241a3a" stroke-width="0.8"/>
+              <!-- East-West Needle -->
+              <polygon points="114,76 80,71 84,76 80,81" fill="url(#g-silver-1)" stroke="#241a3a" stroke-width="0.8"/>
+              <polygon points="38,76 72,71 68,76 72,81" fill="url(#g-silver-1)" stroke="#241a3a" stroke-width="0.8"/>
+              <!-- Diagonal Points -->
+              <polygon points="103,49 80,72 82,75" fill="url(#g-silver-1)" opacity="0.85"/>
+              <polygon points="49,103 72,80 70,77" fill="url(#g-silver-1)" opacity="0.85"/>
+              <polygon points="103,103 80,80 77,82" fill="url(#g-silver-1)" opacity="0.85"/>
+              <polygon points="49,49 72,72 75,70" fill="url(#g-silver-1)" opacity="0.85"/>
+
+              <!-- Center Bezel Cap with Roman Numeral XI (11) -->
+              <circle cx="76" cy="76" r="8.5" fill="#241a3a" stroke="url(#g-silver-1)" stroke-width="1.8"/>
+              <text x="76" y="79.2" font-family="'Cinzel', serif" font-size="7.5" font-weight="900" fill="url(#g-silver-1)" text-anchor="middle">XI</text>
+
+              <!-- Exactly 11 Silver Pavilion Station Stars around the Promenade Bezel (Radius = 48) -->
+              <!-- Top Star (American Adventure / North) -->
+              <polygon points="76,24 77.8,27.5 81.5,28 78.8,30.5 79.5,34 76,32 72.5,34 73.2,30.5 70.5,28 74.2,27.5" fill="url(#g-silver-1)"/>
+              <!-- 10 Circular Station Markers with Silver Dots -->
+              <circle cx="102.5" cy="32.0" r="3.2" fill="url(#g-silver-1)" stroke="#241a3a" stroke-width="0.8"/>
+              <circle cx="119.8" cy="51.5" r="3.2" fill="url(#g-silver-1)" stroke="#241a3a" stroke-width="0.8"/>
+              <circle cx="123.8" cy="76.0" r="3.2" fill="url(#g-silver-1)" stroke="#241a3a" stroke-width="0.8"/>
+              <circle cx="113.1" cy="99.3" r="3.2" fill="url(#g-silver-1)" stroke="#241a3a" stroke-width="0.8"/>
+              <circle cx="91.9" cy="115.1" r="3.2" fill="url(#g-silver-1)" stroke="#241a3a" stroke-width="0.8"/>
+              <circle cx="60.1" cy="115.1" r="3.2" fill="url(#g-silver-1)" stroke="#241a3a" stroke-width="0.8"/>
+              <circle cx="38.9" cy="99.3" r="3.2" fill="url(#g-silver-1)" stroke="#241a3a" stroke-width="0.8"/>
+              <circle cx="28.2" cy="76.0" r="3.2" fill="url(#g-silver-1)" stroke="#241a3a" stroke-width="0.8"/>
+              <circle cx="32.2" cy="51.5" r="3.2" fill="url(#g-silver-1)" stroke="#241a3a" stroke-width="0.8"/>
+              <circle cx="49.5" cy="32.0" r="3.2" fill="url(#g-silver-1)" stroke="#241a3a" stroke-width="0.8"/>
+
+              <!-- Glass Sheen -->
+              <ellipse cx="56" cy="48" rx="46" ry="26" transform="rotate(-26 56 48)" fill="url(#g-gl)"/>
+            </g>
+
+            <!-- Outer Raised Silver Rim Highlight -->
+            <circle cx="76" cy="76" r="58" fill="none" stroke="url(#g-silver-1)" stroke-width="3.2"/>
+          </g>
+        </svg>
+      </div>
+
+      <!-- Live Mockup Card in Catalog -->
+      <div class="catalog-mock-box">
+        <div class="mock-label">Preview in Pin Catalog Card</div>
+        <div class="mock-badges-row">
+          <span class="mock-tier-badge">Silver</span>
+          <span class="mock-mode-badge">🛡️ Contained (DISC)</span>
+          <span class="mock-status-badge">NEW</span>
+        </div>
+        <div class="mock-pin-name">Around the World</div>
+        <div class="mock-pin-crit">An experience in all 11 World Showcase countries, same day.</div>
+      </div>
+      
+      <div class="card-desc">
+        <strong>The Promenade Compass:</strong> 100% fulfills the <code>Contained (DISC)</code> catalog badge. 
+        Zero text banners. A balanced silver expedition compass with <strong>exactly 11 silver pavilion station pips</strong> along the perimeter, radiating into a central geodesic coordinate sphere with a dual-tone compass rose and a clean <code>XI</code> central silver boss.
+      </div>
+      
+      <div class="card-notes">
+        <strong>Art Highlights:</strong>
+        <ul>
+          <li><strong>Text-Free & Clean:</strong> Completely eliminated the bottom banner; now relies entirely on pure navigational symmetry.</li>
+          <li><strong>Symbolic 11:</strong> The 11 outer stations + subtle <code>XI</code> center cap encode the 11 countries without spelling words out.</li>
+          <li><strong>Zero Layout Shift:</strong> Perfect drop-in replacement for the placeholder card.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- =========================================================================
+         CANDIDATE 2: FRIENDSHIP BOAT LAGOON CROSSING (CONTAINED DISC)
+         ========================================================================= -->
+    <div class="card">
+      <div class="card-tag">Candidate 2 • Park Life & Voyage</div>
+      <div class="card-title">Friendship Lagoon Voyage</div>
+      <div class="card-flavor">Iconic Friendship Cruiser • Torii & Eiffel Horizon • 11 Stars</div>
+      
+      <div class="art-frame">
+        <svg class="pin-svg" width="168" height="168" viewBox="-4 -4 160 160">
+          <defs>
+            <linearGradient id="g-silver-2" x1=".15" y1="0" x2=".85" y2="1">
+              <stop offset="0" stop-color="#ffffff"/>
+              <stop offset=".25" stop-color="#e2e8f0"/>
+              <stop offset=".7" stop-color="#94a3b8"/>
+              <stop offset="1" stop-color="#475569"/>
+            </linearGradient>
+            <linearGradient id="g-sky-2" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#1b1a4a"/>
+              <stop offset="50%" stop-color="#3f2f78"/>
+              <stop offset="100%" stop-color="#c47a8e"/>
+            </linearGradient>
+            <filter id="sh-card-2" x="-30%" y="-30%" width="160%" height="160%">
+              <feDropShadow dx="0" dy="4" stdDeviation="3.8" flood-color="#000" flood-opacity=".75"/>
+            </filter>
+            <clipPath id="cp-disc-2">
+              <circle cx="76" cy="76" r="58"/>
+            </clipPath>
+          </defs>
+
+          <g filter="url(#sh-card-2)">
+            <!-- Outer Scalloped Silver Bezel -->
+            <circle cx="76" cy="76" r="62" fill="url(#g-silver-2)" stroke="url(#g-silver-2)" stroke-width="4"/>
+            <circle cx="76" cy="76" r="59.5" fill="none" stroke="#241a3a" stroke-width="1.2" opacity="0.45"/>
+            
+            <g clip-path="url(#cp-disc-2)">
+              <!-- Dusk Sky Background -->
+              <rect x="18" y="18" width="116" height="116" fill="url(#g-sky-2)"/>
+
+              <!-- 11 Silver Stars in Sky Arch -->
+              <g fill="url(#g-silver-2)">
+                <polygon points="34,34 35.5,36 37.5,36.3 36,37.5 36.5,39.5 34,38.2 31.5,39.5 32,37.5 30.5,36.3 32.5,36"/>
+                <polygon points="45,27 46.2,28.8 48,29 46.8,30.2 47.2,32 45,31 42.8,32 43.2,30.2 42,29 43.8,28.8"/>
+                <polygon points="57,23 58.2,24.8 60,25 58.8,26.2 59.2,28 57,27 54.8,28 55.2,26.2 54,25 55.8,24.8"/>
+                <polygon points="70,21 71.2,22.8 73,23 71.8,24.2 72.2,26 70,25 67.8,26 68.2,24.2 67,23 68.8,22.8"/>
+                <polygon points="82,21 83.2,22.8 85,23 83.8,24.2 84.2,26 82,25 79.8,26 80.2,24.2 79,23 80.8,22.8"/>
+                <polygon points="95,23 96.2,24.8 98,25 96.8,26.2 97.2,28 95,27 92.8,28 93.2,26.2 92,25 93.8,24.8"/>
+                <polygon points="107,27 108.2,28.8 110,29 108.8,30.2 109.2,32 107,31 104.8,32 105.2,30.2 104,29 105.8,28.8"/>
+                <polygon points="118,34 119.5,36 121.5,36.3 120,37.5 120.5,39.5 118,38.2 115.5,39.5 116,37.5 114.5,36.3 116.5,36"/>
+                <circle cx="48" cy="42" r="1.5"/>
+                <circle cx="76" cy="33" r="1.8"/>
+                <circle cx="104" cy="42" r="1.5"/>
+              </g>
+
+              <!-- Horizon Landmark Silhouettes: Japan Torii Gate (Left) & France Eiffel Tower (Right) -->
+              <!-- Torii Gate (Japan) on shoreline -->
+              <g fill="#241a3a" stroke="url(#g-silver-2)" stroke-width="0.8">
+                <!-- Torii Top Curved Beam -->
+                <path d="M28 58 Q38 55 48 58 L47 60 Q38 58 29 60 Z"/>
+                <!-- Torii Sub-beam -->
+                <rect x="31" y="62" width="14" height="2"/>
+                <!-- Torii Posts -->
+                <line x1="33" y1="58" x2="33" y2="76" stroke-width="1.8"/>
+                <line x1="43" y1="58" x2="43" y2="76" stroke-width="1.8"/>
+              </g>
+
+              <!-- Eiffel Tower (France) on horizon -->
+              <g fill="#241a3a" stroke="url(#g-silver-2)" stroke-width="0.8">
+                <!-- Spire -->
+                <polygon points="108,44 110,44 113,76 105,76"/>
+                <!-- Arch Base -->
+                <path d="M106 76 Q109 68 112 76" fill="url(#g-sky-2)"/>
+                <!-- First & Second Gallery Decks -->
+                <line x1="106" y1="67" x2="112" y2="67" stroke-width="1.4"/>
+                <line x1="107" y1="57" x2="111" y2="57" stroke-width="1.4"/>
+                <line x1="109" y1="40" x2="109" y2="44" stroke-width="1.2"/>
+              </g>
+
+              <!-- Shoreline Promenade Line -->
+              <line x1="18" y1="76" x2="134" y2="76" stroke="url(#g-silver-2)" stroke-width="2.2"/>
+
+              <!-- Deep Teal Lagoon Waters (#14727f) -->
+              <rect x="18" y="78" width="116" height="56" fill="#14727f"/>
+
+              <!-- Prominent Friendship Boat Sailing Across the Water -->
+              <g transform="translate(48, 86)">
+                <!-- Boat Hull in Silver and Forest Green (#2f7d3e) -->
+                <path d="M0,14 L56,14 L50,23 L6,23 Z" fill="url(#g-silver-2)" stroke="#241a3a" stroke-width="1"/>
+                <path d="M4,17 L52,17 L48,22 L8,22 Z" fill="#2f7d3e"/>
+                <!-- Cabin Structure (White/Cream & Silver) -->
+                <rect x="8" y="7" width="40" height="7" rx="2" fill="url(#g-silver-2)" stroke="#241a3a" stroke-width="0.8"/>
+                <!-- Cabin Windows -->
+                <rect x="11" y="9" width="5" height="3.5" rx="1" fill="#14727f"/>
+                <rect x="18" y="9" width="5" height="3.5" rx="1" fill="#14727f"/>
+                <rect x="25" y="9" width="5" height="3.5" rx="1" fill="#14727f"/>
+                <rect x="32" y="9" width="5" height="3.5" rx="1" fill="#14727f"/>
+                <rect x="39" y="9" width="5" height="3.5" rx="1" fill="#14727f"/>
+                <!-- Pilot House & Roof Radar Fin -->
+                <rect x="20" y="3" width="16" height="4" rx="1" fill="url(#g-silver-2)"/>
+                <rect x="23" y="4" width="4" height="2" fill="#14727f"/>
+                <rect x="29" y="4" width="4" height="2" fill="#14727f"/>
+                <line x1="28" y1="1" x2="28" y2="3" stroke="url(#g-silver-2)" stroke-width="1.2"/>
+                <!-- Bow Flagpole -->
+                <line x1="3" y1="8" x2="3" y2="14" stroke="url(#g-silver-2)" stroke-width="1"/>
+                <polygon points="3,8 7,10 3,12" fill="url(#g-silver-2)"/>
+              </g>
+
+              <!-- Dynamic Silver Water Wakes & Reflection Lines -->
+              <line x1="26" y1="112" x2="68" y2="112" stroke="url(#g-silver-2)" stroke-width="1.4" opacity="0.75"/>
+              <line x1="84" y1="112" x2="126" y2="112" stroke="url(#g-silver-2)" stroke-width="1.4" opacity="0.75"/>
+              <line x1="42" y1="118" x2="110" y2="118" stroke="url(#g-silver-2)" stroke-width="1.8" opacity="0.85"/>
+              <line x1="60" y1="124" x2="92" y2="124" stroke="url(#g-silver-2)" stroke-width="1.2" opacity="0.6"/>
+
+              <!-- Glass Sheen -->
+              <ellipse cx="56" cy="48" rx="46" ry="26" transform="rotate(-26 56 48)" fill="url(#g-gl)"/>
+            </g>
+
+            <!-- Outer Raised Silver Rim Highlight -->
+            <circle cx="76" cy="76" r="58" fill="none" stroke="url(#g-silver-2)" stroke-width="3.2"/>
+          </g>
+        </svg>
+      </div>
+
+      <!-- Live Mockup Card in Catalog -->
+      <div class="catalog-mock-box">
+        <div class="mock-label">Preview in Pin Catalog Card</div>
+        <div class="mock-badges-row">
+          <span class="mock-tier-badge">Silver</span>
+          <span class="mock-mode-badge">🛡️ Contained (DISC)</span>
+          <span class="mock-status-badge">NEW</span>
+        </div>
+        <div class="mock-pin-name">Around the World</div>
+        <div class="mock-pin-crit">An experience in all 11 World Showcase countries, same day.</div>
+      </div>
+      
+      <div class="card-desc">
+        <strong>Friendship Lagoon Voyage:</strong> Fulfills the <code>Contained (DISC)</code> badge.
+        A scenic Disney park pin featuring the beloved World Showcase Friendship Boat cruising across glittering lagoon waters, framed against the iconic silhouettes of Japan's Torii Gate and France's Eiffel Tower beneath an <strong>11-star dusk sky</strong>. Zero text.
+      </div>
+      
+      <div class="card-notes">
+        <strong>Art Highlights:</strong>
+        <ul>
+          <li><strong>Pure Park Storytelling:</strong> Every guest who tours all 11 countries either rides the Friendship Boat or watches it cross the lagoon.</li>
+          <li><strong>No Words:</strong> Relies entirely on atmospheric silhouette art and the 11 silver constellation stars.</li>
+          <li><strong>Scenic Depth:</strong> Beautiful dusk-to-lagoon gradient pairing (`#1b1a4a → #c47a8e` sky, `#14727f` water).</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- =========================================================================
+         CANDIDATE 3: THE 11-PAVILION SKYLINE PANORAMA (CONTAINED DISC)
+         ========================================================================= -->
+    <div class="card">
+      <div class="card-tag">Candidate 3 • Architectural Grandeur</div>
+      <div class="card-title">World Showcase Skyline</div>
+      <div class="card-flavor">Full Architectural Horizon • 11-Star Twilight Constellation</div>
+      
+      <div class="art-frame">
+        <svg class="pin-svg" width="168" height="168" viewBox="-4 -4 160 160">
+          <defs>
+            <linearGradient id="g-silver-3" x1=".15" y1="0" x2=".85" y2="1">
+              <stop offset="0" stop-color="#ffffff"/>
+              <stop offset=".25" stop-color="#e2e8f0"/>
+              <stop offset=".7" stop-color="#94a3b8"/>
+              <stop offset="1" stop-color="#475569"/>
+            </linearGradient>
+            <linearGradient id="g-twilight-3" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#140f2d"/>
+              <stop offset="50%" stop-color="#3b2667"/>
+              <stop offset="100%" stop-color="#2f6bb0"/>
+            </linearGradient>
+            <filter id="sh-card-3" x="-30%" y="-30%" width="160%" height="160%">
+              <feDropShadow dx="0" dy="4" stdDeviation="3.8" flood-color="#000" flood-opacity=".75"/>
+            </filter>
+            <clipPath id="cp-disc-3">
+              <circle cx="76" cy="76" r="58"/>
+            </clipPath>
+          </defs>
+
+          <g filter="url(#sh-card-3)">
+            <circle cx="76" cy="76" r="62" fill="url(#g-silver-3)" stroke="url(#g-silver-3)" stroke-width="4"/>
+            <circle cx="76" cy="76" r="59.5" fill="none" stroke="#241a3a" stroke-width="1.2" opacity="0.45"/>
+            
+            <g clip-path="url(#cp-disc-3)">
+              <!-- Twilight Sky Background -->
+              <rect x="18" y="18" width="116" height="116" fill="url(#g-twilight-3)"/>
+
+              <!-- 11 Silver Constellation Stars in Night Sky -->
+              <g fill="url(#g-silver-3)">
+                <polygon points="32,38 33.5,40 35.5,40.3 34,41.5 34.5,43.5 32,42.2 29.5,43.5 30,41.5 28.5,40.3 30.5,40"/>
+                <polygon points="44,30 45.2,31.8 47,32 45.8,33.2 46.2,35 44,34 41.8,35 42.2,33.2 41,32 42.8,31.8"/>
+                <polygon points="58,25 59.2,26.8 61,27 59.8,28.2 60.2,30 58,29 55.8,30 56.2,28.2 55,27 56.8,26.8"/>
+                <polygon points="76,22 77.5,24 79.5,24.3 78,25.5 78.5,27.5 76,26.2 73.5,27.5 74,25.5 72.5,24.3 74.5,24"/>
+                <polygon points="94,25 95.2,26.8 97,27 95.8,28.2 96.2,30 94,29 91.8,30 92.2,28.2 91,27 92.8,26.8"/>
+                <polygon points="108,30 109.2,31.8 111,32 109.8,33.2 110.2,35 108,34 105.8,35 106.2,33.2 105,32 106.8,31.8"/>
+                <polygon points="120,38 121.5,40 123.5,40.3 122,41.5 122.5,43.5 120,42.2 117.5,43.5 118,41.5 116.5,40.3 118.5,40"/>
+                <circle cx="40" cy="46" r="1.6"/>
+                <circle cx="66" cy="38" r="1.6"/>
+                <circle cx="86" cy="38" r="1.6"/>
+                <circle cx="112" cy="46" r="1.6"/>
+              </g>
+
+              <!-- Architectural Horizon: Prominent Pavilions (Much larger & clearer than before) -->
+              <path d="M18 82 
+                       L26 82 L28 77 L34 77 L36 82 <!-- Mexico Mesoamerican Pyramid -->
+                       L40 82 L42 70 L46 70 L47 82 <!-- Norway Stave Church Steeple -->
+                       L50 82 L53 66 L57 66 L60 82 <!-- China Temple of Heaven Pagoda -->
+                       L64 82 L65 60 L68 57 L71 60 L72 82 <!-- Italy St Mark's Campanile Tower -->
+                       L75 82 L76 74 L80 74 L81 82 <!-- American Adventure Colonial Pediment -->
+                       L84 82 L85 64 L89 64 L90 82 <!-- Japan Pagoda / Torii -->
+                       L93 82 L94 67 L96 63 L98 67 L99 82 <!-- Morocco Koutoubia Minaret -->
+                       L102 82 L106 46 L108 46 L112 82 <!-- France Eiffel Tower! -->
+                       L116 82 L117 72 L124 72 L126 82 <!-- UK / Canada Chateau -->
+                       L134 82 L134 134 L18 134 Z" 
+                    fill="#1e1838" stroke="url(#g-silver-3)" stroke-width="2.2" stroke-linejoin="round"/>
+
+              <!-- Shoreline Promenade Line -->
+              <line x1="18" y1="82" x2="134" y2="82" stroke="url(#g-silver-3)" stroke-width="2.8"/>
+
+              <!-- Deep Teal Lagoon Water (#14727f) -->
+              <rect x="18" y="84" width="116" height="50" fill="#14727f"/>
+
+              <!-- Beautiful Mirrored Water Ripples & Lagoon Reflections (No banner clutter) -->
+              <line x1="28" y1="92" x2="48" y2="92" stroke="url(#g-silver-3)" stroke-width="1.2" opacity="0.7"/>
+              <line x1="102" y1="92" x2="124" y2="92" stroke="url(#g-silver-3)" stroke-width="1.2" opacity="0.7"/>
+              <line x1="58" y1="98" x2="94" y2="98" stroke="url(#g-silver-3)" stroke-width="1.8" opacity="0.85"/>
+              <line x1="36" y1="106" x2="72" y2="106" stroke="url(#g-silver-3)" stroke-width="1.4" opacity="0.65"/>
+              <line x1="80" y1="106" x2="116" y2="106" stroke="url(#g-silver-3)" stroke-width="1.4" opacity="0.65"/>
+              <line x1="48" y1="114" x2="104" y2="114" stroke="url(#g-silver-3)" stroke-width="1.6" opacity="0.8"/>
+              <line x1="64" y1="122" x2="88" y2="122" stroke="url(#g-silver-3)" stroke-width="1.2" opacity="0.5"/>
+
+              <!-- Glass Sheen -->
+              <ellipse cx="56" cy="48" rx="46" ry="26" transform="rotate(-26 56 48)" fill="url(#g-gl)"/>
+            </g>
+
+            <!-- Outer Raised Silver Rim Highlight -->
+            <circle cx="76" cy="76" r="58" fill="none" stroke="url(#g-silver-3)" stroke-width="3.2"/>
+          </g>
+        </svg>
+      </div>
+
+      <!-- Live Mockup Card in Catalog -->
+      <div class="catalog-mock-box">
+        <div class="mock-label">Preview in Pin Catalog Card</div>
+        <div class="mock-badges-row">
+          <span class="mock-tier-badge">Silver</span>
+          <span class="mock-mode-badge">🛡️ Contained (DISC)</span>
+          <span class="mock-status-badge">NEW</span>
+        </div>
+        <div class="mock-pin-name">Around the World</div>
+        <div class="mock-pin-crit">An experience in all 11 World Showcase countries, same day.</div>
+      </div>
+      
+      <div class="card-desc">
+        <strong>World Showcase Skyline:</strong> Fulfills the <code>Contained (DISC)</code> badge.
+        Completely removed the bottom text banner to let the architecture breathe. Prominently features the silhouettes of the 11 national pavilions (Eiffel Tower, St Mark's Campanile, Mayan Pyramid, China Temple, Stave Church) towering over the shimmering lagoon waters beneath <strong>11 silver constellation stars</strong>.
+      </div>
+      
+      <div class="card-notes">
+        <strong>Art Highlights:</strong>
+        <ul>
+          <li><strong>Architecture Speaks:</strong> Recognizable Disney pavilions (Eiffel Tower, Torii Gate, Campanile) tell the story without any words needed.</li>
+          <li><strong>11 Stars Constellation:</strong> Exactly 11 stars in the twilight sky honor the 11 countries completed.</li>
+          <li><strong>Classic Contained Disc:</strong> Zero layout shift in the app or catalog.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- =========================================================================
+         CANDIDATE 4: THE 11-STAR CIRCUMNAVIGATION ASTROLABE (DIECUT)
+         ========================================================================= -->
+    <div class="card">
+      <div class="card-tag">Candidate 4 • Dynamic Touring Sprint</div>
+      <div class="card-title">Circumnavigation Astrolabe</div>
+      <div class="card-flavor">Geodesic Globe • 11-Star Orbital Velocity Ring</div>
+      
+      <div class="art-frame">
+        <svg class="pin-svg" width="168" height="168" viewBox="-4 -4 160 160">
+          <defs>
+            <linearGradient id="g-silver-4" x1=".15" y1="0" x2=".85" y2="1">
+              <stop offset="0" stop-color="#ffffff"/>
+              <stop offset=".25" stop-color="#e2e8f0"/>
+              <stop offset=".7" stop-color="#94a3b8"/>
+              <stop offset="1" stop-color="#475569"/>
+            </linearGradient>
+            <filter id="sh-card-4" x="-30%" y="-30%" width="160%" height="160%">
+              <feDropShadow dx="0" dy="4" stdDeviation="3.8" flood-color="#000" flood-opacity=".75"/>
+            </filter>
+          </defs>
+
+          <g filter="url(#sh-card-4)">
+            <!-- Central Geodesic Globe Core with Royal Sky & Teal Enamel -->
+            <!-- Outer Raised Silver Ring (5.2px rim) -->
+            <circle cx="76" cy="76" r="46" fill="url(#g-silver-4)" stroke="url(#g-silver-4)" stroke-width="4"/>
+            <circle cx="76" cy="76" r="43" fill="#14727f"/>
+
+            <!-- Continents / Geodesic Enamel Wells in Royal Sky (#2f6bb0) & Teal (#14727f) -->
+            <ellipse cx="76" cy="76" rx="28" ry="43" fill="#2f6bb0" stroke="url(#g-silver-4)" stroke-width="1.8"/>
+            <ellipse cx="76" cy="76" rx="14" ry="43" fill="#14727f" stroke="url(#g-silver-4)" stroke-width="1.4"/>
+            <line x1="76" y1="33" x2="76" y2="119" stroke="url(#g-silver-4)" stroke-width="2.2"/>
+            <line x1="33" y1="76" x2="119" y2="76" stroke="url(#g-silver-4)" stroke-width="2.2"/>
+            <line x1="40" y1="56" x2="112" y2="56" stroke="url(#g-silver-4)" stroke-width="1.4"/>
+            <line x1="40" y1="96" x2="112" y2="96" stroke="url(#g-silver-4)" stroke-width="1.4"/>
+
+            <!-- Diagonal Orbital Astrolabe Ring encircling the Globe (carries 11 stars) -->
+            <g transform="rotate(-30 76 76)">
+              <!-- Back Ellipse Half -->
+              <ellipse cx="76" cy="76" rx="64" ry="18" fill="none" stroke="url(#g-silver-4)" stroke-width="5"/>
+              <ellipse cx="76" cy="76" rx="62" ry="16" fill="none" stroke="#241a3a" stroke-width="1.4"/>
+
+              <!-- Front Orbital Ribbon Band in Royal Plum (#6a3fb0) -->
+              <path d="M12 76 C12 90 140 90 140 76 C140 85 12 85 12 76 Z" fill="#6a3fb0"/>
+
+              <!-- Exactly 11 Silver Country Stars along the Orbital Velocity Ring -->
+              <g fill="url(#g-silver-4)">
+                <circle cx="15" cy="76" r="3.4"/>
+                <circle cx="26" cy="66" r="2.8"/>
+                <circle cx="43" cy="61" r="2.8"/>
+                <circle cx="64" cy="59" r="2.8"/>
+                <circle cx="88" cy="59" r="2.8"/>
+                <circle cx="109" cy="61" r="2.8"/>
+                <circle cx="126" cy="66" r="2.8"/>
+                <circle cx="137" cy="76" r="3.4"/>
+                <circle cx="120" cy="87" r="2.8"/>
+                <!-- Bottom Apex Faceted Star -->
+                <polygon points="76,90 78,94 82,94.5 79,97 80,101 76,99 72,101 73,97 70,94.5 74,94"/>
+                <circle cx="32" cy="87" r="2.8"/>
+              </g>
+
+              <!-- Forward Supersonic Velocity Arrow (Symbol of Single-Day Feat) -->
+              <polygon points="148,76 132,70 137,76 132,82" fill="url(#g-silver-4)" stroke="#241a3a" stroke-width="1"/>
+            </g>
+
+            <!-- Top Crown Finial & Bottom Pedestal Terminal -->
+            <polygon points="76,21 82,30 70,30" fill="url(#g-silver-4)" stroke="#241a3a" stroke-width="0.8"/>
+            <circle cx="76" cy="20" r="3" fill="url(#g-silver-4)"/>
+            <circle cx="76" cy="132" r="3" fill="url(#g-silver-4)"/>
+            <polygon points="76,131 82,122 70,122" fill="url(#g-silver-4)" stroke="#241a3a" stroke-width="0.8"/>
+          </g>
+        </svg>
+      </div>
+
+      <!-- Live Mockup Card in Catalog -->
+      <div class="catalog-mock-box">
+        <div class="mock-label">Preview in Pin Catalog Card</div>
+        <div class="mock-badges-row">
+          <span class="mock-tier-badge">Silver</span>
+          <span class="mock-mode-badge">✂️ Die-Cut Silhouette</span>
+          <span class="mock-status-badge">NEW</span>
+        </div>
+        <div class="mock-pin-name">Around the World</div>
+        <div class="mock-pin-crit">An experience in all 11 World Showcase countries, same day.</div>
+      </div>
+      
+      <div class="card-desc">
+        <strong>Circumnavigation Astrolabe:</strong> Die-cut velocity pin.
+        Removed all bottom text plaques. An armillary celestial sphere with dual-enamel geodesic globe, encircled by a 3D orbital velocity ring holding <strong>11 silver country stars</strong> and a supersonic heading chevron symbolizing the single-day sprint.
+      </div>
+      
+      <div class="card-notes">
+        <strong>Art Highlights:</strong>
+        <ul>
+          <li><strong>Touring Speed:</strong> Visually communicates a rapid one-day circumnavigation.</li>
+          <li><strong>Solid Die-Cut Geometry:</strong> Single connected metal body, passes <code>emblemGate</code> at 5.2px rim.</li>
+          <li><strong>No Words:</strong> Pure celestial geometry and starry orbits.</li>
+        </ul>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- =========================================================================
+       DETAILED COMPARISON MATRIX
+       ========================================================================= -->
+  <div class="comparison-section">
+    <div class="comparison-title">Refined Candidate Comparison & Art Direction Matrix</div>
+    <table class="comp-table">
+      <thead>
+        <tr>
+          <th>Candidate</th>
+          <th>Mode / Shape</th>
+          <th>Catalog Alignment</th>
+          <th>11-Country Symbolism</th>
+          <th>Text Elements</th>
+          <th>Artistic Identity</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>1. Promenade Compass</strong></td>
+          <td>Contained (DISC)</td>
+          <td><span class="badge-ok">100% Direct Match</span></td>
+          <td>11 silver pavilion station pips on calibrated outer track</td>
+          <td>Only subtle Roman numeral <code>XI</code> in center boss (no words)</td>
+          <td>Navigational precision instrument; circumnavigating the lagoon promenade.</td>
+        </tr>
+        <tr>
+          <td><strong>2. Friendship Lagoon Voyage</strong></td>
+          <td>Contained (DISC)</td>
+          <td><span class="badge-ok">100% Direct Match</span></td>
+          <td>11 silver stars in sky arch above lagoon</td>
+          <td><strong>Zero text</strong></td>
+          <td>Disney park nostalgia; iconic Friendship Boat with Torii & Eiffel silhouettes.</td>
+        </tr>
+        <tr>
+          <td><strong>3. World Showcase Skyline</strong></td>
+          <td>Contained (DISC)</td>
+          <td><span class="badge-ok">100% Direct Match</span></td>
+          <td>11 silver constellation stars + 11 pavilion landmark silhouettes</td>
+          <td><strong>Zero text</strong></td>
+          <td>Architectural grand tour; expansive panorama reflecting in the lagoon.</td>
+        </tr>
+        <tr>
+          <td><strong>4. Circumnavigation Astrolabe</strong></td>
+          <td>Die-Cut Silhouette</td>
+          <td>Switch to <code>✂️ Die-Cut</code></td>
+          <td>11 silver stars embedded along the orbital ring</td>
+          <td><strong>Zero text</strong></td>
+          <td>Kinetic touring sprint; celestial globe orbiting at speed in a single day.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+</body>
+</html>

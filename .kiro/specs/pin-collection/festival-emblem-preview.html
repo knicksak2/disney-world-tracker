@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Festival emblem — pick one</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#0d0a17;color:#f1f5f9;font-family:'Segoe UI',system-ui,sans-serif;padding:36px 28px}
+  h1{font-size:26px;font-weight:800;margin-bottom:8px;background:linear-gradient(120deg,#fff,#c9a8ff 70%);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+  p{color:#a8b0c0;max-width:800px;line-height:1.6}
+  .row{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:24px;max-width:1000px;margin:26px auto 0}
+  .card{background:#161226;border:1px solid #2a2140;border-radius:18px;padding:22px 16px;text-align:center}
+  .stage{width:200px;height:200px;margin:0 auto 12px;filter:drop-shadow(0 10px 22px rgba(0,0,0,.6))}
+  .cap{font-size:15px;font-weight:700;color:#fff}
+  .sub{font-size:12px;color:#94a3b8;margin-top:4px}
+</style>
+</head>
+<body>
+<h1>Festival Foodie emblem — which reads as a food booth?</h1>
+<p>All shown at silver · 3★ · festive-purple field, with the enlarged emblem size. The circus tent is the current one; storefront and market-stall are the awning-booth alternatives (both Apache/MIT → a CREDITS line).</p>
+<div class="row" id="row"></div>
+<script>
+  const SILVER = ['#ffffff','#e2e8f0','#b0b9c8','#727b8b'];
+  const stops = c => c.map((x,i)=>`<stop offset="${(i/(c.length-1)).toFixed(3)}" stop-color="${x}"/>`).join('');
+  function starPoly(cx,cy,R){const r=R*0.42,p=[];for(let i=0;i<10;i++){const a=-Math.PI/2+i*Math.PI/5,rad=i%2?r:R;p.push((cx+rad*Math.cos(a)).toFixed(1)+','+(cy+rad*Math.sin(a)).toFixed(1));}return `<polygon points="${p.join(' ')}" fill="#ffe08a" stroke="#a5641a" stroke-width="0.8" stroke-linejoin="round"/>`;}
+  const EMBLEMS = {
+    tent:        { vb:24, label:'Circus tent (current)', src:'material-symbols:festival', body:'<path fill="currentColor" d="M2 22q.725-1.85.963-3.812t.287-3.938q-.975-.375-1.612-1.25T1 11V9q2.875-.95 5.863-2.9T12 2q2.15 2.15 5.138 4.1T23 9v2q0 1.125-.638 2t-1.612 1.25q.05 1.975.288 3.938T22 22zM5.9 9h12.2q-1.95-1.1-3.512-2.262T12 4.7q-1.025.875-2.588 2.038T5.9 9m8.6 3.5q.625 0 1.063-.437T16 11h-3q0 .625.438 1.063t1.062.437m-5 0q.625 0 1.063-.437T11 11H8q0 .625.438 1.063T9.5 12.5m-5 0q.625 0 1.063-.437T6 11H3q0 .625.438 1.063T4.5 12.5m.15 7.5h2.675q.225-1.5.35-2.975t.2-2.975q-.225-.125-.45-.263T7 13.45q-.375.375-.812.613t-.938.362q-.05 1.425-.175 2.813T4.65 20m4.7 0h5.3q-.2-1.375-.312-2.75t-.188-2.775q-.65-.05-1.187-.312T12 13.475q-.425.425-.987.688t-1.163.312q-.075 1.4-.187 2.775T9.35 20m7.325 0h2.675q-.3-1.375-.425-2.762t-.175-2.813q-.5-.125-.95-.363t-.8-.612q-.2.2-.425.338t-.45.262q.075 1.5.213 2.975T16.675 20m2.825-7.5q.625 0 1.063-.437T21 11h-3q0 .625.438 1.063t1.062.437"/>' },
+    storefront:  { vb:24, label:'Storefront w/ awning', src:'material-symbols:storefront', body:'<path fill="currentColor" d="M21.025 11.05V19q0 .825-.587 1.413T19.025 21h-14q-.825 0-1.412-.587T3.025 19v-7.95q-.575-.525-.887-1.35t-.013-1.8l1.05-3.4q.2-.65.713-1.075T5.075 3h13.9q.675 0 1.175.413t.725 1.087l1.05 3.4q.3.975-.012 1.775t-.888 1.375m-6.8-1.05q.675 0 1.025-.462t.275-1.038l-.55-3.5h-1.95v3.7q0 .525.35.913t.85.387m-4.5 0q.575 0 .938-.388t.362-.912V5h-1.95l-.55 3.5q-.1.6.262 1.05t.938.45m-4.45 0q.45 0 .787-.325t.413-.825L7.025 5h-1.95l-1 3.35q-.15.5.162 1.075T5.275 10m13.5 0q.725 0 1.05-.575t.15-1.075L18.925 5h-1.9l.55 3.85q.075.5.413.825t.787.325"/>' },
+    marketStall: { vb:48, label:'Market stall w/ awning', src:'healthicons:market-stall', body:'<g fill="currentColor"><path fill-rule="evenodd" d="M9.263 6c-.378 0-.715.262-.845.656L6.11 13.667a2.2 2.2 0 0 0-.11.687v2.789C6 18.72 7.151 20 8.571 20s2.572-1.28 2.572-2.857c0 1.578 1.151 2.857 2.571 2.857s2.572-1.28 2.572-2.857c0 1.578 1.151 2.857 2.571 2.857s2.57-1.278 2.572-2.855C21.429 18.722 22.58 20 24 20s2.571-1.28 2.571-2.857c0 1.578 1.152 2.857 2.572 2.857s2.57-1.278 2.571-2.855C31.715 18.722 32.866 20 34.286 20s2.571-1.28 2.571-2.857c0 1.578 1.151 2.857 2.572 2.857C40.849 20 42 18.72 42 17.143v-2.789a2.2 2.2 0 0 0-.11-.687l-2.308-7.01c-.13-.395-.467-.657-.845-.657z" clip-rule="evenodd"/><path fill-rule="evenodd" d="M10 21.23V29H7.5a.5.5 0 0 0-.5.5v1a.5.5 0 0 0 .5.5h33a.5.5 0 0 0 .5-.5v-1a.5.5 0 0 0-.5-.5H38v-7.77a3.9 3.9 0 0 1-1.143-.703a4 4 0 0 1-.857.576V29H12v-7.897a4 4 0 0 1-.857-.576c-.336.295-.72.535-1.143.703m26-1.957q.127-.127.24-.273H36zM37.474 19a2.8 2.8 0 0 0 .526.519V19zM10 19.519a2.6 2.6 0 0 0 .526-.519H10zM11.76 19H12v.273a3 3 0 0 1-.24-.273M8.5 33a.5.5 0 0 0-.5.5V41a1 1 0 0 0 1 1h30a1 1 0 0 0 1-1v-7.5a.5.5 0 0 0-.5-.5z" clip-rule="evenodd"/><path d="M14 26.5a.5.5 0 0 1 .5-.5h3a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5z"/><path d="M16 27.5a.5.5 0 0 1 .5-.5h3a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5zm8 0a1.5 1.5 0 1 1-3 0a1.5 1.5 0 0 1 3 0"/></g>' },
+  };
+  function pin(key){
+    const em = EMBLEMS[key], n=3, R=44, cy0=66, a0=-168*Math.PI/180, a1=-12*Math.PI/180;
+    let stars=''; for(let i=0;i<n;i++){const t=i/(n-1),a=a0+(a1-a0)*t;stars+=starPoly(75+R*Math.cos(a),cy0+R*Math.sin(a),6.5);}
+    const s=(62/em.vb).toFixed(4);
+    return `<svg viewBox="-4 -4 158 158" width="200" height="200">
+      <defs><linearGradient id="m-${key}" x1=".15" y1="0" x2=".85" y2="1">${stops(SILVER)}</linearGradient>
+      <clipPath id="cw-${key}"><circle cx="75" cy="75" r="62"/></clipPath></defs>
+      <circle cx="75" cy="75" r="70" fill="url(#m-${key})"/>
+      <circle cx="75" cy="75" r="62" fill="#4a2f6e"/>
+      <g clip-path="url(#cw-${key})">${stars}
+        <g transform="translate(75,84) scale(${s}) translate(${-em.vb/2},${-em.vb/2})" style="color:#ffe9c7">${em.body}</g></g>
+      <path d="M50 114 H100 L94 121.5 L100 129 H50 L56 121.5 Z" fill="#120b16" stroke="url(#m-${key})" stroke-width="1.4"/>
+      <text x="75" y="123.5" text-anchor="middle" dominant-baseline="central" font-family="Georgia,serif" font-weight="700" font-size="12" fill="#ffe08a">10</text>
+      <circle cx="75" cy="75" r="70" fill="none" stroke="#000" stroke-opacity=".35" stroke-width="1"/>
+    </svg>`;
+  }
+  const row=document.getElementById('row');
+  for(const k of Object.keys(EMBLEMS)){const e=EMBLEMS[k];row.insertAdjacentHTML('beforeend',`<div class="card"><div class="stage">${pin(k)}</div><div class="cap">${e.label}</div><div class="sub">${e.src}</div></div>`);}
+</script>
+</body>
+</html>

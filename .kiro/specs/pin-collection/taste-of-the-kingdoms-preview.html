@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Taste of the Kingdoms — Pin Design Candidates</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800;900&family=Outfit:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #090514;
+      --bg-card: rgba(20, 14, 38, 0.88);
+      --bg-card-hover: rgba(30, 20, 56, 0.96);
+      --border-card: rgba(147, 112, 219, 0.28);
+      --accent-purple: #cba2f0;
+      --gold: #f8db79;
+      --text-main: #f7fafc;
+      --text-muted: #94a3b8;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background: radial-gradient(circle at 50% 0%, #25124d 0%, var(--bg-dark) 85%);
+      color: var(--text-main);
+      min-height: 100vh;
+      padding: 40px 24px 80px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    header {
+      max-width: 1200px;
+      margin-bottom: 32px;
+      text-align: center;
+    }
+
+    .badge-sub {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(246, 195, 67, 0.15);
+      border: 1px solid rgba(246, 195, 67, 0.4);
+      color: #f6c343;
+      padding: 5px 18px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 14px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    h1 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 36px;
+      font-weight: 800;
+      color: #fff;
+      margin-bottom: 10px;
+      background: linear-gradient(135deg, #fff 0%, #fff8db 50%, #f6c343 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .subtitle {
+      color: var(--text-muted);
+      font-size: 15px;
+      max-width: 820px;
+      margin: 0 auto 24px;
+      line-height: 1.6;
+    }
+
+    /* Challenge spec card */
+    .spec-banner {
+      max-width: 900px;
+      width: 100%;
+      background: rgba(26, 18, 48, 0.85);
+      border: 1px solid rgba(246, 195, 67, 0.35);
+      border-radius: 16px;
+      padding: 18px 24px;
+      margin-bottom: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.4);
+    }
+    .spec-info {
+      text-align: left;
+    }
+    .spec-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 18px;
+      font-weight: 800;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .spec-criteria {
+      color: #cbd5e1;
+      font-size: 14px;
+      margin-top: 4px;
+    }
+    .spec-meta {
+      display: flex;
+      gap: 10px;
+    }
+    .pill {
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      padding: 4px 12px;
+      border-radius: 999px;
+    }
+    .pill-gold {
+      background: linear-gradient(135deg, #fff8db, #e5ab2c);
+      color: #381f00;
+    }
+    .pill-rule {
+      background: rgba(147, 112, 219, 0.25);
+      border: 1px solid rgba(203, 162, 240, 0.4);
+      color: #cba2f0;
+    }
+
+    /* Four Park Legend */
+    .park-legend {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-bottom: 36px;
+      max-width: 900px;
+    }
+    .park-chip {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      padding: 6px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .color-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      border: 1px solid rgba(255,255,255,0.4);
+    }
+
+    /* Candidates grid */
+    .candidates-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 26px;
+      max-width: 1400px;
+      width: 100%;
+    }
+
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-card);
+      border-radius: 20px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      position: relative;
+      transition: all 0.25s ease;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+    }
+    .card:hover {
+      background: var(--bg-card-hover);
+      border-color: rgba(246, 195, 67, 0.5);
+      transform: translateY(-4px);
+      box-shadow: 0 14px 40px rgba(0, 0, 0, 0.65), 0 0 20px rgba(246, 195, 67, 0.15);
+    }
+
+    .card-tag {
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: #f6c343;
+      margin-bottom: 4px;
+    }
+
+    .card-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 22px;
+      font-weight: 800;
+      color: #fff;
+      margin-bottom: 4px;
+    }
+
+    .card-flavor {
+      font-size: 12.5px;
+      color: #cba2f0;
+      margin-bottom: 20px;
+      font-weight: 500;
+    }
+
+    .art-frame {
+      width: 220px;
+      height: 220px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(circle, rgba(65, 35, 110, 0.3) 0%, rgba(13, 8, 26, 0.8) 75%);
+      border-radius: 16px;
+      border: 1px solid rgba(147, 112, 219, 0.18);
+      margin-bottom: 20px;
+      padding: 10px;
+    }
+
+    .badges-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+
+    .tier-badge {
+      background: linear-gradient(135deg, #fff8db, #e5ab2c);
+      color: #381f00;
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      padding: 3px 10px;
+      border-radius: 6px;
+    }
+
+    .mode-badge {
+      background: rgba(147, 112, 219, 0.22);
+      border: 1px solid rgba(203, 162, 240, 0.4);
+      color: #e9d5ff;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 10px;
+      border-radius: 6px;
+    }
+
+    .card-desc {
+      font-size: 13.5px;
+      color: #cbd5e1;
+      line-height: 1.55;
+      margin-bottom: 16px;
+      text-align: left;
+      width: 100%;
+      background: rgba(0, 0, 0, 0.25);
+      padding: 12px 14px;
+      border-radius: 10px;
+      border-left: 3px solid #f6c343;
+    }
+
+    .card-notes {
+      font-size: 12px;
+      color: var(--text-muted);
+      text-align: left;
+      width: 100%;
+      line-height: 1.5;
+    }
+    .card-notes ul {
+      padding-left: 18px;
+      margin-top: 6px;
+    }
+    .card-notes li {
+      margin-bottom: 4px;
+    }
+
+    .pin-svg {
+      overflow: visible;
+      filter: drop-shadow(0 10px 22px rgba(0, 0, 0, 0.65));
+      transition: transform 0.3s ease;
+    }
+    .pin-svg:hover {
+      transform: scale(1.04);
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="badge-sub">🍽️ Touring × Dining Achievement</div>
+    <h1>Taste of the Kingdoms — Design Consultation</h1>
+    <p class="subtitle">
+      "A meal in all 4 theme parks, same day." Exploring 4 distinct aesthetic directions spanning 
+      Contained Banquet Charger, Die-Cut Covered Cloche, Sovereign Tasting Fork, and Dining Passport Medallion.
+    </p>
+  </header>
+
+  <div class="spec-banner">
+    <div class="spec-info">
+      <div class="spec-title">
+        <span>Taste of the Kingdoms</span>
+        <span class="pill pill-gold">Gold Tier</span>
+        <span class="pill pill-rule">Touring / Dining Feat</span>
+      </div>
+      <div class="spec-criteria">Criteria: Log a <code>Restaurant</code> visit in Magic Kingdom, EPCOT, Hollywood Studios, and Animal Kingdom on the same calendar date.</div>
+    </div>
+    <div class="spec-meta">
+      <span class="pill pill-rule">Rim: 6.2px Gold</span>
+    </div>
+  </div>
+
+  <div class="park-legend">
+    <div class="park-chip"><div class="color-dot" style="background:#2f6bb0"></div> Magic Kingdom (Sky Blue)</div>
+    <div class="park-chip"><div class="color-dot" style="background:#14727f"></div> EPCOT (Teal)</div>
+    <div class="park-chip"><div class="color-dot" style="background:#a8323f"></div> Hollywood Studios (Crimson)</div>
+    <div class="park-chip"><div class="color-dot" style="background:#2f7d3e"></div> Animal Kingdom (Forest Green)</div>
+  </div>
+
+  <div class="candidates-grid">
+
+    <!-- =========================================================================
+         CANDIDATE 1: THE GRAND 4-KINGDOMS BANQUET CHARGER (CONTAINED DISC)
+         ========================================================================= -->
+    <div class="card">
+      <div class="card-tag">Candidate 1 • Direct Screenshot Match</div>
+      <div class="card-title">The Grand Banquet Charger</div>
+      <div class="card-flavor">Quartered Heraldic Charger Plate • Crossed Royal Cutlery</div>
+      
+      <div class="art-frame">
+        <svg class="pin-svg" width="168" height="168" viewBox="-4 -4 160 160">
+          <defs>
+            <linearGradient id="g-gold" x1=".15" y1="0" x2=".85" y2="1">
+              <stop offset="0" stop-color="#fff8db"/>
+              <stop offset=".3" stop-color="#ffe08a"/>
+              <stop offset=".7" stop-color="#f4bf45"/>
+              <stop offset="1" stop-color="#c9891c"/>
+            </linearGradient>
+            <linearGradient id="g-gl" x1="0" y1="0" x2=".3" y2="1">
+              <stop offset="0" stop-color="#fff" stop-opacity=".6"/>
+              <stop offset=".4" stop-color="#fff" stop-opacity=".15"/>
+              <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+            </linearGradient>
+            <filter id="sh-card" x="-30%" y="-30%" width="160%" height="160%">
+              <feDropShadow dx="0" dy="4" stdDeviation="3.8" flood-color="#000" flood-opacity=".75"/>
+            </filter>
+            <clipPath id="cp-disc">
+              <circle cx="76" cy="76" r="58"/>
+            </clipPath>
+          </defs>
+
+          <g filter="url(#sh-card)">
+            <!-- Outer Scalloped Gold Charger Rim with fluted notches -->
+            <circle cx="76" cy="76" r="62" fill="url(#g-gold)" stroke="url(#g-gold)" stroke-width="4"/>
+            <!-- Outer Fluted Beaded Ring -->
+            <circle cx="76" cy="76" r="59.5" fill="none" stroke="#241a3a" stroke-width="1.2" opacity="0.45"/>
+            
+            <!-- Recessed Cloisonné Enamel Quadrants -->
+            <g clip-path="url(#cp-disc)">
+              <!-- NW: Magic Kingdom (Sky Blue #2f6bb0) -->
+              <rect x="18" y="18" width="58" height="58" fill="#2f6bb0"/>
+              <!-- NE: EPCOT (Teal #14727f) -->
+              <rect x="76" y="18" width="58" height="58" fill="#14727f"/>
+              <!-- SW: Hollywood Studios (Crimson #a8323f) -->
+              <rect x="18" y="76" width="58" height="58" fill="#a8323f"/>
+              <!-- SE: Animal Kingdom (Forest Green #2f7d3e) -->
+              <rect x="76" y="76" width="58" height="58" fill="#2f7d3e"/>
+
+              <!-- Authentic Four Park Vector Icons in Respective Quadrants -->
+              <!-- NW: Magic Kingdom — Cinderella Castle -->
+              <g transform="translate(47, 45) scale(0.062) translate(-256, -280)" fill="url(#g-gold)">
+                <path d="M96 480 L96 380 L112 380 L112 250 L104 250 L144 150 L184 250 L176 250 L176 380 L208 380 L208 205 L198 205 L256 80 L314 205 L304 205 L304 380 L336 380 L336 250 L328 250 L368 150 L408 250 L400 250 L400 380 L416 380 L416 480 Z M232 480 L232 432 A24 24 0 0 1 280 432 L280 480 Z M241 244 h30 v42 h-30 Z M129 292 h30 v38 h-30 Z M353 292 h30 v38 h-30 Z M136 404 h26 v34 h-26 Z M350 404 h26 v34 h-26 Z M253 40 h6 v42 h-6 Z M259 44 L298 55 L259 66 Z" fill-rule="evenodd"/>
+              </g>
+
+              <!-- NE: EPCOT — Spaceship Earth Geodesic Globe (wireframeGlobe) -->
+              <g transform="translate(105, 47) scale(0.054) translate(-256, -256)" fill="url(#g-gold)">
+                <path d="M256 23C127.4 23 23 127.4 23 256s104.4 233 233 233 233-104.4 233-233S384.6 23 256 23zm-33.7 20.63C190 66.85 163.6 92.25 143.2 119H90.26C122.9 79.54 169.4 51.95 222.3 43.63zm67.4 0c52.9 8.32 99.4 35.91 132 75.37h-52.9c-20.4-26.75-46.8-52.15-79.1-75.37zm-60.2 16.98C219 80.42 210 99.85 202.5 119h-36.3c17.1-20.39 38.2-40 63.3-58.39zm53 0c25.1 18.39 46.2 38 63.3 58.39h-36.3c-7.5-19.15-16.5-38.58-27-58.39zM247 65.99V119h-25.1c7-17.3 15.4-34.95 25.1-53.01zm18 0c9.7 18.06 18.1 35.71 25.1 53.01H265V65.99zM76.89 137h53.51c-9.8 15-17.8 30.4-23.9 46H53.71c5.89-16.3 13.71-31.8 23.18-46zm75.21 0h43.8c-5.4 15.5-9.6 30.8-12.9 46h-57.1c6.7-15.6 15.5-30.9 26.2-46zm62.8 0H247v46h-45.6c3.4-15.2 7.9-30.5 13.5-46zm50.1 0h32.1c5.6 15.5 10.1 30.8 13.5 46H265v-46zm51.1 0h43.8c10.7 15.1 19.5 30.4 26.2 46H329c-3.3-15.2-7.5-30.5-12.9-46zm65.5 0h53.5c9.5 14.2 17.3 29.7 23.2 46h-52.8c-6.1-15.6-14.1-31-23.9-46zM48.1 201h52.1c-4.63 15.2-7.5 30.6-8.64 46H41.2c.65-15.8 3.01-31.2 6.9-46zm70.9 0h60.5c-2.5 15.4-3.9 30.7-4.4 46h-65.5c1.2-15.3 4.4-30.7 9.4-46zm78.8 0H247v46h-53.9c.5-15.3 2-30.6 4.7-46zm67.2 0h49.2c2.7 15.4 4.2 30.7 4.7 46H265v-46zm67.5 0H393c5 15.3 8.2 30.7 9.4 46h-65.5c-.5-15.3-1.9-30.6-4.4-46zm79.3 0h52.1c3.9 14.8 6.2 30.2 6.9 46h-50.4c-1.1-15.4-4-30.8-8.6-46zM41.2 265h49.83c.23 15.5 2.24 30.9 6.02 46H48.1c-3.89-14.8-6.25-30.2-6.9-46zm67.8 0h66.1c.5 15.3 1.9 30.6 4.4 46h-63.9c-4.1-15.2-6.3-30.6-6.6-46zm84.1 0H247v46h-49.2c-2.7-15.4-4.2-30.7-4.7-46zm71.9 0h53.9c-.5 15.3-2 30.6-4.7 46H265v-46zm71.9 0H403c-.3 15.4-2.5 30.8-6.6 46h-63.9c2.5-15.4 3.9-30.7 4.4-46zm84.1 0h49.8c-.7 15.8-3 31.2-6.9 46H415c3.7-15.1 5.7-30.5 6-46zM53.71 329h48.69c5.4 15.7 12.8 31.1 22.1 46H76.89c-9.47-14.2-17.29-29.7-23.18-46zm67.69 0H183c3.3 15.2 7.5 30.5 12.9 46h-50c-10.4-14.9-18.5-30.3-24.5-46zm80 0H247v46h-32.1c-5.6-15.5-10.1-30.8-13.5-46zm63.6 0h45.6c-3.4 15.2-7.9 30.5-13.5 46H265v-46zm64 0h61.6c-6 15.7-14.1 31.1-24.5 46h-50c5.4-15.5 9.6-30.8 12.9-46zm80.6 0h48.7c-5.9 16.3-13.7 31.8-23.2 46h-47.6c9.3-14.9 16.7-30.3 22.1-46zM90.26 393h46.64c20.3 27.1 47.3 52.3 80.9 74.6-51-9.1-95.8-36.3-127.54-74.6zm69.34 0h42.9c7.9 20.4 17.6 41 29 62.1-29.3-18.9-53.2-39.8-71.9-62.1zm62.3 0H247v53c-9.7-18-18.1-35.7-25.1-53zm43.1 0h25.1c-7 17.3-15.4 35-25.1 53v-53zm44.5 0h42.9c-18.7 22.3-42.6 43.2-71.9 62.1 11.4-21.1 21.1-41.7 29-62.1zm65.6 0h46.6c-31.7 38.3-76.5 65.5-127.5 74.6 33.6-22.3 60.6-47.5 80.9-74.6z"/>
+              </g>
+
+              <!-- SW: Hollywood Studios — Clapperboard (clapperboard) -->
+              <g transform="translate(47, 105) scale(0.052) translate(-256, -260)" fill="url(#g-gold)">
+                <path d="M419.682 26.2l-8.66 2.452L32.915 135.81 55.27 214.7l386.77-109.608L419.683 26.2zm-12.41 22.224l9.074 32.014-41.086-22.942 32.013-9.072zM350.77 64.438l56.8 31.714-37.084 10.51-56.8-31.715 37.084-10.51zm-61.577 17.45l56.803 31.716-37.084 10.51-56.8-31.718 37.08-10.51zm-61.574 17.45l56.802 31.715-37.084 10.51-56.803-31.715 37.084-10.51zm-61.577 17.45l56.803 31.716-37.084 10.51-56.8-31.717 37.08-10.51zm-61.574 17.45l56.8 31.715-37.083 10.51-56.802-31.715 37.084-10.51zm-45.86 26.227l41.085 22.94-32.01 9.072-9.074-32.012zM55 215v274h402V215H55zm18 18h33.273L73 266.273V233zm58.727 0h38.546l-46 46H85.727l46-46zm64 0h38.546l-46 46h-38.546l46-46zm64 0h38.546l-46 46h-38.546l46-46zm64 0h38.546l-46 46h-38.546l46-46zm64 0h38.546l-46 46h-38.546l46-46zM439 245.727V279h-33.273L439 245.727zM73 297h366v174H73V297zm248.635 46.57l-192.44.703.067 18 192.44-.703-.067-18zM130.7 391.33l-.134 17.998 92.707.703.137-18-92.71-.7zm127.155.7l-.2 18 63.913.702.2-17.998-63.913-.703z"/>
+              </g>
+
+              <!-- SE: Animal Kingdom — Tree of Life (holyOak) -->
+              <g transform="translate(104, 103) scale(0.050) translate(-256, -260)" fill="url(#g-gold)">
+                <path d="M337.89 23.049c-1.447 0-2.916.04-4.405.125-13.522.765-28.81 5.12-45.807 14.37-14.248-9.434-30.203-13.02-45.844-12.74-10.91.196-21.667 2.264-31.578 5.518-8.03 2.637-15.612 5.91-22.5 9.68l.297-1.398c-15.734-3.344-30.156-4.862-43.314-4.872-91.41-.069-121.763 72.622-106.63 111.397-4.842 4.315-8.46 8.932-10.91 13.842-5.762 11.552-3.789 24.304 2.61 33.297 7.21 10.131 19.422 16.818 32.547 17.796-1.86 11.654 2.044 22.84 9.646 29.905 5.89 5.473 13.934 8.712 22.45 8.09 3.116-.228 6.238-1.001 9.267-2.286 8.315 6.24 16.012 10.021 23.424 11.625 9.25 2.002 17.991.13 24.553-3.978 6.73-4.213 11.389-10.08 14.734-16.102 29.31 42.194 26.042 91.983 23.527 98.682-19.298 51.407-15.086 47.182-32 64-23.146 23.016-88.07 37.148-87.833 43.303.367 9.532 57.123 8.392 99.205 1.527 0 0-30.556 47.147-25.264 50.117 5.292 2.97 60.773-42.722 80.725-41.281 4.722.341 45.077 52.643 62.39 41.604 4.3-2.743-32.135-36.82-30.705-39.086 1.652-2.618 107.222 33.016 114.99 25.39-10.073-19.09-54.035-35.533-77.7-50.568 49.481-7.228 157.867 26.291 155.34 12.797l-77.019-37.295c21.03 1.235 41.769 1.37 62.33-1.135 2.603-13.104-172.876-34.03-118.976-115.17l22.826-34.363c3.451 3.433 7.63 6.348 12.04 8.937 9.846 5.783 21.606 9.749 33.12 10.444 11.515.695 24.123-2.227 30.938-12.797 1.574-2.441 2.718-5.111 3.48-7.988 26.557-5.65 45.885-30.761 47.932-58.19 1.052-14.103-3.121-28.787-13.215-41.346 18.813-40.772 16.948-74.175.467-93.504-8.257-9.683-20.211-15.186-33.072-15.453-8.128-.168-16.575 1.646-24.985 5.375-7.376-8.493-17.106-17.184-29.883-22.74-8-3.478-17.074-5.524-27.199-5.53z"/>
+              </g>
+
+              <!-- Gilded Quadrant Dividing Tracery Cross (The 4-Park Divider) -->
+              <line x1="76" y1="18" x2="76" y2="134" stroke="url(#g-gold)" stroke-width="4.5"/>
+              <line x1="18" y1="76" x2="134" y2="76" stroke="url(#g-gold)" stroke-width="4.5"/>
+              <line x1="76" y1="18" x2="76" y2="134" stroke="#241a3a" stroke-width="0.8" opacity="0.4"/>
+              <line x1="18" y1="76" x2="134" y2="76" stroke="#241a3a" stroke-width="0.8" opacity="0.4"/>
+
+              <!-- Central Gold Medallion with Crossed Dining Cutlery -->
+              <circle cx="76" cy="76" r="23" fill="#241a3a" stroke="url(#g-gold)" stroke-width="2.5"/>
+              <circle cx="76" cy="76" r="20" fill="url(#g-gold)"/>
+
+              <!-- Center Embossed Cutlery: Ornate Fork & Knife in Deep Ink Cloisonne -->
+              <g transform="translate(76, 76)">
+                <!-- Carving Knife (Diagonal NW-SE) -->
+                <g transform="rotate(45)" fill="#241a3a">
+                  <path d="M-2,-14 C-2,-17 2,-18 3,-13 L3,8 C3,11 1,14 -1,14 C-3,14 -3,11 -3,8 L-2,-14 Z"/>
+                </g>
+                <!-- Banquet Fork (Diagonal NE-SW) -->
+                <g transform="rotate(-45)" fill="#241a3a">
+                  <path d="M-1,-3 L-1,13 C-1,15 1,15 1,13 L1,-3 Z"/>
+                  <!-- Fork Tines (4 tines for 4 parks!) -->
+                  <path d="M-4,-4 C-4,-1 -2,2 0,2 C2,2 4,-1 4,-4 L4,-15 L2.5,-15 L2.5,-6 L1,-6 L1,-15 L-1,-15 L-1,-6 L-2.5,-6 L-2.5,-15 L-4,-15 Z"/>
+                </g>
+                <!-- Central Golden Diamond Star -->
+                <polygon points="0,-4 3,0 0,4 -3,0" fill="url(#g-gold)" stroke="#241a3a" stroke-width="0.8"/>
+              </g>
+
+              <!-- Outer Bezel Inner Stroke -->
+              <circle cx="76" cy="76" r="58" fill="none" stroke="#241a3a" stroke-width="1.8" opacity="0.5"/>
+
+              <!-- Specular Curved Glass Sheen -->
+              <ellipse cx="56" cy="48" rx="46" ry="26" transform="rotate(-26 56 48)" fill="url(#g-gl)"/>
+            </g>
+
+            <!-- Outer Raised Gold Rim Highlight -->
+            <circle cx="76" cy="76" r="58" fill="none" stroke="url(#g-gold)" stroke-width="3"/>
+          </g>
+        </svg>
+      </div>
+      
+      <div class="badges-row">
+        <span class="tier-badge">Gold</span>
+        <span class="mode-badge">🛡️ Contained (DISC)</span>
+      </div>
+      
+      <div class="card-desc">
+        <strong>The Grand Banquet Charger:</strong> 100% fulfills the <code>Contained (DISC)</code> badge shown in the catalog card. 
+        A ceremonial gilded charger plate quartered into the 4 authentic park enamels (Sky Blue, Teal, Crimson, Forest Green), 
+        anchored by a raised gold central medallion featuring an embossed <strong>4-tined banquet fork</strong> and carving knife.
+      </div>
+      
+      <div class="card-notes">
+        <strong>Art Highlights:</strong>
+        <ul>
+          <li><strong>Catalog Faithful:</strong> Directly slots into the purple disc card placeholder.</li>
+          <li><strong>Symbolic Cutlery:</strong> The banquet fork has exactly <strong>4 tines</strong>, honoring the four theme park meals.</li>
+          <li><strong>Authentic Park Emblems:</strong> Features the official 4-park vector emblems (Cinderella Castle, Spaceship Earth geodesic globe, Hollywood Studios clapperboard, and the Tree of Life) rendered in raised gold in their respective quadrant enamels.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- =========================================================================
+         CANDIDATE 2: THE ROYAL TASTING CLOCHE (DIECUT SILHOUETTE)
+         ========================================================================= -->
+    <div class="card">
+      <div class="card-tag">Candidate 2 • Iconic Silhouette</div>
+      <div class="card-title">The Royal Tasting Cloche</div>
+      <div class="card-flavor">Pure Die-Cut Covered Serving Cloche • 4-Color Cloisonné Flutes</div>
+      
+      <div class="art-frame">
+        <svg class="pin-svg" width="168" height="168" viewBox="-4 -4 160 160">
+          <defs>
+            <linearGradient id="g-cloche-gold" x1=".15" y1="0" x2=".85" y2="1">
+              <stop offset="0" stop-color="#fff8db"/>
+              <stop offset=".3" stop-color="#ffe08a"/>
+              <stop offset=".7" stop-color="#f4bf45"/>
+              <stop offset="1" stop-color="#c9891c"/>
+            </linearGradient>
+            <filter id="sh-cloche" x="-30%" y="-30%" width="160%" height="160%">
+              <feDropShadow dx="0" dy="4" stdDeviation="3.6" flood-color="#000" flood-opacity=".75"/>
+            </filter>
+            <clipPath id="cp-dome">
+              <path d="M22 104 C22 56 46 36 76 36 C106 36 130 56 130 104 Z"/>
+            </clipPath>
+          </defs>
+
+          <g filter="url(#sh-cloche)">
+            <!-- Outer Gold Rim Silhouette (6.2px gold rim) -->
+            <!-- Base Tray Platter -->
+            <path d="M12 112 C12 107 20 104 76 104 C132 104 140 107 140 112 C140 118 132 122 76 122 C20 122 12 118 12 112 Z" fill="url(#g-cloche-gold)" stroke="url(#g-cloche-gold)" stroke-width="6.2" stroke-linejoin="round"/>
+            <!-- Finial Handle on Top -->
+            <path d="M76 20 C71 20 68 24 71 28 C73 31 75 33 76 36 C77 33 79 31 81 28 C84 24 81 20 76 20 Z" fill="url(#g-cloche-gold)" stroke="url(#g-cloche-gold)" stroke-width="6.2" stroke-linejoin="round"/>
+            <!-- Cloche Dome Body Rim -->
+            <path d="M22 104 C22 56 46 36 76 36 C106 36 130 56 130 104 Z" fill="url(#g-cloche-gold)" stroke="url(#g-cloche-gold)" stroke-width="6.2" stroke-linejoin="round"/>
+
+            <!-- Cloche Tray Base Enamel -->
+            <path d="M14 112 C14 108 24 106 76 106 C128 106 138 108 138 112 C138 116 128 120 76 120 C24 120 14 116 14 112 Z" fill="#241a3a"/>
+            <!-- Tray Lip Gold Highlight -->
+            <path d="M20 114 C36 117 116 117 132 114" stroke="url(#g-cloche-gold)" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+
+            <!-- Cloche Dome Colored Cloisonne Cells (4 Flutes) -->
+            <g clip-path="url(#cp-dome)">
+              <!-- Flute 1: Magic Kingdom (Sky Blue) -->
+              <path d="M22 104 C22 56 46 36 76 36 L52 104 Z" fill="#2f6bb0"/>
+              <!-- Flute 2: EPCOT (Teal) -->
+              <path d="M52 104 L76 36 L76 104 Z" fill="#14727f"/>
+              <!-- Flute 3: Hollywood Studios (Crimson) -->
+              <path d="M76 104 L76 36 L100 104 Z" fill="#a8323f"/>
+              <!-- Flute 4: Animal Kingdom (Forest Green) -->
+              <path d="M100 104 L76 36 C106 36 130 56 130 104 Z" fill="#2f7d3e"/>
+
+              <!-- Fine Gold Dividing Ribs -->
+              <path d="M52 104 L76 36" stroke="url(#g-cloche-gold)" stroke-width="2" stroke-linecap="round"/>
+              <path d="M76 104 L76 36" stroke="url(#g-cloche-gold)" stroke-width="2.2" stroke-linecap="round"/>
+              <path d="M100 104 L76 36" stroke="url(#g-cloche-gold)" stroke-width="2" stroke-linecap="round"/>
+
+              <!-- Raised Gold Dining Crest in Center of Dome -->
+              <g transform="translate(76, 74)">
+                <circle cx="0" cy="0" r="14" fill="#241a3a" stroke="url(#g-cloche-gold)" stroke-width="1.8"/>
+                <!-- Crossed Golden Fork & Spoon -->
+                <g transform="rotate(45)" fill="url(#g-cloche-gold)">
+                  <rect x="-1" y="-8" width="2" height="16" rx="1"/>
+                  <ellipse cx="0" cy="-9" rx="3.5" ry="4"/>
+                </g>
+                <g transform="rotate(-45)" fill="url(#g-cloche-gold)">
+                  <rect x="-1" y="-2" width="2" height="10" rx="0.5"/>
+                  <path d="M-3.5,-3 C-3.5,-1 -2,1 0,1 C2,1 3.5,-1 3.5,-3 L3.5,-11 L2.2,-11 L2.2,-5 L1,-5 L1,-11 L-1,-11 L-1,-5 L-2.2,-5 L-2.2,-11 L-3.5,-11 Z"/>
+                </g>
+                <circle cx="0" cy="0" r="2.2" fill="#fff8db"/>
+              </g>
+
+              <!-- Domed Highlight -->
+              <ellipse cx="54" cy="56" rx="36" ry="18" transform="rotate(-22 54 56)" fill="url(#g-gl)"/>
+            </g>
+
+            <!-- Gilded Finial Crown -->
+            <circle cx="76" cy="22" r="5" fill="url(#g-cloche-gold)"/>
+            <circle cx="76" cy="22" r="2" fill="#fff8db"/>
+            <circle cx="76" cy="30" r="3.5" fill="url(#g-cloche-gold)"/>
+          </g>
+        </svg>
+      </div>
+      
+      <div class="badges-row">
+        <span class="tier-badge">Gold</span>
+        <span class="mode-badge">✂️ Die-Cut Silhouette</span>
+      </div>
+      
+      <div class="card-desc">
+        <strong>The Royal Tasting Cloche:</strong> A pure die-cut fine-dining banquet cloche. 
+        Its polished dome is segmented into four sweeping vertical flutes representing the 4 parks, 
+        crowned with an ornate golden finial and bearing an embossed golden cutlery crest.
+      </div>
+      
+      <div class="card-notes">
+        <strong>Art Highlights:</strong>
+        <ul>
+          <li><strong>Instant Silhouette:</strong> Unmistakable room-service / fine-dining cloche recognizable from across the room.</li>
+          <li><strong>Die-Cut Integrity:</strong> One welded solid metal piece; passes <code>emblemGate</code> at Gold 6.2px rim (64% enamel share).</li>
+          <li><strong>Vibrant Park Palette:</strong> Fluted color panels flow from Magic Kingdom Sky Blue to Animal Kingdom Forest Green.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- =========================================================================
+         CANDIDATE 3: THE SOVEREIGN 4-TINE FORK & CREST (DIECUT)
+         ========================================================================= -->
+    <div class="card">
+      <div class="card-tag">Candidate 3 • Symbolic Cutlery</div>
+      <div class="card-title">The Sovereign Tasting Fork</div>
+      <div class="card-flavor">Ornate 4-Prong Gold Fork • 4 Park Cloisonné Insets • Heraldic Shield</div>
+      
+      <div class="art-frame">
+        <svg class="pin-svg" width="168" height="168" viewBox="-4 -4 160 160">
+          <defs>
+            <linearGradient id="g-fork-gold" x1=".15" y1="0" x2=".85" y2="1">
+              <stop offset="0" stop-color="#fff8db"/>
+              <stop offset=".3" stop-color="#ffe08a"/>
+              <stop offset=".7" stop-color="#f4bf45"/>
+              <stop offset="1" stop-color="#c9891c"/>
+            </linearGradient>
+            <filter id="sh-fork" x="-30%" y="-30%" width="160%" height="160%">
+              <feDropShadow dx="0" dy="4" stdDeviation="3.6" flood-color="#000" flood-opacity=".75"/>
+            </filter>
+          </defs>
+
+          <g filter="url(#sh-fork)">
+            <!-- Welded Unified Silhouette: Shield + Fork + Knife -->
+            <!-- Outer Gold Rim Base (Dilated 6.2px) -->
+            <!-- Shield Path -->
+            <path d="M42 46 C42 36 76 32 76 32 C76 32 110 36 110 46 L110 82 C110 106 76 124 76 124 C76 124 42 106 42 82 Z" fill="url(#g-fork-gold)" stroke="url(#g-fork-gold)" stroke-width="6.2" stroke-linejoin="round"/>
+            <!-- Top Fork Tines Outline & Handle -->
+            <path d="M76 14 L76 144 M56 22 L56 46 M69 16 L69 46 M83 16 L83 46 M96 22 L96 46" stroke="url(#g-fork-gold)" stroke-width="7" stroke-linecap="round"/>
+            <!-- Crossed Knife Blade Outline -->
+            <path d="M30 110 L122 34" stroke="url(#g-fork-gold)" stroke-width="7" stroke-linecap="round"/>
+
+            <!-- Heraldic Shield Body (4 Quadrants) -->
+            <path d="M44 48 C44 38 76 34 76 34 L76 80 L44 80 Z" fill="#2f6bb0"/>
+            <path d="M76 34 C76 34 108 38 108 48 L108 80 L76 80 Z" fill="#14727f"/>
+            <path d="M44 80 L76 80 L76 120 C76 120 44 104 44 80 Z" fill="#a8323f"/>
+            <path d="M76 80 L108 80 C108 104 76 120 76 120 L76 80 Z" fill="#2f7d3e"/>
+
+            <!-- Shield Dividing Gold Wirelines -->
+            <path d="M42 46 C42 36 76 32 76 32 C76 32 110 36 110 46 L110 82 C110 106 76 124 76 124 C76 124 42 106 42 82 Z" fill="none" stroke="url(#g-fork-gold)" stroke-width="2.5"/>
+            <line x1="76" y1="34" x2="76" y2="120" stroke="url(#g-fork-gold)" stroke-width="3"/>
+            <line x1="44" y1="80" x2="108" y2="80" stroke="url(#g-fork-gold)" stroke-width="3"/>
+
+            <!-- Crossed Knife Behind Fork -->
+            <g transform="rotate(-38, 76, 76)">
+              <path d="M74 24 C74 18 78 16 78 20 L78 128 C78 132 74 132 74 128 Z" fill="#ffffff" stroke="url(#g-fork-gold)" stroke-width="1.8"/>
+            </g>
+
+            <!-- Foreground Sovereign Fork with 4 Gem Tines -->
+            <!-- Fork Stem & Crown Handle -->
+            <rect x="73.5" y="44" width="5" height="84" rx="2.5" fill="url(#g-fork-gold)" stroke="#241a3a" stroke-width="1"/>
+            <!-- Ornate Pommel / Crown at bottom -->
+            <path d="M70 128 L82 128 L84 138 L76 142 L68 138 Z" fill="url(#g-fork-gold)" stroke="#241a3a" stroke-width="1"/>
+            <circle cx="76" cy="135" r="2.5" fill="#f6c343"/>
+
+            <!-- Fork Bridge & Collar -->
+            <path d="M54 44 C54 49 64 54 76 54 C88 54 98 49 98 44 Z" fill="url(#g-fork-gold)" stroke="#241a3a" stroke-width="1"/>
+
+            <!-- The 4 Four-Park Enamel Tines (Rising above the shield) -->
+            <!-- Tine 1 (Leftmost): MK Sky Blue -->
+            <rect x="54" y="22" width="4.5" height="24" rx="2" fill="url(#g-fork-gold)" stroke="#241a3a" stroke-width="0.8"/>
+            <rect x="55" y="24" width="2.5" height="18" rx="1" fill="#2f6bb0"/>
+
+            <!-- Tine 2 (Center Left): EPCOT Teal -->
+            <rect x="67" y="16" width="4.5" height="30" rx="2" fill="url(#g-fork-gold)" stroke="#241a3a" stroke-width="0.8"/>
+            <rect x="68" y="18" width="2.5" height="24" rx="1" fill="#14727f"/>
+
+            <!-- Tine 3 (Center Right): HS Crimson -->
+            <rect x="80.5" y="16" width="4.5" height="30" rx="2" fill="url(#g-fork-gold)" stroke="#241a3a" stroke-width="0.8"/>
+            <rect x="81.5" y="18" width="2.5" height="24" rx="1" fill="#a8323f"/>
+
+            <!-- Tine 4 (Rightmost): AK Forest Green -->
+            <rect x="93.5" y="22" width="4.5" height="24" rx="2" fill="url(#g-fork-gold)" stroke="#241a3a" stroke-width="0.8"/>
+            <rect x="94.5" y="24" width="2.5" height="18" rx="1" fill="#2f7d3e"/>
+
+            <!-- Center Gilded Dining Star Core -->
+            <circle cx="76" cy="80" r="10" fill="#241a3a" stroke="url(#g-fork-gold)" stroke-width="2"/>
+            <polygon points="76,73 78,78 83,80 78,82 76,87 74,82 69,80 74,78" fill="url(#g-fork-gold)"/>
+          </g>
+        </svg>
+      </div>
+      
+      <div class="badges-row">
+        <span class="tier-badge">Gold</span>
+        <span class="mode-badge">✂️ Die-Cut Silhouette</span>
+      </div>
+      
+      <div class="card-desc">
+        <strong>The Sovereign Tasting Fork:</strong> A heraldic cutlery crest where the fork itself is the storytelling hero. 
+        Its <strong>4 golden tines</strong> feature cloisonné channel insets for each park's heraldic color, 
+        superimposed over a four-quadrant royal dining shield.
+      </div>
+      
+      <div class="card-notes">
+        <strong>Art Highlights:</strong>
+        <ul>
+          <li><strong>Literal 4-Prong Concept:</strong> Clever metaphor representing 4 parks = 4 fork tines.</li>
+          <li><strong>Regal Crest Styling:</strong> Combines heraldry with dining silverware; feels like a royal order or knighthood pin.</li>
+          <li><strong>Strong Contrasts:</strong> Sparkling white knife blade contrasts against deep crimson & teal shield panels.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- =========================================================================
+         CANDIDATE 4: THE 4-PARK DINING PASSPORT MEDALLION (CONTAINED DISC)
+         ========================================================================= -->
+    <div class="card">
+      <div class="card-tag">Candidate 4 • Expedition Compass</div>
+      <div class="card-title">The Dining Passport Compass</div>
+      <div class="card-flavor">Parchment Plate Well • 4 Cardinal Park Seals • Gilded Rose</div>
+      
+      <div class="art-frame">
+        <svg class="pin-svg" width="168" height="168" viewBox="-4 -4 160 160">
+          <defs>
+            <linearGradient id="g-pass-gold" x1=".15" y1="0" x2=".85" y2="1">
+              <stop offset="0" stop-color="#fff8db"/>
+              <stop offset=".3" stop-color="#ffe08a"/>
+              <stop offset=".7" stop-color="#f4bf45"/>
+              <stop offset="1" stop-color="#c9891c"/>
+            </linearGradient>
+            <filter id="sh-pass" x="-30%" y="-30%" width="160%" height="160%">
+              <feDropShadow dx="0" dy="4" stdDeviation="3.8" flood-color="#000" flood-opacity=".75"/>
+            </filter>
+            <clipPath id="cp-pass-disc">
+              <circle cx="76" cy="76" r="58"/>
+            </clipPath>
+          </defs>
+
+          <g filter="url(#sh-pass)">
+            <!-- Outer Heavy Gold Medallion Rim -->
+            <circle cx="76" cy="76" r="62" fill="url(#g-pass-gold)" stroke="url(#g-pass-gold)" stroke-width="3"/>
+            
+            <g clip-path="url(#cp-pass-disc)">
+              <!-- Outer Navy/Royal Ring (#180e29) -->
+              <circle cx="76" cy="76" r="58" fill="#180e29"/>
+              
+              <!-- Inner Antiqued Cream Parchment Well (#fbf7ee) like fine china plate -->
+              <circle cx="76" cy="76" r="41" fill="#fbf7ee" stroke="url(#g-pass-gold)" stroke-width="2.5"/>
+              <!-- Fine China Beaded Border -->
+              <circle cx="76" cy="76" r="37.5" fill="none" stroke="#b5721a" stroke-width="0.8" stroke-dasharray="2 2"/>
+
+              <!-- 4 Cardinal Park Seals along Outer Compass Ring -->
+              <!-- North: MK (Sky Blue #2f6bb0) -->
+              <g transform="translate(76, 26)">
+                <circle cx="0" cy="0" r="7" fill="#2f6bb0" stroke="url(#g-pass-gold)" stroke-width="1.2"/>
+                <text x="0" y="3" font-family="'Outfit', sans-serif" font-weight="900" font-size="6.5" fill="#fff" text-anchor="middle">MK</text>
+              </g>
+              <!-- East: EPCOT (Teal #14727f) -->
+              <g transform="translate(126, 76)">
+                <circle cx="0" cy="0" r="7" fill="#14727f" stroke="url(#g-pass-gold)" stroke-width="1.2"/>
+                <text x="0" y="3" font-family="'Outfit', sans-serif" font-weight="900" font-size="6.5" fill="#fff" text-anchor="middle">EP</text>
+              </g>
+              <!-- South: HS (Crimson #a8323f) -->
+              <g transform="translate(76, 126)">
+                <circle cx="0" cy="0" r="7" fill="#a8323f" stroke="url(#g-pass-gold)" stroke-width="1.2"/>
+                <text x="0" y="3" font-family="'Outfit', sans-serif" font-weight="900" font-size="6.5" fill="#fff" text-anchor="middle">HS</text>
+              </g>
+              <!-- West: AK (Forest Green #2f7d3e) -->
+              <g transform="translate(26, 76)">
+                <circle cx="0" cy="0" r="7" fill="#2f7d3e" stroke="url(#g-pass-gold)" stroke-width="1.2"/>
+                <text x="0" y="3" font-family="'Outfit', sans-serif" font-weight="900" font-size="6.5" fill="#fff" text-anchor="middle">AK</text>
+              </g>
+
+              <!-- Star Accents on the outer ring -->
+              <polygon points="41,41 43,43 41,45 39,43" fill="url(#g-pass-gold)"/>
+              <polygon points="111,41 113,43 111,45 109,43" fill="url(#g-pass-gold)"/>
+              <polygon points="41,111 43,113 41,115 39,113" fill="url(#g-pass-gold)"/>
+              <polygon points="111,111 113,113 111,115 109,113" fill="url(#g-pass-gold)"/>
+
+              <!-- Central China Plate Artwork: Cloche & Cutlery with 4 Tasting Stars -->
+              <!-- 4-Point Dining Compass Rose background in pale gold -->
+              <path d="M76 46 L78 74 L106 76 L78 78 L76 106 L74 78 L46 76 L74 74 Z" fill="#ffe08a" opacity="0.4"/>
+              
+              <!-- Covered Serving Dish / Cloche in Golden Relief -->
+              <g transform="translate(76, 74)">
+                <!-- Cloche Dome -->
+                <path d="M-18,6 C-18,-10 0,-18 0,-18 C0,-18 18,-10 18,6 Z" fill="url(#g-pass-gold)" stroke="#b5721a" stroke-width="1"/>
+                <circle cx="0" cy="-19" r="2.5" fill="url(#g-pass-gold)"/>
+                <!-- Cloche Serving Tray -->
+                <rect x="-22" y="6" width="44" height="4" rx="2" fill="url(#g-pass-gold)" stroke="#b5721a" stroke-width="0.8"/>
+
+                <!-- Steaming Feat Trails above Cloche (4 wisps for 4 meals) -->
+                <path d="M-8,-23 Q-11,-29 -7,-33" stroke="#b5721a" stroke-width="1.2" fill="none" stroke-linecap="round"/>
+                <path d="M-2,-24 Q-5,-32 -1,-36" stroke="#b5721a" stroke-width="1.2" fill="none" stroke-linecap="round"/>
+                <path d="M4,-24 Q1,-32 5,-36" stroke="#b5721a" stroke-width="1.2" fill="none" stroke-linecap="round"/>
+                <path d="M10,-23 Q7,-29 11,-33" stroke="#b5721a" stroke-width="1.2" fill="none" stroke-linecap="round"/>
+
+                <!-- Crossed Cutlery below tray -->
+                <g transform="translate(0, 14)">
+                  <g transform="rotate(45)" fill="url(#g-pass-gold)">
+                    <rect x="-1" y="-6" width="2" height="12" rx="0.5"/>
+                    <ellipse cx="0" cy="-7" rx="2.5" ry="3"/>
+                  </g>
+                  <g transform="rotate(-45)" fill="url(#g-pass-gold)">
+                    <rect x="-1" y="-2" width="2" height="8" rx="0.5"/>
+                    <path d="M-2.5,-2 C-2.5,0 -1.5,1 0,1 C1.5,1 2.5,0 2.5,-2 L2.5,-8 L1.5,-8 L1.5,-4 L0.5,-4 L0.5,-8 L-0.5,-8 L-0.5,-4 L-1.5,-4 L-1.5,-8 L-2.5,-8 Z"/>
+                  </g>
+                </g>
+              </g>
+
+              <!-- Glossy Sheen -->
+              <ellipse cx="54" cy="46" rx="48" ry="24" transform="rotate(-24 54 46)" fill="url(#g-gl)"/>
+            </g>
+
+            <!-- Heavy Gold Rim Outline -->
+            <circle cx="76" cy="76" r="58" fill="none" stroke="url(#g-pass-gold)" stroke-width="3"/>
+          </g>
+        </svg>
+      </div>
+      
+      <div class="badges-row">
+        <span class="tier-badge">Gold</span>
+        <span class="mode-badge">🛡️ Contained (DISC)</span>
+      </div>
+      
+      <div class="card-desc">
+        <strong>The Dining Passport Compass:</strong> Combines the single-day touring expedition with gourmet dining. 
+        A porcelain-cream fine china well bordered by an expedition compass ring with 4 cardinal park seals (<code>MK</code>, <code>EP</code>, <code>HS</code>, <code>AK</code>), 
+        framing a steaming golden cloche.
+      </div>
+      
+      <div class="card-notes">
+        <strong>Art Highlights:</strong>
+        <ul>
+          <li><strong>Touring & Dining Fusion:</strong> Clear cardinal seals honor the geographic hop across property.</li>
+          <li><strong>Fine Porcelain Aesthetic:</strong> Antique cream inner plate provides maximum contrast and dining elegance.</li>
+          <li><strong>Contained Disc:</strong> Fits the default disc specification while delivering high decorative detail.</li>
+        </ul>
+      </div>
+    </div>
+
+  </div>
+
+</body>
+</html>

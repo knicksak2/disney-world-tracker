@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Monorail Loop Pin Replacement — Design Candidates</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #090514;
+      --bg-card: rgba(20, 14, 38, 0.85);
+      --bg-card-hover: rgba(34, 23, 62, 0.95);
+      --border-card: rgba(147, 112, 219, 0.22);
+      --text-main: #f7fafc;
+      --text-muted: #a0aec0;
+      --accent-purple: #9f7aea;
+      --silver-badge: #94a3b8;
+      --silver-bg: rgba(148, 163, 184, 0.15);
+      --red-accent: #ef4444;
+      --green-accent: #22c55e;
+      --gold-accent: #f59e0b;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: radial-gradient(circle at 50% 0%, #25124d 0%, var(--bg-dark) 80%);
+      color: var(--text-main);
+      min-height: 100vh;
+      padding: 40px 24px 80px;
+    }
+
+    .container {
+      max-width: 1360px;
+      margin: 0 auto;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 36px;
+    }
+
+    .badge-sub {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(159, 122, 234, 0.15);
+      border: 1px solid rgba(159, 122, 234, 0.35);
+      color: var(--accent-purple);
+      padding: 5px 16px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      margin-bottom: 14px;
+    }
+
+    h1 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 44px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      background: linear-gradient(135deg, #ffffff 40%, #c4b5fd 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 12px;
+    }
+
+    p.subtitle {
+      color: var(--text-muted);
+      font-size: 16px;
+      max-width: 780px;
+      margin: 0 auto 24px;
+      line-height: 1.6;
+    }
+
+    .callout-box {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      border-radius: 14px;
+      padding: 16px 20px;
+      max-width: 880px;
+      margin: 0 auto 30px;
+      text-align: left;
+      font-size: 14px;
+      color: #fecaca;
+      line-height: 1.6;
+    }
+
+    .callout-box strong {
+      color: #fff;
+    }
+
+    .controls-bar {
+      display: flex;
+      justify-content: center;
+      gap: 16px;
+      margin-bottom: 36px;
+      flex-wrap: wrap;
+    }
+
+    .btn-toggle {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      color: #fff;
+      padding: 8px 18px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .btn-toggle:hover, .btn-toggle.active {
+      background: var(--accent-purple);
+      border-color: var(--accent-purple);
+      box-shadow: 0 0 16px rgba(159, 122, 234, 0.4);
+    }
+
+    .cards-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
+      gap: 24px;
+      margin-bottom: 50px;
+    }
+
+    .pin-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-card);
+      border-radius: 20px;
+      padding: 28px 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      position: relative;
+      transition: transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+      backdrop-filter: blur(12px);
+    }
+
+    .pin-card:hover {
+      transform: translateY(-4px);
+      border-color: rgba(167, 139, 250, 0.5);
+      box-shadow: 0 16px 36px rgba(0, 0, 0, 0.5);
+    }
+
+    .pin-card.recommended {
+      border-color: rgba(34, 197, 94, 0.6);
+      box-shadow: 0 0 30px rgba(34, 197, 94, 0.22);
+    }
+
+    .pin-card.rejected {
+      border-color: rgba(239, 68, 68, 0.4);
+      opacity: 0.85;
+    }
+
+    .status-ribbon {
+      position: absolute;
+      top: 16px;
+      right: 18px;
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      padding: 4px 10px;
+      border-radius: 6px;
+    }
+
+    .ribbon-rec { background: rgba(34, 197, 94, 0.2); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.4); }
+    .ribbon-alt { background: rgba(147, 197, 253, 0.2); color: #93c5fd; border: 1px solid rgba(147, 197, 253, 0.4); }
+    .ribbon-rej { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); }
+
+    .pin-viewport {
+      width: 220px;
+      height: 190px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 18px;
+      background: radial-gradient(circle at 50% 50%, rgba(255,255,255,0.03) 0%, transparent 70%);
+      border-radius: 14px;
+    }
+
+    .badges-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .badge {
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      padding: 4px 10px;
+      border-radius: 6px;
+      letter-spacing: 0.5px;
+    }
+
+    .badge-silver {
+      background: var(--silver-bg);
+      color: var(--silver-badge);
+      border: 1px solid rgba(148, 163, 184, 0.3);
+    }
+
+    .badge-type {
+      background: rgba(147, 112, 219, 0.18);
+      color: #c4b5fd;
+      border: 1px solid rgba(147, 112, 219, 0.35);
+    }
+
+    .badge-status-tweak {
+      background: rgba(245, 158, 11, 0.18);
+      color: #fbbf24;
+      border: 1px solid rgba(245, 158, 11, 0.35);
+    }
+
+    .pin-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 22px;
+      font-weight: 800;
+      color: #fff;
+      margin-bottom: 6px;
+    }
+
+    .pin-desc {
+      color: var(--text-muted);
+      font-size: 13px;
+      text-align: center;
+      margin-bottom: 16px;
+      line-height: 1.5;
+    }
+
+    .color-swatches {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 16px;
+      background: rgba(0,0,0,0.25);
+      padding: 6px 12px;
+      border-radius: 999px;
+    }
+
+    .swatch-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      font-weight: 700;
+      color: #94a3b8;
+      margin-right: 4px;
+    }
+
+    .swatch {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      cursor: pointer;
+      border: 2px solid transparent;
+      transition: transform 0.15s, border-color 0.15s;
+    }
+
+    .swatch:hover, .swatch.active {
+      transform: scale(1.25);
+      border-color: #fff;
+    }
+
+    .pin-analysis {
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      padding-top: 14px;
+      width: 100%;
+      font-size: 12.5px;
+      color: #cbd5e1;
+      line-height: 1.55;
+    }
+
+    .analysis-point {
+      margin-bottom: 8px;
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+    }
+
+    .analysis-point strong {
+      color: #f1f5f9;
+    }
+
+    .comparison-section {
+      background: var(--bg-card);
+      border: 1px solid var(--border-card);
+      border-radius: 20px;
+      padding: 32px 28px;
+      margin-bottom: 40px;
+    }
+
+    .comparison-section h2 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 24px;
+      font-weight: 700;
+      margin-bottom: 18px;
+      color: #fff;
+    }
+
+    table.spec-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13.5px;
+      text-align: left;
+    }
+
+    table.spec-table th, table.spec-table td {
+      padding: 12px 14px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    table.spec-table th {
+      color: #a78bfa;
+      font-weight: 700;
+      text-transform: uppercase;
+      font-size: 11px;
+      letter-spacing: 0.5px;
+    }
+
+    table.spec-table tr:hover td {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .tag-pass { color: #4ade80; font-weight: 700; }
+    .tag-fail { color: #f87171; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="badge-sub">Pin Collection Art Direction & Architectural Audit</div>
+      <h1>Monorail Loop: Silhouette Audit</h1>
+      <p class="subtitle">
+        You were 100% right to question Option A. Looking past the superficial red paint reveals that <strong>Option A is an Asian commuter train</strong>, while <strong>Option B contains the authentic aerodynamic Bombardier Mark VI silhouette</strong>.
+      </p>
+
+      <div class="callout-box">
+        <strong>💡 Real Disney World Monorail DNA:</strong> The iconic WDW Mark VI (designed by Bombardier & Bob Gurr) is defined by its <em>low-slung, aerodynamic tapered bullet nose, raked cockpit windshield, and horizontal midline color stripe</em>. Option A has an upright flat boxy nose with a tall forehead (Tokyo/Osaka Hitachi commuter monorail style).
+      </div>
+
+      <div class="controls-bar">
+        <button class="btn-toggle active" onclick="setScale(1, this)">Normal Size (150px)</button>
+        <button class="btn-toggle" onclick="setScale(1.25, this)">Zoomed (188px)</button>
+        <button class="btn-toggle" onclick="setScale(0.6, this)">Profile Badge (90px)</button>
+      </div>
+    </header>
+
+    <div class="cards-grid">
+      
+      <!-- CARD 1: CURRENT IMPLEMENTATION (REJECTED) -->
+      <div class="pin-card rejected">
+        <div class="status-ribbon ribbon-rej">Current (Rejected)</div>
+        
+        <div class="pin-viewport" id="viewport-current">
+          <svg width="150" height="150" viewBox="-6 -6 162 162" style="overflow:visible" role="img" class="pin-svg">
+            <defs>
+              <linearGradient id="g-curr-m" x1=".15" y1="0" x2=".85" y2="1">
+                <stop offset="0" stop-color="#fff"/>
+                <stop offset=".25" stop-color="#cbd5e1"/>
+                <stop offset=".5" stop-color="#94a3b8"/>
+                <stop offset=".75" stop-color="#64748b"/>
+                <stop offset="1" stop-color="#334155"/>
+              </linearGradient>
+              <filter id="sh-curr" x="-30%" y="-30%" width="160%" height="170%">
+                <feDropShadow dx="0" dy="4" stdDeviation="3.5" flood-color="#000" flood-opacity=".65"/>
+              </filter>
+            </defs>
+            <g filter="url(#sh-curr)">
+              <path d="M42 108 H54 L58 132 H38 Z" fill="url(#g-curr-m)" stroke="url(#g-curr-m)" stroke-width="4.6" stroke-linejoin="round"/>
+              <path d="M96 108 H108 L112 132 H92 Z" fill="url(#g-curr-m)" stroke="url(#g-curr-m)" stroke-width="4.6" stroke-linejoin="round"/>
+              <path d="M14 96 H136 V108 H14 Z" fill="url(#g-curr-m)" stroke="url(#g-curr-m)" stroke-width="4.6" stroke-linejoin="round"/>
+              <path d="M22 60 H112 A18 18 0 0 1 112 96 H22 A18 18 0 0 1 22 60 Z" fill="url(#g-curr-m)" stroke="url(#g-curr-m)" stroke-width="4.6" stroke-linejoin="round"/>
+              <path d="M112 60 H124 A18 18 0 0 1 138 78 A18 18 0 0 1 124 96 H112 Z" fill="url(#g-curr-m)" stroke="url(#g-curr-m)" stroke-width="4.6" stroke-linejoin="round"/>
+              <path d="M42 108 H54 L58 132 H38 Z" fill="#94A3B8"/>
+              <path d="M96 108 H108 L112 132 H92 Z" fill="#94A3B8"/>
+              <path d="M14 96 H136 V108 H14 Z" fill="#94A3B8"/>
+              <path d="M22 60 H112 A18 18 0 0 1 112 96 H22 A18 18 0 0 1 22 60 Z" fill="#F8FAFC"/>
+              <path d="M112 60 H124 A18 18 0 0 1 138 78 A18 18 0 0 1 124 96 H112 Z" fill="#DC2626" stroke="url(#g-curr-m)" stroke-width="1.2"/>
+              <path d="M32 66 H108 A6 6 0 0 1 108 78 H32 A6 6 0 0 1 32 66 Z" fill="#1E293B" stroke="url(#g-curr-m)" stroke-width="1.2"/>
+            </g>
+          </svg>
+        </div>
+
+        <div class="badges-row">
+          <span class="badge badge-silver">SILVER</span>
+          <span class="badge badge-type">✂️ Die-Cut Silhouette</span>
+          <span class="badge badge-status-tweak">TWEAK</span>
+        </div>
+
+        <div class="pin-title">Monorail Loop</div>
+        <div class="pin-desc">Contemporary + Polynesian + Grand Floridian.</div>
+
+        <div class="pin-analysis">
+          <div class="analysis-point">
+            <span>❌</span>
+            <div><strong>Capsule Silhouette:</strong> A rounded rectangle pill on two trapezoid stool legs. Does not read as any real train.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CARD 2: OPTION A (GOOGLE NOTO) -->
+      <div class="pin-card">
+        <div class="status-ribbon ribbon-rej">Option A · Commuter Monorail</div>
+        
+        <div class="pin-viewport" id="viewport-noto">
+          <svg width="150" height="150" viewBox="-8 -8 144 144" style="overflow:visible" role="img" class="pin-svg" id="svg-noto">
+            <defs>
+              <linearGradient id="g-noto-m" x1=".15" y1="0" x2=".85" y2="1">
+                <stop offset="0" stop-color="#ffffff"/>
+                <stop offset=".22" stop-color="#e2e8f0"/>
+                <stop offset=".48" stop-color="#94a3b8"/>
+                <stop offset=".75" stop-color="#64748b"/>
+                <stop offset="1" stop-color="#334155"/>
+              </linearGradient>
+              <filter id="sh-noto" x="-30%" y="-30%" width="160%" height="170%">
+                <feDropShadow dx="0" dy="4" stdDeviation="3.8" flood-color="#000" flood-opacity=".65"/>
+              </filter>
+            </defs>
+            <g filter="url(#sh-noto)">
+              <g stroke="url(#g-noto-m)" stroke-width="5.2" stroke-linejoin="round" stroke-linecap="round" fill="url(#g-noto-m)">
+                <rect x="4" y="64" width="120" height="36" rx="2"/>
+                <polygon points="4,99.5 4,102.5 11.1,111.2 11.1,124 37.1,124 37.1,111.2 44.2,102.5 83.7,102.5 90.9,111.2 90.9,124 116.8,124 116.8,111.2 124,102.5 124,99.5"/>
+                <path d="M28.96,62.51l-11.77-5.86c-3.43-2.23-4.64-4.38-4.5-7.14c0.13-2.66,1.26-5.91,2.46-9.77C19.52,25.69,29.73,4,53.75,4s70.24,0,70.24,0l0,58.15L28.96,62.51z"/>
+              </g>
+              <polygon points="4,99.5 4,102.5 11.1,111.2 11.1,124 37.1,124 37.1,111.2 44.2,102.5 83.7,102.5 90.9,111.2 90.9,124 116.8,124 116.8,111.2 124,102.5 124,99.5" fill="#475569"/>
+              <path d="M112.74,124H94.99v-7.89c0-2.7,2.19-4.89,4.89-4.89h7.96c2.7,0,4.89,2.19,4.89,4.89V124z" fill="#64748b"/>
+              <path d="M33,124H15.25v-7.89c0-2.7,2.19-4.89,4.89-4.89h7.96c2.7,0,4.89,2.19,4.89,4.89V124z" fill="#64748b"/>
+              <rect x="4" y="63.96" width="119.99" height="36.13" fill="#64748b"/>
+              <rect x="4.18" y="69.37" width="119.82" height="3.53" fill="#334155"/>
+              <path d="M13.51,64c0,0,9.91,2.05,15.06,9.04c4.17,5.65,6.37,9.45,17.48,9.45c2.95,0,77.95,0,77.95,0V63.95L13.51,64z" fill="#1e293b"/>
+              <path d="M28.96,62.51l-11.77-5.86c-3.43-2.23-4.64-4.38-4.5-7.14c0.13-2.66,1.26-5.91,2.46-9.77C19.52,25.69,29.73,4,53.75,4s70.24,0,70.24,0l0,58.15L28.96,62.51z" fill="#f8fafc"/>
+              <path d="M124,79.17H48.52c-10.26,0-14.22-4.05-17.27-11.29c-0.74-1.76-2.67-5.62-2.67-5.62v0H124V79.17z" fill="#e2e8f0"/>
+              <path id="noto-stripe-main" d="M28.68,62.51L124,62.15V49.51H64.66c-4.75,0-8.03-5.06-6.41-9.84c2.96-8.76,9.08-17.97,20.82-17.97c16.68,0,44.93,0,44.93,0V11.42c0,0-37.59,0-50.86,0c-13.38,0-22.27,14.59-26.88,26.5c-2.73,7.04-9.19,11.59-16.3,11.59H12.69c-0.15,2.08,0.46,3.93,2.33,5.68C15.54,55.69,28.68,62.51,28.68,62.51z" fill="#dc2626"/>
+              <path id="noto-stripe-dark" d="M13.51,53.34c0,0,0.82,1.87,4.11,3.6c5.44,2.87,11.06,5.67,11.06,5.67L124,62.25v-5.11c0,0-83.33,0-90.9,0S13.51,53.34,13.51,53.34z" fill="#991b1b"/>
+              <path d="M124,36.97V17.43l-69.47,0.58c-8.91,7.2-12.03,13.67-14.47,18.95H124z" fill="#0284c7"/>
+              <path d="M27.4,34.99c9.92-14.91,17.9-22.8,17.9-22.8l-12.45-0.05L30.37,13c-8.15,7.58-12.65,18.48-15.22,26.75C15.14,39.75,22.7,42.05,27.4,34.99z" fill="#38bdf8"/>
+              <path d="M124,16.62H55.52c-6.29,0-13.76,13.07-16.97,19.33c-0.75,1.47,0.24,3.26,1.8,3.26l83.59,0v0H124V16.62z M43.26,36.2c-0.57,0-1-0.24-0.68-1.18c0.19-0.55,5.12-10.6,10.78-14.24c0.51-0.33,1.16,0.06,1.16,0.69v13.91c0,0.45-0.34,0.81-0.76,0.81H43.26z M56.4,35.38V20.44c0-0.45,0.34-0.81,0.76-0.81h19.12c0.42,0,0.76,0.36,0.76,0.81v14.94c0,0.45-0.34,0.81-0.76,0.81H57.16C56.74,36.2,56.4,35.83,56.4,35.38z M78.91,35.38V20.44c0-0.45,0.34-0.81,0.76-0.81H98.8c0.42,0,0.76,0.36,0.76,0.81v14.94c0,0.45-0.34,0.81-0.76,0.81H79.67C79.25,36.2,78.91,35.83,78.91,35.38z M121.31,36.2h-19.12c-0.42,0-0.76-0.36-0.76-0.81V20.44c0-0.45,0.34-0.81,0.76-0.81h19.12c0.42,0,0.76,0.36,0.76,0.81v14.94C122.06,35.83,121.73,36.2,121.31,36.2z" fill="#0f172a" opacity="0.85"/>
+              <path d="M29.22,36.2C39.16,20.31,47.15,13.05,50.55,11c0.31-0.18,0.5-0.87-0.61-0.87H34.05c-1.16,0.83-2.59,1.84-3.69,2.87l11.07,0.07c0.47,0,0.58,0.58,0.24,0.92c-3.12,3.19-6.09,5.64-14.32,17.95c-2.51,3.76-5.05,4.32-7.07,4.74c-1.16,0.24-2.93,0.3-4.24,0.31c-1.1,2.85-2.71,8.76-2.71,8.76C16.36,46.06,22.85,46.38,29.22,36.2z" fill="#0f172a" opacity="0.85"/>
+              <path d="M21.44,38.4c-0.71-0.79-2.23-0.57-3.39,0.48c-1.16,1.05-1.52,2.54-0.81,3.33c0.71,0.79,2.23,0.57,3.39-0.48C21.79,40.68,22.15,39.19,21.44,38.4z" fill="#f59e0b"/>
+            </g>
+          </svg>
+        </div>
+
+        <div class="badges-row">
+          <span class="badge badge-silver">SILVER</span>
+          <span class="badge badge-type">✂️ Die-Cut Silhouette</span>
+        </div>
+
+        <div class="pin-title">Monorail Loop</div>
+        <div class="pin-desc">Contemporary + Polynesian + Grand Floridian.</div>
+
+        <div class="pin-analysis">
+          <div class="analysis-point">
+            <span>⚠️</span>
+            <div><strong>Commuter Silhouette:</strong> Modeled on Tokyo/Osaka commuter transit. Flat, upright front face with a tall boxy forehead. Lacks the swept aerodynamic bullet nose of Disney's Bombardier Mark VI.</div>
+          </div>
+          <div class="analysis-point">
+            <span>⚠️</span>
+            <div><strong>Heavy Viaduct:</strong> Track structure is 50% of the pin height, reading like a heavy highway bridge rather than an elevated monorail beam.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CARD 3: OPTION B (REFINED DISNEY MARK VI) -->
+      <div class="pin-card recommended">
+        <div class="status-ribbon ribbon-rec">Option B · Authentic WDW Mark VI</div>
+        
+        <div class="pin-viewport" id="viewport-mark6">
+          <!-- Refined WDW Mark VI Cloisonné Pin (Fin removed, Monorail Red, WDW Pylon) -->
+          <svg width="150" height="150" viewBox="-4 -4 44 44" style="overflow:visible" role="img" class="pin-svg" id="svg-mark6">
+            <defs>
+              <linearGradient id="g-m6-m" x1=".15" y1="0" x2=".85" y2="1">
+                <stop offset="0" stop-color="#ffffff"/>
+                <stop offset=".22" stop-color="#e2e8f0"/>
+                <stop offset=".48" stop-color="#94a3b8"/>
+                <stop offset=".75" stop-color="#64748b"/>
+                <stop offset="1" stop-color="#334155"/>
+              </linearGradient>
+              <filter id="sh-m6" x="-30%" y="-30%" width="160%" height="170%">
+                <feDropShadow dx="0" dy="1.4" stdDeviation="1.2" flood-color="#000" flood-opacity=".65"/>
+              </filter>
+            </defs>
+            <g filter="url(#sh-m6)">
+              <!-- 1. OUTER SILVER DILATION RIM (Unified 5.2px Silver Bezel) -->
+              <g stroke="url(#g-m6-m)" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" fill="url(#g-m6-m)">
+                <!-- Unified silhouette: Sleek bullet cab + clean roofline (NO FIN) + beam + flared WDW pylon -->
+                <path d="M2 22 H36 V26 H24 L26 36 H12 L14 26 H2 Z"/>
+                <path d="M36 20 H10 C7 20 3 17 3 14 C3 9 19 2 21 2 H36 V20 Z"/>
+              </g>
+
+              <!-- 2. CLOISONNÉ ENAMEL PASS -->
+              <!-- Iconic WDW Tapered Concrete Support Pylon & Elevated Guideway -->
+              <polygon points="13,26 23,26 25,35.5 11,35.5" fill="#475569"/>
+              <rect x="1" y="21" width="35" height="5" rx="0.5" fill="#64748b"/>
+              <line x1="1" y1="23.5" x2="36" y2="23.5" stroke="#334155" stroke-width="0.6"/>
+
+              <!-- Train Underbody Skirt -->
+              <path d="M36 19v3H18c-3 0-7-3-7-3h25z" fill="#94a3b8"/>
+
+              <!-- Space-Age Aerodynamic Body (Porcelain White #F8FAFC) -->
+              <path d="M36 19H10c-3 0-7-3-7-6C3 9 19 2 21 2h15v17z" fill="#f8fafc"/>
+
+              <!-- Iconic WDW Midline Color Stripe (Default: Monorail Red #DC2626) -->
+              <path id="mark6-stripe" d="M3.741 12C3.28 12.686 3 13.36 3 14c0 1.655 1.22 3.308 2.816 4.459C21.231 14 36 14 36 14v-2.2H3.741z" fill="#dc2626"/>
+
+              <!-- Raked Cockpit Windshield & Panoramic Windows (Dark Midnight Glass #0284c7 / #0f172a) -->
+              <path d="M21 4h-5.553c-3.327 1.524-7.344 3.738-9.898 6H21c1.104 0 2-.896 2-2V6c0-1.104-.896-2-2-2zm5 5c0 .552-.447 1-1 1-.553 0-1-.448-1-1V5c0-.552.447-1 1-1 .553 0 1 .448 1 1v4zm8 0c0 .552-.447 1-1 1h-4c-.553 0-1-.448-1-1V5c0-.552.447-1 1-1h4c.553 0 1 .448 1 1v4z" fill="#0284c7"/>
+              <path d="M21 4h-5.553c-3.327 1.524-7.344 3.738-9.898 6H21c1.104 0 2-.896 2-2V6c0-1.104-.896-2-2-2z" fill="#38bdf8" opacity="0.6"/>
+
+              <!-- Headlight Glimmer at Nose Tip -->
+              <circle cx="4.5" cy="14" r="0.8" fill="#fbbf24"/>
+
+              <!-- 3. METALLIC SILVER WIRE PASS (Dividing Wirelines) -->
+              <g fill="none" stroke="url(#g-m6-m)" stroke-width="0.38" stroke-linejoin="round">
+                <line x1="1" y1="21" x2="36" y2="21"/>
+                <line x1="1" y1="26" x2="36" y2="26"/>
+                <path d="M3.741 12C3.28 12.686 3 13.36 3 14c0 1.655 1.22 3.308 2.816 4.459C21.231 14 36 14 36 14"/>
+                <path d="M36 19H10c-3 0-7-3-7-6"/>
+                <path d="M21 4h-5.553c-3.327 1.524-7.344 3.738-9.898 6H21"/>
+              </g>
+            </g>
+          </svg>
+        </div>
+
+        <div class="badges-row">
+          <span class="badge badge-silver">SILVER</span>
+          <span class="badge badge-type">✂️ Die-Cut Silhouette</span>
+          <span class="badge badge-status-tweak">AUTHENTIC MARK VI</span>
+        </div>
+
+        <div class="pin-title">Monorail Loop</div>
+        <div class="pin-desc">Contemporary + Polynesian + Grand Floridian.</div>
+
+        <div class="color-swatches">
+          <span class="swatch-label">Cab Stripe:</span>
+          <div class="swatch active" style="background:#dc2626;" title="Monorail Red (Default)" onclick="setMark6Stripe('#dc2626', this)"></div>
+          <div class="swatch" style="background:#2563eb;" title="Monorail Blue" onclick="setMark6Stripe('#2563eb', this)"></div>
+          <div class="swatch" style="background:#16a34a;" title="Monorail Green" onclick="setMark6Stripe('#16a34a', this)"></div>
+          <div class="swatch" style="background:#f59e0b;" title="Monorail Gold" onclick="setMark6Stripe('#f59e0b', this)"></div>
+          <div class="swatch" style="background:#ea580c;" title="Monorail Coral" onclick="setMark6Stripe('#ea580c', this)"></div>
+        </div>
+
+        <div class="pin-analysis">
+          <div class="analysis-point">
+            <span>✨</span>
+            <div><strong>True Disney Mark VI Silhouette:</strong> Sleek 45° aerodynamic raked bullet nose, sweeping horizontal beltline color stripe, raked cockpit glass, and continuous smooth roofline.</div>
+          </div>
+          <div class="analysis-point">
+            <span>🏰</span>
+            <div><strong>Authentic WDW Beam & Pylon:</strong> Slender elevated guideway supported by a flared pre-stressed concrete pylon, exactly like the iconic beams crossing Seven Seas Lagoon.</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- COMPARISON & SILHOUETTE ANALYSIS TABLE -->
+    <div class="comparison-section">
+      <h2>Architectural Breakdown: Why Silhouette Trumps Color</h2>
+      <table class="spec-table">
+        <thead>
+          <tr>
+            <th>Design Feature</th>
+            <th>Option A: Google Noto (Urban Commuter)</th>
+            <th>Option B (Refined): WDW Mark VI (Authentic)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Nose Contour</strong></td>
+            <td>Blunt, near-vertical, flat windshield with high forehead</td>
+            <td><strong>Low-slung, 45° aerodynamic raked bullet nose</strong></td>
+          </tr>
+          <tr>
+            <td><strong>Windshield & Cockpit</strong></td>
+            <td>Upright commuter train window with prominent brow</td>
+            <td><strong>Raked, space-age aerodynamic cockpit glass</strong></td>
+          </tr>
+          <tr>
+            <td><strong>Color Stripe Placement</strong></td>
+            <td>Wraps over the top of the roof like a helmet/cap</td>
+            <td><strong>Horizontal beltline stripe sweeping across the nose</strong></td>
+          </tr>
+          <tr>
+            <td><strong>Roof Equipment</strong></td>
+            <td>Smooth roofline</td>
+            <td><strong>Clean aerodynamic roofline</strong> (un-Disney pantograph/fin deleted)</td>
+          </tr>
+          <tr>
+            <td><strong>Track & Pylon Ratio</strong></td>
+            <td>50% of the pin (massive Japanese viaduct)</td>
+            <td><strong>~28% of the pin</strong> (slender beam on iconic flared WDW pylon)</td>
+          </tr>
+          <tr>
+            <td><strong>Real-World Prototype</strong></td>
+            <td>Tokyo Monorail / Tama Toshi (Hitachi / Alstom)</td>
+            <td><strong>Walt Disney World Mark VI (Bombardier / Bob Gurr)</strong></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+  </div>
+
+  <script>
+    function setScale(scale, el) {
+      document.querySelectorAll('.btn-toggle').forEach(b => b.classList.remove('active'));
+      el.classList.add('active');
+      const svgs = document.querySelectorAll('.pin-svg');
+      svgs.forEach(svg => {
+        svg.setAttribute('width', Math.round(150 * scale));
+        svg.setAttribute('height', Math.round(150 * scale));
+      });
+    }
+
+    function setMark6Stripe(col, el) {
+      document.querySelectorAll('#viewport-mark6 ~ .color-swatches .swatch').forEach(s => s.classList.remove('active'));
+      el.classList.add('active');
+      document.getElementById('mark6-stripe').setAttribute('fill', col);
+    }
+  </script>
+</body>
+</html>

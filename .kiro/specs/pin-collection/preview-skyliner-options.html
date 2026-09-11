@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Skyliner Resorts Pin Replacement — Design Candidates</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #090514;
+      --bg-card: rgba(20, 14, 38, 0.88);
+      --bg-card-hover: rgba(32, 22, 58, 0.98);
+      --border-card: rgba(147, 112, 219, 0.22);
+      --text-main: #f7fafc;
+      --text-muted: #94a3b8;
+      --accent-purple: #9f7aea;
+      --silver-badge: #cbd5e1;
+      --silver-bg: rgba(148, 163, 184, 0.18);
+      --accent-sky: #0284c7;
+      --accent-amber: #f59e0b;
+      --accent-crimson: #dc2626;
+      --accent-purple-cab: #7c3aed;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: radial-gradient(circle at 50% 0%, #25124d 0%, var(--bg-dark) 85%);
+      color: var(--text-main);
+      min-height: 100vh;
+      padding: 36px 24px 80px;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+
+    .badge-sub {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(159, 122, 234, 0.15);
+      border: 1px solid rgba(159, 122, 234, 0.35);
+      color: var(--accent-purple);
+      padding: 5px 16px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      margin-bottom: 14px;
+    }
+
+    h1 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 40px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      background: linear-gradient(135deg, #ffffff 40%, #c4b5fd 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 10px;
+    }
+
+    p.subtitle {
+      color: var(--text-muted);
+      font-size: 15px;
+      max-width: 820px;
+      margin: 0 auto 20px;
+      line-height: 1.6;
+    }
+
+    .callout-box {
+      background: rgba(239, 68, 68, 0.08);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      border-radius: 14px;
+      padding: 16px 20px;
+      max-width: 920px;
+      margin: 0 auto 28px;
+      text-align: left;
+      font-size: 13.5px;
+      color: #fecaca;
+      line-height: 1.6;
+    }
+
+    .callout-box strong { color: #fff; }
+
+    .controls-bar {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 20px;
+      margin-bottom: 32px;
+      flex-wrap: wrap;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      padding: 12px 24px;
+      max-width: 980px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .control-group {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .control-label {
+      font-size: 13px;
+      font-weight: 600;
+      color: #cbd5e1;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .swatches-row {
+      display: flex;
+      gap: 8px;
+    }
+
+    .swatch-btn {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      cursor: pointer;
+      transition: transform 0.15s ease, border-color 0.15s ease;
+    }
+
+    .swatch-btn:hover { transform: scale(1.15); }
+    .swatch-btn.active {
+      border-color: #ffffff;
+      box-shadow: 0 0 10px rgba(255, 255, 255, 0.6);
+      transform: scale(1.2);
+    }
+
+    .scale-btn {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      color: #cbd5e1;
+      padding: 5px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .scale-btn.active {
+      background: var(--accent-purple);
+      color: #fff;
+      border-color: var(--accent-purple);
+    }
+
+    .cards-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 20px;
+      margin-bottom: 48px;
+    }
+
+    .pin-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-card);
+      border-radius: 20px;
+      padding: 24px 18px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      position: relative;
+      transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+      backdrop-filter: blur(12px);
+    }
+
+    .pin-card:hover {
+      transform: translateY(-4px);
+      border-color: rgba(167, 139, 250, 0.5);
+      box-shadow: 0 16px 36px rgba(0, 0, 0, 0.5);
+    }
+
+    .pin-card.recommended {
+      border-color: rgba(34, 197, 94, 0.6);
+      box-shadow: 0 0 28px rgba(34, 197, 94, 0.2);
+    }
+
+    .pin-card.baseline {
+      border-color: rgba(239, 68, 68, 0.35);
+      background: rgba(26, 12, 28, 0.7);
+    }
+
+    .status-ribbon {
+      position: absolute;
+      top: 14px;
+      right: 14px;
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      padding: 3px 8px;
+      border-radius: 5px;
+    }
+
+    .ribbon-rec { background: rgba(34, 197, 94, 0.2); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.4); }
+    .ribbon-alt { background: rgba(147, 197, 253, 0.2); color: #93c5fd; border: 1px solid rgba(147, 197, 253, 0.4); }
+    .ribbon-base { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); }
+
+    .pin-viewport {
+      width: 170px;
+      height: 170px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 14px;
+      background: radial-gradient(circle at 50% 50%, rgba(255,255,255,0.03) 0%, transparent 70%);
+      border-radius: 12px;
+    }
+
+    .badges-row {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .badge {
+      font-size: 10.5px;
+      font-weight: 800;
+      text-transform: uppercase;
+      padding: 3px 8px;
+      border-radius: 5px;
+      letter-spacing: 0.5px;
+    }
+
+    .badge-silver {
+      background: var(--silver-bg);
+      color: var(--silver-badge);
+      border: 1px solid rgba(148, 163, 184, 0.3);
+    }
+
+    .badge-type {
+      background: rgba(147, 112, 219, 0.18);
+      color: #c4b5fd;
+      border: 1px solid rgba(147, 112, 219, 0.35);
+    }
+
+    .badge-status {
+      background: rgba(34, 197, 94, 0.15);
+      color: #4ade80;
+      border: 1px solid rgba(34, 197, 94, 0.35);
+    }
+
+    .badge-base {
+      background: rgba(239, 68, 68, 0.15);
+      color: #fca5a5;
+      border: 1px solid rgba(239, 68, 68, 0.35);
+    }
+
+    .pin-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 19px;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 4px;
+      text-align: center;
+    }
+
+    .pin-desc {
+      color: var(--text-muted);
+      font-size: 12.5px;
+      text-align: center;
+      line-height: 1.4;
+      margin-bottom: 14px;
+      min-height: 36px;
+    }
+
+    .gate-stats {
+      width: 100%;
+      background: rgba(0, 0, 0, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 10px;
+      padding: 10px 12px;
+      margin-bottom: 14px;
+      font-size: 11.5px;
+      line-height: 1.5;
+    }
+
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      color: #94a3b8;
+    }
+
+    .stat-row strong { color: #e2e8f0; }
+
+    .analysis-list {
+      width: 100%;
+      text-align: left;
+      font-size: 12px;
+      color: #cbd5e1;
+      line-height: 1.5;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      padding-top: 12px;
+    }
+
+    .analysis-list li {
+      margin-bottom: 6px;
+      list-style-type: none;
+      display: flex;
+      gap: 6px;
+    }
+
+    .comparison-section {
+      background: var(--bg-card);
+      border: 1px solid var(--border-card);
+      border-radius: 20px;
+      padding: 32px 28px;
+      margin-bottom: 48px;
+    }
+
+    .comparison-section h2 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 24px;
+      font-weight: 700;
+      margin-bottom: 16px;
+      color: #fff;
+    }
+
+    .spec-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      text-align: left;
+    }
+
+    .spec-table th {
+      background: rgba(255, 255, 255, 0.05);
+      color: #c4b5fd;
+      font-weight: 700;
+      padding: 12px 14px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+      text-transform: uppercase;
+      font-size: 11.5px;
+      letter-spacing: 0.5px;
+    }
+
+    .spec-table td {
+      padding: 12px 14px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      color: #cbd5e1;
+      vertical-align: top;
+    }
+
+    .spec-table tr:hover td {
+      background: rgba(255, 255, 255, 0.02);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="badge-sub">🎨 Pin Art Direction Review</div>
+      <h1>Skyliner Resorts Pin Replacement</h1>
+      <p class="subtitle">
+        Evaluating high-fidelity vector replacements for the hand-drawn baseline stub. All options screened through <code>emblemGate</code> at the Silver 5.2px rim and rendered with authentic cloisonné multi-color enamel wells.
+      </p>
+
+      <div class="callout-box">
+        <strong>Why the current pin needs updating:</strong> The baseline <code>skylinerCabin</code> was an ad-hoc placeholder composed of hand-typed rectangle primitives (<code>H276 V140...</code>) with two harsh square cutouts. Per <code>docs/pin-art-direction.md §5</code>, primitive boxes fail the organic, collectible character required for Disney pin art.
+      </div>
+    </header>
+
+    <!-- INTERACTIVE COLOR CONTROLS -->
+    <div class="controls-bar">
+      <div class="control-group">
+        <span class="control-label">Cab Theme:</span>
+        <div class="swatches-row">
+          <div class="swatch-btn active" style="background:#0284c7;" title="Riviera Sky Blue (#0284C7)" onclick="setGlobalColor('#0284c7', this)"></div>
+          <div class="swatch-btn" style="background:#f59e0b;" title="Caribbean Beach Amber (#F59E0B)" onclick="setGlobalColor('#f59e0b', this)"></div>
+          <div class="swatch-btn" style="background:#dc2626;" title="Pop Century Crimson (#DC2626)" onclick="setGlobalColor('#dc2626', this)"></div>
+          <div class="swatch-btn" style="background:#7c3aed;" title="Art of Animation Purple (#7C3AED)" onclick="setGlobalColor('#7c3aed', this)"></div>
+          <div class="swatch-btn" style="background:#14727f;" title="Royal Teal (#14727F)" onclick="setGlobalColor('#14727f', this)"></div>
+        </div>
+      </div>
+
+      <div class="control-group">
+        <span class="control-label">Preview Size:</span>
+        <button class="scale-btn" onclick="setViewSize(120, this)">44px App</button>
+        <button class="scale-btn active" onclick="setViewSize(160, this)">Standard</button>
+        <button class="scale-btn" onclick="setViewSize(210, this)">Inspector</button>
+      </div>
+    </div>
+
+    <!-- CANDIDATES GRID -->
+    <div class="cards-grid">
+
+      <!-- BASELINE CURRENT PIN -->
+      <div class="pin-card baseline">
+        <span class="status-ribbon ribbon-base">CURRENT STUB</span>
+        <div class="pin-viewport" id="vp-base">
+          <!-- SVG rendered via script -->
+        </div>
+        <div class="badges-row">
+          <span class="badge badge-silver">SILVER</span>
+          <span class="badge badge-type">✂ Die-Cut</span>
+          <span class="badge badge-base">PRIMITIVE STUB</span>
+        </div>
+        <div class="pin-title">Baseline Placeholder</div>
+        <div class="pin-desc">Riviera + Caribbean Beach + Pop + Art of Animation.</div>
+        
+        <div class="gate-stats">
+          <div class="stat-row"><span>Source:</span> <strong>Ad-hoc Hand-Typed</strong></div>
+          <div class="stat-row"><span>Pieces:</span> <strong>1 piece</strong></div>
+          <div class="stat-row"><span>Cells:</span> <strong>4 cells</strong> (2 square cutouts)</div>
+          <div class="stat-row"><span>Enamel Share:</span> <strong>70%</strong> @ 5.2px rim</div>
+        </div>
+
+        <ul class="analysis-list">
+          <li>❌ <strong>Blocky primitive:</strong> Looks like a toy toaster or battery with square eyes.</li>
+          <li>❌ <strong>Zero lift details:</strong> No cable, no haul-rope grip, flat square hanger.</li>
+          <li>❌ <strong>Unlicensed / undocumented:</strong> Authored in code without source attribution.</li>
+        </ul>
+      </div>
+
+      <!-- OPTION 1: TEMAKI GONDOLA LIFT (RECOMMENDED FOR FRONT PERSPECTIVE) -->
+      <div class="pin-card recommended">
+        <span class="status-ribbon ribbon-rec">TOP FRONT VIEW</span>
+        <div class="pin-viewport" id="vp-temaki">
+          <!-- SVG rendered via script -->
+        </div>
+        <div class="badges-row">
+          <span class="badge badge-silver">SILVER</span>
+          <span class="badge badge-type">✂ Die-Cut</span>
+          <span class="badge badge-status">TEMAKI CC0</span>
+        </div>
+        <div class="pin-title">Temaki Gondola</div>
+        <div class="pin-desc">Front-facing aerodynamic Doppelmayr Omega cabin.</div>
+
+        <div class="gate-stats">
+          <div class="stat-row"><span>Source:</span> <strong>Temaki (Bryan Housel)</strong></div>
+          <div class="stat-row"><span>License:</span> <strong>CC0 1.0 (Public Domain)</strong></div>
+          <div class="stat-row"><span>Gate Verdict:</span> <strong style="color:#4ade80;">PASSES emblemGate</strong></div>
+          <div class="stat-row"><span>Pieces / Cells:</span> <strong>1 pc / 3 cells (62% enamel)</strong></div>
+        </div>
+
+        <ul class="analysis-list">
+          <li>✨ <strong>Aerodynamic Omega curves:</strong> Distinctive bulging hexagonal cabin cross-section with tapered roof and base.</li>
+          <li>🚠 <strong>True cable & grip clamp:</strong> Displays the haul rope and heavy-duty grip arm directly on the die-cut rim.</li>
+          <li>🎨 <strong>Dual panoramic door panes:</strong> 2 distinct window wells allow striking contrast between body enamel and glass.</li>
+        </ul>
+      </div>
+
+      <!-- OPTION 2: MATERIAL SYMBOLS ROUNDED (RECOMMENDED FOR DYNAMIC PROFILE) -->
+      <div class="pin-card recommended">
+        <span class="status-ribbon ribbon-rec">TOP SIDE PROFILE</span>
+        <div class="pin-viewport" id="vp-mat-round">
+          <!-- SVG rendered via script -->
+        </div>
+        <div class="badges-row">
+          <span class="badge badge-silver">SILVER</span>
+          <span class="badge badge-type">✂ Die-Cut</span>
+          <span class="badge badge-status">APACHE 2.0</span>
+        </div>
+        <div class="pin-title">Material Rounded Lift</div>
+        <div class="pin-desc">Dynamic side profile ascending angled cable line.</div>
+
+        <div class="gate-stats">
+          <div class="stat-row"><span>Source:</span> <strong>Material Symbols (Google)</strong></div>
+          <div class="stat-row"><span>License:</span> <strong>Apache 2.0</strong></div>
+          <div class="stat-row"><span>Gate Verdict:</span> <strong style="color:#4ade80;">PASSES emblemGate</strong></div>
+          <div class="stat-row"><span>Pieces / Cells:</span> <strong>1 pc / 4 cells (65% enamel)</strong></div>
+        </div>
+
+        <ul class="analysis-list">
+          <li>🚀 <strong>Dynamic ascending motion:</strong> Angled transit cableway immediately conveys flight across the parks.</li>
+          <li>🪟 <strong>4 Resort-Color cells:</strong> 3 side windows + body shell map perfectly to Riviera, Caribbean, Pop, and Animation!</li>
+          <li>⚙️ <strong>Smooth rounded joints:</strong> Radiused corners ensure clean cloisonné metal separation with zero pooling.</li>
+        </ul>
+      </div>
+
+      <!-- OPTION 3: MDI GONDOLA (HORIZONTAL PROFILE) -->
+      <div class="pin-card">
+        <span class="status-ribbon ribbon-alt">HORIZONTAL</span>
+        <div class="pin-viewport" id="vp-mdi">
+          <!-- SVG rendered via script -->
+        </div>
+        <div class="badges-row">
+          <span class="badge badge-silver">SILVER</span>
+          <span class="badge badge-type">✂ Die-Cut</span>
+          <span class="badge badge-status">APACHE 2.0</span>
+        </div>
+        <div class="pin-title">MDI Gondola Car</div>
+        <div class="pin-desc">Classic horizontal cable traverse with central hanger.</div>
+
+        <div class="gate-stats">
+          <div class="stat-row"><span>Source:</span> <strong>Material Design Icons</strong></div>
+          <div class="stat-row"><span>License:</span> <strong>Apache 2.0</strong></div>
+          <div class="stat-row"><span>Gate Verdict:</span> <strong style="color:#4ade80;">PASSES emblemGate</strong></div>
+          <div class="stat-row"><span>Pieces / Cells:</span> <strong>1 pc / 4 cells (61% enamel)</strong></div>
+        </div>
+
+        <ul class="analysis-list">
+          <li>📐 <strong>Grounded horizontal stance:</strong> Sturdy center hanger arm with symmetrical triple observation bays.</li>
+          <li>🚠 <strong>Overhead transit wire:</strong> Clear cable line anchored directly to the roof grip.</li>
+          <li>🔍 <strong>Wide aspect ratio (1.23):</strong> Generous horizontal footprint that balances well on circular badges.</li>
+        </ul>
+      </div>
+
+    </div>
+
+    <!-- COMPARISON TABLE -->
+    <div class="comparison-section">
+      <h2>Technical & Artistic Comparison</h2>
+      <table class="spec-table">
+        <thead>
+          <tr>
+            <th>Design Property</th>
+            <th>Baseline Placeholder</th>
+            <th>Option 1: Temaki (Front-On)</th>
+            <th>Option 2: Material Symbols (Profile)</th>
+            <th>Option 3: MDI (Traverse)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Perspective</strong></td>
+            <td>Frontal flat box</td>
+            <td><strong>Frontal aerodynamic Omega IV</strong></td>
+            <td><strong>Side profile ascending 15°</strong></td>
+            <td>Side profile horizontal</td>
+          </tr>
+          <tr>
+            <td><strong>Silhouette Legibility</strong></td>
+            <td>Poor (looks like toaster/battery)</td>
+            <td><strong>High (distinctive tapered cabin + grip)</strong></td>
+            <td><strong>Exceptional (cable + carriage wheels + cab)</strong></td>
+            <td>High (classic cable car silhouette)</td>
+          </tr>
+          <tr>
+            <td><strong>Enamel Cells</strong></td>
+            <td>4 cells (2 arbitrary squares)</td>
+            <td>3 cells (Body + 2 panoramic doors)</td>
+            <td><strong>4 cells (Body + 3 panoramic windows)</strong></td>
+            <td>4 cells (Body + 3 windows)</td>
+          </tr>
+          <tr>
+            <td><strong>Resort Storytelling</strong></td>
+            <td>Colors disconnected from form</td>
+            <td>Body = Skyliner Blue, Windows = Resort glass</td>
+            <td><strong>4 cells = 4 Skyliner Resorts!</strong></td>
+            <td>4 cells = 4 Skyliner Resorts</td>
+          </tr>
+          <tr>
+            <td><strong>EmblemGate Screening</strong></td>
+            <td>70% enamel (passed on numbers only)</td>
+            <td><strong>62% enamel, 1 piece, aspect 0.87 (PASS)</strong></td>
+            <td><strong>65% enamel, 1 piece, aspect 1.10 (PASS)</strong></td>
+            <td>61% enamel, 1 piece, aspect 1.23 (PASS)</td>
+          </tr>
+          <tr>
+            <td><strong>License & Provenance</strong></td>
+            <td>Uncredited ad-hoc geometry</td>
+            <td><strong>CC0 1.0 (Public Domain — Bryan Housel)</strong></td>
+            <td>Apache 2.0 (Google Material Symbols)</td>
+            <td>Apache 2.0 (Pictogrammers)</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    let globalColor = '#0284c7';
+    let viewSize = 160;
+
+    const MOTIFS_DATA = {
+      base: {
+        d: 'M236 64 H276 V140 H236 Z M128 140 H384 C416 140 436 164 436 200 L416 380 C416 412 392 432 360 432 H152 C120 432 96 412 96 380 L76 200 C76 164 96 140 128 140 Z M136 200 H236 V300 H136 Z M276 200 H376 V300 H276 Z',
+        getColors: (c) => [c, '#dc2626', '#0284c7', '#f59e0b']
+      },
+      temaki: {
+        d: 'M7 2.87c-.3-.18-.5-.5-.5-.87v-.12l-4.94.62A.51.51 0 0 1 1 2.06a.51.51 0 0 1 .44-.56L6.51.87C6.57.38 6.99 0 7.5 0c.42 0 .78.26.93.63L13.44 0c.27-.03.52.16.56.44a.51.51 0 0 1-.44.56l-5.06.63V2c0 .37-.2.69-.5.87V5h2.17c.48 0 .89.35.98.82l.81 4.48a.9.9 0 0 1 0 .4l-.79 3.52c-.1.45-.5.78-.97.78H4.8c-.47 0-.87-.33-.97-.78l-.79-3.52a.9.9 0 0 1 0-.4l.81-4.48c.09-.47.5-.82.98-.82H7zM4.98 6c-.12 0-.22.08-.24.2l-.68 3.5c-.01.02-.01.03-.01.05c0 .14.12.25.25.25h2.45c.14 0 .25-.11.25-.25v-3.5C7 6.11 6.89 6 6.75 6zm5.04 0H8.25c-.14 0-.25.11-.25.25v3.5c0 .14.11.25.25.25h2.45c.13 0 .25-.11.25-.25c0-.02 0-.03-.01-.05l-.68-3.5a.24.24 0 0 0-.24-.2',
+        getColors: (c) => [c, '#0f172a', '#0f172a']
+      },
+      matRound: {
+        d: 'M5 21q-.825 0-1.412-.587T3 19v-6q0-1.65 1.175-2.825T7 9h4V6.275l-8.775 2.4q-.45.125-.838-.162T1 7.725q0-.325.188-.575T1.7 6.8l4.425-1.2q-.05-.125-.088-.275T6 5q0-.625.438-1.062T7.5 3.5q.575 0 1 .375t.475.95L11 4.275V4q0-.425.288-.712T12 3q.35 0 .613.2t.362.525l2.175-.575q-.075-.15-.112-.312T15 2.5q0-.625.438-1.062T16.5 1q.575 0 1.013.4t.487.975l3.775-1.05q.45-.125.838.163t.387.787q0 .325-.187.575t-.513.35L13 5.725V9h4q1.65 0 2.825 1.175T21 13v6q0 .825-.587 1.413T19 21zm0-6h3.325v-4H7q-.825 0-1.412.588T5 13zm5.325 0h3.325v-4h-3.325zm5.35 0H19v-2q0-.825-.587-1.412T17 11h-1.325z',
+        getColors: (c) => [c, '#0284c7', '#f59e0b', '#dc2626']
+      },
+      mdi: {
+        d: 'M18 10h-5V7.59l9.12-1.52l-.24-1.48l-5.47.91c.05-.15.09-.32.09-.5A1.5 1.5 0 0 0 15 3.5A1.5 1.5 0 0 0 13.5 5c0 .35.13.68.34.93l-.84.14V5h-2v1.41l-.59.09c.05-.15.09-.32.09-.5A1.5 1.5 0 0 0 9 4.5A1.5 1.5 0 0 0 7.5 6c0 .36.13.68.33.93l-5.95 1l.24 1.48L11 7.93V10H6a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2M6 12h2.25v4H6zm3.75 4v-4h4.5v4zM18 16h-2.25v-4H18z',
+        getColors: (c) => [c, '#38bdf8', '#fbbf24', '#f87171']
+      }
+    };
+
+    // SILVER TIER METAL GRADIENT
+    const SILVER_STOPS = ['#ffffff', '#e2e8f0', '#94a3b8', '#64748b', '#cbd5e1'];
+
+    function splitCells(d){
+      const cells = [];
+      let cur = null, sx = 0, sy = 0, cx = 0, cy = 0;
+      const tokens = (d.match(/[MmLlHhVvCcSsQqTtAaZz][^MmLlHhVvCcSsQqTtAaZz]*/g) || []);
+      for (const t of tokens) {
+        const cmd = t[0], rel = cmd === cmd.toLowerCase(), k = cmd.toLowerCase();
+        const nums = (t.slice(1).trim().match(/-?\d*\.?\d+(?:e[-+]?\d+)?/gi) || []).map(Number);
+        if (k === 'm') {
+          if (nums.length >= 2) {
+            const x = rel ? cx + nums[0] : nums[0], y = rel ? cy + nums[1] : nums[1];
+            cur = { d: `M ${+x.toFixed(3)} ${+y.toFixed(3)}` };
+            cells.push(cur);
+            cx = sx = x; cy = sy = y;
+          }
+          continue;
+        }
+        if (!cur) { cur = { d: 'M 0 0' }; cells.push(cur); }
+        cur.d += ' ' + t;
+        if (k === 'z') { cx = sx; cy = sy; }
+        else if (nums.length >= 2) {
+          cx = rel ? cx + nums[nums.length-2] : nums[nums.length-2];
+          cy = rel ? cy + nums[nums.length-1] : nums[nums.length-1];
+        }
+      }
+      return cells.map(c => c.d);
+    }
+
+    function pathBBox(d){
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      let cx = 0, cy = 0;
+      const tokens = (d.match(/[MmLlHhVvCcSsQqTtAaZz][^MmLlHhVvCcSsQqTtAaZz]*/g) || []);
+      for (const t of tokens) {
+        const cmd = t[0], rel = cmd === cmd.toLowerCase(), k = cmd.toLowerCase();
+        const nums = (t.slice(1).trim().match(/-?\d*\.?\d+(?:e[-+]?\d+)?/gi) || []).map(Number);
+        for (let i = 0; i < nums.length; i += 2) {
+          if (nums[i+1] == null) break;
+          const x = rel ? cx + nums[i] : nums[i];
+          const y = rel ? cy + nums[i+1] : nums[i+1];
+          minX = Math.min(minX, x); maxX = Math.max(maxX, x);
+          minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+          cx = x; cy = y;
+        }
+      }
+      if (minX === Infinity) { minX = 0; minY = 0; maxX = 512; maxY = 512; }
+      return { minX, minY, maxX, maxY, w: maxX - minX, h: maxY - minY, cx: (minX+maxX)/2, cy: (minY+maxY)/2 };
+    }
+
+    let uid = 0;
+    function renderDieCutSVG(dPath, colors, size){
+      const id = 'sk-' + (++uid);
+      const bb = pathBBox(dPath);
+      const k = 126 / Math.max(bb.w, bb.h);
+      const tx = 75 - bb.cx * k;
+      const ty = 75 - bb.cy * k;
+      const t = `translate(${tx.toFixed(2)},${ty.toFixed(2)}) scale(${k.toFixed(5)})`;
+      const rimPx = 5.2; // Silver rim
+      const rim = rimPx / k;
+      const innerRim = rim * 0.32;
+
+      const cells = splitCells(dPath);
+      const outerD = cells[0] || dPath;
+      const innerD = cells.slice(1).join(' ');
+
+      const stopsHtml = SILVER_STOPS.map((c, i) =>
+        `<stop offset="${(i/(SILVER_STOPS.length-1)).toFixed(4)}" stop-color="${c}"/>`
+      ).join('');
+
+      return `
+      <svg width="${size}" height="${size}" viewBox="-4 -4 158 158" style="overflow:visible">
+        <defs>
+          <linearGradient id="g-${id}-p" x1=".15" y1="0" x2=".85" y2="1">${stopsHtml}</linearGradient>
+          <linearGradient id="g-${id}-m" x1=".2" y1="0" x2=".8" y2="1">${stopsHtml}</linearGradient>
+          <linearGradient id="g-${id}-gl" x1="0" y1="0" x2=".3" y2="1">
+            <stop offset="0" stop-color="#fff" stop-opacity=".6"/>
+            <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+          </linearGradient>
+          <clipPath id="c-${id}"><path d="${dPath}" transform="${t}"/></clipPath>
+          <filter id="f-${id}" x="-25%" y="-25%" width="150%" height="160%">
+            <feDropShadow dx="0" dy="3.5" stdDeviation="3.2" flood-color="#000" flood-opacity=".65"/>
+          </filter>
+        </defs>
+
+        <g filter="url(#f-${id})">
+          <g transform="${t}">
+            <!-- Poured Cloisonne Enamel Cells -->
+            ${cells.map((cell, i) => `
+              <path d="${cell}" fill="${colors[i % colors.length] || colors[0]}" fill-rule="nonzero"/>
+            `).join('')}
+
+            <!-- Interior Thin Dividers (0.32x rim) -->
+            ${innerD ? `
+              <path d="${innerD}" fill="none" stroke="url(#g-${id}-p)" stroke-width="${innerRim.toFixed(2)}" stroke-linejoin="round"/>
+            ` : ''}
+
+            <!-- Outer Solid Silver Die-Cut Rim (5.2px) -->
+            <path d="${outerD}" fill="none" stroke="url(#g-${id}-p)" stroke-width="${rim.toFixed(2)}" stroke-linejoin="round"/>
+          </g>
+
+          <!-- Specular Curved Glass Highlight -->
+          <g clip-path="url(#c-${id})">
+            <ellipse cx="54" cy="44" rx="48" ry="30" transform="rotate(-26 54 44)" fill="url(#g-${id}-gl)"/>
+          </g>
+
+          <!-- Crisp Perimeter Accent -->
+          <g transform="${t}">
+            <path d="${outerD}" fill="none" stroke="#fff" stroke-opacity=".4" stroke-width="${(rim * 0.15).toFixed(2)}"/>
+          </g>
+        </g>
+      </svg>`;
+    }
+
+    function updateAll(){
+      document.getElementById('vp-base').innerHTML = renderDieCutSVG(
+        MOTIFS_DATA.base.d,
+        MOTIFS_DATA.base.getColors(globalColor),
+        viewSize
+      );
+      document.getElementById('vp-temaki').innerHTML = renderDieCutSVG(
+        MOTIFS_DATA.temaki.d,
+        MOTIFS_DATA.temaki.getColors(globalColor),
+        viewSize
+      );
+      document.getElementById('vp-mat-round').innerHTML = renderDieCutSVG(
+        MOTIFS_DATA.matRound.d,
+        MOTIFS_DATA.matRound.getColors(globalColor),
+        viewSize
+      );
+      document.getElementById('vp-mdi').innerHTML = renderDieCutSVG(
+        MOTIFS_DATA.mdi.d,
+        MOTIFS_DATA.mdi.getColors(globalColor),
+        viewSize
+      );
+    }
+
+    function setGlobalColor(col, el){
+      globalColor = col;
+      document.querySelectorAll('.swatch-btn').forEach(b => b.classList.remove('active'));
+      el.classList.add('active');
+      updateAll();
+    }
+
+    function setViewSize(sz, el){
+      viewSize = sz;
+      document.querySelectorAll('.scale-btn').forEach(b => b.classList.remove('active'));
+      el.classList.add('active');
+      updateAll();
+    }
+
+    // Initial render
+    updateAll();
+  </script>
+</body>
+</html>

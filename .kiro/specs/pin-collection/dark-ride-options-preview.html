@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dark Ride Master — Game Icons Galleon Adaptations (V6)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #07040f;
+      --card-bg: rgba(18, 12, 34, 0.92);
+      --card-border: rgba(246, 195, 67, 0.25);
+      --card-hover: rgba(28, 18, 52, 0.98);
+      --gold: #f6c343;
+      --gold-dark: #b5721a;
+      --purple: #9f7aea;
+      --royal: #4a2a7a;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: radial-gradient(circle at 50% 0%, #221045 0%, var(--bg) 75%);
+      color: var(--text-main);
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      min-height: 100vh;
+      padding: 40px 24px 80px;
+    }
+    header {
+      max-width: 1100px;
+      margin: 0 auto 36px;
+      text-align: center;
+    }
+    .badge-sub {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(246, 195, 67, 0.12);
+      border: 1px solid rgba(246, 195, 67, 0.35);
+      color: var(--gold);
+      padding: 6px 18px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.6px;
+      text-transform: uppercase;
+      margin-bottom: 14px;
+    }
+    h1 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 42px;
+      font-weight: 900;
+      letter-spacing: -0.5px;
+      margin-bottom: 12px;
+      background: linear-gradient(135deg, #ffffff 40%, #ffeaa7 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .subtitle {
+      font-size: 16px;
+      color: var(--text-muted);
+      max-width: 820px;
+      margin: 0 auto 24px;
+      line-height: 1.6;
+    }
+
+    .size-toggle {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin-bottom: 32px;
+    }
+    .size-btn {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: var(--text-muted);
+      padding: 8px 18px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .size-btn.active, .size-btn:hover {
+      background: rgba(246, 195, 67, 0.2);
+      border-color: var(--gold);
+      color: #fff;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 24px;
+      max-width: 1720px;
+      margin: 0 auto 48px;
+    }
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 24px;
+      padding: 30px 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      box-shadow: 0 16px 36px rgba(0,0,0,0.55);
+      transition: all 0.25s ease;
+      position: relative;
+    }
+    .card:hover {
+      transform: translateY(-4px);
+      border-color: rgba(246, 195, 67, 0.55);
+      box-shadow: 0 22px 50px rgba(0,0,0,0.75);
+    }
+    .card-tag {
+      position: absolute;
+      top: -12px;
+      background: #251642;
+      border: 1px solid var(--gold);
+      color: var(--gold);
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      padding: 4px 14px;
+      border-radius: 999px;
+    }
+    .card-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 22px;
+      font-weight: 800;
+      color: #fff;
+      margin-top: 6px;
+      margin-bottom: 4px;
+    }
+    .card-flavor {
+      font-size: 13px;
+      color: var(--gold);
+      font-weight: 600;
+      margin-bottom: 22px;
+    }
+    .art-frame {
+      min-height: 200px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 24px;
+      width: 100%;
+      background: radial-gradient(circle, rgba(147, 112, 219, 0.12) 0%, transparent 72%);
+      border-radius: 18px;
+      padding: 16px;
+    }
+    .badges-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .tier-badge {
+      background: linear-gradient(135deg, #f6c343, #b5721a);
+      color: #1a0f02;
+      font-weight: 900;
+      font-size: 11px;
+      padding: 3px 10px;
+      border-radius: 6px;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+    .mode-badge {
+      background: rgba(159, 122, 234, 0.18);
+      border: 1px solid rgba(159, 122, 234, 0.35);
+      color: #d8b4fe;
+      font-weight: 700;
+      font-size: 11px;
+      padding: 3px 10px;
+      border-radius: 6px;
+    }
+    .card-desc {
+      font-size: 13.5px;
+      line-height: 1.55;
+      color: #cbd5e1;
+      text-align: left;
+      margin-bottom: 18px;
+      background: rgba(255,255,255,0.03);
+      border-radius: 12px;
+      padding: 12px 14px;
+      width: 100%;
+    }
+    .card-notes {
+      font-size: 12.5px;
+      color: #94a3b8;
+      background: rgba(0, 0, 0, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 12px;
+      padding: 12px 14px;
+      text-align: left;
+      line-height: 1.5;
+      margin-top: auto;
+      width: 100%;
+    }
+    .card-notes strong { color: #fff; }
+    .card-notes ul { margin-left: 16px; margin-top: 6px; }
+    .card-notes li { margin-bottom: 4px; }
+
+    .specs-table-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 24px;
+      padding: 32px;
+      max-width: 1720px;
+      margin: 0 auto;
+    }
+    .specs-table-card h2 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 24px;
+      font-weight: 800;
+      margin-bottom: 16px;
+      color: #fff;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    th, td {
+      padding: 12px 16px;
+      text-align: left;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    th {
+      color: var(--gold);
+      font-weight: 700;
+      text-transform: uppercase;
+      font-size: 11px;
+      letter-spacing: 0.6px;
+    }
+    td { color: #cbd5e1; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="badge-sub">⚓ Dark Ride Master • 5 Design Options</div>
+    <h1>Dark Ride Master — 5 Pin Candidates</h1>
+    <p class="subtitle">
+      Comparing your selected <strong>Game Icons <em>galleon</em></strong> adaptations alongside the refined <strong>Living Storybook</strong> (pure tome, zero tracks, slimmed border). Inspect all 5 side-by-side at scale.
+    </p>
+    
+    <div class="size-toggle">
+      <button class="size-btn" onclick="setSize(88)">88px (Board Scale)</button>
+      <button class="size-btn active" onclick="setSize(145)">145px (Catalog Scale)</button>
+      <button class="size-btn" onclick="setSize(200)">200px (Art Inspect)</button>
+    </div>
+  </header>
+
+  <div class="grid">
+
+    <!-- ADAPTATION 1: THE CLOUD SOARER (ASCENDING FLIGHT OVER BILLOWING LONDON CLOUDS) -->
+    <div class="card">
+      <div class="card-tag">Adaptation 1 • Cloud Soarer</div>
+      <div class="card-title">The Cloud Soarer</div>
+      <div class="card-flavor">Pitched 12° Ascent • Billowing London Cloud Bank</div>
+      
+      <div class="art-frame">
+        <svg class="pin-svg" width="145" height="145" viewBox="-8 -8 166 166" style="overflow:visible">
+          <defs>
+            <linearGradient id="g-gold" x1=".15" y1="0" x2=".85" y2="1">
+              <stop offset="0" stop-color="#fff8db"/>
+              <stop offset=".3" stop-color="#f6c343"/>
+              <stop offset=".7" stop-color="#d4941e"/>
+              <stop offset="1" stop-color="#8a5a0d"/>
+            </linearGradient>
+            <filter id="f-shadow" x="-30%" y="-30%" width="160%" height="170%">
+              <feDropShadow dx="0" dy="4" stdDeviation="3.5" flood-color="#000" flood-opacity=".65"/>
+            </filter>
+            <!-- Exact Game Icons galleon path normalized into 512 space -->
+            <path id="raw-galleon" d="M222.03 20.53v58.25L165.938 99l6.344 17.563 49.75-17.938v96.156l-87.155 33.845 6.75 17.406 80.406-31.218v141.97h-61.655l-1.438-7.594-4.687-25.063H95.812v-142.47l60.157-21.686-6.345-17.595-53.813 19.406V78.345H77.126v90.187l-52 18.75 6.344 17.564 45.655-16.47v135.75H26.437c5.565 54.4 27.327 108.08 66.782 143.595H375.56c9.543-51.545 39.83-95.146 73.688-136.44h-.063L494.594 299l-10.813-15.25-66.874 47.53H367.25V219.314l62.188-22.438-6.313-17.563-55.875 20.157v-67.032h-18.688v73.78l-49.937 18 6.313 17.563 43.625-15.75v121.595l-4.907 5.844-2.812 3.31H240.72V207.564l87.155-33.844-6.78-17.407-80.376 31.218V91.907l56.06-20.22-6.342-17.592-49.72 17.937v-51.5H222.03z"/>
+            <!-- Symmetrical Billowing Cloisonné Sails fitted precisely to Game Icons yardarms -->
+            <g id="galleon-sails">
+              <!-- Mizzen Sail (Left Mast): spans yardarm x=25 to 156, billows down to y=290 -->
+              <path d="M25 187 L156 160 Q152 230 148 290 Q90 268 30 295 Q26 235 25 187 Z" fill="#fbf7ee" stroke="url(#g-gold)" stroke-width="8"/>
+              <!-- Main Topsail (Center Top): spans upper yardarm x=166 to 297, drops to y=185 -->
+              <path d="M166 99 L297 72 Q290 135 285 185 Q230 168 175 195 Q170 145 166 99 Z" fill="#fbf7ee" stroke="url(#g-gold)" stroke-width="8"/>
+              <!-- Main Course Sail (Center Lower): spans lower yardarm x=135 to 328, drops to deck y=330 -->
+              <path d="M135 229 L328 174 Q318 255 310 328 Q230 302 145 338 Q138 280 135 229 Z" fill="#fbf7ee" stroke="url(#g-gold)" stroke-width="10"/>
+              <!-- Fore Sail (Right Mast): spans fore yardarm x=298 to 429, drops to deck y=315 -->
+              <path d="M298 224 L429 197 Q420 260 412 315 Q360 295 306 322 Q301 270 298 224 Z" fill="#fbf7ee" stroke="url(#g-gold)" stroke-width="8"/>
+              <!-- Jib / Staysail (Bowsprit): triangular stay sail from foremast to bowsprit -->
+              <path d="M365 205 L480 290 Q430 315 390 310 Z" fill="#fbf7ee" stroke="url(#g-gold)" stroke-width="8"/>
+            </g>
+          </defs>
+          <g filter="url(#f-shadow)">
+            <!-- Outer Gold Dilated Rim for Clouds and Ship Base -->
+            <path d="M16 116 C8 122 8 136 22 142 C34 146 50 146 64 140 C76 144 96 142 108 134 C120 128 132 120 138 108 C126 112 102 116 82 118 C58 120 34 118 16 116 Z"
+                  fill="url(#g-gold)" stroke="url(#g-gold)" stroke-width="4" stroke-linejoin="round"/>
+            
+            <!-- Cloud Base in Night Plum (#2b1548) -->
+            <path d="M17 117 C10 123 10 135 23 140 C34 144 49 144 63 139 C75 142 95 140 106 133 C118 127 129 119 135 109 C124 113 102 117 82 119 C58 121 34 119 17 117 Z"
+                  fill="#2b1548"/>
+            
+            <!-- Billowing Cream Cloud Puffs with Gold Dividers -->
+            <!-- Left Stern Puff -->
+            <path d="M16 118 C12 124 14 134 24 136 C34 138 42 134 46 128 C38 122 26 120 16 118 Z" fill="#fbf7ee" stroke="url(#g-gold)" stroke-width="1.2"/>
+            <!-- Center Low Puff -->
+            <path d="M42 132 C48 140 60 142 70 138 C76 134 80 128 78 122 C66 124 54 126 42 132 Z" fill="#fbf7ee" stroke="url(#g-gold)" stroke-width="1.2"/>
+            <!-- Right Bow Puff -->
+            <path d="M74 124 C82 132 96 132 104 126 C112 120 118 114 122 108 C110 112 92 116 74 124 Z" fill="#fbf7ee" stroke="url(#g-gold)" stroke-width="1.2"/>
+            
+            <!-- Stardust Sparkles in the Cloud Wake -->
+            <polygon points="26,126 28,129 31,130 28,131 26,134 24,131 21,130 24,129" fill="url(#g-gold)"/>
+            <polygon points="56,128 58,131 61,132 58,133 56,136 54,133 51,132 54,131" fill="url(#g-gold)"/>
+            <polygon points="90,120 92,123 95,124 92,125 90,128 88,125 85,124 88,123" fill="url(#g-gold)"/>
+            <circle cx="10" cy="122" r="1.6" fill="url(#g-gold)"/>
+            <circle cx="114" cy="116" r="1.4" fill="url(#g-gold)"/>
+            
+            <!-- Game Icons Galleon: Pitched -12 deg upward in dynamic flight! -->
+            <g transform="rotate(-12, 75, 80) translate(14, 10) scale(0.245)">
+              <use href="#raw-galleon" fill="url(#g-gold)" stroke="url(#g-gold)" stroke-width="24" stroke-linejoin="round"/>
+              <use href="#galleon-sails" stroke="url(#g-gold)" stroke-width="24" stroke-linejoin="round"/>
+              <use href="#galleon-sails"/>
+              <use href="#raw-galleon" fill="#b5721a"/>
+              <use href="#raw-galleon" fill="none" stroke="url(#g-gold)" stroke-width="6"/>
+            </g>
+          </g>
+        </svg>
+      </div>
+      
+      <div class="badges-row">
+        <span class="tier-badge">Gold</span>
+        <span class="mode-badge">✂️ Soaring Die-Cut</span>
+      </div>
+      
+      <div class="card-desc">
+        <strong>The Cloud Soarer:</strong> Rotates the galleon <strong>12° upward</strong> into an ascending climb and seats its keel in a sculpted, billowing cloud bank (evoking the flight over London clouds) poured in porcelain cream and night plum enamel with stardust.
+      </div>
+      
+      <div class="card-notes">
+        <strong>Why It Solves the Flat Look:</strong>
+        <ul>
+          <li><strong>Ascending Pitch:</strong> Bow points dynamically up into the sky, immediately reading as flight rather than sailing.</li>
+          <li><strong>Billowing Clouds:</strong> Puffy cloud lobes replace the thin flat wake, providing unmistakable aerial context.</li>
+          <li><strong>Solid Pin Base:</strong> Broad cloud bank keeps the pin stable and snag-free.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- ADAPTATION 2: CLOISONNÉ CANVAS SAILS ADDED TO THE ICON -->
+    <div class="card">
+      <div class="card-tag">Adaptation 2 • Cloisonné Sails</div>
+      <div class="card-title">Full-Rigged Cloisonné</div>
+      <div class="card-flavor">Game Icons Hull &amp; Masts + Cream Enamel Sails</div>
+      
+      <div class="art-frame">
+        <svg class="pin-svg" width="145" height="145" viewBox="-8 -8 166 166" style="overflow:visible">
+          <g filter="url(#f-shadow)">
+            <g transform="translate(10, 10) scale(0.255)">
+              <!-- Outer Gold Dilation Rim covering both hull and sails -->
+              <use href="#raw-galleon" fill="url(#g-gold)" stroke="url(#g-gold)" stroke-width="26" stroke-linejoin="round"/>
+              <use href="#galleon-sails" stroke="url(#g-gold)" stroke-width="26" stroke-linejoin="round"/>
+              
+              <!-- CLOISONNE SAILS: Poured between the Game Icons yardarms -->
+              <use href="#galleon-sails"/>
+              
+              <!-- Galleon Hull Body (Rich Amber Cloisonne #b5721a) -->
+              <use href="#raw-galleon" fill="#b5721a"/>
+              <!-- Gold dividing wirelines on the icon masts & yardarms -->
+              <use href="#raw-galleon" fill="none" stroke="url(#g-gold)" stroke-width="6"/>
+            </g>
+          </g>
+        </svg>
+      </div>
+      
+      <div class="badges-row">
+        <span class="tier-badge">Gold</span>
+        <span class="mode-badge">✂️ Fabricated Die-Cut</span>
+      </div>
+      
+      <div class="card-desc">
+        <strong>The Baseline Ship:</strong> Preserves the exact Game Icons hull and mast geometry with <strong>porcelain cream enamel sails</strong> poured into the yardarms in a classic upright nautical orientation.
+      </div>
+      
+      <div class="card-notes">
+        <strong>Key Points:</strong>
+        <ul>
+          <li><strong>Symmetrical Sails:</strong> High enamel ratio (62%) with genuine cloisonné depth.</li>
+          <li><strong>Neutral Orientation:</strong> Flat water-line orientation without clouds or celestial elements.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- ADAPTATION 3: THE MOONLIT FLIGHT (CRESCENT MOON CRADLE) -->
+    <div class="card">
+      <div class="card-tag">Adaptation 3 • Moonlit Flight</div>
+      <div class="card-title">The Moonlit Flight</div>
+      <div class="card-flavor">Pitched 12° Ascent • Golden Crescent Moon Cradle</div>
+      
+      <div class="art-frame">
+        <svg class="pin-svg" width="145" height="145" viewBox="-8 -8 166 166" style="overflow:visible">
+          <g filter="url(#f-shadow)">
+            <!-- Outer Golden Crescent Moon cradling the ascending ship -->
+            <path d="M124 24 C140 48 142 80 134 104 C124 126 100 144 70 146 C44 148 24 138 16 128 C26 132 46 134 68 132 C94 130 114 116 122 96 C128 78 126 50 116 32 Z"
+                  fill="url(#g-gold)" stroke="url(#g-gold)" stroke-width="3" stroke-linejoin="round"/>
+            <path d="M122 26 C138 49 140 79 132 102 C122 124 99 141 70 143 C46 145 27 136 19 127 C28 130 47 132 68 130 C93 128 112 114 120 95 C126 77 124 51 114 34 Z"
+                  fill="#f6c343"/>
+            
+            <!-- Pixie Dust Starstream trailing from the stern -->
+            <path d="M18 126 C10 128 4 134 6 138 C8 142 18 142 26 138 Z" fill="url(#g-gold)"/>
+            <polygon points="14,120 16,123 19,124 16,125 14,128 12,125 9,124 12,123" fill="url(#g-gold)"/>
+            <polygon points="32,132 34,135 37,136 34,137 32,140 30,137 27,136 30,135" fill="url(#g-gold)"/>
+            <circle cx="6" cy="132" r="1.4" fill="url(#g-gold)"/>
+            <circle cx="134" cy="40" r="1.6" fill="url(#g-gold)"/>
+            <circle cx="140" cy="62" r="1.2" fill="#fff"/>
+            <polygon points="132,112 134,115 137,116 134,117 132,120 130,117 127,116 130,115" fill="url(#g-gold)"/>
+            
+            <!-- Pitched Galleon soaring right through the crescent moon -->
+            <g transform="rotate(-12, 75, 80) translate(14, 10) scale(0.245)">
+              <use href="#raw-galleon" fill="url(#g-gold)" stroke="url(#g-gold)" stroke-width="24" stroke-linejoin="round"/>
+              <use href="#galleon-sails" stroke="url(#g-gold)" stroke-width="24" stroke-linejoin="round"/>
+              <use href="#galleon-sails"/>
+              <use href="#raw-galleon" fill="#b5721a"/>
+              <use href="#raw-galleon" fill="none" stroke="url(#g-gold)" stroke-width="6"/>
+            </g>
+          </g>
+        </svg>
+      </div>
+      
+      <div class="badges-row">
+        <span class="tier-badge">Gold</span>
+        <span class="mode-badge">✂️ Celestial Die-Cut</span>
+      </div>
+      
+      <div class="card-desc">
+        <strong>The Moonlit Flight:</strong> The pitched galleon soars through the curve of a bold <strong>golden crescent moon</strong>. Directly references the iconic Disney ride moment of the pirate ship flying past the moon with trailing stardust.
+      </div>
+      
+      <div class="card-notes">
+        <strong>Why It Conveys Flight:</strong>
+        <ul>
+          <li><strong>Iconic Celestial Pairing:</strong> Galleon + crescent moon is universally synonymous with Peter Pan's Flight.</li>
+          <li><strong>Dynamic Ascent:</strong> 12° upward pitch makes the ship look weightless and soaring.</li>
+          <li><strong>Balanced Metalwork:</strong> Polished crescent moon provides structural integrity to the pin frame.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- ADAPTATION 4: THE CELESTIAL MEDALLION (CONTAINED DISC WITH BIG BEN & FLIGHT) -->
+    <div class="card">
+      <div class="card-tag">Adaptation 4 • Contained Disc</div>
+      <div class="card-title">Flight Over London Medallion</div>
+      <div class="card-flavor">Climbing Galleon • Big Ben Silhouette • Midnight Sky</div>
+      
+      <div class="art-frame">
+        <svg class="pin-svg" width="145" height="145" viewBox="-8 -8 166 166" style="overflow:visible">
+          <g filter="url(#f-shadow)">
+            <!-- Outer Gold Circular Disc Frame (Classic Gold Medallion) -->
+            <circle cx="75" cy="75" r="66" fill="url(#g-gold)" stroke="url(#g-gold)" stroke-width="3"/>
+            <!-- Inset Midnight Sky Well (#160d26 Deep Purple Enamel) -->
+            <circle cx="75" cy="75" r="60" fill="#160d26"/>
+            
+            <!-- Night Sky Stars inside the disc -->
+            <polygon points="36,36 38,40 42,41 38,43 36,47 34,43 30,41 34,40" fill="url(#g-gold)"/>
+            <polygon points="120,32 121,35 124,36 121,37 120,40 119,37 116,36 119,35" fill="url(#g-gold)"/>
+            <circle cx="48" cy="106" r="1.4" fill="#f6c343"/>
+            <circle cx="75" cy="24" r="1.8" fill="url(#g-gold)"/>
+            <circle cx="28" cy="72" r="1.2" fill="#fff"/>
+            <circle cx="128" cy="74" r="1.4" fill="#f6c343"/>
+            
+            <!-- London Skyline Silhouette at bottom of disc well -->
+            <!-- Big Ben Tower -->
+            <rect x="94" y="104" width="12" height="32" fill="url(#g-gold)"/>
+            <polygon points="100,88 94,104 106,104" fill="url(#g-gold)"/>
+            <!-- Clock Face -->
+            <circle cx="100" cy="98" r="2.5" fill="#fff8db"/>
+            <circle cx="100" cy="98" r="0.8" fill="#160d26"/>
+            <!-- Surrounding parliament / bridge gables -->
+            <polygon points="82,120 86,112 90,120 94,114 94,136 82,136" fill="url(#g-gold)"/>
+            <polygon points="106,114 110,120 114,112 118,120 118,136 106,136" fill="url(#g-gold)"/>
+            <path d="M25 125 C45 122 75 124 94 126 L94 138 C60 144 35 138 25 125 Z" fill="#24143a"/>
+            
+            <!-- Exact Game Icons Galleon: Pitched 8 deg climbing upward over London! -->
+            <g transform="rotate(-8, 70, 68) translate(14, 12) scale(0.218)">
+              <use href="#raw-galleon" fill="url(#g-gold)" stroke="url(#g-gold)" stroke-width="12"/>
+              <use href="#galleon-sails"/>
+              <!-- Amber hull -->
+              <use href="#raw-galleon" fill="#b5721a"/>
+              <use href="#raw-galleon" fill="none" stroke="url(#g-gold)" stroke-width="6"/>
+            </g>
+          </g>
+        </svg>
+      </div>
+      
+      <div class="badges-row">
+        <span class="tier-badge">Gold</span>
+        <span class="mode-badge">🛡️ Contained (DISC)</span>
+      </div>
+      
+      <div class="card-desc">
+        <strong>Flight Over London:</strong> Places the galleon climbing at an <strong>8° flight angle</strong> over the miniature gold silhouette of Big Ben and London rooftops against a deep midnight sky. Direct homage to the climax of the ride.
+      </div>
+      
+      <div class="card-notes">
+        <strong>Key Highlights:</strong>
+        <ul>
+          <li><strong>Unmistakable Narrative:</strong> Big Ben spire immediately establishes that the galleon is airborne over the city.</li>
+          <li><strong>Original Badge Shape:</strong> Fulfills the <code>Contained (DISC)</code> catalog badge.</li>
+          <li><strong>High Depth:</strong> Layered London cityscape + glowing celestial sky.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- CANDIDATE 5: THE LIVING STORYBOOK (REFINED PURE TOME) -->
+    <div class="card">
+      <div class="card-tag">Candidate 5 • Storybook Tome</div>
+      <div class="card-title">The Living Storybook</div>
+      <div class="card-flavor">Pure Illuminated Tome • Gilded Edges • ZERO Tracks</div>
+      
+      <div class="art-frame">
+        <svg class="pin-svg" width="145" height="145" viewBox="-8 -8 166 166" style="overflow:visible">
+          <g filter="url(#f-shadow)">
+            <!-- Outer Slim Gilded Die-Cut Rim: Hugs open book tightly without heavy outer slab -->
+            <path d="M75 28 C96 16 124 18 138 24 C140 26 142 30 140 34 L132 116 C130 120 126 122 120 120 C104 116 88 116 75 126 C62 116 46 116 30 120 C24 122 20 120 18 116 L10 34 C8 30 10 26 12 24 C26 18 54 16 75 28 Z"
+                  fill="url(#g-gold)" stroke="url(#g-gold)" stroke-width="3" stroke-linejoin="round"/>
+            
+            <!-- Rich Leather Binding Base (Royal Purple Cloisonne #4a2a7a) -->
+            <path d="M75 30 C96 18 122 20 136 26 L128 114 C112 110 90 110 75 122 C60 110 38 110 22 114 L14 26 C28 20 54 18 75 30 Z"
+                  fill="#4a2a7a"/>
+            
+            <!-- Stacked Gilded Page Edges along outer sides -->
+            <path d="M14 28 L128 116 M16 30 L126 118" stroke="url(#g-gold)" stroke-width="0.8"/>
+            
+            <!-- LEFT PAGE: Antiqued Cream Parchment (#fbf7ee) with Fairytale Manuscript -->
+            <path d="M73 32 C56 21 34 23 20 28 L24 110 C36 106 56 106 73 118 Z"
+                  fill="#fbf7ee" stroke="url(#g-gold)" stroke-width="1.2"/>
+            <!-- Gothic Illuminated Drop-Cap 'D' in Crimson & Gold -->
+            <rect x="26" y="38" width="18" height="20" rx="2" fill="#a8323f" stroke="url(#g-gold)" stroke-width="1.2"/>
+            <text x="35" y="53" text-anchor="middle" font-family="Georgia,serif" font-weight="900" font-size="14" fill="#fff8db">D</text>
+            <!-- Gold filigree ivy around the drop-cap -->
+            <path d="M26 38 C22 34 22 42 18 38 M44 38 C48 34 48 42 52 38" stroke="url(#g-gold)" stroke-width="1" fill="none"/>
+            <!-- Storybook script lines -->
+            <path d="M48 44 L66 44 M48 50 L64 50 M48 56 L66 56 M26 64 L66 64 M26 70 L62 70 M26 76 L66 76 M26 82 L58 82 M26 88 L64 88 M26 94 L56 94 M26 100 L62 100"
+                  stroke="#b5721a" stroke-width="1.4" stroke-linecap="round"/>
+            
+            <!-- RIGHT PAGE: Illuminated Fairytale Night Scene Illustration (Contained WITHIN the page!) -->
+            <path d="M77 32 C94 21 116 23 130 28 L126 110 C114 106 94 106 77 118 Z"
+                  fill="#fbf7ee" stroke="url(#g-gold)" stroke-width="1.2"/>
+            
+            <!-- Ornate Gilded Illustration Frame inside the right page -->
+            <rect x="82" y="36" width="42" height="66" rx="4" fill="#180e29" stroke="url(#g-gold)" stroke-width="1.5"/>
+            <!-- Gold Corner Brackets inside page illustration -->
+            <path d="M84 40 L88 40 L88 44 M122 40 L118 40 L118 44 M84 98 L88 98 L88 94 M122 98 L118 98 L118 94" stroke="url(#g-gold)" stroke-width="1.2" fill="none"/>
+            
+            <!-- Inside Illustration: Fairytale Castle Silhouette under Night Sky & Stars -->
+            <polygon points="103,42 98,56 108,56" fill="url(#g-gold)"/>
+            <rect x="100" y="56" width="6" height="20" fill="url(#g-gold)"/>
+            <polygon points="90,52 86,62 94,62" fill="url(#g-gold)"/>
+            <rect x="88" y="62" width="4" height="14" fill="url(#g-gold)"/>
+            <polygon points="116,52 112,62 120,62" fill="url(#g-gold)"/>
+            <rect x="114" y="62" width="4" height="14" fill="url(#g-gold)"/>
+            <path d="M84 76 L122 76 L122 100 L84 100 Z" fill="#2d164d"/>
+            <!-- Golden Crescent Moon & Stars in the illustration -->
+            <path d="M116 42 C120 42 122 44 122 48 C122 52 120 54 116 54 C118 52 118 44 116 42 Z" fill="#f6c343"/>
+            <circle cx="92" cy="46" r="1" fill="#f6c343"/>
+            <circle cx="112" cy="48" r="0.8" fill="#fff"/>
+            <circle cx="88" cy="68" r="0.8" fill="#f6c343"/>
+            
+            <!-- Page caption script underneath illustration -->
+            <path d="M88 104 L118 104" stroke="#b5721a" stroke-width="1.2" stroke-linecap="round"/>
+            
+            <!-- Center Spine & Gilded Stitching -->
+            <path d="M75 30 L75 124" stroke="url(#g-gold)" stroke-width="2.2"/>
+            
+            <!-- Silk Crimson Bookmark Ribbon draping gracefully from spine (NO tracks!) -->
+            <path d="M75 124 C76 130 84 134 84 144 L79 150 L84 150 L88 144 C88 132 78 128 75 124 Z"
+                  fill="#a8323f" stroke="url(#g-gold)" stroke-width="1"/>
+            <polygon points="79,150 84,144 88,150 84,147" fill="url(#g-gold)"/>
+          </g>
+        </svg>
+      </div>
+      
+      <div class="badges-row">
+        <span class="tier-badge">Gold</span>
+        <span class="mode-badge">✂️ Pure Die-Cut Tome</span>
+      </div>
+      
+      <div class="card-desc">
+        <strong>The Storybook Origin:</strong> Embodies the quintessential "storybook dark ride" history. Features an open illuminated tome with gilded page edges, crimson Drop-Cap 'D', and an illuminated night castle vignette.
+      </div>
+      
+      <div class="card-notes">
+        <strong>Key Highlights:</strong>
+        <ul>
+          <li><strong>Category Representation:</strong> Covers all dark rides (Pooh, Peter Pan, Snow White, Little Mermaid) as living stories.</li>
+          <li><strong>Zero Tracks / Gimmicks:</strong> Pure, elegant jewelry aesthetic without any protruding elements.</li>
+          <li><strong>Trimmed Border:</strong> Tight gilded rim (§1) without any heavy backplate slabs.</li>
+        </ul>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="specs-table-card">
+    <h2>Dark Ride Master — Full Design Options Breakdown</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Candidate</th>
+          <th>Form Factor</th>
+          <th>Key Motif &amp; Composition</th>
+          <th>Aesthetic &amp; Thematic Fit</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="color:#fff; font-weight:700;">1. The Cloud Soarer</td>
+          <td>✂️ Soaring Die-Cut</td>
+          <td>Galleon pitched 12° upward climbing over billowing London cloud bank.</td>
+          <td>Ascending flight pitch + cream/plum clouds immediately convey airborne flight.</td>
+        </tr>
+        <tr>
+          <td style="color:#fff; font-weight:700;">2. Full-Rigged Cloisonné</td>
+          <td>✂️ Fabricated Die-Cut</td>
+          <td>Exact icon hull &amp; masts + cream sails poured between yardarms (level orientation).</td>
+          <td>62% enamel ratio; pure standalone ship for baseline reference.</td>
+        </tr>
+        <tr>
+          <td style="color:#fff; font-weight:700;">3. The Moonlit Flight</td>
+          <td>✂️ Celestial Die-Cut</td>
+          <td>Galleon pitched 12° upward soaring through a golden crescent moon cradle.</td>
+          <td>Iconic Peter Pan celestial flight motif; golden moon provides balanced structure.</td>
+        </tr>
+        <tr>
+          <td style="color:#fff; font-weight:700;">4. Flight Over London Medallion</td>
+          <td>🛡️ Contained Disc</td>
+          <td>Galleon climbing 8° over Big Ben clock tower silhouette on midnight sky.</td>
+          <td>100% fulfills original <code>Contained (DISC)</code> badge with rich ride-scene depth.</td>
+        </tr>
+        <tr>
+          <td style="color:#fff; font-weight:700;">5. The Living Storybook</td>
+          <td>✂️ Pure Die-Cut Tome</td>
+          <td>Illuminated open fairytale tome with drop-cap and castle plate.</td>
+          <td>Unites all dark rides under the "storybook" genre; zero tracks; elegant manuscript art.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <script>
+    function setSize(sz) {
+      document.querySelectorAll('.pin-svg').forEach(el => {
+        el.setAttribute('width', sz);
+        el.setAttribute('height', sz);
+      });
+      document.querySelectorAll('.size-btn').forEach(btn => btn.classList.remove('active'));
+      event.target.classList.add('active');
+    }
+  </script>
+</body>
+</html>

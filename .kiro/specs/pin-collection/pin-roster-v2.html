@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Pin Roster v2 — redesigned Series 1 (design view)</title>
+<style>
+  :root {
+    --bg:#141020; --panel:#1e1830; --ink:#ece7f7; --muted:#9d95bd; --line:#2f2745;
+    --bronze:#c97f4a; --silver:#b0b9c8; --gold:#e5ab2c; --amethyst:#a86fe0;
+    --pearl:#d9cdeb; --prism:#7fd8ff; --mythic:#ffd86b;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+         font:15px/1.5 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; }
+  header { padding:22px 26px 10px; border-bottom:1px solid var(--line); position:sticky; top:0;
+           background:linear-gradient(180deg,#141020,#141020f2); backdrop-filter:blur(4px); z-index:5; }
+  h1 { margin:0 0 4px; font-size:20px; }
+  .sub { color:var(--muted); font-size:13px; margin-bottom:14px; }
+  .tier-summary, .filters { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+  .filters { margin-top:12px; }
+  .chip { border:1px solid var(--line); background:var(--panel); color:var(--ink);
+          border-radius:999px; padding:5px 12px; font-size:12.5px; cursor:pointer; user-select:none; }
+  .chip.on { outline:2px solid #6a3fb0; }
+  .chip .n { color:var(--muted); margin-left:6px; }
+  .grand { font-size:13px; color:var(--muted); }
+  .grand b { color:var(--ink); font-size:15px; }
+  main { padding:20px 26px 80px; }
+  .track { margin:26px 0 8px; font-size:16px; font-weight:600; display:flex; align-items:baseline; gap:10px; }
+  .track .tn { color:var(--muted); font-size:12.5px; font-weight:400; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:10px; }
+  .pin { background:var(--panel); border:1px solid var(--line); border-left-width:4px;
+         border-radius:10px; padding:10px 12px; }
+  .pin .nm { font-weight:600; font-size:13.5px; }
+  .pin .cr { color:var(--muted); font-size:12px; margin-top:3px; }
+  .badge { font-size:10.5px; text-transform:uppercase; letter-spacing:.05em; font-weight:700;
+           padding:1px 7px; border-radius:999px; float:right; color:#141020; }
+  .b-bronze{background:var(--bronze)} .b-silver{background:var(--silver)} .b-gold{background:var(--gold)}
+  .b-amethyst{background:var(--amethyst);color:#fff} .b-pearl{background:var(--pearl)}
+  .b-prism{background:linear-gradient(90deg,#ffd86b,#ff7fa8,#66dcec,#b6e86a)}
+  .b-mythic{background:linear-gradient(90deg,#fff0c4,#ffc2e8,#c9a8ff,#8ed8ff);color:#141020}
+  .l-bronze{border-left-color:var(--bronze)} .l-silver{border-left-color:var(--silver)}
+  .l-gold{border-left-color:var(--gold)} .l-amethyst{border-left-color:var(--amethyst)}
+  .l-pearl{border-left-color:var(--pearl)} .l-prism{border-left-color:var(--prism)}
+  .l-mythic{border-left-color:var(--mythic)}
+  .note{background:#241a3a;border:1px solid var(--line);border-radius:10px;padding:12px 14px;
+        color:var(--muted);font-size:12.5px;margin-top:8px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Pin Roster v2 — Redesigned Series 1</h1>
+  <div class="sub">Design view (tier / track / criteria). Art &amp; motifs are the next
+    materialization phase and are <b>not</b> shown here. Compare against the old rendered
+    <code>pin-catalog-mockup.html</code>.</div>
+  <div class="tier-summary" id="tierSummary"></div>
+  <div class="filters" id="tierFilters"></div>
+  <div class="filters" id="trackFilters"></div>
+  <div class="filters" style="margin-top:12px"><span class="grand" id="grand"></span></div>
+</header>
+<main id="main"></main>
+
+<div class="note" style="margin:0 26px 40px">
+  Every count/completion pin is computed live from the catalog (`land` / `park` / `category` /
+  facets), so its target set self-adjusts as Disney opens and closes experiences. Named sets
+  (coasters, mountains, 1971, resorts, princesses, signature/character dining) resolve by stable
+  <code>upstream_entity_id</code>. Ride-type &amp; franchise sets are facet-derived and auto-size.
+</div>
+
+<script>
+const TIERS = ['bronze','silver','gold','amethyst','pearl','prism','mythic'];
+const TIER_LABEL = {bronze:'Bronze',silver:'Silver',gold:'Gold',amethyst:'Amethyst',pearl:'Pearl',prism:'Prism',mythic:'Mythic'};
+
+// track, tier, name, criteria
+const PINS = [
+  // ATTRACTIONS LADDER (12)
+  ['Attractions Ladder','bronze','Centurion 5','5 unique attractions logged'],
+  ['Attractions Ladder','bronze','Centurion 15','15 unique attractions'],
+  ['Attractions Ladder','bronze','Centurion 30','30 unique attractions'],
+  ['Attractions Ladder','silver','Centurion 50','50 unique attractions'],
+  ['Attractions Ladder','silver','Centurion 75','75 unique attractions'],
+  ['Attractions Ladder','gold','Centurion 100','100 unique attractions'],
+  ['Attractions Ladder','gold','Centurion 130','130 unique attractions'],
+  ['Attractions Ladder','amethyst','Centurion 160','160 unique attractions'],
+  ['Attractions Ladder','amethyst','Centurion 190','190 unique attractions'],
+  ['Attractions Ladder','pearl','Centurion 215','215 unique attractions'],
+  ['Attractions Ladder','pearl','Centurion 235','235 unique attractions'],
+  ['Attractions Ladder','prism','All Attractions','100% of all ~255 active attractions — Completionist pinnacle'],
+
+  // DINING — RESTAURANTS (12)
+  ['Dining · Restaurants','bronze','Diner 3','3 real restaurants'],
+  ['Dining · Restaurants','bronze','Diner 10','10 real restaurants'],
+  ['Dining · Restaurants','bronze','Diner 20','20 real restaurants'],
+  ['Dining · Restaurants','bronze','Diner 30','30 real restaurants'],
+  ['Dining · Restaurants','silver','Foodie 45','45 real restaurants'],
+  ['Dining · Restaurants','silver','Foodie 60','60 real restaurants'],
+  ['Dining · Restaurants','gold','Gourmand 80','80 real restaurants'],
+  ['Dining · Restaurants','gold','Gourmand 100','100 real restaurants'],
+  ['Dining · Restaurants','amethyst','Connoisseur 120','120 real restaurants'],
+  ['Dining · Restaurants','amethyst','Connoisseur 145','145 real restaurants'],
+  ['Dining · Restaurants','pearl','Epicure 170','170 real restaurants'],
+  ['Dining · Restaurants','prism','Culinary Legend','All ~193 real restaurants — Foodie pinnacle'],
+
+  // DINING — FESTIVAL FOODIE (5)
+  ['Dining · Festival Foodie','bronze','First Booth','1 festival booth'],
+  ['Dining · Festival Foodie','bronze','Booth Sampler','5 festival booths'],
+  ['Dining · Festival Foodie','bronze','Booth Explorer','10 festival booths'],
+  ['Dining · Festival Foodie','silver','Booth Enthusiast','20 festival booths'],
+  ['Dining · Festival Foodie','gold','Festival Feast','30 festival booths (grows in a later series)'],
+
+  // DINING — SNACKS & LOUNGES (7)
+  ['Dining · Snacks & Lounges','bronze','Snacker 5','5 snack/kiosk/lounge stops'],
+  ['Dining · Snacks & Lounges','bronze','Snacker 15','15 snack/kiosk/lounge stops'],
+  ['Dining · Snacks & Lounges','bronze','Snacker 30','30 snack/kiosk/lounge stops'],
+  ['Dining · Snacks & Lounges','silver','Snacker 50','50 snack/kiosk/lounge stops'],
+  ['Dining · Snacks & Lounges','gold','Snacker 75','75 snack/kiosk/lounge stops'],
+  ['Dining · Snacks & Lounges','bronze','Coffee Crawl','Coffee spots around the resort'],
+  ['Dining · Snacks & Lounges','silver','Pool Bar Hopper','Multiple resort pool bars'],
+
+  // DINING — FINE DINING (5)
+  ['Dining · Fine Dining','silver','Signature 4','Dine at 4 Signature restaurants'],
+  ['Dining · Fine Dining','gold','Signature 10','Dine at 10 Signature restaurants'],
+  ['Dining · Fine Dining','amethyst','Signature Master','All ~23 Signature restaurants'],
+  ['Dining · Fine Dining','silver','Character Dining 3','3 character meals'],
+  ['Dining · Fine Dining','gold','Character Dining All','All ~13 character-dining venues'],
+  ['Dining · Fine Dining','gold','Royal Banquet','Dine at the royal princess banquets (Cinderella\'s Royal Table, Akershus, Be Our Guest, Story Book Dining)'],
+
+  // PLACES — LAND STARTERS (20, bronze)
+  ...['Main Street, U.S.A.','Adventureland','Frontierland','Liberty Square','Fantasyland','Tomorrowland',
+      'World Celebration','World Discovery','World Nature','World Showcase',
+      'Hollywood Boulevard','Echo Lake','Animation Courtyard','Sunset Boulevard','Toy Story Land',"Galaxy's Edge",
+      'Discovery Island','Pandora','Africa','Asia']
+      .map(l=>['Places · Land Starters','bronze',l+' Starter','Visit '+l+' once']),
+
+  // PLACES — PARK STARTERS (7, bronze)
+  ...['Magic Kingdom','EPCOT','Hollywood Studios','Animal Kingdom','Typhoon Lagoon','Blizzard Beach','Disney Springs']
+      .map(p=>['Places · Park Starters','bronze',p+' Starter','First experience in '+p]),
+
+  // PLACES — SILVER COMPLETIONS (10)
+  ...['Adventureland','Discovery Island','Animation Courtyard','Frontierland','Asia','World Discovery']
+      .map(l=>['Places · Completions','silver',l+' 100%','All attractions in '+l]),
+  ['Places · Completions','silver','The Boulevards','Hollywood Blvd + Sunset Blvd complete'],
+  ['Places · Completions','silver','Immersive Lands',"Toy Story Land + Galaxy's Edge complete"],
+  ['Places · Completions','silver','Typhoon Lagoon 100%','All Typhoon Lagoon attractions'],
+  ['Places · Completions','silver','Blizzard Beach 100%','All Blizzard Beach attractions'],
+
+  // PLACES — GOLD COMPLETIONS (7)
+  ...['Fantasyland','Main Street, U.S.A.','Tomorrowland','World Nature','World Celebration','Africa']
+      .map(l=>['Places · Completions','gold',l+' 100%','All attractions in '+l]),
+  ['Places · Completions','gold','Disney Springs 100%','All Disney Springs attractions'],
+  ['Places · Completions','gold','All Lands Explorer','Visit an experience in all 20 theme-park lands'],
+
+  // PLACES — AMETHYST (5)
+  ['Places · Mastery','amethyst','World Showcase 100%','All 31 World Showcase attractions'],
+  ['Places · Mastery','amethyst','Magic Kingdom Master','100% of Magic Kingdom attractions'],
+  ['Places · Mastery','amethyst','EPCOT Master','100% of EPCOT attractions'],
+  ['Places · Mastery','amethyst','Hollywood Studios Master','100% of Hollywood Studios attractions'],
+  ['Places · Mastery','amethyst','Animal Kingdom Master','100% of Animal Kingdom attractions'],
+  ['Places · Mastery','pearl','Four Parks Master','100% of the attractions across all four theme parks'],
+
+  // PLACES — PEARL SOVEREIGNS (4)
+  ['Places · Sovereign','pearl','Magic Kingdom Sovereign','100% of everything in MK (attractions + dining + meets)'],
+  ['Places · Sovereign','pearl','EPCOT Sovereign','100% of everything in EPCOT'],
+  ['Places · Sovereign','pearl','Hollywood Studios Sovereign','100% of everything in HS'],
+  ['Places · Sovereign','pearl','Animal Kingdom Sovereign','100% of everything in AK'],
+
+  // PLACES — MYTHIC (1)
+  ['Places · Capstone','mythic','The Whole Catalog','100% of all ~868 active experiences — the 1-of-1 apex'],
+
+  // SOCIAL — SQUAD (6)
+  ['Social · Squad','bronze','First Ride Together','1 confirmed friend ride'],
+  ['Social · Squad','bronze','Squad 5','5 friend rides'],
+  ['Social · Squad','silver','Squad 10','10 friend rides'],
+  ['Social · Squad','silver','Squad 15','15 friend rides'],
+  ['Social · Squad','gold','Squad 25','25 friend rides'],
+  ['Social · Squad','amethyst','Squad 40','40 friend rides'],
+  // SOCIAL — CRITIC (6)
+  ['Social · Critic','bronze','First Review','1 rating or note'],
+  ['Social · Critic','bronze','Reviewer 5','5 reviews'],
+  ['Social · Critic','silver','Reviewer 10','10 reviews'],
+  ['Social · Critic','silver','Reviewer 25','25 reviews'],
+  ['Social · Critic','gold','Reviewer 50','50 reviews'],
+  ['Social · Critic','pearl','Ultimate Critic','50 ratings + 25 notes'],
+  // SOCIAL — ORGANIZER (4)
+  ['Social · Organizer','bronze','First Trip','Organize/join 1 trip'],
+  ['Social · Organizer','silver','Trip Coordinator','3 trips'],
+  ['Social · Organizer','gold','Trip Captain','5 trips'],
+  ['Social · Organizer','amethyst','Trip Commander','10 trips'],
+  // SOCIAL — PINNACLE (1)
+  ['Social · Pinnacle','prism','Legendary Guide','50 friend rides + 5 organized trips — Social pinnacle'],
+
+  // RESORTS (10)
+  ['Resorts','bronze','First Resort','Visit 1 Disney resort'],
+  ['Resorts','bronze','Resort Explorer 3','3 Disney resorts'],
+  ['Resorts','silver','Resort Voyager 6','6 Disney resorts'],
+  ['Resorts','gold','Resort Voyager 12','12 Disney resorts'],
+  ['Resorts','amethyst','Resort Explorer 20','20 Disney resorts'],
+  ['Resorts','silver','Monorail Loop','Contemporary + Polynesian + Grand Floridian'],
+  ['Resorts','silver','Crescent Lake','BoardWalk + Yacht Club + Beach Club'],
+  ['Resorts','silver','Skyliner Resorts','Riviera + Caribbean Beach + Pop + Art of Animation'],
+  ['Resorts','pearl','Deluxe Royalty','All 8 Deluxe resorts'],
+  ['Resorts','prism','Grand Hotelier','All ~30 Disney-owned resorts — Hotelier pinnacle'],
+
+  // CHARACTERS (9)
+  ['Characters','bronze','First Meet','1 character meet'],
+  ['Characters','bronze','Character Trio','3 character meets'],
+  ['Characters','bronze','Character Friend','5 character meets'],
+  ['Characters','silver','Character Hunter','10 character meets'],
+  ['Characters','gold','Character Collector','15 character meets'],
+  ['Characters','amethyst','Character Royalty','25 character meets'],
+  ['Characters','bronze','Royal Encounter','Meet 1 princess'],
+  ['Characters','gold','Princess Court','Meet 4 princesses'],
+  ['Characters','amethyst','All Princesses','Meet all 8 princesses'],
+
+  // TOURING (10)
+  ['Touring','bronze','Two Parks in One Day','Log in 2 theme parks, same day'],
+  ['Touring','gold','Three Parks in One Day','Log in 3 theme parks, same day'],
+  ['Touring','amethyst','Four Parks in One Day','Log in all 4 theme parks, same day'],
+  ['Touring','silver','6-Ride Day','6 rides in one day'],
+  ['Touring','gold','10-Ride Day','10 rides in one day'],
+  ['Touring','amethyst','12-Ride Day','12 rides in one day'],
+  ['Touring','pearl','15-Ride Marathon','15 rides in one day'],
+  ['Touring','gold','Taste of the Kingdoms','A meal in all 4 theme parks, same day'],
+  ['Touring','silver','Around the World','An experience in all 11 World Showcase countries, same day'],
+  ['Touring','prism','Grand Slam','All 4 parks + 15 rides, same day — Touring pinnacle'],
+
+  // THEMATIC (23)
+  ['Thematic · Rides','bronze','Coaster Rookie','Ride your first roller coaster'],
+  ['Thematic · Rides','gold','Coaster Royalty','All 9 roller coasters'],
+  ['Thematic · Rides','silver','Triple Mountain','Space + Big Thunder + Everest'],
+  ['Thematic · Rides','silver','Water Ride Splasher','5 water rides'],
+  ['Thematic · Rides','amethyst','Making Waves','All 27 water rides'],
+  ['Thematic · Rides','silver','Dark Ride Fan','6 dark rides'],
+  ['Thematic · Rides','gold','Dark Ride Master','All 15 dark rides'],
+  ['Thematic · Rides','bronze','Spin Cycle','Your first spinner'],
+  ['Thematic · Rides','silver','Dizzy Devotee','All 11 spinners'],
+  ['Thematic · Rides','gold','Gentle Soul','All 30 gentle rides'],
+  ['Thematic · Shows','silver','Show Enthusiast','See 5 shows'],
+  ['Thematic · Shows','gold','Show Connoisseur','See 15 shows'],
+  ['Thematic · Shows','amethyst','Show Devotee','See 30 shows'],
+  ['Thematic · Shows','silver','Nighttime Spectaculars','See the nighttime shows'],
+  ['Thematic · Shows','silver','Parade Watcher','See all 5 parades'],
+  ['Thematic · Signature','silver','1971 Opening Day Club','All 9 opening-day classics'],
+  ['Thematic · Signature','silver','Animatronic Classics','Carousel of Progress + Hall of Presidents + Tiki Room + Country Bears'],
+  ['Thematic · Signature','silver','Flight Simulator Ace','Soarin\' + Flight of Passage + Star Tours + Smugglers Run'],
+  ['Thematic · Signature','bronze','Target Blaster','Buzz Lightyear + Toy Story Mania'],
+  ['Thematic · Signature','silver','Interstellar Pilot','Space Mountain + Mission: SPACE + Star Tours'],
+  ['Thematic · Signature','silver','Rail & Transit','WDW Railroad + PeopleMover + Wildlife Express'],
+  ['Thematic · Signature','silver','Wildlife Spotter','Kilimanjaro Safaris + wildlife trails'],
+  ['Thematic · Signature','bronze','Comedy & Laughs','Monsters Inc. Laugh Floor + Turtle Talk'],
+  ['Thematic · Franchise','silver','Star Wars Devotee','All Star Wars experiences'],
+  ['Thematic · Franchise','gold','Pixar Pals','All Pixar experiences'],
+  ['Thematic · Franchise','silver','Classic Characters','All classic-character experiences'],
+  ['Thematic · Culture','silver','World Traveler 6','6 World Showcase countries'],
+  ['Thematic · Culture','gold','World Traveler 11','All 11 World Showcase countries'],
+  ['Thematic · Culture','silver','Circle-Vision 360','Canada + China + France 360° films'],
+  ['Thematic · Culture','prism','Global Ambassador','11 countries + 3 films + World Nature/Discovery 100% — Culture pinnacle'],
+];
+
+let tierFilter = 'all', trackFilter = 'all';
+const main = document.getElementById('main');
+
+function tierCounts(){ const c={}; TIERS.forEach(t=>c[t]=0); PINS.forEach(p=>c[p[1]]++); return c; }
+function tracks(){ return [...new Set(PINS.map(p=>p[0]))]; }
+
+function renderSummary(){
+  const c = tierCounts();
+  document.getElementById('tierSummary').innerHTML =
+    TIERS.map(t=>`<span class="badge b-${t}">${TIER_LABEL[t]} ${c[t]}</span>`).join('');
+  document.getElementById('grand').innerHTML = `Total: <b>${PINS.length}</b> pins`;
+}
+function renderFilters(){
+  const tf = document.getElementById('tierFilters');
+  tf.innerHTML = `<span class="chip ${tierFilter==='all'?'on':''}" data-t="all">All tiers<span class="n">${PINS.length}</span></span>` +
+    TIERS.map(t=>`<span class="chip ${tierFilter===t?'on':''}" data-t="${t}">${TIER_LABEL[t]}</span>`).join('');
+  tf.querySelectorAll('.chip').forEach(ch=>ch.onclick=()=>{tierFilter=ch.dataset.t; draw();});
+  const kf = document.getElementById('trackFilters');
+  kf.innerHTML = `<span class="chip ${trackFilter==='all'?'on':''}" data-k="all">All tracks</span>` +
+    tracks().map(k=>`<span class="chip ${trackFilter===k?'on':''}" data-k="${k}">${k}</span>`).join('');
+  kf.querySelectorAll('.chip').forEach(ch=>ch.onclick=()=>{trackFilter=ch.dataset.k; draw();});
+}
+function draw(){
+  renderFilters();
+  const shown = PINS.filter(p=>(tierFilter==='all'||p[1]===tierFilter)&&(trackFilter==='all'||p[0]===trackFilter));
+  const byTrack = {};
+  shown.forEach(p=>{ (byTrack[p[0]] ||= []).push(p); });
+  main.innerHTML = Object.keys(byTrack).map(k=>{
+    const rows = byTrack[k]
+      .sort((a,b)=>TIERS.indexOf(a[1])-TIERS.indexOf(b[1]))
+      .map(p=>`<div class="pin l-${p[1]}"><span class="badge b-${p[1]}">${TIER_LABEL[p[1]]}</span>
+                 <div class="nm">${p[2]}</div><div class="cr">${p[3]}</div></div>`).join('');
+    return `<div class="track">${k}<span class="tn">${byTrack[k].length} pins</span></div><div class="grid">${rows}</div>`;
+  }).join('');
+}
+renderSummary(); draw();
+</script>
+</body>
+</html>

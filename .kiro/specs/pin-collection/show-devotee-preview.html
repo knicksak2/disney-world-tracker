@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Show Devotee — Recessed Stage Center Options</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #090514;
+      --bg-card: rgba(20, 14, 38, 0.88);
+      --bg-card-hover: rgba(30, 20, 56, 0.96);
+      --border-card: rgba(147, 112, 219, 0.28);
+      --accent-purple: #cba2f0;
+      --amethyst-border: #8a45c9;
+      --gold: #f8db79;
+      --text-main: #f7fafc;
+      --text-muted: #94a3b8;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: radial-gradient(circle at 50% 0%, #25124d 0%, var(--bg-dark) 85%);
+      color: var(--text-main);
+      min-height: 100vh;
+      padding: 40px 24px 80px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    header {
+      max-width: 1200px;
+      margin-bottom: 36px;
+      text-align: center;
+    }
+
+    .badge-sub {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(138, 69, 201, 0.22);
+      border: 1px solid rgba(203, 162, 240, 0.45);
+      color: var(--accent-purple);
+      padding: 5px 16px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 14px;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+    }
+
+    h1 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 32px;
+      font-weight: 800;
+      color: #fff;
+      margin-bottom: 10px;
+      background: linear-gradient(135deg, #fff 0%, #f7e4ff 50%, #cba2f0 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .subtitle {
+      color: var(--text-muted);
+      font-size: 15px;
+      max-width: 820px;
+      margin: 0 auto 28px;
+      line-height: 1.6;
+    }
+
+    /* Progression banner */
+    .progression-section {
+      max-width: 1200px;
+      width: 100%;
+      background: rgba(15, 10, 30, 0.7);
+      border: 1px solid rgba(147, 112, 219, 0.2);
+      border-radius: 20px;
+      padding: 24px;
+      margin-bottom: 40px;
+    }
+
+    .progression-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 16px;
+      font-weight: 700;
+      color: #e2e8f0;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 16px;
+      text-align: center;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+
+    .progression-grid {
+      display: flex;
+      gap: 20px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .prog-card {
+      background: rgba(26, 18, 48, 0.75);
+      border: 1px solid rgba(147, 112, 219, 0.25);
+      border-radius: 16px;
+      padding: 16px;
+      text-align: center;
+      width: 220px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .prog-card.highlight {
+      border-color: #cba2f0;
+      box-shadow: 0 0 20px rgba(138, 69, 201, 0.35);
+      background: rgba(38, 22, 68, 0.85);
+    }
+    .prog-card .pin-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 16px;
+      font-weight: 700;
+      color: #fff;
+      margin: 8px 0 2px;
+    }
+    .prog-card .pin-sub {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    /* Candidate grid */
+    .candidates-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 26px;
+      max-width: 1320px;
+      width: 100%;
+    }
+
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-card);
+      border-radius: 20px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      box-shadow: 0 16px 36px rgba(0, 0, 0, 0.55);
+      transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+      position: relative;
+    }
+
+    .card:hover {
+      transform: translateY(-4px);
+      border-color: var(--amethyst-border);
+      box-shadow: 0 20px 42px rgba(138, 69, 201, 0.35);
+    }
+
+    .card h2 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 20px;
+      color: #fff;
+      font-weight: 800;
+      margin-bottom: 4px;
+    }
+
+    .card-subtitle {
+      font-size: 12px;
+      color: var(--accent-purple);
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      font-weight: 600;
+      margin-bottom: 16px;
+    }
+
+    .art-frame {
+      width: 220px;
+      height: 220px;
+      background: radial-gradient(circle at 50% 50%, #17112c 0%, #0c0819 100%);
+      border: 1px solid rgba(147, 112, 219, 0.25);
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 18px;
+      position: relative;
+    }
+
+    .badge-row {
+      display: flex;
+      gap: 6px;
+      justify-content: center;
+      margin-bottom: 12px;
+    }
+
+    .badge {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 999px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .badge.amethyst {
+      background: rgba(138, 69, 201, 0.25);
+      color: #f7e4ff;
+      border: 1px solid #8a45c9;
+    }
+    .badge.diecut {
+      background: rgba(59, 130, 246, 0.2);
+      color: #93c5fd;
+      border: 1px solid #3b82f6;
+    }
+    .badge.gate-pass {
+      background: rgba(16, 185, 129, 0.2);
+      color: #6ee7b7;
+      border: 1px solid #10b981;
+    }
+
+    .swatches {
+      display: flex;
+      gap: 8px;
+      margin: 12px 0 16px;
+      justify-content: center;
+      background: rgba(10, 6, 20, 0.6);
+      padding: 8px 14px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.06);
+    }
+    .swatch {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      border: 1.5px solid rgba(255,255,255,0.3);
+      position: relative;
+    }
+    .swatch:hover::after {
+      content: attr(data-title);
+      position: absolute;
+      bottom: 26px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #000;
+      color: #fff;
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      white-space: nowrap;
+      z-index: 10;
+    }
+
+    .card-desc {
+      font-size: 13px;
+      color: #cbd5e1;
+      line-height: 1.55;
+      text-align: left;
+      background: rgba(10, 6, 22, 0.65);
+      border: 1px solid rgba(147, 112, 219, 0.18);
+      border-radius: 12px;
+      padding: 14px;
+      margin-top: auto;
+      width: 100%;
+    }
+
+    .card-desc strong {
+      color: #f7e4ff;
+    }
+
+    .card-desc ul {
+      margin-left: 18px;
+      margin-top: 6px;
+    }
+
+    .card-desc li {
+      margin-bottom: 4px;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="badge-sub">Amethyst Capstone · Thematic Shows Track</div>
+    <h1>Show Devotee — Recessed Stage Center Comparison</h1>
+    <p class="subtitle">
+      Per repo art direction, a die-cut cloisonné pin must be a solid metal piece with bounded enamel wells, never a hollow cut-through. Below are 4 distinct ways to treat the <strong>recessed stage center</strong> behind the parted velvet drapes.
+    </p>
+  </header>
+
+  <!-- Context: The 3-tier Show Ladder -->
+  <section class="progression-section">
+    <div class="progression-title">
+      <span>🎭 Complete Thematic Shows Progression</span>
+    </div>
+    <div class="progression-grid">
+      <!-- Tier 1 -->
+      <div class="prog-card">
+        <svg width="100" height="100" viewBox="-4 -4 158 158">
+          <defs>
+            <linearGradient id="g-silver-m" x1=".15" y1="0" x2=".85" y2="1">
+              <stop offset="0" stop-color="#ffffff"/><stop offset="0.33" stop-color="#e2e8f0"/><stop offset="0.66" stop-color="#b0b9c8"/><stop offset="1" stop-color="#727b8b"/>
+            </linearGradient>
+            <filter id="sh-silver"><feDropShadow dx="0" dy="2.5" stdDeviation="2" flood-color="#000" flood-opacity=".6"/></filter>
+          </defs>
+          <g filter="url(#sh-silver)">
+            <!-- theater motif scaled in silver -->
+            <g transform="translate(18,18) scale(0.23)">
+              <rect x="0" y="0" width="512" height="300" rx="18" fill="#991B1B" stroke="url(#g-silver-m)" stroke-width="16"/>
+              <rect x="30" y="30" width="452" height="240" fill="#F59E0B"/>
+              <g fill="#1E293B" stroke="url(#g-silver-m)" stroke-width="12">
+                <circle cx="90" cy="380" r="38"/><circle cx="190" cy="380" r="38"/><circle cx="320" cy="380" r="38"/><circle cx="420" cy="380" r="38"/>
+                <circle cx="140" cy="450" r="42"/><circle cx="256" cy="450" r="42"/><circle cx="370" cy="450" r="42"/>
+              </g>
+            </g>
+          </g>
+        </svg>
+        <span class="badge" style="background:#334155;color:#e2e8f0;margin-top:6px;">SILVER</span>
+        <div class="pin-title">Show Enthusiast</div>
+        <div class="pin-sub">See 5 shows.</div>
+      </div>
+
+      <!-- Tier 2 -->
+      <div class="prog-card">
+        <svg width="100" height="100" viewBox="-4 -4 158 158">
+          <defs>
+            <linearGradient id="g-gold-m" x1=".15" y1="0" x2=".85" y2="1">
+              <stop offset="0" stop-color="#fff8db"/><stop offset="0.33" stop-color="#f8db79"/><stop offset="0.66" stop-color="#e5ab2c"/><stop offset="1" stop-color="#8c620f"/>
+            </linearGradient>
+            <filter id="sh-gold"><feDropShadow dx="0" dy="2.5" stdDeviation="2" flood-color="#000" flood-opacity=".6"/></filter>
+          </defs>
+          <g filter="url(#sh-gold)">
+            <g transform="translate(18,18) scale(0.23)">
+              <path d="M418 30c-21 26-49 51-84 71-36 21-75 33-110 38 2 6 4 12 6 18 16 0 29 0 36-1l10-2 8-1v10c0 6 0 12-1 18l56 9c1 0 2 0 3 0 11 0 21 7 24 18l1 7c6-2 12-4 17-7l10-4 2 10c3 15 6 31 7 48 43-17 73-39 98-67-3-37-16-78-39-118-1-1-1-2-2-4l-28 71c5 1 10 3 14 7 10 10 10 26 0 36-10 9-26 9-36 0-8-9-9-23-2-33l39-100c-7-10-14-18-21-26zM52 118c-8 18-16 37-21 57-14 52-14 103-3 143 13-3 26-4 39-4 2 0 4 0 6 0 20 0 41 4 60 11-1-11-2-22-2-34 0-28 3-54 9-79l2-10 10 4c29 14 66 24 106 26 5-20 8-40 9-59-35 5-75 3-116-8-38-10-72-27-100-47z" fill="#fef3c7" stroke="url(#g-gold-m)" stroke-width="12"/>
+              <path d="M105 201l4 18-21 5c8 5 13 16 10 26-3 12-16 20-28 16s-20-16-16-28c0-3 1-5 3-7l-21 5-4-18 73-17zm388 23c-25 25-55 45-87 60 0 3 0 5 0 8 0 9 0 18-1 27 17 1 32-2 45-9 26-15 41-46 43-86z" fill="#991b1b" stroke="url(#g-gold-m)" stroke-width="12"/>
+            </g>
+          </g>
+        </svg>
+        <span class="badge" style="background:#78350f;color:#fde68a;margin-top:6px;">GOLD</span>
+        <div class="pin-title">Show Connoisseur</div>
+        <div class="pin-sub">See 15 shows.</div>
+      </div>
+
+      <!-- Tier 3 -->
+      <div class="prog-card highlight">
+        <svg width="100" height="100" viewBox="-4 -4 158 158">
+          <defs>
+            <linearGradient id="g-amethyst-mini" x1=".15" y1="0" x2=".85" y2="1">
+              <stop offset="0" stop-color="#f7e4ff"/><stop offset="0.33" stop-color="#cba2f0"/><stop offset="0.66" stop-color="#8a45c9"/><stop offset="1" stop-color="#41185f"/>
+            </linearGradient>
+            <filter id="sh-amethyst-mini"><feDropShadow dx="0" dy="2.5" stdDeviation="2" flood-color="#000" flood-opacity=".7"/></filter>
+          </defs>
+          <g filter="url(#sh-amethyst-mini)">
+            <g transform="translate(18,18) scale(0.23)">
+              <!-- Recessed center -->
+              <path d="M95 65 Q256 92 417 65 L417 415 L95 415 Z" fill="#150d2a" stroke="url(#g-amethyst-mini)" stroke-width="6"/>
+              <!-- Curtains -->
+              <path d="M18 18v94c28-12 53-35 71-60-5-3-9-7-13-11-7-7-13-15-17-23zm62 0c2 4 5 7 9 11 11 10 27 20 45 29 37 17 84 29 122 29s85-12 122-29c18-9 34-19 45-29 4-4 7-7 9-11zm373 0c-4 8-10 16-17 24-4 3-8 7-13 11 18 24 43 47 71 59V18zm-82 17c-17 18-63 30-116 30s-98-12-114-30c26 10 68 17 114 17 45 0 87-6 116-17z" fill="#b5721a" stroke="url(#g-amethyst-mini)" stroke-width="12"/>
+              <path d="M105 63c-22 29-51 55-87 69v174c2 1 4 1 6 1 8-1 12-5 18-10 30-24 50-66 65-119 9-31 17-65 25-101-2-1-4-2-7-3-7-3-14-7-20-11zm302 0c-7 4-14 8-21 11-2 1-5 2-7 3 8 36 16 70 25 101 16 53 36 95 65 119 6 5 12 10 19 10 2 0 4 0 6-1V132c-36-14-65-40-87-69z" fill="#4a2a7a" stroke="url(#g-amethyst-mini)" stroke-width="12"/>
+              <path d="M46 317c-7 5-14 8-22 8-2 0-4 0-6 0v123c6 2 14 3 22 3 12 0 25-3 31-7 0-44-1-88-25-127zm420 0c-24 39-25 83-25 127 6 4 18 7 31 7 8 0 16-1 22-3v-123c-2 0-4 0-6 0-8 0-15-3-22-8z" fill="#6a3fb0" stroke="url(#g-amethyst-mini)" stroke-width="12"/>
+              <path d="M88 409c1 13 1 26 1 39v4l-3 2c-11 11-29 15-46 15-8 0-15-1-22-2V487h476v-20c-7 1-14 2-22 2-17 0-35-4-46-15l-3-2v-4c0-13 0-26 1-39z" fill="#b5721a" stroke="url(#g-amethyst-mini)" stroke-width="12"/>
+            </g>
+          </g>
+        </svg>
+        <span class="badge" style="background:#581c87;color:#f7e4ff;margin-top:6px;">AMETHYST</span>
+        <div class="pin-title">Show Devotee</div>
+        <div class="pin-sub">See 30 shows.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4 Recessed Stage Options -->
+  <main class="candidates-grid">
+
+    <!-- OPTION 1: Midnight Void Stage -->
+    <div class="card">
+      <h2>Option 1: Midnight Stage</h2>
+      <div class="card-subtitle">Deep Velvet Cavity · Pure Contrast</div>
+      
+      <div class="art-frame">
+        <svg width="200" height="200" viewBox="-4 -4 158 158">
+          <defs>
+            <linearGradient id="g-amethyst-1" x1=".15" y1="0" x2=".85" y2="1">
+              <stop offset="0" stop-color="#f7e4ff"/><stop offset="0.33" stop-color="#cba2f0"/><stop offset="0.66" stop-color="#8a45c9"/><stop offset="1" stop-color="#41185f"/>
+            </linearGradient>
+            <filter id="sh-1" x="-25%" y="-25%" width="150%" height="160%">
+              <feDropShadow dx="0" dy="3.5" stdDeviation="3.2" flood-color="#000" flood-opacity=".65"/>
+            </filter>
+            <linearGradient id="g-shadow-stage" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#070412"/><stop offset="1" stop-color="#140e26"/>
+            </linearGradient>
+          </defs>
+          <g filter="url(#sh-1)">
+            <g transform="translate(16.5, 16.5) scale(0.244)">
+              <!-- Recessed Stage Backdrop Cavity -->
+              <path d="M95 65 Q256 92 417 65 L417 415 L95 415 Z" fill="url(#g-shadow-stage)" stroke="url(#g-amethyst-1)" stroke-width="6"/>
+              
+              <!-- Drapes & Apron (theaterCurtains original paths with cloisonné enamel fills) -->
+              <!-- Top Valance & Swag (Amber / Gold Fringe) -->
+              <path d="M18 18v94.275c28.382-12.57 52.994-35.202 71.39-59.734-4.662-3.466-8.973-7.064-12.865-10.79C68.903 34.452 62.723 26.51 58.973 18zm61.754 0c2.378 3.508 5.41 7.103 9.22 10.75 10.73 10.274 26.505 20.414 44.88 29.117C170.602 75.274 217.8 87 256 87s85.398-11.726 122.146-29.133c18.375-8.703 34.15-18.843 44.88-29.117 3.81-3.647 6.842-7.242 9.22-10.75zm373.273 0c-3.75 8.51-9.93 16.452-17.552 23.75-3.892 3.726-8.203 7.324-12.864 10.79 18.396 24.533 43.008 47.166 71.39 59.735V18zm-82.554 16.734C354.78 52.937 308.428 65.326 256 65.33c-52.242-.023-98.44-12.343-114.236-30.463C168.982 45.655 211.206 51.987 256 52c44.953-.022 87.294-6.408 114.473-17.266z"
+                    fill="#b5721a" stroke="url(#g-amethyst-1)" stroke-width="12" stroke-linejoin="round"/>
+              <!-- Upper Flowing Drapes (Deep Royal Purple Velvet) -->
+              <path d="M104.785 62.78C83.37 91.92 53.765 118.415 18 131.788v174.035c2.116.805 4.112 1.178 6 1.178 8.312-.646 12.295-5.132 18.324-9.984 29.568-24.024 49.255-66.27 65.053-119.094 9.187-30.72 17.136-64.91 25.34-100.78-2.216-.986-4.41-1.986-6.57-3.01-7.512-3.557-14.67-7.346-21.362-11.35zm302.43 0c-6.693 4.006-13.85 7.795-21.36 11.353-2.162 1.023-4.356 2.023-6.572 3.008 8.204 35.872 16.153 70.062 25.34 100.782 15.798 52.825 35.485 95.07 65.053 119.094 5.414 4.648 11.22 9.89 18.324 9.984 1.888 0 3.884-.373 6-1.178V131.787c-35.764-13.373-65.37-39.87-86.785-69.006z"
+                    fill="#4a2a7a" stroke="url(#g-amethyst-1)" stroke-width="12" stroke-linejoin="round"/>
+              <!-- Lower Tie-Back Drapes (Plum / Crimson) -->
+              <path d="M46.13 317.34C39.233 322.193 31.793 325 24 325c-2.025 0-4.026-.197-6-.564v123.2c6.273 2.01 14.098 3.364 22 3.364 12.41 0 24.637-3.336 30.94-7.316-.04-43.556-.973-88.042-24.81-126.344zm419.74 0c-23.837 38.302-24.77 82.788-24.81 126.344 6.303 3.98 18.53 7.316 30.94 7.316 7.902 0 15.727-1.353 22-3.363v-123.2c-1.974.366-3.975.563-6 .563-7.792 0-15.232-2.807-22.13-7.66z"
+                    fill="#991b1b" stroke="url(#g-amethyst-1)" stroke-width="12" stroke-linejoin="round"/>
+              <!-- Bottom Stage Apron & Plinth (Warm Teak Amber) -->
+              <path d="M88.39 409c.6 13.277.61 26.37.61 39v3.73l-2.637 2.633C75.18 465.545 57.5 469 40 469c-7.475 0-14.98-.636-22-2.232V487h476v-20.232c-7.02 1.596-14.525 2.232-22 2.232-17.5 0-35.18-3.455-46.363-14.637L423 451.73V448c0-12.63.01-25.723.61-39z"
+                    fill="#b5721a" stroke="url(#g-amethyst-1)" stroke-width="12" stroke-linejoin="round"/>
+            </g>
+          </g>
+        </svg>
+      </div>
+
+      <div class="badge-row">
+        <span class="badge amethyst">AMETHYST</span>
+        <span class="badge diecut">✂ DIE-CUT</span>
+        <span class="badge gate-pass">✓ PASSES (48.7%)</span>
+      </div>
+
+      <div class="swatches">
+        <div class="swatch" style="background:#070412;" data-title="Deep Stage Shadow"></div>
+        <div class="swatch" style="background:#4a2a7a;" data-title="Royal Purple Velvet"></div>
+        <div class="swatch" style="background:#991b1b;" data-title="Crimson Tieback"></div>
+        <div class="swatch" style="background:#b5721a;" data-title="Gold Valence Fringe"></div>
+      </div>
+
+      <div class="card-desc">
+        <strong>Theatrical Concept:</strong>
+        <ul>
+          <li><strong>Clean Cloisonné:</strong> A solid midnight-black/ink cavity creates high-contrast depth so the purple velvet drapes jump forward.</li>
+          <li><strong>Zero Gaps:</strong> Encloses the center entirely into an authentic enamel well.</li>
+          <li><strong>Metrics:</strong> 1 piece, 48.7% enamel share at 7.2px rim.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- OPTION 2: Solo Stage Spotlight -->
+    <div class="card">
+      <h2>Option 2: Solo Spotlight</h2>
+      <div class="card-subtitle">Radiant Beam · Center Stage Drama</div>
+      
+      <div class="art-frame">
+        <svg width="200" height="200" viewBox="-4 -4 158 158">
+          <defs>
+            <linearGradient id="g-amethyst-2" x1=".15" y1="0" x2=".85" y2="1">
+              <stop offset="0" stop-color="#f7e4ff"/><stop offset="0.33" stop-color="#cba2f0"/><stop offset="0.66" stop-color="#8a45c9"/><stop offset="1" stop-color="#41185f"/>
+            </linearGradient>
+            <filter id="sh-2" x="-25%" y="-25%" width="150%" height="160%">
+              <feDropShadow dx="0" dy="3.5" stdDeviation="3.2" flood-color="#000" flood-opacity=".65"/>
+            </filter>
+            <linearGradient id="g-beam" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#fff8db"/><stop offset="1" stop-color="#fde047"/>
+            </linearGradient>
+          </defs>
+          <g filter="url(#sh-2)">
+            <g transform="translate(16.5, 16.5) scale(0.244)">
+              <!-- Recessed Stage Wing Shadows -->
+              <path d="M95 65 Q180 80 210 75 L160 415 L95 415 Z" fill="#0c071a" stroke="url(#g-amethyst-2)" stroke-width="4"/>
+              <path d="M302 75 Q332 80 417 65 L417 415 L352 415 Z" fill="#0c071a" stroke="url(#g-amethyst-2)" stroke-width="4"/>
+              <!-- Spotlight Conical Beam -->
+              <path d="M210 75 Q256 85 302 75 L352 415 L160 415 Z" fill="url(#g-beam)" stroke="url(#g-amethyst-2)" stroke-width="6"/>
+
+              <!-- Curtains & Apron -->
+              <path d="M18 18v94.275c28.382-12.57 52.994-35.202 71.39-59.734-4.662-3.466-8.973-7.064-12.865-10.79C68.903 34.452 62.723 26.51 58.973 18zm61.754 0c2.378 3.508 5.41 7.103 9.22 10.75 10.73 10.274 26.505 20.414 44.88 29.117C170.602 75.274 217.8 87 256 87s85.398-11.726 122.146-29.133c18.375-8.703 34.15-18.843 44.88-29.117 3.81-3.647 6.842-7.242 9.22-10.75zm373.273 0c-3.75 8.51-9.93 16.452-17.552 23.75-3.892 3.726-8.203 7.324-12.864 10.79 18.396 24.533 43.008 47.166 71.39 59.735V18zm-82.554 16.734C354.78 52.937 308.428 65.326 256 65.33c-52.242-.023-98.44-12.343-114.236-30.463C168.982 45.655 211.206 51.987 256 52c44.953-.022 87.294-6.408 114.473-17.266z"
+                    fill="#b5721a" stroke="url(#g-amethyst-2)" stroke-width="12" stroke-linejoin="round"/>
+              <path d="M104.785 62.78C83.37 91.92 53.765 118.415 18 131.788v174.035c2.116.805 4.112 1.178 6 1.178 8.312-.646 12.295-5.132 18.324-9.984 29.568-24.024 49.255-66.27 65.053-119.094 9.187-30.72 17.136-64.91 25.34-100.78-2.216-.986-4.41-1.986-6.57-3.01-7.512-3.557-14.67-7.346-21.362-11.35zm302.43 0c-6.693 4.006-13.85 7.795-21.36 11.353-2.162 1.023-4.356 2.023-6.572 3.008 8.204 35.872 16.153 70.062 25.34 100.782 15.798 52.825 35.485 95.07 65.053 119.094 5.414 4.648 11.22 9.89 18.324 9.984 1.888 0 3.884-.373 6-1.178V131.787c-35.764-13.373-65.37-39.87-86.785-69.006z"
+                    fill="#4a2a7a" stroke="url(#g-amethyst-2)" stroke-width="12" stroke-linejoin="round"/>
+              <path d="M46.13 317.34C39.233 322.193 31.793 325 24 325c-2.025 0-4.026-.197-6-.564v123.2c6.273 2.01 14.098 3.364 22 3.364 12.41 0 24.637-3.336 30.94-7.316-.04-43.556-.973-88.042-24.81-126.344zm419.74 0c-23.837 38.302-24.77 82.788-24.81 126.344 6.303 3.98 18.53 7.316 30.94 7.316 7.902 0 15.727-1.353 22-3.363v-123.2c-1.974.366-3.975.563-6 .563-7.792 0-15.232-2.807-22.13-7.66z"
+                    fill="#991b1b" stroke="url(#g-amethyst-2)" stroke-width="12" stroke-linejoin="round"/>
+              <path d="M88.39 409c.6 13.277.61 26.37.61 39v3.73l-2.637 2.633C75.18 465.545 57.5 469 40 469c-7.475 0-14.98-.636-22-2.232V487h476v-20.232c-7.02 1.596-14.525 2.232-22 2.232-17.5 0-35.18-3.455-46.363-14.637L423 451.73V448c0-12.63.01-25.723.61-39z"
+                    fill="#b5721a" stroke="url(#g-amethyst-2)" stroke-width="12" stroke-linejoin="round"/>
+            </g>
+          </g>
+        </svg>
+      </div>
+
+      <div class="badge-row">
+        <span class="badge amethyst">AMETHYST</span>
+        <span class="badge diecut">✂ DIE-CUT</span>
+        <span class="badge gate-pass">✓ PASSES (42.0%)</span>
+      </div>
+
+      <div class="swatches">
+        <div class="swatch" style="background:#fff8db;" data-title="Cream Spotlight Core"></div>
+        <div class="swatch" style="background:#fde047;" data-title="Warm Gold Beam"></div>
+        <div class="swatch" style="background:#0c071a;" data-title="Shadow Wing"></div>
+        <div class="swatch" style="background:#4a2a7a;" data-title="Royal Purple Velvet"></div>
+      </div>
+
+      <div class="card-desc">
+        <strong>Theatrical Concept:</strong>
+        <ul>
+          <li><strong>Center-Stage Illumination:</strong> A glowing conical spotlight strikes the center stage, flanked by deep shadow wings.</li>
+          <li><strong>Opening Night Magic:</strong> Evokes the exact split-second before the Broadway lead emerges under the spotlight.</li>
+          <li><strong>Metrics:</strong> 1 piece, 42.0% enamel share at 7.2px rim.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- OPTION 3: Broadway Horizon & Stage Boards -->
+    <div class="card">
+      <h2>Option 3: Stage Horizon</h2>
+      <div class="card-subtitle">Polished Floor & Wall · Classic Architecture</div>
+      
+      <div class="art-frame">
+        <svg width="200" height="200" viewBox="-4 -4 158 158">
+          <defs>
+            <linearGradient id="g-amethyst-3" x1=".15" y1="0" x2=".85" y2="1">
+              <stop offset="0" stop-color="#f7e4ff"/><stop offset="0.33" stop-color="#cba2f0"/><stop offset="0.66" stop-color="#8a45c9"/><stop offset="1" stop-color="#41185f"/>
+            </linearGradient>
+            <filter id="sh-3" x="-25%" y="-25%" width="150%" height="160%">
+              <feDropShadow dx="0" dy="3.5" stdDeviation="3.2" flood-color="#000" flood-opacity=".65"/>
+            </filter>
+          </defs>
+          <g filter="url(#sh-3)">
+            <g transform="translate(16.5, 16.5) scale(0.244)">
+              <!-- Recessed Stage Wall (Upper Horizon) -->
+              <path d="M95 65 Q256 92 417 65 L417 310 L95 310 Z" fill="#1b1a4a" stroke="url(#g-amethyst-3)" stroke-width="6"/>
+              <!-- Recessed Polished Stage Floor (Lower Horizon) -->
+              <path d="M95 310 L417 310 L417 415 L95 415 Z" fill="#8c531b" stroke="url(#g-amethyst-3)" stroke-width="6"/>
+
+              <!-- Curtains & Apron -->
+              <path d="M18 18v94.275c28.382-12.57 52.994-35.202 71.39-59.734-4.662-3.466-8.973-7.064-12.865-10.79C68.903 34.452 62.723 26.51 58.973 18zm61.754 0c2.378 3.508 5.41 7.103 9.22 10.75 10.73 10.274 26.505 20.414 44.88 29.117C170.602 75.274 217.8 87 256 87s85.398-11.726 122.146-29.133c18.375-8.703 34.15-18.843 44.88-29.117 3.81-3.647 6.842-7.242 9.22-10.75zm373.273 0c-3.75 8.51-9.93 16.452-17.552 23.75-3.892 3.726-8.203 7.324-12.864 10.79 18.396 24.533 43.008 47.166 71.39 59.735V18zm-82.554 16.734C354.78 52.937 308.428 65.326 256 65.33c-52.242-.023-98.44-12.343-114.236-30.463C168.982 45.655 211.206 51.987 256 52c44.953-.022 87.294-6.408 114.473-17.266z"
+                    fill="#b5721a" stroke="url(#g-amethyst-3)" stroke-width="12" stroke-linejoin="round"/>
+              <path d="M104.785 62.78C83.37 91.92 53.765 118.415 18 131.788v174.035c2.116.805 4.112 1.178 6 1.178 8.312-.646 12.295-5.132 18.324-9.984 29.568-24.024 49.255-66.27 65.053-119.094 9.187-30.72 17.136-64.91 25.34-100.78-2.216-.986-4.41-1.986-6.57-3.01-7.512-3.557-14.67-7.346-21.362-11.35zm302.43 0c-6.693 4.006-13.85 7.795-21.36 11.353-2.162 1.023-4.356 2.023-6.572 3.008 8.204 35.872 16.153 70.062 25.34 100.782 15.798 52.825 35.485 95.07 65.053 119.094 5.414 4.648 11.22 9.89 18.324 9.984 1.888 0 3.884-.373 6-1.178V131.787c-35.764-13.373-65.37-39.87-86.785-69.006z"
+                    fill="#4a2a7a" stroke="url(#g-amethyst-3)" stroke-width="12" stroke-linejoin="round"/>
+              <path d="M46.13 317.34C39.233 322.193 31.793 325 24 325c-2.025 0-4.026-.197-6-.564v123.2c6.273 2.01 14.098 3.364 22 3.364 12.41 0 24.637-3.336 30.94-7.316-.04-43.556-.973-88.042-24.81-126.344zm419.74 0c-23.837 38.302-24.77 82.788-24.81 126.344 6.303 3.98 18.53 7.316 30.94 7.316 7.902 0 15.727-1.353 22-3.363v-123.2c-1.974.366-3.975.563-6 .563-7.792 0-15.232-2.807-22.13-7.66z"
+                    fill="#991b1b" stroke="url(#g-amethyst-3)" stroke-width="12" stroke-linejoin="round"/>
+              <path d="M88.39 409c.6 13.277.61 26.37.61 39v3.73l-2.637 2.633C75.18 465.545 57.5 469 40 469c-7.475 0-14.98-.636-22-2.232V487h476v-20.232c-7.02 1.596-14.525 2.232-22 2.232-17.5 0-35.18-3.455-46.363-14.637L423 451.73V448c0-12.63.01-25.723.61-39z"
+                    fill="#b5721a" stroke="url(#g-amethyst-3)" stroke-width="12" stroke-linejoin="round"/>
+            </g>
+          </g>
+        </svg>
+      </div>
+
+      <div class="badge-row">
+        <span class="badge amethyst">AMETHYST</span>
+        <span class="badge diecut">✂ DIE-CUT</span>
+        <span class="badge gate-pass">✓ PASSES (45.5%)</span>
+      </div>
+
+      <div class="swatches">
+        <div class="swatch" style="background:#1b1a4a;" data-title="Deep Stage Cyclorama"></div>
+        <div class="swatch" style="background:#8c531b;" data-title="Polished Teak Floorboards"></div>
+        <div class="swatch" style="background:#4a2a7a;" data-title="Royal Purple Velvet"></div>
+        <div class="swatch" style="background:#b5721a;" data-title="Gold Valence Fringe"></div>
+      </div>
+
+      <div class="card-desc">
+        <strong>Theatrical Concept:</strong>
+        <ul>
+          <li><strong>Architectural Staging:</strong> Divides the well into a dark blue stage cyclorama wall and warm teak stage floor.</li>
+          <li><strong>Perspective Depth:</strong> Anchors the pin so the drapes look like they hang directly over a physical stage.</li>
+          <li><strong>Metrics:</strong> 1 piece, 45.5% enamel share at 7.2px rim.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- OPTION 4: Enchanted Disney Starry Stage -->
+    <div class="card">
+      <h2>Option 4: Enchanted Sparkle</h2>
+      <div class="card-subtitle">Disney Magic · Celestial Starbursts</div>
+      
+      <div class="art-frame">
+        <svg width="200" height="200" viewBox="-4 -4 158 158">
+          <defs>
+            <linearGradient id="g-amethyst-4" x1=".15" y1="0" x2=".85" y2="1">
+              <stop offset="0" stop-color="#f7e4ff"/><stop offset="0.33" stop-color="#cba2f0"/><stop offset="0.66" stop-color="#8a45c9"/><stop offset="1" stop-color="#41185f"/>
+            </linearGradient>
+            <filter id="sh-4" x="-25%" y="-25%" width="150%" height="160%">
+              <feDropShadow dx="0" dy="3.5" stdDeviation="3.2" flood-color="#000" flood-opacity=".65"/>
+            </filter>
+          </defs>
+          <g filter="url(#sh-4)">
+            <g transform="translate(16.5, 16.5) scale(0.244)">
+              <!-- Recessed Celestial Night Backdrop -->
+              <path d="M95 65 Q256 92 417 65 L417 415 L95 415 Z" fill="#171138" stroke="url(#g-amethyst-4)" stroke-width="6"/>
+              
+              <!-- Disney Golden Starburst Sparkles in Stage Center -->
+              <g fill="#fde047" stroke="url(#g-amethyst-4)" stroke-width="3">
+                <!-- Large Center Starburst -->
+                <path d="M256 160 Q256 195 240 205 Q256 195 256 230 Q256 195 272 205 Q256 195 256 160 Z"/>
+                <!-- Left Accent Sparkle -->
+                <path d="M190 230 Q190 248 180 254 Q190 248 190 266 Q190 248 200 254 Q190 248 190 230 Z"/>
+                <!-- Right Accent Sparkle -->
+                <path d="M320 220 Q320 238 310 244 Q320 238 320 256 Q320 238 330 244 Q320 238 320 220 Z"/>
+                <!-- Tiny fairy dust dots -->
+                <circle cx="225" cy="180" r="4"/><circle cx="288" cy="185" r="4"/><circle cx="256" cy="275" r="5"/>
+              </g>
+
+              <!-- Curtains & Apron -->
+              <path d="M18 18v94.275c28.382-12.57 52.994-35.202 71.39-59.734-4.662-3.466-8.973-7.064-12.865-10.79C68.903 34.452 62.723 26.51 58.973 18zm61.754 0c2.378 3.508 5.41 7.103 9.22 10.75 10.73 10.274 26.505 20.414 44.88 29.117C170.602 75.274 217.8 87 256 87s85.398-11.726 122.146-29.133c18.375-8.703 34.15-18.843 44.88-29.117 3.81-3.647 6.842-7.242 9.22-10.75zm373.273 0c-3.75 8.51-9.93 16.452-17.552 23.75-3.892 3.726-8.203 7.324-12.864 10.79 18.396 24.533 43.008 47.166 71.39 59.735V18zm-82.554 16.734C354.78 52.937 308.428 65.326 256 65.33c-52.242-.023-98.44-12.343-114.236-30.463C168.982 45.655 211.206 51.987 256 52c44.953-.022 87.294-6.408 114.473-17.266z"
+                    fill="#b5721a" stroke="url(#g-amethyst-4)" stroke-width="12" stroke-linejoin="round"/>
+              <path d="M104.785 62.78C83.37 91.92 53.765 118.415 18 131.788v174.035c2.116.805 4.112 1.178 6 1.178 8.312-.646 12.295-5.132 18.324-9.984 29.568-24.024 49.255-66.27 65.053-119.094 9.187-30.72 17.136-64.91 25.34-100.78-2.216-.986-4.41-1.986-6.57-3.01-7.512-3.557-14.67-7.346-21.362-11.35zm302.43 0c-6.693 4.006-13.85 7.795-21.36 11.353-2.162 1.023-4.356 2.023-6.572 3.008 8.204 35.872 16.153 70.062 25.34 100.782 15.798 52.825 35.485 95.07 65.053 119.094 5.414 4.648 11.22 9.89 18.324 9.984 1.888 0 3.884-.373 6-1.178V131.787c-35.764-13.373-65.37-39.87-86.785-69.006z"
+                    fill="#4a2a7a" stroke="url(#g-amethyst-4)" stroke-width="12" stroke-linejoin="round"/>
+              <path d="M46.13 317.34C39.233 322.193 31.793 325 24 325c-2.025 0-4.026-.197-6-.564v123.2c6.273 2.01 14.098 3.364 22 3.364 12.41 0 24.637-3.336 30.94-7.316-.04-43.556-.973-88.042-24.81-126.344zm419.74 0c-23.837 38.302-24.77 82.788-24.81 126.344 6.303 3.98 18.53 7.316 30.94 7.316 7.902 0 15.727-1.353 22-3.363v-123.2c-1.974.366-3.975.563-6 .563-7.792 0-15.232-2.807-22.13-7.66z"
+                    fill="#991b1b" stroke="url(#g-amethyst-4)" stroke-width="12" stroke-linejoin="round"/>
+              <path d="M88.39 409c.6 13.277.61 26.37.61 39v3.73l-2.637 2.633C75.18 465.545 57.5 469 40 469c-7.475 0-14.98-.636-22-2.232V487h476v-20.232c-7.02 1.596-14.525 2.232-22 2.232-17.5 0-35.18-3.455-46.363-14.637L423 451.73V448c0-12.63.01-25.723.61-39z"
+                    fill="#b5721a" stroke="url(#g-amethyst-4)" stroke-width="12" stroke-linejoin="round"/>
+            </g>
+          </g>
+        </svg>
+      </div>
+
+      <div class="badge-row">
+        <span class="badge amethyst">AMETHYST</span>
+        <span class="badge diecut">✂ DIE-CUT</span>
+        <span class="badge gate-pass">✓ PASSES (46.8%)</span>
+      </div>
+
+      <div class="swatches">
+        <div class="swatch" style="background:#171138;" data-title="Enchanted Night Sky"></div>
+        <div class="swatch" style="background:#fde047;" data-title="Gold Disney Sparkles"></div>
+        <div class="swatch" style="background:#4a2a7a;" data-title="Royal Purple Velvet"></div>
+        <div class="swatch" style="background:#991b1b;" data-title="Crimson Tieback"></div>
+      </div>
+
+      <div class="card-desc">
+        <strong>Theatrical Concept:</strong>
+        <ul>
+          <li><strong>Disney Fairy-Tale Touch:</strong> Golden 4-point starbursts and stardust shine against the deep night sky through the parted curtains.</li>
+          <li><strong>Signature Disney Staging:</strong> Feels like the curtain opening on *Beauty and the Beast*, *Aladdin*, or *Peter Pan*.</li>
+          <li><strong>Metrics:</strong> 1 piece, 46.8% enamel share at 7.2px rim.</li>
+        </ul>
+      </div>
+    </div>
+
+  </main>
+
+</body>
+</html>

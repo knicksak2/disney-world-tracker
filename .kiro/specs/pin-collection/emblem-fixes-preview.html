@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>Emblem fixes v4</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0d0a17;color:#f1f5f9;font-family:'Segoe UI',system-ui,sans-serif;padding:32px 26px}
+h1{font-size:24px;font-weight:800;margin-bottom:6px;background:linear-gradient(120deg,#fff,#c9a8ff 70%);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+h2{font-size:17px;margin:28px auto 0;max-width:1040px;color:#fff}
+.sub{font-size:12px;color:#94a3b8;font-weight:400}
+p{color:#a8b0c0;max-width:860px;line-height:1.6;font-size:14px}
+.row{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:22px;max-width:1040px;margin:12px auto 0}
+.card{background:#161226;border:1px solid #2a2140;border-radius:16px;padding:20px 14px;text-align:center}
+.stage{width:180px;height:180px;margin:0 auto 10px}
+.cap{font-size:14px;font-weight:700;color:#fff}
+.s2{font-size:11px;color:#94a3b8;margin-top:3px}
+</style></head><body>
+<h1>Emblem fixes v4 — die-cut, amethyst-worthy</h1>
+<p>Trip Commander is now <b>die-cut</b> with a bold travel motif (not a boring contained disc). Squad 10 is a <b>die-cut group standing on a base</b>, so the three figures read as one silhouette with a single rim — not fragments, not a framed disc.</p>
+<h2>Trip Commander <span class="sub">amethyst · die-cut · bold travel</span></h2>
+<div class="row" id="r-cmd"></div>
+<h2>Squad 10 <span class="sub">silver · die-cut group united on a base</span></h2>
+<div class="row" id="r-squad"></div>
+<script>
+const M={amethyst:['#f7e4ff','#cba2f0','#8a45c9','#41185f'],silver:['#ffffff','#e2e8f0','#b0b9c8','#727b8b']};
+const stops=c=>c.map((x,i)=>`<stop offset="${(i/(c.length-1)).toFixed(3)}" stop-color="${x}"/>`).join('');
+let uid=0;
+// die-cut with a single unified rim via feMorphology dilate (works for multi-piece unions)
+function dieCut(metal,vb,inner){const id='d'+(++uid),R=(vb*0.028).toFixed(1),pad=vb*0.14;
+ return `<svg viewBox="${-pad} ${-pad} ${vb+2*pad} ${vb+2*pad}" width="180" height="180">
+  <defs><linearGradient id="g${id}" x1="0" y1="0" x2="1" y2="1">${stops(metal)}</linearGradient>
+   <filter id="r${id}" x="-25%" y="-25%" width="150%" height="150%">
+    <feMorphology in="SourceAlpha" operator="dilate" radius="${R}" result="d"/>
+    <feFlood flood-color="#2a2233"/><feComposite in2="d" operator="in" result="rim"/>
+    <feDropShadow dx="0" dy="${(vb*0.02).toFixed(1)}" stdDeviation="${(vb*0.02).toFixed(1)}" flood-color="#000" flood-opacity=".5"/>
+    <feMerge><feMergeNode in="rim"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+  <g filter="url(#r${id})" fill="url(#g${id})">${inner}</g></svg>`;}
+const AIRBALLOON="M11 23a2 2 0 0 1-2-2v-2h6v2a2 2 0 0 1-2 2zm1-22c.71 0 1.39.09 2.05.26C15.22 2.83 16 5.71 16 9c0 2.28-.38 4.37-1 7a2 2 0 0 1-2 2h-2a2 2 0 0 1-2-2c-.62-2.63-1-4.72-1-7c0-3.29.78-6.17 1.95-7.74C10.61 1.09 11.29 1 12 1m8 7c0 3.18-1.85 7.92-4.54 9.21C16.41 15.39 17 11.83 17 9s-.59-5.39-1.54-7.21C18.15 3.08 20 4.82 20 8M4 8c0-3.18 1.85-4.92 4.54-6.21C7.59 3.61 7 6.17 7 9s.59 6.39 1.54 8.21C5.85 15.92 4 11.18 4 8";
+const CARAVAN="M60.5 129c-5 0-16.557 3.44-25.322 8.773S21.5 150.095 21.5 152.672V335h105.063c6.948-18.637 24.952-32 45.937-32s38.99 13.363 45.938 32H275.5V175h98v160h31.97c3.642-14.619 13.747-56.938 14.03-79.115c.399-31.276-15.2-98.237-15.615-100.012c-1.874-5.313-8.415-12.755-16.512-18.14c-8.178-5.44-17.92-8.733-22.873-8.733zm-9 46h170v82h-170zm41.963 18L69.5 227.36V239h13.828l32.08-46zm44.844 0l-32.08 46h43.888l32.08-46zm155.193 0v142h62v-62h-23v-18h23v-62zm143.104 77.113c-1.55 14.901-4.853 31.89-8.01 46.08l22.906-3.818v-34.813zM172.5 321c-17.227 0-31 13.773-31 31s13.773 31 31 31s31-13.773 31-31s-13.773-31-31-31m251.637 14c-1.498 6.021-3.126 12.008-4.735 18H492.5v-18z";
+const THREEFRIENDS="M389 40.84c18.5 0 35 18.79 35 44.03c0 25.33-16.5 44.03-35 44.03s-35-18.7-35-44.03c0-25.24 16.5-44.03 35-44.03m-132.9 0c18.4 0 35 18.79 35 44.03c0 25.33-16.6 44.03-35 44.03c-18.5 0-35.1-18.7-35.1-44.03c0-25.24 16.6-44.03 35.1-44.03m-133 0c18.5 0 35 18.79 35 44.03c0 25.33-16.5 44.03-35 44.03s-35.09-18.7-35.09-44.03c0-25.24 16.59-44.03 35.09-44.03m133 109.06c64 2 118 2 182.8 4.2c30.9 17.8 45.2 109 44.3 140.7l-17.6 17.7c-7.7-42.8-17.4-99.9-33.5-112.6v87.6l4.1 183.7H414l-16.7-184.7h-18l-16.7 184.7h-22.3l4.2-183.7l-8-88.5h-29.3l-7.2 88.2l4.2 183.7h-22.3l-16.8-184.7h-18l-16.8 184.7h-22.2l4.2-183.7L205 199h-29.3l-8 88.5l4.2 183.7h-22.3l-16.7-184.7h-18L98.01 471.2h-22.2l4.2-183.7v-87.6c-16.2 12.7-25.9 69.8-33.6 112.6l-17.6-17.7c-.9-31.7 13.5-122.9 44.3-140.7c64.99-2.2 118.99-2.2 182.99-4.2";
+document.getElementById('r-cmd').innerHTML=
+ `<div class="card"><div class="stage">${dieCut(M.amethyst,24,'<path d="'+AIRBALLOON+'"/>')}</div><div class="cap">Hot-air balloon</div><div class="s2">mdi · grand adventure</div></div>`+
+ `<div class="card"><div class="stage">${dieCut(M.amethyst,512,'<path d="'+CARAVAN+'"/>')}</div><div class="cap">Caravan</div><div class="s2">game-icons · road trip</div></div>`;
+// three friends + a ground platform ellipse so the union is one connected silhouette
+const base='<ellipse cx="256" cy="470" rx="215" ry="34"/>';
+document.getElementById('r-squad').innerHTML=
+ `<div class="card"><div class="stage">${dieCut(M.silver,512,'<path d="'+THREEFRIENDS+'"/>'+base)}</div><div class="cap">Group on a base</div><div class="s2">one silhouette + single rim</div></div>`+
+ `<div class="card"><div class="stage">${dieCut(M.silver,512,'<path d="'+THREEFRIENDS+'"/>')}</div><div class="cap">Group, no base (for comparison)</div><div class="s2">the feMorphology rim already unifies them</div></div>`;
+</script></body></html>

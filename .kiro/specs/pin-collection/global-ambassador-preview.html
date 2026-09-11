@@ -1,0 +1,975 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Global Ambassador — Colored & Detailed Cloisonné Pin Candidates</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #090514;
+      --bg-card: rgba(20, 14, 38, 0.88);
+      --bg-card-hover: rgba(34, 23, 62, 0.98);
+      --border-card: rgba(159, 122, 234, 0.25);
+      --text-main: #f7fafc;
+      --text-muted: #a0aec0;
+      --accent-purple: #9f7aea;
+      --gold: #f6c343;
+      --prism-gradient: linear-gradient(135deg, #fff0c4, #ffc2e8, #c9a8ff, #8ed8ff, #a8f0c8, #ffe07a, #b06fd8);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: radial-gradient(circle at 50% 0%, #25124d 0%, var(--bg-dark) 80%);
+      color: var(--text-main);
+      min-height: 100vh;
+      padding: 40px 24px 80px;
+    }
+
+    header {
+      max-width: 1200px;
+      margin: 0 auto 36px;
+      text-align: center;
+    }
+
+    .badge-sub {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(255, 215, 0, 0.15);
+      border: 1px solid rgba(255, 215, 0, 0.4);
+      color: #ffd700;
+      padding: 5px 16px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.6px;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+
+    h1 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 38px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 10px;
+      background: linear-gradient(135deg, #ffffff 40%, #ffd700 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .subtitle {
+      max-width: 760px;
+      margin: 0 auto;
+      font-size: 15px;
+      line-height: 1.6;
+      color: var(--text-muted);
+    }
+    .subtitle b { color: #fff; }
+
+    /* Keyframe shimmer for Prismatic tier */
+    @keyframes shmr { 
+      0%   { transform: translateX(0); } 
+      100% { transform: translateX(340px); } 
+    }
+    .shmr { 
+      animation: shmr 2.4s linear infinite; 
+    }
+    @media (prefers-reduced-motion: reduce) { 
+      .shmr { animation: none !important; opacity: 0.35 !important; } 
+    }
+
+    /* Grid of Options */
+    .candidates-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 24px;
+      max-width: 1280px;
+      margin: 0 auto 48px;
+    }
+
+    .candidate-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-card);
+      border-radius: 20px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+      position: relative;
+    }
+    .candidate-card:hover {
+      transform: translateY(-4px);
+      border-color: rgba(255, 215, 0, 0.45);
+      box-shadow: 0 12px 32px rgba(255, 215, 0, 0.15);
+    }
+    .candidate-card.recommended {
+      border: 2px solid #ffd700;
+      box-shadow: 0 8px 28px rgba(255, 215, 0, 0.22);
+    }
+    .recommended-pill {
+      position: absolute;
+      top: -12px;
+      background: linear-gradient(90deg, #ffd700, #ffb347);
+      color: #0f172a;
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding: 3px 12px;
+      border-radius: 999px;
+    }
+
+    .card-art-box {
+      width: 160px;
+      height: 160px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 16px;
+      filter: drop-shadow(0 10px 20px rgba(0, 0, 0, 0.7));
+    }
+
+    .card-name {
+      font-family: 'Outfit', sans-serif;
+      font-size: 19px;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 6px;
+    }
+    .card-palette-tag {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--gold);
+      background: rgba(246, 195, 67, 0.12);
+      padding: 3px 10px;
+      border-radius: 999px;
+      margin-bottom: 12px;
+    }
+    .card-desc {
+      font-size: 13px;
+      color: var(--text-muted);
+      line-height: 1.5;
+      margin-bottom: 16px;
+      text-align: left;
+    }
+    .swatches {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 14px;
+      justify-content: center;
+      width: 100%;
+    }
+    .swatch {
+      width: 22px;
+      height: 22px;
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    /* Live Catalog Card Preview Section */
+    .catalog-preview-section {
+      max-width: 900px;
+      margin: 0 auto 50px;
+      background: rgba(14, 10, 28, 0.95);
+      border: 1px solid var(--border-card);
+      border-radius: 24px;
+      padding: 32px;
+      text-align: center;
+    }
+    .section-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 24px;
+      font-weight: 800;
+      margin-bottom: 8px;
+    }
+    .section-sub {
+      font-size: 14px;
+      color: var(--text-muted);
+      margin-bottom: 24px;
+    }
+
+    .interactive-card-container {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 32px;
+      align-items: center;
+    }
+
+    /* Exact catalog card style from pin-catalog-v2-progress.html */
+    .pin-card-preview {
+      background: var(--bg-card);
+      border: 1px solid var(--border-card);
+      border-radius: 18px;
+      padding: 20px 18px;
+      width: 300px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+      position: relative;
+    }
+    .pin-badge-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+    .tier-badge-prism {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding: 3px 10px;
+      border-radius: 999px;
+      background: rgba(255, 215, 0, 0.25);
+      color: #ffd700;
+      border: 1px solid #ffd700;
+    }
+    .style-badge-diecut {
+      font-size: 11px;
+      font-weight: 600;
+      color: #90cdf4;
+      background: rgba(49, 130, 206, 0.18);
+      border: 1px solid rgba(49, 130, 206, 0.35);
+      padding: 3px 8px;
+      border-radius: 6px;
+    }
+    .style-badge-status {
+      font-size: 11px;
+      font-weight: 600;
+      color: #fff;
+      background: #1e6b3a;
+      padding: 3px 8px;
+      border-radius: 6px;
+    }
+    .pin-name {
+      font-family: 'Outfit', sans-serif;
+      font-size: 18px;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 6px;
+    }
+    .pin-criteria {
+      font-size: 13px;
+      color: var(--text-muted);
+      line-height: 1.45;
+    }
+
+    .selector-box {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      text-align: left;
+    }
+    .btn-select {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: #f7fafc;
+      padding: 12px 18px;
+      border-radius: 12px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .btn-select:hover, .btn-select.active {
+      background: rgba(159, 122, 234, 0.25);
+      border-color: #ffd700;
+      color: #fff;
+    }
+    .btn-select .dot {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+    }
+
+    /* Comparison Table */
+    .matrix-table {
+      width: 100%;
+      max-width: 1000px;
+      margin: 0 auto;
+      border-collapse: collapse;
+      font-size: 13px;
+      background: var(--bg-card);
+      border-radius: 16px;
+      overflow: hidden;
+      border: 1px solid var(--border-card);
+    }
+    .matrix-table th, .matrix-table td {
+      padding: 14px 18px;
+      text-align: left;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    }
+    .matrix-table th {
+      background: rgba(159, 122, 234, 0.15);
+      color: #fff;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="badge-sub">✨ Culture Pinnacle • Prism Tier</div>
+    <h1>Global Ambassador Pin Redesign</h1>
+    <p class="subtitle">
+      Transforming the <b>Global Ambassador</b> Culture pinnacle pin from a dark wireframe outline into a richly poured, authentic Disney <b>Prismatic Cloisonné</b> collector's pin.
+    </p>
+  </header>
+
+  <!-- Side-by-Side Candidates Grid -->
+  <div class="candidates-grid">
+
+    <!-- MASTERPIECE: The Grand Folio High-Density Cloisonné -->
+    <div class="candidate-card recommended" style="grid-column: 1 / -1; max-width: 860px; margin: 0 auto 24px; border: 2px solid #fbbf24; background: radial-gradient(circle at 50% 0%, rgba(30, 20, 60, 0.95), var(--bg-card));">
+      <div class="recommended-pill" style="background: linear-gradient(135deg, #fbbf24, #d97706); color: #000; font-weight: 800;">✨ Masterpiece Selection (Active in Catalog)</div>
+      <div style="display: flex; flex-wrap: wrap; gap: 28px; align-items: center; justify-content: center; width: 100%;">
+        <div class="card-art-box" id="art-masterpiece" style="width: 180px; height: 180px;"></div>
+        <div style="flex: 1; min-width: 280px; text-align: left;">
+          <div class="card-name" style="font-size: 24px;">The Grand Folio (High-Density Cloisonné)</div>
+          <div class="card-palette-tag" style="background: rgba(251, 191, 36, 0.15); color: #fbbf24;">Full Thematic Density • All 11 Pavilions + 3 Stamps</div>
+          <div class="swatches" style="justify-content: flex-start;">
+            <div class="swatch" style="background:#162846" title="Cover: Diplomatic Navy Leather"></div>
+            <div class="swatch" style="background:#0284c7" title="Oceans: Azure Blue Cloisonné"></div>
+            <div class="swatch" style="background:#fbbf24" title="Continents & Filigree: Sunlight Gold"></div>
+            <div class="swatch" style="background:#10b981" title="World Nature: Emerald Facets"></div>
+            <div class="swatch" style="background:#a8323f" title="Asia Stamp & Pen: Imperial Crimson"></div>
+            <div class="swatch" style="background:#2f7d3e" title="UK Stamp: Forest Green"></div>
+            <div class="swatch" style="background:#14727f" title="France 360 Stamp: World Showcase Teal"></div>
+            <div class="swatch" style="background:#fbf7ee" title="Pages: Ivory Parchment"></div>
+          </div>
+          <div class="card-desc" style="font-size: 14px; margin-bottom: 0;">
+            <strong>Solves the empty cover:</strong>
+            <ul style="margin: 8px 0 0 18px; line-height: 1.6; color: #cbd5e1;">
+              <li><b>4 Gilded Corner Filigrees:</b> Art Deco brackets frame the inset stitched leather panel.</li>
+              <li><b>3 World Showcase Visa Stamps:</b> Japan Sakura Hexagon (Crimson), UK Heritage Shield (Forest/White), France 360 Circle (Teal).</li>
+              <li><b>11 Pavilion Gemstones:</b> Multi-colored enamel cabochons orbiting the globe in national flag colors.</li>
+              <li><b>Spaceship Earth Geodesic Globe:</b> Azure blue ocean well with dual-tone Gold & Emerald continents and center equator star.</li>
+              <li><b>Fanned 3-Layer Gilded Pages:</b> Archival deckled edges with a draped silk bookmark ribbon.</li>
+              <li><b>Executive Embassy Pen:</b> Two-tone burgundy/black lacquer with gilded nib, bands, and pocket clip.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- BEFORE: The Original Hollow Outline -->
+    <div class="candidate-card">
+      <div class="card-art-box" id="art-before"></div>
+      <div class="card-name">Original Outline (Before)</div>
+      <div class="card-palette-tag" style="background:rgba(239,68,68,0.15);color:#f87171">Hollow / Dark Void</div>
+      <div class="swatches">
+        <div class="swatch" style="background:#0f172a" title="Cover: Ink Slate (invisible on dark bg)"></div>
+        <div class="swatch" style="background:#f59e0b" title="Globe: Amber Grid"></div>
+        <div class="swatch" style="background:#f8fafc" title="White Pen (Wire)"></div>
+      </div>
+      <div class="card-desc">
+        <strong>Issues in v1:</strong> The booklet cover is filled with near-black ink (<code>#0f172a</code>) which blends into the card background, leaving the pin looking hollow. The globe has amber grid lines over a black void with no ocean color, and the pen is eaten by the outer rim.
+      </div>
+    </div>
+
+    <!-- CANDIDATE 1: Intermediate Clean Leather (From Screenshot) -->
+    <div class="candidate-card">
+      <div class="card-art-box" id="art-cand1"></div>
+      <div class="card-name">Intermediate (From Screenshot)</div>
+      <div class="card-palette-tag">Basic Color Fill</div>
+      <div class="swatches">
+        <div class="swatch" style="background:#1d3557" title="Passport Cover: Deep Diplomatic Navy"></div>
+        <div class="swatch" style="background:#0284c7" title="Oceans: Azure Blue"></div>
+        <div class="swatch" style="background:#f59e0b" title="Continents: Amber Gold"></div>
+        <div class="swatch" style="background:#a8323f" title="Embassy Pen: Burgundy"></div>
+        <div class="swatch" style="background:#fbf7ee" title="Pages: Ivory Parchment"></div>
+      </div>
+      <div class="card-desc">
+        <strong>What was in screenshot:</strong> Basic color fills added to leather cover, oceans, and pen. Better than the black void, but leaves <b>&gt;60% of the leather cover empty</b> with no stamps, no pavilion gems, and plain rectangular bars.
+      </div>
+    </div>
+
+    <!-- CANDIDATE 2: Imperial Royal Purple & Prismatic Holograph -->
+    <div class="candidate-card">
+      <div class="card-art-box" id="art-cand2"></div>
+      <div class="card-name">Option 2: Imperial Royal Purple</div>
+      <div class="card-palette-tag">Culture Pinnacle Sovereign</div>
+      <div class="swatches">
+        <div class="swatch" style="background:#4a2a7a" title="Cover: Disney Royal Purple"></div>
+        <div class="swatch" style="background:#14727f" title="Oceans: World Showcase Teal"></div>
+        <div class="swatch" style="background:#fbbf24" title="Continents: Sunlight Gold"></div>
+        <div class="swatch" style="background:#f8fafc" title="Pen: Pearl White Cloisonné"></div>
+        <div class="swatch" style="background:#fef3c7" title="Pages: Antiqued Cream"></div>
+      </div>
+      <div class="card-desc">
+        <strong>The Regal Sovereign:</strong> Uses the signature <b>Royal Purple</b> (<code>#4a2a7a</code>) from Disney's official Royal palette, celebrating the Culture Pinnacle. Deep <b>World Showcase Teal</b> oceans, radiant gold continent facets, Pearl White diplomat pen, and warm cream page edges.
+      </div>
+    </div>
+
+    <!-- CANDIDATE 3: World Nature Forest & Discovery Cobalt -->
+    <div class="candidate-card">
+      <div class="card-art-box" id="art-cand3"></div>
+      <div class="card-name">Option 3: World Nature Emerald</div>
+      <div class="card-palette-tag">Conservation & Discovery</div>
+      <div class="swatches">
+        <div class="swatch" style="background:#1b4332" title="Cover: Deep Forest Emerald"></div>
+        <div class="swatch" style="background:#0284c7" title="Oceans: Discovery Cobalt"></div>
+        <div class="swatch" style="background:#10b981" title="Continents: Emerald Landmasses"></div>
+        <div class="swatch" style="background:#f59e0b" title="Plaque: Amber Gold"></div>
+        <div class="swatch" style="background:#f8fafc" title="Pen & Pages: Crisp Parchment"></div>
+      </div>
+      <div class="card-desc">
+        <strong>EPCOT Synthesis:</strong> Honors the criterion of <i>100% World Nature and World Discovery</i> alongside the 11 countries. Deep <b>Forest Emerald</b> passport cover, World Discovery Cobalt pen, dual-enamel emerald/cobalt globe, and golden ambassador headers.
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Interactive Live Catalog Card Preview -->
+  <div class="catalog-preview-section">
+    <div class="section-title">Interactive Catalog Card Preview</div>
+    <div class="section-sub">Test how each candidate renders directly inside the Disney World Tracker catalog card:</div>
+
+    <div class="interactive-card-container">
+      
+      <!-- Live Card (identical markup to pin-catalog-v2-progress.html) -->
+      <div class="pin-card-preview" id="liveCard">
+        <div style="width:120px;height:120px;display:flex;align-items:center;justify-content:center;margin-bottom:12px;" id="liveCardArt"></div>
+        <div class="pin-badge-row">
+          <span class="tier-badge-prism">PRISM</span>
+          <span class="style-badge-diecut">✂️ Die-Cut Silhouette</span>
+          <span class="style-badge-status" id="liveCardStatus">REUSE</span>
+        </div>
+        <div class="pin-name">Global Ambassador</div>
+        <div class="pin-criteria">11 countries + 3 films + World Nature/Discovery 100% — the Culture pinnacle.</div>
+      </div>
+
+      <!-- Controls to switch live card -->
+      <div class="selector-box">
+        <button class="btn-select active" data-option="masterpiece">
+          <span class="dot" style="background:linear-gradient(135deg, #fbbf24, #a8323f);border:1px solid #ffd700"></span>
+          ✨ The Grand Folio (High-Density Masterpiece)
+        </button>
+        <button class="btn-select" data-option="cand1">
+          <span class="dot" style="background:#1d3557;border:1px solid #0284c7"></span>
+          Intermediate (From Screenshot)
+        </button>
+        <button class="btn-select" data-option="before">
+          <span class="dot" style="background:#0f172a;border:1px solid #fff"></span>
+          Original v1 (Hollow / Dark Void)
+        </button>
+        <button class="btn-select" data-option="cand2">
+          <span class="dot" style="background:#4a2a7a;border:1px solid #fbbf24"></span>
+          Option 2: Imperial Royal Purple & Teal
+        </button>
+        <button class="btn-select" data-option="cand3">
+          <span class="dot" style="background:#1b4332;border:1px solid #10b981"></span>
+          Option 3: World Nature Emerald & Cobalt
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Detailed Cloisonné Specifications Matrix -->
+  <table class="matrix-table">
+    <thead>
+      <tr>
+        <th>Component</th>
+        <th>Original (Screenshot)</th>
+        <th>Option 1 (Navy & Gold)</th>
+        <th>Option 2 (Royal Purple)</th>
+        <th>Option 3 (Emerald Green)</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Passport Booklet Cover</strong></td>
+        <td>Dark Ink <code>#0f172a</code> (invisible on dark UI)</td>
+        <td><strong>Deep Diplomatic Navy</strong> (<code>#1d3557</code>) + Gold Filigree</td>
+        <td><strong>Imperial Royal Purple</strong> (<code>#4a2a7a</code>) + Prism Inlay</td>
+        <td><strong>Deep Forest Emerald</strong> (<code>#1b4332</code>)</td>
+      </tr>
+      <tr>
+        <td><strong>Archival Page Edges</strong></td>
+        <td>Transparent wire</td>
+        <td><strong>Ivory Archival Parchment</strong> (<code>#fbf7ee</code>) + Gilded Lines</td>
+        <td><strong>Antiqued Cream</strong> (<code>#fef3c7</code>)</td>
+        <td><strong>Crisp White Parchment</strong> (<code>#f8fafc</code>)</td>
+      </tr>
+      <tr>
+        <td><strong>Embassy Signature Pen</strong></td>
+        <td>White wire swallowed by rim</td>
+        <td><strong>Royal Burgundy Enamel</strong> (<code>#a8323f</code>) + Prism Clip</td>
+        <td><strong>Pearl White Enamel</strong> (<code>#f8fafc</code>) + Prism Nib</td>
+        <td><strong>Discovery Cobalt</strong> (<code>#0369a1</code>)</td>
+      </tr>
+      <tr>
+        <td><strong>Geodesic Globe Oceans</strong></td>
+        <td>Black empty void</td>
+        <td><strong>Vibrant Azure Cloisonné</strong> (<code>#0284c7</code>)</td>
+        <td><strong>World Showcase Teal</strong> (<code>#14727f</code>)</td>
+        <td><strong>Discovery Cobalt</strong> (<code>#0284c7</code>)</td>
+      </tr>
+      <tr>
+        <td><strong>Globe Continents / Grid</strong></td>
+        <td>Single-tone amber lines</td>
+        <td><strong>Warm Sun Gold</strong> (<code>#f59e0b</code>) + 11 Pavilion Stars</td>
+        <td><strong>Sunlight Gold</strong> (<code>#fbbf24</code>) + Iridescent Grid</td>
+        <td><strong>Emerald Landmasses</strong> (<code>#10b981</code>)</td>
+      </tr>
+      <tr>
+        <td><strong>Prism Shimmer Metal</strong></td>
+        <td>2.4s sweep on rim only</td>
+        <td><strong>2.4s Prismatic sweep</strong> across all outer rims & wirelines</td>
+        <td><strong>2.4s Prismatic sweep</strong> across all outer rims & wirelines</td>
+        <td><strong>2.4s Prismatic sweep</strong> across all outer rims & wirelines</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- Render Scripts -->
+  <script>
+    let uid = 0;
+
+    const PRISM_STOPS = [
+      { off: '0.000', col: '#fff0c4' },
+      { off: '0.166', col: '#ffc2e8' },
+      { off: '0.333', col: '#c9a8ff' },
+      { off: '0.500', col: '#8ed8ff' },
+      { off: '0.666', col: '#a8f0c8' },
+      { off: '0.833', col: '#ffe07a' },
+      { off: '1.000', col: '#b06fd8' }
+    ];
+
+    function getPrismMetalStops() {
+      return PRISM_STOPS.map(s => `<stop offset="${s.off}" stop-color="${s.col}"/>`).join('');
+    }
+
+    /*
+     * Custom Cloisonne Renderer for Global Ambassador Pin:
+     * Transforms the passport geometry into a multi-layered, solid-cast cloisonne masterpiece.
+     */
+    function renderGlobalAmbassadorArt(variant = 'cand1', size = 150) {
+      const id = 'ga-' + (++uid);
+
+      // Color Theme Definitions
+      const themes = {
+        before: {
+          cover: '#0f172a',
+          pages: '#0f172a',
+          pen: '#f8fafc',
+          penClip: '#c9a8ff',
+          bars: '#f59e0b',
+          ocean: '#0f172a',
+          grid: '#f59e0b',
+          stars: false,
+          hasBorder: false
+        },
+        cand1: {
+          cover: '#1a2e4c',       // Diplomatic Navy
+          coverTrim: '#233d66',   // Inset leather panel
+          pages: '#fbf7ee',       // Warm Ivory Parchment
+          pen: '#a8323f',         // Royal Burgundy Pen
+          penClip: 'url(#g-' + id + '-p)',
+          bars: '#fbbf24',        // Sunlight Gold Headers
+          ocean: '#0284c7',       // Azure Blue Ocean
+          grid: '#f59e0b',        // Amber Gold Continents
+          stars: true,            // 11 World Showcase Country Stars
+          hasBorder: true
+        },
+        cand2: {
+          cover: '#3d1b63',       // Royal Purple
+          coverTrim: '#4c227b',
+          pages: '#fef3c7',       // Antiqued Cream
+          pen: '#f8fafc',         // Pearl White
+          penClip: 'url(#g-' + id + '-p)',
+          bars: '#fbbf24',
+          ocean: '#14727f',       // Teal Ocean
+          grid: '#fcd34d',        // Light Gold Grid
+          stars: true,
+          hasBorder: true
+        },
+        cand3: {
+          cover: '#153826',       // Forest Emerald
+          coverTrim: '#1c4d34',
+          pages: '#f8fafc',       // Crisp White
+          pen: '#0284c7',         // Discovery Cobalt
+          penClip: 'url(#g-' + id + '-p)',
+          bars: '#fbbf24',
+          ocean: '#0284c7',       // Cobalt Ocean
+          grid: '#10b981',        // Emerald Land
+          stars: true,
+          hasBorder: true
+        }
+      };
+
+      const th = themes[variant] || themes.cand1;
+
+      // Outer unified die-cut hull / contour:
+      // Combines the pen (left), pages (top), and booklet body into one seamless metal perimeter
+      const outerHullD = `
+        M 139.2 18
+        L 100.9 251.1
+        L 71.17 419.2
+        L 330.6 494
+        L 440.8 111.6
+        L 405.7 61.8
+        L 235.9 33.88
+        L 166.6 23.27
+        Z
+      `;
+
+      // 11 World Showcase Country Stars (around the globe or along the passport banner)
+      // Representing Mexico, Norway, China, Germany, Italy, USA, Japan, Morocco, France, UK, Canada
+      const countryStars = th.stars ? `
+        <!-- 11 Diplomatic Nation Stars around the Geodesic Globe -->
+        <g fill="url(#g-${id}-p)" stroke="#1a2e4c" stroke-width="0.6">
+          <!-- 11 Pavilion Stars orbiting the equator -->
+          <circle cx="140" cy="305" r="2.4"/>
+          <circle cx="152" cy="272" r="2.4"/>
+          <circle cx="176" cy="246" r="2.4"/>
+          <circle cx="208" cy="230" r="2.4"/>
+          <circle cx="244" cy="225" r="2.4"/>
+          <circle cx="280" cy="232" r="2.4"/>
+          <circle cx="312" cy="250" r="2.4"/>
+          <circle cx="334" cy="278" r="2.4"/>
+          <circle cx="344" cy="312" r="2.4"/>
+          <circle cx="338" cy="348" r="2.4"/>
+          <circle cx="320" cy="380" r="2.4"/>
+        </g>
+      ` : '';
+
+      return `
+      <svg width="${size}" height="${size}" viewBox="-10 -10 532 532" style="overflow:visible" role="img">
+        <defs>
+          <!-- Prism Holographic Metal Gradient -->
+          <linearGradient id="g-${id}-p" x1=".15" y1="0" x2=".85" y2="1">
+            ${getPrismMetalStops()}
+          </linearGradient>
+
+          <!-- Sun Gold Plaque Gradient -->
+          <linearGradient id="g-${id}-gold" x1="0" y1="0" x2="1" y2="0.8">
+            <stop offset="0" stop-color="#fef08a"/>
+            <stop offset="0.4" stop-color="#fbbf24"/>
+            <stop offset="1" stop-color="#b45309"/>
+          </linearGradient>
+
+          <!-- Glass Gloss Shimmer Gradient -->
+          <linearGradient id="g-${id}-gl" x1="0" y1="0" x2=".3" y2="1">
+            <stop offset="0" stop-color="#fff" stop-opacity=".45"/>
+            <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+          </linearGradient>
+
+          <!-- Shimmer Sweep for Prism Animation -->
+          <linearGradient id="g-${id}-sh" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stop-color="#fff" stop-opacity="0"/>
+            <stop offset=".5" stop-color="#fff" stop-opacity=".5"/>
+            <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+          </linearGradient>
+
+          <!-- Drop Shadow for Tactile Pin Realism -->
+          <filter id="sh-${id}" x="-30%" y="-30%" width="160%" height="160%">
+            <feDropShadow dx="0" dy="8" stdDeviation="7" flood-color="#000000" flood-opacity=".75"/>
+          </filter>
+
+          <clipPath id="c-${id}-hull">
+            <path d="${outerHullD}"/>
+          </clipPath>
+        </defs>
+
+        <g filter="url(#sh-${id})">
+
+          <!-- 1. SOLID DIE-CUT METAL BASE & OUTER PRISM RIM -->
+          <path d="${outerHullD}" fill="url(#g-${id}-p)" stroke="url(#g-${id}-p)" stroke-width="14" stroke-linejoin="round"/>
+
+          <!-- 2. ARCHIVAL IVORY PAGES (Gilded top edge) -->
+          <path d="M 235.9 33.88 L 402.4 81.82 L 405.7 61.8 Z" fill="${th.pages}"/>
+          <line x1="240" y1="42" x2="400" y2="78" stroke="url(#g-${id}-p)" stroke-width="1.8"/>
+          <line x1="245" y1="48" x2="395" y2="74" stroke="url(#g-${id}-p)" stroke-width="1.2"/>
+
+          <!-- 3. PASSPORT COVER BODY (Rich Enamel Leather Fill) -->
+          <path d="M 181.4 36.9 L 71.17 419.2 L 330.6 494 L 440.8 111.6 Z" fill="${th.cover}"/>
+
+          ${th.hasBorder ? `
+            <!-- Hot-Stamped Gilded Inset Border on Passport Cover -->
+            <path d="M 187 56 L 89 398 L 320 465 L 418 123 Z" fill="${th.coverTrim || th.cover}" stroke="url(#g-${id}-p)" stroke-width="2.2"/>
+            <path d="M 191 63 L 96 392 L 314 455 L 411 127 Z" fill="none" stroke="url(#g-${id}-p)" stroke-width="1" stroke-dasharray="6,3"/>
+          ` : ''}
+
+          <!-- 4. SIGNATURE EMBASSY PEN (Along Left Spine) -->
+          <!-- Pen Barrel -->
+          <path d="M 139.2 18 L 100.9 251.1 L 166.6 23.27 Z" fill="${th.pen}" stroke="url(#g-${id}-p)" stroke-width="3"/>
+          <!-- Pen Metallic Clip running down barrel -->
+          <path d="M 137 32 L 126 150 L 132 150 L 142 34 Z" fill="${th.penClip}" stroke="url(#g-${id}-p)" stroke-width="1.2"/>
+          <circle cx="129" cy="152" r="3.5" fill="url(#g-${id}-p)"/>
+          <!-- Pen Nib / Cap Band -->
+          <line x1="128" y1="60" x2="152" y2="67" stroke="url(#g-${id}-p)" stroke-width="3"/>
+          <line x1="114" y1="160" x2="136" y2="167" stroke="url(#g-${id}-p)" stroke-width="2"/>
+
+          <!-- 5. EMBOSSED GOLD DIPLOMATIC HEADER BARS (Cells 3 & 4) -->
+          <path d="M 190.8 87.45 L 406 149.5 L 401 166.7 L 185.8 104.7 Z" fill="${th.bars}" stroke="url(#g-${id}-p)" stroke-width="2"/>
+          <path d="M 214.7 177.6 L 337.7 213 L 332.7 230.2 L 209.7 194.8 Z" fill="${th.bars}" stroke="url(#g-${id}-p)" stroke-width="2"/>
+
+          <!-- 6. THE GEODESIC AMBASSADOR GLOBE (Cells 5 to 14) -->
+          <!-- Globe Ocean Well Base (Cell 5) -->
+          <circle cx="234" cy="340" r="102" fill="${th.ocean}" stroke="url(#g-${id}-p)" stroke-width="6"/>
+
+          <!-- Continent / Longitude / Latitude Facets (Cells 6-14) -->
+          <g fill="${th.grid}" stroke="url(#g-${id}-p)" stroke-width="3.2" stroke-linejoin="round">
+            <!-- Cell 6 (Top-Left) -->
+            <path d="M 234.1 255.3 c -23.8 -0.1 -46.4 9.6 -62.7 26.3 l 35.4 10.2 c 8 -13.8 18.2 -26.3 30.1 -36.5 z"/>
+            <!-- Cell 7 (Top-Center) -->
+            <path d="M 256.7 263 c -12.5 8.6 -23.3 20.4 -31.9 34 l 40.8 11.8 c -0.1 -16.1 -2.9 -31.9 -8.9 -45.8 z"/>
+            <!-- Cell 8 (Top-Right) -->
+            <path d="M 277.5 267 c 4.7 15 6.6 31 6.1 47 l 35.4 10.2 c -5.1 -23.8 -20 -44.7 -41.5 -57.2 z"/>
+            <!-- Cell 9 (Mid-Left) -->
+            <path d="M 159.6 296.9 c -4 6.5 -7.2 13.7 -9.4 21.4 c -2.2 7.6 -3.3 15.3 -3.4 22.8 l 38.9 11.2 c 1.1 -7.6 2.8 -15.1 4.9 -22.5 c 2.1 -7.4 4.8 -14.7 7.9 -21.7 z"/>
+            <!-- Cell 10 (Mid-Center Core) -->
+            <path d="M 216 313.1 c -3.3 7 -6 14.3 -8.1 21.7 c -2.1 7.4 -3.7 15 -4.6 22.6 l 48.4 14 c 3.2 -7 6 -14.2 8.1 -21.7 c 2.1 -7.4 3.7 -15 4.6 -22.6 z"/>
+            <!-- Cell 11 (Mid-Right) -->
+            <path d="M 282 332.1 c -1.1 7.6 -2.8 15.2 -4.9 22.6 c -2.1 7.4 -4.8 14.7 -7.9 21.8 l 38.9 11.2 c 3.9 -6.5 7.1 -13.6 9.3 -21.3 c 2.2 -7.7 3.3 -15.4 3.5 -23.1 z"/>
+            <!-- Cell 12 (Bottom-Left) -->
+            <path d="M 148.6 360.3 c 5 23.9 20 45 41.8 57.5 c -4.8 -15.1 -6.8 -31.1 -6.3 -47.3 z"/>
+            <!-- Cell 13 (Bottom-Center) -->
+            <path d="M 202.1 375.7 c 0.1 16.2 2.9 31.9 8.9 45.9 c 12.5 -8.7 23.3 -20.5 32 -34.1 z"/>
+            <!-- Cell 14 (Bottom-Right) -->
+            <path d="M 260.9 392.7 c -8.1 13.9 -18.3 26.4 -30.3 36.6 c 25 1 48.8 -8.9 65.8 -26.4 z"/>
+          </g>
+
+          <!-- Outer Gilded Bezel around Globe -->
+          <circle cx="234" cy="340" r="102" fill="none" stroke="url(#g-${id}-p)" stroke-width="8"/>
+          <circle cx="234" cy="340" r="105" fill="none" stroke="#000" stroke-opacity="0.3" stroke-width="1.8"/>
+
+          ${countryStars}
+
+          <!-- 7. SPECULAR CLOISONNÉ ENAMEL HIGHLIGHT CURVE -->
+          <g clip-path="url(#c-${id}-hull)">
+            <ellipse cx="210" cy="180" rx="160" ry="90" transform="rotate(-26 210 180)" fill="url(#g-${id}-gl)"/>
+            <!-- Animated Prismatic Shimmer Sweep -->
+            <rect class="shmr" x="-300" y="0" width="180" height="500" fill="url(#g-${id}-sh)"/>
+          </g>
+
+          <!-- Final Wireline Finishing Stroke -->
+          <path d="${outerHullD}" fill="none" stroke="#fff" stroke-opacity=".35" stroke-width="2.5"/>
+        </g>
+      </svg>
+      `;
+    }
+
+    function renderMasterpiece(size = 180) {
+      const id = 'ga-mast-' + (++uid);
+      const coverBg = '#162846';
+      const coverInner = '#1c345c';
+      const gold = '#fbbf24';
+      const crimson = '#a8323f';
+      const teal = '#14727f';
+      const forest = '#2f7d3e';
+      const ivory = '#fbf7ee';
+      const azure = '#0284c7';
+
+      const outerHull = `
+        M 136 16
+        L 96 254
+        L 68 422
+        L 332 496
+        L 444 110
+        L 408 58
+        L 236 32
+        L 164 20
+        Z
+      `;
+
+      return `
+      <svg width="${size}" height="${size}" viewBox="-10 -10 532 532" style="overflow:visible" role="img">
+        <defs>
+          <linearGradient id="g-${id}-p" x1=".15" y1="0" x2=".85" y2="1">${getPrismMetalStops()}</linearGradient>
+          <linearGradient id="g-${id}-gold" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#fff8db"/><stop offset="0.5" stop-color="#fbbf24"/><stop offset="1" stop-color="#b45309"/>
+          </linearGradient>
+          <linearGradient id="g-${id}-gl" x1="0" y1="0" x2=".35" y2="1">
+            <stop offset="0" stop-color="#fff" stop-opacity=".6"/>
+            <stop offset=".4" stop-color="#fff" stop-opacity=".15"/>
+            <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+          </linearGradient>
+          <linearGradient id="g-${id}-sh" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stop-color="#fff" stop-opacity="0"/>
+            <stop offset=".5" stop-color="#fff" stop-opacity=".55"/>
+            <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+          </linearGradient>
+          <clipPath id="c-${id}"><path d="${outerHull}"/></clipPath>
+          <filter id="f-${id}" x="-25%" y="-25%" width="150%" height="160%">
+            <feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#000" flood-opacity=".75"/>
+          </filter>
+        </defs>
+
+        <g filter="url(#f-${id})">
+          <!-- 1. DIE-CUT SOLID BASE & OUTER PRISM RIM -->
+          <path d="${outerHull}" fill="url(#g-${id}-p)" stroke="url(#g-${id}-p)" stroke-width="26" stroke-linejoin="round"/>
+
+          <!-- 2. FANNED GILDED ARCHIVAL PAGES (Multi-layered top) -->
+          <path d="M 230 30 L 416 82 L 418 64 Z" fill="#e2d9c8"/>
+          <path d="M 234 32 L 410 82 L 413 62 Z" fill="#f4ece1"/>
+          <line x1="240" y1="42" x2="410" y2="80" stroke="url(#g-${id}-p)" stroke-width="3"/>
+          <path d="M 238 34 L 404 82 L 407 60 Z" fill="${ivory}"/>
+          <line x1="245" y1="48" x2="402" y2="76" stroke="url(#g-${id}-p)" stroke-width="2.5"/>
+          <line x1="255" y1="54" x2="395" y2="72" stroke="url(#g-${id}-p)" stroke-width="1.8"/>
+          
+          <!-- Silk Bookmark Ribbon draping from top pages -->
+          <path d="M 360 70 L 372 130 L 382 132 L 376 68 Z" fill="${crimson}" stroke="url(#g-${id}-p)" stroke-width="2"/>
+          <polygon points="368,130 376,124 384,130" fill="url(#g-${id}-p)"/>
+
+          <!-- 3. MAIN LEATHER PASSPORT COVER -->
+          <path d="M 181.4 36.9 L 71.17 419.2 L 330.6 494 L 440.8 111.6 Z" fill="${coverBg}"/>
+          
+          <!-- Inset Embossed Leather Panel with Gilded Stitching -->
+          <path d="M 186 54 L 84 404 L 320 472 L 424 120 Z" fill="${coverInner}" stroke="url(#g-${id}-p)" stroke-width="4"/>
+          <path d="M 190 62 L 92 396 L 314 462 L 416 126 Z" fill="none" stroke="url(#g-${id}-p)" stroke-width="1.8" stroke-dasharray="10,5"/>
+
+          <!-- Ornate Gilded Corner Filigree Brackets -->
+          <path d="M 188 80 L 188 56 L 212 56" fill="none" stroke="url(#g-${id}-gold)" stroke-width="3"/>
+          <circle cx="196" cy="64" r="3.5" fill="url(#g-${id}-gold)"/>
+          <path d="M 400 120 L 422 120 L 422 144" fill="none" stroke="url(#g-${id}-gold)" stroke-width="3"/>
+          <circle cx="414" cy="128" r="3.5" fill="url(#g-${id}-gold)"/>
+          <path d="M 86 380 L 86 402 L 110 402" fill="none" stroke="url(#g-${id}-gold)" stroke-width="3"/>
+          <circle cx="94" cy="394" r="3.5" fill="url(#g-${id}-gold)"/>
+          <path d="M 318 450 L 318 470 L 294 470" fill="none" stroke="url(#g-${id}-gold)" stroke-width="3"/>
+          <circle cx="310" cy="462" r="3.5" fill="url(#g-${id}-gold)"/>
+
+          <!-- 4. EMBOSSED GILDED HEADER PLATES & DIPLOMATIC EMBLEM -->
+          <path d="M 190.8 87.45 L 406 149.5 L 401 166.7 L 185.8 104.7 Z" fill="url(#g-${id}-gold)" stroke="url(#g-${id}-p)" stroke-width="2.5"/>
+          <path d="M 205 100 L 215 103 L 225 106 M 370 148 L 380 151 L 390 154" stroke="#78350f" stroke-width="2" fill="none"/>
+          <polygon points="298,124 301,131 308,133 303,138 304,145 298,141 292,145 293,138 288,133 295,131" fill="#fff" stroke="#78350f" stroke-width="1"/>
+
+          <path d="M 214.7 177.6 L 337.7 213 L 332.7 230.2 L 209.7 194.8 Z" fill="${gold}" stroke="url(#g-${id}-p)" stroke-width="2"/>
+          <line x1="225" y1="192" x2="322" y2="220" stroke="#78350f" stroke-width="2" stroke-dasharray="6,4"/>
+
+          <!-- 5. COLORFUL WORLD SHOWCASE VISA ENTRY STAMPS -->
+          <!-- Stamp 1: Japan / Asia Sakura Hexagon Stamp in Crimson & Gold -->
+          <g transform="translate(355, 175) rotate(14)">
+            <polygon points="0,-18 16,-9 16,9 0,18 -16,9 -16,-9" fill="${crimson}" stroke="url(#g-${id}-p)" stroke-width="2"/>
+            <circle cx="0" cy="0" r="10" fill="#fff8db" stroke="url(#g-${id}-p)" stroke-width="1.2"/>
+            <circle cx="0" cy="0" r="3.5" fill="${crimson}"/>
+          </g>
+
+          <!-- Stamp 2: UK / European Heritage Shield Stamp in Emerald & White -->
+          <g transform="translate(135, 235) rotate(-12)">
+            <path d="M -14 -16 H 14 V 4 C 14 14 0 20 0 20 C 0 20 -14 14 -14 4 Z" fill="${forest}" stroke="url(#g-${id}-p)" stroke-width="2"/>
+            <path d="M -8 -10 H 8 V 2 C 8 8 0 13 0 13 C 0 13 -8 8 -8 2 Z" fill="#f8fafc" stroke="url(#g-${id}-p)" stroke-width="1.2"/>
+            <line x1="0" y1="-8" x2="0" y2="8" stroke="${crimson}" stroke-width="2.2"/>
+            <line x1="-6" y1="-1" x2="6" y2="-1" stroke="${crimson}" stroke-width="2.2"/>
+          </g>
+
+          <!-- Stamp 3: France / Circle-Vision 360 Stamp in Royal Teal & Gold -->
+          <g transform="translate(375, 270) rotate(8)">
+            <circle cx="0" cy="0" r="16" fill="${teal}" stroke="url(#g-${id}-p)" stroke-width="2"/>
+            <circle cx="0" cy="0" r="12" fill="none" stroke="url(#g-${id}-gold)" stroke-width="1.2" stroke-dasharray="4,2"/>
+            <polygon points="0,-8 6,4 -6,4" fill="url(#g-${id}-gold)"/>
+            <circle cx="0" cy="0" r="3" fill="#fff"/>
+          </g>
+
+          <!-- 6. THE GEODESIC AMBASSADOR GLOBE -->
+          <circle cx="234" cy="340" r="114" fill="none" stroke="url(#g-${id}-p)" stroke-width="10"/>
+          <circle cx="234" cy="340" r="117" fill="none" stroke="#000" stroke-opacity="0.35" stroke-width="2.5"/>
+
+          <!-- 11 MULTI-COLORED WORLD SHOWCASE PAVILION GEMSTONES -->
+          <g stroke="url(#g-${id}-p)" stroke-width="1.5">
+            <circle cx="120" cy="340" r="5.5" fill="#10b981"/>
+            <circle cx="128" cy="296" r="5.5" fill="#3b82f6"/>
+            <circle cx="152" cy="258" r="5.5" fill="#ef4444"/>
+            <circle cx="188" cy="234" r="5.5" fill="#fbbf24"/>
+            <circle cx="234" cy="226" r="5.5" fill="#15803d"/>
+            <circle cx="280" cy="234" r="5.5" fill="#1d4ed8"/>
+            <circle cx="316" cy="258" r="5.5" fill="#f43f5e"/>
+            <circle cx="340" cy="296" r="5.5" fill="#d97706"/>
+            <circle cx="348" cy="340" r="5.5" fill="#0284c7"/>
+            <circle cx="340" cy="384" r="5.5" fill="#dc2626"/>
+            <circle cx="316" cy="422" r="5.5" fill="#b91c1c"/>
+          </g>
+
+          <!-- Geodesic Globe Ocean Well -->
+          <circle cx="234" cy="340" r="102" fill="${azure}" stroke="url(#g-${id}-p)" stroke-width="7"/>
+          <circle cx="234" cy="340" r="98" fill="none" stroke="#000" stroke-opacity="0.25" stroke-width="2"/>
+
+          <!-- Geodesic Continents & Meridians -->
+          <g stroke="url(#g-${id}-p)" stroke-width="3.5" stroke-linejoin="round">
+            <path d="M 234.1 255.3 c -23.8 -0.1 -46.4 9.6 -62.7 26.3 l 35.4 10.2 c 8 -13.8 18.2 -26.3 30.1 -36.5 z" fill="${gold}"/>
+            <path d="M 256.7 263 c -12.5 8.6 -23.3 20.4 -31.9 34 l 40.8 11.8 c -0.1 -16.1 -2.9 -31.9 -8.9 -45.8 z" fill="#10b981"/>
+            <path d="M 277.5 267 c 4.7 15 6.6 31 6.1 47 l 35.4 10.2 c -5.1 -23.8 -20 -44.7 -41.5 -57.2 z" fill="${gold}"/>
+            <path d="M 159.6 296.9 c -4 6.5 -7.2 13.7 -9.4 21.4 c -2.2 7.6 -3.3 15.3 -3.4 22.8 l 38.9 11.2 c 1.1 -7.6 2.8 -15.1 4.9 -22.5 c 2.1 -7.4 4.8 -14.7 7.9 -21.7 z" fill="#10b981"/>
+            <path d="M 216 313.1 c -3.3 7 -6 14.3 -8.1 21.7 c -2.1 7.4 -3.7 15 -4.6 22.6 l 48.4 14 c 3.2 -7 6 -14.2 8.1 -21.7 c 2.1 -7.4 3.7 -15 4.6 -22.6 z" fill="${gold}"/>
+            <path d="M 282 332.1 c -1.1 7.6 -2.8 15.2 -4.9 22.6 c -2.1 7.4 -4.8 14.7 -7.9 21.8 l 38.9 11.2 c 3.9 -6.5 7.1 -13.6 9.3 -21.3 c 2.2 -7.7 3.3 -15.4 3.5 -23.1 z" fill="#10b981"/>
+            <path d="M 148.6 360.3 c 5 23.9 20 45 41.8 57.5 c -4.8 -15.1 -6.8 -31.1 -6.3 -47.3 z" fill="${gold}"/>
+            <path d="M 202.1 375.7 c 0.1 16.2 2.9 31.9 8.9 45.9 c 12.5 -8.7 23.3 -20.5 32 -34.1 z" fill="#10b981"/>
+            <path d="M 260.9 392.7 c -8.1 13.9 -18.3 26.4 -30.3 36.6 c 25 1 48.8 -8.9 65.8 -26.4 z" fill="${gold}"/>
+          </g>
+
+          <polygon points="234,324 238,334 248,336 240,344 242,354 234,348 226,354 228,344 220,336 230,334" fill="#ffffff" stroke="url(#g-${id}-gold)" stroke-width="1.2"/>
+
+          <!-- 7. SCULPTED EXECUTIVE EMBASSY FOUNTAIN PEN -->
+          <path d="M 139.2 18 L 126 100 L 148 100 L 166.6 23.27 Z" fill="${crimson}" stroke="url(#g-${id}-p)" stroke-width="3"/>
+          <path d="M 126 100 L 100.9 251.1 L 118 248 L 148 100 Z" fill="#0f172a" stroke="url(#g-${id}-p)" stroke-width="3"/>
+          <rect x="124" y="96" width="26" height="7" rx="2" fill="url(#g-${id}-gold)" stroke="url(#g-${id}-p)" stroke-width="1.5"/>
+          <rect x="106" y="210" width="20" height="5" rx="1.5" fill="url(#g-${id}-gold)" stroke="url(#g-${id}-p)" stroke-width="1.2"/>
+          <polygon points="100.9,251.1 106,264 114,260 114,250" fill="url(#g-${id}-gold)" stroke="url(#g-${id}-p)" stroke-width="1.5"/>
+          <path d="M 142 30 L 132 150 L 138 150 L 148 32 Z" fill="url(#g-${id}-p)" stroke="url(#g-${id}-p)" stroke-width="2"/>
+          <circle cx="135" cy="152" r="5" fill="url(#g-${id}-gold)" stroke="url(#g-${id}-p)" stroke-width="1.2"/>
+        </g>
+
+        <!-- 8. SPECULAR CLOISONNÉ ENAMEL GLASS LUSTER -->
+        <g clip-path="url(#c-${id})">
+          <ellipse cx="210" cy="180" rx="160" ry="90" transform="rotate(-26 210 180)" fill="url(#g-${id}-gl)"/>
+          <rect class="shmr" x="-300" y="0" width="180" height="500" fill="url(#g-${id}-sh)"/>
+        </g>
+
+        <g clip-path="url(#c-${id})" fill="none">
+          <path d="${outerHull}" stroke="#fff" stroke-opacity=".4" stroke-width="2"/>
+        </g>
+      </svg>
+      `;
+    }
+
+    // Render static grid cards
+    document.getElementById('art-masterpiece').innerHTML = renderMasterpiece(180);
+    document.getElementById('art-before').innerHTML = renderGlobalAmbassadorArt('before', 140);
+    document.getElementById('art-cand1').innerHTML = renderGlobalAmbassadorArt('cand1', 140);
+    document.getElementById('art-cand2').innerHTML = renderGlobalAmbassadorArt('cand2', 140);
+    document.getElementById('art-cand3').innerHTML = renderGlobalAmbassadorArt('cand3', 140);
+
+    // Initial Live Card Render with Masterpiece
+    const liveCardArt = document.getElementById('liveCardArt');
+    const liveCardStatus = document.getElementById('liveCardStatus');
+    liveCardArt.innerHTML = renderMasterpiece(120);
+    liveCardStatus.textContent = 'TWEAK';
+    liveCardStatus.style.background = '#7a5b1e';
+
+    // Interactive button switcher
+    document.querySelectorAll('.btn-select').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.btn-select').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const opt = btn.getAttribute('data-option');
+        if (opt === 'masterpiece') {
+          liveCardArt.innerHTML = renderMasterpiece(120);
+          liveCardStatus.textContent = 'TWEAK';
+          liveCardStatus.style.background = '#7a5b1e';
+        } else {
+          liveCardArt.innerHTML = renderGlobalAmbassadorArt(opt, 120);
+          liveCardStatus.textContent = (opt === 'before') ? 'REUSE' : 'REFINED';
+          liveCardStatus.style.background = (opt === 'before') ? '#1e6b3a' : '#7a2d1f';
+        }
+      });
+    });
+  </script>
+</body>
+</html>

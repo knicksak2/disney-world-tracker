@@ -1,0 +1,1469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Refined Franchise & Immersive Lands Pin Designs</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #070410;
+      --bg-card: rgba(18, 12, 34, 0.9);
+      --bg-card-hover: rgba(28, 18, 52, 0.98);
+      --border-card: rgba(147, 112, 219, 0.25);
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --gold: #f6c343;
+      --silver: #cbd5e1;
+      --accent: #a855f7;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: radial-gradient(circle at 50% 0%, #24104c 0%, var(--bg-dark) 75%);
+      color: var(--text-main);
+      min-height: 100vh;
+      padding: 36px 24px 80px;
+    }
+
+    header {
+      max-width: 1260px;
+      margin: 0 auto 36px;
+      text-align: center;
+    }
+    .badge-top {
+      display: inline-block;
+      padding: 4px 14px;
+      border-radius: 999px;
+      background: rgba(168, 85, 247, 0.15);
+      border: 1px solid rgba(168, 85, 247, 0.4);
+      color: #c084fc;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+    h1 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 34px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 10px;
+      background: linear-gradient(135deg, #ffffff 30%, #e9d5ff 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .subtitle {
+      color: var(--text-muted);
+      font-size: 15px;
+      max-width: 820px;
+      margin: 0 auto;
+      line-height: 1.55;
+    }
+
+    .section-container {
+      max-width: 1260px;
+      margin: 0 auto 52px;
+    }
+    .section-header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      border-bottom: 1px solid rgba(168, 85, 247, 0.28);
+      padding-bottom: 12px;
+      margin-bottom: 24px;
+    }
+    .section-left {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+    }
+    .section-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 21px;
+      font-weight: 700;
+      color: #fff;
+    }
+    .section-badge {
+      font-size: 12px;
+      padding: 2px 10px;
+      border-radius: 999px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .badge-silver { background: rgba(203, 213, 225, 0.18); color: #e2e8f0; border: 1px solid rgba(203, 213, 225, 0.4); }
+    .badge-gold { background: rgba(246, 195, 67, 0.18); color: #fde047; border: 1px solid rgba(246, 195, 67, 0.4); }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
+      gap: 24px;
+    }
+
+    .pin-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-card);
+      border-radius: 20px;
+      padding: 26px 22px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      position: relative;
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+    }
+    .pin-card:hover {
+      background: var(--bg-card-hover);
+      border-color: rgba(168, 85, 247, 0.55);
+      transform: translateY(-4px);
+      box-shadow: 0 18px 42px rgba(0, 0, 0, 0.65);
+    }
+    .pin-card.recommended {
+      border-color: rgba(246, 195, 67, 0.65);
+      background: linear-gradient(180deg, rgba(32, 22, 54, 0.95), rgba(20, 14, 38, 0.9));
+    }
+    .rec-pill {
+      position: absolute;
+      top: 14px;
+      right: 14px;
+      background: linear-gradient(135deg, #f59e0b, #d97706);
+      color: #000;
+      font-size: 11px;
+      font-weight: 800;
+      padding: 3px 10px;
+      border-radius: 999px;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    .art-frame {
+      width: 156px;
+      height: 156px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 18px;
+    }
+
+    .meta-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .pill {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      padding: 2px 8px;
+      border-radius: 999px;
+    }
+    .pill-silver { background: #334155; color: #f1f5f9; border: 1px solid #64748b; }
+    .pill-gold { background: #78350f; color: #fef08a; border: 1px solid #b45309; }
+    .pill-diecut { background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.35); }
+    .pill-contained { background: rgba(168, 85, 247, 0.15); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.35); }
+
+    .pin-name {
+      font-family: 'Outfit', sans-serif;
+      font-size: 19px;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 6px;
+    }
+    .pin-opt-label {
+      font-size: 13.5px;
+      font-weight: 600;
+      color: #c084fc;
+      margin-bottom: 10px;
+    }
+    .pin-desc {
+      font-size: 12.5px;
+      color: var(--text-muted);
+      line-height: 1.5;
+      margin-top: auto;
+    }
+    .feature-list {
+      font-size: 12px;
+      text-align: left;
+      color: #cbd5e1;
+      margin-top: 10px;
+      padding-left: 18px;
+      line-height: 1.45;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="badge-top">Elevated Vector Refinements</div>
+  <h1>Franchise & Immersive Lands Pin Refinements</h1>
+  <p class="subtitle">
+    Upgrading vector craftsmanship to authentic Disney Parks cloisonné collectible standards: 3D spherical projection, faceted cloisonné wire bevels, lathe-turned maritime lathe work, and layered architectural storytelling.
+  </p>
+</header>
+
+<!-- SECTION 1: PIXAR PALS -->
+<div class="section-container">
+  <div class="section-header">
+    <div class="section-left">
+      <div class="section-title">1. Pixar Pals (gold_pixar_pals)</div>
+      <span class="section-badge badge-gold">Gold · Thematic</span>
+    </div>
+    <span style="font-size: 12px; color: var(--text-muted);">Replaces generic beach ball with canonical Pixar iconography</span>
+  </div>
+  <div class="grid">
+    <!-- OPTION A: MASTER CLOISONNE LUXO BALL -->
+    <div class="pin-card recommended">
+      <span class="rec-pill">Recommended</span>
+      <div class="art-frame">
+        
+    <svg width="144" height="144" viewBox="-6 -6 164 164" style="overflow:visible" role="img">
+      <defs>
+        <linearGradient id="g-gold-luxo" x1=".15" y1="0" x2=".85" y2="1">
+          <stop offset="0" stop-color="#ffffff" stop-opacity=".9"/>
+          <stop offset=".15" stop-color="#ffe685"/>
+          <stop offset=".45" stop-color="#f59e0b"/>
+          <stop offset=".75" stop-color="#b45309"/>
+          <stop offset="1" stop-color="#78350f"/>
+        </linearGradient>
+        <linearGradient id="g-luxo-yellow" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#fbbf24"/>
+          <stop offset="1" stop-color="#d97706"/>
+        </linearGradient>
+        <linearGradient id="g-luxo-blue" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#0284c7"/>
+          <stop offset="1" stop-color="#0369a1"/>
+        </linearGradient>
+        <linearGradient id="g-luxo-red" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#ef4444"/>
+          <stop offset="1" stop-color="#b91c1c"/>
+        </linearGradient>
+        <linearGradient id="g-luxo-gl" x1="0" y1="0" x2=".35" y2="1">
+          <stop offset="0" stop-color="#ffffff" stop-opacity=".75"/>
+          <stop offset=".5" stop-color="#ffffff" stop-opacity=".2"/>
+          <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+        </linearGradient>
+        <filter id="sh-luxo" x="-30%" y="-30%" width="160%" height="160%">
+          <feDropShadow dx="0" dy="4" stdDeviation="3.5" flood-color="#000000" flood-opacity=".7"/>
+        </filter>
+        <clipPath id="c-luxo-ball">
+          <circle cx="76" cy="76" r="58"/>
+        </clipPath>
+      </defs>
+      <g filter="url(#sh-luxo)">
+        <!-- Outer Gold Die-Cut Rim Base -->
+        <circle cx="76" cy="76" r="58" fill="url(#g-gold-luxo)" stroke="url(#g-gold-luxo)" stroke-width="6.2" stroke-linejoin="round"/>
+
+        <!-- Sphere Body Clipped Content -->
+        <g clip-path="url(#c-luxo-ball)">
+          <!-- Base Golden Yellow Enamel -->
+          <circle cx="76" cy="76" r="58" fill="url(#g-luxo-yellow)"/>
+
+          <!-- 3D Spherical Cobalt Blue Equatorial Band -->
+          <path d="
+            M 18 64
+            C 40 84, 112 84, 134 64
+            L 135 94
+            C 112 114, 40 114, 17 94
+            Z
+          " fill="url(#g-luxo-blue)"/>
+
+          <!-- Gold Cloisonné Metal Dividers on Blue Band -->
+          <path d="M 18 64 C 40 84, 112 84, 134 64" fill="none" stroke="url(#g-gold-luxo)" stroke-width="2.2" stroke-linecap="round"/>
+          <path d="M 17 94 C 40 114, 112 114, 135 94" fill="none" stroke="url(#g-gold-luxo)" stroke-width="2.2" stroke-linecap="round"/>
+
+          <!-- Central Bold Red 5-Pointed Star in Beveled Gold Cloisonné -->
+          <g>
+            <!-- Red Enamel Base -->
+            <path d="
+              M 76 60
+              L 81.8 74.2
+              L 97.2 76.8
+              L 85.5 87.8
+              L 88.8 103.2
+              L 76 94.6
+              L 63.2 103.2
+              L 66.5 87.8
+              L 54.8 76.8
+              L 70.2 74.2
+              Z
+            " fill="url(#g-luxo-red)" stroke="url(#g-gold-luxo)" stroke-width="2.2" stroke-linejoin="round"/>
+
+            <!-- Faceted Internal Gold Ridges (Real Cloisonné Beveling) -->
+            <line x1="76" y1="85" x2="76" y2="60" stroke="url(#g-gold-luxo)" stroke-width="1.4"/>
+            <line x1="76" y1="85" x2="97.2" y2="76.8" stroke="url(#g-gold-luxo)" stroke-width="1.4"/>
+            <line x1="76" y1="85" x2="88.8" y2="103.2" stroke="url(#g-gold-luxo)" stroke-width="1.4"/>
+            <line x1="76" y1="85" x2="63.2" y2="103.2" stroke="url(#g-gold-luxo)" stroke-width="1.4"/>
+            <line x1="76" y1="85" x2="54.8" y2="76.8" stroke="url(#g-gold-luxo)" stroke-width="1.4"/>
+
+            <!-- Faceted Internal Shading on Alternate Facets for 3D Relief -->
+            <path d="M 76 85 L 76 60 L 81.8 74.2 Z" fill="#ffffff" fill-opacity=".22"/>
+            <path d="M 76 85 L 97.2 76.8 L 85.5 87.8 Z" fill="#000000" fill-opacity=".18"/>
+            <path d="M 76 85 L 88.8 103.2 L 76 94.6 Z" fill="#000000" fill-opacity=".25"/>
+            <path d="M 76 85 L 63.2 103.2 L 66.5 87.8 Z" fill="#ffffff" fill-opacity=".15"/>
+            <path d="M 76 85 L 54.8 76.8 L 70.2 74.2 Z" fill="#ffffff" fill-opacity=".25"/>
+
+            <!-- Center Gold Rivet -->
+            <circle cx="76" cy="85" r="2.2" fill="url(#g-gold-luxo)"/>
+          </g>
+
+          <!-- Inner Ambient Shadow & Curvature Tone -->
+          <circle cx="76" cy="76" r="58" fill="none" stroke="#000000" stroke-opacity=".28" stroke-width="6"/>
+
+          <!-- Specular Curved Glass Highlight -->
+          <ellipse cx="54" cy="48" rx="42" ry="24" transform="rotate(-28 54 48)" fill="url(#g-luxo-gl)"/>
+          
+          <!-- Secondary Bounce Backlight Rim -->
+          <path d="M 112 112 A 58 58 0 0 1 60 132" fill="none" stroke="#ffffff" stroke-opacity=".35" stroke-width="2" stroke-linecap="round"/>
+        </g>
+
+        <!-- Polished Gold Die-Cut Bevel Rim -->
+        <circle cx="76" cy="76" r="58" fill="none" stroke="url(#g-gold-luxo)" stroke-width="6.2"/>
+        <circle cx="76" cy="76" r="55.5" fill="none" stroke="#000000" stroke-opacity=".3" stroke-width="1.2"/>
+      </g>
+    </svg>
+  
+      </div>
+      <div class="meta-row">
+        <span class="pill pill-gold">Gold</span>
+        <span class="pill pill-diecut">✂️ Die-Cut Sphere</span>
+      </div>
+      <div class="pin-name">Pixar Pals</div>
+      <div class="pin-opt-label">Option A: Master Cloisonné Luxo Ball</div>
+      <p class="pin-desc">
+        A true 3D spherical projection of the Luxo Ball with rich canary yellow enamel, curved cobalt blue equator, faceted cloisonné star wire, and specular curved glass reflection.
+      </p>
+      <ul class="feature-list">
+        <li>Realistic spherical 3D perspective & curved blue band</li>
+        <li>Faceted 10-plane red star with raised gold ridges</li>
+        <li>Specular crescent glass reflection & bounce backlight</li>
+      </ul>
+    </div>
+
+    <!-- OPTION B: LUXO JR LAMP & BALL DUO -->
+    <div class="pin-card">
+      <div class="art-frame">
+        
+    <svg width="144" height="144" viewBox="-6 -6 164 164" style="overflow:visible" role="img">
+      <defs>
+        <linearGradient id="g-gold-lamp" x1=".15" y1="0" x2=".85" y2="1">
+          <stop offset="0" stop-color="#ffffff" stop-opacity=".9"/>
+          <stop offset=".15" stop-color="#ffe685"/>
+          <stop offset=".45" stop-color="#f59e0b"/>
+          <stop offset=".75" stop-color="#b45309"/>
+          <stop offset="1" stop-color="#78350f"/>
+        </linearGradient>
+        <linearGradient id="g-lamp-shade" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#f8fafc"/>
+          <stop offset="1" stop-color="#cbd5e1"/>
+        </linearGradient>
+        <filter id="sh-lamp" x="-30%" y="-30%" width="160%" height="160%">
+          <feDropShadow dx="0" dy="4" stdDeviation="3.5" flood-color="#000000" flood-opacity=".7"/>
+        </filter>
+        <clipPath id="c-mini-ball">
+          <circle cx="106" cy="98" r="32"/>
+        </clipPath>
+      </defs>
+      <g filter="url(#sh-lamp)">
+        <!-- Unified Die-Cut Baseplate (Connecting Base + Ball) -->
+        <path d="
+          M 18 132
+          L 138 132
+          C 144 132 144 124 142 118
+          C 140 100 136 74 118 68
+          C 106 62 94 66 84 76
+          L 76 46
+          C 74 38 78 30 76 24
+          C 74 18 64 16 54 20
+          C 44 24 38 34 40 44
+          L 46 64
+          L 34 104
+          C 26 108 18 118 18 132
+          Z
+        " fill="url(#g-gold-lamp)" stroke="url(#g-gold-lamp)" stroke-width="6.2" stroke-linejoin="round"/>
+
+        <!-- INTERIOR ENAMEL: Midnight Navy Studio Floor & Wall -->
+        <path d="
+          M 18 132
+          L 138 132
+          C 144 132 144 124 142 118
+          C 140 100 136 74 118 68
+          C 106 62 94 66 84 76
+          L 76 46
+          C 74 38 78 30 76 24
+          C 74 18 64 16 54 20
+          C 44 24 38 34 40 44
+          L 46 64
+          L 34 104
+          C 26 108 18 118 18 132
+          Z
+        " fill="#140f2d"/>
+
+        <!-- Studio Baseline Wire -->
+        <line x1="20" y1="126" x2="136" y2="126" stroke="url(#g-gold-lamp)" stroke-width="2"/>
+
+        <!-- LUXO JR LAMP (Left) -->
+        <ellipse cx="40" cy="122" rx="20" ry="5.5" fill="url(#g-lamp-shade)" stroke="url(#g-gold-lamp)" stroke-width="2"/>
+        <ellipse cx="40" cy="120" rx="13" ry="3.5" fill="url(#g-gold-lamp)"/>
+        <circle cx="40" cy="116" r="4" fill="url(#g-lamp-shade)" stroke="url(#g-gold-lamp)" stroke-width="1.5"/>
+
+        <line x1="38" y1="116" x2="32" y2="76" stroke="url(#g-gold-lamp)" stroke-width="3.5" stroke-linecap="round"/>
+        <line x1="43" y1="116" x2="39" y2="76" stroke="url(#g-gold-lamp)" stroke-width="2.5" stroke-linecap="round"/>
+        <path d="M 37 106 Q 44 100 37 94 Q 44 88 37 82" fill="none" stroke="#f59e0b" stroke-width="1.5"/>
+
+        <circle cx="36" cy="74" r="5" fill="url(#g-gold-lamp)"/>
+        <circle cx="36" cy="74" r="2.5" fill="#1e293b"/>
+
+        <line x1="36" y1="74" x2="62" y2="44" stroke="url(#g-gold-lamp)" stroke-width="3.5" stroke-linecap="round"/>
+        <line x1="39" y1="71" x2="66" y2="42" stroke="url(#g-gold-lamp)" stroke-width="2.5" stroke-linecap="round"/>
+
+        <circle cx="64" cy="42" r="5" fill="url(#g-gold-lamp)"/>
+
+        <!-- Lamp Shade (Conical Anglepoise Shade looking at the Ball) -->
+        <ellipse cx="60" cy="36" rx="6" ry="4" transform="rotate(35 60 36)" fill="url(#g-gold-lamp)"/>
+        <path d="
+          M 56 32
+          L 76 46
+          L 84 56
+          L 68 68
+          L 54 44
+          Z
+        " fill="url(#g-lamp-shade)" stroke="url(#g-gold-lamp)" stroke-width="2" stroke-linejoin="round"/>
+        <ellipse cx="76" cy="62" rx="11" ry="6" transform="rotate(45 76 62)" fill="#fef08a" stroke="url(#g-gold-lamp)" stroke-width="2"/>
+        
+        <!-- Illuminating Beam onto Ball -->
+        <polygon points="71,58 81,66 114,84 94,106" fill="#fef08a" fill-opacity=".25"/>
+
+        <!-- THE LUXO BALL (Right Foreground) -->
+        <g>
+          <circle cx="106" cy="98" r="32" fill="#f59e0b" stroke="url(#g-gold-lamp)" stroke-width="4"/>
+          <g clip-path="url(#c-mini-ball)">
+            <circle cx="106" cy="98" r="32" fill="#f59e0b"/>
+            <path d="M 74 92 C 86 102, 126 102, 138 92 L 139 108 C 126 118, 86 118, 73 108 Z" fill="#0284c7" stroke="url(#g-gold-lamp)" stroke-width="1.5"/>
+            <path d="
+              M 106 88
+              L 109 96
+              L 118 97
+              L 111 103
+              L 113 112
+              L 106 107
+              L 99 112
+              L 101 103
+              L 94 97
+              L 103 96 Z
+            " fill="#dc2626" stroke="url(#g-gold-lamp)" stroke-width="1.5" stroke-linejoin="round"/>
+            <ellipse cx="94" cy="82" rx="18" ry="10" transform="rotate(-30 94 82)" fill="#ffffff" fill-opacity=".45"/>
+          </g>
+          <circle cx="106" cy="98" r="32" fill="none" stroke="url(#g-gold-lamp)" stroke-width="3.5"/>
+        </g>
+      </g>
+    </svg>
+  
+      </div>
+      <div class="meta-row">
+        <span class="pill pill-gold">Gold</span>
+        <span class="pill pill-diecut">✂️ Die-Cut Duo</span>
+      </div>
+      <div class="pin-name">Pixar Pals</div>
+      <div class="pin-opt-label">Option B: Luxo Jr. Lamp & Ball Duo</div>
+      <p class="pin-desc">
+        The iconic Pixar Animation Studios logo scene: the articulated anglepoise desk lamp hopping beside the Luxo Ball, casting an incandescent beam of light.
+      </p>
+      <ul class="feature-list">
+        <li>Articulated lamp armature with tension spring and head joint</li>
+        <li>Illuminated conical shade spotlighting the ball</li>
+        <li>Single-piece connected metal die-cut silhouette</li>
+      </ul>
+    </div>
+
+    <!-- OPTION C: ANDY'S CLOUD ARCH -->
+    <div class="pin-card">
+      <div class="art-frame">
+        
+    <svg width="144" height="144" viewBox="-6 -6 164 164" style="overflow:visible" role="img">
+      <defs>
+        <linearGradient id="g-gold-arch" x1=".15" y1="0" x2=".85" y2="1">
+          <stop offset="0" stop-color="#ffffff" stop-opacity=".9"/>
+          <stop offset=".15" stop-color="#ffe685"/>
+          <stop offset=".45" stop-color="#f59e0b"/>
+          <stop offset=".75" stop-color="#b45309"/>
+          <stop offset="1" stop-color="#78350f"/>
+        </linearGradient>
+        <linearGradient id="g-andy-sky" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#0284c7"/>
+          <stop offset=".7" stop-color="#38bdf8"/>
+          <stop offset="1" stop-color="#bae6fd"/>
+        </linearGradient>
+        <clipPath id="c-arch-pixar">
+          <path d="M 24 136 V 62 C 24 26 50 14 76 14 C 102 14 128 26 128 62 V 136 Z"/>
+        </clipPath>
+        <filter id="sh-arch" x="-30%" y="-30%" width="160%" height="160%">
+          <feDropShadow dx="0" dy="4" stdDeviation="3.5" flood-color="#000000" flood-opacity=".7"/>
+        </filter>
+      </defs>
+      <g filter="url(#sh-arch)">
+        <!-- Outer Contained Arch Plate -->
+        <path d="M 24 136 V 62 C 24 26 50 14 76 14 C 102 14 128 26 128 62 V 136 Z" fill="url(#g-gold-arch)" stroke="url(#g-gold-arch)" stroke-width="6.2" stroke-linejoin="round"/>
+
+        <!-- Clipped Inner Portal -->
+        <g clip-path="url(#c-arch-pixar)">
+          <!-- Sky Blue Wallpaper Background -->
+          <rect x="24" y="14" width="104" height="122" fill="url(#g-andy-sky)"/>
+
+          <!-- Andy's Authentic Stencil Clouds -->
+          <!-- Cloud 1 (Upper Left) -->
+          <path d="M 36 42 Q 42 34 50 38 Q 58 32 64 38 Q 72 38 72 46 Q 72 52 64 52 L 40 52 Q 34 50 36 42 Z" fill="#ffffff" fill-opacity=".95" stroke="url(#g-gold-arch)" stroke-width="1.2"/>
+          <!-- Cloud 2 (Mid Right) -->
+          <path d="M 82 58 Q 88 52 94 56 Q 102 50 108 56 Q 116 56 116 64 Q 116 70 108 70 L 86 70 Q 80 66 82 58 Z" fill="#ffffff" fill-opacity=".95" stroke="url(#g-gold-arch)" stroke-width="1.2"/>
+
+          <!-- Wooden Bedroom Floor Base -->
+          <rect x="24" y="118" width="104" height="20" fill="#78350f"/>
+          <line x1="24" y1="118" x2="128" y2="118" stroke="url(#g-gold-arch)" stroke-width="2.5"/>
+
+          <!-- Luxo Ball Centered on the Floor -->
+          <g transform="translate(76, 102) scale(0.68)">
+            <circle cx="0" cy="0" r="38" fill="#f59e0b" stroke="url(#g-gold-arch)" stroke-width="3"/>
+            <path d="M -36 -4 C -20 14, 20 14, 36 -4 L 37 14 C 20 32, -20 32, -37 14 Z" fill="#0284c7" stroke="url(#g-gold-arch)" stroke-width="2"/>
+            <path d="
+              M 0 -12
+              L 3.8 0
+              L 15 2
+              L 6.5 10
+              L 9 21
+              L 0 15
+              L -9 21
+              L -6.5 10
+              L -15 2
+              L -3.8 0 Z
+            " fill="#dc2626" stroke="url(#g-gold-arch)" stroke-width="2" stroke-linejoin="round"/>
+            <ellipse cx="-12" cy="-14" rx="18" ry="10" transform="rotate(-30 -12 -14)" fill="#ffffff" fill-opacity=".45"/>
+          </g>
+        </g>
+
+        <!-- Inner Bevel Rim -->
+        <path d="M 24 136 V 62 C 24 26 50 14 76 14 C 102 14 128 26 128 62 V 136 Z" fill="none" stroke="url(#g-gold-arch)" stroke-width="5.5"/>
+        <path d="M 24 136 V 62 C 24 26 50 14 76 14 C 102 14 128 26 128 62 V 136 Z" fill="none" stroke="#000000" stroke-opacity=".3" stroke-width="1.2"/>
+      </g>
+    </svg>
+  
+      </div>
+      <div class="meta-row">
+        <span class="pill pill-gold">Gold</span>
+        <span class="pill pill-contained">🛡️ Contained Arch</span>
+      </div>
+      <div class="pin-name">Pixar Pals</div>
+      <div class="pin-opt-label">Option C: Andy's Cloud Wallpaper Arch</div>
+      <p class="pin-desc">
+        A royal arched plaque capturing Andy's iconic bedroom wallpaper clouds in sky blue and white enamel, framing the Luxo Ball resting on the wooden floor.
+      </p>
+      <ul class="feature-list">
+        <li>Authentic 3-lobe stencil wallpaper clouds</li>
+        <li>Bedroom floor woodgrain baseline in amber enamel</li>
+        <li>Contained architectural arch format</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- SECTION 2: CLASSIC CHARACTERS -->
+<div class="section-container">
+  <div class="section-header">
+    <div class="section-left">
+      <div class="section-title">2. Classic Characters (silver_classic_characters)</div>
+      <span class="section-badge badge-silver">Silver · Thematic</span>
+    </div>
+    <span style="font-size: 12px; color: var(--text-muted);">Honors the Sensational Six · Strictly compliant with "NO Mickey Ears" rule</span>
+  </div>
+  <div class="grid">
+    <!-- OPTION A: STEAMBOAT WILLIE MASTER HELM -->
+    <div class="pin-card recommended">
+      <span class="rec-pill">Recommended</span>
+      <div class="art-frame">
+        
+    <svg width="144" height="144" viewBox="-6 -6 164 164" style="overflow:visible" role="img">
+      <defs>
+        <linearGradient id="g-silv-wheel" x1=".15" y1="0" x2=".85" y2="1">
+          <stop offset="0" stop-color="#ffffff"/>
+          <stop offset=".25" stop-color="#d0d7e2"/>
+          <stop offset=".65" stop-color="#8a99ad"/>
+          <stop offset="1" stop-color="#475569"/>
+        </linearGradient>
+        <filter id="sh-wheel" x="-30%" y="-30%" width="160%" height="160%">
+          <feDropShadow dx="0" dy="4" stdDeviation="3.5" flood-color="#000000" flood-opacity=".7"/>
+        </filter>
+      </defs>
+      <g filter="url(#sh-wheel)">
+        <!-- 8 Turned Handles (Projecting outward) -->
+        
+      <g transform="rotate(0 76 76)">
+        <!-- Turned Handle Shank & Grip -->
+        <path d="
+          M 73.2 32
+          C 72.5 24, 71.5 20, 76 14
+          C 80.5 20, 79.5 24, 78.8 32
+          Z
+        " fill="url(#g-silv-wheel)" stroke="url(#g-silv-wheel)" stroke-width="1.2"/>
+        <!-- Pommel Tip Ball -->
+        <circle cx="76" cy="14" r="4" fill="url(#g-silv-wheel)"/>
+        <!-- Collar Ring at Wheel Rim -->
+        <rect x="72.5" y="30" width="7" height="3" rx="1.5" fill="url(#g-silv-wheel)" stroke="#334155" stroke-width=".8"/>
+      </g>
+    
+      <g transform="rotate(45 76 76)">
+        <!-- Turned Handle Shank & Grip -->
+        <path d="
+          M 73.2 32
+          C 72.5 24, 71.5 20, 76 14
+          C 80.5 20, 79.5 24, 78.8 32
+          Z
+        " fill="url(#g-silv-wheel)" stroke="url(#g-silv-wheel)" stroke-width="1.2"/>
+        <!-- Pommel Tip Ball -->
+        <circle cx="76" cy="14" r="4" fill="url(#g-silv-wheel)"/>
+        <!-- Collar Ring at Wheel Rim -->
+        <rect x="72.5" y="30" width="7" height="3" rx="1.5" fill="url(#g-silv-wheel)" stroke="#334155" stroke-width=".8"/>
+      </g>
+    
+      <g transform="rotate(90 76 76)">
+        <!-- Turned Handle Shank & Grip -->
+        <path d="
+          M 73.2 32
+          C 72.5 24, 71.5 20, 76 14
+          C 80.5 20, 79.5 24, 78.8 32
+          Z
+        " fill="url(#g-silv-wheel)" stroke="url(#g-silv-wheel)" stroke-width="1.2"/>
+        <!-- Pommel Tip Ball -->
+        <circle cx="76" cy="14" r="4" fill="url(#g-silv-wheel)"/>
+        <!-- Collar Ring at Wheel Rim -->
+        <rect x="72.5" y="30" width="7" height="3" rx="1.5" fill="url(#g-silv-wheel)" stroke="#334155" stroke-width=".8"/>
+      </g>
+    
+      <g transform="rotate(135 76 76)">
+        <!-- Turned Handle Shank & Grip -->
+        <path d="
+          M 73.2 32
+          C 72.5 24, 71.5 20, 76 14
+          C 80.5 20, 79.5 24, 78.8 32
+          Z
+        " fill="url(#g-silv-wheel)" stroke="url(#g-silv-wheel)" stroke-width="1.2"/>
+        <!-- Pommel Tip Ball -->
+        <circle cx="76" cy="14" r="4" fill="url(#g-silv-wheel)"/>
+        <!-- Collar Ring at Wheel Rim -->
+        <rect x="72.5" y="30" width="7" height="3" rx="1.5" fill="url(#g-silv-wheel)" stroke="#334155" stroke-width=".8"/>
+      </g>
+    
+      <g transform="rotate(180 76 76)">
+        <!-- Turned Handle Shank & Grip -->
+        <path d="
+          M 73.2 32
+          C 72.5 24, 71.5 20, 76 14
+          C 80.5 20, 79.5 24, 78.8 32
+          Z
+        " fill="url(#g-silv-wheel)" stroke="url(#g-silv-wheel)" stroke-width="1.2"/>
+        <!-- Pommel Tip Ball -->
+        <circle cx="76" cy="14" r="4" fill="url(#g-silv-wheel)"/>
+        <!-- Collar Ring at Wheel Rim -->
+        <rect x="72.5" y="30" width="7" height="3" rx="1.5" fill="url(#g-silv-wheel)" stroke="#334155" stroke-width=".8"/>
+      </g>
+    
+      <g transform="rotate(225 76 76)">
+        <!-- Turned Handle Shank & Grip -->
+        <path d="
+          M 73.2 32
+          C 72.5 24, 71.5 20, 76 14
+          C 80.5 20, 79.5 24, 78.8 32
+          Z
+        " fill="url(#g-silv-wheel)" stroke="url(#g-silv-wheel)" stroke-width="1.2"/>
+        <!-- Pommel Tip Ball -->
+        <circle cx="76" cy="14" r="4" fill="url(#g-silv-wheel)"/>
+        <!-- Collar Ring at Wheel Rim -->
+        <rect x="72.5" y="30" width="7" height="3" rx="1.5" fill="url(#g-silv-wheel)" stroke="#334155" stroke-width=".8"/>
+      </g>
+    
+      <g transform="rotate(270 76 76)">
+        <!-- Turned Handle Shank & Grip -->
+        <path d="
+          M 73.2 32
+          C 72.5 24, 71.5 20, 76 14
+          C 80.5 20, 79.5 24, 78.8 32
+          Z
+        " fill="url(#g-silv-wheel)" stroke="url(#g-silv-wheel)" stroke-width="1.2"/>
+        <!-- Pommel Tip Ball -->
+        <circle cx="76" cy="14" r="4" fill="url(#g-silv-wheel)"/>
+        <!-- Collar Ring at Wheel Rim -->
+        <rect x="72.5" y="30" width="7" height="3" rx="1.5" fill="url(#g-silv-wheel)" stroke="#334155" stroke-width=".8"/>
+      </g>
+    
+      <g transform="rotate(315 76 76)">
+        <!-- Turned Handle Shank & Grip -->
+        <path d="
+          M 73.2 32
+          C 72.5 24, 71.5 20, 76 14
+          C 80.5 20, 79.5 24, 78.8 32
+          Z
+        " fill="url(#g-silv-wheel)" stroke="url(#g-silv-wheel)" stroke-width="1.2"/>
+        <!-- Pommel Tip Ball -->
+        <circle cx="76" cy="14" r="4" fill="url(#g-silv-wheel)"/>
+        <!-- Collar Ring at Wheel Rim -->
+        <rect x="72.5" y="30" width="7" height="3" rx="1.5" fill="url(#g-silv-wheel)" stroke="#334155" stroke-width=".8"/>
+      </g>
+    
+
+        <!-- Outer Wheel Rim Ring (Felloes) -->
+        <!-- Heavy Dual Rim in Silver -->
+        <circle cx="76" cy="76" r="44" fill="none" stroke="url(#g-silv-wheel)" stroke-width="9"/>
+        <!-- Dark Teak / Midnight Navy Enamel Fill inside Rim Channel -->
+        <circle cx="76" cy="76" r="44" fill="none" stroke="#0f172a" stroke-width="5"/>
+        
+        <!-- Felloe Joint Plates with Rivets -->
+        
+      <g transform="rotate(0 76 76)">
+        <rect x="73.5" y="32" width="5" height="11" fill="url(#g-silv-wheel)" stroke="#334155" stroke-width=".8"/>
+        <circle cx="76" cy="35" r=".9" fill="#0f172a"/>
+        <circle cx="76" cy="40" r=".9" fill="#0f172a"/>
+      </g>
+    
+      <g transform="rotate(45 76 76)">
+        <rect x="73.5" y="32" width="5" height="11" fill="url(#g-silv-wheel)" stroke="#334155" stroke-width=".8"/>
+        <circle cx="76" cy="35" r=".9" fill="#0f172a"/>
+        <circle cx="76" cy="40" r=".9" fill="#0f172a"/>
+      </g>
+    
+      <g transform="rotate(90 76 76)">
+        <rect x="73.5" y="32" width="5" height="11" fill="url(#g-silv-wheel)" stroke="#334155" stroke-width=".8"/>
+        <circle cx="76" cy="35" r=".9" fill="#0f172a"/>
+        <circle cx="76" cy="40" r=".9" fill="#0f172a"/>
+      </g>
+    
+      <g transform="rotate(135 76 76)">
+        <rect x="73.5" y="32" width="5" height="11" fill="url(#g-silv-wheel)" stroke="#334155" stroke-width=".8"/>
+        <circle cx="76" cy="35" r=".9" fill="#0f172a"/>
+        <circle cx="76" cy="40" r=".9" fill="#0f172a"/>
+      </g>
+    
+      <g transform="rotate(180 76 76)">
+        <rect x="73.5" y="32" width="5" height="11" fill="url(#g-silv-wheel)" stroke="#334155" stroke-width=".8"/>
+        <circle cx="76" cy="35" r=".9" fill="#0f172a"/>
+        <circle cx="76" cy="40" r=".9" fill="#0f172a"/>
+      </g>
+    
+      <g transform="rotate(225 76 76)">
+        <rect x="73.5" y="32" width="5" height="11" fill="url(#g-silv-wheel)" stroke="#334155" stroke-width=".8"/>
+        <circle cx="76" cy="35" r=".9" fill="#0f172a"/>
+        <circle cx="76" cy="40" r=".9" fill="#0f172a"/>
+      </g>
+    
+      <g transform="rotate(270 76 76)">
+        <rect x="73.5" y="32" width="5" height="11" fill="url(#g-silv-wheel)" stroke="#334155" stroke-width=".8"/>
+        <circle cx="76" cy="35" r=".9" fill="#0f172a"/>
+        <circle cx="76" cy="40" r=".9" fill="#0f172a"/>
+      </g>
+    
+      <g transform="rotate(315 76 76)">
+        <rect x="73.5" y="32" width="5" height="11" fill="url(#g-silv-wheel)" stroke="#334155" stroke-width=".8"/>
+        <circle cx="76" cy="35" r=".9" fill="#0f172a"/>
+        <circle cx="76" cy="40" r=".9" fill="#0f172a"/>
+      </g>
+    
+
+        <!-- 8 Turned Interior Spokes -->
+        
+      <g transform="rotate(0 76 76)">
+        <!-- Spoke Spindle -->
+        <line x1="76" y1="59" x2="76" y2="43" stroke="url(#g-silv-wheel)" stroke-width="4.5" stroke-linecap="round"/>
+        <!-- Turned Spindle Rings -->
+        <circle cx="76" cy="51" r="3.2" fill="url(#g-silv-wheel)"/>
+        <line x1="74" y1="51" x2="78" y2="51" stroke="#334155" stroke-width="1.2"/>
+      </g>
+    
+      <g transform="rotate(45 76 76)">
+        <!-- Spoke Spindle -->
+        <line x1="76" y1="59" x2="76" y2="43" stroke="url(#g-silv-wheel)" stroke-width="4.5" stroke-linecap="round"/>
+        <!-- Turned Spindle Rings -->
+        <circle cx="76" cy="51" r="3.2" fill="url(#g-silv-wheel)"/>
+        <line x1="74" y1="51" x2="78" y2="51" stroke="#334155" stroke-width="1.2"/>
+      </g>
+    
+      <g transform="rotate(90 76 76)">
+        <!-- Spoke Spindle -->
+        <line x1="76" y1="59" x2="76" y2="43" stroke="url(#g-silv-wheel)" stroke-width="4.5" stroke-linecap="round"/>
+        <!-- Turned Spindle Rings -->
+        <circle cx="76" cy="51" r="3.2" fill="url(#g-silv-wheel)"/>
+        <line x1="74" y1="51" x2="78" y2="51" stroke="#334155" stroke-width="1.2"/>
+      </g>
+    
+      <g transform="rotate(135 76 76)">
+        <!-- Spoke Spindle -->
+        <line x1="76" y1="59" x2="76" y2="43" stroke="url(#g-silv-wheel)" stroke-width="4.5" stroke-linecap="round"/>
+        <!-- Turned Spindle Rings -->
+        <circle cx="76" cy="51" r="3.2" fill="url(#g-silv-wheel)"/>
+        <line x1="74" y1="51" x2="78" y2="51" stroke="#334155" stroke-width="1.2"/>
+      </g>
+    
+      <g transform="rotate(180 76 76)">
+        <!-- Spoke Spindle -->
+        <line x1="76" y1="59" x2="76" y2="43" stroke="url(#g-silv-wheel)" stroke-width="4.5" stroke-linecap="round"/>
+        <!-- Turned Spindle Rings -->
+        <circle cx="76" cy="51" r="3.2" fill="url(#g-silv-wheel)"/>
+        <line x1="74" y1="51" x2="78" y2="51" stroke="#334155" stroke-width="1.2"/>
+      </g>
+    
+      <g transform="rotate(225 76 76)">
+        <!-- Spoke Spindle -->
+        <line x1="76" y1="59" x2="76" y2="43" stroke="url(#g-silv-wheel)" stroke-width="4.5" stroke-linecap="round"/>
+        <!-- Turned Spindle Rings -->
+        <circle cx="76" cy="51" r="3.2" fill="url(#g-silv-wheel)"/>
+        <line x1="74" y1="51" x2="78" y2="51" stroke="#334155" stroke-width="1.2"/>
+      </g>
+    
+      <g transform="rotate(270 76 76)">
+        <!-- Spoke Spindle -->
+        <line x1="76" y1="59" x2="76" y2="43" stroke="url(#g-silv-wheel)" stroke-width="4.5" stroke-linecap="round"/>
+        <!-- Turned Spindle Rings -->
+        <circle cx="76" cy="51" r="3.2" fill="url(#g-silv-wheel)"/>
+        <line x1="74" y1="51" x2="78" y2="51" stroke="#334155" stroke-width="1.2"/>
+      </g>
+    
+      <g transform="rotate(315 76 76)">
+        <!-- Spoke Spindle -->
+        <line x1="76" y1="59" x2="76" y2="43" stroke="url(#g-silv-wheel)" stroke-width="4.5" stroke-linecap="round"/>
+        <!-- Turned Spindle Rings -->
+        <circle cx="76" cy="51" r="3.2" fill="url(#g-silv-wheel)"/>
+        <line x1="74" y1="51" x2="78" y2="51" stroke="#334155" stroke-width="1.2"/>
+      </g>
+    
+
+        <!-- Heavy Center Cast Hub -->
+        <!-- Outer Hub Ring -->
+        <circle cx="76" cy="76" r="17" fill="url(#g-silv-wheel)" stroke="#1e293b" stroke-width="1.5"/>
+        <!-- 8 Assembly Bolt Rivets on Hub -->
+        <circle cx="76" cy="63" r="1.4" fill="#0f172a"/>
+        <circle cx="85.2" cy="66.8" r="1.4" fill="#0f172a"/>
+        <circle cx="89" cy="76" r="1.4" fill="#0f172a"/>
+        <circle cx="85.2" cy="85.2" r="1.4" fill="#0f172a"/>
+        <circle cx="76" cy="89" r="1.4" fill="#0f172a"/>
+        <circle cx="66.8" cy="85.2" r="1.4" fill="#0f172a"/>
+        <circle cx="63" cy="76" r="1.4" fill="#0f172a"/>
+        <circle cx="66.8" cy="66.8" r="1.4" fill="#0f172a"/>
+
+        <!-- Center Axle Boss Cap -->
+        <circle cx="76" cy="76" r="11" fill="#1e293b"/>
+        <circle cx="76" cy="76" r="8" fill="url(#g-silv-wheel)"/>
+        <!-- Center Keyway Indentation -->
+        <circle cx="76" cy="76" r="3" fill="#0f172a"/>
+      </g>
+    </svg>
+  
+      </div>
+      <div class="meta-row">
+        <span class="pill pill-silver">Silver</span>
+        <span class="pill pill-diecut">✂️ Die-Cut Wheel</span>
+      </div>
+      <div class="pin-name">Classic Characters</div>
+      <div class="pin-opt-label">Option A: Steamboat Willie Master Helm</div>
+      <p class="pin-desc">
+        The legendary 1928 steering helm from Walt Disney's <i>Steamboat Willie</i>. Precision lathe-turned handles, segmented felloe plates with rivets, and a heavy center axle boss.
+      </p>
+      <ul class="feature-list">
+        <li>8 lathe-turned handles with pommels, swells, and collar rings</li>
+        <li>Felloe rim with dark navy enamel channel and dual rivets</li>
+        <li>Heavy center hub boss with 8 circumferential assembly bolts</li>
+      </ul>
+    </div>
+
+    <!-- OPTION B: MASTER CARTOON WHITE GLOVE -->
+    <div class="pin-card">
+      <div class="art-frame">
+        
+    <svg width="144" height="144" viewBox="-6 -6 164 164" style="overflow:visible" role="img">
+      <defs>
+        <linearGradient id="g-silv-glove" x1=".15" y1="0" x2=".85" y2="1">
+          <stop offset="0" stop-color="#ffffff"/>
+          <stop offset=".3" stop-color="#cbd5e1"/>
+          <stop offset=".7" stop-color="#94a3b8"/>
+          <stop offset="1" stop-color="#475569"/>
+        </linearGradient>
+        <linearGradient id="g-glove-white" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#ffffff"/>
+          <stop offset="1" stop-color="#f1f5f9"/>
+        </linearGradient>
+        <filter id="sh-glove2" x="-30%" y="-30%" width="160%" height="160%">
+          <feDropShadow dx="0" dy="4" stdDeviation="3.5" flood-color="#000000" flood-opacity=".7"/>
+        </filter>
+      </defs>
+      <g filter="url(#sh-glove2)">
+        <!-- Outer Silver Die-Cut Rim Base -->
+        <path d="
+          M 46 128
+          C 34 128 30 114 30 102
+          C 30 90 38 80 44 74
+          C 32 70 20 58 22 42
+          C 24 26 40 26 48 38
+          C 48 28 54 16 66 14
+          C 78 12 84 26 84 34
+          C 86 24 94 18 104 20
+          C 114 22 116 34 114 46
+          C 120 38 128 36 136 42
+          C 144 48 142 66 132 82
+          C 126 94 116 114 108 128
+          Z
+        " fill="url(#g-silv-glove)" stroke="url(#g-silv-glove)" stroke-width="5.2" stroke-linejoin="round"/>
+
+        <!-- Glove Hand Enamel Fill: Crisp Porcelain White -->
+        <path d="
+          M 46 128
+          C 34 128 30 114 30 102
+          C 30 90 38 80 44 74
+          C 32 70 20 58 22 42
+          C 24 26 40 26 48 38
+          C 48 28 54 16 66 14
+          C 78 12 84 26 84 34
+          C 86 24 94 18 104 20
+          C 114 22 116 34 114 46
+          C 120 38 128 36 136 42
+          C 144 48 142 66 132 82
+          C 126 94 116 114 108 128
+          Z
+        " fill="url(#g-glove-white)"/>
+
+        <!-- Silver Cloisonné Finger Crease Dividers -->
+        <path d="M 48 38 C 52 46 54 58 56 68" fill="none" stroke="url(#g-silv-glove)" stroke-width="1.8" stroke-linecap="round"/>
+        <path d="M 84 34 C 84 46 84 56 82 66" fill="none" stroke="url(#g-silv-glove)" stroke-width="1.8" stroke-linecap="round"/>
+        <path d="M 114 46 C 112 56 108 66 104 74" fill="none" stroke="url(#g-silv-glove)" stroke-width="1.8" stroke-linecap="round"/>
+
+        <!-- 3 Iconic Black Embroidered Darts on Back of Hand -->
+        <!-- Left Dart -->
+        <path d="
+          M 66 74
+          C 67 86, 69 98, 70 108
+          C 70.8 109, 72.2 109, 73 108
+          C 72 98, 70 86, 68 74
+          Z
+        " fill="#0f172a" stroke="url(#g-silv-glove)" stroke-width="1"/>
+        <circle cx="67" cy="73" r="1.5" fill="#0f172a"/>
+
+        <!-- Center Dart -->
+        <path d="
+          M 82 70
+          C 83 84, 85 98, 86 108
+          C 86.8 109, 88.2 109, 89 108
+          C 88 98, 86 84, 84 70
+          Z
+        " fill="#0f172a" stroke="url(#g-silv-glove)" stroke-width="1"/>
+        <circle cx="83" cy="69" r="1.5" fill="#0f172a"/>
+
+        <!-- Right Dart -->
+        <path d="
+          M 98 74
+          C 98 86, 98 98, 98 106
+          C 98.8 107, 100.2 107, 101 106
+          C 101 98, 100 86, 100 74
+          Z
+        " fill="#0f172a" stroke="url(#g-silv-glove)" stroke-width="1"/>
+        <circle cx="99" cy="73" r="1.5" fill="#0f172a"/>
+
+        <!-- Padded Folded Wrist Gauntlet Cuff -->
+        <!-- Cuff Backing & Undershadow -->
+        <path d="M 40 126 C 40 118, 76 116, 114 124 L 112 138 C 76 130, 42 130, 42 138 Z" fill="#94a3b8" stroke="url(#g-silv-glove)" stroke-width="2"/>
+        <!-- Cuff Rolled Front -->
+        <path d="M 42 124 C 42 118, 76 116, 114 122 L 112 136 C 76 128, 44 128, 44 136 Z" fill="#ffffff" stroke="url(#g-silv-glove)" stroke-width="2"/>
+      </g>
+    </svg>
+  
+      </div>
+      <div class="meta-row">
+        <span class="pill pill-silver">Silver</span>
+        <span class="pill pill-diecut">✂️ Die-Cut Glove</span>
+      </div>
+      <div class="pin-name">Classic Characters</div>
+      <div class="pin-opt-label">Option B: Master Cartoon White Glove</div>
+      <p class="pin-desc">
+        The iconic 4-finger white character glove shared across Mickey, Minnie, Donald, and Goofy. Sculpted with authentic Golden Age animation curves and 3 black embroidered darts.
+      </p>
+      <ul class="feature-list">
+        <li>Padded rolled gauntlet wrist cuff with dimensional undercuff</li>
+        <li>3 tapered teardrop dart seams with silver cloisonné lining</li>
+        <li>Porcelain white enamel with smooth animation curvature</li>
+      </ul>
+    </div>
+
+    <!-- OPTION C: SORCERER APPRENTICE HAT -->
+    <div class="pin-card">
+      <div class="art-frame">
+        
+    <svg width="144" height="144" viewBox="-6 -6 164 164" style="overflow:visible" role="img">
+      <defs>
+        <linearGradient id="g-silv-hat" x1=".15" y1="0" x2=".85" y2="1">
+          <stop offset="0" stop-color="#ffffff"/>
+          <stop offset=".3" stop-color="#cbd5e1"/>
+          <stop offset=".7" stop-color="#94a3b8"/>
+          <stop offset="1" stop-color="#475569"/>
+        </linearGradient>
+        <linearGradient id="g-hat-blue" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#1d4ed8"/>
+          <stop offset="1" stop-color="#0f172a"/>
+        </linearGradient>
+        <filter id="sh-hat2" x="-30%" y="-30%" width="160%" height="160%">
+          <feDropShadow dx="0" dy="4" stdDeviation="3.5" flood-color="#000000" flood-opacity=".7"/>
+        </filter>
+      </defs>
+      <g filter="url(#sh-hat2)">
+        <!-- Outer Silver Die-Cut Rim Base -->
+        <path d="
+          M 26 128
+          C 28 120, 48 116, 76 116
+          C 104 116, 124 120, 126 128
+          C 126 134, 104 138, 76 138
+          C 48 138, 26 134, 26 128
+          Z
+        " fill="url(#g-silv-hat)" stroke="url(#g-silv-hat)" stroke-width="5.2" stroke-linejoin="round"/>
+        
+        <path d="
+          M 38 122
+          C 44 86, 56 46, 88 18
+          C 96 10, 106 14, 102 24
+          C 98 32, 88 42, 86 54
+          C 84 72, 94 98, 114 122
+          Z
+        " fill="url(#g-silv-hat)" stroke="url(#g-silv-hat)" stroke-width="5.2" stroke-linejoin="round"/>
+
+        <!-- Hat Body Enamel: Midnight Royal Blue -->
+        <path d="
+          M 38 122
+          C 44 86, 56 46, 88 18
+          C 96 10, 106 14, 102 24
+          C 98 32, 88 42, 86 54
+          C 84 72, 94 98, 114 122
+          Z
+        " fill="url(#g-hat-blue)"/>
+
+        <!-- Silver Celestial Symbols on the Hat -->
+        <!-- Crescent Moon -->
+        <path d="
+          M 66 52
+          A 12 12 0 1 0 74 74
+          A 9 9 0 1 1 66 52
+          Z
+        " fill="#ffffff" stroke="url(#g-silv-hat)" stroke-width="1.2"/>
+
+        <!-- 5-Point Silver Stars -->
+        <!-- Star 1 (Mid) -->
+        <path d="M 64 88 L 66 94 L 72 95 L 67 99 L 69 105 L 64 101 L 59 105 L 61 99 L 56 95 L 62 94 Z" fill="#ffffff" stroke="url(#g-silv-hat)" stroke-width="1"/>
+        <!-- Star 2 (Upper) -->
+        <path d="M 84 40 L 85.5 44 L 90 45 L 86.5 48 L 88 52 L 84 49 L 80 52 L 81.5 48 L 78 45 L 82.5 44 Z" fill="#ffffff" stroke="url(#g-silv-hat)" stroke-width="1"/>
+        <!-- Star 3 (Right) -->
+        <path d="M 90 80 L 91.5 84 L 96 85 L 92.5 88 L 94 92 L 90 89 L 86 92 L 87.5 88 L 84 85 L 88.5 84 Z" fill="#ffffff" stroke="url(#g-silv-hat)" stroke-width="1"/>
+
+        <!-- Crimson Velvet Brim Ribbon -->
+        <path d="
+          M 36 122
+          C 44 116, 76 114, 116 122
+          L 114 128
+          C 76 122, 44 124, 38 128
+          Z
+        " fill="#dc2626" stroke="url(#g-silv-hat)" stroke-width="1.5"/>
+
+        <!-- Hat Brim Base -->
+        <ellipse cx="76" cy="128" rx="46" ry="7" fill="none" stroke="url(#g-silv-hat)" stroke-width="3"/>
+      </g>
+    </svg>
+  
+      </div>
+      <div class="meta-row">
+        <span class="pill pill-silver">Silver</span>
+        <span class="pill pill-diecut">✂️ Die-Cut Hat</span>
+      </div>
+      <div class="pin-name">Classic Characters</div>
+      <div class="pin-opt-label">Option C: Sorcerer Apprentice Hat</div>
+      <p class="pin-desc">
+        The legendary pointed cone hat from <i>Fantasia</i> (1940). Deep royal blue velvet enamel adorned with polished silver celestial moon and stars, wrapped in a crimson brim ribbon.
+      </p>
+      <ul class="feature-list">
+        <li>Curved whimsical conical peak with celestial symbols</li>
+        <li>Folded crimson velvet brim band in rich enamel</li>
+        <li>The ultimate symbol of classic Walt Disney animated magic</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- SECTION 3: IMMERSIVE LANDS -->
+<div class="section-container">
+  <div class="section-header">
+    <div class="section-left">
+      <div class="section-title">3. Immersive Lands (silver_immersive_lands)</div>
+      <span class="section-badge badge-silver">Silver · Places (Toy Story Land + Galaxy's Edge)</span>
+    </div>
+    <span style="font-size: 12px; color: var(--text-muted);">Equal 50/50 tribute to both Hollywood Studios immersive lands</span>
+  </div>
+  <div class="grid">
+    <!-- OPTION A: GATEWAY OF TWO WORLDS -->
+    <div class="pin-card recommended">
+      <span class="rec-pill">Recommended</span>
+      <div class="art-frame">
+        <!-- TWO WORLDS GATEWAY ARCH SVG (Clean Iconic Composition) -->
+        <svg width="144" height="144" viewBox="-4 -4 158 158" style="overflow:visible" role="img">
+          <defs>
+            <linearGradient id="g-sarch-clean" x1=".15" y1="0" x2=".85" y2="1">
+              <stop offset="0" stop-color="#ffffff"/>
+              <stop offset=".25" stop-color="#d0d7e2"/>
+              <stop offset=".65" stop-color="#8a99ad"/>
+              <stop offset="1" stop-color="#475569"/>
+            </linearGradient>
+            <linearGradient id="g-andy-clean" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#0284c7"/>
+              <stop offset="1" stop-color="#38bdf8"/>
+            </linearGradient>
+            <linearGradient id="g-batuu-clean" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#090514"/>
+              <stop offset=".5" stop-color="#1e103a"/>
+              <stop offset="1" stop-color="#4a2a7a"/>
+            </linearGradient>
+            <clipPath id="c-sarch-clean">
+              <path d="M 22 134 V 65 C 22 28 50 12 75 12 C 100 12 128 28 128 65 V 134 Z"/>
+            </clipPath>
+            <filter id="sh-sarch-clean" x="-25%" y="-25%" width="150%" height="150%">
+              <feDropShadow dx="0" dy="3.5" stdDeviation="3.2" flood-color="#000000" flood-opacity=".65"/>
+            </filter>
+          </defs>
+          <g filter="url(#sh-sarch-clean)">
+            <!-- Outer Arch Plate -->
+            <path d="M 22 134 V 65 C 22 28 50 12 75 12 C 100 12 128 28 128 65 V 134 Z" fill="url(#g-sarch-clean)"/>
+            
+            <!-- Clipped Inner Portal -->
+            <g clip-path="url(#c-sarch-clean)">
+              <!-- Left Half: Toy Story Sky Blue -->
+              <rect x="22" y="12" width="53" height="122" fill="url(#g-andy-clean)"/>
+              <!-- Right Half: Batuu Twilight Purple Sky -->
+              <rect x="75" y="12" width="53" height="122" fill="url(#g-batuu-clean)"/>
+
+              <!-- LEFT SIDE: Andy's Cloud & Woody's Sheriff Star -->
+              <!-- Fluffy White Stencil Cloud -->
+              <path d="M 32 46 Q 38 38 46 42 Q 54 36 60 42 Q 66 44 64 50 Q 66 56 58 56 L 36 56 Q 30 52 32 46 Z" fill="#ffffff" fill-opacity=".95" stroke="url(#g-sarch-clean)" stroke-width="1"/>
+              <!-- Woody's 6-Point Sheriff Star Badge -->
+              <g transform="translate(48, 92) scale(0.68)">
+                <path d="M 0 -22 L 6 -6 L 22 -6 L 10 5 L 15 21 L 0 12 L -15 21 L -10 5 L -22 -6 L -6 -6 Z" fill="#e5ab2c" stroke="url(#g-sarch-clean)" stroke-width="2" stroke-linejoin="round"/>
+                <circle cx="0" cy="0" r="6.5" fill="#b5721a" stroke="url(#g-sarch-clean)" stroke-width="1.2"/>
+              </g>
+
+              <!-- RIGHT SIDE: Batuu Twin Moons & Black Spire Rocks -->
+              <!-- Twin Moons -->
+              <circle cx="106" cy="38" r="3.5" fill="#ffffff" fill-opacity=".9"/>
+              <circle cx="116" cy="48" r="2" fill="#cbd5e1" fill-opacity=".75"/>
+              <!-- Black Spire Rock Silhouette -->
+              <path d="
+                M 75 134
+                L 75 92
+                L 82 82
+                L 88 100
+                L 96 68
+                L 102 78
+                L 106 62
+                L 112 84
+                L 118 72
+                L 128 108
+                L 128 134 Z
+              " fill="#120c24" stroke="url(#g-sarch-clean)" stroke-width="1.5" stroke-linejoin="round"/>
+
+              <!-- Central Silver Divider Line -->
+              <line x1="75" y1="12" x2="75" y2="134" stroke="url(#g-sarch-clean)" stroke-width="3"/>
+              
+              <!-- Baseline Ground Strip -->
+              <line x1="22" y1="130" x2="128" y2="130" stroke="url(#g-sarch-clean)" stroke-width="2"/>
+            </g>
+
+            <!-- Inner Rim Border -->
+            <path d="M 22 134 V 65 C 22 28 50 12 75 12 C 100 12 128 28 128 65 V 134 Z" fill="none" stroke="url(#g-sarch-clean)" stroke-width="5.5"/>
+            <path d="M 22 134 V 65 C 22 28 50 12 75 12 C 100 12 128 28 128 65 V 134 Z" fill="none" stroke="#000000" stroke-opacity=".35" stroke-width="1.2"/>
+          </g>
+        </svg>
+      </div>
+      <div class="meta-row">
+        <span class="pill pill-silver">Silver</span>
+        <span class="pill pill-contained">🛡️ Contained Arch</span>
+      </div>
+      <div class="pin-name">Immersive Lands</div>
+      <div class="pin-opt-label">Option A: Gateway of Two Worlds Arch</div>
+      <p class="pin-desc">
+        A regal Silver Arch plaque presenting both lands with clean, balanced iconic contrast: Andy’s sunny cloud sky with Woody's Sheriff Star on the left, and Batuu’s starry twilight with the Black Spire rocks on the right.
+      </p>
+      <ul class="feature-list">
+        <li>Clean, uncluttered 50/50 split composition</li>
+        <li>Left: Andy's wallpaper cloud and golden Sheriff Star</li>
+        <li>Right: Twin glowing moons and Black Spire Outpost rocks</li>
+      </ul>
+    </div>
+
+    <!-- OPTION B: THE SPIRE & THE STAR BADGE -->
+    <div class="pin-card">
+      <div class="art-frame">
+        
+    <svg width="144" height="144" viewBox="-6 -6 164 164" style="overflow:visible" role="img">
+      <defs>
+        <linearGradient id="g-silv-badge" x1=".15" y1="0" x2=".85" y2="1">
+          <stop offset="0" stop-color="#ffffff"/>
+          <stop offset=".25" stop-color="#d0d7e2"/>
+          <stop offset=".65" stop-color="#8a99ad"/>
+          <stop offset="1" stop-color="#475569"/>
+        </linearGradient>
+        <filter id="sh-badge" x="-30%" y="-30%" width="160%" height="160%">
+          <feDropShadow dx="0" dy="4" stdDeviation="3.5" flood-color="#000000" flood-opacity=".7"/>
+        </filter>
+        <clipPath id="c-badge-inner">
+          <circle cx="76" cy="80" r="38"/>
+        </clipPath>
+      </defs>
+      <g filter="url(#sh-badge)">
+        <!-- 6-Pointed Sheriff Star Die-Cut Silhouette Base -->
+        <path d="
+          M 76 18
+          L 88 46
+          L 120 34
+          L 110 66
+          L 140 80
+          L 110 94
+          L 120 126
+          L 88 114
+          L 76 142
+          L 64 114
+          L 32 126
+          L 42 94
+          L 12 80
+          L 42 66
+          L 32 34
+          L 64 46
+          Z
+        " fill="url(#g-silv-badge)" stroke="url(#g-silv-badge)" stroke-width="5.2" stroke-linejoin="round"/>
+
+        <!-- 6 Ball Tips on the Star -->
+        <circle cx="76" cy="18" r="4.2" fill="url(#g-silv-badge)"/>
+        <circle cx="120" cy="34" r="4.2" fill="url(#g-silv-badge)"/>
+        <circle cx="140" cy="80" r="4.2" fill="url(#g-silv-badge)"/>
+        <circle cx="120" cy="126" r="4.2" fill="url(#g-silv-badge)"/>
+        <circle cx="76" cy="142" r="4.2" fill="url(#g-silv-badge)"/>
+        <circle cx="32" cy="126" r="4.2" fill="url(#g-silv-badge)"/>
+        <circle cx="12" cy="80" r="4.2" fill="url(#g-silv-badge)"/>
+        <circle cx="32" cy="34" r="4.2" fill="url(#g-silv-badge)"/>
+
+        <!-- Outer Star Enamel Fill: Warm Woody Amber -->
+        <path d="
+          M 76 24
+          L 86 48
+          L 114 38
+          L 106 66
+          L 132 80
+          L 106 94
+          L 114 122
+          L 86 112
+          L 76 136
+          L 66 112
+          L 38 122
+          L 46 94
+          L 20 80
+          L 46 66
+          L 38 38
+          L 66 48
+          Z
+        " fill="#f59e0b"/>
+
+        <!-- Center Inset Medallion: Batuu Galaxy's Edge Twilight Portal -->
+        <circle cx="76" cy="80" r="40" fill="url(#g-silv-badge)" stroke="#334155" stroke-width="1.5"/>
+        <circle cx="76" cy="80" r="38" fill="#140f2d"/>
+
+        <!-- Clipped Portal Content: Black Spire Rock Silhouette & Falcon -->
+        <g clip-path="url(#c-badge-inner)">
+          <!-- Batuu Twilight Gradient -->
+          <rect x="38" y="42" width="76" height="76" fill="#1e113a"/>
+          <!-- Moons & Stars -->
+          <circle cx="94" cy="54" r="4" fill="#ffffff"/>
+          <circle cx="102" cy="60" r="1.8" fill="#cbd5e1"/>
+          <circle cx="56" cy="52" r=".8" fill="#ffffff"/>
+          <circle cx="68" cy="48" r=".8" fill="#ffffff"/>
+
+          <!-- Black Spires Silhouette -->
+          <path d="
+            M 42 118
+            L 48 92
+            L 54 98
+            L 60 76
+            L 66 84
+            L 72 64
+            L 76 56
+            L 82 72
+            L 88 66
+            L 94 88
+            L 102 82
+            L 110 118
+            Z
+          " fill="#0b0818" stroke="url(#g-silv-badge)" stroke-width="1.2" stroke-linejoin="round"/>
+
+          <!-- Millennium Falcon in Silver Relief -->
+          <g transform="translate(76, 96) scale(0.55)">
+            <ellipse cx="0" cy="0" rx="14" ry="11" fill="#cbd5e1" stroke="#334155" stroke-width="1"/>
+            <polygon points="-5,-8 -12,-18 -6,-18 -2,-9" fill="#cbd5e1" stroke="#334155" stroke-width=".8"/>
+            <polygon points="5,-8 12,-18 6,-18 2,-9" fill="#cbd5e1" stroke="#334155" stroke-width=".8"/>
+            <rect x="12" y="-4" width="5" height="4" rx="1" fill="#cbd5e1"/>
+          </g>
+        </g>
+
+        <!-- Raised Silver Inner Rim -->
+        <circle cx="76" cy="80" r="38" fill="none" stroke="url(#g-silv-badge)" stroke-width="3"/>
+      </g>
+    </svg>
+  
+      </div>
+      <div class="meta-row">
+        <span class="pill pill-silver">Silver</span>
+        <span class="pill pill-diecut">✂️ Die-Cut Badge</span>
+      </div>
+      <div class="pin-name">Immersive Lands</div>
+      <div class="pin-opt-label">Option B: The Spire & The Star Badge</div>
+      <p class="pin-desc">
+        A single-piece die-cut badge fusing Woody's 6-pointed ball-tipped Sheriff Star in warm amber with a central twilight medallion framing the Black Spire Outpost and the Millennium Falcon.
+      </p>
+      <ul class="feature-list">
+        <li>Woody's 6-point ball-tipped star geometry in die-cut silver</li>
+        <li>Recessed twilight portal framing Batuu spires and twin moons</li>
+        <li>Gunmetal silver relief of the Millennium Falcon</li>
+      </ul>
+    </div>
+
+    <!-- OPTION C: THE TWO LANDS COMPASS -->
+    <div class="pin-card">
+      <div class="art-frame">
+        
+    <svg width="144" height="144" viewBox="-6 -6 164 164" style="overflow:visible" role="img">
+      <defs>
+        <linearGradient id="g-silv-comp" x1=".15" y1="0" x2=".85" y2="1">
+          <stop offset="0" stop-color="#ffffff"/>
+          <stop offset=".25" stop-color="#d0d7e2"/>
+          <stop offset=".65" stop-color="#8a99ad"/>
+          <stop offset="1" stop-color="#475569"/>
+        </linearGradient>
+        <clipPath id="c-comp-circle">
+          <circle cx="76" cy="76" r="48"/>
+        </clipPath>
+        <filter id="sh-comp" x="-30%" y="-30%" width="160%" height="160%">
+          <feDropShadow dx="0" dy="4" stdDeviation="3.5" flood-color="#000000" flood-opacity=".7"/>
+        </filter>
+      </defs>
+      <g filter="url(#sh-comp)">
+        <!-- Heavy Compass Outer Bezel -->
+        <circle cx="76" cy="76" r="58" fill="url(#g-silv-comp)" stroke="url(#g-silv-comp)" stroke-width="5.2"/>
+        <circle cx="76" cy="76" r="54" fill="#0f172a"/>
+        <!-- Compass Ticks -->
+        <line x1="76" y1="20" x2="76" y2="25" stroke="url(#g-silv-comp)" stroke-width="2"/>
+        <line x1="76" y1="127" x2="76" y2="132" stroke="url(#g-silv-comp)" stroke-width="2"/>
+        <line x1="20" y1="76" x2="25" y2="76" stroke="url(#g-silv-comp)" stroke-width="2"/>
+        <line x1="127" y1="76" x2="132" y2="76" stroke="url(#g-silv-comp)" stroke-width="2"/>
+
+        <!-- Clipped Inner Compass Face -->
+        <g clip-path="url(#c-comp-circle)">
+          <!-- Top Left Half: Toy Story Sky Blue -->
+          <path d="M 28 28 L 124 124 L 28 124 Z" fill="#0284c7"/>
+          <!-- Bottom Right Half: Batuu Twilight Purple -->
+          <path d="M 28 28 L 124 124 L 124 28 Z" fill="#1e103a"/>
+
+          <!-- Andy's Clouds on Left -->
+          <path d="M 38 72 Q 44 66 50 68 Q 56 64 60 68 Q 64 68 64 74 Q 64 78 60 78 L 40 78 Z" fill="#ffffff" fill-opacity=".9"/>
+          <!-- Woody's Sheriff Badge on Left -->
+          <g transform="translate(54, 98) scale(0.65)">
+            <path d="M0 -18 L4.5 -5 L18 -5 L8 3 L12 16 L0 9 L-12 16 L-8 3 L-18 -5 L-4.5 -5 Z" fill="#f59e0b" stroke="url(#g-silv-comp)" stroke-width="1.5"/>
+            <circle cx="0" cy="0" r="4" fill="#b45309"/>
+          </g>
+
+          <!-- Galaxy's Edge Spires on Right -->
+          <!-- Twin Moons -->
+          <circle cx="102" cy="46" r="4" fill="#ffffff"/>
+          <circle cx="110" cy="52" r="1.5" fill="#cbd5e1"/>
+          <!-- Rock Spires -->
+          <path d="M 76 76 L 82 56 L 86 64 L 92 48 L 96 58 L 102 44 L 108 62 L 118 54 L 124 76 Z" fill="#0b0818" stroke="url(#g-silv-comp)" stroke-width="1.2"/>
+
+          <!-- Diagonal Dividing Lightning/Energy Conduit -->
+          <line x1="28" y1="28" x2="124" y2="124" stroke="url(#g-silv-comp)" stroke-width="3"/>
+          <line x1="28" y1="28" x2="124" y2="124" stroke="#ffffff" stroke-width="1"/>
+        </g>
+
+        <!-- Inner Bezel Ring -->
+        <circle cx="76" cy="76" r="48" fill="none" stroke="url(#g-silv-comp)" stroke-width="3"/>
+      </g>
+    </svg>
+  
+      </div>
+      <div class="meta-row">
+        <span class="pill pill-silver">Silver</span>
+        <span class="pill pill-contained">🛡️ Contained Medallion</span>
+      </div>
+      <div class="pin-name">Immersive Lands</div>
+      <div class="pin-opt-label">Option C: The Two Lands Compass</div>
+      <p class="pin-desc">
+        A circular expedition compass medallion divided diagonally: Andy's room and Woody's badge on top-left, and the mysterious Black Spire Outpost under twin moons on bottom-right.
+      </p>
+      <ul class="feature-list">
+        <li>Navigational compass bezel with engraved cardinal ticks</li>
+        <li>Diagonal energy conduit dividing the two worlds</li>
+        <li>Balanced dual-enamel palette (day sky vs. cosmic twilight)</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- SECTION 4: STAR WARS DEVOTEE (LOCKED) -->
+<div class="section-container">
+  <div class="section-header">
+    <div class="section-left">
+      <div class="section-title">4. Star Wars Devotee (silver_star_wars) — Locked</div>
+      <span class="section-badge badge-silver">Silver · Thematic</span>
+    </div>
+    <span style="font-size: 12px; color: #38bdf8;">Confirmed locked by user: Crossed duel lightsabers</span>
+  </div>
+  <div class="grid" style="grid-template-columns: minmax(320px, 420px);">
+    <div class="pin-card">
+      <div class="art-frame">
+        <svg width="144" height="144" viewBox="-6 -6 164 164" style="overflow:visible" role="img">
+          <defs>
+            <linearGradient id="g-sw-locked" x1=".15" y1="0" x2=".85" y2="1">
+              <stop offset="0" stop-color="#ffffff"/>
+              <stop offset=".3" stop-color="#cbd5e1"/>
+              <stop offset=".7" stop-color="#94a3b8"/>
+              <stop offset="1" stop-color="#475569"/>
+            </linearGradient>
+            <filter id="sh-sw2" x="-25%" y="-25%" width="150%" height="150%">
+              <feDropShadow dx="0" dy="4" stdDeviation="3.5" flood-color="#000000" flood-opacity=".7"/>
+            </filter>
+          </defs>
+          <g filter="url(#sh-sw2)" transform="translate(22, 22) scale(0.245)">
+            <!-- Hilt 1 -->
+            <path d="M184 304 L120 368 A12 12 0 0 1 103 351 L167 287 Z" fill="#475569" stroke="url(#g-sw-locked)" stroke-width="12"/>
+            <!-- Blade 1 (Cyan) -->
+            <path d="M184 304 L394 94 A12 12 0 0 1 418 118 L208 328 Z" fill="#00E5FF" stroke="url(#g-sw-locked)" stroke-width="12"/>
+            <!-- Hilt 2 -->
+            <path d="M328 304 L392 368 A12 12 0 0 0 409 351 L345 287 Z" fill="#475569" stroke="url(#g-sw-locked)" stroke-width="12"/>
+            <!-- Blade 2 (Red) -->
+            <path d="M328 304 L118 94 A12 12 0 0 0 94 118 L304 328 Z" fill="#FF1744" stroke="url(#g-sw-locked)" stroke-width="12"/>
+            <!-- Core Plasma Beam Highlights -->
+            <path d="M184 304 L394 94" stroke="#ffffff" stroke-width="4.5" stroke-linecap="round"/>
+            <path d="M328 304 L118 94" stroke="#ffffff" stroke-width="4.5" stroke-linecap="round"/>
+          </g>
+        </svg>
+      </div>
+      <div class="meta-row">
+        <span class="pill pill-silver">Silver</span>
+        <span class="pill pill-diecut">✂️ Die-Cut Silhouette</span>
+      </div>
+      <div class="pin-name">Star Wars Devotee</div>
+      <div class="pin-opt-label">Locked Choice: Crossed Duel Lightsabers</div>
+      <p class="pin-desc">
+        Confirmed: Locked as the duel blades (cyan vs. red with silver hilts), representing the timeless clash of Light vs. Dark across the entire Star Wars saga.
+      </p>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

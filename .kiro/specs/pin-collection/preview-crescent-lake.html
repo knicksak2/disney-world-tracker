@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Crescent Lake Pin — Lighthouse Motif Variations</title>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #07040f;
+      --card-bg: rgba(20, 15, 38, 0.95);
+      --border: rgba(147, 112, 219, 0.3);
+    }
+    * { box-sizing: border-box; }
+    body {
+      background: var(--bg);
+      color: #f8fafc;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      padding: 40px 20px;
+      margin: 0;
+    }
+    .header {
+      max-width: 1100px;
+      margin: 0 auto 36px;
+      text-align: center;
+    }
+    h1 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 28px;
+      font-weight: 800;
+      color: #fff;
+      margin: 0 0 8px;
+    }
+    p.sub {
+      color: #94a3b8;
+      font-size: 15px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 24px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .pin-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+    }
+    .pin-card h3 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 18px;
+      margin: 16px 0 6px;
+      color: #fff;
+    }
+    .badge-row {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+    .badge {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 999px;
+      text-transform: uppercase;
+    }
+    .badge.silver { background: #475569; color: #fff; }
+    .badge.diecut { background: rgba(59, 130, 246, 0.2); color: #93c5fd; border: 1px solid rgba(59, 130, 246, 0.4); }
+    .desc { font-size: 13px; color: #cbd5e1; margin-top: 4px; }
+    .colors { font-family: monospace; font-size: 11px; color: #94a3b8; margin-top: 10px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>Crescent Lake Pin Update: Lighthouse Motif</h1>
+    <p class="sub">Auditing Delapouite Lighthouse (CC BY 3.0) on Silver Die-Cut (5.2px rim) for Crescent Lake</p>
+  </div>
+  <div class="grid" id="grid"></div>
+
+  <script src="motifs/motif-paths.js"></script>
+  <script>
+    const lighthousePath = 'M136 40.938l-88 44V184h176V84.937l-88-44zM480 48l-240 80v32l240 64V48zM64 96h31.406l.313 64H64V96zm47.406 0h48l.313 64h-48l-.314-64zm64 0H208v64h-32.28l-.314-64zM79.312 201L19.094 487h233.812l-.094-.438.125.094c7.327-10.582 26.22-22.905 46.032-28.22 10.19 18.728 29.766 30.564 53.03 30.564h4.125l2.688-3.125c11.347-13.123 19.005-24.272 35.843-27.906C404.94 477.692 426.263 489 448 489h5.25l2.594-4.563c8.78-15.503 11.158-17.993 28.844-28.75l-9.375-15.375c-16.44 10-24.038 17.37-32.063 30.344-15.508-1.633-29.613-11.073-34.75-25.656l-2.344-6.625-7 .656c-26.106 2.45-39.755 18.452-51.062 31.72-17.555-1.233-29.83-10.616-35.688-25.97l-2.656-6.967-7.375 1.343c-20.77 3.78-40.482 13.32-54.094 25.813L192.688 201H79.313zM87 256h18v48H87v-48zm80 128h18v48h-18v-48z';
+
+    // Metal gradients
+    const METALS = {
+      silver: ['#ffffff','#e2e8f0','#b0b9c8','#727b8b']
+    };
+    function stops(cols){
+      return cols.map((c,i) => `<stop offset="${(i/(cols.length-1)).toFixed(4)}" stop-color="${c}"/>`).join('');
+    }
+
+    // Geometry tokenizer & helpers
+    function tokenizePath(d){
+      const res = [];
+      const re = /([MmLlHhVvCcSsQqTtAaZz])([^MmLlHhVvCcSsQqTtAaZz]*)/g;
+      let m;
+      while ((m = re.exec(d)) !== null) {
+        const cmd = m[1];
+        const nums = (m[2].trim().match(/[-+]?(?:\d*\.\d+|\d+)(?:[eE][-+]?\d+)?/g) || []).map(Number);
+        res.push({ cmd, nums });
+      }
+      return res;
+    }
+    function splitCells(d){
+      const cells = [];
+      let cur = null, cx = 0, cy = 0;
+      for (const { cmd, nums } of tokenizePath(d)) {
+        const rel = cmd === cmd.toLowerCase(), k = cmd.toLowerCase();
+        if (k === 'm') {
+          const nx = rel ? cx + nums[0] : nums[0], ny = rel ? cy + nums[1] : nums[1];
+          cx = nx; cy = ny;
+          cur = { d: `M${+nx.toFixed(3)} ${+ny.toFixed(3)}` };
+          cells.push(cur);
+          for (let i = 2; i + 1 < nums.length; i += 2) {
+            const lx = rel ? cx + nums[i] : nums[i], ly = rel ? cy + nums[i+1] : nums[i+1];
+            cur.d += ` L${+lx.toFixed(3)} ${+ly.toFixed(3)}`; cx = lx; cy = ly;
+          }
+        } else if (cur) {
+          cur.d += ` ${cmd}${nums.map(n=>+n.toFixed(3)).join(' ')}`;
+          if (nums.length >= 2) {
+            const lx = nums[nums.length-2], ly = nums[nums.length-1];
+            cx = rel ? cx + lx : lx; cy = rel ? cy + ly : ly;
+          }
+        }
+      }
+      return cells.map(c => c.d);
+    }
+    function pathBBox(d){
+      let minX=Infinity, minY=Infinity, maxX=-Infinity, maxY=-Infinity;
+      let cx=0, cy=0;
+      for (const { cmd, nums } of tokenizePath(d)) {
+        const rel = cmd === cmd.toLowerCase();
+        for (let i=0; i<nums.length; i+=2) {
+          const x = rel ? cx + nums[i] : nums[i];
+          const y = rel ? cy + (nums[i+1]||0) : (nums[i+1]||0);
+          if (x < minX) minX = x; if (x > maxX) maxX = x;
+          if (y < minY) minY = y; if (y > maxY) maxY = y;
+          cx = x; cy = y;
+        }
+      }
+      return { minX, minY, maxX, maxY, w: maxX-minX, h: maxY-minY, cx: (minX+maxX)/2, cy: (minY+maxY)/2 };
+    }
+
+    function renderDieCut(o){
+      const id = o.id;
+      const metal = METALS.silver;
+      const dPath = o.d;
+      const bb = pathBBox(dPath);
+      const k = (126 / Math.max(bb.w, bb.h)) * (o.scale || 1);
+      const tx = 75 - bb.cx * k;
+      const ty = 75 - bb.cy * k;
+      const t = `translate(${tx.toFixed(2)},${ty.toFixed(2)}) scale(${k.toFixed(5)})`;
+      const rim = 5.2 / k;
+      const cells = splitCells(dPath);
+      const enamel = o.enamel;
+
+      return `
+      <svg width="150" height="150" viewBox="-4 -4 158 158" style="overflow:visible">
+        <defs>
+          <linearGradient id="g-${id}-p" x1=".15" y1="0" x2=".85" y2="1">${stops(metal)}</linearGradient>
+          <filter id="f-${id}" x="-25%" y="-25%" width="150%" height="160%">
+            <feDropShadow dx="0" dy="3.5" stdDeviation="3.2" flood-color="#000" flood-opacity=".55"/>
+          </filter>
+        </defs>
+        <g filter="url(#f-${id})">
+          <g transform="${t}">
+            ${cells.map((cell, i) =>
+              `<path d="${cell}" fill="${Array.isArray(enamel) ? enamel[i % enamel.length] : enamel}" fill-rule="nonzero"/>`
+            ).join('')}
+            <path d="${dPath}" fill="none" stroke="url(#g-${id}-p)" stroke-width="${rim.toFixed(1)}" stroke-linejoin="round" stroke-linecap="round"/>
+            <path d="${dPath}" fill="none" stroke="#000" stroke-opacity=".38" stroke-width="${(rim*0.22).toFixed(1)}" stroke-linejoin="round"/>
+          </g>
+        </g>
+      </svg>`;
+    }
+
+    const variations = [
+      {
+        id: 'var_current_sail',
+        title: 'Current Pin (Sailboat)',
+        desc: 'Current silver Crescent Lake using sailboat (collides with Making Waves)',
+        d: window.MOTIF_LIB.sailboat,
+        enamel: ['#FFFFFF', '#1E3A8A', '#F59E0B'],
+        colorsLabel: 'White, Navy Blue, Amber/Gold'
+      },
+      {
+        id: 'var_lighthouse_yachtclub',
+        title: 'Option 1: Nautical Navy & White',
+        desc: 'Deep Navy body, White beam & windows, Gold lantern core',
+        d: lighthousePath,
+        // cell 0: Roof, 1: Beam, 2: Win1, 3: Win2, 4: Win3, 5: Tower+waves, 6: Win4, 7: Win5
+        enamel: ['#1E3A8A', '#F8FAFC', '#F59E0B', '#F59E0B', '#F59E0B', '#1E3A8A', '#F8FAFC', '#F8FAFC'],
+        colorsLabel: 'Roof: Navy, Beam: White, Lantern: Gold, Tower: Navy'
+      },
+      {
+        id: 'var_lighthouse_red_classic',
+        title: 'Option 2: Classic Red & Gold Light',
+        desc: 'Crimson Roof & Accents, Amber Beam & Lantern, White/Navy Tower',
+        d: lighthousePath,
+        enamel: ['#A8323F', '#F59E0B', '#F59E0B', '#F59E0B', '#F59E0B', '#F8FAFC', '#1E3A8A', '#1E3A8A'],
+        colorsLabel: 'Roof: Crimson, Beam: Amber Gold, Tower: White, Accents: Navy'
+      },
+      {
+        id: 'var_lighthouse_royal_palette',
+        title: 'Option 3: Strict Royal Palette (Sky + Amber + Ink)',
+        desc: 'Royal Sky Blue body, Amber Beam & Light, Ink Accents',
+        d: lighthousePath,
+        enamel: ['#241A3A', '#B5721A', '#B5721A', '#B5721A', '#B5721A', '#2F6BB0', '#241A3A', '#241A3A'],
+        colorsLabel: 'Roof: Ink, Beam: Royal Amber, Tower: Royal Sky, Windows: Ink'
+      },
+      {
+        id: 'var_lighthouse_white_tower',
+        title: 'Option 4: White Lighthouse with Amber Beam',
+        desc: 'Nautical Navy Roof, Amber Light Beam, Crisp White Tower, Navy Windows',
+        d: lighthousePath,
+        enamel: ['#1E3A8A', '#F59E0B', '#F59E0B', '#F59E0B', '#F59E0B', '#FFFFFF', '#1E3A8A', '#1E3A8A'],
+        colorsLabel: 'Roof: Navy, Beam: Golden Amber, Tower: White, Windows: Navy'
+      }
+    ];
+
+    const grid = document.getElementById('grid');
+    variations.forEach(v => {
+      const card = document.createElement('div');
+      card.className = 'pin-card';
+      card.innerHTML = `
+        <div class="badge-row">
+          <span class="badge silver">Silver</span>
+          <span class="badge diecut">Die-Cut Silhouette</span>
+        </div>
+        ${renderDieCut(v)}
+        <h3>${v.title}</h3>
+        <div class="desc">${v.desc}</div>
+        <div class="desc" style="color:#94a3b8; margin-top:8px">BoardWalk + Yacht Club + Beach Club</div>
+        <div class="colors">${v.colorsLabel}</div>
+      `;
+      grid.appendChild(card);
+    });
+  </script>
+</body>
+</html>

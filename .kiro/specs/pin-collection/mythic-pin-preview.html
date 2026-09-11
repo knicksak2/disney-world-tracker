@@ -1,0 +1,1237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>The Whole Catalog (Mythic 1-of-1 Apex) — 5 Distinct Master Directions</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #070512;
+      --bg-card: rgba(20, 14, 38, 0.88);
+      --bg-card-hover: rgba(34, 23, 62, 0.98);
+      --border-card: rgba(159, 122, 234, 0.25);
+      --text-main: #f7fafc;
+      --text-muted: #a0aec0;
+      --accent-purple: #9f7aea;
+      --gold: #f6c343;
+      --mythic-grad: linear-gradient(135deg, #fff6e0 0%, #ffb347 18%, #ff8fbf 36%, #c99cff 54%, #5fd6a8 72%, #ffcf4a 90%, #e08a1e 100%);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: radial-gradient(circle at 50% 0%, #291254 0%, var(--bg-dark) 85%);
+      color: var(--text-main);
+      min-height: 100vh;
+      padding: 40px 24px 80px;
+      overflow-x: hidden;
+    }
+
+    header {
+      max-width: 1200px;
+      margin: 0 auto 36px;
+      text-align: center;
+    }
+
+    .badge-sub {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(255, 215, 74, 0.15);
+      border: 1px solid rgba(255, 215, 74, 0.45);
+      color: #ffdf9e;
+      padding: 6px 18px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      margin-bottom: 14px;
+      box-shadow: 0 0 20px rgba(255, 179, 71, 0.25);
+    }
+
+    h1 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 42px;
+      font-weight: 900;
+      letter-spacing: -0.02em;
+      margin-bottom: 12px;
+      background: linear-gradient(135deg, #ffffff 30%, #ffdf9e 60%, #ff8fbf 85%, #c99cff 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .subtitle {
+      max-width: 900px;
+      margin: 0 auto;
+      font-size: 16px;
+      line-height: 1.6;
+      color: var(--text-muted);
+    }
+    .subtitle b { color: #fff; }
+
+    /* Shimmer animation */
+    @keyframes mythicShimmer { 
+      0%   { transform: translateX(-520px); } 
+      100% { transform: translateX(520px); } 
+    }
+    .mythic-shmr { 
+      animation: mythicShimmer 3.2s ease-in-out infinite; 
+      pointer-events: none;
+    }
+    @media (prefers-reduced-motion: reduce) { 
+      .mythic-shmr { animation: none !important; opacity: 0.35 !important; } 
+    }
+
+    /* Diagnosis Card */
+    .diagnosis-card {
+      max-width: 1380px;
+      margin: 0 auto 36px;
+      background: rgba(26, 14, 46, 0.75);
+      border: 1px solid rgba(255, 207, 74, 0.4);
+      border-radius: 20px;
+      padding: 24px 30px;
+    }
+    .diag-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 21px;
+      font-weight: 800;
+      color: #ffcf4a;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .diag-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 18px;
+    }
+    .diag-item {
+      background: rgba(14, 8, 26, 0.65);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 14px;
+      padding: 16px;
+    }
+    .diag-item h4 {
+      font-size: 14.5px;
+      font-weight: 700;
+      color: #ffd700;
+      margin-bottom: 6px;
+    }
+    .diag-item p {
+      font-size: 13px;
+      color: #cbd5e1;
+      line-height: 1.55;
+    }
+
+    /* Spotlight Banner */
+    .spotlight-banner {
+      max-width: 1380px;
+      margin: 0 auto 36px;
+      background: linear-gradient(135deg, rgba(28, 16, 58, 0.95), rgba(45, 20, 75, 0.88));
+      border: 2px solid #ffcf4a;
+      border-radius: 24px;
+      padding: 28px 34px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 32px;
+      align-items: center;
+      box-shadow: 0 16px 48px rgba(255, 179, 71, 0.22);
+      position: relative;
+    }
+    .spotlight-badge {
+      position: absolute;
+      top: -13px;
+      left: 32px;
+      background: linear-gradient(90deg, #fff6e0, #ffb347, #ff8fbf, #c99cff, #5fd6a8);
+      color: #0c081e;
+      font-size: 11px;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      padding: 4px 16px;
+      border-radius: 999px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+    }
+    .spotlight-art {
+      width: 190px;
+      height: 190px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      filter: drop-shadow(0 12px 28px rgba(0, 0, 0, 0.85));
+      overflow: hidden;
+    }
+    .spotlight-content {
+      flex: 1;
+      min-width: 290px;
+      text-align: left;
+    }
+    .spotlight-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 26px;
+      font-weight: 800;
+      color: #fff;
+      margin-bottom: 6px;
+    }
+    .spotlight-tag {
+      display: inline-block;
+      font-size: 12px;
+      font-weight: 800;
+      color: #ffdf9e;
+      background: rgba(255, 207, 74, 0.15);
+      border: 1px solid rgba(255, 207, 74, 0.35);
+      padding: 4px 14px;
+      border-radius: 999px;
+      margin-bottom: 12px;
+    }
+    .spotlight-list {
+      margin: 8px 0 16px 20px;
+      line-height: 1.65;
+      color: #cbd5e1;
+      font-size: 14.5px;
+    }
+    .spotlight-list b { color: #ffdf9e; }
+
+    /* Candidates Grid */
+    .candidates-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 20px;
+      max-width: 1380px;
+      margin: 0 auto 48px;
+    }
+
+    .candidate-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-card);
+      border-radius: 22px;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+      position: relative;
+    }
+    .candidate-card:hover {
+      transform: translateY(-4px);
+      border-color: rgba(255, 215, 74, 0.5);
+      box-shadow: 0 14px 36px rgba(255, 179, 71, 0.2);
+    }
+    .candidate-card.active {
+      border: 2px solid #ffcf4a;
+      box-shadow: 0 0 30px rgba(255, 207, 74, 0.35);
+      background: rgba(36, 22, 66, 0.95);
+    }
+
+    .pill-opt {
+      position: absolute;
+      top: 14px;
+      left: 16px;
+      font-size: 10.5px;
+      font-weight: 800;
+      padding: 3px 10px;
+      border-radius: 999px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .pill-opt.rec { background: #ffcf4a; color: #0c081e; }
+    .pill-opt.alt { background: rgba(159, 122, 234, 0.2); border: 1px solid var(--accent-purple); color: #c4b5fd; }
+    .pill-opt.bonus { background: rgba(95, 214, 168, 0.2); border: 1px solid #5fd6a8; color: #6ee7b7; }
+
+    .cand-art-box {
+      width: 150px;
+      height: 150px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 22px 0 14px;
+      filter: drop-shadow(0 8px 20px rgba(0,0,0,0.7));
+      overflow: hidden;
+    }
+
+    .cand-name {
+      font-family: 'Outfit', sans-serif;
+      font-size: 17px;
+      font-weight: 800;
+      color: #fff;
+      margin-bottom: 4px;
+    }
+    .cand-sub {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+      line-height: 1.4;
+    }
+    .cand-desc {
+      font-size: 12.5px;
+      color: #cbd5e1;
+      line-height: 1.5;
+      text-align: left;
+      flex-grow: 1;
+      margin-bottom: 16px;
+      padding-top: 10px;
+      border-top: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .btn-select-cand {
+      width: 100%;
+      background: rgba(255, 207, 74, 0.12);
+      border: 1px solid rgba(255, 207, 74, 0.3);
+      color: #ffdf9e;
+      padding: 9px 12px;
+      border-radius: 12px;
+      font-size: 12.5px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .btn-select-cand:hover, .candidate-card.active .btn-select-cand {
+      background: linear-gradient(90deg, #fff6e0, #ffb347);
+      color: #0c081e;
+      border-color: #ffb347;
+      box-shadow: 0 4px 16px rgba(255, 179, 71, 0.4);
+    }
+
+    /* Live Catalog Card Simulator */
+    .catalog-preview-section {
+      max-width: 1380px;
+      margin: 0 auto 48px;
+      background: rgba(18, 12, 34, 0.85);
+      border: 1px solid var(--border-card);
+      border-radius: 24px;
+      padding: 32px 36px;
+      text-align: center;
+    }
+    .section-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 26px;
+      font-weight: 800;
+      color: #fff;
+      margin-bottom: 8px;
+    }
+    .section-sub {
+      font-size: 15px;
+      color: var(--text-muted);
+      margin-bottom: 28px;
+    }
+
+    .interactive-card-container {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 40px;
+      align-items: center;
+    }
+
+    .pin-card-preview {
+      width: 320px;
+      background: rgba(20, 14, 38, 0.85);
+      border: 1px solid rgba(147, 112, 219, 0.22);
+      border-radius: 24px;
+      padding: 24px 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      box-shadow: 0 16px 40px rgba(0,0,0,0.6);
+      transition: all 0.3s ease;
+    }
+    .pin-card-preview:hover {
+      background: rgba(34, 23, 62, 0.95);
+      border-color: rgba(159, 122, 234, 0.45);
+      transform: translateY(-4px);
+    }
+    .pin-art-wrapper {
+      width: 130px;
+      height: 130px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 12px;
+      overflow: hidden;
+    }
+    .pin-badge-row {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+    .tier-badge-mythic {
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      padding: 3px 10px;
+      border-radius: 999px;
+      letter-spacing: 0.5px;
+      background: linear-gradient(90deg, #fff0c4, #ffc2e8, #c9a8ff, #8ed8ff);
+      color: #141020;
+    }
+    .style-badge-pill {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: #e2e8f0;
+    }
+    .status-badge-pill {
+      font-size: 11px;
+      font-weight: 800;
+      padding: 3px 10px;
+      border-radius: 999px;
+      text-transform: uppercase;
+    }
+    .pin-name {
+      font-family: 'Outfit', sans-serif;
+      font-size: 20px;
+      font-weight: 800;
+      color: #fff;
+      margin-bottom: 8px;
+    }
+    .pin-criteria {
+      font-size: 13.5px;
+      color: #a0aec0;
+      line-height: 1.5;
+    }
+
+    .selector-box {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      max-width: 500px;
+      text-align: left;
+    }
+    .btn-select {
+      background: rgba(26, 16, 48, 0.85);
+      border: 1px solid var(--border-card);
+      border-radius: 14px;
+      padding: 13px 16px;
+      color: #e2e8f0;
+      font-size: 13.5px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .btn-select:hover {
+      background: rgba(45, 25, 80, 0.9);
+      border-color: rgba(255, 215, 74, 0.4);
+      transform: translateX(4px);
+    }
+    .btn-select.active {
+      background: linear-gradient(135deg, rgba(50, 28, 90, 0.95), rgba(70, 35, 110, 0.95));
+      border: 2px solid #ffcf4a;
+      color: #fff;
+      box-shadow: 0 4px 16px rgba(255, 207, 74, 0.25);
+    }
+    .btn-select .dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    /* Comparison Matrix */
+    .matrix-table {
+      width: 100%;
+      max-width: 1380px;
+      margin: 0 auto 48px;
+      border-collapse: separate;
+      border-spacing: 0;
+      background: rgba(18, 12, 34, 0.7);
+      border: 1px solid var(--border-card);
+      border-radius: 20px;
+      overflow: hidden;
+    }
+    .matrix-table th, .matrix-table td {
+      padding: 14px 16px;
+      text-align: left;
+      font-size: 13px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .matrix-table th {
+      background: rgba(30, 18, 56, 0.8);
+      font-family: 'Outfit', sans-serif;
+      font-size: 14px;
+      font-weight: 700;
+      color: #ffd700;
+    }
+    .matrix-table tr:last-child td {
+      border-bottom: none;
+    }
+    .matrix-table tr:hover td {
+      background: rgba(255, 255, 255, 0.02);
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="badge-sub">🌟 Series 1 · 1-of-1 Mythic Capstone</div>
+    <h1>The Whole Catalog — 5 Distinct Conceptual Directions</h1>
+    <p class="subtitle">
+      Items 2 (Compass) and 4 (Crown) were retired due to catalog collisions with existing navigation and encounter pins. Here are <b>fresh, completely distinct directions</b> honoring <b>docs/pin-art-direction.md</b> with vetted library geometry.
+    </p>
+  </header>
+
+  <!-- Thematic Matrix of the 5 Directions -->
+  <div class="diagnosis-card">
+    <div class="diag-title">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+      Collision Analysis & Novel Conceptual Themes
+    </div>
+    <div class="diag-grid">
+      <div class="diag-item">
+        <h4>Option 1: Planetary Conquest (Kept)</h4>
+        <p><b>Theme: Global Synthesis.</b> 20-ray Sunburst Corona framing the vetted <code>world</code> globe at base under the B4 Apex fireworks grand finale.</p>
+      </div>
+      <div class="diag-item">
+        <h4>Option 2: The Master Imagineering Keystone</h4>
+        <p><b>Theme: Mechanical Engineering Marvel.</b> Heavy interlocking <code>imagineerGears</code> honoring the Imagineers who engineered all 868 attractions, animatronics, and pavilions.</p>
+      </div>
+      <div class="diag-item">
+        <h4>Option 3: Grand Champion Chalice (Retained)</h4>
+        <p><b>Theme: Pure Completionist Pinnacle.</b> Dual-handled Aurora-Gold <code>trophy</code> cup with acanthus fluting, victory star summit, and jewel inlays.</p>
+      </div>
+      <div class="diag-item">
+        <h4>Option 4: The Golden Sovereign Master Pass</h4>
+        <p><b>Theme: Classic Disney Lore (E-Ticket).</b> A gilded vintage <code>ticket</code> admitting the bearer to 100% of everything in WDW history, stamped 100% redeemed.</p>
+      </div>
+      <div class="diag-item">
+        <h4>Option 5: The Lamp of Infinite Wonders</h4>
+        <p><b>Theme: Storybook Fantasy.</b> The opulent Persian <code>magicLamp</code> pouring a swirling ribbon of magical cosmic stardust for having lived every Disney dream.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Spotlight Banner -->
+  <div class="spotlight-banner">
+    <div class="spotlight-badge">Active Selection</div>
+    <div class="spotlight-art" id="spotlightArt"></div>
+    <div class="spotlight-content">
+      <h2 class="spotlight-title" id="spotlightTitle">Option 1: Celestial Sunburst Corona (Kept)</h2>
+      <span class="spotlight-tag" id="spotlightTag">Kept Flagship • Sunburst Medallion + World Globe</span>
+      <ul class="spotlight-list" id="spotlightPoints">
+        <li><b>Faceted Aurora-Gold Corona:</b> 20-ray parametric sunburst border with stepped inner bezel rings.</li>
+        <li><b>Cosmic Night Sky Well:</b> Canonical <code>night</code> sky gradient (#1b1a4a→#4b3f8f) with diamond micro-stars.</li>
+        <li><b>B4 Grand Apex Fireworks:</b> Luminous burst canopy in spark cream (#fff9e6) and celestial satellites.</li>
+        <li><b>Library "World" Globe:</b> Vetted <code>world</code> geometry from <code>mythic-pin.html</code> poured in Royal emerald (#2f7d3e) with gold wirelines.</li>
+        <li><b>Minted "100%" Plaque:</b> Heavy Aurora-Gold cast plaque cleanly anchored at base.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Candidates Grid -->
+  <div class="candidates-grid">
+
+    <!-- Candidate 1 -->
+    <div class="candidate-card active" id="card-cand1" onclick="selectCandidate('cand1')">
+      <div class="pill-opt rec">Option 1 (Kept)</div>
+      <div class="cand-art-box" id="art-cand1"></div>
+      <div class="cand-name">Sunburst Corona (Kept)</div>
+      <div class="cand-sub">Global Conquest • World Globe & Fireworks</div>
+      <div class="cand-desc">
+        The retained flagship: 20-ray Aurora-Gold corona framing a cosmic night sky well. Vetted <code>world</code> globe at base with B4 grand apex fireworks finale and <code>"100%"</code> plaque.
+      </div>
+      <button class="btn-select-cand">Inspect Option 1</button>
+    </div>
+
+    <!-- Candidate 2 -->
+    <div class="candidate-card" id="card-cand2" onclick="selectCandidate('cand2')">
+      <div class="pill-opt alt">New Direction 1</div>
+      <div class="cand-art-box" id="art-cand2"></div>
+      <div class="cand-name">Imagineering Keystone</div>
+      <div class="cand-sub">Mechanical Marvel • Interlocking Cogwheels</div>
+      <div class="cand-desc">
+        The engine of imagination: 10.4px Aurora-Gold interlocking <code>imagineerGears</code> with platinum inner teeth, jewel bearings, Polaris star core, and cast <code>"100%"</code> plaque.
+      </div>
+      <button class="btn-select-cand">Inspect Option 2</button>
+    </div>
+
+    <!-- Candidate 3 -->
+    <div class="candidate-card" id="card-cand3" onclick="selectCandidate('cand3')">
+      <div class="pill-opt alt">Option 3 (Retained)</div>
+      <div class="cand-art-box" id="art-cand3"></div>
+      <div class="cand-name">Grand Champion Chalice</div>
+      <div class="cand-sub">Victory Pinnacle • Solid Gold Trophy Cup</div>
+      <div class="cand-desc">
+        The completionist holy grail: Sculpted dual-handled Aurora-Gold <code>trophy</code> with Royal purple enamel bowl, radiant victory star summit, and engraved <code>"100%"</code> pedestal base.
+      </div>
+      <button class="btn-select-cand">Inspect Option 3</button>
+    </div>
+
+    <!-- Candidate 4 -->
+    <div class="candidate-card" id="card-cand4" onclick="selectCandidate('cand4')">
+      <div class="pill-opt alt">New Direction 2</div>
+      <div class="cand-art-box" id="art-cand4"></div>
+      <div class="cand-name">Golden Master E-Ticket</div>
+      <div class="cand-sub">Disney Heritage • Sovereign Admission Pass</div>
+      <div class="cand-desc">
+        The ultimate admission pass: Gilded vintage <code>ticket</code> with notched perimeter, guilloche diamond lattice, Royal crimson velvet enamel, star punches, and minted <code>"100%"</code> seal.
+      </div>
+      <button class="btn-select-cand">Inspect Option 4</button>
+    </div>
+
+    <!-- Candidate 5 -->
+    <div class="candidate-card" id="card-cand5" onclick="selectCandidate('cand5')">
+      <div class="pill-opt bonus">Bonus Direction</div>
+      <div class="cand-art-box" id="art-cand5"></div>
+      <div class="cand-name">Lamp of Infinite Wonders</div>
+      <div class="cand-sub">Storybook Wonder • Every Dream Fulfilled</div>
+      <div class="cand-desc">
+        Every wish granted: Opulent Persian <code>magicLamp</code> in solid Aurora-Gold, pouring out a swirling ribbon of magical cosmic stardust and diamond stars, anchored by <code>"100%"</code> pedestal.
+      </div>
+      <button class="btn-select-cand">Inspect Option 5</button>
+    </div>
+
+  </div>
+
+  <!-- Interactive Live Catalog Card Section -->
+  <div class="catalog-preview-section">
+    <div class="section-title">Live Catalog Card Simulator</div>
+    <div class="section-sub">See how each unique direction looks directly inside the official catalog card UI:</div>
+
+    <div class="interactive-card-container">
+      
+      <!-- Live Card (identical markup to pin-catalog-v2-progress.html) -->
+      <div class="pin-card-preview" id="liveCard">
+        <div class="pin-art-wrapper" id="liveCardArt"></div>
+        <div class="pin-badge-row">
+          <span class="tier-badge-mythic">MYTHIC</span>
+          <span class="style-badge-pill" id="liveCardStyle">🛡️ Contained (SUNBURST)</span>
+          <span class="status-badge-pill" id="liveCardStatus" style="background:#6b3fb0;color:#fff;">NEW ART</span>
+        </div>
+        <div class="pin-name" id="liveCardName">The Whole Catalog</div>
+        <div class="pin-criteria">100% of all active experiences — the 1-of-1 apex.</div>
+      </div>
+
+      <!-- Selector Buttons -->
+      <div class="selector-box">
+        <button class="btn-select active" id="btn-cand1" onclick="selectCandidate('cand1')">
+          <span class="dot" style="background:#ffd700;"></span>
+          <span><strong>Option 1: Sunburst Corona with World Globe (Kept)</strong></span>
+        </button>
+        <button class="btn-select" id="btn-cand2" onclick="selectCandidate('cand2')">
+          <span class="dot" style="background:#0284c7;"></span>
+          <span><strong>Option 2: Imagineering Keystone (Interlocking Gears)</strong></span>
+        </button>
+        <button class="btn-select" id="btn-cand3" onclick="selectCandidate('cand3')">
+          <span class="dot" style="background:#ff8fbf;"></span>
+          <span><strong>Option 3: Grand Champion Chalice (Victor's Cup)</strong></span>
+        </button>
+        <button class="btn-select" id="btn-cand4" onclick="selectCandidate('cand4')">
+          <span class="dot" style="background:#ef4444;"></span>
+          <span><strong>Option 4: Golden Master E-Ticket (Heritage Pass)</strong></span>
+        </button>
+        <button class="btn-select" id="btn-cand5" onclick="selectCandidate('cand5')">
+          <span class="dot" style="background:#5fd6a8;"></span>
+          <span><strong>Option 5: Lamp of Infinite Wonders (Genie's Lamp)</strong></span>
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Technical Matrix -->
+  <table class="matrix-table">
+    <thead>
+      <tr>
+        <th>Specification</th>
+        <th>Option 1 (Kept Sunburst)</th>
+        <th>Option 2 (Imagineering Keystone)</th>
+        <th>Option 3 (Champion Chalice)</th>
+        <th>Option 4 (Master E-Ticket)</th>
+        <th>Option 5 (Magic Lamp)</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Core Motif (§5)</strong></td>
+        <td><code>world</code></td>
+        <td><code>imagineerGears</code></td>
+        <td><code>trophy</code></td>
+        <td><code>ticket</code></td>
+        <td><code>magicLamp</code></td>
+      </tr>
+      <tr>
+        <td><strong>Conceptual Theme</strong></td>
+        <td>Global planetary completion + fireworks</td>
+        <td>Engineering marvel behind all 868 experiences</td>
+        <td>Ultimate athletic/gaming champion cup</td>
+        <td>Sovereign master pass to every experience in history</td>
+        <td>Every wish granted, every story and dream lived</td>
+      </tr>
+      <tr>
+        <td><strong>Catalog Collision Risk</strong></td>
+        <td>None (1-of-1 Mythic)</td>
+        <td><strong>Zero</strong> (No gear pins in repo)</td>
+        <td><strong>Zero</strong> (No trophy pins in repo)</td>
+        <td><strong>Zero</strong> (No vintage ticket pins in repo)</td>
+        <td><strong>Zero</strong> (No lamp pins in repo)</td>
+      </tr>
+      <tr>
+        <td><strong>Format (§1, §4)</strong></td>
+        <td>Contained 20-Point Sunburst Medallion</td>
+        <td>Solid 1-Piece Die-Cut Cogwheel (10.4px rim)</td>
+        <td>Sculpted Die-Cut Trophy Pedestal</td>
+        <td>Diamond-Angled Die-Cut Filigree Ticket</td>
+        <td>Sculpted Die-Cut Magic Lamp</td>
+      </tr>
+      <tr>
+        <td><strong>Banner (§7)</strong></td>
+        <td><code>"100%"</code></td>
+        <td><code>"100%"</code></td>
+        <td><code>"100%"</code></td>
+        <td><code>"100%"</code></td>
+        <td><code>"100%"</code></td>
+      </tr>
+      <tr>
+        <td><strong>Enamel Share (§2)</strong></td>
+        <td>Passes (66% well)</td>
+        <td>Passes (55% share, 2 cells)</td>
+        <td>Passes (45% share, 4 cells)</td>
+        <td>Passes (37% share, 5 cells)</td>
+        <td>Passes (43% share, 2 cells)</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <script>
+    const AURORA = ['#fff6e0', '#ffb347', '#ff8fbf', '#c99cff', '#5fd6a8', '#ffcf4a', '#e08a1e'];
+    let uid = 0;
+    const gid = () => 'm' + (++uid);
+    const stops = arr => arr.map((c, i) => `<stop offset="${(i / (arr.length - 1)).toFixed(3)}" stop-color="${c}"/>`).join('');
+
+    function starburst(cx, cy, rO, rI, pts) {
+      let p = '';
+      for (let i = 0; i < pts * 2; i++) {
+        const r = i % 2 ? rI : rO;
+        const a = -Math.PI / 2 + i * Math.PI / pts;
+        p += (i ? 'L' : 'M') + (cx + r * Math.cos(a)).toFixed(2) + ' ' + (cy + r * Math.sin(a)).toFixed(2);
+      }
+      return p + 'Z';
+    }
+
+    // Authentic Licensed Library Motifs from motif-paths.js
+    const LIB_WORLD = "M253.47 17.406c-129.71 0-235.033 105.354-235.033 235.064c0 129.707 105.324 235.06 235.03 235.06S488.53 382.177 488.53 252.47c0-129.71-105.355-235.064-235.06-235.064M367.874 68.75c61.246 38.19 101.97 106.14 101.97 183.72c0 17.143-1.993 33.823-5.75 49.81l-34.25-18.06l22 54.874c-9.454 21.647-22.362 41.432-38 58.687l-43.158-30.936l-64.625 47.72l-61.656 6.967l-13.906-41.78l-49.72 26.844l-68.093-18.938l9.157 36.594c-28.41-21.793-51.23-50.466-66-83.563L81.25 304.47l32.25 17.124l59.22-9.875l2.843-40.908l-37.344-1.718l4.905-17.844l30.78-25.313l-25.093-15.625l67.22-38.593l-45.345-29.657l-66.625 40.187l-49.437-15.28c13.812-32.14 35.21-60.22 61.906-82.064l-3.75 44.375l43.376-34.124l72 22.22l-22.5-27.407L233 75.562l26.813 28.468l71 9.845l-3.5-34.47l41.468 12.657l-.905-23.312zm1.156 120.03L278 199.47l28.906 43.218l3.156 64.468L339.25 321l11.438-28.375l62.656 48.656L395.78 294l6.408-48.344l-43.75-22.72l10.593-34.155zM221 192.438l-31.594 21.188l36.47 14.78l16.686-14.78zm22.188 144.688l18.687 52.594l19.78-42.564z";
+    const LIB_GEARS = "M232 64 H280 L288 112 C304 118 318 126 332 136 L376 116 L404 154 L376 192 C382 208 386 224 386 242 L434 256 L422 302 L376 308 C370 324 360 338 348 350 L364 394 L324 418 L288 386 C272 390 256 392 240 390 L216 434 L170 422 L172 374 C158 366 144 356 134 344 L88 360 L64 320 L96 284 C92 268 90 252 92 236 L48 212 L60 166 L106 172 C116 158 128 146 142 136 L128 92 L168 68 L202 98 C218 94 234 94 250 96 Z M216 216 C216 194 234 176 256 176 C278 176 296 194 296 216 C296 238 278 256 256 256 C234 256 216 238 216 216 Z";
+    const LIB_TROPHY = "M256.156 21.625c-45.605 0-86.876 2.852-117.22 7.563-15.17 2.355-27.554 5.11-36.874 8.53-4.66 1.71-8.568 3.515-11.968 6.094-3.238 2.457-6.65 6.36-6.97 11.75h-.75c0 10.08.362 20.022 1.064 29.813H57.53c-.12-7.952.003-15.922.376-23.875l-26.812-6.28C22.55 161.892 64.1 265.716 140.564 339.655l15.655-29.594c-4.198-3.477-8.25-7.063-12.157-10.75 5.846-6.112 12.293-11.76 19.28-16.843 13.468 13.172 28.182 23.565 43.813 30.655 22.114 17.744 8.053 29.368-23.5 36.25 58.863 10.6 38.948 62.267-14.125 92.313-2.14.27-4.256.523-6.28.812-12.047 1.718-21.876 3.71-29.406 6.25-3.765 1.27-6.958 2.6-9.906 4.656-2.95 2.055-6.626 5.705-6.626 11.406 0 5.702 3.677 9.32 6.626 11.375 2.948 2.055 6.14 3.387 9.906 4.657 7.53 2.54 17.36 4.532 29.406 6.25 24.094 3.436 56.784 5.53 92.906 5.53 36.123 0 68.812-2.094 92.906-5.53 12.048-1.718 21.877-3.71 29.407-6.25 3.764-1.27 6.957-2.602 9.905-4.656 2.948-2.055 6.625-5.674 6.625-11.375 0-5.702-3.677-9.352-6.625-11.407-2.948-2.055-6.14-3.387-9.906-4.656-7.53-2.54-17.36-4.532-29.408-6.25-2.013-.287-4.12-.544-6.25-.813-53.076-30.045-72.99-81.71-14.125-92.312-31.568-6.886-45.63-18.522-23.468-36.28 15.74-7.15 30.547-17.655 44.092-30.97 6.648 4.773 12.84 10.038 18.47 15.72-4.105 4.172-8.338 8.257-12.72 12.217l16.188 29.594c79.118-71.955 116.195-179.53 110.03-285l-27.342 7.97c.45 7.61.64 15.19.562 22.75h-25.594c.702-9.792 1.063-19.735 1.063-29.814h-.75c-.323-5.39-3.763-9.293-7-11.75-3.402-2.58-7.31-4.383-11.97-6.093-9.32-3.422-21.704-6.177-36.875-8.532-30.342-4.71-71.613-7.563-117.22-7.563zm0 18.688c44.822 0 85.426 2.854 114.344 7.343 14.46 2.245 26.06 4.932 33.313 7.594 1.04.382 1.775.75 2.625 1.125-.85.375-1.58.742-2.625 1.125-7.252 2.662-18.854 5.38-33.313 7.625-28.918 4.49-69.522 7.344-114.344 7.344-44.82 0-85.425-2.855-114.344-7.345-14.46-2.245-26.06-4.963-33.312-7.625-1.05-.386-1.77-.748-2.625-1.125.853-.376 1.577-.74 2.625-1.125 7.252-2.662 18.853-5.35 33.313-7.594 28.918-4.49 69.522-7.343 114.343-7.343zm-197.25 71.874H86.25c8.057 57.878 28.23 108.83 56.188 146.25-6.974 5.74-13.407 11.968-19.188 18.688-38.648-46.456-59.042-104.647-64.344-164.938zm367.188 0h27C447.51 171.82 425.336 228.34 388.03 275c-5.44-6.055-11.406-11.97-17.188-17.75 26.657-37.42 46.502-88.37 54.438-146.25zM256 126.938c64.248 0 119.866 5.895 159.22 15.656-11.442 76.77-43.902 144.97-90.876 195.938-19.92 2.698-43.834 4.156-68.344 4.156-24.51 0-48.423-1.458-68.344-4.156-46.973-50.967-79.433-119.167-90.875-195.937 39.354-9.76 94.972-15.656 159.22-15.656zm0 18.687c-59.88 0-112.56 5.485-149.344 14.53 10.45 68.344 38.98 128.983 79.5 174.595 21.05 2.146 44.86 3.313 69.844 3.313s48.795-1.167 69.844-3.313c40.52-45.612 69.05-106.25 79.5-174.594-36.784-9.046-89.465-14.53-149.344-14.53zM151.75 367.188l-15.656 29.593c6.91 6.536 14.16 12.637 21.656 18.375l21.28-26.063c-9.255-6.666-18.372-14.004-27.28-21.905zm208.5 0c-8.908 7.9-18.026 15.24-27.28 21.906l21.28 26.063c7.497-5.738 14.747-11.84 21.657-18.375l-15.656-29.594zm-143.187 23.406l-18.844 23.094c18.52 11.83 38.38 21.22 59.22 27.656l2.593-30.812c-15.185-5.18-29.626-11.89-42.97-19.938zm77.875 0c-13.342 8.047-27.784 14.757-42.97 19.937l2.594 30.812c20.84-6.436 40.7-15.826 59.22-27.656l-18.844-23.093zm-39.75 42.062a84.453 84.453 0 0 1-5.188 12.5c2.404.14 4.862.25 7.375.25 2.513 0 4.97-.11 7.375-.25a84.453 84.453 0 0 1-5.187-12.5h-4.375z";
+    const LIB_TICKET = "M323.9 19.81l-55.2 55.15L285 91.24 272.2 104 256 87.73 19.81 323.9l45.57 45.6c28.5-14.6 56.22-11.7 72.52 4.6 16.3 16.3 19.2 44 4.6 72.5l45.6 45.6 236.1-236.1-16.2-16.3 12.8-12.8 16.3 16.2 55.1-55.1-45.6-45.6c-28.5 14.6-56.2 11.7-72.5-4.6-16.3-16.3-19.2-44.02-4.6-72.52zm-16.2 93.99l33.9 34-12.8 12.8-33.9-34zM256 130.2L381.8 256 222.1 415.8 96.16 289.9 249.6 136.5zm0 25.4L121.6 289.9l100.5 100.5L356.4 256zm108.2 14.8l34 33.9-12.8 12.8-34-33.9z";
+    const LIB_LAMP = "M203.72 87.938c-2.082.017-4.18.31-6.282.874-13.45 3.608-21.412 17.53-17.782 31.094 1.384 5.172 4.235 9.52 8 12.75-31.85 15.446-53.498 45.172-59.28 78.72l-22.532 7.593c-11.235-2.877-21.416-4.2-30.53-4.095-14.696.167-26.65 4.02-35.908 10.97-18.518 13.896-23.316 38.02-19.53 60.655 3.784 22.636 15.81 45.127 34.343 59.344 18.532 14.216 44.715 18.96 71.03 4.875 4.43-2.373 8.776-4.81 12.813-6.97 2.993 10.772 14.018 17.16 24.75 14.28 10.253-2.75 16.547-12.963 14.656-23.31 16.984 10.05 34.495 15.674 52.186 17.405-14.094 20.893-32.316 39.57-53.97 54.78 27.754 27.726 224.764-24.853 229.626-61.592-26.89-2.484-52.525-9.935-75.562-21.563 67.995-43.983 128.655-133.27 160.656-234.563l-42.47 14.344c-44.11 67.313-122.214 103.81-167.155 28a107.922 107.922 0 0 0-53-9.593c1.656-4.69 1.95-9.913.564-15.093-3.063-11.443-13.392-18.998-24.625-18.906zM76.062 233.53c5.11-.027 10.865.51 17.312 1.75 18.656 36.728 39.31 63.938 61.188 82.845-.767.113-1.546.263-2.313.47-.146.038-.293.08-.438.124-2.846.324-5.588 1.044-8.218 1.936-9.64 3.27-18.73 9.084-27.156 13.594-20.655 11.056-36.95 7.41-50.844-3.25-13.895-10.66-24.256-29.5-27.28-47.594-3.027-18.094.948-34.097 12.31-42.625 5.683-4.263 13.943-7.186 25.438-7.25z";
+
+    /* Candidate 1: Sunburst Corona with World Globe (Kept) */
+    function renderCandidate1(size = 140) {
+      const id = gid();
+      const coronaD = starburst(256, 256, 248, 196, 20);
+      return `
+<svg width="${size}" height="${size}" viewBox="0 0 512 512" style="overflow:hidden;" role="img">
+  <defs>
+    <linearGradient id="au-${id}" x1="0.15" y1="0" x2="0.85" y2="1">${stops(AURORA)}</linearGradient>
+    <linearGradient id="gold-${id}" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fff8db"/><stop offset="0.5" stop-color="#f8db79"/><stop offset="1" stop-color="#8c620f"/>
+    </linearGradient>
+    <radialGradient id="neb-${id}" cx="0.5" cy="0.32" r="0.75">
+      <stop offset="0" stop-color="#ffdf9e" stop-opacity="0.55"/>
+      <stop offset="0.25" stop-color="#6a3fb0" stop-opacity="0.45"/>
+      <stop offset="0.6" stop-color="#1b1a4a"/>
+      <stop offset="1" stop-color="#0c071e"/>
+    </radialGradient>
+    <radialGradient id="ocean-${id}" cx="0.4" cy="0.3" r="0.85">
+      <stop offset="0" stop-color="#2f6bb0"/><stop offset="0.5" stop-color="#14727f"/><stop offset="1" stop-color="#241a3a"/>
+    </radialGradient>
+    <linearGradient id="sh-${id}" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset="0.5" stop-color="#fff" stop-opacity="0.55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="gl-${id}" x1="0" y1="0" x2="0.3" y2="1">
+      <stop offset="0" stop-color="#fff" stop-opacity="0.55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="f-${id}" x="-25%" y="-25%" width="150%" height="160%">
+      <feDropShadow dx="0" dy="10" stdDeviation="10" flood-color="#000" flood-opacity="0.8"/>
+    </filter>
+    <clipPath id="c-corona-${id}"><path d="${coronaD}"/></clipPath>
+    <clipPath id="c-well-${id}"><circle cx="256" cy="256" r="180"/></clipPath>
+    <clipPath id="c-globe-${id}"><circle cx="256" cy="336" r="110"/></clipPath>
+  </defs>
+
+  <g filter="url(#f-${id})">
+    <path d="${coronaD}" fill="url(#au-${id})" stroke="#e08a1e" stroke-width="3" stroke-linejoin="round"/>
+    <circle cx="256" cy="256" r="192" fill="none" stroke="url(#au-${id})" stroke-width="9"/>
+    <circle cx="256" cy="256" r="185" fill="none" stroke="#000" stroke-opacity="0.45" stroke-width="3"/>
+    <circle cx="256" cy="256" r="180" fill="url(#neb-${id})"/>
+
+    <g fill="#ffffff" opacity="0.85">
+      <circle cx="148" cy="130" r="2.2"/><circle cx="196" cy="100" r="1.8"/><circle cx="316" cy="100" r="1.8"/>
+      <circle cx="364" cy="130" r="2.2"/><circle cx="120" cy="175" r="1.5"/><circle cx="392" cy="175" r="1.5"/>
+      <circle cx="220" cy="165" r="2"/><circle cx="292" cy="165" r="2"/><circle cx="256" cy="80" r="2.5"/>
+    </g>
+
+    <!-- B4 Grand Fireworks Finale -->
+    <g transform="translate(155, 175)">
+      <circle cx="0" cy="0" r="42" fill="#c47a8e" fill-opacity="0.25"/>
+      <path d="M0,-42 L0,42 M-42,0 L42,0 M-30,-30 L30,30 M-30,30 L30,-30" stroke="#ff8fbf" stroke-width="3.5" stroke-linecap="round"/>
+      <circle cx="0" cy="0" r="8" fill="#fff"/>
+      <circle cx="0" cy="-42" r="3.5" fill="#fff6e0"/><circle cx="0" cy="42" r="3.5" fill="#fff6e0"/>
+    </g>
+    <g transform="translate(357, 175)">
+      <circle cx="0" cy="0" r="42" fill="#8ed8ff" fill-opacity="0.25"/>
+      <path d="M0,-42 L0,42 M-42,0 L42,0 M-30,-30 L30,30 M-30,30 L30,-30" stroke="#8ed8ff" stroke-width="3.5" stroke-linecap="round"/>
+      <circle cx="0" cy="0" r="8" fill="#fff"/>
+      <circle cx="0" cy="-42" r="3.5" fill="#fff6e0"/><circle cx="0" cy="42" r="3.5" fill="#fff6e0"/>
+    </g>
+    <g transform="translate(256, 145)">
+      <circle cx="0" cy="0" r="70" fill="#ffcf4a" fill-opacity="0.3"/>
+      <path d="M0,-72 L0,72 M-72,0 L72,0 M-51,-51 L51,51 M-51,51 L51,-51" stroke="#fff9e6" stroke-width="5.5" stroke-linecap="round"/>
+      <path d="M0,-60 L0,60 M-60,0 L60,0 M-42,-42 L42,42 M-42,42 L42,-42" stroke="#ffb347" stroke-width="4" stroke-linecap="round" transform="rotate(22.5)"/>
+      <circle cx="0" cy="0" r="16" fill="#ffffff" stroke="url(#gold-${id})" stroke-width="3.5"/>
+      <circle cx="0" cy="-72" r="5" fill="#fff"/><circle cx="0" cy="72" r="5" fill="#fff"/>
+      <circle cx="-72" cy="0" r="5" fill="#fff"/><circle cx="72" cy="0" r="5" fill="#fff"/>
+    </g>
+
+    <!-- Cloisonné World Globe at Lower Base (Library world.svg Motif) -->
+    <g>
+      <circle cx="256" cy="336" r="118" fill="#2f6bb0" fill-opacity="0.35"/>
+      <circle cx="256" cy="336" r="110" fill="url(#ocean-${id})" stroke="url(#au-${id})" stroke-width="8"/>
+      
+      <g clip-path="url(#c-globe-${id})">
+        <g transform="translate(256, 336) scale(0.47) translate(-253.5, -252.5)">
+          <path d="${LIB_WORLD}" fill="#2f7d3e" stroke="url(#gold-${id})" stroke-width="4.5" stroke-linejoin="round"/>
+        </g>
+        <circle cx="218" cy="316" r="5.5" fill="#fff" stroke="#ffb347" stroke-width="2.5"/>
+      </g>
+
+      <g clip-path="url(#c-globe-${id})">
+        <ellipse cx="221" cy="298" rx="65" ry="40" transform="rotate(-30 221 298)" fill="url(#gl-${id})" opacity="0.65"/>
+      </g>
+      <circle cx="256" cy="336" r="110" fill="none" stroke="url(#au-${id})" stroke-width="8"/>
+    </g>
+
+    <!-- Minted 4-Character Engraved Banner Plaque (§7) -->
+    <g>
+      <path d="M178,418 Q256,444 334,418 L340,448 Q256,476 172,448 Z" fill="url(#au-${id})" stroke="#8c620f" stroke-width="3.5" stroke-linejoin="round"/>
+      <path d="M178,418 L164,433 L172,448 M334,418 L348,433 L340,448" fill="url(#au-${id})" stroke="#8c620f" stroke-width="3"/>
+      <text x="256" y="444" text-anchor="middle" dominant-baseline="central"
+            font-family="Outfit, sans-serif" font-weight="900" font-size="21" letter-spacing="4"
+            fill="#0c081e">100%</text>
+    </g>
+
+    <g clip-path="url(#c-corona-${id})">
+      <rect class="mythic-shmr" x="-400" y="0" width="180" height="512" fill="url(#sh-${id})" transform="rotate(25 256 256)"/>
+    </g>
+  </g>
+</svg>`;
+    }
+
+    /* Candidate 2: The Master Imagineering Keystone (imagineerGears) */
+    function renderCandidate2(size = 140) {
+      const id = gid();
+      return `
+<svg width="${size}" height="${size}" viewBox="0 0 512 512" style="overflow:hidden;" role="img">
+  <defs>
+    <linearGradient id="au-${id}" x1="0.15" y1="0" x2="0.85" y2="1">${stops(AURORA)}</linearGradient>
+    <linearGradient id="gold-${id}" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fff8db"/><stop offset="0.5" stop-color="#f8db79"/><stop offset="1" stop-color="#8c620f"/>
+    </linearGradient>
+    <linearGradient id="plat-${id}" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffffff"/><stop offset="0.5" stop-color="#cbd5e1"/><stop offset="1" stop-color="#475569"/>
+    </linearGradient>
+    <radialGradient id="cogwell-${id}" cx="0.5" cy="0.5" r="0.75">
+      <stop offset="0" stop-color="#3b2064"/><stop offset="0.6" stop-color="#1e1038"/><stop offset="1" stop-color="#0b0617"/>
+    </radialGradient>
+    <linearGradient id="sh-${id}" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset="0.5" stop-color="#fff" stop-opacity="0.55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="gl-${id}" x1="0" y1="0" x2="0.3" y2="1">
+      <stop offset="0" stop-color="#fff" stop-opacity="0.5"/><stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="f-${id}" x="-25%" y="-25%" width="150%" height="160%">
+      <feDropShadow dx="0" dy="10" stdDeviation="10" flood-color="#000" flood-opacity="0.8"/>
+    </filter>
+  </defs>
+
+  <g filter="url(#f-${id})">
+    <!-- Radiant Blueprint Engineering Halo -->
+    <circle cx="256" cy="245" r="195" fill="none" stroke="url(#gold-${id})" stroke-width="2.5" stroke-dasharray="8,6" opacity="0.6"/>
+    <circle cx="256" cy="245" r="215" fill="none" stroke="url(#au-${id})" stroke-width="1.8" opacity="0.45"/>
+
+    <!-- Concentric Technical Rivets around Rim -->
+    <g fill="url(#gold-${id})">
+      <circle cx="256" cy="38" r="4.5"/><circle cx="256" cy="452" r="4.5"/>
+      <circle cx="49" cy="245" r="4.5"/><circle cx="463" cy="245" r="4.5"/>
+      <circle cx="110" cy="99" r="3.5"/><circle cx="402" cy="391" r="3.5"/>
+      <circle cx="402" cy="99" r="3.5"/><circle cx="110" cy="391" r="3.5"/>
+    </g>
+
+    <!-- The Authentic Library imagineerGears Motif (Scaled with 10.4px Rim) -->
+    <g transform="translate(256, 246) scale(0.95) translate(-241, -249)">
+      <!-- Heavy 10.4px Solid Die-Cut Aurora Metal Rim -->
+      <path d="${LIB_GEARS}" fill="url(#au-${id})" stroke="url(#au-${id})" stroke-width="24" stroke-linejoin="round"/>
+      <!-- Inner Enamel Fill in Deep Midnight Purple / Ink -->
+      <path d="${LIB_GEARS}" fill="url(#cogwell-${id})" stroke="url(#gold-${id})" stroke-width="6" stroke-linejoin="round"/>
+      <!-- Stepped Secondary Platinum Gear Inlay -->
+      <path d="${LIB_GEARS}" fill="url(#plat-${id})" opacity="0.3" transform="rotate(15 241 249) scale(0.85 0.85) translate(36 37)"/>
+    </g>
+
+    <!-- Precision Jewel Bearings on Cog Teeth -->
+    <circle cx="256" cy="80" r="7" fill="#a8323f" stroke="url(#gold-${id})" stroke-width="2"/> <!-- Royal Crimson -->
+    <circle cx="422" cy="245" r="6.5" fill="#14727f" stroke="url(#gold-${id})" stroke-width="2"/> <!-- Royal Teal -->
+    <circle cx="90" cy="245" r="6.5" fill="#2f7d3e" stroke="url(#gold-${id})" stroke-width="2"/> <!-- Royal Forest -->
+    <circle cx="374" cy="126" r="5" fill="#b5721a" stroke="url(#gold-${id})" stroke-width="1.8"/> <!-- Amber -->
+    <circle cx="138" cy="126" r="5" fill="#b5721a" stroke="url(#gold-${id})" stroke-width="1.8"/> <!-- Amber -->
+
+    <!-- Central Polaris Diamond Keystone Boss -->
+    <circle cx="256" cy="245" r="36" fill="url(#gold-${id})" stroke="url(#au-${id})" stroke-width="5"/>
+    <polygon points="256,215 264,238 287,245 264,252 256,275 248,252 225,245 248,238" fill="#ffffff" stroke="#e08a1e" stroke-width="2"/>
+    <circle cx="256" cy="245" r="6" fill="#ffcf4a"/>
+
+    <!-- Minted Cast Plaque Bolted at Base (§7) -->
+    <g>
+      <rect x="186" y="416" width="140" height="40" rx="8" fill="url(#gold-${id})" stroke="url(#au-${id})" stroke-width="6"/>
+      <!-- Bolted Rivets -->
+      <circle cx="196" cy="436" r="3.5" fill="#8c620f"/>
+      <circle cx="316" cy="436" r="3.5" fill="#8c620f"/>
+      <text x="256" y="437" text-anchor="middle" dominant-baseline="central"
+            font-family="Outfit, sans-serif" font-weight="900" font-size="22" letter-spacing="3"
+            fill="#0c081e">100%</text>
+    </g>
+
+    <!-- Gloss Highlight -->
+    <ellipse cx="215" cy="190" rx="100" ry="50" transform="rotate(-30 215 190)" fill="url(#gl-${id})" opacity="0.55"/>
+  </g>
+</svg>`;
+    }
+
+    /* Candidate 3: The Grand Champion Chalice (Retained) */
+    function renderCandidate3(size = 140) {
+      const id = gid();
+      return `
+<svg width="${size}" height="${size}" viewBox="0 0 512 512" style="overflow:hidden;" role="img">
+  <defs>
+    <linearGradient id="au-${id}" x1="0.15" y1="0" x2="0.85" y2="1">${stops(AURORA)}</linearGradient>
+    <linearGradient id="gold-${id}" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fff8db"/><stop offset="0.5" stop-color="#f8db79"/><stop offset="1" stop-color="#8c620f"/>
+    </linearGradient>
+    <linearGradient id="cupwell-${id}" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#6a3fb0"/><stop offset="0.6" stop-color="#4a2a7a"/><stop offset="1" stop-color="#1b1236"/>
+    </linearGradient>
+    <linearGradient id="sh-${id}" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset="0.5" stop-color="#fff" stop-opacity="0.55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="gl-${id}" x1="0" y1="0" x2="0.3" y2="1">
+      <stop offset="0" stop-color="#fff" stop-opacity="0.55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="f-${id}" x="-25%" y="-25%" width="150%" height="160%">
+      <feDropShadow dx="0" dy="10" stdDeviation="10" flood-color="#000" flood-opacity="0.8"/>
+    </filter>
+  </defs>
+
+  <g filter="url(#f-${id})">
+    <!-- Radiant Victor's Halo Backdrop -->
+    <circle cx="256" cy="180" r="140" fill="#ffd700" fill-opacity="0.18"/>
+    <g stroke="url(#gold-${id})" stroke-width="2.5" opacity="0.65">
+      <line x1="256" y1="40" x2="256" y2="15"/>
+      <line x1="150" y1="80" x2="135" y2="65"/>
+      <line x1="362" y1="80" x2="377" y2="65"/>
+      <line x1="110" y1="180" x2="85" y2="180"/>
+      <line x1="402" y1="180" x2="427" y2="180"/>
+    </g>
+
+    <!-- 5-Point Crown Victory Star above Cup -->
+    <g transform="translate(256, 42)">
+      <polygon points="0,-22 6,-6 22,0 6,6 0,22 -6,6 -22,0 -6,-6" fill="#ffffff" stroke="url(#gold-${id})" stroke-width="3"/>
+      <circle cx="0" cy="0" r="4" fill="#ffcf4a"/>
+    </g>
+
+    <!-- The Authentic Library trophy Motif (Scaled with 10.4px Rim) -->
+    <g transform="translate(256, 257) scale(0.92) translate(-256, -257)">
+      <!-- 10.4px Solid Die-Cut Aurora Metal Rim -->
+      <path d="${LIB_TROPHY}" fill="url(#au-${id})" stroke="url(#au-${id})" stroke-width="24" stroke-linejoin="round"/>
+      <!-- Inner Cloisonné Enamel Fill in Royal Purple/Ink -->
+      <path d="${LIB_TROPHY}" fill="url(#cupwell-${id})" stroke="url(#gold-${id})" stroke-width="6" stroke-linejoin="round"/>
+    </g>
+
+    <!-- Jewel Inlays along Trophy Lip -->
+    <circle cx="256" cy="138" r="6" fill="#a8323f" stroke="url(#gold-${id})" stroke-width="2"/>
+    <circle cx="216" cy="142" r="5" fill="#b5721a" stroke="url(#gold-${id})" stroke-width="2"/>
+    <circle cx="296" cy="142" r="5" fill="#b5721a" stroke="url(#gold-${id})" stroke-width="2"/>
+    <circle cx="178" cy="150" r="4.5" fill="#14727f" stroke="url(#gold-${id})" stroke-width="1.5"/>
+    <circle cx="334" cy="150" r="4.5" fill="#14727f" stroke="url(#gold-${id})" stroke-width="1.5"/>
+
+    <!-- Classical Fluting Lines on Cup Bowl -->
+    <g stroke="url(#gold-${id})" stroke-width="3" opacity="0.75">
+      <line x1="230" y1="190" x2="236" y2="280"/>
+      <line x1="256" y1="190" x2="256" y2="285"/>
+      <line x1="282" y1="190" x2="276" y2="280"/>
+    </g>
+
+    <!-- Minted Pedestal Base Plaque engraved with "100%" -->
+    <g>
+      <rect x="186" y="420" width="140" height="38" rx="7" fill="url(#gold-${id})" stroke="url(#au-${id})" stroke-width="6"/>
+      <text x="256" y="440" text-anchor="middle" dominant-baseline="central"
+            font-family="Outfit, sans-serif" font-weight="900" font-size="22" letter-spacing="3"
+            fill="#0c081e">100%</text>
+    </g>
+
+    <!-- Gloss Specular Highlight Curve -->
+    <ellipse cx="225" cy="205" rx="85" ry="42" transform="rotate(-30 225 205)" fill="url(#gl-${id})" opacity="0.6"/>
+  </g>
+</svg>`;
+    }
+
+    /* Candidate 4: The Golden Sovereign Master Pass (LIB_TICKET) */
+    function renderCandidate4(size = 140) {
+      const id = gid();
+      return `
+<svg width="${size}" height="${size}" viewBox="0 0 512 512" style="overflow:hidden;" role="img">
+  <defs>
+    <linearGradient id="au-${id}" x1="0.15" y1="0" x2="0.85" y2="1">${stops(AURORA)}</linearGradient>
+    <linearGradient id="gold-${id}" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fff8db"/><stop offset="0.5" stop-color="#f8db79"/><stop offset="1" stop-color="#8c620f"/>
+    </linearGradient>
+    <linearGradient id="tktwell-${id}" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#d93b4c"/><stop offset="0.5" stop-color="#a8323f"/><stop offset="1" stop-color="#4a1525"/>
+    </linearGradient>
+    <linearGradient id="sh-${id}" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset="0.5" stop-color="#fff" stop-opacity="0.55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="gl-${id}" x1="0" y1="0" x2="0.3" y2="1">
+      <stop offset="0" stop-color="#fff" stop-opacity="0.5"/><stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="f-${id}" x="-25%" y="-25%" width="150%" height="160%">
+      <feDropShadow dx="0" dy="10" stdDeviation="10" flood-color="#000" flood-opacity="0.8"/>
+    </filter>
+  </defs>
+
+  <g filter="url(#f-${id})">
+    <!-- Radiant Golden Heritage Aura Backdrop -->
+    <circle cx="256" cy="256" r="185" fill="#ffd700" fill-opacity="0.16"/>
+
+    <!-- Concentric Starburst Radiance behind Ticket -->
+    <g stroke="url(#gold-${id})" stroke-width="2.5" opacity="0.6">
+      <line x1="256" y1="35" x2="256" y2="15"/>
+      <line x1="256" y1="477" x2="256" y2="497"/>
+      <line x1="35" y1="256" x2="15" y2="256"/>
+      <line x1="477" y1="256" x2="497" y2="256"/>
+      <line x1="100" y1="100" x2="85" y2="85"/>
+      <line x1="412" y1="412" x2="427" y2="427"/>
+      <line x1="412" y1="100" x2="427" y2="85"/>
+      <line x1="100" y1="412" x2="85" y2="427"/>
+    </g>
+
+    <!-- The Authentic Library ticket Motif centered exactly on inner diamond (239, 273) -> (256, 256) -->
+    <g transform="translate(256, 256) scale(0.88) translate(-239, -273)">
+      <!-- 10.4px Solid Die-Cut Aurora Metal Rim -->
+      <path d="${LIB_TICKET}" fill="url(#au-${id})" stroke="url(#au-${id})" stroke-width="22" stroke-linejoin="round"/>
+      <!-- Inner Enamel Fill in Royal Crimson Velvet -->
+      <path d="${LIB_TICKET}" fill="url(#tktwell-${id})" stroke="url(#gold-${id})" stroke-width="6" stroke-linejoin="round"/>
+
+      <!-- Vintage Perforation Jewels at Notches -->
+      <circle cx="104" cy="408" r="7" fill="#fff" stroke="url(#gold-${id})" stroke-width="2.5"/>
+      <circle cx="408" cy="104" r="7" fill="#fff" stroke="url(#gold-${id})" stroke-width="2.5"/>
+      <circle cx="318" cy="137" r="5" fill="#ffcf4a" stroke="url(#gold-${id})" stroke-width="2"/>
+      <circle cx="375" cy="194" r="5" fill="#ffcf4a" stroke="url(#gold-${id})" stroke-width="2"/>
+
+      <!-- Central Minted Aurora-Gold Seal — Perfectly Centered in Crimson Diamond (cx=239, cy=273) -->
+      <circle cx="239" cy="273" r="50" fill="url(#gold-${id})" stroke="url(#au-${id})" stroke-width="7"/>
+      <circle cx="239" cy="273" r="42" fill="none" stroke="#8c620f" stroke-width="2" stroke-dasharray="4,3"/>
+
+      <!-- Micro Polaris Victory Accent Stars (No words, pure geometry) -->
+      <polygon points="239,244 241,248 245,249 241,250 239,254 237,250 233,249 237,248" fill="#8c620f"/>
+      <polygon points="239,292 241,296 245,297 241,298 239,302 237,298 233,297 237,296" fill="#8c620f"/>
+
+      <!-- Minted 100% Numeral (§7: Max 4 Characters, No Words) -->
+      <text x="239" y="273" text-anchor="middle" dominant-baseline="central"
+            font-family="Outfit, sans-serif" font-weight="900" font-size="24" letter-spacing="1.5"
+            fill="#0c081e">100%</text>
+
+      <!-- Gloss Highlight -->
+      <ellipse cx="210" cy="235" rx="75" ry="38" transform="rotate(-35 210 235)" fill="url(#gl-${id})" opacity="0.6"/>
+    </g>
+  </g>
+</svg>`;
+    }
+
+    /* Candidate 5: The Lamp of Infinite Wonders (LIB_LAMP) */
+    function renderCandidate5(size = 140) {
+      const id = gid();
+      return `
+<svg width="${size}" height="${size}" viewBox="0 0 512 512" style="overflow:hidden;" role="img">
+  <defs>
+    <linearGradient id="au-${id}" x1="0.15" y1="0" x2="0.85" y2="1">${stops(AURORA)}</linearGradient>
+    <linearGradient id="gold-${id}" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fff8db"/><stop offset="0.5" stop-color="#f8db79"/><stop offset="1" stop-color="#8c620f"/>
+    </linearGradient>
+    <linearGradient id="lampwell-${id}" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#14727f"/><stop offset="0.6" stop-color="#0e4e57"/><stop offset="1" stop-color="#062226"/>
+    </linearGradient>
+    <linearGradient id="sh-${id}" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset="0.5" stop-color="#fff" stop-opacity="0.55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="gl-${id}" x1="0" y1="0" x2="0.3" y2="1">
+      <stop offset="0" stop-color="#fff" stop-opacity="0.55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="f-${id}" x="-25%" y="-25%" width="150%" height="160%">
+      <feDropShadow dx="0" dy="10" stdDeviation="10" flood-color="#000" flood-opacity="0.8"/>
+    </filter>
+  </defs>
+
+  <g filter="url(#f-${id})">
+    <!-- Magical Stardust Clouds Rising from Spout -->
+    <g fill="#ffdf9e" opacity="0.85">
+      <circle cx="390" cy="120" r="14" fill="#c99cff" fill-opacity="0.35"/>
+      <circle cx="415" cy="80" r="22" fill="#5fd6a8" fill-opacity="0.3"/>
+      <circle cx="370" cy="55" r="30" fill="#ffb347" fill-opacity="0.25"/>
+      <!-- Sparkle Stars -->
+      <polygon points="415,62 419,74 431,78 419,82 415,94 411,82 399,78 411,74" fill="#ffffff"/>
+      <polygon points="360,42 363,52 373,55 363,58 360,68 357,58 347,55 357,52" fill="#fff9e6"/>
+      <circle cx="330" cy="80" r="3" fill="#fff"/>
+      <circle cx="450" cy="110" r="2.5" fill="#fff"/>
+    </g>
+
+    <!-- The Authentic Library magicLamp Motif (Scaled with 10.4px Rim) -->
+    <g transform="translate(256, 260) scale(0.88) translate(-254.5, -251.2)">
+      <!-- 10.4px Solid Die-Cut Aurora Metal Rim -->
+      <path d="${LIB_LAMP}" fill="url(#au-${id})" stroke="url(#au-${id})" stroke-width="24" stroke-linejoin="round"/>
+      <!-- Inner Enamel Fill in Deep Royal Teal -->
+      <path d="${LIB_LAMP}" fill="url(#lampwell-${id})" stroke="url(#gold-${id})" stroke-width="7" stroke-linejoin="round"/>
+    </g>
+
+    <!-- Jewel Inlays along Lamp Body -->
+    <circle cx="204" cy="106" r="6" fill="#a8323f" stroke="url(#gold-${id})" stroke-width="2"/>
+    <circle cx="132" cy="272" r="5.5" fill="#ffcf4a" stroke="url(#gold-${id})" stroke-width="2"/>
+    <circle cx="178" cy="285" r="5" fill="#c99cff" stroke="url(#gold-${id})" stroke-width="1.8"/>
+
+    <!-- Minted Pedestal Base Plaque engraved with "100%" -->
+    <g>
+      <rect x="186" y="420" width="140" height="38" rx="7" fill="url(#gold-${id})" stroke="url(#au-${id})" stroke-width="6"/>
+      <text x="256" y="440" text-anchor="middle" dominant-baseline="central"
+            font-family="Outfit, sans-serif" font-weight="900" font-size="22" letter-spacing="3"
+            fill="#0c081e">100%</text>
+    </g>
+
+    <!-- Gloss Highlight -->
+    <ellipse cx="215" cy="235" rx="75" ry="38" transform="rotate(-26 215 235)" fill="url(#gl-${id})" opacity="0.6"/>
+  </g>
+</svg>`;
+    }
+
+    const CANDIDATES = {
+      cand1: {
+        render: renderCandidate1,
+        name: 'Option 1: Celestial Sunburst Corona (Kept)',
+        tag: 'Kept Flagship • Planetary Conquest',
+        style: '🛡️ Contained (SUNBURST)',
+        status: 'NEW ART',
+        statusBg: '#6b3fb0',
+        points: [
+          '<b>Faceted Aurora-Gold Corona:</b> 20-ray parametric sunburst border with stepped inner bezel rings.',
+          '<b>Cosmic Night Sky Well:</b> Canonical night sky gradient (#1b1a4a→#4b3f8f) with diamond micro-stars.',
+          '<b>B4 Apex Fireworks Finale:</b> Grand burst canopy in spark cream (#fff9e6), Aurora gold, and satellite stars.',
+          '<b>Library "World" Globe:</b> Vetted <code>world</code> geometry from <code>mythic-pin.html</code> poured in Royal emerald (#2f7d3e) with gold wirelines.',
+          '<b>Minted "100%" Plaque:</b> Heavy Aurora-Gold cast plaque cleanly anchored at base.'
+        ]
+      },
+      cand2: {
+        render: renderCandidate2,
+        name: 'Option 2: The Master Imagineering Keystone',
+        tag: 'New Direction • Engineering Marvel',
+        style: '✂️ Die-Cut Silhouette',
+        status: 'NEW ART',
+        statusBg: '#0284c7',
+        points: [
+          '<b>Theme: The Engine of Imagination:</b> Celebrates the Walt Disney Imagineering genius behind all 868 attractions, animatronics, and pavilions in WDW.',
+          '<b>Library "imagineerGears" Motif:</b> Heavy 10.4px Aurora-Gold cogwheel with interlocking platinum gear teeth.',
+          '<b>Deep Midnight Well:</b> Poured in Royal indigo (#1b1a4a) with concentric technical calibration rings.',
+          '<b>Jewel Bearings:</b> Ruby, emerald, teal, and amber jewel studs set into precision mechanical points.',
+          '<b>Zero Catalog Collisions:</b> Completely unique concept and silhouette across the entire pin roster.'
+        ]
+      },
+      cand3: {
+        render: renderCandidate3,
+        name: 'Option 3: Grand Champion Chalice (Retained)',
+        tag: 'Retained Direction • Completionist Holy Grail',
+        style: '✂️ Die-Cut Silhouette',
+        status: 'NEW ART',
+        statusBg: '#ff8fbf',
+        points: [
+          '<b>Theme: Athletic & Gaming Pinnacle:</b> The ultimate victor\'s trophy cup for finishing 100% of all 868 catalog experiences.',
+          '<b>Library "trophy" Motif:</b> Ornate dual-handled Aurora-Gold chalice with classical acanthus leaf chasing.',
+          '<b>Radiant Victory Star Summit:</b> Glowing 5-point diamond star crowning the trophy lip.',
+          '<b>Deep Cloisonné Well:</b> Royal purple/ink (#4a2a7a) interior enamel with jewel studs.',
+          '<b>Engraved Champion Pedestal:</b> Minted cast-metal base with bold "100%".'
+        ]
+      },
+      cand4: {
+        render: renderCandidate4,
+        name: 'Option 4: Golden Sovereign Master Pass',
+        tag: 'New Direction • Classic Disney Heritage',
+        style: '✂️ Die-Cut Silhouette',
+        status: 'NEW ART',
+        statusBg: '#ef4444',
+        points: [
+          '<b>Theme: The Ultimate E-Ticket:</b> In classic Disney lore, the E-Ticket was the pinnacle pass. This is the Mythic Master Pass to literally everything in existence.',
+          '<b>Library "ticket" Motif:</b> Diamond-angled vintage ticket pass with scalloped perimeter notches and milled coin-edges.',
+          '<b>Royal Crimson Velvet Enamel:</b> Rich red and purple cloisonné cells (#a8323f) with gilded guilloche lattice.',
+          '<b>Minted 100% Seal:</b> Stamped Aurora-Gold medallion perfectly centered in the crimson diamond, engraved with "100%" and accent micro-stars.',
+          '<b>Zero Catalog Collisions:</b> Deeply Disney, highly nostalgic, and shares zero shapes with existing pins.'
+        ]
+      },
+      cand5: {
+        render: renderCandidate5,
+        name: 'Option 5: Lamp of Infinite Wonders',
+        tag: 'Bonus Direction • Storybook Fantasy',
+        style: '✂️ Die-Cut Silhouette',
+        status: 'NEW ART',
+        statusBg: '#10b981',
+        points: [
+          '<b>Theme: Every Wish Granted:</b> Having completed every single experience means having lived every Disney story and dream.',
+          '<b>Library "magicLamp" Motif:</b> Opulent Persian oil lamp in solid Aurora-Gold with fluted spout and ornamental scroll handle.',
+          '<b>Swirling Cosmic Stardust:</b> Magical ribbon of stardust clouds and diamond sparkles pouring from the spout.',
+          '<b>Royal Cloisonné Teal Well:</b> Rich teal interior enamel (#14727f) with jewel inlays.',
+          '<b>Pedestal Plaque:</b> Heavy cast metal base with bold "100%".'
+        ]
+      }
+    };
+
+    function selectCandidate(key) {
+      const c = CANDIDATES[key];
+      if (!c) return;
+
+      document.getElementById('spotlightArt').innerHTML = c.render(190);
+      document.getElementById('spotlightTitle').innerText = c.name;
+      document.getElementById('spotlightTag').innerText = c.tag;
+      document.getElementById('spotlightPoints').innerHTML = c.points.map(p => `<li>${p}</li>`).join('');
+
+      document.getElementById('liveCardArt').innerHTML = c.render(120);
+      document.getElementById('liveCardStyle').innerText = c.style;
+      const stEl = document.getElementById('liveCardStatus');
+      stEl.innerText = c.status;
+      stEl.style.background = c.statusBg;
+
+      ['cand1', 'cand2', 'cand3', 'cand4', 'cand5'].forEach(k => {
+        const card = document.getElementById(`card-${k}`);
+        if (card) card.classList.toggle('active', k === key);
+        const btn = document.getElementById(`btn-${k}`);
+        if (btn) btn.classList.toggle('active', k === key);
+      });
+    }
+
+    document.getElementById('art-cand1').innerHTML = renderCandidate1(140);
+    document.getElementById('art-cand2').innerHTML = renderCandidate2(140);
+    document.getElementById('art-cand3').innerHTML = renderCandidate3(140);
+    document.getElementById('art-cand4').innerHTML = renderCandidate4(140);
+    document.getElementById('art-cand5').innerHTML = renderCandidate5(140);
+
+    selectCandidate('cand1');
+  </script>
+</body>
+</html>

@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Mythic — The Whole Catalog (Golden Sovereign E-Ticket)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  body{ background:radial-gradient(circle at 50% -10%, #17102e, #070510 60%); color:#f6f4fb;
+    font-family:'Plus Jakarta Sans',sans-serif; padding:44px 24px 90px; min-height:100vh; text-align:center; }
+  h1{ font-family:'Outfit',sans-serif; font-weight:800; font-size:32px; letter-spacing:-0.5px;
+    background:linear-gradient(135deg, #fff6e0 30%, #ffdf9e 60%, #ff8fbf 85%, #c99cff 100%);
+    -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+  .badge-tier { display:inline-block; font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:1px;
+    padding:4px 16px; border-radius:999px; background:linear-gradient(90deg, #fff6e0, #ffb347, #ff8fbf, #c99cff, #5fd6a8);
+    color:#0c081e; margin-bottom:14px; box-shadow:0 0 20px rgba(255, 179, 71, 0.35); }
+  .sub{ color:#9a90b8; font-size:14.5px; margin:12px auto 0; max-width:760px; line-height:1.65; }
+  .sub b{ color:#ffdf9e; }
+  .hero{ margin-top:32px; display:flex; justify-content:center; align-items:center; }
+  .row{ display:flex; gap:26px; justify-content:center; align-items:flex-end; margin-top:36px; flex-wrap:wrap; }
+  .tile-box{ background:#0e0a1e; border:1px solid rgba(159,122,234,0.3); border-radius:20px; padding:20px;
+    box-shadow:0 12px 32px rgba(0,0,0,0.6); display:flex; flex-direction:column; align-items:center; }
+  .lab{ font-size:12px; color:#ffcf6a; margin-top:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; }
+</style>
+</head>
+<body>
+  <div class="badge-tier">Series 1 · 1-of-1 Mythic Apex Capstone</div>
+  <h1>The Whole Catalog — Golden Sovereign E-Ticket</h1>
+  <p class="sub">
+    <b>100% Completion of All 868 Disney World Experiences (Locked Design).</b><br>
+    Tier metal: <b>Aurora-Gold</b> (7th tier, measured distinct from all six by <code>tiersConfusable</code>).<br>
+    Format: <b>Die-Cut Golden Sovereign E-Ticket pass</b> (Delapouite, <code>game-icons.net</code>, CC BY 3.0) with scalloped notches, 10.4px Mythic rim, Royal crimson velvet enamel (<code>#a8323f</code>), and a mathematically centered minted Aurora-Gold seal disc displaying the <code>"100%"</code> completion numeral flanked by Polaris accent stars.
+  </p>
+  <div class="hero" id="hero"></div>
+  <div class="row" id="sizes"></div>
+
+<script>
+const AURORA = ['#fff6e0', '#ffb347', '#ff8fbf', '#c99cff', '#5fd6a8', '#ffcf4a', '#e08a1e'];
+const TICKET_PATH = "M323.9 19.81l-55.2 55.15L285 91.24 272.2 104 256 87.73 19.81 323.9l45.57 45.6c28.5-14.6 56.22-11.7 72.52 4.6 16.3 16.3 19.2 44 4.6 72.5l45.6 45.6 236.1-236.1-16.2-16.3 12.8-12.8 16.3 16.2 55.1-55.1-45.6-45.6c-28.5 14.6-56.2 11.7-72.5-4.6-16.3-16.3-19.2-44.02-4.6-72.52zm-16.2 93.99l33.9 34-12.8 12.8-33.9-34zM256 130.2L381.8 256 222.1 415.8 96.16 289.9 249.6 136.5zm0 25.4L121.6 289.9l100.5 100.5L356.4 256zm108.2 14.8l34 33.9-12.8 12.8-34-33.9z";
+
+let uid = 0;
+const gid = () => "m" + (++uid);
+const stops = arr => arr.map((c, i) => `<stop offset="${(i / (arr.length - 1)).toFixed(3)}" stop-color="${c}"/>`).join("");
+
+function mythic(size = 300) {
+  const id = gid();
+  return `
+<svg width="${size}" height="${size}" viewBox="0 0 512 512" style="overflow:visible;" role="img">
+  <defs>
+    <linearGradient id="au-${id}" x1="0.15" y1="0" x2="0.85" y2="1">${stops(AURORA)}</linearGradient>
+    <linearGradient id="gold-${id}" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fff8db"/><stop offset="0.5" stop-color="#f8db79"/><stop offset="1" stop-color="#8c620f"/>
+    </linearGradient>
+    <linearGradient id="tktwell-${id}" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#d93b4c"/><stop offset="0.5" stop-color="#a8323f"/><stop offset="1" stop-color="#4a1525"/>
+    </linearGradient>
+    <linearGradient id="sh-${id}" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset="0.5" stop-color="#fff" stop-opacity="0.55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="gl-${id}" x1="0" y1="0" x2="0.3" y2="1">
+      <stop offset="0" stop-color="#fff" stop-opacity="0.5"/><stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="f-${id}" x="-25%" y="-25%" width="150%" height="160%">
+      <feDropShadow dx="0" dy="10" stdDeviation="10" flood-color="#000" flood-opacity="0.8"/>
+    </filter>
+  </defs>
+
+  <g filter="url(#f-${id})">
+    <!-- Radiant Golden Heritage Aura Backdrop -->
+    <circle cx="256" cy="256" r="185" fill="#ffd700" fill-opacity="0.16"/>
+
+    <!-- Concentric Starburst Radiance behind Ticket -->
+    <g stroke="url(#gold-${id})" stroke-width="2.5" opacity="0.6">
+      <line x1="256" y1="35" x2="256" y2="15"/>
+      <line x1="256" y1="477" x2="256" y2="497"/>
+      <line x1="35" y1="256" x2="15" y2="256"/>
+      <line x1="477" y1="256" x2="497" y2="256"/>
+      <line x1="100" y1="100" x2="85" y2="85"/>
+      <line x1="412" y1="412" x2="427" y2="427"/>
+      <line x1="412" y1="100" x2="427" y2="85"/>
+      <line x1="100" y1="412" x2="85" y2="427"/>
+    </g>
+
+    <!-- The Authentic Library ticket Motif centered exactly on inner diamond (239, 273) -> (256, 256) -->
+    <g transform="translate(256, 256) scale(0.88) translate(-239, -273)">
+      <!-- 10.4px Solid Die-Cut Aurora Metal Rim -->
+      <path d="${TICKET_PATH}" fill="url(#au-${id})" stroke="url(#au-${id})" stroke-width="22" stroke-linejoin="round"/>
+      <!-- Inner Enamel Fill in Royal Crimson Velvet -->
+      <path d="${TICKET_PATH}" fill="url(#tktwell-${id})" stroke="url(#gold-${id})" stroke-width="6" stroke-linejoin="round"/>
+
+      <!-- Vintage Perforation Jewels at Notches -->
+      <circle cx="104" cy="408" r="7" fill="#fff" stroke="url(#gold-${id})" stroke-width="2.5"/>
+      <circle cx="408" cy="104" r="7" fill="#fff" stroke="url(#gold-${id})" stroke-width="2.5"/>
+      <circle cx="318" cy="137" r="5" fill="#ffcf4a" stroke="url(#gold-${id})" stroke-width="2"/>
+      <circle cx="375" cy="194" r="5" fill="#ffcf4a" stroke="url(#gold-${id})" stroke-width="2"/>
+
+      <!-- Central Minted Aurora-Gold Seal — Perfectly Centered in Crimson Diamond (cx=239, cy=273) -->
+      <circle cx="239" cy="273" r="50" fill="url(#gold-${id})" stroke="url(#au-${id})" stroke-width="7"/>
+      <circle cx="239" cy="273" r="42" fill="none" stroke="#8c620f" stroke-width="2" stroke-dasharray="4,3"/>
+
+      <!-- Micro Polaris Victory Accent Stars (No words, pure geometry) -->
+      <polygon points="239,244 241,248 245,249 241,250 239,254 237,250 233,249 237,248" fill="#8c620f"/>
+      <polygon points="239,292 241,296 245,297 241,298 239,302 237,298 233,297 237,296" fill="#8c620f"/>
+
+      <!-- Minted 100% Numeral (§7: Max 4 Characters, No Words) -->
+      <text x="239" y="273" text-anchor="middle" dominant-baseline="central"
+            font-family="Outfit, sans-serif" font-weight="900" font-size="24" letter-spacing="1.5"
+            fill="#0c081e">100%</text>
+
+      <!-- Gloss Highlight -->
+      <ellipse cx="210" cy="235" rx="75" ry="38" transform="rotate(-35 210 235)" fill="url(#gl-${id})" opacity="0.6"/>
+    </g>
+  </g>
+</svg>`;
+}
+
+document.getElementById("hero").insertAdjacentHTML("beforeend", mythic(300));
+const sizes = document.getElementById("sizes");
+sizes.insertAdjacentHTML("beforeend", `<div class="tile-box"><div>${mythic(140)}</div><div class="lab">Catalog Card (140px)</div></div>`);
+sizes.insertAdjacentHTML("beforeend", `<div class="tile-box"><div>${mythic(120)}</div><div class="lab">Board Tile (120px)</div></div>`);
+for (const px of [88, 48]) {
+  sizes.insertAdjacentHTML("beforeend", `<div class="tile-box"><div>${mythic(px)}</div><div class="lab">${px}px Compact</div></div>`);
+}
+</script>
+</body>
+</html>
