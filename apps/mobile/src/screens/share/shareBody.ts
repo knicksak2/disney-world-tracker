@@ -42,7 +42,16 @@ export interface ProgressShareBody {
   };
 }
 
-export type ShareCreateBody = ExperienceShareBody | ProgressShareBody;
+/** Body for `POST /me/shares` — Pin Showcase branch. */
+export interface PinShowcaseShareBody {
+  readonly kind: 'pinShowcase';
+  readonly recipientIds: ReadonlyArray<string>;
+}
+
+export type ShareCreateBody =
+  | ExperienceShareBody
+  | ProgressShareBody
+  | PinShowcaseShareBody;
 
 /** The states of the two independent include/exclude toggles (R2.14). */
 export interface IncludeToggles {
@@ -114,6 +123,13 @@ export function buildShareCreateBody(
         ? { rating: params.rating, includeRating: true }
         : {}),
       ...(includedNote ? { note: params.note } : {}),
+    };
+  }
+
+  if (params.kind === 'pinShowcase') {
+    return {
+      kind: 'pinShowcase',
+      recipientIds,
     };
   }
 

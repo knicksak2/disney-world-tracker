@@ -13,7 +13,17 @@ CC BY obliges us to name the **author**, not just the library, so each author is
 >
 > Icon by Atisa — Boxicons — CC BY 4.0
 >
+> Icon by JoyPixels / EmojiOne — emojione.com — CC BY 4.0
+>
+> Icon by Font Awesome — fontawesome.com — CC BY 4.0
+>
 > Icons from Temaki by Bryan Housel & OpenStreetMap contributors — CC0 1.0
+>
+> Icons by Google — Material Symbols — Apache 2.0
+>
+> Emoji by Twitter — Twemoji — CC BY 4.0
+>
+> Icon by Kenan Gündoğan — Fontisto — MIT
 
 CC BY 3.0 and 4.0 require attribution only — there is **no** share-alike obligation, so the
 application itself remains proprietary. CC0 1.0 is a public-domain dedication and obliges
@@ -29,7 +39,9 @@ uncredited and three game-icons co-authors went unnamed.
 
 | File | Author | Source | Licence | Used for |
 |---|---|---|---|---|
+| `disney-guidemap.path` | Project Original (Disney App Team) | disney-app | Proprietary | The Legendary Disney Guide (prism_legendary_guide) — 3-panel accordion Walt Disney World park guidemap with Cinderella Castle crest and Mickey location marker |
 | `castle.svg` | Lorc | game-icons.net | CC BY 3.0 | Park conquest (generic fairy-tale castle) |
+| `carouselHorse.svg` | JoyPixels / EmojiOne | emojione.com | CC BY 4.0 | Gentle Soul (leaping carousel horse on brass pole) |
 | `crown.svg` | Lorc | game-icons.net | CC BY 3.0 | Mythic / all-parks completion |
 | `cut-diamond.svg` | Lorc | game-icons.net | CC BY 3.0 | Collection-count gem |
 | `flat-star.svg` | Lorc | game-icons.net | CC BY 3.0 | Interest mastery |
@@ -41,6 +53,7 @@ uncredited and three game-icons co-authors went unnamed.
 | `firework-rocket.svg` | Lorc | game-icons.net | CC BY 3.0 | Nighttime spectaculars |
 | `magic-lamp.svg` | Lorc | game-icons.net | CC BY 3.0 | Fantasyland / Aladdin / Wishes |
 | `fairy-wand.svg` | Lorc | game-icons.net | CC BY 3.0 | Fantasyland Starter / Magic |
+| `fairy-wand-halo.path` | Lorc | game-icons.net `fairy-wand.svg` — **derived**: 2 of 7 cells dropped (2 sparkles 30-36px from the star at render size, too far for any reasonable weld to bridge), keeping the shaft+star+4 near sparkles, welded into one real outline stroked at an 8px halo rim (vs the gold-tier 6.2px default) via `renderColorDieCut`; the outline is its own single continuous subpath (no connectivity ambiguity) and its bbox spans the full motif, confirmed to wrap all 5 kept cells rather than a sub-region | CC BY 3.0 | Fantasyland 100% (v2, `gold_land_fantasyland`) |
 | `scroll-unfurled.svg` | Lorc | game-icons.net | CC BY 3.0 | Liberty Square / Historic Scroll |
 | `locked-chest.svg` | Lorc | game-icons.net | CC BY 3.0 | Adventureland / Pirates Dead Man's Chest |
 | `anchor.svg` | Lorc | game-icons.net | CC BY 3.0 | Adventureland / Nautical |
@@ -55,6 +68,9 @@ uncredited and three game-icons co-authors went unnamed.
 | `pagoda.svg` | Delapouite | game-icons.net | CC BY 3.0 | World Showcase / Japan / China |
 | `mayan-pyramid.svg` | Delapouite | game-icons.net | CC BY 3.0 | World Showcase / Mexico Pavilion |
 | `coliseum.svg` | Delapouite | game-icons.net | CC BY 3.0 | World Showcase / Italy Pavilion |
+| `trumpet-flag.svg` | Delapouite | game-icons.net | CC BY 3.0 | Parade Watcher (fanfare trumpet with heraldic pennant; adapted to continuous pipe & flush banner for 1-piece die-cut) |
+| `trumpet-flag.path` | Delapouite / Project Derived | game-icons.net | CC BY 3.0 | Parade Watcher (single-piece die-cut fanfare trumpet & flush pennant) |
+| `theater-curtains-stage.path` | Delapouite / Project Derived | game-icons.net | CC BY 3.0 | Show Devotee (grand stage proscenium with recessed solo spotlight) |
 | `plant-seed.svg` | Delapouite | game-icons.net | CC BY 3.0 | World Nature / Journey of Water |
 | `submarine.svg` | Delapouite | game-icons.net | CC BY 3.0 | The Seas with Nemo & Friends |
 | `aquarium.svg` | Delapouite | game-icons.net | CC BY 3.0 | The Seas Pavilion |
@@ -75,6 +91,8 @@ uncredited and three game-icons co-authors went unnamed.
 | `beer-bottle.svg` | Delapouite | game-icons.net | CC BY 3.0 | Oga's Cantina / World Showcase Drinks |
 | `fork-knife-spoon.svg` | Delapouite | game-icons.net | CC BY 3.0 | Table Service Dining Connoisseur |
 | `chef-toque.svg` | Delapouite | game-icons.net | CC BY 3.0 | Signature Dining / Executive Chef |
+| `placemat-meal.path` | Delapouite / Project Derived | game-icons.net | CC BY 3.0 | Character Dining Trio (rounded placemat with plate, knife, and fork) |
+| `glass-celebration.path` | Delapouite / Project Derived | game-icons.net | CC BY 3.0 | Signature Connoisseur (crystal toast celebration flutes) |
 | `balloons.svg` | Lorc | game-icons.net | CC BY 3.0 | Squad Companion (15 Group Rides) |
 | `bus.svg` | Delapouite | game-icons.net | CC BY 3.0 | Two Parks in One Day |
 | `compass-rose.svg` | Lorc | game-icons.net | CC BY 3.0 | All 20 Lands Explorer |
@@ -85,21 +103,31 @@ uncredited and three game-icons co-authors went unnamed.
 | `hourglass.svg` | Lorc | game-icons.net | CC BY 3.0 | 12-Ride Single Day Challenge |
 | `megaphone.svg` | Delapouite | game-icons.net | CC BY 3.0 | Active Reviewer (25 Reviews) |
 | `microphone.svg` | Delapouite | game-icons.net | CC BY 3.0 | Comedy & Laughs |
-| `padlock.svg` | Lorc | game-icons.net | CC BY 3.0 | Resort Voyager (12 Resorts) |
+| `padlock.svg` | Lorc | game-icons.net | CC BY 3.0 | Locked state indicator |
+| `bell-concierge.svg` | Font Awesome | fontawesome.com | CC BY 4.0 | Resort Voyager (12 Resorts) |
+| `grand-deluxe-seal.svg` | Project Original | disney-app — original vector art | Project Original | Grand Deluxe Seal (`pearl_deluxe_royalty`) |
 | `passport.svg` | Delapouite | game-icons.net | CC BY 3.0 | The Global Ambassador |
 | `peaks.svg` | Lorc | game-icons.net | CC BY 3.0 | Triple Mountain Conqueror |
 | `pocket-watch.svg` | Skoll | game-icons.net | CC BY 3.0 | 1971 Heritage Club |
-| `queen-crown.svg` | Lorc | game-icons.net | CC BY 3.0 | Character Royalty (25 Meets) |
+| `queen-crown.svg` | Lorc | game-icons.net | CC BY 3.0 | All Princesses (imperial royal crown) |
 | `quill.svg` | Lorc | game-icons.net | CC BY 3.0 | The Ultimate Critic |
+| `galleon.svg` | Lorc | game-icons.net | CC BY 3.0 | Dark Ride Master (Peter Pan's Flight / Pirates full-rigged galleon) |
+| `the-living-storybook.path` | Project Original | disney-app — original vector art | Project Original | Character Royalty (culmination of 5-stage character meet progression) |
+| `teacup.path` | Project Original (AI-authored) | disney-app — hand-authored `renderColorDieCut` branch | Project Original | Spin Cycle (Mad Tea Party cloisonné teacup — pedestal saucer, swirling flutes) |
+| `magic-carpet.path` | Project Original (AI-authored) | disney-app — hand-authored `renderColorDieCut` branch | Project Original | Dizzy Devotee (Adventureland magic-carpet aerial spinner) |
+| `monorail-scene.path` | Twitter / Twemoji | twemoji (github.com/twitter/twemoji) — **derived: edited** (roof clutter removed, redrawn as a WDW Mark VI monorail on an elevated beam; art authored in the `renderColorDieCut` branch) | CC BY 4.0 | Monorail Loop (`silver_monorail_loop`) |
+| `hot-air-balloon.path` | Kenan Gündoğan / Fontisto | fontisto.com (`hot-air-balloon`) | MIT | Trip Commander (`amethyst_organizer_10`) |
 | `riverboat-cruise.svg` | Lorc | game-icons.net | CC BY 3.0 | Legendary Waterway Voyage |
-| `sailboat.svg` | Delapouite | game-icons.net | CC BY 3.0 | Crescent Lake Promenade |
+| `sailboat.svg` | Delapouite | game-icons.net | CC BY 3.0 | Making Waves (`amethyst_water_rides_all`) |
+| `lighthouse.svg` | Delapouite | game-icons.net | CC BY 3.0 | Crescent Lake (`silver_crescent_lake`) |
 | `spaceship.svg` | Delapouite | game-icons.net | CC BY 3.0 | World Discovery Complete (+2 more) |
 | `sprint.svg` | Lorc | game-icons.net | CC BY 3.0 | 10-Ride Single Day Sprint |
 | `star-struck.svg` | Delapouite | game-icons.net | CC BY 3.0 | Character Hunter (10 Meets) |
 | `sunrise.svg` | Lorc | game-icons.net | CC BY 3.0 | Rope Drop to Fireworks Marathon |
-| `ticket.svg` | Delapouite | game-icons.net | CC BY 3.0 | First Attraction Logged |
+| `ticket.svg` | Delapouite | game-icons.net | CC BY 3.0 | First Attraction Logged / The Whole Catalog (`mythic_whole_catalog` Mythic Capstone) |
 | `treasure-map.svg` | Lorc | game-icons.net | CC BY 3.0 | Adventureland Complete (+2 more) |
 | `water-splash.svg` | Lorc | game-icons.net | CC BY 3.0 | Typhoon Lagoon Wave Master (+1 more) |
+| `water-splash-lagoon.path` | Lorc | game-icons.net `water-splash.svg` — **derived**: 3 detached droplet accent cells dropped (still separate pieces even at 3x the die-cut rim, no union reaches them per docs/pin-art-direction.md §5), keeping only the already-connected crown/wave/base group | CC BY 3.0 | Typhoon Lagoon 100% (v2, `silver_typhoon_lagoon`) |
 | `roller-coaster.svg` | Bryan Housel & OSM contributors | Temaki (temaki icons) | CC0 1.0 | Source asset for `coaster-loop.path` — kept for the audit trail |
 | `coaster-loop.path` | Bryan Housel & OSM contributors | Temaki `roller_coaster.svg` — **derived**: union of both source paths, rescaled from the 15-unit grid to 512 | CC0 1.0 | Coaster Royalty |
 | `director-chair.svg` | Delapouite | game-icons.net — **welded variant**, derived | CC BY 3.0 | Source asset for `director-chair.path` |
@@ -134,11 +162,11 @@ uncredited and three game-icons co-authors went unnamed.
 | `world.svg` | Lorc | game-icons.net | CC BY 3.0 | Global Ambassador (+2 more) |
 | `wyvern.path` | Lorc | game-icons.net (lorc/wyvern.svg) — **derived: extracted path** | CC BY 3.0 | Pandora - The World of Avatar (+2 more) |
 | `snowflake.svg` | Delapouite | game-icons.net (delapouite/snowflake-2.svg) | CC BY 3.0 | Blizzard Beach Summit Master (+1 more) |
-| `magic-lantern.svg` | Atisa (atisawd) | Boxicons (bxs-magic-wand.svg) | CC BY 4.0 | Dark Ride Connoisseur |
+| `magic-lantern.svg` | Atisa (atisawd) | Boxicons (bxs-magic-wand.svg) — **derived: unified die-cut variant** (stars positioned to weld continuously with wand rim into a single-piece contour) | CC BY 4.0 | Dark Ride Connoisseur / Dark Ride Fan |
 | `water-tower.svg` | Project Original (Gemini / Antigravity) | Original vector authored for Disney Springs Water Tower | Proprietary / Original (no attribution owed) | Disney Springs progression (3 pins) |
 | `train-station.svg` | Project Original (Gemini / Antigravity) | Original vector authored for Main Street Train Station | Proprietary / Original (no attribution owed) | Main Street, U.S.A. progression (3 pins) |
 | `skyliner.svg` | Project Original (Gemini / Antigravity) | Original vector authored for Disney Skyliner Gondola (Doppelmayr D-Line) | Proprietary / Original (no attribution owed) | Three Parks in One Day (gold) |
-| `skyliner-cabin.svg` | Project Original (Gemini / Antigravity) | Original vector authored for Disney Skyliner Gondola Cabin | Proprietary / Original (no attribution owed) | Skyliner Tour (4 Resorts) (silver) |
+| `skyliner-cabin.svg` | Google | Material Symbols | Apache 2.0 | Skyliner Tour (4 Resorts) (silver) |
 | `enchanted-rose.path` | Lorc | game-icons.net (lorc/blooming-rose.svg) — **derived: extracted path** | CC BY 3.0 | Princess Royal Court (`silver_princess_court`) |
 | `photo-camera.path` | Delapouite | game-icons.net (delapouite/photo-camera.svg) — **derived: extracted path** | CC BY 3.0 | Character Hunter (10 Meets) (`silver_character_hunter_10`) |
 | `tiki-macaw.path` | Lorc | game-icons.net (lorc/parrot-head.svg) — **derived: extracted path** | CC BY 3.0 | Audio-Animatronics Fan (`silver_animatronics_veteran`) & Admirer (`bronze_animatronics_fan`) |

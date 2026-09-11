@@ -52,6 +52,7 @@ import { ApiError, apiRequest } from '../api/client';
 import { invalidatePushRegistration } from '../hooks/usePushRegistration';
 import { AttentionBadge } from '../features/notifications/AttentionBadge';
 import { useAttentionBadge } from '../features/notifications/useAttentionBadge';
+import { useClaimablePinsBadge } from '../components/pins/useClaimablePinsBadge';
 import { renderAvatarPreset } from '../avatars/AvatarPresets';
 import AvatarPicker from './AvatarPicker';
 import ChangePasswordControl from './ChangePasswordControl';
@@ -378,6 +379,8 @@ export default function ProfileScreen(): JSX.Element {
       }}
       saving={saveNameMutation.isPending}
       onViewStats={() => navigation.navigate('Stats')}
+      onViewPins={() => navigation.navigate('PinBoard')}
+      onViewShowcase={() => navigation.navigate('PinShowcase')}
       onOpenNotifications={() => navigation.navigate('NotificationCenter')}
       onLogout={() => logoutMutation.mutate()}
       loggingOut={logoutMutation.isPending}
@@ -423,6 +426,8 @@ interface ProfileContentProps {
   readonly onSave: () => void;
   readonly saving: boolean;
   readonly onViewStats: () => void;
+  readonly onViewPins: () => void;
+  readonly onViewShowcase: () => void;
   readonly onOpenNotifications: () => void;
   readonly onLogout: () => void;
   readonly loggingOut: boolean;
@@ -441,6 +446,8 @@ function ProfileContent({
   onSave,
   saving,
   onViewStats,
+  onViewPins,
+  onViewShowcase,
   onOpenNotifications,
   onLogout,
   loggingOut,
@@ -456,6 +463,10 @@ function ProfileContent({
   // the same waiting-items count as the tab and the open feed (R4.5, R10.3).
   const { display: notificationBadgeDisplay, count: notificationBadgeCount } =
     useAttentionBadge();
+  // The claimable-Pin count, from the same shared board cache the Profile-tab
+  // Pin badge reads, so this in-screen "View your pins" entry shows the same
+  // waiting-to-claim count as the tab (Requirement 22.3, 22.4).
+  const { display: pinBadgeDisplay, count: pinBadgeCount } = useClaimablePinsBadge();
 
   return (
     <ScreenContainer>
@@ -601,6 +612,35 @@ function ProfileContent({
               onPress={onViewStats}
               testID="profile-view-stats"
             />
+          </Card>
+        ) : null}
+
+        {isSelf ? (
+          <Card style={styles.securityCard}>
+            <Text style={styles.statLabel}>Pin collection</Text>
+            <View style={styles.notificationBtnWrap}>
+              <SecondaryButton
+                label="View your pins"
+                icon="ribbon-outline"
+                onPress={onViewPins}
+                testID="profile-view-pins"
+              />
+              <View style={styles.notificationBadgeOverlay} pointerEvents="none">
+                <AttentionBadge
+                  display={pinBadgeDisplay}
+                  count={pinBadgeCount}
+                  testID="profile-pins-badge"
+                />
+              </View>
+            </View>
+            <View style={{ marginTop: theme.spacing.sm }}>
+              <SecondaryButton
+                label="My Showcase"
+                icon="images-outline"
+                onPress={onViewShowcase}
+                testID="profile-view-showcase"
+              />
+            </View>
           </Card>
         ) : null}
 

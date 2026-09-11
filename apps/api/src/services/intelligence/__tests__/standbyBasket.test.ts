@@ -130,8 +130,8 @@ describe('Feature: crowd-calendar — standby basket crowd-index regression', ()
         crowdIndexUpserts.push(...rows);
       },
       pruneWaitSamples: async () => {},
-      getRideShapes: async () => rideShapes,
-      getSeasonHours: async () => [],
+      getRideShapesForBucket: async () => rideShapes,
+      getSeasonHoursForBucket: async () => [],
       getExperienceSignals: async () => [],
     } as any;
 

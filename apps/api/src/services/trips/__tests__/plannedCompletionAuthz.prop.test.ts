@@ -495,7 +495,9 @@ describe('planned-completion-sync authz — Property 6: data and actions require
           // The response body carries only the requested Trip's id.
           const body = res.json();
           if (route.repoMethod === 'logCompletion') {
-            expect(body).toEqual({ logEntryId: `log-${s.tripId}` });
+            // `newlyAwardedPinIds` rides alongside `logEntryId` (pin-collection
+            // R21.1); this test wires no `awardPins` port, so it is always [].
+            expect(body).toEqual({ logEntryId: `log-${s.tripId}`, newlyAwardedPinIds: [] });
           } else if (Array.isArray(body)) {
             expect(body).toEqual([{ scopedTo: s.tripId }]);
           } else {

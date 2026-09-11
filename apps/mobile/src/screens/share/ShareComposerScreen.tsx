@@ -488,6 +488,21 @@ function SharePreview({
     );
   }
 
+  if (params.kind === 'pinShowcase') {
+    return (
+      <View style={styles.previewBlock}>
+        <SectionLabel style={styles.previewLabel}>Sharing</SectionLabel>
+        <Card style={styles.previewCard}>
+          <Text style={styles.previewTitle}>Pin Showcase</Text>
+          <Text style={styles.previewValue} testID="preview-pin-showcase">
+            Share your favorite pins board
+          </Text>
+        </Card>
+        <SectionLabel style={styles.pickerLabel}>Recipients</SectionLabel>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.previewBlock}>
       <SectionLabel style={styles.previewLabel}>Sharing</SectionLabel>

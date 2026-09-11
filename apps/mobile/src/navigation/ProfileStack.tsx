@@ -5,6 +5,9 @@ import type { AttentionItemRef } from '@dwt/shared';
 
 import ProfileScreen from '../screens/ProfileScreen';
 import NotificationCenterScreen from '../screens/notifications/NotificationCenterScreen';
+import PinBoardScreen from '../screens/profile/PinBoardScreen';
+import PinShowcaseScreen from '../screens/profile/PinShowcaseScreen';
+import AttributionScreen from '../screens/profile/AttributionScreen';
 import StatsStack, { type StatsStackParamList } from './StatsStack';
 
 /**
@@ -55,6 +58,19 @@ export type ProfileStackParamList = {
    * Profile_Notifications_Entry) still renders the full feed.
    */
   NotificationCenter: { focusRef?: AttentionItemRef } | undefined;
+  /**
+   * The Pin Board — the user's collectible pin collection (pin-collection R5). Reached from the
+   * Profile screen. Optionally carries `celebratePinIds` (a mutation's `newlyAwardedPinIds`) so a
+   * freshly-earned pin can be celebrated on arrival (R5.5).
+   */
+  PinBoard: { celebratePinIds?: string[] } | undefined;
+  /** The Art credits / attribution screen listing motif provenance (pin-collection R6.1). */
+  PinAttribution: undefined;
+  /**
+   * The Pin Showcase — the user's freeform display board for favorite claimed pins (Requirement 24).
+   * Reached from Profile, Pin Board, and Friend Profile.
+   */
+  PinShowcase: { userId?: string; readOnly?: boolean } | undefined;
 };
 
 const Stack = createNativeStackNavigator<ProfileStackParamList>();
@@ -65,6 +81,9 @@ export default function ProfileStack(): JSX.Element {
       <Stack.Screen name="ProfileMain" component={ProfileScreen} />
       <Stack.Screen name="Stats" component={StatsStack} />
       <Stack.Screen name="NotificationCenter" component={NotificationCenterScreen} />
+      <Stack.Screen name="PinBoard" component={PinBoardScreen} />
+      <Stack.Screen name="PinAttribution" component={AttributionScreen} />
+      <Stack.Screen name="PinShowcase" component={PinShowcaseScreen} />
     </Stack.Navigator>
   );
 }

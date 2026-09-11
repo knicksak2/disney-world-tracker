@@ -17,5 +17,14 @@ Always-on and deliberately tiny: this file only **routes**. It used to carry the
 `.kiro/specs/pin-collection/pin-catalog-mockup.html` is the master catalogue of every existing
 pin. Open it before adding one, to avoid a duplicate achievement or duplicate artwork.
 
-The gate is `node .kiro/specs/pin-collection/verify/run-all.js` and must exit 0.
-`npm run verify` does **not** cover this folder.
+**The pin gate is scoped to the rendered catalogue/artwork, not "anything pin-related."** Run
+`node .kiro/specs/pin-collection/verify/run-all.js` (must exit 0) only when a change touches
+`pin-catalog-mockup.html`, `pin-frame-sample.html`, `pins-v2-transcription.js`,
+`pin-descriptions.js`, or anything under `motifs/` — i.e. a pin's art, motif, or geometry
+changed. It checks artwork validity, dedup, provenance, and die-cut screening; it has nothing
+to say about backend routes, repos, migrations, DTOs, or mobile screens, even ones named
+`Pin*` (e.g. claim logic, the Showcase's drag/overlap/sharing code, `PinRepo`, `PinBoardScreen`).
+For that code, `npm run verify` (or the scoped `verify:api`/`verify:mobile`/`verify:shared`) is
+the right and sufficient gate, exactly like any other feature — `npm run verify` does **not**
+cover the mockup/catalogue folder, but the reverse is also true: the pin gate does not cover
+app code, so do not run it as a substitute or a habit when no catalogue file changed.

@@ -73,6 +73,7 @@ import { runSync } from './services/catalog/sync.js';
 
 import { createCompletionRepo } from './services/tracking/completion/repo.js';
 import { createFriendCompletionsRepo } from './services/tracking/friendCompletions/repo.js';
+import { createExperienceLogRepo } from './services/tracking/logs/repo.js';
 import { createNoteRepo } from './services/tracking/note/repo.js';
 import {
   createRatingRepo,
@@ -116,6 +117,9 @@ import {
   createSenderDisplayNameResolver,
   createExperienceNameResolver,
 } from './services/notifications/index.js';
+
+import { createPinRepo } from './services/pins/repo.js';
+import { createPinShowcaseRepo } from './services/pins/showcaseRepo.js';
 
 import { IntelligenceRepo } from './services/intelligence/IntelligenceRepo.js';
 import { createWeatherClient } from './services/intelligence/weatherClient.js';
@@ -182,9 +186,27 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
   const friendCompletionsRepo = createFriendCompletionsRepo(pool);
   const noteRepo = createNoteRepo(pool);
   const ratingRepo = createRatingRepo({ pool, emitRatingChanged });
+  // The Experience_Log repo shares the same `emitRatingChanged` emitter so a
+  // rated visit log updates the community aggregate exactly as a direct rating
+  // write does (experience-activity-logging R2.2).
+  const experienceLogRepo = createExperienceLogRepo({ pool, emitRatingChanged });
   const friendsRepo = createFriendsRepo(pool);
   const sharingRepo = createSharingRepo(pool);
   const statsRepo = createStatsRepo(pool);
+  const pinRepo = createPinRepo(pool);
+  const pinShowcaseRepo = createPinShowcaseRepo(pool);
+
+  /**
+   * Synchronous Pin award port (pin-collection R2.1-R2.3). Handed to every
+   * mutating action that can unlock a Pin — logs, ratings, notes, and
+   * rode-with confirms — so a newly-earned Pin is evaluated and returned in the
+   * same response the client is already awaiting. The route helpers call this
+   * best-effort (a Pin-evaluation failure never fails the committed mutation),
+   * and awards are idempotent (`ON CONFLICT DO NOTHING`), so re-evaluating on a
+   * later action can never double-award.
+   */
+  const awardPins = (userId: string): Promise<string[]> =>
+    pinRepo.awardNewly(userId);
 
   // The Trip_Service never holds Trip-local copies of Completions or Ratings:
   // it delegates those canonical writes to the existing Tracking_Service repos
@@ -534,6 +556,14 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
       emitTripInviteCreated,
       emitRodeWithTagCreated,
       predictionService,
+      // Award Squad/Social Pins to the confirming Tagged_Member (R2.3).
+      awardPins,
+    },
+    pins: { repo: pinRepo, requireSession: sessionMiddleware },
+    pinShowcase: {
+      repo: pinShowcaseRepo,
+      pool,
+      requireSession: sessionMiddleware,
     },
     push: { repo: pushRepo, requireSession: sessionMiddleware },
     notificationPreferences: {
@@ -545,13 +575,23 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
     aggregate: { repo: aggregateRepo },
     leaderboard: { service: leaderboardService },
     tracking: {
-      completion: { repo: completionRepo, requireSession: sessionMiddleware },
-      rating: { repo: ratingRepo, requireSession: sessionMiddleware },
-      note: { repo: noteRepo, requireSession: sessionMiddleware },
+      // Marking a completion can unlock Pins (R21.1 — this write path
+      // previously never called the award hook).
+      completion: { repo: completionRepo, requireSession: sessionMiddleware, awardPins },
+      // Rating/note writes can unlock Reviewer/Critic Pins (R2.2).
+      rating: { repo: ratingRepo, requireSession: sessionMiddleware, awardPins },
+      note: { repo: noteRepo, requireSession: sessionMiddleware, awardPins },
       friendCompletions: {
         repo: friendCompletionsRepo,
         pool,
         requireSession: sessionMiddleware,
+      },
+      // A logged experience can unlock most tracks; the newly-awarded ids ride
+      // back in the log response to trigger the celebration modal (R2.1, R5.5).
+      logs: {
+        repo: experienceLogRepo,
+        requireSession: sessionMiddleware,
+        awardPins,
       },
     },
     // Always set `{}` so the gateway rate limiter (Redis-backed default

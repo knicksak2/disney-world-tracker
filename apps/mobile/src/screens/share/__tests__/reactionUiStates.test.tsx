@@ -136,6 +136,27 @@ function inboxProgressItem(
   };
 }
 
+/** A `pinShowcase` inbox item. */
+function inboxPinShowcaseItem(
+  shareId: string,
+  myReaction: ShareReactionValue | null,
+): InboxItemDTO {
+  return {
+    shareId,
+    read: true,
+    senderId: SENDER_ID,
+    senderDisplayName: SENDER_NAME,
+    payloadKind: 'pinShowcase',
+    payload: {
+      kind: 'pinShowcase',
+      ownerId: SENDER_ID,
+      ownerDisplayName: SENDER_NAME,
+    },
+    sentAt: '2024-01-02T03:04:05.000Z',
+    myReaction,
+  };
+}
+
 /**
  * A `progress` inbox item whose `myReaction` field is entirely absent — the
  * "reaction state cannot be resolved" shape that drives the unavailable state
@@ -313,6 +334,7 @@ describe('Inbox reaction controls UI states (R11.9–R11.12)', () => {
     ).toBeTruthy();
   });
 
+
   // -------------------------------------------------------------------------
   // R11.11 — unavailable message, remaining Share content retained.
   // -------------------------------------------------------------------------
@@ -445,6 +467,34 @@ describe('Inbox reaction controls UI states (R11.9–R11.12)', () => {
       screen.getByTestId(`inbox-reaction-chip-${item.shareId}-like`).props
         .accessibilityLabel,
     ).toBe('Like, selected');
+  });
+
+  test('pinShowcase shares render only like and love chips, omitting ride-specific been_there and want_to_go', async () => {
+    const item = inboxPinShowcaseItem('share-pin-showcase-reactions', null);
+    apiRequestMock.mockImplementation(async (method, path) => {
+      if (method === 'GET' && path === '/me/inbox') {
+        return inboxResponse([item]) as never;
+      }
+      throw new Error(`unexpected apiRequest: ${method} ${String(path)}`);
+    });
+
+    renderInbox();
+
+    // like and love chips render
+    expect(
+      await screen.findByTestId(`inbox-reaction-chip-${item.shareId}-like`),
+    ).toBeTruthy();
+    expect(
+      screen.getByTestId(`inbox-reaction-chip-${item.shareId}-love`),
+    ).toBeTruthy();
+
+    // ride-specific been_there and want_to_go chips are NOT rendered
+    expect(
+      screen.queryByTestId(`inbox-reaction-chip-${item.shareId}-been_there`),
+    ).toBeNull();
+    expect(
+      screen.queryByTestId(`inbox-reaction-chip-${item.shareId}-want_to_go`),
+    ).toBeNull();
   });
 });
 

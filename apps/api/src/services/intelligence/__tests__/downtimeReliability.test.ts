@@ -96,8 +96,8 @@ describe('Feature: crowd-calendar — downtime/reliability rate excludes schedul
       getParkCrowdIndices: async () => [],
       upsertParkCrowdIndices: async () => {},
       pruneWaitSamples: async () => {},
-      getRideShapes: async () => [],
-      getSeasonHours: async () => [],
+      getRideShapesForBucket: async () => [],
+      getSeasonHoursForBucket: async () => [],
       getExperienceSignals: async () => [],
     } as any;
 

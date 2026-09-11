@@ -28,6 +28,7 @@
 import type {
   FastifyInstance,
   FastifyPluginAsync,
+  FastifyRequest,
   preHandlerHookHandler,
 } from 'fastify';
 import { ZodError, z } from 'zod';
@@ -57,6 +58,14 @@ import type { RatingRepo } from './repo.js';
 export interface RatingRoutesOptions {
   readonly repo: RatingRepo;
   readonly requireSession: preHandlerHookHandler;
+  /**
+   * Pin_Service award hook (R2.2). After a rating is set, this synchronously
+   * evaluates the User's Reviewer/Critic challenges and returns any newly-earned
+   * Pin ids, surfaced as `newlyAwardedPinIds` in the PUT response. Best-effort:
+   * a failure never fails the already-persisted rating. Omitted in tests that
+   * don't exercise pins; wired in `composeServices.ts`.
+   */
+  readonly awardPins?: (userId: string) => Promise<readonly string[]>;
 }
 
 // ---------------------------------------------------------------------------
@@ -145,11 +154,20 @@ export function ratingRoutes(
         // either way (R4.1, R4.3 both return an "observable
         // confirmation").
         const status = result.previousValue === null ? 201 : 200;
+
+        // Reviewer/Critic Pins may unlock on a new rating (R2.2). Best-effort.
+        const newlyAwardedPinIds = await awardPinsSafely(
+          options.awardPins,
+          userId,
+          request,
+        );
+
         reply.code(status);
         return {
           experienceId: result.experienceId,
           value: result.value,
           updatedAt: result.updatedAt.toISOString(),
+          newlyAwardedPinIds,
         };
       },
     );
@@ -199,6 +217,26 @@ function requireUserId(userId: string | undefined): string {
     );
   }
   return userId;
+}
+
+/**
+ * Run the optional Pin award hook without letting it fail the enclosing
+ * mutation (the rating has already been persisted). A Pin-evaluation error is
+ * logged and reported as no newly-awarded Pins this round. Duplicated per route
+ * module to keep the modules independent.
+ */
+async function awardPinsSafely(
+  awardPins: ((userId: string) => Promise<readonly string[]>) | undefined,
+  userId: string,
+  request: FastifyRequest,
+): Promise<string[]> {
+  if (awardPins === undefined) return [];
+  try {
+    return [...(await awardPins(userId))];
+  } catch (err) {
+    request.log.error({ err }, 'pin award evaluation failed');
+    return [];
+  }
 }
 
 /**

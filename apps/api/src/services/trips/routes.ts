@@ -186,6 +186,16 @@ export interface TripRoutesOptions {
   readonly predictionService?: {
     getDaySnapshot(experienceIds: string[], park: string, date: Date): Promise<Record<string, import('@dwt/shared').WaitSnapshot>>;
   };
+  /**
+   * Pin_Service award hook (R2.3). After a Rode_With_Tag is confirmed, this
+   * synchronously evaluates the confirming (Tagged_Member) User's Squad/Social
+   * challenges — their confirmed-friend-ride count just increased — and returns
+   * any newly-earned Pin ids, surfaced as `newlyAwardedPinIds` in the confirm
+   * response. Best-effort: a failure never fails the already-committed confirm.
+   * Omitted in unit tests that don't exercise pins; wired in
+   * `composeServices.ts`.
+   */
+  readonly awardPins?: (userId: string) => Promise<readonly string[]>;
 }
 
 // ---------------------------------------------------------------------------
@@ -332,6 +342,7 @@ export function tripRoutes(options: TripRoutesOptions): FastifyPluginAsync {
     pool,
     emitTripInviteCreated,
     emitRodeWithTagCreated,
+    awardPins,
   } = options;
 
   return async function tripRoutesPlugin(
@@ -824,8 +835,24 @@ export function tripRoutes(options: TripRoutesOptions): FastifyPluginAsync {
             taggedMemberId: tag.taggedMemberId,
           });
         }
+
+        // Logging a Completion via a Trip can unlock Pins (pin-collection
+        // R21.1: this write path previously never called the award hook,
+        // even though `awardPins` was already injected/available here).
+        // Best-effort — a Pin-evaluation failure never fails the already-
+        // committed log entry.
+        const newlyAwardedPinIds = awardPins
+          ? await awardPins(userId).then(
+              (ids) => [...ids],
+              (err: unknown) => {
+                request.log.error({ err }, 'pin award evaluation failed');
+                return [] as string[];
+              },
+            )
+          : [];
+
         reply.code(201);
-        return { logEntryId };
+        return { logEntryId, newlyAwardedPinIds };
       },
     );
 
@@ -909,7 +936,21 @@ export function tripRoutes(options: TripRoutesOptions): FastifyPluginAsync {
           request.params,
         );
         const body = parseOrAppError(rodeWithConfirmSchema, request.body);
-        return repo.confirmRodeWithTag(tagId, userId, body.rating);
+        const confirmed = await repo.confirmRodeWithTag(tagId, userId, body.rating);
+
+        // Confirming raises the caller's (Tagged_Member's) confirmed-friend-ride
+        // count, which may unlock Squad/Social Pins (R2.3). Best-effort — a Pin
+        // failure never fails the already-committed confirm.
+        const newlyAwardedPinIds = awardPins
+          ? await awardPins(userId).then(
+              (ids) => [...ids],
+              (err: unknown) => {
+                request.log.error({ err }, 'pin award evaluation failed');
+                return [] as string[];
+              },
+            )
+          : [];
+        return { ...confirmed, newlyAwardedPinIds };
       },
     );
 

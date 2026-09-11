@@ -1,50 +1,39 @@
-const fs = require('fs');
+/* Deduplication gate for pin-catalog-mockup.html (v2 roster).
+ *
+ * Two pins must not render the same artwork by accident. That bug is real here: `toriiGate`
+ * once held delapouite/pagoda.svg's path, so two different World Showcase pins rendered the
+ * same pagoda while a key-based check reported "100% unique motifs" because the keys differed.
+ * So this compares NORMALISED GEOMETRY, not keys and not raw strings (the same artwork
+ * reserialised — absolute vs relative commands, implicit repeats — produces different bytes).
+ *
+ * Legitimate reuse is a tier PROGRESSION: a land/park/theme starter and its higher-tier
+ * mastery share one emblem on purpose (bronze Adventureland starter -> silver Adventureland
+ * 100%). A progression climbs tiers, so it is recognised as "same art across DISTINCT tiers,
+ * at most 3 pins". The two ladder mechanics (the b4fire attractions arch and the starLadder
+ * emblem+stars) intentionally share one scene across many pins, differing by emblem/stage, so
+ * those scene keys are exempt too.
+ *
+ * The roster is executed through catalog-loader.js (the page builds PINS via mapV2Pins, not a
+ * literal array), so what is compared is what the catalogue actually renders.
+ */
 const path = require('path');
+const { loadCatalog } = require('./catalog-loader');
 
 const file = process.argv[2] || path.join(__dirname, '..', 'pin-catalog-mockup.html');
-const html = fs.readFileSync(file, 'utf8');
 
-// Extract PINS array
-const pinsMatch = html.match(/const PINS = (\[[\s\S]*?\n\];)/);
-if (!pinsMatch) {
-  console.error('FAIL: Could not locate PINS array in catalog!');
-  process.exit(1);
-}
+let cat;
+try { cat = loadCatalog(file); }
+catch (e) { console.error('FAIL: could not load catalogue -> ' + e.message); process.exit(1); }
+const pins = cat.PINS;
+const MOTIFS = cat.MOTIFS;
+if (!Array.isArray(pins) || !pins.length) { console.error('FAIL: no pins'); process.exit(1); }
 
-const vm = require('vm');
-const sandbox = {
-  B4_STAGES: {},
-  PALETTES: { royal: { sky: '#2f6bb0', teal: '#14727f', forest: '#2f7d3e', crimson: '#a8323f', royal: '#4a2a7a', plum: '#6a3fb0', amber: '#b5721a', ink: '#241a3a' } }
-};
-for (let i = 1; i <= 20; i++) sandbox.B4_STAGES[i] = { cols: [] };
+let bad = 0;
+const A = (c, m) => { if (!c) { console.error('FAIL: ' + m); bad++; } else console.log('ok   ' + m); };
 
-const pinsCode = 'var PINS = ' + pinsMatch[1];
-vm.runInNewContext(pinsCode, sandbox);
-const pins = sandbox.PINS;
+console.log(`Auditing deduplication across all ${pins.length} pins in catalog...`);
 
-/* ------------------------------------------------------------------------------
-   Resolve the art each pin ACTUALLY renders.
-
-   Grouping by motif key was measuring the wrong thing. The page builds
-   MOTIFS = Object.assign({}, window.MOTIF_LIB, { ...inline overrides... }), so two
-   different keys can hold the same path, and an inline entry silently shadows the
-   licensed file that all.js byte-asserts. That is how `toriiGate` came to hold
-   delapouite/pagoda.svg's path: two World Showcase pins rendered the same pagoda
-   while this suite reported "100% unique motifs" because the keys differed.
-
-   So resolve keys to path data, and compare NORMALISED GEOMETRY rather than the
-   string - the same artwork reserialised (absolute vs relative commands, implicit
-   command repeats) produces different bytes and would slip through a string compare.
-   ------------------------------------------------------------------------------ */
-const libSandbox = { window: {} };
-vm.runInNewContext(fs.readFileSync(path.join(path.dirname(file), 'motifs', 'motif-paths.js'), 'utf8'),
-                   libSandbox);
-const inlineMatch = html.match(
-  /const MOTIFS = Object\.assign\(\{\}, window\.MOTIF_LIB \|\| \{\}, (\{[\s\S]*?\n\})\);/);
-const inlineSandbox = {};
-if (inlineMatch) vm.runInNewContext('var INLINE = ' + inlineMatch[1], inlineSandbox);
-const MOTIFS = Object.assign({}, libSandbox.window.MOTIF_LIB || {}, inlineSandbox.INLINE || {});
-
+/* ---- normalise path geometry so a reserialised copy cannot hide ---- */
 const STEP = { m: 2, l: 2, h: 1, v: 1, c: 6, s: 4, q: 4, t: 2, a: 7, z: 0 };
 function canonGeometry(d) {
   const re = /([astvzqmhlc])|(-?(?:\d*\.\d+|\d+)(?:[eE][-+]?\d+)?)/gi;
@@ -84,84 +73,64 @@ function canonGeometry(d) {
   return out.join('|');
 }
 
-console.log(`Auditing deduplication across all ${pins.length} pins in catalog...`);
-
-let bad = 0;
-const A = (c, m) => {
-  if (!c) { console.error('FAIL: ' + m); bad++; }
-  else console.log('ok   ' + m);
-};
-
-// Group pins by motif/scene key
-const motifUsage = {};
-pins.forEach(p => {
-  const key = p.scene ? `scene:${p.scene}` : (p.motif ? `motif:${p.motif}` : `text:${p.text}`);
-  if (!motifUsage[key]) motifUsage[key] = [];
-  motifUsage[key].push(p);
-});
-
-// Audit duplicates
-for (const [key, list] of Object.entries(motifUsage)) {
-  if (list.length === 1) continue;
-
-  // Allowed exception 1: The 20-stage Experience Ladder (b4fire1..b4fire20)
-  const isLadder = list.every(p => p.cat === 'ladder' || (p.scene && p.scene.startsWith('b4fire')));
-  if (isLadder) continue;
-
-  // Allowed exception 2: Land Progression (Bronze Starter -> Silver 100% Attraction Mastery -> Gold 100% Complete)
-  const isLandProgression = (list.length >= 2 && list.length <= 3) &&
-    list.every(p => p.cat === 'land');
-  
-  if (isLandProgression) {
-    console.log(`ok   Land Progression verified: ${key} -> [${list.map(p => p.id).join(', ')}]`);
-    continue;
-  }
-
-  // Allowed exception 3: Park Progression (Bronze Starter -> Gold 100% Attraction Master -> Amethyst 100% Sovereign)
-  const isParkProgression = (list.length >= 2 && list.length <= 3) &&
-    list.every(p => p.cat === 'park');
-  
-  if (isParkProgression) {
-    console.log(`ok   Park Progression verified: ${key} -> [${list.map(p => p.id).join(', ')}]`);
-    continue;
-  }
-
-  // Allowed exception 4: Thematic Progression (Bronze Contained Starter Crest -> Silver/Gold Die-Cut Mastery)
-  const isThematicProgression = (list.length === 2) &&
-    list.every(p => p.cat === 'sets');
-
-  if (isThematicProgression) {
-    console.log(`ok   Thematic Progression verified: ${key} -> [${list.map(p => p.id).join(', ')}]`);
-    continue;
-  }
-
-  // Any other reuse is a strict duplicate violation!
-  A(false, `Duplicate motif/scene detected: "${key}" is reused across ${list.length} pins: [${list.map(p => p.id).join(', ')}]`);
+/* A group of pins is a legitimate progression if it reuses one emblem across DISTINCT tiers,
+   at most three pins (starter -> mastery -> sovereign). */
+function isProgression(list) {
+  if (list.length < 2 || list.length > 3) return false;
+  const tiers = new Set(list.map(p => p.tier));
+  return tiers.size === list.length;         // every pin at a different tier
 }
 
-/* ---- the check the key-based pass above cannot make ----
-   Two DIFFERENT keys holding the same artwork. Compared by normalised geometry, so a
-   reserialised copy cannot hide. The progression exemptions above still apply: a land
-   or park ladder legitimately reuses one emblem across its tiers. */
+/* ---- phase 1: the same scene/motif KEY reused across pins ---- */
+const usage = {};
+pins.forEach(p => {
+  const key = p.scene ? `scene:${p.scene}` : (p.motif ? `motif:${p.motif}` : `text:${p.text || p.emblem || p.id}`);
+  (usage[key] = usage[key] || []).push(p);
+});
+
+for (const [key, list] of Object.entries(usage)) {
+  if (list.length === 1) continue;
+
+  /* the two shared ladder mechanics: the b4fire attractions arch and the starLadder emblem
+     ladder. Both intentionally reuse one scene across many pins, differing by emblem/stage. */
+  if (key === 'scene:starLadder' || key.startsWith('scene:b4fire') ||
+      list.every(p => p.scene && p.scene.startsWith('b4fire'))) {
+    console.log(`ok   shared ladder mechanic: ${key} -> ${list.length} pins`);
+    continue;
+  }
+
+  if (isProgression(list)) {
+    console.log(`ok   progression shares one emblem: ${key} -> [${list.map(p => p.id).join(', ')}]`);
+    continue;
+  }
+
+  A(false, `Duplicate motif/scene: "${key}" reused across ${list.length} pins that are not a ` +
+    `tier progression: [${list.map(p => `${p.id} (${p.tier})`).join(', ')}]`);
+}
+
+/* ---- phase 2: DIFFERENT keys that render the same artwork (geometry-normalised) ---- */
 console.log('\nAuditing rendered artwork (geometry-normalised, not by key)...');
 const artGroups = new Map();
-let unresolved = 0;
+let bespokeSkipped = 0;
 pins.filter(p => !p.scene && p.motif).forEach(p => {
   const d = MOTIFS[p.motif];
-  if (d == null || !String(d).trim()) { unresolved++; return; }
+  /* a motif pin with no static path is drawn by a dedicated renderPin branch (magicCarpet,
+     monorailScene, …). There is no comparable geometry, so it cannot collide by artwork;
+     catalog.js owns the "every pin resolves to something renderable" check. Skip it here. */
+  if (d == null || !String(d).trim()) { bespokeSkipped++; return; }
   const g = canonGeometry(String(d));
   if (!artGroups.has(g)) artGroups.set(g, []);
   artGroups.get(g).push(p);
 });
-A(unresolved === 0, `every pin's motif key resolves to path data (${unresolved} did not)`);
+if (bespokeSkipped) console.log(`     (${bespokeSkipped} bespoke-branch motif pin(s) have no static path; compared by catalog.js render check instead)`);
 
 for (const [, list] of artGroups) {
   const keys = [...new Set(list.map(p => p.motif))];
-  if (keys.length < 2) continue;                 // one key reused = handled above
-  const allLand = list.every(p => p.cat === 'land');
-  const allPark = list.every(p => p.cat === 'park');
-  if ((allLand || allPark) && list.length <= 3) {
-    console.log(`ok   progression shares one emblem: [${keys.join(', ')}]`);
+  if (keys.length < 2) continue;                 // one key reused = handled in phase 1
+  /* different keys, identical art. Allowed only for a genuine progression (same subject at
+     different tiers drawn from two keys) — otherwise it is the toriiGate/pagoda bug class. */
+  if (isProgression(list)) {
+    console.log(`ok   progression shares one emblem across keys: [${keys.join(', ')}]`);
     continue;
   }
   A(false, `Same artwork under different keys: [${keys.join(', ')}] renders identically on ` +
@@ -169,7 +138,7 @@ for (const [, list] of artGroups) {
 }
 
 if (bad > 0) {
-  console.error(`\nDEDUPLICATION FAILED: ${bad} duplicate violations detected!`);
+  console.error(`\nDEDUPLICATION FAILED: ${bad} duplicate violation(s) detected!`);
   process.exit(1);
 } else {
   console.log('\nALL DEDUPLICATION CHECKS PASSED — unique keys AND unique artwork.');

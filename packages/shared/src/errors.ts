@@ -50,6 +50,17 @@ export const ERROR_CODES = [
   'note_length_invalid',
   'note_not_found',
 
+  // -- Tracking: experience logs (experience-activity-logging R5.1) -----
+  // `log_not_found`: a delete targeted an Experience_Log id that does not
+  // exist for the authenticated User. A log owned by another User collapses
+  // to this same non-probing response (the delete is scoped by user_id).
+  'log_not_found',
+
+  // `log_future_date`: a create targeted a `visited_on` calendar date strictly
+  // later than today in the request's `user_tz`. A visit cannot be recorded for
+  // a date that has not yet occurred (experience-activity-logging R1.5).
+  'log_future_date',
+
   // -- Profile (R7.6-R7.8) ----------------------------------------------
   'display_name_invalid',
   'avatar_invalid',
@@ -116,6 +127,15 @@ export const ERROR_CODES = [
   'trip_role_invalid',
   'trip_planned_limit',
   'trip_tag_state_invalid',
+
+  // -- Pins (pin-collection R20.4, R24.5, R24.11) ----------------------
+  // `pin_not_eligible`: `POST /me/pins/:pinId/claim` targeted a Pin with no
+  // existing `user_pins` row — i.e. the Pin has not been awarded yet.
+  // Claiming an already-claimed Pin is NOT this error; it is a no-op that
+  // returns the existing `claimedAt` with `200`.
+  'pin_not_eligible',
+  'showcase_full',
+  'showcase_position_overlap',
 
   // -- Edge / gateway (defense-in-depth, R6.7) --------------------------
   // Emitted by the gateway-level rate limiter (task 13.3) when a caller
@@ -203,6 +223,10 @@ export const errorCodeToHttpStatus: { readonly [K in ErrorCode]: number } = {
   note_length_invalid: 400,
   note_not_found: 404,
 
+  // Tracking: experience logs
+  log_not_found: 404,
+  log_future_date: 400,
+
   // Profile
   display_name_invalid: 400,
   avatar_invalid: 400,
@@ -242,6 +266,11 @@ export const errorCodeToHttpStatus: { readonly [K in ErrorCode]: number } = {
   trip_role_invalid: 400,
   trip_planned_limit: 400,
   trip_tag_state_invalid: 409,
+
+  // Pins
+  pin_not_eligible: 409,
+  showcase_full: 409,
+  showcase_position_overlap: 409,
 
   // Edge / gateway
   rate_limit_exceeded: 429,

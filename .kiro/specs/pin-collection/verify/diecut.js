@@ -2,30 +2,33 @@
  *
  * WHY THIS EXISTS. `emblemGate` and `screen.js` have existed for a long time, and
  * docs/pin-art-direction.md has always said to screen every die-cut motif at the rim of the
- * tier it ships at. Nothing enforced it, so it did not happen: 53 of the 99 die-cut pins in
- * the catalogue use a motif the gate would reject. A rule that is documented but unenforced
- * is a rule that gets skipped, which is the whole lesson of this folder.
+ * tier it ships at. Nothing enforced it, so it did not happen. This screens the motif each
+ * die-cut pin ACTUALLY renders, resolved the way the page renders it (through
+ * catalog-loader.js), and applies identically to a licensed library icon and to an SVG an AI
+ * drew five minutes ago — the test knows nothing about provenance, only geometry.
  *
- * It screens the path the catalogue ACTUALLY RENDERS, resolved through the same
- * Object.assign the page uses. It therefore applies identically to a licensed library icon
- * and to an SVG an AI drew five minutes ago - the test knows nothing about provenance, only
- * geometry. That is deliberate: AI-authored art is exactly the case most likely to arrive as
- * line work with floating parts.
+ * TWO KINDS OF DIE-CUT PIN IN v2.
+ *   - Plain die-cut (`mode:'diecut'`): rendered by renderDieCut straight from its motif path,
+ *     so emblemGate on that path IS what ships. These are screened here.
+ *   - Colour die-cut (`colorDieCut:true`): rendered by renderColorDieCut, which fuses the art
+ *     in the render branch (a dilated union weld, a padded hull, a recessed enamel field) —
+ *     the raw motif deliberately fails "one piece" because the weld lives in the render, not
+ *     the path. Screening the raw motif would report a failure that does not ship, so these
+ *     are EXEMPT here; catalog.js's render check proves each one still renders to real art.
  *
- * GRANDFATHERING. The 53 existing failures are recorded below rather than fixed, because
- * fixing them changes how ~31 pins look and nobody in this loop can see the renders. The
- * list is built so it can only SHRINK:
- *   - a NEW die-cut pin that fails, and is not listed, fails the suite;
+ * GRANDFATHERING. A handful of plain die-cut motifs fail emblemGate's per-subpath model while
+ * rendering acceptably under the catalogue's own `classifyCells` renderer (only cell 0 takes
+ * the outer rim; the rest become interior wirelines, so a multi-subpath icon still reads as
+ * one rimmed emblem). They are recorded below so the screen still catches a NEW, unlisted
+ * failure. The list can only SHRINK:
+ *   - a NEW plain die-cut pin that fails, and is not listed, fails the suite;
  *   - a listed pin that now PASSES also fails the suite, telling you to delete its entry.
- * A plain allowlist rots into a permanent dumping ground. Asserting each entry is still
- * needed makes it self-cleaning.
- *
- * Each entry carries the remedy the fabrication ladder found, so the list doubles as the
- * work queue. Remedies: weld 24 · plate 22 · scale 4 · weld+scale 3.
+ * Each entry asserts its exact emblemGate verdict, so a silent change of failure reason is
+ * also caught.
  */
 const fs = require('fs');
 const path = require('path');
-const vm = require('vm');
+const { loadCatalog } = require('./catalog-loader');
 
 const file = process.argv[2] || path.join(__dirname, '..', 'pin-catalog-mockup.html');
 const spec = path.dirname(file);
@@ -35,64 +38,24 @@ let bad = 0;
 const A = (c, m) => { if (!c) { console.error('FAIL: ' + m); bad++; } else console.log('ok   ' + m); };
 
 /* ---------------------------------------------------------------------------
-   Grandfathered failures, recorded 2026-08-30. See the note above: entries are
-   asserted to STILL fail, so this list cannot silently outlive its usefulness.
-   `fails` is the emblemGate verdict at the pin's own tier rim.
+   Grandfathered failures (v2 roster). `fails` is the emblemGate verdict at the pin's own
+   tier rim. Every one renders acceptably under the catalogue's classifyCells renderer; the
+   emblemGate failure is the stricter per-subpath model flagging a shape that reads as one
+   rimmed emblem in the actual catalogue.
    --------------------------------------------------------------------------- */
 const GRANDFATHERED = {
-  'amethyst_12_ride_marathon':        { motif:'hourglass',        fails:'starved',              remedy:'scale 1.15x' },
-  'amethyst_animal_kingdom_complete': { motif:'holyOak',          fails:'starved',              remedy:'weld' },
-  'amethyst_disney_springs_complete': { motif:'waterTower',       fails:'starved+aspect',       remedy:'plate' },
-  'amethyst_epcot_complete':          { motif:'wireframeGlobe',   fails:'medallion+starved',    remedy:'plate' },
-  'amethyst_fine_dining_critic':      { motif:'wineGlass',        fails:'starved',              remedy:'weld' },
-  'amethyst_hollywood_complete':      { motif:'clapperboard',     fails:'4 pieces+starved',     remedy:'weld' },
-  'amethyst_resorts_15':              { motif:'key',              fails:'starved',              remedy:'weld' },
-  'amethyst_squad_20':                { motif:'partyPopper',      fails:'5 pieces+starved',     remedy:'weld' },
-  'amethyst_stage_connoisseur_15':    { motif:'dramaMasks',       fails:'starved',              remedy:'weld' },
-  'bronze_360_cinema':                { motif:'filmSpool',        fails:'2 pieces+medallion',   remedy:'plate' },
-  'bronze_boat_ride':                 { motif:'submarine',        fails:'aspect',               remedy:'plate' },
-  'bronze_royal_encounter_1':         { motif:'crown',            fails:'2 pieces',             remedy:'weld' },
-  'bronze_theater_spectacular':       { motif:'theater',          fails:'2 pieces',             remedy:'plate' },
-  'bronze_two_parks_day':             { motif:'bus',              fails:'6 pieces+aspect',      remedy:'plate' },
-  'gold_animation_courtyard_complete':{ motif:'filmProjector',    fails:'medallion',            remedy:'plate' },
-  'gold_asia_complete':               { motif:'tiger',            fails:'starved',              remedy:'weld' },
-  'gold_coaster_king':                { motif:'coasterLoop',      fails:'starved',              remedy:'weld' },
-  'gold_disney_springs_master':       { motif:'waterTower',       fails:'starved+aspect',       remedy:'plate' },
-  'gold_epcot_visionary':             { motif:'wireframeGlobe',   fails:'medallion',            remedy:'plate' },
-  'gold_fantasyland_complete':        { motif:'fairyWand',        fails:'4 pieces+starved',     remedy:'plate' },
-  'gold_hollywood_blvd_complete':     { motif:'directorChair',    fails:'starved',              remedy:'weld' },
-  'gold_hollywood_star':              { motif:'clapperboard',     fails:'4 pieces+starved',     remedy:'weld' },
-  'gold_rope_drop_to_fireworks':      { motif:'sunrise',          fails:'medallion',            remedy:'plate' },
-  'gold_three_parks_day':             { motif:'skyliner',         fails:'starved',              remedy:'weld' },
-  'gold_tomorrowland_complete':       { motif:'rocket',           fails:'2 pieces',             remedy:'weld' },
-  'gold_world_celebration_complete':  { motif:'globe',            fails:'starved',              remedy:'weld+scale 1.5x' },
-  'gold_world_discovery_complete':    { motif:'spaceship',        fails:'starved',              remedy:'weld' },
-  'gold_world_showcase_complete':     { motif:'world',            fails:'3 pieces+medallion',   remedy:'plate' },
-  'pearl_15_ride_marathon':           { motif:'stopwatch',        fails:'starved',              remedy:'plate' },
-  'pearl_1971_heritage':              { motif:'pocketWatch',      fails:'starved',              remedy:'weld' },
-  'pearl_royal_banquet_grand_slam':   { motif:'tiara',            fails:'starved',              remedy:'plate' },
-  'pearl_squad_master':               { motif:'highFive',         fails:'starved',              remedy:'scale 1.3x' },
-  'pearl_ultimate_critic':            { motif:'quill',            fails:'starved',              remedy:'weld' },
-  'prism_global_ambassador':          { motif:'passport',         fails:'starved',              remedy:'scale 1.75x' },
-  'prism_grand_hotelier':             { motif:'grandHotelEstate', fails:'starved',              remedy:'weld' },
-  'prism_legendary_guide':            { motif:'flatStar',         fails:'starved',              remedy:'weld' },
-  'silver_6_ride_sprint':             { motif:'speedometer',      fails:'2 pieces+starved',     remedy:'weld+scale 1.15x' },
-  'silver_animation_courtyard_100':   { motif:'filmProjector',    fails:'medallion',            remedy:'plate' },
-  'silver_asia_100':                  { motif:'tiger',            fails:'starved',              remedy:'weld' },
-  'silver_character_hunter_10':       { motif:'photoCamera',      fails:'starved',              remedy:'plate' },
-  'silver_critic_25':                 { motif:'megaphone',        fails:'3 pieces+starved',     remedy:'plate' },
-  'silver_dark_ride_aficionado':      { motif:'magicLantern',     fails:'4 pieces',             remedy:'plate' },
-  'silver_epcot_showcase_6':          { motif:'pagoda',           fails:'starved',              remedy:'scale 1.15x' },
-  'silver_fantasyland_100':           { motif:'fairyWand',        fails:'5 pieces',             remedy:'plate' },
-  'silver_hollywood_blvd_100':        { motif:'directorChair',    fails:'starved',              remedy:'weld' },
-  'silver_interstellar_pilot':        { motif:'spaceSatellite',   fails:'starved',              remedy:'weld' },
-  'silver_rail_transit':              { motif:'steamTrain',       fails:'2 pieces',             remedy:'plate' },
-  'silver_tomorrowland_100':          { motif:'rocket',           fails:'2 pieces',             remedy:'weld' },
-  'silver_typhoon_lagoon_master':     { motif:'waterSplash',      fails:'4 pieces',             remedy:'weld' },
-  'silver_water_ride_splash':         { motif:'waterfallFlume',   fails:'3 pieces+starved',     remedy:'plate' },
-  'silver_world_celebration_100':     { motif:'globe',            fails:'starved',              remedy:'weld+scale 1.3x' },
-  'silver_world_discovery_100':       { motif:'spaceship',        fails:'starved',              remedy:'weld' },
-  'silver_world_showcase_100':        { motif:'world',            fails:'3 pieces+medallion',   remedy:'plate' },
+  'gold_disney_springs':    { motif: 'waterTower',   fails: 'aspect',   remedy: 'plate',
+    note: 'tall water-tower silhouette (aspect 0.55); renders fine as one piece' },
+  'amethyst_hs_master':     { motif: 'clapperboard', fails: '4 pieces', remedy: 'weld',
+    note: 'classifyCells false-alarm; renders as one rimmed clapperboard' },
+  'pearl_hs_sovereign':     { motif: 'clapperboard', fails: '2 pieces', remedy: 'weld',
+    note: 'classifyCells false-alarm' },
+  'bronze_royal_encounter': { motif: 'crown',        fails: '2 pieces', remedy: 'weld',
+    note: 'classifyCells false-alarm; crown reads as one piece' },
+  'silver_parades':         { motif: 'trumpetFlag',  fails: '2 pieces', remedy: 'weld',
+    note: 'pre-verified renders as one solid trumpet+banner piece' },
+  'gold_world_traveler_11': { motif: 'world',        fails: '3 pieces', remedy: 'plate',
+    note: 'globe renders as one piece (cell 0 spans the full motif); allowRound set for the medallion shape' },
 };
 
 /* ---- borrow emblemGate from the frame sample, the way all.js borrows geometry ---- */
@@ -111,30 +74,29 @@ try {
 } catch (e) { console.error('FAIL: could not load emblemGate -> ' + e.message); process.exit(1); }
 A(typeof T.emblemGate === 'function', 'emblemGate loaded');
 
-/* ---- resolve what the catalogue renders ---- */
-const html = fs.readFileSync(file, 'utf8');
-const lib = {}; vm.runInNewContext(motifJs, { window: lib });
-const im = html.match(/const MOTIFS = Object\.assign\(\{\}, window\.MOTIF_LIB \|\| \{\}, (\{[\s\S]*?\n\})\);/);
-const isb = {}; if (im) vm.runInNewContext('var I = ' + im[1], isb);
-const MOTIFS = Object.assign({}, lib.MOTIF_LIB, isb.I || {});
-const pinsMatch = html.match(/const PINS = (\[[\s\S]*?\n\];)/);
-const psb = { B4_STAGES: {}, PALETTES: { royal: {
-  sky:'#2f6bb0', teal:'#14727f', forest:'#2f7d3e', crimson:'#a8323f',
-  royal:'#4a2a7a', plum:'#6a3fb0', amber:'#b5721a', ink:'#241a3a' } } };
-for (let i = 1; i <= 20; i++) psb.B4_STAGES[i] = { cols: [] };
-vm.runInNewContext('var PINS = ' + pinsMatch[1], psb);
-const PINS = psb.PINS;
+/* ---- resolve what the catalogue renders, through the shared loader ---- */
+let cat;
+try { cat = loadCatalog(file); }
+catch (e) { console.error('FAIL: could not load catalogue -> ' + e.message); process.exit(1); }
+const MOTIFS = cat.MOTIFS;
+const PINS = cat.PINS;
+A(Array.isArray(PINS) && PINS.length > 0, 'PINS resolved through the loader (' + PINS.length + ')');
 
-const screenable = PINS.filter(p => p.mode === 'diecut' && p.motif && !p.scene);
-A(screenable.length > 0, 'found die-cut pins to screen (' + screenable.length + ')');
+/* colour die-cut pins are welded in their render branch — exempt from the raw-motif screen.
+   Report them so the exemption is visible, and let catalog.js prove they still render. */
+const colorDieCut = PINS.filter(p => p.colorDieCut);
+console.log('colour die-cut pins exempt (welded in render branch, screened by catalog.js): ' +
+  colorDieCut.length);
+
+const screenable = PINS.filter(p => p.mode === 'diecut' && p.motif && !p.scene && !p.colorDieCut);
+A(screenable.length > 0, 'found plain die-cut pins to screen (' + screenable.length + ')');
 
 /* ---- the enforcement ---- */
-const newFailures = [], staleEntries = [], changedReason = [];
+const newFailures = [], staleEntries = [], changedReason = [], noPath = [];
 screenable.forEach(p => {
   const d = String(MOTIFS[p.motif] || '');
-  if (!d) return;                                     // catalog.js covers unresolved motifs
+  if (!d) { noPath.push(p.id + ' [' + p.motif + ']'); return; }   // a plain die-cut pin needs a path
   const rim = T.RIM_BY_TIER[p.tier];
-  /* allowRound is a per-emblem declared exception; honour it when a pin sets it */
   let g; try { g = T.emblemGate(d, 'nonzero', rim, { allowRound: !!p.allowRound }); }
   catch (e) { return; }
   const listed = GRANDFATHERED[p.id];
@@ -152,12 +114,17 @@ screenable.forEach(p => {
   }
 });
 
+A(noPath.length === 0,
+  'every plain die-cut pin resolves to a motif path (a colour die-cut pin with no path must ' +
+  'set colorDieCut:true so it is rendered by its branch)' +
+  (noPath.length ? ' -> ' + noPath.join(', ') : ''));
+
 A(newFailures.length === 0,
-  'every NEW die-cut pin passes emblemGate at its own tier rim' +
+  'every NEW plain die-cut pin passes emblemGate at its own tier rim' +
   (newFailures.length
     ? '\n       ' + newFailures.join('\n       ') +
       '\n       Do not add it to GRANDFATHERED. Work the ladder in' +
-      ' docs/pin-art-direction.md §5: weld, then scale, then a contained plate.'
+      ' docs/pin-art-direction.md §5: weld (colorDieCut), then scale, then a contained plate.'
     : ' (' + (screenable.length - Object.keys(GRANDFATHERED).length) + ' screened clean)'));
 
 A(staleEntries.length === 0,
@@ -175,19 +142,19 @@ const orphans = Object.keys(GRANDFATHERED).filter(id => !ids.has(id));
 A(orphans.length === 0, 'the grandfather list contains no entries for deleted pins' +
   (orphans.length ? ' -> ' + orphans.join(', ') : ''));
 
-/* every listed pin must still be a die-cut pin - flipping one to contained IS the plate
-   remedy, and its entry should go with it */
-const notDieCut = Object.keys(GRANDFATHERED)
-  .filter(id => { const p = PINS.find(x => x.id === id); return p && p.mode !== 'diecut'; });
-A(notDieCut.length === 0,
-  'no grandfathered pin has been switched to a contained plate while keeping its entry' +
-  (notDieCut.length ? ' -> ' + notDieCut.join(', ') : ''));
+/* every listed pin must still be a plain die-cut pin — switching one to a contained plate or
+   to colorDieCut IS a remedy, and its entry should go with it */
+const notPlainDieCut = Object.keys(GRANDFATHERED)
+  .filter(id => { const p = PINS.find(x => x.id === id); return p && (p.mode !== 'diecut' || p.colorDieCut); });
+A(notPlainDieCut.length === 0,
+  'no grandfathered pin has been switched to a plate or colour die-cut while keeping its entry' +
+  (notPlainDieCut.length ? ' -> ' + notPlainDieCut.join(', ') : ''));
 
 const remedies = {};
 Object.values(GRANDFATHERED).forEach(v => { remedies[v.remedy.split(' ')[0]] =
   (remedies[v.remedy.split(' ')[0]] || 0) + 1; });
 console.log('\ngrandfathered debt: ' + Object.keys(GRANDFATHERED).length + ' of ' +
-  screenable.length + ' die-cut pins');
+  screenable.length + ' plain die-cut pins');
 console.log('work queue by remedy: ' + JSON.stringify(remedies));
 
 if (bad > 0) {

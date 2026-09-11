@@ -225,6 +225,8 @@ function makeFakePool(store: Store): FakePool {
                 trip_id: entry.tripId,
                 experience_id: entry.experienceId,
                 log_created_at: entry.createdAt,
+                origin_visited_on: entry.createdAt,
+                origin_user_tz: 'America/New_York',
               },
             ]);
           }
@@ -250,8 +252,14 @@ function makeFakePool(store: Store): FakePool {
             return { rows: [], rowCount: 1 };
           }
 
-          // Neither confirm nor decline writes a feed item (R11.10); a stray
-          // INSERT would fall through to the guard below and fail the run.
+          // A confirm inserts the confirming Member's own Experience_Log
+          // (experience-activity-logging R3.1); accept it. Neither confirm nor
+          // decline writes a feed item (R11.10).
+          if (sql.startsWith('INSERT INTO experience_logs')) {
+            return ok([]);
+          }
+
+          // A stray INSERT would fall through to the guard below and fail the run.
           throw new Error(`unhandled client SQL in fake pool: ${sql.slice(0, 80)}`);
         },
         release(): void {

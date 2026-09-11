@@ -231,12 +231,15 @@ describe('PUT /me/experiences/:id/note', () => {
     });
 
     expect(response.statusCode).toBe(200);
-    const body = response.json() as NoteDTO;
+    const body = response.json() as NoteDTO & { newlyAwardedPinIds: string[] };
     expect(body).toEqual({
       userId: USER_ID,
       experienceId: EXPERIENCE_ID,
       body: 'Worth the wait, especially in the evening.',
       updatedAt: '2024-06-01T12:00:00.000Z',
+      // Superset field added by the Pin award hook; no pins awarded here since
+      // this route test wires no `awardPins` port (R2.2).
+      newlyAwardedPinIds: [],
     });
     expect(repo.upserts).toEqual([
       {

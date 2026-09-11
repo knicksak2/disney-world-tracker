@@ -55,6 +55,13 @@ const envSchema = z.object({
     .string()
     .min(1, 'SAMPLING_CRON_SECRET is required and must not be empty'),
 
+  // Shared secret for the internal Pin reconciliation cron (pin-collection
+  // R21.2, R21.4) — a dedicated secret per the one-secret-per-cron-endpoint
+  // convention, not reused from SAMPLING_CRON_SECRET.
+  PIN_RECONCILE_CRON_SECRET: z
+    .string()
+    .min(1, 'PIN_RECONCILE_CRON_SECRET is required and must not be empty'),
+
   // Upstream catalog source. Defaults to the public ThemeParks.wiki v1 base
   // URL per requirements glossary; overridable for tests and local fixtures.
   // Validated as a well-formed absolute URL so a malformed override halts
@@ -160,6 +167,9 @@ export interface AppConfig {
     readonly samplingCronSecret: string;
     readonly crowdSeedDir: string;
   };
+  readonly pins: {
+    readonly reconcileCronSecret: string;
+  };
   readonly themeparks: {
     readonly baseUrl: string;
   };
@@ -249,6 +259,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     intelligence: { 
       samplingCronSecret: data.SAMPLING_CRON_SECRET,
       crowdSeedDir: data.CROWD_SEED_DIR,
+    },
+    pins: {
+      reconcileCronSecret: data.PIN_RECONCILE_CRON_SECRET,
     },
     themeparks: { baseUrl: data.THEMEPARKS_BASE_URL },
     disney: {

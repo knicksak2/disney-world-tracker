@@ -113,6 +113,7 @@ import {
   type InboxItemDTO,
   type InboxResponse,
   type Park,
+  type PinShowcaseSharePayload,
   type ProgressSharePayload,
   type ShareReactionValue,
 } from '@dwt/shared';
@@ -263,6 +264,16 @@ const REACTION_A11Y_LABELS: Readonly<Record<ShareReactionValue, string>> = {
   been_there: 'Been there',
   want_to_go: 'Want to go',
 };
+
+/**
+ * Subset of reactions offered for a `pinShowcase` Share.
+ * "Been there" and "Want to go" are ride/experience-specific and do not apply
+ * to a user's pin showcase.
+ */
+const PIN_SHOWCASE_REACTION_VALUES: readonly ShareReactionValue[] = [
+  'like',
+  'love',
+];
 
 /** Empty-state indication shown when the recipient has not reacted (R11.10). */
 const REACTION_EMPTY_COPY = 'No reaction yet.';
@@ -525,6 +536,14 @@ export default function InboxScreen(): JSX.Element {
           if (!stillFriend) {
             // R5.6 — keep the User on the Inbox with a message; content stays.
             setRowMessage(item.shareId, SENDER_TAP_UNAVAILABLE_COPY);
+            return;
+          }
+          // R24.13 — a Pin Showcase share navigates directly to the read-only showcase.
+          if (item.payload.kind === 'pinShowcase') {
+            navigation.navigate('PinShowcase', {
+              userId: item.senderId,
+              readOnly: true,
+            });
             return;
           }
           // R14.1 — a Progress_Share deep-links into the Compare pane so the
@@ -843,7 +862,27 @@ function ShareContent(props: { item: InboxItemDTO }): JSX.Element {
   if (payload.kind === 'progress') {
     return <ProgressShareContent payload={payload} shareId={props.item.shareId} />;
   }
+  if (payload.kind === 'pinShowcase') {
+    return <PinShowcaseShareContent payload={payload} shareId={props.item.shareId} />;
+  }
   return <ExperienceShareContent payload={payload} shareId={props.item.shareId} />;
+}
+
+/**
+ * `pinShowcase` Share content (R24.12).
+ */
+function PinShowcaseShareContent(props: {
+  payload: PinShowcaseSharePayload;
+  shareId: string;
+}): JSX.Element {
+  const { payload, shareId } = props;
+  return (
+    <View style={styles.payloadWrap}>
+      <Text style={styles.summary} testID={`inbox-pin-showcase-${shareId}`}>
+        Pin Showcase shared by {payload.ownerDisplayName}
+      </Text>
+    </View>
+  );
 }
 
 /**
@@ -1231,10 +1270,15 @@ function ShareReactions(props: {
     );
   }
 
+  const reactionValues =
+    item.payload.kind === 'pinShowcase'
+      ? PIN_SHOWCASE_REACTION_VALUES
+      : SHARE_REACTION_VALUES;
+
   return (
     <View style={styles.reactionsWrap} testID={`inbox-reactions-${shareId}`}>
       <View style={styles.reactionChips}>
-        {SHARE_REACTION_VALUES.map((value: ShareReactionValue) => (
+        {reactionValues.map((value: ShareReactionValue) => (
           <Chip
             key={value}
             label={REACTION_LABELS[value]}

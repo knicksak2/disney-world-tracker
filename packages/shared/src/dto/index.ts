@@ -20,6 +20,10 @@ export type { ResortDTO } from './Resort.js';
 export type { MealPeriodDTO, MenuDTO } from './Menu.js';
 export type { CompletionDTO } from './Completion.js';
 export type { CompletionEntryDTO, FriendCompletionsDTO } from './CompletionEntry.js';
+export type {
+  ExperienceLogDTO,
+  ExperienceVisitHistoryDTO,
+} from './ExperienceLog.js';
 export type { RatingDTO } from './Rating.js';
 export type { NoteDTO } from './Note.js';
 export type { FriendRequestDTO } from './FriendRequest.js';
@@ -30,6 +34,7 @@ export type {
   SharePayload,
   ExperienceSharePayload,
   ProgressSharePayload,
+  PinShowcaseSharePayload,
 } from './Share.js';
 export type { ShareRecipientDTO } from './ShareRecipient.js';
 export type { ShareReactionDTO } from './ShareReaction.js';
@@ -72,3 +77,31 @@ export type {
   RateLimiterConfig,
   StoredDocument,
 } from './DisneySource.js';
+
+export type {
+  PinDTO,
+  PinCriteria,
+  SingleDayFeat,
+  ParkCompletionScope,
+  CatalogCompletionScope,
+  SetRequirement,
+  UserPinProgressDTO,
+  PinTierSummaryDTO,
+  PinBoardDTO,
+} from './Pin.js';
+
+export type {
+  PinShowcasePlacementDTO,
+  PinShowcaseDTO,
+  PlacePinRequest,
+} from './PinShowcase.js';
+
+export {
+  SHOWCASE_MAX_PINS,
+  SHOWCASE_PIN_SIZE,
+  SHOWCASE_MIN_PIN_CLEARANCE,
+  SHOWCASE_REFERENCE_SIZE,
+  overlapsAnyOtherPin,
+  placementToReferencePx,
+} from './PinShowcase.js';
+

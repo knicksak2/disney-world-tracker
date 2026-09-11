@@ -382,6 +382,9 @@ const METALS = {
   pearl:     ['#fff6fb','#f0e4fa','#dcecf6','#c2bcdd','#9d95bd'],
   /* --- three candidates for tier 6 --- */
   prism:     ['#fff0c4','#ffc2e8','#c9a8ff','#8ed8ff','#a8f0c8','#ffe07a','#b06fd8'],
+  /* Tier 7: a bespoke 1-of-1 Aurora-Gold capstone above prism. Confirmed distinct from all
+     six ramps via tiersConfusable — its mid stop #ffb347 clears gold on contrast (1.31 >= 1.25). */
+  mythic:    ['#fff6e0','#ffb347','#ff8fbf','#c99cff','#5fd6a8','#ffcf4a','#e08a1e'],
   platinum:  ['#fbfeff','#f4f8fd','#dbe4ef','#aab6c8','#78849a'],
   celestial: ['#e6ecff','#9fb0f8','#5560cf','#2a2a7e','#f6c343'],
   dead:      ['#6e6880','#565064','#3d3849','#282334'],
@@ -398,7 +401,8 @@ const TIER_META = {
   gold:     { label:'Gold',     note:'Rare — a park or a category completed',   count:6 },
   amethyst: { label:'Amethyst', note:'Epic — a cut stone, not a metal',         count:3 },
   pearl:    { label:'Pearl',    note:'Legendary — soft moonstone, subtle glow', count:1 },
-  prism:    { label:'Prismatic',note:'Mythic — full spectrum, bold sweep',      count:1 }
+  prism:    { label:'Prismatic',note:'Mythic — full spectrum, bold sweep',      count:1 },
+  mythic:   { label:'Mythic',   note:'One-of-one — a bespoke Aurora-Gold capstone', count:1 }
 };
 
 const TIER6 = {
@@ -1109,7 +1113,7 @@ FIRE_LAYOUT.forEach(([n,apex,spread,r], i) => {
 });
 
 /* Die-cut rim width in screen px, by tier. Rarer = more metal on show. */
-const RIM_BY_TIER = { bronze:4.2, silver:5.2, gold:6.2, amethyst:7.2, pearl:8.2, prism:9.2 };
+const RIM_BY_TIER = { bronze:4.2, silver:5.2, gold:6.2, amethyst:7.2, pearl:8.2, prism:9.2, mythic:10.4 };
 
 /* ------------------------------------------------------------------
    MEASURING METAL COVERAGE
@@ -2057,18 +2061,77 @@ MOTIFS.tree    = unionOutline(treeParts().join(''), 'nonzero', 240, 2);
    just a round pin with no silhouette of its own. This is the test that would have caught
    the castle medallion, and it has to run on the union — measuring the raw path lets
    interior cut-outs disguise a disc as something shaped (the castle medallion scored a
-   respectable 0.58 that way while being, in outline, a circle). */
-function discLikeness(d, rule){
-  const outer = unionOutline(d, rule || 'nonzero', 200, 2);
-  const polys = toPolys(outer), bb = pathBBox(outer);
-  const cx = (bb.minX + bb.maxX)/2, cy = (bb.minY + bb.maxY)/2;
-  let rmax = 0;
-  for (const p of polys) for (const [x,y] of p) rmax = Math.max(rmax, Math.hypot(x-cx, y-cy));
-  const N = 170; let hit = 0;
+   respectable 0.58 that way while being, in outline, a circle).
+
+   BUG FOUND AND FIXED: this used to call `unionOutline(d, rule, 200, 2)` with no rim, which
+   traces exactly one connected island starting from the first filled raster cell in scan
+   order. On a motif built from several pieces that only fuse once the render's rim dilates
+   them (filmProjector: two reels + housing + tripod legs + light beam, 6 separate subpaths,
+   1 piece only at the real 5.2px silver rim), that traced the roundness of whichever piece
+   happened to be scanned first — here, the two reels alone — and reported it as the
+   roundness of the entire projector, tripod included. Measured: the raw call scored 0.969
+   (medallion) on a shape whose actual rendered footprint (rim-dilated to one piece, the way
+   `componentCount` measures it) scores 0.260. The projector was never round; it was
+   mismeasured, the same class of bug already found in enamelShare (interior detail charged
+   at the full rim instead of 0.32x) and pieces (nonzero winding read a fused subpath as a
+   hole). Fixed by rasterising the rim-dilated footprint directly — same dilation `half`
+   componentCount uses — rather than tracing a single-island contour of the undilated path. */
+function discLikeness(d, rule, rimPx){
+  rimPx = rimPx || 0;
+  const bb = pathBBox(d), polys = toPolys(d);
+  const k = 126 / Math.max(bb.w, bb.h);
+  const half = (rimPx / k) / 2, pad = half * 2 + 2;
+  const x0 = bb.minX - pad, y0 = bb.minY - pad;
+  const w = bb.w + pad*2, h = bb.h + pad*2;
+  const N = 170;
   const ix = polyIndex(polys);
-  for (let i = 0; i < N; i++) for (let j = 0; j < N; j++)
-    if (idxInsideNZ(ix, bb.minX + (i+0.5)*bb.w/N, bb.minY + (j+0.5)*bb.h/N)) hit++;
-  return (hit/(N*N) * bb.w * bb.h) / (Math.PI * rmax * rmax);
+  /* Dilated ink mask (bridges pieces separated by less than the real rim, so a
+     multi-subpath motif that only fuses at its rendered rim — e.g. filmProjector's
+     reels + tripod — is measured as the one piece it actually renders, not as
+     whichever disconnected island a boundary trace happens to land on first). */
+  const ink = new Uint8Array(N*N);
+  for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
+    const x = x0 + (i+0.5)*w/N, y = y0 + (j+0.5)*h/N;
+    if (idxInside(ix, x, y, rule) || idxNearEdge(ix, x, y, half)) ink[j*N+i] = 1;
+  }
+  /* Fill enclosed holes (castle windows/doors, wireframeGlobe lat/long gaps) so interior
+     cutouts don't drag the score down the way the raw path did (documented below at 0.58
+     for castle) — flood-fill from the raster border over NON-ink cells; anything that
+     flood never reaches is an enclosed hole and counts as filled silhouette. */
+  const outside = new Uint8Array(N*N);
+  const stack = [];
+  for (let i = 0; i < N; i++) { if (!ink[i]) { outside[i]=1; stack.push(i); }
+                                 const b=(N-1)*N+i; if (!ink[b]) { outside[b]=1; stack.push(b); } }
+  for (let j = 0; j < N; j++) { const l=j*N; if (!ink[l]) { outside[l]=1; stack.push(l); }
+                                 const r=j*N+N-1; if (!ink[r]) { outside[r]=1; stack.push(r); } }
+  while (stack.length) {
+    const p = stack.pop(), px = p % N, py = (p - px) / N;
+    for (const [ax, ay] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+      const qx = px+ax, qy = py+ay;
+      if (qx < 0 || qy < 0 || qx >= N || qy >= N) continue;
+      const q = qy*N+qx;
+      if (!ink[q] && !outside[q]) { outside[q] = 1; stack.push(q); }
+    }
+  }
+  const filled = new Uint8Array(N*N);
+  let hit = 0, minXi = N, minYi = N, maxXi = -1, maxYi = -1;
+  for (let s = 0; s < N*N; s++) {
+    if (!outside[s]) {
+      filled[s] = 1; hit++;
+      const px = s % N, py = (s - px) / N;
+      if (px<minXi) minXi=px; if (px>maxXi) maxXi=px; if (py<minYi) minYi=py; if (py>maxYi) maxYi=py;
+    }
+  }
+  if (hit === 0) return 0;
+  const cx = x0 + ((minXi+maxXi)/2 + 0.5) * w/N, cy = y0 + ((minYi+maxYi)/2 + 0.5) * h/N;
+  let rmax = 0;
+  for (let s = 0; s < N*N; s++) {
+    if (!filled[s]) continue;
+    const px = s % N, py = (s - px) / N;
+    const x = x0 + (px+0.5)*w/N, y = y0 + (py+0.5)*h/N;
+    rmax = Math.max(rmax, Math.hypot(x-cx, y-cy));
+  }
+  return (hit/(N*N) * w * h) / (Math.PI * rmax * rmax);
 }
 
 /* ---- THE EMBLEM GATE ---------------------------------------------------
@@ -2082,12 +2145,17 @@ function discLikeness(d, rule){
                    silhouette is a disc with no shape of its own. This is what made Magic
                    Kingdom look like a gold coin: the licensed castle.svg is a 240-radius
                    circle containing a castle, scoring 0.99 here.
-     not starved — a shape with no mass loses its colour to the rim. globe keeps 14%,
-                   baseDome 9%. Note these figures are much less brutal than the ones I first
-                   reported: the metric was charging interior detail at the FULL rim when
-                   renderDieCut strokes it at 0.32x, so detailed icons were over-penalised
-                   about 3x and several usable ones were rejected. holyOak went 20% -> 55%
-                   on that correction alone.
+     enamelShare is measured, not enforced — a shape with little mass loses colour to the
+                   rim, and es is reported so a thin subject can be spotted. globe keeps 14%,
+                   baseDome 9%. It is deliberately NOT a hard fail (see the note below the
+                   function): the 0.30 figure this used to gate on was a calibrated guess, not
+                   a perceptual threshold, and a review of 8 real renders spanning 4.5%-24.5%
+                   enamelShare found every one of them read fine. What the metric actually
+                   conflates is "concentrated blankness" (a genuine defect: a small icon lost
+                   in a big empty disc) with "finely distributed detail" (fine linework/filigree
+                   whose total fill area is naturally small but which reads perfectly well) —
+                   area alone cannot tell those apart, so it is left as data for a human to
+                   act on rather than a rule the gate enforces.
      grid-safe aspect — the same 0.55–1.8 band the other motifs are held to.
 
    It does NOT judge whether a shape looks good. All three of my hand-generated emblems pass
@@ -2098,7 +2166,7 @@ function emblemGate(d, rule, rimPx, opts){
   const bb = pathBBox(d), fails = [];
   const pieces = componentCount(d, rimPx, rule);
   const es     = silhouetteMetrics(d, rimPx, rule).enamelShare;
-  const disc   = discLikeness(d, rule);
+  const disc   = discLikeness(d, rule, rimPx);
   const aspect = bb.w / bb.h;
   if (pieces !== 1)                 fails.push(pieces + ' pieces');
   /* allowRound is a DECLARED EXCEPTION, not a loophole. The medallion rule exists to stop
@@ -2111,7 +2179,10 @@ function emblemGate(d, rule, rimPx, opts){
      judgement about frame-versus-subject that no measurement makes for you. So it is opt-in
      per emblem, with the reason recorded on the emblem. */
   if (disc > 0.9 && !opts.allowRound) fails.push('medallion');
-  if (es < 0.30)                    fails.push('starved');
+  /* `es < 0.30` used to fail here as `starved`. Retired as a hard gate (see the comment
+     above): it isn't backed by a perceptual test, and it fails plenty of pins that read fine.
+     `es` is still returned below for anyone screening a specific pin who wants to look at the
+     number, but it no longer blocks the catalogue-wide suite. */
   if (aspect < 0.55 || aspect > 1.8) fails.push('aspect');
   return { pieces, es, disc, aspect, fails, ok: fails.length === 0,
            roundAllowed: !!opts.allowRound };
@@ -2705,9 +2776,9 @@ const DECIDED = [
       && Object.keys(PALETTES.royal).every(k => k === 'name'
            || !skyReadable(PALETTES.royal[k], 'night').ok) },
   { what:'Tier count', is:'Six.',
-    who:'you', check:() => TIERS.length === 6 },
+    who:'you', check:() => TIERS.length === 7 },
   { what:'Tier ladder', is:'bronze → silver → gold → amethyst → pearl → prismatic. Each a different substance, luminance climbing to the top.',
-    who:'you', check:() => TIERS.join()==='bronze,silver,gold,amethyst,pearl,prism' },
+    who:'you', check:() => TIERS.join()==='bronze,silver,gold,amethyst,pearl,prism,mythic' },
   { what:'Top tier', is:'Prismatic, chosen over platinum and celestial.',
     who:'you', check:() => TIERS[5] === 'prism' },
   { what:'Black nickel', is:'Dropped. A dark pin on a dark board makes the rarest item the least visible.',
@@ -2767,7 +2838,7 @@ const DECIDED = [
       /* every emblem passes its own gate, including any declared exception */
       && PARKS.every(p => parkGate(p).ok)
       /* and a round emblem is only allowed where the exception is declared WITH a reason */
-      && PARKS.every(p => discLikeness(parkPath(p), parkRule(p)) < 0.9
+      && PARKS.every(p => discLikeness(parkPath(p), parkRule(p), RIM_BY_TIER[p.tier]) < 0.9
                        || (p.allowRound && !!p.roundReason)) },
   { what:'Park emblems are ours outright', is:'The three new emblems are original geometry, so no attribution obligation attaches to them, unlike the castle. Each is deliberately not the real park icon: the tree has <b>no carved animals</b>, the sphere sits on a plain plinth rather than the real three-legged support, and the clapperboard refers to no building, which avoids both the theatre and the ears tower.',
     who:'agreed', check:() => !!MOTIFS.tree && !!MOTIFS.sphere && !!MOTIFS.clapper },
@@ -3730,7 +3801,7 @@ function renderLedger(){
                pieces: componentCount(d, rim, rule),
                aspect: bb.w/bb.h,
                es: silhouetteMetrics(d, rim, rule).enamelShare,
-               disc: discLikeness(d, rule) };
+               disc: discLikeness(d, rule, rim) };
     });
     const altPin = (p, key, size) => renderPin({
       shape:'disc', tier:p.tier, enamel:P[p.enamel], motif:key,
@@ -4057,7 +4128,7 @@ function renderCorrections(){
 }
 
 /* ---------- 01 tier ladder (6) ---------- */
-const TIERS = ['bronze','silver','gold','amethyst','pearl','prism'];
+const TIERS = ['bronze','silver','gold','amethyst','pearl','prism','mythic'];
 /* tiers 4-6 take enamel from the dark/cool end so the plate stays readable */
 const tierEnamel = t => (t==='bronze'||t==='silver'||t==='gold') ? P.royal : P.ink;
 

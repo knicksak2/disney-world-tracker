@@ -160,26 +160,21 @@ function makeRequireSession(opts: { userId?: string } = {}) {
 async function buildApp(opts: {
   repo: CompletionRepo;
   clock?: () => Date;
+  awardPins?: (userId: string) => Promise<readonly string[]>;
 }): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
   registerErrorHandler(app);
   // Build the options object incrementally so `clock: undefined` is never
   // assigned (the option's type forbids `undefined` under
   // `exactOptionalPropertyTypes`).
-  const routeOpts: Parameters<typeof completionRoutes>[0] = opts.clock
-    ? {
-        repo: opts.repo,
-        requireSession: makeRequireSession() as unknown as Parameters<
-          typeof completionRoutes
-        >[0]['requireSession'],
-        clock: opts.clock,
-      }
-    : {
-        repo: opts.repo,
-        requireSession: makeRequireSession() as unknown as Parameters<
-          typeof completionRoutes
-        >[0]['requireSession'],
-      };
+  const routeOpts: Parameters<typeof completionRoutes>[0] = {
+    repo: opts.repo,
+    requireSession: makeRequireSession() as unknown as Parameters<
+      typeof completionRoutes
+    >[0]['requireSession'],
+    ...(opts.clock ? { clock: opts.clock } : {}),
+    ...(opts.awardPins ? { awardPins: opts.awardPins } : {}),
+  };
   await app.register(completionRoutes(routeOpts));
   await app.ready();
   return app;
@@ -265,6 +260,9 @@ describe('PUT /me/experiences/:id/completion', () => {
       experienceId: EXPERIENCE_ID,
       completedOn: today,
       userTz: TZ,
+      // Superset field added by the Pin award hook (R21.1); no pins awarded
+      // here since this route test wires no `awardPins` port.
+      newlyAwardedPinIds: [],
     });
     expect(repo.markCalls).toHaveLength(1);
     expect(repo.markCalls[0]).toEqual({
@@ -273,6 +271,58 @@ describe('PUT /me/experiences/:id/completion', () => {
       completedOn: today,
       userTz: TZ,
     });
+  });
+
+  // Regression guard for the award-wiring bug (pin-collection R21.1): this
+  // write path previously never called the injected `awardPins` port at
+  // all, so a Pin whose criteria were met purely via "mark as visited"
+  // (rather than a log/rating/note) was silently never awarded. This test
+  // would have failed against that code (an `awardPins` port was accepted
+  // but ignored) and passes now that the PUT handler calls it.
+  it('calls the injected awardPins hook and surfaces its ids as newlyAwardedPinIds (R21.1)', async () => {
+    const repo = makeFakeRepo();
+    const clock = fixedClock('2024-06-15T12:00:00Z');
+    const awardPinsCalls: string[] = [];
+    const awardPins = async (userId: string): Promise<readonly string[]> => {
+      awardPinsCalls.push(userId);
+      return ['bronze_park_starter_magic_kingdom'];
+    };
+    const app = await buildApp({ repo, clock, awardPins });
+    const today = ymdInTz(clock(), TZ);
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: `/me/experiences/${EXPERIENCE_ID}/completion`,
+      headers: { 'x-test-user-id': USER_ID },
+      payload: { completedOn: today, userTz: TZ },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(awardPinsCalls).toEqual([USER_ID]);
+    expect(res.json()).toMatchObject({
+      newlyAwardedPinIds: ['bronze_park_starter_magic_kingdom'],
+    });
+  });
+
+  it('never fails the completion when the awardPins hook throws (best-effort)', async () => {
+    const repo = makeFakeRepo();
+    const clock = fixedClock('2024-06-15T12:00:00Z');
+    const awardPins = async (): Promise<readonly string[]> => {
+      throw new Error('evaluation boom');
+    };
+    const app = await buildApp({ repo, clock, awardPins });
+    const today = ymdInTz(clock(), TZ);
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: `/me/experiences/${EXPERIENCE_ID}/completion`,
+      headers: { 'x-test-user-id': USER_ID },
+      payload: { completedOn: today, userTz: TZ },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(res.json()).toMatchObject({ newlyAwardedPinIds: [] });
+    expect(repo.markCalls).toHaveLength(1); // the completion itself still committed
   });
 
   it('rejects a date strictly after today_in_user_tz with completion_future_date (R2.6)', async () => {

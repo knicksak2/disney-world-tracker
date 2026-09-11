@@ -43,23 +43,48 @@ holds enamel. A ladder rung is therefore contained even though a firework is an 
 If you add another exception, record the measured reason with it. "It looks better" is not a
 reason anyone can check.
 
+**`starved` (enamelShare < 0.30) is retired as a hard gate failure.** It started with
+`amethyst_signature_all` (wine glass): a thin stem caps `enamelShare` near the floor regardless
+of scale, and scaling far enough to clear 0.30 (~1.6×) pushed the silhouette off the 130px card —
+confirmed by measurement. The real render at `motifScale:1` was reviewed and reads fine (bowl and
+foot both carry colour), which raised the actual question: is 0.30 even a good floor? It was
+calibrated against exactly two shapes (`hourglass` 0.285, `highFive` 0.233), never checked
+against a rendered pin, so it was a guess rather than a measured perceptual threshold. A batch
+review of the 8 pins failing on `starved` alone (nothing else wrong) spanning 4.5%-24.5%
+enamelShare found every one of them read fine — including the tiara at 4.5%, the lowest in the
+batch. The pattern: most of what fails this check is dense multi-stroke line art (tiger stripes,
+camera housing, satellite panels, tiara filigree) where total fill area is naturally small
+because detail is distributed across many thin parts, not because the pin looks empty.
+`enamelShare` cannot tell "concentrated blankness" (the real defect this was meant to catch — a
+tiny icon lost in a big empty disc) from "finely distributed detail" (reads fine); area alone
+conflates them. `emblemGate` still computes and returns `es` on every result, so a genuinely
+blank shape is still visible in the data — it just no longer auto-fails the suite. If a motif
+ever comes back that genuinely reads as bare metal, that is a design call to make from the real
+render, not a number to re-gate on.
+
 ---
 
 ## 2 · Tiers and metal
 
-Six tiers, each a different substance, luminance climbing to the top:
+Six ramp tiers, each a different substance, luminance climbing to the top, plus a bespoke
+1-of-1 `mythic` capstone above prism:
 
 ```
-bronze → silver → gold → amethyst → pearl → prismatic
+bronze → silver → gold → amethyst → pearl → prismatic → mythic (1-of-1 capstone)
 ```
 
-Four is flat; seven or more are not distinguishable at the 88px grid size.
+Four is flat. The old claim that "seven or more are not distinguishable at 88px" was asserted,
+never measured — and it turned out to be false for a *deliberately distinct* seventh ramp: the
+`mythic` Aurora-Gold capstone was confirmed distinct from all six ramps by `tiersConfusable`
+(its mid stop `#ffb347` clears gold on contrast, 1.31:1 ≥ the 1.25 floor). So the ceiling is not
+"six", it is "no two ramps may collapse together" — a measured constraint, which `mythic` meets.
+It is a single one-of-one capstone, not an open invitation to keep adding tiers.
 
 **Die-cut rim grows with tier** — this is `RIM_BY_TIER`:
 
-| bronze | silver | gold | amethyst | pearl | prism |
-|---|---|---|---|---|---|
-| 4.2px | 5.2px | 6.2px | 7.2px | 8.2px | 9.2px |
+| bronze | silver | gold | amethyst | pearl | prism | mythic |
+|---|---|---|---|---|---|---|
+| 4.2px | 5.2px | 6.2px | 7.2px | 8.2px | 9.2px | 10.4px |
 
 Rim width changes which motifs work, so screening (§5) must use the rim of the tier the pin will
 actually ship at.
@@ -243,10 +268,12 @@ parts.
 Set `allowRound: true` on a pin to claim the medallion exception; the suite honours it. Record the
 reason.
 
-**The 53 pre-existing failures are grandfathered, not fixed.** Fixing them changes how about 31
-pins look and nobody in this loop can see the renders, so they are recorded in `GRANDFATHERED` in
-that suite with their failure reason and the remedy the ladder found. The list is built to only
-shrink:
+**A few pre-existing failures are grandfathered, not fixed** (6 in the v2 catalogue; the count
+above of 53 was the first-generation catalogue). Fixing them changes how a pin looks and nobody in
+this loop can see the renders, so they are recorded in `GRANDFATHERED` in that suite with their
+failure reason and the remedy the ladder found. In v2 the colour die-cut pins (`colorDieCut:true`)
+are welded in their render branch and screened by `catalog.js`'s render check, so they are exempt
+from the raw screen rather than grandfathered. The list is built to only shrink:
 
 - a new die-cut pin that fails and is **not** listed fails the suite;
 - a listed pin that now **passes** also fails the suite, telling you to delete its entry;
@@ -267,14 +294,32 @@ Use the rim of the tier the pin will actually use — **rim width changes the an
 rims leave more enamel but weld less, so parts separate; wide rims weld everything but eat the
 colour.
 
-`emblemGate` rejects on four measured grounds:
+`emblemGate` rejects on three measured grounds (a fourth, `starved`, is retired — see below):
 
 | Test | Fails when | Why |
 |---|---|---|
 | pieces | `!== 1` | a die-cut pin is one piece of metal. `renderDieCut` strokes the rim along *every* subpath, so overlapping pieces each get their own full ring. For one silhouette, one rim, use `unionOutline` — **overlap is not fusion**. |
 | medallion | `discLikeness > 0.9` | some library icons are drawn *inside a circular frame*, so the die-cut silhouette is a plain disc. This is what made Magic Kingdom render as a gold coin. |
-| starved | `enamelShare < 0.30` | too little colour survives behind the rim. |
 | aspect | `< 0.55` or `> 1.8` | too thin or too wide to read at 44px. |
+
+**`discLikeness` bug found and fixed: it must measure the shape's rendered footprint, not one
+disconnected island of it.** `filmProjector` (tripod, two reels, housing, light-beam triangle — 6
+separate subpaths) scored 0.969 (medallion) and was headed for a motif swap on that basis, until
+the number itself was checked. The function traced a single connected contour with no rim
+dilation; on a motif that only fuses into one piece once the render's rim bridges the gaps, the
+trace can only walk whichever disconnected piece happens to be scanned first — here, the two
+reels alone, which genuinely are circular. That circularity was then reported as the roundness of
+the whole projector, tripod included. Measured against the shape it actually renders (rim-dilated
+to one piece, the same dilation `componentCount` uses): **0.26**, nowhere near the medallion
+line — nothing was wrong with the pin, the metric was reading the wrong island. Same defect class
+already on record for `enamelShare` (interior detail charged at the full rim) and `pieces`
+(nonzero winding misread as a hole): the measurement didn't model what the renderer actually
+draws. `discLikeness` now takes an optional `rimPx` and dilates like `componentCount` before
+measuring, while still filling enclosed holes first (windows, lat/long gaps) so interior detail
+doesn't drag a genuinely round shape down — that fill step is why the licensed castle still
+correctly reads 0.997 as a medallion. `emblemGate` and the `PARKS` ledger now pass their rim
+through; call sites that omit `rimPx` get the old single-piece behaviour, correct for a motif
+that is already one piece without dilation (the castle sanity checks, for one).
 
 **`allowRound` is a declared exception, not a loophole.** The medallion rule exists to catch
 icons where the circle is *packaging*. Where the circle **is** the object — a globe — a round pin
@@ -360,7 +405,10 @@ Each was tried and ruled out with a reason. Reopening one costs the same work ag
 
 - **Castle as the completion ladder** — subtractive, so early rungs are fragments.
 - **Balloons as the ladder** — built and measured; fireworks were preferred. Still the fallback.
-- **Four tiers, or seven-plus** — flat, or indistinguishable at 88px.
+- **Four tiers, or seven-plus** — flat, or indistinguishable at 88px. *Exception, measured:* the
+  one-of-one `mythic` Aurora-Gold capstone is a genuine seventh ramp, confirmed distinct from all
+  six others by `tiersConfusable` rather than assumed. The closed route is "add more tiers on the
+  untested assumption they read apart"; a single capstone proven distinct is not that.
 - **Black nickel, platinum, or celestial as the top tier** — black nickel makes the rarest pin
   the least visible on a dark board; platinum sits too close to silver; celestial is still dark.
 - **Shape as the category code** — incoherent once pins are mostly die-cut.

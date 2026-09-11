@@ -2761,13 +2761,33 @@ async function logCompletion(
       await ctx.ratings.setRating(loggerId, input.experienceId, input.rating);
     }
 
-    // Step 5a — insert the Trip_Log_Entry linking the Completion to the Trip
-    // via (member_id, experience_id) (R10.1, R10.2).
-    const entryInsert = await client.query<{ id: string }>(
-      `INSERT INTO trip_log_entries (trip_id, member_id, experience_id)
-       VALUES ($1, $2, $3)
+    // Step 5a — insert the logging Member's Experience_Log (the user-scoped
+    // activity-stream row introduced by migration 0034), then the
+    // Trip_Log_Entry that links the Completion to the Trip via
+    // (member_id, experience_id) and to the log via `log_id` (R10.1, R10.2,
+    // experience-activity-logging R1.2). The visit is dated to the logged
+    // completion date and carries the optional per-visit rating so it appears
+    // in the Member's Visit_History.
+    const experienceLogInsert = await client.query<{ id: string }>(
+      `INSERT INTO experience_logs
+         (user_id, experience_id, visited_on, user_tz, rating)
+       VALUES ($1, $2, $3, $4, $5)
        RETURNING id`,
-      [tripId, loggerId, input.experienceId],
+      [loggerId, input.experienceId, completedOn, userTz, input.rating ?? null],
+    );
+    const experienceLogId = experienceLogInsert.rows[0]?.id;
+    if (!experienceLogId) {
+      throw new AppError(
+        'internal_error',
+        'Experience log insertion returned no row.',
+      );
+    }
+
+    const entryInsert = await client.query<{ id: string }>(
+      `INSERT INTO trip_log_entries (trip_id, member_id, experience_id, log_id)
+       VALUES ($1, $2, $3, $4)
+       RETURNING id`,
+      [tripId, loggerId, input.experienceId, experienceLogId],
     );
     const logEntryId = entryInsert.rows[0]?.id;
     if (!logEntryId) {
@@ -2968,14 +2988,22 @@ async function confirmRodeWithTag(
       trip_id: string;
       experience_id: string;
       log_created_at: Date | string | null;
+      origin_visited_on: Date | string | null;
+      origin_user_tz: string | null;
     }>(
+      // Join the originating Experience_Log (via tle.log_id) so the confirming
+      // Member's own Experience_Log can be dated to the same visit day
+      // (experience-activity-logging R3.1).
       `SELECT rwt.state,
               rwt.tagged_member_id,
               tle.trip_id,
               tle.experience_id,
-              tle.created_at AS log_created_at
+              tle.created_at AS log_created_at,
+              el.visited_on  AS origin_visited_on,
+              el.user_tz     AS origin_user_tz
          FROM rode_with_tags rwt
          JOIN trip_log_entries tle ON tle.id = rwt.log_entry_id
+         LEFT JOIN experience_logs el ON el.id = tle.log_id
         WHERE rwt.id = $1
         FOR UPDATE OF rwt`,
       [tagId],
@@ -3023,6 +3051,20 @@ async function confirmRodeWithTag(
     if (rating !== undefined) {
       await ctx.ratings.setRating(callerId, row.experience_id, rating);
     }
+
+    // experience-activity-logging R3.1 / R3.2: record the confirming Member's
+    // own Experience_Log so the ride counts toward their repeat counts and
+    // single-day challenges. It is dated to the originating log's visit day
+    // (falling back to the derived completion date if the origin row is
+    // somehow absent) and carries the optional rating supplied on confirm.
+    const visitedOn = formatCalendarDate(row.origin_visited_on) ?? completedOn;
+    const logUserTz = row.origin_user_tz ?? userTz;
+    await client.query(
+      `INSERT INTO experience_logs
+         (user_id, experience_id, visited_on, user_tz, rating)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [callerId, row.experience_id, visitedOn, logUserTz, rating ?? null],
+    );
 
     // R11.10: transition the tag to confirmed — the durable link of the
     // Tagged_Member's completion to this Trip. No Trip_Feed_Item is written:

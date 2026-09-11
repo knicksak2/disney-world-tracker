@@ -195,12 +195,48 @@ describe('AttentionItemRow Share open-destination control is conditional (R2.3)'
     expect(cbs.onOpenDestination).toHaveBeenCalledWith(item);
   });
 
-  test('a Share with no Share_Destination renders no Open control', () => {
+  test('a Share referencing a Share_Destination allows tapping the row card itself to open', () => {
+    const item = shareItem('sh-dest', true);
+    const cbs = renderRow(item);
+
+    const rowCard = screen.getByTestId('attention-row-sh-dest');
+    fireEvent.press(rowCard);
+    expect(cbs.onOpenDestination).toHaveBeenCalledWith(item);
+  });
+
+  test('a Share referencing a pinShowcase destination renders Open control and fires onOpenDestination', () => {
+    const item: AttentionItem = {
+      domain: 'share',
+      id: 'sh-pin-1',
+      sourceTimestamp: TIMESTAMP,
+      summary: 'Mickey shared their pin showcase with you',
+      ref: {
+        shareId: 'sh-pin-1',
+        destination: { kind: 'pinShowcase', id: 'user-mickey' },
+      },
+    };
+    const cbs = renderRow(item);
+
+    const open = screen.getByTestId('attention-open-sh-pin-1');
+    expect(open).toBeTruthy();
+    fireEvent.press(open);
+    expect(cbs.onOpenDestination).toHaveBeenCalledWith(item);
+
+    // Also card press works
+    fireEvent.press(screen.getByTestId('attention-row-sh-pin-1'));
+    expect(cbs.onOpenDestination).toHaveBeenCalledTimes(2);
+  });
+
+  test('a Share with no Share_Destination renders no Open control and card press does not open destination', () => {
     const item = shareItem('sh-nodest', false);
-    renderRow(item);
+    const cbs = renderRow(item);
 
     // Mark read is still present, but there is no Open control to press.
     expect(screen.getByTestId('attention-markread-sh-nodest')).toBeTruthy();
     expect(screen.queryByTestId('attention-open-sh-nodest')).toBeNull();
+
+    // Card press does nothing
+    fireEvent.press(screen.getByTestId('attention-row-sh-nodest'));
+    expect(cbs.onOpenDestination).not.toHaveBeenCalled();
   });
 });

@@ -63,7 +63,7 @@ describe('Sampling — Crowd_Index restricted to theme parks', () => {
       // Provide a shape for the MK ride so the per-ride-relative basket is
       // non-empty. The test date 2026-08-05T18:00:00Z → DOW 3 (Wed), hour 14 (ET).
       // avg_wait_minutes = 30 so observed/expected = 30/30 = 1.0 (typical).
-      getRideShapes: async () => [{
+      getRideShapesForBucket: async () => [{
         experience_id: 'mk-ride-db', day_of_week: 3, hour: 14,
         avg_wait_minutes: 30, sample_count: 10,
         sr_avg_wait_minutes: null, sr_sample_count: null,
@@ -74,7 +74,7 @@ describe('Sampling — Crowd_Index restricted to theme parks', () => {
         // about which PARKS get an index, not about baseline mechanics.
         baseline_wait_minutes: 30, baseline_sample_count: 10,
       }],
-      getSeasonHours: async () => [],
+      getSeasonHoursForBucket: async () => [],
       getExperienceSignals: async () => [],
     } as any;
 

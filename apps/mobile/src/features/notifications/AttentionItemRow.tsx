@@ -169,6 +169,13 @@ export function AttentionItemRow({
       accentColor={meta.tint}
       style={[styles.row, highlighted ? styles.rowHighlighted : null]}
       testID={`attention-row-${item.id}`}
+      {...(item.ref.destination !== undefined
+        ? {
+            onPress: () => onOpenDestination(item),
+            accessibilityRole: 'button' as const,
+            accessibilityLabel: `${item.summary}. Tap to open.`,
+          }
+        : {})}
     >
       {/* Push-focus highlight marker (R13.2): present only when this row is the
           Attention_Item a tapped push asked the center to surface, so tests can

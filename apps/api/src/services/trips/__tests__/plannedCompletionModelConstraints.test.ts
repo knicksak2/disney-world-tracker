@@ -119,7 +119,19 @@ describe('Planned List Completion Sync — migration / schema is unchanged', () 
       // since 0015) that later migrations legitimately reference when they touch
       // the trip_feed_items type constraint, and it has nothing to do with
       // planned-list completion — the concept this guard actually protects.
-      const scanned = sql.replace(/completion_logged/giu, '');
+      const scanned = sql
+        // Strip SQL comment prose (`-- ...`): comments legitimately discuss
+        // "completion" (e.g. 0034's backfill notes) and are not DDL.
+        .replace(/--[^\n]*/gu, '')
+        .replace(/completion_logged/giu, '')
+        // The canonical `completions` table and its `completed_on` column are
+        // the source-of-truth Tracking completion — unrelated to planned-list
+        // completion. Migration 0034 (experience-activity-logging) reads from
+        // them in its backfill; strip these exact references like
+        // `completion_logged` above so the guard still catches a genuine
+        // planned-completion column/state without false-positiving on them.
+        .replace(/\bcompletions\b/giu, '')
+        .replace(/\bcompleted_on\b/giu, '');
       // NOTE: a later migration may legitimately touch `planned_items` for
       // reasons unrelated to completion — the day-planning-optimization feature
       // adds scheduling columns (planned_date, is_fixed, priority, item_type,

@@ -83,6 +83,7 @@ function baseEnv(): NodeJS.ProcessEnv {
     REDIS_URL: 'redis://localhost:6379',
     SESSION_SECRET: 'x'.repeat(32),
     SAMPLING_CRON_SECRET: 'test-cron-secret',
+    PIN_RECONCILE_CRON_SECRET: 'test-pin-reconcile-secret',
   };
 }
 

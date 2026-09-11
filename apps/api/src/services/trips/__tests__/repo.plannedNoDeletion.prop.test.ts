@@ -262,6 +262,12 @@ function makeFakePool(store: Store): FakePool {
             return ok(rows);
           }
 
+          // ---- insert the logging Member's Experience_Log, the log_id
+          //      source for the Trip_Log_Entry (experience-activity-logging R1.2)
+          if (sql.startsWith('INSERT INTO experience_logs')) {
+            return ok([{ id: randomUUID() }]);
+          }
+
           // ---- insert the Trip_Log_Entry (R10.1, R10.2) --------------
           if (sql.startsWith('INSERT INTO trip_log_entries')) {
             const [tripId, memberId, experienceId] = params as [

@@ -23,6 +23,9 @@ export {
   WALKING_SPEEDS,
   PLANNED_ITEM_TYPES,
   RESERVATION_KINDS,
+  PIN_TIERS,
+  PIN_TRACKS,
+  PIN_COUNT_METRICS,
 } from './enums.js';
 export type {
   ExperienceCategory,
@@ -34,6 +37,9 @@ export type {
   WalkingSpeed,
   PlannedItemType,
   ReservationKind,
+  PinTier,
+  PinTrack,
+  PinCountMetric,
 } from './enums.js';
 
 // Avatar preset catalog (allowlist of bundled illustration ids).
@@ -69,6 +75,8 @@ export type {
   CompletionDTO,
   CompletionEntryDTO,
   FriendCompletionsDTO,
+  ExperienceLogDTO,
+  ExperienceVisitHistoryDTO,
   RatingDTO,
   NoteDTO,
   FriendRequestDTO,
@@ -78,6 +86,7 @@ export type {
   SharePayload,
   ExperienceSharePayload,
   ProgressSharePayload,
+  PinShowcaseSharePayload,
   ShareRecipientDTO,
   ShareReactionDTO,
   NotificationPreferenceDTO,
@@ -100,6 +109,27 @@ export type {
   CrowdCalendarDayDTO,
   WaitSnapshot,
   WaitInsightsDTO,
+  PinDTO,
+  PinCriteria,
+  SingleDayFeat,
+  ParkCompletionScope,
+  CatalogCompletionScope,
+  SetRequirement,
+  UserPinProgressDTO,
+  PinTierSummaryDTO,
+  PinBoardDTO,
+  PinShowcasePlacementDTO,
+  PinShowcaseDTO,
+  PlacePinRequest,
+} from './dto/index.js';
+
+export {
+  SHOWCASE_MAX_PINS,
+  SHOWCASE_PIN_SIZE,
+  SHOWCASE_MIN_PIN_CLEARANCE,
+  SHOWCASE_REFERENCE_SIZE,
+  overlapsAnyOtherPin,
+  placementToReferencePx,
 } from './dto/index.js';
 
 // Disney source-resilience transport-facing types (closed-set value tuples).
@@ -151,6 +181,9 @@ export {
   experienceSchema,
   completionSchema,
   completionInputSchema,
+  experienceLogSchema,
+  experienceVisitHistorySchema,
+  createExperienceLogInputSchema,
   ratingSchema,
   ratingInputSchema,
   noteSchema,
@@ -192,6 +225,24 @@ export {
   waitInsightsSchema,
 } from './schemas/index.js';
 
+// Pin-collection schemas.
+export {
+  pinTierSchema,
+  pinTrackSchema,
+  pinCountMetricSchema,
+  pinCriteriaSchema,
+  pinSchema,
+  userPinProgressSchema,
+  pinShowcasePlacementSchema,
+  pinShowcaseSchema,
+  placePinRequestSchema,
+  pinShowcaseSharePayloadSchema,
+} from './schemas/index.js';
+
+// Pin-collection Series 1 catalog (roster + set registry).
+export { PINS, PIN_SETS } from './pins/catalog.js';
+export type { SetResolution } from './pins/catalog.js';
+
 export type {
   RegisterInput,
   LoginInput,
@@ -199,6 +250,7 @@ export type {
   ProfileDisplayNameInput,
   ProfileAvatarInput,
   CompletionInput,
+  CreateExperienceLogInput,
   RatingInput,
   NoteInput,
   FriendRequestInput,

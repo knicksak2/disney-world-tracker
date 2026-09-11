@@ -172,6 +172,9 @@ export interface SharingRepo {
     recipientId: string,
     shareId: string,
   ): Promise<boolean>;
+
+  /** Resolve sender display name for payload snapshots. */
+  getSenderDisplayName?(senderId: string): Promise<string | null>;
 }
 
 // ---------------------------------------------------------------------------
@@ -204,6 +207,7 @@ export function createSharingRepo(pool: DbPool): SharingRepo {
       openShare(pool, recipientId, shareId),
     softDeleteForRecipient: (recipientId, shareId) =>
       softDeleteForRecipient(pool, recipientId, shareId),
+    getSenderDisplayName: (senderId) => getSenderDisplayName(pool, senderId),
   };
 }
 
@@ -664,3 +668,15 @@ function parsePayload(value: unknown): SharePayload {
   }
   return value as SharePayload;
 }
+
+async function getSenderDisplayName(
+  pool: DbPool,
+  senderId: string,
+): Promise<string | null> {
+  const result = await pool.query<{ display_name: string }>(
+    `SELECT display_name FROM profiles WHERE user_id = $1`,
+    [senderId],
+  );
+  return result.rows[0]?.display_name ?? null;
+}
+

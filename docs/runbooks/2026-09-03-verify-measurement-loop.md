@@ -112,3 +112,24 @@ ORDER BY ABS(l.error) DESC LIMIT 15;
 ## Done when
 
 12 healthy legs, `wait_archive` growing, and at least some lead-1 rows carrying a plausible `error`. Record anything anomalous in this file so the next runbook has it.
+
+## Findings — run on 2026-09-04
+
+Ran all four checks against the hosted Neon DB (`apps/api/.env.dev`).
+
+**1. Recompute legs** — all 12 rows present, `consecutive_failures = 0` for every leg, `last_success_at` within the last few hours for all. Healthy.
+
+**2. Archive growth** — 45,250 rows, 229 experiences, `2026-08-04` → `2026-09-04`, 221,212 total samples. Cross-check: archived `219,883` vs raw `211,783` operating samples — archived is higher as expected, nothing being dropped.
+
+One thing worth flagging for whoever reads this next: the runbook's "~+1,600 rows/day" estimate doesn't match observed growth. Per-day breakdown (`GROUP BY date`) shows a backfill bump through `2026-08-05`–`2026-08-10` (~3,100–3,300 experiences/day, presumably historical seed data), then a steady **~930–1,060 rows/day** from `2026-08-11` onward. That's consistently lower than the doc's estimate, but it's *stable* day over day (not decaying), so this reads as the original estimate being off rather than a regression. Worth correcting the estimate in this doc rather than chasing it as a bug.
+
+**3. Wait forecasts** — row counts match expectations (160/lead/day × elapsed capture days = totals seen for all three leads). Reconciliation rates (elapsed dates only, excluding today which can't be scored yet):
+- lead 1: 1075/1440 (~75%)
+- lead 3: 813/1120 (~73%)
+- lead 7: 268/480 (~56%, expected to be lower — its window has had less time to elapse)
+
+Spot-checked several unreconciled rows (Slinky Dog Dash, Test Track, Meet Anna and Elsa) against `wait_archive` directly: in every case the archive simply has no row for that `(date, hour)` — i.e. the ride wasn't operating at that hour that day, not a join/matching bug. This matches the runbook's "not necessarily a bug" caveat.
+
+**4. Largest scored errors** — top 15 by `ABS(error)` all fall in the ±38–50 minute range (Space Mountain, Test Track, Tiana's Bayou Adventure, Meet Anna and Elsa, Slinky Dog Dash, Rise of the Resistance). Nothing near the ±200 min range that would indicate a units/matching bug. Manually cross-checked one (Meet Anna and Elsa, lead 1, hour 10, predicted 28 / observed 73) against `wait_archive` directly — the archived `avg_wait_minutes` for that date/hour matches the logged `observed_wait_minutes`, confirming reconciliation is reading the right row. These look like genuine model misses (bigger than the "±5–25 on headliners" expectation, but not a structural bug) — worth keeping an eye on once more days accumulate, per the 2026-09-10 runbook's accuracy review.
+
+**Overall: measurement loop is turning correctly.** No action taken (read-only check, as intended). Two watch-items carried forward: (a) correct the archive growth-rate estimate in this doc, (b) some rides are showing larger-than-expected forecast errors — not a bug, but worth surfacing in the 2026-09-10 accuracy review rather than dismissing as noise.

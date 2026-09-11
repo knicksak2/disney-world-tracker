@@ -45,6 +45,13 @@ export { experienceSchema } from './Experience.js';
 export { completionSchema, completionInputSchema } from './Completion.js';
 export type { CompletionInput } from './Completion.js';
 
+export {
+  experienceLogSchema,
+  experienceVisitHistorySchema,
+  createExperienceLogInputSchema,
+} from './ExperienceLog.js';
+export type { CreateExperienceLogInput } from './ExperienceLog.js';
+
 export { ratingSchema, ratingInputSchema } from './Rating.js';
 export type { RatingInput } from './Rating.js';
 
@@ -64,6 +71,7 @@ export {
   sharePayloadSchema,
   experienceSharePayloadSchema,
   progressSharePayloadSchema,
+  pinShowcaseSharePayloadSchema,
   shareInputSchema,
 } from './Share.js';
 export type { ShareInput } from './Share.js';
@@ -104,3 +112,20 @@ export {
   waitSnapshotSchema,
   waitInsightsSchema,
 } from './Intelligence.js';
+
+// Pin-collection schemas.
+export {
+  pinTierSchema,
+  pinTrackSchema,
+  pinCountMetricSchema,
+  pinCriteriaSchema,
+  pinSchema,
+  userPinProgressSchema,
+} from './Pin.js';
+
+export {
+  pinShowcasePlacementSchema,
+  pinShowcaseSchema,
+  placePinRequestSchema,
+} from './PinShowcase.js';
+

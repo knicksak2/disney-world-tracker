@@ -93,9 +93,18 @@ export const progressSharePayloadSchema = z
   })
   .strict();
 
+export const pinShowcaseSharePayloadSchema = z
+  .object({
+    kind: z.literal('pinShowcase'),
+    ownerId: uuidSchema,
+    ownerDisplayName: z.string().min(1),
+  })
+  .strict();
+
 export const sharePayloadSchema = z.discriminatedUnion('kind', [
   experienceSharePayloadSchema,
   progressSharePayloadSchema,
+  pinShowcaseSharePayloadSchema,
 ]);
 
 // ---------------------------------------------------------------------------

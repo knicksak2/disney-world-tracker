@@ -66,6 +66,10 @@ import {
   type FriendCompletionsRoutesOptions,
 } from './services/tracking/friendCompletions/routes.js';
 import {
+  experienceLogRoutes,
+  type ExperienceLogRoutesOptions,
+} from './services/tracking/logs/routes.js';
+import {
   noteRoutes,
   type NoteRoutesOptions,
 } from './services/tracking/note/routes.js';
@@ -81,6 +85,14 @@ import {
   tripRoutes,
   type TripRoutesOptions,
 } from './services/trips/routes.js';
+import {
+  pinRoutes,
+  type PinRoutesOptions,
+} from './services/pins/routes.js';
+import {
+  showcaseRoutes,
+  type ShowcaseRoutesOptions,
+} from './services/pins/showcaseRoutes.js';
 import {
   intelligenceRoutes,
   type IntelligenceRoutesOptions,
@@ -182,6 +194,18 @@ export interface BuildServerServices {
    */
   readonly intelligence?: IntelligenceRoutesOptions;
   /**
+   * Pin_Service Pin Board read route (pin-collection task 4). Wires
+   * `GET /me/pins` behind the session guard. The synchronous award path is not
+   * here — Pins are awarded by the mutating actions via their injected
+   * `awardPins` port. Opt-in like every other service.
+   */
+  readonly pins?: PinRoutesOptions;
+  /**
+   * Pin Showcase routes (Feature: pin-collection, Requirement 24).
+   * Wires `/me/pin-showcase` and `/users/:userId/pin-showcase`.
+   */
+  readonly pinShowcase?: ShowcaseRoutesOptions;
+  /**
    * Tracking_Service route options. Each tracking sub-domain
    * (`completion`, `rating`, `note`) is opt-in so a focused unit-test
    * harness can wire only the routes it needs.
@@ -210,6 +234,13 @@ export interface BuildServerServices {
      * so focused unit tests can register only the routes they need.
      */
     readonly friendCompletions?: FriendCompletionsRoutesOptions;
+    /**
+     * Experience_Log routes (experience-activity-logging). Wires
+     * `POST/GET/DELETE /me/experiences/:id/logs` behind the session guard.
+     * Opt-in like the other tracking sub-domains so focused unit tests can
+     * register only the routes they need.
+     */
+    readonly logs?: ExperienceLogRoutesOptions;
     /**
      * Emitter used by the rating repo to publish
      * `RatingChanged{experienceId, oldValue, newValue}` events on every
@@ -445,6 +476,14 @@ export function buildServer(
     void app.register(intelligenceRoutes(services.intelligence));
   }
 
+  if (services.pins !== undefined) {
+    void app.register(pinRoutes(services.pins));
+  }
+
+  if (services.pinShowcase !== undefined) {
+    void app.register(showcaseRoutes(services.pinShowcase));
+  }
+
   if (services.tracking?.completion !== undefined) {
     void app.register(completionRoutes(services.tracking.completion));
   }
@@ -461,6 +500,10 @@ export function buildServer(
     void app.register(
       friendCompletionsRoutes(services.tracking.friendCompletions),
     );
+  }
+
+  if (services.tracking?.logs !== undefined) {
+    void app.register(experienceLogRoutes(services.tracking.logs));
   }
 
   return app;

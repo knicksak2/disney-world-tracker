@@ -63,7 +63,16 @@ export interface ProgressSharePayload {
   readonly percentileRank?: number;
 }
 
-export type SharePayload = ExperienceSharePayload | ProgressSharePayload;
+export interface PinShowcaseSharePayload {
+  readonly kind: 'pinShowcase';
+  readonly ownerId: string;
+  readonly ownerDisplayName: string;
+}
+
+export type SharePayload =
+  | ExperienceSharePayload
+  | ProgressSharePayload
+  | PinShowcaseSharePayload;
 
 export interface ShareDTO {
   readonly id: string;

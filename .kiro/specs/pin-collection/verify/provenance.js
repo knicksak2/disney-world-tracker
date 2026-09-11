@@ -22,10 +22,9 @@
  */
 const fs = require('fs');
 const path = require('path');
-const vm = require('vm');
+const { loadCatalog } = require('./catalog-loader');
 
 const file = process.argv[2] || path.join(__dirname, '..', 'pin-catalog-mockup.html');
-const html = fs.readFileSync(file, 'utf8');
 const dir = path.dirname(file);
 const mdir = path.join(dir, 'motifs');
 
@@ -33,25 +32,26 @@ let bad = 0;
 const A = (c, m) => { if (!c) { console.error('FAIL: ' + m); bad++; } else console.log('ok   ' + m); };
 
 /* ---------- resolve what the page actually renders ---------- */
-const libSb = { window: {} };
-vm.runInNewContext(fs.readFileSync(path.join(mdir, 'motif-paths.js'), 'utf8'), libSb);
-const LIB = libSb.window.MOTIF_LIB || {};
+/* The v2 catalogue builds its roster through mapV2Pins (not a literal PINS array) and merges
+   MOTIFS = Object.assign({}, window.MOTIF_LIB, {inline}). catalog-loader.js executes the
+   page's own scripts and hands back the resolved objects, so provenance screens exactly what
+   the catalogue draws. */
+let cat;
+try { cat = loadCatalog(file); }
+catch (e) { console.error('FAIL: could not load catalogue -> ' + e.message); process.exit(1); }
+const LIB = cat.MOTIF_LIB || {};
+const INLINE = cat.INLINE || {};
+const MOTIFS = cat.MOTIFS || {};
+const PINS = cat.PINS || [];
+A(Object.keys(MOTIFS).length > 0, 'MOTIFS resolved through the loader (' + Object.keys(MOTIFS).length + ' keys)');
+A(Array.isArray(PINS) && PINS.length > 0, 'PINS resolved through the loader (' + PINS.length + ' pins)');
 
-const inlineMatch = html.match(
-  /const MOTIFS = Object\.assign\(\{\}, window\.MOTIF_LIB \|\| \{\}, (\{[\s\S]*?\n\})\);/);
-A(!!inlineMatch, 'located the inline MOTIFS override block');
-const inlSb = {};
-if (inlineMatch) vm.runInNewContext('var I = ' + inlineMatch[1], inlSb);
-const INLINE = inlSb.I || {};
-const MOTIFS = Object.assign({}, LIB, INLINE);
-
-const pinsMatch = html.match(/const PINS = (\[[\s\S]*?\n\];)/);
-const pinSb = { B4_STAGES: {}, PALETTES: { royal: {
-  sky: '#2f6bb0', teal: '#14727f', forest: '#2f7d3e', crimson: '#a8323f',
-  royal: '#4a2a7a', plum: '#6a3fb0', amber: '#b5721a', ink: '#241a3a' } } };
-for (let i = 1; i <= 20; i++) pinSb.B4_STAGES[i] = { cols: [] };
-vm.runInNewContext('var PINS = ' + pinsMatch[1], pinSb);
-const PINS = pinSb.PINS;
+/* motif keys that are drawn by a DEDICATED renderPin branch (`o.motif === 'X'`) rather than
+   from a MOTIFS[key] path. Their art lives in the render code as original hand-authored
+   geometry, so — like the park-emblem scenes — they carry no external attribution obligation
+   and are exempt from the "needs a source file" check (but still get a row if derived). */
+const dispatchMotifs = new Set();
+for (const m of cat.inline.matchAll(/o\.motif\s*===\s*'([^']+)'/g)) dispatchMotifs.add(m[1]);
 
 /* ---------- the provenance table ----------
    Only the "| `file.svg` | Author | Source | Licence | ... |" rows count. CREDITS.md
@@ -111,20 +111,48 @@ function upstreamPathOf(svgName) {
 
 const used = [...new Set(PINS.filter(p => !p.scene && p.motif).map(p => p.motif))].sort();
 
+/* A motif key does not always kebab-case to its filename: `carouselHorse` ships as
+   `carouselHorse.svg` (camelCase kept), `__balloon` reuses `balloons.svg`, and the two
+   monorail scene names map to hand-authored files. So resolve a key to its provenance by
+   trying the raw key and the kebab form as both .svg and .path, plus a small explicit alias
+   for the handful that follow neither pattern. */
+const ALIAS = {
+  /* motif key -> CREDITS filename, for the few whose key follows neither `key.svg` nor
+     `kebab(key).svg`. Do NOT alias a key to an unrelated file, as that credits the wrong
+     source. `__balloon` is Fontisto's hot-air-balloon, stored under a readable filename. */
+  __balloon: 'hot-air-balloon.path',
+};
+function candidatesFor(k) {
+  if (ALIAS[k]) return [ALIAS[k]];
+  return [k + '.svg', k + '.path', kebab(k) + '.svg', kebab(k) + '.path'];
+}
+const ORIGINAL_RE = /project original|original|proprietary/i;
+
 /* ---------- 1. every rendered motif needs a provenance row ---------- */
 const noRow = [], noSource = [], derived = [];
 used.forEach(k => {
-  const svg = kebab(k) + '.svg';
-  const pth = kebab(k) + '.path';
-  const hasFile = svgSet.has(svg) || pathSet.has(pth);
-  /* a .path file is the established form for DERIVED geometry here - a welded variant, or
-     a union of several source paths rescaled onto the 512 canvas - so a row keyed to the
-     .path counts as provenance just as a .svg row does */
-  if (!table.has(svg) && !table.has(pth)) noRow.push(k);
-  if (!hasFile) { noSource.push(k); return; }
-  if (svgSet.has(svg)) {
-    const up = upstreamPathOf(svg);
-    if (up !== null && String(MOTIFS[k]) !== up) derived.push(k);
+  const cands = candidatesFor(k);
+  const rowKey = cands.find(c => table.has(c));
+  if (!rowKey) noRow.push(k);
+  const row = rowKey ? table.get(rowKey) : null;
+  const isOriginal = row && ORIGINAL_RE.test(row.licence);
+
+  const fileKey = cands.find(c => svgSet.has(c) || pathSet.has(c));
+  /* A source file must exist for a motif rendered from MOTIFS[k], so its origin is provable.
+     Two exemptions, both because the geometry does not live in a standalone file:
+       - Project Original art authored directly by us, and
+       - any motif drawn by a dedicated renderPin branch (its paths are hardcoded in the
+         render code, licensed or not — the CREDITS row still records the attribution). */
+  if (!fileKey && !isOriginal && !dispatchMotifs.has(k)) { noSource.push(k); return; }
+
+  /* A motif drawn by a dedicated renderPin branch does not render from MOTIFS[k]; any
+     MOTIFS[k] path is vestigial, so comparing it to the .svg says nothing about what ships.
+     Only screen "differs from its source" for motifs actually rendered from their path. */
+  if (dispatchMotifs.has(k)) return;
+  const svgCand = cands.find(c => svgSet.has(c));
+  if (svgCand) {
+    const up = upstreamPathOf(svgCand);
+    if (up !== null && MOTIFS[k] != null && String(MOTIFS[k]) !== up) derived.push(k);
   }
 });
 
@@ -141,8 +169,9 @@ A(noSource.length === 0,
 /* Derived art is legitimate under CC BY - welding is documented in CREDITS - but the
    row has to admit it, otherwise the table claims we ship the pristine licensed file. */
 const derivedUndocumented = derived.filter(k => {
-  const row = table.get(kebab(k) + '.svg');
-  return !row || !/weld|modif|derive|edit|our own|adapted/i.test(row.author + ' ' + row.source + ' ' + (credits.split('\n').find(l => l.includes('`' + kebab(k) + '.svg`')) || ''));
+  const rowKey = candidatesFor(k).find(c => table.has(c));
+  const row = rowKey ? table.get(rowKey) : null;
+  return !row || !/weld|modif|derive|edit|our own|adapted/i.test(row.author + ' ' + row.source + ' ' + (credits.split('\n').find(l => rowKey && l.includes('`' + rowKey + '`')) || ''));
 });
 A(derived.length === 0 || derivedUndocumented.length === 0,
   'every motif that differs from its source file is recorded as derived' +
@@ -171,16 +200,30 @@ A(redundant.length === 0,
   '(a redundant copy is a shadowing hazard with no benefit)' +
   (redundant.length ? '\n       redundant copies: ' + redundant.length + ' keys' : ''));
 
-/* ---------- 4. reverse direction: credited files must exist ---------- */
-const creditedMissing = [...table.keys()].filter(f => !svgSet.has(f) && !pathSet.has(f));
-A(creditedMissing.length === 0, 'every credited file is present in motifs/' +
+/* ---------- 4. reverse direction: credited files must exist ----------
+   A row's file is normally the attribution evidence and must be present. But a motif whose
+   geometry lives in our own code has no standalone file, and that is legitimate for two kinds:
+   a *Project Original* row, and any motif drawn by a dedicated renderPin branch (whose art —
+   licensed-and-edited like the Twemoji-derived monorail, or original — is hardcoded in the
+   render code). Collect the row files those code-authored motifs resolve to, and exempt them;
+   every other credited file must exist so a stale row cannot hide. */
+const codeAuthoredFiles = new Set();
+used.forEach(k => {
+  if (!dispatchMotifs.has(k)) return;
+  const rk = candidatesFor(k).find(c => table.has(c));
+  if (rk) codeAuthoredFiles.add(rk);
+});
+const creditedMissing = [...table.entries()]
+  .filter(([f, v]) => !svgSet.has(f) && !pathSet.has(f) &&
+                      !ORIGINAL_RE.test(v.licence) && !codeAuthoredFiles.has(f))
+  .map(([f]) => f);
+A(creditedMissing.length === 0, 'every credited file is present in motifs/ (code-authored ' +
+  'render-branch and Project Original motifs excepted)' +
   (creditedMissing.length ? ' -> ' + creditedMissing.join(', ') : ''));
 
 /* ---------- 5. the in-app attribution must cover every licence we actually use ---------- */
-const licences = [...new Set(used
-  .map(k => table.get(kebab(k) + '.svg') || table.get(kebab(k) + '.path'))
-  .filter(Boolean)
-  .map(r => r.licence))];
+const rowFor = k => { const c = candidatesFor(k).find(x => table.has(x)); return c ? table.get(c) : null; };
+const licences = [...new Set(used.map(rowFor).filter(Boolean).map(r => r.licence))];
 const attributionBlock = (credits.match(/## Attribution required in-app[\s\S]*?(?=\n## )/) || [''])[0];
 /* CC0 is a public-domain dedication and requires no attribution, so demanding that the
    in-app credits name it would be inventing an obligation. Only licences that actually
@@ -198,7 +241,7 @@ const shortToken = s => (String(s).match(/[A-Za-z][A-Za-z0-9-]{3,}/) || [''])[0]
    upstream filename, so keying on it reported the same author sixteen times */
 const obligations = new Map();
 used.forEach(k => {
-  const r = table.get(kebab(k) + '.svg') || table.get(kebab(k) + '.path');
+  const r = rowFor(k);
   if (!r || !NEEDS_ATTRIBUTION.test(r.licence)) return;
   obligations.set(shortToken(r.author) + '|' + shortToken(r.source) + '|' +
                   (r.licence.match(/CC[\s-]*BY[\s-]*\d(?:\.\d)?|MIT|Apache/i) || [r.licence])[0], r);

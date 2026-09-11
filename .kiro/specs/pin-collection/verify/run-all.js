@@ -30,18 +30,22 @@ if (!fs.existsSync(html)) {
 /* equiv.js runs first and is cheap: it proves the spatial index that makes everything else
    fast still gives the same answers as the brute-force path. If that ever fails, every
    number the other suites check is suspect, so there is no point running them. */
-/* Three suites target pin-catalog-mockup.html rather than the frame sample:
+/* Four suites target pin-catalog-mockup.html (the v2 catalogue) rather than the frame sample.
+   They do not regex a `const PINS = [...]` out of the HTML — v2 has none — they share
+   verify/catalog-loader.js, which executes the page's own scripts (the external roster
+   pins-v2-transcription.js, pin-descriptions.js, and the inline definitions) and returns the
+   resolved pins/motifs, so every suite screens exactly what the catalogue renders:
      dedup.js      - no two pins render the same artwork (by geometry, not by key)
-     catalog.js    - structural invariants: tier/id agreement, section placement, no
-                     hardcoded counts, keys that resolve, load-time counts, enamel sanity
+     catalog.js    - structural invariants: tier/id agreement, track-section placement, no
+                     hardcoded counts, every pin renders to non-empty art, load-time counts
      provenance.js - every motif a pin renders has a CREDITS row and a demonstrable source
-     diecut.js     - every NEW die-cut pin passes emblemGate at its own tier rim. The 53
-                     existing failures are grandfathered and the list is self-cleaning:
-                     fixing a pin without removing its entry also fails. Applies equally to
-                     AI-drawn SVGs, since it screens geometry and ignores provenance.
-   provenance.js and dedup.js are EXPECTED to fail today: the catalogue's provenance is
-   unfinished and toriiGate holds the pagoda's path. They are in the gate so that work is
-   visible rather than described in a paragraph nobody runs.
+                     (or is authored in a render branch and recorded Project Original/derived)
+     diecut.js     - every NEW plain die-cut pin passes emblemGate at its own tier rim; the
+                     grandfathered failures are self-cleaning (fixing one without removing its
+                     entry also fails). Colour die-cut pins are welded in their render branch,
+                     so they are exempt here and covered by catalog.js's render check.
+   All four are GREEN. Applies equally to AI-drawn SVGs, since it screens geometry, not
+   provenance.
 
    "Would these bite?" is answered by verify/bite.js, which is not part of this runner
    for the same reason selftest.js is not - it costs a full suite run per case. */

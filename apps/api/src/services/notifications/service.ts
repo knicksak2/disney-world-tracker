@@ -68,6 +68,12 @@ export type ShareDeliveredEvent =
       readonly senderId: string;
       readonly recipientIds: readonly string[];
       readonly payloadKind: 'progress';
+    }
+  | {
+      readonly shareId: string;
+      readonly senderId: string;
+      readonly recipientIds: readonly string[];
+      readonly payloadKind: 'pinShowcase';
     };
 
 // ---------------------------------------------------------------------------
@@ -484,6 +490,9 @@ async function composeBody(
 ): Promise<string> {
   if (event.payloadKind === 'progress') {
     return PROGRESS_LABEL;
+  }
+  if (event.payloadKind === 'pinShowcase') {
+    return 'their Pin Showcase';
   }
   const name = await deps.resolveExperienceName(event.experienceId);
   const trimmed = name?.trim();

@@ -69,6 +69,14 @@ export interface NoteRoutesOptions {
    * proceed if `request.userId` is unset.
    */
   readonly requireSession: preHandlerHookHandler;
+  /**
+   * Pin_Service award hook (R2.2). After a note is saved, this synchronously
+   * evaluates the User's Reviewer/Critic challenges and returns any newly-earned
+   * Pin ids, surfaced as `newlyAwardedPinIds` in the PUT response. Best-effort:
+   * a failure never fails the already-persisted note. Omitted in tests that
+   * don't exercise pins; wired in `composeServices.ts`.
+   */
+  readonly awardPins?: (userId: string) => Promise<readonly string[]>;
 }
 
 // ---------------------------------------------------------------------------
@@ -192,7 +200,7 @@ async function handlePut(
   opts: NoteRoutesOptions,
   request: FastifyRequest,
   _reply: FastifyReply,
-): Promise<NoteDTO> {
+): Promise<NoteDTO & { readonly newlyAwardedPinIds: string[] }> {
   const userId = requireUserId(request);
   const { id: experienceId } = parseInput(notePathSchema, request.params);
   const { body, shareable } = parseInput(noteInputSchema, request.body);
@@ -202,7 +210,11 @@ async function handlePut(
   // validation rule observed. `shareable` is forwarded as-is (including
   // `undefined` when omitted) so the repo's COALESCE preserves the prior
   // flag on edit and defaults a new Note to private (R4.6, R4.7).
-  return opts.repo.upsertNote(userId, experienceId, body, shareable);
+  const note = await opts.repo.upsertNote(userId, experienceId, body, shareable);
+
+  // Reviewer/Critic Pins may unlock on a new note (R2.2). Best-effort.
+  const newlyAwardedPinIds = await awardPinsSafely(opts.awardPins, userId, request);
+  return { ...note, newlyAwardedPinIds };
 }
 
 /**
@@ -250,6 +262,26 @@ function requireUserId(request: FastifyRequest): string {
     throw new AppError('unauthorized', 'Authentication required.');
   }
   return userId;
+}
+
+/**
+ * Run the optional Pin award hook without letting it fail the enclosing
+ * mutation (the note has already been persisted). A Pin-evaluation error is
+ * logged and reported as no newly-awarded Pins this round. Duplicated per route
+ * module to keep the modules independent.
+ */
+async function awardPinsSafely(
+  awardPins: ((userId: string) => Promise<readonly string[]>) | undefined,
+  userId: string,
+  request: FastifyRequest,
+): Promise<string[]> {
+  if (awardPins === undefined) return [];
+  try {
+    return [...(await awardPins(userId))];
+  } catch (err) {
+    request.log.error({ err }, 'pin award evaluation failed');
+    return [];
+  }
 }
 
 /**

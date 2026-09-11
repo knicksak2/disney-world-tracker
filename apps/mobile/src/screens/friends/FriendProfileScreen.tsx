@@ -103,6 +103,8 @@
 import React from 'react';
 import {
   ActivityIndicator,
+  ImageBackground,
+  ImageSourcePropType,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -111,16 +113,21 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 
 import {
+  PINS,
   type AvatarPresetId,
   type CompletionEntryDTO,
+  type PinDTO,
+  type PinShowcaseDTO,
   type ProfileDTO,
 } from '@dwt/shared';
 
-import { ApiError } from '../../api/client';
+import { ApiError, apiRequest } from '../../api/client';
 import { renderAvatarPreset } from '../../avatars/AvatarPresets';
 import type { StatsResponse } from '../../api/friendProfile';
+import { PinView } from '../../components/pins/PinView';
 import {
   useFriendCompletionsQuery,
   useFriendProfileQuery,
@@ -140,6 +147,7 @@ import {
   GradientHeader,
   PrimaryButton,
   ScreenContainer,
+  SecondaryButton,
 } from '../../theme/components';
 import {
   CoverageSection,
@@ -224,6 +232,10 @@ const FRIEND_MODES = [
   'Compare',
 ] as const satisfies readonly ProfileViewMode[];
 
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const corkTexture: ImageSourcePropType = require('../../../assets/cork.png');
+const CATALOG: ReadonlyMap<string, PinDTO> = new Map(PINS.map((p) => [p.id, p]));
+
 // ---------------------------------------------------------------------------
 // Copy
 // ---------------------------------------------------------------------------
@@ -274,6 +286,13 @@ export default function FriendProfileScreen({
   const profileQuery = useFriendProfileQuery(friendId);
   const statsQuery = useFriendStatsQuery(friendId);
   const completionsQuery = useFriendCompletionsQuery(friendId);
+  const showcaseQuery = useQuery<PinShowcaseDTO, ApiError>({
+    queryKey: ['users', friendId, 'pin-showcase'],
+    queryFn: () => apiRequest<PinShowcaseDTO>('GET', `/users/${friendId}/pin-showcase`),
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+    retryOnMount: false,
+  });
 
   // Phase 3 foundation (task 23.1): read the viewer's OWN stats and completions
   // alongside the friend reads above, so the Progress_Comparison (task 24) and
@@ -372,11 +391,13 @@ export default function FriendProfileScreen({
 
         {mode === 'Overview' ? (
           <OverviewMode
+            friendId={friendId}
             fallbackName={displayName}
             profileState={readState(profileQuery)}
             statsState={readState(statsQuery)}
             profile={profileQuery.data}
             stats={statsQuery.data}
+            showcaseQuery={showcaseQuery}
             onRetryProfile={onRetryProfile}
             onRetryStats={onRetryStats}
             onOpenExperience={openExperience}
@@ -433,20 +454,24 @@ export default function FriendProfileScreen({
 // ---------------------------------------------------------------------------
 
 function OverviewMode({
+  friendId,
   fallbackName,
   profileState,
   statsState,
   profile,
   stats,
+  showcaseQuery,
   onRetryProfile,
   onRetryStats,
   onOpenExperience,
 }: {
+  readonly friendId: string;
   readonly fallbackName: string;
   readonly profileState: ReadState;
   readonly statsState: ReadState;
   readonly profile: ProfileDTO | undefined;
   readonly stats: StatsResponse | undefined;
+  readonly showcaseQuery: UseQueryResult<PinShowcaseDTO, ApiError>;
   readonly onRetryProfile: () => void;
   readonly onRetryStats: () => void;
   readonly onOpenExperience: (experienceId: string) => void;
@@ -498,7 +523,112 @@ function OverviewMode({
           </View>
         </View>
       )}
+
+      <FriendShowcaseSection friendId={friendId} showcaseQuery={showcaseQuery} />
     </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Friend Pin Showcase section (Requirement 24.7, 24.9)
+// ---------------------------------------------------------------------------
+
+function FriendShowcaseSection({
+  friendId,
+  showcaseQuery,
+}: {
+  readonly friendId: string;
+  readonly showcaseQuery: UseQueryResult<PinShowcaseDTO, ApiError>;
+}): JSX.Element {
+  const navigation = useNavigation<any>();
+
+  if (isForbidden(showcaseQuery.error)) {
+    return (
+      <Card style={styles.showcaseSectionCard} testID="friend-showcase-unavailable">
+        <EmptyState
+          icon="lock-closed-outline"
+          title={UNAVAILABLE_TITLE}
+          body={UNAVAILABLE_BODY}
+        />
+      </Card>
+    );
+  }
+
+  if (showcaseQuery.isPending) {
+    return (
+      <Card style={styles.showcaseSectionCard} testID="friend-showcase-loading">
+        <ActivityIndicator color={theme.color.primary} />
+      </Card>
+    );
+  }
+
+  if (showcaseQuery.isError) {
+    return (
+      <Card style={styles.showcaseSectionCard} testID="friend-showcase-error">
+        <EmptyState
+          icon="alert-circle-outline"
+          title="Showcase unavailable"
+          body="We couldn’t load this friend’s pin showcase."
+        />
+      </Card>
+    );
+  }
+
+  const placements = showcaseQuery.data?.placements ?? [];
+
+  return (
+    <Card style={styles.showcaseSectionCard} testID="friend-showcase-section">
+      <View style={styles.showcaseHeaderRow}>
+        <View style={styles.showcaseTitleWrap}>
+          <Text style={styles.showcaseTitle}>Pin Showcase</Text>
+          <Text style={styles.showcaseSubtitle}>
+            {placements.length > 0
+              ? `${placements.length} pin${placements.length === 1 ? '' : 's'} on display`
+              : 'No pins on display'}
+          </Text>
+        </View>
+        <SecondaryButton
+          label="View Showcase"
+          icon="images-outline"
+          onPress={() =>
+            navigation.navigate('PinShowcase', { userId: friendId, readOnly: true })
+          }
+          testID="friend-view-showcase-btn"
+        />
+      </View>
+      {placements.length === 0 ? (
+        <View style={styles.showcaseEmptyWrap} testID="friend-showcase-empty">
+          <EmptyState
+            icon="images-outline"
+            title="No pins on display"
+            body="This friend hasn’t placed any pins yet."
+          />
+        </View>
+      ) : (
+        <View style={styles.showcasePreviewBoard}>
+          <ImageBackground
+            source={corkTexture}
+            resizeMode="repeat"
+            style={styles.showcasePreviewCork}
+            testID="friend-showcase-preview-cork"
+          >
+            {placements.slice(0, 6).map((p) => {
+              const meta = CATALOG.get(p.pinId);
+              return (
+                <View key={p.pinId} style={styles.showcasePreviewPin}>
+                  <PinView
+                    pinId={p.pinId}
+                    tier={meta?.tier ?? 'bronze'}
+                    unlocked={true}
+                    size={48}
+                  />
+                </View>
+              );
+            })}
+          </ImageBackground>
+        </View>
+      )}
+    </Card>
   );
 }
 
@@ -1024,7 +1154,7 @@ function SectionError({
 // ---------------------------------------------------------------------------
 
 /** True when the query failed with the owner-or-friend `profile_forbidden` denial. */
-function isForbidden(error: ApiError | null): boolean {
+function isForbidden(error: unknown): boolean {
   return error instanceof ApiError && error.code === 'profile_forbidden';
 }
 
@@ -1056,6 +1186,8 @@ const styles = StyleSheet.create({
     borderRadius: 40,
     marginBottom: theme.spacing.sm,
     backgroundColor: theme.color.surfaceAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   avatarPlaceholder: {
     width: 80,
@@ -1069,13 +1201,22 @@ const styles = StyleSheet.create({
   profileName: {
     ...theme.typography.title,
     color: theme.color.textPrimary,
-    textAlign: 'center',
   },
   heroWrap: {
     gap: theme.spacing.md,
   },
   ratingsWrap: {
-    marginTop: theme.spacing.md,
+    marginTop: theme.spacing.sm,
+  },
+  modeLoader: {
+    paddingVertical: theme.spacing.xxl,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sectionError: {
+    alignItems: 'center',
+    paddingVertical: theme.spacing.xl,
+    gap: theme.spacing.md,
   },
   card: {
     marginBottom: theme.spacing.md,
@@ -1124,7 +1265,7 @@ const styles = StyleSheet.create({
   },
   errorText: {
     ...theme.typography.body,
-    color: theme.color.textSecondary,
+    color: theme.color.danger,
     textAlign: 'center',
   },
   retryBtn: {
@@ -1165,5 +1306,52 @@ const styles = StyleSheet.create({
     ...theme.typography.subtitle,
     color: theme.color.textPrimary,
     textAlign: 'center',
+  },
+  showcaseSectionCard: {
+    marginTop: theme.spacing.md,
+    padding: theme.spacing.md,
+  },
+  showcaseHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: theme.spacing.sm,
+  },
+  showcaseTitleWrap: {
+    flex: 1,
+    marginRight: theme.spacing.sm,
+  },
+  showcaseTitle: {
+    ...theme.typography.heading,
+    color: theme.color.textPrimary,
+  },
+  showcaseSubtitle: {
+    ...theme.typography.meta,
+    color: theme.color.textSecondary,
+  },
+  showcaseEmptyWrap: {
+    paddingVertical: theme.spacing.sm,
+  },
+  showcasePreviewBoard: {
+    height: 100,
+    borderWidth: 4,
+    borderColor: '#5D3A1A',
+    borderRadius: theme.radius.md,
+    overflow: 'hidden',
+    backgroundColor: '#c49a6c',
+  },
+  showcasePreviewCork: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    paddingHorizontal: theme.spacing.sm,
+  },
+  showcasePreviewPin: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.35,
+    shadowRadius: 3,
+    elevation: 4,
   },
 });

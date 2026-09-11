@@ -31,7 +31,12 @@ import {
 } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
-import type { CompletionDTO, NoteDTO, RatingDTO } from '@dwt/shared';
+import type {
+  CompletionDTO,
+  ExperienceVisitHistoryDTO,
+  NoteDTO,
+  RatingDTO,
+} from '@dwt/shared';
 
 // ---------------------------------------------------------------------------
 // Mocks (declared before the module under test is imported).
@@ -144,6 +149,7 @@ interface RenderOptions {
   readonly completionQuery?: QueryLike<CompletionDTO | null>;
   readonly ratingQuery?: QueryLike<RatingDTO | null>;
   readonly noteQuery?: QueryLike<NoteDTO | null>;
+  readonly logsQuery?: QueryLike<ExperienceVisitHistoryDTO | null>;
 }
 
 function renderCard(options: RenderOptions = {}): {
@@ -166,6 +172,7 @@ function renderCard(options: RenderOptions = {}): {
         completionQuery={options.completionQuery ?? emptyQuery()}
         ratingQuery={options.ratingQuery ?? emptyQuery()}
         noteQuery={options.noteQuery ?? emptyQuery()}
+        logsQuery={options.logsQuery ?? emptyQuery()}
       />
     </QueryClientProvider>,
   );

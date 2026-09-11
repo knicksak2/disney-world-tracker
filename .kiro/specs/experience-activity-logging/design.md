@@ -46,7 +46,7 @@ Experience Activity Logging establishes a clean separation between **User Activi
 - `composeServices.ts`: Composed under `tracking: { logs: { repo, requireSession }, completion, rating, note, friendCompletions }`.
 
 ### Mobile Structure (`apps/mobile/src/screens/catalog/`)
-- `YourVisitCard.tsx`: Embeds visit count badge, "Log Visit / Ride Again" trigger button, and `VisitHistoryTimeline`.
+- `YourVisitCard.tsx`: Embeds visit count badge, the category-neutral visit-logging trigger button (labelled *"Log a visit"* with no prior visits, *"Log another visit"* once one or more exist — R6.2), and `VisitHistoryTimeline`.
 - `LogVisitModal.tsx`: Modal sheet with date picker, 1–10 star slider, note input, and trip dropdown.
 - `VisitHistoryTimeline.tsx`: Collapsible past visits list rendering dates, ratings, and notes.
 
@@ -95,7 +95,9 @@ SELECT
     le.created_at
 FROM trip_log_entries le;
 
--- Backfill completions not recorded in any trip so zero past completions are lost
+-- Backfill completions not recorded in any trip so zero past completions are lost.
+-- Expressed as a LEFT JOIN anti-join (semantically identical to a correlated
+-- NOT EXISTS) so the statement is portable across engines.
 INSERT INTO experience_logs (id, user_id, experience_id, visited_on, user_tz, logged_at)
 SELECT 
     gen_random_uuid(),
@@ -105,10 +107,9 @@ SELECT
     c.user_tz,
     c.completed_on::timestamp AT TIME ZONE c.user_tz
 FROM completions c
-WHERE NOT EXISTS (
-    SELECT 1 FROM experience_logs el 
-    WHERE el.user_id = c.user_id AND el.experience_id = c.experience_id
-);
+LEFT JOIN experience_logs el
+    ON el.user_id = c.user_id AND el.experience_id = c.experience_id
+WHERE el.id IS NULL;
 
 -- ---------------------------------------------------------------------------
 -- 3. Set NOT NULL and Foreign Key on trip_log_entries.log_id
@@ -162,6 +163,7 @@ export interface CreateExperienceLogInputDTO {
 ## Error Handling
 
 - `400 Bad Request`: Validation failure on invalid date, unparseable timezone string, rating outside 1..10, or note exceeding 2000 characters.
+- `400 Bad Request` (`log_future_date`): `visited_on` is strictly later than today in the request's `user_tz`. The route resolves "today in user tz" from an injectable clock (defaulting to `new Date()`) via `Intl.DateTimeFormat`, then compares the two `YYYY-MM-DD` strings lexicographically (zero-padded ISO dates make string order equal calendar order). This mirrors the existing Completion route's `completion_future_date` guard; the guard lives only on the user-facing log-create path and never on the rode-with confirmation insert (whose `visited_on` is copied from an already-valid originating log).
 - `401 Unauthorized`: Unauthenticated request.
 - `403 Forbidden`: Attempting to delete another user's log, or attempting to link to a trip the user is not a member of.
 - `404 Not Found`: Experience ID does not exist or Log ID not found.
@@ -183,6 +185,10 @@ export interface CreateExperienceLogInputDTO {
 ### Property 4: Delete Cleanup & Trip Cascade Independence
 *When an `experience_logs` record linked to a trip is deleted, the matching `trip_log_entries` row is cascaded away via `log_id`. When a Trip is deleted, the `trip_log_entries` row is deleted via `trip_id` while the underlying `experience_logs` record is preserved.*
 **Validates:** Requirement 1.4, Requirement 5.1, Requirement 5.2
+
+### Property 5: No Future Visit Date
+*For any `visited_on` strictly later than today in the request's `user_tz`, `POST /me/experiences/:id/logs` is rejected with `400 log_future_date` and no `experience_logs`, `completions`, `ratings`, or `trip_log_entries` row is written; for any `visited_on` on or before that date the request is accepted. On the mobile client, the visit-date calendar picker's latest selectable day is today in the device time zone, so a future date cannot be submitted from the modal.*
+**Validates:** Requirement 1.5, Requirement 6.6
 
 ## Testing Strategy
 

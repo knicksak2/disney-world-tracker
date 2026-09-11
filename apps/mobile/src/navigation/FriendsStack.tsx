@@ -50,6 +50,11 @@ export type FriendsStackParamList = {
    * in-app tap on the Friends page; takes no params.
    */
   Sent: undefined;
+  /**
+   * Pin Showcase display board (Requirement 24). Reached from Friend Profile Overview tab
+   * and Inbox pinShowcase shares.
+   */
+  PinShowcase: { userId?: string; readOnly?: boolean } | undefined;
 };
 
 const Stack = createNativeStackNavigator<FriendsStackParamList>();
@@ -80,7 +85,12 @@ export default function FriendsStack(): JSX.Element {
       <Stack.Screen
         name="Sent"
         component={SentSharesScreen}
-        options={{ title: 'Sent' }}
+        options={{ title: 'Sent Shares' }}
+      />
+      <Stack.Screen
+        name="PinShowcase"
+        component={require('../screens/profile/PinShowcaseScreen').default}
+        options={{ title: 'Pin Showcase' }}
       />
     </Stack.Navigator>
   );

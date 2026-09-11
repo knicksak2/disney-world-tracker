@@ -44,8 +44,8 @@ describe('Sampling Isolation (Task 4.4)', () => {
       getParkCrowdIndices: async () => [],
       upsertParkCrowdIndices: async () => {},
       pruneWaitSamples: async () => {},
-      getRideShapes: async () => [],
-      getSeasonHours: async () => [],
+      getRideShapesForBucket: async () => [],
+      getSeasonHoursForBucket: async () => [],
       getExperienceSignals: async () => []
     } as any;
 

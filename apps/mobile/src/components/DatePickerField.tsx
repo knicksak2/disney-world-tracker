@@ -134,6 +134,13 @@ export interface DatePickerFieldProps {
    * and not selectable. Used to keep an end date on or after a start date.
    */
   readonly minimumDate?: string;
+  /**
+   * Latest selectable date as `YYYY-MM-DD`. Days after it are grayed out and
+   * not selectable — the Calendar guards `onDayPress` for out-of-range days,
+   * so a later day cannot be chosen. Used to keep a visit date on or before
+   * today.
+   */
+  readonly maximumDate?: string;
   readonly accessibilityLabel: string;
   readonly testID?: string;
 }
@@ -144,6 +151,7 @@ export function DatePickerField({
   placeholder = 'Select a date',
   disabled = false,
   minimumDate,
+  maximumDate,
   accessibilityLabel,
   testID,
 }: DatePickerFieldProps): JSX.Element {
@@ -231,6 +239,7 @@ export function DatePickerField({
               enableSwipeMonths
               hideExtraDays
               {...(minimumDate !== undefined ? { minDate: minimumDate } : {})}
+              {...(maximumDate !== undefined ? { maxDate: maximumDate } : {})}
               {...(testID ? { testID: `${testID}-calendar-view` } : {})}
             />
             <View style={styles.actions}>

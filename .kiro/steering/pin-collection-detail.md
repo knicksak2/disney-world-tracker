@@ -42,8 +42,9 @@ suite. That is deliberate: it is what stops the document drifting from the code.
 it, for AI-drawn SVGs as much as for library icons, because it screens geometry and ignores
 where the art came from. If it fails, **fabricate rather than reject**: weld, then scale up in
 the die, then fall back to a contained plate (`docs/pin-art-direction.md` §5). Do **not** add
-a new pin to that suite's `GRANDFATHERED` list — those 53 entries are pre-existing debt and
-the list is asserted to only shrink.
+a new pin to that suite's `GRANDFATHERED` list — those entries (6 in the v2 catalogue) are
+pre-existing debt and the list is asserted to only shrink. Colour die-cut pins
+(`colorDieCut:true`) are welded in their render branch and are exempt from the raw screen.
 
 An icon is not a pin. Turning one into the other is the job; "that icon fails screening" is
 not an answer.

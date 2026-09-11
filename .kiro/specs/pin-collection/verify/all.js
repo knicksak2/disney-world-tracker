@@ -68,8 +68,8 @@ for (const o of T.LIB) A(areaFrac(T.MOTIFS[o.motif]).frac > .05,
     - c.reduce((s,x)=>s+areaFrac(x).area,0)) < 1, 'cell splitting preserves area'); }
 
 console.log('\n== B. section render counts');
-const COUNTS = {'s-tiers':6,'s-tier6':3,'s-shapes':6,'s-versus':4,'s-versus-grid':12,
-  's-die-tiers':6,'s-die-tiers-rim':6,'s-die-library':13,'s-multicolour':16,'s-inner-rim':28,
+const COUNTS = {'s-tiers':7,'s-tier6':3,'s-shapes':6,'s-versus':4,'s-versus-grid':12,
+  's-die-tiers':7,'s-die-tiers-rim':7,'s-die-library':13,'s-multicolour':16,'s-inner-rim':28,
   's-parts':4,'s-locked-versus':3,'s-ladder':6,'s-ladder-sil':6,'s-set':8,'s-locked':4,'s-board':12};
 for (const [k,v] of Object.entries(COUNTS)) A(n(cap[k],/<svg/g)===v, `${k}: ${v} renders`);
 A(n(cap['lib-metrics'],/<tr>/g)===14, 'metrics table: header + 13 rows');
@@ -159,10 +159,10 @@ console.log('\n== F. ladder, oracle, regressions');
       3:[[166,60],[346,60]],4:[[148,64],[364,64],[256,80]]}))
     for (const [cx,w] of specs)
       A(T.STAGES[i].d.includes(`M${cx-(w/2+12)} `), `stage ${i}: turret ${cx} standard overhang`); }
-A(T.TIERS.length===6 && T.TIERS[5]==='prism', 'tier 6 is prismatic');
+A(T.TIERS.length===7 && T.TIERS[6]==='mythic', 'tier 7 is mythic');
 A(!('nickel' in T.METALS), 'black nickel gone');
-A(new Set(T.TIERS.map(t=>T.METALS[t].join(','))).size===6, '6 distinct ramps');
-A(new Set(T.TIERS.map(t=>T.METALS[t][0])).size===6, '6 distinct top stops');
+A(new Set(T.TIERS.map(t=>T.METALS[t].join(','))).size===7, '7 distinct ramps');
+A(new Set(T.TIERS.map(t=>T.METALS[t][0])).size===7, '7 distinct top stops');
 A(n(cap['s-tiers'],/class="shmr/g)===2, 'only pearl + prism animate');
 A(html.includes('prefers-reduced-motion'), 'reduced motion respected');
 A(n(cap['s-ladder'],/Georgia/g)===12, 'ladder banners intact');
@@ -240,7 +240,7 @@ console.log('\n== G. bugs found by looking, now asserted');
     + `sat diff ${bg.sd.toFixed(2)}`);
   A(conf.length === 0, `no confusable tier pairs remain (${conf.join(', ') || 'none'})`);
   A(bg.cr >= 1.8, `bronze and gold now separate on lightness (${bg.cr.toFixed(2)}:1)`);
-  A(new Set(T.TIERS.map(t=>T.METALS[t][1])).size===6, 'six distinct mid tones');
+  A(new Set(T.TIERS.map(t=>T.METALS[t][1])).size===7, 'seven distinct mid tones');
 
   // the audit sections must report what the functions compute
   A(cap['audit-motif'].includes('MOTIF DISAPPEARS') === false,
@@ -265,7 +265,7 @@ console.log('\n== H. decision ledger must agree with the code');
   /* the ledger's specific factual claims, re-derived independently here so a
      hand-edited ledger cell cannot quietly go stale */
   A(cap['ledger-decided'].includes('bronze → silver → gold → amethyst → pearl → prismatic')
-    && T.TIERS.join()==='bronze,silver,gold,amethyst,pearl,prism', 'ladder order matches');
+    && T.TIERS.join()==='bronze,silver,gold,amethyst,pearl,prism,mythic', 'ladder order matches');
   A(cap['ledger-decided'].includes('4.2px at bronze to 9.2px at prismatic')
     && T.RIM_BY_TIER.bronze===4.2 && T.RIM_BY_TIER.prism===9.2, 'rim range matches');
   A([1,2,3,4,5].map(i=>T.STAGES[i].top).join()==='300,260,220,170,40'
@@ -1158,10 +1158,12 @@ console.log('\n== K. ladder motif candidates');
     'and only passes when the exception is explicitly requested');
   A(relaxed.roundAllowed === true, 'the gate records that the exception was used');
 
-  /* the exception must never rescue anything that fails for a DIFFERENT reason */
-  const thin = T.emblemGate(T.MOTIFS.globe, 'union', 7.2, { allowRound: true });
-  A(!thin.ok && thin.fails.indexOf('starved') > -1,
-    'the round exception does not excuse a starved icon');
+  /* the exception must never rescue anything that fails for a DIFFERENT reason.
+     (starved was retired as a hard gate failure - see emblemGate's comment - so this now
+     uses a multi-piece motif, which allowRound was never meant to touch either.) */
+  const thin = T.emblemGate(T.MOTIFS.rocket, 'nonzero', 6.2, { allowRound: true });
+  A(!thin.ok && thin.fails.indexOf('2 pieces') > -1,
+    'the round exception does not excuse an unrelated failure (pieces)');
 
   /* any park using it must state why, in prose */
   for (const p of T.PARKS) {

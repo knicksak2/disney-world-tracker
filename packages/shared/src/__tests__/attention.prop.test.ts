@@ -117,10 +117,11 @@ const shareDtoArb: fc.Arbitrary<InboxItemDTO> = fc
     senderId: uuidArb,
     senderDisplayName: summaryFieldArb, // feeds the summary
     sentAt: isoTimestampArb,
-    kind: fc.constantFrom('experience' as const, 'progress' as const),
+    kind: fc.constantFrom('experience' as const, 'progress' as const, 'pinShowcase' as const),
     experienceId: uuidArb,
+    ownerId: uuidArb,
   })
-  .map(({ shareId, senderId, senderDisplayName, sentAt, kind, experienceId }) => {
+  .map(({ shareId, senderId, senderDisplayName, sentAt, kind, experienceId, ownerId }) => {
     const base = {
       shareId,
       read: false,
@@ -134,6 +135,16 @@ const shareDtoArb: fc.Arbitrary<InboxItemDTO> = fc
       return {
         ...base,
         payload: { kind: 'experience', experienceId },
+      } as InboxItemDTO;
+    }
+    if (kind === 'pinShowcase') {
+      return {
+        ...base,
+        payload: {
+          kind: 'pinShowcase',
+          ownerId,
+          ownerDisplayName: senderDisplayName,
+        },
       } as InboxItemDTO;
     }
     return {
@@ -230,6 +241,21 @@ describe('Property 2: Item summary and shape', () => {
       fc.property(shareDtoArb, (dto) => {
         const item = toAttentionItem('share', dto);
         assertItemShape(item, 'share', dto.sentAt);
+
+        // Destination mapping per share payload kind
+        if (dto.payload.kind === 'experience') {
+          expect(item.ref.destination).toEqual({
+            kind: 'experience',
+            id: dto.payload.experienceId,
+          });
+        } else if (dto.payload.kind === 'pinShowcase') {
+          expect(item.ref.destination).toEqual({
+            kind: 'pinShowcase',
+            id: dto.payload.ownerId,
+          });
+        } else {
+          expect(item.ref.destination).toBeUndefined();
+        }
       }),
       { numRuns: NUM_RUNS },
     );

@@ -140,6 +140,23 @@ function progressItem(shareId: string): InboxItemDTO {
   };
 }
 
+function pinShowcaseItem(shareId: string): InboxItemDTO {
+  return {
+    shareId,
+    read: true,
+    senderId: SENDER_ID,
+    senderDisplayName: SENDER_NAME,
+    payloadKind: 'pinShowcase',
+    payload: {
+      kind: 'pinShowcase',
+      ownerId: SENDER_ID,
+      ownerDisplayName: SENDER_NAME,
+    },
+    sentAt: '2024-01-02T03:04:05.000Z',
+    myReaction: null,
+  };
+}
+
 function inboxResponse(item: InboxItemDTO): InboxResponse {
   return { unread: item.read ? 0 : 1, items: [item] };
 }
@@ -152,6 +169,7 @@ function inboxResponse(item: InboxItemDTO): InboxResponse {
 type FriendsTestStackParamList = {
   Inbox: undefined;
   FriendProfile: { friendId: string; displayName: string };
+  PinShowcase: { userId?: string; readOnly?: boolean };
 };
 
 type MainTabTestParamList = {
@@ -175,6 +193,10 @@ function FriendProfileStub(): JSX.Element {
   return <View testID="friend-profile-stub" />;
 }
 
+function PinShowcaseStub(): JSX.Element {
+  return <View testID="pin-showcase-stub" />;
+}
+
 function ExperienceDetailStub(): JSX.Element {
   return <View testID="experience-detail-stub" />;
 }
@@ -184,6 +206,7 @@ function FriendsTestStack(): JSX.Element {
     <FriendsStack.Navigator screenOptions={{ headerShown: false }}>
       <FriendsStack.Screen name="Inbox" component={InboxScreen} />
       <FriendsStack.Screen name="FriendProfile" component={FriendProfileStub} />
+      <FriendsStack.Screen name="PinShowcase" component={PinShowcaseStub} />
     </FriendsStack.Navigator>
   );
 }
@@ -357,5 +380,57 @@ describe('Inbox tap-through navigation and failure branches (R5.1, R5.2, R5.4, R
     expect(message.props.children).toBe(SENDER_TAP_UNAVAILABLE_COPY);
     expect(navRef.getCurrentRoute()?.name).toBe('Inbox');
     expect(screen.queryByTestId('friend-profile-stub')).toBeNull();
+  });
+
+  test('selecting a pinShowcase Share navigates within FriendsStack to PinShowcase (R24.13)', async () => {
+    const item = pinShowcaseItem('share-showcase-ok');
+    apiRequestMock.mockImplementation(async (_method, path) => {
+      if (path === '/me/inbox') return inboxResponse(item) as never;
+      if (path === '/me/friends') {
+        return { friends: [{ userId: SENDER_ID }] } as never;
+      }
+      throw new Error(`unexpected apiRequest path: ${String(path)}`);
+    });
+
+    renderInboxNavigator();
+
+    const row = await screen.findByTestId(`inbox-row-${item.shareId}`);
+    fireEvent.press(row);
+
+    // R24.13: lands on PinShowcase in read-only mode with the sender's userId
+    await waitFor(() => {
+      expect(navRef.getCurrentRoute()?.name).toBe('PinShowcase');
+    });
+    expect(navRef.getCurrentRoute()?.params).toEqual({
+      userId: SENDER_ID,
+      readOnly: true,
+    });
+    expect(screen.queryByTestId('pin-showcase-stub')).toBeTruthy();
+    expect(screen.queryByTestId('friend-profile-stub')).toBeNull();
+  });
+
+  test('selecting a pinShowcase Share whose sender is no longer a Friend keeps the User on the Inbox with a message (R24.13, R5.6)', async () => {
+    const item = pinShowcaseItem('share-showcase-fail');
+    apiRequestMock.mockImplementation(async (_method, path) => {
+      if (path === '/me/inbox') return inboxResponse(item) as never;
+      if (path === '/me/friends') {
+        // Sender is absent from current friends
+        return { friends: [{ userId: 'someone-else' }] } as never;
+      }
+      throw new Error(`unexpected apiRequest path: ${String(path)}`);
+    });
+
+    renderInboxNavigator();
+
+    const row = await screen.findByTestId(`inbox-row-${item.shareId}`);
+    fireEvent.press(row);
+
+    // R5.6: sender unavailable message appears and user stays on Inbox
+    const message = await screen.findByTestId(
+      `inbox-tap-message-${item.shareId}`,
+    );
+    expect(message.props.children).toBe(SENDER_TAP_UNAVAILABLE_COPY);
+    expect(navRef.getCurrentRoute()?.name).toBe('Inbox');
+    expect(screen.queryByTestId('pin-showcase-stub')).toBeNull();
   });
 });

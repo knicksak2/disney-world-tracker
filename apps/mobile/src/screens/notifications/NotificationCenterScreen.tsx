@@ -182,6 +182,13 @@ interface ExperienceMetadata {
   readonly park: Park;
 }
 
+const FRIENDS_STALE_MS = 60 * 1000;
+const SENDER_UNAVAILABLE_COPY = 'This friend\u2019s profile is no longer available.';
+
+interface FriendsListSnapshot {
+  readonly friends: ReadonlyArray<{ readonly userId: string }>;
+}
+
 // ---------------------------------------------------------------------------
 // Screen
 // ---------------------------------------------------------------------------
@@ -277,36 +284,66 @@ export default function NotificationCenterScreen(): JSX.Element {
   }, [navigation]);
 
   // Reuse the Inbox screen's destination-verify + cross-navigate logic for a
-  // Share that references a Share_Destination (R2.3): gate on a deduplicated
-  // catalog read so a gone Experience keeps the User on the feed with a
-  // message, then navigate cross-navigator to the detail view on the RootStack.
+  // Share that references a Share_Destination (R2.3):
+  // - For an Experience: gate on a deduplicated catalog read, then navigate to ExperienceDetail.
+  // - For a Pin Showcase: verify the sender is still a Friend against cached friends read, then navigate to PinShowcase (read-only).
   const openDestination = React.useCallback(
     (item: AttentionItem) => {
       const destination = item.ref.destination;
-      if (destination === undefined || destination.kind !== 'experience') {
+      if (destination === undefined) {
         return;
       }
-      const experienceId = destination.id;
-      void (async () => {
-        try {
-          await queryClient.fetchQuery<ExperienceMetadata, ApiError>({
-            queryKey: ['experience', experienceId] as const,
-            queryFn: () =>
-              apiRequest<ExperienceMetadata>(
-                'GET',
-                `/catalog/${encodeURIComponent(experienceId)}`,
-              ),
-            staleTime: METADATA_STALE_MS,
-            retry: false,
+      if (destination.kind === 'experience') {
+        const experienceId = destination.id;
+        void (async () => {
+          try {
+            await queryClient.fetchQuery<ExperienceMetadata, ApiError>({
+              queryKey: ['experience', experienceId] as const,
+              queryFn: () =>
+                apiRequest<ExperienceMetadata>(
+                  'GET',
+                  `/catalog/${encodeURIComponent(experienceId)}`,
+                ),
+              staleTime: METADATA_STALE_MS,
+              retry: false,
+            });
+          } catch {
+            // Keep the User on the feed with an indication; the rest of the feed
+            // stays visible (mirrors the Inbox's R5.5 handling).
+            Alert.alert('Experience unavailable', DESTINATION_UNAVAILABLE_COPY);
+            return;
+          }
+          navigation.navigate('ExperienceDetail', { experienceId });
+        })();
+      } else if (destination.kind === 'pinShowcase') {
+        const userId = destination.id;
+        void (async () => {
+          let stillFriend = false;
+          try {
+            const snapshot = await queryClient.fetchQuery<
+              FriendsListSnapshot,
+              ApiError
+            >({
+              queryKey: ['friends'] as const,
+              queryFn: () =>
+                apiRequest<FriendsListSnapshot>('GET', '/me/friends'),
+              staleTime: FRIENDS_STALE_MS,
+              retry: false,
+            });
+            stillFriend = snapshot.friends.some((f) => f.userId === userId);
+          } catch {
+            stillFriend = false;
+          }
+          if (!stillFriend) {
+            Alert.alert('Profile unavailable', SENDER_UNAVAILABLE_COPY);
+            return;
+          }
+          navigation.navigate('PinShowcase', {
+            userId,
+            readOnly: true,
           });
-        } catch {
-          // Keep the User on the feed with an indication; the rest of the feed
-          // stays visible (mirrors the Inbox's R5.5 handling).
-          Alert.alert('Experience unavailable', DESTINATION_UNAVAILABLE_COPY);
-          return;
-        }
-        navigation.navigate('ExperienceDetail', { experienceId });
-      })();
+        })();
+      }
     },
     [navigation, queryClient],
   );

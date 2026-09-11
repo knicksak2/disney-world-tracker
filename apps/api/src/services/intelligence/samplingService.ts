@@ -170,8 +170,13 @@ export function createSamplingService(deps: SamplingServiceDeps): SamplingServic
     const currentSeason = Math.floor(currentDate.getMonth() / 3);
 
     const allDbIds = Array.from(tpIdToDbId.values());
-    const existingShapes = await repo.getRideShapes(allDbIds);
-    const existingSeasons = await repo.getSeasonHours(allDbIds);
+    // Scoped to today's single (day_of_week, hour) / (season, day_of_week,
+    // hour) bucket rather than every historical bucket: the loop below only
+    // ever reads the one bucket matching currentDow/currentHour/currentSeason
+    // via `.find()`, so fetching the rest was pure egress with no effect on
+    // the model (see IntelligenceRepo.getRideShapesForBucket for why).
+    const existingShapes = await repo.getRideShapesForBucket(allDbIds, currentDow, currentHour);
+    const existingSeasons = await repo.getSeasonHoursForBucket(allDbIds, currentSeason, currentDow, currentHour);
     const existingSignals = await repo.getExperienceSignals(allDbIds);
     
     const unmappedStandbyEntries = new Map<string, { id: string; name: string; waitTime: number }>();

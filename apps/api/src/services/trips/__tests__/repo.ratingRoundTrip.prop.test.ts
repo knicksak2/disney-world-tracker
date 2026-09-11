@@ -197,6 +197,10 @@ function makeFakePool(store: Store): FakePool {
             return ok(rows);
           }
 
+          if (sql.startsWith('INSERT INTO experience_logs')) {
+            return ok([{ id: randomUUID() }]);
+          }
+
           if (sql.startsWith('INSERT INTO trip_log_entries')) {
             const [tripId, memberId, experienceId] = params as [
               string,

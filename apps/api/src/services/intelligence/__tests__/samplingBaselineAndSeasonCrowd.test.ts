@@ -84,8 +84,8 @@ function makeFixture(opts: FixtureOptions) {
     getParkCrowdIndices: async () => opts.crowdIndices ?? [],
     upsertParkCrowdIndices: async () => {},
     pruneWaitSamples: async () => {},
-    getRideShapes: async () => opts.shapes,
-    getSeasonHours: async () => opts.seasons ?? [],
+    getRideShapesForBucket: async () => opts.shapes,
+    getSeasonHoursForBucket: async () => opts.seasons ?? [],
     getExperienceSignals: async () => [],
   } as any;
 

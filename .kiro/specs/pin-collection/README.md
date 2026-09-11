@@ -5,10 +5,12 @@
 the entire quality gate was sitting in `%TEMP%`, unreferenced by the repo, one cleanup away
 from gone.
 
-Status: **the release catalogue exists and is under review; its provenance is unfinished.**
-`requirements.md`, `design.md` and `tasks.md` are written. `pin-catalog-mockup.html` holds all
-167 version-1 pins. The gate is deliberately RED on three suites — see §2 — and those failures
-are the to-do list, not noise.
+Status: **the v2 release catalogue is promoted and the gate is green.**
+`requirements.md`, `design.md` and `tasks.md` are written. `pin-catalog-mockup.html` is the
+**v2** catalogue — its 174 pins are built at load time from `pins-v2-transcription.js` (the
+roster) through `mapV2Pins`, not written inline. The previous inline 167-pin file is archived as
+`pin-catalog-mockup-v1.html`. All ten gate suites pass (`verify/run-all.js` exits 0); provenance
+and dedup, once deliberately red, are now finished.
 
 Nothing in this folder is committed yet. Until it is, all of it exists on one machine.
 
@@ -40,12 +42,16 @@ is to paste this file at it.
 | Path | What it is |
 |---|---|
 | `pin-frame-sample.html` | The working artefact. One parametric SVG renderer plus every decision, rejection and correction, each with live checks. Open it in a browser. |
-| `pin-catalog-mockup.html` | The **release catalogue**: every pin planned for version 1, with tier, category, criteria and art. Filterable by tier and category. This is the file to review when checking the pins themselves. |
-| `pins-mockup.html` | The **older** first-pass mockup. Superseded; kept for history. Don't extend it. |
-| `motifs/*.svg` | Licensed motif art, CC BY 3.0 from game-icons.net. |
+| `pin-catalog-mockup.html` | The **release catalogue** (v2): all 174 pins, filterable by tier and track. Its roster is **not** inline — it renders `mapV2Pins(window.PINS_V2)` at load. This is the file to review when checking the pins themselves. |
+| `pins-v2-transcription.js` | The **roster** (`window.PINS_V2`): the 174 pins as data (id, tier, track, art recipe). Edit a pin here, not in the HTML. |
+| `pin-descriptions.js` | `window.PIN_DESCRIPTIONS`: the criteria text shown per pin. |
+| `pin-catalog-mockup-v1.html` | The **archived** first-generation catalogue (167 pins, written inline). Superseded by v2; kept for reference. Don't extend it. |
+| `pins-mockup.html` | The **oldest** first-pass mockup. Superseded; kept for history. Don't extend it. |
+| `verify/catalog-loader.js` | Shared loader the four catalogue suites use to execute the page's scripts and read the resolved pins/motifs — the single source of the parse. |
+| `motifs/*.svg` · `motifs/*.path` | Licensed motif art (game-icons CC BY 3.0, plus EmojiOne/Twemoji CC BY 4.0, Fontisto MIT, Material Symbols Apache 2.0) and derived/original `.path` variants. See `motifs/CREDITS.md`. |
 | `motifs/motif-paths.js` | **Generated** from those SVGs. Do not hand-edit — see §5. |
 | `motifs/CREDITS.md` | Provenance and the attribution obligation. A motif without a row here must not ship. |
-| `verify/` | Nine verifier suites, a runner, two "does it bite?" harnesses, and `trace.js` for finding a motif's source. This is the quality gate. |
+| `verify/` | Ten verifier suites, a runner, `catalog-loader.js`, two "does it bite?" harnesses, and `trace.js` for finding a motif's source. This is the quality gate. |
 
 ## 2 · How to run the gate
 
@@ -56,36 +62,38 @@ node .kiro/specs/pin-collection/verify/run-all.js
 Run it after **every** change to the mockup, and paste the tail when reporting work, per
 `.kiro/steering/execution-discipline.md`. **Takes about 35 seconds.**
 
-**It is RED right now, deliberately.** `provenance.js` and `dedup.js` fail because there
-is real unfinished work: 70 of the 88 motifs the catalogue renders have no row in the
-CREDITS provenance table, 43 have no source file at all, and `toriiGate` holds
-`delapouite/pagoda.svg`'s path so two World Showcase pins render the same pagoda. Those
-failures are the to-do list. Do not silence them.
+**It is GREEN now.** All ten suites pass. Six target `pin-frame-sample.html`; four target the
+release catalogue (`pin-catalog-mockup.html`): `dedup.js` guards artwork reuse, `catalog.js`
+guards structural invariants, `provenance.js` guards "no row, no ship", and `diecut.js` screens
+every plain die-cut motif through `emblemGate` at its tier rim.
 
-Six suites target `pin-frame-sample.html`. Three target the release catalogue:
-`dedup.js` guards artwork reuse, `catalog.js` guards structural invariants, and
-`provenance.js` guards "no row, no ship".
+Those four **do not parse the HTML for a `const PINS = [...]` array** — the v2 catalogue has
+none. They call `verify/catalog-loader.js`, which executes the page's own scripts (the external
+`pins-v2-transcription.js` roster, `pin-descriptions.js`, and the inline definitions) in a
+sandbox whose `window` IS the global object, exactly as a browser does, and hands back the
+resolved `PINS` / `MOTIFS` / `SCENES` / `renderPin`. One parse, shared by all four, so they
+cannot drift from each other or from what the page renders. If you add a suite that needs the
+roster, use the loader — never regex the pins out of the HTML.
 
 ```
 node .kiro/specs/pin-collection/verify/bite.js
 ```
 
-Asks whether the **catalogue** assertions actually fire, the way `selftest.js` does for
-`all.js`. It cannot use selftest's approach: selftest tampers files in place and demands a
-green baseline first, and the catalogue suites are legitimately red. So `bite.js` tampers a
-**copy** and asserts a token that is present when tampered and absent from the clean run's
-*failures*. That differential is what keeps it meaningful while other assertions in the
-same suite fail. Run it whenever you add or change a catalogue assertion — it has already
-caught two assertions of mine that did not bite, and seven of its own cases that were
-vacuous because the token also appeared on a passing line. Three things the catalogue suites exist to remember, each learned the hard way:
+Asks whether the **catalogue** assertions actually fire. It introduces a real defect for each
+one — in whichever file owns the thing under test (`pins-v2-transcription.js` for a pin,
+the HTML for markup, `CREDITS.md` for provenance) — and requires the suite to report it, keyed
+on a token that must appear among the *failures*. Now that the baseline is green it tampers the
+real file in place and restores it in a `finally` (with a sanity check that the token is absent
+from the clean run first). Run it whenever you add or change a catalogue assertion. Three things
+the catalogue suites exist to remember, each learned the hard way:
 
-- **The catalogue does not render from `motif-paths.js`.** It builds
-  `MOTIFS = Object.assign({}, window.MOTIF_LIB, { ...129 inline keys... })`, so an inline
-  entry silently shadows the licensed file. `all.js` byte-asserts `director-chair.svg` and
-  `film-projector.svg` while the catalogue draws different inline paths, and `toriiGate`
-  held the pagoda's path outright. 125 of the 129 inline keys are byte-identical copies of
-  the library — pure shadowing hazard, no benefit. Any check on motif art must resolve
-  through the same `Object.assign` the page uses.
+- **The catalogue does not render from `motif-paths.js` alone.** It builds
+  `MOTIFS = Object.assign({}, window.MOTIF_LIB, { ...inline overrides... })`, so an inline entry
+  can shadow the licensed file. Any check on motif art must resolve through the same
+  `Object.assign` the page uses — which is exactly what `catalog-loader.js` does. Several v2
+  motifs are drawn entirely by dedicated `renderPin`/`renderColorDieCut` branches (the welded
+  colour die-cuts, the star-ladder scenes), so their `MOTIFS[key]` path is vestigial or absent;
+  screen what renders, not the raw key.
 - **Compare artwork, not keys, and not strings.** `dedup.js` reported "100% unique motifs"
   for a year of edits because it grouped by motif key. Byte comparison is not enough either:
   the same art reserialised (`m`/`l` versus `M` plus implicit repeats) produces different
@@ -304,15 +312,14 @@ properties, the error handling), schema + migration, award rules, the Pin Board 
   decisions. Not worth fixing until the challenge list says which pins exist.
 - Whether the art is *good* is unverified and unverifiable by the gate. It proves the pins are
   valid, not that anyone will want to collect them. The five open questions are all this.
-- **The catalogue's provenance is unfinished**, and `provenance.js` fails until it is done.
-  Of the 88 motifs a pin renders: 18 have a row in the CREDITS provenance table, 45 have a
-  source file, and 47 have an origin proven against game-icons by geometry — 43 of those
-  byte-identical to upstream, so saving the file and writing the row is mechanical. The
-  remaining 41 are not in game-icons; 13 of them have a local file and are deliberately
-  welded, and 28 are unexplained. Several of the 28 carry coordinates beyond the 512 canvas,
-  so they are not raw game-icons paths — `motif-paths.js` names four other libraries
-  (Temaki CC0, Iconify, Tabler MIT, Lucide MIT) whose obligations differ from CC BY, and the
-  in-app credits row currently promises only the game-icons line.
+- **The catalogue's provenance is now complete and `provenance.js` is green.** Every motif a
+  v2 pin renders has a CREDITS row, a source file (or is authored in a render branch and marked
+  Project Original / recorded as derived), and the in-app credits block names every author,
+  source and licence version owed attribution — now spanning game-icons (CC BY 3.0),
+  EmojiOne and Twemoji (CC BY 4.0), Fontisto (MIT) and Material Symbols (Apache 2.0). Motifs
+  drawn entirely in a `renderColorDieCut` branch (the welded colour die-cuts, the hand-authored
+  teacup/magic-carpet/monorail) have no standalone file by design; the check exempts them and
+  the row records the attribution.
 - Two motif keys mislead about what they draw: `riverboatCruise` is `lorc/galleon.svg` and
   `compassRose` is `lorc/compass.svg`, the same art as the existing `compass` key.
 - `magicLantern` is drawn on a 24-unit grid rather than 512. Its one pin is die-cut, and

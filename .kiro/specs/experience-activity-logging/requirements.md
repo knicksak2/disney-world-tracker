@@ -35,6 +35,7 @@ This feature introduces the `experience_logs` event stream while preserving the 
 2. WHERE a User logs an Experience within the context of an active Trip, THE Tracking_Service SHALL create a matching `Trip_Log_Entry` in `trip_log_entries` linked via `log_id = experience_logs.id` with matching `member_id` and `experience_id`.
 3. THE Tracking_Service SHALL allow a User to create multiple distinct `Experience_Log` records for the same Experience on the same calendar date or across different dates.
 4. IF a Trip is deleted, THE Tracking_Service SHALL cascade-delete the `trip_log_entries` row (via `trip_id REFERENCES trips(id) ON DELETE CASCADE`) while preserving the User's underlying `Experience_Log` records intact.
+5. IF a request to log an Experience supplies a `visited_on` calendar date strictly later than the current calendar date in the request's `user_tz`, THE Tracking_Service SHALL reject the request with HTTP `400` and error code `log_future_date` without creating any `Experience_Log`, `completions`, `ratings`, or `trip_log_entries` state. A visit cannot be recorded for a date that has not yet occurred.
 
 ### Requirement 2: Synchronization with Canonical Completions and Ratings
 
@@ -83,7 +84,9 @@ This feature introduces the `experience_logs` event stream while preserving the 
 #### Acceptance Criteria
 
 1. WHEN the App renders the Experience Detail screen for an Experience the User has logged, THE App SHALL display a badge showing the `Repeat_Count` (e.g. *"Completed • 3 visits"*).
-2. THE App SHALL provide a prominent *"Log Visit / Ride Again"* button in the "Your Visit" card.
-3. WHEN the User activates the *"Log Visit / Ride Again"* button, THE App SHALL open a modal sheet allowing the User to select a visit date (defaulting to today), assign an optional 1–10 star rating, enter an optional note, and select an active Trip.
+2. THE App SHALL provide a prominent visit-logging button in the "Your Visit" card whose label is category-neutral (correct for any Experience, not only rides): the button SHALL read *"Log a visit"* when the User has no `Experience_Log` records for the Experience, and *"Log another visit"* WHERE the User has one or more `Experience_Log` records.
+3. WHEN the User activates the visit-logging button, THE App SHALL open a modal sheet allowing the User to select a visit date (defaulting to today), assign an optional 1–10 star rating, enter an optional note, and select an active Trip.
 4. WHERE an Experience has one or more `Experience_Log` records, THE App SHALL render a collapsible *"Visit History"* timeline displaying each past visit date, rating, and note.
 5. WHEN an `Experience_Log` is created or deleted, THE App SHALL immediately invalidate the `['experience-logs', id]`, `['experience-completion', id]`, `['experience-rating', id]`, `['experience-aggregate', id]`, and `['me-stats']` queries to update all UI surfaces.
+6. WHEN the User opens the visit-date picker in the visit-logging modal, THE App SHALL present the visit date as a calendar picker whose latest selectable day is today in the device time zone, so a date later than today cannot be chosen.
+7. WHERE the caller has no active Trip, THE App SHALL omit the Trip selector from the visit-logging modal (there is no Trip to attribute the visit to); WHERE the caller has one or more active Trips, THE App SHALL show the selector with a "No trip" option selected by default.

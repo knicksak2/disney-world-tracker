@@ -51,6 +51,7 @@ import type {
   CompletionDTO,
   ErrorCode,
   ExperienceCategory,
+  ExperienceVisitHistoryDTO,
   FacetValueDTO,
   GroupedFacetsDTO,
   HeightRequirementDTO,
@@ -260,6 +261,18 @@ export default function ExperienceDetailScreen(): JSX.Element {
           ),
       },
       {
+        // The viewer's Visit_History for this Experience (repeat count + logs).
+        // `GET /me/experiences/:id/logs` returns a 200 with `repeatCount: 0`
+        // and an empty list when nothing is logged yet, so no not-found
+        // swallowing is needed (experience-activity-logging R4.1-R4.3).
+        queryKey: ['experience-logs', experienceId] as const,
+        queryFn: () =>
+          apiRequest<ExperienceVisitHistoryDTO>(
+            'GET',
+            `/me/experiences/${encodedId}/logs`,
+          ),
+      },
+      {
         // Live operational layer (R3.2-R3.5, R7.*). This read is fully
         // independent of the static catalog detail above: a failure here
         // (e.g. a 503 `live_unavailable` when no cached Live_Detail exists)
@@ -281,7 +294,8 @@ export default function ExperienceDetailScreen(): JSX.Element {
   const ratingQ = queries[2];
   const noteQ = queries[3];
   const aggregateQ = queries[4];
-  const liveQ = queries[5];
+  const logsQ = queries[5];
+  const liveQ = queries[6];
 
   // Resort name lookup for the specific-Resort Info_Tag (R9.7). Only a
   // `Resort`-area Experience that references a specific Resort needs the
@@ -460,6 +474,7 @@ export default function ExperienceDetailScreen(): JSX.Element {
           completionQuery={completionQ}
           ratingQuery={ratingQ}
           noteQuery={noteQ}
+          logsQuery={logsQ}
         />
 
         {/* ------------------------------------------------------------ */}

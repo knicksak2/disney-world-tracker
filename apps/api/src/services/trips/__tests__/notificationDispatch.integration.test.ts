@@ -126,6 +126,7 @@ function makePool(role: 'organizer' | 'member' | null): DbPool {
 interface DispatchPorts {
   readonly emitTripInviteCreated?: TripInviteCreatedDispatch;
   readonly emitRodeWithTagCreated?: RodeWithTagCreatedDispatch;
+  readonly awardPins?: (userId: string) => Promise<readonly string[]>;
 }
 
 async function buildApp(
@@ -248,7 +249,7 @@ describe('POST /trips/:id/log-entries — RodeWithTagCreated dispatch (R10.8)', 
     });
 
     expect(res.statusCode).toBe(201);
-    expect(res.json()).toEqual({ logEntryId: LOG_ENTRY_ID });
+    expect(res.json()).toEqual({ logEntryId: LOG_ENTRY_ID, newlyAwardedPinIds: [] });
 
     expect(logCompletion).toHaveBeenCalledWith(TRIP_ID, CALLER_ID, {
       experienceId: EXPERIENCE_ID,
@@ -294,6 +295,54 @@ describe('POST /trips/:id/log-entries — RodeWithTagCreated dispatch (R10.8)', 
 
     expect(res.statusCode).toBe(201);
     expect(emitRodeWithTagCreated).not.toHaveBeenCalled();
+  });
+
+  // Regression guard for the award-wiring bug (pin-collection R21.1): this
+  // handler previously destructured `awardPins` from its options without
+  // ever calling it, so a Pin whose criteria were met purely via a Trip log
+  // entry was silently never awarded. This test would have failed against
+  // that code (the port was accepted but ignored) and passes now that the
+  // handler calls it after `repo.logCompletion` commits.
+  it('calls the injected awardPins hook and surfaces its ids as newlyAwardedPinIds (R21.1)', async () => {
+    const logCompletion = vi
+      .fn()
+      .mockResolvedValue({ logEntryId: LOG_ENTRY_ID, pendingTags: [] });
+    const awardPinsCalls: string[] = [];
+    const awardPins = async (userId: string): Promise<readonly string[]> => {
+      awardPinsCalls.push(userId);
+      return ['bronze_organizer_1'];
+    };
+    app = await buildApp('organizer', makeRepo({ logCompletion }), { awardPins });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/trips/${TRIP_ID}/log-entries`,
+      payload: { experienceId: EXPERIENCE_ID, rodeWith: [] },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(awardPinsCalls).toEqual([CALLER_ID]);
+    expect(res.json()).toEqual({ logEntryId: LOG_ENTRY_ID, newlyAwardedPinIds: ['bronze_organizer_1'] });
+    expect(logCompletion).toHaveBeenCalledTimes(1); // the repo commit happened
+  });
+
+  it('never fails the log entry when the awardPins hook throws (best-effort)', async () => {
+    const logCompletion = vi
+      .fn()
+      .mockResolvedValue({ logEntryId: LOG_ENTRY_ID, pendingTags: [] });
+    const awardPins = async (): Promise<readonly string[]> => {
+      throw new Error('evaluation boom');
+    };
+    app = await buildApp('organizer', makeRepo({ logCompletion }), { awardPins });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/trips/${TRIP_ID}/log-entries`,
+      payload: { experienceId: EXPERIENCE_ID, rodeWith: [] },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(res.json()).toEqual({ logEntryId: LOG_ENTRY_ID, newlyAwardedPinIds: [] });
   });
 });
 

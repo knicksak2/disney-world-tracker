@@ -30,7 +30,8 @@
  */
 
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { Alert } from 'react-native';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import type {
@@ -105,6 +106,7 @@ jest.mock('../../../features/notifications/useAttentionActions', () => ({
 // ---------------------------------------------------------------------------
 
 import NotificationCenterScreen from '../NotificationCenterScreen';
+import { apiRequest } from '../../../api/client';
 
 // ---------------------------------------------------------------------------
 // Fixtures / helpers
@@ -371,5 +373,93 @@ describe('NotificationCenterScreen presentation (R1.7, R2.9, R8.2, R9.1, R9.5, R
 
     fireEvent.press(screen.getByTestId('notification-open-inbox'));
     expect(mockNavigate).toHaveBeenCalledWith('Friends', { screen: 'Inbox' });
+  });
+
+  // -------------------------------------------------------------------------
+  // R2.3 — opening a pinShowcase destination
+  // -------------------------------------------------------------------------
+  test('R2.3: opening a pinShowcase destination verifies friend status and navigates to PinShowcase', async () => {
+    const item: AttentionItem = {
+      domain: 'share',
+      id: 'share-showcase-1',
+      sourceTimestamp: '2024-01-01T00:00:00.000Z',
+      summary: 'Mickey shared their pin showcase',
+      ref: {
+        shareId: 'share-showcase-1',
+        destination: { kind: 'pinShowcase', id: 'friend-user-1' },
+      },
+    };
+    programAttention({
+      state: makeState({ items: [item] }),
+      outcomes: [
+        success('friendRequest'),
+        success('tripInvite'),
+        success('rodeWithTag'),
+        success('share', [item]),
+      ],
+      inFlight: false,
+      retryFailed: jest.fn(),
+    });
+    const apiRequestMock = apiRequest as jest.MockedFunction<typeof apiRequest>;
+    apiRequestMock.mockResolvedValueOnce({
+      friends: [{ userId: 'friend-user-1' }],
+    } as never);
+
+    renderScreen();
+
+    const openBtn = screen.getByTestId(`attention-open-${item.id}`);
+    expect(openBtn).toBeTruthy();
+
+    fireEvent.press(openBtn);
+
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith('PinShowcase', {
+        userId: 'friend-user-1',
+        readOnly: true,
+      });
+    });
+  });
+
+  test('R2.3: opening a pinShowcase destination when sender is no longer a friend alerts and does not navigate', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    const item: AttentionItem = {
+      domain: 'share',
+      id: 'share-showcase-2',
+      sourceTimestamp: '2024-01-01T00:00:00.000Z',
+      summary: 'Mickey shared their pin showcase',
+      ref: {
+        shareId: 'share-showcase-2',
+        destination: { kind: 'pinShowcase', id: 'ex-friend-user' },
+      },
+    };
+    programAttention({
+      state: makeState({ items: [item] }),
+      outcomes: [
+        success('friendRequest'),
+        success('tripInvite'),
+        success('rodeWithTag'),
+        success('share', [item]),
+      ],
+      inFlight: false,
+      retryFailed: jest.fn(),
+    });
+    const apiRequestMock = apiRequest as jest.MockedFunction<typeof apiRequest>;
+    apiRequestMock.mockResolvedValueOnce({
+      friends: [{ userId: 'other-user' }],
+    } as never);
+
+    renderScreen();
+
+    const openBtn = screen.getByTestId(`attention-open-${item.id}`);
+    fireEvent.press(openBtn);
+
+    await waitFor(() => {
+      expect(alertSpy).toHaveBeenCalledWith(
+        'Profile unavailable',
+        expect.stringContaining('no longer available'),
+      );
+    });
+    expect(mockNavigate).not.toHaveBeenCalledWith('PinShowcase', expect.anything());
+    alertSpy.mockRestore();
   });
 });

@@ -120,9 +120,16 @@ function applyInitMigration(db: IMemoryDb): void {
   db.public.none(sql);
 }
 
-/** Apply a later migration verbatim (no GIN indexes in 0015). */
+/**
+ * Apply a later migration, stripping engine features pg-mem cannot model: GIN
+ * trigram indexes and the `AT TIME ZONE` operator (0034's backfill uses it;
+ * production Postgres runs it, and the backfill selects zero rows here since
+ * the tables are empty at migration time).
+ */
 function applyMigration(db: IMemoryDb, name: string): void {
-  const sql = readFileSync(migrationPath(name), 'utf8');
+  let sql = readFileSync(migrationPath(name), 'utf8');
+  sql = sql.replace(/CREATE INDEX[^;]+USING gin[^;]+;/gms, '');
+  sql = sql.replace(/\s+AT\s+TIME\s+ZONE\s+('[^']*'|[A-Za-z_][\w.]*)/gimu, '');
   db.public.none(sql);
 }
 
@@ -251,6 +258,9 @@ async function setup(): Promise<Fixture> {
   applyMigration(db, '0027_planned_items_soft_windows.sql');
   applyMigration(db, '0028_planned_items_meal_period_snack.sql');
   applyMigration(db, '0031_planned_item_reservations.sql');
+  // 0034 adds experience_logs + trip_log_entries.log_id, which logCompletion
+  // and confirmRodeWithTag now write to.
+  applyMigration(db, '0034_experience_logs.sql');
 
   // The repo and the canonical Tracking repos all run against the same pool,
   // wrapped so `FOR UPDATE` clauses are stripped for pg-mem.
@@ -352,6 +362,9 @@ describe('Trip cascade delete with canonical Tracking survival (integration, pg-
     expect(await countRows(rawPool, 'trip_invites')).toBe(1);
     expect(await countRows(rawPool, 'planned_items')).toBe(1);
     expect(await countRows(rawPool, 'trip_log_entries')).toBe(1);
+    // experience-activity-logging: the organizer's logCompletion and the
+    // member's confirmRodeWithTag each materialize one Experience_Log row.
+    expect(await countRows(rawPool, 'experience_logs')).toBe(2);
     expect(await countRows(rawPool, 'rode_with_tags')).toBe(1);
     // trip_created + member_joined + completion_logged (confirm writes none).
     expect(await countRows(rawPool, 'trip_feed_items')).toBe(3);
@@ -380,6 +393,10 @@ describe('Trip cascade delete with canonical Tracking survival (integration, pg-
     expect(await countRows(rawPool, 'planned_items')).toBe(0);
     expect(await countRows(rawPool, 'trip_log_entries')).toBe(0);
     expect(await countRows(rawPool, 'rode_with_tags')).toBe(0);
+    // experience-activity-logging R1.4: the trip delete cascades away the
+    // trip_log_entries rows (via trip_id) but the users' permanent
+    // Experience_Log rows SURVIVE — the log_id FK cascades the other direction.
+    expect(await countRows(rawPool, 'experience_logs')).toBe(2);
     expect(await countRows(rawPool, 'trip_feed_items')).toBe(0);
     expect(await countRows(rawPool, 'trip_reactions')).toBe(0);
     expect(await countRows(rawPool, 'trip_comments')).toBe(0);

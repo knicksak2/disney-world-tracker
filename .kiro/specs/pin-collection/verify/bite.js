@@ -1,23 +1,17 @@
-/* Do the catalogue assertions BITE?  node verify/bite.js
+/* Do the catalogue assertions BITE?  node verify/bite.js [pin-catalog-mockup.html]
  *
- * selftest.js answers this question for all.js, but it cannot cover the catalogue
- * suites: it tampers files in place and demands a GREEN baseline first ("if the suite
- * does not pass on a clean tree, this test proves nothing"). catalog.js, dedup.js and
- * provenance.js are legitimately RED right now - there is real unfinished provenance
- * work and a real duplicate-art bug - so a pass/fail baseline carries no information.
+ * A green gate proves nothing is broken; it does not prove the checks would CATCH a defect.
+ * This harness introduces a real defect for each catalogue assertion and requires the suite
+ * to report it, keyed on a SPECIFIC token that must appear among the FAILURES.
  *
- * So this harness works differently, and better:
- *   - it tampers a COPY, never the real file, so an interrupted run cannot leave the
- *     tree broken (the copy sits beside the original because the suites resolve
- *     motifs/ relative to the html, and is removed in a finally);
- *   - it asserts on a SPECIFIC token in the output, present when tampered and ABSENT
- *     when clean. That differential is what makes it meaningful while other assertions
- *     in the same suite are already failing.
- *
- * Every case below was written after a real defect, and two of them exist because the
- * first version of an assertion did NOT bite: the section-header regex silently slid
- * onto the previous tier when a count was reintroduced, and the updateTabCounts checks
- * were textual and passed with the bug reinstated.
+ * v2 note. The catalogue no longer carries its pins as a literal array in the HTML; it builds
+ * them from `pins-v2-transcription.js` (the roster), `pin-descriptions.js`, the inline MOTIFS
+ * block in the HTML, and `motifs/CREDITS.md`. So a defect has to be introduced in whichever of
+ * those files actually owns the thing under test — tampering the HTML alone would not reach a
+ * pin. Each case therefore names the file it breaks. The baseline is green, so unlike the v1
+ * harness this tampers the real file IN PLACE and restores it in a `finally`; an interrupted
+ * run restores on the way out, and a sanity check confirms the token is absent from the clean
+ * run before trusting its presence in the tampered one.
  */
 const fs = require('fs');
 const path = require('path');
@@ -25,20 +19,24 @@ const { execFileSync } = require('child_process');
 
 const here = __dirname;
 const spec = path.resolve(here, '..');
-const src = path.join(spec, 'pin-catalog-mockup.html');
-const copy = path.join(spec, '__bite-copy.html');
+const target = process.argv[2] || path.join(spec, 'pin-catalog-mockup.html');
 
-function run(suite, target) {
+const FILES = {
+  TRANS: path.join(spec, 'pins-v2-transcription.js'),
+  HTML: target,
+  CREDITS: path.join(spec, 'motifs', 'CREDITS.md'),
+};
+
+function run(suite) {
   try {
     return execFileSync(process.execPath, [path.join(here, suite), target],
       { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] });
   } catch (e) { return (e.stdout || '') + (e.stderr || ''); }
 }
 
-/* Search only the FAILURES, not the whole log. An assertion's message appears in both
-   its "ok   <message>" and its "FAIL: <message>" line, so matching the raw output made
-   seven cases below look vacuous when they were fine - the token was present as a PASS.
-   Take each FAIL line plus its indented continuation lines. */
+/* Search only the FAILURES: an assertion's message appears in both its "ok" and "FAIL" lines,
+   so matching the raw output would pass on a token that is present as a PASS. Take each FAIL
+   line plus its indented continuation lines. */
 function failText(out) {
   const keep = [];
   let inFail = false;
@@ -50,140 +48,95 @@ function failText(out) {
   return keep.join('\n');
 }
 
-const original = fs.readFileSync(src, 'utf8');
-
-/* ---- each case: which suite, how to break it, and the token that must appear ---- */
+/* ---- each case: which suite, which file to break, how, and the token that must appear ---- */
 const CASES = [
-  { suite: 'catalog.js', why: 'a silver pin placed under the GOLD header',
-    token: 'silver_bite_probe',
-    mutate: t => t.replace('  // === GOLD ===\n',
-      "  // === GOLD ===\n  { id: 'silver_bite_probe', name: 'Bite Probe', tier: 'silver', " +
-      "cat: 'sets', mode: 'diecut', motif: 'flatStar', enamel: ['#FEF3C7'], criteria: 'probe' },\n") },
+  { suite: 'catalog.js', file: 'TRANS', why: 'a pin whose id prefix disagrees with its tier',
+    token: 'gold_coaster_royalty',
+    mutate: t => t.replace(
+      "{ id:'gold_coaster_royalty', name:'Coaster Royalty', tier:'gold'",
+      "{ id:'gold_coaster_royalty', name:'Coaster Royalty', tier:'silver'") },
 
-  { suite: 'catalog.js', why: 'a hardcoded count restored on a section header',
-    token: 'no section header carries a hardcoded pin count',
-    mutate: t => t.replace('// === BRONZE ===', '// === BRONZE (55) ===') },
-
-  { suite: 'catalog.js', why: 'a sub-group comment naming another tier',
-    token: 'no sub-group comment names a tier other than its section',
-    mutate: t => t.replace('// Touring & Dining (Silver)', '// Touring & Dining (Gold)') },
-
-  { suite: 'catalog.js', why: 'updateTabCounts nested back inside the click handler',
-    token: 'count-all shows the real total on load',
-    mutate: t => t
-      .replace('\n/* Declared at top level on purpose.', '\n  if (1) {\n/* Declared at top level',
-      ).replace('\nupdateTabCounts();\nfilterAndRender();', '\n}\nfilterAndRender();') },
-
-  { suite: 'catalog.js', why: 'a stale literal count restored in the markup',
+  { suite: 'catalog.js', file: 'HTML', why: 'a stale literal count restored in the markup',
     token: 'no count element in the markup holds a literal number',
     mutate: t => t.replace('<strong id="count-bronze">&mdash;</strong>',
-      '<strong id="count-bronze">52</strong>') },
+      '<strong id="count-bronze">57</strong>') },
 
-  { suite: 'catalog.js', why: 'a pin pointing at a motif that does not exist',
-    token: "motif 'trainStationTypo' undefined",
-    mutate: t => t.replace("motif: 'trainStation'", "motif: 'trainStationTypo'") },
-
-  { suite: 'catalog.js', why: 'an id prefix disagreeing with the tier field',
-    token: "gold_coaster_king has tier 'silver'",
-    mutate: t => t.replace("{ id: 'gold_coaster_king', name: 'Coaster Royalty', tier: 'gold'",
-      "{ id: 'gold_coaster_king', name: 'Coaster Royalty', tier: 'silver'") },
-
-  { suite: 'catalog.js', why: 'a ladder id number contradicting its banner',
-    token: 'bronze_centurion_25 shows 27',
-    mutate: t => t.replace("banner: '25', motifEnamel: B4_STAGES[4].cols",
-      "banner: '27', motifEnamel: B4_STAGES[4].cols") },
-
-  { suite: 'catalog.js', why: 'a duplicated pin id',
+  { suite: 'catalog.js', file: 'TRANS', why: 'a duplicated pin id',
     token: 'pin ids are unique',
-    mutate: t => t.replace("id: 'bronze_asia_starter'", "id: 'bronze_africa_starter'") },
+    mutate: t => t.replace("id:'silver_land_asia'", "id:'silver_land_adventureland'") },
 
-  { suite: 'catalog.js', why: 'a contained pin using a motif drawn on a 24-unit grid',
-    token: 'bronze_epcot_starter uses magicLantern',
+  { suite: 'catalog.js', file: 'TRANS', why: 'a pin pointing at a motif that does not exist',
+    token: 'trainStationTypo',
+    mutate: t => t.replace("mode:'diecut', motif:'trainStation'", "mode:'diecut', motif:'trainStationTypo'") },
+
+  { suite: 'catalog.js', file: 'TRANS', why: 'a pin filed under the wrong track section',
+    token: 'sits under the section header matching its track',
     mutate: t => t.replace(
-      "{ id: 'bronze_epcot_starter', name: 'EPCOT Starter', tier: 'bronze', cat: 'park', shape: 'disc', motif: 'wireframeGlobe'",
-      "{ id: 'bronze_epcot_starter', name: 'EPCOT Starter', tier: 'bronze', cat: 'park', shape: 'disc', motif: 'magicLantern'") },
+      "{ id:'silver_land_asia', name:'Asia 100%', tier:'silver', track:'places'",
+      "{ id:'silver_land_asia', name:'Asia 100%', tier:'silver', track:'dining'") },
 
-  { suite: 'catalog.js', why: 'an enamel array given more colours than the art has cells',
-    token: 'gold_coaster_king (',
-    mutate: t => t.replace('motif: \'coasterLoop\', enamel: ["#475569","#94a3b8","#dc2626","#f59e0b"]',
-      'motif: \'coasterLoop\', enamel: ["#475569","#94a3b8","#dc2626","#f59e0b","#111111","#222222","#333333","#444444","#555555","#666666"]') },
-
-  /* dedup.js already reports pagoda/toriiGate, so the generic message is not evidence
-     here - key on the injected clone name instead */
-  /* `compass` and `compassRose` hold the same art already, but only compassRose is used.
-     Pointing a second pin at `compass` creates two keys rendering identically - which is
-     precisely the class the old key-based dedup could not see. Keyed on compassRose,
-     which is absent from dedup's clean failures. */
-  { suite: 'dedup.js', why: 'two different keys holding the same artwork',
+  { suite: 'dedup.js', file: 'TRANS', why: 'two different keys rendering the same artwork',
     token: 'compassRose',
+    /* compass and compassRose hold identical art; only compassRose ships (gold_all_lands,
+       gold). Pointing another GOLD pin at compass makes two gold pins render identically
+       under different keys — same tier, so not a progression, so it must be caught. */
     mutate: t => t.replace(
-      "{ id: 'prism_legendary_guide', name: 'The Legendary Disney Guide', tier: 'prism', cat: 'social', mode: 'diecut', motif: 'flatStar'",
-      "{ id: 'prism_legendary_guide', name: 'The Legendary Disney Guide', tier: 'prism', cat: 'social', mode: 'diecut', motif: 'compass'") },
+      "motif:'world', allowRound:true",
+      "motif:'compass', allowRound:true") },
 
-  /* The inline MOTIFS block is now EMPTY - every redundant copy was removed, so the
-     catalogue renders purely from the licensed, byte-asserted library and the shadowing
-     hazard is gone structurally. Injecting one override for a key that does have a
-     licensed .svg is therefore the only way to exercise the assertion. Prepending is safe
-     precisely because the block is empty; when it held the key already, the later
-     definition won and a prepended override was silently discarded. */
-  /* A NEW die-cut pin using unscreened art must fail. `theater` is 2 pieces at bronze's
-     4.2px rim, and this probe id is not in the grandfather list, so it cannot be excused. */
-  { suite: 'diecut.js', why: 'a new die-cut pin whose motif fails emblemGate',
-    token: 'diecut_bite_probe',
-    mutate: t => t.replace('  // === BRONZE ===\n',
-      "  // === BRONZE ===\n  { id: 'bronze_diecut_bite_probe', name: 'Die-Cut Bite Probe', " +
-      "tier: 'bronze', cat: 'sets', mode: 'diecut', motif: 'theater', " +
-      "enamel: ['#991B1B'], criteria: 'probe' },\n") },
-
-  /* Fixing a grandfathered pin without deleting its entry must also fail, or the list rots
-     into a permanent dumping ground. Switching one to a contained plate IS the plate remedy,
-     so its entry should have gone with it. */
-  { suite: 'diecut.js', why: 'a grandfathered pin fixed but left on the list',
-    token: 'switched to a contained plate while keeping its entry',
-    mutate: t => t.replace(
-      "{ id: 'bronze_theater_spectacular', name: 'Stage Spectacular (First Show)', tier: 'bronze', cat: 'sets', mode: 'diecut'",
-      "{ id: 'bronze_theater_spectacular', name: 'Stage Spectacular (First Show)', tier: 'bronze', cat: 'sets', shape: 'crest'") },
-
-  { suite: 'provenance.js', why: 'an inline override shadowing a licensed file',
+  { suite: 'provenance.js', file: 'HTML', why: 'an inline override shadowing a licensed file',
     token: 'shadowed (1)',
     mutate: t => t.replace('const MOTIFS = Object.assign({}, window.MOTIF_LIB || {}, {',
-      'const MOTIFS = Object.assign({}, window.MOTIF_LIB || {}, {\n  balloons: "M0 0 H10 V10 H0 Z",') },
+      'const MOTIFS = Object.assign({}, window.MOTIF_LIB || {}, {\n  crown: "M0 0 H100 V100 H0 Z",') },
+
+  { suite: 'diecut.js', file: 'TRANS', why: 'a new plain die-cut pin whose motif fails emblemGate',
+    token: 'bronze_diecut_bite_probe',
+    /* theater is 2 pieces at bronze 4.2px; the probe is plain die-cut (not colorDieCut) and
+       not grandfathered, so it cannot be excused. */
+    mutate: t => t.replace('  // ===== Thematic · Rides =====\n',
+      "  // ===== Thematic · Rides =====\n  { id:'bronze_diecut_bite_probe', name:'Probe', " +
+      "tier:'bronze', track:'thematic', status:'new', mode:'diecut', motif:'theater', enamel:['#991B1B'] },\n") },
+
+  { suite: 'diecut.js', file: 'TRANS', why: 'a grandfathered pin fixed but left on the list',
+    token: 'bronze_royal_encounter',
+    /* swap crown (grandfathered 2 pieces) for a motif that passes at bronze; the entry should
+       then be deleted, so leaving it must fail as a stale entry. */
+    mutate: t => t.replace(
+      "{ id:'bronze_royal_encounter', name:'Royal Encounter', tier:'bronze', track:'characters', status:'reuse', src:'bronze_royal_encounter_1', mode:'diecut', motif:'crown'",
+      "{ id:'bronze_royal_encounter', name:'Royal Encounter', tier:'bronze', track:'characters', status:'reuse', src:'bronze_royal_encounter_1', mode:'diecut', motif:'trainStation'") },
 ];
 
 let bad = 0;
-console.log('Baseline: running each suite on an untampered copy to record what already fails.\n');
-fs.writeFileSync(copy, original);
-const cleanOut = {};
-[...new Set(CASES.map(c => c.suite))].forEach(s => { cleanOut[s] = run(s, copy); });
+console.log('Baseline: running each suite clean to confirm the tokens are absent from failures.\n');
+const cleanFail = {};
+[...new Set(CASES.map(c => c.suite))].forEach(s => { cleanFail[s] = failText(run(s)); });
 
-try {
-  for (const c of CASES) {
-    const mutated = c.mutate(original);
-    if (mutated === original) {
-      console.error('FAIL: tamper had no effect (the harness is stale) — ' + c.why);
-      bad++; continue;
-    }
-    /* the token must NOT already be among the clean copy's FAILURES, or the case proves
-       nothing - several of these suites are legitimately red for other reasons */
-    if (failText(cleanOut[c.suite]).includes(c.token)) {
-      console.error('FAIL: token already among the clean failures, so this case is vacuous — ' +
-        c.why + '  [' + c.token + ']');
-      bad++; continue;
-    }
-    fs.writeFileSync(copy, mutated);
-    const out = failText(run(c.suite, copy));
-    if (out.includes(c.token)) console.log('ok   ' + c.suite.padEnd(15) + 'caught: ' + c.why);
+for (const c of CASES) {
+  const fpath = FILES[c.file];
+  const original = fs.readFileSync(fpath, 'utf8');
+  const mutated = c.mutate(original);
+  if (mutated === original) {
+    console.error('FAIL: tamper had no effect (the harness is stale) — ' + c.why + '  [' + c.file + ']');
+    bad++; continue;
+  }
+  if (cleanFail[c.suite].includes(c.token)) {
+    console.error('FAIL: token already among the clean failures, so this case is vacuous — ' +
+      c.why + '  [' + c.token + ']');
+    bad++; continue;
+  }
+  try {
+    fs.writeFileSync(fpath, mutated);
+    const out = failText(run(c.suite));
+    if (out.includes(c.token)) console.log('ok   ' + c.suite.padEnd(14) + 'caught: ' + c.why);
     else {
       console.error('FAIL: NOT caught by ' + c.suite + ' — ' + c.why +
         '\n      expected token: ' + c.token);
       bad++;
     }
+  } finally {
+    fs.writeFileSync(fpath, original);
   }
-} finally {
-  fs.rmSync(copy, { force: true });
 }
-
-if (fs.existsSync(copy)) { console.error('FAIL: the tampered copy was left behind'); bad++; }
 
 console.log('\n' + (bad === 0
   ? 'BITE PASSED — all ' + CASES.length + ' catalogue assertions fire on a real defect'

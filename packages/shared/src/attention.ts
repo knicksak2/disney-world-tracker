@@ -527,6 +527,8 @@ function sharePayloadLabel(kind: SharePayloadKind): string {
       return 'an experience';
     case 'progress':
       return 'their progress';
+    case 'pinShowcase':
+      return 'their pin showcase';
     default:
       return 'a share';
   }
@@ -627,10 +629,15 @@ export function toAttentionItem(domain: AttentionDomain, dto: AttentionSourceDTO
     }
     case 'share': {
       const d = dto as InboxItemDTO;
-      const ref: AttentionItemRef =
-        d.payload.kind === 'experience'
-          ? { shareId: d.shareId, destination: { kind: 'experience', id: d.payload.experienceId } }
-          : { shareId: d.shareId };
+      let destination: AttentionDestination | undefined;
+      if (d.payload.kind === 'experience') {
+        destination = { kind: 'experience', id: d.payload.experienceId };
+      } else if (d.payload.kind === 'pinShowcase') {
+        destination = { kind: 'pinShowcase', id: d.payload.ownerId ?? d.senderId };
+      }
+      const ref: AttentionItemRef = destination
+        ? { shareId: d.shareId, destination }
+        : { shareId: d.shareId };
       return {
         domain,
         id: d.shareId,

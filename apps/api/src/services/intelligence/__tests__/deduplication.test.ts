@@ -94,8 +94,8 @@ describe('Sampling Deduplication Regression', () => {
       getParkCrowdIndices: async () => [],
       upsertParkCrowdIndices: async () => {},
       pruneWaitSamples: async () => {},
-      getRideShapes: async () => [],
-      getSeasonHours: async () => [],
+      getRideShapesForBucket: async () => [],
+      getSeasonHoursForBucket: async () => [],
       getExperienceSignals: async () => [],
     } as any;
 
@@ -213,8 +213,8 @@ describe('Sampling Deduplication Regression', () => {
       getParkCrowdIndices: async () => [],
       upsertParkCrowdIndices: async () => {},
       pruneWaitSamples: async () => {},
-      getRideShapes: async () => [],
-      getSeasonHours: async () => [],
+      getRideShapesForBucket: async () => [],
+      getSeasonHoursForBucket: async () => [],
       getExperienceSignals: async () => [],
     } as any;
 

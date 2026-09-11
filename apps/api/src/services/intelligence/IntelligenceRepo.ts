@@ -207,6 +207,28 @@ export class IntelligenceRepo {
     return res.rows;
   }
 
+  /**
+   * Same rows as `getRideShapes`, narrowed to the one `(day_of_week, hour)`
+   * bucket a sampling pass actually reads. `ride_shapes` has up to 168 rows
+   * per Experience (7 days x 24 hours); a pass only ever looks at today's
+   * single bucket via a post-fetch `.find()`, so fetching every bucket over
+   * the network on every ~10-minute pass was pure egress waste that also
+   * grows unbounded as buckets densify. Use `getRideShapes` instead when the
+   * caller genuinely needs every bucket (e.g. `recomputePercentiles`).
+   */
+  async getRideShapesForBucket(
+    experienceIds: string[],
+    dayOfWeek: number,
+    hour: number,
+  ): Promise<RideShapeRow[]> {
+    if (experienceIds.length === 0) return [];
+    const res = await this.pool.query(
+      `SELECT * FROM ride_shapes WHERE experience_id = ANY($1::uuid[]) AND day_of_week = $2 AND hour = $3`,
+      [experienceIds, dayOfWeek, hour]
+    );
+    return res.rows;
+  }
+
   async upsertRideShapes(shapes: RideShapeRow[]): Promise<void> {
     if (shapes.length === 0) return;
     
@@ -266,6 +288,28 @@ export class IntelligenceRepo {
     const res = await this.pool.query(
       `SELECT * FROM experience_season_hour WHERE experience_id = ANY($1::uuid[])`,
       [experienceIds]
+    );
+    return res.rows;
+  }
+
+  /**
+   * Same rows as `getSeasonHours`, narrowed to the one `(season, day_of_week,
+   * hour)` bucket a sampling pass actually reads. See
+   * `getRideShapesForBucket` for why this exists — `experience_season_hour`
+   * has up to 672 rows per Experience (4 seasons x 7 days x 24 hours) and a
+   * pass only ever touches one of them via a post-fetch `.find()`.
+   */
+  async getSeasonHoursForBucket(
+    experienceIds: string[],
+    season: number,
+    dayOfWeek: number,
+    hour: number,
+  ): Promise<SeasonHourRow[]> {
+    if (experienceIds.length === 0) return [];
+    const res = await this.pool.query(
+      `SELECT * FROM experience_season_hour
+       WHERE experience_id = ANY($1::uuid[]) AND season = $2 AND day_of_week = $3 AND hour = $4`,
+      [experienceIds, season, dayOfWeek, hour]
     );
     return res.rows;
   }

@@ -84,6 +84,15 @@ export interface CompletionRoutesOptions {
   readonly repo: CompletionRepo;
   readonly requireSession: preHandlerHookHandler;
   readonly clock?: () => Date;
+  /**
+   * Pin_Service award hook (pin-collection R21.1). After a completion is
+   * marked, this synchronously evaluates the User's challenges and returns
+   * any newly-earned Pin ids, surfaced as `newlyAwardedPinIds` in the PUT
+   * response — the same contract `logs`/`rating`/`note` already use.
+   * Best-effort: a failure never fails the already-persisted completion.
+   * Omitted in tests that don't exercise pins; wired in `composeServices.ts`.
+   */
+  readonly awardPins?: (userId: string) => Promise<readonly string[]>;
 }
 
 // ---------------------------------------------------------------------------
@@ -198,8 +207,13 @@ export function completionRoutes(
           );
         }
 
+        // Marking a completion can unlock Pins (pin-collection R21.1: this
+        // write path previously never called the award hook). Best-effort —
+        // see `CompletionRoutesOptions.awardPins` doc.
+        const newlyAwardedPinIds = await awardPinsSafely(options.awardPins, userId, request);
+
         reply.code(201);
-        return dto;
+        return { ...dto, newlyAwardedPinIds };
       },
     );
 
@@ -286,6 +300,27 @@ function requireUser(request: FastifyRequest): string {
     throw new AppError('unauthorized', 'Authentication is required.');
   }
   return userId;
+}
+
+/**
+ * Run the optional Pin award hook without letting it fail the enclosing
+ * mutation (the completion has already been persisted). A Pin-evaluation
+ * error is logged and reported as no newly-awarded Pins this round.
+ * Duplicated per route module to keep the modules independent (mirrors
+ * `tracking/logs/routes.ts`, `tracking/note/routes.ts`).
+ */
+async function awardPinsSafely(
+  awardPins: ((userId: string) => Promise<readonly string[]>) | undefined,
+  userId: string,
+  request: FastifyRequest,
+): Promise<string[]> {
+  if (awardPins === undefined) return [];
+  try {
+    return [...(await awardPins(userId))];
+  } catch (err) {
+    request.log.error({ err }, 'pin award evaluation failed');
+    return [];
+  }
 }
 
 /**

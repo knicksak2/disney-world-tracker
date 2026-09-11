@@ -118,6 +118,12 @@ export type ShareDeliveredNotice =
       readonly senderId: string;
       readonly recipientIds: readonly string[];
       readonly payloadKind: 'progress';
+    }
+  | {
+      readonly shareId: string;
+      readonly senderId: string;
+      readonly recipientIds: readonly string[];
+      readonly payloadKind: 'pinShowcase';
     };
 
 /**
@@ -165,6 +171,10 @@ export interface SharingRoutesOptions {
    * `progress` payload is composed from the request body exactly as before.
    */
   readonly computeProgressShareStats?: ProgressShareStatsProvider;
+  /**
+   * Optional display name resolver for pin showcase shares (R24.12).
+   */
+  readonly resolveSenderDisplayName?: (senderId: string) => Promise<string | undefined>;
 }
 
 // ---------------------------------------------------------------------------
@@ -247,9 +257,17 @@ const progressShareInputSchema = z
   })
   .strict();
 
+const pinShowcaseShareInputSchema = z
+  .object({
+    kind: z.literal('pinShowcase'),
+    recipientIds: recipientListSchema,
+  })
+  .strict();
+
 const shareCreateBodySchema = z.discriminatedUnion('kind', [
   experienceShareInputSchema,
   progressShareInputSchema,
+  pinShowcaseShareInputSchema,
 ]);
 
 type ShareCreateBody = z.infer<typeof shareCreateBodySchema>;
@@ -288,7 +306,17 @@ export function sharingRoutes(
       async (request, reply) => {
         const senderId = requireUser(request);
         const body = parseOrAppError(shareCreateBodySchema, request.body);
-        let payload = composePayload(body);
+        let senderDisplayName = 'Friend';
+        if (body.kind === 'pinShowcase') {
+          if (options.resolveSenderDisplayName) {
+            const resolved = await options.resolveSenderDisplayName(senderId);
+            if (resolved) senderDisplayName = resolved;
+          } else if (options.repo.getSenderDisplayName) {
+            const resolved = await options.repo.getSenderDisplayName(senderId);
+            if (resolved) senderDisplayName = resolved;
+          }
+        }
+        let payload = composePayload(body, senderId, senderDisplayName);
         // R10: for a `progress` share, capture a send-time snapshot of the
         // sender's curated stats via the live computation (when the port is
         // wired) and write `overallPercent`, `topFacet`, and `percentileRank`
@@ -476,6 +504,14 @@ function buildShareDeliveredNotice(
       experienceId: payload.experienceId,
     };
   }
+  if (payload.kind === 'pinShowcase') {
+    return {
+      shareId,
+      senderId,
+      recipientIds,
+      payloadKind: 'pinShowcase',
+    };
+  }
   return {
     shareId,
     senderId,
@@ -490,9 +526,20 @@ function buildShareDeliveredNotice(
  * Splits on `kind` so each branch is straight-line; both branches return
  * the same union type so the caller is single-shape.
  */
-function composePayload(body: ShareCreateBody): SharePayload {
+function composePayload(
+  body: ShareCreateBody,
+  senderId: string,
+  senderDisplayName: string,
+): SharePayload {
   if (body.kind === 'experience') {
     return composeExperiencePayload(body);
+  }
+  if (body.kind === 'pinShowcase') {
+    return {
+      kind: 'pinShowcase',
+      ownerId: senderId,
+      ownerDisplayName: senderDisplayName,
+    };
   }
   return composeProgressPayload(body);
 }

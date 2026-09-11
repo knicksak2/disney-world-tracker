@@ -150,9 +150,15 @@ function applyInitMigration(db: IMemoryDb): void {
   db.public.none(sql);
 }
 
-/** Apply a later migration verbatim (no GIN indexes in 0015). */
+/**
+ * Apply a later migration, stripping engine features pg-mem cannot model: GIN
+ * trigram indexes and the `AT TIME ZONE` operator (0034's backfill uses it;
+ * production Postgres runs it, and the backfill selects zero rows here).
+ */
 function applyMigration(db: IMemoryDb, name: string): void {
-  const sql = readFileSync(migrationPath(name), 'utf8');
+  let sql = readFileSync(migrationPath(name), 'utf8');
+  sql = sql.replace(/CREATE INDEX[^;]+USING gin[^;]+;/gms, '');
+  sql = sql.replace(/\s+AT\s+TIME\s+ZONE\s+('[^']*'|[A-Za-z_][\w.]*)/gimu, '');
   db.public.none(sql);
 }
 
@@ -287,6 +293,9 @@ async function setup(): Promise<Fixture> {
   applyMigration(db, '0019_planned_item_scheduling.sql');
   applyMigration(db, '0022_planned_item_ride_options.sql');
   applyMigration(db, '0023_trip_touring_hours.sql');
+  // 0034 adds experience_logs + trip_log_entries.log_id, which logCompletion
+  // and confirmRodeWithTag now write to.
+  applyMigration(db, '0034_experience_logs.sql');
 
   // The repos all run against the same pool, wrapped so `FOR UPDATE` clauses
   // are stripped for pg-mem.

@@ -95,8 +95,9 @@ export type Park = (typeof PARKS)[number];
 //   the sender's Rating and/or Note (R9.1, R9.4, R9.5, R9.6).
 // - `progress`:   a Share that carries the sender's overall, per-Park, and
 //   per-Experience_Category completion percentages (R9.7).
+// - `pinShowcase`: a Share that links to the sender's current Pin Showcase board (R24.12).
 
-export const SHARE_PAYLOAD_KINDS = ['experience', 'progress'] as const;
+export const SHARE_PAYLOAD_KINDS = ['experience', 'progress', 'pinShowcase'] as const;
 
 export type SharePayloadKind = (typeof SHARE_PAYLOAD_KINDS)[number];
 
@@ -200,3 +201,72 @@ export const RESERVATION_KINDS = [
 ] as const;
 
 export type ReservationKind = (typeof RESERVATION_KINDS)[number];
+
+// ---------------------------------------------------------------------------
+// Pin_Tier
+// ---------------------------------------------------------------------------
+//
+// The seven collectible Pin tiers, ascending by rarity (pin-collection Series 1
+// restructure; requirements R7). `mythic` is the 1-of-1 capstone above `prism`.
+// The runtime tuple is the source of truth: it seeds the Zod enum, the id-prefix
+// convention (`<tier>_...`), and the board grouping, so the tier set cannot drift.
+
+export const PIN_TIERS = [
+  'bronze',
+  'silver',
+  'gold',
+  'amethyst',
+  'pearl',
+  'prism',
+  'mythic',
+] as const;
+
+export type PinTier = (typeof PIN_TIERS)[number];
+
+// ---------------------------------------------------------------------------
+// Pin_Track
+// ---------------------------------------------------------------------------
+//
+// The gameplay track a Pin belongs to (used for board grouping and to organise
+// the catalog). Distinct from `PinTier` (rarity): a track spans many tiers.
+
+export const PIN_TRACKS = [
+  'attractions',
+  'dining',
+  'places',
+  'social',
+  'resorts',
+  'characters',
+  'touring',
+  'thematic',
+] as const;
+
+export type PinTrack = (typeof PIN_TRACKS)[number];
+
+// ---------------------------------------------------------------------------
+// Pin_Count_Metric
+// ---------------------------------------------------------------------------
+//
+// The countable lifetime metrics a `count` Pin criteria can threshold on. Each
+// maps to a value the Pin_Service evaluator derives from the User's activity
+// snapshot (completions, ratings/notes, confirmed rode-with tags, trips, and the
+// catalog facets). `attractions` counts the Attraction category set (R9);
+// `restaurants` / `festivalBooths` / `snacks` are the three dining tracks (R10).
+
+export const PIN_COUNT_METRICS = [
+  'attractions',
+  'restaurants',
+  'festivalBooths',
+  'snacks',
+  'characterMeets',
+  'friendRides',
+  'reviews',
+  'ratings',
+  'notes',
+  'trips',
+  'resorts',
+  'shows',
+  'worldShowcaseCountries',
+] as const;
+
+export type PinCountMetric = (typeof PIN_COUNT_METRICS)[number];

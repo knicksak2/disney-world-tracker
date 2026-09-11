@@ -43,6 +43,7 @@ import {
   type ExperienceCategory,
   type ExperienceSharePayload,
   type Park,
+  type PinShowcaseSharePayload,
   type ProgressSharePayload,
   type SentShareDTO,
   type ShareReactionDTO,
@@ -245,7 +246,27 @@ function ShareContent(props: { share: SentShareDTO }): JSX.Element {
   if (payload.kind === 'progress') {
     return <ProgressShareContent payload={payload} shareId={props.share.shareId} />;
   }
+  if (payload.kind === 'pinShowcase') {
+    return <PinShowcaseShareContent payload={payload} shareId={props.share.shareId} />;
+  }
   return <ExperienceShareContent payload={payload} shareId={props.share.shareId} />;
+}
+
+/**
+ * `pinShowcase` Share content (R24.12).
+ */
+function PinShowcaseShareContent(props: {
+  payload: PinShowcaseSharePayload;
+  shareId: string;
+}): JSX.Element {
+  const { payload, shareId } = props;
+  return (
+    <View style={styles.payloadWrap}>
+      <Text style={styles.summary} testID={`sent-pin-showcase-${shareId}`}>
+        Pin Showcase shared by {payload.ownerDisplayName}
+      </Text>
+    </View>
+  );
 }
 
 /**

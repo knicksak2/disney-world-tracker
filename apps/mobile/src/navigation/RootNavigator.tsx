@@ -7,7 +7,7 @@ import {
 import type { NavigatorScreenParams } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { isAvatarPresetId, type ExperienceCategory, type Park } from '@dwt/shared';
+import { badgeDisplayFor, isAvatarPresetId, type ExperienceCategory, type Park } from '@dwt/shared';
 
 import { apiRequest, setOnUnauthorizedCallback } from '../api/client';
 import { renderAvatarPreset } from '../avatars/AvatarPresets';
@@ -24,6 +24,7 @@ import MenuScreen from '../screens/catalog/MenuScreen';
 import ShareComposerScreen from '../screens/share/ShareComposerScreen';
 import { AttentionBadge } from '../features/notifications/AttentionBadge';
 import { useAttentionBadge } from '../features/notifications/useAttentionBadge';
+import { useClaimablePinsBadge } from '../components/pins/useClaimablePinsBadge';
 
 /**
  * Root navigator for the mobile app.
@@ -119,6 +120,9 @@ export type ShareComposerParams =
       overallPercent: number;
       perParkPercent: { [park in Park]?: number };
       perCategoryPercent: { [category in ExperienceCategory]?: number };
+    }
+  | {
+      kind: 'pinShowcase';
     };
 
 /**
@@ -209,14 +213,13 @@ interface MeResponse {
  * person-circle glyph. Reads `/me` via React Query under the shared `['me']`
  * key, so it reuses the same cached response the Profile screen primes.
  *
- * The tab also carries the Notification_Center's Attention_Badge: the
- * four-domain "needs your attention" indicator (pending Friend_Requests,
- * Trip_Invites, Rode_With_Tags, and unread Shares) is overlaid on the Profile
- * tab icon so the User is alerted from anywhere in the app while the Friends
- * tab keeps its plain icon (R4.1, R10.3, R10.4). `useAttentionBadge` reads the
- * same React Query cache the open Attention_Feed does, so the count can never
- * drift from the feed, and it shows even before the Notification_Center has
- * been opened. `AttentionBadge` renders nothing while the count is zero.
+ * The tab also carries the combined Attention_Badge: the four-domain
+ * notification attention count (pending Friend_Requests, Trip_Invites,
+ * Rode_With_Tags, and unread Shares) and claimable collectible Pins are combined
+ * into a single indicator on the bottom bar to keep navigation uncluttered (R22.5).
+ * When the User opens the Profile screen, the counts are presented split between
+ * their respective entry controls ("View notifications" and "View your pins").
+ * `AttentionBadge` renders nothing while the combined count is zero.
  */
 function ProfileTabIcon({
   focused,
@@ -232,7 +235,11 @@ function ProfileTabIcon({
     queryFn: () => apiRequest<MeResponse>('GET', '/me'),
     staleTime: 5 * 60 * 1000,
   });
-  const { display, count } = useAttentionBadge();
+  const { count: notificationCount } = useAttentionBadge();
+  const { count: pinCount } = useClaimablePinsBadge();
+
+  const totalCount = notificationCount + pinCount;
+  const totalDisplay = badgeDisplayFor(totalCount);
 
   const preset = meQuery.data?.profile.avatarPreset ?? null;
   const glyphs = TAB_ICONS.Profile;
@@ -264,7 +271,11 @@ function ProfileTabIcon({
     <View style={styles.tabIconContainer}>
       {icon}
       <View style={styles.badgeOverlay} pointerEvents="none">
-        <AttentionBadge display={display} count={count} testID="profile-tab-badge" />
+        <AttentionBadge
+          display={totalDisplay}
+          count={totalCount}
+          testID="profile-tab-badge"
+        />
       </View>
     </View>
   );
@@ -365,9 +376,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  // Positions the Attention_Badge pill (styled inside `AttentionBadge`) over
-  // the top-right of the Profile tab icon, mirroring where the old Friends
-  // tab-bar badge sat.
+  // Positions the combined Attention_Badge pill (styled inside `AttentionBadge`) over
+  // the top-right of the Profile tab icon.
   badgeOverlay: {
     position: 'absolute',
     top: -4,
