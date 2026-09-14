@@ -62,6 +62,7 @@ function snapshotOf(cells: readonly CellInput[]): StatsSnapshot {
     userRatings: [],
     resortCoverage: [],
     percentile: null,
+    festivalCounts: { lifetimeCount: 0, rows: [] },
   };
 }
 
@@ -78,6 +79,7 @@ function snapshotWithResorts(
     userRatings: [],
     resortCoverage: rows,
     percentile: null,
+    festivalCounts: { lifetimeCount: 0, rows: [] },
   };
 }
 
@@ -528,6 +530,106 @@ describe('GET /me/stats', () => {
       'unauthorized',
     );
     expect(inputs).toEqual([]);
+  });
+
+  it('returns festivals with lifetimeCount and byFestival breakdown on GET /me/stats (R5.1, R5.2, R5.4)', async () => {
+    const snapshot: StatsSnapshot = {
+      ...snapshotOf([]),
+      festivalCounts: {
+        lifetimeCount: 8,
+        rows: [
+          { slug: 'food-and-wine', n: 5 },
+          { slug: 'flower-and-garden', n: 3 },
+        ],
+      },
+    };
+    const { repo } = makeFakeRepo(new Map([['user-self', snapshot]]));
+    const pool = makeFakePool(() => ({ rows: [] }));
+
+    const app = await buildApp({ pool, repo });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/me/stats',
+      headers: { 'x-test-user-id': 'user-self' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as StatsResponse;
+    expect(body).toHaveProperty('festivals');
+    expect(body.festivals.lifetimeCount).toBe(8);
+    expect(body.festivals.byFestival).toEqual([
+      { slug: 'food-and-wine', count: 5 },
+      { slug: 'flower-and-garden', count: 3 },
+    ]);
+  });
+
+  it('returns empty festivals (lifetimeCount: 0, byFestival: []) when user has no tagged festival completions (R5.5)', async () => {
+    const snapshot: StatsSnapshot = {
+      ...snapshotOf([]),
+      festivalCounts: {
+        lifetimeCount: 0,
+        rows: [],
+      },
+    };
+    const { repo } = makeFakeRepo(new Map([['user-self', snapshot]]));
+    const pool = makeFakePool(() => ({ rows: [] }));
+
+    const app = await buildApp({ pool, repo });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/me/stats',
+      headers: { 'x-test-user-id': 'user-self' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as StatsResponse;
+    expect(body.festivals).toEqual({
+      lifetimeCount: 0,
+      byFestival: [],
+    });
+  });
+
+  it('proves completed, untagged booths do NOT contribute to festivals (R5.5)', async () => {
+    // User has completed experiences (e.g. active festival kiosk in coverage),
+    // but zero tagged festival completions in festivalCounts.
+    const snapshot: StatsSnapshot = {
+      ...snapshotOf([
+        {
+          park: 'EPCOT',
+          category: 'Restaurant',
+          areaType: 'ThemePark',
+          isResortRepresentation: false,
+          completed: 4,
+          total: 5,
+        },
+      ]),
+      festivalCounts: {
+        lifetimeCount: 0,
+        rows: [],
+      },
+    };
+    const { repo } = makeFakeRepo(new Map([['user-self', snapshot]]));
+    const pool = makeFakePool(() => ({ rows: [] }));
+
+    const app = await buildApp({ pool, repo });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/me/stats',
+      headers: { 'x-test-user-id': 'user-self' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as StatsResponse;
+    // Coverage counts the completed restaurant...
+    expectCell(body.coverage.byCategory['Restaurant'], 4, 5, 80);
+    // ...but festivals remains strictly zero / empty because untagged booths do not count
+    expect(body.festivals).toEqual({
+      lifetimeCount: 0,
+      byFestival: [],
+    });
   });
 });
 

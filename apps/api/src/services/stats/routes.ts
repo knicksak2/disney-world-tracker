@@ -53,7 +53,7 @@ import type {
 } from 'fastify';
 import { ZodError, z } from 'zod';
 
-import type { AreaType, ExperienceCategory, Park } from '@dwt/shared';
+import type { AreaType, ExperienceCategory, Park, ActivityStatistics, FestivalStatsDTO } from '@dwt/shared';
 import { uuidSchema } from '@dwt/shared';
 
 import type { DbPool } from '../../db/pool.js';
@@ -68,6 +68,8 @@ import { rollUpRatings } from './ratingStats.js';
 import type { ResortCoverage } from './resorts.js';
 import { rollUpResortCoverage } from './resorts.js';
 import { computePercentileRank } from './percentile.js';
+import { rollUpActivity, EMPTY_ACTIVITY_MATERIAL } from './activity.js';
+import { rollUpFestivalStats, EMPTY_FESTIVAL_STATS } from './festivals.js';
 import type { StatsRepo, StatsSnapshot, StatsSnapshotInput } from './repo.js';
 
 // ---------------------------------------------------------------------------
@@ -106,6 +108,8 @@ export interface CoverageResponse {
 export interface StatsResponse {
   readonly coverage: CoverageResponse;
   readonly ratings: RatingStatistics;
+  readonly activity: ActivityStatistics;
+  readonly festivals: FestivalStatsDTO;
   readonly percentileRank?: number;
   readonly percentileUnavailable?: boolean;
 }
@@ -265,6 +269,8 @@ export function assembleResponse(
   const response: {
     coverage: CoverageResponse;
     ratings: RatingStatistics;
+    activity: ActivityStatistics;
+    festivals: FestivalStatsDTO;
     percentileRank?: number;
     percentileUnavailable?: boolean;
   } = {
@@ -281,6 +287,13 @@ export function assembleResponse(
       byResort: rollUpResortCoverage(snapshot.resortCoverage),
     },
     ratings: rollUpRatings(snapshot.userRatings),
+    activity: rollUpActivity(snapshot.activity ?? EMPTY_ACTIVITY_MATERIAL),
+    festivals: snapshot.festivalCounts
+      ? rollUpFestivalStats(
+          snapshot.festivalCounts.lifetimeCount,
+          snapshot.festivalCounts.rows,
+        )
+      : EMPTY_FESTIVAL_STATS,
   };
 
   if (includePercentile) {

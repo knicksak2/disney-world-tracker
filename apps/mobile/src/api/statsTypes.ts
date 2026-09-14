@@ -20,7 +20,7 @@
  * Validates: Requirements 16.1, 16.2, 16.3, 17.3
  */
 
-import type { AreaType, ExperienceCategory, Park } from '@dwt/shared';
+import type { AreaType, ExperienceCategory, Park, FestivalStatsDTO } from '@dwt/shared';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -164,6 +164,55 @@ export interface RatingStatistics {
 }
 
 // ---------------------------------------------------------------------------
+// Activity & Repeat Statistics
+// ---------------------------------------------------------------------------
+
+/**
+ * An attraction in the user's top-5 most ridden podium.
+ *
+ * Validates: Requirements 19.1, 19.2
+ */
+export interface MostRiddenAttraction {
+  readonly experienceId: string;
+  readonly experienceName: string;
+  readonly park: Park | null;
+  readonly count: number;
+}
+
+/**
+ * User personal records and bests for park visits and attraction marathons.
+ *
+ * Validates: Requirements 20.1, 20.4
+ */
+export interface PersonalRecords {
+  readonly mostProductiveDay?: {
+    readonly date: string;
+    readonly rideCount: number;
+    readonly parks: readonly Park[];
+  };
+  readonly marathonRecord?: {
+    readonly experienceId: string;
+    readonly experienceName: string;
+    readonly date: string;
+    readonly count: number;
+  };
+}
+
+/**
+ * Activity volume, repeat statistics, podium, and personal records.
+ *
+ * Validates: Requirements 18.1, 18.2, 18.3, 18.4, 18.6
+ */
+export interface ActivityStatistics {
+  readonly totalLogs: number;
+  readonly distinctParkDays: number;
+  readonly repeatMultiplier: number;
+  readonly averageRidesPerDay: number;
+  readonly mostRidden: readonly MostRiddenAttraction[];
+  readonly personalRecords: PersonalRecords;
+}
+
+// ---------------------------------------------------------------------------
 // Top-level response
 // ---------------------------------------------------------------------------
 
@@ -179,6 +228,8 @@ export interface RatingStatistics {
 export interface StatsResponse {
   readonly coverage: CoverageResponse;
   readonly ratings: RatingStatistics;
+  readonly festivals: FestivalStatsDTO;
+  readonly activity?: ActivityStatistics;
   readonly percentileRank?: number;
   readonly percentileUnavailable?: boolean;
 }

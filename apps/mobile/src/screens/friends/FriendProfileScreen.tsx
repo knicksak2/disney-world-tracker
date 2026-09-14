@@ -864,15 +864,86 @@ function ComparisonMode({
   }
 
   const comparison = deriveProgressComparison(viewerStats, friendStats);
+  const hasActivityComparison = Boolean(viewerStats.activity || friendStats.activity);
+
+  const vList = viewerStats.activity?.mostRidden ?? [];
+  const fList = friendStats.activity?.mostRidden ?? [];
+  let sharedAttraction: { name: string; viewerCount: number; friendCount: number } | null = null;
+  for (const v of vList) {
+    const match = fList.find(
+      (f) => f.experienceId === v.experienceId || f.experienceName === v.experienceName,
+    );
+    if (match) {
+      sharedAttraction = {
+        name: v.experienceName,
+        viewerCount: v.count,
+        friendCount: match.count,
+      };
+      break;
+    }
+  }
 
   return (
     <View testID="friend-mode-compare">
-      <ComparisonRowCard
-        title="Overall"
-        row={comparison.overall}
-        friendName={friendName}
-        testID="friend-comparison-overall"
-      />
+        <ComparisonRowCard
+          title="Overall"
+          row={comparison.overall}
+          friendName={friendName}
+          testID="friend-comparison-overall"
+        />
+
+      {hasActivityComparison && (
+        <>
+          <Text style={styles.comparisonGroupHeading}>Activity & volume</Text>
+          <ActivityComparisonCard
+            title="Total Rides Logged"
+            viewerValue={viewerStats.activity?.totalLogs ?? 0}
+            friendValue={friendStats.activity?.totalLogs ?? 0}
+            friendName={friendName}
+            testID="friend-comparison-total-rides"
+          />
+          <ActivityComparisonCard
+            title="Distinct Park Days"
+            viewerValue={viewerStats.activity?.distinctParkDays ?? 0}
+            friendValue={friendStats.activity?.distinctParkDays ?? 0}
+            friendName={friendName}
+            testID="friend-comparison-park-days"
+          />
+          {sharedAttraction && (
+            <Card style={styles.card} testID="friend-comparison-shared-attraction">
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={{ fontSize: 16 }}>👑</Text>
+                <Text style={styles.comparisonTitle}>Shared Favorite Attraction</Text>
+              </View>
+              <Text style={[styles.cardTitle, { marginVertical: 4 }]}>
+                {sharedAttraction.name}
+              </Text>
+              <View style={styles.comparisonRow}>
+                <View
+                  style={styles.comparisonCell}
+                  testID="friend-comparison-shared-attraction-viewer"
+                >
+                  <Text style={styles.comparisonOwner}>{VIEWER_OWNER_LABEL}</Text>
+                  <Text style={styles.comparisonPercent}>
+                    {sharedAttraction.viewerCount} rides
+                  </Text>
+                </View>
+                <View
+                  style={styles.comparisonCell}
+                  testID="friend-comparison-shared-attraction-friend"
+                >
+                  <Text style={styles.comparisonOwner} numberOfLines={1}>
+                    {friendName}
+                  </Text>
+                  <Text style={styles.comparisonPercent}>
+                    {sharedAttraction.friendCount} rides
+                  </Text>
+                </View>
+              </View>
+            </Card>
+          )}
+        </>
+      )}
 
       <Text style={styles.comparisonGroupHeading}>By park</Text>
       {comparison.byPark.map((row) => (
@@ -896,6 +967,41 @@ function ComparisonMode({
         />
       ))}
     </View>
+  );
+}
+
+/**
+ * An activity metric comparison card: the metric title plus viewer and friend counts side by side.
+ */
+function ActivityComparisonCard({
+  title,
+  viewerValue,
+  friendValue,
+  friendName,
+  testID,
+}: {
+  readonly title: string;
+  readonly viewerValue: string | number;
+  readonly friendValue: string | number;
+  readonly friendName: string;
+  readonly testID: string;
+}): JSX.Element {
+  return (
+    <Card style={styles.card} testID={testID}>
+      <Text style={styles.comparisonTitle}>{title}</Text>
+      <View style={styles.comparisonRow}>
+        <View style={styles.comparisonCell} testID={`${testID}-viewer`}>
+          <Text style={styles.comparisonOwner}>{VIEWER_OWNER_LABEL}</Text>
+          <Text style={styles.comparisonPercent}>{viewerValue}</Text>
+        </View>
+        <View style={styles.comparisonCell} testID={`${testID}-friend`}>
+          <Text style={styles.comparisonOwner} numberOfLines={1}>
+            {friendName}
+          </Text>
+          <Text style={styles.comparisonPercent}>{friendValue}</Text>
+        </View>
+      </View>
+    </Card>
   );
 }
 

@@ -66,4 +66,53 @@ describe('findAvailablePlacement (Task 19.1, Requirement 24.17, Property 24)', (
 
     expect(overlapsAnyOtherPin(candRef, existRef, SHOWCASE_MIN_PIN_CLEARANCE)).toBe(false);
   });
+
+  it('guarantees server reference-space clearance even when device boardSize has different aspect ratio / scale (regression guard)', () => {
+    // Exact pin placements from user defect report where red pin is near top row
+    const existing: PinShowcasePlacementDTO[] = [
+      { pinId: 'dome', posX: 0.32945448, posY: 0.09085953, zIndex: 0 },
+      { pinId: 'red_pin', posX: 0.49059543, posY: 0.11609187, zIndex: 1 },
+      { pinId: 'purple_pin', posX: 0.1168, posY: 0.1944, zIndex: 2 },
+      { pinId: 'purple_cross', posX: 0.2392, posY: 0.4309, zIndex: 3 },
+      { pinId: 'green_map', posX: 0.5480, posY: 0.3990, zIndex: 4 },
+      { pinId: 'filmstrip', posX: 0.7137, posY: 0.7737, zIndex: 5 },
+    ];
+
+    // On a 412x500 device screen, the old code returned a spot that was 66px away in screen space
+    // but compressed to 58px on the server (< 60px SHOWCASE_MIN_PIN_CLEARANCE), causing backend rejection
+    const deviceBoardSize = { width: 412, height: 500 };
+    const result = findAvailablePlacement('new-pin', existing, deviceBoardSize);
+    expect(result).not.toBeNull();
+
+    // 1. MUST satisfy server reference clearance (360x640)
+    const candRef = {
+      pinId: 'new-pin',
+      x: result!.posX * SHOWCASE_REFERENCE_SIZE.width,
+      y: result!.posY * SHOWCASE_REFERENCE_SIZE.height,
+    };
+    const existRef = existing.map((p) => ({
+      pinId: p.pinId,
+      x: p.posX * SHOWCASE_REFERENCE_SIZE.width,
+      y: p.posY * SHOWCASE_REFERENCE_SIZE.height,
+    }));
+    expect(overlapsAnyOtherPin(candRef, existRef, SHOWCASE_MIN_PIN_CLEARANCE)).toBe(false);
+
+    // Specifically verify distance to red_pin on server is >= SHOWCASE_MIN_PIN_CLEARANCE
+    const redPinRef = existRef.find((p) => p.pinId === 'red_pin')!;
+    const distToRedPin = Math.hypot(candRef.x - redPinRef.x, candRef.y - redPinRef.y);
+    expect(distToRedPin).toBeGreaterThanOrEqual(SHOWCASE_MIN_PIN_CLEARANCE);
+
+    // 2. MUST also satisfy screen clearance on device
+    const candScreen = {
+      pinId: 'new-pin',
+      x: result!.posX * deviceBoardSize.width,
+      y: result!.posY * deviceBoardSize.height,
+    };
+    const existScreen = existing.map((p) => ({
+      pinId: p.pinId,
+      x: p.posX * deviceBoardSize.width,
+      y: p.posY * deviceBoardSize.height,
+    }));
+    expect(overlapsAnyOtherPin(candScreen, existScreen, SHOWCASE_MIN_PIN_CLEARANCE)).toBe(false);
+  });
 });

@@ -10,7 +10,7 @@
  * Validates: Requirements 3.1, 3.2, 3.3, 3.4, 3.6, 3.7, 3.8
  */
 
-import type { ExperienceCategory, Park } from '../enums.js';
+import type { ExperienceCategory, FestivalSlug, Park } from '../enums.js';
 
 /**
  * One row of a stats breakdown. `percent` is in `[0.0, 100.0]` to one
@@ -21,6 +21,19 @@ export interface StatsBreakdown {
   readonly completed: number;
   readonly total: number;
   readonly percent: number;
+}
+
+/**
+ * Lifetime and per-festival festival-booth visit counts (festival-booth-tagging
+ * R5). Plain counts, no denominator — the set of all festival booths that have
+ * ever existed grows every festival rotation, so a percentage-of-catalog stat
+ * here would be meaningless (R6).
+ */
+export interface FestivalStatsDTO {
+  /** Distinct completed, festival-tagged experiences, all festivals, all years. */
+  readonly lifetimeCount: number;
+  /** Per-festival breakdown, summed across every tagged year. Zero-count festivals are omitted. */
+  readonly byFestival: readonly { readonly slug: FestivalSlug; readonly count: number }[];
 }
 
 /**
@@ -61,4 +74,55 @@ export interface StatsDTO {
    * Every category is present (R3.6, R3.7).
    */
   readonly perCategory: { readonly [category in ExperienceCategory]: StatsBreakdown };
+
+  /**
+   * Lifetime and per-festival festival-booth visit counts (R5.4).
+   */
+  readonly festivals: FestivalStatsDTO;
 }
+
+/**
+ * An attraction in the user's top-5 most ridden podium.
+ *
+ * Validates: Requirements 19.1, 19.2
+ */
+export interface MostRiddenAttraction {
+  readonly experienceId: string;
+  readonly experienceName: string;
+  readonly park: Park | null;
+  readonly count: number;
+}
+
+/**
+ * User personal records and bests for park visits and attraction marathons.
+ *
+ * Validates: Requirements 20.1, 20.4
+ */
+export interface PersonalRecords {
+  readonly mostProductiveDay?: {
+    readonly date: string;
+    readonly rideCount: number;
+    readonly parks: readonly Park[];
+  };
+  readonly marathonRecord?: {
+    readonly experienceId: string;
+    readonly experienceName: string;
+    readonly date: string;
+    readonly count: number;
+  };
+}
+
+/**
+ * Activity volume, repeat statistics, podium, and personal records.
+ *
+ * Validates: Requirements 18.1, 18.2, 18.3, 18.4, 18.6
+ */
+export interface ActivityStatistics {
+  readonly totalLogs: number;
+  readonly distinctParkDays: number;
+  readonly repeatMultiplier: number;
+  readonly averageRidesPerDay: number;
+  readonly mostRidden: readonly MostRiddenAttraction[];
+  readonly personalRecords: PersonalRecords;
+}
+

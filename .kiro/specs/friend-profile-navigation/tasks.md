@@ -58,6 +58,18 @@ All paths are under `apps/mobile/src/`. Implementation language is TypeScript (R
     - Generate entry lists × a `filterStateArb` (`All/All`, single-axis, and both-axis selections); assert the result is exactly the named entries satisfying both selections in source order, and that `All/All` equals the unfiltered named-entry set
     - **Validates: Requirements 14.5, 14.6, 14.7**
 
+  - [x] 3.3 Add search query narrowing and reset helpers to `experienceFilter.ts`
+    - Extend `ExperienceFilterState` with `readonly search?: string` and update `DEFAULT_FILTER = { park: 'All', category: 'All', search: '' }`
+    - Update `applyExperienceFilter` to narrow entries by `state.search` (matching experience name, park, category, or note case-insensitively)
+    - Add `hasActiveFilter(state)` and `clearFilter()` helpers
+    - _Requirements: 14.10, 14.11_
+
+  - [x] 3.4 Write property test for search query narrowing
+    - File: `screens/navigation/__tests__/experienceFilter.prop.test.ts`, `fast-check`, `numRuns: 100`, Property 6 header comment
+    - **Property 6: Search query narrowing over Experience_Filter**
+    - Assert search query filtering condition, identity on empty search, subsequence preservation, and monotonicity
+    - **Validates: Requirements 14.10, 14.11**
+
 - [x] 4. Checkpoint - pure logic complete
   - Ensure all tests pass, ask the user if questions arise.
 
@@ -91,6 +103,18 @@ All paths are under `apps/mobile/src/`. Implementation language is TypeScript (R
     - File: `screens/navigation/__tests__/ExperiencesList.test.tsx`
     - Assert default `All`/`All`; option sets equal `PARKS`/`EXPERIENCE_CATEGORIES` plus `All`; two mounted lists hold independent filter state; the no-match empty-state message; the empty named-set message; and the controls' `accessibilityLabel`/`accessibilityValue`
     - _Requirements: 5.4, 13.4, 14.1, 14.2, 14.3, 14.8, 14.9_
+
+  - [x] 5.7 Update `ExperiencesList` with search input, dropdown selector pills, and reset button (`screens/navigation/ExperiencesList.tsx`)
+    - Add search input with search icon, clear button, `testID={`${testIDPrefix}-filter-search`}`, and `testID={`${testIDPrefix}-filter-search-clear`}`
+    - Replace 21 horizontal scrolling chips with compact Park and Category dropdown selector pills that open dedicated selection pickers (R14.3)
+    - Add "Clear filters" reset button `testID={`${testIDPrefix}-filter-reset`}` visible when any filter or search query is active
+    - Preserve all existing testIDs (`test-filter-park`, `test-filter-category`, `test-filter-park-option-*`, `test-filter-category-option-*`), accessibilityLabel, and accessibilityValue
+    - _Requirements: 14.3, 14.9, 14.10, 14.11_
+
+  - [x] 5.8 Write RNTL tests for search and reset controls in `ExperiencesList`
+    - File: `screens/navigation/__tests__/ExperiencesList.test.tsx`
+    - Assert typing into search input narrows displayed rows; pressing search clear button restores rows; pressing reset button restores `All / All / ''`
+    - _Requirements: 14.10, 14.11_
 
 - [x] 6. Implement the Own_Completions query hook (`hooks/useOwnCompletions.ts`)
   - [x] 6.1 Implement `useOwnCompletionsQuery`
@@ -156,7 +180,7 @@ All paths are under `apps/mobile/src/`. Implementation language is TypeScript (R
 
 - Tasks marked with `*` are optional test tasks and can be skipped for a faster MVP; core implementation tasks are never optional.
 - Each task references specific requirement sub-clauses for traceability.
-- Properties 1–5 are each implemented by exactly one property-based test using `fast-check` at `numRuns: 100`, located in `screens/navigation/__tests__/*.prop.test.ts`, placed next to the pure module they validate to catch regressions early.
+- Properties 1–6 are each implemented by exactly one property-based test using `fast-check` at `numRuns: 100`, located in `screens/navigation/__tests__/*.prop.test.ts`, placed next to the pure module they validate to catch regressions early.
 - RNTL tests cover rendering, accessibility, and loading/forbidden/error/retry branches; request-spy tests cover the no-refetch-on-mode-switch (R6.5, R12.4), no-refetch-on-filter-change (R14.4), and scoped-retry (R7.5, R7.6, R12.6, R12.9) behaviors.
 - The feature is client-only: no backend code, route, authorization rule, or response shape changes.
 
@@ -168,7 +192,8 @@ All paths are under `apps/mobile/src/`. Implementation language is TypeScript (R
     { "id": 0, "tasks": ["1.1", "2.1", "3.1", "5.1", "5.3", "6.1"] },
     { "id": 1, "tasks": ["1.2", "2.2", "2.3", "2.4", "3.2", "5.2", "5.4", "6.2", "5.5"] },
     { "id": 2, "tasks": ["5.6", "8.1", "9.1"] },
-    { "id": 3, "tasks": ["8.2", "8.3", "8.4", "9.2", "9.3", "9.4"] }
+    { "id": 3, "tasks": ["8.2", "8.3", "8.4", "9.2", "9.3", "9.4"] },
+    { "id": 4, "tasks": ["3.3", "3.4", "5.7", "5.8"] }
   ]
 }
 ```

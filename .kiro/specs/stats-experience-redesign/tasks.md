@@ -244,11 +244,98 @@ existing `*.prop.test.ts` conventions, and are tagged
 - [x] 12. Final checkpoint — full verification
   - Run the TypeScript typecheck for `apps/api` and `apps/mobile`, the full mobile test suite, and the `apps/api` stats test suite; ensure all pass and no reference to the removed flat `byParkAndCategory`/flat top-level fields remains. Ask the user if questions arise.
 
+## Amendment: Activity & Repeat Visit Volume Stats
+
+- [x] 13. Completion write-path bidirectional sync (apps/api)
+  - [x] 13.1 Update `tracking/completion/repo.ts: mark` with transactional dual-write
+    - Wrap `mark()` in `BEGIN ... COMMIT` with automatic rollback; insert into `completions` and dual-write into `experience_logs (user_id, experience_id, visited_on, user_tz)`
+    - _Requirements: 23.1, 23.2_
+  - [x] 13.2 Update `tracking/completion/repo.ts: edit` with date sync
+    - Wrap `edit()` in `BEGIN ... COMMIT`; read old `completed_on` `FOR UPDATE`, update `completions`, and update matching unannotated `experience_logs` row (`visited_on = old_date AND rating IS NULL AND note IS NULL`) to new date/tz
+    - _Requirements: 23.3_
+  - [x] 13.3 Update `tracking/completion/repo.ts: unmark` with safe unannotated log deletion
+    - Wrap `unmark()` in `BEGIN ... COMMIT`; delete from `completions`, and delete matching unannotated `experience_logs` row (`rating IS NULL AND note IS NULL`). Preserve user-annotated logs with ratings or notes
+    - _Requirements: 23.4, 23.5_
+  - [x] 13.4 Write repo integration tests for `mark`, `edit`, and `unmark`
+    - In `apps/api/src/services/tracking/completion/__tests__/repo.test.ts`, assert atomic rollback, dual-write on `mark`, date sync on `edit`, and safe removal on `unmark`
+    - _Requirements: 23.1, 23.2, 23.3, 23.4, 23.5_
+
+- [x] 14. Shared contracts for activity and repeat stats (packages/shared)
+  - [x] 14.1 Define `ActivityStatistics`, `MostRiddenAttraction`, and `PersonalRecords`
+    - In `packages/shared/src/dto/Stats.ts`, define the wire types with readonly fields
+    - _Requirements: 18.1, 19.1, 20.1, 20.4_
+  - [x] 14.2 Add `repeatCount` to `CompletionEntryDTO`
+    - In `packages/shared/src/dto/CompletionEntry.ts`, add `readonly repeatCount?: number`
+    - _Requirements: 21.1, 21.3_
+
+- [x] 15. Backend: activity roll-up & snapshot queries (apps/api)
+  - [x] 15.1 Create pure `activity.ts` roll-up module
+    - In `apps/api/src/services/stats/activity.ts`, implement `rollUpActivity(raw, uniqueCompletedCount)` with `repeatMultiplier = uniqueLoggedExperiences > 0 ? Math.max(1.0, Number((totalLogs / uniqueLoggedExperiences).toFixed(1))) : 1.0` and zero-log defaults
+    - _Requirements: 18.1, 18.2, 18.3, 18.4, 18.5, 18.6, 18.7, 19.2, 20.2, 20.3, 20.5_
+  - [x] 15.2 Write property tests for `rollUpActivity`
+    - In `apps/api/src/services/stats/__tests__/activity.prop.test.ts`, test Property 14 (activity volume bounds & `repeatMultiplier >= 1.0`), Property 15 (most-ridden podium ordering & determinism), and Property 16 (personal records derivation & null-park filtering)
+    - _Requirements: 18.1–18.7, 19.1–19.3, 20.1–20.6_
+  - [x] 15.3 Add activity queries to `StatsSnapshot` in `repo.ts`
+    - Inside existing single `REPEATABLE READ READ ONLY` snapshot transaction, run queries for volume totals, top-5 podium, most productive day (with `FILTER (WHERE e.park IS NOT NULL)`), and marathon record
+    - _Requirements: 18.2, 18.3, 19.1, 20.1, 20.4_
+  - [x] 15.4 Update `friendCompletions/repo.ts` to populate `repeatCount`
+    - In `listCompletions`, join aggregated `experience_logs` to populate `repeatCount = COALESCE(log_count, 1)`
+    - _Requirements: 21.1, 21.2, 21.3_
+  - [x] 15.5 Write repo property test for `repeatCount` on `CompletionEntry`
+    - In `apps/api/src/services/tracking/friendCompletions/__tests__/repo.repeatCount.prop.test.ts`, validate Property 17 (`repeatCount >= 1`, user isolation)
+    - _Requirements: 21.2, 21.3_
+  - [x] 15.6 Surface `activity` in `StatsResponse` and `assembleResponse`
+    - In `apps/api/src/services/stats/routes.ts`, add `activity: rollUpActivity(...)` to response
+    - _Requirements: 18.1_
+
+- [x] 16. Mobile: API types, display transforms, and highlight selector (apps/mobile)
+  - [x] 16.1 Mirror `ActivityStatistics` and `CompletionEntryDTO.repeatCount` in mobile types
+    - In `apps/mobile/src/api/statsTypes.ts`, mirror the wire types byte-identically
+    - _Requirements: 18.1, 21.1_
+  - [x] 16.2 Implement activity display transforms in `statsView.ts`
+    - Pure helpers for formatting odometer metrics, podium ranks, and records
+    - Keep highlight order as `coverage → ratings → [interests] → activity & experiences`
+    - _Requirements: 2.3, 2.4, 2.5, 18.8_
+  - [x] 16.3 Update unit & property tests for `statsView.ts`
+    - Validate highlight card derivation, formatting, and Property 11 preservation
+    - _Requirements: 2.3, 18.8_
+
+- [x] 17. Mobile: Overview Hub Dual-Pillar Hero (apps/mobile)
+  - [x] 17.1 Update `StatsScreen.tsx` with Dual-Pillar Hero
+    - Left column: overall catalog exploration ring; Right column: activity volume metrics (total rides, park days, repeat multiplier)
+    - Retain Percentile Brag Banner and 4 drill-down highlight cards
+    - _Requirements: 18.8_
+  - [x] 17.2 Write component tests for `StatsScreen.tsx`
+    - Assert dual-pillar hero renders both exploration percentage and activity metrics
+    - _Requirements: 18.8_
+
+- [x] 18. Mobile: Unified Activity & Experiences Screen (apps/mobile)
+  - [x] 18.1 Update `ExperiencesDetailScreen.tsx`
+    - Top section: Odometer grid, Hall of Fame podium, and personal records cards from shared `['me-stats']` query
+    - Bottom section: Completed experiences list with repeat badges and `⚡ Most Visited` sort control from `useOwnCompletionsQuery()`
+    - Preserve in-pane error/retry boundary for completions
+    - Visual reference: `repeat-activity-mockup.html`
+    - _Requirements: 19.4, 20.7, 21.4, 21.5_
+  - [x] 18.2 Write component tests for `ExperiencesDetailScreen.tsx`
+    - Assert odometer, podium, records, repeat badges, and sort toggle render and function
+    - _Requirements: 19.4, 20.7, 21.4, 21.5_
+
+- [x] 19. Mobile: Friend Profile Volume Comparison (apps/mobile)
+  - [x] 19.1 Update `FriendProfileScreen.tsx` Compare mode
+    - Render side-by-side volume comparison bars (Total Rides, Park Days) and shared top attraction
+    - _Requirements: 11.6, 22.1, 22.2, 22.3_
+  - [x] 19.2 Write component tests for `FriendProfileScreen.tsx`
+    - Assert volume comparison renders in Compare mode with friend parity
+    - _Requirements: 11.6, 22.1, 22.2, 22.3_
+
+- [x] 20. Final Checkpoint — Full Verification
+  - Run `npm run verify` across all workspaces (`apps/api`, `apps/mobile`, `packages/shared`) and confirm exit code 0
+
 ## Notes
 
 - Tasks marked with `*` are optional test sub-tasks and can be skipped for a
   faster MVP; core implementation sub-tasks are never optional.
-- Each task references specific requirement clauses (R1–R17) for traceability.
+- Each task references specific requirement clauses (R1–R23) for traceability.
 - Property-based tests use `fast-check` and are tagged
   `Feature: stats-experience-redesign, Property {n}: {text}`; backend P13 lives
   in `apps/api`, and mobile P2/P3/P4/P6/P8/P9/P11 live on the pure `statsView`
@@ -273,7 +360,13 @@ existing `*.prop.test.ts` conventions, and are tagged
     { "id": 4, "tasks": ["6.2", "6.4", "6.6", "7.1", "7.3", "7.5", "7.7"] },
     { "id": 5, "tasks": ["7.2", "7.4", "7.6", "7.8", "8.1", "10.1"] },
     { "id": 6, "tasks": ["8.2", "9.1", "10.2"] },
-    { "id": 7, "tasks": ["9.2", "10.3", "11.1"] }
+    { "id": 7, "tasks": ["9.2", "10.3", "11.1"] },
+    { "id": 8, "tasks": ["13.1", "13.2", "13.3", "14.1", "14.2"] },
+    { "id": 9, "tasks": ["13.4", "15.1", "15.3", "15.4"] },
+    { "id": 10, "tasks": ["15.2", "15.5", "15.6", "16.1"] },
+    { "id": 11, "tasks": ["16.2", "16.3"] },
+    { "id": 12, "tasks": ["17.1", "17.2", "18.1", "19.1"] },
+    { "id": 13, "tasks": ["18.2", "19.2", "20"] }
   ]
 }
 ```

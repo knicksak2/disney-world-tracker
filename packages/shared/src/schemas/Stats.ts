@@ -15,6 +15,7 @@ import { z } from 'zod';
 import { EXPERIENCE_CATEGORIES, PARKS } from '../enums.js';
 import type { ExperienceCategory, Park } from '../enums.js';
 
+import { festivalSlugSchema } from './Festival.js';
 import { completionPercentSchema } from './primitives.js';
 
 const breakdownSchema = z
@@ -104,10 +105,25 @@ const perCategoryShape = Object.fromEntries(
   EXPERIENCE_CATEGORIES.map((category) => [category, breakdownSchema] as const),
 ) as { [K in ExperienceCategory]: typeof breakdownSchema };
 
+export const festivalStatsSchema = z
+  .object({
+    lifetimeCount: z.number().int().min(0),
+    byFestival: z.array(
+      z
+        .object({
+          slug: festivalSlugSchema,
+          count: z.number().int().min(1),
+        })
+        .strict(),
+    ),
+  })
+  .strict();
+
 export const statsSchema = z
   .object({
     overall: breakdownSchema,
     perPark: z.object(perParkShape).strict(),
     perCategory: z.object(perCategoryShape).strict(),
+    festivals: festivalStatsSchema,
   })
   .strict();

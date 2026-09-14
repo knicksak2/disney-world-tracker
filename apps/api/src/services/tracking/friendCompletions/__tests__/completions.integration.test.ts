@@ -154,6 +154,20 @@ async function setup(): Promise<Fixture> {
   // Friend Completions read now projects onto each entry's `areaType`.
   applyMigration(db, '0004_disney_sources.sql');
 
+  // 0034 adds `experience_logs`, which listCompletions joins for repeatCount.
+  db.public.none(`
+    CREATE TABLE IF NOT EXISTS experience_logs (
+        id             UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id        UUID         NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        experience_id  UUID         NOT NULL REFERENCES experiences(id),
+        visited_on     DATE         NOT NULL,
+        user_tz        TEXT         NOT NULL,
+        logged_at      TIMESTAMPTZ  NOT NULL DEFAULT now(),
+        rating         SMALLINT,
+        note           TEXT
+    );
+  `);
+
   const repo = createFriendCompletionsRepo(pool);
   const app = Fastify({ logger: false });
   registerErrorHandler(app);

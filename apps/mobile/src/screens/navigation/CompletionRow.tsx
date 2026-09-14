@@ -109,13 +109,23 @@ export function CompletionRow({
             {entry.experienceName}
           </Text>
         </View>
-        {entry.rating !== null ? (
-          <Badge
-            label={`${entry.rating}/10`}
-            color={ratingColor(entry.rating)}
-            icon="star"
-          />
-        ) : null}
+        <View style={styles.badgeGroup}>
+          {entry.repeatCount !== undefined && entry.repeatCount > 1 ? (
+            <Badge
+              label={`${entry.repeatCount}×`}
+              color={entry.repeatCount >= 5 ? '#d9480f' : '#3b5bdb'}
+              icon="repeat"
+              {...(testID !== undefined ? { testID: `${testID}-repeat-badge` } : {})}
+            />
+          ) : null}
+          {entry.rating !== null ? (
+            <Badge
+              label={`${entry.rating}/10`}
+              color={ratingColor(entry.rating)}
+              icon="star"
+            />
+          ) : null}
+        </View>
       </View>
       <Text style={[styles.completionMeta, styles.metaIndent]}>
         {metaParts.join(' \u00b7 ')}
@@ -190,6 +200,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: theme.spacing.xs,
     gap: theme.spacing.sm,
+  },
+  badgeGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.xs,
   },
   titleWrap: {
     flexDirection: 'row',

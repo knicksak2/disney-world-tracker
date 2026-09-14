@@ -72,6 +72,7 @@ const MIGRATIONS = [
   '0034_experience_logs.sql',
   '0035_pins_and_challenges.sql',
   '0036_pin_claiming.sql',
+  '0039_experience_festival_tags.sql',
 ];
 
 function testConfig(): AppConfig {

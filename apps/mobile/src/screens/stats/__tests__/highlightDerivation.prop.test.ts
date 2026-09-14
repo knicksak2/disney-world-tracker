@@ -51,10 +51,16 @@ import {
   buildOverviewHighlights,
   displayedPercent,
   displayedPercentLabel,
+  formatMarathonRecord,
+  formatOdometer,
+  formatPodiumRank,
+  formatProductiveDay,
+  pickExperiencesHighlight,
 } from '../statsView';
 import type { OverviewHighlight } from '../statsView';
 import {
   makeCell,
+  makeDefaultActivity,
   makeInsufficientRatings,
   makeStatsResponse,
   makeSufficientRatings,
@@ -384,5 +390,132 @@ describe('Property 11: coverage highlight — highest-percent park (R2.7)', () =
       }),
       { numRuns: 300 },
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Card 4: Activity & Experiences highlight derivation (R18.5)
+// ---------------------------------------------------------------------------
+
+describe('Card 4: Activity & Experiences highlight derivation (R18.5)', () => {
+  test('with populated activity, derives title, rides headline, and subtext with multiplier', () => {
+    const activity = makeDefaultActivity({
+      totalLogs: 42,
+      distinctParkDays: 5,
+      repeatMultiplier: 1.6,
+    });
+    const highlight = pickExperiencesHighlight(activity);
+
+    expect(highlight.id).toBe('experiences');
+    expect(highlight.title).toBe('Activity & Experiences');
+    expect(highlight.headline).toBe('42 rides logged');
+    expect(highlight.subtext).toBe('5 park days • 1.6x repeat');
+    expect(highlight.target.route).toBe('ExperiencesDetail');
+  });
+
+  test('handles singular ride and park day correctly', () => {
+    const activity = makeDefaultActivity({
+      totalLogs: 1,
+      distinctParkDays: 1,
+      repeatMultiplier: 1.0,
+    });
+    const highlight = pickExperiencesHighlight(activity);
+
+    expect(highlight.headline).toBe('1 ride logged');
+    expect(highlight.subtext).toBe('1 park day • 1.0x repeat');
+  });
+
+  test('falls back to Browse your experiences when activity is undefined or totalLogs is 0', () => {
+    const emptyHighlight = pickExperiencesHighlight(makeDefaultActivity({ totalLogs: 0 }));
+    expect(emptyHighlight.title).toBe('Experiences');
+    expect(emptyHighlight.headline).toBe('Browse your experiences');
+    expect(emptyHighlight.subtext).toBeUndefined();
+    expect(emptyHighlight.target.route).toBe('ExperiencesDetail');
+
+    const undefinedHighlight = pickExperiencesHighlight(undefined);
+    expect(undefinedHighlight.title).toBe('Experiences');
+    expect(undefinedHighlight.headline).toBe('Browse your experiences');
+    expect(undefinedHighlight.subtext).toBeUndefined();
+    expect(undefinedHighlight.target.route).toBe('ExperiencesDetail');
+  });
+
+  test('buildOverviewHighlights includes activity tease when stats.activity is present', () => {
+    const stats = makeStatsResponse({
+      activity: makeDefaultActivity({ totalLogs: 185, distinctParkDays: 14, repeatMultiplier: 2.2 }),
+    });
+    const highlights = buildOverviewHighlights(stats);
+    const exp = highlights.find((h) => h.id === 'experiences');
+
+    expect(exp).toBeDefined();
+    expect(exp?.title).toBe('Activity & Experiences');
+    expect(exp?.headline).toBe('185 rides logged');
+    expect(exp?.subtext).toBe('14 park days • 2.2x repeat');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Activity display formatters (R18.1, R19.1, R20.1)
+// ---------------------------------------------------------------------------
+
+describe('Activity display formatters (R18.1, R19.1, R20.1)', () => {
+  test('formatOdometer formats metric values correctly', () => {
+    const activity = makeDefaultActivity({
+      totalLogs: 185,
+      distinctParkDays: 14,
+      repeatMultiplier: 2.2,
+      averageRidesPerDay: 13.2,
+    });
+    const odo = formatOdometer(activity);
+    expect(odo.totalRides).toBe('185');
+    expect(odo.parkDays).toBe('14');
+    expect(odo.repeatMultiplier).toBe('2.2×');
+    expect(odo.avgPerDay).toBe('13.2');
+  });
+
+  test('formatPodiumRank maps indices to ranks and medals', () => {
+    expect(formatPodiumRank(0)).toEqual({ rank: 1, medal: 'gold' });
+    expect(formatPodiumRank(1)).toEqual({ rank: 2, medal: 'silver' });
+    expect(formatPodiumRank(2)).toEqual({ rank: 3, medal: 'bronze' });
+    expect(formatPodiumRank(3)).toEqual({ rank: 4, medal: null });
+    expect(formatPodiumRank(4)).toEqual({ rank: 5, medal: null });
+  });
+
+  test('formatProductiveDay formats record correctly and returns null when undefined', () => {
+    expect(formatProductiveDay(undefined)).toBeNull();
+
+    const formatted = formatProductiveDay({
+      date: '2024-10-14',
+      rideCount: 14,
+      parks: ['Magic Kingdom', 'EPCOT'],
+    });
+    expect(formatted).toEqual({
+      headline: 'Most Productive Park Day',
+      subtext: '14 rides on 2024-10-14 at Magic Kingdom, EPCOT',
+    });
+
+    const singleRide = formatProductiveDay({
+      date: '2024-10-14',
+      rideCount: 1,
+      parks: [],
+    });
+    expect(singleRide).toEqual({
+      headline: 'Most Productive Park Day',
+      subtext: '1 ride on 2024-10-14',
+    });
+  });
+
+  test('formatMarathonRecord formats record correctly and returns null when undefined', () => {
+    expect(formatMarathonRecord(undefined)).toBeNull();
+
+    const formatted = formatMarathonRecord({
+      experienceId: 'exp-space-mountain',
+      experienceName: 'Space Mountain',
+      date: '2025-01-15',
+      count: 4,
+    });
+    expect(formatted).toEqual({
+      headline: 'Attraction Marathon Record',
+      subtext: '4 rides on Space Mountain (2025-01-15)',
+    });
   });
 });

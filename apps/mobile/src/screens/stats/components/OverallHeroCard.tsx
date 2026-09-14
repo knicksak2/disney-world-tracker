@@ -14,9 +14,10 @@
  */
 
 import React from 'react';
-import { StyleSheet, Text } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
-import type { CompletionCell } from '../../../api/statsTypes';
+import type { ActivityStatistics, CompletionCell } from '../../../api/statsTypes';
 import { CompleteBadge, ProgressRing } from '../../../theme/charts';
 import { Card } from '../../../theme/components';
 import { theme } from '../../../theme/theme';
@@ -25,6 +26,8 @@ import { displayedPercentLabel } from '../statsView';
 export interface OverallHeroCardProps {
   /** The overall coverage cell driving the hero ring. */
   readonly overall: CompletionCell;
+  /** Activity statistics driving the right pillar of the dual-pillar layout. */
+  readonly activity?: ActivityStatistics | undefined;
   /** Ring diameter override (defaults to a hero-sized ring). */
   readonly size?: number;
   readonly testID?: string;
@@ -41,26 +44,89 @@ function heroAccessibilityLabel(overall: CompletionCell): string {
 
 /**
  * The hero overall-completion card for the Overview hub.
+ * When `activity` is present and contains logs, renders a Dual-Pillar Hero:
+ * Catalog coverage ring on the left, activity volume / repeat stats on the right.
  */
 export function OverallHeroCard({
   overall,
-  size = 168,
+  activity,
+  size,
   testID,
 }: OverallHeroCardProps): JSX.Element {
   const complete = overall.completeBadge;
+  const hasActivity = Boolean(activity && activity.totalLogs > 0);
+  const ringSize = size ?? (hasActivity ? 116 : 168);
+  const strokeWidth = hasActivity ? 12 : 16;
+
   return (
     <Card style={styles.card} {...(testID !== undefined ? { testID } : {})}>
-      <Text style={styles.label}>Overall completion</Text>
-      <ProgressRing
-        percent={overall.percent}
-        size={size}
-        strokeWidth={16}
-        complete={complete}
-        centerLabel={`${displayedPercentLabel(overall)}%`}
-        centerSubLabel={`${overall.completed} / ${overall.total}`}
-        accessibilityLabel={heroAccessibilityLabel(overall)}
-        testID="overall-hero-ring"
-      />
+      <Text style={styles.label}>
+        {hasActivity ? 'Magic & Activity Overview' : 'Overall completion'}
+      </Text>
+
+      {hasActivity ? (
+        <View style={styles.dualLayout}>
+          <View style={styles.ringCol}>
+            <ProgressRing
+              percent={overall.percent}
+              size={ringSize}
+              strokeWidth={strokeWidth}
+              complete={complete}
+              centerLabel={`${displayedPercentLabel(overall)}%`}
+              centerSubLabel={`${overall.completed} / ${overall.total}`}
+              accessibilityLabel={heroAccessibilityLabel(overall)}
+              testID="overall-hero-ring"
+            />
+            <Text style={styles.ringMeta}>Coverage</Text>
+          </View>
+
+          <View style={styles.activityCol} testID="hero-activity-pillar">
+            <View style={styles.metricRow}>
+              <View style={[styles.metricIcon, { backgroundColor: '#efe9f7' }]}>
+                <Ionicons name="flash" size={15} color={theme.color.primary} />
+              </View>
+              <View style={styles.metricInfo}>
+                <Text style={styles.metricVal}>{activity!.totalLogs}</Text>
+                <Text style={styles.metricLbl}>Rides Logged</Text>
+              </View>
+            </View>
+
+            <View style={styles.metricRow}>
+              <View style={[styles.metricIcon, { backgroundColor: '#e8f4ff' }]}>
+                <Ionicons name="calendar" size={15} color="#2f80ed" />
+              </View>
+              <View style={styles.metricInfo}>
+                <Text style={styles.metricVal}>{activity!.distinctParkDays}</Text>
+                <Text style={styles.metricLbl}>Park Days</Text>
+              </View>
+            </View>
+
+            <View style={styles.metricRow}>
+              <View style={[styles.metricIcon, { backgroundColor: '#fff4e6' }]}>
+                <Ionicons name="repeat" size={15} color="#d9480f" />
+              </View>
+              <View style={styles.metricInfo}>
+                <Text style={styles.metricVal}>
+                  {activity!.repeatMultiplier.toFixed(1)}×
+                </Text>
+                <Text style={styles.metricLbl}>Repeat Multiplier</Text>
+              </View>
+            </View>
+          </View>
+        </View>
+      ) : (
+        <ProgressRing
+          percent={overall.percent}
+          size={ringSize}
+          strokeWidth={strokeWidth}
+          complete={complete}
+          centerLabel={`${displayedPercentLabel(overall)}%`}
+          centerSubLabel={`${overall.completed} / ${overall.total}`}
+          accessibilityLabel={heroAccessibilityLabel(overall)}
+          testID="overall-hero-ring"
+        />
+      )}
+
       {complete ? (
         <CompleteBadge testID="overall-hero-complete-badge" />
       ) : (
@@ -83,9 +149,62 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
+  dualLayout: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    paddingHorizontal: theme.spacing.sm,
+    gap: theme.spacing.md,
+  },
+  ringCol: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  ringMeta: {
+    ...theme.typography.meta,
+    color: theme.color.textSecondary,
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  activityCol: {
+    flex: 1,
+    borderLeftWidth: StyleSheet.hairlineWidth,
+    borderLeftColor: theme.color.border,
+    paddingLeft: theme.spacing.md,
+    gap: theme.spacing.sm,
+  },
+  metricRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+  },
+  metricIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  metricInfo: {
+    gap: 1,
+  },
+  metricVal: {
+    ...theme.typography.subtitle,
+    color: theme.color.textPrimary,
+    fontWeight: '800',
+    lineHeight: 18,
+  },
+  metricLbl: {
+    ...theme.typography.meta,
+    color: theme.color.textSecondary,
+    fontSize: 10,
+  },
   count: {
     ...theme.typography.body,
     color: theme.color.textSecondary,
     textAlign: 'center',
   },
 });
+

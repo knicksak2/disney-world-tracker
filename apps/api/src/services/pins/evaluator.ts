@@ -57,6 +57,13 @@ export interface PinActivitySnapshot {
   readonly ratings: number;
   readonly notes: number;
   readonly trips: number;
+  /**
+   * Upstream ids of every experience — active or not — that carries at least
+   * one Festival_Tag (any slug, any year), restricted to those the User has
+   * completed. Additive field; every other metric is unaffected
+   * (festival-booth-tagging R4.1, R4.3).
+   */
+  readonly festivalTaggedCompletedIds: ReadonlySet<string>;
 }
 
 // ---------------------------------------------------------------------------
@@ -121,7 +128,18 @@ function metricValue(metric: string, snap: PinActivitySnapshot): number {
   switch (metric) {
     case 'attractions': return countCompleted(snap, isAttraction);
     case 'restaurants': return countCompleted(snap, (e) => e.isRealRestaurant);
-    case 'festivalBooths': return countCompleted(snap, isFestivalBooth);
+    case 'festivalBooths': {
+      // Active, untagged kiosks still count via the existing active-catalog path
+      // (R4.2 — tagging is additive, never a regression during the pre-tag
+      // window); tagged completions count regardless of active (R4.1), via a
+      // union so a booth is never double-counted if it is both currently active
+      // AND tagged.
+      const activeUntagged = countCompleted(
+        snap,
+        (e) => isFestivalBooth(e) && !snap.festivalTaggedCompletedIds.has(e.upstreamId),
+      );
+      return activeUntagged + snap.festivalTaggedCompletedIds.size;
+    }
     case 'snacks': return countCompleted(snap, isSnackLounge);
     case 'characterMeets': return countCompleted(snap, (e) => e.category === 'Character_Meet');
     case 'shows': return countCompleted(snap, (e) => e.category === 'Show');

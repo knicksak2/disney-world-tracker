@@ -243,15 +243,18 @@ export type FilterCategorySelection = ExperienceCategory | 'All'; // R14.3
 export interface ExperienceFilterState {
   readonly park: FilterParkSelection;       // defaults to 'All' (R14.2)
   readonly category: FilterCategorySelection; // defaults to 'All' (R14.2)
+  readonly search?: string;                  // defaults to '' (R14.10)
 }
 
-export const DEFAULT_FILTER: ExperienceFilterState = { park: 'All', category: 'All' };
+export const DEFAULT_FILTER: ExperienceFilterState = { park: 'All', category: 'All', search: '' };
 
 /**
  * Keep every named entry whose Park matches `state.park` (or 'All') AND whose
- * Category matches `state.category` (or 'All'), in the source order of the
- * originating read; exclude every entry failing either selection (R14.5).
- * With both selections 'All' the result equals namedEntries(entries) (R14.6).
+ * Category matches `state.category` (or 'All'), and if `state.search` is non-empty,
+ * where `state.search` (case-insensitive) matches experience name, park, category,
+ * or note, in the source order of the originating read; exclude every entry failing
+ * any selection (R14.5, R14.10).
+ * With both selections 'All' and empty search the result equals namedEntries(entries) (R14.6).
  */
 export function applyExperienceFilter(
   entries: readonly CompletionEntryDTO[],
@@ -270,7 +273,7 @@ export function ExperiencesList(props: {
 }): JSX.Element;
 ```
 
-It owns its own `ExperienceFilterState` via `useState(DEFAULT_FILTER)` — so the two lists' filters are independent (R14.1) — renders the filter controls and a `CompletionRow` per `applyExperienceFilter(entries, state)` result. The filter controls expose, for each of the Park and Category controls, an `accessibilityLabel` naming the control and an `accessibilityValue` reflecting the active selection (R14.9). When the filtered result is empty it shows a "no completed Experiences match the active filter" message (R14.8); when the unfiltered named set is empty it shows the mode's empty-state instead (R5.4, R13.4). Changing a selection updates the rendered list synchronously within the same render pass — well under 300 ms (R14.7) — with no read (R14.4).
+It owns its own `ExperienceFilterState` via `useState(DEFAULT_FILTER)` — so the two lists' filters are independent (R14.1) — renders a search input, compact Park and Category dropdown selector pills that open dedicated selection pickers (R14.3), and a `CompletionRow` per `applyExperienceFilter(entries, state)` result. The search input accepts free-text queries matching experience name, park, category, or note (R14.10). When any filter or search query is active, an active filter indicator and a single-tap reset control restores `All / All / ''` (R14.11). The selector controls expose, for each of the Park and Category controls, an `accessibilityLabel` naming the control and an `accessibilityValue` reflecting the active selection (R14.9). When the filtered result is empty it shows a "no completed Experiences match the active filter" message (R14.8); when the unfiltered named set is empty it shows the mode's empty-state instead (R5.4, R13.4). Changing a selection or typing in the search input updates the rendered list synchronously within the same render pass — well under 300 ms (R14.7) — with no read (R14.4).
 
 ### `CompletionRow` — extracted to `screens/navigation/CompletionRow.tsx` (new, refactor)
 
@@ -389,6 +392,20 @@ Everything else — tab rendering and styling (R1.1, R1.2, R1.6, R1.7, R8.1, R8.
 
 **Validates: Requirements 1.3, 1.4, 1.8, 8.3, 8.4, 8.8, 8.9**
 
+### Property 6: Search query narrowing over Experience_Filter
+
+*For any* already-loaded list of `CompletionEntryDTO` items, *any* `ExperienceFilterState` (with `park`, `category`, and optional `search` query string $q$):
+1. **Filtering condition**: An entry $e$ is included in `applyExperienceFilter(entries, state)` if and only if:
+   - $e$ has an available (non-blank) experience name (`hasAvailableName(e)`), **AND**
+   - $e.\text{park} = \text{state.park}$ or $\text{state.park} = \text{'All'}$, **AND**
+   - $e.\text{category} = \text{state.category}$ or $\text{state.category} = \text{'All'}$, **AND**
+   - if $\text{trim}(q)$ is non-empty, $\text{trim}(q)$ (case-insensitive) is a substring of at least one searchable field: $e.\text{experienceName}$, $e.\text{park}$, $\text{categoryLabel}(e.\text{category})$, or $e.\text{sharedNote}$ (when present).
+2. **Identity on empty search**: When $\text{trim}(q) = \text{""}$ or $q$ is undefined, `applyExperienceFilter(entries, state)` equals `applyExperienceFilter(entries, { park: state.park, category: state.category })`.
+3. **Subsequence preservation**: The resulting list is always a subsequence of `entries`, preserving originating source order.
+4. **Search Monotonicity**: For identical `park` and `category` selections, if query $q_2$ contains query $q_1$ as a substring, the entries matching $q_2$ are a subset of the entries matching $q_1$.
+
+**Validates: Requirements 14.10, 14.11**
+
 ## Error Handling
 
 The feature introduces no new error codes and no new server interaction. It reuses `ApiError` and the closed `ErrorCode` union from `@dwt/shared`, and the existing 30-second client timeout in `api/friendProfile.ts` that translates an aborted request into a synthetic non-`profile_forbidden` `ApiError` (R7.4, R12.5, R12.8).
@@ -410,7 +427,7 @@ The `profile_forbidden` vs. non-forbidden branch is driven by `ApiError.code`, i
 
 ### Dual approach
 
-- **Property-based tests** verify Properties 1–5 across many generated inputs — the grouping, filtering, and selection logic where a regression would corrupt data integrity.
+- **Property-based tests** verify Properties 1–6 across many generated inputs — the grouping, filtering, search, and selection logic where a regression would corrupt data integrity.
 - **React Native Testing Library (RNTL) tests** verify tab rendering, the selected-state and accessibility wiring, per-mode rendering, avatar/empty states, and the loading / `profile_forbidden` / error / retry branches.
 - **Request-spy (integration-style) tests** verify the no-refetch-on-mode-switch (R6.5, R12.4) and no-refetch-on-filter-change (R14.4) behaviors and the scoped-retry behaviors (R7.5, R7.6, R12.6, R12.9) by asserting on a mocked `apiRequest`/fetch call count.
 
@@ -421,7 +438,7 @@ PBT is appropriate here because grouping, filtering, and mode resolution are **p
 - **Library**: [`fast-check`](https://github.com/dubzzz/fast-check), the library already used across the repo's `*.prop.test.ts` suites. It runs in the mobile package via Jest. Property-based testing is not implemented from scratch.
 - **Location**: `apps/mobile/src/screens/navigation/__tests__/*.prop.test.ts`.
 - **Iterations**: every property test runs at least **100 iterations** (`fc.assert(prop, { numRuns: 100 })`).
-- **One test per property**: each of Properties 1–5 is implemented by exactly one property-based test.
+- **One test per property**: each of Properties 1–6 is implemented by exactly one property-based test.
 - **Tagging**: each property test carries a header comment in the form
   `// Feature: friend-profile-navigation, Property {n}: {property text}`.
 - **Generators**: a `completionEntryArb` arbitrary produces `CompletionEntryDTO`s with a random Park from `PARKS`, a random category from `EXPERIENCE_CATEGORIES`, an optional rating (`null` or 1–10), an optional shared note, and an Experience name that is sometimes empty/whitespace (to exercise the unnamed-entry filter, R3.6/R4.6/R5.3/R13.3). A `filterStateArb` produces `{ park: 'All' | Park, category: 'All' | ExperienceCategory }`. A `selectionArb` produces arbitrary subsets/multisets of a mode tuple (including empty and duplicate-laden sets) for Property 5.
@@ -435,6 +452,7 @@ PBT is appropriate here because grouping, filtering, and mode resolution are **p
 | 3 — Category partition | `groupByCategory` | entry lists over all categories incl. empty categories and unnamed entries |
 | 4 — Experience_Filter | `applyExperienceFilter` | entry lists × `filterStateArb` incl. `All/All`, single-axis, and both-axis selections |
 | 5 — Mode resolver | `resolveSelectedMode` / `useViewMode` | both mode tuples × `selectionArb` (empty, singleton, multi) |
+| 6 — Search query narrowing | `applyExperienceFilter` | entry lists × `filterStateArb` (incl. search queries) |
 
 ### RNTL and example tests
 

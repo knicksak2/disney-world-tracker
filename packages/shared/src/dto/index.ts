@@ -42,7 +42,15 @@ export type { NotificationPreferenceDTO } from './NotificationPreference.js';
 export type { InboxItemDTO, InboxResponse } from './Inbox.js';
 export type { AggregateRatingDTO } from './AggregateRating.js';
 export type { LeaderboardEntryDTO } from './LeaderboardEntry.js';
-export type { StatsDTO, StatsBreakdown, CompletionCell } from './Stats.js';
+export type {
+  StatsDTO,
+  StatsBreakdown,
+  FestivalStatsDTO,
+  CompletionCell,
+  ActivityStatistics,
+  MostRiddenAttraction,
+  PersonalRecords,
+} from './Stats.js';
 export type {
   OperatingStatus,
   ForecastEntry,

@@ -270,3 +270,30 @@ export const PIN_COUNT_METRICS = [
 ] as const;
 
 export type PinCountMetric = (typeof PIN_COUNT_METRICS)[number];
+
+// ---------------------------------------------------------------------------
+// Festival_Slug
+// ---------------------------------------------------------------------------
+//
+// The closed set of EPCOT festivals a Festival_Booth (a Restaurant experience
+// carrying the `Festival Kiosk` quickService facet) can be tagged with
+// (festival-booth-tagging R1). Extending this list is a one-line code change,
+// never a migration — the persisted `experience_festival_tags.festival_slug`
+// column is plain TEXT validated against this enum at the application layer.
+
+export const FESTIVAL_SLUGS = [
+  'food-and-wine',
+  'flower-and-garden',
+  'festival-of-the-arts',
+  'festival-of-the-holidays',
+] as const;
+
+export type FestivalSlug = (typeof FESTIVAL_SLUGS)[number];
+
+/** Display label for the Tagging_CLI's menu and any future stats/pin surface. */
+export const FESTIVAL_SLUG_LABELS: { readonly [K in FestivalSlug]: string } = {
+  'food-and-wine': 'EPCOT International Food & Wine Festival',
+  'flower-and-garden': 'EPCOT International Flower & Garden Festival',
+  'festival-of-the-arts': 'EPCOT International Festival of the Arts',
+  'festival-of-the-holidays': 'EPCOT International Festival of the Holidays',
+};

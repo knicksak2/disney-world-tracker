@@ -217,3 +217,134 @@ describe('Property 4: Experience_Filter selects exactly the matching named entri
     );
   });
 });
+
+// ---------------------------------------------------------------------------
+// Property 6: Search query narrowing over Experience_Filter
+// ---------------------------------------------------------------------------
+
+// Feature: friend-profile-navigation, Property 6: Search query narrowing over Experience_Filter
+//
+// Validates: Requirements 14.10, 14.11
+
+const searchQueryArb: fc.Arbitrary<string | undefined> = fc.oneof(
+  { weight: 2, arbitrary: fc.constant(undefined) },
+  { weight: 2, arbitrary: fc.constant('') },
+  { weight: 1, arbitrary: fc.constant('   ') },
+  { weight: 4, arbitrary: fc.string({ minLength: 1, maxLength: 8 }) },
+  {
+    weight: 3,
+    arbitrary: fc.constantFrom(
+      'mountain',
+      'space',
+      'magic',
+      'epcot',
+      'ride',
+      'show',
+      'meet',
+      'parade',
+    ),
+  },
+);
+
+const filterStateWithSearchArb: fc.Arbitrary<ExperienceFilterState> = fc.record({
+  park: parkSelectionArb,
+  category: categorySelectionArb,
+  search: searchQueryArb,
+});
+
+function matchesSearch(entry: CompletionEntryDTO, search: string | undefined): boolean {
+  if (search === undefined) return true;
+  const q = search.trim().toLowerCase();
+  if (q.length === 0) return true;
+  const nameMatch = entry.experienceName.toLowerCase().includes(q);
+  const parkMatch = entry.park !== null && entry.park.toLowerCase().includes(q);
+  const categoryRawMatch = entry.category.toLowerCase().includes(q);
+  const categoryReadableMatch = entry.category.replace(/_/g, ' ').toLowerCase().includes(q);
+  const noteMatch = entry.sharedNote !== null && entry.sharedNote.toLowerCase().includes(q);
+  return nameMatch || parkMatch || categoryRawMatch || categoryReadableMatch || noteMatch;
+}
+
+function expectedFilterWithSearch(
+  entries: readonly CompletionEntryDTO[],
+  state: ExperienceFilterState,
+): CompletionEntryDTO[] {
+  return entries.filter(
+    (e) =>
+      hasAvailableName(e) &&
+      matchesPark(e, state.park) &&
+      matchesCategory(e, state.category) &&
+      matchesSearch(e, state.search),
+  );
+}
+
+describe('Property 6: Search query narrowing over Experience_Filter (R14.10, R14.11)', () => {
+  test('result equals named-and-matching entries matching park, category, and search in source order', () => {
+    fc.assert(
+      fc.property(entriesArb, filterStateWithSearchArb, (entries, state) => {
+        const result = applyExperienceFilter(entries, state);
+        const expected = expectedFilterWithSearch(entries, state);
+
+        // Result matches expected specification directly
+        expect(result).toEqual(expected);
+
+        // Result is always a subsequence of input
+        expect(isSubsequence(entries, result)).toBe(true);
+
+        // Every kept entry satisfies all four conditions
+        for (const e of result) {
+          expect(hasAvailableName(e)).toBe(true);
+          expect(matchesPark(e, state.park)).toBe(true);
+          expect(matchesCategory(e, state.category)).toBe(true);
+          expect(matchesSearch(e, state.search)).toBe(true);
+        }
+
+        // Every excluded entry fails at least one condition
+        const kept = new Set(result);
+        for (const e of entries) {
+          if (kept.has(e)) continue;
+          const passesAll =
+            hasAvailableName(e) &&
+            matchesPark(e, state.park) &&
+            matchesCategory(e, state.category) &&
+            matchesSearch(e, state.search);
+          expect(passesAll).toBe(false);
+        }
+      }),
+      { numRuns: 100 },
+    );
+  });
+
+  test('empty search or whitespace is identical to omitting search', () => {
+    fc.assert(
+      fc.property(entriesArb, filterStateArb, fc.constantFrom('', '  ', '\t', undefined), (entries, baseState, emptySearch) => {
+        const withEmptySearch = applyExperienceFilter(entries, {
+          ...baseState,
+          search: emptySearch,
+        });
+        const withoutSearch = applyExperienceFilter(entries, baseState);
+
+        expect(withEmptySearch).toEqual(withoutSearch);
+      }),
+      { numRuns: 100 },
+    );
+  });
+
+  test('search monotonicity: extending query narrows or preserves the result set', () => {
+    fc.assert(
+      fc.property(entriesArb, filterStateArb, (entries, baseState) => {
+        const q1 = 'mount';
+        const q2 = 'mountain'; // q2 extends q1
+
+        const resultQ1 = applyExperienceFilter(entries, { ...baseState, search: q1 });
+        const resultQ2 = applyExperienceFilter(entries, { ...baseState, search: q2 });
+
+        // Every element matching the more specific query q2 must also match q1
+        for (const e of resultQ2) {
+          expect(resultQ1.some((r) => r.experienceId === e.experienceId)).toBe(true);
+        }
+        expect(resultQ2.length).toBeLessThanOrEqual(resultQ1.length);
+      }),
+      { numRuns: 100 },
+    );
+  });
+});

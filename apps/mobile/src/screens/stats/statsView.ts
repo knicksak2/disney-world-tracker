@@ -28,9 +28,11 @@ import { theme } from '../../theme/theme';
 
 import { MINIMUM_RATINGS_THRESHOLD } from '../../api/statsTypes';
 import type {
+  ActivityStatistics,
   CompletionCell,
   CoverageResponse,
   FacetCoverage,
+  PersonalRecords,
   RatingDistribution,
   RatingStatistics,
   StatsResponse,
@@ -437,6 +439,45 @@ export function pickInterestsHighlight(
 }
 
 /**
+ * Pick the activity & experiences `Highlight_Card` for the hub (R18.5).
+ *
+ * WHERE an activity summary is present with at least one log, displays the
+ * title 'Activity & Experiences', a headline teasing logged ride volume
+ * (e.g. '42 rides logged'), and subtext indicating park days and repeat
+ * multiplier (e.g. '5 park days • 1.6x repeat'). WHERE no logs exist or
+ * activity is undefined, it falls back to 'Browse your experiences'.
+ * Always targets `ExperiencesDetail` (R2.9).
+ */
+export function pickExperiencesHighlight(
+  activity?: ActivityStatistics,
+): OverviewHighlight {
+  if (activity && activity.totalLogs > 0) {
+    const rideLabel =
+      activity.totalLogs === 1 ? '1 ride logged' : `${activity.totalLogs} rides logged`;
+    const dayLabel =
+      activity.distinctParkDays === 1
+        ? '1 park day'
+        : `${activity.distinctParkDays} park days`;
+    return {
+      id: 'experiences',
+      icon: 'list',
+      title: 'Activity & Experiences',
+      headline: rideLabel,
+      subtext: `${dayLabel} • ${activity.repeatMultiplier.toFixed(1)}x repeat`,
+      target: { route: 'ExperiencesDetail' },
+    };
+  }
+
+  return {
+    id: 'experiences',
+    icon: 'list',
+    title: 'Experiences',
+    headline: 'Browse your experiences',
+    target: { route: 'ExperiencesDetail' },
+  };
+}
+
+/**
  * Build the ordered, curated set of `Highlight_Card`s for the Overview hub.
  *
  * Total over any valid `StatsResponse` and deterministic — equal inputs yield
@@ -458,13 +499,7 @@ export function buildOverviewHighlights(
   const interests = pickInterestsHighlight(stats.coverage);
   if (interests) highlights.push(interests);
 
-  highlights.push({
-    id: 'experiences',
-    icon: 'list',
-    title: 'Experiences',
-    headline: 'Browse your experiences',
-    target: { route: 'ExperiencesDetail' },
-  });
+  highlights.push(pickExperiencesHighlight(stats.activity));
 
   return highlights;
 }
@@ -610,3 +645,64 @@ export function rankCategoryRows(
     };
   }).sort(byCompletionDesc);
 }
+
+// ---------------------------------------------------------------------------
+// Activity & Repeat display formatting helpers (R18.1, R19.1, R20.1)
+// ---------------------------------------------------------------------------
+
+export interface OdometerDisplay {
+  readonly totalRides: string;
+  readonly parkDays: string;
+  readonly repeatMultiplier: string;
+  readonly avgPerDay: string;
+}
+
+export function formatOdometer(activity: ActivityStatistics): OdometerDisplay {
+  return {
+    totalRides: `${activity.totalLogs}`,
+    parkDays: `${activity.distinctParkDays}`,
+    repeatMultiplier: `${activity.repeatMultiplier.toFixed(1)}×`,
+    avgPerDay: `${activity.averageRidesPerDay.toFixed(1)}`,
+  };
+}
+
+export interface PodiumRankDisplay {
+  readonly rank: number;
+  readonly medal: 'gold' | 'silver' | 'bronze' | null;
+}
+
+export function formatPodiumRank(index: number): PodiumRankDisplay {
+  const rank = index + 1;
+  const medal =
+    rank === 1 ? 'gold' : rank === 2 ? 'silver' : rank === 3 ? 'bronze' : null;
+  return { rank, medal };
+}
+
+export interface FormattedRecord {
+  readonly headline: string;
+  readonly subtext: string;
+}
+
+export function formatProductiveDay(
+  record?: PersonalRecords['mostProductiveDay'],
+): FormattedRecord | null {
+  if (!record) return null;
+  const rides = record.rideCount === 1 ? '1 ride' : `${record.rideCount} rides`;
+  const parks = record.parks.length > 0 ? ` at ${record.parks.join(', ')}` : '';
+  return {
+    headline: 'Most Productive Park Day',
+    subtext: `${rides} on ${record.date}${parks}`,
+  };
+}
+
+export function formatMarathonRecord(
+  record?: PersonalRecords['marathonRecord'],
+): FormattedRecord | null {
+  if (!record) return null;
+  const rides = record.count === 1 ? '1 ride' : `${record.count} rides`;
+  return {
+    headline: 'Attraction Marathon Record',
+    subtext: `${rides} on ${record.experienceName} (${record.date})`,
+  };
+}
+

@@ -158,6 +158,7 @@ function emptySnapshot(): StatsSnapshot {
     userRatings: [],
     resortCoverage: [],
     percentile: null,
+    festivalCounts: { lifetimeCount: 0, rows: [] },
   };
 }
 

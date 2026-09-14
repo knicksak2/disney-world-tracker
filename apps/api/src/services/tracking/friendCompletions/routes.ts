@@ -175,5 +175,6 @@ function toCompletionEntryDTO(entry: CompletionEntry): CompletionEntryDTO {
     completedOn: entry.completedOn,
     rating: entry.rating,
     sharedNote: entry.sharedNote,
+    repeatCount: entry.repeatCount,
   };
 }

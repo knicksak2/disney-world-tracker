@@ -29,9 +29,10 @@
  */
 
 import { AREA_TYPES, EXPERIENCE_CATEGORIES, PARKS } from '@dwt/shared';
-import type { AreaType, ExperienceCategory, Park } from '@dwt/shared';
+import type { AreaType, ExperienceCategory, Park, FestivalStatsDTO } from '@dwt/shared';
 
 import type {
+  ActivityStatistics,
   CompletionCell,
   CoverageResponse,
   FacetCoverage,
@@ -263,6 +264,71 @@ export function makeInsufficientRatings(
 // Top-level response
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Activity & Repeat statistics
+// ---------------------------------------------------------------------------
+
+export const DEFAULT_ACTIVITY: ActivityStatistics = {
+  totalLogs: 42,
+  distinctParkDays: 5,
+  repeatMultiplier: 1.6,
+  averageRidesPerDay: 8.4,
+  mostRidden: [
+    {
+      experienceId: '11111111-1111-1111-1111-111111111111',
+      experienceName: 'Space Mountain',
+      park: 'Magic Kingdom',
+      count: 12,
+    },
+    {
+      experienceId: '22222222-2222-2222-2222-222222222222',
+      experienceName: 'Haunted Mansion',
+      park: 'Magic Kingdom',
+      count: 8,
+    },
+    {
+      experienceId: '33333333-3333-3333-3333-333333333333',
+      experienceName: 'Big Thunder Mountain',
+      park: 'Magic Kingdom',
+      count: 6,
+    },
+    {
+      experienceId: '44444444-4444-4444-4444-444444444444',
+      experienceName: 'Pirates of the Caribbean',
+      park: 'Magic Kingdom',
+      count: 5,
+    },
+    {
+      experienceId: '55555555-5555-5555-5555-555555555555',
+      experienceName: 'Tower of Terror',
+      park: 'Hollywood Studios',
+      count: 4,
+    },
+  ],
+  personalRecords: {
+    mostProductiveDay: {
+      date: '2025-01-15',
+      rideCount: 14,
+      parks: ['Magic Kingdom', 'EPCOT'],
+    },
+    marathonRecord: {
+      experienceId: '11111111-1111-1111-1111-111111111111',
+      experienceName: 'Space Mountain',
+      date: '2025-01-15',
+      count: 6,
+    },
+  },
+};
+
+export function makeDefaultActivity(
+  overrides: Partial<ActivityStatistics> = {},
+): ActivityStatistics {
+  return {
+    ...DEFAULT_ACTIVITY,
+    ...overrides,
+  };
+}
+
 /**
  * Overrides for {@link makeStatsResponse}. `coverage` is shallow-merged over the
  * default coverage; `ratings` fully *replaces* the default ratings (use the
@@ -273,9 +339,16 @@ export function makeInsufficientRatings(
 export interface StatsFixtureOverrides {
   coverage?: Partial<CoverageResponse>;
   ratings?: RatingStatistics;
+  activity?: ActivityStatistics;
+  festivals?: FestivalStatsDTO;
   percentileRank?: number;
   percentileUnavailable?: boolean;
 }
+
+const DEFAULT_FESTIVALS: FestivalStatsDTO = Object.freeze({
+  lifetimeCount: 0,
+  byFestival: Object.freeze([]),
+});
 
 /**
  * Build a complete, valid nested `StatsResponse`. By default it describes a
@@ -291,11 +364,13 @@ export interface StatsFixtureOverrides {
 export function makeStatsResponse(
   overrides: StatsFixtureOverrides = {},
 ): StatsResponse {
-  const { coverage, ratings, percentileRank, percentileUnavailable } = overrides;
+  const { coverage, ratings, activity, festivals, percentileRank, percentileUnavailable } = overrides;
 
   return {
     coverage: makeCoverageResponse(coverage),
     ratings: ratings ?? makeSufficientRatings(),
+    festivals: festivals ?? DEFAULT_FESTIVALS,
+    ...(activity !== undefined ? { activity } : {}),
     ...(percentileRank !== undefined ? { percentileRank } : {}),
     ...(percentileUnavailable !== undefined ? { percentileUnavailable } : {}),
   };

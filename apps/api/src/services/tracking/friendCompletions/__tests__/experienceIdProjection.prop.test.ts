@@ -247,6 +247,20 @@ describe('friend completions — Property 1: Experience_Id projection', () => {
         applyMigration(db, '0010_resort_experience_category.sql');
         applyMigration(db, '0032_experience_category_taxonomy.sql');
 
+        // 0034 adds `experience_logs`, which listCompletions joins for repeatCount.
+        db.public.none(`
+          CREATE TABLE IF NOT EXISTS experience_logs (
+              id             UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+              user_id        UUID         NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+              experience_id  UUID         NOT NULL REFERENCES experiences(id),
+              visited_on     DATE         NOT NULL,
+              user_tz        TEXT         NOT NULL,
+              logged_at      TIMESTAMPTZ  NOT NULL DEFAULT now(),
+              rating         SMALLINT,
+              note           TEXT
+          );
+        `);
+
         const userId = await insertUser(pool);
 
         for (const exp of population) {

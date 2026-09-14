@@ -161,7 +161,7 @@ export async function buildSnapshot(
   pool: DbPool,
   userId: string,
 ): Promise<PinActivitySnapshot> {
-  const [catalogRes, completedRes, dayRes, friendRes, ratingRes, noteRes, tripRes] =
+  const [catalogRes, completedRes, dayRes, friendRes, ratingRes, noteRes, tripRes, festivalTaggedRes] =
     await Promise.all([
       pool.query<ExperienceRow>(
         `SELECT upstream_entity_id AS upstream_id, category, park, land,
@@ -203,6 +203,14 @@ export async function buildSnapshot(
         `SELECT COUNT(*) AS n FROM trip_memberships WHERE user_id = $1`,
         [userId],
       ),
+      pool.query<{ upstream_id: string | null }>(
+        `SELECT DISTINCT e.upstream_entity_id AS upstream_id
+           FROM completions c
+           JOIN experience_festival_tags t ON t.experience_id = c.experience_id
+           JOIN experiences e ON e.id = c.experience_id
+          WHERE c.user_id = $1 AND e.upstream_entity_id IS NOT NULL`,
+        [userId],
+      ),
     ]);
 
   const catalog = catalogRes.rows
@@ -214,6 +222,11 @@ export async function buildSnapshot(
     if (r.upstream_id !== null) completed.add(r.upstream_id);
   }
 
+  const festivalTaggedCompletedIds = new Set<string>();
+  for (const r of festivalTaggedRes.rows) {
+    if (r.upstream_id !== null) festivalTaggedCompletedIds.add(r.upstream_id);
+  }
+
   return {
     catalog,
     completed,
@@ -222,6 +235,7 @@ export async function buildSnapshot(
     ratings: toCount(ratingRes.rows[0]?.n),
     notes: toCount(noteRes.rows[0]?.n),
     trips: toCount(tripRes.rows[0]?.n),
+    festivalTaggedCompletedIds,
   };
 }
 

@@ -87,6 +87,7 @@ function makeSnapshot(overrides: {
     userRatings: [],
     resortCoverage: [],
     percentile: null,
+    festivalCounts: { lifetimeCount: 0, rows: [] },
   };
 }
 

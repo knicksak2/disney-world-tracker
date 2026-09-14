@@ -378,3 +378,38 @@ This feature consumes the `experience-activity-logging` data foundation to evalu
 15. THE Pin Showcase unplaced pins tray SHALL provide search filtering and sorting controls (by catalog display order, name alphabetically, and tier rank), allowing the User to quickly locate unplaced pins in their collection.
 16. THE Pin Showcase SHALL offer an expandable browse view (modal sheet) displaying all available unplaced pins in a multi-column grid with full-sized artwork, pin names, tier badges, and track metadata, overcoming single-row scroll constraints.
 17. THE Pin Showcase SHALL allow a User to tap an unplaced pin (in the tray or the expanded browse view) to automatically place it at the first available non-overlapping coordinate on the board, in addition to supporting manual drag-and-drop placement.
+
+---
+
+## Festival Foodie Historical Correctness — Added Requirement
+
+> **Revision note (additive).** Requirement 25 below fixes an existing, documented gap in the
+> Festival Foodie ladder (Requirement 10.3): completing a festival booth today counts toward the
+> ladder only while that booth stays `active`, so a booth's completion is silently dropped the
+> moment its festival ends and Catalog_Sync soft-deletes it — the exact gap this design's Data
+> Models section already called out ("Higher rungs and per-festival splits are deferred...blocked
+> until Catalog_Sync tags each booth's festival and retains booths across festivals"). The fix is
+> implemented in the new `festival-booth-tagging` spec, which this requirement depends on. It does
+> not change Requirement 10.3's thresholds, tiers, or pin ids, and it does not touch any other Pin
+> count metric or ladder. No existing requirement is removed, changed, or renumbered.
+
+### Requirement 25: Festival Foodie Historical Correctness
+
+**User Story:** As a User who visited festival booths during a past festival, I want those visits
+to keep counting toward my Festival Foodie ladder after the festival ends, so completing a
+since-deactivated booth is not silently lost from my pin progress.
+
+#### Acceptance Criteria
+
+1. THE Pin_Service's `festivalBooths` count metric SHALL count a User's completed experience
+   whenever that experience carries a Festival_Tag (per `festival-booth-tagging`
+   Requirement 2), regardless of whether the experience's `active` column is currently `TRUE` or
+   `FALSE`.
+2. THE Pin_Service's `festivalBooths` count metric SHALL continue to count a completed,
+   currently-active, `Festival Kiosk`-faceted experience even before it has been tagged, so the
+   fix is additive and never regresses the existing (Requirement 10.3) behavior during the window
+   before a newly-opened festival's booths are tagged.
+3. THE Pin_Service SHALL count a given completed experience toward `festivalBooths` at most once,
+   even when it satisfies both 25.1 and 25.2 simultaneously (an active, already-tagged booth).
+4. THE Pin_Service SHALL NOT change the `active = TRUE` catalog filter for any Pin count metric or
+   ladder other than `festivalBooths`.

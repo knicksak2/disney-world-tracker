@@ -322,4 +322,70 @@ describe('FriendProfileScreen Progress_Comparison loading/unavailable (R12.5, R1
     expect(screen.queryByTestId('friend-comparison-loading')).toBeNull();
     expect(screen.getByTestId('tab-selector')).toBeTruthy();
   });
+
+  // -------------------------------------------------------------------------
+  // R22.1: Activity volume comparison & shared favorite attraction
+  // -------------------------------------------------------------------------
+  test('R22.1: renders activity volume comparison and shared favorite attraction when activity data is present', async () => {
+    routeHandlers.ownStats = () =>
+      Promise.resolve(
+        makeStatsResponse({
+          activity: {
+            totalLogs: 185,
+            distinctParkDays: 14,
+            repeatMultiplier: 2.2,
+            averageRidesPerDay: 13.2,
+            mostRidden: [
+              {
+                experienceId: '11111111-1111-1111-1111-111111111111',
+                experienceName: 'Space Mountain',
+                park: 'Magic Kingdom',
+                count: 12,
+              },
+            ],
+            personalRecords: {},
+          },
+        }),
+      );
+    routeHandlers.friendStats = () =>
+      Promise.resolve(
+        makeStatsResponse({
+          activity: {
+            totalLogs: 92,
+            distinctParkDays: 8,
+            repeatMultiplier: 1.5,
+            averageRidesPerDay: 11.5,
+            mostRidden: [
+              {
+                experienceId: '11111111-1111-1111-1111-111111111111',
+                experienceName: 'Space Mountain',
+                park: 'Magic Kingdom',
+                count: 9,
+              },
+            ],
+            personalRecords: {},
+          },
+        }),
+      );
+
+    renderScreen();
+    await flushMicrotasks();
+
+    fireEvent.press(screen.getByTestId('tab-Compare'));
+    await flushMicrotasks();
+
+    expect(screen.getByText('Activity & volume')).toBeTruthy();
+    expect(screen.getByTestId('friend-comparison-total-rides')).toBeTruthy();
+    expect(screen.getByText('185')).toBeTruthy();
+    expect(screen.getByText('92')).toBeTruthy();
+
+    expect(screen.getByTestId('friend-comparison-park-days')).toBeTruthy();
+    expect(screen.getByText('14')).toBeTruthy();
+    expect(screen.getByText('8')).toBeTruthy();
+
+    expect(screen.getByTestId('friend-comparison-shared-attraction')).toBeTruthy();
+    expect(screen.getByText('Shared Favorite Attraction')).toBeTruthy();
+    expect(screen.getByText('12 rides')).toBeTruthy();
+    expect(screen.getByText('9 rides')).toBeTruthy();
+  });
 });

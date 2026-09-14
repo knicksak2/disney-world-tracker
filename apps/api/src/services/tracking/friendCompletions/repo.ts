@@ -72,6 +72,11 @@ export interface CompletionEntry {
   readonly rating: number | null;
   /** Shareable Note body, or `null` for no-Note / present-but-private (R4.6, R4.7). */
   readonly sharedNote: string | null;
+  /**
+   * Total number of visits/rides logged by the user, >= 1.
+   * Derived from experience_logs count, defaulting to 1 (Requirements 21.1–21.3).
+   */
+  readonly repeatCount: number;
 }
 
 /**
@@ -111,6 +116,7 @@ interface CompletionEntryRow {
   completed_on: Date | string;
   rating: number | string | null;
   shared_note: string | null;
+  repeat_count: number | string | null;
 }
 
 async function listCompletions(
@@ -125,15 +131,22 @@ async function listCompletions(
             e.category,
             c.completed_on,
             r.value AS rating,
-            CASE WHEN n.shareable THEN n.body ELSE NULL END AS shared_note
+            CASE WHEN n.shareable THEN n.body ELSE NULL END AS shared_note,
+            COALESCE(l.log_count, 1)::int AS repeat_count
        FROM completions c
        JOIN experiences e ON e.id = c.experience_id AND e.active = TRUE
        LEFT JOIN ratings r ON r.user_id = c.user_id AND r.experience_id = c.experience_id
        LEFT JOIN notes   n ON n.user_id = c.user_id AND n.experience_id = c.experience_id
+       LEFT JOIN (
+         SELECT experience_id, COUNT(*)::int AS log_count
+           FROM experience_logs
+          WHERE user_id = $1
+          GROUP BY experience_id
+       ) l ON l.experience_id = c.experience_id
       WHERE c.user_id = $1
       ORDER BY c.completed_on DESC,
                lower(e.name) ASC,
-               lower(e.park) ASC,
+               lower(COALESCE(e.park, '')) ASC,
                lower(e.category) ASC
       LIMIT ${MAX_ENTRIES}`,
     [userId],
@@ -160,6 +173,7 @@ function rowToEntry(row: CompletionEntryRow): CompletionEntry {
     completedOn: toIsoDate(row.completed_on),
     rating: row.rating === null ? null : Number(row.rating),
     sharedNote: row.shared_note,
+    repeatCount: Math.max(1, Number(row.repeat_count ?? 1)),
   };
 }
 

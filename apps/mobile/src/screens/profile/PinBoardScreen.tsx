@@ -593,7 +593,7 @@ function PinCell({ item, meta, size, readyToClaim, onTap }: PinCellProps): JSX.E
   }`;
 
   return (
-    <View style={styles.cell}>
+    <View style={[styles.cell, { width: size }]}>
       <Animated.View style={readyToClaim ? [styles.readyRing, { transform: [{ scale }] }] : undefined}>
         {crossfading ? (
           <Pressable
@@ -658,7 +658,12 @@ const styles = StyleSheet.create({
   filterRow: { paddingVertical: theme.spacing.sm, paddingHorizontal: theme.spacing.lg },
   filterChip: { marginRight: theme.spacing.sm },
   grid: { padding: theme.spacing.lg },
-  gridRow: { justifyContent: 'space-between', marginBottom: theme.spacing.md },
+  gridRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+    gap: theme.spacing.md,
+    marginBottom: theme.spacing.md,
+  },
   cell: { alignItems: 'center' },
   readyRing: {
     borderRadius: 999,

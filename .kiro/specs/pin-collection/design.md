@@ -741,6 +741,15 @@ animatronics_veteran, the boat / 360-cinema / 1971 sets) with one consistently-t
 - Per-festival booth pin sets (Food & Wine, Flower & Garden, Arts, Holidays) — blocked until
   Catalog_Sync tags each booth's festival and retains booths across festivals.
 
+**Revision note (additive, Requirement 25).** The "retains booths across festivals" half of the
+blocker above is now unblocked by the `festival-booth-tagging` spec: it adds an
+`experience_festival_tags` table (never touched by Catalog_Sync) and fixes the `festivalBooths`
+metric to count tagged completions regardless of `active`. Per-festival booth pin *sets* (a
+distinct Food & Wine pin vs. a distinct Flower & Garden pin) remain deferred — Requirement 25 only
+fixes the existing, single, cross-festival Festival Foodie ladder's historical accuracy; it does
+not add new per-festival pins. See `festival-booth-tagging`'s design.md for the tag schema and the
+union-count logic.
+
 ## Data Models
 
 ### Migration `0035_pins_and_challenges.sql`
@@ -1391,6 +1400,18 @@ payload carries no placement data to consult.*
 *For any set of unplaced pins, search filtering by query string matches pins whose name, description, or track contains the query (case-insensitive); sorting by catalog order preserves catalog index, sorting by name orders alphabetically, and sorting by tier ranks Prism > Amethyst > Gold > Silver > Bronze. When auto-placing a pin via tap, `findAvailablePlacement` returns a coordinate that maintains >= `SHOWCASE_MIN_PIN_CLEARANCE` from all existing placements, or `null` if the board is saturated.*
 **Validates: Requirement 24.15, 24.16, 24.17**
 
+### Property 25: Festival Metric Historical Union (cross-spec, additive)
+
+*For any `PinActivitySnapshot`, the `festivalBooths` count equals the number of distinct completed
+experiences that are either (a) currently an active `Festival Kiosk`-faceted booth not present in
+the tagged-completions set, or (b) present in the tagged-completions set — and no experience is
+counted twice even when both (a) and (b) hold for it simultaneously. The tagged-completions set is
+supplied by `festival-booth-tagging`'s `experience_festival_tags` table and is unaffected by
+`active`.*
+**Validates: Requirements 25.1, 25.2, 25.3, 25.4** (defined and property-tested in
+`festival-booth-tagging`'s design.md as its own Property 25; restated here so `pin-collection`'s
+own Correctness Properties section stays complete for anyone reading this spec in isolation.)
+
 ## Testing Strategy — Pin Showcase (additive to the existing Testing Strategy section)
 
 - **Repo Tests (`apps/api/src/services/pins/__tests__/showcaseRepo.integration.test.ts`,
@@ -1451,3 +1472,16 @@ All 167 pin motifs and architectural vector shapes are derived from authorized, 
    - Index of 150+ verified open icon collections (Lucide, Tabler, FontAwesome Free, Google Material Symbols, Phosphor).
 4. **Tabler Icons & Lucide Icons (MIT)**:
    - Modern UI and vehicle glyphs for transit and facility badges.
+
+## Testing Strategy — Festival Foodie Historical Correctness (additive, Requirement 25)
+
+- Property 25 and its supporting unit/integration tests are owned by, and live in,
+  `festival-booth-tagging`'s spec and codebase footprint (`apps/api/src/services/pins/evaluator.ts`
+  / `repo.ts` changes and their tests) — see that spec's Testing Strategy section for the full
+  list. `pin-collection`'s own test suite (`evaluator.test.ts`, `repo.integration.test.ts`) gains
+  no new test file of its own beyond what's already being extended there; this section exists so
+  the dependency is visible from this spec without duplicating the other spec's test plan.
+- This spec's existing `evaluator.prop.test.ts` Properties 1-4/8/9/12 and `repo.integration.test.ts`
+  suites are unaffected — the `festivalBooths` metric change only alters how one case in
+  `metricValue` sources its input snapshot field, not the shape of `PinCriteria` evaluation, so no
+  existing property or test in this spec needs to change.

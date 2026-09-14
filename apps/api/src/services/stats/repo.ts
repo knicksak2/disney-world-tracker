@@ -63,6 +63,13 @@ import type { RawCoverageCell } from './coverage.js';
 import type { RawFacetExperienceRow } from './facets.js';
 import type { RawUserRatingRow } from './ratingStats.js';
 import type { RawResortCoverageRow } from './resorts.js';
+import type { RawFestivalCountRow } from './festivals.js';
+import type {
+  RawActivityMaterial,
+  RawMostRiddenRow,
+  RawProductiveDayRow,
+  RawMarathonRecordRow,
+} from './activity.js';
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -123,6 +130,18 @@ export interface StatsSnapshot {
   readonly resortCoverage: readonly RawResortCoverageRow[];
   /** Percentile material, or `null` when not requested (→ `computePercentileRank`). */
   readonly percentile: PercentileInput | null;
+  /**
+   * Activity volume, podium, and personal records material (→ `rollUpActivity`).
+   */
+  readonly activity?: RawActivityMaterial;
+  /**
+   * Raw festival completion counts for lifetime and per-festival breakdown
+   * (→ `rollUpFestivalStats`).
+   */
+  readonly festivalCounts: {
+    readonly lifetimeCount: number;
+    readonly rows: readonly RawFestivalCountRow[];
+  };
 }
 
 /**
@@ -149,6 +168,14 @@ export type { RawCoverageCell } from './coverage.js';
 export type { RawFacetExperienceRow } from './facets.js';
 export type { RawUserRatingRow } from './ratingStats.js';
 export type { RawResortCoverageRow } from './resorts.js';
+export type { RawFestivalCountRow } from './festivals.js';
+export type {
+  RawActivityMaterial,
+  RawActivityVolumeRow,
+  RawMostRiddenRow,
+  RawProductiveDayRow,
+  RawMarathonRecordRow,
+} from './activity.js';
 
 // ---------------------------------------------------------------------------
 // Row shapes returned by the SQL
@@ -217,6 +244,42 @@ interface ResortDenominatorRow {
 interface ResortNumeratorRow {
   readonly resort_id: string;
   readonly completed: string;
+}
+
+interface ActivityVolumeRow {
+  readonly total_logs: string | number;
+  readonly distinct_park_days: string | number;
+  readonly unique_logged_experiences: string | number;
+}
+
+interface MostRiddenRow {
+  readonly experience_id: string;
+  readonly experience_name: string;
+  readonly park: string | null;
+  readonly count: string | number;
+}
+
+interface ProductiveDayRow {
+  readonly date: Date | string;
+  readonly ride_count: string | number;
+  readonly parks: readonly string[];
+}
+
+interface MarathonRecordRow {
+  readonly experience_id: string;
+  readonly experience_name: string;
+  readonly date: Date | string;
+  readonly count: string | number;
+}
+
+function toIsoDate(value: Date | string): string {
+  if (typeof value === 'string') {
+    return value.length >= 10 ? value.slice(0, 10) : value;
+  }
+  const yyyy = value.getUTCFullYear().toString().padStart(4, '0');
+  const mm = (value.getUTCMonth() + 1).toString().padStart(2, '0');
+  const dd = value.getUTCDate().toString().padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -382,7 +445,139 @@ export function createStatsRepo(pool: DbPool): StatsRepo {
           [targetUserId],
         );
 
+        // 8. Activity volume totals (Requirements 18.1–18.7)
+        const activityVolume = await client.query<ActivityVolumeRow>(
+          `SELECT COUNT(*)::int AS total_logs,
+                  COUNT(DISTINCT el.visited_on)::int AS distinct_park_days,
+                  COUNT(DISTINCT el.experience_id)::int AS unique_logged_experiences
+             FROM experience_logs el
+             JOIN experiences e ON e.id = el.experience_id AND e.active = TRUE
+            WHERE el.user_id = $1`,
+          [targetUserId],
+        );
+
+        // 9. Top-5 Most Ridden Attractions / Podium (Requirements 19.1–19.3)
+        const mostRiddenResult = await client.query<MostRiddenRow>(
+          `SELECT el.experience_id::text AS experience_id,
+                  e.name AS experience_name,
+                  e.park AS park,
+                  COUNT(*)::int AS count
+             FROM experience_logs el
+             JOIN experiences e ON e.id = el.experience_id AND e.active = TRUE
+            WHERE el.user_id = $1
+            GROUP BY el.experience_id, e.name, e.park
+            ORDER BY count DESC, lower(e.name) ASC, el.experience_id ASC
+            LIMIT 5`,
+          [targetUserId],
+        );
+
+        // 10. Most Productive Park Day (Requirements 20.1–20.3)
+        const productiveDayResult = await client.query<ProductiveDayRow>(
+          `SELECT el.visited_on AS date,
+                  COUNT(*)::int AS ride_count,
+                  COALESCE(
+                    ARRAY_AGG(DISTINCT e.park) FILTER (WHERE e.park IS NOT NULL),
+                    '{}'::text[]
+                  ) AS parks
+             FROM experience_logs el
+             JOIN experiences e ON e.id = el.experience_id AND e.active = TRUE
+            WHERE el.user_id = $1
+            GROUP BY el.visited_on
+            ORDER BY ride_count DESC, el.visited_on DESC
+            LIMIT 1`,
+          [targetUserId],
+        );
+
+        // 11. Attraction Marathon Record (Requirements 20.4–20.6)
+        const marathonRecordResult = await client.query<MarathonRecordRow>(
+          `SELECT el.experience_id::text AS experience_id,
+                  e.name AS experience_name,
+                  el.visited_on AS date,
+                  COUNT(*)::int AS count
+             FROM experience_logs el
+             JOIN experiences e ON e.id = el.experience_id AND e.active = TRUE
+            WHERE el.user_id = $1
+            GROUP BY el.experience_id, e.name, el.visited_on
+            ORDER BY count DESC, el.visited_on DESC, lower(e.name) ASC, el.experience_id ASC
+            LIMIT 1`,
+          [targetUserId],
+        );
+
+        // 12. Festival Booth Lifetime Count (Requirement 5.1)
+        const festivalLifetimeResult = await client.query<{ n: string | number }>(
+          `SELECT COUNT(DISTINCT c.experience_id)::bigint AS n
+             FROM completions c
+             JOIN experience_festival_tags t ON t.experience_id = c.experience_id
+            WHERE c.user_id = $1`,
+          [targetUserId],
+        );
+
+        // 13. Festival Booth Breakdown (Requirement 5.2)
+        const festivalBreakdownResult = await client.query<RawFestivalCountRow>(
+          `SELECT t.festival_slug AS slug, COUNT(DISTINCT c.experience_id)::bigint AS n
+             FROM completions c
+             JOIN experience_festival_tags t ON t.experience_id = c.experience_id
+            WHERE c.user_id = $1
+            GROUP BY t.festival_slug`,
+          [targetUserId],
+        );
+
         await client.query('COMMIT');
+
+        const volumeRow = activityVolume.rows[0];
+        const totalLogs = Number(volumeRow?.total_logs ?? 0);
+        const distinctParkDays = Number(volumeRow?.distinct_park_days ?? 0);
+        const uniqueLoggedExperiences = Number(
+          volumeRow?.unique_logged_experiences ?? 0,
+        );
+
+        const mostRidden: RawMostRiddenRow[] = mostRiddenResult.rows.map((row) => ({
+          experienceId: row.experience_id,
+          experienceName: row.experience_name,
+          park: row.park && PARK_SET.has(row.park) ? (row.park as Park) : null,
+          count: Number(row.count),
+        }));
+
+        let mostProductiveDay: RawProductiveDayRow | null = null;
+        const prodDayRow = productiveDayResult.rows[0];
+        if (prodDayRow && totalLogs > 0) {
+          const parks = (prodDayRow.parks || []).filter(
+            (p): p is Park => PARK_SET.has(p),
+          );
+          mostProductiveDay = {
+            date: toIsoDate(prodDayRow.date),
+            rideCount: Number(prodDayRow.ride_count),
+            parks,
+          };
+        }
+
+        let marathonRecord: RawMarathonRecordRow | null = null;
+        const marathonRow = marathonRecordResult.rows[0];
+        if (marathonRow && totalLogs > 0) {
+          marathonRecord = {
+            experienceId: marathonRow.experience_id,
+            experienceName: marathonRow.experience_name,
+            date: toIsoDate(marathonRow.date),
+            count: Number(marathonRow.count),
+          };
+        }
+
+        const activity: RawActivityMaterial = {
+          volume: {
+            totalLogs,
+            distinctParkDays,
+            uniqueLoggedExperiences,
+          },
+          mostRidden,
+          mostProductiveDay,
+          marathonRecord,
+        };
+
+        const festivalLifetime = Number(festivalLifetimeResult.rows[0]?.n ?? 0);
+        const festivalCounts = {
+          lifetimeCount: festivalLifetime,
+          rows: festivalBreakdownResult.rows,
+        };
 
         return {
           coverage: mergeCoverageRows(denominators.rows, numerators.rows),
@@ -393,6 +588,8 @@ export function createStatsRepo(pool: DbPool): StatsRepo {
             resortNumerators.rows,
           ),
           percentile,
+          activity,
+          festivalCounts,
         };
       } catch (err) {
         // Best-effort rollback; swallow any rollback error so the original

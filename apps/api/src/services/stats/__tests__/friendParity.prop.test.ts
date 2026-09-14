@@ -145,6 +145,7 @@ function makeFakeRepo(): FakeRepo {
             userRatings,
             resortCoverage: [],
             percentile: null,
+            festivalCounts: { lifetimeCount: 0, rows: [] },
           };
         }
         throw new Error(`unexpected getStatsSnapshot for ${userId}`);

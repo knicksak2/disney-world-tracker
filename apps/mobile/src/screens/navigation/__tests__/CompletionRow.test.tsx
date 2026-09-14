@@ -278,4 +278,42 @@ describe('CompletionRow — affordance gating', () => {
       expect(onOpenExperience).not.toHaveBeenCalled();
     });
   });
+
+  // -------------------------------------------------------------------------
+  // Repeat badge (R19.1)
+  // -------------------------------------------------------------------------
+  describe('CompletionRow — repeat badge (R19.1)', () => {
+    test('renders repeat badge when repeatCount > 1', () => {
+      render(
+        <CompletionRow
+          entry={makeEntry({ repeatCount: 4 })}
+          fields="experiences"
+          testID="row"
+        />,
+      );
+      expect(screen.getByTestId('row-repeat-badge')).toBeTruthy();
+      expect(screen.getByText('4×')).toBeTruthy();
+    });
+
+    test('omits repeat badge when repeatCount <= 1 or undefined', () => {
+      const { unmount } = render(
+        <CompletionRow
+          entry={makeEntry({ repeatCount: 1 })}
+          fields="experiences"
+          testID="row-1"
+        />,
+      );
+      expect(screen.queryByTestId('row-1-repeat-badge')).toBeNull();
+      unmount();
+
+      render(
+        <CompletionRow
+          entry={makeEntry()}
+          fields="experiences"
+          testID="row-undefined"
+        />,
+      );
+      expect(screen.queryByTestId('row-undefined-repeat-badge')).toBeNull();
+    });
+  });
 });

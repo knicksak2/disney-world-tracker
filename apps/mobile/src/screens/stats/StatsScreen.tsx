@@ -321,8 +321,12 @@ export default function StatsScreen(): JSX.Element {
         contentContainerStyle={styles.scrollContent}
         testID="stats-screen"
       >
-        {/* Hero overall-completion ring (R1.1, R1.2). */}
-        <OverallHeroCard overall={stats.coverage.overall} testID="stats-hero" />
+        {/* Hero overall-completion ring + activity pillar (R1.1, R1.2, R18.1). */}
+        <OverallHeroCard
+          overall={stats.coverage.overall}
+          activity={stats.activity}
+          testID="stats-hero"
+        />
 
         {/* Opt-in percentile brag — renders null when absent / unavailable,
             never blocking the sections below (R10.3, R10.4, R10.5, R14.4). */}

@@ -96,6 +96,9 @@ screen (see Friend Parity and the Coverage detail screen).
 | D8 | Experiences placement | Move the Experiences browse into its **own drill-in** `ExperiencesDetailScreen` (wrapping the unchanged `ExperiencesList`), reached from an entry card on the hub — rather than keeping it inline on the landing | The experiences list is itself long and filterable; inlining it on the landing would reintroduce the endless scroll the user rejected. A bounded entry card + dedicated route keeps the hub compact and gives the list room to breathe with its own filter/loading/retry, while the shared list component stays untouched (D7). |
 | D9 | Per-resort activity completion (`byResort`) | Add **one additive coverage dimension** to the stats response, computed live inside the **existing** `REPEATABLE READ READ ONLY` snapshot transaction — grouping active experiences by `experiences.resort_id` joined to `resorts` for the name — rather than adding a new endpoint, a new transaction, or a DB migration | The data already exists (`experiences.resort_id` → `resorts`, migration 0004); it just was not surfaced. Folding one more grouped read into the same snapshot keeps every numerator/denominator on one pinned catalog state (R8) and stays within the existing latency budget (R11), with the smallest possible blast radius. Excluding resort-representing stand-in rows keeps it independent of the hotels-visited `coverage.resort` stat. |
 | D10 | `byResort` presentation | Surface `byResort` as a **new "Resorts" lens** on the Coverage detail screen, rendering **ranked per-resort progress bars** with the existing bar/list components, while keeping the aggregate "Hotels visited" (`coverage.resort`) treatment | Per-resort *activity* completion and hotels-*visited* are two different, complementary stories; showing both on the Coverage screen tells the fuller picture. Reusing the ranked-bar `LabeledCellList`/`ProgressBar` pattern (as used for lands/resort areas) means no new visual language and minimal mobile blast radius. |
+| D11 | Unified Activity & Experiences drill-in | Enhance `ExperiencesDetailScreen` to host the activity summary cards (odometer grid, Hall of Fame podium, personal records) above the completed experiences list, sourced from the shared `['me-stats']` query while the list below continues to read from `useOwnCompletionsQuery()` | Amends D7/D8 without re-introducing endless scroll on the landing hub. Unifies repeat stats and completed items in one place while keeping the completions query's independent error/retry boundary intact. Visual reference: `repeat-activity-mockup.html`. |
+| D12 | Deterministic activity SQL & tie-breaks | Run indexed queries inside the single `REPEATABLE READ READ ONLY` snapshot transaction using `FILTER (WHERE e.park IS NOT NULL)` for parks array and multi-key deterministic `ORDER BY` tie-breaks | Guarantees non-null `Park[]` types and deterministic query results across test runs and DB clusters. |
+| D13 | Friend volume comparison | Add side-by-side volume comparison (Total Rides Logged, Distinct Park Days, and Shared Top Attraction) to Friend Profile `Compare` mode | Extends R11.6 friend parity with valuable activity context without disclosing private notes or raw timestamps. |
 
 ## Backend Addition: `byResort` Coverage Dimension (apps/api)
 
@@ -274,6 +277,116 @@ transaction (both queries hit the already-indexed `experiences.active` /
 R11 latency budgets (the 2s / 3s statement-timeout envelope is unchanged); the
 perf test should seed resort-linked experiences so the added read is exercised
 under load.
+
+## Backend Addition: Activity Volume & Repeat Statistics (apps/api)
+
+Introduces the `activity` object on `StatsResponse` (Requirements 18–20) and `repeatCount` on `CompletionEntryDTO` (Requirement 21), powered by the existing `experience_logs` event stream (migration 0034).
+
+### Data Reality & SQL Queries
+
+All activity queries run inside the **existing single `REPEATABLE READ READ ONLY` snapshot transaction** in `apps/api/src/services/stats/repo.ts`. Soft-deleted experiences (`active = FALSE`) are excluded:
+
+1. **Volume Totals**:
+```sql
+SELECT COUNT(*)::int AS total_logs,
+       COUNT(DISTINCT visited_on)::int AS distinct_park_days,
+       COUNT(DISTINCT experience_id)::int AS unique_logged_experiences
+  FROM experience_logs el
+  JOIN experiences e ON e.id = el.experience_id AND e.active = TRUE
+ WHERE el.user_id = $1;
+```
+
+2. **Top-5 Most Ridden Attractions (Podium)**:
+```sql
+SELECT el.experience_id::text AS experience_id,
+       e.name AS experience_name,
+       e.park AS park,
+       COUNT(*)::int AS count
+  FROM experience_logs el
+  JOIN experiences e ON e.id = el.experience_id AND e.active = TRUE
+ WHERE el.user_id = $1
+ GROUP BY el.experience_id, e.name, e.park
+ ORDER BY count DESC, lower(e.name) ASC, el.experience_id ASC
+ LIMIT 5;
+```
+*Tie-Break Order*: `count DESC`, then `lower(name) ASC`, then `experience_id ASC`.
+
+3. **Most Productive Park Day**:
+```sql
+SELECT el.visited_on::text AS date,
+       COUNT(*)::int AS ride_count,
+       COALESCE(
+         ARRAY_AGG(DISTINCT e.park) FILTER (WHERE e.park IS NOT NULL),
+         '{}'::text[]
+       ) AS parks
+  FROM experience_logs el
+  JOIN experiences e ON e.id = el.experience_id AND e.active = TRUE
+ WHERE el.user_id = $1
+ GROUP BY el.visited_on
+ ORDER BY ride_count DESC, el.visited_on DESC
+ LIMIT 1;
+```
+*Null Park Defense*: `FILTER (WHERE e.park IS NOT NULL)` ensures non-park resort/Disney Springs activities do not inject `null` into `parks: Park[]`.
+*Tie-Break*: Most recent calendar date (`el.visited_on DESC`).
+
+4. **Attraction Marathon Record**:
+```sql
+SELECT el.experience_id::text AS experience_id,
+       e.name AS experience_name,
+       el.visited_on::text AS date,
+       COUNT(*)::int AS count
+  FROM experience_logs el
+  JOIN experiences e ON e.id = el.experience_id AND e.active = TRUE
+ WHERE el.user_id = $1
+ GROUP BY el.experience_id, e.name, el.visited_on
+ ORDER BY count DESC, el.visited_on DESC, lower(e.name) ASC, el.experience_id ASC
+ LIMIT 1;
+```
+*Tie-Break*: `count DESC`, then `el.visited_on DESC`, then `lower(e.name) ASC`, then `experience_id ASC`.
+
+5. **Master Completed Experiences List (`CompletionEntryDTO.repeatCount`)**:
+In `apps/api/src/services/tracking/friendCompletions/repo.ts`:
+```sql
+SELECT e.id AS experience_id,
+       e.name AS experience_name,
+       e.park,
+       e.area_type,
+       e.category,
+       c.completed_on,
+       r.value AS rating,
+       CASE WHEN n.shareable THEN n.body ELSE NULL END AS shared_note,
+       COALESCE(l.log_count, 1)::int AS repeat_count
+  FROM completions c
+  JOIN experiences e ON e.id = c.experience_id AND e.active = TRUE
+  LEFT JOIN ratings r ON r.user_id = c.user_id AND r.experience_id = c.experience_id
+  LEFT JOIN notes   n ON n.user_id = c.user_id AND n.experience_id = c.experience_id
+  LEFT JOIN (
+    SELECT experience_id, COUNT(*)::int AS log_count
+      FROM experience_logs
+     WHERE user_id = $1
+     GROUP BY experience_id
+  ) l ON l.experience_id = c.experience_id
+ WHERE c.user_id = $1
+ ORDER BY c.completed_on DESC,
+          lower(e.name) ASC,
+          lower(COALESCE(e.park, '')) ASC,
+          lower(e.category) ASC
+ LIMIT 5000;
+```
+*Bounds Invariant*: `COALESCE(l.log_count, 1)` guarantees `repeatCount >= 1` for every completed item.
+
+### Pure Roll-Up (`apps/api/src/services/stats/activity.ts`)
+
+Pure function `rollUpActivity(raw: RawActivityMaterial): ActivityStatistics`:
+- `repeatMultiplier`: If `uniqueLoggedExperiences === 0`, returns `1.0`. Otherwise `Math.max(1.0, Number((totalLogs / uniqueLoggedExperiences).toFixed(1)))`.
+- `averageRidesPerDay`: If `distinctParkDays === 0`, returns `0.0`. Otherwise `Number((totalLogs / distinctParkDays).toFixed(1))`.
+- Safe empty states when `totalLogs === 0`: `mostRidden: []`, `personalRecords: {}`.
+
+### Write-Path Synchronization (`apps/api/src/services/tracking/completion/repo.ts`)
+
+- **`mark()`**: Wraps in `BEGIN ... COMMIT`; inserts into `completions`, and dual-writes a base row into `experience_logs (user_id, experience_id, visited_on, user_tz)` atomically.
+- **`edit()`**: Wraps in `BEGIN ... COMMIT`; reads old `completed_on` `FOR UPDATE`, updates `completions`, and updates matching unannotated log (`visited_on = old_date AND rating IS NULL AND note IS NULL`).
+- **`unmark()`**: Wraps in `BEGIN ... COMMIT`; deletes from `completions`, and deletes matching unannotated log (`rating IS NULL AND note IS NULL`). User-authored logs with notes or ratings (from activity logging) are preserved.
 
 ## Architecture
 
@@ -1385,6 +1498,26 @@ exist, contains no duplicate `resortId`, and is ordered by a total order
 label), matching the facet display sort. On mobile, the Resorts lens renders
 these rows in server order and reads each value only through
 `coverage.byResort[i].{resortId,label,cell}`.
+
+### Property 14: Activity volume bounds & invariant
+**Validates:** Requirements 18.1, 18.2, 18.3, 18.4, 18.5, 18.6, 18.7
+For any valid stats snapshot, `rollUpActivity` yields `totalLogs >= distinctParkDays`, `averageRidesPerDay >= 0.0`, and `repeatMultiplier >= 1.0` (with `repeatMultiplier === 1.0` when `totalLogs === 0`). `averageRidesPerDay` equals `(totalLogs / distinctParkDays).toFixed(1)` when `distinctParkDays > 0` and `0.0` otherwise.
+
+### Property 15: Most-ridden podium ordering & determinism
+**Validates:** Requirements 19.1, 19.2, 19.3
+For any valid stats snapshot, `mostRidden` contains at most 5 items, sorted strictly by `count DESC`, then case-insensitive `lower(name) ASC`, then `experience_id ASC`. Each item corresponds to an active experience.
+
+### Property 16: Personal records derivation & null-park filtering
+**Validates:** Requirements 20.1, 20.2, 20.3, 20.4, 20.5, 20.6
+For any valid stats snapshot, `personalRecords.mostProductiveDay.parks` contains no `null` elements (all elements are valid `Park` enum members), and represents the date with maximal ride count with ties broken by `visited_on DESC`. `marathonRecord` represents the attraction-date pair with maximal ride count with ties broken by date desc, then name asc, then experience_id asc. Both are undefined when `totalLogs === 0`.
+
+### Property 17: CompletionEntry repeatCount bounds
+**Validates:** Requirements 21.1, 21.2, 21.3
+For any user completion entry returned by `listCompletions`, `repeatCount` is an integer with `repeatCount >= 1`, and equals `Math.max(logCount, 1)` where `logCount` is the number of `experience_logs` rows for that user and experience.
+
+### Property 18: Bidirectional completion write-path synchronization
+**Validates:** Requirements 23.1, 23.2, 23.3, 23.4, 23.5
+`mark` atomically inserts into both `completions` and `experience_logs`; `edit` atomically updates `completions` and synchronizes the matching unannotated log's `visited_on` date; `unmark` atomically deletes from `completions` and deletes the matching unannotated log while preserving annotated visit logs and other dates.
 
 ## Testing Strategy
 

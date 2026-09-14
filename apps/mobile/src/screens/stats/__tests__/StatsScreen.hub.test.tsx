@@ -243,6 +243,33 @@ describe('StatsScreen Overview_Hub (Requirements 1.1, 1.3, 1.4, 1.5, 4.1, 10.3, 
   });
 
   // -------------------------------------------------------------------------
+  // Dual-Pillar Hero with activity metrics (R18.1)
+  // -------------------------------------------------------------------------
+  test('R18.1: renders the Dual-Pillar Hero with activity metrics when activity is present', async () => {
+    const stats = makeStatsResponse({
+      activity: {
+        totalLogs: 185,
+        distinctParkDays: 14,
+        repeatMultiplier: 2.2,
+        averageRidesPerDay: 13.2,
+        mostRidden: [],
+        personalRecords: {},
+      },
+    });
+    renderScreen(stats);
+
+    expect(await screen.findByTestId('stats-screen')).toBeTruthy();
+    expect(screen.getByTestId('stats-hero')).toBeTruthy();
+    expect(screen.getByTestId('hero-activity-pillar')).toBeTruthy();
+    expect(screen.getByText('185')).toBeTruthy();
+    expect(screen.getByText('Rides Logged')).toBeTruthy();
+    expect(screen.getByText('14')).toBeTruthy();
+    expect(screen.getByText('Park Days')).toBeTruthy();
+    expect(screen.getByText('2.2×')).toBeTruthy();
+    expect(screen.getByText('Repeat Multiplier')).toBeTruthy();
+  });
+
+  // -------------------------------------------------------------------------
   // Each highlight card is a labelled button (R1.4, R15.2)
   // -------------------------------------------------------------------------
   test('R1.4: each highlight card is a button exposing the composed story+action label', async () => {

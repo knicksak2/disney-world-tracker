@@ -45,6 +45,7 @@ function snap(
     ratings: 0,
     notes: 0,
     trips: 0,
+    festivalTaggedCompletedIds: new Set(),
     ...over,
   };
 }

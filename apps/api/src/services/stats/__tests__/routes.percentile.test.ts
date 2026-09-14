@@ -135,6 +135,7 @@ function richSnapshot(percentile: PercentileInput | null): StatsSnapshot {
     userRatings,
     resortCoverage: [],
     percentile,
+    festivalCounts: { lifetimeCount: 0, rows: [] },
   };
 }
 

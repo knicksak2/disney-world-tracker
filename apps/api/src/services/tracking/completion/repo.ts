@@ -59,6 +59,11 @@ export interface CompletionUpsertInput {
   readonly completedOn: string;
   /** IANA TZ identifier (validated by the route before this call). */
   readonly userTz: string;
+  /**
+   * Suppress creating an unannotated `experience_logs` row. Used by callers
+   * like `trips/repo.ts` that create their own linked `experience_logs` row.
+   */
+  readonly skipLog?: boolean;
 }
 
 /** Inputs to `unmark` (DELETE). */
@@ -140,22 +145,48 @@ async function mark(
   pool: DbPool,
   input: CompletionUpsertInput,
 ): Promise<CompletionDTO | null> {
+  const client = await pool.connect();
   try {
-    const result = await pool.query<CompletionRow>(
-      `INSERT INTO completions (user_id, experience_id, completed_on, user_tz)
-       VALUES ($1, $2, $3, $4)
-       RETURNING user_id, experience_id, completed_on, user_tz`,
-      [input.userId, input.experienceId, input.completedOn, input.userTz],
-    );
-    const row = result.rows[0];
-    return row ? rowToDto(row) : null;
-  } catch (err) {
-    if (isUniqueViolation(err)) {
-      // PK collision → a Completion already exists; let the caller decide
-      // how to surface that.
+    await client.query('BEGIN');
+
+    let row: CompletionRow | undefined;
+    try {
+      const result = await client.query<CompletionRow>(
+        `INSERT INTO completions (user_id, experience_id, completed_on, user_tz)
+         VALUES ($1, $2, $3, $4)
+         RETURNING user_id, experience_id, completed_on, user_tz`,
+        [input.userId, input.experienceId, input.completedOn, input.userTz],
+      );
+      row = result.rows[0];
+    } catch (err) {
+      if (isUniqueViolation(err)) {
+        await safeRollback(client);
+        return null;
+      }
+      throw err;
+    }
+
+    if (!row) {
+      await safeRollback(client);
       return null;
     }
+
+    // Dual-write base activity log entry unless explicitly suppressed (Requirement 23.1)
+    if (!input.skipLog) {
+      await client.query(
+        `INSERT INTO experience_logs (user_id, experience_id, visited_on, user_tz)
+         VALUES ($1, $2, $3, $4)`,
+        [input.userId, input.experienceId, input.completedOn, input.userTz],
+      );
+    }
+
+    await client.query('COMMIT');
+    return rowToDto(row);
+  } catch (err) {
+    await safeRollback(client);
     throw err;
+  } finally {
+    client.release();
   }
 }
 
@@ -163,31 +194,121 @@ async function edit(
   pool: DbPool,
   input: CompletionUpsertInput,
 ): Promise<CompletionDTO | null> {
-  const result = await pool.query<CompletionRow>(
-    `UPDATE completions
-        SET completed_on = $3,
-            user_tz      = $4
-      WHERE user_id = $1
-        AND experience_id = $2
-    RETURNING user_id, experience_id, completed_on, user_tz`,
-    [input.userId, input.experienceId, input.completedOn, input.userTz],
-  );
-  const row = result.rows[0];
-  return row ? rowToDto(row) : null;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Lock and read old completion to get prior completed_on date
+    const prior = await client.query<{ completed_on: Date | string }>(
+      `SELECT completed_on
+         FROM completions
+        WHERE user_id = $1 AND experience_id = $2
+          FOR UPDATE`,
+      [input.userId, input.experienceId],
+    );
+
+    const priorRow = prior.rows[0];
+    if (!priorRow) {
+      await safeRollback(client);
+      return null;
+    }
+
+    const oldCompletedOn = toIsoDate(priorRow.completed_on);
+
+    const result = await client.query<CompletionRow>(
+      `UPDATE completions
+          SET completed_on = $3,
+              user_tz      = $4
+        WHERE user_id = $1
+          AND experience_id = $2
+      RETURNING user_id, experience_id, completed_on, user_tz`,
+      [input.userId, input.experienceId, input.completedOn, input.userTz],
+    );
+    const row = result.rows[0];
+    if (!row) {
+      await safeRollback(client);
+      return null;
+    }
+
+    // Synchronize matching unannotated experience_logs row (Requirement 23.3)
+    await client.query(
+      `UPDATE experience_logs
+          SET visited_on = $3,
+              user_tz    = $4
+        WHERE user_id = $1
+          AND experience_id = $2
+          AND visited_on = $5
+          AND rating IS NULL
+          AND note IS NULL`,
+      [input.userId, input.experienceId, input.completedOn, input.userTz, oldCompletedOn],
+    );
+
+    await client.query('COMMIT');
+    return rowToDto(row);
+  } catch (err) {
+    await safeRollback(client);
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 async function unmark(
   pool: DbPool,
   input: CompletionDeleteInput,
 ): Promise<boolean> {
-  const result = await pool.query(
-    `DELETE FROM completions
-      WHERE user_id = $1
-        AND experience_id = $2`,
-    [input.userId, input.experienceId],
-  );
-  // `pg` returns `rowCount` as `number | null`; treat null defensively.
-  return (result.rowCount ?? 0) > 0;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const result = await client.query<{ completed_on: Date | string }>(
+      `DELETE FROM completions
+        WHERE user_id = $1
+          AND experience_id = $2
+       RETURNING completed_on`,
+      [input.userId, input.experienceId],
+    );
+
+    const row = result.rows[0];
+    if (!row) {
+      await safeRollback(client);
+      return false;
+    }
+
+    const completedOn = toIsoDate(row.completed_on);
+
+    // Safely delete matching unannotated experience_logs row (Requirements 23.4, 23.5)
+    await client.query(
+      `DELETE FROM experience_logs
+        WHERE user_id = $1
+          AND experience_id = $2
+          AND visited_on = $3
+          AND rating IS NULL
+          AND note IS NULL`,
+      [input.userId, input.experienceId, completedOn],
+    );
+
+    await client.query('COMMIT');
+    return true;
+  } catch (err) {
+    await safeRollback(client);
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Roll back without masking the original error.
+ */
+async function safeRollback(client: {
+  query(text: string): Promise<unknown>;
+}): Promise<void> {
+  try {
+    await client.query('ROLLBACK');
+  } catch {
+    // Swallow so the original error surfaces.
+  }
 }
 
 /**

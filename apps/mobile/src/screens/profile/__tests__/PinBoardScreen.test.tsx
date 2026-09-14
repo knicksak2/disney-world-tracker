@@ -19,6 +19,7 @@
  * change + that no extra board fetch occurred rather than a per-filter request.
  */
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
@@ -172,6 +173,27 @@ describe('PinBoardScreen', () => {
     expect(screen.getByTestId(`pin-cell-${pinA.id}`)).toBeTruthy();
     expect(screen.getByTestId(`pin-cell-${pinB.id}`)).toBeTruthy();
     expect(screen.getByTestId('pin-board-overall')).toHaveTextContent('66%');
+  });
+
+  it('aligns grid rows with flex-start and uniform gap so incomplete rows flow left-to-center without center gaps', async () => {
+    renderBoard();
+    const cell = await screen.findByTestId(`pin-cell-${pinA.id}`);
+    let cur: any = cell;
+    let foundStyle: any = null;
+    while (cur) {
+      const flat = StyleSheet.flatten(cur.props?.style);
+      if (flat?.justifyContent) {
+        foundStyle = flat;
+        break;
+      }
+      cur = cur.parent;
+    }
+    expect(foundStyle).toEqual(
+      expect.objectContaining({
+        justifyContent: 'flex-start',
+        gap: 12,
+      }),
+    );
   });
 
   it('tier pill filters the grid client-side and leaves the whole-collection header intact', async () => {

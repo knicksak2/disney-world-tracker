@@ -77,6 +77,7 @@ const MIGRATIONS = [
   '0034_experience_logs.sql', // experience_logs (+ trip_log_entries.log_id)
   '0035_pins_and_challenges.sql', // user_pins
   '0036_pin_claiming.sql', // user_pins.claimed_at
+  '0039_experience_festival_tags.sql', // experience_festival_tags
 ];
 
 interface Fixture {
@@ -205,6 +206,30 @@ async function seedConfirmedFriendRide(
   );
 }
 
+async function seedTag(
+  pool: DbPool,
+  upstreamId: string,
+  festivalSlug: string,
+  festivalYear = 2026,
+): Promise<void> {
+  await pool.query(
+    `INSERT INTO experience_festival_tags (experience_id, festival_slug, festival_year)
+     SELECT e.id, $2, $3::int FROM experiences e WHERE e.upstream_entity_id = $1`,
+    [upstreamId, festivalSlug, festivalYear],
+  );
+}
+
+async function setExperienceActive(
+  pool: DbPool,
+  upstreamId: string,
+  active: boolean,
+): Promise<void> {
+  await pool.query(
+    `UPDATE experiences SET active = $2 WHERE upstream_entity_id = $1`,
+    [upstreamId, active],
+  );
+}
+
 const RIDE = { category: 'Ride' as const };
 const REAL_RESTAURANT_FACETS = { tableService: [{ id: 'casual-dining', name: 'Casual Dining' }] };
 const FESTIVAL_FACETS = { quickService: [{ id: 'festival-kiosk', name: 'Festival Kiosk' }] };
@@ -312,6 +337,54 @@ describe('PinRepo (pg-mem)', () => {
     expect(evaluateCriteria({ kind: 'count', metric: 'restaurants', threshold: 1 }, snap).current).toBe(1);
     expect(evaluateCriteria({ kind: 'count', metric: 'festivalBooths', threshold: 1 }, snap).current).toBe(1);
     expect(evaluateCriteria({ kind: 'count', metric: 'snacks', threshold: 1 }, snap).current).toBe(1);
+  });
+
+  it('counts a completed, since-deactivated, tagged booth toward festivalBooths (R4.1)', async () => {
+    const user = await seedUser(fx.pool);
+    const booth = await seedExperience(fx.pool, {
+      category: 'Restaurant',
+      park: 'EPCOT',
+      facets: FESTIVAL_FACETS,
+    });
+    await complete(fx.pool, user, booth);
+    await seedTag(fx.pool, booth, 'food-and-wine', 2026);
+    // Deactivate the booth (simulating festival end / catalog sync soft-delete)
+    await setExperienceActive(fx.pool, booth, false);
+
+    const snap = await buildSnapshot(fx.pool, user);
+    expect(snap.festivalTaggedCompletedIds.has(booth)).toBe(true);
+    expect(evaluateCriteria({ kind: 'count', metric: 'festivalBooths', threshold: 1 }, snap).current).toBe(1);
+  });
+
+  it('counts a completed, active, untagged booth toward festivalBooths (pre-tag grace window, R4.2)', async () => {
+    const user = await seedUser(fx.pool);
+    const booth = await seedExperience(fx.pool, {
+      category: 'Restaurant',
+      park: 'EPCOT',
+      facets: FESTIVAL_FACETS,
+    });
+    await complete(fx.pool, user, booth);
+    // Active booth, but untagged yet (pre-tag grace window)
+
+    const snap = await buildSnapshot(fx.pool, user);
+    expect(snap.festivalTaggedCompletedIds.has(booth)).toBe(false);
+    expect(evaluateCriteria({ kind: 'count', metric: 'festivalBooths', threshold: 1 }, snap).current).toBe(1);
+  });
+
+  it('does NOT count a completed, deactivated, untagged booth toward festivalBooths (regression guard)', async () => {
+    const user = await seedUser(fx.pool);
+    const booth = await seedExperience(fx.pool, {
+      category: 'Restaurant',
+      park: 'EPCOT',
+      facets: FESTIVAL_FACETS,
+    });
+    await complete(fx.pool, user, booth);
+    // Deactivate without tagging
+    await setExperienceActive(fx.pool, booth, false);
+
+    const snap = await buildSnapshot(fx.pool, user);
+    expect(snap.festivalTaggedCompletedIds.has(booth)).toBe(false);
+    expect(evaluateCriteria({ kind: 'count', metric: 'festivalBooths', threshold: 1 }, snap).current).toBe(0);
   });
 
   it('counts only Disney-owned resorts (R16.1)', async () => {

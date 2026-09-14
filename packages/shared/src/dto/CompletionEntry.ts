@@ -55,6 +55,14 @@ export interface CompletionEntryDTO {
    * present-but-not-shareable cases (R4.6, R4.7).
    */
   readonly sharedNote: string | null;
+
+  /**
+   * Total number of times this experience has been logged by the user (>= 1).
+   * Populated from `experience_logs` aggregation with fallback to 1.
+   *
+   * Validates: Requirements 21.1, 21.2, 21.3
+   */
+  readonly repeatCount?: number;
 }
 
 export interface FriendCompletionsDTO {

@@ -2752,6 +2752,7 @@ async function logCompletion(
       experienceId: input.experienceId,
       completedOn,
       userTz,
+      skipLog: true,
     });
 
     // Step 4 — apply the optional canonical Rating via the injected repo, which
@@ -3042,6 +3043,7 @@ async function confirmRodeWithTag(
       experienceId: row.experience_id,
       completedOn,
       userTz,
+      skipLog: true,
     });
 
     // R11.4 / R11.5: apply the optional canonical Rating via the injected repo,

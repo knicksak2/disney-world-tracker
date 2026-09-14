@@ -148,6 +148,7 @@ function sampleEntry(
     completedOn: '2024-05-01',
     rating: 9,
     sharedNote: null,
+    repeatCount: 1,
     ...overrides,
   };
 }

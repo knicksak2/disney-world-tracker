@@ -29,16 +29,38 @@ interface FakeQueryResult {
 
 function makePool(
   responder: (call: FakeCall) => FakeQueryResult | Error,
-): { calls: FakeCall[]; query: (text: string, params?: ReadonlyArray<unknown>) => Promise<FakeQueryResult> } {
+): {
+  calls: FakeCall[];
+  query: (text: string, params?: ReadonlyArray<unknown>) => Promise<FakeQueryResult>;
+  connect: () => Promise<{
+    query: (text: string, params?: ReadonlyArray<unknown>) => Promise<FakeQueryResult>;
+    release: () => void;
+  }>;
+  readonly releasedCount: number;
+} {
   const calls: FakeCall[] = [];
+  let releasedCount = 0;
+  const query = async (text: string, params: ReadonlyArray<unknown> = []): Promise<FakeQueryResult> => {
+    const call: FakeCall = { text, params };
+    calls.push(call);
+    if (text === 'BEGIN' || text === 'COMMIT' || text === 'ROLLBACK') {
+      return { rows: [] };
+    }
+    const result = responder(call);
+    if (result instanceof Error) throw result;
+    return result;
+  };
   return {
     calls,
-    async query(text: string, params: ReadonlyArray<unknown> = []): Promise<FakeQueryResult> {
-      const call: FakeCall = { text, params };
-      calls.push(call);
-      const result = responder(call);
-      if (result instanceof Error) throw result;
-      return result;
+    query,
+    connect: async () => ({
+      query,
+      release: () => {
+        releasedCount++;
+      },
+    }),
+    get releasedCount() {
+      return releasedCount;
     },
   };
 }
@@ -47,25 +69,36 @@ const USER_ID = '11111111-1111-4111-8111-111111111111';
 const EXPERIENCE_ID = '22222222-2222-4222-8222-222222222222';
 
 describe('CompletionRepo.mark', () => {
-  it('inserts and returns the persisted DTO on success', async () => {
+  it('inserts into completions and dual-writes into experience_logs inside a transaction', async () => {
     const pool = makePool((call) => {
-      expect(call.text).toMatch(/^INSERT INTO completions/);
-      expect(call.params).toEqual([
-        USER_ID,
-        EXPERIENCE_ID,
-        '2024-06-14',
-        'America/New_York',
-      ]);
-      return {
-        rows: [
-          {
-            user_id: USER_ID,
-            experience_id: EXPERIENCE_ID,
-            completed_on: '2024-06-14',
-            user_tz: 'America/New_York',
-          },
-        ],
-      };
+      if (call.text.startsWith('INSERT INTO completions')) {
+        expect(call.params).toEqual([
+          USER_ID,
+          EXPERIENCE_ID,
+          '2024-06-14',
+          'America/New_York',
+        ]);
+        return {
+          rows: [
+            {
+              user_id: USER_ID,
+              experience_id: EXPERIENCE_ID,
+              completed_on: '2024-06-14',
+              user_tz: 'America/New_York',
+            },
+          ],
+        };
+      }
+      if (call.text.startsWith('INSERT INTO experience_logs')) {
+        expect(call.params).toEqual([
+          USER_ID,
+          EXPERIENCE_ID,
+          '2024-06-14',
+          'America/New_York',
+        ]);
+        return { rows: [] };
+      }
+      throw new Error(`Unexpected query: ${call.text}`);
     });
     const repo = createCompletionRepo(
       pool as unknown as Parameters<typeof createCompletionRepo>[0],
@@ -84,13 +117,23 @@ describe('CompletionRepo.mark', () => {
       completedOn: '2024-06-14',
       userTz: 'America/New_York',
     });
+    expect(pool.calls.map((c) => c.text.split(' ')[0])).toEqual([
+      'BEGIN',
+      'INSERT',
+      'INSERT',
+      'COMMIT',
+    ]);
+    expect(pool.releasedCount).toBe(1);
   });
 
-  it('returns null on a PK collision (SQLSTATE 23505)', async () => {
-    const pool = makePool(() => {
-      const err = new Error('duplicate key') as Error & { code?: string };
-      err.code = '23505';
-      return err;
+  it('rolls back and returns null on a PK collision (SQLSTATE 23505)', async () => {
+    const pool = makePool((call) => {
+      if (call.text.startsWith('INSERT INTO completions')) {
+        const err = new Error('duplicate key') as Error & { code?: string };
+        err.code = '23505';
+        return err;
+      }
+      throw new Error(`Unexpected query: ${call.text}`);
     });
     const repo = createCompletionRepo(
       pool as unknown as Parameters<typeof createCompletionRepo>[0],
@@ -104,21 +147,71 @@ describe('CompletionRepo.mark', () => {
     });
 
     expect(dto).toBeNull();
+    expect(pool.calls.map((c) => c.text.split(' ')[0])).toEqual([
+      'BEGIN',
+      'INSERT',
+      'ROLLBACK',
+    ]);
+    expect(pool.releasedCount).toBe(1);
+  });
+
+  it('rolls back and re-throws when experience_logs insert fails', async () => {
+    const pool = makePool((call) => {
+      if (call.text.startsWith('INSERT INTO completions')) {
+        return {
+          rows: [
+            {
+              user_id: USER_ID,
+              experience_id: EXPERIENCE_ID,
+              completed_on: '2024-06-14',
+              user_tz: 'America/New_York',
+            },
+          ],
+        };
+      }
+      if (call.text.startsWith('INSERT INTO experience_logs')) {
+        return new Error('disk full');
+      }
+      throw new Error(`Unexpected query: ${call.text}`);
+    });
+    const repo = createCompletionRepo(
+      pool as unknown as Parameters<typeof createCompletionRepo>[0],
+    );
+
+    await expect(
+      repo.mark({
+        userId: USER_ID,
+        experienceId: EXPERIENCE_ID,
+        completedOn: '2024-06-14',
+        userTz: 'America/New_York',
+      }),
+    ).rejects.toThrow('disk full');
+
+    expect(pool.calls.map((c) => c.text.split(' ')[0])).toEqual([
+      'BEGIN',
+      'INSERT',
+      'INSERT',
+      'ROLLBACK',
+    ]);
+    expect(pool.releasedCount).toBe(1);
   });
 
   it('serializes a Date column value back to YYYY-MM-DD', async () => {
-    // `pg`'s default DATE parser returns a JS Date pinned to UTC midnight;
-    // the repo must format that back to the wire date string.
-    const pool = makePool(() => ({
-      rows: [
-        {
-          user_id: USER_ID,
-          experience_id: EXPERIENCE_ID,
-          completed_on: new Date('2024-06-14T00:00:00Z'),
-          user_tz: 'America/New_York',
-        },
-      ],
-    }));
+    const pool = makePool((call) => {
+      if (call.text.startsWith('INSERT INTO completions')) {
+        return {
+          rows: [
+            {
+              user_id: USER_ID,
+              experience_id: EXPERIENCE_ID,
+              completed_on: new Date('2024-06-14T00:00:00Z'),
+              user_tz: 'America/New_York',
+            },
+          ],
+        };
+      }
+      return { rows: [] };
+    });
     const repo = createCompletionRepo(
       pool as unknown as Parameters<typeof createCompletionRepo>[0],
     );
@@ -135,19 +228,39 @@ describe('CompletionRepo.mark', () => {
 });
 
 describe('CompletionRepo.edit', () => {
-  it('updates and returns the new DTO on success', async () => {
+  it('updates completions and syncs matching unannotated experience_logs row inside a transaction', async () => {
     const pool = makePool((call) => {
-      expect(call.text).toMatch(/^UPDATE completions/);
-      return {
-        rows: [
-          {
-            user_id: USER_ID,
-            experience_id: EXPERIENCE_ID,
-            completed_on: '2024-06-10',
-            user_tz: 'America/New_York',
-          },
-        ],
-      };
+      if (call.text.startsWith('SELECT completed_on')) {
+        expect(call.text).toContain('FOR UPDATE');
+        return {
+          rows: [{ completed_on: '2024-06-10' }],
+        };
+      }
+      if (call.text.startsWith('UPDATE completions')) {
+        return {
+          rows: [
+            {
+              user_id: USER_ID,
+              experience_id: EXPERIENCE_ID,
+              completed_on: '2024-06-15',
+              user_tz: 'America/New_York',
+            },
+          ],
+        };
+      }
+      if (call.text.startsWith('UPDATE experience_logs')) {
+        expect(call.params).toEqual([
+          USER_ID,
+          EXPERIENCE_ID,
+          '2024-06-15',
+          'America/New_York',
+          '2024-06-10',
+        ]);
+        expect(call.text).toContain('rating IS NULL');
+        expect(call.text).toContain('note IS NULL');
+        return { rows: [], rowCount: 1 };
+      }
+      throw new Error(`Unexpected query: ${call.text}`);
     });
     const repo = createCompletionRepo(
       pool as unknown as Parameters<typeof createCompletionRepo>[0],
@@ -156,15 +269,28 @@ describe('CompletionRepo.edit', () => {
     const dto = await repo.edit({
       userId: USER_ID,
       experienceId: EXPERIENCE_ID,
-      completedOn: '2024-06-10',
+      completedOn: '2024-06-15',
       userTz: 'America/New_York',
     });
 
-    expect(dto?.completedOn).toBe('2024-06-10');
+    expect(dto?.completedOn).toBe('2024-06-15');
+    expect(pool.calls.map((c) => c.text.split(' ')[0])).toEqual([
+      'BEGIN',
+      'SELECT',
+      'UPDATE',
+      'UPDATE',
+      'COMMIT',
+    ]);
+    expect(pool.releasedCount).toBe(1);
   });
 
-  it('returns null when no row matches the (user, experience) pair', async () => {
-    const pool = makePool(() => ({ rows: [] }));
+  it('returns null and rolls back when no completion row matches', async () => {
+    const pool = makePool((call) => {
+      if (call.text.startsWith('SELECT completed_on')) {
+        return { rows: [] };
+      }
+      throw new Error(`Unexpected query: ${call.text}`);
+    });
     const repo = createCompletionRepo(
       pool as unknown as Parameters<typeof createCompletionRepo>[0],
     );
@@ -177,14 +303,74 @@ describe('CompletionRepo.edit', () => {
     });
 
     expect(dto).toBeNull();
+    expect(pool.calls.map((c) => c.text.split(' ')[0])).toEqual([
+      'BEGIN',
+      'SELECT',
+      'ROLLBACK',
+    ]);
+    expect(pool.releasedCount).toBe(1);
+  });
+
+  it('rolls back and re-throws when experience_logs sync query fails', async () => {
+    const pool = makePool((call) => {
+      if (call.text.startsWith('SELECT completed_on')) {
+        return { rows: [{ completed_on: '2024-06-10' }] };
+      }
+      if (call.text.startsWith('UPDATE completions')) {
+        return {
+          rows: [
+            {
+              user_id: USER_ID,
+              experience_id: EXPERIENCE_ID,
+              completed_on: '2024-06-15',
+              user_tz: 'America/New_York',
+            },
+          ],
+        };
+      }
+      if (call.text.startsWith('UPDATE experience_logs')) {
+        return new Error('connection closed');
+      }
+      throw new Error(`Unexpected query: ${call.text}`);
+    });
+    const repo = createCompletionRepo(
+      pool as unknown as Parameters<typeof createCompletionRepo>[0],
+    );
+
+    await expect(
+      repo.edit({
+        userId: USER_ID,
+        experienceId: EXPERIENCE_ID,
+        completedOn: '2024-06-15',
+        userTz: 'America/New_York',
+      }),
+    ).rejects.toThrow('connection closed');
+
+    expect(pool.calls.map((c) => c.text.split(' ')[0])).toEqual([
+      'BEGIN',
+      'SELECT',
+      'UPDATE',
+      'UPDATE',
+      'ROLLBACK',
+    ]);
+    expect(pool.releasedCount).toBe(1);
   });
 });
 
 describe('CompletionRepo.unmark', () => {
-  it('returns true when a row was deleted', async () => {
+  it('deletes completions and deletes matching unannotated experience_logs row inside a transaction', async () => {
     const pool = makePool((call) => {
-      expect(call.text).toMatch(/^DELETE FROM completions/);
-      return { rows: [], rowCount: 1 };
+      if (call.text.startsWith('DELETE FROM completions')) {
+        expect(call.text).toContain('RETURNING completed_on');
+        return { rows: [{ completed_on: '2024-06-14' }], rowCount: 1 };
+      }
+      if (call.text.startsWith('DELETE FROM experience_logs')) {
+        expect(call.params).toEqual([USER_ID, EXPERIENCE_ID, '2024-06-14']);
+        expect(call.text).toContain('rating IS NULL');
+        expect(call.text).toContain('note IS NULL');
+        return { rows: [], rowCount: 1 };
+      }
+      throw new Error(`Unexpected query: ${call.text}`);
     });
     const repo = createCompletionRepo(
       pool as unknown as Parameters<typeof createCompletionRepo>[0],
@@ -196,10 +382,22 @@ describe('CompletionRepo.unmark', () => {
     });
 
     expect(removed).toBe(true);
+    expect(pool.calls.map((c) => c.text.split(' ')[0])).toEqual([
+      'BEGIN',
+      'DELETE',
+      'DELETE',
+      'COMMIT',
+    ]);
+    expect(pool.releasedCount).toBe(1);
   });
 
-  it('returns false when no row matched', async () => {
-    const pool = makePool(() => ({ rows: [], rowCount: 0 }));
+  it('returns false and rolls back when no completions row matched', async () => {
+    const pool = makePool((call) => {
+      if (call.text.startsWith('DELETE FROM completions')) {
+        return { rows: [], rowCount: 0 };
+      }
+      throw new Error(`Unexpected query: ${call.text}`);
+    });
     const repo = createCompletionRepo(
       pool as unknown as Parameters<typeof createCompletionRepo>[0],
     );
@@ -210,6 +408,42 @@ describe('CompletionRepo.unmark', () => {
     });
 
     expect(removed).toBe(false);
+    expect(pool.calls.map((c) => c.text.split(' ')[0])).toEqual([
+      'BEGIN',
+      'DELETE',
+      'ROLLBACK',
+    ]);
+    expect(pool.releasedCount).toBe(1);
+  });
+
+  it('rolls back and re-throws when log deletion query fails', async () => {
+    const pool = makePool((call) => {
+      if (call.text.startsWith('DELETE FROM completions')) {
+        return { rows: [{ completed_on: '2024-06-14' }], rowCount: 1 };
+      }
+      if (call.text.startsWith('DELETE FROM experience_logs')) {
+        return new Error('db failure');
+      }
+      throw new Error(`Unexpected query: ${call.text}`);
+    });
+    const repo = createCompletionRepo(
+      pool as unknown as Parameters<typeof createCompletionRepo>[0],
+    );
+
+    await expect(
+      repo.unmark({
+        userId: USER_ID,
+        experienceId: EXPERIENCE_ID,
+      }),
+    ).rejects.toThrow('db failure');
+
+    expect(pool.calls.map((c) => c.text.split(' ')[0])).toEqual([
+      'BEGIN',
+      'DELETE',
+      'DELETE',
+      'ROLLBACK',
+    ]);
+    expect(pool.releasedCount).toBe(1);
   });
 });
 

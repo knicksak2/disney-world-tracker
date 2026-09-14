@@ -90,7 +90,8 @@ export { inboxItemSchema, inboxResponseSchema } from './Inbox.js';
 
 export { aggregateRatingSchema } from './AggregateRating.js';
 export { leaderboardEntrySchema } from './LeaderboardEntry.js';
-export { statsSchema, completionCellSchema } from './Stats.js';
+export { statsSchema, completionCellSchema, festivalStatsSchema } from './Stats.js';
+export { festivalSlugSchema } from './Festival.js';
 
 export { userSearchInputSchema } from './UserSearch.js';
 export type { UserSearchInput } from './UserSearch.js';

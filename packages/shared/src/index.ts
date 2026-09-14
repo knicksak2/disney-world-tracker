@@ -26,6 +26,8 @@ export {
   PIN_TIERS,
   PIN_TRACKS,
   PIN_COUNT_METRICS,
+  FESTIVAL_SLUGS,
+  FESTIVAL_SLUG_LABELS,
 } from './enums.js';
 export type {
   ExperienceCategory,
@@ -40,6 +42,7 @@ export type {
   PinTier,
   PinTrack,
   PinCountMetric,
+  FestivalSlug,
 } from './enums.js';
 
 // Avatar preset catalog (allowlist of bundled illustration ids).
@@ -96,7 +99,11 @@ export type {
   LeaderboardEntryDTO,
   StatsDTO,
   StatsBreakdown,
+  FestivalStatsDTO,
   CompletionCell,
+  ActivityStatistics,
+  MostRiddenAttraction,
+  PersonalRecords,
   OperatingStatus,
   ForecastEntry,
   Showtime,
@@ -206,6 +213,8 @@ export {
   aggregateRatingSchema,
   leaderboardEntrySchema,
   statsSchema,
+  festivalStatsSchema,
+  festivalSlugSchema,
   completionCellSchema,
   userSearchInputSchema,
   // Live_Detail schemas

@@ -592,6 +592,8 @@ async function applyMigration(db: IMemoryDb): Promise<void> {
     '0014_experience_world_showcase_country.sql',
     // 0032 widens the category CHECK to admit Walkthrough, PlayArea, Game
     '0032_experience_category_taxonomy.sql',
+    // 0039 adds experience_festival_tags table read by stats and pins snapshots
+    '0039_experience_festival_tags.sql',
   ];
   for (const name of migrations) {
     const migrationPath = resolve(here, '..', '..', 'migrations', name);
@@ -602,6 +604,22 @@ async function applyMigration(db: IMemoryDb): Promise<void> {
     sql = sql.replace(/CREATE INDEX[^;]+USING gin[^;]+;/gms, '');
     db.public.none(sql);
   }
+
+  // 0034 introduces `experience_logs` which the stats snapshot reads for
+  // multi-visit activity metrics. Since 0034's ALTER TABLE targets trips tables
+  // outside the smoke harness scope, create the experience_logs table here.
+  db.public.none(`
+    CREATE TABLE IF NOT EXISTS experience_logs (
+        id             UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id        UUID         NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        experience_id  UUID         NOT NULL REFERENCES experiences(id),
+        visited_on     DATE         NOT NULL,
+        user_tz        TEXT         NOT NULL,
+        logged_at      TIMESTAMPTZ  NOT NULL DEFAULT now(),
+        rating         SMALLINT,
+        note           TEXT
+    );
+  `);
 }
 
 // ---------------------------------------------------------------------------

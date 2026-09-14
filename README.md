@@ -158,8 +158,34 @@ The catalog service provides dedicated commands to seed raw Disney documents and
 | --- | --- | --- |
 | **Catalog Sync** (fetch Disney documents) | `npm run sync` | `npm run sync:cloud` |
 | **Facet Backfill** (re-enrich experience facets) | `npm run backfill-facets` | `npm run backfill-facets:cloud` |
+| **Festival Booth Tagging** (tag active EPCOT festival kiosks) | `npm run tag-festival-booth` | `npm run tag-festival-booth:cloud` |
 
 *(Run these scripts from `apps/api`, or with `--workspace apps/api` from the repo root).*
+
+##### Tagging festival booths
+
+EPCOT festival booths (`Festival Kiosk` restaurants) carry no festival name in Disney's feed, and
+once a festival ends its booths are soft-deleted from the catalog like any other retired
+experience. `tag-festival-booth` records which festival (and year) the *currently active* set of
+kiosks belongs to, in a table Catalog_Sync never touches, so that history survives the booths
+going inactive. Run it once per festival, shortly after it opens:
+
+```bash
+npm run tag-festival-booth --workspace apps/api
+```
+
+It's interactive: pick the festival from a numbered menu, confirm (or accept the default) year,
+review the list of discovered booths, and confirm before anything is written. Re-running it is
+safe — already-tagged booths are left alone. If a booth already carries a *different* festival's
+tag for that same year (a teardown/setup overlap), it's skipped and flagged; pass `--force` to
+retag it deliberately:
+
+```bash
+npm run tag-festival-booth --workspace apps/api -- --year 2026 --force
+```
+
+Use `tag-festival-booth:cloud` (reads `apps/api/.env.dev`) to tag against the hosted database
+instead of local.
 
 ##### Cloning Hosted Dev Data into Local Postgres
 

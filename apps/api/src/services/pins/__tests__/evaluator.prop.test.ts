@@ -59,7 +59,16 @@ function snapshotArb(): fc.Arbitrary<PinActivitySnapshot> {
         const completed = new Set(completedIdx.map((i) => catalog[i]!.upstreamId));
         // One day carrying the completed experiences (enough to exercise single-day).
         const days = [{ date: '2026-01-02', experiences: catalog.filter((e) => completed.has(e.upstreamId)) }];
-        return { catalog, completed, days, friendRides, ratings, notes, trips };
+        return {
+          catalog,
+          completed,
+          days,
+          friendRides,
+          ratings,
+          notes,
+          trips,
+          festivalTaggedCompletedIds: new Set<string>(),
+        };
       }),
   );
 }
@@ -237,6 +246,60 @@ describe('evaluator property tests', () => {
           expect(claimedProjection.currentValue).toBe(unclaimed.currentValue);
           expect(claimedProjection.targetValue).toBe(unclaimed.targetValue);
           expect(claimedProjection.percentComplete).toBe(unclaimed.percentComplete);
+        },
+      ),
+      { numRuns: 150 },
+    );
+  });
+
+  // Feature: festival-booth-tagging, Property 25: Festival Metric Union Correctness
+  it('Property 25: festivalBooths metric correctly counts the union of active kiosks and tagged completions without double-counting', () => {
+    const allIds = Array.from({ length: 10 }, (_, i) => `exp_${i}`);
+
+    fc.assert(
+      fc.property(
+        fc.subarray(allIds),
+        fc.subarray(allIds),
+        fc.subarray(allIds),
+        (kioskIds, completedIds, taggedIds) => {
+          const completedSet = new Set(completedIds);
+          const taggedSet = new Set(taggedIds);
+
+          const catalog: EvalExperience[] = kioskIds.map((id) => ({
+            upstreamId: id,
+            category: 'Restaurant',
+            park: 'EPCOT',
+            land: 'World Showcase',
+            worldShowcaseCountry: null,
+            facets: { quickService: ['Festival Kiosk'] },
+            isDisneyResort: false,
+            isRealRestaurant: false,
+          }));
+
+          const snap: PinActivitySnapshot = {
+            catalog,
+            completed: completedSet,
+            days: [],
+            friendRides: 0,
+            ratings: 0,
+            notes: 0,
+            trips: 0,
+            festivalTaggedCompletedIds: taggedSet,
+          };
+
+          const progress = evaluateCriteria({ kind: 'count', metric: 'festivalBooths', threshold: 999 }, snap);
+
+          const expectedUnion = new Set<string>();
+          for (const kId of kioskIds) {
+            if (completedSet.has(kId)) {
+              expectedUnion.add(kId);
+            }
+          }
+          for (const tId of taggedIds) {
+            expectedUnion.add(tId);
+          }
+
+          expect(progress.current).toBe(expectedUnion.size);
         },
       ),
       { numRuns: 150 },

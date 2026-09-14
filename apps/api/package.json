@@ -19,7 +19,9 @@
     "sync": "tsx --env-file=.env src/scripts/runSync.ts",
     "sync:cloud": "tsx --env-file=.env.dev src/scripts/runSync.ts",
     "backfill-facets": "tsx --env-file=.env src/scripts/backfillFacetEnrichment.ts",
-    "backfill-facets:cloud": "tsx --env-file=.env.dev src/scripts/backfillFacetEnrichment.ts"
+    "backfill-facets:cloud": "tsx --env-file=.env.dev src/scripts/backfillFacetEnrichment.ts",
+    "tag-festival-booth": "tsx --env-file=.env src/scripts/tagFestivalBooth.ts",
+    "tag-festival-booth:cloud": "tsx --env-file=.env.dev src/scripts/tagFestivalBooth.ts"
   },
   "dependencies": {
     "@dwt/shared": "0.0.0",

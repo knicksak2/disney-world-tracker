@@ -208,7 +208,7 @@ design's 13 correctness properties where relevant.
 3. WHERE the friend's `ratings.sufficient` is false, THE Friend_Surface SHALL render a neutral "Not enough ratings yet" message rather than the self-directed unlock call-to-action.
 4. THE Friend_Surface SHALL omit the interests/facets section by default.
 5. THE Friend_Surface Compare pane SHALL derive comparison values from `viewer.coverage.overall`, `viewer.coverage.byPark`, `viewer.coverage.byCategory`, and the corresponding `friend.coverage.*` fields.
-6. WHEN identical Stats_Response data is supplied, THE Friend coverage and ratings sections SHALL render a component tree structurally identical to the Own detail screens, with differences limited to the percentile banner, the interests section, and unlock-versus-neutral copy.
+6. WHEN identical Stats_Response data is supplied, THE Friend coverage and ratings sections SHALL render a component tree structurally identical to the Own detail screens, with differences limited to the percentile banner, the interests section, unlock-versus-neutral copy, and volume comparison in Compare mode.
 
 ### Requirement 12: Percent display consistency
 
@@ -277,3 +277,77 @@ design's 13 correctness properties where relevant.
 1. THE Progress_Ring component SHALL expose a component API that works identically whether backed by `react-native-svg` or by the zero-dependency primitive fallback.
 2. WHERE `react-native-svg` is not adopted, THE Progress_Ring component SHALL render via the primitive fallback behind the same props.
 3. THE Resort_Coverage type SHALL be defined with an identical shape on both the Stats_Service route contract and the mobile layer, whether mirrored locally or centralized in the shared `@dwt/shared` package.
+
+### Requirement 18: Activity Volume Statistics
+
+**User Story:** As a user, I want to see my total rides logged, distinct park days, repeat multiplier, and average rides per day, so that I understand my overall park activity and visit density.
+
+#### Acceptance Criteria
+
+1. THE Stats_Service SHALL compute an `activity` object on `StatsResponse` containing `totalLogs`, `distinctParkDays`, `repeatMultiplier`, `averageRidesPerDay`, `mostRidden`, and `personalRecords`.
+2. THE Stats_Service SHALL compute `totalLogs` as the total count of `experience_logs` rows for the target user.
+3. THE Stats_Service SHALL compute `distinctParkDays` as the count of distinct `visited_on` calendar dates in `experience_logs` for the target user.
+4. WHERE `distinctParkDays > 0`, THE Stats_Service SHALL compute `averageRidesPerDay` as `totalLogs / distinctParkDays` rounded to one decimal place.
+5. IF `distinctParkDays === 0`, THEN THE Stats_Service SHALL set `averageRidesPerDay` to `0.0`.
+6. WHERE `uniqueLoggedExperiences > 0` (the count of distinct `experience_id` in `experience_logs`), THE Stats_Service SHALL compute `repeatMultiplier` as `Math.max(1.0, Number((totalLogs / uniqueLoggedExperiences).toFixed(1)))`.
+7. IF `uniqueLoggedExperiences === 0`, THEN THE Stats_Service SHALL set `repeatMultiplier` to `1.0`.
+8. THE Overview_Hub SHALL render a Dual-Pillar Hero displaying catalog exploration percentage on the left and activity volume metrics (`totalLogs`, `distinctParkDays`, `repeatMultiplier`) on the right.
+
+### Requirement 19: Most Ridden Attractions (Podium)
+
+**User Story:** As a user, I want to see my top 5 most ridden attractions with clear rankings, so that I celebrate my favorite Disney rides.
+
+#### Acceptance Criteria
+
+1. THE Stats_Service SHALL return up to 5 `MostRiddenAttraction` items in `activity.mostRidden` grouped by `experience_id` over active experiences.
+2. THE Stats_Service SHALL order `mostRidden` by ride count descending, with ties broken by case-insensitive attraction name ascending, and exact `experience_id` ascending.
+3. WHEN the user has 0 logs, THE Stats_Service SHALL return an empty array for `activity.mostRidden`.
+4. THE ExperiencesDetailScreen SHALL display a Hall of Fame podium for the top 3 most ridden attractions and rank items 4 and 5 below it.
+
+### Requirement 20: Personal Records & Bests
+
+**User Story:** As a user, I want to see my personal park records (most productive park day and single-attraction marathon record), so that I can look back on my biggest vacation achievements.
+
+#### Acceptance Criteria
+
+1. THE Stats_Service SHALL compute `personalRecords.mostProductiveDay` as the calendar date with the maximum count of rides in `experience_logs` over active experiences.
+2. WHEN computing `mostProductiveDay.parks`, THE Stats_Service SHALL filter out NULL park values (from non-park resort/Disney Springs activities) so that `parks: Park[]` contains only valid Park enum members.
+3. IF two or more calendar dates share the maximum ride count, THEN THE Stats_Service SHALL select the most recent calendar date (`visited_on DESC`).
+4. THE Stats_Service SHALL compute `personalRecords.marathonRecord` as the `(experience_id, visited_on)` pair with the maximum ride count on a single calendar date.
+5. IF two or more attraction-date pairs share the maximum marathon count, THEN THE Stats_Service SHALL break ties by most recent date descending, then case-insensitive attraction name ascending, then `experience_id` ascending.
+6. IF the user has 0 logs, THEN THE Stats_Service SHALL omit `mostProductiveDay` and `marathonRecord`.
+7. THE ExperiencesDetailScreen SHALL render cards for `mostProductiveDay` and `marathonRecord` when present.
+
+### Requirement 21: Master Catalog Repeat Count Badges
+
+**User Story:** As a user, I want each completed experience in my master catalog to show how many times I've experienced it, so that I can easily see my repeat visits while browsing.
+
+#### Acceptance Criteria
+
+1. THE Tracking_Service `GET /users/:userId/completions` endpoint SHALL include `repeatCount` on each `CompletionEntryDTO`.
+2. THE Tracking_Service SHALL compute `repeatCount` as `COALESCE(log_count, 1)` where `log_count` is the count of `experience_logs` for that `(user_id, experience_id)`.
+3. FOR every `CompletionEntryDTO`, `repeatCount` SHALL be an integer greater than or equal to 1.
+4. THE ExperiencesDetailScreen SHALL display a repeat badge on each completed experience row showing its visit count.
+5. THE ExperiencesDetailScreen SHALL provide a sort control allowing the user to sort completed experiences by `repeatCount` descending (Most Visited) in addition to completion date.
+
+### Requirement 22: Friend Profile Volume Comparison
+
+**User Story:** As a user comparing my stats with a friend, I want to see our ride volume and park days side-by-side, so that we can compare how actively we visit the parks.
+
+#### Acceptance Criteria
+
+1. THE Friend_Surface Compare pane SHALL render side-by-side comparison bars for Total Rides Logged and Distinct Park Days Visited derived from `viewer.activity` and `friend.activity`.
+2. WHERE both viewer and friend have at least one logged attraction in common, THE Friend_Surface Compare pane SHALL highlight their shared most-ridden attraction.
+3. IF either viewer or friend has 0 logs, THEN THE Friend_Surface Compare pane SHALL display the available counts without error.
+
+### Requirement 23: Bidirectional Completion Write-Path Synchronization
+
+**User Story:** As a user, I want marking, editing, or unmarking an experience through the legacy completion endpoints to keep my activity log synchronized, so that my repeat stats and completion status never drift.
+
+#### Acceptance Criteria
+
+1. WHEN `mark` is invoked in `tracking/completion/repo.ts`, THE Tracking_Service SHALL execute inside a database transaction (`BEGIN ... COMMIT`) that inserts the canonical `completions` row and dual-writes a corresponding base row into `experience_logs (user_id, experience_id, visited_on, user_tz)` atomically.
+2. IF the database transaction in `mark` encounters an error, THE Tracking_Service SHALL roll back all changes so that neither table is updated.
+3. WHEN `edit` is invoked in `tracking/completion/repo.ts`, THE Tracking_Service SHALL execute inside a database transaction that updates the `completions` date/timezone and synchronizes the matching unannotated `experience_logs` row (`visited_on = old_date AND rating IS NULL AND note IS NULL`) to the new date/timezone.
+4. WHEN `unmark` is invoked in `tracking/completion/repo.ts`, THE Tracking_Service SHALL execute inside a database transaction that deletes the canonical `completions` row and deletes the matching unannotated `experience_logs` row (`rating IS NULL AND note IS NULL`) for that completion date.
+5. WHEN `unmark` is invoked for an experience that has user-annotated visit logs (carrying visit notes or ratings) or additional logs on other dates, THE Tracking_Service SHALL preserve those annotated and historical logs and SHALL NOT delete them.

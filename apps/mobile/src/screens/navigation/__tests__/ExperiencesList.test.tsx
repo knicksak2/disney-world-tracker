@@ -235,3 +235,138 @@ describe('ExperiencesList — control accessibility (R14.9)', () => {
     expect(controlValue('friend-filter-category')).toBe('Character Meet');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Search input and clear control (R14.10)
+// ---------------------------------------------------------------------------
+
+describe('ExperiencesList — search input (R14.10)', () => {
+  test('typing into search input narrows displayed rows', () => {
+    render(<ExperiencesList entries={ENTRIES} testIDPrefix="friend" />);
+
+    // Initially 3 rows
+    expect(screen.getByTestId('friend-experience-row-0')).toBeTruthy();
+    expect(screen.getByTestId('friend-experience-row-1')).toBeTruthy();
+    expect(screen.getByTestId('friend-experience-row-2')).toBeTruthy();
+
+    // Type "Space" into search
+    const searchInput = screen.getByTestId('friend-filter-search');
+    fireEvent.changeText(searchInput, 'Space');
+
+    // Only Space Mountain and Spaceship Earth survive
+    expect(screen.getByTestId('friend-experience-row-0')).toBeTruthy();
+    expect(screen.getByTestId('friend-experience-row-1')).toBeTruthy();
+    expect(screen.queryByTestId('friend-experience-row-2')).toBeNull();
+
+    // Clear button appears
+    expect(screen.getByTestId('friend-filter-search-clear')).toBeTruthy();
+  });
+
+  test('pressing search clear button restores all rows and clears search text', () => {
+    render(<ExperiencesList entries={ENTRIES} testIDPrefix="friend" />);
+
+    const searchInput = screen.getByTestId('friend-filter-search');
+    fireEvent.changeText(searchInput, 'Lion');
+
+    // Only Lion King matches
+    expect(screen.getByTestId('friend-experience-row-0')).toBeTruthy();
+    expect(screen.queryByTestId('friend-experience-row-1')).toBeNull();
+
+    // Tap clear button
+    fireEvent.press(screen.getByTestId('friend-filter-search-clear'));
+
+    // All rows restored and clear button gone
+    expect(screen.getByTestId('friend-experience-row-0')).toBeTruthy();
+    expect(screen.getByTestId('friend-experience-row-1')).toBeTruthy();
+    expect(screen.getByTestId('friend-experience-row-2')).toBeTruthy();
+    expect(screen.queryByTestId('friend-filter-search-clear')).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Filter reset control (R14.11)
+// ---------------------------------------------------------------------------
+
+describe('ExperiencesList — filter reset (R14.11)', () => {
+  test('tapping reset restores park, category, and search to default in one interaction', () => {
+    render(<ExperiencesList entries={ENTRIES} testIDPrefix="friend" />);
+
+    // Initially no reset button visible (all defaults)
+    expect(screen.queryByTestId('friend-filter-reset')).toBeNull();
+
+    // Narrow park to EPCOT
+    fireEvent.press(screen.getByTestId('friend-filter-park-option-EPCOT'));
+    expect(controlValue('friend-filter-park')).toBe('EPCOT');
+
+    // Type in search
+    const searchInput = screen.getByTestId('friend-filter-search');
+    fireEvent.changeText(searchInput, 'Earth');
+
+    // Reset button is visible
+    expect(screen.getByTestId('friend-filter-reset')).toBeTruthy();
+
+    // Tap reset
+    fireEvent.press(screen.getByTestId('friend-filter-reset'));
+
+    // Both controls back to All, search input reset, all 3 rows restored
+    expect(controlValue('friend-filter-park')).toBe('All');
+    expect(controlValue('friend-filter-category')).toBe('All');
+    expect(screen.queryByTestId('friend-filter-reset')).toBeNull();
+    expect(screen.getByTestId('friend-experience-row-0')).toBeTruthy();
+    expect(screen.getByTestId('friend-experience-row-1')).toBeTruthy();
+    expect(screen.getByTestId('friend-experience-row-2')).toBeTruthy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Dropdown Tray expansion & selection interactions (R14.3)
+// ---------------------------------------------------------------------------
+
+describe('ExperiencesList — dropdown selector trays (R14.3)', () => {
+  test('tapping park pill opens park tray and toggles collapsed style', () => {
+    render(<ExperiencesList entries={ENTRIES} testIDPrefix="friend" />);
+
+    const parkTray = screen.getByTestId('friend-filter-park-tray');
+    // Initially hidden (collapsed with height 0 and opacity 0)
+    expect(parkTray.props.style).toEqual(
+      expect.arrayContaining([expect.objectContaining({ height: 0, opacity: 0 })]),
+    );
+
+    // Tap park pill to open
+    fireEvent.press(screen.getByTestId('friend-filter-park'));
+    expect(parkTray.props.style).toEqual(
+      expect.arrayContaining([expect.objectContaining({ opacity: 1 })]),
+    );
+
+    // Tap close button on park tray to dismiss
+    fireEvent.press(screen.getByTestId('friend-filter-park-tray-close'));
+    expect(parkTray.props.style).toEqual(
+      expect.arrayContaining([expect.objectContaining({ height: 0, opacity: 0 })]),
+    );
+  });
+
+  test('selecting an option from tray updates filter and auto-closes the tray', () => {
+    render(<ExperiencesList entries={ENTRIES} testIDPrefix="friend" />);
+
+    // Open category tray
+    fireEvent.press(screen.getByTestId('friend-filter-category'));
+    const categoryTray = screen.getByTestId('friend-filter-category-tray');
+    expect(categoryTray.props.style).toEqual(
+      expect.arrayContaining([expect.objectContaining({ opacity: 1 })]),
+    );
+
+    // Select 'Show' option
+    fireEvent.press(screen.getByTestId('friend-filter-category-option-Show'));
+
+    // Category updated and tray auto-closed
+    expect(controlValue('friend-filter-category')).toBe('Show');
+    expect(categoryTray.props.style).toEqual(
+      expect.arrayContaining([expect.objectContaining({ height: 0, opacity: 0 })]),
+    );
+
+    // Only Lion King matches
+    expect(screen.getByTestId('friend-experience-row-0')).toBeTruthy();
+    expect(screen.queryByTestId('friend-experience-row-1')).toBeNull();
+  });
+});
+

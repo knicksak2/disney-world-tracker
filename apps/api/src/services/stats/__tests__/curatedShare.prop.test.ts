@@ -143,6 +143,7 @@ const snapshotArb: fc.Arbitrary<StatsSnapshot> = fc.record({
   facetExperiences: fc.array(rawFacetRowArb, { maxLength: 15 }),
   userRatings: fc.constant([]),
   resortCoverage: fc.constant([]),
+  festivalCounts: fc.constant({ lifetimeCount: 0, rows: [] }),
   percentile: fc.option(percentileArb, { nil: null }),
 });
 
@@ -276,6 +277,7 @@ describe('buildCuratedProgressStats — Property 12: curated snapshot is well-fo
             facetExperiences,
             userRatings: [],
             resortCoverage: [],
+            festivalCounts: { lifetimeCount: 0, rows: [] },
             // Zero completions for the sender: targetTotal === 0.
             percentile: { targetTotal: 0, otherTotals },
           };
@@ -297,6 +299,7 @@ describe('buildCuratedProgressStats — Property 12: curated snapshot is well-fo
             facetExperiences,
             userRatings: [],
             resortCoverage: [],
+            festivalCounts: { lifetimeCount: 0, rows: [] },
             percentile: null,
           };
           expect(buildCuratedProgressStats(snapshot).percentileRank).toBe(0.0);

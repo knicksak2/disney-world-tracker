@@ -148,6 +148,16 @@ mobile Pin Board UI — gated by the backend suite, the pin gate, and a final fu
   - [x] 19.3 Mobile tests: extend `PinShowcaseScreen.test.tsx` with coverage for searching, sorting, expanding the browse sheet, tap-to-place non-overlapping placement, and existing drag gestures (R24.15–24.17)
   - [x] 19.4 Checkpoint — run verification gate
 
+- [ ] 20. Festival Foodie historical correctness (Requirement 25 — additive; depends on the
+      `festival-booth-tagging` spec's tasks 1-3 being complete, since this task consumes its
+      `experience_festival_tags` table)
+  - [ ] 20.1 Consume `festival-booth-tagging`'s tag data in the `festivalBooths` metric per that
+        spec's tasks 6.1-6.4 (the union-count fix in `evaluator.ts`/`repo.ts` and its property +
+        integration tests); this task is tracked and implemented entirely within
+        `festival-booth-tagging`'s own tasks.md task 6 — this entry exists only so
+        `pin-collection`'s tasks.md reflects that Requirement 25 has a corresponding task, per the
+        "reflect new scope into tasks.md" rule, without duplicating the actual work items
+
 ## Task Dependency Graph
 
 Tasks within a wave can proceed in parallel; each wave depends only on earlier waves. The
@@ -197,7 +207,8 @@ track after the shared catalog exists.
     { "wave": 38, "tasks": ["16.16"] },
     { "wave": 39, "tasks": ["17.1"] },
     { "wave": 40, "tasks": ["18.1", "18.2", "18.3", "18.4"] },
-    { "wave": 41, "tasks": ["19.1", "19.2", "19.3", "19.4"] }
+    { "wave": 41, "tasks": ["19.1", "19.2", "19.3", "19.4"] },
+    { "wave": 42, "tasks": ["20.1"] }
   ]
 }
 ```
