@@ -382,6 +382,95 @@ Pure function `rollUpActivity(raw: RawActivityMaterial): ActivityStatistics`:
 - `averageRidesPerDay`: If `distinctParkDays === 0`, returns `0.0`. Otherwise `Number((totalLogs / distinctParkDays).toFixed(1))`.
 - Safe empty states when `totalLogs === 0`: `mostRidden: []`, `personalRecords: {}`.
 
+## Amendment: Food Stats (`foodActivity`)
+
+Mirrors the `activity` dimension above exactly, computed from `food_item_logs`/`food_items` instead of `experience_logs`/`experiences`, inside the same existing snapshot transaction (Requirement 24.7) — no new transaction, no new endpoint, no migration. Own SQL, own row mapping; does not route through `food-item-logging`'s `FoodItemLogRepo`/`FoodItemLogWithContextDTO` (still unimplemented in that spec's Task 9) — this amendment reuses only the `foodItemName`/`restaurantName`/`locationName` field-naming convention, not the type or repo itself, so it has no build-order dependency on that spec.
+
+### New Queries (`apps/api/src/services/stats/repo.ts`)
+
+Added as new numbered queries inside the existing `getStatsSnapshot` transaction, alongside the existing activity queries #8-11, following the identical `experiences.active = TRUE`-style filtering pattern except food's scope is dual (`experience_id` XOR `location_id`), so every query below coalesces a display name from whichever side is set via a `LEFT JOIN` to both `experiences` and `user_submitted_locations`:
+
+1. **Food activity volume totals**:
+```sql
+SELECT COUNT(*)::int AS total_dishes_logged,
+       COUNT(DISTINCT COALESCE(fi.experience_id::text, fi.location_id::text)) AS distinct_restaurants_visited,
+       COUNT(DISTINCT fil.food_item_id) AS unique_logged_food_items
+  FROM food_item_logs fil
+  JOIN food_items fi ON fi.id = fil.food_item_id
+ WHERE fil.user_id = $1;
+```
+*Note*: `distinct_restaurants_visited` counts distinct `(experience_id OR location_id)` values, never conflating an Experience-scoped and a Location-scoped Food_Item even if their resolved display names happen to be textually identical (Requirement 24.3).
+
+2. **Top-5 Most Logged Dishes**:
+```sql
+SELECT fil.food_item_id::text AS food_item_id,
+       fi.name AS food_item_name,
+       COUNT(*)::int AS count
+  FROM food_item_logs fil
+  JOIN food_items fi ON fi.id = fil.food_item_id
+ WHERE fil.user_id = $1
+ GROUP BY fil.food_item_id, fi.name
+ ORDER BY count DESC, lower(fi.name) ASC, fil.food_item_id ASC
+ LIMIT 5;
+```
+*Tie-Break*: `count DESC`, then `lower(fi.name) ASC`, then `food_item_id ASC` — byte-identical structure to the existing `mostRidden` query (Property 15).
+
+3. **Top-5 Highest Rated Dishes** (minimum rated-log count gate, Requirement 26.2):
+```sql
+SELECT fil.food_item_id::text AS food_item_id,
+       fi.name AS food_item_name,
+       ROUND(AVG(fil.rating)::numeric, 1)::float AS average_rating,
+       COUNT(*)::int AS rated_log_count
+  FROM food_item_logs fil
+  JOIN food_items fi ON fi.id = fil.food_item_id
+ WHERE fil.user_id = $1 AND fil.rating IS NOT NULL
+ GROUP BY fil.food_item_id, fi.name
+HAVING COUNT(*) >= $2   -- FOOD_STATS_MIN_RATED_LOGS
+ ORDER BY average_rating DESC, rated_log_count DESC, lower(fi.name) ASC, fil.food_item_id ASC
+ LIMIT 5;
+```
+*Tie-Break*: `average_rating DESC`, then `rated_log_count DESC`, then `lower(fi.name) ASC`, then `food_item_id ASC`.
+
+4. **Most Adventurous Day** (Requirement 27.1): the calendar date with the most dish logs, plus the distinct restaurant/location names visited that day:
+```sql
+SELECT fil.visited_on::text AS date,
+       COUNT(*)::int AS dish_count,
+       ARRAY_AGG(DISTINCT COALESCE(e.name, usl.name)) AS restaurant_names
+  FROM food_item_logs fil
+  JOIN food_items fi ON fi.id = fil.food_item_id
+  LEFT JOIN experiences e ON e.id = fi.experience_id
+  LEFT JOIN user_submitted_locations usl ON usl.id = fi.location_id
+ WHERE fil.user_id = $1
+ GROUP BY fil.visited_on
+ ORDER BY dish_count DESC, fil.visited_on DESC
+ LIMIT 1;
+```
+*Tie-Break*: `dish_count DESC`, then `visited_on DESC` — mirrors the ride `mostProductiveDay` query exactly (Requirement 27.2).
+
+5. **Dish Marathon Record** (Requirement 27.3):
+```sql
+SELECT fil.food_item_id::text AS food_item_id,
+       fi.name AS food_item_name,
+       fil.visited_on::text AS date,
+       COUNT(*)::int AS count
+  FROM food_item_logs fil
+  JOIN food_items fi ON fi.id = fil.food_item_id
+ WHERE fil.user_id = $1
+ GROUP BY fil.food_item_id, fi.name, fil.visited_on
+ ORDER BY count DESC, fil.visited_on DESC, lower(fi.name) ASC, fil.food_item_id ASC
+ LIMIT 1;
+```
+*Tie-Break*: `count DESC`, then `visited_on DESC`, then `lower(fi.name) ASC`, then `food_item_id ASC` — byte-identical structure to the existing `marathonRecord` query (Requirement 27.4).
+
+Both records-queries' results are only attached (non-null in the raw material) when `total_dishes_logged > 0`, mirroring how `repo.ts` guards `mostProductiveDay`/`marathonRecord` today.
+
+### Pure Roll-Up (`apps/api/src/services/stats/foodActivity.ts`, new file)
+
+Pure function `rollUpFoodActivity(raw: RawFoodActivityMaterial): FoodActivityStatistics`, mirroring `rollUpActivity` byte-for-byte in structure:
+- `repeatMultiplier`: If `uniqueLoggedFoodItems === 0`, returns `1.0`. Otherwise `Math.max(1.0, Number((totalDishesLogged / uniqueLoggedFoodItems).toFixed(1)))`.
+- Safe empty states when `totalDishesLogged === 0`: `mostLogged: []`, `highestRated: []`, `personalRecords: {}`.
+- `highestRated` entries pass through the SQL-computed `averageRating`/`ratedLogCount` from query 3 above without re-deriving them (the `HAVING` threshold and rounding are already applied server-side in SQL, not in this pure function) — this keeps the threshold check co-located with the query that needs the index, consistent with how `mostRidden`'s `LIMIT 5` is likewise applied in SQL, not re-sliced in `activity.ts`.
+
 ### Write-Path Synchronization (`apps/api/src/services/tracking/completion/repo.ts`)
 
 - **`mark()`**: Wraps in `BEGIN ... COMMIT`; inserts into `completions`, and dual-writes a base row into `experience_logs (user_id, experience_id, visited_on, user_tz)` atomically.
@@ -778,6 +867,9 @@ export interface RatingStatistics {
 export interface StatsResponse {
   readonly coverage: CoverageResponse;
   readonly ratings: RatingStatistics;
+  readonly activity?: ActivityStatistics;
+  /** NEW (Amendment: Food Stats) — mirrors `activity` for food-logging data, same optionality convention. */
+  readonly foodActivity?: FoodActivityStatistics;
   /** Present only when requested with ?percentile=true AND computed. */
   readonly percentileRank?: number;
   /** Present only on isolated percentile failure. */
@@ -786,6 +878,59 @@ export interface StatsResponse {
 
 /** Threshold mirrored from the server for the "unlock" progress affordance. */
 export const MINIMUM_RATINGS_THRESHOLD = 3;
+
+// ---------------------------------------------------------------------------
+// Food Activity & Repeat Statistics (Amendment: Food Stats)
+// ---------------------------------------------------------------------------
+
+/** One entry of `foodActivity.mostLogged` (Requirement 25). */
+export interface MostLoggedFoodItem {
+  readonly foodItemId: string;
+  readonly foodItemName: string;
+  readonly count: number;
+}
+
+/** One entry of `foodActivity.highestRated` (Requirement 26). */
+export interface HighestRatedFoodItem {
+  readonly foodItemId: string;
+  readonly foodItemName: string;
+  /** Rounded to one decimal place, computed server-side. */
+  readonly averageRating: number;
+  readonly ratedLogCount: number;
+}
+
+export interface FoodPersonalRecords {
+  readonly mostAdventurousDay?: {
+    readonly date: string;
+    readonly dishCount: number;
+    readonly restaurantNames: readonly string[];
+  };
+  readonly dishMarathonRecord?: {
+    readonly foodItemId: string;
+    readonly foodItemName: string;
+    readonly date: string;
+    readonly count: number;
+  };
+}
+
+/**
+ * Food activity volume, repeat statistics, podium, and personal records.
+ * Mirrors `ActivityStatistics` byte-for-byte in structure, scoped to
+ * `food_item_logs`/`food_items` instead of `experience_logs`/`experiences`.
+ *
+ * Validates: Requirements 24.1-24.8, 25.1-25.4, 26.1-26.5, 27.1-27.6
+ */
+export interface FoodActivityStatistics {
+  readonly totalDishesLogged: number;
+  readonly distinctRestaurantsVisited: number;
+  readonly repeatMultiplier: number;
+  readonly mostLogged: readonly MostLoggedFoodItem[];
+  readonly highestRated: readonly HighestRatedFoodItem[];
+  readonly personalRecords: FoodPersonalRecords;
+}
+
+/** Minimum non-null-rated logs a Food_Item needs to appear in `highestRated` (Requirement 26.2). */
+export const FOOD_STATS_MIN_RATED_LOGS = 2;
 ```
 
 Notes:
@@ -1411,6 +1556,15 @@ The stats reads surface errors through the same catalog the API already emits
   valid `StatsResponse` — a `total === 0` cell renders `0.0%`, an empty
   distribution normalizes to all-zero bars (max clamped to 1), and absent
   optional rating fields are simply not read (gated by `sufficient`).
+- **Amendment: Food Stats.** `foodActivity` follows the identical own-stats-read
+  failure/Retry, cold-deep-link, and malformed-data-defense handling as
+  `activity` above — there is no separate error path or endpoint for it, since
+  it is one more field inside the same `GET /me/stats`/`GET /me/stats/summary`
+  response. `FOOD_STATS_MIN_RATED_LOGS` (value `2`) is the one new constant this
+  amendment introduces (see the wire-types block above); it is a code constant,
+  not an env var, chosen as a starting minimum-samples gate rather than derived
+  from data — the same "revisit once real usage exists" caveat already applied
+  to `LOCATION_SIMILARITY_THRESHOLD` in `food-item-logging` applies here too.
 
 ## Correctness Properties
 
@@ -1519,6 +1673,22 @@ For any user completion entry returned by `listCompletions`, `repeatCount` is an
 **Validates:** Requirements 23.1, 23.2, 23.3, 23.4, 23.5
 `mark` atomically inserts into both `completions` and `experience_logs`; `edit` atomically updates `completions` and synchronizes the matching unannotated log's `visited_on` date; `unmark` atomically deletes from `completions` and deletes the matching unannotated log while preserving annotated visit logs and other dates.
 
+### Property 19: Food activity volume and repeat multiplier bounds (Amendment: Food Stats)
+**Validates:** Requirements 24.2, 24.3, 24.4, 24.5, 24.6
+For any valid stats snapshot, `foodActivity.totalDishesLogged` equals the exact count of the target user's `food_item_logs` rows, `distinctRestaurantsVisited` equals the count of distinct resolved `experience_id`/`location_id` scopes across those rows, and `repeatMultiplier >= 1.0` always, computed as `1.0` when `uniqueLoggedFoodItems === 0` and as `Math.max(1.0, totalDishesLogged / uniqueLoggedFoodItems)` (one decimal) otherwise. When `totalDishesLogged === 0`, `distinctRestaurantsVisited` is `0`, `mostLogged`/`highestRated` are `[]`, and `personalRecords` is `{}`.
+
+### Property 20: Most-logged-dishes podium ordering & determinism (Amendment: Food Stats)
+**Validates:** Requirements 25.1, 25.2, 25.3
+For any valid stats snapshot, `foodActivity.mostLogged` contains at most 5 items, sorted strictly by `count DESC`, then case-insensitive `lower(foodItemName) ASC`, then `foodItemId ASC`. Each item corresponds to a Food_Item the target user has actually logged at least once.
+
+### Property 21: Highest-rated-dishes minimum-count gate & ordering (Amendment: Food Stats)
+**Validates:** Requirements 26.1, 26.2, 26.3, 26.4, 26.5
+For any valid stats snapshot, every entry in `foodActivity.highestRated` corresponds to a Food_Item the target user has rated (non-null `rating`) at least `FOOD_STATS_MIN_RATED_LOGS` (2) times; no Food_Item with fewer qualifying rated logs ever appears, regardless of how high its single rating is. Entries are sorted by `averageRating DESC`, then `ratedLogCount DESC`, then case-insensitive `foodItemName ASC`, then `foodItemId ASC`, and each `averageRating` is rounded to exactly one decimal place.
+
+### Property 22: Food personal records derivation & tie-breaking (Amendment: Food Stats)
+**Validates:** Requirements 27.1, 27.2, 27.3, 27.4, 27.5
+For any valid stats snapshot, `personalRecords.mostAdventurousDay` represents the calendar date with the maximal dish-log count for the target user, with ties broken by `visited_on DESC`, and its `restaurantNames` contains the distinct restaurant/location display names visited that day. `dishMarathonRecord` represents the `(food_item_id, visited_on)` pair with the maximal same-day log count, with ties broken by date desc, then dish name asc, then `food_item_id` asc. Both are absent (not `null`) when `totalDishesLogged === 0`.
+
 ## Testing Strategy
 
 - **Unit / component tests** (`@testing-library/react-native`): each new section
@@ -1584,6 +1754,10 @@ For any user completion entry returned by `listCompletions`, `repeatCount` is an
   that produces a valid nested `StatsResponse` is recommended to avoid
   re-deriving the shape in every test file.
 
+**Amendment: Food Stats testing.**
+- **Backend** (`apps/api/src/services/stats/__tests__/foodActivity.prop.test.ts`, new, `fast-check` >=100 runs): P19 (volume/repeat-multiplier bounds and zero-log empty defaults), P20 (`mostLogged` ordering/determinism, max 5, tie-break), P21 (`highestRated`'s `FOOD_STATS_MIN_RATED_LOGS` gate — specifically a property generating a Food_Item with exactly 1 high-rated log and asserting it never appears, paired with one at exactly the threshold count that does), P22 (personal-records tie-breaking, absent-not-null when zero logs). A repo unit/merge test asserting the 5 new queries (listed in "Amendment: Food Stats" above) correctly resolve the dual `experience_id`/`location_id` scope via the `LEFT JOIN` to both `experiences` and `user_submitted_locations`, and that `distinctRestaurantsVisited` never double-counts an Experience-scoped and Location-scoped pair. A route/response test asserting `foodActivity` is present in the response of both `GET /me/stats` and `GET /me/stats/summary`.
+- **Mobile**: `FoodStatsScreen.test.tsx` (new) covering the odometer, the podium (present/absent-rank guards mirroring the ride podium's), the highest-rated list, personal-records cards, the "Most Logged"/"Highest Rated" sort toggle, and the `hasFoodActivity`-gated empty state when `totalDishesLogged === 0`. A `buildOverviewHighlights` test asserting the highlight card that opens `FoodStatsDetail` only appears when the user has at least one food log (Requirement 28.1). `FriendProfileScreen`'s existing Compare-mode test file gains an assertion for the food volume comparison bars (Requirement 28.8), mirroring the existing ride volume comparison assertion.
+
 ## Impact / Files to Change
 
 ### Production code (backend — `apps/api`)
@@ -1594,6 +1768,9 @@ For any user completion entry returned by `listCompletions`, `repeatCount` is an
 | `apps/api/src/services/stats/resorts.ts` | **NEW** (or an added export in `coverage.ts`) — owns `RawResortCoverageRow` and the pure `rollUpResortCoverage` producing the sorted `ResortCoverage[]` (percent desc / total desc / case-insensitive label asc) via the shared `toCompletionCell`. Defines/exports the `ResortCoverage` type. |
 | `apps/api/src/services/stats/routes.ts` | Add `byResort: readonly ResortCoverage[]` to `CoverageResponse`; import `ResortCoverage`/`rollUpResortCoverage`; add `byResort: rollUpResortCoverage(snapshot.resortCoverage)` to the `coverage` object in `assembleResponse`. No change to gating/auth/percentile/error mapping. |
 | `packages/shared` (optional) | Only if the team prefers `ResortCoverage` (and possibly `CompletionCell`) exported from `@dwt/shared` as the single source of truth for both API and mobile; otherwise mobile mirrors the shape locally (existing convention). Flagged as the one possible shared-package touch. |
+| `apps/api/src/services/stats/foodActivity.ts` | **NEW (Amendment: Food Stats)** — owns `RawFoodActivityMaterial` and the pure `rollUpFoodActivity`, mirroring `activity.ts` structurally. |
+| `apps/api/src/services/stats/repo.ts` | **(Amendment: Food Stats)** Add the 5 new food queries inside the existing snapshot transaction; expose `foodActivity: RawFoodActivityMaterial` on `StatsSnapshot`. |
+| `apps/api/src/services/stats/routes.ts` | **(Amendment: Food Stats)** Add `foodActivity: rollUpFoodActivity(snapshot.foodActivity ?? EMPTY_FOOD_ACTIVITY_MATERIAL)` to `assembleResponse`, mirroring the existing `activity` attachment exactly. |
 
 ### Production code (mobile)
 
@@ -1601,13 +1778,14 @@ For any user completion entry returned by `listCompletions`, `repeatCount` is an
 |------|--------|
 | `apps/mobile/src/api/statsTypes.ts` | **NEW** — shared nested `StatsResponse`, `CompletionCell`, `LabeledCell`, `FacetCoverage`, **`ResortCoverage`**, `RatingStatistics`, `RatingDistribution`, `RatedExperience`, `MINIMUM_RATINGS_THRESHOLD`. `CoverageResponse` gains **`byResort: readonly ResortCoverage[]`**. |
 | `apps/mobile/src/theme/charts.tsx` | **NEW** — `ProgressRing`, `ProgressBar`, `RatingHistogram`, `RatingDial`, `CompleteBadge`. |
-| `apps/mobile/src/navigation/StatsStack.tsx` | **NEW** — native stack for the Stats tab (`StatsStackParamList`): `StatsOverview` (hub, initial) + `CoverageDetail`, `RatingsDetail`, `InterestsDetail`, `ExperiencesDetail`. Mirrors `CatalogStack`/`FriendsStack`. |
+| `apps/mobile/src/navigation/StatsStack.tsx` | **NEW** — native stack for the Stats tab (`StatsStackParamList`): `StatsOverview` (hub, initial) + `CoverageDetail`, `RatingsDetail`, `InterestsDetail`, `ExperiencesDetail`. Mirrors `CatalogStack`/`FriendsStack`. **(Amendment: Food Stats)** adds `FoodStatsDetail` to `StatsStackParamList`. |
 | `apps/mobile/src/navigation/RootNavigator.tsx` | Register the Stats tab with `component={StatsStack}` instead of the bare `StatsScreen`; change `MainTabParamList.Stats` to `NavigatorScreenParams<StatsStackParamList> \| undefined` (matching Catalog/Friends). |
 | `apps/mobile/src/screens/stats/StatsScreen.tsx` | Rewrite from the 5-tab selector into the **Overview hub**: hero + percentile + `buildOverviewHighlights`-driven highlight/entry cards that push detail routes; remove inline flat `StatsResponse`/`StatsBreakdown`; consume `data.coverage.*` / `data.ratings` / `data.percentileRank`; request `?percentile=true`; migrate `buildProgressShareParams`; drop `useViewMode`/`OWN_STATS_MODES` usage. |
 | `apps/mobile/src/screens/stats/CoverageDetailScreen.tsx` | **NEW** — reads the shared cached stats query; renders the lens switcher (`Parks · Categories · Areas · Lands · Resorts`): `CoverageStatGrid` + hotels-visited resort tile + `LabeledCellList`s for lands/resort areas, plus the **Resorts lens** rendering `coverage.byResort` as ranked per-resort `ProgressBar` rows. Adds `'resorts'` to the `CoverageDetail` `focus` union. |
 | `apps/mobile/src/screens/stats/RatingsDetailScreen.tsx` | **NEW** — reads the shared cached stats query; renders `RatingsSection` (rich or unlock). |
 | `apps/mobile/src/screens/stats/InterestsDetailScreen.tsx` | **NEW** — reads the shared cached stats query; renders `FacetCoverageTile`s. |
 | `apps/mobile/src/screens/stats/ExperiencesDetailScreen.tsx` | **NEW** — wraps the unchanged `ExperiencesList` over `useOwnCompletionsQuery` (D8). |
+| `apps/mobile/src/screens/stats/FoodStatsScreen.tsx` | **NEW (Amendment: Food Stats)** — reads the shared cached stats query; renders the food odometer, the Most Logged Dishes podium, the Highest Rated Dishes list (two visually distinct sections, Requirement 28.3), personal-records cards, the "Most Logged"/"Highest Rated" sort toggle, and the zero-food-log empty state. |
 | `apps/mobile/src/screens/stats/components/*` | **NEW** — `HighlightCard` (hub entry/highlight card), `OverallHeroCard`, `PercentileBanner`, `CoverageSection`/`CoverageStatGrid`/`CompletionStatTile`, `LabeledCellList`, `InterestsSection`/`FacetCoverageTile`, `RatingsSection`/`RatingDial`/`RatingHistogram`/`HighLowHeroCards`/`RatingAveragesGrid`/`RatingsUnlockEmptyState`. Sections now live inside the detail screens. |
 | `apps/mobile/src/screens/stats/statsView.ts` | **NEW** — pure display transforms (`buildParkTiles`, `buildCategoryTiles`, `sortFacetsForDisplay`, `normalizeDistribution`, `phrasePercentile`, `shouldShowPercentile`, `ratingsView`, `unlockRemaining`, `displayedPercent`) **plus the hub highlight selector** (`buildOverviewHighlights`, `pickCoverageHighlight`, `pickRatingsHighlight`, `pickInterestsHighlight`). |
 | `apps/mobile/src/screens/stats/progressShareEntry.ts` | Unchanged (enablement predicate is shape-agnostic); verify. |

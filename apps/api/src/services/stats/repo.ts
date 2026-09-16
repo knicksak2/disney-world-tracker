@@ -56,6 +56,7 @@ import {
   AREA_TYPES,
   EXPERIENCE_CATEGORIES,
   PARKS,
+  FOOD_STATS_MIN_RATED_LOGS,
 } from '@dwt/shared';
 
 import type { DbPool } from '../../db/pool.js';
@@ -70,6 +71,13 @@ import type {
   RawProductiveDayRow,
   RawMarathonRecordRow,
 } from './activity.js';
+import type {
+  RawFoodActivityMaterial,
+  RawMostLoggedFoodItemRow,
+  RawHighestRatedFoodItemRow,
+  RawMostAdventurousDayRow,
+  RawDishMarathonRecordRow,
+} from './foodActivity.js';
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -135,6 +143,10 @@ export interface StatsSnapshot {
    */
   readonly activity?: RawActivityMaterial;
   /**
+   * Food activity volume, podium, highest rated, and personal records material (→ `rollUpFoodActivity`).
+   */
+  readonly foodActivity?: RawFoodActivityMaterial;
+  /**
    * Raw festival completion counts for lifetime and per-festival breakdown
    * (→ `rollUpFestivalStats`).
    */
@@ -176,6 +188,14 @@ export type {
   RawProductiveDayRow,
   RawMarathonRecordRow,
 } from './activity.js';
+export type {
+  RawFoodActivityMaterial,
+  RawFoodActivityVolumeRow,
+  RawMostLoggedFoodItemRow,
+  RawHighestRatedFoodItemRow,
+  RawMostAdventurousDayRow,
+  RawDishMarathonRecordRow,
+} from './foodActivity.js';
 
 // ---------------------------------------------------------------------------
 // Row shapes returned by the SQL
@@ -268,6 +288,38 @@ interface ProductiveDayRow {
 interface MarathonRecordRow {
   readonly experience_id: string;
   readonly experience_name: string;
+  readonly date: Date | string;
+  readonly count: string | number;
+}
+
+interface FoodActivityVolumeRow {
+  readonly total_dishes_logged: string | number;
+  readonly distinct_restaurants_visited: string | number;
+  readonly unique_logged_food_items: string | number;
+}
+
+interface MostLoggedFoodRow {
+  readonly food_item_id: string;
+  readonly food_item_name: string;
+  readonly count: string | number;
+}
+
+interface HighestRatedFoodRow {
+  readonly food_item_id: string;
+  readonly food_item_name: string;
+  readonly average_rating: string | number;
+  readonly rated_log_count: string | number;
+}
+
+interface AdventurousDayRow {
+  readonly date: Date | string;
+  readonly dish_count: string | number;
+  readonly restaurant_names: readonly string[];
+}
+
+interface DishMarathonRecordRow {
+  readonly food_item_id: string;
+  readonly food_item_name: string;
   readonly date: Date | string;
   readonly count: string | number;
 }
@@ -522,6 +574,87 @@ export function createStatsRepo(pool: DbPool): StatsRepo {
           [targetUserId],
         );
 
+        // 14. Food activity volume totals (Requirements 24.2, 24.3, 24.7)
+        const foodVolumeResult = await client.query<FoodActivityVolumeRow>(
+          `SELECT COUNT(*)::int AS total_dishes_logged,
+                  COUNT(DISTINCT COALESCE(fi.experience_id::text, fi.location_id::text))::int AS distinct_restaurants_visited,
+                  COUNT(DISTINCT fil.food_item_id)::int AS unique_logged_food_items
+             FROM food_item_logs fil
+             JOIN food_items fi ON fi.id = fil.food_item_id
+            WHERE fil.user_id = $1`,
+          [targetUserId],
+        );
+
+        // 15. Top-5 Most Logged Dishes (Requirements 25.1, 25.2)
+        const mostLoggedFoodResult = await client.query<MostLoggedFoodRow>(
+          `SELECT fil.food_item_id::text AS food_item_id,
+                  fi.name AS food_item_name,
+                  COUNT(*)::int AS count
+             FROM food_item_logs fil
+             JOIN food_items fi ON fi.id = fil.food_item_id
+            WHERE fil.user_id = $1
+            GROUP BY fil.food_item_id, fi.name
+            ORDER BY count DESC, lower(fi.name) ASC, fil.food_item_id ASC
+            LIMIT 5`,
+          [targetUserId],
+        );
+
+        // 16. Top-5 Highest Rated Dishes (Requirements 26.1, 26.2, 26.3)
+        const highestRatedFoodResult = await client.query<HighestRatedFoodRow>(
+          `SELECT food_item_id,
+                  food_item_name,
+                  average_rating,
+                  rated_log_count
+             FROM (
+               SELECT fil.food_item_id::text AS food_item_id,
+                      fi.name AS food_item_name,
+                      ROUND(AVG(fil.rating)::numeric, 1)::float AS average_rating,
+                      COUNT(*)::int AS rated_log_count
+                 FROM food_item_logs fil
+                 JOIN food_items fi ON fi.id = fil.food_item_id
+                WHERE fil.user_id = $1 AND fil.rating IS NOT NULL
+                GROUP BY fil.food_item_id, fi.name
+             ) sub
+            WHERE rated_log_count >= $2
+            ORDER BY average_rating DESC, rated_log_count DESC, lower(food_item_name) ASC, food_item_id ASC
+            LIMIT 5`,
+          [targetUserId, FOOD_STATS_MIN_RATED_LOGS],
+        );
+
+        // 17. Most Adventurous Day (Requirements 27.1, 27.2)
+        const adventurousDayResult = await client.query<AdventurousDayRow>(
+          `SELECT fil.visited_on AS date,
+                  COUNT(*)::int AS dish_count,
+                  COALESCE(
+                    ARRAY_AGG(DISTINCT COALESCE(e.name, usl.name)) FILTER (WHERE COALESCE(e.name, usl.name) IS NOT NULL),
+                    '{}'::text[]
+                  ) AS restaurant_names
+             FROM food_item_logs fil
+             JOIN food_items fi ON fi.id = fil.food_item_id
+             LEFT JOIN experiences e ON e.id = fi.experience_id
+             LEFT JOIN user_submitted_locations usl ON usl.id = fi.location_id
+            WHERE fil.user_id = $1
+            GROUP BY fil.visited_on
+            ORDER BY dish_count DESC, fil.visited_on DESC
+            LIMIT 1`,
+          [targetUserId],
+        );
+
+        // 18. Dish Marathon Record (Requirements 27.3, 27.4)
+        const dishMarathonResult = await client.query<DishMarathonRecordRow>(
+          `SELECT fil.food_item_id::text AS food_item_id,
+                  fi.name AS food_item_name,
+                  fil.visited_on AS date,
+                  COUNT(*)::int AS count
+             FROM food_item_logs fil
+             JOIN food_items fi ON fi.id = fil.food_item_id
+            WHERE fil.user_id = $1
+            GROUP BY fil.food_item_id, fi.name, fil.visited_on
+            ORDER BY count DESC, fil.visited_on DESC, lower(fi.name) ASC, fil.food_item_id ASC
+            LIMIT 1`,
+          [targetUserId],
+        );
+
         await client.query('COMMIT');
 
         const volumeRow = activityVolume.rows[0];
@@ -573,6 +706,68 @@ export function createStatsRepo(pool: DbPool): StatsRepo {
           marathonRecord,
         };
 
+        const foodVolumeRow = foodVolumeResult.rows[0];
+        const totalDishesLogged = Number(foodVolumeRow?.total_dishes_logged ?? 0);
+        const distinctRestaurantsVisited = Number(
+          foodVolumeRow?.distinct_restaurants_visited ?? 0,
+        );
+        const uniqueLoggedFoodItems = Number(
+          foodVolumeRow?.unique_logged_food_items ?? 0,
+        );
+
+        const mostLogged: RawMostLoggedFoodItemRow[] = mostLoggedFoodResult.rows.map(
+          (row) => ({
+            foodItemId: row.food_item_id,
+            foodItemName: row.food_item_name,
+            count: Number(row.count),
+          }),
+        );
+
+        const highestRated: RawHighestRatedFoodItemRow[] =
+          highestRatedFoodResult.rows.map((row) => ({
+            foodItemId: row.food_item_id,
+            foodItemName: row.food_item_name,
+            averageRating: Number(row.average_rating),
+            ratedLogCount: Number(row.rated_log_count),
+          }));
+
+        let mostAdventurousDay: RawMostAdventurousDayRow | null = null;
+        const adventurousRow = adventurousDayResult.rows[0];
+        if (adventurousRow && totalDishesLogged > 0) {
+          const restaurantNames = (adventurousRow.restaurant_names || []).filter(
+            (name): name is string =>
+              typeof name === 'string' && name.trim().length > 0,
+          );
+          mostAdventurousDay = {
+            date: toIsoDate(adventurousRow.date),
+            dishCount: Number(adventurousRow.dish_count),
+            restaurantNames,
+          };
+        }
+
+        let dishMarathonRecord: RawDishMarathonRecordRow | null = null;
+        const dishMarathonRow = dishMarathonResult.rows[0];
+        if (dishMarathonRow && totalDishesLogged > 0) {
+          dishMarathonRecord = {
+            foodItemId: dishMarathonRow.food_item_id,
+            foodItemName: dishMarathonRow.food_item_name,
+            date: toIsoDate(dishMarathonRow.date),
+            count: Number(dishMarathonRow.count),
+          };
+        }
+
+        const foodActivity: RawFoodActivityMaterial = {
+          volume: {
+            totalDishesLogged,
+            distinctRestaurantsVisited,
+            uniqueLoggedFoodItems,
+          },
+          mostLogged,
+          highestRated,
+          mostAdventurousDay,
+          dishMarathonRecord,
+        };
+
         const festivalLifetime = Number(festivalLifetimeResult.rows[0]?.n ?? 0);
         const festivalCounts = {
           lifetimeCount: festivalLifetime,
@@ -589,6 +784,7 @@ export function createStatsRepo(pool: DbPool): StatsRepo {
           ),
           percentile,
           activity,
+          foodActivity,
           festivalCounts,
         };
       } catch (err) {

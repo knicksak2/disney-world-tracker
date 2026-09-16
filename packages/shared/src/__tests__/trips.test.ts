@@ -24,6 +24,8 @@ import {
   pendingRodeWithTagSchema,
   tripIncomingInviteSchema,
   isMealPeriodServed,
+  attachFoodListSchema,
+  tripFoodListSchema,
 } from '../trips.js';
 
 // A stable, well-formed pending rode-with tag DTO (all fields present, valid).
@@ -164,6 +166,95 @@ describe('isMealPeriodServed (B3, R3.17)', () => {
 
   it('always returns true for snack target', () => {
     expect(isMealPeriodServed(['Breakfast'], 'snack')).toBe(true);
+  });
+});
+
+describe('attachFoodListSchema (R22.1)', () => {
+  const VALID_UUID = '55555555-5555-4555-8555-555555555555';
+
+  it('accepts a well-formed attach body', () => {
+    const result = attachFoodListSchema.safeParse({ foodListId: VALID_UUID });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.foodListId).toBe(VALID_UUID);
+    }
+  });
+
+  it('rejects missing foodListId', () => {
+    expect(attachFoodListSchema.safeParse({}).success).toBe(false);
+  });
+
+  it('rejects non-UUID foodListId', () => {
+    expect(attachFoodListSchema.safeParse({ foodListId: 'invalid-id' }).success).toBe(false);
+  });
+
+  it('rejects extra fields', () => {
+    expect(
+      attachFoodListSchema.safeParse({ foodListId: VALID_UUID, extra: 'forbidden' }).success,
+    ).toBe(false);
+  });
+});
+
+describe('tripFoodListSchema (R22.9, R22.10)', () => {
+  const VALID_UUID = '66666666-6666-4666-8666-666666666666';
+
+  it('accepts an available food list DTO', () => {
+    const dto = {
+      available: true as const,
+      foodListId: VALID_UUID,
+      name: 'Best Snacks in Epcot',
+      itemCount: 5,
+      ownerDisplayName: 'Mickey',
+    };
+    const result = tripFoodListSchema.safeParse(dto);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data).toEqual(dto);
+    }
+  });
+
+  it('accepts an unavailable food list DTO (R22.10)', () => {
+    const dto = {
+      available: false as const,
+      foodListId: VALID_UUID,
+    };
+    const result = tripFoodListSchema.safeParse(dto);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data).toEqual(dto);
+    }
+  });
+
+  it('rejects missing fields on available variant', () => {
+    expect(
+      tripFoodListSchema.safeParse({
+        available: true,
+        foodListId: VALID_UUID,
+        name: 'List',
+      }).success,
+    ).toBe(false);
+  });
+
+  it('rejects negative itemCount', () => {
+    expect(
+      tripFoodListSchema.safeParse({
+        available: true,
+        foodListId: VALID_UUID,
+        name: 'List',
+        itemCount: -1,
+        ownerDisplayName: 'Mickey',
+      }).success,
+    ).toBe(false);
+  });
+
+  it('rejects extra fields on unavailable variant', () => {
+    expect(
+      tripFoodListSchema.safeParse({
+        available: false,
+        foodListId: VALID_UUID,
+        name: 'Extra Name',
+      }).success,
+    ).toBe(false);
   });
 });
 

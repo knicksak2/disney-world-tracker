@@ -572,6 +572,17 @@ export const tripCommentInputSchema = z
 
 export type TripCommentInput = z.infer<typeof tripCommentInputSchema>;
 
+/**
+ * Body for `POST /trips/:id/food-lists` (R22.1). Attaches a Food_List to a Trip.
+ */
+export const attachFoodListSchema = z
+  .object({
+    foodListId: uuidSchema,
+  })
+  .strict();
+
+export type AttachFoodListInput = z.infer<typeof attachFoodListSchema>;
+
 // ---------------------------------------------------------------------------
 // DTO schemas (runtime validators for read projections)
 // ---------------------------------------------------------------------------
@@ -595,9 +606,49 @@ export const pendingRodeWithTagSchema = z
   })
   .strict();
 
+/**
+ * Validates the shape of a {@link TripFoodListDTO} (R22.9, R22.10).
+ */
+export const tripFoodListSchema = z.discriminatedUnion('available', [
+  z
+    .object({
+      available: z.literal(true),
+      foodListId: uuidSchema,
+      name: z.string(),
+      itemCount: z.number().int().nonnegative(),
+      ownerDisplayName: z.string(),
+    })
+    .strict(),
+  z
+    .object({
+      available: z.literal(false),
+      foodListId: uuidSchema,
+    })
+    .strict(),
+]);
+
 // ---------------------------------------------------------------------------
 // DTOs (types only — no runtime payload)
 // ---------------------------------------------------------------------------
+
+/**
+ * One Food_List attached to a Trip, as surfaced on a {@link TripDTO}
+ * (R22.9, R22.10). When available, carries the list id, name, item count,
+ * and owner display name. When the referenced Food_List has been deleted
+ * since attachment, surfaces as `available: false` with only the `foodListId`.
+ */
+export type TripFoodListDTO =
+  | {
+      readonly available: true;
+      readonly foodListId: string;
+      readonly name: string;
+      readonly itemCount: number;
+      readonly ownerDisplayName: string;
+    }
+  | {
+      readonly available: false;
+      readonly foodListId: string;
+    };
 
 /**
  * One Resort a Trip's party stayed at, as surfaced on a {@link TripDTO}
@@ -635,6 +686,12 @@ export interface TripDTO {
    * join, never a copy of catalog data.
    */
   readonly resorts: readonly TripResortDTO[];
+  /**
+   * The Food_List(s) attached to the Trip for reference during the visit
+   * (R22.9, R22.10). Sourced from the `trip_food_lists` join resolved
+   * through the Food_List_Service.
+   */
+  readonly foodLists: readonly TripFoodListDTO[];
   /** Walking pace scaling travel times: 'slow' (50m/min), 'moderate' (80m/min), 'fast' (100m/min). */
   readonly walkingSpeed?: 'slow' | 'moderate' | 'fast' | undefined;
   /** Flag indicating whether the party is eligible for 30m Early Entry. */

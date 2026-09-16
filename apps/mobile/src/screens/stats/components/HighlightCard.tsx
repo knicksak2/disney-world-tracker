@@ -38,6 +38,7 @@ const ICON_STYLE: Record<
   ratings: { bg: '#fff4d6', fg: '#d4a017' },
   interests: { bg: '#efe9f7', fg: '#7e57c2' },
   experiences: { bg: '#e8f4ff', fg: '#2f80ed' },
+  foodStats: { bg: '#fbeaf0', fg: '#d6336c' },
 };
 
 /**
@@ -54,6 +55,8 @@ function actionPhrase(highlight: OverviewHighlight): string {
       return 'Opens interests details';
     case 'ExperiencesDetail':
       return 'Opens your experiences';
+    case 'FoodStatsDetail':
+      return 'Opens food stats';
     default:
       return 'Opens details';
   }

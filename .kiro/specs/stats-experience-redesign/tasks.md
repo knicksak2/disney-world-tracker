@@ -331,6 +331,53 @@ existing `*.prop.test.ts` conventions, and are tagged
 - [x] 20. Final Checkpoint — Full Verification
   - Run `npm run verify` across all workspaces (`apps/api`, `apps/mobile`, `packages/shared`) and confirm exit code 0
 
+## Amendment: Food Stats
+
+**Cross-spec note:** does not depend on `food-item-logging`'s Task 9 (`FoodItemLogWithContextDTO`, `GET /me/food-item-logs`) landing first — this amendment writes its own SQL directly against `food_item_logs`/`food_items` inside the existing snapshot transaction, exactly as Task 15 already does for `experience_logs`/`experiences`, independent of any other spec's repo/route layer. It only depends on `food-item-logging` Task 1 (migration `0040`, already `[x]`), since that's what creates the tables this amendment reads.
+
+- [x] 21. Backend: food activity roll-up & snapshot queries (apps/api)
+  - [x] 21.1 Create pure `foodActivity.ts` roll-up module
+    - In `apps/api/src/services/stats/foodActivity.ts`, implement `RawFoodActivityMaterial`/`EMPTY_FOOD_ACTIVITY_MATERIAL` and the pure `rollUpFoodActivity(raw)` mirroring `activity.ts`'s structure exactly: `repeatMultiplier = uniqueLoggedFoodItems > 0 ? Math.max(1.0, Number((totalDishesLogged / uniqueLoggedFoodItems).toFixed(1))) : 1.0`, zero-log defaults (`mostLogged: []`, `highestRated: []`, `personalRecords: {}`)
+    - _Requirements: 24.1, 24.4, 24.5, 24.6_
+  - [x] 21.2 Add the 5 new food queries to `apps/api/src/services/stats/repo.ts`
+    - Inside the existing `getStatsSnapshot` transaction (no new transaction), add: (a) food activity volume totals (total/distinct-restaurants/unique-food-items), (b) top-5 most logged dishes, (c) top-5 highest rated dishes gated by `HAVING COUNT(*) >= FOOD_STATS_MIN_RATED_LOGS`, (d) most adventurous day, (e) dish marathon record — exact SQL and tie-break order per design.md's "Amendment: Food Stats" section; expose the merged result as `foodActivity: RawFoodActivityMaterial` on `StatsSnapshot`
+    - _Requirements: 24.2, 24.3, 24.7, 25.1, 25.2, 26.1, 26.2, 26.3, 27.1, 27.2, 27.3, 27.4_
+  - [x] 21.3 Add `FOOD_STATS_MIN_RATED_LOGS = 2` constant and the shared wire types
+    - Add `MostLoggedFoodItem`, `HighestRatedFoodItem`, `FoodPersonalRecords`, `FoodActivityStatistics` to `apps/api/src/services/stats/routes.ts` (or a co-located types file, mirroring where `ActivityStatistics` currently lives); add `foodActivity?: FoodActivityStatistics` to `StatsResponse`; wire `activity: rollUpFoodActivity(snapshot.foodActivity ?? EMPTY_FOOD_ACTIVITY_MATERIAL)` into `assembleResponse` for both `GET /me/stats` and `GET /me/stats/summary`
+    - _Requirements: 24.1, 24.8_
+  - [x] 21.4 * Write property test `apps/api/src/services/stats/__tests__/foodActivity.prop.test.ts`
+    - `fast-check` (>=100 runs) validating Property 19 (volume/repeat-multiplier bounds, zero-log defaults), Property 20 (`mostLogged` max-5/ordering/tie-break), Property 21 (`highestRated`'s `FOOD_STATS_MIN_RATED_LOGS` gate — include a case at exactly `count - 1` that must be excluded and exactly `count` that must be included), Property 22 (personal-records tie-breaking, absent-not-null at zero logs), tagged `// Feature: stats-experience-redesign, Property 19/20/21/22: <text>`
+    - _Requirements: 24.2-24.6, 25.1-25.3, 26.1-26.5, 27.1-27.5_
+  - [x] 21.5 Write repo unit/merge test and route/response test
+    - Assert the dual `experience_id`/`location_id` scope resolves correctly via the `LEFT JOIN` to both `experiences` and `user_submitted_locations`, `distinctRestaurantsVisited` never double-counts an Experience-scoped and a Location-scoped pair; assert `foodActivity` is present in the response of both `GET /me/stats` and `GET /me/stats/summary`
+    - _Requirements: 24.3, 24.8_
+
+- [x] 22. Checkpoint — backend Food Stats complete
+  - Run `npm run verify:api` and `npm run verify:shared`; ask the user if questions arise.
+
+- [x] 23. Mobile: Food Stats screen, hub highlight, and Friend Profile comparison (apps/mobile)
+  - [x] 23.1 Mirror `FoodActivityStatistics` and add to `apps/mobile/src/api/statsTypes.ts`
+    - Mirror `MostLoggedFoodItem`, `HighestRatedFoodItem`, `FoodPersonalRecords`, `FoodActivityStatistics`, `FOOD_STATS_MIN_RATED_LOGS` byte-identically to the API types; add `foodActivity?: FoodActivityStatistics` to the mobile `StatsResponse`
+    - _Requirements: 24.1_
+  - [x] 23.2 Add food display transforms to `statsView.ts`
+    - `formatFoodOdometer(foodActivity)` (mirroring `formatOdometer`), `formatMostAdventurousDay`/`formatDishMarathonRecord` (mirroring `formatProductiveDay`/`formatMarathonRecord`), and a food-stats entry in `buildOverviewHighlights` gated on `foodActivity.totalDishesLogged > 0` targeting the new `FoodStatsDetail` route
+    - _Requirements: 28.1_
+  - [x] 23.3 Create `FoodStatsScreen.tsx` in `apps/mobile/src/screens/stats/`
+    - Reads the shared cached `['me-stats', {percentile:true}]` query (no separate fetch); renders the food odometer (`totalDishesLogged`, `distinctRestaurantsVisited`, `repeatMultiplier`) with `food-` prefixed testIDs mirroring `ExperiencesDetailScreen`'s odometer (`food-odometer-grid`, `food-odometer-total-logged`, `food-odometer-distinct-restaurants`, `food-odometer-repeat-multiplier`); the Most Logged Dishes podium (`food-podium-card`, `food-podium-step-1/2/3`, runners-up for ranks 4-5, only-render-if-present-rank guards) as a visually distinct section from the Highest Rated Dishes list (never merged, per Requirement 28.3); personal-records cards (`food-record-adventurous-day`, `food-record-marathon`) each independently conditional on presence; a sort toggle ("Most Logged"/"Highest Rated", `food-sort-toggle-logged`/`food-sort-toggle-rated`) mirroring the existing "Most Visited"/"Date" toggle; a `hasFoodActivity`-gated empty state when `totalDishesLogged === 0` that omits every other section
+    - _Requirements: 28.2, 28.3, 28.4, 28.5, 28.6, 28.7_
+  - [x] 23.4 Register `FoodStatsDetail` on `StatsStackParamList`
+    - Add the route to `apps/mobile/src/navigation/StatsStack.tsx` (`headerShown: false`), mirroring the existing detail-route registrations exactly
+    - _Requirements: 28.1_
+  - [x] 23.5 Update `FriendProfileScreen.tsx` Compare mode
+    - Render side-by-side comparison bars for Total Dishes Logged and Distinct Restaurants Visited derived from `viewer.foodActivity`/`friend.foodActivity`, mirroring the existing ride volume comparison bars exactly
+    - _Requirements: 28.8_
+  - [x] 23.6 * Write `FoodStatsScreen.test.tsx` and extend `buildOverviewHighlights`/`FriendProfileScreen` tests
+    - `FoodStatsScreen.test.tsx`: odometer rendering, podium present/absent-rank guards, highest-rated list, personal-records cards, the sort toggle, and the zero-food-log empty state; extend `buildOverviewHighlights.prop.test.ts` to assert the food-stats highlight card only appears when `totalDishesLogged > 0`; extend `FriendProfileScreen`'s existing Compare-mode test with the food volume comparison assertion
+    - _Requirements: 28.1, 28.2, 28.3, 28.4, 28.5, 28.6, 28.8_
+
+- [x] 24. Final Checkpoint — Full Verification (Re-run after Food Stats)
+  - Run `npm run verify` across all workspaces (`apps/api`, `apps/mobile`, `packages/shared`) and confirm exit code 0; this supersedes Task 20 as the most current all-green baseline — Task 20 remains checked as a historical record of the pre-amendment state
+
 ## Notes
 
 - Tasks marked with `*` are optional test sub-tasks and can be skipped for a
@@ -347,6 +394,15 @@ existing `*.prop.test.ts` conventions, and are tagged
 - Pure/foundational modules (backend roll-up, mobile types, chart primitives,
   `statsView` transforms, fixture builder) precede the components, screens, and
   wiring that consume them; navigation wiring is last so nothing is orphaned.
+- **Amendment: Food Stats.** Tasks 21-24 mirror tasks 15-20's ride-activity
+  structure exactly, scoped to `food_item_logs`/`food_items` instead of
+  `experience_logs`/`experiences`. This amendment does **not** depend on
+  `food-item-logging`'s Task 9 (`FoodItemLogWithContextDTO`) — it writes its
+  own SQL directly, mirroring how tasks 13-20 never routed through another
+  service's DTOs either. `FOOD_STATS_MIN_RATED_LOGS` (2) is a new starting
+  threshold, not derived from data; revisit once real usage exists, mirroring
+  the same caveat already applied to `LOCATION_SIMILARITY_THRESHOLD` in
+  `food-item-logging`.
 
 ## Task Dependency Graph
 
@@ -366,7 +422,15 @@ existing `*.prop.test.ts` conventions, and are tagged
     { "id": 10, "tasks": ["15.2", "15.5", "15.6", "16.1"] },
     { "id": 11, "tasks": ["16.2", "16.3"] },
     { "id": 12, "tasks": ["17.1", "17.2", "18.1", "19.1"] },
-    { "id": 13, "tasks": ["18.2", "19.2", "20"] }
+    { "id": 13, "tasks": ["18.2", "19.2", "20"] },
+    { "id": 14, "tasks": ["21.1"] },
+    { "id": 15, "tasks": ["21.2", "21.3"] },
+    { "id": 16, "tasks": ["21.4", "21.5"] },
+    { "id": 17, "tasks": ["22"] },
+    { "id": 18, "tasks": ["23.1", "23.2"] },
+    { "id": 19, "tasks": ["23.3", "23.4", "23.5"] },
+    { "id": 20, "tasks": ["23.6"] },
+    { "id": 21, "tasks": ["24"] }
   ]
 }
 ```

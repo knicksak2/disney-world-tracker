@@ -126,3 +126,66 @@ export interface ActivityStatistics {
   readonly personalRecords: PersonalRecords;
 }
 
+/**
+ * A food item in the user's top-5 most logged dishes podium.
+ *
+ * Validates: Requirements 25.1, 25.2
+ */
+export interface MostLoggedFoodItem {
+  readonly foodItemId: string;
+  readonly foodItemName: string;
+  readonly count: number;
+}
+
+/**
+ * A food item in the user's top-5 highest rated dishes list.
+ *
+ * Validates: Requirements 26.1, 26.2, 26.3
+ */
+export interface HighestRatedFoodItem {
+  readonly foodItemId: string;
+  readonly foodItemName: string;
+  readonly averageRating: number;
+  readonly ratedLogCount: number;
+}
+
+/**
+ * User personal records and bests for adventurous dining and same-day dish records.
+ *
+ * Validates: Requirements 27.1, 27.3
+ */
+export interface FoodPersonalRecords {
+  readonly mostAdventurousDay?: {
+    readonly date: string;
+    readonly dishCount: number;
+    readonly restaurantNames: readonly string[];
+  };
+  readonly dishMarathonRecord?: {
+    readonly foodItemId: string;
+    readonly foodItemName: string;
+    readonly date: string;
+    readonly count: number;
+  };
+}
+
+/**
+ * Food activity volume, repeat multiplier, podium, and personal records.
+ *
+ * Validates: Requirements 24.1, 24.4, 24.5, 24.6
+ */
+export interface FoodActivityStatistics {
+  readonly totalDishesLogged: number;
+  readonly distinctRestaurantsVisited: number;
+  readonly repeatMultiplier: number;
+  readonly mostLogged: readonly MostLoggedFoodItem[];
+  readonly highestRated: readonly HighestRatedFoodItem[];
+  readonly personalRecords: FoodPersonalRecords;
+}
+
+/**
+ * Minimum rated logs required for a food item to qualify for the highest-rated dishes list.
+ *
+ * Validates: Requirement 26.2
+ */
+export const FOOD_STATS_MIN_RATED_LOGS = 2;
+

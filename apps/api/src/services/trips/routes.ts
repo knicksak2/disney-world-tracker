@@ -82,6 +82,7 @@ import type {
 import { ZodError, z } from 'zod';
 
 import {
+  attachFoodListSchema,
   plannedItemAddSchema,
   plannedItemEditSchema,
   tripOptimizationInputSchema,
@@ -240,6 +241,13 @@ const tripMemberParamsSchema = z
  */
 const tripPlannedItemParamsSchema = z
   .object({ id: uuidSchema, itemId: uuidSchema })
+  .strict();
+
+/**
+ * Path parameters for `DELETE /trips/:id/food-lists/:foodListId`.
+ */
+const tripFoodListParamsSchema = z
+  .object({ id: uuidSchema, foodListId: uuidSchema })
   .strict();
 
 /**
@@ -1316,6 +1324,61 @@ export function tripRoutes(options: TripRoutesOptions): FastifyPluginAsync {
         }
         return result;
       }
+    );
+
+    // -------------------------------------------------------------------
+    // POST /trips/:id/food-lists — attach a Food_List to a Trip (R22.1, R22.2)
+    // -------------------------------------------------------------------
+    // Any Trip_Member may attach a Food_List they own or a public Food_List.
+    // Throws trip_food_list_not_found if list is absent, trip_food_list_ineligible
+    // if caller is not owner and list is not public. Returns 201 created.
+    app.post<{ Params: { id: string } }>(
+      '/trips/:id/food-lists',
+      { preHandler: requireSession },
+      async (request, reply) => {
+        const userId = requireUser(request);
+        const { id } = parseOrAppError(tripIdParamsSchema, request.params);
+        const { foodListId } = parseOrAppError(
+          attachFoodListSchema,
+          request.body,
+        );
+        await assertTripMember(pool, userId, id);
+        await repo.attachFoodList(id, userId, foodListId);
+        reply.code(201);
+        reply.send({ success: true });
+      },
+    );
+
+    // -------------------------------------------------------------------
+    // DELETE /trips/:id/food-lists/:foodListId — detach a Food_List (R22.5)
+    // -------------------------------------------------------------------
+    // Adder or Organizer may detach an attached Food_List. A non-adder non-organizer
+    // throws trip_forbidden. Returns 204 no content.
+    app.delete<{ Params: { id: string; foodListId: string } }>(
+      '/trips/:id/food-lists/:foodListId',
+      { preHandler: requireSession },
+      async (request, reply) => {
+        const userId = requireUser(request);
+        const { id, foodListId } = parseOrAppError(
+          tripFoodListParamsSchema,
+          request.params,
+        );
+        const callerRole = await assertTripMember(pool, userId, id);
+        const detached = await repo.detachFoodList(
+          id,
+          userId,
+          callerRole,
+          foodListId,
+        );
+        if (!detached) {
+          throw new AppError(
+            'trip_food_list_not_found',
+            'Food list not found on this trip.',
+          );
+        }
+        reply.code(204);
+        reply.send();
+      },
     );
 
     // -------------------------------------------------------------------

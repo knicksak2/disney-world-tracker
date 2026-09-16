@@ -64,6 +64,10 @@ export type ExpoPushData =
       readonly rodeWithTagId: string;
       /** The Trip_Log_Entry the tag belongs to, for the confirm view. */
       readonly tripLogEntryId: string;
+    }
+  | {
+      /** The Food_List's id, used for notification-tap deep-linking (food-lists R8.1, R8.3). */
+      readonly foodListId: string;
     };
 
 /**

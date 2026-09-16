@@ -379,6 +379,8 @@ export default function ProfileScreen(): JSX.Element {
       }}
       saving={saveNameMutation.isPending}
       onViewStats={() => navigation.navigate('Stats')}
+      onViewFoodHistory={() => (navigation as any).navigate('MyFoodHistory')}
+      onViewFoodLists={() => (navigation as any).navigate('MyFoodLists')}
       onViewPins={() => navigation.navigate('PinBoard')}
       onViewShowcase={() => navigation.navigate('PinShowcase')}
       onOpenNotifications={() => navigation.navigate('NotificationCenter')}
@@ -426,6 +428,8 @@ interface ProfileContentProps {
   readonly onSave: () => void;
   readonly saving: boolean;
   readonly onViewStats: () => void;
+  readonly onViewFoodHistory: () => void;
+  readonly onViewFoodLists: () => void;
   readonly onViewPins: () => void;
   readonly onViewShowcase: () => void;
   readonly onOpenNotifications: () => void;
@@ -446,6 +450,8 @@ function ProfileContent({
   onSave,
   saving,
   onViewStats,
+  onViewFoodHistory,
+  onViewFoodLists,
   onViewPins,
   onViewShowcase,
   onOpenNotifications,
@@ -611,6 +617,30 @@ function ProfileContent({
               icon="stats-chart-outline"
               onPress={onViewStats}
               testID="profile-view-stats"
+            />
+          </Card>
+        ) : null}
+
+        {isSelf ? (
+          <Card style={styles.securityCard}>
+            <Text style={styles.statLabel}>Food history</Text>
+            <SecondaryButton
+              label="View your food history"
+              icon="restaurant-outline"
+              onPress={onViewFoodHistory}
+              testID="profile-view-food-history"
+            />
+          </Card>
+        ) : null}
+
+        {isSelf ? (
+          <Card style={styles.securityCard}>
+            <Text style={styles.statLabel}>Food lists</Text>
+            <SecondaryButton
+              label="View your food lists"
+              icon="bookmark-outline"
+              onPress={onViewFoodLists}
+              testID="profile-view-food-lists"
             />
           </Card>
         ) : null}

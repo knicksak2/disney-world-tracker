@@ -66,6 +66,7 @@ const TRIP: TripDTO = {
   status: 'active',
   createdAt: '2024-04-01T12:00:00Z',
   resorts: [{ id: POLY_ID, name: 'Polynesian Village' }],
+  foodLists: [],
 };
 
 function resort(id: string, name: string): ResortDTO {

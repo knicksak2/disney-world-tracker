@@ -194,3 +194,29 @@ export const tripReactionValueSchema = z.enum(TRIP_REACTION_VALUES);
  * computation time inside Stats_Service.
  */
 export const completionPercentSchema = z.number().min(0).max(100);
+
+// ---------------------------------------------------------------------------
+// Food Item Logging primitives
+// ---------------------------------------------------------------------------
+
+/**
+ * Bounded string primitive for Food_Item dish and User_Submitted_Location names:
+ * trimmed, 1-200 characters (food-item-logging R1.1, R2.1, R6.1).
+ */
+export const foodItemNameSchema = z
+  .string()
+  .trim()
+  .min(1, { message: 'validation_failed' })
+  .max(200, { message: 'validation_failed' });
+
+/**
+ * Bounded string primitive for Food_List names: trimmed, 1-100 characters
+ * (food-lists R1.1, R1.2).
+ */
+export const foodListNameSchema = z
+  .string()
+  .trim()
+  .min(1, { message: 'validation_failed' })
+  .max(100, { message: 'validation_failed' });
+
+

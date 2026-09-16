@@ -95,6 +95,15 @@ export interface MenuRetrievalRepo {
     menus: readonly MenuDTO[],
     fetchedAt: Date,
   ): Promise<void>;
+  /**
+   * Optional hook for Food_Item catalog seeding (food-item-logging R1.1-R1.4).
+   * Called on a successful on-demand fetch right after `upsertMenus`.
+   */
+  upsertFoodItemsFromMenus?(
+    experienceId: string,
+    menus: readonly MenuDTO[],
+    seenAt: Date,
+  ): Promise<void>;
 }
 
 /**
@@ -181,6 +190,9 @@ export function createMenuRetrieval(deps: MenuRetrievalDeps): MenuRetrieval {
         const raw = await deps.client.getMenus(state.upstreamEntityId);
         const menus = projectMenus(raw);
         await deps.repo.upsertMenus(experienceId, menus, now);
+        if (deps.repo.upsertFoodItemsFromMenus) {
+          await deps.repo.upsertFoodItemsFromMenus(experienceId, menus, now);
+        }
         return menus;
       } catch (err) {
         // R8.5: serve any previously cached menu unchanged and record the

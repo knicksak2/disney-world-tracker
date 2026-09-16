@@ -89,8 +89,9 @@ function activeTrip(id: string, name: string): TripDTO {
     startDate: '2024-05-01',
     endDate: '2024-05-05',
     status: 'active',
-    createdAt: '2024-04-01T12:00:00Z',
+    createdAt: '2024-05-01T00:00:00.000Z',
     resorts: [],
+    foodLists: [],
   };
 }
 

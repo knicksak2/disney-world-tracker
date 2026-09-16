@@ -44,6 +44,8 @@ import {
   ScreenContainer,
 } from '../../theme/components';
 import { useQuery } from '@tanstack/react-query';
+import AttachedFoodListsSection from './AttachedFoodListsSection';
+import { tripDetailKeys } from './tripDetailQueryKeys';
 
 /** Wire shape of `GET /me`: the caller's identity (to gate the Edit control). */
 interface MeResponse {
@@ -83,10 +85,13 @@ interface HubSection {
 // Constants
 // ---------------------------------------------------------------------------
 
-/** Query key for a single Trip's header info; keyed by Trip_Identifier. */
-export const tripDetailKeys = {
-  detail: (tripId: string) => ['trips', 'detail', tripId] as const,
-};
+/**
+ * Query key for a single Trip's header info; keyed by Trip_Identifier.
+ * Re-exported from `tripDetailQueryKeys.ts` (see that file for why it lives
+ * there instead of here) so existing `from './TripDetailScreen'` imports
+ * elsewhere in the app keep working unchanged.
+ */
+export { tripDetailKeys } from './tripDetailQueryKeys';
 
 /**
  * The hub sections, in presentation order (R18.1). Each maps to its section
@@ -312,6 +317,21 @@ export default function TripDetailScreen({
             </View>
           </View>
         ) : null}
+
+        {/* Attached Food Lists section (R22, Task 24.6) */}
+        <AttachedFoodListsSection
+          tripId={tripId}
+          foodLists={trip.foodLists}
+          isOrganizer={isOrganizer}
+          callerId={callerId}
+          callerDisplayName={
+            members.find((m) => m.userId === callerId)?.displayName
+          }
+          navigation={navigation}
+          onOpenFoodList={(foodListId) => {
+            (navigation as any).navigate('FoodListDetail', { foodListId });
+          }}
+        />
 
         {HUB_SECTIONS.map((section) => (
           <SectionControl

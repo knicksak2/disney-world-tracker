@@ -232,3 +232,15 @@ export function navigateToTripsList(): boolean {
   });
   return true;
 }
+
+/**
+ * Navigate to `FoodListDetail` for a tapped food-list share / role-change
+ * push notification carrying `{ foodListId }` (Requirement 10.1, Task 8.12).
+ */
+export function navigateToFoodListDetail(params: { readonly foodListId: string }): boolean {
+  if (!navigationRef.isReady()) {
+    return false;
+  }
+  navigationRef.navigate('FoodListDetail', params);
+  return true;
+}

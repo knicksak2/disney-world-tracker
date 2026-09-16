@@ -104,6 +104,11 @@ export interface FriendsRoutesOptions {
    * that don't exercise the notification seam.
    */
   readonly emitFriendRequestReceived?: FriendRequestReceivedDispatch;
+  /**
+   * Optional hook invoked after a friendship is removed, awaited before the 204
+   * response is sent. Used to revoke bidirectional Food List shares (food-lists R4.5).
+   */
+  readonly onFriendshipRemoved?: (userIdA: string, userIdB: string) => Promise<void>;
 }
 
 // ---------------------------------------------------------------------------
@@ -264,6 +269,9 @@ export function friendsRoutes(
             'friendship_not_found',
             'No friendship exists with this user.',
           );
+        }
+        if (options.onFriendshipRemoved) {
+          await options.onFriendshipRemoved(userId, otherUserId);
         }
         reply.code(204);
         reply.send();

@@ -50,7 +50,12 @@ export type {
   ActivityStatistics,
   MostRiddenAttraction,
   PersonalRecords,
+  MostLoggedFoodItem,
+  HighestRatedFoodItem,
+  FoodPersonalRecords,
+  FoodActivityStatistics,
 } from './Stats.js';
+export { FOOD_STATS_MIN_RATED_LOGS } from './Stats.js';
 export type {
   OperatingStatus,
   ForecastEntry,
@@ -113,4 +118,35 @@ export {
   overlapsAnyOtherPin,
   placementToReferencePx,
 } from './PinShowcase.js';
+
+export type { FoodItemDTO, SubmitFoodItemInputDTO } from './FoodItem.js';
+export type {
+  FoodItemLogDTO,
+  FoodItemLogHistoryDTO,
+  CreateFoodItemLogInputDTO,
+  FoodItemLogWithContextDTO,
+} from './FoodItemLog.js';
+export type {
+  UserSubmittedLocationDTO,
+  CreateUserSubmittedLocationInputDTO,
+  LocationSuggestionDTO,
+} from './UserSubmittedLocation.js';
+
+export type {
+  FoodListDTO,
+  FoodListItemDTO,
+  FoodListRole,
+  FoodListDetailDTO,
+  FoodListCollectionDTO,
+  FoodListDiscoveryPageDTO,
+  CreateFoodListInputDTO,
+  UpdateFoodListInputDTO,
+  AddFoodListItemInputDTO,
+  ReorderFoodListItemsInputDTO,
+  FoodListShareRole,
+  ShareFoodListInputDTO,
+  FoodListShareDTO,
+} from './FoodList.js';
+
+
 

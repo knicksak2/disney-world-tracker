@@ -122,6 +122,7 @@ type StatsHubNavParamList = {
   RatingsDetail: undefined;
   InterestsDetail: undefined;
   ExperiencesDetail: undefined;
+  FoodStatsDetail: undefined;
 };
 
 /**
@@ -148,6 +149,9 @@ function navigateToHighlight(
       return;
     case 'ExperiencesDetail':
       navigation.navigate('ExperiencesDetail');
+      return;
+    case 'FoodStatsDetail':
+      navigation.navigate('FoodStatsDetail');
       return;
   }
 }

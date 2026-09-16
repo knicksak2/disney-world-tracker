@@ -388,4 +388,51 @@ describe('FriendProfileScreen Progress_Comparison loading/unavailable (R12.5, R1
     expect(screen.getByText('12 rides')).toBeTruthy();
     expect(screen.getByText('9 rides')).toBeTruthy();
   });
+
+  // -------------------------------------------------------------------------
+  // R28.8: Food volume comparison
+  // -------------------------------------------------------------------------
+  test('R28.8: renders food volume comparison bars when food activity data is present', async () => {
+    routeHandlers.ownStats = () =>
+      Promise.resolve(
+        makeStatsResponse({
+          foodActivity: {
+            totalDishesLogged: 15,
+            distinctRestaurantsVisited: 7,
+            repeatMultiplier: 1.8,
+            mostLogged: [],
+            highestRated: [],
+            personalRecords: {},
+          },
+        }),
+      );
+    routeHandlers.friendStats = () =>
+      Promise.resolve(
+        makeStatsResponse({
+          foodActivity: {
+            totalDishesLogged: 8,
+            distinctRestaurantsVisited: 4,
+            repeatMultiplier: 1.3,
+            mostLogged: [],
+            highestRated: [],
+            personalRecords: {},
+          },
+        }),
+      );
+
+    renderScreen();
+    await flushMicrotasks();
+
+    fireEvent.press(screen.getByTestId('tab-Compare'));
+    await flushMicrotasks();
+
+    expect(screen.getByText('Food & dining')).toBeTruthy();
+    expect(screen.getByTestId('friend-comparison-total-dishes')).toBeTruthy();
+    expect(screen.getByText('15')).toBeTruthy();
+    expect(screen.getByText('8')).toBeTruthy();
+
+    expect(screen.getByTestId('friend-comparison-distinct-restaurants')).toBeTruthy();
+    expect(screen.getByText('7')).toBeTruthy();
+    expect(screen.getByText('4')).toBeTruthy();
+  });
 });

@@ -98,6 +98,14 @@ jest.mock('../../screens/stats/ExperiencesDetailScreen', () => ({
   },
 }));
 
+jest.mock('../../screens/stats/FoodStatsScreen', () => ({
+  __esModule: true,
+  default: function FoodStatsStub(): JSX.Element {
+    const { View: RNView } = require('react-native');
+    return <RNView testID="stub-food-stats" />;
+  },
+}));
+
 // ---------------------------------------------------------------------------
 // Module under test (imported after the mocks above).
 // ---------------------------------------------------------------------------
@@ -119,14 +127,16 @@ const STUB_TEST_ID: Record<string, string> = {
   RatingsDetail: 'stub-ratings-detail',
   InterestsDetail: 'stub-interests-detail',
   ExperiencesDetail: 'stub-experiences-detail',
+  FoodStatsDetail: 'stub-food-stats',
 };
 
-/** The four detail routes pushed above the hub. */
+/** The detail routes pushed above the hub. */
 const DETAIL_ROUTES = [
   'CoverageDetail',
   'RatingsDetail',
   'InterestsDetail',
   'ExperiencesDetail',
+  'FoodStatsDetail',
 ] as const;
 
 /** Render the real `StatsStack` standalone inside a real NavigationContainer. */

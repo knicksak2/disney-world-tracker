@@ -125,4 +125,12 @@ describe('Profile screen — claimable-Pin badge on "View your pins"', () => {
     await screen.findByTestId('profile-view-pins');
     expect(screen.queryByTestId('profile-pins-badge')).toBeNull();
   });
+
+  it('renders "View your food history" button on profile (Requirement 8.3)', async () => {
+    mockApi(boardOf([]));
+    renderProfile();
+
+    const btn = await screen.findByTestId('profile-view-food-history');
+    expect(btn).toBeTruthy();
+  });
 });

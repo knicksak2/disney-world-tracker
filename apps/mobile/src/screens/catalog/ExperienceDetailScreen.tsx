@@ -28,7 +28,7 @@
 // `theme/theme.ts` and `theme/components.tsx`.
 
 import React from 'react';
-import { useQueries, useQuery } from '@tanstack/react-query';
+import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ActivityIndicator,
   Image,
@@ -53,6 +53,7 @@ import type {
   ExperienceCategory,
   ExperienceVisitHistoryDTO,
   FacetValueDTO,
+  FoodItemDTO,
   GroupedFacetsDTO,
   HeightRequirementDTO,
   LiveDetailResponseDTO,
@@ -99,6 +100,10 @@ import { liveSectionFor, NO_LIVE_SHAPE, type LiveShape } from './gating';
 import RideLiveSection from './live/RideLiveSection';
 import ShowtimesSection from './live/ShowtimesSection';
 import DiningSection from './live/DiningSection';
+import FoodItemPickerModal from './FoodItemPickerModal';
+import LogFoodItemModal from './LogFoodItemModal';
+import RestaurantFoodLogsSheet from './RestaurantFoodLogsSheet';
+import AddToListsSheet from '../foodLists/AddToListsSheet';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -214,6 +219,15 @@ export default function ExperienceDetailScreen(): JSX.Element {
   const navigation = useNavigation<ExperienceDetailNavigationProp>();
   const { experienceId } = route.params;
   const encodedId = encodeURIComponent(experienceId);
+
+  const queryClient = useQueryClient();
+  const [foodPickerVisible, setFoodPickerVisible] = React.useState(false);
+  const [selectedFoodItem, setSelectedFoodItem] = React.useState<FoodItemDTO | null>(null);
+  const [logFoodModalVisible, setLogFoodModalVisible] = React.useState(false);
+  const [scopedFoodLogsVisible, setScopedFoodLogsVisible] = React.useState(false);
+  const [addToListsPickerVisible, setAddToListsPickerVisible] = React.useState(false);
+  const [addToListsSheetVisible, setAddToListsSheetVisible] = React.useState(false);
+  const [itemsToAddToLists, setItemsToAddToLists] = React.useState<readonly FoodItemDTO[]>([]);
 
   // React Query's `useQueries` issues every queryFn concurrently and
   // returns a tuple of `UseQueryResult` aligned with the input order.
@@ -518,6 +532,38 @@ export default function ExperienceDetailScreen(): JSX.Element {
         />
 
         {/* ------------------------------------------------------------ */}
+        {/* Food Item Logging Affordance (Requirement 5.1, Task 7.3)      */}
+        {/* ------------------------------------------------------------ */}
+        {experience.category === 'Restaurant' && (
+          <Card style={styles.section} testID="experience-food-item-section">
+            <SectionLabel>Dishes & Food</SectionLabel>
+            <View style={styles.foodItemButtonsRow}>
+              <PrimaryButton
+                label="Log a food item"
+                icon="restaurant"
+                onPress={() => setFoodPickerVisible(true)}
+                accessibilityLabel={`Log a food item at ${experience.name}`}
+                testID="experience-log-food-item-btn"
+              />
+              <SecondaryButton
+                label="My logged items here"
+                icon="time-outline"
+                onPress={() => setScopedFoodLogsVisible(true)}
+                accessibilityLabel={`View my logged dishes at ${experience.name}`}
+                testID="experience-my-logged-items-btn"
+              />
+              <SecondaryButton
+                label="Add to a list"
+                icon="list"
+                onPress={() => setAddToListsPickerVisible(true)}
+                accessibilityLabel={`Add a dish at ${experience.name} to a food list`}
+                testID="experience-add-to-list-btn"
+              />
+            </View>
+          </Card>
+        )}
+
+        {/* ------------------------------------------------------------ */}
         {/* About (R5, R7.1). The collapsible description: clamped to 4  */}
         {/* lines with a "Read more" / "Read less" toggle when it         */}
         {/* overflows, and the "No description available." empty state    */}
@@ -558,6 +604,68 @@ export default function ExperienceDetailScreen(): JSX.Element {
           <TagGroupCard key={group.id} group={group} />
         ))}
       </ScrollView>
+
+      {/* Food item picker modal */}
+      <FoodItemPickerModal
+        experienceId={experienceId}
+        visible={foodPickerVisible}
+        onClose={() => setFoodPickerVisible(false)}
+        onSelectFoodItem={(item) => {
+          setSelectedFoodItem(item);
+          setFoodPickerVisible(false);
+          setLogFoodModalVisible(true);
+        }}
+      />
+
+      {/* Log food item modal */}
+      <LogFoodItemModal
+        foodItem={selectedFoodItem}
+        visible={logFoodModalVisible}
+        onClose={() => {
+          setLogFoodModalVisible(false);
+          setSelectedFoodItem(null);
+        }}
+        onLogged={() => {
+          void queryClient.invalidateQueries({
+            queryKey: ['experience-food-items', experienceId],
+          });
+          if (selectedFoodItem) {
+            void queryClient.invalidateQueries({
+              queryKey: ['food-item-logs', selectedFoodItem.id],
+            });
+          }
+        }}
+      />
+
+      {/* Food item picker modal in addToLists mode (Entry Point 1) */}
+      <FoodItemPickerModal
+        experienceId={experienceId}
+        mode="addToLists"
+        visible={addToListsPickerVisible}
+        onClose={() => setAddToListsPickerVisible(false)}
+        onConfirmSelection={(items) => {
+          setItemsToAddToLists(items);
+          setAddToListsPickerVisible(false);
+          setAddToListsSheetVisible(true);
+        }}
+      />
+
+      {/* Add to Lists Sheet */}
+      <AddToListsSheet
+        visible={addToListsSheetVisible}
+        foodItems={itemsToAddToLists}
+        onClose={() => {
+          setAddToListsSheetVisible(false);
+          setItemsToAddToLists([]);
+        }}
+      />
+
+      {/* Restaurant food logs sheet (Requirement 9.4) */}
+      <RestaurantFoodLogsSheet
+        experienceId={experienceId}
+        visible={scopedFoodLogsVisible}
+        onClose={() => setScopedFoodLogsVisible(false)}
+      />
     </ScreenContainer>
   );
 }
@@ -1128,6 +1236,13 @@ const styles = StyleSheet.create({
   aggregateValueRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: theme.spacing.sm,
+  },
+  directionsButtonText: {
+    ...theme.typography.button,
+    color: theme.color.textOnPrimary,
+  },
+  foodItemButtonsRow: {
     gap: theme.spacing.sm,
   },
   aggregateValue: {

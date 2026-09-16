@@ -22,6 +22,10 @@ import RegisterScreen from '../screens/RegisterScreen';
 import ExperienceDetailScreen from '../screens/catalog/ExperienceDetailScreen';
 import MenuScreen from '../screens/catalog/MenuScreen';
 import ShareComposerScreen from '../screens/share/ShareComposerScreen';
+import FoodListDetailScreen from '../screens/foodLists/FoodListDetailScreen';
+import MyFoodListsScreen from '../screens/foodLists/MyFoodListsScreen';
+import MyFoodHistoryScreen from '../screens/catalog/MyFoodHistoryScreen';
+import FoodListDiscoveryScreen from '../screens/foodLists/FoodListDiscoveryScreen';
 import { AttentionBadge } from '../features/notifications/AttentionBadge';
 import { useAttentionBadge } from '../features/notifications/useAttentionBadge';
 import { useClaimablePinsBadge } from '../components/pins/useClaimablePinsBadge';
@@ -162,6 +166,10 @@ export type RootStackParamList = {
    * `navigate('ShareComposer', params)` call and return via `goBack()`.
    */
   ShareComposer: ShareComposerParams;
+  FoodListDetail: { foodListId: string };
+  MyFoodLists: undefined;
+  MyFoodHistory: undefined;
+  FoodListDiscovery: undefined;
 };
 
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
@@ -359,6 +367,26 @@ function RootStackNavigator(): JSX.Element {
         name="ShareComposer"
         component={ShareComposerScreen}
         options={{ title: 'Share', presentation: 'modal' }}
+      />
+      <RootStack.Screen
+        name="FoodListDetail"
+        component={FoodListDetailScreen}
+        options={{ headerShown: false }}
+      />
+      <RootStack.Screen
+        name="MyFoodLists"
+        component={MyFoodListsScreen}
+        options={{ headerShown: false }}
+      />
+      <RootStack.Screen
+        name="MyFoodHistory"
+        component={MyFoodHistoryScreen}
+        options={{ headerShown: false }}
+      />
+      <RootStack.Screen
+        name="FoodListDiscovery"
+        component={FoodListDiscoveryScreen}
+        options={{ headerShown: false }}
       />
     </RootStack.Navigator>
   );

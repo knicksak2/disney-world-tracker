@@ -865,6 +865,9 @@ function ComparisonMode({
 
   const comparison = deriveProgressComparison(viewerStats, friendStats);
   const hasActivityComparison = Boolean(viewerStats.activity || friendStats.activity);
+  const hasFoodActivityComparison = Boolean(
+    viewerStats.foodActivity || friendStats.foodActivity,
+  );
 
   const vList = viewerStats.activity?.mostRidden ?? [];
   const fList = friendStats.activity?.mostRidden ?? [];
@@ -942,6 +945,30 @@ function ComparisonMode({
               </View>
             </Card>
           )}
+        </>
+      )}
+
+      {hasFoodActivityComparison && (
+        <>
+          <Text style={styles.comparisonGroupHeading}>Food & dining</Text>
+          <ActivityComparisonCard
+            title="Total Dishes Logged"
+            viewerValue={viewerStats.foodActivity?.totalDishesLogged ?? 0}
+            friendValue={friendStats.foodActivity?.totalDishesLogged ?? 0}
+            friendName={friendName}
+            testID="friend-comparison-total-dishes"
+          />
+          <ActivityComparisonCard
+            title="Distinct Restaurants Visited"
+            viewerValue={
+              viewerStats.foodActivity?.distinctRestaurantsVisited ?? 0
+            }
+            friendValue={
+              friendStats.foodActivity?.distinctRestaurantsVisited ?? 0
+            }
+            friendName={friendName}
+            testID="friend-comparison-distinct-restaurants"
+          />
         </>
       )}
 

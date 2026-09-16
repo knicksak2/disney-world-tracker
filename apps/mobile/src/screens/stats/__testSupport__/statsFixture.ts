@@ -36,6 +36,7 @@ import type {
   CompletionCell,
   CoverageResponse,
   FacetCoverage,
+  FoodActivityStatistics,
   LabeledCell,
   RatedExperience,
   RatingDistribution,
@@ -329,6 +330,79 @@ export function makeDefaultActivity(
   };
 }
 
+// ---------------------------------------------------------------------------
+// Food Activity statistics
+// ---------------------------------------------------------------------------
+
+export const DEFAULT_FOOD_ACTIVITY: FoodActivityStatistics = {
+  totalDishesLogged: 12,
+  distinctRestaurantsVisited: 5,
+  repeatMultiplier: 1.5,
+  mostLogged: [
+    {
+      foodItemId: 'dish-1',
+      foodItemName: 'Dole Whip',
+      count: 5,
+    },
+    {
+      foodItemId: 'dish-2',
+      foodItemName: 'Mickey Pretzel',
+      count: 3,
+    },
+    {
+      foodItemId: 'dish-3',
+      foodItemName: 'Cheeseburger Spring Rolls',
+      count: 2,
+    },
+    {
+      foodItemId: 'dish-4',
+      foodItemName: 'Churro',
+      count: 1,
+    },
+    {
+      foodItemId: 'dish-5',
+      foodItemName: 'Turkey Leg',
+      count: 1,
+    },
+  ],
+  highestRated: [
+    {
+      foodItemId: 'dish-1',
+      foodItemName: 'Dole Whip',
+      averageRating: 9.5,
+      ratedLogCount: 4,
+    },
+    {
+      foodItemId: 'dish-3',
+      foodItemName: 'Cheeseburger Spring Rolls',
+      averageRating: 9.0,
+      ratedLogCount: 2,
+    },
+  ],
+  personalRecords: {
+    mostAdventurousDay: {
+      date: '2025-02-14',
+      dishCount: 6,
+      restaurantNames: ['Aloha Isle', 'Pecos Bill'],
+    },
+    dishMarathonRecord: {
+      foodItemId: 'dish-1',
+      foodItemName: 'Dole Whip',
+      date: '2025-02-14',
+      count: 3,
+    },
+  },
+};
+
+export function makeDefaultFoodActivity(
+  overrides: Partial<FoodActivityStatistics> = {},
+): FoodActivityStatistics {
+  return {
+    ...DEFAULT_FOOD_ACTIVITY,
+    ...overrides,
+  };
+}
+
 /**
  * Overrides for {@link makeStatsResponse}. `coverage` is shallow-merged over the
  * default coverage; `ratings` fully *replaces* the default ratings (use the
@@ -337,12 +411,13 @@ export function makeDefaultActivity(
  * are mutually exclusive on the wire.
  */
 export interface StatsFixtureOverrides {
-  coverage?: Partial<CoverageResponse>;
-  ratings?: RatingStatistics;
-  activity?: ActivityStatistics;
-  festivals?: FestivalStatsDTO;
-  percentileRank?: number;
-  percentileUnavailable?: boolean;
+  coverage?: Partial<CoverageResponse> | undefined;
+  ratings?: RatingStatistics | undefined;
+  activity?: ActivityStatistics | undefined;
+  foodActivity?: FoodActivityStatistics | undefined;
+  festivals?: FestivalStatsDTO | undefined;
+  percentileRank?: number | undefined;
+  percentileUnavailable?: boolean | undefined;
 }
 
 const DEFAULT_FESTIVALS: FestivalStatsDTO = Object.freeze({
@@ -364,13 +439,14 @@ const DEFAULT_FESTIVALS: FestivalStatsDTO = Object.freeze({
 export function makeStatsResponse(
   overrides: StatsFixtureOverrides = {},
 ): StatsResponse {
-  const { coverage, ratings, activity, festivals, percentileRank, percentileUnavailable } = overrides;
+  const { coverage, ratings, activity, foodActivity, festivals, percentileRank, percentileUnavailable } = overrides;
 
   return {
     coverage: makeCoverageResponse(coverage),
     ratings: ratings ?? makeSufficientRatings(),
     festivals: festivals ?? DEFAULT_FESTIVALS,
     ...(activity !== undefined ? { activity } : {}),
+    ...(foodActivity !== undefined ? { foodActivity } : {}),
     ...(percentileRank !== undefined ? { percentileRank } : {}),
     ...(percentileUnavailable !== undefined ? { percentileUnavailable } : {}),
   };

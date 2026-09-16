@@ -154,6 +154,8 @@ function actionPhrase(target: HighlightTarget): string {
       return 'Opens interests details';
     case 'ExperiencesDetail':
       return 'Opens your experiences';
+    case 'FoodStatsDetail':
+      return 'Opens food stats';
     default:
       return 'Opens details';
   }
@@ -267,6 +269,35 @@ describe('StatsScreen Overview_Hub (Requirements 1.1, 1.3, 1.4, 1.5, 4.1, 10.3, 
     expect(screen.getByText('Park Days')).toBeTruthy();
     expect(screen.getByText('2.2×')).toBeTruthy();
     expect(screen.getByText('Repeat Multiplier')).toBeTruthy();
+  });
+
+  // -------------------------------------------------------------------------
+  // Food & Dining highlight card (R28.1)
+  // -------------------------------------------------------------------------
+  test('R28.1: renders food stats highlight card when food logs exist and navigates to FoodStatsDetail', async () => {
+    const stats = makeStatsResponse({
+      foodActivity: {
+        totalDishesLogged: 12,
+        distinctRestaurantsVisited: 5,
+        repeatMultiplier: 1.5,
+        mostLogged: [],
+        highestRated: [],
+        personalRecords: {},
+      },
+    });
+    renderScreen(stats);
+
+    expect(await screen.findByTestId('stats-screen')).toBeTruthy();
+    const foodCard = screen.getByTestId('stats-highlight-foodStats');
+    expect(foodCard).toBeTruthy();
+    expect(foodCard.props.accessibilityRole).toBe('button');
+    expect(foodCard.props.accessibilityLabel).toBe(
+      'Food & Dining. 12 dishes logged. 5 restaurants • 1.5x repeat. Opens food stats',
+    );
+
+    mockNavigate.mockClear();
+    fireEvent.press(foodCard);
+    expect(mockNavigate).toHaveBeenCalledWith('FoodStatsDetail');
   });
 
   // -------------------------------------------------------------------------

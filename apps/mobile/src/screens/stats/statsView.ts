@@ -32,6 +32,8 @@ import type {
   CompletionCell,
   CoverageResponse,
   FacetCoverage,
+  FoodActivityStatistics,
+  FoodPersonalRecords,
   PersonalRecords,
   RatingDistribution,
   RatingStatistics,
@@ -295,7 +297,8 @@ export type HighlightTarget =
   | { readonly route: 'CoverageDetail'; readonly focus?: CoverageFocus }
   | { readonly route: 'RatingsDetail' }
   | { readonly route: 'InterestsDetail' }
-  | { readonly route: 'ExperiencesDetail' };
+  | { readonly route: 'ExperiencesDetail' }
+  | { readonly route: 'FoodStatsDetail' };
 
 /**
  * A curated `Highlight_Card` derived from the stats snapshot: a per-dimension
@@ -306,7 +309,7 @@ export type HighlightTarget =
  * is an optional mini progress affordance in `[0, 100]`.
  */
 export interface OverviewHighlight {
-  readonly id: 'coverage' | 'ratings' | 'interests' | 'experiences';
+  readonly id: 'coverage' | 'ratings' | 'interests' | 'experiences' | 'foodStats';
   readonly icon: keyof typeof Ionicons.glyphMap;
   readonly title: string;
   readonly headline: string;
@@ -478,15 +481,40 @@ export function pickExperiencesHighlight(
 }
 
 /**
+ * Pick the food activity & dining `Highlight_Card` for the hub (R28.1).
+ *
+ * Teases logged dish volume (e.g. '12 dishes logged') and subtext
+ * indicating restaurants visited and repeat multiplier (e.g. '5 restaurants • 1.4x repeat').
+ * Always targets `FoodStatsDetail`.
+ */
+export function pickFoodStatsHighlight(
+  foodActivity: FoodActivityStatistics,
+): OverviewHighlight {
+  const dishLabel =
+    foodActivity.totalDishesLogged === 1
+      ? '1 dish logged'
+      : `${foodActivity.totalDishesLogged} dishes logged`;
+  const placeLabel =
+    foodActivity.distinctRestaurantsVisited === 1
+      ? '1 restaurant'
+      : `${foodActivity.distinctRestaurantsVisited} restaurants`;
+  return {
+    id: 'foodStats',
+    icon: 'restaurant',
+    title: 'Food & Dining',
+    headline: dishLabel,
+    subtext: `${placeLabel} • ${foodActivity.repeatMultiplier.toFixed(1)}x repeat`,
+    target: { route: 'FoodStatsDetail' },
+  };
+}
+
+/**
  * Build the ordered, curated set of `Highlight_Card`s for the Overview hub.
  *
  * Total over any valid `StatsResponse` and deterministic — equal inputs yield
  * equal ordered outputs (R2.1, R2.2). The order is fixed: coverage, ratings,
- * interests (only when facets exist), experiences (R2.3). The result has length
- * 3 when `coverage.byFacetValue` is empty (interests omitted, R2.4) or length 4
- * when facets are present (R2.5). The trailing experiences card is a
- * navigational entry point rather than a stat tease. Every card's `target` is a
- * real StatsStack detail route (R2.9, R1.3).
+ * interests (only when facets exist), experiences, food stats (when food logs exist).
+ * Every card's `target` is a real StatsStack detail route (R2.9, R1.3, R28.1).
  */
 export function buildOverviewHighlights(
   stats: StatsResponse,
@@ -500,6 +528,10 @@ export function buildOverviewHighlights(
   if (interests) highlights.push(interests);
 
   highlights.push(pickExperiencesHighlight(stats.activity));
+
+  if (stats.foodActivity && stats.foodActivity.totalDishesLogged > 0) {
+    highlights.push(pickFoodStatsHighlight(stats.foodActivity));
+  }
 
   return highlights;
 }
@@ -703,6 +735,52 @@ export function formatMarathonRecord(
   return {
     headline: 'Attraction Marathon Record',
     subtext: `${rides} on ${record.experienceName} (${record.date})`,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Food Activity display formatting helpers (R28.2, R27.1, R27.3)
+// ---------------------------------------------------------------------------
+
+export interface FoodOdometerDisplay {
+  readonly totalDishes: string;
+  readonly distinctRestaurants: string;
+  readonly repeatMultiplier: string;
+}
+
+export function formatFoodOdometer(
+  foodActivity: FoodActivityStatistics,
+): FoodOdometerDisplay {
+  return {
+    totalDishes: `${foodActivity.totalDishesLogged}`,
+    distinctRestaurants: `${foodActivity.distinctRestaurantsVisited}`,
+    repeatMultiplier: `${foodActivity.repeatMultiplier.toFixed(1)}×`,
+  };
+}
+
+export function formatMostAdventurousDay(
+  record?: FoodPersonalRecords['mostAdventurousDay'],
+): FormattedRecord | null {
+  if (!record) return null;
+  const dishes = record.dishCount === 1 ? '1 dish' : `${record.dishCount} dishes`;
+  const restaurants =
+    record.restaurantNames.length > 0
+      ? ` at ${record.restaurantNames.join(', ')}`
+      : '';
+  return {
+    headline: 'Most Adventurous Day',
+    subtext: `${dishes} on ${record.date}${restaurants}`,
+  };
+}
+
+export function formatDishMarathonRecord(
+  record?: FoodPersonalRecords['dishMarathonRecord'],
+): FormattedRecord | null {
+  if (!record) return null;
+  const dishes = record.count === 1 ? '1 dish' : `${record.count} dishes`;
+  return {
+    headline: 'Dish Marathon Record',
+    subtext: `${dishes} of ${record.foodItemName} (${record.date})`,
   };
 }
 

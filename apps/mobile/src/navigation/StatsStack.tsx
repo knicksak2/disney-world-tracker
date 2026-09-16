@@ -6,6 +6,7 @@ import CoverageDetailScreen from '../screens/stats/CoverageDetailScreen';
 import RatingsDetailScreen from '../screens/stats/RatingsDetailScreen';
 import InterestsDetailScreen from '../screens/stats/InterestsDetailScreen';
 import ExperiencesDetailScreen from '../screens/stats/ExperiencesDetailScreen';
+import FoodStatsScreen from '../screens/stats/FoodStatsScreen';
 import type { CoverageFocus } from '../screens/stats/statsView';
 
 /**
@@ -36,6 +37,8 @@ export type StatsStackParamList = {
   InterestsDetail: undefined;
   /** The existing ExperiencesList wrapped as its own route (D8). */
   ExperiencesDetail: undefined;
+  /** Dedicated Food Stats detail screen (R28.1). */
+  FoodStatsDetail: undefined;
 };
 
 const Stack = createNativeStackNavigator<StatsStackParamList>();
@@ -48,6 +51,7 @@ export default function StatsStack(): JSX.Element {
       <Stack.Screen name="RatingsDetail" component={RatingsDetailScreen} />
       <Stack.Screen name="InterestsDetail" component={InterestsDetailScreen} />
       <Stack.Screen name="ExperiencesDetail" component={ExperiencesDetailScreen} />
+      <Stack.Screen name="FoodStatsDetail" component={FoodStatsScreen} />
     </Stack.Navigator>
   );
 }

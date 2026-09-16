@@ -121,6 +121,19 @@ import {
 import { createPinRepo } from './services/pins/repo.js';
 import { createPinShowcaseRepo } from './services/pins/showcaseRepo.js';
 
+import { createFoodItemRepo, createFoodItemLogRepo } from './services/foodLog/repo.js';
+import { createUserSubmittedLocationRepo } from './services/foodLog/locations.js';
+import {
+  createFoodListRepo,
+  createFoodListItemRepo,
+  createFoodListShareRepo,
+  createFoodListAffinityRepo,
+} from './services/foodLists/repo.js';
+import type {
+  FoodListRoleChangedEvent,
+  FoodListSharedEvent,
+} from './services/notifications/service.js';
+
 import { IntelligenceRepo } from './services/intelligence/IntelligenceRepo.js';
 import { createWeatherClient } from './services/intelligence/weatherClient.js';
 import { createPredictionService } from './services/intelligence/predictionService.js';
@@ -195,6 +208,10 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
   const statsRepo = createStatsRepo(pool);
   const pinRepo = createPinRepo(pool);
   const pinShowcaseRepo = createPinShowcaseRepo(pool);
+  const foodListRepo = createFoodListRepo(pool);
+  const foodListItemRepo = createFoodListItemRepo(pool);
+  const foodListShareRepo = createFoodListShareRepo(pool);
+  const foodListAffinityRepo = createFoodListAffinityRepo(pool, foodListRepo);
 
   /**
    * Synchronous Pin award port (pin-collection R2.1-R2.3). Handed to every
@@ -216,6 +233,43 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
   const tripRepo = createTripRepo(pool, {
     completions: completionRepo,
     ratings: ratingRepo,
+    resolveFoodList: async (foodListId: string) => {
+      const res = await pool.query<{
+        id: string;
+        owner_id: string;
+        visibility: 'private' | 'public';
+        name: string;
+        item_count: number;
+        owner_display_name: string;
+      }>(
+        `SELECT
+           fl.id,
+           fl.owner_id,
+           fl.visibility,
+           fl.name,
+           COALESCE(ic.item_count, 0)::int AS item_count,
+           COALESCE(p.display_name, 'User') AS owner_display_name
+         FROM food_lists fl
+         LEFT JOIN profiles p ON p.user_id = fl.owner_id
+         LEFT JOIN (
+           SELECT food_list_id, COUNT(*)::int AS item_count
+           FROM food_lists_items
+           GROUP BY food_list_id
+         ) ic ON ic.food_list_id = fl.id
+        WHERE fl.id = $1`,
+        [foodListId],
+      );
+      if (res.rows.length === 0) return null;
+      const row = res.rows[0]!;
+      return {
+        id: row.id,
+        ownerId: row.owner_id,
+        visibility: row.visibility,
+        name: row.name,
+        itemCount: row.item_count,
+        ownerDisplayName: row.owner_display_name,
+      };
+    },
   });
 
   // --- Phase 2 sharing services (push / preferences / reactions / notify) ---
@@ -337,6 +391,34 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
         );
       });
   };
+
+  /**
+   * Background `FoodListShared` dispatch (Feature: food-lists R8.1).
+   */
+  const emitFoodListShared = (event: FoodListSharedEvent): void => {
+    void notificationService
+      .handleFoodListShared(event)
+      .catch((err: unknown) => {
+        notificationLogger.error(
+          { err, foodListId: event.foodListId },
+          'FoodListShared dispatch failed',
+        );
+      });
+  };
+
+  /**
+   * Background `FoodListRoleChanged` dispatch (Feature: food-lists R8.3).
+   */
+  const emitFoodListRoleChanged = (event: FoodListRoleChangedEvent): void => {
+    void notificationService
+      .handleFoodListRoleChanged(event)
+      .catch((err: unknown) => {
+        notificationLogger.error(
+          { err, foodListId: event.foodListId },
+          'FoodListRoleChanged dispatch failed',
+        );
+      });
+  };
   // The leaderboard cache and the lockout service accept a narrow
   // structural Redis interface whose `set` is a single rest-arg overload;
   // ioredis's `Redis` exposes many `set` overloads that are not assignable
@@ -418,11 +500,21 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
     baseUrl: config.disney.diningMenuBaseUrl,
   });
 
+  const foodItemRepo = createFoodItemRepo(pool);
+  const foodItemLogRepo = createFoodItemLogRepo({ pool });
+  const userSubmittedLocationRepo = createUserSubmittedLocationRepo(pool);
+
   // Demand-driven Menu retrieval seam (R1.1-R1.3): fetch on cache miss/stale,
   // serve cache when fresh, degrade to cache on failure. The seam's
   // `logger`/`now` default to production implementations.
   const menuRetrieval = createMenuRetrieval({
-    repo: catalogRepo,
+    repo: {
+      getMenuFetchState: (id) => catalogRepo.getMenuFetchState(id),
+      upsertMenus: (id, menus, fetchedAt) =>
+        catalogRepo.upsertMenus(id, menus, fetchedAt),
+      upsertFoodItemsFromMenus: (id, menus, seenAt) =>
+        foodItemRepo.upsertFoodItemsFromMenus(id, menus, seenAt),
+    },
     client: diningMenuClient,
     freshnessMs: config.disney.menuFreshnessMs,
   });
@@ -523,6 +615,9 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
       // Dispatch a push to the recipient on a background port after the
       // request row commits; the request is never blocked or failed by push.
       emitFriendRequestReceived,
+      onFriendshipRemoved: async (userA: string, userB: string) => {
+        await foodListShareRepo.revokeSharesBetween(userA, userB);
+      },
     },
     sharing: {
       repo: sharingRepo,
@@ -564,6 +659,30 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
       repo: pinShowcaseRepo,
       pool,
       requireSession: sessionMiddleware,
+    },
+    foodLog: {
+      items: {
+        repo: foodItemRepo,
+        requireSession: sessionMiddleware,
+        menuRetrieval,
+      },
+      logs: {
+        repo: foodItemLogRepo,
+        requireSession: sessionMiddleware,
+      },
+      locations: {
+        repo: userSubmittedLocationRepo,
+        requireSession: sessionMiddleware,
+      },
+    },
+    foodLists: {
+      repo: foodListRepo,
+      itemRepo: foodListItemRepo,
+      shareRepo: foodListShareRepo,
+      affinityRepo: foodListAffinityRepo,
+      requireSession: sessionMiddleware,
+      emitFoodListShared,
+      emitFoodListRoleChanged,
     },
     push: { repo: pushRepo, requireSession: sessionMiddleware },
     notificationPreferences: {

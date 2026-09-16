@@ -155,6 +155,24 @@ export interface RodeWithTagCreatedEvent {
 }
 
 // ---------------------------------------------------------------------------
+// FoodList events (food-lists R8.1, R8.3)
+// ---------------------------------------------------------------------------
+
+export interface FoodListSharedEvent {
+  readonly foodListId: string;
+  readonly senderId: string;
+  readonly recipientId: string;
+}
+
+export interface FoodListRoleChangedEvent {
+  readonly foodListId: string;
+  readonly senderId: string;
+  readonly recipientId: string;
+  readonly newRole: 'viewer' | 'editor';
+  readonly listName: string;
+}
+
+// ---------------------------------------------------------------------------
 // Structural dependency ports
 // ---------------------------------------------------------------------------
 
@@ -259,6 +277,18 @@ export interface NotificationService {
    * (Trips R10.8).
    */
   handleRodeWithTagCreated(event: RodeWithTagCreatedEvent): Promise<void>;
+
+  /**
+   * Handle a {@link FoodListSharedEvent}: notify recipient that `senderId` shared
+   * a food list with them (food-lists R8.1).
+   */
+  handleFoodListShared(event: FoodListSharedEvent): Promise<void>;
+
+  /**
+   * Handle a {@link FoodListRoleChangedEvent}: notify recipient that their role
+   * on the food list was updated (food-lists R8.3).
+   */
+  handleFoodListRoleChanged(event: FoodListRoleChangedEvent): Promise<void>;
 }
 
 // ---------------------------------------------------------------------------
@@ -275,6 +305,8 @@ export const FRIEND_REQUEST_LABEL = 'Sent you a friend request';
 export const TRIP_INVITE_LABEL = 'Invited you to a trip';
 /** Fixed body for a Rode_With_Tag notification (Trips R10.8). */
 export const RODE_WITH_TAG_LABEL = 'Tagged you on a ride';
+/** Fixed body for a Food_List_Share notification (food-lists R8.1). */
+export const FOOD_LIST_SHARED_LABEL = 'Shared a food list with you';
 /** Neutral fallbacks when a lookup returns null (still discloses nothing extra). */
 const FALLBACK_SENDER_NAME = 'A friend';
 const FALLBACK_EXPERIENCE_LABEL = 'Shared an experience';
@@ -458,6 +490,75 @@ export function createNotificationService(
         deps.logger?.error(
           { err, recipientId: event.taggedMemberId, tagId: event.tagId },
           'rode-with notification delivery failed for recipient',
+        );
+      });
+    },
+
+    async handleFoodListShared(event: FoodListSharedEvent): Promise<void> {
+      let title: string;
+      try {
+        const name = await deps.resolveSenderDisplayName(event.senderId);
+        const trimmed = name?.trim();
+        title = trimmed && trimmed.length > 0 ? trimmed : FALLBACK_SENDER_NAME;
+      } catch (err) {
+        deps.logger?.error(
+          { err, foodListId: event.foodListId },
+          'food-list-share notification composition failed',
+        );
+        return;
+      }
+
+      await notifyRecipient(
+        event.recipientId,
+        { title, body: FOOD_LIST_SHARED_LABEL },
+        {
+          deps,
+          ...timing,
+          data: { foodListId: event.foodListId },
+          logContext: { foodListId: event.foodListId },
+        },
+      ).catch((err) => {
+        deps.logger?.error(
+          { err, recipientId: event.recipientId, foodListId: event.foodListId },
+          'food-list-share notification delivery failed for recipient',
+        );
+      });
+    },
+
+    async handleFoodListRoleChanged(
+      event: FoodListRoleChangedEvent,
+    ): Promise<void> {
+      let title: string;
+      try {
+        const name = await deps.resolveSenderDisplayName(event.senderId);
+        const trimmed = name?.trim();
+        title = trimmed && trimmed.length > 0 ? trimmed : FALLBACK_SENDER_NAME;
+      } catch (err) {
+        deps.logger?.error(
+          { err, foodListId: event.foodListId },
+          'food-list-role-changed notification composition failed',
+        );
+        return;
+      }
+
+      const body =
+        event.newRole === 'editor'
+          ? `You can now edit ${event.listName}`
+          : `Your access to ${event.listName} changed to view-only`;
+
+      await notifyRecipient(
+        event.recipientId,
+        { title, body },
+        {
+          deps,
+          ...timing,
+          data: { foodListId: event.foodListId },
+          logContext: { foodListId: event.foodListId, newRole: event.newRole },
+        },
+      ).catch((err) => {
+        deps.logger?.error(
+          { err, recipientId: event.recipientId, foodListId: event.foodListId },
+          'food-list-role-changed notification delivery failed for recipient',
         );
       });
     },

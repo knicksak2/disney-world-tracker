@@ -470,6 +470,58 @@ describe('ExperienceDetailScreen preserved behaviors (R8.1, R8.2, R8.4, R8.5, R8
   });
 
   // -------------------------------------------------------------------------
+  // Requirement 5.1, Task 7.3 — Restaurant Experience food item affordance
+  // -------------------------------------------------------------------------
+  test('Requirement 5.1: a Restaurant Experience renders the "Log a food item" affordance and opens food item picker', async () => {
+    const experienceId = 'exp-restaurant-food-log';
+    stubDetail({
+      id: experienceId,
+      name: 'Be Our Guest Restaurant',
+      park: 'Magic Kingdom',
+      category: 'Restaurant',
+      description: 'French dining in the Beast Castle.',
+      areaType: 'ThemePark',
+    });
+
+    renderDetail(experienceId);
+
+    const btn = await screen.findByTestId('experience-log-food-item-btn');
+    expect(btn).toBeTruthy();
+
+    fireEvent.press(btn);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('food-item-picker-modal')).toBeTruthy();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // R9.4 — "My logged items here" opens RestaurantFoodLogsSheet
+  // -------------------------------------------------------------------------
+  test('R9.4: My logged items here button opens RestaurantFoodLogsSheet for restaurant experience', async () => {
+    const experienceId = 'exp-restaurant-food-logs-1';
+    stubDetail({
+      id: experienceId,
+      name: 'Be Our Guest Restaurant',
+      park: 'Magic Kingdom',
+      category: 'Restaurant',
+      description: 'French dining in the Beast Castle.',
+      areaType: 'ThemePark',
+    });
+
+    renderDetail(experienceId);
+
+    const btn = await screen.findByTestId('experience-my-logged-items-btn');
+    expect(btn).toBeTruthy();
+
+    fireEvent.press(btn);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('restaurant-food-logs-sheet')).toBeTruthy();
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // R8.8 — the detail query loading state renders the loading indicator
   // -------------------------------------------------------------------------
   test('R8.8: while the Experience detail query is loading the loading indicator renders', async () => {

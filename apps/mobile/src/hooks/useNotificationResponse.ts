@@ -43,7 +43,10 @@ import { useCallback, useEffect, useRef } from 'react';
 import type * as NotificationsModule from 'expo-notifications';
 
 import { loadNotifications } from '../env/notifications';
-import { navigateToNotificationCenter } from '../navigation/navigationRef';
+import {
+  navigateToFoodListDetail,
+  navigateToNotificationCenter,
+} from '../navigation/navigationRef';
 import { useSessionStore } from '../state/sessionStore';
 
 // ---------------------------------------------------------------------------
@@ -148,12 +151,36 @@ export function extractRodeWithTag(
 }
 
 /**
+ * Extract a food list id from a tapped food-list share/role-change notification response.
+ * The foodListId travels in the notification's `data` payload under `foodListId`.
+ * Returns the id when present as a non-empty string, or `null` otherwise.
+ */
+export function extractFoodListId(
+  response: NotificationsModule.NotificationResponse | null | undefined,
+): string | null {
+  const data = response?.notification?.request?.content?.data;
+  if (data === null || typeof data !== 'object') {
+    return null;
+  }
+  const direct = (data as { foodListId?: unknown }).foodListId;
+  if (typeof direct === 'string' && direct.length > 0) {
+    return direct;
+  }
+  const nested = (data as { data?: { foodListId?: unknown } }).data?.foodListId;
+  if (typeof nested === 'string' && nested.length > 0) {
+    return nested;
+  }
+  return null;
+}
+
+/**
  * Classify a tapped notification into its navigation target. A Trip_Invite tap
  * (carrying `{ tripInviteId }`, R18.2) routes to the invite accept/decline
  * view; a Rode_With_Tag tap (carrying `{ rodeWithTagId, tripLogEntryId }`,
  * R18.3) routes to the tag confirm view; a friend-request tap routes to the
- * `FriendsList`; everything else is treated as a Share tap (carrying a
- * resolvable `shareId`, or none for the R10.5 open-inbox case). The Trip kinds
+ * `FriendsList`; a food-list share/role-change tap (carrying `{ foodListId }`)
+ * routes to `FoodListDetail`; everything else is treated as a Share tap (carrying a
+ * resolvable `shareId`, or none for the R10.5 open-inbox case). The specific kinds
  * are checked first so their routing ids take precedence over the Share
  * fallback.
  */
@@ -174,6 +201,10 @@ export function classifyTap(
   }
   if (isFriendRequestTap(response)) {
     return { kind: 'friendRequest' };
+  }
+  const foodListId = extractFoodListId(response);
+  if (foodListId !== null) {
+    return { kind: 'foodListShare', foodListId };
   }
   return { kind: 'share', shareId: extractShareId(response) };
 }
@@ -197,7 +228,8 @@ export type PendingTap =
       readonly kind: 'rodeWithTag';
       readonly rodeWithTagId: string;
       readonly tripLogEntryId: string;
-    };
+    }
+  | { readonly kind: 'foodListShare'; readonly foodListId: string };
 
 /**
  * Dispatch a pending tap to its navigation target through the shared
@@ -237,6 +269,8 @@ function dispatchPendingTap(pending: PendingTap): boolean {
           ? { focusRef: { shareId: pending.shareId } }
           : undefined,
       );
+    case 'foodListShare':
+      return navigateToFoodListDetail({ foodListId: pending.foodListId });
   }
 }
 

@@ -915,3 +915,156 @@ describe('Response shape covers every enum dimension', () => {
     );
   });
 });
+
+// ---------------------------------------------------------------------------
+// Food Activity roll-up & endpoint presence (Requirements 24.1, 24.8)
+// ---------------------------------------------------------------------------
+
+describe('Food Activity in StatsResponse', () => {
+  it('assembleResponse defaults foodActivity when snapshot.foodActivity is missing', () => {
+    const response = assembleResponse(snapshotOf([]), false);
+    expect(response.foodActivity).toEqual({
+      totalDishesLogged: 0,
+      distinctRestaurantsVisited: 0,
+      repeatMultiplier: 1.0,
+      mostLogged: [],
+      highestRated: [],
+      personalRecords: {},
+    });
+  });
+
+  it('assembleResponse folds populated snapshot.foodActivity correctly', () => {
+    const snapshot: StatsSnapshot = {
+      ...snapshotOf([]),
+      foodActivity: {
+        volume: {
+          totalDishesLogged: 12,
+          distinctRestaurantsVisited: 4,
+          uniqueLoggedFoodItems: 6,
+        },
+        mostLogged: [
+          { foodItemId: 'item-1', foodItemName: 'Dole Whip', count: 4 },
+        ],
+        highestRated: [
+          {
+            foodItemId: 'item-1',
+            foodItemName: 'Dole Whip',
+            averageRating: 9.8,
+            ratedLogCount: 3,
+          },
+        ],
+        mostAdventurousDay: {
+          date: '2026-07-04',
+          dishCount: 5,
+          restaurantNames: ['Aloha Isle'],
+        },
+        dishMarathonRecord: {
+          foodItemId: 'item-1',
+          foodItemName: 'Dole Whip',
+          date: '2026-07-04',
+          count: 3,
+        },
+      },
+    };
+
+    const response = assembleResponse(snapshot, false);
+    expect(response.foodActivity).toEqual({
+      totalDishesLogged: 12,
+      distinctRestaurantsVisited: 4,
+      repeatMultiplier: 2.0,
+      mostLogged: [
+        { foodItemId: 'item-1', foodItemName: 'Dole Whip', count: 4 },
+      ],
+      highestRated: [
+        {
+          foodItemId: 'item-1',
+          foodItemName: 'Dole Whip',
+          averageRating: 9.8,
+          ratedLogCount: 3,
+        },
+      ],
+      personalRecords: {
+        mostAdventurousDay: {
+          date: '2026-07-04',
+          dishCount: 5,
+          restaurantNames: ['Aloha Isle'],
+        },
+        dishMarathonRecord: {
+          foodItemId: 'item-1',
+          foodItemName: 'Dole Whip',
+          date: '2026-07-04',
+          count: 3,
+        },
+      },
+    });
+  });
+
+  it('GET /me/stats delivers foodActivity in response body (Requirement 24.8)', async () => {
+    const snapshot: StatsSnapshot = {
+      ...snapshotOf([]),
+      foodActivity: {
+        volume: {
+          totalDishesLogged: 5,
+          distinctRestaurantsVisited: 2,
+          uniqueLoggedFoodItems: 3,
+        },
+        mostLogged: [],
+        highestRated: [],
+        mostAdventurousDay: null,
+        dishMarathonRecord: null,
+      },
+    };
+    const { repo } = makeFakeRepo(new Map([['user-self', snapshot]]));
+    const pool = makeFakePool(() => ({ rows: [] }));
+    const app = await buildApp({ pool, repo });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/me/stats',
+      headers: { 'x-test-user-id': 'user-self' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as StatsResponse;
+    expect(body.foodActivity).toBeDefined();
+    expect(body.foodActivity?.totalDishesLogged).toBe(5);
+    expect(body.foodActivity?.distinctRestaurantsVisited).toBe(2);
+  });
+
+  it('GET /me/stats/summary delivers foodActivity in friend response body (Requirement 24.8)', async () => {
+    const friendSnapshot: StatsSnapshot = {
+      ...snapshotOf([]),
+      foodActivity: {
+        volume: {
+          totalDishesLogged: 8,
+          distinctRestaurantsVisited: 3,
+          uniqueLoggedFoodItems: 4,
+        },
+        mostLogged: [],
+        highestRated: [],
+        mostAdventurousDay: null,
+        dishMarathonRecord: null,
+      },
+    };
+    const { repo } = makeFakeRepo(new Map([[TARGET_ID, friendSnapshot]]));
+    const pool = makeFakePool((call) => {
+      if (call.text.includes('friendships')) {
+        return { rows: [{ exists: true }] };
+      }
+      return { rows: [] };
+    });
+    const app = await buildApp({ pool, repo });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/me/stats/summary?for=${TARGET_ID}`,
+      headers: { 'x-test-user-id': VIEWER_ID },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as StatsResponse;
+    expect(body.foodActivity).toBeDefined();
+    expect(body.foodActivity?.totalDishesLogged).toBe(8);
+    expect(body.foodActivity?.distinctRestaurantsVisited).toBe(3);
+  });
+});

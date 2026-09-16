@@ -97,6 +97,18 @@ import {
   intelligenceRoutes,
   type IntelligenceRoutesOptions,
 } from './services/intelligence/routes.js';
+import {
+  foodItemRoutes,
+  foodItemLogRoutes,
+  userSubmittedLocationRoutes,
+  type FoodItemRoutesOptions,
+  type FoodItemLogRoutesOptions,
+  type UserSubmittedLocationRoutesOptions,
+} from './services/foodLog/routes.js';
+import {
+  foodListRoutes,
+  type FoodListRoutesOptions,
+} from './services/foodLists/routes.js';
 import type { RatingChangedEvent } from './services/aggregate/ratingChangedQueue.js';
 
 /**
@@ -205,6 +217,21 @@ export interface BuildServerServices {
    * Wires `/me/pin-showcase` and `/users/:userId/pin-showcase`.
    */
   readonly pinShowcase?: ShowcaseRoutesOptions;
+  /**
+   * Food_Log_Service route options (Feature: food-item-logging).
+   * Each sub-domain (`items`, `logs`, `locations`) is opt-in so focused unit tests
+   * can register only what they need.
+   */
+  readonly foodLog?: {
+    readonly items?: FoodItemRoutesOptions;
+    readonly logs?: FoodItemLogRoutesOptions;
+    readonly locations?: UserSubmittedLocationRoutesOptions;
+  };
+  /**
+   * Food_Lists_Service route options (Feature: food-lists).
+   * Wires list CRUD, items, shares, discovery, affinity, and collection.
+   */
+  readonly foodLists?: FoodListRoutesOptions;
   /**
    * Tracking_Service route options. Each tracking sub-domain
    * (`completion`, `rating`, `note`) is opt-in so a focused unit-test
@@ -482,6 +509,22 @@ export function buildServer(
 
   if (services.pinShowcase !== undefined) {
     void app.register(showcaseRoutes(services.pinShowcase));
+  }
+
+  if (services.foodLog?.items !== undefined) {
+    void app.register(foodItemRoutes(services.foodLog.items));
+  }
+
+  if (services.foodLog?.logs !== undefined) {
+    void app.register(foodItemLogRoutes(services.foodLog.logs));
+  }
+
+  if (services.foodLog?.locations !== undefined) {
+    void app.register(userSubmittedLocationRoutes(services.foodLog.locations));
+  }
+
+  if (services.foodLists !== undefined) {
+    void app.register(foodListRoutes(services.foodLists));
   }
 
   if (services.tracking?.completion !== undefined) {

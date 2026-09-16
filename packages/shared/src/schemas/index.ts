@@ -27,6 +27,8 @@ export {
   shareReactionValueSchema,
   tripReactionValueSchema,
   completionPercentSchema,
+  foodItemNameSchema,
+  foodListNameSchema,
 } from './primitives.js';
 
 // DTO schemas
@@ -129,4 +131,49 @@ export {
   pinShowcaseSchema,
   placePinRequestSchema,
 } from './PinShowcase.js';
+
+export {
+  foodItemSchema,
+  submitFoodItemInputSchema,
+} from './FoodItem.js';
+export type { SubmitFoodItemInput } from './FoodItem.js';
+
+export {
+  foodItemLogSchema,
+  foodItemLogHistorySchema,
+  createFoodItemLogInputSchema,
+  foodItemLogWithContextSchema,
+} from './FoodItemLog.js';
+export type {
+  CreateFoodItemLogInput,
+  FoodItemLogWithContext,
+} from './FoodItemLog.js';
+
+export {
+  userSubmittedLocationSchema,
+  createUserSubmittedLocationInputSchema,
+  locationSuggestionSchema,
+} from './UserSubmittedLocation.js';
+export type { CreateUserSubmittedLocationInput } from './UserSubmittedLocation.js';
+
+export {
+  foodListVisibilitySchema,
+  foodListRoleSchema,
+  foodListShareRoleSchema,
+  createFoodListInputSchema,
+  updateFoodListInputSchema,
+  addFoodListItemInputSchema,
+  reorderFoodListItemsInputSchema,
+  shareFoodListInputSchema,
+  foodListItemSchema,
+  foodListSchema,
+  foodListDetailSchema,
+  foodListShareSchema,
+  savedFoodListItemSchema,
+  foodListCollectionSchema,
+  foodListDiscoveryPageSchema,
+} from './FoodList.js';
+
+
+
 

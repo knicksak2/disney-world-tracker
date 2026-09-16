@@ -57,6 +57,7 @@ import type {
   TripLogEntryDTO,
   TripMemberDTO,
   TripPendingInviteDTO,
+  TripFoodListDTO,
   TripReactionSummary,
   TripReactionValue,
   TripResortDTO,
@@ -113,11 +114,32 @@ const DEFAULT_LOG_USER_TZ = 'America/New_York';
  * The lifecycle operations do not use these yet — the Shared_Log and
  * rode-with-tag operations added by later tasks will.
  */
+/**
+ * Canonical Tracking_Service repos the Trip_Service delegates to so it never
+ * holds Trip-local copies of Completions or Ratings (design decision 2, R12.1,
+ * R3.10). Injected at construction; wired in `composeServices.ts` (task 13.2).
+ * The lifecycle operations do not use these yet — the Shared_Log and
+ * rode-with-tag operations added by later tasks will.
+ */
+export interface ResolvedFoodList {
+  readonly id: string;
+  readonly ownerId: string;
+  readonly visibility: 'private' | 'public';
+  readonly name: string;
+  readonly itemCount: number;
+  readonly ownerDisplayName: string;
+}
+
 export interface TripRepoDeps {
   /** Canonical Completion repo (`completions` table) for trickle-down writes. */
   readonly completions: CompletionRepo;
   /** Canonical Rating repo (`ratings` table) that emits `RatingChanged`. */
   readonly ratings: RatingRepo;
+  /**
+   * Structural port to resolve a Food_List for attachment eligibility checks
+   * and read projections (R22.1, R22.9, R22.10).
+   */
+  readonly resolveFoodList?: ((foodListId: string) => Promise<ResolvedFoodList | null>) | undefined;
 }
 
 /**
@@ -129,6 +151,7 @@ interface TripRepoContext {
   readonly pool: DbPool;
   readonly completions: CompletionRepo;
   readonly ratings: RatingRepo;
+  readonly resolveFoodList?: ((foodListId: string) => Promise<ResolvedFoodList | null>) | undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -777,6 +800,31 @@ export interface TripRepo {
    *   WDW date the grouping anchors on.
    */
   listMyTrips(userId: string, now?: Date): Promise<TripListGroup[]>;
+
+  /**
+   * Attach a Food_List to a Trip (R22.1, R22.2).
+   * Caller must own the list or the list must be public (R22.1).
+   * Throws `trip_food_list_not_found` if list is absent.
+   * Throws `trip_food_list_ineligible` if caller is not owner and list is not public.
+   * Idempotent: duplicate attach is a no-op success (R22.2).
+   */
+  attachFoodList(
+    tripId: string,
+    callerId: string,
+    foodListId: string,
+  ): Promise<void>;
+
+  /**
+   * Detach a Food_List from a Trip (R22.5).
+   * Gated on adder or organizer; a non-adder non-organizer throws `trip_forbidden`.
+   * Returns true if detached, false if not found.
+   */
+  detachFoodList(
+    tripId: string,
+    callerId: string,
+    callerRole: TripRole,
+    foodListId: string,
+  ): Promise<boolean>;
 }
 
 // ---------------------------------------------------------------------------
@@ -794,6 +842,7 @@ export function createTripRepo(pool: DbPool, deps: TripRepoDeps): TripRepo {
     pool,
     completions: deps.completions,
     ratings: deps.ratings,
+    resolveFoodList: deps.resolveFoodList,
   };
   return {
     createTrip: (creatorId, input, now) =>
@@ -846,6 +895,10 @@ export function createTripRepo(pool: DbPool, deps: TripRepoDeps): TripRepo {
       removeComment(ctx, tripId, commentId, authorId),
     getSummary: (tripId) => getSummary(ctx, tripId),
     listMyTrips: (userId, now) => listMyTrips(ctx, userId, now),
+    attachFoodList: (tripId, callerId, foodListId) =>
+      attachFoodList(ctx, tripId, callerId, foodListId),
+    detachFoodList: (tripId, callerId, callerRole, foodListId) =>
+      detachFoodList(ctx, tripId, callerId, callerRole, foodListId),
   };
 }
 
@@ -940,6 +993,7 @@ function rowToDto(
   row: TripRow,
   now: Date | undefined,
   resorts: readonly TripResortDTO[],
+  foodLists: readonly TripFoodListDTO[] = [],
 ): TripDTO {
   const startDate = toIsoDate(row.start_date);
   const endDate = toIsoDate(row.end_date);
@@ -959,6 +1013,7 @@ function rowToDto(
     status: deriveTripStatus(startDate, endDate, wdwToday(now)),
     createdAt: toIsoTimestamp(row.created_at),
     resorts,
+    foodLists,
     ...(row.walking_speed !== undefined ? { walkingSpeed: row.walking_speed } : {}),
     ...(row.early_entry_eligible !== undefined ? { earlyEntryEligible: row.early_entry_eligible } : {}),
     ...(dayTouringHours !== undefined ? { dayTouringHours } : {}),
@@ -1059,6 +1114,197 @@ async function replaceTripResorts(
 }
 
 // ---------------------------------------------------------------------------
+// Trip_Food_List read/write helpers (R22.1, R22.2, R22.5, R22.9, R22.10)
+// ---------------------------------------------------------------------------
+
+const tripFoodListsAvailableCache = new WeakMap<object, boolean>();
+
+async function isTripFoodListsAvailable(pool: DbPool): Promise<boolean> {
+  const cached = tripFoodListsAvailableCache.get(pool as unknown as object);
+  if (cached !== undefined) return cached;
+  try {
+    await pool.query('SELECT 1 FROM trip_food_lists LIMIT 0');
+    tripFoodListsAvailableCache.set(pool as unknown as object, true);
+    return true;
+  } catch {
+    tripFoodListsAvailableCache.set(pool as unknown as object, false);
+    return false;
+  }
+}
+
+/**
+ * Read the attached Food_Lists for one or more Trips in a single query, grouped
+ * by Trip (R22.9, R22.10). Resolves names and item counts via the injected
+ * `resolveFoodList` port, projecting deleted/inaccessible lists as
+ * `available: false` (R22.10).
+ */
+async function selectTripFoodListsByTrip(
+  ctx: TripRepoContext,
+  tripIds: readonly string[],
+): Promise<Map<string, TripFoodListDTO[]>> {
+  const byTrip = new Map<string, TripFoodListDTO[]>();
+  if (tripIds.length === 0) {
+    return byTrip;
+  }
+  const available = await isTripFoodListsAvailable(ctx.pool);
+  if (!available) {
+    return byTrip;
+  }
+
+  const placeholders = tripIds.map((_, i) => `$${i + 1}`).join(', ');
+  const result = await ctx.pool.query<{
+    trip_id: string;
+    food_list_id: string;
+  }>(
+    `SELECT trip_id, food_list_id
+       FROM trip_food_lists
+      WHERE trip_id IN (${placeholders})
+      ORDER BY created_at ASC, food_list_id ASC`,
+    [...tripIds],
+  );
+
+  if (result.rows.length === 0) {
+    return byTrip;
+  }
+
+  const uniqueListIds = Array.from(new Set(result.rows.map((r) => r.food_list_id)));
+  const resolvedMap = new Map<string, ResolvedFoodList | null>();
+
+  if (ctx.resolveFoodList) {
+    await Promise.all(
+      uniqueListIds.map(async (id) => {
+        try {
+          const resolved = await ctx.resolveFoodList!(id);
+          resolvedMap.set(id, resolved);
+        } catch {
+          resolvedMap.set(id, null);
+        }
+      }),
+    );
+  }
+
+  for (const row of result.rows) {
+    const list = byTrip.get(row.trip_id) ?? [];
+    const resolved = resolvedMap.get(row.food_list_id);
+    if (resolved) {
+      list.push({
+        available: true,
+        foodListId: resolved.id,
+        name: resolved.name,
+        itemCount: resolved.itemCount,
+        ownerDisplayName: resolved.ownerDisplayName,
+      });
+    } else {
+      list.push({
+        available: false,
+        foodListId: row.food_list_id,
+      });
+    }
+    byTrip.set(row.trip_id, list);
+  }
+
+  return byTrip;
+}
+
+/** Read the attached Food_Lists for a single Trip, defaulting to an empty array. */
+async function selectTripFoodLists(
+  ctx: TripRepoContext,
+  tripId: string,
+): Promise<TripFoodListDTO[]> {
+  const byTrip = await selectTripFoodListsByTrip(ctx, [tripId]);
+  return byTrip.get(tripId) ?? [];
+}
+
+/**
+ * Attach a Food_List to a Trip (R22.1, R22.2).
+ * Caller must own the list or the list must be public.
+ * Throws `trip_food_list_not_found` if absent.
+ * Throws `trip_food_list_ineligible` if caller is not owner and list is not public.
+ * Idempotent: duplicate attach is a no-op success.
+ */
+async function attachFoodList(
+  ctx: TripRepoContext,
+  tripId: string,
+  callerId: string,
+  foodListId: string,
+): Promise<void> {
+  const resolved = ctx.resolveFoodList
+    ? await ctx.resolveFoodList(foodListId)
+    : null;
+  if (!resolved) {
+    throw new AppError('trip_food_list_not_found', 'Food list not found.');
+  }
+
+  const isOwner = resolved.ownerId === callerId;
+  const isPublic = resolved.visibility === 'public';
+  if (!isOwner && !isPublic) {
+    throw new AppError(
+      'trip_food_list_ineligible',
+      'Only the food list owner or a public list can be attached to a trip.',
+    );
+  }
+
+  await ctx.pool.query(
+    `INSERT INTO trip_food_lists (trip_id, food_list_id, added_by)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (trip_id, food_list_id) DO NOTHING`,
+    [tripId, foodListId, callerId],
+  );
+}
+
+/**
+ * Detach a Food_List from a Trip (R22.5).
+ * Caller must be the adder or an organizer.
+ * Throws `trip_forbidden` if caller is neither adder nor organizer.
+ * Returns true if detached, false if not found.
+ */
+async function detachFoodList(
+  ctx: TripRepoContext,
+  tripId: string,
+  callerId: string,
+  callerRole: TripRole,
+  foodListId: string,
+): Promise<boolean> {
+  const client = await ctx.pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const current = await client.query<{ added_by: string }>(
+      `SELECT added_by FROM trip_food_lists
+        WHERE trip_id = $1 AND food_list_id = $2
+        FOR UPDATE`,
+      [tripId, foodListId],
+    );
+    const row = current.rows[0];
+    if (!row) {
+      await client.query('ROLLBACK');
+      return false;
+    }
+
+    if (callerRole !== 'organizer' && row.added_by !== callerId) {
+      await client.query('ROLLBACK');
+      throw new AppError(
+        'trip_forbidden',
+        'You can only detach food lists you attached.',
+      );
+    }
+
+    await client.query(
+      `DELETE FROM trip_food_lists WHERE trip_id = $1 AND food_list_id = $2`,
+      [tripId, foodListId],
+    );
+
+    await client.query('COMMIT');
+    return true;
+  } catch (err) {
+    await safeRollback(client);
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+// ---------------------------------------------------------------------------
 // createTrip (R1.1, R1.2, R1.3, R1.9, R1.10)
 // ---------------------------------------------------------------------------
 
@@ -1123,7 +1369,7 @@ async function createTrip(
     }
 
     await client.query('COMMIT');
-    return rowToDto(row, now, resorts);
+    return rowToDto(row, now, resorts, []);
   } catch (err) {
     await safeRollback(client);
     throw err;
@@ -1158,7 +1404,8 @@ async function getTripForMember(
     return null;
   }
   const resorts = await selectTripResorts(ctx.pool, tripId);
-  return rowToDto(row, now, resorts);
+  const foodLists = await selectTripFoodLists(ctx, tripId);
+  return rowToDto(row, now, resorts, foodLists);
 }
 
 // ---------------------------------------------------------------------------
@@ -1256,8 +1503,9 @@ async function editTrip(
 
     if (assignments.length === 0) {
       const resorts = await selectTripResorts(client, tripId);
+      const foodLists = await selectTripFoodLists(ctx, tripId);
       await client.query('COMMIT');
-      return rowToDto(currentRow, now, resorts);
+      return rowToDto(currentRow, now, resorts, foodLists);
     }
 
     params.push(tripId);
@@ -1275,8 +1523,9 @@ async function editTrip(
     }
 
     const resorts = await selectTripResorts(client, tripId);
+    const foodLists = await selectTripFoodLists(ctx, tripId);
     await client.query('COMMIT');
-    return rowToDto(updatedRow, now, resorts);
+    return rowToDto(updatedRow, now, resorts, foodLists);
   } catch (err) {
     await safeRollback(client);
     throw err;
@@ -3958,8 +4207,17 @@ async function listMyTrips(
     ctx.pool,
     result.rows.map((row) => row.id),
   );
+  const foodListsByTrip = await selectTripFoodListsByTrip(
+    ctx,
+    result.rows.map((row) => row.id),
+  );
   const trips = result.rows.map((row) =>
-    rowToDto(row, now, resortsByTrip.get(row.id) ?? []),
+    rowToDto(
+      row,
+      now,
+      resortsByTrip.get(row.id) ?? [],
+      foodListsByTrip.get(row.id) ?? [],
+    ),
   );
   return groupTripsByStatus(trips, wdwToday(now));
 }

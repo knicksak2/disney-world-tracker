@@ -351,3 +351,73 @@ design's 13 correctness properties where relevant.
 3. WHEN `edit` is invoked in `tracking/completion/repo.ts`, THE Tracking_Service SHALL execute inside a database transaction that updates the `completions` date/timezone and synchronizes the matching unannotated `experience_logs` row (`visited_on = old_date AND rating IS NULL AND note IS NULL`) to the new date/timezone.
 4. WHEN `unmark` is invoked in `tracking/completion/repo.ts`, THE Tracking_Service SHALL execute inside a database transaction that deletes the canonical `completions` row and deletes the matching unannotated `experience_logs` row (`rating IS NULL AND note IS NULL`) for that completion date.
 5. WHEN `unmark` is invoked for an experience that has user-annotated visit logs (carrying visit notes or ratings) or additional logs on other dates, THE Tracking_Service SHALL preserve those annotated and historical logs and SHALL NOT delete them.
+
+## Amendment: Food Stats
+
+**Cross-spec note:** this amendment computes `foodActivity` directly from `food_item_logs`/`food_items` (from `food-item-logging`, migration `0040`, already implemented) inside Stats_Service's existing snapshot transaction — the same pattern Requirement 18-20 already use for `experience_logs`. It does **not** depend on `food-item-logging`'s Task 9 (`FoodItemLogWithContextDTO`, `GET /me/food-item-logs`) landing first; that is a separate, unimplemented mobile-facing "My Food History" log screen with its own routes, while this amendment is a Stats_Service aggregate computed with its own SQL, exactly as `activity.ts`/Requirement 18-20 never route through `Tracking_Service`'s own DTOs either. The two features independently reuse the `foodItemName`/`restaurantName`/`locationName` field-naming convention already established by `FoodItemLogWithContextDTO` for consistency, not because one requires the other to exist.
+
+### Requirement 24: Food Activity Volume Statistics
+
+**User Story:** As a user who logs dishes at restaurants, I want to see my total dishes logged, distinct restaurants visited, and repeat multiplier, so that I understand my overall food-trying activity the same way I see my ride activity.
+
+#### Acceptance Criteria
+
+1. THE Stats_Service SHALL compute a `foodActivity` object on `StatsResponse` containing `totalDishesLogged`, `distinctRestaurantsVisited`, `repeatMultiplier`, `mostLogged`, `highestRated`, and `personalRecords`.
+2. THE Stats_Service SHALL compute `totalDishesLogged` as the total count of `food_item_logs` rows for the target user.
+3. THE Stats_Service SHALL compute `distinctRestaurantsVisited` as the count of distinct resolved scopes (`food_items.experience_id` or `food_items.location_id`, whichever is set) across the target user's `food_item_logs`, counting an Experience-scoped and a Location-scoped entry as distinct even if their display names happen to collide.
+4. WHERE `uniqueLoggedFoodItems > 0` (the count of distinct `food_item_id` in the target user's `food_item_logs`), THE Stats_Service SHALL compute `repeatMultiplier` as `Math.max(1.0, Number((totalDishesLogged / uniqueLoggedFoodItems).toFixed(1)))`.
+5. IF `uniqueLoggedFoodItems === 0`, THEN THE Stats_Service SHALL set `repeatMultiplier` to `1.0`.
+6. IF `totalDishesLogged === 0`, THEN THE Stats_Service SHALL set `distinctRestaurantsVisited` to `0`, `mostLogged` to an empty list, `highestRated` to an empty list, and `personalRecords` to an object with no fields present — mirroring Requirement 18's zero-activity convention exactly (empty arrays/objects, never `null`, never an omitted `foodActivity` key).
+7. THE Stats_Service SHALL compute `foodActivity` inside the existing single `REPEATABLE READ READ ONLY` stats snapshot transaction, adding no new transaction, no new endpoint, and no database migration.
+8. THE Stats_Service SHALL return `foodActivity` within both `GET /me/stats` and `GET /me/stats/summary`.
+
+### Requirement 25: Most Logged Dishes (Podium)
+
+**User Story:** As a user, I want to see my top 5 most-logged dishes with clear rankings, so that I celebrate the foods I keep coming back for, the same way I do for rides.
+
+#### Acceptance Criteria
+
+1. THE Stats_Service SHALL return up to 5 `MostLoggedFoodItem` entries in `foodActivity.mostLogged` grouped by `food_item_id` over the target user's `food_item_logs`.
+2. THE Stats_Service SHALL order `mostLogged` by log count descending, with ties broken by case-insensitive dish name ascending, then exact `food_item_id` ascending.
+3. WHEN the user has 0 food logs, THE Stats_Service SHALL return an empty array for `foodActivity.mostLogged`.
+4. THE FoodStatsScreen (Requirement 28) SHALL display a podium for the top 3 most-logged dishes and rank items 4 and 5 below it, mirroring the Hall of Fame podium's layout and only-render-if-present-rank convention (Requirement 19.4).
+
+### Requirement 26: Highest Rated Dishes
+
+**User Story:** As a user, I want to see which dishes I've rated the highest, so that I can remember my favorites without a single lucky rating dominating the list.
+
+#### Acceptance Criteria
+
+1. THE Stats_Service SHALL return up to 5 `HighestRatedFoodItem` entries in `foodActivity.highestRated`, each carrying that Food_Item's average rating across the target user's own `Food_Item_Log` rows for it.
+2. THE Stats_Service SHALL include a Food_Item in `foodActivity.highestRated` only if the target user has logged it with a non-null rating at least `FOOD_STATS_MIN_RATED_LOGS` times (Configuration & Constants) — a single high rating on one visit SHALL NOT alone qualify a dish.
+3. THE Stats_Service SHALL order `highestRated` by average rating descending, with ties broken by rated-log count descending, then case-insensitive dish name ascending, then exact `food_item_id` ascending.
+4. WHEN the user has no Food_Item meeting the Requirement 26.2 threshold, THE Stats_Service SHALL return an empty array for `foodActivity.highestRated`.
+5. THE Stats_Service SHALL round each entry's average rating to one decimal place.
+
+### Requirement 27: Food Personal Records
+
+**User Story:** As a user, I want to see my biggest food-related achievements, like the day I tried the most dishes and the dish I've eaten most in a single day, so that I can look back on my food adventures the same way I do my ride marathons.
+
+#### Acceptance Criteria
+
+1. THE Stats_Service SHALL compute `foodActivity.personalRecords.mostAdventurousDay` as the calendar date with the maximum count of `food_item_logs` rows for the target user, including the distinct restaurant/location names visited that day.
+2. IF two or more calendar dates share the maximum dish-log count, THEN THE Stats_Service SHALL select the most recent calendar date (`visited_on DESC`), mirroring Requirement 20.3's tie-break rule.
+3. THE Stats_Service SHALL compute `foodActivity.personalRecords.dishMarathonRecord` as the `(food_item_id, visited_on)` pair with the maximum log count on a single calendar date for the target user.
+4. IF two or more dish-date pairs share the maximum marathon count, THEN THE Stats_Service SHALL break ties by most recent date descending, then case-insensitive dish name ascending, then `food_item_id` ascending, mirroring Requirement 20.5's tie-break rule exactly.
+5. IF the user has 0 food logs, THEN THE Stats_Service SHALL omit `mostAdventurousDay` and `dishMarathonRecord` from `foodActivity.personalRecords` — present as absent optional fields, not `null`, mirroring Requirement 20.6.
+6. THE FoodStatsScreen (Requirement 28) SHALL render cards for `mostAdventurousDay` and `dishMarathonRecord` when present, mirroring Requirement 20.7's independent-conditional-rendering convention.
+
+### Requirement 28: Mobile Food Stats Screen
+
+**User Story:** As a user, I want a dedicated Food Stats screen alongside my ride stats, so that I can explore my dish-logging activity in the same style I already use for rides, while my raw food log stays a simple chronological list elsewhere.
+
+#### Acceptance Criteria
+
+1. THE StatsStack SHALL register a `FoodStatsDetail` route rendering `FoodStatsScreen`, reachable from a Highlight_Card produced by an extended `buildOverviewHighlights` (Requirement 2) when the target user has at least one food log.
+2. THE FoodStatsScreen SHALL render a food-activity odometer section (`totalDishesLogged`, `distinctRestaurantsVisited`, `repeatMultiplier`) mirroring the Odometer section's layout (Requirement 18.8) with food-specific labels.
+3. THE FoodStatsScreen SHALL render the Most Logged Dishes podium (Requirement 25) and the Highest Rated Dishes list (Requirement 26) as two visually distinct sections that are never merged into one ranking, since log-count popularity and average-rating quality are different measures and a dish can rank highly on one without the other.
+4. THE FoodStatsScreen SHALL render the personal-records cards from Requirement 27 when present.
+5. THE FoodStatsScreen SHALL provide a sort control over the Most Logged Dishes list offering "Most Logged" (log count descending, the Requirement 25.2 order) and "Highest Rated" (the Requirement 26.3 order), mirroring the existing "Most Visited"/"Date" sort toggle convention (Requirement 21.5) applied to whichever list is displayed.
+6. WHERE the target user has 0 food logs, THE FoodStatsScreen SHALL render a compact empty state directing the user to log a dish, and SHALL NOT render the odometer, podium, highest-rated, or personal-records sections — mirroring the existing `hasActivity` gating convention used for ride stats.
+7. THE FoodStatsScreen SHALL read `foodActivity` from the same shared cached `['me-stats', { percentile: true }]` query used by every other StatsStack detail screen (Requirement 4), and SHALL NOT issue its own separate stats fetch.
+8. THE Friend_Surface Compare pane SHALL render side-by-side comparison bars for Total Dishes Logged and Distinct Restaurants Visited derived from `viewer.foodActivity` and `friend.foodActivity`, mirroring Requirement 22.1 exactly for the food dimension.

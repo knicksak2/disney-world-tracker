@@ -674,6 +674,80 @@ CREATE INDEX trip_resorts_resort_idx ON trip_resorts(resort_id);
 COMMIT;
 ```
 
+### New migration `0042_trip_food_lists.sql`
+
+Records which Food_List(s) (from the `food-lists` spec) a Trip's members are using for reference during
+the visit (Requirement 22). Cross-spec dependency: requires `food-lists`' `food_lists` table (migration
+`0041_food_lists.sql`) to already exist. Strictly additive — one new table and its indexes; no existing
+table, column, or constraint is touched. Numbered `0042` on the assumption both `food-item-logging`
+(`0040`) and `food-lists` (`0041`) land first; renumber at implementation time if a different migration has
+since claimed `0042`.
+
+Unlike `trip_resorts` (a pure reference with no access implication — a Resort's own visibility is not
+gated by anything), a Trip_Food_List link **also functions as a persistent access grant**: attaching a
+private Food_List extends its view access to every current and future Trip_Member (R22.3), for as long as
+the link exists, without writing a `food_list_shares` row for each member. This is why the table also
+records who attached it (`added_by`), mirroring `planned_items.added_by`, so detach authorization (R22.5)
+can follow the exact adder-or-organizer rule `removePlannedItem` already implements.
+
+```sql
+BEGIN;
+
+-- trip_food_lists: the Food_List(s) a Trip's members are referencing (R22.1).
+-- The composite primary key guarantees at most one link per (trip, food_list)
+-- (R22.2). The trip FK cascades so a Trip delete fans out to its food-list
+-- links (R22.6); the food_list FK also cascades (R22.11) — deleting a
+-- Food_List removes its trip_food_lists rows in the same transaction, so a
+-- deleted list's attachment simply disappears on the next Trip read rather
+-- than leaving a dangling reference. (An earlier draft of this migration
+-- comment described this FK as having no ON DELETE action; that was never
+-- correct against the SQL below and has been corrected in R22.10/R22.11 to
+-- match the shipped CASCADE behavior.)
+CREATE TABLE trip_food_lists (
+    trip_id      UUID        NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+    food_list_id UUID        NOT NULL REFERENCES food_lists(id) ON DELETE CASCADE,
+    added_by     UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (trip_id, food_list_id)
+);
+CREATE INDEX trip_food_lists_food_list_idx ON trip_food_lists(food_list_id);
+
+COMMIT;
+```
+
+`Food_List_Service`'s access predicate (from `food-lists` design.md) widens by one OR-branch to account for
+Trip-derived access:
+
+```
+can_view(list, user) := list.owner_id = user
+                      OR list.visibility = 'public'
+                      OR EXISTS food_list_shares(list, user)
+                      OR EXISTS (                                    -- NEW, R22.3
+                          trip_food_lists tfl
+                          JOIN trip_memberships tm ON tm.trip_id = tfl.trip_id
+                          WHERE tfl.food_list_id = list.id
+                            AND tm.user_id = user
+                        )
+```
+
+This is computed live on every read, never materialized as a `food_list_shares` row — joining a Trip
+later automatically grants access (no backfill), and leaving or being removed automatically revokes it (no
+cleanup code), which is exactly why R22.4's guarantee needs no explicit revocation logic: it falls out of
+the join no longer matching. A visibility flip to private does not retract a `trip_food_lists` link's
+grant (R22.8), mirroring how an explicit `food_list_shares` grant already survives a visibility change
+(Requirement 3.4 in `food-lists`) — the Trip attachment is the same kind of explicit, persistent grant.
+
+`POST /trips/:id/food-lists` (body: `{ foodListId }`) attaches: the Trip_Service calls into
+`Food_List_Service`'s `getListDetail(foodListId, callerId)` first to resolve ownership/visibility (R22.1's
+eligibility check — owner or public only, never merely-viewable-or-editable-via-someone-else's-share), then
+inserts the `trip_food_lists` row recording `added_by = callerId`. `DELETE /trips/:id/food-lists/:foodListId`
+detaches, gated by adder-or-organizer exactly like `removePlannedItem` (R22.5). The attached set is then
+projected as `TripDTO.foodLists` on every Trip read (detail, create/edit response) exactly like `resorts` —
+no separate list endpoint, resolving each link via `Food_List_Service` and marking an entry `available:
+false` when that resolution fails or returns nothing for a reason other than deletion (R22.10) — a deleted
+Food_List's row is removed by the `ON DELETE CASCADE` FK itself (R22.11), so it never reaches this
+projection step as a dangling link to begin with.
+
 The `Trip_Resort_Stay` is set through the existing create/edit endpoints: `POST /me/trips` and
 `PATCH /trips/:id` accept an optional `resortIds` array (validated by the shared `tripResortIdsSchema`,
 bounded by `TRIP_RESORT_LIMIT`). The Trip_Service validates every id references an active Catalog Resort
@@ -686,12 +760,20 @@ response, and the Trips list) carries the resulting `resorts` projection joined 
 
 ```ts
 interface TripResortDTO { id: string; name: string; }   // R21.1: id + display name of a stayed-at Resort
+// R22.9/R22.10: a Trip's attached Food_Lists, resolved from `food-lists`. An
+// `available: false` entry carries only `foodListId` — the resolveFoodList
+// port failed or returned null for that link (not a deletion; a deleted
+// Food_List's link is already gone via ON DELETE CASCADE, R22.11).
+type TripFoodListDTO =
+  | { available: true; foodListId: string; name: string; itemCount: number; ownerDisplayName: string }
+  | { available: false; foodListId: string };
 interface TripDTO {
   id: string; name: string; description: string;
   startDate: string; endDate: string;             // YYYY-MM-DD
   status: TripStatus;                              // derived, never persisted
   createdAt: string;
   resorts: readonly TripResortDTO[];               // R21.1: the recorded Resort stay, ordered by name
+  foodLists: readonly TripFoodListDTO[];            // R22.9: the Trip's attached Food_Lists
 }
 interface TripMemberDTO { userId: string; displayName: string; avatarPreset: string | null; role: TripRole; }
 interface TripInviteDTO { id: string; tripId: string; tripName: string; inviterDisplayName: string; state: 'pending'|'accepted'|'declined'|'cancelled'; }
@@ -726,9 +808,13 @@ Added to the closed `ERROR_CODES` union and `errorCodeToHttpStatus`:
 | `trip_role_invalid` | 400 | Promote an organizer / demote a member (no-op change) | R4.8 |
 | `trip_planned_limit` | 400 | Planned_List already holds 500 items | R9.5 |
 | `trip_tag_state_invalid` | 409 | Confirm/decline of a non-pending rode-with tag | R11.8 |
+| `trip_food_list_ineligible` | 403 | Attach target is neither owned by the caller nor public | R22.1 |
+| `trip_food_list_not_found` | 404 | Attach target does not exist in `food_lists` | R22.7 |
 
 The `unauthorized` (401) code already exists and is returned by the session check before any Trip check
-so an unauthenticated request never learns whether a Trip exists (R15.3).
+so an unauthenticated request never learns whether a Trip exists (R15.3). `trip_forbidden` (already listed
+above) covers a non-adder, non-Organizer detach attempt (R22.5), mirroring `removePlannedItem`'s existing
+use of the same code for the identical adder-or-organizer rule.
 
 ## Correctness Properties
 
@@ -974,6 +1060,20 @@ Active and Upcoming groups ordered by ascending Trip_Start_Date, the Past group 
 Trip_End_Date, and any empty status group omitted.
 
 **Validates: Requirements 16.1, 16.2, 16.3, 16.4, 16.5**
+
+### Property 27: Trip-derived Food_List access tracks membership live and is eligibility-gated at attach time
+
+*For any* Trip, Food_List, and Trip_Member: (a) attaching succeeds only when the requesting Trip_Member
+owns the Food_List or it is public, otherwise no `trip_food_lists` row is written; (b) for any User who is
+a current Trip_Member of a Trip with an attached Food_List, that Food_List's view-access predicate (in
+`food-lists`) evaluates `true` for that User via the Trip-derived branch alone, independent of any
+`food_list_shares` row; (c) the instant that User's Trip_Membership ends, or the link is removed, the
+Trip-derived branch evaluates `false` for that User for that Food_List, and their overall access reverts to
+`true` only if they independently own it, it is public, or they hold their own `food_list_shares` grant;
+and (d) a Food_List's visibility changing from public to private after attachment does not alter the
+Trip-derived branch's result for any current or future Trip_Member.
+
+**Validates: Requirements 22.1, 22.3, 22.4, 22.8**
 
 ## Error Handling
 

@@ -401,6 +401,31 @@ existing `RatingChanged` propagation path is reused unchanged.
   - [x] 23.4 Add backend and mobile tests for the enriched summary derivations and UI components
     - _Requirements: 14.1, 14.2, 14.4, 14.5, 14.9, 14.10, 14.11, 14.12, 14.13_
 
+- [x] 24. Attach a Food_List to a Trip for reference (R22)
+  - [x] 24.1 Add the `trip_food_lists` migration and shared contracts
+    - Author `apps/api/migrations/00NN_trip_food_lists.sql` (numbered after whichever of `food-item-logging`'s `0040` and `food-lists`' `0041` have landed, and after any other migration claimed in the interim): `trip_food_lists (trip_id → trips ON DELETE CASCADE, food_list_id → food_lists ON DELETE CASCADE, added_by → users ON DELETE CASCADE, PRIMARY KEY (trip_id, food_list_id))` plus `trip_food_lists_food_list_idx`; strictly additive, mirroring `0016_trip_resorts.sql`'s conventions
+    - Add `TripFoodListDTO` (`available: true` variant with `foodListId`/`name`/`itemCount`/`ownerDisplayName`, `available: false` variant with only `foodListId`) to `@dwt/shared`; add `foodLists: readonly TripFoodListDTO[]` to `TripDTO`; add `trip_food_list_ineligible` (403) and `trip_food_list_not_found` (404) to `ERROR_CODES`/`errorCodeToHttpStatus`
+    - _Requirements: 22.1, 22.2, 22.6, 22.7, 22.9, 22.10_
+  - [x] 24.2 Widen `food-lists`' view-access predicate with the Trip-derived OR-branch
+    - In `Food_List_Service`'s access-check function (from the `food-lists` spec), add the `EXISTS (trip_food_lists JOIN trip_memberships ...)` branch described in design.md; this is a change to the `food-lists` repo, not `trips`' — flag the cross-spec edit clearly in the commit/PR since it touches two specs' domains
+    - _Requirements: 22.3, 22.4, 22.8_
+  - [x] 24.3 Implement attach/detach in `apps/api/src/services/trips/repo.ts`
+    - `attachFoodList(tripId, callerId, foodListId)`: call into the injected `Food_List_Service` port to resolve the Food_List's `ownerId`/`visibility`; reject with `trip_food_list_not_found` if absent, `trip_food_list_ineligible` if neither owned-by-caller nor public; otherwise `INSERT ... ON CONFLICT DO NOTHING` recording `added_by = callerId` (R22.1, R22.2)
+    - `detachFoodList(tripId, callerId, callerRole, foodListId)`: mirror `removePlannedItem`'s adder-or-organizer gate exactly — lock the row `FOR UPDATE`, reject non-adder non-organizers with `trip_forbidden`, delete otherwise (R22.5)
+    - Extend the Trip read projection (`getTripForMember`, create/edit response) to resolve `foodLists` alongside the existing `resorts` resolution, marking an entry `available: false` when the `resolveFoodList` port fails or returns null for a reason other than deletion (R22.9, R22.10) — a deleted Food_List's link is already removed by the `ON DELETE CASCADE` FK (R22.11), correcting an earlier inconsistent draft of this spec that described that FK as having no `ON DELETE` action while its own SQL used `CASCADE`; the shipped implementation correctly used `CASCADE`
+    - _Requirements: 22.1, 22.2, 22.5, 22.6, 22.7, 22.9, 22.10, 22.11_
+  - [x] 24.4 Wire routes and injected port
+    - `POST /trips/:id/food-lists` (body `{ foodListId }`, any Trip_Member), `DELETE /trips/:id/food-lists/:foodListId` (adder or Organizer); inject the `Food_List_Service` lookup as a structural port (constructor injection, mirroring how Tracking's completion/rating repos are injected into Trip's `logCompletion`) rather than importing `food-lists`' repo directly, so `trips`' tests can substitute a fake without standing up the whole `food-lists` service
+    - _Requirements: 22.1, 22.5_
+  - [x] 24.5 * Write property test for Property 27 in `apps/api/src/services/trips/__tests__/tripFoodLists.prop.test.ts`
+    - Drive (a) eligibility-gated attach (owner/public succeed, viewer/editor-only/no-access reject), (b) Trip-derived access resolving `true` for a current member independent of any `food_list_shares` row, (c) access reverting to `false` immediately on membership end or link removal (with the three independent-access exceptions), and (d) a post-attach visibility flip to private not retracting the Trip-derived branch — tagged `Feature: trips, Property 27: <text>`
+    - _Requirements: 22.1, 22.3, 22.4, 22.8_
+  - [x] 24.6 Build the mobile "Attached Food Lists" section on the Trip Detail hub
+    - Render each `TripFoodListDTO` (name, item count, owner) with a tap-through to `FoodListDetailScreen`; render `available: false` entries with the same greyed "No longer available" treatment already used for an inaccessible saved Food_List (Requirement 7a in `food-lists`); add an "Attach a list" control (any Trip_Member) sourced from the User's own owned + public-browsable lists, and a detach action gated client-side on adder-or-organizer (server remains the authority)
+    - _Requirements: 22.1, 22.5, 22.9, 22.10_
+  - [x] 24.7 * Add backend route integration tests and mobile render/interaction tests for attach, detach (adder/organizer/forbidden-third-party), the ineligible-attach rejection, and the unavailable-entry rendering
+    - _Requirements: 22.1, 22.5, 22.7, 22.9, 22.10_
+
 ## Notes
 
 - Tasks marked with `*` are optional (property, unit, integration, and mobile tests) and can be skipped for a faster MVP; core implementation tasks are never optional.
@@ -427,7 +452,18 @@ existing `RatingChanged` propagation path is reused unchanged.
     { "id": 9, "tasks": ["11.4", "12.2", "13.2"] },
     { "id": 10, "tasks": ["13.3"] },
     { "id": 11, "tasks": ["15.1", "15.2", "15.3"] },
-    { "id": 12, "tasks": ["8.4"] }
+    { "id": 12, "tasks": ["8.4"] },
+    { "id": 13, "tasks": ["24.1"] },
+    { "id": 14, "tasks": ["24.2", "24.3"] },
+    { "id": 15, "tasks": ["24.4"] },
+    { "id": 16, "tasks": ["24.5", "24.6"] },
+    { "id": 17, "tasks": ["24.7"] }
   ]
 }
 ```
+
+Task 24 is a standalone addition layered on top of the fully-implemented Trips feature (tasks 1-23, all
+complete) and depends on both `food-item-logging` and `food-lists` having landed their own migrations
+first, since `trip_food_lists.food_list_id` is a foreign key into `food_lists`, and task 24.2 edits
+`food-lists`' own access-predicate code. Do not begin wave 13 before both of those specs' backend
+checkpoints are green.

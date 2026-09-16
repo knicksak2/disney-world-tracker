@@ -226,7 +226,9 @@ describe('stats snapshot path leaves the Global_Aggregate stores untouched (R8.4
     const dataReads = statements.filter((sql) => /\bFROM\b/i.test(sql));
     expect(dataReads.length).toBeGreaterThan(0);
     for (const sql of dataReads) {
-      expect(sql).toMatch(/\b(experiences|completions|ratings)\b/i);
+      expect(sql).toMatch(
+        /\b(experiences|completions|ratings|food_item_logs|food_items)\b/i,
+      );
     }
   });
 

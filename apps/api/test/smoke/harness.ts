@@ -537,6 +537,17 @@ function buildPgMemDatabase(): IMemoryDb {
       return h;
     },
   });
+  pub.registerFunction({
+    name: 'round',
+    args: [DataType.float, DataType.integer],
+    returns: DataType.float,
+    implementation: (val: unknown, decimals: unknown): number => {
+      const num = Number(val);
+      const dec = Number(decimals);
+      if (Number.isNaN(num)) return 0;
+      return Number(num.toFixed(dec));
+    },
+  });
 
   return db;
 }
@@ -594,6 +605,8 @@ async function applyMigration(db: IMemoryDb): Promise<void> {
     '0032_experience_category_taxonomy.sql',
     // 0039 adds experience_festival_tags table read by stats and pins snapshots
     '0039_experience_festival_tags.sql',
+    // 0040 adds user_submitted_locations, food_items, and food_item_logs read by stats foodActivity
+    '0040_food_item_logging.sql',
   ];
   for (const name of migrations) {
     const migrationPath = resolve(here, '..', '..', 'migrations', name);

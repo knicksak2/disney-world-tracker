@@ -53,7 +53,7 @@ import type {
 } from 'fastify';
 import { ZodError, z } from 'zod';
 
-import type { AreaType, ExperienceCategory, Park, ActivityStatistics, FestivalStatsDTO } from '@dwt/shared';
+import type { AreaType, ExperienceCategory, Park, ActivityStatistics, FoodActivityStatistics, FestivalStatsDTO } from '@dwt/shared';
 import { uuidSchema } from '@dwt/shared';
 
 import type { DbPool } from '../../db/pool.js';
@@ -69,6 +69,7 @@ import type { ResortCoverage } from './resorts.js';
 import { rollUpResortCoverage } from './resorts.js';
 import { computePercentileRank } from './percentile.js';
 import { rollUpActivity, EMPTY_ACTIVITY_MATERIAL } from './activity.js';
+import { rollUpFoodActivity, EMPTY_FOOD_ACTIVITY_MATERIAL } from './foodActivity.js';
 import { rollUpFestivalStats, EMPTY_FESTIVAL_STATS } from './festivals.js';
 import type { StatsRepo, StatsSnapshot, StatsSnapshotInput } from './repo.js';
 
@@ -109,6 +110,7 @@ export interface StatsResponse {
   readonly coverage: CoverageResponse;
   readonly ratings: RatingStatistics;
   readonly activity: ActivityStatistics;
+  readonly foodActivity?: FoodActivityStatistics;
   readonly festivals: FestivalStatsDTO;
   readonly percentileRank?: number;
   readonly percentileUnavailable?: boolean;
@@ -270,6 +272,7 @@ export function assembleResponse(
     coverage: CoverageResponse;
     ratings: RatingStatistics;
     activity: ActivityStatistics;
+    foodActivity: FoodActivityStatistics;
     festivals: FestivalStatsDTO;
     percentileRank?: number;
     percentileUnavailable?: boolean;
@@ -288,6 +291,9 @@ export function assembleResponse(
     },
     ratings: rollUpRatings(snapshot.userRatings),
     activity: rollUpActivity(snapshot.activity ?? EMPTY_ACTIVITY_MATERIAL),
+    foodActivity: rollUpFoodActivity(
+      snapshot.foodActivity ?? EMPTY_FOOD_ACTIVITY_MATERIAL,
+    ),
     festivals: snapshot.festivalCounts
       ? rollUpFestivalStats(
           snapshot.festivalCounts.lifetimeCount,

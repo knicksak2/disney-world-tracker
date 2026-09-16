@@ -104,6 +104,10 @@ export type {
   ActivityStatistics,
   MostRiddenAttraction,
   PersonalRecords,
+  MostLoggedFoodItem,
+  HighestRatedFoodItem,
+  FoodPersonalRecords,
+  FoodActivityStatistics,
   OperatingStatus,
   ForecastEntry,
   Showtime,
@@ -128,6 +132,28 @@ export type {
   PinShowcasePlacementDTO,
   PinShowcaseDTO,
   PlacePinRequest,
+  FoodItemDTO,
+  SubmitFoodItemInputDTO,
+  FoodItemLogDTO,
+  FoodItemLogHistoryDTO,
+  CreateFoodItemLogInputDTO,
+  FoodItemLogWithContextDTO,
+  UserSubmittedLocationDTO,
+  CreateUserSubmittedLocationInputDTO,
+  LocationSuggestionDTO,
+  FoodListDTO,
+  FoodListItemDTO,
+  FoodListRole,
+  FoodListDetailDTO,
+  FoodListCollectionDTO,
+  FoodListDiscoveryPageDTO,
+  CreateFoodListInputDTO,
+  UpdateFoodListInputDTO,
+  AddFoodListItemInputDTO,
+  ReorderFoodListItemsInputDTO,
+  FoodListShareRole,
+  ShareFoodListInputDTO,
+  FoodListShareDTO,
 } from './dto/index.js';
 
 export {
@@ -138,6 +164,7 @@ export {
   SHOWCASE_REFERENCE_SIZE,
   overlapsAnyOtherPin,
   placementToReferencePx,
+  FOOD_STATS_MIN_RATED_LOGS,
 } from './dto/index.js';
 
 // Disney source-resilience transport-facing types (closed-set value tuples).
@@ -178,6 +205,7 @@ export {
   shareReactionValueSchema,
   tripReactionValueSchema,
   completionPercentSchema,
+  foodListNameSchema,
   // DTO schemas
   userSchema,
   registerInputSchema,
@@ -247,6 +275,31 @@ export {
   pinShowcaseSchema,
   placePinRequestSchema,
   pinShowcaseSharePayloadSchema,
+  foodItemNameSchema,
+  foodItemSchema,
+  submitFoodItemInputSchema,
+  foodItemLogSchema,
+  foodItemLogHistorySchema,
+  createFoodItemLogInputSchema,
+  foodItemLogWithContextSchema,
+  userSubmittedLocationSchema,
+  createUserSubmittedLocationInputSchema,
+  locationSuggestionSchema,
+  foodListVisibilitySchema,
+  foodListRoleSchema,
+  foodListShareRoleSchema,
+  createFoodListInputSchema,
+  updateFoodListInputSchema,
+  addFoodListItemInputSchema,
+  reorderFoodListItemsInputSchema,
+  shareFoodListInputSchema,
+  foodListItemSchema,
+  foodListSchema,
+  foodListDetailSchema,
+  foodListShareSchema,
+  savedFoodListItemSchema,
+  foodListCollectionSchema,
+  foodListDiscoveryPageSchema,
 } from './schemas/index.js';
 
 // Pin-collection Series 1 catalog (roster + set registry).
@@ -267,6 +320,10 @@ export type {
   ShareInput,
   UserSearchInput,
   NotificationPreferenceInput,
+  SubmitFoodItemInput,
+  CreateFoodItemLogInput,
+  FoodItemLogWithContext,
+  CreateUserSubmittedLocationInput,
 } from './schemas/index.js';
 
 // Trips domain: schemas + input types + DTOs.
@@ -296,8 +353,10 @@ export {
   rodeWithConfirmSchema,
   tripReactionInputSchema,
   tripCommentInputSchema,
+  attachFoodListSchema,
   // DTO schemas
   pendingRodeWithTagSchema,
+  tripFoodListSchema,
   tripIncomingInviteSchema,
 } from './trips.js';
 export type {
@@ -319,9 +378,11 @@ export type {
   RodeWithConfirmInput,
   TripReactionInput,
   TripCommentInput,
+  AttachFoodListInput,
   // DTOs
   TripDTO,
   TripResortDTO,
+  TripFoodListDTO,
   TripMemberDTO,
   TripInviteDTO,
   TripIncomingInviteDTO,

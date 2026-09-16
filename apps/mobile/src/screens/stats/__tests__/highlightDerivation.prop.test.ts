@@ -51,16 +51,21 @@ import {
   buildOverviewHighlights,
   displayedPercent,
   displayedPercentLabel,
+  formatDishMarathonRecord,
+  formatFoodOdometer,
   formatMarathonRecord,
+  formatMostAdventurousDay,
   formatOdometer,
   formatPodiumRank,
   formatProductiveDay,
   pickExperiencesHighlight,
+  pickFoodStatsHighlight,
 } from '../statsView';
 import type { OverviewHighlight } from '../statsView';
 import {
   makeCell,
   makeDefaultActivity,
+  makeDefaultFoodActivity,
   makeInsufficientRatings,
   makeStatsResponse,
   makeSufficientRatings,
@@ -76,8 +81,8 @@ import type {
 // ---------------------------------------------------------------------------
 
 /**
- * The real StatsStack detail routes a highlight `target` may name (R2.9). The
- * hub `StatsOverview` is intentionally excluded — no highlight may target the
+ * The real StatsStack detail routes a highlight `target` may name (R2.9, R28.1).
+ * The hub `StatsOverview` is intentionally excluded — no highlight may target the
  * hub itself.
  */
 const VALID_DETAIL_ROUTES = [
@@ -85,6 +90,7 @@ const VALID_DETAIL_ROUTES = [
   'RatingsDetail',
   'InterestsDetail',
   'ExperiencesDetail',
+  'FoodStatsDetail',
 ] as const;
 
 // ---------------------------------------------------------------------------
@@ -519,3 +525,156 @@ describe('Activity display formatters (R18.1, R19.1, R20.1)', () => {
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// Card 5: Food & Dining highlight derivation (R28.1)
+// ---------------------------------------------------------------------------
+
+describe('Card 5: Food & Dining highlight derivation (R28.1)', () => {
+  test('with populated foodActivity, derives title, dishes headline, and subtext with multiplier', () => {
+    const foodActivity = makeDefaultFoodActivity({
+      totalDishesLogged: 12,
+      distinctRestaurantsVisited: 5,
+      repeatMultiplier: 1.5,
+    });
+    const highlight = pickFoodStatsHighlight(foodActivity);
+
+    expect(highlight.id).toBe('foodStats');
+    expect(highlight.title).toBe('Food & Dining');
+    expect(highlight.headline).toBe('12 dishes logged');
+    expect(highlight.subtext).toBe('5 restaurants • 1.5x repeat');
+    expect(highlight.target.route).toBe('FoodStatsDetail');
+  });
+
+  test('handles singular dish and restaurant correctly', () => {
+    const foodActivity = makeDefaultFoodActivity({
+      totalDishesLogged: 1,
+      distinctRestaurantsVisited: 1,
+      repeatMultiplier: 1.0,
+    });
+    const highlight = pickFoodStatsHighlight(foodActivity);
+
+    expect(highlight.headline).toBe('1 dish logged');
+    expect(highlight.subtext).toBe('1 restaurant • 1.0x repeat');
+  });
+
+  test('buildOverviewHighlights includes foodStats card when totalDishesLogged > 0', () => {
+    const stats = makeStatsResponse({
+      foodActivity: makeDefaultFoodActivity({ totalDishesLogged: 10 }),
+    });
+    const highlights = buildOverviewHighlights(stats);
+    const foodHighlight = highlights.find((h) => h.id === 'foodStats');
+
+    expect(foodHighlight).toBeDefined();
+    expect(foodHighlight?.title).toBe('Food & Dining');
+    expect(foodHighlight?.target.route).toBe('FoodStatsDetail');
+  });
+
+  test('buildOverviewHighlights omits foodStats card when totalDishesLogged is 0 or foodActivity is undefined', () => {
+    const zeroStats = makeStatsResponse({
+      foodActivity: makeDefaultFoodActivity({ totalDishesLogged: 0 }),
+    });
+    expect(buildOverviewHighlights(zeroStats).some((h) => h.id === 'foodStats')).toBe(false);
+
+    const undefinedStats = makeStatsResponse({ foodActivity: undefined });
+    expect(buildOverviewHighlights(undefinedStats).some((h) => h.id === 'foodStats')).toBe(false);
+  });
+
+  test('property: food-stats highlight card only appears when totalDishesLogged > 0 (R28.1)', () => {
+    fc.assert(
+      fc.property(
+        fc.record({
+          totalDishesLogged: fc.integer({ min: 0, max: 100 }),
+          distinctRestaurantsVisited: fc.integer({ min: 0, max: 20 }),
+          repeatMultiplier: fc.double({ min: 1.0, max: 5.0, noNaN: true }),
+        }),
+        (activityProps) => {
+          const foodActivity = makeDefaultFoodActivity(activityProps);
+          const stats = makeStatsResponse({ foodActivity });
+          const highlights = buildOverviewHighlights(stats);
+          const hasFoodHighlight = highlights.some((h) => h.id === 'foodStats');
+
+          if (activityProps.totalDishesLogged > 0) {
+            expect(hasFoodHighlight).toBe(true);
+            const foodCard = highlights.find((h) => h.id === 'foodStats')!;
+            expect(foodCard.target.route).toBe('FoodStatsDetail');
+            // foodStats is always last in the list
+            expect(highlights[highlights.length - 1]?.id).toBe('foodStats');
+          } else {
+            expect(hasFoodHighlight).toBe(false);
+          }
+        },
+      ),
+      { numRuns: 200 },
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Food Activity display formatters (R28.2, R27.1, R27.3)
+// ---------------------------------------------------------------------------
+
+describe('Food Activity display formatters (R28.2, R27.1, R27.3)', () => {
+  test('formatFoodOdometer formats metric values correctly', () => {
+    const foodActivity = makeDefaultFoodActivity({
+      totalDishesLogged: 15,
+      distinctRestaurantsVisited: 7,
+      repeatMultiplier: 1.8,
+    });
+    const odo = formatFoodOdometer(foodActivity);
+    expect(odo.totalDishes).toBe('15');
+    expect(odo.distinctRestaurants).toBe('7');
+    expect(odo.repeatMultiplier).toBe('1.8×');
+  });
+
+  test('formatMostAdventurousDay formats record correctly and returns null when undefined', () => {
+    expect(formatMostAdventurousDay(undefined)).toBeNull();
+
+    const formatted = formatMostAdventurousDay({
+      date: '2025-02-14',
+      dishCount: 6,
+      restaurantNames: ['Aloha Isle', 'Pecos Bill'],
+    });
+    expect(formatted).toEqual({
+      headline: 'Most Adventurous Day',
+      subtext: '6 dishes on 2025-02-14 at Aloha Isle, Pecos Bill',
+    });
+
+    const singleDish = formatMostAdventurousDay({
+      date: '2025-02-14',
+      dishCount: 1,
+      restaurantNames: [],
+    });
+    expect(singleDish).toEqual({
+      headline: 'Most Adventurous Day',
+      subtext: '1 dish on 2025-02-14',
+    });
+  });
+
+  test('formatDishMarathonRecord formats record correctly and returns null when undefined', () => {
+    expect(formatDishMarathonRecord(undefined)).toBeNull();
+
+    const formatted = formatDishMarathonRecord({
+      foodItemId: 'dish-1',
+      foodItemName: 'Dole Whip',
+      date: '2025-02-14',
+      count: 3,
+    });
+    expect(formatted).toEqual({
+      headline: 'Dish Marathon Record',
+      subtext: '3 dishes of Dole Whip (2025-02-14)',
+    });
+
+    const singleOrder = formatDishMarathonRecord({
+      foodItemId: 'dish-1',
+      foodItemName: 'Dole Whip',
+      date: '2025-02-14',
+      count: 1,
+    });
+    expect(singleOrder).toEqual({
+      headline: 'Dish Marathon Record',
+      subtext: '1 dish of Dole Whip (2025-02-14)',
+    });
+  });
+});
+

@@ -73,6 +73,7 @@ const ACTIVE_TRIP: TripDTO = {
   status: 'active',
   createdAt: '2024-04-01T12:00:00Z',
   resorts: [],
+  foodLists: [],
 };
 
 function makeQueryClient(): QueryClient {

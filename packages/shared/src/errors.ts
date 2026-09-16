@@ -127,6 +127,8 @@ export const ERROR_CODES = [
   'trip_role_invalid',
   'trip_planned_limit',
   'trip_tag_state_invalid',
+  'trip_food_list_ineligible',
+  'trip_food_list_not_found',
 
   // -- Pins (pin-collection R20.4, R24.5, R24.11) ----------------------
   // `pin_not_eligible`: `POST /me/pins/:pinId/claim` targeted a Pin with no
@@ -136,6 +138,53 @@ export const ERROR_CODES = [
   'pin_not_eligible',
   'showcase_full',
   'showcase_position_overlap',
+
+  // -- Food item logging (food-item-logging R1-R6) ----------------------
+  // `food_item_not_found`: a log/delete targeted a food_item_id that does not
+  // exist. `food_item_duplicate`: a user-submitted name case-insensitively
+  // matched an existing Food_Item for that restaurant or location; the response
+  // includes the existing item's id so the client can use it instead of retrying.
+  // `food_log_not_found`: a delete targeted a Food_Item_Log id that does not
+  // exist for the authenticated User (or belongs to another User/food item) —
+  // collapsed to one non-probing response, mirroring `log_not_found`.
+  // `food_log_future_date`: `visited_on` is strictly later than today in the
+  // request's `user_tz`, mirroring `log_future_date`.
+  // `location_duplicate`: a submitted User_Submitted_Location name
+  // case-insensitively matched an existing one in the same park; the response
+  // includes the existing location's id (Requirement 6.4). Note this is
+  // distinct from the advisory similarity-suggest step (Requirement 6.2, 6.3),
+  // which never rejects — this code is the hard exact-match backstop only.
+  'food_item_not_found',
+  'food_item_duplicate',
+  'food_log_not_found',
+  'food_log_future_date',
+  'location_duplicate',
+
+  // -- Food lists (food-lists R1-R11) -------------------------------------
+  // `food_list_not_found`: a mutation/read targeted a Food_List the caller
+  // has NO access to at all — non-existent, or private with no share of
+  // either role. Owner-only actions (rename/delete/visibility/manage-shares)
+  // also collapse a non-owner's attempt to this same response so ownership
+  // cannot be probed.
+  // `food_list_edit_forbidden`: the caller CAN view the list (public, or a
+  // viewer-role share) but attempted a mutation requiring edit access (item
+  // add/remove/reorder) or an owner-only share-management action while
+  // holding only editor access — distinct from `food_list_not_found` because
+  // the caller already knows the list exists.
+  // `food_list_item_duplicate`: an add targeted a foodItemId already in
+  // the list. `food_list_reorder_mismatch`: a reorder's id set didn't
+  // exactly match the list's current items. `food_list_stale_write`: a
+  // reorder's `expectedVersion` didn't match the list's current `version`
+  // (a concurrent editor's add/remove/reorder landed first).
+  // `food_list_share_not_friend`: a share target is not a Friend of the
+  // owner. `food_list_save_self`: a User attempted to save their own list.
+  'food_list_not_found',
+  'food_list_edit_forbidden',
+  'food_list_item_duplicate',
+  'food_list_reorder_mismatch',
+  'food_list_stale_write',
+  'food_list_share_not_friend',
+  'food_list_save_self',
 
   // -- Edge / gateway (defense-in-depth, R6.7) --------------------------
   // Emitted by the gateway-level rate limiter (task 13.3) when a caller
@@ -266,11 +315,29 @@ export const errorCodeToHttpStatus: { readonly [K in ErrorCode]: number } = {
   trip_role_invalid: 400,
   trip_planned_limit: 400,
   trip_tag_state_invalid: 409,
+  trip_food_list_ineligible: 403,
+  trip_food_list_not_found: 404,
 
   // Pins
   pin_not_eligible: 409,
   showcase_full: 409,
   showcase_position_overlap: 409,
+
+  // Food item logging
+  food_item_not_found: 404,
+  food_item_duplicate: 409,
+  food_log_not_found: 404,
+  food_log_future_date: 400,
+  location_duplicate: 409,
+
+  // Food lists
+  food_list_not_found: 404,
+  food_list_edit_forbidden: 403,
+  food_list_item_duplicate: 409,
+  food_list_reorder_mismatch: 400,
+  food_list_stale_write: 409,
+  food_list_share_not_friend: 403,
+  food_list_save_self: 400,
 
   // Edge / gateway
   rate_limit_exceeded: 429,
@@ -278,3 +345,4 @@ export const errorCodeToHttpStatus: { readonly [K in ErrorCode]: number } = {
   // Catch-all
   internal_error: 500,
 };
+
