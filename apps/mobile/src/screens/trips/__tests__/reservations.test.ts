@@ -28,6 +28,7 @@ function item(overrides: Partial<PlannedItemDTO> = {}): PlannedItemDTO {
     priority: 2,
     itemType: 'experience',
     durationMinutes: 60,
+    catalogDurationMinutes: null,
     windowStartMinutes: null,
     windowEndMinutes: null,
     mealPeriod: null,

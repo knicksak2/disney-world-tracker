@@ -33,6 +33,10 @@ export interface ThemeParksDirectory {
    * lazily; a build failure resolves to `null` rather than throwing.
    */
   resolveEntityId(enterpriseId: string): Promise<string | null>;
+  /**
+   * Return the entire cached externalId -> ThemeParks entity id map.
+   */
+  getEntityIdMap(): Promise<ReadonlyMap<string, string>>;
 }
 
 /** Minimal logger surface used to record directory build failures. */
@@ -152,6 +156,9 @@ export function createThemeParksDirectory(
       }
       const current = await ensureFresh();
       return current.get(enterpriseId) ?? null;
+    },
+    async getEntityIdMap(): Promise<ReadonlyMap<string, string>> {
+      return await ensureFresh();
     },
   };
 }

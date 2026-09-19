@@ -236,4 +236,57 @@ describe('Trip_Activity screen', () => {
       );
     });
   });
+
+  test('tapping wow reaction posts wire enum wow', async () => {
+    const mutate = jest.fn().mockResolvedValue(undefined);
+    installApi({ mutate });
+
+    renderActivity();
+
+    fireEvent.press(
+      await screen.findByTestId(`trip-feed-reaction-${COMPLETION_ITEM_ID}-wow`),
+    );
+
+    await waitFor(() => {
+      expect(mutate).toHaveBeenCalledWith(
+        'POST',
+        `/trips/${TRIP_ID}/feed/feed_item/${COMPLETION_ITEM_ID}/reactions`,
+        { reaction: 'wow' },
+      );
+    });
+  });
+
+  test('comment action link toggles comment composer input and submits comment', async () => {
+    const mutate = jest.fn().mockResolvedValue({ id: 'new-comment-id' });
+    installApi({ mutate });
+
+    renderActivity();
+
+    expect(
+      screen.queryByTestId(`trip-feed-comment-input-${COMPLETION_ITEM_ID}`),
+    ).toBeNull();
+
+    fireEvent.press(
+      await screen.findByTestId(`trip-feed-comment-open-${COMPLETION_ITEM_ID}`),
+    );
+
+    const input = await screen.findByTestId(
+      `trip-feed-comment-input-${COMPLETION_ITEM_ID}`,
+    );
+    expect(input).toBeTruthy();
+
+    fireEvent.changeText(input, 'Great ride!');
+    fireEvent.press(
+      screen.getByTestId(`trip-feed-comment-submit-${COMPLETION_ITEM_ID}`),
+    );
+
+    await waitFor(() => {
+      expect(mutate).toHaveBeenCalledWith(
+        'POST',
+        `/trips/${TRIP_ID}/feed/feed_item/${COMPLETION_ITEM_ID}/comments`,
+        { body: 'Great ride!' },
+      );
+    });
+  });
 });
+

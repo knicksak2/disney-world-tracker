@@ -68,7 +68,7 @@ import {
 } from '@dwt/shared';
 
 import { ApiError, apiRequest } from '../../api/client';
-import type { CatalogStackParamList } from '../../navigation/CatalogStack';
+import type { ExploreStackParamList } from '../../navigation/ExploreStack';
 import type { RootStackParamList } from '../../navigation/RootNavigator';
 import { theme } from '../../theme/theme';
 import {
@@ -124,7 +124,7 @@ import {
  * `CatalogScreen` does.
  */
 type Props = CompositeScreenProps<
-  NativeStackScreenProps<CatalogStackParamList, 'DestinationScreen'>,
+  NativeStackScreenProps<ExploreStackParamList, 'DestinationScreen'>,
   NativeStackScreenProps<RootStackParamList>
 >;
 

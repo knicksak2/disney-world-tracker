@@ -412,6 +412,7 @@ function plannedItemDTOs(store: Store): PlannedItemDTO[] {
       priority: 2,
       itemType: 'experience',
       durationMinutes: null,
+      catalogDurationMinutes: null,
       windowStartMinutes: null,
       windowEndMinutes: null,
       mealPeriod: null,

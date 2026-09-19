@@ -136,14 +136,71 @@ close to the code they validate.
 - [x] 8. Final checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
+- [x] 9. Add the `dining_url` column and detail-response field
+  - [x] 9.1 Write the migration
+    - Create `apps/api/migrations/0044_experience_dining_url.sql`: `BEGIN`/`COMMIT`, additive `ALTER TABLE experiences ADD COLUMN dining_url TEXT` plus a length `CHECK` constraint (1-500 chars when non-null)
+    - _Requirements: 6.1_
+
+  - [x] 9.2 Write the migration test
+    - `migration0044.test.ts` asserting the column exists, is nullable, and the `CHECK` constraint rejects an empty string and a >500-char value while accepting `NULL` and a normal URL
+    - _Requirements: 6.1_
+
+  - [x] 9.3 Map `dining_url` onto `ExperienceDTO.diningUrl` and the detail response
+    - In `apps/api/src/services/catalog/repo.ts`, extend the existing row mapping used by `getExperience` to read `dining_url` and expose it as `diningUrl` on `ExperienceDTO` only when non-null/non-empty (mirror the existing `priceTier` mapping)
+    - Add `readonly diningUrl?: string` to `ExperienceDTO` in `packages/shared/src/dto/Experience.ts`
+    - In `apps/api/src/services/catalog/routes.ts`, attach `diningUrl` to `ExperienceDetailResponse` in `toDetailResponse` only when `experience.diningUrl` is present; add the field to the `ExperienceDetailResponse` interface
+    - _Requirements: 6.5, 6.6, 6.7_
+
+  - [x] 9.4 Write property test for Property 10 (response half) and route example tests
+    - Extend/add a `server.inject` test asserting `diningUrl` is present and equal to the seeded value for a restaurant with `dining_url` set, and absent for a restaurant without one and for a non-restaurant Experience
+    - _Requirements: 6.5, 6.6, 6.7_
+
+- [x] 10. Build the curated dining-link seed and loader
+  - [x] 10.1 Curate the seed data
+    - Query `experiences` for every Restaurant_Experience whose `grouped_facets.tableService` array contains a facet with id `reservations-accepted`
+    - For each candidate, verify (not guess) its real Disney dining-page URL; omit any candidate that cannot be confidently verified
+    - Write `apps/api/seed-data/dining/dining-links.json` as an array of `{ upstreamEntityId, name, diningUrl }`, keyed by `upstreamEntityId` (Enterprise_Id)
+    - _Requirements: 6.2, 6.3, 6.4_
+
+  - [x] 10.2 Implement `seedDiningLinksLogic.ts` + `seedDiningLinks.ts`
+    - Mirror `seedCrowdIndexLogic.ts`/`seedCrowdIndex.ts`: a testable `runSeedDiningLinks(deps)` reading the JSON seed file and upserting `experiences.dining_url` by `upstream_entity_id`; log and skip (do not abort) any entry matching no row
+    - Add a `seed-dining-links` / `seed-dining-links:cloud` script pair to `apps/api/package.json` matching the existing `sync`/`sync:cloud` pattern
+    - _Requirements: 6.4_
+
+  - [x] 10.3 Write the loader test
+    - Mirror `seedCrowdIndex.test.ts`: assert running the loader twice against the same seed file is idempotent (same end state, no duplication/error), and that an unmatched `upstreamEntityId` is skipped without aborting the run
+    - _Requirements: 6.4_
+
+- [x] 11. Build the `Reservation_Action` on the detail screen
+  - [x] 11.1 Add `diningUrl` to the mobile detail DTO and implement the button
+    - In `apps/mobile/src/screens/catalog/ExperienceDetailScreen.tsx`, add `readonly diningUrl?: string` to the screen's `ExperienceDetailDTO`
+    - Render a `Reservation_Action` (`PrimaryButton`/`SecondaryButton`) when `experience.category === 'Restaurant' && experience.diningUrl`, labelled distinctly from Get_Directions/Menu_Summary_Card (e.g. "Reserve on Disney's site")
+    - On press, call `Linking.openURL(experience.diningUrl)` in a `try/catch`; on rejection render a non-blocking inline error (`experience-reservation-error` testID) while leaving the rest of the screen intact
+    - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5_
+
+  - [x] 11.2 Write property test for Property 10 (render + activation half)
+    - **Property 10: The Reservation_Action renders exactly when a dining URL is present, and opens that exact URL**
+    - **Validates: Requirements 6.5, 6.6, 6.7, 7.1, 7.2, 7.4**
+    - Over arbitrary `(category, diningUrl)` combinations, assert the button renders iff `category === 'Restaurant' && diningUrl` is a non-empty string, and that activating it calls `Linking.openURL` with exactly that string; fast-check, min 100 runs, tagged `// Feature: restaurant-menu-display, Property 10: ...`
+
+  - [x] 11.3 Write example tests for the failure path and absence cases
+    - A rejected `Linking.openURL` surfaces `experience-reservation-error` while the rest of the screen (e.g. Menu_Summary_Card, Get_Directions) stays rendered
+    - No button for a non-restaurant, for a restaurant with no `diningUrl`, and on a detail load error
+    - _Requirements: 7.3, 7.4_
+
+- [x] 12. Final checkpoint - Ensure all tests pass
+  - Ensure all tests pass (backend + mobile), ask the user if questions arise.
+
 ## Notes
 
 - Tasks marked with `*` are optional and can be skipped for faster MVP
 - Each task references specific requirements for traceability
 - Checkpoints ensure incremental validation
-- Property tests (fast-check, min 100 runs, tagged `// Feature: restaurant-menu-display, Property {n}: ...`) validate the 9 universal correctness properties; there is exactly one property test per property
+- Property tests (fast-check, min 100 runs, tagged `// Feature: restaurant-menu-display, Property {n}: ...`) validate the 10 universal correctness properties; there is exactly one property test per property
 - Unit/example and integration tests cover the architectural (R2.1, R2.3), styling (R4.7, R5.9), and interaction criteria that are not universally-quantified properties
 - The backend retrieval seam, cache, projection, transport, and `MenuDTO` are reused unchanged; this plan only wires and gates them and adds the mobile UI
+- Tasks 9-12 are a later addition (dining-reservation hand-off, Requirements 6-7) and are architecturally independent of tasks 1-8's menu-retrieval work — they only share the restaurant-category gate and the `ExperienceDetailScreen`. Task 10.1 (seed curation) is manual, human-verified work — no automated scraping or name-based matching is permitted per Requirement 6's rationale.
+- Task 10.1 must be genuinely completed (a real `dining-links.json` populated with verified URLs, or an explicit smaller subset with the rest deferred and stated as such) before 10.2/10.3 are meaningful — do not stub it with placeholder or fabricated URLs.
 
 ## Task Dependency Graph
 
@@ -154,7 +211,12 @@ close to the code they validate.
     { "id": 1, "tasks": ["1.2", "2.1", "4.2", "4.3", "6.2"] },
     { "id": 2, "tasks": ["2.2", "2.3", "2.6", "2.7", "5.1", "6.3"] },
     { "id": 3, "tasks": ["2.4", "2.5", "5.2", "6.4", "7.1"] },
-    { "id": 4, "tasks": ["5.3", "6.5", "7.2"] }
+    { "id": 4, "tasks": ["5.3", "6.5", "7.2"] },
+    { "id": 5, "tasks": ["9.1", "10.1"] },
+    { "id": 6, "tasks": ["9.2", "9.3", "10.2"] },
+    { "id": 7, "tasks": ["9.4", "10.3", "11.1"] },
+    { "id": 8, "tasks": ["11.2", "11.3"] },
+    { "id": 9, "tasks": ["12"] }
   ]
 }
 ```

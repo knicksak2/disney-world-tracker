@@ -133,6 +133,7 @@ describe('addPlannedItem — SQL INSERT persistence regression test', () => {
     applyMigration(memDb, '0027_planned_items_soft_windows.sql');
     applyMigration(memDb, '0028_planned_items_meal_period_snack.sql');
     applyMigration(memDb, '0031_planned_item_reservations.sql');
+    applyMigration(memDb, '0045_trip_walk_wait_weighting.sql');
 
     const { Pool } = memDb.adapters.createPg();
     const rawPool = new Pool() as unknown as DbPool;
@@ -236,6 +237,7 @@ describe('addPlannedItem — SQL INSERT persistence regression test', () => {
     applyMigration(memDb, '0027_planned_items_soft_windows.sql');
     applyMigration(memDb, '0028_planned_items_meal_period_snack.sql');
     applyMigration(memDb, '0031_planned_item_reservations.sql');
+    applyMigration(memDb, '0045_trip_walk_wait_weighting.sql');
 
     const { Pool } = memDb.adapters.createPg();
     const rawPool = new Pool() as unknown as DbPool;

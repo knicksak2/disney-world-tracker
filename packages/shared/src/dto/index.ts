@@ -148,5 +148,9 @@ export type {
   FoodListShareDTO,
 } from './FoodList.js';
 
+export type {
+  ParkLiveEntryDTO,
+  ParkLiveSnapshotDTO,
+} from './ParkLive.js';
 
-
+export type { CurrentWeatherDTO } from './Weather.js';

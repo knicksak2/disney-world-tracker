@@ -71,7 +71,7 @@ jest.mock('../../../api/client', () => {
 // Imports of modules under test (after the mocks above).
 // ---------------------------------------------------------------------------
 
-import FriendsStack from '../../../navigation/FriendsStack';
+import YouAndCrewStack from '../../../navigation/YouAndCrewStack';
 import { apiRequest as mockedApiRequest } from '../../../api/client';
 import { makeStatsResponse } from '../../stats/__testSupport__/statsFixture';
 
@@ -114,7 +114,7 @@ function renderFriendsStack(): ReturnType<typeof render> {
   return render(
     <QueryClientProvider client={client}>
       <NavigationContainer>
-        <FriendsStack />
+        <YouAndCrewStack />
       </NavigationContainer>
     </QueryClientProvider>,
   );

@@ -228,6 +228,11 @@ Adds `source TEXT NOT NULL DEFAULT 'observed' CHECK (source IN ('observed','seed
 
 **Validates: Requirements 18.1, 18.3, 18.4, 18.5, 18.6**
 
+### Property 20: Same-day live wait substitution touches only the current hour, only for today, only when trustworthy
+*For any* Experience and request date: (a) WHEN the request date is NOT the current WDW calendar day, `getDaySnapshot`'s `waits[]` are entirely unaffected by `Live_Service`, regardless of what it would return; (b) WHEN the request date IS today, a fresh (non-stale), `Operating`, numeric live standby wait from `Live_Service` replaces `predictedWaitMinutes` ONLY in the bucket matching the current WDW hour — every other hour bucket for that Experience remains exactly the model/`R4.3`-corrected value it would have been without a `Live_Service` dependency; (c) a stale reading, a non-`Operating` status, an absent `waitMinutes`, or a `Live_Service` failure/timeout all fall back silently to the model value already computed for that hour (best-effort, mirrors R4.4); (d) omitting the `liveService` dependency entirely reproduces the exact pre-Requirement-4.5 snapshot (strictly additive, opt-in by construction).
+
+**Validates: Requirements 4.5**
+
 
 ## Error Handling
 

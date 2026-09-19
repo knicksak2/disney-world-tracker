@@ -178,4 +178,59 @@ describe('Trips_List_Screen (R16.6, R16.7, R16.8, R16.9)', () => {
       expect(screen.getByTestId('trip-detail-loading')).toBeTruthy();
     });
   });
+
+  test('renders countdown badge for upcoming trips and status badges for active and completed trips', async () => {
+    const upcomingTrip: TripDTO = {
+      id: 'trip-upcoming-1',
+      name: 'Summer Vacation',
+      description: '',
+      startDate: '2099-07-01',
+      endDate: '2099-07-10',
+      status: 'upcoming',
+      createdAt: '2024-04-01T12:00:00Z',
+      resorts: [],
+      foodLists: [],
+    };
+    const pastTrip: TripDTO = {
+      id: 'trip-past-1',
+      name: 'Winter Holiday',
+      description: '',
+      startDate: '2020-01-01',
+      endDate: '2020-01-05',
+      status: 'past',
+      createdAt: '2020-01-01T12:00:00Z',
+      resorts: [],
+      foodLists: [],
+    };
+
+    apiRequestMock.mockImplementation(async (_method, path) => {
+      if (path === '/me/trips') {
+        return [
+          { status: 'active', trips: [ACTIVE_TRIP] },
+          { status: 'upcoming', trips: [upcomingTrip] },
+          { status: 'past', trips: [pastTrip] },
+        ];
+      }
+      if (path === '/resorts') {
+        return { resorts: [] };
+      }
+      return [];
+    });
+
+    renderTripsStack();
+
+    expect(
+      await screen.findByTestId(`trips-trip-active-${ACTIVE_TRIP.id}`),
+    ).toBeTruthy();
+    expect(
+      await screen.findByTestId(`trips-trip-countdown-${upcomingTrip.id}`),
+    ).toBeTruthy();
+    expect(
+      await screen.findByTestId(`trips-trip-past-${pastTrip.id}`),
+    ).toBeTruthy();
+    expect(screen.getByText('UPCOMING')).toBeTruthy();
+    expect(screen.getByText('Summer Vacation')).toBeTruthy();
+    expect(screen.getByText('Winter Holiday')).toBeTruthy();
+  });
 });
+

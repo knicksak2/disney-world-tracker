@@ -1,18 +1,15 @@
 /**
- * Tests for ProfileScreen food lists entry point (food-lists Requirement 12).
+ * Tests for trimmed ProfileScreen identity block (Requirements 7.3, 7.4).
  *
  * Validates:
- *   - Requirement 12.1: "View your food lists" button on ProfileScreen navigates to MyFoodListsScreen
- *   - Requirement 12.2: Button renders and is functional regardless of owned/saved list count
- *   - Requirement 12.3: Only navigates to MyFoodLists (no alternate routes)
+ *   - Renders avatar placeholder / preset and display name
+ *   - Tapping "Edit display name" opens inline editor
+ *   - Validates display name and persists via PATCH /me/profile
  */
+
 import React from 'react';
-import { View } from 'react-native';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import {
-  NavigationContainer,
-  createNavigationContainerRef,
-} from '@react-navigation/native';
+import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
@@ -41,7 +38,6 @@ jest.mock('../../env/notifications', () => ({
 import ProfileScreen from '../ProfileScreen';
 import { apiRequest as mockedApiRequest } from '../../api/client';
 import { useSessionStore } from '../../state/sessionStore';
-import type { FoodListCollectionDTO } from '@dwt/shared';
 
 const apiRequestMock = mockedApiRequest as jest.MockedFunction<typeof mockedApiRequest>;
 
@@ -51,136 +47,82 @@ function makeQueryClient(): QueryClient {
 
 const Stack = createNativeStackNavigator();
 
-function DummyMyFoodListsScreen(): JSX.Element {
-  return <View testID="my-food-lists-target" />;
-}
-
-describe('ProfileScreen — Food Lists Entry Point (Requirement 12)', () => {
+describe('ProfileScreen — Identity Block (Requirements 7.3, 7.4)', () => {
   beforeEach(() => {
     apiRequestMock.mockReset();
     useSessionStore.setState({ token: 'token-abc', hydrated: true });
   });
 
-  function setupApi(collection?: FoodListCollectionDTO): void {
+  function setupApi(displayName = 'Mickey'): void {
     apiRequestMock.mockImplementation(async (_method: string, path: string) => {
       if (path === '/me') {
         return {
           user: { id: 'u1', email: 'u@x.test' },
-          profile: { displayName: 'Mickey', avatarPreset: null },
+          profile: { displayName, avatarPreset: null },
         } as never;
       }
       if (path === '/users/u1/profile') {
         return {
           userId: 'u1',
-          displayName: 'Mickey',
+          displayName,
           avatarPreset: null,
-          overallCompletionPercent: 50.0,
         } as never;
       }
-      if (path === '/me/pins') {
+      if (path === '/me/profile') {
         return {
-          pins: [],
-          tierSummary: [],
-          totalUnlocked: 0,
-          totalPins: 0,
-          overallPercent: 0,
+          userId: 'u1',
+          displayName: 'Mickey Mouse',
+          avatarPreset: null,
         } as never;
-      }
-      if (path === '/me/food-lists/collection') {
-        return (collection ?? { owned: [], saved: [] }) as never;
       }
       return {} as never;
     });
   }
 
-  it('renders "View your food lists" button with testID profile-view-food-lists when user has zero lists (Requirement 12.1, 12.2)', async () => {
-    setupApi({ owned: [], saved: [] });
+  it('renders user display name and avatar placeholder', async () => {
+    setupApi('Donald');
 
     render(
       <QueryClientProvider client={makeQueryClient()}>
         <NavigationContainer>
           <Stack.Navigator screenOptions={{ headerShown: false }}>
             <Stack.Screen name="ProfileMain" component={ProfileScreen} />
-            <Stack.Screen name="MyFoodLists" component={DummyMyFoodListsScreen} />
           </Stack.Navigator>
         </NavigationContainer>
       </QueryClientProvider>,
     );
 
-    const btn = await screen.findByTestId('profile-view-food-lists');
-    expect(btn).toBeTruthy();
-    expect(screen.getByText('View your food lists')).toBeTruthy();
-    expect(screen.getByText('Food lists')).toBeTruthy();
+    const nameText = await screen.findByTestId('profile-display-name');
+    expect(nameText).toHaveTextContent('Donald');
+    expect(screen.getByTestId('profile-avatar-placeholder')).toBeTruthy();
   });
 
-  it('renders "View your food lists" button identically when user has multiple owned and saved lists (Requirement 12.2)', async () => {
-    setupApi({
-      owned: [
-        {
-          id: 'list-1',
-          name: 'My Snacks',
-          visibility: 'private',
-          itemCount: 5,
-          ownerDisplayName: 'Mickey',
-          ownerId: 'u1',
-          likeCount: 0,
-          createdAt: '2026-01-01T00:00:00.000Z',
-          updatedAt: '2026-01-01T00:00:00.000Z',
-        },
-      ],
-      saved: [
-        {
-          id: 'list-2',
-          name: 'Favorite Drinks',
-          visibility: 'public',
-          itemCount: 3,
-          ownerDisplayName: 'Goofy',
-          available: true,
-          ownerId: 'u2',
-          likeCount: 2,
-          createdAt: '2026-01-01T00:00:00.000Z',
-          updatedAt: '2026-01-01T00:00:00.000Z',
-        },
-      ],
-    });
+  it('edits and saves display name via PATCH /me/profile', async () => {
+    setupApi('Mickey');
 
     render(
       <QueryClientProvider client={makeQueryClient()}>
         <NavigationContainer>
           <Stack.Navigator screenOptions={{ headerShown: false }}>
             <Stack.Screen name="ProfileMain" component={ProfileScreen} />
-            <Stack.Screen name="MyFoodLists" component={DummyMyFoodListsScreen} />
           </Stack.Navigator>
         </NavigationContainer>
       </QueryClientProvider>,
     );
 
-    const btn = await screen.findByTestId('profile-view-food-lists');
-    expect(btn).toBeTruthy();
-    expect(screen.getByText('View your food lists')).toBeTruthy();
-  });
+    const editBtn = await screen.findByTestId('edit-display-name-button');
+    fireEvent.press(editBtn);
 
-  it('navigates to MyFoodLists when "View your food lists" is pressed (Requirement 12.1)', async () => {
-    setupApi({ owned: [], saved: [] });
-    const navRef = createNavigationContainerRef();
+    const input = screen.getByTestId('edit-display-name-input');
+    fireEvent.changeText(input, 'Mickey Mouse');
 
-    render(
-      <QueryClientProvider client={makeQueryClient()}>
-        <NavigationContainer ref={navRef}>
-          <Stack.Navigator screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="ProfileMain" component={ProfileScreen} />
-            <Stack.Screen name="MyFoodLists" component={DummyMyFoodListsScreen} />
-          </Stack.Navigator>
-        </NavigationContainer>
-      </QueryClientProvider>,
-    );
-
-    const btn = await screen.findByTestId('profile-view-food-lists');
-    fireEvent.press(btn);
+    const saveBtn = screen.getByTestId('save-display-name-button');
+    fireEvent.press(saveBtn);
 
     await waitFor(() => {
-      expect(navRef.getCurrentRoute()?.name).toBe('MyFoodLists');
+      expect(apiRequestMock).toHaveBeenCalledWith('PATCH', '/me/profile', {
+        displayName: 'Mickey Mouse',
+      });
     });
-    expect(screen.getByTestId('my-food-lists-target')).toBeTruthy();
   });
 });

@@ -65,7 +65,6 @@ import {
 } from '../../navigation/tripsListNotice';
 import { theme } from '../../theme/theme';
 import {
-  Badge,
   Card,
   EmptyState,
   GradientHeader,
@@ -73,6 +72,9 @@ import {
   ScreenContainer,
   SecondaryButton,
 } from '../../theme/components';
+import AvatarChip from '../navigation/AvatarChip';
+import NotificationBell from '../../features/notifications/NotificationBell';
+import { calculateCountdownDays } from '../home/countdown';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -301,6 +303,12 @@ export default function TripsListScreen({ navigation }: Props): JSX.Element {
           title="Trips"
           subtitle="Plan and log your park days together."
           icon="map"
+          right={
+            <View style={styles.headerRight}>
+              <NotificationBell tintColor={theme.color.textOnPrimary} />
+              <AvatarChip tintColor={theme.color.textOnPrimary} />
+            </View>
+          }
         />
         <View style={styles.center} testID="trips-loading">
           <ActivityIndicator color={theme.color.primary} />
@@ -320,6 +328,12 @@ export default function TripsListScreen({ navigation }: Props): JSX.Element {
           title="Trips"
           subtitle="Plan and log your park days together."
           icon="map"
+          right={
+            <View style={styles.headerRight}>
+              <NotificationBell tintColor={theme.color.textOnPrimary} />
+              <AvatarChip tintColor={theme.color.textOnPrimary} />
+            </View>
+          }
         />
         <View style={styles.center} testID="trips-error">
           <EmptyState
@@ -352,12 +366,16 @@ export default function TripsListScreen({ navigation }: Props): JSX.Element {
         subtitle="Plan and log your park days together."
         icon="map"
         right={
-          <PrimaryButton
-            label="Create"
-            icon="add-outline"
-            onPress={openCreate}
-            testID="trips-create"
-          />
+          <View style={styles.headerRight}>
+            <NotificationBell tintColor={theme.color.textOnPrimary} />
+            <AvatarChip tintColor={theme.color.textOnPrimary} />
+            <PrimaryButton
+              label="Create"
+              icon="add-outline"
+              onPress={openCreate}
+              testID="trips-create"
+            />
+          </View>
         }
       />
 
@@ -518,21 +536,68 @@ function TripRow({
   readonly onPress: () => void;
 }): JSX.Element {
   const statusMeta = STATUS_META[trip.status];
+  const daysLeft =
+    trip.status === 'upcoming'
+      ? calculateCountdownDays(trip.startDate)
+      : 0;
+
   return (
     <Card
       accentColor={statusMeta.color}
       style={styles.row}
       onPress={onPress}
       testID={`trips-trip-${trip.id}`}
+      accessibilityRole="button"
+      accessibilityLabel={`${trip.name}, ${statusMeta.label}, ${formatDateRange(trip)}`}
     >
       <View style={styles.rowMain}>
+        {trip.status === 'upcoming' ? (
+          <View
+            style={styles.countdownCircle}
+            testID={`trips-trip-countdown-${trip.id}`}
+          >
+            <Text style={styles.countdownNum}>{daysLeft}</Text>
+            <Text style={styles.countdownUnit}>
+              {daysLeft === 1 ? 'DAY' : 'DAYS'}
+            </Text>
+          </View>
+        ) : trip.status === 'active' ? (
+          <View
+            style={[styles.countdownCircle, styles.activeCircle]}
+            testID={`trips-trip-active-${trip.id}`}
+          >
+            <Ionicons name="sparkles" size={18} color="#f6c343" />
+            <Text style={styles.countdownUnit}>NOW</Text>
+          </View>
+        ) : (
+          <View
+            style={[styles.countdownCircle, styles.pastCircle]}
+            testID={`trips-trip-past-${trip.id}`}
+          >
+            <Ionicons name="checkmark-done" size={18} color="#7e57c2" />
+            <Text style={[styles.countdownUnit, styles.pastUnit]}>PAST</Text>
+          </View>
+        )}
+
         <View style={styles.rowIdentity}>
+          <Text style={[styles.rowTag, { color: statusMeta.color }]}>
+            {statusMeta.label.toUpperCase()}
+          </Text>
           <Text style={styles.rowName} numberOfLines={1}>
             {trip.name}
           </Text>
-          <Text style={styles.rowDates}>{formatDateRange(trip)}</Text>
+          <Text style={styles.rowDates} numberOfLines={1}>
+            {formatDateRange(trip)}
+          </Text>
         </View>
-        <Badge label={statusMeta.label} color={statusMeta.color} />
+
+        <View style={styles.arrowWrap}>
+          <Ionicons
+            name="chevron-forward"
+            size={18}
+            color={theme.color.primary}
+          />
+        </View>
       </View>
     </Card>
   );
@@ -778,24 +843,70 @@ const styles = StyleSheet.create({
   },
   row: {
     marginBottom: theme.spacing.md,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#ebdff8',
+    padding: 12,
   },
   rowMain: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: theme.spacing.md,
+    gap: 12,
   },
   rowIdentity: {
-    flexShrink: 1,
-    gap: theme.spacing.xs,
+    flex: 1,
+    gap: 2,
+  },
+  rowTag: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+    marginBottom: 2,
   },
   rowName: {
-    ...theme.typography.subtitle,
+    fontSize: 15,
+    fontWeight: '800',
     color: theme.color.textPrimary,
   },
   rowDates: {
-    ...theme.typography.meta,
+    fontSize: 11.5,
     color: theme.color.textSecondary,
+    marginTop: 1,
+  },
+  arrowWrap: {
+    paddingLeft: 4,
+  },
+  countdownCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: '#3b1d60',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 2,
+  },
+  countdownNum: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#f6c343',
+    lineHeight: 20,
+  },
+  countdownUnit: {
+    fontSize: 8.5,
+    fontWeight: '800',
+    color: 'rgba(255, 255, 255, 0.9)',
+    letterSpacing: 0.5,
+  },
+  activeCircle: {
+    backgroundColor: '#3b1d60',
+  },
+  pastCircle: {
+    backgroundColor: '#f1ebf9',
+    borderWidth: 1,
+    borderColor: '#ebdff8',
+  },
+  pastUnit: {
+    color: '#7e57c2',
   },
   modalBackdrop: {
     flex: 1,
@@ -848,5 +959,10 @@ const styles = StyleSheet.create({
   flexBtn: {
     flexGrow: 1,
     flexBasis: 0,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
   },
 });

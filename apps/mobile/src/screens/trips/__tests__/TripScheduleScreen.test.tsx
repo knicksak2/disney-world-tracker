@@ -8,11 +8,13 @@ import { render, screen, waitFor, fireEvent, within } from '@testing-library/rea
 
 jest.setTimeout(15000);
 
-import { PlannedItemDTO, TripOptimizationResult } from '@dwt/shared';
+import { ExperienceDTO, PlannedItemDTO, TripOptimizationResult } from '@dwt/shared';
 
 import TripScheduleScreen, {
   getMealWindowLabel,
   getMealServiceWindowLabel,
+  getTodayWDW,
+  getWDWNowMinutes,
 } from '../TripScheduleScreen';
 import { apiRequest as mockedApiRequest } from '../../../api/client';
 
@@ -53,6 +55,7 @@ const PLANNED_ITEM: PlannedItemDTO = {
   priority: 2,
   itemType: 'experience',
   durationMinutes: 15,
+  catalogDurationMinutes: null,
   windowStartMinutes: null,
   windowEndMinutes: null,
   mealPeriod: null,
@@ -66,7 +69,7 @@ const PLANNED_ITEM: PlannedItemDTO = {
   partySize: null,
 };
 
-function renderScreen() {
+function renderScreen(navOverrides?: Record<string, any>) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
@@ -74,6 +77,12 @@ function renderScreen() {
   const navigation = {
     navigate: jest.fn(),
     goBack: jest.fn(),
+    replace: jest.fn(),
+    getState: jest.fn(() => ({
+      index: 0,
+      routes: [{ name: 'TripSchedule', params: { tripId: TRIP_ID } }],
+    })),
+    ...navOverrides,
   } as any;
 
   const route = {
@@ -82,11 +91,13 @@ function renderScreen() {
     params: { tripId: TRIP_ID },
   } as any;
 
-  return render(
+  const rendered = render(
     <QueryClientProvider client={queryClient}>
       <TripScheduleScreen navigation={navigation} route={route} />
     </QueryClientProvider>,
   );
+
+  return Object.assign(rendered, { navigation });
 }
 
 describe('TripScheduleScreen', () => {
@@ -199,6 +210,44 @@ describe('TripScheduleScreen', () => {
     ).toBe(false);
   });
 
+  it('shows the curated catalog duration on the duration pill when there is no user override (R11.6, Property 23)', async () => {
+    apiRequestMock.mockImplementation(async (method, path) => {
+      if (method === 'GET' && path === `/trips/${TRIP_ID}`) {
+        return {
+          id: TRIP_ID,
+          name: 'Disney Trip',
+          startDate: '2026-10-01',
+          endDate: '2026-10-03',
+          status: 'upcoming',
+          role: 'organizer',
+        } as any;
+      }
+      if (method === 'GET' && path === `/trips/${TRIP_ID}/planned-items`) {
+        // No user-set durationMinutes, but a curated catalogDurationMinutes —
+        // the pill must show 12m, never the flat 15m fallback. A plannedTime
+        // is required so the item renders in the scheduled timeline (where
+        // the duration pill lives), not the unscheduled-items card.
+        return [
+          {
+            ...PLANNED_ITEM,
+            plannedDate: '2026-10-01',
+            plannedTime: '2026-10-01T14:00:00.000Z',
+            durationMinutes: null,
+            catalogDurationMinutes: 12,
+          },
+        ] as any;
+      }
+      throw new Error(`Unexpected request: ${method} ${path}`);
+    });
+
+    renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByText('🎢 12m duration')).toBeTruthy();
+    });
+    expect(screen.queryByText('🎢 15m duration')).toBeNull();
+  });
+
   it('shows the not-optimized notice and omits the wait pill for a scheduled but unoptimized day (R8.3)', async () => {
     apiRequestMock.mockImplementation(async (method, path) => {
       if (method === 'GET' && path === `/trips/${TRIP_ID}`) {
@@ -269,6 +318,89 @@ describe('TripScheduleScreen', () => {
     await waitFor(() => {
       expect(screen.getByText('Day 2 Ride')).toBeTruthy();
     });
+  });
+
+  it('does not bleed a stale optimize result from one date into a subsequently selected date', async () => {
+    apiRequestMock.mockImplementation(async (method, path, body) => {
+      if (method === 'GET' && path === `/trips/${TRIP_ID}`) {
+        return {
+          id: TRIP_ID,
+          name: 'Disney Trip',
+          startDate: '2026-10-01',
+          endDate: '2026-10-02',
+        } as any;
+      }
+      if (method === 'GET' && path === `/trips/${TRIP_ID}/planned-items`) {
+        return [
+          {
+            ...PLANNED_ITEM,
+            id: 'item-day1',
+            plannedDate: '2026-10-01',
+            plannedTime: '2026-10-01T13:00:00.000Z',
+            experienceName: 'Day 1 Ride',
+          },
+          {
+            ...PLANNED_ITEM,
+            id: 'item-day2',
+            plannedDate: '2026-10-02',
+            plannedTime: '2026-10-02T13:00:00.000Z',
+            experienceName: 'Day 2 Ride',
+          },
+        ] as any;
+      }
+      if (method === 'POST' && path === `/trips/${TRIP_ID}/schedule/optimize`) {
+        expect((body as any).date).toBe('2026-10-01');
+        return {
+          items: [
+            {
+              plannedItemId: 'item-day1',
+              suggestedArrival: '2026-10-01T13:00:00.000Z',
+              predictedWaitMinutes: 5,
+              travelFromPrev: null,
+            },
+          ],
+          totalWaitMinutes: 5,
+          totalWalkMinutes: 0,
+          unfittedItemIds: [],
+          warnings: [],
+        };
+      }
+      throw new Error(`Unexpected request: ${method} ${path}`);
+    });
+
+    renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByText('Day 1 Ride')).toBeTruthy();
+    });
+
+    // Day 1 starts not-optimized (no persisted result yet).
+    expect(screen.getByTestId('not-optimized-notice')).toBeTruthy();
+
+    // Optimize Day 1 — a fresh optResult now sits in optimizeMutation.data,
+    // and the day's wait pill switches from persisted-null to the fresh 5-min
+    // optimize result.
+    fireEvent.press(screen.getByText('✨ Optimize'));
+
+    await waitFor(() => {
+      expect(screen.getByText(/5 min/)).toBeTruthy();
+    });
+    expect(screen.queryByTestId('not-optimized-notice')).toBeNull();
+
+    // Switch to Day 2, which has never been optimized.
+    fireEvent.press(screen.getByTestId('date-pill-2026-10-02'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Day 2 Ride')).toBeTruthy();
+    });
+
+    // Day 2's own item must render (from the persisted/never-optimized path),
+    // not Day 1's stale optimize result: Day 1's item must be gone, Day 2 must
+    // NOT show a 5-min wait pill (that belonged to Day 1's fresh result), and
+    // Day 2 must show its own not-optimized notice.
+    expect(screen.queryByText('Day 1 Ride')).toBeNull();
+    expect(screen.queryByText(/5 min/)).toBeNull();
+    expect(screen.getByTestId('not-optimized-notice')).toBeTruthy();
   });
 
   it('opens inline experience search modal and adds selected experience to date', async () => {
@@ -860,6 +992,8 @@ describe('TripScheduleScreen', () => {
       expect(patchPayload.dayTouringHours['2026-10-01']).toEqual({
         startHour: 9,
         endHour: 21,
+        startMinutes: 540,
+        startMode: 'park_open',
         useEarlyEntry: true,
         useExtendedEvening: true,
         hasAfterHoursTicket: true,
@@ -874,7 +1008,91 @@ describe('TripScheduleScreen', () => {
       expect(optimizePayload.date).toBe('2026-10-01');
       expect(optimizePayload.startHour).toBe(9);
       expect(optimizePayload.endHour).toBe(21);
+      expect(optimizePayload.startMode).toBe('park_open');
+      expect(optimizePayload.startMinutes).toBe(540);
     });
+  });
+
+  it('selects Minimize Waits walk/wait priority and dispatches it on PATCH /trips/:id (R10.1, R10.4)', async () => {
+    let patchPayload: any = null;
+
+    apiRequestMock.mockImplementation(async (method, path, body) => {
+      if (method === 'GET' && path === `/trips/${TRIP_ID}`) {
+        return { id: TRIP_ID, name: 'Disney Trip', startDate: '2026-10-01', walkWaitWeighting: 'balanced' } as any;
+      }
+      if (method === 'GET' && path === `/catalog`) {
+        return { experiences: [] };
+      }
+      if (method === 'GET' && path === `/trips/${TRIP_ID}/planned-items`) {
+        return [PLANNED_ITEM];
+      }
+      if (method === 'PATCH' && path === `/trips/${TRIP_ID}`) {
+        patchPayload = body;
+        return { id: TRIP_ID, name: 'Disney Trip', startDate: '2026-10-01', ...(body as object) } as any;
+      }
+      throw new Error(`Unexpected request: ${method} ${path}`);
+    });
+
+    renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('schedule-settings-btn')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByTestId('schedule-settings-btn'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Settings: Thu, Oct 1')).toBeTruthy();
+    });
+
+    // Balanced is the default and should be visible.
+    expect(screen.getByTestId('walk-wait-weighting-balanced')).toBeTruthy();
+
+    // Select Minimize Waits.
+    fireEvent.press(screen.getByTestId('walk-wait-weighting-minimize_waits'));
+
+    // Save settings
+    fireEvent.press(screen.getByTestId('save-schedule-settings-btn'));
+
+    await waitFor(() => {
+      expect(patchPayload).toBeTruthy();
+      expect(patchPayload.walkWaitWeighting).toBe('minimize_waits');
+    });
+  });
+
+  it('reflects a persisted non-default walk/wait priority from the trip on load (R10.1, R10.4)', async () => {
+    apiRequestMock.mockImplementation(async (method, path) => {
+      if (method === 'GET' && path === `/trips/${TRIP_ID}`) {
+        return { id: TRIP_ID, name: 'Disney Trip', startDate: '2026-10-01', walkWaitWeighting: 'minimize_walking' } as any;
+      }
+      if (method === 'GET' && path === `/catalog`) {
+        return { experiences: [] };
+      }
+      if (method === 'GET' && path === `/trips/${TRIP_ID}/planned-items`) {
+        return [PLANNED_ITEM];
+      }
+      throw new Error(`Unexpected request: ${method} ${path}`);
+    });
+
+    renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('schedule-settings-btn')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByTestId('schedule-settings-btn'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Settings: Thu, Oct 1')).toBeTruthy();
+    });
+
+    // The persisted 'minimize_walking' value should render as the active
+    // chip: optionChipTextActive overrides `color` to theme.color.textOnPrimary,
+    // distinct from the inactive chip's theme.color.textSecondary.
+    const activeLabel = screen.getByText('🚶 Minimize Walking');
+    const inactiveLabel = screen.getByText('⚖️ Balanced');
+    const flatten = (style: unknown) => Object.assign({}, ...(Array.isArray(style) ? style : [style]));
+    expect(flatten(activeLabel.props.style).color).not.toBe(flatten(inactiveLabel.props.style).color);
   });
 
   it('renders distinct per-park operating hours and early entry times for different parks', async () => {
@@ -2819,6 +3037,151 @@ describe('TripScheduleScreen — reservation badges (trip-reservations R4.3, R5.
     expect(screen.getByText('🍽️ 90m dining')).toBeTruthy();
     expect(screen.queryByText(/m break/u)).toBeNull();
   });
+
+  it('sets reservationKind: dining when saving exact time on a restaurant', async () => {
+    let patchPayload: any = null;
+    const RESTAURANT_EXP: ExperienceDTO = {
+      id: 'exp-restaurant',
+      name: 'Skipper Canteen',
+      park: 'Magic Kingdom',
+      category: 'Restaurant',
+      description: '',
+      active: true,
+      imageUrl: null,
+      areaType: 'ThemePark',
+    };
+
+    apiRequestMock.mockImplementation(async (method, path, body) => {
+      if (method === 'GET' && path === `/trips/${TRIP_ID}`) {
+        return {
+          id: TRIP_ID,
+          name: 'Disney Trip',
+          startDate: '2026-10-01',
+          endDate: '2026-10-03',
+          status: 'upcoming',
+          role: 'organizer',
+        } as any;
+      }
+      if (method === 'GET' && path === `/trips/${TRIP_ID}/planned-items`) {
+        return [
+          {
+            ...PLANNED_ITEM,
+            id: 'item-restaurant',
+            experienceId: 'exp-restaurant',
+            experienceName: 'Skipper Canteen',
+            plannedDate: '2026-10-01',
+            plannedTime: null,
+            reservationKind: null,
+          },
+        ] as any;
+      }
+      if (method === 'GET' && String(path).startsWith('/catalog')) {
+        return { experiences: [RESTAURANT_EXP] } as any;
+      }
+      if (method === 'GET' && String(path).startsWith('/crowd-calendar')) {
+        return {} as any;
+      }
+      if (method === 'PATCH' && path === `/trips/${TRIP_ID}/planned-items/item-restaurant`) {
+        patchPayload = body;
+        return { id: 'item-restaurant', reservationKind: 'dining' } as any;
+      }
+      throw new Error(`Unexpected request: ${method} ${path}`);
+    });
+
+    renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByText('Skipper Canteen')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByText('Edit Settings'));
+    await waitFor(() => {
+      expect(screen.getByTestId('timing-mode-exact_time')).toBeTruthy();
+    });
+    fireEvent.press(screen.getByTestId('timing-mode-exact_time'));
+    fireEvent.press(screen.getByText('6:00 PM'));
+    fireEvent.press(screen.getByText('Done'));
+
+    await waitFor(() => {
+      expect(patchPayload).toMatchObject({
+        reservationKind: 'dining',
+        isFixed: true,
+      });
+    });
+  });
+
+  it('clears reservationKind to null when switching a dining reservation to flexible timing', async () => {
+    let patchPayload: any = null;
+    const RESTAURANT_EXP: ExperienceDTO = {
+      id: 'exp-restaurant',
+      name: 'Skipper Canteen',
+      park: 'Magic Kingdom',
+      category: 'Restaurant',
+      description: '',
+      active: true,
+      imageUrl: null,
+      areaType: 'ThemePark',
+    };
+
+    apiRequestMock.mockImplementation(async (method, path, body) => {
+      if (method === 'GET' && path === `/trips/${TRIP_ID}`) {
+        return {
+          id: TRIP_ID,
+          name: 'Disney Trip',
+          startDate: '2026-10-01',
+          endDate: '2026-10-03',
+          status: 'upcoming',
+          role: 'organizer',
+        } as any;
+      }
+      if (method === 'GET' && path === `/trips/${TRIP_ID}/planned-items`) {
+        return [
+          {
+            ...PLANNED_ITEM,
+            id: 'item-restaurant',
+            experienceId: 'exp-restaurant',
+            experienceName: 'Skipper Canteen',
+            plannedDate: '2026-10-01',
+            plannedTime: '2026-10-01T22:00:00.000Z',
+            isFixed: true,
+            reservationKind: 'dining',
+          },
+        ] as any;
+      }
+      if (method === 'GET' && String(path).startsWith('/catalog')) {
+        return { experiences: [RESTAURANT_EXP] } as any;
+      }
+      if (method === 'GET' && String(path).startsWith('/crowd-calendar')) {
+        return {} as any;
+      }
+      if (method === 'PATCH' && path === `/trips/${TRIP_ID}/planned-items/item-restaurant`) {
+        patchPayload = body;
+        return { id: 'item-restaurant', reservationKind: null } as any;
+      }
+      throw new Error(`Unexpected request: ${method} ${path}`);
+    });
+
+    renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByText('Skipper Canteen')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByText('Skipper Canteen'));
+    await waitFor(() => {
+      expect(screen.getByTestId('timing-mode-any_time')).toBeTruthy();
+    });
+    fireEvent.press(screen.getByTestId('timing-mode-any_time'));
+    fireEvent.press(screen.getByText('Done'));
+
+    await waitFor(() => {
+      expect(patchPayload).toMatchObject({
+        reservationKind: null,
+        isFixed: false,
+        plannedTime: null,
+      });
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -2926,5 +3289,402 @@ describe('TripScheduleScreen — shared time wheel (trip-reservations task 8.1)'
     // A touring preference does not need 5-minute steps; reservations do.
     expect(screen.getByTestId('schedule-time-minute-30')).toBeTruthy();
     expect(screen.queryByTestId('schedule-time-minute-25')).toBeNull();
+  });
+
+  describe('Schedule Settings & Intent Presets (R9, Property 20, Task 21)', () => {
+    it('allows selecting Party Mix-in intent preset and dispatches startMode & startMinutes', async () => {
+      let patchPayload: any = null;
+      let optimizePayload: any = null;
+
+      apiRequestMock.mockImplementation(async (method, path, body: any) => {
+        if (method === 'GET' && path === `/trips/${TRIP_ID}`) {
+          return { id: TRIP_ID, name: 'Disney Trip', startDate: '2026-10-01' } as any;
+        }
+        if (method === 'GET' && path === `/trips/${TRIP_ID}/planned-items`) {
+          return [] as any;
+        }
+        if (method === 'PATCH' && path === `/trips/${TRIP_ID}`) {
+          patchPayload = body;
+          return { id: TRIP_ID, name: 'Disney Trip', startDate: '2026-10-01', dayTouringHours: body.dayTouringHours } as any;
+        }
+        if (method === 'POST' && path === `/trips/${TRIP_ID}/schedule/optimize`) {
+          optimizePayload = body;
+          return { items: [], totalWaitMinutes: 0, totalWalkMinutes: 0, unfittedItemIds: [], warnings: [] };
+        }
+        if (method === 'GET' && String(path).startsWith('/catalog')) {
+          return { experiences: [] } as any;
+        }
+        throw new Error(`Unexpected request: ${method} ${path}`);
+      });
+
+      renderScreen();
+
+      await waitFor(() => {
+        expect(screen.getByTestId('schedule-settings-btn')).toBeTruthy();
+      });
+
+      // Open Settings
+      fireEvent.press(screen.getByTestId('schedule-settings-btn'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('arrival-mode-party-mix-in')).toBeTruthy();
+      });
+
+      // Select Party Mix-in
+      fireEvent.press(screen.getByTestId('arrival-mode-party-mix-in'));
+
+      // Save settings
+      fireEvent.press(screen.getByTestId('save-schedule-settings-btn'));
+
+      await waitFor(() => {
+        expect(patchPayload).toBeTruthy();
+        expect(patchPayload.dayTouringHours['2026-10-01']).toMatchObject({
+          startHour: 16,
+          startMinutes: 960,
+          startMode: 'party_mix_in',
+        });
+      });
+
+      // Tap Optimize
+      fireEvent.press(screen.getByText('✨ Optimize'));
+
+      await waitFor(() => {
+        expect(optimizePayload).toBeTruthy();
+        expect(optimizePayload.date).toBe('2026-10-01');
+        expect(optimizePayload.startHour).toBe(16);
+        expect(optimizePayload.startMinutes).toBe(960);
+        expect(optimizePayload.startMode).toBe('party_mix_in');
+      });
+    });
+
+    it('allows selecting Custom Time with TimeWheelPicker minute precision and persists selection', async () => {
+      let patchPayload: any = null;
+      let optimizePayload: any = null;
+
+      apiRequestMock.mockImplementation(async (method, path, body: any) => {
+        if (method === 'GET' && path === `/trips/${TRIP_ID}`) {
+          return { id: TRIP_ID, name: 'Disney Trip', startDate: '2026-10-01' } as any;
+        }
+        if (method === 'GET' && path === `/trips/${TRIP_ID}/planned-items`) {
+          return [] as any;
+        }
+        if (method === 'PATCH' && path === `/trips/${TRIP_ID}`) {
+          patchPayload = body;
+          return { id: TRIP_ID, name: 'Disney Trip', startDate: '2026-10-01', dayTouringHours: body.dayTouringHours } as any;
+        }
+        if (method === 'POST' && path === `/trips/${TRIP_ID}/schedule/optimize`) {
+          optimizePayload = body;
+          return { items: [], totalWaitMinutes: 0, totalWalkMinutes: 0, unfittedItemIds: [], warnings: [] };
+        }
+        if (method === 'GET' && String(path).startsWith('/catalog')) {
+          return { experiences: [] } as any;
+        }
+        throw new Error(`Unexpected request: ${method} ${path}`);
+      });
+
+      renderScreen();
+
+      await waitFor(() => {
+        expect(screen.getByTestId('schedule-settings-btn')).toBeTruthy();
+      });
+
+      // Open Settings
+      fireEvent.press(screen.getByTestId('schedule-settings-btn'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('arrival-mode-custom')).toBeTruthy();
+      });
+
+      // Select Custom Time
+      fireEvent.press(screen.getByTestId('arrival-mode-custom'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('custom-start-time-picker-container')).toBeTruthy();
+      });
+
+      // Select 10:45 AM via TimeWheelPicker
+      fireEvent.press(screen.getByTestId('custom-start-time-hour-10'));
+      fireEvent.press(screen.getByTestId('custom-start-time-minute-45'));
+      fireEvent.press(screen.getByTestId('custom-start-time-meridiem-AM'));
+
+      // Save settings
+      fireEvent.press(screen.getByTestId('save-schedule-settings-btn'));
+
+      await waitFor(() => {
+        expect(patchPayload).toBeTruthy();
+        expect(patchPayload.dayTouringHours['2026-10-01']).toMatchObject({
+          startHour: 10,
+          startMinutes: 645,
+          startMode: 'custom',
+        });
+      });
+
+      // Tap Optimize
+      fireEvent.press(screen.getByText('✨ Optimize'));
+
+      await waitFor(() => {
+        expect(optimizePayload).toBeTruthy();
+        expect(optimizePayload.date).toBe('2026-10-01');
+        expect(optimizePayload.startHour).toBe(10);
+        expect(optimizePayload.startMinutes).toBe(645);
+        expect(optimizePayload.startMode).toBe('custom');
+      });
+    });
+
+    it('displays touring start mode indicator badge on today and supports Right Now preset', async () => {
+      const todayWDW = getTodayWDW();
+      let patchPayload: any = null;
+      let optimizePayload: any = null;
+
+      apiRequestMock.mockImplementation(async (method, path, body: any) => {
+        if (method === 'GET' && path === `/trips/${TRIP_ID}`) {
+          return { id: TRIP_ID, name: 'Disney Trip', startDate: todayWDW } as any;
+        }
+        if (method === 'GET' && path === `/trips/${TRIP_ID}/planned-items`) {
+          return [] as any;
+        }
+        if (method === 'PATCH' && path === `/trips/${TRIP_ID}`) {
+          patchPayload = body;
+          return { id: TRIP_ID, name: 'Disney Trip', startDate: todayWDW, dayTouringHours: body.dayTouringHours } as any;
+        }
+        if (method === 'POST' && path === `/trips/${TRIP_ID}/schedule/optimize`) {
+          optimizePayload = body;
+          return { items: [], totalWaitMinutes: 0, totalWalkMinutes: 0, unfittedItemIds: [], warnings: [] };
+        }
+        if (method === 'GET' && String(path).startsWith('/catalog')) {
+          return { experiences: [] } as any;
+        }
+        throw new Error(`Unexpected request: ${method} ${path}`);
+      });
+
+      renderScreen();
+
+      // Verify touring start indicator badge is visible on today and pressable to open settings modal
+      await waitFor(() => {
+        expect(screen.getByTestId('touring-start-indicator')).toBeTruthy();
+      });
+      expect(screen.getByText(/Touring: (Park Open|Right Now)/)).toBeTruthy();
+
+      // Open Settings via touring-start-indicator badge
+      fireEvent.press(screen.getByTestId('touring-start-indicator'));
+
+      await waitFor(() => {
+        // Right Now option is visible because activeDate === todayWDW
+        expect(screen.getByTestId('arrival-mode-now')).toBeTruthy();
+      });
+
+      // Select Right Now
+      fireEvent.press(screen.getByTestId('arrival-mode-now'));
+
+      // Save settings
+      fireEvent.press(screen.getByTestId('save-schedule-settings-btn'));
+
+      // In patch payload, ephemeral 'now' is sanitized/omitted from DB persistence
+      await waitFor(() => {
+        expect(patchPayload).toBeTruthy();
+        expect(patchPayload.dayTouringHours[todayWDW]?.startMode).toBeUndefined();
+      });
+
+      // On the main screen, the badge reflects 'Right Now' with resolved time
+      await waitFor(() => {
+        expect(screen.getByText(/Touring: Right Now/)).toBeTruthy();
+      });
+
+      // Tap Optimize - dispatches startMode: 'now'
+      fireEvent.press(screen.getByText('✨ Optimize'));
+
+      await waitFor(() => {
+        expect(optimizePayload).toBeTruthy();
+        expect(optimizePayload.date).toBe(todayWDW);
+        expect(optimizePayload.startMode).toBe('now');
+      });
+    });
+
+    it('clamps Custom Time selection to >= roundedNow on today and prevents optimizing in the past (R9.8)', async () => {
+      const todayWDW = getTodayWDW();
+      let patchPayload: any = null;
+      let optimizePayload: any = null;
+
+      apiRequestMock.mockImplementation(async (method, path, body: any) => {
+        if (method === 'GET' && path === `/trips/${TRIP_ID}`) {
+          return { id: TRIP_ID, name: 'Disney Trip', startDate: todayWDW } as any;
+        }
+        if (method === 'GET' && path === `/trips/${TRIP_ID}/planned-items`) {
+          return [] as any;
+        }
+        if (method === 'PATCH' && path === `/trips/${TRIP_ID}`) {
+          patchPayload = body;
+          return { id: TRIP_ID, name: 'Disney Trip', startDate: todayWDW, dayTouringHours: body.dayTouringHours } as any;
+        }
+        if (method === 'POST' && path === `/trips/${TRIP_ID}/schedule/optimize`) {
+          optimizePayload = body;
+          return { items: [], totalWaitMinutes: 0, totalWalkMinutes: 0, unfittedItemIds: [], warnings: [] };
+        }
+        if (method === 'GET' && String(path).startsWith('/catalog')) {
+          return { experiences: [] } as any;
+        }
+        throw new Error(`Unexpected request: ${method} ${path}`);
+      });
+
+      renderScreen();
+
+      await waitFor(() => {
+        expect(screen.getByTestId('schedule-settings-btn')).toBeTruthy();
+      });
+
+      // Open Settings
+      fireEvent.press(screen.getByTestId('schedule-settings-btn'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('arrival-mode-custom')).toBeTruthy();
+      });
+
+      // Select Custom Time
+      fireEvent.press(screen.getByTestId('arrival-mode-custom'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('custom-start-time-picker-container')).toBeTruthy();
+      });
+
+      // Attempt to pick a time in the past: 1:00 AM (60 minutes from midnight)
+      fireEvent.press(screen.getByTestId('custom-start-time-hour-1'));
+      fireEvent.press(screen.getByTestId('custom-start-time-minute-00'));
+      fireEvent.press(screen.getByTestId('custom-start-time-meridiem-AM'));
+
+      // Save settings
+      fireEvent.press(screen.getByTestId('save-schedule-settings-btn'));
+
+      const nowMins = getWDWNowMinutes();
+      const roundedNow = Math.min(Math.ceil(nowMins / 15) * 15, 1439);
+
+      await waitFor(() => {
+        expect(patchPayload).toBeTruthy();
+        // startMinutes is clamped to >= roundedNow
+        expect(patchPayload.dayTouringHours[todayWDW].startMinutes).toBeGreaterThanOrEqual(roundedNow);
+      });
+
+      // Tap Optimize
+      fireEvent.press(screen.getByText('✨ Optimize'));
+
+      await waitFor(() => {
+        expect(optimizePayload).toBeTruthy();
+        expect(optimizePayload.date).toBe(todayWDW);
+        expect(optimizePayload.startMinutes).toBeGreaterThanOrEqual(roundedNow);
+      });
+    });
+  });
+
+  describe('TripScheduleScreen — back navigation (backToHub)', () => {
+    it('replaces to TripDetail when opened directly without TripDetail in the stack', async () => {
+      apiRequestMock.mockImplementation(async (method, path) => {
+        if (method === 'GET' && path === `/trips/${TRIP_ID}`) {
+          return {
+            id: TRIP_ID,
+            name: 'Walt Disney World Vacation',
+            startDate: '2026-10-01',
+            endDate: '2026-10-03',
+            status: 'upcoming',
+            role: 'organizer',
+            resorts: [],
+          } as any;
+        }
+        if (method === 'GET' && path === `/trips/${TRIP_ID}/planned-items`) {
+          return [];
+        }
+        return null as any;
+      });
+
+      const { navigation } = renderScreen({
+        getState: jest.fn(() => ({
+          index: 0,
+          routes: [{ name: 'TripSchedule', params: { tripId: TRIP_ID } }],
+        })),
+      });
+
+      // Subtitle renders trip name once trip data resolves
+      expect(await screen.findByText('Walt Disney World Vacation')).toBeTruthy();
+
+      const backBtn = screen.getByRole('button', { name: /Back to Walt Disney World Vacation/i });
+      fireEvent.press(backBtn);
+
+      expect(navigation.replace).toHaveBeenCalledWith('TripDetail', { tripId: TRIP_ID });
+      expect(navigation.goBack).not.toHaveBeenCalled();
+    });
+
+    it('pops via goBack when TripDetail is the immediate predecessor in the stack', async () => {
+      apiRequestMock.mockImplementation(async (method, path) => {
+        if (method === 'GET' && path === `/trips/${TRIP_ID}`) {
+          return {
+            id: TRIP_ID,
+            name: 'Walt Disney World Vacation',
+            startDate: '2026-10-01',
+            endDate: '2026-10-03',
+            status: 'upcoming',
+            role: 'organizer',
+            resorts: [],
+          } as any;
+        }
+        if (method === 'GET' && path === `/trips/${TRIP_ID}/planned-items`) {
+          return [];
+        }
+        return null as any;
+      });
+
+      const { navigation } = renderScreen({
+        getState: jest.fn(() => ({
+          index: 1,
+          routes: [
+            { name: 'TripDetail', params: { tripId: TRIP_ID } },
+            { name: 'TripSchedule', params: { tripId: TRIP_ID } },
+          ],
+        })),
+      });
+
+      expect(await screen.findByText('Walt Disney World Vacation')).toBeTruthy();
+
+      const backBtn = screen.getByRole('button', { name: /Back to Walt Disney World Vacation/i });
+      fireEvent.press(backBtn);
+
+      expect(navigation.goBack).toHaveBeenCalledTimes(1);
+      expect(navigation.replace).not.toHaveBeenCalled();
+    });
+
+    it('pops via goBack when TripReservations is the immediate predecessor in the stack', async () => {
+      apiRequestMock.mockImplementation(async (method, path) => {
+        if (method === 'GET' && path === `/trips/${TRIP_ID}`) {
+          return {
+            id: TRIP_ID,
+            name: 'Walt Disney World Vacation',
+            startDate: '2026-10-01',
+            endDate: '2026-10-03',
+            status: 'upcoming',
+            role: 'organizer',
+            resorts: [],
+          } as any;
+        }
+        if (method === 'GET' && path === `/trips/${TRIP_ID}/planned-items`) {
+          return [];
+        }
+        return null as any;
+      });
+
+      const { navigation } = renderScreen({
+        getState: jest.fn(() => ({
+          index: 1,
+          routes: [
+            { name: 'TripReservations', params: { tripId: TRIP_ID } },
+            { name: 'TripSchedule', params: { tripId: TRIP_ID } },
+          ],
+        })),
+      });
+
+      expect(await screen.findByText('Walt Disney World Vacation')).toBeTruthy();
+
+      const backBtn = screen.getByRole('button', { name: /Back to Walt Disney World Vacation/i });
+      fireEvent.press(backBtn);
+
+      expect(navigation.goBack).toHaveBeenCalledTimes(1);
+      expect(navigation.replace).not.toHaveBeenCalled();
+    });
   });
 });

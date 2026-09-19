@@ -66,6 +66,7 @@ const plannedItemArb: fc.Arbitrary<PlannedItemDTO> = fc.record({
   priority: fc.integer({ min: 1, max: 3 }),
   itemType: fc.constantFrom('experience', 'break'),
   durationMinutes: fc.option(fc.integer({ min: 1, max: 120 }), { nil: null }),
+  catalogDurationMinutes: fc.option(fc.integer({ min: 1, max: 120 }), { nil: null }),
   windowStartMinutes: fc.option(fc.integer({ min: 0, max: 1440 }), { nil: null }),
   windowEndMinutes: fc.option(fc.integer({ min: 0, max: 1440 }), { nil: null }),
   mealPeriod: fc.option(fc.constantFrom('breakfast', 'lunch', 'dinner'), { nil: null }),

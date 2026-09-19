@@ -1,21 +1,18 @@
 import React, { useEffect } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import {
-  createNativeStackNavigator,
-} from '@react-navigation/native-stack';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import type { NavigatorScreenParams } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { badgeDisplayFor, isAvatarPresetId, type ExperienceCategory, type Park } from '@dwt/shared';
+import { useQueryClient } from '@tanstack/react-query';
+import type { AttentionItemRef, ExperienceCategory, Park } from '@dwt/shared';
 
-import { apiRequest, setOnUnauthorizedCallback } from '../api/client';
-import { renderAvatarPreset } from '../avatars/AvatarPresets';
+import { setOnUnauthorizedCallback } from '../api/client';
 import { useSessionStore } from '../state/sessionStore';
-import CatalogStack, { type CatalogStackParamList } from './CatalogStack';
-import FriendsStack, { type FriendsStackParamList } from './FriendsStack';
-import ProfileStack, { type ProfileStackParamList } from './ProfileStack';
+import ExploreStack, { type ExploreStackParamList } from './ExploreStack';
 import TripsStack, { type TripsStackParamList } from './TripsStack';
+import CollectionStack, { type CollectionStackParamList } from './CollectionStack';
+import YouAndCrewStack, { type YouAndCrewStackParamList } from './YouAndCrewStack';
 import HomeScreen from '../screens/home/HomeScreen';
 import LoginScreen from '../screens/LoginScreen';
 import RegisterScreen from '../screens/RegisterScreen';
@@ -23,26 +20,16 @@ import ExperienceDetailScreen from '../screens/catalog/ExperienceDetailScreen';
 import MenuScreen from '../screens/catalog/MenuScreen';
 import ShareComposerScreen from '../screens/share/ShareComposerScreen';
 import FoodListDetailScreen from '../screens/foodLists/FoodListDetailScreen';
-import MyFoodListsScreen from '../screens/foodLists/MyFoodListsScreen';
-import MyFoodHistoryScreen from '../screens/catalog/MyFoodHistoryScreen';
 import FoodListDiscoveryScreen from '../screens/foodLists/FoodListDiscoveryScreen';
-import { AttentionBadge } from '../features/notifications/AttentionBadge';
-import { useAttentionBadge } from '../features/notifications/useAttentionBadge';
+import NotificationCenterScreen from '../screens/notifications/NotificationCenterScreen';
 import { useClaimablePinsBadge } from '../components/pins/useClaimablePinsBadge';
+import MagicFab from '../screens/quickAction/MagicFab';
 
 /**
- * Root navigator for the mobile app.
+ * Root navigator for the mobile app (Tasks 12.1, 12.2, 12.6, Requirements 1.1, 1.2, 1.5, 7.2, 8.2).
  *
- * The navigator picks one of two stacks based on whether a session token
- * is present:
- *
- *   - No token  → AuthStack (Login, Register).
- *   - Token set → MainTabs (Home, Catalog, Trips, Friends, Profile).
- *
- * Switching between the two is driven by the `useSessionStore` selector
- * for `token`. When the API client reports a 401, the registered
- * unauthorized callback clears the token, which re-renders this component
- * and flips us back into the auth stack (R6.10).
+ * AuthStack (Login, Register) when token is null.
+ * MainTabs (Home, Explore, FAB, Trips, Collection) + root modals/detail screens when authenticated.
  */
 
 export type AuthStackParamList = {
@@ -52,63 +39,11 @@ export type AuthStackParamList = {
 
 export type MainTabParamList = {
   Home: undefined;
-  /**
-   * The Catalog tab nests its own native stack (`CatalogStack`). Typing
-   * the param as `NavigatorScreenParams<CatalogStackParamList>` lets
-   * other tabs dispatch a cross-stack navigation into a specific
-   * Catalog screen via `navigation.navigate('Catalog', { screen, params })`.
-   */
-  Catalog: NavigatorScreenParams<CatalogStackParamList> | undefined;
-  /**
-   * The Trips tab nests its own native stack (`TripsStack`) hosting the
-   * `Trips_List_Screen` (`TripsList`, the initial route), the `Trip_Detail_View`
-   * hub and its section screens, and the invite / rode-with deep-link targets.
-   * Selecting the tab reaches the Trips list in a single tap (R17.1, R17.2).
-   * Typed as `NavigatorScreenParams<TripsStackParamList>` (matching the other
-   * nested tabs) so a caller holding the root ref — e.g. the notification tap
-   * handler (task 17.8) — can deep-link a specific Trips route via
-   * `navigate('MainTabs', { screen: 'Trips', params: { screen: 'TripInvite',
-   * params: { tripInviteId } } })`.
-   */
+  Explore: NavigatorScreenParams<ExploreStackParamList> | undefined;
   Trips: NavigatorScreenParams<TripsStackParamList> | undefined;
-  /**
-   * The Friends tab nests its own native stack (`FriendsStack`). Same
-   * `NavigatorScreenParams` shape as the Catalog tab so callers can
-   * jump directly to the search screen via
-   * `navigation.navigate('Friends', { screen: 'FriendsSearch' })`.
-   */
-  Friends: NavigatorScreenParams<FriendsStackParamList> | undefined;
-  /**
-   * The Profile tab nests its own native stack (`ProfileStack`) hosting the
-   * Profile screen (`ProfileMain`, the initial route) and the re-hosted
-   * personal statistics view (`Stats` = the whole `StatsStack`), which is no
-   * longer a top-level tab (R17.1, R17.3). Typing the param as
-   * `NavigatorScreenParams<ProfileStackParamList>` lets callers open the
-   * Profile screen with `{ userId }` — `navigate('Profile', { screen:
-   * 'ProfileMain', params: { userId } })` — or deep-link a Stats detail route
-   * via `navigate('MainTabs', { screen: 'Profile', params: { screen: 'Stats',
-   * params: { screen: 'RatingsDetail' } } })`. Params dispatched to the tab
-   * with no `screen` flow down to `ProfileMain`.
-   */
-  Profile: NavigatorScreenParams<ProfileStackParamList> | undefined;
+  Collection: NavigatorScreenParams<CollectionStackParamList> | undefined;
 };
 
-/**
- * Pre-populated params for the `Share_Composer` (R2.1, R3.2, R3.3).
- *
- * The composer no longer lets the User pick the payload kind or type a raw
- * Experience identifier; instead every `Share_Entry_Point` opens it with a
- * fully derived, read-only payload. The discriminant `kind` selects between
- * the two payload variants:
- *
- *   - `experience` — carries the referenced Experience's id, name, Park, and
- *     Experience_Category, plus the viewer's Rating (whole number 1–10) and
- *     Note (≤2000 chars) when present. The optional `rating`/`note` fields
- *     drive the include/exclude toggles (R2.14).
- *   - `progress` — carries the viewer's overall, per-Park, and
- *     per-Experience_Category completion percentages, each to one decimal
- *     place as displayed on the Progress_Screen (R1.8).
- */
 export type ShareComposerParams =
   | {
       kind: 'experience';
@@ -129,47 +64,16 @@ export type ShareComposerParams =
       kind: 'pinShowcase';
     };
 
-/**
- * Root-level native stack that hosts the authenticated experience.
- *
- * `MainTabs` (the bottom-tab navigator) is the initial route, and
- * `ExperienceDetail` is registered as a sibling screen pushed *above* the
- * tabs. Promoting `ExperienceDetail` to the root stack (rather than nesting
- * it inside the Catalog tab) leaves the originating tab/screen intact
- * underneath, so a back request pops to the exact screen the User came from
- * regardless of which tab they started in. The native header is suppressed
- * (`headerShown: false`) so the screen presents only its themed in-content
- * header.
- */
 export type RootStackParamList = {
-  /**
-   * The bottom-tab navigator. Typed as `NavigatorScreenParams<MainTabParamList>`
-   * (rather than `undefined`) so a caller holding only the root navigation ref
-   * — e.g. the notification tap handler (task 20.1) — can dispatch a single
-   * nested `navigate('MainTabs', { screen: 'Friends', params: { screen:
-   * 'Inbox', … } })` that walks all the way down to the `Inbox` (R10.1).
-   */
   MainTabs: NavigatorScreenParams<MainTabParamList> | undefined;
   ExperienceDetail: { experienceId: string };
-  /**
-   * Dedicated Menu_Screen for a Restaurant_Experience, reachable by tapping
-   * the Menu_Summary_Card on the detail screen (R4.2, R5.8). Registered as a
-   * sibling of `ExperienceDetail` in task 7.1; the param type is declared here
-   * so the card's `navigation.navigate('Menu', { experienceId })` type-checks.
-   */
   Menu: { experienceId: string };
-  /**
-   * Share_Composer, promoted from `FriendsStack` to the root stack and
-   * presented as a modal (R3.2). Hosting it here lets every
-   * `Share_Entry_Point` — the Experience_Detail_View and the Progress_Screen,
-   * both reachable from the root stack — open it with one cross-navigator-safe
-   * `navigate('ShareComposer', params)` call and return via `goBack()`.
-   */
   ShareComposer: ShareComposerParams;
   FoodListDetail: { foodListId: string };
-  MyFoodLists: undefined;
-  MyFoodHistory: undefined;
   FoodListDiscovery: undefined;
+  YouAndCrew: NavigatorScreenParams<YouAndCrewStackParamList> | undefined;
+  NotificationCenter: { focusRef?: AttentionItemRef } | undefined;
+  PinShowcase?: { userId?: string; readOnly?: boolean };
 };
 
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
@@ -185,111 +89,23 @@ function AuthStackNavigator(): JSX.Element {
   );
 }
 
-/**
- * Map each main tab to its Ionicons glyph (filled when focused, outline
- * otherwise). Kept as a module constant so the `screenOptions` callback
- * stays a cheap lookup rather than a per-render branch.
- */
 const TAB_ICONS: Record<
   keyof MainTabParamList,
   { readonly focused: keyof typeof Ionicons.glyphMap; readonly unfocused: keyof typeof Ionicons.glyphMap }
 > = {
   Home: { focused: 'home', unfocused: 'home-outline' },
-  Catalog: { focused: 'compass', unfocused: 'compass-outline' },
+  Explore: { focused: 'compass', unfocused: 'compass-outline' },
   Trips: { focused: 'map', unfocused: 'map-outline' },
-  Friends: { focused: 'people', unfocused: 'people-outline' },
-  Profile: { focused: 'person-circle', unfocused: 'person-circle-outline' },
+  Collection: { focused: 'albums', unfocused: 'albums-outline' },
 };
 
-/**
- * `/me` response shape (subset). Mirrors `MeResponseBody` in
- * `apps/api/src/services/auth/routes.ts`; only the fields the tab icon needs
- * are typed here.
- */
-interface MeResponse {
-  readonly user: { readonly id: string; readonly email: string };
-  readonly profile: {
-    readonly displayName: string;
-    readonly avatarPreset: string | null;
-  };
-}
-
-/**
- * Profile tab icon. When the signed-in user has chosen an avatar preset, the
- * tab shows that avatar (with a tint ring when the tab is focused) so their
- * identity is reflected in the tab bar. Otherwise it falls back to the default
- * person-circle glyph. Reads `/me` via React Query under the shared `['me']`
- * key, so it reuses the same cached response the Profile screen primes.
- *
- * The tab also carries the combined Attention_Badge: the four-domain
- * notification attention count (pending Friend_Requests, Trip_Invites,
- * Rode_With_Tags, and unread Shares) and claimable collectible Pins are combined
- * into a single indicator on the bottom bar to keep navigation uncluttered (R22.5).
- * When the User opens the Profile screen, the counts are presented split between
- * their respective entry controls ("View notifications" and "View your pins").
- * `AttentionBadge` renders nothing while the combined count is zero.
- */
-function ProfileTabIcon({
-  focused,
-  color,
-  size,
-}: {
-  readonly focused: boolean;
-  readonly color: string;
-  readonly size: number;
-}): JSX.Element {
-  const meQuery = useQuery<MeResponse>({
-    queryKey: ['me'],
-    queryFn: () => apiRequest<MeResponse>('GET', '/me'),
-    staleTime: 5 * 60 * 1000,
-  });
-  const { count: notificationCount } = useAttentionBadge();
-  const { count: pinCount } = useClaimablePinsBadge();
-
-  const totalCount = notificationCount + pinCount;
-  const totalDisplay = badgeDisplayFor(totalCount);
-
-  const preset = meQuery.data?.profile.avatarPreset ?? null;
-  const glyphs = TAB_ICONS.Profile;
-
-  const icon = isAvatarPresetId(preset) ? (
-    <View
-      style={[
-        styles.profileAvatar,
-        {
-          width: size + 6,
-          height: size + 6,
-          borderRadius: (size + 6) / 2,
-          borderColor: focused ? color : 'transparent',
-        },
-      ]}
-      testID="profile-tab-avatar"
-    >
-      {renderAvatarPreset(preset, size)}
-    </View>
-  ) : (
-    <Ionicons
-      name={focused ? glyphs.focused : glyphs.unfocused}
-      size={size}
-      color={color}
-    />
-  );
-
-  return (
-    <View style={styles.tabIconContainer}>
-      {icon}
-      <View style={styles.badgeOverlay} pointerEvents="none">
-        <AttentionBadge
-          display={totalDisplay}
-          count={totalCount}
-          testID="profile-tab-badge"
-        />
-      </View>
-    </View>
-  );
+function EmptySlot(): JSX.Element {
+  return <View />;
 }
 
 function MainTabsNavigator(): JSX.Element {
+  const { count: claimableCount } = useClaimablePinsBadge();
+
   return (
     <MainTabs.Navigator
       screenOptions={({ route }) => ({
@@ -297,10 +113,8 @@ function MainTabsNavigator(): JSX.Element {
         tabBarActiveTintColor: '#003a9b',
         tabBarInactiveTintColor: '#6b7280',
         tabBarIcon: ({ focused, color, size }) => {
-          if (route.name === 'Profile') {
-            return <ProfileTabIcon focused={focused} color={color} size={size} />;
-          }
-          const glyphs = TAB_ICONS[route.name];
+          const glyphs = TAB_ICONS[route.name as keyof MainTabParamList];
+          if (!glyphs) return null;
           const name = focused ? glyphs.focused : glyphs.unfocused;
           return <Ionicons name={name} size={size} color={color} />;
         },
@@ -308,43 +122,60 @@ function MainTabsNavigator(): JSX.Element {
     >
       <MainTabs.Screen name="Home" component={HomeScreen} />
       <MainTabs.Screen
-        name="Catalog"
-        component={CatalogStack}
+        name="Explore"
+        component={ExploreStack}
         options={{ headerShown: false }}
         listeners={({ navigation }) => ({
           tabPress: () => {
-            navigation.navigate('Catalog', { screen: 'CatalogList' });
+            navigation.navigate('Explore', { screen: 'CatalogList' });
           },
         })}
+      />
+      <MainTabs.Screen
+        name={'MagicFab' as any}
+        component={EmptySlot}
+        options={{
+          tabBarButton: () => <MagicFab />,
+        }}
+        listeners={{
+          tabPress: (e) => {
+            e.preventDefault();
+          },
+        }}
       />
       <MainTabs.Screen
         name="Trips"
         component={TripsStack}
         options={{ headerShown: false }}
+        listeners={({ navigation }) => ({
+          tabPress: () => {
+            navigation.navigate('Trips', { screen: 'TripsList' });
+          },
+        })}
       />
       <MainTabs.Screen
-        name="Friends"
-        component={FriendsStack}
-        options={{ headerShown: false }}
-      />
-      <MainTabs.Screen
-        name="Profile"
-        component={ProfileStack}
-        options={{ headerShown: false }}
+        name="Collection"
+        component={CollectionStack}
+        options={{
+          headerShown: false,
+          tabBarLabel: 'Vault',
+          ...(claimableCount > 0
+            ? {
+                tabBarBadge: claimableCount > 99 ? '99+' : claimableCount,
+                tabBarBadgeStyle: {
+                  backgroundColor: '#d97706',
+                  color: '#ffffff',
+                  fontSize: 10,
+                  fontWeight: '700',
+                },
+              }
+            : {}),
+        }}
       />
     </MainTabs.Navigator>
   );
 }
 
-/**
- * Authenticated root stack. Hosts `MainTabs` as the initial route and
- * registers `ExperienceDetail` as a sibling screen pushed above the tabs.
- *
- * `ExperienceDetail` is registered with `headerShown: false` so React
- * Navigation renders no native header bar; the screen supplies its own
- * themed header. `MainTabs` is likewise headerless, matching today's
- * behavior.
- */
 function RootStackNavigator(): JSX.Element {
   return (
     <RootStack.Navigator initialRouteName="MainTabs">
@@ -374,44 +205,28 @@ function RootStackNavigator(): JSX.Element {
         options={{ headerShown: false }}
       />
       <RootStack.Screen
-        name="MyFoodLists"
-        component={MyFoodListsScreen}
-        options={{ headerShown: false }}
-      />
-      <RootStack.Screen
-        name="MyFoodHistory"
-        component={MyFoodHistoryScreen}
-        options={{ headerShown: false }}
-      />
-      <RootStack.Screen
         name="FoodListDiscovery"
         component={FoodListDiscoveryScreen}
+        options={{ headerShown: false }}
+      />
+      <RootStack.Screen
+        name="YouAndCrew"
+        component={YouAndCrewStack}
+        options={{ headerShown: false }}
+      />
+      <RootStack.Screen
+        name="NotificationCenter"
+        component={NotificationCenterScreen}
+        options={{ presentation: 'modal', headerShown: false }}
+      />
+      <RootStack.Screen
+        name="PinShowcase"
+        component={require('../screens/profile/PinShowcaseScreen').default}
         options={{ headerShown: false }}
       />
     </RootStack.Navigator>
   );
 }
-
-const styles = StyleSheet.create({
-  profileAvatar: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-    borderWidth: 2,
-  },
-  tabIconContainer: {
-    width: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  // Positions the combined Attention_Badge pill (styled inside `AttentionBadge`) over
-  // the top-right of the Profile tab icon.
-  badgeOverlay: {
-    position: 'absolute',
-    top: -4,
-    right: 4,
-  },
-});
 
 export default function RootNavigator(): JSX.Element {
   const token = useSessionStore((state) => state.token);
@@ -420,16 +235,7 @@ export default function RootNavigator(): JSX.Element {
 
   useEffect(() => {
     setOnUnauthorizedCallback(() => {
-      // Fire and forget — the store handles persistence; the navigator
-      // re-renders once `token` flips to null.
       void clearToken();
-      // Session end: discard every cached server response so no Pending_Item
-      // retrieved during this session (Notification_Center feed items, badge
-      // counts, etc.) leaks into a later session for a different user
-      // (notification-center R11.4–R11.6). Clearing here — the single place the
-      // 401 → session-end flow is centralized — keeps the Notification_Center
-      // hook free of teardown logic that would only run while its screen is
-      // mounted.
       queryClient.clear();
     });
     return () => {

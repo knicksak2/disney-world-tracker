@@ -88,6 +88,9 @@ import { createLiveRepo } from './services/live/repo.js';
 import { createThemeParksLiveClient } from './services/live/themeParksLiveClient.js';
 import { createThemeParksLiveService } from './services/live/themeParksLiveService.js';
 import { createThemeParksDirectory } from './services/live/themeParksDirectory.js';
+import { createParkGuidResolver } from './services/live/parkResolve.js';
+import { createParkLiveCache } from './services/live/parkLiveCache.js';
+import { createParkLiveService } from './services/live/parkLive.js';
 import { createThemeParksClient } from './services/catalog/themeparks.js';
 import { createFacilitiesClient } from './services/catalog/disney/facilitiesClient.js';
 import { createDisneyTransport } from './services/catalog/disney/transport.js';
@@ -466,6 +469,24 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
       themeParksDirectory.resolveEntityId(enterpriseId),
   });
 
+  // --- ParkLiveService wiring (park-wide live waits) -----------------
+  const parkGuidResolver = createParkGuidResolver({
+    client: createThemeParksClient({ baseUrl: config.themeparks.baseUrl }),
+  });
+  const parkLiveCache = createParkLiveCache(redis as never);
+  const parkLiveService = createParkLiveService({
+    client: themeParksLiveClient,
+    cache: parkLiveCache,
+    parkResolver: parkGuidResolver,
+    getExperiencesWithUpstreamIds: (park) =>
+      liveRepo.getExperiencesWithUpstreamIds
+        ? liveRepo.getExperiencesWithUpstreamIds(park)
+        : Promise.resolve([]),
+    getEntityIdMap: () => themeParksDirectory.getEntityIdMap(),
+    resolveEntityId: (enterpriseId) =>
+      themeParksDirectory.resolveEntityId(enterpriseId),
+  });
+
   // --- Disney egress: shared Rate_Limiter + Transport + Facilities_Client ---
   // Every Disney HTTP call (the Catalog_Sync facilities channel + demand-driven
   // Menu_Service reads) must draw from ONE authoritative Request_Budget across
@@ -525,6 +546,7 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
   const predictionService = createPredictionService({
     repo: intelligenceRepo,
     weatherClient,
+    liveService,
   });
   const derivedStatsService = createDerivedStatsService({
     repo: intelligenceRepo,
@@ -607,6 +629,7 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
     intelligence: {
       samplingService,
       predictionService,
+      weatherClient,
       requireSession: sessionMiddleware,
     },
     friends: {
@@ -683,6 +706,10 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
       requireSession: sessionMiddleware,
       emitFoodListShared,
       emitFoodListRoleChanged,
+    },
+    parkLive: {
+      service: parkLiveService,
+      requireSession: sessionMiddleware,
     },
     push: { repo: pushRepo, requireSession: sessionMiddleware },
     notificationPreferences: {

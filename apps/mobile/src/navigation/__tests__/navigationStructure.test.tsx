@@ -143,7 +143,7 @@ jest.mock('@react-navigation/bottom-tabs', () => {
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import RootNavigator from '../RootNavigator';
-import CatalogStack from '../CatalogStack';
+import ExploreStack from '../ExploreStack';
 
 beforeEach(() => {
   mockNavCaptures.length = 0;
@@ -183,22 +183,27 @@ describe('RootStack structure (Requirements 2.1, 2.2, 2.3, 2.5)', () => {
   });
 });
 
-describe('CatalogStack structure (Requirements 2.5)', () => {
-  it('no longer registers ExperienceDetail; CatalogList and DestinationScreen are its screens', () => {
-    render(<CatalogStack />);
+describe('ExploreStack structure (Requirements 2.5)', () => {
+  it('no longer registers ExperienceDetail; CatalogList, DestinationScreen, CrowdCalendar, and LiveWaits are its screens', () => {
+    render(<ExploreStack />);
 
-    const catalogStack = mockNavCaptures.find((capture) =>
+    const exploreStack = mockNavCaptures.find((capture) =>
       capture.screens.some((s) => s.name === 'CatalogList'),
     );
-    expect(catalogStack).toBeDefined();
+    expect(exploreStack).toBeDefined();
 
-    const names = catalogStack?.screens.map((s) => s.name) ?? [];
+    const names = exploreStack?.screens.map((s) => s.name) ?? [];
     expect(names).toContain('CatalogList');
     // ExperienceDetail stays on the root stack, not the Catalog tab stack.
     expect(names).not.toContain('ExperienceDetail');
     // The Level-2 Destination_Screen is registered here (catalog redesign
     // task 11.1) and the CrowdCalendar screen (crowd-calendar feature);
     // CatalogList remains the initial route.
-    expect(names).toEqual(['CatalogList', 'DestinationScreen', 'CrowdCalendar']);
+    expect(names).toEqual([
+      'CatalogList',
+      'DestinationScreen',
+      'CrowdCalendar',
+      'LiveWaits',
+    ]);
   });
 });

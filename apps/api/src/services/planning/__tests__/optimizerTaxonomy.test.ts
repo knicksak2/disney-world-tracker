@@ -330,4 +330,35 @@ describe('optimizerTaxonomy - Property Tests', () => {
       { numRuns: NUM_RUNS },
     );
   });
+
+  // Feature: day-planning-optimization, Property 22: Curated catalog duration overrides the flat ride default
+  it('Property 22: a curated catalogDurationMinutes is never discarded in favor of DEFAULT_RIDE_DUR for ride-like categories', () => {
+    const rideLikeCategoryArb = fc.constantFrom<'Ride' | 'Character_Meet'>('Ride', 'Character_Meet');
+
+    fc.assert(
+      fc.property(
+        rideLikeCategoryArb,
+        fc.option(fc.integer({ min: 1, max: 180 }), { nil: null }),
+        fc.option(fc.integer({ min: 1, max: 180 }), { nil: null }),
+        (category, userDuration, catalogDuration) => {
+          const item = baseItem({
+            category,
+            durationMinutes: userDuration,
+            catalogDurationMinutes: catalogDuration,
+          });
+
+          const resolved = resolveDefaultDuration(item);
+
+          if (userDuration !== null) {
+            expect(resolved).toBe(userDuration);
+          } else if (catalogDuration !== null) {
+            expect(resolved).toBe(catalogDuration);
+          } else {
+            expect(resolved).toBe(DEFAULT_RIDE_DUR);
+          }
+        },
+      ),
+      { numRuns: NUM_RUNS },
+    );
+  });
 });

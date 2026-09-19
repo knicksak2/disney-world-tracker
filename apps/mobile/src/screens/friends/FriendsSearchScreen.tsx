@@ -353,7 +353,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.lg,
     paddingTop: theme.spacing.md,
     paddingBottom: theme.spacing.sm,
-    marginTop: -theme.layout.headerOverlap,
     gap: theme.spacing.sm,
   },
   searchWrap: {

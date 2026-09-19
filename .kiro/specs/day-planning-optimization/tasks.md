@@ -316,6 +316,104 @@ Implementation is **TypeScript**. It reuses `experiences.latitude/longitude` for
     - Verify ExperiencePicker forwards free-text search queries to the enhanced catalog endpoint without client-side text filtering
     - _Requirements: 4.16_
 
+- [x] 21. Intent-Based Touring Arrival and Same-Day Live Optimization
+  - [x] 21.1 Spec amendments
+    - Add Requirement 9 to `requirements.md`, Property 20 to `design.md`, Task 21 to `tasks.md`, and Wave 15 to Task Dependency Graph.
+    - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5, 9.6, 9.7_
+  - [x] 21.2 Shared contracts update (`packages/shared/src/trips.ts`)
+    - Extend `dayTouringHoursSchema` with `startMinutes?: number` and `startMode?: 'park_open' | 'party_mix_in' | 'custom'`.
+    - Extend `tripOptimizationInputSchema` with `startMinutes?: number` and `startMode?: 'park_open' | 'party_mix_in' | 'now' | 'custom'`.
+    - Add schema tests verifying valid/invalid inputs for both schemas.
+    - _Requirements: 9.1, 9.2, 9.7_
+  - [x] 21.3 Optimizer engine update (`apps/api/src/services/planning/optimizer.ts`)
+    - Add `startMinutes?: number` to `OptimizeInput`. In `simulate()`, anchor earliest arrival `startMins` to `input.startMinutes` when present.
+    - Add Property 20 fast-check property test in `optimizer.prop.test.ts`.
+    - _Requirements: 9.1, 9.2, 9.4_
+  - [x] 21.4 Route wiring & live anchor resolution (`apps/api/src/services/trips/routes.ts`)
+    - In `POST /trips/:id/schedule/optimize`, extract `startMinutes` and `startMode`. Resolve `now` to current WDW wall-clock time rounded up to next 15-min slot (`Math.ceil(nowMinutes / 15) * 15`) when `date === wdwToday()`, falling back to `park_open` on non-today dates. Resolve `party_mix_in` to 16:00 (960 min). Strictly clamp all arrival intents on `wdwToday()` to `>= Math.ceil(nowMinutes / 15) * 15`, preventing past-time touring.
+    - Add Fastify integration tests in `routes.schedule.test.ts`.
+    - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5, 9.8_
+  - [x] 21.5 Mobile UI updates (`apps/mobile/src/screens/trips/TripScheduleScreen.tsx`)
+    - Extend Schedule Settings modal (`⚙️`) with intent presets (`🏰 Park Open`, `🎟️ Party Mix-in`, `📍 Right Now` on today) and wire existing `TimeWheelPicker` for custom start time. On today, disable passed arrival presets, clamp custom time selection to `>= roundedNow`, and reflect `Right Now` on the touring indicator when park open has passed.
+    - Surface active arrival intent on today's schedule and pass resolved `startMinutes` and `startMode` on optimize.
+    - Add mobile component tests in `TripScheduleScreen.test.tsx`.
+    - _Requirements: 9.3, 9.6, 9.8_
+  - [x] 21.6 Verification Gate
+    - Run typecheck and tests across all workspaces (`npm run verify`).
+    - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5, 9.6, 9.7, 9.8_
+
+- [ ] 22. Walk/Wait Optimization Priority
+  - [ ] 22.1 Spec amendments
+    - Add Requirement 10 to `requirements.md`, Property 21 to `design.md` (plus the `WALK_WAIT_WEIGHT_PRESETS` Configuration & Constants entry and `0045` migration data-model note), Task 22 to `tasks.md`, and Wave 16 to the Task Dependency Graph.
+    - _Requirements: 10.1, 10.2, 10.3, 10.4, 10.5_
+  - [x] 22.2 Shared contracts update (`packages/shared/src/enums.ts`, `packages/shared/src/trips.ts`)
+    - Add `WALK_WAIT_WEIGHTINGS = ['balanced', 'minimize_walking', 'minimize_waits'] as const` and `WalkWaitWeighting` type to `enums.ts`, alongside `WALKING_SPEEDS`.
+    - Add optional `walkWaitWeighting: z.enum(WALK_WAIT_WEIGHTINGS).optional()` to `tripEditSchema`, and `walkWaitWeighting?: WalkWaitWeighting | undefined` to `TripDTO`, following the exact `walkingSpeed` pattern.
+    - Add schema tests (valid values accepted, invalid value rejected) to `trips.test.ts`.
+    - _Requirements: 10.1_
+  - [x] 22.3 Migration `0045_trip_walk_wait_weighting.sql` + `migration0045.test.ts`
+    - `ALTER TABLE trips ADD COLUMN walk_wait_weighting TEXT NOT NULL DEFAULT 'balanced'` plus `ADD CONSTRAINT trips_walk_wait_weighting_chk CHECK (walk_wait_weighting IN ('balanced', 'minimize_walking', 'minimize_waits'))`, mirroring `0019`'s `walking_speed` column/constraint. `BEGIN/COMMIT`, inline comment. pg-mem test asserts the column, default, and CHECK constraint (valid values accepted, invalid rejected).
+    - _Requirements: 10.1_
+  - [x] 22.4 Optimizer weighted cost in `optimizer.ts`
+    - Add `walkWaitWeighting?: WalkWaitWeighting` to `OptimizeInput`. Export `WALK_WAIT_WEIGHT_PRESETS` (`balanced: {waitWeight:1, walkWeight:1}`, `minimize_waits: {waitWeight:1, walkWeight:0.3}`, `minimize_walking: {waitWeight:0.3, walkWeight:1}`). In `simulate()`, resolve the preset (default `balanced` when omitted) and change the returned `cost` to `waitWeight * totalWait + walkWeight * totalWalk + penalty`, leaving `OptimizeResult.totalWaitMinutes`/`totalWalkMinutes` as the true unweighted sums (unchanged accumulation logic — only the returned `cost` scalar used by the search is weighted).
+    - Unit tests: `balanced` (or omitted) produces identical `cost`/results to the pre-change formula on a fixed fixture; a fixture with a genuine walk/wait tradeoff shows `minimize_waits` selecting a lower-`totalWaitMinutes` sequence than `minimize_walking` on the same input (and vice versa for `totalWalkMinutes`).
+    - Add Property 21 `fast-check` test (≥100 runs, tagged `Feature: day-planning-optimization, Property 21`) in `optimizer.prop.test.ts`.
+    - _Requirements: 10.2, 10.3, 10.5_
+  - [x] 22.5 Route wiring (`apps/api/src/services/trips/routes.ts`)
+    - In `POST /trips/:id/schedule/optimize`, extend the existing `SELECT walking_speed, early_entry_eligible, day_touring_hours FROM trips` query to also select `walk_wait_weighting`, and pass it into `optInput` as `walkWaitWeighting`.
+    - `server.inject` test: a trip with `walk_wait_weighting = 'minimize_waits'` produces a different (lower-wait) sequence than the same trip's items optimized under `'minimize_walking'`, on a fixture engineered to have a real tradeoff.
+    - _Requirements: 10.1, 10.2_
+  - [x] 22.6 Repo read/write for `walk_wait_weighting` (`apps/api/src/services/trips/repo.ts`)
+    - Extend the trip row projection (`rowToTripDto` or equivalent) and `editTrip`/`PATCH` write path to read/write `walk_wait_weighting`, mirroring the existing `walking_speed` read/write exactly.
+    - pg-mem test: `PATCH /trips/:id` with `walkWaitWeighting: 'minimize_walking'` persists and reads back correctly; omitting it on an unrelated edit leaves the stored value unchanged.
+    - _Requirements: 10.1_
+  - [x] 22.7 Mobile Schedule Settings Modal control (`apps/mobile/src/screens/trips/TripScheduleScreen.tsx`)
+    - Add a 3-option segmented control (`⚖️ Balanced` / `🚶 Minimize Walking` / `⏱️ Minimize Waits`) next to the existing Walking Pace selector, backed by a `walkWaitWeighting` state var mirroring `walkingSpeed`'s existing state/effect/mutation wiring (init from `tripQuery.data.walkWaitWeighting`, update on mutation success, include in the `PATCH /trips/:id` body on Done).
+    - Mobile `@testing-library/react-native` component test: selecting `Minimize Waits` and tapping Done asserts the `PATCH` body includes `walkWaitWeighting: 'minimize_waits'`, and the control reflects a persisted non-default value on reload.
+    - _Requirements: 10.4_
+  - [x] 22.8 Verification Gate
+    - Run `npm run verify` across all workspaces.
+    - _Requirements: 10.1, 10.2, 10.3, 10.4, 10.5_
+
+- [ ] 23. Curated Ride/Show Durations Override the Flat Ride Default
+  - [x] 23.1 Spec amendments
+    - Add Requirement 11 to `requirements.md`, Property 22 to `design.md` (plus the curated-durations Configuration & Constants entry and `0046` migration data-model note), Task 23 to `tasks.md`, and Wave 17 to the Task Dependency Graph. Update Property 13's text to reflect the amended ride duration precedence.
+    - _Requirements: 11.1, 11.2, 11.3, 11.4, 11.5_
+  - [x] 23.2 `resolveDefaultDuration` ride branch (`apps/api/src/services/planning/optimizer.ts`)
+    - Change the ride/`Character_Meet` fallthrough branch from unconditionally returning `DEFAULT_RIDE_DUR` to `item.catalogDurationMinutes ?? DEFAULT_RIDE_DUR`, matching the precedence already used by every other category branch.
+    - Update the now-outdated test in `optimizer.diningAndBreaks.test.ts` (`'defaults rides/attractions to DEFAULT_RIDE_DUR (15 min), ignoring catalog duration'`) to assert the new precedence: a ride with a non-null `catalogDurationMinutes` resolves to that value; a ride with `catalogDurationMinutes: null` still resolves to `DEFAULT_RIDE_DUR`.
+    - Add a Property 22 `fast-check` test (≥100 runs, tagged `Feature: day-planning-optimization, Property 22`) in `optimizer.prop.test.ts` or `optimizerTaxonomy.test.ts`.
+    - _Requirements: 11.1_
+  - [x] 23.3 Migration `0046_curated_attraction_durations.sql` + `migration0046.test.ts`
+    - Data-only `UPDATE experiences SET duration_minutes = <value> WHERE upstream_entity_id = '<Enterprise_Id>'` for each attraction in Requirement 11.4 (Avatar Flight of Passage → 12, Na'vi River Journey → 5, Kilimanjaro Safaris → 20, Expedition Everest → 4, Zootopia: Better Zoogether! → 9). `BEGIN/COMMIT`, inline comment citing the sourcing (public reference material, total experience time). pg-mem test asserts each curated row's `duration_minutes` after the migration; asserts a non-curated experience is unaffected; asserts reapplying the migration is idempotent (same values, no error).
+    - _Requirements: 11.2, 11.4, 11.5_
+  - [x] 23.4 Expose `catalogDurationMinutes` on `PlannedItemDTO` and fix the timeline duration pill display bug (R11.6, Property 23)
+    - Add `catalogDurationMinutes: number | null` to the shared `PlannedItemDTO` interface (`packages/shared/src/trips.ts`); NOT accepted on `plannedItemAddSchema`/`plannedItemEditSchema` (read-projection only).
+    - Add `e.duration_minutes AS catalog_duration_minutes` to both planned-item join SELECTs in `apps/api/src/services/trips/repo.ts` (`selectPlannedItem` and the `listPlannedItems`-style query), and project it in `rowToPlannedItemDto`.
+    - Fix `TripScheduleScreen.tsx`'s duration pill (currently `` `🎢 ${item.durationMinutes || 15}m duration` ``, which ignores a curated catalog duration and silently shows `15m` for every ride without a user override — the exact bug that surfaced once curated durations existed) to prefer `item.durationMinutes ?? item.catalogDurationMinutes ?? <existing per-category fallback>`.
+    - Mobile component test: an item with `catalogDurationMinutes: 12` and `durationMinutes: null` renders `🎢 12m duration`, not `🎢 15m duration`.
+    - pg-mem repo test: `selectPlannedItem`/`listPlannedItems` on an item linked to a curated experience returns the curated `catalogDurationMinutes`.
+    - _Requirements: 11.6_
+  - [x] 23.5 Fix stale cross-date optimize result bleed in Schedule Builder (bugfix, no new requirement — corrects R8.2/R8.3's existing "persisted vs. un-optimized" behavior)
+    - `TripScheduleScreen.tsx`'s `optResult` (from `optimizeMutation.data`) was rendered whenever present regardless of which date it was optimized for, so switching the date pill after optimizing kept showing the previous date's fresh result (matched by item id against the whole trip's `items`, not date-scoped) instead of the newly selected date's own persisted/un-optimized state. Fix: only treat `optResult` as valid when `optimizeMutation.variables`'s `date` equals the currently selected `activeDate`; otherwise fall through to the persisted-per-item rendering path exactly as if no fresh result existed.
+    - Mobile component test: optimize Day 1, switch to Day 2 (never optimized), assert Day 2 renders its own un-optimized state and none of Day 1's fresh result (item names or wait pills) leak through.
+    - _Requirements: 8.2, 8.3_
+  - [ ] 23.6 Verification Gate
+    - Apply the migration to every environment (local Docker Postgres and hosted dev Neon), confirm `resolveDefaultDuration` returns the curated value for each of the 5 attractions via a direct check, and re-run the Animal Kingdom optimize scenario to confirm arrival times now reflect real durations instead of a flat 15 minutes.
+    - Run `npm run verify` across all workspaces.
+    - _Requirements: 11.1, 11.2, 11.3, 11.4, 11.5, 11.6_
+
+- [x] 24. Rope-drop ramp anchor decoupled from `startMinutes` (Property 24)
+  - **Superseded diagnosis, recorded for the record:** the originally-suspected "opportunity-cost blindness" (the cost function under-valuing a headliner's rope-drop discount versus a flat cheap ride) was investigated against real production data and did NOT reproduce — `optimize()` correctly puts Flight of Passage first on every real fixture tried, discounting it to the walk-on floor and leaving the flat-wait ride for later, exactly as expected. That theory is retired.
+  - **Actual root cause found:** `officialOpenMins`/the rope-drop ramp's anchor was computed as `earlyEntryEligible ? defaultOpenMins : startMins` (and the early-entry anchor was `startMins` outright) — aliasing the ramp's fixed park-schedule anchor to `startMins`, the simulated sequence's OWN clock-start variable. On a live "Right Now" optimize for today (R9.3/R9.8 correctly clamp `startMinutes` to the current WDW time), this meant `arrival == startMins == itemOpenMins` for whichever item is scheduled first, by construction — so `minutesIntoWindow` was always exactly `0`, and that item always got the 5-minute walk-on floor, no matter how late in the day it actually was (reproduced against real dev data: a 9:15 AM optimize, 105 minutes after both official park open at 8:00 and early-entry open at 7:30, still discounted the first-scheduled ride to 5 minutes).
+  - Fixed in `apps/api/src/services/planning/optimizer.ts`: `officialOpenMins` is now unconditionally `defaultOpenMins` (the real, fixed official-open clock time) and a new `earlyEntryOpenMins = defaultOpenMins - EARLY_ENTRY_MINUTES` is the fixed early-entry anchor; `itemOpenMins` selects between these two fixed park-schedule values only, never `startMins`.
+  - Added Property 24 (`design.md`) and its `fast-check` test (`optimizer.midDayRopeDropAnchor.test.ts`, 200 runs, tagged `Feature: day-planning-optimization, Property 24`), verified to fail against the pre-fix code (3/5 regression cases fail on revert) and pass with the fix; full `services/planning` suite (74 tests) remains green, including the pre-existing Property 9/10 rope-drop and early-entry tests (which happened to never exercise a `startMinutes` later than the park's real open, which is why this shipped undetected).
+  - _Requirements: 3.11, 3.12_
+
+- [x] 25. Same-Day Live Wait Substitution for a Specific Ride — implemented as `crowd-calendar` Requirement 4.5 / Task 22
+  - Separately from Task 24's fix, real dev data on today's date (Sep 19) surfaced a second, distinct gap: with the rope-drop bug fixed, Flight of Passage's modeled wait at ~9:15 AM read as 45 minutes (the historical hourly-average model for that hour), while the ride's actual live-posted wait at the same moment was 55 minutes — a real, today-specific crowd spike the model cannot see. Confirmed as a systematic (not one-off) gap via three further spot-checks the same morning: Zootopia (live 15 vs model 9), Expedition Everest (live 30 vs model 22), Na'vi River Journey (live 30 vs model 32, the one close match). `getDaySnapshot`'s existing R4.3 same-day correction (`crowd-calendar` spec) only nudges the PARK-WIDE crowd multiplier from the park-wide observed average; it had no mechanism to substitute one specific ride's own current live wait. Since `getDaySnapshot` is owned by `crowd-calendar`, the fix was built and shipped there as Requirement 4.5 / Property 20 / Task 22, NOT in this spec — `predictionService` now substitutes a fresh, `Operating`, numeric live standby wait into the current-hour bucket only, for today's requests, falling back to the model otherwise. This planning-optimization task is retained only as a pointer; no code lives here.
+  - _Requirements: (see crowd-calendar R4.5)_
+
 ## Notes
 
 - Test tasks are **required, not optional** — a feature task is not complete until its tests exist and pass.
@@ -343,7 +441,12 @@ Implementation is **TypeScript**. It reuses `experiences.latitude/longitude` for
     { "id": 11, "tasks": ["16.4", "17.1", "17.2", "17.3", "17.4", "17.5"] },
     { "id": 12, "tasks": ["17.6", "18.1", "19.1", "19.2"] },
     { "id": 13, "tasks": ["19.3"] },
-    { "id": 14, "tasks": ["20.1", "20.2", "20.3", "20.4", "20.5"] }
+    { "id": 14, "tasks": ["20.1", "20.2", "20.3", "20.4", "20.5"] },
+    { "id": 15, "tasks": ["21.1", "21.2", "21.3", "21.4", "21.5", "21.6"] },
+    { "id": 16, "tasks": ["22.1", "22.2", "22.3", "22.4", "22.5", "22.6", "22.7", "22.8"] },
+    { "id": 17, "tasks": ["23.1", "23.2", "23.3"] },
+    { "id": 18, "tasks": ["23.4", "23.5", "23.6"] },
+    { "id": 19, "tasks": ["24"] }
   ]
 }
 ```

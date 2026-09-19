@@ -71,7 +71,8 @@ jest.mock('../../navigation/tripsListNotice', () => ({
 
 import ActiveTripShortcut from '../ActiveTripShortcut';
 import { apiRequest as mockedApiRequest } from '../../api/client';
-import type { TripDTO } from '@dwt/shared';
+import type { PlannedItemDTO, TripDTO } from '@dwt/shared';
+import { getTodayWDW } from '../../screens/trips/TripScheduleScreen';
 
 const apiRequestMock = mockedApiRequest as jest.MockedFunction<
   typeof mockedApiRequest
@@ -97,6 +98,37 @@ function activeTrip(id: string, name: string): TripDTO {
 
 const TRIP_A = activeTrip('trip-a', 'Magic Kingdom Day');
 const TRIP_B = activeTrip('trip-b', 'Epcot Day');
+
+function makePlannedItem(overrides?: Partial<PlannedItemDTO>): PlannedItemDTO {
+  return {
+    id: 'pi-1',
+    experienceId: null,
+    experienceName: null,
+    park: null,
+    customTitle: null,
+    addedByDisplayName: 'User',
+    plannedDate: null,
+    plannedTime: null,
+    isFixed: false,
+    isLightningLane: false,
+    useSingleRider: false,
+    priority: 1,
+    itemType: 'experience',
+    durationMinutes: 30,
+    catalogDurationMinutes: null,
+    windowStartMinutes: null,
+    windowEndMinutes: null,
+    mealPeriod: null,
+    scheduledShowtime: null,
+    reservationKind: null,
+    confirmationNumber: null,
+    partySize: null,
+    predictedWaitMinutes: null,
+    travelFromPrev: null,
+    optimizedAt: null,
+    ...overrides,
+  };
+}
 
 function makeQueryClient(): QueryClient {
   return new QueryClient({
@@ -185,9 +217,14 @@ describe('Active_Trip_Shortcut (R19.1, R19.4)', () => {
   test('R19.6: a stale target falls back to the Trips list with a "no longer available" message', async () => {
     // Initial read: one active Trip (shortcut shows). Re-read on activation:
     // the Trip is no longer active, so the target is stale.
-    apiRequestMock
-      .mockResolvedValueOnce([{ status: 'active', trips: [TRIP_A] }])
-      .mockResolvedValueOnce([]);
+    let tripsCallCount = 0;
+    apiRequestMock.mockImplementation(async (_method, url) => {
+      if (url === '/me/trips') {
+        tripsCallCount += 1;
+        return tripsCallCount === 1 ? [{ status: 'active', trips: [TRIP_A] }] : [];
+      }
+      return [];
+    });
 
     renderShortcut();
 
@@ -201,5 +238,144 @@ describe('Active_Trip_Shortcut (R19.1, R19.4)', () => {
     // stale Trip.
     expect(mockSetTripsListNotice).toHaveBeenCalledWith(expect.any(String));
     expect(mockNavigateToTripDetail).not.toHaveBeenCalled();
+  });
+
+  test('does NOT bleed planned items from previous days when today has no items planned', async () => {
+    const today = getTodayWDW();
+    const [y, m, d] = today.split('-').map(Number);
+    const yesterdayDate = new Date(y!, m! - 1, d! - 1);
+    const yesterday = `${yesterdayDate.getFullYear()}-${String(yesterdayDate.getMonth() + 1).padStart(2, '0')}-${String(yesterdayDate.getDate()).padStart(2, '0')}`;
+
+    const tripWithDates: TripDTO = {
+      ...TRIP_A,
+      startDate: yesterday,
+      endDate: '2026-12-31',
+    };
+
+    const previousDayItems: PlannedItemDTO[] = [
+      makePlannedItem({
+        id: 'pi-1',
+        experienceId: 'exp-remy',
+        experienceName: "Remy's Ratatouille Adventure",
+        park: 'EPCOT',
+        plannedDate: yesterday,
+        plannedTime: `${yesterday}T13:00:00.000Z`,
+      }),
+      makePlannedItem({
+        id: 'pi-2',
+        experienceId: 'exp-biergarten',
+        experienceName: 'Biergarten Restaurant',
+        park: 'EPCOT',
+        plannedDate: yesterday,
+        plannedTime: `${yesterday}T21:00:00.000Z`,
+        reservationKind: 'dining',
+        durationMinutes: 60,
+      }),
+    ];
+
+    apiRequestMock.mockImplementation(async (_method, url) => {
+      if (url === '/me/trips') {
+        return [{ status: 'active', trips: [tripWithDates] }];
+      }
+      if (url.includes('/planned-items')) {
+        return previousDayItems;
+      }
+      return [];
+    });
+
+    renderShortcut();
+
+    await screen.findByTestId('active-trip-shortcut');
+    // Today has no items scheduled, so prompt to plan and add dining instead of showing yesterday's items
+    expect(screen.getByText('🚀 Next: Tap to plan your day')).toBeTruthy();
+    expect(screen.queryByText(/Remy's Ratatouille Adventure/)).toBeNull();
+    expect(screen.getByText('🍽️ Dining: Tap to add dining')).toBeTruthy();
+    expect(screen.queryByText(/Biergarten Restaurant/)).toBeNull();
+  });
+
+  test('displays today next item and dining item when scheduled for today', async () => {
+    const today = getTodayWDW();
+    const tripWithDates: TripDTO = {
+      ...TRIP_A,
+      startDate: today,
+      endDate: '2026-12-31',
+    };
+
+    const todayItems: PlannedItemDTO[] = [
+      makePlannedItem({
+        id: 'pi-1',
+        experienceId: 'exp-space',
+        experienceName: 'Space Mountain',
+        park: 'Magic Kingdom',
+        plannedDate: today,
+        plannedTime: `${today}T15:00:00.000Z`,
+      }),
+      makePlannedItem({
+        id: 'pi-2',
+        experienceId: 'exp-be-our-guest',
+        experienceName: 'Be Our Guest',
+        park: 'Magic Kingdom',
+        plannedDate: today,
+        plannedTime: `${today}T18:00:00.000Z`,
+        reservationKind: 'dining',
+        durationMinutes: 60,
+      }),
+    ];
+
+    apiRequestMock.mockImplementation(async (_method, url) => {
+      if (url === '/me/trips') {
+        return [{ status: 'active', trips: [tripWithDates] }];
+      }
+      if (url.includes('/planned-items')) {
+        return todayItems;
+      }
+      return [];
+    });
+
+    renderShortcut();
+
+    await screen.findByTestId('active-trip-shortcut');
+    expect(screen.getByText(/Next: Space Mountain/)).toBeTruthy();
+    expect(screen.getByText(/Dining: Be Our Guest/)).toBeTruthy();
+  });
+
+  test('excludes mealPeriod dining items from rides queue so dining is never rendered as next ride', async () => {
+    const today = getTodayWDW();
+    const tripWithDates: TripDTO = {
+      ...TRIP_A,
+      startDate: today,
+      endDate: '2026-12-31',
+    };
+
+    const todayItems: PlannedItemDTO[] = [
+      makePlannedItem({
+        id: 'pi-lunch',
+        experienceId: 'exp-pecos',
+        experienceName: "Pecos Bill Tall Tale Inn and Cafe",
+        park: 'Magic Kingdom',
+        plannedDate: today,
+        plannedTime: `${today}T12:00:00.000Z`,
+        mealPeriod: 'lunch',
+        durationMinutes: 45,
+      }),
+    ];
+
+    apiRequestMock.mockImplementation(async (_method, url) => {
+      if (url === '/me/trips') {
+        return [{ status: 'active', trips: [tripWithDates] }];
+      }
+      if (url.includes('/planned-items')) {
+        return todayItems;
+      }
+      return [];
+    });
+
+    renderShortcut();
+
+    await screen.findByTestId('active-trip-shortcut');
+    // Dining item appears in dining row, but NOT in Next ride row
+    expect(screen.getByText(/Dining: Pecos Bill Tall Tale Inn and Cafe/)).toBeTruthy();
+    expect(screen.getByText('🚀 Next: Tap to plan your day')).toBeTruthy();
+    expect(screen.queryByText(/Next: Pecos Bill/)).toBeNull();
   });
 });

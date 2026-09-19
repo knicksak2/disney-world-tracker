@@ -95,8 +95,16 @@ function makeQueryClient(): QueryClient {
   });
 }
 
-function makeNavigation(): { navigate: jest.Mock; goBack: jest.Mock } {
-  return { navigate: jest.fn(), goBack: jest.fn() };
+function makeNavigation(state?: unknown): {
+  navigate: jest.Mock;
+  goBack: jest.Mock;
+  getState: jest.Mock;
+} {
+  return {
+    navigate: jest.fn(),
+    goBack: jest.fn(),
+    getState: jest.fn(() => state),
+  };
 }
 
 function renderDetail(
@@ -249,4 +257,289 @@ describe('Trip_Detail_View hub (R18.1, R18.6)', () => {
       expect(apiRequestMock.mock.calls.length).toBeGreaterThan(callsBefore);
     });
   });
+
+  test('rate limit exceeded: surfaces a clear "Too many requests" message with a Retry control', async () => {
+    apiRequestMock.mockRejectedValue(
+      new ApiError({
+        code: 'rate_limit_exceeded',
+        message: 'Too many requests.',
+        status: 429,
+        details: { retryAfterMs: 30000, max: 120 },
+      }),
+    );
+
+    renderDetail(makeNavigation());
+
+    expect(await screen.findByTestId('trip-detail-error')).toBeTruthy();
+    expect(
+      screen.getByText('Too many requests. Please wait a moment and try again.'),
+    ).toBeTruthy();
+    const retry = screen.getByTestId('trip-detail-retry');
+    expect(retry).toBeTruthy();
+  });
+
+  test('Schedule Builder tile in 2x2 grid navigates to TripSchedule', async () => {
+    apiRequestMock.mockResolvedValue(TRIP);
+    const navigation = makeNavigation();
+
+    renderDetail(navigation);
+    await screen.findByTestId('trip-detail-hub');
+
+    const scheduleTile = screen.getByTestId('trip-detail-section-schedule');
+    expect(scheduleTile).toBeTruthy();
+    fireEvent.press(scheduleTile);
+    expect(navigation.navigate).toHaveBeenCalledWith('TripSchedule', {
+      tripId: TRIP_ID,
+    });
+  });
+
+  test('Live glance card: renders reservation glance card and navigates to TripReservations', async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    apiRequestMock.mockImplementation(async (_method: string, path: string) => {
+      if (path === `/trips/${TRIP_ID}`) return TRIP;
+      if (path === `/trips/${TRIP_ID}/planned-items`) {
+        return [
+          {
+            id: 'item-res-1',
+            experienceId: 'exp-biergarten',
+            experienceName: 'Biergarten Restaurant',
+            park: 'epcot',
+            customTitle: null,
+            addedByDisplayName: 'Alex',
+            plannedDate: today,
+            plannedTime: '21:00',
+            isFixed: true,
+            isLightningLane: false,
+            useSingleRider: false,
+            priority: 1,
+            itemType: 'experience',
+            durationMinutes: 60,
+            windowStartMinutes: null,
+            windowEndMinutes: null,
+            mealPeriod: 'dinner',
+            scheduledShowtime: null,
+            reservationKind: 'dining',
+            confirmationNumber: 'W12345',
+            partySize: 4,
+          },
+        ];
+      }
+      if (path === '/me') return { user: { id: 'user-1' } };
+      if (path === `/trips/${TRIP_ID}/members`) return [];
+      if (path === `/trips/${TRIP_ID}/feed`) return [];
+      throw new Error(`unexpected path ${path}`);
+    });
+    const navigation = makeNavigation();
+
+    renderDetail(navigation);
+
+    const glanceCard = await screen.findByTestId('trip-detail-glance-reservation');
+    expect(glanceCard).toBeTruthy();
+    expect(screen.getByText('Biergarten Restaurant')).toBeTruthy();
+    expect(screen.getByText('EPCOT')).toBeTruthy();
+    expect(screen.getByText('👥 Party of 4')).toBeTruthy();
+
+    fireEvent.press(glanceCard);
+    expect(navigation.navigate).toHaveBeenCalledWith('TripReservations', {
+      tripId: TRIP_ID,
+    });
+  });
+
+  test('Live glance card: renders scheduled item glance card when no reservation exists today', async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    apiRequestMock.mockImplementation(async (_method: string, path: string) => {
+      if (path === `/trips/${TRIP_ID}`) return TRIP;
+      if (path === `/trips/${TRIP_ID}/planned-items`) {
+        return [
+          {
+            id: 'item-sched-1',
+            experienceId: 'exp-space-mtn',
+            experienceName: 'Space Mountain',
+            park: 'magic-kingdom',
+            customTitle: null,
+            addedByDisplayName: 'Alex',
+            plannedDate: today,
+            plannedTime: '14:30',
+            isFixed: false,
+            isLightningLane: false,
+            useSingleRider: false,
+            priority: 2,
+            itemType: 'experience',
+            durationMinutes: 45,
+            windowStartMinutes: null,
+            windowEndMinutes: null,
+            mealPeriod: null,
+            scheduledShowtime: null,
+            reservationKind: null,
+            confirmationNumber: null,
+            partySize: null,
+          },
+        ];
+      }
+      if (path === '/me') return { user: { id: 'user-1' } };
+      if (path === `/trips/${TRIP_ID}/members`) return [];
+      if (path === `/trips/${TRIP_ID}/feed`) return [];
+      throw new Error(`unexpected path ${path}`);
+    });
+    const navigation = makeNavigation();
+
+    renderDetail(navigation);
+
+    const glanceCard = await screen.findByTestId('trip-detail-glance-schedule');
+    expect(glanceCard).toBeTruthy();
+    expect(screen.getByText('Space Mountain')).toBeTruthy();
+    expect(screen.getByText('Magic Kingdom')).toBeTruthy();
+    expect(screen.getByText('🎯 2:30 PM Target')).toBeTruthy();
+
+    fireEvent.press(glanceCard);
+    expect(navigation.navigate).toHaveBeenCalledWith('TripSchedule', {
+      tripId: TRIP_ID,
+    });
+  });
+
+  test('Live glance card: renders quiet day fallback when no plans exist today', async () => {
+    apiRequestMock.mockImplementation(async (_method: string, path: string) => {
+      if (path === `/trips/${TRIP_ID}`) return TRIP;
+      if (path === `/trips/${TRIP_ID}/planned-items`) return [];
+      if (path === '/me') return { user: { id: 'user-1' } };
+      if (path === `/trips/${TRIP_ID}/members`) return [];
+      if (path === `/trips/${TRIP_ID}/feed`) return [];
+      throw new Error(`unexpected path ${path}`);
+    });
+    const navigation = makeNavigation();
+
+    renderDetail(navigation);
+
+    const quietCard = await screen.findByTestId('trip-detail-glance-rest');
+    expect(quietCard).toBeTruthy();
+    expect(screen.getByText('No Scheduled Plans Today')).toBeTruthy();
+
+    const addBtn = screen.getByText('+ Add from Wishlist');
+    fireEvent.press(addBtn);
+    expect(navigation.navigate).toHaveBeenCalledWith('TripPlannedList', {
+      tripId: TRIP_ID,
+    });
+
+    const openScheduleBtn = screen.getByText('Open Schedule');
+    fireEvent.press(openScheduleBtn);
+    expect(navigation.navigate).toHaveBeenCalledWith('TripSchedule', {
+      tripId: TRIP_ID,
+    });
+  });
+
+  test('Past Trip mode: renders celebratory Wrap-Up Hero and TRAVEL PARTY label', async () => {
+    apiRequestMock.mockImplementation(async (_method: string, path: string) => {
+      if (path === `/trips/${TRIP_ID}`) {
+        return {
+          ...TRIP,
+          status: 'past',
+        };
+      }
+      if (path === `/trips/${TRIP_ID}/planned-items`) return [];
+      if (path === '/me') return { user: { id: 'user-1' } };
+      if (path === `/trips/${TRIP_ID}/members`) {
+        return [
+          {
+            userId: 'user-1',
+            displayName: 'Alex',
+            avatarPreset: null,
+            role: 'organizer',
+          },
+        ];
+      }
+      if (path === `/trips/${TRIP_ID}/feed`) return [];
+      throw new Error(`unexpected path ${path}`);
+    });
+    const navigation = makeNavigation();
+
+    renderDetail(navigation);
+
+    await screen.findByTestId('trip-detail-hub');
+    expect(screen.getByText('TRAVEL PARTY (1)')).toBeTruthy();
+    expect(screen.getByText('🏆 TRIP COMPLETE')).toBeTruthy();
+    expect(screen.getByText('Magical Vacation Recap')).toBeTruthy();
+
+    const summaryCard = screen.getByTestId('trip-detail-section-summary');
+    fireEvent.press(summaryCard);
+    expect(navigation.navigate).toHaveBeenCalledWith('TripSummary', {
+      tripId: TRIP_ID,
+    });
+  });
+
+  test('Active Trip mode: renders celebratory vacation progress card with live superlatives hint and navigates to TripSummary', async () => {
+    apiRequestMock.mockImplementation(async (_method: string, path: string) => {
+      if (path === `/trips/${TRIP_ID}`) return TRIP;
+      if (path === `/trips/${TRIP_ID}/planned-items`) return [];
+      if (path === '/me') return { user: { id: 'user-1' } };
+      if (path === `/trips/${TRIP_ID}/members`) return [];
+      if (path === `/trips/${TRIP_ID}/feed`) {
+        return [
+          {
+            id: 'feed-1',
+            tripId: TRIP_ID,
+            userId: 'user-1',
+            type: 'completion',
+            createdAt: '2024-05-02T12:00:00Z',
+            experienceName: 'Flight of Passage',
+            rating: 5,
+            photoUrl: null,
+            comment: null,
+            rodeWith: [],
+            reactions: {},
+            reactionCount: 0,
+          },
+        ];
+      }
+      throw new Error(`unexpected path ${path}`);
+    });
+    const navigation = makeNavigation();
+
+    renderDetail(navigation);
+
+    await screen.findByTestId('trip-detail-hub');
+    const summaryCard = screen.getByTestId('trip-detail-section-summary');
+    expect(summaryCard).toBeTruthy();
+    expect(screen.getByText(/VACATION UNDERWAY/)).toBeTruthy();
+    expect(screen.getByText('1 magical moment logged!')).toBeTruthy();
+    expect(
+      screen.getByText('Tap to see live group superlatives & top ratings ›'),
+    ).toBeTruthy();
+
+    fireEvent.press(summaryCard);
+    expect(navigation.navigate).toHaveBeenCalledWith('TripSummary', {
+      tripId: TRIP_ID,
+    });
+  });
+
+  test('Back button: pops via goBack when TripsList is in navigation stack history', async () => {
+    apiRequestMock.mockResolvedValue(TRIP);
+    const navigation = makeNavigation({
+      index: 1,
+      routes: [{ name: 'TripsList' }, { name: 'TripDetail' }],
+    });
+
+    renderDetail(navigation);
+    await screen.findByTestId('trip-detail-hub');
+
+    const backBtn = screen.getByLabelText('Go back');
+    fireEvent.press(backBtn);
+    expect(navigation.goBack).toHaveBeenCalled();
+    expect(navigation.navigate).not.toHaveBeenCalledWith('TripsList');
+  });
+
+  test('Back button: navigates to TripsList when TripsList is not in stack history', async () => {
+    apiRequestMock.mockResolvedValue(TRIP);
+    const navigation = makeNavigation({
+      index: 0,
+      routes: [{ name: 'TripDetail' }],
+    });
+
+    renderDetail(navigation);
+    await screen.findByTestId('trip-detail-hub');
+
+    const backBtn = screen.getByLabelText('Go back');
+    fireEvent.press(backBtn);
+    expect(navigation.navigate).toHaveBeenCalledWith('TripsList');
+  });
 });
+

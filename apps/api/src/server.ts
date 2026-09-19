@@ -109,6 +109,10 @@ import {
   foodListRoutes,
   type FoodListRoutesOptions,
 } from './services/foodLists/routes.js';
+import {
+  parkLiveRoutes,
+  type ParkLiveRoutesOptions,
+} from './services/live/parkLiveRoutes.js';
 import type { RatingChangedEvent } from './services/aggregate/ratingChangedQueue.js';
 
 /**
@@ -232,6 +236,11 @@ export interface BuildServerServices {
    * Wires list CRUD, items, shares, discovery, affinity, and collection.
    */
   readonly foodLists?: FoodListRoutesOptions;
+  /**
+   * Park-wide Live Waits routes (navigation-redesign).
+   * Wires `GET /parks/:park/live` behind session authentication.
+   */
+  readonly parkLive?: ParkLiveRoutesOptions;
   /**
    * Tracking_Service route options. Each tracking sub-domain
    * (`completion`, `rating`, `note`) is opt-in so a focused unit-test
@@ -525,6 +534,10 @@ export function buildServer(
 
   if (services.foodLists !== undefined) {
     void app.register(foodListRoutes(services.foodLists));
+  }
+
+  if (services.parkLive !== undefined) {
+    void app.register(parkLiveRoutes(services.parkLive));
   }
 
   if (services.tracking?.completion !== undefined) {

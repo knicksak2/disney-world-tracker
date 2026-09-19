@@ -33,11 +33,13 @@ import { theme } from './theme';
 export function ScreenContainer({
   children,
   style,
+  testID,
 }: {
   readonly children: React.ReactNode;
   readonly style?: StyleProp<ViewStyle>;
+  readonly testID?: string;
 }): JSX.Element {
-  return <View style={[styles.screen, style]}>{children}</View>;
+  return <View style={[styles.screen, style]} testID={testID}>{children}</View>;
 }
 
 // ---------------------------------------------------------------------------
@@ -58,6 +60,7 @@ export function GradientHeader({
   right,
   onBack,
   backAccessibilityLabel = 'Go back',
+  eyebrow,
 }: {
   readonly title: string;
   readonly subtitle?: string;
@@ -74,6 +77,8 @@ export function GradientHeader({
   readonly onBack?: () => void;
   /** Spoken label for the back control; defaults to "Go back". */
   readonly backAccessibilityLabel?: string;
+  /** Optional greeting or section badge rendered above the title. */
+  readonly eyebrow?: string | React.ReactNode;
 }): JSX.Element {
   // Add the device's top safe-area inset (status bar / notch height) to the
   // header padding so the leading back control clears the system UI and stays
@@ -135,6 +140,15 @@ export function GradientHeader({
           </Pressable>
         ) : null}
         <View style={styles.headerTextWrap}>
+          {eyebrow !== undefined ? (
+            typeof eyebrow === 'string' ? (
+              <View style={styles.headerEyebrowPill} testID="header-eyebrow-pill">
+                <Text style={styles.headerEyebrowText}>{eyebrow}</Text>
+              </View>
+            ) : (
+              eyebrow
+            )
+          ) : null}
           <View style={styles.headerTitleRow}>
             {icon !== undefined ? (
               <Ionicons
@@ -185,34 +199,28 @@ export function Card({
   /** Accessibility label forwarded to the pressable wrapper when `onPress` is set. */
   readonly accessibilityLabel?: string;
 }): JSX.Element {
-  const inner = (
-    <View
-      style={[
-        styles.card,
-        accentColor !== undefined ? styles.cardWithAccent : null,
-        accentColor !== undefined ? { borderLeftColor: accentColor } : null,
-        style,
-      ]}
-    >
-      {children}
-    </View>
-  );
+  const cardStyle = [
+    styles.card,
+    accentColor !== undefined ? styles.cardWithAccent : null,
+    accentColor !== undefined ? { borderLeftColor: accentColor } : null,
+    style,
+  ];
   if (onPress === undefined) {
-    return testID !== undefined ? (
-      <View testID={testID}>{inner}</View>
-    ) : (
-      inner
+    return (
+      <View style={cardStyle} testID={testID}>
+        {children}
+      </View>
     );
   }
   return (
     <Pressable
       onPress={onPress}
-      style={({ pressed }) => [pressed && styles.cardPressed]}
+      style={({ pressed }) => [cardStyle, pressed && styles.cardPressed]}
       testID={testID}
       {...(accessibilityRole !== undefined ? { accessibilityRole } : {})}
       {...(accessibilityLabel !== undefined ? { accessibilityLabel } : {})}
     >
-      {inner}
+      {children}
     </Pressable>
   );
 }
@@ -503,6 +511,24 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: theme.spacing.sm,
     backgroundColor: 'rgba(255,255,255,0.16)',
+  },
+  headerEyebrowPill: {
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(255, 255, 255, 0.16)',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    marginBottom: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.28)',
+  },
+  headerEyebrowText: {
+    ...theme.typography.meta,
+    color: '#ffd54f',
+    fontWeight: '700',
+    fontSize: 11,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
   headerTitleRow: {
     flexDirection: 'row',

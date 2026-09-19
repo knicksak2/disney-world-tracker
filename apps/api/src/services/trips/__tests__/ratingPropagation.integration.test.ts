@@ -293,6 +293,7 @@ async function setup(): Promise<Fixture> {
   applyMigration(db, '0019_planned_item_scheduling.sql');
   applyMigration(db, '0022_planned_item_ride_options.sql');
   applyMigration(db, '0023_trip_touring_hours.sql');
+  applyMigration(db, '0045_trip_walk_wait_weighting.sql');
   // 0034 adds experience_logs + trip_log_entries.log_id, which logCompletion
   // and confirmRodeWithTag now write to.
   applyMigration(db, '0034_experience_logs.sql');

@@ -200,12 +200,13 @@ const REACTION_META: Record<
     readonly icon: keyof typeof Ionicons.glyphMap;
     readonly iconActive: keyof typeof Ionicons.glyphMap;
     readonly tint: string;
+    readonly emoji: string;
   }
 > = {
-  like: { label: 'Like', icon: 'thumbs-up-outline', iconActive: 'thumbs-up', tint: '#2f80ed' },
-  love: { label: 'Love', icon: 'heart-outline', iconActive: 'heart', tint: '#d6336c' },
-  celebrate: { label: 'Celebrate', icon: 'sparkles-outline', iconActive: 'sparkles', tint: '#f6a609' },
-  wow: { label: 'Wow', icon: 'happy-outline', iconActive: 'happy', tint: '#7e57c2' },
+  like: { label: 'Like', icon: 'thumbs-up-outline', iconActive: 'thumbs-up', tint: '#2f80ed', emoji: '👍' },
+  love: { label: 'Love', icon: 'heart-outline', iconActive: 'heart', tint: '#d6336c', emoji: '❤️' },
+  celebrate: { label: 'Celebrate', icon: 'sparkles-outline', iconActive: 'sparkles', tint: '#f6a609', emoji: '✨' },
+  wow: { label: 'Wow', icon: 'star-outline', iconActive: 'star', tint: '#7e57c2', emoji: '🤩' },
 };
 
 /** Human copy + glyph + accent tone for the known Trip_Feed_Item types (R13.1). */
@@ -226,12 +227,12 @@ const FEED_TYPE_META: Record<
 /** Per-state visuals for a rode-with tag chip (R10.3 lifecycle). */
 const RODE_WITH_VISUAL: Record<
   RodeWithTagState,
-  { readonly bg: string; readonly fg: string; readonly icon: keyof typeof Ionicons.glyphMap }
+  { readonly bg: string; readonly fg: string; readonly prefix: string }
 > = {
-  confirmed: { bg: 'rgba(46, 158, 107, 0.14)', fg: theme.color.success, icon: 'checkmark-circle' },
-  pending: { bg: theme.color.warningSurface, fg: theme.color.warningText, icon: 'time-outline' },
-  declined: { bg: 'rgba(214, 51, 108, 0.12)', fg: theme.color.danger, icon: 'close-circle-outline' },
-  cancelled: { bg: theme.color.surfaceAlt, fg: theme.color.textSecondary, icon: 'remove-circle-outline' },
+  confirmed: { bg: 'rgba(46, 158, 107, 0.14)', fg: '#27855a', prefix: '✓ ' },
+  pending: { bg: 'rgba(246, 166, 9, 0.16)', fg: '#9a6500', prefix: '⏳ ' },
+  declined: { bg: 'rgba(214, 51, 108, 0.12)', fg: theme.color.danger, prefix: '✕ ' },
+  cancelled: { bg: theme.color.surfaceAlt, fg: theme.color.textSecondary, prefix: '— ' },
 };
 
 /** Palette for the initials avatar, chosen by a stable hash of the name. */
@@ -321,7 +322,7 @@ export default function TripFeedScreen({
   if (feedQuery.isLoading && feedQuery.data === undefined) {
     return (
       <ScreenContainer>
-        <ActivityHeader onBack={backToHub} onLog={openComposer} />
+        <ActivityHeader onBack={backToHub} />
         <View style={styles.center} testID="trip-feed-loading">
           <ActivityIndicator color={theme.color.primary} />
         </View>
@@ -336,7 +337,7 @@ export default function TripFeedScreen({
   if (feedQuery.isError && feedQuery.data === undefined) {
     return (
       <ScreenContainer>
-        <ActivityHeader onBack={backToHub} onLog={openComposer} />
+        <ActivityHeader onBack={backToHub} />
         <View style={styles.center} testID="trip-feed-error">
           <EmptyState
             icon="cloud-offline-outline"
@@ -365,7 +366,7 @@ export default function TripFeedScreen({
 
   return (
     <ScreenContainer>
-      <ActivityHeader onBack={backToHub} onLog={openComposer} />
+      <ActivityHeader onBack={backToHub} />
 
       <FlatList
         data={items}
@@ -375,13 +376,32 @@ export default function TripFeedScreen({
         testID="trip-feed"
         ListHeaderComponent={
           <View style={styles.listHeader}>
-            <PrimaryButton
-              label="Log a completion"
-              icon="add-circle-outline"
+            <Pressable
               onPress={openComposer}
+              style={({ pressed }) => [
+                styles.composerCtaCard,
+                pressed && styles.pressed,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Log a ride or snack. Tag who rode with you and share ratings."
               testID="trip-activity-log-cta"
-              style={styles.logBtn}
-            />
+            >
+              <View style={styles.composerCtaLeft}>
+                <View style={styles.composerCtaIconCircle}>
+                  <Text style={styles.composerCtaIcon}>✨</Text>
+                </View>
+                <View style={styles.composerCtaTextWrap}>
+                  <Text style={styles.composerCtaTitle}>Log a ride or snack</Text>
+                  <Text style={styles.composerCtaSubtitle}>
+                    Tag who rode with you and share ratings
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.composerCtaPlus}>
+                <Ionicons name="add" size={18} color={theme.color.textOnPrimary} />
+              </View>
+            </Pressable>
+
             <View style={styles.filterRow} testID="trip-activity-filter">
               <Chip
                 label="All"
@@ -663,7 +683,10 @@ function FeedItemCard({
               ) : null}
             </View>
             {rodeWith.length > 0 ? (
-              <View style={styles.rodeWithChips} testID={`trip-feed-rodewith-${item.id}`}>
+              <View style={styles.rodeWithRow} testID={`trip-feed-rodewith-${item.id}`}>
+                <Text style={styles.rodeWithLabel}>
+                  {experienceCategory === 'Dining' ? '👥 Dined with:' : '👥 Rode with:'}
+                </Text>
                 {rodeWith.map((tag) => {
                   const visual = RODE_WITH_VISUAL[tag.state];
                   return (
@@ -671,12 +694,11 @@ function FeedItemCard({
                       key={tag.taggedMemberId}
                       style={[styles.tagChip, { backgroundColor: visual.bg }]}
                     >
-                      <Ionicons name={visual.icon} size={12} color={visual.fg} />
                       <Text
                         style={[styles.tagChipText, { color: visual.fg }]}
                         numberOfLines={1}
                       >
-                        {tag.displayName}
+                        {visual.prefix}{tag.displayName}
                       </Text>
                     </View>
                   );
@@ -687,45 +709,55 @@ function FeedItemCard({
         </View>
       ) : null}
 
-      {/* Reaction controls over the closed Trip_Reaction vocabulary. */}
-      <View style={styles.reactions} testID={`trip-feed-reactions-${item.id}`}>
-        {TRIP_REACTION_VALUES.map((reaction) => {
-          const summary = reactionByValue.get(reaction);
-          const active = summary?.mine ?? false;
-          const count = summary?.count ?? 0;
-          const rmeta = REACTION_META[reaction];
-          return (
-            <Pressable
-              key={reaction}
-              onPress={() => {
-                if (reactionMutation.isPending) return;
-                setError(null);
-                reactionMutation.mutate({ reaction, remove: active });
-              }}
-              accessibilityRole="button"
-              accessibilityState={{ selected: active }}
-              accessibilityLabel={`${rmeta.label}${count > 0 ? `, ${count}` : ''}, ${active ? 'selected' : 'not selected'}`}
-              testID={`trip-feed-reaction-${item.id}-${reaction}`}
-              style={({ pressed }) => [
-                styles.reactionPill,
-                active && { backgroundColor: withAlpha(rmeta.tint, 0.14), borderColor: rmeta.tint },
-                pressed && styles.pressed,
-              ]}
-            >
-              <Ionicons
-                name={active ? rmeta.iconActive : rmeta.icon}
-                size={15}
-                color={active ? rmeta.tint : theme.color.textSecondary}
-              />
-              <Text style={[styles.reactionText, active && { color: rmeta.tint }]}>
-                {count > 0 ? `${rmeta.label} ${count}` : rmeta.label}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
+      {/* Reaction controls over the closed Trip_Reaction vocabulary + comments link. */}
+      <View style={styles.feedReactionsRow}>
+        <View style={styles.reactionsGroup} testID={`trip-feed-reactions-${item.id}`}>
+          {TRIP_REACTION_VALUES.map((reaction) => {
+            const summary = reactionByValue.get(reaction);
+            const active = summary?.mine ?? false;
+            const count = summary?.count ?? 0;
+            const rmeta = REACTION_META[reaction];
+            return (
+              <Pressable
+                key={reaction}
+                onPress={() => {
+                  if (reactionMutation.isPending) return;
+                  setError(null);
+                  reactionMutation.mutate({ reaction, remove: active });
+                }}
+                accessibilityRole="button"
+                accessibilityState={{ selected: active }}
+                accessibilityLabel={`${rmeta.label}${count > 0 ? `, ${count}` : ''}, ${active ? 'selected' : 'not selected'}`}
+                testID={`trip-feed-reaction-${item.id}-${reaction}`}
+                style={({ pressed }) => [
+                  styles.rxChip,
+                  active && styles.rxChipActive,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Text style={styles.rxEmoji}>{rmeta.emoji}</Text>
+                {count > 0 ? (
+                  <Text style={[styles.rxCount, active && styles.rxCountActive]}>
+                    {count}
+                  </Text>
+                ) : null}
+              </Pressable>
+            );
+          })}
+        </View>
 
-      <View style={styles.divider} />
+        <Pressable
+          onPress={() => setComposerOpen((prev) => !prev)}
+          accessibilityRole="button"
+          accessibilityLabel={`${commentCount} comments, tap to ${composerOpen ? 'close' : 'open'}`}
+          testID={`trip-feed-comment-open-${item.id}`}
+          style={styles.commentLink}
+        >
+          <Text style={styles.commentLinkText}>
+            💬 {commentCount === 1 ? '1 comment' : commentCount > 1 ? `${commentCount} comments` : 'Comment'}
+          </Text>
+        </Pressable>
+      </View>
 
       {/* Every Member's comments, oldest-first; a remove control appears only
           on the caller's own comments (author-scoped, R13.11/R13.12). */}
@@ -811,24 +843,7 @@ function FeedItemCard({
             style={styles.composerSend}
           />
         </View>
-      ) : (
-        <Pressable
-          onPress={() => setComposerOpen(true)}
-          accessibilityRole="button"
-          accessibilityLabel="Add a comment"
-          testID={`trip-feed-comment-open-${item.id}`}
-          style={({ pressed }) => [styles.commentAction, pressed && styles.pressed]}
-        >
-          <Ionicons
-            name="chatbubble-outline"
-            size={16}
-            color={theme.color.textSecondary}
-          />
-          <Text style={styles.commentActionText}>
-            {commentCount > 0 ? 'Add another comment' : 'Add a comment'}
-          </Text>
-        </Pressable>
-      )}
+      ) : null}
 
       {error !== null ? (
         <Text
@@ -1190,10 +1205,8 @@ function ExperienceThumb({
 /** Shared compact header for every state of the Trip_Activity screen. */
 function ActivityHeader({
   onBack,
-  onLog,
 }: {
   readonly onBack: () => void;
-  readonly onLog: () => void;
 }): JSX.Element {
   return (
     <GradientHeader
@@ -1202,14 +1215,6 @@ function ActivityHeader({
       icon="megaphone"
       compact
       onBack={onBack}
-      right={
-        <PrimaryButton
-          label="Log"
-          icon="add-outline"
-          onPress={onLog}
-          testID="trip-activity-log-open"
-        />
-      }
     />
   );
 }
@@ -1484,61 +1489,133 @@ const styles = StyleSheet.create({
     ...theme.typography.meta,
     color: theme.color.accentDark,
   },
-  rodeWithChips: {
+  composerCtaCard: {
     flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#fcfaff',
+    borderWidth: 1.5,
+    borderColor: '#ece4f6',
+    borderRadius: theme.radius.lg,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.md,
+    ...theme.shadow.card,
+  },
+  composerCtaLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.md,
+    flex: 1,
+  },
+  composerCtaIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(91, 42, 134, 0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  composerCtaIcon: {
+    fontSize: 18,
+  },
+  composerCtaTextWrap: {
+    flex: 1,
+    gap: 2,
+  },
+  composerCtaTitle: {
+    ...theme.typography.subtitle,
+    color: theme.color.primary,
+    fontWeight: '800',
+  },
+  composerCtaSubtitle: {
+    ...theme.typography.meta,
+    color: theme.color.textSecondary,
+  },
+  composerCtaPlus: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: theme.color.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rodeWithRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 6,
     flexWrap: 'wrap',
-    gap: theme.spacing.sm,
-    marginTop: theme.spacing.xs,
+  },
+  rodeWithLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: theme.color.textSecondary,
   },
   tagChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: 6,
+    gap: 3,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
     borderRadius: theme.radius.pill,
     maxWidth: '100%',
   },
   tagChipText: {
-    ...theme.typography.meta,
+    fontSize: 11,
+    fontWeight: '700',
     flexShrink: 1,
   },
-  reactions: {
+  feedReactionsRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: theme.spacing.sm,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: theme.spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: theme.color.border,
   },
-  reactionPill: {
+  reactionsGroup: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.sm,
+  },
+  rxChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
     borderRadius: theme.radius.pill,
     backgroundColor: theme.color.surfaceAlt,
     borderWidth: 1,
     borderColor: theme.color.border,
   },
-  reactionText: {
+  rxChipActive: {
+    backgroundColor: 'rgba(91, 42, 134, 0.12)',
+    borderColor: 'rgba(91, 42, 134, 0.35)',
+  },
+  rxEmoji: {
+    fontSize: 14,
+  },
+  rxCount: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: theme.color.textSecondary,
+  },
+  rxCountActive: {
+    color: theme.color.primary,
+    fontWeight: '800',
+  },
+  commentLink: {
+    paddingVertical: 4,
+    paddingHorizontal: 6,
+  },
+  commentLinkText: {
     ...theme.typography.meta,
     color: theme.color.textSecondary,
+    fontWeight: '600',
   },
   pressed: {
     opacity: 0.7,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: theme.color.border,
-  },
-  commentAction: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing.sm,
-    paddingVertical: theme.spacing.xs,
-  },
-  commentActionText: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
   },
   comments: {
     gap: theme.spacing.sm,

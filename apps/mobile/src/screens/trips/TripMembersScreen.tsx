@@ -33,6 +33,7 @@
 import React, { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Modal,
   ScrollView,
   StyleSheet,
@@ -251,6 +252,47 @@ export default function TripMembersScreen({
     leaveMutation.isPending ||
     cancelInviteMutation.isPending;
 
+  const promptLeaveTrip = () => {
+    if (busy) return;
+    Alert.alert(
+      'Leave Trip?',
+      'Are you sure you want to leave this trip? You will no longer have access to its schedule, reservations, or activity.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Leave',
+          style: 'destructive',
+          onPress: () => {
+            setActionError(null);
+            leaveMutation.mutate();
+          },
+        },
+      ],
+    );
+  };
+
+  const promptRemoveMember = (member: TripMemberDTO) => {
+    if (busy) return;
+    Alert.alert(
+      `Remove ${member.displayName}?`,
+      `Remove ${member.displayName} from this trip? They will no longer have access to this trip, its schedule, or reservations.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: () => {
+            setActionError(null);
+            roleMutation.mutate({
+              userId: member.userId,
+              action: 'remove',
+            });
+          },
+        },
+      ],
+    );
+  };
+
   const loading =
     (meQuery.isLoading && meQuery.data === undefined) ||
     (membersQuery.isLoading && membersQuery.data === undefined);
@@ -360,11 +402,7 @@ export default function TripMembersScreen({
                     label="Leave trip"
                     icon="exit-outline"
                     tone="danger"
-                    onPress={() => {
-                      if (busy) return;
-                      setActionError(null);
-                      leaveMutation.mutate();
-                    }}
+                    onPress={promptLeaveTrip}
                     disabled={busy}
                     testID="trip-members-leave"
                   />
@@ -408,14 +446,7 @@ export default function TripMembersScreen({
                       label="Remove"
                       icon="person-remove-outline"
                       tone="danger"
-                      onPress={() => {
-                        if (busy) return;
-                        setActionError(null);
-                        roleMutation.mutate({
-                          userId: member.userId,
-                          action: 'remove',
-                        });
-                      }}
+                      onPress={() => promptRemoveMember(member)}
                       disabled={busy}
                       testID={`trip-member-remove-${member.userId}`}
                     />
@@ -647,11 +678,21 @@ function InviteModal({
 // Components
 // ---------------------------------------------------------------------------
 
+const AVATAR_PALETTE = ['#5b2a86', '#2f80ed', '#2e9e6b', '#f6a609', '#d6336c'];
+function getAvatarColor(name: string): string {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = (hash + name.charCodeAt(i)) % AVATAR_PALETTE.length;
+  }
+  return AVATAR_PALETTE[hash] ?? '#5b2a86';
+}
+
 /** A small circular avatar showing the first initial of a display name. */
 function MemberAvatar({ displayName }: { readonly displayName: string }): JSX.Element {
   const initial = displayName.trim().charAt(0).toUpperCase() || '?';
+  const bgColor = getAvatarColor(displayName);
   return (
-    <View style={styles.avatar}>
+    <View style={[styles.avatar, { backgroundColor: bgColor }]}>
       <Text style={styles.avatarText}>{initial}</Text>
     </View>
   );
@@ -799,7 +840,8 @@ const styles = StyleSheet.create({
   },
   avatarText: {
     ...theme.typography.subtitle,
-    color: theme.color.primary,
+    color: '#ffffff',
+    fontWeight: '800',
   },
   busy: {
     alignSelf: 'center',

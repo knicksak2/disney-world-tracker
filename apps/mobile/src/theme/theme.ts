@@ -57,6 +57,7 @@ export const color = {
 
   // Star/sparkle highlights for the starry headers.
   star: '#ffffff',
+  starRating: '#f59e0b',
 } as const;
 
 // ---------------------------------------------------------------------------

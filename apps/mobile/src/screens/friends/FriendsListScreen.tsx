@@ -39,6 +39,7 @@
 import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   StyleSheet,
   Text,
@@ -56,7 +57,7 @@ import { isAvatarPresetId } from '@dwt/shared';
 
 import { ApiError, apiRequest } from '../../api/client';
 import { renderAvatarPreset } from '../../avatars/AvatarPresets';
-import type { FriendsStackParamList } from '../../navigation/FriendsStack';
+import type { YouAndCrewStackParamList } from '../../navigation/YouAndCrewStack';
 import { theme } from '../../theme/theme';
 import {
   Badge,
@@ -73,7 +74,7 @@ import { friendsErrorMessage } from './errorMessages';
 // Types
 // ---------------------------------------------------------------------------
 
-type Props = NativeStackScreenProps<FriendsStackParamList, 'FriendsList'>;
+type Props = NativeStackScreenProps<YouAndCrewStackParamList, 'FriendsList'>;
 
 /**
  * Wire shape for `GET /me/friends`. Mirrors `FriendsAndRequests` from
@@ -189,6 +190,27 @@ export default function FriendsListScreen({ navigation }: Props): JSX.Element {
     },
   });
 
+  const handleRemove = useCallback(
+    (friend: FriendListEntry) => {
+      Alert.alert(
+        `Remove ${friend.displayName}?`,
+        `Are you sure you want to remove ${friend.displayName} from your crew? You will need to send a new friend request to reconnect.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Remove',
+            style: 'destructive',
+            onPress: () => {
+              setRowError(friend.userId, null);
+              removeMutation.mutate(friend.userId);
+            },
+          },
+        ],
+      );
+    },
+    [removeMutation],
+  );
+
   // -------------------------------------------------------------------------
   // Render branches
   // -------------------------------------------------------------------------
@@ -298,10 +320,7 @@ export default function FriendsListScreen({ navigation }: Props): JSX.Element {
                       removeMutation.isPending &&
                       removeMutation.variables === item.friend.userId
                     }
-                    onRemove={() => {
-                      setRowError(item.friend.userId, null);
-                      removeMutation.mutate(item.friend.userId);
-                    }}
+                    onRemove={() => handleRemove(item.friend)}
                     onPress={() => {
                       navigation.navigate('FriendProfile', {
                         friendId: item.friend.userId,

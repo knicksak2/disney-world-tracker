@@ -324,6 +324,10 @@ export interface ExperienceDetailResponse {
    * `null`/absent otherwise (R6, R10.1).
    */
   readonly subType?: string | null;
+  /**
+   * Curated Disney reservation-page URL, present only when persisted (R6.5, R6.6, R6.7).
+   */
+  readonly diningUrl?: string;
 }
 
 /**
@@ -635,12 +639,19 @@ function toDetailResponse(
 ): ExperienceDetailResponse {
   // Strip `active` (browse-path only); keep all other DTO fields, including
   // the present-only-when-persisted enrichment fields.
-  const { active: _active, menus: _dtoMenus, ...rest } = experience;
+  const { active: _active, menus: _dtoMenus, diningUrl: _dtoDiningUrl, ...rest } = experience;
   void _active;
   void _dtoMenus;
+  void _dtoDiningUrl;
   return {
     ...rest,
     ...(menus.length > 0 ? { menus } : {}),
+    ...(experience.category === 'Restaurant' &&
+    experience.diningUrl !== undefined &&
+    experience.diningUrl !== null &&
+    experience.diningUrl.trim().length > 0
+      ? { diningUrl: experience.diningUrl }
+      : {}),
   };
 }
 

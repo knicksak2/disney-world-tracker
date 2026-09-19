@@ -26,6 +26,9 @@ import {
   isMealPeriodServed,
   attachFoodListSchema,
   tripFoodListSchema,
+  dayTouringHoursSchema,
+  tripOptimizationInputSchema,
+  tripEditSchema,
 } from '../trips.js';
 
 // A stable, well-formed pending rode-with tag DTO (all fields present, valid).
@@ -255,6 +258,84 @@ describe('tripFoodListSchema (R22.9, R22.10)', () => {
         name: 'Extra Name',
       }).success,
     ).toBe(false);
+  });
+});
+
+describe('dayTouringHoursSchema (R7.1, R9.7)', () => {
+  it('accepts valid startMinutes and startMode', () => {
+    const result = dayTouringHoursSchema.safeParse({
+      startHour: 9,
+      endHour: 21,
+      startMinutes: 750,
+      startMode: 'custom',
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.startMinutes).toBe(750);
+      expect(result.data.startMode).toBe('custom');
+    }
+  });
+
+  it('accepts park_open and party_mix_in startMode', () => {
+    expect(dayTouringHoursSchema.safeParse({ startMode: 'park_open' }).success).toBe(true);
+    expect(dayTouringHoursSchema.safeParse({ startMode: 'party_mix_in' }).success).toBe(true);
+  });
+
+  it('rejects ephemeral "now" startMode on persisted dayTouringHoursSchema (R9.7)', () => {
+    const result = dayTouringHoursSchema.safeParse({ startMode: 'now' });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects out of range startMinutes', () => {
+    expect(dayTouringHoursSchema.safeParse({ startMinutes: -1 }).success).toBe(false);
+    expect(dayTouringHoursSchema.safeParse({ startMinutes: 1440 }).success).toBe(false);
+  });
+});
+
+describe('tripOptimizationInputSchema (R9.1, R9.2)', () => {
+  it('accepts valid startMinutes and ephemeral "now" startMode', () => {
+    const result = tripOptimizationInputSchema.safeParse({
+      date: '2026-10-01',
+      startMinutes: 750,
+      startMode: 'now',
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.startMinutes).toBe(750);
+      expect(result.data.startMode).toBe('now');
+    }
+  });
+
+  it('accepts park_open, party_mix_in, and custom startModes', () => {
+    expect(tripOptimizationInputSchema.safeParse({ date: '2026-10-01', startMode: 'park_open' }).success).toBe(true);
+    expect(tripOptimizationInputSchema.safeParse({ date: '2026-10-01', startMode: 'party_mix_in' }).success).toBe(true);
+    expect(tripOptimizationInputSchema.safeParse({ date: '2026-10-01', startMode: 'custom' }).success).toBe(true);
+  });
+
+  it('rejects unknown startMode', () => {
+    expect(tripOptimizationInputSchema.safeParse({ date: '2026-10-01', startMode: 'invalid' }).success).toBe(false);
+  });
+
+  it('rejects out of range startMinutes', () => {
+    expect(tripOptimizationInputSchema.safeParse({ date: '2026-10-01', startMinutes: -1 }).success).toBe(false);
+    expect(tripOptimizationInputSchema.safeParse({ date: '2026-10-01', startMinutes: 1440 }).success).toBe(false);
+  });
+});
+
+describe('tripEditSchema: walkWaitWeighting (R10.1)', () => {
+  it('accepts each valid walkWaitWeighting value', () => {
+    expect(tripEditSchema.safeParse({ walkWaitWeighting: 'balanced' }).success).toBe(true);
+    expect(tripEditSchema.safeParse({ walkWaitWeighting: 'minimize_walking' }).success).toBe(true);
+    expect(tripEditSchema.safeParse({ walkWaitWeighting: 'minimize_waits' }).success).toBe(true);
+  });
+
+  it('accepts an edit payload omitting walkWaitWeighting entirely', () => {
+    expect(tripEditSchema.safeParse({ name: 'Summer 2026' }).success).toBe(true);
+  });
+
+  it('rejects an unknown walkWaitWeighting value', () => {
+    const result = tripEditSchema.safeParse({ walkWaitWeighting: 'fastest' });
+    expect(result.success).toBe(false);
   });
 });
 

@@ -9,12 +9,12 @@ import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
-import type { ProfileStackParamList } from '../../navigation/ProfileStack';
+import type { CollectionStackParamList } from '../../navigation/CollectionStack';
 import { PIN_CREDITS } from '../../components/pins/pinCredits';
 import { theme } from '../../theme/theme';
 import { Card, GradientHeader, ScreenContainer, SectionLabel } from '../../theme/components';
 
-type Props = NativeStackScreenProps<ProfileStackParamList, 'PinAttribution'>;
+type Props = NativeStackScreenProps<CollectionStackParamList, 'PinAttribution'>;
 
 export default function AttributionScreen({ navigation }: Props): JSX.Element {
   return (

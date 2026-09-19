@@ -1,0 +1,3435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Disney World Tracker — Navigation & Layout Redesign</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #5b2a86;
+      --primary-dark: #3d1c5c;
+      --primary-light: #7e57c2;
+      --accent: #f6c343;
+      --accent-dark: #d4a017;
+      --bg: #f5f2fb;
+      --surface: #ffffff;
+      --surface-alt: #efe9f7;
+      --text-primary: #1f1235;
+      --text-secondary: #6b6480;
+      --border: #e2d9f0;
+      --danger: #d6336c;
+      --success: #2e9e6b;
+      
+      --mk-purple: #7e57c2;
+      --epcot-blue: #2f80ed;
+      --dhs-red: #e8505b;
+      --dak-green: #3fa34d;
+      
+      --shadow-sm: 0 2px 8px rgba(61, 28, 92, 0.06);
+      --shadow-md: 0 6px 18px rgba(61, 28, 92, 0.08);
+      --shadow-lg: 0 12px 32px rgba(61, 28, 92, 0.16);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background: #0c0615;
+      color: #e2d9f0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px 16px 60px;
+    }
+
+    header.top-bar {
+      max-width: 1240px;
+      width: 100%;
+      text-align: center;
+      margin-bottom: 24px;
+    }
+
+    .badge-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(246, 195, 67, 0.15);
+      border: 1px solid rgba(246, 195, 67, 0.35);
+      color: var(--accent);
+      padding: 5px 14px;
+      border-radius: 999px;
+      font-size: 11.5px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+
+    h1 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 32px;
+      font-weight: 800;
+      color: #ffffff;
+      margin-bottom: 6px;
+      letter-spacing: -0.5px;
+    }
+
+    p.subtitle {
+      font-size: 14.5px;
+      color: #a79fc2;
+      max-width: 780px;
+      margin: 0 auto 16px;
+      line-height: 1.5;
+    }
+
+    /* Screen Selector Bar */
+    .view-switcher {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 8px;
+      background: #180e2b;
+      padding: 6px;
+      border-radius: 14px;
+      border: 1px solid #332057;
+      max-width: 860px;
+      margin: 0 auto;
+    }
+
+    .view-btn {
+      padding: 8px 14px;
+      background: transparent;
+      border: none;
+      color: #b0a4cf;
+      font-family: 'Outfit', sans-serif;
+      font-size: 13px;
+      font-weight: 700;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .view-btn:hover {
+      color: #fff;
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    .view-btn.active {
+      background: var(--primary);
+      color: white;
+      box-shadow: 0 4px 12px rgba(91, 42, 134, 0.4);
+    }
+
+    /* Park Chips (Live Waits & Explore) */
+    .park-chips {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      padding: 2px 0 8px;
+    }
+
+    .park-chips::-webkit-scrollbar {
+      display: none;
+    }
+
+    .park-chip {
+      flex: 0 0 auto;
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all 0.15s ease;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .park-chip:hover {
+      border-color: var(--primary-light);
+      color: var(--text-primary);
+    }
+
+    .park-chip.active {
+      background: var(--primary);
+      color: white;
+      border-color: var(--primary);
+      box-shadow: 0 2px 8px rgba(91, 42, 134, 0.3);
+    }
+
+    /* Wait Filters & List Cards */
+    .wait-filter-row {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 8px;
+      overflow-x: auto;
+    }
+
+    .wait-filter-pill {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 7px;
+      background: var(--surface-alt);
+      color: var(--text-secondary);
+      border: none;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .wait-filter-pill.active {
+      background: rgba(91, 42, 134, 0.15);
+      color: var(--primary);
+      font-weight: 800;
+    }
+
+    .wait-card {
+      background: var(--surface);
+      border-radius: 14px;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow-sm);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 6px;
+      transition: transform 0.15s;
+      cursor: pointer;
+    }
+
+    .wait-card:hover {
+      transform: translateX(2px);
+    }
+
+    .wait-status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .wait-status-dot.low { background: #2e9e6b; box-shadow: 0 0 6px rgba(46, 158, 107, 0.5); }
+    .wait-status-dot.mod { background: #f6c343; box-shadow: 0 0 6px rgba(246, 195, 67, 0.5); }
+    .wait-status-dot.high { background: #e8505b; box-shadow: 0 0 6px rgba(232, 80, 91, 0.5); }
+    .wait-status-dot.down { background: #8e889b; }
+
+    .wait-details {
+      flex: 1;
+    }
+
+    .wait-name {
+      font-size: 12.5px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    .wait-meta {
+      font-size: 10px;
+      color: var(--text-secondary);
+      margin-top: 1px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .wait-time-box {
+      text-align: right;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+    }
+
+    .wait-time-num {
+      font-family: 'Outfit', sans-serif;
+      font-size: 16px;
+      font-weight: 800;
+      color: var(--text-primary);
+      line-height: 1;
+    }
+
+    .wait-time-unit {
+      font-size: 8.5px;
+      font-weight: 700;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+    }
+
+    .btn-quick-log {
+      background: var(--surface-alt);
+      color: var(--primary);
+      border: 1px solid var(--border);
+      font-size: 9.5px;
+      font-weight: 800;
+      padding: 3px 8px;
+      border-radius: 6px;
+      cursor: pointer;
+      margin-top: 4px;
+      transition: all 0.15s;
+    }
+
+    .btn-quick-log:hover {
+      background: var(--primary);
+      color: white;
+    }
+
+    /* Avatar Header Chip (Option 1) */
+    .avatar-chip-btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(255, 255, 255, 0.18);
+      backdrop-filter: blur(10px);
+      border: 1.5px solid rgba(246, 195, 67, 0.7);
+      border-radius: 20px;
+      padding: 3px 8px 3px 4px;
+      color: white;
+      cursor: pointer;
+      position: relative;
+      transition: all 0.2s ease;
+    }
+
+    .avatar-chip-btn:hover {
+      background: rgba(255, 255, 255, 0.28);
+      transform: scale(1.04);
+    }
+
+    .avatar-chip-circle {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: var(--accent);
+      color: var(--primary-dark);
+      font-weight: 800;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .avatar-chip-label {
+      font-size: 11px;
+      font-weight: 700;
+      color: #ffffff;
+    }
+
+    .avatar-chip-badge {
+      position: absolute;
+      top: -3px;
+      right: -3px;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--danger);
+      border: 2px solid var(--primary-dark);
+    }
+
+    /* Center Magic FAB */
+    .nav-fab-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      margin-top: -24px;
+    }
+
+    .nav-fab-btn {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%);
+      color: var(--primary-dark);
+      border: 3px solid white;
+      box-shadow: 0 4px 14px rgba(246, 195, 67, 0.45);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      font-weight: 800;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .nav-fab-btn:hover {
+      transform: scale(1.08);
+      box-shadow: 0 6px 18px rgba(246, 195, 67, 0.6);
+    }
+
+    .nav-fab-label {
+      font-size: 9px;
+      font-weight: 800;
+      color: var(--accent-dark);
+      margin-top: 2px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* Presentation Layout */
+    .app-container {
+      max-width: 1240px;
+      width: 100%;
+      display: grid;
+      grid-template-columns: 390px 1fr;
+      gap: 32px;
+      align-items: start;
+      margin-top: 10px;
+    }
+
+    @media (max-width: 1040px) {
+      .app-container {
+        grid-template-columns: 1fr;
+        justify-items: center;
+      }
+    }
+
+    /* Device Frame */
+    .device-wrapper {
+      position: sticky;
+      top: 20px;
+    }
+
+    .iphone-frame {
+      width: 390px;
+      height: 820px;
+      background: var(--bg);
+      border-radius: 48px;
+      box-shadow: 0 0 0 10px #241639, 0 25px 60px rgba(0, 0, 0, 0.7);
+      border: 4px solid #3d2958;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    /* Dynamic Island */
+    .island {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 110px;
+      height: 28px;
+      background: #000;
+      border-radius: 20px;
+      z-index: 999;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 12px;
+    }
+
+    .island-lens {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #0d1222;
+      border: 1px solid #1c2742;
+    }
+
+    /* Scrollable Viewport */
+    .screen-content {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding-bottom: 95px;
+      position: relative;
+    }
+
+    .screen-content::-webkit-scrollbar {
+      display: none;
+    }
+
+    /* 5-Tab Bottom Navigation Bar */
+    .bottom-nav {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 80px;
+      background: rgba(255, 255, 255, 0.96);
+      backdrop-filter: blur(20px);
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-around;
+      padding-bottom: 16px;
+      z-index: 100;
+    }
+
+    .nav-tab {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      color: var(--text-secondary);
+      font-size: 10px;
+      font-weight: 700;
+      cursor: pointer;
+      border: none;
+      background: none;
+      padding: 6px 8px;
+      border-radius: 12px;
+      transition: all 0.2s ease;
+      position: relative;
+    }
+
+    .nav-tab.active {
+      color: var(--primary);
+    }
+
+    .nav-tab svg {
+      width: 20px;
+      height: 20px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 2;
+    }
+
+    .nav-tab.active svg {
+      stroke: var(--primary);
+      fill: rgba(91, 42, 134, 0.12);
+    }
+
+    .nav-badge {
+      position: absolute;
+      top: 3px;
+      right: 6px;
+      background: var(--danger);
+      color: white;
+      font-size: 9px;
+      font-weight: 800;
+      min-width: 15px;
+      height: 15px;
+      border-radius: 7.5px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 3px;
+      border: 2px solid white;
+    }
+
+    /* Screen Headers */
+    .gradient-header {
+      background: linear-gradient(145deg, var(--primary) 0%, var(--primary-dark) 100%);
+      color: white;
+      padding: 48px 16px 22px;
+      border-bottom-left-radius: 26px;
+      border-bottom-right-radius: 26px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .gradient-header::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at 80% 20%, rgba(246, 195, 67, 0.22) 0%, transparent 60%);
+      pointer-events: none;
+    }
+
+    .header-top-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+      position: relative;
+      z-index: 2;
+    }
+
+    .greeting-pill {
+      font-size: 11.5px;
+      font-weight: 700;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .icon-btn {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.15);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      position: relative;
+      transition: all 0.2s ease;
+    }
+
+    .icon-btn:hover {
+      background: rgba(255, 255, 255, 0.25);
+      transform: scale(1.05);
+    }
+
+    .icon-btn svg {
+      width: 16px;
+      height: 16px;
+      stroke: white;
+      fill: none;
+      stroke-width: 2;
+    }
+
+    .icon-btn .btn-badge {
+      position: absolute;
+      top: -2px;
+      right: -2px;
+      background: var(--danger);
+      color: white;
+      font-size: 9px;
+      font-weight: 800;
+      width: 15px;
+      height: 15px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 2px solid var(--primary-dark);
+    }
+
+    .header-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 21px;
+      font-weight: 800;
+      line-height: 1.2;
+      margin-bottom: 2px;
+    }
+
+    .header-sub {
+      font-size: 11.5px;
+      color: rgba(255, 255, 255, 0.8);
+    }
+
+    .screen-body {
+      padding: 0 14px 90px;
+      margin-top: -14px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      position: relative;
+      z-index: 10;
+    }
+
+    .card {
+      background: var(--surface);
+      border-radius: 16px;
+      padding: 14px;
+      box-shadow: var(--shadow-md);
+      border: 1px solid var(--border);
+    }
+
+    /* Countdown Card */
+    .countdown-card {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 14px;
+      background: linear-gradient(135deg, #ffffff 0%, #faf7ff 100%);
+      border: 1px solid #ebdff8;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+
+    .countdown-card:hover {
+      transform: translateY(-2px);
+    }
+
+    .countdown-circle {
+      width: 48px;
+      height: 48px;
+      border-radius: 14px;
+      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+      color: white;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 3px 8px rgba(91, 42, 134, 0.25);
+    }
+
+    .countdown-num {
+      font-family: 'Outfit', sans-serif;
+      font-size: 20px;
+      font-weight: 800;
+      line-height: 1;
+      color: var(--accent);
+    }
+
+    .countdown-unit {
+      font-size: 8.5px;
+      text-transform: uppercase;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      opacity: 0.9;
+    }
+
+    .countdown-info {
+      flex: 1;
+    }
+
+    .countdown-tag {
+      font-size: 9.5px;
+      font-weight: 700;
+      color: var(--mk-purple);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 2px;
+    }
+
+    .countdown-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 14.5px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    .countdown-meta {
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
+
+    /* Action Dock */
+    .action-dock {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+    }
+
+    .dock-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 13px;
+      padding: 9px 4px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      color: var(--text-primary);
+      position: relative;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .dock-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-md);
+      border-color: var(--primary-light);
+    }
+
+    .dock-icon-wrap {
+      width: 36px;
+      height: 36px;
+      border-radius: 11px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 17px;
+    }
+
+    .dock-label {
+      font-size: 9.5px;
+      font-weight: 700;
+      text-align: center;
+      color: var(--text-primary);
+    }
+
+    .dock-badge {
+      position: absolute;
+      top: 3px;
+      right: 6px;
+      background: var(--danger);
+      color: white;
+      font-size: 8.5px;
+      font-weight: 800;
+      width: 15px;
+      height: 15px;
+      border-radius: 7.5px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 2px solid white;
+    }
+
+    /* Pulse Carousel */
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 2px;
+    }
+
+    .section-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .section-link {
+      font-size: 11.5px;
+      font-weight: 700;
+      color: var(--primary);
+      text-decoration: none;
+      cursor: pointer;
+    }
+
+    .park-pulse-row {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 2px;
+      margin: 0 -14px;
+      padding-left: 14px;
+      padding-right: 14px;
+    }
+
+    .park-pulse-row::-webkit-scrollbar {
+      display: none;
+    }
+
+    .pulse-pill {
+      flex: 0 0 112px;
+      background: var(--surface);
+      border-radius: 13px;
+      padding: 9px;
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow-sm);
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      cursor: pointer;
+    }
+
+    .pulse-park-name {
+      font-size: 10.5px;
+      font-weight: 700;
+      color: var(--text-secondary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .pulse-wait-time {
+      font-family: 'Outfit', sans-serif;
+      font-size: 17px;
+      font-weight: 800;
+      display: flex;
+      align-items: baseline;
+      gap: 3px;
+    }
+
+    .pulse-unit {
+      font-size: 9.5px;
+      font-weight: 600;
+      color: var(--text-secondary);
+    }
+
+    .pulse-trend {
+      font-size: 8.5px;
+      font-weight: 700;
+      padding: 1px 5px;
+      border-radius: 5px;
+      align-self: flex-start;
+    }
+
+    .pulse-trend.good {
+      background: rgba(46, 158, 107, 0.12);
+      color: var(--success);
+    }
+
+    .pulse-trend.med {
+      background: rgba(246, 166, 9, 0.12);
+      color: #c97702;
+    }
+
+    /* Experience Row */
+    .experience-row {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      padding: 10px 12px;
+      border-radius: 13px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left-width: 4px;
+      box-shadow: var(--shadow-sm);
+      margin-bottom: 6px;
+      cursor: pointer;
+      transition: transform 0.15s;
+    }
+
+    .experience-row:hover {
+      transform: translateX(2px);
+    }
+
+    .rank-num {
+      width: 24px;
+      height: 24px;
+      border-radius: 12px;
+      background: var(--surface-alt);
+      color: var(--primary);
+      font-family: 'Outfit', sans-serif;
+      font-weight: 800;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .exp-content {
+      flex: 1;
+    }
+
+    .exp-name {
+      font-size: 12.5px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    .exp-park {
+      font-size: 10.5px;
+      color: var(--text-secondary);
+      margin-top: 1px;
+    }
+
+    .exp-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+      padding: 2px 6px;
+      border-radius: 5px;
+      font-size: 9px;
+      font-weight: 700;
+      margin-top: 3px;
+    }
+
+    .exp-rating {
+      text-align: right;
+    }
+
+    .rating-val {
+      font-family: 'Outfit', sans-serif;
+      font-size: 14.5px;
+      font-weight: 800;
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      gap: 2px;
+    }
+
+    .rating-val svg {
+      width: 12px;
+      height: 12px;
+      fill: var(--accent);
+      stroke: none;
+    }
+
+    .rating-count {
+      font-size: 9.5px;
+      color: var(--text-secondary);
+    }
+
+    /* Segmented Control */
+    .segmented-control {
+      display: flex;
+      background: var(--surface-alt);
+      border-radius: 13px;
+      padding: 3px;
+      gap: 4px;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+
+    .segmented-control::-webkit-scrollbar {
+      display: none;
+    }
+
+    .seg-btn {
+      flex: 0 0 auto;
+      padding: 6px 11px;
+      border: none;
+      background: transparent;
+      border-radius: 9px;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      white-space: nowrap;
+    }
+
+    .seg-btn.active {
+      background: var(--surface);
+      color: var(--primary);
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+    }
+
+    .seg-badge {
+      background: var(--danger);
+      color: white;
+      font-size: 8.5px;
+      font-weight: 800;
+      padding: 1px 4px;
+      border-radius: 5px;
+    }
+
+    /* Corkboard Preview */
+    .corkboard-card {
+      background: #dfcfb2;
+      border: 5px solid #8d6e53;
+      border-radius: 15px;
+      padding: 10px;
+      position: relative;
+      box-shadow: inset 0 2px 8px rgba(0,0,0,0.2), var(--shadow-sm);
+      overflow: hidden;
+    }
+
+    .cork-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+      position: relative;
+      z-index: 2;
+    }
+
+    .cork-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 11.5px;
+      font-weight: 800;
+      color: #4a3828;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .cork-tag {
+      font-size: 9.5px;
+      font-weight: 700;
+      background: rgba(255,255,255,0.7);
+      color: #4a3828;
+      padding: 2px 7px;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    .pin-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+      position: relative;
+      z-index: 2;
+    }
+
+    .pin-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+
+    .pin-badge-graphic {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: white;
+      box-shadow: 0 3px 8px rgba(0,0,0,0.2), 0 0 0 2px #f6c343;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+    }
+
+    .pin-name-sm {
+      font-size: 8.5px;
+      font-weight: 700;
+      color: #3b2c1f;
+      text-align: center;
+      line-height: 1.1;
+      max-width: 48px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* Right Documentation Panel */
+    .docs-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .card-dark {
+      background: #150c26;
+      border: 1px solid #341e54;
+      border-radius: 18px;
+      padding: 20px;
+    }
+
+    .card-dark h3 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 18px;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .card-dark p {
+      font-size: 13px;
+      line-height: 1.6;
+      color: #b3a8cf;
+      margin-bottom: 12px;
+    }
+
+    .table-compare {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11.5px;
+      margin-top: 6px;
+    }
+
+    .table-compare th {
+      text-align: left;
+      padding: 8px 10px;
+      background: #20133b;
+      color: var(--accent);
+      font-weight: 700;
+      border-bottom: 2px solid #3d2866;
+    }
+
+    .table-compare td {
+      padding: 9px 10px;
+      border-bottom: 1px solid #24163e;
+      color: #d1c7eb;
+      vertical-align: top;
+      line-height: 1.4;
+    }
+
+    .badge-ok {
+      display: inline-block;
+      background: rgba(46, 158, 107, 0.2);
+      color: #5ce3a5;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 9.5px;
+      font-weight: 700;
+    }
+
+    .badge-promoted {
+      display: inline-block;
+      background: rgba(246, 195, 67, 0.2);
+      color: #fbd36b;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 9.5px;
+      font-weight: 700;
+    }
+
+    /* Modals & Sheets */
+    .sheet-modal {
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.65);
+      z-index: 500;
+      display: none;
+      align-items: flex-end;
+    }
+
+    .sheet-modal.open {
+      display: flex;
+    }
+
+    .sheet-content {
+      width: 100%;
+      background: var(--surface);
+      border-top-left-radius: 22px;
+      border-top-right-radius: 22px;
+      padding: 16px 14px 28px;
+      max-height: 85%;
+      overflow-y: auto;
+      box-shadow: var(--shadow-lg);
+      animation: slideUp 0.2s ease;
+    }
+
+    @keyframes slideUp {
+      from { transform: translateY(100%); }
+      to { transform: translateY(0); }
+    }
+
+    .sheet-handle {
+      width: 34px;
+      height: 4px;
+      background: var(--border);
+      border-radius: 2px;
+      margin: 0 auto 12px;
+    }
+
+    .sheet-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 16px;
+      font-weight: 800;
+      color: var(--text-primary);
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .feed-item {
+      display: flex;
+      gap: 9px;
+      padding: 10px;
+      border-radius: 11px;
+      background: var(--surface-alt);
+      margin-bottom: 7px;
+      cursor: pointer;
+    }
+
+    .feed-icon {
+      font-size: 19px;
+    }
+
+    .feed-text {
+      flex: 1;
+      font-size: 11.5px;
+      color: var(--text-primary);
+      line-height: 1.35;
+    }
+
+    .feed-time {
+      font-size: 9.5px;
+      color: var(--text-secondary);
+      margin-top: 2px;
+    }
+
+    .itinerary-slot {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 11px;
+      padding: 9px 11px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+
+    .ll-pill {
+      background: rgba(246, 195, 67, 0.2);
+      color: #946800;
+      font-size: 9.5px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 5px;
+    }
+    /* Schedule Timeline Styling (Faithful to TripScheduleScreen.tsx) */
+    .schedule-top-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .btn-add-item {
+      flex: 1;
+      padding: 9px 12px;
+      border-radius: 12px;
+      background: #f5f3ff;
+      border: 1.5px solid #d8b4fe;
+      color: #581c87;
+      font-size: 12px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      cursor: pointer;
+    }
+    .btn-optimize {
+      padding: 9px 14px;
+      border-radius: 12px;
+      background: #3b0764;
+      border: none;
+      color: white;
+      font-size: 12px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      cursor: pointer;
+      box-shadow: 0 3px 8px rgba(59, 7, 100, 0.25);
+    }
+    .park-hours-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .park-hours-card {
+      flex: 1;
+      background: white;
+      border: 1px solid #e2e8f0;
+      border-radius: 14px;
+      padding: 10px 12px;
+      border-left: 4px solid;
+      box-shadow: var(--shadow-sm);
+    }
+    .park-hours-name {
+      font-weight: 800;
+      font-size: 12px;
+      color: #0f172a;
+    }
+    .park-hours-time {
+      font-size: 10px;
+      color: #64748b;
+      margin: 1px 0 5px;
+      font-weight: 500;
+    }
+    .early-entry-badge {
+      display: inline-block;
+      background: #fef08a;
+      color: #854d0e;
+      font-size: 8.5px;
+      font-weight: 800;
+      padding: 2px 6px;
+      border-radius: 999px;
+    }
+    .schedule-header {
+      margin-bottom: 10px;
+    }
+    .schedule-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 17px;
+      font-weight: 800;
+      color: #0f172a;
+    }
+    .schedule-sub {
+      font-size: 10px;
+      color: #64748b;
+      margin-top: 1px;
+    }
+    .timeline-container {
+      position: relative;
+      padding-left: 56px;
+      margin-bottom: 12px;
+    }
+    .timeline-rail {
+      position: absolute;
+      left: 24px;
+      top: 14px;
+      bottom: 24px;
+      width: 2px;
+      background: #cbd5e1;
+      z-index: 1;
+    }
+    .timeline-speech-row {
+      display: flex;
+      align-items: center;
+      position: relative;
+      height: 32px;
+      margin-bottom: 8px;
+      z-index: 3;
+    }
+    .timeline-speech-dot {
+      position: absolute;
+      left: -39px;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #6b21a8;
+      border: 2px solid white;
+      z-index: 3;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+    }
+    .timeline-speech-pill {
+      position: absolute;
+      left: -20px;
+      background: #581c87;
+      color: white;
+      font-size: 11px;
+      font-weight: 800;
+      padding: 4px 11px;
+      border-radius: 12px;
+      white-space: nowrap;
+      box-shadow: 0 2px 6px rgba(88, 28, 135, 0.3);
+      z-index: 4;
+    }
+    .timeline-node {
+      position: relative;
+      margin-bottom: 8px;
+    }
+    .timeline-time-box {
+      position: absolute;
+      left: -56px;
+      width: 42px;
+      top: calc(50% - 13px);
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      padding-right: 14px;
+      line-height: 1;
+      z-index: 2;
+    }
+    .timeline-time-digits {
+      font-size: 12px;
+      font-weight: 800;
+      color: #0f172a;
+    }
+    .timeline-time-ampm {
+      font-size: 8px;
+      font-weight: 700;
+      color: #64748b;
+      text-transform: uppercase;
+      margin-top: 1px;
+    }
+    .timeline-rail-dot {
+      position: absolute;
+      left: -36px;
+      top: calc(50% - 4px);
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #64748b;
+      border: 2px solid white;
+      z-index: 3;
+    }
+    .schedule-card {
+      background: white;
+      border-radius: 14px;
+      padding: 10px 11px;
+      border: 1px solid #e2e8f0;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      cursor: pointer;
+    }
+    .schedule-thumb {
+      width: 52px;
+      height: 52px;
+      border-radius: 10px;
+      object-fit: cover;
+      background: #f1f5f9;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+    }
+    .schedule-card-body {
+      flex: 1;
+      min-width: 0;
+    }
+    .schedule-card-name {
+      font-size: 13.5px;
+      font-weight: 800;
+      color: #0f172a;
+      line-height: 1.2;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .schedule-badge-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 5px;
+    }
+    .badge-wait-gray {
+      background: #f1f5f9;
+      color: #334155;
+      font-size: 9.5px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 6px;
+    }
+    .badge-duration-gray {
+      background: #f1f5f9;
+      color: #475569;
+      font-size: 9.5px;
+      font-weight: 600;
+      padding: 2px 6px;
+      border-radius: 6px;
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+    }
+    .badge-early-cyan {
+      background: #a5f3fc;
+      color: #0891b2;
+      font-size: 9px;
+      font-weight: 800;
+      padding: 2px 6px;
+      border-radius: 6px;
+      letter-spacing: 0.3px;
+    }
+    .walk-step {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 10.5px;
+      font-weight: 600;
+      color: #64748b;
+      margin: 6px 0 6px 0;
+    }
+    .trip-context-btn {
+      background: rgba(255, 255, 255, 0.08);
+      color: #cbd5e1;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 999px;
+      padding: 5px 14px;
+      font-size: 11.5px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-family: inherit;
+    }
+    .trip-context-btn:hover {
+      background: rgba(255, 255, 255, 0.16);
+      color: white;
+    }
+    .trip-context-btn.active {
+      background: #22c55e;
+      color: #052e16;
+      border-color: #4ade80;
+      font-weight: 800;
+      box-shadow: 0 0 12px rgba(34, 197, 94, 0.4);
+    }
+  </style>
+</head>
+<body>
+
+  <header class="top-bar">
+    <div class="badge-pill">✨ Magic FAB Architecture + Real-Time Wait Utility</div>
+    <h1>Disney World Tracker: Unified In-Park Experience</h1>
+    <p class="subtitle">
+      The thumb-friendly <strong>4 Content Spaces + Center Magic FAB</strong> navigation architecture, fully integrated with a <strong>Real-Time Live Wait Times</strong> tracker, 1-tap in-park logging, and top-header profile hub.
+    </p>
+
+    <!-- Screen Switcher -->
+    <div class="view-switcher">
+      <button class="view-btn active" id="vbtn-home" onclick="showScreen('home')">🏰 1. Today</button>
+      <button class="view-btn" id="vbtn-waits" onclick="showScreen('waits')">⏱️ 2. Live Waits</button>
+      <button class="view-btn" id="vbtn-explore" onclick="showScreen('explore')">🧭 3. Explore</button>
+      <button class="view-btn" id="vbtn-trips" onclick="showScreen('trips')">🗺️ 4. Trips</button>
+      <button class="view-btn" id="vbtn-collection" onclick="showScreen('collection')">📌 5. Vault</button>
+      <button class="view-btn" id="vbtn-crew" onclick="showScreen('crew')">👤 6. You & Crew</button>
+    </div>
+
+    <!-- Interactive Home Screen Context Switcher -->
+    <div style="margin-top: 14px; display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap;">
+      <span style="font-size: 11px; font-weight: 700; color: #a594c7; text-transform: uppercase; letter-spacing: 0.5px;">Today Screen Demo State:</span>
+      <button id="tmode-btn-countdown" class="trip-context-btn active" onclick="setHomeTripMode('countdown')">✈️ Pre-Trip Planning (18 Days Out)</button>
+      <button id="tmode-btn-active" class="trip-context-btn" onclick="setHomeTripMode('active')">🟢 Active In-Park (Day 2 at Magic Kingdom)</button>
+    </div>
+  </header>
+
+  <main class="app-container">
+    
+    <!-- LEFT: Interactive iPhone Prototype -->
+    <div class="device-wrapper">
+      <div class="iphone-frame">
+        <div class="island"><div class="island-lens"></div></div>
+
+        <div class="screen-content" id="phone-viewport">
+          
+          <!-- SCREEN 1: HOME -->
+          <div id="screen-home" class="screen-panel">
+            <div class="gradient-header">
+              <div class="header-top-row">
+                <div class="greeting-pill">✨ Good morning, Nicholas!</div>
+                <div class="header-actions">
+                  <button class="icon-btn" onclick="toggleNotifications()" title="Notifications (R22.5 Attention Badge)">
+                    <svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+                    <span class="btn-badge">2</span>
+                  </button>
+
+                  <!-- Profile Avatar Chip: Opens You & Crew Screen (Profile, Friends, Shares, Settings) -->
+                  <button class="avatar-chip-btn" id="home-avatar-chip" onclick="showScreen('crew')" title="My Profile, Friends & Settings">
+                    <span class="avatar-chip-circle">N</span>
+                    <span class="avatar-chip-label">You & Crew</span>
+                    <span class="avatar-chip-badge"></span>
+                  </button>
+                </div>
+              </div>
+              <h2 class="header-title" id="home-header-title">Ready for the Magic?</h2>
+              <div class="header-sub" id="home-header-sub">Magic Kingdom &bull; 8:00 AM – 11:00 PM &bull; 78° Sunny</div>
+            </div>
+
+            <div class="screen-body">
+              <!-- 1A. Vacation Context: Pre-Trip Countdown Card -->
+              <div id="home-hero-countdown" class="countdown-card card" onclick="showScreen('trips')">
+                <div class="countdown-circle">
+                  <span class="countdown-num">18</span>
+                  <span class="countdown-unit">Days</span>
+                </div>
+                <div class="countdown-info">
+                  <div class="countdown-tag">Upcoming Vacation</div>
+                  <div class="countdown-title">Fall Magic Trip</div>
+                  <div class="countdown-meta">Oct 4 – Oct 10 &bull; 4 Parks &bull; 3 Reservations</div>
+                </div>
+                <div style="color: var(--primary); font-weight: 800;">➔</div>
+              </div>
+
+              <!-- 1B. Vacation Context: Active In-Park Live Day Card -->
+              <div id="home-hero-active" class="card" style="display: none; padding: 13px 14px; background: linear-gradient(135deg, #ffffff 0%, #f0fdf4 100%); border: 1.5px solid #86efac; cursor: pointer; box-shadow: 0 4px 14px rgba(34, 197, 94, 0.12); transition: transform 0.2s;" onclick="showScreen('trips'); setTripSubTab('schedule');">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                  <div style="display: flex; align-items: center; gap: 6px;">
+                    <span style="width: 8px; height: 8px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 8px rgba(34, 197, 94, 0.9);"></span>
+                    <span style="font-size: 10px; font-weight: 800; color: #15803d; text-transform: uppercase; letter-spacing: 0.5px;">Active Vacation &bull; Day 2 of 5</span>
+                  </div>
+                  <span style="font-size: 10px; font-weight: 700; color: var(--primary); background: rgba(91, 42, 134, 0.08); padding: 2px 8px; border-radius: 6px;">Today's Schedule ›</span>
+                </div>
+                <div style="display: flex; gap: 12px; align-items: center;">
+                  <div style="width: 48px; height: 48px; border-radius: 12px; background: linear-gradient(135deg, #7e57c2 0%, #5b2a86 100%); color: white; display: flex; align-items: center; justify-content: center; font-size: 24px; flex-shrink: 0; box-shadow: 0 3px 8px rgba(91, 42, 134, 0.25);">🏰</div>
+                  <div style="flex: 1; min-width: 0;">
+                    <div style="font-family: 'Outfit', sans-serif; font-size: 15px; font-weight: 800; color: var(--text-primary);">Magic Kingdom Park Day</div>
+                    <div style="font-size: 11.5px; color: #166534; font-weight: 700; margin-top: 2px; display: flex; align-items: center; gap: 5px;">
+                      <span>🚀 Next: Space Mountain</span>
+                      <span style="background: #dcfce7; color: #15803d; font-size: 9.5px; font-weight: 800; padding: 1px 5px; border-radius: 4px;">10:15 AM (34m)</span>
+                    </div>
+                    <div style="font-size: 10.5px; color: var(--text-secondary); margin-top: 3px;">🍽️ Dining: Cinderella's Table &bull; 1:15 PM</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 2. Action Dock -->
+              <div class="action-dock">
+                <div class="dock-btn" onclick="showScreen('waits')">
+                  <div class="dock-icon-wrap" style="background: #eef2ff; color: #4338ca;">⏱️</div>
+                  <span class="dock-label" id="dock-label-waits">Live Waits</span>
+                </div>
+                <div class="dock-btn" onclick="alert('Opening Log Attraction modal: rate and note rides!')">
+                  <div class="dock-icon-wrap" style="background: #fdf2f8; color: #be185d;">🎢</div>
+                  <span class="dock-label">Log Ride</span>
+                </div>
+                <div class="dock-btn" onclick="alert('Opening Log Food Item modal: save dishes eaten!')">
+                  <div class="dock-icon-wrap" style="background: #fffbeb; color: #b45309;">🍦</div>
+                  <span class="dock-label">Log Snack</span>
+                </div>
+                <div class="dock-btn" id="dock-btn-plan" onclick="showScreen('collection'); setCollectionTab('pins');">
+                  <div class="dock-icon-wrap" id="dock-icon-plan" style="background: #f5f3ff; color: #6d28d9;">📌</div>
+                  <span class="dock-label" id="dock-label-plan">My Pins</span>
+                  <span class="dock-badge" id="dock-badge-plan">2</span>
+                </div>
+              </div>
+
+              <!-- 3. Park Pulse -->
+              <div>
+                <div class="section-header">
+                  <h3 class="section-title">⏱️ Park Wait Pulse</h3>
+                  <a class="section-link" onclick="showScreen('waits')">All Parks ›</a>
+                </div>
+                <div class="park-pulse-row" style="margin-top: 6px;">
+                  <div class="pulse-pill" id="pulse-pill-mk" onclick="selectWaitPark('mk'); showScreen('waits');">
+                    <div class="pulse-park-name" style="color: var(--mk-purple);">Magic Kingdom</div>
+                    <div class="pulse-wait-time">32 <span class="pulse-unit">min avg</span></div>
+                    <span class="pulse-trend good">Moderate</span>
+                  </div>
+                  <div class="pulse-pill" onclick="selectWaitPark('epcot'); showScreen('waits');">
+                    <div class="pulse-park-name" style="color: var(--epcot-blue);">EPCOT</div>
+                    <div class="pulse-wait-time">24 <span class="pulse-unit">min avg</span></div>
+                    <span class="pulse-trend good">Light lines</span>
+                  </div>
+                  <div class="pulse-pill" onclick="selectWaitPark('dhs'); showScreen('waits');">
+                    <div class="pulse-park-name" style="color: var(--dhs-red);">Hollywood Studios</div>
+                    <div class="pulse-wait-time">48 <span class="pulse-unit">min avg</span></div>
+                    <span class="pulse-trend med">Heavy</span>
+                  </div>
+                  <div class="pulse-pill" onclick="selectWaitPark('dak'); showScreen('waits');">
+                    <div class="pulse-park-name" style="color: var(--dak-green);">Animal Kingdom</div>
+                    <div class="pulse-wait-time">18 <span class="pulse-unit">min avg</span></div>
+                    <span class="pulse-trend good">Walk-on</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 4. Community Favorites -->
+              <div>
+                <div class="section-header">
+                  <h3 class="section-title">🏆 Highest-Rated Experiences</h3>
+                  <a class="section-link" onclick="showScreen('explore')">See All</a>
+                </div>
+                <div style="margin-top: 6px;">
+                  <div class="experience-row" style="border-left-color: var(--mk-purple);">
+                    <div class="rank-num">1</div>
+                    <div class="exp-content">
+                      <div class="exp-name">Jungle Cruise</div>
+                      <div class="exp-park">Magic Kingdom &bull; Adventureland</div>
+                      <span class="exp-tag" style="background: rgba(126, 87, 194, 0.15); color: var(--mk-purple);">🚀 Ride</span>
+                    </div>
+                    <div class="exp-rating">
+                      <div class="rating-val"><svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg> 8.7</div>
+                      <div class="rating-count">3 ratings</div>
+                    </div>
+                  </div>
+
+                  <div class="experience-row" style="border-left-color: var(--mk-purple);">
+                    <div class="rank-num">2</div>
+                    <div class="exp-content">
+                      <div class="exp-name">Pirates of the Caribbean</div>
+                      <div class="exp-park">Magic Kingdom &bull; Adventureland</div>
+                      <span class="exp-tag" style="background: rgba(126, 87, 194, 0.15); color: var(--mk-purple);">🚀 Ride</span>
+                    </div>
+                    <div class="exp-rating">
+                      <div class="rating-val"><svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg> 7.7</div>
+                      <div class="rating-count">3 ratings</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- SCREEN: LIVE WAITS (Integrated real-time wait times & line radar) -->
+          <div id="screen-waits" class="screen-panel" style="display: none;">
+            <div class="gradient-header" style="padding-bottom: 16px;">
+              <div class="header-top-row">
+                <div class="greeting-pill">⏱️ Real-Time Line Times</div>
+                <button class="icon-btn" onclick="alert('Refreshed live wait times via Live_Service (ThemeParks.wiki)!')" title="Refresh Wait Times">
+                  <svg viewBox="0 0 24 24"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+                </button>
+              </div>
+              <h2 class="header-title" id="waits-park-title">Magic Kingdom</h2>
+              <div class="header-sub" id="waits-park-sub">Park Hours: 8:00 AM – 11:00 PM &bull; Updated 2 min ago</div>
+            </div>
+
+            <div class="screen-body">
+              <!-- Park Selector Chips -->
+              <div class="park-chips" style="margin-top: 4px;">
+                <button class="park-chip active" id="pchip-mk" onclick="selectWaitPark('mk')">🏰 Magic Kingdom</button>
+                <button class="park-chip" id="pchip-epcot" onclick="selectWaitPark('epcot')">🌐 EPCOT</button>
+                <button class="park-chip" id="pchip-dhs" onclick="selectWaitPark('dhs')">🎬 Studios</button>
+                <button class="park-chip" id="pchip-dak" onclick="selectWaitPark('dak')">🍃 Animal K.</button>
+              </div>
+
+              <!-- Live Wait Alert / Crowd Status Card -->
+              <div class="card" style="padding: 10px 12px; background: linear-gradient(135deg, #ffffff 0%, #faf8ff 100%); border-left: 4px solid var(--primary); display: flex; align-items: center; justify-content: space-between;">
+                <div>
+                  <div style="font-size: 11px; font-weight: 800; color: var(--primary);" id="waits-alert-level">Crowd Level 4 &bull; Moderate Lines (32m avg)</div>
+                  <div style="font-size: 10px; color: var(--text-secondary);" id="waits-alert-desc">Lines peak between 1–3 PM. Best to ride Space Mtn soon!</div>
+                </div>
+                <button style="border: 1px solid var(--border); background: var(--surface-alt); font-size: 9.5px; font-weight: 700; color: var(--primary); padding: 4px 8px; border-radius: 6px; cursor: pointer;" onclick="alert('Prediction Engine: Crowds drop sharply after 8:30 PM Happily Ever After fireworks!')">Tips</button>
+              </div>
+
+              <!-- Filter Pills -->
+              <div class="wait-filter-row">
+                <button class="wait-filter-pill active" onclick="filterWaits('all', this)">All (24)</button>
+                <button class="wait-filter-pill" onclick="filterWaits('walkon', this)">Walk-on (&lt;25m)</button>
+                <button class="wait-filter-pill" onclick="filterWaits('ll', this)">Lightning Lane</button>
+                <button class="wait-filter-pill" onclick="filterWaits('headliners', this)">Headliners</button>
+              </div>
+
+              <!-- Dynamic Rides List Container -->
+              <div id="waits-ride-list" style="display: flex; flex-direction: column; gap: 6px;">
+                <!-- Filled dynamically by selectWaitPark -->
+              </div>
+            </div>
+          </div>
+
+          <!-- SCREEN 2: EXPLORE (Catalog + Crowd Calendar) -->
+          <div id="screen-explore" class="screen-panel" style="display: none;">
+            <div class="gradient-header" style="padding-bottom: 18px;">
+              <div class="header-top-row">
+                <div class="greeting-pill">🧭 Park Explorer</div>
+                <button class="icon-btn" onclick="alert('CrowdCalendarScreen: Month crowd forecast and best days')" title="Crowd Calendar">
+                  <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                </button>
+              </div>
+              <h2 class="header-title">Parks & Attractions</h2>
+              <div style="margin-top: 8px; background: rgba(255,255,255,0.18); border-radius: 12px; padding: 9px 12px; display: flex; align-items: center; gap: 8px;">
+                <span style="color: rgba(255,255,255,0.8);">🔍</span>
+                <span style="color: rgba(255,255,255,0.8); font-size: 12.5px;">Search rides, snacks, lands...</span>
+              </div>
+            </div>
+
+            <div class="screen-body">
+              <!-- Quick Jump to Live Waits from Explore -->
+              <div class="card" style="display: flex; align-items: center; justify-content: space-between; padding: 11px 14px; background: linear-gradient(135deg, #f0fdf4 0%, #e0f2fe 100%); border: 1px solid #bae6fd; cursor: pointer;" onclick="showScreen('waits')">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                  <div style="width: 34px; height: 34px; border-radius: 10px; background: #0284c7; color: white; display: flex; align-items: center; justify-content: center; font-size: 17px;">⏱️</div>
+                  <div>
+                    <div style="font-size: 12.5px; font-weight: 800; color: #0369a1;">Live Ride Waits &amp; Queues</div>
+                    <div style="font-size: 10.5px; color: #0284c7;">Real-time line times across all 4 parks</div>
+                  </div>
+                </div>
+                <span style="color: #0369a1; font-weight: 800;">➔</span>
+              </div>
+
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                <div class="card" style="padding: 12px; border-top: 4px solid var(--mk-purple); cursor: pointer;" onclick="alert('DestinationScreen: Magic Kingdom')">
+                  <div style="font-size: 24px;">🏰</div>
+                  <div style="font-weight: 700; font-size: 12.5px; margin-top: 3px;">Magic Kingdom</div>
+                  <div style="font-size: 10.5px; color: var(--text-secondary);">115 experiences &bull; 32m</div>
+                </div>
+                <div class="card" style="padding: 12px; border-top: 4px solid var(--epcot-blue); cursor: pointer;" onclick="alert('DestinationScreen: EPCOT')">
+                  <div style="font-size: 24px;">🌐</div>
+                  <div style="font-weight: 700; font-size: 12.5px; margin-top: 3px;">EPCOT</div>
+                  <div style="font-size: 10.5px; color: var(--text-secondary);">179 experiences &bull; 24m</div>
+                </div>
+                <div class="card" style="padding: 12px; border-top: 4px solid var(--dhs-red); cursor: pointer;" onclick="alert('DestinationScreen: Hollywood Studios')">
+                  <div style="font-size: 24px;">🎬</div>
+                  <div style="font-weight: 700; font-size: 12.5px; margin-top: 3px;">Hollywood Studios</div>
+                  <div style="font-size: 10.5px; color: var(--text-secondary);">80 experiences &bull; 48m</div>
+                </div>
+                <div class="card" style="padding: 12px; border-top: 4px solid var(--dak-green); cursor: pointer;" onclick="alert('DestinationScreen: Animal Kingdom')">
+                  <div style="font-size: 24px;">🍃</div>
+                  <div style="font-weight: 700; font-size: 12.5px; margin-top: 3px;">Animal Kingdom</div>
+                  <div style="font-size: 10.5px; color: var(--text-secondary);">71 experiences &bull; 18m</div>
+                </div>
+              </div>
+
+              <!-- Crowd Calendar Card -->
+              <div class="card" style="display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; cursor: pointer;" onclick="alert('Opening Crowd Calendar Screen')">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                  <div style="width: 34px; height: 34px; border-radius: 9px; background: #fef3c7; display: flex; align-items: center; justify-content: center; font-size: 17px;">📅</div>
+                  <div>
+                    <div style="font-size: 12.5px; font-weight: 700;">Crowd Calendar & Best Days</div>
+                    <div style="font-size: 10.5px; color: var(--text-secondary);">Day-by-day crowd projections</div>
+                  </div>
+                </div>
+                <span style="color: var(--primary); font-weight: 800;">➔</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- SCREEN 3: TRIPS PLANNER -->
+          <div id="screen-trips" class="screen-panel" style="display: none;">
+            <div class="gradient-header">
+              <div class="header-top-row">
+                <div style="display: flex; align-items: center; gap: 7px;">
+                  <button id="trip-back-btn" class="icon-btn" style="width: auto; height: 28px; border-radius: 8px; padding: 0 9px; font-size: 11px; font-weight: 800; display: flex; background: rgba(255,255,255,0.22);" onclick="toggleTripsListView(true)">‹ All Trips</button>
+                  <div class="greeting-pill" id="trip-header-pill">🗺️ Vacation Hub</div>
+                </div>
+                <div class="header-actions" id="trip-header-actions">
+                  <button class="icon-btn" onclick="setTripSubTab('party')" title="Manage Trip Members">
+                    <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                  </button>
+                  <button class="icon-btn" onclick="alert('TripEditScreen: Edit trip dates, resort, and title')" title="Edit Trip Details">
+                    <svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                  </button>
+                </div>
+              </div>
+              <h2 class="header-title" id="trip-header-title">Fall Magic Vacation</h2>
+              <div class="header-sub" id="trip-header-sub">Oct 4 – Oct 10 &bull; <span style="text-decoration: underline; cursor: pointer; color: var(--accent);" onclick="setTripSubTab('party')">4 Guests ›</span> &bull; Pop Century Resort</div>
+            </div>
+
+            <div class="screen-body">
+              
+              <!-- CONTAINER A: TRIP DETAIL VIEW -->
+              <div id="tview-trip-detail" style="display: flex; flex-direction: column; gap: 12px;">
+                <div class="segmented-control">
+                  <button class="seg-btn active" id="tbtn-schedule" onclick="setTripSubTab('schedule')">📅 Schedule</button>
+                  <button class="seg-btn" id="tbtn-reservations" onclick="setTripSubTab('reservations')">🍽️ Reservations</button>
+                  <button class="seg-btn" id="tbtn-planned" onclick="setTripSubTab('planned')">📋 Planned</button>
+                  <button class="seg-btn" id="tbtn-food" onclick="setTripSubTab('food')">🍦 Food Lists</button>
+                  <button class="seg-btn" id="tbtn-feed" onclick="setTripSubTab('feed')">📸 Feed</button>
+                  <button class="seg-btn" id="tbtn-party" onclick="setTripSubTab('party')">👥 Party (4)</button>
+                  <button class="seg-btn" id="tbtn-summary" onclick="setTripSubTab('summary')">🏆 Summary</button>
+                </div>
+
+              <!-- SUB-VIEW 1: SCHEDULE (Pure Day Itinerary Timeline - ZERO overlap, NO members card) -->
+              <div id="tview-schedule">
+                <!-- 1. Action Row: Add Item & Optimize -->
+                <div class="schedule-top-row">
+                  <button class="btn-add-item" onclick="alert('ExperiencePicker: Add attraction, show, or dining to Thursday, Aug 20')">
+                    <span style="font-size: 14px;">⊕</span> + Add to Thu, Aug 20
+                  </button>
+                  <button class="btn-optimize" onclick="alert('Triggering AI Schedule Optimizer (TripScheduleScreen.tsx)...')">
+                    <span>✨</span> Optimize
+                  </button>
+                </div>
+
+                <!-- 2. Park Operating Hours Cards -->
+                <div class="park-hours-row">
+                  <div class="park-hours-card" style="border-left-color: #2e9e6b;">
+                    <div class="park-hours-name">Magic Kingdom</div>
+                    <div class="park-hours-time">9:00 AM - 10:00 PM</div>
+                    <span class="early-entry-badge">Early Entry 8:30 AM</span>
+                  </div>
+                  <div class="park-hours-card" style="border-left-color: #0284c7;">
+                    <div class="park-hours-name">Hollywood Studios</div>
+                    <div class="park-hours-time">9:00 AM - 9:00 PM</div>
+                    <span class="early-entry-badge">Early Entry 8:30 AM</span>
+                  </div>
+                </div>
+
+                <!-- 3. Itinerary Heading -->
+                <div class="schedule-header">
+                  <h3 class="schedule-title">Thu, Aug 20 Itinerary</h3>
+                  <div class="schedule-sub">Last optimized Aug 17, 2:38 AM</div>
+                </div>
+
+                <!-- 4. Vertical Timeline Rail & Cards -->
+                <div class="timeline-container">
+                  <div class="timeline-rail"></div>
+
+                  <!-- Speech Bubble Row: 8:30 AM (In its own distinct row ABOVE the card!) -->
+                  <div class="timeline-speech-row">
+                    <span class="timeline-speech-dot"></span>
+                    <span class="timeline-speech-pill">8:30 AM</span>
+                  </div>
+
+                  <!-- Item 1: Space Mountain -->
+                  <div class="timeline-node">
+                    <div class="schedule-card" onclick="alert('Editing Space Mountain (8:30 AM slot)')">
+                      <div class="schedule-thumb" style="background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%); color: white;">🚀</div>
+                      <div class="schedule-card-body">
+                        <div class="schedule-card-name">Space Mountain</div>
+                        <div class="schedule-badge-row">
+                          <span class="badge-wait-gray">Wait: 5 min</span>
+                          <span class="badge-duration-gray">🎢 15m duration</span>
+                          <span class="badge-early-cyan">EARLY ENTRY</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Walk Step -->
+                  <div class="walk-step">
+                    <span>🚶</span>
+                    <span><strong>+2m</strong> walk to Tomorrowland</span>
+                  </div>
+
+                  <!-- Item 2: 9:00 AM TRON -->
+                  <div class="timeline-node">
+                    <div class="timeline-time-box">
+                      <span class="timeline-time-digits">9:00</span>
+                      <span class="timeline-time-ampm">AM</span>
+                    </div>
+                    <span class="timeline-rail-dot"></span>
+                    <div class="schedule-card" onclick="alert('Editing TRON Lightcycle / Run slot')">
+                      <div class="schedule-thumb" style="background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%); color: white;">🏍️</div>
+                      <div class="schedule-card-body">
+                        <div class="schedule-card-name">TRON Lightcycle / Run</div>
+                        <div class="schedule-badge-row">
+                          <span class="badge-wait-gray">Wait: 5 min</span>
+                          <span class="badge-duration-gray">🎢 15m duration</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Walk Step -->
+                  <div class="walk-step">
+                    <span>🚶</span>
+                    <span><strong>+2m</strong> walk to Tomorrowland</span>
+                  </div>
+
+                  <!-- Item 3: 9:22 AM Space Mountain -->
+                  <div class="timeline-node">
+                    <div class="timeline-time-box">
+                      <span class="timeline-time-digits">9:22</span>
+                      <span class="timeline-time-ampm">AM</span>
+                    </div>
+                    <span class="timeline-rail-dot"></span>
+                    <div class="schedule-card" onclick="alert('Editing Space Mountain (9:22 AM slot)')">
+                      <div class="schedule-thumb" style="background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%); color: white;">🚀</div>
+                      <div class="schedule-card-body">
+                        <div class="schedule-card-name">Space Mountain</div>
+                        <div class="schedule-badge-row">
+                          <span class="badge-wait-gray">Wait: 34 min</span>
+                          <span class="badge-duration-gray">🎢 15m duration</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+
+              <!-- SUB-VIEW 2: RESERVATIONS (TripReservationsScreen.tsx - Dining, Lightning Lane & Timed Bookings) -->
+              <div id="tview-reservations" style="display: none; flex-direction: column; gap: 12px;">
+                
+                <!-- 1. Header Card with Add Booking -->
+                <div class="card" style="padding: 14px;">
+                  <div class="section-header" style="margin-bottom: 8px;">
+                    <div>
+                      <div style="font-family: 'Outfit', sans-serif; font-size: 15px; font-weight: 800; color: var(--text-primary);">🍽️ Trip Reservations</div>
+                      <div style="font-size: 10.5px; color: var(--text-secondary); margin-top: 1px;">3 Dining &amp; LL Bookings Confirmed</div>
+                    </div>
+                    <button style="border: 1.5px solid var(--primary-light); background: #fdfaff; color: var(--primary); font-size: 10.5px; font-weight: 800; padding: 5px 10px; border-radius: 8px; cursor: pointer;" onclick="alert('TripReservationsScreen: Add Dining Reservation, Lightning Lane Pass, or Tour')">+ Add Booking</button>
+                  </div>
+                  <div style="font-size: 10px; color: #475569; background: var(--surface-alt); padding: 7px 10px; border-radius: 8px; display: flex; align-items: center; gap: 6px;">
+                    <span>💡</span>
+                    <span>Reservations automatically sync into your daily <strong>Schedule timeline</strong>.</span>
+                  </div>
+                </div>
+
+                <!-- 2. Date Group 1: Thursday, Oct 5 (Magic Kingdom) -->
+                <div>
+                  <div class="section-header" style="margin-bottom: 6px;">
+                    <span style="font-size: 11px; font-weight: 800; color: var(--mk-purple); text-transform: uppercase; letter-spacing: 0.5px;">🏰 Thu, Oct 5 &bull; Magic Kingdom</span>
+                    <span style="font-size: 10px; color: var(--text-secondary);">2 Bookings</span>
+                  </div>
+                  <div style="display: flex; flex-direction: column; gap: 8px;">
+                    
+                    <!-- Booking 1: Lightning Lane Return Window -->
+                    <div class="card" style="padding: 12px 14px; border-left: 4px solid #0284c7;">
+                      <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                        <div>
+                          <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 3px;">
+                            <span style="background: rgba(2, 132, 199, 0.12); color: #0284c7; font-size: 9px; font-weight: 800; padding: 2px 6px; border-radius: 4px;">⚡ LIGHTNING LANE</span>
+                            <span style="font-size: 10px; color: #166534; font-weight: 700;">Confirmed</span>
+                          </div>
+                          <div style="font-family: 'Outfit', sans-serif; font-size: 14.5px; font-weight: 800; color: var(--text-primary);">Space Mountain</div>
+                          <div style="font-size: 11px; color: #0284c7; font-weight: 700; margin-top: 2px;">10:15 AM – 11:15 AM Window</div>
+                          <div style="font-size: 10px; color: var(--text-secondary); margin-top: 2px;">Multi Pass &bull; Party of 4 &bull; Tomorrowland</div>
+                        </div>
+                        <button style="border: 1px solid var(--border); background: var(--surface-alt); color: var(--text-primary); font-size: 9.5px; font-weight: 700; padding: 3px 8px; border-radius: 6px; cursor: pointer;" onclick="alert('Modifying Space Mountain Lightning Lane pass window')">Modify</button>
+                      </div>
+                    </div>
+
+                    <!-- Booking 2: Cinderella's Royal Table Dining -->
+                    <div class="card" style="padding: 12px 14px; border-left: 4px solid #be185d;">
+                      <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                        <div>
+                          <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 3px;">
+                            <span style="background: #fdf2f8; color: #be185d; font-size: 9px; font-weight: 800; padding: 2px 6px; border-radius: 4px;">🍽️ DINING (ADR)</span>
+                            <span style="font-size: 9.5px; color: var(--text-secondary);">Conf: #W-8492041</span>
+                          </div>
+                          <div style="font-family: 'Outfit', sans-serif; font-size: 14.5px; font-weight: 800; color: var(--text-primary);">Cinderella's Royal Table</div>
+                          <div style="font-size: 11px; color: #be185d; font-weight: 700; margin-top: 2px;">1:15 PM &bull; Table Service Lunch</div>
+                          <div style="font-size: 10px; color: var(--text-secondary); margin-top: 2px;">Party of 4 &bull; Inside Cinderella Castle &bull; Fantasyland</div>
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 4px;">
+                          <button style="border: 1px solid var(--border); background: var(--surface-alt); color: var(--primary); font-size: 9.5px; font-weight: 700; padding: 3px 8px; border-radius: 6px; cursor: pointer;" onclick="alert('Editing Cinderella\'s Royal Table ADR')">Edit</button>
+                          <button style="border: none; background: transparent; color: #94a3b8; font-size: 9px; cursor: pointer;" onclick="alert('Cancelling dining reservation')">Cancel</button>
+                        </div>
+                      </div>
+                    </div>
+
+                  </div>
+                </div>
+
+                <!-- 3. Date Group 2: Friday, Oct 6 (EPCOT) -->
+                <div>
+                  <div class="section-header" style="margin-bottom: 6px;">
+                    <span style="font-size: 11px; font-weight: 800; color: var(--epcot-blue); text-transform: uppercase; letter-spacing: 0.5px;">🌐 Fri, Oct 6 &bull; EPCOT</span>
+                    <span style="font-size: 10px; color: var(--text-secondary);">1 Booking</span>
+                  </div>
+                  <div style="display: flex; flex-direction: column; gap: 8px;">
+                    
+                    <!-- Booking 3: Space 220 Restaurant -->
+                    <div class="card" style="padding: 12px 14px; border-left: 4px solid #be185d;">
+                      <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                        <div>
+                          <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 3px;">
+                            <span style="background: #fdf2f8; color: #be185d; font-size: 9px; font-weight: 800; padding: 2px 6px; border-radius: 4px;">🍽️ DINING (ADR)</span>
+                            <span style="font-size: 9.5px; color: var(--text-secondary);">Conf: #W-7392019</span>
+                          </div>
+                          <div style="font-family: 'Outfit', sans-serif; font-size: 14.5px; font-weight: 800; color: var(--text-primary);">Space 220 Restaurant</div>
+                          <div style="font-size: 11px; color: #be185d; font-weight: 700; margin-top: 2px;">6:30 PM &bull; Table Service Dinner</div>
+                          <div style="font-size: 10px; color: var(--text-secondary); margin-top: 2px;">Party of 4 &bull; World Discovery &bull; Space Elevator View</div>
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 4px;">
+                          <button style="border: 1px solid var(--border); background: var(--surface-alt); color: var(--primary); font-size: 9.5px; font-weight: 700; padding: 3px 8px; border-radius: 6px; cursor: pointer;" onclick="alert('Editing Space 220 reservation')">Edit</button>
+                          <button style="border: none; background: transparent; color: #94a3b8; font-size: 9px; cursor: pointer;" onclick="alert('Cancelling dining reservation')">Cancel</button>
+                        </div>
+                      </div>
+                    </div>
+
+                  </div>
+                </div>
+
+                <!-- 4. Date Group 3: Saturday, Oct 7 (Hollywood Studios) -->
+                <div>
+                  <div class="section-header" style="margin-bottom: 6px;">
+                    <span style="font-size: 11px; font-weight: 800; color: var(--dhs-red); text-transform: uppercase; letter-spacing: 0.5px;">🎬 Sat, Oct 7 &bull; Hollywood Studios</span>
+                    <span style="font-size: 10px; color: var(--text-secondary);">1 Booking</span>
+                  </div>
+                  <div style="display: flex; flex-direction: column; gap: 8px;">
+                    
+                    <!-- Booking 4: Rise of the Resistance LL Single Pass -->
+                    <div class="card" style="padding: 12px 14px; border-left: 4px solid #f59e0b;">
+                      <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                        <div>
+                          <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 3px;">
+                            <span style="background: #fef3c7; color: #b45309; font-size: 9px; font-weight: 800; padding: 2px 6px; border-radius: 4px;">⚡ SINGLE PASS ($22)</span>
+                            <span style="font-size: 10px; color: #166534; font-weight: 700;">Confirmed</span>
+                          </div>
+                          <div style="font-family: 'Outfit', sans-serif; font-size: 14.5px; font-weight: 800; color: var(--text-primary);">Star Wars: Rise of the Resistance</div>
+                          <div style="font-size: 11px; color: #b45309; font-weight: 700; margin-top: 2px;">2:45 PM – 3:45 PM Window</div>
+                          <div style="font-size: 10px; color: var(--text-secondary); margin-top: 2px;">Party of 4 &bull; Star Wars: Galaxy's Edge</div>
+                        </div>
+                        <button style="border: 1px solid var(--border); background: var(--surface-alt); color: var(--text-primary); font-size: 9.5px; font-weight: 700; padding: 3px 8px; border-radius: 6px; cursor: pointer;" onclick="alert('Viewing Lightning Lane Single Pass barcode')">View Pass</button>
+                      </div>
+                    </div>
+
+                  </div>
+                </div>
+
+              </div>
+
+              <!-- SUB-VIEW 3: PLANNED LIST (TripPlannedListScreen.tsx - Group Bucket List) -->
+              <div id="tview-planned" style="display: none; flex-direction: column; gap: 12px;">
+                <div class="card" style="padding: 14px;">
+                  <div class="section-header" style="margin-bottom: 8px;">
+                    <div>
+                      <div style="font-family: 'Outfit', sans-serif; font-size: 15px; font-weight: 800; color: var(--text-primary);">📋 Planned Experiences (Bucket List)</div>
+                      <div style="font-size: 10.5px; color: var(--text-secondary); margin-top: 1px;">Attractions &amp; shows the group wants to experience</div>
+                    </div>
+                    <button style="border: 1.5px solid var(--primary-light); background: #fdfaff; color: var(--primary); font-size: 10.5px; font-weight: 800; padding: 5px 10px; border-radius: 8px; cursor: pointer;" onclick="alert('Opening ExperiencePicker: Add attraction to Planned List')">+ Add Ride</button>
+                  </div>
+
+                  <div style="display: flex; flex-direction: column; gap: 7px;">
+                    <!-- Item 1: Scheduled -->
+                    <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; background: var(--surface-alt); border-radius: 10px;">
+                      <div>
+                        <div style="font-size: 12px; font-weight: 700; color: var(--text-primary);">Space Mountain</div>
+                        <div style="font-size: 10px; color: var(--text-secondary);">Magic Kingdom &bull; Added by Nicholas</div>
+                      </div>
+                      <span style="background: #dcfce7; color: #15803d; font-size: 9px; font-weight: 800; padding: 2px 6px; border-radius: 5px;">✅ Thu 8:30 AM</span>
+                    </div>
+
+                    <!-- Item 2: Scheduled -->
+                    <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; background: var(--surface-alt); border-radius: 10px;">
+                      <div>
+                        <div style="font-size: 12px; font-weight: 700; color: var(--text-primary);">TRON Lightcycle / Run</div>
+                        <div style="font-size: 10px; color: var(--text-secondary);">Magic Kingdom &bull; Added by Alex</div>
+                      </div>
+                      <span style="background: #dcfce7; color: #15803d; font-size: 9px; font-weight: 800; padding: 2px 6px; border-radius: 5px;">✅ Thu 9:00 AM</span>
+                    </div>
+
+                    <!-- Item 3: Need to Schedule -->
+                    <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; background: var(--surface-alt); border-radius: 10px;">
+                      <div>
+                        <div style="font-size: 12px; font-weight: 700; color: var(--text-primary);">Seven Dwarfs Mine Train</div>
+                        <div style="font-size: 10px; color: var(--text-secondary);">Magic Kingdom &bull; Added by Sarah</div>
+                      </div>
+                      <button style="border: 1px solid var(--border); background: var(--surface); color: var(--primary); font-size: 9.5px; font-weight: 700; padding: 2px 6px; border-radius: 5px; cursor: pointer;" onclick="alert('Scheduling Seven Dwarfs Mine Train into Thursday Itinerary')">+ Schedule</button>
+                    </div>
+
+                    <!-- Item 4: Need to Schedule -->
+                    <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; background: var(--surface-alt); border-radius: 10px;">
+                      <div>
+                        <div style="font-size: 12px; font-weight: 700; color: var(--text-primary);">Haunted Mansion</div>
+                        <div style="font-size: 10px; color: var(--text-secondary);">Magic Kingdom &bull; Added by Nicholas</div>
+                      </div>
+                      <button style="border: 1px solid var(--border); background: var(--surface); color: var(--primary); font-size: 9.5px; font-weight: 700; padding: 2px 6px; border-radius: 5px; cursor: pointer;" onclick="alert('Scheduling Haunted Mansion into Thursday Itinerary')">+ Schedule</button>
+                    </div>
+
+                    <!-- Item 5: Completed -->
+                    <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; background: var(--surface-alt); border-radius: 10px;">
+                      <div>
+                        <div style="font-size: 12px; font-weight: 700; color: var(--text-primary); text-decoration: line-through; opacity: 0.7;">Cosmic Rewind</div>
+                        <div style="font-size: 10px; color: var(--text-secondary);">EPCOT &bull; Added by Dave</div>
+                      </div>
+                      <span style="background: #e0e7ff; color: #4338ca; font-size: 9px; font-weight: 800; padding: 2px 6px; border-radius: 5px;">🎉 Ridden</span>
+                    </div>
+
+                    <!-- Item 6: Need to Schedule -->
+                    <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; background: var(--surface-alt); border-radius: 10px;">
+                      <div>
+                        <div style="font-size: 12px; font-weight: 700; color: var(--text-primary);">Slinky Dog Dash</div>
+                        <div style="font-size: 10px; color: var(--text-secondary);">Hollywood Studios &bull; Added by Sarah</div>
+                      </div>
+                      <button style="border: 1px solid var(--border); background: var(--surface); color: var(--primary); font-size: 9.5px; font-weight: 700; padding: 2px 6px; border-radius: 5px; cursor: pointer;" onclick="alert('Scheduling Slinky Dog Dash into Friday Itinerary')">+ Schedule</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- SUB-VIEW 4: FOOD LISTS (AttachedFoodListsSection.tsx) -->
+              <div id="tview-food" style="display: none; flex-direction: column; gap: 12px;">
+                <div class="card" style="padding: 14px;">
+                  <div class="section-header" style="margin-bottom: 8px;">
+                    <div>
+                      <div style="font-family: 'Outfit', sans-serif; font-size: 15px; font-weight: 800; color: var(--text-primary);">🍦 Attached Food Checklists</div>
+                      <div style="font-size: 10.5px; color: var(--text-secondary); margin-top: 1px;">Snack checklists &amp; festival targets for this trip</div>
+                    </div>
+                    <button style="border: 1px solid var(--border); background: var(--surface-alt); color: var(--primary); font-size: 10.5px; font-weight: 700; padding: 5px 10px; border-radius: 8px; cursor: pointer;" onclick="alert('Attach Food List: Attach another saved list to this trip')">+ Attach</button>
+                  </div>
+
+                  <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <!-- Attached List 1 -->
+                    <div style="border: 1px solid var(--border); border-radius: 11px; padding: 10px 12px; cursor: pointer;" onclick="alert('Opening FoodListDetailScreen: EPCOT Food & Wine 2026')">
+                      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                        <div style="font-weight: 800; font-size: 12.5px; color: var(--text-primary);">🍧 EPCOT Food &amp; Wine 2026</div>
+                        <span style="font-size: 11px; font-weight: 800; color: var(--primary);">8 / 14 Tried</span>
+                      </div>
+                      <div style="height: 6px; background: var(--surface-alt); border-radius: 3px; overflow: hidden; margin-top: 4px;">
+                        <div style="width: 57%; height: 100%; background: linear-gradient(90deg, var(--primary) 0%, var(--primary-light) 100%);"></div>
+                      </div>
+                      <div style="display: flex; justify-content: space-between; font-size: 9.5px; color: var(--text-secondary); margin-top: 4px;">
+                        <span>57% completed</span>
+                        <span style="color: var(--primary); font-weight: 700;">View Checklist ›</span>
+                      </div>
+                    </div>
+
+                    <!-- Attached List 2 -->
+                    <div style="border: 1px solid var(--border); border-radius: 11px; padding: 10px 12px; cursor: pointer;" onclick="alert('Opening FoodListDetailScreen: Magic Kingdom Iconic Treats')">
+                      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                        <div style="font-weight: 800; font-size: 12.5px; color: var(--text-primary);">🥨 Magic Kingdom Iconic Treats</div>
+                        <span style="font-size: 11px; font-weight: 800; color: var(--primary);">3 / 6 Tried</span>
+                      </div>
+                      <div style="height: 6px; background: var(--surface-alt); border-radius: 3px; overflow: hidden; margin-top: 4px;">
+                        <div style="width: 50%; height: 100%; background: linear-gradient(90deg, #3fa34d 0%, #22c55e 100%);"></div>
+                      </div>
+                      <div style="display: flex; justify-content: space-between; font-size: 9.5px; color: var(--text-secondary); margin-top: 4px;">
+                        <span>50% completed</span>
+                        <span style="color: var(--primary); font-weight: 700;">View Checklist ›</span>
+                      </div>
+                    </div>
+
+                    <!-- Attached List 3 -->
+                    <div style="border: 1px solid var(--border); border-radius: 11px; padding: 10px 12px; cursor: pointer;" onclick="alert('Opening FoodListDetailScreen: Disney Springs Lounge Bites')">
+                      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                        <div style="font-weight: 800; font-size: 12.5px; color: var(--text-primary);">🍹 Disney Springs Lounge Bites</div>
+                        <span style="font-size: 11px; font-weight: 800; color: var(--primary);">1 / 4 Tried</span>
+                      </div>
+                      <div style="height: 6px; background: var(--surface-alt); border-radius: 3px; overflow: hidden; margin-top: 4px;">
+                        <div style="width: 25%; height: 100%; background: linear-gradient(90deg, #f59e0b 0%, #fbbf24 100%);"></div>
+                      </div>
+                      <div style="display: flex; justify-content: space-between; font-size: 9.5px; color: var(--text-secondary); margin-top: 4px;">
+                        <span>25% completed</span>
+                        <span style="color: var(--primary); font-weight: 700;">View Checklist ›</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- SUB-VIEW 5: LIVE TRIP FEED (TripFeedScreen.tsx - Live Party Activity Feed) -->
+              <div id="tview-feed" style="display: none; flex-direction: column; gap: 10px;">
+                <div class="card" style="padding: 14px;">
+                  <div class="section-header" style="margin-bottom: 10px;">
+                    <div>
+                      <div style="font-family: 'Outfit', sans-serif; font-size: 15px; font-weight: 800; color: var(--text-primary);">📸 Live Party Activity Feed</div>
+                      <div style="font-size: 10.5px; color: var(--text-secondary); margin-top: 1px;">Live ride completions, photos &amp; reactions</div>
+                    </div>
+                    <button style="background: var(--primary); color: white; border: none; font-size: 10.5px; font-weight: 700; padding: 5px 10px; border-radius: 8px; cursor: pointer;" onclick="alert('TripFeedScreen: Post a ride log, photo, or status to the party')">+ Share</button>
+                  </div>
+
+                  <div style="display: flex; flex-direction: column; gap: 9px;">
+                    <!-- Feed Post 1 -->
+                    <div style="background: var(--surface-alt); border-radius: 12px; padding: 10px 11px;">
+                      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                        <div style="display: flex; align-items: center; gap: 7px;">
+                          <span style="width: 22px; height: 22px; border-radius: 50%; background: var(--primary); color: white; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 800;">N</span>
+                          <span style="font-size: 11.5px; font-weight: 800; color: var(--text-primary);">Nicholas</span>
+                          <span style="font-size: 9.5px; color: var(--text-secondary);">&bull; 15m ago</span>
+                        </div>
+                        <span style="font-size: 10.5px; color: #f59e0b; font-weight: 800;">★★★★★</span>
+                      </div>
+                      <div style="font-size: 12px; font-weight: 700; color: var(--primary);">🚀 Logged Space Mountain</div>
+                      <div style="font-size: 11px; color: var(--text-secondary); margin: 2px 0 6px;">"Front row! Walk-on in 5 min during Early Entry. Dave was terrified."</div>
+                      <div style="display: flex; align-items: center; justify-content: space-between;">
+                        <span style="background: rgba(91, 42, 134, 0.1); color: var(--primary); font-size: 9px; font-weight: 700; padding: 2px 6px; border-radius: 4px;">🏷️ Rode with Sarah &amp; Dave</span>
+                        <div style="display: flex; gap: 4px;">
+                          <span style="background: white; border: 1px solid var(--border); border-radius: 10px; padding: 1px 5px; font-size: 9px; cursor: pointer;" onclick="alert('Reacted ❤️')">❤️ 3</span>
+                          <span style="background: white; border: 1px solid var(--border); border-radius: 10px; padding: 1px 5px; font-size: 9px; cursor: pointer;" onclick="alert('Reacted 🔥')">🔥 2</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Feed Post 2 -->
+                    <div style="background: var(--surface-alt); border-radius: 12px; padding: 10px 11px;">
+                      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                        <div style="display: flex; align-items: center; gap: 7px;">
+                          <span style="width: 22px; height: 22px; border-radius: 50%; background: #be185d; color: white; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 800;">S</span>
+                          <span style="font-size: 11.5px; font-weight: 800; color: var(--text-primary);">Sarah</span>
+                          <span style="font-size: 9.5px; color: var(--text-secondary);">&bull; 45m ago</span>
+                        </div>
+                        <span style="font-size: 10.5px; color: #f59e0b; font-weight: 800;">★★★★☆</span>
+                      </div>
+                      <div style="font-size: 12px; font-weight: 700; color: #be185d;">🍦 Tried Warm Cinnamon Roll (Gaston's)</div>
+                      <div style="font-size: 11px; color: var(--text-secondary); margin: 2px 0 6px;">"Huge cinnamon roll! Definitely sharing this between all of us."</div>
+                      <div style="display: flex; align-items: center; justify-content: space-between;">
+                        <span style="background: #fdf2f8; color: #be185d; font-size: 9px; font-weight: 700; padding: 2px 6px; border-radius: 4px;">Fantasyland</span>
+                        <div style="display: flex; gap: 4px;">
+                          <span style="background: white; border: 1px solid var(--border); border-radius: 10px; padding: 1px 5px; font-size: 9px; cursor: pointer;" onclick="alert('Reacted 😋')">😋 4</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Feed Post 3 -->
+                    <div style="background: var(--surface-alt); border-radius: 12px; padding: 10px 11px;">
+                      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                        <div style="display: flex; align-items: center; gap: 7px;">
+                          <span style="width: 22px; height: 22px; border-radius: 50%; background: #0284c7; color: white; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 800;">A</span>
+                          <span style="font-size: 11.5px; font-weight: 800; color: var(--text-primary);">Alex</span>
+                          <span style="font-size: 9.5px; color: var(--text-secondary);">&bull; 1h ago</span>
+                        </div>
+                        <span style="font-size: 10.5px; color: #f59e0b; font-weight: 800;">★★★★★</span>
+                      </div>
+                      <div style="font-size: 12px; font-weight: 700; color: #0284c7;">🚀 Logged TRON Lightcycle / Run</div>
+                      <div style="font-size: 11px; color: var(--text-secondary); margin: 2px 0 6px;">"Lightcycle position is insane! Incredible launch sequence."</div>
+                      <div style="display: flex; align-items: center; justify-content: space-between;">
+                        <span style="background: #e0f2fe; color: #0284c7; font-size: 9px; font-weight: 700; padding: 2px 6px; border-radius: 4px;">Tomorrowland</span>
+                        <div style="display: flex; gap: 4px;">
+                          <span style="background: white; border: 1px solid var(--border); border-radius: 10px; padding: 1px 5px; font-size: 9px; cursor: pointer;" onclick="alert('Reacted 🚀')">🚀 5</span>
+                          <span style="background: white; border: 1px solid var(--border); border-radius: 10px; padding: 1px 5px; font-size: 9px; cursor: pointer;" onclick="alert('Reacted 👏')">👏 3</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- SUB-VIEW 6: PARTY MEMBERS (TripMembersScreen.tsx - Dedicated Vacation Roster Hub) -->
+              <div id="tview-party" style="display: none; flex-direction: column; gap: 10px;">
+                <div class="card" style="padding: 14px;">
+                  <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+                    <div>
+                      <div style="font-family: 'Outfit', sans-serif; font-size: 16px; font-weight: 800; color: var(--text-primary);">Fall Magic Party</div>
+                      <div style="font-size: 11px; color: var(--text-secondary); margin-top: 2px;">4 Confirmed Members &bull; 1 Pending Invite</div>
+                    </div>
+                    <button style="border: 1.5px solid var(--primary-light); background: #f5f2fb; color: var(--primary); font-size: 11px; font-weight: 700; padding: 6px 12px; border-radius: 9px; cursor: pointer;" onclick="alert('Opening Invite Friends modal (search friends or copy deep-link)')">+ Invite Friend</button>
+                  </div>
+
+                  <!-- Member Roster -->
+                  <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <!-- Nick (Host) -->
+                    <div style="display: flex; align-items: center; justify-content: space-between; padding: 9px 10px; background: var(--surface-alt); border-radius: 12px;">
+                      <div style="display: flex; align-items: center; gap: 9px;">
+                        <span style="width: 32px; height: 32px; border-radius: 50%; background: var(--primary); color: white; display: inline-flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800;">N</span>
+                        <div>
+                          <div style="font-size: 12.5px; font-weight: 800; color: var(--text-primary);">Nicholas (You)</div>
+                          <div style="font-size: 10px; color: var(--text-secondary);">nicholas@example.com</div>
+                        </div>
+                      </div>
+                      <span style="background: rgba(91, 42, 134, 0.15); color: var(--primary); font-size: 9.5px; font-weight: 800; padding: 3px 8px; border-radius: 6px;">Organizer (Host)</span>
+                    </div>
+
+                    <!-- Alex -->
+                    <div style="display: flex; align-items: center; justify-content: space-between; padding: 9px 10px; background: var(--surface-alt); border-radius: 12px;">
+                      <div style="display: flex; align-items: center; gap: 9px;">
+                        <span style="width: 32px; height: 32px; border-radius: 50%; background: #0284c7; color: white; display: inline-flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800;">A</span>
+                        <div>
+                          <div style="font-size: 12.5px; font-weight: 800; color: var(--text-primary);">Alex Chen</div>
+                          <div style="font-size: 10px; color: var(--text-secondary);">alex@example.com &bull; Joined Aug 12</div>
+                        </div>
+                      </div>
+                      <span style="background: rgba(2, 132, 199, 0.12); color: #0284c7; font-size: 9.5px; font-weight: 800; padding: 3px 8px; border-radius: 6px;">Member</span>
+                    </div>
+
+                    <!-- Sarah -->
+                    <div style="display: flex; align-items: center; justify-content: space-between; padding: 9px 10px; background: var(--surface-alt); border-radius: 12px;">
+                      <div style="display: flex; align-items: center; gap: 9px;">
+                        <span style="width: 32px; height: 32px; border-radius: 50%; background: #be185d; color: white; display: inline-flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800;">S</span>
+                        <div>
+                          <div style="font-size: 12.5px; font-weight: 800; color: var(--text-primary);">Sarah Jenkins</div>
+                          <div style="font-size: 10px; color: var(--text-secondary);">sarah@example.com &bull; Joined Aug 14</div>
+                        </div>
+                      </div>
+                      <span style="background: rgba(2, 132, 199, 0.12); color: #0284c7; font-size: 9.5px; font-weight: 800; padding: 3px 8px; border-radius: 6px;">Member</span>
+                    </div>
+
+                    <!-- Dave -->
+                    <div style="display: flex; align-items: center; justify-content: space-between; padding: 9px 10px; background: var(--surface-alt); border-radius: 12px;">
+                      <div style="display: flex; align-items: center; gap: 9px;">
+                        <span style="width: 32px; height: 32px; border-radius: 50%; background: #3fa34d; color: white; display: inline-flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800;">D</span>
+                        <div>
+                          <div style="font-size: 12.5px; font-weight: 800; color: var(--text-primary);">Dave Miller</div>
+                          <div style="font-size: 10px; color: var(--text-secondary);">dave@example.com &bull; Joined Aug 15</div>
+                        </div>
+                      </div>
+                      <span style="background: rgba(100, 116, 139, 0.12); color: #475569; font-size: 9.5px; font-weight: 800; padding: 3px 8px; border-radius: 6px;">Viewer</span>
+                    </div>
+                  </div>
+
+                  <!-- Share Trip Invite Link -->
+                  <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between;">
+                    <div>
+                      <div style="font-size: 11.5px; font-weight: 700; color: var(--text-primary);">Invite Link</div>
+                      <div style="font-size: 10px; color: var(--text-secondary);">dwt.app/join/fall-magic-489</div>
+                    </div>
+                    <button style="border: 1px solid var(--border); background: var(--surface); color: var(--primary); font-size: 10px; font-weight: 700; padding: 4px 10px; border-radius: 7px; cursor: pointer;" onclick="alert('Trip invite link copied to clipboard!')">Copy Link</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- SUB-VIEW 7: CELEBRATORY TRIP SUMMARY (TripSummaryScreen.tsx) -->
+              <div id="tview-summary" style="display: none; flex-direction: column; gap: 10px;">
+                
+                <!-- Progress & Completion Hero -->
+                <div class="card" style="padding: 14px; background: linear-gradient(135deg, #ffffff 0%, #faf5ff 100%); border-left: 4px solid var(--primary);">
+                  <div style="display: flex; align-items: center; gap: 14px;">
+                    <div style="width: 54px; height: 54px; border-radius: 50%; background: linear-gradient(135deg, #5b2a86 0%, #3d1c5c 100%); color: white; display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(91, 42, 134, 0.3); flex-shrink: 0;">
+                      <span style="font-family: 'Outfit', sans-serif; font-size: 17px; font-weight: 800; color: var(--accent); line-height: 1;">82%</span>
+                      <span style="font-size: 7.5px; font-weight: 700; text-transform: uppercase;">Done</span>
+                    </div>
+                    <div>
+                      <div style="font-family: 'Outfit', sans-serif; font-size: 15px; font-weight: 800; color: var(--text-primary);">Magical Vacation Accomplished!</div>
+                      <div style="font-size: 11px; color: var(--text-secondary); margin-top: 2px;">18 of 22 planned experiences completed across 4 parks</div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Quick Stats Grid -->
+                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;">
+                  <div class="card" style="padding: 9px 6px; text-align: center;">
+                    <div style="font-family: 'Outfit', sans-serif; font-size: 16px; font-weight: 800; color: var(--primary);">18</div>
+                    <div style="font-size: 8.5px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase;">Attractions</div>
+                  </div>
+                  <div class="card" style="padding: 9px 6px; text-align: center;">
+                    <div style="font-family: 'Outfit', sans-serif; font-size: 16px; font-weight: 800; color: #0284c7;">4</div>
+                    <div style="font-size: 8.5px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase;">Parks</div>
+                  </div>
+                  <div class="card" style="padding: 9px 6px; text-align: center;">
+                    <div style="font-family: 'Outfit', sans-serif; font-size: 16px; font-weight: 800; color: #b45309;">7</div>
+                    <div style="font-size: 8.5px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase;">Treats</div>
+                  </div>
+                  <div class="card" style="padding: 9px 6px; text-align: center;">
+                    <div style="font-family: 'Outfit', sans-serif; font-size: 16px; font-weight: 800; color: #2e9e6b;">9.2★</div>
+                    <div style="font-size: 8.5px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase;">Rating</div>
+                  </div>
+                </div>
+
+                <!-- Group Superlatives & Awards (Hall of Fame) -->
+                <div class="card" style="padding: 12px 14px;">
+                  <div class="section-header" style="margin-bottom: 8px;">
+                    <span style="font-size: 12px; font-weight: 800; color: var(--text-primary);">🏆 Group Awards &amp; Superlatives</span>
+                    <span style="font-size: 10px; color: var(--primary); font-weight: 700;">Party of 4</span>
+                  </div>
+                  <div style="display: flex; flex-direction: column; gap: 7px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; padding: 7px 9px; background: var(--surface-alt); border-radius: 9px;">
+                      <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 16px;">👑</span>
+                        <div>
+                          <div style="font-size: 11px; font-weight: 700;">Trip MVP: Nicholas</div>
+                          <div style="font-size: 9.5px; color: var(--text-secondary);">14 total experiences logged</div>
+                        </div>
+                      </div>
+                      <span style="background: #fef3c7; color: #92400e; font-size: 8.5px; font-weight: 800; padding: 2px 6px; border-radius: 5px;">GOLD</span>
+                    </div>
+
+                    <div style="display: flex; align-items: center; justify-content: space-between; padding: 7px 9px; background: var(--surface-alt); border-radius: 9px;">
+                      <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 16px;">🧭</span>
+                        <div>
+                          <div style="font-size: 11px; font-weight: 700;">Lead Explorer: Sarah</div>
+                          <div style="font-size: 9.5px; color: var(--text-secondary);">Conquered all 4 parks in 2 days</div>
+                        </div>
+                      </div>
+                      <span style="background: #e0f2fe; color: #0369a1; font-size: 8.5px; font-weight: 800; padding: 2px 6px; border-radius: 5px;">EXPLORER</span>
+                    </div>
+
+                    <div style="display: flex; align-items: center; justify-content: space-between; padding: 7px 9px; background: var(--surface-alt); border-radius: 9px;">
+                      <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 16px;">🍿</span>
+                        <div>
+                          <div style="font-size: 11px; font-weight: 700;">Chief Snack Officer: Dave</div>
+                          <div style="font-size: 9.5px; color: var(--text-secondary);">Tried 7 distinct festival dishes</div>
+                        </div>
+                      </div>
+                      <span style="background: #fef2f2; color: #b91c1c; font-size: 8.5px; font-weight: 800; padding: 2px 6px; border-radius: 5px;">FOODIE</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Top-Rated Moments -->
+                <div class="card" style="padding: 12px 14px;">
+                  <div style="font-size: 12px; font-weight: 800; color: var(--text-primary); margin-bottom: 8px;">⭐ Group's Top-Rated Experiences</div>
+                  <div style="display: flex; flex-direction: column; gap: 6px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; font-size: 11.5px;">
+                      <span>1. Guardians of the Galaxy: Cosmic Rewind</span>
+                      <strong style="color: var(--primary);">9.8 ★</strong>
+                    </div>
+                    <div style="display: flex; align-items: center; justify-content: space-between; font-size: 11.5px;">
+                      <span>2. TRON Lightcycle / Run</span>
+                      <strong style="color: var(--primary);">9.5 ★</strong>
+                    </div>
+                    <div style="display: flex; align-items: center; justify-content: space-between; font-size: 11.5px;">
+                      <span>3. Space Mountain</span>
+                      <strong style="color: var(--primary);">9.1 ★</strong>
+                    </div>
+                  </div>
+                </div>
+
+                <button style="background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%); color: white; border: none; padding: 11px; border-radius: 12px; font-weight: 800; font-size: 12px; cursor: pointer; box-shadow: 0 4px 12px rgba(91,42,134,0.25);" onclick="alert('TripSummary: Formatted vacation highlights ready to share on iMessage/WhatsApp/Instagram!')">
+                  📤 Share Vacation Highlights Recap
+                </button>
+              </div>
+
+            </div>
+            <!-- END CONTAINER A -->
+
+            <!-- CONTAINER B: ALL TRIPS DIRECTORY (TripsListScreen.tsx) -->
+            <div id="tview-all-trips" style="display: none; flex-direction: column; gap: 12px;">
+              
+              <!-- 1. Active Trips -->
+              <div>
+                <div class="section-header" style="margin-bottom: 6px;">
+                  <span style="font-size: 11.5px; font-weight: 800; color: #15803d; text-transform: uppercase; letter-spacing: 0.5px;">🟢 Happening Now</span>
+                </div>
+                <div class="card" style="padding: 12px 14px; border: 1.5px solid #86efac; background: linear-gradient(135deg, #ffffff 0%, #f0fdf4 100%); cursor: pointer;" onclick="openTripDetail('Fall Magic Vacation')">
+                  <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                    <div>
+                      <div style="font-family: 'Outfit', sans-serif; font-size: 15px; font-weight: 800; color: var(--text-primary);">Fall Magic Vacation</div>
+                      <div style="font-size: 11px; color: #166534; font-weight: 600; margin-top: 2px;">Oct 4 – Oct 10, 2026 &bull; Pop Century Resort</div>
+                      <div style="font-size: 10px; color: var(--text-secondary); margin-top: 3px;">Day 2 in Magic Kingdom &bull; 4 Guests</div>
+                    </div>
+                    <span style="background: #dcfce7; color: #15803d; font-size: 9.5px; font-weight: 800; padding: 3px 8px; border-radius: 6px;">ACTIVE</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 2. Upcoming Trips -->
+              <div>
+                <div class="section-header" style="margin-bottom: 6px;">
+                  <span style="font-size: 11.5px; font-weight: 800; color: var(--primary); text-transform: uppercase; letter-spacing: 0.5px;">📅 Upcoming Vacations</span>
+                </div>
+                <div class="card" style="padding: 12px 14px; cursor: pointer;" onclick="openTripDetail('Holiday Magic 2026')">
+                  <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                    <div>
+                      <div style="font-family: 'Outfit', sans-serif; font-size: 14.5px; font-weight: 800; color: var(--text-primary);">Holiday Magic 2026</div>
+                      <div style="font-size: 11px; color: var(--text-secondary); margin-top: 2px;">Dec 12 – Dec 18, 2026 &bull; Wilderness Lodge</div>
+                      <div style="font-size: 10px; color: var(--text-secondary); margin-top: 3px;">6 Days Planned &bull; 3 Dining Bookings &bull; 2 Guests</div>
+                    </div>
+                    <span style="background: rgba(91, 42, 134, 0.12); color: var(--primary); font-size: 9.5px; font-weight: 800; padding: 3px 8px; border-radius: 6px;">UPCOMING</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 3. Past Trips (with Celebratory Summary Shortcut) -->
+              <div>
+                <div class="section-header" style="margin-bottom: 6px;">
+                  <span style="font-size: 11.5px; font-weight: 800; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">📜 Past Vacations & Memories</span>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                  
+                  <!-- Past Trip 1 -->
+                  <div class="card" style="padding: 12px 14px;">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                      <div>
+                        <div style="font-family: 'Outfit', sans-serif; font-size: 14.5px; font-weight: 800; color: var(--text-primary);">Spring Break 2025</div>
+                        <div style="font-size: 11px; color: var(--text-secondary); margin-top: 2px;">Apr 10 – Apr 15, 2025 &bull; Caribbean Beach Resort</div>
+                        <div style="font-size: 10.5px; color: #475569; margin-top: 3px;">24 experiences &bull; MVP: Nicholas &bull; 82% completed</div>
+                      </div>
+                      <span style="background: #f1f5f9; color: #64748b; font-size: 9.5px; font-weight: 800; padding: 3px 8px; border-radius: 6px;">PAST</span>
+                    </div>
+                    <div style="margin-top: 10px; display: flex; gap: 8px;">
+                      <button style="flex: 1; border: 1.5px solid var(--primary-light); background: #fdfaff; color: var(--primary); font-size: 11px; font-weight: 800; padding: 6px; border-radius: 8px; cursor: pointer;" onclick="openTripSummary('Spring Break 2025')">
+                        🏆 View Trip Summary
+                      </button>
+                      <button style="border: 1px solid var(--border); background: var(--surface-alt); color: var(--text-primary); font-size: 11px; font-weight: 700; padding: 6px 12px; border-radius: 8px; cursor: pointer;" onclick="openTripDetail('Spring Break 2025')">
+                        Itinerary ›
+                      </button>
+                    </div>
+                  </div>
+
+                  <!-- Past Trip 2 -->
+                  <div class="card" style="padding: 12px 14px;">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                      <div>
+                        <div style="font-family: 'Outfit', sans-serif; font-size: 14.5px; font-weight: 800; color: var(--text-primary);">Halloween Horror & Magic 2024</div>
+                        <div style="font-size: 11px; color: var(--text-secondary); margin-top: 2px;">Oct 28 – Nov 2, 2024 &bull; Port Orleans French Quarter</div>
+                        <div style="font-size: 10.5px; color: #475569; margin-top: 3px;">31 experiences &bull; 14 snacks &bull; Top: Tower of Terror</div>
+                      </div>
+                      <span style="background: #f1f5f9; color: #64748b; font-size: 9.5px; font-weight: 800; padding: 3px 8px; border-radius: 6px;">PAST</span>
+                    </div>
+                    <div style="margin-top: 10px; display: flex; gap: 8px;">
+                      <button style="flex: 1; border: 1.5px solid var(--primary-light); background: #fdfaff; color: var(--primary); font-size: 11px; font-weight: 800; padding: 6px; border-radius: 8px; cursor: pointer;" onclick="openTripSummary('Halloween Magic 2024')">
+                        🏆 View Trip Summary
+                      </button>
+                      <button style="border: 1px solid var(--border); background: var(--surface-alt); color: var(--text-primary); font-size: 11px; font-weight: 700; padding: 6px 12px; border-radius: 8px; cursor: pointer;" onclick="openTripDetail('Halloween Magic 2024')">
+                        Itinerary ›
+                      </button>
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+
+              <!-- Plan New Trip Button -->
+              <button style="background: var(--surface); border: 2px dashed var(--primary-light); color: var(--primary); font-weight: 800; font-size: 12.5px; padding: 12px; border-radius: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 4px;" onclick="alert('Opening TripCreateModal: Plan a new vacation!')">
+                <span>➕</span> Plan a New Disney Vacation
+              </button>
+
+            </div>
+            <!-- END CONTAINER B -->
+            </div>
+          </div>
+
+          <!-- SCREEN 4: COLLECTION (Pins & Food Scrapbook) -->
+          <div id="screen-collection" class="screen-panel" style="display: none;">
+            <div class="gradient-header">
+              <div class="header-top-row">
+                <div class="greeting-pill">📌 Disney Vault</div>
+              </div>
+              <h2 class="header-title">My Disney Collection</h2>
+              <div class="header-sub">Your personal scrapbook of pins, treats, and progress stats</div>
+            </div>
+
+            <div class="screen-body">
+              <!-- Sub-Tabs for the 3 Hobby Pillars -->
+              <div class="segmented-control">
+                <button class="seg-btn active" id="cbtn-pins" onclick="setCollectionTab('pins')">
+                  📌 Pins & Showcase <span class="seg-badge">2</span>
+                </button>
+                <button class="seg-btn" id="cbtn-food" onclick="setCollectionTab('food')">
+                  🍽️ Food & Lists
+                </button>
+                <button class="seg-btn" id="cbtn-stats" onclick="setCollectionTab('stats')">
+                  📊 Park Stats
+                </button>
+              </div>
+
+              <!-- PINS VIEW -->
+              <div id="cview-pins" style="display: flex; flex-direction: column; gap: 10px;">
+                <div style="background: linear-gradient(135deg, #fff9e6 0%, #fff0c7 100%); border: 1px solid rgba(246, 195, 67, 0.6); border-radius: 13px; padding: 10px 12px; display: flex; align-items: center; justify-content: space-between;">
+                  <div style="display: flex; align-items: center; gap: 9px;">
+                    <span style="font-size: 22px;">🏅</span>
+                    <div>
+                      <div style="font-family: 'Outfit', sans-serif; font-size: 12.5px; font-weight: 800; color: #664600;">2 Pins Ready to Claim!</div>
+                      <div style="font-size: 10px; color: #8a650d;">Space Mtn & Dole Whip Fan</div>
+                    </div>
+                  </div>
+                  <button style="background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%); color: var(--primary-dark); border: none; font-size: 10px; font-weight: 800; padding: 5px 9px; border-radius: 7px; cursor: pointer;" onclick="alert('PinCelebrationModal: Celebrating newly awarded pins!')">Claim</button>
+                </div>
+
+                <!-- Corkboard Showcase Preview -->
+                <div class="corkboard-card">
+                  <div class="cork-header">
+                    <span class="cork-title">My Pin Showcase Canvas</span>
+                    <span class="cork-tag" onclick="alert('PinShowcaseScreen: Interactive drag & arrange corkboard')">Open Canvas ➔</span>
+                  </div>
+                  <div class="pin-grid">
+                    <div class="pin-item" onclick="alert('PinDetailModal: Space Mountain Veteran')">
+                      <div class="pin-badge-graphic">🚀</div>
+                      <span class="pin-name-sm">Space Mtn</span>
+                    </div>
+                    <div class="pin-item" onclick="alert('PinDetailModal: Haunted Mansion Society')">
+                      <div class="pin-badge-graphic" style="box-shadow: 0 3px 8px rgba(0,0,0,0.2), 0 0 0 2px #7e57c2;">👻</div>
+                      <span class="pin-name-sm">Haunted M</span>
+                    </div>
+                    <div class="pin-item" onclick="alert('PinDetailModal: Spaceship Earth Navigator')">
+                      <div class="pin-badge-graphic" style="box-shadow: 0 3px 8px rgba(0,0,0,0.2), 0 0 0 2px #2f80ed;">🌐</div>
+                      <span class="pin-name-sm">Spaceship E</span>
+                    </div>
+                    <div class="pin-item" onclick="alert('PinDetailModal: Tower of Terror Drop Master')">
+                      <div class="pin-badge-graphic" style="box-shadow: 0 3px 8px rgba(0,0,0,0.2), 0 0 0 2px #e8505b;">🎬</div>
+                      <span class="pin-name-sm">Tower Terror</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="card" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 12px;">
+                  <div>
+                    <div style="font-size: 12.5px; font-weight: 700; color: var(--text-primary);">Pin Directory & Rarity Tiers</div>
+                    <div style="font-size: 10px; color: var(--text-secondary);">42 of 120 Pins Collected (35%)</div>
+                  </div>
+                  <button style="border: none; background: var(--surface-alt); color: var(--primary); font-weight: 700; padding: 5px 10px; border-radius: 7px; font-size: 11px; cursor: pointer;" onclick="alert('PinBoardScreen: Complete catalog of all collectible pins')">View Board</button>
+                </div>
+              </div>
+
+              <!-- FOOD VIEW -->
+              <div id="cview-food" style="display: none; flex-direction: column; gap: 10px;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                  <div class="card" style="padding: 10px; text-align: center;">
+                    <div style="font-family: 'Outfit', sans-serif; font-size: 18px; font-weight: 800; color: var(--primary);">34</div>
+                    <div style="font-size: 10px; font-weight: 600; color: var(--text-secondary);">Snacks & Eats Logged</div>
+                  </div>
+                  <div class="card" style="padding: 10px; text-align: center;">
+                    <div style="font-family: 'Outfit', sans-serif; font-size: 18px; font-weight: 800; color: var(--primary);">3</div>
+                    <div style="font-size: 10px; font-weight: 600; color: var(--text-secondary);">Saved Food Lists</div>
+                  </div>
+                </div>
+
+                <div class="card">
+                  <div class="section-header" style="margin-bottom: 6px;">
+                    <span style="font-weight: 700; font-size: 12px;">My Food Lists</span>
+                    <a class="section-link" onclick="alert('FoodListDiscoveryScreen: Browse community lists')">+ New / Discover</a>
+                  </div>
+                  <div style="display: flex; flex-direction: column; gap: 5px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; background: var(--surface-alt); border-radius: 9px; cursor: pointer;" onclick="alert('FoodListDetailScreen: EPCOT Food & Wine 2026')">
+                      <div>
+                        <div style="font-size: 11.5px; font-weight: 700;">🍦 EPCOT Food & Wine 2026</div>
+                        <div style="font-size: 9.5px; color: var(--text-secondary);">8 of 14 items tried</div>
+                      </div>
+                      <span style="color: var(--primary); font-weight: 800;">➔</span>
+                    </div>
+                  </div>
+                </div>
+
+                <button style="background: var(--primary); color: white; border: none; padding: 10px; border-radius: 11px; font-weight: 700; font-size: 12px; cursor: pointer;" onclick="alert('MyFoodHistoryScreen: Complete chronological food log timeline')">
+                  Open Food History Timeline
+                </button>
+              </div>
+
+              <!-- STATS VIEW -->
+              <div id="cview-stats" style="display: none; flex-direction: column; gap: 10px;">
+                <div class="card">
+                  <div class="section-header" style="margin-bottom: 8px;">
+                    <span style="font-size: 12px; font-weight: 700;">Park Coverage Story</span>
+                    <span style="font-size: 10.5px; font-weight: 700; color: var(--primary);">68.4% Total</span>
+                  </div>
+                  <div style="display: flex; flex-direction: column; gap: 6px;">
+                    <div>
+                      <div style="display: flex; justify-content: space-between; font-size: 10.5px; margin-bottom: 2px;">
+                        <span style="font-weight: 700; color: var(--mk-purple);">Magic Kingdom</span>
+                        <span style="font-weight: 700;">82%</span>
+                      </div>
+                      <div style="height: 5px; background: var(--surface-alt); border-radius: 3px; overflow: hidden;"><div style="width: 82%; height: 100%; background: var(--mk-purple);"></div></div>
+                    </div>
+                    <div>
+                      <div style="display: flex; justify-content: space-between; font-size: 10.5px; margin-bottom: 2px;">
+                        <span style="font-weight: 700; color: var(--epcot-blue);">EPCOT</span>
+                        <span style="font-weight: 700;">74%</span>
+                      </div>
+                      <div style="height: 5px; background: var(--surface-alt); border-radius: 3px; overflow: hidden;"><div style="width: 74%; height: 100%; background: var(--epcot-blue);"></div></div>
+                    </div>
+                  </div>
+                </div>
+
+                <button style="background: var(--surface-alt); color: var(--primary); border: none; padding: 10px; border-radius: 11px; font-weight: 700; font-size: 12px; cursor: pointer;" onclick="alert('StatsOverview (StatsStack): Full radar charts & resort analytics')">
+                  Open Full Analytics Suite (StatsStack) ➔
+                </button>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- SCREEN 5: PROFILE & FRIENDS (Full Identity + Friends + Settings) -->
+          <div id="screen-crew" class="screen-panel" style="display: none;">
+            <div class="gradient-header">
+              <div class="header-top-row">
+                <div class="greeting-pill">👤 Profile & Crew</div>
+                <button class="icon-btn" onclick="toggleSettingsModal()" title="Account Settings">
+                  <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                </button>
+              </div>
+              <h2 class="header-title">Nicholas S.</h2>
+              <div class="header-sub">Explorer Level 4 &bull; Frontierland Scout</div>
+            </div>
+
+            <div class="screen-body">
+              <!-- 1. AVATAR & DISPLAY NAME EDITOR CARD (Directly visible!) -->
+              <div class="card" style="padding: 14px;">
+                <div style="font-size: 11px; font-weight: 800; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">My Identity</div>
+                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+                  <div style="width: 58px; height: 58px; border-radius: 29px; border: 3px solid var(--accent); padding: 2px; position: relative; cursor: pointer;" onclick="alert('AvatarPicker (R7.4): Choose avatar preset (Castle, Monorail, Spaceship Earth, Mickey, Figment)')">
+                    <div style="width: 100%; height: 100%; border-radius: 50%; background: var(--primary); display: flex; align-items: center; justify-content: center; color: white; font-weight: 800; font-size: 22px;">N</div>
+                    <span style="position: absolute; bottom: -4px; right: -4px; background: var(--accent); color: var(--primary-dark); font-size: 8.5px; font-weight: 800; padding: 1px 5px; border-radius: 6px; border: 1.5px solid white;">CHANGE</span>
+                  </div>
+                  <div style="flex: 1;">
+                    <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 2px;">Display Name</div>
+                    <div style="display: flex; gap: 6px;">
+                      <input type="text" id="in-profile-name" value="Nicholas S." style="flex: 1; border: 1px solid var(--border); background: var(--surface-alt); border-radius: 7px; padding: 5px 8px; font-size: 13px; font-weight: 700; color: var(--text-primary); font-family: inherit;" />
+                      <button style="background: var(--primary); color: white; border: none; border-radius: 7px; padding: 5px 10px; font-size: 11px; font-weight: 700; cursor: pointer;" onclick="alert('Saved display name to PATCH /me/profile!')">Save</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 2. FRIENDS (CREW) SECTION -->
+              <div class="card">
+                <div class="section-header" style="margin-bottom: 8px;">
+                  <span style="font-weight: 700; font-size: 13px; color: var(--text-primary);">My Friends (Crew)</span>
+                  <a class="section-link" onclick="alert('FriendsSearchScreen: Search users and send requests')">+ Add Friends</a>
+                </div>
+
+                <!-- Friend Item -->
+                <div style="display: flex; align-items: center; justify-content: space-between; padding: 9px 10px; background: var(--surface-alt); border-radius: 10px; margin-bottom: 6px;">
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <div style="width: 34px; height: 34px; border-radius: 17px; background: #e0f2fe; display: flex; align-items: center; justify-content: center; font-size: 16px;">🍿</div>
+                    <div>
+                      <div style="font-weight: 700; font-size: 12.5px;">test</div>
+                      <div style="font-size: 10px; color: var(--text-secondary);">Friend &bull; 42% Completed</div>
+                    </div>
+                  </div>
+                  <button style="border: 1px solid var(--border); background: var(--surface); color: var(--primary); font-size: 10px; font-weight: 700; padding: 5px 9px; border-radius: 7px; cursor: pointer;" onclick="alert('FriendProfileScreen: Compare stats & view test\'s Pin Showcase!')">Compare Stats</button>
+                </div>
+              </div>
+
+              <!-- 3. SHARES (Inbox & Sent) -->
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                <div class="card" style="padding: 10px 12px; cursor: pointer;" onclick="alert('InboxScreen: 1 unread share from friends')">
+                  <div style="font-size: 18px;">📬</div>
+                  <div style="font-size: 12px; font-weight: 700; margin-top: 2px;">Share Inbox</div>
+                  <div style="font-size: 10px; color: var(--text-secondary);">1 unread share</div>
+                </div>
+                <div class="card" style="padding: 10px 12px; cursor: pointer;" onclick="alert('SentSharesScreen: Sent shares history & reactions')">
+                  <div style="font-size: 18px;">📤</div>
+                  <div style="font-size: 12px; font-weight: 700; margin-top: 2px;">Sent Shares</div>
+                  <div style="font-size: 10px; color: var(--text-secondary);">3 active shares</div>
+                </div>
+              </div>
+
+              <!-- 4. ACCOUNT SETTINGS SHORTCUTS -->
+              <div class="card" style="padding: 12px;">
+                <div style="font-size: 11px; font-weight: 800; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">Preferences & Security</div>
+                <div style="display: flex; flex-direction: column; gap: 6px;">
+                  <button style="border: 1px solid var(--border); background: var(--surface-alt); padding: 8px 10px; border-radius: 8px; font-size: 11.5px; font-weight: 700; color: var(--text-primary); text-align: left; display: flex; justify-content: space-between;" onclick="alert('PushNotificationPreferenceControl: Toggled notification settings')">
+                    <span>🔔 Push Notifications</span>
+                    <span style="color: var(--text-secondary);">➔</span>
+                  </button>
+                  <button style="border: 1px solid var(--border); background: var(--surface-alt); padding: 8px 10px; border-radius: 8px; font-size: 11.5px; font-weight: 700; color: var(--text-primary); text-align: left; display: flex; justify-content: space-between;" onclick="alert('ChangePasswordControl: Update password modal')">
+                    <span>🔒 Change Password</span>
+                    <span style="color: var(--text-secondary);">➔</span>
+                  </button>
+                  <button style="background: rgba(214, 51, 108, 0.1); color: var(--danger); border: 1px solid rgba(214, 51, 108, 0.2); padding: 9px 10px; border-radius: 8px; font-weight: 700; font-size: 11.5px; cursor: pointer; text-align: center; margin-top: 4px;" onclick="alert('Logged out cleanly (R6.10)')">
+                    Log Out
+                  </button>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+        </div>
+
+        <!-- NOTIFICATION BOTTOM SHEET -->
+        <div class="sheet-modal" id="notification-sheet" onclick="toggleNotifications()">
+          <div class="sheet-content" onclick="event.stopPropagation()">
+            <div class="sheet-handle"></div>
+            <div class="sheet-title">
+              <span>🔔 Notification Center</span>
+              <span style="font-size: 12px; font-weight: 600; color: var(--primary); cursor: pointer;" onclick="toggleNotifications()">Close</span>
+            </div>
+            <div class="feed-item" onclick="alert('Opens Pin Celebration')">
+              <span class="feed-icon">🏅</span>
+              <div class="feed-text"><strong>New Pin Unlocked:</strong> Space Mountain Veteran.<div class="feed-time">10m ago</div></div>
+            </div>
+            <div class="feed-item" onclick="alert('Opens TripInviteScreen')">
+              <span class="feed-icon">🗺️</span>
+              <div class="feed-text"><strong>Trip Invite:</strong> Alex invited you to Fall Magic Trip.<div class="feed-time">1h ago</div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- SETTINGS BOTTOM SHEET -->
+        <div class="sheet-modal" id="settings-sheet" onclick="toggleSettingsModal()">
+          <div class="sheet-content" onclick="event.stopPropagation()">
+            <div class="sheet-handle"></div>
+            <div class="sheet-title">
+              <span>⚙️ Account Settings</span>
+              <span style="font-size: 12px; font-weight: 600; color: var(--primary); cursor: pointer;" onclick="toggleSettingsModal()">Done</span>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              <div class="card" style="padding: 10px;">
+                <div style="font-size: 12px; font-weight: 700;">Push Notifications</div>
+                <div style="font-size: 10px; color: var(--text-secondary); margin: 2px 0 6px;">Manage trip invite, rode-with tag, and pin alerts.</div>
+                <button style="border: 1px solid var(--border); background: var(--surface-alt); padding: 5px 10px; border-radius: 6px; font-size: 10.5px; font-weight: 700; color: var(--primary);" onclick="alert('Push preferences toggled')">Preferences</button>
+              </div>
+              <div class="card" style="padding: 10px;">
+                <div style="font-size: 12px; font-weight: 700;">Account Security</div>
+                <div style="font-size: 10px; color: var(--text-secondary); margin: 2px 0 6px;">Change password and security options.</div>
+                <button style="border: 1px solid var(--border); background: var(--surface-alt); padding: 5px 10px; border-radius: 6px; font-size: 10.5px; font-weight: 700; color: var(--text-primary);" onclick="alert('Change password modal opened')">Change Password</button>
+              </div>
+              <button style="background: rgba(214, 51, 108, 0.1); color: var(--danger); border: 1px solid rgba(214, 51, 108, 0.2); padding: 10px; border-radius: 10px; font-weight: 700; font-size: 12px; cursor: pointer; margin-top: 4px;" onclick="alert('Logged out cleanly')">Log Out</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- FAST ACTION SHEET (Triggered by Center Magic FAB in Option 1) -->
+        <div class="sheet-modal" id="fab-action-sheet" onclick="toggleFabActionSheet()">
+          <div class="sheet-content" onclick="event.stopPropagation()">
+            <div class="sheet-handle"></div>
+            <div class="sheet-title">
+              <span>🪄 Fast In-Park Action</span>
+              <span style="font-size: 12px; font-weight: 600; color: var(--primary); cursor: pointer;" onclick="toggleFabActionSheet()">Close</span>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              <div class="feed-item" onclick="toggleFabActionSheet(); showScreen('waits');">
+                <span class="feed-icon">⏱️</span>
+                <div class="feed-text"><strong>Check Live Wait Times</strong><div class="feed-time">Real-time lines, crowd levels & forecasts across all 4 parks</div></div>
+                <span style="color: var(--primary); font-weight: 800;">➔</span>
+              </div>
+              <div class="feed-item" onclick="toggleFabActionSheet(); alert('LogAttractionModal: Rate ride, record wait time & tag crew!')">
+                <span class="feed-icon">🎢</span>
+                <div class="feed-text"><strong>Log Ride Experience</strong><div class="feed-time">Rate ride, enter wait time & tag friends</div></div>
+                <span style="color: var(--primary); font-weight: 800;">➔</span>
+              </div>
+              <div class="feed-item" onclick="toggleFabActionSheet(); alert('LogFoodItemModal: Save dish, festival booth & rating!')">
+                <span class="feed-icon">🍦</span>
+                <div class="feed-text"><strong>Log Food or Snack</strong><div class="feed-time">Save treats, food festival items & reviews</div></div>
+                <span style="color: var(--primary); font-weight: 800;">➔</span>
+              </div>
+              <div class="feed-item" onclick="toggleFabActionSheet(); alert('PinCelebrationModal: Celebrating 2 newly unlocked pins!')">
+                <span class="feed-icon">🏅</span>
+                <div class="feed-text"><strong>Claim Unlocked Pins (2)</strong><div class="feed-time">Space Mountain Veteran & Dole Whip Fan</div></div>
+                <span style="color: var(--primary); font-weight: 800;">➔</span>
+              </div>
+              <div class="feed-item" onclick="toggleFabActionSheet(); showScreen('trips');">
+                <span class="feed-icon">📅</span>
+                <div class="feed-text"><strong>View Today's Vacation Schedule</strong><div class="feed-time">Jump straight to your next Lightning Lane slot</div></div>
+                <span style="color: var(--primary); font-weight: 800;">➔</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- BOTTOM TABS: 4 Content Spaces + Center Magic FAB -->
+        <nav class="bottom-nav">
+          <button class="nav-tab active" id="tab-home" onclick="showScreen('home')">
+            <svg viewBox="0 0 24 24"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+            <span>Today</span>
+          </button>
+          
+          <button class="nav-tab" id="tab-explore" onclick="showScreen('explore')">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon></svg>
+            <span>Explore</span>
+          </button>
+          
+          <!-- Center Magic FAB -->
+          <div class="nav-fab-wrap" id="tab-fab-wrap">
+            <button class="nav-fab-btn" onclick="toggleFabActionSheet()" title="Quick Log Attraction, Snack, or Check Waits">
+              🪄
+            </button>
+            <span class="nav-fab-label">Magic</span>
+          </div>
+
+          <button class="nav-tab" id="tab-trips" onclick="showScreen('trips')">
+            <svg viewBox="0 0 24 24"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"></polygon><line x1="9" y1="3" x2="9" y2="18"></line><line x1="15" y1="6" x2="15" y2="21"></line></svg>
+            <span>Trips</span>
+          </button>
+          
+          <button class="nav-tab" id="tab-collection" onclick="showScreen('collection')">
+            <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"></rect><circle cx="9" cy="10" r="2"></circle><line x1="15" y1="8" x2="17" y2="8"></line><line x1="15" y1="12" x2="17" y2="12"></line><line x1="7" y1="16" x2="17" y2="16"></line></svg>
+            <span>Vault</span>
+            <span class="nav-badge">2</span>
+          </button>
+        </nav>
+      </div>
+    </div>
+
+    <!-- RIGHT: Architecture Strategy & Feature Directory -->
+    <div class="docs-panel">
+      
+      <div class="card-dark" style="border-color: var(--accent);">
+        <h3 style="color: var(--accent);">✨ The Winning Architecture: Magic FAB + Real-Time Wait Utility</h3>
+        <p>
+          Following in-depth UX evaluation, we have permanently committed to <strong>The Magic FAB Architecture (4 Content Tabs + Center In-Park Action FAB)</strong> and fully incorporated the <strong>Real-Time Live Wait Times &amp; Queue Radar</strong>.
+        </p>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px;">
+          <div style="background: rgba(246, 195, 67, 0.08); border: 1px solid rgba(246, 195, 67, 0.25); border-radius: 12px; padding: 12px;">
+            <div style="font-weight: 800; color: var(--accent); font-size: 13px; margin-bottom: 6px;">🪄 Why the FAB Model Wins</div>
+            <ul style="font-size: 11.5px; line-height: 1.5; color: #d1c7eb; padding-left: 16px;">
+              <li><strong>Lightning In-Park Speed</strong>: 1 thumb tap on the center gold FAB opens the fast logging sheet from any screen in the app.</li>
+              <li><strong>Clean, Purposeful Tabs</strong>: The bottom bar stays 100% dedicated to prime destinations: <em>Today</em>, <em>Explore</em>, <em>Trips</em>, and <em>Vault</em>.</li>
+              <li><strong>No Profile Clutter</strong>: Profile &amp; Crew are elevated to the prominent <strong>Header Avatar Chip</strong> (the Apple Maps, Airbnb, Duolingo pattern).</li>
+              <li><strong>Stable Muscle Memory</strong>: Zero dynamic bar shifting; buttons never move or disappear while walking through the park.</li>
+            </ul>
+          </div>
+
+          <div style="background: rgba(47, 128, 237, 0.12); border: 1px solid rgba(47, 128, 237, 0.35); border-radius: 12px; padding: 12px;">
+            <div style="font-weight: 800; color: #70b4ff; font-size: 13px; margin-bottom: 6px;">⏱️ Why Incorporating Live Waits is Essential</div>
+            <ul style="font-size: 11.5px; line-height: 1.5; color: #d1c7eb; padding-left: 16px;">
+              <li><strong>#1 In-Park Utility</strong>: Checking wait times is what guests do dozens of times per day. Putting it 1 tap away is a massive upgrade.</li>
+              <li><strong>Fixes Kiro's Critical Flaw</strong>: Kiro made Waits a morphing bottom tab that only appeared in-park, broke muscle memory, and banished Explore to a hidden sheet.</li>
+              <li><strong>Multi-Path Accessibility</strong>: Access Live Waits from Home Action Dock, Home Pulse pills, Explore banner, or the Center FAB.</li>
+              <li><strong>Actionable Data</strong>: Filter by Walk-ons or Lightning Lane, and log rides directly from the wait list.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <div class="card-dark">
+        <h3>📍 Where Everything Lives Across the App</h3>
+        <p>
+          Here is the complete, unambiguous breakdown of what lives in each screen and destination:
+        </p>
+
+        <table class="table-compare">
+          <thead>
+            <tr>
+              <th>Destination</th>
+              <th>Core Responsibilities</th>
+              <th>Exact Features on This Screen</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>1. 🏰 Today</strong></td>
+              <td>Daily / In-Park Command Center</td>
+              <td>
+                &bull; Personalized greeting ("Good morning, Nicholas!")<br>
+                &bull; Upcoming trip countdown / Live in-park day card<br>
+                &bull; Action Dock (Live Waits, Log Ride, Log Snack, My Pins)<br>
+                &bull; Park Wait Pulse (live average waits across 4 parks with 1-tap jump)<br>
+                &bull; Community Highest-Rated Leaderboard<br>
+                &bull; Top-right 🔔 Notification Bell with unread badge<br>
+                &bull; Top-right 👤 You &amp; Crew Avatar Hub button
+              </td>
+            </tr>
+            <tr>
+              <td><strong>⏱️ Live Waits</strong></td>
+              <td>Real-Time Line Times &amp; Radar</td>
+              <td>
+                &bull; 4-Park Selector Chips (Magic Kingdom, EPCOT, Studios, Animal K.)<br>
+                &bull; Crowd level forecast &amp; touring tips card<br>
+                &bull; Line filters: All, Walk-on (&lt;25m), Lightning Lane, Headliners<br>
+                &bull; Real-time wait minutes, LL return times &amp; status dots (Low/Mod/High/Down)<br>
+                &bull; 1-Tap <strong>[+ Log]</strong> button on every attraction to record waits immediately
+              </td>
+            </tr>
+            <tr>
+              <td><strong>2. 🧭 Explore</strong></td>
+              <td>Park Directory &amp; Crowd Insights</td>
+              <td>
+                &bull; Quick jump banner to Live Ride Waits &amp; Queues<br>
+                &bull; 6 Parks (Magic Kingdom, EPCOT, Studios, Animal Kingdom, Water Parks) + Disney Springs + Resorts<br>
+                &bull; Crowd Calendar &amp; Best Days to Visit button<br>
+                &bull; Search &amp; filters (Rides, Dining &amp; Menus, Characters)
+              </td>
+            </tr>
+            <tr>
+              <td><strong>3. 🗺️ Trips</strong></td>
+              <td>Vacation Hub &amp; Celebratory Capstone</td>
+              <td>
+                &bull; <strong>All Trips Directory (‹ All Trips)</strong>: Master directory of Active, Upcoming, and Past vacations with 1-tap summary shortcuts<br>
+                &bull; <strong>📅 Schedule</strong>: Day-by-day timeline with time nodes, wait/duration badges, walk connectors &amp; AI optimizer<br>
+                &bull; <strong>🍽️ Reservations</strong>: Dining ADRs, Lightning Lane return windows, party sizes &amp; confirmation numbers<br>
+                &bull; <strong>📋 Planned List</strong>: Group bucket list of experiences to do together with + Schedule action<br>
+                &bull; <strong>🍦 Attached Food Lists</strong>: Festival snack checklists with real-time completion progress bars<br>
+                &bull; <strong>📸 Trip Feed</strong>: Shared party activity feed, ride logs, reviews, "Rode with" tagging &amp; reactions<br>
+                &bull; <strong>👥 Party Roster</strong>: Member management, organizer/viewer roles, friend invitations &amp; invite links<br>
+                &bull; <strong>🏆 Celebratory Summary</strong>: Itinerary progress ring (82% done), Group Superlatives (MVP, Lead Explorer, Snack Officer), Top-rated moments &amp; shareable vacation recap card
+              </td>
+            </tr>
+            <tr>
+              <td><strong>4. 📌 Vault</strong></td>
+              <td>Your Personal Scrapbook (The Vault)</td>
+              <td>
+                &bull; <strong>Pins &amp; Showcase Tab</strong>: 2 Claimable pins banner, Interactive corkboard showcase canvas, All 120 pins directory button<br>
+                &bull; <strong>Food &amp; Lists Tab</strong>: Food history timeline, saved food lists, discovery<br>
+                &bull; <strong>Park Stats Tab</strong>: Park completion rings, ratings breakdown, full analytics
+              </td>
+            </tr>
+            <tr>
+              <td><strong>👤 Header Hub</strong></td>
+              <td>You &amp; Crew (Identity &amp; Settings)</td>
+              <td>
+                &bull; <strong>My Identity Card</strong>: Large Avatar with <strong>[CHANGE]</strong> button (preset picker) + Display Name with editable input &amp; <strong>[Save]</strong> button<br>
+                &bull; <strong>My Friends (Crew)</strong>: Friends list (test), <strong>[Compare Stats]</strong> button, and <strong>[+ Add Friends]</strong> search<br>
+                &bull; <strong>Shares</strong>: Share Inbox (1 unread) &amp; Sent Shares history<br>
+                &bull; <strong>Preferences &amp; Security</strong>: Push notifications toggle, Change Password, and Log Out
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card-dark">
+        <h3>🛡️ Full 32-Screen Feature Map (Zero Functionality Lost)</h3>
+        <p>
+          Every single existing screen, modal, and deep-link route is preserved in its optimal new location:
+        </p>
+
+        <table class="table-compare">
+          <thead>
+            <tr>
+              <th>Feature / Screen</th>
+              <th>Original File</th>
+              <th>New Home</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td><strong>Home Leaderboard</strong></td><td><code>HomeScreen.tsx</code></td><td>Tab 1: Today</td><td><span class="badge-promoted">Enhanced</span></td></tr>
+            <tr><td><strong>Active Trip Shortcut</strong></td><td><code>ActiveTripShortcut.tsx</code></td><td>Tab 1: Today (Hero Card)</td><td><span class="badge-promoted">Enhanced</span></td></tr>
+            <tr><td><strong>Live Wait Times Screen</strong></td><td><code>Live_Service</code></td><td>Dedicated Waits Screen (Dock/FAB/Pulse)</td><td><span class="badge-promoted">Net-New Utility</span></td></tr>
+            <tr><td><strong>Park Directory &amp; Lands</strong></td><td><code>CatalogScreen.tsx</code></td><td>Tab 2: Explore</td><td><span class="badge-ok">Preserved</span></td></tr>
+            <tr><td><strong>Crowd Calendar</strong></td><td><code>CrowdCalendarScreen.tsx</code></td><td>Tab 2: Explore &amp; Home Dock</td><td><span class="badge-ok">Preserved</span></td></tr>
+            <tr><td><strong>Experience Detail &amp; Ratings</strong></td><td><code>ExperienceDetailScreen.tsx</code></td><td>Root Stack (Global push)</td><td><span class="badge-ok">Preserved</span></td></tr>
+            <tr><td><strong>Restaurant Menus</strong></td><td><code>MenuScreen.tsx</code></td><td>Root Stack</td><td><span class="badge-ok">Preserved</span></td></tr>
+            <tr><td><strong>Food Logging &amp; Modals</strong></td><td><code>LogFoodItemModal.tsx</code></td><td>FAB Sheet &amp; Home Action Dock</td><td><span class="badge-promoted">1-Tap Access</span></td></tr>
+            <tr><td><strong>Food Item Picker Modal</strong></td><td><code>FoodItemPickerModal.tsx</code></td><td>Root Modal</td><td><span class="badge-ok">Preserved</span></td></tr>
+            <tr><td><strong>My Food History</strong></td><td><code>MyFoodHistoryScreen.tsx</code></td><td>Tab 4: Vault &rarr; Food Tab</td><td><span class="badge-promoted">Promoted</span></td></tr>
+            <tr><td><strong>My Food Lists</strong></td><td><code>MyFoodListsScreen.tsx</code></td><td>Tab 4: Vault &rarr; Food Tab</td><td><span class="badge-promoted">Promoted</span></td></tr>
+            <tr><td><strong>Food List Detail &amp; Create</strong></td><td><code>FoodListDetailScreen.tsx</code></td><td>Vault Stack</td><td><span class="badge-ok">Preserved</span></td></tr>
+            <tr><td><strong>Food List Discovery</strong></td><td><code>FoodListDiscoveryScreen.tsx</code></td><td>Vault Stack</td><td><span class="badge-ok">Preserved</span></td></tr>
+            <tr><td><strong>Pin Collection &amp; Board</strong></td><td><code>PinBoardScreen.tsx</code></td><td>Tab 4: Vault &rarr; Pins Tab</td><td><span class="badge-promoted">Promoted</span></td></tr>
+            <tr><td><strong>Pin Showcase (Corkboard)</strong></td><td><code>PinShowcaseScreen.tsx</code></td><td>Tab 4: Vault &rarr; Corkboard Preview</td><td><span class="badge-promoted">Visual Preview</span></td></tr>
+            <tr><td><strong>Pin Detail &amp; Claim</strong></td><td><code>PinDetailModal.tsx</code></td><td>Vault Stack / Modal</td><td><span class="badge-ok">Preserved</span></td></tr>
+            <tr><td><strong>Pin Celebration Modal</strong></td><td><code>PinCelebrationModal.tsx</code></td><td>FAB Sheet / Modal</td><td><span class="badge-ok">Preserved</span></td></tr>
+            <tr><td><strong>Personal Stats Suite</strong></td><td><code>StatsStack.tsx</code></td><td>Tab 4: Vault &rarr; Stats Tab</td><td><span class="badge-promoted">Promoted</span></td></tr>
+            <tr><td><strong>All Trips Directory</strong></td><td><code>TripsListScreen.tsx</code></td><td>Tab 3: Trips &rarr; Directory (‹ All Trips)</td><td><span class="badge-ok">Preserved</span></td></tr>
+            <tr><td><strong>Trips &amp; Schedule Builder</strong></td><td><code>TripScheduleScreen.tsx</code></td><td>Tab 3: Trips &rarr; Schedule</td><td><span class="badge-ok">Preserved</span></td></tr>
+            <tr><td><strong>Dining &amp; LL Reservations</strong></td><td><code>TripReservationsScreen.tsx</code></td><td>Tab 3: Trips &rarr; Reservations</td><td><span class="badge-ok">Preserved</span></td></tr>
+            <tr><td><strong>Planned Experiences Bucket List</strong></td><td><code>TripPlannedListScreen.tsx</code></td><td>Tab 3: Trips &rarr; Planned</td><td><span class="badge-ok">Preserved</span></td></tr>
+            <tr><td><strong>Attached Food Lists</strong></td><td><code>AttachedFoodListsSection.tsx</code></td><td>Tab 3: Trips &rarr; Food Lists</td><td><span class="badge-ok">Preserved</span></td></tr>
+            <tr><td><strong>Live Trip Feed &amp; Photos</strong></td><td><code>TripFeedScreen.tsx</code></td><td>Tab 3: Trips &rarr; Feed</td><td><span class="badge-ok">Preserved</span></td></tr>
+            <tr><td><strong>Trip Members &amp; Roles</strong></td><td><code>TripMembersScreen.tsx</code></td><td>Tab 3: Trips &rarr; Party</td><td><span class="badge-ok">Preserved</span></td></tr>
+            <tr><td><strong>Celebratory Trip Summary</strong></td><td><code>TripSummaryScreen.tsx</code></td><td>Tab 3: Trips &rarr; Summary</td><td><span class="badge-promoted">Promoted</span></td></tr>
+            <tr><td><strong>Trip Edit &amp; Dates</strong></td><td><code>TripEditScreen.tsx</code></td><td>Trips Stack</td><td><span class="badge-ok">Preserved</span></td></tr>
+            <tr><td><strong>Trip Invite Screen</strong></td><td><code>TripInviteScreen.tsx</code></td><td>Root Stack (Deep link)</td><td><span class="badge-ok">Preserved</span></td></tr>
+            <tr><td><strong>Rode With Tagging Confirm</strong></td><td><code>RodeWithConfirmScreen.tsx</code></td><td>Root Stack (Deep link)</td><td><span class="badge-ok">Preserved</span></td></tr>
+            <tr><td><strong>Notification Center</strong></td><td><code>NotificationCenterScreen.tsx</code></td><td>Universal Header Bell (🔔)</td><td><span class="badge-promoted">Global Access</span></td></tr>
+            <tr><td><strong>Avatar Preset Picker</strong></td><td><code>AvatarPicker.tsx</code></td><td>Header Hub: Profile (Identity Card)</td><td><span class="badge-promoted">Direct Access</span></td></tr>
+            <tr><td><strong>Display Name (Username)</strong></td><td><code>PATCH /me/profile</code></td><td>Header Hub: Profile (Identity Card)</td><td><span class="badge-promoted">Direct Access</span></td></tr>
+            <tr><td><strong>Friends List &amp; Search</strong></td><td><code>FriendsListScreen.tsx</code></td><td>Header Hub: Friends Card</td><td><span class="badge-ok">Preserved</span></td></tr>
+            <tr><td><strong>Friend Stats Compare</strong></td><td><code>FriendProfileScreen.tsx</code></td><td>Header Hub: Friends Card</td><td><span class="badge-promoted">Promoted</span></td></tr>
+            <tr><td><strong>Share Inbox &amp; Sent</strong></td><td><code>InboxScreen.tsx</code></td><td>Header Hub: Shares Card</td><td><span class="badge-promoted">Promoted</span></td></tr>
+            <tr><td><strong>Share Composer</strong></td><td><code>ShareComposerScreen.tsx</code></td><td>Root Stack / Modal</td><td><span class="badge-ok">Preserved</span></td></tr>
+            <tr><td><strong>Account Security &amp; Push</strong></td><td><code>ChangePasswordControl.tsx</code></td><td>Header Hub: Preferences</td><td><span class="badge-ok">De-cluttered</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+    </div>
+
+  </main>
+
+  <script>
+    let activeScreen = 'home';
+    let currentWaitPark = 'mk';
+    let currentWaitFilter = 'all';
+
+    const PARK_DATA = {
+      mk: {
+        title: 'Magic Kingdom',
+        sub: 'Park Hours: 8:00 AM – 11:00 PM &bull; Updated 1 min ago',
+        crowdLevel: 'Crowd Level 4 &bull; Moderate Lines (32m avg)',
+        crowdDesc: 'Lines peak between 1–3 PM. Best to ride Space Mtn or Mine Train before noon!',
+        rides: [
+          { name: 'Seven Dwarfs Mine Train', land: 'Fantasyland', wait: 65, status: 'high', ll: '1:40 PM ($14)', type: 'headliners' },
+          { name: 'Space Mountain', land: 'Tomorrowland', wait: 40, status: 'mod', ll: '2:15 PM (Multi)', type: 'headliners' },
+          { name: 'Big Thunder Mountain Railroad', land: 'Frontierland', wait: 35, status: 'mod', ll: '3:00 PM (Multi)', type: 'headliners' },
+          { name: "Peter Pan's Flight", land: 'Fantasyland', wait: 50, status: 'high', ll: '12:50 PM (Multi)', type: 'headliners' },
+          { name: 'Haunted Mansion', land: 'Liberty Square', wait: 25, status: 'mod', ll: '1:15 PM (Multi)', type: 'headliners' },
+          { name: 'Pirates of the Caribbean', land: 'Adventureland', wait: 20, status: 'low', ll: '12:30 PM (Multi)', type: 'walkon' },
+          { name: 'Jungle Cruise', land: 'Adventureland', wait: 30, status: 'mod', ll: '4:10 PM (Multi)', type: 'headliners' },
+          { name: "Buzz Lightyear's Space Ranger Spin", land: 'Tomorrowland', wait: 15, status: 'low', ll: '12:15 PM (Multi)', type: 'walkon' },
+          { name: 'Under the Sea ~ Little Mermaid', land: 'Fantasyland', wait: 10, status: 'low', ll: '12:00 PM (Multi)', type: 'walkon' },
+          { name: 'TRON Lightcycle / Run', land: 'Tomorrowland', wait: 0, status: 'down', statusText: 'Virtual Queue', ll: 'Group 42 Calling', type: 'headliners' },
+          { name: 'Tomorrowland Transit Authority PeopleMover', land: 'Tomorrowland', wait: 5, status: 'low', ll: 'None', type: 'walkon' },
+          { name: 'The Many Adventures of Winnie the Pooh', land: 'Fantasyland', wait: 20, status: 'low', ll: '1:30 PM (Multi)', type: 'walkon' }
+        ]
+      },
+      epcot: {
+        title: 'EPCOT',
+        sub: 'Park Hours: 9:00 AM – 9:00 PM &bull; Updated 2 min ago',
+        crowdLevel: 'Crowd Level 3 &bull; Light-to-Moderate Lines (24m avg)',
+        crowdDesc: 'World Showcase opens at 11:00 AM. Cosmic Rewind drop open at 1:00 PM.',
+        rides: [
+          { name: 'Guardians of the Galaxy: Cosmic Rewind', land: 'World Discovery', wait: 0, status: 'down', statusText: 'Virtual Queue', ll: 'Group 58 Calling', type: 'headliners' },
+          { name: "Remy's Ratatouille Adventure", land: 'France Pavilion', wait: 55, status: 'high', ll: '2:20 PM (Multi)', type: 'headliners' },
+          { name: 'Frozen Ever After', land: 'Norway Pavilion', wait: 45, status: 'high', ll: '3:40 PM (Multi)', type: 'headliners' },
+          { name: "Soarin' Around the World", land: 'World Nature', wait: 25, status: 'mod', ll: '1:10 PM (Multi)', type: 'headliners' },
+          { name: 'Test Track (Reimagining)', land: 'World Discovery', wait: 0, status: 'down', statusText: 'Refurbishment', ll: 'Closed', type: 'headliners' },
+          { name: 'Spaceship Earth', land: 'World Celebration', wait: 10, status: 'low', ll: '12:15 PM (Multi)', type: 'walkon' },
+          { name: 'Mission: SPACE', land: 'World Discovery', wait: 15, status: 'low', ll: '12:45 PM (Multi)', type: 'walkon' },
+          { name: 'The Seas with Nemo & Friends', land: 'World Nature', wait: 5, status: 'low', ll: '12:00 PM (Multi)', type: 'walkon' },
+          { name: 'Living with the Land', land: 'World Nature', wait: 10, status: 'low', ll: '12:05 PM (Multi)', type: 'walkon' },
+          { name: 'Journey Into Imagination With Figment', land: 'World Celebration', wait: 5, status: 'low', ll: 'None', type: 'walkon' }
+        ]
+      },
+      dhs: {
+        title: 'Hollywood Studios',
+        sub: 'Park Hours: 8:30 AM – 9:00 PM &bull; Updated 1 min ago',
+        crowdLevel: 'Crowd Level 7 &bull; Heavy Lines (48m avg)',
+        crowdDesc: "Galaxy's Edge & Toy Story Land are bustling. Slinky Dog & Rise LL sell out early!",
+        rides: [
+          { name: 'Star Wars: Rise of the Resistance', land: "Galaxy's Edge", wait: 85, status: 'high', ll: '4:45 PM ($22)', type: 'headliners' },
+          { name: 'Slinky Dog Dash', land: 'Toy Story Land', wait: 75, status: 'high', ll: 'Sold Out', type: 'headliners' },
+          { name: 'The Twilight Zone Tower of Terror', land: 'Sunset Blvd', wait: 55, status: 'high', ll: '3:30 PM (Multi)', type: 'headliners' },
+          { name: "Mickey & Minnie's Runaway Railway", land: 'Hollywood Blvd', wait: 40, status: 'mod', ll: '2:00 PM (Multi)', type: 'headliners' },
+          { name: 'Millennium Falcon: Smugglers Run', land: "Galaxy's Edge", wait: 35, status: 'mod', ll: '2:45 PM (Multi)', type: 'headliners' },
+          { name: "Rock 'n' Roller Coaster Starring Aerosmith", land: 'Sunset Blvd', wait: 0, status: 'down', statusText: 'Temp Closed', ll: 'Paused', type: 'headliners' },
+          { name: 'Toy Story Mania!', land: 'Toy Story Land', wait: 30, status: 'mod', ll: '1:30 PM (Multi)', type: 'headliners' },
+          { name: 'Star Tours – The Adventures Continue', land: 'Echo Lake', wait: 15, status: 'low', ll: '12:15 PM (Multi)', type: 'walkon' },
+          { name: 'Alien Swirling Saucers', land: 'Toy Story Land', wait: 20, status: 'low', ll: '1:10 PM (Multi)', type: 'walkon' }
+        ]
+      },
+      dak: {
+        title: 'Animal Kingdom',
+        sub: 'Park Hours: 8:00 AM – 6:00 PM &bull; Updated 3 min ago',
+        crowdLevel: 'Crowd Level 2 &bull; Low Lines (18m avg)',
+        crowdDesc: 'Park closes at 6:00 PM. Kilimanjaro Safaris best experienced before 2:00 PM.',
+        rides: [
+          { name: 'Avatar Flight of Passage', land: 'Pandora – Avatar', wait: 60, status: 'high', ll: '1:30 PM ($16)', type: 'headliners' },
+          { name: "Na'vi River Journey", land: 'Pandora – Avatar', wait: 35, status: 'mod', ll: '2:10 PM (Multi)', type: 'headliners' },
+          { name: 'Kilimanjaro Safaris', land: 'Africa', wait: 20, status: 'low', ll: '1:00 PM (Multi)', type: 'walkon' },
+          { name: 'Expedition Everest - Legend of Forbidden Mountain', land: 'Asia', wait: 15, status: 'low', ll: '12:45 PM (Multi)', type: 'walkon' },
+          { name: 'DINOSAUR', land: 'DinoLand U.S.A.', wait: 10, status: 'low', ll: '12:15 PM (Multi)', type: 'walkon' },
+          { name: 'Kali River Rapids', land: 'Asia', wait: 25, status: 'mod', ll: '1:40 PM (Multi)', type: 'headliners' },
+          { name: "It's Tough to be a Bug!", land: 'Discovery Island', wait: 5, status: 'low', ll: 'None', type: 'walkon' }
+        ]
+      }
+    };
+
+    function selectWaitPark(parkKey) {
+      currentWaitPark = parkKey;
+      const data = PARK_DATA[parkKey];
+      if (!data) return;
+
+      // Update chip styles
+      document.querySelectorAll('.park-chip').forEach(c => c.classList.remove('active'));
+      const activeChip = document.getElementById('pchip-' + parkKey);
+      if (activeChip) activeChip.classList.add('active');
+
+      // Update header info
+      const titleEl = document.getElementById('waits-park-title');
+      const subEl = document.getElementById('waits-park-sub');
+      const alertLevelEl = document.getElementById('waits-alert-level');
+      const alertDescEl = document.getElementById('waits-alert-desc');
+
+      if (titleEl) titleEl.textContent = data.title;
+      if (subEl) subEl.innerHTML = data.sub;
+      if (alertLevelEl) alertLevelEl.innerHTML = data.crowdLevel;
+      if (alertDescEl) alertDescEl.textContent = data.crowdDesc;
+
+      renderRidesList();
+    }
+
+    function filterWaits(filterType, btnEl) {
+      currentWaitFilter = filterType;
+      document.querySelectorAll('.wait-filter-pill').forEach(btn => btn.classList.remove('active'));
+      if (btnEl) btnEl.classList.add('active');
+      renderRidesList();
+    }
+
+    function renderRidesList() {
+      const listContainer = document.getElementById('waits-ride-list');
+      if (!listContainer) return;
+
+      const data = PARK_DATA[currentWaitPark];
+      if (!data) return;
+
+      let rides = data.rides;
+      if (currentWaitFilter === 'walkon') {
+        rides = rides.filter(r => r.wait > 0 && r.wait <= 25);
+      } else if (currentWaitFilter === 'll') {
+        rides = rides.filter(r => r.ll && r.ll !== 'None' && r.ll !== 'Closed' && r.ll !== 'Sold Out');
+      } else if (currentWaitFilter === 'headliners') {
+        rides = rides.filter(r => r.type === 'headliners');
+      }
+
+      listContainer.innerHTML = rides.map(ride => {
+        const statusClass = ride.status; // low, mod, high, down
+        let timeDisplay = '';
+        if (ride.wait > 0) {
+          timeDisplay = `
+            <div class="wait-time-num">${ride.wait}</div>
+            <span class="wait-time-unit">min wait</span>
+          `;
+        } else {
+          const label = ride.statusText || 'Down';
+          const color = ride.status === 'down' ? 'var(--danger)' : 'var(--primary)';
+          timeDisplay = `
+            <div class="wait-time-num" style="font-size: 11px; font-weight: 800; color: ${color};">${label}</div>
+          `;
+        }
+
+        const llBadge = ride.ll && ride.ll !== 'None' ? `&bull; ⚡ LL ${ride.ll}` : '';
+
+        return `
+          <div class="wait-card" onclick="alert('Viewing attraction details & past wait graph: ${ride.name.replace(/'/g, "\\'")}')">
+            <div class="wait-status-dot ${statusClass}"></div>
+            <div class="wait-details">
+              <div class="wait-name">${ride.name}</div>
+              <div class="wait-meta">${ride.land} ${llBadge}</div>
+            </div>
+            <div class="wait-time-box">
+              ${timeDisplay}
+              <button class="btn-quick-log" onclick="event.stopPropagation(); alert('Quick Logging wait time for: ${ride.name.replace(/'/g, "\\'")}')">+ Log</button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function showScreen(screenId) {
+      activeScreen = screenId;
+      document.querySelectorAll('.screen-panel').forEach(el => el.style.display = 'none');
+      
+      const target = document.getElementById('screen-' + screenId);
+      if (target) target.style.display = 'block';
+
+      // Update top switcher buttons
+      document.querySelectorAll('.view-btn').forEach(btn => btn.classList.remove('active'));
+      const activeVBtn = document.getElementById('vbtn-' + screenId);
+      if (activeVBtn) activeVBtn.classList.add('active');
+
+      // Update bottom tab bar
+      document.querySelectorAll('.nav-tab').forEach(el => el.classList.remove('active'));
+      const activeNav = document.getElementById('tab-' + screenId);
+      if (activeNav) activeNav.classList.add('active');
+
+      if (screenId === 'waits') {
+        selectWaitPark(currentWaitPark);
+      }
+
+      const viewport = document.getElementById('phone-viewport');
+      if (viewport) viewport.scrollTop = 0;
+    }
+
+    function setCollectionTab(tab) {
+      document.getElementById('cview-pins').style.display = tab === 'pins' ? 'flex' : 'none';
+      document.getElementById('cview-food').style.display = tab === 'food' ? 'flex' : 'none';
+      document.getElementById('cview-stats').style.display = tab === 'stats' ? 'flex' : 'none';
+
+      document.getElementById('cbtn-pins').classList.toggle('active', tab === 'pins');
+      document.getElementById('cbtn-food').classList.toggle('active', tab === 'food');
+      document.getElementById('cbtn-stats').classList.toggle('active', tab === 'stats');
+    }
+
+    function setTripSubTab(tab) {
+      const tabs = ['schedule', 'reservations', 'planned', 'food', 'feed', 'party', 'summary'];
+      tabs.forEach(t => {
+        const view = document.getElementById('tview-' + t);
+        if (view) view.style.display = (t === tab ? (t === 'schedule' ? 'block' : 'flex') : 'none');
+        const btn = document.getElementById('tbtn-' + t);
+        if (btn) btn.classList.toggle('active', t === tab);
+      });
+    }
+
+    let showingAllTripsList = false;
+    function toggleTripsListView(showList) {
+      showingAllTripsList = typeof showList === 'boolean' ? showList : !showingAllTripsList;
+      const allTripsView = document.getElementById('tview-all-trips');
+      const detailView = document.getElementById('tview-trip-detail');
+      const backBtn = document.getElementById('trip-back-btn');
+      const headerTitle = document.getElementById('trip-header-title');
+      const headerSub = document.getElementById('trip-header-sub');
+      const headerActions = document.getElementById('trip-header-actions');
+      const headerPill = document.getElementById('trip-header-pill');
+
+      if (showingAllTripsList) {
+        if (allTripsView) allTripsView.style.display = 'flex';
+        if (detailView) detailView.style.display = 'none';
+        if (backBtn) backBtn.style.display = 'none';
+        if (headerPill) headerPill.textContent = '🗺️ All Vacations';
+        if (headerTitle) headerTitle.textContent = 'My Disney Trips';
+        if (headerSub) headerSub.innerHTML = '1 Active &bull; 1 Upcoming &bull; 2 Past Vacations';
+        if (headerActions) headerActions.innerHTML = `
+          <button class="icon-btn" style="width: auto; height: 28px; border-radius: 8px; padding: 0 10px; font-size: 11px; font-weight: 700;" onclick="alert('TripCreateModal: Plan a new vacation')">+ New</button>
+        `;
+      } else {
+        if (allTripsView) allTripsView.style.display = 'none';
+        if (detailView) detailView.style.display = 'flex';
+        if (backBtn) backBtn.style.display = 'flex';
+        if (headerPill) headerPill.textContent = '🗺️ Vacation Hub';
+        if (headerTitle) headerTitle.textContent = 'Fall Magic Vacation';
+        if (headerSub) headerSub.innerHTML = 'Oct 4 – Oct 10 &bull; <span style="text-decoration: underline; cursor: pointer; color: var(--accent);" onclick="setTripSubTab(\'party\')">4 Guests ›</span> &bull; Pop Century Resort';
+        if (headerActions) headerActions.innerHTML = `
+          <button class="icon-btn" onclick="setTripSubTab('party')" title="Manage Trip Members">
+            <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+          </button>
+          <button class="icon-btn" onclick="alert('TripEditScreen: Edit trip dates, resort, and title')" title="Edit Trip Details">
+            <svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+          </button>
+        `;
+      }
+    }
+
+    function openTripDetail(tripName) {
+      toggleTripsListView(false);
+      const titleEl = document.getElementById('trip-header-title');
+      if (titleEl && tripName) titleEl.textContent = tripName;
+      setTripSubTab('schedule');
+    }
+
+    function openTripSummary(tripName) {
+      toggleTripsListView(false);
+      const titleEl = document.getElementById('trip-header-title');
+      if (titleEl && tripName) titleEl.textContent = tripName;
+      setTripSubTab('summary');
+    }
+
+    function toggleNotifications() {
+      document.getElementById('notification-sheet').classList.toggle('open');
+    }
+
+    function toggleSettingsModal() {
+      document.getElementById('settings-sheet').classList.toggle('open');
+    }
+
+    function toggleFabActionSheet() {
+      document.getElementById('fab-action-sheet').classList.toggle('open');
+    }
+
+    function setHomeTripMode(mode) {
+      const countdownCard = document.getElementById('home-hero-countdown');
+      const activeCard = document.getElementById('home-hero-active');
+      const titleEl = document.getElementById('home-header-title');
+      const subEl = document.getElementById('home-header-sub');
+      const btnCountdown = document.getElementById('tmode-btn-countdown');
+      const btnActive = document.getElementById('tmode-btn-active');
+      const mkPulsePill = document.getElementById('pulse-pill-mk');
+      const dockPlanLabel = document.getElementById('dock-label-plan');
+      const dockPlanIcon = document.getElementById('dock-icon-plan');
+      const dockPlanBadge = document.getElementById('dock-badge-plan');
+      const dockBtnPlan = document.getElementById('dock-btn-plan');
+
+      if (btnCountdown) btnCountdown.classList.toggle('active', mode === 'countdown');
+      if (btnActive) btnActive.classList.toggle('active', mode === 'active');
+
+      if (mode === 'active') {
+        if (countdownCard) countdownCard.style.display = 'none';
+        if (activeCard) activeCard.style.display = 'block';
+        if (titleEl) titleEl.textContent = 'Day 2 at the Magic Kingdom!';
+        if (subEl) subEl.innerHTML = '🏰 Magic Kingdom &bull; Day 2 of 5 &bull; Park Closes 11:00 PM';
+        if (mkPulsePill) {
+          mkPulsePill.style.border = '2px solid #22c55e';
+          mkPulsePill.style.boxShadow = '0 0 10px rgba(34, 197, 94, 0.35)';
+        }
+        if (dockPlanLabel) dockPlanLabel.textContent = 'Day 2 Plan';
+        if (dockPlanIcon) {
+          dockPlanIcon.textContent = '🗺️';
+          dockPlanIcon.style.background = '#ecfdf5';
+          dockPlanIcon.style.color = '#059669';
+        }
+        if (dockPlanBadge) dockPlanBadge.style.display = 'none';
+        if (dockBtnPlan) {
+          dockBtnPlan.onclick = () => { showScreen('trips'); setTripSubTab('schedule'); };
+        }
+      } else {
+        if (countdownCard) countdownCard.style.display = 'flex';
+        if (activeCard) activeCard.style.display = 'none';
+        if (titleEl) titleEl.textContent = 'Ready for the Magic?';
+        if (subEl) subEl.innerHTML = 'Magic Kingdom &bull; 8:00 AM – 11:00 PM &bull; 78° Sunny';
+        if (mkPulsePill) {
+          mkPulsePill.style.border = '1px solid var(--border)';
+          mkPulsePill.style.boxShadow = 'var(--shadow-sm)';
+        }
+        if (dockPlanLabel) dockPlanLabel.textContent = 'My Pins';
+        if (dockPlanIcon) {
+          dockPlanIcon.textContent = '📌';
+          dockPlanIcon.style.background = '#f5f3ff';
+          dockPlanIcon.style.color = '#6d28d9';
+        }
+        if (dockPlanBadge) dockPlanBadge.style.display = 'flex';
+        if (dockBtnPlan) {
+          dockBtnPlan.onclick = () => { showScreen('collection'); setCollectionTab('pins'); };
+        }
+      }
+    }
+
+    // Initialize in FAB mode with Magic Kingdom wait data ready
+    selectWaitPark('mk');
+    showScreen('home');
+  </script>
+</body>
+</html>

@@ -178,7 +178,8 @@ describe('MyFoodListsScreen', () => {
 
     // Verify saved list card has proper internal padding
     const innerCard = screen.getByTestId('saved-food-list-card-inner-list-saved-1');
-    expect(StyleSheet.flatten(innerCard.props.children.props.style).padding).toBe(theme.spacing.md);
+    const cardStyle = innerCard.props.children?.props?.style ?? innerCard.props.style;
+    expect(StyleSheet.flatten(cardStyle).padding).toBe(theme.spacing.md);
   });
 
   test('creates a new private food list through the modal (sends visibility: "private")', async () => {

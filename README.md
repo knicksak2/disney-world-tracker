@@ -342,6 +342,33 @@ If you'd rather keep the **LAN** URL (e.g. to also test on a physical phone over
 
 </details>
 
+### Testing on a Physical iPhone
+
+You do **not** need an Apple Developer account, Xcode, or a Mac to run this app on your own iPhone — use **Expo Go**. This project has no custom native modules outside what Expo Go already supports (`expo-secure-store`, `expo-image-picker`, `expo-status-bar`, `expo-notifications`), so the dev server path works as-is.
+
+1. Install **Expo Go** from the iOS App Store on your iPhone.
+2. Make sure your iPhone and your dev machine are on the **same Wi-Fi network**.
+3. Point the app at an API URL your phone can actually reach (`http://10.0.2.2:3000`, the Android-emulator default, does not work from a physical device). Set your machine's LAN IP in `apps/mobile/.env.local` — see [Local config with `.env.local`](#local-config-with-envlocal-only-to-override-the-local-target):
+
+   ```bash
+   copy apps\mobile\.env.example apps\mobile\.env.local   # Windows
+   cp apps/mobile/.env.example apps/mobile/.env.local     # macOS / Linux
+   ```
+
+   Then uncomment and set:
+
+   ```
+   API_BASE_URL=http://<your-LAN-IP>:3000
+   ```
+
+   Find your LAN IP with `ipconfig` (Windows) or `ifconfig` / `ip a` (macOS / Linux).
+4. Make sure `npm run dev:api` is running so there's a backend to talk to, and that your firewall allows inbound connections to port `3000` from your LAN (Windows Defender may prompt the first time).
+5. Run `npm run dev:mobile`, then scan the printed QR code with your iPhone's camera (it'll offer to open in Expo Go).
+
+Restart Metro after any change to `.env.local`.
+
+**Limitation:** remote push notifications don't work in Expo Go on SDK 53+, since that requires a signed dev-client build. Testing push notifications, or producing an installable `.ipa` (dev client / preview / production via `eas build -p ios`), requires a paid Apple Developer Program membership ($99/yr) — Apple won't issue signing credentials without one, regardless of tooling. See [Push notification credentials (FCM / APNs)](#push-notification-credentials-fcm--apns) and [Mobile app (EAS build → install on phone)](#3-mobile-app-eas-build--install-on-phone).
+
 ## Repo-Wide Scripts
 
 All from the repo root.

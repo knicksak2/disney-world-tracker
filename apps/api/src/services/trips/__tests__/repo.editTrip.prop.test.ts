@@ -419,6 +419,38 @@ describe('editTrip — fixed regression examples', () => {
     });
   });
 
+  it('editing walkWaitWeighting persists and returns on read (R10.1)', async () => {
+    const { store, id } = seed();
+    const repo = createTripRepo(makeInMemoryPool(store), NOOP_DEPS);
+
+    const result = await repo.editTrip(id, { walkWaitWeighting: 'minimize_walking' });
+    expect(result).toMatchObject({
+      name: 'Original',
+      walkWaitWeighting: 'minimize_walking',
+    });
+
+    const readBack = await repo.getTripForMember(id);
+    expect(readBack).toMatchObject({
+      name: 'Original',
+      walkWaitWeighting: 'minimize_walking',
+    });
+  });
+
+  it('omitting walkWaitWeighting on an unrelated edit leaves the stored value unchanged (R10.1)', async () => {
+    const { store, id } = seed();
+    const repo = createTripRepo(makeInMemoryPool(store), NOOP_DEPS);
+
+    // First set a non-default value.
+    await repo.editTrip(id, { walkWaitWeighting: 'minimize_waits' });
+
+    // Then an unrelated edit that omits walkWaitWeighting entirely.
+    const result = await repo.editTrip(id, { description: 'updated' });
+    expect(result).toMatchObject({
+      description: 'updated',
+      walkWaitWeighting: 'minimize_waits',
+    });
+  });
+
   it('returns null when the Trip does not exist', async () => {
     const { store } = seed();
     const repo = createTripRepo(makeInMemoryPool(store), NOOP_DEPS);

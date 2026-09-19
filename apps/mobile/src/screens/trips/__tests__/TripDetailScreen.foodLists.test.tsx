@@ -19,6 +19,7 @@
  */
 
 import React from 'react';
+import { Alert } from 'react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   fireEvent,
@@ -173,6 +174,12 @@ function makeNavigation(): { navigate: jest.Mock; goBack: jest.Mock } {
 describe('Attached Food Lists UI (Task 24.6, 24.7)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.spyOn(Alert, 'alert').mockImplementation((_title, _message, buttons) => {
+      const confirmButton = buttons?.find(
+        (b) => b.text === 'Detach' || b.style === 'destructive',
+      );
+      confirmButton?.onPress?.();
+    });
   });
 
   test('R22.9, R22.10: renders attached food lists with name, itemCount, and ownerDisplayName', async () => {
@@ -542,6 +549,36 @@ describe('Attached Food Lists UI (Task 24.6, 24.7)', () => {
     expect(
       screen.queryByTestId(`detach-food-list-btn-${LIST_2_ID}`),
     ).toBeNull();
+  });
+
+  test('prompts confirmation when detach is pressed and cancels without calling API', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    render(
+      <QueryClientProvider client={makeQueryClient()}>
+        <AttachedFoodListsSection
+          tripId={TRIP_ID}
+          foodLists={[AVAILABLE_LIST_1]}
+          isOrganizer={true}
+          callerDisplayName="Ariel"
+        />
+      </QueryClientProvider>,
+    );
+
+    const detachBtn = screen.getByTestId(`detach-food-list-btn-${LIST_1_ID}`);
+    fireEvent.press(detachBtn);
+
+    expect(alertSpy).toHaveBeenCalledWith(
+      "Detach 'Snacks of Epcot'?",
+      expect.stringContaining("Detach 'Snacks of Epcot' from this trip?"),
+      expect.arrayContaining([
+        expect.objectContaining({ text: 'Cancel', style: 'cancel' }),
+        expect.objectContaining({ text: 'Detach', style: 'destructive' }),
+      ]),
+    );
+    expect(apiRequestMock).not.toHaveBeenCalledWith(
+      'DELETE',
+      `/trips/${TRIP_ID}/food-lists/${LIST_1_ID}`,
+    );
   });
 
   test('R22.5: server rejection trip_forbidden on detach displays friendly copy', async () => {

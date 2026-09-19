@@ -323,10 +323,9 @@ describe('navigation (R6.10, R11.6, R11.12)', () => {
     await signInWithToken('token-abc');
     renderApp();
 
-    // The Profile tab's screen issues `GET /me` on mount via react-query;
-    // that's the request that returns 401 and triggers the auth flip.
-    // (Stats is no longer a top-level tab — it is re-hosted under Profile.)
-    fireEvent.press(screen.getByText('Profile'));
+    // Tapping the avatar chip in the header navigates to YouAndCrew;
+    // the request returns 401 and triggers the auth flip.
+    fireEvent.press(screen.getByTestId('avatar-chip'));
 
     // After the 401 settles, the navigator should re-render into the
     // auth stack. LoginScreen renders a unique `login-submit` testID.

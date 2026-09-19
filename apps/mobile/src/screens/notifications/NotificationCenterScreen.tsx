@@ -63,7 +63,6 @@ import {
 
 import { ApiError, apiRequest } from '../../api/client';
 import type { MainTabParamList, RootStackParamList } from '../../navigation/RootNavigator';
-import type { ProfileStackParamList } from '../../navigation/ProfileStack';
 import { theme } from '../../theme/theme';
 import {
   EmptyState,
@@ -81,19 +80,13 @@ import { AttentionItemRow } from '../../features/notifications/AttentionItemRow'
 // ---------------------------------------------------------------------------
 
 /**
- * The Notification_Center is hosted on the Profile tab's stack
- * (`ProfileStack`, wired in task 14.1). Composing that stack with the tab
- * navigator and the root stack lets a single `navigate` reach the Share inbox
- * on the Friends tab (`navigate('Friends', { screen: 'Inbox' })`, R2.9/R12.2)
- * or a Share_Destination on the root stack (`navigate('ExperienceDetail', …)`,
- * R2.3) — the request bubbles up past the tab navigator for either.
+ * The Notification_Center is hosted on RootStack with modal presentation
+ * (Task 12.2, Requirement 8.2). Composing with the tab navigator lets a single
+ * `navigate` reach tabs or root screens.
  */
 type NotificationCenterNavigation = CompositeNavigationProp<
-  NativeStackNavigationProp<ProfileStackParamList>,
-  CompositeNavigationProp<
-    BottomTabNavigationProp<MainTabParamList>,
-    NativeStackNavigationProp<RootStackParamList>
-  >
+  NativeStackNavigationProp<RootStackParamList, 'NotificationCenter'>,
+  BottomTabNavigationProp<MainTabParamList>
 >;
 
 // ---------------------------------------------------------------------------
@@ -195,7 +188,7 @@ interface FriendsListSnapshot {
 
 export default function NotificationCenterScreen(): JSX.Element {
   const navigation = useNavigation<NotificationCenterNavigation>();
-  const route = useRoute<RouteProp<ProfileStackParamList, 'NotificationCenter'>>();
+  const route = useRoute<RouteProp<RootStackParamList, 'NotificationCenter'>>();
   const queryClient = useQueryClient();
 
   // The Attention_Item a tapped push asked the center to surface, when opened
@@ -280,7 +273,7 @@ export default function NotificationCenterScreen(): JSX.Element {
   // Friends tab's stack; the nested navigate bubbles up through the tab
   // navigator to reach it.
   const openFullInbox = React.useCallback(() => {
-    navigation.navigate('Friends', { screen: 'Inbox' });
+    navigation.navigate('YouAndCrew', { screen: 'Inbox' });
   }, [navigation]);
 
   // Reuse the Inbox screen's destination-verify + cross-navigate logic for a

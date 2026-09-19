@@ -19,13 +19,17 @@ import {
   type DayTouringHoursDTO,
   type ExperienceDTO,
   type MealPeriod,
+  type OptimizationStartMode,
   type PlannedItemDTO,
   type PlannedItemEditInput,
   type ReservationKind,
+  type TouringStartMode,
   type TripDTO,
   type TripEditInput,
+  type TripOptimizationInput,
   type TripOptimizationResult,
   type WalkingSpeed,
+  type WalkWaitWeighting,
   MEAL_WINDOWS,
   MEAL_SERVICE_WINDOWS,
   isMealPeriodServed,
@@ -58,6 +62,12 @@ import { TimeWheelPicker } from '../../components/TimeWheelPicker';
 function reservationBadgeLabel(kind: ReservationKind): string {
   return `🎟️ ${reservationKindPresentation(kind).label}`;
 }
+
+export type { TouringStartMode, OptimizationStartMode };
+
+export type ClientDayTouringHours = Omit<DayTouringHoursDTO, 'startMode'> & {
+  startMode?: OptimizationStartMode;
+};
 
 type Props = NativeStackScreenProps<TripsStackParamList, 'TripSchedule'>;
 
@@ -126,6 +136,19 @@ export function formatMinutesToTime(mins: number | null | undefined): string {
   return `${h12}:${mStr} ${ampm}`;
 }
 
+/** Parse 'H:MM AM/PM' string into minutes from midnight (0..1439). */
+export function parseTimeToMinutes(timeStr: string): number | null {
+  const match = /^(\d{1,2}):(\d{2})\s*(AM|PM)$/i.exec(timeStr.trim());
+  if (!match) return null;
+  let hours = Number.parseInt(match[1]!, 10);
+  const minutes = Number.parseInt(match[2]!, 10);
+  const meridiem = match[3]!.toUpperCase();
+  if (hours < 1 || hours > 12 || minutes < 0 || minutes > 59) return null;
+  if (meridiem === 'PM' && hours < 12) hours += 12;
+  if (meridiem === 'AM' && hours === 12) hours = 0;
+  return hours * 60 + minutes;
+}
+
 /** Format an `optimized_at` ISO timestamp as a short ET date + time (R8.2). */
 function formatLastOptimized(isoString: string | null | undefined): string | null {
   if (!isoString) return null;
@@ -170,6 +193,20 @@ export function getTodayWDW(): string {
   const m = parts.find((p) => p.type === 'month')!.value;
   const d = parts.find((p) => p.type === 'day')!.value;
   return `${y}-${m}-${d}`;
+}
+
+/** Return current minutes from midnight in the WDW (America/New_York) timezone. */
+export function getWDWNowMinutes(): number {
+  const now = new Date();
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: WDW_TIME_ZONE,
+    hour: 'numeric',
+    minute: 'numeric',
+    hour12: false,
+  }).formatToParts(now);
+  const hour = parseInt(parts.find((p) => p.type === 'hour')!.value, 10);
+  const minute = parseInt(parts.find((p) => p.type === 'minute')!.value, 10);
+  return (hour === 24 ? 0 : hour) * 60 + minute;
 }
 
 function generateDateRange(startDateStr?: string, endDateStr?: string, filterPastDates = false): string[] {
@@ -424,8 +461,9 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
   const [showSettingsModal, setShowSettingsModal] = useState<boolean>(false);
 
   const [walkingSpeed, setWalkingSpeed] = useState<WalkingSpeed>('moderate');
+  const [walkWaitWeighting, setWalkWaitWeighting] = useState<WalkWaitWeighting>('balanced');
   const [earlyEntryEligible, setEarlyEntryEligible] = useState<boolean>(false);
-  const [dayHoursMap, setDayHoursMap] = useState<Record<string, DayTouringHoursDTO>>({});
+  const [dayHoursMap, setDayHoursMap] = useState<Record<string, ClientDayTouringHours>>({});
 
   const [passTimeText, setPassTimeText] = useState<string>('');
   const [timeError, setTimeError] = useState<string | null>(null);
@@ -433,8 +471,21 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
   React.useEffect(() => {
     if (tripQuery.data) {
       if (tripQuery.data.walkingSpeed) setWalkingSpeed(tripQuery.data.walkingSpeed);
+      if (tripQuery.data.walkWaitWeighting) setWalkWaitWeighting(tripQuery.data.walkWaitWeighting);
       if (tripQuery.data.earlyEntryEligible !== undefined) setEarlyEntryEligible(tripQuery.data.earlyEntryEligible);
-      if (tripQuery.data.dayTouringHours) setDayHoursMap(tripQuery.data.dayTouringHours);
+      if (tripQuery.data.dayTouringHours) {
+        setDayHoursMap((prev) => {
+          const next: Record<string, ClientDayTouringHours> = {
+            ...(tripQuery.data!.dayTouringHours as Record<string, ClientDayTouringHours>),
+          };
+          for (const [d, prevSetting] of Object.entries(prev)) {
+            if (prevSetting.startMode === 'now') {
+              next[d] = { ...next[d], startMode: 'now' };
+            }
+          }
+          return next;
+        });
+      }
     }
   }, [tripQuery.data]);
 
@@ -449,8 +500,21 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
     mutationFn: (body) => apiRequest<TripDTO>('PATCH', `/trips/${tripId}`, body),
     onSuccess: (updated) => {
       if (updated.walkingSpeed) setWalkingSpeed(updated.walkingSpeed);
+      if (updated.walkWaitWeighting) setWalkWaitWeighting(updated.walkWaitWeighting);
       if (updated.earlyEntryEligible !== undefined) setEarlyEntryEligible(updated.earlyEntryEligible);
-      if (updated.dayTouringHours) setDayHoursMap(updated.dayTouringHours);
+      if (updated.dayTouringHours) {
+        setDayHoursMap((prev) => {
+          const next: Record<string, ClientDayTouringHours> = {
+            ...(updated.dayTouringHours as Record<string, ClientDayTouringHours>),
+          };
+          for (const [d, prevSetting] of Object.entries(prev)) {
+            if (prevSetting.startMode === 'now') {
+              next[d] = { ...next[d], startMode: 'now' };
+            }
+          }
+          return next;
+        });
+      }
       void queryClient.invalidateQueries({
         queryKey: tripDetailKeys.detail(tripId),
       });
@@ -520,7 +584,7 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
     },
   });
 
-  const optimizeMutation = useMutation<TripOptimizationResult, ApiError, { date: string; startHour?: number; endHour?: number } | string>({
+  const optimizeMutation = useMutation<TripOptimizationResult, ApiError, TripOptimizationInput | string>({
     mutationFn: async (input) => {
       const body = typeof input === 'string' ? { date: input } : input;
       return apiRequest<TripOptimizationResult>('POST', `/trips/${tripId}/schedule/optimize`, body);
@@ -534,22 +598,70 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
 
   const items = itemsQuery.data ?? [];
   const activeDate = selectedDate ?? tripQuery.data?.startDate ?? 'No Date';
+  const isToday = activeDate === getTodayWDW();
   const tripDates = generateDateRange(tripQuery.data?.startDate, tripQuery.data?.endDate, true);
 
-  const activeDaySettings: DayTouringHoursDTO = (activeDate !== 'No Date' && dayHoursMap[activeDate]) || {};
-  const currentStartHour = activeDaySettings.startHour ?? 9;
-  const currentEndHour = activeDaySettings.endHour ?? 21;
+  const activeDateNorm = normalizeDateStr(activeDate);
+  const dayItems = items.filter((i) => normalizeDateStr(i.plannedDate) === activeDateNorm);
+  const unassignedItems = items.filter((i) => !i.plannedDate);
+  const scheduledDayItems = dayItems
+    .filter((i) => i.plannedTime)
+    .sort((a, b) => (a.plannedTime ?? '').localeCompare(b.plannedTime ?? ''));
+  const unscheduledDayItems = dayItems.filter((i) => !i.plannedTime);
+
+  const activeDayParks = [...new Set(dayItems.map((i) => i.park).filter((p): p is import('@dwt/shared').Park => p != null))];
+
+  const activeDaySettings: ClientDayTouringHours = (activeDate !== 'No Date' && dayHoursMap[activeDate]) || {};
+  const primaryParkName = activeDaySettings.startingPark || activeDayParks[0];
+  const primaryParkInfo = primaryParkName ? getParkHoursDetails(primaryParkName) : null;
+  const primaryParkOpenHour = primaryParkInfo ? parseInt(primaryParkInfo.openTimeText.split(':')[0]!, 10) : 9;
+
+  const nowMinutesWDW = getWDWNowMinutes();
   const currentUseEarlyEntry = activeDaySettings.useEarlyEntry ?? earlyEntryEligible;
   const currentUseExtendedEvening = activeDaySettings.useExtendedEvening ?? false;
   const currentHasAfterHoursTicket = activeDaySettings.hasAfterHoursTicket ?? false;
 
-  const setDaySetting = (updates: Partial<DayTouringHoursDTO>) => {
+  const parkOpenMinutes = primaryParkOpenHour * 60;
+  const parkArrivalMinutes = parkOpenMinutes - (currentUseEarlyEntry ? 30 : 0);
+  const roundedNowMinutes = Math.min(Math.ceil(nowMinutesWDW / 15) * 15, 1439);
+  const isParkAlreadyOpen = isToday && nowMinutesWDW >= parkArrivalMinutes;
+  const isPartyMixInPassed = isToday && nowMinutesWDW >= 16 * 60;
+
+  // On Today, if the park is already open and no explicit startMode was saved, default to 'now'.
+  const defaultStartMode: OptimizationStartMode =
+    isToday && isParkAlreadyOpen ? 'now' : 'park_open';
+  const currentStartMode: OptimizationStartMode = activeDaySettings.startMode ?? defaultStartMode;
+
+  const fallbackStartMinutes = activeDaySettings.startHour !== undefined ? activeDaySettings.startHour * 60 : parkOpenMinutes;
+  const currentStartMinutes =
+    currentStartMode === 'now'
+      ? roundedNowMinutes
+      : currentStartMode === 'party_mix_in'
+      ? (isToday ? Math.max(16 * 60, roundedNowMinutes) : 16 * 60)
+      : currentStartMode === 'custom'
+      ? (isToday
+          ? Math.max(activeDaySettings.startMinutes ?? fallbackStartMinutes, roundedNowMinutes)
+          : (activeDaySettings.startMinutes ?? fallbackStartMinutes))
+      : (isToday && isParkAlreadyOpen
+          ? roundedNowMinutes
+          : (activeDaySettings.startMinutes ?? fallbackStartMinutes));
+  const currentStartHour =
+    currentStartMode === 'now'
+      ? Math.floor(roundedNowMinutes / 60)
+      : currentStartMode === 'party_mix_in'
+      ? 16
+      : (activeDaySettings.startHour ?? Math.floor(currentStartMinutes / 60));
+  const currentEndHour = activeDaySettings.endHour ?? 21;
+
+  const setDaySetting = (updates: Partial<ClientDayTouringHours>) => {
     if (activeDate === 'No Date') return;
     setDayHoursMap((prev) => ({
       ...prev,
       [activeDate]: {
         startHour: currentStartHour,
         endHour: currentEndHour,
+        startMinutes: currentStartMinutes,
+        startMode: currentStartMode,
         useEarlyEntry: currentUseEarlyEntry,
         useExtendedEvening: currentUseExtendedEvening,
         hasAfterHoursTicket: currentHasAfterHoursTicket,
@@ -561,41 +673,54 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
   };
 
   const handleSaveScheduleSettings = () => {
-    const updatedMap = {
+    const updatedDaySetting: ClientDayTouringHours = {
+      startHour: currentStartHour,
+      endHour: currentEndHour,
+      useEarlyEntry: currentUseEarlyEntry,
+      useExtendedEvening: currentUseExtendedEvening,
+      hasAfterHoursTicket: currentHasAfterHoursTicket,
+      ...(activeDaySettings.startingPark ? { startingPark: activeDaySettings.startingPark } : {}),
+      ...(activeDaySettings.startMinutes !== undefined ? { startMinutes: activeDaySettings.startMinutes } : {}),
+      ...(activeDaySettings.startMode ? { startMode: activeDaySettings.startMode } : {}),
+    };
+
+    const updatedMap: Record<string, ClientDayTouringHours> = {
       ...dayHoursMap,
-      ...(activeDate !== 'No Date'
-        ? {
-            [activeDate]: {
-              startHour: currentStartHour,
-              endHour: currentEndHour,
-              useEarlyEntry: currentUseEarlyEntry,
-              useExtendedEvening: currentUseExtendedEvening,
-              hasAfterHoursTicket: currentHasAfterHoursTicket,
-              ...(activeDaySettings.startingPark ? { startingPark: activeDaySettings.startingPark } : {}),
-            },
-          }
-        : {}),
+      ...(activeDate !== 'No Date' ? { [activeDate]: updatedDaySetting } : {}),
     };
     setDayHoursMap(updatedMap);
+
+    // Sanitize for DB persistence: exclude ephemeral 'now' from dayTouringHoursSchema
+    const persistedDayTouringHours: Record<string, DayTouringHoursDTO> = {};
+    for (const [d, settings] of Object.entries(updatedMap)) {
+      const { startMode, ...rest } = settings;
+      persistedDayTouringHours[d] = {
+        ...rest,
+        ...(startMode && startMode !== 'now' ? { startMode } : {}),
+      };
+    }
+
     tripPatchMutation.mutate({
       walkingSpeed,
+      walkWaitWeighting,
       earlyEntryEligible,
-      dayTouringHours: updatedMap,
+      dayTouringHours: persistedDayTouringHours,
     });
     setShowSettingsModal(false);
   };
 
-  const activeDateNorm = normalizeDateStr(activeDate);
-  const dayItems = items.filter((i) => normalizeDateStr(i.plannedDate) === activeDateNorm);
-  const unassignedItems = items.filter((i) => !i.plannedDate);
-
-  const scheduledDayItems = dayItems
-    .filter((i) => i.plannedTime)
-    .sort((a, b) => (a.plannedTime ?? '').localeCompare(b.plannedTime ?? ''));
-  const unscheduledDayItems = dayItems.filter((i) => !i.plannedTime);
-
-  const optResult = optimizeMutation.data;
-  const activeDayParks = [...new Set(dayItems.map((i) => i.park).filter((p): p is import('@dwt/shared').Park => p != null))];
+  // Only trust a fresh optimize result while it's still for the active date —
+  // otherwise a stale result from a previously optimized date would bleed
+  // into every subsequently selected date (it matches optimized item ids
+  // against the whole trip's `items`, not just the active day's).
+  const optimizeMutationDate =
+    optimizeMutation.variables != null
+      ? typeof optimizeMutation.variables === 'string'
+        ? optimizeMutation.variables
+        : optimizeMutation.variables.date
+      : null;
+  const optResult =
+    optimizeMutation.data && optimizeMutationDate === activeDate ? optimizeMutation.data : undefined;
 
   // R8.2 / R8.3: a day is "optimized" if it was just optimized this session
   // (`optResult`) or its scheduled items carry a persisted optimization result
@@ -845,8 +970,18 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
     const origDuration = editingItem.durationMinutes ?? null;
     const hasDurationChanged = newDuration !== origDuration;
 
+    const origReservationKind = editingItem.reservationKind ?? null;
+    const targetReservationKind =
+      timingMode === 'exact_time' && isRestaurant
+        ? 'dining'
+        : timingMode === 'any_time' || timingMode === 'soft_window'
+        ? null
+        : origReservationKind;
+    const hasReservationChanged = targetReservationKind !== origReservationKind;
+
     const hasAnyChange =
       hasTimingChanged ||
+      hasReservationChanged ||
       hasDateChanged ||
       hasPriorityChanged ||
       hasSingleRiderChanged ||
@@ -877,6 +1012,9 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
         body.windowEndMinutes = null;
         body.mealPeriod = null;
       }
+      if (editingItem.reservationKind != null) {
+        body.reservationKind = null;
+      }
     } else if (timingMode === 'soft_window') {
       body.plannedTime = null;
       body.isFixed = false;
@@ -884,6 +1022,9 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
       body.mealPeriod = isRestaurant ? selectedMealPeriod : null;
       body.windowStartMinutes = windowStartMins;
       body.windowEndMinutes = windowEndMins;
+      if (editingItem.reservationKind != null) {
+        body.reservationKind = null;
+      }
     } else if (timingMode === 'exact_time') {
       body.plannedTime = exactTimeIso;
       body.isLightningLane = isLLAllowed ? (draftItem.isLightningLane ?? false) : false;
@@ -891,6 +1032,9 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
       body.windowStartMinutes = null;
       body.windowEndMinutes = null;
       body.mealPeriod = null;
+      if (isRestaurant) {
+        body.reservationKind = 'dining';
+      }
     }
 
     editMutation.mutate({
@@ -916,13 +1060,47 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
     });
   };
 
+  const backToHub = (): void => {
+    const state = navigation.getState?.();
+    const routes = state?.routes;
+    const currentIndex = typeof state?.index === 'number' ? state.index : (routes ? routes.length - 1 : -1);
+    const prevRoute = routes && currentIndex > 0 ? routes[currentIndex - 1] : null;
+
+    if (
+      prevRoute &&
+      (prevRoute.name === 'TripDetail' || prevRoute.name === 'TripReservations') &&
+      (prevRoute.params as { tripId?: string })?.tripId === tripId
+    ) {
+      navigation.goBack();
+      return;
+    }
+
+    if (typeof navigation.replace === 'function') {
+      navigation.replace('TripDetail', { tripId });
+      return;
+    }
+
+    if (typeof navigation.navigate === 'function') {
+      navigation.navigate('TripDetail', { tripId });
+      return;
+    }
+
+    navigation.goBack();
+  };
+
   return (
     <ScreenContainer>
       <GradientHeader
         title="Schedule Builder"
+        {...(tripQuery.data?.name ? { subtitle: tripQuery.data.name } : {})}
         icon="calendar"
         compact
-        onBack={() => navigation.goBack()}
+        onBack={backToHub}
+        backAccessibilityLabel={
+          tripQuery.data?.name
+            ? `Back to ${tripQuery.data.name}`
+            : 'Back to trip'
+        }
         right={
           <Pressable
             testID="schedule-settings-btn"
@@ -986,10 +1164,21 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
               label={optimizeMutation.isPending ? 'Optimizing...' : '✨ Optimize'}
               onPress={() => {
                 if (activeDate !== 'No Date') {
+                  const effStartMins = isToday
+                    ? Math.max(currentStartMinutes ?? roundedNowMinutes, roundedNowMinutes)
+                    : currentStartMinutes;
+                  const effStartHour = isToday
+                    ? Math.floor(effStartMins / 60)
+                    : currentStartHour;
+                  const effStartMode = isToday && currentStartMode === 'park_open' && isParkAlreadyOpen
+                    ? 'now'
+                    : currentStartMode;
                   optimizeMutation.mutate({
                     date: activeDate,
-                    startHour: currentStartHour,
+                    startHour: effStartHour,
                     endHour: currentEndHour,
+                    startMode: effStartMode,
+                    ...(effStartMins !== undefined ? { startMinutes: effStartMins } : {}),
                   });
                 }
               }}
@@ -1032,6 +1221,31 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
                 );
               })}
             </ScrollView>
+
+            {/* Today Touring Start Mode Indicator */}
+            {isToday && (
+              <View style={styles.touringStartBadgeContainer}>
+                <Pressable
+                  style={styles.touringStartBadge}
+                  testID="touring-start-indicator"
+                  onPress={() => setShowSettingsModal(true)}
+                  hitSlop={8}
+                >
+                  <Text style={styles.touringStartBadgeText}>
+                    {currentStartMode === 'now' || (isParkAlreadyOpen && currentStartMode === 'park_open')
+                      ? `📍 Touring: Right Now (${formatMinutesToTime(roundedNowMinutes)})`
+                      : currentStartMode === 'party_mix_in'
+                      ? (isPartyMixInPassed
+                          ? `📍 Touring: Right Now (${formatMinutesToTime(roundedNowMinutes)})`
+                          : '🎟️ Touring: Party Mix-in (4 PM)')
+                      : currentStartMode === 'custom'
+                      ? `⏰ Touring: ${formatMinutesToTime(currentStartMinutes)}`
+                      : `🏰 Touring: Park Open (${formatMinutesToTime(parkOpenMinutes)})`}
+                  </Text>
+                  <Ionicons name="chevron-down" size={14} color="#6d28d9" style={{ marginLeft: 4 }} />
+                </Pressable>
+              </View>
+            )}
 
             {/* Optimized / Scheduled Itinerary Timeline */}
             {(optResult || scheduledDayItems.length > 0) ? (
@@ -1213,7 +1427,7 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
                                       ? `☕ ${item.durationMinutes || 45}m break`
                                       : expInfo?.category === 'Restaurant'
                                       ? `🍽️ ${item.durationMinutes || 60}m dining`
-                                      : `🎢 ${item.durationMinutes || 15}m duration`}
+                                      : `🎢 ${item.durationMinutes ?? item.catalogDurationMinutes ?? 15}m duration`}
                                   </Text>
                                 </View>
                                 {item.mealPeriod === 'breakfast' && (
@@ -2179,6 +2393,26 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
                     ))}
                   </View>
 
+                  <Text style={styles.label}>Walk/Wait Priority</Text>
+                  <View style={styles.chipRow}>
+                    {[
+                      { label: '⚖️ Balanced', val: 'balanced' as const },
+                      { label: '🚶 Minimize Walking', val: 'minimize_walking' as const },
+                      { label: '⏱️ Minimize Waits', val: 'minimize_waits' as const },
+                    ].map((w) => (
+                      <Pressable
+                        key={w.val}
+                        testID={`walk-wait-weighting-${w.val}`}
+                        style={[styles.optionChip, walkWaitWeighting === w.val && styles.optionChipActive]}
+                        onPress={() => setWalkWaitWeighting(w.val)}
+                      >
+                        <Text style={[styles.optionChipText, walkWaitWeighting === w.val && styles.optionChipTextActive]}>
+                          {w.label}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+
                   <Text style={styles.label}>Special Park Hours & Tickets ({formatDatePill(activeDate)})</Text>
                   <View style={styles.chipRow}>
                     <Pressable
@@ -2235,7 +2469,7 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
                             const newStartHour = parkInfo ? parseInt(parkInfo.openTimeText.split(':')[0]!, 10) : undefined;
                             setDaySetting({
                               startingPark: newPark,
-                              ...(newStartHour !== undefined ? { startHour: newStartHour } : {}),
+                              ...(newStartHour !== undefined ? { startHour: newStartHour, startMinutes: newStartHour * 60 } : {}),
                             });
                           }}
                         >
@@ -2256,7 +2490,126 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
 
                     return (
                       <>
-                        <Text style={styles.label}>Quick Presets</Text>
+                        <Text style={styles.label}>Arrival Intent</Text>
+                        <View style={styles.chipRow}>
+                          <Pressable
+                            testID="arrival-mode-park-open"
+                            disabled={isParkAlreadyOpen}
+                            style={[
+                              styles.optionChip,
+                              currentStartMode === 'park_open' && !isParkAlreadyOpen && styles.optionChipActive,
+                              isParkAlreadyOpen && { opacity: 0.45 },
+                            ]}
+                            onPress={() =>
+                              setDaySetting({
+                                startMode: 'park_open',
+                                startHour: primaryParkOpenHour,
+                                startMinutes: parkOpenMinutes,
+                              })
+                            }
+                          >
+                            <Text style={[styles.optionChipText, currentStartMode === 'park_open' && !isParkAlreadyOpen && styles.optionChipTextActive]}>
+                              🏰 Park Open ({formatMinutesToTime(parkOpenMinutes)}){isParkAlreadyOpen ? ' (Passed)' : ''}
+                            </Text>
+                          </Pressable>
+
+                          <Pressable
+                            testID="arrival-mode-party-mix-in"
+                            disabled={isPartyMixInPassed}
+                            style={[
+                              styles.optionChip,
+                              currentStartMode === 'party_mix_in' && !isPartyMixInPassed && styles.optionChipActive,
+                              isPartyMixInPassed && { opacity: 0.45 },
+                            ]}
+                            onPress={() =>
+                              setDaySetting({
+                                startMode: 'party_mix_in',
+                                startHour: 16,
+                                startMinutes: 960,
+                              })
+                            }
+                          >
+                            <Text style={[styles.optionChipText, currentStartMode === 'party_mix_in' && !isPartyMixInPassed && styles.optionChipTextActive]}>
+                              🎟️ Party Mix-in (4 PM){isPartyMixInPassed ? ' (Passed)' : ''}
+                            </Text>
+                          </Pressable>
+
+                          {isToday && (
+                            <Pressable
+                              testID="arrival-mode-now"
+                              style={[
+                                styles.optionChip,
+                                (currentStartMode === 'now' || (isParkAlreadyOpen && currentStartMode === 'park_open')) && styles.optionChipActive,
+                              ]}
+                              onPress={() =>
+                                setDaySetting({
+                                  startMode: 'now',
+                                  startMinutes: roundedNowMinutes,
+                                  startHour: Math.floor(roundedNowMinutes / 60),
+                                })
+                              }
+                            >
+                              <Text
+                                style={[
+                                  styles.optionChipText,
+                                  (currentStartMode === 'now' || (isParkAlreadyOpen && currentStartMode === 'park_open')) && styles.optionChipTextActive,
+                                ]}
+                              >
+                                📍 Right Now ({formatMinutesToTime(roundedNowMinutes)})
+                              </Text>
+                            </Pressable>
+                          )}
+
+                          <Pressable
+                            testID="arrival-mode-custom"
+                            style={[styles.optionChip, currentStartMode === 'custom' && styles.optionChipActive]}
+                            onPress={() => {
+                              const nextMinutes = isToday
+                                ? Math.max(activeDaySettings.startMinutes ?? roundedNowMinutes, roundedNowMinutes)
+                                : (activeDaySettings.startMinutes ?? parkOpenMinutes);
+                              setDaySetting({
+                                startMode: 'custom',
+                                startMinutes: nextMinutes,
+                                startHour: Math.floor(nextMinutes / 60),
+                              });
+                            }}
+                          >
+                            <Text style={[styles.optionChipText, currentStartMode === 'custom' && styles.optionChipTextActive]}>
+                              ⏰ Custom Time
+                            </Text>
+                          </Pressable>
+                        </View>
+
+                        {currentStartMode === 'custom' && (
+                          <View style={{ marginTop: theme.spacing.xs }} testID="custom-start-time-picker-container">
+                            <Text style={[styles.label, { fontSize: theme.typography.meta.fontSize, color: theme.color.textSecondary }]}>
+                              Selected Arrival: {formatMinutesToTime(currentStartMinutes)}
+                            </Text>
+                            <TimeWheelPicker
+                              value={formatMinutesToTime(currentStartMinutes)}
+                              minuteStep={15}
+                              onChange={(nextTime) => {
+                                const mins = parseTimeToMinutes(nextTime);
+                                if (mins != null) {
+                                  const clampedMins = isToday ? Math.max(mins, roundedNowMinutes) : mins;
+                                  setDaySetting({
+                                    startMinutes: clampedMins,
+                                    startHour: Math.floor(clampedMins / 60),
+                                    startMode: 'custom',
+                                  });
+                                }
+                              }}
+                              testIDPrefix="custom-start-time"
+                            />
+                            {isToday && (
+                              <Text style={{ fontSize: 12, color: theme.color.textSecondary, marginTop: 4 }}>
+                                Earliest arrival today is Right Now ({formatMinutesToTime(roundedNowMinutes)}). Past times are clamped.
+                              </Text>
+                            )}
+                          </View>
+                        )}
+
+                        <Text style={[styles.label, { marginTop: theme.spacing.xs }]}>Quick Presets</Text>
                         <View style={styles.chipRow}>
                           <Pressable
                             testID="preset-park-open-close"
@@ -2264,7 +2617,23 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
                               styles.optionChip,
                               currentStartHour === primaryParkOpenHour && currentEndHour === primaryParkCloseHour && styles.optionChipActive,
                             ]}
-                            onPress={() => setDaySetting({ startHour: primaryParkOpenHour, endHour: primaryParkCloseHour })}
+                            onPress={() => {
+                              if (isToday && isParkAlreadyOpen) {
+                                setDaySetting({
+                                  startHour: Math.floor(roundedNowMinutes / 60),
+                                  endHour: primaryParkCloseHour,
+                                  startMinutes: roundedNowMinutes,
+                                  startMode: 'now',
+                                });
+                              } else {
+                                setDaySetting({
+                                  startHour: primaryParkOpenHour,
+                                  endHour: primaryParkCloseHour,
+                                  startMinutes: parkOpenMinutes,
+                                  startMode: 'park_open',
+                                });
+                              }
+                            }}
                           >
                             <Text
                               style={[
@@ -2281,7 +2650,15 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
                               styles.optionChip,
                               currentStartHour === primaryParkOpenHour && currentEndHour === 13 && styles.optionChipActive,
                             ]}
-                            onPress={() => setDaySetting({ startHour: primaryParkOpenHour, endHour: 13 })}
+                            onPress={() => {
+                              const effStart = isToday && isParkAlreadyOpen ? roundedNowMinutes : parkOpenMinutes;
+                              setDaySetting({
+                                startHour: Math.floor(effStart / 60),
+                                endHour: 13,
+                                startMinutes: effStart,
+                                startMode: isToday && isParkAlreadyOpen ? 'now' : 'park_open',
+                              });
+                            }}
                           >
                             <Text
                               style={[
@@ -2298,7 +2675,15 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
                               styles.optionChip,
                               currentStartHour === 16 && currentEndHour === primaryParkCloseHour && styles.optionChipActive,
                             ]}
-                            onPress={() => setDaySetting({ startHour: 16, endHour: primaryParkCloseHour })}
+                            onPress={() => {
+                              const effStart = isToday && isPartyMixInPassed ? roundedNowMinutes : 960;
+                              setDaySetting({
+                                startHour: Math.floor(effStart / 60),
+                                endHour: primaryParkCloseHour,
+                                startMinutes: effStart,
+                                startMode: isToday && isPartyMixInPassed ? 'now' : 'party_mix_in',
+                              });
+                            }}
                           >
                             <Text
                               style={[
@@ -2309,31 +2694,6 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
                               🌙 Evening
                             </Text>
                           </Pressable>
-                        </View>
-
-                        <Text style={[styles.label, { marginTop: theme.spacing.xs }]}>Day Start Time</Text>
-                        <View style={styles.chipRow}>
-                          {[
-                            { label: '7:00 AM', val: 7 },
-                            { label: '8:00 AM', val: 8 },
-                            { label: '9:00 AM', val: 9 },
-                            { label: '10:00 AM', val: 10 },
-                            { label: '11:00 AM', val: 11 },
-                          ].map((opt) => {
-                            const displayLabel = opt.val === primaryParkOpenHour ? `${opt.label} (Open)` : opt.label;
-                            return (
-                              <Pressable
-                                key={opt.val}
-                                testID={`start-hour-${opt.val}`}
-                                style={[styles.optionChip, currentStartHour === opt.val && styles.optionChipActive]}
-                                onPress={() => setDaySetting({ startHour: opt.val })}
-                              >
-                                <Text style={[styles.optionChipText, currentStartHour === opt.val && styles.optionChipTextActive]}>
-                                  {displayLabel}
-                                </Text>
-                              </Pressable>
-                            );
-                          })}
                         </View>
 
                         <Text style={[styles.label, { marginTop: theme.spacing.xs }]}>Day End Time</Text>
@@ -2433,6 +2793,27 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing.md,
     backgroundColor: theme.color.surface,
     gap: theme.spacing.sm,
+  },
+  touringStartBadgeContainer: {
+    paddingHorizontal: theme.spacing.lg,
+    paddingTop: theme.spacing.sm,
+    paddingBottom: theme.spacing.xs,
+  },
+  touringStartBadge: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.color.surface,
+    borderColor: theme.color.primary,
+    borderWidth: 1,
+    borderRadius: theme.radius.pill,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: 4,
+  },
+  touringStartBadgeText: {
+    fontSize: theme.typography.meta.fontSize,
+    fontWeight: '600',
+    color: theme.color.primary,
   },
   parkHoursRow: {
     gap: theme.spacing.xs,

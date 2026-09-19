@@ -1,0 +1,103 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`Feature: navigation-redesign, Property 6: Trip section structure untouched (Requirements 5.1, 5.2) HUB_SECTIONS snapshot matches pre-change canonical definition 1`] = `
+[
+  {
+    "body": "Experiences the group wants to do together.",
+    "color": "#5b2a86",
+    "icon": "list-outline",
+    "key": "planned",
+    "route": "TripPlannedList",
+    "title": "Planned List",
+  },
+  {
+    "body": "Plan and optimize your day-by-day timeline.",
+    "color": "#7e57c2",
+    "icon": "calendar-outline",
+    "key": "schedule",
+    "route": "TripSchedule",
+    "title": "Schedule Builder",
+  },
+  {
+    "body": "Dining, Lightning Lane, and other bookings you hold.",
+    "color": "#f6c343",
+    "icon": "ticket-outline",
+    "key": "reservations",
+    "route": "TripReservations",
+    "title": "Reservations",
+  },
+  {
+    "body": "Log completions and follow, react to, and comment on the group.",
+    "color": "#f6c343",
+    "icon": "chatbubbles-outline",
+    "key": "activity",
+    "route": "TripFeed",
+    "title": "Trip Activity",
+  },
+  {
+    "body": "Who is on this Trip and their roles.",
+    "color": "#7e57c2",
+    "icon": "people-outline",
+    "key": "members",
+    "route": "TripMembers",
+    "title": "Members",
+  },
+  {
+    "body": "Group counts, top-rated moments, and contributions.",
+    "color": "#6b6480",
+    "icon": "stats-chart-outline",
+    "key": "summary",
+    "route": "TripSummary",
+    "title": "Summary",
+  },
+]
+`;
+
+exports[`Feature: navigation-redesign, Property 6: Trip section structure untouched (Requirements 5.1, 5.2) TripsStack registers exactly the 11 expected screens and matches snapshot 1`] = `
+[
+  {
+    "name": "TripsList",
+    "options": undefined,
+  },
+  {
+    "name": "TripDetail",
+    "options": undefined,
+  },
+  {
+    "name": "TripEdit",
+    "options": undefined,
+  },
+  {
+    "name": "TripPlannedList",
+    "options": undefined,
+  },
+  {
+    "name": "TripSchedule",
+    "options": undefined,
+  },
+  {
+    "name": "TripReservations",
+    "options": undefined,
+  },
+  {
+    "name": "TripFeed",
+    "options": undefined,
+  },
+  {
+    "name": "TripMembers",
+    "options": undefined,
+  },
+  {
+    "name": "TripSummary",
+    "options": undefined,
+  },
+  {
+    "name": "TripInvite",
+    "options": undefined,
+  },
+  {
+    "name": "RodeWithConfirm",
+    "options": undefined,
+  },
+]
+`;

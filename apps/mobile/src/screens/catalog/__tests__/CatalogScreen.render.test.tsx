@@ -38,7 +38,11 @@
  */
 
 import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import {
+  NavigationContainer,
+  createNavigationContainerRef,
+} from '@react-navigation/native';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
@@ -46,6 +50,7 @@ import {
   fireEvent,
   render,
   screen,
+  waitFor,
   within,
 } from '@testing-library/react-native';
 import { Text } from 'react-native';
@@ -88,6 +93,16 @@ jest.mock('../../../api/client', () => {
     apiRequest: jest.fn(),
   };
 });
+
+// `NotificationBell` (mounted in the Catalog header) calls `useAttentionBadge`,
+// which fans out four unrelated reads (`/me/friends`, trip invites, etc.) and
+// expects specific response shapes. Stubbed to hidden/zero so it does not
+// interfere with the catalog-focused assertions below, mirroring the existing
+// convention in `notificationNavigation.test.tsx` / `pinTabBadge.test.tsx`.
+jest.mock('../../../features/notifications/useAttentionBadge', () => ({
+  __esModule: true,
+  useAttentionBadge: () => ({ display: 'hidden', count: 0 }),
+}));
 
 // ---------------------------------------------------------------------------
 // Imports of modules under test (after the mocks above).
@@ -253,6 +268,46 @@ function renderCatalog(): ReturnType<typeof render> {
  */
 function orderOf(testID: string): number {
   return JSON.stringify(screen.toJSON()).indexOf(`"testID":"${testID}"`);
+}
+
+/**
+ * Bottom-tab harness param list, mirroring the production `MainTabs` shape
+ * closely enough to exercise the bug: a tab navigator (which — like the real
+ * `MainTabs` — never unmounts a blurred tab) hosting `CatalogScreen` as one
+ * tab and an inert stub as a sibling tab.
+ */
+type TabHarnessParamList = {
+  CatalogTab: undefined;
+  OtherTab: undefined;
+};
+
+function OtherTabStub(): JSX.Element {
+  return <Text testID="other-tab">other tab</Text>;
+}
+
+const tabNavRef = createNavigationContainerRef<TabHarnessParamList>();
+
+/**
+ * Mount `CatalogScreen` inside a real bottom-tab navigator (not a stack), so
+ * switching to `OtherTab` and back to `CatalogTab` blurs/refocuses the screen
+ * without ever unmounting it — exactly how the production `MainTabs`
+ * navigator behaves. A stack navigator (used by `renderCatalog` above) would
+ * not reproduce this: `CatalogScreen`'s own internal `Stack.Navigator` for
+ * `DestinationScreen`/`ExperienceDetail` is unrelated to tab blur/focus.
+ */
+function renderCatalogInTabs(): ReturnType<typeof render> {
+  const Tab = createBottomTabNavigator<TabHarnessParamList>();
+  const client = makeQueryClient();
+  return render(
+    <QueryClientProvider client={client}>
+      <NavigationContainer ref={tabNavRef}>
+        <Tab.Navigator>
+          <Tab.Screen name="CatalogTab" component={CatalogScreen as never} />
+          <Tab.Screen name="OtherTab" component={OtherTabStub} />
+        </Tab.Navigator>
+      </NavigationContainer>
+    </QueryClientProvider>,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -591,5 +646,82 @@ describe('Catalog_Home grid + global search (R4.1, R4.4, R4.7, R5.2, R5.3, R5.5,
     expect(screen.queryByTestId('catalog-destination-grid')).toBeNull();
     // The typed query is retained in the search control (R5.7).
     expect(screen.getByTestId('catalog-search')).toHaveProp('value', 'boom');
+  });
+
+  // -------------------------------------------------------------------------
+  // Regression: a failed grid read clears itself when the tab regains focus,
+  // rather than sitting frozen in its error state forever.
+  //
+  // Bottom tabs (the production `MainTabs`) never unmount a blurred screen, so
+  // navigating Home → Explore and back does not remount `CatalogScreen` or
+  // re-run its initial `useQuery`. Before this fix, a `destinationsQuery`
+  // that failed once (e.g. a transient `429`) had `retry: false` and no
+  // focus-driven refetch, so it stayed on the full-screen error state even
+  // long after the underlying condition cleared. This test would have failed
+  // against the pre-fix code: `apiRequest` is only ever called once, and
+  // returning to the Catalog tab would still show `catalog-unavailable`.
+  // -------------------------------------------------------------------------
+  test('a failed destinations read refetches and recovers when the Catalog tab regains focus', async () => {
+    // `NotificationBell` (mounted in the Catalog header) fans out its own
+    // reads (`/me/friends`, `/me/trips`, etc.) through the same mocked
+    // `apiRequest`, so the one-time failure must be scoped to
+    // `/catalog/destinations` specifically rather than "whichever call
+    // happens first".
+    let destinationsCallCount = 0;
+    apiRequestMock.mockImplementation(async (_method, path) => {
+      if (typeof path === 'string' && path.startsWith('/catalog/destinations')) {
+        destinationsCallCount += 1;
+        if (destinationsCallCount === 1) {
+          throw new ApiError({
+            code: 'catalog_unavailable',
+            message: 'upstream unreachable',
+            status: 503,
+          });
+        }
+        // The refetch on refocus succeeds — the condition that caused the
+        // first failure (e.g. the rate limit window) has since cleared.
+        return {
+          destinations: [{ destination: 'Magic Kingdom', count: 42 }],
+          staleCache: false,
+        };
+      }
+      // `useCompletedExperiences` (mounted unconditionally by the screen)
+      // reads `GET /me` for the signed-in user id and then
+      // `GET /users/:id/completions`; both need a minimally valid shape so
+      // the hook does not throw, even though this test does not assert on
+      // completion markers.
+      if (path === '/me') {
+        return { user: { id: 'test-user' } };
+      }
+      if (typeof path === 'string' && path.startsWith('/users/')) {
+        return { entries: [] };
+      }
+      // Every other endpoint resolves to an inert empty success so it does
+      // not interfere with this test.
+      return {};
+    });
+
+    renderCatalogInTabs();
+    await waitFor(() => expect(tabNavRef.isReady()).toBe(true));
+
+    // The first (failed) read renders the full-screen unavailable state.
+    await screen.findByTestId('catalog-unavailable');
+    expect(destinationsCallCount).toBe(1);
+
+    // Navigate to the sibling tab, blurring Catalog without unmounting it.
+    act(() => {
+      tabNavRef.navigate('OtherTab');
+    });
+    await screen.findByTestId('other-tab');
+
+    // Navigate back to Catalog — this refocus should trigger a fresh fetch.
+    act(() => {
+      tabNavRef.navigate('CatalogTab');
+    });
+
+    // The retry succeeds this time, so the grid replaces the error state.
+    await screen.findByTestId('catalog-destination-grid');
+    expect(screen.queryByTestId('catalog-unavailable')).toBeNull();
+    expect(destinationsCallCount).toBeGreaterThan(1);
   });
 });

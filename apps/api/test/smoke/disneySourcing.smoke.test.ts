@@ -436,6 +436,10 @@ function applyMigrations(db: IMemoryDb): void {
   db.public.none(
     readFileSync(migrationPath('0032_experience_category_taxonomy.sql'), 'utf8'),
   );
+  // 0044 adds experiences.dining_url column selected by catalog read projections.
+  db.public.none(
+    readFileSync(migrationPath('0044_experience_dining_url.sql'), 'utf8'),
+  );
 }
 
 // ---------------------------------------------------------------------------

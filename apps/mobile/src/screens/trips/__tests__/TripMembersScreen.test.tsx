@@ -19,6 +19,7 @@
  */
 
 import React from 'react';
+import { Alert } from 'react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   act,
@@ -190,6 +191,12 @@ function renderMembers(
 describe('Trip_Members screen', () => {
   beforeEach(() => {
     apiRequestMock.mockReset();
+    jest.spyOn(Alert, 'alert').mockImplementation((_title, _message, buttons) => {
+      const confirmButton = buttons?.find(
+        (b) => b.text === 'Leave' || b.text === 'Remove' || b.style === 'destructive',
+      );
+      confirmButton?.onPress?.();
+    });
   });
 
   test('R4.5/R4.6/R8.2: an Organizer sees promote on a member, demote on an organizer, remove on others, and Leave on self', async () => {
@@ -357,5 +364,43 @@ describe('Trip_Members screen', () => {
     expect(screen.getByTestId('trip-members-retry')).toBeTruthy();
 
     await flushPending();
+  });
+
+  test('prompts confirmation when Leave is pressed and cancels without calling API', async () => {
+    const mutate = jest.fn();
+    installApi(ORGANIZER_ROSTER, { mutate });
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+
+    renderMembers(makeNavigation());
+    fireEvent.press(await screen.findByTestId('trip-members-leave'));
+
+    expect(alertSpy).toHaveBeenCalledWith(
+      'Leave Trip?',
+      expect.stringContaining('Are you sure you want to leave this trip?'),
+      expect.arrayContaining([
+        expect.objectContaining({ text: 'Cancel', style: 'cancel' }),
+        expect.objectContaining({ text: 'Leave', style: 'destructive' }),
+      ]),
+    );
+    expect(mutate).not.toHaveBeenCalled();
+  });
+
+  test('prompts confirmation when Remove member is pressed and cancels without calling API', async () => {
+    const mutate = jest.fn();
+    installApi(ORGANIZER_ROSTER, { mutate });
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+
+    renderMembers(makeNavigation());
+    fireEvent.press(await screen.findByTestId(`trip-member-remove-${MEMBER_ID}`));
+
+    expect(alertSpy).toHaveBeenCalledWith(
+      'Remove Eric?',
+      expect.stringContaining('Remove Eric from this trip?'),
+      expect.arrayContaining([
+        expect.objectContaining({ text: 'Cancel', style: 'cancel' }),
+        expect.objectContaining({ text: 'Remove', style: 'destructive' }),
+      ]),
+    );
+    expect(mutate).not.toHaveBeenCalled();
   });
 });

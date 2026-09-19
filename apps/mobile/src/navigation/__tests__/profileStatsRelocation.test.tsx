@@ -57,11 +57,11 @@ import { act, render, screen, waitFor } from '@testing-library/react-native';
 
 // Each stub is a named, capitalized function component so React Navigation
 // infers a valid display name.
-jest.mock('../../screens/ProfileScreen', () => ({
+jest.mock('../../screens/collection/CollectionScreen', () => ({
   __esModule: true,
-  default: function ProfileMainStub(): JSX.Element {
+  default: function CollectionHomeStub(): JSX.Element {
     const { View: RNView } = require('react-native');
-    return <RNView testID="stub-profile-main" />;
+    return <RNView testID="stub-collection-home" />;
   },
 }));
 
@@ -109,7 +109,7 @@ jest.mock('../../screens/stats/ExperiencesDetailScreen', () => ({
 // Module under test (imported after the mocks above).
 // ---------------------------------------------------------------------------
 
-import ProfileStack from '../ProfileStack';
+import CollectionStack from '../CollectionStack';
 
 // ---------------------------------------------------------------------------
 // Harness
@@ -131,7 +131,7 @@ const STUB_TEST_ID: Record<string, string> = {
 /**
  * Every Stats screen that was reachable before the relocation — the Overview
  * hub plus the four focused detail routes. Each must stay reachable through
- * the Profile tab (R17.5).
+ * the Collection tab.
  */
 const PRIOR_STATS_SCREENS = [
   'StatsOverview',
@@ -141,18 +141,17 @@ const PRIOR_STATS_SCREENS = [
   'ExperiencesDetail',
 ] as const;
 
-/** Render the real `ProfileStack` standalone inside a real NavigationContainer. */
-function renderProfileStack(): void {
+/** Render the real `CollectionStack` standalone inside a real NavigationContainer. */
+function renderCollectionStack(): void {
   render(
     <NavigationContainer ref={navRef}>
-      <ProfileStack />
+      <CollectionStack />
     </NavigationContainer>,
   );
 }
 
-// Production nesting for the deep-link test: RootStack ⊃ MainTabs ⊃ Profile,
-// where the Profile tab's component is the real `ProfileStack` — matching how
-// `RootNavigator` wires the Profile tab (task 16.1).
+// Production nesting for the deep-link test: RootStack ⊃ MainTabs ⊃ Collection,
+// where the Collection tab's component is the real `CollectionStack`.
 const RootStack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
@@ -164,12 +163,12 @@ function MainTabsHarness(): JSX.Element {
   return (
     <Tab.Navigator screenOptions={{ headerShown: false }}>
       <Tab.Screen name="Home" component={HomeStub} />
-      <Tab.Screen name="Profile" component={ProfileStack} />
+      <Tab.Screen name="Collection" component={CollectionStack} />
     </Tab.Navigator>
   );
 }
 
-/** Render the RootStack ⊃ MainTabs ⊃ Profile(ProfileStack) production nesting. */
+/** Render the RootStack ⊃ MainTabs ⊃ Collection(CollectionStack) production nesting. */
 function renderNestedNavigator(): void {
   render(
     <NavigationContainer ref={navRef}>
@@ -187,25 +186,25 @@ function renderNestedNavigator(): void {
 // Suite
 // ---------------------------------------------------------------------------
 
-describe('Personal statistics relocated under the Profile tab (Requirements 17.3, 17.5)', () => {
+describe('Personal statistics relocated under the Collection tab (Requirements 6.1, 6.2)', () => {
   // -------------------------------------------------------------------------
-  // Profile is the tab landing; Stats is reachable from it (R17.3)
+  // Collection is the tab landing; Stats is reachable from it
   // -------------------------------------------------------------------------
-  test('R17.3: the Profile screen (ProfileMain) is the Profile tab landing route', async () => {
-    renderProfileStack();
+  test('R6.1: the Collection screen (CollectionHome) is the Collection tab landing route', async () => {
+    renderCollectionStack();
 
-    expect(await screen.findByTestId('stub-profile-main')).toBeTruthy();
-    expect(navRef.getCurrentRoute()?.name).toBe('ProfileMain');
+    expect(await screen.findByTestId('stub-collection-home')).toBeTruthy();
+    expect(navRef.getCurrentRoute()?.name).toBe('CollectionHome');
 
     // Stats is not mounted until the User navigates to it — it is not a
-    // top-level surface (R17.1, R17.3).
+    // top-level surface.
     expect(screen.queryByTestId('stub-stats-overview')).toBeNull();
   });
 
-  test('R17.3: the statistics view is reachable from the Profile tab in a single navigate', async () => {
-    renderProfileStack();
+  test('R6.1: the statistics view is reachable from the Collection tab in a single navigate', async () => {
+    renderCollectionStack();
 
-    await screen.findByTestId('stub-profile-main');
+    await screen.findByTestId('stub-collection-home');
 
     act(() => {
       navRef.navigate('Stats' as never);
@@ -219,18 +218,16 @@ describe('Personal statistics relocated under the Profile tab (Requirements 17.3
   });
 
   // -------------------------------------------------------------------------
-  // Every prior Stats screen stays reachable through the Profile tab (R17.5)
+  // Every prior Stats screen stays reachable through the Collection tab
   // -------------------------------------------------------------------------
   test.each(PRIOR_STATS_SCREENS)(
-    'R17.5: the prior Stats screen %s remains reachable via Profile → Stats',
+    'the prior Stats screen %s remains reachable via Collection → Stats',
     async (route) => {
-      renderProfileStack();
+      renderCollectionStack();
 
-      await screen.findByTestId('stub-profile-main');
+      await screen.findByTestId('stub-collection-home');
 
       act(() => {
-        // Push the re-hosted Stats stack and select the specific screen within
-        // it — the navigation path a Profile-tab control would drive.
         (
           navRef.navigate as unknown as (name: string, params?: object) => void
         )('Stats', { screen: route });
@@ -244,16 +241,16 @@ describe('Personal statistics relocated under the Profile tab (Requirements 17.3
   );
 
   // -------------------------------------------------------------------------
-  // Deep-link through the Profile tab from the root (R17.3)
+  // Deep-link through the Collection tab from the root
   // -------------------------------------------------------------------------
-  test('R17.3: a nested deep-link to Profile/Stats/RatingsDetail lands on the ratings detail', async () => {
+  test('a nested deep-link to Collection/Stats/RatingsDetail lands on the ratings detail', async () => {
     renderNestedNavigator();
 
     act(() => {
       (
         navRef.navigate as unknown as (name: string, params?: object) => void
       )('MainTabs', {
-        screen: 'Profile',
+        screen: 'Collection',
         params: { screen: 'Stats', params: { screen: 'RatingsDetail' } },
       });
     });

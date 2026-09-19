@@ -917,6 +917,7 @@ interface TripRow {
   walking_speed?: 'slow' | 'moderate' | 'fast';
   early_entry_eligible?: boolean;
   day_touring_hours?: Record<string, unknown> | string;
+  walk_wait_weighting?: 'balanced' | 'minimize_walking' | 'minimize_waits';
 }
 
 /**
@@ -958,6 +959,7 @@ interface PlannedItemRow {
   priority: number;
   item_type: 'experience' | 'break';
   duration_minutes: number | null;
+  catalog_duration_minutes: number | null;
   window_start_minutes: number | null;
   window_end_minutes: number | null;
   meal_period: import('@dwt/shared').MealPeriod | null;
@@ -1017,6 +1019,7 @@ function rowToDto(
     ...(row.walking_speed !== undefined ? { walkingSpeed: row.walking_speed } : {}),
     ...(row.early_entry_eligible !== undefined ? { earlyEntryEligible: row.early_entry_eligible } : {}),
     ...(dayTouringHours !== undefined ? { dayTouringHours } : {}),
+    ...(row.walk_wait_weighting !== undefined ? { walkWaitWeighting: row.walk_wait_weighting } : {}),
   };
 }
 
@@ -1394,7 +1397,7 @@ async function getTripForMember(
   now: Date | undefined,
 ): Promise<TripDTO | null> {
   const result = await ctx.pool.query<TripRow>(
-    `SELECT id, name, description, start_date, end_date, created_at, walking_speed, early_entry_eligible, day_touring_hours
+    `SELECT id, name, description, start_date, end_date, created_at, walking_speed, early_entry_eligible, day_touring_hours, walk_wait_weighting
        FROM trips
       WHERE id = $1`,
     [tripId],
@@ -1435,7 +1438,7 @@ async function editTrip(
     await client.query('BEGIN');
 
     const current = await client.query<TripRow>(
-      `SELECT id, name, description, start_date, end_date, created_at, walking_speed, early_entry_eligible, day_touring_hours
+      `SELECT id, name, description, start_date, end_date, created_at, walking_speed, early_entry_eligible, day_touring_hours, walk_wait_weighting
          FROM trips
         WHERE id = $1
         FOR UPDATE`,
@@ -1493,6 +1496,10 @@ async function editTrip(
       params.push(JSON.stringify(input.dayTouringHours));
       assignments.push(`day_touring_hours = $${params.length}`);
     }
+    if (input.walkWaitWeighting !== undefined) {
+      params.push(input.walkWaitWeighting);
+      assignments.push(`walk_wait_weighting = $${params.length}`);
+    }
 
     // Supplying `resortIds` replaces the recorded Resort stay wholesale, even
     // when no scalar Trip field changed; an empty array clears it (R21.1). An
@@ -1513,7 +1520,7 @@ async function editTrip(
       `UPDATE trips
           SET ${assignments.join(', ')}, updated_at = now()
         WHERE id = $${params.length}
-      RETURNING id, name, description, start_date, end_date, created_at, walking_speed, early_entry_eligible, day_touring_hours`,
+      RETURNING id, name, description, start_date, end_date, created_at, walking_speed, early_entry_eligible, day_touring_hours, walk_wait_weighting`,
       params,
     );
     const updatedRow = updated.rows[0];
@@ -2881,6 +2888,7 @@ async function listPlannedItems(
             pi.priority,
             pi.item_type,
             pi.duration_minutes,
+            e.duration_minutes AS catalog_duration_minutes,
             pi.window_start_minutes,
             pi.window_end_minutes,
             pi.meal_period,
@@ -4195,7 +4203,7 @@ async function listMyTrips(
   now: Date | undefined,
 ): Promise<TripListGroup[]> {
   const result = await ctx.pool.query<TripRow>(
-    `SELECT t.id, t.name, t.description, t.start_date, t.end_date, t.created_at, t.walking_speed, t.early_entry_eligible, t.day_touring_hours
+    `SELECT t.id, t.name, t.description, t.start_date, t.end_date, t.created_at, t.walking_speed, t.early_entry_eligible, t.day_touring_hours, t.walk_wait_weighting
        FROM trips t
        JOIN trip_memberships tm ON tm.trip_id = t.id
       WHERE tm.user_id = $1`,
@@ -4252,6 +4260,7 @@ async function selectPlannedItem(
             pi.priority,
             pi.item_type,
             pi.duration_minutes,
+            e.duration_minutes AS catalog_duration_minutes,
             pi.window_start_minutes,
             pi.window_end_minutes,
             pi.meal_period,
@@ -4330,6 +4339,7 @@ function rowToPlannedItemDto(row: PlannedItemRow): PlannedItemDTO {
     priority: row.priority,
     itemType: row.item_type,
     durationMinutes: row.duration_minutes,
+    catalogDurationMinutes: row.catalog_duration_minutes ?? null,
     windowStartMinutes: row.window_start_minutes != null ? Number(row.window_start_minutes) : null,
     windowEndMinutes: row.window_end_minutes != null ? Number(row.window_end_minutes) : null,
     mealPeriod: row.meal_period ?? null,

@@ -186,6 +186,12 @@ function createStubRepo(): StubRepo {
     async updateSpecialHoursParticipation() {
       return;
     },
+    async updateDiningUrl() {
+      return true;
+    },
+    async listDiningLinkEligibleRestaurants() {
+      return [];
+    },
   };
 }
 

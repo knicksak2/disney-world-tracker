@@ -17,7 +17,7 @@
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { QueryClientProvider, QueryClient } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 jest.mock('expo-secure-store', () => ({
   __esModule: true,
@@ -45,7 +45,8 @@ import RootNavigator from '../RootNavigator';
 import { useAttentionBadge } from '../../features/notifications/useAttentionBadge';
 import { useSessionStore } from '../../state/sessionStore';
 import { apiRequest as mockedApiRequest } from '../../api/client';
-import { PINS, type PinBoardDTO, type UserPinProgressDTO } from '@dwt/shared';
+import { PINS } from '@dwt/shared';
+import type { PinBoardDTO, UserPinProgressDTO } from '@dwt/shared';
 
 const apiRequestMock = mockedApiRequest as jest.MockedFunction<typeof mockedApiRequest>;
 
@@ -104,51 +105,56 @@ function renderApp(board: PinBoardDTO): void {
   );
 }
 
-describe('Claimable-Pin tab badge (R22.3, R22.4, R22.5)', () => {
+describe('Claimable-Pin and Notification badge locations (Requirement 6.4, 8.1, 8.3)', () => {
   beforeEach(() => {
     apiRequestMock.mockReset();
     useAttentionBadgeMock.mockReturnValue({ display: 'hidden', count: 0 });
   });
 
-  it('shows the claimable-pin count in the profile-tab badge when pins are ready to claim and notifications are zero', async () => {
+  it('shows the claimable-pin count on CollectionScreen when pins are ready to claim', async () => {
     const pinId = PINS[0]!.id;
     renderApp(boardOf([readyProg(pinId)]));
 
-    const badges = await screen.findAllByTestId('profile-tab-badge');
-    expect(badges.length).toBeGreaterThan(0);
-    for (const b of badges) expect(b).toHaveTextContent('1');
+    // Bottom tab bar no longer carries profile-tab-badge
+    expect(screen.queryAllByTestId('profile-tab-badge')).toHaveLength(0);
+
+    // Navigate to Vault/Collection tab
+    fireEvent.press(await screen.findByText(/Vault|Collection/));
+
+    const badge = await screen.findByTestId('claimable-pins-badge');
+    expect(badge).toBeTruthy();
+    expect(badge).toHaveTextContent('1 to claim');
   });
 
-  it('hides the badge when no pin is ready to claim and notifications are zero', async () => {
+  it('hides the claimable-pin badge when no pin is ready to claim', async () => {
     renderApp(boardOf([]));
 
-    // Let the board query settle before asserting absence.
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(screen.queryAllByTestId('profile-tab-badge')).toHaveLength(0);
+    // Navigate to Vault/Collection tab
+    fireEvent.press(await screen.findByText(/Vault|Collection/));
+
+    await screen.findByTestId('collection-screen');
+    expect(screen.queryByTestId('claimable-pins-badge')).toBeNull();
   });
 
-  it('combines notification and claimable-pin counts into a single badge on the bottom bar', async () => {
+  it('shows notification count on the header NotificationBell', async () => {
     useAttentionBadgeMock.mockReturnValue({ display: 'count', count: 3 });
-    const pinId = PINS[1]!.id;
-    renderApp(boardOf([readyProg(pinId)]));
+    renderApp(boardOf([]));
 
     await waitFor(async () => {
-      const badges = await screen.findAllByTestId('profile-tab-badge');
-      expect(badges.length).toBeGreaterThan(0);
-      for (const b of badges) expect(b).toHaveTextContent('4');
+      const badge = await screen.findByTestId('notification-bell-badge');
+      expect(badge).toBeTruthy();
+      expect(badge).toHaveTextContent('3');
     });
   });
 
-  it('shows overflow "99+" when combined notification and pin counts reach 100 or more', async () => {
-    useAttentionBadgeMock.mockReturnValue({ display: 'count', count: 98 });
-    const pinId1 = PINS[0]!.id;
-    const pinId2 = PINS[1]!.id;
-    renderApp(boardOf([readyProg(pinId1), readyProg(pinId2)]));
+  it('shows overflow "99+" on NotificationBell when notification count reaches 100 or more', async () => {
+    useAttentionBadgeMock.mockReturnValue({ display: 'overflow', count: 100 });
+    renderApp(boardOf([]));
 
     await waitFor(async () => {
-      const badges = await screen.findAllByTestId('profile-tab-badge');
-      expect(badges.length).toBeGreaterThan(0);
-      for (const b of badges) expect(b).toHaveTextContent('99+');
+      const badge = await screen.findByTestId('notification-bell-badge');
+      expect(badge).toBeTruthy();
+      expect(badge).toHaveTextContent('99+');
     });
   });
 });

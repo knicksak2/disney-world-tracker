@@ -60,6 +60,7 @@ const plannedItemArb: fc.Arbitrary<PlannedItemDTO> = fc
       priority: 2,
       itemType: experienceName == null ? 'break' : 'experience',
       durationMinutes: null,
+      catalogDurationMinutes: null,
       windowStartMinutes: null,
       windowEndMinutes: null,
       mealPeriod: null,

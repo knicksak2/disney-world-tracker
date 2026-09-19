@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { intelligenceRoutes } from '../routes.js';
 import type { SamplingService } from '../samplingService.js';
 import type { PredictionService } from '../predictionService.js';
+import type { WeatherClient } from '../weatherClient.js';
 import { registerErrorHandler } from '../../../errors/handler.js';
 import { AppError } from '../../../errors/AppError.js';
 
@@ -20,6 +21,10 @@ describe('Intelligence Routes', () => {
     getWaitInsights: vi.fn().mockResolvedValue({}),
   };
 
+  const fakeWeatherClient: WeatherClient = {
+    getWDWWeather: vi.fn().mockResolvedValue({ current: null, forecast: [] }),
+  };
+
   function buildTestApp() {
     const app = Fastify();
     app.decorate('config', { intelligence: { samplingCronSecret: 'secret123' } } as any);
@@ -35,6 +40,7 @@ describe('Intelligence Routes', () => {
     void app.register(intelligenceRoutes({
       samplingService: fakeSamplingService,
       predictionService: fakePredictionService,
+      weatherClient: fakeWeatherClient,
       requireSession,
     }));
 
@@ -145,5 +151,58 @@ describe('Intelligence Routes', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(fakePredictionService.getWaitInsights).toHaveBeenCalled();
+  });
+
+  it('GET /weather/current - 401 without session', async () => {
+    const app = buildTestApp();
+    const res = await app.inject({
+      method: 'GET',
+      url: '/weather/current',
+    });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('GET /weather/current - returns 200 with current: null when observation absent', async () => {
+    fakeWeatherClient.getWDWWeather = vi.fn().mockResolvedValue({
+      current: null,
+      forecast: [],
+    });
+
+    const app = buildTestApp();
+    const res = await app.inject({
+      method: 'GET',
+      url: '/weather/current',
+      headers: { authorization: 'Bearer token' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ current: null });
+  });
+
+  it('GET /weather/current - returns 200 with mapped tempF and condition when present', async () => {
+    fakeWeatherClient.getWDWWeather = vi.fn().mockResolvedValue({
+      current: {
+        observed_at: new Date('2026-09-18T10:00:00Z'),
+        temp_f: 78.5,
+        precip: 0,
+        condition: 'Sunny',
+      },
+      forecast: [],
+    });
+
+    const app = buildTestApp();
+    const res = await app.inject({
+      method: 'GET',
+      url: '/weather/current',
+      headers: { authorization: 'Bearer token' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      current: {
+        tempF: 78.5,
+        condition: 'Sunny',
+      },
+    });
   });
 });

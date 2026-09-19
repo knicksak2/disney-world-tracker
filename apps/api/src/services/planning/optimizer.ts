@@ -1,4 +1,4 @@
-import type { ExperienceCategory, Park, PlannedItemType, WalkingSpeed, WaitSnapshot } from '@dwt/shared';
+import type { ExperienceCategory, Park, PlannedItemType, WalkingSpeed, WalkWaitWeighting, WaitSnapshot } from '@dwt/shared';
 import { travelFromPrev, type Coordinates } from './travel.js';
 import {
   wdwIsoAtMinutes as toISOString,
@@ -54,8 +54,17 @@ export interface OptimizeInput {
   readonly startingPark?: Park;
   readonly startHour?: number;
   readonly endHour?: number;
+  readonly startMinutes?: number;
   readonly snapshots: Record<string, WaitSnapshot>;
   readonly seed?: number;
+  /**
+   * How the search weighs walking time against queue wait time when ranking
+   * candidate sequences (R10). Defaults to `'balanced'` (the original
+   * unweighted 1:1 formula) when omitted. Only affects which sequence is
+   * selected as best — `OptimizeResult.totalWaitMinutes`/`totalWalkMinutes`
+   * always report the true unweighted minutes of the chosen sequence.
+   */
+  readonly walkWaitWeighting?: WalkWaitWeighting;
 }
 
 export interface OptimizedItem {
@@ -90,6 +99,19 @@ export const DEFAULT_GAME_DUR = 20;
 export const SAME_KIND_ADJACENCY_PENALTY = 500;
 const ROPE_DROP_WINDOW_MINUTES = 30;
 const ROPE_DROP_WALKON_MINS = 5;
+
+/**
+ * Walk/wait cost-weighting presets (R10). `balanced` reproduces the original
+ * unweighted 1:1 formula exactly. The de-prioritized dimension keeps a
+ * nonzero weight (0.3) rather than 0 so the search never accepts an
+ * arbitrarily large walk/wait to shave a small amount off the prioritized
+ * dimension.
+ */
+export const WALK_WAIT_WEIGHT_PRESETS: Record<WalkWaitWeighting, { waitWeight: number; walkWeight: number }> = {
+  balanced: { waitWeight: 1, walkWeight: 1 },
+  minimize_waits: { waitWeight: 1, walkWeight: 0.3 },
+  minimize_walking: { waitWeight: 0.3, walkWeight: 1 },
+};
 
 export function resolveDefaultDuration(item: OptimizeInputItem): number {
   // 1. User override always wins
@@ -134,8 +156,12 @@ export function resolveDefaultDuration(item: OptimizeInputItem): number {
     return item.catalogDurationMinutes ?? 60;
   }
 
-  // 7. Rides/attractions/Character_Meet default to 15 minutes (covers ride length + load/unload)
-  return DEFAULT_RIDE_DUR;
+  // 7. Rides/attractions/Character_Meet: catalog duration (curated per-attraction
+  // override, e.g. real ride/show length + pre-show) wins when present, else the
+  // generic 15-minute default. Every other branch above already consults
+  // catalogDurationMinutes before falling back to its category default; rides
+  // were the one category that skipped straight to the flat default (R10.6).
+  return item.catalogDurationMinutes ?? DEFAULT_RIDE_DUR;
 }
 
 /**
@@ -333,7 +359,11 @@ function simulate(
     startingPark,
     startHour,
     endHour,
+    startMinutes,
+    walkWaitWeighting,
   } = input;
+
+  const { waitWeight, walkWeight } = WALK_WAIT_WEIGHT_PRESETS[walkWaitWeighting ?? 'balanced'];
 
   let effStartHour = startHour ?? DEFAULT_START_HOUR;
   let effEndHour = endHour ?? DEFAULT_END_HOUR;
@@ -342,8 +372,21 @@ function simulate(
     effStartHour = 16;
   }
 
-  const startMins = earlyEntryEligible ? effStartHour * 60 - EARLY_ENTRY_MINUTES : effStartHour * 60;
-  const officialOpenMins = earlyEntryEligible ? startMins + EARLY_ENTRY_MINUTES : startMins;
+  const defaultOpenMins = effStartHour * 60;
+  const startMins = startMinutes != null
+    ? startMinutes
+    : (earlyEntryEligible ? defaultOpenMins - EARLY_ENTRY_MINUTES : defaultOpenMins);
+
+  // The rope-drop ramp's anchor (R3.11/R3.12) is the park's REAL schedule —
+  // official open, or early-entry open when the day has early entry — and
+  // must NEVER be aliased to `startMins`. `startMins` is merely where this
+  // simulated sequence's clock begins (R9.8 clamps it to "now" for a live
+  // today optimize), which on a mid-day "Right Now" optimize is well after
+  // the park has already opened. Conflating the two made every first-in-
+  // sequence item read as "arriving at minute 0 of rope drop" no matter the
+  // real wall-clock time, discounting its wait even hours after open.
+  const officialOpenMins = defaultOpenMins;
+  const earlyEntryOpenMins = defaultOpenMins - EARLY_ENTRY_MINUTES;
   const baseCloseMins = effEndHour * 60;
 
   let currentMins = startMins;
@@ -437,7 +480,8 @@ function simulate(
     // Anchor the rope-drop ramp (R3.11) to when THIS item can first be ridden:
     // early-entry open for early-entry rides on an early-entry day, else official
     // open — so a ride that opens at park open ramps from official open (R3.12).
-    const itemOpenMins = itemEarlyEntry ? startMins : officialOpenMins;
+    // Always the park's real, fixed schedule time — never `startMins`/"now".
+    const itemOpenMins = itemEarlyEntry ? earlyEntryOpenMins : officialOpenMins;
 
     const {
       wait,
@@ -507,7 +551,7 @@ function simulate(
   }
 
   return {
-    cost: totalWait + totalWalk + penalty,
+    cost: waitWeight * totalWait + walkWeight * totalWalk + penalty,
     result: {
       items: resultItems,
       totalWaitMinutes: totalWait,

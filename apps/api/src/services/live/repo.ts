@@ -34,9 +34,16 @@ import type { QueryResultRow } from 'pg';
 
 import type { DbPool } from '../../db/pool.js';
 
+import type { Park } from '@dwt/shared';
+
 // ---------------------------------------------------------------------------
 // Public surface
 // ---------------------------------------------------------------------------
+
+export interface ExperienceUpstreamRow {
+  readonly id: string;
+  readonly upstream_entity_id: string;
+}
 
 /**
  * Repository surface returned by {@link createLiveRepo}. The orchestrator
@@ -49,6 +56,12 @@ export interface LiveRepo {
    * when no mapping exists. Reads only; never writes.
    */
   resolveUpstreamEntityId(experienceId: string): Promise<string | null>;
+
+  /**
+   * Bulk experience lookup: resolves active experiences (optionally filtered by park)
+   * into { id, upstream_entity_id } pairs. Reads only; never writes.
+   */
+  getExperiencesWithUpstreamIds?(park?: Park): Promise<readonly ExperienceUpstreamRow[]>;
 }
 
 // ---------------------------------------------------------------------------
@@ -77,7 +90,39 @@ export function createLiveRepo(pool: DbPool): LiveRepo {
   return {
     resolveUpstreamEntityId: (experienceId) =>
       resolveUpstreamEntityId(pool, experienceId),
+    getExperiencesWithUpstreamIds: (park) =>
+      getExperiencesWithUpstreamIds(pool, park),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Queries
+// ---------------------------------------------------------------------------
+
+async function getExperiencesWithUpstreamIds(
+  pool: DbPool,
+  park?: Park,
+): Promise<readonly ExperienceUpstreamRow[]> {
+  if (park !== undefined) {
+    const result = await pool.query<ExperienceUpstreamRow>(
+      `SELECT id, upstream_entity_id
+         FROM experiences
+        WHERE upstream_entity_id IS NOT NULL
+          AND active = true
+          AND category != 'Restaurant'
+          AND park = $1`,
+      [park],
+    );
+    return result.rows;
+  }
+  const result = await pool.query<ExperienceUpstreamRow>(
+    `SELECT id, upstream_entity_id
+       FROM experiences
+      WHERE upstream_entity_id IS NOT NULL
+        AND active = true
+        AND category != 'Restaurant'`,
+  );
+  return result.rows;
 }
 
 // ---------------------------------------------------------------------------

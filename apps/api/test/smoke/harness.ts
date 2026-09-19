@@ -607,6 +607,8 @@ async function applyMigration(db: IMemoryDb): Promise<void> {
     '0039_experience_festival_tags.sql',
     // 0040 adds user_submitted_locations, food_items, and food_item_logs read by stats foodActivity
     '0040_food_item_logging.sql',
+    // 0044 adds experiences.dining_url column selected by catalog read projections
+    '0044_experience_dining_url.sql',
   ];
   for (const name of migrations) {
     const migrationPath = resolve(here, '..', '..', 'migrations', name);

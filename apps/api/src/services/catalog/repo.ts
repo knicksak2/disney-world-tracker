@@ -285,6 +285,8 @@ interface ExperienceRow extends QueryResultRow {
   why_this: WhyThisDTO | null;
   /** Facility_SubType finer classification, or `null` (R7.4, R8.4). */
   sub_type: string | null;
+  /** Curated Disney dining reservation URL, or `null`. */
+  dining_url?: string | null;
 }
 
 /**
@@ -399,6 +401,25 @@ export interface CatalogRepo {
       ticketedEvent: boolean;
     }[],
   ): Promise<void>;
+  /**
+   * Update the curated dining reservation URL for an Experience by upstream_entity_id.
+   * Returns true if a row was updated, false if no matching row was found.
+   */
+  updateDiningUrl(
+    upstreamEntityId: string,
+    diningUrl: string,
+  ): Promise<boolean>;
+  /**
+   * List every active Restaurant Experience whose `grouped_facets.tableService`
+   * contains a `reservations-accepted` facet — the curation-eligibility rule
+   * from restaurant-menu-display Requirement 6.2. Used by the post-sync
+   * dining-link-candidate check to detect newly-eligible restaurants; does not
+   * consult `dining_url` or the seed file itself (the caller diffs against the
+   * curated seed separately).
+   */
+  listDiningLinkEligibleRestaurants(): Promise<
+    readonly { upstreamEntityId: string; name: string; park: string | null }[]
+  >;
 }
 
 /**
@@ -428,6 +449,10 @@ export function createCatalogRepo(pool: DbPool): CatalogRepo {
       upsertMenus(pool, experienceId, menus, fetchedAt),
     updateSpecialHoursParticipation: (entries) =>
       updateSpecialHoursParticipation(pool, entries),
+    updateDiningUrl: (upstreamEntityId, diningUrl) =>
+      updateDiningUrl(pool, upstreamEntityId, diningUrl),
+    listDiningLinkEligibleRestaurants: () =>
+      listDiningLinkEligibleRestaurants(pool),
   };
 }
 
@@ -440,6 +465,93 @@ interface SpecialHoursEntry {
   readonly earlyEntry: boolean;
   readonly extendedEvening: boolean;
   readonly ticketedEvent: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// updateDiningUrl
+// ---------------------------------------------------------------------------
+
+/**
+ * Upsert the curated dining reservation URL for an Experience by upstream_entity_id.
+ * Returns true if a row was updated, false if no matching row was found.
+ */
+async function updateDiningUrl(
+  pool: DbPool,
+  upstreamEntityId: string,
+  diningUrl: string,
+): Promise<boolean> {
+  const result = await pool.query(
+    `UPDATE experiences
+        SET dining_url = $1
+      WHERE upstream_entity_id = $2`,
+    [diningUrl, upstreamEntityId],
+  );
+  return (result.rowCount ?? 0) > 0;
+}
+
+/** Facet id checked for the `tableService` group by {@link hasReservationsAcceptedFacet}. */
+const RESERVATIONS_ACCEPTED_FACET_ID = 'reservations-accepted';
+
+interface RawFacetValue {
+  readonly id?: unknown;
+}
+
+/**
+ * True iff `groupedFacets.tableService` contains a facet whose `id` is
+ * `reservations-accepted` — the curation-eligibility rule from
+ * restaurant-menu-display Requirement 6.2. Mirrors the same
+ * facet-array-scanning shape used by `pins/repo.ts`'s `isRealRestaurant` and
+ * `festivalTags/repo.ts`'s `hasFestivalKioskFacet`, matched by `id` rather
+ * than by display `name` (ids are the stable Disney facet key; the display
+ * name is not).
+ */
+function hasReservationsAcceptedFacet(groupedFacets: unknown): boolean {
+  if (
+    groupedFacets === null ||
+    typeof groupedFacets !== 'object' ||
+    Array.isArray(groupedFacets)
+  ) {
+    return false;
+  }
+  const ts = (groupedFacets as Record<string, unknown>)['tableService'];
+  if (!Array.isArray(ts)) return false;
+  return ts.some(
+    (entry: unknown) => (entry as RawFacetValue | null)?.id === RESERVATIONS_ACCEPTED_FACET_ID,
+  );
+}
+
+/**
+ * List every active Restaurant Experience eligible for dining-link curation
+ * (Requirement 6.2). Reads `grouped_facets` for every active Restaurant and
+ * filters in application code — the facet set is small (well under a
+ * thousand rows even at this catalog's full size) and this mirrors the
+ * existing `listActiveFestivalBooths` filter-after-fetch shape rather than a
+ * `jsonb_array_elements` subquery, keeping the eligibility rule in one
+ * TypeScript predicate that both this repo method and its tests exercise
+ * directly.
+ */
+async function listDiningLinkEligibleRestaurants(
+  pool: DbPool,
+): Promise<readonly { upstreamEntityId: string; name: string; park: string | null }[]> {
+  const result = await pool.query<{
+    upstream_entity_id: string;
+    name: string;
+    park: string | null;
+    grouped_facets: unknown;
+  }>(
+    `SELECT upstream_entity_id, name, park, grouped_facets
+       FROM experiences
+      WHERE active = TRUE AND category = 'Restaurant'
+      ORDER BY name ASC`,
+  );
+
+  return result.rows
+    .filter((row) => hasReservationsAcceptedFacet(row.grouped_facets))
+    .map((row) => ({
+      upstreamEntityId: row.upstream_entity_id,
+      name: row.name,
+      park: row.park,
+    }));
 }
 
 /**
@@ -974,7 +1086,8 @@ async function listActiveExperiences(
     SELECT id, upstream_entity_id, name, park, category, description, active,
            land, resort_area, world_showcase_country, image_url, latitude, longitude, area_type, resort_id,
            accessibility, price_tier, meal_periods,
-           grouped_facets, height_requirement, why_this, sub_type
+           grouped_facets, height_requirement, why_this, sub_type,
+           dining_url
       FROM experiences
      WHERE ${where.join(' AND ')}
      ORDER BY park ASC, lower(name) ASC, id ASC`;
@@ -1046,7 +1159,8 @@ async function getExperience(
     `SELECT id, upstream_entity_id, name, park, category, description, active,
             land, resort_area, world_showcase_country, image_url, latitude, longitude, area_type, resort_id,
             accessibility, price_tier, meal_periods,
-            grouped_facets, height_requirement, why_this, sub_type
+            grouped_facets, height_requirement, why_this, sub_type,
+            dining_url
        FROM experiences
       WHERE id = $1`,
     [id],
@@ -1258,6 +1372,11 @@ function rowToDto(row: ExperienceRow): ExperienceDTO {
     ...(Object.keys(interestFacets).length > 0 ? { interestFacets } : {}),
     ...(row.why_this !== null ? { whyThis: row.why_this } : {}),
     ...(row.sub_type !== null ? { subType: row.sub_type } : {}),
+    ...(row.dining_url !== null &&
+    row.dining_url !== undefined &&
+    row.dining_url.length > 0
+      ? { diningUrl: row.dining_url }
+      : {}),
   };
 }
 

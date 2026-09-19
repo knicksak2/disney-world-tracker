@@ -198,6 +198,8 @@ export const dayTouringHoursSchema = z
   .object({
     startHour: z.number().int().min(0).max(23).optional(),
     endHour: z.number().int().min(0).max(23).optional(),
+    startMinutes: z.number().int().min(0).max(1439).optional(),
+    startMode: z.enum(['park_open', 'party_mix_in', 'custom']).optional(),
     useEarlyEntry: z.boolean().optional(),
     useExtendedEvening: z.boolean().optional(),
     hasAfterHoursTicket: z.boolean().optional(),
@@ -206,6 +208,7 @@ export const dayTouringHoursSchema = z
   .strict();
 
 export type DayTouringHoursDTO = z.infer<typeof dayTouringHoursSchema>;
+export type TouringStartMode = NonNullable<DayTouringHoursDTO['startMode']>;
 
 /**
  * Body for `PATCH /trips/:id` (R3.4–R3.6). Every field is optional so an edit
@@ -224,6 +227,7 @@ export const tripEditSchema = z
     endDate: tripCalendarDateSchema.optional(),
     resortIds: tripResortIdsSchema.optional(),
     walkingSpeed: z.enum(['slow', 'moderate', 'fast']).optional(),
+    walkWaitWeighting: z.enum(['balanced', 'minimize_walking', 'minimize_waits']).optional(),
     earlyEntryEligible: z.boolean().optional(),
     dayTouringHours: z.record(z.string(), dayTouringHoursSchema).optional(),
   })
@@ -492,10 +496,13 @@ export const tripOptimizationInputSchema = z
     date: tripCalendarDateSchema,
     startHour: z.number().int().min(0).max(23).optional(),
     endHour: z.number().int().min(0).max(23).optional(),
+    startMinutes: z.number().int().min(0).max(1439).optional(),
+    startMode: z.enum(['park_open', 'party_mix_in', 'now', 'custom']).optional(),
   })
   .strict();
 
 export type TripOptimizationInput = z.infer<typeof tripOptimizationInputSchema>;
+export type OptimizationStartMode = NonNullable<TripOptimizationInput['startMode']>;
 
 export interface OptimizedItem {
   readonly plannedItemId: string;
@@ -694,6 +701,8 @@ export interface TripDTO {
   readonly foodLists: readonly TripFoodListDTO[];
   /** Walking pace scaling travel times: 'slow' (50m/min), 'moderate' (80m/min), 'fast' (100m/min). */
   readonly walkingSpeed?: 'slow' | 'moderate' | 'fast' | undefined;
+  /** How the optimizer weighs walking time against queue wait time (R10). Defaults to 'balanced' when unset. */
+  readonly walkWaitWeighting?: 'balanced' | 'minimize_walking' | 'minimize_waits' | undefined;
   /** Flag indicating whether the party is eligible for 30m Early Entry. */
   readonly earlyEntryEligible?: boolean | undefined;
   /** Per-date touring hours and event settings dictionary keyed by YYYY-MM-DD. */
@@ -822,6 +831,14 @@ export interface PlannedItemDTO {
   readonly priority: number;
   readonly itemType: 'experience' | 'break';
   readonly durationMinutes: number | null;
+  /**
+   * Read-projection of the linked Experience's curated `duration_minutes`
+   * (day-planning-optimization R11.6) — e.g. a real ride/show length plus any
+   * pre-show, distinct from `durationMinutes` (the user's own override). Never
+   * accepted on `plannedItemAddSchema`/`plannedItemEditSchema`. `null` when
+   * unlinked or the Experience has no curated duration.
+   */
+  readonly catalogDurationMinutes: number | null;
   readonly windowStartMinutes: number | null;
   readonly windowEndMinutes: number | null;
   readonly mealPeriod: MealPeriod | null;

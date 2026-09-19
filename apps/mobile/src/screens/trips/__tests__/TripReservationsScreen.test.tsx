@@ -58,6 +58,7 @@ function item(overrides: Partial<PlannedItemDTO> = {}): PlannedItemDTO {
     priority: 2,
     itemType: 'experience',
     durationMinutes: 60,
+    catalogDurationMinutes: null,
     windowStartMinutes: null,
     windowEndMinutes: null,
     mealPeriod: null,
@@ -134,9 +135,17 @@ function catalogRequests(): readonly string[] {
     .map(([, p]) => String(p));
 }
 
-const navigation = { navigate: jest.fn(), goBack: jest.fn() } as any;
+const navigation = {
+  navigate: jest.fn(),
+  goBack: jest.fn(),
+  replace: jest.fn(),
+  getState: jest.fn(() => ({
+    index: 0,
+    routes: [{ name: 'TripReservations', params: { tripId: TRIP_ID } }],
+  })),
+} as any;
 
-function renderScreen() {
+function renderScreen(navOverrides?: Record<string, any>) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
@@ -146,11 +155,15 @@ function renderScreen() {
     params: { tripId: TRIP_ID },
   } as any;
 
-  return render(
+  const currentNav = navOverrides ? { ...navigation, ...navOverrides } : navigation;
+
+  const rendered = render(
     <QueryClientProvider client={queryClient}>
-      <TripReservationsScreen navigation={navigation} route={route} />
+      <TripReservationsScreen navigation={currentNav} route={route} />
     </QueryClientProvider>,
   );
+
+  return Object.assign(rendered, { navigation: currentNav });
 }
 
 /**
@@ -241,6 +254,30 @@ describe('TripReservationsScreen', () => {
     });
     expect(screen.queryByTestId('reservation-row-self-pinned')).toBeNull();
     expect(screen.queryByText('Space Mountain')).toBeNull();
+  });
+
+  it('renders a Menu button for dining reservations with an experienceId and navigates on press', async () => {
+    mockApi({
+      items: [
+        item({
+          id: 'item-dining-1',
+          experienceId: 'exp-dining-1',
+          reservationKind: 'dining',
+          experienceName: 'Be Our Guest',
+        }),
+      ],
+    });
+    const { navigation: nav } = renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('reservation-menu-item-dining-1')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByTestId('reservation-menu-item-dining-1'));
+
+    expect(nav.navigate).toHaveBeenCalledWith('ExperienceDetail', {
+      experienceId: 'exp-dining-1',
+    });
   });
 
   it('shows the empty state when the trip holds no reservations (R2.4)', async () => {
@@ -888,6 +925,59 @@ describe('TripReservationsScreen', () => {
     });
     await waitFor(() => {
       expect(queryByTestId('reservation-remove-button')).toBeNull();
+    });
+  });
+
+  describe('TripReservationsScreen — back navigation (backToHub)', () => {
+    it('replaces to TripDetail when opened directly without TripDetail in the stack', async () => {
+      mockApi({ items: [] });
+
+      const nav = {
+        navigate: jest.fn(),
+        goBack: jest.fn(),
+        replace: jest.fn(),
+        getState: jest.fn(() => ({
+          index: 0,
+          routes: [{ name: 'TripReservations', params: { tripId: TRIP_ID } }],
+        })),
+      };
+
+      renderScreen(nav);
+
+      expect(await screen.findByText('Disney Trip')).toBeTruthy();
+
+      const backBtn = screen.getByRole('button', { name: /Back to Disney Trip/i });
+      fireEvent.press(backBtn);
+
+      expect(nav.replace).toHaveBeenCalledWith('TripDetail', { tripId: TRIP_ID });
+      expect(nav.goBack).not.toHaveBeenCalled();
+    });
+
+    it('pops via goBack when TripDetail is the immediate predecessor in the stack', async () => {
+      mockApi({ items: [] });
+
+      const nav = {
+        navigate: jest.fn(),
+        goBack: jest.fn(),
+        replace: jest.fn(),
+        getState: jest.fn(() => ({
+          index: 1,
+          routes: [
+            { name: 'TripDetail', params: { tripId: TRIP_ID } },
+            { name: 'TripReservations', params: { tripId: TRIP_ID } },
+          ],
+        })),
+      };
+
+      renderScreen(nav);
+
+      expect(await screen.findByText('Disney Trip')).toBeTruthy();
+
+      const backBtn = screen.getByRole('button', { name: /Back to Disney Trip/i });
+      fireEvent.press(backBtn);
+
+      expect(nav.goBack).toHaveBeenCalledTimes(1);
+      expect(nav.replace).not.toHaveBeenCalled();
     });
   });
 });

@@ -51,7 +51,7 @@ import {
 } from '@dwt/shared';
 
 import { ApiError, apiRequest } from '../../api/client';
-import type { FriendsStackParamList } from '../../navigation/FriendsStack';
+import type { YouAndCrewStackParamList } from '../../navigation/YouAndCrewStack';
 import { theme } from '../../theme/theme';
 import {
   Badge,
@@ -65,7 +65,7 @@ import {
 // Navigation typing
 // ---------------------------------------------------------------------------
 
-type Props = NativeStackScreenProps<FriendsStackParamList, 'Sent'>;
+type Props = NativeStackScreenProps<YouAndCrewStackParamList, 'Sent'>;
 
 // ---------------------------------------------------------------------------
 // Constants and helpers

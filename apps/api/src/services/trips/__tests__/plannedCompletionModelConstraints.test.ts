@@ -236,12 +236,16 @@ describe('Planned List Completion Sync — derived state lives off the persisted
         'windowEndMinutes',
         'windowStartMinutes',
         // Booking facet added by the trip-reservations feature (R7.2). These
-        // three are the ONLY permitted additions: a Reservation is a facet of a
+        // three are permitted additions: a Reservation is a facet of a
         // Planned_Item, not a completion state, so the completion-token
         // assertions below still apply to every field including these.
         'reservationKind',
         'confirmationNumber',
         'partySize',
+        // Curated-duration read-projection added by day-planning-optimization
+        // (R11.6): a catalog value projected from the linked Experience, not a
+        // completion state — likewise still subject to the token scan below.
+        'catalogDurationMinutes',
       ].sort(),
     );
 

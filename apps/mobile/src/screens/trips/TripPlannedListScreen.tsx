@@ -29,6 +29,7 @@ import React, { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -97,6 +98,55 @@ export const tripPlannedListKeys = {
   items: (tripId: string) => ['trips', 'planned-items', tripId] as const,
 };
 
+interface ParkFilterOption {
+  readonly id: string;
+  readonly label: string;
+  readonly match: (park: string | null) => boolean;
+}
+
+const PARK_FILTERS: readonly ParkFilterOption[] = [
+  { id: 'all', label: 'All', match: () => true },
+  { id: 'epcot', label: 'EPCOT', match: (p) => p?.toLowerCase().includes('epcot') ?? false },
+  { id: 'mk', label: 'Magic Kingdom', match: (p) => p?.toLowerCase().includes('magic') ?? false },
+  { id: 'dhs', label: 'Hollywood Studios', match: (p) => p?.toLowerCase().includes('hollywood') ?? false },
+  { id: 'dak', label: 'Animal Kingdom', match: (p) => p?.toLowerCase().includes('animal') ?? false },
+];
+
+function getParkColor(park: string | null): string {
+  if (!park) return theme.color.primary;
+  const lower = park.toLowerCase();
+  if (lower.includes('epcot')) return '#2f80ed';
+  if (lower.includes('magic')) return '#7e57c2';
+  if (lower.includes('hollywood')) return '#e8505b';
+  if (lower.includes('animal')) return '#2e9e6b';
+  return theme.color.primary;
+}
+
+function getSchedulingStatus(
+  item: PlannedItemView,
+  tripStartDate?: string | null,
+): { readonly label: string; readonly isScheduled: boolean } {
+  if (!item.plannedDate) {
+    return { label: '⏳ Unscheduled', isScheduled: false };
+  }
+  let dayLabel = '';
+  if (tripStartDate) {
+    const itemDay = new Date(item.plannedDate);
+    const startDay = new Date(tripStartDate);
+    const diffDays =
+      Math.floor((itemDay.getTime() - startDay.getTime()) / (1000 * 60 * 60 * 24)) +
+      1;
+    if (diffDays >= 1) {
+      dayLabel = `Day ${diffDays}`;
+    }
+  }
+  if (!dayLabel) {
+    dayLabel = item.plannedDate;
+  }
+  const time = item.plannedTime ? ` · ${item.plannedTime}` : '';
+  return { label: `✓ ${dayLabel}${time}`, isScheduled: true };
+}
+
 // ---------------------------------------------------------------------------
 // Screen
 // ---------------------------------------------------------------------------
@@ -141,12 +191,16 @@ export default function TripPlannedListScreen({
       apiRequest<TripMembersResponse>('GET', `/trips/${tripId}/members`),
   });
 
+  const [selectedPark, setSelectedPark] = useState<string>('all');
   const [composerVisible, setComposerVisible] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   // The Planned_Item whose Log_Composer is open, or `null` when closed. Opening
   // it pre-fills that item's Experience (R1.2); it is available on every item,
   // done or not (R1.5).
   const [loggingItem, setLoggingItem] = useState<PlannedItemView | null>(null);
+
+  const cachedTrip = queryClient.getQueryData<{ startDate?: string | null }>(['trips', tripId]);
+  const tripStartDate = cachedTrip?.startDate ?? null;
 
   const ownUserId = meQuery.data?.user.id ?? null;
   const candidates = useMemo<readonly TripMemberDTO[]>(() => {
@@ -322,6 +376,46 @@ export default function TripPlannedListScreen({
         </View>
       </View>
 
+      {/* Park filter tabs */}
+      {items.length > 0 ? (
+        <View style={styles.parkFilterRow} testID="planned-list-park-filter">
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.parkFilterScroll}
+          >
+            {PARK_FILTERS.map((f) => {
+              const count = items.filter((it) => f.match(it.park)).length;
+              const active = selectedPark === f.id;
+              return (
+                <Pressable
+                  key={f.id}
+                  onPress={() => setSelectedPark(f.id)}
+                  style={({ pressed }) => [
+                    styles.filterPill,
+                    active && styles.filterPillActive,
+                    pressed && styles.pressed,
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: active }}
+                  accessibilityLabel={`${f.label} filter, ${count} items, ${active ? 'selected' : 'not selected'}`}
+                  testID={`planned-list-filter-${f.id}`}
+                >
+                  <Text
+                    style={[
+                      styles.filterPillText,
+                      active && styles.filterPillTextActive,
+                    ]}
+                  >
+                    {f.label} ({count})
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </View>
+      ) : null}
+
       {/* Feed unavailable: completion could not be determined. Every item stays
           `not_done` (no `done` badge) and we offer a retry (R2.7). */}
       {!completionAvailable ? (
@@ -374,38 +468,64 @@ export default function TripPlannedListScreen({
             </Text>
           ) : null}
 
-          {/* not_done items, outside the Done_Section (R3.2). */}
-          {notDoneSection.map((item) => (
-            <PlannedItemCard
-              key={item.id}
-              item={item}
-              rating={null}
-              onLog={openLogComposer}
-              onRemove={onRemove}
-            />
-          ))}
+          {/* not_done items, filtered by selected park */}
+          {(() => {
+            const activeFilter =
+              PARK_FILTERS.find((f) => f.id === selectedPark) ?? PARK_FILTERS[0]!;
+            const filteredNotDone = notDoneSection.filter((it) =>
+              activeFilter.match(it.park),
+            );
+            const filteredDone = doneSection.filter((it) =>
+              activeFilter.match(it.park),
+            );
 
-          {/* Done_Section: the Completed_Planned_Items (R3.1, R3.2). */}
-          {doneSection.length > 0 ? (
-            <View style={styles.doneSection} testID="planned-list-done-section">
-              <Text style={styles.doneHeading}>
-                Done ({doneSection.length})
-              </Text>
-              {doneSection.map((item) => (
-                <PlannedItemCard
-                  key={item.id}
-                  item={item}
-                  rating={
-                    item.experienceId
-                      ? ratingFor(completionByExperience.get(item.experienceId))
-                      : null
-                  }
-                  onLog={openLogComposer}
-                  onRemove={onRemove}
-                />
-              ))}
-            </View>
-          ) : null}
+            if (filteredNotDone.length === 0 && filteredDone.length === 0) {
+              return (
+                <View style={styles.filterEmpty} testID="planned-list-filter-empty">
+                  <Text style={styles.filterEmptyText}>
+                    No planned experiences for this park.
+                  </Text>
+                </View>
+              );
+            }
+
+            return (
+              <>
+                {filteredNotDone.map((item) => (
+                  <PlannedItemCard
+                    key={item.id}
+                    item={item}
+                    rating={null}
+                    tripStartDate={tripStartDate}
+                    onLog={openLogComposer}
+                    onRemove={onRemove}
+                  />
+                ))}
+
+                {filteredDone.length > 0 ? (
+                  <View style={styles.doneSection} testID="planned-list-done-section">
+                    <Text style={styles.doneHeading}>
+                      Done ({filteredDone.length})
+                    </Text>
+                    {filteredDone.map((item) => (
+                      <PlannedItemCard
+                        key={item.id}
+                        item={item}
+                        rating={
+                          item.experienceId
+                            ? ratingFor(completionByExperience.get(item.experienceId))
+                            : null
+                        }
+                        tripStartDate={tripStartDate}
+                        onLog={openLogComposer}
+                        onRemove={onRemove}
+                      />
+                    ))}
+                  </View>
+                ) : null}
+              </>
+            );
+          })()}
 
           {removeMutation.isPending ? (
             <ActivityIndicator
@@ -466,11 +586,13 @@ export default function TripPlannedListScreen({
 function PlannedItemCard({
   item,
   rating,
+  tripStartDate,
   onLog,
   onRemove,
 }: {
   readonly item: PlannedItemView;
   readonly rating: number | null;
+  readonly tripStartDate?: string | null;
   readonly onLog: (item: PlannedItemView) => void;
   readonly onRemove: (item: PlannedItemView) => void;
 }): JSX.Element {
@@ -480,6 +602,7 @@ function PlannedItemCard({
     adderName.length > 0
       ? `Added by ${adderName}`
       : 'Added by a member who is no longer available (unavailable)';
+  const schedStatus = getSchedulingStatus(item, tripStartDate);
 
   return (
     <Card
@@ -509,7 +632,31 @@ function PlannedItemCard({
               📍 {item.experienceName}
             </Text>
           ) : null}
-          {item.park ? <Badge label={item.park} color={theme.color.primary} /> : null}
+          <View style={styles.tagRow}>
+            {item.park ? (
+              <Badge label={item.park} color={getParkColor(item.park)} />
+            ) : null}
+            <View
+              style={[
+                styles.schedBadge,
+                schedStatus.isScheduled
+                  ? styles.schedBadgeScheduled
+                  : styles.schedBadgeUnscheduled,
+              ]}
+              testID={`planned-item-sched-${item.id}`}
+            >
+              <Text
+                style={[
+                  styles.schedBadgeText,
+                  schedStatus.isScheduled
+                    ? styles.schedBadgeTextScheduled
+                    : styles.schedBadgeTextUnscheduled,
+                ]}
+              >
+                {schedStatus.label}
+              </Text>
+            </View>
+          </View>
           <Text style={styles.itemMeta}>{attribution}</Text>
           {done ? (
             rating !== null ? (
@@ -532,24 +679,36 @@ function PlannedItemCard({
         </View>
 
         <View style={styles.itemActions}>
-          <Ionicons
-            name="add-circle-outline"
-            size={22}
-            color={theme.color.primary}
+          <Pressable
             onPress={() => onLog(item)}
             accessibilityRole="button"
             accessibilityLabel={`Log a completion for ${item.experienceName}`}
             testID={`planned-item-log-${item.id}`}
-          />
-          <Ionicons
-            name="trash-outline"
-            size={20}
-            color={theme.color.danger}
+            style={({ pressed }) => [styles.actionCircleBtn, pressed && styles.pressed]}
+          >
+            <Ionicons
+              name="add-circle-outline"
+              size={22}
+              color={theme.color.primary}
+            />
+          </Pressable>
+          <Pressable
             onPress={() => onRemove(item)}
             accessibilityRole="button"
             accessibilityLabel={`Remove ${item.experienceName}`}
             testID={`planned-item-remove-${item.id}`}
-          />
+            style={({ pressed }) => [
+              styles.actionCircleBtn,
+              styles.actionCircleRemove,
+              pressed && styles.pressed,
+            ]}
+          >
+            <Ionicons
+              name="trash-outline"
+              size={18}
+              color={theme.color.textSecondary}
+            />
+          </Pressable>
         </View>
       </View>
     </Card>
@@ -873,6 +1032,82 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.lg,
     paddingTop: theme.spacing.md,
     alignItems: 'flex-start',
+  },
+  parkFilterRow: {
+    paddingTop: theme.spacing.sm,
+    paddingBottom: theme.spacing.xs,
+  },
+  parkFilterScroll: {
+    paddingHorizontal: theme.spacing.lg,
+    gap: theme.spacing.xs,
+  },
+  filterPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: theme.radius.pill,
+    backgroundColor: theme.color.surface,
+    borderWidth: 1,
+    borderColor: theme.color.border,
+  },
+  filterPillActive: {
+    backgroundColor: theme.color.primary,
+    borderColor: theme.color.primary,
+  },
+  filterPillText: {
+    ...theme.typography.meta,
+    fontWeight: '700',
+    color: theme.color.textSecondary,
+  },
+  filterPillTextActive: {
+    color: theme.color.textOnPrimary,
+  },
+  tagRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.xs,
+    flexWrap: 'wrap',
+  },
+  schedBadge: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 5,
+  },
+  schedBadgeScheduled: {
+    backgroundColor: 'rgba(46, 158, 107, 0.14)',
+  },
+  schedBadgeUnscheduled: {
+    backgroundColor: 'rgba(246, 166, 9, 0.16)',
+  },
+  schedBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  schedBadgeTextScheduled: {
+    color: '#27855a',
+  },
+  schedBadgeTextUnscheduled: {
+    color: '#9a6500',
+  },
+  actionCircleBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionCircleRemove: {
+    backgroundColor: theme.color.surfaceAlt,
+  },
+  filterEmpty: {
+    padding: theme.spacing.xl,
+    alignItems: 'center',
+  },
+  filterEmptyText: {
+    ...theme.typography.meta,
+    color: theme.color.textSecondary,
+  },
+  pressed: {
+    opacity: 0.7,
   },
   progressBadge: {
     flexDirection: 'row',

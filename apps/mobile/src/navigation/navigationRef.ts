@@ -41,66 +41,37 @@ export function navigateToInbox(params?: { readonly shareId?: string }): boolean
   if (!navigationRef.isReady()) {
     return false;
   }
-  navigationRef.navigate('MainTabs', {
-    screen: 'Friends',
-    params: {
-      screen: 'Inbox',
-      params,
-    },
+  navigationRef.navigate('YouAndCrew', {
+    screen: 'Inbox',
+    params,
   });
   return true;
 }
 
 /**
- * Navigate to the `FriendsList`, the screen that renders incoming pending
- * Friend_Requests with their Accept/Decline actions. Used to deep-link a
- * tapped friend-request push notification.
- *
- * Returns `true` once the dispatch is issued, or `false` when the navigation
- * container is not ready yet (the caller should retry within the
- * foreground-navigation window).
+ * Navigate to `YouAndCrewMain`.
  */
 export function navigateToFriendsList(): boolean {
   if (!navigationRef.isReady()) {
     return false;
   }
-  navigationRef.navigate('MainTabs', {
-    screen: 'Friends',
-    params: {
-      screen: 'FriendsList',
-    },
+  navigationRef.navigate('YouAndCrew', {
+    screen: 'YouAndCrewMain',
   });
   return true;
 }
 
 // ---------------------------------------------------------------------------
-// Notification_Center deep-link routing (notification-center task 16.1).
+// Notification_Center deep-link routing (Tasks 12.2, Requirements 8.2).
 //
-// A tapped push for a Friend_Request, Trip_Invite, Rode_With_Tag, or Share now
-// opens the Notification_Center rather than a per-domain handler screen (R13.1,
-// R13.4). The center is re-hosted on the Profile tab's stack, at the bottom of
-// the navigator tree:
-//
-//   RootStack ▸ MainTabs ▸ Profile ▸ ProfileStack ▸ NotificationCenter
-//
-// `navigateToNotificationCenter` issues one nested `navigate` that walks that
-// path in a single call, forwarding an optional `focusRef` naming the referenced
-// Attention_Item so the screen can surface it (R13.2) — or the "no longer
-// available" indication when it is no longer pending (R13.3, owned by the
-// screen, task 16.2). It returns `false` when the container is not yet
-// mounted/ready so the caller can retry within the foreground-navigation window
-// (R13.1).
+// A tapped push for a Friend_Request, Trip_Invite, Rode_With_Tag, or Share opens
+// the Notification_Center as a root-level modal sheet.
 // ---------------------------------------------------------------------------
 
 /**
  * Navigate to the Notification_Center's Attention_Feed for a tapped push
  * notification, optionally carrying a `focusRef` that names the referenced
- * Attention_Item so the screen can surface it while it is still pending
- * (R13.1, R13.2). Opening with no params renders the full feed.
- *
- * Returns `true` once the dispatch is issued, or `false` when the navigation
- * container is not ready yet (the caller should retry within the
- * foreground-navigation window, R13.1).
+ * Attention_Item so the screen can surface it while it is still pending.
  */
 export function navigateToNotificationCenter(params?: {
   readonly focusRef?: AttentionItemRef;
@@ -108,13 +79,7 @@ export function navigateToNotificationCenter(params?: {
   if (!navigationRef.isReady()) {
     return false;
   }
-  navigationRef.navigate('MainTabs', {
-    screen: 'Profile',
-    params: {
-      screen: 'NotificationCenter',
-      params,
-    },
-  });
+  navigationRef.navigate('NotificationCenter', params);
   return true;
 }
 
@@ -244,3 +209,64 @@ export function navigateToFoodListDetail(params: { readonly foodListId: string }
   navigationRef.navigate('FoodListDetail', params);
   return true;
 }
+
+/**
+ * Navigate to `LiveWaits` screen under Explore tab (Requirement 4.3).
+ */
+export function navigateToLiveWaits(park: string): boolean {
+  if (!navigationRef.isReady()) {
+    return false;
+  }
+  navigationRef.navigate('MainTabs', {
+    screen: 'Explore',
+    params: {
+      screen: 'LiveWaits',
+      params: { park: park as any },
+    },
+  });
+  return true;
+}
+
+/**
+ * Navigate to `PinBoard` under Collection tab, optionally celebrating awarded pins (Requirement 4.5).
+ */
+export function navigateToPinBoard(celebratePinIds?: readonly string[]): boolean {
+  if (!navigationRef.isReady()) {
+    return false;
+  }
+  navigationRef.navigate('MainTabs', {
+    screen: 'Collection',
+    params: {
+      screen: 'PinBoard',
+      params: celebratePinIds ? { celebratePinIds: [...celebratePinIds] } : undefined,
+    },
+  });
+  return true;
+}
+
+/**
+ * Navigate to the `TripSchedule` section of an active trip (Requirement 4.6).
+ * Seeds `TripDetail` in the Trips stack so the user can easily navigate back to the
+ * rest of the trip (the hub) instead of jumping out of the Trips flow.
+ */
+export function navigateToTripSchedule(params: { readonly tripId: string }): boolean {
+  if (!navigationRef.isReady()) {
+    return false;
+  }
+  navigationRef.navigate('MainTabs', {
+    screen: 'Trips',
+    params: {
+      screen: 'TripDetail',
+      params: { tripId: params.tripId },
+    },
+  });
+  navigationRef.navigate('MainTabs', {
+    screen: 'Trips',
+    params: {
+      screen: 'TripSchedule',
+      params,
+    },
+  });
+  return true;
+}
+

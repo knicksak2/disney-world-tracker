@@ -85,6 +85,7 @@ const ITEM: PlannedItemDTO = {
   priority: 2,
   itemType: 'experience',
   durationMinutes: null,
+  catalogDurationMinutes: null,
   windowStartMinutes: null,
   windowEndMinutes: null,
   mealPeriod: null,
@@ -114,6 +115,7 @@ const DONE_ITEM: PlannedItemDTO = {
   priority: 2,
   itemType: 'experience',
   durationMinutes: null,
+  catalogDurationMinutes: null,
   windowStartMinutes: null,
   windowEndMinutes: null,
   mealPeriod: null,
@@ -143,6 +145,7 @@ const TODO_ITEM: PlannedItemDTO = {
   priority: 2,
   itemType: 'experience',
   durationMinutes: null,
+  catalogDurationMinutes: null,
   windowStartMinutes: null,
   windowEndMinutes: null,
   mealPeriod: null,
@@ -663,4 +666,65 @@ describe('Planned_List completion sync presentation', () => {
       );
     });
   });
+
+  test('park filter tab filters items by park', async () => {
+    const epcotItem: PlannedItemDTO = {
+      ...ITEM,
+      id: 'item-epcot',
+      experienceName: 'Spaceship Earth',
+      park: 'EPCOT',
+    };
+    const mkItem: PlannedItemDTO = {
+      ...ITEM,
+      id: 'item-mk',
+      experienceName: 'Space Mountain',
+      park: 'Magic Kingdom',
+    };
+    installApi([mkItem, epcotItem]);
+
+    renderPlanned(makeNavigation());
+
+    expect(await screen.findByTestId(`planned-item-${mkItem.id}`)).toBeTruthy();
+    expect(screen.getByTestId(`planned-item-${epcotItem.id}`)).toBeTruthy();
+
+    // Tap EPCOT filter pill
+    fireEvent.press(screen.getByTestId('planned-list-filter-epcot'));
+
+    expect(screen.queryByTestId(`planned-item-${mkItem.id}`)).toBeNull();
+    expect(screen.getByTestId(`planned-item-${epcotItem.id}`)).toBeTruthy();
+
+    // Tap All filter pill to reset
+    fireEvent.press(screen.getByTestId('planned-list-filter-all'));
+
+    expect(screen.getByTestId(`planned-item-${mkItem.id}`)).toBeTruthy();
+    expect(screen.getByTestId(`planned-item-${epcotItem.id}`)).toBeTruthy();
+  });
+
+  test('renders unscheduled and scheduled badges based on plannedDate', async () => {
+    const unscheduledItem: PlannedItemDTO = {
+      ...ITEM,
+      id: 'item-unscheduled',
+      plannedDate: null,
+    };
+    const scheduledItem: PlannedItemDTO = {
+      ...ITEM,
+      id: 'item-scheduled',
+      plannedDate: '2025-08-02',
+      plannedTime: '10:30',
+    };
+    installApi([unscheduledItem, scheduledItem]);
+
+    renderPlanned(makeNavigation());
+
+    const unschedBadge = await screen.findByTestId(
+      `planned-item-sched-${unscheduledItem.id}`,
+    );
+    expect(within(unschedBadge).getByText('⏳ Unscheduled')).toBeTruthy();
+
+    const schedBadge = screen.getByTestId(
+      `planned-item-sched-${scheduledItem.id}`,
+    );
+    expect(within(schedBadge).getByText(/10:30/)).toBeTruthy();
+  });
 });
+

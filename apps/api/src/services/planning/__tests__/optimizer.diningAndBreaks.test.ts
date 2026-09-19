@@ -173,12 +173,25 @@ describe('Optimizer Duration Precedence (R3.14, Property 13)', () => {
     ).toBe(DEFAULT_SHOW_DURATION_MIN);
   });
 
-  it('defaults rides/attractions to DEFAULT_RIDE_DUR (15 min), ignoring catalog duration', () => {
+  it('rides/attractions use a curated catalog duration when present, else DEFAULT_RIDE_DUR (R11.1, Property 22)', () => {
+    // A curated total-experience duration (e.g. a real ride length + pre-show)
+    // takes precedence over the flat 15-min default.
     expect(
       resolveDefaultDuration(
         makeItem({
           category: 'Ride',
-          catalogDurationMinutes: 4, // 4-min ride length does NOT override 15-min operational duration
+          catalogDurationMinutes: 12, // e.g. Flight of Passage: 4.5-min flight + pre-show
+          durationMinutes: null,
+        })
+      )
+    ).toBe(12);
+
+    // No curated duration on the catalog row: falls through to the flat default.
+    expect(
+      resolveDefaultDuration(
+        makeItem({
+          category: 'Ride',
+          catalogDurationMinutes: null,
           durationMinutes: null,
         })
       )

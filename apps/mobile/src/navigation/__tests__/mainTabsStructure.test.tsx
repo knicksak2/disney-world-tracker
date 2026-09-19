@@ -161,7 +161,7 @@ jest.mock('@react-navigation/bottom-tabs', () => {
 // ---------------------------------------------------------------------------
 
 import RootNavigator from '../RootNavigator';
-import ProfileStack from '../ProfileStack';
+import CollectionStack from '../CollectionStack';
 import StatsStack from '../StatsStack';
 
 beforeEach(() => {
@@ -169,20 +169,19 @@ beforeEach(() => {
 });
 
 /**
- * The five top-level tabs, in the required left-to-right order (R17.1).
+ * The four top-level tabs, in the required left-to-right order (Requirement 1.1).
  */
 const EXPECTED_TAB_ORDER = [
   'Home',
-  'Catalog',
+  'Explore',
   'Trips',
-  'Friends',
-  'Profile',
+  'Collection',
 ] as const;
 
 /**
  * Every Stats screen that was reachable before the relocation — the Overview
  * hub plus the four focused detail routes. Each must remain registered on the
- * re-hosted `StatsStack` (R17.5).
+ * re-hosted `StatsStack` (R17.5 / Requirement 6.1).
  */
 const PRIOR_STATS_SCREENS = [
   'StatsOverview',
@@ -219,7 +218,11 @@ function captureMainTabs(): NavigatorCapture {
   expect(mainTabsComponent).toBeDefined();
 
   const before = mockNavCaptures.length;
-  render(React.createElement(mainTabsComponent!));
+  render(
+    <QueryClientProvider client={queryClient}>
+      {React.createElement(mainTabsComponent!)}
+    </QueryClientProvider>,
+  );
 
   // The bottom-tab navigator rendered by MainTabsNavigator is the capture that
   // owns the Trips tab.
@@ -230,57 +233,62 @@ function captureMainTabs(): NavigatorCapture {
   return mainTabs!;
 }
 
-describe('MainTabs structure (Requirements 17.1, 17.3)', () => {
-  it('registers exactly the five tabs Home, Catalog, Trips, Friends, Profile in order', () => {
+describe('MainTabs structure (Requirements 1.1, 1.5, 6.5)', () => {
+  it('registers exactly the four screen-bearing tabs Home, Explore, Trips, Collection in order plus MagicFab', () => {
     const mainTabs = captureMainTabs();
 
     const tabNames = mainTabs.screens.map((s) => s.name);
-    // Exactly five tabs, in the required left-to-right order.
-    expect(tabNames).toEqual([...EXPECTED_TAB_ORDER]);
+    // Four tabs plus the center MagicFab slot
+    expect(tabNames).toEqual(['Home', 'Explore', 'MagicFab', 'Trips', 'Collection']);
+    const screenTabs = tabNames.filter((name) => name !== 'MagicFab');
+    expect(screenTabs).toEqual([...EXPECTED_TAB_ORDER]);
+
+    // Collection tab displays label "Vault" (Requirement 6.5)
+    const collectionScreen = mainTabs.screens.find((s) => s.name === 'Collection');
+    expect(collectionScreen).toBeDefined();
+    expect((collectionScreen?.options as any)?.tabBarLabel).toBe('Vault');
   });
 
-  it('configures Catalog tab tabPress listener to navigate to CatalogList (Experience Catalogue)', () => {
+  it('configures Explore tab tabPress listener to navigate to CatalogList (Experience Catalogue)', () => {
     const mainTabs = captureMainTabs();
-    const catalogScreen = mainTabs.screens.find((s) => s.name === 'Catalog');
-    expect(catalogScreen).toBeDefined();
-    expect(catalogScreen?.listeners).toBeDefined();
+    const exploreScreen = mainTabs.screens.find((s) => s.name === 'Explore');
+    expect(exploreScreen).toBeDefined();
+    expect(exploreScreen?.listeners).toBeDefined();
 
     const mockNavigate = jest.fn();
-    const listenersFactory = catalogScreen?.listeners as (arg: { navigation: { navigate: jest.Mock } }) => { tabPress: () => void };
+    const listenersFactory = exploreScreen?.listeners as (arg: { navigation: { navigate: jest.Mock } }) => { tabPress: () => void };
     const listeners = listenersFactory({ navigation: { navigate: mockNavigate } });
     expect(listeners.tabPress).toBeDefined();
 
     listeners.tabPress();
-    expect(mockNavigate).toHaveBeenCalledWith('Catalog', { screen: 'CatalogList' });
+    expect(mockNavigate).toHaveBeenCalledWith('Explore', { screen: 'CatalogList' });
   });
 
-  it('does NOT register the personal statistics view (Stats) as a top-level tab', () => {
+  it('does NOT register Friends, Profile, Catalog, or Stats as top-level tabs', () => {
     const mainTabs = captureMainTabs();
 
     const tabNames = mainTabs.screens.map((s) => s.name);
-    // Stats is relocated under Profile — it is no longer a top-level tab
-    // (R17.1, R17.3).
+    expect(tabNames).not.toContain('Friends');
+    expect(tabNames).not.toContain('Profile');
+    expect(tabNames).not.toContain('Catalog');
     expect(tabNames).not.toContain('Stats');
   });
 });
 
-describe('ProfileStack re-hosts the personal statistics view (Requirement 17.3)', () => {
+describe('CollectionStack re-hosts the personal statistics view (Requirement 6.1)', () => {
   it('registers a Stats route whose component is the whole StatsStack', () => {
-    render(<ProfileStack />);
+    render(<CollectionStack />);
 
-    const profileStack = mockNavCaptures.find((capture) =>
-      capture.screens.some((s) => s.name === 'ProfileMain'),
+    const collectionStack = mockNavCaptures.find((capture) =>
+      capture.screens.some((s) => s.name === 'CollectionHome'),
     );
-    expect(profileStack).toBeDefined();
+    expect(collectionStack).toBeDefined();
 
-    const names = profileStack?.screens.map((s) => s.name) ?? [];
-    // Profile is the landing route; Stats is re-hosted beneath it.
-    expect(names).toContain('ProfileMain');
+    const names = collectionStack?.screens.map((s) => s.name) ?? [];
+    expect(names).toContain('CollectionHome');
     expect(names).toContain('Stats');
 
-    // The re-hosted Stats route mounts the *entire* existing StatsStack, so
-    // every screen it hosts comes along unchanged (R17.3, R17.5).
-    const statsRoute = profileStack?.screens.find((s) => s.name === 'Stats');
+    const statsRoute = collectionStack?.screens.find((s) => s.name === 'Stats');
     expect(statsRoute?.component).toBe(StatsStack);
   });
 });

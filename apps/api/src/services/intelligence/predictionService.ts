@@ -1,7 +1,7 @@
 import type { IntelligenceRepo, ShowTimePatternRow } from './IntelligenceRepo.js';
 import type { WeatherClient } from './weatherClient.js';
 import { createLogger } from '../../logger.js';
-import { wdwToday } from '../trips/wdwClock.js';
+import { wdwToday, wdwMinutesFromMidnight } from '../trips/wdwClock.js';
 import { selectTier, crowdMultiplier, weatherAdjustment, displayLevel } from './waitMath.js';
 import { forecastIndex, selectComparableIndices } from './crowdForecast.js';
 import { applyBiasCorrection } from './calibration.js';
@@ -9,12 +9,21 @@ import { seasonalPrior } from './seasonalPrior.js';
 import { getETDayOfWeek, minutesFromMidnightETToISO, normalizeShowtimeEntries } from './showtimePatterns.js';
 import type { WaitSnapshot, CrowdCalendarDayDTO, WaitInsightsDTO } from '@dwt/shared';
 import type { Park } from '@dwt/shared';
+import type { ThemeParksLiveService } from '../live/themeParksLiveService.js';
 
 export interface PredictionServiceDeps {
   repo: IntelligenceRepo;
   weatherClient: WeatherClient;
   now?: () => Date;
   logger?: any;
+  /**
+   * Same-day current-hour live wait substitution (R4.5). Optional so existing
+   * callers/tests that construct `PredictionService` without a Live_Service
+   * keep working unchanged — `getDaySnapshot` simply skips the substitution
+   * (falls back to the model) when omitted, exactly like a Live_Service
+   * failure (R4.4's existing best-effort/fallback convention).
+   */
+  liveService?: ThemeParksLiveService;
 }
 
 export interface PredictionService {
@@ -351,7 +360,39 @@ export function createPredictionService(deps: PredictionServiceDeps): Prediction
           }
           waits.push(entry);
         }
-        
+
+        // R4.5: same-day current-hour live wait substitution. The park-wide
+        // R4.3 correction above can move in the OPPOSITE direction from one
+        // specific ride's own live wait (e.g. the park average is normal-to-
+        // low while a single headliner is running hot) — this fixes that by
+        // substituting THIS Experience's own current live standby wait for
+        // the CURRENT hour bucket only, when the request is for today and a
+        // fresh (non-stale), currently-operating, numeric live wait exists.
+        // Every other hour bucket (later today, or any other date) stays
+        // model-driven, since a live reading says nothing about the future.
+        // Best-effort: any Live_Service failure/miss silently falls back to
+        // the model value already computed above (mirrors R4.4).
+        const snapshotClockDateStr = wdwToday(clock());
+        if (deps.liveService && targetDateStr === snapshotClockDateStr) {
+          try {
+            const live = await deps.liveService.getLiveDetail(id, clock());
+            if (
+              !live.stale &&
+              live.liveDetail.status === 'Operating' &&
+              typeof live.liveDetail.waitMinutes === 'number'
+            ) {
+              const nowMinutes = wdwMinutesFromMidnight(snapshotClockDateStr, clock().toISOString());
+              const currentHour = Math.floor(nowMinutes / 60);
+              const currentEntry = waits.find((w) => w.hour === currentHour);
+              if (currentEntry) {
+                currentEntry.predictedWaitMinutes = Math.max(0, Math.round(live.liveDetail.waitMinutes));
+              }
+            }
+          } catch (_err) {
+            // Best-effort — fall back to the model value already in `waits`.
+          }
+        }
+
         const daily = dailyByExp.get(id);
         const { instants: perDateInstants, skipped: perDateSkipped } = normalizeShowtimeEntries(daily?.showtimes);
         if (perDateSkipped > 0 && logger?.warn) {

@@ -39,6 +39,9 @@ handling.
 - **Menu_Summary_Card**: A compact card on the Experience detail screen that summarizes a Restaurant_Experience's available menus (e.g. a count and the menu-type names) and acts as the tappable entry point to the Menu_Screen.
 - **Menu_Screen**: A dedicated mobile screen, reachable by tapping the Menu_Summary_Card, that renders the full menu(s) of a Restaurant_Experience organized by menu type, group/course, and item.
 - **ExperienceDetailScreen**: The mobile screen (`apps/mobile/src/screens/catalog/ExperienceDetailScreen.tsx`) that loads and renders Experience detail.
+- **Dining_Url**: A nullable `dining_url` column on `experiences` holding the restaurant's official Disney dining-page URL (e.g. `https://disneyworld.disney.go.com/dining/animal-kingdom/tiffins/`). Populated only by curated seed data (see Requirement 6); never derived at request time.
+- **Reservations_Accepted_Facet**: The Disney-sourced facet value with id `reservations-accepted` inside a Restaurant_Experience's `grouped_facets.tableService` array. Used only as the curation-time selection rule for which restaurants are eligible for Dining_Url curation (Requirement 6) — it is not evaluated at request or render time.
+- **Reservation_Action**: A button on the ExperienceDetailScreen that, when a Restaurant_Experience's Experience_Detail_Response carries a Dining_Url, opens that URL so the user can complete a reservation on Disney's own site.
 
 ## Requirements
 
@@ -108,3 +111,31 @@ The cached menu age is the elapsed time from the cached menu's recorded fetch ti
 7. WHEN a menu item has no price or an empty price string, THE Menu_Screen SHALL render the item name and SHALL render no price for that item.
 8. THE Menu_Screen SHALL provide a control to return to the Experience detail screen.
 9. THE Menu_Screen SHALL render using the shared Magical / Whimsical theme components (Card, SectionLabel, Badge, GradientHeader) used by the other detail sections.
+
+### Requirement 6: Curated dining-reservation links
+
+**User Story:** As an app user, I want a way to jump straight to a restaurant's official Disney reservation page, so that I can book a table without hunting for it myself.
+
+No public Disney API returns a per-restaurant reservation-page URL or slug (confirmed against the Facilities sync, the Menu_Service, and ThemeParks.wiki — none carry a `url`/slug field for an individual facility), and Disney's dining-page slugs (e.g. `dining/animal-kingdom/tiffins/`) do not derive mechanically from the stored `experiences.name` (e.g. "Tiffins Restaurant" → slug `tiffins`, not `tiffins-restaurant`; "Yak & Yeti™ Restaurant" and "Yak & Yeti™ Local Food Cafes" are two different Experiences with two different slugs). Automated scraping or name-based fuzzy matching is explicitly rejected as a source for this data: a wrong reservation link sent to the user is worse than no link. Dining_Url is therefore populated exclusively by one-time, human-verified curation, seeded the same way historical crowd data is (`apps/api/seed-data/crowd/` → `seedCrowdIndex`).
+
+#### Acceptance Criteria
+
+1. THE `experiences` table SHALL carry a nullable `dining_url` column, populated only through the curated seed described in this requirement and never computed or fetched at request time.
+2. THE curation process SHALL select curation candidates as every Restaurant_Experience whose persisted `grouped_facets.tableService` array contains a Reservations_Accepted_Facet (facet id `reservations-accepted`), so that quick-service counters, snack carts, festival kiosks, "Working Cast Dining" rows, and "- To Go" variants are excluded, while bars/lounges that accept reservations (e.g. Oga's Cantina, Space 220 Lounge) are included.
+3. FOR each curation candidate, THE curator SHALL verify the specific Disney dining-page URL for that exact restaurant (not a guessed slug, not a generic dining hub URL) before it is added to the seed data, and SHALL omit the entry (leaving `dining_url` NULL) rather than record an unverified or best-guess URL.
+4. THE seed data SHALL be stored as a versioned file under `apps/api/seed-data/dining/` keyed by an identifier stable across re-syncs (the Experience's `upstream_entity_id`, matching the identification pattern used for menu retrieval), and SHALL be loaded via an idempotent seed script mirroring `seedCrowdIndex`/`runSeedCrowdIndex` (safe to re-run; re-running upserts rather than duplicating).
+5. WHEN a Restaurant_Experience detail is requested AND that Experience has a persisted `dining_url`, THE Catalog_Service SHALL include a `diningUrl` field carrying that value in the Experience_Detail_Response.
+6. IF a Restaurant_Experience has no persisted `dining_url` (including any Experience outside the curated candidate set, or a candidate the curator could not verify), THEN THE Catalog_Service SHALL omit the `diningUrl` field entirely from the Experience_Detail_Response, rather than including it as `null` or an empty string.
+7. WHERE an Experience is not a Restaurant_Experience, THE Catalog_Service SHALL omit the `diningUrl` field from the Experience_Detail_Response.
+
+### Requirement 7: Reservation action on the detail screen
+
+**User Story:** As an app user, I want a clearly-labelled reservation button on a restaurant's detail screen, so that I can get to Disney's booking flow for that exact restaurant in one tap.
+
+#### Acceptance Criteria
+
+1. WHERE the Experience is a Restaurant_Experience AND the Experience_Detail_Response carries a `diningUrl`, THE ExperienceDetailScreen SHALL render a Reservation_Action labelled to make clear it opens Disney's site (e.g. "Reserve on Disney's site"), distinct from the existing "Get directions" action and from the Menu_Summary_Card.
+2. WHEN the user activates the Reservation_Action, THE ExperienceDetailScreen SHALL open the Experience's `diningUrl` in the device's default browser.
+3. IF opening the `diningUrl` fails, THEN THE ExperienceDetailScreen SHALL render a non-blocking inline error indication and SHALL leave the rest of the screen intact, mirroring the existing Get_Directions_Action failure handling.
+4. IF the Experience_Detail_Response carries no `diningUrl` (including a non-restaurant, a restaurant outside the curated set, or a restaurant load error), THEN THE ExperienceDetailScreen SHALL render no Reservation_Action and SHALL provide no other in-app path to a reservation link for that Experience.
+5. THE Reservation_Action SHALL render using the shared Magical / Whimsical theme button components (`PrimaryButton`/`SecondaryButton`) used by the other detail-screen actions.

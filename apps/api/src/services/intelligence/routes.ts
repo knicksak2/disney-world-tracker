@@ -3,11 +3,13 @@ import { ZodError, z } from 'zod';
 import { isoDateSchema, parkSchema, uuidSchema } from '@dwt/shared';
 import type { SamplingService } from './samplingService.js';
 import type { PredictionService } from './predictionService.js';
+import type { WeatherClient } from './weatherClient.js';
 import { AppError } from '../../errors/AppError.js';
 
 export interface IntelligenceRoutesOptions {
   samplingService: SamplingService;
   predictionService: PredictionService;
+  weatherClient: WeatherClient;
   requireSession: onRequestHookHandler;
 }
 
@@ -119,6 +121,15 @@ export function intelligenceRoutes(options: IntelligenceRoutesOptions): FastifyP
       }
       
       return insights;
+    });
+
+    app.get('/weather/current', { preHandler: [options.requireSession] }, async () => {
+      const weather = await options.weatherClient.getWDWWeather();
+      return {
+        current: weather.current
+          ? { tempF: weather.current.temp_f, condition: weather.current.condition }
+          : null,
+      };
     });
   };
 }

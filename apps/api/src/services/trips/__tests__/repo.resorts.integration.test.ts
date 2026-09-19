@@ -171,6 +171,7 @@ function makeFixture(): Fixture {
   applyMigration(db, '0019_planned_item_scheduling.sql');
   applyMigration(db, '0022_planned_item_ride_options.sql');
   applyMigration(db, '0023_trip_touring_hours.sql');
+  applyMigration(db, '0045_trip_walk_wait_weighting.sql');
 
   const pool = withForUpdateCompat(rawPool);
   const repo = createTripRepo(pool, NOOP_DEPS);

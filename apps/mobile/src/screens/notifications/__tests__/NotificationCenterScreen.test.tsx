@@ -361,7 +361,7 @@ describe('NotificationCenterScreen presentation (R1.7, R2.9, R8.2, R9.1, R9.5, R
   // -------------------------------------------------------------------------
   // R2.9 / R12.2 — open-full-inbox control cross-navigates to the Share_Inbox
   // -------------------------------------------------------------------------
-  test('R2.9/R12.2: the open-full-inbox control navigates to Friends → Inbox', () => {
+  test('R2.9/R12.2: the open-full-inbox control navigates to YouAndCrew → Inbox', () => {
     programAttention({
       state: makeState({ items: [] }),
       outcomes: ALL_DOMAINS.map((domain) => success(domain)),
@@ -372,7 +372,7 @@ describe('NotificationCenterScreen presentation (R1.7, R2.9, R8.2, R9.1, R9.5, R
     renderScreen();
 
     fireEvent.press(screen.getByTestId('notification-open-inbox'));
-    expect(mockNavigate).toHaveBeenCalledWith('Friends', { screen: 'Inbox' });
+    expect(mockNavigate).toHaveBeenCalledWith('YouAndCrew', { screen: 'Inbox' });
   });
 
   // -------------------------------------------------------------------------

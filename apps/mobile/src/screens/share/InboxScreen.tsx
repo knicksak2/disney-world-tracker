@@ -119,7 +119,7 @@ import {
 } from '@dwt/shared';
 
 import { ApiError, apiRequest } from '../../api/client';
-import type { FriendsStackParamList } from '../../navigation/FriendsStack';
+import type { YouAndCrewStackParamList } from '../../navigation/YouAndCrewStack';
 import type {
   MainTabParamList,
   RootStackParamList,
@@ -140,15 +140,14 @@ import {
 // ---------------------------------------------------------------------------
 
 /**
- * The Inbox lives inside `FriendsStack`, which is a screen on the `Friends`
- * tab of `MainTabs`, which is itself a screen on the root-level `RootStack`.
+ * The Inbox lives inside `YouAndCrewStack`, which is a screen on the root-level `RootStack`.
  * Composing those navigators lets one `navigate` call resolve either a sibling
- * within `FriendsStack` (`FriendProfile`, R5.2) or a screen up on the
+ * within `YouAndCrewStack` (`FriendProfile`, R5.2) or a screen up on the
  * `RootStack` (`ExperienceDetail`, R5.1/R5.4) — the request bubbles up past the
  * tab navigator to the root stack for the latter.
  */
 type InboxNavigation = CompositeNavigationProp<
-  NativeStackNavigationProp<FriendsStackParamList, 'Inbox'>,
+  NativeStackNavigationProp<YouAndCrewStackParamList, 'Inbox'>,
   CompositeNavigationProp<
     BottomTabNavigationProp<MainTabParamList>,
     NativeStackNavigationProp<RootStackParamList>
@@ -162,7 +161,7 @@ type InboxNavigation = CompositeNavigationProp<
  * marking it read (R10.2) — or shows a "no longer available" message when the
  * Share is gone (R10.4).
  */
-type InboxRoute = RouteProp<FriendsStackParamList, 'Inbox'>;
+type InboxRoute = RouteProp<YouAndCrewStackParamList, 'Inbox'>;
 
 // ---------------------------------------------------------------------------
 // Constants and helpers

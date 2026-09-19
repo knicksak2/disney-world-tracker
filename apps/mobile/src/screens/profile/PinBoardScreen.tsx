@@ -51,7 +51,7 @@ import {
   type UserPinProgressDTO,
 } from '@dwt/shared';
 
-import type { ProfileStackParamList } from '../../navigation/ProfileStack';
+import type { CollectionStackParamList } from '../../navigation/CollectionStack';
 import { ApiError, apiRequest } from '../../api/client';
 import { PinView } from '../../components/pins/PinView';
 import { TIER_COLOR, TIER_LABEL, TRACK_LABEL } from '../../components/pins/pinTierMeta';
@@ -68,7 +68,7 @@ import PinDetailModal from './PinDetailModal';
 import PinCelebrationModal, { type CelebrationPosition } from './PinCelebrationModal';
 import { Ionicons } from '@expo/vector-icons';
 
-type Props = NativeStackScreenProps<ProfileStackParamList, 'PinBoard'>;
+type Props = NativeStackScreenProps<CollectionStackParamList, 'PinBoard'>;
 
 /** Board read query key (shared cache). */
 export const pinBoardKey = ['me', 'pins'] as const;

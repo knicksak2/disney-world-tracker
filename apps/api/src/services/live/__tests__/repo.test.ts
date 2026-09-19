@@ -97,3 +97,60 @@ describe('LiveRepo.resolveUpstreamEntityId', () => {
     expect(await repo.resolveUpstreamEntityId(EXP_ID)).toBeNull();
   });
 });
+
+describe('LiveRepo.getExperiencesWithUpstreamIds', () => {
+  it('queries active experiences with upstream IDs excluding Restaurant when park is specified', async () => {
+    const pool = makePool((call) => {
+      if (call.text.includes('FROM experiences')) {
+        return {
+          rows: [
+            { id: EXP_ID, upstream_entity_id: 'tp-entity-1' },
+          ],
+        };
+      }
+      return { rows: [] };
+    });
+    const repo = createLiveRepo(pool as never);
+
+    const rows = await repo.getExperiencesWithUpstreamIds!('Magic Kingdom');
+
+    expect(rows).toEqual([{ id: EXP_ID, upstream_entity_id: 'tp-entity-1' }]);
+    expect(pool.calls).toHaveLength(1);
+
+    const sql = pool.calls[0]?.text ?? '';
+    expect(sql).toMatch(/SELECT id, upstream_entity_id/);
+    expect(sql).toMatch(/FROM experiences/);
+    expect(sql).toMatch(/WHERE upstream_entity_id IS NOT NULL/);
+    expect(sql).toMatch(/AND active = true/);
+    expect(sql).toMatch(/AND category != 'Restaurant'/);
+    expect(sql).toMatch(/AND park = \$1/);
+    expect(pool.calls[0]?.params).toEqual(['Magic Kingdom']);
+  });
+
+  it('queries active experiences excluding Restaurant when park is not specified', async () => {
+    const pool = makePool((call) => {
+      if (call.text.includes('FROM experiences')) {
+        return {
+          rows: [
+            { id: EXP_ID, upstream_entity_id: 'tp-entity-1' },
+          ],
+        };
+      }
+      return { rows: [] };
+    });
+    const repo = createLiveRepo(pool as never);
+
+    const rows = await repo.getExperiencesWithUpstreamIds!();
+
+    expect(rows).toEqual([{ id: EXP_ID, upstream_entity_id: 'tp-entity-1' }]);
+    expect(pool.calls).toHaveLength(1);
+
+    const sql = pool.calls[0]?.text ?? '';
+    expect(sql).toMatch(/SELECT id, upstream_entity_id/);
+    expect(sql).toMatch(/FROM experiences/);
+    expect(sql).toMatch(/WHERE upstream_entity_id IS NOT NULL/);
+    expect(sql).toMatch(/AND active = true/);
+    expect(sql).toMatch(/AND category != 'Restaurant'/);
+    expect(pool.calls[0]?.params).toEqual([]);
+  });
+});

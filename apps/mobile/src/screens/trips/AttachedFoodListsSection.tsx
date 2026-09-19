@@ -217,6 +217,23 @@ export default function AttachedFoodListsSection({
     }
   }
 
+  const promptDetach = (foodListId: string, listName: string) => {
+    Alert.alert(
+      `Detach '${listName}'?`,
+      `Detach '${listName}' from this trip? (The food list will remain saved in your profile).`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Detach',
+          style: 'destructive',
+          onPress: () => {
+            void handleDetach(foodListId);
+          },
+        },
+      ],
+    );
+  };
+
   return (
     <View style={styles.sectionContainer} testID="trip-detail-food-lists-section">
       {/* Header Row */}
@@ -343,7 +360,7 @@ export default function AttachedFoodListsSection({
                   <View style={styles.foodListRight}>
                     {canDetach ? (
                       <Pressable
-                        onPress={() => void handleDetach(item.foodListId)}
+                        onPress={() => promptDetach(item.foodListId, item.name)}
                         accessibilityRole="button"
                         accessibilityLabel={`Detach ${item.name}`}
                         style={styles.detachBtn}
@@ -351,8 +368,8 @@ export default function AttachedFoodListsSection({
                         testID={`detach-food-list-btn-${item.foodListId}`}
                       >
                         <Ionicons
-                          name="close-circle-outline"
-                          size={20}
+                          name="ellipsis-horizontal"
+                          size={18}
                           color={theme.color.textSecondary}
                         />
                       </Pressable>
@@ -680,7 +697,11 @@ const styles = StyleSheet.create({
     gap: theme.spacing.sm,
   },
   detachBtn: {
-    padding: 4,
+    padding: 6,
+    borderRadius: theme.radius.sm,
+    backgroundColor: theme.color.surfaceAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   unavailableRow: {
     flexDirection: 'row',

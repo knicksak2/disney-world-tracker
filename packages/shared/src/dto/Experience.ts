@@ -157,4 +157,7 @@ export interface ExperienceDTO {
    * (R6). Present only when persisted; `null`/absent otherwise.
    */
   readonly subType?: string | null;
+
+  /** Curated Disney reservation-page URL when seeded, else absent (R6.5, R6.6, R6.7). */
+  readonly diningUrl?: string | undefined;
 }

@@ -295,6 +295,34 @@ export default function TripReservationsScreen({ navigation, route }: Props): JS
     editMutation.mutate({ itemId: editing.id, body });
   };
 
+  const backToHub = (): void => {
+    const state = navigation.getState?.();
+    const routes = state?.routes;
+    const currentIndex = typeof state?.index === 'number' ? state.index : (routes ? routes.length - 1 : -1);
+    const prevRoute = routes && currentIndex > 0 ? routes[currentIndex - 1] : null;
+
+    if (
+      prevRoute &&
+      prevRoute.name === 'TripDetail' &&
+      (prevRoute.params as { tripId?: string })?.tripId === tripId
+    ) {
+      navigation.goBack();
+      return;
+    }
+
+    if (typeof navigation.replace === 'function') {
+      navigation.replace('TripDetail', { tripId });
+      return;
+    }
+
+    if (typeof navigation.navigate === 'function') {
+      navigation.navigate('TripDetail', { tripId });
+      return;
+    }
+
+    navigation.goBack();
+  };
+
   const busy = addMutation.isPending || editMutation.isPending || deleteMutation.isPending;
 
   return (
@@ -308,7 +336,12 @@ export default function TripReservationsScreen({ navigation, route }: Props): JS
         }
         icon="ticket-outline"
         compact
-        onBack={() => navigation.goBack()}
+        onBack={backToHub}
+        backAccessibilityLabel={
+          tripQuery.data?.name
+            ? `Back to ${tripQuery.data.name}`
+            : 'Back to trip'
+        }
       />
 
       <ScrollView contentContainerStyle={styles.scroll} testID="trip-reservations-scroll">
@@ -353,6 +386,15 @@ export default function TripReservationsScreen({ navigation, route }: Props): JS
                 item={item}
                 onPress={() => handleOpenEdit(item)}
                 onEdit={() => handleOpenEdit(item)}
+                {...(item.experienceId
+                  ? {
+                      onViewMenu: () => {
+                        (navigation as any).navigate('ExperienceDetail', {
+                          experienceId: item.experienceId,
+                        });
+                      },
+                    }
+                  : {})}
               />
             ))}
           </View>
@@ -644,10 +686,12 @@ function ReservationRow({
   item,
   onPress,
   onEdit,
+  onViewMenu,
 }: {
   readonly item: PlannedItemDTO;
   readonly onPress: () => void;
   readonly onEdit: () => void;
+  readonly onViewMenu?: (() => void) | undefined;
 }): JSX.Element {
   const presentation =
     item.reservationKind != null
@@ -666,9 +710,11 @@ function ReservationRow({
         testID={`reservation-row-${item.id}`}
       >
         <View style={styles.rowHeader}>
-          <Text style={styles.rowTime} testID={`reservation-time-${item.id}`}>
-            {formatParkTime(item.plannedTime ?? undefined)}
-          </Text>
+          <View style={styles.resTimeBadge}>
+            <Text style={styles.rowTime} testID={`reservation-time-${item.id}`}>
+              {formatParkTime(item.plannedTime ?? undefined)}
+            </Text>
+          </View>
           <View style={styles.kindBadge}>
             <Ionicons
               name={presentation.icon as keyof typeof Ionicons.glyphMap}
@@ -687,21 +733,44 @@ function ReservationRow({
           {item.park != null ? <Badge label={item.park} color={theme.color.primaryLight} /> : null}
           {item.partySize != null ? (
             <Text style={styles.rowMeta} testID={`reservation-party-${item.id}`}>
-              Party of {item.partySize}
+              👥 Party of {item.partySize}
+            </Text>
+          ) : null}
+          {item.confirmationNumber != null ? (
+            <Text style={styles.rowConfirmation} testID={`reservation-confirmation-${item.id}`}>
+              Confirmation {item.confirmationNumber}
             </Text>
           ) : null}
         </View>
 
-        {item.confirmationNumber != null ? (
-          <Text style={styles.rowConfirmation} testID={`reservation-confirmation-${item.id}`}>
-            Confirmation {item.confirmationNumber}
-          </Text>
-        ) : null}
-
-        <Text style={styles.rowAdder}>Added by {item.addedByDisplayName}</Text>
+        <View style={styles.cardFooter}>
+          <Text style={styles.rowAdder}>Added by {item.addedByDisplayName}</Text>
+          <View style={styles.footerActions}>
+            {item.reservationKind === 'dining' && item.experienceId && onViewMenu ? (
+              <Pressable
+                onPress={onViewMenu}
+                accessibilityRole="button"
+                accessibilityLabel={`View menu for ${reservationTitle(item)}`}
+                testID={`reservation-menu-${item.id}`}
+                style={({ pressed }) => [styles.smallActionBtn, pressed && styles.pressed]}
+              >
+                <Ionicons name="restaurant-outline" size={13} color={theme.color.primary} />
+                <Text style={styles.smallActionBtnText}>Menu</Text>
+              </Pressable>
+            ) : null}
+            <Pressable
+              onPress={onEdit}
+              accessibilityRole="button"
+              accessibilityLabel={`Edit reservation for ${reservationTitle(item)}`}
+              testID={`reservation-edit-${item.id}`}
+              style={({ pressed }) => [styles.smallActionBtn, pressed && styles.pressed]}
+            >
+              <Ionicons name="pencil-outline" size={13} color={theme.color.textSecondary} />
+              <Text style={styles.smallActionBtnTextMuted}>Edit</Text>
+            </Pressable>
+          </View>
+        </View>
       </Pressable>
-
-      <SecondaryButton label="Edit" onPress={onEdit} testID={`reservation-edit-${item.id}`} />
     </Card>
   );
 }
@@ -730,43 +799,99 @@ const styles = StyleSheet.create({
   loading: { marginTop: theme.spacing.lg },
   group: { gap: theme.spacing.xs, marginTop: theme.spacing.sm },
   row: { gap: theme.spacing.xs },
-  rowMain: { gap: 2 },
+  rowMain: { gap: theme.spacing.xs },
   rowHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  rowTime: {
-    fontSize: theme.typography.body.fontSize,
-    fontWeight: '700',
-    color: theme.color.textPrimary,
+  resTimeBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(91, 42, 134, 0.08)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
   },
-  kindBadge: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  rowTime: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: theme.color.primary,
+  },
+  kindBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: theme.color.surfaceAlt,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
   kindBadgeText: {
-    fontSize: theme.typography.meta.fontSize,
+    fontSize: 11,
+    fontWeight: '700',
     color: theme.color.textSecondary,
   },
   rowTitle: {
-    fontSize: theme.typography.body.fontSize,
+    fontSize: 15,
+    fontWeight: '800',
     color: theme.color.textPrimary,
   },
   rowMetaLine: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.xs,
+    gap: theme.spacing.sm,
     flexWrap: 'wrap',
   },
   rowMeta: {
-    fontSize: theme.typography.meta.fontSize,
+    fontSize: 12,
+    fontWeight: '600',
     color: theme.color.textSecondary,
   },
   rowConfirmation: {
-    fontSize: theme.typography.meta.fontSize,
+    fontSize: 12,
     color: theme.color.textSecondary,
   },
+  cardFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: theme.spacing.xs,
+    borderTopWidth: 1,
+    borderTopColor: theme.color.border,
+    marginTop: 4,
+  },
   rowAdder: {
-    fontSize: theme.typography.meta.fontSize,
+    fontSize: 11,
     color: theme.color.textSecondary,
+  },
+  footerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  smallActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    backgroundColor: theme.color.surfaceAlt,
+    borderWidth: 1,
+    borderColor: theme.color.border,
+  },
+  smallActionBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: theme.color.primary,
+  },
+  smallActionBtnTextMuted: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: theme.color.textSecondary,
+  },
+  pressed: {
+    opacity: 0.7,
   },
   kindRow: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.xs },
   kindChip: {

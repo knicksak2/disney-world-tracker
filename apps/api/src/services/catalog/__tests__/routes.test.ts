@@ -665,6 +665,60 @@ describe('GET /catalog/:experienceId enrichment + menus', () => {
 });
 
 // ---------------------------------------------------------------------------
+// GET /catalog/:experienceId — diningUrl (R6.5, R6.6, R6.7)
+// ---------------------------------------------------------------------------
+
+describe('GET /catalog/:experienceId diningUrl field', () => {
+  it('attaches diningUrl when present on a Restaurant Experience (R6.5)', async () => {
+    const exp = makeExperience({
+      id: '12121212-1212-4212-8212-121212121212',
+      category: 'Restaurant',
+      diningUrl:
+        'https://disneyworld.disney.go.com/dining/animal-kingdom/tiffins-restaurant/',
+    });
+    const { app } = await buildApp({ getExperience: async () => exp });
+
+    const res = await app.inject({ method: 'GET', url: `/catalog/${exp.id}` });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().diningUrl).toBe(
+      'https://disneyworld.disney.go.com/dining/animal-kingdom/tiffins-restaurant/',
+    );
+    await app.close();
+  });
+
+  it('omits diningUrl for a Restaurant Experience when absent (R6.6)', async () => {
+    const exp = makeExperience({
+      id: '13131313-1313-4313-8313-131313131313',
+      category: 'Restaurant',
+    });
+    const { app } = await buildApp({ getExperience: async () => exp });
+
+    const res = await app.inject({ method: 'GET', url: `/catalog/${exp.id}` });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).not.toHaveProperty('diningUrl');
+    await app.close();
+  });
+
+  it('omits diningUrl for a non-restaurant Experience even if set on DTO (R6.7)', async () => {
+    const exp = makeExperience({
+      id: '14141414-1414-4414-8414-141414141414',
+      category: 'Ride',
+      diningUrl:
+        'https://disneyworld.disney.go.com/dining/animal-kingdom/tiffins-restaurant/',
+    });
+    const { app } = await buildApp({ getExperience: async () => exp });
+
+    const res = await app.inject({ method: 'GET', url: `/catalog/${exp.id}` });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).not.toHaveProperty('diningUrl');
+    await app.close();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // GET /resorts (R6.8, R16.5)
 // ---------------------------------------------------------------------------
 

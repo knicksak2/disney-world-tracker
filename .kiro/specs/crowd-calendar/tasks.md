@@ -301,6 +301,21 @@ Implementation is **TypeScript**, reusing existing infrastructure: the `Live_Ser
 - **Expect a small measured gain from 18 and be honest about it.** The holdout ceiling for ride/hour/weekday features is `5.58` min MAE against the shipped `5.87`; R16's shrinkage recovers ~`0.22` min of that. The large remaining headroom (down to a `2.95` min noise floor) is day-level signal, which is what groups 19 and 21 make reachable rather than something the tier arithmetic can deliver.
 - Group 21 deliberately builds **measurement**, not accuracy: `wait_archive` and `wait_forecast_log` change no prediction (R17.5 is property-tested). Their value is that model quality stops being invisible, and that day-level training data stops being deleted by the 30-day raw prune. This is the one item in the wave that is time-sensitive for a reason unrelated to correctness — every day it is not shipped is a day of day-to-day variation permanently lost.
 
+- [x] 22. Same-day live wait substitution (R4.5, Property 20)
+  - **Motivating defect (found via day-planning-optimization's Task 24/25 investigation):** the existing R4.3 same-day correction only nudges the PARK-WIDE crowd multiplier from the park-wide observed average — it has no way to reflect one specific ride running hot (or cold) while the park average sits normal. Confirmed against real dev data: with day-planning-optimization's separate rope-drop-anchor bug fixed, Flight of Passage's modeled wait at ~9:15 AM read 45 min (the historical hourly model) against a live-posted 55 min at the same moment — and further spot-checks (Zootopia live 15 vs model 9, Expedition Everest live 30 vs model 22, Na'vi River Journey live 30 vs model 32) confirmed the gap runs in both directions per-ride, which a single park-wide multiplier cannot correct.
+  - [x] 22.1 Wire `ThemeParksLiveService` into `predictionService` (`apps/api/src/services/intelligence/predictionService.ts`)
+    - Add an optional `liveService?: ThemeParksLiveService` to `PredictionServiceDeps`. In `getDaySnapshot`, after computing the per-hour `waits[]` for an Experience, WHEN the request date equals `wdwToday(clock())`: call `liveService.getLiveDetail(id, clock())`; WHEN the result is non-stale, `status === 'Operating'`, and `waitMinutes` is numeric, overwrite `predictedWaitMinutes` in ONLY the `waits[]` entry whose `hour` matches the current WDW hour (`Math.floor(wdwMinutesFromMidnight(...) / 60)`). Any failure/timeout/miss/non-today date/undefined `liveService` leaves `waits[]` exactly as the pre-existing model path would produce (best-effort, mirrors R4.4).
+    - _Requirements: 4.5_
+  - [x] 22.2 Wire the same `liveService` instance into `composeServices.ts`
+    - Pass the already-constructed `liveService` (used by the catalog `getLiveDetail` port) into `createPredictionService({ ..., liveService })` — no second Live_Service instance, no new cache.
+    - _Requirements: 4.5_
+  - [x] 22.3 Tests (`predictionLiveSubstitution.test.ts`)
+    - Substitutes into the current hour only when fresh + Operating + numeric, for today; does NOT substitute a different hour, a stale reading, a non-Operating status, an absent `waitMinutes`, a non-today date, or when `liveService` is omitted; best-effort fallback on a thrown Live_Service error. Verified: the primary substitution assertion fails when the substitution branch is disabled, proving it exercises the real code path.
+    - _Requirements: 4.5_
+  - [x] 22.4 Spec amendments
+    - Requirement 4.5 (`requirements.md`), Property 20 (`design.md`), this task + wave 30 (`tasks.md`).
+    - _Requirements: 4.5_
+
 ## Task Dependency Graph
 
 ```json
@@ -335,7 +350,9 @@ Implementation is **TypeScript**, reusing existing infrastructure: the `Live_Ser
     { "id": 26, "tasks": ["21.1", "21.4"] },
     { "id": 27, "tasks": ["21.2", "21.3"] },
     { "id": 28, "tasks": ["21.5"] },
-    { "id": 29, "tasks": ["21.6"] }
+    { "id": 29, "tasks": ["21.6"] },
+    { "id": 30, "tasks": ["22.1", "22.2"] },
+    { "id": 31, "tasks": ["22.3", "22.4"] }
   ]
 }
 ```

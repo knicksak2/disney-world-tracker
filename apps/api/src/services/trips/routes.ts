@@ -101,6 +101,7 @@ import { AppError } from '../../errors/AppError.js';
 import { assertTripMember, assertTripOrganizer } from './authz.js';
 import { optimize } from '../planning/optimizer.js';
 import type { OptimizeInput, OptimizeInputItem } from '../planning/optimizer.js';
+import { wdwToday, wdwMinutesFromMidnight } from './wdwClock.js';
 import type {
   RodeWithTagCreatedNotice,
   TripInviteCreatedNotice,
@@ -1218,7 +1219,7 @@ export function tripRoutes(options: TripRoutesOptions): FastifyPluginAsync {
         );
         await assertTripMember(pool, userId, id);
         
-        const { date, startHour, endHour } = parseOrAppError(tripOptimizationInputSchema, request.body);
+        const { date, startHour, endHour, startMinutes, startMode } = parseOrAppError(tripOptimizationInputSchema, request.body);
         
         const allItems = await repo.listPlannedItems(id);
         const dayItems = allItems.filter((i) => i.plannedDate === date);
@@ -1227,8 +1228,13 @@ export function tripRoutes(options: TripRoutesOptions): FastifyPluginAsync {
           return { items: [], totalWaitMinutes: 0, totalWalkMinutes: 0, unfittedItemIds: [], warnings: [] };
         }
         
-        const tripRes = await pool.query<{ walking_speed: import('@dwt/shared').WalkingSpeed; early_entry_eligible: boolean; day_touring_hours: any }>(
-          `SELECT walking_speed, early_entry_eligible, day_touring_hours FROM trips WHERE id = $1`,
+        const tripRes = await pool.query<{
+          walking_speed: import('@dwt/shared').WalkingSpeed;
+          early_entry_eligible: boolean;
+          day_touring_hours: any;
+          walk_wait_weighting: import('@dwt/shared').WalkWaitWeighting;
+        }>(
+          `SELECT walking_speed, early_entry_eligible, day_touring_hours, walk_wait_weighting FROM trips WHERE id = $1`,
           [id]
         );
         const tripRow = tripRes.rows[0];
@@ -1240,8 +1246,49 @@ export function tripRoutes(options: TripRoutesOptions): FastifyPluginAsync {
         const useExtendedEvening = dateSettings?.useExtendedEvening ?? false;
         const hasAfterHoursTicket = dateSettings?.hasAfterHoursTicket ?? false;
         const walkingSpeed = tripRow?.walking_speed ?? 'moderate';
+        const walkWaitWeighting = tripRow?.walk_wait_weighting ?? 'balanced';
         const resolvedStartHour = dateSettings?.startHour ?? startHour;
         const resolvedEndHour = dateSettings?.endHour ?? endHour;
+        const resolvedStartMinutes = startMinutes ?? dateSettings?.startMinutes;
+        const resolvedStartMode = startMode ?? dateSettings?.startMode;
+
+        const isToday = date === wdwToday();
+        const nowMinutes = isToday ? wdwMinutesFromMidnight(date, new Date().toISOString()) : 0;
+        const roundedNow = isToday ? Math.min(Math.ceil(nowMinutes / 15) * 15, 1439) : 0;
+        const defaultOpen = earlyEntryEligible ? 9 * 60 - 30 : 9 * 60;
+        const parkOpenMinutes = (resolvedStartHour !== undefined ? resolvedStartHour * 60 : defaultOpen);
+
+        let effectiveStartMinutes: number | undefined = undefined;
+
+        if (resolvedStartMode === 'now') {
+          if (isToday) {
+            effectiveStartMinutes = roundedNow;
+          }
+        } else if (resolvedStartMode === 'party_mix_in') {
+          effectiveStartMinutes = isToday ? Math.max(16 * 60, roundedNow) : 16 * 60;
+        } else if (resolvedStartMode === 'custom') {
+          const candidate = resolvedStartMinutes ?? (resolvedStartHour !== undefined ? resolvedStartHour * 60 : undefined);
+          effectiveStartMinutes = isToday
+            ? (candidate !== undefined ? Math.max(candidate, roundedNow) : roundedNow)
+            : candidate;
+        } else if (resolvedStartMode === 'park_open') {
+          if (isToday) {
+            effectiveStartMinutes = Math.max(parkOpenMinutes, roundedNow);
+          } else {
+            effectiveStartMinutes = undefined;
+          }
+        } else {
+          if (resolvedStartMinutes !== undefined) {
+            effectiveStartMinutes = isToday ? Math.max(resolvedStartMinutes, roundedNow) : resolvedStartMinutes;
+          } else if (isToday) {
+            effectiveStartMinutes = Math.max(parkOpenMinutes, roundedNow);
+          }
+        }
+
+        // Hard gate: On today, no schedule is ever allowed to start in the past (R9.8)
+        if (isToday && effectiveStartMinutes !== undefined) {
+          effectiveStartMinutes = Math.max(effectiveStartMinutes, roundedNow);
+        }
 
         const expIds = dayItems.map((i) => i.experienceId);
         const expRes = await pool.query<{
@@ -1304,9 +1351,11 @@ export function tripRoutes(options: TripRoutesOptions): FastifyPluginAsync {
           useExtendedEvening,
           hasAfterHoursTicket,
           walkingSpeed,
+          walkWaitWeighting,
           ...(dateSettings?.startingPark ? { startingPark: dateSettings.startingPark } : {}),
           ...(resolvedStartHour !== undefined ? { startHour: resolvedStartHour } : {}),
           ...(resolvedEndHour !== undefined ? { endHour: resolvedEndHour } : {}),
+          ...(effectiveStartMinutes !== undefined ? { startMinutes: effectiveStartMinutes } : {}),
         };
         
         const result = optimize(optInput);

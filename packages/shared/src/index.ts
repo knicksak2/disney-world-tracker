@@ -21,6 +21,7 @@ export {
   SHARE_REACTION_VALUES,
   TRIP_REACTION_VALUES,
   WALKING_SPEEDS,
+  WALK_WAIT_WEIGHTINGS,
   PLANNED_ITEM_TYPES,
   RESERVATION_KINDS,
   PIN_TIERS,
@@ -37,6 +38,7 @@ export type {
   ShareReactionValue,
   TripReactionValue,
   WalkingSpeed,
+  WalkWaitWeighting,
   PlannedItemType,
   ReservationKind,
   PinTier,
@@ -51,6 +53,15 @@ export {
   isAvatarPresetId,
 } from './constants/avatarPresets.js';
 export type { AvatarPresetId } from './constants/avatarPresets.js';
+
+// Navigation & Live-Waits constants
+export {
+  WALK_ON_THRESHOLD_MINUTES,
+  MAX_INLINE_FRIENDS,
+  HEADLINER_THRILL_FACET_VALUES,
+  PARK_LIVE_CACHE_TTL_SECONDS,
+  PARK_LIVE_CACHE_RETENTION_SECONDS,
+} from './constants/navigation.js';
 
 // Error code catalog and uniform JSON envelope.
 export {
@@ -154,6 +165,9 @@ export type {
   FoodListShareRole,
   ShareFoodListInputDTO,
   FoodListShareDTO,
+  ParkLiveEntryDTO,
+  ParkLiveSnapshotDTO,
+  CurrentWeatherDTO,
 } from './dto/index.js';
 
 export {
@@ -261,6 +275,9 @@ export {
   crowdCalendarDaySchema,
   waitSnapshotSchema,
   waitInsightsSchema,
+  parkLiveEntrySchema,
+  parkLiveSnapshotSchema,
+  currentWeatherSchema,
 } from './schemas/index.js';
 
 // Pin-collection schemas.
@@ -367,6 +384,8 @@ export type {
   RodeWithTagState,
   TripFeedTargetType,
   DayTouringHoursDTO,
+  TouringStartMode,
+  OptimizationStartMode,
   MealPeriod,
   // input types
   TripCreateInput,

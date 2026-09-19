@@ -106,8 +106,8 @@ jest.mock('../../../env/notifications', () => ({
 // ---------------------------------------------------------------------------
 
 import RootNavigator from '../../../navigation/RootNavigator';
-import ProfileScreen from '../../ProfileScreen';
 import { AttentionBadge } from '../../../features/notifications/AttentionBadge';
+import { NotificationBell } from '../../../features/notifications/NotificationBell';
 import { useSessionStore } from '../../../state/sessionStore';
 import { apiRequest as mockedApiRequest } from '../../../api/client';
 
@@ -149,19 +149,11 @@ function NotificationCenterSentinel(): JSX.Element {
   return <View testID="notification-center-sentinel" />;
 }
 
-function renderProfile(): ReturnType<typeof render> {
-  return render(
-    <QueryClientProvider client={makeQueryClient()}>
-      <NavigationContainer>
-        <Stack.Navigator screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="ProfileMain" component={ProfileScreen} />
-          <Stack.Screen
-            name="NotificationCenter"
-            component={NotificationCenterSentinel}
-          />
-        </Stack.Navigator>
-      </NavigationContainer>
-    </QueryClientProvider>,
+function BellHostScreen(): JSX.Element {
+  return (
+    <View>
+      <NotificationBell />
+    </View>
   );
 }
 
@@ -209,15 +201,13 @@ describe('Notification_Center navigation / tab entry (R10.1, R10.2, R10.3, R10.4
     useSessionStore.setState({ token: 'token-abc', hydrated: true });
     renderApp();
 
-    // The five expected tabs render as tab-bar labels (React Navigation labels
-    // each tab with its route name by default).
+    // The four expected tabs render as tab-bar labels.
     await waitFor(() => {
       expect(screen.getAllByText('Home').length).toBeGreaterThan(0);
     });
-    expect(screen.getAllByText('Catalog').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Explore').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Trips').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Friends').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Profile').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Vault').length).toBeGreaterThan(0);
 
     // There is NO dedicated Notifications tab in the bottom bar (R10.1).
     expect(screen.queryByText('Notifications')).toBeNull();
@@ -225,43 +215,30 @@ describe('Notification_Center navigation / tab entry (R10.1, R10.2, R10.3, R10.4
   });
 
   // -------------------------------------------------------------------------
-  // R10.2 / R10.5 — Profile_Notifications_Entry opens the Notification_Center
+  // R10.2 / R10.5 — NotificationBell opens the Notification_Center
   // -------------------------------------------------------------------------
-  test('R10.2/R10.5: the Profile notifications entry navigates to the Notification_Center', async () => {
-    apiRequestMock.mockImplementation(async (_method, path) => {
-      if (path === '/me') {
-        return {
-          user: { id: 'u1', email: 'u@x.test' },
-          profile: { displayName: 'Mickey', avatarPreset: null },
-        };
-      }
-      if (path === '/users/u1/profile') {
-        return {
-          userId: 'u1',
-          displayName: 'Mickey',
-          avatarPreset: null,
-          overallCompletionPercent: 42.5,
-        };
-      }
-      if (path === '/me/notification-preferences') {
-        return { pushNotificationsEnabled: true };
-      }
-      return {};
-    });
+  test('R10.2/R10.5: the NotificationBell navigates to the Notification_Center', async () => {
+    render(
+      <QueryClientProvider client={makeQueryClient()}>
+        <NavigationContainer>
+          <Stack.Navigator screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="Main" component={BellHostScreen} />
+            <Stack.Screen
+              name="NotificationCenter"
+              component={NotificationCenterSentinel}
+            />
+          </Stack.Navigator>
+        </NavigationContainer>
+      </QueryClientProvider>,
+    );
 
-    useSessionStore.setState({ token: 'token-abc', hydrated: true });
-    renderProfile();
+    const bell = await screen.findByTestId('notification-bell');
+    expect(bell).toBeTruthy();
 
-    // The Profile_Notifications_Entry appears once the self-mode profile loads.
-    const entry = await screen.findByTestId('profile-open-notifications');
-    expect(entry).toBeTruthy();
-
-    // The center is not open yet.
     expect(screen.queryByTestId('notification-center-sentinel')).toBeNull();
 
-    fireEvent.press(entry);
+    fireEvent.press(bell);
 
-    // Pressing the entry opens the Notification_Center (R10.2, R10.5).
     await waitFor(() => {
       expect(screen.getByTestId('notification-center-sentinel')).toBeTruthy();
     });

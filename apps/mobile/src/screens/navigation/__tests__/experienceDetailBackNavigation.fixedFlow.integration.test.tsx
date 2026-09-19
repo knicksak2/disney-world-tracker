@@ -303,11 +303,11 @@ async function openFromHome(): Promise<void> {
 
 /** Navigate to Stats (re-hosted under Profile), open ExperiencesDetail, open the row. */
 async function openFromStats(): Promise<void> {
-  // Stats is re-hosted under the Profile tab (trips R17): reach it via the
-  // Profile tab's nested `Stats` route rather than a top-level Stats tab.
+  // Stats is re-hosted under the Collection tab (Requirement 6.1): reach it via the
+  // Collection tab's nested `Stats` route.
   act(() => {
     navRef.navigate('MainTabs', {
-      screen: 'Profile',
+      screen: 'Collection',
       params: { screen: 'Stats' },
     });
   });
@@ -317,15 +317,12 @@ async function openFromStats(): Promise<void> {
   fireEvent.press(await screen.findByTestId('own-experience-row-0'));
 }
 
-/** Push the Friend profile inside the Friends tab, then open the row. */
+/** Push the Friend profile inside YouAndCrewStack, then open the row. */
 async function openFromFriend(): Promise<void> {
   act(() => {
-    navRef.navigate('MainTabs', {
-      screen: 'Friends',
-      params: {
-        screen: 'FriendProfile',
-        params: { friendId: FRIEND_ID, displayName: DISPLAY_NAME },
-      },
+    navRef.navigate('YouAndCrew', {
+      screen: 'FriendProfile',
+      params: { friendId: FRIEND_ID, displayName: DISPLAY_NAME },
     });
   });
   await screen.findByTestId('friend-profile-screen');
@@ -334,10 +331,10 @@ async function openFromFriend(): Promise<void> {
   fireEvent.press(await screen.findByTestId('friend-experience-row-0'));
 }
 
-/** Navigate to the Catalog tab and open a detail via the global search. */
+/** Navigate to the Explore tab and open a detail via the global search. */
 async function openFromCatalog(): Promise<void> {
   act(() => {
-    navRef.navigate('MainTabs', { screen: 'Catalog' });
+    navRef.navigate('MainTabs', { screen: 'Explore' });
   });
   // The redesigned Catalog_Home (catalog-navigation-redesign) is a Destination
   // grid; the real production call site that pushes `ExperienceDetail` from the
@@ -447,12 +444,12 @@ describe('Fixed flow — prior tab and mode restored after a return', () => {
   test('Stats retains its ExperiencesDetail screen across an open + themed-back round-trip', async () => {
     renderApp();
 
-    // Switch to Stats (re-hosted under the Profile tab, trips R17) and drill
+    // Switch to Stats (re-hosted under the Collection tab) and drill
     // into the ExperiencesDetail screen before navigating to the detail (a
     // deliberate non-default tab + screen).
     act(() => {
       navRef.navigate('MainTabs', {
-        screen: 'Profile',
+        screen: 'Collection',
         params: { screen: 'Stats' },
       });
     });

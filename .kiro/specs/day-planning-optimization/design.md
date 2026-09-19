@@ -69,6 +69,7 @@ graph TD
 
 #### `optimizer.ts`
 - `optimize(input: OptimizeInput): OptimizeResult` — greedy seed, then or-opt (relocate one item) and 2-opt (reverse a segment) local search, re-simulating downstream arrivals after each move; a fixed number of seeded random restarts keeps the best. Respects `is_fixed` anchors, `is_lightning_lane` minimal waits with 1-hour return window flexibility (valid arrival range: `[start - 5m, start + 75m]` incorporating Disney's 5-minute early and 15-minute late grace periods), priorities, park hours, the 45-minute transit penalty, and pace-scaled travel.
+- **Walk/wait weighting (Requirement 10):** `input.walkWaitWeighting` (`'balanced' | 'minimize_walking' | 'minimize_waits'`, default `'balanced'`) resolves via `WALK_WAIT_WEIGHT_PRESETS` to a `{ waitWeight, walkWeight }` pair. `simulate()`'s returned `cost` is `waitWeight * totalWait + walkWeight * totalWalk + penalty` (penalty terms — fixed-item infeasibility, expired LL, outside-window, show-miss, adjacency, starting-park mismatch — remain unweighted so hard/soft constraints are never softened by the preference). This only changes which sequence the greedy/local-search/restart machinery selects as "best"; the reported `OptimizeResult.totalWaitMinutes`/`totalWalkMinutes` always carry the true unweighted minutes of the chosen sequence (Property 21).
 - **Experience-type handling** (from the `WaitSnapshot`): a show is scheduled to a showtime with its wait = time-to-next-show; a virtual-queue ride is not standby-optimized but flagged for boarding-group signup; a `use_single_rider` item uses the single-rider wait. Each such item is labeled in the result so the timeline can explain it.
 - Consumes a prefetched `WaitSnapshot` (from the Prediction_Service) plus coordinates; performs no I/O.
 
@@ -95,6 +96,14 @@ graph TD
   - `optimized_at TIMESTAMPTZ` — when this item was last part of an optimize run.
 - These columns are set together by the optimize route's persistence step and cleared together when an item is manually edited (R8.4).
 
+### Migration `0045_trip_walk_wait_weighting.sql`
+
+- `trips`: add `walk_wait_weighting TEXT NOT NULL DEFAULT 'balanced'` with `CHECK (walk_wait_weighting IN ('balanced', 'minimize_walking', 'minimize_waits'))`, mirroring the existing `walking_speed` column/constraint pair from `0019_planned_item_scheduling.sql`.
+
+### Migration `0046_curated_attraction_durations.sql`
+
+- Data-only migration (no schema change): `UPDATE experiences SET duration_minutes = <curated value> WHERE upstream_entity_id = '<Enterprise_Id>'` for each attraction in the Requirement 11.4 curated set. Idempotent on reapply (setting the same value twice is a no-op). Never overwritten by catalog sync (R11.3) — `duration_minutes` is not a field `sync.ts` writes.
+
 ### Migration `0027_planned_items_soft_windows.sql`
 
 - `planned_items`:
@@ -120,10 +129,12 @@ graph TD
   - `predictedWaitMinutes: number | null`
   - `travelFromPrev: { kind: 'walk' | 'park_hop'; minutes: number } | null`
   - `optimizedAt: string | null`
+  - `catalogDurationMinutes: number | null` — read-projection of `experiences.duration_minutes` for the linked Experience (R11.6); never accepted on `plannedItemAddSchema`/`plannedItemEditSchema` (a curated catalog value, not user input).
 - `plannedItemAddSchema` / `plannedItemEditSchema`:
   - `superRefine` rule: when `experienceId == null`, require `itemType === 'break'` and a non-empty `customTitle`.
   - Window validation: `windowEndMinutes >= windowStartMinutes`.
 - `TripOptimizationInput`: `{ date }`.
+- `WalkWaitWeighting` (`WALK_WAIT_WEIGHTINGS` in `@dwt/shared` enums): `'balanced' | 'minimize_walking' | 'minimize_waits'`. `TripDTO.walkWaitWeighting?: WalkWaitWeighting`; `tripEditSchema` accepts an optional `walkWaitWeighting` field validated the same way as `walkingSpeed`. `OptimizeInput.walkWaitWeighting?: WalkWaitWeighting` (default `'balanced'` when omitted, mirroring how `walkingSpeed` defaults to `'moderate'`).
 - `TripOptimizationResult`: `{ items: OptimizedItem[]; totalWaitMinutes; totalWalkMinutes; unfittedItemIds; warnings }`, where `OptimizedItem` carries `plannedItemId`, `suggestedArrival`, `predictedWaitMinutes`, `scheduledShowtime`, and `travelFromPrev`.
 - `WaitSnapshot` is imported from the crowd-calendar shared contracts, carrying `showtimesAreTypical?: boolean`.
 
@@ -135,7 +146,7 @@ graph TD
 **Validates: Requirements 3.3**
 
 ### Property 2: The simulated timeline is monotonic and self-consistent
-*For any* result, each item's arrival ≥ previous item's `arrival + wait + duration + travel`, and predicted waits are read from the snapshot at each item's own simulated arrival hour.
+*For any* result, each item's arrival ≥ previous item's `arrival + wait + duration + travel`, and predicted waits are read from the snapshot at each item's own simulated arrival hour. (R3.2's cost formula is now resolved through `walkWaitWeighting` per Requirement 10 / Property 21; this property is about timeline consistency and is unaffected by which weighting preset is active.)
 
 **Validates: Requirements 3.1, 3.2**
 
@@ -179,6 +190,11 @@ graph TD
 
 **Validates: Requirements 3.11, 3.12**
 
+### Property 24: The rope-drop ramp anchor is the park's fixed schedule, never `startMinutes`
+*For any* `startMinutes` (where the simulated sequence's clock begins — R9.3/R9.8 clamp this to the current WDW time for a live "Right Now" optimize on today, which on a mid-day request is well after the park has opened), the rope-drop ramp's anchor for a given item (official open, or early-entry open for an early-entry Experience on an early-entry day) is computed strictly from the park's own schedule (`startHour`/`earlyEntryEligible`) and never from `startMinutes`. Consequently, whichever item lands first in a sequence does NOT automatically read as "arriving at minute 0 of rope drop" merely by being first — only an item whose REAL arrival time falls within 30 minutes of its own true anchor receives the walk-on-floor discount, regardless of how late `startMinutes` (and therefore the sequence's actual start) is. This is the fix for the defect where a mid-day "Right Now" optimize (e.g. 9:15 AM, long after an 8:00 official / 7:30 early-entry open) still discounted whichever ride was scheduled first down to the 5-minute walk-on floor.
+
+**Validates: Requirements 3.11, 3.12**
+
 ### Property 11: Late-window availability gates scheduling into the extensions
 *For any* day using Extended Evening, an Experience with `operatesDuringExtendedEvening !== true` never completes after base close; *for any* day with an after-hours ticket, an Experience with `operatesDuringTicketedEvent !== true` never completes after base close; and an eligible Experience may complete up to base close plus the extension(s) it qualifies for. On a day with no active extension the flags have no effect.
 
@@ -190,7 +206,7 @@ graph TD
 **Validates: Requirements 2.7, 2.8, 3.15**
 
 ### Property 13: Duration precedence and zero queue wait for non-ride categories
-*For any* item, queue wait is `0` for all non-ride categories (dining, resorts, recreation, spas, tours, events, other) and breaks (`item_type = 'break'`). ONLY ride-like categories (`category === 'Ride'` or `'Character_Meet'`) model standby queue wait and `DEFAULT_RIDE_DUR` (15). Duration precedence is strictly: (1) `item.durationMinutes` override if non-null; (2) `DEFAULT_BREAK_DUR` (60) for breaks; (3) `sub_type` defaults (30 Quick / 60 Table / 90 Signature) for dining; (4) `catalogDurationMinutes ?? DEFAULT_SHOW_DURATION_MIN` (30) for shows and parades; (5) `item.catalogDurationMinutes ?? 60` for non-ride catalog categories (Resort, Recreation, Spa, Tour, Event); (6) `DEFAULT_RIDE_DUR` (15) for rides.
+*For any* item, queue wait is `0` for all non-ride categories (dining, resorts, recreation, spas, tours, events, other) and breaks (`item_type = 'break'`). ONLY ride-like categories (`category === 'Ride'` or `'Character_Meet'`) model standby queue wait. Duration precedence is strictly: (1) `item.durationMinutes` override if non-null; (2) `DEFAULT_BREAK_DUR` (60) for breaks; (3) `sub_type` defaults (30 Quick / 60 Table / 90 Signature) for dining; (4) `catalogDurationMinutes ?? DEFAULT_SHOW_DURATION_MIN` (30) for shows and parades; (5) `item.catalogDurationMinutes ?? 60` for non-ride catalog categories (Resort, Recreation, Spa, Tour, Event); (6) `item.catalogDurationMinutes ?? DEFAULT_RIDE_DUR` (15) for rides — amended by Requirement 11 / Property 22, which adds the curated-catalog-duration branch rides previously skipped, aligning them with every other category's precedence; the flat `DEFAULT_RIDE_DUR` fallback itself is unchanged.
 
 **Validates: Requirements 2.4, 3.14, 3.16**
 
@@ -224,6 +240,26 @@ graph TD
 
 **Validates: Requirements 4.12, 4.15**
 
+### Property 20: Intent-Based and Live Arrival Optimization Anchoring
+*For any* `startMinutes` value (0..1439), arrival of the first scheduled item in `OptimizeResult` is greater than or equal to `startMinutes`. *For any* request with `startMode: 'party_mix_in'`, earliest arrival is greater than or equal to `960` (16:00 / 4:00 PM ET). *For any* request with `startMode: 'now'` on `wdwToday()`, earliest arrival is greater than or equal to `Math.ceil(nowMinutes / 15) * 15`. *For any* request on `wdwToday()`, regardless of `startMode` or `startMinutes` input, effective start minutes and earliest arrival are strictly greater than or equal to `Math.ceil(nowMinutes / 15) * 15`, preventing any schedule on today from starting in the past.
+
+**Validates: Requirements 9.1, 9.2, 9.3, 9.4, 9.5, 9.8**
+
+### Property 21: Walk/wait weighting biases search without corrupting reported totals
+*For any* fixed input with at least one relocatable flexible item (i.e. a non-trivial search space), running `optimize` under `minimize_waits` never produces a strictly worse `totalWaitMinutes` than the same input run under `minimize_walking`, and running `optimize` under `minimize_walking` never produces a strictly worse `totalWalkMinutes` than the same input run under `minimize_waits` — the weighting measurably steers the chosen sequence toward its named dimension. *For any* input, `optimize` under `balanced` (or with `walkWaitWeighting` omitted) produces byte-identical `OptimizeResult.items`, `totalWaitMinutes`, and `totalWalkMinutes` to the pre-Requirement-10 unweighted implementation on that same input. *For any* input and any `walkWaitWeighting`, `OptimizeResult.totalWaitMinutes` and `totalWalkMinutes` equal the true unweighted minutes summed along the chosen sequence (never scaled by `waitWeight`/`walkWeight`); only the internal cost used to rank candidate sequences during search is weighted.
+
+**Validates: Requirements 10.2, 10.3, 10.5**
+
+### Property 22: Curated catalog duration overrides the flat ride default
+*For any* item with `category === 'Ride'` or `'Character_Meet'` and no user-supplied `durationMinutes`, `resolveDefaultDuration` returns `item.catalogDurationMinutes` whenever it is non-null, and `DEFAULT_RIDE_DUR` only when `catalogDurationMinutes` is null — a non-null curated value is never silently discarded in favor of the flat default, and no curated value is ever used when a user override is present. *For any* of the initial curated Animal Kingdom attractions (Requirement 11.4), a fixture whose `catalogDurationMinutes` matches the curated value resolves to exactly that value, not `DEFAULT_RIDE_DUR`.
+
+**Validates: Requirements 11.1, 11.4**
+
+### Property 23: The duration pill displays the actual resolved duration, never a stale hardcoded fallback
+*For any* `PlannedItemDTO` with a non-null `catalogDurationMinutes` and a null `durationMinutes`, the Schedule Builder timeline's duration pill renders that `catalogDurationMinutes` value, not the generic per-category display fallback (previously `${item.durationMinutes || 15}m duration`, which silently ignored `catalogDurationMinutes` and always showed `15m` for any ride without a user override — the exact defect this property guards). *For any* item with a non-null `durationMinutes` (user override), the pill renders that value regardless of `catalogDurationMinutes`.
+
+**Validates: Requirements 11.6**
+
 ## Error Handling
 
 - **Prediction_Service fallback/failure:** the optimizer uses whatever snapshot is returned (including a model-only fallback for far-future dates) and never fails for want of live data (R1.3).
@@ -234,12 +270,13 @@ graph TD
 
 ## Testing Strategy
 
-- **Property-based (`fast-check`, ≥100 runs, tagged `Feature: day-planning-optimization, Property N`):** the properties above, against `optimizer.ts` and `travel.ts` with a stubbed `WaitSnapshot`.
+- **Property-based (`fast-check`, ≥100 runs, tagged `Feature: day-planning-optimization, Property N`):** the properties above, against `optimizer.ts` and `travel.ts` with a stubbed `WaitSnapshot`. Property 21 additionally requires an input shape with at least one non-fixed, relocatable flexible item and a genuine walk/wait tradeoff (e.g. two candidate orderings where one has materially lower total wait and the other materially lower total walk) so the three weighting presets can actually diverge; a trivial single-item or fully-fixed input is not a useful case for this property and should be excluded from the arbitrary.
 - **Migration test (`migration0027.test.ts`):** `planned_items` columns (`custom_title`, `window_start_minutes`, `window_end_minutes`, `meal_period`, `scheduled_showtime`) apply, and `experience_id` is nullable.
 - **Migration test (`migration0028.test.ts`):** `chk_planned_items_meal_period` accepts `'snack'` and rejects unknown values.
 - **Repo (pg-mem):** `addPlannedItem` and `editPlannedItem` persist and read back soft window columns, `meal_period`, `custom_title`, null `experience_id`, `scheduled_showtime`, and enforce mutual exclusion between exact times and soft windows.
 - **Integration (`server.inject`):** optimize route scopes items to `planned_date = date`, leaving other dates untouched.
 - **Mobile:** `@testing-library/react-native` tests driving tab switching (Rides, Shows, Dining, Break), break addition, meal period selection, showtime selection, 3-state timing mode, and ExperiencePicker search query integration without secondary destructive client filtering (R4.16).
+- **Migration test (`migration0046.test.ts`):** each curated attraction's `duration_minutes` is set to its documented value after the migration applies; an experience not in the curated set is unaffected (still `null` or its prior value).
 
 ## Configuration & Constants
 
@@ -259,3 +296,5 @@ graph TD
 - **Lightning Lane item wait:** modeled as a fixed `10` min (return + board).
 - **Limits & budget:** max `20` items per day per request; return within `2` s.
 - **Search:** greedy seed → or-opt + 2-opt local search; `50` iterations cap and `5` seeded random restarts (fixed seed `42` for determinism).
+- **Walk/wait weighting (`WALK_WAIT_WEIGHT_PRESETS`):** `balanced` → `{ waitWeight: 1.0, walkWeight: 1.0 }` (default); `minimize_waits` → `{ waitWeight: 1.0, walkWeight: 0.3 }`; `minimize_walking` → `{ waitWeight: 0.3, walkWeight: 1.0 }`. The de-prioritized dimension keeps a nonzero `0.3` weight rather than `0` so the search does not accept arbitrarily large walks/waits to shave a small amount of the prioritized dimension.
+- **Curated attraction durations (minutes, initial set, keyed by `upstream_entity_id`; R11.4):** Avatar Flight of Passage (`18665186;entityType=Attraction`) `12`; Na'vi River Journey (`18665185;entityType=Attraction`) `5`; Kilimanjaro Safaris (`80010157;entityType=Attraction`) `20`; Expedition Everest - Legend of the Forbidden Mountain (`26068;entityType=Attraction`) `4`; Zootopia: Better Zoogether! - NEW! (`412430582;entityType=Attraction`) `9`. Sourced from public reference material (official Disney ride-length statements and published attraction guides), representing total guest-facing experience time (ride/show cycle plus any fixed pre-show), not raw ride-vehicle-cycle time alone.

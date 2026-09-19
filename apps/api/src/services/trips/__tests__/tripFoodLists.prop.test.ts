@@ -127,6 +127,7 @@ describe('Trip Food Lists — Property 27', { timeout: 120_000 }, () => {
     applyMigration(db, '0016_trip_resorts.sql');
     applyMigration(db, '0019_planned_item_scheduling.sql');
     applyMigration(db, '0023_trip_touring_hours.sql');
+    applyMigration(db, '0045_trip_walk_wait_weighting.sql');
     applyMigration(db, '0040_food_item_logging.sql');
     applyMigration(db, '0041_food_lists.sql');
     applyMigration(db, '0042_trip_food_lists.sql');

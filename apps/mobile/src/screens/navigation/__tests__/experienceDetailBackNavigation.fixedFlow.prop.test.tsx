@@ -239,11 +239,11 @@ async function openFromHome(): Promise<void> {
 }
 
 async function openFromStats(): Promise<void> {
-  // Stats is re-hosted under the Profile tab (trips R17): reach it via the
-  // Profile tab's nested `Stats` route rather than a top-level Stats tab.
+  // Stats is re-hosted under the Collection tab (Requirement 6.1): reach it via the
+  // Collection tab's nested `Stats` route.
   act(() => {
     navRef.navigate('MainTabs', {
-      screen: 'Profile',
+      screen: 'Collection',
       params: { screen: 'Stats' },
     });
   });
@@ -257,12 +257,9 @@ async function openFromStats(): Promise<void> {
 
 async function openFromFriend(): Promise<void> {
   act(() => {
-    navRef.navigate('MainTabs', {
-      screen: 'Friends',
-      params: {
-        screen: 'FriendProfile',
-        params: { friendId: FRIEND_ID, displayName: DISPLAY_NAME },
-      },
+    navRef.navigate('YouAndCrew', {
+      screen: 'FriendProfile',
+      params: { friendId: FRIEND_ID, displayName: DISPLAY_NAME },
     });
   });
   await screen.findByTestId('friend-profile-screen');

@@ -69,11 +69,12 @@
  * 5.3, 5.4, 5.5, 5.6, 5.7, 9.9, 10.1, 10.2, 10.3, 10.6, 10.7
  */
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
   Image,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -83,12 +84,13 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import type { CompositeScreenProps } from '@react-navigation/native';
+import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import type { ExperienceCategory, ExperienceDTO } from '@dwt/shared';
 
 import { ApiError, apiRequest } from '../../api/client';
-import type { CatalogStackParamList } from '../../navigation/CatalogStack';
+import type { ExploreStackParamList } from '../../navigation/ExploreStack';
 import type { RootStackParamList } from '../../navigation/RootNavigator';
 import { theme } from '../../theme/theme';
 import {
@@ -108,6 +110,17 @@ import { priceTierListTag, resortAreaLabel } from './infoTags';
 import { browseLandOf } from './catalogGrouping';
 import { useCardFocusRestore, useResultCountAnnouncement } from './catalogFocus';
 import { useCompletedExperiences } from './useCompletedExperiences';
+import AvatarChip from '../navigation/AvatarChip';
+import NotificationBell from '../../features/notifications/NotificationBell';
+
+function HeaderActions(): JSX.Element {
+  return (
+    <View style={styles.headerActions}>
+      <NotificationBell tintColor={theme.color.textOnPrimary} />
+      <AvatarChip tintColor={theme.color.textOnPrimary} />
+    </View>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -122,7 +135,7 @@ import { useCompletedExperiences } from './useCompletedExperiences';
  * `RootStack` for a tapped search result (R5.4, R10.7).
  */
 type Props = CompositeScreenProps<
-  NativeStackScreenProps<CatalogStackParamList, 'CatalogList'>,
+  NativeStackScreenProps<ExploreStackParamList, 'CatalogList'>,
   NativeStackScreenProps<RootStackParamList>
 >;
 
@@ -230,6 +243,27 @@ export default function CatalogScreen({ navigation }: Props): JSX.Element {
     retry: false,
   });
 
+  // Bottom tabs stay mounted across navigation (they never unmount on blur),
+  // so returning to this screen after visiting another tab does not remount
+  // it or re-run the initial `useQuery` fetch. Without an explicit refetch on
+  // focus, a `destinationsQuery`/`searchQuery` that failed (e.g. a transient
+  // `429` from the gateway rate limiter) would sit in that failed state
+  // forever, even long after the condition that caused it has cleared —
+  // `retry: false` only disables react-query's automatic retry loop, it does
+  // not preclude a fresh manual attempt. This mirrors `TripsListScreen`'s
+  // refetch-on-focus pattern so a stale error clears the moment the User
+  // comes back to the tab, not never.
+  const { refetch: refetchDestinations } = destinationsQuery;
+  const { refetch: refetchSearch } = searchQuery;
+  useFocusEffect(
+    useCallback(() => {
+      void refetchDestinations();
+      if (searchActive) {
+        void refetchSearch();
+      }
+    }, [refetchDestinations, refetchSearch, searchActive]),
+  );
+
   // Index the count entries by Destination id so each card can look up its
   // count in O(1); a Destination with no entry falls back to zero (R4.6).
   const countById = useMemo<ReadonlyMap<DestinationId, number>>(() => {
@@ -294,9 +328,10 @@ export default function CatalogScreen({ navigation }: Props): JSX.Element {
   return (
     <ScreenContainer>
       <GradientHeader
-        title="Catalog"
+        title="Explore"
         subtitle="Where would you like to explore?"
-        icon="map"
+        icon="compass"
+        right={<HeaderActions />}
       />
 
       {/* Always-visible search control (R5.1, R12.4). */}
@@ -358,6 +393,8 @@ export default function CatalogScreen({ navigation }: Props): JSX.Element {
           destinationsQuery={destinationsQuery}
           countById={countById}
           registerCardRef={registerCardRef}
+          onOpenLiveWaits={() => navigation.navigate('LiveWaits')}
+          onOpenCrowdCalendar={() => navigation.navigate('CrowdCalendar')}
           onSelectDestination={(destination) => {
             // R12.7: remember which card opened the Destination_Screen so focus
             // can be restored to it on back.
@@ -380,6 +417,8 @@ function GridBody({
   destinationsQuery,
   countById,
   registerCardRef,
+  onOpenLiveWaits,
+  onOpenCrowdCalendar,
   onSelectDestination,
 }: {
   readonly destinationsQuery: {
@@ -388,6 +427,8 @@ function GridBody({
   };
   readonly countById: ReadonlyMap<DestinationId, number>;
   readonly registerCardRef: (id: DestinationId) => (node: View | null) => void;
+  readonly onOpenLiveWaits: () => void;
+  readonly onOpenCrowdCalendar: () => void;
   readonly onSelectDestination: (destination: Destination) => void;
 }): JSX.Element {
   const showLoading =
@@ -408,6 +449,53 @@ function GridBody({
       testID="catalog-destination-grid"
       keyboardShouldPersistTaps="handled"
     >
+      <View style={styles.liveWaitsBannerWrap} testID="jump-in-live-waits">
+        <Card style={styles.liveWaitsBanner} accentColor="#0284c7">
+          <Pressable
+            style={styles.liveWaitsBannerRow}
+            onPress={onOpenLiveWaits}
+            accessibilityRole="button"
+            accessibilityLabel="Live Ride Waits and Queues. Real-time line times across all four parks."
+            testID="jump-in-live-waits-button"
+          >
+            <View style={styles.liveWaitsIcon}>
+              <Ionicons name="time-outline" size={20} color={theme.color.textOnPrimary} />
+            </View>
+            <View style={styles.liveWaitsText}>
+              <Text style={styles.liveWaitsTitle}>Live Ride Waits &amp; Queues</Text>
+              <Text style={styles.liveWaitsSub}>
+                Real-time line times across all 4 parks
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#0369a1" />
+          </Pressable>
+        </Card>
+      </View>
+
+      <View style={styles.calendarBannerWrap} testID="jump-in-crowd-calendar">
+        <Card style={styles.calendarBanner}>
+          <Pressable
+            style={styles.calendarBannerRow}
+            onPress={onOpenCrowdCalendar}
+            accessibilityRole="button"
+            accessibilityLabel="Crowd Calendar and Best Days. Day-by-day crowd projections."
+            testID="jump-in-crowd-calendar-button"
+          >
+            <View style={styles.calendarIcon}>
+              <Ionicons name="calendar-outline" size={18} color="#92400e" />
+            </View>
+            <View style={styles.liveWaitsText}>
+              <Text style={styles.calendarTitle}>Crowd Calendar &amp; Best Days</Text>
+              <Text style={styles.calendarSub}>Day-by-day crowd projections</Text>
+            </View>
+            <Ionicons
+              name="chevron-forward"
+              size={18}
+              color={theme.color.textSecondary}
+            />
+          </Pressable>
+        </Card>
+      </View>
       {DESTINATIONS.map((destination) => (
         <DestinationCard
           key={destination.id}
@@ -828,7 +916,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.lg,
     paddingTop: theme.spacing.md,
     paddingBottom: theme.spacing.sm,
-    marginTop: -theme.layout.headerOverlap,
   },
   searchWrap: {
     flexDirection: 'row',
@@ -971,5 +1058,82 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: theme.spacing.sm,
     marginTop: theme.spacing.xs,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+  },
+  liveWaitsBannerWrap: {
+    width: '100%',
+    paddingHorizontal: theme.spacing.sm,
+    marginBottom: theme.spacing.sm,
+  },
+  liveWaitsBanner: {
+    backgroundColor: '#f0fdf4',
+    borderColor: '#bae6fd',
+    borderWidth: 1,
+    padding: 0,
+    overflow: 'hidden',
+  },
+  liveWaitsBannerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.md,
+    padding: theme.spacing.md,
+  },
+  liveWaitsIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: theme.radius.md,
+    backgroundColor: '#0284c7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  liveWaitsText: {
+    flex: 1,
+  },
+  liveWaitsTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0369a1',
+  },
+  liveWaitsSub: {
+    fontSize: 12,
+    color: '#0284c7',
+    marginTop: 2,
+  },
+  calendarBannerWrap: {
+    width: '100%',
+    paddingHorizontal: theme.spacing.sm,
+    marginBottom: theme.spacing.sm,
+  },
+  calendarBanner: {
+    padding: 0,
+    overflow: 'hidden',
+  },
+  calendarBannerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.md,
+    padding: theme.spacing.md,
+  },
+  calendarIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: theme.radius.md,
+    backgroundColor: '#fef3c7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  calendarTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: theme.color.textPrimary,
+  },
+  calendarSub: {
+    fontSize: 12,
+    color: theme.color.textSecondary,
+    marginTop: 2,
   },
 });

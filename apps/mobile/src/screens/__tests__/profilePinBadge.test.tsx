@@ -1,10 +1,8 @@
 /**
- * Profile-screen claimable-Pin badge test (pin-collection Requirement 22.3, 22.4).
+ * Claimable-Pin badge and collection entry tests (pin-collection Requirement 22.3, 22.4, navigation-redesign Requirement 6.1, 6.4).
  *
- * Mirrors the existing Profile_Notifications_Entry badge (`profile-notifications-badge`): the
- * "View your pins" entry on the Profile screen itself shows a small count badge whenever at
- * least one Pin is ready to claim, sourced from the same `['me','pins']` cache the Pin Board and
- * the Profile-tab icon read, so all three surfaces can never disagree.
+ * Tests that CollectionScreen displays the claimable Pin badge when pins are ready to claim,
+ * hides it when zero, and provides the Food & Dining entry point.
  */
 import React from 'react';
 import { render, screen } from '@testing-library/react-native';
@@ -34,7 +32,7 @@ jest.mock('../../env/notifications', () => ({
   loadNotifications: () => null,
 }));
 
-import ProfileScreen from '../ProfileScreen';
+import CollectionScreen from '../collection/CollectionScreen';
 import { apiRequest as mockedApiRequest } from '../../api/client';
 import { useSessionStore } from '../../state/sessionStore';
 import { PINS, type PinBoardDTO, type UserPinProgressDTO } from '@dwt/shared';
@@ -58,23 +56,22 @@ function boardOf(pins: UserPinProgressDTO[]): PinBoardDTO {
     pins,
     tierSummary: [],
     totalUnlocked: pins.filter((p) => p.unlocked).length,
-    totalPins: pins.length,
+    totalPins: PINS.length,
     overallPercent: 0,
   };
 }
 
-function makeQueryClient(): QueryClient {
-  return new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
-}
-
 const Stack = createNativeStackNavigator();
 
-function renderProfile(): ReturnType<typeof render> {
+function renderCollection(): ReturnType<typeof render> {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: 0 } },
+  });
   return render(
-    <QueryClientProvider client={makeQueryClient()}>
+    <QueryClientProvider client={client}>
       <NavigationContainer>
         <Stack.Navigator screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="ProfileMain" component={ProfileScreen} />
+          <Stack.Screen name="CollectionHome" component={CollectionScreen} />
         </Stack.Navigator>
       </NavigationContainer>
     </QueryClientProvider>,
@@ -89,20 +86,12 @@ function mockApi(board: PinBoardDTO): void {
         profile: { displayName: 'Mickey', avatarPreset: null },
       } as never;
     }
-    if (path === '/users/u1/profile') {
-      return {
-        userId: 'u1',
-        displayName: 'Mickey',
-        avatarPreset: null,
-        overallCompletionPercent: 42.5,
-      } as never;
-    }
     if (path === '/me/pins') return board as never;
     return {} as never;
   });
 }
 
-describe('Profile screen — claimable-Pin badge on "View your pins"', () => {
+describe('Collection screen — claimable-Pin badge on Pins & Badges card', () => {
   beforeEach(() => {
     apiRequestMock.mockReset();
     useSessionStore.setState({ token: 'token-abc', hydrated: true });
@@ -111,26 +100,26 @@ describe('Profile screen — claimable-Pin badge on "View your pins"', () => {
   it('shows the exact claimable count on the pin-collection entry', async () => {
     const pinId = PINS[0]!.id;
     mockApi(boardOf([readyProg(pinId)]));
-    renderProfile();
+    renderCollection();
 
-    await screen.findByTestId('profile-view-pins');
-    const badge = await screen.findByTestId('profile-pins-badge');
-    expect(badge).toHaveTextContent('1');
+    await screen.findByTestId('collection-pins-card');
+    const badge = await screen.findByTestId('claimable-pins-badge');
+    expect(badge).toHaveTextContent('1 to claim');
   });
 
   it('hides the badge when no pin is ready to claim', async () => {
     mockApi(boardOf([]));
-    renderProfile();
+    renderCollection();
 
-    await screen.findByTestId('profile-view-pins');
-    expect(screen.queryByTestId('profile-pins-badge')).toBeNull();
+    await screen.findByTestId('collection-pins-card');
+    expect(screen.queryByTestId('claimable-pins-badge')).toBeNull();
   });
 
-  it('renders "View your food history" button on profile (Requirement 8.3)', async () => {
+  it('renders Food & Dining card on CollectionScreen (Requirement 6.1)', async () => {
     mockApi(boardOf([]));
-    renderProfile();
+    renderCollection();
 
-    const btn = await screen.findByTestId('profile-view-food-history');
+    const btn = await screen.findByTestId('food-entry-button');
     expect(btn).toBeTruthy();
   });
 });

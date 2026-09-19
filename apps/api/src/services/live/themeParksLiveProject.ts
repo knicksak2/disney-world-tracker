@@ -434,7 +434,7 @@ function projectDiningAvailability(
  * valid; returns `undefined` when no sub-field is valid so the field is omitted
  * entirely rather than emitted empty (R11.8).
  */
-function projectLightningLane(
+export function projectLightningLane(
   input: ThemeParksLiveInput,
 ): LightningLaneState | undefined {
   const source =

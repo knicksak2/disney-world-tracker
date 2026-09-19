@@ -24,9 +24,44 @@
  *   npm run sync
  */
 
-import { closePool } from '../db/pool.js';
+import { closePool, getPool } from '../db/pool.js';
 import { closeRedisClient } from '../redis/client.js';
 import { runSync } from '../services/catalog/sync.js';
+import { createCatalogRepo } from '../services/catalog/repo.js';
+import { resolveDiningLinksSeedPath } from './seedDiningLinksPath.js';
+import {
+  diffDiningLinkCandidates,
+  formatDiningLinkCandidateReport,
+  readSeedEntries,
+} from '../services/catalog/diningLinkCandidates.js';
+
+/**
+ * Post-sync dining-link-candidate check (restaurant-menu-display follow-up).
+ *
+ * Detection-only: reports Restaurant Experiences that are newly eligible for
+ * curation (they match the `reservations-accepted` facet rule but have no
+ * entry in the curated seed) so a human can look up and add the real Disney
+ * dining-page URL. Never guesses or writes a URL itself — see
+ * `diningLinkCandidates.ts`'s module doc for why. Failures here are logged
+ * and swallowed rather than failing the sync; this check is a convenience,
+ * not part of Catalog_Sync's own correctness.
+ */
+async function reportNewDiningLinkCandidates(): Promise<void> {
+  try {
+    const repo = createCatalogRepo(getPool());
+    const [candidates, seedEntries] = await Promise.all([
+      repo.listDiningLinkEligibleRestaurants(),
+      readSeedEntries(resolveDiningLinksSeedPath()),
+    ]);
+    const newCandidates = diffDiningLinkCandidates(candidates, seedEntries);
+    const report = formatDiningLinkCandidateReport(newCandidates);
+    if (report) {
+      console.log(`\n${report}`);
+    }
+  } catch (err) {
+    console.error('[dining-links] candidate check failed (non-fatal):', err);
+  }
+}
 
 async function main(): Promise<void> {
   try {
@@ -39,6 +74,7 @@ async function main(): Promise<void> {
             `entitiesProcessed=${result.entitiesProcessed} ` +
             `upserts=${result.upserts} softDeletes=${result.softDeletes}`,
         );
+        await reportNewDiningLinkCandidates();
         break;
       case 'skipped':
         console.log(

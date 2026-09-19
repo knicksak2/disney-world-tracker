@@ -34,6 +34,12 @@ export interface AvatarPickerProps {
    * selection so the parent can update its cached Profile without a refetch.
    */
   readonly onChanged: (profile: ProfileDTO) => void;
+  /** When controlled by a parent component. */
+  readonly isOpen?: boolean;
+  /** Callback when open state changes. */
+  readonly onOpenChange?: (open: boolean) => void;
+  /** Whether to render the default SecondaryButton trigger. Defaults to true. */
+  readonly showDefaultTrigger?: boolean;
 }
 
 type Status =
@@ -44,14 +50,28 @@ type Status =
 export default function AvatarPicker({
   currentPreset,
   onChanged,
+  isOpen,
+  onOpenChange,
+  showDefaultTrigger = true,
 }: AvatarPickerProps): JSX.Element {
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = isOpen !== undefined ? isOpen : internalOpen;
+
+  const setOpenState = (next: boolean | ((prev: boolean) => boolean)) => {
+    const resolved = typeof next === 'function' ? next(open) : next;
+    if (onOpenChange) {
+      onOpenChange(resolved);
+    } else {
+      setInternalOpen(resolved);
+    }
+  };
+
   const [status, setStatus] = useState<Status>({ kind: 'idle' });
 
   async function choose(preset: AvatarPresetId | null): Promise<void> {
     // No-op if the user re-taps their current selection.
     if (preset === currentPreset) {
-      setOpen(false);
+      setOpenState(false);
       return;
     }
     setStatus({ kind: 'saving', target: preset });
@@ -59,7 +79,7 @@ export default function AvatarPicker({
       const profile = await setAvatarPreset(preset);
       onChanged(profile);
       setStatus({ kind: 'idle' });
-      setOpen(false);
+      setOpenState(false);
     } catch (err) {
       const message =
         err instanceof ApiError && err.message.length > 0
@@ -73,14 +93,16 @@ export default function AvatarPicker({
 
   return (
     <View style={styles.container}>
-      <SecondaryButton
-        label={open ? 'Done' : currentPreset !== null ? 'Change avatar' : 'Choose an avatar'}
-        icon={open ? 'checkmark-outline' : 'color-palette-outline'}
-        onPress={() => setOpen((v) => !v)}
-      />
+      {showDefaultTrigger ? (
+        <SecondaryButton
+          label={open ? 'Done' : currentPreset !== null ? 'Change avatar' : 'Choose an avatar'}
+          icon={open ? 'checkmark-outline' : 'color-palette-outline'}
+          onPress={() => setOpenState((v) => !v)}
+        />
+      ) : null}
 
       {open ? (
-        <View style={styles.grid} accessibilityRole="radiogroup">
+        <View style={styles.grid} accessibilityRole="radiogroup" testID="avatar-picker-grid">
           {AVATAR_PRESET_IDS.map((preset) => {
             const Art = AVATAR_PRESET_COMPONENTS[preset];
             const selected = preset === currentPreset;

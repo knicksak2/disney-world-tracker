@@ -153,6 +153,11 @@ interface ExperienceDetailDTO {
   readonly interestFacets?: GroupedFacetsDTO;
   readonly whyThis?: WhyThisDTO | null;
   readonly subType?: string | null;
+  /**
+   * Verified Disney dining-page URL for restaurants that accept reservations (R6.5, R7.1).
+   * Present only when populated in the curated seed; omitted otherwise.
+   */
+  readonly diningUrl?: string | null;
 }
 
 /** Wire shape for `GET /resorts`; only the fields needed to resolve a name. */
@@ -228,6 +233,16 @@ export default function ExperienceDetailScreen(): JSX.Element {
   const [addToListsPickerVisible, setAddToListsPickerVisible] = React.useState(false);
   const [addToListsSheetVisible, setAddToListsSheetVisible] = React.useState(false);
   const [itemsToAddToLists, setItemsToAddToLists] = React.useState<readonly FoodItemDTO[]>([]);
+  const [reservationFailed, setReservationFailed] = React.useState(false);
+
+  const handleReserveAction = async (url: string): Promise<void> => {
+    try {
+      await Linking.openURL(url);
+      setReservationFailed(false);
+    } catch {
+      setReservationFailed(true);
+    }
+  };
 
   // React Query's `useQueries` issues every queryFn concurrently and
   // returns a tuple of `UseQueryResult` aligned with the input order.
@@ -475,6 +490,37 @@ export default function ExperienceDetailScreen(): JSX.Element {
           latitude={experience.latitude}
           longitude={experience.longitude}
         />
+
+        {/* ------------------------------------------------------------ */}
+        {/* Reservation_Action (R7.1-R7.5, Property 10, Task 11).         */}
+        {/* Rendered when category === 'Restaurant' and a non-empty       */}
+        {/* diningUrl is present. Tapping attempts to open the diningUrl  */}
+        {/* in the default browser via Linking.openURL, surfacing a       */}
+        {/* non-blocking inline error on failure.                         */}
+        {/* ------------------------------------------------------------ */}
+        {experience.category === 'Restaurant' &&
+        typeof experience.diningUrl === 'string' &&
+        experience.diningUrl.trim().length > 0 ? (
+          <View style={styles.reservationActionWrap}>
+            <PrimaryButton
+              label="Reserve on Disney's site"
+              icon="calendar-outline"
+              testID="experience-reserve-action"
+              accessibilityLabel={`Reserve a table at ${experience.name} on Disney's site`}
+              onPress={() => {
+                void handleReserveAction(experience.diningUrl as string);
+              }}
+            />
+            {reservationFailed ? (
+              <Text
+                style={styles.errorText}
+                testID="experience-reservation-error"
+              >
+                Couldn&apos;t open the reservation page. Please try again.
+              </Text>
+            ) : null}
+          </View>
+        ) : null}
 
         {/* ------------------------------------------------------------ */}
         {/* Your visit (R6, R7.1, R7.2). The consolidated completion →   */}
@@ -1256,5 +1302,8 @@ const styles = StyleSheet.create({
   errorText: {
     ...theme.typography.body,
     color: theme.color.danger,
+  },
+  reservationActionWrap: {
+    gap: theme.spacing.xs,
   },
 });

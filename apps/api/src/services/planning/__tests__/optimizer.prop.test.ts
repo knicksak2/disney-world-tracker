@@ -5,6 +5,7 @@ import fc from 'fast-check';
 import type { Park, WaitSnapshot } from '@dwt/shared';
 import { optimize, type OptimizeInput, type OptimizeInputItem } from '../optimizer.js';
 import { travelFromPrev } from '../travel.js';
+import { wdwMinutesFromMidnight } from '../../trips/wdwClock.js';
 
 const mockDate = '2024-05-01';
 
@@ -555,6 +556,49 @@ describe('Feature: day-planning-optimization', () => {
             // Flexible adjacent same-kind downtime items emit warning and are soft-penalized
             expect(hasWarning).toBe(true);
           }
+        },
+      ),
+      { numRuns: 100 },
+    );
+  });
+
+  it('Property 20: Intent-Based and Live Arrival Optimization Anchoring', () => {
+    fc.assert(
+      fc.property(
+        fc.integer({ min: 0, max: 1300 }),
+        fc.boolean(),
+        (startMins, earlyEntry) => {
+          const rideItem: OptimizeInputItem = {
+            id: 'item-ride-1',
+            experienceId: 'exp-ride-1',
+            park: 'Magic Kingdom',
+            coords: { lat: 28.4177, lng: -81.5812 },
+            plannedTime: null,
+            isFixed: false,
+            isLightningLane: false,
+            useSingleRider: false,
+            priority: 1,
+            itemType: 'experience',
+            category: 'Ride',
+            durationMinutes: 15,
+          };
+
+          const input: OptimizeInput = {
+            date: mockDate,
+            startHour: 9,
+            endHour: 23,
+            startMinutes: startMins,
+            walkingSpeed: 'moderate',
+            earlyEntryEligible: earlyEntry,
+            snapshots: {},
+            seed: 42,
+            items: [rideItem],
+          };
+
+          const res = optimize(input);
+          expect(res.items).toHaveLength(1);
+          const firstItemArrivalMins = wdwMinutesFromMidnight(mockDate, res.items[0]!.suggestedArrival);
+          expect(firstItemArrivalMins).toBeGreaterThanOrEqual(startMins);
         },
       ),
       { numRuns: 100 },

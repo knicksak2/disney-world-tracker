@@ -161,6 +161,22 @@ export const WALKING_SPEEDS = [
 export type WalkingSpeed = (typeof WALKING_SPEEDS)[number];
 
 // ---------------------------------------------------------------------------
+// Walk_Wait_Weighting
+// ---------------------------------------------------------------------------
+//
+// How the Optimization_Engine weighs walking time against queue wait time
+// when ranking candidate sequences (R10). 'balanced' (default) reproduces the
+// pre-existing unweighted 1:1 cost formula.
+
+export const WALK_WAIT_WEIGHTINGS = [
+  'balanced',
+  'minimize_walking',
+  'minimize_waits',
+] as const;
+
+export type WalkWaitWeighting = (typeof WALK_WAIT_WEIGHTINGS)[number];
+
+// ---------------------------------------------------------------------------
 // Planned_Item_Type
 // ---------------------------------------------------------------------------
 //

@@ -1,0 +1,497 @@
+[
+  {
+    "upstreamEntityId": "90002440;entityType=restaurant",
+    "name": "Rainforest Cafe® at Disney's Animal Kingdom",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/animal-kingdom/rainforest-cafe-animal-kingdom/"
+  },
+  {
+    "upstreamEntityId": "18069632;entityType=restaurant",
+    "name": "Tiffins Restaurant",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/animal-kingdom/tiffins/"
+  },
+  {
+    "upstreamEntityId": "90002686;entityType=restaurant",
+    "name": "Tusker House Restaurant",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/animal-kingdom/tusker-house-restaurant/"
+  },
+  {
+    "upstreamEntityId": "215686;entityType=restaurant",
+    "name": "Yak & Yeti™ Restaurant",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/animal-kingdom/yak-and-yeti-restaurant/"
+  },
+  {
+    "upstreamEntityId": "90002448;entityType=restaurant",
+    "name": "Boatwright's Dining Hall",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/port-orleans-resort-riverside/boatwright-dining-hall/"
+  },
+  {
+    "upstreamEntityId": "18427314;entityType=restaurant",
+    "name": "Chef Art Smith's Homecomin'",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/disney-springs/chef-art-smiths-homecomin/"
+  },
+  {
+    "upstreamEntityId": "19124370;entityType=restaurant",
+    "name": "City Works Eatery & Pour House",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/disney-springs/city-works/"
+  },
+  {
+    "upstreamEntityId": "18808553;entityType=restaurant",
+    "name": "Enzo's Hideaway",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/disney-springs/enzos-hideaway/"
+  },
+  {
+    "upstreamEntityId": "18436515;entityType=restaurant",
+    "name": "Frontera Cocina",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/disney-springs/frontera-cocina/"
+  },
+  {
+    "upstreamEntityId": "90001754;entityType=restaurant",
+    "name": "House of Blues® Restaurant & Bar",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/disney-springs/house-of-blues-restaurant-and-bar/"
+  },
+  {
+    "upstreamEntityId": "19063652;entityType=restaurant",
+    "name": "Jaleo® by José Andrés",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/disney-springs/jaleo/"
+  },
+  {
+    "upstreamEntityId": "18807537;entityType=restaurant",
+    "name": "Maria & Enzo's Ristorante",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/disney-springs/maria-enzo/"
+  },
+  {
+    "upstreamEntityId": "17936194;entityType=restaurant",
+    "name": "Morimoto Asia™",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/disney-springs/morimoto-asia/"
+  },
+  {
+    "upstreamEntityId": "90002006;entityType=restaurant",
+    "name": "Olivia's Cafe",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/old-key-west-resort/olivia-cafe/"
+  },
+  {
+    "upstreamEntityId": "18457125;entityType=restaurant",
+    "name": "Paddlefish",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/disney-springs/paddlefish/"
+  },
+  {
+    "upstreamEntityId": "343233;entityType=restaurant",
+    "name": "Paradiso 37, Taste of the Americas",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/disney-springs/paradiso-37-taste-of-the-americas/"
+  },
+  {
+    "upstreamEntityId": "18475350;entityType=restaurant",
+    "name": "Planet Hollywood®",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/disney-springs/planet-hollywood-observatory/"
+  },
+  {
+    "upstreamEntityId": "90002044;entityType=restaurant",
+    "name": "Raglan Road™ Irish Pub and Restaurant",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/disney-springs/raglan-road-irish-pub-and-restaurant/"
+  },
+  {
+    "upstreamEntityId": "90001873;entityType=restaurant",
+    "name": "Rainforest Cafe® at Disney Springs Marketplace",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/disney-springs/rainforest-cafe-disney-springs/"
+  },
+  {
+    "upstreamEntityId": "17957969;entityType=restaurant",
+    "name": "STK® Steakhouse",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/disney-springs/stk-steakhouse/"
+  },
+  {
+    "upstreamEntityId": "17134590;entityType=restaurant",
+    "name": "Splitsville Dining Room",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/disney-springs/splitsville/"
+  },
+  {
+    "upstreamEntityId": "411854928;entityType=restaurant",
+    "name": "Summer House on the Lake",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/disney-springs/summer-house-on-the-lake/"
+  },
+  {
+    "upstreamEntityId": "293563;entityType=restaurant",
+    "name": "T-REX ™",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/disney-springs/t-rex/"
+  },
+  {
+    "upstreamEntityId": "18752054;entityType=restaurant",
+    "name": "Terralina Crafted Italian",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/disney-springs/terralina-crafted-italian/"
+  },
+  {
+    "upstreamEntityId": "17936197;entityType=restaurant",
+    "name": "The BOATHOUSE®: Great Food, Waterfront Dining, Dream Boats™",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/disney-springs/boathouse-restaurant/"
+  },
+  {
+    "upstreamEntityId": "18472966;entityType=restaurant",
+    "name": "The Edison",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/disney-springs/edison/"
+  },
+  {
+    "upstreamEntityId": "98575;entityType=restaurant",
+    "name": "The Turf Club Bar and Grill",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/saratoga-springs-resort/turf-club-bar-and-grill/"
+  },
+  {
+    "upstreamEntityId": "18667615;entityType=restaurant",
+    "name": "Wine Bar George – A Restaurant & Bar",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/disney-springs/wine-bar-george/"
+  },
+  {
+    "upstreamEntityId": "412013553;entityType=restaurant",
+    "name": "eet by Maneet Chauhan",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/disney-springs/eet-by-maneet-chauhan/"
+  },
+  {
+    "upstreamEntityId": "90002066;entityType=restaurant",
+    "name": "Akershus Royal Banquet Hall",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/epcot/akershus-royal-banquet-hall/"
+  },
+  {
+    "upstreamEntityId": "90001292;entityType=restaurant",
+    "name": "Biergarten Restaurant",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/epcot/biergarten-restaurant/"
+  },
+  {
+    "upstreamEntityId": "90001373;entityType=restaurant",
+    "name": "Chefs de France",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/epcot/chefs-de-france/"
+  },
+  {
+    "upstreamEntityId": "90001416;entityType=restaurant",
+    "name": "Coral Reef Restaurant",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/epcot/coral-reef-restaurant/"
+  },
+  {
+    "upstreamEntityId": "90002237;entityType=restaurant",
+    "name": "Garden Grill Restaurant",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/epcot/garden-grill-restaurant/"
+  },
+  {
+    "upstreamEntityId": "19511274;entityType=restaurant",
+    "name": "La Crêperie de Paris",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/epcot/creperie-de-paris/"
+  },
+  {
+    "upstreamEntityId": "15525573;entityType=restaurant",
+    "name": "La Hacienda de San Angel",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/epcot/hacienda-de-san-angel/"
+  },
+  {
+    "upstreamEntityId": "90001798;entityType=restaurant",
+    "name": "Le Cellier Steakhouse",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/epcot/le-cellier-steakhouse/"
+  },
+  {
+    "upstreamEntityId": "90001296;entityType=restaurant",
+    "name": "Monsieur Paul",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/epcot/monsieur-paul/"
+  },
+  {
+    "upstreamEntityId": "90001985;entityType=restaurant",
+    "name": "Nine Dragons Restaurant",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/epcot/nine-dragons-restaurant/"
+  },
+  {
+    "upstreamEntityId": "90002084;entityType=restaurant",
+    "name": "Rose & Crown Dining Room",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/epcot/rose-and-crown-dining-room/"
+  },
+  {
+    "upstreamEntityId": "90002100;entityType=restaurant",
+    "name": "San Angel Inn Restaurante",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/epcot/san-angel-inn-restaurante/"
+  },
+  {
+    "upstreamEntityId": "221626;entityType=restaurant",
+    "name": "Shiki-Sai: Sushi Izakaya",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/epcot/shiki-sai-izakaya-and-sushi/"
+  },
+  {
+    "upstreamEntityId": "19634138;entityType=restaurant",
+    "name": "Space 220 Lounge",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/epcot/space-220-lounge/"
+  },
+  {
+    "upstreamEntityId": "19433706;entityType=restaurant",
+    "name": "Space 220 Restaurant",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/epcot/space-220/"
+  },
+  {
+    "upstreamEntityId": "17720675;entityType=restaurant",
+    "name": "Spice Road Table",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/epcot/spice-road-table/"
+  },
+  {
+    "upstreamEntityId": "19317888;entityType=restaurant",
+    "name": "Takumi-Tei",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/epcot/takumi-tei-restaurant/"
+  },
+  {
+    "upstreamEntityId": "221625;entityType=restaurant",
+    "name": "Teppan Edo",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/epcot/teppan-edo/"
+  },
+  {
+    "upstreamEntityId": "220739;entityType=restaurant",
+    "name": "Tutto Italia Ristorante",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/epcot/tutto-italia-ristorante/"
+  },
+  {
+    "upstreamEntityId": "15525574;entityType=restaurant",
+    "name": "Via Napoli Ristorante e Pizzeria",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/epcot/via-napoli/"
+  },
+  {
+    "upstreamEntityId": "412297708;entityType=restaurant",
+    "name": "GEO-82",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/epcot/geo-82-lounge/"
+  },
+  {
+    "upstreamEntityId": "90001216;entityType=restaurant",
+    "name": "50's Prime Time Café",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/hollywood-studios/50s-prime-time-cafe/"
+  },
+  {
+    "upstreamEntityId": "90001744;entityType=restaurant",
+    "name": "Hollywood & Vine",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/hollywood-studios/hollywood-and-vine/"
+  },
+  {
+    "upstreamEntityId": "19267226;entityType=restaurant",
+    "name": "Oga's Cantina",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/hollywood-studios/ogas-cantina/"
+  },
+  {
+    "upstreamEntityId": "19553134;entityType=restaurant",
+    "name": "Roundup Rodeo BBQ",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/hollywood-studios/roundup-rodeo-bbq/"
+  },
+  {
+    "upstreamEntityId": "90002114;entityType=restaurant",
+    "name": "Sci-Fi Dine-In Theater Restaurant",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/hollywood-studios/sci-fi-dine-in-theater/"
+  },
+  {
+    "upstreamEntityId": "90002245;entityType=restaurant",
+    "name": "The Hollywood Brown Derby",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/hollywood-studios/hollywood-brown-derby/"
+  },
+  {
+    "upstreamEntityId": "16660079;entityType=restaurant",
+    "name": "Be Our Guest Restaurant",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/magic-kingdom/be-our-guest-restaurant/"
+  },
+  {
+    "upstreamEntityId": "90002464;entityType=restaurant",
+    "name": "Cinderella's Royal Table",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/magic-kingdom/cinderella-royal-table/"
+  },
+  {
+    "upstreamEntityId": "18185631;entityType=restaurant",
+    "name": "Jungle Navigation Co. LTD Skipper Canteen",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/magic-kingdom/jungle-navigation-skipper-canteen/"
+  },
+  {
+    "upstreamEntityId": "90001819;entityType=restaurant",
+    "name": "Liberty Tree Tavern",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/magic-kingdom/liberty-tree-tavern/"
+  },
+  {
+    "upstreamEntityId": "412358722;entityType=restaurant",
+    "name": "The Beak and Barrel",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/magic-kingdom/beak-barrel/"
+  },
+  {
+    "upstreamEntityId": "90002660;entityType=restaurant",
+    "name": "The Crystal Palace",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/magic-kingdom/crystal-palace/"
+  },
+  {
+    "upstreamEntityId": "247904;entityType=restaurant",
+    "name": "The Diamond Horseshoe",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/magic-kingdom/diamond-horseshoe/"
+  },
+  {
+    "upstreamEntityId": "90002670;entityType=restaurant",
+    "name": "The Plaza Restaurant",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/magic-kingdom/plaza-restaurant/"
+  },
+  {
+    "upstreamEntityId": "90002678;entityType=restaurant",
+    "name": "Tony's Town Square Restaurant",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/magic-kingdom/tonys-town-square-restaurant/"
+  },
+  {
+    "upstreamEntityId": "90002606;entityType=restaurant",
+    "name": "'Ohana",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/polynesian-resort/ohana/"
+  },
+  {
+    "upstreamEntityId": "90001212;entityType=restaurant",
+    "name": "1900 Park Fare",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/grand-floridian-resort-and-spa/1900-park-fare/"
+  },
+  {
+    "upstreamEntityId": "18733814;entityType=restaurant",
+    "name": "Ale & Compass Restaurant",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/yacht-club-resort/ale-and-compass/"
+  },
+  {
+    "upstreamEntityId": "19629076;entityType=restaurant",
+    "name": "Amare",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/swan-reserve/amare/"
+  },
+  {
+    "upstreamEntityId": "90001272;entityType=restaurant",
+    "name": "Beaches & Cream Soda Shop",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/beach-club-resort/beaches-and-cream-soda-shop/"
+  },
+  {
+    "upstreamEntityId": "90001320;entityType=restaurant",
+    "name": "Boma - Flavors of Africa",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/animal-kingdom-lodge/boma-flavors-of-africa/"
+  },
+  {
+    "upstreamEntityId": "412398174;entityType=restaurant",
+    "name": "Bourbon Steak - A Michael Mina Restaurant",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/swan-hotel/bourbon-steak/"
+  },
+  {
+    "upstreamEntityId": "90001336;entityType=restaurant",
+    "name": "California Grill",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/contemporary-resort/california-grill/"
+  },
+  {
+    "upstreamEntityId": "90001347;entityType=restaurant",
+    "name": "Cape May Cafe",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/beach-club-resort/cape-may-cafe/"
+  },
+  {
+    "upstreamEntityId": "90001369;entityType=restaurant",
+    "name": "Chef Mickey's",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/contemporary-resort/chef-mickeys/"
+  },
+  {
+    "upstreamEntityId": "90001378;entityType=restaurant",
+    "name": "Cítricos",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/grand-floridian-resort-and-spa/citricos/"
+  },
+  {
+    "upstreamEntityId": "90001548;entityType=restaurant",
+    "name": "Flying Fish",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/boardwalk/flying-fish/"
+  },
+  {
+    "upstreamEntityId": "90001724;entityType=restaurant",
+    "name": "Grand Floridian Cafe",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/grand-floridian-resort-and-spa/grand-floridian-cafe/"
+  },
+  {
+    "upstreamEntityId": "90002032;entityType=restaurant",
+    "name": "Hoop-Dee-Doo Musical Revue",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/fort-wilderness-resort-campground/hoop-dee-doo-musical-revue/"
+  },
+  {
+    "upstreamEntityId": "90002012;entityType=restaurant",
+    "name": "Il Mulino",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/swan-hotel/il-mulino-new-york-trattoria/"
+  },
+  {
+    "upstreamEntityId": "90001778;entityType=restaurant",
+    "name": "Jiko - The Cooking Place",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/animal-kingdom-lodge/jiko-the-cooking-place/"
+  },
+  {
+    "upstreamEntityId": "90001786;entityType=restaurant",
+    "name": "Kona Cafe",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/polynesian-resort/kona-cafe/"
+  },
+  {
+    "upstreamEntityId": "90001879;entityType=restaurant",
+    "name": "Maya Grill",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/coronado-springs-resort/maya-grill/"
+  },
+  {
+    "upstreamEntityId": "90001983;entityType=restaurant",
+    "name": "Narcoossee's",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/grand-floridian-resort-and-spa/narcoossees/"
+  },
+  {
+    "upstreamEntityId": "248573;entityType=restaurant",
+    "name": "Rix Sports Bar & Grill",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/coronado-springs-resort/rix-sports-bar/"
+  },
+  {
+    "upstreamEntityId": "411927951;entityType=restaurant",
+    "name": "Rosa Mexicano",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/dolphin-hotel/rosa-mexicano/"
+  },
+  {
+    "upstreamEntityId": "293704;entityType=restaurant",
+    "name": "Sanaa",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/animal-kingdom-villas-kidani/sanaa/"
+  },
+  {
+    "upstreamEntityId": "19069003;entityType=restaurant",
+    "name": "Sebastian's Bistro",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/caribbean-beach-resort/sebastians-bistro/"
+  },
+  {
+    "upstreamEntityId": "19631278;entityType=restaurant",
+    "name": "Steakhouse 71",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/contemporary-resort/steakhouse-71/"
+  },
+  {
+    "upstreamEntityId": "90001248;entityType=restaurant",
+    "name": "Story Book Dining at Artist Point with Snow White",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/wilderness-lodge-resort/artist-point/"
+  },
+  {
+    "upstreamEntityId": "411827623;entityType=restaurant",
+    "name": "The Cake Bake Shop® Restaurant by Gwendolyn Rogers",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/boardwalk/cake-bake-shop-restaurant/"
+  },
+  {
+    "upstreamEntityId": "90002336;entityType=restaurant",
+    "name": "The Dining Room at Victoria & Albert’s",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/grand-floridian-resort-and-spa/victoria-and-alberts/"
+  },
+  {
+    "upstreamEntityId": "90002274;entityType=restaurant",
+    "name": "Todd English's bluezoo",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/dolphin-hotel/todd-english-bluezoo/"
+  },
+  {
+    "upstreamEntityId": "19015837;entityType=restaurant",
+    "name": "Toledo - Tapas, Steak & Seafood",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/coronado-springs-resort/toledo/"
+  },
+  {
+    "upstreamEntityId": "19233597;entityType=restaurant",
+    "name": "Topolino's Terrace – Flavors of the Riviera",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/riviera-resort/topolinos-terrace/"
+  },
+  {
+    "upstreamEntityId": "17851099;entityType=restaurant",
+    "name": "Trattoria al Forno",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/boardwalk/trattoria-al-forno/"
+  },
+  {
+    "upstreamEntityId": "412193973;entityType=restaurant",
+    "name": "Wailulu Bar & Grill",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/polynesian-resort/wailulu-bar-grill/"
+  },
+  {
+    "upstreamEntityId": "90002376;entityType=restaurant",
+    "name": "Whispering Canyon Cafe",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/wilderness-lodge-resort/whispering-canyon-cafe/"
+  },
+  {
+    "upstreamEntityId": "90002412;entityType=restaurant",
+    "name": "Yachtsman Steakhouse",
+    "diningUrl": "https://disneyworld.disney.go.com/dining/yacht-club-resort/yachtsman-steakhouse/"
+  }
+]

@@ -290,6 +290,12 @@ function createOutcomeRepo(sc: OutcomeScenario): OutcomeRepo {
     async updateSpecialHoursParticipation() {
       return;
     },
+    async updateDiningUrl() {
+      return true;
+    },
+    async listDiningLinkEligibleRestaurants() {
+      return [];
+    },
   };
   return repo;
 }
