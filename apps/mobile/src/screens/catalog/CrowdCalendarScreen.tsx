@@ -47,6 +47,14 @@ export default function CrowdCalendarScreen(): JSX.Element {
       }
       return apiRequest<CrowdCalendarResponse>('GET', url);
     },
+    // Crowd forecasts don't change meaningfully within a few minutes, and this
+    // query's ~70-day window is the app's most expensive single read. Without a
+    // staleTime, react-query treats the data as stale immediately, so simply
+    // navigating away and back (a screen focus, not just a park/month change)
+    // re-triggers the full 70-day fetch again. Matches the catalog's existing
+    // 5-minute staleness convention (STALE_TIME_MS in CatalogScreen/
+    // DestinationScreen) rather than inventing a new interval.
+    staleTime: 5 * 60 * 1000,
   });
 
   const activeDate = selectedDate ?? todayStr;

@@ -20,7 +20,7 @@
 // `Card`s with a "Send request" PrimaryButton, and calm muted helper/empty
 // states. See `theme/theme.ts` and `theme/components.tsx`.
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -181,6 +181,40 @@ export default function FriendsSearchScreen(): JSX.Element {
     },
   });
 
+  // Stable `renderItem` identity — an inline arrow function literal here
+  // gets a new identity on every render, which VirtualizedList treats as a
+  // changed render function and forces the whole visible window to
+  // re-render/re-measure (the "large list that is slow to update" warning)
+  // even though the row components below are already memoized-friendly.
+  // See `DestinationScreen`'s `renderRow` for the same fix. The mutation
+  // object is included in deps because `renderRow` reads
+  // `sendRequestMutation.isPending` / `.variables` / `.mutate` on every
+  // call, and those are new values whenever a mutation transitions state.
+  const renderRow = useCallback(
+    ({ item }: { item: UserSearchHit }) => {
+      const inFlight =
+        sendRequestMutation.isPending &&
+        sendRequestMutation.variables === item.id;
+      return (
+        <ResultRow
+          hit={item}
+          busy={inFlight}
+          sent={sentTo[item.id] === true}
+          error={rowErrors[item.id] ?? null}
+          onSend={() => {
+            setRowErrors((prev) => {
+              const next = { ...prev };
+              delete next[item.id];
+              return next;
+            });
+            sendRequestMutation.mutate(item.id);
+          }}
+        />
+      );
+    },
+    [sendRequestMutation, sentTo, rowErrors],
+  );
+
   const inlineLengthError = useMemo<string | null>(() => {
     if (lengthStatus === 'invalid') {
       return `Search must be ${SEARCH_MIN_LENGTH} to ${SEARCH_MAX_LENGTH} characters.`;
@@ -272,27 +306,7 @@ export default function FriendsSearchScreen(): JSX.Element {
         <FlatList
           data={results}
           keyExtractor={(item) => item.id}
-          renderItem={({ item }) => {
-            const inFlight =
-              sendRequestMutation.isPending &&
-              sendRequestMutation.variables === item.id;
-            return (
-              <ResultRow
-                hit={item}
-                busy={inFlight}
-                sent={sentTo[item.id] === true}
-                error={rowErrors[item.id] ?? null}
-                onSend={() => {
-                  setRowErrors((prev) => {
-                    const next = { ...prev };
-                    delete next[item.id];
-                    return next;
-                  });
-                  sendRequestMutation.mutate(item.id);
-                }}
-              />
-            );
-          }}
+          renderItem={renderRow}
           contentContainerStyle={styles.listContent}
         />
       )}

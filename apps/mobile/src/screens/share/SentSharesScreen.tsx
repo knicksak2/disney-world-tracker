@@ -32,7 +32,7 @@
  * Validates: Requirements 11.7, 11.9, 11.10, 11.11
  */
 
-import React from 'react';
+import React, { useCallback } from 'react';
 import { ActivityIndicator, FlatList, StyleSheet, Text, View } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -147,6 +147,18 @@ export default function SentSharesScreen({ navigation }: Props): JSX.Element {
     queryFn: () => apiRequest<SentShareDTO[]>('GET', '/me/shares'),
   });
 
+  // Stable `renderItem` identity — an inline arrow literal passed to `FlatList`
+  // is recreated every render, which `FlatList`/`VirtualizedList` treats as a
+  // changed render function and forces broader re-render/re-measure work on
+  // every parent update, even though `SentShareRow` itself does no such thing
+  // (see `DestinationScreen`'s `renderRow` for the same fix). Defined above the
+  // early loading/error returns below so the Hook is called unconditionally on
+  // every render, per the Rules of Hooks.
+  const renderRow = useCallback(
+    ({ item }: { item: SentShareDTO }) => <SentShareRow share={item} />,
+    [],
+  );
+
   if (sentQuery.isLoading) {
     return (
       <ScreenContainer>
@@ -206,7 +218,7 @@ export default function SentSharesScreen({ navigation }: Props): JSX.Element {
             />
           </View>
         }
-        renderItem={({ item }) => <SentShareRow share={item} />}
+        renderItem={renderRow}
       />
     </ScreenContainer>
   );

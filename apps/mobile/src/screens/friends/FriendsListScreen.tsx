@@ -211,6 +211,44 @@ export default function FriendsListScreen({ navigation }: Props): JSX.Element {
     [removeMutation],
   );
 
+  // Stable `renderItem` identity — an inline arrow function literal here
+  // gets a new identity on every render, which VirtualizedList treats as a
+  // changed render function and forces the whole visible window to
+  // re-render/re-measure (the "large list that is slow to update" warning)
+  // even though the row components below are already memoized-friendly.
+  // See `DestinationScreen`'s `renderRow` for the same fix.
+  const renderRow = useCallback(
+    ({ item }: { item: Row }) => {
+      switch (item.kind) {
+        case 'header':
+          return <SectionHeader label={item.label} />;
+        case 'empty':
+          return <SectionEmpty label={item.label} />;
+        case 'friend':
+          return (
+            <FriendRow
+              friend={item.friend}
+              error={rowErrors[item.friend.userId] ?? null}
+              busy={
+                removeMutation.isPending &&
+                removeMutation.variables === item.friend.userId
+              }
+              onRemove={() => handleRemove(item.friend)}
+              onPress={() => {
+                navigation.navigate('FriendProfile', {
+                  friendId: item.friend.userId,
+                  displayName: item.friend.displayName,
+                });
+              }}
+            />
+          );
+        case 'outgoing':
+          return <OutgoingRequestRow request={item.request} />;
+      }
+    },
+    [rowErrors, removeMutation, handleRemove, navigation],
+  );
+
   // -------------------------------------------------------------------------
   // Render branches
   // -------------------------------------------------------------------------
@@ -305,34 +343,7 @@ export default function FriendsListScreen({ navigation }: Props): JSX.Element {
         <FlatList
           data={rows}
           keyExtractor={(row) => row.id}
-          renderItem={({ item }) => {
-            switch (item.kind) {
-              case 'header':
-                return <SectionHeader label={item.label} />;
-              case 'empty':
-                return <SectionEmpty label={item.label} />;
-              case 'friend':
-                return (
-                  <FriendRow
-                    friend={item.friend}
-                    error={rowErrors[item.friend.userId] ?? null}
-                    busy={
-                      removeMutation.isPending &&
-                      removeMutation.variables === item.friend.userId
-                    }
-                    onRemove={() => handleRemove(item.friend)}
-                    onPress={() => {
-                      navigation.navigate('FriendProfile', {
-                        friendId: item.friend.userId,
-                        displayName: item.friend.displayName,
-                      });
-                    }}
-                  />
-                );
-              case 'outgoing':
-                return <OutgoingRequestRow request={item.request} />;
-            }
-          }}
+          renderItem={renderRow}
           contentContainerStyle={styles.listContent}
         />
       )}

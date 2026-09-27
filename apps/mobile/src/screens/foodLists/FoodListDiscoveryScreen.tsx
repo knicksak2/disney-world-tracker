@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -48,6 +48,45 @@ export default function FoodListDiscoveryScreen(): JSX.Element {
       void fetchNextPage();
     }
   };
+
+  // Stable `renderItem` identity — an inline arrow literal is recreated every
+  // render, which `FlatList`/`VirtualizedList` treats as a changed render
+  // function and forces expensive re-render/re-measure work even when the row
+  // is otherwise unchanged (see the same fix in `DestinationScreen.tsx`).
+  const renderDiscoveryItem = useCallback(
+    ({ item }: { item: FoodListDTO }) => (
+      <Card style={styles.listCard}>
+        <Pressable
+          onPress={() =>
+            navigation.navigate('FoodListDetail', {
+              foodListId: item.id,
+            })
+          }
+          accessibilityRole="button"
+          accessibilityLabel={`Open food list ${item.name}`}
+          testID={`food-discovery-item-${item.id}`}
+        >
+          <View style={styles.cardHeader}>
+            <Text style={styles.listName} numberOfLines={1}>
+              {item.name}
+            </Text>
+            <View style={styles.likeBadge}>
+              <Ionicons name="heart" size={14} color={theme.color.danger} />
+              <Text style={styles.likeCount}>{item.likeCount}</Text>
+            </View>
+          </View>
+
+          <View style={styles.cardFooter}>
+            <Text style={styles.ownerText}>by {item.ownerDisplayName}</Text>
+            <Text style={styles.itemCountText}>
+              {item.itemCount} {item.itemCount === 1 ? 'item' : 'items'}
+            </Text>
+          </View>
+        </Pressable>
+      </Card>
+    ),
+    [navigation],
+  );
 
   return (
     <ScreenContainer>
@@ -109,37 +148,7 @@ export default function FoodListDiscoveryScreen(): JSX.Element {
             data={allLists}
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.listContent}
-            renderItem={({ item }) => (
-              <Card style={styles.listCard}>
-                <Pressable
-                  onPress={() =>
-                    navigation.navigate('FoodListDetail', {
-                      foodListId: item.id,
-                    })
-                  }
-                  accessibilityRole="button"
-                  accessibilityLabel={`Open food list ${item.name}`}
-                  testID={`food-discovery-item-${item.id}`}
-                >
-                  <View style={styles.cardHeader}>
-                    <Text style={styles.listName} numberOfLines={1}>
-                      {item.name}
-                    </Text>
-                    <View style={styles.likeBadge}>
-                      <Ionicons name="heart" size={14} color={theme.color.danger} />
-                      <Text style={styles.likeCount}>{item.likeCount}</Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.cardFooter}>
-                    <Text style={styles.ownerText}>by {item.ownerDisplayName}</Text>
-                    <Text style={styles.itemCountText}>
-                      {item.itemCount} {item.itemCount === 1 ? 'item' : 'items'}
-                    </Text>
-                  </View>
-                </Pressable>
-              </Card>
-            )}
+            renderItem={renderDiscoveryItem}
             onEndReached={handleLoadMore}
             onEndReachedThreshold={0.5}
             ListFooterComponent={

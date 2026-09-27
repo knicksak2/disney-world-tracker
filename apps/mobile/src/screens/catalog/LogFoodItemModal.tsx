@@ -4,6 +4,7 @@
 
 import React, { useState } from 'react';
 import {
+  Keyboard,
   Modal,
   Pressable,
   ScrollView,
@@ -116,6 +117,7 @@ export default function LogFoodItemModal({
 
     setBusy(true);
     setError(null);
+    Keyboard.dismiss();
 
     try {
       const created = await apiRequest<FoodItemLogDTO>(
@@ -193,7 +195,12 @@ export default function LogFoodItemModal({
             </View>
           )}
 
-          <ScrollView contentContainerStyle={styles.content}>
+          <ScrollView
+            contentContainerStyle={styles.content}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+            testID="log-food-item-scroll"
+          >
             {error && (
               <View style={styles.errorBanner} testID="log-food-item-error">
                 <Ionicons name="alert-circle" size={18} color={theme.color.danger} />

@@ -81,11 +81,12 @@ describe('foodList enum schemas', () => {
 });
 
 describe('createFoodListInputSchema', () => {
-  it('accepts valid name with visibility omitted', () => {
+  it('accepts valid name with visibility and isChecklist omitted', () => {
     const res = createFoodListInputSchema.safeParse({ name: 'Best Desserts' });
     expect(res.success).toBe(true);
     if (res.success) {
       expect(res.data.visibility).toBeUndefined();
+      expect(res.data.isChecklist).toBeUndefined();
     }
   });
 
@@ -103,6 +104,35 @@ describe('createFoodListInputSchema', () => {
     expect(pub.success).toBe(true);
   });
 
+  it('accepts isChecklist true and false', () => {
+    const checklist = createFoodListInputSchema.safeParse({
+      name: 'Best Desserts',
+      isChecklist: true,
+    });
+    expect(checklist.success).toBe(true);
+
+    const nonChecklist = createFoodListInputSchema.safeParse({
+      name: 'Best Desserts',
+      isChecklist: false,
+    });
+    expect(nonChecklist.success).toBe(true);
+  });
+
+  it('rejects non-boolean isChecklist', () => {
+    expect(
+      createFoodListInputSchema.safeParse({
+        name: 'Best Desserts',
+        isChecklist: 'true',
+      }).success,
+    ).toBe(false);
+    expect(
+      createFoodListInputSchema.safeParse({
+        name: 'Best Desserts',
+        isChecklist: 1,
+      }).success,
+    ).toBe(false);
+  });
+
   it('rejects invalid visibility value', () => {
     const res = createFoodListInputSchema.safeParse({
       name: 'Best Desserts',
@@ -118,17 +148,24 @@ describe('createFoodListInputSchema', () => {
 });
 
 describe('updateFoodListInputSchema', () => {
-  it('accepts optional name and visibility', () => {
+  it('accepts optional name, visibility, and isChecklist', () => {
     expect(updateFoodListInputSchema.safeParse({}).success).toBe(true);
     expect(updateFoodListInputSchema.safeParse({ name: 'New Name' }).success).toBe(true);
     expect(updateFoodListInputSchema.safeParse({ visibility: 'public' }).success).toBe(true);
+    expect(updateFoodListInputSchema.safeParse({ isChecklist: true }).success).toBe(true);
+    expect(updateFoodListInputSchema.safeParse({ isChecklist: false }).success).toBe(true);
     expect(
-      updateFoodListInputSchema.safeParse({ name: 'New Name', visibility: 'private' }).success,
+      updateFoodListInputSchema.safeParse({
+        name: 'New Name',
+        visibility: 'private',
+        isChecklist: true,
+      }).success,
     ).toBe(true);
   });
 
-  it('rejects invalid visibility', () => {
+  it('rejects invalid visibility and non-boolean isChecklist', () => {
     expect(updateFoodListInputSchema.safeParse({ visibility: 'unlisted' }).success).toBe(false);
+    expect(updateFoodListInputSchema.safeParse({ isChecklist: 'yes' }).success).toBe(false);
   });
 });
 
@@ -211,30 +248,67 @@ describe('foodListItemSchema and foodListDetailSchema', () => {
     ownerDisplayName: 'Jordan',
     name: 'Must Eats',
     visibility: 'public' as const,
+    isChecklist: false,
     likeCount: 5,
     itemCount: 1,
     createdAt: '2026-06-15T12:00:00Z',
     updatedAt: '2026-06-15T12:00:00Z',
   };
 
-  it('validates foodListItemSchema', () => {
+  it('validates foodListItemSchema with and without gotten', () => {
     expect(foodListItemSchema.safeParse(sampleItem).success).toBe(true);
+    expect(foodListItemSchema.safeParse({ ...sampleItem, gotten: true }).success).toBe(true);
+    expect(foodListItemSchema.safeParse({ ...sampleItem, gotten: false }).success).toBe(true);
+    expect(foodListItemSchema.safeParse({ ...sampleItem, gotten: 'yes' }).success).toBe(false);
+  });
+
+  // Feature: food-lists, Requirement 13.19 — rating field on a checklist item
+  it('validates foodListItemSchema rating: absent, null, and a valid 1-10 value all accepted; out-of-range rejected', () => {
+    expect(foodListItemSchema.safeParse(sampleItem).success).toBe(true);
+    expect(
+      foodListItemSchema.safeParse({ ...sampleItem, gotten: true, rating: null }).success,
+    ).toBe(true);
+    expect(
+      foodListItemSchema.safeParse({ ...sampleItem, gotten: true, rating: 9 }).success,
+    ).toBe(true);
+    expect(
+      foodListItemSchema.safeParse({ ...sampleItem, gotten: true, rating: 0 }).success,
+    ).toBe(false);
+    expect(
+      foodListItemSchema.safeParse({ ...sampleItem, gotten: true, rating: 11 }).success,
+    ).toBe(false);
+    expect(
+      foodListItemSchema.safeParse({ ...sampleItem, gotten: true, rating: 5.5 }).success,
+    ).toBe(false);
   });
 
   it('validates foodListSchema', () => {
     expect(foodListSchema.safeParse(sampleList).success).toBe(true);
+    expect(foodListSchema.safeParse({ ...sampleList, isChecklist: true }).success).toBe(true);
   });
 
-  it('validates foodListDetailSchema', () => {
+  it('validates foodListDetailSchema with and without gottenCount', () => {
     const detail = {
       ...sampleList,
       liked: true,
       saved: false,
       version: 2,
-      myRole: 'owner',
+      myRole: 'owner' as const,
       items: [sampleItem],
     };
     expect(foodListDetailSchema.safeParse(detail).success).toBe(true);
+
+    const checklistDetail = {
+      ...sampleList,
+      isChecklist: true,
+      liked: true,
+      saved: false,
+      version: 2,
+      myRole: 'owner' as const,
+      items: [{ ...sampleItem, gotten: true }],
+      gottenCount: 1,
+    };
+    expect(foodListDetailSchema.safeParse(checklistDetail).success).toBe(true);
   });
 
   it('rejects invalid role in detail', () => {
@@ -257,6 +331,7 @@ describe('foodListCollectionSchema and foodListDiscoveryPageSchema', () => {
     ownerDisplayName: 'Jordan',
     name: 'Must Eats',
     visibility: 'public' as const,
+    isChecklist: false,
     likeCount: 5,
     itemCount: 1,
     createdAt: '2026-06-15T12:00:00Z',

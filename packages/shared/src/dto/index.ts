@@ -16,7 +16,12 @@ export type {
   HeightRequirementDTO,
   WhyThisDTO,
 } from './Facet.js';
-export type { ResortDTO } from './Resort.js';
+export type {
+  ResortDTO,
+  ResortTier,
+  ResortRecreationItemDTO,
+  ResortLoreItemDTO,
+} from './Resort.js';
 export type { MealPeriodDTO, MenuDTO } from './Menu.js';
 export type { CompletionDTO } from './Completion.js';
 export type { CompletionEntryDTO, FriendCompletionsDTO } from './CompletionEntry.js';
@@ -124,6 +129,7 @@ export type {
   FoodItemLogDTO,
   FoodItemLogHistoryDTO,
   CreateFoodItemLogInputDTO,
+  UpdateFoodItemLogInputDTO,
   FoodItemLogWithContextDTO,
 } from './FoodItemLog.js';
 export type {

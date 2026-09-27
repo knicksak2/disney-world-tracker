@@ -1,0 +1,2884 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Disney World Tracker — Experience Detail Master Design</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Outfit:wght@400;500;600;700;800&family=Cinzel:wght@700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --color-primary: #5b2a86;
+      --color-primary-dark: #371756;
+      --color-primary-light: #7e57c2;
+      --color-accent: #f6c343;
+      --color-accent-dark: #d4a017;
+      --color-bg: #140824;
+      --color-phone-bg: #f8f6fc;
+      --color-text-primary: #190c2d;
+      --color-text-secondary: #655d78;
+      --color-success: #16a34a;
+      --color-success-bg: #ecfdf5;
+      --color-danger: #e11d48;
+      --color-warning: #d97706;
+      --color-border: #e6def2;
+      --radius-sm: 8px;
+      --radius-md: 14px;
+      --radius-lg: 20px;
+      --radius-pill: 999px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+    body {
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: radial-gradient(circle at 50% 5%, #2c124d 0%, #17092c 60%, #0d031c 100%);
+      color: #fff;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px 16px 80px;
+    }
+
+    .top-bar { text-align: center; margin-bottom: 24px; max-width: 1100px; width: 100%; }
+    .top-title { font-family: 'Outfit', sans-serif; font-size: 32px; font-weight: 800; color: var(--color-accent); letter-spacing: -0.5px; }
+    .top-sub { font-size: 14px; color: #cfbfeb; margin-top: 6px; line-height: 1.5; }
+
+    .control-row {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      margin: 16px 0 10px;
+      flex-wrap: wrap;
+    }
+
+    .control-group {
+      display: flex;
+      align-items: center;
+      background: rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(14px);
+      padding: 4px;
+      border-radius: var(--radius-pill);
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      gap: 4px;
+    }
+
+    .control-label {
+      font-size: 11px;
+      font-weight: 700;
+      color: #cdbce6;
+      padding: 0 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .toggle-btn {
+      background: transparent;
+      border: none;
+      color: rgba(255, 255, 255, 0.82);
+      padding: 7px 14px;
+      border-radius: var(--radius-pill);
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .toggle-btn:hover { color: #fff; background: rgba(255, 255, 255, 0.12); }
+    .toggle-btn.active {
+      background: var(--color-accent);
+      color: var(--color-primary-dark);
+      box-shadow: 0 3px 12px rgba(246, 195, 67, 0.4);
+    }
+
+    .mockup-viewport {
+      display: flex;
+      gap: 36px;
+      justify-content: center;
+      align-items: flex-start;
+      margin-top: 16px;
+      width: 100%;
+      max-width: 1240px;
+      flex-wrap: wrap;
+    }
+
+    .device-column {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 395px;
+    }
+
+    .device-label {
+      font-family: 'Outfit', sans-serif;
+      font-size: 16px;
+      font-weight: 800;
+      color: #f1e9fc;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .device-label span.pill {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 9px;
+      border-radius: var(--radius-pill);
+      text-transform: uppercase;
+    }
+    .pill-before { background: #d6336c; color: #fff; }
+    .pill-after { background: #2e9e6b; color: #fff; }
+
+    /* Phone Chassis */
+    .phone-chassis {
+      width: 390px;
+      background: var(--color-phone-bg);
+      border-radius: 46px;
+      box-shadow: 0 25px 65px rgba(0, 0, 0, 0.75), 0 0 0 10px #211333, 0 0 0 12px rgba(255, 255, 255, 0.14);
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      color: var(--color-text-primary);
+    }
+
+    /* Scroll Frame Mode (Default Phone View) */
+    body.mode-scroll .phone-chassis { height: 844px; }
+    body.mode-scroll .phone-scroll-body {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
+      position: relative;
+      scroll-behavior: smooth;
+      padding-bottom: 96px;
+    }
+    body.mode-scroll .phone-scroll-body::-webkit-scrollbar { width: 5px; }
+    body.mode-scroll .phone-scroll-body::-webkit-scrollbar-thumb { background: #7e57c2; border-radius: 10px; }
+
+    /* Unrolled Full Page Mode */
+    body.mode-unrolled .phone-chassis { height: auto !important; max-height: none !important; border-radius: 36px; }
+    body.mode-unrolled .phone-scroll-body { overflow: visible !important; height: auto !important; padding-bottom: 24px; }
+    body.mode-unrolled .phone-notch { display: none; }
+    body.mode-unrolled .after-dock { position: sticky; bottom: 14px; margin: 14px; z-index: 100; }
+
+    .phone-notch {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 120px;
+      height: 28px;
+      background: #000;
+      border-radius: 20px;
+      z-index: 99;
+      pointer-events: none;
+    }
+
+    /* ======================================================== */
+    /* BEFORE STYLING (THE ORIGINAL STACK OF 14 PLAIN BOXES)     */
+    /* ======================================================== */
+    .magic-card {
+      background: #fff;
+      border-radius: 16px;
+      padding: 14px;
+      box-shadow: 0 2px 8px rgba(31, 18, 53, 0.05);
+      border: 1px solid var(--color-border);
+    }
+    .before-content {
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .before-hero-img {
+      width: 100%;
+      height: 190px;
+      border-radius: 14px;
+      object-fit: cover;
+    }
+    .before-badge-row { display: flex; gap: 8px; margin-top: -4px; }
+    .before-pill {
+      background: #efe9f7;
+      color: #5b2a86;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 5px 11px;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .before-share-btn {
+      width: 100%;
+      background: #47216a;
+      color: #fff;
+      font-weight: 700;
+      font-size: 13.5px;
+      padding: 12px;
+      border-radius: 12px;
+      border: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      cursor: pointer;
+    }
+    .before-map-img {
+      width: 100%;
+      height: 130px;
+      border-radius: 12px;
+      object-fit: cover;
+      margin: 8px 0;
+    }
+    .before-outline-btn {
+      width: 100%;
+      background: #efe9f7;
+      color: #5b2a86;
+      border: 1px solid #cdbce6;
+      font-weight: 700;
+      font-size: 12.5px;
+      padding: 10px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      cursor: pointer;
+    }
+    .before-btn-pair { display: flex; gap: 8px; margin-top: 6px; }
+    .before-btn-sub {
+      flex: 1;
+      padding: 7px 10px;
+      border-radius: 8px;
+      font-size: 11px;
+      font-weight: 700;
+      border: 1px solid #cdbce6;
+      background: #efe9f7;
+      color: #5b2a86;
+      text-align: center;
+      cursor: pointer;
+    }
+    .before-btn-danger { background: #fff0f3; border-color: #f7c5ce; color: #d6336c; }
+
+    /* ======================================================== */
+    /* THE SIGNATURE PURPLE GRADIENT HEADER (APP BRAND IDENTITY) */
+    /* ======================================================== */
+    .app-purple-header {
+      background: linear-gradient(180deg, #5b2a86 0%, #47216a 100%);
+      padding: 46px 16px 14px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      color: #fff;
+      border-bottom-left-radius: 22px;
+      border-bottom-right-radius: 22px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 4px 16px rgba(61, 28, 92, 0.35);
+      z-index: 20;
+    }
+    .app-purple-header::after {
+      content: '✦';
+      position: absolute;
+      right: 48px;
+      top: 42px;
+      font-size: 8px;
+      opacity: 0.35;
+      color: #fff;
+    }
+    .app-purple-header::before {
+      content: '✦';
+      position: absolute;
+      right: 76px;
+      top: 56px;
+      font-size: 6px;
+      opacity: 0.25;
+      color: #f6c343;
+    }
+    .header-back-circle {
+      width: 36px;
+      height: 36px;
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      cursor: pointer;
+    }
+    .header-title-wrap { flex: 1; }
+    .header-title { font-size: 18px; font-weight: 800; display: flex; align-items: center; gap: 6px; line-height: 1.2; }
+    .header-sub { font-size: 12px; color: #dcd1ed; margin-top: 2px; display: flex; align-items: center; gap: 4px; }
+    .header-action-circle {
+      width: 36px;
+      height: 36px;
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+    }
+    .header-action-circle:hover {
+      background: rgba(255, 255, 255, 0.32);
+      transform: scale(1.05);
+    }
+
+    /* ======================================================== */
+    /* THE MAGICAL EXPERIENCE CANOPY (HERO & QUICK TRAITS)      */
+    /* ======================================================== */
+    .after-photo-card {
+      position: relative;
+      margin: 12px 14px 4px;
+      height: 195px;
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow: 0 6px 20px rgba(31, 18, 53, 0.16);
+    }
+    .after-photo-img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .after-photo-scrim {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, transparent 35%, rgba(20, 8, 36, 0.88) 100%);
+    }
+    .after-photo-badges {
+      position: absolute;
+      bottom: 12px;
+      left: 14px;
+      right: 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .after-land-pill {
+      font-size: 11.5px;
+      font-weight: 700;
+      background: rgba(255, 255, 255, 0.95);
+      color: var(--color-primary-dark);
+      padding: 5px 12px;
+      border-radius: var(--radius-pill);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+    }
+    .after-comm-rating-pill {
+      font-size: 12px;
+      font-weight: 800;
+      background: #f6c343;
+      color: #3d1c5c;
+      padding: 5px 11px;
+      border-radius: var(--radius-pill);
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.22);
+    }
+
+    /* Quick Specs Ribbon (Cardless, airy, and elegant) */
+    .specs-ribbon {
+      display: flex;
+      justify-content: space-around;
+      padding: 8px 10px;
+      margin: 8px 14px 4px;
+      background: rgba(255, 255, 255, 0.88);
+      backdrop-filter: blur(10px);
+      border-radius: 16px;
+      border: 1px solid rgba(230, 222, 242, 0.85);
+    }
+    .spec-item {
+      display: flex;
+      align-items: center;
+      gap: 4.5px;
+    }
+    .spec-icon { font-size: 13px; }
+    .spec-val { font-size: 11px; font-weight: 800; color: var(--color-text-primary); white-space: nowrap; }
+    .spec-sep { width: 1px; height: 16px; background: #ddd2ee; align-self: center; }
+
+    /* ======================================================== */
+    /* MASTER SECTIONS CONTAINER (NO MORE REPETITIVE WHITE BOXES)*/
+    /* ======================================================== */
+    .experience-story-stream {
+      padding: 8px 14px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* -------------------------------------------------------- */
+    /* SECTION 1: LIVE PARK COCKPIT (THE TACTICAL INSTRUMENT)   */
+    /* -------------------------------------------------------- */
+    .cockpit-card {
+      background: linear-gradient(145deg, #ffffff 0%, #f9f6fd 100%);
+      border: 1.5px solid #ded3f0;
+      border-radius: 22px;
+      padding: 16px;
+      box-shadow: 0 6px 20px rgba(91, 42, 134, 0.08);
+      position: relative;
+    }
+    .cockpit-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .cockpit-title {
+      font-size: 13.5px;
+      font-weight: 800;
+      color: #190c2d;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      letter-spacing: -0.2px;
+    }
+    .pulse-status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: #ecfdf5;
+      color: #16a34a;
+      font-size: 11px;
+      font-weight: 800;
+      padding: 4px 10px;
+      border-radius: var(--radius-pill);
+      border: 1px solid rgba(22, 163, 74, 0.25);
+    }
+    .pulse-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #16a34a;
+      box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.25);
+      animation: pulse 1.6s infinite;
+    }
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.6); }
+      70% { box-shadow: 0 0 0 7px rgba(22, 163, 74, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(22, 163, 74, 0); }
+    }
+
+    .cockpit-instruments {
+      display: grid;
+      grid-template-columns: 1.15fr 1.25fr;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .wait-dial-hero {
+      background: linear-gradient(135deg, #1b864d 0%, #115e34 100%);
+      color: #fff;
+      border-radius: 18px;
+      padding: 14px;
+      box-shadow: 0 4px 14px rgba(27, 134, 77, 0.25);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .wait-dial-num {
+      font-family: 'Outfit', sans-serif;
+      font-size: 34px;
+      font-weight: 800;
+      line-height: 1;
+      display: flex;
+      align-items: baseline;
+      gap: 4px;
+    }
+    .wait-dial-num span { font-size: 14px; font-weight: 700; opacity: 0.9; }
+    .wait-dial-lbl {
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      opacity: 0.85;
+      margin-top: 4px;
+    }
+    .wait-dial-sub {
+      font-size: 10px;
+      font-weight: 600;
+      color: #bbf7d0;
+      margin-top: 4px;
+    }
+
+    /* FastPass Ticket Style for Lightning Lane */
+    .fastpass-ticket {
+      background: #fbf9fe;
+      border: 1.5px dashed #c8b7e6;
+      border-radius: 18px;
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      position: relative;
+    }
+    .fastpass-tag {
+      font-size: 10.5px;
+      font-weight: 800;
+      color: var(--color-primary);
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .fastpass-window {
+      font-size: 14px;
+      font-weight: 800;
+      color: var(--color-text-primary);
+      margin-top: 4px;
+    }
+    .fastpass-benefit {
+      font-size: 10.5px;
+      font-weight: 700;
+      color: #15803d;
+      margin-top: 4px;
+    }
+
+    .cockpit-verdict {
+      background: #f0fdf4;
+      border-left: 3.5px solid #16a34a;
+      border-radius: 0 10px 10px 0;
+      padding: 9px 12px;
+      margin-bottom: 12px;
+    }
+    .cockpit-verdict b { font-size: 10.5px; color: #166534; text-transform: uppercase; }
+    .cockpit-verdict div { font-size: 11.5px; font-weight: 700; color: #190c2d; margin-top: 2px; }
+
+    .cockpit-stats-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      background: #f3edf9;
+      padding: 8px 12px;
+      border-radius: 12px;
+      margin-bottom: 10px;
+    }
+    .stat-cell { text-align: center; }
+    .stat-cell-lbl { font-size: 9.5px; font-weight: 700; color: #655d78; text-transform: uppercase; }
+    .stat-cell-val { font-size: 13.5px; font-weight: 800; color: #190c2d; margin-top: 1px; }
+
+    /* Interactive forecast graph */
+    .cockpit-forecast-box {
+      background: #fff;
+      border: 1px solid #e7def4;
+      border-radius: 14px;
+      padding: 10px 12px;
+    }
+    .forecast-head { display: flex; justify-content: space-between; font-size: 10.5px; font-weight: 700; color: #655d78; margin-bottom: 8px; }
+    .forecast-bars { display: flex; align-items: flex-end; height: 46px; gap: 5px; }
+    .forecast-bar-col { flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; cursor: pointer; }
+    .forecast-bar-fill { width: 100%; background: #cfc2e5; border-radius: 4px 4px 0 0; transition: all 0.2s; }
+    .forecast-bar-col:hover .forecast-bar-fill, .forecast-bar-col.active .forecast-bar-fill { background: var(--color-primary); }
+    /* Context switcher chips (Now / Trip / Typical) */
+    .cockpit-chips {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+    .cockpit-chip {
+      flex: 1;
+      padding: 7px 4px;
+      border-radius: 10px;
+      border: 1px solid #e2d9f3;
+      background: #fbf9fe;
+      font-size: 11px;
+      font-weight: 700;
+      color: #655d78;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.15s ease;
+    }
+    .cockpit-chip.active {
+      background: var(--color-primary);
+      color: #fff;
+      border-color: var(--color-primary);
+      box-shadow: 0 2px 6px rgba(91, 42, 134, 0.25);
+    }
+
+    /* Action buttons: Add to plan & Alert */
+    .action-btn-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .action-btn-item {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 8px 10px;
+      border-radius: 10px;
+      font-size: 11.5px;
+      font-weight: 800;
+      cursor: pointer;
+      border: none;
+      transition: transform 0.1s ease;
+    }
+    .action-btn-item:active { transform: scale(0.98); }
+    .action-btn-plan {
+      background: var(--color-primary);
+      color: #fff;
+    }
+    .action-btn-alert {
+      background: #f3edf9;
+      color: var(--color-primary);
+      border: 1px solid #d8c8ed;
+    }
+
+    /* Virtual Queue & Boarding Group Banner */
+    .queue-banner {
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-radius: 12px;
+      padding: 9px 12px;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .queue-banner-title { font-size: 11.5px; font-weight: 800; color: #1e40af; display: flex; align-items: center; gap: 6px; }
+    .queue-banner-val { font-size: 11px; font-weight: 700; color: #1d4ed8; }
+
+    /* Single Rider Line Strip */
+    .single-rider-strip {
+      background: #faf5ff;
+      border: 1.5px dashed #d8b4fe;
+      border-radius: 12px;
+      padding: 8px 12px;
+      margin-bottom: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .single-rider-title { font-size: 11.5px; font-weight: 800; color: #7e22ce; display: flex; align-items: center; gap: 6px; }
+    .single-rider-benefit { font-size: 11px; font-weight: 700; color: #6b21a8; }
+
+    /* Freshness Footer */
+    .freshness-footer {
+      display: flex;
+      justify-content: space-between;
+      font-size: 9.5px;
+      font-weight: 600;
+      color: #948ca5;
+      margin-top: 8px;
+      padding-top: 6px;
+      border-top: 1px solid #f0eaf7;
+    }
+
+    /* -------------------------------------------------------- */
+    /* SECTION 2: THE DISNEY EXPLORER'S PASSPORT (THE KEEPSAKE) */
+    /* -------------------------------------------------------- */
+    .passport-keepsake-card {
+      background: linear-gradient(135deg, #fffcf5 0%, #fdf8eb 100%);
+      border: 2px solid #ecd899;
+      border-radius: 22px;
+      padding: 18px 16px;
+      box-shadow: 0 6px 22px rgba(212, 160, 23, 0.12);
+      position: relative;
+    }
+    .passport-keepsake-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+    }
+    .passport-keepsake-title {
+      font-family: 'Cinzel', serif;
+      font-size: 13.5px;
+      font-weight: 800;
+      color: #78350f;
+      letter-spacing: 0.5px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .passport-badge-ribbon {
+      background: #fef3c7;
+      color: #92400e;
+      font-size: 10.5px;
+      font-weight: 800;
+      padding: 3px 10px;
+      border-radius: var(--radius-pill);
+      border: 1px solid #fde68a;
+    }
+
+    .passport-keepsake-body {
+      display: flex;
+      gap: 14px;
+      align-items: center;
+    }
+    /* Embossed Golden Stamp / Medallion */
+    .passport-gold-seal {
+      width: 84px;
+      height: 84px;
+      border: 3px dashed #d4a017;
+      border-radius: 14px;
+      transform: rotate(-2.5deg);
+      background: radial-gradient(circle, #fffdf7 40%, #fef4d4 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: 0 6px 16px rgba(212, 160, 23, 0.22);
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      flex-shrink: 0;
+    }
+    .passport-gold-seal:hover { transform: scale(1.08) rotate(0deg); }
+    .passport-gold-seal.shape-circle {
+      border-radius: 50% !important;
+      transform: rotate(0deg) !important;
+    }
+    .passport-gold-seal.shape-circle:hover {
+      transform: scale(1.08) rotate(4deg) !important;
+    }
+    .seal-num { font-family: 'Outfit', sans-serif; font-size: 28px; font-weight: 800; color: #b45309; line-height: 1; }
+    .seal-word { font-size: 9px; font-weight: 800; text-transform: uppercase; color: #92400e; letter-spacing: 0.5px; }
+    .seal-date { font-size: 8px; font-weight: 700; color: #b45309; opacity: 0.85; margin-top: 1px; }
+
+    .passport-journal-entry { flex: 1; }
+    .passport-star-score {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .passport-score-val { font-size: 15px; font-weight: 800; color: #b45309; }
+    .passport-quote-bubble {
+      background: #fff;
+      border: 1px solid #f3e5b8;
+      border-left: 3px solid #d4a017;
+      border-radius: 0 10px 10px 0;
+      padding: 8px 10px;
+      font-size: 11.5px;
+      font-style: italic;
+      color: #451a03;
+      margin-top: 8px;
+      line-height: 1.4;
+      box-shadow: 0 2px 6px rgba(212, 160, 23, 0.06);
+    }
+
+    .passport-history-timeline {
+      margin-top: 14px;
+      padding-top: 12px;
+      border-top: 1px dashed #e4d3a2;
+    }
+    .timeline-title { font-size: 11px; font-weight: 800; color: #78350f; margin-bottom: 6px; }
+    .timeline-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 10px;
+      background: rgba(255, 255, 255, 0.85);
+      border: 1px solid #eee2be;
+      border-radius: 10px;
+      margin-top: 6px;
+    }
+
+    /* -------------------------------------------------------- */
+    /* SECTION 3: IMAGINEERING FIELD GUIDE (STORY & SECRETS)    */
+    /* -------------------------------------------------------- */
+    .imagineering-guide-card {
+      background: #fff;
+      border-radius: 22px;
+      padding: 18px 16px;
+      border: 1px solid var(--color-border);
+      box-shadow: 0 4px 16px rgba(45, 18, 77, 0.05);
+    }
+    .guide-chapter-title {
+      font-family: 'Cinzel', serif;
+      font-size: 13.5px;
+      font-weight: 800;
+      color: var(--color-primary);
+      margin-bottom: 8px;
+      letter-spacing: 0.5px;
+    }
+    .guide-story-text {
+      font-size: 12.5px;
+      line-height: 1.55;
+      color: var(--color-text-primary);
+    }
+
+    /* Why Visit Insider Secrets Box */
+    .insider-secrets-box {
+      background: linear-gradient(135deg, #f9f5fe 0%, #f4edfb 100%);
+      border: 1.5px solid #ded1f1;
+      border-radius: 16px;
+      padding: 12px 14px;
+      margin-top: 14px;
+    }
+    .insider-badge {
+      font-size: 11px;
+      font-weight: 800;
+      color: var(--color-primary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin-bottom: 8px;
+    }
+    .insider-bullet {
+      font-size: 12px;
+      color: #190c2d;
+      line-height: 1.45;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+    }
+
+    /* Community Rating Pill Banner */
+    .community-guest-strip {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: #fffcf4;
+      border: 1px solid #f6e6be;
+      border-radius: 14px;
+      padding: 10px 14px;
+      margin-top: 14px;
+    }
+    .guest-score-dial {
+      background: #fef3c7;
+      border: 1px solid #fde68a;
+      border-radius: 10px;
+      padding: 6px 10px;
+      text-align: center;
+    }
+    .guest-score-num { font-family: 'Outfit', sans-serif; font-size: 22px; font-weight: 800; color: #b45309; line-height: 1; }
+    .guest-score-lbl { font-size: 8.5px; font-weight: 700; color: #92400e; }
+
+    /* Accessibility & Facets Harmony Cloud */
+    .facets-cloud {
+      margin-top: 14px;
+      padding-top: 12px;
+      border-top: 1px dashed var(--color-border);
+    }
+    .cloud-lbl { font-size: 10px; font-weight: 700; color: #655d78; text-transform: uppercase; margin-bottom: 6px; }
+    .cloud-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 10px; }
+    .cloud-pill {
+      background: #f1ecf9;
+      color: #190c2d;
+      border: 1px solid #e2d7f2;
+      padding: 4px 10px;
+      border-radius: var(--radius-pill);
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    /* -------------------------------------------------------- */
+    /* SECTION 4: ADVENTURELAND EXPEDITION MAP                  */
+    /* -------------------------------------------------------- */
+    .expedition-map-card {
+      background: #fff;
+      border-radius: 22px;
+      overflow: hidden;
+      border: 1.5px solid var(--color-border);
+      box-shadow: 0 6px 20px rgba(45, 18, 77, 0.08);
+    }
+    .expedition-map-frame {
+      width: 100%;
+      height: 195px;
+      position: relative;
+    }
+    .expedition-map-frame img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .expedition-map-body {
+      padding: 14px 16px;
+    }
+    .route-brief-title { font-size: 13.5px; font-weight: 800; color: #190c2d; }
+    .route-brief-sub { font-size: 11px; color: #655d78; margin-top: 2px; }
+    .route-walking-callout {
+      font-size: 11.5px;
+      color: #4338ca;
+      background: #eef2ff;
+      border: 1px solid #c7d2fe;
+      padding: 8px 12px;
+      border-radius: 10px;
+      margin-top: 10px;
+      line-height: 1.4;
+    }
+
+    /* ======================================================== */
+    /* FLOATING ACTION CAPSULE (ERGONOMIC SAFE-AREA DOCK)       */
+    /* ======================================================== */
+    .after-dock {
+      position: absolute;
+      bottom: 14px;
+      left: 14px;
+      right: 14px;
+      z-index: 100;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(20px);
+      border: 1.5px solid rgba(230, 222, 242, 0.95);
+      border-radius: var(--radius-pill);
+      padding: 7px 9px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      box-shadow: 0 10px 30px rgba(91, 42, 134, 0.24);
+    }
+    .after-dock-primary {
+      flex: 1.35;
+      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
+      color: #fff;
+      border: none;
+      padding: 12px 14px;
+      border-radius: var(--radius-pill);
+      font-size: 13px;
+      font-weight: 800;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      box-shadow: 0 3px 10px rgba(91, 42, 134, 0.35);
+      transition: all 0.15s ease;
+      white-space: nowrap;
+    }
+    .after-dock-primary:active { transform: scale(0.97); }
+    .after-dock-sec {
+      flex: 1;
+      background: var(--color-surface-alt);
+      color: var(--color-primary-dark);
+      border: 1.5px solid #ded3f0;
+      padding: 12px 12px;
+      border-radius: var(--radius-pill);
+      font-size: 12.5px;
+      font-weight: 800;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+    }
+    .after-dock-sec:hover { background: #f0eaf8; border-color: var(--color-primary-light); }
+    .after-dock-sec:active { transform: scale(0.97); }
+
+    /* Lens Switcher (Tactile Park vs Keepsake Pill) */
+    .lens-switcher {
+      display: flex;
+      background: #ede6f6;
+      border-radius: var(--radius-pill);
+      padding: 4px;
+      margin: 10px 14px 6px;
+      gap: 4px;
+      border: 1px solid #dcd1ec;
+      box-shadow: inset 0 2px 4px rgba(91, 42, 134, 0.06);
+    }
+    .lens-btn {
+      flex: 1;
+      border: none;
+      background: transparent;
+      color: #655d78;
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 800;
+      padding: 9px 8px;
+      border-radius: var(--radius-pill);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .lens-btn:hover { color: var(--color-primary); }
+    .lens-btn.active {
+      background: #ffffff;
+      color: var(--color-primary);
+      box-shadow: 0 3px 10px rgba(91, 42, 134, 0.18);
+    }
+
+    /* Bento Mode Styles */
+    .bento-grid-container {
+      display: none;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      padding: 10px 14px 24px;
+    }
+    .bento-tile {
+      background: #fff;
+      border-radius: 18px;
+      border: 1.5px solid var(--color-border);
+      padding: 14px;
+      box-shadow: 0 4px 14px rgba(91, 42, 134, 0.06);
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .bento-tile:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 22px rgba(91, 42, 134, 0.14);
+      border-color: var(--color-primary-light);
+    }
+    .bento-tile-wide { grid-column: span 2; }
+    .bento-tile-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 11px; font-weight: 800; color: #655d78; text-transform: uppercase; }
+    .bento-tile-val { font-size: 20px; font-weight: 800; color: var(--color-text-primary); line-height: 1.1; }
+    .bento-tile-sub { font-size: 11px; color: #655d78; margin-top: 4px; }
+    .bento-pill-action { font-size: 10px; font-weight: 800; color: var(--color-primary); display: flex; align-items: center; gap: 3px; margin-top: 8px; }
+
+    /* ======================================================== */
+    /* RESORT DETAIL REDESIGN STYLING                           */
+    /* ======================================================== */
+    .resort-card {
+      background: #fff;
+      border-radius: 20px;
+      border: 1.5px solid var(--color-border);
+      padding: 14px 16px;
+      box-shadow: 0 4px 16px rgba(45, 18, 77, 0.06);
+      margin-bottom: 12px;
+    }
+    .resort-card-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .resort-card-title {
+      font-size: 13.5px;
+      font-weight: 800;
+      color: #190c2d;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .resort-tier-pill {
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      padding: 3px 9px;
+      border-radius: var(--radius-pill);
+      background: #fdf4ff;
+      color: #a21caf;
+      border: 1px solid #f0abfc;
+    }
+    .resort-overview-desc {
+      font-size: 12px;
+      line-height: 1.5;
+      color: #4a4358;
+    }
+    .resort-highlights-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .resort-highlight-item {
+      background: #fbf9fe;
+      border: 1px solid #e7def4;
+      border-radius: 12px;
+      padding: 8px 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .resort-highlight-icon { font-size: 18px; }
+    .resort-highlight-text { font-size: 11px; font-weight: 700; color: #190c2d; line-height: 1.2; }
+    .resort-highlight-sub { font-size: 9px; color: #786f8a; font-weight: 600; margin-top: 1px; }
+
+    /* Resort Dining Directory */
+    .resort-dining-item {
+      background: #fbf9fe;
+      border: 1px solid #e8e0f5;
+      border-radius: 14px;
+      padding: 10px 12px;
+      margin-top: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: all 0.15s ease;
+      cursor: pointer;
+    }
+    .resort-dining-item:hover {
+      background: #f5edfc;
+      border-color: #cbb8e8;
+      transform: translateX(2px);
+    }
+    .resort-dining-name { font-size: 12.5px; font-weight: 800; color: #190c2d; }
+    .resort-dining-desc { font-size: 10px; color: #655d78; margin-top: 2px; }
+    .resort-dining-meta { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
+    .resort-dining-tag {
+      font-size: 9.5px;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: var(--radius-pill);
+      background: #efe9f7;
+      color: var(--color-primary);
+    }
+    .resort-dining-price { font-size: 10.5px; font-weight: 800; color: #15803d; }
+    .resort-dining-btn {
+      padding: 6px 12px;
+      background: var(--color-primary);
+      color: #fff;
+      border-radius: var(--radius-pill);
+      font-size: 10.5px;
+      font-weight: 800;
+      border: none;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    /* Recreation & Amenities */
+    .resort-recreation-item {
+      background: #fdfcff;
+      border: 1px solid #ece4f7;
+      border-radius: 12px;
+      padding: 9px 11px;
+      margin-top: 8px;
+    }
+    .resort-recreation-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .resort-recreation-name { font-size: 12px; font-weight: 800; color: #190c2d; }
+    .resort-recreation-badge {
+      font-size: 9px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: var(--radius-pill);
+      background: #ecfdf5;
+      color: #047857;
+      border: 1px solid #a7f3d0;
+    }
+    .resort-recreation-desc { font-size: 10.5px; color: #655d78; margin-top: 3px; line-height: 1.35; }
+
+    /* Transportation Strip */
+    .resort-transit-pill {
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      color: #1e40af;
+      border-radius: 8px;
+      padding: 5px 9px;
+      font-size: 10px;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    #confetti-layer { position: absolute; inset: 0; pointer-events: none; z-index: 999; }
+  </style>
+</head>
+<body class="mode-scroll mode-lens">
+
+  <div class="top-bar">
+    <div class="top-title">Disney World Tracker — Experience Field Guide</div>
+    <div class="top-sub">Signature Purple Header • Tactical Live Cockpit • Golden Explorer's Passport • Imagineering Secrets</div>
+    
+    <div class="control-row">
+      <!-- Presentation UX Mode -->
+      <div class="control-group">
+        <span class="control-label">Presentation UX:</span>
+        <button class="toggle-btn active" id="btn-ux-lens" onclick="switchUX('lens')">
+          ⚡ Two-Lens Living Guide (Recommended)
+        </button>
+        <button class="toggle-btn" id="btn-ux-bento" onclick="switchUX('bento')">
+          🎴 Bento Glanceable Stage
+        </button>
+        <button class="toggle-btn" id="btn-ux-stream" onclick="switchUX('stream')">
+          📜 Full Continuous Scroll
+        </button>
+      </div>
+
+      <!-- Stamp Shape Switcher -->
+      <div class="control-group">
+        <span class="control-label">Stamp Shape:</span>
+        <button class="toggle-btn active" id="btn-stamp-square" onclick="setStampShape('square')">
+          🔲 Square Postage Stamp (Recommended)
+        </button>
+        <button class="toggle-btn" id="btn-stamp-circle" onclick="setStampShape('circle')">
+          ⭕ Circular Medallion
+        </button>
+      </div>
+
+      <!-- Experience Type Switcher -->
+      <div class="control-group">
+        <span class="control-label">Experience:</span>
+        <button class="toggle-btn active" id="btn-pirates" onclick="switchExperience('pirates')">
+          🏴‍☠️ Pirates
+        </button>
+        <button class="toggle-btn" id="btn-space" onclick="switchExperience('space')">
+          🚀 Space Mtn
+        </button>
+        <button class="toggle-btn" id="btn-dining" onclick="switchExperience('dining')">
+          🍽️ Be Our Guest
+        </button>
+        <button class="toggle-btn" id="btn-show" onclick="switchExperience('show')">
+          🎭 Lion King
+        </button>
+        <button class="toggle-btn" id="btn-resort" onclick="switchExperience('resort')">
+          🏨 Coronado Springs
+        </button>
+      </div>
+
+      <!-- View Frame Switcher -->
+      <div class="control-group">
+        <span class="control-label">View Frame:</span>
+        <button class="toggle-btn active" id="btn-view-scroll" onclick="switchView('scroll')">
+          📱 Phone Frame
+        </button>
+        <button class="toggle-btn" id="btn-view-unrolled" onclick="switchView('unrolled')">
+          📜 Unrolled
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="mockup-viewport">
+
+    <!-- ============================================== -->
+    <!-- COLUMN 1: CURRENT "BEFORE" SCREEN (100% MATCH) -->
+    <!-- ============================================== -->
+    <div class="device-column">
+      <div class="device-label">
+        <span>Current App</span>
+        <span class="pill pill-before">Before (14 Generic White Boxes)</span>
+      </div>
+
+      <div class="phone-chassis">
+        <div class="phone-notch"></div>
+
+        <div class="phone-scroll-body" id="before-scroll-body">
+          <div style="background: linear-gradient(180deg, #5b2a86 0%, #47216a 100%); padding: 46px 16px 14px; color: #fff;">
+            <div style="font-size: 18.5px; font-weight: 800;" id="before-head-title">🚀 Pirates of the Caribbean</div>
+            <div style="font-size: 12px; color: #dcd1ed; margin-top: 2px;">★ Magic Kingdom</div>
+          </div>
+
+          <div class="before-content">
+            <img class="before-hero-img" id="before-img" src="assets/pirates_hero.jpg" alt="Ride">
+
+            <div class="before-badge-row">
+              <div class="before-pill" id="before-park-pill">📍 Magic Kingdom</div>
+              <div class="before-pill" id="before-cat-pill">🚀 Ride</div>
+            </div>
+
+            <!-- Quick Specs Ribbon (as rendered currently on mobile) -->
+            <div id="before-quick-specs" style="display: none; background: #fff; border: 1px solid var(--color-border); border-radius: 12px; padding: 7px 10px; justify-content: space-around; font-size: 11px; font-weight: 700; color: #190c2d;">
+              <span id="before-spec-1">📏 Any Height</span>
+              <span style="color: #cbd5e1;">|</span>
+              <span id="before-spec-2" style="color: #0284c7;">❄️ Indoor A/C</span>
+              <span style="color: #cbd5e1;">|</span>
+              <span id="before-spec-3">✨ Resort</span>
+            </div>
+
+            <!-- Broken Live Unavailable Card (as rendered currently on mobile) -->
+            <div class="magic-card" id="before-live-unavailable" style="display: none; text-align: center; padding: 22px 14px;">
+              <div style="width: 44px; height: 44px; border-radius: 22px; background: #f1ecf9; display: flex; align-items: center; justify-content: center; margin: 0 auto 10px; font-size: 20px;">
+                ☁️
+              </div>
+              <div style="font-weight: 800; font-size: 13.5px; color: #190c2d; margin-bottom: 4px;">Live information currently unavailable</div>
+              <div style="font-size: 11.5px; color: #655d78; line-height: 1.4;">We couldn't load live details right now. Please try again later.</div>
+            </div>
+
+            <button class="before-share-btn"><span>↗</span> Share</button>
+
+            <!-- Card 1: Location -->
+            <div class="magic-card" id="before-location-card">
+              <div style="font-weight: 800; font-size: 14px; margin-bottom: 6px;" id="before-location-title">Location</div>
+              <div style="display: flex; gap: 6px; margin-bottom: 6px;">
+                <div class="before-pill" style="padding: 4px 8px; font-size: 10px;" id="before-loc-p1">Magic Kingdom</div>
+                <div class="before-pill" style="padding: 4px 8px; font-size: 10px;" id="before-land-pill">Adventureland</div>
+              </div>
+              <img class="before-map-img" id="before-map-img" src="assets/adventureland_map.jpg" alt="Map view">
+              <div id="before-loc-walking" style="display: none; font-size: 11px; color: #4338ca; background: #eef2ff; border: 1px solid #c7d2fe; padding: 7px 10px; border-radius: 8px; margin-bottom: 8px; line-height: 1.35;">
+                🚶 <b>~4 min walk from Central Plaza</b> • Located in the park.
+              </div>
+              <button class="before-outline-btn">📍 Get directions</button>
+            </div>
+
+            <!-- Card 2: Your visit -->
+            <div class="magic-card">
+              <div style="font-weight: 800; font-size: 14px; margin-bottom: 6px;">Your visit</div>
+              <div class="before-pill" style="margin-bottom: 8px;">Completed • 2 visits</div>
+              <button class="before-share-btn" style="padding: 9px; font-size: 12px; margin-bottom: 10px;">⊕ Log another visit</button>
+              
+              <div style="font-size: 12px; font-weight: 700; color: #1f1235; margin-bottom: 6px;">Visit history (2) ▾</div>
+              <div style="font-size: 11px; color: #2e9e6b; font-weight: 700;">✓ Completed on 2026-07-03</div>
+              <div class="before-btn-pair">
+                <div class="before-btn-sub">📅 Edit date</div>
+                <div class="before-btn-sub before-btn-danger">⊗ Unmark</div>
+              </div>
+
+              <div style="font-size: 13px; font-weight: 800; color: #f59e0b; margin-top: 10px;">★ 10 / 10</div>
+              <div class="before-btn-pair">
+                <div class="before-btn-sub">✏ Change</div>
+                <div class="before-btn-sub before-btn-danger">🗑 Remove</div>
+              </div>
+
+              <div style="font-size: 11px; font-style: italic; color: #6b6480; margin-top: 10px;" id="before-note">“Yo ho, yo ho, a pirate’s life for me!”</div>
+              <div style="font-size: 10px; color: #8e87a2; margin-top: 2px;">Shared with friends</div>
+              <div class="before-btn-pair">
+                <div class="before-btn-sub">✏ Edit</div>
+                <div class="before-btn-sub before-btn-danger">🗑 Delete</div>
+              </div>
+            </div>
+
+            <!-- Card 3: Wait & Status Card -->
+            <div class="magic-card" id="before-live-card">
+              <div style="font-weight: 800; font-size: 14px; margin-bottom: 6px;">Wait &amp; Status</div>
+              <div style="display: inline-block; background: #ecfdf5; color: #16a34a; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; margin-bottom: 8px;" id="before-status-badge">Operating</div>
+              <div style="font-size: 11px; color: #6b6480;" id="before-ll-text">Standby wait: <b>15 min</b></div>
+              <div style="font-size: 11px; color: #6b6480;" id="before-window-text">Lightning Lane: <b>Available (11:45 AM - 12:45 PM)</b></div>
+            </div>
+
+            <!-- Card 4: Wait Insights Card -->
+            <div class="magic-card" id="before-insights-card">
+              <div style="background: #2e9e6b; color: #fff; padding: 8px; border-radius: 8px; font-size: 11px;" id="before-strat-box">
+                <b>🎯 BEST TIME TO RIDE: Rope drop</b><br>Lowest waits (~8 min). Avoid 3 PM (~16 min).
+              </div>
+            </div>
+
+            <!-- Card 5: About Card -->
+            <div class="magic-card">
+              <div style="font-weight: 800; font-size: 14px; margin-bottom: 6px;">About</div>
+              <div style="font-size: 11.5px; line-height: 1.45; color: #6b6480;" id="before-about">
+                Set sail on a swashbuckling voyage to a long-forgotten time and place when pirates and privateers ruled the seas. Disney PhotoPass Service is available at this attraction.
+              </div>
+            </div>
+
+            <!-- Card 6: Community Rating Card -->
+            <div class="magic-card" id="before-comm-card">
+              <div style="font-weight: 800; font-size: 14px; margin-bottom: 6px;">Community Rating</div>
+              <div style="font-size: 13.5px; font-weight: 800; color: #f59e0b;" id="before-comm-rating">★ 7.7 / 10 <span style="font-size: 11px; color: #6b6480;">(3 ratings)</span></div>
+            </div>
+
+            <!-- Card 7: Good for Card -->
+            <div class="magic-card" style="margin-bottom: 24px;">
+              <div style="font-weight: 800; font-size: 14px; margin-bottom: 6px;">Good for</div>
+              <div style="display: flex; flex-wrap: wrap; gap: 4px;" id="before-tags-box">
+                <div class="before-pill" style="font-size: 9.5px;">Kids</div>
+                <div class="before-pill" style="font-size: 9.5px;">All Ages</div>
+                <div class="before-pill" style="font-size: 9.5px;">Slow Rides</div>
+                <div class="before-pill" style="font-size: 9.5px;">Water Rides</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================== -->
+    <!-- COLUMN 2: REDESIGNED FIELD GUIDE ("THIS IS IT")-->
+    <!-- ============================================== -->
+    <div class="device-column">
+      <div class="device-label">
+        <span>Redesigned App</span>
+        <span class="pill pill-after">Disney Field Guide &amp; Keepsake</span>
+      </div>
+
+      <div class="phone-chassis" id="after-chassis">
+        <div class="phone-notch"></div>
+        <canvas id="confetti-layer"></canvas>
+
+        <div class="phone-scroll-body" id="after-scroll-body">
+          
+          <!-- 1. SIGNATURE PURPLE GRADIENT HEADER (AUTHENTIC APP BRAND) -->
+          <div class="app-purple-header">
+            <div class="header-back-circle" onclick="alert('Navigate back')">←</div>
+            <div class="header-title-wrap">
+              <div class="header-title" id="after-head-title">🚀 Pirates of the Caribbean</div>
+              <div class="header-sub" id="after-head-sub">★ Magic Kingdom</div>
+            </div>
+            <div class="header-action-circle" id="share-btn" onclick="openShareComposer()" title="Share Experience (opens ShareComposer)">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>
+                <polyline points="16 6 12 2 8 6"/>
+                <line x1="12" y1="2" x2="12" y2="15"/>
+              </svg>
+            </div>
+          </div>
+
+          <!-- 2. DRAMATIC PHOTO CANOPY WITH BADGES -->
+          <div class="after-photo-card">
+            <img class="after-photo-img" id="after-photo-img" src="assets/pirates_hero.jpg" alt="Attraction">
+            <div class="after-photo-scrim"></div>
+            <div class="after-photo-badges">
+              <div class="after-land-pill" id="after-land">📍 Adventureland</div>
+              <div class="after-comm-rating-pill" id="after-comm-pill">★ 7.7 <span style="font-size: 9.5px; opacity: 0.9;">(3 ratings)</span></div>
+            </div>
+          </div>
+
+          <!-- 3. AIRY SPECS RIBBON (NO CLUNKY BOXES) -->
+          <div class="specs-ribbon" id="after-bento-strip">
+            <div class="spec-item">
+              <span class="spec-icon" id="bento-duration-icon">⏱️</span>
+              <span class="spec-val" id="bento-duration">9 min ride</span>
+            </div>
+            <div class="spec-sep"></div>
+            <div class="spec-item">
+              <span class="spec-icon" id="bento-height-icon">📏</span>
+              <span class="spec-val" id="bento-height">Any Height</span>
+            </div>
+            <div class="spec-sep"></div>
+            <div class="spec-item">
+              <span class="spec-icon" id="bento-climate-icon">❄️</span>
+              <span class="spec-val" id="bento-climate" style="color: #0284c7;">Indoor A/C</span>
+            </div>
+            <div class="spec-sep"></div>
+            <div class="spec-item">
+              <span class="spec-icon" id="bento-feature-icon">🌊</span>
+              <span class="spec-val" id="bento-feature">Water Classic</span>
+            </div>
+          </div>
+
+          <!-- LENS SWITCHER TACTILE CONTROL -->
+          <div class="lens-switcher" id="lens-switcher-bar">
+            <button class="lens-btn active" id="lens-btn-park" onclick="switchLens('park')">
+              <span id="lens-btn-park-icon">⚡</span> <span id="lens-btn-park-label">Today in Park</span>
+            </button>
+            <button class="lens-btn" id="lens-btn-passport" onclick="switchLens('passport')">
+              <span id="lens-btn-passport-icon">🧭</span> <span id="lens-btn-passport-label">My Passport &amp; Lore</span>
+            </button>
+          </div>
+
+          <!-- ============================================== -->
+          <!-- LENS 1: TODAY IN PARK (TACTICAL PARK COMPANION)-->
+          <!-- ============================================== -->
+          <div class="experience-story-stream" id="lens-park-view">
+
+            <!-- CHAPTER 1: TACTICAL LIVE PARK COCKPIT -->
+            <div class="cockpit-card" id="sec-wait-strategy">
+              <!-- Context Switcher (Now / Trip / Typical) -->
+              <div class="cockpit-chips">
+                <button class="cockpit-chip active" id="chip-now" onclick="switchWaitContext('Now')">Now</button>
+                <button class="cockpit-chip" id="chip-trip" onclick="switchWaitContext('Trip')">Trip (Oct 14)</button>
+                <button class="cockpit-chip" id="chip-typical" onclick="switchWaitContext('Typical')">Typical</button>
+              </div>
+
+              <div class="cockpit-head">
+                <div class="cockpit-title">
+                  <span>⚡</span> <span id="cockpit-headline-text">Live Park Cockpit</span>
+                </div>
+                <div class="pulse-status-badge" id="after-op-badge">
+                  <span class="pulse-dot"></span>
+                  <span id="cockpit-op-status">Operating</span>
+                </div>
+              </div>
+
+              <!-- Virtual Queue Banner (Conditional when attraction has VQ or in demo) -->
+              <div class="queue-banner" id="sec-vq-banner" style="display: none;">
+                <div class="queue-banner-title">
+                  <span>🎫</span> <span>Virtual Queue</span>
+                </div>
+                <div class="queue-banner-val" id="vq-status-text">Now Boarding: Groups 45–60</div>
+              </div>
+
+              <!-- High-Contrast Dual Instruments -->
+              <div class="cockpit-instruments">
+                <div class="wait-dial-hero">
+                  <div class="wait-dial-num" id="after-live-val">
+                    15 <span>min</span>
+                  </div>
+                  <div class="wait-dial-lbl" id="after-live-lbl">Standby Wait</div>
+                  <div class="wait-dial-sub" id="after-live-sub">Typical is ~8 min</div>
+                </div>
+
+                <div class="fastpass-ticket">
+                  <div class="fastpass-tag">⚡ Lightning Lane</div>
+                  <div class="fastpass-window" id="after-ll-status">11:45 AM – 12:45 PM</div>
+                  <div class="fastpass-benefit" id="after-ll-sub">Saves ~10 min • Sells out ~1 PM • $22 peak</div>
+                </div>
+              </div>
+
+              <!-- Single Rider Line Callout (Shown when experience has Single Rider) -->
+              <div class="single-rider-strip" id="sec-single-rider" style="display: none;">
+                <div class="single-rider-title">
+                  <span>🚶 Single Rider Line:</span>
+                  <span style="font-weight: 900; color: #581c87;" id="single-rider-wait">10 min</span>
+                </div>
+                <div class="single-rider-benefit" id="single-rider-sub">Saves ~5 min • Party will be split</div>
+              </div>
+
+              <!-- Tactical Action Buttons -->
+              <div class="action-btn-row">
+                <button class="action-btn-item action-btn-plan" onclick="alert('Added to your active day plan!')">
+                  <span>＋</span> <span>Add to my plan</span>
+                </button>
+                <button class="action-btn-item action-btn-alert" onclick="alert('Wait time alert created! You will be notified when wait drops below 30 min.')">
+                  <span>🔔</span> <span>Alert &lt; 30 min</span>
+                </button>
+              </div>
+
+              <!-- Best Time Verdict -->
+              <div class="cockpit-verdict">
+                <b id="verdict-title">🎯 Best Time to Ride: Rope Drop</b>
+                <div id="after-strat-text">Lowest waits (~8 min). Avoid peak around 3 PM (~16 min).</div>
+              </div>
+
+              <!-- Typical/Worst & Reliability (from WaitInsightsDTO: p50, p90, downRate) -->
+              <div class="cockpit-stats-row">
+                <div class="stat-cell">
+                  <div class="stat-cell-lbl">Typical / Worst</div>
+                  <div class="stat-cell-val" id="after-typical-val">8 / 16 min</div>
+                </div>
+                <div class="stat-cell">
+                  <div class="stat-cell-lbl">Reliability</div>
+                  <div class="stat-cell-val" id="after-rel-val" style="color: #16a34a;">94% uptime</div>
+                </div>
+              </div>
+
+              <!-- Hourly Prediction Curve -->
+              <div class="cockpit-forecast-box">
+                <div class="forecast-head">
+                  <span id="forecast-context-title">Predicted Wait — Today</span>
+                  <span style="color: var(--color-primary); font-weight: 800;" id="scrub-label">Tap bars to inspect</span>
+                </div>
+                <div class="forecast-bars" id="forecast-bars-container">
+                  <div class="forecast-bar-col best" onclick="scrubHour('9 AM', 8)"><div class="forecast-bar-fill" style="height: 25%;"></div></div>
+                  <div class="forecast-bar-col" onclick="scrubHour('10 AM', 12)"><div class="forecast-bar-fill" style="height: 40%;"></div></div>
+                  <div class="forecast-bar-col" onclick="scrubHour('11 AM', 14)"><div class="forecast-bar-fill" style="height: 50%;"></div></div>
+                  <div class="forecast-bar-col active" onclick="scrubHour('12 PM', 15)"><div class="forecast-bar-fill" style="height: 55%;"></div></div>
+                  <div class="forecast-bar-col" onclick="scrubHour('1 PM', 16)"><div class="forecast-bar-fill" style="height: 60%;"></div></div>
+                  <div class="forecast-bar-col" onclick="scrubHour('2 PM', 18)"><div class="forecast-bar-fill" style="height: 70%;"></div></div>
+                  <div class="forecast-bar-col" onclick="scrubHour('3 PM', 22)"><div class="forecast-bar-fill" style="height: 85%;"></div></div>
+                  <div class="forecast-bar-col" onclick="scrubHour('4 PM', 20)"><div class="forecast-bar-fill" style="height: 75%;"></div></div>
+                  <div class="forecast-bar-col" onclick="scrubHour('6 PM', 15)"><div class="forecast-bar-fill" style="height: 55%;"></div></div>
+                  <div class="forecast-bar-col" onclick="scrubHour('7 PM', 12)"><div class="forecast-bar-fill" style="height: 45%;"></div></div>
+                  <div class="forecast-bar-col best" onclick="scrubHour('8 PM', 10)"><div class="forecast-bar-fill" style="height: 35%;"></div></div>
+                  <div class="forecast-bar-col best" onclick="scrubHour('9 PM', 8)"><div class="forecast-bar-fill" style="height: 25%;"></div></div>
+                </div>
+                <div class="forecast-axis"><span>9 AM</span><span>3 PM (Peak)</span><span>9 PM (Close)</span></div>
+                <div style="font-size: 10px; color: #16a34a; font-weight: 700; margin-top: 6px; text-align: center;" id="lowest-forecast-legend">
+                  Lowest predicted wait: 8 min at 9:00 AM
+                </div>
+
+                <!-- Real freshness timestamps from LiveDetailResponseDTO -->
+                <div class="freshness-footer">
+                  <span id="foot-retrieved">Retrieved today, 7:44 PM</span>
+                  <span id="foot-updated">Source updated 7:36 PM</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Dining Live Hours (When Restaurant) -->
+            <div class="cockpit-card" id="sec-dining" style="display: none;">
+              <div class="cockpit-head">
+                <div class="cockpit-title">🍽️ Reservations &amp; Dishes</div>
+                <div class="pulse-status-badge"><span class="pulse-dot"></span><span>Open Today</span></div>
+              </div>
+              <button style="width: 100%; background: #d97706; color: #fff; padding: 11px; border-radius: 12px; border: none; font-weight: 800; font-size: 12.5px; cursor: pointer;" onclick="alert('Opening official Disney dining reservation page in browser...')">
+                📅 Reserve on Disney's Site
+              </button>
+              <!-- Food item logging buttons (Feature: food-item-logging) -->
+              <div style="margin-top: 10px; padding-top: 10px; border-top: 1px dashed #e2d9f3; display: flex; gap: 8px;">
+                <button style="flex: 1; background: #5b2a86; color: #fff; padding: 9px 8px; border-radius: 10px; border: none; font-weight: 800; font-size: 11.5px; cursor: pointer;" onclick="alert('Opening FoodItemPickerModal: Choose a dish at Be Our Guest to rate and log...')">
+                  🍽️ Log a Dish
+                </button>
+                <button style="flex: 1; background: #fbf9fe; border: 1.5px solid #dcd1ed; color: #5b2a86; padding: 9px 8px; border-radius: 10px; font-weight: 800; font-size: 11.5px; cursor: pointer;" onclick="switchLens('passport')">
+                  ⏱️ My Dishes (3) →
+                </button>
+              </div>
+            </div>
+
+            <!-- Restaurant Menus Card (When Restaurant) -->
+            <div class="cockpit-card" id="sec-restaurant-menus" style="display: none;">
+              <div class="cockpit-head">
+                <div class="cockpit-title">📋 Menus</div>
+                <span style="font-size: 10.5px; font-weight: 700; color: #655d78;">2 menus available</span>
+              </div>
+              <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px;">
+                <button style="padding: 7px 14px; border-radius: 999px; font-size: 11.5px; font-weight: 700; background: #fbf9fe; border: 1.5px solid #dcd1ed; color: #5b2a86; cursor: pointer;" onclick="alert('Opening Lunch Menu...')">
+                  🍴 Lunch
+                </button>
+                <button style="padding: 7px 14px; border-radius: 999px; font-size: 11.5px; font-weight: 700; background: #fbf9fe; border: 1.5px solid #dcd1ed; color: #5b2a86; cursor: pointer;" onclick="alert('Opening Dinner Menu...')">
+                  🍴 Dinner
+                </button>
+              </div>
+            </div>
+
+            <!-- Showtimes Schedule (When Show) -->
+            <div class="cockpit-card" id="sec-showtimes" style="display: none;">
+              <div class="cockpit-head">
+                <div class="cockpit-title">🎭 Today's Showtimes</div>
+                <div class="pulse-status-badge"><span class="pulse-dot"></span><span>Next at 1:00 PM</span></div>
+              </div>
+              <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px;">
+                <div style="padding: 6px 10px; border-radius: 8px; font-size: 11px; font-weight: 700; background: #e5e7eb; color: #9ca3af;">10:00 AM</div>
+                <div style="padding: 6px 10px; border-radius: 8px; font-size: 11px; font-weight: 800; background: #16a34a; color: #fff;">1:00 PM (Next)</div>
+                <div style="padding: 6px 10px; border-radius: 8px; font-size: 11px; font-weight: 700; background: var(--color-surface-alt); border: 1px solid var(--color-border);">2:00 PM</div>
+              </div>
+            </div>
+
+            <!-- ============================================== -->
+            <!-- RESORT SPECIFIC SECTIONS                       -->
+            <!-- ============================================== -->
+            <!-- 1. Resort Guide & Highlights Card -->
+            <div class="resort-card" id="sec-resort-guide" style="display: none;">
+              <div class="resort-card-head">
+                <div class="resort-card-title">
+                  <span>🏨</span> <span>Resort Guide &amp; Highlights</span>
+                </div>
+                <span class="resort-tier-pill">Moderate Resort</span>
+              </div>
+              <div class="resort-overview-desc">
+                Celebrate the romance of Spanish, Mexican, and Southwest American cultures centered around scenic 22-acre Lago Dorado. Home to Gran Destino Tower, the iconic Dig Site pyramid pool, and destination dining.
+              </div>
+              <div class="resort-highlights-grid">
+                <div class="resort-highlight-item">
+                  <span class="resort-highlight-icon">🏰</span>
+                  <div>
+                    <div class="resort-highlight-text">Gran Destino Tower</div>
+                    <div class="resort-highlight-sub">16-story luxury hub</div>
+                  </div>
+                </div>
+                <div class="resort-highlight-item">
+                  <span class="resort-highlight-icon">🏊</span>
+                  <div>
+                    <div class="resort-highlight-text">The Dig Site Pool</div>
+                    <div class="resort-highlight-sub">50-ft Mayan pyramid</div>
+                  </div>
+                </div>
+                <div class="resort-highlight-item">
+                  <span class="resort-highlight-icon">🍽️</span>
+                  <div>
+                    <div class="resort-highlight-text">5 Dining Venues</div>
+                    <div class="resort-highlight-sub">Rooftop &amp; lakeside</div>
+                  </div>
+                </div>
+                <div class="resort-highlight-item">
+                  <span class="resort-highlight-icon">🚌</span>
+                  <div>
+                    <div class="resort-highlight-text">Direct Bus Service</div>
+                    <div class="resort-highlight-sub">All 4 parks &amp; Springs</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 2. Dining at this Resort Card -->
+            <div class="resort-card" id="sec-resort-dining" style="display: none;">
+              <div class="resort-card-head">
+                <div class="resort-card-title">
+                  <span>🍽️</span> <span>Dining &amp; Lounges at the Resort (5)</span>
+                </div>
+                <span style="font-size: 10.5px; font-weight: 700; color: #655d78;">Tap to inspect</span>
+              </div>
+              <div style="font-size: 11px; color: #655d78; margin-bottom: 4px;">
+                Award-winning Spanish tapas, Tex-Mex feasts, and panoramic rooftop views:
+              </div>
+              <div class="resort-dining-item" onclick="alert('Opening Toledo – Tapas, Steak & Seafood menu and booking...')">
+                <div>
+                  <div class="resort-dining-name">Toledo – Tapas, Steak &amp; Seafood</div>
+                  <div class="resort-dining-desc">Rooftop signature dining atop Gran Destino Tower • Surrealist Spanish interior</div>
+                  <div class="resort-dining-meta">
+                    <span class="resort-dining-tag">Rooftop Signature</span>
+                    <span class="resort-dining-price">$$$$</span>
+                  </div>
+                </div>
+                <button class="resort-dining-btn">Reserve</button>
+              </div>
+
+              <div class="resort-dining-item" onclick="alert('Opening Three Bridges Bar & Grill details...')">
+                <div>
+                  <div class="resort-dining-name">Three Bridges Bar &amp; Grill</div>
+                  <div class="resort-dining-desc">Lakeside open-air dining at Villa del Lago • Sangria flights &amp; warm churros</div>
+                  <div class="resort-dining-meta">
+                    <span class="resort-dining-tag">Lakeside Casual</span>
+                    <span class="resort-dining-price">$$</span>
+                  </div>
+                </div>
+                <button class="resort-dining-btn">Menu ›</button>
+              </div>
+
+              <div class="resort-dining-item" onclick="alert('Opening Maya Grill details...')">
+                <div>
+                  <div class="resort-dining-name">Maya Grill</div>
+                  <div class="resort-dining-desc">Nuevo Latino cuisine under Mayan sun deities and fire accents</div>
+                  <div class="resort-dining-meta">
+                    <span class="resort-dining-tag">Table Service</span>
+                    <span class="resort-dining-price">$$</span>
+                  </div>
+                </div>
+                <button class="resort-dining-btn">Reserve</button>
+              </div>
+
+              <div class="resort-dining-item" onclick="alert('Opening Dahlia & Barcelona Lounge details...')">
+                <div>
+                  <div class="resort-dining-name">Dahlia Lounge &amp; Barcelona Lounge</div>
+                  <div class="resort-dining-desc">Tower rooftop cocktails and lobby espresso bar inspired by Salvador Dalí</div>
+                  <div class="resort-dining-meta">
+                    <span class="resort-dining-tag">Lounges</span>
+                    <span class="resort-dining-price">$$</span>
+                  </div>
+                </div>
+                <button class="resort-dining-btn">Menu ›</button>
+              </div>
+
+              <div class="resort-dining-item" onclick="alert('Opening El Mercado de Coronado details...')">
+                <div>
+                  <div class="resort-dining-name">El Mercado de Coronado</div>
+                  <div class="resort-dining-desc">Airy food court with artisan pizzas, Mexican specialties, and grab-and-go</div>
+                  <div class="resort-dining-meta">
+                    <span class="resort-dining-tag">Quick Service</span>
+                    <span class="resort-dining-price">$</span>
+                  </div>
+                </div>
+                <button class="resort-dining-btn">Menu ›</button>
+              </div>
+            </div>
+
+            <!-- 3. Recreation & Amenities Card -->
+            <div class="resort-card" id="sec-resort-recreation" style="display: none;">
+              <div class="resort-card-head">
+                <div class="resort-card-title">
+                  <span>🌴</span> <span>Recreation &amp; Amenities</span>
+                </div>
+              </div>
+              <div class="resort-recreation-item">
+                <div class="resort-recreation-head">
+                  <div class="resort-recreation-name">🏊 The Dig Site &amp; Lost City of Cibola Pool</div>
+                  <span class="resort-recreation-badge">Feature Pool</span>
+                </div>
+                <div class="resort-recreation-desc">
+                  Iconic 50-foot Mayan pyramid with cascading waterfall, a twisting 123-foot jaguar waterslide, and the largest outdoor hot tub in Walt Disney World (capacity 22).
+                </div>
+              </div>
+
+              <div class="resort-recreation-item">
+                <div class="resort-recreation-head">
+                  <div class="resort-recreation-name">🏃 Lago Dorado 0.9-Mile Jogging Loop</div>
+                  <span class="resort-recreation-badge">Trail</span>
+                </div>
+                <div class="resort-recreation-desc">
+                  Scenic paved pathway winding along the waterfront with scenic bridge crossings, fountain courtyards, and tranquil lake views.
+                </div>
+              </div>
+
+              <div class="resort-recreation-item">
+                <div class="resort-recreation-head">
+                  <div class="resort-recreation-name">🏋️ La Vida Health Club &amp; Fitness Center</div>
+                  <span class="resort-recreation-badge">Wellness</span>
+                </div>
+                <div class="resort-recreation-desc">
+                  Full 24/7 fitness center with state-of-the-art cardio and weight equipment, dry saunas, and optional facial and massage services.
+                </div>
+              </div>
+
+              <div class="resort-recreation-item">
+                <div class="resort-recreation-head">
+                  <div class="resort-recreation-name">🪵 Campfire &amp; Movies Under the Stars</div>
+                  <span class="resort-recreation-badge">Family Fun</span>
+                </div>
+                <div class="resort-recreation-desc">
+                  Nightly marshmallow roasts by Lago Dorado followed by complimentary Disney movie screenings under the Florida twilight.
+                </div>
+              </div>
+            </div>
+
+            <!-- 4. Resort Property Map & Park Transportation Card -->
+            <div class="expedition-map-card" id="sec-resort-transport" style="display: none; margin-bottom: 12px;">
+              <div class="expedition-map-frame">
+                <img src="assets/coronado_map.jpg" alt="Illustrated Coronado Springs Resort Map">
+              </div>
+              <div class="expedition-map-body">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <div>
+                    <div class="route-brief-title">Animal Kingdom Resort Area</div>
+                    <div class="route-brief-sub">1000 W Buena Vista Dr, Lake Buena Vista, FL</div>
+                  </div>
+                  <button style="padding: 8px 14px; background: #5b2a86; color: #fff; border: none; border-radius: 999px; font-size: 11.5px; font-weight: 800; cursor: pointer;" onclick="alert('Opening Google/Apple Maps with Coronado Springs Resort coordinates (28.3644° N, 81.5744° W)...')">
+                    🧭 Directions
+                  </button>
+                </div>
+                <div style="margin-top: 10px; font-size: 11px; font-weight: 800; color: #1e3a8a;">
+                  🚌 Complimentary Disney Bus Transportation:
+                </div>
+                <div class="resort-transit-strip">
+                  <div class="resort-transit-pill"><span>🚌</span> <span>Animal Kingdom (~8m)</span></div>
+                  <div class="resort-transit-pill"><span>🚌</span> <span>Hollywood Studios (~9m)</span></div>
+                  <div class="resort-transit-pill"><span>🚌</span> <span>EPCOT (~12m)</span></div>
+                  <div class="resort-transit-pill"><span>🚌</span> <span>Magic Kingdom (~16m)</span></div>
+                  <div class="resort-transit-pill"><span>🚌</span> <span>Disney Springs (~12m)</span></div>
+                </div>
+                <div style="font-size: 10px; color: #64748b; margin-top: 6px;">
+                  Buses arrive every ~15–20 minutes across 4 stops: Gran Destino Tower, Casitas, Ranchos, and Cabanas.
+                </div>
+              </div>
+            </div>
+
+            <!-- CHAPTER 4: LOCATION & DIRECTIONS -->
+            <div class="expedition-map-card" id="sec-expedition-map">
+              <div class="expedition-map-frame">
+                <img src="assets/adventureland_map.jpg" alt="Illustrated Adventureland Map">
+              </div>
+              <div class="expedition-map-body">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <div>
+                    <div class="route-brief-title" id="after-loc-land">Adventureland • Caribbean Plaza</div>
+                    <div class="route-brief-sub" id="after-loc-footer">Magic Kingdom • Landmark Navigation</div>
+                  </div>
+                  <button style="padding: 8px 14px; background: #5b2a86; color: #fff; border: none; border-radius: 999px; font-size: 11.5px; font-weight: 800; cursor: pointer;" onclick="alert('Opening Apple/Google Maps with attraction coordinates (28.4194° N, 81.5812° W)...')">
+                    🧭 Get Directions
+                  </button>
+                </div>
+                <div class="route-walking-callout" id="after-walking-callout">
+                  🚶 <b>~4 min walk from Central Hub</b> • Located in Caribbean Plaza, opposite Tortuga Tavern.
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- ============================================== -->
+          <!-- LENS 2: MY PASSPORT & LORE (KEEPSAKE & SECRETS)-->
+          <!-- ============================================== -->
+          <div class="experience-story-stream" id="lens-passport-view" style="display: none;">
+
+            <!-- CHAPTER 2: THE DISNEY EXPLORER'S PASSPORT -->
+            <div class="passport-keepsake-card">
+              <div class="passport-keepsake-head">
+                <div class="passport-keepsake-title">
+                  <span>🧭</span> <span>Park Passport &amp; Journal</span>
+                </div>
+                <span class="passport-badge-ribbon" id="passport-badge-ribbon">Completed • 3 Visits • ★ 9.3 Avg</span>
+              </div>
+
+              <div class="passport-keepsake-body">
+                <!-- Embossed Golden Seal Medallion -->
+                <div class="passport-gold-seal" onclick="toggleStampShape(); triggerCelebration();" title="Tap to toggle Square / Circle shape & celebrate!">
+                  <div class="seal-num" id="log-count">3</div>
+                  <div class="seal-word" id="seal-word">Visits</div>
+                  <div class="seal-date" id="seal-avg-rating" style="font-weight: 800; color: #78350f;">★ 9.3 Avg</div>
+                </div>
+
+                <div class="passport-journal-entry">
+                  <!-- Overall Rating = Calculated Average Across All Rated Visits -->
+                  <div class="passport-star-score">
+                    <div>
+                      <span class="passport-score-val" id="passport-avg-score">★ 9.3 / 10</span>
+                      <span style="font-size: 10px; color: #78350f; font-weight: 700; margin-left: 4px;">Your Average Rating</span>
+                    </div>
+                    <span id="passport-rated-count-badge" style="font-size: 9.5px; color: #92400e; font-weight: 700; background: #fef3c7; padding: 2px 7px; border-radius: 999px;">3 of 3 rated</span>
+                  </div>
+
+                  <!-- General Attraction Tip (Legacy NoteDTO, shared with friends) -->
+                  <div class="passport-quote-bubble" id="after-note">
+                    “The puns are great!”
+                  </div>
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px;">
+                    <span style="font-size: 9.5px; color: #78716c;">Shared Tip with Friends</span>
+                    <button style="font-size: 10px; color: var(--color-primary); background: none; border: none; font-weight: 700; cursor: pointer;" onclick="promptEditNote()">✏ Edit Tip</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Real Visit History Timeline (from ExperienceLogDTO) -->
+              <div class="passport-history-timeline">
+                <div class="timeline-title" style="display: flex; justify-content: space-between; align-items: center;">
+                  <span id="timeline-title-text">Visit History (3)</span>
+                  <span id="timeline-avg-badge" style="font-size: 9.5px; color: #78350f; font-weight: 700;">★ 9.3 Average</span>
+                </div>
+
+                <div id="timeline-logs-container">
+                  <!-- Dynamically rendered by renderVisitHistory() -->
+                  <div class="timeline-row" style="flex-direction: column; align-items: stretch; gap: 4px; margin-bottom: 8px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                      <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 11.5px; font-weight: 700; color: #16a34a;">✓ 2026-09-23</span>
+                        <span style="font-size: 11px; font-weight: 800; color: #f59e0b; cursor: pointer; background: #fef3c7; padding: 1px 6px; border-radius: 4px;" onclick="promptEditVisitRating('1', 10)" title="Tap to change rating for this visit">★ 10 / 10 ✏</span>
+                      </div>
+                      <button style="font-size: 11px; padding: 2px 6px; border: none; background: transparent; color: #e11d48; cursor: pointer;" onclick="deleteVisitLog('1')" title="Delete visit log">🗑️</button>
+                    </div>
+                    <div style="font-size: 11px; font-style: italic; color: #451a03; background: #fffdf8; padding: 4px 8px; border-radius: 6px; border-left: 2px solid #f59e0b;">
+                      “awesome skipper”
+                    </div>
+                  </div>
+
+                  <div class="timeline-row" style="margin-bottom: 8px;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                      <span style="font-size: 11.5px; font-weight: 700; color: #16a34a;">✓ 2026-08-24</span>
+                      <span style="font-size: 11px; font-weight: 800; color: #f59e0b; cursor: pointer; background: #fef3c7; padding: 1px 6px; border-radius: 4px;" onclick="promptEditVisitRating('2', 9)" title="Tap to change rating for this visit">★ 9 / 10 ✏</span>
+                    </div>
+                    <button style="font-size: 11px; padding: 2px 6px; border: none; background: transparent; color: #e11d48; cursor: pointer;" onclick="deleteVisitLog('2')" title="Delete visit log">🗑️</button>
+                  </div>
+
+                  <div class="timeline-row" style="margin-bottom: 8px;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                      <span style="font-size: 11.5px; font-weight: 700; color: #16a34a;">✓ 2026-07-03</span>
+                      <span style="font-size: 11px; font-weight: 800; color: #f59e0b; cursor: pointer; background: #fef3c7; padding: 1px 6px; border-radius: 4px;" onclick="promptEditVisitRating('3', 9)" title="Tap to change rating for this visit">★ 9 / 10 ✏</span>
+                    </div>
+                    <button style="font-size: 11px; padding: 2px 6px; border: none; background: transparent; color: #e11d48; cursor: pointer;" onclick="deleteVisitLog('3')" title="Delete visit log">🗑️</button>
+                  </div>
+                </div>
+
+                <button style="width: 100%; margin-top: 10px; background: #5b2a86; color: #fff; border: none; padding: 9px; border-radius: 10px; font-size: 11.5px; font-weight: 800; cursor: pointer;" onclick="promptAddLog()">
+                  ⊕ Log another visit
+                </button>
+              </div>
+            </div>
+
+            <!-- CHAPTER 2B: MY LOGGED DISHES (RESTAURANTS ONLY) -->
+            <div class="passport-keepsake-card" id="sec-restaurant-food-logs" style="display: none; background: #fffdfa; border: 1.5px solid #f3e5b8;">
+              <div class="passport-keepsake-head">
+                <div class="passport-keepsake-title">
+                  <span>🍽️</span> <span>My Logged Dishes (3)</span>
+                </div>
+                <button style="font-size: 11px; padding: 4px 10px; border-radius: 8px; background: #d97706; color: #fff; border: none; font-weight: 800; cursor: pointer;" onclick="alert('Opening FoodItemPickerModal: Choose a dish at Be Our Guest to rate and log...')">
+                  ⊕ Log a Dish
+                </button>
+              </div>
+              <div style="font-size: 10.5px; color: #78350f; margin-bottom: 8px;">
+                Individual dishes &amp; drinks rated here (from <code>FoodItemLogDTO</code>):
+              </div>
+
+              <!-- List of logged food items -->
+              <div style="display: flex; flex-direction: column; gap: 8px;">
+                <div style="background: #fff; border: 1px solid #fde68a; border-radius: 10px; padding: 9px 11px;">
+                  <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-size: 12px; font-weight: 800; color: #451a03;">🌹 The Grey Stuff Cupcake</span>
+                    <span style="font-size: 11px; font-weight: 800; color: #d97706; background: #fef3c7; padding: 1px 6px; border-radius: 4px;">★ 10 / 10</span>
+                  </div>
+                  <div style="font-size: 11px; font-style: italic; color: #78350f; margin-top: 3px;">
+                    “Delicious! Lumière was right, truly unique cookies-and-cream whipped panna cotta.”
+                  </div>
+                  <div style="font-size: 9px; color: #a16207; margin-top: 3px;">Logged Aug 20, 2026 • Dessert</div>
+                </div>
+
+                <div style="background: #fff; border: 1px solid #fde68a; border-radius: 10px; padding: 9px 11px;">
+                  <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-size: 12px; font-weight: 800; color: #451a03;">🥣 French Onion Soup</span>
+                    <span style="font-size: 11px; font-weight: 800; color: #d97706; background: #fef3c7; padding: 1px 6px; border-radius: 4px;">★ 8 / 10</span>
+                  </div>
+                  <div style="font-size: 11px; font-style: italic; color: #78350f; margin-top: 3px;">
+                    “Rich Gruyère cheese melt, great toasted sourdough crock.”
+                  </div>
+                  <div style="font-size: 9px; color: #a16207; margin-top: 3px;">Logged Aug 20, 2026 • Appetizer</div>
+                </div>
+
+                <div style="background: #fff; border: 1px solid #fde68a; border-radius: 10px; padding: 9px 11px;">
+                  <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-size: 12px; font-weight: 800; color: #451a03;">🥩 Center-Cut Filet Mignon</span>
+                    <span style="font-size: 11px; font-weight: 800; color: #d97706; background: #fef3c7; padding: 1px 6px; border-radius: 4px;">★ 9 / 10</span>
+                  </div>
+                  <div style="font-size: 11px; font-style: italic; color: #78350f; margin-top: 3px;">
+                    “Tender and perfectly cooked medium rare with potato pavé.”
+                  </div>
+                  <div style="font-size: 9px; color: #a16207; margin-top: 3px;">Logged Aug 20, 2026 • Entrée</div>
+                </div>
+              </div>
+
+              <div style="display: flex; gap: 8px; margin-top: 10px;">
+                <button style="flex: 1; padding: 8px; background: #fff8eb; border: 1px solid #d97706; color: #92400e; border-radius: 8px; font-size: 11px; font-weight: 800; cursor: pointer;" onclick="alert('Opening RestaurantFoodLogsSheet modal for Be Our Guest...')">
+                  ⏱️ View Food Logs Sheet
+                </button>
+                <button style="flex: 1; padding: 8px; background: #fff; border: 1px solid #dcd1ed; color: var(--color-primary); border-radius: 8px; font-size: 11px; font-weight: 800; cursor: pointer;" onclick="alert('Opening Add to Food List modal...')">
+                  📋 Add to Food List
+                </button>
+              </div>
+            </div>
+
+            <!-- CHAPTER 3: IMAGINEERING FIELD GUIDE -->
+            <div class="imagineering-guide-card">
+              <div class="guide-chapter-title" id="guide-chapter-title">📖 The Attraction &amp; Backstory</div>
+              <div class="guide-story-text" id="after-about-text">
+                Set sail on a swashbuckling voyage to a long-forgotten time and place when pirates and privateers ruled the seas. Disney PhotoPass Service is available at this attraction.
+              </div>
+
+              <!-- Curated WhyThis Insider Secrets -->
+              <div class="insider-secrets-box" id="why-visit-box">
+                <div class="insider-badge">✨ Imagineer's Insider Notes:</div>
+                <div class="insider-bullet" id="why-bullet-1">
+                  <span>🗝️</span>
+                  <span>Be sure to keep a spry eye out for Captain Jack Sparrow, from The Pirates of the Caribbean movies.</span>
+                </div>
+                <div class="insider-bullet" id="why-bullet-2">
+                  <span>❄️</span>
+                  <span>Step out of the heat and feel the relief—this experience is completely air-conditioned.</span>
+                </div>
+              </div>
+
+              <!-- Real Community Guest Rating Strip -->
+              <div class="community-guest-strip" id="sec-community-rating">
+                <div class="guest-score-dial">
+                  <div class="guest-score-num" id="comm-large-num">7.7</div>
+                  <div class="guest-score-lbl">Out of 10</div>
+                </div>
+                <div>
+                  <div style="font-size: 12px; font-weight: 800; color: #190c2d;" id="comm-count-sub">
+                    Based on 3 park guest ratings
+                  </div>
+                  <div style="font-size: 10.5px; color: #655d78; margin-top: 2px;">
+                    Average rating across all completed visits. Requires minimum 3 ratings.
+                  </div>
+                </div>
+              </div>
+
+              <!-- Accessibility & Style Clouds -->
+              <div class="facets-cloud">
+                <div class="cloud-lbl">Accessibility &amp; Boarding</div>
+                <div class="cloud-tags" id="after-access-wrap">
+                  <span class="cloud-pill">wheelchair access</span>
+                  <span class="cloud-pill">wheelchair access vehicle</span>
+                </div>
+
+                <div class="cloud-lbl">Good For</div>
+                <div class="cloud-tags" id="after-ages-wrap">
+                  <span class="cloud-pill">Kids</span>
+                  <span class="cloud-pill">All Ages</span>
+                  <span class="cloud-pill">Adults</span>
+                  <span class="cloud-pill">Slow Rides</span>
+                  <span class="cloud-pill">Water Rides</span>
+                  <span class="cloud-pill">Park Classics</span>
+                </div>
+
+                <div id="after-advisory-wrap" style="display: none; margin-top: 6px;">
+                  <div style="font-size: 10.5px; color: #e11d48; font-weight: 800; margin-bottom: 4px;">⚠️ Physical Advisories:</div>
+                  <span class="cloud-pill" style="background: #fff1f2; color: #e11d48; border-color: #fecdd3;">Expectant Mothers Should Not Ride</span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- ============================================== -->
+          <!-- PRESENTATION MODE 2: BENTO GLANCEABLE STAGE    -->
+          <!-- ============================================== -->
+          <div class="bento-grid-container" id="bento-view">
+            <div class="bento-tile bento-tile-wide" onclick="switchUX('lens'); switchLens('park');" style="background: linear-gradient(135deg, #1b864d 0%, #115e34 100%); color: #fff;">
+              <div class="bento-tile-head" style="color: #bbf7d0;">
+                <span>⚡ Live Status</span>
+                <span style="background: rgba(255,255,255,0.2); padding: 2px 7px; border-radius: 999px; font-size: 10px;">Operating</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; align-items: flex-end;">
+                <div>
+                  <div class="bento-tile-val" style="color: #fff; font-size: 28px;">15 <span style="font-size: 14px; opacity: 0.9;">min wait</span></div>
+                  <div class="bento-tile-sub" style="color: #d1fae5;">Lightning Lane: 11:45 AM</div>
+                </div>
+                <div class="bento-pill-action" style="color: #fef08a;">Inspect Cockpit ›</div>
+              </div>
+            </div>
+
+            <div class="bento-tile" onclick="switchUX('lens'); switchLens('passport');" style="background: #fffcf5; border-color: #ecd899;">
+              <div class="bento-tile-head" style="color: #92400e;"><span>🎟️ Passport</span></div>
+              <div class="bento-tile-val" id="bento-passport-val" style="color: #b45309; font-size: 24px;">★ 9.3</div>
+              <div class="bento-tile-sub" id="bento-passport-sub">3 visits • Avg score</div>
+              <div class="bento-pill-action" style="color: #b45309;">Journal ›</div>
+            </div>
+
+            <div class="bento-tile" onclick="switchUX('lens'); switchLens('park');" style="background: #eef2ff; border-color: #c7d2fe;">
+              <div class="bento-tile-head" style="color: #4338ca;"><span>🚶 Park Location</span></div>
+              <div class="bento-tile-val" style="color: #3730a3; font-size: 19px;">Adventureland</div>
+              <div class="bento-tile-sub">Near Caribbean Plaza</div>
+              <div class="bento-pill-action" style="color: #4338ca;">Open Maps ›</div>
+            </div>
+
+            <div class="bento-tile bento-tile-wide" onclick="switchUX('lens'); switchLens('passport');">
+              <div class="bento-tile-head"><span>✨ Imagineer's Lore</span></div>
+              <div style="font-size: 12px; font-weight: 700; color: #190c2d; line-height: 1.4;">
+                “Keep a spry eye out for Captain Jack Sparrow...”
+              </div>
+              <div class="bento-tile-sub">PhotoPass • Full A/C • Rated 7.7 by Guests</div>
+              <div class="bento-pill-action">Read Backstory ›</div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- ============================================== -->
+        <!-- FLOATING ACTION CAPSULE (ERGONOMIC SAFE-AREA)  -->
+        <!-- ============================================== -->
+        <div class="after-dock" id="floating-dock">
+          <button class="after-dock-primary" id="dock-primary-btn" onclick="triggerCelebration()">
+            <span>✓</span> <span>Log Visit</span>
+          </button>
+          <button class="after-dock-sec" id="dock-sec-btn" onclick="promptAddToPlan()">
+            <span>＋</span> <span>Add to Plan</span>
+          </button>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    let rideCount = 2;
+    let currentLens = 'park';
+    let currentUX = 'lens';
+    let currentExp = 'pirates';
+
+    function switchUX(mode) {
+      currentUX = mode;
+      document.body.classList.toggle('mode-lens', mode === 'lens');
+      document.body.classList.toggle('mode-stream', mode === 'stream');
+      document.body.classList.toggle('mode-bento', mode === 'bento');
+
+      ['lens', 'bento', 'stream'].forEach(m => {
+        const btn = document.getElementById(`btn-ux-${m}`);
+        if (btn) btn.classList.toggle('active', m === mode);
+      });
+
+      const parkView = document.getElementById('lens-park-view');
+      const passportView = document.getElementById('lens-passport-view');
+      const bentoView = document.getElementById('bento-view');
+      const lensBar = document.getElementById('lens-switcher-bar');
+
+      if (mode === 'lens') {
+        if (lensBar) lensBar.style.display = 'flex';
+        if (bentoView) bentoView.style.display = 'none';
+        switchLens(currentLens);
+      } else if (mode === 'stream') {
+        if (lensBar) lensBar.style.display = 'none';
+        if (bentoView) bentoView.style.display = 'none';
+        if (parkView) parkView.style.display = 'flex';
+        if (passportView) passportView.style.display = 'flex';
+      } else if (mode === 'bento') {
+        if (lensBar) lensBar.style.display = 'none';
+        if (parkView) parkView.style.display = 'none';
+        if (passportView) passportView.style.display = 'none';
+        if (bentoView) bentoView.style.display = 'grid';
+      }
+    }
+
+    function switchLens(lens) {
+      currentLens = lens;
+      const isPark = lens === 'park';
+      const btnPark = document.getElementById('lens-btn-park');
+      const btnPassport = document.getElementById('lens-btn-passport');
+      if (btnPark) btnPark.classList.toggle('active', isPark);
+      if (btnPassport) btnPassport.classList.toggle('active', !isPark);
+
+      const parkView = document.getElementById('lens-park-view');
+      const passportView = document.getElementById('lens-passport-view');
+
+      if (parkView && passportView) {
+        parkView.style.display = isPark ? 'flex' : 'none';
+        passportView.style.display = isPark ? 'none' : 'flex';
+      }
+
+      // Update floating dock buttons based on active lens and experience type
+      const dockPrimary = document.getElementById('dock-primary-btn');
+      const dockSec = document.getElementById('dock-sec-btn');
+      if (dockPrimary && dockSec) {
+        const isDining = currentExp === 'dining';
+        if (isDining) {
+          if (isPark) {
+            dockPrimary.innerHTML = '<span>🍽️</span> <span>Log a Dish</span>';
+            dockPrimary.onclick = () => promptAddFoodLog();
+            dockSec.innerHTML = '<span>📅</span> <span>Reserve Table</span>';
+            dockSec.onclick = () => alert('Opening Disney Dining Reservations for Be Our Guest...');
+          } else {
+            dockPrimary.innerHTML = '<span>🍽️</span> <span>Log a Dish</span>';
+            dockPrimary.onclick = () => promptAddFoodLog();
+            dockSec.innerHTML = '<span>★</span> <span>Rate Meal</span>';
+            dockSec.onclick = () => promptAddLog();
+          }
+        } else {
+          if (isPark) {
+            dockPrimary.innerHTML = '<span>✓</span> <span>Log Visit</span>';
+            dockPrimary.onclick = () => triggerCelebration();
+            dockSec.innerHTML = '<span>＋</span> <span>Add to Plan</span>';
+            dockSec.onclick = () => promptAddToPlan();
+          } else {
+            dockPrimary.innerHTML = '<span>⊕</span> <span>Stamp Visit</span>';
+            dockPrimary.onclick = () => triggerCelebration();
+            dockSec.innerHTML = '<span>★</span> <span>Rate Visit</span>';
+            dockSec.onclick = () => promptAddLog();
+          }
+        }
+      }
+    }
+
+    function switchView(mode) {
+      document.body.classList.toggle('mode-scroll', mode === 'scroll');
+      document.body.classList.toggle('mode-unrolled', mode === 'unrolled');
+
+      document.getElementById('btn-view-scroll').classList.toggle('active', mode === 'scroll');
+      document.getElementById('btn-view-unrolled').classList.toggle('active', mode === 'unrolled');
+    }
+
+    function switchExperience(exp) {
+      currentExp = exp;
+      ['pirates', 'space', 'dining', 'show', 'resort'].forEach(id => {
+        const btn = document.getElementById(`btn-${id}`);
+        if (btn) btn.classList.toggle('active', id === exp);
+      });
+
+      // Grab elements
+      const beforeHead = document.getElementById('before-head-title');
+      const beforeImg = document.getElementById('before-img');
+      const beforeParkPill = document.getElementById('before-park-pill');
+      const beforeCatPill = document.getElementById('before-cat-pill');
+      const beforeLandPill = document.getElementById('before-land-pill');
+      const beforeAbout = document.getElementById('before-about');
+      const beforeCommRating = document.getElementById('before-comm-rating');
+      const beforeMapImg = document.getElementById('before-map-img');
+      const beforeQuickSpecs = document.getElementById('before-quick-specs');
+      const beforeLiveUnavailable = document.getElementById('before-live-unavailable');
+      const beforeLiveCard = document.getElementById('before-live-card');
+      const beforeInsightsCard = document.getElementById('before-insights-card');
+      const beforeLocWalking = document.getElementById('before-loc-walking');
+      const beforeTagsBox = document.getElementById('before-tags-box');
+
+      const afterHead = document.getElementById('after-head-title');
+      const afterHeadSub = document.getElementById('after-head-sub');
+      const afterPhoto = document.getElementById('after-photo-img');
+      const afterLand = document.getElementById('after-land');
+      const afterCommPill = document.getElementById('after-comm-pill');
+      const bentoDuration = document.getElementById('bento-duration');
+      const bentoDurationIcon = document.getElementById('bento-duration-icon');
+      const bentoHeight = document.getElementById('bento-height');
+      const bentoHeightIcon = document.getElementById('bento-height-icon');
+      const bentoClimate = document.getElementById('bento-climate');
+      const bentoClimateIcon = document.getElementById('bento-climate-icon');
+      const bentoFeature = document.getElementById('bento-feature');
+      const bentoFeatureIcon = document.getElementById('bento-feature-icon');
+
+      const lensBtnParkIcon = document.getElementById('lens-btn-park-icon');
+      const lensBtnParkLabel = document.getElementById('lens-btn-park-label');
+      const lensBtnPassIcon = document.getElementById('lens-btn-passport-icon');
+      const lensBtnPassLabel = document.getElementById('lens-btn-passport-label');
+
+      const secWait = document.getElementById('sec-wait-strategy');
+      const secDining = document.getElementById('sec-dining');
+      const secMenus = document.getElementById('sec-restaurant-menus');
+      const secShowtimes = document.getElementById('sec-showtimes');
+      const secSingleRider = document.getElementById('sec-single-rider');
+      const secVqBanner = document.getElementById('sec-vq-banner');
+
+      const secResortGuide = document.getElementById('sec-resort-guide');
+      const secResortDining = document.getElementById('sec-resort-dining');
+      const secResortRecreation = document.getElementById('sec-resort-recreation');
+      const secResortTransport = document.getElementById('sec-resort-transport');
+      const secExpeditionMap = document.getElementById('sec-expedition-map');
+
+      const sealWord = document.getElementById('seal-word');
+      const guideChapterTitle = document.getElementById('guide-chapter-title');
+      const dockPrimaryLabel = document.querySelector('.after-dock-primary span:last-child');
+      const dockSecLabel = document.querySelector('.after-dock-sec span:last-child');
+
+      const afterLiveVal = document.getElementById('after-live-val');
+      const afterLLStatus = document.getElementById('after-ll-status');
+      const afterLLSub = document.getElementById('after-ll-sub');
+      const afterTyp = document.getElementById('after-typical-val');
+      const afterRel = document.getElementById('after-rel-val');
+      const afterStrat = document.getElementById('after-strat-text');
+      const afterAbout = document.getElementById('after-about-text');
+      const whyBox = document.getElementById('why-visit-box');
+      const commLargeNum = document.getElementById('comm-large-num');
+      const commCountSub = document.getElementById('comm-count-sub');
+      const afterAdvisoryWrap = document.getElementById('after-advisory-wrap');
+      const afterLocFooter = document.getElementById('after-loc-footer');
+      const afterLocLand = document.getElementById('after-loc-land');
+      const afterWalkingCallout = document.getElementById('after-walking-callout');
+      const secFoodLogs = document.getElementById('sec-restaurant-food-logs');
+      const afterNote = document.getElementById('after-note');
+
+      // Default resets for non-resort experiences
+      if (exp !== 'resort') {
+        if (beforeQuickSpecs) beforeQuickSpecs.style.display = 'none';
+        if (beforeLiveUnavailable) beforeLiveUnavailable.style.display = 'none';
+        if (beforeLiveCard) beforeLiveCard.style.display = 'block';
+        if (beforeInsightsCard) beforeInsightsCard.style.display = 'block';
+        if (beforeLocWalking) beforeLocWalking.style.display = 'none';
+        if (beforeMapImg) beforeMapImg.src = 'assets/adventureland_map.jpg';
+
+        if (secResortGuide) secResortGuide.style.display = 'none';
+        if (secResortDining) secResortDining.style.display = 'none';
+        if (secResortRecreation) secResortRecreation.style.display = 'none';
+        if (secResortTransport) secResortTransport.style.display = 'none';
+        if (secExpeditionMap) secExpeditionMap.style.display = 'block';
+
+        if (lensBtnParkIcon) lensBtnParkIcon.innerText = '⚡';
+        if (lensBtnParkLabel) lensBtnParkLabel.innerText = 'Today in Park';
+        if (lensBtnPassIcon) lensBtnPassIcon.innerText = '🧭';
+        if (lensBtnPassLabel) lensBtnPassLabel.innerText = 'My Passport & Lore';
+
+        if (sealWord) sealWord.innerText = 'Visits';
+        if (guideChapterTitle) guideChapterTitle.innerText = '📖 The Attraction & Backstory';
+
+        if (bentoDurationIcon) bentoDurationIcon.innerText = '⏱️';
+        if (bentoHeightIcon) bentoHeightIcon.innerText = '📏';
+        if (bentoFeatureIcon) bentoFeatureIcon.innerText = '🌊';
+
+        if (dockPrimaryLabel) dockPrimaryLabel.innerText = 'Log Visit';
+        if (dockSecLabel) dockSecLabel.innerText = 'Add to Plan';
+      }
+
+      if (exp === 'pirates') {
+        beforeHead.innerHTML = "🚀 Pirates of the Caribbean";
+        beforeImg.src = "assets/pirates_hero.jpg";
+        beforeParkPill.innerHTML = "📍 Magic Kingdom";
+        beforeCatPill.innerHTML = "🚀 Ride";
+        beforeLandPill.innerHTML = "Adventureland";
+        beforeAbout.innerHTML = "Set sail on a swashbuckling voyage to a long-forgotten time and place when pirates and privateers ruled the seas. Disney PhotoPass Service is available at this attraction.";
+        beforeCommRating.innerHTML = "★ 7.7 / 10 <span style='font-size: 11px; color: #6b6480;'>(3 ratings)</span>";
+
+        afterHead.innerHTML = "<span>🚀</span> <span>Pirates of the Caribbean</span>";
+        afterHeadSub.innerHTML = "<span>★</span> <span>Magic Kingdom</span>";
+        afterPhoto.src = "assets/pirates_hero.jpg";
+        afterLand.innerHTML = "<span>📍 Adventureland</span>";
+        afterCommPill.innerHTML = "<span>★ 7.7</span> <span style='font-size: 9px; opacity: 0.9;'>(3 ratings)</span>";
+
+        bentoDuration.innerHTML = "9 min ride";
+        bentoHeight.innerHTML = "Any Height";
+        if (bentoClimate) { bentoClimate.innerHTML = "Indoor A/C"; bentoClimate.style.color = "#0284c7"; }
+        if (bentoClimateIcon) bentoClimateIcon.innerHTML = "❄️";
+        bentoFeature.innerHTML = "Water Classic";
+
+        secWait.style.display = 'block';
+        secDining.style.display = 'none';
+        if (secMenus) secMenus.style.display = 'none';
+        secShowtimes.style.display = 'none';
+        if (secSingleRider) secSingleRider.style.display = 'none';
+        if (secVqBanner) secVqBanner.style.display = 'none';
+
+        afterLiveVal.innerHTML = "15 <span>min</span>";
+        afterLLStatus.innerHTML = "11:45 AM – 12:45 PM";
+        afterLLSub.innerHTML = "Saves ~10 min • Sells out ~1 PM • $22 peak";
+        if (afterTyp) afterTyp.innerHTML = "8 / 16 min";
+        if (afterRel) afterRel.innerHTML = "94% uptime";
+        afterStrat.innerHTML = "Lowest waits (~8 min). Great midday A/C escape: 9-min dark ride with fully air-conditioned queue to beat the 1–3 PM heat.";
+        afterAbout.innerHTML = "Set sail on a swashbuckling voyage to a long-forgotten time and place when pirates and privateers ruled the seas. Disney PhotoPass Service is available at this attraction.";
+        whyBox.style.display = 'block';
+
+        commLargeNum.innerHTML = "7.7";
+        commCountSub.innerHTML = "Based on 3 park guest ratings";
+        afterAdvisoryWrap.style.display = 'none';
+        afterLocLand.innerHTML = "Adventureland • Caribbean Plaza";
+        afterLocFooter.innerHTML = "Magic Kingdom • Landmark Navigation";
+        if (afterWalkingCallout) afterWalkingCallout.innerHTML = "🚶 <b>~4 min walk from Central Hub</b> • Located in Caribbean Plaza, opposite Tortuga Tavern.";
+        if (secFoodLogs) secFoodLogs.style.display = 'none';
+        if (afterNote) afterNote.innerHTML = "“Front row splash is the best! Watch out for Captain Jack.”";
+
+        visitLogs = [
+          { id: '1', date: '2026-09-23', rating: 10, note: 'awesome skipper' },
+          { id: '2', date: '2026-08-24', rating: 9, note: null },
+          { id: '3', date: '2026-07-03', rating: 9, note: null }
+        ];
+        renderVisitHistory();
+
+      } else if (exp === 'space') {
+        beforeHead.innerHTML = "🚀 Space Mountain";
+        beforeImg.src = "assets/space_hero.jpg";
+        beforeParkPill.innerHTML = "📍 Magic Kingdom";
+        beforeCatPill.innerHTML = "🚀 Ride";
+        beforeLandPill.innerHTML = "Tomorrowland";
+        beforeAbout.innerHTML = "Blast off on a thrilling, high-speed rocket journey through the cosmos into darkest space.";
+        beforeCommRating.innerHTML = "★ 9.1 / 10 <span style='font-size: 11px; color: #6b6480;'>(8 ratings)</span>";
+
+        afterHead.innerHTML = "<span>🚀</span> <span>Space Mountain</span>";
+        afterHeadSub.innerHTML = "<span>★</span> <span>Magic Kingdom</span>";
+        afterPhoto.src = "assets/space_hero.jpg";
+        afterLand.innerHTML = "<span>📍 Tomorrowland</span>";
+        afterCommPill.innerHTML = "<span>★ 9.1</span> <span style='font-size: 9px; opacity: 0.9;'>(8 ratings)</span>";
+
+        bentoDuration.innerHTML = "3 min ride";
+        bentoHeight.innerHTML = "Min 44\" (112cm)";
+        if (bentoClimate) { bentoClimate.innerHTML = "Indoor A/C"; bentoClimate.style.color = "#0284c7"; }
+        if (bentoClimateIcon) bentoClimateIcon.innerHTML = "❄️";
+        bentoFeature.innerHTML = "Thrill Coaster";
+
+        secWait.style.display = 'block';
+        secDining.style.display = 'none';
+        if (secMenus) secMenus.style.display = 'none';
+        secShowtimes.style.display = 'none';
+
+        // Space Mountain supports Single Rider!
+        if (secSingleRider) {
+          secSingleRider.style.display = 'flex';
+          const srWait = document.getElementById('single-rider-wait');
+          const srSub = document.getElementById('single-rider-sub');
+          if (srWait) srWait.innerText = '25 min';
+          if (srSub) srSub.innerText = 'Saves ~30 min • Party will be split';
+        }
+        if (secVqBanner) secVqBanner.style.display = 'none';
+
+        afterLiveVal.innerHTML = "55 <span>min</span>";
+        afterLLStatus.innerHTML = "Return at 4:10 PM";
+        afterLLSub.innerHTML = "Saves ~45 min • Sells out ~11:30 AM • $28 peak";
+        if (afterTyp) afterTyp.innerHTML = "45 / 75 min";
+        if (afterRel) afterRel.innerHTML = "91% uptime";
+        afterStrat.innerHTML = "Lowest waits (~45 min). Avoid peak around 1 PM (~75 min). Fully indoor climate-controlled queue.";
+        afterAbout.innerHTML = "Blast off on a thrilling, high-speed rocket journey through the cosmos into darkest space.";
+        whyBox.style.display = 'none';
+
+        commLargeNum.innerHTML = "9.1";
+        commCountSub.innerHTML = "Based on 8 park guest ratings";
+        afterAdvisoryWrap.style.display = 'block';
+        afterLocLand.innerHTML = "Tomorrowland • Outer Rim";
+        afterLocFooter.innerHTML = "Magic Kingdom • Landmark Navigation";
+        if (afterWalkingCallout) afterWalkingCallout.innerHTML = "🚶 <b>~6 min walk from Central Hub</b> • Located at the far end of Tomorrowland, past PeopleMover.";
+        if (secFoodLogs) secFoodLogs.style.display = 'none';
+        if (afterNote) afterNote.innerHTML = "“Ask for the front rocket for the smoothest track feel.”";
+
+        visitLogs = [
+          { id: '1', date: '2026-09-15', rating: 10, note: 'Front row rocket!' },
+          { id: '2', date: '2026-07-12', rating: 10, note: null },
+          { id: '3', date: '2026-05-04', rating: 8, note: 'Bumpy but fast' },
+          { id: '4', date: '2026-01-20', rating: 9, note: null }
+        ];
+        renderVisitHistory();
+
+      } else if (exp === 'dining') {
+        beforeHead.innerHTML = "🍽️ Be Our Guest Restaurant";
+        beforeImg.src = "assets/dining_hero.jpg";
+        beforeParkPill.innerHTML = "📍 Magic Kingdom";
+        beforeCatPill.innerHTML = "🍽️ Restaurant";
+        beforeLandPill.innerHTML = "Fantasyland";
+        beforeAbout.innerHTML = "Feast on French-inspired fare in the grand ballroom of the Beast's enchanted castle.";
+        beforeCommRating.innerHTML = "★ 8.8 / 10 <span style='font-size: 11px; color: #6b6480;'>(14 ratings)</span>";
+
+        afterHead.innerHTML = "<span>🍽️</span> <span>Be Our Guest Restaurant</span>";
+        afterHeadSub.innerHTML = "<span>★</span> <span>Magic Kingdom</span>";
+        afterPhoto.src = "assets/dining_hero.jpg";
+        afterLand.innerHTML = "<span>📍 Fantasyland</span>";
+        afterCommPill.innerHTML = "<span>★ 8.8</span> <span style='font-size: 9px; opacity: 0.9;'>(14 ratings)</span>";
+
+        bentoDuration.innerHTML = "Table Service";
+        bentoHeight.innerHTML = "$$$ Price Tier";
+        if (bentoClimate) { bentoClimate.innerHTML = "Indoor A/C"; bentoClimate.style.color = "#0284c7"; }
+        if (bentoClimateIcon) bentoClimateIcon.innerHTML = "❄️";
+        bentoFeature.innerHTML = "French Cuisine";
+
+        secWait.style.display = 'none';
+        secDining.style.display = 'block';
+        if (secMenus) secMenus.style.display = 'block';
+        secShowtimes.style.display = 'none';
+        if (secSingleRider) secSingleRider.style.display = 'none';
+        if (secVqBanner) secVqBanner.style.display = 'none';
+
+        afterAbout.innerHTML = "Feast on French-inspired fare in the grand ballroom of the Beast's enchanted castle.";
+        whyBox.style.display = 'none';
+
+        commLargeNum.innerHTML = "8.8";
+        commCountSub.innerHTML = "Based on 14 park guest ratings";
+        afterAdvisoryWrap.style.display = 'none';
+        afterLocLand.innerHTML = "Fantasyland • Beast's Castle";
+        afterLocFooter.innerHTML = "Magic Kingdom • Landmark Navigation";
+        if (afterWalkingCallout) afterWalkingCallout.innerHTML = "🚶 <b>~5 min walk from Cinderella Castle</b> • Cross the stone bridge into the Enchanted Forest.";
+        if (secFoodLogs) secFoodLogs.style.display = 'block';
+        if (afterNote) afterNote.innerHTML = "“Request the West Wing for the enchanted rose and moody gothic atmosphere!”";
+
+        visitLogs = [
+          { id: '1', date: '2026-08-20', rating: 9, note: 'Grey stuff was delicious' }
+        ];
+        renderVisitHistory();
+
+      } else if (exp === 'show') {
+        beforeHead.innerHTML = "🎭 Festival of the Lion King";
+        beforeImg.src = "assets/pirates_hero.jpg";
+        beforeParkPill.innerHTML = "📍 Animal Kingdom";
+        beforeCatPill.innerHTML = "🎭 Show";
+        beforeLandPill.innerHTML = "Africa";
+        beforeAbout.innerHTML = "Delight in a Broadway-style celebration filled with pageantry, puppetry and acrobatics.";
+        beforeCommRating.innerHTML = "★ 9.4 / 10 <span style='font-size: 11px; color: #6b6480;'>(11 ratings)</span>";
+
+        afterHead.innerHTML = "<span>🎭</span> <span>Festival of the Lion King</span>";
+        afterHeadSub.innerHTML = "<span>★</span> <span>Animal Kingdom</span>";
+        afterPhoto.src = "assets/pirates_hero.jpg";
+        afterLand.innerHTML = "<span>📍 Africa</span>";
+        afterCommPill.innerHTML = "<span>★ 9.4</span> <span style='font-size: 9px; opacity: 0.9;'>(11 ratings)</span>";
+
+        bentoDuration.innerHTML = "30 min show";
+        bentoHeight.innerHTML = "Any Height";
+        if (bentoClimate) { bentoClimate.innerHTML = "Indoor A/C"; bentoClimate.style.color = "#0284c7"; }
+        if (bentoClimateIcon) bentoClimateIcon.innerHTML = "❄️";
+        bentoFeature.innerHTML = "Live Musical";
+
+        secWait.style.display = 'none';
+        secDining.style.display = 'none';
+        if (secMenus) secMenus.style.display = 'none';
+        secShowtimes.style.display = 'block';
+        if (secSingleRider) secSingleRider.style.display = 'none';
+        if (secVqBanner) secVqBanner.style.display = 'none';
+
+        afterAbout.innerHTML = "Delight in a Broadway-style celebration of the Disney animated classic, filled with pageantry, puppetry and acrobatics.";
+        whyBox.style.display = 'none';
+
+        commLargeNum.innerHTML = "9.4";
+        commCountSub.innerHTML = "Based on 11 park guest ratings";
+        afterAdvisoryWrap.style.display = 'none';
+        afterLocLand.innerHTML = "Africa • Harambe Theater";
+        afterLocFooter.innerHTML = "Animal Kingdom • Landmark Navigation";
+        if (afterWalkingCallout) afterWalkingCallout.innerHTML = "🚶 <b>~5 min walk from Discovery Island</b> • Follow the path into Harambe Village toward the train.";
+        if (secFoodLogs) secFoodLogs.style.display = 'none';
+        if (afterNote) afterNote.innerHTML = "“Sit in the front section for the best view of the tumble monkeys!”";
+
+        visitLogs = [
+          { id: '1', date: '2026-09-02', rating: 10, note: 'Tumble monkeys stole the show' },
+          { id: '2', date: '2026-06-18', rating: 10, note: null }
+        ];
+        renderVisitHistory();
+
+      } else if (exp === 'resort') {
+        // --- BEFORE COLUMN (Exact mirror of current mobile bugs) ---
+        beforeHead.innerHTML = "🏨 Disney's Coronado Springs Resort";
+        beforeImg.src = "assets/coronado_hero.jpg";
+        beforeParkPill.innerHTML = "📍 Resort";
+        beforeCatPill.innerHTML = "🏨 Resort";
+        beforeLandPill.innerHTML = "Central Plaza";
+        if (beforeMapImg) beforeMapImg.src = "assets/adventureland_map.jpg";
+        beforeAbout.innerHTML = "Celebrate the unique blend of Spanish, Mexican and Southwest American cultures at Disney's Coronado Springs Resort. This beautiful lakeside oasis offers classic influences, Disney touches and modern comforts.";
+        beforeCommRating.innerHTML = "Not enough ratings yet";
+
+        // Show the awkward Any Height / Indoor A/C on resort
+        if (beforeQuickSpecs) beforeQuickSpecs.style.display = 'flex';
+        // Show the broken Live Unavailable card
+        if (beforeLiveUnavailable) beforeLiveUnavailable.style.display = 'block';
+        if (beforeLiveCard) beforeLiveCard.style.display = 'none';
+        if (beforeInsightsCard) beforeInsightsCard.style.display = 'none';
+        // Show the hallucinated MK Central Plaza walking distance
+        if (beforeLocWalking) beforeLocWalking.style.display = 'block';
+        if (beforeTagsBox) {
+          beforeTagsBox.innerHTML = `
+            <div class="before-pill" style="font-size: 9.5px;">Any Height</div>
+            <div class="before-pill" style="font-size: 9.5px;">Indoor A/C</div>
+            <div class="before-pill" style="font-size: 9.5px;">Resort</div>
+          `;
+        }
+
+        // --- AFTER COLUMN (Redesigned Resort Experience) ---
+        afterHead.innerHTML = "<span>🏨</span> <span>Disney's Coronado Springs Resort</span>";
+        afterHeadSub.innerHTML = "<span>★</span> <span>Animal Kingdom Resort Area</span>";
+        afterPhoto.src = "assets/coronado_hero.jpg";
+        afterLand.innerHTML = "<span>📍 Animal Kingdom Resort Area</span>";
+        afterCommPill.innerHTML = "<span>★ 8.6</span> <span style='font-size: 9px; opacity: 0.9;'>(34 ratings)</span>";
+
+        // Tailored Resort Specs Ribbon
+        bentoDuration.innerHTML = "Moderate Resort";
+        if (bentoDurationIcon) bentoDurationIcon.innerHTML = "🏨";
+        bentoHeight.innerHTML = "Animal Kingdom Area";
+        if (bentoHeightIcon) bentoHeightIcon.innerHTML = "🗺️";
+        if (bentoClimate) { bentoClimate.innerHTML = "Disney Bus Service"; bentoClimate.style.color = "#1e40af"; }
+        if (bentoClimateIcon) bentoClimateIcon.innerHTML = "🚌";
+        bentoFeature.innerHTML = "The Dig Site Pool";
+        if (bentoFeatureIcon) bentoFeatureIcon.innerHTML = "🏊";
+
+        // Lens Bar Labels for Resorts
+        if (lensBtnParkIcon) lensBtnParkIcon.innerText = "🏨";
+        if (lensBtnParkLabel) lensBtnParkLabel.innerText = "Resort Guide";
+        if (lensBtnPassIcon) lensBtnPassIcon.innerText = "🧭";
+        if (lensBtnPassLabel) lensBtnPassLabel.innerText = "Stay Passport & Lore";
+
+        // Hide ride/dining/show operational cards
+        secWait.style.display = 'none';
+        secDining.style.display = 'none';
+        if (secMenus) secMenus.style.display = 'none';
+        secShowtimes.style.display = 'none';
+        if (secSingleRider) secSingleRider.style.display = 'none';
+        if (secVqBanner) secVqBanner.style.display = 'none';
+        if (secExpeditionMap) secExpeditionMap.style.display = 'none';
+
+        // Show dedicated resort sections
+        if (secResortGuide) secResortGuide.style.display = 'block';
+        if (secResortDining) secResortDining.style.display = 'block';
+        if (secResortRecreation) secResortRecreation.style.display = 'block';
+        if (secResortTransport) secResortTransport.style.display = 'block';
+
+        // Passport & Lore
+        if (sealWord) sealWord.innerText = "Stays";
+        if (guideChapterTitle) guideChapterTitle.innerText = "📖 The Resort History & Architecture";
+
+        afterAbout.innerHTML = "Celebrate the romance of Spanish, Mexican, and Southwest American cultures centered around scenic 22-acre Lago Dorado. Home to Gran Destino Tower, the iconic Dig Site pyramid pool, and destination dining.";
+        whyBox.style.display = 'block';
+        const whyB1 = document.getElementById('why-bullet-1');
+        const whyB2 = document.getElementById('why-bullet-2');
+        if (whyB1) whyB1.innerHTML = "<span>🎨</span> <span><b>Salvador Dalí's Influence:</b> Gran Destino Tower's ribbon motif and Barcelona Lounge chandeliers pay tribute to Dalí and Walt Disney's 1946 collaboration on Destino.</span>";
+        if (whyB2) whyB2.innerHTML = "<span>🌉</span> <span><b>Villa del Lago:</b> The over-water bridges connecting the three village neighborhoods intersect at Three Bridges Bar & Grill at the lake's center.</span>";
+
+        commLargeNum.innerHTML = "8.6";
+        commCountSub.innerHTML = "Based on 34 guest ratings";
+        afterAdvisoryWrap.style.display = 'none';
+        if (secFoodLogs) secFoodLogs.style.display = 'none';
+        if (afterNote) afterNote.innerHTML = "“Request a high floor in Gran Destino Tower facing east for views of both the lake and fireworks!”";
+
+        // Stay History Logs
+        visitLogs = [
+          { id: '1', date: '2026-05-18', rating: 9, note: 'Gran Destino Tower, 14th floor water view. Breathtaking views of EPCOT fireworks from the room!' },
+          { id: '2', date: '2025-11-04', rating: 9, note: 'Casitas building 4 near quiet pool. Peaceful courtyard fountains and easy walk to El Centro.' }
+        ];
+        renderVisitHistory();
+
+        // Dock buttons
+        if (dockPrimaryLabel) dockPrimaryLabel.innerText = "Log Stay";
+        if (dockSecLabel) dockSecLabel.innerText = "Add to Trip";
+      }
+      switchLens(currentLens);
+    }
+
+    /* ---- Wait Context Switcher (Now / Trip / Typical) ---- */
+    let currentWaitContext = 'Now';
+    function switchWaitContext(ctx) {
+      currentWaitContext = ctx;
+      ['Now', 'Trip', 'Typical'].forEach(c => {
+        const chip = document.getElementById(`chip-${c.toLowerCase()}`);
+        if (chip) chip.classList.toggle('active', c === ctx);
+      });
+
+      const liveVal = document.getElementById('after-live-val');
+      const liveLbl = document.getElementById('after-live-lbl');
+      const liveSub = document.getElementById('after-live-sub');
+      const stratText = document.getElementById('after-strat-text');
+      const verdictTitle = document.getElementById('verdict-title');
+      const forecastTitle = document.getElementById('forecast-context-title');
+
+      if (ctx === 'Now') {
+        if (liveVal) liveVal.innerHTML = '15 <span>min</span>';
+        if (liveLbl) liveLbl.innerText = 'Standby Wait';
+        if (liveSub) liveSub.innerText = 'Typical is ~8 min';
+        if (verdictTitle) verdictTitle.innerText = '🎯 Best Time to Ride: Rope Drop';
+        if (stratText) stratText.innerText = 'Lowest waits (~8 min). Avoid peak around 3 PM (~16 min).';
+        if (forecastTitle) forecastTitle.innerText = 'Predicted Wait — Today';
+      } else if (ctx === 'Trip') {
+        if (liveVal) liveVal.innerHTML = '~12 <span>min</span>';
+        if (liveLbl) liveLbl.innerText = 'Predicted for Trip';
+        if (liveSub) liveSub.innerText = 'Oct 14, 2026 • Crowd 5/10';
+        if (verdictTitle) verdictTitle.innerText = '🎯 Best Time on Oct 14: Rope Drop';
+        if (stratText) stratText.innerText = 'Target 9:00 AM – 10:30 AM (~10 min). Avoid 2 PM parade peak (~22 min).';
+        if (forecastTitle) forecastTitle.innerText = 'Predicted Wait — Oct 14 Vacation';
+      } else if (ctx === 'Typical') {
+        if (liveVal) liveVal.innerHTML = '~8 <span>min</span>';
+        if (liveLbl) liveLbl.innerText = 'Typical Median Wait';
+        if (liveSub) liveSub.innerText = 'Past 30-day baseline';
+        if (verdictTitle) verdictTitle.innerText = '🎯 Historical Recommendation';
+        if (stratText) stratText.innerText = 'Usually best at rope drop or after 8:30 PM fireworks.';
+        if (forecastTitle) forecastTitle.innerText = 'Typical Wait Curve (30-day)';
+      }
+    }
+
+    /* ---- Toggle Virtual Queue for Testing Demonstration ---- */
+    function toggleVirtualQueueDemo() {
+      const vq = document.getElementById('sec-vq-banner');
+      if (vq) {
+        const isHidden = vq.style.display === 'none';
+        vq.style.display = isHidden ? 'flex' : 'none';
+        if (isHidden) {
+          alert('Virtual Queue demo enabled! Displaying: Now Boarding Groups 45-60.');
+        } else {
+          alert('Virtual Queue demo disabled.');
+        }
+      }
+    }
+
+    /* ---- Interactive Visit History & Average Rating State ---- */
+    let visitLogs = [
+      { id: '1', date: '2026-09-23', rating: 10, note: 'awesome skipper' },
+      { id: '2', date: '2026-08-24', rating: 9, note: null },
+      { id: '3', date: '2026-07-03', rating: 9, note: null }
+    ];
+
+    function computeVisitStats() {
+      const rated = visitLogs.filter(l => l.rating !== null && l.rating !== undefined);
+      const count = visitLogs.length;
+      const ratedCount = rated.length;
+      const avg = ratedCount > 0 ? (rated.reduce((s, l) => s + Number(l.rating), 0) / ratedCount).toFixed(1) : null;
+      return { count, ratedCount, avg };
+    }
+
+    function renderVisitHistory() {
+      const { count, ratedCount, avg } = computeVisitStats();
+      
+      const ribbon = document.getElementById('passport-badge-ribbon');
+      if (ribbon) ribbon.innerText = `Completed • ${count} ${count === 1 ? 'Visit' : 'Visits'} • ${avg ? '★ ' + avg + ' Avg' : 'Unrated'}`;
+
+      const sealNum = document.getElementById('log-count');
+      if (sealNum) sealNum.innerText = count;
+      const sealAvg = document.getElementById('seal-avg-rating');
+      if (sealAvg) sealAvg.innerText = avg ? `★ ${avg} Avg` : 'Not Rated';
+
+      const scoreVal = document.getElementById('passport-avg-score');
+      if (scoreVal) scoreVal.innerText = avg ? `★ ${avg} / 10` : '☆ Not rated';
+      const ratedBadge = document.getElementById('passport-rated-count-badge');
+      if (ratedBadge) ratedBadge.innerText = `${ratedCount} of ${count} rated`;
+
+      const tlTitle = document.getElementById('timeline-title-text');
+      if (tlTitle) tlTitle.innerText = `Visit History (${count})`;
+      const tlAvg = document.getElementById('timeline-avg-badge');
+      if (tlAvg) tlAvg.innerText = avg ? `★ ${avg} Average` : 'Unrated';
+
+      const bentoVal = document.getElementById('bento-passport-val');
+      if (bentoVal) bentoVal.innerText = avg ? `★ ${avg}` : '☆ --';
+      const bentoSub = document.getElementById('bento-passport-sub');
+      if (bentoSub) bentoSub.innerText = `${count} visits • ${avg ? 'Avg score' : 'No ratings'}`;
+
+      const container = document.getElementById('timeline-logs-container');
+      if (!container) return;
+
+      if (visitLogs.length === 0) {
+        container.innerHTML = '<div style="font-size: 11px; color: #78716c; text-align: center; padding: 12px; background: #fffdf8; border-radius: 8px;">No visits logged yet. Tap below to record your first visit!</div>';
+        return;
+      }
+
+      container.innerHTML = visitLogs.map((log) => `
+        <div class="timeline-row" style="flex-direction: column; align-items: stretch; gap: 4px; margin-bottom: 8px;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 11.5px; font-weight: 700; color: #16a34a;">✓ ${log.date}</span>
+              ${log.rating !== null && log.rating !== undefined 
+                ? `<span style="font-size: 11px; font-weight: 800; color: #f59e0b; cursor: pointer; background: #fef3c7; padding: 1px 6px; border-radius: 4px;" onclick="promptEditVisitRating('${log.id}', ${log.rating})" title="Tap to change rating for this visit">★ ${log.rating} / 10 ✏</span>` 
+                : `<span style="font-size: 11px; font-weight: 600; color: #9ca3af; cursor: pointer; text-decoration: underline;" onclick="promptEditVisitRating('${log.id}', 10)">☆ Rate visit</span>`
+              }
+            </div>
+            <button style="font-size: 11px; padding: 2px 6px; border: none; background: transparent; color: #e11d48; cursor: pointer;" onclick="deleteVisitLog('${log.id}')" title="Delete visit log">🗑️</button>
+          </div>
+          ${log.note ? `<div style="font-size: 11px; font-style: italic; color: #451a03; background: #fffdf8; padding: 4px 8px; border-radius: 6px; border-left: 2px solid #f59e0b;">“${log.note}”</div>` : ''}
+        </div>
+      `).join('');
+    }
+
+    function promptEditVisitRating(logId, currentRating) {
+      const val = prompt(`Change rating for this visit date (1 - 10):`, currentRating || '10');
+      if (val !== null) {
+        const parsed = parseInt(val, 10);
+        if (!isNaN(parsed) && parsed >= 1 && parsed <= 10) {
+          const log = visitLogs.find(l => l.id === logId);
+          if (log) {
+            log.rating = parsed;
+            renderVisitHistory();
+            burstParticles();
+          }
+        } else {
+          alert('Please enter a whole integer between 1 and 10.');
+        }
+      }
+    }
+
+    function deleteVisitLog(logId) {
+      if (confirm('Delete this visit log? Your visit count and average rating will automatically update.')) {
+        visitLogs = visitLogs.filter(l => l.id !== logId);
+        renderVisitHistory();
+      }
+    }
+
+    function promptAddLog() {
+      const today = new Date().toISOString().split('T')[0];
+      const date = prompt('Visit Date (YYYY-MM-DD):', today);
+      if (!date) return;
+      const ratingStr = prompt('Rate this visit (1 - 10, or leave blank):', '10');
+      let rating = null;
+      if (ratingStr && ratingStr.trim() !== '') {
+        const r = parseInt(ratingStr, 10);
+        if (!isNaN(r) && r >= 1 && r <= 10) rating = r;
+      }
+      const note = prompt('Optional visit memory / note:', '');
+      
+      const newId = String(Date.now());
+      visitLogs.unshift({ id: newId, date, rating, note: note && note.trim() ? note.trim() : null });
+      renderVisitHistory();
+      burstParticles();
+    }
+
+    function triggerCelebration() {
+      promptAddLog();
+    }
+
+    function promptEditNote() {
+      const note = prompt('Edit your shared tip for friends:', '“The puns are great!”');
+      if (note) {
+        document.getElementById('after-note').innerText = note;
+        alert('Tip saved!');
+      }
+    }
+
+    function openShareComposer() {
+      const title = document.getElementById('after-head-title')?.innerText?.replace(/^[^\w\s]+/, '').trim() || 'Pirates of the Caribbean';
+      const park = document.getElementById('after-head-sub')?.innerText?.replace(/^[^\w\s]+/, '').trim() || 'Magic Kingdom';
+      const { count, avg } = computeVisitStats();
+      const ratingStr = avg ? `★ ${avg} / 10 (${count} ${count === 1 ? 'visit' : 'visits'})` : 'Unrated';
+      const tip = document.getElementById('after-note')?.innerText || 'No shared tip yet';
+
+      alert(`📤 Share Experience (ShareComposer)\n\n───────────────────────────────\nAttraction: ${title}\nPark: ${park}\nYour Rating: ${ratingStr}\nShared Note: “${tip}”\n───────────────────────────────\nIn the real mobile app, this opens the native ShareComposer modal to generate an Instagram/text share card or send to your Disney crew!`);
+    }
+
+    function promptAddToPlan() {
+      const title = document.getElementById('after-head-title')?.innerText?.replace(/^[^\w\s]+/, '').trim() || 'Pirates of the Caribbean';
+      const time = prompt(`Add ${title} to your trip plan!\n\nEnter planned time (e.g. 11:30 AM, or leave blank for flexible):`, '11:30 AM');
+      if (time !== null) {
+        alert(`✨ Added to Plan!\n\n${title} scheduled for ${time.trim() ? time.trim() : 'Flexible'}.\nIn the mobile app, this directly syncs to your shared trip itinerary!`);
+      }
+    }
+
+    function scrubHour(hour, wait) {
+      document.getElementById('scrub-label').innerHTML = `${hour}: ~${wait}m wait`;
+    }
+
+    function burstParticles() {
+      const canvas = document.getElementById('confetti-layer');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      canvas.width = canvas.offsetWidth;
+      canvas.height = canvas.offsetHeight;
+
+      const particles = [];
+      const colors = ['#f6c343', '#7e57c2', '#2e9e6b', '#ffffff', '#e94560'];
+
+      for (let i = 0; i < 40; i++) {
+        particles.push({
+          x: canvas.width / 2,
+          y: canvas.height * 0.45,
+          vx: (Math.random() - 0.5) * 8,
+          vy: (Math.random() - 1.2) * 8,
+          color: colors[Math.floor(Math.random() * colors.length)],
+          size: Math.random() * 5 + 3,
+          alpha: 1,
+          rot: Math.random() * 360,
+          dRot: (Math.random() - 0.5) * 8
+        });
+      }
+
+      function loop() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        let active = false;
+        particles.forEach(p => {
+          p.x += p.vx;
+          p.y += p.vy;
+          p.vy += 0.22;
+          p.alpha -= 0.02;
+          p.rot += p.dRot;
+          if (p.alpha > 0) {
+            active = true;
+            ctx.save();
+            ctx.globalAlpha = p.alpha;
+            ctx.translate(p.x, p.y);
+            ctx.rotate(p.rot * Math.PI / 180);
+            ctx.fillStyle = p.color;
+            ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
+            ctx.restore();
+          }
+        });
+        if (active) requestAnimationFrame(loop);
+        else ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
+      loop();
+    }
+
+    function setStampShape(shape) {
+      const seal = document.querySelector('.passport-gold-seal');
+      if (!seal) return;
+      seal.classList.toggle('shape-circle', shape === 'circle');
+      document.getElementById('btn-stamp-circle')?.classList.toggle('active', shape === 'circle');
+      document.getElementById('btn-stamp-square')?.classList.toggle('active', shape === 'square');
+    }
+
+    function toggleStampShape() {
+      const seal = document.querySelector('.passport-gold-seal');
+      if (!seal) return;
+      const isCircle = seal.classList.contains('shape-circle');
+      setStampShape(isCircle ? 'square' : 'circle');
+    }
+
+    // Initialize visit history display on load
+    window.addEventListener('DOMContentLoaded', () => {
+      renderVisitHistory();
+    });
+  </script>
+</body>
+</html>

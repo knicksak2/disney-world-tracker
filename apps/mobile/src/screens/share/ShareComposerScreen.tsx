@@ -220,6 +220,38 @@ export default function ShareComposerScreen({
   const recipientCountValid = isRecipientCountValid(recipientCount);
   const noFriends = hasNoFriends(friendCount);
 
+  // Stable `renderItem` identity — an inline arrow literal passed to `FlatList`
+  // is recreated every render (e.g. every keystroke or toggle), which
+  // `FlatList`/`VirtualizedList` treats as a changed render function and forces
+  // broader re-render/re-measure work on every parent update, even though the
+  // row content here is otherwise cheap (see `DestinationScreen`'s `renderRow`
+  // for the same fix). `selected` and `toggleRecipient` are read inside the
+  // closure (`selected.has`, the row's `onPress`), so both are dependencies.
+  const renderRow = useCallback(
+    ({ item }: { item: FriendsListEntry }) => {
+      const isSelected = selected.has(item.userId);
+      return (
+        <Card
+          onPress={() => toggleRecipient(item.userId)}
+          {...(isSelected ? { accentColor: theme.color.primary } : {})}
+          style={[styles.friendRow, isSelected && styles.friendRowSelected]}
+        >
+          <View style={styles.friendRowInner}>
+            <Text style={styles.friendName}>{item.displayName}</Text>
+            <Ionicons
+              name={isSelected ? 'checkmark-circle' : 'ellipse-outline'}
+              size={22}
+              color={
+                isSelected ? theme.color.primary : theme.color.borderStrong
+              }
+            />
+          </View>
+        </Card>
+      );
+    },
+    [selected, toggleRecipient],
+  );
+
   const handleSend = useCallback((): void => {
     setSubmissionError(null);
 
@@ -356,27 +388,7 @@ export default function ShareComposerScreen({
             />
           </View>
         }
-        renderItem={({ item }) => {
-          const isSelected = selected.has(item.userId);
-          return (
-            <Card
-              onPress={() => toggleRecipient(item.userId)}
-              {...(isSelected ? { accentColor: theme.color.primary } : {})}
-              style={[styles.friendRow, isSelected && styles.friendRowSelected]}
-            >
-              <View style={styles.friendRowInner}>
-                <Text style={styles.friendName}>{item.displayName}</Text>
-                <Ionicons
-                  name={isSelected ? 'checkmark-circle' : 'ellipse-outline'}
-                  size={22}
-                  color={
-                    isSelected ? theme.color.primary : theme.color.borderStrong
-                  }
-                />
-              </View>
-            </Card>
-          );
-        }}
+        renderItem={renderRow}
         ListFooterComponent={
           <View style={styles.footer}>
             {submissionError !== null ? (
@@ -440,7 +452,8 @@ function SharePreview({
             {params.experienceName}
           </Text>
           <Text style={styles.previewMeta} testID="preview-experience-meta">
-            {params.park} {'\u00b7'} {categoryLabel(params.category)}
+            {resolveExperiencePreviewLocation(params)}
+            {categoryLabel(params.category)}
           </Text>
 
           {showRating && includeRating ? (
@@ -528,6 +541,31 @@ function SharePreview({
  */
 function categoryLabel(category: string): string {
   return category.replace(/_/g, ' ');
+}
+
+/** The `experience` variant of `ShareComposerParams`. */
+export type ExperiencePreviewParams = Extract<ShareComposerParams, { kind: 'experience' }>;
+
+/**
+ * Resolve the `experience` preview's location prefix (R2.3): the Park when
+ * present, else the Resort's Geographic Area (`resortArea`) when present and
+ * non-empty, else an empty string so the category label renders alone with no
+ * dangling separator or literal `"null"` — a Resort's own representing row
+ * carries no owning Park (experience-detail-redesign R4.14, R4.15).
+ *
+ * Returns the resolved segment already suffixed with the `\u00b7` separator
+ * and a trailing space when non-empty, so the caller can simply concatenate
+ * the category label after it.
+ */
+export function resolveExperiencePreviewLocation(params: ExperiencePreviewParams): string {
+  if (params.park !== null) {
+    return `${params.park} \u00b7 `;
+  }
+  const area = params.resortArea;
+  if (area !== undefined && area !== null && area.trim().length > 0) {
+    return `${area.trim()} \u00b7 `;
+  }
+  return '';
 }
 
 /**

@@ -530,3 +530,181 @@ No new env vars. No new external API calls — this feature is entirely internal
 - **Create-time visibility tests** (added by this amendment): a route integration test in `apps/api/src/services/foodLists/__tests__/routes.test.ts` asserting `POST /me/food-lists` with `{ name, visibility: 'public' }` creates a list with `visibility: 'public'` in the response, with `visibility` omitted still creates `'private'`, and an invalid `visibility` value is rejected `400 validation_failed` with no row created (Property 14); a schema test in `packages/shared/src/schemas/__tests__/FoodList.test.ts` asserting `createFoodListInputSchema` accepts both, accepts the field omitted, and rejects an invalid enum value; a `MyFoodListsScreen.test.tsx` assertion that selecting "Public" in the create modal and submitting calls `apiRequest('POST', '/me/food-lists', { name, visibility: 'public' })`, that the list appears in the `owned` tab afterward, and — separately — that a failed create request (mocked rejection) surfaces a visible error rather than silently closing or leaving the modal inert, closing the gap where `handleCreateList`'s empty `catch {}` previously made a failed create indistinguishable from doing nothing.
 - **Header back navigation test** (added by this amendment, to `apps/mobile/src/screens/foodLists/__tests__/MyFoodListsScreen.test.tsx`): asserts the header renders an accessible back button with role "button" and label "Go back" (Requirement 12.4), and that activating it invokes `navigation.goBack()` when `navigation.canGoBack()` is true, and `navigation.navigate('MainTabs')` when `canGoBack()` is false (Property 15).
 
+
+## Amendment: Checklist Food Lists (Requirement 13)
+
+### Why derived, not a stored per-item flag
+
+An earlier design considered a `food_lists_items.checked BOOLEAN` column. Two things rule it out:
+
+1. **A recurring dish reuses the same `food_items` row across years.** `food-item-logging`'s `upsertFoodItemsFromMenus` is insert/update-only and matches on `(experience_id, lower(name))` — a Food & Wine booth item that returns next year updates the *same* `food_items.id`'s `last_seen_at`, it never creates a new row. If "gotten" were `EXISTS food_item_logs WHERE food_item_id = X` with no date bound, last year's log would make this year's freshly-created "Food & Wine 27" list show that item as already gotten the moment the list is opened, before the User has eaten anything this season. "Gotten" is therefore inherently time-scoped to *this list's* lifetime, not the dish's lifetime — which a plain per-item stored flag cannot express without itself being reset per list-instance (which is just reinventing the date-scoped query below, with an extra column to keep in sync).
+2. **A stored flag can drift from the log it's supposed to represent.** If checking a box both set `food_lists_items.checked = true` AND wrote a `food_item_logs` row, the two could disagree (e.g. the log gets deleted from "My Food History" per Requirement 13.8 but the list's `checked` column is never told). Deriving `gotten` at read time from `food_item_logs` — the same source of truth `food-item-logging`'s own history screens already read — makes disagreement impossible by construction, at the cost of one extra join on `GET /food-lists/:id`, which already joins several tables per item.
+
+So `gotten` is computed, never persisted, using the Food_List's own `created_at` as the cutoff (Requirement 13.3). This reuses the exact `currentlyOnMenu`-style pattern (`food-item-logging`'s design.md) already established in this codebase for "a field that must always reflect current reality, never a stored snapshot that can go stale."
+
+### Per-viewer, not pooled, progress
+
+`gotten`/`gottenCount` are computed against the *requesting* User's own `food_item_logs`, never aggregated across every User with access to a shared Checklist Food_List. A shared checklist's item set is collaborative (any editor can add dishes), but eating a dish is not something one collaborator can do "on behalf of" another — pooling progress would let a list read as complete for a User who has personally tried nothing on it, which defeats the point of a checklist telling that User what they still need to do. This mirrors Requirement 7.1's `myRole` already being per-viewer on the same response; `gotten`/`gottenCount` join that pattern rather than introducing a new one.
+
+### Components and Interfaces — Additions
+
+**Backend (`apps/api/src/services/foodLists/repo.ts`):**
+
+- `FoodListRepo.createList` and `renameList`-sibling `setChecklistMode(listId, ownerId, isChecklist)` (mirrors the existing `setVisibility` method's shape and owner-only gating exactly — Requirement 13.2 is deliberately symmetric with Requirement 3.1's visibility update).
+- `FoodListRepo.getListDetail(listId, viewerId)` widens its existing item query: when the resolved `Food_List.is_checklist` is `true`, LEFT JOIN `food_item_logs` scoped to `(user_id = viewerId, food_item_id = fli.food_item_id, visited_on >= food_lists.created_at::date)` per item, projecting `gotten` as `EXISTS(...)` and computing `gottenCount` as a `COUNT(*) FILTER (WHERE gotten)` in the same query — no second round trip. When `is_checklist` is `false`, neither field is computed or included, per Requirement 13.4 (the query takes the existing, unmodified path).
+
+```sql
+-- getListDetail's item projection, checklist branch only:
+SELECT fli.food_item_id, fi.name, fi.price, fli.position,
+       fli.added_by_user_id, p.display_name AS added_by_display_name,
+       e.id AS experience_id, e.name AS experience_name,
+       usl.id AS location_id, usl.name AS location_name,
+       EXISTS (
+         SELECT 1 FROM food_item_logs fil
+          WHERE fil.food_item_id = fli.food_item_id
+            AND fil.user_id = $viewerId
+            AND fil.visited_on >= $listCreatedAtDate
+       ) AS gotten
+  FROM food_lists_items fli
+  JOIN food_items fi ON fi.id = fli.food_item_id
+  LEFT JOIN profiles p ON p.user_id = fli.added_by_user_id
+  LEFT JOIN experiences e ON e.id = fi.experience_id
+  LEFT JOIN user_submitted_locations usl ON usl.id = fi.location_id
+ WHERE fli.food_list_id = $listId
+ ORDER BY fli.position ASC
+```
+
+`gottenCount` is the `COUNT(*) FILTER (WHERE gotten)` over this same result set (computed in the application layer after the query, or as a second lightweight aggregate query — either is acceptable; no correctness difference, since both read the identical `EXISTS` predicate).
+
+**Routes (`apps/api/src/services/foodLists/routes.ts`):**
+
+- `PATCH /me/food-lists/:id` widens its existing body schema to accept `isChecklist` alongside `name`/`visibility` (Requirement 13.2), routed to `setChecklistMode` when present — mirrors exactly how `visibility` is already handled in the same handler, not a new route.
+- `POST /me/food-lists` widens its existing body schema to accept `isChecklist` alongside `name`/`visibility` (Requirement 13.1) — mirrors the Requirement 1a `visibility` amendment precedent exactly (optional field, defaults server-side when omitted).
+- No new route is added for "mark gotten" — Requirement 13.6 is deliberately served by the pre-existing `POST /me/food-items/:foodItemId/logs` route from `food-item-logging`; the mobile checkbox is a client for that endpoint, not a reason to add a new one.
+
+### Mobile Structure — Additions
+
+- **`MyFoodListsScreen.tsx` create modal** gains a second toggle, "Track as a checklist" (labelled to read naturally against the existing Public/Private toggle), wired into the same `POST /me/food-lists` body as `isChecklist` (Requirement 13.13).
+- **`FoodListDetailScreen.tsx`**:
+  - Reads `list.isChecklist`; when `true`, renders a progress row ("3 of 12 tried" + a horizontal progress bar) between the existing header `Card` and the "Dishes (N)" section header, sourced from `list.gottenCount`/`list.itemCount` (Requirement 13.10).
+  - Each item row (the existing `Card` per item) gains a leading completion indicator when `list.isChecklist` is `true`, reflecting `item.gotten`. Unchecked → pressable, opening `RateOnCheckoffPrompt` (Requirement 13.15, see below) before submitting. Gotten → renders a filled completion badge in place of the outline box, with the row's text styling completely unchanged (no strikethrough/dimming, Requirement 13.14) and no `onPress` (Requirement 13.7/13.11 — no further mark-gotten submission fires from an already-gotten row).
+  - After a successful mark-gotten submission, the screen compares the refetched `gottenCount === itemCount` against the pre-submission values; if it just transitioned from not-equal to equal, it triggers the completion celebration (Requirement 13.12) — a lightweight, purely client-side, non-persisted UI moment (e.g. a `ConfettiOverlay`-style transient component mounted for a few seconds plus a banner message), analogous in spirit to `foodListNotice.ts`'s existing transient-notice pattern but scoped locally to this screen's own state rather than a cross-screen store, since the celebration is only ever relevant to the screen the User is already looking at when they complete the list — it never needs to survive navigation.
+  - Non-checklist lists (`isChecklist: false`) render exactly as they do today — no progress row, no completion indicator — since `gotten`/`gottenCount` are simply absent from the response in that case (Requirement 13.4).
+
+### Amendment: Non-Destructive Completion Indicator, Inline Rating, and Action-Scoped Undo (Requirement 13.14-13.18)
+
+**Why not reuse `LogFoodItemModal` directly.** `LogFoodItemModal` (from `food-item-logging`) is a full sheet: date picker (capped at today), 1–10 rating, and a note field. A checklist mark-gotten submission always uses today's date (Requirement 13.6, unchanged) and Requirement 13.15 only asks for an *optional rating*, not a note — reusing the whole modal would resurface a date picker that has nothing to decide (today is the only valid choice here) and a note field this flow never asked for, working against the "fast, skippable" interaction this amendment is trying to preserve. Instead, `RateOnCheckoffPrompt.tsx` (new, `apps/mobile/src/screens/foodLists/`) is a small, purpose-built prompt that reuses `LogFoodItemModal`'s 1–10 rating button grid **styling** (the `ratingRow`/`ratingBtn`/`ratingBtnSelected` visual pattern) without importing the modal itself — a lightweight popover/sheet with just the rating row, a "Skip" action, and a "Confirm" action once a value is picked.
+
+- **`RateOnCheckoffPrompt.tsx`** (new): props `{ visible, foodItemName, onSkip, onConfirm(rating: number) }`. Opened when the User activates an unchecked checklist item's row. `onSkip` and dismissal without a selection both proceed to Requirement 13.6's submission with no `rating`; selecting a value and confirming proceeds with that `rating` included. This directly backs Requirement 13.15 — the prompt never blocks or delays the mark-gotten submission, it only decides whether `rating` is present on it.
+- **`handleMarkGotten(foodItemId, rating?: number)`** (widened from the original single-argument version) includes `rating` in the `POST /me/food-items/:foodItemId/logs` body when provided (Requirement 13.15) and, on success, captures the created log's `id` from the response (`FoodItemLogDTO.id`, already returned by this endpoint — no response-shape change needed) to back the undo affordance below (Requirement 13.16, 13.17).
+- **Undo affordance (Requirement 13.16-13.18):** a new lightweight, self-contained component `MarkGottenUndoToast.tsx` (new, `apps/mobile/src/screens/foodLists/`) rendered by `FoodListDetailScreen.tsx` from local component state — **not** the cross-screen `foodListNotice.ts` store, since this needs to carry a specific `logId`/`foodItemId` payload and auto-dismiss on a timer, neither of which `foodListNotice.ts` (a single optional string, consumed once on next mount) supports. `FoodListDetailScreen` holds an array of `{ id: string; logId: string; foodItemId: string; itemName: string }` (Requirement 13.18 — multiple can coexist, each independently timed and dismissed) rather than a single value, so a second mark-gotten submission's toast never displaces or gets confused with an earlier one still visible. Activating a toast's "Undo" action calls `DELETE /me/food-items/:foodItemId/logs/:logId` using *that toast's own* `logId` (never "the most recent log for this item," which is what makes Requirement 13.17's precision hold even if the User had an older, unrelated log for the same dish), removes that toast from the array, and invalidates `['food-list-detail', foodListId]` so the item's `gotten` re-resolves to `false` on refetch. A toast that times out or is dismissed without activating "Undo" simply removes itself from the array with no further action — the log it referenced stays exactly as submitted, and from that point on, correcting it requires "My Food History" or the item's log-history sheet, per the unchanged Requirement 13.7.
+
+## Shared Contracts — Additions
+
+### `packages/shared/src/dto/FoodList.ts` (amended)
+
+```typescript
+export interface FoodListDTO {
+  // ...existing fields unchanged...
+  readonly isChecklist: boolean;
+}
+
+export interface FoodListItemDTO {
+  // ...existing fields unchanged...
+  /** Present only when the parent Food_List's `isChecklist` is `true` (Requirement 13.3, 13.4). */
+  readonly gotten?: boolean;
+}
+
+export interface FoodListDetailDTO extends FoodListDTO {
+  // ...existing fields unchanged...
+  /** Present only when `isChecklist` is `true` (Requirement 13.9). */
+  readonly gottenCount?: number;
+}
+
+export interface CreateFoodListInputDTO {
+  readonly name: string;
+  readonly visibility?: 'private' | 'public';
+  /** Defaults server-side to `false` when omitted (Requirement 13.1). */
+  readonly isChecklist?: boolean;
+}
+
+export interface UpdateFoodListInputDTO {
+  readonly name?: string;
+  readonly visibility?: 'private' | 'public';
+  /** Requirement 13.2 — symmetric with `visibility`'s existing update path. */
+  readonly isChecklist?: boolean;
+}
+```
+
+`createFoodListInputSchema`/`updateFoodListInputSchema` in `packages/shared/src/schemas/FoodList.ts` each gain `isChecklist: z.boolean().optional()`, following the exact `visibility.optional()` precedent from the Requirement 1a amendment. `foodListItemSchema`/`foodListDetailSchema` gain `gotten`/`gottenCount` as `.optional()` fields (never `.nullable()` — they are either present, when `isChecklist`, or entirely absent, never present-and-null).
+
+## Data Models & Migration — Addition
+
+### Migration `0047_food_list_checklist.sql`
+
+```sql
+BEGIN;
+
+ALTER TABLE food_lists
+    ADD COLUMN is_checklist BOOLEAN NOT NULL DEFAULT false;
+
+COMMIT;
+```
+
+No new table. `is_checklist` needs no index — it is only ever read alongside a primary-key lookup (`GET /food-lists/:id`) or as part of the already-indexed owner listing (`food_lists_owner_idx`), never filtered on at scale (discovery's `sort=popular|recent` queries are unaffected and do not filter on this column).
+
+## Error Handling — Addition
+
+No new `ErrorCode` is introduced by this amendment. `isChecklist` follows the existing `validation_failed` path if a non-boolean value is submitted (handled by the widened Zod schema, not a bespoke check); marking an item gotten reuses `food-item-logging`'s existing error codes (`food_log_future_date`, `food_item_not_found`) verbatim, since it is the same endpoint.
+
+## Configuration & Constants — Addition
+
+| Constant | Value | Purpose |
+|---|---|---|
+| `DEFAULT_IS_CHECKLIST` | `false` | Default `isChecklist` value when omitted on create (Requirement 13.1) |
+
+## Correctness Properties — Addition
+
+### Property 16: Checklist Gotten State Is Derived, Per-Viewer, and Time-Scoped to the List (Added by this amendment)
+*For any Checklist Food_List (`isChecklist = true`) and any Food_Item within it, a viewing User's `gotten` value is `true` if and only if that specific User holds at least one `Food_Item_Log` referencing that Food_Item with `visited_on` on or after the Food_List's `created_at`; a `Food_Item_Log` dated before the Food_List's `created_at` (e.g. against a `food_items` row reused from a prior year's recurring event) never causes `gotten` to be `true`. Two different Users with access to the same Checklist Food_List may see different `gotten` values for the same item, each resolved solely from that User's own logs. For any non-checklist Food_List (`isChecklist = false`), no item carries a `gotten` value at all. `gottenCount` for a given viewer always equals the count of that viewer's `gotten = true` items in that read.*
+**Validates:** Requirement 13.3, Requirement 13.4, Requirement 13.5, Requirement 13.9
+
+### Property 17: Checklist Mode Is Independently Toggleable Without Side Effects (Added by this amendment)
+*For any Food_List, creating it with `isChecklist` omitted results in `isChecklist = false`; supplying `isChecklist: true` or `false` on create sets it exactly; and the owning User changing `isChecklist` via `PATCH /me/food-lists/:id` at any later time changes only that column and `updatedAt` — it never adds, removes, or reorders any `Food_List_Item`, `Food_List_Share`, `Food_List_Like`, or `Food_List_Save` row.*
+**Validates:** Requirement 13.1, Requirement 13.2
+
+### Property 18: Mark-Gotten Undo Is Log-Scoped, Not Item-Scoped (Added by this amendment)
+*For any Checklist Food_List item with N pre-existing qualifying `Food_Item_Log` rows (N >= 0) for the acting User, a new mark-gotten submission creates exactly one additional `Food_Item_Log` row and returns its `id`; activating that specific submission's undo affordance deletes only the `Food_Item_Log` row with that returned `id`, leaving all N pre-existing rows untouched, regardless of how many qualifying logs exist for that item at the time of the undo. Letting the undo affordance dismiss or time out without activation leaves the newly created row permanently in place. For any two mark-gotten submissions (same or different items) whose undo affordances are simultaneously visible, activating or dismissing one never deletes, times out, or otherwise affects the other's referenced log.*
+**Validates:** Requirement 13.16, Requirement 13.17, Requirement 13.18
+
+### Property 19: Optional Rating Never Blocks or Delays Mark-Gotten (Added by this amendment)
+*For any mark-gotten submission, presenting `RateOnCheckoffPrompt` and either (a) skipping it, (b) dismissing it without a selection, or (c) confirming it with a selected 1–10 rating all result in exactly one `Food_Item_Log` being created; cases (a) and (b) create that log with `rating: null`/absent, and case (c) creates it with the selected `rating` value included — in every case, `gotten` resolves to `true` for that item immediately after, with no case left partially submitted or blocked pending further User input beyond the prompt itself.*
+**Validates:** Requirement 13.15
+
+## Correctness Properties — Addition (Rating Visibility, Whole-Row Activation, Drag-to-Reorder)
+
+### Property 20: Displayed Rating Matches the Most-Recent Qualifying Log, Present Only When Gotten (Added by this amendment)
+*For any Checklist Food_List item and any set of qualifying `Food_Item_Log` rows for the acting User (Property 16's viewer-scoped, time-scoped qualification), the item's `rating` field on `GET /food-lists/:id` equals the `rating` of whichever qualifying log has the latest `visited_on` (ties broken by latest `logged_at`), or `null` if that specific log's `rating` is `null` — never the rating of an earlier qualifying log, even if that earlier log had a non-null rating and the most recent one does not. `rating` is present in the response if and only if `gotten` is `true` for that item; it is entirely absent when `gotten` is `false` or the list is not a checklist (mirroring how `gotten` itself is entirely absent for a non-checklist list, Property 16).*
+**Validates:** Requirement 13.19
+
+### Property 21: Check-Off Button Exclusivity, Badge Rendering, and Restaurant Navigation (Added by this amendment)
+*For any Checklist Food_List item row, at most one of the following is true at render time: (a) when `gotten` is `false`, an explicit trailing "Check off" action button is rendered in the badge slot before the delete button (with testID `food-list-item-check-off-btn-${foodItemId}`) as the exclusive completion activation target opening `RateOnCheckoffPrompt`, or (b) when `gotten` is `true`, the "Check off" action button is replaced by a trailing completed badge showing `` `${rating}/10` `` when `rating` is non-null or a generic completed label when `rating` is `null`. No leading circle/checkbox-shaped element is rendered in either state. The row details area (dish name/location/price) does not trigger mark-gotten or open `RateOnCheckoffPrompt` in any state; instead, activating the row details area WHERE `experienceId` is non-null navigates to `ExperienceDetailScreen` (`{ experienceId }`), and is inert when `experienceId` is `null`. A non-checklist list's item row renders neither the "Check off" button nor a completion badge, and its details area similarly navigates to `ExperienceDetailScreen` WHERE `experienceId` is non-null.*
+**Validates:** Requirement 13.20, Requirement 13.21
+
+### Property 22: Post-Completion Rating Editing on Checklist Items (Added by this amendment)
+*For any Checklist Food_List item with `gotten = true`, its DTO carries `logId` populated with the UUID of the most recent qualifying `Food_Item_Log`. The item's completed status badge (`testID="food-list-item-gotten-badge-${foodItemId}"`) is an accessible button; activating it opens `RateOnCheckoffPrompt` with `initialRating` pre-selected to the item's current rating. Confirming a rating issues `PATCH /me/food-items/:foodItemId/logs/:logId` with `{ rating }`, and updates the list's query data so the updated rating renders on the completed badge.*
+**Validates:** Requirement 13.23
+
+## Testing Strategy — Addition
+
+- **Repository property test** (extend `apps/api/src/services/foodLists/__tests__/foodLists.prop.test.ts` or add `foodListChecklist.prop.test.ts`): `fast-check` (>=100 runs) generating a Food_List with `isChecklist` true/false, a set of items, and per-item `Food_Item_Log` fixtures dated both before and after the list's `created_at` (and for a mix of two distinct viewer Users), asserting `gotten`/`gottenCount` match Property 16 exactly in every generated case, including the "prior-year log against a reused `food_items` row does not count" case explicitly as a named scenario (not left to chance under the property generator alone, since it is the specific case this amendment exists to get right).
+- **Route integration test** (extend `apps/api/src/services/foodLists/__tests__/routes.test.ts`): `POST /me/food-lists` with `isChecklist: true`/`false`/omitted; `PATCH /me/food-lists/:id` toggling `isChecklist` and asserting no other row/field changes (Property 17); `GET /food-lists/:id` for a checklist list asserting `gotten`/`gottenCount` appear, and for a non-checklist list asserting they are absent from the JSON response (not merely `false`/`0`).
+- **Migration test** (`apps/api/src/db/__tests__/migration0047.test.ts`): asserts `food_lists.is_checklist` exists, is `NOT NULL`, and defaults to `false` on an insert that omits it.
+- **Mobile component test** (extend `FoodListDetailScreen.test.tsx`): renders a checklist-mode list's progress row and per-item completion indicators; activating an unchecked item's row opens `RateOnCheckoffPrompt`; skipping it or confirming a rating both call `POST /me/food-items/:foodItemId/logs` with today's date (the skip path omitting `rating`, the confirm path including it), then re-render that item with the filled completion badge and unchanged (non-struck-through) text; asserts an already-gotten item's row does not re-trigger a submission on further taps; asserts the completion celebration renders exactly once on the specific submission that brings `gottenCount` to equal `itemCount`, and does not render again on a subsequent unrelated re-render of an already-100%-complete list; asserts a non-checklist list renders no progress row and no completion indicator. Extend `MyFoodListsScreen.test.tsx` asserting the new "Track as a checklist" toggle in the create modal is included in the `POST /me/food-lists` body as `isChecklist`.
+- **Mobile undo/rating tests** (added by this amendment, extend `FoodListDetailScreen.test.tsx`; new `RateOnCheckoffPrompt.test.tsx` and `MarkGottenUndoToast.test.tsx`): `RateOnCheckoffPrompt.test.tsx` asserts selecting a rating and confirming calls `onConfirm` with that value, and both "Skip" and dismissal without a selection call `onSkip`, never `onConfirm`. `MarkGottenUndoToast.test.tsx` asserts activating "Undo" calls `DELETE /me/food-items/:foodItemId/logs/:logId` with the specific `logId` it was constructed with, and that it auto-dismisses after its visible duration without calling the delete endpoint. `FoodListDetailScreen.test.tsx` gains: an assertion that two mark-gotten submissions in quick succession (for different items) each show their own undo toast simultaneously (Property 18's multi-toast case); an assertion that activating one submission's undo deletes only that submission's log and leaves a pre-existing older log for the same item's `foodItemId` untouched (Property 18's log-scoped-not-item-scoped case, driven by seeding the mocked list response with two logs for one item before the mark-gotten action); and an assertion that dismissing/timing out a toast without activating it leaves `gotten` as `true` on the next refetch.
+
+### Testing Strategy — Addition (Rating Visibility, Whole-Row Activation, Drag-to-Reorder)
+
+- **Repository test** (extend `apps/api/src/services/foodLists/__tests__/foodListChecklist.prop.test.ts`): asserts a gotten item's `rating` equals the most recent qualifying log's rating; covers a rated most-recent log, an unrated most-recent log with an earlier rated log present (asserting `null`, not the earlier value), and a never-logged item (asserting `rating` is entirely absent, mirroring `gotten: false`).
+- **Mobile component test** (extend `FoodListDetailScreen.test.tsx`): asserts a gotten item with `rating: null` renders the generic completed badge and not a numeric one; asserts a gotten item with a numeric `rating` renders `` `${rating}/10` `` and not the generic label; asserts an unmarked checklist row exposes `accessibilityRole="button"` and an "Ate this: {name}" label on its details area (not a separate leading element) and that no leading checkbox-shaped testID exists anywhere in the tree; asserts a non-checklist list's row carries neither the activation role/label nor a completed badge.
+- **Drag-to-reorder** was already covered pre-amendment by the existing `test-simulate-drag-to-end-*` mock-driven reorder test (`react-native-draggable-flatlist`'s real gesture cannot be driven via `fireEvent`); no new drag-specific property test is added here since Requirement 13.22 is a UI-affordance change (handle position/shape), not a new reorder-semantics behavior — Property 5's reorder-submission correctness is unchanged and already covered.

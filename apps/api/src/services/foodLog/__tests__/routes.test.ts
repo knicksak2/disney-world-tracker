@@ -22,6 +22,7 @@ import { registerErrorHandler } from '../../../errors/handler.js';
 import type { UserSubmittedLocationRepo } from '../locations.js';
 import type {
   CreateFoodItemLogRepoInput,
+  UpdateFoodItemLogRepoInput,
   FoodItemLogRepo,
   FoodItemRepo,
 } from '../repo.js';
@@ -109,11 +110,13 @@ function makeFakeFoodItemLogRepo() {
     addCalls: [] as CreateFoodItemLogRepoInput[],
     historyCalls: [] as { userId: string; foodItemId: string }[],
     deleteCalls: [] as { userId: string; foodItemId: string; logId: string }[],
+    updateCalls: [] as UpdateFoodItemLogRepoInput[],
     allLogsCalls: [] as string[],
     scopedLogsCalls: [] as { userId: string; scope: { experienceId?: string; locationId?: string } }[],
     addError: null as AppError | null,
     historyError: null as AppError | null,
     deleteError: null as AppError | null,
+    updateError: null as AppError | null,
     historyResult: {
       foodItemId: FOOD_ITEM_ID,
       repeatCount: 0,
@@ -121,6 +124,16 @@ function makeFakeFoodItemLogRepo() {
     } as FoodItemLogHistoryDTO,
     allLogsResult: [] as FoodItemLogWithContextDTO[],
     scopedLogsResult: [] as FoodItemLogWithContextDTO[],
+    updateResult: {
+      id: LOG_ID,
+      userId: USER_ID,
+      foodItemId: FOOD_ITEM_ID,
+      visitedOn: '2026-06-15',
+      userTz: 'America/New_York',
+      loggedAt: '2026-06-15T12:00:00.000Z',
+      rating: 8,
+      note: 'Updated note',
+    } as FoodItemLogDTO,
 
     async addLog(input: CreateFoodItemLogRepoInput): Promise<FoodItemLogDTO> {
       this.addCalls.push(input);
@@ -151,6 +164,13 @@ function makeFakeFoodItemLogRepo() {
     ): Promise<void> {
       this.deleteCalls.push({ userId, foodItemId, logId });
       if (this.deleteError) throw this.deleteError;
+    },
+    async updateLog(
+      input: UpdateFoodItemLogRepoInput,
+    ): Promise<FoodItemLogDTO> {
+      this.updateCalls.push(input);
+      if (this.updateError) throw this.updateError;
+      return this.updateResult;
     },
     async getAllLogsForUser(userId: string): Promise<readonly FoodItemLogWithContextDTO[]> {
       this.allLogsCalls.push(userId);
@@ -657,6 +677,63 @@ describe('foodLog routes', () => {
         method: 'DELETE',
         url: `/me/food-items/${FOOD_ITEM_ID}/logs/${LOG_ID}`,
         headers: { 'x-test-user-id': USER_ID },
+      });
+
+      expect(res.statusCode).toBe(404);
+      expect(res.json().error.code).toBe('food_log_not_found');
+    });
+
+    it('PATCH /me/food-items/:foodItemId/logs/:logId updates rating and note (200)', async () => {
+      const res = await app.inject({
+        method: 'PATCH',
+        url: `/me/food-items/${FOOD_ITEM_ID}/logs/${LOG_ID}`,
+        headers: { 'x-test-user-id': USER_ID },
+        payload: {
+          rating: 9,
+          note: 'Delicious update',
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(logRepo.updateCalls).toEqual([
+        {
+          userId: USER_ID,
+          foodItemId: FOOD_ITEM_ID,
+          logId: LOG_ID,
+          rating: 9,
+          note: 'Delicious update',
+        },
+      ]);
+      const body = res.json();
+      expect(body.id).toBe(LOG_ID);
+      expect(body.rating).toBe(8); // from fake's updateResult
+    });
+
+    it('PATCH /me/food-items/:foodItemId/logs/:logId rejects invalid rating with 400 rating_out_of_range', async () => {
+      const res = await app.inject({
+        method: 'PATCH',
+        url: `/me/food-items/${FOOD_ITEM_ID}/logs/${LOG_ID}`,
+        headers: { 'x-test-user-id': USER_ID },
+        payload: {
+          rating: 12,
+        },
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error.code).toBe('rating_out_of_range');
+      expect(logRepo.updateCalls).toHaveLength(0);
+    });
+
+    it('PATCH /me/food-items/:foodItemId/logs/:logId returns 404 when log not found', async () => {
+      logRepo.updateError = new AppError('food_log_not_found', 'Food item log not found');
+
+      const res = await app.inject({
+        method: 'PATCH',
+        url: `/me/food-items/${FOOD_ITEM_ID}/logs/${LOG_ID}`,
+        headers: { 'x-test-user-id': USER_ID },
+        payload: {
+          rating: 7,
+        },
       });
 
       expect(res.statusCode).toBe(404);

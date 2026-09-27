@@ -5,28 +5,65 @@ import { apiRequest } from '../../api/client';
 import { theme } from '../../theme/theme';
 import { Card, SectionLabel, PrimaryButton, SecondaryButton } from '../../theme/components';
 import type { WaitInsightsDTO } from '@dwt/shared';
+import { resolveTripContextDate } from './tripContextDate';
+import { getTodayWdwDate } from './live/parkTime';
 
 interface Props {
-  experienceId: string;
+  readonly experienceId: string;
+  readonly plannedDate?: string | null | undefined;
+  readonly activeTripRange?:
+    | { readonly startDate: string; readonly endDate: string }
+    | null
+    | undefined;
+  readonly todayWdw?: string | undefined;
 }
 
-export default function WaitInsightsSection({ experienceId }: Props): JSX.Element | null {
+export default function WaitInsightsSection({
+  experienceId,
+  plannedDate,
+  activeTripRange,
+  todayWdw,
+}: Props): JSX.Element | null {
   const [context, setContext] = useState<'Now' | 'Trip' | 'Typical'>('Now');
 
-  // We only show "Trip" if we actually had a trip date. The spec says "hide 'Trip' when there's no upcoming/active trip".
-  // For now, we'll check if the user has an active trip via a query, or we can just omit it if we don't have the trip state directly available.
-  // The user says: "hide 'Trip' when there's no upcoming/active trip; default to 'Now' today, else 'Typical'."
-  
-  // A simple active trip fetch to determine if we should show 'Trip'
-  // Alternatively, the parent screen could pass down the active trip date.
-  // We'll do a lightweight fetch to `/me/trips` or rely on the fact that `HomeScreen` uses it.
+  // Active trip fetch to determine the trip range and planned items
   const { data: tripsData } = useQuery({
     queryKey: ['me', 'trips', 'active'] as const,
     queryFn: () => apiRequest<any>('GET', '/me/trips?filter=active'),
   });
 
   const activeTrip = tripsData?.trips?.[0];
-  const tripDate = activeTrip ? activeTrip.startDate : null;
+
+  const { data: plannedItemsData } = useQuery({
+    queryKey: ['trips', activeTrip?.id, 'planned-items'] as const,
+    queryFn: () => apiRequest<any>('GET', `/trips/${activeTrip?.id}/planned-items`),
+    enabled: Boolean(activeTrip?.id) && plannedDate === undefined,
+  });
+
+  const itemForExperience =
+    plannedItemsData?.items?.find((item: any) => item.experienceId === experienceId) ??
+    (Array.isArray(plannedItemsData)
+      ? plannedItemsData.find((item: any) => item.experienceId === experienceId)
+      : undefined);
+
+  const resolvedPlannedDate =
+    plannedDate !== undefined ? plannedDate : (itemForExperience?.plannedDate ?? null);
+
+  const resolvedTripRange =
+    activeTripRange !== undefined
+      ? activeTripRange
+      : activeTrip
+      ? { startDate: activeTrip.startDate, endDate: activeTrip.endDate }
+      : null;
+
+  const resolvedTodayWdw = todayWdw ?? getTodayWdwDate();
+
+  // R16.1-R16.6: Replace unconditional activeTrip.startDate with resolveTripContextDate
+  const tripDate = resolveTripContextDate({
+    plannedDate: resolvedPlannedDate,
+    activeTripRange: resolvedTripRange,
+    todayWdw: resolvedTodayWdw,
+  });
 
   // Set the default on mount if 'Now' isn't appropriate? "default to 'Now' today, else 'Typical'."
   // Actually, wait, "Now" is always available.

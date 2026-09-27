@@ -2,7 +2,7 @@
 //
 // Validates: Requirements 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8, 8.9, 8.10, Property 12
 
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -26,6 +26,7 @@ import {
   type FoodHistorySort,
   deriveDisplayedFoodLogs,
 } from './foodHistoryFilters';
+import RateOnCheckoffPrompt from '../foodLists/RateOnCheckoffPrompt';
 
 export default function MyFoodHistoryScreen(): JSX.Element {
   const navigation = useNavigation();
@@ -36,6 +37,7 @@ export default function MyFoodHistoryScreen(): JSX.Element {
   const [selectedRestaurants, setSelectedRestaurants] = useState<Set<string>>(new Set());
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [editingLog, setEditingLog] = useState<FoodItemLogWithContextDTO | null>(null);
 
   // Query full history (Requirement 8.1, 8.2)
   const logsQuery = useQuery<readonly FoodItemLogWithContextDTO[]>({
@@ -112,6 +114,120 @@ export default function MyFoodHistoryScreen(): JSX.Element {
       setDeletingId(null);
     }
   }
+
+  // Requirement 8.11: Update rating after the fact on an existing food log
+  async function handleUpdateRating(
+    foodItemId: string,
+    logId: string,
+    rating: number,
+  ): Promise<void> {
+    try {
+      await apiRequest(
+        'PATCH',
+        `/me/food-items/${encodeURIComponent(foodItemId)}/logs/${encodeURIComponent(logId)}`,
+        { rating },
+      );
+      await queryClient.invalidateQueries({
+        queryKey: ['me-food-item-logs'],
+      });
+      await queryClient.invalidateQueries({
+        queryKey: ['food-item-logs', foodItemId],
+      });
+    } catch {
+      // Ignore
+    }
+  }
+
+  // Stable `renderItem` identity — an inline arrow literal is recreated every
+  // render (e.g. each keystroke re-deriving `displayedLogs`), which `FlatList`
+  // treats as a changed render function and forces the whole visible window
+  // to re-render/re-measure. Same fix as `DestinationScreen`'s search-results
+  // `renderRow`.
+  const renderHistoryRow = useCallback(
+    ({ item }: { item: FoodItemLogWithContextDTO }) => {
+      const placeName = item.restaurantName ?? item.locationName;
+      return (
+        <Card
+          key={item.id}
+          style={styles.logCard}
+          testID={`food-history-card-${item.id}`}
+        >
+          <View style={styles.cardHeader}>
+            <View style={styles.cardTitleWrap}>
+              <Text style={styles.dishName} numberOfLines={2}>
+                {item.foodItemName}
+              </Text>
+              {placeName && (
+                <View style={styles.placeRow}>
+                  <Ionicons
+                    name="location-outline"
+                    size={14}
+                    color={theme.color.textSecondary}
+                  />
+                  <Text style={styles.placeName} numberOfLines={1}>
+                    {placeName}
+                  </Text>
+                </View>
+              )}
+            </View>
+            <Pressable
+              onPress={() => void handleDeleteLog(item)}
+              disabled={deletingId === item.id}
+              accessibilityRole="button"
+              accessibilityLabel={`Delete log for ${item.foodItemName}`}
+              style={styles.deleteBtn}
+              testID={`food-history-delete-${item.id}`}
+            >
+              {deletingId === item.id ? (
+                <ActivityIndicator size="small" color={theme.color.danger} />
+              ) : (
+                <Ionicons name="trash-outline" size={18} color={theme.color.danger} />
+              )}
+            </Pressable>
+          </View>
+
+          <View style={styles.metaRow}>
+            <Text style={styles.dateText}>{item.visitedOn}</Text>
+            {item.rating !== null ? (
+              <Pressable
+                onPress={() => setEditingLog(item)}
+                accessibilityRole="button"
+                accessibilityLabel={`Rating for ${item.foodItemName}: ${item.rating} out of 10. Tap to edit`}
+                style={styles.ratingBadge}
+                testID={`food-history-rating-${item.id}`}
+              >
+                <Ionicons name="star" size={13} color={theme.color.accent} />
+                <Text style={styles.ratingText}>{item.rating}/10</Text>
+              </Pressable>
+            ) : (
+              <Pressable
+                onPress={() => setEditingLog(item)}
+                accessibilityRole="button"
+                accessibilityLabel={`Add rating for ${item.foodItemName}`}
+                style={styles.addRatingBtn}
+                testID={`food-history-add-rating-${item.id}`}
+              >
+                <Ionicons name="star-outline" size={13} color={theme.color.primary} />
+                <Text style={styles.addRatingText}>+ Add rating</Text>
+              </Pressable>
+            )}
+            {!item.currentlyOnMenu && (
+              <Badge
+                label="Not currently on menu"
+                color={theme.color.textSecondary}
+                testID={`food-history-not-on-menu-${item.id}`}
+              />
+            )}
+          </View>
+
+          {item.note && item.note.trim().length > 0 && (
+            <Text style={styles.noteText}>{item.note}</Text>
+          )}
+        </Card>
+      );
+    },
+    [deletingId, handleDeleteLog, setEditingLog],
+  );
 
   return (
     <ScreenContainer>
@@ -269,75 +385,26 @@ export default function MyFoodHistoryScreen(): JSX.Element {
             data={displayedLogs}
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.listContent}
-            renderItem={({ item }) => {
-              const placeName = item.restaurantName ?? item.locationName;
-              return (
-                <Card
-                  key={item.id}
-                  style={styles.logCard}
-                  testID={`food-history-card-${item.id}`}
-                >
-                  <View style={styles.cardHeader}>
-                    <View style={styles.cardTitleWrap}>
-                      <Text style={styles.dishName} numberOfLines={2}>
-                        {item.foodItemName}
-                      </Text>
-                      {placeName && (
-                        <View style={styles.placeRow}>
-                          <Ionicons
-                            name="location-outline"
-                            size={14}
-                            color={theme.color.textSecondary}
-                          />
-                          <Text style={styles.placeName} numberOfLines={1}>
-                            {placeName}
-                          </Text>
-                        </View>
-                      )}
-                    </View>
-                    <Pressable
-                      onPress={() => void handleDeleteLog(item)}
-                      disabled={deletingId === item.id}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Delete log for ${item.foodItemName}`}
-                      style={styles.deleteBtn}
-                      testID={`food-history-delete-${item.id}`}
-                    >
-                      {deletingId === item.id ? (
-                        <ActivityIndicator size="small" color={theme.color.danger} />
-                      ) : (
-                        <Ionicons name="trash-outline" size={18} color={theme.color.danger} />
-                      )}
-                    </Pressable>
-                  </View>
-
-                  <View style={styles.metaRow}>
-                    <Text style={styles.dateText}>{item.visitedOn}</Text>
-                    {item.rating !== null && (
-                      <View style={styles.ratingBadge}>
-                        <Ionicons name="star" size={13} color={theme.color.accent} />
-                        <Text style={styles.ratingText}>{item.rating}/10</Text>
-                      </View>
-                    )}
-                    {!item.currentlyOnMenu && (
-                      <Badge
-                        label="Not currently on menu"
-                        color={theme.color.textSecondary}
-                        testID={`food-history-not-on-menu-${item.id}`}
-                      />
-                    )}
-                  </View>
-
-                  {item.note && item.note.trim().length > 0 && (
-                    <Text style={styles.noteText}>{item.note}</Text>
-                  )}
-                </Card>
-              );
-            }}
+            renderItem={renderHistoryRow}
           />
         )}
       </View>
     </View>
+
+    {/* Requirement 8.11: Update rating prompt */}
+    {editingLog ? (
+      <RateOnCheckoffPrompt
+        visible={Boolean(editingLog)}
+        foodItemName={editingLog.foodItemName}
+        initialRating={editingLog.rating}
+        onSkip={() => setEditingLog(null)}
+        onConfirm={(rating) => {
+          const target = editingLog;
+          setEditingLog(null);
+          void handleUpdateRating(target.foodItemId, target.id, rating);
+        }}
+      />
+    ) : null}
   </ScreenContainer>
 );
 }
@@ -497,6 +564,22 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: 6,
     gap: 4,
+  },
+  addRatingBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.color.surfaceAlt,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    gap: 4,
+    borderWidth: 1,
+    borderColor: theme.color.border,
+  },
+  addRatingText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: theme.color.primary,
   },
   ratingText: {
     fontSize: 12,

@@ -113,6 +113,7 @@ const config: ExpoConfig = {
     'expo-image-picker',
     'expo-status-bar',
     'expo-notifications',
+    'expo-image',
   ],
   extra: {
     apiBaseUrl,

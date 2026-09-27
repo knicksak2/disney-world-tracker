@@ -2,7 +2,7 @@
 //
 // Validates: Requirements 6.1, 6.2, 6.3, 6.4, 7.1, 7.2, 7.3, 7.4
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -80,6 +80,36 @@ export default function CreateLocationModal({
 
     return () => clearTimeout(timer);
   }, [name, park, visible]);
+
+  // Stable `renderItem` identity — an inline arrow literal is recreated every
+  // render (e.g. each debounced suggestion refetch), which `FlatList` treats
+  // as a changed render function and forces the whole visible window to
+  // re-render/re-measure. Same fix as `DestinationScreen`'s search-results
+  // `renderRow`.
+  const renderSuggestion = useCallback(
+    ({ item }: { item: LocationSuggestionDTO }) => (
+      <Pressable
+        onPress={() => handleSelectSuggestion(item)}
+        accessibilityRole="button"
+        accessibilityLabel={`Select existing location ${item.name}`}
+        style={({ pressed }) => [
+          styles.suggestionRow,
+          pressed && styles.suggestionRowPressed,
+        ]}
+        testID={`location-suggestion-${item.id}`}
+      >
+        <Ionicons name="location-outline" size={18} color={theme.color.primary} />
+        <View style={styles.suggestionTextWrap}>
+          <Text style={styles.suggestionName}>{item.name}</Text>
+          <Text style={styles.suggestionPark}>{park}</Text>
+        </View>
+        <Text style={styles.matchScore}>
+          {Math.round(item.similarity * 100)}% match
+        </Text>
+      </Pressable>
+    ),
+    [handleSelectSuggestion, park],
+  );
 
   if (!visible) {
     return null;
@@ -217,27 +247,7 @@ export default function CreateLocationModal({
             <FlatList
               data={suggestions}
               keyExtractor={(item) => item.id}
-              renderItem={({ item }) => (
-                <Pressable
-                  onPress={() => handleSelectSuggestion(item)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Select existing location ${item.name}`}
-                  style={({ pressed }) => [
-                    styles.suggestionRow,
-                    pressed && styles.suggestionRowPressed,
-                  ]}
-                  testID={`location-suggestion-${item.id}`}
-                >
-                  <Ionicons name="location-outline" size={18} color={theme.color.primary} />
-                  <View style={styles.suggestionTextWrap}>
-                    <Text style={styles.suggestionName}>{item.name}</Text>
-                    <Text style={styles.suggestionPark}>{park}</Text>
-                  </View>
-                  <Text style={styles.matchScore}>
-                    {Math.round(item.similarity * 100)}% match
-                  </Text>
-                </Pressable>
-              )}
+              renderItem={renderSuggestion}
               contentContainerStyle={styles.suggestionsList}
             />
           </View>

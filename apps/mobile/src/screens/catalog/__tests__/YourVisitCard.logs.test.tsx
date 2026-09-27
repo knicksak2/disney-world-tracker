@@ -239,6 +239,9 @@ describe('YourVisitCard — activity logging', () => {
     fireEvent.press(screen.getByTestId('log-visit-button'));
 
     expect(screen.getByTestId('log-visit-modal')).toBeTruthy();
+    expect(screen.getByTestId('log-visit-scroll').props.keyboardShouldPersistTaps).toBe(
+      'handled',
+    );
     await waitFor(() => {
       expect(apiRequestMock).toHaveBeenCalledWith('GET', '/me/trips');
     });

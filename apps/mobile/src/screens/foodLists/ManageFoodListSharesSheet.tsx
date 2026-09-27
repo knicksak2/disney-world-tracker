@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -124,6 +124,109 @@ export default function ManageFoodListSharesSheet({
     }
   }
 
+  // Stable `renderItem` identity — an inline arrow literal is recreated every
+  // render, which `FlatList`/`VirtualizedList` treats as a changed render
+  // function and forces expensive re-render/re-measure work even when the row
+  // is otherwise unchanged (see the same fix in `DestinationScreen.tsx`).
+  // Placed before the `if (!visible) return null;` early return below so the
+  // hook always runs, satisfying React's Rules of Hooks.
+  const renderFriend = useCallback(
+    ({ item }: { item: FriendListEntry }) => {
+      const isSelected = selectedFriendId === item.userId;
+      return (
+        <Pressable
+          onPress={() => setSelectedFriendId(isSelected ? null : item.userId)}
+          style={[
+            styles.friendChip,
+            isSelected && styles.friendChipSelected,
+          ]}
+          accessibilityRole="button"
+          accessibilityLabel={`Select friend ${item.displayName}`}
+          testID={`share-friend-select-${item.userId}`}
+        >
+          <Text
+            style={[
+              styles.friendChipText,
+              isSelected && styles.friendChipTextSelected,
+            ]}
+          >
+            {item.displayName}
+          </Text>
+        </Pressable>
+      );
+    },
+    [selectedFriendId],
+  );
+
+  // Same stable-identity fix as `renderFriend` above, for the current-shares
+  // `FlatList`.
+  const renderShare = useCallback(
+    ({ item }: { item: FoodListShareDTO }) => {
+      const busy = isUpdating === item.recipientId;
+      return (
+        <View
+          style={styles.shareRow}
+          testID={`share-row-${item.recipientId}`}
+        >
+          <View style={styles.shareInfo}>
+            <Text style={styles.shareName}>{item.recipientDisplayName}</Text>
+            <Text style={styles.shareRoleLabel}>
+              {item.role === 'editor' ? 'Can edit items' : 'View only'}
+            </Text>
+          </View>
+
+          <View style={styles.shareActions}>
+            <Pressable
+              onPress={() => void handleToggleRole(item)}
+              disabled={busy}
+              style={[
+                styles.roleBadge,
+                item.role === 'editor' && styles.roleBadgeEditor,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel={`Toggle role for ${item.recipientDisplayName}, currently ${item.role}`}
+              testID={`share-role-toggle-${item.recipientId}`}
+            >
+              <Text
+                style={[
+                  styles.roleBadgeText,
+                  item.role === 'editor' && styles.roleBadgeTextEditor,
+                ]}
+              >
+                {item.role === 'editor' ? 'Editor' : 'Viewer'}
+              </Text>
+              <Ionicons
+                name="swap-horizontal"
+                size={14}
+                color={item.role === 'editor' ? '#fff' : theme.color.primary}
+              />
+            </Pressable>
+
+            <Pressable
+              onPress={() => void handleRevoke(item.recipientId)}
+              disabled={busy}
+              style={styles.revokeBtn}
+              accessibilityRole="button"
+              accessibilityLabel={`Revoke access for ${item.recipientDisplayName}`}
+              testID={`share-revoke-btn-${item.recipientId}`}
+            >
+              {busy ? (
+                <ActivityIndicator size="small" color={theme.color.danger} />
+              ) : (
+                <Ionicons
+                  name="trash-outline"
+                  size={18}
+                  color={theme.color.danger}
+                />
+              )}
+            </Pressable>
+          </View>
+        </View>
+      );
+    },
+    [isUpdating, handleToggleRole, handleRevoke],
+  );
+
   if (!visible) return null;
 
   return (
@@ -169,30 +272,7 @@ export default function ManageFoodListSharesSheet({
                   showsHorizontalScrollIndicator={false}
                   data={availableFriends}
                   keyExtractor={(f) => f.userId}
-                  renderItem={({ item }) => {
-                    const isSelected = selectedFriendId === item.userId;
-                    return (
-                      <Pressable
-                        onPress={() => setSelectedFriendId(isSelected ? null : item.userId)}
-                        style={[
-                          styles.friendChip,
-                          isSelected && styles.friendChipSelected,
-                        ]}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Select friend ${item.displayName}`}
-                        testID={`share-friend-select-${item.userId}`}
-                      >
-                        <Text
-                          style={[
-                            styles.friendChipText,
-                            isSelected && styles.friendChipTextSelected,
-                          ]}
-                        >
-                          {item.displayName}
-                        </Text>
-                      </Pressable>
-                    );
-                  }}
+                  renderItem={renderFriend}
                   contentContainerStyle={styles.friendsList}
                 />
 
@@ -269,69 +349,7 @@ export default function ManageFoodListSharesSheet({
             <FlatList
               data={shares}
               keyExtractor={(item) => item.recipientId}
-              renderItem={({ item }) => {
-                const busy = isUpdating === item.recipientId;
-                return (
-                  <View
-                    style={styles.shareRow}
-                    testID={`share-row-${item.recipientId}`}
-                  >
-                    <View style={styles.shareInfo}>
-                      <Text style={styles.shareName}>{item.recipientDisplayName}</Text>
-                      <Text style={styles.shareRoleLabel}>
-                        {item.role === 'editor' ? 'Can edit items' : 'View only'}
-                      </Text>
-                    </View>
-
-                    <View style={styles.shareActions}>
-                      <Pressable
-                        onPress={() => void handleToggleRole(item)}
-                        disabled={busy}
-                        style={[
-                          styles.roleBadge,
-                          item.role === 'editor' && styles.roleBadgeEditor,
-                        ]}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Toggle role for ${item.recipientDisplayName}, currently ${item.role}`}
-                        testID={`share-role-toggle-${item.recipientId}`}
-                      >
-                        <Text
-                          style={[
-                            styles.roleBadgeText,
-                            item.role === 'editor' && styles.roleBadgeTextEditor,
-                          ]}
-                        >
-                          {item.role === 'editor' ? 'Editor' : 'Viewer'}
-                        </Text>
-                        <Ionicons
-                          name="swap-horizontal"
-                          size={14}
-                          color={item.role === 'editor' ? '#fff' : theme.color.primary}
-                        />
-                      </Pressable>
-
-                      <Pressable
-                        onPress={() => void handleRevoke(item.recipientId)}
-                        disabled={busy}
-                        style={styles.revokeBtn}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Revoke access for ${item.recipientDisplayName}`}
-                        testID={`share-revoke-btn-${item.recipientId}`}
-                      >
-                        {busy ? (
-                          <ActivityIndicator size="small" color={theme.color.danger} />
-                        ) : (
-                          <Ionicons
-                            name="trash-outline"
-                            size={18}
-                            color={theme.color.danger}
-                          />
-                        )}
-                      </Pressable>
-                    </View>
-                  </View>
-                );
-              }}
+              renderItem={renderShare}
               ListEmptyComponent={
                 <View style={styles.emptyWrap}>
                   <Text style={styles.emptyText} testID="manage-shares-empty">

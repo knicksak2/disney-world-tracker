@@ -34,8 +34,14 @@ import {
   groupByLand,
   groupByLandFiltered,
   groupByPavilionFiltered,
+  groupByResort,
   LAND_CATCHALL_KEY,
-  RESORT_CATCHALL_ID,
+  RESORT_BOARDWALK_ID,
+  RESORT_BOARDWALK_TITLE,
+  RESORT_RECREATION_ID,
+  RESORT_RECREATION_TITLE,
+  RESORT_WWOS_ID,
+  RESORT_WWOS_TITLE,
 } from '../catalogGrouping';
 
 const NUM_RUNS = 100;
@@ -128,15 +134,23 @@ const nameArb = fc.constantFrom(
   'Apple',
 );
 
+const resortAreaPool = [
+  'EPCOT Resort Area',
+  'Wide World of Sports Resort Area',
+  'Magic Kingdom Resort Area',
+  'Animal Kingdom Resort Area',
+  null,
+] as const;
+
 /**
  * An Experience over the full Park × Category space with a mixed Land value and
- * a mostly-shared resortId pool (so resort matching + catch-all are exercised).
+ * a mostly-shared resortId pool (so resort matching + sub-destinations are exercised).
  */
 function experienceArb(resortIdPool: readonly string[]): fc.Arbitrary<ExperienceDTO> {
   const resortIdArb = fc.oneof(
     { weight: 4, arbitrary: fc.constantFrom(...resortIdPool) },
     { weight: 1, arbitrary: fc.constant(null) },
-    // An unmatched, non-empty id that is NOT in the resort pool → catch-all.
+    // An unmatched, non-empty id that is NOT in the resort pool → sub-destinations.
     { weight: 1, arbitrary: fc.constant('__unmatched_resort_id__') },
   );
 
@@ -150,6 +164,7 @@ function experienceArb(resortIdPool: readonly string[]): fc.Arbitrary<Experience
     imageUrl: fc.constant(null),
     areaType: fc.constantFrom(...AREA_TYPES),
     resortId: resortIdArb,
+    resortArea: fc.constantFrom(...resortAreaPool),
     land: landArb,
   });
 }
@@ -361,7 +376,7 @@ describe('Property 12: groupByCategory follows canonical category order with emp
 // Validates: Requirements 8.2, 8.3, 8.4
 
 describe('Property 13: buildResortRows anchors every Resort in order and totally partitions Experiences', () => {
-  it('lists every Resort anchor case-insensitively, groups Experiences under their resort or the single trailing catch-all', () => {
+  it('lists every Resort anchor case-insensitively, groups Experiences under their resort or structured sub-destinations, and never names a section "Other"', () => {
     fc.assert(
       fc.property(experiencesArb, resortsArb, (experiences, resorts) => {
         const rows = buildResortRows(experiences, resorts);
@@ -370,39 +385,44 @@ describe('Property 13: buildResortRows anchors every Resort in order and totally
         const experienceRows = rows.filter((r) => r.kind === 'experience');
 
         const knownResortIds = new Set(resorts.map((r) => r.id));
-        const anyCatchall = experiences.some(
-          (e) => !(typeof e.resortId === 'string' && knownResortIds.has(e.resortId)),
-        );
+        const subDestIds = new Set([
+          RESORT_BOARDWALK_ID,
+          RESORT_WWOS_ID,
+          RESORT_RECREATION_ID,
+        ]);
 
-        // R8.3: every active Resort appears as exactly one anchor (including
-        // resorts with no Experiences), plus the catch-all anchor when needed.
+        // R22.1: never names any anchor 'Other'
+        for (const anchor of anchorRows) {
+          expect((anchor as { resort: ResortDTO }).resort.name).not.toBe('Other');
+        }
+
+        // R8.3: every active Resort appears as exactly one anchor
         const specificAnchors = anchorRows.filter(
-          (r) => r.kind === 'resort' && r.resort.id !== RESORT_CATCHALL_ID,
+          (r) => r.kind === 'resort' && !subDestIds.has(r.resort.id),
         );
-        const catchallAnchors = anchorRows.filter(
-          (r) => r.kind === 'resort' && r.resort.id === RESORT_CATCHALL_ID,
+        const subDestAnchors = anchorRows.filter(
+          (r) => r.kind === 'resort' && subDestIds.has(r.resort.id),
         );
         expect(specificAnchors).toHaveLength(resorts.length);
         expect(new Set(specificAnchors.map((r) => (r as { resort: ResortDTO }).resort.id)).size).toBe(
           resorts.length,
         );
-        expect(catchallAnchors.length).toBe(anyCatchall ? 1 : 0);
 
-        // R8.3: specific Resort anchors are ordered case-insensitively by name,
-        // and any catch-all anchor comes after all of them.
+        // Specific Resort anchors are ordered case-insensitively by name
         const specificNames = specificAnchors.map(
           (r) => (r as { resort: ResortDTO }).resort.name,
         );
         expectCaseInsensitiveAscending(specificNames);
-        if (catchallAnchors.length === 1) {
-          const lastAnchor = anchorRows[anchorRows.length - 1]!;
-          expect((lastAnchor as { resort: ResortDTO }).resort.id).toBe(RESORT_CATCHALL_ID);
+
+        // Sub-destination anchors appear after all specific hotel resorts
+        if (subDestAnchors.length > 0) {
+          const firstSubDestIndex = anchorRows.findIndex((r) =>
+            subDestIds.has((r as { resort: ResortDTO }).resort.id),
+          );
+          expect(firstSubDestIndex).toBe(specificAnchors.length);
         }
 
-        // R8.2 / R8.4: each Experience row belongs to the nearest anchor above
-        // it; verify that grouping by walking the flat row list. An Experience
-        // under a specific Resort matches that Resort's id; an Experience under
-        // the catch-all has no matched resortId.
+        // R8.2 / R22: verify grouping by walking the flat row list
         let currentAnchorId: string | null = null;
         for (const row of rows) {
           if (row.kind === 'resort') {
@@ -410,20 +430,94 @@ describe('Property 13: buildResortRows anchors every Resort in order and totally
           } else {
             expect(currentAnchorId).not.toBeNull();
             const { resortId } = row.experience;
-            if (currentAnchorId === RESORT_CATCHALL_ID) {
-              // R8.4: catch-all holds Experiences with no/unmatched resortId.
+            if (subDestIds.has(currentAnchorId!)) {
               expect(typeof resortId === 'string' && knownResortIds.has(resortId)).toBe(false);
             } else {
-              // R8.2: an Experience under a specific Resort matches its id.
               expect(resortId).toBe(currentAnchorId);
             }
           }
         }
 
-        // R8.2/R8.4: total partition — each Experience appears exactly once
-        // across all rows, none omitted.
+        // Total partition
         const flat = experienceRows.map((r) => (r as { experience: ExperienceDTO }).experience);
         expectSameByReference(flat, experiences);
+      }),
+      { numRuns: NUM_RUNS },
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Property 27 — Resorts Destination Section partitioning and sub-grouping
+// ---------------------------------------------------------------------------
+// Feature: experience-detail-redesign, Property 27: Resorts Destination Section partitioning and sub-grouping
+// Validates: Requirements 22.1, 22.2, 22.3, 22.4
+
+describe('Property 27: Resorts Destination Section partitioning and sub-grouping (groupByResort)', () => {
+  it('never emits a section titled "Other", partitions unlinked experiences into structured sub-destinations, and totally partitions', () => {
+    fc.assert(
+      fc.property(experiencesArb, resortsArb, (experiences, resorts) => {
+        const sections = groupByResort(experiences, resorts);
+
+        const knownResortIds = new Set(resorts.map((r) => r.id));
+        const subDestIds = new Set([
+          RESORT_BOARDWALK_ID,
+          RESORT_WWOS_ID,
+          RESORT_RECREATION_ID,
+        ]);
+
+        // R22.1: never emits a section titled 'Other'
+        for (const section of sections) {
+          expect(section.title).not.toBe('Other');
+        }
+
+        // R8.3: every active Resort appears as a section
+        const hotelSections = sections.filter((s) => !subDestIds.has(s.key));
+        expect(hotelSections).toHaveLength(resorts.length);
+        expectCaseInsensitiveAscending(hotelSections.map((s) => s.title));
+
+        // Sub-destination sections appear after hotel resorts
+        const subSections = sections.filter((s) => subDestIds.has(s.key));
+        if (subSections.length > 0) {
+          const firstSubIndex = sections.findIndex((s) => subDestIds.has(s.key));
+          expect(firstSubIndex).toBe(hotelSections.length);
+        }
+
+        // Verify sub-destination items match R22.2, R22.3, R22.4
+        for (const section of sections) {
+          if (section.key === RESORT_BOARDWALK_ID) {
+            expect(section.title).toBe(RESORT_BOARDWALK_TITLE);
+            for (const item of section.items) {
+              expect(
+                item.resortArea === 'EPCOT Resort Area' ||
+                  item.name.toLowerCase().includes('boardwalk'),
+              ).toBe(true);
+            }
+          } else if (section.key === RESORT_WWOS_ID) {
+            expect(section.title).toBe(RESORT_WWOS_TITLE);
+            for (const item of section.items) {
+              expect(
+                item.resortArea === 'Wide World of Sports Resort Area' ||
+                  item.name.toLowerCase().includes('wide world of sports') ||
+                  item.name.toLowerCase().includes('espn'),
+              ).toBe(true);
+            }
+          } else if (section.key === RESORT_RECREATION_ID) {
+            expect(section.title).toBe(RESORT_RECREATION_TITLE);
+            for (const item of section.items) {
+              expect(typeof item.resortId === 'string' && knownResortIds.has(item.resortId)).toBe(false);
+            }
+          } else {
+            // Hotel resort
+            for (const item of section.items) {
+              expect(item.resortId).toBe(section.key);
+            }
+          }
+        }
+
+        // Total partition — union of all section items equals input experiences by reference
+        const flatItems = sections.flatMap((s) => [...s.items]);
+        expectSameByReference(flatItems, experiences);
       }),
       { numRuns: NUM_RUNS },
     );

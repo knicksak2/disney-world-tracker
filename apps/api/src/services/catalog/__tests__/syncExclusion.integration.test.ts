@@ -81,6 +81,7 @@ function freshPgMemRepo() {
   applyMigration(db, '0026_experience_special_hours.sql');
   applyMigration(db, '0032_experience_category_taxonomy.sql');
   applyMigration(db, '0044_experience_dining_url.sql');
+  applyMigration(db, '0049_resort_metadata.sql');
 
   const { Pool } = db.adapters.createPg();
   const pool = new Pool() as unknown as DbPool;

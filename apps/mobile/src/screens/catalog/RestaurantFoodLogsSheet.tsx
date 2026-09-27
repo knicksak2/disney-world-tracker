@@ -2,7 +2,7 @@
 //
 // Validates: Requirements 9.1, 9.2, 9.3, 9.4, 9.5, 9.6, 9.7, 9.8, Property 11, Property 12
 
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -87,6 +87,59 @@ export default function RestaurantFoodLogsSheet({
       searchFields: ['foodItemName'],
     });
   }, [rawLogs, sort, searchText]);
+
+  // Stable `renderItem` identity — an inline arrow literal is recreated every
+  // render (e.g. each keystroke re-deriving `displayedLogs`), which `FlatList`
+  // treats as a changed render function and forces the whole visible window
+  // to re-render/re-measure. Same fix as `DestinationScreen`'s search-results
+  // `renderRow`.
+  const renderLogRow = useCallback(
+    ({ item }: { item: FoodItemLogWithContextDTO }) => (
+      <Card key={item.id} style={styles.logCard} testID={`scoped-food-log-card-${item.id}`}>
+        <View style={styles.cardHeader}>
+          <Text style={styles.dishName} numberOfLines={2}>
+            {item.foodItemName}
+          </Text>
+          <Pressable
+            onPress={() => void handleDeleteLog(item)}
+            disabled={deletingId === item.id}
+            accessibilityRole="button"
+            accessibilityLabel={`Delete log for ${item.foodItemName}`}
+            style={styles.deleteBtn}
+            testID={`scoped-food-log-delete-${item.id}`}
+          >
+            {deletingId === item.id ? (
+              <ActivityIndicator size="small" color={theme.color.danger} />
+            ) : (
+              <Ionicons name="trash-outline" size={18} color={theme.color.danger} />
+            )}
+          </Pressable>
+        </View>
+
+        <View style={styles.metaRow}>
+          <Text style={styles.dateText}>{item.visitedOn}</Text>
+          {item.rating !== null && (
+            <View style={styles.ratingBadge}>
+              <Ionicons name="star" size={13} color={theme.color.accent} />
+              <Text style={styles.ratingText}>{item.rating}/10</Text>
+            </View>
+          )}
+          {!item.currentlyOnMenu && (
+            <Badge
+              label="Not currently on menu"
+              color={theme.color.textSecondary}
+              testID={`scoped-food-log-not-on-menu-${item.id}`}
+            />
+          )}
+        </View>
+
+        {item.note && item.note.trim().length > 0 && (
+          <Text style={styles.noteText}>{item.note}</Text>
+        )}
+      </Card>
+    ),
+    [deletingId, handleDeleteLog],
+  );
 
   if (!visible) {
     return null;
@@ -241,54 +294,7 @@ export default function RestaurantFoodLogsSheet({
               data={displayedLogs}
               keyExtractor={(item) => item.id}
               contentContainerStyle={styles.listContent}
-              renderItem={({ item }) => (
-                <Card
-                  key={item.id}
-                  style={styles.logCard}
-                  testID={`scoped-food-log-card-${item.id}`}
-                >
-                  <View style={styles.cardHeader}>
-                    <Text style={styles.dishName} numberOfLines={2}>
-                      {item.foodItemName}
-                    </Text>
-                    <Pressable
-                      onPress={() => void handleDeleteLog(item)}
-                      disabled={deletingId === item.id}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Delete log for ${item.foodItemName}`}
-                      style={styles.deleteBtn}
-                      testID={`scoped-food-log-delete-${item.id}`}
-                    >
-                      {deletingId === item.id ? (
-                        <ActivityIndicator size="small" color={theme.color.danger} />
-                      ) : (
-                        <Ionicons name="trash-outline" size={18} color={theme.color.danger} />
-                      )}
-                    </Pressable>
-                  </View>
-
-                  <View style={styles.metaRow}>
-                    <Text style={styles.dateText}>{item.visitedOn}</Text>
-                    {item.rating !== null && (
-                      <View style={styles.ratingBadge}>
-                        <Ionicons name="star" size={13} color={theme.color.accent} />
-                        <Text style={styles.ratingText}>{item.rating}/10</Text>
-                      </View>
-                    )}
-                    {!item.currentlyOnMenu && (
-                      <Badge
-                        label="Not currently on menu"
-                        color={theme.color.textSecondary}
-                        testID={`scoped-food-log-not-on-menu-${item.id}`}
-                      />
-                    )}
-                  </View>
-
-                  {item.note && item.note.trim().length > 0 && (
-                    <Text style={styles.noteText}>{item.note}</Text>
-                  )}
-                </Card>
-              )}
+              renderItem={renderLogRow}
             />
           )}
         </View>

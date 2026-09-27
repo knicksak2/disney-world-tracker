@@ -367,4 +367,51 @@ describe('FoodItemLogRepo Property Tests', () => {
       { numRuns: 100 },
     );
   });
+
+  it('updateLog updates rating and note on an existing log in pg-mem', async () => {
+    const created = await logRepo.addLog({
+      userId,
+      foodItemId,
+      visitedOn: '2026-06-10',
+      userTz: 'America/New_York',
+      rating: null,
+      note: 'First taste',
+    });
+
+    expect(created.rating).toBeNull();
+    expect(created.note).toBe('First taste');
+
+    // Update rating
+    const updatedRating = await logRepo.updateLog({
+      userId,
+      foodItemId,
+      logId: created.id,
+      rating: 9,
+    });
+
+    expect(updatedRating.rating).toBe(9);
+    expect(updatedRating.note).toBe('First taste');
+
+    // Update note and clear rating
+    const updatedNote = await logRepo.updateLog({
+      userId,
+      foodItemId,
+      logId: created.id,
+      rating: null,
+      note: 'Updated review text',
+    });
+
+    expect(updatedNote.rating).toBeNull();
+    expect(updatedNote.note).toBe('Updated review text');
+
+    // Other user cannot update log
+    await expect(
+      logRepo.updateLog({
+        userId: randomUUID(),
+        foodItemId,
+        logId: created.id,
+        rating: 10,
+      }),
+    ).rejects.toThrowError(AppError);
+  });
 });

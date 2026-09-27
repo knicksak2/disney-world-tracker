@@ -115,6 +115,7 @@ The following capabilities are explicitly out of scope for v1 and are noted as f
 8. IF a User who is not an Organizer of a Trip submits a request to delete that Trip, THEN THE Trip_Service SHALL reject the request with an authorization error and SHALL preserve the Trip together with its associated entities.
 9. IF a User submits a request to edit or delete a Trip that does not exist or has already been deleted, THEN THE Trip_Service SHALL reject the request with a not-found error and SHALL NOT change any Trip data.
 10. WHEN the Trip_Service deletes a Trip, THE Trip_Service SHALL preserve every Trip_Member's canonical Completions, Ratings, and Notes in the Tracking_Service.
+11. WHEN an Organizer views the Trip_Edit screen, THE App SHALL provide a delete affordance; WHEN the Organizer activates the delete affordance, THE App SHALL display a confirmation prompt; WHEN the Organizer confirms deletion in the prompt, THE App SHALL submit a deletion request (`DELETE /trips/:id`), remove the Trip from query caches, invalidate the Trips list query, and navigate the User to the Trips_List_Screen.
 
 ### Requirement 4: Trip Roles and Permissions
 

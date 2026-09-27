@@ -2,7 +2,7 @@
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import type { FoodItemDTO, FoodListDetailDTO } from '@dwt/shared';
 
 jest.mock('expo-constants', () => ({
@@ -36,6 +36,68 @@ jest.mock('@react-navigation/native', () => {
     useRoute: () => ({
       params: { foodListId: mockFoodListId },
     }),
+  };
+});
+
+// `react-native-draggable-flatlist`'s real drag interaction is driven by
+// native gesture-handler pan recognition, which isn't practically drivable
+// through `fireEvent` in this test environment. This mock renders each row
+// via the screen's REAL `renderItem` (so row content/testIDs/behavior stay
+// real — only the drag gesture itself is stood in for) and exposes one
+// extra "simulate drag to end" button per row that invokes the real
+// `onDragEnd` prop with the item moved to the end of the list, which is
+// exactly the reorder outcome `handleReorderItems`'s existing contract test
+// needs to drive.
+jest.mock('react-native-draggable-flatlist', () => {
+  const ReactActual = jest.requireActual('react');
+  const { Pressable: PressableActual, View: ViewActual } = jest.requireActual('react-native');
+  function NestableScrollContainerMock({ children }: { children: React.ReactNode }) {
+    return ReactActual.createElement(ViewActual, null, children);
+  }
+  function NestableDraggableFlatListMock({
+    data,
+    renderItem,
+    onDragEnd,
+    keyExtractor,
+  }: {
+    readonly data: readonly unknown[];
+    readonly renderItem: (params: {
+      item: unknown;
+      getIndex: () => number | undefined;
+      drag: () => void;
+      isActive: boolean;
+    }) => React.ReactNode;
+    readonly onDragEnd?: (params: { data: unknown[] }) => void;
+    readonly keyExtractor: (item: unknown, index: number) => string;
+  }) {
+    return ReactActual.createElement(
+      ViewActual,
+      null,
+      data.map((item, index) =>
+        ReactActual.createElement(
+          ViewActual,
+          { key: keyExtractor(item, index) },
+          renderItem({ item, getIndex: () => index, drag: () => {}, isActive: false }),
+          ReactActual.createElement(
+            PressableActual,
+            {
+              testID: `test-simulate-drag-to-end-${keyExtractor(item, index)}`,
+              onPress: () => {
+                const reordered = data.filter((_, i) => i !== index);
+                reordered.push(item);
+                onDragEnd?.({ data: reordered });
+              },
+            },
+            null,
+          ),
+        ),
+      ),
+    );
+  }
+  return {
+    __esModule: true,
+    NestableScrollContainer: NestableScrollContainerMock,
+    NestableDraggableFlatList: NestableDraggableFlatListMock,
   };
 });
 
@@ -86,6 +148,7 @@ const sampleOwnerList: FoodListDetailDTO = {
   ownerDisplayName: 'Me',
   name: 'EPCOT Snack Trail',
   visibility: 'private',
+  isChecklist: false,
   itemCount: 2,
   likeCount: 5,
   liked: false,
@@ -146,6 +209,7 @@ const sampleViewerList: FoodListDetailDTO = {
   ownerDisplayName: 'Alice',
   name: "Alice's Secret Eats",
   visibility: 'public',
+  isChecklist: false,
   itemCount: 1,
   likeCount: 12,
   liked: true,
@@ -172,6 +236,7 @@ const sampleViewerList: FoodListDetailDTO = {
 
 describe('FoodListDetailScreen', () => {
   beforeEach(() => {
+    jest.setTimeout(15000);
     jest.clearAllMocks();
     mockFoodListId = 'list-detail-1';
     apiRequestMock.mockImplementation(async (_method, path) => {
@@ -182,18 +247,22 @@ describe('FoodListDetailScreen', () => {
     });
   });
 
-  test('renders list details, items, like count, and Owner badge', async () => {
-    renderScreen();
+  test(
+    'renders list details, items, like count, and Owner badge',
+    async () => {
+      renderScreen();
 
-    await waitFor(() => {
-      expect(screen.getByTestId('food-list-name')).toBeTruthy();
-      expect(screen.getByText('Dole Whip')).toBeTruthy();
-      expect(screen.getByText('Cinnamon Churro')).toBeTruthy();
-    });
+      await waitFor(() => {
+        expect(screen.getByTestId('food-list-name')).toBeTruthy();
+        expect(screen.getByText('Dole Whip')).toBeTruthy();
+        expect(screen.getByText('Cinnamon Churro')).toBeTruthy();
+      });
 
-    expect(screen.getByText('Owner')).toBeTruthy();
-    expect(screen.getByText('5')).toBeTruthy(); // likeCount
-  });
+      expect(screen.getByText('Owner')).toBeTruthy();
+      expect(screen.getByText('5')).toBeTruthy(); // likeCount
+    },
+    15000,
+  );
 
   test('attribution label is displayed when list has 2+ distinct contributors (Requirement 11.2)', async () => {
     renderScreen();
@@ -283,6 +352,68 @@ describe('FoodListDetailScreen', () => {
     });
   });
 
+  test('owner can turn an existing non-checklist list into a checklist via PATCH (Requirement 13.2)', async () => {
+    renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('food-list-toggle-checklist-btn')).toBeTruthy();
+    });
+    expect(screen.getByText('Make checklist')).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId('food-list-toggle-checklist-btn'));
+
+    await waitFor(() => {
+      expect(apiRequestMock).toHaveBeenCalledWith(
+        'PATCH',
+        '/me/food-lists/list-detail-1',
+        { isChecklist: true },
+      );
+    });
+  });
+
+  test('owner can turn an existing checklist back into a plain list via PATCH (Requirement 13.2)', async () => {
+    apiRequestMock.mockImplementation(async (_method, path) => {
+      if (path === '/food-lists/list-detail-1') {
+        return { ...sampleOwnerList, isChecklist: true, gottenCount: 0 };
+      }
+      return {};
+    });
+
+    renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('food-list-toggle-checklist-btn')).toBeTruthy();
+    });
+    expect(screen.getByText('Checklist')).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId('food-list-toggle-checklist-btn'));
+
+    await waitFor(() => {
+      expect(apiRequestMock).toHaveBeenCalledWith(
+        'PATCH',
+        '/me/food-lists/list-detail-1',
+        { isChecklist: false },
+      );
+    });
+  });
+
+  test('a non-owner never sees the checklist mode toggle (Requirement 13.2)', async () => {
+    apiRequestMock.mockImplementation(async (_method, path) => {
+      if (path === '/food-lists/list-detail-1') {
+        return sampleViewerList;
+      }
+      return {};
+    });
+
+    renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('food-list-name')).toBeTruthy();
+    });
+
+    expect(screen.queryByTestId('food-list-toggle-checklist-btn')).toBeNull();
+  });
+
   test('owner does not see save button', async () => {
     renderScreen();
 
@@ -326,6 +457,23 @@ describe('FoodListDetailScreen', () => {
 
     expect(screen.queryByTestId('food-list-add-items-btn')).toBeNull();
     expect(screen.queryByTestId('food-list-item-delete-item-corn-dog')).toBeNull();
+    expect(screen.queryByTestId('food-list-item-drag-handle-item-corn-dog')).toBeNull();
+  });
+
+  test('owner/editor sees a drag handle to reorder items (Requirement 11.1)', async () => {
+    apiRequestMock.mockImplementation(async (_method, path) => {
+      if (path === '/food-lists/list-detail-1') {
+        return sampleOwnerList;
+      }
+      return {};
+    });
+
+    renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('food-list-item-drag-handle-item-dole')).toBeTruthy();
+      expect(screen.getByTestId('food-list-item-drag-handle-item-churro')).toBeTruthy();
+    });
   });
 
   test('reordering items submits expectedVersion and handles stale write 409 (Task 8.15, Requirement 11.3, Property 5)', async () => {
@@ -347,11 +495,11 @@ describe('FoodListDetailScreen', () => {
     renderScreen();
 
     await waitFor(() => {
-      expect(screen.getByTestId('food-list-item-move-down-item-dole')).toBeTruthy();
+      expect(screen.getByTestId('test-simulate-drag-to-end-item-dole')).toBeTruthy();
     });
 
-    // Move first item down
-    fireEvent.press(screen.getByTestId('food-list-item-move-down-item-dole'));
+    // Drag the first item (Dole Whip) to the end of the list.
+    fireEvent.press(screen.getByTestId('test-simulate-drag-to-end-item-dole'));
 
     await waitFor(() => {
       expect(apiRequestMock).toHaveBeenCalledWith(
@@ -601,5 +749,878 @@ describe('FoodListDetailScreen', () => {
       expect(call[1]).not.toMatch(/\bsearch=/);
       expect(call[1]).not.toMatch(/\blimit=/);
     }
+  });
+
+  test('renders neither progress row nor Ate-this tap targets for a non-checklist list (Task 17.5, Requirement 13.4, 13.10)', async () => {
+    apiRequestMock.mockImplementation(async (_method, path) => {
+      if (path === '/food-lists/list-detail-1') {
+        return {
+          ...sampleOwnerList,
+          isChecklist: false,
+        };
+      }
+      return {};
+    });
+
+    renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('food-list-name')).toBeTruthy();
+    });
+
+    expect(screen.queryByTestId('food-list-progress-row')).toBeNull();
+    // The row's details wrapper navigates to ExperienceDetail when experienceId is present,
+    // but carries no completion/check-off affordance.
+    const doleRow = screen.getByTestId('food-list-item-details-item-dole');
+    expect(doleRow.props.accessibilityRole).toBe('button');
+    expect(doleRow.props.accessibilityLabel).toBe('View details for Aloha Isle');
+    fireEvent.press(doleRow);
+    expect(mockNavigate).toHaveBeenCalledWith('ExperienceDetail', { experienceId: 'exp-1' });
+
+    expect(screen.queryByTestId('food-list-item-gotten-badge-item-dole')).toBeNull();
+    expect(screen.queryByTestId('food-list-item-gotten-badge-item-churro')).toBeNull();
+    expect(screen.queryByTestId('food-list-item-check-off-btn-item-dole')).toBeNull();
+    expect(screen.queryByTestId('food-list-item-check-off-btn-item-churro')).toBeNull();
+  });
+
+  test('renders progress row and Ate-this tap targets for a checklist list (Task 17.5, Requirement 13.9, 13.10, 13.11)', async () => {
+    const checklistData: FoodListDetailDTO = {
+      ...sampleOwnerList,
+      isChecklist: true,
+      gottenCount: 1,
+      items: [
+        {
+          ...sampleOwnerList.items[0]!,
+          gotten: true,
+        },
+        {
+          ...sampleOwnerList.items[1]!,
+          gotten: false,
+        },
+      ],
+    };
+
+    apiRequestMock.mockImplementation(async (_method, path) => {
+      if (path === '/food-lists/list-detail-1') {
+        return checklistData;
+      }
+      return {};
+    });
+
+    renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('food-list-progress-row')).toBeTruthy();
+      expect(screen.getByText('1 of 2 tried')).toBeTruthy();
+      expect(screen.getByText('50%')).toBeTruthy();
+    });
+
+    expect(screen.getByTestId('food-list-item-details-item-dole')).toBeTruthy();
+    expect(screen.getByTestId('food-list-item-details-item-churro')).toBeTruthy();
+    expect(screen.getByTestId('food-list-item-gotten-badge-item-dole')).toBeTruthy();
+    expect(screen.queryByTestId('food-list-item-check-off-btn-item-dole')).toBeNull();
+    expect(screen.getByTestId('food-list-item-check-off-btn-item-churro')).toBeTruthy();
+    expect(screen.queryByTestId('food-list-item-gotten-badge-item-churro')).toBeNull();
+  });
+
+  test('a gotten item with no rating shows a generic "Ate this" trailing badge, not a rating value (Requirement 13.14, 13.19)', async () => {
+    const checklistData: FoodListDetailDTO = {
+      ...sampleOwnerList,
+      isChecklist: true,
+      gottenCount: 1,
+      items: [
+        { ...sampleOwnerList.items[0]!, gotten: true, rating: null },
+        { ...sampleOwnerList.items[1]!, gotten: false },
+      ],
+    };
+
+    apiRequestMock.mockImplementation(async (_method, path) => {
+      if (path === '/food-lists/list-detail-1') {
+        return checklistData;
+      }
+      return {};
+    });
+
+    renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('food-list-item-gotten-badge-item-dole')).toBeTruthy();
+    });
+    expect(screen.getByText('Ate this')).toBeTruthy();
+    expect(screen.queryByTestId('food-list-item-gotten-badge-item-churro')).toBeNull();
+  });
+
+  test('a gotten item with a rating shows the rating in the trailing badge instead of the generic label (Requirement 13.14, 13.19)', async () => {
+    const checklistData: FoodListDetailDTO = {
+      ...sampleOwnerList,
+      isChecklist: true,
+      gottenCount: 1,
+      items: [
+        { ...sampleOwnerList.items[0]!, gotten: true, rating: 9 },
+        { ...sampleOwnerList.items[1]!, gotten: false },
+      ],
+    };
+
+    apiRequestMock.mockImplementation(async (_method, path) => {
+      if (path === '/food-lists/list-detail-1') {
+        return checklistData;
+      }
+      return {};
+    });
+
+    renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('food-list-item-gotten-badge-item-dole')).toBeTruthy();
+    });
+    expect(screen.getByText('9/10')).toBeTruthy();
+    expect(screen.queryByText('Ate this')).toBeNull();
+  });
+
+  test('an unmarked checklist row is the whole-row "Ate this" tap target, not a leading indicator (Requirement 13.11, 13.19)', async () => {
+    const checklistData: FoodListDetailDTO = {
+      ...sampleOwnerList,
+      isChecklist: true,
+      gottenCount: 0,
+      items: [
+        { ...sampleOwnerList.items[0]!, gotten: false },
+        { ...sampleOwnerList.items[1]!, gotten: false },
+      ],
+    };
+
+    apiRequestMock.mockImplementation(async (_method, path) => {
+      if (path === '/food-lists/list-detail-1') {
+        return checklistData;
+      }
+      return {};
+    });
+
+    renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('food-list-item-details-item-dole')).toBeTruthy();
+    });
+
+    const row = screen.getByTestId('food-list-item-details-item-dole');
+    expect(row.props.accessibilityRole).toBe('button');
+    expect(row.props.accessibilityLabel).toBe('View details for Aloha Isle');
+    // Unmarked items render the trailing "Check off" button (Requirement 13.20 amendment)
+    const checkOffBtn = screen.getByTestId('food-list-item-check-off-btn-item-dole');
+    expect(checkOffBtn).toBeTruthy();
+    expect(checkOffBtn.props.accessibilityRole).toBe('button');
+    expect(checkOffBtn.props.accessibilityLabel).toBe('Check off: Dole Whip');
+    expect(within(checkOffBtn).getByText('Check off')).toBeTruthy();
+    // Tapping the row navigates to the restaurant, not check off
+    mockNavigate.mockClear();
+    fireEvent.press(row);
+    expect(mockNavigate).toHaveBeenCalledWith('ExperienceDetail', { experienceId: 'exp-1' });
+    expect(screen.queryByTestId('rate-on-checkoff-prompt')).toBeNull();
+    // No leading circle/checkbox indicator exists anywhere for this row.
+    expect(screen.queryByTestId('food-list-item-checkbox-item-dole')).toBeNull();
+  });
+
+  test('tapping the trailing "Check off" button opens RateOnCheckoffPrompt (Requirement 13.20)', async () => {
+    const checklistData: FoodListDetailDTO = {
+      ...sampleOwnerList,
+      isChecklist: true,
+      gottenCount: 0,
+      items: [
+        { ...sampleOwnerList.items[0]!, gotten: false },
+      ],
+    };
+
+    apiRequestMock.mockImplementation(async (_method, path) => {
+      if (path === '/food-lists/list-detail-1') {
+        return checklistData;
+      }
+      return {};
+    });
+
+    renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('food-list-item-check-off-btn-item-dole')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByTestId('food-list-item-check-off-btn-item-dole'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('rate-on-checkoff-prompt')).toBeTruthy();
+    });
+  });
+
+  test('tapping food list item details navigates to restaurant ExperienceDetailScreen when experienceId is present, inert when null (Requirement 13.20)', async () => {
+    const listWithMixedItems: FoodListDetailDTO = {
+      ...sampleOwnerList,
+      items: [
+        {
+          ...sampleOwnerList.items[0]!,
+          experienceId: 'exp-1',
+          experienceName: 'Aloha Isle',
+        },
+        {
+          ...sampleOwnerList.items[1]!,
+          experienceId: null,
+          experienceName: null,
+          locationId: 'loc-cart-1',
+          locationName: 'Snack Cart',
+        },
+      ],
+    };
+
+    apiRequestMock.mockImplementation(async (_method, path) => {
+      if (path === '/food-lists/list-detail-1') {
+        return listWithMixedItems;
+      }
+      return {};
+    });
+
+    renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('food-list-item-details-item-dole')).toBeTruthy();
+      expect(screen.getByTestId('food-list-item-details-item-churro')).toBeTruthy();
+    });
+
+    const doleDetails = screen.getByTestId('food-list-item-details-item-dole');
+    expect(doleDetails.props.accessibilityRole).toBe('button');
+    expect(doleDetails.props.accessibilityLabel).toBe('View details for Aloha Isle');
+    mockNavigate.mockClear();
+    fireEvent.press(doleDetails);
+    expect(mockNavigate).toHaveBeenCalledWith('ExperienceDetail', { experienceId: 'exp-1' });
+
+    const churroDetails = screen.getByTestId('food-list-item-details-item-churro');
+    expect(churroDetails.props.accessibilityRole).toBeUndefined();
+    expect(churroDetails.props.accessibilityLabel).toBeUndefined();
+    mockNavigate.mockClear();
+    fireEvent.press(churroDetails);
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  test('tapping an unmarked row marks item gotten with today date and updates progress (Task 17.5, Requirement 13.6, 13.7, 13.11)', async () => {
+    let currentDetail: FoodListDetailDTO = {
+      ...sampleOwnerList,
+      isChecklist: true,
+      gottenCount: 0,
+      items: [
+        {
+          ...sampleOwnerList.items[0]!,
+          gotten: false,
+        },
+        {
+          ...sampleOwnerList.items[1]!,
+          gotten: false,
+        },
+      ],
+    };
+
+    apiRequestMock.mockImplementation(async (method, path) => {
+      if (path === '/food-lists/list-detail-1' && method === 'GET') {
+        return currentDetail;
+      }
+      if (path === '/me/food-items/item-dole/logs' && method === 'POST') {
+        currentDetail = {
+          ...currentDetail,
+          gottenCount: 1,
+          items: [
+            {
+              ...currentDetail.items[0]!,
+              gotten: true,
+            },
+            currentDetail.items[1]!,
+          ],
+        };
+        return { id: 'log-1', visitedOn: '2026-09-19' };
+      }
+      return {};
+    });
+
+    renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByText('0 of 2 tried')).toBeTruthy();
+    });
+
+    // Activating the "Check off" button for Dole Whip opens the optional rating
+    // prompt (Requirement 13.15) rather than submitting immediately.
+    fireEvent.press(screen.getByTestId('food-list-item-check-off-btn-item-dole'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('rate-on-checkoff-prompt')).toBeTruthy();
+    });
+
+    // Skip the rating — the submission still proceeds with no rating.
+    fireEvent.press(screen.getByTestId('rate-on-checkoff-skip-btn'));
+
+    await waitFor(() => {
+      expect(apiRequestMock).toHaveBeenCalledWith(
+        'POST',
+        '/me/food-items/item-dole/logs',
+        expect.objectContaining({
+          visitedOn: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+          userTz: expect.any(String),
+        }),
+      );
+    });
+
+    // Verify the exact payload shape sent to the real endpoint: `userTz` is
+    // REQUIRED by `createFoodItemLogInputSchema` (`.strict()`, no
+    // `.optional()`) — a request missing it is rejected 400
+    // validation_failed server-side, which is exactly the bug this
+    // assertion guards against (the mock previously let a `userTz`-less
+    // payload through, silently passing while the real endpoint would
+    // have rejected it). Rating is omitted on the skip path (Requirement
+    // 13.15) and note is never sent for a mark-gotten submission.
+    const logCall = apiRequestMock.mock.calls.find(
+      (c) => c[1] === '/me/food-items/item-dole/logs' && c[0] === 'POST',
+    );
+    expect(logCall?.[2]).toEqual({
+      visitedOn: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+      userTz: expect.any(String),
+    });
+
+    // Progress updates to 1 of 2 tried
+    await waitFor(() => {
+      expect(screen.getByText('1 of 2 tried')).toBeTruthy();
+    });
+
+    // An action-scoped undo toast appears for this specific submission
+    // (Requirement 13.16).
+    expect(screen.getByTestId('mark-gotten-undo-toast')).toBeTruthy();
+    expect(screen.getByText('Ate this: Dole Whip')).toBeTruthy();
+  });
+
+  test('confirming a rating in the prompt includes it in the mark-gotten submission (Requirement 13.15)', async () => {
+    let currentDetail: FoodListDetailDTO = {
+      ...sampleOwnerList,
+      isChecklist: true,
+      gottenCount: 0,
+      items: [
+        { ...sampleOwnerList.items[0]!, gotten: false },
+        { ...sampleOwnerList.items[1]!, gotten: false },
+      ],
+    };
+
+    apiRequestMock.mockImplementation(async (method, path) => {
+      if (path === '/food-lists/list-detail-1' && method === 'GET') {
+        return currentDetail;
+      }
+      if (path === '/me/food-items/item-dole/logs' && method === 'POST') {
+        currentDetail = {
+          ...currentDetail,
+          gottenCount: 1,
+          items: [
+            { ...currentDetail.items[0]!, gotten: true },
+            currentDetail.items[1]!,
+          ],
+        };
+        return { id: 'log-rated-1', visitedOn: '2026-09-19' };
+      }
+      return {};
+    });
+
+    renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByText('0 of 2 tried')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByTestId('food-list-item-check-off-btn-item-dole'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('rate-on-checkoff-prompt')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByTestId('rate-on-checkoff-rating-btn-9'));
+    fireEvent.press(screen.getByTestId('rate-on-checkoff-confirm-btn'));
+
+    await waitFor(() => {
+      const logCall = apiRequestMock.mock.calls.find(
+        (c) => c[1] === '/me/food-items/item-dole/logs' && c[0] === 'POST',
+      );
+      expect(logCall?.[2]).toEqual({
+        visitedOn: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+        userTz: expect.any(String),
+        rating: 9,
+      });
+    });
+  });
+
+  test('an already-gotten row does not fire a second call on press (Task 17.5, Requirement 13.8, 13.11)', async () => {
+    const checklistData: FoodListDetailDTO = {
+      ...sampleOwnerList,
+      isChecklist: true,
+      gottenCount: 1,
+      items: [
+        {
+          ...sampleOwnerList.items[0]!,
+          gotten: true,
+        },
+        {
+          ...sampleOwnerList.items[1]!,
+          gotten: false,
+        },
+      ],
+    };
+
+    apiRequestMock.mockImplementation(async (_method, path) => {
+      if (path === '/food-lists/list-detail-1') {
+        return checklistData;
+      }
+      return {};
+    });
+
+    renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('food-list-item-details-item-dole')).toBeTruthy();
+    });
+
+    // Clear calls
+    apiRequestMock.mockClear();
+
+    // Press already-gotten Dole Whip row: does not call POST logs
+    fireEvent.press(screen.getByTestId('food-list-item-details-item-dole'));
+
+    // Should not call POST logs
+    expect(apiRequestMock).not.toHaveBeenCalledWith(
+      'POST',
+      expect.stringMatching(/\/me\/food-items\/.*\/logs/),
+      expect.anything(),
+    );
+  });
+
+  test('completion celebration renders on the submission that completes the list, but not on initial view of already-complete list (Task 17.5, Requirement 13.12)', async () => {
+    // 1. Initial view of an already-complete list does NOT show celebration
+    const alreadyCompleteData: FoodListDetailDTO = {
+      ...sampleOwnerList,
+      isChecklist: true,
+      itemCount: 2,
+      gottenCount: 2,
+      items: [
+        { ...sampleOwnerList.items[0]!, gotten: true },
+        { ...sampleOwnerList.items[1]!, gotten: true },
+      ],
+    };
+
+    apiRequestMock.mockImplementation(async (_method, path) => {
+      if (path === '/food-lists/list-detail-1') {
+        return alreadyCompleteData;
+      }
+      return {};
+    });
+
+    const { unmount } = renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByText('2 of 2 tried')).toBeTruthy();
+    });
+
+    expect(screen.queryByTestId('food-list-completion-celebration')).toBeNull();
+    unmount();
+
+    // 2. Transition from incomplete (1 of 2) to complete (2 of 2) triggers celebration
+    let transitionData: FoodListDetailDTO = {
+      ...sampleOwnerList,
+      isChecklist: true,
+      itemCount: 2,
+      gottenCount: 1,
+      items: [
+        { ...sampleOwnerList.items[0]!, gotten: true },
+        { ...sampleOwnerList.items[1]!, gotten: false },
+      ],
+    };
+
+    apiRequestMock.mockImplementation(async (method, path) => {
+      if (path === '/food-lists/list-detail-1' && method === 'GET') {
+        return transitionData;
+      }
+      if (path === '/me/food-items/item-churro/logs' && method === 'POST') {
+        transitionData = {
+          ...transitionData,
+          gottenCount: 2,
+          items: [
+            transitionData.items[0]!,
+            { ...transitionData.items[1]!, gotten: true },
+          ],
+        };
+        return { id: 'log-2', visitedOn: '2026-09-19' };
+      }
+      return {};
+    });
+
+    renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByText('1 of 2 tried')).toBeTruthy();
+    });
+
+    expect(screen.queryByTestId('food-list-completion-celebration')).toBeNull();
+
+    // Mark the second item gotten
+    fireEvent.press(screen.getByTestId('food-list-item-check-off-btn-item-churro'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('rate-on-checkoff-prompt')).toBeTruthy();
+    });
+    fireEvent.press(screen.getByTestId('rate-on-checkoff-skip-btn'));
+
+    // Celebration should now be visible!
+    await waitFor(() => {
+      expect(screen.getByTestId('food-list-completion-celebration')).toBeTruthy();
+      expect(screen.getByText(/You've tried everything on EPCOT Snack Trail!/)).toBeTruthy();
+    });
+  });
+
+  test('activating an already-gotten row does not open the rating prompt or submit again (Requirement 13.14)', async () => {
+    const checklistData: FoodListDetailDTO = {
+      ...sampleOwnerList,
+      isChecklist: true,
+      gottenCount: 1,
+      items: [
+        { ...sampleOwnerList.items[0]!, gotten: true },
+        { ...sampleOwnerList.items[1]!, gotten: false },
+      ],
+    };
+
+    apiRequestMock.mockImplementation(async (_method, path) => {
+      if (path === '/food-lists/list-detail-1') {
+        return checklistData;
+      }
+      return {};
+    });
+
+    renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('food-list-item-details-item-dole')).toBeTruthy();
+    });
+
+    // Requirement 13.14: the row's text is never struck through/dimmed —
+    // it stays a plain, legible record even when gotten.
+    const doleName = screen.getByText('Dole Whip');
+    const nameStyle = Array.isArray(doleName.props.style)
+      ? Object.assign({}, ...doleName.props.style)
+      : doleName.props.style;
+    expect(nameStyle?.textDecorationLine).not.toBe('line-through');
+
+    fireEvent.press(screen.getByTestId('food-list-item-details-item-dole'));
+
+    expect(screen.queryByTestId('rate-on-checkoff-prompt')).toBeNull();
+    expect(apiRequestMock).not.toHaveBeenCalledWith(
+      'POST',
+      expect.stringMatching(/\/me\/food-items\/.*\/logs/),
+      expect.anything(),
+    );
+  });
+
+  test('undo targets only the log the mark-gotten submission created, not an item-scoped lookup (Property 18, Requirement 13.16, 13.17)', async () => {
+    // Requirement 13.7 allows repeat logs for the same dish within the
+    // window — an item can already be `gotten` from an earlier,
+    // pre-existing log before this specific submission's new log exists.
+    // The submission below is a *repeat* log (Dole Whip is already
+    // `gotten: true` going in), and its own undo toast must target only
+    // the new log id it just created — never "the most recent log for
+    // this item" and never the earlier, pre-existing log.
+    let currentDetail: FoodListDetailDTO = {
+      ...sampleOwnerList,
+      isChecklist: true,
+      gottenCount: 1,
+      items: [
+        { ...sampleOwnerList.items[0]!, gotten: true },
+        { ...sampleOwnerList.items[1]!, gotten: false },
+      ],
+    };
+
+    apiRequestMock.mockImplementation(async (method, path) => {
+      if (path === '/food-lists/list-detail-1' && method === 'GET') {
+        return currentDetail;
+      }
+      // Requirement 13.14: an already-gotten row has no onPress, so this
+      // repeat submission is driven directly through handleMarkGotten via
+      // the rating prompt path is not reachable from the UI for an
+      // already-gotten item — instead this test drives the *other* item
+      // (churro) to obtain a second toast, then separately asserts the
+      // DELETE call shape a repeat-log undo would use. See the assertion
+      // below for the precise id being targeted.
+      if (path === '/me/food-items/item-churro/logs' && method === 'POST') {
+        currentDetail = {
+          ...currentDetail,
+          gottenCount: 2,
+          items: [
+            currentDetail.items[0]!,
+            { ...currentDetail.items[1]!, gotten: true },
+          ],
+        };
+        return { id: 'log-churro-new', visitedOn: '2026-09-19' };
+      }
+      return {};
+    });
+
+    renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('food-list-item-check-off-btn-item-churro')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByTestId('food-list-item-check-off-btn-item-churro'));
+    await waitFor(() => expect(screen.getByTestId('rate-on-checkoff-prompt')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('rate-on-checkoff-skip-btn'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('mark-gotten-undo-toast')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByTestId('mark-gotten-undo-btn'));
+
+    await waitFor(() => {
+      expect(apiRequestMock).toHaveBeenCalledWith(
+        'DELETE',
+        '/me/food-items/item-churro/logs/log-churro-new',
+      );
+    });
+
+    // The pre-existing gotten state for Dole Whip (from an earlier,
+    // unrelated log) was never targeted by this undo — no DELETE call
+    // references it.
+    expect(apiRequestMock).not.toHaveBeenCalledWith(
+      'DELETE',
+      expect.stringContaining('/me/food-items/item-dole/logs/'),
+    );
+  });
+
+  test('two mark-gotten submissions in quick succession each show their own independent undo toast (Property 18, Requirement 13.18)', async () => {
+    let currentDetail: FoodListDetailDTO = {
+      ...sampleOwnerList,
+      isChecklist: true,
+      gottenCount: 0,
+      items: [
+        { ...sampleOwnerList.items[0]!, gotten: false },
+        { ...sampleOwnerList.items[1]!, gotten: false },
+      ],
+    };
+
+    apiRequestMock.mockImplementation(async (method, path) => {
+      if (path === '/food-lists/list-detail-1' && method === 'GET') {
+        return currentDetail;
+      }
+      if (path === '/me/food-items/item-dole/logs' && method === 'POST') {
+        currentDetail = {
+          ...currentDetail,
+          gottenCount: currentDetail.items[1]!.gotten ? 2 : 1,
+          items: [{ ...currentDetail.items[0]!, gotten: true }, currentDetail.items[1]!],
+        };
+        return { id: 'log-dole-1', visitedOn: '2026-09-19' };
+      }
+      if (path === '/me/food-items/item-churro/logs' && method === 'POST') {
+        currentDetail = {
+          ...currentDetail,
+          gottenCount: currentDetail.items[0]!.gotten ? 2 : 1,
+          items: [currentDetail.items[0]!, { ...currentDetail.items[1]!, gotten: true }],
+        };
+        return { id: 'log-churro-1', visitedOn: '2026-09-19' };
+      }
+      return {};
+    });
+
+    renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('food-list-item-check-off-btn-item-dole')).toBeTruthy();
+    });
+
+    // Mark Dole Whip gotten, skipping the rating.
+    fireEvent.press(screen.getByTestId('food-list-item-check-off-btn-item-dole'));
+    await waitFor(() => expect(screen.getByTestId('rate-on-checkoff-prompt')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('rate-on-checkoff-skip-btn'));
+
+    await waitFor(() => {
+      expect(screen.getAllByTestId('mark-gotten-undo-toast')).toHaveLength(1);
+    });
+
+    // Before that toast is dismissed, mark Cinnamon Churro gotten too.
+    fireEvent.press(screen.getByTestId('food-list-item-check-off-btn-item-churro'));
+    await waitFor(() => expect(screen.getByTestId('rate-on-checkoff-prompt')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('rate-on-checkoff-skip-btn'));
+
+    await waitFor(() => {
+      expect(screen.getAllByTestId('mark-gotten-undo-toast')).toHaveLength(2);
+    });
+    expect(screen.getByText('Ate this: Dole Whip')).toBeTruthy();
+    expect(screen.getByText('Ate this: Cinnamon Churro')).toBeTruthy();
+
+    // Undoing the churro toast only removes that toast and only deletes
+    // that specific log — the dole toast/log is unaffected.
+    const undoButtons = screen.getAllByTestId('mark-gotten-undo-btn');
+    fireEvent.press(undoButtons[1]!);
+
+    await waitFor(() => {
+      expect(apiRequestMock).toHaveBeenCalledWith(
+        'DELETE',
+        '/me/food-items/item-churro/logs/log-churro-1',
+      );
+    });
+    expect(apiRequestMock).not.toHaveBeenCalledWith(
+      'DELETE',
+      expect.stringContaining('/me/food-items/item-dole/logs/'),
+    );
+
+    await waitFor(() => {
+      expect(screen.getAllByTestId('mark-gotten-undo-toast')).toHaveLength(1);
+    });
+    expect(screen.getByText('Ate this: Dole Whip')).toBeTruthy();
+    expect(screen.queryByText('Ate this: Cinnamon Churro')).toBeNull();
+  });
+
+  test('skip, dismiss-without-selection, and confirm-with-rating each result in exactly one mark-gotten submission (Property 19, Requirement 13.15)', async () => {
+    let currentDetail: FoodListDetailDTO = {
+      ...sampleOwnerList,
+      isChecklist: true,
+      gottenCount: 0,
+      items: [
+        { ...sampleOwnerList.items[0]!, gotten: false },
+        { ...sampleOwnerList.items[1]!, gotten: false },
+      ],
+    };
+
+    apiRequestMock.mockImplementation(async (method, path) => {
+      if (path === '/food-lists/list-detail-1' && method === 'GET') {
+        return currentDetail;
+      }
+      if (path === '/me/food-items/item-dole/logs' && method === 'POST') {
+        currentDetail = {
+          ...currentDetail,
+          gottenCount: 1,
+          items: [{ ...currentDetail.items[0]!, gotten: true }, currentDetail.items[1]!],
+        };
+        return { id: 'log-dole-skip', visitedOn: '2026-09-19' };
+      }
+      return {};
+    });
+
+    // --- Skip path ---
+    renderScreen();
+    await waitFor(() => {
+      expect(screen.getByTestId('food-list-item-check-off-btn-item-dole')).toBeTruthy();
+    });
+    fireEvent.press(screen.getByTestId('food-list-item-check-off-btn-item-dole'));
+    await waitFor(() => expect(screen.getByTestId('rate-on-checkoff-prompt')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('rate-on-checkoff-skip-btn'));
+
+    await waitFor(() => {
+      const doleLogCalls = apiRequestMock.mock.calls.filter(
+        (c) => c[0] === 'POST' && c[1] === '/me/food-items/item-dole/logs',
+      );
+      expect(doleLogCalls).toHaveLength(1);
+      expect(doleLogCalls[0]![2]).toEqual({
+        visitedOn: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+        userTz: expect.any(String),
+      });
+    });
+    await waitFor(() => {
+      expect(screen.getByText('1 of 2 tried')).toBeTruthy();
+    });
+
+    apiRequestMock.mockClear();
+
+    // --- Dismiss-without-selection path (churro) ---
+    currentDetail = {
+      ...currentDetail,
+      gottenCount: 1,
+      items: [currentDetail.items[0]!, { ...currentDetail.items[1]!, gotten: false }],
+    };
+    apiRequestMock.mockImplementation(async (method, path) => {
+      if (path === '/food-lists/list-detail-1' && method === 'GET') {
+        return currentDetail;
+      }
+      if (path === '/me/food-items/item-churro/logs' && method === 'POST') {
+        currentDetail = {
+          ...currentDetail,
+          gottenCount: 2,
+          items: [currentDetail.items[0]!, { ...currentDetail.items[1]!, gotten: true }],
+        };
+        return { id: 'log-churro-dismiss', visitedOn: '2026-09-19' };
+      }
+      return {};
+    });
+
+    fireEvent.press(screen.getByTestId('food-list-item-check-off-btn-item-churro'));
+    await waitFor(() => expect(screen.getByTestId('rate-on-checkoff-prompt')).toBeTruthy());
+    // Dismiss via the backdrop, without selecting a rating.
+    fireEvent.press(screen.getByTestId('rate-on-checkoff-backdrop'));
+
+    await waitFor(() => {
+      const churroLogCalls = apiRequestMock.mock.calls.filter(
+        (c) => c[0] === 'POST' && c[1] === '/me/food-items/item-churro/logs',
+      );
+      expect(churroLogCalls).toHaveLength(1);
+      expect(churroLogCalls[0]![2]).toEqual({
+        visitedOn: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+        userTz: expect.any(String),
+      });
+    });
+    await waitFor(() => {
+      expect(screen.getByText('2 of 2 tried')).toBeTruthy();
+    });
+  });
+
+  test('tapping a completed item gotten badge opens rating prompt and updates rating via PATCH (Requirement 13.23)', async () => {
+    const currentDetail: FoodListDetailDTO = {
+      ...sampleOwnerList,
+      isChecklist: true,
+      gottenCount: 1,
+      items: [
+        {
+          ...sampleOwnerList.items[0]!,
+          gotten: true,
+          rating: null,
+          logId: 'log-dole-1',
+        },
+      ],
+    };
+
+    apiRequestMock.mockImplementation(async (method, path) => {
+      if (path === '/food-lists/list-detail-1' && method === 'GET') {
+        return currentDetail;
+      }
+      if (path === '/me/food-items/item-dole/logs/log-dole-1' && method === 'PATCH') {
+        return {
+          id: 'log-dole-1',
+          foodItemId: 'item-dole',
+          rating: 9,
+          visitedOn: '2026-09-19',
+        };
+      }
+      return {};
+    });
+
+    renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('food-list-item-gotten-badge-item-dole')).toBeTruthy();
+      expect(screen.getByText('Ate this')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByTestId('food-list-item-gotten-badge-item-dole'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('rate-on-checkoff-prompt')).toBeTruthy();
+      expect(screen.getAllByText('Dole Whip').length).toBeGreaterThanOrEqual(2);
+    });
+
+    // Select rating 9 and confirm
+    fireEvent.press(screen.getByTestId('rate-on-checkoff-rating-btn-9'));
+    await waitFor(() => {
+      expect(screen.getByTestId('rate-on-checkoff-confirm-btn')).toBeTruthy();
+    });
+    fireEvent.press(screen.getByTestId('rate-on-checkoff-confirm-btn'));
+
+    await waitFor(() => {
+      expect(apiRequestMock).toHaveBeenCalledWith(
+        'PATCH',
+        '/me/food-items/item-dole/logs/log-dole-1',
+        { rating: 9 },
+      );
+    });
   });
 });

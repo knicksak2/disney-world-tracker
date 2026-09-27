@@ -73,6 +73,12 @@ export interface ExperienceDTO {
    */
   readonly resortId?: string | null;
 
+  /**
+   * For an Experience representing a Resort hotel (`category === 'Resort'`),
+   * the referenced Resort's Internal_Id.
+   */
+  readonly representsResortId?: string | null;
+
   /** Latitude when persisted, else `null`/absent (R5.1, R5.2, R5.6). */
   readonly latitude?: number | null;
 

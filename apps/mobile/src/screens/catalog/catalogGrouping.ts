@@ -237,78 +237,51 @@ export type ResortRow =
   | { readonly kind: 'experience'; readonly experience: ExperienceDTO };
 
 /** The stable id used for the resort-wide catch-all anchor group (R8.4). */
-export const RESORT_CATCHALL_ID = '__resort_catchall__';
+export const RESORT_BOARDWALK_ID = '__resort_boardwalk__';
+export const RESORT_BOARDWALK_TITLE = "Disney's BoardWalk & Promenade";
 
-const RESORT_CATCHALL_NAME = 'Other';
+export const RESORT_WWOS_ID = '__resort_wwos__';
+export const RESORT_WWOS_TITLE = 'ESPN Wide World of Sports Complex';
+
+export const RESORT_RECREATION_ID = '__resort_catchall__';
+export const RESORT_RECREATION_TITLE = 'Property-Wide Recreation & Sports';
+
+/** Backward-compatible alias for the resort catch-all anchor/section group (R8.4, R22.1). */
+export const RESORT_CATCHALL_ID = RESORT_RECREATION_ID;
+export const RESORT_CATCHALL_NAME = RESORT_RECREATION_TITLE;
+
+export type ResortSubDestination = 'boardwalk' | 'wwos' | 'recreation';
 
 /**
- * Build the flat, anchored Resorts Destination rows (R8.2, R8.3, R8.4):
- *
- *   - every active Resort appears as a `resort` anchor row, ordered
- *     case-insensitively ascending by Resort name, including Resorts with no
- *     associated active Experiences (R8.3);
- *   - each Resort anchor is immediately followed by the `experience` rows whose
- *     `resortId` matches that Resort's Internal_Id (R8.2);
- *   - a single resort-wide catch-all anchor — carrying a synthetic `ResortDTO`
- *     with id `RESORT_CATCHALL_ID` — is appended after all specific Resort
- *     groups and holds every Experience with no `resortId` or a `resortId` that
- *     matches no active Resort (R8.4).
- *
- * The Experiences form a total partition: each appears exactly once, under its
- * matched Resort or the single trailing catch-all, so none is omitted. The
- * catch-all anchor is included only when it has at least one Experience.
+ * Classify an unlinked resort-area Experience into one of the three structured
+ * sub-destinations (R22.2, R22.3, R22.4).
  */
-export function buildResortRows(
-  experiences: readonly ExperienceDTO[],
-  resorts: readonly ResortDTO[],
-): readonly ResortRow[] {
-  const knownResortIds = new Set(resorts.map((r) => r.id));
+export function resolveResortSubDestination(
+  experience: ExperienceDTO,
+): ResortSubDestination {
+  const resortArea = experience.resortArea;
+  const nameLower = experience.name?.toLowerCase() ?? '';
 
-  // Bucket Experiences by matched resortId; unmatched / missing → catch-all.
-  const byResort = new Map<string, ExperienceDTO[]>();
-  const catchall: ExperienceDTO[] = [];
-
-  for (const experience of experiences) {
-    const resortId = experience.resortId;
-    if (typeof resortId === 'string' && knownResortIds.has(resortId)) {
-      const bucket = byResort.get(resortId);
-      if (bucket) {
-        bucket.push(experience);
-      } else {
-        byResort.set(resortId, [experience]);
-      }
-    } else {
-      catchall.push(experience);
-    }
+  if (resortArea === 'EPCOT Resort Area' || nameLower.includes('boardwalk')) {
+    return 'boardwalk';
   }
 
-  const orderedResorts = [...resorts].sort((a, b) =>
-    compareCaseInsensitive(a.name, b.name),
-  );
-
-  const rows: ResortRow[] = [];
-  for (const resort of orderedResorts) {
-    rows.push({ kind: 'resort', resort });
-    for (const experience of byResort.get(resort.id) ?? []) {
-      rows.push({ kind: 'experience', experience });
-    }
+  if (
+    resortArea === 'Wide World of Sports Resort Area' ||
+    nameLower.includes('wide world of sports') ||
+    nameLower.includes('espn')
+  ) {
+    return 'wwos';
   }
 
-  if (catchall.length > 0) {
-    rows.push({ kind: 'resort', resort: catchallResort() });
-    for (const experience of catchall) {
-      rows.push({ kind: 'experience', experience });
-    }
-  }
-
-  return rows;
+  return 'recreation';
 }
 
-/** The synthetic anchor Resort for the resort-wide catch-all group (R8.4). */
-function catchallResort(): ResortDTO {
+/** The synthetic anchor Resort for structured sub-destination groups (R8.4, R22). */
+function syntheticSubDestinationResort(id: string, name: string): ResortDTO {
   return {
-    id: RESORT_CATCHALL_ID,
-    name: RESORT_CATCHALL_NAME,
+    id,
+    name,
     description: null,
     imageUrl: null,
     latitude: null,
@@ -320,33 +293,31 @@ function catchallResort(): ResortDTO {
 }
 
 /**
- * Group the Resorts Destination's Experiences into one collapsible Section per
- * active Resort (R8.2, R8.3), the sectioned counterpart to {@link buildResortRows}
- * used by the collapsed-by-default Resorts layout:
+ * Build the flat, anchored Resorts Destination rows (R8.2, R8.3, R8.4, R22):
  *
- *   - every active Resort becomes a Section, ordered case-insensitively
- *     ascending by name, INCLUDING Resorts with no active Experiences so the
- *     full resort directory stays browsable (R8.3);
- *   - each Section's items are its `resortId`-matched Experiences, ordered
- *     case-insensitively ascending by name (R8.2);
- *   - a single trailing catch-all Section (key `RESORT_CATCHALL_ID`) holds every
- *     Experience with no `resortId` or a `resortId` that matches no active
- *     Resort, appended after all specific Resorts and included only when it has
- *     at least one Experience (R8.4).
+ *   - every active Resort appears as a `resort` anchor row, ordered
+ *     case-insensitively ascending by Resort name, including Resorts with no
+ *     associated active Experiences (R8.3);
+ *   - each Resort anchor is immediately followed by the `experience` rows whose
+ *     `resortId` matches that Resort's Internal_Id (R8.2);
+ *   - unlinked experiences (no `resortId` or unmatched `resortId`) are partitioned
+ *     into structured sub-destinations (BoardWalk, ESPN WWOS, Property-Wide Recreation)
+ *     and appended after all specific Resort groups (R22.1–R22.4).
  *
- * The Experiences form a total partition: each appears in exactly one Section
- * (its matched Resort or the single catch-all), so none is omitted. The Section
- * `key` is the Resort's Internal_Id (or `RESORT_CATCHALL_ID`) so the layout can
- * derive stable per-section collapsible state and test ids.
+ * The Experiences form a total partition: each appears exactly once, under its
+ * matched Resort or one of the trailing sub-destinations, so none is omitted and
+ * no section is ever labeled 'Other'.
  */
-export function groupByResort(
+export function buildResortRows(
   experiences: readonly ExperienceDTO[],
   resorts: readonly ResortDTO[],
-): readonly Section<ExperienceDTO>[] {
+): readonly ResortRow[] {
   const knownResortIds = new Set(resorts.map((r) => r.id));
 
   const byResort = new Map<string, ExperienceDTO[]>();
-  const catchall: ExperienceDTO[] = [];
+  const boardwalk: ExperienceDTO[] = [];
+  const wwos: ExperienceDTO[] = [];
+  const recreation: ExperienceDTO[] = [];
 
   for (const experience of experiences) {
     const resortId = experience.resortId;
@@ -358,7 +329,114 @@ export function groupByResort(
         byResort.set(resortId, [experience]);
       }
     } else {
-      catchall.push(experience);
+      const subDest = resolveResortSubDestination(experience);
+      if (subDest === 'boardwalk') {
+        boardwalk.push(experience);
+      } else if (subDest === 'wwos') {
+        wwos.push(experience);
+      } else {
+        recreation.push(experience);
+      }
+    }
+  }
+
+  const orderedResorts = [...resorts].sort((a, b) =>
+    compareCaseInsensitive(a.name, b.name),
+  );
+
+  const rows: ResortRow[] = [];
+  for (const resort of orderedResorts) {
+    rows.push({ kind: 'resort', resort });
+    for (const experience of sortExperiencesByName(byResort.get(resort.id) ?? [])) {
+      rows.push({ kind: 'experience', experience });
+    }
+  }
+
+  if (boardwalk.length > 0) {
+    rows.push({
+      kind: 'resort',
+      resort: syntheticSubDestinationResort(
+        RESORT_BOARDWALK_ID,
+        RESORT_BOARDWALK_TITLE,
+      ),
+    });
+    for (const experience of sortExperiencesByName(boardwalk)) {
+      rows.push({ kind: 'experience', experience });
+    }
+  }
+
+  if (wwos.length > 0) {
+    rows.push({
+      kind: 'resort',
+      resort: syntheticSubDestinationResort(RESORT_WWOS_ID, RESORT_WWOS_TITLE),
+    });
+    for (const experience of sortExperiencesByName(wwos)) {
+      rows.push({ kind: 'experience', experience });
+    }
+  }
+
+  if (recreation.length > 0) {
+    rows.push({
+      kind: 'resort',
+      resort: syntheticSubDestinationResort(
+        RESORT_RECREATION_ID,
+        RESORT_RECREATION_TITLE,
+      ),
+    });
+    for (const experience of sortExperiencesByName(recreation)) {
+      rows.push({ kind: 'experience', experience });
+    }
+  }
+
+  return rows;
+}
+
+/**
+ * Group the Resorts Destination's Experiences into collapsible Sections per
+ * active Resort (R8.2, R8.3) and structured sub-destinations (R22.1–R22.4):
+ *
+ *   - every active Resort becomes a Section, ordered case-insensitively
+ *     ascending by name, INCLUDING Resorts with no active Experiences so the
+ *     full resort directory stays browsable (R8.3);
+ *   - each Section's items are its `resortId`-matched Experiences, ordered
+ *     case-insensitively ascending by name (R8.2);
+ *   - unlinked Experiences are partitioned into structured sub-destination
+ *     Sections ("Disney's BoardWalk & Promenade", "ESPN Wide World of Sports Complex",
+ *     "Property-Wide Recreation & Sports") and appended after all specific Resorts;
+ *   - no Section is ever labeled 'Other'.
+ *
+ * The Experiences form a total partition: each appears in exactly one Section,
+ * none is omitted, and no item is duplicated.
+ */
+export function groupByResort(
+  experiences: readonly ExperienceDTO[],
+  resorts: readonly ResortDTO[],
+): readonly Section<ExperienceDTO>[] {
+  const knownResortIds = new Set(resorts.map((r) => r.id));
+
+  const byResort = new Map<string, ExperienceDTO[]>();
+  const boardwalk: ExperienceDTO[] = [];
+  const wwos: ExperienceDTO[] = [];
+  const recreation: ExperienceDTO[] = [];
+
+  for (const experience of experiences) {
+    const resortId = experience.resortId;
+    if (typeof resortId === 'string' && knownResortIds.has(resortId)) {
+      const bucket = byResort.get(resortId);
+      if (bucket) {
+        bucket.push(experience);
+      } else {
+        byResort.set(resortId, [experience]);
+      }
+    } else {
+      const subDest = resolveResortSubDestination(experience);
+      if (subDest === 'boardwalk') {
+        boardwalk.push(experience);
+      } else if (subDest === 'wwos') {
+        wwos.push(experience);
+      } else {
+        recreation.push(experience);
+      }
     }
   }
 
@@ -370,11 +448,27 @@ export function groupByResort(
       items: sortExperiencesByName(byResort.get(resort.id) ?? []),
     }));
 
-  if (catchall.length > 0) {
+  if (boardwalk.length > 0) {
     sections.push({
-      key: RESORT_CATCHALL_ID,
-      title: RESORT_CATCHALL_NAME,
-      items: sortExperiencesByName(catchall),
+      key: RESORT_BOARDWALK_ID,
+      title: RESORT_BOARDWALK_TITLE,
+      items: sortExperiencesByName(boardwalk),
+    });
+  }
+
+  if (wwos.length > 0) {
+    sections.push({
+      key: RESORT_WWOS_ID,
+      title: RESORT_WWOS_TITLE,
+      items: sortExperiencesByName(wwos),
+    });
+  }
+
+  if (recreation.length > 0) {
+    sections.push({
+      key: RESORT_RECREATION_ID,
+      title: RESORT_RECREATION_TITLE,
+      items: sortExperiencesByName(recreation),
     });
   }
 

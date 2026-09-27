@@ -289,7 +289,7 @@ describe('ExperienceDetailScreen Reservation_Action (R6.5, R6.6, R6.7, R7.1, R7.
 
     const button = screen.getByTestId('experience-reserve-action');
     expect(button).toBeTruthy();
-    expect(screen.getByText("Reserve on Disney's site")).toBeTruthy();
+    expect(screen.getByText(/Reserve on Disney's [Ss]ite/)).toBeTruthy();
 
     fireEvent.press(button);
 

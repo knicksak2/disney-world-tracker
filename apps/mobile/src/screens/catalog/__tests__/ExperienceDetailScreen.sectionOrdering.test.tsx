@@ -35,7 +35,7 @@ import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen } from '@testing-library/react-native';
 
 // ---------------------------------------------------------------------------
 // Mocks (declared before the modules under test are imported).
@@ -82,7 +82,7 @@ import ExperienceDetailScreen from '../ExperienceDetailScreen';
 import { ApiError, apiRequest as mockedApiRequest } from '../../../api/client';
 
 type CatalogStackParamList = {
-  ExperienceDetail: { experienceId: string };
+  ExperienceDetail: { experienceId: string; initialLens?: 'today' | 'passport' };
 };
 
 const apiRequestMock = mockedApiRequest as jest.MockedFunction<
@@ -192,6 +192,15 @@ function stubDetail(
     if (path === `/experiences/${id}/aggregate-rating`) {
       return { value: null, count: 0 };
     }
+    if (path.startsWith('/me/trips')) {
+      return { trips: [] };
+    }
+    if (path.endsWith('/logs')) {
+      return { repeatCount: 0, logs: [] };
+    }
+    if (path.includes('/food-item-logs')) {
+      return [];
+    }
     throw new Error(`unexpected call to ${path}`);
   });
 }
@@ -205,7 +214,10 @@ function makeQueryClient(): QueryClient {
   });
 }
 
-function renderDetail(experienceId: string): ReturnType<typeof render> {
+function renderDetail(
+  experienceId: string,
+  initialLens: 'today' | 'passport' = 'today',
+): ReturnType<typeof render> {
   const Stack = createNativeStackNavigator<CatalogStackParamList>();
   const client = makeQueryClient();
   return render(
@@ -215,7 +227,7 @@ function renderDetail(experienceId: string): ReturnType<typeof render> {
           <Stack.Screen
             name="ExperienceDetail"
             component={ExperienceDetailScreen}
-            initialParams={{ experienceId }}
+            initialParams={{ experienceId, initialLens }}
           />
         </Stack.Navigator>
       </NavigationContainer>
@@ -291,35 +303,52 @@ describe('ExperienceDetailScreen section ordering & info tags (R1.7, R2.2, R7.*)
   // -------------------------------------------------------------------------
   // R7.1 — fully-populated render asserts the top-to-bottom section order
   // -------------------------------------------------------------------------
-  test('R7.1: renders every section in the fixed top-to-bottom order', async () => {
+  test('R7.1: renders every section in the fixed top-to-bottom order per lens', async () => {
     const experienceId = 'exp-full';
     stubDetail(fullyPopulatedFixture(experienceId), [
       { id: 'resort-poly', name: 'Polynesian Village Resort' },
     ]);
 
-    renderDetail(experienceId);
+    renderDetail(experienceId, 'today');
 
-    // Wait for the detail (and the resort name lookup) to settle so every
-    // section is present in the tree.
+    // Wait for the detail (and the resort name lookup) to settle
     await screen.findByTestId('experience-location-group');
     await screen.findByText('Polynesian Village Resort');
 
-    // Marker testIDs for each ordered section (R7.1):
+    // Today in Park Lens section ordering:
     //   header/hero region → Park badge
+    //   Quick specs row    → experience-quick-specs-row
+    //   Lens switcher      → lens-switcher
     //   Location group     → experience-location-group
-    //   Your visit         → your-visit-card
-    //   Live section       → live-unavailable (dining live read errored)
-    //   Menu summary       → menu-summary-card (Restaurant)
+    //   Floating dock      → floating-action-dock
+    const todayPositions = [
+      orderOf('experience-park-badge'),
+      orderOf('experience-quick-specs-row'),
+      orderOf('lens-switcher'),
+      orderOf('experience-location-group'),
+      orderOf('floating-action-dock'),
+    ];
+
+    for (const position of todayPositions) {
+      expect(position).toBeGreaterThanOrEqual(0);
+    }
+    const todaySorted = [...todayPositions].sort((a, b) => a - b);
+    expect(todayPositions).toEqual(todaySorted);
+
+    // Switch to My Passport & Lore lens
+    fireEvent.press(screen.getByTestId('lens-tab-passport'));
+    await screen.findByTestId('park-passport-card');
+
+    // Passport & Lore Lens section ordering:
+    //   Park passport card → park-passport-card (supersedes your-visit-card, R17)
+    //   Dish log card      → restaurant-dish-log-card (Restaurant, R18)
     //   About              → about-section
     //   Why visit          → experience-why-this
     //   Community rating   → aggregate-empty
     //   remaining groups   → good to know → accessibility → good for
-    const positions = [
-      orderOf('experience-park-badge'),
-      orderOf('experience-location-group'),
-      orderOf('your-visit-card'),
-      orderOf('live-unavailable'),
-      orderOf('menu-summary-card'),
+    const passportPositions = [
+      orderOf('park-passport-card'),
+      orderOf('restaurant-dish-log-card'),
       orderOf('about-section'),
       orderOf('experience-why-this'),
       orderOf('aggregate-empty'),
@@ -328,45 +357,39 @@ describe('ExperienceDetailScreen section ordering & info tags (R1.7, R2.2, R7.*)
       orderOf('experience-tag-group-goodFor'),
     ];
 
-    // Every marker is present...
-    for (const position of positions) {
+    for (const position of passportPositions) {
       expect(position).toBeGreaterThanOrEqual(0);
     }
-    // ...and appears strictly before the next, i.e. the sequence is sorted.
-    const sorted = [...positions].sort((a, b) => a - b);
-    expect(positions).toEqual(sorted);
+    const passportSorted = [...passportPositions].sort((a, b) => a - b);
+    expect(passportPositions).toEqual(passportSorted);
   });
 
   // -------------------------------------------------------------------------
-  // R7.2 / R7.3 — Your visit and the Live section both sit above About
+  // R7.2 — Park Passport sits above About
   // -------------------------------------------------------------------------
-  test('R7.2/R7.3: Your visit card and the Live section render above the About section', async () => {
+  test('R7.2: Park Passport card renders above the About section on Passport lens', async () => {
     const experienceId = 'exp-above-about';
     stubDetail(fullyPopulatedFixture(experienceId), [
       { id: 'resort-poly', name: 'Polynesian Village Resort' },
     ]);
 
-    renderDetail(experienceId);
+    renderDetail(experienceId, 'passport');
 
     await screen.findByTestId('about-section');
 
-    const yourVisit = orderOf('your-visit-card');
-    const live = orderOf('live-unavailable');
+    const parkPassport = orderOf('park-passport-card');
     const about = orderOf('about-section');
 
-    expect(yourVisit).toBeGreaterThanOrEqual(0);
-    expect(live).toBeGreaterThanOrEqual(0);
+    expect(parkPassport).toBeGreaterThanOrEqual(0);
     expect(about).toBeGreaterThanOrEqual(0);
-    // R7.2 — Your visit above About.
-    expect(yourVisit).toBeLessThan(about);
-    // R7.3 — Live section above About.
-    expect(live).toBeLessThan(about);
+    // R7.2 — Park Passport above About.
+    expect(parkPassport).toBeLessThan(about);
   });
 
   // -------------------------------------------------------------------------
-  // R7.4 — the Menu_Summary_Card sits between the Live section and About
+  // R7.4 — the Menu_Summary_Card sits below dining and above Location on Today lens
   // -------------------------------------------------------------------------
-  test('R7.4: Restaurant renders the Menu summary card between the Live section and About', async () => {
+  test('R7.4: Restaurant renders the Menu summary card below Dining Reservations and above Location on Today in Park lens', async () => {
     const experienceId = 'exp-restaurant-menu';
     stubDetail({
       id: experienceId,
@@ -381,20 +404,20 @@ describe('ExperienceDetailScreen section ordering & info tags (R1.7, R2.2, R7.*)
       ],
     });
 
-    renderDetail(experienceId);
+    renderDetail(experienceId, 'today');
 
     await screen.findByTestId('menu-summary-card');
 
-    const live = orderOf('live-unavailable');
+    const dining = orderOf('dining-reservation-card');
     const menu = orderOf('menu-summary-card');
-    const about = orderOf('about-section');
+    const location = orderOf('experience-location-group');
 
-    expect(live).toBeGreaterThanOrEqual(0);
+    expect(dining).toBeGreaterThanOrEqual(0);
     expect(menu).toBeGreaterThanOrEqual(0);
-    expect(about).toBeGreaterThanOrEqual(0);
-    // R7.4 — Menu summary strictly between the Live section and About.
-    expect(live).toBeLessThan(menu);
-    expect(menu).toBeLessThan(about);
+    expect(location).toBeGreaterThanOrEqual(0);
+    // Menu summary sits below dining reservations and above location group
+    expect(dining).toBeLessThan(menu);
+    expect(menu).toBeLessThan(location);
   });
 
   // -------------------------------------------------------------------------
@@ -413,15 +436,14 @@ describe('ExperienceDetailScreen section ordering & info tags (R1.7, R2.2, R7.*)
       // or menus — every optional section collapses.
     });
 
-    renderDetail(experienceId);
+    renderDetail(experienceId, 'passport');
 
     // The About section still renders once the detail settles.
     await screen.findByTestId('about-section');
 
-    // Omitted sections (R7.5): no Location group, no Live section, no Menu
+    // Omitted sections (R7.5): no Location group, no Menu
     // card, no Why visit, and none of the remaining Tag_Groups.
     expect(screen.queryByTestId('experience-location-group')).toBeNull();
-    expect(screen.queryByTestId('live-unavailable')).toBeNull();
     expect(screen.queryByTestId('menu-summary-card')).toBeNull();
     expect(screen.queryByTestId('menu-summary-empty')).toBeNull();
     expect(screen.queryByTestId('experience-why-this')).toBeNull();
@@ -430,10 +452,10 @@ describe('ExperienceDetailScreen section ordering & info tags (R1.7, R2.2, R7.*)
     expect(screen.queryByTestId('experience-tag-group-goodFor')).toBeNull();
 
     // The sections that do render preserve their relative top-to-bottom order:
-    // header/hero → Your visit → About → Community rating.
+    // header/hero → Park Passport → About → Community rating.
     const positions = [
       orderOf('experience-park-badge'),
-      orderOf('your-visit-card'),
+      orderOf('park-passport-card'),
       orderOf('about-section'),
       orderOf('aggregate-empty'),
     ];
@@ -453,11 +475,14 @@ describe('ExperienceDetailScreen section ordering & info tags (R1.7, R2.2, R7.*)
       { id: 'resort-poly', name: 'Polynesian Village Resort' },
     ]);
 
-    renderDetail(experienceId);
+    renderDetail(experienceId, 'today');
 
+    await screen.findByTestId('experience-location-group');
+    expect(screen.getByText('Location')).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId('lens-tab-passport'));
     await screen.findByTestId('experience-tag-group-goodFor');
 
-    expect(screen.getByText('Location')).toBeTruthy();
     expect(screen.getByText('Good to know')).toBeTruthy();
     expect(screen.getByText('Accessibility')).toBeTruthy();
     expect(screen.getByText('Good for')).toBeTruthy();
@@ -478,7 +503,7 @@ describe('ExperienceDetailScreen section ordering & info tags (R1.7, R2.2, R7.*)
       accessibility: ['no-service-animals'],
     });
 
-    renderDetail(experienceId);
+    renderDetail(experienceId, 'passport');
 
     await screen.findByTestId('experience-tag-group-accessibility');
 

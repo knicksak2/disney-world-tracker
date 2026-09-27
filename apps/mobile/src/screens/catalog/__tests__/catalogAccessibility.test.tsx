@@ -474,17 +474,19 @@ describe('Catalog navigation accessibility (R12.1-R12.5, R12.8)', () => {
       expect(
         screen.getByTestId('experience-info-tag-land').props.accessibilityLabel,
       ).toBe('Land: Fantasyland');
-      // Accessibility group tag.
-      expect(
-        screen.getByTestId('experience-info-tag-accessibility').props
-          .accessibilityLabel,
-      ).toBe('Accessibility: Wheelchair Accessible');
       // Raw coordinates are no longer a tag; the Get directions action that
       // replaces them exposes a non-empty accessibility label (R4.6).
       expect(screen.queryByTestId('experience-info-tag-coordinates')).toBeNull();
       expect(
         screen.getByTestId('experience-get-directions').props.accessibilityLabel,
       ).toBe('Get directions to Space Mountain');
+
+      // Accessibility group tag (located on My Passport & Lore lens).
+      fireEvent.press(screen.getByTestId('lens-tab-passport'));
+      expect(
+        (await screen.findByTestId('experience-info-tag-accessibility')).props
+          .accessibilityLabel,
+      ).toBe('Accessibility: Wheelchair Accessible');
     });
   });
 

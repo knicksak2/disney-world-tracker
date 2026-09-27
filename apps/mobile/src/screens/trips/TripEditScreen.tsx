@@ -1,6 +1,6 @@
-// Feature: trips, Task 22 — Trip edit (name, description, dates, resorts)
+// Feature: trips, Task 22 (including Task 22.4) — Trip edit and delete (name, description, dates, resorts, deletion)
 //
-// Validates: Requirements 3.1, 3.4, 3.5, 3.6, 3.8, 21.1, 21.5
+// Validates: Requirements 3.1, 3.4, 3.5, 3.6, 3.7, 3.8, 3.11, 21.1, 21.5
 //
 // Behavior summary:
 //   - The edit counterpart to the create modal. Reached from the organizer-only
@@ -13,10 +13,14 @@
 //     create) before the request. `resortIds` is always sent, so the recorded
 //     Resort stay is replaced wholesale with the current selection; clearing it
 //     is an empty array (R21.5).
-//   - Editing is Organizer-gated server-side (R3.8): a non-organizer / missing
-//     Trip collapses to `trip_forbidden`, surfaced as friendly copy. On success
+//   - Editing and deletion are Organizer-gated server-side (R3.8): a non-organizer / missing
+//     Trip collapses to `trip_forbidden`, surfaced as friendly copy. On save success
 //     the detail and list queries are invalidated so both reflect the edit, and
 //     the screen pops back to the hub.
+//   - Deletion (R3.7, R3.8, R3.11) prompts confirmation via `Alert.alert` and on
+//     confirmation sends `DELETE /trips/:id`, prunes the deleted trip and its
+//     detail queries from the cache, invalidates the trips list query, and
+//     navigates directly back to `TripsList`.
 //
 // Styling follows the shared "Magical / Whimsical" theme, mirroring
 // `TripDetailScreen` and the create modal in `TripsListScreen`.
@@ -24,6 +28,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   ScrollView,
   StyleSheet,
   Text,
@@ -168,7 +173,46 @@ export default function TripEditScreen({
     },
   });
 
-  const busy = editMutation.isPending;
+  const deleteMutation = useMutation<void, ApiError, void>({
+    mutationFn: async () => {
+      await apiRequest<void>('DELETE', `/trips/${tripId}`);
+    },
+    onSuccess: () => {
+      // Prune all queries for this trip so that any background queries
+      // or unmounting screens do not attempt to refetch deleted data.
+      queryClient.removeQueries({ queryKey: ['trips', tripId] });
+      queryClient.removeQueries({ queryKey: tripDetailKeys.detail(tripId) });
+      void queryClient.invalidateQueries({ queryKey: tripsListKeys.list() });
+      navigation.navigate('TripsList');
+    },
+    onError: (err) => {
+      setFormError(editErrorMessage(err));
+    },
+  });
+
+  const isSaving = editMutation.isPending;
+  const isDeleting = deleteMutation.isPending;
+  const busy = isSaving || isDeleting;
+
+  const promptDeleteTrip = (): void => {
+    if (busy) return;
+    const tripName = draftName.trim() || tripQuery.data?.name || 'this trip';
+    Alert.alert(
+      `Delete "${tripName}"?`,
+      'Are you sure you want to delete this trip? All plans, reservations, and shared activity will be permanently removed. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            setFormError(null);
+            deleteMutation.mutate();
+          },
+        },
+      ],
+    );
+  };
 
   // -------------------------------------------------------------------------
   // Loading
@@ -324,7 +368,7 @@ export default function TripEditScreen({
 
         <View style={styles.actions}>
           <PrimaryButton
-            label={busy ? 'Saving\u2026' : 'Save changes'}
+            label={isSaving ? 'Saving\u2026' : 'Save changes'}
             onPress={() => {
               setFormError(null);
               editMutation.mutate();
@@ -339,6 +383,18 @@ export default function TripEditScreen({
             disabled={busy}
             testID="trip-edit-cancel"
             style={styles.flexBtn}
+          />
+        </View>
+
+        <View style={styles.dangerZone}>
+          <SecondaryButton
+            label={isDeleting ? 'Deleting\u2026' : 'Delete trip'}
+            icon="trash-outline"
+            tone="danger"
+            onPress={promptDeleteTrip}
+            disabled={busy}
+            testID="trip-edit-delete-btn"
+            style={styles.deleteBtn}
           />
         </View>
       </ScrollView>
@@ -433,4 +489,14 @@ const styles = StyleSheet.create({
   flexBtn: {
     flex: 1,
   },
+  dangerZone: {
+    marginTop: theme.spacing.xl,
+    paddingTop: theme.spacing.lg,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: theme.color.border,
+  },
+  deleteBtn: {
+    alignSelf: 'stretch',
+  },
 });
+

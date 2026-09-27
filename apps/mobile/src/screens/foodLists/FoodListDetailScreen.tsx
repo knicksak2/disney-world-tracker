@@ -1,10 +1,9 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
   Modal,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -15,6 +14,11 @@ import type { RouteProp } from '@react-navigation/native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  NestableDraggableFlatList,
+  NestableScrollContainer,
+} from 'react-native-draggable-flatlist';
+import type { RenderItemParams } from 'react-native-draggable-flatlist';
 import type {
   ExperienceDTO,
   FoodItemDTO,
@@ -27,7 +31,10 @@ import { theme } from '../../theme/theme';
 import { Badge, Card, GradientHeader, ScreenContainer } from '../../theme/components';
 import FoodItemPickerModal from '../catalog/FoodItemPickerModal';
 import ManageFoodListSharesSheet from './ManageFoodListSharesSheet';
+import MarkGottenUndoToast from './MarkGottenUndoToast';
+import RateOnCheckoffPrompt from './RateOnCheckoffPrompt';
 import { useFoodListNotice } from './foodListNotice';
+import { useOpenExperience } from '../navigation/experienceNavigation';
 
 export interface FoodListDetailParams {
   readonly foodListId: string;
@@ -39,16 +46,82 @@ interface CatalogSearchResponse {
 
 type FoodListDetailRouteProp = RouteProp<{ FoodListDetail: FoodListDetailParams }, 'FoodListDetail'>;
 
+/** The checklist item currently awaiting a rating decision (Requirement 13.15). */
+interface RatingPromptTarget {
+  readonly foodItemId: string;
+  readonly name: string;
+}
+
+/** The completed checklist item awaiting rating update after the fact (Requirement 13.23). */
+interface EditRatingTarget {
+  readonly foodItemId: string;
+  readonly logId: string | null;
+  readonly name: string;
+  readonly initialRating: number | null;
+}
+
+/**
+ * A single active undo affordance for one mark-gotten submission
+ * (Requirement 13.16-13.18). Keyed to the specific `logId` that submission
+ * created — never "the most recent log for this Food_Item" — so undo can
+ * never revert an unrelated, pre-existing log for the same dish
+ * (Requirement 13.17). `toastKey` is a local render key distinct from
+ * `logId` only in spirit (they're the same value today, but kept as
+ * separate fields so a future change to the toast's identity scheme
+ * doesn't have to also mean changing what undo targets).
+ */
+interface ActiveUndoToast {
+  readonly toastKey: string;
+  readonly logId: string;
+  readonly foodItemId: string;
+  readonly itemName: string;
+}
+
+function deviceTimeZone(): string {
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  return typeof tz === 'string' && tz.length > 0 ? tz : 'UTC';
+}
+
+function ymdInTimeZone(now: Date, timeZone: string): string {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(now);
+  let yyyy = '';
+  let mm = '';
+  let dd = '';
+  for (const part of parts) {
+    if (part.type === 'year') yyyy = part.value;
+    else if (part.type === 'month') mm = part.value;
+    else if (part.type === 'day') dd = part.value;
+  }
+  return `${yyyy.padStart(4, '0')}-${mm}-${dd}`;
+}
+
 export default function FoodListDetailScreen(): JSX.Element {
   const route = useRoute<FoodListDetailRouteProp>();
   const navigation = useNavigation<NativeStackNavigationProp<any>>();
+  const openExperience = useOpenExperience();
   const { foodListId } = route.params;
   const queryClient = useQueryClient();
 
   const [isLiking, setIsLiking] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isTogglingChecklist, setIsTogglingChecklist] = useState(false);
   const [staleWriteNotice, setStaleWriteNotice] = useState<string | null>(null);
   const [manageSharesVisible, setManageSharesVisible] = useState(false);
+  const [markingGottenId, setMarkingGottenId] = useState<string | null>(null);
+  const [showCelebration, setShowCelebration] = useState(false);
+  // Requirement 13.15: the item awaiting the optional rating prompt.
+  const [ratingPromptItem, setRatingPromptItem] = useState<RatingPromptTarget | null>(null);
+  // Requirement 13.23: the completed item awaiting a rating edit after the fact.
+  const [editRatingItem, setEditRatingItem] = useState<EditRatingTarget | null>(null);
+  // Requirement 13.16-13.18: one entry per currently-visible undo toast;
+  // multiple can coexist (Requirement 13.18), each acting only on its own
+  // `logId` (Requirement 13.17).
+  const [activeUndoToasts, setActiveUndoToasts] = useState<readonly ActiveUndoToast[]>([]);
 
   // Entry Point 2: Restaurant search modal & scoped picker
   const [restaurantSearchModalVisible, setRestaurantSearchModalVisible] = useState(false);
@@ -123,6 +196,24 @@ export default function FoodListDetailScreen(): JSX.Element {
     }
   }
 
+  // Requirement 13.2: owner can toggle a list into/out of checklist mode
+  // at any time after creation, mirroring how `visibility` is changed via
+  // the same `PATCH /me/food-lists/:id` endpoint.
+  async function handleToggleChecklistMode(): Promise<void> {
+    if (!list || isTogglingChecklist || list.myRole !== 'owner') return;
+    setIsTogglingChecklist(true);
+    try {
+      await apiRequest('PATCH', `/me/food-lists/${encodeURIComponent(foodListId)}`, {
+        isChecklist: !list.isChecklist,
+      });
+      await queryClient.invalidateQueries({ queryKey: ['food-list-detail', foodListId] });
+    } catch {
+      // Ignore
+    } finally {
+      setIsTogglingChecklist(false);
+    }
+  }
+
   async function handleSave(): Promise<void> {
     if (!list || isSaving || list.myRole === 'owner') return;
     setIsSaving(true);
@@ -174,17 +265,128 @@ export default function FoodListDetailScreen(): JSX.Element {
     }
   }
 
-  function moveItem(index: number, direction: 'up' | 'down'): void {
-    if (!list) return;
-    const targetIndex = direction === 'up' ? index - 1 : index + 1;
-    if (targetIndex < 0 || targetIndex >= list.items.length) return;
+  // Requirement 11's original up/down tap controls were unclear affordances
+  // — they looked like expand/collapse chevrons, not a reorder action. A
+  // drag handle (react-native-draggable-flatlist) replaces them: dragging a
+  // row directly to its new position is the unambiguous, standard mobile
+  // pattern for reordering, unlike a pair of small stacked arrows.
+  function handleDragEnd({ data }: { data: readonly FoodListItemDTO[] }): void {
+    void handleReorderItems(data);
+  }
 
-    const reordered = [...list.items];
-    const temp = reordered[index]!;
-    reordered[index] = reordered[targetIndex]!;
-    reordered[targetIndex] = temp;
+  // Task 17.3 / 19.5: Mark an item gotten via POST /me/food-items/:foodItemId/logs
+  // (Requirement 13.6, 13.11), optionally including a rating (Requirement
+  // 13.15). Captures the created log's `id` from the response to back a
+  // per-submission undo toast (Requirement 13.16, 13.17) — the endpoint
+  // already returns `FoodItemLogDTO.id`, so no backend change is needed.
+  // Task 17.4: Client-local completion celebration on transition to 100% (Requirement 13.12)
+  async function handleMarkGotten(
+    foodItemId: string,
+    itemName: string,
+    rating?: number,
+  ): Promise<void> {
+    if (!list || markingGottenId) return;
+    setMarkingGottenId(foodItemId);
+    const tz = deviceTimeZone();
+    const today = ymdInTimeZone(new Date(), tz);
+    const preGottenCount = list.gottenCount ?? 0;
+    const preItemCount = list.itemCount;
 
-    void handleReorderItems(reordered);
+    setStaleWriteNotice(null);
+
+    try {
+      const created = await apiRequest<{ readonly id: string }>(
+        'POST',
+        `/me/food-items/${encodeURIComponent(foodItemId)}/logs`,
+        {
+          visitedOn: today,
+          userTz: tz,
+          ...(rating !== undefined ? { rating } : {}),
+        },
+      );
+      const updatedDetail = await queryClient.fetchQuery<FoodListDetailDTO>({
+        queryKey: ['food-list-detail', foodListId],
+        queryFn: () =>
+          apiRequest<FoodListDetailDTO>(
+            'GET',
+            `/food-lists/${encodeURIComponent(foodListId)}`,
+          ),
+      });
+      await queryClient.invalidateQueries({ queryKey: ['food-list-detail', foodListId] });
+      await queryClient.invalidateQueries({ queryKey: ['food-lists-collection'] });
+
+      // Requirement 13.16/13.18: append this submission's own undo toast
+      // rather than replacing any existing one — several can be visible
+      // at once, each scoped to the specific log it was created for.
+      setActiveUndoToasts((prev) => [
+        ...prev,
+        {
+          toastKey: `${created.id}-${Date.now()}`,
+          logId: created.id,
+          foodItemId,
+          itemName,
+        },
+      ]);
+
+      const postGottenCount = updatedDetail.gottenCount ?? 0;
+      const postItemCount = updatedDetail.itemCount;
+      if (
+        preGottenCount < preItemCount &&
+        postGottenCount === postItemCount &&
+        postItemCount > 0
+      ) {
+        setShowCelebration(true);
+      }
+    } catch {
+      // Surface the failure rather than letting the checkbox silently do
+      // nothing — an empty catch here previously hid a real bug (a missing
+      // required `userTz` field made every mark-gotten request reject with
+      // 400 validation_failed with no visible sign to the User).
+      setStaleWriteNotice("Couldn't save that. Please try again.");
+    } finally {
+      setMarkingGottenId(null);
+    }
+  }
+
+  // Requirement 13.16, 13.17: revert only the specific log a given toast
+  // was created for — never "the most recent log for this Food_Item" —
+  // then remove that toast. A pre-existing, unrelated log for the same
+  // dish (Requirement 13.7's repeat-log allowance) is never touched.
+  async function handleUndoMarkGotten(toast: ActiveUndoToast): Promise<void> {
+    try {
+      await apiRequest(
+        'DELETE',
+        `/me/food-items/${encodeURIComponent(toast.foodItemId)}/logs/${encodeURIComponent(toast.logId)}`,
+      );
+      await queryClient.invalidateQueries({ queryKey: ['food-list-detail', foodListId] });
+      await queryClient.invalidateQueries({ queryKey: ['food-lists-collection'] });
+    } catch {
+      // Ignore — the toast still dismisses; a failed undo leaves the log
+      // in place, which the User can still correct via My Food History.
+    }
+  }
+
+  function dismissUndoToast(toastKey: string): void {
+    setActiveUndoToasts((prev) => prev.filter((t) => t.toastKey !== toastKey));
+  }
+
+  // Requirement 13.23: Update rating after the fact on a completed checklist item
+  async function handleUpdateRating(
+    foodItemId: string,
+    logId: string,
+    rating: number,
+  ): Promise<void> {
+    try {
+      await apiRequest(
+        'PATCH',
+        `/me/food-items/${encodeURIComponent(foodItemId)}/logs/${encodeURIComponent(logId)}`,
+        { rating },
+      );
+      await queryClient.invalidateQueries({ queryKey: ['food-list-detail', foodListId] });
+      await queryClient.invalidateQueries({ queryKey: ['me-food-item-logs'] });
+    } catch {
+      // Ignore
+    }
   }
 
   // Entry point 2: Add selected items from picker scoped to restaurant
@@ -222,6 +424,206 @@ export default function FoodListDetailScreen(): JSX.Element {
       setIsAddingItems(false);
     }
   }
+
+  // Stable `renderItem` identity — an inline arrow literal passed to
+  // `NestableDraggableFlatList` is recreated every render, which
+  // `VirtualizedList` (the engine underlying both `FlatList` and
+  // `NestableDraggableFlatList`) treats as a changed render function and
+  // forces the whole visible window to re-render/re-measure, producing the
+  // "large list that is slow to update" warning even though the row markup
+  // below is otherwise unchanged. See `DestinationScreen.tsx`'s `renderRow`
+  // for the same fix.
+  const renderDraggableItem = useCallback(
+    (params: RenderItemParams<FoodListItemDTO>) => {
+      const { item, drag, isActive } = params;
+      const placeName = item.experienceName ?? item.locationName ?? 'Walt Disney World';
+      // `canEdit`/`isChecklist` are normally derived below (after the
+      // loading/unavailable early returns narrow `list` to non-null), but
+      // this callback must be declared before those early returns to
+      // satisfy the Rules of Hooks — so it re-derives the same booleans
+      // from the raw, possibly-undefined `list` query data instead of
+      // referencing the later `const canEdit`/`isOwner` declarations.
+      const canEdit = list?.myRole === 'owner' || list?.myRole === 'editor';
+      const isChecklist = list?.isChecklist ?? false;
+      return (
+        <Card
+          style={[styles.itemCard, isActive && styles.itemCardDragging]}
+          testID={`food-list-item-row-${item.foodItemId}`}
+        >
+          <View style={styles.itemCardMain}>
+            {/* Drag handle — leading edge, grouped with the
+                checklist completion indicator (both are "state of
+                this row" controls), leaving delete as the sole
+                trailing action. Press-and-hold to pick up the row,
+                drag to its new position; replaces the original
+                up/down chevron pair. */}
+            {canEdit ? (
+              <Pressable
+                onLongPress={drag}
+                disabled={isActive}
+                style={styles.dragHandle}
+                accessibilityRole="button"
+                accessibilityLabel={`Drag to reorder ${item.name}`}
+                testID={`food-list-item-drag-handle-${item.foodItemId}`}
+              >
+                <Ionicons
+                  name="reorder-three"
+                  size={22}
+                  color={theme.color.textSecondary}
+                />
+              </Pressable>
+            ) : null}
+
+            {/* Item details (name, location, price): tapping navigates to the
+                restaurant's ExperienceDetailScreen when experienceId is present
+                (Requirement 13.20 amended). When experienceId is null (e.g. snack cart),
+                the row is inert. It never triggers mark-gotten — that action is
+                exclusively owned by the trailing "Check off" button below. */}
+            <Pressable
+              onPress={
+                item.experienceId
+                  ? () => openExperience(item.experienceId!)
+                  : undefined
+              }
+              disabled={!item.experienceId}
+              style={({ pressed }) => [
+                styles.itemDetails,
+                pressed && item.experienceId && styles.itemDetailsPressed,
+              ]}
+              accessibilityRole={item.experienceId ? 'button' : undefined}
+              accessibilityLabel={
+                item.experienceId
+                  ? `View details for ${placeName}`
+                  : undefined
+              }
+              testID={`food-list-item-details-${item.foodItemId}`}
+            >
+              <Text style={styles.itemName}>{item.name}</Text>
+              <Text style={styles.itemLocation}>{placeName}</Text>
+              {item.price ? (
+                <Text style={styles.itemPrice}>{item.price}</Text>
+              ) : null}
+
+              {/* Attribution label (Requirement 11.2) */}
+              {showAttribution && item.addedByDisplayName ? (
+                <Text
+                  style={styles.attributionLabel}
+                  testID={`food-list-attribution-${item.foodItemId}`}
+                >
+                  added by {item.addedByDisplayName}
+                </Text>
+              ) : null}
+            </Pressable>
+
+            {/* Trailing completion affordance / badge (Requirement 13.14, 13.19, 13.20):
+                when not yet gotten, renders an outline "Check off" button so users can
+                readily tell the item is completable. Tapping it opens the rating prompt.
+                Once gotten, transforms into the completed status badge showing rating/10
+                or generic "Ate this". Never rendered as a tap target once gotten —
+                undo is only ever available through the action-scoped toast
+                (Requirement 13.16-13.18), never from this badge. */}
+            {isChecklist && !item.gotten ? (
+              <Pressable
+                onPress={() =>
+                  setRatingPromptItem({
+                    foodItemId: item.foodItemId,
+                    name: item.name,
+                  })
+                }
+                disabled={markingGottenId === item.foodItemId}
+                style={({ pressed }) => [
+                  styles.checkOffBtn,
+                  pressed && styles.checkOffBtnPressed,
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel={`Check off: ${item.name}`}
+                testID={`food-list-item-check-off-btn-${item.foodItemId}`}
+              >
+                <Text style={styles.checkOffBtnText}>Check off</Text>
+              </Pressable>
+            ) : null}
+
+            {isChecklist && item.gotten ? (
+              <Pressable
+                onPress={() =>
+                  setEditRatingItem({
+                    foodItemId: item.foodItemId,
+                    logId: item.logId ?? null,
+                    name: item.name,
+                    initialRating: item.rating ?? null,
+                  })
+                }
+                style={({ pressed }) => [
+                  styles.gottenBadge,
+                  pressed && styles.gottenBadgePressed,
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel={`Rating for ${item.name}: ${item.rating != null ? `${item.rating} out of 10` : 'unrated'}. Tap to edit rating`}
+                testID={`food-list-item-gotten-badge-${item.foodItemId}`}
+              >
+                <Ionicons name="checkmark" size={14} color={theme.color.primary} />
+                <Text style={styles.gottenBadgeText}>
+                  {item.rating != null ? `${item.rating}/10` : 'Ate this'}
+                </Text>
+              </Pressable>
+            ) : null}
+
+            {/* Delete action (Requirement 11.1) — the sole trailing
+                action now that the drag handle moved to the
+                leading edge. */}
+            {canEdit ? (
+              <Pressable
+                onPress={() => void handleDeleteItem(item.foodItemId)}
+                style={styles.itemDeleteBtn}
+                accessibilityRole="button"
+                accessibilityLabel={`Remove ${item.name} from list`}
+                testID={`food-list-item-delete-${item.foodItemId}`}
+              >
+                <Ionicons name="trash-outline" size={18} color={theme.color.danger} />
+              </Pressable>
+            ) : null}
+          </View>
+        </Card>
+      );
+    },
+    [
+      list?.myRole,
+      openExperience,
+      showAttribution,
+      list?.isChecklist,
+      markingGottenId,
+      handleDeleteItem,
+    ],
+  );
+
+  // Stable `renderItem` identity for the restaurant search results list —
+  // same rationale as `renderDraggableItem` above: an inline arrow here is
+  // recreated on every keystroke of the search input, which `FlatList`
+  // treats as a changed render function and forces unnecessary
+  // re-render/re-measure work on the visible rows.
+  const renderRestaurantResult = useCallback(
+    ({ item }: { item: ExperienceDTO }) => (
+      <Pressable
+        onPress={() => {
+          setSelectedExperience(item);
+          setRestaurantSearchModalVisible(false);
+          setPickerModalVisible(true);
+        }}
+        style={({ pressed }) => [styles.restaurantRow, pressed && styles.restaurantRowPressed]}
+        accessibilityRole="button"
+        accessibilityLabel={`Select restaurant ${item.name}`}
+        testID={`restaurant-select-row-${item.id}`}
+      >
+        <Ionicons name="restaurant" size={20} color={theme.color.primary} />
+        <View style={styles.restaurantRowText}>
+          <Text style={styles.restaurantRowName}>{item.name}</Text>
+          <Text style={styles.restaurantRowMeta}>{item.park}</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={18} color={theme.color.textSecondary} />
+      </Pressable>
+    ),
+    [],
+  );
 
   // Loading state
   if (listQuery.isLoading) {
@@ -274,7 +676,31 @@ export default function FoodListDetailScreen(): JSX.Element {
         onBack={() => navigation.goBack()}
       />
 
-      <ScrollView contentContainerStyle={styles.content}>
+      <NestableScrollContainer contentContainerStyle={styles.content}>
+        {/* Completion celebration banner (Requirement 13.12) */}
+        {showCelebration ? (
+          <View style={styles.celebrationCard} testID="food-list-completion-celebration">
+            <View style={styles.celebrationTop}>
+              <View style={styles.celebrationIconRow}>
+                <Ionicons name="sparkles" size={24} color="#f59e0b" />
+                <Text style={styles.celebrationTitle}>List Complete!</Text>
+              </View>
+              <Pressable
+                onPress={() => setShowCelebration(false)}
+                accessibilityRole="button"
+                accessibilityLabel="Dismiss celebration"
+                style={styles.celebrationDismissBtn}
+                testID="dismiss-celebration-btn"
+              >
+                <Ionicons name="close" size={20} color={theme.color.textSecondary} />
+              </Pressable>
+            </View>
+            <Text style={styles.celebrationMessage}>
+              You&apos;ve tried everything on {list.name}!
+            </Text>
+          </View>
+        ) : null}
+
         {/* Stale write message (Requirement 11.3) */}
         {staleWriteNotice ? (
           <View style={styles.staleNotice} testID="food-list-stale-write-message">
@@ -356,30 +782,100 @@ export default function FoodListDetailScreen(): JSX.Element {
               </Pressable>
             ) : null}
 
-            {/* Add items button (owner or editor, Requirement 9.5 / 11.1) */}
-            {canEdit ? (
+            {/* Checklist mode toggle (owner only, Requirement 13.2). Keeps a
+                short text label ("Checklist"/"List") rather than an
+                unlabeled icon — an icon-only checkbox glyph doesn't tell a
+                sighted User what tapping it does, and `actionRow`'s
+                `flexWrap` (below) already lets this wrap onto a second line
+                on narrow devices instead of needing to sacrifice legibility
+                for width. */}
+            {isOwner ? (
               <Pressable
-                onPress={() => setRestaurantSearchModalVisible(true)}
-                style={[styles.actionButton, styles.addItemsBtn]}
+                onPress={() => void handleToggleChecklistMode()}
+                disabled={isTogglingChecklist}
+                style={({ pressed }) => [styles.actionButton, pressed && styles.actionButtonPressed]}
                 accessibilityRole="button"
-                accessibilityLabel="Add items to this list"
-                testID="food-list-add-items-btn"
+                accessibilityLabel={
+                  list.isChecklist ? 'Stop tracking as a checklist' : 'Track as a checklist'
+                }
+                testID="food-list-toggle-checklist-btn"
               >
-                <Ionicons name="add" size={20} color="#fff" />
-                <Text style={styles.addItemsBtnText}>Add items</Text>
+                <Ionicons
+                  name={list.isChecklist ? 'checkbox' : 'checkbox-outline'}
+                  size={20}
+                  color={list.isChecklist ? theme.color.primary : theme.color.textSecondary}
+                />
+                <Text style={styles.actionButtonText}>
+                  {list.isChecklist ? 'Checklist' : 'Make checklist'}
+                </Text>
               </Pressable>
             ) : null}
           </View>
         </Card>
 
-        {/* Section Header */}
+        {/* Progress row for Checklist Food List (Requirement 13.10) */}
+        {list.isChecklist ? (
+          <Card style={styles.progressCard} testID="food-list-progress-row">
+            <View style={styles.progressTextRow}>
+              <View style={styles.progressLabelGroup}>
+                <Ionicons name="checkbox-outline" size={18} color={theme.color.primary} />
+                <Text style={styles.progressLabel} testID="food-list-progress-text">
+                  {`${list.gottenCount ?? 0} of ${list.itemCount} tried`}
+                </Text>
+              </View>
+              <Text style={styles.progressPercent} testID="food-list-progress-percent">
+                {list.itemCount > 0
+                  ? `${Math.round(((list.gottenCount ?? 0) / list.itemCount) * 100)}%`
+                  : '0%'}
+              </Text>
+            </View>
+            <View style={styles.progressBarTrack} testID="food-list-progress-bar-track">
+              <View
+                style={[
+                  styles.progressBarFill,
+                  {
+                    width: `${
+                      list.itemCount > 0
+                        ? Math.min(100, Math.round(((list.gottenCount ?? 0) / list.itemCount) * 100))
+                        : 0
+                    }%`,
+                  },
+                ]}
+                testID="food-list-progress-bar"
+              />
+            </View>
+          </Card>
+        ) : null}
+
+        {/* Section Header — "Add items" lives here, beside the Dishes
+            title, rather than in the header card's Like/Share/Checklist
+            settings row above: it's the primary content-editing action for
+            this section, not a property of the list itself. */}
         <View style={styles.sectionHeaderRow}>
           <Text style={styles.sectionTitle}>
             Dishes ({list.items.length})
           </Text>
+
+          {canEdit ? (
+            <Pressable
+              onPress={() => setRestaurantSearchModalVisible(true)}
+              style={[styles.actionButton, styles.addItemsBtn]}
+              accessibilityRole="button"
+              accessibilityLabel="Add items to this list"
+              testID="food-list-add-items-btn"
+            >
+              <Ionicons name="add" size={20} color="#fff" />
+              <Text style={styles.addItemsBtnText}>Add items</Text>
+            </Pressable>
+          ) : null}
         </View>
 
-        {/* Items List */}
+        {/* Items List. Reordering (owner/editor only) is drag-to-reorder via
+            react-native-draggable-flatlist's drag handle, replacing the
+            original up/down tap arrows — those read as expand/collapse
+            controls rather than a reorder action, an unclear affordance
+            this amendment specifically addresses alongside the checklist
+            completion styling. */}
         {list.items.length === 0 ? (
           <View style={styles.emptyItemsWrap}>
             <Ionicons name="restaurant-outline" size={40} color={theme.color.textSecondary} />
@@ -394,86 +890,67 @@ export default function FoodListDetailScreen(): JSX.Element {
             ) : null}
           </View>
         ) : (
-          list.items.map((item, index) => {
-            const placeName = item.experienceName ?? item.locationName ?? 'Walt Disney World';
-            return (
-              <Card
-                key={item.foodItemId}
-                style={styles.itemCard}
-                testID={`food-list-item-row-${item.foodItemId}`}
-              >
-                <View style={styles.itemCardMain}>
-                  <View style={styles.itemDetails}>
-                    <Text style={styles.itemName}>{item.name}</Text>
-                    <Text style={styles.itemLocation}>{placeName}</Text>
-                    {item.price ? (
-                      <Text style={styles.itemPrice}>{item.price}</Text>
-                    ) : null}
-
-                    {/* Attribution label (Requirement 11.2) */}
-                    {showAttribution && item.addedByDisplayName ? (
-                      <Text
-                        style={styles.attributionLabel}
-                        testID={`food-list-attribution-${item.foodItemId}`}
-                      >
-                        added by {item.addedByDisplayName}
-                      </Text>
-                    ) : null}
-                  </View>
-
-                  {/* Actions for editor/owner (Requirement 11.1) */}
-                  {canEdit ? (
-                    <View style={styles.itemControls}>
-                      {/* Move controls */}
-                      <View style={styles.moveButtons}>
-                        <Pressable
-                          onPress={() => moveItem(index, 'up')}
-                          disabled={index === 0}
-                          style={[styles.moveBtn, index === 0 && styles.moveBtnDisabled]}
-                          accessibilityRole="button"
-                          accessibilityLabel={`Move ${item.name} up`}
-                          testID={`food-list-item-move-up-${item.foodItemId}`}
-                        >
-                          <Ionicons
-                            name="chevron-up"
-                            size={18}
-                            color={index === 0 ? theme.color.border : theme.color.textSecondary}
-                          />
-                        </Pressable>
-                        <Pressable
-                          onPress={() => moveItem(index, 'down')}
-                          disabled={index === list.items.length - 1}
-                          style={[styles.moveBtn, index === list.items.length - 1 && styles.moveBtnDisabled]}
-                          accessibilityRole="button"
-                          accessibilityLabel={`Move ${item.name} down`}
-                          testID={`food-list-item-move-down-${item.foodItemId}`}
-                        >
-                          <Ionicons
-                            name="chevron-down"
-                            size={18}
-                            color={index === list.items.length - 1 ? theme.color.border : theme.color.textSecondary}
-                          />
-                        </Pressable>
-                      </View>
-
-                      {/* Delete action */}
-                      <Pressable
-                        onPress={() => void handleDeleteItem(item.foodItemId)}
-                        style={styles.itemDeleteBtn}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Remove ${item.name} from list`}
-                        testID={`food-list-item-delete-${item.foodItemId}`}
-                      >
-                        <Ionicons name="trash-outline" size={18} color={theme.color.danger} />
-                      </Pressable>
-                    </View>
-                  ) : null}
-                </View>
-              </Card>
-            );
-          })
+          <NestableDraggableFlatList
+            data={[...list.items]}
+            keyExtractor={(item) => item.foodItemId}
+            scrollEnabled={false}
+            renderItem={renderDraggableItem}
+            onDragEnd={handleDragEnd}
+          />
         )}
-      </ScrollView>
+      </NestableScrollContainer>
+
+      {/* Optional rating prompt on checklist mark-gotten (Requirement 13.15) */}
+      <RateOnCheckoffPrompt
+        visible={ratingPromptItem !== null}
+        foodItemName={ratingPromptItem?.name ?? ''}
+        onSkip={() => {
+          if (ratingPromptItem) {
+            void handleMarkGotten(ratingPromptItem.foodItemId, ratingPromptItem.name);
+          }
+          setRatingPromptItem(null);
+        }}
+        onConfirm={(rating) => {
+          if (ratingPromptItem) {
+            void handleMarkGotten(ratingPromptItem.foodItemId, ratingPromptItem.name, rating);
+          }
+          setRatingPromptItem(null);
+        }}
+      />
+
+      {/* Update rating after the fact on completed checklist item (Requirement 13.23) */}
+      {editRatingItem ? (
+        <RateOnCheckoffPrompt
+          visible={Boolean(editRatingItem)}
+          foodItemName={editRatingItem.name}
+          initialRating={editRatingItem.initialRating}
+          onSkip={() => setEditRatingItem(null)}
+          onConfirm={(rating) => {
+            const target = editRatingItem;
+            setEditRatingItem(null);
+            if (target?.logId) {
+              void handleUpdateRating(target.foodItemId, target.logId, rating);
+            }
+          }}
+        />
+      ) : null}
+
+      {/* Action-scoped undo toasts for mark-gotten submissions (Requirement
+          13.16-13.18). Rendered as an overlay above the scroll content;
+          several can stack simultaneously, each acting only on its own
+          submission's log. */}
+      {activeUndoToasts.length > 0 ? (
+        <View style={styles.undoToastStack} pointerEvents="box-none">
+          {activeUndoToasts.map((toast) => (
+            <MarkGottenUndoToast
+              key={toast.toastKey}
+              itemName={toast.itemName}
+              onUndo={() => void handleUndoMarkGotten(toast)}
+              onDismiss={() => dismissUndoToast(toast.toastKey)}
+            />
+          ))}
+        </View>
+      ) : null}
 
       {/* Manage Sharing Sheet */}
       <ManageFoodListSharesSheet
@@ -531,26 +1008,7 @@ export default function FoodListDetailScreen(): JSX.Element {
               <FlatList
                 data={restaurantSearchQuery.data?.experiences ?? []}
                 keyExtractor={(item) => item.id}
-                renderItem={({ item }) => (
-                  <Pressable
-                    onPress={() => {
-                      setSelectedExperience(item);
-                      setRestaurantSearchModalVisible(false);
-                      setPickerModalVisible(true);
-                    }}
-                    style={({ pressed }) => [styles.restaurantRow, pressed && styles.restaurantRowPressed]}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Select restaurant ${item.name}`}
-                    testID={`restaurant-select-row-${item.id}`}
-                  >
-                    <Ionicons name="restaurant" size={20} color={theme.color.primary} />
-                    <View style={styles.restaurantRowText}>
-                      <Text style={styles.restaurantRowName}>{item.name}</Text>
-                      <Text style={styles.restaurantRowMeta}>{item.park}</Text>
-                    </View>
-                    <Ionicons name="chevron-forward" size={18} color={theme.color.textSecondary} />
-                  </Pressable>
-                )}
+                renderItem={renderRestaurantResult}
                 ListEmptyComponent={
                   <View style={styles.emptyWrap}>
                     <Text style={styles.emptyWrapText}>No restaurants found.</Text>
@@ -620,6 +1078,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 15,
   },
+  undoToastStack: {
+    position: 'absolute',
+    left: theme.spacing.md,
+    right: theme.spacing.md,
+    bottom: theme.spacing.lg,
+    gap: 8,
+  },
   staleNotice: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -635,6 +1100,72 @@ const styles = StyleSheet.create({
     color: theme.color.primary,
     fontWeight: '500',
     flex: 1,
+  },
+  celebrationCard: {
+    backgroundColor: '#fef3c7',
+    borderWidth: 1,
+    borderColor: '#f59e0b',
+    borderRadius: theme.radius.md,
+    padding: theme.spacing.md,
+    gap: 6,
+  },
+  celebrationTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  celebrationIconRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  celebrationTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#92400e',
+  },
+  celebrationDismissBtn: {
+    padding: 4,
+  },
+  celebrationMessage: {
+    fontSize: 14,
+    color: '#78350f',
+    fontWeight: '500',
+  },
+  progressCard: {
+    padding: theme.spacing.md,
+    gap: 8,
+  },
+  progressTextRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  progressLabelGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  progressLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.color.textPrimary,
+  },
+  progressPercent: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: theme.color.primary,
+  },
+  progressBarTrack: {
+    height: 8,
+    backgroundColor: theme.color.surfaceAlt,
+    borderRadius: theme.radius.pill,
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: '100%',
+    backgroundColor: theme.color.primary,
+    borderRadius: theme.radius.pill,
   },
   headerCard: {
     padding: theme.spacing.md,
@@ -664,6 +1195,7 @@ const styles = StyleSheet.create({
   },
   actionRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     gap: 10,
     marginTop: 4,
@@ -687,7 +1219,6 @@ const styles = StyleSheet.create({
   },
   addItemsBtn: {
     backgroundColor: theme.color.primary,
-    marginLeft: 'auto',
   },
   addItemsBtnText: {
     color: '#fff',
@@ -695,6 +1226,10 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
     marginTop: 8,
     marginBottom: 2,
   },
@@ -725,6 +1260,16 @@ const styles = StyleSheet.create({
   },
   itemCard: {
     padding: 12,
+    // `NestableDraggableFlatList` renders each row inside its own internal
+    // list, as ONE opaque child of `content` — the parent's `gap: 12`
+    // (which correctly spaced every row back when they were direct mapped
+    // siblings of `content`) no longer reaches inside it. Space rows here
+    // instead, directly on each row's own style.
+    marginBottom: 12,
+  },
+  itemCardDragging: {
+    opacity: 0.85,
+    ...theme.shadow.card,
   },
   itemCardMain: {
     flexDirection: 'row',
@@ -733,6 +1278,52 @@ const styles = StyleSheet.create({
   },
   itemDetails: {
     flex: 1,
+  },
+  itemDetailsPressed: {
+    opacity: 0.7,
+  },
+  // Trailing completion badge (Requirement 13.14, 13.19) — replaces the
+  // old leading circle indicator entirely. No leading position, no
+  // checkbox-shaped silhouette, so it never reads as a two-way toggle;
+  // it's purely a status readout, with undo handled solely by the
+  // separate action-scoped toast.
+  checkOffBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: theme.radius.pill,
+    borderWidth: 1,
+    borderColor: theme.color.primary,
+    backgroundColor: 'transparent',
+    marginLeft: 8,
+  },
+  checkOffBtnPressed: {
+    opacity: 0.7,
+    backgroundColor: 'rgba(91, 42, 134, 0.08)',
+  },
+  checkOffBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: theme.color.primary,
+  },
+  gottenBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: theme.radius.pill,
+    backgroundColor: 'rgba(91, 42, 134, 0.12)', // muted tint of theme.color.primary
+    marginLeft: 8,
+  },
+  gottenBadgePressed: {
+    opacity: 0.7,
+  },
+  gottenBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: theme.color.primary,
   },
   itemName: {
     fontSize: 15,
@@ -756,20 +1347,9 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     marginTop: 4,
   },
-  itemControls: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  moveButtons: {
-    flexDirection: 'column',
-    alignItems: 'center',
-  },
-  moveBtn: {
-    padding: 2,
-  },
-  moveBtnDisabled: {
-    opacity: 0.3,
+  dragHandle: {
+    padding: 6,
+    marginRight: 4,
   },
   itemDeleteBtn: {
     padding: 6,

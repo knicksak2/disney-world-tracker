@@ -85,7 +85,7 @@
  * 11.11, 11.12, 14.1, 14.2, 14.3, 14.4
  */
 
-import React from 'react';
+import React, { useCallback } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -629,6 +629,31 @@ export default function InboxScreen(): JSX.Element {
     );
   };
 
+  // Stable `renderItem` identity — an inline arrow literal passed to `FlatList`
+  // is recreated every render, which `FlatList`/`VirtualizedList` treats as a
+  // changed render function and forces broader re-render/re-measure work on
+  // every parent update even though `InboxRow` itself does no such thing (see
+  // `DestinationScreen`'s `renderRow` for the same fix). Every value the
+  // closure reads from the surrounding scope — `handleSelect`, `markShareRead`,
+  // `verifyingIds`, `rowMessages`, `handleDelete`, `deleteMutation` — is a
+  // dependency.
+  const renderRow = useCallback(
+    ({ item }: { item: InboxItemDTO }) => (
+      <InboxRow
+        item={item}
+        onSelect={() => handleSelect(item)}
+        onReacted={() => markShareRead(item.shareId)}
+        isVerifying={verifyingIds.has(item.shareId)}
+        message={rowMessages[item.shareId] ?? null}
+        onDelete={() => handleDelete(item)}
+        isDeleting={
+          deleteMutation.isPending && deleteMutation.variables === item.shareId
+        }
+      />
+    ),
+    [handleSelect, markShareRead, verifyingIds, rowMessages, handleDelete, deleteMutation],
+  );
+
   // -------------------------------------------------------------------------
   // Loading / error states
   // -------------------------------------------------------------------------
@@ -732,19 +757,7 @@ export default function InboxScreen(): JSX.Element {
             />
           </View>
         }
-        renderItem={({ item }) => (
-          <InboxRow
-            item={item}
-            onSelect={() => handleSelect(item)}
-            onReacted={() => markShareRead(item.shareId)}
-            isVerifying={verifyingIds.has(item.shareId)}
-            message={rowMessages[item.shareId] ?? null}
-            onDelete={() => handleDelete(item)}
-            isDeleting={
-              deleteMutation.isPending && deleteMutation.variables === item.shareId
-            }
-          />
-        )}
+        renderItem={renderRow}
       />
     </ScreenContainer>
   );

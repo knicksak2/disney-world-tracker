@@ -15,6 +15,7 @@ import { ZodError, z } from 'zod';
 import type { ErrorCode } from '@dwt/shared';
 import {
   createFoodItemLogInputSchema,
+  updateFoodItemLogInputSchema,
   createUserSubmittedLocationInputSchema,
   parkSchema,
   submitFoodItemInputSchema,
@@ -240,6 +241,31 @@ export function foodItemLogRoutes(
         await options.repo.deleteLog(userId, foodItemId, logId);
         reply.code(204);
         reply.send();
+      },
+    );
+
+    // PATCH /me/food-items/:foodItemId/logs/:logId (Requirement 4.5, 4.6)
+    app.patch(
+      '/me/food-items/:foodItemId/logs/:logId',
+      { preHandler: options.requireSession },
+      async (request) => {
+        const userId = requireUser(request);
+        const { foodItemId, logId } = parseOrAppError(
+          deleteLogParamsSchema,
+          request.params,
+        );
+        const body = parseOrAppError(
+          updateFoodItemLogInputSchema,
+          request.body,
+        );
+
+        return options.repo.updateLog({
+          userId,
+          foodItemId,
+          logId,
+          rating: body.rating,
+          note: body.note,
+        });
       },
     );
 

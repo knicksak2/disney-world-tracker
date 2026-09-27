@@ -133,7 +133,7 @@ import type { MainTabParamList } from '../navigation/RootNavigator';
  */
 type CatalogStackParamList = {
   CatalogList: undefined;
-  ExperienceDetail: { experienceId: string };
+  ExperienceDetail: { experienceId: string; initialLens?: 'today' | 'passport' };
 };
 
 const apiRequestMock = mockedApiRequest as jest.MockedFunction<
@@ -192,7 +192,10 @@ function renderCatalog(): ReturnType<typeof render> {
  * `experienceId` seeded as the screen's `initialParams`, so
  * `useRoute().params.experienceId` resolves to the test fixture id.
  */
-function renderExperienceDetail(experienceId: string): ReturnType<typeof render> {
+function renderExperienceDetail(
+  experienceId: string,
+  initialLens: 'today' | 'passport' = 'passport',
+): ReturnType<typeof render> {
   const Stack = createNativeStackNavigator<CatalogStackParamList>();
   return renderWithClient(
     <NavigationContainer>
@@ -200,7 +203,7 @@ function renderExperienceDetail(experienceId: string): ReturnType<typeof render>
         <Stack.Screen
           name="ExperienceDetail"
           component={ExperienceDetailScreen}
-          initialParams={{ experienceId }}
+          initialParams={{ experienceId, initialLens }}
         />
       </Stack.Navigator>
     </NavigationContainer>,

@@ -104,7 +104,7 @@ import ExperienceDetailScreen from '../ExperienceDetailScreen';
 import { ApiError, apiRequest as mockedApiRequest } from '../../../api/client';
 
 type CatalogStackParamList = {
-  ExperienceDetail: { experienceId: string };
+  ExperienceDetail: { experienceId: string; initialLens?: 'today' | 'passport' };
 };
 
 const apiRequestMock = mockedApiRequest as jest.MockedFunction<
@@ -231,6 +231,15 @@ function stubDetail(detail: DetailFixture, options: StubOptions = {}): void {
     if (path === `/experiences/${id}/aggregate-rating`) {
       return aggregate;
     }
+    if (path.includes('/food-item-logs')) {
+      return [];
+    }
+    if (path.startsWith('/me/trips')) {
+      return [];
+    }
+    if (path.endsWith('/logs')) {
+      return { repeatCount: 0, logs: [] };
+    }
     throw new Error(`unexpected call to ${path}`);
   });
 }
@@ -244,7 +253,10 @@ function makeQueryClient(): QueryClient {
   });
 }
 
-function renderDetail(experienceId: string): ReturnType<typeof render> {
+function renderDetail(
+  experienceId: string,
+  initialLens: 'today' | 'passport' = 'passport',
+): ReturnType<typeof render> {
   const Stack = createNativeStackNavigator<CatalogStackParamList>();
   const client = makeQueryClient();
   return render(
@@ -254,7 +266,7 @@ function renderDetail(experienceId: string): ReturnType<typeof render> {
           <Stack.Screen
             name="ExperienceDetail"
             component={ExperienceDetailScreen}
-            initialParams={{ experienceId }}
+            initialParams={{ experienceId, initialLens }}
           />
         </Stack.Navigator>
       </NavigationContainer>
@@ -459,7 +471,7 @@ describe('ExperienceDetailScreen preserved behaviors (R8.1, R8.2, R8.4, R8.5, R8
       ],
     });
 
-    renderDetail(experienceId);
+    renderDetail(experienceId, 'today');
 
     // R8.7: the pressable menu summary card renders for the restaurant.
     const card = await screen.findByTestId('menu-summary-card');

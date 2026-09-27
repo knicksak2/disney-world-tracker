@@ -166,6 +166,30 @@ export default function TripsListScreen({ navigation }: Props): JSX.Element {
     }, []),
   );
 
+  // Stable `renderItem` identity: an inline arrow literal passed to `FlatList`
+  // is recreated every render, which `FlatList`/`VirtualizedList` treats as a
+  // changed render function and forces the whole visible window to
+  // re-render/re-measure even though the row components below are otherwise
+  // cheap to re-render. See `DestinationScreen`'s `renderRow` for the same fix.
+  // Defined here (before the loading/error early returns below) rather than
+  // next to `rows`, since hooks must run unconditionally on every render.
+  const renderRow = useCallback(
+    ({ item }: { item: Row }) => {
+      if (item.kind === 'header') {
+        return <SectionHeader label={item.label} />;
+      }
+      return (
+        <TripRow
+          trip={item.trip}
+          onPress={() => {
+            navigation.navigate('TripDetail', { tripId: item.trip.id });
+          }}
+        />
+      );
+    },
+    [navigation],
+  );
+
   const tripsQuery = useQuery<TripsListResponse, ApiError>({
     queryKey: tripsListKeys.list(),
     // A retrieval that fails or exceeds the 10s ceiling must surface as an
@@ -404,19 +428,7 @@ export default function TripsListScreen({ navigation }: Props): JSX.Element {
         <FlatList
           data={rows}
           keyExtractor={(row) => row.id}
-          renderItem={({ item }) => {
-            if (item.kind === 'header') {
-              return <SectionHeader label={item.label} />;
-            }
-            return (
-              <TripRow
-                trip={item.trip}
-                onPress={() => {
-                  navigation.navigate('TripDetail', { tripId: item.trip.id });
-                }}
-              />
-            );
-          }}
+          renderItem={renderRow}
           contentContainerStyle={styles.listContent}
         />
       )}

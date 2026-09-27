@@ -342,4 +342,62 @@ describe('MyFoodHistoryScreen', () => {
 
     expect(screen.getByText('No food logs yet')).toBeTruthy();
   });
+
+  test('R8.11: tapping "+ Add rating" on an unrated log opens prompt and submits rating via PATCH', async () => {
+    apiRequestMock.mockResolvedValue([...MOCK_LOGS]);
+
+    renderWithClient();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('food-history-add-rating-log-4')).toBeTruthy();
+      expect(screen.getByText('+ Add rating')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByTestId('food-history-add-rating-log-4'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('rate-on-checkoff-prompt')).toBeTruthy();
+      expect(screen.getAllByText('Spring Roll').length).toBeGreaterThanOrEqual(1);
+    });
+
+    fireEvent.press(screen.getByTestId('rate-on-checkoff-rating-btn-8'));
+    fireEvent.press(screen.getByTestId('rate-on-checkoff-confirm-btn'));
+
+    await waitFor(() => {
+      expect(apiRequestMock).toHaveBeenCalledWith(
+        'PATCH',
+        '/me/food-items/item-4/logs/log-4',
+        { rating: 8 },
+      );
+    });
+  });
+
+  test('R8.11: tapping existing rating badge opens prompt with initial rating and submits updated rating via PATCH', async () => {
+    apiRequestMock.mockResolvedValue([...MOCK_LOGS]);
+
+    renderWithClient();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('food-history-rating-log-1')).toBeTruthy();
+      expect(screen.getByText('9/10')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByTestId('food-history-rating-log-1'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('rate-on-checkoff-prompt')).toBeTruthy();
+      expect(screen.getByText('Update rating (1–10)')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByTestId('rate-on-checkoff-rating-btn-10'));
+    fireEvent.press(screen.getByTestId('rate-on-checkoff-confirm-btn'));
+
+    await waitFor(() => {
+      expect(apiRequestMock).toHaveBeenCalledWith(
+        'PATCH',
+        '/me/food-items/item-1/logs/log-1',
+        { rating: 10 },
+      );
+    });
+  });
 });

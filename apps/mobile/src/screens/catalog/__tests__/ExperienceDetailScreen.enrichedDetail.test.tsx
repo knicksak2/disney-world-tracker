@@ -38,7 +38,7 @@ import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 
 // ---------------------------------------------------------------------------
 // Mocks (declared before the modules under test are imported).
@@ -85,7 +85,7 @@ import ExperienceDetailScreen from '../ExperienceDetailScreen';
 import { ApiError, apiRequest as mockedApiRequest } from '../../../api/client';
 
 type CatalogStackParamList = {
-  ExperienceDetail: { experienceId: string };
+  ExperienceDetail: { experienceId: string; initialLens?: 'today' | 'passport' };
 };
 
 const apiRequestMock = mockedApiRequest as jest.MockedFunction<
@@ -187,7 +187,10 @@ function makeQueryClient(): QueryClient {
   });
 }
 
-function renderDetail(experienceId: string): ReturnType<typeof render> {
+function renderDetail(
+  experienceId: string,
+  initialLens: 'today' | 'passport' = 'today',
+): ReturnType<typeof render> {
   const Stack = createNativeStackNavigator<CatalogStackParamList>();
   const client = makeQueryClient();
   return render(
@@ -197,7 +200,7 @@ function renderDetail(experienceId: string): ReturnType<typeof render> {
           <Stack.Screen
             name="ExperienceDetail"
             component={ExperienceDetailScreen}
-            initialParams={{ experienceId }}
+            initialParams={{ experienceId, initialLens }}
           />
         </Stack.Navigator>
       </NavigationContainer>
@@ -257,14 +260,6 @@ describe('ExperienceDetailScreen grouped enrichment layout', () => {
     expect(screen.getByTestId('experience-info-tag-park')).toBeTruthy();
     expect(screen.getByTestId('experience-info-tag-land')).toBeTruthy();
 
-    // The Accessibility group surfaces one badge per persisted value.
-    expect(
-      screen.getByTestId('experience-tag-group-accessibility'),
-    ).toBeTruthy();
-    expect(
-      screen.getAllByTestId('experience-info-tag-accessibility'),
-    ).toHaveLength(2);
-
     // Raw coordinates are no longer a tag; valid coordinates power the
     // Get directions action inside the Location group instead (R4.2).
     expect(screen.queryByTestId('experience-info-tag-coordinates')).toBeNull();
@@ -273,21 +268,22 @@ describe('ExperienceDetailScreen grouped enrichment layout', () => {
     // This ThemePark Experience references no Resort, so no resort tag.
     expect(screen.queryByTestId('experience-info-tag-resort')).toBeNull();
 
-    // Fixed relative order (R1.2, R7.1): park before land within the Location
-    // group, and the Location group renders above the Accessibility group.
+    // Fixed relative order (R1.2, R7.1): park before land within the Location group
     const park = orderOf('experience-info-tag-park');
     const land = orderOf('experience-info-tag-land');
-    const locationGroup = orderOf('experience-location-group');
-    const accessibilityGroup = orderOf('experience-tag-group-accessibility');
-
     expect(park).toBeGreaterThanOrEqual(0);
     expect(park).toBeLessThan(land);
-    expect(locationGroup).toBeGreaterThanOrEqual(0);
-    expect(locationGroup).toBeLessThan(accessibilityGroup);
 
     // The visible values carry the persisted enrichment verbatim.
     expect(screen.getAllByText('Magic Kingdom').length).toBeGreaterThan(0);
     expect(screen.getByText('Tomorrowland')).toBeTruthy();
+
+    // Switch to My Passport & Lore lens to verify Accessibility group (R11.5, R17.1)
+    fireEvent.press(screen.getByTestId('lens-tab-passport'));
+    await screen.findByTestId('experience-tag-group-accessibility');
+    expect(
+      screen.getAllByTestId('experience-info-tag-accessibility'),
+    ).toHaveLength(2);
     expect(screen.getByText('Wheelchair Accessible')).toBeTruthy();
     expect(screen.getByText('Service Animals')).toBeTruthy();
   });
@@ -317,8 +313,9 @@ describe('ExperienceDetailScreen grouped enrichment layout', () => {
     await screen.findByTestId('experience-location-group');
 
     // The resolved Resort name renders as the resort tag within the Location group.
-    expect(screen.getByTestId('experience-info-tag-resort')).toBeTruthy();
-    expect(screen.getByText('Polynesian Village Resort')).toBeTruthy();
+    const resortTag = screen.getByTestId('experience-info-tag-resort');
+    expect(resortTag).toBeTruthy();
+    expect(within(resortTag).getByText('Polynesian Village Resort')).toBeTruthy();
 
     // The resort tag lives inside the Location group card.
     const locationGroup = orderOf('experience-location-group');
@@ -347,8 +344,8 @@ describe('ExperienceDetailScreen grouped enrichment layout', () => {
 
     renderDetail(experienceId);
 
-    // The static detail still renders (its description is shown)...
-    await screen.findByText('A classic audio-animatronic revue.');
+    // The static detail still renders (Location group is shown)...
+    await screen.findByTestId('experience-location-group');
 
     // ...the only Location enrichment is the park, so the Location group shows
     // the park tag but none of land / resort / resort-area (R1.6).
@@ -362,7 +359,9 @@ describe('ExperienceDetailScreen grouped enrichment layout', () => {
     expect(screen.queryByTestId('experience-info-tag-coordinates')).toBeNull();
     expect(screen.queryByTestId('experience-get-directions')).toBeNull();
 
-    // The optional Tag_Group cards are omitted entirely when they have no tags.
+    // Switch to Passport lens to verify description renders and optional Tag_Group cards are omitted entirely
+    fireEvent.press(screen.getByTestId('lens-tab-passport'));
+    await screen.findByText('A classic audio-animatronic revue.');
     expect(screen.queryByTestId('experience-tag-group-goodToKnow')).toBeNull();
     expect(screen.queryByTestId('experience-tag-group-accessibility')).toBeNull();
     expect(screen.queryByTestId('experience-tag-group-goodFor')).toBeNull();
@@ -421,7 +420,7 @@ describe('ExperienceDetailScreen grouped enrichment layout', () => {
     renderDetail(experienceId);
 
     // Wait for a stable, always-present section before asserting omissions.
-    await screen.findByTestId('your-visit-card');
+    await screen.findByTestId('experience-detail');
 
     // The resort tag is omitted because the resolved name is unavailable.
     expect(screen.queryByTestId('experience-info-tag-resort')).toBeNull();
@@ -446,7 +445,7 @@ describe('ExperienceDetailScreen grouped enrichment layout', () => {
       land: 'Liberty Square',
     });
 
-    renderDetail(experienceId);
+    renderDetail(experienceId, 'passport');
 
     // About / description section.
     await screen.findByText('A haunted doombuggy dark ride.');
@@ -456,10 +455,10 @@ describe('ExperienceDetailScreen grouped enrichment layout', () => {
     expect(screen.getByTestId('experience-park-badge')).toBeTruthy();
     expect(screen.getByTestId('experience-category-badge')).toBeTruthy();
 
-    // The completion, rating, and note controls now live in a single
-    // consolidated "Your visit" card (R6.1); the community section persists.
-    expect(screen.getByTestId('your-visit-card')).toBeTruthy();
-    expect(screen.getByText('Your visit')).toBeTruthy();
+    // R17: ParkPassportCard supersedes the consolidated "Your visit" card layout
+    // inside My_Passport_And_Lore_Lens; the community section persists.
+    expect(screen.getByTestId('park-passport-card')).toBeTruthy();
+    expect(screen.getByText('Park Passport')).toBeTruthy();
     expect(screen.getByText('Community Rating')).toBeTruthy();
 
     // The empty personal-section states still resolve through their own paths.

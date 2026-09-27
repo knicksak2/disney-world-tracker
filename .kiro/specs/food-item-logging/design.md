@@ -49,9 +49,9 @@ A new top-level service, sibling to `tracking/`, `sharing/`, `pins/` — not nes
 
 - `repo.ts`:
   - `FoodItemRepo` — `upsertFoodItemsFromMenus(experienceId, menus, now)`, `listFoodItems(experienceId)` (computes `currentlyOnMenu` per item, see below), `submitFoodItem(experienceId, userId, name)`, `listLocationFoodItems(locationId)`, `submitLocationFoodItem(locationId, userId, name)`, `findFoodItem(foodItemId)`.
-  - `FoodItemLogRepo` — `addLog(input: CreateFoodItemLogInput)`, `getLogHistory(userId, foodItemId)`, `deleteLog(userId, foodItemId, logId)`, and (Requirement 8, 9 — added by this amendment) `getAllLogsForUser(userId)`, `getLogsForUserAtScope(userId, scope: { experienceId?: string; locationId?: string })` — see "My Food History and Restaurant-Scoped Logged Items" below.
+  - `FoodItemLogRepo` — `addLog(input: CreateFoodItemLogInput)`, `getLogHistory(userId, foodItemId)`, `deleteLog(userId, foodItemId, logId)`, `updateLog(input: UpdateFoodItemLogRepoInput)`, and (Requirement 8, 9 — added by this amendment) `getAllLogsForUser(userId)`, `getLogsForUserAtScope(userId, scope: { experienceId?: string; locationId?: string })` — see "My Food History and Restaurant-Scoped Logged Items" below.
   - `UserSubmittedLocationRepo` — `createLocation(userId, name, park)` (case-insensitive exact-match collision → `AppError('location_duplicate', ..., { details: { existingId } })`), `suggestLocations(park, name)` (trigram `similarity()` query, see below), `findLocation(locationId)`.
-- `routes.ts`: Fastify routes for `/experiences/:id/food-items`, `/me/food-items/:foodItemId/logs`, `/locations`, `/locations/suggest`, `/locations/:id/food-items`, and (Requirement 8, 9) `/me/food-item-logs`, `/experiences/:id/food-item-logs/mine`, `/locations/:id/food-item-logs/mine`.
+- `routes.ts`: Fastify routes for `/experiences/:id/food-items`, `/me/food-items/:foodItemId/logs`, `PATCH /me/food-items/:foodItemId/logs/:logId`, `/locations`, `/locations/suggest`, `/locations/:id/food-items`, and (Requirement 8, 9) `/me/food-item-logs`, `/experiences/:id/food-item-logs/mine`, `/locations/:id/food-item-logs/mine`.
 - Extends `MenuRetrievalRepo` (in `apps/api/src/services/catalog/menuRetrieval.ts`) with the new seeding call — see "Menu_Retrieval Integration" below.
 
 ### Menu_Retrieval Integration
@@ -104,6 +104,7 @@ export interface FoodItemLogRepo {
   addLog(input: CreateFoodItemLogRepoInput): Promise<FoodItemLogDTO>;
   getLogHistory(userId: string, foodItemId: string): Promise<FoodItemLogHistoryDTO>;
   deleteLog(userId: string, foodItemId: string, logId: string): Promise<void>;
+  updateLog(input: UpdateFoodItemLogRepoInput): Promise<FoodItemLogDTO>;
   // NEW:
   getAllLogsForUser(userId: string): Promise<readonly FoodItemLogWithContextDTO[]>;
   getLogsForUserAtScope(
@@ -343,6 +344,11 @@ export interface FoodItemLogHistoryDTO {
 export interface CreateFoodItemLogInputDTO {
   readonly visitedOn: string; // YYYY-MM-DD
   readonly userTz: string;
+  readonly rating?: number | null;
+  readonly note?: string | null;
+}
+
+export interface UpdateFoodItemLogInputDTO {
   readonly rating?: number | null;
   readonly note?: string | null;
 }

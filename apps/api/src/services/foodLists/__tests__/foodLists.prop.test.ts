@@ -115,6 +115,7 @@ describe('foodLists repository properties (fast-check)', () => {
     applyMigration(db, '0001_init.sql');
     applyMigration(db, '0040_food_item_logging.sql');
     applyMigration(db, '0041_food_lists.sql');
+    applyMigration(db, '0047_food_list_checklist.sql');
 
     const { Pool: PgMemPool } = db.adapters.createPg();
     rawPool = new PgMemPool() as unknown as DbPool;

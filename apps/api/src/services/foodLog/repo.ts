@@ -59,6 +59,14 @@ export interface FoodItemRepo {
   findFoodItem(foodItemId: string): Promise<FoodItemDTO | null>;
 }
 
+export interface UpdateFoodItemLogRepoInput {
+  readonly userId: string;
+  readonly foodItemId: string;
+  readonly logId: string;
+  readonly rating?: number | null | undefined;
+  readonly note?: string | null | undefined;
+}
+
 export interface FoodItemLogRepo {
   addLog(input: CreateFoodItemLogRepoInput): Promise<FoodItemLogDTO>;
   getLogHistory(
@@ -70,6 +78,9 @@ export interface FoodItemLogRepo {
     foodItemId: string,
     logId: string,
   ): Promise<void>;
+  updateLog(
+    input: UpdateFoodItemLogRepoInput,
+  ): Promise<FoodItemLogDTO>;
   getAllLogsForUser(
     userId: string,
   ): Promise<readonly FoodItemLogWithContextDTO[]>;
@@ -510,6 +521,54 @@ export function createFoodItemLogRepo(options: {
       if (res.rows.length === 0) {
         throw new AppError('food_log_not_found', 'Food item log not found');
       }
+    },
+
+    async updateLog(
+      input: UpdateFoodItemLogRepoInput,
+    ): Promise<FoodItemLogDTO> {
+      const checkRes = await pool.query<{ id: string }>(
+        `SELECT id FROM food_item_logs
+          WHERE id = $1 AND user_id = $2 AND food_item_id = $3`,
+        [input.logId, input.userId, input.foodItemId],
+      );
+
+      if (checkRes.rows.length === 0) {
+        throw new AppError('food_log_not_found', 'Food item log not found');
+      }
+
+      const updates: string[] = [];
+      const values: unknown[] = [input.logId, input.userId, input.foodItemId];
+      let paramIdx = 4;
+
+      if (input.rating !== undefined) {
+        updates.push(`rating = $${paramIdx++}`);
+        values.push(input.rating);
+      }
+
+      if (input.note !== undefined) {
+        updates.push(`note = $${paramIdx++}`);
+        values.push(input.note === null ? null : input.note.trim() || null);
+      }
+
+      if (updates.length === 0) {
+        const existing = await pool.query<FoodItemLogRow>(
+          `SELECT id, user_id, food_item_id, visited_on, user_tz, logged_at, rating, note
+             FROM food_item_logs
+            WHERE id = $1`,
+          [input.logId],
+        );
+        return mapFoodItemLogRow(existing.rows[0]!);
+      }
+
+      const res = await pool.query<FoodItemLogRow>(
+        `UPDATE food_item_logs
+            SET ${updates.join(', ')}
+          WHERE id = $1 AND user_id = $2 AND food_item_id = $3
+         RETURNING id, user_id, food_item_id, visited_on, user_tz, logged_at, rating, note`,
+        values,
+      );
+
+      return mapFoodItemLogRow(res.rows[0]!);
     },
 
     async getAllLogsForUser(

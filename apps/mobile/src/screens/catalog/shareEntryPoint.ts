@@ -43,7 +43,10 @@ export type ExperienceShareParams = Extract<
 export interface ShareableExperienceDetail {
   readonly id: string;
   readonly name: string;
-  readonly park: Park;
+  // `null` for a Resort's own representing row (no owning Park); `resortArea`
+  // is the fallback location for that case.
+  readonly park: Park | null;
+  readonly resortArea?: string | null;
   readonly category: ExperienceCategory;
 }
 
@@ -99,7 +102,8 @@ export function buildExperienceShareParams(
     kind: 'experience';
     experienceId: string;
     experienceName: string;
-    park: Park;
+    park: Park | null;
+    resortArea?: string | null;
     category: ExperienceCategory;
     rating?: number;
     note?: string;
@@ -110,6 +114,12 @@ export function buildExperienceShareParams(
     park: detail.park,
     category: detail.category,
   };
+
+  // Only set when the detail actually carries one, so a non-Resort projection
+  // keeps its exact pre-existing key set (no `resortArea: undefined` noise).
+  if (detail.resortArea !== undefined) {
+    params.resortArea = detail.resortArea;
+  }
 
   if (rating !== null) {
     params.rating = normalizeRating(rating.value);

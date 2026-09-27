@@ -226,7 +226,11 @@ type ShareComposerParams =
       kind: 'experience';
       experienceId: string;
       experienceName: string;
-      park: Park;
+      // `null` for a Resort's own representing row, which has no owning Park
+      // (R4.14, R4.15 of experience-detail-redesign); the preview falls back
+      // to `resortArea` in that case (R2.3).
+      park: Park | null;
+      resortArea?: string | null;
       category: ExperienceCategory;
       // Present only when the viewer has the value; drives the include/exclude toggles (R2.14).
       rating?: number;          // whole number 1..10 (R1.4)
@@ -243,8 +247,10 @@ type ShareComposerParams =
 Behavior changes to `ShareComposerScreen.tsx`:
 
 - Derives payload kind from `route.params.kind`; **no** kind picker (R2.1).
-- Renders a **read-only preview** (R2.2): for `experience`, the name/Park/`Experience_Category` and each
-  included value (R2.3); for `progress`, the overall percentage to one decimal (R2.4).
+- Renders a **read-only preview** (R2.2): for `experience`, the name/`Experience_Category` and location —
+  the Park, or for a Resort (`park === null`) the `resortArea` falling back to the Park then omitting the
+  location segment entirely — and each included value (R2.3); for `progress`, the overall percentage to
+  one decimal (R2.4).
 - **No** free-text Experience identifier input (R2.5); the `experienceId` comes from params.
 - Recipient picker over `GET /me/friends`; selection allowed for 1–50 friends (R2.6). Send is disabled
   while the count is `0` or `>50` (R2.7), while submitting (R2.9), and while the User has zero friends,
@@ -564,12 +570,20 @@ enabled if and only if none of its required content is still loading.
 
 *For any* Experience detail with any viewer Rating (integer 1–10) and any viewer Note (≤2000 chars),
 activating the `Experience_Detail_View` entry point produces `experience` composer params carrying that
-same `experienceId`, name, Park, `Experience_Category`, the same integer Rating, and the same Note text;
-and *for any* completion data, activating the `Progress_Screen` entry point produces `progress` params
-whose overall, per-Park, and per-`Experience_Category` percentages equal the displayed one-decimal
-values.
+same `experienceId`, name, Park (`null` for a Resort's own representing row), `resortArea`,
+`Experience_Category`, the same integer Rating, and the same Note text; and *for any* completion data,
+activating the `Progress_Screen` entry point produces `progress` params whose overall, per-Park, and
+per-`Experience_Category` percentages equal the displayed one-decimal values.
 
 **Validates: Requirements 1.3, 1.4, 1.5, 1.8**
+
+### Property 2a: Composer preview falls back from Park to Resort_Area, never rendering a blank location
+
+*For any* `experience` composer params, the preview's location segment is: the Park when non-null; else
+`resortArea` when present and non-empty; else omitted entirely (never a literal `"null"` or blank
+location segment).
+
+**Validates: Requirements 2.3**
 
 ### Property 3: Composer send control is gated by recipient count
 

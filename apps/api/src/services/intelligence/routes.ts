@@ -40,6 +40,43 @@ function parseOrAppError<T>(schema: z.ZodType<T>, input: unknown): T {
   }
 }
 
+/**
+ * Concurrency cap for `GET /crowd-calendar`'s per-day fan-out below the shared
+ * DB pool's `max: 10` (`db/pool.ts`), so one calendar request cannot occupy
+ * every pooled connection and starve other concurrent requests on this
+ * single-process API.
+ */
+const CROWD_CALENDAR_CONCURRENCY = 6;
+
+/**
+ * Maps `items` through the async `fn`, running at most `limit` invocations
+ * concurrently, and returns results in the same order as `items` regardless of
+ * completion order. A minimal worker-pool implementation — no new dependency
+ * — since bounded concurrency (not full sequential, not unbounded
+ * `Promise.all`) is all `GET /crowd-calendar` needs.
+ */
+async function mapWithConcurrency<T, R>(
+  items: readonly T[],
+  limit: number,
+  fn: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let nextIndex = 0;
+
+  async function worker(): Promise<void> {
+    while (true) {
+      const index = nextIndex;
+      nextIndex += 1;
+      if (index >= items.length) return;
+      results[index] = await fn(items[index]!, index);
+    }
+  }
+
+  const workerCount = Math.min(limit, items.length);
+  await Promise.all(Array.from({ length: workerCount }, () => worker()));
+  return results;
+}
+
 export function intelligenceRoutes(options: IntelligenceRoutesOptions): FastifyPluginAsync {
   return async function (app: FastifyInstance): Promise<void> {
     
@@ -93,14 +130,27 @@ export function intelligenceRoutes(options: IntelligenceRoutesOptions): FastifyP
       }
 
       const selectedPark = query.park ?? 'Magic Kingdom';
-      const days = [];
+      const dates: Date[] = [];
       const current = new Date(fromDate);
       while (current <= toDate) {
-        const day = await options.predictionService.getCrowdCalendarDay(selectedPark, new Date(current));
-        days.push(day);
+        dates.push(new Date(current));
         current.setUTCDate(current.getUTCDate() + 1);
       }
-      
+
+      // Each day's `getCrowdCalendarDay` was previously awaited one at a time —
+      // for the mobile Crowd_Calendar's ~70-day query window that meant up to 70
+      // sequential round trips of DB work, which is what made the screen slow
+      // to load. The days are independent (each computes its own park+date
+      // forecast/signals), so they are fetched with bounded concurrency instead
+      // of full sequential `await`. Bounded — not `Promise.all` over the whole
+      // range — so a 90-day request doesn't fire more concurrent DB work than
+      // the process's connection pool (`db/pool.ts`, `max: 10`) can actually use
+      // at once; excess would just queue at the pool level anyway, but bounding
+      // it explicitly keeps a single request from monopolizing the shared pool.
+      const days = await mapWithConcurrency(dates, CROWD_CALENDAR_CONCURRENCY, (date) =>
+        options.predictionService.getCrowdCalendarDay(selectedPark, date),
+      );
+
       return { days };
     });
 

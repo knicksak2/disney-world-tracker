@@ -160,6 +160,9 @@ export function foodListRoutes(options: FoodListRoutesOptions): FastifyPluginAsy
         if (input.visibility !== undefined) {
           updated = await repo.setVisibility(id, userId, input.visibility);
         }
+        if (input.isChecklist !== undefined) {
+          updated = await repo.setChecklistMode(id, userId, input.isChecklist);
+        }
         if (!updated) {
           const detail = await repo.getListDetail(id, userId);
           return detail;

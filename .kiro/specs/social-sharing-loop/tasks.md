@@ -290,6 +290,13 @@ MVP; core implementation sub-tasks are not.
 - [x] 27. Final checkpoint — Phase 3
   - Ensure all tests pass, ask the user if questions arise.
 
+- [x] 28. Fix the `experience` composer preview's location for a shared Resort
+  - [x] 28.1 Fall back the preview's location segment from Park to Resort_Area
+    - `ShareableExperienceDetail.park` / `ExperienceShareParams.park` widened to `Park | null` to match the real `ExperienceDetailDTO` contract — a Resort's own representing row carries no owning Park (`experience-detail-redesign` R4.14/R4.15) — so the previously non-null `park: Park` silently allowed `null` to reach a preview typed and coded to assume a real Park, rendering a literal `"null"` location segment for any shared Resort
+    - Thread `resortArea` through `buildExperienceShareParams` (task 4.1's projection, `shareEntryPoint.ts`) and `ShareComposerScreen.tsx`'s preview so the location segment falls back Park → `resortArea` → omitted entirely, never a blank or literal `"null"` segment
+    - **Property 2a: Composer preview falls back from Park to Resort_Area, never rendering a blank location**
+    - _Requirements: 2.3_
+
 ## Notes
 
 - Tasks marked with `*` are optional test tasks and can be skipped for a faster MVP.
@@ -313,7 +320,8 @@ MVP; core implementation sub-tasks are not.
     { "id": 7, "tasks": ["18.2", "19.2", "20.2", "21.3", "24.1"] },
     { "id": 8, "tasks": ["24.2", "24.3", "25.1"] },
     { "id": 9, "tasks": ["25.2", "25.3", "26.1"] },
-    { "id": 10, "tasks": ["26.2"] }
+    { "id": 10, "tasks": ["26.2"] },
+    { "id": 11, "tasks": ["28.1"] }
   ]
 }
 ```

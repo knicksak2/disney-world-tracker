@@ -826,6 +826,72 @@ export default function PinShowcaseScreen(props: PinShowcaseScreenProps): React.
     return list;
   }, [unplaced, tierFilter, searchQuery, sortOption]);
 
+  // Stable `renderItem` identity: an inline arrow literal passed to `FlatList`
+  // is recreated every render, which `FlatList`/`VirtualizedList` treats as a
+  // changed render function and forces broader re-render/re-measure work on
+  // every parent update (search/sort/filter changes) — producing the "large
+  // list that is slow to update" warning even though the tray card content
+  // below has no memoized wrapper of its own. Wrapping in `useCallback` keeps
+  // the same function identity across renders. Matches the pattern used as a
+  // fix in `apps/mobile/src/screens/catalog/DestinationScreen.tsx`.
+  const renderUnplacedPin = useCallback(
+    ({ item: pinId }: { item: string }) => {
+      const p = CATALOG.get(pinId);
+      const isBoardFull = placements.length >= SHOWCASE_MAX_PINS;
+      return (
+        <View testID={`pin-showcase-card-${pinId}`} style={styles.pinCard}>
+          <View style={styles.cardHeader}>
+            <Badge
+              label={TIER_LABEL[p?.tier ?? 'bronze']}
+              color={TIER_COLOR[p?.tier ?? 'bronze']}
+            />
+            <Text style={styles.cardTrackText} numberOfLines={1}>
+              {p ? TRACK_LABEL[p.track] : ''}
+            </Text>
+          </View>
+          <View style={styles.cardPinWrap}>
+            <PinView
+              pinId={pinId}
+              tier={p?.tier ?? 'bronze'}
+              unlocked={true}
+              size={SHOWCASE_PIN_SIZE}
+            />
+          </View>
+          <Text style={styles.cardPinName} numberOfLines={2}>
+            {p?.name ?? pinId}
+          </Text>
+          <Pressable
+            testID={`pin-showcase-card-place-${pinId}`}
+            onPress={() => handleTapPlace(pinId)}
+            disabled={isBoardFull}
+            style={({ pressed }) => [
+              styles.cardPlaceBtn,
+              isBoardFull && styles.cardPlaceBtnDisabled,
+              pressed && styles.btnPressed,
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel={`Place ${p?.name ?? pinId} on board`}
+          >
+            <Ionicons
+              name={isBoardFull ? 'lock-closed' : 'add-circle-outline'}
+              size={16}
+              color={isBoardFull ? theme.color.textSecondary : theme.color.textOnPrimary}
+            />
+            <Text
+              style={[
+                styles.cardPlaceBtnText,
+                isBoardFull && styles.cardPlaceBtnTextDisabled,
+              ]}
+            >
+              {isBoardFull ? 'Board Full' : 'Place on Board'}
+            </Text>
+          </Pressable>
+        </View>
+      );
+    },
+    [placements, handleTapPlace],
+  );
+
   const headerNavProps = nav ? { onBack: () => (nav as any).goBack() } : {};
   const headerActionProps = !isReadOnly
     ? {
@@ -1221,60 +1287,7 @@ export default function PinShowcaseScreen(props: PinShowcaseScreenProps): React.
                   numColumns={2}
                   contentContainerStyle={styles.modalGridContent}
                   columnWrapperStyle={styles.modalGridRow}
-                  renderItem={({ item: pinId }) => {
-                    const p = CATALOG.get(pinId);
-                    const isBoardFull = placements.length >= SHOWCASE_MAX_PINS;
-                    return (
-                      <View testID={`pin-showcase-card-${pinId}`} style={styles.pinCard}>
-                        <View style={styles.cardHeader}>
-                          <Badge
-                            label={TIER_LABEL[p?.tier ?? 'bronze']}
-                            color={TIER_COLOR[p?.tier ?? 'bronze']}
-                          />
-                          <Text style={styles.cardTrackText} numberOfLines={1}>
-                            {p ? TRACK_LABEL[p.track] : ''}
-                          </Text>
-                        </View>
-                        <View style={styles.cardPinWrap}>
-                          <PinView
-                            pinId={pinId}
-                            tier={p?.tier ?? 'bronze'}
-                            unlocked={true}
-                            size={SHOWCASE_PIN_SIZE}
-                          />
-                        </View>
-                        <Text style={styles.cardPinName} numberOfLines={2}>
-                          {p?.name ?? pinId}
-                        </Text>
-                        <Pressable
-                          testID={`pin-showcase-card-place-${pinId}`}
-                          onPress={() => handleTapPlace(pinId)}
-                          disabled={isBoardFull}
-                          style={({ pressed }) => [
-                            styles.cardPlaceBtn,
-                            isBoardFull && styles.cardPlaceBtnDisabled,
-                            pressed && styles.btnPressed,
-                          ]}
-                          accessibilityRole="button"
-                          accessibilityLabel={`Place ${p?.name ?? pinId} on board`}
-                        >
-                          <Ionicons
-                            name={isBoardFull ? 'lock-closed' : 'add-circle-outline'}
-                            size={16}
-                            color={isBoardFull ? theme.color.textSecondary : theme.color.textOnPrimary}
-                          />
-                          <Text
-                            style={[
-                              styles.cardPlaceBtnText,
-                              isBoardFull && styles.cardPlaceBtnTextDisabled,
-                            ]}
-                          >
-                            {isBoardFull ? 'Board Full' : 'Place on Board'}
-                          </Text>
-                        </Pressable>
-                      </View>
-                    );
-                  }}
+                  renderItem={renderUnplacedPin}
                 />
               )}
             </View>

@@ -54,7 +54,15 @@ export const foodItemLogWithContextSchema = foodItemLogSchema
   })
   .strict();
 
+export const updateFoodItemLogInputSchema = z
+  .object({
+    rating: ratingValueSchema.nullable().optional(),
+    note: noteBodySchema.nullable().optional(),
+  })
+  .strict();
+
 export type CreateFoodItemLogInput = z.infer<typeof createFoodItemLogInputSchema>;
+export type UpdateFoodItemLogInput = z.infer<typeof updateFoodItemLogInputSchema>;
 export type FoodItemLogWithContext = z.infer<typeof foodItemLogWithContextSchema>;
 
 

@@ -26,6 +26,7 @@ import {
 } from '../FoodItem.js';
 import {
   createFoodItemLogInputSchema,
+  updateFoodItemLogInputSchema,
   foodItemLogHistorySchema,
   foodItemLogSchema,
   foodItemLogWithContextSchema,
@@ -118,6 +119,20 @@ describe('createFoodItemLogInputSchema', () => {
       userTz: 'America/New_York',
     });
     expect(res.success).toBe(true);
+  });
+
+  it('rejects a payload missing the required userTz field', () => {
+    // Regression guard: `food-lists`' checklist mark-gotten flow
+    // (FoodListDetailScreen's `handleMarkGotten`) originally submitted only
+    // `{ visitedOn }`, omitting the required, non-optional `userTz` field —
+    // the request would be rejected 400 validation_failed by this
+    // `.strict()` schema every time, with the mobile client's catch block
+    // silently swallowing the failure so the checkbox appeared to do
+    // nothing. This test would have failed against that buggy payload.
+    const res = createFoodItemLogInputSchema.safeParse({
+      visitedOn: '2026-06-15',
+    });
+    expect(res.success).toBe(false);
   });
 
   it('accepts full rating and note input', () => {
@@ -226,6 +241,49 @@ describe('foodItemLogSchema and foodItemLogHistorySchema', () => {
         logs: [],
       }).success,
     ).toBe(false);
+  });
+});
+
+describe('updateFoodItemLogInputSchema', () => {
+  it('accepts valid rating update only', () => {
+    const res = updateFoodItemLogInputSchema.safeParse({ rating: 8 });
+    expect(res.success).toBe(true);
+  });
+
+  it('accepts valid note update only', () => {
+    const res = updateFoodItemLogInputSchema.safeParse({ note: 'Updated note' });
+    expect(res.success).toBe(true);
+  });
+
+  it('accepts both rating and note updates', () => {
+    const res = updateFoodItemLogInputSchema.safeParse({ rating: 10, note: 'Even better second time' });
+    expect(res.success).toBe(true);
+  });
+
+  it('accepts clearing rating and note with null', () => {
+    const res = updateFoodItemLogInputSchema.safeParse({ rating: null, note: null });
+    expect(res.success).toBe(true);
+  });
+
+  it('accepts empty object (no-op update)', () => {
+    const res = updateFoodItemLogInputSchema.safeParse({});
+    expect(res.success).toBe(true);
+  });
+
+  it('rejects rating out of range [1, 10]', () => {
+    expect(updateFoodItemLogInputSchema.safeParse({ rating: 0 }).success).toBe(false);
+    expect(updateFoodItemLogInputSchema.safeParse({ rating: 11 }).success).toBe(false);
+    expect(updateFoodItemLogInputSchema.safeParse({ rating: 5.5 }).success).toBe(false);
+  });
+
+  it('rejects note exceeding 2000 chars or empty string after trim', () => {
+    expect(updateFoodItemLogInputSchema.safeParse({ note: '' }).success).toBe(false);
+    expect(updateFoodItemLogInputSchema.safeParse({ note: '   ' }).success).toBe(false);
+    expect(updateFoodItemLogInputSchema.safeParse({ note: 'a'.repeat(2001) }).success).toBe(false);
+  });
+
+  it('rejects unknown fields (strict)', () => {
+    expect(updateFoodItemLogInputSchema.safeParse({ rating: 8, extraField: 'bad' }).success).toBe(false);
   });
 });
 

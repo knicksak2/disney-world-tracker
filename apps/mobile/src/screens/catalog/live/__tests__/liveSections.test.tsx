@@ -23,7 +23,7 @@ import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 import type { LiveDetailDTO } from '@dwt/shared';
 
@@ -501,12 +501,13 @@ describe('ExperienceDetailScreen live-unavailable state (R3.2, R3.3, R3.4)', () 
       expect(screen.getByTestId('live-unavailable')).toBeTruthy();
     });
     expect(
-      screen.getByText(/live information currently unavailable/i),
+      screen.getByText(/live information.*unavailable/i),
     ).toBeTruthy();
 
-    // R3.3 — the static detail fields remain visible.
-    expect(screen.getByText('A thrilling indoor coaster.')).toBeTruthy();
+    // R3.3 — the static detail fields remain visible (park badge in hero region, description in Passport lens).
     expect(screen.getByTestId('experience-park-badge')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('lens-tab-passport'));
+    expect(await screen.findByText('A thrilling indoor coaster.')).toBeTruthy();
   });
 
   test('R3.4: when the static detail itself cannot be rendered the live-unavailable indicator is still shown', async () => {

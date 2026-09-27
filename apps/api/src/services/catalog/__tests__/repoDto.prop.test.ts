@@ -170,6 +170,7 @@ const experienceRowArb = fc.record({
   height_requirement: heightRequirementArb,
   why_this: whyThisArb,
   sub_type: subTypeArb,
+  represents_resort_id: fc.option(fc.uuid(), { nil: null }),
 });
 
 /** A `resorts` row exactly as `repo.ts` reads it back. */
@@ -184,6 +185,40 @@ const resortRowArb = fc.record({
   address: fc.option(fc.string(), { nil: null }),
   phone: fc.option(fc.string(), { nil: null }),
   active: fc.constant(true),
+  tier: fc.option(
+    fc.constantFrom('Value', 'Moderate', 'Deluxe', 'Deluxe Villa', 'Campground'),
+    { nil: null },
+  ),
+  feature_pool: fc.option(fc.string({ maxLength: 50 }), { nil: null }),
+  transportation_modes: fc.option(
+    fc.array(fc.string({ maxLength: 20 }), { maxLength: 3 }),
+    { nil: null },
+  ),
+  recreation: fc.option(
+    fc.array(
+      fc.record({
+        name: fc.string({ maxLength: 30 }),
+        category: fc.string({ maxLength: 20 }),
+        description: fc.option(fc.string({ maxLength: 50 }), { nil: null }),
+      }),
+      { maxLength: 3 },
+    ),
+    { nil: null },
+  ),
+  transit_times: fc.option(
+    fc.dictionary(fc.string({ maxLength: 20 }), fc.string({ maxLength: 20 })),
+    { nil: null },
+  ),
+  architectural_lore: fc.option(
+    fc.array(
+      fc.record({
+        heading: fc.string({ maxLength: 30 }),
+        text: fc.string({ maxLength: 100 }),
+      }),
+      { maxLength: 3 },
+    ),
+    { nil: null },
+  ),
   // Option A: the active resort-representing Experience id joined in by
   // `listActiveResorts`, or null when the Resort has no active representing row.
   representing_experience_id: fc.option(fc.uuid(), { nil: null }),
@@ -212,6 +247,9 @@ function expectedExperienceDto(row: Row): Record<string, unknown> {
     dto.worldShowcaseCountry = row.world_showcase_country;
   }
   if (row.resort_id !== null) dto.resortId = row.resort_id;
+  if (row.represents_resort_id !== null && row.represents_resort_id !== undefined) {
+    dto.representsResortId = row.represents_resort_id;
+  }
   if (row.latitude !== null) dto.latitude = row.latitude;
   if (row.longitude !== null) dto.longitude = row.longitude;
   if ((row.accessibility as unknown[]).length > 0) {
@@ -240,7 +278,7 @@ function expectedExperienceDto(row: Row): Record<string, unknown> {
 }
 
 function expectedResortDto(row: Row): Record<string, unknown> {
-  return {
+  const dto: Record<string, unknown> = {
     id: row.id,
     name: row.name,
     description: row.description,
@@ -251,6 +289,21 @@ function expectedResortDto(row: Row): Record<string, unknown> {
     phone: row.phone,
     representingExperienceId: row.representing_experience_id ?? null,
   };
+  if (row.tier) dto.tier = row.tier;
+  if (row.feature_pool) dto.featurePool = row.feature_pool;
+  if (Array.isArray(row.transportation_modes) && row.transportation_modes.length > 0) {
+    dto.transportationModes = row.transportation_modes;
+  }
+  if (Array.isArray(row.recreation) && row.recreation.length > 0) {
+    dto.recreation = row.recreation;
+  }
+  if (row.transit_times && Object.keys(row.transit_times as object).length > 0) {
+    dto.transitTimes = row.transit_times;
+  }
+  if (Array.isArray(row.architectural_lore) && row.architectural_lore.length > 0) {
+    dto.architecturalLore = row.architectural_lore;
+  }
+  return dto;
 }
 
 /** Assert the DTO equals the oracle in both value AND exact key set. */

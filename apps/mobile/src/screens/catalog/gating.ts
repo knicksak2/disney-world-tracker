@@ -83,3 +83,49 @@ export function liveSectionFor(
     }
   }
 }
+
+/**
+ * Determines whether a dining Experience is Quick Service / Counter Service
+ * based on its subType or groupedFacets (Requirement 21.3).
+ */
+export function isQuickServiceDining(
+  subType?: string | null,
+  groupedFacets?: Record<string, unknown> | null,
+): boolean {
+  if (subType) {
+    const s = subType.toLowerCase();
+    if (
+      s.includes('quick') ||
+      s.includes('counter') ||
+      s.includes('fast casual') ||
+      s.includes('food court') ||
+      s.includes('food cart')
+    ) {
+      return true;
+    }
+  }
+  if (groupedFacets) {
+    const diningGroups = [
+      groupedFacets['serviceStyle'],
+      groupedFacets['diningStyle'],
+      groupedFacets['tableService'],
+    ];
+    for (const group of diningGroups) {
+      if (Array.isArray(group)) {
+        for (const item of group) {
+          const id = (item as any)?.id?.toLowerCase() ?? '';
+          const name = (item as any)?.name?.toLowerCase() ?? '';
+          if (
+            id.includes('quick') ||
+            id.includes('counter') ||
+            name.includes('quick service') ||
+            name.includes('counter service')
+          ) {
+            return true;
+          }
+        }
+      }
+    }
+  }
+  return false;
+}

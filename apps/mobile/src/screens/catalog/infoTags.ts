@@ -65,7 +65,8 @@ export type InfoTagExperience = Pick<
   | 'heightRequirement'
   | 'physicalConsiderations'
   | 'interestFacets'
->;
+> &
+  Partial<Pick<ExperienceDTO, 'category' | 'name'>>;
 
 /**
  * The four labelled Tag_Groups the Experience_Detail_Screen renders, in their
@@ -88,7 +89,9 @@ export interface TagGroup {
  * owning Park (R1.2). Sourced entirely from the existing `ExperienceDTO`, so no
  * DTO change is required.
  */
-export type TagGroupExperience = InfoTagExperience & Pick<ExperienceDTO, 'park'>;
+export type TagGroupExperience = InfoTagExperience &
+  Pick<ExperienceDTO, 'park'> &
+  Partial<Pick<ExperienceDTO, 'category' | 'name'>>;
 
 /**
  * Static slug→human-friendly label map for accessibility tag values (R2.1,
@@ -227,9 +230,19 @@ export function buildInfoTags(
     }
   }
 
-  // 6. Specific Resort — only for a `Resort` area referencing a Resort whose
-  //    name is available (R9.7); omitted when the name is unavailable (R9.8).
+  // 6. Specific Resort — for a `Resort` category or a `Resort` area referencing a Resort
+  //    whose name is available (R9.7); omitted when the name is unavailable (R9.8).
   if (
+    experience.category === 'Resort' &&
+    isNonEmpty(experience.name)
+  ) {
+    const name = experience.name.trim();
+    tags.push({
+      kind: 'resort',
+      label: name,
+      accessibilityLabel: `Resort: ${name}`,
+    });
+  } else if (
     experience.areaType === 'Resort' &&
     isNonEmpty(experience.resortId) &&
     isNonEmpty(resortName)
@@ -364,6 +377,12 @@ function collectLocation(
   }
 
   if (
+    experience.category === 'Resort' &&
+    isNonEmpty(experience.name)
+  ) {
+    const label = experience.name.trim();
+    addTag(acc, 'resort', label, `Resort: ${label}`);
+  } else if (
     experience.areaType === 'Resort' &&
     isNonEmpty(experience.resortId) &&
     isNonEmpty(resortName)

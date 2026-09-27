@@ -46,7 +46,6 @@ import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
-  Image,
   Modal,
   Pressable,
   ScrollView,
@@ -55,6 +54,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import type { CompositeScreenProps } from '@react-navigation/native';
@@ -78,7 +78,6 @@ import {
   GradientHeader,
   ScreenContainer,
 } from '../../theme/components';
-import { GroupSection } from '../navigation/GroupSection';
 import {
   type GroupSectionState,
   isExpanded as isExpandedPure,
@@ -94,7 +93,10 @@ import {
   groupByCategory,
   groupByPavilionFiltered,
   groupByResort,
+  RESORT_BOARDWALK_ID,
   RESORT_CATCHALL_ID,
+  RESORT_RECREATION_ID,
+  RESORT_WWOS_ID,
   type Section,
 } from './catalogGrouping';
 import {
@@ -154,6 +156,171 @@ interface ResortListResponse {
 
 /** 5 minutes — matches the catalog's react-query staleness interval (R10.6). */
 const STALE_TIME_MS = 5 * 60 * 1000;
+
+/**
+ * Fixed row heights for the flattened, per-row-virtualizing `FlatList`s below
+ * (theme/water-park, Disney Springs, Resorts layouts). Both the header row and
+ * the Experience row render at a constant height regardless of content —
+ * `numberOfLines` caps text, and the empty-group indicator reuses the header
+ * row's height — so `getItemLayout` can report exact offsets without a
+ * measurement pass, letting `FlatList` compute scroll position synchronously
+ * (matters most for the Resorts layout's scroll-to-anchor jump).
+ */
+const SECTION_HEADER_ROW_HEIGHT = 44;
+const EXPERIENCE_ROW_HEIGHT = 96;
+
+// ---------------------------------------------------------------------------
+// Flattened, per-row-virtualizing section list
+// ---------------------------------------------------------------------------
+
+/**
+ * A single flattened row for a collapsible sectioned `FlatList`: either a
+ * section header or one of that section's items. Encoding sections as one flat
+ * tagged array — instead of each `renderItem` call rendering its whole section
+ * (header + every item) as plain `View`s — lets `FlatList` virtualize at the
+ * granularity of individual Experience rows rather than whole sections, so a
+ * Land/category/Resort with dozens of Experiences never mounts more rows than
+ * are actually scrolled into view. Matches the pattern already used by
+ * `TripsListScreen` / `FriendsListScreen` for their unified lists.
+ */
+type FlatSectionRow<T> =
+  | {
+      readonly kind: 'header';
+      readonly key: string;
+      readonly section: Section<T>;
+    }
+  | {
+      readonly kind: 'item';
+      readonly key: string;
+      readonly sectionKey: string;
+      readonly item: T;
+    }
+  | {
+      readonly kind: 'emptyGroup';
+      readonly key: string;
+      readonly sectionKey: string;
+    };
+
+/**
+ * Flatten collapsible `Section`s into `FlatSectionRow`s: a header row for every
+ * section, followed by its item rows only while expanded (collapsed sections
+ * contribute only their header, so their rows are never mounted — not merely
+ * hidden). A section with zero items renders a trailing `emptyGroup` row while
+ * expanded, when `showEmptyGroup` is set (used by the Resorts layout, R8.7).
+ */
+/** `flattenSections` without `showEmptyGroup`: never produces an `emptyGroup` row. */
+function flattenSections<T>(
+  sections: readonly Section<T>[],
+  isExpanded: (key: string) => boolean,
+): readonly Exclude<FlatSectionRow<T>, { readonly kind: 'emptyGroup' }>[];
+/** `flattenSections` with `showEmptyGroup: true`: may produce `emptyGroup` rows. */
+function flattenSections<T>(
+  sections: readonly Section<T>[],
+  isExpanded: (key: string) => boolean,
+  options: { readonly showEmptyGroup: true },
+): readonly FlatSectionRow<T>[];
+function flattenSections<T>(
+  sections: readonly Section<T>[],
+  isExpanded: (key: string) => boolean,
+  options: { readonly showEmptyGroup?: boolean } = {},
+): readonly FlatSectionRow<T>[] {
+  const rows: FlatSectionRow<T>[] = [];
+  for (const section of sections) {
+    rows.push({ kind: 'header', key: `header:${section.key}`, section });
+    if (!isExpanded(section.key)) {
+      continue;
+    }
+    if (section.items.length === 0) {
+      if (options.showEmptyGroup === true) {
+        rows.push({
+          kind: 'emptyGroup',
+          key: `empty:${section.key}`,
+          sectionKey: section.key,
+        });
+      }
+      continue;
+    }
+    for (const item of section.items) {
+      rows.push({
+        kind: 'item',
+        key: `item:${section.key}:${(item as { id: string }).id}`,
+        sectionKey: section.key,
+        item,
+      });
+    }
+  }
+  return rows;
+}
+
+/** A row's fixed height by kind — every row is either header height or item height. */
+function flatSectionRowHeight<T>(row: FlatSectionRow<T>): number {
+  return row.kind === 'header' ? SECTION_HEADER_ROW_HEIGHT : EXPERIENCE_ROW_HEIGHT;
+}
+
+/**
+ * Precompute the `{ length, offset, index }` triple for every row in a
+ * flattened section list in one O(n) pass, so the `getItemLayout` callback
+ * `FlatList` calls per row is an O(1) array lookup rather than re-summing
+ * preceding heights on every call (which would make scrolling an O(n²) list of
+ * calls). Recomputed only when `rows` changes (a new/updated flatten, e.g. on
+ * toggle or filter), via the caller's `useMemo`.
+ */
+function buildRowLayouts<T>(
+  rows: readonly FlatSectionRow<T>[],
+): ReadonlyArray<{ readonly length: number; readonly offset: number; readonly index: number }> {
+  const layouts: Array<{ length: number; offset: number; index: number }> = [];
+  let offset = 0;
+  rows.forEach((row, index) => {
+    const length = flatSectionRowHeight(row);
+    layouts.push({ length, offset, index });
+    offset += length;
+  });
+  return layouts;
+}
+
+/**
+ * A collapsible section's header, rendered as its own flat-list row rather than
+ * as `GroupSection`'s wrapping container. Reproduces `GroupSection`'s header
+ * contract exactly — the same `Pressable`, `accessibilityRole="button"`,
+ * `accessibilityState={{ expanded }}`, `accessibilityLabel`, and
+ * `${testID}-header` id — so the flattened list is behaviorally identical to
+ * the nested `GroupSection` it replaces; only the body's items move from
+ * `children` to sibling flat-list rows.
+ */
+const CollapsibleHeaderRow = React.memo(function CollapsibleHeaderRow({
+  sectionKey,
+  expanded,
+  onToggle,
+  accessibilityLabel,
+  header,
+  testID,
+}: {
+  readonly sectionKey: string;
+  readonly expanded: boolean;
+  readonly onToggle: (sectionKey: string) => void;
+  readonly accessibilityLabel: string;
+  readonly header: React.ReactNode;
+  readonly testID: string;
+}): JSX.Element {
+  const handlePress = useCallback(() => {
+    onToggle(sectionKey);
+  }, [onToggle, sectionKey]);
+
+  return (
+    <View testID={testID}>
+      <Pressable
+        onPress={handlePress}
+        accessibilityRole="button"
+        accessibilityState={{ expanded }}
+        accessibilityLabel={accessibilityLabel}
+        style={({ pressed }) => [pressed && styles.headerPressed]}
+        testID={`${testID}-header`}
+      >
+        {header}
+      </Pressable>
+    </View>
+  );
+});
 
 // ---------------------------------------------------------------------------
 // Screen
@@ -265,9 +432,12 @@ function DestinationBody({
   // The search control is offered whenever there are Experiences to narrow.
   const showSearch = !showLoading && !showEmpty;
 
-  const onSelectExperience = (experience: ExperienceDTO): void => {
-    navigation.navigate('ExperienceDetail', { experienceId: experience.id });
-  };
+  const onSelectExperience = useCallback(
+    (experience: ExperienceDTO): void => {
+      navigation.navigate('ExperienceDetail', { experienceId: experience.id });
+    },
+    [navigation],
+  );
 
   return (
     <ScreenContainer>
@@ -414,6 +584,22 @@ function DestinationSearchResults({
 
   useResultCountAnnouncement(results.length);
 
+  // Stable `renderItem` identity — an inline arrow literal is recreated every
+  // render (e.g. each keystroke re-deriving `results`), which `FlatList`
+  // treats as a changed render function and forces the whole visible window
+  // to re-render/re-measure even though `ExperienceRow` is memoized. See the
+  // grouped layouts' `renderRow` for the same fix.
+  const renderRow = useCallback(
+    ({ item }: { item: ExperienceDTO }) => (
+      <ExperienceRow
+        experience={item}
+        onSelectExperience={onSelectExperience}
+        completed={completedIds.has(item.id)}
+      />
+    ),
+    [onSelectExperience, completedIds],
+  );
+
   if (results.length === 0) {
     return (
       <View style={styles.center} testID="destination-search-empty">
@@ -437,13 +623,7 @@ function DestinationSearchResults({
       windowSize={11}
       removeClippedSubviews
       testID="destination-search-results"
-      renderItem={({ item }) => (
-        <ExperienceRow
-          experience={item}
-          onPress={() => onSelectExperience(item)}
-          completed={completedIds.has(item.id)}
-        />
-      )}
+      renderItem={renderRow}
     />
   );
 }
@@ -628,12 +808,76 @@ function ThemeOrWaterParkLayout({
   const sectionKeys = useMemo(() => sections.map((s) => s.key), [sections]);
   const { isExpanded, toggle } = useDestinationSections(sectionKeys);
 
+  // Flatten into per-row `FlatList` data so the list virtualizes at the
+  // granularity of individual Experience rows rather than whole Land sections
+  // (see `flattenSections`). Recomputed only when the sections or any
+  // section's expanded state actually changes.
+  const flatRows = useMemo(
+    () => flattenSections(sections, isExpanded),
+    [sections, isExpanded],
+  );
+  const rowLayouts = useMemo(() => buildRowLayouts(flatRows), [flatRows]);
+  const getItemLayout = useCallback(
+    (_data: unknown, index: number) =>
+      rowLayouts[index] ?? { length: EXPERIENCE_ROW_HEIGHT, offset: 0, index },
+    [rowLayouts],
+  );
+
   // Accessible announcement of visible count
   const visibleCount = useMemo(
     () => sections.reduce((total, section) => total + section.items.length, 0),
     [sections],
   );
   useResultCountAnnouncement(visibleCount);
+
+  // Stable `renderItem` identity: an inline arrow literal passed to `FlatList`
+  // is recreated every render, which `FlatList`/`VirtualizedList` treats as a
+  // changed render function and forces broader re-render/re-measure work on
+  // every parent update (tab switch, filter change, section toggle) — this is
+  // what was producing the "large list that is slow to update" warning even
+  // though the row components below are already memoized. Wrapping in
+  // `useCallback` keeps the same function identity across renders so
+  // memoized rows can actually skip re-rendering.
+  // The row type is inferred from `flatRows` (not annotated explicitly) so it
+  // stays the narrower type this layout's no-`showEmptyGroup` `flattenSections`
+  // overload produces — see `DisneySpringsLayout`'s `renderRow` comment.
+  const renderRow = useCallback(
+    ({ item: row }: { item: (typeof flatRows)[number] }) => {
+      if (row.kind === 'header') {
+        const section = row.section;
+        const expanded = isExpanded(section.key);
+        return (
+          <CollapsibleHeaderRow
+            sectionKey={section.key}
+            expanded={expanded}
+            onToggle={toggle}
+            accessibilityLabel={`${section.title}, ${
+              expanded ? 'expanded' : 'collapsed'
+            }`}
+            header={
+              <SectionHeader
+                title={section.title}
+                count={section.items.length}
+                expanded={expanded}
+              />
+            }
+            testID={`destination-section-${section.key}`}
+          />
+        );
+      }
+      // 'item' — an Experience row nested under its section header.
+      return (
+        <View style={styles.itemRowWrap}>
+          <ExperienceRow
+            experience={row.item}
+            onSelectExperience={onSelectExperience}
+            completed={completedIds.has(row.item.id)}
+          />
+        </View>
+      );
+    },
+    [isExpanded, toggle, onSelectExperience, completedIds],
+  );
 
   return (
     <View style={styles.tabLayoutContainer}>
@@ -1051,42 +1295,16 @@ function ThemeOrWaterParkLayout({
         </View>
       ) : (
         <FlatList
-          data={sections as Section<ExperienceDTO>[]}
-          keyExtractor={(section) => section.key}
+          data={flatRows}
+          keyExtractor={(row) => row.key}
           style={styles.list}
           contentContainerStyle={styles.listContent}
-          initialNumToRender={8}
+          initialNumToRender={12}
+          maxToRenderPerBatch={12}
           windowSize={11}
-          renderItem={({ item: section }) => {
-            const expanded = isExpanded(section.key);
-            return (
-              <GroupSection
-                sectionKey={section.key}
-                expanded={expanded}
-                onToggle={toggle}
-                accessibilityLabel={`${section.title}, ${
-                  expanded ? 'expanded' : 'collapsed'
-                }`}
-                header={
-                  <SectionHeader
-                    title={section.title}
-                    count={section.items.length}
-                    expanded={expanded}
-                  />
-                }
-                testID={`destination-section-${section.key}`}
-              >
-                {section.items.map((experience) => (
-                  <ExperienceRow
-                    key={experience.id}
-                    experience={experience}
-                    onPress={() => onSelectExperience(experience)}
-                    completed={completedIds.has(experience.id)}
-                  />
-                ))}
-              </GroupSection>
-            );
-          }}
+          removeClippedSubviews
+          getItemLayout={getItemLayout}
+          renderItem={renderRow}
         />
       )}
     </View>
@@ -1176,18 +1394,33 @@ function DisneySpringsLayout({
   const sectionKeys = useMemo(() => sections.map((s) => s.key), [sections]);
   const { isExpanded, toggle } = useDestinationSections(sectionKeys);
 
-  return (
-    <FlatList
-      data={sections as Section<ExperienceDTO>[]}
-      keyExtractor={(section) => section.key}
-      style={styles.list}
-      contentContainerStyle={styles.listContent}
-      initialNumToRender={8}
-      windowSize={11}
-      renderItem={({ item: section }) => {
+  // Flatten into per-row `FlatList` data (see `flattenSections`) so a
+  // category with many Experiences virtualizes at the row level.
+  const flatRows = useMemo(
+    () => flattenSections(sections, isExpanded),
+    [sections, isExpanded],
+  );
+  const rowLayouts = useMemo(() => buildRowLayouts(flatRows), [flatRows]);
+  const getItemLayout = useCallback(
+    (_data: unknown, index: number) =>
+      rowLayouts[index] ?? { length: EXPERIENCE_ROW_HEIGHT, offset: 0, index },
+    [rowLayouts],
+  );
+
+  // Stable `renderItem` identity — see `ThemeOrWaterParkLayout`'s
+  // `renderRow` for why an inline arrow here defeats row-level memoization.
+  // The row type is inferred from `flatRows` (not annotated explicitly) so it
+  // stays the narrower `Exclude<FlatSectionRow<T>, { kind: 'emptyGroup' }>`
+  // that this layout's no-`showEmptyGroup` `flattenSections` overload
+  // produces — annotating the full `FlatSectionRow<ExperienceDTO>` here would
+  // widen it back and break the exhaustiveness narrowing below.
+  const renderRow = useCallback(
+    ({ item: row }: { item: (typeof flatRows)[number] }) => {
+      if (row.kind === 'header') {
+        const section = row.section;
         const expanded = isExpanded(section.key);
         return (
-          <GroupSection
+          <CollapsibleHeaderRow
             sectionKey={section.key}
             expanded={expanded}
             onToggle={toggle}
@@ -1202,18 +1435,36 @@ function DisneySpringsLayout({
               />
             }
             testID={`destination-section-${section.key}`}
-          >
-            {section.items.map((experience) => (
-              <ExperienceRow
-                key={experience.id}
-                experience={experience}
-                onPress={() => onSelectExperience(experience)}
-                completed={completedIds.has(experience.id)}
-              />
-            ))}
-          </GroupSection>
+          />
         );
-      }}
+      }
+      // 'item' — Disney Springs' `flattenSections` call omits
+      // `showEmptyGroup`, so 'emptyGroup' rows never occur here.
+      return (
+        <View style={styles.itemRowWrap}>
+          <ExperienceRow
+            experience={row.item}
+            onSelectExperience={onSelectExperience}
+            completed={completedIds.has(row.item.id)}
+          />
+        </View>
+      );
+    },
+    [isExpanded, toggle, onSelectExperience, completedIds],
+  );
+
+  return (
+    <FlatList
+      data={flatRows}
+      keyExtractor={(row) => row.key}
+      style={styles.list}
+      contentContainerStyle={styles.listContent}
+      initialNumToRender={12}
+      maxToRenderPerBatch={12}
+      windowSize={11}
+      removeClippedSubviews
+      getItemLayout={getItemLayout}
+      renderItem={renderRow}
     />
   );
 }
@@ -1294,19 +1545,37 @@ function ResortsLayout({
     setExpandedState((current) => togglePure(current, key));
   }, []);
 
-  return (
-    <FlatList
-      data={sections as Section<ExperienceDTO>[]}
-      keyExtractor={(section) => section.key}
-      style={styles.list}
-      contentContainerStyle={styles.listContent}
-      initialNumToRender={16}
-      windowSize={11}
-      renderItem={({ item: section }) => {
+  // Flatten into per-row `FlatList` data (see `flattenSections`), including a
+  // trailing `emptyGroup` row for an expanded Resort with no Experiences
+  // (R8.7). Resort directories can be long, so per-row virtualization matters
+  // even more here than in the park layouts.
+  const flatRows = useMemo(
+    () => flattenSections(sections, isExpanded, { showEmptyGroup: true }),
+    [sections, isExpanded],
+  );
+  const rowLayouts = useMemo(() => buildRowLayouts(flatRows), [flatRows]);
+  const getItemLayout = useCallback(
+    (_data: unknown, index: number) =>
+      rowLayouts[index] ?? { length: EXPERIENCE_ROW_HEIGHT, offset: 0, index },
+    [rowLayouts],
+  );
+
+  // Stable `renderItem` identity — see `ThemeOrWaterParkLayout`'s
+  // `renderRow` for why an inline arrow here defeats row-level memoization.
+  // Matters most in this layout: sections start collapsed, so every
+  // expand/collapse tap on a long resort directory previously recreated
+  // `renderItem` and forced the whole visible window to re-render/re-measure.
+  // The row type is inferred from `flatRows` (not annotated explicitly); see
+  // `DisneySpringsLayout`'s `renderRow` comment. This layout's
+  // `showEmptyGroup: true` `flattenSections` call means `flatRows`' inferred
+  // type already includes the `emptyGroup` case handled below.
+  const renderRow = useCallback(
+    ({ item: row }: { item: (typeof flatRows)[number] }) => {
+      if (row.kind === 'header') {
+        const section = row.section;
         const expanded = isExpanded(section.key);
-        const isCatchall = section.key === RESORT_CATCHALL_ID;
         return (
-          <GroupSection
+          <CollapsibleHeaderRow
             sectionKey={section.key}
             expanded={expanded}
             onToggle={toggle}
@@ -1318,52 +1587,82 @@ function ResortsLayout({
                 title={section.title}
                 count={section.items.length}
                 expanded={expanded}
-                isCatchall={isCatchall}
+                sectionKey={section.key}
               />
             }
             testID={`destination-resort-${section.key}`}
-          >
-            {section.items.length === 0 ? (
-              <Text
-                style={styles.resortAnchorEmpty}
-                testID={`destination-resort-empty-${section.key}`}
-              >
-                No experiences yet
-              </Text>
-            ) : (
-              section.items.map((experience) => (
-                <ExperienceRow
-                  key={experience.id}
-                  experience={experience}
-                  onPress={() => onSelectExperience(experience)}
-                  completed={completedIds.has(experience.id)}
-                />
-              ))
-            )}
-          </GroupSection>
+          />
         );
-      }}
+      }
+      if (row.kind === 'emptyGroup') {
+        return (
+          <View style={styles.emptyGroupWrap}>
+            <Text
+              style={styles.resortAnchorEmpty}
+              testID={`destination-resort-empty-${row.sectionKey}`}
+            >
+              No experiences yet
+            </Text>
+          </View>
+        );
+      }
+      // 'item' — the only remaining case in the FlatSectionRow union.
+      return (
+        <View style={styles.itemRowWrap}>
+          <ExperienceRow
+            experience={row.item}
+            onSelectExperience={onSelectExperience}
+            completed={completedIds.has(row.item.id)}
+          />
+        </View>
+      );
+    },
+    [isExpanded, toggle, onSelectExperience, completedIds],
+  );
+
+  return (
+    <FlatList
+      data={flatRows}
+      keyExtractor={(row) => row.key}
+      style={styles.list}
+      contentContainerStyle={styles.listContent}
+      initialNumToRender={16}
+      maxToRenderPerBatch={16}
+      windowSize={11}
+      removeClippedSubviews
+      getItemLayout={getItemLayout}
+      renderItem={renderRow}
     />
   );
 }
 
 /**
- * A Resort section header: the expand/collapse chevron, a Resort (or catch-all)
- * glyph, the Resort name, and its Experience count. Mirrors `SectionHeader` but
- * carries the resort-flavored leading icon so a Resort section still reads as a
- * hotel rather than a generic group.
+ * A Resort section header: the expand/collapse chevron, a Resort (or sub-destination)
+ * glyph, the section name, and its Experience count.
  */
 function ResortSectionHeader({
   title,
   count,
   expanded,
-  isCatchall,
+  sectionKey,
 }: {
   readonly title: string;
   readonly count: number;
   readonly expanded: boolean;
-  readonly isCatchall: boolean;
+  readonly sectionKey?: string;
 }): JSX.Element {
+  let iconName: keyof typeof Ionicons.glyphMap = 'bed-outline';
+  if (sectionKey === RESORT_BOARDWALK_ID) {
+    iconName = 'sparkles-outline';
+  } else if (sectionKey === RESORT_WWOS_ID) {
+    iconName = 'trophy-outline';
+  } else if (
+    sectionKey === RESORT_RECREATION_ID ||
+    sectionKey === RESORT_CATCHALL_ID
+  ) {
+    iconName = 'compass-outline';
+  }
+
   return (
     <View style={styles.sectionHeader}>
       <Ionicons
@@ -1373,7 +1672,7 @@ function ResortSectionHeader({
         style={styles.sectionChevron}
       />
       <Ionicons
-        name={isCatchall ? 'ellipsis-horizontal-circle-outline' : 'bed-outline'}
+        name={iconName}
         size={18}
         color={theme.color.primary}
         style={styles.resortAnchorIcon}
@@ -1392,7 +1691,7 @@ function ResortSectionHeader({
 
 interface ExperienceRowProps {
   readonly experience: ExperienceDTO;
-  readonly onPress: () => void;
+  readonly onSelectExperience: (experience: ExperienceDTO) => void;
   /**
    * Whether the signed-in User has marked this Experience as visited. When
    * true the row shows a "Visited" completion badge so the list conveys
@@ -1414,11 +1713,15 @@ interface ExperienceRowProps {
  * the Experience_Detail_Screen, so a guest can spot the Experiences they have
  * already done directly from the list.
  */
-function ExperienceRow({
+const ExperienceRow = React.memo(function ExperienceRow({
   experience,
-  onPress,
+  onSelectExperience,
   completed = false,
 }: ExperienceRowProps): JSX.Element {
+  const onPress = useCallback(
+    () => onSelectExperience(experience),
+    [onSelectExperience, experience],
+  );
   const visual = theme.categoryVisual[experience.category];
   // `park` is `null` for a Resort-area Experience with no park ancestor; fall
   // back to the brand accent so the row still reads.
@@ -1507,14 +1810,14 @@ function ExperienceRow({
       </View>
     </Card>
   );
-}
+});
 
 /**
  * Leading thumbnail for an Experience row. Renders the Disney-sourced image when
  * present; otherwise a category-tinted placeholder with the category glyph
  * (R10.4).
  */
-function ExperienceThumb({
+const ExperienceThumb = React.memo(function ExperienceThumb({
   imageUrl,
   category,
 }: {
@@ -1529,7 +1832,11 @@ function ExperienceThumb({
       <Image
         source={{ uri: imageUrl }}
         style={styles.thumb}
-        resizeMode="cover"
+        contentFit="cover"
+        // Default `cachePolicy` ('disk') persists decoded rows across
+        // mount/unmount as the list scrolls, avoiding a re-fetch/re-decode
+        // every time a row scrolls back into the (now much smaller,
+        // per-row-virtualized) render window.
         onError={() => setFailed(true)}
         accessibilityIgnoresInvertColors
       />
@@ -1548,7 +1855,7 @@ function ExperienceThumb({
       />
     </View>
   );
-}
+});
 
 /**
  * A completion marker overlaid on the corner of an Experience row's thumbnail:
@@ -1558,7 +1865,11 @@ function ExperienceThumb({
  * visually distinct from the tag pills so it is easy to spot when scanning the
  * list. Exposed as a single accessible "Visited" element for screen readers.
  */
-function VisitedOverlay({ testID }: { readonly testID: string }): JSX.Element {
+const VisitedOverlay = React.memo(function VisitedOverlay({
+  testID,
+}: {
+  readonly testID: string;
+}): JSX.Element {
   return (
     <View
       style={styles.visitedOverlay}
@@ -1569,7 +1880,7 @@ function VisitedOverlay({ testID }: { readonly testID: string }): JSX.Element {
       <Ionicons name="checkmark" size={14} color={theme.color.textOnPrimary} />
     </View>
   );
-}
+});
 
 function DestinationUnavailableState({
   title,
@@ -1769,6 +2080,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: theme.spacing.sm,
     paddingRight: theme.spacing.md,
+  },
+  headerPressed: {
+    opacity: 0.85,
+  },
+  // Mirrors `GroupSection`'s `body` indentation/rail so a flattened item row
+  // still reads as nested under its section header, now that each item is its
+  // own flat-list row rather than a child inside a shared bordered container.
+  itemRowWrap: {
+    marginLeft: theme.spacing.md,
+    paddingLeft: theme.spacing.md,
+    borderLeftWidth: 2,
+    borderLeftColor: theme.color.borderStrong,
+  },
+  emptyGroupWrap: {
+    marginTop: theme.spacing.sm,
+    marginLeft: theme.spacing.md,
+    paddingLeft: theme.spacing.md,
+    borderLeftWidth: 2,
+    borderLeftColor: theme.color.borderStrong,
   },
   sectionHeader: {
     flexDirection: 'row',

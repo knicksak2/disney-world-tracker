@@ -17,6 +17,22 @@
 /** IANA time zone shared by every Walt Disney World park (US Eastern). */
 export const WDW_TIME_ZONE = 'America/New_York';
 
+/**
+ * Return today's date in YYYY-MM-DD in the WDW (America/New_York) timezone.
+ */
+export function getTodayWdwDate(now: Date = new Date()): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: WDW_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(now);
+  const y = parts.find((p) => p.type === 'year')!.value;
+  const m = parts.find((p) => p.type === 'month')!.value;
+  const d = parts.find((p) => p.type === 'day')!.value;
+  return `${y}-${m}-${d}`;
+}
+
 /** Shown in place of an unparseable / absent instant so rendering never throws. */
 const INVALID_PLACEHOLDER = '—';
 

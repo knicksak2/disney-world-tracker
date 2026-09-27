@@ -263,6 +263,217 @@ involved.
       preserved
     - _Requirements: 4.5, 4.7, 4.8, 4.9, 10.5, 10.6_
 
+## Amendment: Two-Lens Navigation (Requirements 11–19)
+
+- [x] 13. Create the `tripContextDate.ts` pure module
+  - [x] 13.1 Implement `resolveTripContextDate`
+    - Precedence: non-null `plannedDate` first; else `todayWdw` when `activeTripRange` is non-null
+      and `todayWdw` falls within `[startDate, endDate]` inclusive; else `activeTripRange.startDate`
+      when `activeTripRange` is non-null; else `null`
+    - Keep the module pure and framework-free (no React, no `Linking`, no navigation, no direct
+      `wdwClock` call — `todayWdw` is passed in as a plain string)
+    - _Requirements: 16.1, 16.2, 16.3, 16.4, 16.5_
+
+  - [x] 13.2 Write property tests for `resolveTripContextDate`
+    - **Property 20: Trip_Context_Date precedence** (Validates: Requirements 16.1, 16.2, 16.3, 16.4, 16.5)
+    - **Property 21: Trip_Context_Date is total and deterministic** (Validates: Requirements 16.1, 16.2, 16.3, 16.4)
+    - Generate the full cross-product of null/non-null `plannedDate` and `activeTripRange`, and
+      `todayWdw` both inside and outside the range boundary (inclusive edges specifically), at 100+
+      iterations each
+
+- [x] 14. Create the `passportStats.ts` pure module
+  - [x] 14.1 Implement `computePassportAverage`
+    - Mean of non-null ratings in the input list, rounded to one decimal place; `null` when every
+      entry is null (including the empty list); pure, total, never throws
+    - _Requirements: 17.2, 17.3_
+
+  - [x] 14.2 Write property tests for `computePassportAverage`
+    - **Property 22: Passport average is the mean of non-null ratings, rounded to one decimal** (Validates: Requirements 17.2, 17.3)
+    - **Property 23: Passport average recomputes correctly after a rating change** (Validates: Requirements 17.5, 17.6)
+    - Generate rating lists mixing nulls and numeric values (including all-null and empty), plus
+      single-entry edit/delete operations, at 100+ iterations each
+
+- [x] 15. Checkpoint - Ensure all tests pass
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [x] 16. Build the persistent header region components
+  - [x] 16.1 Implement `LiveStatusStrip`
+    - Reads `liveQ.data` and `liveSectionFor(category)`; renders standby wait + Lightning Lane
+      (Ride/Character_Meet), reservation availability + next time (Restaurant), or next-showtime
+      countdown (Show); omitted when `liveSectionFor` yields no section; renders the existing
+      live-unavailable indicator on live failure
+    - _Requirements: 12.1, 12.2, 12.3, 12.4, 12.5, 12.6, 12.7_
+  - [x] 16.2 Implement `QuickSpecsRow`
+    - Renders duration/height/climate/category-feature chips from existing DTO fields; no new fields
+    - _Requirements: 11.3_
+  - [x] 16.3 Implement `LensSwitcher`
+    - Two-segment control with `activeLens` state (`'today' | 'passport'`, default `'today'`);
+      non-empty accessibility label per segment reflecting tab role and selected state
+    - _Requirements: 11.1, 11.2, 11.3, 11.4, 11.6_
+  - [x] 16.4 Write render tests for the header region
+    - Default Lens is `Today_In_Park_Lens`; switching swaps only the content below the switcher while
+      header/hero/strip/specs/switcher/dock stay identical; correct `LiveStatusStrip` headline per
+      category; strip omitted when `liveSectionFor` yields nothing; live-unavailable indicator on
+      failure; segment accessibility labels reflect selected state
+    - _Requirements: 11.1, 11.3, 11.4, 11.5, 11.6, 11.7, 12.1, 12.2, 12.3, 12.4, 12.5, 12.6, 12.7_
+
+- [x] 17. Build `VirtualQueueBanner`
+  - [x] 17.1 Implement `VirtualQueueBanner`
+    - Renders only when `liveDetail.boardingGroup?.state` is a non-empty string; displays the
+      `currentGroupStart`–`currentGroupEnd` range when both are present; non-empty accessibility label
+    - Consumes the existing `liveDetail.boardingGroup` field — no new DTO field, migration, or endpoint
+    - _Requirements: 15.1, 15.2, 15.3, 15.4, 15.5_
+  - [x] 17.2 Write tests for `VirtualQueueBanner`
+    - **Property 24: Virtual Queue Banner renders iff `state` is present** (Validates: Requirements 15.1, 15.3)
+    - Boundary cases as example-based render tests: `state` present with/without the group range,
+      `state` absent, `boardingGroup` entirely absent; non-empty accessibility label asserted
+    - _Requirements: 15.1, 15.2, 15.3, 15.4_
+
+- [x] 18. Build `LiveWaitCockpit` and the category-specific Today_In_Park_Lens cards
+  - [x] 18.1 Implement `LiveWaitCockpit` (Ride / Character_Meet)
+    - Composes `WaitContextSelector` (Now/Trip/Typical, default Now; "Trip" segment present only when
+      `resolveTripContextDate(...)` is non-null), the standby-wait instrument, the existing
+      Lightning_Lane display, `VirtualQueueBanner`, the relocated existing Single_Rider_Strip, the
+      forecast chart driven by the selected context, the Typical/Worst + Reliability stat pair, and
+      the existing Best_Time_Verdict text
+    - "Now" renders the live standby wait + current-hour forecast; "Typical" issues the
+      `WaitInsightsDTO` query with no `date`; "Trip" issues it with `resolveTripContextDate(...)`'s
+      result as `date`
+    - _Requirements: 13.1, 13.2, 13.3, 13.4, 13.5, 13.6, 13.7, 13.8, 13.9, 13.10_
+  - [x] 18.2 Implement `DiningReservationCard` and `ShowtimesCard`
+    - `DiningReservationCard` (Restaurant): reservation availability + the existing Reservation_Action
+      unchanged
+    - `ShowtimesCard` (Show/Character_Meet where `liveSectionFor()` resolves to showtimes): today's
+      showtimes list + next-upcoming indicator
+    - _Requirements: 14.1, 14.2_
+  - [x] 18.3 Wire the Today_In_Park_Lens category dispatch
+    - Render `LiveWaitCockpit` | `DiningReservationCard` | `ShowtimesCard` | neither (per
+      `liveSectionFor()`), then the existing `LocationGroupSection` (Static_Map_Preview +
+      Get_Directions_Action) below it for every category
+    - _Requirements: 14.1, 14.2, 14.3, 14.4_
+  - [x] 18.4 Write render tests for Today_In_Park_Lens category dispatch and the Cockpit
+    - Default "Now"; switching to "Typical"/"Trip" issues the correctly-parameterized query; "Trip"
+      segment omitted when `resolveTripContextDate` returns null; Single_Rider_Strip and
+      Lightning_Lane assertions carried over from existing tests; Restaurant renders
+      `DiningReservationCard`, Show renders `ShowtimesCard`, a no-live category renders neither;
+      Location_Group renders below whichever (or none) is shown, for every category
+    - _Requirements: 13.1, 13.2, 13.3, 13.4, 13.5, 13.6, 13.7, 13.8, 13.9, 13.10, 14.1, 14.2, 14.3, 14.4_
+
+- [x] 19. Checkpoint - Ensure all tests pass
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [x] 20. Build `ParkPassportCard` and `RestaurantDishLogCard`
+  - [x] 20.1 Implement `ParkPassportCard`
+    - Wraps the existing `CompletionControls` / `RatingControl` / `NoteControl` and the existing
+      `logsQ` visit-history list; adds a visit-count + `computePassportAverage(...)` header, an
+      expandable per-visit-log list (date, per-entry rating, per-entry note), per-entry rating
+      edit/delete that triggers the existing `['experience-rating', id]` +
+      `['experience-aggregate', id]` invalidations and locally recomputes the header average; existing
+      empty state when zero logs
+    - Preserve every accessibility label, loading/error/empty independence, and mutation-invalidation
+      behavior from Requirement 6 for the underlying controls
+    - _Requirements: 17.1, 17.2, 17.3, 17.4, 17.5, 17.6, 17.7, 17.8_
+  - [x] 20.2 Implement `RestaurantDishLogCard` (Restaurant only)
+    - Renders the existing food-item-log query's items as name/rating/note rows, reusing the existing
+      "Log a food item" / "My logged items" / "Add to a list" handlers unchanged; existing empty state
+      when the list is empty; omitted for non-Restaurant categories
+    - _Requirements: 18.1, 18.2, 18.3, 18.4_
+  - [x] 20.3 Write render tests for `ParkPassportCard` and `RestaurantDishLogCard`
+    - Visit count + average header; per-entry rating edit recomputes the header average and fires the
+      existing invalidations; per-entry delete removes the entry, updates count and average, preserves
+      remaining order; empty state when zero logs; every existing R6 accessibility/loading/error/
+      mutation assertion re-run against the new layout; dish log renders items with name/rating/note,
+      empty state, omission for non-Restaurant categories
+    - _Requirements: 17.1, 17.2, 17.3, 17.4, 17.5, 17.6, 17.7, 17.8, 18.1, 18.2, 18.3, 18.4_
+
+- [x] 21. Build `FloatingActionDock` and wire the My_Passport_And_Lore_Lens
+  - [x] 21.1 Implement `FloatingActionDock`
+    - Fixed-position, category- and Lens-aware two-button control; selects its label pair per R19.2–
+      R19.4 and delegates to the exact existing handlers from Requirements 6/8/Task 7.3 — no new
+      mutation logic; non-empty accessibility label per action; content area reserves bottom padding
+      ≥ the dock's measured height
+    - _Requirements: 19.1, 19.2, 19.3, 19.4, 19.5, 19.6, 19.7_
+  - [x] 21.2 Wire the My_Passport_And_Lore_Lens
+    - Compose `ParkPassportCard` → `RestaurantDishLogCard` (Restaurant only) → `AboutSection` →
+      Why_This_Section under the "Imagineer's Insider Notes" label (copy change only) →
+      `Community_Rating_Section` → remaining `TagGroupCard`s, all reusing existing components
+    - _Requirements: 11.1, 11.5_
+  - [x] 21.3 Write render tests for `FloatingActionDock` and the full Lens composition
+    - Correct label pair per category × Lens combination; each action invokes the exact pre-existing
+      handler (spy-asserted, not a new mock behavior); dock remains rendered while Lens content
+      scrolls; My_Passport_And_Lore_Lens renders its cards in the specified order with the renamed
+      Why_This_Section label
+    - _Requirements: 19.1, 19.2, 19.3, 19.4, 19.5, 19.6, 19.7_
+
+- [x] 22. Fix the Trip_Context_Date regression in the existing `WaitInsightsSection`/`LiveWaitCockpit` wiring
+  - [x] 22.1 Replace the unconditional `activeTrip.startDate` resolution
+    - Wire the screen to call `resolveTripContextDate(...)` with the Experience's planned-item date
+      (if scheduled), the active/nearest-upcoming trip's date range, and today's WDW date, replacing
+      the pre-existing `tripDate = activeTrip ? activeTrip.startDate : null` logic entirely — not as
+      an additional fallback alongside it
+    - _Requirements: 16.1, 16.2, 16.3, 16.4, 16.5, 16.6_
+  - [x] 22.2 Write the regression test for the Trip date fix
+    - Assert that for a multi-day active trip where the Experience has a planned item scheduled on a
+      day other than the trip's `startDate`, the "Trip" forecast query uses the planned item's date,
+      not `startDate` — this test must fail against the pre-fix code path
+    - Assert that for an active trip with no planned item for this Experience, where today falls
+      within the trip's range, the query uses today's date, not `startDate`
+    - Assert that for an upcoming (not-yet-started) trip with no planned item, the query falls back to
+      `startDate`
+    - Assert that with no active or upcoming trip at all, the "Trip" segment is omitted entirely
+    - _Requirements: 16.1, 16.2, 16.3, 16.4, 16.6_
+
+- [x] 24. Backend Data Layer: Migration 0049_resort_metadata.sql, ResortDTO and Fastify routes
+  - [x] 24.1 Create additive migration `0049_resort_metadata.sql` adding `tier`, `feature_pool`, `transportation_modes`, `recreation`, and `transit_times` to `resorts` with seeded values for WDW resorts, and write `apps/api/src/db/__tests__/migration0049.test.ts`
+    - _Requirements: 20.1, 20.4_
+  - [x] 24.2 Update `packages/shared/src/dto/Resort.ts` and `schemas/Resort.ts` to export typed fields on `ResortDTO`
+    - _Requirements: 20.1, 20.4_
+  - [x] 24.3 Expose resort metadata in `apps/api/src/services/catalog/` (`GET /resorts` and `GET /catalog/:id`), and add optional `resortId` filter to `listActiveExperiences`
+    - _Requirements: 20.4_
+
+- [x] 25. Mobile Core Fixes: Live queue suppression, Location Group landmark resolution, and Floating Action Dock
+  - [x] 25.1 In `ExperienceDetailScreen.tsx`, suppress live queries and `<LiveUnavailableIndicator />` when `liveSectionFor === 'none'`
+    - _Requirements: 20.3, 21.2_
+  - [x] 25.2 In `LocationGroupSection.tsx`, update `resolveLandmarkDetails` for `areaType === 'Resort'` / `resortArea` to display resort name and area, eliminating the Magic Kingdom Central Plaza default
+    - _Requirements: 21.1_
+  - [x] 25.3 In `FloatingActionDock.tsx` and `DiningReservationCard.tsx`, update Quick Service handling to display `Log a Dish` + `Add to Trip` instead of `Reserve Table`, and title the card `Quick Service & Dishes`
+    - _Requirements: 21.3, 21.4_
+
+- [x] 26. Mobile Resort Guide & Lenses
+  - [x] 26.1 In `QuickSpecsRow.tsx` and `ExperienceDetailScreen.tsx`, implement category-polymorphic specs for `category === 'Resort'` (Tier, Area, Primary Transit, Feature Pool) sourcing matched Resort metadata without Coronado fallbacks, and `category === 'Tour'` / `Recreation`
+    - _Requirements: 20.1_
+  - [x] 26.2 In `LensSwitcher.tsx`, label lenses `Resort Guide` and `Stay Passport & Lore` for Resorts, and `Today at Resort` for resort activities
+    - _Requirements: 20.2, 21.5_
+  - [x] 26.3 Implement `ResortGuideSection.tsx` rendering authentic resort-specific Highlights, On-Property Dining (interactive cards with venue subtitles, service tags, green price tiers, and 'Reserve' / 'Menu ›' action buttons navigating to ExperienceDetail, queried per resort with authentic fallbacks), Recreation & Amenities, and Property Map & Transit with verified street addresses and destination-specific transit mode indicators (Boat, Monorail, Skyliner, Bus)
+    - _Requirements: 20.4, 20.5, 20.6_
+  - [x] 26.4 Fix the Resort-representing Experience's `resortArea` (backend `toResortRepresentingExperience` in `sync.ts` hardcoded `resortArea: null` instead of resolving it from the Resort's own Facility_Document ancestor chain), populate the `Experience_Detail_Screen` header subtitle and `ExperienceHero` location pin badge from it for Resorts (falling back to Park, then omitting the text rather than rendering blank), and remove the now-redundant Geographic Area chip from `QuickSpecsRow`'s Resort branch since the header subtitle and hero photo pin already convey it
+    - _Requirements: 20.1, 20.7, 20.8_
+  - [x] 26.5 In `QuickSpecsRow.tsx`, replace the equal-thirds chip layout with a natural-width-plus-one-growing-chip layout (`specItemGrow` on the last, longest-text chip per category branch) so short fixed-length chips (tier, transit, duration, climate) no longer get stretched or steal space from the long, variable-length chip (feature pool / feature label) that was still truncating even after the Area chip was removed
+    - _Requirements: 20.1_
+
+- [x] 27. Resorts Destination Screen 'Other' Category Refactoring
+  - [x] 27.1 In `catalogGrouping.ts`, replace the `Other` catch-all with structured sub-destinations (*Disney's BoardWalk & Promenade*, *ESPN Wide World of Sports Complex*, and *Property-Wide Recreation & Sports*)
+    - _Requirements: 22.1, 22.2, 22.3, 22.4_
+  - [x] 27.2 Update `DestinationScreen.tsx` and write property tests for `groupByResort`
+    - _Requirements: 22.1, 22.2, 22.3, 22.4_
+
+- [x] 28. Final Checkpoint & Full Verification
+  - [x] 28.1 Run all unit and property tests across modified modules
+  - [x] 28.2 Run `npm run verify` across all workspaces and paste literal output
+    - _Requirements: All_
+
+- [x] 29. Park Passport Tip Empty State & Authentic Display
+  - [x] 29.1 In `ParkPassportCard.tsx`, eliminate the hardcoded placeholder quote fallback and render a clean empty tip state with an '+ Add Tip' affordance when no personal tip or visit note exists
+    - _Requirements: 17.11_
+  - [x] 29.2 In `ParkPassportCard.test.tsx`, write render and interaction tests verifying empty tip state prompt, '+ Add Tip' modal opening, and authentic tip rendering
+    - _Requirements: 17.11_
+
+- [x] 30. Resort Dining Served Meal Periods Display
+  - [x] 30.1 In `ResortGuideSection.tsx`, update `ResortDiningVenue` interface to include `readonly meals?: readonly string[] | undefined;`, extract meal periods from dynamic `ExperienceDTO.mealPeriods` with non-meal tag filtering (e.g. 'Pool Bar') and canonical chronological sorting (`Breakfast`, `Brunch`, `Lunch`, `Dinner`, `Late Night`) with fallback to `KNOWN_DINING_METADATA`, populate authentic meal periods in `KNOWN_DINING_METADATA` and `KNOWN_RESORT_PROFILES` fallback dining items, and render meal periods on their own dedicated line between subtitle and tag row (`resort-dining-meals-${venue.id}`) to prevent truncation
+    - _Requirements: 20.4_
+  - [x] 30.2 In `ResortGuideSection.test.tsx`, write render tests asserting meal periods are rendered on their own dedicated line in canonical chronological order, non-meal tags are filtered, and fallback dining venues render authentic meals
+    - _Requirements: 20.4_
+
 ## Notes
 
 - Tasks marked with `*` are optional test tasks and can be skipped for a faster MVP.
@@ -271,9 +482,13 @@ involved.
 - Property tests run at a minimum of 100 iterations and each implements exactly one correctness
   property, tagged `Feature: experience-detail-redesign, Property {number}: {property_text}`.
 - Property tests target the pure cores (`infoTags.ts`, `directions.ts`, `shareEntryPoint.ts`,
-  `gating.ts`, aggregate helper); example-based render tests cover UI composition, ordering, and
-  interaction criteria (R5, R6, R7, most of R8).
+  `gating.ts`, aggregate helper, and — for the Two-Lens amendment — `tripContextDate.ts` and
+  `passportStats.ts`); example-based render tests cover UI composition, ordering, and interaction
+  criteria (R5, R6, R7, most of R8, and R11–R19).
 - Checkpoints ensure incremental validation before wiring the screen together.
+- Task 22 is a bug fix to already-shipped code (`WaitInsightsSection.tsx`'s trip-date resolution), not
+  new-feature work; per this repo's execution-discipline convention its regression test (22.2) must be
+  written to fail against the pre-fix code path, not merely pass after the fix.
 
 ## Task Dependency Graph
 
@@ -290,7 +505,28 @@ involved.
     { "id": 7, "tasks": ["10.2"] },
     { "id": 8, "tasks": ["12.1"] },
     { "id": 9, "tasks": ["12.2", "12.3"] },
-    { "id": 10, "tasks": ["12.4"] }
+    { "id": 10, "tasks": ["12.4"] },
+    { "id": 11, "tasks": ["13.1", "14.1"] },
+    { "id": 12, "tasks": ["13.2", "14.2"] },
+    { "id": 13, "tasks": ["15"] },
+    { "id": 14, "tasks": ["16.1", "16.2", "16.3", "17.1"] },
+    { "id": 15, "tasks": ["16.4", "17.2", "18.1", "18.2"] },
+    { "id": 16, "tasks": ["18.3"] },
+    { "id": 17, "tasks": ["18.4"] },
+    { "id": 18, "tasks": ["19"] },
+    { "id": 19, "tasks": ["20.1", "20.2", "21.1"] },
+    { "id": 20, "tasks": ["20.3", "21.2"] },
+    { "id": 21, "tasks": ["21.3"] },
+    { "id": 22, "tasks": ["22.1"] },
+    { "id": 23, "tasks": ["22.2"] },
+    { "id": 24, "tasks": ["23"] },
+    { "id": 25, "tasks": ["24.1", "24.2"] },
+    { "id": 26, "tasks": ["24.3", "25.1", "25.2", "25.3"] },
+    { "id": 27, "tasks": ["26.1", "26.2", "26.3"] },
+    { "id": 28, "tasks": ["27.1", "27.2"] },
+    { "id": 29, "tasks": ["28.1", "28.2"] },
+    { "id": 30, "tasks": ["29.1", "29.2"] },
+    { "id": 31, "tasks": ["30.1", "30.2"] }
   ]
 }
 ```

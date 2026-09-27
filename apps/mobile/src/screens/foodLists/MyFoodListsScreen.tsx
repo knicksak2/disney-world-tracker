@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -29,6 +29,7 @@ export default function MyFoodListsScreen(): JSX.Element {
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [newListName, setNewListName] = useState('');
   const [newListVisibility, setNewListVisibility] = useState<'private' | 'public'>('private');
+  const [newListIsChecklist, setNewListIsChecklist] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
@@ -56,9 +57,11 @@ export default function MyFoodListsScreen(): JSX.Element {
       await apiRequest('POST', '/me/food-lists', {
         name: trimmed,
         visibility: newListVisibility,
+        isChecklist: newListIsChecklist,
       });
       setNewListName('');
       setNewListVisibility('private');
+      setNewListIsChecklist(false);
       setCreateError(null);
       setCreateModalVisible(false);
       await queryClient.invalidateQueries({ queryKey: ['food-lists-collection'] });
@@ -120,6 +123,128 @@ export default function MyFoodListsScreen(): JSX.Element {
     }
     navigation.goBack();
   }
+
+  // Stable `renderItem` identity — an inline arrow literal is recreated every
+  // render, which `FlatList`/`VirtualizedList` treats as a changed render
+  // function and forces expensive re-render/re-measure work even when the row
+  // is otherwise unchanged (see the same fix in `DestinationScreen.tsx`).
+  const renderOwnedList = useCallback(
+    ({ item }: { item: FoodListDTO }) => (
+      <Card style={styles.card} testID={`my-food-list-card-${item.id}`}>
+        <Pressable
+          onPress={() => navigation.navigate('FoodListDetail', { foodListId: item.id })}
+          accessibilityRole="button"
+          accessibilityLabel={`Open food list ${item.name}`}
+          style={styles.cardPressable}
+        >
+          <View style={styles.cardHeader}>
+            <Text style={styles.cardTitle}>{item.name}</Text>
+            <Badge
+              label={item.visibility === 'public' ? 'Public' : 'Private'}
+              color={item.visibility === 'public' ? theme.color.primary : theme.color.textSecondary}
+            />
+          </View>
+          <View style={styles.cardMeta}>
+            <Text style={styles.cardMetaText}>{item.itemCount} items</Text>
+            <View style={styles.likeCountBadge}>
+              <Ionicons name="heart" size={14} color={theme.color.danger} />
+              <Text style={styles.likeCountText}>{item.likeCount}</Text>
+            </View>
+          </View>
+        </Pressable>
+
+        {/* Card Controls */}
+        <View style={styles.cardControls}>
+          <Pressable
+            onPress={() => {
+              setRenameTarget(item);
+              setRenameValue(item.name);
+            }}
+            style={styles.controlBtn}
+            accessibilityRole="button"
+            accessibilityLabel={`Rename ${item.name}`}
+            testID={`my-food-lists-rename-btn-${item.id}`}
+          >
+            <Ionicons name="pencil-outline" size={16} color={theme.color.textSecondary} />
+            <Text style={styles.controlBtnText}>Rename</Text>
+          </Pressable>
+
+          <Pressable
+            onPress={() => void handleToggleVisibility(item)}
+            style={styles.controlBtn}
+            accessibilityRole="button"
+            accessibilityLabel={`Change visibility of ${item.name}, currently ${item.visibility}`}
+            testID={`my-food-lists-visibility-btn-${item.id}`}
+          >
+            <Ionicons
+              name={item.visibility === 'public' ? 'globe-outline' : 'lock-closed-outline'}
+              size={16}
+              color={theme.color.textSecondary}
+            />
+            <Text style={styles.controlBtnText}>
+              Make {item.visibility === 'public' ? 'Private' : 'Public'}
+            </Text>
+          </Pressable>
+
+          <Pressable
+            onPress={() => void handleDeleteList(item.id)}
+            style={styles.controlBtn}
+            accessibilityRole="button"
+            accessibilityLabel={`Delete ${item.name}`}
+            testID={`my-food-lists-delete-btn-${item.id}`}
+          >
+            <Ionicons name="trash-outline" size={16} color={theme.color.danger} />
+            <Text style={[styles.controlBtnText, styles.deleteBtnText]}>Delete</Text>
+          </Pressable>
+        </View>
+      </Card>
+    ),
+    [navigation, handleToggleVisibility, handleDeleteList],
+  );
+
+  // Same stable-identity fix as `renderOwnedList` above, for the saved-lists
+  // `FlatList`. Preserves the `!item.available` unavailable-row degradation
+  // branch exactly.
+  const renderSavedList = useCallback(
+    ({ item }: { item: FoodListCollectionDTO['saved'][number] }) => {
+      // Requirement 7a, Task 8.11: Unavailable row degradation
+      if (!item.available) {
+        return (
+          <View
+            style={styles.unavailableRow}
+            testID={`saved-food-list-unavailable-${item.foodListId}`}
+          >
+            <Ionicons name="alert-circle-outline" size={20} color={theme.color.textSecondary} />
+            <Text style={styles.unavailableRowText}>No longer available</Text>
+          </View>
+        );
+      }
+
+      return (
+        <Pressable
+          onPress={() => navigation.navigate('FoodListDetail', { foodListId: item.id })}
+          accessibilityRole="button"
+          accessibilityLabel={`Open saved food list ${item.name}`}
+          testID={`saved-food-list-card-${item.id}`}
+        >
+          <Card style={styles.savedCard} testID={`saved-food-list-card-inner-${item.id}`}>
+            <View style={styles.cardHeader}>
+              <Text style={styles.cardTitle}>{item.name}</Text>
+              <View style={styles.likeCountBadge}>
+                <Ionicons name="heart" size={14} color={theme.color.danger} />
+                <Text style={styles.likeCountText}>{item.likeCount}</Text>
+              </View>
+            </View>
+            <View style={styles.cardMeta}>
+              <Text style={styles.cardMetaText}>by {item.ownerDisplayName}</Text>
+              <Text style={styles.cardMetaText}>{item.itemCount} items</Text>
+            </View>
+          </Card>
+        </Pressable>
+      );
+    },
+    [navigation],
+  );
 
   return (
     <ScreenContainer>
@@ -186,6 +311,7 @@ export default function MyFoodListsScreen(): JSX.Element {
             onPress={() => {
               setNewListName('');
               setNewListVisibility('private');
+              setNewListIsChecklist(false);
               setCreateError(null);
               setCreateModalVisible(true);
             }}
@@ -201,76 +327,7 @@ export default function MyFoodListsScreen(): JSX.Element {
           <FlatList
             data={ownedLists}
             keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
-              <Card style={styles.card} testID={`my-food-list-card-${item.id}`}>
-                <Pressable
-                  onPress={() => navigation.navigate('FoodListDetail', { foodListId: item.id })}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Open food list ${item.name}`}
-                  style={styles.cardPressable}
-                >
-                  <View style={styles.cardHeader}>
-                    <Text style={styles.cardTitle}>{item.name}</Text>
-                    <Badge
-                      label={item.visibility === 'public' ? 'Public' : 'Private'}
-                      color={item.visibility === 'public' ? theme.color.primary : theme.color.textSecondary}
-                    />
-                  </View>
-                  <View style={styles.cardMeta}>
-                    <Text style={styles.cardMetaText}>{item.itemCount} items</Text>
-                    <View style={styles.likeCountBadge}>
-                      <Ionicons name="heart" size={14} color={theme.color.danger} />
-                      <Text style={styles.likeCountText}>{item.likeCount}</Text>
-                    </View>
-                  </View>
-                </Pressable>
-
-                {/* Card Controls */}
-                <View style={styles.cardControls}>
-                  <Pressable
-                    onPress={() => {
-                      setRenameTarget(item);
-                      setRenameValue(item.name);
-                    }}
-                    style={styles.controlBtn}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Rename ${item.name}`}
-                    testID={`my-food-lists-rename-btn-${item.id}`}
-                  >
-                    <Ionicons name="pencil-outline" size={16} color={theme.color.textSecondary} />
-                    <Text style={styles.controlBtnText}>Rename</Text>
-                  </Pressable>
-
-                  <Pressable
-                    onPress={() => void handleToggleVisibility(item)}
-                    style={styles.controlBtn}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Change visibility of ${item.name}, currently ${item.visibility}`}
-                    testID={`my-food-lists-visibility-btn-${item.id}`}
-                  >
-                    <Ionicons
-                      name={item.visibility === 'public' ? 'globe-outline' : 'lock-closed-outline'}
-                      size={16}
-                      color={theme.color.textSecondary}
-                    />
-                    <Text style={styles.controlBtnText}>
-                      Make {item.visibility === 'public' ? 'Private' : 'Public'}
-                    </Text>
-                  </Pressable>
-
-                  <Pressable
-                    onPress={() => void handleDeleteList(item.id)}
-                    style={styles.controlBtn}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Delete ${item.name}`}
-                    testID={`my-food-lists-delete-btn-${item.id}`}
-                  >
-                    <Ionicons name="trash-outline" size={16} color={theme.color.danger} />
-                    <Text style={[styles.controlBtnText, styles.deleteBtnText]}>Delete</Text>
-                  </Pressable>
-                </View>
-              </Card>
-            )}
+            renderItem={renderOwnedList}
             ListEmptyComponent={
               <View style={styles.emptyWrap}>
                 <Ionicons name="restaurant-outline" size={44} color={theme.color.textSecondary} />
@@ -287,43 +344,7 @@ export default function MyFoodListsScreen(): JSX.Element {
           <FlatList
             data={savedLists}
             keyExtractor={(item) => (item.available ? item.id : item.foodListId)}
-            renderItem={({ item }) => {
-              // Requirement 7a, Task 8.11: Unavailable row degradation
-              if (!item.available) {
-                return (
-                  <View
-                    style={styles.unavailableRow}
-                    testID={`saved-food-list-unavailable-${item.foodListId}`}
-                  >
-                    <Ionicons name="alert-circle-outline" size={20} color={theme.color.textSecondary} />
-                    <Text style={styles.unavailableRowText}>No longer available</Text>
-                  </View>
-                );
-              }
-
-              return (
-                <Pressable
-                  onPress={() => navigation.navigate('FoodListDetail', { foodListId: item.id })}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Open saved food list ${item.name}`}
-                  testID={`saved-food-list-card-${item.id}`}
-                >
-                  <Card style={styles.savedCard} testID={`saved-food-list-card-inner-${item.id}`}>
-                    <View style={styles.cardHeader}>
-                      <Text style={styles.cardTitle}>{item.name}</Text>
-                      <View style={styles.likeCountBadge}>
-                        <Ionicons name="heart" size={14} color={theme.color.danger} />
-                        <Text style={styles.likeCountText}>{item.likeCount}</Text>
-                      </View>
-                    </View>
-                    <View style={styles.cardMeta}>
-                      <Text style={styles.cardMetaText}>by {item.ownerDisplayName}</Text>
-                      <Text style={styles.cardMetaText}>{item.itemCount} items</Text>
-                    </View>
-                  </Card>
-                </Pressable>
-              );
-            }}
+            renderItem={renderSavedList}
             ListEmptyComponent={
               <View style={styles.emptyWrap}>
                 <Ionicons name="bookmark-outline" size={44} color={theme.color.textSecondary} />
@@ -399,6 +420,50 @@ export default function MyFoodListsScreen(): JSX.Element {
                     ]}
                   >
                     Public
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+
+            <View style={styles.visibilityToggleRow}>
+              <Text style={styles.visibilityLabel}>Track as a checklist:</Text>
+              <View style={styles.visToggleGroup}>
+                <Pressable
+                  onPress={() => setNewListIsChecklist(false)}
+                  style={[
+                    styles.visPill,
+                    !newListIsChecklist && styles.visPillActive,
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Do not track as a checklist"
+                  testID="new-food-list-checklist-off"
+                >
+                  <Text
+                    style={[
+                      styles.visPillText,
+                      !newListIsChecklist && styles.visPillTextActive,
+                    ]}
+                  >
+                    No
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => setNewListIsChecklist(true)}
+                  style={[
+                    styles.visPill,
+                    newListIsChecklist && styles.visPillActive,
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Track as a checklist"
+                  testID="new-food-list-checklist-toggle"
+                >
+                  <Text
+                    style={[
+                      styles.visPillText,
+                      newListIsChecklist && styles.visPillTextActive,
+                    ]}
+                  >
+                    Yes
                   </Text>
                 </Pressable>
               </View>

@@ -118,6 +118,28 @@ export function createThemeParksDirectory(
       }
     }
 
+    // Also enumerate the destination's OWN children. ThemeParks.wiki parents
+    // resort-hotel restaurants, lounges, bars, and shows (e.g. Cove Bar,
+    // Sanaa Lounge, California Grill) directly to the destination rather than
+    // to any of the six theme/water parks in `wdw.parks` — those venues are
+    // never returned by a per-park children call, so without this pass the
+    // directory can never resolve them and every resort-based experience
+    // permanently degrades to `live_unavailable`. Same per-call failure
+    // isolation as the park loop above.
+    try {
+      const { children } = await client.getEntityChildren(wdw.id);
+      for (const child of children) {
+        if (child.externalId !== undefined && child.externalId.length > 0) {
+          next.set(child.externalId, child.id);
+        }
+      }
+    } catch (err) {
+      logger.warn(
+        { err, destinationId: wdw.id, destinationName: wdw.name },
+        'ThemeParks directory: failed to enumerate the destination\u2019s own children',
+      );
+    }
+
     logger.debug({ entries: next.size }, 'ThemeParks directory built');
     return next;
   }

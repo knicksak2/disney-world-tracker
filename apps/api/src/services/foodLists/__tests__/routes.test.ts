@@ -24,6 +24,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import type {
+  CreateFoodListInputDTO,
   FoodListCollectionDTO,
   FoodListDetailDTO,
   FoodListDiscoveryPageDTO,
@@ -63,6 +64,7 @@ function makeFakeFoodListRepo() {
       ownerId: string;
       name: string;
       visibility?: 'private' | 'public' | undefined;
+      isChecklist?: boolean | undefined;
     }[],
     renameListCalls: [] as { listId: string; userId: string; name: string }[],
     updateVisibilityCalls: [] as {
@@ -70,14 +72,20 @@ function makeFakeFoodListRepo() {
       userId: string;
       visibility: 'private' | 'public';
     }[],
+    setChecklistModeCalls: [] as {
+      listId: string;
+      userId: string;
+      isChecklist: boolean;
+    }[],
     deleteListCalls: [] as { listId: string; userId: string }[],
     listOwnedCalls: [] as string[],
     getListDetailCalls: [] as { listId: string; userId: string }[],
-    discoverCalls: [] as { sort: 'popular' | 'recent'; cursor?: string }[],
+    discoverCalls: [] as { sort: string; cursor?: string }[],
 
     createListError: null as Error | null,
     renameListError: null as Error | null,
     updateVisibilityError: null as Error | null,
+    setChecklistModeError: null as Error | null,
     deleteListError: null as Error | null,
     getListDetailError: null as Error | null,
     discoverError: null as Error | null,
@@ -88,6 +96,7 @@ function makeFakeFoodListRepo() {
       ownerDisplayName: 'Test User',
       name: 'Best Snacks',
       visibility: 'private' as const,
+      isChecklist: false,
       likeCount: 0,
       itemCount: 0,
       createdAt: '2026-06-15T12:00:00.000Z',
@@ -96,18 +105,20 @@ function makeFakeFoodListRepo() {
 
     async createList(
       userId: string,
-      input: { name: string; visibility?: 'private' | 'public' },
+      input: CreateFoodListInputDTO,
     ): Promise<FoodListDTO> {
       this.createListCalls.push({
         ownerId: userId,
         name: input.name,
         visibility: input.visibility,
+        isChecklist: input.isChecklist,
       });
       if (this.createListError) throw this.createListError;
       return {
         ...this.sampleList,
         name: input.name,
         visibility: input.visibility ?? 'private',
+        isChecklist: input.isChecklist ?? false,
         ownerId: userId,
       };
     },
@@ -126,6 +137,16 @@ function makeFakeFoodListRepo() {
       this.updateVisibilityCalls.push({ listId, userId, visibility });
       if (this.updateVisibilityError) throw this.updateVisibilityError;
       return { ...this.sampleList, id: listId, visibility };
+    },
+
+    async setChecklistMode(
+      listId: string,
+      userId: string,
+      isChecklist: boolean,
+    ): Promise<FoodListDTO> {
+      this.setChecklistModeCalls.push({ listId, userId, isChecklist });
+      if (this.setChecklistModeError) throw this.setChecklistModeError;
+      return { ...this.sampleList, id: listId, isChecklist };
     },
 
     async findListById(
@@ -810,6 +831,173 @@ describe('Food Lists routes integration', () => {
     expect(body.saved[0]).toEqual({
       available: false,
       foodListId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Checklist Food Lists (Requirement 13)
+  // -------------------------------------------------------------------------
+
+  describe('Checklist Food Lists (Requirement 13)', () => {
+    it('creates checklist list with isChecklist: true', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/me/food-lists',
+        headers: { 'x-test-user-id': USER_ID },
+        payload: { name: 'Festival Checklist', isChecklist: true },
+      });
+      expect(res.statusCode).toBe(201);
+      const list = res.json() as FoodListDTO;
+      expect(list.isChecklist).toBe(true);
+      expect(fakeRepo.createListCalls).toHaveLength(1);
+    });
+
+    it('creates non-checklist list with isChecklist: false', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/me/food-lists',
+        headers: { 'x-test-user-id': USER_ID },
+        payload: { name: 'Plain Collection', isChecklist: false },
+      });
+      expect(res.statusCode).toBe(201);
+      const list = res.json() as FoodListDTO;
+      expect(list.isChecklist).toBe(false);
+    });
+
+    it('creates non-checklist list by default when isChecklist is omitted', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/me/food-lists',
+        headers: { 'x-test-user-id': USER_ID },
+        payload: { name: 'Default List' },
+      });
+      expect(res.statusCode).toBe(201);
+      const list = res.json() as FoodListDTO;
+      expect(list.isChecklist).toBe(false);
+    });
+
+    it('rejects invalid non-boolean isChecklist with 400 validation_failed', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/me/food-lists',
+        headers: { 'x-test-user-id': USER_ID },
+        payload: { name: 'Invalid List', isChecklist: 'yes' },
+      });
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error.code).toBe('validation_failed');
+    });
+
+    it('PATCH /me/food-lists/:id toggles isChecklist without side effects', async () => {
+      const res = await app.inject({
+        method: 'PATCH',
+        url: `/me/food-lists/${LIST_ID}`,
+        headers: { 'x-test-user-id': USER_ID },
+        payload: { isChecklist: true },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(fakeRepo.setChecklistModeCalls).toEqual([
+        { listId: LIST_ID, userId: USER_ID, isChecklist: true },
+      ]);
+      const list = res.json() as FoodListDTO;
+      expect(list.isChecklist).toBe(true);
+    });
+
+    it('GET /food-lists/:id includes gotten and gottenCount when isChecklist is true', async () => {
+      const origGetListDetail = fakeRepo.getListDetail;
+      fakeRepo.getListDetail = async (listId, userId) => ({
+        ...fakeRepo.sampleList,
+        id: listId,
+        isChecklist: true,
+        liked: false,
+        saved: false,
+        version: 1,
+        myRole: 'owner',
+        itemCount: 2,
+        gottenCount: 1,
+        items: [
+          {
+            foodItemId: FOOD_ITEM_ID_1,
+            name: 'Dole Whip',
+            experienceId: null,
+            experienceName: null,
+            locationId: null,
+            locationName: null,
+            price: '$5.99',
+            position: 0,
+            addedByUserId: userId,
+            addedByDisplayName: 'User',
+            gotten: true,
+          },
+          {
+            foodItemId: FOOD_ITEM_ID_2,
+            name: 'Churro',
+            experienceId: null,
+            experienceName: null,
+            locationId: null,
+            locationName: null,
+            price: '$4.99',
+            position: 1,
+            addedByUserId: userId,
+            addedByDisplayName: 'User',
+            gotten: false,
+          },
+        ],
+      });
+
+      const res = await app.inject({
+        method: 'GET',
+        url: `/food-lists/${LIST_ID}`,
+        headers: { 'x-test-user-id': USER_ID },
+      });
+      expect(res.statusCode).toBe(200);
+      const detail = res.json() as FoodListDetailDTO;
+      expect(detail.isChecklist).toBe(true);
+      expect(detail.gottenCount).toBe(1);
+      expect(detail.items[0]?.gotten).toBe(true);
+      expect(detail.items[1]?.gotten).toBe(false);
+
+      fakeRepo.getListDetail = origGetListDetail;
+    });
+
+    it('GET /food-lists/:id omits gotten and gottenCount when isChecklist is false', async () => {
+      const origGetListDetail = fakeRepo.getListDetail;
+      fakeRepo.getListDetail = async (listId, userId) => ({
+        ...fakeRepo.sampleList,
+        id: listId,
+        isChecklist: false,
+        liked: false,
+        saved: false,
+        version: 1,
+        myRole: 'owner',
+        itemCount: 1,
+        items: [
+          {
+            foodItemId: FOOD_ITEM_ID_1,
+            name: 'Dole Whip',
+            experienceId: null,
+            experienceName: null,
+            locationId: null,
+            locationName: null,
+            price: '$5.99',
+            position: 0,
+            addedByUserId: userId,
+            addedByDisplayName: 'User',
+          },
+        ],
+      });
+
+      const res = await app.inject({
+        method: 'GET',
+        url: `/food-lists/${LIST_ID}`,
+        headers: { 'x-test-user-id': USER_ID },
+      });
+      expect(res.statusCode).toBe(200);
+      const rawJson = res.json();
+      expect(rawJson.isChecklist).toBe(false);
+      expect('gottenCount' in rawJson).toBe(false);
+      expect('gotten' in rawJson.items[0]).toBe(false);
+
+      fakeRepo.getListDetail = origGetListDetail;
     });
   });
 });

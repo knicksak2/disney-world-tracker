@@ -68,6 +68,9 @@ import type {
   MenuDTO,
   Park,
   ResortDTO,
+  ResortLoreItemDTO,
+  ResortRecreationItemDTO,
+  ResortTier,
   SyncRunOutcome,
   WhyThisDTO,
 } from '@dwt/shared';
@@ -170,6 +173,11 @@ export interface CatalogListFilters {
    * other filter; a non-matching value yields an empty list.
    */
   readonly worldShowcaseCountry?: string;
+  /**
+   * Exact match on `experiences.resort_id`. When present, returns only active
+   * Experiences located at that specific Resort.
+   */
+  readonly resortId?: string;
 }
 
 /**
@@ -308,6 +316,12 @@ interface ResortRow extends QueryResultRow {
   address: string | null;
   phone: string | null;
   active: boolean;
+  tier?: ResortTier | null;
+  feature_pool?: string | null;
+  transportation_modes?: string[] | null;
+  recreation?: ResortRecreationItemDTO[] | null;
+  transit_times?: Record<string, string> | null;
+  architectural_lore?: ResortLoreItemDTO[] | null;
   /**
    * Id of the active resort-representing Experience standing in for this
    * Resort, joined in by {@link listActiveResorts} (Option A). Absent on reads
@@ -1082,12 +1096,17 @@ async function listActiveExperiences(
     where.push(`world_showcase_country = $${params.length}`);
   }
 
+  if (filters.resortId !== undefined) {
+    params.push(filters.resortId);
+    where.push(`resort_id = $${params.length}`);
+  }
+
   const sql = `
     SELECT id, upstream_entity_id, name, park, category, description, active,
            land, resort_area, world_showcase_country, image_url, latitude, longitude, area_type, resort_id,
            accessibility, price_tier, meal_periods,
            grouped_facets, height_requirement, why_this, sub_type,
-           dining_url
+           dining_url, represents_resort_id
       FROM experiences
      WHERE ${where.join(' AND ')}
      ORDER BY park ASC, lower(name) ASC, id ASC`;
@@ -1125,7 +1144,8 @@ async function listActiveResorts(
   // a Resort into multiple rows.
   const result = await pool.query<ResortRow>(
     `SELECT r.id, r.name, r.description, r.image_url, r.latitude, r.longitude,
-            r.address, r.phone,
+            r.address, r.phone, r.tier, r.feature_pool, r.transportation_modes,
+            r.recreation, r.transit_times, r.architectural_lore,
             e.id AS representing_experience_id
        FROM resorts r
        LEFT JOIN experiences e
@@ -1160,7 +1180,7 @@ async function getExperience(
             land, resort_area, world_showcase_country, image_url, latitude, longitude, area_type, resort_id,
             accessibility, price_tier, meal_periods,
             grouped_facets, height_requirement, why_this, sub_type,
-            dining_url
+            dining_url, represents_resort_id
        FROM experiences
       WHERE id = $1`,
     [id],
@@ -1357,6 +1377,9 @@ function rowToDto(row: ExperienceRow): ExperienceDTO {
       ? { worldShowcaseCountry: row.world_showcase_country }
       : {}),
     ...(row.resort_id !== null ? { resortId: row.resort_id } : {}),
+    ...(row.represents_resort_id !== null && row.represents_resort_id !== undefined
+      ? { representsResortId: row.represents_resort_id }
+      : {}),
     ...(row.latitude !== null ? { latitude: row.latitude } : {}),
     ...(row.longitude !== null ? { longitude: row.longitude } : {}),
     ...(row.accessibility.length > 0
@@ -1381,7 +1404,26 @@ function rowToDto(row: ExperienceRow): ExperienceDTO {
 }
 
 /** Translate a `resorts` row into the wire {@link ResortDTO} (R6.8). */
-function rowToResortDto(row: ResortRow): ResortDTO {
+function rowToResortDto(row: any): ResortDTO {
+  const rawModes = row.transportation_modes;
+  const modes: string[] = Array.isArray(rawModes)
+    ? rawModes
+    : typeof rawModes === 'string' && (rawModes as string).startsWith('{')
+      ? (rawModes as string)
+          .slice(1, -1)
+          .split(',')
+          .map((s: string) => s.trim().replace(/^"|"$/g, ''))
+          .filter(Boolean)
+      : [];
+  const recreation = Array.isArray(row.recreation) ? row.recreation : [];
+  const lore = Array.isArray(row.architectural_lore) ? row.architectural_lore : [];
+  const transitTimes =
+    row.transit_times &&
+    typeof row.transit_times === 'object' &&
+    !Array.isArray(row.transit_times)
+      ? row.transit_times
+      : {};
+
   return {
     id: row.id,
     name: row.name,
@@ -1392,6 +1434,12 @@ function rowToResortDto(row: ResortRow): ResortDTO {
     address: row.address,
     phone: row.phone,
     representingExperienceId: row.representing_experience_id ?? null,
+    ...(row.tier ? { tier: row.tier } : {}),
+    ...(row.feature_pool ? { featurePool: row.feature_pool } : {}),
+    ...(modes.length > 0 ? { transportationModes: modes } : {}),
+    ...(recreation.length > 0 ? { recreation } : {}),
+    ...(Object.keys(transitTimes).length > 0 ? { transitTimes } : {}),
+    ...(lore.length > 0 ? { architecturalLore: lore } : {}),
   };
 }
 

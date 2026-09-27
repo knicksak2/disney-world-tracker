@@ -73,6 +73,7 @@ const sampleOwnedLists: readonly FoodListDTO[] = [
     ownerDisplayName: 'Me',
     name: 'Best Snacks in EPCOT',
     visibility: 'public',
+    isChecklist: false,
     itemCount: 4,
     likeCount: 12,
     createdAt: '2026-09-01T12:00:00.000Z',
@@ -84,6 +85,7 @@ const sampleOwnedLists: readonly FoodListDTO[] = [
     ownerDisplayName: 'Me',
     name: 'Secret Drinks',
     visibility: 'private',
+    isChecklist: false,
     itemCount: 2,
     likeCount: 0,
     createdAt: '2026-09-02T12:00:00.000Z',
@@ -226,6 +228,7 @@ describe('MyFoodListsScreen', () => {
       expect(apiRequestMock).toHaveBeenCalledWith('POST', '/me/food-lists', {
         name: 'Dole Whip Tour',
         visibility: 'private',
+        isChecklist: false,
       });
     });
   });
@@ -240,6 +243,7 @@ describe('MyFoodListsScreen', () => {
           ownerDisplayName: 'Me',
           name: (body as any)?.name,
           visibility: (body as any)?.visibility ?? 'private',
+          isChecklist: (body as any)?.isChecklist ?? false,
           itemCount: 0,
           likeCount: 0,
           createdAt: new Date().toISOString(),
@@ -277,12 +281,63 @@ describe('MyFoodListsScreen', () => {
       expect(apiRequestMock).toHaveBeenCalledWith('POST', '/me/food-lists', {
         name: 'Magic Kingdom Sweets',
         visibility: 'public',
+        isChecklist: false,
       });
     });
 
     // Verify the new public list appears in the owned tab
     await waitFor(() => {
       expect(screen.getByText('Magic Kingdom Sweets')).toBeTruthy();
+    });
+  });
+
+  test('creates a new checklist food list when "Track as a checklist" toggle is activated (Task 17.6, Requirement 13.13)', async () => {
+    apiRequestMock.mockImplementation(async (method, path, body) => {
+      if (path === '/me/food-lists' && method === 'POST') {
+        return {
+          id: 'list-checklist-1',
+          ownerId: 'user-me',
+          ownerDisplayName: 'Me',
+          name: (body as any)?.name,
+          visibility: (body as any)?.visibility ?? 'private',
+          isChecklist: (body as any)?.isChecklist ?? false,
+          itemCount: 0,
+          likeCount: 0,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+      }
+      if (path === '/me/food-lists/collection') {
+        return { owned: sampleOwnedLists, saved: sampleSavedLists };
+      }
+      return {};
+    });
+
+    renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByText('Best Snacks in EPCOT')).toBeTruthy();
+    });
+
+    // Open create modal
+    fireEvent.press(screen.getByTestId('my-food-lists-create-btn'));
+    expect(screen.getByText('Create Food List')).toBeTruthy();
+
+    // Enter list name
+    fireEvent.changeText(screen.getByTestId('new-food-list-name-input'), 'Festival Checklist');
+
+    // Activate checklist toggle
+    fireEvent.press(screen.getByTestId('new-food-list-checklist-toggle'));
+
+    // Submit
+    fireEvent.press(screen.getByTestId('submit-create-food-list-btn'));
+
+    await waitFor(() => {
+      expect(apiRequestMock).toHaveBeenCalledWith('POST', '/me/food-lists', {
+        name: 'Festival Checklist',
+        visibility: 'private',
+        isChecklist: true,
+      });
     });
   });
 

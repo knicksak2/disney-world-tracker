@@ -16,9 +16,7 @@
  *   1. **Resolve** the Experience's `Enterprise_Id` via
  *      {@link LiveRepo.resolveUpstreamEntityId}. The catalog persists it as
  *      `experiences.upstream_entity_id`, and it equals the ThemeParks.wiki
- *      entity's `External_Id` (R11.2). A `null` result is a failed retrieval
- *      that NEVER contacts ThemeParks.wiki (mirrors R1.9) and falls through to
- *      the failure path.
+ *      entity's `External_Id` (R11.2).
  *   2. **Cache decision.** A cached entry within the `Live_Cache_TTL`
  *      (5 minutes) is served `stale:false` without any upstream call (R2.2).
  *   3. **Fetch fresh** under a 5-second deadline (R2.6) from the ThemeParks.wiki
@@ -26,12 +24,19 @@
  *      `liveData` entry, project via `projectThemeParksLive` in the entity's
  *      time zone (R11.9), store with a fresh `retrievedAt` (R2.4), and serve
  *      `stale:false`.
- *   4. **Failure with a cached entry:** serve the most recent cached value
- *      regardless of age, marked `stale:true`, without overwriting it
- *      (R2.6, R2.7, R3.1, R12.10).
- *   5. **Failure with NO cache:** throw `AppError('live_unavailable')` (→ 503),
- *      storing nothing (R2.8). NEVER falls back to a Disney source (R11.10,
- *      R12.3).
+ *   4. **Permanent absence — no Enterprise_Id, or ThemeParks.wiki tracks no
+ *      matching entity at all:** this can never succeed on retry, so it is
+ *      NOT treated as a failure. It serves the same total, defensive
+ *      `Unknown`/empty `LiveDetailDTO` projection an empty `liveData` feed
+ *      gets (`serveNoLiveData`), never `live_unavailable` — whose copy
+ *      explicitly (and, for this case, wrongly) tells the user retrying will
+ *      help.
+ *   5. **Transient failure (fetch error, deadline abort) with a cached
+ *      entry:** serve the most recent cached value regardless of age, marked
+ *      `stale:true`, without overwriting it (R2.6, R2.7, R3.1, R12.10).
+ *   6. **Transient failure with NO cache:** throw `AppError('live_unavailable')`
+ *      (→ 503), storing nothing (R2.8). NEVER falls back to a Disney source
+ *      (R11.10, R12.3).
  *
  * The orchestrator depends only on injected collaborators so it is unit-testable
  * with in-memory fakes and a controlled clock — no Redis, database, or network.
@@ -148,16 +153,20 @@ export function createThemeParksLiveService(
     ): Promise<ThemeParksLiveDetailResult> {
       const now = nowOverride ?? clock();
 
-      // Step 1: resolve the Enterprise_Id (R11.1). An unresolved id never
-      // contacts ThemeParks.wiki and falls straight through to the failure path.
+      // Step 1: resolve the Enterprise_Id (R11.1).
       const enterpriseId = await repo.resolveUpstreamEntityId(experienceId);
 
       // Read the cached entry once; it drives both the freshness decision and
       // the stale-serve fallback.
       const cached = await cache.get(experienceId);
 
+      // No Enterprise_Id on file for this Experience at all: this is not a
+      // transient failure, so it never contacts ThemeParks.wiki and — like an
+      // upstream resolution miss below — serves the calm "no data" projection
+      // rather than the retriable `live_unavailable` error (see the comment
+      // on the resolution-miss branch for the full rationale).
       if (enterpriseId === null) {
-        return failureFallback(experienceId, cached);
+        return serveNoLiveData(cached, now);
       }
 
       // Step 2: serve a sufficiently-fresh cached entry without upstream (R2.2).
@@ -172,22 +181,36 @@ export function createThemeParksLiveService(
       // `externalId` equals the Enterprise_Id (R11.2), then fetch its live feed
       // under a 5-second deadline (R2.6) and project (R11). The live endpoint is
       // keyed by the entity id, not the externalId, so this join is required.
-      // A resolution miss (ThemeParks.wiki tracks no such entity) degrades to
-      // the cache / live_unavailable fallback rather than erroring.
       let themeParksId: string | null;
       try {
         themeParksId = await resolveEntityId(enterpriseId);
       } catch {
         themeParksId = null;
       }
+      // A resolution miss means ThemeParks.wiki tracks no entity matching this
+      // Enterprise_Id at all (verified directly against the live API for
+      // "Aloha Isle" — no entity exists under its id or name anywhere in the
+      // WDW destination tree, under any park or the destination itself). That
+      // is a PERMANENT absence, not a transient upstream hiccup: retrying
+      // never succeeds. Previously this fell into `failureFallback`, which
+      // throws `live_unavailable` and shows the app's "we couldn't load live
+      // details right now... please try again later" error card — copy that
+      // is actively wrong for this case, since trying again later changes
+      // nothing. Serve the same calm "no data" projection the empty-feed case
+      // gets instead (see `selectLiveEntry`), so the UI renders its normal
+      // thin-data state (e.g. `DiningReservationCard`'s default "Open Today")
+      // rather than an error implying a retry could help.
       if (themeParksId === null) {
-        return failureFallback(experienceId, cached);
+        return serveNoLiveData(cached, now);
       }
 
       try {
         const response = await fetchWithDeadline(themeParksId);
         const entry = selectLiveEntry(response, themeParksId);
-        const input = toThemeParksLiveInput(entry, response.timezone);
+        const input =
+          entry === null
+            ? {}
+            : toThemeParksLiveInput(entry, response.timezone);
         // Prefer the entity's own IANA time zone from the feed; fall back to the
         // orchestrator's configured Park time zone when the feed carries none
         // (R11.9).
@@ -238,18 +261,28 @@ export function createThemeParksLiveService(
  * carries the matching entity's live data as the first (and usually only)
  * `liveData` entry. When several entries are present we prefer the one whose
  * `id` equals the resolved `themeParksId`; otherwise we take the first entry.
- * An empty feed throws so the caller falls back to stale-serve or 503 rather
- * than projecting a fabricated empty detail.
+ *
+ * An empty feed (`liveData: []`) is NOT a failure: ThemeParks.wiki returns it
+ * for entities it tracks but has no live status to report for — quick-service
+ * restaurants, bars, and lounges routinely respond this way, since Disney
+ * itself does not publish a standby queue for them (verified directly against
+ * `GET /entity/{id}/live` for Casey's Corner and Cove Bar, both `RESTAURANT`
+ * entities). Treating an empty feed as a fetch failure previously threw here,
+ * which fell through to `live_unavailable` (or a stale cache) for every such
+ * restaurant even though the resolution and request both succeeded — the
+ * upstream simply had nothing to report. Returning `null` lets the caller
+ * project the pure, total `Unknown`/empty `LiveDetailDTO` that
+ * `projectThemeParksLive` already produces for a missing input, exactly the
+ * same defensive-absence handling every other missing field gets (R11.8),
+ * rather than fabricating an error state.
  */
 function selectLiveEntry(
   response: ThemeParksLiveResponse,
   themeParksId: string,
-): ThemeParksLiveEntry {
+): ThemeParksLiveEntry | null {
   const entries = response.liveData;
   if (entries.length === 0) {
-    throw new Error(
-      `ThemeParks.wiki live feed for ${themeParksId} carried no liveData entries.`,
-    );
+    return null;
   }
   const matched = entries.find((entry) => entry.id === themeParksId);
   return matched ?? (entries[0] as ThemeParksLiveEntry);
@@ -297,7 +330,10 @@ function toThemeParksLiveInput(
 /**
  * Serve the most recent cached value `stale:true` without overwriting it when
  * one exists (R2.6, R2.7, R3.1); otherwise throw `live_unavailable` and store
- * nothing (R2.8). Never contacts a Disney source (R11.10, R12.3).
+ * nothing (R2.8). Never contacts a Disney source (R11.10, R12.3). Reserved for
+ * GENUINELY TRANSIENT failures (fetch error, deadline abort) — a resolution
+ * miss (no Enterprise_Id, or ThemeParks.wiki tracks no matching entity) is
+ * PERMANENT and goes through {@link serveNoLiveData} instead, never here.
  */
 function failureFallback(
   experienceId: string,
@@ -311,6 +347,41 @@ function failureFallback(
     `Live data is currently unavailable for experience ${experienceId}.`,
     { details: { experienceId } },
   );
+}
+
+/**
+ * Serve the "no live data to report" state for an Experience whose
+ * Enterprise_Id is unresolvable — either absent on the catalog row, or absent
+ * from ThemeParks.wiki's tracked entities entirely. Unlike a transient
+ * failure, this can never succeed on retry, so it must NOT surface as
+ * `live_unavailable` (whose copy explicitly tells the user to try again).
+ * Instead it projects the same total, defensive `Unknown`/empty
+ * `LiveDetailDTO` that `projectThemeParksLive` produces for any other
+ * missing input (R11.8) — identical treatment to an empty `liveData` feed
+ * (`selectLiveEntry`) — and caches it so repeated reads for a permanently
+ * unresolvable Experience don't re-attempt resolution on every request
+ * within the TTL. A pre-existing fresher cache entry (e.g. from a prior
+ * successful resolution that later started missing — unlikely but not
+ * impossible) is preferred over re-deriving the empty projection.
+ */
+function serveNoLiveData(
+  cached: CachedLiveDetail | null,
+  now: Date,
+): ThemeParksLiveDetailResult {
+  if (cached !== null && cacheAgeSeconds(cached, now) <= LIVE_CACHE_TTL_SECONDS) {
+    return toResult(cached, false);
+  }
+  const liveDetail: LiveDetailDTO = {
+    status: 'Unknown',
+    showtimes: [],
+    operatingHours: [],
+    diningAvailability: [],
+  };
+  return {
+    liveDetail,
+    retrievedAt: now.toISOString(),
+    stale: false,
+  };
 }
 
 /**

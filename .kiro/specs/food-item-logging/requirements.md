@@ -70,6 +70,8 @@ This feature introduces a durable, per-restaurant dish catalog (`food_items`) se
 2. IF the User has no `Food_Item_Log` records for the Food_Item, THE Food_Log_Service SHALL return an empty list with `repeatCount = 0` and HTTP status `200`.
 3. WHEN a User requests to delete a `Food_Item_Log` by its id (`DELETE /me/food-items/:foodItemId/logs/:logId`), THE Food_Log_Service SHALL remove that specific log record if and only if it belongs to the authenticated User and references that Food_Item, returning HTTP `204`.
 4. IF the targeted `Food_Item_Log` does not exist, belongs to another User, or references a different Food_Item, THE Food_Log_Service SHALL reject the request with HTTP `404` and error code `food_log_not_found` — a non-existent log and one owned by another User collapse to the same response so ownership cannot be probed.
+5. WHEN a User requests to update a `Food_Item_Log` by its id (`PATCH /me/food-items/:foodItemId/logs/:logId`), THE Food_Log_Service SHALL update the log's `rating` (1–10 or `null`) and/or `note` (trimmed 1–2000 chars or `null`) if and only if it belongs to the authenticated User and references that Food_Item, returning the updated `Food_Item_Log` with HTTP status `200`.
+6. IF the targeted `Food_Item_Log` does not exist, belongs to another User, or references a different Food_Item, THE Food_Log_Service SHALL reject the PATCH request with HTTP `404` and error code `food_log_not_found`.
 
 ### Requirement 5: Mobile Food Logging on the Experience Detail Screen
 
@@ -127,6 +129,7 @@ This feature introduces a durable, per-restaurant dish catalog (`food_items`) se
 8. THE My Food History screen SHALL provide a restaurant/location filter control populated from the distinct set of `restaurantName`/`locationName` values present in the currently-fetched list (derived client-side, not a separate endpoint call); selecting one or more values narrows the displayed rows to only those whose row matches a selected value, and clearing the filter restores the full list.
 9. THE My Food History screen SHALL provide a free-text search input that, as the User types, narrows the displayed rows to those whose `foodItemName`, `restaurantName`, or `locationName` case-insensitively contains the entered text; clearing the search input restores the rows implied by the current sort and filter selections.
 10. THE sort, filter, and search controls in Requirement 8.7-8.9 SHALL compose together (e.g. a search term narrows within an already-restaurant-filtered set, and the sort order applies to whatever rows remain after filtering/search) rather than resetting one another.
+11. THE My Food History screen SHALL provide an affordance to add or update a rating for any displayed log: for an unrated log, an accessible "+ Add rating" button opens a 1–10 rating prompt; for a rated log, activating its rating indicator opens the rating prompt to change the rating; confirming a rating SHALL call `PATCH /me/food-items/:foodItemId/logs/:logId` (Requirement 4.5) with the updated rating and refresh the food history view.
 
 ### Requirement 9: My Logged Items at a Specific Restaurant or Location
 

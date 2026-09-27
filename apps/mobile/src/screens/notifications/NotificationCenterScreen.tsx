@@ -380,6 +380,19 @@ export default function NotificationCenterScreen(): JSX.Element {
     [sortMode, state.items, actions, openDestination, highlightedItemId],
   );
 
+  // `FlatList` calls `renderItem` with a `{ item, index, separators }` object,
+  // which doesn't match `renderRow`'s positional `(item, index)` signature, so
+  // a minimal wrapper is still needed to adapt the shapes. Wrapping it in
+  // `useCallback` (rather than leaving the inline arrow FlatList used to call
+  // directly) keeps its identity stable across renders — an unstable wrapper
+  // here would defeat the point of memoizing `renderRow` itself, since
+  // `FlatList`/`VirtualizedList` compares whatever function is actually passed
+  // as `renderItem`.
+  const renderItem = React.useCallback(
+    ({ item, index }: { item: AttentionItem; index: number }) => renderRow(item, index),
+    [renderRow],
+  );
+
   return (
     <ScreenContainer>
       <GradientHeader
@@ -498,7 +511,7 @@ export default function NotificationCenterScreen(): JSX.Element {
           data={state.items}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
-          renderItem={({ item, index }) => renderRow(item, index)}
+          renderItem={renderItem}
         />
       )}
     </ScreenContainer>

@@ -2,7 +2,7 @@
 //
 // Validates: Requirements 1.9, 2.1, 2.2, 5.1, 5.2, 5.5, 5.6, 5.7, 6.5
 
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -233,6 +233,24 @@ export default function FoodItemPickerModal({
     }
   }
 
+  // Stable `renderItem` identity — an inline arrow literal is recreated every
+  // render (e.g. each keystroke re-deriving `filteredItems`), which `FlatList`
+  // treats as a changed render function and forces the whole visible window
+  // to re-render/re-measure even though `FoodItemRow` is memoized-adjacent.
+  // Same fix as `DestinationScreen`'s search-results `renderRow`.
+  const renderFoodItem = useCallback(
+    ({ item }: { item: FoodItemDTO }) => (
+      <FoodItemRow
+        item={item}
+        mode={mode}
+        isSelected={selectedItems.has(item.id)}
+        onSelect={handleItemPress}
+        onOpenHistory={(foodItem) => setHistoryItem(foodItem)}
+      />
+    ),
+    [mode, selectedItems, handleItemPress, setHistoryItem],
+  );
+
   function handleItemPress(item: FoodItemDTO): void {
     if (mode === 'addToLists') {
       setSelectedItems((prev) => {
@@ -339,15 +357,7 @@ export default function FoodItemPickerModal({
               <FlatList
                 data={filteredItems}
                 keyExtractor={(item) => item.id}
-                renderItem={({ item }) => (
-                  <FoodItemRow
-                    item={item}
-                    mode={mode}
-                    isSelected={selectedItems.has(item.id)}
-                    onSelect={handleItemPress}
-                    onOpenHistory={(foodItem) => setHistoryItem(foodItem)}
-                  />
-                )}
+                renderItem={renderFoodItem}
                 ListHeaderComponent={
                   showAddRow ? (
                     <Pressable

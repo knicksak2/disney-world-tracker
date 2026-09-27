@@ -538,6 +538,35 @@ describe('GET /catalog areaType filter', () => {
     await app.close();
   });
 
+  it('forwards resortId filter to listActiveExperiences', async () => {
+    const { app, listFilters } = await buildApp();
+    const resortId = '11111111-1111-4111-8111-111111111111';
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/catalog?resortId=${resortId}`,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(listFilters).toEqual([{ resortId }]);
+    await app.close();
+  });
+
+  it('rejects an invalid resortId parameter with validation_failed', async () => {
+    const { app } = await buildApp();
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/catalog?resortId=not-a-uuid',
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({
+      error: { code: 'validation_failed', field: 'resortId' },
+    });
+    await app.close();
+  });
+
   it('forwards areaType alongside parkId, category, and q (R16.3, R16.4)', async () => {
     const { app, listFilters } = await buildApp();
 
@@ -662,6 +691,31 @@ describe('GET /catalog/:experienceId enrichment + menus', () => {
     expect(res.json()).not.toHaveProperty('menus');
     await app.close();
   });
+
+  it('preserves representsResortId in the detail response', async () => {
+    const experienceId = '22222222-2222-4222-8222-222222222222';
+    const resortId = '33333333-3333-4333-8333-333333333333';
+    const exp = makeExperience({
+      id: experienceId,
+      category: 'Resort',
+      representsResortId: resortId,
+    });
+    const { app } = await buildApp({
+      getExperience: async () => exp,
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/catalog/${experienceId}`,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({
+      id: experienceId,
+      representsResortId: resortId,
+    });
+    await app.close();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -735,6 +789,35 @@ describe('GET /resorts', () => {
         address: '1600 Seven Seas Dr',
         phone: '407-555-0100',
         representingExperienceId: '88888888-8888-4888-8888-888888888888',
+      },
+    ];
+    const { app } = await buildApp({ listActiveResorts: async () => resorts });
+
+    const res = await app.inject({ method: 'GET', url: '/resorts' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ resorts });
+    await app.close();
+  });
+
+  it('returns resort metadata fields including tier, featurePool, and transitTimes', async () => {
+    const resorts: ResortDTO[] = [
+      {
+        id: '99999999-9999-4999-8999-999999999999',
+        name: "Disney's Coronado Springs Resort",
+        description: 'Celebrate Spanish and Mexican cultures.',
+        imageUrl: 'https://cdn.example/coronado.jpg',
+        latitude: 28.3644,
+        longitude: -81.5694,
+        address: '1000 W Buena Vista Dr, Lake Buena Vista, FL 32830',
+        phone: '407-939-1000',
+        representingExperienceId: '88888888-8888-4888-8888-888888888888',
+        tier: 'Moderate',
+        featurePool: 'The Lost City of Cibola Pool (The Dig Site)',
+        transportationModes: ['Bus'],
+        recreation: [{ icon: 'water', title: 'The Lost City of Cibola Pool', description: 'Pool' }],
+        transitTimes: { 'Magic Kingdom': 20 },
+        architecturalLore: [{ emoji: '🏰', title: 'Gran Destino Tower', text: 'Inspired by Dali.' }],
       },
     ];
     const { app } = await buildApp({ listActiveResorts: async () => resorts });

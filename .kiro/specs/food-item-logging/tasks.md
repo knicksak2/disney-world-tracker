@@ -68,6 +68,11 @@
 - [x] 11. Final Verification & Quality Gate (Re-run after R8/R9)
   - [x] 11.1 Run full `npm run verify` across all workspaces (`apps/api`, `apps/mobile`, `packages/shared`)
 
+- [x] 12. Add and Update Food Item Log Ratings (R4.5, R4.6, R8.11)
+  - [x] 12.1 Add `updateFoodItemLogInputSchema` to `packages/shared/src/schemas/FoodItemLog.ts` and `UpdateFoodItemLogInputDTO` to `packages/shared/src/dto/FoodItemLog.ts`
+  - [x] 12.2 Add `updateLog` to `FoodItemLogRepo` in `apps/api/src/services/foodLog/repo.ts` and `PATCH /me/food-items/:foodItemId/logs/:logId` in `apps/api/src/services/foodLog/routes.ts`; add route integration tests in `apps/api/src/services/foodLog/__tests__/routes.test.ts`
+  - [x] 12.3 Support adding/updating rating in `apps/mobile/src/screens/catalog/MyFoodHistoryScreen.tsx` (pressable rating badge and "+ Add rating" button opening rating prompt and dispatching PATCH call)
+
 ## Task Dependency Graph
 
 Tasks within a wave can proceed in parallel; each wave depends only on earlier waves.

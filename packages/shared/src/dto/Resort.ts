@@ -12,6 +12,26 @@
  * Validates: Requirements 6.6, 6.8
  */
 
+export type ResortTier =
+  | 'Value'
+  | 'Moderate'
+  | 'Deluxe'
+  | 'Deluxe Villa'
+  | 'Campground';
+
+export interface ResortRecreationItemDTO {
+  readonly icon: string;
+  readonly title: string;
+  readonly badge?: string;
+  readonly description: string;
+}
+
+export interface ResortLoreItemDTO {
+  readonly emoji: string;
+  readonly title: string;
+  readonly text: string;
+}
+
 export interface ResortDTO {
   /** Stable Internal_Id; UUIDv5 of the Enterprise_Id (R6.6). */
   readonly id: string;
@@ -50,4 +70,22 @@ export interface ResortDTO {
    * (R3.1, R3.3, R3.4).
    */
   readonly representingExperienceId: string | null;
+
+  /** Curated Resort Tier (Value, Moderate, Deluxe, Deluxe Villa, Campground). */
+  readonly tier?: ResortTier | null;
+
+  /** Signature / feature pool name. */
+  readonly featurePool?: string | null;
+
+  /** Complimentary transportation modes available at this resort. */
+  readonly transportationModes?: readonly string[];
+
+  /** Key recreation & amenities (pools, jogging trails, wellness, campfire). */
+  readonly recreation?: readonly ResortRecreationItemDTO[];
+
+  /** Direct transit travel times (in minutes) to parks and destinations. */
+  readonly transitTimes?: Record<string, number>;
+
+  /** Historical, architectural, and Imagineering backstory lore points. */
+  readonly architecturalLore?: readonly ResortLoreItemDTO[];
 }

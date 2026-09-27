@@ -16,7 +16,7 @@
  *   - Tracks last-viewed park in liveWaitsStore
  */
 
-import React, { useContext, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -227,7 +227,13 @@ export default function LiveWaitsScreen({
   const parkHours = getParkHoursDetails(selectedPark).openTimeText;
   const updatedText = formatRelativeTime(liveQuery.data?.retrievedAt);
 
-  const renderItem = ({ item }: { readonly item: LiveWaitsRow }) => {
+  // Wrapped in useCallback so FlatList/VirtualizedList sees a stable function
+  // identity across renders. A plain `const` function defined in the component
+  // body is still recreated fresh on every render, which defeats row memoization
+  // (React.memo) the same way an inline JSX arrow would and triggers the
+  // "large list that is slow to update" warning. Same fix pattern as
+  // `renderRow` in DestinationScreen.tsx.
+  const renderItem = useCallback(({ item }: { readonly item: LiveWaitsRow }) => {
     const status = getWaitStatus(item.waitMinutes, item.isClosedOrDown);
     const statusColor =
       status === 'low'
@@ -306,7 +312,7 @@ export default function LiveWaitsScreen({
         </View>
       </View>
     );
-  };
+  }, [navigation, setActiveLogExperienceId]);
 
   const renderContent = () => {
     if ((liveQuery.isLoading && !liveQuery.data) || (catalogQuery.isLoading && !catalogQuery.data)) {

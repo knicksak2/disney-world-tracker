@@ -70,7 +70,7 @@ Requirements 1 through 6 constitute Phase 1 and are independently shippable. Req
 
 1. WHEN the Share_Composer is opened from a Share_Entry_Point, THE Share_Composer SHALL determine the Share payload kind from the originating Share_Entry_Point and SHALL NOT present a control for the User to change the payload kind.
 2. THE Share_Composer SHALL display a read-only preview of the content to be shared.
-3. WHERE the Share payload kind is `experience`, THE Share_Composer SHALL display in the read-only preview the referenced Experience's name, Park, and Experience_Category, and WHILE the sender's Rating or Note is marked for inclusion SHALL display each included value.
+3. WHERE the Share payload kind is `experience`, THE Share_Composer SHALL display in the read-only preview the referenced Experience's name, Experience_Category, and location — the Park for a non-Resort Experience, or the Resort's Geographic Area (falling back to the Park, then omitting the location segment) for a Resort Experience, whose own representing row has no owning Park — and WHILE the sender's Rating or Note is marked for inclusion SHALL display each included value.
 4. WHERE the Share payload kind is `progress`, THE Share_Composer SHALL display in the read-only preview the sender's overall completion percentage to one decimal place.
 5. THE Share_Composer SHALL NOT provide a free-text input for an Experience identifier.
 6. THE Share_Composer SHALL allow the User to select between 1 and 50 recipient Friends inclusive.

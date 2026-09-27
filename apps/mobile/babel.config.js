@@ -20,6 +20,12 @@ module.exports = function babelConfig(api) {
           extensions: ['.ts', '.tsx', '.js', '.jsx', '.json'],
         },
       ],
+      // Added for react-native-draggable-flatlist (checklist item drag
+      // reorder, food-lists Requirement 13.14-13.18 amendment). Required by
+      // react-native-reanimated 4.x; must be the LAST plugin in this array.
+      // It already includes react-native-worklets' plugin internally — do
+      // NOT also add 'react-native-worklets/plugin', which would conflict.
+      'react-native-reanimated/plugin',
     ],
   };
 };

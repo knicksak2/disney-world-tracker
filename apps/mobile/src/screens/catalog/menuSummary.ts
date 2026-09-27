@@ -27,6 +27,6 @@ export interface MenuSummary {
 export function summarizeMenus(menus: readonly MenuDTO[]): MenuSummary {
   return {
     count: menus.length,
-    menuTypes: menus.map((menu) => menu.menuType),
+    menuTypes: menus.map((menu: any) => menu.menuType ?? menu.type ?? menu.name ?? 'Menu'),
   };
 }

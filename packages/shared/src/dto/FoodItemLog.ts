@@ -28,6 +28,11 @@ export interface CreateFoodItemLogInputDTO {
   readonly note?: string | null;
 }
 
+export interface UpdateFoodItemLogInputDTO {
+  readonly rating?: number | null | undefined;
+  readonly note?: string | null | undefined;
+}
+
 export interface FoodItemLogWithContextDTO extends FoodItemLogDTO {
   readonly foodItemName: string;
   readonly currentlyOnMenu: boolean;

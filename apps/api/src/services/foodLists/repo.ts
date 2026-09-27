@@ -32,6 +32,11 @@ export interface FoodListRepo {
     userId: string,
     visibility: 'private' | 'public',
   ): Promise<FoodListDTO>;
+  setChecklistMode(
+    listId: string,
+    userId: string,
+    isChecklist: boolean,
+  ): Promise<FoodListDTO>;
   deleteList(listId: string, userId: string): Promise<void>;
   listOwned(userId: string): Promise<readonly FoodListDTO[]>;
   getListDetail(listId: string, viewerId: string): Promise<FoodListDetailDTO>;
@@ -98,6 +103,7 @@ interface FoodListRow {
   owner_display_name: string;
   name: string;
   visibility: 'private' | 'public';
+  is_checklist: boolean;
   like_count: number;
   item_count: number;
   created_at: Date | string;
@@ -128,6 +134,7 @@ function mapFoodListRow(row: FoodListRow): FoodListDTO {
     ownerDisplayName: row.owner_display_name,
     name: row.name,
     visibility: row.visibility,
+    isChecklist: Boolean(row.is_checklist),
     likeCount: Number(row.like_count),
     itemCount: Number(row.item_count),
     createdAt: toIsoString(row.created_at),
@@ -261,6 +268,7 @@ export function createFoodListRepo(pool: DbPool): FoodListRepo {
          COALESCE(p.display_name, 'User') AS owner_display_name,
          fl.name,
          fl.visibility,
+         fl.is_checklist,
          fl.like_count,
          COALESCE(ic.item_count, 0)::int AS item_count,
          fl.created_at,
@@ -296,11 +304,16 @@ export function createFoodListRepo(pool: DbPool): FoodListRepo {
         throw new AppError('validation_failed', 'Invalid visibility');
       }
 
+      const isChecklist = input.isChecklist ?? false;
+      if (typeof isChecklist !== 'boolean') {
+        throw new AppError('validation_failed', 'isChecklist must be a boolean');
+      }
+
       const insertRes = await pool.query<{ id: string }>(
-        `INSERT INTO food_lists (owner_id, name, visibility)
-         VALUES ($1, $2, $3)
+        `INSERT INTO food_lists (owner_id, name, visibility, is_checklist)
+         VALUES ($1, $2, $3, $4)
          RETURNING id`,
-        [userId, trimmed, visibility],
+        [userId, trimmed, visibility, isChecklist],
       );
 
       return getListSummary(insertRes.rows[0]!.id);
@@ -350,6 +363,28 @@ export function createFoodListRepo(pool: DbPool): FoodListRepo {
       return getListSummary(listId);
     },
 
+    async setChecklistMode(
+      listId: string,
+      userId: string,
+      isChecklist: boolean,
+    ): Promise<FoodListDTO> {
+      if (typeof isChecklist !== 'boolean') {
+        throw new AppError('validation_failed', 'isChecklist must be a boolean');
+      }
+
+      const access = await getListAccess(pool, listId, userId);
+      assertOwner(access, userId);
+
+      await pool.query(
+        `UPDATE food_lists
+            SET is_checklist = $2, updated_at = now()
+          WHERE id = $1`,
+        [listId, isChecklist],
+      );
+
+      return getListSummary(listId);
+    },
+
     async deleteList(listId: string, userId: string): Promise<void> {
       const access = await getListAccess(pool, listId, userId);
       assertOwner(access, userId);
@@ -365,6 +400,7 @@ export function createFoodListRepo(pool: DbPool): FoodListRepo {
            COALESCE(p.display_name, 'User') AS owner_display_name,
            fl.name,
            fl.visibility,
+           fl.is_checklist,
            fl.like_count,
            COALESCE(ic.item_count, 0)::int AS item_count,
            fl.created_at,
@@ -394,6 +430,7 @@ export function createFoodListRepo(pool: DbPool): FoodListRepo {
         owner_display_name: string;
         name: string;
         visibility: 'private' | 'public';
+        is_checklist: boolean;
         like_count: number;
         version: number;
         created_at: Date | string;
@@ -407,6 +444,7 @@ export function createFoodListRepo(pool: DbPool): FoodListRepo {
            COALESCE(p.display_name, 'User') AS owner_display_name,
            fl.name,
            fl.visibility,
+           fl.is_checklist,
            fl.like_count,
            fl.version,
            fl.created_at,
@@ -424,30 +462,95 @@ export function createFoodListRepo(pool: DbPool): FoodListRepo {
       );
 
       const row = listRes.rows[0]!;
+      const isChecklist = Boolean(row.is_checklist);
+      let items: FoodListItemDTO[];
 
-      const itemsRes = await pool.query<FoodListItemRow>(
-        `SELECT
-           fli.food_item_id,
-           fi.name,
-           fi.experience_id,
-           e.name AS experience_name,
-           fi.location_id,
-           usl.name AS location_name,
-           fi.price,
-           fli.position,
-           fli.added_by_user_id,
-           p.display_name AS added_by_display_name
-         FROM food_lists_items fli
-         JOIN food_items fi ON fi.id = fli.food_item_id
-         LEFT JOIN experiences e ON e.id = fi.experience_id
-         LEFT JOIN user_submitted_locations usl ON usl.id = fi.location_id
-         LEFT JOIN profiles p ON p.user_id = fli.added_by_user_id
-        WHERE fli.food_list_id = $1
-        ORDER BY fli.position ASC`,
-        [listId],
-      );
-
-      const items = itemsRes.rows.map(mapFoodListItemRow);
+      if (isChecklist) {
+        const listCreatedAtDate = toIsoString(row.created_at).slice(0, 10);
+        // `fil` picks the single most recent qualifying log per item (per
+        // Requirement 13.7's repeat-log allowance, `DISTINCT ON` +
+        // `ORDER BY visited_on DESC, logged_at DESC` mirrors this
+        // codebase's existing "most recent log wins" convention elsewhere)
+        // so a rating shown on the row reflects the User's latest visit,
+        // not an arbitrary one among several.
+        const itemsRes = await pool.query<
+          FoodListItemRow & { gotten: boolean; rating: number | null; log_id: string | null }
+        >(
+          `SELECT
+             fli.food_item_id,
+             fi.name,
+             fi.experience_id,
+             e.name AS experience_name,
+             fi.location_id,
+             usl.name AS location_name,
+             fi.price,
+             fli.position,
+             fli.added_by_user_id,
+             p.display_name AS added_by_display_name,
+             (fil.food_item_id IS NOT NULL) AS gotten,
+             fil.rating,
+             fil.log_id
+           FROM food_lists_items fli
+           JOIN food_items fi ON fi.id = fli.food_item_id
+           LEFT JOIN experiences e ON e.id = fi.experience_id
+           LEFT JOIN user_submitted_locations usl ON usl.id = fi.location_id
+           LEFT JOIN profiles p ON p.user_id = fli.added_by_user_id
+           LEFT JOIN (
+             SELECT DISTINCT ON (food_item_id) food_item_id, id AS log_id, rating
+               FROM food_item_logs
+              WHERE user_id = $2
+                AND visited_on >= $3
+              ORDER BY food_item_id, visited_on DESC, logged_at DESC
+           ) fil ON fil.food_item_id = fli.food_item_id
+          WHERE fli.food_list_id = $1
+          ORDER BY fli.position ASC`,
+          [listId, viewerId, listCreatedAtDate],
+        );
+        items = itemsRes.rows.map((itemRow) => {
+          const gotten = Boolean(itemRow.gotten);
+          return {
+            foodItemId: itemRow.food_item_id,
+            name: itemRow.name,
+            experienceId: itemRow.experience_id ?? null,
+            experienceName: itemRow.experience_name ?? null,
+            locationId: itemRow.location_id ?? null,
+            locationName: itemRow.location_name ?? null,
+            price: itemRow.price ?? null,
+            position: Number(itemRow.position),
+            addedByUserId: itemRow.added_by_user_id ?? null,
+            addedByDisplayName: itemRow.added_by_display_name ?? null,
+            gotten,
+            // Requirement 13.19, 13.23: `rating` and `logId` are present if and
+            // only if `gotten` is `true`.
+            ...(gotten
+              ? { rating: itemRow.rating ?? null, logId: itemRow.log_id ?? null }
+              : {}),
+          };
+        });
+      } else {
+        const itemsRes = await pool.query<FoodListItemRow>(
+          `SELECT
+             fli.food_item_id,
+             fi.name,
+             fi.experience_id,
+             e.name AS experience_name,
+             fi.location_id,
+             usl.name AS location_name,
+             fi.price,
+             fli.position,
+             fli.added_by_user_id,
+             p.display_name AS added_by_display_name
+           FROM food_lists_items fli
+           JOIN food_items fi ON fi.id = fli.food_item_id
+           LEFT JOIN experiences e ON e.id = fi.experience_id
+           LEFT JOIN user_submitted_locations usl ON usl.id = fi.location_id
+           LEFT JOIN profiles p ON p.user_id = fli.added_by_user_id
+          WHERE fli.food_list_id = $1
+          ORDER BY fli.position ASC`,
+          [listId],
+        );
+        items = itemsRes.rows.map(mapFoodListItemRow);
+      }
 
       let myRole: FoodListRole = 'viewer';
       if (access!.owner_id === viewerId) {
@@ -456,12 +559,13 @@ export function createFoodListRepo(pool: DbPool): FoodListRepo {
         myRole = 'editor';
       }
 
-      return {
+      const detail: FoodListDetailDTO = {
         id: row.id,
         ownerId: row.owner_id,
         ownerDisplayName: row.owner_display_name,
         name: row.name,
         visibility: row.visibility,
+        isChecklist,
         likeCount: Number(row.like_count),
         itemCount: items.length,
         createdAt: toIsoString(row.created_at),
@@ -471,7 +575,10 @@ export function createFoodListRepo(pool: DbPool): FoodListRepo {
         version: Number(row.version),
         myRole,
         items,
+        ...(isChecklist ? { gottenCount: items.filter((it) => it.gotten === true).length } : {}),
       };
+
+      return detail;
     },
 
     async findListById(
@@ -533,6 +640,7 @@ export function createFoodListRepo(pool: DbPool): FoodListRepo {
               COALESCE(p.display_name, 'User') AS owner_display_name,
               fl.name,
               fl.visibility,
+              fl.is_checklist,
               fl.like_count,
               COALESCE(ic.item_count, 0)::int AS item_count,
               fl.created_at,
@@ -556,6 +664,7 @@ export function createFoodListRepo(pool: DbPool): FoodListRepo {
               COALESCE(p.display_name, 'User') AS owner_display_name,
               fl.name,
               fl.visibility,
+              fl.is_checklist,
               fl.like_count,
               COALESCE(ic.item_count, 0)::int AS item_count,
               fl.created_at,
@@ -581,6 +690,7 @@ export function createFoodListRepo(pool: DbPool): FoodListRepo {
               COALESCE(p.display_name, 'User') AS owner_display_name,
               fl.name,
               fl.visibility,
+              fl.is_checklist,
               fl.like_count,
               COALESCE(ic.item_count, 0)::int AS item_count,
               fl.created_at,
@@ -604,6 +714,7 @@ export function createFoodListRepo(pool: DbPool): FoodListRepo {
               COALESCE(p.display_name, 'User') AS owner_display_name,
               fl.name,
               fl.visibility,
+              fl.is_checklist,
               fl.like_count,
               COALESCE(ic.item_count, 0)::int AS item_count,
               fl.created_at,
@@ -1258,6 +1369,7 @@ export function createFoodListAffinityRepo(
         owner_display_name: string | null;
         name: string | null;
         visibility: 'private' | 'public' | null;
+        is_checklist: boolean | null;
         like_count: number | null;
         item_count: number | null;
         created_at: Date | string | null;
@@ -1271,6 +1383,7 @@ export function createFoodListAffinityRepo(
            COALESCE(p.display_name, 'User') AS owner_display_name,
            fl.name,
            fl.visibility,
+           fl.is_checklist,
            fl.like_count,
            COALESCE(ic.item_count, 0)::int AS item_count,
            fl.created_at,
@@ -1306,6 +1419,7 @@ export function createFoodListAffinityRepo(
             ownerDisplayName: row.owner_display_name!,
             name: row.name!,
             visibility: row.visibility!,
+            isChecklist: Boolean(row.is_checklist),
             likeCount: Number(row.like_count),
             itemCount: Number(row.item_count),
             createdAt: toIsoString(row.created_at!),

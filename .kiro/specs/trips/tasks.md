@@ -390,6 +390,9 @@ existing `RatingChanged` propagation path is reused unchanged.
   - [x] 22.3 Test the edit form and the gated control
     - `TripEditScreen.test.tsx`: pre-fill from the Trip + stay, `PATCH` carries the edited `resortIds` (add and clear), and the `trip_forbidden` friendly-copy path. `TripDetailScreen.test.tsx`: an Organizer sees the Edit control and it opens `TripEdit`; a plain Member does not
     - _Requirements: 3.1, 3.8, 21.1, 21.5_
+  - [x] 22.4 Add mobile Trip deletion affordance to TripEditScreen
+    - Wire "Delete Trip" action button with confirmation dialog (`Alert.alert`), calling `DELETE /trips/:id` on confirmation, removing trip query caches (`['trips', tripId]`), invalidating the trips list query, and navigating to `TripsList`; cover with render, confirmation, cancellation, execution, error handling, and mutual-busy tests in `TripEditScreen.test.tsx`
+    - _Requirements: 3.7, 3.8, 3.11_
 
 - [x] 23. Enrich and redesign the Trip Summary screen (R14.9–R14.13)
   - [x] 23.1 Extend `TripSummaryDTO` with park/category breakdowns, superlatives, and member favorites in `@dwt/shared` and `summary.ts`

@@ -25,7 +25,7 @@
  * Profile-tab badge surfacing the same claimable count from anywhere in the App — shares this
  * exact predicate rather than a second, potentially drifting one (Requirement 22.3, 22.4).
  */
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -439,6 +439,32 @@ export default function PinBoardScreen({ navigation, route }: Props): JSX.Elemen
     </View>
   );
 
+  // Stable `renderItem` identity: an inline arrow literal passed to `FlatList`
+  // is recreated every render, which `FlatList`/`VirtualizedList` treats as a
+  // changed render function and forces broader re-render/re-measure work on
+  // every parent update (filter changes, claim queue draining, etc.) —
+  // producing the "large list that is slow to update" warning even though
+  // `PinCell` is otherwise cheap to render. Wrapping in `useCallback` keeps
+  // the same function identity across renders. Matches the pattern used as a
+  // fix in `apps/mobile/src/screens/catalog/DestinationScreen.tsx`.
+  const renderPinCell = useCallback(
+    ({ item }: { item: UserPinProgressDTO }) => {
+      const meta = CATALOG.get(item.pinId);
+      if (!meta) return null;
+      const readyToClaim = isReadyToClaim(item);
+      return (
+        <PinCell
+          item={item}
+          meta={meta}
+          size={tileSize}
+          readyToClaim={readyToClaim}
+          onTap={() => (readyToClaim ? enqueueClaim(item.pinId) : setSelected(item))}
+        />
+      );
+    },
+    [tileSize, enqueueClaim, setSelected],
+  );
+
   return (
     <ScreenContainer>
       <GradientHeader
@@ -494,20 +520,7 @@ export default function PinBoardScreen({ navigation, route }: Props): JSX.Elemen
           ListEmptyComponent={
             <EmptyState icon="ribbon-outline" title="No pins here yet" body="Try a different tier or track." />
           }
-          renderItem={({ item }) => {
-            const meta = CATALOG.get(item.pinId);
-            if (!meta) return null;
-            const readyToClaim = isReadyToClaim(item);
-            return (
-              <PinCell
-                item={item}
-                meta={meta}
-                size={tileSize}
-                readyToClaim={readyToClaim}
-                onTap={() => (readyToClaim ? enqueueClaim(item.pinId) : setSelected(item))}
-              />
-            );
-          }}
+          renderItem={renderPinCell}
         />
       )}
 

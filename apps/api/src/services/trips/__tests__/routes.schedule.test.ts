@@ -666,109 +666,138 @@ describe('Schedule optimization & planned item edit routes', () => {
       const arrivalFuture = wdwMinutesFromMidnight('2026-10-01', bodyFuture.items[0]!.suggestedArrival);
       expect(arrivalFuture).toBe(540);
 
-      // Today anchors to now rounded to 15m
-      const todayStr = wdwToday();
-      const todayApp = Fastify();
-      registerErrorHandler(todayApp);
-      const todayRepo = makeRepo({
-        listPlannedItems: async () => [pi({ plannedDate: todayStr })],
-        updatePlannedItemTimes: async () => {},
-      });
-      const dummyAuth: preHandlerHookHandler = async (req) => {
-        (req as unknown as { userId: string }).userId = CALLER_ID;
-      };
-      const fakePool = {
-        query: vi.fn(async (text: string) => {
-          if (text.includes('FROM trip_memberships')) return { rows: [{ role: 'member' }], rowCount: 1 };
-          if (text.includes('FROM trips WHERE id = $1')) return { rows: [{ walking_speed: 'moderate', early_entry_eligible: false, day_touring_hours: {} }], rowCount: 1 };
-          if (text.includes('FROM experiences WHERE id = ANY')) return { rows: [{ id: EXP_ID, latitude: 28.4177, longitude: -81.5812 }], rowCount: 1 };
-          return { rows: [], rowCount: 0 };
-        }),
-      } as unknown as DbPool;
-      await todayApp.register(tripRoutes({ pool: fakePool, repo: todayRepo, requireSession: dummyAuth }));
+      // Today anchors to now rounded to 15m. "Now" is pinned to a safe
+      // mid-morning WDW-local time (10:00 AM ET) rather than the real wall
+      // clock: this route always reads `new Date()`/`wdwToday()` directly
+      // (it takes no injectable clock), so without pinning, a run late in
+      // the WDW day (close to or past the default 21:00 close) would push
+      // `roundedNow` past `itemEndMins` and the optimizer would correctly
+      // report the single fixture item as unfittable — an empty `items`
+      // array — no matter what real time the suite happens to run at.
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2026-06-15T14:00:00.000Z')); // 10:00 AM ET (EDT, UTC-4)
+      try {
+        const todayStr = wdwToday();
+        const todayApp = Fastify();
+        registerErrorHandler(todayApp);
+        const todayRepo = makeRepo({
+          listPlannedItems: async () => [pi({ plannedDate: todayStr })],
+          updatePlannedItemTimes: async () => {},
+        });
+        const dummyAuth: preHandlerHookHandler = async (req) => {
+          (req as unknown as { userId: string }).userId = CALLER_ID;
+        };
+        const fakePool = {
+          query: vi.fn(async (text: string) => {
+            if (text.includes('FROM trip_memberships')) return { rows: [{ role: 'member' }], rowCount: 1 };
+            if (text.includes('FROM trips WHERE id = $1')) return { rows: [{ walking_speed: 'moderate', early_entry_eligible: false, day_touring_hours: {} }], rowCount: 1 };
+            if (text.includes('FROM experiences WHERE id = ANY')) return { rows: [{ id: EXP_ID, latitude: 28.4177, longitude: -81.5812 }], rowCount: 1 };
+            return { rows: [], rowCount: 0 };
+          }),
+        } as unknown as DbPool;
+        await todayApp.register(tripRoutes({ pool: fakePool, repo: todayRepo, requireSession: dummyAuth }));
 
-      const resToday = await todayApp.inject({
-        method: 'POST',
-        url: `/trips/${TRIP_ID}/schedule/optimize`,
-        payload: { date: todayStr, startMode: 'now', endHour: 23 },
-      });
-      expect(resToday.statusCode).toBe(200);
-      const bodyToday = resToday.json() as TripOptimizationResult;
-      expect(bodyToday.items).toHaveLength(1);
-      const arrivalToday = wdwMinutesFromMidnight(todayStr, bodyToday.items[0]!.suggestedArrival);
-      const nowMins = wdwMinutesFromMidnight(todayStr, new Date().toISOString());
-      expect(arrivalToday).toBeGreaterThanOrEqual(Math.min(Math.ceil(nowMins / 15) * 15, 1439));
+        const resToday = await todayApp.inject({
+          method: 'POST',
+          url: `/trips/${TRIP_ID}/schedule/optimize`,
+          payload: { date: todayStr, startMode: 'now' },
+        });
+        expect(resToday.statusCode).toBe(200);
+        const bodyToday = resToday.json() as TripOptimizationResult;
+        expect(bodyToday.items).toHaveLength(1);
+        const arrivalToday = wdwMinutesFromMidnight(todayStr, bodyToday.items[0]!.suggestedArrival);
+        const nowMins = wdwMinutesFromMidnight(todayStr, new Date().toISOString());
+        expect(arrivalToday).toBeGreaterThanOrEqual(Math.min(Math.ceil(nowMins / 15) * 15, 1439));
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it('preserves park open start when startMode: "park_open" is explicitly set on today (R9.5)', async () => {
-      const todayStr = wdwToday();
-      const todayApp = Fastify();
-      registerErrorHandler(todayApp);
-      const todayRepo = makeRepo({
-        listPlannedItems: async () => [pi({ plannedDate: todayStr })],
-        updatePlannedItemTimes: async () => {},
-      });
-      const dummyAuth: preHandlerHookHandler = async (req) => {
-        (req as unknown as { userId: string }).userId = CALLER_ID;
-      };
-      const fakePool = {
-        query: vi.fn(async (text: string) => {
-          if (text.includes('FROM trip_memberships')) return { rows: [{ role: 'member' }], rowCount: 1 };
-          if (text.includes('FROM trips WHERE id = $1')) return { rows: [{ walking_speed: 'moderate', early_entry_eligible: false, day_touring_hours: {} }], rowCount: 1 };
-          if (text.includes('FROM experiences WHERE id = ANY')) return { rows: [{ id: EXP_ID, latitude: 28.4177, longitude: -81.5812 }], rowCount: 1 };
-          return { rows: [], rowCount: 0 };
-        }),
-      } as unknown as DbPool;
-      await todayApp.register(tripRoutes({ pool: fakePool, repo: todayRepo, requireSession: dummyAuth }));
+      // See the "now" test above for why the system clock is pinned rather
+      // than left to the real wall clock.
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2026-06-15T14:00:00.000Z')); // 10:00 AM ET (EDT, UTC-4)
+      try {
+        const todayStr = wdwToday();
+        const todayApp = Fastify();
+        registerErrorHandler(todayApp);
+        const todayRepo = makeRepo({
+          listPlannedItems: async () => [pi({ plannedDate: todayStr })],
+          updatePlannedItemTimes: async () => {},
+        });
+        const dummyAuth: preHandlerHookHandler = async (req) => {
+          (req as unknown as { userId: string }).userId = CALLER_ID;
+        };
+        const fakePool = {
+          query: vi.fn(async (text: string) => {
+            if (text.includes('FROM trip_memberships')) return { rows: [{ role: 'member' }], rowCount: 1 };
+            if (text.includes('FROM trips WHERE id = $1')) return { rows: [{ walking_speed: 'moderate', early_entry_eligible: false, day_touring_hours: {} }], rowCount: 1 };
+            if (text.includes('FROM experiences WHERE id = ANY')) return { rows: [{ id: EXP_ID, latitude: 28.4177, longitude: -81.5812 }], rowCount: 1 };
+            return { rows: [], rowCount: 0 };
+          }),
+        } as unknown as DbPool;
+        await todayApp.register(tripRoutes({ pool: fakePool, repo: todayRepo, requireSession: dummyAuth }));
 
-      const resToday = await todayApp.inject({
-        method: 'POST',
-        url: `/trips/${TRIP_ID}/schedule/optimize`,
-        payload: { date: todayStr, startMode: 'park_open' },
-      });
-      expect(resToday.statusCode).toBe(200);
-      const bodyToday = resToday.json() as TripOptimizationResult;
-      expect(bodyToday.items).toHaveLength(1);
-      const arrivalToday = wdwMinutesFromMidnight(todayStr, bodyToday.items[0]!.suggestedArrival);
-      const nowMins = wdwMinutesFromMidnight(todayStr, new Date().toISOString());
-      const roundedNow = Math.min(Math.ceil(nowMins / 15) * 15, 1439);
-      expect(arrivalToday).toBe(Math.max(540, roundedNow));
+        const resToday = await todayApp.inject({
+          method: 'POST',
+          url: `/trips/${TRIP_ID}/schedule/optimize`,
+          payload: { date: todayStr, startMode: 'park_open' },
+        });
+        expect(resToday.statusCode).toBe(200);
+        const bodyToday = resToday.json() as TripOptimizationResult;
+        expect(bodyToday.items).toHaveLength(1);
+        const arrivalToday = wdwMinutesFromMidnight(todayStr, bodyToday.items[0]!.suggestedArrival);
+        const nowMins = wdwMinutesFromMidnight(todayStr, new Date().toISOString());
+        const roundedNow = Math.min(Math.ceil(nowMins / 15) * 15, 1439);
+        expect(arrivalToday).toBe(Math.max(540, roundedNow));
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it('strictly clamps past arrival times and passed park open to current rounded time on today (R9.8)', async () => {
-      const todayStr = wdwToday();
-      const todayApp = Fastify();
-      registerErrorHandler(todayApp);
-      const todayRepo = makeRepo({
-        listPlannedItems: async () => [pi({ plannedDate: todayStr })],
-        updatePlannedItemTimes: async () => {},
-      });
-      const dummyAuth: preHandlerHookHandler = async (req) => {
-        (req as unknown as { userId: string }).userId = CALLER_ID;
-      };
-      const fakePool = {
-        query: vi.fn(async (text: string) => {
-          if (text.includes('FROM trip_memberships')) return { rows: [{ role: 'member' }], rowCount: 1 };
-          if (text.includes('FROM trips WHERE id = $1')) return { rows: [{ walking_speed: 'moderate', early_entry_eligible: false, day_touring_hours: {} }], rowCount: 1 };
-          if (text.includes('FROM experiences WHERE id = ANY')) return { rows: [{ id: EXP_ID, latitude: 28.4177, longitude: -81.5812 }], rowCount: 1 };
-          return { rows: [], rowCount: 0 };
-        }),
-      } as unknown as DbPool;
-      await todayApp.register(tripRoutes({ pool: fakePool, repo: todayRepo, requireSession: dummyAuth }));
+      // See the "now" test above for why the system clock is pinned rather
+      // than left to the real wall clock.
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2026-06-15T14:00:00.000Z')); // 10:00 AM ET (EDT, UTC-4)
+      try {
+        const todayStr = wdwToday();
+        const todayApp = Fastify();
+        registerErrorHandler(todayApp);
+        const todayRepo = makeRepo({
+          listPlannedItems: async () => [pi({ plannedDate: todayStr })],
+          updatePlannedItemTimes: async () => {},
+        });
+        const dummyAuth: preHandlerHookHandler = async (req) => {
+          (req as unknown as { userId: string }).userId = CALLER_ID;
+        };
+        const fakePool = {
+          query: vi.fn(async (text: string) => {
+            if (text.includes('FROM trip_memberships')) return { rows: [{ role: 'member' }], rowCount: 1 };
+            if (text.includes('FROM trips WHERE id = $1')) return { rows: [{ walking_speed: 'moderate', early_entry_eligible: false, day_touring_hours: {} }], rowCount: 1 };
+            if (text.includes('FROM experiences WHERE id = ANY')) return { rows: [{ id: EXP_ID, latitude: 28.4177, longitude: -81.5812 }], rowCount: 1 };
+            return { rows: [], rowCount: 0 };
+          }),
+        } as unknown as DbPool;
+        await todayApp.register(tripRoutes({ pool: fakePool, repo: todayRepo, requireSession: dummyAuth }));
 
-      // Custom time in the past (e.g. 1:00 AM = 60 minutes)
-      const resPast = await todayApp.inject({
-        method: 'POST',
-        url: `/trips/${TRIP_ID}/schedule/optimize`,
-        payload: { date: todayStr, startMode: 'custom', startMinutes: 60, endHour: 23 },
-      });
-      expect(resPast.statusCode).toBe(200);
-      const bodyPast = resPast.json() as TripOptimizationResult;
-      expect(bodyPast.items).toHaveLength(1);
-      const arrivalPast = wdwMinutesFromMidnight(todayStr, bodyPast.items[0]!.suggestedArrival);
-      const nowMins = wdwMinutesFromMidnight(todayStr, new Date().toISOString());
-      const roundedNow = Math.min(Math.ceil(nowMins / 15) * 15, 1439);
-      expect(arrivalPast).toBeGreaterThanOrEqual(roundedNow);
+        // Custom time in the past (e.g. 1:00 AM = 60 minutes)
+        const resPast = await todayApp.inject({
+          method: 'POST',
+          url: `/trips/${TRIP_ID}/schedule/optimize`,
+          payload: { date: todayStr, startMode: 'custom', startMinutes: 60 },
+        });
+        expect(resPast.statusCode).toBe(200);
+        const bodyPast = resPast.json() as TripOptimizationResult;
+        expect(bodyPast.items).toHaveLength(1);
+        const arrivalPast = wdwMinutesFromMidnight(todayStr, bodyPast.items[0]!.suggestedArrival);
+        const nowMins = wdwMinutesFromMidnight(todayStr, new Date().toISOString());
+        const roundedNow = Math.min(Math.ceil(nowMins / 15) * 15, 1439);
+        expect(arrivalPast).toBeGreaterThanOrEqual(roundedNow);
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it('reads walk_wait_weighting from the trip row and steers the sequence accordingly (R10.1, R10.2)', async () => {

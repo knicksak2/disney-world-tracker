@@ -13,6 +13,7 @@
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
+  Keyboard,
   Modal,
   Pressable,
   ScrollView,
@@ -97,7 +98,7 @@ function isValidIsoDate(value: string): boolean {
 }
 
 function activeTripsOf(data: TripsListResponse | undefined): readonly TripDTO[] {
-  if (data === undefined) return [];
+  if (!Array.isArray(data)) return [];
   return data.find((group) => group.status === 'active')?.trips ?? [];
 }
 
@@ -144,6 +145,7 @@ export default function LogVisitModal({
 
   async function handleSubmit(): Promise<void> {
     if (busy) return;
+    Keyboard.dismiss();
     const trimmedNote = note.trim();
     if (!isValidIsoDate(visitedOn)) {
       setError('Enter a date as YYYY-MM-DD.');
@@ -199,7 +201,12 @@ export default function LogVisitModal({
     >
       <View style={styles.backdrop}>
         <View style={styles.sheet} testID="log-visit-modal">
-          <ScrollView contentContainerStyle={styles.sheetContent}>
+          <ScrollView
+            contentContainerStyle={styles.sheetContent}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+            testID="log-visit-scroll"
+          >
             <Text style={styles.title}>Log a visit</Text>
 
             {/* Visit date */}

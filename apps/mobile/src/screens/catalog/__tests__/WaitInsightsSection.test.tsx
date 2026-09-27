@@ -175,4 +175,161 @@ describe('WaitInsightsSection', () => {
       expect(screen.getAllByText('11 AM').length).toBeGreaterThan(0); // from the Typical waits (hour 11)
     });
   });
+
+  describe('Task 22.2 regression: Trip context date resolution (R16.1-R16.4)', () => {
+    it('uses planned item date when scheduled on a day other than trip startDate (fails before fix)', async () => {
+      const waitInsightsCalls: string[] = [];
+      mockApiRequest.mockImplementation(async (_method, url) => {
+        if (url.includes('/me/trips?filter=active')) {
+          return {
+            trips: [
+              {
+                id: 'trip-1',
+                startDate: '2026-06-01',
+                endDate: '2026-06-07',
+              },
+            ],
+          };
+        }
+        if (url.includes('/planned-items')) {
+          return {
+            items: [
+              {
+                id: 'plan-1',
+                experienceId: '123',
+                plannedDate: '2026-06-04',
+              },
+            ],
+          };
+        }
+        if (url.includes('/wait-insights')) {
+          waitInsightsCalls.push(url);
+          return baseResponse;
+        }
+        throw new Error(`Unknown url: ${url}`);
+      });
+
+      render(
+        <QueryClientProvider client={queryClient}>
+          <WaitInsightsSection experienceId="123" />
+        </QueryClientProvider>,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Trip')).toBeTruthy();
+      });
+
+      fireEvent.press(screen.getByText('Trip'));
+
+      await waitFor(() => {
+        expect(waitInsightsCalls.some((call) => call.includes('date=2026-06-04'))).toBe(true);
+      });
+      // Crucial: Must NOT use startDate 2026-06-01
+      expect(waitInsightsCalls.some((call) => call.includes('date=2026-06-01'))).toBe(false);
+    });
+
+    it('uses today date when today is within active trip range and no planned item', async () => {
+      const waitInsightsCalls: string[] = [];
+      mockApiRequest.mockImplementation(async (_method, url) => {
+        if (url.includes('/me/trips?filter=active')) {
+          return {
+            trips: [
+              {
+                id: 'trip-1',
+                startDate: '2026-06-01',
+                endDate: '2026-06-10',
+              },
+            ],
+          };
+        }
+        if (url.includes('/planned-items')) {
+          return { items: [] };
+        }
+        if (url.includes('/wait-insights')) {
+          waitInsightsCalls.push(url);
+          return baseResponse;
+        }
+        throw new Error(`Unknown url: ${url}`);
+      });
+
+      render(
+        <QueryClientProvider client={queryClient}>
+          <WaitInsightsSection experienceId="123" todayWdw="2026-06-05" />
+        </QueryClientProvider>,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Trip')).toBeTruthy();
+      });
+
+      fireEvent.press(screen.getByText('Trip'));
+
+      await waitFor(() => {
+        expect(waitInsightsCalls.some((call) => call.includes('date=2026-06-05'))).toBe(true);
+      });
+      expect(waitInsightsCalls.some((call) => call.includes('date=2026-06-01'))).toBe(false);
+    });
+
+    it('falls back to trip startDate for upcoming trip where today is before startDate', async () => {
+      const waitInsightsCalls: string[] = [];
+      mockApiRequest.mockImplementation(async (_method, url) => {
+        if (url.includes('/me/trips?filter=active')) {
+          return {
+            trips: [
+              {
+                id: 'trip-1',
+                startDate: '2026-07-01',
+                endDate: '2026-07-08',
+              },
+            ],
+          };
+        }
+        if (url.includes('/planned-items')) {
+          return { items: [] };
+        }
+        if (url.includes('/wait-insights')) {
+          waitInsightsCalls.push(url);
+          return baseResponse;
+        }
+        throw new Error(`Unknown url: ${url}`);
+      });
+
+      render(
+        <QueryClientProvider client={queryClient}>
+          <WaitInsightsSection experienceId="123" todayWdw="2026-06-01" />
+        </QueryClientProvider>,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Trip')).toBeTruthy();
+      });
+
+      fireEvent.press(screen.getByText('Trip'));
+
+      await waitFor(() => {
+        expect(waitInsightsCalls.some((call) => call.includes('date=2026-07-01'))).toBe(true);
+      });
+    });
+
+    it('omits Trip segment when there is no active or upcoming trip', async () => {
+      mockApiRequest.mockImplementation(async (_method, url) => {
+        if (url.includes('/trips')) return { trips: [] };
+        if (url.includes('/wait-insights')) return baseResponse;
+        throw new Error(`Unknown url: ${url}`);
+      });
+
+      render(
+        <QueryClientProvider client={queryClient}>
+          <WaitInsightsSection experienceId="123" />
+        </QueryClientProvider>,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Now')).toBeTruthy();
+      });
+
+      expect(screen.queryByText('Trip')).toBeNull();
+    });
+  });
 });
+

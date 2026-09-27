@@ -88,6 +88,10 @@ describe('LogFoodItemModal', () => {
     for (let i = 1; i <= 10; i++) {
       expect(screen.getByTestId(`rating-btn-${i}`)).toBeTruthy();
     }
+
+    expect(screen.getByTestId('log-food-item-scroll').props.keyboardShouldPersistTaps).toBe(
+      'handled',
+    );
   });
 
   it('renders "Not currently on menu" indicator when item is not on current menu', () => {

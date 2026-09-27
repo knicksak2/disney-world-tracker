@@ -623,7 +623,7 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
       // plugin's `/catalog/:experienceId/live` route, keyed by the Experience's
       // Enterprise_Id (R11.1), which equals the ThemeParks.wiki External_Id
       // (R11.2). Contacts only ThemeParks.wiki, never a Disney source
-      // (R11.10, R12.3).
+      // (disney-source-resilience R13.1–R13.3).
       getLiveDetail: (id) => liveService.getLiveDetail(id),
     },
     intelligence: {

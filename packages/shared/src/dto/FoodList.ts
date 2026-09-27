@@ -11,6 +11,7 @@ export interface FoodListDTO {
   readonly ownerDisplayName: string;
   readonly name: string;
   readonly visibility: 'private' | 'public';
+  readonly isChecklist: boolean;
   readonly likeCount: number;
   readonly itemCount: number;
   readonly createdAt: string;
@@ -36,6 +37,22 @@ export interface FoodListItemDTO {
   /** `null` when the contributing User's account has since been deleted (ON DELETE SET NULL). */
   readonly addedByUserId: string | null;
   readonly addedByDisplayName: string | null;
+  /** Present only when the parent Food_List's `isChecklist` is `true` (Requirement 13.3, 13.4). */
+  readonly gotten?: boolean;
+  /**
+   * The 1-10 rating from the User's most recent qualifying `Food_Item_Log`
+   * for this item (Requirement 13.7's repeat-log allowance — "most recent"
+   * is the same tie-break this codebase already uses elsewhere), or `null`
+   * if that log carried no rating. Present only when `gotten` is `true`;
+   * absent entirely (not merely `null`) when the list isn't a checklist or
+   * the item isn't yet gotten.
+   */
+  readonly rating?: number | null | undefined;
+  /**
+   * The id of the most recent qualifying Food_Item_Log that marked this item
+   * as gotten (Requirement 13.23). Present only when `gotten` is `true`.
+   */
+  readonly logId?: string | null | undefined;
 }
 
 /** The requesting User's access level on a Food_List (Requirement 7.1, 7.3). */
@@ -48,6 +65,8 @@ export interface FoodListDetailDTO extends FoodListDTO {
   readonly version: number;
   readonly myRole: FoodListRole;
   readonly items: readonly FoodListItemDTO[];
+  /** Present only when `isChecklist` is `true` (Requirement 13.9). */
+  readonly gottenCount?: number;
 }
 
 export interface FoodListCollectionDTO {
@@ -68,11 +87,15 @@ export type FoodListVisibility = 'private' | 'public';
 export interface CreateFoodListInputDTO {
   readonly name: string;
   readonly visibility?: FoodListVisibility | undefined;
+  /** Defaults server-side to `false` when omitted (Requirement 13.1). */
+  readonly isChecklist?: boolean | undefined;
 }
 
 export interface UpdateFoodListInputDTO {
   readonly name?: string;
   readonly visibility?: FoodListVisibility;
+  /** Requirement 13.2 — symmetric with `visibility`'s existing update path. */
+  readonly isChecklist?: boolean | undefined;
 }
 
 export interface AddFoodListItemInputDTO {

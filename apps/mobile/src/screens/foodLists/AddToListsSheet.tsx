@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -173,6 +173,41 @@ export default function AddToListsSheet({
     }
   }
 
+  // Stable `renderItem` identity — an inline arrow literal is recreated every
+  // render, which `FlatList`/`VirtualizedList` treats as a changed render
+  // function and forces expensive re-render/re-measure work even when the row
+  // is otherwise unchanged (see the same fix in `DestinationScreen.tsx`).
+  // Placed before the `if (!visible) return null;` early return below so the
+  // hook always runs, satisfying React's Rules of Hooks.
+  const renderOwnedList = useCallback(
+    ({ item }: { item: FoodListDTO }) => {
+      const isSelected = selectedListIds.has(item.id);
+      return (
+        <Pressable
+          onPress={() => toggleListSelection(item.id)}
+          style={({ pressed }) => [styles.listRow, pressed && styles.listRowPressed]}
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: isSelected }}
+          accessibilityLabel={`List ${item.name}`}
+          testID={`food-list-checkbox-row-${item.id}`}
+        >
+          <Ionicons
+            name={isSelected ? 'checkbox' : 'square-outline'}
+            size={22}
+            color={isSelected ? theme.color.primary : theme.color.textSecondary}
+          />
+          <View style={styles.listRowInfo}>
+            <Text style={styles.listRowName}>{item.name}</Text>
+            <Text style={styles.listRowMeta}>
+              {item.itemCount} items • {item.visibility}
+            </Text>
+          </View>
+        </Pressable>
+      );
+    },
+    [selectedListIds, toggleListSelection],
+  );
+
   if (!visible) return null;
 
   return (
@@ -263,31 +298,7 @@ export default function AddToListsSheet({
             <FlatList
               data={ownedLists}
               keyExtractor={(item) => item.id}
-              renderItem={({ item }) => {
-                const isSelected = selectedListIds.has(item.id);
-                return (
-                  <Pressable
-                    onPress={() => toggleListSelection(item.id)}
-                    style={({ pressed }) => [styles.listRow, pressed && styles.listRowPressed]}
-                    accessibilityRole="checkbox"
-                    accessibilityState={{ checked: isSelected }}
-                    accessibilityLabel={`List ${item.name}`}
-                    testID={`food-list-checkbox-row-${item.id}`}
-                  >
-                    <Ionicons
-                      name={isSelected ? 'checkbox' : 'square-outline'}
-                      size={22}
-                      color={isSelected ? theme.color.primary : theme.color.textSecondary}
-                    />
-                    <View style={styles.listRowInfo}>
-                      <Text style={styles.listRowName}>{item.name}</Text>
-                      <Text style={styles.listRowMeta}>
-                        {item.itemCount} items • {item.visibility}
-                      </Text>
-                    </View>
-                  </Pressable>
-                );
-              }}
+              renderItem={renderOwnedList}
               ListEmptyComponent={
                 <View style={styles.emptyWrap}>
                   <Text style={styles.emptyText} testID="add-to-lists-empty">

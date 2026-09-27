@@ -30,7 +30,7 @@
 // `GET /trips/:id/members` (the only Users it may tag, R10.4) and `GET /me` (to
 // exclude the logging Member, R10.5).
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -315,6 +315,20 @@ export default function TripFeedScreen({
     setComposerVisible(true);
   };
 
+  // Stable `renderItem` identity: an inline arrow literal passed to `FlatList`
+  // is recreated every render, which `FlatList`/`VirtualizedList` treats as a
+  // changed render function and forces the whole visible window to
+  // re-render/re-measure even though `FeedItemCard` handles its own updates.
+  // See `DestinationScreen`'s `renderRow` for the same fix. Defined here
+  // (before the loading/error early returns below) rather than next to
+  // `items`, since hooks must run unconditionally on every render.
+  const renderRow = useCallback(
+    ({ item }: { item: TripFeedItemDTO }) => (
+      <FeedItemCard tripId={tripId} item={item} />
+    ),
+    [tripId],
+  );
+
   // -------------------------------------------------------------------------
   // Loading
   // -------------------------------------------------------------------------
@@ -371,7 +385,7 @@ export default function TripFeedScreen({
       <FlatList
         data={items}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => <FeedItemCard tripId={tripId} item={item} />}
+        renderItem={renderRow}
         contentContainerStyle={styles.listContent}
         testID="trip-feed"
         ListHeaderComponent={

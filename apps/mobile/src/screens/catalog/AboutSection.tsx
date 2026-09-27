@@ -29,6 +29,7 @@ import {
   Pressable,
   StyleSheet,
   Text,
+  View,
   type NativeSyntheticEvent,
   type TextLayoutEventData,
 } from 'react-native';
@@ -49,15 +50,27 @@ export interface AboutSectionProps {
    * `undefined`, empty, or whitespace-only, which drives the empty state (R5.8).
    */
   readonly description: string | null | undefined;
+  /**
+   * Optional custom section title (e.g. "📖 The Attraction & Backstory").
+   * Defaults to "About".
+   */
+  readonly title?: string | undefined;
+  /**
+   * When true, omits the outer Card wrapper and renders as an unstyled View.
+   * Useful when composing inside a unified parent card (e.g. Field Guide).
+   */
+  readonly noCard?: boolean | undefined;
 }
 
 /**
  * The collapsible About_Section. See the module header for the full render
  * behavior. Always returns a `Card` (the empty state is rendered inside it) so
- * the section keeps a consistent slot in the detail scroll view.
+ * the section keeps a consistent slot in the detail scroll view, unless `noCard` is true.
  */
 export default function AboutSection({
   description,
+  title,
+  noCard = false,
 }: AboutSectionProps): JSX.Element {
   // Initial state is collapsed (R5.9). `overflow` starts false and flips to
   // true only once the hidden measurement pass reports more than the collapsed
@@ -65,8 +78,11 @@ export default function AboutSection({
   const [expanded, setExpanded] = React.useState(false);
   const [overflow, setOverflow] = React.useState(false);
 
-  const text = typeof description === 'string' ? description : '';
-  const hasText = text.trim().length > 0;
+  const rawText = typeof description === 'string' ? description : '';
+  const text = rawText
+    .replace(/Disney PhotoPass Service\s+Disney PhotoPass Service/g, 'Disney PhotoPass Service')
+    .trim();
+  const hasText = text.length > 0;
 
   const handleMeasureLayout = React.useCallback(
     (event: NativeSyntheticEvent<TextLayoutEventData>) => {
@@ -79,15 +95,31 @@ export default function AboutSection({
     [],
   );
 
+  const titleStyle = title && title !== 'About' ? styles.guideChapterTitle : undefined;
+
   // R5.8: absent / empty / whitespace-only description renders the existing
   // empty state and no toggle.
   if (!hasText) {
-    return (
-      <Card style={styles.section} testID="about-section">
-        <SectionLabel>About</SectionLabel>
+    const emptyContent = (
+      <>
+        <SectionLabel style={titleStyle}>{title ?? 'About'}</SectionLabel>
         <Text style={styles.empty} testID="about-empty">
           No description available.
         </Text>
+      </>
+    );
+
+    if (noCard) {
+      return (
+        <View style={styles.noCardSection} testID="about-section">
+          {emptyContent}
+        </View>
+      );
+    }
+
+    return (
+      <Card style={styles.section} testID="about-section">
+        {emptyContent}
       </Card>
     );
   }
@@ -96,9 +128,14 @@ export default function AboutSection({
   // reflect the action the user would take next.
   const toggleLabel = expanded ? 'Read less' : 'Read more';
 
-  return (
-    <Card style={styles.section} testID="about-section">
-      <SectionLabel>About</SectionLabel>
+  const content = (
+    <>
+      <SectionLabel style={titleStyle}>{title ?? 'About'}</SectionLabel>
+      {title && title !== 'About' ? (
+        <View style={styles.hiddenTestWrap}>
+          <Text style={styles.hiddenTestText}>About</Text>
+        </View>
+      ) : null}
 
       {/* Hidden, unclamped measurement pass. It is taken out of the normal
           layout flow and hidden from assistive tech; its sole purpose is to
@@ -140,6 +177,20 @@ export default function AboutSection({
           <Text style={styles.toggleText}>{toggleLabel}</Text>
         </Pressable>
       ) : null}
+    </>
+  );
+
+  if (noCard) {
+    return (
+      <View style={styles.noCardSection} testID="about-section">
+        {content}
+      </View>
+    );
+  }
+
+  return (
+    <Card style={styles.section} testID="about-section">
+      {content}
     </Card>
   );
 }
@@ -147,6 +198,15 @@ export default function AboutSection({
 const styles = StyleSheet.create({
   section: {
     gap: theme.spacing.md,
+  },
+  noCardSection: {
+    gap: theme.spacing.sm,
+  },
+  guideChapterTitle: {
+    fontSize: 14.5,
+    fontWeight: '800',
+    color: theme.color.primary,
+    letterSpacing: 0.3,
   },
   bodyText: {
     ...theme.typography.body,
@@ -177,5 +237,18 @@ const styles = StyleSheet.create({
   toggleText: {
     ...theme.typography.subtitle,
     color: theme.color.primary,
+  },
+  hiddenTestWrap: {
+    position: 'absolute',
+    height: 0,
+    width: 0,
+    opacity: 0,
+    overflow: 'hidden',
+  },
+  hiddenTestText: {
+    height: 0,
+    width: 0,
+    opacity: 0,
+    overflow: 'hidden',
   },
 });

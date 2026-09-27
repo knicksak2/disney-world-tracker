@@ -1,0 +1,6 @@
+BEGIN;
+
+ALTER TABLE food_lists
+    ADD COLUMN is_checklist BOOLEAN NOT NULL DEFAULT false;
+
+COMMIT;

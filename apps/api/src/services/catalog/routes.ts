@@ -103,6 +103,11 @@ export interface CatalogListFilters {
    * equals this value, combined conjunctively with every other filter.
    */
   readonly worldShowcaseCountry?: string;
+  /**
+   * Exact Resort filter. When present, returns only active Experiences
+   * located at the specified Resort.
+   */
+  readonly resortId?: string;
 }
 
 /**
@@ -266,6 +271,8 @@ export interface ExperienceDetailResponse {
   readonly areaType: AreaType;
   /** Referenced Resort Internal_Id for a `Resort` area (R5.7). */
   readonly resortId?: string | null;
+  /** Represented Resort Internal_Id for a Resort-representing experience. */
+  readonly representsResortId?: string | null;
   /** Latitude when persisted (R5.1, R5.6). */
   readonly latitude?: number | null;
   /** Longitude when persisted (R5.1, R5.6). */
@@ -432,6 +439,7 @@ const catalogQuerySchema = z
     q: searchQuerySchema.optional(),
     land: z.string().min(1).max(200).optional(),
     worldShowcaseCountry: z.string().min(1).max(200).optional(),
+    resortId: uuidSchema.optional(),
   })
   .strict();
 
@@ -614,6 +622,9 @@ function parseListQuery(raw: unknown): CatalogListFilters {
   }
   if (parsed.worldShowcaseCountry !== undefined) {
     filters.worldShowcaseCountry = parsed.worldShowcaseCountry;
+  }
+  if (parsed.resortId !== undefined) {
+    filters.resortId = parsed.resortId;
   }
   return filters;
 }

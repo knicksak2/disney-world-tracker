@@ -148,7 +148,7 @@ export default function LoginScreen({ navigation }: Props): JSX.Element {
             icon="sparkles"
           />
 
-          <View style={styles.body}>
+          <View style={styles.body} testID="login-body">
             <Card>
               <View style={styles.field}>
                 <Text style={styles.label}>Email</Text>
@@ -262,7 +262,7 @@ const styles = StyleSheet.create({
   scroll: { flexGrow: 1, paddingBottom: theme.spacing.xxl },
   body: {
     paddingHorizontal: theme.spacing.xl,
-    marginTop: -theme.layout.headerOverlap,
+    marginTop: theme.spacing.lg,
     gap: theme.spacing.lg,
   },
   field: {

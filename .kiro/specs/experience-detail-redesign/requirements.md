@@ -248,7 +248,7 @@ most relevant details appear before long descriptive content and detail groups.
 3. THE Experience_Detail_Screen SHALL render the Live_Operational_Section at a vertical position above the
    About_Section.
 4. WHERE the Experience is a Restaurant, THE Experience_Detail_Screen SHALL render the Menu_Summary_Card
-   between the Live_Operational_Section and the About_Section.
+   in the Today_In_Park_Lens below the Dining_Reservation_Card and above the Location_Group (preserving Requirement 8.7).
 5. WHERE a section in the ordered sequence would render no content, THE Experience_Detail_Screen SHALL omit
    that section while preserving the top-to-bottom relative order of the remaining sections.
 
@@ -335,3 +335,353 @@ picture of where it is, so that I can recognize its position at a glance and tap
 10. WHEN the Static_Map_Url builder is invoked with a given Latitude and Longitude, THE Static_Map_Url builder
     SHALL encode a bounding box whose center equals those exact Latitude and Longitude values into the returned
     Static_Map_Url, producing an equal Static_Map_Url on repeated invocations with equal inputs.
+## Amendment: Two-Lens Navigation
+
+The single continuous scroll produced by Requirements 1–10 still stacks the live/actionable content
+(wait status, forecast, Lightning Lane, dining reservation, showtimes) directly above the
+personal/reference content (visit history, ratings, notes, backstory, accessibility) in one column.
+User feedback on the shipped result was that the page is "one long scrollable page" that does not
+surface the single most time-sensitive fact — the current wait, reservation, or showtime — without
+scrolling past several other sections first, and that the personal-visit controls occupy full-height
+space on every visit even when the user has nothing new to log.
+
+This amendment splits the Experience_Detail_Screen into two switchable views ("Lenses") reached by a
+persistent Lens_Switcher, promotes the most time-sensitive content into a Live_Status_Strip visible
+regardless of which Lens is active, and consolidates the personal-visit controls into a single
+collapsible Park_Passport_Card. It reuses the existing data-fetching, mutation, and query-invalidation
+behavior established by Requirements 6 and 8; it does not change any DTO, endpoint, or persisted
+field except where a Requirement below explicitly says so (Requirement 15, which surfaces an existing,
+previously unrendered DTO field, and Requirement 16, which fixes a client-side date-selection defect
+in already-shipped code).
+
+### Additional Glossary
+
+- **Lens**: One of the two mutually exclusive views the Experience_Detail_Screen renders below the
+  Live_Status_Strip: the Today_In_Park_Lens or the My_Passport_And_Lore_Lens. Exactly one Lens is
+  active at a time.
+- **Lens_Switcher**: The two-segment control, rendered directly beneath the Quick_Specs_Row, that
+  switches the active Lens.
+- **Today_In_Park_Lens**: The Lens containing the Live_Wait_Cockpit (or the category's equivalent
+  live section — Dining_Reservation_Card or Showtimes_Card), the Virtual_Queue_Banner and
+  Single_Rider_Strip when applicable, and the Location_Group with the Static_Map_Preview and
+  Get_Directions_Action.
+- **My_Passport_And_Lore_Lens**: The Lens containing the Park_Passport_Card, the
+  Restaurant_Dish_Log_Card (Restaurant only), the About_Section, the "Imagineer's Insider Notes"
+  section (the renamed Why_This_Section), the Community_Rating_Section, and the remaining Tag_Groups
+  (Good to know / Accessibility / Good for).
+- **Live_Status_Strip**: The compact status region rendered immediately below the header/hero region,
+  visible on both Lenses without scrolling, showing the category-appropriate live headline value (wait
+  minutes, reservation availability, or next showtime countdown) and its status.
+- **Quick_Specs_Row**: The row of at-a-glance stat chips (duration, height requirement, climate,
+  category-specific feature) rendered above the Lens_Switcher.
+- **Live_Wait_Cockpit**: The rendered-only-for-Ride/Character_Meet live section combining the
+  standby-wait instrument, the Lightning_Lane_Ticket, the Wait_Context_Selector, the forecast chart,
+  and the Best_Time_Verdict. Supersedes the plain Live_Operational_Section layout for these categories;
+  the underlying live data source and gating (`liveSectionFor()`) are unchanged.
+- **Wait_Context_Selector**: The three-way control ("Now" / "Trip" / "Typical") that selects which
+  date the Live_Wait_Cockpit's forecast, Typical/Worst stats, and Reliability figure describe.
+- **Trip_Context_Date**: The specific calendar date the Wait_Context_Selector's "Trip" option requests
+  when the viewer has a relevant trip, resolved per Requirement 16.
+- **Virtual_Queue_Banner**: The banner shown in the Today_In_Park_Lens when the Experience's live
+  detail carries boarding-group data, surfacing the current boarding-group state.
+- **Single_Rider_Strip**: The existing single-rider surfacing (Requirement pre-dating this amendment;
+  see `RideLiveSection.tsx` / `WaitInsightsSection.tsx`), repositioned within the Live_Wait_Cockpit but
+  not otherwise changed by this amendment.
+- **Park_Passport_Card**: The collapsible card in the My_Passport_And_Lore_Lens presenting the
+  viewer's visit count, computed average rating, most recent shared note, and expandable visit
+  history, superseding the plain Your_Visit_Card layout (Requirement 6) with a richer presentation
+  over the same underlying data and mutations.
+- **Passport_Average_Rating**: The arithmetic mean of the numeric rating on every visit log that
+  carries one, rounded to one decimal place for display, recomputed whenever a visit log's rating is
+  added, edited, or removed.
+- **Restaurant_Dish_Log_Card**: The Restaurant-only card in the My_Passport_And_Lore_Lens listing the
+  viewer's logged food items for that Experience, superseding the plain food-item-logging button row
+  (Task 7.3 of this spec) with a list-plus-summary presentation over the same underlying data.
+- **Floating_Action_Dock**: The persistent, category- and Lens-aware two-button control fixed to the
+  bottom of the Experience_Detail_Screen across both Lenses.
+- **Dining_Reservation_Card**: The Restaurant-category equivalent of the Live_Wait_Cockpit in the
+  Today_In_Park_Lens, showing reservation availability and the existing Reservation_Action.
+- **Showtimes_Card**: The Show/Character_Meet-category equivalent of the Live_Wait_Cockpit in the
+  Today_In_Park_Lens, showing today's showtimes and a countdown to the next one.
+
+### Requirement 11: Two-Lens navigation shell
+
+**User Story:** As a mobile user viewing an Experience, I want the live/actionable content and the
+personal/reference content separated into two switchable views, so that I am not forced to scroll
+past one to reach the other.
+
+#### Acceptance Criteria
+
+1. THE Experience_Detail_Screen SHALL render exactly one Lens at a time: the Today_In_Park_Lens or the
+   My_Passport_And_Lore_Lens.
+2. THE Experience_Detail_Screen SHALL default to the Today_In_Park_Lens on first render for every
+   Experience category.
+3. THE Experience_Detail_Screen SHALL render the Lens_Switcher directly beneath the Quick_Specs_Row,
+   above both Lenses' content, on every render regardless of which Lens is active.
+4. WHEN the user activates the inactive segment of the Lens_Switcher, THE Experience_Detail_Screen
+   SHALL switch the active Lens and scroll the newly active Lens's content into view from its top.
+5. THE Experience_Detail_Screen SHALL preserve the header/hero region, the Quick_Specs_Row, the
+   Lens_Switcher, the Live_Status_Strip, and the Floating_Action_Dock unchanged in position and content
+   across a Lens switch; only the content below the Lens_Switcher and above the Floating_Action_Dock
+   SHALL change.
+6. THE Lens_Switcher SHALL provide a non-empty accessibility label for each segment identifying it as a
+   tab and indicating its selected state to assistive technology.
+7. WHILE a Lens's data-fetching queries are loading, THE Experience_Detail_Screen SHALL render that
+   Lens's existing per-section loading indicators without blocking the other Lens's ability to become
+   active.
+
+### Requirement 12: Live_Status_Strip promoted above the Lens content
+
+**User Story:** As a mobile user, I want the single most time-sensitive fact about an Experience
+visible the instant the screen opens, so that I do not have to switch Lenses or scroll to find it.
+
+#### Acceptance Criteria
+
+1. THE Experience_Detail_Screen SHALL omit the redundant Live_Status_Strip from between the header/hero
+   region and the Quick_Specs_Row, matching `mockup.html` where live standby wait and Lightning Lane
+   availability are surfaced directly inside the Live_Wait_Cockpit below the Lens_Switcher.
+2. WHERE standalone or external surfaces consume `LiveStatusStrip`, THE component SHALL display the
+   current standby wait in minutes (or the existing closed/down indication when not Operating) and the
+   Lightning Lane availability state for Ride and Character_Meet.
+3. WHERE standalone or external surfaces consume `LiveStatusStrip` for Restaurant, IT SHALL display the
+   current reservation availability state and, where available, the next available reservation time.
+4. WHERE standalone or external surfaces consume `LiveStatusStrip` for Show or where `liveSectionFor()`
+   resolves to showtimes, IT SHALL display a countdown in minutes to the next showtime together with that
+   showtime's clock time.
+5. WHERE the Experience category has no Live_Operational_Section per `liveSectionFor()`, THE component
+   SHALL omit its output.
+6. IF the live retrieval fails, THEN THE Live_Status_Strip SHALL render the existing live-unavailable
+   indication in place of the headline value, preserving Requirement 8.4's behavior.
+7. THE Live_Status_Strip SHALL derive its displayed values from the same live data source and
+   `liveSectionFor()` gating already used by the Live_Operational_Section (Requirement 8.3).
+
+### Requirement 13: Live_Wait_Cockpit with Now / Trip / Typical context
+
+**User Story:** As a mobile user planning when to ride, I want to see the forecast for right now, for
+my upcoming trip day, or for the typical pattern, so that I can decide when to go without leaving the
+screen.
+
+#### Acceptance Criteria
+
+1. WHERE the Experience category is Ride or Character_Meet, THE Today_In_Park_Lens SHALL render the
+   Live_Wait_Cockpit in place of the plain Live_Operational_Section layout.
+2. THE Live_Wait_Cockpit SHALL render the Wait_Context_Selector with a "Now" segment and a "Typical"
+   segment always present, and a "Trip" segment present only when a Trip_Context_Date is resolvable per
+   Requirement 16.
+3. THE Live_Wait_Cockpit SHALL default the Wait_Context_Selector to "Now".
+4. WHEN the user activates the "Now" segment, THE Live_Wait_Cockpit SHALL display the current live
+   standby wait and the current-hour forecast chart.
+5. WHEN the user activates the "Typical" segment, THE Live_Wait_Cockpit SHALL display the
+   `WaitInsightsDTO` historical-pattern forecast obtained without a `date` query parameter.
+6. WHEN the user activates the "Trip" segment, THE Live_Wait_Cockpit SHALL display the
+   `WaitInsightsDTO` forecast obtained using the Trip_Context_Date as the `date` query parameter.
+7. THE Live_Wait_Cockpit SHALL render the Typical/Worst stat pair and the Reliability percentage
+   sourced from the currently selected Wait_Context_Selector segment's `WaitInsightsDTO` response.
+8. THE Live_Wait_Cockpit SHALL preserve the existing Lightning_Lane availability/return-window display
+   and the existing Best_Time_Verdict text, sourced unchanged from their existing DTOs.
+9. WHERE the Experience's live detail carries boarding-group data, THE Live_Wait_Cockpit SHALL render
+   the Virtual_Queue_Banner per Requirement 15; where it does not, THE Live_Wait_Cockpit SHALL omit the
+   Virtual_Queue_Banner.
+10. THE Live_Wait_Cockpit SHALL preserve the existing Single_Rider_Strip content and gating unchanged,
+    repositioning it within the Cockpit's layout only.
+
+### Requirement 14: Category-specific Today_In_Park_Lens content
+
+**User Story:** As a mobile user viewing a Restaurant or a Show, I want the live section to show
+reservation or showtime information relevant to that category, so that I am not shown a standby-wait
+instrument that does not apply.
+
+#### Acceptance Criteria
+
+1. WHERE the Experience category is Restaurant, THE Today_In_Park_Lens SHALL render the
+   Dining_Reservation_Card in place of the Live_Wait_Cockpit, preserving the existing
+   Reservation_Action (diningUrl gating and open/error behavior) unchanged.
+2. WHERE the Experience category is Show or Character_Meet and `liveSectionFor()` resolves to
+   showtimes, THE Today_In_Park_Lens SHALL render the Showtimes_Card in place of the Live_Wait_Cockpit,
+   listing today's showtimes and indicating the next upcoming one.
+3. WHERE the Experience category has no Live_Operational_Section per `liveSectionFor()`, THE
+   Today_In_Park_Lens SHALL omit both the Live_Wait_Cockpit and the category-specific cards for that
+   Experience.
+4. THE Today_In_Park_Lens SHALL render the Location_Group with the Static_Map_Preview and
+   Get_Directions_Action (Requirements 4 and 10) below the live/category-specific card, for every
+   category, regardless of which live section (if any) is rendered above it.
+5. WHERE the Experience category is Restaurant and menus are present, THE Today_In_Park_Lens SHALL
+   render the Menu_Summary_Card below the Dining_Reservation_Card and above the Location_Group.
+
+### Requirement 15: Virtual Queue / boarding-group display
+
+**User Story:** As a mobile user riding an Experience that uses a virtual queue, I want to see the
+current boarding-group state, so that I know whether and when I can board without checking a separate
+app.
+
+#### Acceptance Criteria
+
+1. WHERE the Experience's live detail response includes a `boardingGroup` value with `state` present,
+   THE Today_In_Park_Lens SHALL render the Virtual_Queue_Banner displaying that `state`.
+2. WHERE the `boardingGroup` value includes both `currentGroupStart` and `currentGroupEnd`, THE
+   Virtual_Queue_Banner SHALL display the current boarding-group range using those two values.
+3. IF the Experience's live detail response omits `boardingGroup` or omits `state` within it, THEN THE
+   Experience_Detail_Screen SHALL omit the Virtual_Queue_Banner.
+4. THE Virtual_Queue_Banner SHALL provide a non-empty accessibility label describing the boarding-group
+   state for the Experience.
+5. THE Virtual_Queue_Banner SHALL consume the existing `liveDetail.boardingGroup` field without
+   requiring any new DTO field, migration, or endpoint.
+
+### Requirement 16: Correct Trip_Context_Date resolution
+
+**User Story:** As a mobile user with a multi-day trip planned, I want the "Trip" wait forecast to
+reflect the day I am actually asking about, so that the forecast is not silently wrong for every day of
+my trip except the first.
+
+#### Acceptance Criteria
+
+1. IF the Experience has a planned item already scheduled for the viewer on an active or upcoming
+   trip, THEN THE Trip_Context_Date SHALL equal that planned item's `planned_date`.
+2. IF the Experience has no planned item scheduled for the viewer but the viewer has an active trip
+   whose date range includes today's date (per `wdwClock`), THEN THE Trip_Context_Date SHALL equal
+   today's date.
+3. IF the Experience has no planned item scheduled for the viewer and the viewer's active or nearest
+   upcoming trip's date range does not include today's date, THEN THE Trip_Context_Date SHALL equal
+   that trip's start date.
+4. IF the viewer has no active or upcoming trip, THEN THE Trip_Context_Date SHALL be unresolvable and
+   THE Live_Wait_Cockpit SHALL omit the "Trip" segment of the Wait_Context_Selector per Requirement
+   13.2.
+5. THE Trip_Context_Date resolution in Acceptance Criteria 1–4 SHALL take precedence in that order,
+   evaluating Acceptance Criterion 1 before falling back to Acceptance Criterion 2, and Acceptance
+   Criterion 2 before falling back to Acceptance Criterion 3.
+6. THIS Requirement corrects the pre-existing client behavior in `WaitInsightsSection.tsx`, which
+   resolves the "Trip" context to the active trip's `startDate` unconditionally; that behavior SHALL
+   be replaced by Acceptance Criteria 1–4, not preserved as an additional fallback.
+
+### Requirement 17: Park_Passport_Card
+
+**User Story:** As a mobile user reviewing my own visit history, I want a single richer card showing my
+visit count, average rating, and history, so that I get more context than a plain completion checkbox
+without hunting through separate controls.
+
+#### Acceptance Criteria
+
+1. THE My_Passport_And_Lore_Lens SHALL render the Park_Passport_Card in place of the plain
+   Your_Visit_Card layout (Requirement 6), reusing the same completion, rating, and note data and
+   mutations.
+2. THE Park_Passport_Card SHALL display the total number of visit logs for the Experience and the
+   Passport_Average_Rating, when at least one visit log carries a rating.
+3. IF no visit log for the Experience carries a rating, THEN THE Park_Passport_Card SHALL omit the
+   Passport_Average_Rating and render the existing empty-rating state.
+4. THE Park_Passport_Card SHALL render the visit history as an expandable list where each entry shows
+   that visit's date, that visit's individual rating (when present), and that visit's individual note
+   (when present).
+5. WHEN the user edits or removes the rating on an individual visit history entry, THE
+   Park_Passport_Card SHALL recompute and re-render the Passport_Average_Rating to reflect the change,
+   and SHALL trigger the existing `['experience-rating', experienceId]` and
+   `['experience-aggregate', experienceId]` invalidations (Requirement 6.3) for the entry that changed.
+6. WHEN the user deletes an individual visit history entry, THE Park_Passport_Card SHALL remove that
+   entry from the displayed history, recompute the Passport_Average_Rating and the displayed visit
+   count, and preserve the remaining entries' relative order.
+7. IF the Experience has zero visit logs, THEN THE Park_Passport_Card SHALL render an empty state
+   inviting the user to log a visit, matching Requirement 6.7's empty-state behavior.
+8. THE Park_Passport_Card SHALL preserve every accessibility label, loading/error/empty independence,
+   and mutation-invalidation behavior specified in Requirement 6 for the underlying completion, rating,
+   and note controls; this amendment changes only their visual presentation and grouping.
+9. THE Park_Passport_Card SHALL present the title 'Park Passport & Journal', the Embossed Golden Seal
+   Medallion with visit count and average score, the personal tip quote bubble with 'Edit Tip' affordance,
+   and the 'Log another visit' button at the bottom of the card, matching `mockup.html` (lines 1466-1547).
+10. THE Park_Passport_Card SHALL omit the redundant legacy `CompletionControls`, `RatingControl`, and
+    `NoteControl` form controls from the normal success state, while preserving query error messages when
+    any of the queries are in an error state per Acceptance Criterion 8.
+11. WHEN the user has not recorded a personal tip or visit note for the Experience, THE Park_Passport_Card
+    SHALL render a clean empty tip state with an 'Add Tip' affordance, and SHALL NOT display placeholder tip
+    text. WHEN a personal tip or visit note exists, THE Park_Passport_Card SHALL render the user's tip text
+    with an 'Edit Tip' affordance.
+
+### Requirement 18: Restaurant_Dish_Log_Card
+
+**User Story:** As a mobile user who has logged dishes at a Restaurant, I want to see my logged dishes
+in the Passport Lens, so that my food history for this restaurant is visible alongside my visit
+history.
+
+#### Acceptance Criteria
+
+1. WHERE the Experience category is Restaurant, THE My_Passport_And_Lore_Lens SHALL render the
+   Restaurant_Dish_Log_Card, reusing the existing food-item-logging data and the "Log a food item" /
+   "My logged items" / "Add to a list" affordances (this spec's Task 7.3) without introducing a new DTO
+   or endpoint.
+2. THE Restaurant_Dish_Log_Card SHALL display the count of the viewer's logged food items for the
+   Restaurant and, for each logged item, its name, its individual rating (when present), and its
+   individual note (when present).
+3. IF the viewer has zero logged food items for the Restaurant, THEN THE Restaurant_Dish_Log_Card SHALL
+   render an empty state inviting the user to log a dish.
+4. WHERE the Experience category is not Restaurant, THE My_Passport_And_Lore_Lens SHALL omit the
+   Restaurant_Dish_Log_Card.
+
+### Requirement 19: Floating_Action_Dock
+
+**User Story:** As a mobile user, I want the primary actions for an Experience available without
+scrolling, so that logging a visit, adding to my plan, or reserving a table does not require finding
+the right section first.
+
+#### Acceptance Criteria
+
+1. THE Experience_Detail_Screen SHALL render the Floating_Action_Dock fixed to the bottom of the
+   screen, visible on both Lenses, for every Experience category.
+2. WHERE the Experience category is Ride, Character_Meet, or Show and the active Lens is the
+   Today_In_Park_Lens, THE Floating_Action_Dock SHALL present a primary action that logs a visit and a
+   secondary action labeled "Add to Trip" that adds the Experience to the viewer's active or upcoming trip's planned items.
+3. WHERE the Experience category is Ride, Character_Meet, or Show and the active Lens is the
+   My_Passport_And_Lore_Lens, THE Floating_Action_Dock SHALL present a primary action that logs a visit
+   and a secondary action labeled "Add to Trip" that adds the Experience to the viewer's active or upcoming trip's planned items (matching the Today_In_Park_Lens,
+   superseding the lens-specific rating secondary action).
+4. WHERE the Experience category is Restaurant, THE Floating_Action_Dock SHALL present a primary
+   action that opens the Restaurant_Dish_Log_Card's "Log a food item" flow and a secondary action that
+   invokes the existing Reservation_Action, on both Lenses.
+5. WHEN the user activates a Floating_Action_Dock action, THE Experience_Detail_Screen SHALL invoke the
+   same existing handler and query-invalidation behavior already specified for that action by
+   Requirements 6, 8, or this spec's Task 7.3, whichever governs that action; the Floating_Action_Dock
+   introduces no new mutation behavior of its own.
+6. THE Floating_Action_Dock SHALL provide a non-empty accessibility label for each of its two actions
+   reflecting their current category- and Lens-dependent label.
+7. THE Floating_Action_Dock SHALL remain visible while its underlying screen content scrolls, and SHALL
+   not obscure the final rendered section of either Lens (the content area SHALL reserve bottom padding
+   at least equal to the Floating_Action_Dock's rendered height).
+
+### Requirement 20: Resort_Experience_Detail_And_Guide
+
+**User Story:** As a mobile user viewing a Disney Resort hotel, I want to see a dedicated Resort Guide with hotel specs, highlights, dining directory, recreation, property map, and transportation rather than ride wait times and park specs, so that the screen functions as a comprehensive resort concierge.
+
+#### Acceptance Criteria
+
+1. WHERE the Experience category is Resort, THE Quick_Specs_Row SHALL render the Resort Tier, Primary Transportation Mode, and Signature Feature Pool sourced from the matched Resort metadata, and SHALL NOT fall back to Moderate Resort, Bus Transit, or a generic Feature Pool when the resort is Deluxe, Value, or Deluxe Villa with specific transit modes and named pools. The Quick_Specs_Row SHALL NOT render a separate Geographic Area chip, since the Geographic Area is already conveyed by the Experience_Detail_Screen header subtitle (Requirement 20.7) and the hero photo's location pill badge; repeating it a third time in the Quick_Specs_Row crowded the row and starved the remaining three chips of space.
+2. WHERE the Experience category is Resort, THE Lens_Switcher SHALL display 'Resort Guide' for the primary lens and 'Stay Passport & Lore' for the secondary lens.
+3. WHERE the Experience category is Resort, THE Experience_Detail_Screen SHALL suppress the live queue query and the Live_Unavailable_Indicator.
+4. WHERE the Experience category is Resort and the active lens is Resort Guide, THE screen SHALL render:
+   - A Resort_Highlights_Card detailing property features and tier, dynamically reflecting the authentic theme, landmarks, and feature pool description of the specific resort being viewed, and SHALL NOT default to Coronado Springs highlights or Mayan pyramid descriptions.
+   - An On_Property_Dining_Directory with header '🍽️ Dining & Lounges at the Resort (<count>)' and a 'Tap to inspect' prompt, listing dining experiences belonging to this specific resort with venue subtitles, served meal periods (e.g. Breakfast, Lunch, Dinner, Late Night) formatted on their own dedicated line between the subtitle and tag row in canonical chronological order, service-style tags and green price tiers in the tag row (e.g. `[Quick Service] $`), and an action pill button ('Reserve' for table service, 'Menu ›' for quick service and lounges) where each card and action navigates directly to the restaurant's ExperienceDetail or opens reservations, and SHALL NOT display Coronado Springs restaurants on other resorts.
+   - A Recreation_And_Amenities_Card detailing feature pools, wellness/fitness facilities, trails, and campfire/movie activities.
+   - A Property_Map_And_Transit_Card displaying the resort map preview, verified street address of the specific resort, direct travel times to all four theme parks and Disney Springs, destination-specific transit mode indicators (Boat ⛴️, Monorail 🚝, Skyliner 🚡, Bus 🚌) for each individual destination rather than applying a single blanket mode badge across all destinations, and card subtitle and header badges that accurately convey all available complimentary transit modes at that resort (e.g., 'Boat & Bus').
+5. WHERE the Experience category is Resort, THE Floating_Action_Dock SHALL present a primary action labeled 'Log Stay' and a secondary action labeled 'Add to Trip'.
+6. WHERE the Experience category is Resort and the active lens is Stay Passport & Lore, THE Field Guide section SHALL display the title 'The Resort History & Architecture' and render architectural and Imagineering backstory notes from `whyThis`.
+7. THE Experience_Detail_Screen header SHALL display a subtitle beneath the Experience name: for a non-Resort Experience, the owning Park; for a Resort Experience, the Resort's Geographic Area (`resortArea`) when present, falling back to the Park when `resortArea` is absent, and omitting the subtitle entirely only when neither value is present (never rendering a blank subtitle line).
+8. THE hero photo's location pin badge SHALL display the same Geographic Area precedence as the header subtitle (Requirement 20.7): for a non-Resort Experience, the Land when present else the Park; for a Resort Experience, the Resort's Geographic Area (`resortArea`) when present else the Park, and SHALL render only the pin glyph with no dangling location text when neither value is present.
+
+### Requirement 21: Resort_Area_And_Quick_Service_Experience_Refinements
+
+**User Story:** As a mobile user viewing activities, tours, or dining venues at a resort or in the parks, I want the screen to accurately reflect resort geography and dining service models, so that locations outside the parks do not default to Magic Kingdom and counter-service venues do not show broken wait time errors or reservation buttons.
+
+#### Acceptance Criteria
+
+1. WHERE an Experience has `areaType === 'Resort'` (or has a non-null `resortId` or `resortArea`), THE Location_Group_Section SHALL resolve its landmark navigation using the resort name, resort area, and verified street address, and SHALL NOT fall back to Magic Kingdom's Central Plaza.
+2. WHERE an Experience category is Restaurant, Tour, Recreation, Spa, or Event, THE Experience_Detail_Screen SHALL suppress the live queue query and the Live_Unavailable_Indicator error card.
+3. WHERE an Experience category is Restaurant and its service style is Quick Service (resolved via `subType` or `groupedFacets`), THE Floating_Action_Dock SHALL present a primary action labeled 'Log a Dish' and a secondary action labeled 'Add to Trip', rather than 'Reserve Table'.
+4. WHERE an Experience category is Restaurant and its service style is Quick Service, THE Dining_Reservation_Card SHALL present the title 'Quick Service & Dishes' rather than 'Reservations & Dishes'.
+5. WHERE an Experience has `areaType === 'Resort'`, THE Lens_Switcher SHALL label the operational lens 'Today at Resort' (or 'Today') rather than 'Today in Park'.
+
+### Requirement 22: Resorts_Destination_Screen_Sub_Grouping
+
+**User Story:** As a mobile user browsing the Resorts destination screen, I want experiences that belong to broader resort areas to be grouped under clear sub-destinations rather than an 'Other' catch-all, so that premier entertainment, sports, and recreation areas are easily discoverable.
+
+#### Acceptance Criteria
+
+1. THE Resorts Destination grouping logic (`groupByResort` / `buildResortRows`) SHALL NOT label any rendered section or anchor 'Other'.
+2. WHERE active Experiences belong to `resortArea === 'EPCOT Resort Area'` with no specific resort id (such as Disney's BoardWalk entertainment venues), THE Resorts Destination screen SHALL group them under a dedicated section titled "Disney's BoardWalk & Promenade".
+3. WHERE active Experiences belong to `resortArea === 'Wide World of Sports Resort Area'`, THE Resorts Destination screen SHALL group them under a dedicated section titled "ESPN Wide World of Sports Complex".
+4. WHERE remaining active Experiences have no specific resort match, THE Resorts Destination screen SHALL group them under a dedicated section titled "Property-Wide Recreation & Sports".

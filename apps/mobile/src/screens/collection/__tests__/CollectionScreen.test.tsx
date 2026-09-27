@@ -106,6 +106,7 @@ const mockFoodLists: FoodListCollectionDTO = {
       ownerId: 'user-1',
       ownerDisplayName: 'User One',
       visibility: 'public',
+      isChecklist: false,
       itemCount: 8,
       likeCount: 4,
       createdAt: '2026-09-10T00:00:00Z',

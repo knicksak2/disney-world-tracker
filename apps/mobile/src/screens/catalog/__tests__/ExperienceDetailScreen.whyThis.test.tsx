@@ -75,7 +75,7 @@ import ExperienceDetailScreen from '../ExperienceDetailScreen';
 import { ApiError, apiRequest as mockedApiRequest } from '../../../api/client';
 
 type CatalogStackParamList = {
-  ExperienceDetail: { experienceId: string };
+  ExperienceDetail: { experienceId: string; initialLens?: 'today' | 'passport' };
 };
 
 const apiRequestMock = mockedApiRequest as jest.MockedFunction<
@@ -165,7 +165,10 @@ function makeQueryClient(): QueryClient {
   });
 }
 
-function renderDetail(experienceId: string): ReturnType<typeof render> {
+function renderDetail(
+  experienceId: string,
+  initialLens: 'today' | 'passport' = 'passport',
+): ReturnType<typeof render> {
   const Stack = createNativeStackNavigator<CatalogStackParamList>();
   const client = makeQueryClient();
   return render(
@@ -175,7 +178,7 @@ function renderDetail(experienceId: string): ReturnType<typeof render> {
           <Stack.Screen
             name="ExperienceDetail"
             component={ExperienceDetailScreen}
-            initialParams={{ experienceId }}
+            initialParams={{ experienceId, initialLens }}
           />
         </Stack.Navigator>
       </NavigationContainer>
@@ -224,7 +227,7 @@ describe('ExperienceDetailScreen Why_This section (R11.4, R11.5)', () => {
     await screen.findByTestId('experience-why-this');
 
     // The accessible section header (R11.6) and each bullet (R11.4) render.
-    expect(screen.getByText('Why visit')).toBeTruthy();
+    expect(screen.getByText(/Imagineer's Insider Notes|Why visit/)).toBeTruthy();
     expect(
       screen.getByText('Race through the cosmos in the dark'),
     ).toBeTruthy();

@@ -73,7 +73,6 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
-  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -81,6 +80,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import type { CompositeScreenProps } from '@react-navigation/native';
@@ -285,9 +285,12 @@ export default function CatalogScreen({ navigation }: Props): JSX.Element {
     : 0;
   useResultCountAnnouncement(searchResultCount, searchActive);
 
-  const onSelectExperience = (experience: ExperienceDTO): void => {
-    navigation.navigate('ExperienceDetail', { experienceId: experience.id });
-  };
+  const onSelectExperience = useCallback(
+    (experience: ExperienceDTO): void => {
+      navigation.navigate('ExperienceDetail', { experienceId: experience.id });
+    },
+    [navigation],
+  );
 
   // The signed-in User's completed-Experience id set, used to badge visited
   // search-result rows. Fails soft to an empty set, so results render unmarked
@@ -617,6 +620,22 @@ function SearchResultsBody({
 }): JSX.Element {
   const results = query.data?.experiences ?? [];
 
+  // Stable `renderItem` identity — an inline arrow literal is recreated every
+  // render, which `FlatList`/`VirtualizedList` treats as a changed render
+  // function and forces the whole visible window to re-render/re-measure even
+  // though `SearchResultRow` is memoized. Same fix as `DestinationScreen`'s
+  // search-results `renderRow`.
+  const renderSearchResult = useCallback(
+    ({ item }: { item: ExperienceDTO }) => (
+      <SearchResultRow
+        experience={item}
+        onSelectExperience={onSelectExperience}
+        completed={completedIds.has(item.id)}
+      />
+    ),
+    [onSelectExperience, completedIds],
+  );
+
   // R5.7: a failed search shows the search-error state (query is retained in the
   // control above). Only when there is no prior cache to keep showing.
   if (query.isError && query.data === undefined) {
@@ -664,20 +683,14 @@ function SearchResultsBody({
       removeClippedSubviews
       contentContainerStyle={styles.listContent}
       testID="catalog-search-results"
-      renderItem={({ item }) => (
-        <SearchResultRow
-          experience={item}
-          onPress={() => onSelectExperience(item)}
-          completed={completedIds.has(item.id)}
-        />
-      )}
+      renderItem={renderSearchResult}
     />
   );
 }
 
 interface SearchResultRowProps {
   readonly experience: ExperienceDTO;
-  readonly onPress: () => void;
+  readonly onSelectExperience: (experience: ExperienceDTO) => void;
   /**
    * Whether the signed-in User has marked this Experience as visited. When
    * true the row shows a "Visited" completion badge so search results convey
@@ -693,11 +706,15 @@ interface SearchResultRowProps {
  * Info_Tag from `priceTierListTag` (R9.9). Tapping the row navigates to the
  * Experience_Detail_Screen (R5.4).
  */
-function SearchResultRow({
+const SearchResultRow = React.memo(function SearchResultRow({
   experience,
-  onPress,
+  onSelectExperience,
   completed = false,
 }: SearchResultRowProps): JSX.Element {
+  const onPress = useCallback(
+    () => onSelectExperience(experience),
+    [onSelectExperience, experience],
+  );
   const visual = theme.categoryVisual[experience.category];
   // `park` is `null` for a Resort-area Experience; fall back to the brand accent
   // so the row still reads.
@@ -775,14 +792,14 @@ function SearchResultRow({
       </View>
     </Card>
   );
-}
+});
 
 /**
  * Leading thumbnail for a search-result row. Renders the Disney-sourced image
  * when present; otherwise a category-tinted placeholder with the category glyph
  * (R10.4).
  */
-function ExperienceThumb({
+const ExperienceThumb = React.memo(function ExperienceThumb({
   imageUrl,
   category,
 }: {
@@ -797,7 +814,10 @@ function ExperienceThumb({
       <Image
         source={{ uri: imageUrl }}
         style={styles.thumb}
-        resizeMode="cover"
+        contentFit="cover"
+        // Default `cachePolicy` ('disk') persists decoded images across
+        // mount/unmount as search results scroll, avoiding a re-fetch/decode
+        // every time a row scrolls back into the virtualized render window.
         onError={() => setFailed(true)}
         accessibilityIgnoresInvertColors
       />
@@ -816,7 +836,7 @@ function ExperienceThumb({
       />
     </View>
   );
-}
+});
 
 /**
  * A completion marker overlaid on the corner of a search-result thumbnail: a
@@ -826,7 +846,11 @@ function ExperienceThumb({
  * visually distinct from the tag pills so it is easy to spot when scanning the
  * results. Exposed as a single accessible "Visited" element for screen readers.
  */
-function VisitedOverlay({ testID }: { readonly testID: string }): JSX.Element {
+const VisitedOverlay = React.memo(function VisitedOverlay({
+  testID,
+}: {
+  readonly testID: string;
+}): JSX.Element {
   return (
     <View
       style={styles.visitedOverlay}
@@ -837,7 +861,7 @@ function VisitedOverlay({ testID }: { readonly testID: string }): JSX.Element {
       <Ionicons name="checkmark" size={14} color={theme.color.textOnPrimary} />
     </View>
   );
-}
+});
 
 // ---------------------------------------------------------------------------
 // Full-screen states

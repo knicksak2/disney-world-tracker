@@ -49,7 +49,11 @@ export type ShareComposerParams =
       kind: 'experience';
       experienceId: string;
       experienceName: string;
-      park: Park;
+      // `null` for a Resort's own representing row, which has no owning Park
+      // (experience-detail-redesign R4.14, R4.15); the preview falls back to
+      // `resortArea` in that case (social-sharing-loop R2.3).
+      park: Park | null;
+      resortArea?: string | null;
       category: ExperienceCategory;
       rating?: number;
       note?: string;
@@ -66,7 +70,7 @@ export type ShareComposerParams =
 
 export type RootStackParamList = {
   MainTabs: NavigatorScreenParams<MainTabParamList> | undefined;
-  ExperienceDetail: { experienceId: string };
+  ExperienceDetail: { experienceId: string; initialLens?: 'today' | 'passport' };
   Menu: { experienceId: string };
   ShareComposer: ShareComposerParams;
   FoodListDetail: { foodListId: string };

@@ -819,7 +819,7 @@ function buildUpstreamCatalog(
       // soft-delete reconciliation as any other Experience — so a Resort going
       // inactive soft-deletes its representing row (preserving Completions,
       // R3.5) and a reactivation restores it (R3.1, R3.2, R3.4, R3.5).
-      experiences.push(toResortRepresentingExperience(resort));
+      experiences.push(toResortRepresentingExperience(doc, resort));
       continue;
     }
 
@@ -971,13 +971,20 @@ const RESORT_VISIT_UPSTREAM_ID_SUFFIX = ':resort-visit';
  *     former links the row back to its hotel, the latter marks it as the hotel's
  *     stand-in (`UNIQUE` guarantees at most one representing row per Resort).
  *   - `name` / `imageUrl` / `description`: copied from the Resort.
+ *   - `resortArea`: resolved from the Resort's own Facility_Document ancestor
+ *     chain the same way as any resort-area activity (`resolveResortArea`), so
+ *     the hotel's own detail page conveys which zone of the property it sits
+ *     in (e.g. "Animal Kingdom Resort Area") rather than carrying no geographic
+ *     context at all.
  *
  * Every remaining Experience field is an empty/`null` placeholder: a hotel
  * stand-in carries no land, coordinates, enrichment, or menus of its own.
  */
 function toResortRepresentingExperience(
+  doc: FacilityDocument,
   resort: UpstreamResort,
 ): UpstreamExperience {
+  const area = resolveArea(doc);
   return {
     id: internalId(resort.upstreamEntityId, RESORT_VISIT_ID_NAMESPACE),
     upstreamEntityId: resort.upstreamEntityId + RESORT_VISIT_UPSTREAM_ID_SUFFIX,
@@ -988,7 +995,7 @@ function toResortRepresentingExperience(
     imageUrl: resort.imageUrl,
     areaType: 'Resort',
     land: null,
-    resortArea: null,
+    resortArea: resolveResortArea(doc, area),
     worldShowcaseCountry: null,
     // The representing row both belongs to its hotel (`resortId`) and *is* the
     // hotel's stand-in (`representsResortId`); the discriminator is what keeps

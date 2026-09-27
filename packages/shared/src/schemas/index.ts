@@ -142,10 +142,12 @@ export {
   foodItemLogSchema,
   foodItemLogHistorySchema,
   createFoodItemLogInputSchema,
+  updateFoodItemLogInputSchema,
   foodItemLogWithContextSchema,
 } from './FoodItemLog.js';
 export type {
   CreateFoodItemLogInput,
+  UpdateFoodItemLogInput,
   FoodItemLogWithContext,
 } from './FoodItemLog.js';
 

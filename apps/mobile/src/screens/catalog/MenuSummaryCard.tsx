@@ -22,6 +22,7 @@
 
 import React from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { NavigationContext } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import type { ExperienceCategory, MenuDTO } from '@dwt/shared';
@@ -59,7 +60,7 @@ export interface MenuSummaryCardProps {
   /** The Restaurant_Experience id; forwarded to the Menu_Screen on tap (R4.2). */
   readonly experienceId: string;
   /** Detail screen navigation, used to open the Menu_Screen on tap (R4.2). */
-  readonly navigation: MenuNavigationProp;
+  readonly navigation?: MenuNavigationProp | undefined;
 }
 
 /**
@@ -75,6 +76,8 @@ export default function MenuSummaryCard({
   experienceId,
   navigation,
 }: MenuSummaryCardProps): JSX.Element | null {
+  const fallbackNav = React.useContext(NavigationContext);
+  const activeNav = navigation ?? (fallbackNav as any);
   // R4.6: the card exists only for restaurants — every other category renders
   // nothing and offers no navigation to the Menu_Screen.
   if (category !== 'Restaurant') {
@@ -122,7 +125,7 @@ export default function MenuSummaryCard({
   return (
     <Card
       style={styles.section}
-      onPress={() => navigation.navigate('Menu', { experienceId })}
+      onPress={() => activeNav?.navigate?.('Menu', { experienceId })}
       accessibilityRole="button"
       accessibilityLabel={`View menus, ${summary.count} ${
         summary.count === 1 ? 'menu' : 'menus'

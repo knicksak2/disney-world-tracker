@@ -8,6 +8,7 @@ import { z } from 'zod';
 import {
   foodListNameSchema,
   isoTimestampSchema,
+  ratingValueSchema,
   uuidSchema,
 } from './primitives.js';
 
@@ -19,6 +20,7 @@ export const createFoodListInputSchema = z
   .object({
     name: foodListNameSchema,
     visibility: foodListVisibilitySchema.optional(),
+    isChecklist: z.boolean().optional(),
   })
   .strict();
 
@@ -26,6 +28,7 @@ export const updateFoodListInputSchema = z
   .object({
     name: foodListNameSchema.optional(),
     visibility: foodListVisibilitySchema.optional(),
+    isChecklist: z.boolean().optional(),
   })
   .strict();
 
@@ -61,6 +64,9 @@ export const foodListItemSchema = z
     position: z.number().int().min(0),
     addedByUserId: uuidSchema.nullable(),
     addedByDisplayName: z.string().nullable(),
+    gotten: z.boolean().optional(),
+    rating: ratingValueSchema.nullable().optional(),
+    logId: uuidSchema.nullable().optional(),
   })
   .strict();
 
@@ -71,6 +77,7 @@ export const foodListSchema = z
     ownerDisplayName: z.string().min(1),
     name: foodListNameSchema,
     visibility: foodListVisibilitySchema,
+    isChecklist: z.boolean(),
     likeCount: z.number().int().min(0),
     itemCount: z.number().int().min(0),
     createdAt: isoTimestampSchema,
@@ -85,6 +92,7 @@ export const foodListDetailSchema = foodListSchema
     version: z.number().int().min(0),
     myRole: foodListRoleSchema,
     items: z.array(foodListItemSchema),
+    gottenCount: z.number().int().min(0).optional(),
   })
   .strict();
 

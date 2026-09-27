@@ -22,6 +22,26 @@
 /** @type {import('jest').Config} */
 module.exports = {
   preset: 'jest-expo',
+  // Added for react-native-draggable-flatlist (checklist item drag reorder,
+  // food-lists Requirement 13.14-13.18 amendment), which pulls in
+  // react-native-reanimated -> react-native-worklets. Worklets is a native
+  // library; under Jest's Node environment its native part is never
+  // initialized, which crashes ANY test file that transitively imports a
+  // screen depending on it (e.g. navigation structure tests importing
+  // RootNavigator). Per Worklets' own testing guide
+  // (https://docs.swmansion.com/react-native-worklets/docs/guides/testing),
+  // this resolver override forces Jest to resolve Worklets' Web
+  // implementation instead of the native one, globally, for every test file
+  // — the officially recommended fix, not a one-off per-file mock.
+  resolver: 'react-native-worklets/jest/resolver',
+  // Required by react-native-gesture-handler (added for
+  // react-native-draggable-flatlist's checklist drag reorder,
+  // food-lists Requirement 13.14-13.18 amendment) — mocks the native
+  // gesture responder system so components using it don't crash under
+  // Jest's Node environment. react-native-reanimated 4.x no longer ships
+  // an equivalent dedicated setup file; jest-expo's own preset mock
+  // already covers it.
+  setupFiles: ['react-native-gesture-handler/jestSetup'],
   setupFilesAfterEnv: ['@testing-library/jest-native/extend-expect'],
   // React Native's Animated module schedules background timers that the
   // BottomTabBar uses for its press feedback. They keep the Node event

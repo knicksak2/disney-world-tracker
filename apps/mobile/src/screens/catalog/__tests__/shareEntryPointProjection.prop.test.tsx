@@ -68,6 +68,21 @@ const detailArb: fc.Arbitrary<ShareableExperienceDetail> = fc.record({
   category: categoryArb,
 });
 
+// A Resort's own representing row: `park` is always `null` (it has no owning
+// Park — experience-detail-redesign R4.14, R4.15); `resortArea` is present in
+// this generator (the absent case is covered by the fixed regression test
+// below, mirroring how `rating`/`note` absence is exercised by `ratingArb`/
+// `noteArb` rather than a dedicated generator branch here).
+const resortDetailArb: fc.Arbitrary<ShareableExperienceDetail> = fc.record({
+  id: fc.uuid(),
+  name: fc.string({ minLength: 1, maxLength: 60 }).filter((s) => s.length > 0),
+  park: fc.constant<Park | null>(null),
+  resortArea: fc
+    .string({ minLength: 1, maxLength: 60 })
+    .filter((s) => s.trim().length > 0),
+  category: fc.constant<ExperienceCategory>('Resort'),
+});
+
 // The RatingDTO invariant: an integer in [1, 10] (R1.4). Absent when the viewer
 // has recorded no Rating.
 const ratingArb: fc.Arbitrary<RatingDTO | null> = fc.oneof(
@@ -228,6 +243,44 @@ describe('Property 2: Entry point projects content faithfully into composer para
         expect(keys).toEqual(expectedKeys.sort());
       }),
       { numRuns: 100 },
+    );
+  });
+
+  // -------------------------------------------------------------------------
+  // Property 2a — a Resort's own representing row (`park === null`) still
+  // projects faithfully, carrying `resortArea` instead (social-sharing-loop
+  // R2.3; new branch since `ShareableExperienceDetail.park` was widened to
+  // `Park | null` to match the real `ExperienceDetailDTO` contract).
+  // -------------------------------------------------------------------------
+
+  test('a Resort detail (park === null) projects resortArea verbatim alongside a null park (R2.3)', () => {
+    fc.assert(
+      fc.property(resortDetailArb, ratingArb, noteArb, (detail, rating, note) => {
+        const params = buildExperienceShareParams(detail, rating, note);
+
+        expect(params.kind).toBe('experience');
+        expect(params.park).toBeNull();
+        expect(params.resortArea).toBe(detail.resortArea);
+        expect(params.category).toBe('Resort');
+      }),
+      { numRuns: 100 },
+    );
+  });
+
+  test('a Resort detail with no resortArea projects park as null and omits resortArea entirely', () => {
+    const detail: ShareableExperienceDetail = {
+      id: 'exp-uncharted',
+      name: "Disney's Uncharted Resort",
+      park: null,
+      category: 'Resort',
+    };
+
+    const params = buildExperienceShareParams(detail, null, null);
+
+    expect(params.park).toBeNull();
+    expect(params.resortArea).toBeUndefined();
+    expect(Object.keys(params).sort()).toEqual(
+      ['category', 'experienceId', 'experienceName', 'kind', 'park'].sort(),
     );
   });
 

@@ -31,15 +31,16 @@ import React from 'react';
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ActivityIndicator,
+  Alert,
   Image,
   Linking,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import type { RouteProp } from '@react-navigation/native';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -54,6 +55,7 @@ import type {
   ExperienceVisitHistoryDTO,
   FacetValueDTO,
   FoodItemDTO,
+  FoodItemLogWithContextDTO,
   GroupedFacetsDTO,
   HeightRequirementDTO,
   LiveDetailResponseDTO,
@@ -70,40 +72,32 @@ import { ApiError, apiRequest } from '../../api/client';
 import type { RootStackParamList } from '../../navigation/RootNavigator';
 import { theme } from '../../theme/theme';
 import {
-  Badge,
   Card,
   EmptyState,
   GradientHeader,
-  PrimaryButton,
   ScreenContainer,
-  SectionLabel,
-  SecondaryButton,
 } from '../../theme/components';
 import {
   buildExperienceShareParams,
   isExperienceShareEntryEnabled,
 } from './shareEntryPoint';
-import { formatCommunityAggregate } from './aggregateFormat';
-import MenuSummaryCard from './MenuSummaryCard';
-import YourVisitCard from './YourVisitCard';
-import AboutSection from './AboutSection';
-import WaitInsightsSection from './WaitInsightsSection';
 import { buildTagGroups } from './infoTags';
-import type { TagGroup } from './infoTags';
-import type { DirectionsPlatform } from './directions';
-import {
-  directionsUrlCandidates,
-  hasValidCoordinates,
-  staticMapUrl,
-} from './directions';
-import { liveSectionFor, NO_LIVE_SHAPE, type LiveShape } from './gating';
-import RideLiveSection from './live/RideLiveSection';
-import ShowtimesSection from './live/ShowtimesSection';
-import DiningSection from './live/DiningSection';
 import FoodItemPickerModal from './FoodItemPickerModal';
 import LogFoodItemModal from './LogFoodItemModal';
 import RestaurantFoodLogsSheet from './RestaurantFoodLogsSheet';
 import AddToListsSheet from '../foodLists/AddToListsSheet';
+import QuickSpecsRow from './QuickSpecsRow';
+import LensSwitcher from './LensSwitcher';
+import TodayInParkLens from './TodayInParkLens';
+import ResortGuideSection, {
+  resolveFallbackResortMeta,
+} from './ResortGuideSection';
+import PassportAndLoreLens from './PassportAndLoreLens';
+import FloatingActionDock from './FloatingActionDock';
+import LogVisitModal from './LogVisitModal';
+import RateExperienceModal from './RateExperienceModal';
+import { getTodayWdwDate } from './live/parkTime';
+import { isQuickServiceDining, liveSectionFor, NO_LIVE_SHAPE } from './gating';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -118,7 +112,11 @@ import AddToListsSheet from '../foodLists/AddToListsSheet';
 interface ExperienceDetailDTO {
   readonly id: string;
   readonly name: string;
-  readonly park: Park;
+  // Nullable to match the shared canonical `ExperienceDetailDTO`/`Experience`
+  // wire contract: a Resort's own representing row (`category === 'Resort'`)
+  // carries no owning Park — it isn't inside a specific theme park (R4.14,
+  // R4.15) — so `park` is `null` for that row-shape in real persisted data.
+  readonly park: Park | null;
   readonly category: ExperienceCategory;
   readonly description: string;
   readonly imageUrl: string | null;
@@ -158,6 +156,14 @@ interface ExperienceDetailDTO {
    * Present only when populated in the curated seed; omitted otherwise.
    */
   readonly diningUrl?: string | null;
+  readonly representsResortId?: string | null;
+  readonly resortArea?: string | null;
+  readonly tier?: string | null;
+  readonly featurePool?: string | null;
+  readonly transportationModes?: readonly string[];
+  readonly recreation?: readonly any[];
+  readonly transitTimes?: Record<string, number>;
+  readonly architecturalLore?: readonly any[];
 }
 
 /** Wire shape for `GET /resorts`; only the fields needed to resolve a name. */
@@ -223,6 +229,7 @@ export default function ExperienceDetailScreen(): JSX.Element {
   const route = useRoute<ExperienceDetailRouteProp>();
   const navigation = useNavigation<ExperienceDetailNavigationProp>();
   const { experienceId } = route.params;
+  const initialLens = (route.params as any)?.initialLens as 'today' | 'passport' | undefined;
   const encodedId = encodeURIComponent(experienceId);
 
   const queryClient = useQueryClient();
@@ -234,6 +241,99 @@ export default function ExperienceDetailScreen(): JSX.Element {
   const [addToListsSheetVisible, setAddToListsSheetVisible] = React.useState(false);
   const [itemsToAddToLists, setItemsToAddToLists] = React.useState<readonly FoodItemDTO[]>([]);
   const [reservationFailed, setReservationFailed] = React.useState(false);
+  const [logVisitModalVisible, setLogVisitModalVisible] = React.useState(false);
+  const [rateModalVisible, setRateModalVisible] = React.useState(false);
+
+  const [activeLens, setActiveLens] = React.useState<'today' | 'passport'>(initialLens ?? 'today');
+  const scrollViewRef = React.useRef<ScrollView>(null);
+
+  const handleLensChange = React.useCallback((lens: 'today' | 'passport') => {
+    setActiveLens(lens);
+    scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+  }, []);
+
+  const invalidateAfterLogChange = React.useCallback((): void => {
+    void queryClient.invalidateQueries({
+      queryKey: ['experience-logs', experienceId],
+    });
+    void queryClient.invalidateQueries({
+      queryKey: ['experience-completion', experienceId],
+    });
+    void queryClient.invalidateQueries({
+      queryKey: ['experience-rating', experienceId],
+    });
+    void queryClient.invalidateQueries({
+      queryKey: ['experience-aggregate', experienceId],
+    });
+    void queryClient.invalidateQueries({
+      queryKey: ['scoped-food-item-logs', experienceId],
+    });
+    void queryClient.invalidateQueries({ queryKey: ['me-stats'] });
+  }, [experienceId, queryClient]);
+
+  const { data: tripsData } = useQuery({
+    queryKey: ['me', 'trips', 'active'] as const,
+    queryFn: () => apiRequest<any>('GET', '/me/trips?filter=active'),
+  });
+
+  const activeTrip = React.useMemo(() => {
+    if (!tripsData) return undefined;
+    if (Array.isArray(tripsData)) {
+      const activeGroup = tripsData.find((g: any) => g.status === 'active');
+      return activeGroup?.trips?.[0] ?? tripsData[0]?.trips?.[0];
+    }
+    return tripsData?.trips?.[0];
+  }, [tripsData]);
+
+  const handleAddToPlan = async (): Promise<void> => {
+    const tripToUse =
+      activeTrip ??
+      (Array.isArray(tripsData)
+        ? tripsData.find((g: any) => g.status === 'upcoming')?.trips?.[0]
+        : undefined);
+
+    if (!tripToUse?.id) {
+      Alert.alert(
+        'No Active Trip',
+        "You don't have an active or upcoming trip yet. Create a trip in the Trips tab to add experiences to your itinerary!",
+        [
+          {
+            text: 'Go to Trips',
+            onPress: () => navigation.navigate('Trips' as any),
+          },
+          { text: 'Cancel', style: 'cancel' },
+        ],
+      );
+      return;
+    }
+
+    try {
+      await apiRequest('POST', `/trips/${tripToUse.id}/planned-items`, {
+        experienceId,
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ['trips', tripToUse.id, 'planned-items'],
+      });
+      Alert.alert(
+        'Added to Trip',
+        `✨ ${experience.name} has been added to ${tripToUse.name || 'your trip'}!`,
+      );
+    } catch (err: any) {
+      Alert.alert('Could Not Add to Trip', err?.message ?? 'Please try again.');
+    }
+  };
+
+  const { data: plannedItemsData } = useQuery({
+    queryKey: ['trips', activeTrip?.id, 'planned-items'] as const,
+    queryFn: () => apiRequest<any>('GET', `/trips/${activeTrip?.id}/planned-items`),
+    enabled: Boolean(activeTrip?.id),
+  });
+
+  const itemForExperience =
+    plannedItemsData?.items?.find((item: any) => item.experienceId === experienceId) ??
+    (Array.isArray(plannedItemsData)
+      ? plannedItemsData.find((item: any) => item.experienceId === experienceId)
+      : undefined);
 
   const handleReserveAction = async (url: string): Promise<void> => {
     try {
@@ -249,7 +349,11 @@ export default function ExperienceDetailScreen(): JSX.Element {
   // The five reads — catalog detail, own completion, own rating, own
   // note, community aggregate — are independent, so running them in
   // parallel keeps the time-to-content close to the slowest single hop
-  // rather than the sum.
+  const cachedDetail = queryClient.getQueryData<ExperienceDetailDTO>([
+    'experience',
+    experienceId,
+  ]);
+
   const queries = useQueries({
     queries: [
       {
@@ -314,6 +418,10 @@ export default function ExperienceDetailScreen(): JSX.Element {
             'GET',
             `/catalog/${encodedId}/live`,
           ),
+        enabled: Boolean(
+          !cachedDetail ||
+            liveSectionFor(cachedDetail.category, NO_LIVE_SHAPE) !== 'none',
+        ),
       },
     ],
   });
@@ -334,13 +442,26 @@ export default function ExperienceDetailScreen(): JSX.Element {
   // stays `null` and `buildInfoTags` omits the Resort tag (R9.8).
   const detail = experienceQ.data;
   const needsResortName =
-    detail?.areaType === 'Resort' &&
-    typeof detail.resortId === 'string' &&
-    detail.resortId.length > 0;
+    (detail?.areaType === 'Resort' &&
+      typeof detail.resortId === 'string' &&
+      detail.resortId.length > 0) ||
+    detail?.category === 'Resort';
   const resortsQ = useQuery({
     queryKey: ['resorts'] as const,
     queryFn: () => apiRequest<ResortListResponse>('GET', '/resorts'),
     enabled: needsResortName,
+  });
+
+  const foodLogsQ = useQuery<readonly FoodItemLogWithContextDTO[]>({
+    queryKey: ['scoped-food-item-logs', experienceId] as const,
+    queryFn: async () => {
+      const res = await apiRequest<readonly FoodItemLogWithContextDTO[]>(
+        'GET',
+        `/experiences/${encodedId}/food-item-logs/mine`,
+      );
+      return res ?? [];
+    },
+    enabled: Boolean(experienceId && experienceQ.data?.category === 'Restaurant'),
   });
 
   // Block the whole screen on the catalog detail load — the section
@@ -383,10 +504,94 @@ export default function ExperienceDetailScreen(): JSX.Element {
   // Resolve the referenced Resort's name for the specific-Resort Info_Tag
   // (R9.7); `null` whenever the name is unavailable so the tag is omitted.
   const resortName =
-    needsResortName && experience.resortId != null
-      ? resortsQ.data?.resorts.find((r) => r.id === experience.resortId)?.name ??
-        null
+    experience.category === 'Resort'
+      ? experience.name
+      : needsResortName && experience.resortId != null
+        ? resortsQ.data?.resorts.find((r) => r.id === experience.resortId)?.name ?? null
+        : null;
+
+  const fallbackResortMeta =
+    experience.category === 'Resort'
+      ? resolveFallbackResortMeta(experience.name)
       : null;
+
+  const matchedResort: ResortDTO | null = (() => {
+    const fromApi = resortsQ.data?.resorts.find(
+      (r) =>
+        r.id === experience.representsResortId ||
+        r.id === experience.resortId ||
+        (r.name &&
+          experience.name &&
+          (r.name.toLowerCase() === experience.name.toLowerCase() ||
+            r.name.toLowerCase().includes(experience.name.toLowerCase()) ||
+            experience.name.toLowerCase().includes(r.name.toLowerCase()))),
+    );
+
+    if (fromApi) {
+      if (fallbackResortMeta) {
+        return {
+          ...fromApi,
+          tier: fromApi.tier ?? fallbackResortMeta.tier,
+          featurePool: fromApi.featurePool ?? fallbackResortMeta.featurePool,
+          transportationModes:
+            fromApi.transportationModes && fromApi.transportationModes.length > 0
+              ? fromApi.transportationModes
+              : fallbackResortMeta.transportationModes,
+        };
+      }
+      return fromApi;
+    }
+
+    if (experience.category === 'Resort') {
+      return {
+        id: experience.representsResortId ?? experience.id,
+        name: experience.name,
+        description: experience.description,
+        tier: (experience.tier as any) ?? fallbackResortMeta?.tier ?? 'Moderate',
+        featurePool:
+          experience.featurePool ??
+          fallbackResortMeta?.featurePool ??
+          'Feature Pool',
+        transportationModes:
+          experience.transportationModes ??
+          fallbackResortMeta?.transportationModes ?? ['Bus'],
+        recreation: (experience.recreation as any) ?? [],
+        transitTimes: experience.transitTimes ?? {},
+        architecturalLore: (experience.architecturalLore as any) ?? [],
+      } as unknown as ResortDTO;
+    }
+
+    return null;
+  })();
+
+  const quickSpecsExperience =
+    experience.category === 'Resort'
+      ? {
+          ...experience,
+          tier:
+            matchedResort?.tier ??
+            (experience as any).tier ??
+            fallbackResortMeta?.tier,
+          featurePool:
+            matchedResort?.featurePool ??
+            (experience as any).featurePool ??
+            fallbackResortMeta?.featurePool,
+          transportationModes:
+            matchedResort?.transportationModes &&
+            matchedResort.transportationModes.length > 0
+              ? matchedResort.transportationModes
+              : (experience as any).transportationModes &&
+                (experience as any).transportationModes.length > 0
+              ? (experience as any).transportationModes
+              : fallbackResortMeta?.transportationModes,
+        }
+      : experience;
+
+  const isQuickService =
+    experience.category === 'Restaurant' &&
+    isQuickServiceDining(experience.subType, experience.groupedFacets);
+  const canHaveLive =
+    liveSectionFor(experience.category, NO_LIVE_SHAPE) !== 'none';
 
   // Grouped, relabelled, de-duplicated Tag_Groups (R1). The Location_Group is
   // promoted to its own section directly beneath the header/hero region with
@@ -397,259 +602,217 @@ export default function ExperienceDetailScreen(): JSX.Element {
   const locationGroup = tagGroups.find((group) => group.id === 'location');
   const remainingGroups = tagGroups.filter((group) => group.id !== 'location');
 
+  // Header subtitle (R20.7 of experience-detail-redesign): the Resort's
+  // Geographic Area for a Resort (falling back to Park), or the Park for
+  // every other category — omitted entirely (not passed as `undefined`) when
+  // neither resolves, so `GradientHeader` never renders a blank subtitle line.
+  const headerSubtitle: string | undefined =
+    experience.category === 'Resort'
+      ? experience.resortArea ?? experience.park ?? undefined
+      : experience.park ?? undefined;
+
   return (
     <ScreenContainer>
       {/* -------------------------------------------------------------- */}
       {/* Header: name + Park subtitle + category glyph (R1.22)          */}
+      {/* Plus top-right circular Share action button (R1.1-R1.5)        */}
       {/* -------------------------------------------------------------- */}
       <GradientHeader
         title={experience.name}
-        subtitle={experience.park}
+        {...(headerSubtitle !== undefined ? { subtitle: headerSubtitle } : {})}
         icon={visual.glyph as keyof typeof Ionicons.glyphMap}
         compact
         onBack={() => navigation.goBack()}
+        right={
+          <Pressable
+            testID="experience-share-button"
+            accessibilityRole="button"
+            accessibilityLabel={`Share ${experience.name}`}
+            accessibilityState={{
+              disabled: !isExperienceShareEntryEnabled({
+                detailLoading: experienceQ.isLoading,
+                ratingLoading: ratingQ.isLoading,
+                noteLoading: noteQ.isLoading,
+              }),
+            }}
+            disabled={
+              !isExperienceShareEntryEnabled({
+                detailLoading: experienceQ.isLoading,
+                ratingLoading: ratingQ.isLoading,
+                noteLoading: noteQ.isLoading,
+              })
+            }
+            onPress={() => {
+              navigation.navigate(
+                'ShareComposer',
+                buildExperienceShareParams(
+                  experience,
+                  ratingQ.data ?? null,
+                  noteQ.data ?? null,
+                ),
+              );
+            }}
+            style={({ pressed }) => [
+              styles.headerActionCircle,
+              pressed && styles.cardPressed,
+              !isExperienceShareEntryEnabled({
+                detailLoading: experienceQ.isLoading,
+                ratingLoading: ratingQ.isLoading,
+                noteLoading: noteQ.isLoading,
+              }) && { opacity: 0.5 },
+            ]}
+          >
+            <Ionicons name="share-outline" size={18} color="#ffffff" />
+          </Pressable>
+        }
       />
 
       <ScrollView
-        contentContainerStyle={styles.container}
+        contentContainerStyle={[styles.container, styles.scrollContainerPadding]}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         testID="experience-detail"
       >
-        {/* Hero image (sourced photo or category placeholder). */}
+        {/* Photo Canopy with overlaid Park/Land and Community/Category badges */}
         <ExperienceHero
           imageUrl={experience.imageUrl}
           category={experience.category}
-        />
-
-        {/* Park + category badges, surfaced as themed pills. */}
-        <View style={styles.badgeRow}>
-          <Badge
-            label={experience.park}
-            color={theme.parkAccent[experience.park]}
-            icon="location"
-            testID="experience-park-badge"
-          />
-          <Badge
-            label={categoryLabel(experience.category)}
-            color={visual.tint}
-            icon={visual.glyph as keyof typeof Ionicons.glyphMap}
-            testID="experience-category-badge"
-          />
-        </View>
-
-        {/* ------------------------------------------------------------ */}
-        {/* Share_Entry_Point (R1.1-R1.5). A themed share control that   */}
-        {/* opens the Share_Composer pre-populated with an               */}
-        {/* Experience_Share for this Experience. It is disabled while   */}
-        {/* the Experience detail, the viewer's Rating, or the viewer's  */}
-        {/* Note is still loading (R1.2). On activation it projects the   */}
-        {/* loaded detail plus the viewer's Rating (whole 1–10 when       */}
-        {/* present, R1.4) and Note (≤2000 chars when present, R1.5) into */}
-        {/* discriminated `experience` composer params and navigates      */}
-        {/* cross-navigator to the RootStack `ShareComposer` modal        */}
-        {/* (R1.3).                                                       */}
-        {/* ------------------------------------------------------------ */}
-        <PrimaryButton
-          label="Share"
-          icon="share-social"
-          testID="experience-share-button"
-          accessibilityLabel={`Share ${experience.name}`}
-          disabled={
-            !isExperienceShareEntryEnabled({
-              detailLoading: experienceQ.isLoading,
-              ratingLoading: ratingQ.isLoading,
-              noteLoading: noteQ.isLoading,
-            })
-          }
-          onPress={() => {
-            navigation.navigate(
-              'ShareComposer',
-              buildExperienceShareParams(
-                experience,
-                ratingQ.data ?? null,
-                noteQ.data ?? null,
-              ),
-            );
-          }}
-          style={styles.shareButton}
+          park={experience.park}
+          land={experience.land ?? null}
+          resortArea={experience.resortArea ?? null}
+          aggregateRating={aggregateQ.data ?? null}
         />
 
         {/* ------------------------------------------------------------ */}
-        {/* Location_Group + Get_Directions_Action (R1.2, R4.2-R4.6,     */}
-        {/* R7.1). Promoted directly beneath the header/hero region. The */}
-        {/* Location Tag_Group renders as a labelled card of pills; the  */}
-        {/* Get directions action is rendered within this area only when */}
-        {/* the stored coordinates are valid (R4.2/R4.3) and opens the OS */}
-        {/* maps app on activation (R4.4), surfacing a non-blocking       */}
-        {/* inline error on failure while leaving the rest of the screen  */}
-        {/* intact (R4.5). Omitted entirely when there is neither a        */}
-        {/* Location group nor valid coordinates (R7.5).                   */}
+        {/* Quick Specs Row (R11.3, R20.1)                               */}
         {/* ------------------------------------------------------------ */}
-        <LocationGroupSection
-          group={locationGroup}
-          experienceName={experience.name}
-          latitude={experience.latitude}
-          longitude={experience.longitude}
+        <QuickSpecsRow experience={quickSpecsExperience} />
+
+        {/* Live retrieval failure indicator (R3.2, R8.4, R20.3, R21.2) */}
+        {canHaveLive && liveQ.isError ? <LiveUnavailableIndicator /> : null}
+
+        {/* ------------------------------------------------------------ */}
+        {/* Lens Switcher (R11.1-R11.6)                                  */}
+        {/* ------------------------------------------------------------ */}
+        <LensSwitcher
+          activeLens={activeLens}
+          onChangeLens={handleLensChange}
+          onLensChange={handleLensChange}
+          category={experience.category}
+          areaType={experience.areaType}
         />
 
         {/* ------------------------------------------------------------ */}
-        {/* Reservation_Action (R7.1-R7.5, Property 10, Task 11).         */}
-        {/* Rendered when category === 'Restaurant' and a non-empty       */}
-        {/* diningUrl is present. Tapping attempts to open the diningUrl  */}
-        {/* in the default browser via Linking.openURL, surfacing a       */}
-        {/* non-blocking inline error on failure.                         */}
+        {/* Active Lens Content (R11, R13, R14, R17, R18)                */}
         {/* ------------------------------------------------------------ */}
-        {experience.category === 'Restaurant' &&
-        typeof experience.diningUrl === 'string' &&
-        experience.diningUrl.trim().length > 0 ? (
-          <View style={styles.reservationActionWrap}>
-            <PrimaryButton
-              label="Reserve on Disney's site"
-              icon="calendar-outline"
-              testID="experience-reserve-action"
-              accessibilityLabel={`Reserve a table at ${experience.name} on Disney's site`}
-              onPress={() => {
-                void handleReserveAction(experience.diningUrl as string);
-              }}
+        {/* Active Lens Content (R11, R13, R14, R17, R18, R20.4)         */}
+        {/* ------------------------------------------------------------ */}
+        {activeLens === 'today' ? (
+          experience.category === 'Resort' ? (
+            <ResortGuideSection
+              experienceId={experience.id}
+              experienceName={experience.name}
+              resort={matchedResort}
+              latitude={experience.latitude}
+              longitude={experience.longitude}
             />
-            {reservationFailed ? (
-              <Text
-                style={styles.errorText}
-                testID="experience-reservation-error"
-              >
-                Couldn&apos;t open the reservation page. Please try again.
-              </Text>
-            ) : null}
-          </View>
-        ) : null}
-
-        {/* ------------------------------------------------------------ */}
-        {/* Your visit (R6, R7.1, R7.2). The consolidated completion →   */}
-        {/* rating → note card, promoted above the Live section and the  */}
-        {/* About_Section. It owns its own per-control loading/error/     */}
-        {/* empty rendering and the `onMutated` query invalidations       */}
-        {/* verbatim (R6.2-R6.4).                                         */}
-        {/* ------------------------------------------------------------ */}
-        <YourVisitCard
-          experienceId={experienceId}
-          completionQuery={completionQ}
-          ratingQuery={ratingQ}
-          noteQuery={noteQ}
-          logsQuery={logsQ}
-        />
-
-        {/* ------------------------------------------------------------ */}
-        {/* Live operational section (R7.1, R7.3, R8.3: at most one, by  */}
-        {/* category). Ride/Character_Meet → wait/status, Show/Parade →  */}
-        {/* showtimes, Restaurant → dining, Other → nothing. A live      */}
-        {/* failure renders only the unavailable indicator (R8.4) while  */}
-        {/* the static fields above remain visible; a stale success      */}
-        {/* renders the out-of-date indicator + Retrieved_At, both owned  */}
-        {/* by the section components. Placed above the About_Section     */}
-        {/* (R7.3).                                                       */}
-        {/* ------------------------------------------------------------ */}
-        <LiveOperationalSection
-          category={experience.category}
-          query={liveQ}
-        />
-
-        {/* ------------------------------------------------------------ */}
-        {/* Wait Insights (Task 6) - "When to ride"                      */}
-        {/* Rendered only for attractions.                               */}
-        {/* ------------------------------------------------------------ */}
-        {experience.category === 'Ride' && (
-          <WaitInsightsSection experienceId={experienceId} />
+          ) : (
+            <TodayInParkLens
+              experienceId={experience.id}
+              experienceName={experience.name}
+              category={experience.category}
+              diningUrl={experience.diningUrl}
+              menus={experience.menus}
+              liveDetail={liveQ.data?.liveDetail}
+              liveError={liveQ.isError}
+              locationGroup={locationGroup}
+              latitude={experience.latitude}
+              longitude={experience.longitude}
+              plannedDate={itemForExperience?.plannedDate ?? null}
+              activeTripRange={
+                activeTrip
+                  ? { startDate: activeTrip.startDate, endDate: activeTrip.endDate }
+                  : null
+              }
+              todayWdw={getTodayWdwDate()}
+              onReserve={handleReserveAction}
+              reservationFailed={reservationFailed}
+              onLogFoodItem={() => setFoodPickerVisible(true)}
+              onMyLoggedItems={() => setScopedFoodLogsVisible(true)}
+              loggedDishesCount={foodLogsQ.data?.length ?? 0}
+              isQuickService={isQuickService}
+            />
+          )
+        ) : (
+          <PassportAndLoreLens
+            experienceId={experienceId}
+            experienceName={experience.name}
+            category={experience.category}
+            description={experience.description}
+            whyThis={experience.whyThis}
+            menus={experience.menus}
+            completionQuery={completionQ}
+            ratingQuery={ratingQ}
+            noteQuery={noteQ}
+            logsQuery={logsQ}
+            aggregateQuery={aggregateQ}
+            remainingGroups={remainingGroups}
+            onLogFoodItem={() => setFoodPickerVisible(true)}
+            onMyLoggedItems={() => setScopedFoodLogsVisible(true)}
+            onAddToList={() => setAddToListsPickerVisible(true)}
+          />
         )}
-
-        {/* ------------------------------------------------------------ */}
-        {/* Menu_Summary_Card (R7.4, R8.7). Rendered only for a          */}
-        {/* Restaurant_Experience, positioned between the Live section    */}
-        {/* and the About_Section. A pressable summary of the available   */}
-        {/* menus that opens the Menu_Screen; nothing for a               */}
-        {/* non-restaurant. The query flags are forwarded so the card     */}
-        {/* owns its own loading/error rendering.                         */}
-        {/* ------------------------------------------------------------ */}
-        <MenuSummaryCard
-          category={experience.category}
-          menus={experience.menus}
-          isLoading={experienceQ.isLoading}
-          isError={experienceQ.isError}
-          experienceId={experienceId}
-          navigation={navigation}
-        />
-
-        {/* ------------------------------------------------------------ */}
-        {/* Food Item Logging Affordance (Requirement 5.1, Task 7.3)      */}
-        {/* ------------------------------------------------------------ */}
-        {experience.category === 'Restaurant' && (
-          <Card style={styles.section} testID="experience-food-item-section">
-            <SectionLabel>Dishes & Food</SectionLabel>
-            <View style={styles.foodItemButtonsRow}>
-              <PrimaryButton
-                label="Log a food item"
-                icon="restaurant"
-                onPress={() => setFoodPickerVisible(true)}
-                accessibilityLabel={`Log a food item at ${experience.name}`}
-                testID="experience-log-food-item-btn"
-              />
-              <SecondaryButton
-                label="My logged items here"
-                icon="time-outline"
-                onPress={() => setScopedFoodLogsVisible(true)}
-                accessibilityLabel={`View my logged dishes at ${experience.name}`}
-                testID="experience-my-logged-items-btn"
-              />
-              <SecondaryButton
-                label="Add to a list"
-                icon="list"
-                onPress={() => setAddToListsPickerVisible(true)}
-                accessibilityLabel={`Add a dish at ${experience.name} to a food list`}
-                testID="experience-add-to-list-btn"
-              />
-            </View>
-          </Card>
-        )}
-
-        {/* ------------------------------------------------------------ */}
-        {/* About (R5, R7.1). The collapsible description: clamped to 4  */}
-        {/* lines with a "Read more" / "Read less" toggle when it         */}
-        {/* overflows, and the "No description available." empty state    */}
-        {/* when absent/empty/whitespace-only (R5.8).                     */}
-        {/* ------------------------------------------------------------ */}
-        <AboutSection description={experience.description} />
-
-        {/* ------------------------------------------------------------ */}
-        {/* Why visit (R8.10, R8.11). Renders the Why_This bullets as    */}
-        {/* flavor text when the Experience carries one or more; omitted  */}
-        {/* entirely when the Why_This value is absent or every bullet    */}
-        {/* merely duplicates the About description.                      */}
-        {/* ------------------------------------------------------------ */}
-        <WhyThisSection
-          whyThis={experience.whyThis}
-          description={experience.description}
-        />
-
-        {/* ------------------------------------------------------------ */}
-        {/* Community Rating (R8.5, R8.6). Server enforces the           */}
-        {/* `count >= 3` threshold; on the wire, `value === null` either */}
-        {/* means "below threshold" or "no aggregate row yet" — both     */}
-        {/* render as the same empty state.                              */}
-        {/* ------------------------------------------------------------ */}
-        <Card style={styles.section}>
-          <SectionLabel>Community Rating</SectionLabel>
-          <AggregateContent query={aggregateQ} />
-        </Card>
-
-        {/* ------------------------------------------------------------ */}
-        {/* Remaining Tag_Groups (R1.7, R1.8, R7.1): Good to know,       */}
-        {/* Accessibility, Good for — rendered last, each as a labelled   */}
-        {/* card of relabelled, de-duplicated pills, in the fixed order   */}
-        {/* `buildTagGroups` emits, omitting any group with no            */}
-        {/* renderable tags (R7.5).                                       */}
-        {/* ------------------------------------------------------------ */}
-        {remainingGroups.map((group) => (
-          <TagGroupCard key={group.id} group={group} />
-        ))}
       </ScrollView>
+
+      {/* -------------------------------------------------------------- */}
+      {/* Floating Action Dock (R19)                                     */}
+      {/* -------------------------------------------------------------- */}
+      <FloatingActionDock
+        category={experience.category}
+        activeLens={activeLens}
+        isQuickService={isQuickService}
+        onLogVisit={() => {
+          setLogVisitModalVisible(true);
+        }}
+        onAddToPlan={() => {
+          void handleAddToPlan();
+        }}
+        onRateVisit={() => {
+          setRateModalVisible(true);
+        }}
+        onRateMostRecent={() => {
+          setRateModalVisible(true);
+        }}
+        onLogDish={() => {
+          setFoodPickerVisible(true);
+        }}
+        onReserveTable={
+          typeof experience.diningUrl === 'string' &&
+          experience.diningUrl.trim().length > 0
+            ? () => {
+                void handleReserveAction(experience.diningUrl as string);
+              }
+            : undefined
+        }
+      />
+
+      {/* Log visit modal */}
+      <LogVisitModal
+        experienceId={experienceId}
+        visible={logVisitModalVisible}
+        onClose={() => setLogVisitModalVisible(false)}
+        onLogged={invalidateAfterLogChange}
+      />
+
+      {/* Rate experience modal */}
+      <RateExperienceModal
+        experienceId={experienceId}
+        experienceName={experience.name}
+        visible={rateModalVisible}
+        currentRating={ratingQ.data?.value ?? null}
+        onClose={() => setRateModalVisible(false)}
+        onRated={invalidateAfterLogChange}
+      />
 
       {/* Food item picker modal */}
       <FoodItemPickerModal
@@ -674,6 +837,9 @@ export default function ExperienceDetailScreen(): JSX.Element {
         onLogged={() => {
           void queryClient.invalidateQueries({
             queryKey: ['experience-food-items', experienceId],
+          });
+          void queryClient.invalidateQueries({
+            queryKey: ['scoped-food-item-logs', experienceId],
           });
           if (selectedFoodItem) {
             void queryClient.invalidateQueries({
@@ -721,382 +887,114 @@ export default function ExperienceDetailScreen(): JSX.Element {
 // ---------------------------------------------------------------------------
 
 /**
- * Full-width hero image for the detail view. Shows the sourced photo when
- * present; otherwise a category-tinted placeholder with the category glyph so
- * the layout is consistent whether or not an image exists. Disney imagery
- * needs no attribution caption (R14.8).
+ * Full-width hero image canopy for the detail view. Shows the sourced photo when
+ * present; otherwise a category-tinted placeholder with the category glyph.
+ * Overlays a dark gradient scrim and bottom land and community-rating badges.
  */
 function ExperienceHero({
   imageUrl,
   category,
+  park,
+  land,
+  resortArea,
+  aggregateRating,
 }: {
   readonly imageUrl: string | null;
   readonly category: ExperienceCategory;
+  readonly park: Park | null;
+  readonly land?: string | null;
+  readonly resortArea?: string | null;
+  readonly aggregateRating: AggregateRatingDTO | null;
 }): JSX.Element {
   const [failed, setFailed] = React.useState(false);
   const visual = theme.categoryVisual[category];
   const hasImage = imageUrl != null && imageUrl.length > 0 && !failed;
+  // A Resort's own representing row carries no `land`/`park` (it isn't inside
+  // a specific park or land) — its Geographic Area is the resortArea instead.
+  // Every other category keeps the existing land-then-park precedence.
+  const displayLand =
+    category === 'Resort'
+      ? resortArea && resortArea.trim().length > 0
+        ? resortArea.trim()
+        : park ?? undefined
+      : land && land.trim().length > 0
+        ? land.trim()
+        : park ?? undefined;
 
-  if (!hasImage) {
-    return (
-      <View
-        style={[styles.hero, styles.heroPlaceholder, { backgroundColor: visual.tint }]}
-        testID="experience-hero-placeholder"
-      >
-        <Ionicons
-          name={visual.glyph as keyof typeof Ionicons.glyphMap}
-          size={48}
-          color={theme.color.textOnPrimary}
+  return (
+    <View style={styles.heroCard}>
+      {hasImage ? (
+        <Image
+          source={{ uri: imageUrl as string }}
+          style={styles.heroImage}
+          resizeMode="cover"
+          onError={() => setFailed(true)}
+          accessibilityIgnoresInvertColors
+          testID="experience-hero-image"
         />
-      </View>
-    );
-  }
-
-  return (
-    <View>
-      <Image
-        source={{ uri: imageUrl as string }}
-        style={styles.hero}
-        resizeMode="cover"
-        onError={() => setFailed(true)}
-        accessibilityIgnoresInvertColors
-        testID="experience-hero-image"
-      />
-    </View>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Per-section content
-// ---------------------------------------------------------------------------
-
-interface QueryLike<T> {
-  readonly isLoading: boolean;
-  readonly isError: boolean;
-  readonly data: T | undefined;
-}
-
-function AggregateContent({
-  query,
-}: {
-  readonly query: QueryLike<AggregateRatingDTO>;
-}): JSX.Element {
-  if (query.isLoading) {
-    return (
-      <ActivityIndicator
-        accessibilityLabel="Loading community rating"
-        color={theme.color.primary}
-      />
-    );
-  }
-  if (query.isError || query.data === undefined) {
-    return (
-      <Text style={styles.errorText}>Could not load community rating.</Text>
-    );
-  }
-  // Project the aggregate into its display shape via the pure formatter
-  // (R8.5, R8.6). The renderer stays a thin mapping over that result.
-  const display = formatCommunityAggregate(query.data);
-  // R10.6/R8.5: when `value` is null (count < 3, or no row yet) show the
-  // empty state without leaking the underlying count.
-  if (display.kind === 'empty') {
-    return (
-      <Text style={styles.empty} testID="aggregate-empty">
-        Not enough ratings yet
-      </Text>
-    );
-  }
-  // R10.5/R8.6: render the published mean to one decimal alongside the
-  // contributing rating count.
-  return (
-    <View style={styles.aggregateBlock}>
-      <View style={styles.aggregateValueRow}>
-        <Ionicons name="star" size={22} color={theme.color.accent} />
-        <Text style={styles.aggregateValue} testID="aggregate-value">
-          {display.mean} / 10
-        </Text>
-      </View>
-      <Text style={styles.aggregateMeta} testID="aggregate-count">
-        ({display.count} {display.count === 1 ? 'rating' : 'ratings'})
-      </Text>
-    </View>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Location group + Get directions
-// ---------------------------------------------------------------------------
-
-/**
- * Map the running OS to the `DirectionsPlatform` `directionsUrl` builds for.
- * Anything that is not iOS or Android (web, desktop) falls back to the
- * cross-platform web maps URL.
- */
-function mapsPlatform(): DirectionsPlatform {
-  if (Platform.OS === 'ios') {
-    return 'ios';
-  }
-  if (Platform.OS === 'android') {
-    return 'android';
-  }
-  return 'web';
-}
-
-/**
- * Location_Group card plus the Get_Directions_Action (R1.2, R4.2-R4.6).
- *
- * Renders the Location Tag_Group's relabelled, de-duplicated tags as a wrapping
- * row of pills under a "Location" label. When the Experience carries valid
- * stored coordinates (R4.2 — latitude in [-90, 90] and longitude in [-180,
- * 180]) it also renders the Get_Directions_Action within this Location area;
- * the action is omitted entirely when the coordinates are absent or out of
- * range (R4.3).
- *
- * Activating the action opens the OS maps app at the stored coordinates (R4.4).
- * It walks the ordered `directionsUrlCandidates(...)` — the platform-native maps
- * URL first, then the universal `https` web maps URL — awaiting
- * `Linking.openURL(candidate)` inside a `try/catch` and stopping at the first
- * candidate that opens (R4.7). There is deliberately no `Linking.canOpenURL`
- * pre-check (R4.8): on Android 11+ package-visibility filtering makes it resolve
- * `false` for the `geo:` scheme unless declared in a native `<queries>` manifest
- * element, which suppressed an `openURL` call that in fact succeeds. Only when
- * every candidate rejects does the section set a local error flag that renders an
- * inline, non-blocking error indication (matching the existing danger-text
- * pattern) while every other section of the screen stays intact (R4.5, R4.9).
- * The action always exposes a non-empty accessibility label describing the
- * Experience it routes to (R4.6).
- *
- * When the coordinates are valid it additionally renders the Static_Map_Preview
- * (R10.1-R10.8): a tappable `<Image>` (wrapped in a `Pressable`) sourced from
- * `staticMapUrl(latitude, longitude)`, gated by the SAME `hasValidCoordinates`
- * check as Get directions. Tapping the preview opens the OS maps app via the
- * same `handleGetDirections` path (R10.5/R10.6). If the image fails to load, a
- * local `mapImageFailed` flag hides ONLY the image while the rest of the
- * Location content — including the Get directions button — keeps rendering
- * (R10.7). The preview carries a non-empty accessibility label (R10.8).
- *
- * The whole section is omitted when there is neither a Location Tag_Group to
- * show nor valid coordinates for a Get directions action.
- */
-function LocationGroupSection({
-  group,
-  experienceName,
-  latitude,
-  longitude,
-}: {
-  readonly group: TagGroup | undefined;
-  readonly experienceName: string;
-  readonly latitude?: number | null | undefined;
-  readonly longitude?: number | null | undefined;
-}): JSX.Element | null {
-  const [failed, setFailed] = React.useState(false);
-  // R10.7: when the static map image fails to load, hide ONLY the image while
-  // continuing to render the rest of the Location group content (including the
-  // Get_Directions_Action).
-  const [mapImageFailed, setMapImageFailed] = React.useState(false);
-  const canGetDirections = hasValidCoordinates(latitude, longitude);
-
-  // Nothing to render: no Location tags and no valid coordinates.
-  if (group === undefined && !canGetDirections) {
-    return null;
-  }
-
-  const handleGetDirections = async (): Promise<void> => {
-    // `canGetDirections` already gates the coordinate range, so a truthy value
-    // here means both are finite and in range (R4.2).
-    const candidates = directionsUrlCandidates(
-      latitude as number,
-      longitude as number,
-      mapsPlatform(),
-    );
-
-    // R4.7/R4.8: attempt each candidate unconditionally, in order, stopping at
-    // the first that opens. There is deliberately NO `Linking.canOpenURL`
-    // pre-check: from Android 11 (API 30) package-visibility filtering makes
-    // `canOpenURL` resolve `false` for the `geo:` scheme unless it is declared
-    // in a native `<queries>` manifest element (Expo Go declares none), even
-    // though `openURL` for the same URL succeeds — launching an implicit intent
-    // is not subject to that filtering. Gating on it therefore suppressed a
-    // working open on every Android client.
-    for (const url of candidates) {
-      try {
-        await Linking.openURL(url);
-        // Clear any prior failure on a successful open.
-        setFailed(false);
-        return;
-      } catch {
-        // This candidate has no handler; fall through to the next one.
-      }
-    }
-
-    // R4.5/R4.9: every candidate rejected — surface the inline error and
-    // preserve all other screen state.
-    setFailed(true);
-  };
-
-  return (
-    <Card style={styles.section} testID="experience-location-group">
-      <SectionLabel>{group?.label ?? 'Location'}</SectionLabel>
-
-      {group !== undefined ? (
-        <View style={styles.badgeRow}>
-          {group.tags.map((tag, index) => (
-            <Badge
-              key={`${tag.kind}-${index}`}
-              label={tag.label}
-              color={theme.color.primary}
-              accessibilityLabel={tag.accessibilityLabel}
-              testID={`experience-info-tag-${tag.kind}`}
-            />
-          ))}
-        </View>
-      ) : null}
-
-      {/* Static_Map_Preview (R10.1-R10.8). Gated by the SAME coordinate-validity
-          check as the Get_Directions_Action (R10.1/R10.2). Tapping the preview
-          opens the OS maps app via the same `handleGetDirections` path as Get
-          directions (R10.5/R10.6). If the image fails to load, `mapImageFailed`
-          hides only the image while the rest of the Location content — including
-          the Get directions button — keeps rendering (R10.7). */}
-      {canGetDirections && !mapImageFailed ? (
-        <Pressable
-          onPress={() => {
-            void handleGetDirections();
-          }}
-          accessibilityRole="imagebutton"
-          accessibilityLabel={`Map preview of ${experienceName}. Tap for directions.`}
-          testID="experience-static-map"
+      ) : (
+        <View
+          style={[styles.heroImage, styles.heroPlaceholder, { backgroundColor: visual.tint }]}
+          testID="experience-hero-placeholder"
         >
-          {/* The ArcGIS export image has no built-in marker, so overlay a
-              centered pin. The coordinate sits at the exact bbox center, so a
-              pin centered over the image lands on the Experience location. The
-              pin is decorative for a11y — the Pressable carries the label. */}
-          <View style={styles.mapPreviewWrap}>
-            <Image
-              source={{
-                uri: staticMapUrl(latitude as number, longitude as number),
-              }}
-              style={styles.mapPreview}
-              resizeMode="cover"
-              onError={() => setMapImageFailed(true)}
-              accessibilityIgnoresInvertColors
-            />
-            <Ionicons
-              name="location"
-              size={32}
-              color={theme.color.accent}
-              style={styles.mapPin}
-              accessibilityElementsHidden
-              importantForAccessibility="no"
-            />
-          </View>
-        </Pressable>
-      ) : null}
-
-      {canGetDirections ? (
-        <SecondaryButton
-          label="Get directions"
-          icon="navigate"
-          onPress={() => {
-            void handleGetDirections();
-          }}
-          accessibilityLabel={`Get directions to ${experienceName}`}
-          testID="experience-get-directions"
-        />
-      ) : null}
-
-      {failed ? (
-        <Text style={styles.errorText} testID="experience-directions-error">
-          Couldn&apos;t open the maps app. Please try again.
-        </Text>
-      ) : null}
-    </Card>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Remaining Tag_Groups (Good to know / Accessibility / Good for)
-// ---------------------------------------------------------------------------
-
-/**
- * Render one non-Location Tag_Group as a labelled `Card` of pills (R1.7, R7.1).
- * Used for the Good_To_Know_Group, Accessibility_Group, and Good_For_Group,
- * which the screen places last in the fixed order `buildTagGroups` emits. The
- * group's relabelled, de-duplicated tags each render as a `Badge` carrying its
- * `accessibilityLabel` (R2.4, R2.5). `buildTagGroups` never emits an empty
- * group, so this card always has at least one pill to show (R7.5).
- */
-function TagGroupCard({ group }: { readonly group: TagGroup }): JSX.Element {
-  return (
-    <Card style={styles.section} testID={`experience-tag-group-${group.id}`}>
-      <SectionLabel>{group.label}</SectionLabel>
-      <View style={styles.badgeRow}>
-        {group.tags.map((tag, index) => (
-          <Badge
-            key={`${tag.kind}-${index}`}
-            label={tag.label}
-            color={theme.color.primary}
-            accessibilityLabel={tag.accessibilityLabel}
-            testID={`experience-info-tag-${tag.kind}`}
+          <Ionicons
+            name={visual.glyph as keyof typeof Ionicons.glyphMap}
+            size={48}
+            color={theme.color.textOnPrimary}
           />
-        ))}
+        </View>
+      )}
+
+      {/* Gradient scrim overlay across the bottom */}
+      <LinearGradient
+        colors={['transparent', 'rgba(20, 8, 36, 0.88)']}
+        style={styles.heroScrim}
+        pointerEvents="none"
+      />
+
+      {/* Overlaid badges at bottom of hero photo */}
+      <View style={styles.heroBadgesRow}>
+        <View style={styles.heroLandPill} testID="experience-park-badge">
+          <Text
+            style={styles.heroLandPillText}
+            numberOfLines={1}
+            ellipsizeMode="tail"
+          >
+            📍{displayLand !== undefined ? ` ${displayLand}` : ''}
+          </Text>
+        </View>
+
+        {aggregateRating?.value != null ? (
+          <View
+            style={styles.heroRatingPill}
+            testID="experience-category-badge"
+            accessibilityLabel={`Community rating: ${aggregateRating.value.toFixed(1)} out of 10 based on ${aggregateRating.count} guest ratings`}
+          >
+            <Text style={styles.heroRatingPillText}>
+              ★ {aggregateRating.value.toFixed(1)}{' '}
+              <Text style={styles.heroRatingCountText}>
+                ({aggregateRating.count} {aggregateRating.count === 1 ? 'rating' : 'ratings'})
+              </Text>
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.heroCategoryPill} testID="experience-category-badge">
+            <Ionicons
+              name={visual.glyph as keyof typeof Ionicons.glyphMap}
+              size={11}
+              color="#ffffff"
+            />
+            <Text style={styles.heroCategoryPillText}>{categoryLabel(category)}</Text>
+          </View>
+        )}
       </View>
-    </Card>
+    </View>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Why visit (Why_This)
+// Fallback Indicator
 // ---------------------------------------------------------------------------
-
-/**
- * Normalize marketing copy for duplicate comparison: trim, collapse internal
- * whitespace runs to a single space, and lowercase. Used to detect when a
- * Why_This bullet merely restates the About description regardless of casing
- * or incidental whitespace differences. An absent value normalizes to `''`.
- */
-function normalizeCopy(value?: string | null): string {
-  return (value ?? '').trim().replace(/\s+/gu, ' ').toLowerCase();
-}
-
-/**
- * "Why visit" section (R11.4-R11.6). Renders the Why_This `bullets` as flavor
- * text when the Experience carries one or more (R11.4). Returns `null` — i.e.
- * omits the section entirely — when the Why_This value is absent/null or its
- * `bullets` list is empty (R11.5), so the screen never shows an empty "Why
- * visit" card. The `SectionLabel` header provides the screen-reader accessible
- * label for the section (R11.6); each bullet is a plain `Text` line.
- *
- * Bullets that merely restate the About `description` are filtered out so the
- * same copy is never shown in both sections; when that leaves no distinct
- * bullets the section is omitted just like the empty case above.
- */
-function WhyThisSection({
-  whyThis,
-  description,
-}: {
-  readonly whyThis?: WhyThisDTO | null | undefined;
-  readonly description?: string | undefined;
-}): JSX.Element | null {
-  const normalizedDescription = normalizeCopy(description);
-  const bullets = (whyThis?.bullets ?? []).filter(
-    (bullet) => normalizeCopy(bullet) !== normalizedDescription,
-  );
-  // R11.5: omit the section entirely when there is nothing distinct to show.
-  if (bullets.length === 0) {
-    return null;
-  }
-  return (
-    <Card style={styles.section} testID="experience-why-this">
-      <SectionLabel>Why visit</SectionLabel>
-      {bullets.map((bullet, index) => (
-        <Text key={`why-this-${index}`} style={styles.bodyText}>
-          {bullet}
-        </Text>
-      ))}
-    </Card>
-  );
-}
 
 // ---------------------------------------------------------------------------
 // Live operational section
@@ -1120,100 +1018,18 @@ function LiveUnavailableIndicator(): JSX.Element {
   );
 }
 
-/**
- * Render at most one live operational section, chosen solely by the
- * Experience's category via `liveSectionFor` (R7.1–R7.5):
- *   - `Ride` / `Character_Meet` → wait/status section,
- *   - `Show` / `Parade`         → showtimes section,
- *   - `Restaurant`              → dining section,
- *   - `Other`                   → no live section.
- *
- * The read is independent of the static catalog detail, so a live failure
- * degrades to the unavailable indicator (R3.2) without affecting the static
- * fields. On a `stale: true` success the section component renders the
- * out-of-date indicator together with the Retrieved_At time (R3.5).
- */
-function LiveOperationalSection({
-  category,
-  query,
-}: {
-  readonly category: ExperienceCategory;
-  readonly query: QueryLike<LiveDetailResponseDTO>;
-}): JSX.Element | null {
-  const detail = query.data?.liveDetail;
-  // No loaded Live_Detail means "nothing known", which gates identically to the
-  // category-only behavior; the shape is always passed so the compiler can catch
-  // a call site that forgets it (see `NO_LIVE_SHAPE`).
-  const liveShape: LiveShape = detail
-    ? {
-        hasStandbyWait:
-          typeof detail.waitMinutes === 'number' && !Number.isNaN(detail.waitMinutes),
-        hasShowtimes:
-          Array.isArray(detail.showtimes) && detail.showtimes.length > 0,
-      }
-    : NO_LIVE_SHAPE;
-
-  const section = liveSectionFor(category, liveShape);
-
-  // R7.1 / R5.2 / R5.5: `Other` (and any non-live category) shows no live section at all.
-  if (section === 'none') {
-    return null;
-  }
-
-  if (query.isLoading) {
-    return (
-      <Card style={styles.section}>
-        <ActivityIndicator
-          accessibilityLabel="Loading live information"
-          color={theme.color.primary}
-        />
-      </Card>
-    );
-  }
-
-  // R3.2: a failed live retrieval (the orchestrator returns a 503
-  // `live_unavailable` when no cached Live_Detail exists) shows only the
-  // unavailable indicator; the static fields above remain visible (R3.3).
-  if (query.isError || query.data === undefined) {
-    return <LiveUnavailableIndicator />;
-  }
-
-  const { liveDetail, retrievedAt, stale } = query.data;
-  // Lift `upstreamLastUpdated` out of the detail so the section can label it
-  // distinctly from Retrieved_At (R4.13, R5.7, R6.8).
-  const sectionProps = {
-    liveDetail,
-    retrievedAt,
-    stale,
-    ...(liveDetail.upstreamLastUpdated !== undefined
-      ? { upstreamLastUpdated: liveDetail.upstreamLastUpdated }
-      : {}),
-  };
-
-  switch (section) {
-    case 'wait_status': // R7.2
-      return <RideLiveSection {...sectionProps} />;
-    case 'showtimes': // R7.3
-      return <ShowtimesSection {...sectionProps} />;
-    case 'dining': // R7.4
-      return <DiningSection {...sectionProps} />;
-    default: {
-      // Exhaustiveness guard: a new `LiveSection` member must be handled here.
-      const _exhaustive: never = section;
-      return _exhaustive;
-    }
-  }
-}
-
 // ---------------------------------------------------------------------------
 // Styles
 // ---------------------------------------------------------------------------
 
 const styles = StyleSheet.create({
   container: {
-    padding: theme.spacing.lg,
-    paddingBottom: theme.spacing.xxl,
-    gap: theme.spacing.md,
+    paddingHorizontal: 14,
+    paddingTop: 12,
+    gap: 12,
+  },
+  scrollContainerPadding: {
+    paddingBottom: 110,
   },
   centered: {
     flex: 1,
@@ -1221,6 +1037,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: theme.spacing.xl,
     gap: theme.spacing.sm,
+  },
+  headerActionCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.25)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cardPressed: {
+    opacity: 0.75,
   },
   badgeRow: {
     flexDirection: 'row',
@@ -1230,15 +1059,101 @@ const styles = StyleSheet.create({
   shareButton: {
     marginTop: theme.spacing.xs,
   },
-  hero: {
+  heroCard: {
+    position: 'relative',
     width: '100%',
-    height: 200,
-    borderRadius: theme.radius.lg,
+    height: 195,
+    borderRadius: 20,
+    overflow: 'hidden',
     backgroundColor: theme.color.surfaceAlt,
+    shadowColor: '#1f1235',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.16,
+    shadowRadius: 16,
+    elevation: 4,
+  },
+  heroImage: {
+    width: '100%',
+    height: '100%',
   },
   heroPlaceholder: {
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  heroScrim: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 90,
+  },
+  heroBadgesRow: {
+    position: 'absolute',
+    left: 14,
+    right: 14,
+    bottom: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  heroLandPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    // A long Geographic Area (e.g. "Disney's Animal Kingdom Resort Area")
+    // must not balloon past the category/rating pill on the same row — cap it
+    // and let the text ellipsize instead of crowding or wrapping the row.
+    flexShrink: 1,
+    maxWidth: '62%',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    paddingVertical: 5,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  heroLandPillText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#371756',
+  },
+  heroRatingPill: {
+    backgroundColor: '#f6c343',
+    paddingVertical: 5,
+    paddingHorizontal: 11,
+    borderRadius: 999,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.22,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  heroRatingPillText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#3d1c5c',
+  },
+  heroRatingCountText: {
+    fontSize: 9.5,
+    fontWeight: '700',
+    opacity: 0.9,
+  },
+  heroCategoryPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(91, 42, 134, 0.85)',
+    paddingVertical: 5,
+    paddingHorizontal: 11,
+    borderRadius: 999,
+  },
+  heroCategoryPillText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#ffffff',
   },
   mapPreviewWrap: {
     position: 'relative',

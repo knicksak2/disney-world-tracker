@@ -440,6 +440,10 @@ function applyMigrations(db: IMemoryDb): void {
   db.public.none(
     readFileSync(migrationPath('0044_experience_dining_url.sql'), 'utf8'),
   );
+  // 0049 adds resort metadata columns selected by listActiveResorts.
+  db.public.none(
+    readFileSync(migrationPath('0049_resort_metadata.sql'), 'utf8'),
+  );
 }
 
 // ---------------------------------------------------------------------------
