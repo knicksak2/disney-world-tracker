@@ -71,6 +71,7 @@ const page1: FoodListDiscoveryPageDTO = {
       likeCount: 99,
       createdAt: '2026-09-01T10:00:00.000Z',
       updatedAt: '2026-09-01T10:00:00.000Z',
+      pinnedAt: null,
     },
     {
       id: 'disc-2',
@@ -83,6 +84,7 @@ const page1: FoodListDiscoveryPageDTO = {
       likeCount: 45,
       createdAt: '2026-09-02T10:00:00.000Z',
       updatedAt: '2026-09-02T10:00:00.000Z',
+      pinnedAt: null,
     },
   ],
   nextCursor: 'cursor-page-2',
@@ -101,6 +103,7 @@ const page2: FoodListDiscoveryPageDTO = {
       likeCount: 15,
       createdAt: '2026-09-03T10:00:00.000Z',
       updatedAt: '2026-09-03T10:00:00.000Z',
+      pinnedAt: null,
     },
   ],
   nextCursor: null,

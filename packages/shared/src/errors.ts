@@ -129,6 +129,7 @@ export const ERROR_CODES = [
   'trip_tag_state_invalid',
   'trip_food_list_ineligible',
   'trip_food_list_not_found',
+  'trip_experience_list_ineligible',
 
   // -- Pins (pin-collection R20.4, R24.5, R24.11) ----------------------
   // `pin_not_eligible`: `POST /me/pins/:pinId/claim` targeted a Pin with no
@@ -185,6 +186,41 @@ export const ERROR_CODES = [
   'food_list_stale_write',
   'food_list_share_not_friend',
   'food_list_save_self',
+
+  // -- Experience lists (experience-lists R1-R9) -------------------------
+  // `experience_list_not_found`: a mutation/read targeted an Experience_List
+  // the caller has NO access to at all — non-existent, or private with no
+  // share of either role. Owner-only actions (rename/delete/visibility/
+  // manage-shares) also collapse a non-owner's attempt to this same
+  // response so ownership cannot be probed. Mirrors `food_list_not_found`.
+  // `experience_list_edit_forbidden`: the caller CAN view the list (public,
+  // or a viewer-role share) but attempted a mutation requiring edit access
+  // (item add/remove/reorder) or an owner-only share-management action
+  // while holding only editor access.
+  // `experience_list_item_duplicate`: an add targeted an experienceId
+  // already in the list. `experience_not_found`: an add's `experienceId`
+  // does not reference an existing, active Experience (Requirement 2.3) —
+  // distinct from `experience_list_*` codes since it's a Catalog lookup
+  // failure, not a list-access failure. `experience_list_dining_ineligible`:
+  // an add targeted an Experience whose `category` is `Restaurant` — dining
+  // stays exclusively in `Food_List`'s domain; checked before the duplicate
+  // check (and after the `experience_not_found` check).
+  // `experience_list_reorder_mismatch`: a reorder's id set didn't exactly
+  // match the list's current items. `experience_list_stale_write`: a
+  // reorder's `expectedVersion` didn't match the list's current `version`
+  // (a concurrent editor's add/remove/reorder landed first).
+  // `experience_list_share_not_friend`: a share target is not a Friend of
+  // the owner. `experience_list_save_self`: a User attempted to save their
+  // own list.
+  'experience_list_not_found',
+  'experience_list_edit_forbidden',
+  'experience_list_item_duplicate',
+  'experience_not_found',
+  'experience_list_dining_ineligible',
+  'experience_list_reorder_mismatch',
+  'experience_list_stale_write',
+  'experience_list_share_not_friend',
+  'experience_list_save_self',
 
   // -- Edge / gateway (defense-in-depth, R6.7) --------------------------
   // Emitted by the gateway-level rate limiter (task 13.3) when a caller
@@ -317,6 +353,7 @@ export const errorCodeToHttpStatus: { readonly [K in ErrorCode]: number } = {
   trip_tag_state_invalid: 409,
   trip_food_list_ineligible: 403,
   trip_food_list_not_found: 404,
+  trip_experience_list_ineligible: 403,
 
   // Pins
   pin_not_eligible: 409,
@@ -338,6 +375,17 @@ export const errorCodeToHttpStatus: { readonly [K in ErrorCode]: number } = {
   food_list_stale_write: 409,
   food_list_share_not_friend: 403,
   food_list_save_self: 400,
+
+  // Experience lists
+  experience_list_not_found: 404,
+  experience_list_edit_forbidden: 403,
+  experience_list_item_duplicate: 409,
+  experience_not_found: 404,
+  experience_list_dining_ineligible: 400,
+  experience_list_reorder_mismatch: 400,
+  experience_list_stale_write: 409,
+  experience_list_share_not_friend: 403,
+  experience_list_save_self: 400,
 
   // Edge / gateway
   rate_limit_exceeded: 429,

@@ -21,6 +21,8 @@ import MenuScreen from '../screens/catalog/MenuScreen';
 import ShareComposerScreen from '../screens/share/ShareComposerScreen';
 import FoodListDetailScreen from '../screens/foodLists/FoodListDetailScreen';
 import FoodListDiscoveryScreen from '../screens/foodLists/FoodListDiscoveryScreen';
+import ExperienceListDetailScreen from '../screens/experienceLists/ExperienceListDetailScreen';
+import ExperienceListDiscoveryScreen from '../screens/experienceLists/ExperienceListDiscoveryScreen';
 import NotificationCenterScreen from '../screens/notifications/NotificationCenterScreen';
 import { useClaimablePinsBadge } from '../components/pins/useClaimablePinsBadge';
 import MagicFab from '../screens/quickAction/MagicFab';
@@ -75,6 +77,8 @@ export type RootStackParamList = {
   ShareComposer: ShareComposerParams;
   FoodListDetail: { foodListId: string };
   FoodListDiscovery: undefined;
+  ExperienceListDetail: { experienceListId: string };
+  ExperienceListDiscovery: undefined;
   YouAndCrew: NavigatorScreenParams<YouAndCrewStackParamList> | undefined;
   NotificationCenter: { focusRef?: AttentionItemRef } | undefined;
   PinShowcase?: { userId?: string; readOnly?: boolean };
@@ -211,6 +215,16 @@ function RootStackNavigator(): JSX.Element {
       <RootStack.Screen
         name="FoodListDiscovery"
         component={FoodListDiscoveryScreen}
+        options={{ headerShown: false }}
+      />
+      <RootStack.Screen
+        name="ExperienceListDetail"
+        component={ExperienceListDetailScreen}
+        options={{ headerShown: false }}
+      />
+      <RootStack.Screen
+        name="ExperienceListDiscovery"
+        component={ExperienceListDiscoveryScreen}
         options={{ headerShown: false }}
       />
       <RootStack.Screen

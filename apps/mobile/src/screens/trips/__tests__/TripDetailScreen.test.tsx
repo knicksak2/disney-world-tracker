@@ -71,6 +71,7 @@ const TRIP: TripDTO = {
   createdAt: '2024-04-01T12:00:00Z',
   resorts: [],
   foodLists: [],
+  experienceLists: [],
 };
 
 /** Section control testIDs paired with the route each opens (R18.1, R18.6). */

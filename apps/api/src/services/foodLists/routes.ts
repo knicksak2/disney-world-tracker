@@ -163,6 +163,9 @@ export function foodListRoutes(options: FoodListRoutesOptions): FastifyPluginAsy
         if (input.isChecklist !== undefined) {
           updated = await repo.setChecklistMode(id, userId, input.isChecklist);
         }
+        if (input.pinned !== undefined) {
+          updated = await repo.setPinned(id, userId, input.pinned);
+        }
         if (!updated) {
           const detail = await repo.getListDetail(id, userId);
           return detail;

@@ -29,6 +29,8 @@ export const updateFoodListInputSchema = z
     name: foodListNameSchema.optional(),
     visibility: foodListVisibilitySchema.optional(),
     isChecklist: z.boolean().optional(),
+    /** Setting `true` pins the list (server stamps `pinned_at = now()`); `false` unpins it (`pinned_at = NULL`). */
+    pinned: z.boolean().optional(),
   })
   .strict();
 
@@ -82,6 +84,7 @@ export const foodListSchema = z
     itemCount: z.number().int().min(0),
     createdAt: isoTimestampSchema,
     updatedAt: isoTimestampSchema,
+    pinnedAt: isoTimestampSchema.nullable(),
   })
   .strict();
 

@@ -209,8 +209,8 @@ sub-tasks are marked optional with `*`.
     - Upgrade `AvatarChip.tsx` with a `variant="pill"` supporting the `[N] You & Crew` pill button with subtle glass border and badge
     - Wire personalized greeting pill ("✨ Good morning, [Name]!"), hero title ("Ready for the Magic?"), and park operating subtext into `HomeScreen.tsx`
     - _Requirements: 2.1, 2.2_
-  - [x] 15.4 Upcoming Vacation Countdown Hero & Active Vacation Card
-    - Create `UpcomingTripHero.tsx` rendering the countdown badge, trip title, date range, and metrics with tap navigation to `TripDetailScreen`
+  - [x] 15.4 Upcoming Vacation Countdown Hero, Active Vacation Card & Exploration Prompt
+    - Create `UpcomingTripHero.tsx` and `ExplorationPromptCard.tsx` rendering countdown badge, active trip metrics, and exploration prompt when no trips exist with tap navigation
     - _Requirements: 2.1_
   - [x] 15.5 Action Dock and Park Wait Pulse components
     - Create `ActionDock.tsx` with 4 tiles (Live Waits, Log Ride, Log Snack, My Pins) and modal triggers
@@ -250,6 +250,40 @@ sub-tasks are marked optional with `*`.
   - [x] 16.8 Checkpoint
     - Run `npx jest apps/mobile/src/screens/home apps/mobile/src/screens/quickAction`, then the full `npm run verify`; paste the literal tail output per this repo's execution-discipline steering
 
+- [ ] 17. Split the Collection tab's "Food & Lists" segment into separate "Food" and "Lists" segments (Requirement 6's amendment; cross-spec with `experience-lists` Requirement 12's amendment)
+  - [x] 17.1 Rebuild `CollectionScreen.tsx`'s segmented control as four pills
+    - Replace the three `segBtn` pills with four: "📌 Pins" (shortened from "Pins & Showcase" once a 4th equal-width pill made the longer label clip), "🍽️ Food", "📋 Lists" (no badge), "📊 Park Stats"; add a `VaultSubTab` union member `'lists'`; remove the `-16` negative top margin on `segmentedControl` so it no longer overlaps the header's bottom curve, matching every other `GradientHeader` screen's spacing
+    - _Requirements: 6.6a_
+  - [ ] 17.2 Split the existing "Food & Lists" sub-view into "Food" and "Lists" sub-views
+    - Move the "My Food Lists" card and "My Experience Lists" card (and their underlying `useQuery`s) out of the `activeTab === 'food'` block into a new `activeTab === 'lists'` block, rendered as two equal-weight `Card`s with no visual hierarchy; the remaining `activeTab === 'food'` block keeps the snack-count metric tile, Recent Treats Passport, Classic Treats Checklist, and "Open Food History Timeline" action, dropping the saved-food-list-count metric tile (list counts now live on the "Lists" pill's badge and within the "Lists" sub-view itself)
+    - _Requirements: 6.8a, 6.8b_
+  - [ ] 17.3 Add a "Log a food item" action to the Food sub-view
+    - Compose the existing `ExperiencePicker` (scoped to dining via `defaultTab="dining"`) → `FoodItemPickerModal` → `LogFoodItemModal` flow directly in `CollectionScreen.tsx`, mirroring `MagicFab.tsx`'s existing "Log Snack" quick-action wiring (same modals, same mutation/invalidation calls) rather than duplicating that logic — a User can log food from this screen without needing the separate global FAB
+    - _Requirements: 6.8a_
+  - [ ] 17.4 Update `CollectionScreen.test.tsx`
+    - Update the existing "My Experience Lists card... in Food tab" test(s) to assert the card renders under the "Lists" tab instead; add assertions for the four-pill segmented control (all four testIDs present, defaulting to "Pins & Showcase"), the "Lists" pill's combined-count badge, the Food sub-view's new "Log a food item" action opening the picker→food-item→log flow end to end, and that the Food sub-view no longer renders a list-count metric tile or either list card
+    - _Requirements: 6.6a, 6.8a, 6.8b_
+  - [ ] 17.5 Checkpoint — run `npm run verify:mobile`, paste the literal tail output
+
+- [x] 18. Multi-Row Preview, Pin-Aware Ordering, Deep Link, and Inline Create for the Lists Sub-View (Requirement 6 amendment 8c; cross-spec with `food-lists` Requirement 14 / `experience-lists` Requirement 19)
+  - [x] 18.1 Extract `CreateFoodListModal.tsx` from `MyFoodListsScreen.tsx` and `CreateExperienceListModal.tsx` from `MyExperienceListsScreen.tsx`
+    - Move each screen's existing create-list `Modal` (name input, visibility toggle, and for food lists the checklist toggle, plus the `POST` mutation and error-surfacing) into a standalone component taking `{ visible, onClose, onCreated(newList) }`; update the two management screens to render the extracted component with unchanged behavior
+    - _Requirements: 6 amendment 8c_
+  - [x] 18.2 Wire the same `PATCH .../:id` pin/unpin mutation shape directly in both `MyFoodListsScreen.tsx`/`MyExperienceListsScreen.tsx`'s row-level pin control (per `food-lists` task 22.9 / `experience-lists` task 25.9) and the new Collection preview rows below (implemented as parallel `handleTogglePinned`/`handleToggleFoodListPinned`/`handleToggleExperienceListPinned` functions with the identical request shape, rather than a shared hook — both call sites are one-line `apiRequest('PATCH', ...)` calls with no other logic worth abstracting)
+    - _Requirements: 6 amendment 8c; `food-lists` 14.5; `experience-lists` 19.5_
+  - [x] 18.3 Rebuild `CollectionScreen.tsx`'s "My Food Lists"/"My Experience Lists" cards to render up to `MAX_COLLECTION_PREVIEW_ROWS` (3) rows from `ownedLists` as-returned (no client re-sort), each deep-linking to `FoodListDetail`/`ExperienceListDetail` with that row's own id and carrying a pin/unpin toggle; remove the `activeList`/`activeExperienceList` `[0]`-pick derivations entirely
+    - _Requirements: 6 amendment 8c (Property 10, Property 11)_
+  - [x] 18.4 Add the "View all (N)" row when `ownedLists.length > 3`, navigating to `MyFoodLists`/`MyExperienceLists`
+    - _Requirements: 6 amendment 8c (Property 10)_
+  - [x] 18.5 Add a "+ New" action to each card's header (alongside the existing "Discover" link), opening task 18.1's extracted create modal in place; on successful creation, invalidate the collection query so the new list appears among the rendered rows
+    - _Requirements: 6 amendment 8c_
+  - [x] 18.6 Update `CollectionScreen.test.tsx`
+    - Assert up to 3 rows render in the mocked `owned` order (Property 10); a 4th+ list produces the "View all (N)" row, absent at ≤3; tapping a specific row navigates to `FoodListDetail`/`ExperienceListDetail` with that row's own id (Property 11); tapping a row's pin toggle issues `PATCH .../:id` with the correct `pinned` value and does not also navigate (Property 12); tapping "+ New" opens the create modal in place (no navigation away from `CollectionHome`) and a successful submission adds the new list to the rendered rows
+    - _Requirements: 6 amendment 8c_
+  - [x] 18.7 Write `CreateFoodListModal.test.tsx`/`CreateExperienceListModal.test.tsx` for the extracted components (ported from the pre-extraction inline-modal test cases in `MyFoodListsScreen.test.tsx`/`MyExperienceListsScreen.test.tsx`)
+    - _Requirements: 6 amendment 8c_
+  - [x] 18.8 Checkpoint — ran `npx tsc --noEmit` (clean) and full `npx jest` (234 suites, 1564 tests, all passing) in `apps/mobile`; covered by the final full-workspace `npm run verify` gate as well
+
 ## Notes
 
 - Tasks marked with `*` are optional test sub-tasks and can be skipped for a faster MVP. (None are marked in this plan — every test sub-task here guards a Correctness Property or a stated regression risk, so none is optional.)
@@ -287,7 +321,20 @@ sub-tasks are marked optional with `*`.
     { "id": 20, "tasks": ["16.2", "16.3", "16.6"] },
     { "id": 21, "tasks": ["16.4", "16.5"] },
     { "id": 22, "tasks": ["16.7"] },
-    { "id": 23, "tasks": ["16.8"] }
+    { "id": 23, "tasks": ["16.8"] },
+    { "id": 24, "tasks": ["18.1", "18.2"] },
+    { "id": 25, "tasks": ["18.3", "18.4", "18.5"] },
+    { "id": 26, "tasks": ["18.6", "18.7"] },
+    { "id": 27, "tasks": ["18.8"] }
   ]
 }
 ```
+
+Wave 24 builds the two extracted create modals and each screen's pin-toggle handler in parallel,
+since both depend only on tasks 17.1-17.4 (the Lists sub-view existing) and are otherwise
+independent files. Wave 25 rebuilds the Collection cards' rows/View-all/create-action, depending
+on wave 24's extracted modal existing to consume. Wave 26 is the component tests, sequenced after
+the screen changes they assert against. Wave 27 is the mobile verification checkpoint. This task
+depends on `food-lists` task 22 and `experience-lists` task 25 (the `pinned`/`pinnedAt` wire
+contract and `setPinned` route) already having landed, since the Collection rows' pin toggle and
+pinned-first row ordering have nothing to call/reflect otherwise.

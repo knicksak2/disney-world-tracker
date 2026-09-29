@@ -78,6 +78,7 @@ const sampleOwnedLists: readonly FoodListDTO[] = [
     likeCount: 12,
     createdAt: '2026-09-01T12:00:00.000Z',
     updatedAt: '2026-09-01T12:00:00.000Z',
+    pinnedAt: null,
   },
   {
     id: 'list-2',
@@ -90,6 +91,7 @@ const sampleOwnedLists: readonly FoodListDTO[] = [
     likeCount: 0,
     createdAt: '2026-09-02T12:00:00.000Z',
     updatedAt: '2026-09-02T12:00:00.000Z',
+    pinnedAt: null,
   },
 ];
 
@@ -105,6 +107,7 @@ const sampleSavedLists = [
     likeCount: 42,
     createdAt: '2026-09-01T10:00:00.000Z',
     updatedAt: '2026-09-01T10:00:00.000Z',
+    pinnedAt: null,
   },
   {
     available: false as const,
@@ -197,6 +200,7 @@ describe('MyFoodListsScreen', () => {
           likeCount: 0,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
+          pinnedAt: null,
         };
       }
       if (path === '/me/food-lists/collection') {
@@ -248,6 +252,7 @@ describe('MyFoodListsScreen', () => {
           likeCount: 0,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
+          pinnedAt: null,
         };
         owned.unshift(newList);
         return newList;
@@ -305,6 +310,7 @@ describe('MyFoodListsScreen', () => {
           likeCount: 0,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
+          pinnedAt: null,
         };
       }
       if (path === '/me/food-lists/collection') {
@@ -442,6 +448,57 @@ describe('MyFoodListsScreen', () => {
 
     await waitFor(() => {
       expect(apiRequestMock).toHaveBeenCalledWith('DELETE', '/me/food-lists/list-1');
+    });
+  });
+
+  // Feature: list-pinning
+  test('pins an unpinned food list, sending pinned: true', async () => {
+    renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByText('Best Snacks in EPCOT')).toBeTruthy();
+    });
+
+    // list-1 starts unpinned (pinnedAt: null); its pin button reads "Pin"
+    expect(screen.getByLabelText('Pin Best Snacks in EPCOT')).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId('my-food-lists-pin-btn-list-1'));
+
+    await waitFor(() => {
+      expect(apiRequestMock).toHaveBeenCalledWith('PATCH', '/me/food-lists/list-1', {
+        pinned: true,
+      });
+    });
+  });
+
+  // Feature: list-pinning
+  test('unpins an already-pinned food list, sending pinned: false', async () => {
+    const pinnedOwned = [
+      { ...sampleOwnedLists[0]!, pinnedAt: '2026-09-20T08:00:00.000Z' },
+      sampleOwnedLists[1]!,
+    ];
+    apiRequestMock.mockImplementation(async (_method, path) => {
+      if (path === '/me/food-lists/collection') {
+        return { owned: pinnedOwned, saved: sampleSavedLists };
+      }
+      return {};
+    });
+
+    renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByText('Best Snacks in EPCOT')).toBeTruthy();
+    });
+
+    // Already-pinned list's button reads "Unpin"
+    expect(screen.getByLabelText('Unpin Best Snacks in EPCOT')).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId('my-food-lists-pin-btn-list-1'));
+
+    await waitFor(() => {
+      expect(apiRequestMock).toHaveBeenCalledWith('PATCH', '/me/food-lists/list-1', {
+        pinned: false,
+      });
     });
   });
 

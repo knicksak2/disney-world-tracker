@@ -8,6 +8,7 @@ import PinShowcaseScreen from '../screens/profile/PinShowcaseScreen';
 import AttributionScreen from '../screens/profile/AttributionScreen';
 import MyFoodHistoryScreen from '../screens/catalog/MyFoodHistoryScreen';
 import MyFoodListsScreen from '../screens/foodLists/MyFoodListsScreen';
+import MyExperienceListsScreen from '../screens/experienceLists/MyExperienceListsScreen';
 import StatsStack, { type StatsStackParamList } from './StatsStack';
 
 /**
@@ -26,6 +27,7 @@ export type CollectionStackParamList = {
   PinShowcase: { userId?: string; readOnly?: boolean } | undefined;
   MyFoodHistory: undefined;
   MyFoodLists: undefined;
+  MyExperienceLists: undefined;
   Stats: NavigatorScreenParams<StatsStackParamList> | undefined;
 };
 
@@ -40,6 +42,7 @@ export default function CollectionStack(): JSX.Element {
       <Stack.Screen name="PinShowcase" component={PinShowcaseScreen} />
       <Stack.Screen name="MyFoodHistory" component={MyFoodHistoryScreen} />
       <Stack.Screen name="MyFoodLists" component={MyFoodListsScreen} />
+      <Stack.Screen name="MyExperienceLists" component={MyExperienceListsScreen} />
       <Stack.Screen name="Stats" component={StatsStack} />
     </Stack.Navigator>
   );

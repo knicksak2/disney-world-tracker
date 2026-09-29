@@ -117,6 +117,29 @@ export interface ExperiencePickerProps {
   readonly style?: StyleProp<ViewStyle>;
   /** When true, the results area and picker expand to fill available vertical space (e.g. in full-screen modals). */
   readonly fillContainer?: boolean;
+  /**
+   * The caller-computed, already-deduplicated flat union of every Experience
+   * currently on the Trip's attached Experience_Lists (Requirement 15.2),
+   * resolved to `ExperienceDTO`-shaped rows. The picker itself never fetches
+   * a Trip or an Experience_List — this is Trip-scoped data the caller
+   * screen already owns. When `undefined` or empty, the "My Lists" tab is
+   * omitted entirely (Requirement 15.3).
+   */
+  readonly listSourcedItems?: readonly ExperienceDTO[];
+  /** Whether the caller's underlying attached-list content fetches are in flight. */
+  readonly listSourcedLoading?: boolean;
+  /**
+   * Experience ids that already exist as a `planned_items` row on the current
+   * Trip, on any date — derived by the caller from its already-fetched
+   * Planned_List using the same `experienceId`-matching approach
+   * `planned-list-completion-sync` established (Requirement 15.5). Rendered as
+   * a non-blocking "Already added" tag alongside every matching row,
+   * regardless of active tab. Unlike `disabledIds`, this NEVER disables the
+   * row — an Experience may legitimately be added to the Planned_List more
+   * than once (Requirement 9.3), so this is presentation-only. Defaults to an
+   * empty set.
+   */
+  readonly alreadyPlannedIds?: ReadonlySet<string>;
 }
 
 /**
@@ -139,6 +162,9 @@ export function ExperiencePicker({
   testIDPrefix,
   style,
   fillContainer = false,
+  listSourcedItems,
+  listSourcedLoading = false,
+  alreadyPlannedIds,
 }: ExperiencePickerProps): JSX.Element {
   const [activeTab, setActiveTab] = useState<ExperiencePickerTab>(defaultTab);
   const [selectedPark, setSelectedPark] = useState<DestinationId | 'all'>(
@@ -157,6 +183,7 @@ export function ExperiencePicker({
 
   const disabledSet = disabledIds ?? EMPTY_SET;
   const addedSet = addedIds ?? EMPTY_SET;
+  const alreadyPlannedSet = alreadyPlannedIds ?? EMPTY_SET;
 
   const clearAllFilters = () => {
     setSelectedLands(new Set());
@@ -217,9 +244,17 @@ export function ExperiencePicker({
     clearAllFilters();
   };
 
+  // Whether the Trip has any attached Experience_Lists to source candidates
+  // from (Requirement 15.3) — the tab itself is omitted entirely when false.
+  const hasMyListsTab = (listSourcedItems?.length ?? 0) > 0;
+
   // Breaks tab requires at least SEARCH_MIN_CHARS so as not to flood the location list (AC 4.14)
+  // The My Lists tab has its own candidate source (listSourcedItems) and never
+  // hits GET /catalog, so it is always considered "active" once selected.
   const searchActive =
-    activeTab === 'breaks'
+    activeTab === 'myLists'
+      ? true
+      : activeTab === 'breaks'
       ? debouncedQuery.length >= SEARCH_MIN_CHARS
       : activeTab !== 'all' || selectedPark !== 'all' || debouncedQuery.length >= SEARCH_MIN_CHARS;
 
@@ -251,10 +286,13 @@ export function ExperiencePicker({
         `/catalog${qs ? `?${qs}` : ''}`,
       );
     },
-    enabled: enabled && searchActive,
+    // The My Lists tab sources its candidates from the caller-supplied
+    // listSourcedItems, never from GET /catalog (Requirement 15.2).
+    enabled: enabled && searchActive && activeTab !== 'myLists',
   });
 
-  const rawResults = searchQuery.data?.experiences ?? [];
+  const rawResults =
+    activeTab === 'myLists' ? listSourcedItems ?? [] : searchQuery.data?.experiences ?? [];
 
   // Tab category filter safety
   const tabFilteredResults = rawResults.filter((item) => {
@@ -270,6 +308,11 @@ export function ExperiencePicker({
       );
     }
     if (activeTab === 'breaks') {
+      return true;
+    }
+    if (activeTab === 'myLists') {
+      // Membership in this tab's candidate set comes from list attachment,
+      // not a catalog category — every listSourcedItems row passes through.
       return true;
     }
     return true;
@@ -349,6 +392,17 @@ export function ExperiencePicker({
           >
             <Text style={[styles.tabText, activeTab === 'breaks' && styles.tabTextActive]}>☕ Breaks</Text>
           </Pressable>
+          {hasMyListsTab && (
+            <Pressable
+              style={[styles.tabBtn, activeTab === 'myLists' && styles.tabBtnActive]}
+              onPress={() => handleTabChange('myLists')}
+              accessibilityRole="button"
+              accessibilityState={{ selected: activeTab === 'myLists' }}
+              testID={`${testIDPrefix}-tab-myLists`}
+            >
+              <Text style={[styles.tabText, activeTab === 'myLists' && styles.tabTextActive]}>⭐ My Lists</Text>
+            </Pressable>
+          )}
         </View>
       )}
 
@@ -760,6 +814,8 @@ export function ExperiencePicker({
               ? 'Search shows or locations...'
               : activeTab === 'breaks'
               ? 'Search break locations...'
+              : activeTab === 'myLists'
+              ? 'Search your attached lists...'
               : 'Search experiences, lands, or facets...'
           }
           placeholderTextColor={theme.color.textSecondary}
@@ -790,11 +846,15 @@ export function ExperiencePicker({
               ? `Type at least ${SEARCH_MIN_CHARS} characters to search break locations.`
               : formatSearchHintMessage()}
           </Text>
-        ) : searchQuery.isLoading ? (
+        ) : activeTab === 'myLists' && listSourcedLoading ? (
           <View style={styles.center} testID={`${testIDPrefix}-search-loading`}>
             <ActivityIndicator color={theme.color.primary} />
           </View>
-        ) : searchQuery.isError ? (
+        ) : activeTab !== 'myLists' && searchQuery.isLoading ? (
+          <View style={styles.center} testID={`${testIDPrefix}-search-loading`}>
+            <ActivityIndicator color={theme.color.primary} />
+          </View>
+        ) : activeTab !== 'myLists' && searchQuery.isError ? (
           <Text style={styles.hint} testID={`${testIDPrefix}-search-error`}>
             We couldn&apos;t search the catalog. Please try again.
           </Text>
@@ -834,6 +894,7 @@ export function ExperiencePicker({
                       disabledLabel={disabledLabel}
                       pending={pendingId === item.id && busy}
                       addedCount={count}
+                      alreadyPlanned={alreadyPlannedSet.has(item.id)}
                       isStaged={isStagedOnBreaks}
                       busy={busy}
                       onPress={() => {
@@ -868,6 +929,7 @@ function ExperienceResultRow({
   disabledLabel,
   pending,
   addedCount = 0,
+  alreadyPlanned = false,
   isStaged = false,
   busy,
   onPress,
@@ -878,12 +940,20 @@ function ExperienceResultRow({
   readonly disabledLabel: string;
   readonly pending: boolean;
   readonly addedCount?: number;
+  /**
+   * The Experience already exists as a `planned_items` row on the current
+   * Trip (Requirement 15.5) — shown as a non-blocking "Already added" tag.
+   * The row stays fully pressable: re-adding is a legitimate action
+   * (Requirement 9.3), so this must never feed into `inactive`.
+   */
+  readonly alreadyPlanned?: boolean;
   readonly isStaged?: boolean;
   readonly busy: boolean;
   readonly onPress: () => void;
   readonly testID: string;
 }): JSX.Element {
   const inactive = disabled || busy;
+  const accessibilityAlreadyPlannedSuffix = alreadyPlanned ? ', already added to your planned list' : '';
   return (
     <Pressable
       onPress={() => {
@@ -897,8 +967,8 @@ function ExperienceResultRow({
         disabled
           ? `${experience.name}, ${disabledLabel}`
           : addedCount > 0
-          ? `Add ${experience.name} (${addedCount} currently added)`
-          : `Add ${experience.name}`
+          ? `Add ${experience.name} (${addedCount} currently added)${accessibilityAlreadyPlannedSuffix}`
+          : `Add ${experience.name}${accessibilityAlreadyPlannedSuffix}`
       }
       style={({ pressed }) => [
         styles.resultRow,
@@ -928,6 +998,9 @@ function ExperienceResultRow({
               label={addedCount === 1 ? '✓ 1 added' : `✓ ${addedCount} added`}
               color={theme.color.success}
             />
+          ) : null}
+          {alreadyPlanned ? (
+            <Badge label="Already added" color={theme.color.textSecondary} />
           ) : null}
           {isStaged ? (
             <Badge label="📍 Attached Location" color={theme.color.primary} />
@@ -960,25 +1033,32 @@ const styles = StyleSheet.create({
   containerFill: {
     flex: 1,
   },
+  // Chip-style row (mirrors `filterChip`/`filterChipActive` below), not a
+  // segmented control: each tab carries its own background/border so a
+  // wrapped second row (needed once a 6th tab like "My Lists" no longer
+  // fits) reads as an ordinary chip row, not an orphaned control sitting in
+  // dead space inside a shared bar background.
   tabBar: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing.xs,
-    marginBottom: theme.spacing.sm,
-    backgroundColor: theme.color.surfaceAlt,
-    padding: theme.spacing.xs,
-    borderRadius: theme.radius.md,
-  },
-  tabBtn: {
-    flex: 1,
-    paddingVertical: theme.spacing.sm,
+    flexWrap: 'wrap',
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: theme.radius.sm,
+    gap: theme.spacing.xs,
+    marginBottom: theme.spacing.sm,
+  },
+  tabBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: theme.spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 16,
+    backgroundColor: theme.color.surfaceAlt,
+    borderWidth: 1,
+    borderColor: theme.color.border,
   },
   tabBtnActive: {
-    backgroundColor: theme.color.surface,
-    ...theme.shadow.card,
+    backgroundColor: theme.color.primary,
+    borderColor: theme.color.primary,
   },
   tabText: {
     ...theme.typography.meta,
@@ -986,7 +1066,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   tabTextActive: {
-    color: theme.color.primary,
+    color: '#FFFFFF',
     fontWeight: '700',
   },
   filterBarWrap: {

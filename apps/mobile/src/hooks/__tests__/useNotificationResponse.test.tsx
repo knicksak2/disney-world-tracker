@@ -49,18 +49,29 @@ jest.mock('expo-notifications', () => ({
 }));
 
 const mockNavigateToNotificationCenter = jest.fn();
+const mockNavigateToExperienceListDetail = jest.fn();
+const mockNavigateToFoodListDetail = jest.fn();
 
 jest.mock('../../navigation/navigationRef', () => ({
   __esModule: true,
   navigateToNotificationCenter: (...args: unknown[]) =>
     mockNavigateToNotificationCenter(...args),
+  navigateToExperienceListDetail: (...args: unknown[]) =>
+    mockNavigateToExperienceListDetail(...args),
+  navigateToFoodListDetail: (...args: unknown[]) =>
+    mockNavigateToFoodListDetail(...args),
 }));
 
 // ---------------------------------------------------------------------------
 // Imports of modules under test (after the mocks above).
 // ---------------------------------------------------------------------------
 
-import { useNotificationResponse, NAV_READY_POLL_MS } from '../useNotificationResponse';
+import {
+  useNotificationResponse,
+  NAV_READY_POLL_MS,
+  classifyTap,
+  extractExperienceListId,
+} from '../useNotificationResponse';
 import { useSessionStore } from '../../state/sessionStore';
 
 // ---------------------------------------------------------------------------
@@ -116,6 +127,8 @@ describe('useNotificationResponse — deep-link branches (R10.1, R10.3, R10.5)',
     mockAddNotificationResponseReceivedListener.mockReset();
     mockRemoveSubscription.mockReset();
     mockNavigateToNotificationCenter.mockReset();
+    mockNavigateToExperienceListDetail.mockReset();
+    mockNavigateToFoodListDetail.mockReset();
 
     // Default: no cold-start tap, container is ready so a dispatch succeeds.
     mockGetLastNotificationResponseAsync.mockResolvedValue(null);
@@ -123,6 +136,8 @@ describe('useNotificationResponse — deep-link branches (R10.1, R10.3, R10.5)',
       remove: mockRemoveSubscription,
     });
     mockNavigateToNotificationCenter.mockReturnValue(true);
+    mockNavigateToExperienceListDetail.mockReturnValue(true);
+    mockNavigateToFoodListDetail.mockReturnValue(true);
   });
 
   afterEach(() => {
@@ -251,5 +266,108 @@ describe('useNotificationResponse — deep-link branches (R10.1, R10.3, R10.5)',
     } finally {
       jest.useRealTimers();
     }
+  });
+
+  // -------------------------------------------------------------------------
+  // experienceListShare dispatch (task 14.3) — lives in this describe block
+  // to inherit its beforeEach mock setup (navigation-ready defaults, etc).
+  // -------------------------------------------------------------------------
+
+  test('R10.1 — a live tap carrying an experienceListId navigates to ExperienceListDetail, bypassing the Notification_Center', async () => {
+    setSession({ token: 'auth-token', hydrated: true });
+
+    renderHook(() => useNotificationResponse());
+
+    const listener = getRegisteredListener();
+    act(() => {
+      listener(responseWith({ experienceListId: 'elist-3' }));
+    });
+
+    await waitFor(() => {
+      expect(mockNavigateToExperienceListDetail).toHaveBeenCalledWith({
+        experienceListId: 'elist-3',
+      });
+    });
+    expect(mockNavigateToNotificationCenter).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// classifyTap / extractExperienceListId — pure-function tests (task 14.3)
+// ---------------------------------------------------------------------------
+
+describe('extractExperienceListId (Requirement 10.1)', () => {
+  test('resolves an experienceListId present directly on the data payload', () => {
+    expect(
+      extractExperienceListId(responseWith({ experienceListId: 'elist-1' })),
+    ).toBe('elist-1');
+  });
+
+  test('resolves the nested { data: { experienceListId } } fallback shape', () => {
+    expect(
+      extractExperienceListId(
+        responseWith({ data: { experienceListId: 'elist-nested-1' } }),
+      ),
+    ).toBe('elist-nested-1');
+  });
+
+  test('returns null when the payload is null', () => {
+    expect(extractExperienceListId(responseWith(null))).toBeNull();
+  });
+
+  test('returns null when the payload carries no experienceListId', () => {
+    expect(extractExperienceListId(responseWith({}))).toBeNull();
+  });
+});
+
+describe('classifyTap (Requirement 10.1, 10.2)', () => {
+  test('classifies an experienceListId payload as an experienceListShare tap', () => {
+    expect(classifyTap(responseWith({ experienceListId: 'elist-2' }))).toEqual({
+      kind: 'experienceListShare',
+      experienceListId: 'elist-2',
+    });
+  });
+
+  test('prioritizes tripInviteId over experienceListId when both are present', () => {
+    expect(
+      classifyTap(
+        responseWith({ tripInviteId: 'invite-1', experienceListId: 'elist-3' }),
+      ),
+    ).toEqual({ kind: 'tripInvite', tripInviteId: 'invite-1' });
+  });
+
+  test('prioritizes rodeWithTagId over experienceListId when both are present', () => {
+    expect(
+      classifyTap(
+        responseWith({
+          rodeWithTagId: 'tag-1',
+          tripLogEntryId: 'entry-1',
+          experienceListId: 'elist-4',
+        }),
+      ),
+    ).toEqual({
+      kind: 'rodeWithTag',
+      rodeWithTagId: 'tag-1',
+      tripLogEntryId: 'entry-1',
+    });
+  });
+
+  test('prioritizes a friend-request tap over experienceListId when both are present', () => {
+    expect(
+      classifyTap(
+        responseWith({ friendRequestId: 'req-1', experienceListId: 'elist-5' }),
+      ),
+    ).toEqual({ kind: 'friendRequest' });
+  });
+
+  test('falls back to a share tap when no specific kind is resolvable', () => {
+    expect(classifyTap(responseWith({ shareId: 'share-1' }))).toEqual({
+      kind: 'share',
+      shareId: 'share-1',
+    });
+  });
+
+  test('falls back to a share tap with a null shareId when nothing is resolvable', () => {
+    expect(classifyTap(responseWith({}))).toEqual({ kind: 'share', shareId: null });
   });
 });

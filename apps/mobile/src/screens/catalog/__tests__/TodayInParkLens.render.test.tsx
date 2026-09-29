@@ -229,6 +229,48 @@ describe('TodayInParkLens & LiveWaitCockpit (Task 18.4)', () => {
       });
     });
 
+    it('R13.2, R16.4: omits Trip chip when fallback query contains only past trips', async () => {
+      mockApiRequest.mockImplementation(async (_method: string, url: string) => {
+        if (url.includes('/me/trips')) {
+          return [
+            {
+              status: 'past',
+              trips: [
+                {
+                  id: 'past-trip-1',
+                  status: 'past',
+                  startDate: '2024-01-01',
+                  endDate: '2024-01-05',
+                },
+              ],
+            },
+          ];
+        }
+        if (url.includes('/wait-insights')) {
+          return {
+            p50WaitMinutes: 15,
+            p90WaitMinutes: 30,
+            downRate: 0.05,
+            waits: [],
+          };
+        }
+        return {};
+      });
+
+      const { getByTestId, queryByTestId } = renderWithClient(
+        <LiveWaitCockpit
+          experienceId="exp-1"
+          todayWdw="2026-09-24"
+        />,
+      );
+
+      await waitFor(() => {
+        expect(getByTestId('wait-context-now')).toBeTruthy();
+      });
+
+      expect(queryByTestId('wait-context-trip')).toBeNull();
+    });
+
     it('R13.2, R13.6: renders Trip chip when resolvable and requests with Trip date', async () => {
       const { getByTestId } = renderWithClient(
         <LiveWaitCockpit

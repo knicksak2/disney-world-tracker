@@ -15,12 +15,22 @@
  *   - GET 200 returns the visit history payload (R4.1-R4.3)
  *   - GET 401 when unauthenticated
  *   - DELETE 204 on success; 404 log_not_found when the repo reports not deleted (R5.1)
+ *   - GET /me/experiences/visit-summary — `experience-lists` spec addition (R13.1, R13.2):
+ *     401 when unauthenticated; empty/missing `ids` short-circuits to `{}` with no repo call;
+ *     a mix of logged/unlogged/rated/unrated ids is backfilled to a full 1-entry-per-id
+ *     response; duplicate/whitespace ids are deduplicated before reaching the repo; over-cap
+ *     and malformed ids are rejected with `validation_failed` before any repo call.
  */
 
 import Fastify, { type FastifyInstance } from 'fastify';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import type { ExperienceLogDTO, ExperienceVisitHistoryDTO } from '@dwt/shared';
+import type {
+  ExperienceLogDTO,
+  ExperienceVisitHistoryDTO,
+  VisitSummaryResponseDTO,
+} from '@dwt/shared';
+import { VISIT_SUMMARY_MAX_IDS } from '@dwt/shared';
 
 import { registerErrorHandler } from '../../../../errors/handler.js';
 import { AppError } from '../../../../errors/AppError.js';
@@ -32,6 +42,7 @@ import type {
   CreateLogInput,
   DeleteLogResult,
   ExperienceLogRepo,
+  VisitSummary,
 } from '../repo.js';
 
 const USER_ID = '11111111-1111-4111-8111-111111111111';
@@ -46,15 +57,18 @@ const TRIP_ID = '44444444-4444-4444-8444-444444444444';
 interface FakeLogRepo extends ExperienceLogRepo {
   readonly addCalls: CreateLogInput[];
   readonly deleteCalls: { userId: string; experienceId: string; logId: string }[];
+  readonly visitSummaryCalls: { userId: string; experienceIds: readonly string[] }[];
   addResult: ExperienceLogDTO;
   addError: AppError | null;
   historyResult: ExperienceVisitHistoryDTO;
   deleteResult: DeleteLogResult;
+  visitSummaryResult: readonly VisitSummary[];
 }
 
 function makeRepo(): FakeLogRepo {
   const addCalls: CreateLogInput[] = [];
   const deleteCalls: { userId: string; experienceId: string; logId: string }[] = [];
+  const visitSummaryCalls: { userId: string; experienceIds: readonly string[] }[] = [];
   const defaultLog: ExperienceLogDTO = {
     id: LOG_ID,
     userId: USER_ID,
@@ -68,6 +82,7 @@ function makeRepo(): FakeLogRepo {
   return {
     addCalls,
     deleteCalls,
+    visitSummaryCalls,
     addResult: defaultLog,
     addError: null,
     historyResult: {
@@ -76,6 +91,7 @@ function makeRepo(): FakeLogRepo {
       logs: [],
     },
     deleteResult: { deleted: true, completionRemoved: false },
+    visitSummaryResult: [],
     async addLog(input) {
       addCalls.push(input);
       if (this.addError) throw this.addError;
@@ -87,6 +103,10 @@ function makeRepo(): FakeLogRepo {
     async deleteLog(userId, experienceId, logId) {
       deleteCalls.push({ userId, experienceId, logId });
       return this.deleteResult;
+    },
+    async getVisitSummaries(userId, experienceIds) {
+      visitSummaryCalls.push({ userId, experienceIds });
+      return this.visitSummaryResult;
     },
   };
 }
@@ -424,5 +444,112 @@ describe('experienceLogRoutes', () => {
       url: `/me/experiences/${EXPERIENCE_ID}/logs/${LOG_ID}`,
     });
     expect(res.statusCode).toBe(401);
+  });
+
+  // --- GET /me/experiences/visit-summary (batched, experience-lists R13) ----
+
+  describe('GET /me/experiences/visit-summary', () => {
+    it('401 when unauthenticated', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: `/me/experiences/visit-summary?ids=${EXPERIENCE_ID}`,
+      });
+      expect(res.statusCode).toBe(401);
+    });
+
+    it('200 with {} and no repo call when `ids` is missing (R13.2)', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: `/me/experiences/visit-summary`,
+        headers: { 'x-test-user-id': USER_ID },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({});
+      expect(repo.visitSummaryCalls).toHaveLength(0);
+    });
+
+    it('200 with {} and no repo call when `ids` is empty (R13.2)', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: `/me/experiences/visit-summary?ids=`,
+        headers: { 'x-test-user-id': USER_ID },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({});
+      expect(repo.visitSummaryCalls).toHaveLength(0);
+    });
+
+    it('backfills unlogged ids and passes through logged/rated/unrated summaries (R13.1, R13.2)', async () => {
+      const id1 = EXPERIENCE_ID;
+      const id2 = '55555555-5555-4555-8555-555555555555';
+      const id3 = '66666666-6666-4666-8666-666666666666';
+      const id4 = '77777777-7777-4777-8777-777777777777';
+
+      repo.visitSummaryResult = [
+        { experienceId: id1, repeatCount: 3, ratedCount: 2, averageRating: 8.5 },
+        { experienceId: id2, repeatCount: 1, ratedCount: 0, averageRating: null },
+        // id3/id4 intentionally omitted — simulates "never logged".
+      ];
+
+      const res = await app.inject({
+        method: 'GET',
+        url: `/me/experiences/visit-summary?ids=${id1},${id2},${id3},${id4}`,
+        headers: { 'x-test-user-id': USER_ID },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json() as VisitSummaryResponseDTO;
+      expect(Object.keys(body)).toHaveLength(4);
+      expect(body[id1]).toEqual({ repeatCount: 3, ratedCount: 2, averageRating: 8.5 });
+      expect(body[id2]).toEqual({ repeatCount: 1, ratedCount: 0, averageRating: null });
+      expect(body[id3]).toEqual({ repeatCount: 0, ratedCount: 0, averageRating: null });
+      expect(body[id4]).toEqual({ repeatCount: 0, ratedCount: 0, averageRating: null });
+    });
+
+    it('deduplicates whitespace/duplicate ids before calling the repo (R13.2)', async () => {
+      const id1 = EXPERIENCE_ID;
+      const id2 = '55555555-5555-4555-8555-555555555555';
+
+      const res = await app.inject({
+        method: 'GET',
+        url: `/me/experiences/visit-summary?ids=${encodeURIComponent(
+          `${id1}, ${id1},${id1} ,${id2}`,
+        )}`,
+        headers: { 'x-test-user-id': USER_ID },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(repo.visitSummaryCalls).toHaveLength(1);
+      expect(repo.visitSummaryCalls[0]?.experienceIds).toEqual([id1, id2]);
+    });
+
+    it('400 validation_failed when more than VISIT_SUMMARY_MAX_IDS distinct ids are requested, without calling the repo', async () => {
+      const ids = Array.from(
+        { length: VISIT_SUMMARY_MAX_IDS + 1 },
+        (_, i) => `${i.toString(16).padStart(8, '0')}-0000-4000-8000-000000000000`,
+      );
+
+      const res = await app.inject({
+        method: 'GET',
+        url: `/me/experiences/visit-summary?ids=${ids.join(',')}`,
+        headers: { 'x-test-user-id': USER_ID },
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error.code).toBe('validation_failed');
+      expect(repo.visitSummaryCalls).toHaveLength(0);
+    });
+
+    it('400 validation_failed when an id in `ids` is not a valid UUID', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: `/me/experiences/visit-summary?ids=not-a-uuid`,
+        headers: { 'x-test-user-id': USER_ID },
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error.code).toBe('validation_failed');
+      expect(repo.visitSummaryCalls).toHaveLength(0);
+    });
   });
 });

@@ -17,7 +17,8 @@
 //         Reservations, and Trip Activity.
 //       • Celebratory Wrap-Up Hero (past trips) / Progress Card (active trips)
 //         navigating to TripSummaryScreen (`trip-detail-section-summary`).
-//       • Attached Food Lists section with detach protection.
+//       • Attached Food Lists and Attached Experience Lists sections, each with
+//         detach protection.
 //
 // The concrete section screens arrive in later 17.x tasks; this hub wires
 // the navigation controls to their routes (already declared on
@@ -60,6 +61,7 @@ import {
 } from '../../theme/components';
 import { formatParkTime } from '../catalog/live/parkTime';
 import AttachedFoodListsSection from './AttachedFoodListsSection';
+import AttachedExperienceListsSection from './AttachedExperienceListsSection';
 import { tripDetailKeys } from './tripDetailQueryKeys';
 import { tripPlannedListKeys } from './TripPlannedListScreen';
 import { tripFeedKeys } from './TripFeedScreen';
@@ -897,6 +899,21 @@ export default function TripDetailScreen({
           navigation={navigation}
           onOpenFoodList={(foodListId) => {
             (navigation as any).navigate('FoodListDetail', { foodListId });
+          }}
+        />
+
+        {/* Attached Experience Lists section (R14, Task 19.1) */}
+        <AttachedExperienceListsSection
+          tripId={tripId}
+          experienceLists={trip.experienceLists}
+          isOrganizer={isOrganizer}
+          callerId={callerId}
+          callerDisplayName={
+            members.find((m) => m.userId === callerId)?.displayName
+          }
+          navigation={navigation}
+          onOpenExperienceList={(experienceListId) => {
+            (navigation as any).navigate('ExperienceListDetail', { experienceListId });
           }}
         />
 

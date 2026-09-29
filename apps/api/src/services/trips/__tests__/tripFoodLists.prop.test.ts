@@ -132,6 +132,7 @@ describe('Trip Food Lists — Property 27', { timeout: 120_000 }, () => {
     applyMigration(db, '0041_food_lists.sql');
     applyMigration(db, '0042_trip_food_lists.sql');
     applyMigration(db, '0047_food_list_checklist.sql');
+    applyMigration(db, '0052_food_list_pinning.sql');
 
     const rawPool = db.adapters.createPg().Pool;
     pool = withForUpdateCompat(new rawPool() as unknown as DbPool);

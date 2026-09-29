@@ -18,6 +18,7 @@ import type { FoodListCollectionDTO, FoodListDTO } from '@dwt/shared';
 import { apiRequest } from '../../api/client';
 import { theme } from '../../theme/theme';
 import { Badge, Card, GradientHeader, ScreenContainer } from '../../theme/components';
+import CreateFoodListModal from './CreateFoodListModal';
 
 export default function MyFoodListsScreen(): JSX.Element {
   const navigation = useNavigation<NativeStackNavigationProp<any>>();
@@ -27,11 +28,6 @@ export default function MyFoodListsScreen(): JSX.Element {
 
   // Create List Modal State
   const [createModalVisible, setCreateModalVisible] = useState(false);
-  const [newListName, setNewListName] = useState('');
-  const [newListVisibility, setNewListVisibility] = useState<'private' | 'public'>('private');
-  const [newListIsChecklist, setNewListIsChecklist] = useState(false);
-  const [isCreating, setIsCreating] = useState(false);
-  const [createError, setCreateError] = useState<string | null>(null);
 
   // Rename List Modal State
   const [renameTarget, setRenameTarget] = useState<FoodListDTO | null>(null);
@@ -48,30 +44,20 @@ export default function MyFoodListsScreen(): JSX.Element {
   const ownedLists = collection?.owned ?? [];
   const savedLists = collection?.saved ?? [];
 
-  async function handleCreateList(): Promise<void> {
-    const trimmed = newListName.trim();
-    if (!trimmed || isCreating) return;
-    setIsCreating(true);
-    setCreateError(null);
+  async function invalidateOwnedFoodLists(): Promise<void> {
+    await queryClient.invalidateQueries({ queryKey: ['food-lists-collection'] });
+    await queryClient.invalidateQueries({ queryKey: ['my-owned-food-lists'] });
+  }
+
+  async function handleTogglePinned(list: FoodListDTO): Promise<void> {
     try {
-      await apiRequest('POST', '/me/food-lists', {
-        name: trimmed,
-        visibility: newListVisibility,
-        isChecklist: newListIsChecklist,
+      await apiRequest('PATCH', `/me/food-lists/${encodeURIComponent(list.id)}`, {
+        pinned: list.pinnedAt === null,
       });
-      setNewListName('');
-      setNewListVisibility('private');
-      setNewListIsChecklist(false);
-      setCreateError(null);
-      setCreateModalVisible(false);
-      await queryClient.invalidateQueries({ queryKey: ['food-lists-collection'] });
-      await queryClient.invalidateQueries({ queryKey: ['my-owned-food-lists'] });
-    } catch (err) {
-      setCreateError(
-        err instanceof Error ? err.message : 'Failed to create list. Please try again.',
-      );
-    } finally {
-      setIsCreating(false);
+      await invalidateOwnedFoodLists();
+      await queryClient.invalidateQueries({ queryKey: ['food-list-detail', list.id] });
+    } catch {
+      // Ignore
     }
   }
 
@@ -109,8 +95,7 @@ export default function MyFoodListsScreen(): JSX.Element {
   async function handleDeleteList(listId: string): Promise<void> {
     try {
       await apiRequest('DELETE', `/me/food-lists/${encodeURIComponent(listId)}`);
-      await queryClient.invalidateQueries({ queryKey: ['food-lists-collection'] });
-      await queryClient.invalidateQueries({ queryKey: ['my-owned-food-lists'] });
+      await invalidateOwnedFoodLists();
     } catch {
       // Ignore
     }
@@ -156,6 +141,23 @@ export default function MyFoodListsScreen(): JSX.Element {
         {/* Card Controls */}
         <View style={styles.cardControls}>
           <Pressable
+            onPress={() => void handleTogglePinned(item)}
+            style={styles.controlBtn}
+            accessibilityRole="button"
+            accessibilityLabel={
+              item.pinnedAt !== null ? `Unpin ${item.name}` : `Pin ${item.name}`
+            }
+            testID={`my-food-lists-pin-btn-${item.id}`}
+          >
+            <Ionicons
+              name={item.pinnedAt !== null ? 'pin' : 'pin-outline'}
+              size={16}
+              color={item.pinnedAt !== null ? theme.color.primary : theme.color.textSecondary}
+            />
+            <Text style={styles.controlBtnText}>{item.pinnedAt !== null ? 'Pinned' : 'Pin'}</Text>
+          </Pressable>
+
+          <Pressable
             onPress={() => {
               setRenameTarget(item);
               setRenameValue(item.name);
@@ -199,7 +201,7 @@ export default function MyFoodListsScreen(): JSX.Element {
         </View>
       </Card>
     ),
-    [navigation, handleToggleVisibility, handleDeleteList],
+    [navigation, handleTogglePinned, handleToggleVisibility, handleDeleteList],
   );
 
   // Same stable-identity fix as `renderOwnedList` above, for the saved-lists
@@ -308,13 +310,7 @@ export default function MyFoodListsScreen(): JSX.Element {
         <View style={styles.tabContent}>
           {/* Create List Button */}
           <Pressable
-            onPress={() => {
-              setNewListName('');
-              setNewListVisibility('private');
-              setNewListIsChecklist(false);
-              setCreateError(null);
-              setCreateModalVisible(true);
-            }}
+            onPress={() => setCreateModalVisible(true)}
             style={styles.createButton}
             accessibilityRole="button"
             accessibilityLabel="Create a new food list"
@@ -358,153 +354,15 @@ export default function MyFoodListsScreen(): JSX.Element {
         </View>
       )}
 
-      {/* Create List Modal */}
-      <Modal
+      {/* Create List Modal (extracted; shared with CollectionScreen.tsx's "+ New" action) */}
+      <CreateFoodListModal
         visible={createModalVisible}
-        animationType="slide"
-        transparent
-        onRequestClose={() => {
+        onClose={() => setCreateModalVisible(false)}
+        onCreated={() => {
           setCreateModalVisible(false);
-          setCreateError(null);
+          void invalidateOwnedFoodLists();
         }}
-        testID="create-food-list-modal"
-      >
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalContainer}>
-            <Text style={styles.modalTitle}>Create Food List</Text>
-            <TextInput
-              value={newListName}
-              onChangeText={(text) => {
-                setNewListName(text);
-                if (createError) setCreateError(null);
-              }}
-              placeholder="e.g. Best Epcot Snacks"
-              placeholderTextColor={theme.color.textSecondary}
-              style={styles.modalInput}
-              autoFocus
-              testID="new-food-list-name-input"
-            />
-
-            <View style={styles.visibilityToggleRow}>
-              <Text style={styles.visibilityLabel}>Visibility:</Text>
-              <View style={styles.visToggleGroup}>
-                <Pressable
-                  onPress={() => setNewListVisibility('private')}
-                  style={[
-                    styles.visPill,
-                    newListVisibility === 'private' && styles.visPillActive,
-                  ]}
-                  testID="new-food-list-visibility-private"
-                >
-                  <Text
-                    style={[
-                      styles.visPillText,
-                      newListVisibility === 'private' && styles.visPillTextActive,
-                    ]}
-                  >
-                    Private
-                  </Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => setNewListVisibility('public')}
-                  style={[
-                    styles.visPill,
-                    newListVisibility === 'public' && styles.visPillActive,
-                  ]}
-                  testID="new-food-list-visibility-public"
-                >
-                  <Text
-                    style={[
-                      styles.visPillText,
-                      newListVisibility === 'public' && styles.visPillTextActive,
-                    ]}
-                  >
-                    Public
-                  </Text>
-                </Pressable>
-              </View>
-            </View>
-
-            <View style={styles.visibilityToggleRow}>
-              <Text style={styles.visibilityLabel}>Track as a checklist:</Text>
-              <View style={styles.visToggleGroup}>
-                <Pressable
-                  onPress={() => setNewListIsChecklist(false)}
-                  style={[
-                    styles.visPill,
-                    !newListIsChecklist && styles.visPillActive,
-                  ]}
-                  accessibilityRole="button"
-                  accessibilityLabel="Do not track as a checklist"
-                  testID="new-food-list-checklist-off"
-                >
-                  <Text
-                    style={[
-                      styles.visPillText,
-                      !newListIsChecklist && styles.visPillTextActive,
-                    ]}
-                  >
-                    No
-                  </Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => setNewListIsChecklist(true)}
-                  style={[
-                    styles.visPill,
-                    newListIsChecklist && styles.visPillActive,
-                  ]}
-                  accessibilityRole="button"
-                  accessibilityLabel="Track as a checklist"
-                  testID="new-food-list-checklist-toggle"
-                >
-                  <Text
-                    style={[
-                      styles.visPillText,
-                      newListIsChecklist && styles.visPillTextActive,
-                    ]}
-                  >
-                    Yes
-                  </Text>
-                </Pressable>
-              </View>
-            </View>
-
-            {createError ? (
-              <Text style={styles.modalErrorText} testID="create-food-list-error">
-                {createError}
-              </Text>
-            ) : null}
-
-            <View style={styles.modalActions}>
-              <Pressable
-                onPress={() => {
-                  setCreateModalVisible(false);
-                  setCreateError(null);
-                }}
-                style={styles.modalCancelBtn}
-                testID="cancel-create-food-list-btn"
-              >
-                <Text style={styles.modalCancelText}>Cancel</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => void handleCreateList()}
-                disabled={!newListName.trim() || isCreating}
-                style={[
-                  styles.modalSubmitBtn,
-                  (!newListName.trim() || isCreating) && styles.modalSubmitBtnDisabled,
-                ]}
-                testID="submit-create-food-list-btn"
-              >
-                {isCreating ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <Text style={styles.modalSubmitText}>Create</Text>
-                )}
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      />
 
       {/* Rename List Modal */}
       <Modal
@@ -754,38 +612,6 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     fontSize: 15,
     color: theme.color.textPrimary,
-  },
-  visibilityToggleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  visibilityLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: theme.color.textPrimary,
-  },
-  visToggleGroup: {
-    flexDirection: 'row',
-    backgroundColor: theme.color.surfaceAlt,
-    borderRadius: theme.radius.sm,
-    padding: 2,
-  },
-  visPill: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: theme.radius.sm - 2,
-  },
-  visPillActive: {
-    backgroundColor: theme.color.primary,
-  },
-  visPillText: {
-    fontSize: 11,
-    color: theme.color.textSecondary,
-    fontWeight: '600',
-  },
-  visPillTextActive: {
-    color: '#fff',
   },
   modalActions: {
     flexDirection: 'row',

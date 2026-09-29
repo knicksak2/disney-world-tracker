@@ -58,6 +58,7 @@ const sampleOwnedLists: readonly FoodListDTO[] = [
     likeCount: 5,
     createdAt: '2026-09-01T00:00:00Z',
     updatedAt: '2026-09-01T00:00:00Z',
+    pinnedAt: null,
   },
   {
     id: 'list-2',
@@ -70,6 +71,7 @@ const sampleOwnedLists: readonly FoodListDTO[] = [
     likeCount: 0,
     createdAt: '2026-09-02T00:00:00Z',
     updatedAt: '2026-09-02T00:00:00Z',
+    pinnedAt: null,
   },
 ];
 
@@ -84,6 +86,7 @@ const sampleList1Detail: FoodListDetailDTO = {
   likeCount: 5,
   createdAt: '2026-09-01T00:00:00Z',
   updatedAt: '2026-09-01T00:00:00Z',
+  pinnedAt: null,
   liked: false,
   saved: false,
   version: 1,
@@ -115,6 +118,7 @@ const sampleList2Detail: FoodListDetailDTO = {
   likeCount: 0,
   createdAt: '2026-09-02T00:00:00Z',
   updatedAt: '2026-09-02T00:00:00Z',
+  pinnedAt: null,
   liked: false,
   saved: false,
   version: 1,
@@ -226,6 +230,7 @@ describe('AddToListsSheet', () => {
             likeCount: 0,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
+            pinnedAt: null,
           };
         }
         return sampleOwnedLists;

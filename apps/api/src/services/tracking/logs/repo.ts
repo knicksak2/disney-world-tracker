@@ -61,6 +61,21 @@ export interface DeleteLogResult {
 }
 
 /**
+ * Batched per-experience visit projection for one User.
+ *
+ * `experience-lists` spec addition (Requirement 13) — cross-service, added here rather than
+ * duplicating an `experience_logs` query in that feature's own service. See design.md's "Why
+ * Visit_Summary lives in `tracking/logs`" section.
+ */
+export interface VisitSummary {
+  readonly experienceId: string;
+  readonly repeatCount: number;
+  readonly ratedCount: number;
+  /** ROUND(AVG(rating), 1) over rated logs only; `null` when ratedCount is 0. */
+  readonly averageRating: number | null;
+}
+
+/**
  * `RatingChanged` emitter port, structurally identical to the one the rating
  * repo consumes. The logs repo publishes on it after a rated log commits so
  * the community aggregate is updated exactly as a direct rating write would.
@@ -88,6 +103,10 @@ export interface ExperienceLogRepo {
     experienceId: string,
     logId: string,
   ): Promise<DeleteLogResult>;
+  getVisitSummaries(
+    userId: string,
+    experienceIds: readonly string[],
+  ): Promise<readonly VisitSummary[]>;
 }
 
 /** Build an `ExperienceLogRepo` bound to the supplied pool and emitter. */
@@ -100,6 +119,8 @@ export function createExperienceLogRepo(
       getVisitHistory(opts.pool, userId, experienceId),
     deleteLog: (userId, experienceId, logId) =>
       deleteLog(opts.pool, userId, experienceId, logId),
+    getVisitSummaries: (userId, experienceIds) =>
+      getVisitSummaries(opts.pool, userId, experienceIds),
   };
 }
 
@@ -150,6 +171,22 @@ function toIsoTimestamp(value: Date | string): string {
   // `pg` returns a parsed Date for TIMESTAMPTZ by default; the string branch
   // is defensive for drivers configured to leave it as text.
   return new Date(value).toISOString();
+}
+
+interface VisitSummaryRow {
+  experience_id: string;
+  repeat_count: number;
+  rated_count: number;
+  average_rating: number | string | null;
+}
+
+function rowToVisitSummary(row: VisitSummaryRow): VisitSummary {
+  return {
+    experienceId: row.experience_id,
+    repeatCount: row.repeat_count,
+    ratedCount: row.rated_count,
+    averageRating: row.average_rating === null ? null : Number(row.average_rating),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -296,6 +333,43 @@ async function getVisitHistory(
     repeatCount: logs.length,
     logs,
   };
+}
+
+// ---------------------------------------------------------------------------
+// getVisitSummaries
+// ---------------------------------------------------------------------------
+
+/**
+ * Batched `{ repeatCount, ratedCount, averageRating }` projection for a set of experiences,
+ * scoped to one User via `user_id = $1` — never reads or leaks another User's logs (Property
+ * 12). `experience-lists` spec addition (Requirement 13); see the `VisitSummary` doc comment
+ * for why this lives here rather than in that feature's own service.
+ *
+ * One grouped query for every requested id. An id with zero logs is simply absent from the
+ * returned array (no `GROUP BY` row) — the caller (the `tracking/logs` route) is responsible
+ * for backfilling `{ repeatCount: 0, ratedCount: 0, averageRating: null }` for any requested id
+ * missing from this result, per design.md.
+ */
+async function getVisitSummaries(
+  pool: DbPool,
+  userId: string,
+  experienceIds: readonly string[],
+): Promise<readonly VisitSummary[]> {
+  if (experienceIds.length === 0) {
+    return [];
+  }
+
+  const result = await pool.query<VisitSummaryRow>(
+    `SELECT experience_id,
+            COUNT(*)::int AS repeat_count,
+            COUNT(*) FILTER (WHERE rating IS NOT NULL)::int AS rated_count,
+            ROUND(AVG(rating) FILTER (WHERE rating IS NOT NULL)::numeric, 1)::float AS average_rating
+       FROM experience_logs
+      WHERE user_id = $1 AND experience_id = ANY($2::uuid[])
+      GROUP BY experience_id`,
+    [userId, experienceIds],
+  );
+  return result.rows.map(rowToVisitSummary);
 }
 
 // ---------------------------------------------------------------------------

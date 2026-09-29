@@ -93,6 +93,16 @@ This feature builds on top of the existing `trips`, `pin-collection`, `stats-exp
 
 **User Story:** As a guest, I want my pins, food history, and stats in one place separate from my account settings, so that Profile is no longer a catch-all.
 
+**Amendment (superseded in part by `experience-lists` Requirement 12's revision):** the "Food &
+Lists" segment (R6.6, R6.8) is split into two separate segments — "Food" (logging and food-history
+content only) and "Lists" (both Food_Lists and Experience_Lists, presented as peers). This split
+exists because Experience_Lists are not food-related, and sharing a segment named "Food & Lists"
+with them read as an unrelated capability tacked onto a food-specific screen rather than a
+first-class part of the hub. The acceptance criteria below are left unchanged as this
+requirement's historical record; see the new Requirement 6.6a–6.8b below for the current
+four-segment structure, and `experience-lists` Requirement 12 for the Lists segment's own entry
+point behavior.
+
 #### Acceptance Criteria
 
 1. THE Collection tab SHALL present three sub-sections reachable from its landing screen: Pins (the existing PinBoardScreen and PinShowcaseScreen, with a claimable-count indicator), Food (the existing MyFoodHistoryScreen and MyFoodListsScreen), and Stats (the existing StatsStack Overview hub).
@@ -101,8 +111,49 @@ This feature builds on top of the existing `trips`, `pin-collection`, `stats-exp
 4. THE Collection tab's landing screen SHALL present the same claimable-Pin count used by the existing Attention_Badge composition unchanged.
 5. THE Collection tab SHALL present the display label "Vault" in the bottom tab bar, displaying an unread badge indicating the claimable-pin count WHERE claimable pins exist.
 6. THE Collection/Vault landing screen SHALL present a three-way segmented pill control — "Pins & Showcase", "Food & Lists", and "Park Stats" — defaulting to "Pins & Showcase".
+6a. (Supersedes Requirement 6.6 per this Requirement's amendment above.) THE Collection/Vault
+   landing screen SHALL present a four-way segmented pill control — "Pins", "Food", "Lists", and
+   "Park Stats" — defaulting to "Pins". "Pins" carries the pre-existing claimable-pin unread
+   badge, unchanged. "Lists" carries no count badge — a list count is not actionable/urgent the
+   way a claimable pin is, so no badge is warranted there.
 7. WHEN "Pins & Showcase" is active, THE screen SHALL present: (a) a gold claim banner with a direct claim action navigating to PinBoardScreen with `celebratePinIds` WHERE claimable pins exist; (b) a display-mode corkboard canvas rendering the user's placed pins scaled from fractional coordinates on cork texture, with a "Customize ✏️" action navigating to PinShowcaseScreen and pin taps opening PinDetailModal; (c) a collection progress card with overall collected percentage and tier breakdown badges, with a direct action navigating to PinBoardScreen.
 8. WHEN "Food & Lists" is active, THE screen SHALL present: (a) logged snack count and saved list count summary metrics; (b) the user's active food list with an action navigating to list detail or discovery; (c) a recent treats preview displaying recently logged items with ratings; (d) an action navigating to MyFoodHistoryScreen.
+8a. (Supersedes Requirement 6.8 per this Requirement's amendment above.) WHEN "Food" is active,
+    THE screen SHALL present: (a) a logged-snacks-count summary metric (no list-count metric — list
+    content moved to the "Lists" segment); (b) a "Log a food item" primary action opening the
+    existing restaurant-then-dish picker flow (`ExperiencePicker` scoped to dining, then
+    `FoodItemPickerModal`, then `LogFoodItemModal` — the same flow `MagicFab`'s "Log Snack" quick
+    action already uses, reused here rather than duplicated) so a User can log food without
+    leaving this segment; (c) a recent treats preview displaying recently logged items with
+    ratings; (d) the Classic Treats Checklist card; (e) an action navigating to
+    `MyFoodHistoryScreen`.
+8b. WHEN "Lists" is active, THE screen SHALL present the User's "My Food Lists" and "My Experience
+    Lists" cards as peers (neither visually subordinate to the other), each with its own active-list
+    preview and a "+ New / Discover" action, per `experience-lists` Requirement 12's entry-point
+    behavior for the Experience_Lists card and the pre-existing behavior for the Food_Lists card.
+
+**Amendment — Multi-Row Preview, Pin-Aware Ordering, Deep Link, and Inline Create:** the single
+active-list preview row named in 8b read as an arbitrary pick to Users with more than one list —
+it silently selected index 0 of the owned list array with no visible reason, and tapping it (or
+"+ New / Discover") navigated to the full list-management screen rather than the specific list
+itself. 8c below supersedes 8b's single-row/single-destination behavior for both the "My Food
+Lists" and "My Experience Lists" cards; 8b's peer-cards framing and "+ New / Discover" as the
+Discover-only action are otherwise unchanged.
+
+8c. (Supersedes 8b's single-preview-row and single-destination behavior.) WHEN "Lists" is active,
+    THE "My Food Lists" and "My Experience Lists" cards SHALL each render up to 3 of the User's
+    owned lists of that type as individual rows, ordered pinned-first (per `food-lists` Requirement
+    14.4 / `experience-lists` Requirement 15.4) then by `updatedAt DESC` among the rest; WHERE the
+    User owns more than 3 lists of that type, THE card SHALL render a fourth "View all (N) →" row
+    (`N` = total owned count) navigating to `MyFoodListsScreen`/`MyExperienceListsScreen`; WHERE
+    the User owns 3 or fewer, no such row is rendered. Each list row SHALL navigate directly to
+    that specific list's `FoodListDetail`/`ExperienceListDetail` screen (not to the management
+    screen) and SHALL render a pin/unpin toggle control per `food-lists` Requirement 14.5 /
+    `experience-lists` Requirement 15.5. Each card's header SHALL additionally present a "+ New"
+    action, distinct from "Discover", that opens the same create-list modal `MyFoodListsScreen`/
+    `MyExperienceListsScreen` already uses, without navigating away from the Collection screen;
+    "Discover" continues to navigate to `FoodListDiscoveryScreen`/`ExperienceListDiscoveryScreen`
+    unchanged.
 9. WHEN "Park Stats" is active, THE screen SHALL present overall completion and per-park coverage progress bars derived from `/me/stats`, with an action navigating to the StatsStack overview.
 
 ### Requirement 7: You & Crew (Identity, Friends, Settings)

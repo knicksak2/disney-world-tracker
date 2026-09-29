@@ -77,6 +77,11 @@ function makeFakeFoodListRepo() {
       userId: string;
       isChecklist: boolean;
     }[],
+    setPinnedCalls: [] as {
+      listId: string;
+      userId: string;
+      pinned: boolean;
+    }[],
     deleteListCalls: [] as { listId: string; userId: string }[],
     listOwnedCalls: [] as string[],
     getListDetailCalls: [] as { listId: string; userId: string }[],
@@ -86,6 +91,7 @@ function makeFakeFoodListRepo() {
     renameListError: null as Error | null,
     updateVisibilityError: null as Error | null,
     setChecklistModeError: null as Error | null,
+    setPinnedError: null as Error | null,
     deleteListError: null as Error | null,
     getListDetailError: null as Error | null,
     discoverError: null as Error | null,
@@ -101,6 +107,7 @@ function makeFakeFoodListRepo() {
       itemCount: 0,
       createdAt: '2026-06-15T12:00:00.000Z',
       updatedAt: '2026-06-15T12:00:00.000Z',
+      pinnedAt: null,
     } satisfies FoodListDTO,
 
     async createList(
@@ -147,6 +154,16 @@ function makeFakeFoodListRepo() {
       this.setChecklistModeCalls.push({ listId, userId, isChecklist });
       if (this.setChecklistModeError) throw this.setChecklistModeError;
       return { ...this.sampleList, id: listId, isChecklist };
+    },
+
+    async setPinned(listId: string, userId: string, pinned: boolean): Promise<FoodListDTO> {
+      this.setPinnedCalls.push({ listId, userId, pinned });
+      if (this.setPinnedError) throw this.setPinnedError;
+      return {
+        ...this.sampleList,
+        id: listId,
+        pinnedAt: pinned ? '2026-09-20T08:00:00.000Z' : null,
+      };
     },
 
     async findListById(
@@ -998,6 +1015,66 @@ describe('Food Lists routes integration', () => {
       expect('gotten' in rawJson.items[0]).toBe(false);
 
       fakeRepo.getListDetail = origGetListDetail;
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // List Pinning (Feature: list-pinning)
+  // -------------------------------------------------------------------------
+
+  describe('List Pinning', () => {
+    it('PATCH /me/food-lists/:id with pinned: true calls setPinned and returns pinnedAt set', async () => {
+      const res = await app.inject({
+        method: 'PATCH',
+        url: `/me/food-lists/${LIST_ID}`,
+        headers: { 'x-test-user-id': USER_ID },
+        payload: { pinned: true },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(fakeRepo.setPinnedCalls).toEqual([
+        { listId: LIST_ID, userId: USER_ID, pinned: true },
+      ]);
+      const list = res.json() as FoodListDTO;
+      expect(list.pinnedAt).not.toBeNull();
+    });
+
+    it('PATCH /me/food-lists/:id with pinned: false calls setPinned and returns pinnedAt null', async () => {
+      const res = await app.inject({
+        method: 'PATCH',
+        url: `/me/food-lists/${LIST_ID}`,
+        headers: { 'x-test-user-id': USER_ID },
+        payload: { pinned: false },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(fakeRepo.setPinnedCalls).toEqual([
+        { listId: LIST_ID, userId: USER_ID, pinned: false },
+      ]);
+      const list = res.json() as FoodListDTO;
+      expect(list.pinnedAt).toBeNull();
+    });
+
+    it('rejects non-boolean pinned with 400 validation_failed', async () => {
+      const res = await app.inject({
+        method: 'PATCH',
+        url: `/me/food-lists/${LIST_ID}`,
+        headers: { 'x-test-user-id': USER_ID },
+        payload: { pinned: 'yes' },
+      });
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error.code).toBe('validation_failed');
+      expect(fakeRepo.setPinnedCalls).toHaveLength(0);
+    });
+
+    it('propagates food_list_not_found when setPinned rejects a non-owner', async () => {
+      fakeRepo.setPinnedError = new AppError('food_list_not_found', 'Food list not found');
+      const res = await app.inject({
+        method: 'PATCH',
+        url: `/me/food-lists/${LIST_ID}`,
+        headers: { 'x-test-user-id': FRIEND_ID },
+        payload: { pinned: true },
+      });
+      expect(res.statusCode).toBe(404);
+      expect(res.json().error.code).toBe('food_list_not_found');
     });
   });
 });

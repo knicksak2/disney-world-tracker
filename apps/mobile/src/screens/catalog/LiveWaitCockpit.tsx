@@ -61,7 +61,24 @@ export default function LiveWaitCockpit({
     enabled: propActiveTripRange === undefined,
   });
 
-  const activeTrip = tripsData?.trips?.[0];
+  const activeTrip = React.useMemo(() => {
+    if (!tripsData) return undefined;
+    if (Array.isArray(tripsData)) {
+      const activeGroup = tripsData.find((g: any) => g.status === 'active');
+      const upcomingGroup = tripsData.find((g: any) => g.status === 'upcoming');
+      return activeGroup?.trips?.[0] ?? upcomingGroup?.trips?.[0] ?? undefined;
+    }
+    const trips = tripsData?.trips;
+    if (Array.isArray(trips)) {
+      return (
+        trips.find((t: any) => t.status === 'active') ??
+        trips.find((t: any) => t.status === 'upcoming') ??
+        undefined
+      );
+    }
+    return undefined;
+  }, [tripsData]);
+
   const activeTripRange =
     propActiveTripRange !== undefined
       ? propActiveTripRange

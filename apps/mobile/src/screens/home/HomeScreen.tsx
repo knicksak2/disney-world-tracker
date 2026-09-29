@@ -75,6 +75,7 @@ import LogVisitModal from '../catalog/LogVisitModal';
 import FoodItemPickerModal from '../catalog/FoodItemPickerModal';
 import LogFoodItemModal from '../catalog/LogFoodItemModal';
 import ActionDock from './ActionDock';
+import ExplorationPromptCard from './ExplorationPromptCard';
 import ParkWaitPulse from './ParkWaitPulse';
 import UpcomingTripHero from './UpcomingTripHero';
 import { buildOperatingContextSubtitle } from './operatingContext';
@@ -164,6 +165,11 @@ export default function HomeScreen({ navigation }: Props): JSX.Element {
 
   const activeGroup = tripsQuery.data?.find((g) => g.status === 'active');
   const activeTrip = activeGroup?.trips?.[0];
+  const upcomingGroup = tripsQuery.data?.find((g) => g.status === 'upcoming');
+  const upcomingTrips = upcomingGroup?.trips ?? [];
+  const hasUpcomingTrip = upcomingTrips.length > 0;
+  const hasActiveTrip = Boolean(activeTrip);
+  const showExplorationPrompt = tripsQuery.isSuccess && !hasActiveTrip && !hasUpcomingTrip;
 
   // Active trip planned items query for deriving today's park
   const activePlannedItemsQuery = useQuery<readonly PlannedItemDTO[]>({
@@ -344,14 +350,20 @@ export default function HomeScreen({ navigation }: Props): JSX.Element {
         }
         showsVerticalScrollIndicator={false}
       >
-        {/* 2. Vacation Context: Active Vacation or Upcoming Countdown Hero */}
+        {/* 2. Vacation Context: Active Vacation, Upcoming Countdown Hero, or Exploration Prompt */}
         <ActiveTripShortcut />
         <UpcomingTripHero />
+        {showExplorationPrompt && (
+          <ExplorationPromptCard
+            onPress={() => navigation.navigate('Trips' as any)}
+          />
+        )}
 
         {/* 3. Action Dock */}
         <ActionDock
           isActiveVacation={Boolean(activeTrip)}
           dayNumber={currentDay}
+          style={!hasActiveTrip && !hasUpcomingTrip && !showExplorationPrompt ? styles.actionDockTopSpacing : undefined}
           onOpenSchedule={() => {
             if (activeTrip?.id) {
               navigateToTripSchedule({ tripId: activeTrip.id });
@@ -677,6 +689,9 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingBottom: 110,
+  },
+  actionDockTopSpacing: {
+    marginTop: 12,
   },
   sectionContainer: {
     paddingHorizontal: theme.spacing.md,

@@ -110,6 +110,10 @@ import {
   type FoodListRoutesOptions,
 } from './services/foodLists/routes.js';
 import {
+  experienceListRoutes,
+  type ExperienceListRoutesOptions,
+} from './services/experienceLists/routes.js';
+import {
   parkLiveRoutes,
   type ParkLiveRoutesOptions,
 } from './services/live/parkLiveRoutes.js';
@@ -236,6 +240,11 @@ export interface BuildServerServices {
    * Wires list CRUD, items, shares, discovery, affinity, and collection.
    */
   readonly foodLists?: FoodListRoutesOptions;
+  /**
+   * Experience_Lists_Service route options (Feature: experience-lists).
+   * Wires list CRUD, items, shares, discovery, affinity, and collection.
+   */
+  readonly experienceLists?: ExperienceListRoutesOptions;
   /**
    * Park-wide Live Waits routes (navigation-redesign).
    * Wires `GET /parks/:park/live` behind session authentication.
@@ -534,6 +543,10 @@ export function buildServer(
 
   if (services.foodLists !== undefined) {
     void app.register(foodListRoutes(services.foodLists));
+  }
+
+  if (services.experienceLists !== undefined) {
+    void app.register(experienceListRoutes(services.experienceLists));
   }
 
   if (services.parkLive !== undefined) {

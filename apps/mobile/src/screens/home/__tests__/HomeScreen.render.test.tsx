@@ -183,6 +183,52 @@ describe('HomeScreen (Requirements 2.1–2.5)', () => {
     navigateToTripDetailSpy.mockRestore();
   });
 
+  it('renders the exploration prompt card when no active or upcoming trips exist and navigates to Trips on tap', async () => {
+    mockApiRequest.mockImplementation(async (_method: string, path: string) => {
+      if (path === '/me') {
+        return {
+          user: { id: 'user-1', email: 'nicholas@example.com' },
+          profile: { displayName: 'Nicholas K', avatarPreset: null },
+        };
+      }
+      if (path === '/me/trips') {
+        return [];
+      }
+      if (path === '/home/highest-rated') {
+        return { entries: [] };
+      }
+      if (path === '/catalog') {
+        return { experiences: [] };
+      }
+      if (path.startsWith('/parks/')) {
+        return { park: 'Magic Kingdom', entries: [], retrievedAt: new Date().toISOString(), stale: false };
+      }
+      if (path.startsWith('/crowd-calendar')) {
+        return { days: [] };
+      }
+      if (path === '/weather/current') {
+        return { current: null };
+      }
+      return {};
+    });
+
+    renderHome();
+
+    const promptCard = await screen.findByTestId('home-exploration-prompt-card');
+    expect(promptCard).toBeTruthy();
+    expect(screen.getByText('PLAN A VACATION')).toBeTruthy();
+    expect(screen.getByText('Plan Your Next Adventure')).toBeTruthy();
+    expect(
+      screen.getByText('Explore parks, build itineraries & invite crew'),
+    ).toBeTruthy();
+
+    expect(screen.queryByTestId('home-upcoming-trip-card')).toBeNull();
+    expect(screen.queryByTestId('active-trip-shortcut')).toBeNull();
+
+    fireEvent.press(promptCard);
+    expect(mockNavigate).toHaveBeenCalledWith('Trips');
+  });
+
   it('renders the 4 action dock tiles with badge and handles Live Waits tap', async () => {
     const navigateToLiveWaitsSpy = jest
       .spyOn(navigationRefModule, 'navigateToLiveWaits')

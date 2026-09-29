@@ -45,6 +45,10 @@
  *     Trip_Invite so a tap can open the accept/decline view (Trips R6.6, R6.7).
  *   - Rode-with variant   — `{ rodeWithTagId, tripLogEntryId }` deep-links to
  *     the pending Rode_With_Tag confirm view (Trips R10.8).
+ *   - Food-list variant   — `{ foodListId }` deep-links to the shared/role-
+ *     changed Food_List (food-lists R8.1, R8.3).
+ *   - Experience-list variant — `{ experienceListId }` deep-links to the
+ *     shared/role-changed Experience_List (experience-lists R8.1, R8.3).
  */
 export type ExpoPushData =
   | {
@@ -68,6 +72,13 @@ export type ExpoPushData =
   | {
       /** The Food_List's id, used for notification-tap deep-linking (food-lists R8.1, R8.3). */
       readonly foodListId: string;
+    }
+  | {
+      /**
+       * The Experience_List's id, used for notification-tap deep-linking
+       * (experience-lists R8.1, R8.3).
+       */
+      readonly experienceListId: string;
     };
 
 /**

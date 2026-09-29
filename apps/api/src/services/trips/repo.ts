@@ -58,6 +58,7 @@ import type {
   TripMemberDTO,
   TripPendingInviteDTO,
   TripFoodListDTO,
+  TripExperienceListDTO,
   TripReactionSummary,
   TripReactionValue,
   TripResortDTO,
@@ -130,6 +131,23 @@ export interface ResolvedFoodList {
   readonly ownerDisplayName: string;
 }
 
+/**
+ * Structurally identical to {@link ResolvedFoodList}, resolved via the
+ * injected `resolveExperienceList` port for Experience_List attachment
+ * eligibility checks and read projections (R14.1, R14.8). Cross-spec: this
+ * mirrors `attachFoodList`/`detachFoodList`'s pattern for the new Trip
+ * Attachment Bridge introduced by the `experience-lists` spec (Requirement
+ * 14) onto this already-shipped `trips` repo.
+ */
+export interface ResolvedExperienceList {
+  readonly id: string;
+  readonly ownerId: string;
+  readonly visibility: 'private' | 'public';
+  readonly name: string;
+  readonly itemCount: number;
+  readonly ownerDisplayName: string;
+}
+
 export interface TripRepoDeps {
   /** Canonical Completion repo (`completions` table) for trickle-down writes. */
   readonly completions: CompletionRepo;
@@ -140,6 +158,11 @@ export interface TripRepoDeps {
    * and read projections (R22.1, R22.9, R22.10).
    */
   readonly resolveFoodList?: ((foodListId: string) => Promise<ResolvedFoodList | null>) | undefined;
+  /**
+   * Structural port to resolve an Experience_List for attachment eligibility
+   * checks and read projections (R14.1, R14.8). Mirrors `resolveFoodList`.
+   */
+  readonly resolveExperienceList?: ((experienceListId: string) => Promise<ResolvedExperienceList | null>) | undefined;
 }
 
 /**
@@ -152,6 +175,7 @@ interface TripRepoContext {
   readonly completions: CompletionRepo;
   readonly ratings: RatingRepo;
   readonly resolveFoodList?: ((foodListId: string) => Promise<ResolvedFoodList | null>) | undefined;
+  readonly resolveExperienceList?: ((experienceListId: string) => Promise<ResolvedExperienceList | null>) | undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -825,6 +849,35 @@ export interface TripRepo {
     callerRole: TripRole,
     foodListId: string,
   ): Promise<boolean>;
+
+  /**
+   * Attach an Experience_List to a Trip (R14.1, R14.3). Cross-spec addition
+   * from the `experience-lists` spec's Trip Attachment Bridge (Requirement
+   * 14), mirroring `attachFoodList` exactly.
+   * Caller must own the list or the list must be public (R14.1).
+   * Throws `experience_list_not_found` if list is absent.
+   * Throws `trip_experience_list_ineligible` if caller is not owner and list is not public.
+   * Idempotent: duplicate attach is a no-op success (R14.3).
+   */
+  attachExperienceList(
+    tripId: string,
+    callerId: string,
+    experienceListId: string,
+  ): Promise<void>;
+
+  /**
+   * Detach an Experience_List from a Trip (R14.4). Cross-spec addition from
+   * the `experience-lists` spec's Trip Attachment Bridge (Requirement 14),
+   * mirroring `detachFoodList` exactly.
+   * Gated on adder or organizer; a non-adder non-organizer throws `trip_forbidden`.
+   * Returns true if detached, false if not found.
+   */
+  detachExperienceList(
+    tripId: string,
+    callerId: string,
+    callerRole: TripRole,
+    experienceListId: string,
+  ): Promise<boolean>;
 }
 
 // ---------------------------------------------------------------------------
@@ -843,6 +896,7 @@ export function createTripRepo(pool: DbPool, deps: TripRepoDeps): TripRepo {
     completions: deps.completions,
     ratings: deps.ratings,
     resolveFoodList: deps.resolveFoodList,
+    resolveExperienceList: deps.resolveExperienceList,
   };
   return {
     createTrip: (creatorId, input, now) =>
@@ -899,6 +953,10 @@ export function createTripRepo(pool: DbPool, deps: TripRepoDeps): TripRepo {
       attachFoodList(ctx, tripId, callerId, foodListId),
     detachFoodList: (tripId, callerId, callerRole, foodListId) =>
       detachFoodList(ctx, tripId, callerId, callerRole, foodListId),
+    attachExperienceList: (tripId, callerId, experienceListId) =>
+      attachExperienceList(ctx, tripId, callerId, experienceListId),
+    detachExperienceList: (tripId, callerId, callerRole, experienceListId) =>
+      detachExperienceList(ctx, tripId, callerId, callerRole, experienceListId),
   };
 }
 
@@ -996,6 +1054,7 @@ function rowToDto(
   now: Date | undefined,
   resorts: readonly TripResortDTO[],
   foodLists: readonly TripFoodListDTO[] = [],
+  experienceLists: readonly TripExperienceListDTO[] = [],
 ): TripDTO {
   const startDate = toIsoDate(row.start_date);
   const endDate = toIsoDate(row.end_date);
@@ -1016,6 +1075,7 @@ function rowToDto(
     createdAt: toIsoTimestamp(row.created_at),
     resorts,
     foodLists,
+    experienceLists,
     ...(row.walking_speed !== undefined ? { walkingSpeed: row.walking_speed } : {}),
     ...(row.early_entry_eligible !== undefined ? { earlyEntryEligible: row.early_entry_eligible } : {}),
     ...(dayTouringHours !== undefined ? { dayTouringHours } : {}),
@@ -1308,6 +1368,208 @@ async function detachFoodList(
 }
 
 // ---------------------------------------------------------------------------
+// Trip_Experience_List read/write helpers (R14.1, R14.2, R14.3, R14.4, R14.5,
+// R14.8)
+//
+// Cross-spec note: this block, `attachExperienceList`, and
+// `detachExperienceList` below are new additions to this already-shipped
+// `trips` repo, added by the `experience-lists` spec's Requirement 14 (Trip
+// Attachment Bridge). They mirror the `trip_food_lists` helpers above
+// line-for-line, per that spec's design.md.
+// ---------------------------------------------------------------------------
+
+const tripExperienceListsAvailableCache = new WeakMap<object, boolean>();
+
+async function isTripExperienceListsAvailable(pool: DbPool): Promise<boolean> {
+  const cached = tripExperienceListsAvailableCache.get(pool as unknown as object);
+  if (cached !== undefined) return cached;
+  try {
+    await pool.query('SELECT 1 FROM trip_experience_lists LIMIT 0');
+    tripExperienceListsAvailableCache.set(pool as unknown as object, true);
+    return true;
+  } catch {
+    tripExperienceListsAvailableCache.set(pool as unknown as object, false);
+    return false;
+  }
+}
+
+/**
+ * Read the attached Experience_Lists for one or more Trips in a single
+ * query, grouped by Trip (R14.8). Resolves names and item counts via the
+ * injected `resolveExperienceList` port, projecting deleted/inaccessible
+ * lists as `available: false` (R14.8).
+ */
+async function selectTripExperienceListsByTrip(
+  ctx: TripRepoContext,
+  tripIds: readonly string[],
+): Promise<Map<string, TripExperienceListDTO[]>> {
+  const byTrip = new Map<string, TripExperienceListDTO[]>();
+  if (tripIds.length === 0) {
+    return byTrip;
+  }
+  const available = await isTripExperienceListsAvailable(ctx.pool);
+  if (!available) {
+    return byTrip;
+  }
+
+  const placeholders = tripIds.map((_, i) => `$${i + 1}`).join(', ');
+  const result = await ctx.pool.query<{
+    trip_id: string;
+    experience_list_id: string;
+  }>(
+    `SELECT trip_id, experience_list_id
+       FROM trip_experience_lists
+      WHERE trip_id IN (${placeholders})
+      ORDER BY added_at ASC, experience_list_id ASC`,
+    [...tripIds],
+  );
+
+  if (result.rows.length === 0) {
+    return byTrip;
+  }
+
+  const uniqueListIds = Array.from(new Set(result.rows.map((r) => r.experience_list_id)));
+  const resolvedMap = new Map<string, ResolvedExperienceList | null>();
+
+  if (ctx.resolveExperienceList) {
+    await Promise.all(
+      uniqueListIds.map(async (id) => {
+        try {
+          const resolved = await ctx.resolveExperienceList!(id);
+          resolvedMap.set(id, resolved);
+        } catch {
+          resolvedMap.set(id, null);
+        }
+      }),
+    );
+  }
+
+  for (const row of result.rows) {
+    const list = byTrip.get(row.trip_id) ?? [];
+    const resolved = resolvedMap.get(row.experience_list_id);
+    if (resolved) {
+      list.push({
+        available: true,
+        experienceListId: resolved.id,
+        name: resolved.name,
+        itemCount: resolved.itemCount,
+        ownerDisplayName: resolved.ownerDisplayName,
+      });
+    } else {
+      list.push({
+        available: false,
+        experienceListId: row.experience_list_id,
+      });
+    }
+    byTrip.set(row.trip_id, list);
+  }
+
+  return byTrip;
+}
+
+/** Read the attached Experience_Lists for a single Trip, defaulting to an empty array. */
+async function selectTripExperienceLists(
+  ctx: TripRepoContext,
+  tripId: string,
+): Promise<TripExperienceListDTO[]> {
+  const byTrip = await selectTripExperienceListsByTrip(ctx, [tripId]);
+  return byTrip.get(tripId) ?? [];
+}
+
+/**
+ * Attach an Experience_List to a Trip (R14.1, R14.3).
+ * Caller must own the list or the list must be public.
+ * Throws `experience_list_not_found` if absent (the attach-target lookup
+ * failing, not the same code as a viewer being denied by the access
+ * predicate — matches how `trips` reuses `food_list_not_found` for its
+ * analogous lookup failure).
+ * Throws `trip_experience_list_ineligible` if caller is not owner and list is
+ * not public.
+ * Idempotent: duplicate attach is a no-op success.
+ */
+async function attachExperienceList(
+  ctx: TripRepoContext,
+  tripId: string,
+  callerId: string,
+  experienceListId: string,
+): Promise<void> {
+  const resolved = ctx.resolveExperienceList
+    ? await ctx.resolveExperienceList(experienceListId)
+    : null;
+  if (!resolved) {
+    throw new AppError('experience_list_not_found', 'Experience list not found.');
+  }
+
+  const isOwner = resolved.ownerId === callerId;
+  const isPublic = resolved.visibility === 'public';
+  if (!isOwner && !isPublic) {
+    throw new AppError(
+      'trip_experience_list_ineligible',
+      'Only the experience list owner or a public list can be attached to a trip.',
+    );
+  }
+
+  await ctx.pool.query(
+    `INSERT INTO trip_experience_lists (trip_id, experience_list_id, added_by)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (trip_id, experience_list_id) DO NOTHING`,
+    [tripId, experienceListId, callerId],
+  );
+}
+
+/**
+ * Detach an Experience_List from a Trip (R14.4).
+ * Caller must be the adder or an organizer.
+ * Throws `trip_forbidden` if caller is neither adder nor organizer.
+ * Returns true if detached, false if not found.
+ */
+async function detachExperienceList(
+  ctx: TripRepoContext,
+  tripId: string,
+  callerId: string,
+  callerRole: TripRole,
+  experienceListId: string,
+): Promise<boolean> {
+  const client = await ctx.pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const current = await client.query<{ added_by: string }>(
+      `SELECT added_by FROM trip_experience_lists
+        WHERE trip_id = $1 AND experience_list_id = $2
+        FOR UPDATE`,
+      [tripId, experienceListId],
+    );
+    const row = current.rows[0];
+    if (!row) {
+      await client.query('ROLLBACK');
+      return false;
+    }
+
+    if (callerRole !== 'organizer' && row.added_by !== callerId) {
+      await client.query('ROLLBACK');
+      throw new AppError(
+        'trip_forbidden',
+        'You can only detach experience lists you attached.',
+      );
+    }
+
+    await client.query(
+      `DELETE FROM trip_experience_lists WHERE trip_id = $1 AND experience_list_id = $2`,
+      [tripId, experienceListId],
+    );
+
+    await client.query('COMMIT');
+    return true;
+  } catch (err) {
+    await safeRollback(client);
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+// ---------------------------------------------------------------------------
 // createTrip (R1.1, R1.2, R1.3, R1.9, R1.10)
 // ---------------------------------------------------------------------------
 
@@ -1372,7 +1634,7 @@ async function createTrip(
     }
 
     await client.query('COMMIT');
-    return rowToDto(row, now, resorts, []);
+    return rowToDto(row, now, resorts, [], []);
   } catch (err) {
     await safeRollback(client);
     throw err;
@@ -1408,7 +1670,8 @@ async function getTripForMember(
   }
   const resorts = await selectTripResorts(ctx.pool, tripId);
   const foodLists = await selectTripFoodLists(ctx, tripId);
-  return rowToDto(row, now, resorts, foodLists);
+  const experienceLists = await selectTripExperienceLists(ctx, tripId);
+  return rowToDto(row, now, resorts, foodLists, experienceLists);
 }
 
 // ---------------------------------------------------------------------------
@@ -1511,8 +1774,9 @@ async function editTrip(
     if (assignments.length === 0) {
       const resorts = await selectTripResorts(client, tripId);
       const foodLists = await selectTripFoodLists(ctx, tripId);
+      const experienceLists = await selectTripExperienceLists(ctx, tripId);
       await client.query('COMMIT');
-      return rowToDto(currentRow, now, resorts, foodLists);
+      return rowToDto(currentRow, now, resorts, foodLists, experienceLists);
     }
 
     params.push(tripId);
@@ -1531,8 +1795,9 @@ async function editTrip(
 
     const resorts = await selectTripResorts(client, tripId);
     const foodLists = await selectTripFoodLists(ctx, tripId);
+    const experienceLists = await selectTripExperienceLists(ctx, tripId);
     await client.query('COMMIT');
-    return rowToDto(updatedRow, now, resorts, foodLists);
+    return rowToDto(updatedRow, now, resorts, foodLists, experienceLists);
   } catch (err) {
     await safeRollback(client);
     throw err;
@@ -4219,12 +4484,17 @@ async function listMyTrips(
     ctx,
     result.rows.map((row) => row.id),
   );
+  const experienceListsByTrip = await selectTripExperienceListsByTrip(
+    ctx,
+    result.rows.map((row) => row.id),
+  );
   const trips = result.rows.map((row) =>
     rowToDto(
       row,
       now,
       resortsByTrip.get(row.id) ?? [],
       foodListsByTrip.get(row.id) ?? [],
+      experienceListsByTrip.get(row.id) ?? [],
     ),
   );
   return groupTripsByStatus(trips, wdwToday(now));

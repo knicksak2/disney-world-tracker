@@ -10,7 +10,7 @@
  */
 
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, type StyleProp, StyleSheet, Text, View, type ViewStyle } from 'react-native';
 import { useClaimablePinsBadge } from '../../components/pins/useClaimablePinsBadge';
 import { navigateToLiveWaits, navigateToPinBoard } from '../../navigation/navigationRef';
 import { theme } from '../../theme/theme';
@@ -24,6 +24,7 @@ export interface ActionDockProps {
   readonly isActiveVacation?: boolean;
   readonly dayNumber?: number;
   readonly testID?: string;
+  readonly style?: StyleProp<ViewStyle>;
 }
 
 export default function ActionDock({
@@ -35,6 +36,7 @@ export default function ActionDock({
   isActiveVacation = false,
   dayNumber = 2,
   testID = 'home-action-dock',
+  style,
 }: ActionDockProps): JSX.Element {
   const { count: claimablePinCount } = useClaimablePinsBadge();
 
@@ -73,7 +75,7 @@ export default function ActionDock({
   };
 
   return (
-    <View style={styles.dock} testID={testID}>
+    <View style={[styles.dock, style]} testID={testID}>
       {/* 1. Live Waits */}
       <Pressable
         style={({ pressed }) => [styles.dockBtn, pressed && styles.pressed]}

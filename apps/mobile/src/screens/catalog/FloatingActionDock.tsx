@@ -19,6 +19,8 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { ExperienceCategory } from '@dwt/shared';
 
+import AddToTripOrListChoiceSheet from './AddToTripOrListChoiceSheet';
+
 // ---------------------------------------------------------------------------
 // Props
 // ---------------------------------------------------------------------------
@@ -34,6 +36,13 @@ export interface FloatingActionDockProps {
   readonly onLogDish: () => void;
   readonly onReserve?: (() => void) | undefined;
   readonly onReserveTable?: (() => void) | undefined;
+  /**
+   * Requirement 17.3: opens the existing AddToExperienceListsSheet. Required
+   * only for the categories where the secondary action becomes the merged
+   * "Add to Trip or List" choice (Ride/Character_Meet/Show, Resort) — the
+   * Restaurant branch never reads this prop (Requirement 17.5).
+   */
+  readonly onAddToExperienceList?: (() => void) | undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -51,9 +60,15 @@ export default function FloatingActionDock({
   onLogDish,
   onReserve,
   onReserveTable,
+  onAddToExperienceList,
 }: FloatingActionDockProps): JSX.Element {
   const isRestaurant = category === 'Restaurant';
   const reserveHandler = onReserve ?? onReserveTable ?? (() => {});
+
+  // Requirement 17.1: the three non-Restaurant "Add to Trip" branches below
+  // open this choice instead of calling onAddToPlan directly; the Restaurant
+  // branch never sets this true (Requirement 17.5).
+  const [choiceSheetVisible, setChoiceSheetVisible] = React.useState(false);
 
   let primaryLabel: string;
   let primaryAccessibilityLabel: string;
@@ -72,10 +87,10 @@ export default function FloatingActionDock({
     primaryIcon = 'bed-outline';
     primaryHandler = onLogVisit;
 
-    secondaryLabel = 'Add to Trip';
-    secondaryAccessibilityLabel = 'Add to trip';
+    secondaryLabel = 'Add to…';
+    secondaryAccessibilityLabel = 'Add to trip or list';
     secondaryIcon = 'add';
-    secondaryHandler = onAddToPlan;
+    secondaryHandler = () => setChoiceSheetVisible(true);
   } else if (isRestaurant) {
     // R19.4, R21.3: Restaurant on both lenses
     primaryLabel = 'Log a Dish';
@@ -101,10 +116,10 @@ export default function FloatingActionDock({
     primaryIcon = 'checkmark-sharp';
     primaryHandler = onLogVisit;
 
-    secondaryLabel = 'Add to Trip';
-    secondaryAccessibilityLabel = 'Add to trip';
+    secondaryLabel = 'Add to…';
+    secondaryAccessibilityLabel = 'Add to trip or list';
     secondaryIcon = 'add';
-    secondaryHandler = onAddToPlan;
+    secondaryHandler = () => setChoiceSheetVisible(true);
   }
 
   return (
@@ -136,6 +151,19 @@ export default function FloatingActionDock({
         <Ionicons name={secondaryIcon} size={16} color="#5b2a86" />
         <Text style={styles.secondaryPillText}>{secondaryLabel}</Text>
       </Pressable>
+
+      <AddToTripOrListChoiceSheet
+        visible={choiceSheetVisible}
+        onClose={() => setChoiceSheetVisible(false)}
+        onAddToTrip={() => {
+          setChoiceSheetVisible(false);
+          onAddToPlan();
+        }}
+        onAddToList={() => {
+          setChoiceSheetVisible(false);
+          onAddToExperienceList?.();
+        }}
+      />
     </View>
   );
 }

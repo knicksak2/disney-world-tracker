@@ -82,6 +82,7 @@ import type {
 import { ZodError, z } from 'zod';
 
 import {
+  attachExperienceListSchema,
   attachFoodListSchema,
   plannedItemAddSchema,
   plannedItemEditSchema,
@@ -249,6 +250,15 @@ const tripPlannedItemParamsSchema = z
  */
 const tripFoodListParamsSchema = z
   .object({ id: uuidSchema, foodListId: uuidSchema })
+  .strict();
+
+/**
+ * Path parameters for `DELETE /trips/:id/experience-lists/:experienceListId`.
+ * Cross-spec addition from the `experience-lists` spec's Trip Attachment
+ * Bridge (Requirement 14), mirroring `tripFoodListParamsSchema` exactly.
+ */
+const tripExperienceListParamsSchema = z
+  .object({ id: uuidSchema, experienceListId: uuidSchema })
   .strict();
 
 /**
@@ -1423,6 +1433,68 @@ export function tripRoutes(options: TripRoutesOptions): FastifyPluginAsync {
           throw new AppError(
             'trip_food_list_not_found',
             'Food list not found on this trip.',
+          );
+        }
+        reply.code(204);
+        reply.send();
+      },
+    );
+
+    // -------------------------------------------------------------------
+    // POST /trips/:id/experience-lists — attach an Experience_List to a Trip
+    // (R14.1, R14.2, R14.3). Cross-spec addition from the `experience-lists`
+    // spec's Trip Attachment Bridge, mirroring the food-lists route above.
+    // -------------------------------------------------------------------
+    // Any Trip_Member may attach an Experience_List they own or a public
+    // Experience_List. `repo.attachExperienceList` throws
+    // experience_list_not_found if the list is absent, and
+    // trip_experience_list_ineligible if the caller is not owner and the
+    // list is not public. Returns 201 created.
+    app.post<{ Params: { id: string } }>(
+      '/trips/:id/experience-lists',
+      { preHandler: requireSession },
+      async (request, reply) => {
+        const userId = requireUser(request);
+        const { id } = parseOrAppError(tripIdParamsSchema, request.params);
+        const { experienceListId } = parseOrAppError(
+          attachExperienceListSchema,
+          request.body,
+        );
+        await assertTripMember(pool, userId, id);
+        await repo.attachExperienceList(id, userId, experienceListId);
+        reply.code(201);
+        reply.send({ success: true });
+      },
+    );
+
+    // -------------------------------------------------------------------
+    // DELETE /trips/:id/experience-lists/:experienceListId — detach an
+    // Experience_List (R14.4). Cross-spec addition from the
+    // `experience-lists` spec's Trip Attachment Bridge, mirroring the
+    // food-lists route above.
+    // -------------------------------------------------------------------
+    // Adder or Organizer may detach an attached Experience_List. A
+    // non-adder non-organizer throws trip_forbidden. Returns 204 no content.
+    app.delete<{ Params: { id: string; experienceListId: string } }>(
+      '/trips/:id/experience-lists/:experienceListId',
+      { preHandler: requireSession },
+      async (request, reply) => {
+        const userId = requireUser(request);
+        const { id, experienceListId } = parseOrAppError(
+          tripExperienceListParamsSchema,
+          request.params,
+        );
+        const callerRole = await assertTripMember(pool, userId, id);
+        const detached = await repo.detachExperienceList(
+          id,
+          userId,
+          callerRole,
+          experienceListId,
+        );
+        if (!detached) {
+          throw new AppError(
+            'experience_list_not_found',
+            'Experience list not found on this trip.',
           );
         }
         reply.code(204);

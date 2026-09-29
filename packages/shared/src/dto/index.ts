@@ -155,8 +155,28 @@ export type {
 } from './FoodList.js';
 
 export type {
+  ExperienceListDTO,
+  ExperienceListItemDTO,
+  ExperienceListRole,
+  ExperienceListDetailDTO,
+  ExperienceListCollectionDTO,
+  ExperienceListDiscoveryPageDTO,
+  ExperienceListVisibility,
+  CreateExperienceListInputDTO,
+  UpdateExperienceListInputDTO,
+  AddExperienceListItemInputDTO,
+  ReorderExperienceListItemsInputDTO,
+  ExperienceListShareRole,
+  ShareExperienceListInputDTO,
+  ExperienceListShareDTO,
+} from './ExperienceList.js';
+
+export type {
   ParkLiveEntryDTO,
   ParkLiveSnapshotDTO,
 } from './ParkLive.js';
 
 export type { CurrentWeatherDTO } from './Weather.js';
+
+export type { VisitSummaryDTO, VisitSummaryResponseDTO } from './VisitSummary.js';
+export { VISIT_SUMMARY_MAX_IDS } from './VisitSummary.js';

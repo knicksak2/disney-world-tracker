@@ -275,7 +275,12 @@ export default function StatsScreen(): JSX.Element {
   if (query.isFetching && query.data === undefined) {
     return (
       <ScreenContainer>
-        <GradientHeader title="Your Stats" icon="stats-chart" right={shareControl} />
+        <GradientHeader
+          title="Your Stats"
+          icon="stats-chart"
+          onBack={() => navigation.goBack()}
+          right={shareControl}
+        />
         <View style={styles.center} testID="stats-loading">
           <ActivityIndicator color={theme.color.primary} />
         </View>
@@ -288,7 +293,12 @@ export default function StatsScreen(): JSX.Element {
   if (stats === undefined) {
     return (
       <ScreenContainer>
-        <GradientHeader title="Your Stats" icon="stats-chart" right={shareControl} />
+        <GradientHeader
+          title="Your Stats"
+          icon="stats-chart"
+          onBack={() => navigation.goBack()}
+          right={shareControl}
+        />
         <View style={styles.center} testID="stats-error">
           <EmptyState
             icon="cloud-offline-outline"
@@ -319,6 +329,7 @@ export default function StatsScreen(): JSX.Element {
         title="Your Stats"
         subtitle="Track how much magic you've experienced."
         icon="stats-chart"
+        onBack={() => navigation.goBack()}
         right={shareControl}
       />
       <ScrollView

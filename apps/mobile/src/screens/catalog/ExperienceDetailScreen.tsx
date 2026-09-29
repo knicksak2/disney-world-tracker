@@ -65,6 +65,7 @@ import type {
   Park,
   RatingDTO,
   ResortDTO,
+  TripDTO,
   WhyThisDTO,
 } from '@dwt/shared';
 
@@ -86,6 +87,8 @@ import FoodItemPickerModal from './FoodItemPickerModal';
 import LogFoodItemModal from './LogFoodItemModal';
 import RestaurantFoodLogsSheet from './RestaurantFoodLogsSheet';
 import AddToListsSheet from '../foodLists/AddToListsSheet';
+import AddToExperienceListsSheet from '../experienceLists/AddToExperienceListsSheet';
+import AddToTripPickerSheet from './AddToTripPickerSheet';
 import QuickSpecsRow from './QuickSpecsRow';
 import LensSwitcher from './LensSwitcher';
 import TodayInParkLens from './TodayInParkLens';
@@ -240,6 +243,12 @@ export default function ExperienceDetailScreen(): JSX.Element {
   const [addToListsPickerVisible, setAddToListsPickerVisible] = React.useState(false);
   const [addToListsSheetVisible, setAddToListsSheetVisible] = React.useState(false);
   const [itemsToAddToLists, setItemsToAddToLists] = React.useState<readonly FoodItemDTO[]>([]);
+  const [addToExperienceListsSheetVisible, setAddToExperienceListsSheetVisible] = React.useState(false);
+  // Requirement 18.1: the trip picker's own candidate list, captured at the
+  // moment "Add to Trip" is chosen so the sheet's contents can't drift if
+  // `tripsData` refetches while it's open.
+  const [tripPickerTrips, setTripPickerTrips] = React.useState<readonly TripDTO[]>([]);
+  const [tripPickerVisible, setTripPickerVisible] = React.useState(false);
   const [reservationFailed, setReservationFailed] = React.useState(false);
   const [logVisitModalVisible, setLogVisitModalVisible] = React.useState(false);
   const [rateModalVisible, setRateModalVisible] = React.useState(false);
@@ -280,19 +289,40 @@ export default function ExperienceDetailScreen(): JSX.Element {
     if (!tripsData) return undefined;
     if (Array.isArray(tripsData)) {
       const activeGroup = tripsData.find((g: any) => g.status === 'active');
-      return activeGroup?.trips?.[0] ?? tripsData[0]?.trips?.[0];
+      const upcomingGroup = tripsData.find((g: any) => g.status === 'upcoming');
+      return activeGroup?.trips?.[0] ?? upcomingGroup?.trips?.[0] ?? undefined;
     }
-    return tripsData?.trips?.[0];
+    const trips = tripsData?.trips;
+    if (Array.isArray(trips)) {
+      return (
+        trips.find((t: any) => t.status === 'active') ??
+        trips.find((t: any) => t.status === 'upcoming') ??
+        undefined
+      );
+    }
+    return undefined;
   }, [tripsData]);
 
-  const handleAddToPlan = async (): Promise<void> => {
-    const tripToUse =
-      activeTrip ??
-      (Array.isArray(tripsData)
-        ? tripsData.find((g: any) => g.status === 'upcoming')?.trips?.[0]
-        : undefined);
+  // Requirement 18.1: every Trip eligible to receive this Experience — not
+  // just the single silently-preferred one `activeTrip` resolves above
+  // (which is kept, unchanged, for the separate "already on your plan" check
+  // below). Flattens every `active`/`upcoming` status group's Trips into one
+  // list for the picker.
+  const eligibleTripsForAdd = React.useMemo((): readonly TripDTO[] => {
+    if (!tripsData) return [];
+    if (Array.isArray(tripsData)) {
+      return tripsData
+        .filter((g: any) => g.status === 'active' || g.status === 'upcoming')
+        .flatMap((g: any) => g.trips ?? []);
+    }
+    return tripsData?.trips ?? [];
+  }, [tripsData]);
 
-    if (!tripToUse?.id) {
+  // Requirement 18.1, 18.3: resolves the eligible Trip set and either opens
+  // the Trip picker (always, regardless of count — Property 22) or shows the
+  // existing "No Active Trip" alert unchanged when there are none.
+  const handleAddToPlan = (): void => {
+    if (eligibleTripsForAdd.length === 0) {
       Alert.alert(
         'No Active Trip',
         "You don't have an active or upcoming trip yet. Create a trip in the Trips tab to add experiences to your itinerary!",
@@ -307,16 +337,27 @@ export default function ExperienceDetailScreen(): JSX.Element {
       return;
     }
 
+    setTripPickerTrips(eligibleTripsForAdd);
+    setTripPickerVisible(true);
+  };
+
+  // Requirement 18.2: the actual write, unchanged from the pre-Requirement-18
+  // `handleAddToPlan` body, now parameterized on the User's picked Trip
+  // rather than a silently-derived one.
+  const addToTrip = async (tripId: string): Promise<void> => {
+    setTripPickerVisible(false);
+    const tripToUse = eligibleTripsForAdd.find((t) => t.id === tripId);
+
     try {
-      await apiRequest('POST', `/trips/${tripToUse.id}/planned-items`, {
+      await apiRequest('POST', `/trips/${tripId}/planned-items`, {
         experienceId,
       });
       void queryClient.invalidateQueries({
-        queryKey: ['trips', tripToUse.id, 'planned-items'],
+        queryKey: ['trips', tripId, 'planned-items'],
       });
       Alert.alert(
         'Added to Trip',
-        `✨ ${experience.name} has been added to ${tripToUse.name || 'your trip'}!`,
+        `✨ ${experience.name} has been added to ${tripToUse?.name || 'your trip'}!`,
       );
     } catch (err: any) {
       Alert.alert('Could Not Add to Trip', err?.message ?? 'Please try again.');
@@ -765,7 +806,8 @@ export default function ExperienceDetailScreen(): JSX.Element {
       </ScrollView>
 
       {/* -------------------------------------------------------------- */}
-      {/* Floating Action Dock (R19)                                     */}
+      {/* Floating Action Dock (R19; secondary action merged per          */}
+      {/* experience-lists R17 — see FloatingActionDock.tsx)              */}
       {/* -------------------------------------------------------------- */}
       <FloatingActionDock
         category={experience.category}
@@ -775,7 +817,7 @@ export default function ExperienceDetailScreen(): JSX.Element {
           setLogVisitModalVisible(true);
         }}
         onAddToPlan={() => {
-          void handleAddToPlan();
+          handleAddToPlan();
         }}
         onRateVisit={() => {
           setRateModalVisible(true);
@@ -794,6 +836,7 @@ export default function ExperienceDetailScreen(): JSX.Element {
               }
             : undefined
         }
+        onAddToExperienceList={() => setAddToExperienceListsSheetVisible(true)}
       />
 
       {/* Log visit modal */}
@@ -877,6 +920,24 @@ export default function ExperienceDetailScreen(): JSX.Element {
         experienceId={experienceId}
         visible={scopedFoodLogsVisible}
         onClose={() => setScopedFoodLogsVisible(false)}
+      />
+
+      {/* Trip picker for "Add to Trip" (experience-lists R18) */}
+      <AddToTripPickerSheet
+        visible={tripPickerVisible}
+        trips={tripPickerTrips}
+        onSelect={(tripId) => {
+          void addToTrip(tripId);
+        }}
+        onClose={() => setTripPickerVisible(false)}
+      />
+
+      {/* Add to Experience_Lists Sheet (experience-lists Entry Point 1, R9.1) */}
+      <AddToExperienceListsSheet
+        visible={addToExperienceListsSheetVisible}
+        experienceId={experienceId}
+        experienceName={experience.name}
+        onClose={() => setAddToExperienceListsSheetVisible(false)}
       />
     </ScreenContainer>
   );

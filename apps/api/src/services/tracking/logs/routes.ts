@@ -1,18 +1,23 @@
 /**
  * Tracking_Service — Experience_Log routes.
  *
- * Wires the three activity-logging endpoints:
+ * Wires the activity-logging endpoints:
  *
  *   POST   /me/experiences/:id/logs           create a visit/ride log
  *   GET    /me/experiences/:id/logs           read the caller's Visit_History
  *   DELETE /me/experiences/:id/logs/:logId    delete one log
+ *   GET    /me/experiences/visit-summary      batched per-experience visit summary
  *
- * All three require an authenticated session (`requireSession` populates
+ * All four require an authenticated session (`requireSession` populates
  * `request.userId`). Persistence and the completion/rating dual-write are owned
  * by the injected `ExperienceLogRepo`; these handlers only validate input, map
  * the repo result to the right status/envelope, and stay thin.
  *
- * Validates: Requirements 1.1, 1.2, 4.1, 4.2, 4.3, 5.1, 5.2, 5.3
+ * The visit-summary route is an `experience-lists` spec addition (Requirement 13),
+ * added to this file rather than a new one — see that spec's design.md "Why
+ * Visit_Summary lives in `tracking/logs`" section.
+ *
+ * Validates: Requirements 1.1, 1.2, 4.1, 4.2, 4.3, 5.1, 5.2, 5.3, 13.1, 13.2
  */
 
 import type {
@@ -23,8 +28,12 @@ import type {
 } from 'fastify';
 import { ZodError, z } from 'zod';
 
-import type { ErrorCode } from '@dwt/shared';
-import { createExperienceLogInputSchema, uuidSchema } from '@dwt/shared';
+import type { ErrorCode, VisitSummaryDTO, VisitSummaryResponseDTO } from '@dwt/shared';
+import {
+  createExperienceLogInputSchema,
+  uuidSchema,
+  VISIT_SUMMARY_MAX_IDS,
+} from '@dwt/shared';
 
 import { AppError } from '../../../errors/AppError.js';
 import type { ExperienceLogRepo } from './repo.js';
@@ -59,6 +68,9 @@ export interface ExperienceLogRoutesOptions {
 const paramsSchema = z.object({ id: uuidSchema }).strict();
 const deleteParamsSchema = z
   .object({ id: uuidSchema, logId: uuidSchema })
+  .strict();
+const visitSummaryQuerySchema = z
+  .object({ ids: z.string().optional() })
   .strict();
 
 /**
@@ -163,6 +175,58 @@ export function experienceLogRoutes(
         reply.send();
       },
     );
+
+    // --- GET /me/experiences/visit-summary (batched) --------------------
+    app.get(
+      '/me/experiences/visit-summary',
+      { preHandler: options.requireSession },
+      async (request) => {
+        const userId = requireUser(request);
+        const { ids: rawIds } = parseOrAppError(
+          visitSummaryQuerySchema,
+          request.query,
+        );
+
+        const requestedIds = parseVisitSummaryIds(rawIds);
+        // Empty/missing `ids` is a valid 200 with nothing to summarize (R13.2).
+        if (requestedIds.length === 0) {
+          return {} satisfies VisitSummaryResponseDTO;
+        }
+
+        // Capped rather than silently truncated — see design.md (R13.2).
+        if (requestedIds.length > VISIT_SUMMARY_MAX_IDS) {
+          throw new AppError(
+            'validation_failed',
+            `At most ${VISIT_SUMMARY_MAX_IDS} ids are allowed per request.`,
+            { field: 'ids' },
+          );
+        }
+
+        const summaries = await options.repo.getVisitSummaries(
+          userId,
+          requestedIds,
+        );
+        const summaryByExperienceId = new Map(
+          summaries.map((summary) => [summary.experienceId, summary]),
+        );
+
+        // Backfill zero-log defaults so the response has one entry per
+        // requested id, not just the ones with logs (R13.1, R13.2).
+        const response: Record<string, VisitSummaryDTO> = {};
+        for (const experienceId of requestedIds) {
+          const summary = summaryByExperienceId.get(experienceId);
+          response[experienceId] =
+            summary === undefined
+              ? { repeatCount: 0, ratedCount: 0, averageRating: null }
+              : {
+                  repeatCount: summary.repeatCount,
+                  ratedCount: summary.ratedCount,
+                  averageRating: summary.averageRating,
+                };
+        }
+        return response satisfies VisitSummaryResponseDTO;
+      },
+    );
   };
 }
 
@@ -198,6 +262,40 @@ async function awardPinsSafely(
     request.log.error({ err }, 'pin award evaluation failed');
     return [];
   }
+}
+
+/**
+ * Parse the `ids` query param into a deduplicated list of UUIDs (R13.2).
+ * Splits on `,`, trims whitespace, drops empty pieces, then deduplicates via a
+ * `Set` (insertion order preserved, so the response/cap check is deterministic
+ * for a given request). A syntactically invalid id — anything that fails
+ * `uuidSchema` — is rejected as `validation_failed` rather than silently
+ * dropped, since a typo'd id silently vanishing would be confusing.
+ */
+function parseVisitSummaryIds(rawIds: string | undefined): string[] {
+  if (rawIds === undefined) return [];
+
+  const deduped = [
+    ...new Set(
+      rawIds
+        .split(',')
+        .map((piece) => piece.trim())
+        .filter((piece) => piece.length > 0),
+    ),
+  ];
+
+  for (const id of deduped) {
+    const result = uuidSchema.safeParse(id);
+    if (!result.success) {
+      throw new AppError(
+        'validation_failed',
+        'Each id in "ids" must be a valid UUID.',
+        { field: 'ids' },
+      );
+    }
+  }
+
+  return deduped;
 }
 
 function parseOrAppError<S extends z.ZodTypeAny>(

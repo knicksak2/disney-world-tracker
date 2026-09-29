@@ -210,6 +210,14 @@ interface Handlers {
   // an empty (loaded) feed; a handler that throws simulates a feed that could
   // not be loaded, forcing `completionAvailable === false` (R2.7).
   readonly feed?: () => Promise<unknown>;
+  // `GET /trips/:id`, fetched by `useAttachedExperienceListItemsForTrip` once
+  // the add modal opens (Requirement 15.1). Defaults to an empty stub (no
+  // `experienceLists`), matching every pre-existing test's implicit
+  // assumption that the "My Lists" tab never appears.
+  readonly trip?: () => Promise<unknown>;
+  // `GET /experience-lists/:id`, one call per attached (available)
+  // Experience_List — dispatched by `experienceListId` from the path.
+  readonly experienceListDetail?: (experienceListId: string) => Promise<unknown>;
 }
 
 function installApi(items: PlannedItemDTO[], handlers: Handlers = {}): void {
@@ -226,6 +234,16 @@ function installApi(items: PlannedItemDTO[], handlers: Handlers = {}): void {
       }
       if (method === 'GET' && path === `/trips/${TRIP_ID}/members`) {
         return MEMBERS;
+      }
+      if (method === 'GET' && path === `/trips/${TRIP_ID}`) {
+        return handlers.trip ? await handlers.trip() : ({ id: TRIP_ID } as any);
+      }
+      if (method === 'GET' && path.startsWith('/experience-lists/')) {
+        const experienceListId = path.slice('/experience-lists/'.length);
+        if (handlers.experienceListDetail) {
+          return handlers.experienceListDetail(experienceListId);
+        }
+        throw new Error(`unexpected apiRequest ${method} ${path}`);
       }
       if (method === 'GET' && path.startsWith('/catalog')) {
         return handlers.search
@@ -330,7 +348,7 @@ describe('Planned_List screen', () => {
     );
   });
 
-  test('R9.3: an Experience already on the planned list can be added again', async () => {
+  test('R9.3 & R15.5: an Experience already on the planned list shows the "Already added" tag and can still be added again', async () => {
     const mutate = jest.fn().mockResolvedValue(undefined);
     // The already-planned item and the search hit share EXPERIENCE_UUID (a
     // valid UUID the shared add schema accepts), so the row references an
@@ -349,6 +367,12 @@ describe('Planned_List screen', () => {
     const row = await screen.findByTestId(
       `planned-list-result-${EXPERIENCE_UUID}`,
     );
+
+    // R15.5: the row is annotated with a non-blocking "Already added" tag,
+    // derived from the parent's already-fetched Planned_List (any date).
+    expect(screen.getByText('Already added')).toBeTruthy();
+    expect(row.props.accessibilityState?.disabled).toBe(false);
+
     fireEvent.press(row);
 
     // The row is not disabled, and tapping it POSTs a second add for the same
@@ -419,6 +443,129 @@ describe('Planned_List screen', () => {
     const doneButton = screen.getByTestId('planned-list-cancel');
     expect(screen.getByText('Done')).toBeTruthy();
     fireEvent.press(doneButton);
+  });
+
+  // -------------------------------------------------------------------------
+  // Property 19: Selecting a List-Sourced Candidate Is Behaviorally Identical
+  // to Catalog Search (Requirement 15.4, 15.6) — task 20.4
+  // -------------------------------------------------------------------------
+  //
+  // Property 18's tab presence/absence and union/dedup-across-attached-lists
+  // clause is already validated at the correct layer: `ExperiencePicker.test.tsx`
+  // covers the tab's conditional presence, and
+  // `useAttachedExperienceListItems.test.tsx` covers the actual merge/dedup
+  // computation (`useAttachedExperienceListItemsForTrip`, which this screen
+  // uses, delegates to the same `useAttachedExperienceListItems` merge). This
+  // test does not re-derive that coverage — it closes the remaining gap
+  // Property 19 requires: observing the real `POST /trips/:id/planned-items`
+  // request body issued by each selection path.
+  test('Property 19 (R15.4, R15.6): POSTs the identical planned-items request body whether the same Experience is selected from catalog search or the "My Lists" tab', async () => {
+    // A valid UUID, since `plannedItemAddSchema.experienceId` requires one
+    // (the id the picker forwards always comes from a real Experience row).
+    const SHARED_EXPERIENCE_ID = '77777777-7777-4777-8777-777777777777';
+    const postedBodies: unknown[] = [];
+
+    const search = jest.fn().mockResolvedValue({
+      experiences: [
+        {
+          id: SHARED_EXPERIENCE_ID,
+          name: 'Jungle Cruise',
+          park: 'Magic Kingdom',
+          category: 'Ride',
+          description: '',
+          active: true,
+          imageUrl: null,
+          areaType: 'ThemePark',
+        },
+      ],
+    });
+
+    const trip = jest.fn().mockResolvedValue({
+      id: TRIP_ID,
+      // One attached Experience_List — enables the "My Lists" tab.
+      experienceLists: [
+        {
+          available: true,
+          experienceListId: 'list-1',
+          name: 'Must Do',
+          itemCount: 1,
+          ownerDisplayName: 'Ada',
+        },
+      ],
+    });
+
+    const experienceListDetail = jest.fn().mockResolvedValue({
+      id: 'list-1',
+      ownerId: 'owner-1',
+      ownerDisplayName: 'Ada',
+      name: 'Must Do',
+      visibility: 'private',
+      likeCount: 0,
+      itemCount: 1,
+      createdAt: '2024-01-01T00:00:00.000Z',
+      updatedAt: '2024-01-01T00:00:00.000Z',
+      liked: false,
+      saved: false,
+      version: 1,
+      myRole: 'owner',
+      items: [
+        {
+          // Same experienceId the catalog search above also returns.
+          experienceId: SHARED_EXPERIENCE_ID,
+          name: 'Jungle Cruise',
+          park: 'Magic Kingdom',
+          category: 'Ride',
+          position: 0,
+          addedByUserId: 'owner-1',
+          addedByDisplayName: 'Ada',
+        },
+      ],
+    });
+
+    const mutate = jest.fn().mockImplementation(async (_method: string, _path: string, body: unknown) => {
+      postedBodies.push(body);
+      return undefined;
+    });
+
+    installApi([ITEM], { mutate, search, trip, experienceListDetail });
+
+    renderPlanned(makeNavigation());
+    fireEvent.press(await screen.findByTestId('planned-list-add-open'));
+
+    // --- Selection path 1: ordinary catalog search (the "All" tab) --------
+    fireEvent.changeText(
+      await screen.findByTestId('planned-list-search'),
+      'Jungle',
+    );
+    const catalogRow = await screen.findByTestId(
+      `planned-list-result-${SHARED_EXPERIENCE_ID}`,
+    );
+    fireEvent.press(catalogRow);
+
+    await waitFor(() => {
+      expect(postedBodies.length).toBe(1);
+    });
+
+    // --- Selection path 2: the "My Lists" tab ------------------------------
+    await waitFor(() => {
+      expect(screen.getByTestId('planned-list-tab-myLists')).toBeTruthy();
+    });
+    fireEvent.press(screen.getByTestId('planned-list-tab-myLists'));
+
+    const listSourcedRow = await screen.findByTestId(
+      `planned-list-result-${SHARED_EXPERIENCE_ID}`,
+    );
+    fireEvent.press(listSourcedRow);
+
+    await waitFor(() => {
+      expect(postedBodies.length).toBe(2);
+    });
+
+    // Property 19: identical request body from both selection sources — no
+    // provenance/source/listId field is written on either.
+    expect(postedBodies[0]).toEqual(postedBodies[1]);
+    expect(postedBodies[0]).toEqual({ experienceId: SHARED_EXPERIENCE_ID });
+    expect(Object.keys(postedBodies[0] as object)).toEqual(['experienceId']);
   });
 
   test('R9.6: removing an item calls the delete endpoint', async () => {

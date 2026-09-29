@@ -173,6 +173,24 @@ export interface FoodListRoleChangedEvent {
 }
 
 // ---------------------------------------------------------------------------
+// ExperienceList events (experience-lists R8.1, R8.3)
+// ---------------------------------------------------------------------------
+
+export interface ExperienceListSharedEvent {
+  readonly experienceListId: string;
+  readonly senderId: string;
+  readonly recipientId: string;
+}
+
+export interface ExperienceListRoleChangedEvent {
+  readonly experienceListId: string;
+  readonly senderId: string;
+  readonly recipientId: string;
+  readonly newRole: 'viewer' | 'editor';
+  readonly listName: string;
+}
+
+// ---------------------------------------------------------------------------
 // Structural dependency ports
 // ---------------------------------------------------------------------------
 
@@ -289,6 +307,20 @@ export interface NotificationService {
    * on the food list was updated (food-lists R8.3).
    */
   handleFoodListRoleChanged(event: FoodListRoleChangedEvent): Promise<void>;
+
+  /**
+   * Handle an {@link ExperienceListSharedEvent}: notify recipient that
+   * `senderId` shared an experience list with them (experience-lists R8.1).
+   */
+  handleExperienceListShared(event: ExperienceListSharedEvent): Promise<void>;
+
+  /**
+   * Handle an {@link ExperienceListRoleChangedEvent}: notify recipient that
+   * their role on the experience list was updated (experience-lists R8.3).
+   */
+  handleExperienceListRoleChanged(
+    event: ExperienceListRoleChangedEvent,
+  ): Promise<void>;
 }
 
 // ---------------------------------------------------------------------------
@@ -307,6 +339,8 @@ export const TRIP_INVITE_LABEL = 'Invited you to a trip';
 export const RODE_WITH_TAG_LABEL = 'Tagged you on a ride';
 /** Fixed body for a Food_List_Share notification (food-lists R8.1). */
 export const FOOD_LIST_SHARED_LABEL = 'Shared a food list with you';
+/** Fixed body for an Experience_List_Share notification (experience-lists R8.1). */
+export const EXPERIENCE_LIST_SHARED_LABEL = 'Shared an experience list with you';
 /** Neutral fallbacks when a lookup returns null (still discloses nothing extra). */
 const FALLBACK_SENDER_NAME = 'A friend';
 const FALLBACK_EXPERIENCE_LABEL = 'Shared an experience';
@@ -559,6 +593,88 @@ export function createNotificationService(
         deps.logger?.error(
           { err, recipientId: event.recipientId, foodListId: event.foodListId },
           'food-list-role-changed notification delivery failed for recipient',
+        );
+      });
+    },
+
+    async handleExperienceListShared(
+      event: ExperienceListSharedEvent,
+    ): Promise<void> {
+      let title: string;
+      try {
+        const name = await deps.resolveSenderDisplayName(event.senderId);
+        const trimmed = name?.trim();
+        title = trimmed && trimmed.length > 0 ? trimmed : FALLBACK_SENDER_NAME;
+      } catch (err) {
+        deps.logger?.error(
+          { err, experienceListId: event.experienceListId },
+          'experience-list-share notification composition failed',
+        );
+        return;
+      }
+
+      await notifyRecipient(
+        event.recipientId,
+        { title, body: EXPERIENCE_LIST_SHARED_LABEL },
+        {
+          deps,
+          ...timing,
+          data: { experienceListId: event.experienceListId },
+          logContext: { experienceListId: event.experienceListId },
+        },
+      ).catch((err) => {
+        deps.logger?.error(
+          {
+            err,
+            recipientId: event.recipientId,
+            experienceListId: event.experienceListId,
+          },
+          'experience-list-share notification delivery failed for recipient',
+        );
+      });
+    },
+
+    async handleExperienceListRoleChanged(
+      event: ExperienceListRoleChangedEvent,
+    ): Promise<void> {
+      let title: string;
+      try {
+        const name = await deps.resolveSenderDisplayName(event.senderId);
+        const trimmed = name?.trim();
+        title = trimmed && trimmed.length > 0 ? trimmed : FALLBACK_SENDER_NAME;
+      } catch (err) {
+        deps.logger?.error(
+          { err, experienceListId: event.experienceListId },
+          'experience-list-role-changed notification composition failed',
+        );
+        return;
+      }
+
+      const body =
+        event.newRole === 'editor'
+          ? `You can now edit ${event.listName}`
+          : `Your access to ${event.listName} changed to view-only`;
+
+      await notifyRecipient(
+        event.recipientId,
+        { title, body },
+        {
+          deps,
+          ...timing,
+          data: { experienceListId: event.experienceListId },
+          logContext: {
+            experienceListId: event.experienceListId,
+            newRole: event.newRole,
+          },
+        },
+      ).catch((err) => {
+        deps.logger?.error(
+          {
+            err,
+            recipientId: event.recipientId,
+            experienceListId: event.experienceListId,
+          },
+          'experience-list-role-changed notification delivery failed for recipient',
         );
       });
     },

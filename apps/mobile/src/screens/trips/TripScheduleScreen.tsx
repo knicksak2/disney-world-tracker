@@ -51,6 +51,7 @@ import { tripPlannedListKeys } from './TripPlannedListScreen';
 import { tripDetailKeys } from './TripDetailScreen';
 import { ExperiencePicker } from './ExperiencePicker';
 import { isKnownPark } from './experiencePickerFilters';
+import { useAttachedExperienceListItems } from './useAttachedExperienceListItems';
 import { reservationKindPresentation } from './reservations';
 import { TimeWheelPicker } from '../../components/TimeWheelPicker';
 
@@ -457,6 +458,16 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
   const [editingItem, setEditingItem] = useState<PlannedItemDTO | null>(null);
   const [draftItem, setDraftItem] = useState<PlannedItemDTO | null>(null);
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
+
+  // Schedule Builder / Planned List Picker Integration (Requirement 15):
+  // merges every attached Experience_List's contents into one flat,
+  // deduplicated candidate set for ExperiencePicker's "My Lists" tab. Only
+  // fetched while the add-item modal is open, mirroring showAddModal-gated
+  // queries elsewhere in this screen.
+  const attachedListItems = useAttachedExperienceListItems(
+    tripQuery.data?.experienceLists,
+    showAddModal,
+  );
   const [addedScheduleCounts, setAddedScheduleCounts] = useState<ReadonlyMap<string, number>>(new Map());
   const [showSettingsModal, setShowSettingsModal] = useState<boolean>(false);
 
@@ -597,6 +608,22 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
   });
 
   const items = itemsQuery.data ?? [];
+
+  // Requirement 15.5: Trip-wide (any date) set of Experience ids already on
+  // the Planned_List, for the ExperiencePicker's "Already added" tag —
+  // reusing the same experienceId-matching approach
+  // planned-list-completion-sync established (a `break`-type item has
+  // `experienceId: null`, so it is filtered out here).
+  const existingExperienceIds = React.useMemo<ReadonlySet<string>>(
+    () =>
+      new Set(
+        items
+          .map((item) => item.experienceId)
+          .filter((id): id is string => typeof id === 'string' && id.length > 0),
+      ),
+    [items],
+  );
+
   const activeDate = selectedDate ?? tripQuery.data?.startDate ?? 'No Date';
   const isToday = activeDate === getTodayWDW();
   const tripDates = generateDateRange(tripQuery.data?.startDate, tripQuery.data?.endDate, true);
@@ -1638,6 +1665,9 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
                   showParkFilter={true}
                   defaultPark={isKnownPark(activeDaySettings.startingPark) ? activeDaySettings.startingPark : null}
                   fillContainer
+                  listSourcedItems={attachedListItems.items}
+                  listSourcedLoading={attachedListItems.isLoading}
+                  alreadyPlannedIds={existingExperienceIds}
                 />
               </View>
             </ScreenContainer>

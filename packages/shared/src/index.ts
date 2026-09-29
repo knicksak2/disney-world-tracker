@@ -169,9 +169,25 @@ export type {
   FoodListShareRole,
   ShareFoodListInputDTO,
   FoodListShareDTO,
+  ExperienceListDTO,
+  ExperienceListItemDTO,
+  ExperienceListRole,
+  ExperienceListDetailDTO,
+  ExperienceListCollectionDTO,
+  ExperienceListDiscoveryPageDTO,
+  ExperienceListVisibility,
+  CreateExperienceListInputDTO,
+  UpdateExperienceListInputDTO,
+  AddExperienceListItemInputDTO,
+  ReorderExperienceListItemsInputDTO,
+  ExperienceListShareRole,
+  ShareExperienceListInputDTO,
+  ExperienceListShareDTO,
   ParkLiveEntryDTO,
   ParkLiveSnapshotDTO,
   CurrentWeatherDTO,
+  VisitSummaryDTO,
+  VisitSummaryResponseDTO,
 } from './dto/index.js';
 
 export {
@@ -183,6 +199,7 @@ export {
   overlapsAnyOtherPin,
   placementToReferencePx,
   FOOD_STATS_MIN_RATED_LOGS,
+  VISIT_SUMMARY_MAX_IDS,
 } from './dto/index.js';
 
 // Disney source-resilience transport-facing types (closed-set value tuples).
@@ -324,6 +341,25 @@ export {
   foodListDiscoveryPageSchema,
 } from './schemas/index.js';
 
+export {
+  experienceListNameSchema,
+  experienceListVisibilitySchema,
+  experienceListRoleSchema,
+  experienceListShareRoleSchema,
+  createExperienceListInputSchema,
+  updateExperienceListInputSchema,
+  addExperienceListItemInputSchema,
+  reorderExperienceListItemsInputSchema,
+  shareExperienceListInputSchema,
+  experienceListItemSchema,
+  experienceListSchema,
+  experienceListDetailSchema,
+  experienceListShareSchema,
+  savedExperienceListItemSchema,
+  experienceListCollectionSchema,
+  experienceListDiscoveryPageSchema,
+} from './schemas/index.js';
+
 // Pin-collection Series 1 catalog (roster + set registry).
 export { PINS, PIN_SETS } from './pins/catalog.js';
 export type { SetResolution } from './pins/catalog.js';
@@ -377,9 +413,11 @@ export {
   tripReactionInputSchema,
   tripCommentInputSchema,
   attachFoodListSchema,
+  attachExperienceListSchema,
   // DTO schemas
   pendingRodeWithTagSchema,
   tripFoodListSchema,
+  tripExperienceListSchema,
   tripIncomingInviteSchema,
 } from './trips.js';
 export type {
@@ -404,10 +442,12 @@ export type {
   TripReactionInput,
   TripCommentInput,
   AttachFoodListInput,
+  AttachExperienceListInput,
   // DTOs
   TripDTO,
   TripResortDTO,
   TripFoodListDTO,
+  TripExperienceListDTO,
   TripMemberDTO,
   TripInviteDTO,
   TripIncomingInviteDTO,

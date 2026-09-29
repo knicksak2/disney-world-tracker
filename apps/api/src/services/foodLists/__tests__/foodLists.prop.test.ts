@@ -8,6 +8,8 @@
  * Property 2 — Edit-Access-Scoped Item Mutation
  * Property 5 — Reorder Atomicity, Rejection, and Optimistic Concurrency
  * Property 14 — Create-Time Visibility Override
+ * Property 23 — Pinning Reorders Without Touching Content or updatedAt
+ * Property 24 — Pinned-First Ordering Is Total and Stable
  */
 
 import { randomUUID } from 'node:crypto';
@@ -116,6 +118,7 @@ describe('foodLists repository properties (fast-check)', () => {
     applyMigration(db, '0040_food_item_logging.sql');
     applyMigration(db, '0041_food_lists.sql');
     applyMigration(db, '0047_food_list_checklist.sql');
+    applyMigration(db, '0052_food_list_pinning.sql');
 
     const { Pool: PgMemPool } = db.adapters.createPg();
     rawPool = new PgMemPool() as unknown as DbPool;
@@ -409,4 +412,149 @@ describe('foodLists repository properties (fast-check)', () => {
       { numRuns: 100 },
     );
   }, 120000);
+
+  // Feature: list-pinning, Property 23: Pinning Reorders Without Touching Content or updatedAt
+  it('Property 23: Pinning Reorders Without Touching Content or updatedAt', async () => {
+    await fc.assert(
+      fc.asyncProperty(
+        fc.constantFrom<'owner' | 'editor' | 'viewer' | 'none'>(
+          'owner',
+          'editor',
+          'viewer',
+          'none',
+        ),
+        fc.boolean(), // pinned value being set
+        async (role, pinned) => {
+          const list = await foodListRepo.createList(ownerId, { name: 'Pin Test List' });
+
+          let actorId = strangerId;
+          if (role === 'owner') {
+            actorId = ownerId;
+          } else if (role === 'editor') {
+            actorId = collaboratorId;
+            await pool.query(
+              `INSERT INTO food_list_shares (food_list_id, shared_with_user_id, shared_by_user_id, role)
+               VALUES ($1, $2, $3, 'editor')`,
+              [list.id, collaboratorId, ownerId],
+            );
+          } else if (role === 'viewer') {
+            actorId = collaboratorId;
+            await pool.query(
+              `INSERT INTO food_list_shares (food_list_id, shared_with_user_id, shared_by_user_id, role)
+               VALUES ($1, $2, $3, 'viewer')`,
+              [list.id, collaboratorId, ownerId],
+            );
+          }
+
+          const beforeRow = await pool.query<{ updated_at: string; pinned_at: string | null }>(
+            `SELECT updated_at, pinned_at FROM food_lists WHERE id = $1`,
+            [list.id],
+          );
+          const updatedAtBefore = beforeRow.rows[0]!.updated_at;
+
+          if (role === 'owner') {
+            const updated = await foodListRepo.setPinned(list.id, actorId, pinned);
+            expect(updated.pinnedAt === null).toBe(!pinned);
+
+            const afterRow = await pool.query<{
+              updated_at: string;
+              pinned_at: string | null;
+              name: string;
+              visibility: string;
+              is_checklist: boolean;
+              like_count: number;
+            }>(
+              `SELECT updated_at, pinned_at, name, visibility, is_checklist, like_count
+                 FROM food_lists WHERE id = $1`,
+              [list.id],
+            );
+            // updatedAt must NOT change — pinning is a display-order preference, not a content edit.
+            expect(afterRow.rows[0]!.updated_at).toEqual(updatedAtBefore);
+            expect(afterRow.rows[0]!.name).toBe('Pin Test List');
+            expect(afterRow.rows[0]!.visibility).toBe('private');
+            expect(afterRow.rows[0]!.is_checklist).toBe(false);
+            expect(afterRow.rows[0]!.like_count).toBe(0);
+            expect(afterRow.rows[0]!.pinned_at === null).toBe(!pinned);
+          } else {
+            const canView = role === 'viewer' || role === 'editor';
+            const expectedCode = canView ? 'food_list_edit_forbidden' : 'food_list_not_found';
+            await expect(foodListRepo.setPinned(list.id, actorId, pinned)).rejects.toSatisfy(
+              (err: unknown) => err instanceof AppError && err.code === expectedCode,
+            );
+
+            const afterRow = await pool.query<{ pinned_at: string | null }>(
+              `SELECT pinned_at FROM food_lists WHERE id = $1`,
+              [list.id],
+            );
+            expect(afterRow.rows[0]!.pinned_at).toBeNull();
+          }
+
+          await pool.query(`DELETE FROM food_lists WHERE id = $1`, [list.id]);
+        },
+      ),
+      { numRuns: 100 },
+    );
+  });
+
+  // Feature: list-pinning, Property 24: Pinned-First Ordering Is Total and Stable
+  it('Property 24: Pinned-First Ordering Is Total and Stable', async () => {
+    await fc.assert(
+      fc.asyncProperty(
+        fc.array(fc.boolean(), { minLength: 2, maxLength: 6 }),
+        async (pinFlags) => {
+          const createdIds: string[] = [];
+          for (let i = 0; i < pinFlags.length; i++) {
+            const list = await foodListRepo.createList(ownerId, {
+              name: `Order Test ${i}-${randomUUID().slice(0, 6)}`,
+            });
+            createdIds.push(list.id);
+            // Stagger updated_at deterministically so recency ordering among
+            // unpinned lists is unambiguous, then apply this list's pin flag.
+            const staggeredUpdatedAt = new Date(Date.now() - (pinFlags.length - i) * 1000);
+            await pool.query(`UPDATE food_lists SET updated_at = $2 WHERE id = $1`, [
+              list.id,
+              staggeredUpdatedAt,
+            ]);
+            if (pinFlags[i]) {
+              await foodListRepo.setPinned(list.id, ownerId, true);
+            }
+          }
+
+          const owned = await foodListRepo.listOwned(ownerId);
+          const ordered = owned.filter((l) => createdIds.includes(l.id));
+
+          // Every pinned list appears before every unpinned list.
+          let seenUnpinned = false;
+          for (const l of ordered) {
+            if (l.pinnedAt === null) {
+              seenUnpinned = true;
+            } else {
+              expect(seenUnpinned).toBe(false);
+            }
+          }
+
+          // Among pinned lists, descending pinnedAt.
+          const pinnedSubset = ordered.filter((l) => l.pinnedAt !== null);
+          for (let i = 1; i < pinnedSubset.length; i++) {
+            expect(new Date(pinnedSubset[i - 1]!.pinnedAt!).getTime()).toBeGreaterThanOrEqual(
+              new Date(pinnedSubset[i]!.pinnedAt!).getTime(),
+            );
+          }
+
+          // Among unpinned lists, descending updatedAt.
+          const unpinnedSubset = ordered.filter((l) => l.pinnedAt === null);
+          for (let i = 1; i < unpinnedSubset.length; i++) {
+            expect(new Date(unpinnedSubset[i - 1]!.updatedAt).getTime()).toBeGreaterThanOrEqual(
+              new Date(unpinnedSubset[i]!.updatedAt).getTime(),
+            );
+          }
+
+          for (const id of createdIds) {
+            await pool.query(`DELETE FROM food_lists WHERE id = $1`, [id]);
+          }
+        },
+      ),
+      { numRuns: 100 },
+    );
+  }, 30000);
 });

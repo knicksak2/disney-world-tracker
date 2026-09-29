@@ -17,7 +17,7 @@
 //   - Preserves error indicators for completion, rating, and note queries independently (R17.8, R17.10).
 //   - Omits redundant legacy form controls on success (R17.10).
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -26,7 +26,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import type {
   CompletionDTO,
@@ -34,6 +34,7 @@ import type {
   ExperienceVisitHistoryDTO,
   NoteDTO,
   RatingDTO,
+  VisitSummaryResponseDTO,
 } from '@dwt/shared';
 
 import { ApiError, apiRequest } from '../../api/client';
@@ -41,7 +42,6 @@ import { theme } from '../../theme/theme';
 import { Card, PrimaryButton } from '../../theme/components';
 import NoteControl from './NoteControl';
 import LogVisitModal from './LogVisitModal';
-import { computePassportAverage } from './passportStats';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -95,8 +95,20 @@ export default function ParkPassportCard({
   }, [logsQuery.data?.logs]);
 
   const visitCount = localLogs.length;
-  const ratings = useMemo(() => localLogs.map((l) => l.rating), [localLogs]);
-  const passportAverage = useMemo(() => computePassportAverage(ratings), [ratings]);
+
+  // Requirement 16.1-16.3: averageRating/ratedCount are sourced from the
+  // batched visit-summary endpoint, not computed by reducing over `logs`.
+  const visitSummaryQuery = useQuery({
+    queryKey: ['visit-summary', experienceId] as const,
+    queryFn: () =>
+      apiRequest<VisitSummaryResponseDTO>(
+        'GET',
+        `/me/experiences/visit-summary?ids=${encodedId}`,
+      ),
+  });
+  const visitSummary = visitSummaryQuery.data?.[experienceId];
+  const passportAverage = visitSummary?.averageRating ?? null;
+  const ratedCount = visitSummary?.ratedCount ?? 0;
 
   const invalidateAfterLogChange = (): void => {
     void queryClient.invalidateQueries({
@@ -111,6 +123,9 @@ export default function ParkPassportCard({
     void queryClient.invalidateQueries({
       queryKey: ['experience-aggregate', experienceId],
     });
+    void queryClient.invalidateQueries({
+      queryKey: ['visit-summary', experienceId],
+    });
     void queryClient.invalidateQueries({ queryKey: ['me-stats'] });
   };
 
@@ -124,6 +139,9 @@ export default function ParkPassportCard({
     });
     void queryClient.invalidateQueries({
       queryKey: ['experience-aggregate', experienceId],
+    });
+    void queryClient.invalidateQueries({
+      queryKey: ['visit-summary', experienceId],
     });
   };
 
@@ -154,7 +172,6 @@ export default function ParkPassportCard({
     }
   };
 
-  const ratedCount = localLogs.filter((l) => l.rating !== null).length;
   const tipText =
     noteQuery.data?.body?.trim() ||
     localLogs.find((l) => l.note?.trim())?.note?.trim() ||

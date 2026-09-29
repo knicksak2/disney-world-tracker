@@ -211,6 +211,21 @@ export function navigateToFoodListDetail(params: { readonly foodListId: string }
 }
 
 /**
+ * Navigate to `ExperienceListDetail` for a tapped experience-list share /
+ * role-change push notification carrying `{ experienceListId }` (Requirement
+ * 10.1, Task 14.1).
+ */
+export function navigateToExperienceListDetail(params: {
+  readonly experienceListId: string;
+}): boolean {
+  if (!navigationRef.isReady()) {
+    return false;
+  }
+  navigationRef.navigate('ExperienceListDetail', params);
+  return true;
+}
+
+/**
  * Navigate to `LiveWaits` screen under Explore tab (Requirement 4.3).
  */
 export function navigateToLiveWaits(park: string): boolean {

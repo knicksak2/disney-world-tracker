@@ -132,9 +132,21 @@ import {
   createFoodListShareRepo,
   createFoodListAffinityRepo,
 } from './services/foodLists/repo.js';
+// Feature: experience-lists (task 3.2) — cross-spec import into a file the
+// already-shipped food-lists spec created, to compose unfriend revocation
+// across both list kinds. Only the share repo was needed there; task 6.3
+// wires the remaining Experience_List repos below.
+import {
+  createExperienceListRepo,
+  createExperienceListItemRepo,
+  createExperienceListShareRepo,
+  createExperienceListAffinityRepo,
+} from './services/experienceLists/repo.js';
 import type {
   FoodListRoleChangedEvent,
   FoodListSharedEvent,
+  ExperienceListRoleChangedEvent,
+  ExperienceListSharedEvent,
 } from './services/notifications/service.js';
 
 import { IntelligenceRepo } from './services/intelligence/IntelligenceRepo.js';
@@ -215,6 +227,17 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
   const foodListItemRepo = createFoodListItemRepo(pool);
   const foodListShareRepo = createFoodListShareRepo(pool);
   const foodListAffinityRepo = createFoodListAffinityRepo(pool, foodListRepo);
+  // Feature: experience-lists (task 6.3) — the full Experience_List repo set,
+  // mirroring the food-lists repo instantiation above. `experienceListShareRepo`
+  // was already needed by `onFriendshipRemoved` (task 3.2); the rest are new
+  // here now that the routes are wired.
+  const experienceListRepo = createExperienceListRepo(pool);
+  const experienceListItemRepo = createExperienceListItemRepo(pool);
+  const experienceListShareRepo = createExperienceListShareRepo(pool);
+  const experienceListAffinityRepo = createExperienceListAffinityRepo(
+    pool,
+    experienceListRepo,
+  );
 
   /**
    * Synchronous Pin award port (pin-collection R2.1-R2.3). Handed to every
@@ -261,6 +284,54 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
          ) ic ON ic.food_list_id = fl.id
         WHERE fl.id = $1`,
         [foodListId],
+      );
+      if (res.rows.length === 0) return null;
+      const row = res.rows[0]!;
+      return {
+        id: row.id,
+        ownerId: row.owner_id,
+        visibility: row.visibility,
+        name: row.name,
+        itemCount: row.item_count,
+        ownerDisplayName: row.owner_display_name,
+      };
+    },
+    // Feature: experience-lists (task 18.7) — cross-spec port injected into
+    // `trips`' attach/detach and Trip read projection (Requirement 14),
+    // mirroring `resolveFoodList` immediately above exactly. This runs its
+    // own standalone query (rather than delegating to `experienceListRepo`)
+    // for the same reason `resolveFoodList` does: `TripRepoDeps.resolveExperienceList`
+    // needs the full `{ id, ownerId, visibility, name, itemCount, ownerDisplayName }`
+    // shape, which `experienceListRepo.resolveForAttachEligibility` does not
+    // return (it only returns `{ ownerId, visibility }` for the eligibility
+    // check, not the `name`/`itemCount`/`ownerDisplayName` the Trip read
+    // projection (`selectTripExperienceListsByTrip`) needs to build a
+    // `TripExperienceListDTO`).
+    resolveExperienceList: async (experienceListId: string) => {
+      const res = await pool.query<{
+        id: string;
+        owner_id: string;
+        visibility: 'private' | 'public';
+        name: string;
+        item_count: number;
+        owner_display_name: string;
+      }>(
+        `SELECT
+           el.id,
+           el.owner_id,
+           el.visibility,
+           el.name,
+           COALESCE(ic.item_count, 0)::int AS item_count,
+           COALESCE(p.display_name, 'User') AS owner_display_name
+         FROM experience_lists el
+         LEFT JOIN profiles p ON p.user_id = el.owner_id
+         LEFT JOIN (
+           SELECT experience_list_id, COUNT(*)::int AS item_count
+           FROM experience_lists_items
+           GROUP BY experience_list_id
+         ) ic ON ic.experience_list_id = el.id
+        WHERE el.id = $1`,
+        [experienceListId],
       );
       if (res.rows.length === 0) return null;
       const row = res.rows[0]!;
@@ -419,6 +490,36 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
         notificationLogger.error(
           { err, foodListId: event.foodListId },
           'FoodListRoleChanged dispatch failed',
+        );
+      });
+  };
+
+  /**
+   * Background `ExperienceListShared` dispatch (Feature: experience-lists R8.1).
+   */
+  const emitExperienceListShared = (event: ExperienceListSharedEvent): void => {
+    void notificationService
+      .handleExperienceListShared(event)
+      .catch((err: unknown) => {
+        notificationLogger.error(
+          { err, experienceListId: event.experienceListId },
+          'ExperienceListShared dispatch failed',
+        );
+      });
+  };
+
+  /**
+   * Background `ExperienceListRoleChanged` dispatch (Feature: experience-lists R8.3).
+   */
+  const emitExperienceListRoleChanged = (
+    event: ExperienceListRoleChangedEvent,
+  ): void => {
+    void notificationService
+      .handleExperienceListRoleChanged(event)
+      .catch((err: unknown) => {
+        notificationLogger.error(
+          { err, experienceListId: event.experienceListId },
+          'ExperienceListRoleChanged dispatch failed',
         );
       });
   };
@@ -638,8 +739,14 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
       // Dispatch a push to the recipient on a background port after the
       // request row commits; the request is never blocked or failed by push.
       emitFriendRequestReceived,
+      // Feature: experience-lists (task 3.2) — cross-spec edit to the
+      // food-lists-authored `onFriendshipRemoved` callback: unfriending now
+      // revokes both list kinds' shares concurrently, per design.md.
       onFriendshipRemoved: async (userA: string, userB: string) => {
-        await foodListShareRepo.revokeSharesBetween(userA, userB);
+        await Promise.all([
+          foodListShareRepo.revokeSharesBetween(userA, userB),
+          experienceListShareRepo.revokeSharesBetween(userA, userB),
+        ]);
       },
     },
     sharing: {
@@ -706,6 +813,15 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
       requireSession: sessionMiddleware,
       emitFoodListShared,
       emitFoodListRoleChanged,
+    },
+    experienceLists: {
+      repo: experienceListRepo,
+      itemRepo: experienceListItemRepo,
+      shareRepo: experienceListShareRepo,
+      affinityRepo: experienceListAffinityRepo,
+      requireSession: sessionMiddleware,
+      emitExperienceListShared,
+      emitExperienceListRoleChanged,
     },
     parkLive: {
       service: parkLiveService,

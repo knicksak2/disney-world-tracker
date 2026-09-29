@@ -74,6 +74,7 @@ const ACTIVE_TRIP: TripDTO = {
   createdAt: '2024-04-01T12:00:00Z',
   resorts: [],
   foodLists: [],
+  experienceLists: [],
 };
 
 function makeQueryClient(): QueryClient {
@@ -190,6 +191,7 @@ describe('Trips_List_Screen (R16.6, R16.7, R16.8, R16.9)', () => {
       createdAt: '2024-04-01T12:00:00Z',
       resorts: [],
       foodLists: [],
+      experienceLists: [],
     };
     const pastTrip: TripDTO = {
       id: 'trip-past-1',
@@ -201,6 +203,7 @@ describe('Trips_List_Screen (R16.6, R16.7, R16.8, R16.9)', () => {
       createdAt: '2020-01-01T12:00:00Z',
       resorts: [],
       foodLists: [],
+      experienceLists: [],
     };
 
     apiRequestMock.mockImplementation(async (_method, path) => {

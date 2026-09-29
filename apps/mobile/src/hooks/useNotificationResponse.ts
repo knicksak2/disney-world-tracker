@@ -44,6 +44,7 @@ import type * as NotificationsModule from 'expo-notifications';
 
 import { loadNotifications } from '../env/notifications';
 import {
+  navigateToExperienceListDetail,
   navigateToFoodListDetail,
   navigateToNotificationCenter,
 } from '../navigation/navigationRef';
@@ -174,12 +175,38 @@ export function extractFoodListId(
 }
 
 /**
+ * Extract an experience list id from a tapped experience-list share/role-change notification response.
+ * The experienceListId travels in the notification's `data` payload under `experienceListId`.
+ * Returns the id when present as a non-empty string, or `null` otherwise.
+ */
+export function extractExperienceListId(
+  response: NotificationsModule.NotificationResponse | null | undefined,
+): string | null {
+  const data = response?.notification?.request?.content?.data;
+  if (data === null || typeof data !== 'object') {
+    return null;
+  }
+  const direct = (data as { experienceListId?: unknown }).experienceListId;
+  if (typeof direct === 'string' && direct.length > 0) {
+    return direct;
+  }
+  const nested = (data as { data?: { experienceListId?: unknown } }).data
+    ?.experienceListId;
+  if (typeof nested === 'string' && nested.length > 0) {
+    return nested;
+  }
+  return null;
+}
+
+/**
  * Classify a tapped notification into its navigation target. A Trip_Invite tap
  * (carrying `{ tripInviteId }`, R18.2) routes to the invite accept/decline
  * view; a Rode_With_Tag tap (carrying `{ rodeWithTagId, tripLogEntryId }`,
  * R18.3) routes to the tag confirm view; a friend-request tap routes to the
  * `FriendsList`; a food-list share/role-change tap (carrying `{ foodListId }`)
- * routes to `FoodListDetail`; everything else is treated as a Share tap (carrying a
+ * routes to `FoodListDetail`; an experience-list share/role-change tap
+ * (carrying `{ experienceListId }`) routes to `ExperienceListDetail`;
+ * everything else is treated as a Share tap (carrying a
  * resolvable `shareId`, or none for the R10.5 open-inbox case). The specific kinds
  * are checked first so their routing ids take precedence over the Share
  * fallback.
@@ -206,6 +233,10 @@ export function classifyTap(
   if (foodListId !== null) {
     return { kind: 'foodListShare', foodListId };
   }
+  const experienceListId = extractExperienceListId(response);
+  if (experienceListId !== null) {
+    return { kind: 'experienceListShare', experienceListId };
+  }
   return { kind: 'share', shareId: extractShareId(response) };
 }
 
@@ -218,7 +249,9 @@ export function classifyTap(
  * Share id (or `null` for the R10.5 open-inbox case); a friend-request tap
  * carries no id and routes to the `FriendsList`; a Trip_Invite tap carries its
  * `tripInviteId` (R18.2) and a Rode_With_Tag tap its `rodeWithTagId` plus
- * `tripLogEntryId` (R18.3) and route into the Trips tab.
+ * `tripLogEntryId` (R18.3) and route into the Trips tab; a food-list
+ * share/role-change tap carries `{ foodListId }` and an experience-list
+ * share/role-change tap carries `{ experienceListId }` (R10.1).
  */
 export type PendingTap =
   | { readonly kind: 'share'; readonly shareId: string | null }
@@ -229,7 +262,8 @@ export type PendingTap =
       readonly rodeWithTagId: string;
       readonly tripLogEntryId: string;
     }
-  | { readonly kind: 'foodListShare'; readonly foodListId: string };
+  | { readonly kind: 'foodListShare'; readonly foodListId: string }
+  | { readonly kind: 'experienceListShare'; readonly experienceListId: string };
 
 /**
  * Dispatch a pending tap to its navigation target through the shared
@@ -271,6 +305,10 @@ function dispatchPendingTap(pending: PendingTap): boolean {
       );
     case 'foodListShare':
       return navigateToFoodListDetail({ foodListId: pending.foodListId });
+    case 'experienceListShare':
+      return navigateToExperienceListDetail({
+        experienceListId: pending.experienceListId,
+      });
   }
 }
 

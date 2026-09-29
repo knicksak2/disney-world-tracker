@@ -16,6 +16,15 @@ export interface FoodListDTO {
   readonly itemCount: number;
   readonly createdAt: string;
   readonly updatedAt: string;
+  /**
+   * ISO-8601 UTC timestamp of when the owner pinned this list, or `null` if
+   * unpinned. Drives `listOwned`'s `ORDER BY pinned_at DESC NULLS LAST,
+   * updated_at DESC` — pinned lists surface first (most-recently-pinned
+   * first), so a User actively working on a list keeps it visible on the
+   * Collection screen's capped preview regardless of what else they've
+   * recently touched.
+   */
+  readonly pinnedAt: string | null;
 }
 
 export interface FoodListItemDTO {
@@ -96,6 +105,8 @@ export interface UpdateFoodListInputDTO {
   readonly visibility?: FoodListVisibility;
   /** Requirement 13.2 — symmetric with `visibility`'s existing update path. */
   readonly isChecklist?: boolean | undefined;
+  /** `true` pins the list (server stamps `pinnedAt`); `false` unpins it (`pinnedAt` set to `null`). */
+  readonly pinned?: boolean | undefined;
 }
 
 export interface AddFoodListItemInputDTO {

@@ -63,6 +63,7 @@ import {
   SecondaryButton,
 } from '../../theme/components';
 import { ExperiencePicker } from './ExperiencePicker';
+import { useAttachedExperienceListItemsForTrip } from './useAttachedExperienceListItems';
 import {
   LogComposerModal,
   tripFeedKeys,
@@ -207,6 +208,24 @@ export default function TripPlannedListScreen({
     const members = membersQuery.data ?? [];
     return members.filter((m) => m.userId !== ownUserId);
   }, [membersQuery.data, ownUserId]);
+
+  // Requirement 15.5: Trip-wide (any date) set of Experience ids already on
+  // the Planned_List, for the ExperiencePicker's "Already added" tag —
+  // reusing the same experienceId-matching approach
+  // planned-list-completion-sync established (a `break`-type item has
+  // `experienceId: null`, so it is filtered out here). Computed unconditionally
+  // (before the loading/error early returns below) to satisfy the Rules of
+  // Hooks — it reads `itemsQuery.data` directly rather than the later `items`
+  // local, which is only defined after those returns.
+  const existingExperienceIds = useMemo<ReadonlySet<string>>(
+    () =>
+      new Set(
+        (itemsQuery.data ?? [])
+          .map((item) => item.experienceId)
+          .filter((id): id is string => typeof id === 'string' && id.length > 0),
+      ),
+    [itemsQuery.data],
+  );
 
   const invalidateItems = (): void => {
     void queryClient.invalidateQueries({
@@ -540,6 +559,7 @@ export default function TripPlannedListScreen({
       <AddItemModal
         visible={composerVisible}
         tripId={tripId}
+        existingExperienceIds={existingExperienceIds}
         onClose={() => {
           setComposerVisible(false);
           invalidateItems();
@@ -733,11 +753,18 @@ function ratingFor(feedItem: TripFeedItemDTO | undefined): number | null {
 function AddItemModal({
   visible,
   tripId,
+  existingExperienceIds,
   onClose,
   onAdded,
 }: {
   readonly visible: boolean;
   readonly tripId: string;
+  /**
+   * Requirement 15.5: Trip-wide (any date) ids already on the Planned_List,
+   * supplied by the parent's already-fetched `items` — passed straight
+   * through to the picker's non-blocking `alreadyPlannedIds` prop.
+   */
+  readonly existingExperienceIds: ReadonlySet<string>;
   readonly onClose: () => void;
   readonly onAdded: () => void;
 }): JSX.Element {
@@ -746,6 +773,14 @@ function AddItemModal({
   // spinner and block a second tap while the POST is in flight.
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [addedCounts, setAddedCounts] = useState<ReadonlyMap<string, number>>(new Map());
+
+  // Schedule Builder / Planned List Picker Integration (Requirement 15):
+  // merges every attached Experience_List's contents into one flat,
+  // deduplicated candidate set for ExperiencePicker's "My Lists" tab. This
+  // modal only has `tripId`, not an already-fetched TripDTO, so it fetches
+  // its own (cache-shared with any other screen reading the same Trip via
+  // `tripDetailKeys.detail`). Only fetched while the modal is visible.
+  const attachedListItems = useAttachedExperienceListItemsForTrip(tripId, visible);
 
   const resetForm = (): void => {
     setError(null);
@@ -872,6 +907,9 @@ function AddItemModal({
             addedCounts={addedCounts}
             busy={busy}
             testIDPrefix="planned-list"
+            listSourcedItems={attachedListItems.items}
+            listSourcedLoading={attachedListItems.isLoading}
+            alreadyPlannedIds={existingExperienceIds}
           />
 
           <SecondaryButton

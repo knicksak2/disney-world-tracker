@@ -272,12 +272,13 @@ its summary counts) and owns none of the underlying data.
 
 #### Section 5.1: Disney Vault Segmented Hub Redesign (Requirements 6.5–6.9)
 
-To eliminate dead launcher whitespace and provide a rich personal scrapbook hub, `CollectionScreen` is amended into a three-way segmented hub:
+To eliminate dead launcher whitespace and provide a rich personal scrapbook hub, `CollectionScreen` is amended into a four-way segmented hub (originally three-way per R6.6; split into "Food" and "Lists" per R6's amendment and `experience-lists` Requirement 12's revision — Experience_Lists are not food-related, and sharing a segment named "Food & Lists" with an unrelated collection type read as a bolted-on capability rather than a first-class part of the hub):
 1. **Header & Tab Label (R6.5):**
    - The bottom tab bar displays `tabBarLabel: 'Vault'` and renders an attention badge reflecting `useClaimablePinsBadge().count`.
    - `GradientHeader` renders an eyebrow greeting pill `📌 DISNEY VAULT`, title `My Disney Collection`, and subtitle `Your personal scrapbook of pins, treats, and progress stats`, retaining `NotificationBell` and `AvatarChip` in the header right.
-2. **Segmented Control (R6.6):**
-   - Three pills: "Pins & Showcase" (with unread badge), "Food & Lists", and "Park Stats".
+2. **Segmented Control (R6.6a):**
+   - Four pills: "Pins" (with unread claimable-pin badge, shortened from "Pins & Showcase" once a 4th equal-width pill made the longer label clip), "Food", "Lists" (no badge — a list count is not actionable/urgent the way a claimable pin is), and "Park Stats".
+   - **Amendment (styling correction, not a requirement change):** the segmented control originally sat with a `-16` negative top margin so its rounded card visually overlapped the header's bottom curve ("to eliminate dead launcher whitespace"). This was the only screen in the app using that overlapping treatment — every other `GradientHeader` screen (Explore, Trip Detail, Experience Detail, etc.) places its content flush below the header with no intrusion into the curve — and side-by-side it read as inconsistent, not as an intentional design language. The negative margin is removed; the segmented control now sits with ordinary positive spacing below the header, matching every other screen's pattern.
 3. **Pins & Showcase Sub-View (R6.7):**
    - **Claim Banner:** When `claimableCount > 0`, renders a celebratory gold card with a "Claim" button that navigates to `PinBoardScreen` with `{ celebratePinIds }`.
    - **Display Corkboard Canvas:** A 240px-high wood-framed corkboard (`assets/cork.png`). Reuses **only** the read-only projection math from `PinShowcaseScreen.tsx`, mapping fractional `0.0–1.0` floats to board coordinates:
@@ -285,12 +286,16 @@ To eliminate dead launcher whitespace and provide a rich personal scrapbook hub,
      `y = Math.max(minTop, Math.min(maxTop, placement.posY * boardHeight - PIN_SIZE / 2))`
      without mounting `PanResponder` or drag physics. Tapping a pin opens `PinDetailModal`. A header action "Customize ✏️" navigates to `PinShowcaseScreen`.
    - **Pin Directory Card:** Displays overall progress `X of Y Pins Collected (Z%)` with a progress bar, tier badges, and "View Board ➔" button navigating to `PinBoardScreen`.
-4. **Food & Lists Sub-View (R6.8):**
-   - Summary stat tiles for snacks logged (`useQuery(['me-food-item-logs'])`) and saved food lists (`useQuery(['food-lists-collection'])`).
-   - Active food list preview with link to list discovery (`FoodListDiscoveryScreen`).
+4. **Food Sub-View (R6.8a, supersedes the pre-split "Food & Lists" R6.8):**
+   - A single summary stat tile for snacks logged (`useQuery(['me-food-item-logs'])`) — no list-count tile here anymore, since list content moved to the "Lists" segment.
+   - A "🍽️ Log a food item" primary action opening the exact same restaurant→dish→rating flow `MagicFab`'s existing "Log Snack" quick action already drives (`ExperiencePicker` with `defaultTab="dining"` → `FoodItemPickerModal` → `LogFoodItemModal`), composed locally in `CollectionScreen.tsx` rather than routing through `MagicFab`/`QuickActionSheet` — the Food segment needed its own in-place entry point rather than relying on a User remembering the separate global FAB exists, but the underlying modals and mutation/invalidation logic are the same reused components, not a second implementation.
    - Recent treats passport showing the last 2–3 logged items with ratings.
+   - The Classic Treats Checklist card (unchanged from the pre-split view).
    - Primary action "Open Food History Timeline" navigating to `MyFoodHistoryScreen`.
-5. **Park Stats Sub-View (R6.9):**
+5. **Lists Sub-View (R6.8b, new):**
+   - "My Food Lists" card (unchanged content/behavior, moved here from the old "Food & Lists" view) and "My Experience Lists" card (per `experience-lists` Requirement 12, likewise moved here rather than living beside food content) presented as two equal-weight cards, in that order, with no visual hierarchy implying one is primary.
+   - Each card's own active-list preview and "+ New / Discover" link are unchanged from their pre-split implementation — this is a relocation of two existing cards onto a new segment, not a rebuild of either.
+6. **Park Stats Sub-View (R6.9):**
    - Derived from existing cached `GET /me/stats?percentile=true` (`useQuery(['me-stats', { percentile: true }])`).
    - Overall completion ring/percentage, brag banner, and 4-park coverage bars.
    - Primary action "View Full Stats & Insights" navigating to `StatsStack`.
@@ -725,3 +730,87 @@ single `TripFeed` (Trip_Activity) route.
   re-splitting Trip_Activity.
 - **Full `npm run verify`** once the change is complete, per this repo's execution-discipline steering.
 
+
+## Amendment: Multi-Row Preview, Pin-Aware Ordering, Deep Link, and Inline Create (Requirement 6 amendment 8c)
+
+### Why the single active-list preview row was replaced
+
+The Lists Sub-View's original single-row preview (5. in the Sub-View list above) picked
+`ownedLists[0]` with no visible rationale — since `listOwned` already orders by `updatedAt DESC`
+(and now, per `food-lists`/`experience-lists` Requirement 14/19, pinned-first), the row shown was
+technically "most recently touched," but nothing on screen communicated that, so it read as an
+arbitrary pick to a User with more than one list. Worse, tapping the row (or "+ New / Discover")
+navigated to the full list-management screen rather than that specific list, adding an extra hop
+for the single most common action. This amendment replaces the single row with up to 3 rows per
+card, each deep-linking directly to its own list, plus makes the ordering's rationale visible and
+actionable via the pin toggle already specified in `food-lists` Requirement 14.5 /
+`experience-lists` Requirement 19.5.
+
+### Component changes — `CollectionScreen.tsx`
+
+- Remove `activeList`/`activeExperienceList` (the `[0]`-pick derivations).
+- Each of the "My Food Lists"/"My Experience Lists" cards renders
+  `ownedLists.slice(0, MAX_COLLECTION_PREVIEW_ROWS)` as individual rows (name, item count, pin
+  toggle), reusing the existing row visual style. `ownedLists` is already returned pinned-first by
+  `listOwned` (Requirement 14.4/19.4), so no client-side re-sort is needed — the card renders the
+  array exactly as received.
+- Each row's `onPress` navigates to `FoodListDetail`/`ExperienceListDetail` with that row's own
+  `id` (`{ foodListId: item.id }` / `{ experienceListId: item.id }`), replacing the old
+  `navigation.navigate('MyFoodLists')`/`'MyExperienceLists'` full-screen jump.
+- Each row renders a small pin/unpin icon (e.g. a pin glyph, filled when `pinnedAt !== null`)
+  calling `PATCH /me/food-lists/:id`/`PATCH /me/experience-lists/:id` with `{ pinned: !current }`
+  and invalidating `['food-lists-collection']`/`['experience-lists-collection']` on success — the
+  identical request shape `MyFoodListsScreen.tsx`/`MyExperienceListsScreen.tsx`'s own row-level
+  pin control (Requirement 14.5/19.5) sends. Implemented as parallel one-line handler functions
+  (`handleToggleFoodListPinned`/`handleToggleExperienceListPinned` in `CollectionScreen.tsx`,
+  `handleTogglePinned` in each management screen) rather than a shared hook — each is a single
+  `apiRequest('PATCH', ...)` call with no other logic, so extracting a hook would add a layer of
+  indirection without removing any duplication worth removing.
+- WHERE `ownedLists.length > MAX_COLLECTION_PREVIEW_ROWS` (3), an additional row renders "View
+  all (N) →" (`N = ownedLists.length`) navigating to `MyFoodLists`/`MyExperienceLists` — the only
+  remaining path to the full management screen from this card.
+- The card header's "+ New / Discover" link (unchanged destination for "Discover") gains a
+  sibling "+ New" action that opens a small create-list modal in place, without navigating away
+  from `CollectionScreen`. This modal is the exact same `CreateFoodListModal`/
+  `CreateExperienceListModal` component `MyFoodListsScreen.tsx`/`MyExperienceListsScreen.tsx`
+  already renders — extracted from those screens into a standalone component
+  (`apps/mobile/src/screens/foodLists/CreateFoodListModal.tsx`,
+  `apps/mobile/src/screens/experienceLists/CreateExperienceListModal.tsx`) taking `{ visible,
+  onClose, onCreated }`, so `CollectionScreen` and the two management screens share one
+  implementation rather than duplicating the name/visibility/(checklist, for food lists)
+  form and its validation/error-surfacing.
+- The empty-state text ("No saved food lists yet...") is unchanged, rendered when
+  `ownedLists.length === 0`.
+
+## Correctness Properties — Addition
+
+### Property 10: Collection Preview Rows Are Exactly the First `MAX_COLLECTION_PREVIEW_ROWS` of the Pinned-First-Ordered Owned List (Added by this amendment)
+*For any User and either list card ("My Food Lists" / "My Experience Lists"), the rows rendered on `CollectionScreen` equal `ownedLists.slice(0, 3)` exactly (same ids, same order) as returned by `GET /me/food-lists/collection` / `GET /me/experience-lists/collection`'s `owned` array — no client-side re-sort, re-filter, or `[0]`-style pick is applied. A "View all (N)" row renders if and only if `ownedLists.length > 3`, with `N` equal to the exact `ownedLists.length`.*
+**Validates:** Requirement 6 amendment 8c
+
+### Property 11: Each Collection Preview Row Deep-Links to Its Own List (Added by this amendment)
+*For any rendered Collection preview row with id `X`, activating that row navigates to `FoodListDetail`/`ExperienceListDetail` with that exact `X` — never to `MyFoodLists`/`MyExperienceLists`, and never to a different row's id.*
+**Validates:** Requirement 6 amendment 8c
+
+### Property 12: Collection and Management-Screen Pin Toggles Are Behaviorally Identical (Added by this amendment)
+*For any Food_List or Experience_List, activating its pin/unpin toggle on the Collection preview row and activating the equivalent row's pin/unpin toggle on `MyFoodListsScreen`/`MyExperienceListsScreen` issue the identical `PATCH` request body and produce the identical resulting `pinnedAt` state — the two surfaces are two entry points into the same mutation, never two independently-behaving implementations.*
+**Validates:** Requirement 6 amendment 8c; `food-lists` Requirement 14.5; `experience-lists` Requirement 19.5
+
+## Testing Strategy — Addition
+
+- **`CollectionScreen.test.tsx`**: extend the existing Lists-segment tests to assert (a) up to 3
+  rows render per card ordered exactly as the mocked `collection` response's `owned` array (no
+  re-sort), (b) a 4th+ list produces a "View all (N)" row navigating to
+  `MyFoodLists`/`MyExperienceLists`, and its absence when `ownedLists.length <= 3`, (c) tapping a
+  specific row's `testID` navigates to `FoodListDetail`/`ExperienceListDetail` with that row's own
+  id (not a different row's, not the management screen), (d) tapping a row's pin toggle issues
+  `PATCH .../:id` with `{ pinned: true }` (or `false` when already pinned) and the row's pin icon
+  reflects the new state, (e) tapping "+ New" opens the create-list modal in place (no navigation
+  away from `CollectionHome`) and a successful submission adds the new list to the rendered rows.
+- **`CreateFoodListModal.test.tsx` / `CreateExperienceListModal.test.tsx`** (new, extracted
+  components): render/interaction tests covering name entry, visibility toggle (and checklist
+  toggle for the food variant), submit calling `POST /me/food-lists`/`POST /me/experience-lists`
+  with the expected body, and a rejected submission surfacing a visible error without closing the
+  modal — ported directly from `MyFoodListsScreen.test.tsx`/`MyExperienceListsScreen.test.tsx`'s
+  existing create-modal test cases, which are updated to render the extracted component via those
+  screens rather than inline modal markup.

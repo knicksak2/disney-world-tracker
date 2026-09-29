@@ -148,24 +148,28 @@ describe('createFoodListInputSchema', () => {
 });
 
 describe('updateFoodListInputSchema', () => {
-  it('accepts optional name, visibility, and isChecklist', () => {
+  it('accepts optional name, visibility, isChecklist, and pinned', () => {
     expect(updateFoodListInputSchema.safeParse({}).success).toBe(true);
     expect(updateFoodListInputSchema.safeParse({ name: 'New Name' }).success).toBe(true);
     expect(updateFoodListInputSchema.safeParse({ visibility: 'public' }).success).toBe(true);
     expect(updateFoodListInputSchema.safeParse({ isChecklist: true }).success).toBe(true);
     expect(updateFoodListInputSchema.safeParse({ isChecklist: false }).success).toBe(true);
+    expect(updateFoodListInputSchema.safeParse({ pinned: true }).success).toBe(true);
+    expect(updateFoodListInputSchema.safeParse({ pinned: false }).success).toBe(true);
     expect(
       updateFoodListInputSchema.safeParse({
         name: 'New Name',
         visibility: 'private',
         isChecklist: true,
+        pinned: true,
       }).success,
     ).toBe(true);
   });
 
-  it('rejects invalid visibility and non-boolean isChecklist', () => {
+  it('rejects invalid visibility, non-boolean isChecklist, and non-boolean pinned', () => {
     expect(updateFoodListInputSchema.safeParse({ visibility: 'unlisted' }).success).toBe(false);
     expect(updateFoodListInputSchema.safeParse({ isChecklist: 'yes' }).success).toBe(false);
+    expect(updateFoodListInputSchema.safeParse({ pinned: 'yes' }).success).toBe(false);
   });
 });
 
@@ -253,6 +257,7 @@ describe('foodListItemSchema and foodListDetailSchema', () => {
     itemCount: 1,
     createdAt: '2026-06-15T12:00:00Z',
     updatedAt: '2026-06-15T12:00:00Z',
+    pinnedAt: null,
   };
 
   it('validates foodListItemSchema with and without gotten', () => {
@@ -285,6 +290,17 @@ describe('foodListItemSchema and foodListDetailSchema', () => {
   it('validates foodListSchema', () => {
     expect(foodListSchema.safeParse(sampleList).success).toBe(true);
     expect(foodListSchema.safeParse({ ...sampleList, isChecklist: true }).success).toBe(true);
+  });
+
+  // Feature: list-pinning — pinnedAt accepts null (unpinned) or an ISO timestamp (pinned)
+  it('validates foodListSchema pinnedAt: null, a valid ISO timestamp, and rejects a non-timestamp string', () => {
+    expect(foodListSchema.safeParse({ ...sampleList, pinnedAt: null }).success).toBe(true);
+    expect(
+      foodListSchema.safeParse({ ...sampleList, pinnedAt: '2026-09-20T08:00:00Z' }).success,
+    ).toBe(true);
+    expect(foodListSchema.safeParse({ ...sampleList, pinnedAt: 'not-a-timestamp' }).success).toBe(
+      false,
+    );
   });
 
   it('validates foodListDetailSchema with and without gottenCount', () => {
@@ -336,6 +352,7 @@ describe('foodListCollectionSchema and foodListDiscoveryPageSchema', () => {
     itemCount: 1,
     createdAt: '2026-06-15T12:00:00Z',
     updatedAt: '2026-06-15T12:00:00Z',
+    pinnedAt: null,
   };
 
   it('validates collection with available and unavailable saved items', () => {

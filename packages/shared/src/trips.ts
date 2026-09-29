@@ -590,6 +590,16 @@ export const attachFoodListSchema = z
 
 export type AttachFoodListInput = z.infer<typeof attachFoodListSchema>;
 
+/**
+ * Body for `POST /trips/:id/experience-lists` (R14.1). Attaches an
+ * Experience_List to a Trip.
+ */
+export const attachExperienceListSchema = z
+  .object({ experienceListId: uuidSchema })
+  .strict();
+
+export type AttachExperienceListInput = z.infer<typeof attachExperienceListSchema>;
+
 // ---------------------------------------------------------------------------
 // DTO schemas (runtime validators for read projections)
 // ---------------------------------------------------------------------------
@@ -634,6 +644,27 @@ export const tripFoodListSchema = z.discriminatedUnion('available', [
     .strict(),
 ]);
 
+/**
+ * Validates the shape of a {@link TripExperienceListDTO} (R14.8).
+ */
+export const tripExperienceListSchema = z.discriminatedUnion('available', [
+  z
+    .object({
+      available: z.literal(true),
+      experienceListId: uuidSchema,
+      name: z.string(),
+      itemCount: z.number().int().nonnegative(),
+      ownerDisplayName: z.string(),
+    })
+    .strict(),
+  z
+    .object({
+      available: z.literal(false),
+      experienceListId: uuidSchema,
+    })
+    .strict(),
+]);
+
 // ---------------------------------------------------------------------------
 // DTOs (types only — no runtime payload)
 // ---------------------------------------------------------------------------
@@ -655,6 +686,25 @@ export type TripFoodListDTO =
   | {
       readonly available: false;
       readonly foodListId: string;
+    };
+
+/**
+ * One Experience_List attached to a Trip, as surfaced on a {@link TripDTO}
+ * (R14.8). When available, carries the list id, name, item count, and owner
+ * display name. When the referenced Experience_List has been deleted since
+ * attachment, surfaces as `available: false` with only the `experienceListId`.
+ */
+export type TripExperienceListDTO =
+  | {
+      readonly available: true;
+      readonly experienceListId: string;
+      readonly name: string;
+      readonly itemCount: number;
+      readonly ownerDisplayName: string;
+    }
+  | {
+      readonly available: false;
+      readonly experienceListId: string;
     };
 
 /**
@@ -699,6 +749,12 @@ export interface TripDTO {
    * through the Food_List_Service.
    */
   readonly foodLists: readonly TripFoodListDTO[];
+  /**
+   * The Experience_List(s) attached to the Trip for reference during the
+   * visit (R14.8). Sourced from the `trip_experience_lists` join resolved
+   * through the Experience_List_Service.
+   */
+  readonly experienceLists: readonly TripExperienceListDTO[];
   /** Walking pace scaling travel times: 'slow' (50m/min), 'moderate' (80m/min), 'fast' (100m/min). */
   readonly walkingSpeed?: 'slow' | 'moderate' | 'fast' | undefined;
   /** How the optimizer weighs walking time against queue wait time (R10). Defaults to 'balanced' when unset. */

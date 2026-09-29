@@ -1,6 +1,9 @@
 // Feature: experience-detail-redesign, Task 20.3 — ParkPassportCard & RestaurantDishLogCard render tests
+// Feature: experience-lists, Task 9.2 — updated for Requirement 16 / Property 20 (visit-summary
+// pass-through average, no client-side recomputation)
 //
-// Validates: Requirements 17.1, 17.2, 17.3, 17.4, 17.5, 17.6, 17.7, 17.8, 18.1, 18.2, 18.3, 18.4
+// Validates: Requirements 16.1, 16.3, 17.1, 17.2, 17.3, 17.4, 17.5, 17.6, 17.7, 17.8, 18.1,
+// 18.2, 18.3, 18.4
 
 import React from 'react';
 import {
@@ -15,6 +18,7 @@ import type {
   ExperienceVisitHistoryDTO,
   FoodItemLogWithContextDTO,
   NoteDTO,
+  VisitSummaryResponseDTO,
 } from '@dwt/shared';
 
 // ---------------------------------------------------------------------------
@@ -101,6 +105,38 @@ function makeLog(
   };
 }
 
+/**
+ * Requirement 16.1, 16.3 / Property 20 — ParkPassportCard's averageRating/ratedCount are a
+ * pure pass-through of `GET /me/experiences/visit-summary`, not a client-side reduction over
+ * `logsQuery`'s raw `logs`. Every test below mocks this endpoint URL-aware (matching the
+ * established `apiRequestMock.mockImplementation((method, path) => ...)` pattern used
+ * elsewhere in this codebase, e.g. TripScheduleScreen.test.tsx) rather than relying on
+ * `mockResolvedValueOnce` call ordering, since several tests also invoke `DELETE .../logs/:id`
+ * through the same shared mock.
+ */
+function stubVisitSummary(
+  summary: VisitSummaryResponseDTO,
+  extra?: (
+    method: string,
+    path: string,
+    body: unknown,
+  ) => unknown | undefined,
+): void {
+  const expectedPath = `/me/experiences/visit-summary?ids=${encodeURIComponent(EXPERIENCE_ID)}`;
+  apiRequestMock.mockImplementation(async (method: string, path: string, body?: unknown) => {
+    if (method === 'GET' && path === expectedPath) {
+      return summary;
+    }
+    if (extra) {
+      const result = extra(method, path, body);
+      if (result !== undefined) {
+        return result;
+      }
+    }
+    throw new Error(`unexpected apiRequest call: ${method} ${path}`);
+  });
+}
+
 describe('ParkPassportCard (Requirements 17.1 - 17.8)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -113,6 +149,9 @@ describe('ParkPassportCard (Requirements 17.1 - 17.8)', () => {
       repeatCount: 0,
       logs: [],
     };
+    stubVisitSummary({
+      [EXPERIENCE_ID]: { repeatCount: 0, ratedCount: 0, averageRating: null },
+    });
 
     render(
       <QueryClientProvider client={client}>
@@ -131,9 +170,12 @@ describe('ParkPassportCard (Requirements 17.1 - 17.8)', () => {
       screen.getByText('No visits logged yet. Log your first visit to start your passport!'),
     ).toBeTruthy();
     expect(screen.queryByTestId('passport-average-rating')).toBeNull();
+    return waitFor(() => {
+      expect(apiRequestMock).toHaveBeenCalled();
+    });
   });
 
-  test('R17.2, R17.3: displays visit count and average rating when ratings exist; omits average when none rated', () => {
+  test('R17.2, R17.3, Property 20: displays visit count and renders the average rating exactly as returned by visit-summary (pass-through, no client-side averaging)', async () => {
     const { client } = createQueryClient();
     const historyWithRatings: ExperienceVisitHistoryDTO = {
       experienceId: EXPERIENCE_ID,
@@ -159,6 +201,12 @@ describe('ParkPassportCard (Requirements 17.1 - 17.8)', () => {
         }),
       ],
     };
+    // The mocked visit-summary response is the ONLY source of the rendered average — it happens
+    // to equal the mean of [8, 9] here, but the point of this test (Property 20) is that the
+    // component renders exactly this API-provided value rather than recomputing it from `logs`.
+    stubVisitSummary({
+      [EXPERIENCE_ID]: { repeatCount: 3, ratedCount: 2, averageRating: 8.5 },
+    });
 
     render(
       <QueryClientProvider client={client}>
@@ -172,15 +220,15 @@ describe('ParkPassportCard (Requirements 17.1 - 17.8)', () => {
       </QueryClientProvider>,
     );
 
-    // Mean of [8, 9] is 8.5
     expect(screen.getByTestId('passport-visit-count')).toBeTruthy();
     expect(screen.getByText('3 visits')).toBeTruthy();
-    const avgElement = screen.getByTestId('passport-average-rating');
-    expect(avgElement).toBeTruthy();
-    expect(screen.getByText('8.5 / 10')).toBeTruthy();
+    await waitFor(() => {
+      expect(screen.getByTestId('passport-average-rating')).toBeTruthy();
+      expect(screen.getByText('8.5 / 10')).toBeTruthy();
+    });
   });
 
-  test('R17.3: omits passport average rating when all logs have null rating', () => {
+  test('R17.3: omits passport average rating when visit-summary reports zero rated logs', async () => {
     const { client } = createQueryClient();
     const historyNoRatings: ExperienceVisitHistoryDTO = {
       experienceId: EXPERIENCE_ID,
@@ -200,6 +248,9 @@ describe('ParkPassportCard (Requirements 17.1 - 17.8)', () => {
         }),
       ],
     };
+    stubVisitSummary({
+      [EXPERIENCE_ID]: { repeatCount: 2, ratedCount: 0, averageRating: null },
+    });
 
     render(
       <QueryClientProvider client={client}>
@@ -214,7 +265,9 @@ describe('ParkPassportCard (Requirements 17.1 - 17.8)', () => {
     );
 
     expect(screen.getByText('2 visits')).toBeTruthy();
-    expect(screen.queryByTestId('passport-average-rating')).toBeNull();
+    await waitFor(() => {
+      expect(screen.queryByTestId('passport-average-rating')).toBeNull();
+    });
   });
 
   test('R17.4: expands visit history timeline and shows details per entry', () => {
@@ -231,6 +284,11 @@ describe('ParkPassportCard (Requirements 17.1 - 17.8)', () => {
         }),
       ],
     };
+    // Minimal visit-summary mock: R17.4 asserts timeline expansion, not the average, but
+    // apiRequest must be mocked so the component's mount-time fetch doesn't go unhandled.
+    stubVisitSummary({
+      [EXPERIENCE_ID]: { repeatCount: 1, ratedCount: 1, averageRating: 10 },
+    });
 
     render(
       <QueryClientProvider client={client}>
@@ -255,7 +313,7 @@ describe('ParkPassportCard (Requirements 17.1 - 17.8)', () => {
     expect(screen.getByText('Favorite ride ever!')).toBeTruthy();
   });
 
-  test('R17.5: editing an entry rating recomputes header average and invalidates experience-rating and aggregate', async () => {
+  test('R17.5, Property 20: editing an entry rating invalidates visit-summary (and experience-rating/aggregate) instead of recomputing the average client-side', async () => {
     const { client, invalidateSpy } = createQueryClient();
     const history: ExperienceVisitHistoryDTO = {
       experienceId: EXPERIENCE_ID,
@@ -275,6 +333,11 @@ describe('ParkPassportCard (Requirements 17.1 - 17.8)', () => {
         }),
       ],
     };
+    // Initial average is sourced purely from this mock (7.0), matching the mean of [6, 8]
+    // coincidentally — the mock is the source of truth, not the `logs` fixture.
+    stubVisitSummary({
+      [EXPERIENCE_ID]: { repeatCount: 2, ratedCount: 2, averageRating: 7.0 },
+    });
 
     render(
       <QueryClientProvider client={client}>
@@ -288,8 +351,10 @@ describe('ParkPassportCard (Requirements 17.1 - 17.8)', () => {
       </QueryClientProvider>,
     );
 
-    // Initial average of [6, 8] = 7.0
-    expect(screen.getByText('7.0 / 10')).toBeTruthy();
+    // Initial average sourced from the mocked visit-summary response.
+    await waitFor(() => {
+      expect(screen.getByText('7.0 / 10')).toBeTruthy();
+    });
 
     // Expand timeline
     fireEvent.press(screen.getByTestId('visit-history-toggle'));
@@ -300,22 +365,28 @@ describe('ParkPassportCard (Requirements 17.1 - 17.8)', () => {
     // Change rating to 10
     fireEvent.press(screen.getByTestId('rating-picker-option-log-1-10'));
 
-    // Post-edit average of [10, 8] = 9.0
-    await waitFor(() => {
-      expect(screen.getByText('9.0 / 10')).toBeTruthy();
-    });
+    // The displayed average does NOT change to a client-recomputed value (that recomputation
+    // path is gone per Requirement 16 / Property 20) — it remains the visit-summary-sourced
+    // 7.0 until a refetch resolves a different value.
+    expect(screen.getByText('7.0 / 10')).toBeTruthy();
 
-    expect(invalidateSpy).toHaveBeenCalledWith({
-      queryKey: ['experience-rating', EXPERIENCE_ID],
+    // The edit invalidates experience-rating, experience-aggregate, AND visit-summary so the
+    // header average refetches server-side rather than being recomputed locally.
+    await waitFor(() => {
+      expect(invalidateSpy).toHaveBeenCalledWith({
+        queryKey: ['experience-rating', EXPERIENCE_ID],
+      });
     });
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: ['experience-aggregate', EXPERIENCE_ID],
     });
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ['visit-summary', EXPERIENCE_ID],
+    });
   });
 
-  test('R17.6: deleting a visit removes entry, recomputes count and average, and fires all 5 invalidations', async () => {
+  test('R17.6, Property 20: deleting a visit removes entry, updates visit count, and fires all 6 invalidations (including visit-summary) without recomputing the average client-side', async () => {
     const { client, invalidateSpy } = createQueryClient();
-    apiRequestMock.mockResolvedValueOnce(null);
 
     const history: ExperienceVisitHistoryDTO = {
       experienceId: EXPERIENCE_ID,
@@ -335,6 +406,20 @@ describe('ParkPassportCard (Requirements 17.1 - 17.8)', () => {
         }),
       ],
     };
+    // Pre-delete average sourced purely from the mock (8.0), matching the mean of [6, 10]
+    // coincidentally — see Property 20.
+    stubVisitSummary(
+      { [EXPERIENCE_ID]: { repeatCount: 2, ratedCount: 2, averageRating: 8.0 } },
+      (method, path) => {
+        if (
+          method === 'DELETE' &&
+          path === `/me/experiences/${encodeURIComponent(EXPERIENCE_ID)}/logs/log-1`
+        ) {
+          return null;
+        }
+        return undefined;
+      },
+    );
 
     render(
       <QueryClientProvider client={client}>
@@ -348,8 +433,10 @@ describe('ParkPassportCard (Requirements 17.1 - 17.8)', () => {
       </QueryClientProvider>,
     );
 
-    // Initial average of [6, 10] = 8.0
-    expect(screen.getByText('8.0 / 10')).toBeTruthy();
+    // Initial average sourced from the mocked visit-summary response.
+    await waitFor(() => {
+      expect(screen.getByText('8.0 / 10')).toBeTruthy();
+    });
     expect(screen.getByText('2 visits')).toBeTruthy();
 
     // Expand timeline
@@ -365,15 +452,19 @@ describe('ParkPassportCard (Requirements 17.1 - 17.8)', () => {
       );
     });
 
-    // After deleting log-1, only log-2 (rating 10) remains
+    // visitCount is still sourced from localLogs/logsQuery, unchanged by this task — it
+    // updates immediately on delete. The average does NOT recompute client-side to "10.0 / 10"
+    // (that path is gone); it stays at the visit-summary-sourced 8.0 until a refetch resolves.
     await waitFor(() => {
       expect(screen.getByText('1 visit')).toBeTruthy();
-      expect(screen.getByText('10.0 / 10')).toBeTruthy();
       expect(screen.queryByTestId('visit-history-item-log-1')).toBeNull();
       expect(screen.getByTestId('visit-history-item-log-2')).toBeTruthy();
     });
+    expect(screen.getByText('8.0 / 10')).toBeTruthy();
+    expect(screen.queryByText('10.0 / 10')).toBeNull();
 
-    // Invalidation checks
+    // Invalidation checks — 6 distinct keys per invalidateAfterLogChange, including
+    // visit-summary (the new server-sourced average dependency).
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: ['experience-logs', EXPERIENCE_ID],
     });
@@ -386,6 +477,9 @@ describe('ParkPassportCard (Requirements 17.1 - 17.8)', () => {
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: ['experience-aggregate', EXPERIENCE_ID],
     });
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ['visit-summary', EXPERIENCE_ID],
+    });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['me-stats'] });
   });
 
@@ -396,6 +490,11 @@ describe('ParkPassportCard (Requirements 17.1 - 17.8)', () => {
       isError: true,
       data: null,
     };
+    // Minimal visit-summary mock: this test's assertions are about the completion/rating/note
+    // error states, not the average, but apiRequest must be mocked for the mount-time fetch.
+    stubVisitSummary({
+      [EXPERIENCE_ID]: { repeatCount: 0, ratedCount: 0, averageRating: null },
+    });
 
     render(
       <QueryClientProvider client={client}>
@@ -414,7 +513,7 @@ describe('ParkPassportCard (Requirements 17.1 - 17.8)', () => {
     expect(screen.getByText('Could not load note.')).toBeTruthy();
   });
 
-  test('R17.2, R17.4: renders header title and badge ribbon, and renders visit note inline with quotes', () => {
+  test('R17.2, R17.4, Property 20: renders header title and badge ribbon from the visit-summary pass-through, and renders visit note inline with quotes', async () => {
     const { client } = createQueryClient();
     const history: ExperienceVisitHistoryDTO = {
       experienceId: EXPERIENCE_ID,
@@ -428,6 +527,11 @@ describe('ParkPassportCard (Requirements 17.1 - 17.8)', () => {
         }),
       ],
     };
+    // The "★ 9.0 Avg" ribbon text is asserted below via this explicit mock, not a client
+    // computation over `logs` — keeping the assertion passing via pass-through (Property 20).
+    stubVisitSummary({
+      [EXPERIENCE_ID]: { repeatCount: 1, ratedCount: 1, averageRating: 9.0 },
+    });
 
     render(
       <QueryClientProvider client={client}>
@@ -443,7 +547,9 @@ describe('ParkPassportCard (Requirements 17.1 - 17.8)', () => {
 
     // Header title and ribbon
     expect(screen.getByText('Park Passport & Journal')).toBeTruthy();
-    expect(screen.getByText('Completed • 1 Visit • ★ 9.0 Avg')).toBeTruthy();
+    await waitFor(() => {
+      expect(screen.getByText('Completed • 1 Visit • ★ 9.0 Avg')).toBeTruthy();
+    });
 
     // Expand timeline to verify note rendering
     fireEvent.press(screen.getByTestId('visit-history-toggle'));
@@ -464,6 +570,9 @@ describe('ParkPassportCard (Requirements 17.1 - 17.8)', () => {
         }),
       ],
     };
+    stubVisitSummary({
+      [EXPERIENCE_ID]: { repeatCount: 1, ratedCount: 1, averageRating: 8.0 },
+    });
 
     render(
       <QueryClientProvider client={client}>
@@ -516,6 +625,9 @@ describe('ParkPassportCard (Requirements 17.1 - 17.8)', () => {
       shareable: true,
       updatedAt: '2026-09-25T10:00:00Z',
     };
+    stubVisitSummary({
+      [EXPERIENCE_ID]: { repeatCount: 1, ratedCount: 1, averageRating: 9.0 },
+    });
 
     render(
       <QueryClientProvider client={client}>
@@ -542,6 +654,42 @@ describe('ParkPassportCard (Requirements 17.1 - 17.8)', () => {
     // Tapping button opens modal with title "Edit Tip for Friends"
     fireEvent.press(editTipBtn);
     expect(screen.getByText('Edit Tip for Friends')).toBeTruthy();
+  });
+
+  test('Property 20: renders the visit-summary-provided average even when it deliberately disagrees with what a client-side reduction over `logs` would produce (no residual client-side averaging path remains active)', async () => {
+    const { client } = createQueryClient();
+    // Ratings [2, 4] would client-side-average to 3.0 via the deleted `computePassportAverage`
+    // path. The mocked visit-summary response returns a deliberately mismatched 9.5 instead.
+    const history: ExperienceVisitHistoryDTO = {
+      experienceId: EXPERIENCE_ID,
+      repeatCount: 2,
+      logs: [
+        makeLog({ id: 'log-1', visitedOn: '2026-05-01', rating: 2, note: null }),
+        makeLog({ id: 'log-2', visitedOn: '2026-05-02', rating: 4, note: null }),
+      ],
+    };
+    stubVisitSummary({
+      [EXPERIENCE_ID]: { repeatCount: 2, ratedCount: 2, averageRating: 9.5 },
+    });
+
+    render(
+      <QueryClientProvider client={client}>
+        <ParkPassportCard
+          experienceId={EXPERIENCE_ID}
+          completionQuery={emptyQuery()}
+          ratingQuery={emptyQuery()}
+          noteQuery={emptyQuery()}
+          logsQuery={dataQuery(history)}
+        />
+      </QueryClientProvider>,
+    );
+
+    // The rendered average is the API-provided 9.5, never the client-computed 3.0 — proving no
+    // residual client-side averaging path remains active.
+    await waitFor(() => {
+      expect(screen.getByText('9.5 / 10')).toBeTruthy();
+    });
+    expect(screen.queryByText('3.0 / 10')).toBeNull();
   });
 });
 

@@ -37,6 +37,7 @@ export interface FoodListRepo {
     userId: string,
     isChecklist: boolean,
   ): Promise<FoodListDTO>;
+  setPinned(listId: string, userId: string, pinned: boolean): Promise<FoodListDTO>;
   deleteList(listId: string, userId: string): Promise<void>;
   listOwned(userId: string): Promise<readonly FoodListDTO[]>;
   getListDetail(listId: string, viewerId: string): Promise<FoodListDetailDTO>;
@@ -108,6 +109,7 @@ interface FoodListRow {
   item_count: number;
   created_at: Date | string;
   updated_at: Date | string;
+  pinned_at: Date | string | null;
 }
 
 interface FoodListItemRow {
@@ -139,6 +141,7 @@ function mapFoodListRow(row: FoodListRow): FoodListDTO {
     itemCount: Number(row.item_count),
     createdAt: toIsoString(row.created_at),
     updatedAt: toIsoString(row.updated_at),
+    pinnedAt: row.pinned_at === null ? null : toIsoString(row.pinned_at),
   };
 }
 
@@ -272,7 +275,8 @@ export function createFoodListRepo(pool: DbPool): FoodListRepo {
          fl.like_count,
          COALESCE(ic.item_count, 0)::int AS item_count,
          fl.created_at,
-         fl.updated_at
+         fl.updated_at,
+         fl.pinned_at
        FROM food_lists fl
        LEFT JOIN profiles p ON p.user_id = fl.owner_id
        LEFT JOIN (
@@ -385,6 +389,27 @@ export function createFoodListRepo(pool: DbPool): FoodListRepo {
       return getListSummary(listId);
     },
 
+    async setPinned(listId: string, userId: string, pinned: boolean): Promise<FoodListDTO> {
+      if (typeof pinned !== 'boolean') {
+        throw new AppError('validation_failed', 'pinned must be a boolean');
+      }
+
+      const access = await getListAccess(pool, listId, userId);
+      assertOwner(access, userId);
+
+      // Pinning/unpinning does NOT touch `updated_at` — it is a display-order
+      // preference, not a content edit, so it must not perturb the
+      // recency-based ordering unpinned lists fall back to.
+      await pool.query(
+        `UPDATE food_lists
+            SET pinned_at = CASE WHEN $2 THEN now() ELSE NULL END
+          WHERE id = $1`,
+        [listId, pinned],
+      );
+
+      return getListSummary(listId);
+    },
+
     async deleteList(listId: string, userId: string): Promise<void> {
       const access = await getListAccess(pool, listId, userId);
       assertOwner(access, userId);
@@ -404,7 +429,8 @@ export function createFoodListRepo(pool: DbPool): FoodListRepo {
            fl.like_count,
            COALESCE(ic.item_count, 0)::int AS item_count,
            fl.created_at,
-           fl.updated_at
+           fl.updated_at,
+           fl.pinned_at
          FROM food_lists fl
          LEFT JOIN profiles p ON p.user_id = fl.owner_id
          LEFT JOIN (
@@ -413,7 +439,7 @@ export function createFoodListRepo(pool: DbPool): FoodListRepo {
            GROUP BY food_list_id
          ) ic ON ic.food_list_id = fl.id
         WHERE fl.owner_id = $1
-        ORDER BY fl.updated_at DESC`,
+        ORDER BY fl.pinned_at DESC NULLS LAST, fl.updated_at DESC`,
         [userId],
       );
 
@@ -435,6 +461,7 @@ export function createFoodListRepo(pool: DbPool): FoodListRepo {
         version: number;
         created_at: Date | string;
         updated_at: Date | string;
+        pinned_at: Date | string | null;
         liked: boolean;
         saved: boolean;
       }>(
@@ -449,6 +476,7 @@ export function createFoodListRepo(pool: DbPool): FoodListRepo {
            fl.version,
            fl.created_at,
            fl.updated_at,
+           fl.pinned_at,
            (fll.food_list_id IS NOT NULL) AS liked,
            (fls_save.food_list_id IS NOT NULL) AS saved
          FROM food_lists fl
@@ -570,6 +598,7 @@ export function createFoodListRepo(pool: DbPool): FoodListRepo {
         itemCount: items.length,
         createdAt: toIsoString(row.created_at),
         updatedAt: toIsoString(row.updated_at),
+        pinnedAt: row.pinned_at === null ? null : toIsoString(row.pinned_at),
         liked: Boolean(row.liked),
         saved: Boolean(row.saved),
         version: Number(row.version),
@@ -644,7 +673,8 @@ export function createFoodListRepo(pool: DbPool): FoodListRepo {
               fl.like_count,
               COALESCE(ic.item_count, 0)::int AS item_count,
               fl.created_at,
-              fl.updated_at
+              fl.updated_at,
+              fl.pinned_at
             FROM food_lists fl
             LEFT JOIN profiles p ON p.user_id = fl.owner_id
             LEFT JOIN (
@@ -668,7 +698,8 @@ export function createFoodListRepo(pool: DbPool): FoodListRepo {
               fl.like_count,
               COALESCE(ic.item_count, 0)::int AS item_count,
               fl.created_at,
-              fl.updated_at
+              fl.updated_at,
+              fl.pinned_at
             FROM food_lists fl
             LEFT JOIN profiles p ON p.user_id = fl.owner_id
             LEFT JOIN (
@@ -694,7 +725,8 @@ export function createFoodListRepo(pool: DbPool): FoodListRepo {
               fl.like_count,
               COALESCE(ic.item_count, 0)::int AS item_count,
               fl.created_at,
-              fl.updated_at
+              fl.updated_at,
+              fl.pinned_at
             FROM food_lists fl
             LEFT JOIN profiles p ON p.user_id = fl.owner_id
             LEFT JOIN (
@@ -718,7 +750,8 @@ export function createFoodListRepo(pool: DbPool): FoodListRepo {
               fl.like_count,
               COALESCE(ic.item_count, 0)::int AS item_count,
               fl.created_at,
-              fl.updated_at
+              fl.updated_at,
+              fl.pinned_at
             FROM food_lists fl
             LEFT JOIN profiles p ON p.user_id = fl.owner_id
             LEFT JOIN (
@@ -1374,6 +1407,7 @@ export function createFoodListAffinityRepo(
         item_count: number | null;
         created_at: Date | string | null;
         updated_at: Date | string | null;
+        pinned_at: Date | string | null;
         can_view: boolean;
       }>(
         `SELECT
@@ -1388,6 +1422,7 @@ export function createFoodListAffinityRepo(
            COALESCE(ic.item_count, 0)::int AS item_count,
            fl.created_at,
            fl.updated_at,
+           fl.pinned_at,
            (fl.id IS NOT NULL AND (
              fl.visibility = 'public'
              OR fl.owner_id = $1
@@ -1424,6 +1459,7 @@ export function createFoodListAffinityRepo(
             itemCount: Number(row.item_count),
             createdAt: toIsoString(row.created_at!),
             updatedAt: toIsoString(row.updated_at!),
+            pinnedAt: row.pinned_at === null ? null : toIsoString(row.pinned_at),
           };
         }
         return {

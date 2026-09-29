@@ -708,3 +708,91 @@ No new `ErrorCode` is introduced by this amendment. `isChecklist` follows the ex
 - **Repository test** (extend `apps/api/src/services/foodLists/__tests__/foodListChecklist.prop.test.ts`): asserts a gotten item's `rating` equals the most recent qualifying log's rating; covers a rated most-recent log, an unrated most-recent log with an earlier rated log present (asserting `null`, not the earlier value), and a never-logged item (asserting `rating` is entirely absent, mirroring `gotten: false`).
 - **Mobile component test** (extend `FoodListDetailScreen.test.tsx`): asserts a gotten item with `rating: null` renders the generic completed badge and not a numeric one; asserts a gotten item with a numeric `rating` renders `` `${rating}/10` `` and not the generic label; asserts an unmarked checklist row exposes `accessibilityRole="button"` and an "Ate this: {name}" label on its details area (not a separate leading element) and that no leading checkbox-shaped testID exists anywhere in the tree; asserts a non-checklist list's row carries neither the activation role/label nor a completed badge.
 - **Drag-to-reorder** was already covered pre-amendment by the existing `test-simulate-drag-to-end-*` mock-driven reorder test (`react-native-draggable-flatlist`'s real gesture cannot be driven via `fireEvent`); no new drag-specific property test is added here since Requirement 13.22 is a UI-affordance change (handle position/shape), not a new reorder-semantics behavior — Property 5's reorder-submission correctness is unchanged and already covered.
+
+## Amendment: List Pinning (Requirement 14)
+
+### Why `pinned_at` (timestamp), not a plain boolean
+
+A plain `is_pinned BOOLEAN` would tell us *that* a list is pinned but not *when*, so if a User
+pins more than one list there would be no way to order the pinned group itself beyond an
+arbitrary tiebreak. `pinned_at TIMESTAMPTZ NULL` gives the same true/false signal (`NULL` =
+unpinned) while also providing a natural sort key: `ORDER BY pinned_at DESC NULLS LAST,
+updated_at DESC` puts pinned lists first, most-recently-pinned first among those, then falls back
+to the existing recency ordering (Requirement 1.5) for everything else. Pinning intentionally does
+**not** touch `updated_at` — it is a display-order preference the owner is setting about the list,
+not a change to the list's content, and conflating the two would make "pin a list I haven't
+touched in months" incorrectly bump it to the top of *content-recency* orderings elsewhere that
+key off `updated_at` (e.g. anything that surfaces "recently edited lists" independent of pinning).
+
+## Shared Contracts — Addition
+
+### `packages/shared/src/dto/FoodList.ts` (amended)
+
+```typescript
+export interface FoodListDTO {
+  // ...existing fields unchanged...
+  readonly pinnedAt: string | null; // ISO-8601 UTC, or null if unpinned
+}
+
+export interface UpdateFoodListInputDTO {
+  // ...existing fields unchanged...
+  readonly pinned?: boolean | undefined;
+}
+```
+
+`updateFoodListInputSchema` in `packages/shared/src/schemas/FoodList.ts` gains `pinned:
+z.boolean().optional()`, following the exact `isChecklist.optional()` precedent. `foodListSchema`
+gains `pinnedAt: isoTimestampSchema.nullable()` — always present (never optional), since every
+Food_List has a pin state (even if `null`), unlike `gotten`/`gottenCount` which are conditionally
+absent based on `isChecklist`.
+
+## Data Models & Migration — Addition
+
+### Migration `0052_food_list_pinning.sql`
+
+```sql
+BEGIN;
+
+ALTER TABLE food_lists
+    ADD COLUMN pinned_at TIMESTAMPTZ NULL;
+
+CREATE INDEX food_lists_owner_pinned_idx ON food_lists(owner_id, pinned_at DESC, updated_at DESC);
+
+COMMIT;
+```
+
+No new table. The new composite index backs `listOwned`'s widened `ORDER BY` directly (owner
+lookup plus the exact two-column sort order the query now uses), replacing reliance on the
+pre-existing `food_lists_owner_idx` (which only covered `(owner_id, updated_at DESC)`) for that
+query's access path.
+
+## Error Handling — Addition
+
+No new `ErrorCode` is introduced. A pin/unpin request against a Food_List the requester does not
+own reuses Requirement 1.4's existing ownership-collapsing response (`food_list_not_found` /
+`food_list_edit_forbidden`) via the same `assertOwner` predicate every other owner-only mutation
+(`renameList`, `setVisibility`, `setChecklistMode`) already uses. A non-boolean `pinned` value
+follows the existing `validation_failed` path via the widened Zod schema.
+
+## Configuration & Constants — Addition
+
+| Constant | Value | Purpose |
+|---|---|---|
+| `MAX_COLLECTION_PREVIEW_ROWS` | `3` | Cap on rows rendered per list-type card in the Collection screen's "Lists" segment (`navigation-redesign` Requirement 6 amendment 8c) before a "View all (N)" row appears. Lives in `apps/mobile/src/screens/collection/CollectionScreen.tsx`, not a server constant — the server always returns the full `listOwned` array; the cap is a client rendering decision. |
+
+## Correctness Properties — Addition
+
+### Property 23: Pinning Reorders Without Touching Content or `updatedAt` (Added by this amendment)
+*For any Food_List, calling `setPinned(listId, ownerId, true)` sets `pinnedAt` to a non-null UTC timestamp and leaves `updatedAt`, `name`, `visibility`, `isChecklist`, `likeCount`, and every `Food_List_Item`/`Food_List_Share`/`Food_List_Like`/`Food_List_Save` row unchanged; calling it with `false` sets `pinnedAt` back to `null` with the same non-side-effect guarantee. A non-owner calling `setPinned` (owner, editor, viewer, or no access) is rejected per Requirement 14.3 with no `pinned_at` change on any list.*
+**Validates:** Requirement 14.1, Requirement 14.2, Requirement 14.3
+
+### Property 24: Pinned-First Ordering Is Total and Stable (Added by this amendment)
+*For any User's set of owned Food_Lists, `listOwned`'s returned order satisfies: every list with non-null `pinnedAt` appears before every list with a null `pinnedAt`; among lists with non-null `pinnedAt`, they appear in descending `pinnedAt` order; among lists with null `pinnedAt`, they appear in descending `updatedAt` order (Requirement 1.5, unchanged for the unpinned subset). This ordering holds regardless of how many lists are pinned (zero, one, or all of them).*
+**Validates:** Requirement 14.4
+
+## Testing Strategy — Addition
+
+- **Repository test** (extend `apps/api/src/services/foodLists/__tests__/foodLists.prop.test.ts` or add a dedicated case): `fast-check` (>=100 runs) generating a set of Food_Lists with randomized pin/unpin sequences and `updatedAt` values, asserting `listOwned`'s returned order matches Property 24 exactly; a targeted (non-property) test asserting `setPinned` leaves `updatedAt` and every other column/row untouched (Property 23), and that a non-owner's `setPinned` call is rejected with the existing ownership-collapsing error codes.
+- **Migration test** (`apps/api/src/db/__tests__/migration0052.test.ts`): asserts `food_lists.pinned_at` exists, is nullable, defaults to `null` on an insert that omits it, and can be set/cleared via `UPDATE`.
+- **Route integration test** (extend `apps/api/src/services/foodLists/__tests__/routes.test.ts`): `PATCH /me/food-lists/:id` with `pinned: true` calls `setPinned` and returns a non-null `pinnedAt`; with `pinned: false` returns `pinnedAt: null`; a non-boolean `pinned` value is rejected with `400 validation_failed`; a non-owner's pin attempt returns the existing ownership-collapsing error.
+- **Mobile component test** (extend `MyFoodListsScreen.test.tsx`): a pin/unpin toggle control renders per row and calls `PATCH /me/food-lists/:id` with the new `pinned` value, re-rendering the row's pinned state. Extend `CollectionScreen.test.tsx` (see `navigation-redesign` amendment 8c's own testing strategy) for the pin toggle's presence and behavior on the Collection preview rows.

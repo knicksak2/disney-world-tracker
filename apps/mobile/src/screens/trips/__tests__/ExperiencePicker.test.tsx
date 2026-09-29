@@ -601,3 +601,205 @@ describe('ExperiencePicker Component', () => {
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// "My Lists" tab (Requirement 15.1, 15.2, 15.3) — task 20.1
+// ---------------------------------------------------------------------------
+
+describe('ExperiencePicker "My Lists" tab (R15.1, R15.2, R15.3)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (apiRequest as jest.Mock).mockResolvedValue({ experiences: mockExperiences });
+  });
+
+  const listSourcedExperience: ExperienceDTO = {
+    id: 'exp-list-1',
+    name: 'Jungle Cruise',
+    category: 'Ride',
+    park: 'Magic Kingdom',
+    description: '',
+    active: true,
+    imageUrl: null,
+    areaType: 'ThemePark',
+  };
+
+  it('omits the "My Lists" tab entirely when zero lists are attached (listSourcedItems is undefined or empty) (R15.3)', async () => {
+    renderPicker();
+    await waitFor(() => {
+      expect(screen.getByTestId('picker-tabs')).toBeTruthy();
+    });
+    expect(screen.queryByTestId('picker-tab-myLists')).toBeNull();
+
+    renderPicker({ listSourcedItems: [] });
+    await waitFor(() => {
+      expect(screen.getAllByTestId('picker-tab-all').length).toBeGreaterThan(0);
+    });
+    expect(screen.queryAllByTestId('picker-tab-myLists').length).toBe(0);
+  });
+
+  it('renders the "My Lists" tab when one or more attached lists supply items, and selecting it shows those items without hitting GET /catalog (R15.1, R15.2)', async () => {
+    renderPicker({ listSourcedItems: [listSourcedExperience] });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('picker-tab-myLists')).toBeTruthy();
+    });
+
+    (apiRequest as jest.Mock).mockClear();
+    fireEvent.press(screen.getByTestId('picker-tab-myLists'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Jungle Cruise')).toBeTruthy();
+    });
+    // The My Lists tab sources from listSourcedItems, never GET /catalog.
+    expect(apiRequest).not.toHaveBeenCalled();
+  });
+
+  it('shows a loading indicator while listSourcedLoading is true, then renders every item in the caller-supplied merged set once loaded', async () => {
+    const secondListSourcedExperience: ExperienceDTO = {
+      id: 'exp-list-2',
+      name: 'Pirates of the Caribbean',
+      category: 'Ride',
+      park: 'Magic Kingdom',
+      description: '',
+      active: true,
+      imageUrl: null,
+      areaType: 'ThemePark',
+    };
+
+    const { rerender } = renderPicker({
+      listSourcedItems: [listSourcedExperience],
+      listSourcedLoading: true,
+    });
+
+    fireEvent.press(screen.getByTestId('picker-tab-myLists'));
+    await waitFor(() => {
+      expect(screen.getByTestId('picker-search-loading')).toBeTruthy();
+    });
+
+    // Simulate the caller's attached-list fetches resolving: listSourcedItems
+    // grows to the deduplicated union the caller's hook computed (dedup is
+    // the hook's responsibility — Property 18 — not re-asserted here).
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    rerender(
+      <QueryClientProvider client={queryClient}>
+        <ExperiencePicker
+          enabled={true}
+          onSelect={jest.fn()}
+          onSelectUnlocatedBreak={jest.fn()}
+          testIDPrefix="picker"
+          listSourcedItems={[listSourcedExperience, secondListSourcedExperience]}
+          listSourcedLoading={false}
+        />
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Jungle Cruise')).toBeTruthy();
+      expect(screen.getByText('Pirates of the Caribbean')).toBeTruthy();
+    });
+    expect(screen.getAllByTestId('picker-result-exp-list-1').length).toBe(1);
+    expect(screen.getAllByTestId('picker-result-exp-list-2').length).toBe(1);
+  });
+
+  it('selecting a "My Lists" row calls onSelect with the exact same ExperienceDTO (R15.4)', async () => {
+    const onSelect = jest.fn();
+    renderPicker({ listSourcedItems: [listSourcedExperience], onSelect });
+
+    fireEvent.press(screen.getByTestId('picker-tab-myLists'));
+    await waitFor(() => {
+      expect(screen.getByText('Jungle Cruise')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByTestId('picker-result-exp-list-1'));
+    expect(onSelect).toHaveBeenCalledWith(listSourcedExperience);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// "Already added" tag (Requirement 15.5) — task 20.2
+// ---------------------------------------------------------------------------
+
+describe('ExperiencePicker "Already added" tag (R15.5)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (apiRequest as jest.Mock).mockResolvedValue({ experiences: mockExperiences });
+  });
+
+  const listSourcedExperience: ExperienceDTO = {
+    id: 'exp-list-1',
+    name: 'Jungle Cruise',
+    category: 'Ride',
+    park: 'Magic Kingdom',
+    description: '',
+    active: true,
+    imageUrl: null,
+    areaType: 'ThemePark',
+  };
+
+  it('shows the "Already added" tag only on a row whose experienceId is in alreadyPlannedIds, on the catalog tab', async () => {
+    renderPicker({ alreadyPlannedIds: new Set(['exp-ride-1']) });
+
+    fireEvent.changeText(screen.getByTestId('picker-search'), 'Magic');
+    await waitFor(() => {
+      expect(screen.getByText('Space Mountain')).toBeTruthy();
+    });
+
+    // The matching row carries the tag; a non-matching row does not.
+    expect(screen.getByTestId('picker-result-exp-ride-1')).toBeTruthy();
+    const matchingRowLabel = screen.getByTestId('picker-result-exp-ride-1').props
+      .accessibilityLabel as string;
+    expect(matchingRowLabel).toContain('already added to your planned list');
+
+    const nonMatchingRowLabel = screen.getByTestId('picker-result-exp-dining-1').props
+      .accessibilityLabel as string;
+    expect(nonMatchingRowLabel).not.toContain('already added to your planned list');
+
+    expect(screen.getAllByText('Already added').length).toBe(1);
+  });
+
+  it('renders no "Already added" tag when alreadyPlannedIds is omitted or empty', async () => {
+    renderPicker();
+
+    fireEvent.changeText(screen.getByTestId('picker-search'), 'Magic');
+    await waitFor(() => {
+      expect(screen.getByText('Space Mountain')).toBeTruthy();
+    });
+
+    expect(screen.queryByText('Already added')).toBeNull();
+  });
+
+  it('shows the "Already added" tag on a "My Lists" tab row whose experienceId is already planned (R15.5 applies across every tab)', async () => {
+    renderPicker({
+      listSourcedItems: [listSourcedExperience],
+      alreadyPlannedIds: new Set(['exp-list-1']),
+    });
+
+    fireEvent.press(screen.getByTestId('picker-tab-myLists'));
+    await waitFor(() => {
+      expect(screen.getByText('Jungle Cruise')).toBeTruthy();
+    });
+
+    expect(screen.getByText('Already added')).toBeTruthy();
+  });
+
+  it('keeps a row tagged "Already added" fully selectable — a real press still fires onSelect (R9.3: re-adding a duplicate is never blocked)', async () => {
+    const onSelect = jest.fn();
+    renderPicker({ alreadyPlannedIds: new Set(['exp-ride-1']), onSelect });
+
+    fireEvent.changeText(screen.getByTestId('picker-search'), 'Magic');
+    await waitFor(() => {
+      expect(screen.getByText('Space Mountain')).toBeTruthy();
+    });
+
+    const row = screen.getByTestId('picker-result-exp-ride-1');
+    // Not marked disabled by the tag — distinct from the disabledIds mechanism.
+    expect(row.props.accessibilityState?.disabled).toBe(false);
+
+    fireEvent.press(row);
+
+    expect(onSelect).toHaveBeenCalledTimes(1);
+    expect(onSelect).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'exp-ride-1', name: 'Space Mountain' }),
+    );
+  });
+});

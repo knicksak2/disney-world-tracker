@@ -93,6 +93,7 @@ function activeTrip(id: string, name: string): TripDTO {
     createdAt: '2024-05-01T00:00:00.000Z',
     resorts: [],
     foodLists: [],
+    experienceLists: [],
   };
 }
 

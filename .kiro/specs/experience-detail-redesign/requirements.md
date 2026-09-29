@@ -620,6 +620,22 @@ history.
 scrolling, so that logging a visit, adding to my plan, or reserving a table does not require finding
 the right section first.
 
+**Amendment (superseded in part by `experience-lists` Requirement 17):** for every category where
+this requirement's secondary action is "Add to Trip" (19.2, 19.3, and 20.5's Resort case), that
+action is relabeled "Add to Trip or List" and now presents a two-option choice (Add to Trip / Add
+to a List) instead of invoking the trip-add handler directly. The acceptance criteria below are
+left unchanged as the historical record of this spec's own scope; `experience-lists` Requirement
+17 is the authoritative source for the current merged behavior. The Restaurant case (19.4) is
+unaffected.
+
+**Second amendment (superseded further by `experience-lists` Requirement 18):** wherever this
+requirement's "Add to Trip" action (19.2, 19.3, 19.4's Quick Service branch, 20.5) resolves "the
+viewer's active or upcoming trip" as a single, silently-chosen trip, it instead always presents a
+trip picker first (even when the viewer has exactly one eligible trip) and adds to whichever trip
+the viewer selects there. `experience-lists` Requirement 18 is the authoritative source for the
+current trip-selection behavior; this requirement's phrase "the viewer's active or upcoming
+trip's planned items" should be read as "the viewer-selected trip's planned items."
+
 #### Acceptance Criteria
 
 1. THE Experience_Detail_Screen SHALL render the Floating_Action_Dock fixed to the bottom of the

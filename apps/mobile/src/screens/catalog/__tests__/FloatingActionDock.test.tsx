@@ -63,7 +63,7 @@ describe('FloatingActionDock (Requirements 19.1 - 19.7)', () => {
     jest.clearAllMocks();
   });
 
-  test('R19.2: Ride/Character_Meet/Show on Today lens renders Log visit & Add to trip', () => {
+  test('R19.2, R17.1: Ride/Character_Meet/Show on Today lens renders Log visit & the merged Add-to-Trip-or-List secondary action', () => {
     const categories: ExperienceCategory[] = ['Ride', 'Character_Meet', 'Show'];
 
     for (const category of categories) {
@@ -79,21 +79,24 @@ describe('FloatingActionDock (Requirements 19.1 - 19.7)', () => {
       const secondary = screen.getByTestId('dock-secondary-action');
 
       expect(screen.getByText(/Log Visit/i)).toBeTruthy();
-      expect(screen.getByText(/Add to Trip/i)).toBeTruthy();
+      expect(screen.getByText('Add to…')).toBeTruthy();
       expect(primary.props.accessibilityLabel).toBeTruthy();
-      expect(secondary.props.accessibilityLabel).toBeTruthy();
+      expect(secondary.props.accessibilityLabel).toBe('Add to trip or list');
 
       fireEvent.press(primary);
       expect(mockHandlers.onLogVisit).toHaveBeenCalled();
 
+      // R17.1: the secondary action opens the choice sheet rather than
+      // calling onAddToPlan directly.
       fireEvent.press(secondary);
-      expect(mockHandlers.onAddToPlan).toHaveBeenCalled();
+      expect(mockHandlers.onAddToPlan).not.toHaveBeenCalled();
+      expect(screen.getByTestId('add-to-trip-or-list-choice-sheet')).toBeTruthy();
 
       unmount();
     }
   });
 
-  test('R19.3: Ride/Character_Meet/Show on Passport lens renders Log visit & Add to trip', () => {
+  test('R19.3, R17.1: Ride/Character_Meet/Show on Passport lens renders Log visit & the merged Add-to-Trip-or-List secondary action', () => {
     render(
       <FloatingActionDock
         category="Ride"
@@ -106,15 +109,59 @@ describe('FloatingActionDock (Requirements 19.1 - 19.7)', () => {
     const secondary = screen.getByTestId('dock-secondary-action');
 
     expect(screen.getByText(/Log Visit/i)).toBeTruthy();
-    expect(screen.getByText(/Add to Trip/i)).toBeTruthy();
+    expect(screen.getByText('Add to…')).toBeTruthy();
     expect(primary.props.accessibilityLabel).toBeTruthy();
-    expect(secondary.props.accessibilityLabel).toBeTruthy();
+    expect(secondary.props.accessibilityLabel).toBe('Add to trip or list');
 
     fireEvent.press(primary);
     expect(mockHandlers.onLogVisit).toHaveBeenCalledTimes(1);
 
     fireEvent.press(secondary);
+    expect(mockHandlers.onAddToPlan).not.toHaveBeenCalled();
+    expect(screen.getByTestId('add-to-trip-or-list-choice-sheet')).toBeTruthy();
+  });
+
+  test('R17.2: choice sheet routes "Add to Trip" to the existing onAddToPlan handler, unchanged', () => {
+    render(
+      <FloatingActionDock
+        category="Ride"
+        activeLens="today"
+        {...mockHandlers}
+        onAddToExperienceList={jest.fn()}
+      />,
+    );
+
+    fireEvent.press(screen.getByTestId('dock-secondary-action'));
+    fireEvent.press(screen.getByTestId('add-to-trip-or-list-choice-trip'));
+
     expect(mockHandlers.onAddToPlan).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId('add-to-trip-or-list-choice-sheet')).toBeNull();
+  });
+
+  test('R17.3, R17.6: choice sheet "Add to a List" calls onAddToExperienceList and closes; dismissing via backdrop calls neither handler', () => {
+    const onAddToExperienceList = jest.fn();
+    render(
+      <FloatingActionDock
+        category="Show"
+        activeLens="today"
+        {...mockHandlers}
+        onAddToExperienceList={onAddToExperienceList}
+      />,
+    );
+
+    fireEvent.press(screen.getByTestId('dock-secondary-action'));
+    fireEvent.press(screen.getByTestId('add-to-trip-or-list-choice-list'));
+
+    expect(onAddToExperienceList).toHaveBeenCalledTimes(1);
+    expect(mockHandlers.onAddToPlan).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('add-to-trip-or-list-choice-sheet')).toBeNull();
+
+    // Reopen and dismiss via backdrop instead of a choice.
+    fireEvent.press(screen.getByTestId('dock-secondary-action'));
+    fireEvent.press(screen.getByTestId('add-to-trip-or-list-backdrop'));
+
+    expect(onAddToExperienceList).toHaveBeenCalledTimes(1);
+    expect(mockHandlers.onAddToPlan).not.toHaveBeenCalled();
   });
 
   test('R19.4: Restaurant on both Today and Passport lenses renders Log dish & Reserve table', () => {
@@ -147,7 +194,7 @@ describe('FloatingActionDock (Requirements 19.1 - 19.7)', () => {
     }
   });
 
-  test('R20.5: Resort renders Log Stay & Add to Trip', () => {
+  test('R20.5, R17.1: Resort renders Log Stay & the merged Add-to-Trip-or-List secondary action', () => {
     render(
       <FloatingActionDock
         category="Resort"
@@ -160,14 +207,18 @@ describe('FloatingActionDock (Requirements 19.1 - 19.7)', () => {
     const secondary = screen.getByTestId('dock-secondary-action');
 
     expect(screen.getByText('Log Stay')).toBeTruthy();
-    expect(screen.getByText('Add to Trip')).toBeTruthy();
+    expect(screen.getByText('Add to…')).toBeTruthy();
     expect(primary.props.accessibilityLabel).toBe('Log Stay');
-    expect(secondary.props.accessibilityLabel).toBe('Add to trip');
+    expect(secondary.props.accessibilityLabel).toBe('Add to trip or list');
 
     fireEvent.press(primary);
     expect(mockHandlers.onLogVisit).toHaveBeenCalledTimes(1);
 
     fireEvent.press(secondary);
+    expect(mockHandlers.onAddToPlan).not.toHaveBeenCalled();
+    expect(screen.getByTestId('add-to-trip-or-list-choice-sheet')).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId('add-to-trip-or-list-choice-trip'));
     expect(mockHandlers.onAddToPlan).toHaveBeenCalledTimes(1);
   });
 

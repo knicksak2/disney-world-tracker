@@ -467,7 +467,7 @@ describe('TripScheduleScreen', () => {
     });
   });
 
-  it('R9.3: allows selecting an experience already in the schedule and adds it again', async () => {
+  it('R9.3 & R15.5: shows the "Already added" tag for a Trip-wide already-planned experience, while keeping it selectable and adding it again', async () => {
     let addBody: any = null;
     apiRequestMock.mockImplementation(async (method, path, body) => {
       if (method === 'GET' && path === `/trips/${TRIP_ID}`) {
@@ -522,6 +522,13 @@ describe('TripScheduleScreen', () => {
     const row = await screen.findByTestId(
       `schedule-picker-result-${PLANNED_ITEM.experienceId}`,
     );
+
+    // R15.5: the row is annotated with a non-blocking "Already added" tag,
+    // derived Trip-wide (any date) from the already-fetched planned_items —
+    // not the disabledIds mechanism, so accessibilityState.disabled is false.
+    expect(screen.getByText('Already added')).toBeTruthy();
+    expect(row.props.accessibilityState?.disabled).toBe(false);
+
     fireEvent.press(row);
 
     await waitFor(() => {
@@ -3686,5 +3693,168 @@ describe('TripScheduleScreen — shared time wheel (trip-reservations task 8.1)'
       expect(navigation.goBack).toHaveBeenCalledTimes(1);
       expect(navigation.replace).not.toHaveBeenCalled();
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Property 19: Selecting a List-Sourced Candidate Is Behaviorally Identical
+// to Catalog Search (Requirement 15.4, 15.6) — task 20.4
+// ---------------------------------------------------------------------------
+//
+// Property 18's "My Lists" tab presence/absence and dedup-across-lists clause
+// is already validated at the correct layer: the tab omission/inclusion
+// itself in `ExperiencePicker.test.tsx` ("omits the My Lists tab entirely
+// when zero lists are attached" / "renders the My Lists tab when one or more
+// attached lists supply items"), and the actual union/dedup-across-attached-
+// lists computation in `useAttachedExperienceListItems.test.tsx`
+// ("deduplicates by experienceId when the same Experience appears on more
+// than one attached list"), since `useAttachedExperienceListItems` — not
+// `ExperiencePicker` — is where the merge/dedup happens (the picker only
+// renders whatever `listSourcedItems` it is given). This suite does not
+// re-derive that coverage; it closes the one remaining gap: Property 19,
+// which requires observing the actual `POST /trips/:id/planned-items`
+// request body, something only a screen-level test (not
+// `ExperiencePicker.test.tsx` alone) can do.
+describe('TripScheduleScreen — Property 19: list-sourced selection is behaviorally identical to catalog search (R15.4, R15.6)', () => {
+  it('POSTs the identical /trips/:id/planned-items request body whether the same Experience is selected from catalog search or from the "My Lists" tab', async () => {
+    const postedBodies: unknown[] = [];
+    const SHARED_EXPERIENCE_ID = 'exp-shared-jungle-cruise';
+
+    apiRequestMock.mockImplementation(async (method, path, body) => {
+      if (method === 'GET' && path === `/trips/${TRIP_ID}`) {
+        return {
+          id: TRIP_ID,
+          name: 'Disney Trip',
+          startDate: '2026-10-01',
+          endDate: '2026-10-02',
+          // One attached Experience_List — enables the "My Lists" tab.
+          experienceLists: [
+            {
+              available: true,
+              experienceListId: 'list-1',
+              name: 'Must Do',
+              itemCount: 1,
+              ownerDisplayName: 'Ada',
+            },
+          ],
+        } as any;
+      }
+      if (method === 'GET' && path === `/trips/${TRIP_ID}/planned-items`) {
+        return [];
+      }
+      if (method === 'GET' && path === '/experience-lists/list-1') {
+        // The list-sourced view of the SAME experienceId the catalog search
+        // below will also return.
+        return {
+          id: 'list-1',
+          ownerId: 'owner-1',
+          ownerDisplayName: 'Ada',
+          name: 'Must Do',
+          visibility: 'private',
+          likeCount: 0,
+          itemCount: 1,
+          createdAt: '2024-01-01T00:00:00.000Z',
+          updatedAt: '2024-01-01T00:00:00.000Z',
+          liked: false,
+          saved: false,
+          version: 1,
+          myRole: 'owner',
+          items: [
+            {
+              experienceId: SHARED_EXPERIENCE_ID,
+              name: 'Jungle Cruise',
+              park: 'Magic Kingdom',
+              category: 'Ride',
+              position: 0,
+              addedByUserId: 'owner-1',
+              addedByDisplayName: 'Ada',
+            },
+          ],
+        } as any;
+      }
+      if (method === 'GET' && path.startsWith('/catalog')) {
+        // Ordinary catalog search surfaces the exact same experienceId.
+        return {
+          experiences: [
+            {
+              id: SHARED_EXPERIENCE_ID,
+              name: 'Jungle Cruise',
+              park: 'Magic Kingdom',
+              land: 'Adventureland',
+              category: 'Ride',
+              description: '',
+              active: true,
+              imageUrl: null,
+              areaType: 'ThemePark',
+            },
+          ],
+        } as any;
+      }
+      if (method === 'POST' && path === `/trips/${TRIP_ID}/planned-items`) {
+        postedBodies.push(body);
+        return {
+          ...PLANNED_ITEM,
+          id: `item-${postedBodies.length}`,
+          experienceId: SHARED_EXPERIENCE_ID,
+          experienceName: 'Jungle Cruise',
+          plannedDate: '2026-10-01',
+        } as any;
+      }
+      throw new Error(`Unexpected request: ${method} ${path}`);
+    });
+
+    renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByText('+ Add to Thu, Oct 1')).toBeTruthy();
+    });
+
+    // --- Selection path 1: ordinary catalog search (the "All" tab) --------
+    fireEvent.press(screen.getByText('+ Add to Thu, Oct 1'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('schedule-picker-search')).toBeTruthy();
+    });
+    fireEvent.changeText(screen.getByTestId('schedule-picker-search'), 'Jungle');
+
+    const catalogRow = await screen.findByTestId(
+      `schedule-picker-result-${SHARED_EXPERIENCE_ID}`,
+    );
+    fireEvent.press(catalogRow);
+
+    await waitFor(() => {
+      expect(postedBodies.length).toBe(1);
+    });
+
+    fireEvent.press(screen.getByTestId('schedule-add-done-btn'));
+
+    // --- Selection path 2: the "My Lists" tab ------------------------------
+    fireEvent.press(screen.getByText('+ Add to Thu, Oct 1'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('schedule-picker-tab-myLists')).toBeTruthy();
+    });
+    fireEvent.press(screen.getByTestId('schedule-picker-tab-myLists'));
+
+    const listSourcedRow = await screen.findByTestId(
+      `schedule-picker-result-${SHARED_EXPERIENCE_ID}`,
+    );
+    fireEvent.press(listSourcedRow);
+
+    await waitFor(() => {
+      expect(postedBodies.length).toBe(2);
+    });
+
+    // Property 19: the two request bodies — one from catalog search, one
+    // from the list-sourced candidate view — are identical in every field.
+    // No extra "source"/"listId"/provenance field is present on either.
+    expect(postedBodies[0]).toEqual(postedBodies[1]);
+    expect(postedBodies[0]).toEqual({
+      experienceId: SHARED_EXPERIENCE_ID,
+      plannedDate: '2026-10-01',
+    });
+    expect(Object.keys(postedBodies[0] as object).sort()).toEqual(
+      ['experienceId', 'plannedDate'].sort(),
+    );
   });
 });

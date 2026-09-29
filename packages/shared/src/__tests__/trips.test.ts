@@ -26,6 +26,7 @@ import {
   isMealPeriodServed,
   attachFoodListSchema,
   tripFoodListSchema,
+  tripExperienceListSchema,
   dayTouringHoursSchema,
   tripOptimizationInputSchema,
   tripEditSchema,
@@ -255,6 +256,69 @@ describe('tripFoodListSchema (R22.9, R22.10)', () => {
       tripFoodListSchema.safeParse({
         available: false,
         foodListId: VALID_UUID,
+        name: 'Extra Name',
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe('tripExperienceListSchema (R14.8)', () => {
+  const VALID_UUID = '77777777-7777-4777-8777-777777777777';
+
+  it('accepts an available experience list DTO', () => {
+    const dto = {
+      available: true as const,
+      experienceListId: VALID_UUID,
+      name: 'Must-Do Thrill Rides',
+      itemCount: 5,
+      ownerDisplayName: 'Mickey',
+    };
+    const result = tripExperienceListSchema.safeParse(dto);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data).toEqual(dto);
+    }
+  });
+
+  it('accepts an unavailable experience list DTO (R14.8)', () => {
+    const dto = {
+      available: false as const,
+      experienceListId: VALID_UUID,
+    };
+    const result = tripExperienceListSchema.safeParse(dto);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data).toEqual(dto);
+    }
+  });
+
+  it('rejects missing fields on available variant', () => {
+    expect(
+      tripExperienceListSchema.safeParse({
+        available: true,
+        experienceListId: VALID_UUID,
+        name: 'List',
+      }).success,
+    ).toBe(false);
+  });
+
+  it('rejects negative itemCount', () => {
+    expect(
+      tripExperienceListSchema.safeParse({
+        available: true,
+        experienceListId: VALID_UUID,
+        name: 'List',
+        itemCount: -1,
+        ownerDisplayName: 'Mickey',
+      }).success,
+    ).toBe(false);
+  });
+
+  it('rejects extra fields on unavailable variant', () => {
+    expect(
+      tripExperienceListSchema.safeParse({
+        available: false,
+        experienceListId: VALID_UUID,
         name: 'Extra Name',
       }).success,
     ).toBe(false);

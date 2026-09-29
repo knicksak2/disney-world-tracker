@@ -103,6 +103,7 @@ const BASE_TRIP: TripDTO = {
   createdAt: '2026-09-01T00:00:00Z',
   resorts: [],
   foodLists: [AVAILABLE_LIST_1, UNAVAILABLE_LIST],
+  experienceLists: [],
 };
 
 const OWNED_FOOD_LISTS: readonly FoodListDTO[] = [
@@ -117,6 +118,7 @@ const OWNED_FOOD_LISTS: readonly FoodListDTO[] = [
     itemCount: 5,
     createdAt: '2026-09-01T00:00:00Z',
     updatedAt: '2026-09-01T00:00:00Z',
+    pinnedAt: null,
   },
   {
     id: LIST_NEW_ID, // not attached yet
@@ -129,6 +131,7 @@ const OWNED_FOOD_LISTS: readonly FoodListDTO[] = [
     itemCount: 8,
     createdAt: '2026-09-02T00:00:00Z',
     updatedAt: '2026-09-02T00:00:00Z',
+    pinnedAt: null,
   },
 ];
 
@@ -145,6 +148,7 @@ const DISCOVERY_PAGE: FoodListDiscoveryPageDTO = {
       itemCount: 5,
       createdAt: '2026-09-01T00:00:00Z',
       updatedAt: '2026-09-01T00:00:00Z',
+      pinnedAt: null,
     },
     {
       id: LIST_PUB_ID, // not attached yet
@@ -157,6 +161,7 @@ const DISCOVERY_PAGE: FoodListDiscoveryPageDTO = {
       itemCount: 12,
       createdAt: '2026-09-03T00:00:00Z',
       updatedAt: '2026-09-03T00:00:00Z',
+      pinnedAt: null,
     },
   ],
   nextCursor: null,

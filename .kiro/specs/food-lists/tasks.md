@@ -285,7 +285,16 @@ Tasks within a wave can proceed in parallel; each wave depends only on earlier w
     { "id": 42, "tasks": ["20.5", "20.6", "20.7"] },
     { "id": 43, "tasks": ["20.8", "20.9"] },
     { "id": 44, "tasks": ["20.10"] },
-    { "id": 45, "tasks": ["20.11"] }
+    { "id": 45, "tasks": ["20.11"] },
+    { "id": 46, "tasks": ["22.1", "22.2", "22.3"] },
+    { "id": 47, "tasks": ["22.4"] },
+    { "id": 48, "tasks": ["22.5"] },
+    { "id": 49, "tasks": ["22.6", "22.7"] },
+    { "id": 50, "tasks": ["22.8"] },
+    { "id": 51, "tasks": ["22.9"] },
+    { "id": 52, "tasks": ["22.10"] },
+    { "id": 53, "tasks": ["22.11"] },
+    { "id": 54, "tasks": ["23.1"] }
   ]
 }
 ```
@@ -309,3 +318,32 @@ Wave 3 groups likes/saves/collection (task 4) with discovery (task 5) since both
 - **Amendment (Requirement 13.14-13.18): completion is not a to-do-list checkbox.** A gotten item's row text (name/location/price) must never be struck through, dimmed, or otherwise de-emphasized — a Checklist Food_List stays a legible record to revisit or share after completion, not a crossed-off task list. Only the leading indicator (outline → filled badge) changes.
 - **Amendment: undo is per-submission, not per-item.** `MarkGottenUndoToast` and its wiring must key off the specific `logId` returned by the mark-gotten submission that created it — never "the most recent log for this Food_Item" or any other item-scoped lookup. An item can have pre-existing qualifying logs from earlier repeat visits (Requirement 13.7); undo must never touch those. This is the same log-scoped-not-item-scoped care already taken by `food-item-logging`'s own per-log delete route (`DELETE /me/food-items/:foodItemId/logs/:logId`), which this amendment reuses as-is — no new backend route or schema change is introduced by this amendment.
 - **Amendment: the rating prompt is a new small component, not a reuse of `LogFoodItemModal`.** `LogFoodItemModal` carries a date picker and note field this flow doesn't need (mark-gotten always uses today's date, and Requirement 13.15 never asks for a note) — reusing it whole would reintroduce UI the fast, skippable checklist interaction doesn't want. Reuse only its rating-button-grid visual styling, not the component itself.
+- **Amendment (Requirement 14): pinning is a display-order preference, not a content edit.** `setPinned` must never touch `updated_at` — conflating pin state with content recency would make pinning a stale list incorrectly bump it in any ordering that keys off `updated_at` independent of pinning. Use `pinned_at DESC NULLS LAST, updated_at DESC` as the `listOwned` ordering, not a boolean-then-recency two-step that would lose the "most-recently-pinned first" ordering within the pinned group.
+
+- [x] 22. List Pinning (R14, added by this amendment)
+  - [x] 22.1 Create migration `apps/api/migrations/0052_food_list_pinning.sql` adding `food_lists.pinned_at TIMESTAMPTZ NULL` and index `food_lists_owner_pinned_idx (owner_id, pinned_at DESC, updated_at DESC)`
+    - _Requirements: 14.1, 14.2_
+  - [x] 22.2 Add migration test `apps/api/src/db/__tests__/migration0052.test.ts`
+    - Asserts the column exists, is nullable, defaults to `null` on an insert that omits it, and can be set/cleared via `UPDATE`
+    - _Requirements: 14.1, 14.2_
+  - [x] 22.3 Widen `FoodListDTO`/`foodListSchema` with `pinnedAt: string | null` (always present, not optional) and `UpdateFoodListInputDTO`/`updateFoodListInputSchema` with `pinned?: boolean` in `packages/shared/src/dto/FoodList.ts`/`packages/shared/src/schemas/FoodList.ts`
+    - Add schema tests to `packages/shared/src/schemas/__tests__/FoodList.test.ts` covering `pinnedAt` null/timestamp/invalid on `foodListSchema`, and `pinned` true/false/non-boolean on `updateFoodListInputSchema`
+    - _Requirements: 14.1, 14.2_
+  - [x] 22.4 Implement `FoodListRepo.setPinned(listId, ownerId, pinned)` in `apps/api/src/services/foodLists/repo.ts`, mirroring `setVisibility`'s owner-only gating exactly but WITHOUT touching `updated_at`; widen `listOwned`'s `ORDER BY` to `pinned_at DESC NULLS LAST, updated_at DESC`; include `pinned_at`/`pinnedAt` in every `FoodListRow`-producing query (`getListSummary`, `listOwned`, `getListDetail`, all 4 `discover` variants, `getCollection`'s `saved` mapping)
+    - _Requirements: 14.1, 14.2, 14.4_
+  - [x] 22.5 Wire `PATCH /me/food-lists/:id` to accept `pinned` and route to `setPinned`
+    - _Requirements: 14.1, 14.2, 14.3_
+  - [x] 22.6 Write property test coverage validating Property 23 (no side effects, ownership-gated) and Property 24 (pinned-first total ordering) in `apps/api/src/services/foodLists/__tests__/foodLists.prop.test.ts`
+    - _Requirements: 14.1, 14.2, 14.3, 14.4_
+  - [x] 22.7 Add route integration test coverage to `routes.test.ts`: `PATCH` with `pinned: true`/`false` calls `setPinned` and returns the expected `pinnedAt`; non-boolean `pinned` rejected with `400 validation_failed`; non-owner pin attempt rejected with the existing ownership-collapsing error
+    - _Requirements: 14.1, 14.2, 14.3_
+  - [x] 22.8 Checkpoint — ran `npx vitest run` for `apps/api/src/services/foodLists`/`experienceLists` and related trips/friends/migration test files (all green) and `npx tsc --noEmit` for `apps/api`/`packages/shared` (clean); full `npm run verify:api`/`verify:shared` scripts not separately invoked this checkpoint, covered by the final full-workspace gate instead
+    - _Requirements: 14.1, 14.2, 14.3, 14.4_
+  - [x] 22.9 Add a pin/unpin toggle control to each row in `MyFoodListsScreen.tsx`'s owned-list `FlatList`, alongside the existing Rename/Visibility/Delete controls, calling `PATCH /me/food-lists/:id` with the new `pinned` value and invalidating `['food-lists-collection']`/`['my-owned-food-lists']`
+    - _Requirements: 14.5_
+  - [x] 22.10 Write/extend `MyFoodListsScreen.test.tsx` asserting the pin toggle renders per row, calls `PATCH` with the correct `pinned` value, and the row reflects the resulting pinned state
+    - _Requirements: 14.5_
+  - [x] 22.11 Checkpoint — ran `npx tsc --noEmit` (clean) and full `npx jest` (234 suites, 1564 tests, all passing) in `apps/mobile`; covered by the final full-workspace `npm run verify` gate as well
+
+- [x] 23. Final Verification & Quality Gate (Re-run after R14)
+  - [x] 23.1 Run full `npm run verify` across all workspaces (`apps/api`, `apps/mobile`, `packages/shared`) — apps/api: 375 test files / 2545 tests passed; apps/mobile: 234 suites / 1564 tests passed; packages/shared: 34 files / 390 tests passed; exit code 0

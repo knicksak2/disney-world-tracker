@@ -157,6 +157,7 @@ const sampleOwnerList: FoodListDetailDTO = {
   myRole: 'owner',
   createdAt: '2026-09-01T00:00:00Z',
   updatedAt: '2026-09-01T00:00:00Z',
+  pinnedAt: null,
   items: [
     {
       foodItemId: 'item-dole',
@@ -218,6 +219,7 @@ const sampleViewerList: FoodListDetailDTO = {
   myRole: 'viewer',
   createdAt: '2026-09-01T00:00:00Z',
   updatedAt: '2026-09-01T00:00:00Z',
+  pinnedAt: null,
   items: [
     {
       foodItemId: 'item-corn-dog',
