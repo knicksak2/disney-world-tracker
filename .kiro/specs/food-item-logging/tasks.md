@@ -73,6 +73,11 @@
   - [x] 12.2 Add `updateLog` to `FoodItemLogRepo` in `apps/api/src/services/foodLog/repo.ts` and `PATCH /me/food-items/:foodItemId/logs/:logId` in `apps/api/src/services/foodLog/routes.ts`; add route integration tests in `apps/api/src/services/foodLog/__tests__/routes.test.ts`
   - [x] 12.3 Support adding/updating rating in `apps/mobile/src/screens/catalog/MyFoodHistoryScreen.tsx` (pressable rating badge and "+ Add rating" button opening rating prompt and dispatching PATCH call)
 
+- [x] 13. Menu Tabs and Grouping in Food Item Picker (R5.8, R5.9, R5.10)
+  - [x] 13.1 Update `FoodItemsResponseDTO` in `packages/shared/src/dto/FoodItem.ts` and `apps/api/src/services/foodLog/routes.ts` to return optional `menus` alongside `items` on `GET /experiences/:id/food-items`
+  - [x] 13.2 Add menu tab filtering, group section headers, and cross-menu search fallback to `FoodItemPickerModal.tsx` in `apps/mobile/src/screens/catalog/`
+  - [x] 13.3 Add interaction unit tests in `apps/mobile/src/screens/catalog/__tests__/FoodItemPickerModal.test.tsx` verifying tab filtering, default tab selection, group rendering, tab switching, and cross-menu search fallback
+
 ## Task Dependency Graph
 
 Tasks within a wave can proceed in parallel; each wave depends only on earlier waves.
@@ -95,7 +100,8 @@ Tasks within a wave can proceed in parallel; each wave depends only on earlier w
     { "id": 12, "tasks": ["10.2", "10.3", "10.4", "10.5", "10.6"] },
     { "id": 13, "tasks": ["10.7", "10.8"] },
     { "id": 14, "tasks": ["10.9"] },
-    { "id": 15, "tasks": ["11.1"] }
+    { "id": 15, "tasks": ["11.1"] },
+    { "id": 16, "tasks": ["13.1", "13.2", "13.3"] }
   ]
 }
 ```

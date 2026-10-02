@@ -695,6 +695,19 @@ Experience_List analogue of `food-lists` Requirement 14 — same mechanism, same
    (`navigation-redesign` Requirement 6's amendment 8c); both controls invoke the same `PATCH
    /me/experience-lists/:id` pin/unpin request and reflect the resulting `pinnedAt` state
    immediately.
+6. THE App SHALL provide a pin/unpin toggle control in the header action row on
+   `ExperienceListDetailScreen.tsx` for an owned Experience_List (`myRole === 'owner'`), with
+   testID `experience-list-pin-btn`; activating it SHALL invoke `PATCH /me/experience-lists/:id`
+   with `{ pinned: list.pinnedAt === null }` and immediately reflect the updated `pinnedAt` state
+   with a filled pin icon and "Pinned" label when pinned, or an outline pin icon and "Pin" label
+   when unpinned. For non-owners (`myRole !== 'owner'`), the pin toggle control SHALL NOT be
+   rendered.
+7. THE Experience_List_Service SHALL enforce a maximum of 4 pinned Experience_Lists per User.
+   IF a User attempts to pin an Experience_List (`pinned: true`) when they already have 4 pinned
+   Experience_Lists, THE Experience_List_Service SHALL reject the request with HTTP `400`
+   `experience_list_pin_limit_reached`. THE App SHALL prevent pinning a 5th Experience_List and
+   display an alert titled "Pin Limit Reached" with message "You can pin up to 4 lists to your
+   dashboard. Unpin a list first to pin this one."
 
 ## Out of Scope (Future Work)
 

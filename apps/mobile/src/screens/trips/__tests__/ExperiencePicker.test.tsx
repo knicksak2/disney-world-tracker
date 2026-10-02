@@ -82,8 +82,14 @@ function renderPicker(props: Partial<React.ComponentProps<typeof ExperiencePicke
 describe('ExperiencePicker Component', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    (apiRequest as jest.Mock).mockResolvedValue({ experiences: mockExperiences });
+    (apiRequest as jest.Mock).mockImplementation(async (_method: string, path: string) => {
+      if (path === '/me/favorites') {
+        return { experienceIds: [] };
+      }
+      return { experiences: mockExperiences };
+    });
   });
+
 
   it('renders category tabs', async () => {
     renderPicker();
@@ -600,7 +606,212 @@ describe('ExperiencePicker Component', () => {
       expect(screen.getByText('The Twilight Zone Tower of Terror™')).toBeTruthy();
     });
   });
+
 });
+
+// ---------------------------------------------------------------------------
+// "Favorites" tab (experience-favorites Requirement 6, amended) — mirrors
+// the "My Lists" tab's structure exactly: a caller-resolved candidate source,
+// omitted entirely when empty, that never hits GET /catalog.
+// ---------------------------------------------------------------------------
+
+describe('ExperiencePicker "Favorites" tab (experience-favorites R6, amended)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (apiRequest as jest.Mock).mockImplementation(async (_method: string, path: string) => {
+      if (path === '/me/favorites') {
+        return { experienceIds: [] };
+      }
+      return { experiences: mockExperiences };
+    });
+  });
+
+  const favoriteSourcedExperience: ExperienceDTO = {
+    id: 'exp-ride-1',
+    name: 'Space Mountain',
+    category: 'Ride',
+    park: 'Magic Kingdom',
+    land: 'Tomorrowland',
+    description: '',
+    active: true,
+    imageUrl: null,
+    areaType: 'ThemePark',
+  };
+
+  it('omits the "Favorites" tab entirely when zero favorites are resolved (favoriteSourcedItems is undefined or empty) (R6.1 amended)', async () => {
+    renderPicker();
+    await waitFor(() => {
+      expect(screen.getByTestId('picker-tabs')).toBeTruthy();
+    });
+    expect(screen.queryByTestId('picker-tab-favorites')).toBeNull();
+
+    renderPicker({ favoriteSourcedItems: [] });
+    await waitFor(() => {
+      expect(screen.getAllByTestId('picker-tab-all').length).toBeGreaterThan(0);
+    });
+    expect(screen.queryAllByTestId('picker-tab-favorites').length).toBe(0);
+  });
+
+  it('renders the "Favorites" tab when one or more favorited experiences are supplied, and selecting it shows those items without hitting GET /catalog (R6.1, R6.2 amended)', async () => {
+    renderPicker({ favoriteSourcedItems: [favoriteSourcedExperience] });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('picker-tab-favorites')).toBeTruthy();
+    });
+
+    (apiRequest as jest.Mock).mockClear();
+    fireEvent.press(screen.getByTestId('picker-tab-favorites'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Space Mountain')).toBeTruthy();
+    });
+    // The Favorites tab sources from favoriteSourcedItems, never GET /catalog.
+    expect(apiRequest).not.toHaveBeenCalled();
+  });
+
+  it('shows a loading indicator while favoriteSourcedLoading is true, then renders once resolved', async () => {
+    const { rerender } = renderPicker({
+      favoriteSourcedItems: [],
+      favoriteSourcedLoading: true,
+    });
+
+    // The tab itself requires a non-empty favoriteSourcedItems to render per
+    // R6.1's omission rule, so seed one item up front and only vary loading.
+    rerender(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <ExperiencePicker
+          enabled={true}
+          onSelect={jest.fn()}
+          onSelectUnlocatedBreak={jest.fn()}
+          testIDPrefix="picker"
+          favoriteSourcedItems={[favoriteSourcedExperience]}
+          favoriteSourcedLoading={true}
+        />
+      </QueryClientProvider>,
+    );
+
+    fireEvent.press(screen.getByTestId('picker-tab-favorites'));
+    await waitFor(() => {
+      expect(screen.getByTestId('picker-search-loading')).toBeTruthy();
+    });
+
+    rerender(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <ExperiencePicker
+          enabled={true}
+          onSelect={jest.fn()}
+          onSelectUnlocatedBreak={jest.fn()}
+          testIDPrefix="picker"
+          favoriteSourcedItems={[favoriteSourcedExperience]}
+          favoriteSourcedLoading={false}
+        />
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Space Mountain')).toBeTruthy();
+    });
+  });
+
+  it('selecting a "Favorites" row calls onSelect with the exact same ExperienceDTO, with no optimizer-related fields injected (R6.2, R6.4 amended)', async () => {
+    const onSelect = jest.fn();
+    renderPicker({ favoriteSourcedItems: [favoriteSourcedExperience], onSelect });
+
+    fireEvent.press(screen.getByTestId('picker-tab-favorites'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Space Mountain')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByTestId('picker-result-exp-ride-1'));
+
+    expect(onSelect).toHaveBeenCalledTimes(1);
+    expect(onSelect).toHaveBeenCalledWith(favoriteSourcedExperience);
+    const selectedArg = onSelect.mock.calls[0][0];
+    expect(selectedArg).not.toHaveProperty('isFavorite');
+    expect(selectedArg).not.toHaveProperty('optimizerWeight');
+    expect(selectedArg).not.toHaveProperty('favoritePriority');
+  });
+
+  it('BUGFIX: selecting a park chip while on the "Favorites" tab narrows the displayed favorites to that park (previously silently did nothing, since this tab never calls GET /catalog)', async () => {
+    const mkPark: ExperienceDTO = {
+      id: 'exp-fav-mk',
+      name: 'Pirates of the Caribbean',
+      category: 'Ride',
+      park: 'Magic Kingdom',
+      land: 'Adventureland',
+      description: '',
+      active: true,
+      imageUrl: null,
+      areaType: 'ThemePark',
+    };
+    const epcotFav: ExperienceDTO = {
+      id: 'exp-fav-epcot',
+      name: 'Test Track',
+      category: 'Ride',
+      park: 'EPCOT',
+      land: 'World Discovery',
+      description: '',
+      active: true,
+      imageUrl: null,
+      areaType: 'ThemePark',
+    };
+
+    renderPicker({
+      favoriteSourcedItems: [mkPark, epcotFav],
+      showParkFilter: true,
+    });
+
+    fireEvent.press(screen.getByTestId('picker-tab-favorites'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Pirates of the Caribbean')).toBeTruthy();
+      expect(screen.getByText('Test Track')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByTestId('picker-park-chip-EPCOT'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Test Track')).toBeTruthy();
+      expect(screen.queryByText('Pirates of the Caribbean')).toBeNull();
+    });
+  });
+
+  it('filters the "Favorites" tab by land/attribute chips exactly like every other tab, since it reuses the same filterExperiencesMulti pipeline (R6.2 amended)', async () => {
+    const secondFavorite: ExperienceDTO = {
+      id: 'exp-ride-2',
+      name: 'Big Thunder Mountain Railroad',
+      category: 'Ride',
+      park: 'Magic Kingdom',
+      land: 'Frontierland',
+      description: '',
+      active: true,
+      imageUrl: null,
+      areaType: 'ThemePark',
+    };
+
+    renderPicker({ favoriteSourcedItems: [favoriteSourcedExperience, secondFavorite] });
+    fireEvent.press(screen.getByTestId('picker-tab-favorites'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Space Mountain')).toBeTruthy();
+      expect(screen.getByText('Big Thunder Mountain Railroad')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByTestId('picker-open-filters-modal'));
+    await waitFor(() => {
+      expect(screen.getByTestId('picker-modal-lands-section')).toBeTruthy();
+    });
+    fireEvent.press(screen.getByTestId('picker-modal-filter-land-tomorrowland'));
+    fireEvent.press(screen.getByTestId('picker-modal-close'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Space Mountain')).toBeTruthy();
+      expect(screen.queryByText('Big Thunder Mountain Railroad')).toBeNull();
+    });
+  });
+});
+
 
 // ---------------------------------------------------------------------------
 // "My Lists" tab (Requirement 15.1, 15.2, 15.3) — task 20.1
@@ -609,8 +820,14 @@ describe('ExperiencePicker Component', () => {
 describe('ExperiencePicker "My Lists" tab (R15.1, R15.2, R15.3)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    (apiRequest as jest.Mock).mockResolvedValue({ experiences: mockExperiences });
+    (apiRequest as jest.Mock).mockImplementation(async (_method: string, path: string) => {
+      if (path === '/me/favorites') {
+        return { experienceIds: [] };
+      }
+      return { experiences: mockExperiences };
+    });
   });
+
 
   const listSourcedExperience: ExperienceDTO = {
     id: 'exp-list-1',
@@ -652,6 +869,39 @@ describe('ExperiencePicker "My Lists" tab (R15.1, R15.2, R15.3)', () => {
     });
     // The My Lists tab sources from listSourcedItems, never GET /catalog.
     expect(apiRequest).not.toHaveBeenCalled();
+  });
+
+  it('BUGFIX: selecting a park chip while on the "My Lists" tab narrows the displayed list items to that park (previously silently did nothing, since this tab never calls GET /catalog)', async () => {
+    const epcotListItem: ExperienceDTO = {
+      id: 'exp-list-epcot',
+      name: 'Spaceship Earth',
+      category: 'Ride',
+      park: 'EPCOT',
+      land: 'World Celebration',
+      description: '',
+      active: true,
+      imageUrl: null,
+      areaType: 'ThemePark',
+    };
+
+    renderPicker({
+      listSourcedItems: [listSourcedExperience, epcotListItem],
+      showParkFilter: true,
+    });
+
+    fireEvent.press(screen.getByTestId('picker-tab-myLists'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Jungle Cruise')).toBeTruthy();
+      expect(screen.getByText('Spaceship Earth')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByTestId('picker-park-chip-EPCOT'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Spaceship Earth')).toBeTruthy();
+      expect(screen.queryByText('Jungle Cruise')).toBeNull();
+    });
   });
 
   it('shows a loading indicator while listSourcedLoading is true, then renders every item in the caller-supplied merged set once loaded', async () => {

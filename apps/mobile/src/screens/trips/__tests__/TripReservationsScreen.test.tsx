@@ -873,6 +873,105 @@ describe('TripReservationsScreen', () => {
     });
   });
 
+  it('PATCHes a changed date and recomputed plannedTime (R3.16)', async () => {
+    mockApi();
+    renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('reservation-edit-item-1')).toBeTruthy();
+    });
+    fireEvent.press(screen.getByTestId('reservation-edit-item-1'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('reservation-edit-date-2026-10-02')).toBeTruthy();
+    });
+    fireEvent.press(screen.getByTestId('reservation-edit-date-2026-10-02'));
+    fireEvent.press(screen.getByTestId('reservation-edit-save-button'));
+
+    await waitFor(() => {
+      expect(
+        apiRequestMock.mock.calls.some(
+          ([m, p]) => m === 'PATCH' && p === `/trips/${TRIP_ID}/planned-items/item-1`,
+        ),
+      ).toBe(true);
+    });
+    expect(bodyOf('PATCH', `/trips/${TRIP_ID}/planned-items/item-1`)).toEqual({
+      plannedDate: '2026-10-02',
+      plannedTime: '2026-10-02T22:00:00.000Z',
+    });
+  });
+
+  it('PATCHes a changed location to another catalog experience (R3.17)', async () => {
+    mockApi();
+    renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('reservation-edit-item-1')).toBeTruthy();
+    });
+    fireEvent.press(screen.getByTestId('reservation-edit-item-1'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('reservation-edit-selected-venue')).toBeTruthy();
+    });
+    expect(screen.getByTestId('reservation-edit-selected-venue').props.children).toBe('Be Our Guest');
+    fireEvent.press(screen.getByTestId('reservation-edit-clear-venue'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('reservation-edit-picker-result-exp-restaurant')).toBeTruthy();
+    });
+    fireEvent.press(screen.getByTestId('reservation-edit-picker-result-exp-restaurant'));
+    fireEvent.press(screen.getByTestId('reservation-edit-save-button'));
+
+    await waitFor(() => {
+      expect(
+        apiRequestMock.mock.calls.some(
+          ([m, p]) => m === 'PATCH' && p === `/trips/${TRIP_ID}/planned-items/item-1`,
+        ),
+      ).toBe(true);
+    });
+    expect(bodyOf('PATCH', `/trips/${TRIP_ID}/planned-items/item-1`)).toEqual({
+      experienceId: 'exp-restaurant',
+      itemType: 'experience',
+    });
+  });
+
+  it('PATCHes a changed location to an off-property custom title (R3.17)', async () => {
+    mockApi();
+    renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('reservation-edit-item-1')).toBeTruthy();
+    });
+    fireEvent.press(screen.getByTestId('reservation-edit-item-1'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('reservation-edit-clear-venue')).toBeTruthy();
+    });
+    fireEvent.press(screen.getByTestId('reservation-edit-clear-venue'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('reservation-edit-custom-title-input')).toBeTruthy();
+    });
+    fireEvent.changeText(
+      screen.getByTestId('reservation-edit-custom-title-input'),
+      'Off-property Bistro',
+    );
+    fireEvent.press(screen.getByTestId('reservation-edit-save-button'));
+
+    await waitFor(() => {
+      expect(
+        apiRequestMock.mock.calls.some(
+          ([m, p]) => m === 'PATCH' && p === `/trips/${TRIP_ID}/planned-items/item-1`,
+        ),
+      ).toBe(true);
+    });
+    expect(bodyOf('PATCH', `/trips/${TRIP_ID}/planned-items/item-1`)).toEqual({
+      experienceId: null,
+      itemType: 'break',
+      customTitle: 'Off-property Bistro',
+    });
+  });
+
   it('blocks an edit with an out-of-range party size and issues no PATCH', async () => {
     mockApi();
     renderScreen();

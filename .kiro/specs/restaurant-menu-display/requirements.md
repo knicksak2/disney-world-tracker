@@ -111,6 +111,7 @@ The cached menu age is the elapsed time from the cached menu's recorded fetch ti
 7. WHEN a menu item has no price or an empty price string, THE Menu_Screen SHALL render the item name and SHALL render no price for that item.
 8. THE Menu_Screen SHALL provide a control to return to the Experience detail screen.
 9. THE Menu_Screen SHALL render using the shared Magical / Whimsical theme components (Card, SectionLabel, Badge, GradientHeader) used by the other detail sections.
+10. WHEN viewing menu items on the Menu_Screen, THE Menu_Screen SHALL provide an affordance on each menu item to add that dish to a Food_List, and an 'Add to List' header action opening the Food_Item picker in multi-select mode.
 
 ### Requirement 6: Curated dining-reservation links
 

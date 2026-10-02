@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -30,6 +30,7 @@ export default function AddToListsSheet({
   onComplete,
 }: AddToListsSheetProps): JSX.Element | null {
   const queryClient = useQueryClient();
+  const hasCheckedPreselectionsRef = useRef(false);
   const [selectedListIds, setSelectedListIds] = useState<Set<string>>(new Set());
   const [initialSelectedListIds, setInitialSelectedListIds] = useState<Set<string>>(new Set());
   const [isSaving, setIsSaving] = useState(false);
@@ -48,7 +49,12 @@ export default function AddToListsSheet({
 
   // When visible, fetch detail for owned lists to determine pre-selection (Requirement 9.3)
   useEffect(() => {
-    if (!visible || ownedLists.length === 0 || foodItems.length === 0) {
+    if (
+      !visible ||
+      hasCheckedPreselectionsRef.current ||
+      ownedLists.length === 0 ||
+      foodItems.length === 0
+    ) {
       return;
     }
 
@@ -72,7 +78,8 @@ export default function AddToListsSheet({
       );
 
       if (isMounted) {
-        setSelectedListIds(new Set(preselected));
+        hasCheckedPreselectionsRef.current = true;
+        setSelectedListIds((prev) => new Set([...prev, ...preselected]));
         setInitialSelectedListIds(new Set(preselected));
       }
     }
@@ -83,6 +90,16 @@ export default function AddToListsSheet({
       isMounted = false;
     };
   }, [visible, ownedLists.length, foodItems]);
+
+  useEffect(() => {
+    if (!visible) {
+      hasCheckedPreselectionsRef.current = false;
+      setSelectedListIds(new Set());
+      setInitialSelectedListIds(new Set());
+      setIsCreatingList(false);
+      setNewListName('');
+    }
+  }, [visible]);
 
   function toggleListSelection(listId: string): void {
     setSelectedListIds((prev) => {
@@ -122,7 +139,7 @@ export default function AddToListsSheet({
   }
 
   async function handleConfirm(): Promise<void> {
-    if (isSaving) return;
+    if (isSaving || selectedListIds.size === 0) return;
     setIsSaving(true);
 
     try {
@@ -314,10 +331,14 @@ export default function AddToListsSheet({
           <View style={styles.footer}>
             <Pressable
               onPress={() => void handleConfirm()}
-              disabled={isSaving}
+              disabled={isSaving || selectedListIds.size === 0}
               accessibilityRole="button"
+              accessibilityState={{ disabled: isSaving || selectedListIds.size === 0 }}
               accessibilityLabel="Save list selections"
-              style={[styles.saveBtn, isSaving && styles.saveBtnDisabled]}
+              style={[
+                styles.saveBtn,
+                (isSaving || selectedListIds.size === 0) && styles.saveBtnDisabled,
+              ]}
               testID="add-to-lists-save-btn"
             >
               {isSaving ? (

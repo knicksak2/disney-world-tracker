@@ -1038,29 +1038,34 @@ COMMIT;
 
 ## Error Handling — Addition
 
-No new `ErrorCode`. A pin/unpin request against an Experience_List the requester does not own
-reuses the existing `assertOwner` predicate's `experience_list_not_found`/
-`experience_list_edit_forbidden` response, identically to `renameList`/`setVisibility`. A
-non-boolean `pinned` value follows the existing `validation_failed` path.
+- `experience_list_pin_limit_reached` (HTTP `400`): Returned when an owner attempts to pin an Experience_List (`pinned: true`) when they already have 4 pinned Experience_Lists (Requirement 19.7).
+- A pin/unpin request against an Experience_List the requester does not own reuses the existing `assertOwner` predicate's `experience_list_not_found`/`experience_list_edit_forbidden` response, identically to `renameList`/`setVisibility`. A non-boolean `pinned` value follows the existing `validation_failed` path.
 
 ## Configuration & Constants — Addition
 
-Reuses `food-lists`' `MAX_COLLECTION_PREVIEW_ROWS = 3` (a single client-side constant in
-`CollectionScreen.tsx`, shared by both list types' cards — not duplicated per list type).
+| Constant | Value | Purpose |
+|---|---|---|
+| `MAX_COLLECTION_PREVIEW_ROWS` | `4` | Cap on rows rendered per list-type card in the Collection screen's "Lists" segment (`navigation-redesign` Requirement 6 amendment 8c) before a "View all (N)" row appears. Lives in `apps/mobile/src/screens/collection/CollectionScreen.tsx`. |
+| `MAX_PINNED_LISTS` | `4` | Maximum number of pinned lists permitted per user per list type (Requirement 19.7). Enforced by both server repository and mobile UI. |
 
 ## Correctness Properties — Addition
 
 ### Property 24: Pinning Reorders Without Touching Content or `updatedAt` (Added by this amendment)
 *For any Experience_List, calling `setPinned(listId, ownerId, true)` sets `pinnedAt` to a non-null UTC timestamp and leaves `updatedAt`, `name`, `visibility`, `likeCount`, and every `Experience_List_Item`/`Experience_List_Share`/`Experience_List_Like`/`Experience_List_Save` row unchanged; calling it with `false` sets `pinnedAt` back to `null` with the same non-side-effect guarantee. A non-owner calling `setPinned` is rejected per Requirement 19.3 with no `pinned_at` change on any list.*
-**Validates:** Requirement 19.1, Requirement 19.2, Requirement 19.3
+**Validates:** Requirement 19.1, Requirement 19.2, Requirement 19.3, Requirement 19.6
 
 ### Property 25: Pinned-First Ordering Is Total and Stable (Added by this amendment)
 *For any User's set of owned Experience_Lists, `listOwned`'s returned order satisfies: every list with non-null `pinnedAt` appears before every list with a null `pinnedAt`; among lists with non-null `pinnedAt`, they appear in descending `pinnedAt` order; among lists with null `pinnedAt`, they appear in descending `updatedAt` order.*
 **Validates:** Requirement 19.4
 
+### Property 25.1: Pin Limit Cap (Added by this amendment)
+*For any User who already has 4 pinned Experience_Lists, attempting to pin an unpinned Experience_List (`setPinned(listId, ownerId, true)`) is rejected with HTTP 400 `experience_list_pin_limit_reached` and leaves the set of pinned lists and their `pinnedAt` timestamps completely unchanged. Setting `pinned: false` on an already-pinned list is always allowed regardless of how many lists are pinned.*
+**Validates:** Requirement 19.7
+
 ## Testing Strategy — Addition
 
-- **Repository property test** (extend `apps/api/src/services/experienceLists/__tests__/experienceLists.prop.test.ts`): mirrors `food-lists`' Property 23/24 tests exactly, substituting `Experience_List`/`experience_lists`.
+- **Repository property test** (`apps/api/src/services/experienceLists/__tests__/experienceLists.prop.test.ts`): mirrors `food-lists`' Property 24/24.1 tests, asserting `listOwned`'s returned order matches Property 25 exactly and asserting Property 25.1 pin limit rejection with `experience_list_pin_limit_reached`.
 - **Migration test** (`apps/api/src/db/__tests__/migration0053.test.ts`): asserts `experience_lists.pinned_at` exists, is nullable, defaults to `null`, and can be set/cleared via `UPDATE`.
 - **Route integration test** (extend `apps/api/src/services/experienceLists/__tests__/routes.test.ts`): mirrors `food-lists`' pin-toggle route tests exactly.
-- **Mobile component test** (extend `MyExperienceListsScreen.test.tsx`): mirrors `food-lists`' `MyFoodListsScreen.test.tsx` pin-toggle test exactly.
+- **Mobile component test** (extend `MyExperienceListsScreen.test.tsx` and `ExperienceListDetailScreen.test.tsx`): mirrors `food-lists`' pin-toggle tests, asserting the pin toggle renders per row in `MyExperienceListsScreen` and in the header action row in `ExperienceListDetailScreen` for owners (calling `PATCH /me/experience-lists/:id` with inverted boolean and updating state), and is hidden for non-owners. Attempting to pin a 5th list displays an alert modal and prevents the mutation. Extend `CollectionScreen.test.tsx` for the 4 preview rows, "View all (N)" behavior, and pin toggle on preview rows.
+

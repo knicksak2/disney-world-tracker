@@ -148,6 +148,7 @@ export type {
   PlacePinRequest,
   FoodItemDTO,
   SubmitFoodItemInputDTO,
+  FoodItemsResponseDTO,
   FoodItemLogDTO,
   FoodItemLogHistoryDTO,
   CreateFoodItemLogInputDTO,
@@ -188,6 +189,9 @@ export type {
   CurrentWeatherDTO,
   VisitSummaryDTO,
   VisitSummaryResponseDTO,
+  FavoritesResponseDTO,
+  GroupFavoriteDTO,
+  GroupFavoritesResponseDTO,
 } from './dto/index.js';
 
 export {

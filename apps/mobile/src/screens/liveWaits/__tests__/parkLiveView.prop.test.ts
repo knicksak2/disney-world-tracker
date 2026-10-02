@@ -305,5 +305,127 @@ describe('parkLiveView property tests', () => {
       expect(getWaitStatus(51, false)).toBe('high');
       expect(getWaitStatus(120, false)).toBe('high');
     });
+
+    // Feature: experience-favorites, Property 7: Live Waits Favorites Filter Is Park-Scoped and Re-Applies on Park Switch
+    it('Property 7: Live Waits Favorites Filter Is Park-Scoped and Re-Applies on Park Switch', () => {
+      fc.assert(
+        fc.property(
+          fc.array(entryArb, { maxLength: 20 }),
+          fc.array(entryArb, { maxLength: 20 }),
+          fc.array(fc.uuid(), { maxLength: 10 }),
+          (parkAEntries, parkBEntries, favoritedList) => {
+            const favoritedIds = new Set(favoritedList);
+
+            const experiencesById = new Map<string, ExperienceDTO>();
+            for (const entry of [...parkAEntries, ...parkBEntries]) {
+              experiencesById.set(
+                entry.experienceId,
+                createMockExperience(entry.experienceId, []),
+              );
+            }
+
+            // Compute for Park A
+            const rowsParkA = buildLiveWaitsRows(
+              parkAEntries,
+              experiencesById,
+              'favorites',
+              favoritedIds,
+            );
+
+            // 1. Every row in rowsParkA must be in favoritedIds AND must have come from parkAEntries
+            const parkAIds = new Set(parkAEntries.map((e) => e.experienceId));
+            for (const row of rowsParkA) {
+              expect(favoritedIds.has(row.experienceId)).toBe(true);
+              expect(parkAIds.has(row.experienceId)).toBe(true);
+            }
+
+            // 2. Exact intersection: all live-wait-eligible parkA entries that are favorited must be in rowsParkA
+            const allEligibleParkA = buildLiveWaitsRows(
+              parkAEntries,
+              experiencesById,
+              'all',
+            );
+            const expectedParkA = allEligibleParkA.filter((r) =>
+              favoritedIds.has(r.experienceId),
+            );
+            expect(rowsParkA.map((r) => r.experienceId)).toEqual(
+              expectedParkA.map((r) => r.experienceId),
+            );
+
+            // 3. Park switch: compute for Park B with the same 'favorites' filter
+            const rowsParkB = buildLiveWaitsRows(
+              parkBEntries,
+              experiencesById,
+              'favorites',
+              favoritedIds,
+            );
+
+            const parkBIds = new Set(parkBEntries.map((e) => e.experienceId));
+            for (const row of rowsParkB) {
+              expect(favoritedIds.has(row.experienceId)).toBe(true);
+              expect(parkBIds.has(row.experienceId)).toBe(true);
+            }
+
+            const allEligibleParkB = buildLiveWaitsRows(
+              parkBEntries,
+              experiencesById,
+              'all',
+            );
+            const expectedParkB = allEligibleParkB.filter((r) =>
+              favoritedIds.has(r.experienceId),
+            );
+            expect(rowsParkB.map((r) => r.experienceId)).toEqual(
+              expectedParkB.map((r) => r.experienceId),
+            );
+          },
+        ),
+        { numRuns: NUM_RUNS },
+      );
+    });
+
+    // Feature: experience-favorites, Property 8: buildLiveWaitsRows's New Parameter Is Fully Backward Compatible
+    it('Property 8: buildLiveWaitsRows with omitted favoritedIds reproduces pre-existing behavior for every non-favorites filter', () => {
+      const legacyFilterArb: fc.Arbitrary<LiveWaitsFilter> = fc.constantFrom(
+        'all',
+        'walkOn',
+        'lightningLane',
+        'headliners',
+      );
+
+      fc.assert(
+        fc.property(
+          fc.array(entryArb, { maxLength: 20 }),
+          legacyFilterArb,
+          (entries, filter) => {
+            const experiencesById = new Map<string, ExperienceDTO>();
+            for (const entry of entries) {
+              const isHl = entry.name.length % 2 === 0;
+              experiencesById.set(
+                entry.experienceId,
+                createMockExperience(
+                  entry.experienceId,
+                  isHl ? [HEADLINER_THRILL_FACET_VALUES[0]!] : [],
+                ),
+              );
+            }
+
+            // Call with 3 arguments (omitting favoritedIds)
+            const resultOmitted = buildLiveWaitsRows(entries, experiencesById, filter);
+
+            // Call with 4 arguments explicitly passing an empty set (the default)
+            const resultExplicitDefault = buildLiveWaitsRows(
+              entries,
+              experiencesById,
+              filter,
+              new Set<string>(),
+            );
+
+            expect(resultOmitted).toEqual(resultExplicitDefault);
+          },
+        ),
+        { numRuns: NUM_RUNS },
+      );
+    });
   });
 });
+

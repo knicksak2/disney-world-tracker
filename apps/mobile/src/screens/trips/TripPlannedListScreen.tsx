@@ -46,6 +46,7 @@ import {
   type ExperienceDTO,
   type PlannedItemDTO,
   type PlannedItemView,
+  type ReservationKind,
   type TripFeedItemDTO,
   type TripMemberDTO,
 } from '@dwt/shared';
@@ -62,8 +63,12 @@ import {
   ScreenContainer,
   SecondaryButton,
 } from '../../theme/components';
+import { formatParkTime } from '../catalog/live/parkTime';
+import { tripDetailKeys } from './tripDetailQueryKeys';
+import { formatGroupDate } from './reservations';
 import { ExperiencePicker } from './ExperiencePicker';
 import { useAttachedExperienceListItemsForTrip } from './useAttachedExperienceListItems';
+import { useFavoriteSourcedExperienceItems } from '../catalog/useFavoriteSourcedExperienceItems';
 import {
   LogComposerModal,
   tripFeedKeys,
@@ -123,6 +128,39 @@ function getParkColor(park: string | null): string {
   return theme.color.primary;
 }
 
+/**
+ * Format a planned time into a human-readable park-local wall-clock time
+ * (e.g. `10:00 AM` or `3:45 PM`). Handles ISO timestamps with 'T' via
+ * `formatParkTime` (converting UTC to America/New_York) as well as HH:mm short times.
+ */
+function formatPlannedTime(timeStr?: string | null): string {
+  if (!timeStr) return '';
+  if (timeStr.includes('T')) {
+    const formatted = formatParkTime(timeStr);
+    if (formatted !== '—') {
+      return formatted;
+    }
+  }
+  if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(timeStr)) {
+    const [hStr, mStr] = timeStr.split(':');
+    const h = parseInt(hStr!, 10);
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    const hour12 = h % 12 || 12;
+    return `${hour12}:${mStr} ${ampm}`;
+  }
+  return timeStr;
+}
+
+const RESERVATION_KIND_LABELS: Record<
+  ReservationKind,
+  { readonly label: string; readonly color: string }
+> = {
+  dining: { label: 'Dining Reservation', color: '#d6336c' },
+  lightning_lane: { label: 'Lightning Lane', color: '#f6a609' },
+  activity: { label: 'Activity Booking', color: '#2f80ed' },
+  other: { label: 'Reservation', color: '#7e57c2' },
+};
+
 function getSchedulingStatus(
   item: PlannedItemView,
   tripStartDate?: string | null,
@@ -130,22 +168,24 @@ function getSchedulingStatus(
   if (!item.plannedDate) {
     return { label: '⏳ Unscheduled', isScheduled: false };
   }
+  const formattedDate = formatGroupDate(item.plannedDate);
   let dayLabel = '';
   if (tripStartDate) {
-    const itemDay = new Date(item.plannedDate);
-    const startDay = new Date(tripStartDate);
+    const itemDay = new Date(item.plannedDate + 'T00:00:00Z');
+    const startDay = new Date(tripStartDate + 'T00:00:00Z');
     const diffDays =
       Math.floor((itemDay.getTime() - startDay.getTime()) / (1000 * 60 * 60 * 24)) +
       1;
     if (diffDays >= 1) {
-      dayLabel = `Day ${diffDays}`;
+      dayLabel = `Day ${diffDays} (${formattedDate})`;
     }
   }
   if (!dayLabel) {
-    dayLabel = item.plannedDate;
+    dayLabel = formattedDate;
   }
-  const time = item.plannedTime ? ` · ${item.plannedTime}` : '';
-  return { label: `✓ ${dayLabel}${time}`, isScheduled: true };
+  const formattedTime = formatPlannedTime(item.plannedTime);
+  const time = formattedTime ? ` · ${formattedTime}` : '';
+  return { label: `📅 ${dayLabel}${time}`, isScheduled: true };
 }
 
 // ---------------------------------------------------------------------------
@@ -200,8 +240,13 @@ export default function TripPlannedListScreen({
   // done or not (R1.5).
   const [loggingItem, setLoggingItem] = useState<PlannedItemView | null>(null);
 
-  const cachedTrip = queryClient.getQueryData<{ startDate?: string | null }>(['trips', tripId]);
-  const tripStartDate = cachedTrip?.startDate ?? null;
+  const tripQuery = useQuery<{ startDate?: string | null }, ApiError>({
+    queryKey: tripDetailKeys.detail(tripId),
+    queryFn: () =>
+      apiRequest<{ startDate?: string | null }>('GET', `/trips/${tripId}`),
+    staleTime: 30 * 1000,
+  });
+  const tripStartDate = tripQuery.data?.startDate ?? null;
 
   const ownUserId = meQuery.data?.user.id ?? null;
   const candidates = useMemo<readonly TripMemberDTO[]>(() => {
@@ -656,6 +701,19 @@ function PlannedItemCard({
             {item.park ? (
               <Badge label={item.park} color={getParkColor(item.park)} />
             ) : null}
+            {item.reservationKind ? (
+              <Badge
+                label={
+                  RESERVATION_KIND_LABELS[item.reservationKind]?.label ??
+                  'Reservation'
+                }
+                color={
+                  RESERVATION_KIND_LABELS[item.reservationKind]?.color ??
+                  theme.color.primaryLight
+                }
+                testID={`planned-item-reservation-${item.id}`}
+              />
+            ) : null}
             <View
               style={[
                 styles.schedBadge,
@@ -781,6 +839,12 @@ function AddItemModal({
   // its own (cache-shared with any other screen reading the same Trip via
   // `tripDetailKeys.detail`). Only fetched while the modal is visible.
   const attachedListItems = useAttachedExperienceListItemsForTrip(tripId, visible);
+
+  // ExperiencePicker "Favorites" Tab (experience-favorites Requirement 6,
+  // amended): resolves the User's Favorited_Set into full ExperienceDTO rows,
+  // mirroring attachedListItems' role for the "My Lists" tab exactly. Only
+  // fetched while the modal is visible, same gating as attachedListItems.
+  const favoriteItems = useFavoriteSourcedExperienceItems(visible);
 
   const resetForm = (): void => {
     setError(null);
@@ -909,6 +973,8 @@ function AddItemModal({
             testIDPrefix="planned-list"
             listSourcedItems={attachedListItems.items}
             listSourcedLoading={attachedListItems.isLoading}
+            favoriteSourcedItems={favoriteItems.items}
+            favoriteSourcedLoading={favoriteItems.isLoading}
             alreadyPlannedIds={existingExperienceIds}
           />
 
@@ -1111,7 +1177,7 @@ const styles = StyleSheet.create({
     borderRadius: 5,
   },
   schedBadgeScheduled: {
-    backgroundColor: 'rgba(46, 158, 107, 0.14)',
+    backgroundColor: 'rgba(91, 42, 134, 0.10)',
   },
   schedBadgeUnscheduled: {
     backgroundColor: 'rgba(246, 166, 9, 0.16)',
@@ -1121,7 +1187,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   schedBadgeTextScheduled: {
-    color: '#27855a',
+    color: theme.color.primary,
   },
   schedBadgeTextUnscheduled: {
     color: '#9a6500',

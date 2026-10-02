@@ -127,6 +127,23 @@ Migration numbering: `0030_derived_stat_runs.sql` is the last file on disk, so t
     - `npm run verify:mobile`, then the full `npm run verify` once.
     - _Requirements: 3.13_
 
+- [x] 10. Enable updating date and location when editing a reservation
+  - [x] 10.1 Shared contracts and API repo write rules
+    - Add `experienceId: uuidSchema.nullable().optional()` to `plannedItemEditSchema`. In `editPlannedItem`, update `experience_id` when provided, adjust `item_type` (`'experience'` when an experience is set, `'break'` when unlocated), validate that any non-null `experienceId` exists in the catalog, and verify that a Reservation retains either an `experienceId` or a `customTitle`.
+    - _Requirements: 3.16, 3.17_
+  - [x] 10.2 Backend tests
+    - Add test cases in `packages/shared/src/__tests__/reservations.test.ts` for updating `experienceId` and `customTitle` on `plannedItemEditSchema`.
+    - Add test cases in `apps/api/src/services/trips/__tests__/repo.reservations.integration.test.ts` for updating `plannedDate`, updating `experienceId` to another catalog experience, switching from an off-property reservation to a catalog experience, switching from a catalog experience to an off-property custom title, and rejecting an unknown experience or clearing both experience and custom title.
+    - _Requirements: 3.16, 3.17_
+  - [x] 10.3 Mobile Edit Reservation modal
+    - In `TripReservationsScreen.tsx`, add Date selection chips to the Edit Reservation modal. Recompute `plannedTime` as a UTC instant on that date when submitting.
+    - In `TripReservationsScreen.tsx`, add Location/Where section to the Edit Reservation modal displaying the current venue card with a "Change" button, and allowing selection of a new Catalog Experience via `ExperiencePicker` or an off-property custom title. Send changed venue fields on `PATCH`.
+    - _Requirements: 3.16, 3.17_
+  - [x] 10.4 Mobile tests and checkpoint
+    - In `TripReservationsScreen.test.tsx`, add tests for editing a reservation's date (verifying `plannedDate` and the recomputed `plannedTime` are PATCHed), and editing a reservation's location (changing experience, or switching to off-property custom title).
+    - Run scoped verifications and final `npm run verify`.
+    - _Requirements: 3.16, 3.17_
+
 ## Notes
 
 - **No new endpoint and no new Trip_Action.** The Reservations screen reads the existing `GET /trips/:id/planned-items` and filters client-side; writes reuse the existing Planned_Item routes. Authorization is inherited from Planned_Item rules (R6.4). Do not add a `/trips/:id/reservations` route or an `add_reservation` action to `permissions.ts`.
@@ -164,7 +181,10 @@ Migration numbering: `0030_derived_stat_runs.sql` is the last file on disk, so t
     { "id": 18, "tasks": ["8.5"] },
     { "id": 19, "tasks": ["9.1"] },
     { "id": 20, "tasks": ["9.2"] },
-    { "id": 21, "tasks": ["9.3"] }
+    { "id": 21, "tasks": ["9.3"] },
+    { "id": 22, "tasks": ["10.1"] },
+    { "id": 23, "tasks": ["10.2", "10.3"] },
+    { "id": 24, "tasks": ["10.4"] }
   ]
 }
 ```

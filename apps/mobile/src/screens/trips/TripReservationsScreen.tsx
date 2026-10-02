@@ -127,9 +127,12 @@ export default function TripReservationsScreen({ navigation, route }: Props): JS
   const [showAddModal, setShowAddModal] = useState(false);
   const [draft, setDraft] = useState<DraftState>(() => emptyDraft(''));
   const [editing, setEditing] = useState<PlannedItemDTO | null>(null);
+  const [editDate, setEditDate] = useState('');
   const [editTimeText, setEditTimeText] = useState('');
   const [editPartySizeText, setEditPartySizeText] = useState('');
   const [editConfirmation, setEditConfirmation] = useState('');
+  const [editExperience, setEditExperience] = useState<ExperienceDTO | null>(null);
+  const [editCustomTitle, setEditCustomTitle] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
 
   const invalidate = (): void => {
@@ -182,11 +185,22 @@ export default function TripReservationsScreen({ navigation, route }: Props): JS
 
   const handleOpenEdit = (item: PlannedItemDTO): void => {
     setEditing(item);
+    setEditDate(item.plannedDate ?? tripQuery.data?.startDate ?? '');
     // Seed the Time_Picker with the stored Booked_Time in park-local 12-hour
     // form so it opens on the reservation's actual time (R3.10).
     setEditTimeText(isoToWheelTime(item.plannedTime));
     setEditPartySizeText(item.partySize == null ? '' : String(item.partySize));
     setEditConfirmation(item.confirmationNumber ?? '');
+    if (item.experienceId != null) {
+      setEditExperience({
+        id: item.experienceId,
+        name: item.experienceName ?? 'Selected Experience',
+      } as ExperienceDTO);
+      setEditCustomTitle('');
+    } else {
+      setEditExperience(null);
+      setEditCustomTitle(item.customTitle ?? '');
+    }
     setFormError(null);
   };
 
@@ -258,8 +272,23 @@ export default function TripReservationsScreen({ navigation, route }: Props): JS
 
     const body: Record<string, unknown> = {};
 
-    if (editTimeText.trim().length > 0) {
-      const plannedTime = etWallClockToIso(editing.plannedDate ?? '', editTimeText);
+    const effectiveDate = editDate || (editing.plannedDate ?? '');
+    if (!effectiveDate) {
+      setFormError('Pick a date for this reservation.');
+      return;
+    }
+    if (effectiveDate !== editing.plannedDate) {
+      body.plannedDate = effectiveDate;
+      if (editTimeText.trim().length > 0) {
+        const plannedTime = etWallClockToIso(effectiveDate, editTimeText);
+        if (plannedTime === null) {
+          setFormError('That time could not be read. Pick an hour, minute, and AM or PM.');
+          return;
+        }
+        body.plannedTime = plannedTime;
+      }
+    } else if (editTimeText.trim().length > 0) {
+      const plannedTime = etWallClockToIso(effectiveDate, editTimeText);
       if (plannedTime === null) {
         setFormError('That time could not be read. Pick an hour, minute, and AM or PM.');
         return;
@@ -286,6 +315,32 @@ export default function TripReservationsScreen({ navigation, route }: Props): JS
     const nextConfirmation = confirmation.length === 0 ? null : confirmation;
     if (nextConfirmation !== editing.confirmationNumber) {
       body.confirmationNumber = nextConfirmation;
+    }
+
+    // Venue / Location (R3.17)
+    const hasVenue = editExperience != null || editCustomTitle.trim().length > 0;
+    if (!hasVenue) {
+      setFormError('Choose a place, or type a name for an off-property booking.');
+      return;
+    }
+
+    if (editExperience != null) {
+      if (editExperience.id !== editing.experienceId) {
+        body.experienceId = editExperience.id;
+        body.itemType = 'experience';
+        if (editing.customTitle !== null) {
+          body.customTitle = null;
+        }
+      }
+    } else {
+      const trimmedCustom = editCustomTitle.trim();
+      if (editing.experienceId !== null) {
+        body.experienceId = null;
+        body.itemType = 'break';
+        body.customTitle = trimmedCustom;
+      } else if (trimmedCustom !== (editing.customTitle ?? '')) {
+        body.customTitle = trimmedCustom;
+      }
     }
 
     if (Object.keys(body).length === 0) {
@@ -591,6 +646,30 @@ export default function TripReservationsScreen({ navigation, route }: Props): JS
             onBack={() => setEditing(null)}
           />
           <ScrollView contentContainerStyle={styles.scroll}>
+            <SectionLabel>Date</SectionLabel>
+            <View style={styles.dateRow}>
+              {availableDates(tripQuery.data, editing?.plannedDate).map((date) => {
+                const active = editDate === date;
+                return (
+                  <Pressable
+                    key={date}
+                    onPress={() => {
+                      setEditDate(date);
+                      setFormError(null);
+                    }}
+                    style={[styles.dateChip, active && styles.dateChipActive]}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: active }}
+                    testID={`reservation-edit-date-${date}`}
+                  >
+                    <Text style={[styles.dateChipText, active && styles.dateChipTextActive]}>
+                      {formatGroupDate(date)}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
             <SectionLabel>Time (park time)</SectionLabel>
             {/* Preselected from the stored Booked_Time (R3.10). */}
             <Text style={styles.timeReadout} testID="reservation-edit-time-readout">
@@ -629,6 +708,48 @@ export default function TripReservationsScreen({ navigation, route }: Props): JS
               accessibilityLabel="Confirmation number"
               testID="reservation-edit-confirmation-input"
             />
+
+            <SectionLabel>Where</SectionLabel>
+            {editExperience != null ? (
+              <Card style={styles.selectedVenue}>
+                <Text style={styles.selectedVenueText} testID="reservation-edit-selected-venue">
+                  {editExperience.name}
+                </Text>
+                <SecondaryButton
+                  label="Change"
+                  onPress={() => {
+                    setEditExperience(null);
+                    setEditCustomTitle('');
+                  }}
+                  testID="reservation-edit-clear-venue"
+                />
+              </Card>
+            ) : (
+              <>
+                <ExperiencePicker
+                  key={`edit-${editing?.reservationKind ?? 'dining'}`}
+                  enabled={editing !== null}
+                  showTabs={false}
+                  defaultTab={PICKER_TAB_BY_KIND[editing?.reservationKind ?? 'dining']}
+                  showParkFilter
+                  onSelect={(experience) => {
+                    setEditExperience(experience);
+                    setEditCustomTitle('');
+                  }}
+                  testIDPrefix="reservation-edit-picker"
+                />
+                <Text style={styles.hint}>Not in the app? Type the name instead.</Text>
+                <TextInput
+                  value={editCustomTitle}
+                  onChangeText={setEditCustomTitle}
+                  placeholder="Off-property restaurant"
+                  placeholderTextColor={theme.color.textSecondary}
+                  style={styles.input}
+                  accessibilityLabel="Off-property booking name"
+                  testID="reservation-edit-custom-title-input"
+                />
+              </>
+            )}
 
             {formError !== null ? (
               <Text style={styles.errorText} testID="reservation-edit-error">
@@ -788,6 +909,14 @@ function tripDates(trip: TripDTO | undefined): readonly string[] {
     if (dates.length > 60) break;
   }
   return dates;
+}
+
+function availableDates(trip: TripDTO | undefined, extraDate?: string | null): readonly string[] {
+  const dates = new Set(tripDates(trip));
+  if (extraDate) {
+    dates.add(extraDate);
+  }
+  return Array.from(dates).sort();
 }
 
 const styles = StyleSheet.create({

@@ -91,6 +91,7 @@ describe('TodayInParkLens & LiveWaitCockpit (Task 18.4)', () => {
       const onReserve = jest.fn();
       const onLogFoodItem = jest.fn();
       const onMyLoggedItems = jest.fn();
+      const onAddToList = jest.fn();
       const { getByTestId, getByText, queryByTestId } = renderWithClient(
         <TodayInParkLens
           experienceId="exp-dining"
@@ -107,6 +108,7 @@ describe('TodayInParkLens & LiveWaitCockpit (Task 18.4)', () => {
           onReserve={onReserve}
           onLogFoodItem={onLogFoodItem}
           onMyLoggedItems={onMyLoggedItems}
+          onAddToList={onAddToList}
           loggedDishesCount={3}
         />
       );
@@ -118,6 +120,8 @@ describe('TodayInParkLens & LiveWaitCockpit (Task 18.4)', () => {
       expect(getByText("Reserve on Disney's Site")).toBeTruthy();
       expect(getByTestId('dining-card-log-dish-btn')).toBeTruthy();
       expect(getByText('Log a Dish')).toBeTruthy();
+      expect(getByTestId('dining-card-add-to-list-btn')).toBeTruthy();
+      expect(getByText('Add to List')).toBeTruthy();
       expect(getByTestId('dining-card-my-dishes-btn')).toBeTruthy();
       expect(getByText('My Dishes (3) →')).toBeTruthy();
       expect(getByTestId('menu-summary-card')).toBeTruthy();
@@ -133,6 +137,9 @@ describe('TodayInParkLens & LiveWaitCockpit (Task 18.4)', () => {
 
       fireEvent.press(getByTestId('dining-card-log-dish-btn'));
       expect(onLogFoodItem).toHaveBeenCalled();
+
+      fireEvent.press(getByTestId('dining-card-add-to-list-btn'));
+      expect(onAddToList).toHaveBeenCalled();
 
       fireEvent.press(getByTestId('dining-card-my-dishes-btn'));
       expect(onMyLoggedItems).toHaveBeenCalled();

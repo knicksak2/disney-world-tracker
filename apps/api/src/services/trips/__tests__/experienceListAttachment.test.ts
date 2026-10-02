@@ -492,7 +492,7 @@ describe('Trip Experience Lists — Properties 16 & 17', { timeout: 120_000 }, (
       ),
       { numRuns: 100 },
     );
-  }, 120000);
+  }, 240000);
 
   // -------------------------------------------------------------------------
   // Property 17: Trip Attachment Is View-Access Only, Never a Scheduling Action

@@ -289,6 +289,151 @@ describe('HomeScreen (Requirements 2.1–2.5)', () => {
     }));
   });
 
+  it('renders Your Favorites below Park Wait Pulse without altering Pulse assertions and shows empty state when zero favorites (Requirements 8.1, 8.3, 8.5)', async () => {
+    renderHome();
+
+    // Pulse carousel assertions remain valid (non-regression check, R8.5)
+    expect(await screen.findByTestId('home-park-wait-pulse')).toBeTruthy();
+    expect(await screen.findByTestId('home-pulse-pill-Magic Kingdom')).toBeTruthy();
+
+    // Your Favorites section renders below Pulse
+    expect(await screen.findByTestId('home-favorites-section')).toBeTruthy();
+    expect(screen.getByText('Your Favorites')).toBeTruthy();
+    expect(screen.getByTestId('home-favorites-empty')).toBeTruthy();
+    expect(screen.getByText('No favorites with live waits')).toBeTruthy();
+  });
+
+  it('renders favorited attractions with live wait status and navigates to ExperienceDetail on tap (Requirements 8.2, 8.4)', async () => {
+    mockApiRequest.mockImplementation(async (_method: string, path: string) => {
+      if (path === '/me') {
+        return {
+          user: { id: 'user-1', email: 'nicholas@example.com' },
+          profile: { displayName: 'Nicholas K', avatarPreset: null },
+        };
+      }
+      if (path === '/me/favorites') {
+        return { experienceIds: ['e-1'] };
+      }
+      if (path === '/catalog') {
+        return {
+          experiences: [
+            {
+              id: 'e-1',
+              name: 'Space Mountain',
+              park: 'Magic Kingdom',
+              category: 'Attraction',
+            },
+          ],
+        };
+      }
+      if (path === '/parks/Magic%20Kingdom/live' || path.startsWith('/parks/')) {
+        return {
+          park: 'Magic Kingdom',
+          entries: [
+            { experienceId: 'e-1', name: 'Space Mountain', status: 'OPERATING', waitMinutes: 35 },
+          ],
+          retrievedAt: new Date().toISOString(),
+          stale: false,
+        };
+      }
+      if (path === '/home/highest-rated') {
+        return { entries: [] };
+      }
+      if (path === '/me/trips') {
+        return [];
+      }
+      return {};
+    });
+
+    renderHome();
+
+    expect(await screen.findByTestId('home-favorites-section')).toBeTruthy();
+    const pill = await screen.findByTestId('home-favorite-pill-e-1');
+    expect(pill).toBeTruthy();
+    expect(screen.getByText('Space Mountain')).toBeTruthy();
+    expect(screen.getByTestId('home-favorite-wait-e-1')).toHaveTextContent('35m');
+
+    fireEvent.press(pill);
+    expect(mockNavigate).toHaveBeenCalledWith('ExperienceDetail', { experienceId: 'e-1' });
+  });
+
+  it('sorts active wait times before closed attractions and navigates to LiveWaits with favorites filter on See All (Requirements 8.2, 8.6)', async () => {
+    mockApiRequest.mockImplementation(async (_method: string, path: string) => {
+      if (path === '/me') {
+        return {
+          user: { id: 'user-1', email: 'nicholas@example.com' },
+          profile: { displayName: 'Nicholas K', avatarPreset: null },
+        };
+      }
+      if (path === '/me/favorites') {
+        return { experienceIds: ['e-closed', 'e-long', 'e-short'] };
+      }
+      if (path === '/catalog') {
+        return {
+          experiences: [
+            { id: 'e-closed', name: 'Guardians of the Galaxy', park: 'EPCOT', category: 'Ride' },
+            { id: 'e-long', name: 'Space Mountain', park: 'Magic Kingdom', category: 'Ride' },
+            { id: 'e-short', name: 'Pirates of the Caribbean', park: 'Magic Kingdom', category: 'Ride' },
+          ],
+        };
+      }
+      if (path === '/parks/Magic%20Kingdom/live') {
+        return {
+          park: 'Magic Kingdom',
+          entries: [
+            { experienceId: 'e-long', name: 'Space Mountain', status: 'OPERATING', waitMinutes: 45 },
+            { experienceId: 'e-short', name: 'Pirates of the Caribbean', status: 'OPERATING', waitMinutes: 5 },
+          ],
+          retrievedAt: new Date().toISOString(),
+          stale: false,
+        };
+      }
+      if (path === '/parks/EPCOT/live') {
+        return {
+          park: 'EPCOT',
+          entries: [
+            { experienceId: 'e-closed', name: 'Guardians of the Galaxy', status: 'CLOSED', waitMinutes: null },
+          ],
+          retrievedAt: new Date().toISOString(),
+          stale: false,
+        };
+      }
+      if (path.startsWith('/parks/')) {
+        return { park: 'Animal Kingdom', entries: [], retrievedAt: new Date().toISOString(), stale: false };
+      }
+      if (path === '/home/highest-rated') {
+        return { entries: [] };
+      }
+      if (path === '/me/trips') {
+        return [];
+      }
+      return {};
+    });
+
+    renderHome();
+
+    expect(await screen.findByTestId('home-favorites-section')).toBeTruthy();
+    const shortPill = await screen.findByTestId('home-favorite-pill-e-short');
+    const longPill = await screen.findByTestId('home-favorite-pill-e-long');
+    const closedPill = await screen.findByTestId('home-favorite-pill-e-closed');
+
+    expect(shortPill).toBeTruthy();
+    expect(longPill).toBeTruthy();
+    expect(closedPill).toBeTruthy();
+
+    expect(screen.getByTestId('home-favorite-wait-e-short')).toHaveTextContent('5m');
+    expect(screen.getByTestId('home-favorite-wait-e-long')).toHaveTextContent('45m');
+    expect(screen.getByTestId('home-favorite-wait-e-closed')).toHaveTextContent('Closed');
+
+    // See All link navigates to Live Waits with filter: 'favorites'
+    const seeAll = screen.getByTestId('home-favorites-see-all');
+    fireEvent.press(seeAll);
+    expect(mockNavigate).toHaveBeenCalledWith('Explore', {
+      screen: 'LiveWaits',
+      params: { filter: 'favorites' },
+    });
+  });
+
   it('renders the Highest-Rated Experiences leaderboard and handles See All & row tap', async () => {
     renderHome();
 

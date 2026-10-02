@@ -444,6 +444,23 @@ export function createExperienceListRepo(pool: DbPool): ExperienceListRepo {
       const access = await getListAccess(pool, listId, userId);
       assertOwner(access, userId);
 
+      if (pinned) {
+        const countRes = await pool.query<{ count: string }>(
+          `SELECT COUNT(*)::int AS count
+             FROM experience_lists
+            WHERE owner_id = $1
+              AND pinned_at IS NOT NULL
+              AND id != $2`,
+          [userId, listId],
+        );
+        if (Number(countRes.rows[0]?.count ?? 0) >= 4) {
+          throw new AppError(
+            'experience_list_pin_limit_reached',
+            'You can pin up to 4 lists. Unpin a list first.',
+          );
+        }
+      }
+
       // Pinning/unpinning does NOT touch `updated_at` — it is a display-order
       // preference, not a content edit, so it must not perturb the
       // recency-based ordering unpinned lists fall back to.

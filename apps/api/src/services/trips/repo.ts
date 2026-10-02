@@ -40,6 +40,8 @@
  */
 
 import type {
+  ExperienceCategory,
+  GroupFavoriteDTO,
   Park,
   PlannedItemAddInput,
   PlannedItemEditInput,
@@ -80,6 +82,7 @@ import {
   type TripRole,
   violatesLastOrganizer,
 } from './permissions.js';
+import { assertTripMember } from './authz.js';
 import { deriveTripSummary } from './summary.js';
 import { deriveTripStatus } from './tripStatus.js';
 import { groupTripsByStatus, type TripStatusGroup } from './tripsList.js';
@@ -878,6 +881,18 @@ export interface TripRepo {
     callerRole: TripRole,
     experienceListId: string,
   ): Promise<boolean>;
+
+  /**
+   * Read the Trip's Group Favorites: experiences favorited by 2+ current
+   * Trip_Members, with member counts and display names. Gated by assertTripMember
+   * when callerId is provided.
+   *
+   * Validates: Requirements 9.1, 9.2, 9.3
+   */
+  getGroupFavorites(
+    tripId: string,
+    callerId?: string,
+  ): Promise<readonly GroupFavoriteDTO[]>;
 }
 
 // ---------------------------------------------------------------------------
@@ -957,6 +972,8 @@ export function createTripRepo(pool: DbPool, deps: TripRepoDeps): TripRepo {
       attachExperienceList(ctx, tripId, callerId, experienceListId),
     detachExperienceList: (tripId, callerId, callerRole, experienceListId) =>
       detachExperienceList(ctx, tripId, callerId, callerRole, experienceListId),
+    getGroupFavorites: (tripId, callerId) =>
+      getGroupFavorites(ctx, tripId, callerId),
   };
 }
 
@@ -1567,6 +1584,70 @@ async function detachExperienceList(
   } finally {
     client.release();
   }
+}
+
+/**
+ * Read Group Favorites for a Trip: experiences favorited by two or more
+ * current Trip_Members (Requirements 9.1, 9.3).
+ *
+ * Gated by assertTripMember when callerId is supplied (Requirement 9.2).
+ */
+async function getGroupFavorites(
+  ctx: TripRepoContext,
+  tripId: string,
+  callerId?: string,
+): Promise<readonly GroupFavoriteDTO[]> {
+  if (callerId) {
+    await assertTripMember(ctx.pool, callerId, tripId);
+  }
+
+  const result = await ctx.pool.query<{
+    experience_id: string;
+    experience_name: string;
+    park: Park | null;
+    category: ExperienceCategory;
+    favoriting_display_names: string[] | string;
+    favoriting_count: number | string;
+  }>(
+    `SELECT ef.experience_id,
+            e.name AS experience_name,
+            e.park,
+            e.category,
+            array_agg(p.display_name ORDER BY p.display_name) AS favoriting_display_names,
+            count(*)::int AS favoriting_count
+       FROM experience_favorites ef
+       JOIN trip_memberships tm ON tm.user_id = ef.user_id AND tm.trip_id = $1
+       JOIN experiences e ON e.id = ef.experience_id AND e.active = TRUE
+       JOIN profiles p ON p.user_id = ef.user_id
+      GROUP BY ef.experience_id, e.name, e.park, e.category
+     HAVING count(*) >= 2
+      ORDER BY count(*) DESC, lower(e.name) ASC`,
+    [tripId],
+  );
+
+  return result.rows.map((row) => {
+    let names: readonly string[];
+    if (Array.isArray(row.favoriting_display_names)) {
+      names = row.favoriting_display_names;
+    } else if (typeof row.favoriting_display_names === 'string') {
+      names = (row.favoriting_display_names as string)
+        .replace(/^{|}$/g, '')
+        .split(',')
+        .map((s) => s.trim().replace(/^"|"$/g, ''))
+        .filter((s) => s.length > 0);
+    } else {
+      names = [];
+    }
+
+    return {
+      experienceId: row.experience_id,
+      experienceName: row.experience_name,
+      park: (row.park as Park) ?? null,
+      category: row.category,
+      favoritingCount: Number(row.favoriting_count),
+      favoritingDisplayNames: [...names].sort((a, b) => a.localeCompare(b)),
+    };
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -2758,8 +2839,10 @@ async function editPlannedItem(
       window_end_minutes: number | null;
       meal_period: string | null;
       reservation_kind: ReservationKind | null;
+      custom_title: string | null;
+      item_type: 'experience' | 'break';
     }>(
-      'SELECT id, experience_id, is_lightning_lane, is_fixed, planned_date, planned_time, window_start_minutes, window_end_minutes, meal_period, reservation_kind FROM planned_items WHERE id = $1 AND trip_id = $2 FOR UPDATE',
+      'SELECT id, experience_id, is_lightning_lane, is_fixed, planned_date, planned_time, window_start_minutes, window_end_minutes, meal_period, reservation_kind, custom_title, item_type FROM planned_items WHERE id = $1 AND trip_id = $2 FOR UPDATE',
       [itemId, tripId],
     );
     if ((existing.rowCount ?? 0) === 0) {
@@ -2768,8 +2851,32 @@ async function editPlannedItem(
     }
     const currentRow = existing.rows[0]!;
 
+    if (input.experienceId !== undefined && input.experienceId !== null) {
+      const expRes = await client.query(
+        `SELECT 1 FROM experiences WHERE id = $1`,
+        [input.experienceId],
+      );
+      if ((expRes.rowCount ?? 0) === 0) {
+        await client.query('ROLLBACK');
+        throw new AppError(
+          'trip_validation_failed',
+          'That experience does not exist in the catalog.',
+          { field: 'experienceId' },
+        );
+      }
+    }
+
+    const effectiveExperienceId =
+      input.experienceId !== undefined ? input.experienceId : currentRow.experience_id;
+    const effectiveItemType =
+      input.itemType !== undefined
+        ? input.itemType
+        : (input.experienceId !== undefined
+            ? (input.experienceId !== null ? 'experience' : 'break')
+            : currentRow.item_type);
+
     // Unlocated items must stay 'break'
-    if (currentRow.experience_id == null && input.itemType !== undefined && input.itemType !== 'break') {
+    if (effectiveExperienceId == null && effectiveItemType !== 'break') {
       await client.query('ROLLBACK');
       throw new AppError(
         'trip_validation_failed',
@@ -2811,12 +2918,26 @@ async function editPlannedItem(
           { field: 'plannedTime' },
         );
       }
+      const resolvedCustomTitle =
+        input.customTitle !== undefined ? input.customTitle : currentRow.custom_title;
+      if (!effectiveExperienceId && (!resolvedCustomTitle || resolvedCustomTitle.trim().length === 0)) {
+        await client.query('ROLLBACK');
+        throw new AppError(
+          'trip_validation_failed',
+          'A reservation requires either an experienceId or a customTitle',
+          { field: 'customTitle' },
+        );
+      }
     }
 
     const updates: string[] = [];
     const values: any[] = [itemId, tripId];
     let pos = 3;
 
+    if (input.experienceId !== undefined) {
+      updates.push(`experience_id = $${pos++}`);
+      values.push(input.experienceId ?? null);
+    }
     if (input.customTitle !== undefined) {
       updates.push(`custom_title = $${pos++}`);
       values.push(input.customTitle ?? null);
@@ -2836,6 +2957,9 @@ async function editPlannedItem(
     if (input.itemType !== undefined) {
       updates.push(`item_type = $${pos++}`);
       values.push(input.itemType ?? 'experience');
+    } else if (input.experienceId !== undefined) {
+      updates.push(`item_type = $${pos++}`);
+      values.push(input.experienceId !== null ? 'experience' : 'break');
     }
     if (input.durationMinutes !== undefined) {
       updates.push(`duration_minutes = $${pos++}`);

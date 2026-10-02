@@ -109,12 +109,13 @@ export interface DwtRateLimitOptions {
   readonly loginAccount?: RouteGroupBudget;
 }
 
-// Reads allow 120/min per user. Modern mobile screens execute multiple parallel
+// Reads allow 300/min per user. Modern mobile screens execute multiple parallel
 // queries on mount (trip header, members, planned items, activity feed, notifications),
-// so normal browsing through tabs and hubs can issue 10-15 reads per screen transition.
-// 120/min prevents legitimate user navigation from exhausting the budget while
+// search as-you-type, and catalog dishes, so normal browsing through tabs, hubs, and
+// menus can issue dozens of reads in quick succession. 300/min prevents legitimate
+// user navigation and search interactions from exhausting the budget while
 // maintaining firm protection against automated scraping.
-const DEFAULT_READS: RouteGroupBudget = { max: 120, timeWindowMs: 60_000 };
+const DEFAULT_READS: RouteGroupBudget = { max: 300, timeWindowMs: 60_000 };
 // Mutations get the same 60/min budget as reads. The app's core flow is
 // "log my visit" — a single Experience can take up to three writes
 // (completion + rating + note) and users routinely revise ratings/notes

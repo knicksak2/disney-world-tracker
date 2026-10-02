@@ -46,6 +46,7 @@ export interface TodayInParkLensProps {
   readonly reservationFailed?: boolean | undefined;
   readonly onLogFoodItem?: (() => void) | undefined;
   readonly onMyLoggedItems?: (() => void) | undefined;
+  readonly onAddToList?: (() => void) | undefined;
   readonly loggedDishesCount?: number | undefined;
   readonly isQuickService?: boolean | undefined;
 }
@@ -70,6 +71,7 @@ export default function TodayInParkLens({
   reservationFailed,
   onLogFoodItem,
   onMyLoggedItems,
+  onAddToList,
   loggedDishesCount,
   isQuickService,
 }: TodayInParkLensProps): JSX.Element {
@@ -108,6 +110,7 @@ export default function TodayInParkLens({
             reservationFailed={reservationFailed}
             onLogFoodItem={onLogFoodItem}
             onMyLoggedItems={onMyLoggedItems}
+            onAddToList={onAddToList}
             loggedDishesCount={loggedDishesCount}
           />
           {menus && menus.length > 0 ? (

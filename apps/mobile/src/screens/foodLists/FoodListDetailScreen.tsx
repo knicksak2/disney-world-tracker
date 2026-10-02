@@ -1,6 +1,7 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Modal,
   Pressable,
@@ -110,6 +111,7 @@ export default function FoodListDetailScreen(): JSX.Element {
   const [isLiking, setIsLiking] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isTogglingChecklist, setIsTogglingChecklist] = useState(false);
+  const [isTogglingPinned, setIsTogglingPinned] = useState(false);
   const [staleWriteNotice, setStaleWriteNotice] = useState<string | null>(null);
   const [manageSharesVisible, setManageSharesVisible] = useState(false);
   const [markingGottenId, setMarkingGottenId] = useState<string | null>(null);
@@ -126,13 +128,36 @@ export default function FoodListDetailScreen(): JSX.Element {
   // Entry Point 2: Restaurant search modal & scoped picker
   const [restaurantSearchModalVisible, setRestaurantSearchModalVisible] = useState(false);
   const [restaurantSearch, setRestaurantSearch] = useState('');
+  const [debouncedRestaurantSearch, setDebouncedRestaurantSearch] = useState('');
   const [selectedExperience, setSelectedExperience] = useState<ExperienceDTO | null>(null);
   const [pickerModalVisible, setPickerModalVisible] = useState(false);
   const [isAddingItems, setIsAddingItems] = useState(false);
 
+  useEffect(() => {
+    if (restaurantSearch === debouncedRestaurantSearch) return;
+    const timer = setTimeout(() => {
+      setDebouncedRestaurantSearch(restaurantSearch);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [restaurantSearch, debouncedRestaurantSearch]);
+
+  // Reset search query whenever the restaurant search modal closes
+  useEffect(() => {
+    if (!restaurantSearchModalVisible) {
+      setRestaurantSearch('');
+      setDebouncedRestaurantSearch('');
+    }
+  }, [restaurantSearchModalVisible]);
+
+  const handleCloseRestaurantSearch = useCallback(() => {
+    setRestaurantSearchModalVisible(false);
+    setRestaurantSearch('');
+    setDebouncedRestaurantSearch('');
+  }, []);
+
   const transientNotice = useFoodListNotice();
 
-  const listQuery = useQuery<FoodListDetailDTO>({
+  const listQuery = useQuery<FoodListDetailDTO, ApiError>({
     queryKey: ['food-list-detail', foodListId],
     queryFn: () =>
       apiRequest<FoodListDetailDTO>(
@@ -153,13 +178,13 @@ export default function FoodListDetailScreen(): JSX.Element {
   // surfacing the failure. Use `category` + `q`, mirroring the already-correct
   // usage in `ExperiencePicker.tsx`.
   const restaurantSearchQuery = useQuery<CatalogSearchResponse, ApiError>({
-    queryKey: ['restaurant-catalog-search', restaurantSearch],
+    queryKey: ['restaurant-catalog-search', debouncedRestaurantSearch],
     queryFn: () => {
       const params = new URLSearchParams({
         category: 'Restaurant',
       });
-      if (restaurantSearch.trim()) {
-        params.set('q', restaurantSearch.trim());
+      if (debouncedRestaurantSearch.trim()) {
+        params.set('q', debouncedRestaurantSearch.trim());
       }
       return apiRequest<CatalogSearchResponse>('GET', `/catalog?${params.toString()}`);
     },
@@ -167,6 +192,19 @@ export default function FoodListDetailScreen(): JSX.Element {
   });
 
   const list = listQuery.data;
+
+  // Background refetch rate limit notice: if list is already loaded in cache
+  // and a background refresh encounters 429, inform the user without unmounting.
+  useEffect(() => {
+    if (list && listQuery.isError) {
+      if (
+        listQuery.error instanceof ApiError &&
+        (listQuery.error.code === 'rate_limit_exceeded' || listQuery.error.status === 429)
+      ) {
+        setStaleWriteNotice('Rate limit reached. Please wait a moment before refreshing.');
+      }
+    }
+  }, [list, listQuery.isError, listQuery.error]);
 
   // Requirement 11.2: attribution label shown ONLY when list has 2+ distinct contributors
   const showAttribution = useMemo(() => {
@@ -211,6 +249,28 @@ export default function FoodListDetailScreen(): JSX.Element {
       // Ignore
     } finally {
       setIsTogglingChecklist(false);
+    }
+  }
+
+  // Requirement 14.6: owner can toggle list pin state from the detail screen
+  async function handleTogglePinned(): Promise<void> {
+    if (!list || isTogglingPinned || list.myRole !== 'owner') return;
+    setIsTogglingPinned(true);
+    try {
+      await apiRequest('PATCH', `/me/food-lists/${encodeURIComponent(foodListId)}`, {
+        pinned: list.pinnedAt === null,
+      });
+      await queryClient.invalidateQueries({ queryKey: ['food-list-detail', foodListId] });
+      await queryClient.invalidateQueries({ queryKey: ['food-lists-collection'] });
+    } catch (err) {
+      if (err instanceof ApiError && err.code === 'food_list_pin_limit_reached') {
+        Alert.alert(
+          'Pin Limit Reached',
+          'You can pin up to 4 lists to your dashboard. Unpin a list first to pin this one.',
+        );
+      }
+    } finally {
+      setIsTogglingPinned(false);
     }
   }
 
@@ -393,8 +453,14 @@ export default function FoodListDetailScreen(): JSX.Element {
   async function handleConfirmAddItems(pickedItems: readonly FoodItemDTO[]): Promise<void> {
     if (pickedItems.length === 0 || isAddingItems) return;
     setIsAddingItems(true);
+    let hadError = false;
+    let rateLimited = false;
     try {
+      const existingIds = new Set(list?.items.map((i) => i.foodItemId) ?? []);
       for (const item of pickedItems) {
+        if (existingIds.has(item.id)) {
+          continue;
+        }
         try {
           await apiRequest(
             'POST',
@@ -403,15 +469,25 @@ export default function FoodListDetailScreen(): JSX.Element {
               foodItemId: item.id,
             },
           );
+          existingIds.add(item.id);
         } catch (err) {
           // Swallow duplicate per Requirement 9.4
           if (err instanceof ApiError && err.code === 'food_list_item_duplicate') {
             continue;
           }
+          if (err instanceof ApiError && (err.code === 'rate_limit_exceeded' || err.status === 429)) {
+            rateLimited = true;
+          }
+          hadError = true;
         }
       }
       setPickerModalVisible(false);
       setSelectedExperience(null);
+      if (rateLimited) {
+        setStaleWriteNotice('Too many requests. Please wait a moment before adding more items.');
+      } else if (hadError) {
+        setStaleWriteNotice("Couldn't add some items to the list. Please try again.");
+      }
       await queryClient.invalidateQueries({ queryKey: ['food-list-detail', foodListId] });
       // Adding items changes this list's itemCount, which the collection
       // card on MyFoodListsScreen also displays — invalidate it too so that
@@ -420,6 +496,12 @@ export default function FoodListDetailScreen(): JSX.Element {
       // AddToListsSheet.tsx's own add/remove flow (Entry Point 1).
       await queryClient.invalidateQueries({ queryKey: ['food-lists-collection'] });
       await queryClient.invalidateQueries({ queryKey: ['my-owned-food-lists'] });
+    } catch (err) {
+      if (err instanceof ApiError && (err.code === 'rate_limit_exceeded' || err.status === 429)) {
+        setStaleWriteNotice('Too many requests. Please wait a moment before adding more items.');
+      } else {
+        setStaleWriteNotice("Couldn't add items to the list. Please try again.");
+      }
     } finally {
       setIsAddingItems(false);
     }
@@ -607,6 +689,8 @@ export default function FoodListDetailScreen(): JSX.Element {
         onPress={() => {
           setSelectedExperience(item);
           setRestaurantSearchModalVisible(false);
+          setRestaurantSearch('');
+          setDebouncedRestaurantSearch('');
           setPickerModalVisible(true);
         }}
         style={({ pressed }) => [styles.restaurantRow, pressed && styles.restaurantRowPressed]}
@@ -625,8 +709,8 @@ export default function FoodListDetailScreen(): JSX.Element {
     [],
   );
 
-  // Loading state
-  if (listQuery.isLoading) {
+  // Loading state (only show full-screen loader on initial fetch when no cached list exists)
+  if (listQuery.isLoading && !list) {
     return (
       <ScreenContainer style={styles.centerContainer}>
         <ActivityIndicator color={theme.color.primary} size="large" />
@@ -635,7 +719,14 @@ export default function FoodListDetailScreen(): JSX.Element {
   }
 
   // Requirement 10.2 / Task 8.13: Unavailable state
-  if (listQuery.isError || !list) {
+  // Check if list was explicitly deleted or revoked (404/403 food_list_not_found)
+  const isDeletedOrRevoked =
+    listQuery.error instanceof ApiError &&
+    (listQuery.error.code === 'food_list_not_found' ||
+      listQuery.error.status === 404 ||
+      listQuery.error.status === 403);
+
+  if (isDeletedOrRevoked) {
     return (
       <ScreenContainer>
         <GradientHeader
@@ -659,6 +750,76 @@ export default function FoodListDetailScreen(): JSX.Element {
             <Text style={styles.backBtnText}>Return to previous screen</Text>
           </Pressable>
         </View>
+      </ScreenContainer>
+    );
+  }
+
+  // If initial load failed with no cached list
+  if (!list && listQuery.isError) {
+    const isRateLimited =
+      listQuery.error instanceof ApiError &&
+      (listQuery.error.code === 'rate_limit_exceeded' || listQuery.error.status === 429);
+
+    if (isRateLimited) {
+      return (
+        <ScreenContainer>
+          <GradientHeader
+            title="Food List"
+            compact
+            onBack={() => navigation.goBack()}
+          />
+          <View style={styles.unavailableWrap} testID="food-list-rate-limit-notice">
+            <Ionicons name="time-outline" size={48} color={theme.color.warning} />
+            <Text style={styles.unavailableTitle}>Too many requests</Text>
+            <Text style={styles.unavailableBody}>
+              Please wait a moment and try again.
+            </Text>
+            <Pressable
+              onPress={() => void listQuery.refetch()}
+              style={styles.backBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Retry loading food list"
+              testID="food-list-rate-limit-retry-btn"
+            >
+              <Text style={styles.backBtnText}>Retry</Text>
+            </Pressable>
+          </View>
+        </ScreenContainer>
+      );
+    }
+
+    // Default error screen for initial load failure when list is not found or failed (Task 8.13)
+    return (
+      <ScreenContainer>
+        <GradientHeader
+          title="Food List"
+          compact
+          onBack={() => navigation.goBack()}
+        />
+        <View style={styles.unavailableWrap} testID="food-list-unavailable-notice">
+          <Ionicons name="alert-circle-outline" size={48} color={theme.color.danger} />
+          <Text style={styles.unavailableTitle}>No longer available</Text>
+          <Text style={styles.unavailableBody}>
+            {transientNotice ?? 'This food list does not exist or is no longer shared with you.'}
+          </Text>
+          <Pressable
+            onPress={() => navigation.goBack()}
+            style={styles.backBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+            testID="food-list-unavailable-back-btn"
+          >
+            <Text style={styles.backBtnText}>Return to previous screen</Text>
+          </Pressable>
+        </View>
+      </ScreenContainer>
+    );
+  }
+
+  if (!list) {
+    return (
+      <ScreenContainer style={styles.centerContainer}>
+        <ActivityIndicator color={theme.color.primary} size="large" />
       </ScreenContainer>
     );
   }
@@ -807,6 +968,32 @@ export default function FoodListDetailScreen(): JSX.Element {
                 />
                 <Text style={styles.actionButtonText}>
                   {list.isChecklist ? 'Checklist' : 'Make checklist'}
+                </Text>
+              </Pressable>
+            ) : null}
+
+            {/* Pin button (owner only, Requirement 14.6) */}
+            {isOwner ? (
+              <Pressable
+                onPress={() => void handleTogglePinned()}
+                disabled={isTogglingPinned}
+                style={({ pressed }) => [styles.actionButton, pressed && styles.actionButtonPressed]}
+                accessibilityRole="button"
+                accessibilityLabel={list.pinnedAt !== null ? 'Unpin list' : 'Pin list'}
+                testID="food-list-pin-btn"
+              >
+                <Ionicons
+                  name={list.pinnedAt !== null ? 'pin' : 'pin-outline'}
+                  size={20}
+                  color={list.pinnedAt !== null ? theme.color.primary : theme.color.textSecondary}
+                />
+                <Text
+                  style={[
+                    styles.actionButtonText,
+                    list.pinnedAt !== null && styles.actionButtonTextPinned,
+                  ]}
+                >
+                  {list.pinnedAt !== null ? 'Pinned' : 'Pin'}
                 </Text>
               </Pressable>
             ) : null}
@@ -964,7 +1151,7 @@ export default function FoodListDetailScreen(): JSX.Element {
         visible={restaurantSearchModalVisible}
         animationType="slide"
         transparent
-        onRequestClose={() => setRestaurantSearchModalVisible(false)}
+        onRequestClose={handleCloseRestaurantSearch}
         testID="restaurant-search-modal"
       >
         <View style={styles.modalBackdrop}>
@@ -972,7 +1159,7 @@ export default function FoodListDetailScreen(): JSX.Element {
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Choose a Restaurant</Text>
               <Pressable
-                onPress={() => setRestaurantSearchModalVisible(false)}
+                onPress={handleCloseRestaurantSearch}
                 accessibilityRole="button"
                 accessibilityLabel="Close restaurant search"
                 testID="close-restaurant-search-btn"
@@ -992,6 +1179,20 @@ export default function FoodListDetailScreen(): JSX.Element {
                 autoCorrect={false}
                 testID="restaurant-search-input"
               />
+              {restaurantSearch.length > 0 ? (
+                <Pressable
+                  onPress={() => {
+                    setRestaurantSearch('');
+                    setDebouncedRestaurantSearch('');
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Clear search text"
+                  testID="restaurant-search-clear-btn"
+                  style={styles.clearSearchBtn}
+                >
+                  <Ionicons name="close-circle" size={18} color={theme.color.textSecondary} />
+                </Pressable>
+              ) : null}
             </View>
 
             {restaurantSearchQuery.isLoading ? (
@@ -1009,6 +1210,7 @@ export default function FoodListDetailScreen(): JSX.Element {
                 data={restaurantSearchQuery.data?.experiences ?? []}
                 keyExtractor={(item) => item.id}
                 renderItem={renderRestaurantResult}
+                keyboardShouldPersistTaps="handled"
                 ListEmptyComponent={
                   <View style={styles.emptyWrap}>
                     <Text style={styles.emptyWrapText}>No restaurants found.</Text>
@@ -1027,6 +1229,8 @@ export default function FoodListDetailScreen(): JSX.Element {
           experienceId={selectedExperience.id}
           mode="addToLists"
           visible={pickerModalVisible}
+          existingItemIds={list?.items.map((i) => i.foodItemId)}
+          isSubmittingSelection={isAddingItems}
           onClose={() => {
             setPickerModalVisible(false);
             setSelectedExperience(null);
@@ -1217,6 +1421,9 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: theme.color.textPrimary,
   },
+  actionButtonTextPinned: {
+    color: theme.color.primary,
+  },
   addItemsBtn: {
     backgroundColor: theme.color.primary,
   },
@@ -1393,6 +1600,9 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     color: theme.color.textPrimary,
+  },
+  clearSearchBtn: {
+    padding: 4,
   },
   loadingWrap: {
     padding: 32,

@@ -124,7 +124,7 @@ export {
   placementToReferencePx,
 } from './PinShowcase.js';
 
-export type { FoodItemDTO, SubmitFoodItemInputDTO } from './FoodItem.js';
+export type { FoodItemDTO, SubmitFoodItemInputDTO, FoodItemsResponseDTO } from './FoodItem.js';
 export type {
   FoodItemLogDTO,
   FoodItemLogHistoryDTO,
@@ -180,3 +180,9 @@ export type { CurrentWeatherDTO } from './Weather.js';
 
 export type { VisitSummaryDTO, VisitSummaryResponseDTO } from './VisitSummary.js';
 export { VISIT_SUMMARY_MAX_IDS } from './VisitSummary.js';
+
+export type {
+  FavoritesResponseDTO,
+  GroupFavoriteDTO,
+  GroupFavoritesResponseDTO,
+} from './Favorite.js';

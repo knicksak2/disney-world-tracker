@@ -129,6 +129,18 @@ export interface ExperiencePickerProps {
   /** Whether the caller's underlying attached-list content fetches are in flight. */
   readonly listSourcedLoading?: boolean;
   /**
+   * The caller-resolved set of the User's favorited Experiences, resolved to
+   * `ExperienceDTO`-shaped rows (experience-favorites Requirement 6, amended).
+   * Mirrors `listSourcedItems`'s role for the "My Lists" tab: the picker
+   * itself never fetches the full catalog to resolve favorited ids to rows —
+   * the caller already has (or can cheaply derive) a full-catalog read and
+   * passes the filtered-to-favorites result in. When `undefined` or empty,
+   * the "Favorites" tab is omitted entirely, mirroring `hasMyListsTab`.
+   */
+  readonly favoriteSourcedItems?: readonly ExperienceDTO[];
+  /** Whether the caller's underlying favorites-resolution fetch is in flight. */
+  readonly favoriteSourcedLoading?: boolean;
+  /**
    * Experience ids that already exist as a `planned_items` row on the current
    * Trip, on any date — derived by the caller from its already-fetched
    * Planned_List using the same `experienceId`-matching approach
@@ -164,6 +176,8 @@ export function ExperiencePicker({
   fillContainer = false,
   listSourcedItems,
   listSourcedLoading = false,
+  favoriteSourcedItems,
+  favoriteSourcedLoading = false,
   alreadyPlannedIds,
 }: ExperiencePickerProps): JSX.Element {
   const [activeTab, setActiveTab] = useState<ExperiencePickerTab>(defaultTab);
@@ -248,11 +262,17 @@ export function ExperiencePicker({
   // from (Requirement 15.3) — the tab itself is omitted entirely when false.
   const hasMyListsTab = (listSourcedItems?.length ?? 0) > 0;
 
+  // Whether the User has any favorited Experiences to source candidates from
+  // (experience-favorites Requirement 6, amended) — the tab itself is omitted
+  // entirely when false, mirroring hasMyListsTab exactly.
+  const hasFavoritesTab = (favoriteSourcedItems?.length ?? 0) > 0;
+
   // Breaks tab requires at least SEARCH_MIN_CHARS so as not to flood the location list (AC 4.14)
-  // The My Lists tab has its own candidate source (listSourcedItems) and never
-  // hits GET /catalog, so it is always considered "active" once selected.
+  // The My Lists and Favorites tabs have their own candidate sources
+  // (listSourcedItems / favoriteSourcedItems) and never hit GET /catalog, so
+  // they are always considered "active" once selected.
   const searchActive =
-    activeTab === 'myLists'
+    activeTab === 'myLists' || activeTab === 'favorites'
       ? true
       : activeTab === 'breaks'
       ? debouncedQuery.length >= SEARCH_MIN_CHARS
@@ -286,13 +306,18 @@ export function ExperiencePicker({
         `/catalog${qs ? `?${qs}` : ''}`,
       );
     },
-    // The My Lists tab sources its candidates from the caller-supplied
-    // listSourcedItems, never from GET /catalog (Requirement 15.2).
-    enabled: enabled && searchActive && activeTab !== 'myLists',
+    // The My Lists and Favorites tabs source their candidates from
+    // caller-supplied props, never from GET /catalog (Requirement 15.2;
+    // experience-favorites Requirement 6, amended).
+    enabled: enabled && searchActive && activeTab !== 'myLists' && activeTab !== 'favorites',
   });
 
   const rawResults =
-    activeTab === 'myLists' ? listSourcedItems ?? [] : searchQuery.data?.experiences ?? [];
+    activeTab === 'myLists'
+      ? listSourcedItems ?? []
+      : activeTab === 'favorites'
+      ? favoriteSourcedItems ?? []
+      : searchQuery.data?.experiences ?? [];
 
   // Tab category filter safety
   const tabFilteredResults = rawResults.filter((item) => {
@@ -312,19 +337,48 @@ export function ExperiencePicker({
     }
     if (activeTab === 'myLists') {
       // Membership in this tab's candidate set comes from list attachment,
-      // not a catalog category — every listSourcedItems row passes through.
+      // not a catalog category — every listSourcedItems row passes through
+      // (the park filter, applied below, still narrows it).
+      return true;
+    }
+    if (activeTab === 'favorites') {
+      // Membership in this tab's candidate set comes from the User's
+      // Favorited_Set, not a catalog category — every favoriteSourcedItems
+      // row passes through (experience-favorites Requirement 6, amended;
+      // the park filter, applied below, still narrows it).
       return true;
     }
     return true;
   });
 
+  // The park chips (showParkFilter) drive `GET /catalog`'s parkId/areaType
+  // params for every catalog-sourced tab, but the My Lists and Favorites tabs
+  // never call GET /catalog — their candidates come from a caller-supplied
+  // prop instead. Without this, selecting a park chip while on either tab
+  // silently did nothing (the bug this comment documents the fix for).
+  // Applied here, client-side, against the same `parkScope` the catalog
+  // query already resolves, so a selected park narrows these two tabs
+  // exactly as it narrows every other tab's results.
+  const parkFilteredResults =
+    (activeTab === 'myLists' || activeTab === 'favorites') && selectedPark !== 'all'
+      ? tabFilteredResults.filter((item) => {
+          if (parkScope.areaType !== undefined) {
+            return item.areaType === parkScope.areaType;
+          }
+          if (parkScope.parkId !== undefined) {
+            return item.park === parkScope.parkId;
+          }
+          return true;
+        })
+      : tabFilteredResults;
+
   // Dynamic filter chips derived directly from loaded results
-  const { landChips, priceChips, attributeChips, allChips } = deriveFilterChips(tabFilteredResults);
+  const { landChips, priceChips, attributeChips, allChips } = deriveFilterChips(parkFilteredResults);
   const quickChips = deriveQuickChips(attributeChips, activeTab, priceChips);
 
   // Multi-filter by selected land and attribute chips
   const filteredResults = filterExperiencesMulti(
-    tabFilteredResults,
+    parkFilteredResults,
     selectedLands,
     selectedTags,
   );
@@ -401,6 +455,17 @@ export function ExperiencePicker({
               testID={`${testIDPrefix}-tab-myLists`}
             >
               <Text style={[styles.tabText, activeTab === 'myLists' && styles.tabTextActive]}>⭐ My Lists</Text>
+            </Pressable>
+          )}
+          {hasFavoritesTab && (
+            <Pressable
+              style={[styles.tabBtn, activeTab === 'favorites' && styles.tabBtnActive]}
+              onPress={() => handleTabChange('favorites')}
+              accessibilityRole="button"
+              accessibilityState={{ selected: activeTab === 'favorites' }}
+              testID={`${testIDPrefix}-tab-favorites`}
+            >
+              <Text style={[styles.tabText, activeTab === 'favorites' && styles.tabTextActive]}>❤️ Favorites</Text>
             </Pressable>
           )}
         </View>
@@ -816,6 +881,8 @@ export function ExperiencePicker({
               ? 'Search break locations...'
               : activeTab === 'myLists'
               ? 'Search your attached lists...'
+              : activeTab === 'favorites'
+              ? 'Search your favorites...'
               : 'Search experiences, lands, or facets...'
           }
           placeholderTextColor={theme.color.textSecondary}
@@ -850,11 +917,15 @@ export function ExperiencePicker({
           <View style={styles.center} testID={`${testIDPrefix}-search-loading`}>
             <ActivityIndicator color={theme.color.primary} />
           </View>
-        ) : activeTab !== 'myLists' && searchQuery.isLoading ? (
+        ) : activeTab === 'favorites' && favoriteSourcedLoading ? (
           <View style={styles.center} testID={`${testIDPrefix}-search-loading`}>
             <ActivityIndicator color={theme.color.primary} />
           </View>
-        ) : activeTab !== 'myLists' && searchQuery.isError ? (
+        ) : activeTab !== 'myLists' && activeTab !== 'favorites' && searchQuery.isLoading ? (
+          <View style={styles.center} testID={`${testIDPrefix}-search-loading`}>
+            <ActivityIndicator color={theme.color.primary} />
+          </View>
+        ) : activeTab !== 'myLists' && activeTab !== 'favorites' && searchQuery.isError ? (
           <Text style={styles.hint} testID={`${testIDPrefix}-search-error`}>
             We couldn&apos;t search the catalog. Please try again.
           </Text>

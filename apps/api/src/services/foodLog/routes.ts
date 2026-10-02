@@ -98,12 +98,13 @@ export function foodItemRoutes(
         request.params,
       );
 
+      let menus: readonly unknown[] | undefined;
       if (options.menuRetrieval) {
-        await options.menuRetrieval.getMenuForRestaurant(experienceId);
+        menus = await options.menuRetrieval.getMenuForRestaurant(experienceId);
       }
 
       const items = await options.repo.listFoodItems(experienceId);
-      return { items };
+      return { items, ...(menus && menus.length > 0 ? { menus } : {}) };
     });
 
     // POST /experiences/:id/food-items (Requirement 2.1, 2.2)

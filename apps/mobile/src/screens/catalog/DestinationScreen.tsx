@@ -107,6 +107,8 @@ import {
 } from '../trips/experiencePickerFilters';
 import { useDestinationSections } from './useDestinationSections';
 import { useCompletedExperiences } from './useCompletedExperiences';
+import { useFavoritedExperiences } from './useFavoritedExperiences';
+import { FavoriteToggle } from './FavoriteToggle';
 import { priceTierListTag, resortAreaLabel } from './infoTags';
 import {
   useAccessibilityFocusOnMount,
@@ -405,6 +407,7 @@ function DestinationBody({
   // The signed-in User's completed-Experience id set, used to badge visited
   // rows. Fails soft to an empty set, so the list renders unmarked on error.
   const completedIds = useCompletedExperiences();
+  const favoritedIds = useFavoritedExperiences();
 
   // R10.2 full-screen error: only when there is no prior cache to fall back on.
   // With prior cache react-query keeps serving `data`, so we fall through to
@@ -489,9 +492,10 @@ function DestinationBody({
           query={trimmedQuery}
           onSelectExperience={onSelectExperience}
           completedIds={completedIds}
+          favoritedIds={favoritedIds}
         />
       ) : (
-        renderBody(destination, experiences, onSelectExperience, completedIds)
+        renderBody(destination, experiences, onSelectExperience, completedIds, favoritedIds)
       )}
     </ScreenContainer>
   );
@@ -572,11 +576,13 @@ function DestinationSearchResults({
   query,
   onSelectExperience,
   completedIds,
+  favoritedIds,
 }: {
   readonly experiences: readonly ExperienceDTO[];
   readonly query: string;
   readonly onSelectExperience: (experience: ExperienceDTO) => void;
   readonly completedIds: ReadonlySet<string>;
+  readonly favoritedIds: ReadonlySet<string>;
 }): JSX.Element {
   const results = useMemo(() => {
     return filterAndRankExperiences(experiences, query);
@@ -595,9 +601,10 @@ function DestinationSearchResults({
         experience={item}
         onSelectExperience={onSelectExperience}
         completed={completedIds.has(item.id)}
+        favorited={favoritedIds.has(item.id)}
       />
     ),
-    [onSelectExperience, completedIds],
+    [onSelectExperience, completedIds, favoritedIds],
   );
 
   if (results.length === 0) {
@@ -648,6 +655,7 @@ function renderBody(
   experiences: readonly ExperienceDTO[],
   onSelectExperience: (experience: ExperienceDTO) => void,
   completedIds: ReadonlySet<string>,
+  favoritedIds: ReadonlySet<string>,
 ): JSX.Element {
   switch (destination.kind) {
     case 'themeOrWaterPark':
@@ -658,6 +666,7 @@ function renderBody(
           experiences={experiences}
           onSelectExperience={onSelectExperience}
           completedIds={completedIds}
+          favoritedIds={favoritedIds}
         />
       );
     case 'disneySprings':
@@ -668,6 +677,7 @@ function renderBody(
           experiences={experiences}
           onSelectExperience={onSelectExperience}
           completedIds={completedIds}
+          favoritedIds={favoritedIds}
         />
       );
     case 'resorts':
@@ -679,6 +689,7 @@ function renderBody(
           experiences={experiences}
           onSelectExperience={onSelectExperience}
           completedIds={completedIds}
+          favoritedIds={favoritedIds}
         />
       );
   }
@@ -713,16 +724,19 @@ function ThemeOrWaterParkLayout({
   experiences,
   onSelectExperience,
   completedIds,
+  favoritedIds,
 }: {
   readonly experiences: readonly ExperienceDTO[];
   readonly onSelectExperience: (experience: ExperienceDTO) => void;
   readonly completedIds: ReadonlySet<string>;
+  readonly favoritedIds: ReadonlySet<string>;
 }): JSX.Element {
   // Category tabs matching the schedule builder picker: 'all' | 'attractions' | 'dining' | 'shows'
   const [activeTab, setActiveTab] = useState<ExperiencePickerTab>('all');
   const [selectedLands, setSelectedLands] = useState<Set<string>>(new Set());
   const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
   const [isFilterModalOpen, setIsFilterModalOpen] = useState<boolean>(false);
+  const [favoritesOnly, setFavoritesOnly] = useState<boolean>(false);
 
   const clearAllFilters = useCallback(() => {
     setSelectedLands(new Set());
@@ -789,12 +803,18 @@ function ThemeOrWaterParkLayout({
     [attributeChips, activeTab, priceChips],
   );
 
-  // Multi-filter by selected lands and attribute/price tags
-  const filteredResults = useMemo(
-    () =>
-      filterExperiencesMulti(tabFilteredResults, selectedLands, selectedTags),
-    [tabFilteredResults, selectedLands, selectedTags],
-  );
+  // Multi-filter by selected lands and attribute/price tags, composed conjunctively with favoritesOnly
+  const filteredResults = useMemo(() => {
+    const multiFiltered = filterExperiencesMulti(
+      tabFilteredResults,
+      selectedLands,
+      selectedTags,
+    );
+    if (!favoritesOnly) {
+      return multiFiltered;
+    }
+    return multiFiltered.filter((item) => favoritedIds.has(item.id));
+  }, [tabFilteredResults, selectedLands, selectedTags, favoritesOnly, favoritedIds]);
 
   const activeFilterCount = selectedLands.size + selectedTags.size;
 
@@ -872,100 +892,129 @@ function ThemeOrWaterParkLayout({
             experience={row.item}
             onSelectExperience={onSelectExperience}
             completed={completedIds.has(row.item.id)}
+            favorited={favoritedIds.has(row.item.id)}
           />
         </View>
       );
     },
-    [isExpanded, toggle, onSelectExperience, completedIds],
+    [isExpanded, toggle, onSelectExperience, completedIds, favoritedIds],
   );
 
   return (
     <View style={styles.tabLayoutContainer}>
-      {/* Category Tabs */}
-      <View
-        style={styles.tabBar}
-        testID="destination-category-filter"
-      >
-        <Pressable
-          style={[styles.tabBtn, activeTab === 'all' && styles.tabBtnActive]}
-          onPress={() => handleTabChange('all')}
-          accessibilityRole="button"
-          accessibilityState={{ selected: activeTab === 'all' }}
-          accessibilityLabel={`All, ${
-            activeTab === 'all' ? 'selected' : 'not selected'
-          }`}
-          testID="destination-category-All"
+      {/* Category Tabs & Favorites Toggle */}
+      <View style={styles.tabBarWrap}>
+        <View
+          style={styles.tabBar}
+          testID="destination-category-filter"
         >
-          <Text
-            style={[
-              styles.tabText,
-              activeTab === 'all' && styles.tabTextActive,
-            ]}
+          <Pressable
+            style={[styles.tabBtn, activeTab === 'all' && styles.tabBtnActive]}
+            onPress={() => handleTabChange('all')}
+            accessibilityRole="button"
+            accessibilityState={{ selected: activeTab === 'all' }}
+            accessibilityLabel={`All, ${
+              activeTab === 'all' ? 'selected' : 'not selected'
+            }`}
+            testID="destination-category-All"
           >
-            All
-          </Text>
-        </Pressable>
+            <Text
+              style={[
+                styles.tabText,
+                activeTab === 'all' && styles.tabTextActive,
+              ]}
+            >
+              All
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[
+              styles.tabBtn,
+              activeTab === 'attractions' && styles.tabBtnActive,
+            ]}
+            onPress={() => handleTabChange('attractions')}
+            accessibilityRole="button"
+            accessibilityState={{ selected: activeTab === 'attractions' }}
+            accessibilityLabel={`Ride, ${
+              activeTab === 'attractions' ? 'selected' : 'not selected'
+            }`}
+            testID="destination-category-Ride"
+          >
+            <Text
+              style={[
+                styles.tabText,
+                activeTab === 'attractions' && styles.tabTextActive,
+              ]}
+            >
+              Rides
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[
+              styles.tabBtn,
+              activeTab === 'dining' && styles.tabBtnActive,
+            ]}
+            onPress={() => handleTabChange('dining')}
+            accessibilityRole="button"
+            accessibilityState={{ selected: activeTab === 'dining' }}
+            accessibilityLabel={`Restaurant, ${
+              activeTab === 'dining' ? 'selected' : 'not selected'
+            }`}
+            testID="destination-category-Restaurant"
+          >
+            <Text
+              style={[
+                styles.tabText,
+                activeTab === 'dining' && styles.tabTextActive,
+              ]}
+            >
+              Dining
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[styles.tabBtn, activeTab === 'shows' && styles.tabBtnActive]}
+            onPress={() => handleTabChange('shows')}
+            accessibilityRole="button"
+            accessibilityState={{ selected: activeTab === 'shows' }}
+            accessibilityLabel={`Show, ${
+              activeTab === 'shows' ? 'selected' : 'not selected'
+            }`}
+            testID="destination-category-Show"
+          >
+            <Text
+              style={[
+                styles.tabText,
+                activeTab === 'shows' && styles.tabTextActive,
+              ]}
+            >
+              Shows
+            </Text>
+          </Pressable>
+        </View>
+
         <Pressable
           style={[
-            styles.tabBtn,
-            activeTab === 'attractions' && styles.tabBtnActive,
+            styles.favoritesToggleBtn,
+            favoritesOnly && styles.favoritesToggleBtnActive,
           ]}
-          onPress={() => handleTabChange('attractions')}
-          accessibilityRole="button"
-          accessibilityState={{ selected: activeTab === 'attractions' }}
-          accessibilityLabel={`Ride, ${
-            activeTab === 'attractions' ? 'selected' : 'not selected'
-          }`}
-          testID="destination-category-Ride"
+          onPress={() => setFavoritesOnly((prev) => !prev)}
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: favoritesOnly }}
+          accessibilityLabel={`Favorites only${favoritesOnly ? ', selected' : ''}`}
+          testID="destination-favorites-toggle"
         >
+          <Ionicons
+            name={favoritesOnly ? 'heart' : 'heart-outline'}
+            size={14}
+            color={favoritesOnly ? '#FF2D55' : theme.color.textSecondary}
+          />
           <Text
             style={[
-              styles.tabText,
-              activeTab === 'attractions' && styles.tabTextActive,
+              styles.favoritesToggleText,
+              favoritesOnly && styles.favoritesToggleTextActive,
             ]}
           >
-            Rides
-          </Text>
-        </Pressable>
-        <Pressable
-          style={[
-            styles.tabBtn,
-            activeTab === 'dining' && styles.tabBtnActive,
-          ]}
-          onPress={() => handleTabChange('dining')}
-          accessibilityRole="button"
-          accessibilityState={{ selected: activeTab === 'dining' }}
-          accessibilityLabel={`Restaurant, ${
-            activeTab === 'dining' ? 'selected' : 'not selected'
-          }`}
-          testID="destination-category-Restaurant"
-        >
-          <Text
-            style={[
-              styles.tabText,
-              activeTab === 'dining' && styles.tabTextActive,
-            ]}
-          >
-            Dining
-          </Text>
-        </Pressable>
-        <Pressable
-          style={[styles.tabBtn, activeTab === 'shows' && styles.tabBtnActive]}
-          onPress={() => handleTabChange('shows')}
-          accessibilityRole="button"
-          accessibilityState={{ selected: activeTab === 'shows' }}
-          accessibilityLabel={`Show, ${
-            activeTab === 'shows' ? 'selected' : 'not selected'
-          }`}
-          testID="destination-category-Show"
-        >
-          <Text
-            style={[
-              styles.tabText,
-              activeTab === 'shows' && styles.tabTextActive,
-            ]}
-          >
-            Shows
+            Favorites
           </Text>
         </Pressable>
       </View>
@@ -1279,13 +1328,21 @@ function ThemeOrWaterParkLayout({
       {filteredResults.length === 0 ? (
         <View style={styles.center} testID="destination-filter-empty">
           <EmptyState
-            icon="search-outline"
-            title="No experiences matched"
-            body="Try resetting your active filters."
+            icon={favoritesOnly ? 'heart-outline' : 'search-outline'}
+            title={favoritesOnly ? 'No favorited experiences' : 'No experiences matched'}
+            body={
+              favoritesOnly
+                ? 'No favorited experiences were found in this destination.'
+                : 'Try resetting your active filters.'
+            }
+            {...(favoritesOnly ? { testID: 'destination-favorites-empty' } : {})}
           />
           <Pressable
             style={styles.resetFilterEmptyBtn}
-            onPress={clearAllFilters}
+            onPress={() => {
+              clearAllFilters();
+              setFavoritesOnly(false);
+            }}
             accessibilityRole="button"
             accessibilityLabel="Reset active filters"
             testID="destination-filter-empty-reset"
@@ -1380,10 +1437,12 @@ function DisneySpringsLayout({
   experiences,
   onSelectExperience,
   completedIds,
+  favoritedIds,
 }: {
   readonly experiences: readonly ExperienceDTO[];
   readonly onSelectExperience: (experience: ExperienceDTO) => void;
   readonly completedIds: ReadonlySet<string>;
+  readonly favoritedIds: ReadonlySet<string>;
 }): JSX.Element {
   // R7.2/R7.5: derive the category sections client-side over the already-fetched
   // Experiences in canonical order, empties omitted (no refetch).
@@ -1446,11 +1505,12 @@ function DisneySpringsLayout({
             experience={row.item}
             onSelectExperience={onSelectExperience}
             completed={completedIds.has(row.item.id)}
+            favorited={favoritedIds.has(row.item.id)}
           />
         </View>
       );
     },
-    [isExpanded, toggle, onSelectExperience, completedIds],
+    [isExpanded, toggle, onSelectExperience, completedIds, favoritedIds],
   );
 
   return (
@@ -1508,10 +1568,12 @@ function ResortsLayout({
   experiences,
   onSelectExperience,
   completedIds,
+  favoritedIds,
 }: {
   readonly experiences: readonly ExperienceDTO[];
   readonly onSelectExperience: (experience: ExperienceDTO) => void;
   readonly completedIds: ReadonlySet<string>;
+  readonly favoritedIds: ReadonlySet<string>;
 }): JSX.Element {
   // R8.1: fetch the active Resort list. On failure or while loading the list is
   // empty, so `groupByResort` degrades to a catch-all-only layout (R10.5).
@@ -1613,11 +1675,12 @@ function ResortsLayout({
             experience={row.item}
             onSelectExperience={onSelectExperience}
             completed={completedIds.has(row.item.id)}
+            favorited={favoritedIds.has(row.item.id)}
           />
         </View>
       );
     },
-    [isExpanded, toggle, onSelectExperience, completedIds],
+    [isExpanded, toggle, onSelectExperience, completedIds, favoritedIds],
   );
 
   return (
@@ -1698,6 +1761,10 @@ interface ExperienceRowProps {
    * completion at a glance without drilling into the detail screen.
    */
   readonly completed?: boolean;
+  /**
+   * Whether the signed-in User has marked this Experience as favorite.
+   */
+  readonly favorited?: boolean;
 }
 
 /**
@@ -1717,6 +1784,7 @@ const ExperienceRow = React.memo(function ExperienceRow({
   experience,
   onSelectExperience,
   completed = false,
+  favorited = false,
 }: ExperienceRowProps): JSX.Element {
   const onPress = useCallback(
     () => onSelectExperience(experience),
@@ -1802,11 +1870,18 @@ const ExperienceRow = React.memo(function ExperienceRow({
             ) : null}
           </View>
         </View>
-        <Ionicons
-          name="chevron-forward"
-          size={20}
-          color={theme.color.textSecondary}
-        />
+        <View style={styles.rowActions}>
+          <FavoriteToggle
+            experienceId={experience.id}
+            favorited={favorited}
+            size="small"
+          />
+          <Ionicons
+            name="chevron-forward"
+            size={20}
+            color={theme.color.textSecondary}
+          />
+        </View>
       </View>
     </Card>
   );
@@ -2018,6 +2093,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  rowActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+  },
   thumbWrap: {
     position: 'relative',
     marginRight: theme.spacing.md,
@@ -2122,17 +2202,49 @@ const styles = StyleSheet.create({
   tabLayoutContainer: {
     flex: 1,
   },
+  tabBarWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: theme.spacing.lg,
+    marginTop: theme.spacing.xs,
+    marginBottom: theme.spacing.sm,
+    gap: theme.spacing.xs,
+  },
   tabBar: {
+    flex: 1,
     flexDirection: 'row',
     backgroundColor: theme.color.surface,
     borderRadius: theme.radius.md,
     padding: 3,
-    marginHorizontal: theme.spacing.lg,
-    marginTop: theme.spacing.xs,
-    marginBottom: theme.spacing.sm,
     borderWidth: 1,
     borderColor: theme.color.border,
     ...theme.shadow.card,
+  },
+  favoritesToggleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: theme.radius.md,
+    backgroundColor: theme.color.surface,
+    borderWidth: 1,
+    borderColor: theme.color.border,
+    ...theme.shadow.card,
+  },
+  favoritesToggleBtnActive: {
+    borderColor: '#FF2D55',
+    backgroundColor: '#fff1f2',
+  },
+  favoritesToggleText: {
+    ...theme.typography.meta,
+    fontSize: 12,
+    fontWeight: '600',
+    color: theme.color.textSecondary,
+  },
+  favoritesToggleTextActive: {
+    color: '#FF2D55',
+    fontWeight: '700',
   },
   tabBtn: {
     flex: 1,

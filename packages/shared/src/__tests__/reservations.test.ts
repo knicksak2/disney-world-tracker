@@ -176,6 +176,49 @@ describe('Reservation contract — venue is always named (R5.4)', () => {
       expect(parsed.error.issues.some((i) => i.path.includes('customTitle'))).toBe(true);
     }
   });
+
+  it('accepts an edit that updates experienceId (R3.17)', () => {
+    const parsed = plannedItemEditSchema.safeParse({
+      experienceId: '11111111-1111-4111-8111-111111111111',
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.experienceId).toBe('11111111-1111-4111-8111-111111111111');
+    }
+  });
+
+  it('accepts an edit that updates plannedDate (R3.16)', () => {
+    const parsed = plannedItemEditSchema.safeParse({
+      plannedDate: '2026-10-05',
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.plannedDate).toBe('2026-10-05');
+    }
+  });
+
+  it('rejects an edit that sets experienceId to null while keeping itemType experience', () => {
+    const parsed = plannedItemEditSchema.safeParse({
+      experienceId: null,
+      itemType: 'experience',
+    });
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) {
+      expect(parsed.error.issues.some((i) => i.path.includes('experienceId'))).toBe(true);
+    }
+  });
+
+  it('rejects an edit that clears both experienceId and customTitle on a reservation (R3.17)', () => {
+    const parsed = plannedItemEditSchema.safeParse({
+      reservationKind: 'dining',
+      experienceId: null,
+      customTitle: null,
+    });
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) {
+      expect(parsed.error.issues.some((i) => i.path.includes('customTitle'))).toBe(true);
+    }
+  });
 });
 
 describe('Reservation contract — strict schemas reject unknown fields', () => {

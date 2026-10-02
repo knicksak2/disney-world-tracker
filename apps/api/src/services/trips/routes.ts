@@ -96,6 +96,7 @@ import {
   tripReactionValueSchema,
   uuidSchema,
 } from '@dwt/shared';
+import type { GroupFavoritesResponseDTO } from '@dwt/shared';
 
 import type { DbPool } from '../../db/pool.js';
 import { AppError } from '../../errors/AppError.js';
@@ -1499,6 +1500,26 @@ export function tripRoutes(options: TripRoutesOptions): FastifyPluginAsync {
         }
         reply.code(204);
         reply.send();
+      },
+    );
+
+    // -------------------------------------------------------------------
+    // GET /trips/:id/favorites/shared — Trip Group Favorites (Requirement 9.1)
+    // -------------------------------------------------------------------
+    // Reads experiences favorited by two or more current Trip_Members.
+    // Membership-gated by assertTripMember: non-members and non-existent trips
+    // collapse to 403 trip_forbidden (Requirement 9.2).
+    app.get<{ Params: { id: string } }>(
+      '/trips/:id/favorites/shared',
+      { preHandler: requireSession },
+      async (request, reply) => {
+        const userId = requireUser(request);
+        const { id } = parseOrAppError(tripIdParamsSchema, request.params);
+        await assertTripMember(pool, userId, id);
+        const items = await repo.getGroupFavorites(id, userId);
+        const response: GroupFavoritesResponseDTO = { items };
+        reply.code(200);
+        reply.send(response);
       },
     );
 

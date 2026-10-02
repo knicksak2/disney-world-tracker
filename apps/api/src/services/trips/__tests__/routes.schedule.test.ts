@@ -8,7 +8,7 @@
  */
 
 import Fastify, { type FastifyInstance, type preHandlerHookHandler } from 'fastify';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { PlannedItemDTO, TripOptimizationResult } from '@dwt/shared';
 
@@ -104,6 +104,8 @@ describe('Schedule optimization & planned item edit routes', () => {
   let mockRole: string | null;
 
   beforeEach(async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-06-15T14:00:00.000Z')); // 10:00 AM ET (EDT, UTC-4)
     mockRole = 'member';
     const fakePool = {
       query: vi.fn(async (text: string) => {
@@ -151,6 +153,10 @@ describe('Schedule optimization & planned item edit routes', () => {
         requireSession: dummyRequireSession,
       })
     );
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   describe('POST /trips/:id/schedule/optimize', () => {

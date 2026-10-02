@@ -17,7 +17,9 @@ import {
   type ParkLiveEntryDTO,
 } from '@dwt/shared';
 
-export type LiveWaitsFilter = 'all' | 'walkOn' | 'lightningLane' | 'headliners';
+export type LiveWaitsFilter = 'all' | 'walkOn' | 'lightningLane' | 'headliners' | 'favorites';
+
+export const EMPTY_FAVORITED_SET: ReadonlySet<string> = new Set<string>();
 
 export interface LiveWaitsRow {
   readonly experienceId: string;
@@ -134,6 +136,7 @@ export function buildLiveWaitsRows(
   entries: readonly ParkLiveEntryDTO[],
   experiencesById: ReadonlyMap<string, ExperienceDTO>,
   filter: LiveWaitsFilter,
+  favoritedIds: ReadonlySet<string> = EMPTY_FAVORITED_SET,
 ): readonly LiveWaitsRow[] {
   const rows: LiveWaitsRow[] = [];
   const seenIds = new Set<string>();
@@ -194,6 +197,9 @@ export function buildLiveWaitsRows(
       const exp = experiencesById.get(row.experienceId);
       return exp !== undefined && isHeadliner(exp);
     });
+  }
+  if (filter === 'favorites') {
+    return rows.filter((row) => favoritedIds.has(row.experienceId));
   }
 
   return rows;

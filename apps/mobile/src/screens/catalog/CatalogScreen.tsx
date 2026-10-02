@@ -110,6 +110,8 @@ import { priceTierListTag, resortAreaLabel } from './infoTags';
 import { browseLandOf } from './catalogGrouping';
 import { useCardFocusRestore, useResultCountAnnouncement } from './catalogFocus';
 import { useCompletedExperiences } from './useCompletedExperiences';
+import FavoriteToggle from './FavoriteToggle';
+import { useFavoritedExperiences } from './useFavoritedExperiences';
 import AvatarChip from '../navigation/AvatarChip';
 import NotificationBell from '../../features/notifications/NotificationBell';
 
@@ -243,6 +245,18 @@ export default function CatalogScreen({ navigation }: Props): JSX.Element {
     retry: false,
   });
 
+  // --- Favorites view state (Requirement 5) -------------------------------
+  const [favoritesViewActive, setFavoritesViewActive] = useState(false);
+
+  // --- All catalog (for My Favorites view) -------------------------------
+  const allCatalogQuery = useQuery<CatalogListResponse, ApiError>({
+    queryKey: ['catalog', 'all'] as const,
+    queryFn: fetchAllCatalog,
+    enabled: favoritesViewActive,
+    staleTime: STALE_TIME_MS,
+    retry: false,
+  });
+
   // Bottom tabs stay mounted across navigation (they never unmount on blur),
   // so returning to this screen after visiting another tab does not remount
   // it or re-run the initial `useQuery` fetch. Without an explicit refetch on
@@ -255,13 +269,17 @@ export default function CatalogScreen({ navigation }: Props): JSX.Element {
   // comes back to the tab, not never.
   const { refetch: refetchDestinations } = destinationsQuery;
   const { refetch: refetchSearch } = searchQuery;
+  const { refetch: refetchAllCatalog } = allCatalogQuery;
   useFocusEffect(
     useCallback(() => {
       void refetchDestinations();
       if (searchActive) {
         void refetchSearch();
       }
-    }, [refetchDestinations, refetchSearch, searchActive]),
+      if (favoritesViewActive) {
+        void refetchAllCatalog();
+      }
+    }, [refetchDestinations, refetchSearch, refetchAllCatalog, searchActive, favoritesViewActive]),
   );
 
   // Index the count entries by Destination id so each card can look up its
@@ -296,6 +314,7 @@ export default function CatalogScreen({ navigation }: Props): JSX.Element {
   // search-result rows. Fails soft to an empty set, so results render unmarked
   // on error or while loading.
   const completedIds = useCompletedExperiences();
+  const favoritedIds = useFavoritedExperiences();
 
   // R12.7: track a ref per Destination card and the last-activated Destination
   // so focus is restored to the activating card when the Catalog_Home regains
@@ -390,6 +409,15 @@ export default function CatalogScreen({ navigation }: Props): JSX.Element {
           query={searchQuery}
           onSelectExperience={onSelectExperience}
           completedIds={completedIds}
+          favoritedIds={favoritedIds}
+        />
+      ) : favoritesViewActive ? (
+        <FavoritesBody
+          allCatalogQuery={allCatalogQuery}
+          onSelectExperience={onSelectExperience}
+          completedIds={completedIds}
+          favoritedIds={favoritedIds}
+          onBack={() => setFavoritesViewActive(false)}
         />
       ) : (
         <GridBody
@@ -398,6 +426,7 @@ export default function CatalogScreen({ navigation }: Props): JSX.Element {
           registerCardRef={registerCardRef}
           onOpenLiveWaits={() => navigation.navigate('LiveWaits')}
           onOpenCrowdCalendar={() => navigation.navigate('CrowdCalendar')}
+          onOpenFavorites={() => setFavoritesViewActive(true)}
           onSelectDestination={(destination) => {
             // R12.7: remember which card opened the Destination_Screen so focus
             // can be restored to it on back.
@@ -422,6 +451,7 @@ function GridBody({
   registerCardRef,
   onOpenLiveWaits,
   onOpenCrowdCalendar,
+  onOpenFavorites,
   onSelectDestination,
 }: {
   readonly destinationsQuery: {
@@ -432,6 +462,7 @@ function GridBody({
   readonly registerCardRef: (id: DestinationId) => (node: View | null) => void;
   readonly onOpenLiveWaits: () => void;
   readonly onOpenCrowdCalendar: () => void;
+  readonly onOpenFavorites: () => void;
   readonly onSelectDestination: (destination: Destination) => void;
 }): JSX.Element {
   const showLoading =
@@ -490,6 +521,33 @@ function GridBody({
             <View style={styles.liveWaitsText}>
               <Text style={styles.calendarTitle}>Crowd Calendar &amp; Best Days</Text>
               <Text style={styles.calendarSub}>Day-by-day crowd projections</Text>
+            </View>
+            <Ionicons
+              name="chevron-forward"
+              size={18}
+              color={theme.color.textSecondary}
+            />
+          </Pressable>
+        </Card>
+      </View>
+
+      <View style={styles.favoritesBannerWrap} testID="jump-in-favorites">
+        <Card style={styles.favoritesBanner} accentColor="#FF2D55">
+          <Pressable
+            style={styles.favoritesBannerRow}
+            onPress={onOpenFavorites}
+            accessibilityRole="button"
+            accessibilityLabel="My Favorites. View your favorited experiences across all destinations."
+            testID="jump-in-favorites-button"
+          >
+            <View style={styles.favoritesIcon}>
+              <Ionicons name="heart" size={18} color="#FF2D55" />
+            </View>
+            <View style={styles.liveWaitsText}>
+              <Text style={styles.favoritesTitle}>My Favorites</Text>
+              <Text style={styles.favoritesSub}>
+                Your favorited rides, dining &amp; shows
+              </Text>
             </View>
             <Ionicons
               name="chevron-forward"
@@ -594,6 +652,128 @@ function DestinationImage({
 }
 
 // ---------------------------------------------------------------------------
+// Favorites body (Requirement 5)
+// ---------------------------------------------------------------------------
+
+/**
+ * The "My Favorites" view body that renders a flat list of favorited Experiences
+ * across all Destinations (R5.2, R5.4). Reuses SearchResultRow presentation.
+ */
+function FavoritesBody({
+  allCatalogQuery,
+  onSelectExperience,
+  completedIds,
+  favoritedIds,
+  onBack,
+}: {
+  readonly allCatalogQuery: {
+    readonly isLoading: boolean;
+    readonly isError: boolean;
+    readonly error: ApiError | null;
+    readonly data: CatalogListResponse | undefined;
+  };
+  readonly onSelectExperience: (experience: ExperienceDTO) => void;
+  readonly completedIds: ReadonlySet<string>;
+  readonly favoritedIds: ReadonlySet<string>;
+  readonly onBack: () => void;
+}): JSX.Element {
+  const experiences = allCatalogQuery.data?.experiences ?? [];
+  const favoritedExperiences = useMemo(
+    () => experiences.filter((exp) => favoritedIds.has(exp.id)),
+    [experiences, favoritedIds],
+  );
+
+  const renderFavoriteItem = useCallback(
+    ({ item }: { item: ExperienceDTO }) => (
+      <SearchResultRow
+        experience={item}
+        onSelectExperience={onSelectExperience}
+        completed={completedIds.has(item.id)}
+        favorited={favoritedIds.has(item.id)}
+      />
+    ),
+    [onSelectExperience, completedIds, favoritedIds],
+  );
+
+  if (allCatalogQuery.isError && allCatalogQuery.data === undefined) {
+    return (
+      <View style={styles.favoritesContainer} testID="catalog-favorites-view">
+        <View style={styles.favoritesHeader}>
+          <Pressable
+            style={styles.favoritesBackBtn}
+            onPress={onBack}
+            accessibilityRole="button"
+            accessibilityLabel="Back to catalog"
+            testID="catalog-favorites-back-button"
+          >
+            <Ionicons name="arrow-back" size={20} color={theme.color.primary} />
+            <Text style={styles.favoritesBackText}>Catalog</Text>
+          </Pressable>
+          <Text style={styles.favoritesHeaderTitle}>My Favorites</Text>
+          <View style={styles.favoritesHeaderSpacer} />
+        </View>
+        <View style={styles.center} testID="catalog-favorites-error">
+          <EmptyState
+            icon="alert-circle-outline"
+            title="Favorites couldn't be loaded"
+            body={allCatalogQuery.error?.message ?? 'Please try again.'}
+          />
+        </View>
+      </View>
+    );
+  }
+
+  const showLoading =
+    allCatalogQuery.isLoading && allCatalogQuery.data === undefined;
+
+  return (
+    <View style={styles.favoritesContainer} testID="catalog-favorites-view">
+      <View style={styles.favoritesHeader}>
+        <Pressable
+          style={styles.favoritesBackBtn}
+          onPress={onBack}
+          accessibilityRole="button"
+          accessibilityLabel="Back to catalog"
+          testID="catalog-favorites-back-button"
+        >
+          <Ionicons name="arrow-back" size={20} color={theme.color.primary} />
+          <Text style={styles.favoritesBackText}>Catalog</Text>
+        </Pressable>
+        <Text style={styles.favoritesHeaderTitle}>My Favorites</Text>
+        <View style={styles.favoritesHeaderSpacer} />
+      </View>
+
+      {showLoading ? (
+        <View style={styles.center} testID="catalog-favorites-loading">
+          <ActivityIndicator color={theme.color.primary} />
+        </View>
+      ) : favoritedExperiences.length === 0 ? (
+        <View style={styles.center} testID="catalog-favorites-empty">
+          <EmptyState
+            icon="heart-outline"
+            title="No experiences favorited yet"
+            body="You have not favorited any experiences yet. Tap the heart on any experience to add it to your favorites."
+          />
+        </View>
+      ) : (
+        <FlatList
+          data={favoritedExperiences}
+          keyExtractor={(experience) => experience.id}
+          style={styles.list}
+          initialNumToRender={12}
+          maxToRenderPerBatch={12}
+          windowSize={11}
+          removeClippedSubviews
+          contentContainerStyle={styles.listContent}
+          testID="catalog-favorites-results"
+          renderItem={renderFavoriteItem}
+        />
+      )}
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Search results body
 // ---------------------------------------------------------------------------
 
@@ -608,6 +788,7 @@ function SearchResultsBody({
   query,
   onSelectExperience,
   completedIds,
+  favoritedIds,
 }: {
   readonly query: {
     readonly isLoading: boolean;
@@ -617,6 +798,7 @@ function SearchResultsBody({
   };
   readonly onSelectExperience: (experience: ExperienceDTO) => void;
   readonly completedIds: ReadonlySet<string>;
+  readonly favoritedIds: ReadonlySet<string>;
 }): JSX.Element {
   const results = query.data?.experiences ?? [];
 
@@ -631,9 +813,10 @@ function SearchResultsBody({
         experience={item}
         onSelectExperience={onSelectExperience}
         completed={completedIds.has(item.id)}
+        favorited={favoritedIds.has(item.id)}
       />
     ),
-    [onSelectExperience, completedIds],
+    [onSelectExperience, completedIds, favoritedIds],
   );
 
   // R5.7: a failed search shows the search-error state (query is retained in the
@@ -697,6 +880,10 @@ interface SearchResultRowProps {
    * completion at a glance without opening the detail screen.
    */
   readonly completed?: boolean;
+  /**
+   * Whether the signed-in User has marked this Experience as favorite.
+   */
+  readonly favorited?: boolean;
 }
 
 /**
@@ -710,6 +897,7 @@ const SearchResultRow = React.memo(function SearchResultRow({
   experience,
   onSelectExperience,
   completed = false,
+  favorited = false,
 }: SearchResultRowProps): JSX.Element {
   const onPress = useCallback(
     () => onSelectExperience(experience),
@@ -784,11 +972,18 @@ const SearchResultRow = React.memo(function SearchResultRow({
             ) : null}
           </View>
         </View>
-        <Ionicons
-          name="chevron-forward"
-          size={20}
-          color={theme.color.textSecondary}
-        />
+        <View style={styles.rowActions}>
+          <FavoriteToggle
+            experienceId={experience.id}
+            favorited={favorited}
+            size="small"
+          />
+          <Ionicons
+            name="chevron-forward"
+            size={20}
+            color={theme.color.textSecondary}
+          />
+        </View>
       </View>
     </Card>
   );
@@ -904,6 +1099,11 @@ function GenericErrorState({ message }: { readonly message: string }): JSX.Eleme
 /** Dispatch `GET /catalog/destinations`. */
 async function fetchDestinationCounts(): Promise<DestinationsResponse> {
   return apiRequest<DestinationsResponse>('GET', '/catalog/destinations');
+}
+
+/** Dispatch `GET /catalog` for all experiences across all destinations (R5.2). */
+async function fetchAllCatalog(): Promise<CatalogListResponse> {
+  return apiRequest<CatalogListResponse>('GET', '/catalog');
 }
 
 /**
@@ -1083,6 +1283,11 @@ const styles = StyleSheet.create({
     gap: theme.spacing.sm,
     marginTop: theme.spacing.xs,
   },
+  rowActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+  },
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1156,6 +1361,73 @@ const styles = StyleSheet.create({
     color: theme.color.textPrimary,
   },
   calendarSub: {
+    fontSize: 12,
+    color: theme.color.textSecondary,
+    marginTop: 2,
+  },
+  favoritesContainer: {
+    flex: 1,
+  },
+  favoritesHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.color.border,
+    backgroundColor: theme.color.surface,
+  },
+  favoritesBackBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  favoritesBackText: {
+    ...theme.typography.meta,
+    color: theme.color.primary,
+    fontWeight: '600',
+  },
+  favoritesHeaderTitle: {
+    ...theme.typography.subtitle,
+    fontWeight: '700',
+    color: theme.color.textPrimary,
+  },
+  favoritesHeaderSpacer: {
+    width: 60,
+  },
+  favoritesBannerWrap: {
+    width: '100%',
+    paddingHorizontal: theme.spacing.sm,
+    marginBottom: theme.spacing.sm,
+  },
+  favoritesBanner: {
+    backgroundColor: '#fff1f2',
+    borderColor: '#fecdd3',
+    borderWidth: 1,
+    padding: 0,
+    overflow: 'hidden',
+  },
+  favoritesBannerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.md,
+    padding: theme.spacing.md,
+  },
+  favoritesIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: theme.radius.md,
+    backgroundColor: '#ffe4e6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  favoritesTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#e11d48',
+  },
+  favoritesSub: {
     fontSize: 12,
     color: theme.color.textSecondary,
     marginTop: 2,

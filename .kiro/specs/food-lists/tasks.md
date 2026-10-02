@@ -343,7 +343,20 @@ Wave 3 groups likes/saves/collection (task 4) with discovery (task 5) since both
     - _Requirements: 14.5_
   - [x] 22.10 Write/extend `MyFoodListsScreen.test.tsx` asserting the pin toggle renders per row, calls `PATCH` with the correct `pinned` value, and the row reflects the resulting pinned state
     - _Requirements: 14.5_
+  - [x] 22.10b Add a pin/unpin toggle control to `FoodListDetailScreen.tsx` header action row for owned lists (`testID="food-list-pin-btn"`), calling `PATCH /me/food-lists/:id` with `{ pinned: list.pinnedAt === null }`, and test in `FoodListDetailScreen.test.tsx` (renders for owner, toggles pin state, hidden for non-owners)
+    - _Requirements: 14.6_
   - [x] 22.11 Checkpoint — ran `npx tsc --noEmit` (clean) and full `npx jest` (234 suites, 1564 tests, all passing) in `apps/mobile`; covered by the final full-workspace `npm run verify` gate as well
+  - [x] 22.12 Enforce 4-pin limit in FoodListRepo (`food_list_pin_limit_reached`) and mobile UI Alert (`Alert.alert('Pin Limit Reached', ...)`), bump `MAX_COLLECTION_PREVIEW_ROWS = 4`, and test in `foodLists.prop.test.ts` (Property 24.1), `MyFoodListsScreen.test.tsx`, `FoodListDetailScreen.test.tsx`, and `CollectionScreen.test.tsx`
+    - _Requirements: 14.7_
 
 - [x] 23. Final Verification & Quality Gate (Re-run after R14)
   - [x] 23.1 Run full `npm run verify` across all workspaces (`apps/api`, `apps/mobile`, `packages/shared`) — apps/api: 375 test files / 2545 tests passed; apps/mobile: 234 suites / 1564 tests passed; packages/shared: 34 files / 390 tests passed; exit code 0
+
+- [ ] 24. Restaurant Page and Menu Screen Add-to-List Affordances (R9.1, R9.9, added by this amendment)
+  - [ ] 24.1 Add 'Add to List' button to `DiningReservationCard.tsx` on Today in Park lens, passing `onAddToList` from `TodayInParkLens` and `ExperienceDetailScreen` to open `FoodItemPickerModal` (mode="addToLists") -> `AddToListsSheet`
+    - _Requirements: 9.1_
+  - [ ] 24.2 Add 'Add to List' actions on `MenuScreen.tsx`: item-level add button on each dish (opening `AddToListsSheet`) and header action opening `FoodItemPickerModal` in multi-select mode
+    - _Requirements: 9.9_
+  - [ ] 24.3 Add component and interaction tests covering both entry points
+    - _Requirements: 9.1, 9.9_
+

@@ -141,19 +141,22 @@ Lists" and "My Experience Lists" cards; 8b's peer-cards framing and "+ New / Dis
 Discover-only action are otherwise unchanged.
 
 8c. (Supersedes 8b's single-preview-row and single-destination behavior.) WHEN "Lists" is active,
-    THE "My Food Lists" and "My Experience Lists" cards SHALL each render up to 3 of the User's
+    THE "My Food Lists" and "My Experience Lists" cards SHALL each render up to 4 of the User's
     owned lists of that type as individual rows, ordered pinned-first (per `food-lists` Requirement
-    14.4 / `experience-lists` Requirement 15.4) then by `updatedAt DESC` among the rest; WHERE the
-    User owns more than 3 lists of that type, THE card SHALL render a fourth "View all (N) →" row
+    14.4 / `experience-lists` Requirement 19.4) then by `updatedAt DESC` among the rest; WHERE the
+    User owns more than 4 lists of that type, THE card SHALL render a fifth "View all (N) →" row
     (`N` = total owned count) navigating to `MyFoodListsScreen`/`MyExperienceListsScreen`; WHERE
-    the User owns 3 or fewer, no such row is rendered. Each list row SHALL navigate directly to
+    the User owns 4 or fewer, no such row is rendered. Each list row SHALL navigate directly to
     that specific list's `FoodListDetail`/`ExperienceListDetail` screen (not to the management
     screen) and SHALL render a pin/unpin toggle control per `food-lists` Requirement 14.5 /
-    `experience-lists` Requirement 15.5. Each card's header SHALL additionally present a "+ New"
-    action, distinct from "Discover", that opens the same create-list modal `MyFoodListsScreen`/
-    `MyExperienceListsScreen` already uses, without navigating away from the Collection screen;
-    "Discover" continues to navigate to `FoodListDiscoveryScreen`/`ExperienceListDiscoveryScreen`
-    unchanged.
+    `experience-lists` Requirement 19.5. A User MAY pin up to 4 lists per list type (Food Lists
+    and Experience Lists); IF a User attempts to pin a 5th list of that type, THE App SHALL
+    display an alert titled "Pin Limit Reached" informing the User that they can pin up to 4
+    lists and must unpin one first, and SHALL NOT issue or allow a 5th pin mutation. Each card's
+    header SHALL additionally present a "+ New" action, distinct from "Discover", that opens
+    the same create-list modal `MyFoodListsScreen`/`MyExperienceListsScreen` already uses, without
+    navigating away from the Collection screen; "Discover" continues to navigate to
+    `FoodListDiscoveryScreen`/`ExperienceListDiscoveryScreen` unchanged.
 9. WHEN "Park Stats" is active, THE screen SHALL present overall completion and per-park coverage progress bars derived from `/me/stats`, with an action navigating to the StatsStack overview.
 
 ### Requirement 7: You & Crew (Identity, Friends, Settings)

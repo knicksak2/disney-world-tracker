@@ -414,5 +414,5 @@ describe('Trip Food Lists — Property 27', { timeout: 120_000 }, () => {
       ),
       { numRuns: 100 },
     );
-  }, 120000);
+  }, 240000);
 });

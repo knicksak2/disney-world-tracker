@@ -30,7 +30,7 @@
 // the other detail sections (R5.9). See `theme/theme.ts` and `theme/components`.
 
 import React from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ActivityIndicator,
   Pressable,
@@ -39,12 +39,13 @@ import {
   Text,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import type { RouteProp } from '@react-navigation/native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 
-import type { MenuDTO } from '@dwt/shared';
+import type { FoodItemDTO, FoodItemsResponseDTO, MenuDTO } from '@dwt/shared';
 
-import { apiRequest } from '../../api/client';
+import { ApiError, apiRequest } from '../../api/client';
 import { theme } from '../../theme/theme';
 import {
   Badge,
@@ -54,6 +55,8 @@ import {
   ScreenContainer,
   SectionLabel,
 } from '../../theme/components';
+import FoodItemPickerModal from './FoodItemPickerModal';
+import AddToListsSheet from '../foodLists/AddToListsSheet';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -81,8 +84,12 @@ export default function MenuScreen(): JSX.Element {
   const navigation = useNavigation();
   const { experienceId } = route.params;
   const encodedId = encodeURIComponent(experienceId);
+  const queryClient = useQueryClient();
 
   const [activeIndex, setActiveIndex] = React.useState(0);
+  const [pickerVisible, setPickerVisible] = React.useState(false);
+  const [sheetVisible, setSheetVisible] = React.useState(false);
+  const [selectedItemsForSheet, setSelectedItemsForSheet] = React.useState<readonly FoodItemDTO[]>([]);
 
   // Same key + fn as `ExperienceDetailScreen`, so the entry the detail view
   // already fetched is reused here.
@@ -90,6 +97,64 @@ export default function MenuScreen(): JSX.Element {
     queryKey: ['experience', experienceId] as const,
     queryFn: () => apiRequest<MenuDetailDTO>('GET', `/catalog/${encodedId}`),
   });
+
+  // Query food items so that we have IDs to add to food lists
+  const foodItemsQ = useQuery<FoodItemsResponseDTO>({
+    queryKey: ['experience-food-items', experienceId],
+    queryFn: () =>
+      apiRequest<FoodItemsResponseDTO>(
+        'GET',
+        `/experiences/${encodedId}/food-items`,
+      ),
+    staleTime: 60_000,
+  });
+
+  const handleAddItemToList = React.useCallback(
+    async (item: { name: string; price?: string | null }) => {
+      const trimmed = item.name.trim();
+      const existing = foodItemsQ.data?.items?.find(
+        (fi) => fi.name.trim().toLowerCase() === trimmed.toLowerCase(),
+      );
+      if (existing) {
+        setSelectedItemsForSheet([existing]);
+        setSheetVisible(true);
+        return;
+      }
+
+      // If not yet in cache, create or resolve it on-demand
+      try {
+        const created = await apiRequest<FoodItemDTO>(
+          'POST',
+          `/experiences/${encodedId}/food-items`,
+          { name: trimmed },
+        );
+        void queryClient.invalidateQueries({
+          queryKey: ['experience-food-items', experienceId],
+        });
+        setSelectedItemsForSheet([created]);
+        setSheetVisible(true);
+      } catch (err) {
+        if (err instanceof ApiError && err.code === 'food_item_duplicate') {
+          const existingId = err.details?.['existingId'] as string | undefined;
+          const matched =
+            (existingId
+              ? foodItemsQ.data?.items?.find((i) => i.id === existingId)
+              : undefined) ?? {
+              id: existingId ?? `item-${trimmed}`,
+              experienceId,
+              locationId: null,
+              name: trimmed,
+              price: item.price ?? null,
+              source: 'user_submitted' as const,
+              currentlyOnMenu: true,
+            };
+          setSelectedItemsForSheet([matched]);
+          setSheetVisible(true);
+        }
+      }
+    },
+    [encodedId, experienceId, foodItemsQ.data?.items, queryClient],
+  );
 
   // Deep-link defensive path: nothing cached yet and the fetch is in flight.
   if (detailQ.isLoading) {
@@ -127,13 +192,28 @@ export default function MenuScreen(): JSX.Element {
 
   return (
     <ScreenContainer>
-      {/* Header: restaurant name + back control (R5.8, R5.9). */}
+      {/* Header: restaurant name + back control (R5.8, R5.9) + Add to List action (R5.10) */}
       <GradientHeader
         title={detail.name}
         subtitle="Menu"
         icon="restaurant"
         compact
         onBack={() => navigation.goBack()}
+        right={
+          <Pressable
+            testID="menu-screen-add-to-list-btn"
+            accessibilityRole="button"
+            accessibilityLabel="Add dishes to a food list"
+            onPress={() => setPickerVisible(true)}
+            style={({ pressed }) => [
+              styles.headerActionBtn,
+              pressed && styles.headerActionBtnPressed,
+            ]}
+          >
+            <Ionicons name="bookmark-outline" size={15} color="#ffffff" />
+            <Text style={styles.headerActionBtnText}>Add to List</Text>
+          </Pressable>
+        }
       />
 
       {/* Tab bar: one tab per menu type, only when there's more than one menu
@@ -161,9 +241,37 @@ export default function MenuScreen(): JSX.Element {
         ) : (
           // Only the selected menu is rendered (tabbed navigation), labelled by
           // its own index so per-menu testIDs stay stable.
-          <MenuBlock menu={menus[safeActive]!} index={safeActive} />
+          <MenuBlock
+            menu={menus[safeActive]!}
+            index={safeActive}
+            onAddItem={handleAddItemToList}
+          />
         )}
       </ScrollView>
+
+      {/* Food item picker modal in addToLists mode */}
+      <FoodItemPickerModal
+        experienceId={experienceId}
+        menus={menus}
+        mode="addToLists"
+        visible={pickerVisible}
+        onClose={() => setPickerVisible(false)}
+        onConfirmSelection={(items) => {
+          setSelectedItemsForSheet(items);
+          setPickerVisible(false);
+          setSheetVisible(true);
+        }}
+      />
+
+      {/* Add to Lists Sheet */}
+      <AddToListsSheet
+        visible={sheetVisible}
+        foodItems={selectedItemsForSheet}
+        onClose={() => {
+          setSheetVisible(false);
+          setSelectedItemsForSheet([]);
+        }}
+      />
     </ScreenContainer>
   );
 }
@@ -232,9 +340,11 @@ function MenuTabs({
 function MenuBlock({
   menu,
   index,
+  onAddItem,
 }: {
   readonly menu: MenuDTO;
   readonly index: number;
+  readonly onAddItem?: (item: { name: string; price?: string | null }) => void;
 }): JSX.Element {
   const hasCuisine = typeof menu.cuisineType === 'string' && menu.cuisineType.length > 0;
 
@@ -264,11 +374,25 @@ function MenuBlock({
                 style={styles.itemRow}
                 testID={`menu-item-${index}-${groupIndex}-${itemIndex}`}
               >
-                <Text style={styles.itemName}>{item.name}</Text>
-                {hasPrice ? (
-                  <Text style={styles.itemPrice} testID={`menu-item-price-${index}-${groupIndex}-${itemIndex}`}>
-                    {item.price as string}
-                  </Text>
+                <View style={styles.itemInfo}>
+                  <Text style={styles.itemName}>{item.name}</Text>
+                  {hasPrice ? (
+                    <Text style={styles.itemPrice} testID={`menu-item-price-${index}-${groupIndex}-${itemIndex}`}>
+                      {item.price as string}
+                    </Text>
+                  ) : null}
+                </View>
+                {onAddItem ? (
+                  <Pressable
+                    onPress={() => onAddItem(item)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Add ${item.name} to food list`}
+                    style={({ pressed }) => [styles.itemAddBtn, pressed && styles.itemAddBtnPressed]}
+                    testID={`menu-item-add-to-list-${index}-${groupIndex}-${itemIndex}`}
+                    hitSlop={8}
+                  >
+                    <Ionicons name="bookmark-outline" size={16} color={theme.color.primary} />
+                  </Pressable>
                 ) : null}
               </View>
             );
@@ -345,10 +469,37 @@ const styles = StyleSheet.create({
     color: theme.color.textPrimary,
     marginBottom: theme.spacing.xs,
   },
+  headerActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(255, 255, 255, 0.22)',
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: theme.radius.pill,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.35)',
+  },
+  headerActionBtnPressed: {
+    opacity: 0.8,
+    transform: [{ scale: 0.97 }],
+  },
+  headerActionBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
   itemRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
+    paddingVertical: 3,
+  },
+  itemInfo: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    flex: 1,
     gap: theme.spacing.md,
   },
   itemName: {
@@ -361,5 +512,17 @@ const styles = StyleSheet.create({
     ...theme.typography.body,
     color: theme.color.textSecondary,
     flexShrink: 0,
+  },
+  itemAddBtn: {
+    padding: 6,
+    marginLeft: 8,
+    borderRadius: 8,
+    backgroundColor: '#f6f2fa',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  itemAddBtnPressed: {
+    opacity: 0.7,
+    backgroundColor: '#ede6f6',
   },
 });

@@ -52,6 +52,7 @@ import { tripDetailKeys } from './TripDetailScreen';
 import { ExperiencePicker } from './ExperiencePicker';
 import { isKnownPark } from './experiencePickerFilters';
 import { useAttachedExperienceListItems } from './useAttachedExperienceListItems';
+import { useFavoriteSourcedExperienceItems } from '../catalog/useFavoriteSourcedExperienceItems';
 import { reservationKindPresentation } from './reservations';
 import { TimeWheelPicker } from '../../components/TimeWheelPicker';
 
@@ -464,6 +465,13 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
   // deduplicated candidate set for ExperiencePicker's "My Lists" tab. Only
   // fetched while the add-item modal is open, mirroring showAddModal-gated
   // queries elsewhere in this screen.
+  // ExperiencePicker "Favorites" Tab (experience-favorites Requirement 6,
+  // amended): resolves the User's Favorited_Set into full ExperienceDTO rows.
+  // Shares the ['catalog', 'all'] query key with this screen's own
+  // catalogQuery above, so no second GET /catalog is issued. Only fetched
+  // while the add-item modal is open, mirroring attachedListItems' gating.
+  const favoriteItems = useFavoriteSourcedExperienceItems(showAddModal);
+
   const attachedListItems = useAttachedExperienceListItems(
     tripQuery.data?.experienceLists,
     showAddModal,
@@ -1667,6 +1675,8 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
                   fillContainer
                   listSourcedItems={attachedListItems.items}
                   listSourcedLoading={attachedListItems.isLoading}
+                  favoriteSourcedItems={favoriteItems.items}
+                  favoriteSourcedLoading={favoriteItems.isLoading}
                   alreadyPlannedIds={existingExperienceIds}
                 />
               </View>

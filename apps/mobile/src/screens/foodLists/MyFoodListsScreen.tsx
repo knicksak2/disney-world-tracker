@@ -1,6 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Modal,
   Pressable,
@@ -50,6 +51,16 @@ export default function MyFoodListsScreen(): JSX.Element {
   }
 
   async function handleTogglePinned(list: FoodListDTO): Promise<void> {
+    if (list.pinnedAt === null) {
+      const pinnedCount = ownedLists.filter((l) => l.pinnedAt !== null).length;
+      if (pinnedCount >= 4) {
+        Alert.alert(
+          'Pin Limit Reached',
+          'You can pin up to 4 lists to your dashboard. Unpin a list first to pin this one.',
+        );
+        return;
+      }
+    }
     try {
       await apiRequest('PATCH', `/me/food-lists/${encodeURIComponent(list.id)}`, {
         pinned: list.pinnedAt === null,

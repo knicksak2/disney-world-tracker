@@ -6,11 +6,11 @@
  */
 
 import React from 'react';
-import { AccessibilityInfo } from 'react-native';
+import { AccessibilityInfo, Text } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 import type { ExperienceDTO } from '@dwt/shared';
 
@@ -72,6 +72,14 @@ function makeQueryClient(): QueryClient {
 
 const Stack = createNativeStackNavigator<CatalogStackParamList>();
 
+function DetailTarget({
+  route,
+}: {
+  readonly route: { readonly params: { readonly experienceId: string } };
+}): JSX.Element {
+  return <Text testID="nav-detail">{route.params.experienceId}</Text>;
+}
+
 function renderScreen(destination: DestinationId) {
   const queryClient = makeQueryClient();
   return render(
@@ -83,6 +91,10 @@ function renderScreen(destination: DestinationId) {
             component={DestinationScreen}
             initialParams={{ destination }}
           />
+          <Stack.Screen
+            name="ExperienceDetail"
+            component={DetailTarget as any}
+          />
         </Stack.Navigator>
       </NavigationContainer>
     </QueryClientProvider>,
@@ -91,10 +103,17 @@ function renderScreen(destination: DestinationId) {
 
 function stub(
   experiences: readonly ExperienceDTO[],
+  favorites: readonly string[] = [],
 ): void {
   apiRequestMock.mockImplementation(async (_method, path) => {
     if (typeof path !== 'string') {
       throw new Error(`unexpected non-string path: ${String(path)}`);
+    }
+    if (path.startsWith('/me/favorites')) {
+      return { experienceIds: favorites };
+    }
+    if (path.includes('/favorite')) {
+      return null;
     }
     if (path.startsWith('/catalog')) {
       return { experiences, staleCache: false };
@@ -108,6 +127,7 @@ function stub(
     return {};
   });
 }
+
 
 describe('DestinationScreen in-destination search', () => {
   const mockExperiences: ExperienceDTO[] = [
@@ -132,6 +152,17 @@ describe('DestinationScreen in-destination search', () => {
       imageUrl: null,
       areaType: 'ThemePark',
       land: 'Sunset Boulevard',
+    },
+    {
+      id: 'exp-derby',
+      name: 'The Hollywood Brown Derby',
+      park: 'Hollywood Studios',
+      category: 'Restaurant',
+      description: 'Fine dining',
+      active: true,
+      imageUrl: null,
+      areaType: 'ThemePark',
+      land: 'Hollywood Boulevard',
     },
     {
       id: 'exp-peter',
@@ -226,4 +257,89 @@ describe('DestinationScreen in-destination search', () => {
     const location = screen.getByTestId('destination-location-exp-peter');
     expect(location).toHaveTextContent('Fantasyland');
   });
+
+  it('R3.1, R3.2: each destination row renders favorite toggle reflecting Favorited_Set and tapping it does not navigate', async () => {
+    stub(mockExperiences, ['exp-runaway']);
+    renderScreen('Hollywood Studios');
+
+    await screen.findByTestId('destination-row-exp-runaway');
+    await screen.findByTestId('destination-row-exp-tower');
+
+    const favToggle = screen.getByTestId('favorite-toggle-exp-runaway');
+    const unfavToggle = screen.getByTestId('favorite-toggle-exp-tower');
+
+    expect(favToggle.props.accessibilityState).toEqual({ selected: true });
+    expect(unfavToggle.props.accessibilityState).toEqual({ selected: false });
+
+    // Tapping favorite toggle does not trigger row navigation
+    fireEvent.press(favToggle);
+    expect(screen.queryByTestId('nav-detail')).toBeNull();
+
+    // Tapping the row itself navigates
+    fireEvent.press(screen.getByTestId('destination-row-exp-runaway'));
+    await waitFor(() => {
+      expect(screen.getByTestId('nav-detail')).toBeTruthy();
+      expect(screen.getByTestId('nav-detail').props.children).toBe('exp-runaway');
+    });
+  });
+
+  it('R4.1, R4.2: Favorites toggle composes conjunctively with category tabs', async () => {
+    // exp-runaway (Ride) and exp-derby (Restaurant) are favorited
+    stub(mockExperiences, ['exp-runaway', 'exp-derby']);
+    renderScreen('Hollywood Studios');
+
+    await screen.findByTestId('destination-row-exp-runaway');
+    await screen.findByTestId('destination-row-exp-tower');
+    await screen.findByTestId('destination-row-exp-derby');
+
+    // Activate favorites-only toggle
+    const favToggleBtn = screen.getByTestId('destination-favorites-toggle');
+    fireEvent.press(favToggleBtn);
+
+    // Only favorited experiences appear (exp-tower is excluded)
+    await waitFor(() => {
+      expect(screen.getByTestId('destination-row-exp-runaway')).toBeTruthy();
+      expect(screen.getByTestId('destination-row-exp-derby')).toBeTruthy();
+      expect(screen.queryByTestId('destination-row-exp-tower')).toBeNull();
+    });
+
+    // Now switch to Rides category tab
+    const ridesTab = screen.getByTestId('destination-category-Ride');
+    fireEvent.press(ridesTab);
+
+    // Intersection: only exp-runaway (Ride AND favorited) appears
+    await waitFor(() => {
+      expect(screen.getByTestId('destination-row-exp-runaway')).toBeTruthy();
+      expect(screen.queryByTestId('destination-row-exp-derby')).toBeNull();
+      expect(screen.queryByTestId('destination-row-exp-tower')).toBeNull();
+    });
+  });
+
+  it('R4.3, R4.4: shows empty state when no favorited experiences match and reset restores filters', async () => {
+    // No favorites in this destination
+    stub(mockExperiences, []);
+    renderScreen('Hollywood Studios');
+
+    await screen.findByTestId('destination-row-exp-runaway');
+
+    // Activate favorites-only toggle
+    const favToggleBtn = screen.getByTestId('destination-favorites-toggle');
+    fireEvent.press(favToggleBtn);
+
+    // Empty state appears
+    await screen.findByTestId('destination-favorites-empty');
+    expect(
+      screen.getByText('No favorited experiences were found in this destination.'),
+    ).toBeTruthy();
+
+    // Tapping reset clears favoritesOnly
+    const resetBtn = screen.getByTestId('destination-filter-empty-reset');
+    fireEvent.press(resetBtn);
+
+    // Rows reappear
+    await screen.findByTestId('destination-row-exp-runaway');
+    expect(screen.queryByTestId('destination-favorites-empty')).toBeNull();
+  });
 });
+
+

@@ -27,3 +27,8 @@ export interface FoodItemDTO {
 export interface SubmitFoodItemInputDTO {
   readonly name: string;
 }
+
+export interface FoodItemsResponseDTO {
+  readonly items: readonly FoodItemDTO[];
+  readonly menus?: readonly import('./Menu.js').MenuDTO[];
+}

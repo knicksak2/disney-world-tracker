@@ -1,5 +1,6 @@
 // Feature: food-lists, Task 8.4, 8.7, 8.8, 8.13, 8.15, 8.16 — FoodListDetailScreen interaction tests
 import React from 'react';
+import { Alert } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
@@ -537,6 +538,71 @@ describe('FoodListDetailScreen', () => {
     expect(mockGoBack).toHaveBeenCalled();
   });
 
+  test('displays rate limit notice on initial load 429 and allows retrying', async () => {
+    apiRequestMock.mockImplementation(async () => {
+      throw new ApiError({
+        code: 'rate_limit_exceeded',
+        message: 'Too many requests. Please try again in 1 minute.',
+        status: 429,
+      });
+    });
+
+    renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('food-list-rate-limit-notice')).toBeTruthy();
+      expect(screen.getByText('Too many requests')).toBeTruthy();
+      expect(screen.queryByText('No longer available')).toBeNull();
+    });
+
+    // Provide successful list on retry
+    apiRequestMock.mockImplementation(async () => sampleOwnerList);
+    fireEvent.press(screen.getByTestId('food-list-rate-limit-retry-btn'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('food-list-name')).toBeTruthy();
+      expect(screen.getByText('Dole Whip')).toBeTruthy();
+    });
+  });
+
+  test('retains cached list when background refetch fails with rate_limit_exceeded 429', async () => {
+    apiRequestMock.mockImplementation(async (_method, path) => {
+      if (path === '/food-lists/list-detail-1') {
+        return sampleOwnerList;
+      }
+      return [];
+    });
+
+    const { queryClient } = renderScreenWithClient();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('food-list-name')).toBeTruthy();
+      expect(screen.getByText('Dole Whip')).toBeTruthy();
+    });
+
+    // Background refetch fails with 429 rate limit
+    apiRequestMock.mockImplementation(async (_method, path) => {
+      if (path === '/food-lists/list-detail-1') {
+        throw new ApiError({
+          code: 'rate_limit_exceeded',
+          message: 'Too many requests. Please try again in 1 minute.',
+          status: 429,
+        });
+      }
+      return [];
+    });
+
+    await queryClient.refetchQueries({ queryKey: ['food-list-detail', 'list-detail-1'] });
+
+    // The list MUST NOT be replaced with the unavailable screen
+    await waitFor(() => {
+      expect(screen.queryByTestId('food-list-unavailable-notice')).toBeNull();
+      expect(screen.getByTestId('food-list-name')).toBeTruthy();
+      expect(screen.getByText('Dole Whip')).toBeTruthy();
+      expect(screen.getByText('Rate limit reached. Please wait a moment before refreshing.')).toBeTruthy();
+    });
+  });
+
   test('Entry Point 2: searches restaurants, opens scoped picker, and adds items (Task 8.7, 8.8)', async () => {
     const sampleDishes: readonly FoodItemDTO[] = [
       {
@@ -701,6 +767,159 @@ describe('FoodListDetailScreen', () => {
     });
   });
 
+  test('Entry Point 2: skips adding items already on the list and handles server errors gracefully', async () => {
+    // sampleOwnerList already contains foodItemId: 'item-dole' (Dole Whip)
+    const dishes: readonly FoodItemDTO[] = [
+      {
+        id: 'item-dole',
+        experienceId: 'exp-aloha',
+        locationId: null,
+        name: 'Dole Whip',
+        price: '$5.99',
+        source: 'menu_sync',
+        currentlyOnMenu: true,
+      },
+      {
+        id: 'item-new-error',
+        experienceId: 'exp-aloha',
+        locationId: null,
+        name: 'Failing Dish',
+        price: '$8.99',
+        source: 'menu_sync',
+        currentlyOnMenu: true,
+      },
+    ];
+
+    apiRequestMock.mockImplementation(async (method, path) => {
+      if (path === '/food-lists/list-detail-1') {
+        return sampleOwnerList;
+      }
+      if (typeof path === 'string' && path.startsWith('/catalog')) {
+        return {
+          experiences: [
+            { id: 'exp-aloha', name: 'Aloha Isle', park: 'Magic Kingdom', category: 'Restaurant' },
+          ],
+        };
+      }
+      if (path === '/experiences/exp-aloha/food-items') {
+        return { items: dishes };
+      }
+      if (path === '/me/food-lists/list-detail-1/items' && method === 'POST') {
+        throw new Error('Server 500 error');
+      }
+      return {};
+    });
+
+    renderScreenWithClient();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('food-list-add-items-btn')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByTestId('food-list-add-items-btn'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('restaurant-search-modal')).toBeTruthy();
+      expect(screen.getByTestId('restaurant-select-row-exp-aloha')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByTestId('restaurant-select-row-exp-aloha'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('food-item-picker-modal')).toBeTruthy();
+      expect(screen.getByTestId('food-item-row-item-dole')).toBeTruthy();
+      // Should show already on list badge
+      expect(screen.getByTestId('food-item-already-on-list-item-dole')).toBeTruthy();
+    });
+
+    // Select the failing dish
+    fireEvent.press(screen.getByTestId('food-item-row-item-new-error'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('food-item-picker-done-btn')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByTestId('food-item-picker-done-btn'));
+
+    // Should surface error notice rather than getting stuck
+    await waitFor(() => {
+      expect(screen.getByTestId('food-list-stale-write-message')).toBeTruthy();
+      expect(screen.getByText("Couldn't add some items to the list. Please try again.")).toBeTruthy();
+    });
+  });
+
+  test('Entry Point 2: displays rate limit notice when add items hits 429 rate limit', async () => {
+    const dishes: readonly FoodItemDTO[] = [
+      {
+        id: 'item-rate-limited',
+        experienceId: 'exp-aloha',
+        locationId: null,
+        name: 'Sweet-and-Spicy Chicken Strips',
+        price: '$12.99',
+        source: 'menu_sync',
+        currentlyOnMenu: true,
+      },
+    ];
+
+    apiRequestMock.mockImplementation(async (method, path) => {
+      if (path === '/food-lists/list-detail-1') {
+        return sampleOwnerList;
+      }
+      if (typeof path === 'string' && path.startsWith('/catalog')) {
+        return {
+          experiences: [
+            { id: 'exp-aloha', name: 'Aloha Isle', park: 'Magic Kingdom', category: 'Restaurant' },
+          ],
+        };
+      }
+      if (path === '/experiences/exp-aloha/food-items') {
+        return { items: dishes };
+      }
+      if (path === '/me/food-lists/list-detail-1/items' && method === 'POST') {
+        throw new ApiError({
+          code: 'rate_limit_exceeded',
+          message: 'Too many requests. Please try again in 1 minute.',
+          status: 429,
+        });
+      }
+      return {};
+    });
+
+    renderScreenWithClient();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('food-list-add-items-btn')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByTestId('food-list-add-items-btn'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('restaurant-search-modal')).toBeTruthy();
+      expect(screen.getByTestId('restaurant-select-row-exp-aloha')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByTestId('restaurant-select-row-exp-aloha'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('food-item-picker-modal')).toBeTruthy();
+      expect(screen.getByTestId('food-item-row-item-rate-limited')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByTestId('food-item-row-item-rate-limited'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('food-item-picker-done-btn')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByTestId('food-item-picker-done-btn'));
+
+    // Should surface the rate limit specific message
+    await waitFor(() => {
+      expect(screen.getByTestId('food-list-stale-write-message')).toBeTruthy();
+      expect(screen.getByText('Too many requests. Please wait a moment before adding more items.')).toBeTruthy();
+    });
+  });
+
   test('Entry Point 2: restaurant search uses the real /catalog contract (category + q, not search/limit)', async () => {
     // Regression test: `GET /catalog` validates its query params with a
     // `.strict()` Zod schema recognizing only `parkId`, `category`/
@@ -751,6 +970,92 @@ describe('FoodListDetailScreen', () => {
       expect(call[1]).not.toMatch(/\bsearch=/);
       expect(call[1]).not.toMatch(/\blimit=/);
     }
+  });
+
+  test('Entry Point 2: closing the restaurant search modal and reopening it resets the search query', async () => {
+    apiRequestMock.mockImplementation(async (_method, path) => {
+      if (path === '/food-lists/list-detail-1') {
+        return sampleOwnerList;
+      }
+      if (typeof path === 'string' && path.startsWith('/catalog')) {
+        return {
+          experiences: [
+            { id: 'exp-gaston', name: "Gaston's Tavern", park: 'Magic Kingdom', category: 'Restaurant' },
+          ],
+        };
+      }
+      return {};
+    });
+
+    renderScreenWithClient();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('food-list-add-items-btn')).toBeTruthy();
+    });
+
+    // 1. Open the modal
+    fireEvent.press(screen.getByTestId('food-list-add-items-btn'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('restaurant-search-modal')).toBeTruthy();
+    });
+
+    // 2. Type "cosmic" in search input
+    const searchInput = screen.getByTestId('restaurant-search-input');
+    fireEvent.changeText(searchInput, 'cosmic');
+    expect(searchInput.props.value).toBe('cosmic');
+
+    // 3. Clear button should be visible
+    expect(screen.getByTestId('restaurant-search-clear-btn')).toBeTruthy();
+
+    // 4. Close the modal using the close 'X' button
+    fireEvent.press(screen.getByTestId('close-restaurant-search-btn'));
+
+    // 5. Re-open the modal
+    fireEvent.press(screen.getByTestId('food-list-add-items-btn'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('restaurant-search-modal')).toBeTruthy();
+    });
+
+    // 6. The search input should be reset and empty
+    const reopenedInput = screen.getByTestId('restaurant-search-input');
+    expect(reopenedInput.props.value).toBe('');
+    expect(screen.queryByTestId('restaurant-search-clear-btn')).toBeNull();
+  });
+
+  test('Entry Point 2: tapping the clear search button resets the restaurant search query', async () => {
+    apiRequestMock.mockImplementation(async (_method, path) => {
+      if (path === '/food-lists/list-detail-1') {
+        return sampleOwnerList;
+      }
+      if (typeof path === 'string' && path.startsWith('/catalog')) {
+        return { experiences: [] };
+      }
+      return {};
+    });
+
+    renderScreenWithClient();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('food-list-add-items-btn')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByTestId('food-list-add-items-btn'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('restaurant-search-modal')).toBeTruthy();
+    });
+
+    const searchInput = screen.getByTestId('restaurant-search-input');
+    fireEvent.changeText(searchInput, 'cosmic');
+    expect(searchInput.props.value).toBe('cosmic');
+
+    const clearBtn = screen.getByTestId('restaurant-search-clear-btn');
+    fireEvent.press(clearBtn);
+
+    expect(screen.getByTestId('restaurant-search-input').props.value).toBe('');
+    expect(screen.queryByTestId('restaurant-search-clear-btn')).toBeNull();
   });
 
   test('renders neither progress row nor Ate-this tap targets for a non-checklist list (Task 17.5, Requirement 13.4, 13.10)', async () => {
@@ -1445,9 +1750,12 @@ describe('FoodListDetailScreen', () => {
     await waitFor(() => expect(screen.getByTestId('rate-on-checkoff-prompt')).toBeTruthy());
     fireEvent.press(screen.getByTestId('rate-on-checkoff-skip-btn'));
 
-    await waitFor(() => {
-      expect(screen.getAllByTestId('mark-gotten-undo-toast')).toHaveLength(2);
-    });
+    await waitFor(
+      () => {
+        expect(screen.getAllByTestId('mark-gotten-undo-toast')).toHaveLength(2);
+      },
+      { timeout: 3000 },
+    );
     expect(screen.getByText('Ate this: Dole Whip')).toBeTruthy();
     expect(screen.getByText('Ate this: Cinnamon Churro')).toBeTruthy();
 
@@ -1625,4 +1933,128 @@ describe('FoodListDetailScreen', () => {
       );
     });
   });
+
+  // -------------------------------------------------------------------------
+  // Pinning from list detail (Requirement 14.6)
+  // -------------------------------------------------------------------------
+
+  test('owner sees pin toggle in header action row; unpinned list displays "Pin" and tapping calls PATCH with pinned: true (Requirement 14.6)', async () => {
+    apiRequestMock.mockImplementation(async (method, path) => {
+      if (path === '/food-lists/list-detail-1') {
+        return sampleOwnerList;
+      }
+      if (method === 'PATCH' && path === '/me/food-lists/list-detail-1') {
+        return { ...sampleOwnerList, pinnedAt: '2026-09-30T12:00:00Z' };
+      }
+      return {};
+    });
+
+    renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('food-list-pin-btn')).toBeTruthy();
+    });
+
+    const pinBtn = screen.getByTestId('food-list-pin-btn');
+    expect(pinBtn.props.accessibilityLabel).toBe('Pin list');
+    expect(within(pinBtn).getByText('Pin')).toBeTruthy();
+
+    fireEvent.press(pinBtn);
+
+    await waitFor(() => {
+      expect(apiRequestMock).toHaveBeenCalledWith(
+        'PATCH',
+        '/me/food-lists/list-detail-1',
+        { pinned: true },
+      );
+    });
+  });
+
+  test('pinned list displays "Pinned" and tapping calls PATCH with pinned: false (Requirement 14.6)', async () => {
+    const pinnedList: FoodListDetailDTO = {
+      ...sampleOwnerList,
+      pinnedAt: '2026-09-30T12:00:00Z',
+    };
+
+    apiRequestMock.mockImplementation(async (method, path) => {
+      if (path === '/food-lists/list-detail-1') {
+        return pinnedList;
+      }
+      if (method === 'PATCH' && path === '/me/food-lists/list-detail-1') {
+        return { ...sampleOwnerList, pinnedAt: null };
+      }
+      return {};
+    });
+
+    renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('food-list-pin-btn')).toBeTruthy();
+    });
+
+    const pinBtn = screen.getByTestId('food-list-pin-btn');
+    expect(pinBtn.props.accessibilityLabel).toBe('Unpin list');
+    expect(within(pinBtn).getByText('Pinned')).toBeTruthy();
+
+    fireEvent.press(pinBtn);
+
+    await waitFor(() => {
+      expect(apiRequestMock).toHaveBeenCalledWith(
+        'PATCH',
+        '/me/food-lists/list-detail-1',
+        { pinned: false },
+      );
+    });
+  });
+
+  test('non-owners (viewer or editor) do not see the pin button in action row (Requirement 14.6)', async () => {
+    apiRequestMock.mockImplementation(async (_method, path) => {
+      if (path === '/food-lists/list-detail-1') {
+        return sampleViewerList;
+      }
+      return {};
+    });
+
+    renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('food-list-name')).toBeTruthy();
+    });
+
+    expect(screen.queryByTestId('food-list-pin-btn')).toBeNull();
+  });
+
+  test('pinning fails with food_list_pin_limit_reached triggers alert and does not throw', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    apiRequestMock.mockImplementation(async (method, path) => {
+      if (path === '/food-lists/list-detail-1') {
+        return sampleOwnerList;
+      }
+      if (method === 'PATCH' && path === '/me/food-lists/list-detail-1') {
+        throw new ApiError({
+          code: 'food_list_pin_limit_reached',
+          message: 'Pin limit reached',
+          status: 400,
+        });
+      }
+      return {};
+    });
+
+    renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('food-list-pin-btn')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByTestId('food-list-pin-btn'));
+
+    await waitFor(() => {
+      expect(alertSpy).toHaveBeenCalledWith(
+        'Pin Limit Reached',
+        'You can pin up to 4 lists to your dashboard. Unpin a list first to pin this one.',
+      );
+    });
+    alertSpy.mockRestore();
+  });
 });
+

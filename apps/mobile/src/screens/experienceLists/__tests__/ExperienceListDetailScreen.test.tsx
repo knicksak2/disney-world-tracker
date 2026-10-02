@@ -1,9 +1,10 @@
 // Feature: experience-lists, Task 10.4 — ExperienceListDetailScreen render/interaction tests
 // Feature: experience-lists, Task 13.5 — visit-summary badges/sections + log-from-list flow
 import React from 'react';
+import { Alert } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import type { ExperienceListDetailDTO, VisitSummaryResponseDTO } from '@dwt/shared';
 
 jest.mock('expo-constants', () => ({
@@ -1237,4 +1238,128 @@ describe('ExperienceListDetailScreen', () => {
       expect.objectContaining({ visitedOn: expect.any(String) }),
     );
   });
+
+  // -------------------------------------------------------------------------
+  // Pinning from list detail (Requirement 19.6)
+  // -------------------------------------------------------------------------
+
+  test('owner sees pin toggle in header action row; unpinned list displays "Pin" and tapping calls PATCH with pinned: true (Requirement 19.6)', async () => {
+    apiRequestMock.mockImplementation(async (method, path) => {
+      if (path === '/experience-lists/exp-list-detail-1') {
+        return sampleOwnerList;
+      }
+      if (method === 'PATCH' && path === '/me/experience-lists/exp-list-detail-1') {
+        return { ...sampleOwnerList, pinnedAt: '2026-09-30T12:00:00Z' };
+      }
+      return {};
+    });
+
+    renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('experience-list-pin-btn')).toBeTruthy();
+    });
+
+    const pinBtn = screen.getByTestId('experience-list-pin-btn');
+    expect(pinBtn.props.accessibilityLabel).toBe('Pin list');
+    expect(within(pinBtn).getByText('Pin')).toBeTruthy();
+
+    fireEvent.press(pinBtn);
+
+    await waitFor(() => {
+      expect(apiRequestMock).toHaveBeenCalledWith(
+        'PATCH',
+        '/me/experience-lists/exp-list-detail-1',
+        { pinned: true },
+      );
+    });
+  });
+
+  test('pinned list displays "Pinned" and tapping calls PATCH with pinned: false (Requirement 19.6)', async () => {
+    const pinnedList: ExperienceListDetailDTO = {
+      ...sampleOwnerList,
+      pinnedAt: '2026-09-30T12:00:00Z',
+    };
+
+    apiRequestMock.mockImplementation(async (method, path) => {
+      if (path === '/experience-lists/exp-list-detail-1') {
+        return pinnedList;
+      }
+      if (method === 'PATCH' && path === '/me/experience-lists/exp-list-detail-1') {
+        return { ...sampleOwnerList, pinnedAt: null };
+      }
+      return {};
+    });
+
+    renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('experience-list-pin-btn')).toBeTruthy();
+    });
+
+    const pinBtn = screen.getByTestId('experience-list-pin-btn');
+    expect(pinBtn.props.accessibilityLabel).toBe('Unpin list');
+    expect(within(pinBtn).getByText('Pinned')).toBeTruthy();
+
+    fireEvent.press(pinBtn);
+
+    await waitFor(() => {
+      expect(apiRequestMock).toHaveBeenCalledWith(
+        'PATCH',
+        '/me/experience-lists/exp-list-detail-1',
+        { pinned: false },
+      );
+    });
+  });
+
+  test('non-owners (viewer or editor) do not see the pin button in action row (Requirement 19.6)', async () => {
+    apiRequestMock.mockImplementation(async (_method, path) => {
+      if (path === '/experience-lists/exp-list-detail-1') {
+        return sampleViewerList;
+      }
+      return {};
+    });
+
+    renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('experience-list-name')).toBeTruthy();
+    });
+
+    expect(screen.queryByTestId('experience-list-pin-btn')).toBeNull();
+  });
+
+  test('pinning fails with experience_list_pin_limit_reached triggers alert and does not throw', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    apiRequestMock.mockImplementation(async (method, path) => {
+      if (path === '/experience-lists/exp-list-detail-1') {
+        return sampleOwnerList;
+      }
+      if (method === 'PATCH' && path === '/me/experience-lists/exp-list-detail-1') {
+        throw new ApiError({
+          code: 'experience_list_pin_limit_reached',
+          message: 'Pin limit reached',
+          status: 400,
+        });
+      }
+      return {};
+    });
+
+    renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('experience-list-pin-btn')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByTestId('experience-list-pin-btn'));
+
+    await waitFor(() => {
+      expect(alertSpy).toHaveBeenCalledWith(
+        'Pin Limit Reached',
+        'You can pin up to 4 lists to your dashboard. Unpin a list first to pin this one.',
+      );
+    });
+    alertSpy.mockRestore();
+  });
 });
+

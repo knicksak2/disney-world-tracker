@@ -169,6 +169,8 @@ function stub(options: {
   readonly destinations?: readonly DestinationCountEntry[];
   readonly staleCache?: boolean;
   readonly search?: SearchOutcome;
+  readonly favorites?: readonly string[];
+  readonly allCatalog?: readonly ExperienceDTO[];
   /** When set, the destinations read rejects with this error. */
   readonly destinationsError?: ApiError;
 }): void {
@@ -176,12 +178,29 @@ function stub(options: {
     destinations = [],
     staleCache = false,
     search = { kind: 'ok', experiences: [] },
+    favorites = [],
+    allCatalog = [],
     destinationsError,
   } = options;
 
   apiRequestMock.mockImplementation(async (_method, path) => {
     if (typeof path !== 'string') {
       throw new Error(`unexpected non-string path: ${String(path)}`);
+    }
+    if (path.startsWith('/me/favorites')) {
+      return { experienceIds: favorites };
+    }
+    if (path === '/me') {
+      return { user: { id: 'test-user' } };
+    }
+    if (path.startsWith('/users/')) {
+      return { entries: [] };
+    }
+    if (path.includes('/favorite')) {
+      return null;
+    }
+    if (path === '/catalog') {
+      return { experiences: allCatalog, staleCache: false };
     }
     if (path.startsWith('/catalog/destinations')) {
       if (destinationsError !== undefined) {
@@ -202,6 +221,7 @@ function stub(options: {
     throw new Error(`unexpected call to ${path}`);
   });
 }
+
 
 /** Count the `GET /catalog?q=...` search dispatches observed so far. */
 function searchCallCount(): number {
@@ -724,4 +744,125 @@ describe('Catalog_Home grid + global search (R4.1, R4.4, R4.7, R5.2, R5.3, R5.5,
     expect(screen.queryByTestId('catalog-unavailable')).toBeNull();
     expect(destinationsCallCount).toBeGreaterThan(1);
   });
+
+  test('R3.1, R3.2, R3.3: search results row renders favorite toggle reflecting Favorited_Set and tapping it does not navigate', async () => {
+    const favoritedExp = experience({
+      id: 'space-mountain',
+      name: 'Space Mountain',
+      park: 'Magic Kingdom',
+      category: 'Ride',
+      areaType: 'ThemePark',
+    });
+    const unfavoritedExp = experience({
+      id: 'buzz-lightyear',
+      name: 'Buzz Lightyear Space Ranger Spin',
+      park: 'Magic Kingdom',
+      category: 'Ride',
+      areaType: 'ThemePark',
+    });
+
+    stub({
+      destinations: [{ destination: 'Magic Kingdom', count: 2 }],
+      search: { kind: 'ok', experiences: [favoritedExp, unfavoritedExp] },
+      favorites: ['space-mountain'],
+    });
+
+    renderCatalog();
+
+    const input = await screen.findByTestId('catalog-search');
+    fireEvent.changeText(input, 'space');
+
+    await screen.findByTestId('catalog-search-row-space-mountain');
+    await screen.findByTestId('catalog-search-row-buzz-lightyear');
+
+    const favToggle = screen.getByTestId('favorite-toggle-space-mountain');
+    const unfavToggle = screen.getByTestId('favorite-toggle-buzz-lightyear');
+
+    expect(favToggle.props.accessibilityState).toEqual({ selected: true });
+    expect(unfavToggle.props.accessibilityState).toEqual({ selected: false });
+
+    // Tapping the favorite toggle does NOT trigger navigation to detail
+    fireEvent.press(favToggle);
+    expect(screen.queryByTestId('nav-detail')).toBeNull();
+
+    // Tapping the row itself DOES navigate
+    fireEvent.press(screen.getByTestId('catalog-search-row-space-mountain'));
+    await waitFor(() => {
+      expect(screen.getByTestId('nav-detail')).toBeTruthy();
+      expect(screen.getByTestId('nav-detail').props.children).toBe('space-mountain');
+    });
+  });
+
+  test('R5.1, R5.2, R5.3: My Favorites entry renders flat list and selecting a result navigates to ExperienceDetail', async () => {
+    const favoritedExp = experience({
+      id: 'space-mountain',
+      name: 'Space Mountain',
+      park: 'Magic Kingdom',
+      category: 'Ride',
+      areaType: 'ThemePark',
+    });
+    const unfavoritedExp = experience({
+      id: 'buzz-lightyear',
+      name: 'Buzz Lightyear Space Ranger Spin',
+      park: 'Magic Kingdom',
+      category: 'Ride',
+      areaType: 'ThemePark',
+    });
+
+    stub({
+      destinations: [{ destination: 'Magic Kingdom', count: 2 }],
+      allCatalog: [favoritedExp, unfavoritedExp],
+      favorites: ['space-mountain'],
+    });
+
+    renderCatalog();
+
+    // The "My Favorites" entry point appears in GridBody
+    const banner = await screen.findByTestId('jump-in-favorites-button');
+    fireEvent.press(banner);
+
+    // Flat list renders only the favorited experience
+    await screen.findByTestId('catalog-search-row-space-mountain');
+    expect(screen.queryByTestId('catalog-search-row-buzz-lightyear')).toBeNull();
+
+    // Tapping the row navigates to ExperienceDetail
+    fireEvent.press(screen.getByTestId('catalog-search-row-space-mountain'));
+    await waitFor(() => {
+      expect(screen.getByTestId('nav-detail')).toBeTruthy();
+      expect(screen.getByTestId('nav-detail').props.children).toBe('space-mountain');
+    });
+  });
+
+  test('R5.4: My Favorites entry renders empty state when user has no favorites', async () => {
+    const exp = experience({
+      id: 'space-mountain',
+      name: 'Space Mountain',
+      park: 'Magic Kingdom',
+      category: 'Ride',
+      areaType: 'ThemePark',
+    });
+
+    stub({
+      destinations: [{ destination: 'Magic Kingdom', count: 1 }],
+      allCatalog: [exp],
+      favorites: [],
+    });
+
+    renderCatalog();
+
+    const banner = await screen.findByTestId('jump-in-favorites-button');
+    fireEvent.press(banner);
+
+    // Empty state is displayed
+    await screen.findByTestId('catalog-favorites-empty');
+    expect(screen.getByText('No experiences favorited yet')).toBeTruthy();
+
+    // Back button restores the destination grid
+    const backBtn = screen.getByTestId('catalog-favorites-back-button');
+    fireEvent.press(backBtn);
+    await screen.findByTestId('catalog-destination-grid');
+  });
 });
+
+
+

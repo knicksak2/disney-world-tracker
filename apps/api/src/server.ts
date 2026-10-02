@@ -117,6 +117,10 @@ import {
   parkLiveRoutes,
   type ParkLiveRoutesOptions,
 } from './services/live/parkLiveRoutes.js';
+import {
+  favoriteRoutes,
+  type FavoriteRoutesOptions,
+} from './services/tracking/favorite/routes.js';
 import type { RatingChangedEvent } from './services/aggregate/ratingChangedQueue.js';
 
 /**
@@ -250,6 +254,11 @@ export interface BuildServerServices {
    * Wires `GET /parks/:park/live` behind session authentication.
    */
   readonly parkLive?: ParkLiveRoutesOptions;
+  /**
+   * Favorite routes (experience-favorites).
+   * Wires PUT/DELETE /me/experiences/:id/favorite and GET /me/favorites.
+   */
+  readonly favorite?: FavoriteRoutesOptions;
   /**
    * Tracking_Service route options. Each tracking sub-domain
    * (`completion`, `rating`, `note`) is opt-in so a focused unit-test
@@ -551,6 +560,10 @@ export function buildServer(
 
   if (services.parkLive !== undefined) {
     void app.register(parkLiveRoutes(services.parkLive));
+  }
+
+  if (services.favorite !== undefined) {
+    void app.register(favoriteRoutes(services.favorite));
   }
 
   if (services.tracking?.completion !== undefined) {

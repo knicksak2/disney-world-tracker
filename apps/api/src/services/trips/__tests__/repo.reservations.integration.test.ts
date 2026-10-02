@@ -663,4 +663,131 @@ describe('A Non_Catalog_Reservation stays break-typed (Property 6, storage)', ()
       fx.repo.editPlannedItem(trip.id, item.id, { itemType: 'experience' }),
     ).rejects.toMatchObject({ code: 'trip_validation_failed' });
   });
+
+  describe('Property 9: Reservation date and venue editing preserves constraints and invariants (R3.16, R3.17)', () => {
+    it('updates plannedDate and plannedTime on a reservation', async () => {
+      const user = await seedUser(fx.pool, 'Organizer');
+      const trip = await fx.repo.createTrip(user, { ...VALID_TRIP });
+      const expId = await seedExperience(fx.pool, 'Topolino Terrace', 'Restaurant');
+      const item = await fx.repo.addPlannedItem(trip.id, user, {
+        experienceId: expId,
+        plannedDate: '2026-10-01',
+        plannedTime: '2026-10-01T23:00:00.000Z',
+        reservationKind: 'dining',
+      });
+
+      const updated = await fx.repo.editPlannedItem(trip.id, item.id, {
+        plannedDate: '2026-10-02',
+        plannedTime: '2026-10-02T23:00:00.000Z',
+      });
+
+      expect(updated.plannedDate).toBe('2026-10-02');
+      expect(updated.plannedTime).toBe('2026-10-02T23:00:00.000Z');
+      expect(updated.experienceId).toBe(expId);
+    });
+
+    it('updates experienceId from one catalog experience to another', async () => {
+      const user = await seedUser(fx.pool, 'Organizer');
+      const trip = await fx.repo.createTrip(user, { ...VALID_TRIP });
+      const exp1 = await seedExperience(fx.pool, 'Flying Fish', 'Restaurant');
+      const exp2 = await seedExperience(fx.pool, 'Yachtsman Steakhouse', 'Restaurant');
+      const item = await fx.repo.addPlannedItem(trip.id, user, {
+        experienceId: exp1,
+        plannedDate: '2026-10-01',
+        plannedTime: '2026-10-01T23:00:00.000Z',
+        reservationKind: 'dining',
+      });
+
+      const updated = await fx.repo.editPlannedItem(trip.id, item.id, {
+        experienceId: exp2,
+      });
+
+      expect(updated.experienceId).toBe(exp2);
+      expect(updated.experienceName).toBe('Yachtsman Steakhouse');
+      expect(updated.itemType).toBe('experience');
+    });
+
+    it('converts an off-property reservation to a catalog experience', async () => {
+      const user = await seedUser(fx.pool, 'Organizer');
+      const trip = await fx.repo.createTrip(user, { ...VALID_TRIP });
+      const exp = await seedExperience(fx.pool, 'California Grill', 'Restaurant');
+      const item = await fx.repo.addPlannedItem(trip.id, user, {
+        experienceId: null,
+        itemType: 'break',
+        customTitle: 'External Bistro',
+        plannedDate: '2026-10-01',
+        plannedTime: '2026-10-01T23:00:00.000Z',
+        reservationKind: 'dining',
+      });
+
+      const updated = await fx.repo.editPlannedItem(trip.id, item.id, {
+        experienceId: exp,
+        customTitle: null,
+      });
+
+      expect(updated.experienceId).toBe(exp);
+      expect(updated.experienceName).toBe('California Grill');
+      expect(updated.customTitle).toBeNull();
+      expect(updated.itemType).toBe('experience');
+    });
+
+    it('converts a catalog reservation to an off-property reservation', async () => {
+      const user = await seedUser(fx.pool, 'Organizer');
+      const trip = await fx.repo.createTrip(user, { ...VALID_TRIP });
+      const exp = await seedExperience(fx.pool, 'Jiko', 'Restaurant');
+      const item = await fx.repo.addPlannedItem(trip.id, user, {
+        experienceId: exp,
+        plannedDate: '2026-10-01',
+        plannedTime: '2026-10-01T23:00:00.000Z',
+        reservationKind: 'dining',
+      });
+
+      const updated = await fx.repo.editPlannedItem(trip.id, item.id, {
+        experienceId: null,
+        itemType: 'break',
+        customTitle: 'Four Seasons Ravello',
+      });
+
+      expect(updated.experienceId).toBeNull();
+      expect(updated.customTitle).toBe('Four Seasons Ravello');
+      expect(updated.itemType).toBe('break');
+    });
+
+    it('rejects an update with a non-existent experienceId', async () => {
+      const user = await seedUser(fx.pool, 'Organizer');
+      const trip = await fx.repo.createTrip(user, { ...VALID_TRIP });
+      const exp = await seedExperience(fx.pool, 'Sanaa', 'Restaurant');
+      const item = await fx.repo.addPlannedItem(trip.id, user, {
+        experienceId: exp,
+        plannedDate: '2026-10-01',
+        plannedTime: '2026-10-01T23:00:00.000Z',
+        reservationKind: 'dining',
+      });
+
+      await expect(
+        fx.repo.editPlannedItem(trip.id, item.id, {
+          experienceId: '00000000-0000-4000-8000-000000000000',
+        }),
+      ).rejects.toMatchObject({ code: 'trip_validation_failed' });
+    });
+
+    it('rejects an update on a reservation that clears customTitle without setting experienceId', async () => {
+      const user = await seedUser(fx.pool, 'Organizer');
+      const trip = await fx.repo.createTrip(user, { ...VALID_TRIP });
+      const item = await fx.repo.addPlannedItem(trip.id, user, {
+        experienceId: null,
+        itemType: 'break',
+        customTitle: 'External Diner',
+        plannedDate: '2026-10-01',
+        plannedTime: '2026-10-01T23:00:00.000Z',
+        reservationKind: 'dining',
+      });
+
+      await expect(
+        fx.repo.editPlannedItem(trip.id, item.id, {
+          customTitle: '',
+        }),
+      ).rejects.toMatchObject({ code: 'trip_validation_failed' });
+    });
+  });
 });

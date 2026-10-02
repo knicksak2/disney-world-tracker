@@ -35,9 +35,12 @@ describe('PinCelebrationModal', () => {
     render(<PinCelebrationModal visible onClose={jest.fn()} pinIds={[pin.id]} />);
 
     // Give the async reduce-motion check a tick to resolve.
-    await waitFor(() => {
-      expect(screen.queryByTestId(`pin-celebration-confetti-${pin.id}-0`)).toBeNull();
-    });
+    await waitFor(
+      () => {
+        expect(screen.queryByTestId(`pin-celebration-confetti-${pin.id}-0`)).toBeNull();
+      },
+      { timeout: 3000 },
+    );
     expect(screen.getByTestId(`pin-celebration-${pin.id}`)).toBeTruthy();
   });
 

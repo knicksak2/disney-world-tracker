@@ -2,6 +2,7 @@
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { Alert } from 'react-native';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import type { ExperienceListCollectionDTO, ExperienceListDTO } from '@dwt/shared';
 
@@ -419,6 +420,39 @@ describe('MyExperienceListsScreen', () => {
         { pinned: false },
       );
     });
+  });
+
+  test('attempting to pin a 5th experience list when 4 are already pinned triggers an alert and does not issue PATCH', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    const fourPinned = [
+      { ...sampleOwnedLists[0]!, id: 'exp-list-1', name: 'List 1', pinnedAt: '2026-09-20T08:00:00.000Z' },
+      { ...sampleOwnedLists[0]!, id: 'exp-list-2', name: 'List 2', pinnedAt: '2026-09-20T08:01:00.000Z' },
+      { ...sampleOwnedLists[0]!, id: 'exp-list-3', name: 'List 3', pinnedAt: '2026-09-20T08:02:00.000Z' },
+      { ...sampleOwnedLists[0]!, id: 'exp-list-4', name: 'List 4', pinnedAt: '2026-09-20T08:03:00.000Z' },
+      { ...sampleOwnedLists[0]!, id: 'exp-list-5', name: 'List 5', pinnedAt: null },
+    ];
+    apiRequestMock.mockImplementation(async (_method, path) => {
+      if (path === '/me/experience-lists/collection') {
+        return { owned: fourPinned, saved: sampleSavedLists };
+      }
+      return {};
+    });
+
+    renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByText('List 5')).toBeTruthy();
+    });
+
+    apiRequestMock.mockClear();
+    fireEvent.press(screen.getByTestId('my-experience-lists-pin-btn-exp-list-5'));
+
+    expect(alertSpy).toHaveBeenCalledWith(
+      'Pin Limit Reached',
+      'You can pin up to 4 lists to your dashboard. Unpin a list first to pin this one.',
+    );
+    expect(apiRequestMock).not.toHaveBeenCalled();
+    alertSpy.mockRestore();
   });
 
   test('header "Discover" button navigates to ExperienceListDiscovery (Requirement 1.1, 6.7)', async () => {

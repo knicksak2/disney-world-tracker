@@ -447,4 +447,148 @@ describe('LiveWaitsScreen', () => {
     // PeopleMover (Show without LL) is filtered out
     expect(screen.queryByText('PeopleMover')).toBeNull();
   });
+
+  it('R7.1, R7.2, R7.3, R7.4: fifth pill renders, filters to favorited subset, renders empty state when empty, and recomputes on park switch', async () => {
+    const epcotSnapshot: ParkLiveSnapshotDTO = {
+      park: 'EPCOT',
+      entries: [
+        {
+          experienceId: 'exp-soarin',
+          name: 'Soarin',
+          status: 'OPERATING',
+          waitMinutes: 35,
+        },
+        {
+          experienceId: 'exp-test-track',
+          name: 'Test Track',
+          status: 'OPERATING',
+          waitMinutes: 50,
+        },
+      ],
+      retrievedAt: '2026-09-17T14:00:00Z',
+      stale: false,
+    };
+
+    const epcotExperiences: ExperienceDTO[] = [
+      {
+        id: 'exp-soarin',
+        name: 'Soarin',
+        park: 'EPCOT',
+        category: 'Ride',
+        active: true,
+        upstreamEntityId: 'tp-soarin',
+        location: null,
+      } as unknown as ExperienceDTO,
+      {
+        id: 'exp-test-track',
+        name: 'Test Track',
+        park: 'EPCOT',
+        category: 'Ride',
+        active: true,
+        upstreamEntityId: 'tp-test-track',
+        location: null,
+      } as unknown as ExperienceDTO,
+    ];
+
+    mockApiRequest.mockImplementation(async (_method, url) => {
+      if (url.includes('/parks/EPCOT/live')) {
+        return epcotSnapshot;
+      }
+      if (url.includes('/parks/') && url.includes('/live')) {
+        return mockSnapshot;
+      }
+      if (url.includes('/catalog')) {
+        return { experiences: [...mockExperiences, ...epcotExperiences] };
+      }
+      if (url.includes('/me/favorites')) {
+        return { experienceIds: ['exp-space-mountain', 'exp-soarin'] };
+      }
+      if (url.includes('/me/trips')) {
+        return [];
+      }
+      return {};
+    });
+
+    renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByText('Space Mountain')).toBeTruthy();
+      expect(screen.getByText('PeopleMover')).toBeTruthy();
+    });
+
+    // 1. Fifth pill renders
+    const favChip = screen.getByTestId('filter-chip-favorites');
+    expect(favChip).toBeTruthy();
+
+    // 2. Select Favorites filter
+    fireEvent.press(favChip);
+
+    // Only Space Mountain is in Magic Kingdom favorites
+    await waitFor(() => {
+      expect(screen.getByText('Space Mountain')).toBeTruthy();
+      expect(screen.queryByText('PeopleMover')).toBeNull();
+      expect(screen.queryByText("Peter Pan's Flight")).toBeNull();
+    });
+
+    // 3. Switch park to EPCOT while Favorites filter is active
+    const epcotPill = screen.getByTestId('park-chip-EPCOT');
+    fireEvent.press(epcotPill);
+
+    // Recomputed against EPCOT: only Soarin (favorited) appears
+    await waitFor(() => {
+      expect(screen.getByText('Soarin')).toBeTruthy();
+      expect(screen.queryByText('Test Track')).toBeNull();
+      expect(screen.queryByText('Space Mountain')).toBeNull();
+    });
+
+    // 4. Switch park to Animal Kingdom (no favorites in AK) -> empty state renders
+    const akSnapshot: ParkLiveSnapshotDTO = {
+      park: 'Animal Kingdom',
+      entries: [
+        {
+          experienceId: 'exp-everest',
+          name: 'Expedition Everest',
+          status: 'OPERATING',
+          waitMinutes: 20,
+        },
+      ],
+      retrievedAt: '2026-09-17T14:00:00Z',
+      stale: false,
+    };
+    mockApiRequest.mockImplementation(async (_method, url) => {
+      if (url.includes('/parks/Animal%20Kingdom/live') || url.includes('/parks/Animal Kingdom/live')) {
+        return akSnapshot;
+      }
+      if (url.includes('/catalog')) {
+        return {
+          experiences: [
+            ...mockExperiences,
+            ...epcotExperiences,
+            {
+              id: 'exp-everest',
+              name: 'Expedition Everest',
+              park: 'Animal Kingdom',
+              category: 'Ride',
+              active: true,
+              upstreamEntityId: 'tp-everest',
+              location: null,
+            } as unknown as ExperienceDTO,
+          ],
+        };
+      }
+      if (url.includes('/me/favorites')) {
+        return { experienceIds: ['exp-space-mountain', 'exp-soarin'] };
+      }
+      return {};
+    });
+
+    const akPill = screen.getByTestId('park-chip-Animal Kingdom');
+    fireEvent.press(akPill);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('live-waits-filter-empty')).toBeTruthy();
+      expect(screen.getByText('No rides match this filter')).toBeTruthy();
+    });
+  });
 });
+

@@ -296,4 +296,156 @@ describe('AddToListsSheet', () => {
       expect(mockOnClose).toHaveBeenCalled();
     });
   });
+
+  test('disables save button until a food list is selected, and re-disables when deselected', async () => {
+    // Both lists empty, item is not preselected on any list
+    apiRequestMock.mockImplementation(async (_method, path) => {
+      if (path === '/me/food-lists') {
+        return sampleOwnedLists;
+      }
+      if (path === '/food-lists/list-1') {
+        return { ...sampleList1Detail, items: [] };
+      }
+      if (path === '/food-lists/list-2') {
+        return sampleList2Detail;
+      }
+      return {};
+    });
+
+    renderSheet();
+
+    await waitFor(() => {
+      expect(screen.getByText('Snacks Bucket List')).toBeTruthy();
+      expect(screen.getByText('Summer Trip 2026')).toBeTruthy();
+    });
+
+    const saveBtn = screen.getByTestId('add-to-lists-save-btn');
+
+    // Initially disabled because no food list is selected
+    expect(saveBtn.props.accessibilityState.disabled).toBe(true);
+
+    // Tapping the disabled save button does not call the API or close the sheet
+    fireEvent.press(saveBtn);
+    expect(apiRequestMock).not.toHaveBeenCalledWith('POST', expect.stringContaining('/items'), expect.anything());
+    expect(mockOnComplete).not.toHaveBeenCalled();
+    expect(mockOnClose).not.toHaveBeenCalled();
+
+    // Select list-1
+    fireEvent.press(screen.getByTestId('food-list-checkbox-row-list-1'));
+
+    // Save button becomes enabled
+    expect(saveBtn.props.accessibilityState.disabled).toBe(false);
+
+    // Deselect list-1
+    fireEvent.press(screen.getByTestId('food-list-checkbox-row-list-1'));
+
+    // Save button is disabled again
+    expect(saveBtn.props.accessibilityState.disabled).toBe(true);
+
+    // Select list-2
+    fireEvent.press(screen.getByTestId('food-list-checkbox-row-list-2'));
+    expect(saveBtn.props.accessibilityState.disabled).toBe(false);
+
+    // Now save works as expected
+    fireEvent.press(saveBtn);
+
+    await waitFor(() => {
+      expect(apiRequestMock).toHaveBeenCalledWith('POST', '/me/food-lists/list-2/items', {
+        foodItemId: 'item-dole-whip',
+      });
+      expect(mockOnComplete).toHaveBeenCalled();
+      expect(mockOnClose).toHaveBeenCalled();
+    });
+  });
+
+  test('enables save button when a new list is created inline and auto-selected', async () => {
+    const newlyCreatedLists: FoodListDTO[] = [];
+    const newListDetail: FoodListDetailDTO = {
+      id: 'list-new-inline',
+      ownerId: 'user-me',
+      ownerDisplayName: 'Me',
+      name: 'Must Try Snacks',
+      visibility: 'private',
+      isChecklist: false,
+      itemCount: 0,
+      likeCount: 0,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      pinnedAt: null,
+      liked: false,
+      saved: false,
+      version: 1,
+      myRole: 'owner',
+      items: [],
+    };
+
+    apiRequestMock.mockImplementation(async (method, path, body) => {
+      if (path === '/me/food-lists') {
+        if (method === 'POST') {
+          const created: FoodListDTO = {
+            id: 'list-new-inline',
+            ownerId: 'user-me',
+            ownerDisplayName: 'Me',
+            name: (body as any)?.name,
+            visibility: 'private',
+            isChecklist: false,
+            itemCount: 0,
+            likeCount: 0,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            pinnedAt: null,
+          };
+          newlyCreatedLists.push(created);
+          return created;
+        }
+        return newlyCreatedLists.length > 0
+          ? [...sampleOwnedLists, ...newlyCreatedLists]
+          : sampleOwnedLists;
+      }
+      if (path === '/food-lists/list-1') return { ...sampleList1Detail, items: [] };
+      if (path === '/food-lists/list-2') return sampleList2Detail;
+      if (path === '/food-lists/list-new-inline') return newListDetail;
+      return {};
+    });
+
+    renderSheet();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('inline-create-list-btn')).toBeTruthy();
+    });
+
+    const saveBtn = screen.getByTestId('add-to-lists-save-btn');
+    // Initially disabled because no list is selected
+    expect(saveBtn.props.accessibilityState.disabled).toBe(true);
+
+    // Open inline creation
+    fireEvent.press(screen.getByTestId('inline-create-list-btn'));
+    fireEvent.changeText(screen.getByTestId('create-list-name-input'), 'Must Try Snacks');
+    fireEvent.press(screen.getByTestId('submit-create-list-btn'));
+
+    await waitFor(() => {
+      expect(apiRequestMock).toHaveBeenCalledWith('POST', '/me/food-lists', {
+        name: 'Must Try Snacks',
+        visibility: 'private',
+      });
+    });
+
+    // Auto-selected newly created list enables Save button
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('add-to-lists-save-btn').props.accessibilityState.disabled,
+      ).toBe(false);
+    });
+
+    // Tap Save to persist dish to the newly created list
+    fireEvent.press(screen.getByTestId('add-to-lists-save-btn'));
+
+    await waitFor(() => {
+      expect(apiRequestMock).toHaveBeenCalledWith('POST', '/me/food-lists/list-new-inline/items', {
+        foodItemId: 'item-dole-whip',
+      });
+      expect(mockOnComplete).toHaveBeenCalled();
+      expect(mockOnClose).toHaveBeenCalled();
+    });
+  });
 });

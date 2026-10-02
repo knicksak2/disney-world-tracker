@@ -186,6 +186,7 @@ export const ERROR_CODES = [
   'food_list_stale_write',
   'food_list_share_not_friend',
   'food_list_save_self',
+  'food_list_pin_limit_reached',
 
   // -- Experience lists (experience-lists R1-R9) -------------------------
   // `experience_list_not_found`: a mutation/read targeted an Experience_List
@@ -221,6 +222,7 @@ export const ERROR_CODES = [
   'experience_list_stale_write',
   'experience_list_share_not_friend',
   'experience_list_save_self',
+  'experience_list_pin_limit_reached',
 
   // -- Edge / gateway (defense-in-depth, R6.7) --------------------------
   // Emitted by the gateway-level rate limiter (task 13.3) when a caller
@@ -375,6 +377,7 @@ export const errorCodeToHttpStatus: { readonly [K in ErrorCode]: number } = {
   food_list_stale_write: 409,
   food_list_share_not_friend: 403,
   food_list_save_self: 400,
+  food_list_pin_limit_reached: 400,
 
   // Experience lists
   experience_list_not_found: 404,
@@ -386,6 +389,7 @@ export const errorCodeToHttpStatus: { readonly [K in ErrorCode]: number } = {
   experience_list_stale_write: 409,
   experience_list_share_not_friend: 403,
   experience_list_save_self: 400,
+  experience_list_pin_limit_reached: 400,
 
   // Edge / gateway
   rate_limit_exceeded: 429,

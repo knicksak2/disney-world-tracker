@@ -422,6 +422,7 @@ export type PlannedItemAddInput = z.infer<typeof plannedItemAddSchema>;
 
 export const plannedItemEditSchema = z
   .object({
+    experienceId: uuidSchema.nullable().optional(),
     customTitle: z.string().trim().min(1).max(255).nullable().optional(),
     plannedDate: tripCalendarDateSchema.nullable().optional(),
     plannedTime: isoTimestampSchema.nullable().optional(),
@@ -456,6 +457,13 @@ export const plannedItemEditSchema = z
     // `editPlannedItem`, where the current `reservation_kind` is known. What is
     // checkable here: an edit that *sets* a kind must not simultaneously clear
     // the anchor.
+    if (data.experienceId === null && data.itemType && data.itemType !== 'break') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['experienceId'],
+        message: "Unlocated items without an experienceId must have itemType 'break'",
+      });
+    }
     if (data.reservationKind != null) {
       if (data.plannedDate === null) {
         ctx.addIssue({
@@ -469,6 +477,13 @@ export const plannedItemEditSchema = z
           code: z.ZodIssueCode.custom,
           path: ['plannedTime'],
           message: 'A reservation requires a plannedTime',
+        });
+      }
+      if (data.experienceId === null && data.customTitle === null) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['customTitle'],
+          message: 'A reservation requires either an experienceId or a customTitle',
         });
       }
     }

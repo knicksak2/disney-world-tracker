@@ -128,6 +128,7 @@ export const RESERVATION_KINDS = ['dining', 'lightning_lane', 'activity', 'other
 export type ReservationKind = (typeof RESERVATION_KINDS)[number];
 
 // trips.ts — added to plannedItemAddSchema and plannedItemEditSchema (both .strict())
+experienceId: uuidSchema.nullable().optional(), // added to plannedItemEditSchema
 reservationKind: z.enum(RESERVATION_KINDS).nullable().optional(),
 confirmationNumber: z.string().trim().min(1).max(CONFIRMATION_NUMBER_MAX).nullable().optional(),
 partySize: z.number().int().min(PARTY_SIZE_MIN).max(PARTY_SIZE_MAX).nullable().optional(),
@@ -138,12 +139,12 @@ readonly confirmationNumber: string | null;
 readonly partySize: number | null;
 ```
 
-`plannedItemAddSchema.superRefine` gains: when `reservationKind` is non-null, `plannedDate` and `plannedTime` are both required (R1.5), and either `experienceId` or `customTitle` must be present (R5.4). `plannedItemEditSchema.superRefine` cannot see the stored row, so the "must not clear date/time" rule (R1.6) is enforced in the repo where the current `reservation_kind` is known.
+`plannedItemAddSchema.superRefine` gains: when `reservationKind` is non-null, `plannedDate` and `plannedTime` are both required (R1.5), and either `experienceId` or `customTitle` must be present (R5.4). `plannedItemEditSchema` accepts `experienceId`, and `editPlannedItem` updates `experience_id` and `item_type` (`'experience'` when an experience is set, `'break'` when unlocated), verifies the experience exists in the catalog if non-null, and enforces that a Reservation retains either an `experienceId` or `customTitle` (R3.17). The "must not clear date/time" rule (R1.6) is enforced in the repo where the current `reservation_kind` is known.
 
 ### Trip_Service repo changes (`services/trips/repo.ts`)
 
 - `addPlannedItem` — derive timing flags from the kind before the INSERT (R1.7): a non-null kind other than `lightning_lane` forces `is_fixed = true` and leaves `window_start_minutes` / `window_end_minutes` / `meal_period` null; `lightning_lane` forces `is_lightning_lane = true`, `is_fixed = false`. Adds `reservation_kind`, `confirmation_number`, `party_size` to the existing 15-column INSERT.
-- `editPlannedItem` — extend the `SELECT … FOR UPDATE` to read the current `reservation_kind`; reject an edit that would null `planned_date` or `planned_time` on a Reservation with `trip_validation_failed` (R1.6); re-derive timing flags when the kind changes; add the three columns to the dynamic `SET` list. The existing unconditional optimization-result clear satisfies R3.7.
+- `editPlannedItem` — extend the `SELECT … FOR UPDATE` to read the current `reservation_kind`, `experience_id`, `item_type`, and `custom_title`; reject an edit that would null `planned_date` or `planned_time` on a Reservation with `trip_validation_failed` (R1.6); re-derive timing flags when the kind changes; validate catalog experience existence when `experienceId` is set; update `experience_id` and adjust `item_type`; ensure a reservation retains either an experience or custom title (R3.17); add the updated columns to the dynamic `SET` list. The existing unconditional optimization-result clear satisfies R3.7.
 - `updatePlannedItemTimes` — for a row whose `reservation_kind IS NOT NULL`, update only `predicted_wait_minutes`, `travel_from_prev_minutes`, `travel_from_prev_kind`, `scheduled_showtime`, `optimized_at`, omitting `planned_time` from the `SET` list (R4.4). The guard is expressed in SQL (`WHERE id = $n AND trip_id = $m` with a `CASE`/second statement keyed on `reservation_kind IS NULL`) so it holds regardless of caller.
 - `selectPlannedItem` / `listPlannedItems` — add the three columns to the projection and to `rowToPlannedItemDto`.
 
@@ -250,6 +251,16 @@ Every read and write path that can observe or change `reservationKind`, `confirm
 For every hour 1–12, every 5-minute increment, and both meridiems, converting a Time_Picker selection on a date yields the UTC instant of that park-local wall clock — correct under both EDT and EST — and seeding the picker from that instant reproduces the identical selection. An afternoon selection never converts to its morning counterpart: the twelve-hour ambiguity free-text entry allowed is unrepresentable, because the meridiem is always an explicit part of the selection rather than an inference from the typed digits.
 
 **Validates: Requirements 3.8, 3.9, 3.10, 3.12**
+
+### Property 9: Reservation date and venue editing preserves constraints and invariants
+
+For any edit of an existing Reservation:
+1. Updating `plannedDate` updates the item's stored date and, together with the selected time, updates `plannedTime` to the corresponding UTC instant on that date.
+2. Updating `experienceId` to a valid catalog experience sets `experience_id` and sets `item_type = 'experience'`, while clearing any conflicting `custom_title`.
+3. Updating `experienceId` to null with a non-empty `customTitle` sets `experience_id = null`, `item_type = 'break'`, and persists the `custom_title`.
+4. An edit that would leave a Reservation with neither an `experienceId` nor a `customTitle`, or an `experienceId` that does not exist in the catalog, is rejected with `trip_validation_failed` and leaves the row untouched.
+
+**Validates: Requirements 3.16, 3.17**
 
 ## Error Handling
 

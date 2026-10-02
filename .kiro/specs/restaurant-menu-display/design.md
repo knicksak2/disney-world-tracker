@@ -511,6 +511,12 @@ transformation, fallback candidate list, or derived URL.
 
 **Validates: Requirements 6.5, 6.6, 6.7, 7.1, 7.2, 7.4**
 
+### Property 11: Menu Screen provides add-to-food-list affordances
+
+*For any* menu item on the Menu_Screen, the screen provides an affordance on each item to add that dish to a Food_List (resolving to a Food_Item and opening `AddToListsSheet`), and provides an 'Add to List' header action opening `FoodItemPickerModal` in multi-select mode.
+
+**Validates: Requirement 5.10**
+
 ## Error Handling
 
 ### Backend

@@ -542,5 +542,74 @@ describe('Trip_Detail_View hub (R18.1, R18.6)', () => {
     fireEvent.press(backBtn);
     expect(navigation.navigate).toHaveBeenCalledWith('TripsList');
   });
+
+  test('R9.1, R9.4: Group Favorites section renders mocked shared favorites with titles and members, textually distinct from Crowd Favorite', async () => {
+    const navigation = makeNavigation();
+    apiRequestMock.mockImplementation(async (_method: string, path: string) => {
+      if (path === `/trips/${TRIP_ID}`) return TRIP;
+      if (path === `/trips/${TRIP_ID}/favorites/shared`) {
+        return {
+          items: [
+            {
+              experienceId: 'exp-space-mountain',
+              experienceName: 'Space Mountain',
+              park: 'Magic Kingdom',
+              category: 'Attraction',
+              favoritingCount: 3,
+              favoritingDisplayNames: ['Alice', 'Bob', 'Charlie'],
+            },
+          ],
+        };
+      }
+      return {};
+    });
+
+    renderDetail(navigation);
+    await screen.findByTestId('trip-detail-hub');
+
+    expect(await screen.findByTestId('trip-detail-group-favorites')).toBeTruthy();
+    expect(screen.getByText('Group Favorites')).toBeTruthy();
+
+    // Must be textually distinct from any "Crowd Favorite" superlative
+    expect(screen.queryByText(/Crowd Favorite/i)).toBeNull();
+
+    const item = await screen.findByTestId('group-favorite-item-exp-space-mountain');
+    expect(item).toBeTruthy();
+    expect(screen.getByText('Space Mountain')).toBeTruthy();
+    expect(screen.getByText('Magic Kingdom')).toBeTruthy();
+    expect(screen.getByText('Favorited by Alice, Bob, Charlie')).toBeTruthy();
+    expect(screen.getByText('3')).toBeTruthy();
+
+    fireEvent.press(item);
+    expect(navigation.navigate).toHaveBeenCalledWith('ExperienceDetail', {
+      experienceId: 'exp-space-mountain',
+    });
+  });
+
+  test('R9.5: Group Favorites section renders distinct empty state for zero-overlap mocked result', async () => {
+    const navigation = makeNavigation();
+    apiRequestMock.mockImplementation(async (_method: string, path: string) => {
+      if (path === `/trips/${TRIP_ID}`) return TRIP;
+      if (path === `/trips/${TRIP_ID}/favorites/shared`) {
+        return { items: [] };
+      }
+      return {};
+    });
+
+    renderDetail(navigation);
+    await screen.findByTestId('trip-detail-hub');
+
+    expect(await screen.findByTestId('trip-detail-group-favorites')).toBeTruthy();
+    expect(await screen.findByTestId('group-favorites-empty')).toBeTruthy();
+    expect(screen.getByText('No group favorites yet')).toBeTruthy();
+    expect(
+      screen.getByText(
+        'When two or more crew members favorite the same experience, it will appear here.',
+      ),
+    ).toBeTruthy();
+
+    // Distinct from Crowd Favorite
+    expect(screen.queryByText(/Crowd Favorite/i)).toBeNull();
+  });
 });
 

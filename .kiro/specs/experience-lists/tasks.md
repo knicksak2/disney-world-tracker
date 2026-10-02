@@ -227,7 +227,11 @@
     - _Requirements: 19.5_
   - [x] 25.10 Write/extend `MyExperienceListsScreen.test.tsx` asserting the pin toggle renders per row, calls `PATCH` with the correct `pinned` value, and the row reflects the resulting pinned state
     - _Requirements: 19.5_
+  - [x] 25.10b Add a pin/unpin toggle control to `ExperienceListDetailScreen.tsx` header action row for owned lists (`testID="experience-list-pin-btn"`), calling `PATCH /me/experience-lists/:id` with `{ pinned: list.pinnedAt === null }`, and test in `ExperienceListDetailScreen.test.tsx` (renders for owner, toggles pin state, hidden for non-owners)
+    - _Requirements: 19.6_
   - [x] 25.11 Checkpoint — ran `npx tsc --noEmit` (clean) and full `npx jest` (234 suites, 1564 tests, all passing) in `apps/mobile`; covered by the final full-workspace `npm run verify` gate as well
+  - [x] 25.12 Enforce 4-pin limit in ExperienceListRepo (`experience_list_pin_limit_reached`) and mobile UI Alert (`Alert.alert('Pin Limit Reached', ...)`), bump `MAX_COLLECTION_PREVIEW_ROWS = 4`, and test in `experienceLists.prop.test.ts` (Property 25.1), `MyExperienceListsScreen.test.tsx`, `ExperienceListDetailScreen.test.tsx`, and `CollectionScreen.test.tsx`
+    - _Requirements: 19.7_
 
 - [x] 26. Final Verification & Quality Gate (Re-run after R19)
   - [x] 26.1 Run full `npm run verify` across all workspaces (`apps/api`, `apps/mobile`, `packages/shared`) — apps/api: 375 test files / 2545 tests passed; apps/mobile: 234 suites / 1564 tests passed; packages/shared: 34 files / 390 tests passed; exit code 0

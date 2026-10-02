@@ -29,7 +29,8 @@ export type ExperiencePickerTab =
   | 'dining'
   | 'shows'
   | 'breaks'
-  | 'myLists';
+  | 'myLists'
+  | 'favorites';
 
 export const TAB_CATEGORIES: Record<
   ExperiencePickerTab,
@@ -41,6 +42,7 @@ export const TAB_CATEGORIES: Record<
   shows: ['Show', 'Parade', 'Character_Meet', 'Event'],
   breaks: [], // Unrestricted location search for breaks
   myLists: [], // Unrestricted — membership comes from the attached Experience_Lists, not a category
+  favorites: [], // Unrestricted — membership comes from the User's Favorited_Set, not a category
 };
 
 export const POPULAR_QUICK_TAGS_BY_TAB: Record<
@@ -53,6 +55,7 @@ export const POPULAR_QUICK_TAGS_BY_TAB: Record<
   shows: ['Nighttime Spectacular', 'Stage Shows', 'Parades', 'Character Meets'],
   breaks: [],
   myLists: [],
+  favorites: [],
 };
 
 /**
@@ -437,6 +440,8 @@ export function formatEmptyFilterMessage(
       ? 'locations'
       : activeTab === 'myLists'
       ? 'list items'
+      : activeTab === 'favorites'
+      ? 'favorited experiences'
       : 'experiences';
 
   const parkLabel = selectedPark !== 'all' ? ` in ${selectedPark}` : '';

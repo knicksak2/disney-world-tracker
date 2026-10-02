@@ -22,6 +22,7 @@ export interface DiningReservationCardProps {
   readonly reservationFailed?: boolean | undefined;
   readonly onLogFoodItem?: (() => void) | undefined;
   readonly onMyLoggedItems?: (() => void) | undefined;
+  readonly onAddToList?: (() => void) | undefined;
   readonly loggedDishesCount?: number | undefined;
 }
 
@@ -34,6 +35,7 @@ export default function DiningReservationCard({
   reservationFailed,
   onLogFoodItem,
   onMyLoggedItems,
+  onAddToList,
   loggedDishesCount,
 }: DiningReservationCardProps): JSX.Element {
   const hasDiningUrl =
@@ -136,20 +138,34 @@ export default function DiningReservationCard({
 
         <Pressable
           style={({ pressed }) => [
-            styles.myDishesButton,
+            styles.addToListButton,
             pressed && styles.buttonPressed,
           ]}
-          onPress={onMyLoggedItems}
+          onPress={onAddToList}
           accessibilityRole="button"
-          accessibilityLabel={`View my logged dishes at ${experienceName}`}
-          testID="dining-card-my-dishes-btn"
+          accessibilityLabel={`Add a dish at ${experienceName} to a food list`}
+          testID="dining-card-add-to-list-btn"
         >
-          <Ionicons name="time-outline" size={15} color="#5b2a86" />
-          <Text style={styles.myDishesButtonText}>
-            My Dishes{typeof loggedDishesCount === 'number' && loggedDishesCount > 0 ? ` (${loggedDishesCount})` : ''} →
-          </Text>
+          <Ionicons name="bookmark-outline" size={15} color="#5b2a86" />
+          <Text style={styles.addToListButtonText}>Add to List</Text>
         </Pressable>
       </View>
+
+      <Pressable
+        style={({ pressed }) => [
+          styles.myDishesButton,
+          pressed && styles.buttonPressed,
+        ]}
+        onPress={onMyLoggedItems}
+        accessibilityRole="button"
+        accessibilityLabel={`View my logged dishes at ${experienceName}`}
+        testID="dining-card-my-dishes-btn"
+      >
+        <Ionicons name="time-outline" size={15} color="#5b2a86" />
+        <Text style={styles.myDishesButtonText}>
+          My Dishes{typeof loggedDishesCount === 'number' && loggedDishesCount > 0 ? ` (${loggedDishesCount})` : ''} →
+        </Text>
+      </Pressable>
     </View>
   );
 }
@@ -313,13 +329,31 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#ffffff',
   },
-  myDishesButton: {
+  addToListButton: {
     flex: 1,
     backgroundColor: '#fbf9fe',
     borderWidth: 1.5,
     borderColor: '#dcd1ed',
     borderRadius: 10,
     paddingVertical: 10,
+    paddingHorizontal: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  addToListButtonText: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: '#5b2a86',
+  },
+  myDishesButton: {
+    marginTop: 8,
+    backgroundColor: '#fbf9fe',
+    borderWidth: 1.5,
+    borderColor: '#dcd1ed',
+    borderRadius: 10,
+    paddingVertical: 9,
     paddingHorizontal: 8,
     flexDirection: 'row',
     alignItems: 'center',

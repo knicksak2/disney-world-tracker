@@ -232,6 +232,9 @@ function installApi(items: PlannedItemDTO[], handlers: Handlers = {}): void {
       if (method === 'GET' && path === '/me') {
         return ME;
       }
+      if (method === 'GET' && path === '/me/favorites') {
+        return { experienceIds: [] };
+      }
       if (method === 'GET' && path === `/trips/${TRIP_ID}/members`) {
         return MEMBERS;
       }
@@ -872,6 +875,36 @@ describe('Planned_List completion sync presentation', () => {
       `planned-item-sched-${scheduledItem.id}`,
     );
     expect(within(schedBadge).getByText(/10:30/)).toBeTruthy();
+  });
+
+  test('renders scheduled badge with calendar icon, day of week, date, park-local time, and no checkmark', async () => {
+    const reservationItem: PlannedItemDTO = {
+      ...ITEM,
+      id: 'item-res-1',
+      experienceName: "Chef Mickey's",
+      plannedDate: '2026-10-04',
+      plannedTime: '2026-10-04T14:00:00.000Z',
+      reservationKind: 'dining',
+    };
+    installApi([reservationItem], {
+      trip: async () => ({ id: TRIP_ID, startDate: '2026-10-01' }),
+    });
+
+    renderPlanned(makeNavigation());
+
+    const schedBadge = await screen.findByTestId(
+      `planned-item-sched-${reservationItem.id}`,
+    );
+    // Formats into Day 4 (Sun, Oct 4) · 10:00 AM with calendar icon and no completion checkmark
+    expect(within(schedBadge).getByText(/📅/)).toBeTruthy();
+    expect(within(schedBadge).getByText(/Day 4 \(Sun, Oct 4\) · 10:00 AM/)).toBeTruthy();
+    expect(within(schedBadge).queryByText(/✓/)).toBeNull();
+
+    // Also renders the reservation tag
+    const resBadge = screen.getByTestId(
+      `planned-item-reservation-${reservationItem.id}`,
+    );
+    expect(within(resBadge).getByText('Dining Reservation')).toBeTruthy();
   });
 });
 

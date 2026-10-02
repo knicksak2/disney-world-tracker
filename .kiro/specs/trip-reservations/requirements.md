@@ -73,6 +73,8 @@ It also closes one defect that only becomes visible once a pinned time represent
 13. WHEN the add-reservation venue picker is shown, THE Mobile_App SHALL present Destination filter chips covering each theme park, each water park, Disney Springs, and Resorts, so a Trip_Member can narrow to where the booking actually is.
 14. THE Destination filter SHALL default to no destination selected, so that no venue is hidden until the Trip_Member chooses to narrow.
 15. WHERE a Destination filter is applied, THE Mobile_App SHALL scope the Catalog request to that Destination in addition to the Reservation_Kind's category restriction, so the two filters compose rather than override one another.
+16. WHEN the edit-reservation form is opened, THE Mobile_App SHALL present date selection chips allowing the reservation's date to be updated to any date of the Trip, and WHEN the date changes, SHALL recompute the Booked_Time UTC instant on that date before submitting.
+17. WHEN the edit-reservation form is opened, THE Mobile_App SHALL present the current venue and allow updating it (either selecting a Catalog Experience scoped to the Reservation_Kind or entering an off-property custom title); and THE Trip_Service SHALL accept `experienceId` on `PATCH /trips/:id/planned-items/:itemId`, updating `experience_id`, `item_type`, and `custom_title` accordingly while ensuring a reservation retains a venue.
 
 ### Requirement 4: Automatic Schedule Integration
 

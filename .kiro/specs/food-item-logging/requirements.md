@@ -86,6 +86,9 @@ This feature introduces a durable, per-restaurant dish catalog (`food_items`) se
 5. WHERE a Food_Item has one or more `Food_Item_Log` records for the User, THE App SHALL display a repeat-count indicator (e.g. "Logged 3x") on that Food_Item's row in the picker, sourced from `GET /me/food-items/:foodItemId/logs`.
 6. WHEN the User activates the repeat-count indicator on a Food_Item, THE App SHALL open a history view listing every `Food_Item_Log` for that Food_Item (date, rating, note), each with a delete action that calls `DELETE /me/food-items/:foodItemId/logs/:logId`.
 7. WHERE a Food_Item's `currentlyOnMenu` is `false`, THE App SHALL render that item's row in the Food_Item picker and in any history view with a "Not currently on menu" label distinguishing it from a current item, while still allowing it to be selected for logging (Requirement 3, unaffected) — a past dish is never hidden, only visually distinguished from what is presently orderable.
+8. WHERE a restaurant offers more than one menu (`MenuDTO`), THE Food_Item picker SHALL display a horizontal tab bar allowing the User to filter the displayed dishes by menu (e.g. "Breakfast", "Lunch and Dinner", "Allergy-Friendly") or view "All" dishes, defaulting to the primary menu when multiple menus exist.
+9. WHEN a specific menu tab is selected in the Food_Item picker, THE App SHALL group the displayed dishes by the menu's groups (courses/sections) preserving the menu's group and item order.
+10. WHERE a User searches within a specific menu tab and no items match within that menu but matching dishes exist on other menus for the restaurant, THE App SHALL provide an affordance to view matching dishes across all menus.
 
 ### Requirement 6: User-Submitted Locations for Uncatalogued Food-Selling Spots
 

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Modal,
   Pressable,
   StyleSheet,
@@ -149,6 +150,20 @@ function AddItemsCatalogSearch({
           style={styles.addItemsSearchInput}
           testID="experience-list-add-items-search-input"
         />
+        {searchInput.length > 0 ? (
+          <Pressable
+            onPress={() => {
+              setSearchInput('');
+              setDebouncedQuery('');
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Clear search text"
+            testID="experience-list-add-items-clear-btn"
+            style={styles.clearSearchBtn}
+          >
+            <Ionicons name="close-circle" size={18} color={theme.color.textSecondary} />
+          </Pressable>
+        ) : null}
       </View>
 
       {errorNotice ? (
@@ -238,6 +253,7 @@ export default function ExperienceListDetailScreen(): JSX.Element {
 
   const [isLiking, setIsLiking] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isTogglingPinned, setIsTogglingPinned] = useState(false);
   const [staleWriteNotice, setStaleWriteNotice] = useState<string | null>(null);
   const [manageSharesVisible, setManageSharesVisible] = useState(false);
   // Drives the "Add items" modal (Requirement 9.5, Entry Point 2), whose
@@ -355,6 +371,28 @@ export default function ExperienceListDetailScreen(): JSX.Element {
       // Ignore
     } finally {
       setIsSaving(false);
+    }
+  }
+
+  // Requirement 19.6: owner can toggle list pin state from the detail screen
+  async function handleTogglePinned(): Promise<void> {
+    if (!list || isTogglingPinned || list.myRole !== 'owner') return;
+    setIsTogglingPinned(true);
+    try {
+      await apiRequest('PATCH', `/me/experience-lists/${encodeURIComponent(experienceListId)}`, {
+        pinned: list.pinnedAt === null,
+      });
+      await queryClient.invalidateQueries({ queryKey: ['experience-list-detail', experienceListId] });
+      await queryClient.invalidateQueries({ queryKey: ['experience-lists-collection'] });
+    } catch (err) {
+      if (err instanceof ApiError && err.code === 'experience_list_pin_limit_reached') {
+        Alert.alert(
+          'Pin Limit Reached',
+          'You can pin up to 4 lists to your dashboard. Unpin a list first to pin this one.',
+        );
+      }
+    } finally {
+      setIsTogglingPinned(false);
     }
   }
 
@@ -705,6 +743,32 @@ export default function ExperienceListDetailScreen(): JSX.Element {
                   <Text style={styles.actionButtonText}>Share</Text>
                 </Pressable>
               ) : null}
+
+              {/* Pin button (owner only, Requirement 19.6) */}
+              {isOwner ? (
+                <Pressable
+                  onPress={() => void handleTogglePinned()}
+                  disabled={isTogglingPinned}
+                  style={({ pressed }) => [styles.actionButton, pressed && styles.actionButtonPressed]}
+                  accessibilityRole="button"
+                  accessibilityLabel={list.pinnedAt !== null ? 'Unpin list' : 'Pin list'}
+                  testID="experience-list-pin-btn"
+                >
+                  <Ionicons
+                    name={list.pinnedAt !== null ? 'pin' : 'pin-outline'}
+                    size={20}
+                    color={list.pinnedAt !== null ? theme.color.primary : theme.color.textSecondary}
+                  />
+                  <Text
+                    style={[
+                      styles.actionButtonText,
+                      list.pinnedAt !== null && styles.actionButtonTextPinned,
+                    ]}
+                  >
+                    {list.pinnedAt !== null ? 'Pinned' : 'Pin'}
+                  </Text>
+                </Pressable>
+              ) : null}
             </View>
           </Card>
 
@@ -776,11 +840,13 @@ export default function ExperienceListDetailScreen(): JSX.Element {
                   <Ionicons name="close" size={24} color={theme.color.textSecondary} />
                 </Pressable>
               </View>
-              <AddItemsCatalogSearch
-                experienceListId={experienceListId}
-                existingExperienceIds={existingExperienceIds}
-                onAdded={handleItemAdded}
-              />
+              {addItemsModalVisible ? (
+                <AddItemsCatalogSearch
+                  experienceListId={experienceListId}
+                  existingExperienceIds={existingExperienceIds}
+                  onAdded={handleItemAdded}
+                />
+              ) : null}
             </View>
           </View>
         </Modal>
@@ -926,6 +992,9 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: theme.color.textPrimary,
+  },
+  actionButtonTextPinned: {
+    color: theme.color.primary,
   },
   addItemsBtn: {
     backgroundColor: theme.color.primary,
@@ -1077,6 +1146,9 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     color: theme.color.textPrimary,
+  },
+  clearSearchBtn: {
+    padding: 4,
   },
   addItemsHintText: {
     color: theme.color.textSecondary,

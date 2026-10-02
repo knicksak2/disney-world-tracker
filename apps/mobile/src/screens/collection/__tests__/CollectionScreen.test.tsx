@@ -417,12 +417,13 @@ describe('CollectionScreen — Disney Vault Hub', () => {
   });
 
   // Feature: navigation-redesign amendment 8c, Property 10 — exact-order, capped preview rows
-  it('renders up to 3 food list rows in pinned-first order exactly as returned, with a "View all" row when more than 3 exist', async () => {
+  it('renders up to 4 food list rows in pinned-first order exactly as returned, with a "View all" row when more than 4 exist', async () => {
     const manyOwned = [
       { ...mockFoodLists.owned[0]!, id: 'list-a', name: 'List A', pinnedAt: '2026-09-20T08:00:00Z' },
       { ...mockFoodLists.owned[0]!, id: 'list-b', name: 'List B', pinnedAt: null },
       { ...mockFoodLists.owned[0]!, id: 'list-c', name: 'List C', pinnedAt: null },
       { ...mockFoodLists.owned[0]!, id: 'list-d', name: 'List D', pinnedAt: null },
+      { ...mockFoodLists.owned[0]!, id: 'list-e', name: 'List E', pinnedAt: null },
     ];
     mockApiRequest.mockImplementation(async (_method: string, path: string) => {
       if (path === '/me/pins') return mockBoardData as never;
@@ -438,25 +439,46 @@ describe('CollectionScreen — Disney Vault Hub', () => {
     renderCollection();
     fireEvent.press(screen.getByTestId('vault-seg-lists'));
 
-    // Exactly the first 3, in the order the mocked response returned them
+    // Exactly the first 4, in the order the mocked response returned them
     // (server-side pinned-first ordering) — no client re-sort.
     await waitFor(() => {
       expect(screen.getByTestId('food-list-preview-row-list-a')).toBeTruthy();
       expect(screen.getByTestId('food-list-preview-row-list-b')).toBeTruthy();
       expect(screen.getByTestId('food-list-preview-row-list-c')).toBeTruthy();
+      expect(screen.getByTestId('food-list-preview-row-list-d')).toBeTruthy();
     });
-    expect(screen.queryByTestId('food-list-preview-row-list-d')).toBeNull();
+    expect(screen.queryByTestId('food-list-preview-row-list-e')).toBeNull();
 
-    // "View all (4)" row renders since ownedLists.length (4) > 3.
-    expect(screen.getByText('View all (4) →')).toBeTruthy();
+    // "View all (5)" row renders since ownedLists.length (5) > 4.
+    expect(screen.getByText('View all (5) →')).toBeTruthy();
   });
 
-  it('renders no "View all" row when 3 or fewer food lists are owned', async () => {
+  it('renders no "View all" row when 4 or fewer food lists are owned', async () => {
+    const fourOwned = [
+      { ...mockFoodLists.owned[0]!, id: 'list-a', name: 'List A', pinnedAt: null },
+      { ...mockFoodLists.owned[0]!, id: 'list-b', name: 'List B', pinnedAt: null },
+      { ...mockFoodLists.owned[0]!, id: 'list-c', name: 'List C', pinnedAt: null },
+      { ...mockFoodLists.owned[0]!, id: 'list-d', name: 'List D', pinnedAt: null },
+    ];
+    mockApiRequest.mockImplementation(async (_method: string, path: string) => {
+      if (path === '/me/pins') return mockBoardData as never;
+      if (path === '/me/pin-showcase') return mockShowcaseData as never;
+      if (path === '/me/food-item-logs') return mockFoodLogs as never;
+      if (path === '/me/food-lists/collection')
+        return { owned: fourOwned, saved: [] } as never;
+      if (path === '/me/experience-lists/collection') return mockExperienceLists as never;
+      if (path === '/me/stats?percentile=true') return mockStats as never;
+      return {} as never;
+    });
+
     renderCollection();
     fireEvent.press(screen.getByTestId('vault-seg-lists'));
 
     await waitFor(() => {
-      expect(screen.getByTestId('food-list-preview-row-list-1')).toBeTruthy();
+      expect(screen.getByTestId('food-list-preview-row-list-a')).toBeTruthy();
+      expect(screen.getByTestId('food-list-preview-row-list-b')).toBeTruthy();
+      expect(screen.getByTestId('food-list-preview-row-list-c')).toBeTruthy();
+      expect(screen.getByTestId('food-list-preview-row-list-d')).toBeTruthy();
     });
     expect(screen.queryByTestId('food-lists-view-all-row')).toBeNull();
   });
@@ -485,6 +507,7 @@ describe('CollectionScreen — Disney Vault Hub', () => {
       { ...mockFoodLists.owned[0]!, id: 'list-b', name: 'List B' },
       { ...mockFoodLists.owned[0]!, id: 'list-c', name: 'List C' },
       { ...mockFoodLists.owned[0]!, id: 'list-d', name: 'List D' },
+      { ...mockFoodLists.owned[0]!, id: 'list-e', name: 'List E' },
     ];
     mockApiRequest.mockImplementation(async (_method: string, path: string) => {
       if (path === '/me/pins') return mockBoardData as never;
@@ -748,12 +771,13 @@ describe('CollectionScreen — Disney Vault Hub', () => {
   });
 
   // Feature: navigation-redesign amendment 8c, Property 10 — capped rows + "View all"
-  it('renders up to 3 experience list rows with a "View all" row when more than 3 exist', async () => {
+  it('renders up to 4 experience list rows with a "View all" row when more than 4 exist', async () => {
     const manyOwned = [
       { ...mockExperienceLists.owned[0]!, id: 'elist-a', name: 'List A' },
       { ...mockExperienceLists.owned[0]!, id: 'elist-b', name: 'List B' },
       { ...mockExperienceLists.owned[0]!, id: 'elist-c', name: 'List C' },
       { ...mockExperienceLists.owned[0]!, id: 'elist-d', name: 'List D' },
+      { ...mockExperienceLists.owned[0]!, id: 'elist-e', name: 'List E' },
     ];
     mockApiRequest.mockImplementation(async (_method: string, path: string) => {
       if (path === '/me/pins') return mockBoardData as never;
@@ -774,8 +798,9 @@ describe('CollectionScreen — Disney Vault Hub', () => {
       expect(screen.getByTestId('experience-list-preview-row-elist-a')).toBeTruthy();
       expect(screen.getByTestId('experience-list-preview-row-elist-b')).toBeTruthy();
       expect(screen.getByTestId('experience-list-preview-row-elist-c')).toBeTruthy();
+      expect(screen.getByTestId('experience-list-preview-row-elist-d')).toBeTruthy();
     });
-    expect(screen.queryByTestId('experience-list-preview-row-elist-d')).toBeNull();
+    expect(screen.queryByTestId('experience-list-preview-row-elist-e')).toBeNull();
 
     const viewAllRow = screen.getByTestId('experience-lists-view-all-row');
     expect(viewAllRow).toBeTruthy();

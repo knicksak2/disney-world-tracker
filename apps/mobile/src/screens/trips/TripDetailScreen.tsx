@@ -62,6 +62,7 @@ import {
 import { formatParkTime } from '../catalog/live/parkTime';
 import AttachedFoodListsSection from './AttachedFoodListsSection';
 import AttachedExperienceListsSection from './AttachedExperienceListsSection';
+import GroupFavoritesSection from './GroupFavoritesSection';
 import { tripDetailKeys } from './tripDetailQueryKeys';
 import { tripPlannedListKeys } from './TripPlannedListScreen';
 import { tripFeedKeys } from './TripFeedScreen';
@@ -914,6 +915,14 @@ export default function TripDetailScreen({
           navigation={navigation}
           onOpenExperienceList={(experienceListId) => {
             (navigation as any).navigate('ExperienceListDetail', { experienceListId });
+          }}
+        />
+
+        {/* Group Favorites section (R9, Task 11.2) */}
+        <GroupFavoritesSection
+          tripId={tripId}
+          onSelectExperience={(experienceId) => {
+            (navigation as any).navigate('ExperienceDetail', { experienceId });
           }}
         />
 

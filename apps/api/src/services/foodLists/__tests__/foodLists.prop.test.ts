@@ -500,7 +500,9 @@ describe('foodLists repository properties (fast-check)', () => {
   it('Property 24: Pinned-First Ordering Is Total and Stable', async () => {
     await fc.assert(
       fc.asyncProperty(
-        fc.array(fc.boolean(), { minLength: 2, maxLength: 6 }),
+        fc.array(fc.boolean(), { minLength: 2, maxLength: 6 }).filter(
+          (flags) => flags.filter(Boolean).length <= 4,
+        ),
         async (pinFlags) => {
           const createdIds: string[] = [];
           for (let i = 0; i < pinFlags.length; i++) {
@@ -557,4 +559,33 @@ describe('foodLists repository properties (fast-check)', () => {
       { numRuns: 100 },
     );
   }, 30000);
+
+  it('Property 24.1: Attempting to pin a 5th food list rejects with food_list_pin_limit_reached', async () => {
+    const listIds: string[] = [];
+    for (let i = 0; i < 5; i++) {
+      const list = await foodListRepo.createList(ownerId, {
+        name: `Limit Test ${i}-${randomUUID().slice(0, 6)}`,
+      });
+      listIds.push(list.id);
+    }
+
+    // Pin the first 4 lists
+    for (let i = 0; i < 4; i++) {
+      await foodListRepo.setPinned(listIds[i]!, ownerId, true);
+    }
+
+    // Attempting to pin the 5th list must reject with food_list_pin_limit_reached
+    await expect(foodListRepo.setPinned(listIds[4]!, ownerId, true)).rejects.toSatisfy(
+      (err: unknown) => err instanceof AppError && err.code === 'food_list_pin_limit_reached',
+    );
+
+    // Unpinning one list allows the 5th to be pinned
+    await foodListRepo.setPinned(listIds[0]!, ownerId, false);
+    const updated5 = await foodListRepo.setPinned(listIds[4]!, ownerId, true);
+    expect(updated5.pinnedAt).not.toBeNull();
+
+    for (const id of listIds) {
+      await pool.query(`DELETE FROM food_lists WHERE id = $1`, [id]);
+    }
+  });
 });

@@ -11,6 +11,7 @@ import { navigationRef } from './navigation/navigationRef';
 import { usePushRegistration } from './hooks/usePushRegistration';
 import { useNotificationResponse } from './hooks/useNotificationResponse';
 import { useSessionStore } from './state/sessionStore';
+import { ApiError } from './api/client';
 
 // Suppress known third-party library deprecation noise:
 // 1. `react-native-draggable-flatlist` internal use of findNodeHandle with measureLayout on newer React Native.
@@ -42,7 +43,18 @@ if (Platform.OS !== 'web') {
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      retry: 1,
+      retry: (failureCount, error) => {
+        if (
+          error instanceof ApiError &&
+          (error.status === 429 ||
+            error.status === 404 ||
+            error.status === 403 ||
+            error.code === 'rate_limit_exceeded')
+        ) {
+          return false;
+        }
+        return failureCount < 1;
+      },
       refetchOnWindowFocus: false,
     },
   },

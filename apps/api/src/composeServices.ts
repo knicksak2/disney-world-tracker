@@ -72,6 +72,7 @@ import { decideCatalogRead } from './services/catalog/readDecision.js';
 import { runSync } from './services/catalog/sync.js';
 
 import { createCompletionRepo } from './services/tracking/completion/repo.js';
+import { createFavoriteRepo } from './services/tracking/favorite/repo.js';
 import { createFriendCompletionsRepo } from './services/tracking/friendCompletions/repo.js';
 import { createExperienceLogRepo } from './services/tracking/logs/repo.js';
 import { createNoteRepo } from './services/tracking/note/repo.js';
@@ -211,6 +212,7 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
 
   const catalogRepo = createCatalogRepo(pool);
   const completionRepo = createCompletionRepo(pool);
+  const favoriteRepo = createFavoriteRepo(pool);
   const friendCompletionsRepo = createFriendCompletionsRepo(pool);
   const noteRepo = createNoteRepo(pool);
   const ratingRepo = createRatingRepo({ pool, emitRatingChanged });
@@ -825,6 +827,10 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
     },
     parkLive: {
       service: parkLiveService,
+      requireSession: sessionMiddleware,
+    },
+    favorite: {
+      repo: favoriteRepo,
       requireSession: sessionMiddleware,
     },
     push: { repo: pushRepo, requireSession: sessionMiddleware },

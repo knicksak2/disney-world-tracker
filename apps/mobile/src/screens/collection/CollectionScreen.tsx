@@ -26,6 +26,7 @@
 
 import React, { useMemo, useState } from 'react';
 import {
+  Alert,
   ImageBackground,
   ImageSourcePropType,
   LayoutChangeEvent,
@@ -101,7 +102,7 @@ const PARK_META: Record<string, { readonly name: string; readonly color: string 
 // navigation-redesign Requirement 6 amendment 8c — cap on rows rendered per
 // list-type card before a "View all (N)" row appears. Client-side rendering
 // decision only; the server always returns the full `listOwned` array.
-const MAX_COLLECTION_PREVIEW_ROWS = 3;
+const MAX_COLLECTION_PREVIEW_ROWS = 4;
 
 const ICONIC_TREATS = [
   { name: 'DOLE Whip® Float', query: 'dole whip', icon: '🍍', location: 'Aloha Isle & Tamu Tamu' },
@@ -184,6 +185,16 @@ export default function CollectionScreen(): JSX.Element {
   // mutation the two management screens' row-level pin controls call, so
   // this preview and the management screen never behave differently.
   async function handleToggleFoodListPinned(list: FoodListDTO): Promise<void> {
+    if (list.pinnedAt === null) {
+      const pinnedCount = ownedLists.filter((l) => l.pinnedAt !== null).length;
+      if (pinnedCount >= 4) {
+        Alert.alert(
+          'Pin Limit Reached',
+          'You can pin up to 4 lists to your dashboard. Unpin a list first to pin this one.',
+        );
+        return;
+      }
+    }
     try {
       await apiRequest('PATCH', `/me/food-lists/${encodeURIComponent(list.id)}`, {
         pinned: list.pinnedAt === null,
@@ -196,6 +207,16 @@ export default function CollectionScreen(): JSX.Element {
   }
 
   async function handleToggleExperienceListPinned(list: ExperienceListDTO): Promise<void> {
+    if (list.pinnedAt === null) {
+      const pinnedCount = ownedExperienceLists.filter((l) => l.pinnedAt !== null).length;
+      if (pinnedCount >= 4) {
+        Alert.alert(
+          'Pin Limit Reached',
+          'You can pin up to 4 lists to your dashboard. Unpin a list first to pin this one.',
+        );
+        return;
+      }
+    }
     try {
       await apiRequest('PATCH', `/me/experience-lists/${encodeURIComponent(list.id)}`, {
         pinned: list.pinnedAt === null,

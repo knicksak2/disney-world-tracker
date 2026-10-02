@@ -94,4 +94,27 @@ describe('DiningReservationCard — resolved-but-empty live data (regression)', 
     expect(queryByTestId('live-unavailable')).toBeNull();
     expect(getByText('Open Today')).toBeTruthy();
   });
+
+  it('renders Add to List button and invokes onAddToList on press (R9.1)', () => {
+    const onAddToListMock = jest.fn();
+    const onLogDishMock = jest.fn();
+    const { getByTestId, getByText } = render(
+      <DiningReservationCard
+        experienceName="Jungle Navigation Co. LTD Skipper Canteen"
+        diningUrl={null}
+        liveDetail={EMPTY_UNKNOWN_LIVE_DETAIL}
+        onReserve={() => {}}
+        onLogFoodItem={onLogDishMock}
+        onAddToList={onAddToListMock}
+      />,
+    );
+
+    const addToListBtn = getByTestId('dining-card-add-to-list-btn');
+    expect(addToListBtn).toBeTruthy();
+    expect(getByText('Add to List')).toBeTruthy();
+
+    const { fireEvent } = require('@testing-library/react-native');
+    fireEvent.press(addToListBtn);
+    expect(onAddToListMock).toHaveBeenCalledTimes(1);
+  });
 });

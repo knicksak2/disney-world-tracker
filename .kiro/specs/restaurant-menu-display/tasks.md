@@ -191,6 +191,12 @@ close to the code they validate.
 - [x] 12. Final checkpoint - Ensure all tests pass
   - Ensure all tests pass (backend + mobile), ask the user if questions arise.
 
+- [ ] 13. Menu Screen Food List Affordances (R5.10, added by this amendment)
+  - [ ] 13.1 Add item-level and header add-to-list actions to `MenuScreen.tsx`, opening `AddToListsSheet` and `FoodItemPickerModal`
+    - _Requirements: 5.10_
+  - [ ] 13.2 Add interaction tests for MenuScreen add-to-list affordances
+    - _Requirements: 5.10_
+
 ## Notes
 
 - Tasks marked with `*` are optional and can be skipped for faster MVP

@@ -30,7 +30,6 @@ export interface AvatarChipProps {
   readonly tintColor?: string;
   readonly testID?: string;
   readonly variant?: 'icon' | 'pill';
-  readonly showBadge?: boolean;
 }
 
 export function AvatarChip({
@@ -38,7 +37,6 @@ export function AvatarChip({
   tintColor = color.textOnPrimary,
   testID = 'avatar-chip',
   variant = 'icon',
-  showBadge = false,
 }: AvatarChipProps): JSX.Element {
   const navigation = useNavigation<any>();
   const meQuery = useQuery<MeResponse>({
@@ -76,7 +74,6 @@ export function AvatarChip({
           )}
         </View>
         <Text style={styles.pillLabel}>You & Crew</Text>
-        {showBadge ? <View style={styles.pillBadge} testID={`${testID}-badge`} /> : null}
       </Pressable>
     );
   }
@@ -165,17 +162,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: '#ffffff',
-  },
-  pillBadge: {
-    position: 'absolute',
-    top: -2,
-    right: -2,
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#ef4444',
-    borderWidth: 2,
-    borderColor: '#5b2a86',
   },
 });
 

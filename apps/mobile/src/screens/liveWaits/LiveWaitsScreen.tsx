@@ -50,6 +50,7 @@ import {
 import LogVisitModal from '../catalog/LogVisitModal';
 import { useLiveWaitsStore } from '../../state/liveWaitsStore';
 import { resolveDefaultLiveWaitsPark } from './defaultPark';
+import { useFavoritedExperiences } from '../catalog/useFavoritedExperiences';
 import {
   buildLiveWaitsRows,
   getWaitStatus,
@@ -66,6 +67,7 @@ export interface LiveWaitsScreenProps {
   readonly route?: {
     readonly params?: {
       readonly park?: Park;
+      readonly filter?: LiveWaitsFilter;
     };
   };
   readonly navigation?: {
@@ -124,6 +126,7 @@ export default function LiveWaitsScreen({
 
   const queryClient = useQueryClient();
   const routePark = route?.params?.park;
+  const routeFilter = route?.params?.filter;
   const lastViewedPark = useLiveWaitsStore((state) => state.lastViewedPark);
   const setLastViewedPark = useLiveWaitsStore((state) => state.setLastViewedPark);
 
@@ -134,15 +137,21 @@ export default function LiveWaitsScreen({
     return resolveDefaultLiveWaitsPark(null, lastViewedPark);
   });
 
-  const [filter, setFilter] = useState<LiveWaitsFilter>('all');
+  const [filter, setFilter] = useState<LiveWaitsFilter>(() => routeFilter ?? 'all');
   const [activeLogExperienceId, setActiveLogExperienceId] = useState<string | null>(null);
 
-  // Sync route param changes when navigated with a new park
+  // Sync route param changes when navigated with a new park or filter
   useEffect(() => {
     if (routePark && (PARKS as readonly string[]).includes(routePark)) {
       setSelectedPark(routePark);
     }
   }, [routePark]);
+
+  useEffect(() => {
+    if (routeFilter) {
+      setFilter(routeFilter);
+    }
+  }, [routeFilter]);
 
   // Track most recently viewed park in Zustand (Requirement 10.1)
   useEffect(() => {
@@ -181,17 +190,19 @@ export default function LiveWaitsScreen({
     return map;
   }, [catalogQuery.data?.experiences]);
 
+  const favoritedIds = useFavoritedExperiences();
+
   // All eligible rows (to compute total count in All chip)
   const allRows = useMemo(() => {
     if (!liveQuery.data?.entries) return [];
-    return buildLiveWaitsRows(liveQuery.data.entries, experiencesById, 'all');
-  }, [liveQuery.data?.entries, experiencesById]);
+    return buildLiveWaitsRows(liveQuery.data.entries, experiencesById, 'all', favoritedIds);
+  }, [liveQuery.data?.entries, experiencesById, favoritedIds]);
 
   // Filtered rows for display
   const rows = useMemo(() => {
     if (!liveQuery.data?.entries) return [];
-    return buildLiveWaitsRows(liveQuery.data.entries, experiencesById, filter);
-  }, [liveQuery.data?.entries, experiencesById, filter]);
+    return buildLiveWaitsRows(liveQuery.data.entries, experiencesById, filter, favoritedIds);
+  }, [liveQuery.data?.entries, experiencesById, filter, favoritedIds]);
 
   const parkWaitAvg = useMemo(() => {
     if (!liveQuery.data?.entries) return null;
@@ -477,6 +488,27 @@ export default function LiveWaitsScreen({
                     ]}
                   >
                     Headliners
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={() => setFilter('favorites')}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: filter === 'favorites' }}
+                  accessibilityLabel="Favorites"
+                  testID="filter-chip-favorites"
+                  style={[
+                    styles.filterPill,
+                    filter === 'favorites' && styles.filterPillActive,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.filterPillText,
+                      filter === 'favorites' && styles.filterPillTextActive,
+                    ]}
+                  >
+                    ❤️ Favorites
                   </Text>
                 </Pressable>
               </ScrollView>

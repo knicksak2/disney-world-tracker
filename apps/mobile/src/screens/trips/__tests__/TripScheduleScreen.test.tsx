@@ -103,6 +103,12 @@ function renderScreen(navOverrides?: Record<string, any>) {
 describe('TripScheduleScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.useFakeTimers({ doNotFake: ['nextTick', 'setImmediate'] });
+    jest.setSystemTime(new Date('2026-05-01T12:00:00.000Z'));
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
   });
 
   it('renders date selector bar, planned items, and triggers optimization', async () => {
@@ -3199,6 +3205,14 @@ describe('TripScheduleScreen — reservation badges (trip-reservations R4.3, R5.
 // ---------------------------------------------------------------------------
 
 describe('TripScheduleScreen — shared time wheel (trip-reservations task 8.1)', () => {
+  beforeEach(() => {
+    jest.useFakeTimers({ doNotFake: ['nextTick', 'setImmediate'] });
+    jest.setSystemTime(new Date('2026-05-01T12:00:00.000Z'));
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
   beforeEach(() => {
     jest.clearAllMocks();
   });

@@ -101,6 +101,8 @@ import LogVisitModal from './LogVisitModal';
 import RateExperienceModal from './RateExperienceModal';
 import { getTodayWdwDate } from './live/parkTime';
 import { isQuickServiceDining, liveSectionFor, NO_LIVE_SHAPE } from './gating';
+import FavoriteToggle from './FavoriteToggle';
+import { useFavoritedExperiences } from './useFavoritedExperiences';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -252,6 +254,9 @@ export default function ExperienceDetailScreen(): JSX.Element {
   const [reservationFailed, setReservationFailed] = React.useState(false);
   const [logVisitModalVisible, setLogVisitModalVisible] = React.useState(false);
   const [rateModalVisible, setRateModalVisible] = React.useState(false);
+
+  const favoritedIds = useFavoritedExperiences();
+  const isFavorited = favoritedIds.has(experienceId);
 
   const [activeLens, setActiveLens] = React.useState<'today' | 'passport'>(initialLens ?? 'today');
   const scrollViewRef = React.useRef<ScrollView>(null);
@@ -665,46 +670,53 @@ export default function ExperienceDetailScreen(): JSX.Element {
         compact
         onBack={() => navigation.goBack()}
         right={
-          <Pressable
-            testID="experience-share-button"
-            accessibilityRole="button"
-            accessibilityLabel={`Share ${experience.name}`}
-            accessibilityState={{
-              disabled: !isExperienceShareEntryEnabled({
-                detailLoading: experienceQ.isLoading,
-                ratingLoading: ratingQ.isLoading,
-                noteLoading: noteQ.isLoading,
-              }),
-            }}
-            disabled={
-              !isExperienceShareEntryEnabled({
-                detailLoading: experienceQ.isLoading,
-                ratingLoading: ratingQ.isLoading,
-                noteLoading: noteQ.isLoading,
-              })
-            }
-            onPress={() => {
-              navigation.navigate(
-                'ShareComposer',
-                buildExperienceShareParams(
-                  experience,
-                  ratingQ.data ?? null,
-                  noteQ.data ?? null,
-                ),
-              );
-            }}
-            style={({ pressed }) => [
-              styles.headerActionCircle,
-              pressed && styles.cardPressed,
-              !isExperienceShareEntryEnabled({
-                detailLoading: experienceQ.isLoading,
-                ratingLoading: ratingQ.isLoading,
-                noteLoading: noteQ.isLoading,
-              }) && { opacity: 0.5 },
-            ]}
-          >
-            <Ionicons name="share-outline" size={18} color="#ffffff" />
-          </Pressable>
+          <View style={styles.headerRightActions}>
+            <FavoriteToggle
+              experienceId={experienceId}
+              favorited={isFavorited}
+              size="large"
+            />
+            <Pressable
+              testID="experience-share-button"
+              accessibilityRole="button"
+              accessibilityLabel={`Share ${experience.name}`}
+              accessibilityState={{
+                disabled: !isExperienceShareEntryEnabled({
+                  detailLoading: experienceQ.isLoading,
+                  ratingLoading: ratingQ.isLoading,
+                  noteLoading: noteQ.isLoading,
+                }),
+              }}
+              disabled={
+                !isExperienceShareEntryEnabled({
+                  detailLoading: experienceQ.isLoading,
+                  ratingLoading: ratingQ.isLoading,
+                  noteLoading: noteQ.isLoading,
+                })
+              }
+              onPress={() => {
+                navigation.navigate(
+                  'ShareComposer',
+                  buildExperienceShareParams(
+                    experience,
+                    ratingQ.data ?? null,
+                    noteQ.data ?? null,
+                  ),
+                );
+              }}
+              style={({ pressed }) => [
+                styles.headerActionCircle,
+                pressed && styles.cardPressed,
+                !isExperienceShareEntryEnabled({
+                  detailLoading: experienceQ.isLoading,
+                  ratingLoading: ratingQ.isLoading,
+                  noteLoading: noteQ.isLoading,
+                }) && { opacity: 0.5 },
+              ]}
+            >
+              <Ionicons name="share-outline" size={18} color="#ffffff" />
+            </Pressable>
+          </View>
         }
       />
 
@@ -780,6 +792,7 @@ export default function ExperienceDetailScreen(): JSX.Element {
               reservationFailed={reservationFailed}
               onLogFoodItem={() => setFoodPickerVisible(true)}
               onMyLoggedItems={() => setScopedFoodLogsVisible(true)}
+              onAddToList={() => setAddToListsPickerVisible(true)}
               loggedDishesCount={foodLogsQ.data?.length ?? 0}
               isQuickService={isQuickService}
             />
@@ -860,6 +873,7 @@ export default function ExperienceDetailScreen(): JSX.Element {
       {/* Food item picker modal */}
       <FoodItemPickerModal
         experienceId={experienceId}
+        menus={experience.menus}
         visible={foodPickerVisible}
         onClose={() => setFoodPickerVisible(false)}
         onSelectFoodItem={(item) => {
@@ -895,6 +909,7 @@ export default function ExperienceDetailScreen(): JSX.Element {
       {/* Food item picker modal in addToLists mode (Entry Point 1) */}
       <FoodItemPickerModal
         experienceId={experienceId}
+        menus={experience.menus}
         mode="addToLists"
         visible={addToListsPickerVisible}
         onClose={() => setAddToListsPickerVisible(false)}
@@ -1281,5 +1296,10 @@ const styles = StyleSheet.create({
   },
   reservationActionWrap: {
     gap: theme.spacing.xs,
+  },
+  headerRightActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
 });

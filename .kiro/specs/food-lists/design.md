@@ -768,31 +768,38 @@ query's access path.
 
 ## Error Handling — Addition
 
-No new `ErrorCode` is introduced. A pin/unpin request against a Food_List the requester does not
-own reuses Requirement 1.4's existing ownership-collapsing response (`food_list_not_found` /
-`food_list_edit_forbidden`) via the same `assertOwner` predicate every other owner-only mutation
-(`renameList`, `setVisibility`, `setChecklistMode`) already uses. A non-boolean `pinned` value
-follows the existing `validation_failed` path via the widened Zod schema.
+- `food_list_pin_limit_reached` (HTTP `400`): Returned when an owner attempts to pin a Food_List (`pinned: true`) when they already have 4 pinned Food_Lists (Requirement 14.7).
+- A pin/unpin request against a Food_List the requester does not own reuses Requirement 1.4's existing ownership-collapsing response (`food_list_not_found` / `food_list_edit_forbidden`) via the same `assertOwner` predicate every other owner-only mutation (`renameList`, `setVisibility`, `setChecklistMode`) already uses. A non-boolean `pinned` value follows the existing `validation_failed` path via the widened Zod schema.
 
 ## Configuration & Constants — Addition
 
 | Constant | Value | Purpose |
 |---|---|---|
-| `MAX_COLLECTION_PREVIEW_ROWS` | `3` | Cap on rows rendered per list-type card in the Collection screen's "Lists" segment (`navigation-redesign` Requirement 6 amendment 8c) before a "View all (N)" row appears. Lives in `apps/mobile/src/screens/collection/CollectionScreen.tsx`, not a server constant — the server always returns the full `listOwned` array; the cap is a client rendering decision. |
+| `MAX_COLLECTION_PREVIEW_ROWS` | `4` | Cap on rows rendered per list-type card in the Collection screen's "Lists" segment (`navigation-redesign` Requirement 6 amendment 8c) before a "View all (N)" row appears. Lives in `apps/mobile/src/screens/collection/CollectionScreen.tsx`. |
+| `MAX_PINNED_LISTS` | `4` | Maximum number of pinned lists permitted per user per list type (Requirement 14.7). Enforced by both server repository and mobile UI. |
 
 ## Correctness Properties — Addition
 
 ### Property 23: Pinning Reorders Without Touching Content or `updatedAt` (Added by this amendment)
 *For any Food_List, calling `setPinned(listId, ownerId, true)` sets `pinnedAt` to a non-null UTC timestamp and leaves `updatedAt`, `name`, `visibility`, `isChecklist`, `likeCount`, and every `Food_List_Item`/`Food_List_Share`/`Food_List_Like`/`Food_List_Save` row unchanged; calling it with `false` sets `pinnedAt` back to `null` with the same non-side-effect guarantee. A non-owner calling `setPinned` (owner, editor, viewer, or no access) is rejected per Requirement 14.3 with no `pinned_at` change on any list.*
-**Validates:** Requirement 14.1, Requirement 14.2, Requirement 14.3
+**Validates:** Requirement 14.1, Requirement 14.2, Requirement 14.3, Requirement 14.6
 
 ### Property 24: Pinned-First Ordering Is Total and Stable (Added by this amendment)
 *For any User's set of owned Food_Lists, `listOwned`'s returned order satisfies: every list with non-null `pinnedAt` appears before every list with a null `pinnedAt`; among lists with non-null `pinnedAt`, they appear in descending `pinnedAt` order; among lists with null `pinnedAt`, they appear in descending `updatedAt` order (Requirement 1.5, unchanged for the unpinned subset). This ordering holds regardless of how many lists are pinned (zero, one, or all of them).*
 **Validates:** Requirement 14.4
 
+### Property 24.1: Pin Limit Cap (Added by this amendment)
+*For any User who already has 4 pinned Food_Lists, attempting to pin an unpinned Food_List (`setPinned(listId, ownerId, true)`) is rejected with HTTP 400 `food_list_pin_limit_reached` and leaves the set of pinned lists and their `pinnedAt` timestamps completely unchanged. Setting `pinned: false` on an already-pinned list is always allowed regardless of how many lists are pinned.*
+**Validates:** Requirement 14.7
+
+### Property 25: Restaurant Page and Menu Screen Add-to-List Affordances (Added by this amendment)
+*For any Restaurant_Experience, the App provides an 'Add to List' affordance on the Today in Park lens (inside `DiningReservationCard`) opening `FoodItemPickerModal` in multi-select mode (`mode='addToLists'`), and on the dedicated `MenuScreen` providing both an item-level add affordance on each menu item (opening `AddToListsSheet` for that dish) and a header action opening `FoodItemPickerModal` in multi-select mode.*
+**Validates:** Requirement 9.1, Requirement 9.9
+
 ## Testing Strategy — Addition
 
-- **Repository test** (extend `apps/api/src/services/foodLists/__tests__/foodLists.prop.test.ts` or add a dedicated case): `fast-check` (>=100 runs) generating a set of Food_Lists with randomized pin/unpin sequences and `updatedAt` values, asserting `listOwned`'s returned order matches Property 24 exactly; a targeted (non-property) test asserting `setPinned` leaves `updatedAt` and every other column/row untouched (Property 23), and that a non-owner's `setPinned` call is rejected with the existing ownership-collapsing error codes.
+- **Repository test** (`apps/api/src/services/foodLists/__tests__/foodLists.prop.test.ts`): `fast-check` (>=100 runs) generating a set of Food_Lists with randomized pin/unpin sequences (capped at 4 pins) and `updatedAt` values, asserting `listOwned`'s returned order matches Property 24 exactly; Property 24.1 asserts attempting a 5th pin throws `food_list_pin_limit_reached`; a targeted (non-property) test asserting `setPinned` leaves `updatedAt` and every other column/row untouched (Property 23), and that a non-owner's `setPinned` call is rejected with the existing ownership-collapsing error codes.
 - **Migration test** (`apps/api/src/db/__tests__/migration0052.test.ts`): asserts `food_lists.pinned_at` exists, is nullable, defaults to `null` on an insert that omits it, and can be set/cleared via `UPDATE`.
 - **Route integration test** (extend `apps/api/src/services/foodLists/__tests__/routes.test.ts`): `PATCH /me/food-lists/:id` with `pinned: true` calls `setPinned` and returns a non-null `pinnedAt`; with `pinned: false` returns `pinnedAt: null`; a non-boolean `pinned` value is rejected with `400 validation_failed`; a non-owner's pin attempt returns the existing ownership-collapsing error.
-- **Mobile component test** (extend `MyFoodListsScreen.test.tsx`): a pin/unpin toggle control renders per row and calls `PATCH /me/food-lists/:id` with the new `pinned` value, re-rendering the row's pinned state. Extend `CollectionScreen.test.tsx` (see `navigation-redesign` amendment 8c's own testing strategy) for the pin toggle's presence and behavior on the Collection preview rows.
+- **Mobile component test** (extend `MyFoodListsScreen.test.tsx` and `FoodListDetailScreen.test.tsx`): a pin/unpin toggle control renders per row in `MyFoodListsScreen` and in the header action row in `FoodListDetailScreen` for owners (calling `PATCH /me/food-lists/:id` with the inverted `pinned` value and updating state), and is hidden for non-owners. Attempting to pin a 5th list displays an alert modal and prevents the mutation. Extend `CollectionScreen.test.tsx` (see `navigation-redesign` amendment 8c's own testing strategy) for the 4 preview rows, "View all (N)" behavior, and pin toggle on preview rows.
+

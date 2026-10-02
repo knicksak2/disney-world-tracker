@@ -76,6 +76,7 @@ import FoodItemPickerModal from '../catalog/FoodItemPickerModal';
 import LogFoodItemModal from '../catalog/LogFoodItemModal';
 import ActionDock from './ActionDock';
 import ExplorationPromptCard from './ExplorationPromptCard';
+import HomeFavoritesSection from './HomeFavoritesSection';
 import ParkWaitPulse from './ParkWaitPulse';
 import UpcomingTripHero from './UpcomingTripHero';
 import { buildOperatingContextSubtitle } from './operatingContext';
@@ -324,7 +325,6 @@ export default function HomeScreen({ navigation }: Props): JSX.Element {
             <AvatarChip
               variant="pill"
               tintColor={theme.color.textOnPrimary}
-              showBadge={true}
               testID="avatar-chip"
             />
           </View>
@@ -395,6 +395,19 @@ export default function HomeScreen({ navigation }: Props): JSX.Element {
             navigation.navigate('Explore', {
               screen: 'LiveWaits' as any,
               params: { park } as any,
+            } as any)
+          }
+        />
+
+        {/* 4b. Your Favorites (R8, Task 10.2, 10.5) */}
+        <HomeFavoritesSection
+          onSelectExperience={(experienceId) =>
+            navigation.navigate('ExperienceDetail', { experienceId })
+          }
+          onSeeAll={() =>
+            navigation.navigate('Explore', {
+              screen: 'LiveWaits' as any,
+              params: { filter: 'favorites' } as any,
             } as any)
           }
         />

@@ -420,4 +420,70 @@ describe('Property 19: ExperiencePicker multi-select filtering, land/price/attri
       );
     });
   });
+
+  // Feature: experience-favorites, Property 6: Destination and Picker Favorites Filters Compose Conjunctively With Existing Filters
+  //
+  // Amended (Requirement 6, revised): the "Favorites" quick-chip was promoted
+  // to a dedicated picker tab whose candidate source (favoriteSourcedItems)
+  // is already pre-filtered to the Favorited_Set by the caller — see
+  // ExperiencePicker.test.tsx's "Favorites" tab suite for the
+  // component-level behavior. This property test still holds unchanged: set
+  // intersection is commutative, so filtering-to-favorites-then-by-chips
+  // (today's actual pipeline order on the Favorites tab) and
+  // filtering-by-chips-then-to-favorites (modeled below) produce the
+  // identical result — the conjunction invariant this property guards is
+  // independent of which side applies first.
+  describe('Property 6: ExperiencePicker Favorites Filter Conjunction', () => {
+    it('composes favorites filtering conjunctively, never as a union, with land and attribute filters', () => {
+      fc.assert(
+        fc.property(
+          fc.array(experienceArb, { minLength: 1, maxLength: 30 }),
+          fc.array(fc.string({ minLength: 1, maxLength: 15 }), { maxLength: 3 }),
+          fc.array(fc.string({ minLength: 1, maxLength: 15 }), { maxLength: 3 }),
+          fc.array(fc.uuid(), { maxLength: 10 }),
+          fc.boolean(),
+          (candidates, landFilters, tagFilters, favoritedList, favoritesOnly) => {
+            const selectedLands = new Set(landFilters);
+            const selectedTags = new Set(tagFilters);
+            const favoritedIds = new Set(favoritedList);
+
+            const multiFiltered = filterExperiencesMulti(
+              candidates,
+              selectedLands,
+              selectedTags,
+            );
+
+            const pipelineFiltered = favoritesOnly
+              ? multiFiltered.filter((exp) => favoritedIds.has(exp.id))
+              : multiFiltered;
+
+            if (favoritesOnly) {
+              // 1. Every element in pipelineFiltered must be in multiFiltered AND in favoritedIds
+              for (const exp of pipelineFiltered) {
+                expect(multiFiltered).toContain(exp);
+                expect(favoritedIds.has(exp.id)).toBe(true);
+              }
+
+              // 2. Never a union: no candidate rejected by land/tag filters can be resurrected by being favorited
+              for (const exp of candidates) {
+                if (favoritedIds.has(exp.id) && !multiFiltered.includes(exp)) {
+                  expect(pipelineFiltered).not.toContain(exp);
+                }
+              }
+
+              // 3. Exact intersection size: count of items satisfying both conditions
+              const expectedIntersection = multiFiltered.filter((exp) =>
+                favoritedIds.has(exp.id),
+              );
+              expect(pipelineFiltered).toEqual(expectedIntersection);
+              expect(pipelineFiltered.length).toBeLessThanOrEqual(multiFiltered.length);
+            } else {
+              expect(pipelineFiltered).toEqual(multiFiltered);
+            }
+          },
+        ),
+        { numRuns: NUM_RUNS },
+      );
+    });
+  });
 });
