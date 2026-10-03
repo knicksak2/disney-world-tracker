@@ -78,6 +78,8 @@ const MIGRATIONS = [
   '0035_pins_and_challenges.sql', // user_pins
   '0036_pin_claiming.sql', // user_pins.claimed_at
   '0039_experience_festival_tags.sql', // experience_festival_tags
+  '0040_food_item_logging.sql', // food_items, food_item_logs
+  '0055_festival_edition_and_dish_tags.sql', // match_kind, festival_editions, food_item_festival_tags
 ];
 
 interface Fixture {
@@ -206,16 +208,70 @@ async function seedConfirmedFriendRide(
   );
 }
 
+/** Seed one `food_items` row for the experience and return its id. */
+async function seedFoodItem(pool: DbPool, upstreamId: string, name: string): Promise<string> {
+  const res = await pool.query<{ id: string }>(
+    `INSERT INTO food_items (experience_id, name, source)
+     SELECT e.id, $2, 'menu_sync' FROM experiences e WHERE e.upstream_entity_id = $1
+     RETURNING id`,
+    [upstreamId, name],
+  );
+  return res.rows[0]!.id;
+}
+
+async function addFoodItemLog(
+  pool: DbPool,
+  userId: string,
+  foodItemId: string,
+  visitedOn: string,
+): Promise<void> {
+  await pool.query(
+    `INSERT INTO food_item_logs (user_id, food_item_id, visited_on, user_tz)
+     VALUES ($1, $2, $3::date, 'America/New_York')`,
+    [userId, foodItemId, visitedOn],
+  );
+}
+
+async function tagFoodItemFestival(
+  pool: DbPool,
+  foodItemId: string,
+  festivalSlug: string,
+  festivalYear = 2026,
+): Promise<void> {
+  await pool.query(
+    `INSERT INTO food_item_festival_tags (food_item_id, festival_slug, festival_year)
+     VALUES ($1, $2, $3::int)`,
+    [foodItemId, festivalSlug, festivalYear],
+  );
+}
+
+async function seedFestivalEdition(
+  pool: DbPool,
+  festivalSlug: string,
+  festivalYear: number,
+  startsOn: string,
+  endsOn: string | null,
+): Promise<void> {
+  await pool.query(
+    `INSERT INTO festival_editions (festival_slug, festival_year, starts_on, ends_on)
+     VALUES ($1, $2::int, $3::date, $4::date)
+     ON CONFLICT (festival_slug, festival_year) DO UPDATE
+       SET starts_on = EXCLUDED.starts_on, ends_on = EXCLUDED.ends_on`,
+    [festivalSlug, festivalYear, startsOn, endsOn],
+  );
+}
+
 async function seedTag(
   pool: DbPool,
   upstreamId: string,
   festivalSlug: string,
   festivalYear = 2026,
+  matchKind: 'facet' | 'menu' = 'facet',
 ): Promise<void> {
   await pool.query(
-    `INSERT INTO experience_festival_tags (experience_id, festival_slug, festival_year)
-     SELECT e.id, $2, $3::int FROM experiences e WHERE e.upstream_entity_id = $1`,
-    [upstreamId, festivalSlug, festivalYear],
+    `INSERT INTO experience_festival_tags (experience_id, festival_slug, festival_year, match_kind)
+     SELECT e.id, $2, $3::int, $4 FROM experiences e WHERE e.upstream_entity_id = $1`,
+    [upstreamId, festivalSlug, festivalYear, matchKind],
   );
 }
 
@@ -385,6 +441,134 @@ describe('PinRepo (pg-mem)', () => {
     const snap = await buildSnapshot(fx.pool, user);
     expect(snap.festivalTaggedCompletedIds.has(booth)).toBe(false);
     expect(evaluateCriteria({ kind: 'count', metric: 'festivalBooths', threshold: 1 }, snap).current).toBe(0);
+  });
+
+  // -------------------------------------------------------------------------
+  // Qualifying-Visit computation for menu-matched restaurants (R9-R11)
+  // -------------------------------------------------------------------------
+
+  it("does NOT count a 'menu'-matched restaurant's completion when NO tagged-dish log exists (R10.3)", async () => {
+    const user = await seedUser(fx.pool);
+    const restaurant = await seedExperience(fx.pool, {
+      category: 'Restaurant',
+      park: 'EPCOT',
+      facets: REAL_RESTAURANT_FACETS,
+    });
+    await seedTag(fx.pool, restaurant, 'food-and-wine', 2026, 'menu');
+    await complete(fx.pool, user, restaurant);
+    // No food_item_log at all — a bare completion must never qualify a
+    // 'menu'-matched restaurant.
+
+    const snap = await buildSnapshot(fx.pool, user);
+    expect(snap.festivalTaggedCompletedIds.has(restaurant)).toBe(false);
+  });
+
+  it("counts a 'menu'-matched restaurant exactly once when a tagged-dish log exists, even WITH the completion also present (R10.3)", async () => {
+    const user = await seedUser(fx.pool);
+    const restaurant = await seedExperience(fx.pool, {
+      category: 'Restaurant',
+      park: 'EPCOT',
+      facets: REAL_RESTAURANT_FACETS,
+    });
+    await seedTag(fx.pool, restaurant, 'food-and-wine', 2026, 'menu');
+    await complete(fx.pool, user, restaurant);
+    const dish = await seedFoodItem(fx.pool, restaurant, 'Falafel Wrap');
+    await tagFoodItemFestival(fx.pool, dish, 'food-and-wine', 2026);
+    await addFoodItemLog(fx.pool, user, dish, '2026-09-01');
+
+    const snap = await buildSnapshot(fx.pool, user);
+    expect(snap.festivalTaggedCompletedIds.has(restaurant)).toBe(true);
+    expect(evaluateCriteria({ kind: 'count', metric: 'festivalBooths', threshold: 1 }, snap).current).toBe(1);
+  });
+
+  it("does NOT count a 'menu'-matched restaurant from a food log on an UNTAGGED dish (R10.3)", async () => {
+    const user = await seedUser(fx.pool);
+    const restaurant = await seedExperience(fx.pool, {
+      category: 'Restaurant',
+      park: 'EPCOT',
+      facets: REAL_RESTAURANT_FACETS,
+    });
+    await seedTag(fx.pool, restaurant, 'food-and-wine', 2026, 'menu');
+    const everydayDish = await seedFoodItem(fx.pool, restaurant, 'Steak Frites');
+    // No food_item_festival_tag on this dish.
+    await addFoodItemLog(fx.pool, user, everydayDish, '2026-09-01');
+
+    const snap = await buildSnapshot(fx.pool, user);
+    expect(snap.festivalTaggedCompletedIds.has(restaurant)).toBe(false);
+  });
+
+  it("counts a 'facet'-matched (temporary) booth from a food log alone, with no completion (R11.1)", async () => {
+    const user = await seedUser(fx.pool);
+    const booth = await seedExperience(fx.pool, {
+      category: 'Restaurant',
+      park: 'EPCOT',
+      facets: FESTIVAL_FACETS,
+    });
+    await seedTag(fx.pool, booth, 'food-and-wine', 2026, 'facet');
+    const dish = await seedFoodItem(fx.pool, booth, 'Fig Cocktail');
+    // No completion at all; a plain (untagged-dish) food log suffices for 'facet'.
+    await addFoodItemLog(fx.pool, user, dish, '2026-09-01');
+
+    const snap = await buildSnapshot(fx.pool, user);
+    expect(snap.festivalTaggedCompletedIds.has(booth)).toBe(true);
+  });
+
+  it('does not count a signal dated outside a set Festival_Edition window, but does once the window is widened (R9.4, R9.5)', async () => {
+    const user = await seedUser(fx.pool);
+    const booth = await seedExperience(fx.pool, {
+      category: 'Restaurant',
+      park: 'EPCOT',
+      facets: FESTIVAL_FACETS,
+    });
+    await seedTag(fx.pool, booth, 'food-and-wine', 2026, 'facet');
+    await complete(fx.pool, user, booth); // completed_on = '2026-01-02' (seeded by `complete`)
+    await seedFestivalEdition(fx.pool, 'food-and-wine', 2026, '2026-08-28', '2026-11-18');
+
+    const snapOutside = await buildSnapshot(fx.pool, user);
+    expect(snapOutside.festivalTaggedCompletedIds.has(booth)).toBe(false);
+
+    // Widen the window to include the completion date.
+    await seedFestivalEdition(fx.pool, 'food-and-wine', 2026, '2026-01-01', '2026-11-18');
+    const snapWidened = await buildSnapshot(fx.pool, user);
+    expect(snapWidened.festivalTaggedCompletedIds.has(booth)).toBe(true);
+  });
+
+  it('counts in-window signals when no Festival_Edition row exists at all (R9.4: absence = unrestricted)', async () => {
+    const user = await seedUser(fx.pool);
+    const booth = await seedExperience(fx.pool, {
+      category: 'Restaurant',
+      park: 'EPCOT',
+      facets: FESTIVAL_FACETS,
+    });
+    await seedTag(fx.pool, booth, 'food-and-wine', 2026, 'facet');
+    await complete(fx.pool, user, booth);
+    // No festival_editions row for (food-and-wine, 2026) at all.
+
+    const snap = await buildSnapshot(fx.pool, user);
+    expect(snap.festivalTaggedCompletedIds.has(booth)).toBe(true);
+  });
+
+  it('counts only once two different dishes are logged on the same day at the same restaurant (dedup, Property 32)', async () => {
+    const user = await seedUser(fx.pool);
+    const restaurant = await seedExperience(fx.pool, {
+      category: 'Restaurant',
+      park: 'EPCOT',
+      facets: REAL_RESTAURANT_FACETS,
+    });
+    await seedTag(fx.pool, restaurant, 'food-and-wine', 2026, 'menu');
+    const dish1 = await seedFoodItem(fx.pool, restaurant, 'Falafel Wrap');
+    const dish2 = await seedFoodItem(fx.pool, restaurant, 'Fig Cocktail');
+    await tagFoodItemFestival(fx.pool, dish1, 'food-and-wine', 2026);
+    await tagFoodItemFestival(fx.pool, dish2, 'food-and-wine', 2026);
+    await addFoodItemLog(fx.pool, user, dish1, '2026-09-01');
+    await addFoodItemLog(fx.pool, user, dish2, '2026-09-01');
+
+    const snap = await buildSnapshot(fx.pool, user);
+    expect(snap.festivalTaggedCompletedIds.has(restaurant)).toBe(true);
+    // The ENTIRE point: two qualifying dish logs at the same restaurant on
+    // the same day still contribute exactly 1 to the festivalBooths count,
+    // never 2.
+    expect(evaluateCriteria({ kind: 'count', metric: 'festivalBooths', threshold: 1 }, snap).current).toBe(1);
   });
 
   it('counts only Disney-owned resorts (R16.1)', async () => {

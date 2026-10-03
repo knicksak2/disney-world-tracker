@@ -735,12 +735,14 @@ function ThemeOrWaterParkLayout({
   const [activeTab, setActiveTab] = useState<ExperiencePickerTab>('all');
   const [selectedLands, setSelectedLands] = useState<Set<string>>(new Set());
   const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
+  const [selectedFestivals, setSelectedFestivals] = useState<Set<string>>(new Set());
   const [isFilterModalOpen, setIsFilterModalOpen] = useState<boolean>(false);
   const [favoritesOnly, setFavoritesOnly] = useState<boolean>(false);
 
   const clearAllFilters = useCallback(() => {
     setSelectedLands(new Set());
     setSelectedTags(new Set());
+    setSelectedFestivals(new Set());
   }, []);
 
   const toggleLandFilter = useCallback((land: string) => {
@@ -762,6 +764,19 @@ function ThemeOrWaterParkLayout({
         next.delete(tag);
       } else {
         next.add(tag);
+      }
+      return next;
+    });
+  }, []);
+
+  // Festival filter toggle (festival-booth-tagging R8.9, R8.10).
+  const toggleFestivalFilter = useCallback((slug: string) => {
+    setSelectedFestivals((prev) => {
+      const next = new Set(prev);
+      if (next.has(slug)) {
+        next.delete(slug);
+      } else {
+        next.add(slug);
       }
       return next;
     });
@@ -794,29 +809,39 @@ function ThemeOrWaterParkLayout({
   }, [experiences, activeTab]);
 
   // Dynamic filter chips derived directly from loaded tab results
-  const { landChips, priceChips, attributeChips, allChips } = useMemo(
+  const { landChips, priceChips, attributeChips, festivalChips, allChips } = useMemo(
     () => deriveFilterChips(tabFilteredResults),
     [tabFilteredResults],
   );
   const quickChips = useMemo(
-    () => deriveQuickChips(attributeChips, activeTab, priceChips),
-    [attributeChips, activeTab, priceChips],
+    () => deriveQuickChips(attributeChips, activeTab, priceChips, festivalChips),
+    [attributeChips, activeTab, priceChips, festivalChips],
   );
 
-  // Multi-filter by selected lands and attribute/price tags, composed conjunctively with favoritesOnly
+  // Multi-filter by selected lands, attribute/price tags, and festivals,
+  // composed conjunctively with favoritesOnly (festival-booth-tagging R8.10).
   const filteredResults = useMemo(() => {
     const multiFiltered = filterExperiencesMulti(
       tabFilteredResults,
       selectedLands,
       selectedTags,
+      selectedFestivals,
     );
     if (!favoritesOnly) {
       return multiFiltered;
     }
     return multiFiltered.filter((item) => favoritedIds.has(item.id));
-  }, [tabFilteredResults, selectedLands, selectedTags, favoritesOnly, favoritedIds]);
+  }, [
+    tabFilteredResults,
+    selectedLands,
+    selectedTags,
+    selectedFestivals,
+    favoritesOnly,
+    favoritedIds,
+  ]);
 
-  const activeFilterCount = selectedLands.size + selectedTags.size;
+  const activeFilterCount =
+    selectedLands.size + selectedTags.size + selectedFestivals.size;
 
   // Re-derive Land sections client-side
   const sections = useMemo(
@@ -1061,7 +1086,10 @@ function ThemeOrWaterParkLayout({
 
             {/* Quick Filter Chips */}
             {quickChips.map((chip) => {
-              const isSelected = selectedTags.has(chip.rawValue);
+              const isSelected =
+                chip.kind === 'festival'
+                  ? selectedFestivals.has(chip.rawValue)
+                  : selectedTags.has(chip.rawValue);
               return (
                 <Pressable
                   key={chip.id}
@@ -1069,10 +1097,14 @@ function ThemeOrWaterParkLayout({
                     styles.filterChip,
                     isSelected && styles.filterChipActive,
                   ]}
-                  onPress={() => toggleTagFilter(chip.rawValue)}
+                  onPress={() =>
+                    chip.kind === 'festival'
+                      ? toggleFestivalFilter(chip.rawValue)
+                      : toggleTagFilter(chip.rawValue)
+                  }
                   accessibilityRole="checkbox"
                   accessibilityState={{ checked: isSelected }}
-                  accessibilityLabel={`${chip.rawValue}, quick attribute filter${
+                  accessibilityLabel={`${chip.label}, quick ${chip.kind} filter${
                     isSelected ? ', selected' : ''
                   }`}
                   testID={`destination-subfilter-${chip.id}`}
@@ -1161,6 +1193,49 @@ function ThemeOrWaterParkLayout({
               contentContainerStyle={styles.modalScrollContent}
               showsVerticalScrollIndicator={false}
             >
+              {/* Festivals Section (festival-booth-tagging R8.9, R8.11) */}
+              {festivalChips.length > 0 && (
+                <View
+                  style={styles.modalSection}
+                  testID="destination-modal-festivals-section"
+                >
+                  <Text style={styles.modalSectionTitle}>
+                    FESTIVALS{' '}
+                    {selectedFestivals.size > 0 ? `(${selectedFestivals.size})` : ''}
+                  </Text>
+                  <View style={styles.chipGrid}>
+                    {festivalChips.map((chip) => {
+                      const isSelected = selectedFestivals.has(chip.rawValue);
+                      return (
+                        <Pressable
+                          key={`modal-${chip.id}`}
+                          style={[
+                            styles.modalChip,
+                            isSelected && styles.modalChipActive,
+                          ]}
+                          onPress={() => toggleFestivalFilter(chip.rawValue)}
+                          accessibilityRole="checkbox"
+                          accessibilityState={{ checked: isSelected }}
+                          accessibilityLabel={`${chip.label}, festival filter${
+                            isSelected ? ', selected' : ''
+                          }`}
+                          testID={`destination-modal-filter-${chip.id}`}
+                        >
+                          <Text
+                            style={[
+                              styles.modalChipText,
+                              isSelected && styles.modalChipTextActive,
+                            ]}
+                          >
+                            {chip.label}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
+              )}
+
               {/* Lands Section */}
               {landChips.length > 0 && (
                 <View

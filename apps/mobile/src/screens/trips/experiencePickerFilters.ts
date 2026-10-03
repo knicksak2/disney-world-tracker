@@ -14,7 +14,13 @@
  * Validates: Requirements 4.12, 4.15
  */
 
-import { PARKS, type ExperienceCategory, type ExperienceDTO, type Park } from '@dwt/shared';
+import {
+  FESTIVAL_SLUG_LABELS,
+  PARKS,
+  type ExperienceCategory,
+  type ExperienceDTO,
+  type Park,
+} from '@dwt/shared';
 
 import { browseLandOf } from '../catalog/catalogGrouping';
 import {
@@ -77,7 +83,7 @@ export const WHITELISTED_FACET_GROUPS = [
 export interface FilterChipItem {
   readonly id: string;
   readonly label: string;
-  readonly kind: 'land' | 'attribute' | 'price';
+  readonly kind: 'land' | 'attribute' | 'price' | 'festival';
   readonly rawValue: string;
   readonly accessibilityLabel: string;
 }
@@ -86,6 +92,13 @@ export interface DerivedFilterChips {
   readonly landChips: readonly FilterChipItem[];
   readonly priceChips: readonly FilterChipItem[];
   readonly attributeChips: readonly FilterChipItem[];
+  /**
+   * One chip per distinct `festivalTag.slug` observed among the input
+   * Experiences (festival-booth-tagging R8.9), labeled via
+   * `FESTIVAL_SLUG_LABELS` (never the raw slug) and sorted by that display
+   * label. Empty when no input Experience carries a `festivalTag`.
+   */
+  readonly festivalChips: readonly FilterChipItem[];
   readonly allChips: readonly FilterChipItem[];
 }
 
@@ -153,6 +166,38 @@ export function formatAttributeChipLabel(name: string, id?: string): string {
 }
 
 /**
+ * Internal or redundant Disney facet names/ids that pollute the attribute filter list.
+ */
+const SUPPRESSED_ATTRIBUTE_NAMES = new Set([
+  'areaxx',
+  'epcot areaxx',
+  'menu category display',
+  'walkupwaitlist',
+  'festival kiosk',
+  'theme park dining',
+  'all quick service',
+]);
+
+export function isSuppressedAttributeFacet(name: string, id?: string): boolean {
+  const n = name.trim().toLowerCase();
+  const i = (id ?? '').trim().toLowerCase();
+  if (SUPPRESSED_ATTRIBUTE_NAMES.has(n) || SUPPRESSED_ATTRIBUTE_NAMES.has(i)) {
+    return true;
+  }
+  if (n.includes('areaxx') || i.includes('areaxx')) {
+    return true;
+  }
+  return false;
+}
+
+const ATTRIBUTE_SYNONYM_CANONICAL = new Map<string, string>([
+  ['bar-lounge', 'Bars/Lounges'],
+  ['bars/lounges', 'Bars/Lounges'],
+  ['snack', 'Snacks'],
+  ['snacks', 'Snacks'],
+]);
+
+/**
  * Dynamically derives available Land chips, Price chips, and Attribute chips from loaded experiences.
  * Whitelists high-signal facet groups, derives price tiers, and dedupes by id OR case-insensitive trimmed name.
  */
@@ -161,6 +206,7 @@ export function deriveFilterChips(
 ): DerivedFilterChips {
   const landSet = new Set<string>();
   const priceSet = new Set<string>();
+  const festivalSlugSet = new Set<string>();
   const seenAttributeIds = new Set<string>();
   const seenAttributeNames = new Set<string>();
   const attributeChips: FilterChipItem[] = [];
@@ -170,6 +216,11 @@ export function deriveFilterChips(
     const land = browseLandOf(exp);
     if (typeof land === 'string' && land.trim().length > 0) {
       landSet.add(land.trim());
+    }
+
+    // 1b. Festival derivation (festival-booth-tagging R8.9)
+    if (exp.festivalTag) {
+      festivalSlugSet.add(exp.festivalTag.slug);
     }
 
     // 2. Price tier derivation
@@ -190,20 +241,31 @@ export function deriveFilterChips(
               const idLower = idTrimmed.toLowerCase();
 
               if (nameTrimmed.length > 0) {
-                const hasSeenId = idLower.length > 0 && seenAttributeIds.has(idLower);
-                const hasSeenName = seenAttributeNames.has(nameLower);
+                if (isSuppressedAttributeFacet(nameTrimmed, idTrimmed)) {
+                  continue;
+                }
+                const canonicalName =
+                  ATTRIBUTE_SYNONYM_CANONICAL.get(nameLower) ?? nameTrimmed;
+                const canonicalLower = canonicalName.toLowerCase();
+
+                const hasSeenId =
+                  idLower.length > 0 && seenAttributeIds.has(idLower);
+                const hasSeenName = seenAttributeNames.has(canonicalLower);
 
                 if (!hasSeenId && !hasSeenName) {
                   if (idLower.length > 0) seenAttributeIds.add(idLower);
-                  seenAttributeNames.add(nameLower);
+                  seenAttributeNames.add(canonicalLower);
 
-                  const label = formatAttributeChipLabel(nameTrimmed, idTrimmed);
+                  const label = formatAttributeChipLabel(
+                    canonicalName,
+                    idTrimmed,
+                  );
                   attributeChips.push({
-                    id: idTrimmed || `attr-${nameLower}`,
+                    id: idTrimmed || `attr-${canonicalLower}`,
                     label,
                     kind: 'attribute',
-                    rawValue: nameTrimmed,
-                    accessibilityLabel: `${nameTrimmed}, attribute filter`,
+                    rawValue: canonicalName,
+                    accessibilityLabel: `${canonicalName}, attribute filter`,
                   });
                 }
               }
@@ -217,16 +279,24 @@ export function deriveFilterChips(
     if (typeof exp.subType === 'string') {
       const subTypeTrimmed = exp.subType.trim();
       const subTypeLower = subTypeTrimmed.toLowerCase();
-      if (subTypeTrimmed.length > 0 && !seenAttributeNames.has(subTypeLower)) {
-        seenAttributeNames.add(subTypeLower);
-        const label = formatAttributeChipLabel(subTypeTrimmed);
-        attributeChips.push({
-          id: `subtype-${subTypeLower}`,
-          label,
-          kind: 'attribute',
-          rawValue: subTypeTrimmed,
-          accessibilityLabel: `${subTypeTrimmed}, attribute filter`,
-        });
+      if (
+        subTypeTrimmed.length > 0 &&
+        !isSuppressedAttributeFacet(subTypeTrimmed)
+      ) {
+        const canonicalName =
+          ATTRIBUTE_SYNONYM_CANONICAL.get(subTypeLower) ?? subTypeTrimmed;
+        const canonicalLower = canonicalName.toLowerCase();
+        if (!seenAttributeNames.has(canonicalLower)) {
+          seenAttributeNames.add(canonicalLower);
+          const label = formatAttributeChipLabel(canonicalName);
+          attributeChips.push({
+            id: `subtype-${canonicalLower}`,
+            label,
+            kind: 'attribute',
+            rawValue: canonicalName,
+            accessibilityLabel: `${canonicalName}, attribute filter`,
+          });
+        }
       }
     }
   }
@@ -256,25 +326,54 @@ export function deriveFilterChips(
   // Sort attribute chips case-insensitively ascending by rawValue
   attributeChips.sort((a, b) => compareCaseInsensitive(a.rawValue, b.rawValue));
 
+  // Festival chips: one per distinct observed slug, labeled via
+  // FESTIVAL_SLUG_LABELS (never the raw slug), sorted by that display label.
+  const festivalChips: FilterChipItem[] = Array.from(festivalSlugSet)
+    .map((slug) => ({
+      id: `festival-${slug}`,
+      label: FESTIVAL_SLUG_LABELS[slug as keyof typeof FESTIVAL_SLUG_LABELS],
+      kind: 'festival' as const,
+      rawValue: slug,
+      accessibilityLabel: `${FESTIVAL_SLUG_LABELS[slug as keyof typeof FESTIVAL_SLUG_LABELS]}, festival filter`,
+    }))
+    .sort((a, b) => compareCaseInsensitive(a.label, b.label));
+
   return {
     landChips,
     priceChips,
     attributeChips,
-    allChips: [...landChips, ...priceChips, ...attributeChips],
+    festivalChips,
+    allChips: [...landChips, ...priceChips, ...attributeChips, ...festivalChips],
   };
 }
 
 /**
- * Extracts top 3-4 popular quick-toggle chips for the active tab from derived attribute and price chips.
+ * Extracts top 3-4 popular quick-toggle chips for the active tab from derived chips,
+ * prioritizing active festivals when browsing dining or all tabs.
  */
 export function deriveQuickChips(
   attributeChips: readonly FilterChipItem[],
   activeTab: ExperiencePickerTab,
   priceChips: readonly FilterChipItem[] = [],
+  festivalChips: readonly FilterChipItem[] = [],
 ): readonly FilterChipItem[] {
   const popularKeywords = POPULAR_QUICK_TAGS_BY_TAB[activeTab] ?? [];
   const quickChips: FilterChipItem[] = [];
   const pickedIds = new Set<string>();
+
+  // Prioritize active festival chips when on dining or all tabs
+  if (
+    (activeTab === 'all' || activeTab === 'dining') &&
+    festivalChips.length > 0
+  ) {
+    for (const fc of festivalChips) {
+      if (!pickedIds.has(fc.id)) {
+        quickChips.push(fc);
+        pickedIds.add(fc.id);
+        if (quickChips.length >= 2) break;
+      }
+    }
+  }
 
   const pool = [...priceChips, ...attributeChips];
 
@@ -331,10 +430,25 @@ export function matchesExperienceAttribute(
   attributeRawValue: string,
 ): boolean {
   const target = attributeRawValue.trim().toLowerCase();
-  if (typeof exp.priceTier === 'string' && exp.priceTier.trim().toLowerCase() === target) {
+  const targets = new Set<string>([target]);
+  if (target === 'bars/lounges' || target === 'bar-lounge') {
+    targets.add('bars/lounges');
+    targets.add('bar-lounge');
+  } else if (target === 'snacks' || target === 'snack') {
+    targets.add('snacks');
+    targets.add('snack');
+  }
+
+  if (
+    typeof exp.priceTier === 'string' &&
+    targets.has(exp.priceTier.trim().toLowerCase())
+  ) {
     return true;
   }
-  if (typeof exp.subType === 'string' && exp.subType.trim().toLowerCase() === target) {
+  if (
+    typeof exp.subType === 'string' &&
+    targets.has(exp.subType.trim().toLowerCase())
+  ) {
     return true;
   }
   if (exp.groupedFacets) {
@@ -343,8 +457,10 @@ export function matchesExperienceAttribute(
       if (Array.isArray(facets)) {
         for (const facet of facets) {
           if (
-            (typeof facet?.name === 'string' && facet.name.trim().toLowerCase() === target) ||
-            (typeof facet?.id === 'string' && facet.id.trim().toLowerCase() === target)
+            (typeof facet?.name === 'string' &&
+              targets.has(facet.name.trim().toLowerCase())) ||
+            (typeof facet?.id === 'string' &&
+              targets.has(facet.id.trim().toLowerCase()))
           ) {
             return true;
           }
@@ -373,16 +489,24 @@ export function resolveParkScope(
 }
 
 /**
- * Filters experiences matching active land set (OR) and active tag set (OR),
- * intersecting with AND across categories.
- * When both sets are empty, returns the input array unmodified (identity).
+ * Filters experiences matching active land set (OR), active tag set (OR), and
+ * active festival set (OR), intersecting with AND across the three
+ * dimensions. When all three sets are empty, returns the input array
+ * unmodified (identity) — this keeps every existing call site that passes no
+ * `selectedFestivals` argument (an implicit empty set) behavior-identical to
+ * before `selectedFestivals` existed (festival-booth-tagging R8.10).
  */
 export function filterExperiencesMulti(
   experiences: readonly ExperienceDTO[],
   selectedLands: ReadonlySet<string>,
   selectedTags: ReadonlySet<string>,
+  selectedFestivals: ReadonlySet<string> = new Set(),
 ): readonly ExperienceDTO[] {
-  if (selectedLands.size === 0 && selectedTags.size === 0) {
+  if (
+    selectedLands.size === 0 &&
+    selectedTags.size === 0 &&
+    selectedFestivals.size === 0
+  ) {
     return experiences;
   }
 
@@ -405,6 +529,13 @@ export function filterExperiencesMulti(
         }
       }
       if (!matchesAnyTag) {
+        return false;
+      }
+    }
+
+    // 3. Festival check (OR within selected festivals, festival-booth-tagging R8.10)
+    if (selectedFestivals.size > 0) {
+      if (!exp.festivalTag || !selectedFestivals.has(exp.festivalTag.slug)) {
         return false;
       }
     }

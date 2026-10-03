@@ -207,6 +207,7 @@ describe('runSeedDiningLinks integration with CatalogRepo (pg-mem)', () => {
     applyMigration(db, '0010_resort_experience_category.sql');
     applyMigration(db, '0014_experience_world_showcase_country.sql');
     applyMigration(db, '0032_experience_category_taxonomy.sql');
+    applyMigration(db, '0039_experience_festival_tags.sql');
     applyMigration(db, '0044_experience_dining_url.sql');
     applyMigration(db, '0009_resort_representing_experiences.sql');
 

@@ -19,7 +19,17 @@ This feature builds on top of the existing `trips`, `pin-collection`, `stats-exp
 - **Live_Waits_Screen**: The net-new screen, reachable from the Explore tab and from the Quick_Action_Sheet, presenting every trackable Experience's live status and wait for a single selected Park in one list.
 - **Park_Live_Snapshot**: The net-new server-side read that fetches every live entry for a Park in a single upstream call and serves it to the Live_Waits_Screen, keyed and cached separately from the existing single-Experience `Live_Cache`.
 - **Walk_On_Threshold**: The configured wait-minutes value (default 25) at or below which the Live_Waits_Screen's "Walk-on" filter includes an Experience.
-- **Headliner_Facet**: An Experience whose persisted `groupedFacets.thrillFactor` contains a configured high-intensity Facet_Value, used by the Live_Waits_Screen's "Headliners" filter. Reuses the existing `thrillFactor` Facet_Group; introduces no new catalog concept or persisted field.
+- **Headliner_Facet**: An Experience whose stable internal id appears in a curated, hand-maintained
+  per-park allowlist of marquee attractions, used by the Live_Waits_Screen's "Headliners" filter.
+  **Superseded definition, recorded for the record:** this was originally an Experience whose
+  persisted `groupedFacets.thrillFactor` contained a configured high-intensity Facet_Value, reusing
+  the existing `thrillFactor` Facet_Group with no new catalog concept or persisted field. A live-data
+  audit (see Requirement 10's amendment below) found that definition conflated sensory thrill
+  intensity with marquee/must-do status: it matched most Typhoon Lagoon/Blizzard Beach water slides
+  (tagged `thrill-rides` for sensory reasons) while excluding unambiguous headliners like Haunted
+  Mansion, Pirates of the Caribbean, and Frozen Ever After (tagged `slow-rides`/`dark`, never
+  `thrill-rides`/`big-drops`). The name `Headliner_Facet` is retained for continuity with existing
+  references even though the match is no longer facet-based.
 - **Active_Trip_Mode**: The existing derived state (already computed by `Active_Trip_Shortcut` — a Trip_Member of >= 1 `active` Trip) that this feature reuses to select which quick actions the Quick_Action_Sheet leads with; it does NOT change the Main_Tab bar's shape (Requirement 8).
 
 ## Requirements
@@ -210,6 +220,21 @@ Discover-only action are otherwise unchanged.
 3. THE Live_Waits_Screen SHALL present four filters — "All" (displaying the total count of eligible attractions), "Walk-on", "Lightning Lane", and "Headliners" — defaulting to "All."
 4. WHEN the "Walk-on" filter is selected, THE Live_Waits_Screen SHALL display only Experiences whose live wait is a numeric value less than or equal to the configured Walk_On_Threshold.
 5. WHEN the "Headliners" filter is selected, THE Live_Waits_Screen SHALL display only Experiences that are a Headliner_Facet.
+
+**Amendment — Headliner_Facet redefined from a thrillFactor match to a curated id allowlist:**
+Requirement 10.5's acceptance criterion above is unchanged in wording; what changed is the
+Headliner_Facet definition it refers to (Glossary, above). 10.5a below supersedes the
+`groupedFacets.thrillFactor`-based matching rule that previously backed this criterion.
+
+5a. (Supersedes the `thrillFactor`-facet matching rule previously backing Requirement 10.5.) THE
+    Live_Waits_Screen SHALL determine Headliner_Facet membership by checking an Experience's stable
+    internal `id` against `HEADLINER_EXPERIENCE_IDS`, a curated, hand-maintained list of marquee
+    attraction ids per Park (Configuration & Constants), and SHALL NOT consult
+    `groupedFacets.thrillFactor` for this determination. THE curated list SHALL be re-derived (not
+    guessed) whenever a new attraction opens or an existing one is reclassified, following the same
+    curation discipline as `catalog-taxonomy-cleanup`'s `Category_Overrides` (hand-checked against
+    the live synced catalog, one entry added per real-world change, never a runtime facet/threshold
+    comparison).
 6. WHEN the "Lightning Lane" filter is selected, THE Live_Waits_Screen SHALL display only Experiences that are eligible for or currently reporting Lightning Lane availability.
 7. THE Live_Waits_Screen SHALL present a "Log" control on each Experience row that opens the existing LogVisitModal flow for that Experience.
 8. THE Live_Waits_Screen SHALL display the snapshot's retrieval time and, WHERE the snapshot is stale, a staleness indicator, consistent with the existing per-Experience live detail's staleness presentation.
@@ -221,7 +246,15 @@ Discover-only action are otherwise unchanged.
 
 - `WALK_ON_THRESHOLD_MINUTES` (default `25`) — the Walk_On_Threshold used by Requirement 10.4. Env var: none (compile-time constant in `packages/shared`, matching the pattern of other display thresholds); adjustable without a migration.
 - `MAX_INLINE_FRIENDS` (default `3`) — the maximum inline friend display count used by Requirement 7.7 before capping and displaying the expand/collapse toggle.
-- `HEADLINER_THRILL_FACET_VALUES` (default: the highest-intensity `thrillFactor` Facet_Value id(s) observed in the synced catalog — to be confirmed against real synced data before implementation and pinned as a literal list, not a threshold comparison) — the Headliner_Facet match set used by Requirement 10.5.
+- `HEADLINER_EXPERIENCE_IDS` (default: a curated, hand-maintained list of 24 marquee attraction
+  internal `id`s — 9 Magic Kingdom, 6 EPCOT, 5 Hollywood Studios, 4 Animal Kingdom — derived by
+  cross-referencing the live synced catalog's per-ride `ride_shapes.baseline_wait_minutes` ranking
+  against Disney's published Lightning Lane Multi Pass Tier 1 / Single Pass attraction lists, and
+  pinned as a literal list, not a threshold or facet comparison) — the Headliner_Facet match set
+  used by Requirement 10.5a. **Supersedes** `HEADLINER_THRILL_FACET_VALUES` (default: the
+  highest-intensity `thrillFactor` Facet_Value id(s) observed in the synced catalog), the prior
+  constant backing the original facet-based Requirement 10.5 definition, retired per the Glossary
+  amendment above.
 - `PARK_LIVE_CACHE_TTL_SECONDS` (default `300`, matching the existing per-Experience `LIVE_CACHE_TTL_SECONDS`) — the Park_Live_Snapshot freshness window used by Requirement 9.3.
 - `PARK_LIVE_CACHE_RETENTION_SECONDS` (default `86400`, matching the existing per-Experience `LIVE_CACHE_RETENTION_SECONDS`) — the Redis key retention backing the Requirement 9.4 stale-serve fallback.
 - Home tab operating-context weather (Requirement 2.6): no new constant — reuses the existing `weatherClient.ts`'s `WEATHER_REFRESH_MS` (default 1 hour, env-overridable) cache window unchanged. The mobile-side `GET /weather/current` query's `staleTime` SHOULD match this window (60 minutes) so the client does not poll more frequently than the server-side cache refreshes.

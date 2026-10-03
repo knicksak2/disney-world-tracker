@@ -55,6 +55,7 @@ import type {
   ExperienceCategory,
   ExperienceDTO,
   FacetValueDTO,
+  FestivalSlug,
   GroupedFacetsDTO,
   HeightRequirementDTO,
   LiveDetailDTO,
@@ -68,6 +69,7 @@ import {
   AREA_TYPES,
   EXPERIENCE_CATEGORIES,
   experienceCategorySchema,
+  festivalSlugSchema,
   parkSchema,
   searchQuerySchema,
   uuidSchema,
@@ -108,6 +110,17 @@ export interface CatalogListFilters {
    * located at the specified Resort.
    */
   readonly resortId?: string;
+  /**
+   * Exact match on a tagged Festival (festival-booth-tagging R8.4). Matches
+   * any Experience carrying at least one Festival_Tag for this slug,
+   * combined conjunctively with every other filter (R8.7).
+   */
+  readonly festivalSlug?: FestivalSlug;
+  /**
+   * Exact match on a tagged Festival_Year, usable only alongside
+   * `festivalSlug` (R8.5).
+   */
+  readonly festivalYear?: number;
 }
 
 /**
@@ -335,6 +348,12 @@ export interface ExperienceDetailResponse {
    * Curated Disney reservation-page URL, present only when persisted (R6.5, R6.6, R6.7).
    */
   readonly diningUrl?: string;
+  /**
+   * The EPCOT festival this Experience is tagged with (highest Festival_Year
+   * only), present only when at least one Festival_Tag exists; `null`/absent
+   * otherwise (festival-booth-tagging R8.1, R8.2).
+   */
+  readonly festivalTag?: { readonly slug: FestivalSlug; readonly year: number } | null;
 }
 
 /**
@@ -440,8 +459,18 @@ const catalogQuerySchema = z
     land: z.string().min(1).max(200).optional(),
     worldShowcaseCountry: z.string().min(1).max(200).optional(),
     resortId: uuidSchema.optional(),
+    // Festival filter (festival-booth-tagging R8.4, R8.5, R8.6): festivalYear
+    // is only meaningful alongside festivalSlug, enforced by the .refine
+    // below rather than at the per-field level so the "missing festivalSlug"
+    // case produces a single, clearly-attributed validation error.
+    festivalSlug: festivalSlugSchema.optional(),
+    festivalYear: z.coerce.number().int().min(2015).max(2100).optional(),
   })
-  .strict();
+  .strict()
+  .refine((val) => val.festivalYear === undefined || val.festivalSlug !== undefined, {
+    message: 'validation_failed',
+    path: ['festivalYear'],
+  });
 
 /**
  * Zod schema for the `GET /catalog/:experienceId` path. The id is a UUID
@@ -625,6 +654,12 @@ function parseListQuery(raw: unknown): CatalogListFilters {
   }
   if (parsed.resortId !== undefined) {
     filters.resortId = parsed.resortId;
+  }
+  if (parsed.festivalSlug !== undefined) {
+    filters.festivalSlug = parsed.festivalSlug;
+  }
+  if (parsed.festivalYear !== undefined) {
+    filters.festivalYear = parsed.festivalYear;
   }
   return filters;
 }

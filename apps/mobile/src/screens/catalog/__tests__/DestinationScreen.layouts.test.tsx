@@ -41,7 +41,7 @@ import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen, within } from '@testing-library/react-native';
 
 import type { ExperienceDTO, ResortDTO } from '@dwt/shared';
 
@@ -536,6 +536,100 @@ describe('DestinationScreen layouts (R6, R7, R8)', () => {
       // Reset button clears the filters
       fireEvent.press(screen.getByTestId('destination-subfilter-reset'));
       expect(screen.getByTestId('destination-row-epcot-guardians')).toBeTruthy();
+    });
+
+    // ---------------------------------------------------------------------
+    // R8.9/R8.10/R8.11 — Festival filter chips (festival-booth-tagging)
+    // ---------------------------------------------------------------------
+    test('R8.9/R8.10/R8.11: Festival filter chips render per distinct tagged slug, narrow results when selected, and omit unobserved slugs', async () => {
+      stub([
+        experience({
+          id: 'epcot-fw-booth',
+          areaType: 'ThemePark',
+          park: 'EPCOT',
+          name: 'Hanami',
+          land: 'World Showcase',
+          worldShowcaseCountry: 'Japan',
+          category: 'Restaurant',
+          festivalTag: { slug: 'food-and-wine', year: 2026 },
+        }),
+        experience({
+          id: 'epcot-fg-booth',
+          areaType: 'ThemePark',
+          park: 'EPCOT',
+          name: 'Honey Bee-stro',
+          land: 'World Showcase',
+          worldShowcaseCountry: 'France',
+          category: 'Restaurant',
+          festivalTag: { slug: 'flower-and-garden', year: 2025 },
+        }),
+        experience({
+          id: 'epcot-untagged',
+          areaType: 'ThemePark',
+          park: 'EPCOT',
+          name: 'Space 220',
+          land: 'World Discovery',
+          category: 'Restaurant',
+        }),
+      ]);
+
+      renderDestination('EPCOT');
+
+      await screen.findByTestId('destination-open-filters-modal');
+      fireEvent.press(screen.getByTestId('destination-open-filters-modal'));
+      expect(screen.getByTestId('destination-filters-modal-content')).toBeTruthy();
+
+      // Festivals section renders at the top of the modal before lands
+      const modalScroll = screen.getByTestId('destination-filters-modal-content');
+      expect(
+        screen.getByTestId('destination-modal-festivals-section'),
+      ).toBeTruthy();
+      expect(screen.getByTestId('destination-modal-lands-section')).toBeTruthy();
+
+      // R8.9 — a chip exists for each distinct tagged slug, labeled via
+      // FESTIVAL_SLUG_LABELS.
+      expect(
+        screen.getByTestId('destination-modal-filter-festival-food-and-wine'),
+      ).toBeTruthy();
+      expect(
+        screen.getByTestId('destination-modal-filter-festival-flower-and-garden'),
+      ).toBeTruthy();
+      expect(
+        within(modalScroll).getByText('EPCOT International Food & Wine Festival'),
+      ).toBeTruthy();
+
+      // R8.11 — a FestivalSlug with zero loaded Experiences never produces a chip.
+      expect(
+        screen.queryByTestId('destination-modal-filter-festival-festival-of-the-arts'),
+      ).toBeNull();
+      expect(
+        screen.queryByTestId('destination-modal-filter-festival-festival-of-the-holidays'),
+      ).toBeNull();
+
+      // R8.10 — selecting the Food & Wine chip narrows to that festival only,
+      // preserving Land grouping.
+      fireEvent.press(screen.getByTestId('destination-modal-filter-festival-food-and-wine'));
+      fireEvent.press(screen.getByTestId('destination-modal-apply-btn'));
+
+      expect(screen.getByTestId('destination-row-epcot-fw-booth')).toBeTruthy();
+      expect(screen.queryByTestId('destination-row-epcot-fg-booth')).toBeNull();
+      expect(screen.queryByTestId('destination-row-epcot-untagged')).toBeNull();
+
+      // Resetting clears the Festival filter along with every other filter.
+      fireEvent.press(screen.getByTestId('destination-subfilter-reset'));
+      expect(screen.getByTestId('destination-row-epcot-fg-booth')).toBeTruthy();
+      expect(screen.getByTestId('destination-row-epcot-untagged')).toBeTruthy();
+
+      // Quick filter bar also offers the active festival chip for 1-tap filtering
+      const quickFestivalChip = screen.getByTestId(
+        'destination-subfilter-festival-food-and-wine',
+      );
+      expect(quickFestivalChip).toBeTruthy();
+      fireEvent.press(quickFestivalChip);
+
+      expect(screen.getByTestId('destination-row-epcot-fw-booth')).toBeTruthy();
+      expect(screen.queryByTestId('destination-row-epcot-fg-booth')).toBeNull();
+      expect(screen.queryByTestId('destination-row-epcot-untagged')).toBeNull();
     });
   });
 

@@ -21,6 +21,20 @@ jest.mock('../../../api/client', () => {
   };
 });
 
+// Amendment (Requirement 10.5a): isHeadliner now checks id-allowlist membership
+// against HEADLINER_EXPERIENCE_IDS (keyed by the stable internal `id`) instead
+// of a `groupedFacets.thrillFactor` match. Override the curated list with this
+// test's own fixture ids so the "Headliners" filter test below exercises the
+// real `isHeadliner` logic without depending on production ids.
+jest.mock('@dwt/shared', () => {
+  const actual = jest.requireActual('@dwt/shared');
+  return {
+    __esModule: true,
+    ...actual,
+    HEADLINER_EXPERIENCE_IDS: ['exp-space-mountain', 'exp-splash'],
+  };
+});
+
 const mockApiRequest = apiRequest as jest.MockedFunction<typeof apiRequest>;
 
 describe('LiveWaitsScreen', () => {
@@ -33,14 +47,7 @@ describe('LiveWaitsScreen', () => {
       park: 'Magic Kingdom',
       category: 'Attraction',
       active: true,
-      upstreamEntityId: 'tp-space',
       location: null,
-      groupedFacets: {
-        thrillFactor: [
-          { id: 'thrill-rides', label: 'Thrill Rides' },
-          { id: 'big-drops', label: 'Big Drops' },
-        ],
-      },
     } as unknown as ExperienceDTO,
     {
       id: 'exp-peter-pan',
@@ -48,11 +55,7 @@ describe('LiveWaitsScreen', () => {
       park: 'Magic Kingdom',
       category: 'Attraction',
       active: true,
-      upstreamEntityId: 'tp-peter',
       location: null,
-      groupedFacets: {
-        thrillFactor: [],
-      },
     } as unknown as ExperienceDTO,
     {
       id: 'exp-peoplemover',
@@ -60,11 +63,7 @@ describe('LiveWaitsScreen', () => {
       park: 'Magic Kingdom',
       category: 'Attraction',
       active: true,
-      upstreamEntityId: 'tp-peoplemover',
       location: null,
-      groupedFacets: {
-        thrillFactor: [],
-      },
     } as unknown as ExperienceDTO,
     {
       id: 'exp-splash',
@@ -72,11 +71,7 @@ describe('LiveWaitsScreen', () => {
       park: 'Magic Kingdom',
       category: 'Attraction',
       active: true,
-      upstreamEntityId: 'tp-splash',
       location: null,
-      groupedFacets: {
-        thrillFactor: [{ id: 'big-drops', label: 'Big Drops' }],
-      },
     } as unknown as ExperienceDTO,
   ];
 
@@ -215,7 +210,7 @@ describe('LiveWaitsScreen', () => {
     const headlinersChip = screen.getByTestId('filter-chip-headliners');
     fireEvent.press(headlinersChip);
 
-    // Space Mountain and Tiana have headliner thrillFactor facets
+    // Space Mountain and Tiana are in the (mocked) curated HEADLINER_EXPERIENCE_IDS allowlist
     expect(screen.getByText('Space Mountain')).toBeTruthy();
     expect(screen.getByText('Tiana Bayou Adventure')).toBeTruthy();
     // PeopleMover and Peter Pan are not headliners

@@ -58,7 +58,7 @@ export type { AvatarPresetId } from './constants/avatarPresets.js';
 export {
   WALK_ON_THRESHOLD_MINUTES,
   MAX_INLINE_FRIENDS,
-  HEADLINER_THRILL_FACET_VALUES,
+  HEADLINER_EXPERIENCE_IDS,
   PARK_LIVE_CACHE_TTL_SECONDS,
   PARK_LIVE_CACHE_RETENTION_SECONDS,
 } from './constants/navigation.js';

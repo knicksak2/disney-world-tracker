@@ -3,7 +3,7 @@ import {
   parkLiveEntrySchema,
   parkLiveSnapshotSchema,
   WALK_ON_THRESHOLD_MINUTES,
-  HEADLINER_THRILL_FACET_VALUES,
+  HEADLINER_EXPERIENCE_IDS,
 } from '../index.js';
 
 describe('ParkLive schemas and navigation constants (Tasks 1.1 - 1.4)', () => {
@@ -74,10 +74,16 @@ describe('ParkLive schemas and navigation constants (Tasks 1.1 - 1.4)', () => {
 
   it('verifies navigation constants', () => {
     expect(WALK_ON_THRESHOLD_MINUTES).toBe(25);
-    expect(HEADLINER_THRILL_FACET_VALUES).toBeDefined();
-    expect(HEADLINER_THRILL_FACET_VALUES.length).toBeGreaterThan(0);
-    expect(HEADLINER_THRILL_FACET_VALUES).toContain('thrill-rides');
-    expect(HEADLINER_THRILL_FACET_VALUES).toContain('big-drops');
+    expect(HEADLINER_EXPERIENCE_IDS).toBeDefined();
+    expect(HEADLINER_EXPERIENCE_IDS.length).toBeGreaterThan(0);
+    // Every curated id is a well-formed UUID (the internal id space), not a
+    // facet-id-shaped string like 'thrill-rides'.
+    const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    for (const id of HEADLINER_EXPERIENCE_IDS) {
+      expect(uuidRe.test(id)).toBe(true);
+    }
+    // No duplicate ids in the curated list.
+    expect(new Set(HEADLINER_EXPERIENCE_IDS).size).toBe(HEADLINER_EXPERIENCE_IDS.length);
   });
 
   it('accepts park live entry with lightningLane state', () => {

@@ -440,8 +440,8 @@ describe('CatalogRepo.listActiveExperiences', () => {
     const rows = await repo.listActiveExperiences();
 
     expect(rows).toHaveLength(2);
-    expect(pool.calls[0]?.text).toMatch(/WHERE active = TRUE\b/);
-    expect(pool.calls[0]?.text).toMatch(/ORDER BY park ASC, lower\(name\) ASC, id ASC/);
+    expect(pool.calls[0]?.text).toMatch(/WHERE e\.active = TRUE\b/);
+    expect(pool.calls[0]?.text).toMatch(/ORDER BY e\.park ASC, lower\(e\.name\) ASC, e\.id ASC/);
     expect(pool.calls[0]?.params).toHaveLength(0);
   });
 
@@ -452,7 +452,7 @@ describe('CatalogRepo.listActiveExperiences', () => {
     await repo.listActiveExperiences({ park: MAGIC_KINGDOM, category: RIDE });
 
     const call = pool.calls[0];
-    expect(call?.text).toMatch(/active = TRUE AND park = \$1 AND category = \$2/);
+    expect(call?.text).toMatch(/e\.active = TRUE AND e\.park = \$1 AND e\.category = \$2/);
     expect(call?.params).toEqual([MAGIC_KINGDOM, RIDE]);
   });
 
@@ -601,7 +601,7 @@ describe('CatalogRepo.getExperience', () => {
       imageUrl: null,
       areaType: 'ThemePark',
     });
-    expect(pool.calls[0]?.text).toMatch(/FROM experiences\s+WHERE id = \$1/);
+    expect(pool.calls[0]?.text).toMatch(/FROM experiences e[\s\S]*WHERE e\.id = \$1/);
   });
 
   it('returns null when no row matches', async () => {

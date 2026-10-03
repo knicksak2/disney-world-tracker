@@ -6,11 +6,11 @@
  *   - buildLiveWaitsRows: sorts entries ascending by wait with closed/down entries last,
  *     applying the selected filter ('all' | 'walkOn' | 'headliners').
  *   - isWalkOn: true iff waitMinutes is non-null and <= WALK_ON_THRESHOLD_MINUTES.
- *   - isHeadliner: true iff experience has a thrillFactor facet in HEADLINER_THRILL_FACET_VALUES.
+ *   - isHeadliner: true iff experience.id is a member of the curated HEADLINER_EXPERIENCE_IDS allowlist.
  */
 
 import {
-  HEADLINER_THRILL_FACET_VALUES,
+  HEADLINER_EXPERIENCE_IDS,
   WALK_ON_THRESHOLD_MINUTES,
   type ExperienceDTO,
   type LightningLaneState,
@@ -73,15 +73,14 @@ export function isWalkOn(waitMinutes: number | null, threshold = WALK_ON_THRESHO
 }
 
 /**
- * R10.5: A headliner experience has at least one thrillFactor facet in HEADLINER_THRILL_FACET_VALUES.
+ * R10.5a: A headliner experience's stable internal `id` is a member of the
+ * curated `HEADLINER_EXPERIENCE_IDS` allowlist. Supersedes the original
+ * `groupedFacets.thrillFactor` match (Requirement 10.5a) — see
+ * `HEADLINER_EXPERIENCE_IDS`'s doc comment for why.
  */
 export function isHeadliner(experience: ExperienceDTO): boolean {
-  const thrillFacets = experience.groupedFacets?.thrillFactor;
-  if (!Array.isArray(thrillFacets)) {
-    return false;
-  }
-  const headlinerSet: readonly string[] = HEADLINER_THRILL_FACET_VALUES;
-  return thrillFacets.some((facet) => headlinerSet.includes(facet.id));
+  const headlinerSet: readonly string[] = HEADLINER_EXPERIENCE_IDS;
+  return headlinerSet.includes(experience.id);
 }
 
 /**

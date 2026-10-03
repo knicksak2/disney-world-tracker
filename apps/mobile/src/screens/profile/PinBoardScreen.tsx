@@ -195,18 +195,28 @@ export default function PinBoardScreen({ navigation, route }: Props): JSX.Elemen
     };
   }, []);
 
-  function enqueueClaim(pinId: string): void {
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setQueue((q) => {
-      if (q.includes(pinId)) return q;
-      const next = [...q, pinId];
-      // Starting a fresh batch (queue was empty and nothing is celebrating):
-      // this id's batch total is 1 unless more are added in the same tick.
-      if (q.length === 0 && celebratingId === null) setQueueTotal(1);
-      else setQueueTotal((t) => t + 1);
-      return next;
-    });
-  }
+  // Stable identity: `renderPinCell` below (the `FlatList`'s `renderItem`,
+  // already wrapped in `useCallback`) lists this function as a dependency.
+  // A plain `function` declaration here is recreated every render, which
+  // would give `renderPinCell` a new identity every render too — defeating
+  // the stable-`renderItem` fix and reproducing the "large list that is slow
+  // to update" warning even though `PinCell` is memoized. See
+  // `DestinationScreen.tsx`'s `renderRow` for the same fix pattern.
+  const enqueueClaim = useCallback(
+    (pinId: string): void => {
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      setQueue((q) => {
+        if (q.includes(pinId)) return q;
+        const next = [...q, pinId];
+        // Starting a fresh batch (queue was empty and nothing is celebrating):
+        // this id's batch total is 1 unless more are added in the same tick.
+        if (q.length === 0 && celebratingId === null) setQueueTotal(1);
+        else setQueueTotal((t) => t + 1);
+        return next;
+      });
+    },
+    [celebratingId],
+  );
 
   /** "Claim all" (Requirement 23.4): enqueue every ready-to-claim id as one batch. */
   function enqueueAll(pinIds: readonly string[]): void {
@@ -458,7 +468,8 @@ export default function PinBoardScreen({ navigation, route }: Props): JSX.Elemen
           meta={meta}
           size={tileSize}
           readyToClaim={readyToClaim}
-          onTap={() => (readyToClaim ? enqueueClaim(item.pinId) : setSelected(item))}
+          onEnqueueClaim={enqueueClaim}
+          onViewDetail={setSelected}
         />
       );
     },
@@ -551,7 +562,15 @@ interface PinCellProps {
   readonly meta: PinDTO;
   readonly size: number;
   readonly readyToClaim: boolean;
-  readonly onTap: () => void;
+  /**
+   * Stable callbacks (not a per-item `onTap` closure) so `renderPinCell`
+   * can pass the same two function identities for every row regardless of
+   * which pin it is — otherwise an inline `() => ...` built fresh per item on
+   * every `renderItem` call would defeat this component's own `React.memo`.
+   * `PinCell` derives the per-item tap handler itself via `useCallback`.
+   */
+  readonly onEnqueueClaim: (pinId: string) => void;
+  readonly onViewDetail: (item: UserPinProgressDTO) => void;
 }
 
 /**
@@ -564,8 +583,23 @@ interface PinCellProps {
  * resolves (readyToClaim flips to false) the art cross-fades from its
  * locked to its unlocked rendering.
  */
-function PinCell({ item, meta, size, readyToClaim, onTap }: PinCellProps): JSX.Element {
+const PinCell = React.memo(function PinCell({
+  item,
+  meta,
+  size,
+  readyToClaim,
+  onEnqueueClaim,
+  onViewDetail,
+}: PinCellProps): JSX.Element {
   const scale = useRef(new Animated.Value(1)).current;
+
+  const onTap = useCallback(() => {
+    if (readyToClaim) {
+      onEnqueueClaim(item.pinId);
+    } else {
+      onViewDetail(item);
+    }
+  }, [readyToClaim, onEnqueueClaim, onViewDetail, item]);
 
   // A pin renders unlocked art only once it is both earned AND claimed (Requirement 23.1);
   // ready-to-claim pins render through PinView's locked branch until the claim resolves.
@@ -645,7 +679,7 @@ function PinCell({ item, meta, size, readyToClaim, onTap }: PinCellProps): JSX.E
       ) : null}
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: theme.spacing.xl },

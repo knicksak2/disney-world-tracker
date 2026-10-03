@@ -216,6 +216,64 @@ describe('GET /catalog', () => {
     await app.close();
   });
 
+  it('forwards festivalSlug (and festivalYear) to the repo (festival-booth-tagging R8.4, R8.5)', async () => {
+    const { app, listFilters } = await buildApp();
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/catalog?festivalSlug=food-and-wine&festivalYear=2026',
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(listFilters).toEqual([
+      { festivalSlug: 'food-and-wine', festivalYear: 2026 },
+    ]);
+    await app.close();
+  });
+
+  it('forwards festivalSlug alone without festivalYear', async () => {
+    const { app, listFilters } = await buildApp();
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/catalog?festivalSlug=flower-and-garden',
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(listFilters).toEqual([{ festivalSlug: 'flower-and-garden' }]);
+    await app.close();
+  });
+
+  it('rejects festivalYear supplied without festivalSlug with validation_failed naming festivalYear (R8.6)', async () => {
+    const { app } = await buildApp();
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/catalog?festivalYear=2026',
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({
+      error: { code: 'validation_failed', field: 'festivalYear' },
+    });
+    await app.close();
+  });
+
+  it('rejects an invalid festivalSlug enum value with validation_failed', async () => {
+    const { app } = await buildApp();
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/catalog?festivalSlug=not-a-real-festival',
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({
+      error: { code: 'validation_failed' },
+    });
+    await app.close();
+  });
+
   it('returns experiences matching search query q through relevance search (R1.20, R1.25)', async () => {
     const runawayRailway = makeExperience({
       id: '00000000-0000-4000-8000-000000000010',

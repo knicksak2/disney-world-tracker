@@ -71,3 +71,60 @@ describe('experienceSchema — land validation', () => {
     expect(result.success).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// festivalTag validation (festival-booth-tagging R8.1, R8.2)
+// ---------------------------------------------------------------------------
+
+describe('experienceSchema — festivalTag validation', () => {
+  it('accepts a valid festivalTag', () => {
+    const result = experienceSchema.safeParse({
+      ...BASE,
+      festivalTag: { slug: 'food-and-wine', year: 2026 },
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.festivalTag).toEqual({ slug: 'food-and-wine', year: 2026 });
+    }
+  });
+
+  it('accepts an absent festivalTag (optional field)', () => {
+    const result = experienceSchema.safeParse(BASE);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.festivalTag).toBeUndefined();
+    }
+  });
+
+  it('accepts a null festivalTag (persisted null / untagged)', () => {
+    const result = experienceSchema.safeParse({ ...BASE, festivalTag: null });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.festivalTag).toBeNull();
+    }
+  });
+
+  it('rejects a festivalTag with an invalid (non-enum) slug', () => {
+    const result = experienceSchema.safeParse({
+      ...BASE,
+      festivalTag: { slug: 'not-a-real-festival', year: 2026 },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects a festivalTag with a non-integer year', () => {
+    const result = experienceSchema.safeParse({
+      ...BASE,
+      festivalTag: { slug: 'food-and-wine', year: 2026.5 },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects a festivalTag with an extra unknown field (strict object)', () => {
+    const result = experienceSchema.safeParse({
+      ...BASE,
+      festivalTag: { slug: 'food-and-wine', year: 2026, extra: 'nope' },
+    });
+    expect(result.success).toBe(false);
+  });
+});

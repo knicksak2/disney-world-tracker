@@ -17,6 +17,7 @@ import {
 } from '@dwt/shared';
 
 import type { DestinationId } from '../../catalog/destinations';
+import { FESTIVAL_SLUGS, FESTIVAL_SLUG_LABELS } from '@dwt/shared';
 import {
   WHITELISTED_FACET_GROUPS,
   deriveFilterChips,
@@ -25,6 +26,7 @@ import {
   formatEmptyFilterMessage,
   formatSearchHintMessage,
   isKnownPark,
+  isSuppressedAttributeFacet,
   matchesExperienceAttribute,
   resolveParkScope,
   type ExperiencePickerTab,
@@ -150,13 +152,25 @@ const experienceArb: fc.Arbitrary<ExperienceDTO> = fc
       { nil: null },
     ),
     groupedFacets: fc.option(groupedFacetsArb, { nil: undefined }),
+    festivalTag: fc.option(
+      fc.record({
+        slug: fc.constantFrom(...FESTIVAL_SLUGS),
+        year: fc.integer({ min: 2015, max: 2100 }),
+      }),
+      { nil: undefined },
+    ),
   })
   .map((exp) => {
+    let result = exp as ExperienceDTO;
     if (exp.groupedFacets === undefined) {
-      const { groupedFacets: _gf, ...rest } = exp;
-      return rest as ExperienceDTO;
+      const { groupedFacets: _gf, ...rest } = result;
+      result = rest as ExperienceDTO;
     }
-    return exp as ExperienceDTO;
+    if (exp.festivalTag === undefined) {
+      const { festivalTag: _ft, ...rest } = result;
+      result = rest as ExperienceDTO;
+    }
+    return result;
   });
 
 const datasetArb = fc.array(experienceArb, { minLength: 0, maxLength: 25 });
@@ -183,10 +197,16 @@ describe('Property 19: ExperiencePicker multi-select filtering, land/price/attri
   it('deriveFilterChips partitions unique land, price, and attribute chips, excludes age/height, and dedupes (R4.15)', () => {
     fc.assert(
       fc.property(datasetArb, (experiences) => {
-        const { landChips, priceChips, attributeChips, allChips } = deriveFilterChips(experiences);
+        const { landChips, priceChips, attributeChips, festivalChips, allChips } =
+          deriveFilterChips(experiences);
 
         // 1. Total partition integrity
-        expect(allChips).toEqual([...landChips, ...priceChips, ...attributeChips]);
+        expect(allChips).toEqual([
+          ...landChips,
+          ...priceChips,
+          ...attributeChips,
+          ...festivalChips,
+        ]);
 
         // 2. Land chip uniqueness & formatting
         const landIds = new Set(landChips.map((c) => c.id));
@@ -250,6 +270,101 @@ describe('Property 19: ExperiencePicker multi-select filtering, land/price/attri
           expect(backedByWhitelist).toBe(true);
         }
       }),
+      { numRuns: NUM_RUNS },
+    );
+  });
+
+  // Feature: festival-booth-tagging, Property 29 (mobile side): festivalChips
+  // dedup/labeling and selectedFestivals OR/AND composition
+  it('deriveFilterChips.festivalChips are deduped by slug, labeled via FESTIVAL_SLUG_LABELS, and never emitted for an unobserved slug (R8.9, R8.11)', () => {
+    fc.assert(
+      fc.property(datasetArb, (experiences) => {
+        const { festivalChips } = deriveFilterChips(experiences);
+
+        // 1. Uniqueness by slug
+        const slugs = festivalChips.map((c) => c.rawValue);
+        expect(new Set(slugs).size).toBe(slugs.length);
+
+        // 2. Every chip is labeled via FESTIVAL_SLUG_LABELS, never the raw slug alone
+        for (const chip of festivalChips) {
+          expect(chip.kind).toBe('festival');
+          expect(chip.label).toBe(
+            FESTIVAL_SLUG_LABELS[chip.rawValue as keyof typeof FESTIVAL_SLUG_LABELS],
+          );
+          expect(chip.accessibilityLabel).toContain('festival filter');
+        }
+
+        // 3. Soundness: every chip's slug was actually observed in the input
+        const observedSlugs = new Set<string>(
+          experiences
+            .map((e) => e.festivalTag?.slug)
+            .filter((s): s is NonNullable<typeof s> => typeof s === 'string'),
+        );
+        for (const chip of festivalChips) {
+          expect(observedSlugs.has(chip.rawValue)).toBe(true);
+        }
+
+        // 4. Completeness: every observed slug produced exactly one chip
+        expect(new Set(slugs)).toEqual(observedSlugs);
+      }),
+      { numRuns: NUM_RUNS },
+    );
+  });
+
+  it('filterExperiencesMulti selectedFestivals composes OR-within/AND-across like selectedLands/selectedTags, and an empty set is a no-op (R8.10)', () => {
+    fc.assert(
+      fc.property(
+        datasetArb,
+        fc.array(fc.constantFrom(...FESTIVAL_SLUGS), { maxLength: 3 }),
+        (experiences, festivalList) => {
+          const selectedFestivals = new Set(festivalList);
+          const emptyLands = new Set<string>();
+          const emptyTags = new Set<string>();
+
+          // Backward-compatibility: omitting the 4th argument entirely must
+          // behave identically to passing an explicit empty set.
+          const omittedArgResult = filterExperiencesMulti(experiences, emptyLands, emptyTags);
+          const explicitEmptyResult = filterExperiencesMulti(
+            experiences,
+            emptyLands,
+            emptyTags,
+            new Set<string>(),
+          );
+          expect(omittedArgResult).toEqual(explicitEmptyResult);
+
+          const filtered = filterExperiencesMulti(
+            experiences,
+            emptyLands,
+            emptyTags,
+            selectedFestivals,
+          );
+
+          if (selectedFestivals.size === 0) {
+            expect(filtered).toBe(experiences);
+            return;
+          }
+
+          // Soundness: every surviving experience carries a selected festival slug.
+          for (const exp of filtered) {
+            expect(
+              exp.festivalTag !== undefined &&
+                exp.festivalTag !== null &&
+                selectedFestivals.has(exp.festivalTag.slug),
+            ).toBe(true);
+          }
+
+          // Completeness: every experience with a selected slug survived.
+          for (const exp of experiences) {
+            const matches =
+              exp.festivalTag !== undefined &&
+              exp.festivalTag !== null &&
+              selectedFestivals.has(exp.festivalTag.slug);
+            if (matches) {
+              expect(filtered).toContain(exp);
+            }
+          }
+        },
+      ),
       { numRuns: NUM_RUNS },
     );
   });
@@ -484,6 +599,166 @@ describe('Property 19: ExperiencePicker multi-select filtering, land/price/attri
         ),
         { numRuns: NUM_RUNS },
       );
+    });
+  });
+
+  describe('Festival filtering, noisy tag cleanup, and synonym normalization', () => {
+    it('suppresses internal and redundant Disney facet noise', () => {
+      expect(isSuppressedAttributeFacet('EPCOT AreaXX')).toBe(true);
+      expect(isSuppressedAttributeFacet('areaxx')).toBe(true);
+      expect(isSuppressedAttributeFacet('Menu Category Display')).toBe(true);
+      expect(isSuppressedAttributeFacet('walkupWaitList')).toBe(true);
+      expect(isSuppressedAttributeFacet('Festival Kiosk')).toBe(true);
+      expect(isSuppressedAttributeFacet('Theme Park Dining')).toBe(true);
+      expect(isSuppressedAttributeFacet('All Quick Service')).toBe(true);
+
+      // Legitimate attributes are not suppressed
+      expect(isSuppressedAttributeFacet('Quick Service')).toBe(false);
+      expect(isSuppressedAttributeFacet('Table Service')).toBe(false);
+      expect(isSuppressedAttributeFacet('Character Dining')).toBe(false);
+      expect(isSuppressedAttributeFacet('American')).toBe(false);
+    });
+
+    it('deriveFilterChips excludes suppressed noise facets and deduplicates synonyms', () => {
+      const experiences: ExperienceDTO[] = [
+        {
+          id: 'exp-1',
+          name: 'Noise Booth',
+          park: 'EPCOT',
+          category: 'Restaurant',
+          description: '',
+          active: true,
+          imageUrl: null,
+          areaType: 'ThemePark',
+          groupedFacets: {
+            dining: [
+              { id: 'f-1', name: 'EPCOT AreaXX' },
+              { id: 'f-2', name: 'Menu Category Display' },
+              { id: 'f-3', name: 'walkupWaitList' },
+              { id: 'f-4', name: 'Bar-Lounge' },
+            ],
+            diningInterests: [
+              { id: 'f-5', name: 'Theme Park Dining' },
+              { id: 'f-6', name: 'Bars/Lounges' },
+            ],
+            quickService: [
+              { id: 'f-7', name: 'Festival Kiosk' },
+              { id: 'f-8', name: 'All Quick Service' },
+              { id: 'f-9', name: 'Quick Service' },
+            ],
+            cuisine: [
+              { id: 'f-10', name: 'Snack' },
+              { id: 'f-11', name: 'Snacks' },
+            ],
+          },
+        },
+      ];
+
+      const { attributeChips } = deriveFilterChips(experiences);
+      const rawValues = attributeChips.map((c) => c.rawValue);
+
+      // Suppressed tags should not be present
+      expect(rawValues).not.toContain('EPCOT AreaXX');
+      expect(rawValues).not.toContain('Menu Category Display');
+      expect(rawValues).not.toContain('walkupWaitList');
+      expect(rawValues).not.toContain('Festival Kiosk');
+      expect(rawValues).not.toContain('Theme Park Dining');
+      expect(rawValues).not.toContain('All Quick Service');
+
+      // Canonical tags should be present and deduplicated
+      expect(rawValues).toContain('Quick Service');
+      expect(rawValues).toContain('Bars/Lounges');
+      expect(rawValues).not.toContain('Bar-Lounge');
+      expect(rawValues).toContain('Snacks');
+      expect(rawValues).not.toContain('Snack');
+    });
+
+    it('matchesExperienceAttribute matches both canonical and synonym attribute values', () => {
+      const expBarLounge: ExperienceDTO = {
+        id: 'exp-bar',
+        name: 'Rose & Crown Pub',
+        park: 'EPCOT',
+        category: 'Restaurant',
+        description: '',
+        active: true,
+        imageUrl: null,
+        areaType: 'ThemePark',
+        groupedFacets: {
+          dining: [{ id: 'f-bar', name: 'Bar-Lounge' }],
+        },
+      };
+
+      const expSnack: ExperienceDTO = {
+        id: 'exp-snack',
+        name: 'Popcorn Cart',
+        park: 'EPCOT',
+        category: 'Restaurant',
+        description: '',
+        active: true,
+        imageUrl: null,
+        areaType: 'ThemePark',
+        groupedFacets: {
+          cuisine: [{ id: 'f-snack', name: 'Snack' }],
+        },
+      };
+
+      // Searching for 'Bars/Lounges' matches 'Bar-Lounge'
+      expect(matchesExperienceAttribute(expBarLounge, 'Bars/Lounges')).toBe(true);
+      expect(matchesExperienceAttribute(expBarLounge, 'bar-lounge')).toBe(true);
+
+      // Searching for 'Snacks' matches 'Snack'
+      expect(matchesExperienceAttribute(expSnack, 'Snacks')).toBe(true);
+      expect(matchesExperienceAttribute(expSnack, 'snack')).toBe(true);
+    });
+
+    it('deriveQuickChips prioritizes active festival chips on dining and all tabs', () => {
+      const festivalChips = [
+        {
+          id: 'festival-food-and-wine',
+          label: 'EPCOT International Food & Wine Festival',
+          kind: 'festival' as const,
+          rawValue: 'food-and-wine',
+          accessibilityLabel: 'EPCOT International Food & Wine Festival, festival filter',
+        },
+      ];
+      const attributeChips = [
+        {
+          id: 'attr-qs',
+          label: '🍔 Quick Service',
+          kind: 'attribute' as const,
+          rawValue: 'Quick Service',
+          accessibilityLabel: 'Quick Service, attribute filter',
+        },
+        {
+          id: 'attr-ts',
+          label: '🍽️ Table Service',
+          kind: 'attribute' as const,
+          rawValue: 'Table Service',
+          accessibilityLabel: 'Table Service, attribute filter',
+        },
+      ];
+      const priceChips = [
+        {
+          id: 'price-s',
+          label: '💵 $ (Under $15)',
+          kind: 'price' as const,
+          rawValue: '$',
+          accessibilityLabel: 'Price tier: $',
+        },
+      ];
+
+      // On dining tab, festival chip appears first
+      const diningQuick = deriveQuickChips(attributeChips, 'dining', priceChips, festivalChips);
+      expect(diningQuick[0]!.id).toBe('festival-food-and-wine');
+      expect(diningQuick[0]!.kind).toBe('festival');
+
+      // On all tab, festival chip appears first
+      const allQuick = deriveQuickChips(attributeChips, 'all', priceChips, festivalChips);
+      expect(allQuick[0]!.id).toBe('festival-food-and-wine');
+
+      // On attractions tab, festival chip is not injected
+      const attractionsQuick = deriveQuickChips(attributeChips, 'attractions', priceChips, festivalChips);
+      expect(attractionsQuick.some((c) => c.kind === 'festival')).toBe(false);
     });
   });
 });

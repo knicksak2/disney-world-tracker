@@ -2947,6 +2947,12 @@ describe('TripScheduleScreen', () => {
 describe('TripScheduleScreen — reservation badges (trip-reservations R4.3, R5.2)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.useFakeTimers({ doNotFake: ['nextTick', 'setImmediate'] });
+    jest.setSystemTime(new Date('2026-05-01T12:00:00.000Z'));
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
   });
 
   function mockDayWith(items: readonly PlannedItemDTO[]): void {
@@ -3730,6 +3736,16 @@ describe('TripScheduleScreen — shared time wheel (trip-reservations task 8.1)'
 // request body, something only a screen-level test (not
 // `ExperiencePicker.test.tsx` alone) can do.
 describe('TripScheduleScreen — Property 19: list-sourced selection is behaviorally identical to catalog search (R15.4, R15.6)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.useFakeTimers({ doNotFake: ['nextTick', 'setImmediate'] });
+    jest.setSystemTime(new Date('2026-05-01T12:00:00.000Z'));
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
   it('POSTs the identical /trips/:id/planned-items request body whether the same Experience is selected from catalog search or from the "My Lists" tab', async () => {
     const postedBodies: unknown[] = [];
     const SHARED_EXPERIENCE_ID = 'exp-shared-jungle-cruise';

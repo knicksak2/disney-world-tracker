@@ -16,7 +16,29 @@ Investigation of the existing codebase and the live ThemeParks.wiki API establis
 - **`GET /entity/{parkGuid}/live` already returns every child in one call.** Verified directly against the production API: requesting Magic Kingdom's entity GUID returned 71 `liveData` entries (the park entity itself plus every tracked child), each carrying the same `status` / `queue.STANDBY.waitTime` shape the existing `ThemeParksLiveEntry` type already models for the single-entity case. `samplingService.runSamplingPass` already issues exactly this call shape per park (`liveClient.getEntityLive(park.id)`) during its cron pass — this feature's `ParkLiveService` reuses the same client and the same call shape for an interactive, cached, on-demand read instead of a batch sampling pass.
 - **Park → ThemeParks GUID resolution already exists.** `samplingService.ts` resolves the WDW destination's parks via `catalogClient.getDestinations()` → `wdw.parks`, giving each park's own ThemeParks GUID directly (a park's live-query id is the park entity's own id — it is not run through `themeParksDirectory.resolveEntityId`, which maps an *Experience's* `Enterprise_Id` to *that Experience's* ThemeParks GUID). `ParkLiveService` reuses this same destination enumeration, cached identically to how `themeParksDirectory` caches its own map (TTL + de-duplicated in-flight build), rather than introducing a second resolution mechanism.
 - **The existing per-Experience `Live_Cache`/`LiveCache` pattern is directly reusable, not reinventable.** `cache.ts`'s split between a freshness TTL (evaluated in application code) and a longer Redis key retention (for stale-serve) is exactly the shape a park-keyed cache needs; only the key prefix and payload shape change (a `ThemeParksLiveResponse`-shaped array instead of one projected `LiveDetailDTO`).
-- **`thrillFactor` is an existing, already-synced Facet_Group.** `INTEREST_FACET_GROUPS` in `facilityDoc.ts` already includes `thrillFactor`, populated by the existing `disney-facilities-catalog-source`/`experience-facet-enrichment` sync. The Headliner filter (Requirement 10.5) is a read-time match against this existing persisted facet — no new catalog field, no new sync logic.
+- **Headliner_Facet is a curated id allowlist, not a `thrillFactor` facet match (Requirement 10.5a).**
+  The original design read the Headliner filter (Requirement 10.5) against `groupedFacets.thrillFactor`
+  — `INTEREST_FACET_GROUPS` in `facilityDoc.ts` already includes `thrillFactor`, populated by the
+  existing `disney-facilities-catalog-source`/`experience-facet-enrichment` sync, so that approach
+  needed no new catalog field or sync logic. A live-data audit found the facet measures sensory
+  thrill intensity, not marquee/must-do status, and the two diverge badly in this park: most Typhoon
+  Lagoon/Blizzard Beach water slides carry `thrill-rides` (false positives), while Haunted Mansion,
+  Pirates of the Caribbean, and Frozen Ever After carry only `slow-rides`/`dark` (false negatives).
+  `catalog-taxonomy-cleanup`'s design made the identical call for a structurally identical problem —
+  "the facet signal is roughly 90% accurate... so it is a good discovery tool and a bad classifier" —
+  and used a hand-checked literal id list (`Category_Overrides`) instead of a runtime facet match.
+  Headliner_Facet now follows that same precedent: `HEADLINER_EXPERIENCE_IDS` is a curated list of
+  stable internal `id`s (not Enterprise_Ids — see below), and `isHeadliner` is a `Set.has(id)` check.
+  This keeps `isHeadliner` pure, cheap, and dependency-free, at the cost of needing a manual addition
+  when a new marquee attraction opens (the same cost `Category_Overrides` already accepts).
+- **The curated set is keyed by the stable internal `id`, not the Disney `Enterprise_Id`
+  (`upstream_entity_id`).** `ExperienceDTO` (the wire shape `isHeadliner` receives) never carries
+  `upstream_entity_id` — that field exists only server-side (`experiences.upstream_entity_id`) and is
+  used internally by `internalId()`'s UUIDv5 derivation and by server-only curated sets like
+  `PIN_SETS` in `pins/catalog.ts` (whose evaluator has direct DB-row access). A client-side pure
+  function has only the `id` field to key against, so `HEADLINER_EXPERIENCE_IDS` is a list of
+  internal `id`s, pinned once per environment's sync and stable for the lifetime of each Experience
+  row (ids do not change on re-sync; see `catalog` design's Identity Continuity).
 - **The claimable-Pin count and queue-navigation contract already exist.** `useClaimablePinsBadge()` reads the exact same `pinBoardKey` cache `PinBoardScreen` reads, and `ProfileStack.PinBoard` already accepts `{ celebratePinIds?: string[] }` to drive the existing claim-and-celebrate queue. The Quick_Action_Sheet's "Claim Pins" action (Requirement 4.5) is wiring, not new claim logic.
 - **The combined Attention_Badge is already screen-agnostic.** `useAttentionBadge()` and `useClaimablePinsBadge()` are plain hooks with no dependency on being rendered inside a specific tab's icon — today's `ProfileTabIcon` just happens to be their only caller. Promoting the badge to a header control on every Main_Tab (Requirement 8) is a new call site for an existing hook, not new state.
 
@@ -124,7 +146,8 @@ apps/api/src/services/live/
   routes.ts                   (changed, or new parkLiveRoutes.ts) GET /parks/:park/live
 
 packages/shared/src/
-  constants/navigation.ts     (new) WALK_ON_THRESHOLD_MINUTES, HEADLINER_THRILL_FACET_VALUES
+  constants/navigation.ts     (new) WALK_ON_THRESHOLD_MINUTES, HEADLINER_EXPERIENCE_IDS (supersedes
+                              the originally-planned HEADLINER_THRILL_FACET_VALUES; Requirement 10.5a)
   schemas/ParkLive.ts          (new) ParkLiveSnapshotDTO + Zod schema
 ```
 
@@ -473,7 +496,11 @@ export function buildLiveWaitsRows(
 /** R10.4 — a numeric wait at or below WALK_ON_THRESHOLD_MINUTES. */
 export function isWalkOn(waitMinutes: number | null): boolean;
 
-/** R10.5 — the Experience carries a configured high-intensity thrillFactor facet value. */
+/**
+ * R10.5a — the Experience's internal `id` appears in the curated
+ * `HEADLINER_EXPERIENCE_IDS` allowlist. Supersedes the originally-planned
+ * `groupedFacets.thrillFactor` match (see design.md's architectural notes).
+ */
 export function isHeadliner(experience: ExperienceDTO): boolean;
 ```
 
@@ -609,14 +636,19 @@ which never appears as a map key.
 
 **Validates: Requirements 10.2**
 
-### Property 3: Walk-on and Headliner filters are threshold/facet-exact and monotonic in their own dimension
+### Property 3: Walk-on and Headliner filters are threshold/id-exact and monotonic in their own dimension
 
 *For any* Row, `isWalkOn(waitMinutes)` is true iff `waitMinutes` is non-null and
 `waitMinutes <= WALK_ON_THRESHOLD_MINUTES`; raising `WALK_ON_THRESHOLD_MINUTES` never removes a
 previously-included Row (monotonic in the threshold). *For any* Experience, `isHeadliner(experience)` is
-true iff its `groupedFacets.thrillFactor` contains at least one id in `HEADLINER_THRILL_FACET_VALUES`.
+true iff its `id` is a member of `HEADLINER_EXPERIENCE_IDS`.
 
-**Validates: Requirements 10.4, 10.5**
+**Amendment — superseded clause, recorded for the record:** this property originally asserted
+`isHeadliner(experience)` is true iff its `groupedFacets.thrillFactor` contains at least one id in
+`HEADLINER_THRILL_FACET_VALUES`. Requirement 10.5a's redefinition (curated id allowlist, not a facet
+match) supersedes that clause; the id-membership clause above is the current, authoritative version.
+
+**Validates: Requirements 10.4, 10.5, 10.5a**
 
 ### Property 4: `buildQuickActions` is a total, order-preserving projection of the claimable count
 

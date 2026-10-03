@@ -35,6 +35,11 @@ sub-tasks are marked optional with `*`.
   - [x] 1.4 Write schema unit tests
     - Verify `parkLiveSnapshotSchema` accepts a well-formed snapshot and rejects a negative/out-of-range `waitMinutes`, and that `HEADLINER_THRILL_FACET_VALUES` is non-empty
     - _Requirements: 9.1_
+  - [x] 1.5 (Amendment, Requirement 10.5a) Replace `HEADLINER_THRILL_FACET_VALUES` with a curated `HEADLINER_EXPERIENCE_IDS` allowlist
+    - A live-data audit of task 1.3's facet-based constant found most matches were Typhoon Lagoon/Blizzard Beach water slides (tagged `thrill-rides` for sensory reasons) while unambiguous headliners (Haunted Mansion, Pirates of the Caribbean, Frozen Ever After) were excluded (tagged `slow-rides`/`dark`). Replace `HEADLINER_THRILL_FACET_VALUES` with `HEADLINER_EXPERIENCE_IDS: readonly string[]` keyed by each Experience's stable internal `id` (not `upstream_entity_id` — `ExperienceDTO` does not carry that field over the wire), curated per park by cross-referencing `ride_shapes.baseline_wait_minutes` ranking against Disney's published Lightning Lane Tier 1/Single Pass lists, following the same hand-maintained-list discipline as `catalog-taxonomy-cleanup`'s `Category_Overrides`; remove the old constant and its export entirely (no deprecation period — this is a pre-launch definitional correction, not a wire-contract change visible to any shipped client)
+    - _Requirements: 10.5a, Configuration & Constants_
+  - [x] 1.6 (Amendment) Update `isHeadliner` in `parkLiveView.ts` to check `HEADLINER_EXPERIENCE_IDS.includes(experience.id)` instead of the `thrillFactor` facet intersection; update the schema/constants unit test (task 1.4) to assert `HEADLINER_EXPERIENCE_IDS` is non-empty instead of asserting facet-id membership
+    - _Requirements: 10.5a_
 
 - [x] 2. Build the API Park_Live_Snapshot service
   - [x] 2.1 Implement `ParkGuidResolver` (`services/live/parkResolve.ts`)
@@ -73,9 +78,11 @@ sub-tasks are marked optional with `*`.
   - [x] 5.1 Implement `parkLiveView.ts` (`screens/liveWaits/parkLiveView.ts`)
     - `buildLiveWaitsRows(entries, experiencesById, filter)`: filter entries to queue-eligible experiences (categories Ride and Character_Meet, or any Experience actively posting a standby wait; excluding Restaurants and schedule-only entertainment without waits), sort ascending by `waitMinutes` with closed/down entries last, apply the selected filter; `isWalkOn(waitMinutes)`: true iff non-null and `<= WALK_ON_THRESHOLD_MINUTES`; `isHeadliner(experience)`: true iff `groupedFacets.thrillFactor` intersects `HEADLINER_THRILL_FACET_VALUES`; all pure, no I/O
     - _Requirements: 10.2, 10.3, 10.4, 10.5_
+    - **Superseded by task 1.6 (Requirement 10.5a):** `isHeadliner` no longer reads `groupedFacets.thrillFactor`; see task 1.6.
   - [x] 5.2 Write property tests for `parkLiveView.ts`
     - **Property 2: Sort/filter never drops or duplicates an eligible Row and resolves closed/down last** — for any entries and any filter, the result is a duplicate-free subset of input ids; under `'all'` every queue-eligible entry is present exactly once; numeric-wait Rows precede closed/down Rows and are strictly ascending. **Validates: Requirements 10.2**
     - **Property 3: Walk-on/Headliner are threshold/facet-exact and monotonic** — `isWalkOn` matches the threshold predicate exactly and raising the threshold never excludes a previously-included Row; `isHeadliner` matches the facet-membership predicate exactly. **Validates: Requirements 10.4, 10.5**
+    - **Amendment (Requirement 10.5a):** re-run this property test against the redefined `isHeadliner` — it now asserts id-allowlist membership against `HEADLINER_EXPERIENCE_IDS` instead of facet intersection; update the test's experience fixtures accordingly (see task 1.6).
   - [x] 5.3 Implement `resolveDefaultLiveWaitsPark` (`screens/liveWaits/defaultPark.ts`)
     - `resolveDefaultLiveWaitsPark(activeTripPark: Park | null, lastViewedPark: Park | null): Park`: active Trip's park, else last-viewed park, else the first entry of canonical `PARKS` order; pure, never returns outside `PARKS`
     - _Requirements: 4.3, 10.1_
@@ -292,6 +299,7 @@ sub-tasks are marked optional with `*`.
 - Property tests target the framework-free pure cores (`projectParkLive`, `parkLiveView.ts`, `resolveDefaultLiveWaitsPark`, `buildQuickActions`, `pulseCalculations.ts`, `countdown.ts`) so they run without rendering; component tests cover the screens; the Trip-structure regression test is a snapshot, not a property.
 - Checkpoints ensure incremental validation at the API boundary (task 4), before the risky `RootNavigator.tsx` cutover (task 11), at the end of the initial wave (task 14), and at the end of Home screen enhancements (task 15.7).
 - Task 1.3 (confirming real `thrillFactor` facet values) MUST happen before task 5.1/5.2 implement `isHeadliner` against a final constant — do not guess the values.
+- **Amendment (Requirement 10.5a):** tasks 1.5/1.6 supersede the facet-based `HEADLINER_THRILL_FACET_VALUES`/`isHeadliner` built in tasks 1.2/1.3/5.1/5.2 with a curated `HEADLINER_EXPERIENCE_IDS` id allowlist, after a live-data audit found the facet match mislabeled most water-park slides as headliners while excluding Haunted Mansion, Pirates of the Caribbean, and other unambiguous headliners. Tasks 1.2/1.3/5.1/5.2 are left checked as historical record of work actually done; 1.5/1.6 are the corrective follow-up and must both land together (constant + consumer) since `isHeadliner` would otherwise reference a removed export.
 
 ## Task Dependency Graph
 
@@ -325,10 +333,16 @@ sub-tasks are marked optional with `*`.
     { "id": 24, "tasks": ["18.1", "18.2"] },
     { "id": 25, "tasks": ["18.3", "18.4", "18.5"] },
     { "id": 26, "tasks": ["18.6", "18.7"] },
-    { "id": 27, "tasks": ["18.8"] }
+    { "id": 27, "tasks": ["18.8"] },
+    { "id": 28, "tasks": ["1.5", "1.6"] }
   ]
 }
 ```
+
+Wave 28 (Requirement 10.5a amendment) replaces the facet-based Headliner constant/consumer with the
+curated id allowlist. It depends only on the original tasks 1.2/1.3/5.1/5.2 having landed (so there
+is something to supersede) and has no dependents of its own, so it is sequenced last; it does not
+block or get blocked by any Collection/Lists work in waves 17-27, which are unrelated to Live Waits.
 
 Wave 24 builds the two extracted create modals and each screen's pin-toggle handler in parallel,
 since both depend only on tasks 17.1-17.4 (the Lists sub-view existing) and are otherwise

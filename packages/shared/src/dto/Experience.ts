@@ -16,7 +16,7 @@
  * Validates: Requirements 5.6, 5.7, 8.5
  */
 
-import type { AreaType, ExperienceCategory, Park } from '../enums.js';
+import type { AreaType, ExperienceCategory, FestivalSlug, Park } from '../enums.js';
 import type {
   FacetValueDTO,
   GroupedFacetsDTO,
@@ -166,4 +166,14 @@ export interface ExperienceDTO {
 
   /** Curated Disney reservation-page URL when seeded, else absent (R6.5, R6.6, R6.7). */
   readonly diningUrl?: string | undefined;
+
+  /**
+   * The EPCOT festival this Experience is tagged with (festival-booth-tagging
+   * R8.1), present only when at least one `experience_festival_tags` row
+   * exists for it. When an Experience carries tags for more than one
+   * Festival_Year, this reflects the highest (most recent) year's tag only.
+   * `null`/absent when untagged (R8.2). Independent of `active` — a
+   * since-deactivated, tagged booth still carries this field.
+   */
+  readonly festivalTag?: { readonly slug: FestivalSlug; readonly year: number } | null;
 }

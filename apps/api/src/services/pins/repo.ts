@@ -42,6 +42,13 @@ import {
   type DaySnapshot,
   type PinActivitySnapshot,
 } from './evaluator.js';
+import { collectQualifyingVisits } from '../catalog/festivalTags/qualifyingVisit.js';
+import {
+  QUALIFYING_VISIT_SIGNAL_SQL,
+  toRawQualifyingSignalRows,
+  type RawQualifyingVisitSignalRow,
+} from '../catalog/festivalTags/qualifyingVisitQuery.js';
+import { wdwToday } from '../trips/wdwClock.js';
 
 // ---------------------------------------------------------------------------
 // Public surface
@@ -118,6 +125,54 @@ const REAL_QUICK_SERVICE_IDS: ReadonlySet<string> = new Set([
   'food-court',
   'quick-service',
 ]);
+
+// ---------------------------------------------------------------------------
+// Qualifying-Visit signal read (festival-booth-tagging R9, R10, R11)
+// ---------------------------------------------------------------------------
+
+/** `QUALIFYING_VISIT_SIGNAL_SQL`'s row shape, plus the experience's `upstream_entity_id`. */
+interface PinQualifyingVisitSignalRow extends RawQualifyingVisitSignalRow {
+  readonly upstream_id: string | null;
+}
+
+/**
+ * {@link QUALIFYING_VISIT_SIGNAL_SQL}, joined to `experiences` for the
+ * `upstream_entity_id` the Pin_Service's evaluator keys everything on
+ * (`EvalExperience.upstreamId`). Restricted to experiences with a non-null
+ * `upstream_entity_id`, mirroring the old read's own filter.
+ */
+const PIN_QUALIFYING_VISIT_SIGNAL_SQL = `
+  SELECT sig.*, e.upstream_entity_id AS upstream_id
+    FROM (${QUALIFYING_VISIT_SIGNAL_SQL}) sig
+    JOIN experiences e ON e.id = sig.experience_id
+   WHERE e.upstream_entity_id IS NOT NULL
+`;
+
+/**
+ * Fold the raw signal rows into the set of `upstream_entity_id`s that
+ * qualify as a festival visit for this User (R11.1-11.3), via
+ * `collectQualifyingVisits`'s shared grouping + `isQualifyingVisit` decision
+ * — the SAME function `stats/repo.ts` uses, so the two can never diverge on
+ * this rule.
+ */
+function toFestivalTaggedCompletedIds(
+  rows: readonly PinQualifyingVisitSignalRow[],
+): Set<string> {
+  const upstreamIdByExperienceId = new Map<string, string>();
+  for (const row of rows) {
+    if (row.upstream_id !== null) {
+      upstreamIdByExperienceId.set(row.experience_id, row.upstream_id);
+    }
+  }
+
+  const visits = collectQualifyingVisits(toRawQualifyingSignalRows(rows), wdwToday());
+  const ids = new Set<string>();
+  for (const visit of visits) {
+    const upstreamId = upstreamIdByExperienceId.get(visit.experienceId);
+    if (upstreamId !== undefined) ids.add(upstreamId);
+  }
+  return ids;
+}
 
 // ---------------------------------------------------------------------------
 // Row shapes
@@ -203,14 +258,7 @@ export async function buildSnapshot(
         `SELECT COUNT(*) AS n FROM trip_memberships WHERE user_id = $1`,
         [userId],
       ),
-      pool.query<{ upstream_id: string | null }>(
-        `SELECT DISTINCT e.upstream_entity_id AS upstream_id
-           FROM completions c
-           JOIN experience_festival_tags t ON t.experience_id = c.experience_id
-           JOIN experiences e ON e.id = c.experience_id
-          WHERE c.user_id = $1 AND e.upstream_entity_id IS NOT NULL`,
-        [userId],
-      ),
+      pool.query<PinQualifyingVisitSignalRow>(PIN_QUALIFYING_VISIT_SIGNAL_SQL, [userId]),
     ]);
 
   const catalog = catalogRes.rows
@@ -222,10 +270,7 @@ export async function buildSnapshot(
     if (r.upstream_id !== null) completed.add(r.upstream_id);
   }
 
-  const festivalTaggedCompletedIds = new Set<string>();
-  for (const r of festivalTaggedRes.rows) {
-    if (r.upstream_id !== null) festivalTaggedCompletedIds.add(r.upstream_id);
-  }
+  const festivalTaggedCompletedIds = toFestivalTaggedCompletedIds(festivalTaggedRes.rows);
 
   return {
     catalog,

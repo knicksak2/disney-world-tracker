@@ -18,6 +18,7 @@ import {
   parkSchema,
   uuidSchema,
 } from './primitives.js';
+import { festivalSlugSchema } from './Festival.js';
 
 /** A single facet value: upstream id plus human-readable name (R9). */
 const facetValueSchema = z.object({ id: z.string(), name: z.string() }).strict();
@@ -70,5 +71,13 @@ export const experienceSchema = z
       .nullable()
       .optional(),
     subType: z.string().max(200).nullable().optional(),
+    // The highest-year EPCOT Festival_Tag for this Experience
+    // (festival-booth-tagging R8.1, R8.2). Present only when persisted;
+    // null/absent otherwise.
+    festivalTag: z
+      .object({ slug: festivalSlugSchema, year: z.number().int() })
+      .strict()
+      .nullable()
+      .optional(),
   })
   .strict();

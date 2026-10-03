@@ -1,7 +1,7 @@
 /**
  * Unit tests for tagFestivalBooth CLI pure helpers and orchestration.
  *
- * Validates: Requirements 3.1, 3.2, 3.3, 3.4, 3.5, 3.6
+ * Validates: Requirements 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 9.3, 10.1, 10.2
  */
 
 import { describe, expect, it, vi } from 'vitest';
@@ -14,6 +14,17 @@ import {
   runTaggingCli,
 } from '../tagFestivalBooth.js';
 import type { DiscoveredBooth, FestivalTagRepo } from '../../services/catalog/festivalTags/repo.js';
+
+/** Builds a fully-populated mock FestivalTagRepo, overridable per test. */
+function makeMockRepo(overrides: Partial<FestivalTagRepo> = {}): FestivalTagRepo {
+  return {
+    listActiveFestivalBooths: vi.fn().mockResolvedValue([]),
+    listActiveEpcotRestaurantIds: vi.fn().mockResolvedValue([]),
+    upsertTags: vi.fn().mockResolvedValue([]),
+    upsertFestivalEdition: vi.fn().mockResolvedValue(undefined),
+    ...overrides,
+  };
+}
 
 describe('tagFestivalBooth CLI pure helpers', () => {
   it('buildFestivalMenu lists all festivals in FESTIVAL_SLUGS order with numbers and labels', () => {
@@ -39,6 +50,8 @@ describe('tagFestivalBooth CLI pure helpers', () => {
         name: 'Bauernmarkt',
         park: 'EPCOT',
         conflictingTag: null,
+        matchKind: 'facet',
+        matchingFoodItemIds: [],
       },
       {
         experienceId: 'b2',
@@ -49,7 +62,10 @@ describe('tagFestivalBooth CLI pure helpers', () => {
           festivalSlug: 'food-and-wine',
           festivalYear: 2026,
           taggedAt: '2026-01-01T00:00:00.000Z',
+          matchKind: 'facet',
         },
+        matchKind: 'facet',
+        matchingFoodItemIds: [],
       },
     ];
 
@@ -63,59 +79,99 @@ describe('tagFestivalBooth CLI pure helpers', () => {
   });
 
   it('parseArgs correctly parses --year and --force', () => {
-    expect(parseArgs(['--year', '2026'])).toEqual({ year: 2026, force: false });
-    expect(parseArgs(['--year=2025', '--force'])).toEqual({ year: 2025, force: true });
-    expect(parseArgs(['--force'])).toEqual({ year: null, force: true });
-    expect(parseArgs([])).toEqual({ year: null, force: false });
+    expect(parseArgs(['--year', '2026'])).toEqual({ year: 2026, force: false, skipMenuRefresh: false });
+    expect(parseArgs(['--year=2025', '--force'])).toEqual({ year: 2025, force: true, skipMenuRefresh: false });
+    expect(parseArgs(['--force'])).toEqual({ year: null, force: true, skipMenuRefresh: false });
+    expect(parseArgs([])).toEqual({ year: null, force: false, skipMenuRefresh: false });
     // Invalid year ignored
-    expect(parseArgs(['--year', '2010'])).toEqual({ year: null, force: false });
-    expect(parseArgs(['--year=abc'])).toEqual({ year: null, force: false });
+    expect(parseArgs(['--year', '2010'])).toEqual({ year: null, force: false, skipMenuRefresh: false });
+    expect(parseArgs(['--year=abc'])).toEqual({ year: null, force: false, skipMenuRefresh: false });
+  });
+
+  it('parseArgs correctly parses --skip-menu-refresh (R3.10)', () => {
+    expect(parseArgs(['--skip-menu-refresh'])).toEqual({
+      year: null,
+      force: false,
+      skipMenuRefresh: true,
+    });
+    expect(parseArgs(['--year', '2026', '--force', '--skip-menu-refresh'])).toEqual({
+      year: 2026,
+      force: true,
+      skipMenuRefresh: true,
+    });
   });
 });
 
 describe('runTaggingCli orchestration flow', () => {
-  it('exits cleanly with no prompt when zero booths are discovered', async () => {
-    const mockRepo: FestivalTagRepo = {
-      listActiveFestivalBooths: vi.fn().mockResolvedValue([]),
-      upsertTags: vi.fn().mockResolvedValue([]),
-    };
+  it('exits cleanly with no booth-confirm prompt when zero booths are discovered, but still sets the edition window', async () => {
+    const mockRepo = makeMockRepo();
 
-    const promptFn = vi.fn().mockResolvedValueOnce('1'); // choice: 1 (food-and-wine)
+    // choice: 1 (food-and-wine), start date: blank (defaults today), end date: blank
+    const answers = ['1', '', ''];
+    let idx = 0;
+    const promptFn = vi.fn().mockImplementation(() => Promise.resolve(answers[idx++]!));
 
-    await runTaggingCli(mockRepo, { year: 2026, force: false }, promptFn);
+    await runTaggingCli(mockRepo, { year: 2026, force: false, skipMenuRefresh: true }, promptFn);
 
     expect(mockRepo.listActiveFestivalBooths).toHaveBeenCalledWith(2026, 'food-and-wine');
     expect(mockRepo.upsertTags).not.toHaveBeenCalled();
-    // Only 1 prompt (festival selection) was asked
-    expect(promptFn).toHaveBeenCalledTimes(1);
+    const todayIso = new Date().toISOString().slice(0, 10);
+    expect(mockRepo.upsertFestivalEdition).toHaveBeenCalledWith('food-and-wine', 2026, todayIso, null);
+    // Festival choice + start date + end date = 3 prompts
+    expect(promptFn).toHaveBeenCalledTimes(3);
   });
 
-  it('prompts confirmation and writes tags on confirmation', async () => {
+  it('prompts confirmation and writes tags on confirmation, threading matchKind/matchingFoodItemIds (R10.1)', async () => {
     const mockBooths: DiscoveredBooth[] = [
       {
         experienceId: 'b1',
         name: 'Bauernmarkt',
         park: 'EPCOT',
         conflictingTag: null,
+        matchKind: 'menu',
+        matchingFoodItemIds: ['fi-1', 'fi-2'],
       },
     ];
 
-    const mockRepo: FestivalTagRepo = {
+    const mockRepo = makeMockRepo({
       listActiveFestivalBooths: vi.fn().mockResolvedValue(mockBooths),
       upsertTags: vi.fn().mockResolvedValue(['b1']),
-    };
+    });
 
-    const answers = ['1', 'y'];
+    // choice: 1, start date: explicit, end date: blank, confirm: y
+    const answers = ['1', '2026-08-28', '', 'y'];
     let idx = 0;
     const promptFn = vi.fn().mockImplementation(() => Promise.resolve(answers[idx++]!));
 
-    await runTaggingCli(mockRepo, { year: 2026, force: false }, promptFn);
+    await runTaggingCli(mockRepo, { year: 2026, force: false, skipMenuRefresh: true }, promptFn);
 
     expect(mockRepo.listActiveFestivalBooths).toHaveBeenCalledWith(2026, 'food-and-wine');
+    expect(mockRepo.upsertFestivalEdition).toHaveBeenCalledWith('food-and-wine', 2026, '2026-08-28', null);
     expect(mockRepo.upsertTags).toHaveBeenCalledWith(
-      [{ experienceId: 'b1', year: 2026, slug: 'food-and-wine' }],
+      [
+        {
+          experienceId: 'b1',
+          year: 2026,
+          slug: 'food-and-wine',
+          matchKind: 'menu',
+          matchingFoodItemIds: ['fi-1', 'fi-2'],
+        },
+      ],
       { force: false },
     );
+  });
+
+  it('re-prompts on an invalid edition date before accepting a valid one', async () => {
+    const mockRepo = makeMockRepo();
+
+    // choice: 1, start date: invalid then valid, end date: invalid then blank
+    const answers = ['1', 'not-a-date', '2026-08-28', 'also-bad', ''];
+    let idx = 0;
+    const promptFn = vi.fn().mockImplementation(() => Promise.resolve(answers[idx++]!));
+
+    await runTaggingCli(mockRepo, { year: 2026, force: false, skipMenuRefresh: true }, promptFn);
+
+    expect(mockRepo.upsertFestivalEdition).toHaveBeenCalledWith('food-and-wine', 2026, '2026-08-28', null);
   });
 
   it('excludes conflicting booths without --force and aborts write if user answers no', async () => {
@@ -125,6 +181,8 @@ describe('runTaggingCli orchestration flow', () => {
         name: 'Bauernmarkt',
         park: 'EPCOT',
         conflictingTag: null,
+        matchKind: 'facet',
+        matchingFoodItemIds: [],
       },
       {
         experienceId: 'b2',
@@ -135,21 +193,164 @@ describe('runTaggingCli orchestration flow', () => {
           festivalSlug: 'food-and-wine',
           festivalYear: 2026,
           taggedAt: '2026-01-01T00:00:00.000Z',
+          matchKind: 'facet',
         },
+        matchKind: 'facet',
+        matchingFoodItemIds: [],
       },
     ];
 
-    const mockRepo: FestivalTagRepo = {
+    const mockRepo = makeMockRepo({
       listActiveFestivalBooths: vi.fn().mockResolvedValue(mockBooths),
-      upsertTags: vi.fn().mockResolvedValue([]),
-    };
+    });
 
-    const answers = ['2', 'n']; // choice 2: flower-and-garden, confirm: n
+    // choice 2: flower-and-garden, start date blank, end date blank, confirm: n
+    const answers = ['2', '', '', 'n'];
     let idx = 0;
     const promptFn = vi.fn().mockImplementation(() => Promise.resolve(answers[idx++]!));
 
-    await runTaggingCli(mockRepo, { year: 2026, force: false }, promptFn);
+    await runTaggingCli(mockRepo, { year: 2026, force: false, skipMenuRefresh: true }, promptFn);
 
     expect(mockRepo.upsertTags).not.toHaveBeenCalled();
+  });
+});
+
+describe('runTaggingCli menu-refresh step (R3.10)', () => {
+  function makeDiscoveryRepo(): FestivalTagRepo {
+    return makeMockRepo();
+  }
+
+  it('refreshes every active restaurant id via getMenuForRestaurant before discovery', async () => {
+    const repo = makeDiscoveryRepo();
+    const answers = ['1', '', ''];
+    let idx = 0;
+    const promptFn = vi.fn().mockImplementation(() => Promise.resolve(answers[idx++]!));
+    const getMenuForRestaurant = vi.fn().mockResolvedValue([]);
+    const listActiveRestaurantIds = vi.fn().mockResolvedValue(['r1', 'r2', 'r3']);
+
+    await runTaggingCli(
+      repo,
+      { year: 2026, force: false, skipMenuRefresh: false },
+      promptFn,
+      { listActiveRestaurantIds, menuRetrieval: { getMenuForRestaurant } },
+    );
+
+    expect(listActiveRestaurantIds).toHaveBeenCalledTimes(1);
+    expect(getMenuForRestaurant).toHaveBeenCalledTimes(3);
+    expect(getMenuForRestaurant).toHaveBeenCalledWith('r1');
+    expect(getMenuForRestaurant).toHaveBeenCalledWith('r2');
+    expect(getMenuForRestaurant).toHaveBeenCalledWith('r3');
+    // Discovery still ran after the refresh step.
+    expect(repo.listActiveFestivalBooths).toHaveBeenCalledWith(2026, 'food-and-wine');
+  });
+
+  it('a refresh failure for one restaurant does not abort the pass or prevent discovery', async () => {
+    const repo = makeDiscoveryRepo();
+    const answers = ['1', '', ''];
+    let idx = 0;
+    const promptFn = vi.fn().mockImplementation(() => Promise.resolve(answers[idx++]!));
+    const getMenuForRestaurant = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('boom'))
+      .mockResolvedValueOnce([]);
+    const listActiveRestaurantIds = vi.fn().mockResolvedValue(['r1', 'r2']);
+
+    await runTaggingCli(
+      repo,
+      { year: 2026, force: false, skipMenuRefresh: false },
+      promptFn,
+      { listActiveRestaurantIds, menuRetrieval: { getMenuForRestaurant } },
+    );
+
+    expect(getMenuForRestaurant).toHaveBeenCalledTimes(2);
+    expect(repo.listActiveFestivalBooths).toHaveBeenCalledWith(2026, 'food-and-wine');
+  });
+
+  it('--skip-menu-refresh skips the refresh step entirely', async () => {
+    const repo = makeDiscoveryRepo();
+    const answers = ['1', '', ''];
+    let idx = 0;
+    const promptFn = vi.fn().mockImplementation(() => Promise.resolve(answers[idx++]!));
+    const getMenuForRestaurant = vi.fn().mockResolvedValue([]);
+    const listActiveRestaurantIds = vi.fn().mockResolvedValue(['r1']);
+
+    await runTaggingCli(
+      repo,
+      { year: 2026, force: false, skipMenuRefresh: true },
+      promptFn,
+      { listActiveRestaurantIds, menuRetrieval: { getMenuForRestaurant } },
+    );
+
+    expect(listActiveRestaurantIds).not.toHaveBeenCalled();
+    expect(getMenuForRestaurant).not.toHaveBeenCalled();
+    expect(repo.listActiveFestivalBooths).toHaveBeenCalledWith(2026, 'food-and-wine');
+  });
+
+  it('no refresh deps supplied is a no-op (treated like skip)', async () => {
+    const repo = makeDiscoveryRepo();
+    const answers = ['1', '', ''];
+    let idx = 0;
+    const promptFn = vi.fn().mockImplementation(() => Promise.resolve(answers[idx++]!));
+
+    await runTaggingCli(
+      repo,
+      { year: 2026, force: false, skipMenuRefresh: false },
+      promptFn,
+    );
+
+    expect(repo.listActiveFestivalBooths).toHaveBeenCalledWith(2026, 'food-and-wine');
+  });
+});
+
+describe('runTaggingCli Festival_Edition date window step (R9.3)', () => {
+  it('defaults starts_on to today when the operator enters a blank answer', async () => {
+    const repo = makeMockRepo();
+    const answers = ['1', '', ''];
+    let idx = 0;
+    const promptFn = vi.fn().mockImplementation(() => Promise.resolve(answers[idx++]!));
+
+    await runTaggingCli(repo, { year: 2026, force: false, skipMenuRefresh: true }, promptFn);
+
+    const todayIso = new Date().toISOString().slice(0, 10);
+    expect(repo.upsertFestivalEdition).toHaveBeenCalledWith('food-and-wine', 2026, todayIso, null);
+  });
+
+  it('passes an explicit ends_on through to upsertFestivalEdition when provided', async () => {
+    const repo = makeMockRepo();
+    const answers = ['1', '2026-08-28', '2026-11-18'];
+    let idx = 0;
+    const promptFn = vi.fn().mockImplementation(() => Promise.resolve(answers[idx++]!));
+
+    await runTaggingCli(repo, { year: 2026, force: false, skipMenuRefresh: true }, promptFn);
+
+    expect(repo.upsertFestivalEdition).toHaveBeenCalledWith(
+      'food-and-wine',
+      2026,
+      '2026-08-28',
+      '2026-11-18',
+    );
+  });
+
+  it('calls upsertFestivalEdition exactly once per run, before discovery', async () => {
+    const callOrder: string[] = [];
+    const repo = makeMockRepo({
+      listActiveFestivalBooths: vi.fn().mockImplementation(() => {
+        callOrder.push('discover');
+        return Promise.resolve([]);
+      }),
+      upsertFestivalEdition: vi.fn().mockImplementation(() => {
+        callOrder.push('edition');
+        return Promise.resolve(undefined);
+      }),
+    });
+
+    const answers = ['1', '', ''];
+    let idx = 0;
+    const promptFn = vi.fn().mockImplementation(() => Promise.resolve(answers[idx++]!));
+
+    await runTaggingCli(repo, { year: 2026, force: false, skipMenuRefresh: true }, promptFn);
+
+    expect(repo.upsertFestivalEdition).toHaveBeenCalledTimes(1);
+    expect(callOrder).toEqual(['edition', 'discover']);
   });
 });

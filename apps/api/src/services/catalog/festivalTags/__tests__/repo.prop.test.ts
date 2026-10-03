@@ -68,6 +68,8 @@ interface UpsertOperation {
     readonly experienceId: string;
     readonly year: number;
     readonly slug: FestivalSlug;
+    readonly matchKind: 'facet' | 'menu';
+    readonly matchingFoodItemIds: readonly string[];
   }[];
   readonly force: boolean;
 }
@@ -79,6 +81,8 @@ const opArbitrary: fc.Arbitrary<UpsertOperation> = fc.record({
         experienceId: fc.constantFrom(...EXP_IDS),
         year: fc.constantFrom(...YEARS),
         slug: fc.constantFrom(...FESTIVAL_SLUGS),
+        matchKind: fc.constantFrom('facet' as const, 'menu' as const),
+        matchingFoodItemIds: fc.constant([]),
       }),
       { minLength: 1, maxLength: 4 },
     ),
@@ -99,6 +103,8 @@ describe('FestivalTagRepo property tests', () => {
           applyMigration(db, '0001_init.sql');
           applyMigration(db, '0008_experience_facet_enrichment.sql');
           applyMigration(db, '0039_experience_festival_tags.sql');
+          applyMigration(db, '0040_food_item_logging.sql');
+          applyMigration(db, '0055_festival_edition_and_dish_tags.sql');
 
           for (const id of EXP_IDS) {
             await pool.query(

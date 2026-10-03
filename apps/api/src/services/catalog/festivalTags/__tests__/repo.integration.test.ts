@@ -95,8 +95,13 @@ describe('FestivalTagRepo (integration, pg-mem)', () => {
     pool = new PgMemPool() as unknown as DbPool;
 
     applyMigration(db, '0001_init.sql');
+    applyMigration(db, '0002_experience_images.sql');
+    applyMigration(db, '0003_note_shareable.sql');
+    applyMigration(db, '0004_disney_sources.sql');
     applyMigration(db, '0008_experience_facet_enrichment.sql');
     applyMigration(db, '0039_experience_festival_tags.sql');
+    applyMigration(db, '0040_food_item_logging.sql');
+    applyMigration(db, '0055_festival_edition_and_dish_tags.sql');
 
     repo = createFestivalTagRepo(pool);
 
@@ -170,7 +175,7 @@ describe('FestivalTagRepo (integration, pg-mem)', () => {
     it('flags conflictingTag when an existing tag for the target year has a different slug', async () => {
       // Pre-tag booth1 with food-and-wine in 2026
       await repo.upsertTags(
-        [{ experienceId: booth1, year: 2026, slug: 'food-and-wine' }],
+        [{ experienceId: booth1, year: 2026, slug: 'food-and-wine', matchKind: 'facet', matchingFoodItemIds: [] }],
         { force: false },
       );
 
@@ -189,10 +194,36 @@ describe('FestivalTagRepo (integration, pg-mem)', () => {
     });
   });
 
+  describe('listActiveEpcotRestaurantIds', () => {
+    it('returns only active, EPCOT, Restaurant ids — excluding other parks and categories', async () => {
+      const otherParkRestaurant = randomUUID();
+      await seedExperience(pool, {
+        id: otherParkRestaurant,
+        name: 'Be Our Guest Restaurant',
+        category: 'Restaurant',
+        park: 'Magic Kingdom',
+        active: true,
+        groupedFacets: {},
+      });
+
+      const ids = await repo.listActiveEpcotRestaurantIds();
+
+      expect(ids).toContain(booth1);
+      expect(ids).toContain(booth2);
+      expect(ids).toContain(nonKioskRestaurant);
+      // Not EPCOT.
+      expect(ids).not.toContain(otherParkRestaurant);
+      // Inactive EPCOT restaurant.
+      expect(ids).not.toContain(inactiveBooth);
+      // EPCOT but not a Restaurant.
+      expect(ids).not.toContain(ride);
+    });
+  });
+
   describe('upsertTags', () => {
     it('re-running with identical inputs makes no additional row (Property 26)', async () => {
       const written1 = await repo.upsertTags(
-        [{ experienceId: booth1, year: 2026, slug: 'flower-and-garden' }],
+        [{ experienceId: booth1, year: 2026, slug: 'flower-and-garden', matchKind: 'facet', matchingFoodItemIds: [] }],
         { force: false },
       );
       expect(written1).toEqual([booth1]);
@@ -205,7 +236,7 @@ describe('FestivalTagRepo (integration, pg-mem)', () => {
 
       // Re-run identical
       const written2 = await repo.upsertTags(
-        [{ experienceId: booth1, year: 2026, slug: 'flower-and-garden' }],
+        [{ experienceId: booth1, year: 2026, slug: 'flower-and-garden', matchKind: 'facet', matchingFoodItemIds: [] }],
         { force: false },
       );
       expect(written2).toEqual([booth1]);
@@ -220,13 +251,13 @@ describe('FestivalTagRepo (integration, pg-mem)', () => {
     it('excludes same-year different-slug call without force and applies with force', async () => {
       // Initial tag
       await repo.upsertTags(
-        [{ experienceId: booth1, year: 2026, slug: 'food-and-wine' }],
+        [{ experienceId: booth1, year: 2026, slug: 'food-and-wine', matchKind: 'facet', matchingFoodItemIds: [] }],
         { force: false },
       );
 
       // Attempt to overwrite with flower-and-garden without force
       const writtenWithoutForce = await repo.upsertTags(
-        [{ experienceId: booth1, year: 2026, slug: 'flower-and-garden' }],
+        [{ experienceId: booth1, year: 2026, slug: 'flower-and-garden', matchKind: 'facet', matchingFoodItemIds: [] }],
         { force: false },
       );
       expect(writtenWithoutForce).toEqual([]);
@@ -240,7 +271,7 @@ describe('FestivalTagRepo (integration, pg-mem)', () => {
 
       // Now with force: true
       const writtenWithForce = await repo.upsertTags(
-        [{ experienceId: booth1, year: 2026, slug: 'flower-and-garden' }],
+        [{ experienceId: booth1, year: 2026, slug: 'flower-and-garden', matchKind: 'facet', matchingFoodItemIds: [] }],
         { force: true },
       );
       expect(writtenWithForce).toEqual([booth1]);
@@ -253,10 +284,131 @@ describe('FestivalTagRepo (integration, pg-mem)', () => {
     });
   });
 
+  describe('upsertTags — match_kind + dish tags (R10.1, R10.2)', () => {
+    let menuRestaurant: string;
+    let foodItem1: string;
+    let foodItem2: string;
+
+    beforeEach(async () => {
+      menuRestaurant = randomUUID();
+      await seedExperience(pool, {
+        id: menuRestaurant,
+        name: 'Tangierine Cafe',
+        category: 'Restaurant',
+        park: 'EPCOT',
+        active: true,
+        groupedFacets: { quickService: [{ id: 'qsk-1', name: 'Quick Service Kiosk' }] },
+      });
+
+      const f1 = await pool.query<{ id: string }>(
+        `INSERT INTO food_items (experience_id, name, source) VALUES ($1, 'Falafel Wrap', 'menu_sync') RETURNING id`,
+        [menuRestaurant],
+      );
+      foodItem1 = f1.rows[0]!.id;
+      const f2 = await pool.query<{ id: string }>(
+        `INSERT INTO food_items (experience_id, name, source) VALUES ($1, 'Lentil Soup', 'menu_sync') RETURNING id`,
+        [menuRestaurant],
+      );
+      foodItem2 = f2.rows[0]!.id;
+    });
+
+    it("writes both the experience tag AND per-dish tags in one call for matchKind: 'menu' with non-empty matchingFoodItemIds", async () => {
+      const written = await repo.upsertTags(
+        [
+          {
+            experienceId: menuRestaurant,
+            year: 2026,
+            slug: 'food-and-wine',
+            matchKind: 'menu',
+            matchingFoodItemIds: [foodItem1, foodItem2],
+          },
+        ],
+        { force: false },
+      );
+      expect(written).toEqual([menuRestaurant]);
+
+      const tagRow = await pool.query<{ match_kind: string }>(
+        `SELECT match_kind FROM experience_festival_tags WHERE experience_id = $1`,
+        [menuRestaurant],
+      );
+      expect(tagRow.rows[0]?.match_kind).toBe('menu');
+
+      const dishRows = await pool.query<{ food_item_id: string; festival_slug: string }>(
+        `SELECT food_item_id, festival_slug FROM food_item_festival_tags WHERE food_item_id IN ($1, $2)`,
+        [foodItem1, foodItem2],
+      );
+      expect(dishRows.rows).toHaveLength(2);
+      expect(dishRows.rows.every((r) => r.festival_slug === 'food-and-wine')).toBe(true);
+    });
+
+    it("writes ZERO dish tags for matchKind: 'facet' even if matchingFoodItemIds is (defensively) non-empty", async () => {
+      await repo.upsertTags(
+        [
+          {
+            experienceId: menuRestaurant,
+            year: 2026,
+            slug: 'food-and-wine',
+            matchKind: 'facet',
+            matchingFoodItemIds: [foodItem1, foodItem2],
+          },
+        ],
+        { force: false },
+      );
+
+      const tagRow = await pool.query<{ match_kind: string }>(
+        `SELECT match_kind FROM experience_festival_tags WHERE experience_id = $1`,
+        [menuRestaurant],
+      );
+      expect(tagRow.rows[0]?.match_kind).toBe('facet');
+
+      const dishRows = await pool.query<{ food_item_id: string }>(
+        `SELECT food_item_id FROM food_item_festival_tags WHERE food_item_id IN ($1, $2)`,
+        [foodItem1, foodItem2],
+      );
+      expect(dishRows.rows).toHaveLength(0);
+    });
+  });
+
+  describe('upsertFestivalEdition (R9.3)', () => {
+    it('inserts a new edition window', async () => {
+      await repo.upsertFestivalEdition('food-and-wine', 2026, '2026-08-28', null);
+      const r = await pool.query<{ starts_on: string; ends_on: string | null }>(
+        `SELECT starts_on, ends_on FROM festival_editions WHERE festival_slug = 'food-and-wine' AND festival_year = 2026`,
+      );
+      expect(r.rows).toHaveLength(1);
+      expect(r.rows[0]?.ends_on).toBeNull();
+    });
+
+    it('never blanks a previously-set ends_on when later called with endsOn: null', async () => {
+      await repo.upsertFestivalEdition('food-and-wine', 2026, '2026-08-28', '2026-11-18');
+      // Operator re-runs CLI later this run without re-entering an end date.
+      await repo.upsertFestivalEdition('food-and-wine', 2026, '2026-08-28', null);
+
+      const r = await pool.query<{ ends_on: string | Date | null }>(
+        `SELECT ends_on FROM festival_editions WHERE festival_slug = 'food-and-wine' AND festival_year = 2026`,
+      );
+      const endsOn = r.rows[0]?.ends_on;
+      const isoDate = endsOn instanceof Date ? endsOn.toISOString().slice(0, 10) : String(endsOn);
+      expect(isoDate).toBe('2026-11-18');
+    });
+
+    it('overwrites ends_on when a new explicit date is supplied', async () => {
+      await repo.upsertFestivalEdition('food-and-wine', 2026, '2026-08-28', '2026-11-18');
+      await repo.upsertFestivalEdition('food-and-wine', 2026, '2026-08-28', '2026-11-25');
+
+      const r = await pool.query<{ ends_on: string | Date | null }>(
+        `SELECT ends_on FROM festival_editions WHERE festival_slug = 'food-and-wine' AND festival_year = 2026`,
+      );
+      const endsOn = r.rows[0]?.ends_on;
+      const isoDate = endsOn instanceof Date ? endsOn.toISOString().slice(0, 10) : String(endsOn);
+      expect(isoDate).toBe('2026-11-25');
+    });
+  });
+
   describe('Tag Survives Deactivation (Property 27)', () => {
     it('soft-deleting and reactivating an experience leaves its festival tag unchanged', async () => {
       await repo.upsertTags(
-        [{ experienceId: booth1, year: 2026, slug: 'flower-and-garden' }],
+        [{ experienceId: booth1, year: 2026, slug: 'flower-and-garden', matchKind: 'facet', matchingFoodItemIds: [] }],
         { force: false },
       );
 

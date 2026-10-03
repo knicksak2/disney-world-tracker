@@ -65,6 +65,13 @@ import type { RawFacetExperienceRow } from './facets.js';
 import type { RawUserRatingRow } from './ratingStats.js';
 import type { RawResortCoverageRow } from './resorts.js';
 import type { RawFestivalCountRow } from './festivals.js';
+import { collectQualifyingVisits } from '../catalog/festivalTags/qualifyingVisit.js';
+import {
+  QUALIFYING_VISIT_SIGNAL_SQL,
+  toRawQualifyingSignalRows,
+  type RawQualifyingVisitSignalRow,
+} from '../catalog/festivalTags/qualifyingVisitQuery.js';
+import { wdwToday } from '../trips/wdwClock.js';
 import type {
   RawActivityMaterial,
   RawMostRiddenRow,
@@ -324,6 +331,30 @@ interface DishMarathonRecordRow {
   readonly count: string | number;
 }
 
+/**
+ * Fold {@link QUALIFYING_VISIT_SIGNAL_SQL}'s raw rows into the distinct
+ * experiences that qualify as a festival visit for this User, via
+ * `collectQualifyingVisits`'s shared grouping + `isQualifyingVisit` decision
+ * — the SAME function `pins/repo.ts` uses, so the two can never diverge on
+ * this rule (R11.1-11.3, festival-booth-tagging Property 32).
+ */
+function toQualifyingFestivalVisits(
+  rows: readonly RawQualifyingVisitSignalRow[],
+): { readonly lifetimeCount: number; readonly rows: readonly RawFestivalCountRow[] } {
+  const visits = collectQualifyingVisits(toRawQualifyingSignalRows(rows), wdwToday());
+  const countBySlug = new Map<string, number>();
+  for (const visit of visits) {
+    countBySlug.set(visit.festivalSlug, (countBySlug.get(visit.festivalSlug) ?? 0) + 1);
+  }
+  return {
+    lifetimeCount: visits.length,
+    rows: Array.from(countBySlug.entries()).map(([slug, n]) => ({
+      slug: slug as RawFestivalCountRow['slug'],
+      n,
+    })),
+  };
+}
+
 function toIsoDate(value: Date | string): string {
   if (typeof value === 'string') {
     return value.length >= 10 ? value.slice(0, 10) : value;
@@ -555,24 +586,18 @@ export function createStatsRepo(pool: DbPool): StatsRepo {
           [targetUserId],
         );
 
-        // 12. Festival Booth Lifetime Count (Requirement 5.1)
-        const festivalLifetimeResult = await client.query<{ n: string | number }>(
-          `SELECT COUNT(DISTINCT c.experience_id)::bigint AS n
-             FROM completions c
-             JOIN experience_festival_tags t ON t.experience_id = c.experience_id
-            WHERE c.user_id = $1`,
+        // 12/13. Festival Booth Lifetime Count + Breakdown (Requirement 5.1,
+        // 5.2), via the Qualifying_Visit computation (festival-booth-tagging
+        // R9-R11): a `match_kind = 'menu'` restaurant's bare completion no
+        // longer counts on its own — only a tagged-dish Food_Item_Log (or an
+        // in-window one, when a Festival_Edition is set) does. See
+        // `toQualifyingFestivalVisits` below, which shares `isQualifyingVisit`
+        // with `pins/repo.ts` so the two can never diverge on this rule.
+        const qualifyingVisitSignalResult = await client.query<RawQualifyingVisitSignalRow>(
+          QUALIFYING_VISIT_SIGNAL_SQL,
           [targetUserId],
         );
-
-        // 13. Festival Booth Breakdown (Requirement 5.2)
-        const festivalBreakdownResult = await client.query<RawFestivalCountRow>(
-          `SELECT t.festival_slug AS slug, COUNT(DISTINCT c.experience_id)::bigint AS n
-             FROM completions c
-             JOIN experience_festival_tags t ON t.experience_id = c.experience_id
-            WHERE c.user_id = $1
-            GROUP BY t.festival_slug`,
-          [targetUserId],
-        );
+        const qualifyingVisits = toQualifyingFestivalVisits(qualifyingVisitSignalResult.rows);
 
         // 14. Food activity volume totals (Requirements 24.2, 24.3, 24.7)
         const foodVolumeResult = await client.query<FoodActivityVolumeRow>(
@@ -768,11 +793,7 @@ export function createStatsRepo(pool: DbPool): StatsRepo {
           dishMarathonRecord,
         };
 
-        const festivalLifetime = Number(festivalLifetimeResult.rows[0]?.n ?? 0);
-        const festivalCounts = {
-          lifetimeCount: festivalLifetime,
-          rows: festivalBreakdownResult.rows,
-        };
+        const festivalCounts = qualifyingVisits;
 
         return {
           coverage: mergeCoverageRows(denominators.rows, numerators.rows),

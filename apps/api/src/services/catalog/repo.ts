@@ -62,6 +62,7 @@ import type {
   AreaType,
   ExperienceCategory,
   ExperienceDTO,
+  FestivalSlug,
   GroupedFacetsDTO,
   HeightRequirementDTO,
   MealPeriodDTO,
@@ -178,6 +179,19 @@ export interface CatalogListFilters {
    * Experiences located at that specific Resort.
    */
   readonly resortId?: string;
+  /**
+   * Exact match on a tagged Festival (festival-booth-tagging R8.4). Matches
+   * any Experience carrying at least one `experience_festival_tags` row for
+   * this slug, regardless of which year's tag the DTO projection surfaces.
+   * Combines conjunctively with every other filter (R8.7).
+   */
+  readonly festivalSlug?: FestivalSlug;
+  /**
+   * Exact match on a tagged Festival_Year, usable only alongside
+   * `festivalSlug` (R8.5). Narrows the `festivalSlug` match to a tag row
+   * whose year also equals this value.
+   */
+  readonly festivalYear?: number;
 }
 
 /**
@@ -295,6 +309,14 @@ interface ExperienceRow extends QueryResultRow {
   sub_type: string | null;
   /** Curated Disney dining reservation URL, or `null`. */
   dining_url?: string | null;
+  /**
+   * Highest-year `experience_festival_tags` slug for this experience, joined
+   * in by the `DISTINCT ON` derived table (festival-booth-tagging R8.1), or
+   * `null`/absent when the experience carries no Festival_Tag at all.
+   */
+  festival_slug?: FestivalSlug | null;
+  /** Paired year for {@link festival_slug}; `null`/absent alongside it. */
+  festival_year?: number | null;
 }
 
 /**
@@ -1059,57 +1081,82 @@ async function listActiveExperiences(
   pool: DbPool,
   filters: CatalogListFilters,
 ): Promise<readonly ExperienceDTO[]> {
-  const where: string[] = ['active = TRUE'];
+  const where: string[] = ['e.active = TRUE'];
   const params: unknown[] = [];
 
   if (filters.park !== undefined) {
     params.push(filters.park);
-    where.push(`park = $${params.length}`);
+    where.push(`e.park = $${params.length}`);
   }
 
   if (filters.category !== undefined) {
     params.push(filters.category);
-    where.push(`category = $${params.length}`);
+    where.push(`e.category = $${params.length}`);
   }
 
   if (filters.categories !== undefined && filters.categories.length > 0) {
     params.push(filters.categories);
-    where.push(`category = ANY($${params.length}::text[])`);
+    where.push(`e.category = ANY($${params.length}::text[])`);
   }
 
   if (filters.areaType !== undefined) {
     params.push(filters.areaType);
-    where.push(`area_type = $${params.length}`);
+    where.push(`e.area_type = $${params.length}`);
   }
 
   if (filters.land !== undefined) {
     // Case-sensitive exact match (R3.4): SQL `=` on TEXT is case-sensitive by
     // default, so this is a literal equality.
     params.push(filters.land);
-    where.push(`land = $${params.length}`);
+    where.push(`e.land = $${params.length}`);
   }
 
   if (filters.worldShowcaseCountry !== undefined) {
     // Case-sensitive exact match on the derived EPCOT pavilion, mirroring the
     // `land` filter and combining conjunctively with every other filter.
     params.push(filters.worldShowcaseCountry);
-    where.push(`world_showcase_country = $${params.length}`);
+    where.push(`e.world_showcase_country = $${params.length}`);
   }
 
   if (filters.resortId !== undefined) {
     params.push(filters.resortId);
-    where.push(`resort_id = $${params.length}`);
+    where.push(`e.resort_id = $${params.length}`);
+  }
+
+  if (filters.festivalSlug !== undefined) {
+    // IN-subquery (rather than reusing the DISTINCT-ON projection join
+    // below): the filter must match ANY tagged year carrying this slug, not
+    // only the highest year the DTO projection surfaces (festival-booth-
+    // tagging R8.4, R8.5, Property 29).
+    params.push(filters.festivalSlug);
+    const slugParamIdx = params.length;
+    let subquery = `SELECT t.experience_id FROM experience_festival_tags t
+                      WHERE t.festival_slug = $${slugParamIdx}`;
+    if (filters.festivalYear !== undefined) {
+      params.push(filters.festivalYear);
+      subquery += ` AND t.festival_year = $${params.length}`;
+    }
+    where.push(`e.id IN (${subquery})`);
   }
 
   const sql = `
-    SELECT id, upstream_entity_id, name, park, category, description, active,
-           land, resort_area, world_showcase_country, image_url, latitude, longitude, area_type, resort_id,
-           accessibility, price_tier, meal_periods,
-           grouped_facets, height_requirement, why_this, sub_type,
-           dining_url, represents_resort_id
-      FROM experiences
+    SELECT e.id, e.upstream_entity_id, e.name, e.park, e.category, e.description, e.active,
+           e.land, e.resort_area, e.world_showcase_country, e.image_url, e.latitude, e.longitude,
+           e.area_type, e.resort_id,
+           e.accessibility, e.price_tier, e.meal_periods,
+           e.grouped_facets, e.height_requirement, e.why_this, e.sub_type,
+           e.dining_url, e.represents_resort_id,
+           ft.festival_slug, ft.festival_year
+      FROM experiences e
+      LEFT JOIN (
+        SELECT experience_id, MAX(festival_year) AS max_year
+          FROM experience_festival_tags
+         GROUP BY experience_id
+      ) fy ON fy.experience_id = e.id
+      LEFT JOIN experience_festival_tags ft
+        ON ft.experience_id = e.id AND ft.festival_year = fy.max_year
      WHERE ${where.join(' AND ')}
-     ORDER BY park ASC, lower(name) ASC, id ASC`;
+     ORDER BY e.park ASC, lower(e.name) ASC, e.id ASC`;
 
   const result = await pool.query<ExperienceRow>(sql, params);
   const dtos = result.rows.map(rowToDto);
@@ -1176,13 +1223,22 @@ async function getExperience(
   id: string,
 ): Promise<ExperienceDTO | null> {
   const result = await pool.query<ExperienceRow>(
-    `SELECT id, upstream_entity_id, name, park, category, description, active,
-            land, resort_area, world_showcase_country, image_url, latitude, longitude, area_type, resort_id,
-            accessibility, price_tier, meal_periods,
-            grouped_facets, height_requirement, why_this, sub_type,
-            dining_url, represents_resort_id
-       FROM experiences
-      WHERE id = $1`,
+    `SELECT e.id, e.upstream_entity_id, e.name, e.park, e.category, e.description, e.active,
+            e.land, e.resort_area, e.world_showcase_country, e.image_url, e.latitude, e.longitude,
+            e.area_type, e.resort_id,
+            e.accessibility, e.price_tier, e.meal_periods,
+            e.grouped_facets, e.height_requirement, e.why_this, e.sub_type,
+            e.dining_url, e.represents_resort_id,
+            ft.festival_slug, ft.festival_year
+       FROM experiences e
+       LEFT JOIN (
+         SELECT experience_id, MAX(festival_year) AS max_year
+           FROM experience_festival_tags
+          GROUP BY experience_id
+       ) fy ON fy.experience_id = e.id
+       LEFT JOIN experience_festival_tags ft
+         ON ft.experience_id = e.id AND ft.festival_year = fy.max_year
+      WHERE e.id = $1`,
     [id],
   );
   const row = result.rows[0];
@@ -1399,6 +1455,9 @@ function rowToDto(row: ExperienceRow): ExperienceDTO {
     row.dining_url !== undefined &&
     row.dining_url.length > 0
       ? { diningUrl: row.dining_url }
+      : {}),
+    ...(row.festival_slug !== null && row.festival_slug !== undefined
+      ? { festivalTag: { slug: row.festival_slug, year: row.festival_year as number } }
       : {}),
   };
 }
