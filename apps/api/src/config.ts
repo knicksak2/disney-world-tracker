@@ -62,6 +62,14 @@ const envSchema = z.object({
     .string()
     .min(1, 'PIN_RECONCILE_CRON_SECRET is required and must not be empty'),
 
+  // HTTP Basic authentication credentials for the internal operator Admin Panel (admin-panel R1.5).
+  ADMIN_PANEL_USERNAME: z
+    .string()
+    .min(1, 'ADMIN_PANEL_USERNAME is required and must not be empty'),
+  ADMIN_PANEL_PASSWORD: z
+    .string()
+    .min(1, 'ADMIN_PANEL_PASSWORD is required and must not be empty'),
+
   // Upstream catalog source. Defaults to the public ThemeParks.wiki v1 base
   // URL per requirements glossary; overridable for tests and local fixtures.
   // Validated as a well-formed absolute URL so a malformed override halts
@@ -170,6 +178,10 @@ export interface AppConfig {
   readonly pins: {
     readonly reconcileCronSecret: string;
   };
+  readonly admin: {
+    readonly username: string;
+    readonly password: string;
+  };
   readonly themeparks: {
     readonly baseUrl: string;
   };
@@ -262,6 +274,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     },
     pins: {
       reconcileCronSecret: data.PIN_RECONCILE_CRON_SECRET,
+    },
+    admin: {
+      username: data.ADMIN_PANEL_USERNAME,
+      password: data.ADMIN_PANEL_PASSWORD,
     },
     themeparks: { baseUrl: data.THEMEPARKS_BASE_URL },
     disney: {

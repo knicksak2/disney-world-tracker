@@ -48,6 +48,16 @@ const CROWD_INDEX_PARKS = new Set<string>([
   'Animal Kingdom',
 ]);
 
+export const SAMPLING_RUNS_RETENTION_DAYS = 30;
+
+export interface SamplingPassStats {
+  parksSampledCount: number;
+  experiencesMappedCount: number;
+  waitSamplesRecordedCount: number;
+  unmappedWithWaitCount: number;
+  unmappedSample: Array<{ name: string; id: string }>;
+}
+
 export interface SamplingServiceDeps {
   repo: IntelligenceRepo;
   liveClient: ThemeParksLiveClient;
@@ -93,9 +103,37 @@ export function createSamplingService(deps: SamplingServiceDeps): SamplingServic
       
       isRunning = true;
       lastSampleStart = now.getTime();
+      const startedAt = now;
       try {
-        await executePass(now);
+        const stats = await executePass(now);
+        const completedAt = clock();
+        if (typeof repo.recordSamplingRun === 'function') {
+          await repo.recordSamplingRun({
+            started_at: startedAt,
+            completed_at: completedAt,
+            outcome: 'success',
+            parks_sampled_count: stats?.parksSampledCount ?? 0,
+            experiences_mapped_count: stats?.experiencesMappedCount ?? 0,
+            wait_samples_recorded_count: stats?.waitSamplesRecordedCount ?? 0,
+            unmapped_with_wait_count: stats?.unmappedWithWaitCount ?? 0,
+            unmapped_sample: stats?.unmappedSample ?? null,
+          });
+        }
       } catch (err) {
+        const completedAt = clock();
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        try {
+          if (typeof repo.recordSamplingRun === 'function') {
+            await repo.recordSamplingRun({
+              started_at: startedAt,
+              completed_at: completedAt,
+              outcome: 'failed',
+              error_message: errorMessage,
+            });
+          }
+        } catch (logErr) {
+          logger.error({ logErr }, 'Failed to record sampling run failure');
+        }
         logger.error({ err }, 'Sampling pass failed fatally');
       } finally {
         isRunning = false;
@@ -130,7 +168,13 @@ export function createSamplingService(deps: SamplingServiceDeps): SamplingServic
       }
     } catch (err) {
       logger.warn({ err }, 'Failed to fetch destinations for sampling');
-      return;
+      return {
+        parksSampledCount: 0,
+        experiencesMappedCount: 0,
+        waitSamplesRecordedCount: 0,
+        unmappedWithWaitCount: 0,
+        unmappedSample: [],
+      };
     }
 
     const experiences = await repo.getExperiencesWithUpstreamIds();
@@ -525,8 +569,20 @@ export function createSamplingService(deps: SamplingServiceDeps): SamplingServic
       `Sampling pass summary: ${parksSampledCount} parks sampled, ${tpIdToDbId.size} experiences mapped, ${totalWaitSamplesRecorded} wait samples recorded, ${unmappedStandbyEntries.size} unmapped with standby waits, ${unresolvedCount} unresolved`
     );
 
-    // Prune old samples (30 days)
-    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    // Prune old samples and sampling runs (30 days)
+    const thirtyDaysAgo = new Date(now.getTime() - SAMPLING_RUNS_RETENTION_DAYS * 24 * 60 * 60 * 1000);
     await repo.pruneWaitSamples(thirtyDaysAgo);
+    if (typeof repo.pruneSamplingRuns === 'function') {
+      await repo.pruneSamplingRuns(thirtyDaysAgo);
+    }
+
+    const unmappedList = Array.from(unmappedStandbyEntries.values());
+    return {
+      parksSampledCount,
+      experiencesMappedCount: tpIdToDbId.size,
+      waitSamplesRecordedCount: totalWaitSamplesRecorded,
+      unmappedWithWaitCount: unmappedStandbyEntries.size,
+      unmappedSample: unmappedList.slice(0, 10).map(e => ({ name: e.name, id: e.id })),
+    };
   }
 }

@@ -121,6 +121,10 @@ import {
   favoriteRoutes,
   type FavoriteRoutesOptions,
 } from './services/tracking/favorite/routes.js';
+import {
+  adminRoutes,
+  type AdminRoutesOptions,
+} from './services/admin/routes.js';
 import type { RatingChangedEvent } from './services/aggregate/ratingChangedQueue.js';
 
 /**
@@ -325,6 +329,8 @@ export interface BuildServerServices {
    * the shared Redis-backed store apply uniformly.
    */
   readonly rateLimit?: DwtRateLimitOptions;
+  /** Admin_Panel routes (admin-panel). */
+  readonly admin?: AdminRoutesOptions;
 }
 
 /**
@@ -586,6 +592,10 @@ export function buildServer(
 
   if (services.tracking?.logs !== undefined) {
     void app.register(experienceLogRoutes(services.tracking.logs));
+  }
+
+  if (services.admin !== undefined) {
+    void app.register(adminRoutes(services.admin));
   }
 
   return app;

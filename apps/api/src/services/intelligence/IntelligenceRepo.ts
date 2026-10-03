@@ -195,6 +195,31 @@ export interface DerivedStatRunRow {
   consecutive_failures: number;
 }
 
+export interface SamplingRunRow {
+  id: string;
+  started_at: Date;
+  completed_at: Date;
+  outcome: 'success' | 'failed';
+  error_message: string | null;
+  parks_sampled_count: number;
+  experiences_mapped_count: number;
+  wait_samples_recorded_count: number;
+  unmapped_with_wait_count: number;
+  unmapped_sample: Array<{ name: string; id: string }> | null;
+}
+
+export interface RecordSamplingRunInput {
+  started_at: Date;
+  completed_at: Date;
+  outcome: 'success' | 'failed';
+  error_message?: string | null;
+  parks_sampled_count?: number;
+  experiences_mapped_count?: number;
+  wait_samples_recorded_count?: number;
+  unmapped_with_wait_count?: number;
+  unmapped_sample?: Array<{ name: string; id: string }> | null;
+}
+
 export class IntelligenceRepo {
   constructor(private pool: Pool) {}
 
@@ -1276,6 +1301,71 @@ export class IntelligenceRepo {
           ? r.consecutive_failures
           : parseInt(r.consecutive_failures, 10),
     }));
+  }
+
+  async recordSamplingRun(input: RecordSamplingRunInput): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO sampling_runs (
+        started_at,
+        completed_at,
+        outcome,
+        error_message,
+        parks_sampled_count,
+        experiences_mapped_count,
+        wait_samples_recorded_count,
+        unmapped_with_wait_count,
+        unmapped_sample
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [
+        input.started_at,
+        input.completed_at,
+        input.outcome,
+        input.error_message ?? null,
+        input.parks_sampled_count ?? 0,
+        input.experiences_mapped_count ?? 0,
+        input.wait_samples_recorded_count ?? 0,
+        input.unmapped_with_wait_count ?? 0,
+        input.unmapped_sample ? JSON.stringify(input.unmapped_sample) : null,
+      ]
+    );
+  }
+
+  async getRecentSamplingRuns(limit: number): Promise<SamplingRunRow[]> {
+    const res = await this.pool.query(
+      `SELECT * FROM sampling_runs ORDER BY started_at DESC LIMIT $1`,
+      [limit]
+    );
+    return res.rows.map((row: any) => ({
+      id: row.id,
+      started_at: new Date(row.started_at),
+      completed_at: new Date(row.completed_at),
+      outcome: row.outcome,
+      error_message: row.error_message ?? null,
+      parks_sampled_count:
+        typeof row.parks_sampled_count === 'number'
+          ? row.parks_sampled_count
+          : parseInt(row.parks_sampled_count, 10),
+      experiences_mapped_count:
+        typeof row.experiences_mapped_count === 'number'
+          ? row.experiences_mapped_count
+          : parseInt(row.experiences_mapped_count, 10),
+      wait_samples_recorded_count:
+        typeof row.wait_samples_recorded_count === 'number'
+          ? row.wait_samples_recorded_count
+          : parseInt(row.wait_samples_recorded_count, 10),
+      unmapped_with_wait_count:
+        typeof row.unmapped_with_wait_count === 'number'
+          ? row.unmapped_with_wait_count
+          : parseInt(row.unmapped_with_wait_count, 10),
+      unmapped_sample:
+        typeof row.unmapped_sample === 'string'
+          ? JSON.parse(row.unmapped_sample)
+          : row.unmapped_sample ?? null,
+    }));
+  }
+
+  async pruneSamplingRuns(before: Date): Promise<void> {
+    await this.pool.query(`DELETE FROM sampling_runs WHERE started_at < $1`, [before]);
   }
 }
 

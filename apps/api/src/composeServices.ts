@@ -95,7 +95,10 @@ import { createParkLiveService } from './services/live/parkLive.js';
 import { createThemeParksClient } from './services/catalog/themeparks.js';
 import { createFacilitiesClient } from './services/catalog/disney/facilitiesClient.js';
 import { createDisneyTransport } from './services/catalog/disney/transport.js';
-import { createRedisRateLimiter } from './services/catalog/disney/rateLimiter.js';
+import {
+  createRedisRateLimiter,
+  getRateLimiterSnapshot,
+} from './services/catalog/disney/rateLimiter.js';
 import { createDiningMenuClient } from './services/catalog/disney/diningMenuClient.js';
 import { createMenuRetrieval } from './services/catalog/menuRetrieval.js';
 
@@ -155,6 +158,9 @@ import { createWeatherClient } from './services/intelligence/weatherClient.js';
 import { createPredictionService } from './services/intelligence/predictionService.js';
 import { createDerivedStatsService } from './services/intelligence/derivedStatsService.js';
 import { createSamplingService } from './services/intelligence/samplingService.js';
+import { createAdminRepo } from './services/admin/repo.js';
+import { createBasicAuthHook } from './services/admin/basicAuth.js';
+import { CATALOG_SYNC_LOCK_KEY } from './services/catalog/sync.js';
 
 import { createLogger } from './logger.js';
 
@@ -371,6 +377,20 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
     resolveSenderDisplayName: createSenderDisplayNameResolver(pool),
     resolveExperienceName: createExperienceNameResolver(pool),
     logger: notificationLogger,
+    onDelivery: async (userId, status, kind) => {
+      try {
+        await pool.query(
+          `INSERT INTO push_delivery_log (user_id, status, notification_kind)
+           VALUES ($1, $2, $3)`,
+          [userId, status, kind],
+        );
+      } catch (err) {
+        notificationLogger.warn(
+          { err, userId, status, kind },
+          'Failed to record push delivery log',
+        );
+      }
+    },
   });
 
   /**
@@ -664,6 +684,13 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
     derivedStatsService,
   });
   
+  // --- Admin wiring ---------------------------------------------------
+  const adminRepo = createAdminRepo(pool, redis as never);
+  const adminBasicAuth = createBasicAuthHook({
+    username: config.admin.username,
+    password: config.admin.password,
+  });
+
   // --- Auth wiring ----------------------------------------------------
   const lockout = createLockoutService(redis as never);
   const sessionMiddleware = createSessionMiddleware({
@@ -861,6 +888,28 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
         requireSession: sessionMiddleware,
         awardPins,
       },
+    },
+    admin: {
+      repo: adminRepo,
+      catalogRepo,
+      intelligenceRepo,
+      pinRepo,
+      config,
+      runCatalogSync: async () => {
+        await runSync({
+          repo: catalogRepo,
+          redis,
+          client: facilitiesClient,
+          trigger: 'manual',
+        });
+      },
+      isSyncInProgress: async () => {
+        return (await redis.exists(CATALOG_SYNC_LOCK_KEY)) === 1;
+      },
+      getRateLimiterSnapshot: () =>
+        getRateLimiterSnapshot(redis as never, config.disney.requestBudget),
+      getDirectorySnapshot: async () => themeParksDirectory.getSnapshot(),
+      basicAuth: adminBasicAuth,
     },
     // Always set `{}` so the gateway rate limiter (Redis-backed default
     // budgets) applies uniformly across every service route. The

@@ -39,6 +39,7 @@
 import type {
   ExpoPushClient,
   ExpoPushData,
+  ExpoPushDeliveryStatus,
   ExpoPushMessage,
 } from './expoPushClient.js';
 
@@ -254,6 +255,15 @@ export interface NotificationServiceDeps {
   readonly retryWindowMs?: number;
   /** Backoff between attempts in ms. Default 500. */
   readonly retryBackoffMs?: number;
+  /**
+   * Optional best-effort callback invoked on each resolved per-token delivery
+   * outcome (admin-panel R10.1). Failures are logged and never fail the push send.
+   */
+  readonly onDelivery?: (
+    userId: string,
+    status: ExpoPushDeliveryStatus,
+    kind: string,
+  ) => Promise<void>;
 }
 
 /** Public surface of the Notification_Service. */
@@ -393,6 +403,7 @@ export function createNotificationService(
             ...timing,
             data: { shareId: event.shareId },
             logContext: { shareId: event.shareId },
+            notificationKind: 'share_delivered',
           }).catch((err) => {
             // Defensive: notifyRecipient already swallows its own errors, but
             // guarantee handleShareDelivered never rejects (R7.7).
@@ -433,6 +444,7 @@ export function createNotificationService(
           ...timing,
           data: { friendRequestId: event.requestId },
           logContext: { requestId: event.requestId },
+          notificationKind: 'friend_request_received',
         },
       ).catch((err) => {
         // Defensive: notifyRecipient already swallows its own errors, but
@@ -472,6 +484,7 @@ export function createNotificationService(
           ...timing,
           data: { tripInviteId: event.inviteId },
           logContext: { inviteId: event.inviteId, tripId: event.tripId },
+          notificationKind: 'trip_invite_created',
         },
       ).catch((err) => {
         // Defensive: notifyRecipient already swallows its own errors, but
@@ -517,6 +530,7 @@ export function createNotificationService(
             tagId: event.tagId,
             tripLogEntryId: event.tripLogEntryId,
           },
+          notificationKind: 'rode_with_tag_created',
         },
       ).catch((err) => {
         // Defensive: notifyRecipient already swallows its own errors, but
@@ -550,6 +564,7 @@ export function createNotificationService(
           ...timing,
           data: { foodListId: event.foodListId },
           logContext: { foodListId: event.foodListId },
+          notificationKind: 'food_list_shared',
         },
       ).catch((err) => {
         deps.logger?.error(
@@ -588,6 +603,7 @@ export function createNotificationService(
           ...timing,
           data: { foodListId: event.foodListId },
           logContext: { foodListId: event.foodListId, newRole: event.newRole },
+          notificationKind: 'food_list_role_changed',
         },
       ).catch((err) => {
         deps.logger?.error(
@@ -621,6 +637,7 @@ export function createNotificationService(
           ...timing,
           data: { experienceListId: event.experienceListId },
           logContext: { experienceListId: event.experienceListId },
+          notificationKind: 'experience_list_shared',
         },
       ).catch((err) => {
         deps.logger?.error(
@@ -666,6 +683,7 @@ export function createNotificationService(
             experienceListId: event.experienceListId,
             newRole: event.newRole,
           },
+          notificationKind: 'experience_list_role_changed',
         },
       ).catch((err) => {
         deps.logger?.error(
@@ -740,6 +758,12 @@ interface DeliveryContext {
   readonly data: ExpoPushData;
   /** Extra fields merged into every log line for this delivery (e.g. shareId). */
   readonly logContext: Record<string, unknown>;
+  readonly notificationKind?: string;
+  readonly onDelivery?: (
+    userId: string,
+    status: ExpoPushDeliveryStatus,
+    kind: string,
+  ) => Promise<void>;
 }
 
 /**
@@ -804,7 +828,31 @@ async function deliverToRecipient(
   }
 
   // Send with bounded retry + invalidation (R7.1, R7.6, R7.7).
-  await sendWithRetry(tokens, content, ctx);
+  await sendWithRetry(recipientId, tokens, content, ctx);
+}
+
+function emitDelivery(
+  ctx: DeliveryContext,
+  recipientId: string,
+  status: ExpoPushDeliveryStatus,
+): void {
+  const cb = ctx.onDelivery ?? ctx.deps.onDelivery;
+  if (!cb) return;
+  const kind = ctx.notificationKind ?? 'share_delivered';
+  try {
+    const p = cb(recipientId, status, kind);
+    p?.catch((err) => {
+      ctx.deps.logger?.warn(
+        { err, ...ctx.logContext, recipientId, status, kind },
+        'onDelivery callback rejected',
+      );
+    });
+  } catch (err) {
+    ctx.deps.logger?.warn(
+      { err, ...ctx.logContext, recipientId, status, kind },
+      'onDelivery callback threw synchronously',
+    );
+  }
 }
 
 /**
@@ -819,6 +867,7 @@ async function deliverToRecipient(
  * elapses (R7.7).
  */
 async function sendWithRetry(
+  recipientId: string,
   tokens: readonly string[],
   content: { readonly title: string; readonly body: string },
   ctx: DeliveryContext,
@@ -838,10 +887,16 @@ async function sendWithRetry(
           { ...ctx.logContext, pending: pending.length },
           'notification retry window elapsed; abandoning pending tokens',
         );
+        for (const _ of pending) {
+          emitDelivery(ctx, recipientId, 'error');
+        }
         return;
       }
       await ctx.delay(backoffFor(attempt, ctx.retryBackoffMs));
       if (ctx.now() - startedAt >= ctx.retryWindowMs) {
+        for (const _ of pending) {
+          emitDelivery(ctx, recipientId, 'error');
+        }
         return;
       }
     }
@@ -879,9 +934,11 @@ async function sendWithRetry(
         continue;
       }
       if (delivery.status === 'ok') {
+        emitDelivery(ctx, recipientId, 'ok');
         continue; // delivered
       }
       if (delivery.status === 'device_unregistered') {
+        emitDelivery(ctx, recipientId, 'device_unregistered');
         // R7.6: token no longer valid ⇒ invalidate and stop sending to it.
         try {
           await deps.pushTokens.invalidateByToken(token);
@@ -904,6 +961,9 @@ async function sendWithRetry(
       { ...ctx.logContext, pending: pending.length },
       'notification retries exhausted; some tokens undelivered',
     );
+    for (const _ of pending) {
+      emitDelivery(ctx, recipientId, 'error');
+    }
   }
 }
 

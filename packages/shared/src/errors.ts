@@ -231,6 +231,11 @@ export const ERROR_CODES = [
   // shape as the rest of the API so clients have a single error contract.
   'rate_limit_exceeded',
 
+  // -- Admin panel (admin-panel R3.6, R5.5, R12.3) -----------------------
+  'admin_experience_not_found',
+  'admin_user_not_found',
+  'admin_sync_already_running',
+
   // -- Catch-all --------------------------------------------------------
   // Used by the global Fastify error hook for unhandled exceptions; the
   // client never sees a raw stack or constraint name.
@@ -393,6 +398,11 @@ export const errorCodeToHttpStatus: { readonly [K in ErrorCode]: number } = {
 
   // Edge / gateway
   rate_limit_exceeded: 429,
+
+  // Admin panel
+  admin_experience_not_found: 404,
+  admin_user_not_found: 404,
+  admin_sync_already_running: 409,
 
   // Catch-all
   internal_error: 500,

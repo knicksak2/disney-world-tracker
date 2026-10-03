@@ -72,6 +72,8 @@ function validBaseEnv(): NodeJS.ProcessEnv {
     DISNEY_SYNC_GATEWAY_PASSWORD: 'disney-pass',
     SAMPLING_CRON_SECRET: 'test-cron-secret',
     PIN_RECONCILE_CRON_SECRET: 'test-pin-reconcile-secret',
+    ADMIN_PANEL_USERNAME: 'admin-user',
+    ADMIN_PANEL_PASSWORD: 'admin-password',
   };
 }
 
@@ -216,6 +218,35 @@ describe('config — Property 16: configuration fail-fast', () => {
           for (const key of offending) {
             expect(configError.message).toContain(key);
           }
+        },
+      ),
+      { numRuns: NUM_RUNS },
+    );
+  });
+
+  it('throws ConfigError naming ADMIN_PANEL_USERNAME or ADMIN_PANEL_PASSWORD when missing or empty', () => {
+    fc.assert(
+      fc.property(
+        fc.constantFrom('ADMIN_PANEL_USERNAME', 'ADMIN_PANEL_PASSWORD'),
+        emptyCredentialValueArb,
+        (varName, brokenValue) => {
+          const env = validBaseEnv();
+          if (brokenValue === undefined) {
+            delete env[varName];
+          } else {
+            env[varName] = brokenValue;
+          }
+
+          let thrown: unknown;
+          try {
+            loadConfig(env);
+          } catch (err) {
+            thrown = err;
+          }
+
+          expect(thrown).toBeInstanceOf(ConfigError);
+          const configError = thrown as ConfigError;
+          expect(configError.message).toContain(varName);
         },
       ),
       { numRuns: NUM_RUNS },

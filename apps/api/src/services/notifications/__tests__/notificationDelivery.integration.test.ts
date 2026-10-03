@@ -339,4 +339,59 @@ describe('Notification_Service delivery — integration against a fake Expo clie
     expect(message?.body).toBe(PROGRESS_LABEL);
     expect(message?.body.length).toBeLessThanOrEqual(100);
   });
+
+  // Feature: admin-panel, Property 4: Push_Delivery_Log write failure never affects delivery outcome
+  describe('Property 4: Push_Delivery_Log write failure never affects delivery outcome (Requirement 10.4)', () => {
+    const tokens = ['ExponentPushToken[GOOD]', 'ExponentPushToken[DEAD]'];
+    const statusFor = (token: string) =>
+      token === 'ExponentPushToken[DEAD]' ? 'device_unregistered' : 'ok';
+
+    it('resolves identically when onDelivery throws synchronously', async () => {
+      const expoClient = makeExpoClient(statusFor);
+      const pushTokens = makePushTokens(tokens);
+
+      const service = createNotificationService({
+        preferences: makePreferences(true),
+        pushTokens,
+        expoClient,
+        delay: async () => {},
+        now: () => 1_000,
+        ...experienceResolvers,
+        onDelivery: () => {
+          throw new Error('Database write synchronously threw');
+        },
+      });
+
+      await expect(
+        service.handleShareDelivered(EXPERIENCE_EVENT),
+      ).resolves.toBeUndefined();
+
+      expect(expoClient.sendCount()).toBe(1);
+      expect(pushTokens.invalidated).toEqual(['ExponentPushToken[DEAD]']);
+    });
+
+    it('resolves identically when onDelivery returns a rejected promise', async () => {
+      const expoClient = makeExpoClient(statusFor);
+      const pushTokens = makePushTokens(tokens);
+
+      const service = createNotificationService({
+        preferences: makePreferences(true),
+        pushTokens,
+        expoClient,
+        delay: async () => {},
+        now: () => 1_000,
+        ...experienceResolvers,
+        onDelivery: async () => {
+          throw new Error('Database pool connection rejected promise');
+        },
+      });
+
+      await expect(
+        service.handleShareDelivered(EXPERIENCE_EVENT),
+      ).resolves.toBeUndefined();
+
+      expect(expoClient.sendCount()).toBe(1);
+      expect(pushTokens.invalidated).toEqual(['ExponentPushToken[DEAD]']);
+    });
+  });
 });

@@ -131,7 +131,8 @@ describe('Planned List Completion Sync — migration / schema is unchanged', () 
         // `completion_logged` above so the guard still catches a genuine
         // planned-completion column/state without false-positiving on them.
         .replace(/\bcompletions\b/giu, '')
-        .replace(/\bcompleted_on\b/giu, '');
+        .replace(/\bcompleted_on\b/giu, '')
+        .replace(/\bcompleted_at\b/giu, '');
       // NOTE: a later migration may legitimately touch `planned_items` for
       // reasons unrelated to completion — the day-planning-optimization feature
       // adds scheduling columns (planned_date, is_fixed, priority, item_type,

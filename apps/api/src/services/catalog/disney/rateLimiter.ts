@@ -532,3 +532,60 @@ export function createRedisRateLimiter(
     },
   };
 }
+
+/** Snapshot of an individual DisneyTarget bucket's usage and configured limits. */
+export interface RateLimiterBucketSnapshot {
+  readonly currentRps: number;
+  readonly maxRps: number;
+  readonly currentConcurrency: number;
+  readonly maxConcurrency: number;
+}
+
+/** Snapshot of both DisneyTarget buckets for admin visibility (Requirement 4.1). */
+export interface RateLimiterSnapshot {
+  readonly syncGateway: RateLimiterBucketSnapshot;
+  readonly web: RateLimiterBucketSnapshot;
+}
+
+/**
+ * Requirement 4.1. Standalone read-only snapshot reader for Redis rate limiter state.
+ * Issues only ZREMRANGEBYSCORE + ZCARD + GET, performing no ZADD or INCR.
+ */
+export async function getRateLimiterSnapshot(
+  redis: RedisClient,
+  cfg: RateLimiterConfig,
+  deps: {
+    readonly keyPrefix?: string;
+    readonly now?: () => number;
+  } = {},
+): Promise<RateLimiterSnapshot> {
+  const now = deps.now ?? Date.now;
+  const prefix = deps.keyPrefix ?? REDIS_RATE_LIMIT_PREFIX;
+  const t = now();
+  const cutoff = t - RATE_WINDOW_MS;
+
+  async function readBucket(bucket: DisneyTarget): Promise<RateLimiterBucketSnapshot> {
+    const concurrencyKey = `${prefix}:${bucket}:concurrency`;
+    const rateKey = `${prefix}:${bucket}:rate`;
+
+    await redis.zremrangebyscore(rateKey, '-inf', cutoff);
+    const currentRps = await redis.zcard(rateKey);
+    const concStr = await redis.get(concurrencyKey);
+    const currentConcurrency = concStr !== null ? parseInt(concStr, 10) || 0 : 0;
+
+    return {
+      currentRps,
+      maxRps: cfg.maxRequestsPerSecond,
+      currentConcurrency,
+      maxConcurrency: cfg.maxConcurrency,
+    };
+  }
+
+  const [syncGateway, web] = await Promise.all([
+    readBucket('sync_gateway'),
+    readBucket('web'),
+  ]);
+
+  return { syncGateway, web };
+}
+

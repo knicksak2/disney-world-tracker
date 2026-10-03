@@ -37,6 +37,10 @@ export interface ThemeParksDirectory {
    * Return the entire cached externalId -> ThemeParks entity id map.
    */
   getEntityIdMap(): Promise<ReadonlyMap<string, string>>;
+  /**
+   * Requirement 4.2. Returns directory cache state without forcing a (re)build.
+   */
+  getSnapshot(): { readonly builtAtMs: number | null; readonly entryCount: number; readonly ttlMs: number };
 }
 
 /** Minimal logger surface used to record directory build failures. */
@@ -181,6 +185,13 @@ export function createThemeParksDirectory(
     },
     async getEntityIdMap(): Promise<ReadonlyMap<string, string>> {
       return await ensureFresh();
+    },
+    getSnapshot(): { readonly builtAtMs: number | null; readonly entryCount: number; readonly ttlMs: number } {
+      return {
+        builtAtMs: map === null ? null : builtAtMs,
+        entryCount: map?.size ?? 0,
+        ttlMs,
+      };
     },
   };
 }
