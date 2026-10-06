@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { escapeHtml, flagged, renderPage, table } from '../html.js';
+import { escapeHtml, flagged, renderPage, table, explainerBanner, progressBar } from '../html.js';
 
 describe('html — unit tests', () => {
   describe('escapeHtml', () => {
@@ -29,6 +29,29 @@ describe('html — unit tests', () => {
 
     it('returns empty string when condition is false', () => {
       expect(flagged(false, 'Degraded Health')).toBe('');
+    });
+  });
+
+  describe('explainerBanner', () => {
+    it('renders an explainer callout with icon, title, and escaped text', () => {
+      const html = explainerBanner('🔄', 'Data Pipeline', 'Syncs <all> records.');
+      expect(html).toContain('class="explainer-banner"');
+      expect(html).toContain('🔄');
+      expect(html).toContain('Data Pipeline');
+      expect(html).toContain('Syncs &lt;all&gt; records.');
+    });
+  });
+
+  describe('progressBar', () => {
+    it('renders progress bar with percentage and variant', () => {
+      const normal = progressBar(45.5);
+      expect(normal).toContain('style="width: 45.5%;"');
+
+      const warning = progressBar(75, 'warning');
+      expect(warning).toContain('class="progress-bar-fill warning"');
+
+      const clamped = progressBar(120, 'danger');
+      expect(clamped).toContain('style="width: 100.0%;"');
     });
   });
 
@@ -86,6 +109,22 @@ describe('html — unit tests', () => {
       expect(html).toContain('<h1>System Diagnostics</h1>');
       expect(html).toContain('<div class="test-body">Hello Admin World</div>');
       expect(html).toContain('href="/admin"');
+    });
+
+    it('renders breadcrumbs and active nav highlights when currentPath is provided for a section', () => {
+      const title = 'Catalog & Disney Sync';
+      const body = '<div class="content">Section data</div>';
+
+      const html = renderPage(title, body, '/admin/catalog');
+
+      expect(html).toContain('class="breadcrumbs"');
+      expect(html).toContain('Catalog &amp; Disney Sync');
+      expect(html).toContain('class="dropdown-item active"');
+    });
+
+    it('omits breadcrumbs on dashboard landing page', () => {
+      const html = renderPage('Admin Overview', '<div>Dashboard</div>', '/admin');
+      expect(html).not.toContain('class="breadcrumbs"');
     });
   });
 });

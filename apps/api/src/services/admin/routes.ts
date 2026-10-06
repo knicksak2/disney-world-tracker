@@ -8,7 +8,7 @@ import type { FastifyPluginAsync, FastifyReply, preHandlerHookHandler } from 'fa
 import { AppError } from '../../errors/AppError.js';
 import { errorCodeToHttpStatus, PINS } from '@dwt/shared';
 import type { AppConfig } from '../../config.js';
-import { escapeHtml, flagged, renderPage, table } from './html.js';
+import { escapeHtml, flagged, renderPage, table, explainerBanner, progressBar } from './html.js';
 import {
   type AdminRepo,
   SAMPLING_HEALTH_STALE_MINUTES,
@@ -54,6 +54,9 @@ export interface AdminSectionLink {
   readonly path: string;
   readonly title: string;
   readonly description: string;
+  readonly category: string;
+  readonly icon: string;
+  readonly badge: string;
 }
 
 export const ADMIN_SECTIONS: readonly AdminSectionLink[] = [
@@ -61,61 +64,97 @@ export const ADMIN_SECTIONS: readonly AdminSectionLink[] = [
     path: '/admin/catalog',
     title: 'Catalog & Disney Sync',
     description: 'Catalog sync history, cache staleness, data quality checks, and manual sync trigger.',
+    category: 'Data Ingestion & External Sync',
+    icon: '🔄',
+    badge: 'Disney Facilities & Menus',
   },
   {
     path: '/admin/disney-transport',
     title: 'Disney Transport & Rate Limiter',
     description: 'Disney egress budget, dispatch/concurrency counters, and ThemeParks directory cache.',
-  },
-  {
-    path: '/admin/intelligence/accuracy',
-    title: 'Forecast Accuracy',
-    description: 'Park and Experience-level wait time forecast MAE, bias, and historical logs.',
-  },
-  {
-    path: '/admin/intelligence/model',
-    title: 'Intelligence Model Internals',
-    description: 'Park crowd index history, ride baseline coverage, weather sensitivities, cascades, and show patterns.',
+    category: 'Data Ingestion & External Sync',
+    icon: '⚡',
+    badge: 'Egress & Entity Cache',
   },
   {
     path: '/admin/intelligence/sampling',
     title: 'Sampling Pass Health',
     description: 'Sampling run history, recent execution status, and unmapped entities sample.',
+    category: 'Data Ingestion & External Sync',
+    icon: '⏱️',
+    badge: '10m Live Poller',
+  },
+  {
+    path: '/admin/intelligence/accuracy',
+    title: 'Forecast Accuracy',
+    description: 'Park and Experience-level wait time forecast MAE, bias, and historical logs.',
+    category: 'Predictive Intelligence & Models',
+    icon: '🎯',
+    badge: 'MAE & Model Bias',
+  },
+  {
+    path: '/admin/intelligence/model',
+    title: 'Intelligence Model Internals',
+    description: 'Park crowd index history, ride baseline coverage, weather sensitivities, cascades, and show patterns.',
+    category: 'Predictive Intelligence & Models',
+    icon: '🧠',
+    badge: 'Baselines & Cascades',
   },
   {
     path: '/admin/intelligence/derived-stats',
     title: 'Derived Stats Health',
     description: 'Derived statistics calculation job status, last error, and consecutive failure counts.',
+    category: 'Predictive Intelligence & Models',
+    icon: '📊',
+    badge: 'Nightly Batch Jobs',
   },
   {
     path: '/admin/infra',
     title: 'Infrastructure Budget',
     description: 'Postgres database storage consumption and Upstash Redis daily command budget.',
-  },
-  {
-    path: '/admin/accounts/lockouts',
-    title: 'Account Lockouts',
-    description: 'Active login lockout states and manual operator unlock trigger.',
+    category: 'Infrastructure & System Health',
+    icon: '💾',
+    badge: 'Neon & Upstash Caps',
   },
   {
     path: '/admin/notifications',
     title: 'Push Delivery Visibility',
     description: 'Recent Expo push notification deliveries, breakdown by status, and 24h summary.',
-  },
-  {
-    path: '/admin/users',
-    title: 'User & Support Lookup',
-    description: 'Case-insensitive user search by email, activity totals, and session revocation.',
-  },
-  {
-    path: '/admin/growth',
-    title: 'Growth & Activity',
-    description: 'High-level activity totals and trailing 7-day daily activity trends.',
+    category: 'Infrastructure & System Health',
+    icon: '🔔',
+    badge: 'Expo Notifications',
   },
   {
     path: '/admin/config',
     title: 'Configuration',
     description: 'Resolved non-secret system and Disney transport configuration values.',
+    category: 'Infrastructure & System Health',
+    icon: '⚙️',
+    badge: 'System Parameters',
+  },
+  {
+    path: '/admin/users',
+    title: 'User & Support Lookup',
+    description: 'Case-insensitive user search by email, activity totals, and session revocation.',
+    category: 'User Operations & Security',
+    icon: '👤',
+    badge: 'Customer Support',
+  },
+  {
+    path: '/admin/accounts/lockouts',
+    title: 'Account Lockouts',
+    description: 'Active login lockout states and manual operator unlock trigger.',
+    category: 'User Operations & Security',
+    icon: '🔒',
+    badge: 'Security & Brute-Force',
+  },
+  {
+    path: '/admin/growth',
+    title: 'Growth & Activity',
+    description: 'High-level activity totals and trailing 7-day daily activity trends.',
+    category: 'User Operations & Security',
+    icon: '📈',
+    badge: 'Platform Trends',
   },
 ];
 
@@ -131,7 +170,9 @@ export async function renderAdminSection(
 ): Promise<void> {
   try {
     const bodyHtml = await generateHtml();
-    reply.type('text/html; charset=utf-8').status(200).send(bodyHtml);
+    const currentPath = (reply as unknown as { request?: { url?: string } }).request?.url?.split('?')[0];
+    const html = renderPage(sectionTitle, bodyHtml, currentPath);
+    reply.type('text/html; charset=utf-8').status(200).send(html);
   } catch (err: unknown) {
     // Requirement 2.3 hides the raw error from the browser, but the Operator
     // still needs to find it — without this, a 500 produces no diagnostic
@@ -211,24 +252,99 @@ export function adminRoutes(options: AdminRoutesOptions): FastifyPluginAsync {
       { preHandler: options.basicAuth },
       async (_request, reply) => {
         await renderAdminSection(reply, 'Admin Overview', () => {
-          const linksHtml = ADMIN_SECTIONS.map(
-            (sec) => `
-            <div class="card" style="margin-bottom: 1rem;">
-              <h3 style="margin-top: 0; margin-bottom: 0.5rem;">
-                <a href="${escapeHtml(sec.path)}">${escapeHtml(sec.title)}</a>
-              </h3>
-              <p style="margin: 0; color: #94a3b8;">${escapeHtml(sec.description)}</p>
-            </div>`,
-          ).join('\n');
+          const categories = [
+            {
+              name: 'Data Ingestion & External Sync',
+              icon: '🔄',
+              desc: 'Disney static facility synchronization, rate limit budgets, and 10-minute live polling health.',
+            },
+            {
+              name: 'Predictive Intelligence & Models',
+              icon: '🧠',
+              desc: 'Machine learning wait time accuracy, ride baselines, weather adjustments, and nightly batch stats.',
+            },
+            {
+              name: 'Infrastructure & System Health',
+              icon: '⚡',
+              desc: 'Resource consumption against free-tier storage/command caps, push notification delivery, and configs.',
+            },
+            {
+              name: 'User Operations & Security',
+              icon: '👥',
+              desc: 'Customer support lookup, account lockouts, session revocation, and engagement activity trends.',
+            },
+          ];
+
+          const categorySectionsHtml = categories.map((cat) => {
+            const sections = ADMIN_SECTIONS.filter((s) => s.category === cat.name);
+            const cardsHtml = sections.map((sec) => `
+              <div class="section-card">
+                <div class="section-card-top">
+                  <div class="section-card-header">
+                    <span class="section-card-icon">${sec.icon}</span>
+                    <h3 class="section-card-title">
+                      <a href="${escapeHtml(sec.path)}">${escapeHtml(sec.title)}</a>
+                    </h3>
+                  </div>
+                  <p class="section-card-desc">${escapeHtml(sec.description)}</p>
+                </div>
+                <div class="section-card-footer">
+                  <span class="section-card-badge">${escapeHtml(sec.badge)}</span>
+                  <a href="${escapeHtml(sec.path)}" class="section-card-cta">Open Console &rarr;</a>
+                </div>
+              </div>
+            `).join('\n');
+
+            return `
+              <section class="category-section">
+                <div class="category-header">
+                  <span class="category-icon">${cat.icon}</span>
+                  <span class="category-title">${escapeHtml(cat.name)}</span>
+                  <span class="category-desc">${escapeHtml(cat.desc)}</span>
+                </div>
+                <div class="sections-grid">
+                  ${cardsHtml}
+                </div>
+              </section>
+            `;
+          }).join('\n');
 
           return `
-            <h1>Admin Panel</h1>
-            <p style="color: #94a3b8; margin-bottom: 2rem;">
-              Operational observability, infrastructure health, and administrative controls.
-            </p>
-            <div class="grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1rem;">
-              ${linksHtml}
+            <div class="dashboard-hero">
+              <h1>Admin Panel</h1>
+              <p>Operational observability, infrastructure health, and administrative controls.</p>
+              <div class="hero-stats-row">
+                <div class="hero-stat">
+                  <span class="hero-stat-icon">🔄</span>
+                  <div class="hero-stat-text">
+                    <span class="hero-stat-title">Data Ingestion</span>
+                    <span class="hero-stat-desc">Disney Sync & Live Sampling</span>
+                  </div>
+                </div>
+                <div class="hero-stat">
+                  <span class="hero-stat-icon">🧠</span>
+                  <div class="hero-stat-text">
+                    <span class="hero-stat-title">Predictive AI</span>
+                    <span class="hero-stat-desc">Forecasts & Ride Baselines</span>
+                  </div>
+                </div>
+                <div class="hero-stat">
+                  <span class="hero-stat-icon">⚡</span>
+                  <div class="hero-stat-text">
+                    <span class="hero-stat-title">Infrastructure</span>
+                    <span class="hero-stat-desc">Neon & Upstash Budget Quotas</span>
+                  </div>
+                </div>
+                <div class="hero-stat">
+                  <span class="hero-stat-icon">👥</span>
+                  <div class="hero-stat-text">
+                    <span class="hero-stat-title">User Operations</span>
+                    <span class="hero-stat-desc">Security, Support & Growth</span>
+                  </div>
+                </div>
+              </div>
             </div>
+            ${categorySectionsHtml}
           `;
         });
       },
@@ -341,6 +457,11 @@ export function adminRoutes(options: AdminRoutesOptions): FastifyPluginAsync {
           ]);
 
           return `
+            ${explainerBanner(
+              '🔄',
+              'Catalog & Disney Sync Overview',
+              'Monitors synchronization of static Walt Disney World facilities, dining menus, and operational entities into PostgreSQL. Disney provides official facility structures; ThemeParks.wiki powers real-time wait times.',
+            )}
             <h2>Catalog & Sync Health</h2>
             <div class="metric-card" style="margin-bottom: 1.5rem;">
               <div class="metric-label">Current Catalog Cache Age</div>
@@ -455,6 +576,11 @@ export function adminRoutes(options: AdminRoutesOptions): FastifyPluginAsync {
           }
 
           return `
+            ${explainerBanner(
+              '⚡',
+              'Disney Egress & Directory Cache',
+              'Monitors outbound HTTP request budgets and rate limits enforced on Disney API calls to prevent Akamai WAF blocks, along with the ThemeParks.wiki entity cache.',
+            )}
             <div class="card">
               <h2>Disney Egress Rate Limiter (Redis)</h2>
               ${rlHtml}
@@ -479,46 +605,312 @@ export function adminRoutes(options: AdminRoutesOptions): FastifyPluginAsync {
           const parkAcc = await options.repo.getParkForecastAccuracies();
           const waitAcc = await options.repo.getTopWaitForecastAccuracies(50);
 
+          // Summary KPI Calculations
+          const validRideMaes = waitAcc.filter((w) => w.mae !== null);
+          const avgRideMae =
+            validRideMaes.length > 0
+              ? validRideMaes.reduce((acc, w) => acc + (w.mae ?? 0), 0) / validRideMaes.length
+              : null;
+
+          const validRideBiases = waitAcc.filter((w) => w.bias !== null);
+          const avgRideBias =
+            validRideBiases.length > 0
+              ? validRideBiases.reduce((acc, w) => acc + (w.bias ?? 0), 0) / validRideBiases.length
+              : null;
+
+          const oneDayParks = parkAcc.filter((p) => p.leadDays === 1 && p.mae !== null);
+          const avgParkMae =
+            oneDayParks.length > 0
+              ? oneDayParks.reduce((acc, p) => acc + (p.mae ?? 0), 0) / oneDayParks.length
+              : null;
+
+          const challengerEvals = waitAcc.filter(
+            (w) =>
+              w.challengerSampleCount !== undefined &&
+              w.challengerSampleCount !== null &&
+              w.challengerSampleCount > 0,
+          );
+
+          const kpisHtml = `
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+              <div class="metric-card">
+                <div class="metric-label">Avg Attraction Error (MAE)</div>
+                <div class="metric-val">${avgRideMae !== null ? `${avgRideMae.toFixed(1)} min` : '-'}</div>
+                <div class="text-xs text-muted" style="margin-top: 0.25rem;">Average standby wait error across top rides</div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-label">Attraction Bias (Direction)</div>
+                <div class="metric-val" style="display: flex; align-items: baseline; gap: 0.4rem;">
+                  ${avgRideBias !== null ? `${avgRideBias > 0 ? '+' : ''}${avgRideBias.toFixed(1)} min` : '-'}
+                  ${avgRideBias !== null ? (
+                    avgRideBias < -1.0
+                      ? '<span class="badge badge-warning text-xs">Underpredicting</span>'
+                      : avgRideBias > 1.0
+                      ? '<span class="badge badge-info text-xs">Overpredicting</span>'
+                      : '<span class="badge badge-success text-xs">Well-Calibrated</span>'
+                  ) : ''}
+                </div>
+                <div class="text-xs text-muted" style="margin-top: 0.25rem;">
+                  ${avgRideBias !== null && avgRideBias < -0.5
+                    ? 'Actual lines run slightly longer than predicted'
+                    : avgRideBias !== null && avgRideBias > 0.5
+                    ? 'Actual lines run slightly shorter than predicted'
+                    : 'Balanced between over and under predictions'}
+                </div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-label">Park Crowd Error (1-Day MAE)</div>
+                <div class="metric-val">${avgParkMae !== null ? `&plusmn;${avgParkMae.toFixed(2)} pts` : '-'}</div>
+                <div class="text-xs text-muted" style="margin-top: 0.25rem;">On 1.0 crowd multiplier scale (~1–10 crowd levels)</div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-label">Challenger Shadow Status</div>
+                <div class="metric-val" style="font-size: 1.15rem;">
+                  ${challengerEvals.length > 0 ? `${challengerEvals.length} Rides Monitored` : 'Awaiting Shadow Logs'}
+                </div>
+                <div class="text-xs text-muted" style="margin-top: 0.25rem;">
+                  ${challengerEvals.length > 0 ? 'Evaluating alongside production engine' : 'No active challenger evaluations logged'}
+                </div>
+              </div>
+            </div>
+          `;
+
+          const guideHtml = `
+            <div class="guide-card">
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;">
+                <h3 style="margin: 0; display: flex; align-items: center; gap: 0.5rem; font-size: 0.95rem;">
+                  <span>📖</span> Metric Interpretation Reference Guide
+                </h3>
+                <span class="text-xs text-muted">Plain-English definitions & benchmarks</span>
+              </div>
+              <div class="guide-grid">
+                <div class="guide-item">
+                  <div class="guide-item-title">
+                    <span>🎯</span> MAE (Mean Absolute Error)
+                  </div>
+                  <div class="guide-item-desc">
+                    <strong>How far off predictions are on average</strong>, ignoring whether they were too high or too low. Lower is better.
+                    <div style="margin-top: 0.4rem; padding-top: 0.4rem; border-top: 1px solid rgba(255,255,255,0.06);">
+                      &bull; <strong>Attractions:</strong> Standby minutes (&lt;7m tight, 7–14m typical).<br/>
+                      &bull; <strong>Parks:</strong> Crowd index points (&lt;0.20 is high accuracy).
+                    </div>
+                  </div>
+                </div>
+
+                <div class="guide-item">
+                  <div class="guide-item-title">
+                    <span>⚖️</span> Bias (Systematic Skew)
+                  </div>
+                  <div class="guide-item-desc">
+                    <strong>Directional tendency</strong> over many predictions. Shows if the model systematically misses in one direction:
+                    <div style="margin-top: 0.4rem; padding-top: 0.4rem; border-top: 1px solid rgba(255,255,255,0.06);">
+                      &bull; <span class="text-amber font-semibold">&minus; Negative Bias:</span> <strong>Underpredicting</strong> (Actual lines/crowds were longer than predicted).<br/>
+                      &bull; <span class="text-cyan font-semibold">+ Positive Bias:</span> <strong>Overpredicting</strong> (Actual lines/crowds were shorter than predicted).<br/>
+                      &bull; <span class="text-emerald font-semibold">&plusmn;0 Neutral:</span> <strong>Balanced</strong> (Equally centered around reality).
+                    </div>
+                  </div>
+                </div>
+
+                <div class="guide-item">
+                  <div class="guide-item-title">
+                    <span>📅</span> Lead Days (Horizon)
+                  </div>
+                  <div class="guide-item-desc">
+                    <strong>How far in advance</strong> the prediction was locked in (1 day vs. 30 days ahead).
+                    <div style="margin-top: 0.4rem; padding-top: 0.4rem; border-top: 1px solid rgba(255,255,255,0.06);">
+                      Error naturally widens as lead days increase because weather, crowd swings, and ride outages cannot be known weeks in advance.
+                    </div>
+                  </div>
+                </div>
+
+                <div class="guide-item">
+                  <div class="guide-item-title">
+                    <span>⚔️</span> Challenger Model
+                  </div>
+                  <div class="guide-item-desc">
+                    <strong>Experimental shadow candidate</strong> running silently in parallel with production.
+                    <div style="margin-top: 0.4rem; padding-top: 0.4rem; border-top: 1px solid rgba(255,255,255,0.06);">
+                      Allows data science to evaluate new machine learning algorithms against real outcomes before promoting them to production.
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          `;
+
           const parkTable = table(parkAcc, [
-            { header: 'Park', cell: (r) => escapeHtml(r.park) },
-            { header: 'Lead Days', cell: (r) => escapeHtml(r.leadDays) },
-            { header: 'MAE', cell: (r) => (r.mae !== null ? r.mae.toFixed(2) : '-') },
-            { header: 'Bias', cell: (r) => (r.bias !== null ? r.bias.toFixed(2) : '-') },
-            { header: 'Sample Count', cell: (r) => escapeHtml(r.sampleCount) },
+            {
+              header: 'Park',
+              cell: (r) => `<strong>${escapeHtml(r.park)}</strong>`,
+            },
+            {
+              header: 'Lead Horizon',
+              cell: (r) => {
+                const horizonLabel =
+                  r.leadDays === 1
+                    ? '1 day out'
+                    : r.leadDays === 3
+                    ? '3 days out'
+                    : r.leadDays === 7
+                    ? '1 week out'
+                    : r.leadDays === 14
+                    ? '2 weeks out'
+                    : r.leadDays === 30
+                    ? '1 month out'
+                    : `${r.leadDays} days out`;
+                return `<span class="mono" style="font-weight: 600;">${escapeHtml(r.leadDays)}</span> <span class="text-xs text-muted">(${horizonLabel})</span>`;
+              },
+            },
+            {
+              header: 'MAE (Crowd Index)',
+              cell: (r) => {
+                if (r.mae === null) return '-';
+                const maeVal = r.mae.toFixed(2);
+                const badgeClass =
+                  r.mae < 0.20 ? 'badge-success' : r.mae < 0.35 ? 'badge-info' : 'badge-warning';
+                const ratingLabel =
+                  r.mae < 0.20 ? 'High' : r.mae < 0.35 ? 'Standard' : 'Volatile';
+                return `<div style="display: flex; align-items: center; gap: 0.5rem;"><span class="mono" style="font-weight: 600;">${maeVal}</span> <span class="badge ${badgeClass} text-xs">${ratingLabel}</span></div><span class="text-xs text-muted">index pts</span>`;
+              },
+            },
+            {
+              header: 'Bias (Direction)',
+              cell: (r) => {
+                if (r.bias === null) return '-';
+                const biasVal = (r.bias > 0 ? '+' : '') + r.bias.toFixed(2);
+                let labelHtml = '';
+                if (r.bias < -0.05) {
+                  labelHtml = `<div class="text-xs text-amber font-semibold">&#x25BC; Underpredicts by ${Math.abs(r.bias).toFixed(2)} pts</div>`;
+                } else if (r.bias > 0.05) {
+                  labelHtml = `<div class="text-xs text-cyan font-semibold">&#x25B2; Overpredicts by ${r.bias.toFixed(2)} pts</div>`;
+                } else {
+                  labelHtml = `<div class="text-xs text-emerald font-semibold">&#x2714; Well balanced</div>`;
+                }
+                return `<span class="mono" style="font-weight: 600;">${biasVal}</span>${labelHtml}`;
+              },
+            },
+            {
+              header: 'Sample Days',
+              cell: (r) => `<span class="mono">${escapeHtml(r.sampleCount)}</span> <span class="text-xs text-muted">days</span>`,
+            },
           ]);
 
           const waitTable = table(waitAcc, [
             {
               header: 'Experience',
               cell: (r) =>
-                `<a href="/admin/intelligence/accuracy/${escapeHtml(r.experienceId)}">${escapeHtml(r.name)}</a>`,
+                `<div><a href="/admin/intelligence/accuracy/${escapeHtml(r.experienceId)}"><strong>${escapeHtml(r.name)}</strong></a></div><div class="text-xs text-muted">ID: ${escapeHtml(r.experienceId)} &bull; <a href="/admin/intelligence/accuracy/${escapeHtml(r.experienceId)}">View hourly logs &rarr;</a></div>`,
             },
-            { header: 'Park', cell: (r) => escapeHtml(r.park) },
-            { header: 'Lead Days', cell: (r) => escapeHtml(r.leadDays) },
-            { header: 'MAE', cell: (r) => (r.mae !== null ? r.mae.toFixed(2) : '-') },
-            { header: 'Bias', cell: (r) => (r.bias !== null ? r.bias.toFixed(2) : '-') },
-            { header: 'Samples', cell: (r) => escapeHtml(r.sampleCount) },
+            {
+              header: 'Park',
+              cell: (r) => `<span class="badge badge-neutral">${escapeHtml(r.park)}</span>`,
+            },
+            {
+              header: 'Lead Horizon',
+              cell: (r) => `<span class="mono" style="font-weight: 600;">${escapeHtml(r.leadDays)}</span> <span class="text-xs text-muted">${r.leadDays === 1 ? 'day out' : 'days out'}</span>`,
+            },
+            {
+              header: 'MAE (Avg Min Error)',
+              cell: (r) => {
+                if (r.mae === null) return '-';
+                const maeVal = r.mae.toFixed(2);
+                const badge =
+                  r.mae < 7.0
+                    ? '<span class="badge badge-success text-xs">&plusmn;tight</span>'
+                    : r.mae < 14.0
+                    ? '<span class="badge badge-info text-xs">&plusmn;typical</span>'
+                    : '<span class="badge badge-warning text-xs">&plusmn;volatile</span>';
+                return `<div style="display: flex; align-items: center; gap: 0.4rem;"><span class="mono" style="font-weight: 600; font-size: 0.95rem;">${maeVal} min</span> ${badge}</div><span class="text-xs text-muted">avg off by &plusmn;${Math.round(r.mae)}m</span>`;
+              },
+            },
+            {
+              header: 'Bias (Directional Skew)',
+              cell: (r) => {
+                if (r.bias === null) return '-';
+                const biasVal = (r.bias > 0 ? '+' : '') + r.bias.toFixed(2);
+                let skewExplainer = '';
+                if (r.bias < -1.0) {
+                  skewExplainer = `<div class="text-xs text-amber font-semibold">&#x25BC; Under by ~${Math.abs(Math.round(r.bias))}m (lines run longer)</div>`;
+                } else if (r.bias > 1.0) {
+                  skewExplainer = `<div class="text-xs text-cyan font-semibold">&#x25B2; Over by ~${Math.round(r.bias)}m (lines run shorter)</div>`;
+                } else {
+                  skewExplainer = `<div class="text-xs text-emerald font-semibold">&#x2714; Well balanced (&plusmn;1m)</div>`;
+                }
+                return `<span class="mono" style="font-weight: 600;">${biasVal} min</span>${skewExplainer}`;
+              },
+            },
+            {
+              header: 'Evaluations',
+              cell: (r) => `<span class="mono">${escapeHtml(r.sampleCount)}</span> <span class="text-xs text-muted">logs</span>`,
+            },
             {
               header: 'Challenger MAE',
-              cell: (r) => (r.challengerMae !== undefined && r.challengerMae !== null ? r.challengerMae.toFixed(2) : '-'),
+              cell: (r) => {
+                if (r.challengerMae === undefined || r.challengerMae === null) {
+                  return '<span class="text-muted">-</span>';
+                }
+                const maeStr = r.challengerMae.toFixed(2);
+                return `<span class="mono" style="font-weight: 600;">${maeStr}</span> <span class="text-xs text-muted">min</span>`;
+              },
             },
             {
               header: 'Challenger Bias',
-              cell: (r) => (r.challengerBias !== undefined && r.challengerBias !== null ? r.challengerBias.toFixed(2) : '-'),
+              cell: (r) => {
+                if (r.challengerBias === undefined || r.challengerBias === null) {
+                  return '<span class="text-muted">-</span>';
+                }
+                const biasStr = (r.challengerBias > 0 ? '+' : '') + r.challengerBias.toFixed(2);
+                return `<span class="mono">${biasStr}</span> <span class="text-xs text-muted">min</span>`;
+              },
             },
             {
-              header: 'Challenger Samples',
-              cell: (r) => escapeHtml(r.challengerSampleCount ?? '-'),
+              header: 'Challenger Status',
+              cell: (r) => {
+                const sampleCount = r.challengerSampleCount ?? 0;
+                if (sampleCount === 0 || r.challengerMae === null || r.challengerMae === undefined) {
+                  return '<span class="text-muted text-xs">No shadow data</span>';
+                }
+                if (r.mae !== null) {
+                  const delta = r.mae - r.challengerMae;
+                  if (delta > 0.5) {
+                    return `<span class="badge badge-success text-xs">&#x2197; +${delta.toFixed(1)}m better</span><div class="text-xs text-muted">${escapeHtml(sampleCount)} evals</div>`;
+                  }
+                  if (delta < -0.5) {
+                    return `<span class="badge badge-danger text-xs">&#x2198; ${Math.abs(delta).toFixed(1)}m worse</span><div class="text-xs text-muted">${escapeHtml(sampleCount)} evals</div>`;
+                  }
+                  return `<span class="badge badge-info text-xs">&#x2248; Similar accuracy</span><div class="text-xs text-muted">${escapeHtml(sampleCount)} evals</div>`;
+                }
+                return `<span class="text-xs text-muted">${escapeHtml(sampleCount)} evals</span>`;
+              },
             },
           ]);
 
           return `
+            ${explainerBanner(
+              '🎯',
+              'Forecast Accuracy Evaluation',
+              'Measures prediction accuracy against actual observed standby wait times and crowd densities. All metrics preserve underlying raw data, with plain-English directional indicators and units below.',
+            )}
+            ${kpisHtml}
+            ${guideHtml}
             <div class="card">
-              <h2>Park-Level Forecast Accuracy</h2>
+              <div style="display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 0.5rem; flex-wrap: wrap; gap: 0.5rem;">
+                <h2>Park-Level Crowd Index Forecast Accuracy</h2>
+                <span class="text-xs text-muted">Evaluated across 1 to 30 day forecast horizons (1.0 = typical crowd)</span>
+              </div>
+              <p class="text-muted" style="font-size: 0.85rem; margin-bottom: 1rem;">
+                Measures how accurately the 1–10 crowd calendar models total park density. Metrics are expressed in crowd multiplier index points.
+              </p>
               ${parkTable}
             </div>
             <div class="card">
-              <h2>Top Experience Forecast Accuracy (Highest Sample Count)</h2>
+              <div style="display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 0.5rem; flex-wrap: wrap; gap: 0.5rem;">
+                <h2>Top Experience Forecast Accuracy (Highest Sample Count)</h2>
+                <span class="text-xs text-muted">Evaluated against actual ThemeParks.wiki posted wait times</span>
+              </div>
+              <p class="text-muted" style="font-size: 0.85rem; margin-bottom: 1rem;">
+                Standby wait time predictions for individual attractions. MAE and Bias are measured in minutes. Click an attraction name to inspect hourly historical comparisons.
+              </p>
               ${waitTable}
             </div>
           `;
@@ -542,29 +934,89 @@ export function adminRoutes(options: AdminRoutesOptions): FastifyPluginAsync {
 
           const logs = await options.repo.getWaitForecastHistory(experienceId, 200);
 
+          const validLogs = logs.filter((l) => l.predictedWaitMinutes !== null && l.actualWaitMinutes !== null);
+          const avgActual =
+            validLogs.length > 0
+              ? Math.round(validLogs.reduce((acc, l) => acc + (l.actualWaitMinutes ?? 0), 0) / validLogs.length)
+              : null;
+          const avgPred =
+            validLogs.length > 0
+              ? Math.round(validLogs.reduce((acc, l) => acc + (l.predictedWaitMinutes ?? 0), 0) / validLogs.length)
+              : null;
+          const avgAbsErr =
+            validLogs.length > 0
+              ? (validLogs.reduce((acc, l) => acc + Math.abs(l.errorMinutes ?? 0), 0) / validLogs.length).toFixed(1)
+              : null;
+
+          const statsCardHtml = `
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+              <div class="metric-card">
+                <div class="metric-label">Historical Logs</div>
+                <div class="metric-val">${logs.length}</div>
+                <div class="text-xs text-muted" style="margin-top: 0.25rem;">Total hourly snapshots evaluated</div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-label">Avg Observed Wait</div>
+                <div class="metric-val">${avgActual !== null ? `${avgActual} min` : '-'}</div>
+                <div class="text-xs text-muted" style="margin-top: 0.25rem;">Actual standby wait time posted</div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-label">Avg Predicted Wait</div>
+                <div class="metric-val">${avgPred !== null ? `${avgPred} min` : '-'}</div>
+                <div class="text-xs text-muted" style="margin-top: 0.25rem;">Standby wait time forecasted</div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-label">Mean Absolute Error</div>
+                <div class="metric-val">${avgAbsErr !== null ? `&plusmn;${avgAbsErr} min` : '-'}</div>
+                <div class="text-xs text-muted" style="margin-top: 0.25rem;">Average error across all hourly logs</div>
+              </div>
+            </div>
+          `;
+
           const logsTable = table(logs, [
             { header: 'Date', cell: (r) => `<span class="mono">${escapeHtml(r.targetDate)}</span>` },
-            { header: 'Hour', cell: (r) => `${escapeHtml(r.targetHour)}:00` },
+            { header: 'Hour', cell: (r) => `<span class="mono">${escapeHtml(r.targetHour)}:00</span>` },
             {
-              header: 'Predicted (min)',
-              cell: (r) => (r.predictedWaitMinutes !== null ? escapeHtml(r.predictedWaitMinutes) : '-'),
+              header: 'Predicted Wait',
+              cell: (r) =>
+                r.predictedWaitMinutes !== null
+                  ? `<span class="mono" style="font-weight: 600;">${escapeHtml(r.predictedWaitMinutes)}</span> <span class="text-xs text-muted">min</span>`
+                  : '<span class="text-muted">-</span>',
             },
             {
-              header: 'Observed (min)',
-              cell: (r) => (r.actualWaitMinutes !== null ? escapeHtml(r.actualWaitMinutes) : '-'),
+              header: 'Observed Wait',
+              cell: (r) =>
+                r.actualWaitMinutes !== null
+                  ? `<span class="mono" style="font-weight: 600;">${escapeHtml(r.actualWaitMinutes)}</span> <span class="text-xs text-muted">min</span>`
+                  : '<span class="text-muted">-</span>',
             },
             {
-              header: 'Error (min)',
-              cell: (r) => (r.errorMinutes !== null ? escapeHtml(r.errorMinutes) : '-'),
+              header: 'Prediction Error',
+              cell: (r) => {
+                if (r.errorMinutes === null) return '<span class="text-muted">-</span>';
+                const err = r.errorMinutes;
+                const absErr = Math.abs(err);
+                const badgeClass = absErr <= 5 ? 'badge-success' : absErr <= 15 ? 'badge-info' : 'badge-warning';
+                const sign = err > 0 ? `+${err}` : `${err}`;
+                const dir = err > 0 ? 'overpredicted' : err < 0 ? 'underpredicted' : 'exact';
+                return `<div style="display: flex; align-items: center; gap: 0.4rem;"><span class="mono font-semibold">${sign} min</span> <span class="badge ${badgeClass} text-xs">${dir}</span></div>`;
+              },
             },
           ]);
 
           return `
+            ${explainerBanner(
+              '📈',
+              'Attraction Forecast Comparison History',
+              'Hourly breakdown of predicted vs actual standby wait times and prediction error delta for this specific attraction.',
+            )}
             <div class="card">
-              <h2>${escapeHtml(exp.name)} (${escapeHtml(experienceId)})</h2>
-              <p class="text-muted" style="margin-bottom: 1rem;">
-                Historical forecast log comparisons (predicted vs observed standby wait times).
-              </p>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
+                <h2>${escapeHtml(exp.name)} (${escapeHtml(experienceId)})</h2>
+                <a href="/admin/intelligence/accuracy" class="btn btn-secondary text-xs">&larr; Back to Forecast Accuracy</a>
+              </div>
+              ${statsCardHtml}
+              <h3 style="margin-top: 1.25rem; margin-bottom: 0.75rem;">Hourly Historical Logs</h3>
               ${logsTable}
               <p style="margin-top: 1rem;"><a href="/admin/intelligence/accuracy">&larr; Back to Forecast Accuracy</a></p>
             </div>
@@ -610,6 +1062,7 @@ export function adminRoutes(options: AdminRoutesOptions): FastifyPluginAsync {
                 <div class="metric-card">
                   <div class="metric-label">Coverage Percent</div>
                   <div class="metric-val">${baseline.coveragePercent.toFixed(1)}%</div>
+                  ${progressBar(baseline.coveragePercent)}
                 </div>
               </div>
               <h3 style="margin-top: 1rem; margin-bottom: 0.5rem;">Top 20 by Bucket Density</h3>
@@ -673,6 +1126,11 @@ export function adminRoutes(options: AdminRoutesOptions): FastifyPluginAsync {
           ]);
 
           return `
+            ${explainerBanner(
+              '🧠',
+              'Intelligence Model Internals & Heuristics',
+              'Inspects the learned components of the prediction engine: attraction baseline wait curves (~500-sample memory), park crowd index history, weather sensitivity multipliers, ride breakdown cascading impacts, and entertainment showtime schedules.',
+            )}
             ${baselineHtml}
             <h2>Park Crowd Index History</h2>
             ${crowdHtml}
@@ -744,6 +1202,11 @@ export function adminRoutes(options: AdminRoutesOptions): FastifyPluginAsync {
               : '<li>No unmapped entities detected in recent passes.</li>';
 
           return `
+            ${explainerBanner(
+              '⏱️',
+              'Sampling Pass Observability',
+              'Live wait times and operating statuses are polled from ThemeParks.wiki on a ~10-minute cadence via external keep-alive cron. If no successful pass occurs in 30 minutes, status is marked Degraded.',
+            )}
             <div class="card">
               <h2>Sampling Pass Status</h2>
               <div style="margin-bottom: 1rem;">${healthBadge}</div>
@@ -797,6 +1260,11 @@ export function adminRoutes(options: AdminRoutesOptions): FastifyPluginAsync {
           ]);
 
           return `
+            ${explainerBanner(
+              '📊',
+              'Nightly Derived Statistics Jobs',
+              'Heavy analytics batch computations calculating weather sensitivity multipliers, attraction cascade relationships, and baseline wait distributions. Jobs that fail consecutively are flagged for review.',
+            )}
             <div class="card">
               <h2>Derived Statistics Background Jobs</h2>
               <p class="text-muted" style="margin-bottom: 1rem;">
@@ -843,6 +1311,7 @@ export function adminRoutes(options: AdminRoutesOptions): FastifyPluginAsync {
                     <div class="metric-card">
                       <div class="metric-label">Cap (${UPSTASH_FREE_TIER_DAILY_COMMANDS.toLocaleString()} / day)</div>
                       <div class="metric-val">${redisBudget.percentOfBudget.toFixed(1)}%</div>
+                      ${progressBar(redisBudget.percentOfBudget, redisBudget.percentOfBudget > 80 ? 'danger' : redisBudget.percentOfBudget > 60 ? 'warning' : 'normal')}
                     </div>
                   </div>
                   <p class="text-muted" style="font-size: 0.85rem;">
@@ -852,6 +1321,11 @@ export function adminRoutes(options: AdminRoutesOptions): FastifyPluginAsync {
               `;
 
           return `
+            ${explainerBanner(
+              '💾',
+              'Infrastructure Free-Tier Quota Monitoring',
+              'Observes real-time storage and command consumption against free-tier infrastructure limits: Neon PostgreSQL (0.5 GB capacity) and Upstash Redis (10,000 commands/day).',
+            )}
             <div class="card">
               <h2>Neon Postgres Database Storage</h2>
               <div class="metric-grid">
@@ -862,6 +1336,7 @@ export function adminRoutes(options: AdminRoutesOptions): FastifyPluginAsync {
                 <div class="metric-card">
                   <div class="metric-label">Neon Free Tier (0.5 GB)</div>
                   <div class="metric-val">${dbSize.percentOfBudget.toFixed(1)}%</div>
+                  ${progressBar(dbSize.percentOfBudget, dbSize.percentOfBudget > 80 ? 'danger' : dbSize.percentOfBudget > 60 ? 'warning' : 'normal')}
                 </div>
               </div>
               <h3 style="margin-top: 1rem; margin-bottom: 0.5rem;">Top 10 Tables by Size</h3>
@@ -910,6 +1385,11 @@ export function adminRoutes(options: AdminRoutesOptions): FastifyPluginAsync {
           ]);
 
           return `
+            ${explainerBanner(
+              '🔒',
+              'Account Lockout Defense & Security',
+              'Users temporarily or permanently locked after repeated failed login attempts. Operators can review remaining lockout time or trigger an instant manual unlock.',
+            )}
             <div class="card">
               <h2>Active Account Lockouts</h2>
               <p class="text-muted" style="margin-bottom: 1rem;">
@@ -981,6 +1461,11 @@ export function adminRoutes(options: AdminRoutesOptions): FastifyPluginAsync {
           ]);
 
           return `
+            ${explainerBanner(
+              '🔔',
+              'Push Delivery Visibility',
+              'Trailing 24-hour delivery tracking for Expo Push Notifications. Evaluates delivery success rate, unregistered device tokens, and downstream gateway errors.',
+            )}
             <div class="card">
               <h2>Push Delivery Health (Trailing 24 Hours)</h2>
               <div style="margin-bottom: 1rem;">${statusBadge}</div>
@@ -1100,6 +1585,11 @@ export function adminRoutes(options: AdminRoutesOptions): FastifyPluginAsync {
           }
 
           return `
+            ${explainerBanner(
+              '👤',
+              'User Support & Account Lookup',
+              'Case-insensitive search by user email. Surfaces engagement statistics (completions, ratings, notes, trips), active device push tokens, and instant session revocation.',
+            )}
             <div class="card">
               <h2>Lookup User by Email</h2>
               <form method="GET" action="/admin/users" style="display: flex; gap: 0.5rem; align-items: center; margin-top: 0.5rem;">
@@ -1166,6 +1656,11 @@ export function adminRoutes(options: AdminRoutesOptions): FastifyPluginAsync {
           ]);
 
           return `
+            ${explainerBanner(
+              '🏅',
+              'User Pin Collection Diagnostic',
+              'Detailed achievement and pin unlock status for this user account. The operator can trigger a global pin reconciliation batch to evaluate all accounts.',
+            )}
             <div class="card">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
                 <h2>Pin Board Diagnostic: ${escapeHtml(userId)}</h2>
@@ -1232,6 +1727,11 @@ export function adminRoutes(options: AdminRoutesOptions): FastifyPluginAsync {
           ]);
 
           return `
+            ${explainerBanner(
+              '📈',
+              'Platform Growth & Activity Analytics',
+              'High-level activity milestones and trailing 7-day daily trends across registrations, completed experiences, ratings, notes, and trips.',
+            )}
             <div class="card">
               <p class="text-muted" style="font-size: 0.8rem; margin-bottom: 0.75rem;">
                 "Completions" are counted by their user-entered visit date (<code>completed_on</code>),
@@ -1315,6 +1815,11 @@ export function adminRoutes(options: AdminRoutesOptions): FastifyPluginAsync {
           ]);
 
           return `
+            ${explainerBanner(
+              '⚙️',
+              'Resolved System Configuration',
+              'Runtime system configuration values resolved by the running API server. Sensitive secrets, passwords, and tokens are strictly omitted.',
+            )}
             <div class="card">
               <h2>Resolved App Configuration</h2>
               <p class="text-muted" style="margin-bottom: 1rem;">

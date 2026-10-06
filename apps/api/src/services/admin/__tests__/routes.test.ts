@@ -391,6 +391,11 @@ describe('Admin Panel Routes - Comprehensive Integration Suite', () => {
     expect(res.body).toContain('Space Mountain');
     expect(res.body).toContain('5.50'); // Challenger MAE
     expect(res.body).toContain('Big Thunder');
+    expect(res.body).toContain('Metric Interpretation Reference Guide');
+    expect(res.body).toContain('Avg Attraction Error (MAE)');
+    expect(res.body).toContain('Attraction Bias (Direction)');
+    expect(res.body).toContain('Park Crowd Error (1-Day MAE)');
+    expect(res.body).toContain('Lead Horizon');
   });
 
   it('GET /admin/intelligence/accuracy/:experienceId - 200 on found, 404 admin_experience_not_found on miss', async () => {
@@ -403,6 +408,9 @@ describe('Admin Panel Routes - Comprehensive Integration Suite', () => {
     expect(hit.statusCode).toBe(200);
     expect(hit.body).toContain('Space Mountain');
     expect(hit.body).toContain('2026-10-02');
+    expect(hit.body).toContain('Historical Logs');
+    expect(hit.body).toContain('Avg Observed Wait');
+    expect(hit.body).toContain('Prediction Error');
 
     const miss = await app.inject({
       method: 'GET',
