@@ -71,7 +71,7 @@ const deleteLogParamsSchema = z
 
 const suggestQuerySchema = z
   .object({
-    park: parkSchema,
+    park: parkSchema.optional(),
     name: z.string().trim().min(1).max(200).optional(),
     q: z.string().trim().min(1).max(200).optional(),
     limit: z.coerce.number().int().min(1).max(50).optional(),

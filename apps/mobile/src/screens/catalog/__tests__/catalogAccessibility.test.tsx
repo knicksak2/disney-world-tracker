@@ -99,7 +99,7 @@ jest.mock('../../../api/client', () => {
 // Imports of modules under test (after the mocks above).
 // ---------------------------------------------------------------------------
 
-import CatalogScreen from '../CatalogScreen';
+import ExploreHubScreen from '../ExploreHubScreen';
 import DestinationScreen from '../DestinationScreen';
 import ExperienceDetailScreen from '../ExperienceDetailScreen';
 import { Chip } from '../../../theme/components';
@@ -163,7 +163,7 @@ function renderCatalog(): ReturnType<typeof render> {
     <QueryClientProvider client={client}>
       <NavigationContainer>
         <Stack.Navigator>
-          <Stack.Screen name="CatalogList" component={CatalogScreen} />
+          <Stack.Screen name="CatalogList" component={ExploreHubScreen} />
         </Stack.Navigator>
       </NavigationContainer>
     </QueryClientProvider>,
@@ -246,24 +246,29 @@ describe('Catalog navigation accessibility (R12.1-R12.5, R12.8)', () => {
             staleCache: false,
           };
         }
+        if (typeof path === 'string' && path.startsWith('/parks/')) {
+          return { entries: [] };
+        }
         throw new Error(`unexpected call to ${String(path)}`);
       });
 
       renderCatalog();
 
-      const mkCard = await screen.findByTestId(
-        'catalog-destination-Magic Kingdom',
-      );
-      expect(mkCard.props.accessibilityLabel).toBe('Magic Kingdom, 42 experiences');
+      await waitFor(() => {
+        const mkCard = screen.getByTestId(
+          'explore-park-card-Magic Kingdom',
+        );
+        expect(mkCard.props.accessibilityLabel).toBe('Magic Kingdom, 42 experiences');
+      });
 
       // A Destination with no count entry falls back to a numeric zero (R4.6).
-      const springs = screen.getByTestId('catalog-destination-Disney Springs');
+      const springs = screen.getByTestId('explore-disney-springs-card');
       expect(springs.props.accessibilityLabel).toBe(
         'Disney Springs, 0 experiences',
       );
 
       // The aggregate Resorts card reads its aggregate count.
-      const resorts = screen.getByTestId('catalog-destination-Resorts');
+      const resorts = screen.getByTestId('explore-resorts-spotlight-card');
       expect(resorts.props.accessibilityLabel).toBe('Resorts, 7 experiences');
     });
   });

@@ -7,7 +7,7 @@ import { forecastIndex, selectComparableIndices } from './crowdForecast.js';
 import { applyBiasCorrection } from './calibration.js';
 import { seasonalPrior } from './seasonalPrior.js';
 import { getETDayOfWeek, minutesFromMidnightETToISO, normalizeShowtimeEntries } from './showtimePatterns.js';
-import type { WaitSnapshot, CrowdCalendarDayDTO, WaitInsightsDTO } from '@dwt/shared';
+import type { WaitSnapshot, CrowdCalendarDayDTO, ParkCrowdSummary, WaitInsightsDTO } from '@dwt/shared';
 import type { Park } from '@dwt/shared';
 import type { ThemeParksLiveService } from '../live/themeParksLiveService.js';
 
@@ -471,6 +471,8 @@ export function createPredictionService(deps: PredictionServiceDeps): Prediction
       // model look perfect. `forecastAccuracy` attaches the measured error at
       // the same lead time so the claim carries its own error bar.
       let observedIndex: number | undefined;
+      let isLiveTracking: boolean | undefined;
+      let expectedAvgWaitMinutes: number | undefined;
       let capturedForecast:
         | { index: number; leadDays: number; capturedAt: string }
         | undefined;
@@ -478,7 +480,17 @@ export function createPredictionService(deps: PredictionServiceDeps): Prediction
         | { meanAbsoluteErrorLevels: number; leadDays: number; sampleCount: number }
         | undefined;
 
-      const isPastOrToday = dateStr <= wdwToday(clock());
+      const PARK_TYPICAL_STANDBY_MINUTES: Record<string, number> = {
+        'Magic Kingdom': 32,
+        'EPCOT': 28,
+        'Hollywood Studios': 38,
+        'Animal Kingdom': 26,
+      };
+
+      const clockDateStr = wdwToday(clock());
+      const isPastOrToday = dateStr <= clockDateStr;
+      const isToday = dateStr === clockDateStr;
+
       if (isPastOrToday) {
         try {
           const observedRows = await repo.getParkCrowdIndices(park, [date]);
@@ -487,6 +499,12 @@ export function createPredictionService(deps: PredictionServiceDeps): Prediction
           );
           if (observedRow) {
             observedIndex = displayLevel(observedRow.crowd_index);
+            if (isToday) {
+              isLiveTracking = true;
+            }
+            if (observedRow.daily_avg_wait && observedRow.daily_avg_wait > 0) {
+              expectedAvgWaitMinutes = Math.round(observedRow.daily_avg_wait);
+            }
           }
         } catch (_err) {
           // Predicted-vs-actual is a transparency extra, never a hard dependency.
@@ -521,6 +539,87 @@ export function createPredictionService(deps: PredictionServiceDeps): Prediction
           } catch (_err) {
             // Same: absence of the log must not fail the calendar read.
           }
+        }
+      }
+
+      if (expectedAvgWaitMinutes == null) {
+        const baseMins = PARK_TYPICAL_STANDBY_MINUTES[park] ?? 30;
+        expectedAvgWaitMinutes = Math.round(baseMins * crowdMultiplier(rawForecast, 1.0));
+      }
+
+      // R6.2: per-park comparison across all 4 theme parks on this date
+      const WDW_THEME_PARKS: Park[] = ['Magic Kingdom', 'EPCOT', 'Hollywood Studios', 'Animal Kingdom'];
+      const allParks: ParkCrowdSummary[] = [];
+      for (const p of WDW_THEME_PARKS) {
+        if (p === park) {
+          allParks.push({
+            park: p,
+            forecastIndex: displayLevel(rawForecast),
+            expectedAvgWaitMinutes,
+          });
+        } else {
+          try {
+            const pForecast = await computeCalibratedForecast(p, date);
+            const pBase = PARK_TYPICAL_STANDBY_MINUTES[p] ?? 30;
+            const pWait = Math.round(pBase * crowdMultiplier(pForecast, 1.0));
+            allParks.push({
+              park: p,
+              forecastIndex: displayLevel(pForecast),
+              expectedAvgWaitMinutes: pWait,
+            });
+          } catch (_err) {
+            allParks.push({
+              park: p,
+              forecastIndex: 5,
+              expectedAvgWaitMinutes: PARK_TYPICAL_STANDBY_MINUTES[p] ?? 30,
+            });
+          }
+        }
+      }
+
+      // R10.5: forecast weather for dates within the near-term horizon (~14 days)
+      let weather: { tempMaxF: number; tempMinF: number; condition: string; precipProbability?: number } | undefined;
+      if (deps.weatherClient && typeof deps.weatherClient.getWDWWeather === 'function') {
+        try {
+          const wResult = await deps.weatherClient.getWDWWeather();
+          if (wResult?.forecast) {
+            const match = wResult.forecast.find(
+              (f) => f.date.toISOString().split('T')[0] === dateStr,
+            );
+            if (match) {
+              weather = {
+                tempMaxF: Math.round(match.temp_max_f),
+                tempMinF: Math.round(match.temp_min_f),
+                condition: match.condition,
+                ...(match.precip != null ? { precipProbability: Math.min(100, Math.round(match.precip * 100)) } : {}),
+              };
+            }
+          }
+        } catch (_err) {
+          // Weather fetch is best effort
+        }
+      }
+
+      // Known festival and event window tagging
+      let festival: string | undefined;
+      const [, monthStr, dayNumStr] = dateStr.split('-');
+      const monthNum = parseInt(monthStr ?? '0', 10);
+      const dayNum = parseInt(dayNumStr ?? '0', 10);
+      if (park === 'EPCOT') {
+        if ((monthNum === 8 && dayNum >= 25) || monthNum === 9 || monthNum === 10 || (monthNum === 11 && dayNum <= 22)) {
+          festival = 'Food & Wine Festival';
+        } else if ((monthNum === 11 && dayNum >= 25) || monthNum === 12) {
+          festival = 'Festival of the Holidays';
+        } else if ((monthNum === 1 && dayNum >= 15) || (monthNum === 2 && dayNum <= 22)) {
+          festival = 'Festival of the Arts';
+        } else if (monthNum >= 3 && monthNum <= 6) {
+          festival = 'Flower & Garden Festival';
+        }
+      } else if (park === 'Magic Kingdom' && s?.ticketed_event) {
+        if (monthNum >= 8 && monthNum <= 10) {
+          festival = "Mickey's Not-So-Scary Halloween Party";
+        } else if (monthNum >= 11 && monthNum <= 12) {
+          festival = "Mickey's Very Merry Christmas Party";
         }
       }
 
@@ -593,6 +692,10 @@ export function createPredictionService(deps: PredictionServiceDeps): Prediction
         park: park as Park,
         forecastIndex: displayLevel(rawForecast),
         ...(observedIndex != null ? { observedIndex } : {}),
+        ...(isLiveTracking ? { isLiveTracking } : {}),
+        ...(expectedAvgWaitMinutes != null ? { expectedAvgWaitMinutes } : {}),
+        ...(weather ? { weather } : {}),
+        ...(allParks.length > 0 ? { allParks } : {}),
         ...(capturedForecast ? { capturedForecast } : {}),
         ...(forecastAccuracy ? { forecastAccuracy } : {}),
         parkHours: {
@@ -603,6 +706,7 @@ export function createPredictionService(deps: PredictionServiceDeps): Prediction
         extendedEvening: s?.extended_evening ?? false,
         ticketedEvent: s?.ticketed_event ?? false,
         ...(s?.ll_multipass_price_cents != null ? { llMultipassPriceCents: s.ll_multipass_price_cents } : {}),
+        ...(festival ? { festival } : {}),
         ...(rideSignals && rideSignals.length > 0 ? { rideSignals } : {}),
       };
     },

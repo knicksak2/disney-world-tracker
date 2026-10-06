@@ -26,6 +26,7 @@ export const locationSuggestionSchema = z
   .object({
     id: uuidSchema,
     name: foodItemNameSchema,
+    park: parkSchema,
     similarity: z.number().min(0).max(1),
   })
   .strict();

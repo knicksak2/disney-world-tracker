@@ -15,6 +15,17 @@ interface CrowdCalendarResponse {
 
 const PARK_FILTERS: (Park | 'All')[] = ['All', 'Magic Kingdom', 'EPCOT', 'Hollywood Studios', 'Animal Kingdom'];
 
+function getWeatherIcon(cond?: string): string {
+  switch (cond?.toLowerCase()) {
+    case 'rain': return '🌧️';
+    case 'storm': return '⛈️';
+    case 'cloudy': return '☁️';
+    case 'partly-cloudy': return '⛅';
+    case 'clear': return '☀️';
+    default: return '🌤️';
+  }
+}
+
 export default function CrowdCalendarScreen(): JSX.Element {
   const navigation = useNavigation();
   const [selectedPark, setSelectedPark] = useState<Park | 'All'>('All');
@@ -194,10 +205,53 @@ export default function CrowdCalendarScreen(): JSX.Element {
                 </View>
                 <View style={styles.levelHeroText}>
                   <Text style={styles.levelHeroTitle}>{getLevelInfo(selectedDayInfo.forecastIndex).label}</Text>
-                  <Text style={styles.levelHeroSub}>Based on typical history.</Text>
+                  <Text style={styles.levelHeroSub}>
+                    {selectedDayInfo.expectedAvgWaitMinutes != null
+                      ? `Expected standby wait ~${selectedDayInfo.expectedAvgWaitMinutes} min`
+                      : 'Based on typical history.'}
+                  </Text>
                 </View>
               </View>
             </Card>
+
+            {selectedDayInfo.allParks && selectedDayInfo.allParks.length > 0 && (
+              <>
+                <SectionLabel>All parks on this day</SectionLabel>
+                <Card>
+                  {selectedDayInfo.allParks.map((p, idx) => {
+                    const info = getLevelInfo(p.forecastIndex);
+                    const isSelected = (selectedPark === 'All' && p.park === 'Magic Kingdom') || selectedPark === p.park;
+                    const isLast = idx === (selectedDayInfo.allParks?.length ?? 0) - 1;
+                    return (
+                      <Pressable
+                        key={p.park}
+                        style={[styles.parkComparisonRow, isLast && { borderBottomWidth: 0 }]}
+                        onPress={() => setSelectedPark(p.park)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`${p.park}: Level ${info.level}/10 ${info.label}${p.expectedAvgWaitMinutes != null ? `, expected wait ~${p.expectedAvgWaitMinutes} minutes` : ''}`}
+                      >
+                        <View style={styles.parkComparisonTop}>
+                          <Text style={[styles.parkComparisonName, isSelected && styles.parkComparisonNameCurrent]}>
+                            {p.park}
+                          </Text>
+                          <View style={styles.parkComparisonRight}>
+                            {p.expectedAvgWaitMinutes != null && (
+                              <Text style={styles.parkComparisonWait}>~{p.expectedAvgWaitMinutes}m wait</Text>
+                            )}
+                            <View style={[styles.parkComparisonBadge, { backgroundColor: info.color }]}>
+                              <Text style={styles.parkComparisonBadgeText}>{info.level}/10</Text>
+                            </View>
+                          </View>
+                        </View>
+                        <View style={styles.barTrack}>
+                          <View style={[styles.barFill, { width: `${info.level * 10}%`, backgroundColor: info.color }]} />
+                        </View>
+                      </Pressable>
+                    );
+                  })}
+                </Card>
+              </>
+            )}
 
             <SectionLabel>Park info</SectionLabel>
             <Card>
@@ -207,33 +261,58 @@ export default function CrowdCalendarScreen(): JSX.Element {
                   {selectedDayInfo.parkHours?.openTime ? `${new Date(selectedDayInfo.parkHours.openTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit'})} - ${new Date(selectedDayInfo.parkHours.closeTime!).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit'})}` : 'Unknown'}
                 </Text>
               </View>
+              {selectedDayInfo.expectedAvgWaitMinutes != null && (
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoKey}>Expected Standby Avg</Text>
+                  <Text style={styles.infoVal}>~{selectedDayInfo.expectedAvgWaitMinutes} min</Text>
+                </View>
+              )}
               {selectedDayInfo.llMultipassPriceCents != null && (
                 <View style={styles.infoRow}>
                   <Text style={styles.infoKey}>Lightning Lane Multi Pass</Text>
                   <Text style={styles.infoVal}>${(selectedDayInfo.llMultipassPriceCents / 100).toFixed(0)}</Text>
                 </View>
               )}
+              {selectedDayInfo.weather && (
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoKey}>Weather</Text>
+                  <Text style={styles.infoVal}>
+                    {getWeatherIcon(selectedDayInfo.weather.condition)} {selectedDayInfo.weather.tempMaxF}° / {selectedDayInfo.weather.tempMinF}°
+                    {selectedDayInfo.weather.precipProbability ? ` · ${selectedDayInfo.weather.precipProbability}% rain` : ''}
+                  </Text>
+                </View>
+              )}
+              {selectedDayInfo.festival && (
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoKey}>Festival</Text>
+                  <Text style={[styles.infoVal, { color: theme.color.primary }]}>
+                    🎉 {selectedDayInfo.festival}
+                  </Text>
+                </View>
+              )}
               {(selectedDayInfo.earlyEntry || selectedDayInfo.extendedEvening || selectedDayInfo.ticketedEvent) && (
                 <View style={styles.infoRow}>
                   <Text style={styles.infoKey}>Events</Text>
                   <View style={styles.flagsRow}>
-                    {selectedDayInfo.earlyEntry && <Badge label="Early Entry" color="#e9f6ec" />}
-                    {selectedDayInfo.extendedEvening && <Badge label="Extended Eve" color="#fdeede" />}
-                    {selectedDayInfo.ticketedEvent && <Badge label="Ticketed Event" color="#fdeede" />}
+                    {selectedDayInfo.earlyEntry && <Badge label="Early Entry" color="#2e7d3a" />}
+                    {selectedDayInfo.extendedEvening && <Badge label="Extended Eve" color="#6a1b9a" />}
+                    {selectedDayInfo.ticketedEvent && <Badge label="Ticketed Event" color="#d84315" />}
                   </View>
                 </View>
               )}
             </Card>
             {selectedDayInfo.observedIndex != null && (
               <>
-                <SectionLabel>How we did</SectionLabel>
+                <SectionLabel>{selectedDayInfo.isLiveTracking ? 'Live tracking today' : 'How we did'}</SectionLabel>
                 <Card>
                   <Text
                     style={styles.accNote}
                     accessibilityLabel={
-                      selectedDayInfo.capturedForecast
-                        ? `We predicted ${selectedDayInfo.capturedForecast.index} out of 10, ${selectedDayInfo.capturedForecast.leadDays} days ahead. Actual was ${selectedDayInfo.observedIndex} out of 10.`
-                        : `Actual was ${selectedDayInfo.observedIndex} out of 10.`
+                      selectedDayInfo.isLiveTracking
+                        ? `We predicted ${selectedDayInfo.forecastIndex} out of 10. Today is tracking ${selectedDayInfo.observedIndex} out of 10 so far.`
+                        : selectedDayInfo.capturedForecast
+                          ? `We predicted ${selectedDayInfo.capturedForecast.index} out of 10, ${selectedDayInfo.capturedForecast.leadDays} days ahead. Actual was ${selectedDayInfo.observedIndex} out of 10.`
+                          : `Actual was ${selectedDayInfo.observedIndex} out of 10.`
                     }
                   >
                     {/*
@@ -242,11 +321,13 @@ export default function CrowdCalendarScreen(): JSX.Element {
                       model see the observed index and echo it back, which would
                       make this line meaningless.
                     */}
-                    {selectedDayInfo.capturedForecast
-                      ? `We predicted ${selectedDayInfo.capturedForecast.index}/10 · actual was ${selectedDayInfo.observedIndex}/10`
-                      : `Actual was ${selectedDayInfo.observedIndex}/10`}
+                    {selectedDayInfo.isLiveTracking
+                      ? `We predicted ${selectedDayInfo.forecastIndex}/10 · tracking ${selectedDayInfo.observedIndex}/10 so far ✓`
+                      : selectedDayInfo.capturedForecast
+                        ? `We predicted ${selectedDayInfo.capturedForecast.index}/10 · actual was ${selectedDayInfo.observedIndex}/10`
+                        : `Actual was ${selectedDayInfo.observedIndex}/10`}
                   </Text>
-                  {selectedDayInfo.capturedForecast && (
+                  {selectedDayInfo.capturedForecast && !selectedDayInfo.isLiveTracking && (
                     <Text style={styles.accSub}>
                       Forecast made {selectedDayInfo.capturedForecast.leadDays}{' '}
                       {selectedDayInfo.capturedForecast.leadDays === 1 ? 'day' : 'days'} ahead
@@ -453,5 +534,55 @@ const styles = StyleSheet.create({
     color: theme.color.textSecondary,
     textAlign: 'center',
     marginTop: 4,
+  },
+  parkComparisonRow: {
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.color.border,
+  },
+  parkComparisonTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  parkComparisonName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.color.textPrimary,
+  },
+  parkComparisonNameCurrent: {
+    fontWeight: '800',
+    color: theme.color.primary,
+  },
+  parkComparisonRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  parkComparisonWait: {
+    fontSize: 12,
+    color: theme.color.textSecondary,
+    fontWeight: '500',
+  },
+  parkComparisonBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: theme.radius.sm,
+  },
+  parkComparisonBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  barTrack: {
+    height: 6,
+    backgroundColor: theme.color.surfaceAlt,
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  barFill: {
+    height: '100%',
+    borderRadius: 3,
   },
 });

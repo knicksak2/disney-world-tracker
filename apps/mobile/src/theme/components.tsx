@@ -56,17 +56,22 @@ export function GradientHeader({
   title,
   subtitle,
   icon,
+  iconText,
   compact = false,
   right,
   onBack,
   backAccessibilityLabel = 'Go back',
   eyebrow,
+  colors,
+  testID,
+  backTestID,
 }: {
   readonly title: string;
-  readonly subtitle?: string;
-  readonly icon?: keyof typeof Ionicons.glyphMap;
-  readonly compact?: boolean;
-  readonly right?: React.ReactNode;
+  readonly subtitle?: string | undefined;
+  readonly icon?: keyof typeof Ionicons.glyphMap | undefined;
+  readonly iconText?: string | undefined;
+  readonly compact?: boolean | undefined;
+  readonly right?: React.ReactNode | undefined;
   /**
    * When provided, renders a themed leading back control that invokes this
    * callback on press. The control is exposed to assistive tech as a button
@@ -74,11 +79,17 @@ export function GradientHeader({
    * Optional so existing `GradientHeader` usages (Catalog, Home, Stats, etc.)
    * are unaffected.
    */
-  readonly onBack?: () => void;
+  readonly onBack?: (() => void) | undefined;
   /** Spoken label for the back control; defaults to "Go back". */
-  readonly backAccessibilityLabel?: string;
+  readonly backAccessibilityLabel?: string | undefined;
   /** Optional greeting or section badge rendered above the title. */
-  readonly eyebrow?: string | React.ReactNode;
+  readonly eyebrow?: string | React.ReactNode | undefined;
+  /** Optional custom gradient colors (e.g. park-specific or destination themes). */
+  readonly colors?: readonly [string, string, ...string[]] | readonly string[] | undefined;
+  /** Optional testID for the root header element. */
+  readonly testID?: string | undefined;
+  /** Optional testID for the back button. */
+  readonly backTestID?: string | undefined;
 }): JSX.Element {
   // Add the device's top safe-area inset (status bar / notch height) to the
   // header padding so the leading back control clears the system UI and stays
@@ -96,9 +107,11 @@ export function GradientHeader({
   // measures) so the header — and its back control — never crowds the top edge.
   const topInset = Math.max(insets?.top ?? 0, theme.spacing.xl);
   const basePadding = compact ? theme.spacing.lg : theme.spacing.xl;
+  const gradientColors = (colors ?? theme.gradient.headerVivid) as [string, string, ...string[]];
   return (
     <LinearGradient
-      colors={theme.gradient.headerVivid}
+      testID={testID}
+      colors={gradientColors}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={[
@@ -123,6 +136,7 @@ export function GradientHeader({
       <View style={styles.headerRow}>
         {onBack !== undefined ? (
           <Pressable
+            testID={backTestID}
             onPress={onBack}
             accessibilityRole="button"
             accessibilityLabel={backAccessibilityLabel}
@@ -150,6 +164,11 @@ export function GradientHeader({
             )
           ) : null}
           <View style={styles.headerTitleRow}>
+            {iconText !== undefined ? (
+              <Text style={[styles.headerIconText, compact && styles.headerIconTextCompact]}>
+                {iconText}
+              </Text>
+            ) : null}
             {icon !== undefined ? (
               <Ionicons
                 name={icon}
@@ -166,10 +185,12 @@ export function GradientHeader({
             </Text>
           </View>
           {subtitle !== undefined ? (
-            <Text style={styles.headerSubtitle}>{subtitle}</Text>
+            <Text style={styles.headerSubtitle} numberOfLines={2}>
+              {subtitle}
+            </Text>
           ) : null}
         </View>
-        {right !== undefined ? <View>{right}</View> : null}
+        {right !== undefined ? <View style={styles.headerRightWrap}>{right}</View> : null}
       </View>
     </LinearGradient>
   );
@@ -537,6 +558,16 @@ const styles = StyleSheet.create({
   },
   headerIcon: {
     marginRight: 2,
+  },
+  headerIconText: {
+    fontSize: 24,
+    marginRight: 2,
+  },
+  headerIconTextCompact: {
+    fontSize: 20,
+  },
+  headerRightWrap: {
+    marginLeft: theme.spacing.sm,
   },
   headerTitle: {
     color: theme.color.textOnPrimary,

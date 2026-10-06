@@ -31,7 +31,7 @@ const weatherClient: WeatherClient = {
 
 interface Options {
   /** Observed crowd index rows keyed by nothing — returned for any date asked. */
-  observed?: { crowd_index: number; sample_count: number; source: string } | null;
+  observed?: { crowd_index: number; sample_count: number; source: string; daily_avg_wait?: number } | null;
   captured?: { forecast_index: number; lead_days: number; forecasted_at: Date } | null;
   accuracies?: Array<{ park: string; lead_days: number; mae: number; bias: number; sample_count: number }>;
   omitCapturedMethod?: boolean;
@@ -46,7 +46,7 @@ function makeService(opts: Options = {}) {
               park,
               date: dates[0],
               crowd_index: opts.observed.crowd_index,
-              daily_avg_wait: 20,
+              daily_avg_wait: opts.observed.daily_avg_wait ?? 20,
               sample_count: opts.observed.sample_count,
               source: opts.observed.source,
             },
@@ -203,5 +203,20 @@ describe('Feature: crowd-calendar — getCrowdCalendarDay surfaces predicted vs 
     expect(day.forecastIndex).toBe(5);
     expect(day.observedIndex).toBe(5);
     expect(day.capturedForecast).toBeUndefined();
+  });
+
+  // Feature: crowd-calendar, Property 21: Day detail contains allParks, expectedAvgWaitMinutes, weather
+  it('populates allParks comparison and expectedAvgWaitMinutes', async () => {
+    const service = makeService({
+      observed: { crowd_index: 1.0, daily_avg_wait: 33.5, sample_count: 80, source: 'observed' },
+    });
+
+    const day = await service.getCrowdCalendarDay('Magic Kingdom', PAST);
+    expect(day.expectedAvgWaitMinutes).toBe(34);
+    expect(day.allParks).toBeDefined();
+    expect(day.allParks).toHaveLength(4);
+    const mk = day.allParks?.find((p) => p.park === 'Magic Kingdom');
+    expect(mk?.forecastIndex).toBe(5);
+    expect(mk?.expectedAvgWaitMinutes).toBe(34);
   });
 });

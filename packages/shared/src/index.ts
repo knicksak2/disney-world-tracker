@@ -132,6 +132,7 @@ export type {
   LiveDetailDTO,
   LiveDetailResponseDTO,
   CrowdCalendarDayDTO,
+  ParkCrowdSummary,
   WaitSnapshot,
   WaitInsightsDTO,
   PinDTO,
@@ -157,6 +158,7 @@ export type {
   UserSubmittedLocationDTO,
   CreateUserSubmittedLocationInputDTO,
   LocationSuggestionDTO,
+  LocationSuggestionsResponseDTO,
   FoodListDTO,
   FoodListItemDTO,
   FoodListRole,
@@ -298,6 +300,7 @@ export {
 
 export {
   crowdCalendarDaySchema,
+  parkCrowdSummarySchema,
   waitSnapshotSchema,
   waitInsightsSchema,
   parkLiveEntrySchema,
@@ -538,4 +541,16 @@ export type {
   SearchMatchTier,
   SearchScoredResult,
 } from './search/index.js';
+
+// Catalog & Explore constants
+export {
+  DEFAULT_RESORT_SECTION_LIMIT,
+  EXPLORE_UTILITY_TILES,
+  THEME_PARKS_EXPLORE_GRID,
+} from './constants/catalog.js';
+export type {
+  ExploreUtilityTile,
+  ExploreUtilityTileId,
+  ThemeParkExploreGridItem,
+} from './constants/catalog.js';
 

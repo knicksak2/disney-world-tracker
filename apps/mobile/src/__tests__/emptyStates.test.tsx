@@ -115,7 +115,7 @@ jest.mock('../api/client', () => {
 // Imports of modules under test (after the mocks above).
 // ---------------------------------------------------------------------------
 
-import CatalogScreen from '../screens/catalog/CatalogScreen';
+import ExploreHubScreen from '../screens/catalog/ExploreHubScreen';
 import ExperienceDetailScreen from '../screens/catalog/ExperienceDetailScreen';
 import HomeScreen from '../screens/home/HomeScreen';
 import {
@@ -181,7 +181,7 @@ function renderCatalog(): ReturnType<typeof render> {
   return renderWithClient(
     <NavigationContainer>
       <Stack.Navigator>
-        <Stack.Screen name="CatalogList" component={CatalogScreen} />
+        <Stack.Screen name="CatalogList" component={ExploreHubScreen} />
       </Stack.Navigator>
     </NavigationContainer>,
   );
@@ -274,7 +274,7 @@ describe('empty-state renders (R1.23, R1.24, R4.6, R5.9, R10.6, R11.11)', () => 
     // `catalog-empty` state was removed when the grid + global search replaced
     // the flat list). A global search with no matches shows the search
     // empty-results state (R5.6).
-    await screen.findByTestId('catalog-destination-grid');
+    await screen.findByTestId('catalog-search');
     fireEvent.changeText(screen.getByTestId('catalog-search'), 'zzzz');
 
     const empty = await screen.findByTestId('catalog-search-empty');

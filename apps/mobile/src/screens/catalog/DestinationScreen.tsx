@@ -46,9 +46,7 @@ import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
-  Modal,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -64,7 +62,6 @@ import {
   filterAndRankExperiences,
   type ExperienceCategory,
   type ExperienceDTO,
-  type ResortDTO,
 } from '@dwt/shared';
 
 import { ApiError, apiRequest } from '../../api/client';
@@ -79,32 +76,17 @@ import {
   ScreenContainer,
 } from '../../theme/components';
 import {
-  type GroupSectionState,
-  isExpanded as isExpandedPure,
-  toggle as togglePure,
-} from '../navigation/groupSectionState';
-import {
   DESTINATIONS,
   destinationCatalogFilter,
   type Destination,
+  type DestinationId,
 } from './destinations';
+import { DESTINATION_VISUALS } from './destinationVisuals';
 import {
   browseLandOf,
   groupByCategory,
-  groupByPavilionFiltered,
-  groupByResort,
-  RESORT_BOARDWALK_ID,
-  RESORT_CATCHALL_ID,
-  RESORT_RECREATION_ID,
-  RESORT_WWOS_ID,
   type Section,
 } from './catalogGrouping';
-import {
-  deriveFilterChips,
-  deriveQuickChips,
-  filterExperiencesMulti,
-  type ExperiencePickerTab,
-} from '../trips/experiencePickerFilters';
 import { useDestinationSections } from './useDestinationSections';
 import { useCompletedExperiences } from './useCompletedExperiences';
 import { useFavoritedExperiences } from './useFavoritedExperiences';
@@ -114,6 +96,8 @@ import {
   useAccessibilityFocusOnMount,
   useResultCountAnnouncement,
 } from './catalogFocus';
+import ParkDestinationScreen from './ParkDestinationScreen';
+import ResortsDirectoryScreen from './ResortsDirectoryScreen';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -141,15 +125,6 @@ interface CatalogListResponse {
   readonly experiences: readonly ExperienceDTO[];
   readonly staleCache: boolean;
   readonly cacheAgeHours?: number | null;
-}
-
-/**
- * Wire shape for `GET /resorts`. Mirrors the `ResortListResponse` consumed by
- * `CatalogScreen`/`ExperienceDetailScreen`; the Resorts layout needs the full
- * active Resort list to render every Resort as a browsable anchor (R8.3).
- */
-interface ResortListResponse {
-  readonly resorts: readonly ResortDTO[];
 }
 
 // ---------------------------------------------------------------------------
@@ -359,6 +334,22 @@ export default function DestinationScreen({
     );
   }
 
+  // Requirements 7.2: ThemePark / WaterPark destinations delegate to ParkDestinationScreen
+  if (destination.kind === 'themeOrWaterPark') {
+    return (
+      <ParkDestinationScreen
+        route={route}
+        navigation={navigation}
+        destination={destination}
+      />
+    );
+  }
+
+  // Requirements 7.2, 8.1: Resorts destination delegates to ResortsDirectoryScreen
+  if (destination.kind === 'resorts') {
+    return <ResortsDirectoryScreen navigation={navigation} />;
+  }
+
   return <DestinationBody destination={destination} navigation={navigation} />;
 }
 
@@ -442,13 +433,24 @@ function DestinationBody({
     [navigation],
   );
 
+  const visual =
+    DESTINATION_VISUALS[destination.title as DestinationId] ??
+    DESTINATION_VISUALS[destination.id as DestinationId];
+
   return (
     <ScreenContainer>
       <View ref={headingRef} collapsable={false} accessibilityRole="header">
         <GradientHeader
           title={destination.title}
-          subtitle="Browse this destination."
-          icon="map"
+          subtitle={
+            experiences.length > 0
+              ? `${experiences.length} Active Experiences`
+              : 'Browse this destination.'
+          }
+          iconText={visual?.icon}
+          icon={visual?.icon ? undefined : 'map'}
+          colors={visual?.gradient}
+          compact
           onBack={() => navigation.goBack()}
           backAccessibilityLabel="Back to catalog"
         />
@@ -651,797 +653,28 @@ function DestinationSearchResults({
  *     renders `buildResortRows` with scroll-to-group anchors.
  */
 function renderBody(
-  destination: Destination,
+  _destination: Destination,
   experiences: readonly ExperienceDTO[],
   onSelectExperience: (experience: ExperienceDTO) => void,
   completedIds: ReadonlySet<string>,
   favoritedIds: ReadonlySet<string>,
 ): JSX.Element {
-  switch (destination.kind) {
-    case 'themeOrWaterPark':
-      // Task 10.2: Land groups (collapsible, default expanded) + a scoped
-      // Experience_Category filter driving `groupByLandFiltered` client-side.
-      return (
-        <ThemeOrWaterParkLayout
-          experiences={experiences}
-          onSelectExperience={onSelectExperience}
-          completedIds={completedIds}
-          favoritedIds={favoritedIds}
-        />
-      );
-    case 'disneySprings':
-      // Task 10.3: Experience_Category groups (collapsible, default expanded)
-      // in canonical order via `groupByCategory`, empties omitted, no filter.
-      return (
-        <DisneySpringsLayout
-          experiences={experiences}
-          onSelectExperience={onSelectExperience}
-          completedIds={completedIds}
-          favoritedIds={favoritedIds}
-        />
-      );
-    case 'resorts':
-    default:
-      // Task 10.4: Resort anchor groups built by `buildResortRows` (fetches
-      // `GET /resorts` itself), with scroll-to-group on anchor tap.
-      return (
-        <ResortsLayout
-          experiences={experiences}
-          onSelectExperience={onSelectExperience}
-          completedIds={completedIds}
-          favoritedIds={favoritedIds}
-        />
-      );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Theme / Water-park layout (task 10.2)
-// ---------------------------------------------------------------------------
-
-/**
- * The `ThemePark` / `WaterPark` Destination layout (R6.2–R6.9).
- *
- * The Destination's already-fetched Experiences are grouped by Land through the
- * pure `groupByLandFiltered` core: named Land sections ordered case-insensitively
- * ascending, each section's Experiences ordered case-insensitively ascending by
- * name (R6.2, R6.3), and the single Land_Catchall section appended after every
- * named section so no Experience is omitted (R6.6). Each section renders as a
- * collapsible `GroupSection` whose expanded/collapsed state is owned by
- * `useDestinationSections`, seeded so every section starts **expanded** (R6.4)
- * and toggles on header tap (R6.5).
- *
- * A scoped Experience_Category `Chip` filter row sits above the sections,
- * defaulting to no active category (the "All" chip, R6.7). Selecting a category
- * re-derives the sections via `groupByLandFiltered` client-side over the
- * already-fetched Experiences — no refetch — preserving the Land grouping and
- * ordering (R6.8) and dropping any Land section left with no matching Experience
- * (R6.9).
- *
- * Validates: Requirements 6.2, 6.3, 6.4, 6.5, 6.6, 6.7, 6.8, 6.9
- */
-function ThemeOrWaterParkLayout({
-  experiences,
-  onSelectExperience,
-  completedIds,
-  favoritedIds,
-}: {
-  readonly experiences: readonly ExperienceDTO[];
-  readonly onSelectExperience: (experience: ExperienceDTO) => void;
-  readonly completedIds: ReadonlySet<string>;
-  readonly favoritedIds: ReadonlySet<string>;
-}): JSX.Element {
-  // Category tabs matching the schedule builder picker: 'all' | 'attractions' | 'dining' | 'shows'
-  const [activeTab, setActiveTab] = useState<ExperiencePickerTab>('all');
-  const [selectedLands, setSelectedLands] = useState<Set<string>>(new Set());
-  const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
-  const [selectedFestivals, setSelectedFestivals] = useState<Set<string>>(new Set());
-  const [isFilterModalOpen, setIsFilterModalOpen] = useState<boolean>(false);
-  const [favoritesOnly, setFavoritesOnly] = useState<boolean>(false);
-
-  const clearAllFilters = useCallback(() => {
-    setSelectedLands(new Set());
-    setSelectedTags(new Set());
-    setSelectedFestivals(new Set());
-  }, []);
-
-  const toggleLandFilter = useCallback((land: string) => {
-    setSelectedLands((prev) => {
-      const next = new Set(prev);
-      if (next.has(land)) {
-        next.delete(land);
-      } else {
-        next.add(land);
-      }
-      return next;
-    });
-  }, []);
-
-  const toggleTagFilter = useCallback((tag: string) => {
-    setSelectedTags((prev) => {
-      const next = new Set(prev);
-      if (next.has(tag)) {
-        next.delete(tag);
-      } else {
-        next.add(tag);
-      }
-      return next;
-    });
-  }, []);
-
-  // Festival filter toggle (festival-booth-tagging R8.9, R8.10).
-  const toggleFestivalFilter = useCallback((slug: string) => {
-    setSelectedFestivals((prev) => {
-      const next = new Set(prev);
-      if (next.has(slug)) {
-        next.delete(slug);
-      } else {
-        next.add(slug);
-      }
-      return next;
-    });
-  }, []);
-
-  const handleTabChange = useCallback(
-    (tab: ExperiencePickerTab) => {
-      setActiveTab(tab);
-      clearAllFilters();
-    },
-    [clearAllFilters],
-  );
-
-  // Tab category filter
-  const tabFilteredResults = useMemo(() => {
-    return experiences.filter((item) => {
-      if (activeTab === 'all') return true;
-      if (activeTab === 'attractions') return item.category === 'Ride';
-      if (activeTab === 'dining') return item.category === 'Restaurant';
-      if (activeTab === 'shows') {
-        return (
-          item.category === 'Show' ||
-          item.category === 'Parade' ||
-          item.category === 'Character_Meet' ||
-          item.category === 'Event'
-        );
-      }
-      return true;
-    });
-  }, [experiences, activeTab]);
-
-  // Dynamic filter chips derived directly from loaded tab results
-  const { landChips, priceChips, attributeChips, festivalChips, allChips } = useMemo(
-    () => deriveFilterChips(tabFilteredResults),
-    [tabFilteredResults],
-  );
-  const quickChips = useMemo(
-    () => deriveQuickChips(attributeChips, activeTab, priceChips, festivalChips),
-    [attributeChips, activeTab, priceChips, festivalChips],
-  );
-
-  // Multi-filter by selected lands, attribute/price tags, and festivals,
-  // composed conjunctively with favoritesOnly (festival-booth-tagging R8.10).
-  const filteredResults = useMemo(() => {
-    const multiFiltered = filterExperiencesMulti(
-      tabFilteredResults,
-      selectedLands,
-      selectedTags,
-      selectedFestivals,
-    );
-    if (!favoritesOnly) {
-      return multiFiltered;
-    }
-    return multiFiltered.filter((item) => favoritedIds.has(item.id));
-  }, [
-    tabFilteredResults,
-    selectedLands,
-    selectedTags,
-    selectedFestivals,
-    favoritesOnly,
-    favoritedIds,
-  ]);
-
-  const activeFilterCount =
-    selectedLands.size + selectedTags.size + selectedFestivals.size;
-
-  // Re-derive Land sections client-side
-  const sections = useMemo(
-    () => groupByPavilionFiltered(filteredResults, null),
-    [filteredResults],
-  );
-
-  // Seed collapsible state
-  const sectionKeys = useMemo(() => sections.map((s) => s.key), [sections]);
-  const { isExpanded, toggle } = useDestinationSections(sectionKeys);
-
-  // Flatten into per-row `FlatList` data so the list virtualizes at the
-  // granularity of individual Experience rows rather than whole Land sections
-  // (see `flattenSections`). Recomputed only when the sections or any
-  // section's expanded state actually changes.
-  const flatRows = useMemo(
-    () => flattenSections(sections, isExpanded),
-    [sections, isExpanded],
-  );
-  const rowLayouts = useMemo(() => buildRowLayouts(flatRows), [flatRows]);
-  const getItemLayout = useCallback(
-    (_data: unknown, index: number) =>
-      rowLayouts[index] ?? { length: EXPERIENCE_ROW_HEIGHT, offset: 0, index },
-    [rowLayouts],
-  );
-
-  // Accessible announcement of visible count
-  const visibleCount = useMemo(
-    () => sections.reduce((total, section) => total + section.items.length, 0),
-    [sections],
-  );
-  useResultCountAnnouncement(visibleCount);
-
-  // Stable `renderItem` identity: an inline arrow literal passed to `FlatList`
-  // is recreated every render, which `FlatList`/`VirtualizedList` treats as a
-  // changed render function and forces broader re-render/re-measure work on
-  // every parent update (tab switch, filter change, section toggle) — this is
-  // what was producing the "large list that is slow to update" warning even
-  // though the row components below are already memoized. Wrapping in
-  // `useCallback` keeps the same function identity across renders so
-  // memoized rows can actually skip re-rendering.
-  // The row type is inferred from `flatRows` (not annotated explicitly) so it
-  // stays the narrower type this layout's no-`showEmptyGroup` `flattenSections`
-  // overload produces — see `DisneySpringsLayout`'s `renderRow` comment.
-  const renderRow = useCallback(
-    ({ item: row }: { item: (typeof flatRows)[number] }) => {
-      if (row.kind === 'header') {
-        const section = row.section;
-        const expanded = isExpanded(section.key);
-        return (
-          <CollapsibleHeaderRow
-            sectionKey={section.key}
-            expanded={expanded}
-            onToggle={toggle}
-            accessibilityLabel={`${section.title}, ${
-              expanded ? 'expanded' : 'collapsed'
-            }`}
-            header={
-              <SectionHeader
-                title={section.title}
-                count={section.items.length}
-                expanded={expanded}
-              />
-            }
-            testID={`destination-section-${section.key}`}
-          />
-        );
-      }
-      // 'item' — an Experience row nested under its section header.
-      return (
-        <View style={styles.itemRowWrap}>
-          <ExperienceRow
-            experience={row.item}
-            onSelectExperience={onSelectExperience}
-            completed={completedIds.has(row.item.id)}
-            favorited={favoritedIds.has(row.item.id)}
-          />
-        </View>
-      );
-    },
-    [isExpanded, toggle, onSelectExperience, completedIds, favoritedIds],
-  );
-
   return (
-    <View style={styles.tabLayoutContainer}>
-      {/* Category Tabs & Favorites Toggle */}
-      <View style={styles.tabBarWrap}>
-        <View
-          style={styles.tabBar}
-          testID="destination-category-filter"
-        >
-          <Pressable
-            style={[styles.tabBtn, activeTab === 'all' && styles.tabBtnActive]}
-            onPress={() => handleTabChange('all')}
-            accessibilityRole="button"
-            accessibilityState={{ selected: activeTab === 'all' }}
-            accessibilityLabel={`All, ${
-              activeTab === 'all' ? 'selected' : 'not selected'
-            }`}
-            testID="destination-category-All"
-          >
-            <Text
-              style={[
-                styles.tabText,
-                activeTab === 'all' && styles.tabTextActive,
-              ]}
-            >
-              All
-            </Text>
-          </Pressable>
-          <Pressable
-            style={[
-              styles.tabBtn,
-              activeTab === 'attractions' && styles.tabBtnActive,
-            ]}
-            onPress={() => handleTabChange('attractions')}
-            accessibilityRole="button"
-            accessibilityState={{ selected: activeTab === 'attractions' }}
-            accessibilityLabel={`Ride, ${
-              activeTab === 'attractions' ? 'selected' : 'not selected'
-            }`}
-            testID="destination-category-Ride"
-          >
-            <Text
-              style={[
-                styles.tabText,
-                activeTab === 'attractions' && styles.tabTextActive,
-              ]}
-            >
-              Rides
-            </Text>
-          </Pressable>
-          <Pressable
-            style={[
-              styles.tabBtn,
-              activeTab === 'dining' && styles.tabBtnActive,
-            ]}
-            onPress={() => handleTabChange('dining')}
-            accessibilityRole="button"
-            accessibilityState={{ selected: activeTab === 'dining' }}
-            accessibilityLabel={`Restaurant, ${
-              activeTab === 'dining' ? 'selected' : 'not selected'
-            }`}
-            testID="destination-category-Restaurant"
-          >
-            <Text
-              style={[
-                styles.tabText,
-                activeTab === 'dining' && styles.tabTextActive,
-              ]}
-            >
-              Dining
-            </Text>
-          </Pressable>
-          <Pressable
-            style={[styles.tabBtn, activeTab === 'shows' && styles.tabBtnActive]}
-            onPress={() => handleTabChange('shows')}
-            accessibilityRole="button"
-            accessibilityState={{ selected: activeTab === 'shows' }}
-            accessibilityLabel={`Show, ${
-              activeTab === 'shows' ? 'selected' : 'not selected'
-            }`}
-            testID="destination-category-Show"
-          >
-            <Text
-              style={[
-                styles.tabText,
-                activeTab === 'shows' && styles.tabTextActive,
-              ]}
-            >
-              Shows
-            </Text>
-          </Pressable>
-        </View>
-
-        <Pressable
-          style={[
-            styles.favoritesToggleBtn,
-            favoritesOnly && styles.favoritesToggleBtnActive,
-          ]}
-          onPress={() => setFavoritesOnly((prev) => !prev)}
-          accessibilityRole="checkbox"
-          accessibilityState={{ checked: favoritesOnly }}
-          accessibilityLabel={`Favorites only${favoritesOnly ? ', selected' : ''}`}
-          testID="destination-favorites-toggle"
-        >
-          <Ionicons
-            name={favoritesOnly ? 'heart' : 'heart-outline'}
-            size={14}
-            color={favoritesOnly ? '#FF2D55' : theme.color.textSecondary}
-          />
-          <Text
-            style={[
-              styles.favoritesToggleText,
-              favoritesOnly && styles.favoritesToggleTextActive,
-            ]}
-          >
-            Favorites
-          </Text>
-        </Pressable>
-      </View>
-
-      {/* Sub-Filters / Quick Chips Bar */}
-      {allChips.length > 0 && (
-        <View style={styles.filterBarWrap} testID="destination-sub-filters">
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.filterBarScroll}
-          >
-            {/* Filters Modal Button */}
-            <Pressable
-              style={[
-                styles.filterChip,
-                styles.filterModalBtn,
-                activeFilterCount > 0 && styles.filterModalBtnActive,
-              ]}
-              onPress={() => setIsFilterModalOpen(true)}
-              accessibilityRole="button"
-              accessibilityLabel={`Open filters sheet${
-                activeFilterCount > 0 ? `, ${activeFilterCount} active` : ''
-              }`}
-              testID="destination-open-filters-modal"
-            >
-              <Ionicons
-                name="options-outline"
-                size={14}
-                color={
-                  activeFilterCount > 0 ? '#FFFFFF' : theme.color.textSecondary
-                }
-              />
-              <Text
-                style={[
-                  styles.filterChipText,
-                  styles.filterModalBtnText,
-                  activeFilterCount > 0 && styles.filterChipTextActive,
-                ]}
-              >
-                Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
-              </Text>
-            </Pressable>
-
-            {/* Quick Filter Chips */}
-            {quickChips.map((chip) => {
-              const isSelected =
-                chip.kind === 'festival'
-                  ? selectedFestivals.has(chip.rawValue)
-                  : selectedTags.has(chip.rawValue);
-              return (
-                <Pressable
-                  key={chip.id}
-                  style={[
-                    styles.filterChip,
-                    isSelected && styles.filterChipActive,
-                  ]}
-                  onPress={() =>
-                    chip.kind === 'festival'
-                      ? toggleFestivalFilter(chip.rawValue)
-                      : toggleTagFilter(chip.rawValue)
-                  }
-                  accessibilityRole="checkbox"
-                  accessibilityState={{ checked: isSelected }}
-                  accessibilityLabel={`${chip.label}, quick ${chip.kind} filter${
-                    isSelected ? ', selected' : ''
-                  }`}
-                  testID={`destination-subfilter-${chip.id}`}
-                >
-                  <Text
-                    style={[
-                      styles.filterChipText,
-                      isSelected && styles.filterChipTextActive,
-                    ]}
-                  >
-                    {chip.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-
-            {/* Reset Button */}
-            {activeFilterCount > 0 && (
-              <Pressable
-                style={[styles.filterChip, styles.resetChip]}
-                onPress={clearAllFilters}
-                accessibilityRole="button"
-                accessibilityLabel="Reset all active filters"
-                testID="destination-subfilter-reset"
-              >
-                <Text style={[styles.filterChipText, styles.resetChipText]}>
-                  ✕ Reset
-                </Text>
-              </Pressable>
-            )}
-          </ScrollView>
-        </View>
-      )}
-
-      {/* Filters Bottom Sheet Modal */}
-      <Modal
-        visible={isFilterModalOpen}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setIsFilterModalOpen(false)}
-        testID="destination-filters-modal"
-      >
-        <View style={styles.modalBackdrop}>
-          <Pressable
-            style={styles.modalBackdropDismiss}
-            onPress={() => setIsFilterModalOpen(false)}
-            accessibilityRole="button"
-            accessibilityLabel="Close filters modal"
-          />
-          <View
-            style={styles.modalContent}
-            testID="destination-filters-modal-content"
-          >
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Filters</Text>
-              <View style={styles.modalHeaderActions}>
-                {activeFilterCount > 0 && (
-                  <Pressable
-                    onPress={clearAllFilters}
-                    style={styles.modalClearBtn}
-                    accessibilityRole="button"
-                    accessibilityLabel="Clear all filters"
-                    testID="destination-modal-clear-all"
-                  >
-                    <Text style={styles.modalClearText}>Clear All</Text>
-                  </Pressable>
-                )}
-                <Pressable
-                  onPress={() => setIsFilterModalOpen(false)}
-                  style={styles.modalCloseBtn}
-                  accessibilityRole="button"
-                  accessibilityLabel="Close filters sheet"
-                  testID="destination-modal-close"
-                >
-                  <Ionicons
-                    name="close"
-                    size={22}
-                    color={theme.color.textPrimary}
-                  />
-                </Pressable>
-              </View>
-            </View>
-
-            <ScrollView
-              style={styles.modalScroll}
-              contentContainerStyle={styles.modalScrollContent}
-              showsVerticalScrollIndicator={false}
-            >
-              {/* Festivals Section (festival-booth-tagging R8.9, R8.11) */}
-              {festivalChips.length > 0 && (
-                <View
-                  style={styles.modalSection}
-                  testID="destination-modal-festivals-section"
-                >
-                  <Text style={styles.modalSectionTitle}>
-                    FESTIVALS{' '}
-                    {selectedFestivals.size > 0 ? `(${selectedFestivals.size})` : ''}
-                  </Text>
-                  <View style={styles.chipGrid}>
-                    {festivalChips.map((chip) => {
-                      const isSelected = selectedFestivals.has(chip.rawValue);
-                      return (
-                        <Pressable
-                          key={`modal-${chip.id}`}
-                          style={[
-                            styles.modalChip,
-                            isSelected && styles.modalChipActive,
-                          ]}
-                          onPress={() => toggleFestivalFilter(chip.rawValue)}
-                          accessibilityRole="checkbox"
-                          accessibilityState={{ checked: isSelected }}
-                          accessibilityLabel={`${chip.label}, festival filter${
-                            isSelected ? ', selected' : ''
-                          }`}
-                          testID={`destination-modal-filter-${chip.id}`}
-                        >
-                          <Text
-                            style={[
-                              styles.modalChipText,
-                              isSelected && styles.modalChipTextActive,
-                            ]}
-                          >
-                            {chip.label}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                </View>
-              )}
-
-              {/* Lands Section */}
-              {landChips.length > 0 && (
-                <View
-                  style={styles.modalSection}
-                  testID="destination-modal-lands-section"
-                >
-                  <Text style={styles.modalSectionTitle}>
-                    LANDS{' '}
-                    {selectedLands.size > 0 ? `(${selectedLands.size})` : ''}
-                  </Text>
-                  <View style={styles.chipGrid}>
-                    {landChips.map((chip) => {
-                      const isSelected = selectedLands.has(chip.rawValue);
-                      return (
-                        <Pressable
-                          key={`modal-${chip.id}`}
-                          style={[
-                            styles.modalChip,
-                            isSelected && styles.modalChipActive,
-                          ]}
-                          onPress={() => toggleLandFilter(chip.rawValue)}
-                          accessibilityRole="checkbox"
-                          accessibilityState={{ checked: isSelected }}
-                          accessibilityLabel={`${chip.rawValue}, land filter${
-                            isSelected ? ', selected' : ''
-                          }`}
-                          testID={`destination-modal-filter-${chip.id}`}
-                        >
-                          <Text
-                            style={[
-                              styles.modalChipText,
-                              isSelected && styles.modalChipTextActive,
-                            ]}
-                          >
-                            {chip.label}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                </View>
-              )}
-
-              {/* Price Range Section */}
-              {priceChips.length > 0 && (
-                <View
-                  style={styles.modalSection}
-                  testID="destination-modal-price-section"
-                >
-                  <Text style={styles.modalSectionTitle}>
-                    PRICE RANGE{' '}
-                    {selectedTags.size > 0
-                      ? `(${
-                          Array.from(selectedTags).filter((t) =>
-                            priceChips.some((p) => p.rawValue === t),
-                          ).length
-                        })`
-                      : ''}
-                  </Text>
-                  <View style={styles.chipGrid}>
-                    {priceChips.map((chip) => {
-                      const isSelected = selectedTags.has(chip.rawValue);
-                      return (
-                        <Pressable
-                          key={`modal-${chip.id}`}
-                          style={[
-                            styles.modalChip,
-                            isSelected && styles.modalChipActive,
-                          ]}
-                          onPress={() => toggleTagFilter(chip.rawValue)}
-                          accessibilityRole="checkbox"
-                          accessibilityState={{ checked: isSelected }}
-                          accessibilityLabel={`${chip.rawValue}, price filter${
-                            isSelected ? ', selected' : ''
-                          }`}
-                          testID={`destination-modal-filter-${chip.id}`}
-                        >
-                          <Text
-                            style={[
-                              styles.modalChipText,
-                              isSelected && styles.modalChipTextActive,
-                            ]}
-                          >
-                            {chip.label}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                </View>
-              )}
-
-              {/* Attributes Section */}
-              {attributeChips.length > 0 && (
-                <View
-                  style={styles.modalSection}
-                  testID="destination-modal-attributes-section"
-                >
-                  <Text style={styles.modalSectionTitle}>
-                    ATTRIBUTES & DINING{' '}
-                    {selectedTags.size > 0
-                      ? `(${
-                          Array.from(selectedTags).filter((t) =>
-                            attributeChips.some((a) => a.rawValue === t),
-                          ).length
-                        })`
-                      : ''}
-                  </Text>
-                  <View style={styles.chipGrid}>
-                    {attributeChips.map((chip) => {
-                      const isSelected = selectedTags.has(chip.rawValue);
-                      return (
-                        <Pressable
-                          key={`modal-${chip.id}`}
-                          style={[
-                            styles.modalChip,
-                            isSelected && styles.modalChipActive,
-                          ]}
-                          onPress={() => toggleTagFilter(chip.rawValue)}
-                          accessibilityRole="checkbox"
-                          accessibilityState={{ checked: isSelected }}
-                          accessibilityLabel={`${
-                            chip.rawValue
-                          }, attribute filter${isSelected ? ', selected' : ''}`}
-                          testID={`destination-modal-filter-${chip.id}`}
-                        >
-                          <Text
-                            style={[
-                              styles.modalChipText,
-                              isSelected && styles.modalChipTextActive,
-                            ]}
-                          >
-                            {chip.label}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                </View>
-              )}
-            </ScrollView>
-
-            <View style={styles.modalFooter}>
-              <Pressable
-                style={styles.modalApplyBtn}
-                onPress={() => setIsFilterModalOpen(false)}
-                accessibilityRole="button"
-                accessibilityLabel={`Apply filters, ${filteredResults.length} experiences found`}
-                testID="destination-modal-apply-btn"
-              >
-                <Text style={styles.modalApplyBtnText}>
-                  {filteredResults.length > 0
-                    ? `Show ${filteredResults.length} Result${
-                        filteredResults.length === 1 ? '' : 's'
-                      }`
-                    : 'Show 0 Results'}
-                </Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Content List or Empty State */}
-      {filteredResults.length === 0 ? (
-        <View style={styles.center} testID="destination-filter-empty">
-          <EmptyState
-            icon={favoritesOnly ? 'heart-outline' : 'search-outline'}
-            title={favoritesOnly ? 'No favorited experiences' : 'No experiences matched'}
-            body={
-              favoritesOnly
-                ? 'No favorited experiences were found in this destination.'
-                : 'Try resetting your active filters.'
-            }
-            {...(favoritesOnly ? { testID: 'destination-favorites-empty' } : {})}
-          />
-          <Pressable
-            style={styles.resetFilterEmptyBtn}
-            onPress={() => {
-              clearAllFilters();
-              setFavoritesOnly(false);
-            }}
-            accessibilityRole="button"
-            accessibilityLabel="Reset active filters"
-            testID="destination-filter-empty-reset"
-          >
-            <Text style={styles.resetFilterEmptyBtnText}>Reset Filters</Text>
-          </Pressable>
-        </View>
-      ) : (
-        <FlatList
-          data={flatRows}
-          keyExtractor={(row) => row.key}
-          style={styles.list}
-          contentContainerStyle={styles.listContent}
-          initialNumToRender={12}
-          maxToRenderPerBatch={12}
-          windowSize={11}
-          removeClippedSubviews
-          getItemLayout={getItemLayout}
-          renderItem={renderRow}
-        />
-      )}
-    </View>
+    <DisneySpringsLayout
+      experiences={experiences}
+      onSelectExperience={onSelectExperience}
+      completedIds={completedIds}
+      favoritedIds={favoritedIds}
+    />
   );
 }
+
+
+
+
+
+
+
 
 /**
  * A collapsible section header shared by the Destination layouts: an
@@ -1604,224 +837,9 @@ function DisneySpringsLayout({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Resorts layout (task 10.4)
-// ---------------------------------------------------------------------------
 
-/**
- * The Resorts Destination layout (R8.1–R8.4, R8.6, R8.7).
- *
- * In addition to the Destination's already-fetched active `Resort`-area
- * Experiences, this layout fetches the active Resort list itself via
- * `GET /resorts` (react-query, queryKey `['resorts']`, same 5-minute staleness
- * as the catalog, `retry: false`), matching how `CatalogScreen` /
- * `ExperienceDetailScreen` consume `/resorts` (R8.1).
- *
- * Each active Resort becomes a **collapsible section** via the pure
- * `groupByResort` core: every Resort is a section header ordered
- * case-insensitively by name — including Resorts with no active Experiences so
- * the full resort directory stays browsable (R8.3) — with its
- * `resortId`-matched Experiences (ordered by name) as the section body (R8.2),
- * then a single resort-wide catch-all section holding Experiences with
- * no/unmatched `resortId` appended after every specific Resort group (R8.4).
- * Experience rows reuse `ExperienceRow` (R8.5); an expanded Resort with no
- * Experiences shows an empty-group indication (R8.7).
- *
- * Unlike the park layouts (which start expanded), the Resort sections start
- * **collapsed** — there are many Resorts, so a collapsed directory of headers
- * is far easier to scan and scroll than one long flat list. Tapping a header
- * expands/collapses that Resort's Experiences in place and stays on the screen.
- *
- * Graceful degradation (R10.5): the base screen already handles
- * `catalog_unavailable` for the `/catalog` fetch. If the `/resorts` fetch fails
- * or is still loading, `resorts` is simply an empty list, so `groupByResort`
- * renders every Experience under the catch-all section rather than crashing.
- *
- * Validates: Requirements 8.1, 8.2, 8.3, 8.4, 8.5, 8.7, 10.5
- */
-function ResortsLayout({
-  experiences,
-  onSelectExperience,
-  completedIds,
-  favoritedIds,
-}: {
-  readonly experiences: readonly ExperienceDTO[];
-  readonly onSelectExperience: (experience: ExperienceDTO) => void;
-  readonly completedIds: ReadonlySet<string>;
-  readonly favoritedIds: ReadonlySet<string>;
-}): JSX.Element {
-  // R8.1: fetch the active Resort list. On failure or while loading the list is
-  // empty, so `groupByResort` degrades to a catch-all-only layout (R10.5).
-  const resortsQuery = useQuery<ResortListResponse, ApiError>({
-    queryKey: ['resorts'] as const,
-    queryFn: () => apiRequest<ResortListResponse>('GET', '/resorts'),
-    staleTime: STALE_TIME_MS,
-    retry: false,
-  });
 
-  const resorts = resortsQuery.data?.resorts ?? [];
 
-  // R8.2/R8.3/R8.4: one collapsible section per Resort (incl. empty ones) plus a
-  // trailing catch-all, ordered case-insensitively by name.
-  const sections = useMemo(
-    () => groupByResort(experiences, resorts),
-    [experiences, resorts],
-  );
-
-  // Collapsed by default: the natural empty state of the proven section-state
-  // reducer is "all collapsed", which is exactly what a long resort directory
-  // wants (the opposite of the park layouts' default-expanded policy).
-  const [expandedState, setExpandedState] = useState<GroupSectionState>(
-    () => new Set(),
-  );
-  const isExpanded = useCallback(
-    (key: string): boolean => isExpandedPure(expandedState, key),
-    [expandedState],
-  );
-  const toggle = useCallback((key: string): void => {
-    setExpandedState((current) => togglePure(current, key));
-  }, []);
-
-  // Flatten into per-row `FlatList` data (see `flattenSections`), including a
-  // trailing `emptyGroup` row for an expanded Resort with no Experiences
-  // (R8.7). Resort directories can be long, so per-row virtualization matters
-  // even more here than in the park layouts.
-  const flatRows = useMemo(
-    () => flattenSections(sections, isExpanded, { showEmptyGroup: true }),
-    [sections, isExpanded],
-  );
-  const rowLayouts = useMemo(() => buildRowLayouts(flatRows), [flatRows]);
-  const getItemLayout = useCallback(
-    (_data: unknown, index: number) =>
-      rowLayouts[index] ?? { length: EXPERIENCE_ROW_HEIGHT, offset: 0, index },
-    [rowLayouts],
-  );
-
-  // Stable `renderItem` identity — see `ThemeOrWaterParkLayout`'s
-  // `renderRow` for why an inline arrow here defeats row-level memoization.
-  // Matters most in this layout: sections start collapsed, so every
-  // expand/collapse tap on a long resort directory previously recreated
-  // `renderItem` and forced the whole visible window to re-render/re-measure.
-  // The row type is inferred from `flatRows` (not annotated explicitly); see
-  // `DisneySpringsLayout`'s `renderRow` comment. This layout's
-  // `showEmptyGroup: true` `flattenSections` call means `flatRows`' inferred
-  // type already includes the `emptyGroup` case handled below.
-  const renderRow = useCallback(
-    ({ item: row }: { item: (typeof flatRows)[number] }) => {
-      if (row.kind === 'header') {
-        const section = row.section;
-        const expanded = isExpanded(section.key);
-        return (
-          <CollapsibleHeaderRow
-            sectionKey={section.key}
-            expanded={expanded}
-            onToggle={toggle}
-            accessibilityLabel={`${section.title}, ${
-              expanded ? 'expanded' : 'collapsed'
-            }`}
-            header={
-              <ResortSectionHeader
-                title={section.title}
-                count={section.items.length}
-                expanded={expanded}
-                sectionKey={section.key}
-              />
-            }
-            testID={`destination-resort-${section.key}`}
-          />
-        );
-      }
-      if (row.kind === 'emptyGroup') {
-        return (
-          <View style={styles.emptyGroupWrap}>
-            <Text
-              style={styles.resortAnchorEmpty}
-              testID={`destination-resort-empty-${row.sectionKey}`}
-            >
-              No experiences yet
-            </Text>
-          </View>
-        );
-      }
-      // 'item' — the only remaining case in the FlatSectionRow union.
-      return (
-        <View style={styles.itemRowWrap}>
-          <ExperienceRow
-            experience={row.item}
-            onSelectExperience={onSelectExperience}
-            completed={completedIds.has(row.item.id)}
-            favorited={favoritedIds.has(row.item.id)}
-          />
-        </View>
-      );
-    },
-    [isExpanded, toggle, onSelectExperience, completedIds, favoritedIds],
-  );
-
-  return (
-    <FlatList
-      data={flatRows}
-      keyExtractor={(row) => row.key}
-      style={styles.list}
-      contentContainerStyle={styles.listContent}
-      initialNumToRender={16}
-      maxToRenderPerBatch={16}
-      windowSize={11}
-      removeClippedSubviews
-      getItemLayout={getItemLayout}
-      renderItem={renderRow}
-    />
-  );
-}
-
-/**
- * A Resort section header: the expand/collapse chevron, a Resort (or sub-destination)
- * glyph, the section name, and its Experience count.
- */
-function ResortSectionHeader({
-  title,
-  count,
-  expanded,
-  sectionKey,
-}: {
-  readonly title: string;
-  readonly count: number;
-  readonly expanded: boolean;
-  readonly sectionKey?: string;
-}): JSX.Element {
-  let iconName: keyof typeof Ionicons.glyphMap = 'bed-outline';
-  if (sectionKey === RESORT_BOARDWALK_ID) {
-    iconName = 'sparkles-outline';
-  } else if (sectionKey === RESORT_WWOS_ID) {
-    iconName = 'trophy-outline';
-  } else if (
-    sectionKey === RESORT_RECREATION_ID ||
-    sectionKey === RESORT_CATCHALL_ID
-  ) {
-    iconName = 'compass-outline';
-  }
-
-  return (
-    <View style={styles.sectionHeader}>
-      <Ionicons
-        name={expanded ? 'chevron-down' : 'chevron-forward'}
-        size={18}
-        color={theme.color.textSecondary}
-        style={styles.sectionChevron}
-      />
-      <Ionicons
-        name={iconName}
-        size={18}
-        color={theme.color.primary}
-        style={styles.resortAnchorIcon}
-      />
-      <Text style={styles.sectionTitle} numberOfLines={1}>
-        {title}
-      </Text>
-      <Text style={styles.sectionCount}>{count}</Text>
-    </View>
-  );
-}
 
 // ---------------------------------------------------------------------------
 // Subcomponents

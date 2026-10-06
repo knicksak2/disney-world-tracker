@@ -360,3 +360,25 @@ Wave 3 groups likes/saves/collection (task 4) with discovery (task 5) since both
   - [ ] 24.3 Add component and interaction tests covering both entry points
     - _Requirements: 9.1, 9.9_
 
+- [x] 25. Uncatalogued Food Spot (Snack Carts / Stands) Fallback in Entry Point 2 (R9.5a, R9.5b, added by this amendment)
+  - [x] 25.1 Add "It's not listed" affordance to `FoodListDetailScreen.tsx` restaurant search modal when no restaurants match (and footer link when browsing), opening `CreateLocationModal`
+    - _Requirements: 9.5a_
+  - [x] 25.2 Update `CreateLocationModal.tsx` to support park selection chips and optional initial park prop, enabling carts to be added to any park
+    - _Requirements: 9.5a_
+  - [x] 25.3 Wire selected or created `UserSubmittedLocationDTO` to open `FoodItemPickerModal` with `locationId` in `mode="addToLists"`, and confirm added dishes persist to the target food list
+    - _Requirements: 9.5b_
+  - [x] 25.4 Add interaction tests in `FoodListDetailScreen.test.tsx` verifying the unlisted location flow: opening `CreateLocationModal`, creating or selecting a location, opening the location-scoped `FoodItemPickerModal`, and confirming dishes are added to the list
+    - _Requirements: 9.5a, 9.5b_
+
+- [x] 26. Unified Search in Entry Point 2 for Official Restaurants and Community Carts (R9.5c, added by this amendment)
+  - [x] 26.1 Update `LocationSuggestionDTO` to include `park: Park`, and update `suggestLocations` / `GET /locations/suggest` to make `park` query parameter optional (supporting cross-park suggestions with substring matching)
+    - _Requirements: 9.5c_
+  - [x] 26.2 Wire `FoodListDetailScreen.tsx` restaurant search to query both `/catalog?category=Restaurant&q=...` and `/locations/suggest?q=...`, merging and rendering custom locations with a "Snack Cart" badge
+    - _Requirements: 9.5c_
+  - [x] 26.3 Allow tapping a custom location directly from search results to open the location-scoped `FoodItemPickerModal`
+    - _Requirements: 9.5c_
+  - [x] 26.4 Add unit and interaction tests verifying that custom locations appear directly in the search results and tapping them routes into the location-scoped item picker
+    - _Requirements: 9.5c_
+
+
+

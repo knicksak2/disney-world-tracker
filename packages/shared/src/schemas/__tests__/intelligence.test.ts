@@ -102,4 +102,30 @@ describe('crowdCalendarDaySchema', () => {
       ),
     ).toThrow();
   });
+
+  it('accepts day-detail extras: allParks, expectedAvgWaitMinutes, weather, isLiveTracking', () => {
+    const parsed = crowdCalendarDaySchema.parse(
+      baseDay({
+        expectedAvgWaitMinutes: 35,
+        isLiveTracking: true,
+        weather: {
+          tempMaxF: 86,
+          tempMinF: 72,
+          condition: 'partly-cloudy',
+          precipProbability: 20,
+        },
+        allParks: [
+          { park: 'Magic Kingdom', forecastIndex: 7, expectedAvgWaitMinutes: 38 },
+          { park: 'EPCOT', forecastIndex: 5, expectedAvgWaitMinutes: 28 },
+          { park: 'Hollywood Studios', forecastIndex: 8, expectedAvgWaitMinutes: 44 },
+          { park: 'Animal Kingdom', forecastIndex: 4, expectedAvgWaitMinutes: 24 },
+        ],
+      }),
+    );
+    expect(parsed.expectedAvgWaitMinutes).toBe(35);
+    expect(parsed.isLiveTracking).toBe(true);
+    expect(parsed.weather?.tempMaxF).toBe(86);
+    expect(parsed.allParks).toHaveLength(4);
+    expect(parsed.allParks?.[0]?.park).toBe('Magic Kingdom');
+  });
 });

@@ -13,14 +13,16 @@ import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import type { Park } from '@dwt/shared';
 
-import CatalogScreen from '../screens/catalog/CatalogScreen';
+import ExploreHubScreen from '../screens/catalog/ExploreHubScreen';
 import DestinationScreen from '../screens/catalog/DestinationScreen';
 import type { DestinationId } from '../screens/catalog/destinations';
+import ResortsDirectoryScreen from '../screens/catalog/ResortsDirectoryScreen';
 import LiveWaitsScreen from '../screens/liveWaits/LiveWaitsScreen';
 
 export type ExploreStackParamList = {
   CatalogList: undefined;
   DestinationScreen: { destination: DestinationId };
+  ResortsDirectory: undefined;
   CrowdCalendar: undefined;
   LiveWaits: { park?: Park } | undefined;
 };
@@ -37,12 +39,17 @@ export default function ExploreStack(): JSX.Element {
     <Stack.Navigator>
       <Stack.Screen
         name="CatalogList"
-        component={CatalogScreen}
+        component={ExploreHubScreen}
         options={{ headerShown: false }}
       />
       <Stack.Screen
         name="DestinationScreen"
         component={DestinationScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="ResortsDirectory"
+        component={ResortsDirectoryScreen}
         options={{ headerShown: false }}
       />
       <Stack.Screen

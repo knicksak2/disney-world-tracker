@@ -189,7 +189,7 @@ function makeFakeFoodItemLogRepo() {
 function makeFakeLocationRepo() {
   return {
     createCalls: [] as { userId: string; name: string; park: Park }[],
-    suggestCalls: [] as { park: Park; name: string; limit?: number }[],
+    suggestCalls: [] as { park?: Park; name: string; limit?: number }[],
     createError: null as AppError | null,
     suggestions: [] as LocationSuggestionDTO[],
 
@@ -207,11 +207,14 @@ function makeFakeLocationRepo() {
       };
     },
     async suggestLocations(
-      park: Park,
-      name: string,
+      park?: Park,
+      name?: string,
       limit?: number,
     ): Promise<readonly LocationSuggestionDTO[]> {
-      const call: { park: Park; name: string; limit?: number } = { park, name };
+      const call: { park?: Park; name: string; limit?: number } = { name: name ?? '' };
+      if (park !== undefined) {
+        call.park = park;
+      }
       if (limit !== undefined) {
         call.limit = limit;
       }
@@ -803,8 +806,8 @@ describe('foodLog routes', () => {
 
     it('GET /locations/suggest returns ranked suggestions (200)', async () => {
       locRepo.suggestions = [
-        { id: LOCATION_ID, name: 'Spring Roll Cart', similarity: 0.95 },
-        { id: '77777777-7777-4777-8777-777777777777', name: 'Spring Roll Wagon', similarity: 0.75 },
+        { id: LOCATION_ID, name: 'Spring Roll Cart', park: 'Magic Kingdom', similarity: 0.95 },
+        { id: '77777777-7777-4777-8777-777777777777', name: 'Spring Roll Wagon', park: 'Magic Kingdom', similarity: 0.75 },
       ];
 
       const res = await app.inject({
@@ -819,6 +822,7 @@ describe('foodLog routes', () => {
       const body = res.json();
       expect(body.suggestions).toHaveLength(2);
       expect(body.suggestions[0].similarity).toBe(0.95);
+      expect(body.suggestions[0].park).toBe('Magic Kingdom');
     });
 
     it('GET /locations/suggest supports q parameter as fallback', async () => {
@@ -831,6 +835,25 @@ describe('foodLog routes', () => {
       expect(locRepo.suggestCalls).toEqual([
         { park: 'Magic Kingdom', name: 'Spring', limit: undefined },
       ]);
+    });
+
+    it('GET /locations/suggest allows park parameter to be omitted for cross-park search', async () => {
+      locRepo.suggestions = [
+        { id: LOCATION_ID, name: 'Spring Roll Cart', park: 'Magic Kingdom', similarity: 0.95 },
+      ];
+
+      const res = await app.inject({
+        method: 'GET',
+        url: '/locations/suggest?q=Spring',
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(locRepo.suggestCalls).toEqual([
+        { park: undefined, name: 'Spring', limit: undefined },
+      ]);
+      const body = res.json();
+      expect(body.suggestions).toHaveLength(1);
+      expect(body.suggestions[0].park).toBe('Magic Kingdom');
     });
 
     it('GET /locations/suggest rejects missing search name/q with 400 validation_failed', async () => {

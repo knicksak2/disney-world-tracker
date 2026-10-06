@@ -75,6 +75,7 @@ export type {
 
 export type {
   CrowdCalendarDayDTO,
+  ParkCrowdSummary,
   WaitSnapshot,
   WaitInsightsDTO,
 } from './Intelligence.js';
@@ -136,6 +137,7 @@ export type {
   UserSubmittedLocationDTO,
   CreateUserSubmittedLocationInputDTO,
   LocationSuggestionDTO,
+  LocationSuggestionsResponseDTO,
 } from './UserSubmittedLocation.js';
 
 export type {

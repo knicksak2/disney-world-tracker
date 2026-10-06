@@ -28,6 +28,8 @@
 import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react-native';
 
+import { Text } from 'react-native';
+
 import { GradientHeader } from '../components';
 
 describe('GradientHeader — accessible back control (Requirements 2.4, 2.5, 3.6)', () => {
@@ -91,5 +93,28 @@ describe('GradientHeader — accessible back control (Requirements 2.4, 2.5, 3.6
     expect(screen.getByText('Animal Kingdom')).toBeTruthy();
     // …and the accessible back control is present in the same header.
     expect(screen.getByRole('button', { name: 'Go back' })).toBeTruthy();
+  });
+
+  it('renders custom iconText, testID, backTestID, and right slot', () => {
+    const onBack = jest.fn();
+    render(
+      <GradientHeader
+        title="Magic Kingdom"
+        subtitle="Cinderella Castle · 114 Experiences"
+        iconText="🏰"
+        colors={['#280b45', '#5b2a86', '#7e57c2']}
+        testID="custom-header-id"
+        backTestID="custom-back-id"
+        onBack={onBack}
+        right={<Text>RightSlot</Text>}
+      />,
+    );
+
+    expect(screen.getByTestId('custom-header-id')).toBeTruthy();
+    expect(screen.getByTestId('custom-back-id')).toBeTruthy();
+    expect(screen.getByText('🏰')).toBeTruthy();
+    expect(screen.getByText('Magic Kingdom')).toBeTruthy();
+    expect(screen.getByText('Cinderella Castle · 114 Experiences')).toBeTruthy();
+    expect(screen.getByText('RightSlot')).toBeTruthy();
   });
 });

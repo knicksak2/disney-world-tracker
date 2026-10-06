@@ -112,6 +112,7 @@ export {
 
 export {
   crowdCalendarDaySchema,
+  parkCrowdSummarySchema,
   waitSnapshotSchema,
   waitInsightsSchema,
 } from './Intelligence.js';

@@ -66,7 +66,7 @@ export const POPULAR_QUICK_TAGS_BY_TAB: Record<
 
 /**
  * High-signal facet groups mined for attribute chips.
- * Excludes noisy ubiquitous groups like 'age' and 'height'.
+ * Includes height and age facet groups for dedicated Height/Physical filtering.
  */
 export const WHITELISTED_FACET_GROUPS = [
   'interests',
@@ -78,6 +78,8 @@ export const WHITELISTED_FACET_GROUPS = [
   'dining',
   'tableService',
   'quickService',
+  'height',
+  'age',
 ] as const;
 
 export interface FilterChipItem {
@@ -275,6 +277,37 @@ export function deriveFilterChips(
       }
     }
 
+    // 3b. Physical considerations extraction
+    if (Array.isArray(exp.physicalConsiderations)) {
+      for (const facet of exp.physicalConsiderations) {
+        if (typeof facet?.name === 'string') {
+          const nameTrimmed = facet.name.trim();
+          const nameLower = nameTrimmed.toLowerCase();
+          const idTrimmed = typeof facet.id === 'string' ? facet.id.trim() : '';
+          const idLower = idTrimmed.toLowerCase();
+
+          if (nameTrimmed.length > 0 && !isSuppressedAttributeFacet(nameTrimmed, idTrimmed)) {
+            const hasSeenId = idLower.length > 0 && seenAttributeIds.has(idLower);
+            const hasSeenName = seenAttributeNames.has(nameLower);
+
+            if (!hasSeenId && !hasSeenName) {
+              if (idLower.length > 0) seenAttributeIds.add(idLower);
+              seenAttributeNames.add(nameLower);
+
+              const label = formatAttributeChipLabel(nameTrimmed, idTrimmed);
+              attributeChips.push({
+                id: idTrimmed || `physical-${nameLower}`,
+                label,
+                kind: 'attribute',
+                rawValue: nameTrimmed,
+                accessibilityLabel: `${nameTrimmed}, attribute filter`,
+              });
+            }
+          }
+        }
+      }
+    }
+
     // 4. Fallback/supplemental subType extraction
     if (typeof exp.subType === 'string') {
       const subTypeTrimmed = exp.subType.trim();
@@ -448,6 +481,23 @@ export function matchesExperienceAttribute(
   if (
     typeof exp.subType === 'string' &&
     targets.has(exp.subType.trim().toLowerCase())
+  ) {
+    return true;
+  }
+  if (Array.isArray(exp.physicalConsiderations)) {
+    for (const pc of exp.physicalConsiderations) {
+      if (
+        (typeof pc?.name === 'string' && targets.has(pc.name.trim().toLowerCase())) ||
+        (typeof pc?.id === 'string' && targets.has(pc.id.trim().toLowerCase()))
+      ) {
+        return true;
+      }
+    }
+  }
+  if (
+    exp.heightRequirement &&
+    typeof exp.heightRequirement.name === 'string' &&
+    targets.has(exp.heightRequirement.name.trim().toLowerCase())
   ) {
     return true;
   }

@@ -64,11 +64,18 @@ export default function FavoriteToggle({
     },
   });
 
-  const isFavorited = toggleMutation.isPending ? toggleMutation.variables : favorited;
+  const cachedFavorites = queryClient.getQueryData<FavoritesResponseDTO>(FAVORITES_QUERY_KEY);
+  const cacheFavorited = Array.isArray(cachedFavorites?.experienceIds)
+    ? cachedFavorites.experienceIds.includes(experienceId)
+    : undefined;
+  const isFavorited = toggleMutation.isPending ? toggleMutation.variables : (cacheFavorited ?? favorited);
 
   return (
     <Pressable
-      onPress={() => toggleMutation.mutate(!isFavorited)}
+      onPress={(e) => {
+        (e as any)?.stopPropagation?.();
+        toggleMutation.mutate(!isFavorited);
+      }}
       accessibilityRole="button"
       accessibilityLabel={
         accessibilityLabel ?? (isFavorited ? 'Remove from favorites' : 'Add to favorites')

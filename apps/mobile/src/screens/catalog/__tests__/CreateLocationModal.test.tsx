@@ -39,11 +39,13 @@ const MOCK_SUGGESTIONS: readonly LocationSuggestionDTO[] = [
   {
     id: 'loc-1',
     name: 'Spring Roll Snack Cart',
+    park: 'Magic Kingdom',
     similarity: 0.85,
   },
   {
     id: 'loc-2',
     name: 'Adventureland Spring Roll Stand',
+    park: 'Magic Kingdom',
     similarity: 0.45,
   },
 ];
@@ -234,4 +236,50 @@ describe('CreateLocationModal', () => {
       expect(onClose).toHaveBeenCalled();
     });
   });
+
+  it('allows user to switch park via park chip and queries/submits with selected park', async () => {
+    apiRequestMock.mockResolvedValueOnce({
+      id: 'epcot-loc-1',
+      name: 'Festival Kiosk',
+      park: 'EPCOT',
+    });
+
+    const onLocationSelected = jest.fn();
+
+    render(
+      <CreateLocationModal
+        park="Magic Kingdom"
+        visible={true}
+        onClose={jest.fn()}
+        onLocationSelected={onLocationSelected}
+      />,
+    );
+
+    // Switch to EPCOT
+    fireEvent.press(screen.getByTestId('create-location-park-chip-epcot'));
+
+    expect(screen.getByText("Can't find a snack cart or stand in EPCOT? Add it here.")).toBeTruthy();
+
+    fireEvent.changeText(
+      screen.getByTestId('create-location-name-input'),
+      'Festival Kiosk',
+    );
+
+    fireEvent.press(screen.getByTestId('create-location-submit-btn'));
+
+    await waitFor(() => {
+      expect(apiRequestMock).toHaveBeenCalledWith('POST', '/locations', {
+        name: 'Festival Kiosk',
+        park: 'EPCOT',
+      });
+      expect(onLocationSelected).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 'epcot-loc-1',
+          name: 'Festival Kiosk',
+          park: 'EPCOT',
+        }),
+      );
+    });
+  });
 });
+

@@ -21,5 +21,10 @@ export interface CreateUserSubmittedLocationInputDTO {
 export interface LocationSuggestionDTO {
   readonly id: string;
   readonly name: string;
+  readonly park: Park;
   readonly similarity: number; // 0..1, pg_trgm's similarity() score
+}
+
+export interface LocationSuggestionsResponseDTO {
+  readonly suggestions: readonly LocationSuggestionDTO[];
 }

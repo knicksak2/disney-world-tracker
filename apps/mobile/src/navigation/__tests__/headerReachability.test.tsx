@@ -34,7 +34,7 @@ jest.mock('../../screens/home/HomeScreen', () => ({
   },
 }));
 
-jest.mock('../../screens/catalog/CatalogScreen', () => ({
+jest.mock('../../screens/catalog/ExploreHubScreen', () => ({
   __esModule: true,
   default: function CatalogStub(): JSX.Element {
     const { View: RNView } = require('react-native');

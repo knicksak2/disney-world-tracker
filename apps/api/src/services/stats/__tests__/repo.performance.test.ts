@@ -335,6 +335,10 @@ describe.skipIf(!DB_AVAILABLE)(
       });
       await applyAllMigrations(testPool);
 
+      // Ensure a clean baseline before bulk seeding the exact benchmark dataset
+      await testPool.query('TRUNCATE experiences CASCADE');
+      await testPool.query('TRUNCATE resorts CASCADE');
+
       // Bulk seed once. Order matters: experiences → resorts → link a subset of
       // experiences to resorts (so `byResort` is exercised) → target
       // (+completions, +ratings) → 100k trackers with one completion each.

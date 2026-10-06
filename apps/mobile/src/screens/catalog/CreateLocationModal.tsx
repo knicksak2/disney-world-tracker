@@ -8,6 +8,7 @@ import {
   FlatList,
   Modal,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -15,15 +16,20 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-import type { LocationSuggestionDTO, Park, UserSubmittedLocationDTO } from '@dwt/shared';
+import {
+  PARKS,
+  type LocationSuggestionDTO,
+  type Park,
+  type UserSubmittedLocationDTO,
+} from '@dwt/shared';
 
 import { ApiError, apiRequest } from '../../api/client';
 import { theme } from '../../theme/theme';
 import { PrimaryButton, SecondaryButton } from '../../theme/components';
 
 export interface CreateLocationModalProps {
-  /** The currently-selected park for the location. */
-  readonly park: Park;
+  /** The currently-selected park for the location (optional, defaults to 'Magic Kingdom'). */
+  readonly park?: Park;
   /** Whether the modal is presented. */
   readonly visible: boolean;
   /** Dismiss the modal without creating. */
@@ -35,16 +41,23 @@ export interface CreateLocationModalProps {
 const DEBOUNCE_MS = 300;
 
 export default function CreateLocationModal({
-  park,
+  park = 'Magic Kingdom',
   visible,
   onClose,
   onLocationSelected,
 }: CreateLocationModalProps): JSX.Element | null {
+  const [selectedPark, setSelectedPark] = useState<Park>(park);
   const [name, setName] = useState<string>('');
   const [suggestions, setSuggestions] = useState<readonly LocationSuggestionDTO[]>([]);
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState<boolean>(false);
   const [isCreating, setIsCreating] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (park) {
+      setSelectedPark(park);
+    }
+  }, [park]);
 
   // Debounce query GET /locations/suggest (Requirement 6.2, 7.2)
   useEffect(() => {
@@ -65,11 +78,19 @@ export default function CreateLocationModal({
     setIsLoadingSuggestions(true);
     const timer = setTimeout(async () => {
       try {
-        const results = await apiRequest<readonly LocationSuggestionDTO[]>(
+        const results = await apiRequest<
+          | { readonly suggestions: readonly LocationSuggestionDTO[] }
+          | readonly LocationSuggestionDTO[]
+        >(
           'GET',
-          `/locations/suggest?park=${encodeURIComponent(park)}&name=${encodeURIComponent(trimmed)}`,
+          `/locations/suggest?park=${encodeURIComponent(selectedPark)}&name=${encodeURIComponent(trimmed)}`,
         );
-        setSuggestions(results);
+        const list = Array.isArray(results)
+          ? results
+          : ('suggestions' in results
+            ? (results.suggestions ?? [])
+            : []);
+        setSuggestions(list);
       } catch {
         // Advisory suggest query failure should not block user
         setSuggestions([]);
@@ -79,7 +100,7 @@ export default function CreateLocationModal({
     }, DEBOUNCE_MS);
 
     return () => clearTimeout(timer);
-  }, [name, park, visible]);
+  }, [name, selectedPark, visible]);
 
   // Stable `renderItem` identity — an inline arrow literal is recreated every
   // render (e.g. each debounced suggestion refetch), which `FlatList` treats
@@ -152,7 +173,7 @@ export default function CreateLocationModal({
     try {
       const created = await apiRequest<UserSubmittedLocationDTO>('POST', '/locations', {
         name: trimmed,
-        park,
+        park: selectedPark,
       });
       onLocationSelected(created);
       handleClose();
@@ -164,7 +185,7 @@ export default function CreateLocationModal({
           onLocationSelected({
             id: existingId,
             name: trimmed,
-            park,
+            park: selectedPark,
           });
           handleClose();
           return;
@@ -193,7 +214,7 @@ export default function CreateLocationModal({
             <View style={styles.headerTitles}>
               <Text style={styles.title}>Add Food Spot</Text>
               <Text style={styles.subtitle}>
-                Can&apos;t find a snack cart or stand in {park}? Add it here.
+                Can&apos;t find a snack cart or stand in {selectedPark}? Add it here.
               </Text>
             </View>
             <Pressable
@@ -205,6 +226,36 @@ export default function CreateLocationModal({
             >
               <Ionicons name="close" size={24} color={theme.color.textSecondary} />
             </Pressable>
+          </View>
+
+          {/* Park Selection Chips */}
+          <View style={styles.parkSection}>
+            <Text style={styles.inputLabel}>Park</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.parkChipsContent}
+              style={styles.parkChipsScroll}
+            >
+              {PARKS.map((p) => {
+                const isSelected = p === selectedPark;
+                return (
+                  <Pressable
+                    key={p}
+                    onPress={() => setSelectedPark(p)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Select park ${p}`}
+                    accessibilityState={{ selected: isSelected }}
+                    style={[styles.parkChip, isSelected && styles.parkChipSelected]}
+                    testID={`create-location-park-chip-${p.toLowerCase().replace(/\s+/g, '-')}`}
+                  >
+                    <Text style={[styles.parkChipText, isSelected && styles.parkChipTextSelected]}>
+                      {p}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
           </View>
 
           {/* Form input */}
@@ -315,6 +366,37 @@ const styles = StyleSheet.create({
   formSection: {
     paddingHorizontal: 20,
     paddingTop: 16,
+  },
+  parkSection: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+  },
+  parkChipsScroll: {
+    marginTop: 8,
+  },
+  parkChipsContent: {
+    gap: 8,
+    paddingRight: 8,
+  },
+  parkChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: theme.radius.pill,
+    backgroundColor: theme.color.surfaceAlt,
+    borderWidth: 1,
+    borderColor: theme.color.border,
+  },
+  parkChipSelected: {
+    backgroundColor: theme.color.primary,
+    borderColor: theme.color.primary,
+  },
+  parkChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: theme.color.textSecondary,
+  },
+  parkChipTextSelected: {
+    color: '#ffffff',
   },
   inputLabel: {
     fontSize: 14,

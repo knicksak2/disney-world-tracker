@@ -108,9 +108,9 @@ Adds `source TEXT NOT NULL DEFAULT 'observed' CHECK (source IN ('observed','seed
 
 ### Shared DTOs (`@dwt/shared`)
 
-- `CrowdCalendarDayDTO` — `{ date, park, forecastIndex, observedIndex?, capturedForecast?, forecastAccuracy?, parkHours, earlyEntry, extendedEvening, ticketedEvent, llMultipassPriceCents?, festival? }`, plus optional per-ride surfacing of reliability, typical LL sell-out hour, and showtimes in the day-detail projection.
+- `CrowdCalendarDayDTO` — `{ date, park, forecastIndex, observedIndex?, capturedForecast?, forecastAccuracy?, parkHours, earlyEntry, extendedEvening, ticketedEvent, llMultipassPriceCents?, festival?, expectedAvgWaitMinutes?, isLiveTracking?, weather?, allParks? }`, plus optional per-ride surfacing of reliability, typical LL sell-out hour, and showtimes in the day-detail projection.
 
-  `forecastIndex` and `observedIndex` are both on the **display 1–10 scale** (the continuous ratio is projected via `displayLevel` at the DTO boundary). `observedIndex` is set only for a past date whose observed index is finalized from the app's own sampling — a `source='seed'` row is history, not "how we did", and does not populate it.
+  `forecastIndex` and `observedIndex` are both on the **display 1–10 scale** (the continuous ratio is projected via `displayLevel` at the DTO boundary). `observedIndex` is set only for a past date whose observed index is finalized from the app's own sampling (or the active date when live tracking is present) — a `source='seed'` row is history, not "how we did", and does not populate it.
 
   The two accuracy fields exist because R7.5 requires predicted-versus-actual to be honest, and the naive implementation is not:
   - `capturedForecast: { index, leadDays, capturedAt }` — the forecast **as issued**, read from the frozen `crowd_forecast_log`. Critically NOT a recomputed value: for a past date `computeRawForecast` returns the observed index verbatim (its first branch), so a recomputed "prediction" would always equal the actual and the comparison would be vacuous. `getCapturedForecast` returns the **earliest-issued** surviving capture (largest `lead_days`) — the strongest honest claim, and the one least contaminated by the R4.3 same-day live correction. `leadDays` travels with it so the UI can state how far ahead the claim was made.
@@ -232,6 +232,11 @@ Adds `source TEXT NOT NULL DEFAULT 'observed' CHECK (source IN ('observed','seed
 *For any* Experience and request date: (a) WHEN the request date is NOT the current WDW calendar day, `getDaySnapshot`'s `waits[]` are entirely unaffected by `Live_Service`, regardless of what it would return; (b) WHEN the request date IS today, a fresh (non-stale), `Operating`, numeric live standby wait from `Live_Service` replaces `predictedWaitMinutes` ONLY in the bucket matching the current WDW hour — every other hour bucket for that Experience remains exactly the model/`R4.3`-corrected value it would have been without a `Live_Service` dependency; (c) a stale reading, a non-`Operating` status, an absent `waitMinutes`, or a `Live_Service` failure/timeout all fall back silently to the model value already computed for that hour (best-effort, mirrors R4.4); (d) omitting the `liveService` dependency entirely reproduces the exact pre-Requirement-4.5 snapshot (strictly additive, opt-in by construction).
 
 **Validates: Requirements 4.5**
+
+### Property 21: Crowd Calendar Day Detail contains per-park comparison and day extras
+*For any* date queried in `getCrowdCalendarDay`, the returned DTO provides `allParks` with valid 1–10 display levels for all four theme parks, non-negative `expectedAvgWaitMinutes`, near-term weather when within the forecast horizon, and same-day live tracking when applicable.
+
+**Validates: Requirements 6.2, 6.6, 10.5**
 
 
 ## Error Handling

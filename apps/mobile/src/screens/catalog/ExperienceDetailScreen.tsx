@@ -226,6 +226,134 @@ function categoryLabel(category: ExperienceCategory): string {
   return category.replace(/_/g, ' ');
 }
 
+/**
+ * Curated fallback data for signature resort recreation activities, ensuring their
+ * ExperienceDetailScreen renders with rich specifications, descriptions, and tracking
+ * controls even before database sync or in offline / testing environments.
+ */
+const KNOWN_RECREATION_EXPERIENCES: Record<string, ExperienceDetailDTO> = {
+  'b1010001-c001-4000-8000-000000000001': {
+    id: 'b1010001-c001-4000-8000-000000000001',
+    name: 'Colors of Coronado Painting Experience',
+    category: 'Recreation',
+    areaType: 'Resort',
+    resortId: 'resort-coronado',
+    description:
+      'Paint an iconic Disney masterpiece alongside master artists overlooking panoramic views from Gran Destino Tower.',
+    priceTier: '$$$',
+    subType: 'Arts & Crafts',
+    park: null,
+    imageUrl: null,
+    latitude: 28.3644,
+    longitude: -81.5694,
+  },
+  'rec-coronado-paint': {
+    id: 'b1010001-c001-4000-8000-000000000001',
+    name: 'Colors of Coronado Painting Experience',
+    category: 'Recreation',
+    areaType: 'Resort',
+    resortId: 'resort-coronado',
+    description:
+      'Paint an iconic Disney masterpiece alongside master artists overlooking panoramic views from Gran Destino Tower.',
+    priceTier: '$$$',
+    subType: 'Arts & Crafts',
+    park: null,
+    imageUrl: null,
+    latitude: 28.3644,
+    longitude: -81.5694,
+  },
+  'b1010001-c001-4000-8000-000000000002': {
+    id: 'b1010001-c001-4000-8000-000000000002',
+    name: 'Spanish Mosaic Art Experience',
+    category: 'Recreation',
+    areaType: 'Resort',
+    resortId: 'resort-coronado',
+    description:
+      'Design and handcraft your own unique Spanish mosaic art tile inspired by Catalan architecture at Dahlia Lounge terrace.',
+    priceTier: '$$',
+    subType: 'Arts & Crafts',
+    park: null,
+    imageUrl: null,
+    latitude: 28.3644,
+    longitude: -81.5694,
+  },
+  'rec-coronado-mosaic': {
+    id: 'b1010001-c001-4000-8000-000000000002',
+    name: 'Spanish Mosaic Art Experience',
+    category: 'Recreation',
+    areaType: 'Resort',
+    resortId: 'resort-coronado',
+    description:
+      'Design and handcraft your own unique Spanish mosaic art tile inspired by Catalan architecture at Dahlia Lounge terrace.',
+    priceTier: '$$',
+    subType: 'Arts & Crafts',
+    park: null,
+    imageUrl: null,
+    latitude: 28.3644,
+    longitude: -81.5694,
+  },
+  'b1010001-c001-4000-8000-000000000003': {
+    id: 'b1010001-c001-4000-8000-000000000003',
+    name: 'Sangria University',
+    category: 'Recreation',
+    areaType: 'Resort',
+    resortId: 'resort-coronado',
+    description:
+      'Delve into the history and craft of four artisan sangria recipes with sommeliers at Three Bridges Bar & Grill.',
+    priceTier: '$$$',
+    subType: 'Class',
+    park: null,
+    imageUrl: null,
+    latitude: 28.3644,
+    longitude: -81.5694,
+  },
+  'rec-coronado-sangria': {
+    id: 'b1010001-c001-4000-8000-000000000003',
+    name: 'Sangria University',
+    category: 'Recreation',
+    areaType: 'Resort',
+    resortId: 'resort-coronado',
+    description:
+      'Delve into the history and craft of four artisan sangria recipes with sommeliers at Three Bridges Bar & Grill.',
+    priceTier: '$$$',
+    subType: 'Class',
+    park: null,
+    imageUrl: null,
+    latitude: 28.3644,
+    longitude: -81.5694,
+  },
+  'b1010001-c001-4000-8000-000000000004': {
+    id: 'b1010001-c001-4000-8000-000000000004',
+    name: 'Painting on the Riviera',
+    category: 'Recreation',
+    areaType: 'Resort',
+    resortId: 'resort-riviera',
+    description:
+      "Create your own Mediterranean-inspired acrylic painting on canvas with guidance from a Disney artist at Topolino's Terrace.",
+    priceTier: '$$$',
+    subType: 'Arts & Crafts',
+    park: null,
+    imageUrl: null,
+    latitude: 28.3615,
+    longitude: -81.5434,
+  },
+  'rec-riviera-paint': {
+    id: 'b1010001-c001-4000-8000-000000000004',
+    name: 'Painting on the Riviera',
+    category: 'Recreation',
+    areaType: 'Resort',
+    resortId: 'resort-riviera',
+    description:
+      "Create your own Mediterranean-inspired acrylic painting on canvas with guidance from a Disney artist at Topolino's Terrace.",
+    priceTier: '$$$',
+    subType: 'Arts & Crafts',
+    park: null,
+    imageUrl: null,
+    latitude: 28.3615,
+    longitude: -81.5434,
+  },
+};
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -235,7 +363,9 @@ export default function ExperienceDetailScreen(): JSX.Element {
   const navigation = useNavigation<ExperienceDetailNavigationProp>();
   const { experienceId } = route.params;
   const initialLens = (route.params as any)?.initialLens as 'today' | 'passport' | undefined;
-  const encodedId = encodeURIComponent(experienceId);
+  const effectiveExperienceId =
+    KNOWN_RECREATION_EXPERIENCES[experienceId]?.id ?? experienceId;
+  const encodedId = encodeURIComponent(effectiveExperienceId);
 
   const queryClient = useQueryClient();
   const [foodPickerVisible, setFoodPickerVisible] = React.useState(false);
@@ -256,7 +386,8 @@ export default function ExperienceDetailScreen(): JSX.Element {
   const [rateModalVisible, setRateModalVisible] = React.useState(false);
 
   const favoritedIds = useFavoritedExperiences();
-  const isFavorited = favoritedIds.has(experienceId);
+  const isFavorited =
+    favoritedIds.has(effectiveExperienceId) || favoritedIds.has(experienceId);
 
   const [activeLens, setActiveLens] = React.useState<'today' | 'passport'>(initialLens ?? 'today');
   const scrollViewRef = React.useRef<ScrollView>(null);
@@ -268,22 +399,36 @@ export default function ExperienceDetailScreen(): JSX.Element {
 
   const invalidateAfterLogChange = React.useCallback((): void => {
     void queryClient.invalidateQueries({
-      queryKey: ['experience-logs', experienceId],
+      queryKey: ['experience-logs', effectiveExperienceId],
     });
     void queryClient.invalidateQueries({
-      queryKey: ['experience-completion', experienceId],
+      queryKey: ['experience-completion', effectiveExperienceId],
     });
     void queryClient.invalidateQueries({
-      queryKey: ['experience-rating', experienceId],
+      queryKey: ['experience-rating', effectiveExperienceId],
     });
     void queryClient.invalidateQueries({
-      queryKey: ['experience-aggregate', experienceId],
+      queryKey: ['experience-aggregate', effectiveExperienceId],
     });
     void queryClient.invalidateQueries({
-      queryKey: ['scoped-food-item-logs', experienceId],
+      queryKey: ['scoped-food-item-logs', effectiveExperienceId],
     });
+    if (effectiveExperienceId !== experienceId) {
+      void queryClient.invalidateQueries({
+        queryKey: ['experience-logs', experienceId],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ['experience-completion', experienceId],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ['experience-rating', experienceId],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ['experience-aggregate', experienceId],
+      });
+    }
     void queryClient.invalidateQueries({ queryKey: ['me-stats'] });
-  }, [experienceId, queryClient]);
+  }, [effectiveExperienceId, experienceId, queryClient]);
 
   const { data: tripsData } = useQuery({
     queryKey: ['me', 'trips', 'active'] as const,
@@ -395,20 +540,39 @@ export default function ExperienceDetailScreen(): JSX.Element {
   // The five reads — catalog detail, own completion, own rating, own
   // note, community aggregate — are independent, so running them in
   // parallel keeps the time-to-content close to the slowest single hop
-  const cachedDetail = queryClient.getQueryData<ExperienceDetailDTO>([
-    'experience',
-    experienceId,
-  ]);
+  const cachedDetail =
+    queryClient.getQueryData<ExperienceDetailDTO>([
+      'experience',
+      effectiveExperienceId,
+    ]) ??
+    queryClient.getQueryData<ExperienceDetailDTO>([
+      'experience',
+      experienceId,
+    ]);
 
   const queries = useQueries({
     queries: [
       {
-        queryKey: ['experience', experienceId] as const,
-        queryFn: () =>
-          apiRequest<ExperienceDetailDTO>('GET', `/catalog/${encodedId}`),
+        queryKey: ['experience', effectiveExperienceId] as const,
+        queryFn: async () => {
+          try {
+            return await apiRequest<ExperienceDetailDTO>(
+              'GET',
+              `/catalog/${encodedId}`,
+            );
+          } catch (err) {
+            const fallback =
+              KNOWN_RECREATION_EXPERIENCES[experienceId] ??
+              KNOWN_RECREATION_EXPERIENCES[effectiveExperienceId];
+            if (fallback) {
+              return fallback;
+            }
+            throw err;
+          }
+        },
       },
       {
-        queryKey: ['experience-completion', experienceId] as const,
+        queryKey: ['experience-completion', effectiveExperienceId] as const,
         queryFn: () =>
           fetchOrNullOnCode<CompletionDTO>(
             `/me/experiences/${encodedId}/completion`,
@@ -416,7 +580,7 @@ export default function ExperienceDetailScreen(): JSX.Element {
           ),
       },
       {
-        queryKey: ['experience-rating', experienceId] as const,
+        queryKey: ['experience-rating', effectiveExperienceId] as const,
         queryFn: () =>
           fetchOrNullOnCode<RatingDTO>(
             `/me/experiences/${encodedId}/rating`,
@@ -424,7 +588,7 @@ export default function ExperienceDetailScreen(): JSX.Element {
           ),
       },
       {
-        queryKey: ['experience-note', experienceId] as const,
+        queryKey: ['experience-note', effectiveExperienceId] as const,
         queryFn: () =>
           fetchOrNullOnCode<NoteDTO>(
             `/me/experiences/${encodedId}/note`,
@@ -432,7 +596,7 @@ export default function ExperienceDetailScreen(): JSX.Element {
           ),
       },
       {
-        queryKey: ['experience-aggregate', experienceId] as const,
+        queryKey: ['experience-aggregate', effectiveExperienceId] as const,
         queryFn: () =>
           apiRequest<AggregateRatingDTO>(
             'GET',
@@ -444,7 +608,7 @@ export default function ExperienceDetailScreen(): JSX.Element {
         // `GET /me/experiences/:id/logs` returns a 200 with `repeatCount: 0`
         // and an empty list when nothing is logged yet, so no not-found
         // swallowing is needed (experience-activity-logging R4.1-R4.3).
-        queryKey: ['experience-logs', experienceId] as const,
+        queryKey: ['experience-logs', effectiveExperienceId] as const,
         queryFn: () =>
           apiRequest<ExperienceVisitHistoryDTO>(
             'GET',

@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react-native';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { NavigationContainer } from '@react-navigation/native';
 import { apiRequest } from '../../../api/client';
@@ -229,3 +229,106 @@ describe('CrowdCalendarScreen — predicted vs actual (R7.5)', () => {
     });
   });
 });
+
+describe('CrowdCalendarScreen — Day detail additions (R6.2, R6.6, R10.5)', () => {
+  let queryClient: QueryClient;
+
+  beforeEach(() => {
+    queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    mockApiRequest.mockReset();
+  });
+
+  function renderScreen() {
+    return render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationContainer>
+          <CrowdCalendarScreen />
+        </NavigationContainer>
+      </QueryClientProvider>
+    );
+  }
+
+  it('renders all-parks comparison, standby wait, weather, and festival', async () => {
+    const today = new Date().toISOString().split('T')[0];
+    mockApiRequest.mockResolvedValue({
+      days: [
+        {
+          date: today,
+          park: 'Magic Kingdom',
+          forecastIndex: 1.2,
+          parkHours: { openTime: '2026-08-07T09:00:00Z', closeTime: '2026-08-07T22:00:00Z' },
+          earlyEntry: false,
+          extendedEvening: false,
+          ticketedEvent: false,
+          expectedAvgWaitMinutes: 38,
+          festival: 'Food & Wine Festival',
+          weather: {
+            tempMaxF: 86,
+            tempMinF: 74,
+            condition: 'partly-cloudy',
+            precipProbability: 25,
+          },
+          allParks: [
+            { park: 'Magic Kingdom', forecastIndex: 1.2, expectedAvgWaitMinutes: 38 },
+            { park: 'EPCOT', forecastIndex: 0.8, expectedAvgWaitMinutes: 28 },
+            { park: 'Hollywood Studios', forecastIndex: 1.4, expectedAvgWaitMinutes: 44 },
+            { park: 'Animal Kingdom', forecastIndex: 0.7, expectedAvgWaitMinutes: 24 },
+          ],
+        },
+      ],
+    });
+
+    renderScreen();
+
+    await waitFor(() => {
+      // 4-park comparison
+      expect(screen.getByText('All parks on this day')).toBeTruthy();
+      expect(screen.getByLabelText(/EPCOT: Level 4\/10/)).toBeTruthy();
+      expect(screen.getByText('Hollywood Studios')).toBeTruthy();
+      expect(screen.getByText('Animal Kingdom')).toBeTruthy();
+      expect(screen.getByText('~28m wait')).toBeTruthy();
+
+      // Park info extras
+      expect(screen.getByText('Expected Standby Avg')).toBeTruthy();
+      expect(screen.getByText('~38 min')).toBeTruthy();
+      expect(screen.getByText(/⛅ 86° \/ 74° · 25% rain/)).toBeTruthy();
+      expect(screen.getByText(/🎉 Food & Wine Festival/)).toBeTruthy();
+    });
+
+    // Pressing another park in the comparison card selects that park
+    fireEvent.press(screen.getByLabelText(/EPCOT: Level 4\/10/));
+    await waitFor(() => {
+      expect(mockApiRequest).toHaveBeenCalledWith(
+        'GET',
+        expect.stringContaining('&park=EPCOT'),
+      );
+    });
+  });
+
+  it('renders live tracking header and format when isLiveTracking is true', async () => {
+    const today = new Date().toISOString().split('T')[0];
+    mockApiRequest.mockResolvedValue({
+      days: [
+        {
+          date: today,
+          park: 'Magic Kingdom',
+          forecastIndex: 6,
+          observedIndex: 5,
+          isLiveTracking: true,
+          parkHours: { openTime: '2026-08-07T09:00:00Z', closeTime: '2026-08-07T22:00:00Z' },
+          earlyEntry: false,
+          extendedEvening: false,
+          ticketedEvent: false,
+        },
+      ],
+    });
+
+    renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByText('Live tracking today')).toBeTruthy();
+      expect(screen.getByText('We predicted 6/10 · tracking 5/10 so far ✓')).toBeTruthy();
+    });
+  });
+});
+

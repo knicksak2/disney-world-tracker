@@ -4,7 +4,7 @@ import { Alert } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
-import type { FoodItemDTO, FoodListDetailDTO } from '@dwt/shared';
+import type { FoodItemDTO, FoodListDetailDTO, UserSubmittedLocationDTO } from '@dwt/shared';
 
 jest.mock('expo-constants', () => ({
   __esModule: true,
@@ -1056,6 +1056,229 @@ describe('FoodListDetailScreen', () => {
 
     expect(screen.getByTestId('restaurant-search-input').props.value).toBe('');
     expect(screen.queryByTestId('restaurant-search-clear-btn')).toBeNull();
+  });
+
+  test('Entry Point 2: displays "It\'s not listed" button when no restaurants match, opens CreateLocationModal, creates location, and adds item from scoped picker (Task 25, Requirement 9.5a, 9.5b)', async () => {
+    const createdLocation: UserSubmittedLocationDTO = {
+      id: 'loc-spring-roll-cart',
+      name: 'Spring Roll Snack Cart',
+      park: 'Magic Kingdom',
+    };
+
+    const springRollDish: FoodItemDTO = {
+      id: 'dish-cheeseburger-spring-roll',
+      experienceId: null,
+      locationId: 'loc-spring-roll-cart',
+      name: 'Cheeseburger Spring Roll',
+      price: '$9.50',
+      source: 'user_submitted',
+      currentlyOnMenu: true,
+    };
+
+    apiRequestMock.mockImplementation(async (method, path) => {
+      if (path === '/food-lists/list-detail-1') {
+        return sampleOwnerList;
+      }
+      if (typeof path === 'string' && path.startsWith('/catalog')) {
+        // No catalog match for snack cart
+        return { experiences: [] };
+      }
+      if (path.startsWith('/locations/suggest')) {
+        return [];
+      }
+      if (path === '/locations' && method === 'POST') {
+        return createdLocation;
+      }
+      if (path === '/locations/loc-spring-roll-cart/food-items') {
+        if (method === 'GET') {
+          return { items: [springRollDish] };
+        }
+        if (method === 'POST') {
+          return springRollDish;
+        }
+      }
+      if (path === '/me/food-lists/list-detail-1/items' && method === 'POST') {
+        return { id: 'li-spring-roll-item' };
+      }
+      return {};
+    });
+
+    renderScreenWithClient();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('food-list-add-items-btn')).toBeTruthy();
+    });
+
+    // 1. Open restaurant search modal
+    fireEvent.press(screen.getByTestId('food-list-add-items-btn'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('restaurant-search-modal')).toBeTruthy();
+    });
+
+    // 2. Type "Spring Roll" -> 0 catalog restaurants found -> "It's not listed" button appears
+    fireEvent.changeText(screen.getByTestId('restaurant-search-input'), 'Spring Roll');
+
+    await waitFor(() => {
+      expect(screen.getByText('No restaurants found.')).toBeTruthy();
+      expect(screen.getByTestId('restaurant-search-not-listed-btn')).toBeTruthy();
+      expect(screen.getByText("It's not listed? Add a snack cart or stand")).toBeTruthy();
+    });
+
+    // 3. Tap "It's not listed" button -> opens CreateLocationModal
+    fireEvent.press(screen.getByTestId('restaurant-search-not-listed-btn'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('create-location-modal')).toBeTruthy();
+      expect(screen.getByText('Add Food Spot')).toBeTruthy();
+    });
+
+    // 4. Fill in location name and submit
+    fireEvent.changeText(
+      screen.getByTestId('create-location-name-input'),
+      'Spring Roll Snack Cart',
+    );
+    fireEvent.press(screen.getByTestId('create-location-submit-btn'));
+
+    // 5. CreateLocationModal calls POST /locations and closes, opening FoodItemPickerModal with locationId
+    await waitFor(() => {
+      expect(apiRequestMock).toHaveBeenCalledWith('POST', '/locations', {
+        name: 'Spring Roll Snack Cart',
+        park: 'Magic Kingdom',
+      });
+      expect(screen.getByTestId('food-item-picker-modal')).toBeTruthy();
+      expect(screen.getByText('Cheeseburger Spring Roll')).toBeTruthy();
+    });
+
+    // 6. Select the dish and press Done
+    fireEvent.press(screen.getByTestId('food-item-row-dish-cheeseburger-spring-roll'));
+    fireEvent.press(screen.getByTestId('food-item-picker-done-btn'));
+
+    // 7. Confirmed items are added to the food list via POST /me/food-lists/:id/items
+    await waitFor(() => {
+      expect(apiRequestMock).toHaveBeenCalledWith('POST', '/me/food-lists/list-detail-1/items', {
+        foodItemId: 'dish-cheeseburger-spring-roll',
+      });
+    });
+  });
+
+  test('Entry Point 2: displays footer "Can\'t find a snack cart or stand? Add it here" when search results exist (Task 25, Requirement 9.5a)', async () => {
+    apiRequestMock.mockImplementation(async (_method, path) => {
+      if (path === '/food-lists/list-detail-1') {
+        return sampleOwnerList;
+      }
+      if (typeof path === 'string' && path.startsWith('/catalog')) {
+        return {
+          experiences: [
+            { id: 'exp-gaston', name: "Gaston's Tavern", park: 'Magic Kingdom', category: 'Restaurant' },
+          ],
+        };
+      }
+      return {};
+    });
+
+    renderScreenWithClient();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('food-list-add-items-btn')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByTestId('food-list-add-items-btn'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('restaurant-search-modal')).toBeTruthy();
+      expect(screen.getByText("Gaston's Tavern")).toBeTruthy();
+      expect(screen.getByTestId('restaurant-search-footer-not-listed-btn')).toBeTruthy();
+      expect(screen.getByText("Can't find a snack cart or stand? Add it here")).toBeTruthy();
+    });
+
+    // Tap footer button -> opens CreateLocationModal
+    fireEvent.press(screen.getByTestId('restaurant-search-footer-not-listed-btn'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('create-location-modal')).toBeTruthy();
+    });
+  });
+
+  test('Entry Point 2: unified search queries both catalog and community locations, displaying Snack Cart badge and opening location-scoped picker directly (Task 26, Requirement 9.5c)', async () => {
+    const existingCustomCart = {
+      id: 'loc-spring-roll-cart',
+      name: 'Spring Roll Snack Cart',
+      park: 'Magic Kingdom' as const,
+    };
+
+    const springRollDish: FoodItemDTO = {
+      id: 'dish-cheeseburger-spring-roll',
+      experienceId: null,
+      locationId: 'loc-spring-roll-cart',
+      name: 'Cheeseburger Spring Roll',
+      price: '$9.50',
+      source: 'user_submitted',
+      currentlyOnMenu: true,
+    };
+
+    apiRequestMock.mockImplementation(async (method, path) => {
+      if (path === '/food-lists/list-detail-1') {
+        return sampleOwnerList;
+      }
+      if (typeof path === 'string' && path.startsWith('/catalog')) {
+        return { experiences: [] };
+      }
+      if (typeof path === 'string' && path.startsWith('/locations/suggest')) {
+        return { suggestions: [existingCustomCart] };
+      }
+      if (path === '/locations/loc-spring-roll-cart/food-items') {
+        if (method === 'GET') {
+          return { items: [springRollDish] };
+        }
+      }
+      if (path === '/me/food-lists/list-detail-1/items' && method === 'POST') {
+        return { id: 'li-cheeseburger-spring-roll' };
+      }
+      return {};
+    });
+
+    renderScreenWithClient();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('food-list-add-items-btn')).toBeTruthy();
+    });
+
+    // 1. Open restaurant search modal
+    fireEvent.press(screen.getByTestId('food-list-add-items-btn'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('restaurant-search-modal')).toBeTruthy();
+    });
+
+    // 2. Type "Spring roll" -> queries /locations/suggest?q=Spring%20roll
+    fireEvent.changeText(screen.getByTestId('restaurant-search-input'), 'Spring roll');
+
+    // 3. Community cart appears in search results with Snack Cart badge and park
+    await waitFor(() => {
+      expect(screen.getByText('Spring Roll Snack Cart')).toBeTruthy();
+      expect(screen.getByText('Snack Cart')).toBeTruthy();
+      expect(screen.getByText('Magic Kingdom')).toBeTruthy();
+      expect(screen.getByTestId('custom-location-select-row-loc-spring-roll-cart')).toBeTruthy();
+    });
+
+    // 4. Tap the custom location directly -> opens FoodItemPickerModal scoped to locationId
+    fireEvent.press(screen.getByTestId('custom-location-select-row-loc-spring-roll-cart'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('food-item-picker-modal')).toBeTruthy();
+      expect(screen.getByText('Cheeseburger Spring Roll')).toBeTruthy();
+    });
+
+    // 5. Select dish and confirm -> added to list via POST /me/food-lists/:id/items
+    fireEvent.press(screen.getByTestId('food-item-row-dish-cheeseburger-spring-roll'));
+    fireEvent.press(screen.getByTestId('food-item-picker-done-btn'));
+
+    await waitFor(() => {
+      expect(apiRequestMock).toHaveBeenCalledWith('POST', '/me/food-lists/list-detail-1/items', {
+        foodItemId: 'dish-cheeseburger-spring-roll',
+      });
+    });
   });
 
   test('renders neither progress row nor Ate-this tap targets for a non-checklist list (Task 17.5, Requirement 13.4, 13.10)', async () => {

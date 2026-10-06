@@ -568,8 +568,7 @@ export async function getRateLimiterSnapshot(
     const concurrencyKey = `${prefix}:${bucket}:concurrency`;
     const rateKey = `${prefix}:${bucket}:rate`;
 
-    await redis.zremrangebyscore(rateKey, '-inf', cutoff);
-    const currentRps = await redis.zcard(rateKey);
+    const currentRps = await redis.zcount(rateKey, cutoff + 1, '+inf');
     const concStr = await redis.get(concurrencyKey);
     const currentConcurrency = concStr !== null ? parseInt(concStr, 10) || 0 : 0;
 

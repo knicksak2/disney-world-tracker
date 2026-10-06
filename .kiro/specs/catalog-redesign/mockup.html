@@ -1,0 +1,3592 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Disney World Tracker — Catalogue &amp; Resorts Redesign Mockup (Strict Data Reality)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --primary: #5b2a86;
+    --primary-dark: #371556;
+    --primary-light: #7e57c2;
+    --primary-glow: rgba(126, 87, 194, 0.25);
+    --gold: #f6c343;
+    --gold-dark: #c99313;
+    --gold-light: #fef08a;
+    --bg-page: #0f0a1c;
+    --phone-bg: #f8f7fc;
+    --surface: #ffffff;
+    --surface-alt: #f1edfa;
+    --border-light: rgba(91, 42, 134, 0.08);
+    --border-subtle: #e9e3f5;
+    --text-main: #1d1233;
+    --text-muted: #6f6785;
+    --text-light: #a39bb8;
+    
+    /* Park theme accents */
+    --mk-color: #6c35de;
+    --epcot-color: #1e88e5;
+    --hs-color: #e53935;
+    --ak-color: #2e7d32;
+    --resort-color: #6a1b9a;
+    --springs-color: #d97706;
+
+    /* Statuses */
+    --green: #10b981;
+    --amber: #f59e0b;
+    --red: #ef4444;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  
+  body {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: radial-gradient(circle at 50% 0%, #2b1649 0%, #110920 60%, #08040f 100%);
+    color: #fff;
+    min-height: 100vh;
+    padding: 24px 16px 80px;
+    overflow-x: hidden;
+  }
+
+  /* Control Header */
+  .mockup-header {
+    max-width: 1280px;
+    margin: 0 auto 28px;
+    text-align: center;
+    position: relative;
+  }
+  .mockup-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    background: rgba(246, 195, 67, 0.15);
+    border: 1px solid rgba(246, 195, 67, 0.35);
+    border-radius: 999px;
+    color: var(--gold);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+  .mockup-title {
+    font-family: 'Outfit', sans-serif;
+    font-size: 32px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    background: linear-gradient(135deg, #ffffff 30%, #e2d2fe 70%, #f6c343 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 8px;
+  }
+  .mockup-subtitle {
+    font-size: 15px;
+    color: #b7abd6;
+    max-width: 820px;
+    margin: 0 auto 20px;
+    line-height: 1.5;
+  }
+  
+  /* View Switcher */
+  .control-dock {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    padding: 5px 6px;
+    border-radius: 999px;
+    margin-bottom: 16px;
+  }
+  .control-btn {
+    border: none;
+    background: transparent;
+    color: #cfc5ea;
+    font-size: 13px;
+    font-weight: 700;
+    padding: 8px 18px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .control-btn.active {
+    background: linear-gradient(135deg, #7e57c2, #5b2a86);
+    color: #fff;
+    box-shadow: 0 4px 14px rgba(91, 42, 134, 0.5);
+  }
+  .control-btn:hover:not(.active) {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  /* Canvas Layout */
+  .canvas {
+    max-width: 1380px;
+    margin: 0 auto;
+    display: flex;
+    gap: 32px;
+    justify-content: center;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    transition: all 0.3s ease;
+  }
+  .canvas.single-mode .phone-wrap {
+    display: none;
+  }
+  .canvas.single-mode .phone-wrap.active-screen {
+    display: flex;
+  }
+
+  /* Phone Simulator Frame */
+  .phone-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+  .phone-caption {
+    font-family: 'Outfit', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #e5def5;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .phone-caption .pill {
+    font-size: 10px;
+    font-weight: 800;
+    padding: 3px 8px;
+    border-radius: 12px;
+    background: rgba(246, 195, 67, 0.2);
+    color: var(--gold);
+    border: 1px solid rgba(246, 195, 67, 0.4);
+  }
+
+  .phone {
+    width: 380px;
+    height: 800px;
+    background: var(--phone-bg);
+    border-radius: 48px;
+    position: relative;
+    border: 11px solid #1f1530;
+    box-shadow: 0 25px 60px -10px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.08);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    color: var(--text-main);
+  }
+
+  /* Dynamic Island & Status Bar */
+  .status-bar {
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #ffffff;
+    z-index: 40;
+    position: relative;
+  }
+  .dynamic-island {
+    position: absolute;
+    top: 9px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 108px;
+    height: 28px;
+    background: #000;
+    border-radius: 20px;
+  }
+  .status-icons {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+  }
+
+  /* Scrollable Screen Body */
+  .screen-content {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    position: relative;
+  }
+  .screen-content::-webkit-scrollbar { width: 0; }
+
+  /* App Bottom Navigation */
+  .bottom-nav {
+    height: 68px;
+    background: rgba(255, 255, 255, 0.94);
+    backdrop-filter: blur(20px);
+    border-top: 1px solid var(--border-subtle);
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    padding: 0 10px 10px;
+    z-index: 30;
+  }
+  .nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    color: #8c82a5;
+    font-size: 10px;
+    font-weight: 700;
+    cursor: pointer;
+    border: none;
+    background: transparent;
+  }
+  .nav-item.active { color: var(--primary); }
+  .nav-item .icon { font-size: 18px; }
+  .nav-center-btn {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #7e57c2, #5b2a86);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    box-shadow: 0 6px 16px rgba(91, 42, 134, 0.4);
+    margin-top: -16px;
+    border: 3px solid #fff;
+    cursor: pointer;
+  }
+
+  /* Header Components */
+  .hero-gradient-hdr {
+    background: linear-gradient(135deg, #7e57c2 0%, #5b2a86 50%, #3d1c5c 100%);
+    padding: 10px 18px 22px;
+    color: #fff;
+    position: relative;
+    border-bottom-left-radius: 28px;
+    border-bottom-right-radius: 28px;
+    box-shadow: 0 10px 25px -5px rgba(61, 28, 92, 0.35);
+  }
+  .hero-gradient-hdr::after {
+    content: "✨";
+    position: absolute;
+    right: 18px;
+    top: 16px;
+    font-size: 22px;
+    opacity: 0.4;
+  }
+  .hdr-top-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .hdr-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+  }
+  .hdr-icon-badge {
+    width: 36px;
+    height: 36px;
+    background: rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(10px);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+  }
+  .hdr-title {
+    font-family: 'Outfit', sans-serif;
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+  }
+  .hdr-sub {
+    font-size: 12.5px;
+    color: #e5def5;
+    margin-top: 2px;
+    font-weight: 500;
+  }
+  .hdr-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .hdr-action-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.15);
+    border: none;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    cursor: pointer;
+    position: relative;
+  }
+  .hdr-action-btn .dot {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 7px;
+    height: 7px;
+    background: var(--gold);
+    border-radius: 50%;
+    border: 1px solid #5b2a86;
+  }
+
+  /* Search Control */
+  .search-container {
+    margin: -14px 16px 14px;
+    position: relative;
+    z-index: 10;
+  }
+  .search-box {
+    background: #ffffff;
+    border-radius: 16px;
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    box-shadow: 0 8px 20px rgba(61, 28, 92, 0.10);
+    border: 1px solid rgba(91, 42, 134, 0.08);
+  }
+  .search-box .s-icon {
+    font-size: 16px;
+    color: #8c82a5;
+  }
+  .search-input {
+    border: none;
+    outline: none;
+    font-family: inherit;
+    font-size: 13.5px;
+    color: var(--text-main);
+    width: 100%;
+    font-weight: 500;
+  }
+  .search-input::placeholder { color: #9d94b8; }
+
+  /* Quick Action Dock (3 Canonical Global Tools) */
+  .action-dock {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    padding: 0 16px;
+    margin-bottom: 20px;
+  }
+  .action-tile {
+    background: #ffffff;
+    border-radius: 16px;
+    padding: 12px 8px;
+    text-align: center;
+    box-shadow: 0 4px 14px rgba(61, 28, 92, 0.07);
+    border: 1px solid rgba(91, 42, 134, 0.08);
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.15s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+  }
+  .action-tile:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 18px rgba(61, 28, 92, 0.12);
+  }
+  .action-tile .icon-wrap {
+    width: 36px;
+    height: 36px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+  }
+  .action-tile .title {
+    font-size: 11.5px;
+    font-weight: 800;
+    color: var(--text-main);
+  }
+  .action-tile .badge-pill {
+    font-size: 9.5px;
+    font-weight: 800;
+    padding: 2px 7px;
+    border-radius: 999px;
+  }
+
+  /* Section Titles */
+  .section-hdr {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 18px;
+    margin-bottom: 10px;
+  }
+  .section-hdr .title {
+    font-family: 'Outfit', sans-serif;
+    font-size: 16px;
+    font-weight: 800;
+    color: var(--text-main);
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+  .section-hdr .meta {
+    font-size: 11.5px;
+    color: var(--primary-light);
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  /* The 4 Theme Parks 2x2 Grid */
+  .parks-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    padding: 0 16px;
+    margin-bottom: 22px;
+  }
+  .park-card {
+    border-radius: 20px;
+    background: #ffffff;
+    box-shadow: 0 6px 18px rgba(61, 28, 92, 0.08);
+    overflow: hidden;
+    position: relative;
+    cursor: pointer;
+    transition: transform 0.2s;
+    border: 1px solid var(--border-light);
+    display: flex;
+    flex-direction: column;
+  }
+  .park-card:hover { transform: translateY(-3px); }
+  .park-photo-wrap {
+    height: 105px;
+    position: relative;
+    background: #2a1a45;
+  }
+  .park-photo-wrap img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .park-photo-gradient {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.65) 100%);
+  }
+  .park-badge-top {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    color: #fff;
+    padding: 2px 7px;
+    border-radius: 8px;
+    font-size: 9.5px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .park-badge-top .live-dot {
+    width: 6px;
+    height: 6px;
+    background: var(--green);
+    border-radius: 50%;
+  }
+  .park-body {
+    padding: 10px 12px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1;
+  }
+  .park-name {
+    font-family: 'Outfit', sans-serif;
+    font-size: 14.5px;
+    font-weight: 800;
+    color: var(--text-main);
+  }
+  .park-stats-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 4px;
+  }
+  .park-count-tag {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text-muted);
+    background: var(--surface-alt);
+    padding: 2px 6px;
+    border-radius: 6px;
+  }
+  .park-wait-avg {
+    font-size: 11px;
+    font-weight: 800;
+    color: #4338ca;
+  }
+
+  /* Featured Resorts Spotlight Gateway (Balanced & Sleek) */
+  .resorts-spotlight-card {
+    margin: 0 16px 18px;
+    border-radius: 20px;
+    background: linear-gradient(135deg, #4a154b 0%, #2f1042 100%);
+    color: #fff;
+    overflow: hidden;
+    position: relative;
+    box-shadow: 0 8px 24px rgba(47, 16, 66, 0.22);
+    cursor: pointer;
+    transition: transform 0.2s;
+  }
+  .resorts-spotlight-card:hover { transform: translateY(-2px); }
+  .resorts-spotlight-bg {
+    position: absolute;
+    inset: 0;
+    opacity: 0.38;
+    background-image: url('https://images.unsplash.com/photo-1540541338287-41700207dee6?w=800&auto=format&fit=crop&q=80');
+    background-size: cover;
+    background-position: center;
+    mix-blend-mode: overlay;
+  }
+  .resorts-spotlight-content {
+    position: relative;
+    padding: 16px;
+    z-index: 2;
+  }
+  .resort-crown-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(246, 195, 67, 0.2);
+    border: 1px solid rgba(246, 195, 67, 0.4);
+    padding: 3px 9px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 800;
+    color: var(--gold);
+    margin-bottom: 6px;
+  }
+  .resort-spotlight-title {
+    font-family: 'Outfit', sans-serif;
+    font-size: 17px;
+    font-weight: 800;
+    margin-bottom: 3px;
+  }
+  .resort-spotlight-sub {
+    font-size: 11.5px;
+    color: #d8cde9;
+    margin-bottom: 10px;
+    line-height: 1.35;
+  }
+  .resort-tier-chips {
+    display: flex;
+    gap: 5px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+  }
+  .resort-chip {
+    font-size: 9.5px;
+    font-weight: 700;
+    background: rgba(255, 255, 255, 0.12);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    padding: 2px 7px;
+    border-radius: 6px;
+    color: #f3e8ff;
+  }
+  .resort-spotlight-cta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 10px;
+    padding: 7px 12px;
+    font-size: 11.5px;
+    font-weight: 700;
+  }
+
+  /* Disney Springs Feature Banner */
+  .springs-feature-card {
+    margin: 0 16px 14px;
+    border-radius: 18px;
+    background: #ffffff;
+    box-shadow: 0 6px 18px rgba(61, 28, 92, 0.08);
+    overflow: hidden;
+    border: 1px solid var(--border-light);
+    cursor: pointer;
+    transition: transform 0.2s;
+  }
+  .springs-feature-card:hover { transform: translateY(-2px); }
+  .springs-photo-wrap {
+    height: 95px;
+    position: relative;
+    background: #c2410c;
+  }
+  .springs-photo-wrap img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .springs-body {
+    padding: 10px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .springs-title {
+    font-family: 'Outfit', sans-serif;
+    font-size: 14.5px;
+    font-weight: 800;
+    color: var(--text-main);
+  }
+  .springs-sub {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 2px;
+  }
+  .springs-tag {
+    font-size: 10px;
+    font-weight: 800;
+    color: #c2410c;
+    background: #ffedd5;
+    padding: 3px 8px;
+    border-radius: 6px;
+  }
+
+  /* Water Parks 2-Column Grid */
+  .water-parks-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    padding: 0 16px 20px;
+  }
+  .water-park-card {
+    border-radius: 18px;
+    background: #ffffff;
+    box-shadow: 0 4px 14px rgba(61, 28, 92, 0.07);
+    overflow: hidden;
+    border: 1px solid var(--border-light);
+    cursor: pointer;
+    transition: transform 0.2s;
+  }
+  .water-park-card:hover { transform: translateY(-2px); }
+  .water-park-photo {
+    height: 85px;
+    position: relative;
+    background: #0284c7;
+  }
+  .water-park-photo img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .water-park-body {
+    padding: 8px 10px 10px;
+  }
+  .water-park-name {
+    font-family: 'Outfit', sans-serif;
+    font-size: 13px;
+    font-weight: 800;
+    color: var(--text-main);
+  }
+  .water-park-meta {
+    font-size: 10.5px;
+    color: var(--text-muted);
+    margin-top: 2px;
+  }
+
+  /* ========================================================
+     SCREEN 2: RESORTS CONCIERGE (REAL DATA STRUCTURE)
+     ======================================================== */
+  .segmented-control {
+    display: flex;
+    background: var(--surface-alt);
+    border-radius: 14px;
+    padding: 4px;
+    margin: 0 16px 12px;
+    gap: 4px;
+  }
+  .segment-btn {
+    flex: 1;
+    border: none;
+    background: transparent;
+    padding: 8px 4px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-muted);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .segment-btn.active {
+    background: #ffffff;
+    color: var(--primary);
+    box-shadow: 0 2px 8px rgba(91, 42, 134, 0.12);
+  }
+
+  .filter-strip {
+    display: flex;
+    gap: 6px;
+    padding: 0 16px 12px;
+    overflow-x: auto;
+  }
+  .filter-strip::-webkit-scrollbar { width: 0; }
+  .filter-pill {
+    flex-shrink: 0;
+    border: 1px solid var(--border-subtle);
+    background: #ffffff;
+    color: var(--text-muted);
+    font-size: 11.5px;
+    font-weight: 700;
+    padding: 6px 12px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .filter-pill.active {
+    background: var(--primary);
+    color: #fff;
+    border-color: var(--primary);
+    box-shadow: 0 2px 8px rgba(91, 42, 134, 0.25);
+  }
+
+  /* Resort Hotel Card */
+  .resort-hotel-card {
+    margin: 0 16px 14px;
+    border-radius: 20px;
+    background: #ffffff;
+    box-shadow: 0 6px 18px rgba(61, 28, 92, 0.08);
+    border: 1px solid var(--border-light);
+    overflow: hidden;
+    cursor: pointer;
+    transition: transform 0.2s;
+  }
+  .resort-hotel-card:hover { transform: translateY(-2px); }
+  .resort-header-img {
+    height: 125px;
+    position: relative;
+    background: #371556;
+  }
+  .resort-header-img img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .resort-header-gradient {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.7) 100%);
+  }
+  .resort-tier-badge {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    padding: 3px 9px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+  }
+  .tier-deluxe {
+    background: linear-gradient(135deg, #f6c343, #d49a18);
+    color: #3b2203;
+  }
+  .tier-moderate {
+    background: linear-gradient(135deg, #38bdf8, #0284c7);
+    color: #fff;
+  }
+  .tier-value {
+    background: linear-gradient(135deg, #c084fc, #9333ea);
+    color: #fff;
+  }
+  .resort-transit-pills {
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+    display: flex;
+    gap: 4px;
+  }
+  .transit-pill {
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(8px);
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .resort-card-body { padding: 12px 14px 14px; }
+  .resort-hotel-title {
+    font-family: 'Outfit', sans-serif;
+    font-size: 16px;
+    font-weight: 800;
+    color: var(--text-main);
+    line-height: 1.25;
+    margin-bottom: 4px;
+  }
+  .resort-amenity-highlights {
+    font-size: 11.5px;
+    color: var(--text-muted);
+    line-height: 1.4;
+    margin-bottom: 10px;
+  }
+  .resort-subitems-preview {
+    background: var(--surface-alt);
+    border-radius: 12px;
+    padding: 8px 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 11.5px;
+    font-weight: 700;
+    color: var(--primary);
+  }
+  .resort-subitems-preview .chevron {
+    transition: transform 0.2s;
+  }
+  .resort-hotel-card.expanded .resort-subitems-preview .chevron {
+    transform: rotate(90deg);
+  }
+
+  /* Lightweight Preview Metrics on Resort Card */
+  .resort-preview-metrics {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin: 8px 0 10px;
+  }
+  .preview-metric-pill {
+    background: #f5f2fb;
+    color: var(--primary);
+    border-radius: 8px;
+    padding: 4px 9px;
+    font-size: 11px;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    border: 1px solid rgba(126, 87, 194, 0.15);
+  }
+  .resort-card-cta-btn {
+    width: 100%;
+    margin-top: 8px;
+    background: linear-gradient(135deg, rgba(106, 27, 154, 0.08) 0%, rgba(126, 87, 194, 0.12) 100%);
+    border: 1.5px solid rgba(106, 27, 154, 0.25);
+    color: var(--primary);
+    padding: 10px 12px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .resort-card-cta-btn:hover {
+    background: var(--primary);
+    color: #fff;
+  }
+
+  /* Dedicated Resort Guide Detail Screen Styles */
+  .detail-hero-banner {
+    height: 180px;
+    position: relative;
+    background: #371556;
+  }
+  .detail-hero-banner img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .detail-hero-gradient {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.75) 100%);
+  }
+  .detail-hero-body {
+    position: absolute;
+    bottom: 12px;
+    left: 16px;
+    right: 16px;
+    color: #fff;
+  }
+  .detail-resort-title {
+    font-family: 'Outfit', sans-serif;
+    font-size: 18px;
+    font-weight: 800;
+    line-height: 1.25;
+    margin-bottom: 4px;
+    color: #ffffff;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.6);
+  }
+  .detail-resort-subtitle {
+    font-size: 11.5px;
+    color: #e5def5;
+  }
+  .detail-jump-strip {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding: 10px 16px;
+    background: #ffffff;
+    border-bottom: 1px solid var(--border-light);
+    position: sticky;
+    top: 0;
+    z-index: 20;
+  }
+  .detail-jump-strip::-webkit-scrollbar { width: 0; }
+  .detail-jump-pill {
+    padding: 5px 11px;
+    border-radius: 999px;
+    background: var(--surface-alt);
+    color: var(--text-main);
+    font-size: 11px;
+    font-weight: 700;
+    white-space: nowrap;
+    cursor: pointer;
+    border: 1px solid var(--border-subtle);
+  }
+  .detail-jump-pill.active {
+    background: var(--primary);
+    color: #fff;
+    border-color: var(--primary);
+  }
+  .detail-card-box {
+    margin: 12px 16px;
+    background: #ffffff;
+    border-radius: 18px;
+    padding: 14px;
+    box-shadow: 0 4px 14px rgba(61, 28, 92, 0.06);
+    border: 1px solid var(--border-light);
+  }
+  .detail-card-hdr {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+  }
+  .detail-card-title {
+    font-family: 'Outfit', sans-serif;
+    font-size: 14.5px;
+    font-weight: 800;
+    color: var(--text-main);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .activity-item-card {
+    display: flex;
+    gap: 12px;
+    padding: 10px;
+    border-radius: 12px;
+    background: #fbf9fe;
+    border: 1px solid var(--border-subtle);
+    margin-bottom: 8px;
+  }
+  .activity-icon-bubble {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    background: #ede9fe;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    flex-shrink: 0;
+  }
+  .activity-info {
+    flex: 1;
+    min-width: 0;
+  }
+  .activity-title {
+    font-size: 13px;
+    font-weight: 800;
+    color: var(--text-main);
+  }
+  .activity-desc {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 2px;
+    line-height: 1.35;
+  }
+  .activity-tags {
+    display: flex;
+    gap: 5px;
+    margin-top: 4px;
+  }
+  .activity-tag {
+    font-size: 9.5px;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: #ffffff;
+    border: 1px solid var(--border-subtle);
+    color: var(--text-muted);
+  }
+
+  /* Stayed / Visited Property Bar */
+  .resort-stayed-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #ffffff;
+    border: 1px solid var(--border-subtle);
+    border-radius: 12px;
+    padding: 8px 12px;
+    margin-bottom: 12px;
+  }
+  .stayed-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: #f1f5f9;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    padding: 4px 10px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #475569;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .stayed-btn.active {
+    background: #dcfce7;
+    border-color: #86efac;
+    color: #166534;
+  }
+
+  /* Nested Experience List */
+  .drawer-section-title {
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    letter-spacing: 0.5px;
+    margin: 10px 0 6px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .nested-exp-item {
+    background: #ffffff;
+    border: 1px solid var(--border-subtle);
+    border-radius: 10px;
+    padding: 8px 10px;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .nested-exp-item:hover { background: #fdfcff; }
+  .nested-exp-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+  }
+  .nested-exp-name {
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--text-main);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .nested-exp-meta {
+    font-size: 10.5px;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  /* Direct Transit Mini Grid */
+  .transit-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+    margin-top: 4px;
+    margin-bottom: 10px;
+  }
+  .transit-cell {
+    background: #ffffff;
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    padding: 6px 4px;
+    text-align: center;
+  }
+  .transit-dest {
+    font-size: 9.5px;
+    font-weight: 800;
+    color: var(--text-muted);
+  }
+  .transit-time {
+    font-size: 11.5px;
+    font-weight: 800;
+    color: var(--primary);
+  }
+
+  /* Recreation & Sports Full Card */
+  .resort-rec-card {
+    margin: 0 16px 12px;
+    border-radius: 16px;
+    background: #ffffff;
+    box-shadow: 0 4px 14px rgba(61, 28, 92, 0.06);
+    border: 1px solid var(--border-light);
+    display: flex;
+    overflow: hidden;
+    cursor: pointer;
+  }
+
+  /* Sub-Destination Showcase Card (BoardWalk / ESPN / Catchall) */
+  .subdest-banner-card {
+    margin: 0 16px 16px;
+    border-radius: 18px;
+    background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%);
+    color: #fff;
+    padding: 14px 16px;
+    box-shadow: 0 6px 18px rgba(30, 27, 75, 0.18);
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+  }
+  .subdest-badge {
+    display: inline-block;
+    background: rgba(255, 255, 255, 0.18);
+    padding: 2px 7px;
+    border-radius: 6px;
+    font-size: 9.5px;
+    font-weight: 800;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+  }
+  .subdest-title {
+    font-family: 'Outfit', sans-serif;
+    font-size: 16px;
+    font-weight: 800;
+    margin-bottom: 4px;
+  }
+  .subdest-sub {
+    font-size: 11px;
+    color: #c7d2fe;
+    margin-bottom: 10px;
+    line-height: 1.35;
+  }
+  .subdest-items-pill {
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 10.5px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: #e0e7ff;
+    font-weight: 700;
+  }
+
+  /* Resort Dining Card */
+  .resort-dining-card {
+    margin: 0 16px 12px;
+    border-radius: 16px;
+    background: #ffffff;
+    box-shadow: 0 4px 14px rgba(61, 28, 92, 0.06);
+    border: 1px solid var(--border-light);
+    display: flex;
+    overflow: hidden;
+    cursor: pointer;
+  }
+  .dining-thumb {
+    width: 90px;
+    background: #371556;
+    flex-shrink: 0;
+  }
+  .dining-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .dining-card-body {
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    flex: 1;
+  }
+  .dining-title {
+    font-size: 13.5px;
+    font-weight: 800;
+    color: var(--text-main);
+    line-height: 1.25;
+  }
+  .dining-resort-name {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 2px;
+  }
+  .dining-tags-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 6px;
+  }
+  .dining-tag {
+    font-size: 9.5px;
+    font-weight: 800;
+    padding: 2px 6px;
+    border-radius: 6px;
+  }
+  .tag-char { background: #fef3c7; color: #b45309; }
+  .tag-sig { background: #ede9fe; color: #6d28d9; }
+  .tag-lounge { background: #fce7f3; color: #be185d; }
+  .tag-qs { background: #e0f2fe; color: #0369a1; }
+  .dining-price {
+    font-size: 11px;
+    font-weight: 800;
+    color: var(--green);
+    margin-left: auto;
+  }
+
+  /* ========================================================
+     SCREEN 3: THEME PARK LAND VIEW (FULL FILTERS RESTORED!)
+     ======================================================== */
+  /* Park Header */
+  .park-header-bar {
+    padding: 10px 18px 18px;
+    background: linear-gradient(135deg, #6c35de 0%, #491f85 60%, #2f1059 100%);
+    color: #fff;
+    border-bottom-left-radius: 26px;
+    border-bottom-right-radius: 26px;
+  }
+
+  /* Category Tabs Bar with Integrated Favorites Toggle */
+  .park-tabs-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: -14px 16px 10px;
+    position: relative;
+    z-index: 10;
+  }
+  .cat-tabs {
+    flex: 1;
+    display: flex;
+    background: #ffffff;
+    border-radius: 14px;
+    padding: 3px;
+    box-shadow: 0 4px 14px rgba(61, 28, 92, 0.09);
+    border: 1px solid rgba(91, 42, 134, 0.08);
+  }
+  .cat-tab-btn {
+    flex: 1;
+    border: none;
+    background: transparent;
+    padding: 8px 3px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-muted);
+    border-radius: 11px;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-align: center;
+  }
+  .cat-tab-btn.active {
+    background: var(--primary);
+    color: #ffffff;
+    box-shadow: 0 2px 8px rgba(91, 42, 134, 0.25);
+  }
+  .fav-filter-btn {
+    background: #ffffff;
+    border-radius: 14px;
+    padding: 8px 12px;
+    box-shadow: 0 4px 14px rgba(61, 28, 92, 0.09);
+    border: 1px solid rgba(91, 42, 134, 0.08);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .fav-filter-btn.active {
+    background: #fff1f2;
+    border-color: #fda4af;
+    color: #e11d48;
+  }
+
+  /* Sub-Filter Bar (Filters Modal Button + Dynamic Quick Chips) */
+  .sub-filter-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 16px 12px;
+    overflow-x: auto;
+  }
+  .sub-filter-row::-webkit-scrollbar { width: 0; }
+  .filter-modal-trigger {
+    flex-shrink: 0;
+    background: #ffffff;
+    border: 1.5px solid var(--border-subtle);
+    padding: 6px 12px;
+    border-radius: 999px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11.5px;
+    font-weight: 800;
+    color: var(--text-main);
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+  }
+  .filter-modal-trigger.has-active {
+    background: var(--primary);
+    color: #fff;
+    border-color: var(--primary);
+  }
+  .chip-counter {
+    background: var(--gold);
+    color: #3b2203;
+    font-size: 9.5px;
+    font-weight: 800;
+    padding: 1px 5px;
+    border-radius: 8px;
+  }
+  .quick-chip {
+    flex-shrink: 0;
+    background: #ffffff;
+    border: 1px solid var(--border-subtle);
+    padding: 6px 11px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .quick-chip.active {
+    background: var(--surface-alt);
+    border-color: var(--primary-light);
+    color: var(--primary);
+    font-weight: 800;
+  }
+
+  /* Land Accordion Section Header */
+  .land-accordion-hdr {
+    padding: 8px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    user-select: none;
+    margin-top: 6px;
+  }
+  .land-title-group {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+  .land-chevron {
+    font-size: 12px;
+    color: var(--text-muted);
+    transition: transform 0.2s;
+  }
+  .land-hdr-title {
+    font-family: 'Outfit', sans-serif;
+    font-size: 14.5px;
+    font-weight: 800;
+    color: var(--text-main);
+  }
+  .land-hdr-count {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-muted);
+    background: var(--surface-alt);
+    padding: 1px 7px;
+    border-radius: 6px;
+  }
+
+  /* Grounded Experience Card (Only Real DTO Fields!) */
+  .experience-card {
+    margin: 0 16px 10px;
+    background: #ffffff;
+    border-radius: 16px;
+    border: 1px solid var(--border-light);
+    box-shadow: 0 4px 12px rgba(61, 28, 92, 0.05);
+    display: flex;
+    align-items: center;
+    padding: 10px 12px;
+    gap: 12px;
+    cursor: pointer;
+    transition: transform 0.15s;
+  }
+  .experience-card:hover { transform: translateY(-2px); }
+  .exp-thumb {
+    width: 64px;
+    height: 64px;
+    border-radius: 12px;
+    background: #371556;
+    overflow: hidden;
+    flex-shrink: 0;
+    position: relative;
+  }
+  .exp-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .exp-thumb .check-badge {
+    position: absolute;
+    top: 3px;
+    right: 3px;
+    width: 17px;
+    height: 17px;
+    background: var(--green);
+    color: #fff;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 900;
+    border: 1.5px solid #fff;
+  }
+  .exp-details {
+    flex: 1;
+    min-width: 0;
+  }
+  .exp-name {
+    font-size: 13.5px;
+    font-weight: 800;
+    color: var(--text-main);
+    line-height: 1.25;
+    margin-bottom: 2px;
+  }
+  .exp-land-text {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+  }
+  .exp-meta-row {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex-wrap: wrap;
+  }
+  .dto-tag {
+    font-size: 9.5px;
+    font-weight: 800;
+    padding: 2px 6px;
+    border-radius: 6px;
+  }
+  .tag-cat { background: var(--surface-alt); color: var(--primary); }
+  .tag-height { background: #fee2e2; color: #b91c1c; }
+  .tag-price { background: #dcfce7; color: #15803d; }
+  .tag-facet { background: #f1f5f9; color: #475569; }
+  .fav-btn {
+    border: none;
+    background: transparent;
+    font-size: 18px;
+    color: #d1c7e6;
+    cursor: pointer;
+    padding: 4px;
+  }
+  .fav-btn.active { color: #ef4444; }
+
+  /* Phone 4: Resort Detail Dedicated Styles */
+  .resort-detail-card {
+    background: #ffffff;
+    border-radius: 20px;
+    padding: 16px;
+    margin: 0 16px 14px;
+    border: 1px solid var(--border-light);
+    box-shadow: 0 4px 14px rgba(61, 28, 92, 0.06);
+  }
+  .resort-lens-toggle {
+    display: flex;
+    background: #f1edfb;
+    border-radius: 12px;
+    padding: 3px;
+    margin: 12px 16px;
+  }
+  .resort-lens-btn {
+    flex: 1;
+    border: none;
+    background: transparent;
+    padding: 8px 12px;
+    border-radius: 9px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #6c5885;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.15s;
+  }
+  .resort-lens-btn.active {
+    background: #ffffff;
+    color: var(--primary);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+  }
+  .resort-expand-btn {
+    width: 100%;
+    padding: 10px 14px;
+    background: #fbf9ff;
+    border: 1px dashed #d8b4fe;
+    border-radius: 12px;
+    color: var(--primary);
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    margin-top: 10px;
+    transition: all 0.2s;
+  }
+  .resort-expand-btn:hover {
+    background: #f3edfc;
+    border-color: var(--primary);
+  }
+  .resort-float-dock {
+    position: absolute;
+    bottom: 12px;
+    left: 16px;
+    right: 16px;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(16px);
+    border-radius: 999px;
+    padding: 8px 12px;
+    box-shadow: 0 8px 24px rgba(61, 28, 92, 0.2);
+    border: 1px solid rgba(226, 210, 254, 0.6);
+    display: flex;
+    gap: 10px;
+    z-index: 50;
+  }
+  .dock-btn-primary {
+    flex: 1;
+    background: linear-gradient(135deg, #7e57c2, #5b2a86);
+    color: #fff;
+    border: none;
+    border-radius: 999px;
+    padding: 10px 16px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+  .dock-btn-secondary {
+    flex: 1;
+    background: transparent;
+    color: var(--primary);
+    border: 1.5px solid var(--primary);
+    border-radius: 999px;
+    padding: 10px 16px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+  .subcard-filter-row {
+    display: flex;
+    gap: 6px;
+    margin: 8px 0 12px;
+    overflow-x: auto;
+  }
+  .subcard-filter-row::-webkit-scrollbar { width: 0; }
+  .subcard-pill {
+    flex-shrink: 0;
+    border: 1px solid var(--border-subtle);
+    background: #f8fafc;
+    color: #64748b;
+    font-size: 10.5px;
+    font-weight: 700;
+    padding: 4px 9px;
+    border-radius: 999px;
+    cursor: pointer;
+  }
+  .subcard-pill.active {
+    background: var(--surface-alt);
+    color: var(--primary);
+    border-color: var(--primary-light);
+    font-weight: 800;
+  }
+  .collapsible-group {
+    display: none;
+  }
+  .collapsible-group.expanded {
+    display: block;
+    animation: fadeIn 0.25s ease-out;
+  }
+  .dining-item-box {
+    background: #ffffff;
+    border: 1px solid var(--border-subtle);
+    border-radius: 14px;
+    padding: 10px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .rec-item-box {
+    background: #ffffff;
+    border: 1px solid var(--border-subtle);
+    border-radius: 14px;
+    padding: 10px 12px;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .reserve-btn {
+    background: #5b2a86;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .menu-btn {
+    background: #5b2a86;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  /* Comparison Explanations Footer */
+  .comparison-ledger {
+    max-width: 1200px;
+    margin: 48px auto 0;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 24px;
+    padding: 28px;
+    backdrop-filter: blur(12px);
+  }
+  .ledger-title {
+    font-family: 'Outfit', sans-serif;
+    font-size: 22px;
+    font-weight: 800;
+    color: #fff;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .ledger-sub {
+    font-size: 14px;
+    color: #b7abd6;
+    margin-bottom: 20px;
+  }
+  .ledger-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 20px;
+  }
+  .ledger-item {
+    background: rgba(0, 0, 0, 0.25);
+    border-radius: 16px;
+    padding: 18px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  .ledger-item h4 {
+    font-size: 15px;
+    font-weight: 800;
+    color: var(--gold);
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .ledger-item p {
+    font-size: 13px;
+    color: #d0c4eb;
+    line-height: 1.5;
+  }
+  .ledger-item ul {
+    margin-top: 8px;
+    margin-left: 18px;
+    font-size: 12.5px;
+    color: #b4a7d4;
+    line-height: 1.5;
+  }
+</style>
+</head>
+<body>
+
+<header class="mockup-header">
+  <div class="mockup-badge">✨ Grounded Architecture Prototype — Verified Data Only</div>
+  <h1 class="mockup-title">Walt Disney World — Catalogue &amp; Resorts Redesign</h1>
+  <p class="mockup-subtitle">
+    Strictly aligned with what the API and database actually provide. Preserves the full Category Tab &amp; Filter system (Tabs, Favorites toggle, Filters modal, Quick Chips) while fixing the Resorts layout and visual hierarchy.
+  </p>
+
+  <!-- Interactive Controls -->
+  <div class="control-dock">
+    <button class="control-btn active" id="btn-all" onclick="setMode('all')">
+      <span>📱 Side-by-Side Canvas</span>
+    </button>
+    <button class="control-btn" id="btn-explore" onclick="setMode('explore')">
+      <span>🧭 1. Explore Hub</span>
+    </button>
+    <button class="control-btn" id="btn-resorts" onclick="setMode('resorts')">
+      <span>🏨 2. Resorts Directory</span>
+    </button>
+    <button class="control-btn" id="btn-park" onclick="setMode('park')">
+      <span>🏰 3. Theme Park Land View</span>
+    </button>
+    <button class="control-btn" id="btn-resort-detail" onclick="setMode('resort-detail')">
+      <span>✨ 4. Resort Page (Grand Floridian)</span>
+    </button>
+  </div>
+</header>
+
+<main class="canvas" id="canvas">
+
+  <!-- ========================================================
+       PHONE 1: EXPLORE HUB (CATALOG HOME)
+       ======================================================== -->
+  <div class="phone-wrap active-screen" id="wrap-explore">
+    <div class="phone-caption">
+      <span>1. Explore Hub</span>
+      <span class="pill">Level 1 Home</span>
+    </div>
+    
+    <div class="phone">
+      <div class="status-bar" style="background: #7e57c2;">
+        <span>9:41</span>
+        <div class="dynamic-island"></div>
+        <div class="status-icons">5G 􀛨 100%</div>
+      </div>
+
+      <div class="screen-content">
+        <!-- Hero Header -->
+        <div class="hero-gradient-hdr">
+          <div class="hdr-top-row">
+            <div class="hdr-title-wrap">
+              <div class="hdr-icon-badge">🧭</div>
+              <div>
+                <div class="hdr-title">Explore</div>
+                <div class="hdr-sub">Where would you like to explore?</div>
+              </div>
+            </div>
+            <div class="hdr-actions">
+              <button class="hdr-action-btn" title="Notifications">
+                🔔<span class="dot"></span>
+              </button>
+              <button class="hdr-action-btn" style="background: rgba(246, 195, 67, 0.3); border: 1px solid var(--gold);" title="You & Crew">
+                👑
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Global Search -->
+        <div class="search-container">
+          <div class="search-box">
+            <span class="s-icon">🔍</span>
+            <input type="text" class="search-input" placeholder="Search 600+ rides, dining, resorts..." id="explore-search" />
+          </div>
+        </div>
+
+        <!-- Quick Action Dock (3 Canonical Global Tools) -->
+        <div class="action-dock">
+          <div class="action-tile" onclick="setMode('park')">
+            <div class="icon-wrap" style="background: #e0f2fe; color: #0284c7;">⏱️</div>
+            <div class="title">Live Waits</div>
+            <div class="badge-pill" style="background: #dcfce7; color: #15803d;">4 Open</div>
+          </div>
+          <div class="action-tile" onclick="alert('Navigating to Crowd Calendar')">
+            <div class="icon-wrap" style="background: #fef3c7; color: #d97706;">📅</div>
+            <div class="title">Crowds</div>
+            <div class="badge-pill" style="background: #fef3c7; color: #b45309;">4/10 Mod</div>
+          </div>
+          <div class="action-tile" onclick="alert('Viewing My Saved Favorites')">
+            <div class="icon-wrap" style="background: #ffe4e6; color: #e11d48;">❤️</div>
+            <div class="title">Favorites</div>
+            <div class="badge-pill" style="background: #ffe4e6; color: #be123c;">18 Saved</div>
+          </div>
+        </div>
+
+        <!-- Theme Parks Grid (2x2) -->
+        <div class="section-hdr">
+          <div class="title"><span>🏰</span> Theme Parks</div>
+          <span class="meta">4 Parks</span>
+        </div>
+
+        <div class="parks-grid">
+          <!-- Magic Kingdom -->
+          <div class="park-card" onclick="setMode('park')">
+            <div class="park-photo-wrap" style="background: linear-gradient(135deg, #1e1b4b 0%, #2e1065 50%, #4338ca 100%);">
+              <div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 42px; opacity: 0.9;">
+                🏰
+              </div>
+              <div class="park-photo-gradient"></div>
+              <div class="park-badge-top">
+                <span class="live-dot"></span> Open Today
+              </div>
+            </div>
+            <div class="park-body">
+              <div class="park-name">Magic Kingdom</div>
+              <div class="park-stats-row">
+                <span class="park-count-tag">113 experiences</span>
+                <span class="park-wait-avg">⚡ 28m avg</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- EPCOT -->
+          <div class="park-card" onclick="setMode('park')">
+            <div class="park-photo-wrap" style="background: linear-gradient(135deg, #090d16 0%, #1e1b4b 50%, #0284c7 100%);">
+              <div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 42px; opacity: 0.9;">
+                🌐
+              </div>
+              <div class="park-photo-gradient"></div>
+              <div class="park-badge-top">
+                <span class="live-dot"></span> Open Today
+              </div>
+            </div>
+            <div class="park-body">
+              <div class="park-name">EPCOT</div>
+              <div class="park-stats-row">
+                <span class="park-count-tag">179 experiences</span>
+                <span class="park-wait-avg">⚡ 19m avg</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Hollywood Studios -->
+          <div class="park-card" onclick="setMode('park')">
+            <div class="park-photo-wrap" style="background: linear-gradient(135deg, #4c0519 0%, #831843 50%, #ea580c 100%);">
+              <div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 42px; opacity: 0.9;">
+                🎬
+              </div>
+              <div class="park-photo-gradient"></div>
+              <div class="park-badge-top">
+                <span class="live-dot"></span> Open Today
+              </div>
+            </div>
+            <div class="park-body">
+              <div class="park-name">Hollywood Studios</div>
+              <div class="park-stats-row">
+                <span class="park-count-tag">80 experiences</span>
+                <span class="park-wait-avg" style="color: #dc2626;">⚡ 39m avg</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Animal Kingdom -->
+          <div class="park-card" onclick="setMode('park')">
+            <div class="park-photo-wrap" style="background: linear-gradient(135deg, #022c22 0%, #064e3b 50%, #059669 100%);">
+              <div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 42px; opacity: 0.9;">
+                🌳
+              </div>
+              <div class="park-photo-gradient"></div>
+              <div class="park-badge-top">
+                <span class="live-dot"></span> Open Today
+              </div>
+            </div>
+            <div class="park-body">
+              <div class="park-name">Animal Kingdom</div>
+              <div class="park-stats-row">
+                <span class="park-count-tag">71 experiences</span>
+                <span class="park-wait-avg" style="color: #16a34a;">⚡ 16m avg</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Featured Resorts & Hotels Spotlight Gateway -->
+        <div class="section-hdr">
+          <div class="title"><span>🏨</span> Disney Resorts &amp; Hotels</div>
+          <span class="meta" onclick="setMode('resorts')">Browse All 32 ›</span>
+        </div>
+
+        <div class="resorts-spotlight-card" onclick="setMode('resorts')">
+          <div class="resorts-spotlight-bg"></div>
+          <div class="resorts-spotlight-content">
+            <div class="resort-crown-badge">👑 Premier Concierge</div>
+            <div class="resort-spotlight-title">Disney Resort Hotels &amp; Dining</div>
+            <div class="resort-spotlight-sub">Explore all 32 Disney resort hotels, Monorail &amp; Skyliner loops, and 100+ resort dining &amp; character experiences.</div>
+            <div class="resort-tier-chips">
+              <span class="resort-chip">Deluxe</span>
+              <span class="resort-chip">Moderate</span>
+              <span class="resort-chip">Value</span>
+              <span class="resort-chip">DVC Villas</span>
+              <span class="resort-chip">🚝 Monorail</span>
+              <span class="resort-chip">🚡 Skyliner</span>
+            </div>
+            <div class="resort-spotlight-cta">
+              <span>Explore Resort Directory &amp; Dining</span>
+              <span>➔</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Disney Springs Feature Banner -->
+        <div class="section-hdr">
+          <div class="title"><span>✨</span> Disney Springs</div>
+          <span class="meta">118 Venues</span>
+        </div>
+
+        <div class="springs-feature-card" onclick="alert('Opening Disney Springs Directory (118 venues)')">
+          <div class="springs-photo-wrap" style="background: linear-gradient(135deg, #7c2d12 0%, #c2410c 60%, #ea580c 100%);">
+            <div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 38px; opacity: 0.9;">
+              🛍️ 🍽️ 🎵
+            </div>
+          </div>
+          <div class="springs-body">
+            <div>
+              <div class="springs-title">Disney Springs District</div>
+              <div class="springs-sub">Dining, shopping, nightlife &amp; lakefront entertainment</div>
+            </div>
+            <span class="springs-tag">Explore ➔</span>
+          </div>
+        </div>
+
+        <!-- Water Parks 2-Column Grid -->
+        <div class="section-hdr">
+          <div class="title"><span>🌊</span> Water Parks</div>
+          <span class="meta">2 Parks</span>
+        </div>
+
+        <div class="water-parks-grid">
+          <!-- Typhoon Lagoon -->
+          <div class="water-park-card" onclick="alert('Opening Typhoon Lagoon')">
+            <div class="water-park-photo" style="background: linear-gradient(135deg, #0369a1 0%, #0284c7 60%, #38bdf8 100%);">
+              <div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 32px;">
+                🏄‍♂️
+              </div>
+            </div>
+            <div class="water-park-body">
+              <div class="water-park-name">Typhoon Lagoon</div>
+              <div class="water-park-meta">24 water attractions</div>
+            </div>
+          </div>
+
+          <!-- Blizzard Beach -->
+          <div class="water-park-card" onclick="alert('Opening Blizzard Beach')">
+            <div class="water-park-photo" style="background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 60%, #60a5fa 100%);">
+              <div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 32px;">
+                ❄️
+              </div>
+            </div>
+            <div class="water-park-body">
+              <div class="water-park-name">Blizzard Beach</div>
+              <div class="water-park-meta">23 ski-themed slides</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Bottom Nav -->
+      <div class="bottom-nav">
+        <button class="nav-item">
+          <span class="icon">🏠</span>
+          <span>Home</span>
+        </button>
+        <button class="nav-item active">
+          <span class="icon">🧭</span>
+          <span>Explore</span>
+        </button>
+        <button class="nav-center-btn" title="Add / Magic Action">✨</button>
+        <button class="nav-item">
+          <span class="icon">🗺️</span>
+          <span>Trips</span>
+        </button>
+        <button class="nav-item">
+          <span class="icon">🗂️</span>
+          <span>Vault</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ========================================================
+       PHONE 2: RESORTS DESTINATION (REAL DTO DATA)
+       ======================================================== -->
+  <div class="phone-wrap active-screen" id="wrap-resorts">
+    <div class="phone-caption">
+      <span>2. Resorts Concierge</span>
+      <span class="pill" style="background: rgba(106, 27, 154, 0.2); color: #c084fc; border-color: rgba(106, 27, 154, 0.4);">Solves User Problem</span>
+    </div>
+
+    <div class="phone">
+      <div class="status-bar" style="background: #4a154b;">
+        <span>9:41</span>
+        <div class="dynamic-island"></div>
+        <div class="status-icons">5G 􀛨 100%</div>
+      </div>
+
+      <div class="screen-content">
+        <!-- Resorts Gradient Header -->
+        <div class="hero-gradient-hdr" style="background: linear-gradient(135deg, #6a1b9a 0%, #4a154b 60%, #2f1042 100%);">
+          <div class="hdr-top-row">
+            <div class="hdr-title-wrap">
+              <button class="hdr-action-btn" onclick="setMode('explore')" style="margin-right: 4px;" title="Back to Explore">‹</button>
+              <div>
+                <div class="hdr-title">Resorts &amp; Hotels</div>
+                <div class="hdr-sub">32 Properties · 258 Experiences</div>
+              </div>
+            </div>
+            <div class="hdr-actions">
+              <button class="hdr-action-btn" title="Filter Settings">⚙️</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- In-Resort Search -->
+        <div class="search-container">
+          <div class="search-box">
+            <span class="s-icon">🔍</span>
+            <input type="text" class="search-input" placeholder="Search hotels, lounges, character dining..." id="resort-search" oninput="filterResorts(this.value)" />
+          </div>
+        </div>
+
+        <!-- 1. CATEGORY TABS & FAVORITES TOGGLE (MATCHING PARKS ARCHITECTURE) -->
+        <div class="park-tabs-row" style="margin-top: -10px; margin-bottom: 12px;">
+          <div class="cat-tabs" style="overflow-x: auto;">
+            <button class="cat-tab-btn active" id="resort-tab-hotels" onclick="switchResortSection('hotels')">Hotels (32)</button>
+            <button class="cat-tab-btn" id="resort-tab-dining" onclick="switchResortSection('dining')">Dining (104)</button>
+            <button class="cat-tab-btn" id="resort-tab-rec" onclick="switchResortSection('recreation')">Recreation (85)</button>
+            <button class="cat-tab-btn" id="resort-tab-subdest" onclick="switchResortSection('subdest')">BoardWalk &amp; Sports (37)</button>
+          </div>
+          <button class="fav-filter-btn" id="btn-resort-fav" onclick="toggleResortFavFilter()" title="Filter to saved favorites">
+            <span>❤️</span>
+            <span>Favs</span>
+          </button>
+        </div>
+
+        <!-- 2. CONTEXTUAL FILTER CHIPS STRIP -->
+        <div class="filter-strip" id="resort-filter-strip">
+          <button class="filter-pill active" onclick="setTierFilter(this, 'all')">All (32)</button>
+          <button class="filter-pill" onclick="setTierFilter(this, 'deluxe')">👑 Deluxe (8)</button>
+          <button class="filter-pill" onclick="setTierFilter(this, 'moderate')">🌿 Moderate (5)</button>
+          <button class="filter-pill" onclick="setTierFilter(this, 'value')">🎨 Value (5)</button>
+          <button class="filter-pill" onclick="setTierFilter(this, 'dvc')">🏰 DVC Villas (12)</button>
+          <button class="filter-pill" onclick="setTierFilter(this, 'monorail')">🚝 Monorail Loop</button>
+          <button class="filter-pill" onclick="setTierFilter(this, 'skyliner')">🚡 Skyliner Route</button>
+        </div>
+
+        <!-- ==========================================
+             VIEW 1: RESORT PROPERTIES (EXPANDABLE DRAWER)
+             ========================================== -->
+        <div id="resorts-properties-container">
+
+          <!-- 1. Grand Floridian (Lightweight Preview Card) -->
+          <div class="resort-hotel-card" id="card-gf" data-tier="deluxe" data-transport="monorail boat walk" onclick="setMode('resort-detail')">
+            <div class="resort-header-img">
+              <img src="https://images.unsplash.com/photo-1566073771259-6a8506099945?w=600&auto=format&fit=crop&q=80" alt="Grand Floridian" />
+              <div class="resort-header-gradient"></div>
+              <span class="resort-tier-badge tier-deluxe">Deluxe Resort</span>
+              <div class="resort-transit-pills">
+                <span class="transit-pill">🚝 Monorail</span>
+                <span class="transit-pill">🛥️ Boat</span>
+                <span class="transit-pill">🚶 Walk to MK</span>
+              </div>
+            </div>
+            <div class="resort-card-body">
+              <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                <div>
+                  <div class="resort-hotel-title">Disney's Grand Floridian Resort &amp; Spa</div>
+                  <div class="resort-amenity-highlights">Victorian elegance on Seven Seas Lagoon · Courtyard &amp; Beach Pools · Full Service Spa</div>
+                </div>
+                <button class="fav-btn active" title="Favorited" onclick="event.stopPropagation(); this.classList.toggle('active')">♥</button>
+              </div>
+
+              <!-- Lightweight Glanceable Preview Tags -->
+              <div class="resort-preview-metrics">
+                <span class="preview-metric-pill">🍽️ 7 Dining Venues</span>
+                <span class="preview-metric-pill">🏊 6 Activities &amp; Pools</span>
+                <span class="preview-metric-pill" style="color: #0284c7; background: #f0f9ff; border-color: #bae6fd;">⏱️ 4m to MK</span>
+              </div>
+
+              <!-- Tap to Open Existing Dedicated Page -->
+              <div class="resort-card-cta-btn" onclick="openExistingResortPage('Disney\'s Grand Floridian Resort & Spa')">
+                <span>🏨 View Resort Page (ExperienceDetailScreen)</span>
+                <span>➔</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 2. Polynesian Village (Lightweight Preview Card) -->
+          <div class="resort-hotel-card" id="card-poly" data-tier="deluxe" data-transport="monorail boat" onclick="openExistingResortPage('Disney\'s Polynesian Village Resort')">
+            <div class="resort-header-img">
+              <img src="https://images.unsplash.com/photo-1540541338287-41700207dee6?w=600&auto=format&fit=crop&q=80" alt="Polynesian Village" />
+              <div class="resort-header-gradient"></div>
+              <span class="resort-tier-badge tier-deluxe">Deluxe Resort</span>
+              <div class="resort-transit-pills">
+                <span class="transit-pill">🚝 Monorail</span>
+                <span class="transit-pill">🛥️ Boat</span>
+                <span class="transit-pill">🏖️ Seven Seas Beach</span>
+              </div>
+            </div>
+            <div class="resort-card-body">
+              <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                <div>
+                  <div class="resort-hotel-title">Disney's Polynesian Village Resort</div>
+                  <div class="resort-amenity-highlights">South Pacific island retreat · Lava Pool with volcano slide · Seven Seas Lagoon beach</div>
+                </div>
+                <button class="fav-btn active" title="Favorited" onclick="event.stopPropagation(); this.classList.toggle('active')">♥</button>
+              </div>
+
+              <!-- Lightweight Glanceable Preview Tags -->
+              <div class="resort-preview-metrics">
+                <span class="preview-metric-pill">🍽️ 5 Dining Venues</span>
+                <span class="preview-metric-pill">🏊 4 Activities &amp; Pools</span>
+                <span class="preview-metric-pill" style="color: #0284c7; background: #f0f9ff; border-color: #bae6fd;">⏱️ 8m to MK</span>
+              </div>
+
+              <div class="resort-card-cta-btn">
+                <span>🏨 View Resort Page (ExperienceDetailScreen)</span>
+                <span>➔</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 3. Disney's Riviera Resort (Lightweight Preview Card) -->
+          <div class="resort-hotel-card" id="card-riviera" data-tier="dvc" data-transport="skyliner" onclick="openExistingResortPage('Disney\'s Riviera Resort')">
+            <div class="resort-header-img">
+              <img src="https://images.unsplash.com/photo-1582719508461-905c673771fd?w=600&auto=format&fit=crop&q=80" alt="Riviera Resort" />
+              <div class="resort-header-gradient"></div>
+              <span class="resort-tier-badge tier-deluxe" style="background: linear-gradient(135deg, #a855f7, #6b21a8); color: #fff;">Deluxe Villa</span>
+              <div class="resort-transit-pills">
+                <span class="transit-pill">🚡 Skyliner Direct</span>
+                <span class="transit-pill">🚌 Direct Bus</span>
+              </div>
+            </div>
+            <div class="resort-card-body">
+              <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                <div>
+                  <div class="resort-hotel-title">Disney's Riviera Resort</div>
+                  <div class="resort-amenity-highlights">European elegance inspired by Walt's travels · Riviera Pool · Direct Skyliner hub</div>
+                </div>
+                <button class="fav-btn" title="Favorite" onclick="event.stopPropagation(); this.classList.toggle('active')">♡</button>
+              </div>
+
+              <div class="resort-preview-metrics">
+                <span class="preview-metric-pill">🍽️ 4 Dining Venues</span>
+                <span class="preview-metric-pill">🏊 3 Activities &amp; Pools</span>
+                <span class="preview-metric-pill" style="color: #0284c7; background: #f0f9ff; border-color: #bae6fd;">⏱️ 9m Skyliner to EPCOT</span>
+              </div>
+
+              <div class="resort-card-cta-btn">
+                <span>🏨 View Resort Page (ExperienceDetailScreen)</span>
+                <span>➔</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 4. Caribbean Beach Resort (Lightweight Preview Card) -->
+          <div class="resort-hotel-card" id="card-cbr" data-tier="moderate" data-transport="skyliner" onclick="openExistingResortPage('Disney\'s Caribbean Beach Resort')">
+            <div class="resort-header-img">
+              <img src="https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=600&auto=format&fit=crop&q=80" alt="Caribbean Beach" />
+              <div class="resort-header-gradient"></div>
+              <span class="resort-tier-badge tier-moderate">Moderate Resort</span>
+              <div class="resort-transit-pills">
+                <span class="transit-pill">🚡 Central Skyliner Hub</span>
+                <span class="transit-pill">🚌 Internal Bus</span>
+              </div>
+            </div>
+            <div class="resort-card-body">
+              <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                <div>
+                  <div class="resort-hotel-title">Disney's Caribbean Beach Resort</div>
+                  <div class="resort-amenity-highlights">Lush tropical islands on Barefoot Bay · Fuentes del Morro pirate pool</div>
+                </div>
+                <button class="fav-btn" title="Favorite" onclick="event.stopPropagation(); this.classList.toggle('active')">♡</button>
+              </div>
+
+              <div class="resort-preview-metrics">
+                <span class="preview-metric-pill">🍽️ 4 Dining Venues</span>
+                <span class="preview-metric-pill">🏊 4 Activities &amp; Pools</span>
+                <span class="preview-metric-pill" style="color: #0284c7; background: #f0f9ff; border-color: #bae6fd;">⏱️ 7m Skyliner to Studios</span>
+              </div>
+
+              <div class="resort-card-cta-btn">
+                <span>🏨 View Resort Page (ExperienceDetailScreen)</span>
+                <span>➔</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 5. Pop Century Resort (Lightweight Preview Card) -->
+          <div class="resort-hotel-card" id="card-pop" data-tier="value" data-transport="skyliner" onclick="openExistingResortPage('Disney\'s Pop Century Resort')">
+            <div class="resort-header-img">
+              <img src="https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=600&auto=format&fit=crop&q=80" alt="Pop Century" />
+              <div class="resort-header-gradient"></div>
+              <span class="resort-tier-badge tier-value">Value Resort</span>
+              <div class="resort-transit-pills">
+                <span class="transit-pill">🚡 Skyliner Station</span>
+                <span class="transit-pill">🚌 Direct Bus</span>
+              </div>
+            </div>
+            <div class="resort-card-body">
+              <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                <div>
+                  <div class="resort-hotel-title">Disney's Pop Century Resort</div>
+                  <div class="resort-amenity-highlights">Pop-culture decades 1950s–1990s · Hippy Dippy Pool · Skyliner bridge</div>
+                </div>
+                <button class="fav-btn" title="Favorite" onclick="event.stopPropagation(); this.classList.toggle('active')">♡</button>
+              </div>
+
+              <div class="resort-preview-metrics">
+                <span class="preview-metric-pill">🍽️ 1 Food Court &amp; Bar</span>
+                <span class="preview-metric-pill">🏊 3 Themed Pools</span>
+                <span class="preview-metric-pill" style="color: #0284c7; background: #f0f9ff; border-color: #bae6fd;">⏱️ 12m Skyliner</span>
+              </div>
+
+              <div class="resort-card-cta-btn">
+                <span>🏨 View Resort Page (ExperienceDetailScreen)</span>
+                <span>➔</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- ==========================================
+             VIEW 2: RESORT DINING & LOUNGES LIST
+             ========================================== -->
+        <div id="resorts-dining-container" style="display: none;">
+          <div class="section-hdr">
+            <div class="title"><span>🍽️</span> All Resort Dining &amp; Lounges</div>
+            <span class="meta">104 Total Venues</span>
+          </div>
+
+          <!-- Topolino's Terrace -->
+          <div class="resort-dining-card">
+            <div class="dining-thumb">
+              <img src="https://images.unsplash.com/photo-1544025162-d76694265947?w=300&auto=format&fit=crop&q=80" alt="Topolino's Terrace" />
+            </div>
+            <div class="dining-card-body">
+              <div>
+                <div class="dining-title">Topolino's Terrace — Flavors of the Riviera</div>
+                <div class="dining-resort-name">📍 Disney's Riviera Resort</div>
+                <div class="dining-tags-row">
+                  <span class="dining-tag tag-char">✨ Character Dining</span>
+                  <span class="dining-tag tag-sig">Table Service</span>
+                  <span class="dining-price">$$$$</span>
+                </div>
+              </div>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px;">
+                <span style="font-size: 11px; color: var(--text-muted); font-weight: 600;">Breakfast · Dinner</span>
+                <button class="fav-btn active" style="font-size: 14px;">♥</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Trader Sam's -->
+          <div class="resort-dining-card">
+            <div class="dining-thumb">
+              <img src="https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=300&auto=format&fit=crop&q=80" alt="Trader Sam's" />
+            </div>
+            <div class="dining-card-body">
+              <div>
+                <div class="dining-title">Trader Sam's Grog Grotto</div>
+                <div class="dining-resort-name">📍 Disney's Polynesian Village Resort</div>
+                <div class="dining-tags-row">
+                  <span class="dining-tag tag-lounge">🍸 Lounge &amp; Bar</span>
+                  <span class="dining-price">$$</span>
+                </div>
+              </div>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px;">
+                <span style="font-size: 11px; color: var(--text-muted); font-weight: 600;">Evening Hours</span>
+                <button class="fav-btn active" style="font-size: 14px;">♥</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- California Grill -->
+          <div class="resort-dining-card">
+            <div class="dining-thumb">
+              <img src="https://images.unsplash.com/photo-1550966871-3ed3cdb5ed0c?w=300&auto=format&fit=crop&q=80" alt="California Grill" />
+            </div>
+            <div class="dining-card-body">
+              <div>
+                <div class="dining-title">California Grill</div>
+                <div class="dining-resort-name">📍 Disney's Contemporary Resort</div>
+                <div class="dining-tags-row">
+                  <span class="dining-tag tag-sig">🍷 Table Service</span>
+                  <span class="dining-price">$$$$</span>
+                </div>
+              </div>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px;">
+                <span style="font-size: 11px; color: var(--text-muted); font-weight: 600;">Dinner Only</span>
+                <button class="fav-btn" style="font-size: 14px;">♡</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Chef Mickey's -->
+          <div class="resort-dining-card">
+            <div class="dining-thumb">
+              <img src="https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=300&auto=format&fit=crop&q=80" alt="Chef Mickey's" />
+            </div>
+            <div class="dining-card-body">
+              <div>
+                <div class="dining-title">Chef Mickey's</div>
+                <div class="dining-resort-name">📍 Disney's Contemporary Resort</div>
+                <div class="dining-tags-row">
+                  <span class="dining-tag tag-char">✨ Character Dining</span>
+                  <span class="dining-tag tag-qs" style="background: #f1f5f9; color: #475569;">Buffet</span>
+                  <span class="dining-price">$$$</span>
+                </div>
+              </div>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px;">
+                <span style="font-size: 11px; color: var(--text-muted); font-weight: 600;">Breakfast · Dinner</span>
+                <button class="fav-btn active" style="font-size: 14px;">♥</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Sanaa -->
+          <div class="resort-dining-card">
+            <div class="dining-thumb">
+              <img src="https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=300&auto=format&fit=crop&q=80" alt="Sanaa" />
+            </div>
+            <div class="dining-card-body">
+              <div>
+                <div class="dining-title">Sanaa</div>
+                <div class="dining-resort-name">📍 Disney's Animal Kingdom Lodge</div>
+                <div class="dining-tags-row">
+                  <span class="dining-tag tag-qs">Table Service</span>
+                  <span class="dining-price">$$</span>
+                </div>
+              </div>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px;">
+                <span style="font-size: 11px; color: var(--text-muted); font-weight: 600;">Lunch · Dinner</span>
+                <button class="fav-btn active" style="font-size: 14px;">♥</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ==========================================
+             VIEW 3: RESORT RECREATION & SPORTS (85 EXPERIENCES)
+             ========================================== -->
+        <div id="resorts-recreation-container" style="display: none;">
+          <div class="section-hdr">
+            <div class="title"><span>⛳</span> Recreation, Golf &amp; Activities</div>
+            <span class="meta">85 Total Activities</span>
+          </div>
+
+          <!-- Fantasia Gardens Mini Golf -->
+          <div class="resort-rec-card">
+            <div class="dining-thumb" style="width: 85px;">
+              <img src="https://images.unsplash.com/photo-1587174486073-ae5e5cff23aa?w=300&auto=format&fit=crop&q=80" alt="Fantasia Gardens" />
+            </div>
+            <div class="dining-card-body">
+              <div>
+                <div class="dining-title">Disney's Fantasia Gardens Miniature Golf</div>
+                <div class="dining-resort-name">📍 EPCOT Resort Area / Property-Wide</div>
+                <div class="dining-tags-row">
+                  <span class="dining-tag" style="background: #ecfdf5; color: #047857;">⛳ 36 Holes Mini-Golf</span>
+                  <span class="dining-price">$</span>
+                </div>
+              </div>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px;">
+                <span style="font-size: 10.5px; color: var(--text-muted);">10:00 AM – 10:00 PM · Walk-up or Reserve</span>
+                <button class="fav-btn" style="font-size: 14px;">♡</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Winter Summerland Mini Golf -->
+          <div class="resort-rec-card">
+            <div class="dining-thumb" style="width: 85px;">
+              <img src="https://images.unsplash.com/photo-1535131749006-b7f58c99034b?w=300&auto=format&fit=crop&q=80" alt="Winter Summerland" />
+            </div>
+            <div class="dining-card-body">
+              <div>
+                <div class="dining-title">Disney's Winter Summerland Miniature Golf</div>
+                <div class="dining-resort-name">📍 Blizzard Beach Area / Property-Wide</div>
+                <div class="dining-tags-row">
+                  <span class="dining-tag" style="background: #ecfdf5; color: #047857;">⛳ Santa's Summer Course</span>
+                  <span class="dining-price">$</span>
+                </div>
+              </div>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px;">
+                <span style="font-size: 10.5px; color: var(--text-muted);">10:00 AM – 10:00 PM · Walk-up or Reserve</span>
+                <button class="fav-btn" style="font-size: 14px;">♡</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Championship Golf (Palm & Magnolia) -->
+          <div class="resort-rec-card">
+            <div class="dining-thumb" style="width: 85px;">
+              <img src="https://images.unsplash.com/photo-1592919505780-303950717480?w=300&auto=format&fit=crop&q=80" alt="Golf" />
+            </div>
+            <div class="dining-card-body">
+              <div>
+                <div class="dining-title">Disney's Palm &amp; Magnolia Golf Courses</div>
+                <div class="dining-resort-name">📍 Shades of Green / Grand Floridian Area</div>
+                <div class="dining-tags-row">
+                  <span class="dining-tag" style="background: #eff6ff; color: #1d4ed8;">🏆 18-Hole Championship</span>
+                  <span class="dining-price">$$$</span>
+                </div>
+              </div>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px;">
+                <span style="font-size: 10.5px; color: var(--text-muted);">PGA Tour caliber · Tee Times Required</span>
+                <button class="fav-btn" style="font-size: 14px;">♡</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Marina Boat Rentals -->
+          <div class="resort-rec-card">
+            <div class="dining-thumb" style="width: 85px;">
+              <img src="https://images.unsplash.com/photo-1544551763-46a013bb70d5?w=300&auto=format&fit=crop&q=80" alt="Boat Rental" />
+            </div>
+            <div class="dining-card-body">
+              <div>
+                <div class="dining-title">Seven Seas &amp; Bay Lake Marina Boat Rentals</div>
+                <div class="dining-resort-name">📍 Contemporary, Poly, Grand Floridian Marinas</div>
+                <div class="dining-tags-row">
+                  <span class="dining-tag" style="background: #f0fdf4; color: #15803d;">🛥️ Motorized Pontoon Rentals</span>
+                  <span class="dining-price">$$</span>
+                </div>
+              </div>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px;">
+                <span style="font-size: 10.5px; color: var(--text-muted);">No boating license needed · Hourly</span>
+                <button class="fav-btn active" style="font-size: 14px;">♥</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Senses Spa -->
+          <div class="resort-rec-card">
+            <div class="dining-thumb" style="width: 85px;">
+              <img src="https://images.unsplash.com/photo-1540555700478-4be289fbecef?w=300&auto=format&fit=crop&q=80" alt="Spa" />
+            </div>
+            <div class="dining-card-body">
+              <div>
+                <div class="dining-title">The Grand Floridian Spa (Senses)</div>
+                <div class="dining-resort-name">📍 Disney's Grand Floridian Resort</div>
+                <div class="dining-tags-row">
+                  <span class="dining-tag" style="background: #fdf4ff; color: #a21caf;">💆 Full-Service Luxury Spa</span>
+                  <span class="dining-price">$$$$</span>
+                </div>
+              </div>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px;">
+                <span style="font-size: 10.5px; color: var(--text-muted);">Facials, Massages, Relaxation Lounge</span>
+                <button class="fav-btn" style="font-size: 14px;">♡</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ==========================================
+             VIEW 4: SUB-DESTINATIONS (BOARDWALK, ESPN, CATCHALL)
+             ========================================== -->
+        <div id="resorts-subdest-container" style="display: none;">
+          <div class="section-hdr">
+            <div class="title"><span>🌟</span> Sub-Destinations &amp; Sports</div>
+            <span class="meta">37 Experiences</span>
+          </div>
+
+          <!-- Disney's BoardWalk & Promenade -->
+          <div class="subdest-banner-card">
+            <span class="subdest-badge">Crescent Lake Waterfront</span>
+            <div class="subdest-title">Disney's BoardWalk &amp; Promenade</div>
+            <div class="subdest-sub">Turn-of-the-century Atlantic boardwalk featuring premier nightlife, dueling piano bars, dance halls, and seaside dining.</div>
+            <div class="subdest-items-pill">
+              <span>Jellyrolls · Atlantic Dance Hall · BoardWalk Deli · Surrey Bikes</span>
+              <span>15 Venues ›</span>
+            </div>
+          </div>
+
+          <!-- ESPN Wide World of Sports Complex -->
+          <div class="subdest-banner-card" style="background: linear-gradient(135deg, #1c1917 0%, #44403c 100%);">
+            <span class="subdest-badge" style="background: rgba(239, 68, 68, 0.4); color: #fca5a5;">Premier Athletics</span>
+            <div class="subdest-title">ESPN Wide World of Sports Complex</div>
+            <div class="subdest-sub">State-of-the-art 220-acre athletic complex hosting national cheerleading, basketball tournaments, runDisney expos, and training fields.</div>
+            <div class="subdest-items-pill">
+              <span>AdventHealth Arena · The Turf Fields · ESPN Sports Grill</span>
+              <span>10 Venues ›</span>
+            </div>
+          </div>
+
+          <!-- Property-Wide Recreation & Sports -->
+          <div class="subdest-banner-card" style="background: linear-gradient(135deg, #064e3b 0%, #047857 100%);">
+            <span class="subdest-badge" style="background: rgba(52, 211, 153, 0.3); color: #a7f3d0;">Outdoor Adventures</span>
+            <div class="subdest-title">Property-Wide Recreation &amp; Sports</div>
+            <div class="subdest-sub">Miniature golf courses, championship 18-hole golf, bass fishing charters on Bay Lake, and guided kayak excursions.</div>
+            <div class="subdest-items-pill">
+              <span>Fantasia Gardens · Winter Summerland · Palm &amp; Magnolia Golf</span>
+              <span>12 Activities ›</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Bottom Nav -->
+      <div class="bottom-nav">
+        <button class="nav-item">
+          <span class="icon">🏠</span>
+          <span>Home</span>
+        </button>
+        <button class="nav-item active">
+          <span class="icon">🧭</span>
+          <span>Explore</span>
+        </button>
+        <button class="nav-center-btn">✨</button>
+        <button class="nav-item">
+          <span class="icon">🗺️</span>
+          <span>Trips</span>
+        </button>
+        <button class="nav-item">
+          <span class="icon">🗂️</span>
+          <span>Vault</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ========================================================
+       PHONE 3: THEME PARK DESTINATION (RESTORED FULL FILTERS + REAL DATA)
+       ======================================================== -->
+  <div class="phone-wrap active-screen" id="wrap-park">
+    <div class="phone-caption">
+      <span>3. Park Destination Screen</span>
+      <span class="pill" style="background: rgba(108, 53, 222, 0.2); color: #a78bfa; border-color: rgba(108, 53, 222, 0.4);">Level 2 Destination</span>
+    </div>
+
+    <div class="phone">
+      <div class="status-bar" style="background: #491f85;">
+        <span>9:41</span>
+        <div class="dynamic-island"></div>
+        <div class="status-icons">5G 􀛨 100%</div>
+      </div>
+
+      <div class="screen-content">
+        <!-- Park Header -->
+        <div class="park-header-bar">
+          <div class="hdr-top-row">
+            <div class="hdr-title-wrap">
+              <button class="hdr-action-btn" onclick="setMode('explore')" style="margin-right: 4px;" title="Back to Explore">‹</button>
+              <div>
+                <div class="hdr-title">Magic Kingdom</div>
+                <div class="hdr-sub">113 Active Experiences</div>
+              </div>
+            </div>
+            <div class="hdr-actions">
+              <button class="hdr-action-btn" title="Search">🔍</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- In-Destination Search Box -->
+        <div class="search-container" style="margin-top: -12px;">
+          <div class="search-box">
+            <span class="s-icon">🔍</span>
+            <input type="text" class="search-input" placeholder="Search by name, land, or facet..." />
+          </div>
+        </div>
+
+        <!-- 1. CATEGORY TABS & FAVORITES TOGGLE (EXACTLY AS SPECIFIED IN APP) -->
+        <div class="park-tabs-row">
+          <div class="cat-tabs">
+            <button class="cat-tab-btn active" id="tab-all" onclick="selectParkTab('all')">All</button>
+            <button class="cat-tab-btn" id="tab-rides" onclick="selectParkTab('rides')">Rides</button>
+            <button class="cat-tab-btn" id="tab-dining-pk" onclick="selectParkTab('dining')">Dining</button>
+            <button class="cat-tab-btn" id="tab-shows" onclick="selectParkTab('shows')">Shows</button>
+          </div>
+          <button class="fav-filter-btn" id="btn-fav-toggle" onclick="toggleFavFilter()">
+            <span>❤️</span>
+            <span>Favorites</span>
+          </button>
+        </div>
+
+        <!-- 2. SUB-FILTERS / QUICK CHIPS BAR (PRESERVING FILTERS MODAL TRIGGER!) -->
+        <div class="sub-filter-row">
+          <button class="filter-modal-trigger has-active" onclick="alert('Filters Modal: multi-select Lands, Price Tiers, and Facets')">
+            <span>⚙️ Filters</span>
+            <span class="chip-counter">2</span>
+          </button>
+          <button class="quick-chip active" onclick="toggleQuickChip(this)">🎢 Thrill Ride</button>
+          <button class="quick-chip" onclick="toggleQuickChip(this)">🍔 Quick Service</button>
+          <button class="quick-chip" onclick="toggleQuickChip(this)">🍽️ Table Service</button>
+          <button class="quick-chip active" onclick="toggleQuickChip(this)">📏 Height 40"+</button>
+          <button class="quick-chip" onclick="toggleQuickChip(this)">✨ Character Dining</button>
+          <button class="quick-chip" onclick="toggleQuickChip(this)">$$ Price</button>
+        </div>
+
+        <!-- 3. LAND ACCORDION SECTIONS (CLEAN, POLISHED, NO SPECULATIVE LIVE WAITS) -->
+        
+        <!-- SECTION 1: FANTASYLAND -->
+        <div class="land-accordion-hdr" onclick="toggleAccordion('land-fantasyland')">
+          <div class="land-title-group">
+            <span class="land-chevron" id="chev-land-fantasyland">▼</span>
+            <span class="land-hdr-title">Fantasyland</span>
+          </div>
+          <span class="land-hdr-count">28 experiences</span>
+        </div>
+
+        <div id="land-fantasyland">
+          <!-- Seven Dwarfs Mine Train -->
+          <div class="experience-card">
+            <div class="exp-thumb">
+              <img src="https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=300&auto=format&fit=crop&q=80" alt="Mine Train" />
+              <div class="check-badge">✓</div>
+            </div>
+            <div class="exp-details">
+              <div class="exp-name">Seven Dwarfs Mine Train</div>
+              <div class="exp-land-text">📍 Fantasyland</div>
+              <div class="exp-meta-row">
+                <span class="dto-tag tag-cat">Ride · Coaster</span>
+                <span class="dto-tag tag-height">📏 38" Height</span>
+                <span class="dto-tag tag-facet">Thrill Ride</span>
+              </div>
+            </div>
+            <button class="fav-btn active" title="Favorited">♥</button>
+          </div>
+
+          <!-- Peter Pan's Flight -->
+          <div class="experience-card">
+            <div class="exp-thumb">
+              <img src="https://images.unsplash.com/photo-1563245372-f21724e3856d?w=300&auto=format&fit=crop&q=80" alt="Peter Pan" />
+            </div>
+            <div class="exp-details">
+              <div class="exp-name">Peter Pan's Flight</div>
+              <div class="exp-land-text">📍 Fantasyland</div>
+              <div class="exp-meta-row">
+                <span class="dto-tag tag-cat">Ride · Dark Ride</span>
+                <span class="dto-tag tag-facet">Any Height</span>
+                <span class="dto-tag tag-facet">Slow Ride</span>
+              </div>
+            </div>
+            <button class="fav-btn" title="Favorite">♡</button>
+          </div>
+
+          <!-- Be Our Guest Restaurant -->
+          <div class="experience-card">
+            <div class="exp-thumb">
+              <img src="https://images.unsplash.com/photo-1544025162-d76694265947?w=300&auto=format&fit=crop&q=80" alt="Be Our Guest" />
+            </div>
+            <div class="exp-details">
+              <div class="exp-name">Be Our Guest Restaurant</div>
+              <div class="exp-land-text">📍 Fantasyland</div>
+              <div class="exp-meta-row">
+                <span class="dto-tag tag-cat">Restaurant</span>
+                <span class="dto-tag tag-price">$$$$</span>
+                <span class="dto-tag tag-facet">Table Service</span>
+                <span class="dto-tag tag-facet">French</span>
+              </div>
+            </div>
+            <button class="fav-btn active" title="Favorited">♥</button>
+          </div>
+        </div>
+
+        <!-- SECTION 2: TOMORROWLAND -->
+        <div class="land-accordion-hdr" onclick="toggleAccordion('land-tomorrowland')">
+          <div class="land-title-group">
+            <span class="land-chevron" id="chev-land-tomorrowland">▼</span>
+            <span class="land-hdr-title">Tomorrowland</span>
+          </div>
+          <span class="land-hdr-count">16 experiences</span>
+        </div>
+
+        <div id="land-tomorrowland">
+          <!-- Space Mountain -->
+          <div class="experience-card">
+            <div class="exp-thumb">
+              <img src="https://images.unsplash.com/photo-1579783902614-a3fb3927b675?w=300&auto=format&fit=crop&q=80" alt="Space Mountain" />
+              <div class="check-badge">✓</div>
+            </div>
+            <div class="exp-details">
+              <div class="exp-name">Space Mountain</div>
+              <div class="exp-land-text">📍 Tomorrowland</div>
+              <div class="exp-meta-row">
+                <span class="dto-tag tag-cat">Ride · Coaster</span>
+                <span class="dto-tag tag-height">📏 44" Height</span>
+                <span class="dto-tag tag-facet">Big Drops</span>
+                <span class="dto-tag tag-facet">Dark</span>
+              </div>
+            </div>
+            <button class="fav-btn active" title="Favorited">♥</button>
+          </div>
+
+          <!-- TRON Lightcycle / Run -->
+          <div class="experience-card">
+            <div class="exp-thumb">
+              <img src="https://images.unsplash.com/photo-1582298538104-fe2e74c27f59?w=300&auto=format&fit=crop&q=80" alt="Tron" />
+            </div>
+            <div class="exp-details">
+              <div class="exp-name">TRON Lightcycle / Run</div>
+              <div class="exp-land-text">📍 Tomorrowland</div>
+              <div class="exp-meta-row">
+                <span class="dto-tag tag-cat">Ride · Launch Coaster</span>
+                <span class="dto-tag tag-height">📏 48" Height</span>
+                <span class="dto-tag tag-facet">Thrill Ride</span>
+              </div>
+            </div>
+            <button class="fav-btn" title="Favorite">♡</button>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Bottom Nav -->
+      <div class="bottom-nav">
+        <button class="nav-item">
+          <span class="icon">🏠</span>
+          <span>Home</span>
+        </button>
+        <button class="nav-item active">
+          <span class="icon">🧭</span>
+          <span>Explore</span>
+        </button>
+        <button class="nav-center-btn">✨</button>
+        <button class="nav-item">
+          <span class="icon">🗺️</span>
+          <span>Trips</span>
+        </button>
+        <button class="nav-item">
+          <span class="icon">🗂️</span>
+          <span>Vault</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================
+       PHONE 4: RESORT DETAIL PAGE (GRAND FLORIDIAN)
+       ======================================================== -->
+  <div class="phone-wrap" id="wrap-resort-detail">
+    <div class="phone-caption">
+      <span>4. Resort Detail (Grand Floridian)</span>
+      <span class="pill" style="background: #ede9fe; color: #5b2a86;">Existing Screen + Truncation</span>
+    </div>
+
+    <div class="phone" style="position: relative;">
+      <div class="status-bar" style="background: #5b2a86; color: #fff;">
+        <span>9:41</span>
+        <div class="dynamic-island"></div>
+        <div class="status-icons">5G 􀛨 100%</div>
+      </div>
+
+      <div class="screen-content" style="padding-bottom: 80px;">
+        <!-- Top Custom Gradient Header (Verbatim from Production) -->
+        <div style="background: linear-gradient(135deg, #5b2a86 0%, #371556 100%); padding: 14px 16px 20px; color: #fff;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <button onclick="setMode('resorts')" style="background: rgba(255,255,255,0.15); border: none; width: 34px; height: 34px; border-radius: 17px; color: #fff; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center;">←</button>
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <span style="font-size: 16px;">🛏️</span>
+                <span style="font-family: 'Outfit', sans-serif; font-size: 15px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px;">Disney's Grand Floridian...</span>
+              </div>
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <button class="fav-btn active" style="color: #fff; font-size: 16px; background: rgba(255,255,255,0.15); border-radius: 17px; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center;">♥</button>
+              <button style="background: rgba(255,255,255,0.15); border: none; width: 34px; height: 34px; border-radius: 17px; color: #fff; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center;">􀈂</button>
+            </div>
+          </div>
+          <div style="font-size: 12px; color: #e2d2fe; margin-left: 44px; display: flex; align-items: center; gap: 4px;">
+            <span>★</span> Magic Kingdom Resort Area
+          </div>
+        </div>
+
+        <!-- Hero Photo & Badges -->
+        <div style="position: relative; height: 160px; margin: 12px 16px 0; border-radius: 18px; overflow: hidden;">
+          <img src="https://images.unsplash.com/photo-1566073771259-6a8506099945?w=600&auto=format&fit=crop&q=80" alt="Grand Floridian" style="width: 100%; height: 100%; object-fit: cover;" />
+          <div style="position: absolute; inset: 0; background: linear-gradient(180deg, transparent 40%, rgba(0,0,0,0.6) 100%);"></div>
+          <div style="position: absolute; bottom: 10px; left: 10px; display: flex; gap: 6px;">
+            <span style="background: #ffffff; color: #1e1b4b; font-size: 10.5px; font-weight: 800; padding: 4px 10px; border-radius: 999px;">📍 Magic Kingdom Resort Area</span>
+            <span style="background: #5b2a86; color: #fff; font-size: 10.5px; font-weight: 800; padding: 4px 10px; border-radius: 999px;">🛏️ Resort</span>
+          </div>
+        </div>
+
+        <!-- Quick Badges Row -->
+        <div style="display: flex; gap: 6px; padding: 10px 16px; overflow-x: auto;">
+          <span style="background: #fff; border: 1px solid var(--border-subtle); padding: 5px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; color: #475569;">🏰 Deluxe Resort</span>
+          <span style="background: #fff; border: 1px solid var(--border-subtle); padding: 5px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; color: #475569;">🚝 Monorail Transit</span>
+          <span style="background: #fff; border: 1px solid var(--border-subtle); padding: 5px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; color: #475569;">🏊 Beach Pool</span>
+        </div>
+
+        <!-- Lens Switcher (Verbatim from Production) -->
+        <div class="resort-lens-toggle">
+          <button class="resort-lens-btn active" id="lens-btn-guide">🛏️ Resort Guide</button>
+          <button class="resort-lens-btn" id="lens-btn-lore" onclick="alert('Switches to Stay Passport & Lore lens: visit history, journal, and architectural trivia!')">🧭 Stay Passport &amp; Lore</button>
+        </div>
+
+        <!-- 1. Property Highlights & Atmosphere -->
+        <div class="resort-detail-card">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <div style="display: flex; align-items: center; gap: 6px; font-weight: 800; font-size: 13.5px; color: var(--text-main);">
+              <span style="color: #7e57c2;">✨</span> Property Highlights &amp; Atmosphere
+            </div>
+            <span style="background: #ede9fe; color: #5b2a86; font-size: 10.5px; font-weight: 800; padding: 3px 8px; border-radius: 999px;">Deluxe Resort</span>
+          </div>
+          <div style="font-size: 12px; color: #475569; line-height: 1.45; margin-bottom: 12px;">
+            Walt Disney World's flagship resort celebrates the golden era of Victorian beach resorts. Features a soaring 5-story lobby atrium, stained-glass domes, live orchestra music, and views of Seven Seas Lagoon.
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <div style="background: #f8fafc; border: 1px solid var(--border-subtle); border-radius: 12px; padding: 9px 12px; display: flex; gap: 10px; align-items: center;">
+              <span style="font-size: 20px;">🏰</span>
+              <div>
+                <div style="font-size: 12px; font-weight: 800; color: #1e1b4b;">Victorian Grandeur &amp; Monorail Concourse</div>
+                <div style="font-size: 10.5px; color: #64748b;">Direct Monorail and water taxi access to Magic Kingdom, with evening fireworks views from the marina.</div>
+              </div>
+            </div>
+            <div style="background: #f8fafc; border: 1px solid var(--border-subtle); border-radius: 12px; padding: 9px 12px; display: flex; gap: 10px; align-items: center;">
+              <span style="font-size: 20px;">🏊</span>
+              <div>
+                <div style="font-size: 12px; font-weight: 800; color: #1e1b4b;">Beach Pool &amp; Natural Rock Springs</div>
+                <div style="font-size: 10.5px; color: #64748b;">111,261-gallon pool with 181-foot natural rock springs waterslide, walking bridge, and zero-depth entry.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. Dining & Lounges at the Resort (12) with Show More Toggle -->
+        <div class="resort-detail-card" id="detail-dining-card">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+            <div style="display: flex; align-items: center; gap: 6px; font-weight: 800; font-size: 13.5px; color: var(--text-main);">
+              <span>🍽️</span> Dining &amp; Lounges at the Resort (12)
+            </div>
+            <span style="font-size: 11px; color: var(--primary); font-weight: 700;">Tap to inspect</span>
+          </div>
+          <div style="font-size: 11.5px; color: #64748b; margin-bottom: 8px;">
+            AAA Five Diamond signature dining, Victorian cafes, and character meals:
+          </div>
+
+          <!-- Quick Category Filters (Solves the Long List Concern!) -->
+          <div class="subcard-filter-row">
+            <button class="subcard-pill active" onclick="filterDiningInCard(this, 'all')">All (12)</button>
+            <button class="subcard-pill" onclick="filterDiningInCard(this, 'table')">Table Service (6)</button>
+            <button class="subcard-pill" onclick="filterDiningInCard(this, 'quick')">Quick Service (2)</button>
+            <button class="subcard-pill" onclick="filterDiningInCard(this, 'lounge')">Lounges (4)</button>
+          </div>
+
+          <!-- Initial Visible Dining Venues (Top 4 Flagships) -->
+          <div id="dining-visible-group" style="display: flex; flex-direction: column; gap: 8px;">
+            <!-- 1. 1900 Park Fare -->
+            <div class="dining-item-box" data-cat="table">
+              <div style="flex: 1; min-width: 0;">
+                <div style="font-size: 13px; font-weight: 800; color: #1e1b4b;">1900 Park Fare</div>
+                <div style="font-size: 11px; color: #64748b; margin-top: 1px;">Whimsical carousel-themed buffet celebrating wishmakers like Mirabel, Aladdin, and Tiana.</div>
+                <div style="font-size: 10.5px; color: #7c3aed; font-weight: 700; margin-top: 3px;">Breakfast, Dinner</div>
+                <div style="display: flex; align-items: center; gap: 6px; margin-top: 4px;">
+                  <span style="background: #f3e8ff; color: #6b21a8; font-size: 9.5px; font-weight: 800; padding: 2px 6px; border-radius: 6px;">Character Dining</span>
+                  <span style="font-size: 11px; font-weight: 800; color: #166534;">$$$</span>
+                </div>
+              </div>
+              <button class="reserve-btn">Reserve</button>
+            </div>
+
+            <!-- 2. Beaches Pool Bar & Grill -->
+            <div class="dining-item-box" data-cat="table">
+              <div style="flex: 1; min-width: 0;">
+                <div style="font-size: 13px; font-weight: 800; color: #1e1b4b;">Beaches Pool Bar &amp; Grill</div>
+                <div style="font-size: 11px; color: #64748b; margin-top: 1px;">Enjoy a drink in style at this gleaming white gazebo bar by the sandy beach and pool.</div>
+                <div style="font-size: 10.5px; color: #7c3aed; font-weight: 700; margin-top: 3px;">Lunch, Pool Bar and Grill</div>
+                <div style="display: flex; align-items: center; gap: 6px; margin-top: 4px;">
+                  <span style="background: #f3e8ff; color: #6b21a8; font-size: 9.5px; font-weight: 800; padding: 2px 6px; border-radius: 6px;">Table Service</span>
+                  <span style="font-size: 11px; font-weight: 800; color: #166534;">$</span>
+                </div>
+              </div>
+              <button class="reserve-btn">Reserve</button>
+            </div>
+
+            <!-- 3. Cítricos -->
+            <div class="dining-item-box" data-cat="table">
+              <div style="flex: 1; min-width: 0;">
+                <div style="font-size: 13px; font-weight: 800; color: #1e1b4b;">Cítricos</div>
+                <div style="font-size: 11px; color: #64748b; margin-top: 1px;">Mary Poppins Returns-inspired signature dining featuring Mediterranean-influenced Florida fare.</div>
+                <div style="font-size: 10.5px; color: #7c3aed; font-weight: 700; margin-top: 3px;">Dinner</div>
+                <div style="display: flex; align-items: center; gap: 6px; margin-top: 4px;">
+                  <span style="background: #ede9fe; color: #5b2a86; font-size: 9.5px; font-weight: 800; padding: 2px 6px; border-radius: 6px;">Signature Dining</span>
+                  <span style="font-size: 11px; font-weight: 800; color: #166534;">$$$$</span>
+                </div>
+              </div>
+              <button class="reserve-btn">Reserve</button>
+            </div>
+
+            <!-- 4. Enchanted Rose -->
+            <div class="dining-item-box" data-cat="lounge">
+              <div style="flex: 1; min-width: 0;">
+                <div style="font-size: 13px; font-weight: 800; color: #1e1b4b;">Enchanted Rose</div>
+                <div style="font-size: 11px; color: #64748b; margin-top: 1px;">Sophisticated four-room lounge inspired by Beauty and the Beast with craft cocktails and light fare.</div>
+                <div style="font-size: 10.5px; color: #7c3aed; font-weight: 700; margin-top: 3px;">Bar – Lounge</div>
+                <div style="display: flex; align-items: center; gap: 6px; margin-top: 4px;">
+                  <span style="background: #fce7f3; color: #9d174d; font-size: 9.5px; font-weight: 800; padding: 2px 6px; border-radius: 6px;">Lounge</span>
+                  <span style="font-size: 11px; font-weight: 800; color: #166534;">$$$</span>
+                </div>
+              </div>
+              <button class="menu-btn">Menu ›</button>
+            </div>
+          </div>
+
+          <!-- Hidden Venues 5–12 (Revealed on Toggle) -->
+          <div class="collapsible-group" id="dining-hidden-group">
+            <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 8px;">
+              <!-- 5. Gasparilla Island Grill -->
+              <div class="dining-item-box" data-cat="quick">
+                <div style="flex: 1; min-width: 0;">
+                  <div style="font-size: 13px; font-weight: 800; color: #1e1b4b;">Gasparilla Island Grill</div>
+                  <div style="font-size: 11px; color: #64748b; margin-top: 1px;">24-hour quick-service bakery and cafe overlooking the Seven Seas Lagoon marina.</div>
+                  <div style="font-size: 10.5px; color: #7c3aed; font-weight: 700; margin-top: 3px;">Breakfast, Lunch, Dinner, Late Night</div>
+                  <div style="display: flex; align-items: center; gap: 6px; margin-top: 4px;">
+                    <span style="background: #e0f2fe; color: #0369a1; font-size: 9.5px; font-weight: 800; padding: 2px 6px; border-radius: 6px;">Quick Service</span>
+                    <span style="font-size: 11px; font-weight: 800; color: #166534;">$</span>
+                  </div>
+                </div>
+                <button class="menu-btn">Menu ›</button>
+              </div>
+
+              <!-- 6. Grand Floridian Cafe -->
+              <div class="dining-item-box" data-cat="table">
+                <div style="flex: 1; min-width: 0;">
+                  <div style="font-size: 13px; font-weight: 800; color: #1e1b4b;">Grand Floridian Cafe</div>
+                  <div style="font-size: 11px; color: #64748b; margin-top: 1px;">Charming Victorian cafe serving elevated American bistro favorites and buttermilk chicken.</div>
+                  <div style="font-size: 10.5px; color: #7c3aed; font-weight: 700; margin-top: 3px;">Brunch, Dinner</div>
+                  <div style="display: flex; align-items: center; gap: 6px; margin-top: 4px;">
+                    <span style="background: #f3e8ff; color: #6b21a8; font-size: 9.5px; font-weight: 800; padding: 2px 6px; border-radius: 6px;">Table Service</span>
+                    <span style="font-size: 11px; font-weight: 800; color: #166534;">$$</span>
+                  </div>
+                </div>
+                <button class="reserve-btn">Reserve</button>
+              </div>
+
+              <!-- 7. Narcoossee's -->
+              <div class="dining-item-box" data-cat="table">
+                <div style="flex: 1; min-width: 0;">
+                  <div style="font-size: 13px; font-weight: 800; color: #1e1b4b;">Narcoossee's</div>
+                  <div style="font-size: 11px; color: #64748b; margin-top: 1px;">Waterfront coastal dining on Seven Seas Lagoon with panoramic views of Magic Kingdom fireworks.</div>
+                  <div style="font-size: 10.5px; color: #7c3aed; font-weight: 700; margin-top: 3px;">Dinner</div>
+                  <div style="display: flex; align-items: center; gap: 6px; margin-top: 4px;">
+                    <span style="background: #ede9fe; color: #5b2a86; font-size: 9.5px; font-weight: 800; padding: 2px 6px; border-radius: 6px;">Signature Dining</span>
+                    <span style="font-size: 11px; font-weight: 800; color: #166534;">$$$$</span>
+                  </div>
+                </div>
+                <button class="reserve-btn">Reserve</button>
+              </div>
+
+              <!-- 8. Victoria & Albert's -->
+              <div class="dining-item-box" data-cat="table">
+                <div style="flex: 1; min-width: 0;">
+                  <div style="font-size: 13px; font-weight: 800; color: #1e1b4b;">The Dining Room at Victoria &amp; Albert's</div>
+                  <div style="font-size: 11px; color: #64748b; margin-top: 1px;">AAA Five Diamond culinary palace with exquisite multi-course French-inspired chef tastings.</div>
+                  <div style="font-size: 10.5px; color: #7c3aed; font-weight: 700; margin-top: 3px;">Dinner</div>
+                  <div style="display: flex; align-items: center; gap: 6px; margin-top: 4px;">
+                    <span style="background: #fef3c7; color: #92400e; font-size: 9.5px; font-weight: 800; padding: 2px 6px; border-radius: 6px;">Fine Dining</span>
+                    <span style="font-size: 11px; font-weight: 800; color: #166534;">$$$$</span>
+                  </div>
+                </div>
+                <button class="reserve-btn">Reserve</button>
+              </div>
+
+              <!-- 9. Cítricos Lounge -->
+              <div class="dining-item-box" data-cat="lounge">
+                <div style="flex: 1; min-width: 0;">
+                  <div style="font-size: 13px; font-weight: 800; color: #1e1b4b;">Cítricos Lounge</div>
+                  <div style="font-size: 11px; color: #64748b; margin-top: 1px;">Intimate cocktail sanctuary serving specialty tapas and wine pairings.</div>
+                  <div style="font-size: 10.5px; color: #7c3aed; font-weight: 700; margin-top: 3px;">Bar – Lounge</div>
+                  <div style="display: flex; align-items: center; gap: 6px; margin-top: 4px;">
+                    <span style="background: #fce7f3; color: #9d174d; font-size: 9.5px; font-weight: 800; padding: 2px 6px; border-radius: 6px;">Lounge</span>
+                    <span style="font-size: 11px; font-weight: 800; color: #166534;">$$$$</span>
+                  </div>
+                </div>
+                <button class="reserve-btn">Reserve</button>
+              </div>
+
+              <!-- 10. Courtyard Pool Bar -->
+              <div class="dining-item-box" data-cat="lounge">
+                <div style="flex: 1; min-width: 0;">
+                  <div style="font-size: 13px; font-weight: 800; color: #1e1b4b;">Courtyard Pool Bar</div>
+                  <div style="font-size: 11px; color: #64748b; margin-top: 1px;">Enjoy a refreshing dip then a refreshing sip by the serene courtyard pool.</div>
+                  <div style="font-size: 10.5px; color: #7c3aed; font-weight: 700; margin-top: 3px;">Pool Bar</div>
+                  <div style="display: flex; align-items: center; gap: 6px; margin-top: 4px;">
+                    <span style="background: #f3e8ff; color: #6b21a8; font-size: 9.5px; font-weight: 800; padding: 2px 6px; border-radius: 6px;">Table Service</span>
+                    <span style="font-size: 11px; font-weight: 800; color: #166534;">$</span>
+                  </div>
+                </div>
+                <button class="reserve-btn">Reserve</button>
+              </div>
+
+              <!-- 11. Private Dining -->
+              <div class="dining-item-box" data-cat="quick">
+                <div style="flex: 1; min-width: 0;">
+                  <div style="font-size: 13px; font-weight: 800; color: #1e1b4b;">Private In-Room Dining</div>
+                  <div style="font-size: 11px; color: #64748b; margin-top: 1px;">Dine amid Victorian elegance in the comfort of your resort room or villa.</div>
+                  <div style="font-size: 10.5px; color: #7c3aed; font-weight: 700; margin-top: 3px;">Breakfast, Dinner</div>
+                  <div style="display: flex; align-items: center; gap: 6px; margin-top: 4px;">
+                    <span style="background: #f3e8ff; color: #6b21a8; font-size: 9.5px; font-weight: 800; padding: 2px 6px; border-radius: 6px;">Table Service</span>
+                    <span style="font-size: 11px; font-weight: 800; color: #166534;">$$</span>
+                  </div>
+                </div>
+                <button class="reserve-btn">Reserve</button>
+              </div>
+
+              <!-- 12. The Perch -->
+              <div class="dining-item-box" data-cat="lounge">
+                <div style="flex: 1; min-width: 0;">
+                  <div style="font-size: 13px; font-weight: 800; color: #1e1b4b;">The Perch at Disney's Grand Floridian</div>
+                  <div style="font-size: 11px; color: #64748b; margin-top: 1px;">Temporary guest lounge and cocktail bar during ongoing main building refurbishment.</div>
+                  <div style="font-size: 10.5px; color: #7c3aed; font-weight: 700; margin-top: 3px;">Bar – Lounge</div>
+                  <div style="display: flex; align-items: center; gap: 6px; margin-top: 4px;">
+                    <span style="background: #f3e8ff; color: #6b21a8; font-size: 9.5px; font-weight: 800; padding: 2px 6px; border-radius: 6px;">Table Service</span>
+                    <span style="font-size: 11px; font-weight: 800; color: #166534;">$$</span>
+                  </div>
+                </div>
+                <button class="reserve-btn">Reserve</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- The Inline Expand / Collapse Toggle -->
+          <button class="resort-expand-btn" id="btn-dining-toggle" onclick="toggleDiningExpand()">
+            <span>Show all 12 dining locations (8 more)</span>
+            <span>▾</span>
+          </button>
+        </div>
+
+        <!-- 3. Recreation & Resort Amenities (Enriched + Collapsible) -->
+        <div class="resort-detail-card" id="detail-rec-card">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+            <div style="display: flex; align-items: center; gap: 6px; font-weight: 800; font-size: 13.5px; color: var(--text-main);">
+              <span style="color: #7e57c2;">💜</span> Recreation &amp; Resort Amenities (8)
+            </div>
+          </div>
+          <div style="font-size: 11.5px; color: #64748b; margin-bottom: 8px;">
+            Complimentary activities and wellness spaces available to all resort guests:
+          </div>
+
+          <!-- Initial Visible Recreation (Top 4) -->
+          <div id="rec-visible-group" style="display: flex; flex-direction: column; gap: 8px;">
+            <div class="rec-item-box" style="cursor: pointer;" onclick="openExperiencePage('Beach Pool')">
+              <span style="font-size: 24px;">🏊</span>
+              <div style="flex: 1;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <span style="font-size: 13px; font-weight: 800; color: #1e1b4b;">Beach Pool</span>
+                  <div style="display: flex; align-items: center; gap: 4px;">
+                    <span style="background: #ede9fe; color: #5b2a86; font-size: 9.5px; font-weight: 800; padding: 2px 6px; border-radius: 6px;">Feature Pool</span>
+                    <span style="color: #94a3b8; font-size: 14px;">›</span>
+                  </div>
+                </div>
+                <div style="font-size: 11px; color: #64748b; margin-top: 2px;">111,261-gallon pool overlooking Seven Seas Lagoon with 181-foot natural springs waterslide and zero-depth entry.</div>
+              </div>
+            </div>
+
+            <div class="rec-item-box" style="cursor: pointer;" onclick="openExperiencePage('Courtyard Pool')">
+              <span style="font-size: 24px;">🏊</span>
+              <div style="flex: 1;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <span style="font-size: 13px; font-weight: 800; color: #1e1b4b;">Courtyard Pool</span>
+                  <div style="display: flex; align-items: center; gap: 4px;">
+                    <span style="background: #f1f5f9; color: #475569; font-size: 9.5px; font-weight: 800; padding: 2px 6px; border-radius: 6px;">Quiet Pool</span>
+                    <span style="color: #94a3b8; font-size: 14px;">›</span>
+                  </div>
+                </div>
+                <div style="font-size: 11px; color: #64748b; margin-top: 2px;">Serene heated leisure pool situated in the tranquil center courtyard with an adjacent whirlpool spa.</div>
+              </div>
+            </div>
+
+            <div class="rec-item-box" style="cursor: pointer;" onclick="openExperiencePage('The Grand Floridian Spa')">
+              <span style="font-size: 24px;">🧖</span>
+              <div style="flex: 1;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <span style="font-size: 13px; font-weight: 800; color: #1e1b4b;">The Grand Floridian Spa</span>
+                  <div style="display: flex; align-items: center; gap: 4px;">
+                    <span style="background: #fdf2f8; color: #9d174d; font-size: 9.5px; font-weight: 800; padding: 2px 6px; border-radius: 6px;">Wellness</span>
+                    <span style="color: #94a3b8; font-size: 14px;">›</span>
+                  </div>
+                </div>
+                <div style="font-size: 11px; color: #64748b; margin-top: 2px;">Full-service Victorian health spa offering signature massage, botanical facials, and relaxation lounges.</div>
+              </div>
+            </div>
+
+            <div class="rec-item-box" style="cursor: pointer;" onclick="openExperiencePage('Seven Seas Marina & Campfire')">
+              <span style="font-size: 24px;">⛵</span>
+              <div style="flex: 1;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <span style="font-size: 13px; font-weight: 800; color: #1e1b4b;">Seven Seas Marina &amp; Campfire</span>
+                  <div style="display: flex; align-items: center; gap: 4px;">
+                    <span style="background: #fef3c7; color: #92400e; font-size: 9.5px; font-weight: 800; padding: 2px 6px; border-radius: 6px;">Family Fun</span>
+                    <span style="color: #94a3b8; font-size: 14px;">›</span>
+                  </div>
+                </div>
+                <div style="font-size: 11px; color: #64748b; margin-top: 2px;">Motorized boat rentals, evening marshmallow roasts, and prime viewing of the Electrical Water Pageant.</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Hidden Recreation 5–8 (Enriched Activities Revealed on Toggle) -->
+          <div class="collapsible-group" id="rec-hidden-group">
+            <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 8px;">
+              <div class="rec-item-box" style="cursor: pointer;" onclick="openExperiencePage('Private Poolside Cabana Rentals')">
+                <span style="font-size: 24px;">🏖️</span>
+                <div style="flex: 1;">
+                  <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-size: 13px; font-weight: 800; color: #1e1b4b;">Private Poolside Cabana Rentals</span>
+                    <div style="display: flex; align-items: center; gap: 4px;">
+                      <span style="background: #dbeafe; color: #1e40af; font-size: 9.5px; font-weight: 800; padding: 2px 6px; border-radius: 6px;">Premium</span>
+                      <span style="color: #94a3b8; font-size: 14px;">›</span>
+                    </div>
+                  </div>
+                  <div style="font-size: 11px; color: #64748b; margin-top: 2px;">Luxury cabanas at Beach Pool with plush padded loungers, ceiling fan, mini-fridge, and fruit basket.</div>
+                </div>
+              </div>
+
+              <div class="rec-item-box" style="cursor: pointer;" onclick="openExperiencePage('Guided Bass Fishing Excursions')">
+                <span style="font-size: 24px;">🎣</span>
+                <div style="flex: 1;">
+                  <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-size: 13px; font-weight: 800; color: #1e1b4b;">Guided Bass Fishing Excursions</span>
+                    <div style="display: flex; align-items: center; gap: 4px;">
+                      <span style="background: #dcfce7; color: #166534; font-size: 9.5px; font-weight: 800; padding: 2px 6px; border-radius: 6px;">Excursion</span>
+                      <span style="color: #94a3b8; font-size: 14px;">›</span>
+                    </div>
+                  </div>
+                  <div style="font-size: 11px; color: #64748b; margin-top: 2px;">2-hour &amp; 4-hour catch-and-release tournament boat excursions on Seven Seas Lagoon with seasoned guide.</div>
+                </div>
+              </div>
+
+              <div class="rec-item-box" style="cursor: pointer;" onclick="openExperiencePage('Arcadia Games')">
+                <span style="font-size: 24px;">🕹️</span>
+                <div style="flex: 1;">
+                  <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-size: 13px; font-weight: 800; color: #1e1b4b;">Arcadia Games</span>
+                    <div style="display: flex; align-items: center; gap: 4px;">
+                      <span style="background: #f1f5f9; color: #475569; font-size: 9.5px; font-weight: 800; padding: 2px 6px; border-radius: 6px;">Family Fun</span>
+                      <span style="color: #94a3b8; font-size: 14px;">›</span>
+                    </div>
+                  </div>
+                  <div style="font-size: 11px; color: #64748b; margin-top: 2px;">High-tech family game room featuring classic retro arcade titles and contemporary simulator games.</div>
+                </div>
+              </div>
+
+              <div class="rec-item-box" style="cursor: pointer;" onclick="openExperiencePage('Lawn Games & Courtyard Yoga')">
+                <span style="font-size: 24px;">🧘</span>
+                <div style="flex: 1;">
+                  <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-size: 13px; font-weight: 800; color: #1e1b4b;">Lawn Games &amp; Courtyard Yoga</span>
+                    <div style="display: flex; align-items: center; gap: 4px;">
+                      <span style="background: #fdf2f8; color: #9d174d; font-size: 9.5px; font-weight: 800; padding: 2px 6px; border-radius: 6px;">Wellness</span>
+                      <span style="color: #94a3b8; font-size: 14px;">›</span>
+                    </div>
+                  </div>
+                  <div style="font-size: 11px; color: #64748b; margin-top: 2px;">Morning yoga sessions on the Victorian lawn, plus life-sized chess set and bocce ball court.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Recreation Toggle Button -->
+          <button class="resort-expand-btn" id="btn-rec-toggle" onclick="toggleRecExpand()">
+            <span>Show all 8 recreation &amp; activities (4 more)</span>
+            <span>▾</span>
+          </button>
+        </div>
+
+        <!-- 4. Property Map & Transit Times (Verbatim from Production) -->
+        <div class="resort-detail-card">
+          <div style="display: flex; align-items: center; gap: 6px; font-weight: 800; font-size: 13.5px; color: var(--text-main); margin-bottom: 4px;">
+            <span>🗺️</span> Property Map &amp; Transit Times
+          </div>
+          <div style="font-size: 11.5px; color: #64748b; margin-bottom: 10px;">
+            Complimentary Monorail, Boat &amp; Bus transportation connects you across Walt Disney World.
+          </div>
+          <div style="font-size: 11px; color: #475569; margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
+            <span>📍</span> 4401 Floridian Way, Lake Buena Vista, FL 32830
+          </div>
+          <div style="font-size: 12px; font-weight: 800; color: var(--text-main); margin-bottom: 8px;">
+            Direct Park Travel Times
+          </div>
+          <div class="transit-grid">
+            <div class="transit-box">
+              <span class="transit-dest">EPCOT</span>
+              <span class="transit-eta">~18m</span>
+            </div>
+            <div class="transit-box">
+              <span class="transit-dest">Magic Kingdom</span>
+              <span class="transit-eta">~4m</span>
+            </div>
+            <div class="transit-box">
+              <span class="transit-dest">Animal Kingdom</span>
+              <span class="transit-eta">~18m</span>
+            </div>
+            <div class="transit-box">
+              <span class="transit-dest">Disney Springs</span>
+              <span class="transit-eta">~20m</span>
+            </div>
+            <div class="transit-box" style="grid-column: span 2;">
+              <span class="transit-dest">Hollywood Studios</span>
+              <span class="transit-eta">~16m</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Floating Action Dock (Verbatim from Production) -->
+      <div class="resort-float-dock">
+        <button class="dock-btn-primary">🛏️ Log Stay</button>
+        <button class="dock-btn-secondary">＋ Add to...</button>
+      </div>
+
+    </div>
+  </div>
+
+</main>
+
+<!-- Explanatory Architecture & Feature Ledger -->
+<footer class="comparison-ledger">
+  <div class="ledger-title">
+    <span>💡</span> Reality Check: Verified Data &amp; Redesign Principles
+  </div>
+  <div class="ledger-sub">
+    Direct response to user review: Aligning strictly with what the database &amp; API provide, preserving the complete filtering system, and clarifying architectural boundaries.
+  </div>
+
+  <div class="ledger-grid">
+    <div class="ledger-item">
+      <h4><span>✅</span> 1. Real Data We Actually Have</h4>
+      <p>
+        Every piece of information shown in this revised mockup is 100% verified against our models:
+      </p>
+      <ul>
+        <li><strong>From <code>ExperienceDTO</code>:</strong> <code>name</code>, <code>category</code>, <code>land</code>, <code>worldShowcaseCountry</code>, <code>priceTier</code> ($, $$, $$$), <code>heightRequirement</code> (e.g. 44" min), <code>groupedFacets</code> / physical considerations (Thrill, Dark, Big Drops), <code>mealPeriods</code>, <code>imageUrl</code>.</li>
+        <li><strong>From User State:</strong> <code>useCompletedExperiences()</code> (visited checkmark) and <code>useFavoritedExperiences()</code> (favorite heart).</li>
+        <li><strong>From <code>ResortDTO</code>:</strong> <code>tier</code> (Deluxe, Moderate, Value, DVC), <code>transportationModes</code> (Monorail, Skyliner, Boat), <code>featurePool</code>, <code>recreation</code>, <code>transitTimes</code>.</li>
+        <li><strong>From <code>ParkLiveSnapshotDTO</code>:</strong> Integer average park wait time across 4 parks (as already computed on HomeScreen's <code>ParkWaitPulse</code>).</li>
+      </ul>
+    </div>
+
+    <div class="ledger-item">
+      <h4><span>❌</span> 2. What Was Speculative &amp; Has Been Removed</h4>
+      <p>
+        We deliberately removed data that does NOT belong on static catalog list rows:
+      </p>
+      <ul>
+        <li><strong>NO per-ride live waits on catalog rows:</strong> Catalog is a 5-minute cached reference directory (<code>GET /catalog</code>). Per-ride live wait times update every minute and belong strictly in <code>LiveWaitsScreen</code> and <code>LiveWaitCockpit</code> on detail view. Sourcing live waits for 150+ items on browse would break offline caching and hammer the server.</li>
+        <li><strong>NO live Lightning Lane return windows:</strong> Return windows fluctuate second-by-second and live in live services, not the catalog DTO.</li>
+        <li><strong>NO live showtime clocks ("Next show 2:15 PM"):</strong> Belongs in <code>LiveDetail</code> on the detail screen.</li>
+      </ul>
+    </div>
+
+    <div class="ledger-item">
+      <h4><span>🔍</span> 3. Complete Filtering System Restored</h4>
+      <p>
+        Nothing from the existing powerful filter architecture is lost:
+      </p>
+      <ul>
+        <li><strong>Category Tabs:</strong> <code>All</code>, <code>Rides</code>, <code>Dining</code>, <code>Shows</code>.</li>
+        <li><strong>Dedicated Favorites Toggle:</strong> Restored right beside the tabs so users can instantly narrow any destination to their saved items.</li>
+        <li><strong>Filters Modal Trigger:</strong> Multi-select sheet for Lands, Price Tiers, Facets, and Festivals.</li>
+        <li><strong>Dynamic Quick Chips:</strong> Automatically derived from active tab items (e.g., <code>Thrill Ride</code>, <code>Quick Service</code>, <code>Table Service</code>, <code>Height 40"+</code>).</li>
+        <li><strong>Collapsible Land Accordions:</strong> Retained, but with cleaner visual hierarchy, clear count badges, and rich card tags.</li>
+      </ul>
+    </div>
+
+    <div class="ledger-item">
+      <h4><span>🏨</span> 4. Complete Resorts Ecosystem Restored (Zero Regressions)</h4>
+      <p>
+        Full preservation of the 258 resort experiences without returning to the old 30-accordion clunkiness:
+      </p>
+      <ul>
+        <li><strong>Full Experience Partition (258 Total):</strong> 32 Resort Hotels, 104 Dining &amp; Lounges, 85 Recreation &amp; Activities, and 37 Sub-Destination experiences.</li>
+        <li><strong>First-Class Sub-Destinations:</strong> Dedicated showcase cards for <em>Disney's BoardWalk &amp; Promenade</em>, <em>ESPN Wide World of Sports Complex</em>, and <em>Property-Wide Recreation &amp; Sports</em> (Mini-Golf, Championship Golf, Marinas).</li>
+        <li><strong>Direct Navigation to Existing Resort Screen:</strong> Tapping any hotel card navigates directly to the app's existing production <code>ExperienceDetailScreen</code> (with <code>ResortGuideSection</code> and <code>PassportAndLoreLens</code>). The on-property <em>Recreation &amp; Resort Amenities</em> section is enriched in place with full verified activities (pools, boat rentals, cabanas, fitness/spas, campfires).</li>
+        <li><strong>Completion &amp; Favorites Parity:</strong> Every hotel, dining venue, and recreation activity supports the green visited checkmark and favorite heart toggle.</li>
+      </ul>
+    </div>
+  </div>
+</footer>
+
+<script>
+  let isDiningExpanded = false;
+  function toggleDiningExpand() {
+    isDiningExpanded = !isDiningExpanded;
+    const hiddenGroup = document.getElementById('dining-hidden-group');
+    const toggleBtn = document.getElementById('btn-dining-toggle');
+    if (isDiningExpanded) {
+      hiddenGroup.classList.add('expanded');
+      toggleBtn.innerHTML = '<span>Show fewer dining locations</span><span>▴</span>';
+    } else {
+      hiddenGroup.classList.remove('expanded');
+      toggleBtn.innerHTML = '<span>Show all 12 dining locations (8 more)</span><span>▾</span>';
+    }
+  }
+
+  let isRecExpanded = false;
+  function toggleRecExpand() {
+    isRecExpanded = !isRecExpanded;
+    const hiddenGroup = document.getElementById('rec-hidden-group');
+    const toggleBtn = document.getElementById('btn-rec-toggle');
+    if (isRecExpanded) {
+      hiddenGroup.classList.add('expanded');
+      toggleBtn.innerHTML = '<span>Show fewer activities</span><span>▴</span>';
+    } else {
+      hiddenGroup.classList.remove('expanded');
+      toggleBtn.innerHTML = '<span>Show all 8 recreation & activities (4 more)</span><span>▾</span>';
+    }
+  }
+
+  function filterDiningInCard(btn, cat) {
+    document.querySelectorAll('.subcard-pill').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    
+    const hiddenGroup = document.getElementById('dining-hidden-group');
+    const toggleBtn = document.getElementById('btn-dining-toggle');
+    if (cat !== 'all') {
+      hiddenGroup.classList.add('expanded');
+      toggleBtn.style.display = 'none';
+    } else {
+      toggleBtn.style.display = 'flex';
+      if (!isDiningExpanded) hiddenGroup.classList.remove('expanded');
+    }
+
+    document.querySelectorAll('.dining-item-box').forEach(item => {
+      if (cat === 'all' || item.dataset.cat === cat) {
+        item.style.display = 'flex';
+      } else {
+        item.style.display = 'none';
+      }
+    });
+  }
+
+  function openExistingResortPage(resortName) {
+    setMode('resort-detail');
+    const phone = document.getElementById('wrap-resort-detail');
+    if (phone) phone.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function openExperiencePage(name) {
+    alert("Navigates to ExperienceDetailScreen for " + name + "!\n\nJust like restaurants, recreation activities can have their own full experience page:\n• Log Visit & track completion (visited checkmark)\n• Favorite heart toggle\n• 1–5 star community & personal rating\n• Personal visit notes\n• Full operational descriptions & guidelines");
+  }
+
+  function setMode(mode) {
+    const canvas = document.getElementById('canvas');
+    const wraps = {
+      explore: document.getElementById('wrap-explore'),
+      resorts: document.getElementById('wrap-resorts'),
+      park: document.getElementById('wrap-park'),
+      'resort-detail': document.getElementById('wrap-resort-detail')
+    };
+    
+    document.querySelectorAll('.control-btn').forEach(btn => btn.classList.remove('active'));
+    const activeBtn = document.getElementById('btn-' + mode);
+    if (activeBtn) activeBtn.classList.add('active');
+
+    if (mode === 'all') {
+      canvas.classList.remove('single-mode');
+      Object.values(wraps).forEach(w => {
+        if (w) w.classList.add('active-screen');
+      });
+    } else {
+      canvas.classList.add('single-mode');
+      Object.values(wraps).forEach(w => {
+        if (w) w.classList.remove('active-screen');
+      });
+      if (wraps[mode]) wraps[mode].classList.add('active-screen');
+    }
+  }
+
+  function switchResortSection(section) {
+    const tabs = ['hotels', 'dining', 'recreation', 'subdest'];
+    tabs.forEach(t => {
+      const btn = document.getElementById('resort-tab-' + (t === 'recreation' ? 'rec' : t));
+      if (btn) btn.classList.remove('active');
+    });
+
+    const activeBtn = document.getElementById('resort-tab-' + (section === 'recreation' ? 'rec' : section));
+    if (activeBtn) activeBtn.classList.add('active');
+
+    const containers = {
+      hotels: document.getElementById('resorts-properties-container'),
+      dining: document.getElementById('resorts-dining-container'),
+      recreation: document.getElementById('resorts-recreation-container'),
+      subdest: document.getElementById('resorts-subdest-container')
+    };
+
+    Object.keys(containers).forEach(k => {
+      if (containers[k]) containers[k].style.display = (k === section) ? 'block' : 'none';
+    });
+
+    const filterStrip = document.getElementById('resort-filter-strip');
+    if (section === 'hotels') {
+      filterStrip.innerHTML = `
+        <button class="filter-pill active" onclick="setTierFilter(this, 'all')">All (32)</button>
+        <button class="filter-pill" onclick="setTierFilter(this, 'deluxe')">👑 Deluxe (8)</button>
+        <button class="filter-pill" onclick="setTierFilter(this, 'moderate')">🌿 Moderate (5)</button>
+        <button class="filter-pill" onclick="setTierFilter(this, 'value')">🎨 Value (5)</button>
+        <button class="filter-pill" onclick="setTierFilter(this, 'dvc')">🏰 DVC Villas (12)</button>
+        <button class="filter-pill" onclick="setTierFilter(this, 'monorail')">🚝 Monorail</button>
+        <button class="filter-pill" onclick="setTierFilter(this, 'skyliner')">🚡 Skyliner</button>
+      `;
+    } else if (section === 'dining') {
+      filterStrip.innerHTML = `
+        <button class="filter-pill active" onclick="setDiningFilter(this, 'all')">All Dining (104)</button>
+        <button class="filter-pill" onclick="setDiningFilter(this, 'char')">✨ Character Dining (9)</button>
+        <button class="filter-pill" onclick="setDiningFilter(this, 'sig')">🍷 Fine Dining (14)</button>
+        <button class="filter-pill" onclick="setDiningFilter(this, 'lounge')">🍸 Lounges &amp; Bars (28)</button>
+        <button class="filter-pill" onclick="setDiningFilter(this, 'qs')">🍔 Quick Service (35)</button>
+      `;
+    } else if (section === 'recreation') {
+      filterStrip.innerHTML = `
+        <button class="filter-pill active">All Activities (85)</button>
+        <button class="filter-pill">⛳ Mini Golf &amp; Golf</button>
+        <button class="filter-pill">🛥️ Marinas &amp; Pontoon Boats</button>
+        <button class="filter-pill">💆 Spas &amp; Wellness</button>
+        <button class="filter-pill">🔥 Campfire &amp; Movies</button>
+      `;
+    } else if (section === 'subdest') {
+      filterStrip.innerHTML = `
+        <button class="filter-pill active">All Sub-Destinations (37)</button>
+        <button class="filter-pill">🎡 Disney's BoardWalk</button>
+        <button class="filter-pill">🏟️ ESPN Sports Complex</button>
+        <button class="filter-pill">🌲 Property-Wide Adventures</button>
+      `;
+    }
+  }
+
+  function toggleResortCard(cardId) {
+    const card = document.getElementById(cardId);
+    if (card) {
+      card.classList.toggle('expanded');
+    }
+  }
+
+  function toggleResortFavFilter() {
+    const btn = document.getElementById('btn-resort-fav');
+    btn.classList.toggle('active');
+    const isFavOnly = btn.classList.contains('active');
+
+    // In hotels view
+    const hotelCards = document.querySelectorAll('.resort-hotel-card');
+    hotelCards.forEach(c => {
+      if (!isFavOnly) {
+        c.style.display = 'block';
+      } else {
+        const hasFav = c.querySelector('.fav-btn.active');
+        c.style.display = hasFav ? 'block' : 'none';
+      }
+    });
+
+    // In dining view
+    const diningCards = document.querySelectorAll('.resort-dining-card');
+    diningCards.forEach(c => {
+      if (!isFavOnly) {
+        c.style.display = 'flex';
+      } else {
+        const hasFav = c.querySelector('.fav-btn.active');
+        c.style.display = hasFav ? 'flex' : 'none';
+      }
+    });
+  }
+
+  function setTierFilter(button, tier) {
+    document.querySelectorAll('#resort-filter-strip .filter-pill').forEach(p => p.classList.remove('active'));
+    button.classList.add('active');
+
+    const cards = document.querySelectorAll('.resort-hotel-card');
+    cards.forEach(card => {
+      if (tier === 'all') {
+        card.style.display = 'block';
+      } else if (tier === 'monorail' || tier === 'skyliner') {
+        const transport = card.getAttribute('data-transport') || '';
+        card.style.display = transport.includes(tier) ? 'block' : 'none';
+      } else {
+        const cardTier = card.getAttribute('data-tier');
+        card.style.display = cardTier === tier ? 'block' : 'none';
+      }
+    });
+  }
+
+  function setDiningFilter(button, filter) {
+    document.querySelectorAll('#resort-filter-strip .filter-pill').forEach(p => p.classList.remove('active'));
+    button.classList.add('active');
+  }
+
+  function filterResorts(query) {
+    const q = query.toLowerCase().trim();
+    const cards = document.querySelectorAll('.resort-hotel-card, .resort-dining-card');
+    cards.forEach(card => {
+      const text = card.textContent.toLowerCase();
+      card.style.display = text.includes(q) ? 'flex' : 'none';
+      if (card.classList.contains('resort-hotel-card') && text.includes(q)) {
+        card.style.display = 'block';
+      }
+    });
+  }
+
+  function selectParkTab(tab) {
+    document.querySelectorAll('.cat-tab-btn').forEach(b => b.classList.remove('active'));
+    const btn = document.getElementById(tab === 'dining' ? 'tab-dining-pk' : 'tab-' + tab);
+    if (btn) btn.classList.add('active');
+  }
+
+  function toggleFavFilter() {
+    const btn = document.getElementById('btn-fav-toggle');
+    btn.classList.toggle('active');
+  }
+
+  function toggleQuickChip(chip) {
+    chip.classList.toggle('active');
+  }
+
+  function toggleAccordion(id) {
+    const section = document.getElementById(id);
+    const chev = document.getElementById('chev-' + id);
+    if (!section || !chev) return;
+    if (section.style.display === 'none') {
+      section.style.display = 'block';
+      chev.textContent = '▼';
+    } else {
+      section.style.display = 'none';
+      chev.textContent = '▶';
+    }
+  }
+</script>
+
+</body>
+</html>

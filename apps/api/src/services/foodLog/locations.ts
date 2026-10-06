@@ -24,8 +24,8 @@ export interface UserSubmittedLocationRepo {
     park: Park,
   ): Promise<UserSubmittedLocationDTO>;
   suggestLocations(
-    park: Park,
-    name: string,
+    park?: Park,
+    name?: string,
     limit?: number,
   ): Promise<readonly LocationSuggestionDTO[]>;
   findLocation(locationId: string): Promise<UserSubmittedLocationDTO | null>;
@@ -40,6 +40,7 @@ interface LocationRow {
 interface SuggestionRow {
   id: string;
   name: string;
+  park: Park;
   sim: number;
 }
 
@@ -90,28 +91,29 @@ export function createUserSubmittedLocationRepo(pool: DbPool): UserSubmittedLoca
     },
 
     async suggestLocations(
-      park: Park,
-      name: string,
+      park?: Park,
+      name?: string,
       limit: number = LOCATION_SUGGEST_LIMIT,
     ): Promise<readonly LocationSuggestionDTO[]> {
-      const trimmed = name.trim();
+      const trimmed = name?.trim() ?? '';
       if (!trimmed) {
         return [];
       }
 
       const res = await pool.query<SuggestionRow>(
-        `SELECT id, name, similarity(lower(name), lower($2)) AS sim
+        `SELECT id, name, park, similarity(lower(name), lower($2)) AS sim
            FROM user_submitted_locations
-          WHERE park = $1
-            AND similarity(lower(name), lower($2)) >= $3
+          WHERE ($1::varchar IS NULL OR park = $1)
+            AND (similarity(lower(name), lower($2)) >= $3 OR lower(name) LIKE '%' || lower($2) || '%')
           ORDER BY sim DESC
           LIMIT $4`,
-        [park, trimmed, LOCATION_SIMILARITY_THRESHOLD, limit],
+        [park ?? null, trimmed, LOCATION_SIMILARITY_THRESHOLD, limit],
       );
 
       return res.rows.map((r) => ({
         id: r.id,
         name: r.name,
+        park: r.park,
         similarity: Number(r.sim),
       }));
     },

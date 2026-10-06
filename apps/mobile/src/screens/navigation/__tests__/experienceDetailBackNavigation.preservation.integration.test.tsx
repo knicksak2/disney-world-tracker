@@ -97,7 +97,7 @@ jest.mock('../../../api/client', () => {
 // ---------------------------------------------------------------------------
 
 import StatsStack from '../../../navigation/StatsStack';
-import CatalogScreen from '../../catalog/CatalogScreen';
+import ExploreHubScreen from '../../catalog/ExploreHubScreen';
 import ExperienceDetailScreen from '../../catalog/ExperienceDetailScreen';
 import { apiRequest as mockedApiRequest } from '../../../api/client';
 import type { StatsResponse } from '../../../api/statsTypes';
@@ -244,7 +244,7 @@ function CatalogTestStack(): JSX.Element {
     <CatalogStack.Navigator>
       <CatalogStack.Screen
         name="CatalogList"
-        component={CatalogScreen}
+        component={ExploreHubScreen}
         options={{ headerShown: false }}
       />
       <CatalogStack.Screen

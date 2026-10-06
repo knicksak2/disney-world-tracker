@@ -20,10 +20,14 @@ export type ResortTier =
   | 'Campground';
 
 export interface ResortRecreationItemDTO {
+  /** Stable experience ID when backed by a catalog ExperienceDTO */
+  readonly id?: string;
   readonly icon: string;
   readonly title: string;
   readonly badge?: string;
   readonly description: string;
+  readonly priceTier?: string;
+  readonly hours?: string;
 }
 
 export interface ResortLoreItemDTO {

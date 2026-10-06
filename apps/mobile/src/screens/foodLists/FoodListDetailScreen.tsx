@@ -25,11 +25,14 @@ import type {
   FoodItemDTO,
   FoodListDetailDTO,
   FoodListItemDTO,
+  LocationSuggestionDTO,
+  UserSubmittedLocationDTO,
 } from '@dwt/shared';
 
 import { ApiError, apiRequest } from '../../api/client';
 import { theme } from '../../theme/theme';
 import { Badge, Card, GradientHeader, ScreenContainer } from '../../theme/components';
+import CreateLocationModal from '../catalog/CreateLocationModal';
 import FoodItemPickerModal from '../catalog/FoodItemPickerModal';
 import ManageFoodListSharesSheet from './ManageFoodListSharesSheet';
 import MarkGottenUndoToast from './MarkGottenUndoToast';
@@ -60,6 +63,11 @@ interface EditRatingTarget {
   readonly name: string;
   readonly initialRating: number | null;
 }
+
+/** A search result item in the restaurant/place search modal (official restaurant or community spot). */
+type SearchPlaceItem =
+  | { readonly kind: 'restaurant'; readonly data: ExperienceDTO }
+  | { readonly kind: 'custom_location'; readonly data: LocationSuggestionDTO };
 
 /**
  * A single active undo affordance for one mark-gotten submission
@@ -130,6 +138,8 @@ export default function FoodListDetailScreen(): JSX.Element {
   const [restaurantSearch, setRestaurantSearch] = useState('');
   const [debouncedRestaurantSearch, setDebouncedRestaurantSearch] = useState('');
   const [selectedExperience, setSelectedExperience] = useState<ExperienceDTO | null>(null);
+  const [selectedLocation, setSelectedLocation] = useState<UserSubmittedLocationDTO | null>(null);
+  const [createLocationModalVisible, setCreateLocationModalVisible] = useState(false);
   const [pickerModalVisible, setPickerModalVisible] = useState(false);
   const [isAddingItems, setIsAddingItems] = useState(false);
 
@@ -153,6 +163,20 @@ export default function FoodListDetailScreen(): JSX.Element {
     setRestaurantSearchModalVisible(false);
     setRestaurantSearch('');
     setDebouncedRestaurantSearch('');
+  }, []);
+
+  const handleOpenCreateLocation = useCallback(() => {
+    setRestaurantSearchModalVisible(false);
+    setRestaurantSearch('');
+    setDebouncedRestaurantSearch('');
+    setCreateLocationModalVisible(true);
+  }, []);
+
+  const handleLocationSelected = useCallback((location: UserSubmittedLocationDTO) => {
+    setSelectedLocation(location);
+    setSelectedExperience(null);
+    setCreateLocationModalVisible(false);
+    setPickerModalVisible(true);
   }, []);
 
   const transientNotice = useFoodListNotice();
@@ -190,6 +214,52 @@ export default function FoodListDetailScreen(): JSX.Element {
     },
     enabled: restaurantSearchModalVisible,
   });
+
+  // Community snack carts/stands search for Entry Point 2 (Requirement 9.5c)
+  const customLocationSearchQuery = useQuery<readonly LocationSuggestionDTO[], ApiError>({
+    queryKey: ['custom-location-search', debouncedRestaurantSearch],
+    queryFn: async () => {
+      const q = debouncedRestaurantSearch.trim();
+      if (!q) return [];
+      const res = await apiRequest<
+        | { readonly suggestions: readonly LocationSuggestionDTO[] }
+        | readonly LocationSuggestionDTO[]
+      >('GET', `/locations/suggest?q=${encodeURIComponent(q)}`);
+      return Array.isArray(res)
+        ? res
+        : ('suggestions' in res
+          ? (res.suggestions ?? [])
+          : []);
+    },
+    enabled: restaurantSearchModalVisible && debouncedRestaurantSearch.trim().length > 0,
+  });
+
+  // Unified search results: catalog restaurants + community snack spots
+  const searchResults = useMemo<readonly SearchPlaceItem[]>(() => {
+    const restaurants: readonly SearchPlaceItem[] = (
+      restaurantSearchQuery.data?.experiences ?? []
+    ).map((exp) => ({
+      kind: 'restaurant',
+      data: exp,
+    }));
+
+    if (!debouncedRestaurantSearch.trim()) {
+      return restaurants;
+    }
+
+    const customLocations: readonly SearchPlaceItem[] = (
+      customLocationSearchQuery.data ?? []
+    ).map((loc) => ({
+      kind: 'custom_location',
+      data: loc,
+    }));
+
+    return [...restaurants, ...customLocations];
+  }, [
+    debouncedRestaurantSearch,
+    restaurantSearchQuery.data?.experiences,
+    customLocationSearchQuery.data,
+  ]);
 
   const list = listQuery.data;
 
@@ -483,6 +553,7 @@ export default function FoodListDetailScreen(): JSX.Element {
       }
       setPickerModalVisible(false);
       setSelectedExperience(null);
+      setSelectedLocation(null);
       if (rateLimited) {
         setStaleWriteNotice('Too many requests. Please wait a moment before adding more items.');
       } else if (hadError) {
@@ -678,34 +749,68 @@ export default function FoodListDetailScreen(): JSX.Element {
     ],
   );
 
-  // Stable `renderItem` identity for the restaurant search results list —
-  // same rationale as `renderDraggableItem` above: an inline arrow here is
-  // recreated on every keystroke of the search input, which `FlatList`
-  // treats as a changed render function and forces unnecessary
-  // re-render/re-measure work on the visible rows.
-  const renderRestaurantResult = useCallback(
-    ({ item }: { item: ExperienceDTO }) => (
-      <Pressable
-        onPress={() => {
-          setSelectedExperience(item);
-          setRestaurantSearchModalVisible(false);
-          setRestaurantSearch('');
-          setDebouncedRestaurantSearch('');
-          setPickerModalVisible(true);
-        }}
-        style={({ pressed }) => [styles.restaurantRow, pressed && styles.restaurantRowPressed]}
-        accessibilityRole="button"
-        accessibilityLabel={`Select restaurant ${item.name}`}
-        testID={`restaurant-select-row-${item.id}`}
-      >
-        <Ionicons name="restaurant" size={20} color={theme.color.primary} />
-        <View style={styles.restaurantRowText}>
-          <Text style={styles.restaurantRowName}>{item.name}</Text>
-          <Text style={styles.restaurantRowMeta}>{item.park}</Text>
-        </View>
-        <Ionicons name="chevron-forward" size={18} color={theme.color.textSecondary} />
-      </Pressable>
-    ),
+  // Stable `renderItem` identity for the restaurant / community location search results list
+  const renderSearchResult = useCallback(
+    ({ item }: { item: SearchPlaceItem }) => {
+      if (item.kind === 'restaurant') {
+        const exp = item.data;
+        return (
+          <Pressable
+            onPress={() => {
+              setSelectedExperience(exp);
+              setSelectedLocation(null);
+              setRestaurantSearchModalVisible(false);
+              setRestaurantSearch('');
+              setDebouncedRestaurantSearch('');
+              setPickerModalVisible(true);
+            }}
+            style={({ pressed }) => [styles.restaurantRow, pressed && styles.restaurantRowPressed]}
+            accessibilityRole="button"
+            accessibilityLabel={`Select restaurant ${exp.name}`}
+            testID={`restaurant-select-row-${exp.id}`}
+          >
+            <Ionicons name="restaurant" size={20} color={theme.color.primary} />
+            <View style={styles.restaurantRowText}>
+              <Text style={styles.restaurantRowName}>{exp.name}</Text>
+              <Text style={styles.restaurantRowMeta}>{exp.park}</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={theme.color.textSecondary} />
+          </Pressable>
+        );
+      } else {
+        const loc = item.data;
+        return (
+          <Pressable
+            onPress={() => {
+              setSelectedLocation({
+                id: loc.id,
+                name: loc.name,
+                park: loc.park,
+              });
+              setSelectedExperience(null);
+              setRestaurantSearchModalVisible(false);
+              setRestaurantSearch('');
+              setDebouncedRestaurantSearch('');
+              setPickerModalVisible(true);
+            }}
+            style={({ pressed }) => [styles.restaurantRow, pressed && styles.restaurantRowPressed]}
+            accessibilityRole="button"
+            accessibilityLabel={`Select snack cart ${loc.name}`}
+            testID={`custom-location-select-row-${loc.id}`}
+          >
+            <Ionicons name="fast-food-outline" size={20} color={theme.color.primary} />
+            <View style={styles.restaurantRowText}>
+              <View style={styles.locationTitleRow}>
+                <Text style={styles.restaurantRowName}>{loc.name}</Text>
+                <Badge label="Snack Cart" />
+              </View>
+              <Text style={styles.restaurantRowMeta}>{loc.park}</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={theme.color.textSecondary} />
+          </Pressable>
+        );
+      }
+    },
     [],
   );
 
@@ -1195,7 +1300,8 @@ export default function FoodListDetailScreen(): JSX.Element {
               ) : null}
             </View>
 
-            {restaurantSearchQuery.isLoading ? (
+            {restaurantSearchQuery.isLoading ||
+            (customLocationSearchQuery.isLoading && debouncedRestaurantSearch.trim().length > 0) ? (
               <View style={styles.loadingWrap}>
                 <ActivityIndicator color={theme.color.primary} testID="restaurant-search-loading" />
               </View>
@@ -1207,14 +1313,50 @@ export default function FoodListDetailScreen(): JSX.Element {
               </View>
             ) : (
               <FlatList
-                data={restaurantSearchQuery.data?.experiences ?? []}
-                keyExtractor={(item) => item.id}
-                renderItem={renderRestaurantResult}
+                data={searchResults}
+                keyExtractor={(item) =>
+                  item.kind === 'restaurant' ? item.data.id : `loc-${item.data.id}`
+                }
+                renderItem={renderSearchResult}
                 keyboardShouldPersistTaps="handled"
                 ListEmptyComponent={
                   <View style={styles.emptyWrap}>
                     <Text style={styles.emptyWrapText}>No restaurants found.</Text>
+                    <Pressable
+                      onPress={handleOpenCreateLocation}
+                      accessibilityRole="button"
+                      accessibilityLabel="It's not listed? Add a snack cart or stand"
+                      style={({ pressed }) => [
+                        styles.notListedBtn,
+                        pressed && styles.notListedBtnPressed,
+                      ]}
+                      testID="restaurant-search-not-listed-btn"
+                    >
+                      <Ionicons name="add-circle-outline" size={18} color={theme.color.primary} />
+                      <Text style={styles.notListedBtnText}>
+                        It&apos;s not listed? Add a snack cart or stand
+                      </Text>
+                    </Pressable>
                   </View>
+                }
+                ListFooterComponent={
+                  searchResults.length > 0 ? (
+                    <Pressable
+                      onPress={handleOpenCreateLocation}
+                      accessibilityRole="button"
+                      accessibilityLabel="Can't find a snack cart or stand? Add it here"
+                      style={({ pressed }) => [
+                        styles.notListedFooterBtn,
+                        pressed && styles.notListedFooterBtnPressed,
+                      ]}
+                      testID="restaurant-search-footer-not-listed-btn"
+                    >
+                      <Ionicons name="add-circle-outline" size={16} color={theme.color.primary} />
+                      <Text style={styles.notListedFooterBtnText}>
+                        Can&apos;t find a snack cart or stand? Add it here
+                      </Text>
+                    </Pressable>
+                  ) : null
                 }
                 contentContainerStyle={styles.restaurantListContent}
               />
@@ -1223,10 +1365,11 @@ export default function FoodListDetailScreen(): JSX.Element {
         </View>
       </Modal>
 
-      {/* Entry Point 2: FoodItemPickerModal scoped to selected restaurant */}
-      {selectedExperience ? (
+      {/* Entry Point 2: FoodItemPickerModal scoped to selected restaurant or location */}
+      {selectedExperience || selectedLocation ? (
         <FoodItemPickerModal
-          experienceId={selectedExperience.id}
+          experienceId={selectedExperience?.id}
+          locationId={selectedLocation?.id}
           mode="addToLists"
           visible={pickerModalVisible}
           existingItemIds={list?.items.map((i) => i.foodItemId)}
@@ -1234,10 +1377,19 @@ export default function FoodListDetailScreen(): JSX.Element {
           onClose={() => {
             setPickerModalVisible(false);
             setSelectedExperience(null);
+            setSelectedLocation(null);
           }}
           onConfirmSelection={(items) => void handleConfirmAddItems(items)}
         />
       ) : null}
+
+      {/* Entry Point 2: Create User-Submitted Location Modal for snack carts/stands */}
+      <CreateLocationModal
+        park="Magic Kingdom"
+        visible={createLocationModalVisible}
+        onClose={() => setCreateLocationModalVisible(false)}
+        onLocationSelected={handleLocationSelected}
+      />
       </View>
     </ScreenContainer>
   );
@@ -1626,6 +1778,11 @@ const styles = StyleSheet.create({
   restaurantRowText: {
     flex: 1,
   },
+  locationTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   restaurantRowName: {
     fontSize: 15,
     fontWeight: '600',
@@ -1643,5 +1800,48 @@ const styles = StyleSheet.create({
   emptyWrapText: {
     color: theme.color.textSecondary,
     fontSize: 13,
+  },
+  notListedBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    backgroundColor: theme.color.surfaceAlt,
+    borderRadius: theme.radius.pill,
+    borderWidth: 1,
+    borderColor: theme.color.border,
+  },
+  notListedBtnPressed: {
+    opacity: 0.7,
+  },
+  notListedBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.color.primary,
+  },
+  notListedFooterBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    paddingHorizontal: theme.spacing.md,
+    marginHorizontal: theme.spacing.md,
+    marginTop: 8,
+    marginBottom: 16,
+    backgroundColor: theme.color.surfaceAlt,
+    borderRadius: theme.radius.md,
+    borderWidth: 1,
+    borderColor: theme.color.border,
+  },
+  notListedFooterBtnPressed: {
+    opacity: 0.7,
+  },
+  notListedFooterBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.color.primary,
   },
 });

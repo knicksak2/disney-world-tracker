@@ -60,8 +60,8 @@ Implementation is **TypeScript**, reusing existing infrastructure: the `Live_Ser
 - [ ] 6. Crowd Calendar mobile UI (`apps/mobile`)
   - [ ] 6.1 Month calendar per park (1–10 coloring) + best-park/best-days picks.
     - _Requirements: 6.1, 6.3_
-  - [ ] 6.2 Day-detail view — per-park index, park hours, event flags, LL price, festival; per-ride reliability, typical LL sell-out hour, and showtimes; forecast weather for near-term dates; captured-forecast-vs-actual for past dates and a recent forecast-accuracy stat.
-    - _Requirements: 6.2, 6.4, 7.5, 9.6, 10.5_
+  - [ ] 6.2 Day-detail view — per-park index, all 4 parks comparison breakdown, expected average standby wait minutes, park hours, event flags, LL price, festival; forecast weather for near-term dates; captured-forecast-vs-actual for past dates, same-day live tracking, and recent forecast-accuracy stat.
+    - _Requirements: 6.2, 6.4, 6.6, 7.5, 9.6, 10.5_
   - [ ] 6.3 "When to ride" wait-insights section on `ExperienceDetailScreen` — date-context switcher (Now / trip date / typical), a lead best-time-to-ride verdict whose certainty scales with data confidence (definitive → "usually" → soft pattern + "early estimate" chip; never self-disparaging copy), the always-visible forecast curve, Lightning Lane vs single-rider decision helpers, secondary insights (p50/p90 volatility, reliability, LL sell-out, event/cascade), an "Add to my plan" action into `TripSchedule`, and an optional wait-drop alert. Backed by `WaitInsightsDTO`.
     - _Requirements: 11.5, 11.8, 11.9, 11.10, 11.11_
   - [ ] 6.4 Component tests for calendar, day-detail, and wait-insights rendering.

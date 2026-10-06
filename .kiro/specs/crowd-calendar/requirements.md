@@ -101,10 +101,11 @@ This feature owns data collection, the wait-time model, the crowd index and fore
 #### Acceptance Criteria
 
 1. THE App SHALL provide a Crowd Calendar screen showing a month view with each date's forecast Crowd_Index per Park (or a resort rollup), on a 1–10 scale.
-2. THE Crowd Calendar SHALL provide a day-detail view showing per-Park Crowd_Index, park hours, Early Entry / Extended Evening / Special Ticketed Event flags, the Lightning Lane Multi Pass price, and any known festival window.
+2. THE Crowd Calendar SHALL provide a day-detail view showing per-Park Crowd_Index (comparing all 4 Walt Disney World theme parks for the selected date), expected average standby wait minutes, park hours, Early Entry / Extended Evening / Special Ticketed Event flags, the Lightning Lane Multi Pass price, and any known festival window.
 3. THE Crowd Calendar SHALL recommend the least-busy Park for a given date and highlight the least-busy days within a date range.
 4. WHERE an observed Crowd_Index exists for a past date, THE Crowd Calendar SHALL show predicted-versus-actual for transparency.
 5. THE Crowd Calendar reads SHALL be served by an authenticated endpoint backed by the Prediction_Service and the Crowd_Index/Schedule_Signal stores.
+6. WHEN the selected date is the current calendar day and live wait samples exist, THE Crowd Calendar day-detail SHALL surface in-progress tracking comparing the forecast against the current observed crowd index.
 
 ### Requirement 7: Forecast Accuracy and Calibration
 
@@ -161,7 +162,7 @@ This feature owns data collection, the wait-time model, the crowd index and fore
 2. THE System SHALL maintain a per-Experience weather sensitivity — a relative wait adjustment by condition versus a clear-sky baseline — learned recency-weighted from observed weather-versus-wait, acknowledging that outdoor and indoor Experiences may react oppositely.
 3. WHEN a date falls within the weather forecast horizon (~up to 14 days), THE Prediction_Service SHALL apply the per-Experience weather adjustment to predicted waits using the forecast; beyond the horizon, no weather adjustment SHALL be applied (weather cannot inform far-future planning).
 4. THE weather forecast SHALL be refreshed at most once per day; the weather adjustment SHALL be bounded so a single condition cannot distort a prediction beyond a sane limit.
-5. THE Crowd Calendar day-detail MAY surface the forecast weather for near-term dates.
+5. THE Crowd Calendar day-detail SHALL surface the forecast weather (temperature, condition, and precipitation) for near-term dates within the weather forecast horizon.
 6. THE weather stores SHALL remain bounded per Requirement 3.6.
 
 ### Requirement 11: Derived Statistics and Cross-Ride Effects

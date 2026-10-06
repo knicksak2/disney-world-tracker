@@ -35,9 +35,9 @@ import RestaurantFoodLogsSheet from './RestaurantFoodLogsSheet';
 
 export interface FoodItemPickerModalProps {
   /** Experience id if scoped to a Restaurant_Experience. */
-  readonly experienceId?: string;
+  readonly experienceId?: string | undefined;
   /** Location id if scoped to a User_Submitted_Location. */
-  readonly locationId?: string;
+  readonly locationId?: string | undefined;
   /** Optional menus to override or supply without fetching. */
   readonly menus?: readonly MenuDTO[] | undefined;
   /** Mode: 'log' (single-select default) or 'addToLists' (multi-select). */

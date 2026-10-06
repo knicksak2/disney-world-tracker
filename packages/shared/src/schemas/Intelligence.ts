@@ -1,6 +1,12 @@
 import { z } from 'zod';
 import { parkSchema } from './primitives.js';
 
+export const parkCrowdSummarySchema = z.object({
+  park: parkSchema,
+  forecastIndex: z.number(),
+  expectedAvgWaitMinutes: z.number().optional(),
+});
+
 export const crowdCalendarDaySchema = z.object({
   date: z.string(),
   park: parkSchema,
@@ -26,6 +32,15 @@ export const crowdCalendarDaySchema = z.object({
   ticketedEvent: z.boolean(),
   llMultipassPriceCents: z.number().optional(),
   festival: z.string().optional(),
+  expectedAvgWaitMinutes: z.number().optional(),
+  isLiveTracking: z.boolean().optional(),
+  weather: z.object({
+    tempMaxF: z.number(),
+    tempMinF: z.number(),
+    condition: z.string(),
+    precipProbability: z.number().optional(),
+  }).optional(),
+  allParks: z.array(parkCrowdSummarySchema).optional(),
   rideSignals: z.array(z.object({
     experienceId: z.string().uuid(),
     reliability: z.number(),

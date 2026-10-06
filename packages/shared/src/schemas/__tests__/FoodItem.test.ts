@@ -412,6 +412,7 @@ describe('createUserSubmittedLocationInputSchema and locationSuggestionSchema', 
       locationSuggestionSchema.safeParse({
         id: UUID_A,
         name: 'Spring Roll Cart',
+        park: 'Magic Kingdom',
         similarity: 0.85,
       }).success,
     ).toBe(true);
@@ -420,6 +421,7 @@ describe('createUserSubmittedLocationInputSchema and locationSuggestionSchema', 
       locationSuggestionSchema.safeParse({
         id: UUID_A,
         name: 'Spring Roll Cart',
+        park: 'Magic Kingdom',
         similarity: 1.5,
       }).success,
     ).toBe(false);

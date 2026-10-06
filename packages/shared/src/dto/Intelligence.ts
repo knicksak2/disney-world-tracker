@@ -1,11 +1,17 @@
 import type { Park } from '../enums.js';
 
+export interface ParkCrowdSummary {
+  readonly park: Park;
+  readonly forecastIndex: number;
+  readonly expectedAvgWaitMinutes?: number;
+}
+
 export interface CrowdCalendarDayDTO {
   readonly date: string; // YYYY-MM-DD
   readonly park: Park;
   /** Display-scale 1-10 level, projected from the continuous ratio at render time. */
   readonly forecastIndex: number;
-  /** Display-scale 1-10 level actually observed. Present only for finalized past dates. */
+  /** Display-scale 1-10 level actually observed. Present only for finalized past dates (or current day when tracking). */
   readonly observedIndex?: number;
   /**
    * R7.5: the forecast **as originally issued** for this date, read from the
@@ -40,6 +46,19 @@ export interface CrowdCalendarDayDTO {
   readonly ticketedEvent: boolean;
   readonly llMultipassPriceCents?: number;
   readonly festival?: string;
+  /** Expected average standby wait in minutes across the park's standby basket. */
+  readonly expectedAvgWaitMinutes?: number;
+  /** True when observedIndex reflects same-day in-progress live tracking. */
+  readonly isLiveTracking?: boolean;
+  /** Forecast weather for dates within the near-term forecast horizon (~14 days). */
+  readonly weather?: {
+    readonly tempMaxF: number;
+    readonly tempMinF: number;
+    readonly condition: string;
+    readonly precipProbability?: number;
+  };
+  /** R6.2: per-park crowd levels and expected waits across all 4 theme parks for this date. */
+  readonly allParks?: readonly ParkCrowdSummary[];
   // Day-detail extras
   readonly rideSignals?: readonly {
     readonly experienceId: string;

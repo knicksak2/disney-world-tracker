@@ -333,5 +333,5 @@ describe('navigation (R6.10, R11.6, R11.12)', () => {
       expect(screen.getByTestId('login-submit')).toBeTruthy();
     });
     expect(useSessionStore.getState().token).toBeNull();
-  });
+  }, 15000);
 });

@@ -4,7 +4,7 @@
 
 import React from 'react';
 import { Linking } from 'react-native';
-import { render, fireEvent, waitFor } from '@testing-library/react-native';
+import { render, fireEvent, waitFor, within } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import ResortGuideSection, {
@@ -101,9 +101,13 @@ describe('ResortGuideSection (Requirements 20.4, 20.5, 20.6)', () => {
     expect(getByText('Three Bridges Bar & Grill')).toBeTruthy();
     expect(getByText('Maya Grill')).toBeTruthy();
     expect(getByText('Dahlia Lounge & Barcelona Lounge')).toBeTruthy();
-    expect(getByText('El Mercado de Coronado')).toBeTruthy();
     expect(getByTestId('resort-dining-meals-a2b8f7c2-5aed-5432-a69c-8944524ce74c')).toHaveTextContent('Dinner');
     expect(getByTestId('resort-dining-meals-7fedf9d2-0cf1-59df-bb66-0e77d947dece')).toHaveTextContent('Dinner, Late Night');
+
+    // Progressive disclosure: 5th item visible after expansion
+    expect(getByTestId('resort-dining-expand-toggle')).toBeTruthy();
+    fireEvent.press(getByTestId('resort-dining-expand-toggle'));
+    expect(getByText('El Mercado de Coronado')).toBeTruthy();
     expect(getByTestId('resort-dining-meals-b7cba035-5b25-5697-a0ca-dadef0054658')).toHaveTextContent('Breakfast, Lunch, Dinner');
 
     // 3. Recreation & Amenities
@@ -234,6 +238,70 @@ describe('ResortGuideSection (Requirements 20.4, 20.5, 20.6)', () => {
     fireEvent.press(getByTestId('resort-dining-item-custom-dining-1'));
     expect(mockNavigate).toHaveBeenCalledWith('ExperienceDetail', {
       experienceId: 'custom-dining-1',
+    });
+  });
+
+  it('merges live catalog-synced Recreation/Spa/Tour experiences into the Recreation card alongside the curated pool/trail items, without dropping either', async () => {
+    (apiRequest as jest.Mock).mockImplementation(async (_method: string, path: string) => {
+      if (path.includes('categories=Recreation')) {
+        return {
+          items: [
+            {
+              id: 'exp-live-spa',
+              name: 'La Vida Spa Treatments',
+              category: 'Spa',
+              subType: 'Wellness',
+              description: 'Rejuvenating massages and facials.',
+              priceTier: '$$$',
+            },
+            {
+              id: 'exp-live-tour',
+              name: 'Behind the Seeds Garden Tour',
+              category: 'Tour',
+              description: 'Guided tour of the resort gardens.',
+            },
+          ],
+        };
+      }
+      return { items: [] };
+    });
+
+    const client = createQueryClient();
+    const { getByText, getByTestId } = render(
+      <QueryClientProvider client={client}>
+        <ResortGuideSection
+          experienceId="exp-coronado"
+          experienceName="Disney's Coronado Springs Resort"
+          resort={mockResort as any}
+          latitude={28.3644}
+          longitude={-81.5694}
+        />
+      </QueryClientProvider>,
+    );
+
+    // The live Spa/Tour items appear...
+    await waitFor(() => {
+      expect(getByText('La Vida Spa Treatments')).toBeTruthy();
+      expect(getByText('Behind the Seeds Garden Tour')).toBeTruthy();
+    });
+
+    // ...merged additively alongside the curated recreation items already on
+    // `mockResort.recreation` (The Dig Site pool and the jogging trail), not
+    // replacing them the way live dining replaces `diningFallback`. ("The Dig
+    // Site..." also appears as a Property Highlights block, so this card is
+    // scoped to the recreation list specifically via testID.)
+    expect(
+      within(getByTestId('resort-recreation-card')).getByText(
+        'The Dig Site & Lost City of Cibola Pool',
+      ),
+    ).toBeTruthy();
+    expect(getByText('Lago Dorado 0.9-Mile Jogging Loop')).toBeTruthy();
+
+    // The live Spa item is interactive (carries a real experience id), so
+    // pressing it navigates to ExperienceDetail exactly like a live dining item.
+    fireEvent.press(getByTestId('resort-recreation-item-exp-live-spa'));
+    expect(mockNavigate).toHaveBeenCalledWith('ExperienceDetail', {
+      experienceId: 'exp-live-spa',
     });
   });
 
@@ -520,6 +588,432 @@ describe('ResortGuideSection (Requirements 20.4, 20.5, 20.6)', () => {
       expect(cleanAndSortMealPeriods([])).toBeUndefined();
       expect(cleanAndSortMealPeriods(undefined)).toBeUndefined();
       expect(cleanAndSortMealPeriods(['Pool Bar', 'Lounge'])).toBeUndefined();
+    });
+  });
+
+  describe('Progressive disclosure and in-card dining filters (Requirement 3)', () => {
+    it('truncates dining at 4 items by default and expands on toggle press', () => {
+      const client = createQueryClient();
+      const { getByTestId, getByText, queryByText } = render(
+        <QueryClientProvider client={client}>
+          <ResortGuideSection
+            experienceId="exp-coronado"
+            experienceName="Disney's Coronado Springs Resort"
+            resort={mockResort as any}
+            latitude={28.3644}
+            longitude={-81.5694}
+          />
+        </QueryClientProvider>,
+      );
+
+      // Top 4 items are present, 5th item is not
+      expect(getByText('Toledo – Tapas, Steak & Seafood')).toBeTruthy();
+      expect(getByText('Three Bridges Bar & Grill')).toBeTruthy();
+      expect(getByText('Maya Grill')).toBeTruthy();
+      expect(getByText('Dahlia Lounge & Barcelona Lounge')).toBeTruthy();
+      expect(queryByText('El Mercado de Coronado')).toBeNull();
+
+      // Expand toggle is present with exact count
+      const toggle = getByTestId('resort-dining-expand-toggle');
+      expect(toggle).toHaveTextContent('Show all 5 dining locations (1 more) ▾');
+
+      // Tap toggle to expand
+      fireEvent.press(toggle);
+      expect(getByText('El Mercado de Coronado')).toBeTruthy();
+      expect(toggle).toHaveTextContent('Show fewer dining locations ▴');
+
+      // Tap again to collapse
+      fireEvent.press(toggle);
+      expect(queryByText('El Mercado de Coronado')).toBeNull();
+      expect(toggle).toHaveTextContent('Show all 5 dining locations (1 more) ▾');
+    });
+
+    it('filters visible dining items by category and suppresses expand toggle when <= 4 items match', () => {
+      const client = createQueryClient();
+      const { getByTestId, getByText, queryByText, queryByTestId } = render(
+        <QueryClientProvider client={client}>
+          <ResortGuideSection
+            experienceId="exp-coronado"
+            experienceName="Disney's Coronado Springs Resort"
+            resort={mockResort as any}
+            latitude={28.3644}
+            longitude={-81.5694}
+          />
+        </QueryClientProvider>,
+      );
+
+      // Tap Quick Service filter pill
+      const quickFilter = getByTestId('resort-dining-filter-quick');
+      fireEvent.press(quickFilter);
+
+      // Only El Mercado de Coronado should be visible
+      expect(getByText('El Mercado de Coronado')).toBeTruthy();
+      expect(queryByText('Toledo – Tapas, Steak & Seafood')).toBeNull();
+      expect(queryByText('Three Bridges Bar & Grill')).toBeNull();
+      expect(queryByText('Maya Grill')).toBeNull();
+      expect(queryByText('Dahlia Lounge & Barcelona Lounge')).toBeNull();
+
+      // Expand toggle is suppressed because filtered count is 1 (<= 4)
+      expect(queryByTestId('resort-dining-expand-toggle')).toBeNull();
+
+      // Tap Table Service filter pill
+      const tableFilter = getByTestId('resort-dining-filter-table');
+      fireEvent.press(tableFilter);
+      expect(getByText('Toledo – Tapas, Steak & Seafood')).toBeTruthy();
+      expect(getByText('Three Bridges Bar & Grill')).toBeTruthy();
+      expect(getByText('Maya Grill')).toBeTruthy();
+      expect(queryByText('El Mercado de Coronado')).toBeNull();
+      expect(queryByText('Dahlia Lounge & Barcelona Lounge')).toBeNull();
+      expect(queryByTestId('resort-dining-expand-toggle')).toBeNull();
+
+      // Tap Lounges filter pill
+      const loungesFilter = getByTestId('resort-dining-filter-lounge');
+      fireEvent.press(loungesFilter);
+      expect(getByText('Dahlia Lounge & Barcelona Lounge')).toBeTruthy();
+      expect(queryByText('Toledo – Tapas, Steak & Seafood')).toBeNull();
+      expect(queryByTestId('resort-dining-expand-toggle')).toBeNull();
+
+      // Tap All filter pill to reset
+      const allFilter = getByTestId('resort-dining-filter-all');
+      fireEvent.press(allFilter);
+      expect(getByText('Toledo – Tapas, Steak & Seafood')).toBeTruthy();
+      expect(getByTestId('resort-dining-expand-toggle')).toBeTruthy();
+    });
+  });
+
+  describe('Recreation card interactions and modal sheet (Requirement 4)', () => {
+    const resortWithDiverseRecreation = {
+      ...mockResort,
+      recreation: [
+        {
+          id: 'exp-dig-site-pool',
+          icon: '🏊',
+          title: 'The Dig Site & Lost City of Cibola Pool',
+          badge: 'Feature Pool',
+          description: '50-foot Mayan pyramid with cascading waterfall.',
+          hours: '9:00 AM - 10:00 PM',
+          priceTier: 'Included',
+        },
+        {
+          icon: '🏃',
+          title: 'Lago Dorado 0.9-Mile Jogging Loop',
+          badge: 'Trail',
+          description: 'Scenic paved waterfront path connecting all neighborhoods.',
+          hours: '24 Hours',
+          priceTier: 'Free',
+        },
+        {
+          icon: '🏐',
+          title: 'Volleyball Court',
+          badge: 'Sports',
+          description: 'Sand court located by the Dig Site.',
+        },
+        {
+          icon: '🎮',
+          title: 'Iguana Arcade',
+          badge: 'Games',
+          description: 'Classic and modern arcade games.',
+        },
+        {
+          icon: '🔥',
+          title: 'Campfire Activities',
+          badge: 'Campfire',
+          description: 'Nightly campfire with marshmallows.',
+        },
+        {
+          icon: '🎬',
+          title: 'Movies Under the Stars',
+          badge: 'Entertainment',
+          description: 'Outdoor Disney movie screenings.',
+        },
+      ],
+    };
+
+    it('navigates to ExperienceDetail when recreation item has an id', () => {
+      const client = createQueryClient();
+      const { getByTestId } = render(
+        <QueryClientProvider client={client}>
+          <ResortGuideSection
+            experienceId="exp-coronado"
+            experienceName="Disney's Coronado Springs Resort"
+            resort={resortWithDiverseRecreation as any}
+            latitude={28.3644}
+            longitude={-81.5694}
+          />
+        </QueryClientProvider>,
+      );
+
+      const item0 = getByTestId('resort-recreation-item-exp-dig-site-pool');
+      fireEvent.press(item0);
+
+      expect(mockNavigate).toHaveBeenCalledWith('ExperienceDetail', {
+        experienceId: 'exp-dig-site-pool',
+      });
+    });
+
+    it('opens amenity modal sheet when recreation item does not have an id', () => {
+      const client = createQueryClient();
+      const { getByTestId, queryByTestId } = render(
+        <QueryClientProvider client={client}>
+          <ResortGuideSection
+            experienceId="exp-coronado"
+            experienceName="Disney's Coronado Springs Resort"
+            resort={resortWithDiverseRecreation as any}
+            latitude={28.3644}
+            longitude={-81.5694}
+          />
+        </QueryClientProvider>,
+      );
+
+      expect(queryByTestId('resort-amenity-modal')).toBeNull();
+
+      // Tap item 1 (no id)
+      const item1 = getByTestId('resort-recreation-item-1');
+      fireEvent.press(item1);
+
+      // Amenity modal appears
+      const modal = getByTestId('resort-amenity-modal');
+      expect(modal).toBeTruthy();
+      expect(within(modal).getByText('Lago Dorado 0.9-Mile Jogging Loop')).toBeTruthy();
+      expect(within(modal).getByText('Scenic paved waterfront path connecting all neighborhoods.')).toBeTruthy();
+      expect(within(modal).getByText('24 Hours')).toBeTruthy();
+      expect(within(modal).getByText('Free')).toBeTruthy();
+
+      // Close modal
+      const closeBtn = getByTestId('resort-amenity-modal-close');
+      fireEvent.press(closeBtn);
+      expect(queryByTestId('resort-amenity-modal')).toBeNull();
+    });
+
+    it('truncates recreation items at 4 and shows expand toggle when >4 items exist', () => {
+      const client = createQueryClient();
+      const { getByTestId, getByText, getAllByText, queryByText } = render(
+        <QueryClientProvider client={client}>
+          <ResortGuideSection
+            experienceId="exp-coronado"
+            experienceName="Disney's Coronado Springs Resort"
+            resort={resortWithDiverseRecreation as any}
+            latitude={28.3644}
+            longitude={-81.5694}
+          />
+        </QueryClientProvider>,
+      );
+
+      // Top 4 are visible
+      expect(getAllByText('The Dig Site & Lost City of Cibola Pool').length).toBeGreaterThanOrEqual(1);
+      expect(getByText('Lago Dorado 0.9-Mile Jogging Loop')).toBeTruthy();
+      expect(getByText('Volleyball Court')).toBeTruthy();
+      expect(getByText('Iguana Arcade')).toBeTruthy();
+      expect(queryByText('Campfire Activities')).toBeNull();
+      expect(queryByText('Movies Under the Stars')).toBeNull();
+
+      // Expand toggle shows count
+      const toggle = getByTestId('resort-recreation-expand-toggle');
+      expect(toggle).toHaveTextContent('Show all 6 recreation & activities (2 more) ▾');
+
+      // Expand
+      fireEvent.press(toggle);
+      expect(getByText('Campfire Activities')).toBeTruthy();
+      expect(getByText('Movies Under the Stars')).toBeTruthy();
+      expect(toggle).toHaveTextContent('Show fewer activities ▴');
+
+      // Collapse
+      fireEvent.press(toggle);
+      expect(queryByText('Campfire Activities')).toBeNull();
+      expect(toggle).toHaveTextContent('Show all 6 recreation & activities (2 more) ▾');
+    });
+
+    it('falls back to signature recreation activities (painting, mosaic, and sangria classes) when resort recreation is missing', () => {
+      const resortWithoutRecreation = {
+        id: 'resort-coronado',
+        name: "Disney's Coronado Springs Resort",
+        description: 'A moderate resort on Lago Dorado',
+        tier: 'Moderate' as const,
+        featurePool: 'The Dig Site & Lost City of Cibola Pool',
+        transportationModes: ['Bus'],
+      };
+
+      const client = createQueryClient();
+      const { getByTestId, getByText, getAllByText } = render(
+        <QueryClientProvider client={client}>
+          <ResortGuideSection
+            experienceId="exp-coronado"
+            experienceName="Disney's Coronado Springs Resort"
+            resort={resortWithoutRecreation as any}
+            latitude={28.3644}
+            longitude={-81.5694}
+          />
+        </QueryClientProvider>,
+      );
+
+      // Verify that signature recreation activities from profile.recreationFallback are rendered
+      expect(getByText('Colors of Coronado Painting Experience')).toBeTruthy();
+      expect(getByText('Spanish Mosaic Art Experience')).toBeTruthy();
+      expect(getByText('Sangria University')).toBeTruthy();
+      expect(getAllByText('The Dig Site & Lost City of Cibola Pool').length).toBeGreaterThanOrEqual(1);
+
+      // Verify expand toggle for additional activities
+      const toggle = getByTestId('resort-recreation-expand-toggle');
+      expect(toggle).toBeTruthy();
+      fireEvent.press(toggle);
+      expect(getByText('Lago Dorado Waterfront Trail')).toBeTruthy();
+      expect(getByText('La Vida Health Club & Fitness Center')).toBeTruthy();
+    });
+
+    it('merges signature painting, mosaic, and sangria experiences even when live resort recreation provides generic pools and fitness centers', () => {
+      const resortWithGenericRecreation = {
+        id: 'resort-coronado-uuid',
+        name: "Disney's Coronado Springs Resort",
+        description: 'A moderate resort on Lago Dorado',
+        tier: 'Moderate' as const,
+        featurePool: 'The Dig Site & Lost City of Cibola Pool',
+        transportationModes: ['Bus'],
+        recreation: [
+          {
+            icon: '🏊',
+            title: 'The Dig Site & Lost City of Cibola Pool',
+            badge: 'Feature Pool',
+            description: '50-foot Mayan pyramid with cascading waterfall and waterslide.',
+          },
+          {
+            icon: '🏊',
+            title: 'Casitas, Ranchos & Cabanas Leisure Pools',
+            badge: 'Quiet Pools',
+            description: 'Three tranquil heated leisure pools.',
+          },
+          {
+            icon: '🏃',
+            title: 'Lago Dorado 0.9-Mile Jogging Loop',
+            badge: 'Trail',
+            description: 'Scenic paved waterfront path.',
+          },
+          {
+            icon: '🏋️',
+            title: 'La Vida Health Club & Fitness Center',
+            badge: 'Wellness',
+            description: '24/7 fitness facility.',
+          },
+          {
+            icon: '🪵',
+            title: 'Campfire & Movies Under the Stars',
+            badge: 'Family Fun',
+            description: 'Nightly marshmallow roasts by Lago Dorado.',
+          },
+        ],
+      };
+
+      const client = createQueryClient();
+      const { getByTestId, getByText } = render(
+        <QueryClientProvider client={client}>
+          <ResortGuideSection
+            experienceId="exp-coronado"
+            experienceName="Disney's Coronado Springs Resort"
+            resort={resortWithGenericRecreation as any}
+            latitude={28.3644}
+            longitude={-81.5694}
+          />
+        </QueryClientProvider>,
+      );
+
+      // Verify that signature arts & crafts are NOT overwritten by generic live DB recreation
+      expect(getByText('Colors of Coronado Painting Experience')).toBeTruthy();
+      expect(getByText('Spanish Mosaic Art Experience')).toBeTruthy();
+      expect(getByText('Sangria University')).toBeTruthy();
+
+      // Verify toggle expands the remaining live/fallback items
+      const toggle = getByTestId('resort-recreation-expand-toggle');
+      expect(toggle).toBeTruthy();
+      fireEvent.press(toggle);
+
+      expect(getByText('Casitas, Ranchos & Cabanas Leisure Pools')).toBeTruthy();
+      expect(getByText('La Vida Health Club & Fitness Center')).toBeTruthy();
+    });
+
+    it('merges Painting on the Riviera when live resort recreation provides Riviera pool and fitness center', () => {
+      const rivieraWithGenericRecreation = {
+        id: 'resort-riviera-uuid',
+        name: "Disney's Riviera Resort",
+        description: 'Mediterranean elegance on Barefoot Bay',
+        tier: 'Deluxe Villa' as const,
+        featurePool: 'Riviera Pool',
+        transportationModes: ['Skyliner', 'Bus'],
+        recreation: [
+          {
+            icon: '🏊',
+            title: 'Riviera Pool',
+            badge: 'Feature Pool',
+            description: 'Mediterranean feature pool.',
+          },
+          {
+            icon: '🏋️',
+            title: 'Athlétique Fitness Center',
+            badge: 'Wellness',
+            description: 'Contemporary gym.',
+          },
+        ],
+      };
+
+      const client = createQueryClient();
+      const { getByText } = render(
+        <QueryClientProvider client={client}>
+          <ResortGuideSection
+            experienceId="exp-riviera"
+            experienceName="Disney's Riviera Resort"
+            resort={rivieraWithGenericRecreation as any}
+            latitude={28.3664}
+            longitude={-81.5432}
+          />
+        </QueryClientProvider>,
+      );
+
+      // Verify Painting on the Riviera is preserved and prioritized
+      expect(getByText('Painting on the Riviera')).toBeTruthy();
+    });
+
+    it('navigates directly to ExperienceDetail when Colors of Coronado Painting Experience is pressed (Requirement 6.2)', () => {
+      const client = createQueryClient();
+      const { getByTestId } = render(
+        <QueryClientProvider client={client}>
+          <ResortGuideSection
+            experienceId="exp-coronado"
+            experienceName="Disney's Coronado Springs Resort"
+            resort={{ id: 'resort-coronado', name: "Disney's Coronado Springs Resort" } as any}
+            latitude={28.3644}
+            longitude={-81.5694}
+          />
+        </QueryClientProvider>,
+      );
+
+      const paintItem = getByTestId('resort-recreation-item-b1010001-c001-4000-8000-000000000001');
+      expect(paintItem).toBeTruthy();
+      fireEvent.press(paintItem);
+
+      expect(mockNavigate).toHaveBeenCalledWith('ExperienceDetail', {
+        experienceId: 'b1010001-c001-4000-8000-000000000001',
+      });
+    });
+
+    it('navigates directly to ExperienceDetail when Painting on the Riviera is pressed (Requirement 6.2)', () => {
+      const client = createQueryClient();
+      const { getByTestId } = render(
+        <QueryClientProvider client={client}>
+          <ResortGuideSection
+            experienceId="exp-riviera"
+            experienceName="Disney's Riviera Resort"
+            resort={{ id: 'resort-riviera', name: "Disney's Riviera Resort" } as any}
+            latitude={28.3664}
+            longitude={-81.5432}
+          />
+        </QueryClientProvider>,
+      );
+
+      const rivieraPaintItem = getByTestId('resort-recreation-item-b1010001-c001-4000-8000-000000000004');
+      expect(rivieraPaintItem).toBeTruthy();
+      fireEvent.press(rivieraPaintItem);
+
+      expect(mockNavigate).toHaveBeenCalledWith('ExperienceDetail', {
+        experienceId: 'b1010001-c001-4000-8000-000000000004',
+      });
     });
   });
 });

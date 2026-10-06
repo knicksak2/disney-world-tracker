@@ -202,6 +202,7 @@ describe('ExploreStack structure (Requirements 2.5)', () => {
     expect(names).toEqual([
       'CatalogList',
       'DestinationScreen',
+      'ResortsDirectory',
       'CrowdCalendar',
       'LiveWaits',
     ]);

@@ -12,6 +12,7 @@ import React from 'react';
 import {
   Image,
   Linking,
+  Modal,
   Platform,
   Pressable,
   StyleSheet,
@@ -38,6 +39,12 @@ import {
   type DirectionsPlatform,
 } from './directions';
 import { isQuickServiceDining } from './gating';
+import {
+  computeVisibleItems,
+  filterDiningByCategory,
+  classifyDiningCategory,
+  type DiningCategoryFilter,
+} from './resortGuideView';
 
 function mapsPlatform(): DirectionsPlatform {
   if (Platform.OS === 'ios') return 'ios';
@@ -63,6 +70,9 @@ export interface ResortDiningVenue {
   readonly action: 'Reserve' | 'Menu ›';
   readonly diningUrl?: string | null;
   readonly meals?: readonly string[] | undefined;
+  readonly imageUrl?: string | null;
+  readonly resortName?: string | undefined;
+  readonly resortId?: string | null | undefined;
 }
 
 export interface ResortHighlightBlock {
@@ -77,10 +87,11 @@ export interface ResortProfile {
   readonly highlights: readonly ResortHighlightBlock[];
   readonly diningSubtitle: string;
   readonly diningFallback: readonly ResortDiningVenue[];
+  readonly recreationFallback?: readonly ResortRecreationItemDTO[];
   readonly transitTimes?: Record<string, number>;
 }
 
-const DEFAULT_TRANSIT_BY_RESORT: Record<string, Record<string, number>> = {
+export const DEFAULT_TRANSIT_BY_RESORT: Record<string, Record<string, number>> = {
   coronado: {
     'Animal Kingdom': 8,
     'Hollywood Studios': 9,
@@ -174,7 +185,7 @@ const DEFAULT_TRANSIT_BY_RESORT: Record<string, Record<string, number>> = {
   },
 };
 
-const KNOWN_DINING_METADATA: Record<
+export const KNOWN_DINING_METADATA: Record<
   string,
   {
     subtitle: string;
@@ -668,7 +679,7 @@ const KNOWN_DINING_METADATA: Record<
   },
 };
 
-const KNOWN_RESORT_PROFILES: Record<string, ResortProfile> = {
+export const KNOWN_RESORT_PROFILES: Record<string, ResortProfile> = {
   coronado: {
     blurb:
       'Spanish Colonial and Southwestern Mexican heritage surrounding 22-acre Lago Dorado. Guests can stroll across wooden boardwalk bridges to Villa del Lago or take in panoramic Florida skyline views from Gran Destino Tower.',
@@ -756,6 +767,74 @@ const KNOWN_RESORT_PROFILES: Record<string, ResortProfile> = {
         diningUrl:
           'https://disneyworld.disney.go.com/dining/coronado-springs-resort/el-mercado-de-coronado/',
         meals: ['Breakfast', 'Lunch', 'Dinner'],
+      },
+    ],
+    recreationFallback: [
+      {
+        id: 'b1010001-c001-4000-8000-000000000001',
+        icon: '🎨',
+        title: 'Colors of Coronado Painting Experience',
+        badge: 'Arts & Crafts',
+        description:
+          'Paint an iconic Disney masterpiece alongside master artists overlooking panoramic views from Gran Destino Tower.',
+        hours: 'Select Afternoons',
+        priceTier: '$$$',
+      },
+      {
+        id: 'b1010001-c001-4000-8000-000000000002',
+        icon: '🎨',
+        title: 'Spanish Mosaic Art Experience',
+        badge: 'Arts & Crafts',
+        description:
+          'Design and handcraft your own unique Spanish mosaic art tile inspired by Catalan architecture at Dahlia Lounge terrace.',
+        hours: 'Select Mornings',
+        priceTier: '$$',
+      },
+      {
+        id: 'b1010001-c001-4000-8000-000000000003',
+        icon: '🍷',
+        title: 'Sangria University',
+        badge: 'Class',
+        description:
+          'Delve into the history and craft of four artisan sangria recipes with sommeliers at Three Bridges Bar & Grill.',
+        hours: 'Saturdays & Sundays',
+        priceTier: '$$$',
+      },
+      {
+        icon: '🏊',
+        title: 'The Dig Site & Lost City of Cibola Pool',
+        badge: 'Feature Pool',
+        description:
+          '50-foot Mayan pyramid with cascading waterfall, 123-foot jaguar waterslide, and largest outdoor hot tub at WDW.',
+        hours: '9:00 AM - 10:00 PM',
+        priceTier: 'Included',
+      },
+      {
+        icon: '🏃',
+        title: 'Lago Dorado Waterfront Trail',
+        badge: 'Trail',
+        description:
+          '0.9-mile scenic paved path connecting all four village neighborhoods across over-water boardwalk bridges.',
+        hours: '24 Hours',
+        priceTier: 'Free',
+      },
+      {
+        icon: '🏋️',
+        title: 'La Vida Health Club & Fitness Center',
+        badge: 'Wellness',
+        description:
+          '24/7 fitness facility with modern cardio and strength equipment, dry saunas, and wellness services.',
+        hours: '24 Hours',
+        priceTier: 'Included',
+      },
+      {
+        icon: '🪵',
+        title: 'Campfire & Movies Under the Stars',
+        badge: 'Family Fun',
+        description:
+          'Nightly marshmallow roasts by Lago Dorado followed by complimentary Disney movie screenings under the Florida twilight.',
+        hours: 'Evenings',
+        priceTier: 'Free',
       },
     ],
   },
@@ -1454,8 +1533,46 @@ const KNOWN_RESORT_PROFILES: Record<string, ResortProfile> = {
         tag: 'Poolside Bar & Lounge',
         price: '$$',
         action: 'Menu ›',
-        diningUrl:
-          'https://disneyworld.disney.go.com/dining/riviera-resort/bar-riva/',
+        meals: ['Breakfast', 'Lunch', 'Dinner'],
+      },
+    ],
+    recreationFallback: [
+      {
+        id: 'b1010001-c001-4000-8000-000000000004',
+        icon: '🎨',
+        title: 'Painting on the Riviera',
+        badge: 'Arts & Crafts',
+        description:
+          'Terrace painting masterclass celebrating European Mediterranean art overlooking Barefoot Bay.',
+        hours: 'Select Mornings',
+        priceTier: '$$$',
+      },
+      {
+        icon: '♟️',
+        title: 'Riviera Lawn Games & Bocce Ball',
+        badge: 'Recreation',
+        description:
+          'Bocce ball court, life-sized chess on the event lawn, and scenic waterfront promenade around Barefoot Bay.',
+        hours: 'Daytime',
+        priceTier: 'Included',
+      },
+      {
+        icon: '🏊',
+        title: 'Riviera Pool & S’il Vous Play',
+        badge: 'Feature Pool',
+        description:
+          'Signature Mediterranean pool with 30-foot winding stone turret waterslide and interactive water play area.',
+        hours: '9:00 AM - 10:00 PM',
+        priceTier: 'Included',
+      },
+      {
+        icon: '🏋️',
+        title: 'Athlétique Fitness Center',
+        badge: 'Wellness',
+        description:
+          'Contemporary fitness center with top-tier cardio machinery, free weights, and stretching equipment.',
+        hours: '24 Hours',
+        priceTier: 'Included',
       },
     ],
   },
@@ -2080,7 +2197,7 @@ export function resolveFallbackResortMeta(name: string): {
   };
 }
 
-function resolveResortProfile(
+export function resolveResortProfile(
   name: string,
   resort?: ResortDTO | null,
   featurePool: string = 'Feature Pool',
@@ -2158,7 +2275,7 @@ function resolveResortProfile(
   };
 }
 
-function resolveTransitTimes(
+export function resolveTransitTimes(
   resortName: string,
   resort?: ResortDTO | null,
 ): Record<string, number> {
@@ -2427,6 +2544,31 @@ function mapExperienceToDiningVenue(
   };
 }
 
+/**
+ * Map a catalog-synced Recreation/Spa/Tour `ExperienceDTO` to the shared
+ * `ResortRecreationItemDTO` display shape, mirroring `mapExperienceToDiningVenue`
+ * above. Carries the real experience `id` through so the card is interactive
+ * (navigates to `ExperienceDetail` on press) rather than opening the
+ * informational bottom sheet.
+ */
+function mapExperienceToRecreationItem(
+  item: ExperienceDTO,
+): ResortRecreationItemDTO {
+  const icon =
+    item.category === 'Spa' ? '💆' : item.category === 'Tour' ? '🏛️' : '🏊';
+  return {
+    id: item.id,
+    icon,
+    title: item.name,
+    badge: item.subType ?? item.category,
+    description:
+      item.description && item.description.trim().length > 0
+        ? item.description
+        : 'On-property recreation activity.',
+    ...(item.priceTier ? { priceTier: item.priceTier } : {}),
+  };
+}
+
 export default function ResortGuideSection({
   experienceId,
   experienceName,
@@ -2437,6 +2579,10 @@ export default function ResortGuideSection({
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [directionsFailed, setDirectionsFailed] = React.useState(false);
   const [mapImageFailed, setMapImageFailed] = React.useState(false);
+  const [diningExpanded, setDiningExpanded] = React.useState(false);
+  const [diningCategoryFilter, setDiningCategoryFilter] = React.useState<DiningCategoryFilter>('all');
+  const [recreationExpanded, setRecreationExpanded] = React.useState(false);
+  const [selectedAmenity, setSelectedAmenity] = React.useState<ResortRecreationItemDTO | null>(null);
 
   const resortId = resort?.id;
   const fallbackMeta = resolveFallbackResortMeta(experienceName);
@@ -2455,31 +2601,138 @@ export default function ResortGuideSection({
     primaryTransit,
   );
 
-  const recreation: readonly ResortRecreationItemDTO[] =
-    resort?.recreation && resort.recreation.length > 0
-      ? resort.recreation
-      : [
-          {
-            icon: '🏊',
-            title: featurePool,
-            badge: 'Feature Pool',
-            description: `Heated signature pool with themed slide and lounge deck at ${experienceName}.`,
-          },
-          {
-            icon: '🏃',
-            title: 'Resort Walking Trail',
-            badge: 'Trail',
-            description:
-              'Paved scenic path winding through landscaped grounds and resort courtyards.',
-          },
-          {
-            icon: '🪵',
-            title: 'Campfire & Movies Under the Stars',
-            badge: 'Family Fun',
-            description:
-              'Nightly marshmallow roasts followed by complimentary outdoor Disney movie screenings under the Florida twilight.',
-          },
-        ];
+  // Query catalog-linked Recreation/Spa/Tour experiences for this resort,
+  // mirroring the dining query above. Unlike dining, resort amenities such as
+  // pools, fitness centers, and spas are deliberately excluded from Disney's
+  // catalog sync (see `AMENITY_SUB_TYPES` in `facilityExclusion.ts`) and exist
+  // only in the curated `resort.recreation` / `recreationFallback` data below,
+  // so live results are merged additively with that curated data rather than
+  // replacing it the way live dining replaces `diningFallback`.
+  const recreationQuery = useQuery({
+    queryKey: ['catalog', 'recreation', resortId ?? experienceId] as const,
+    queryFn: async () => {
+      const q = resortId
+        ? `?categories=Recreation,Spa,Tour&resortId=${encodeURIComponent(resortId)}`
+        : '?categories=Recreation,Spa,Tour';
+      const res = await apiRequest<{
+        experiences?: readonly ExperienceDTO[];
+        items?: readonly ExperienceDTO[];
+      }>('GET', `/catalog${q}`);
+      const list = res?.experiences ?? res?.items ?? [];
+      return list.filter(
+        (item) =>
+          item.category === 'Recreation' ||
+          item.category === 'Spa' ||
+          item.category === 'Tour',
+      );
+    },
+    enabled: Boolean(resortId),
+  });
+
+  const liveRecreationItems: readonly ResortRecreationItemDTO[] = React.useMemo(
+    () => (recreationQuery.data ?? []).map(mapExperienceToRecreationItem),
+    [recreationQuery.data],
+  );
+
+  const recreation: readonly ResortRecreationItemDTO[] = React.useMemo(() => {
+    // Start from the existing curated/live-JSONB resolution (unchanged below),
+    // then merge in the catalog-linked items that aren't already represented
+    // there, deduped by id (preferred) or case-insensitive title.
+    const base: readonly ResortRecreationItemDTO[] = (() => {
+    if (resort?.recreation && resort.recreation.length > 0) {
+      // If live resort recreation has items, check if signature art/class experiences
+      // (Colors of Coronado, Spanish Mosaic, Sangria University, Painting on the Riviera)
+      // are missing from this specific resort. If missing from an older DB seed, merge them up-front.
+      const norm = (resort?.name ?? experienceName).toLowerCase();
+      const hasSignature = resort.recreation.some(
+        (r) =>
+          r.title.toLowerCase().includes('painting') ||
+          r.title.toLowerCase().includes('mosaic') ||
+          r.title.toLowerCase().includes('sangria'),
+      );
+
+      if (!hasSignature && profile.recreationFallback && profile.recreationFallback.length > 0) {
+        const signatureItems = profile.recreationFallback.filter(
+          (fb) =>
+            fb.badge === 'Arts & Crafts' ||
+            fb.badge === 'Class' ||
+            fb.title.toLowerCase().includes('painting') ||
+            fb.title.toLowerCase().includes('mosaic') ||
+            fb.title.toLowerCase().includes('sangria'),
+        );
+
+        if (signatureItems.length > 0) {
+          const isKnownResort = norm.includes('coronado') || norm.includes('riviera');
+          const isLegacyDbList = resort.recreation.some(
+            (r) =>
+              r.title.includes('Casitas, Ranchos & Cabanas') ||
+              r.title.includes('Beau Soleil') ||
+              r.title.includes('Athlétique Fitness Center'),
+          );
+          if (isKnownResort && isLegacyDbList) {
+            const seenTitles = new Set(signatureItems.map((s) => s.title.toLowerCase()));
+            const remainingLive = resort.recreation.filter(
+              (r) => !seenTitles.has(r.title.toLowerCase()),
+            );
+            return [...signatureItems, ...remainingLive];
+          }
+        }
+      }
+
+      return resort.recreation;
+    }
+
+    if (profile.recreationFallback && profile.recreationFallback.length > 0) {
+      return profile.recreationFallback;
+    }
+
+    return [
+      {
+        icon: '🏊',
+        title: featurePool,
+        badge: 'Feature Pool',
+        description: `Heated signature pool with themed slide and lounge deck at ${experienceName}.`,
+      },
+      {
+        icon: '🏃',
+        title: 'Resort Walking Trail',
+        badge: 'Trail',
+        description:
+          'Paved scenic path winding through landscaped grounds and resort courtyards.',
+      },
+      {
+        icon: '🪵',
+        title: 'Campfire & Movies Under the Stars',
+        badge: 'Family Fun',
+        description:
+          'Nightly marshmallow roasts followed by complimentary outdoor Disney movie screenings under the Florida twilight.',
+      },
+    ];
+    })();
+
+    if (liveRecreationItems.length === 0) {
+      return base;
+    }
+
+    const seenIds = new Set(
+      base.map((b) => b.id).filter((id): id is string => Boolean(id)),
+    );
+    const seenTitles = new Set(base.map((b) => b.title.toLowerCase()));
+    const additions = liveRecreationItems.filter(
+      (item) =>
+        !(item.id && seenIds.has(item.id)) &&
+        !seenTitles.has(item.title.toLowerCase()),
+    );
+
+    return additions.length > 0 ? [...base, ...additions] : base;
+  }, [
+    resort?.recreation,
+    resort?.name,
+    profile.recreationFallback,
+    featurePool,
+    experienceName,
+    liveRecreationItems,
+  ]);
 
   const transitTimes = resolveTransitTimes(experienceName, resort);
   const transitSummary = resolveTransitSummary(
@@ -2577,6 +2830,56 @@ export default function ResortGuideSection({
     handleCardPress(venue);
   };
 
+  const diningCategoryCounts = React.useMemo(() => {
+    let table = 0;
+    let quick = 0;
+    let lounge = 0;
+    for (const venue of diningVenues) {
+      const cat = classifyDiningCategory(venue);
+      if (cat === 'table') table++;
+      else if (cat === 'quick') quick++;
+      else if (cat === 'lounge') lounge++;
+    }
+    return { all: diningVenues.length, table, quick, lounge };
+  }, [diningVenues]);
+
+  const filteredDiningVenues = React.useMemo(() => {
+    return filterDiningByCategory(diningVenues, diningCategoryFilter);
+  }, [diningVenues, diningCategoryFilter]);
+
+  const visibleDiningResult = React.useMemo(() => {
+    return computeVisibleItems({
+      items: filteredDiningVenues,
+      limit: 4,
+      expanded: diningExpanded,
+      isFiltered: diningCategoryFilter !== 'all',
+    });
+  }, [filteredDiningVenues, diningExpanded, diningCategoryFilter]);
+
+  const visibleRecreationResult = React.useMemo(() => {
+    return computeVisibleItems({
+      items: recreation,
+      limit: 4,
+      expanded: recreationExpanded,
+    });
+  }, [recreation, recreationExpanded]);
+
+  const handleRecreationPress = (item: ResortRecreationItemDTO): void => {
+    if (item.id) {
+      if (typeof (navigation as any).push === 'function') {
+        (navigation as any).push('ExperienceDetail', {
+          experienceId: item.id,
+        });
+      } else {
+        navigation.navigate('ExperienceDetail', {
+          experienceId: item.id,
+        });
+      }
+    } else {
+      setSelectedAmenity(item);
+    }
+  };
+
   return (
     <View style={styles.container} testID="resort-guide-section">
       {/* ------------------------------------------------------------------ */}
@@ -2633,13 +2936,42 @@ export default function ResortGuideSection({
           {profile.diningSubtitle}
         </Text>
 
+        {diningVenues.length > 0 ? (
+          <View style={styles.categoryPillRow} testID="resort-dining-category-pills">
+            {(
+              [
+                { id: 'all' as const, label: `All (${diningCategoryCounts.all})` },
+                { id: 'table' as const, label: `Table Service (${diningCategoryCounts.table})` },
+                { id: 'quick' as const, label: `Quick Service (${diningCategoryCounts.quick})` },
+                { id: 'lounge' as const, label: `Lounges (${diningCategoryCounts.lounge})` },
+              ] as const
+            ).map((pill) => {
+              const isActive = diningCategoryFilter === pill.id;
+              return (
+                <Pressable
+                  key={pill.id}
+                  style={[styles.categoryPill, isActive && styles.categoryPillActive]}
+                  onPress={() => setDiningCategoryFilter(pill.id)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Filter ${pill.label} dining`}
+                  testID={`resort-dining-filter-${pill.id}`}
+                >
+                  <Text style={[styles.categoryPillText, isActive && styles.categoryPillTextActive]}>
+                    {pill.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        ) : null}
+
         <View style={styles.diningList}>
-          {diningVenues.length === 0 ? (
+          {visibleDiningResult.visibleItems.length === 0 ? (
             <Text style={styles.noDiningText}>
               No dining locations currently listed for this resort.
             </Text>
           ) : (
-            diningVenues.map((venue) => (
+            visibleDiningResult.visibleItems.map((venue) => (
             <Pressable
               key={venue.id}
               style={({ pressed }) => [
@@ -2692,6 +3024,29 @@ export default function ResortGuideSection({
             </Pressable>
           )))}
         </View>
+
+        {diningCategoryFilter === 'all' && diningVenues.length > 4 ? (
+          <Pressable
+            style={({ pressed }) => [
+              styles.expandToggleBtn,
+              pressed && styles.cardPressed,
+            ]}
+            onPress={() => setDiningExpanded((prev) => !prev)}
+            accessibilityRole="button"
+            accessibilityLabel={
+              diningExpanded
+                ? 'Show fewer dining locations'
+                : `Show all ${diningVenues.length} dining locations`
+            }
+            testID="resort-dining-expand-toggle"
+          >
+            <Text style={styles.expandToggleBtnText}>
+              {diningExpanded
+                ? 'Show fewer dining locations ▴'
+                : `Show all ${diningVenues.length} dining locations (${visibleDiningResult.hiddenCount} more) ▾`}
+            </Text>
+          </Pressable>
+        ) : null}
       </View>
 
       {/* ------------------------------------------------------------------ */}
@@ -2706,12 +3061,23 @@ export default function ResortGuideSection({
         </View>
 
         <Text style={styles.cardSubtitle}>
-          Complimentary activities and wellness spaces available to all resort guests.
+          Signature activities, wellness spaces, and recreation available to resort guests.
         </Text>
 
         <View style={styles.recreationList}>
-          {recreation.map((item, idx) => (
-            <View key={idx} style={styles.recreationItem}>
+          {visibleRecreationResult.visibleItems.map((item, idx) => (
+            <Pressable
+              key={idx}
+              style={({ pressed }) => [
+                styles.recreationItem,
+                styles.recreationItemPressable,
+                pressed && styles.cardPressed,
+              ]}
+              onPress={() => handleRecreationPress(item)}
+              accessibilityRole="button"
+              accessibilityLabel={`View ${item.title}`}
+              testID={`resort-recreation-item-${item.id ?? idx}`}
+            >
               <View style={styles.recreationIconWrap}>
                 <Text style={styles.recreationEmoji}>{item.icon}</Text>
               </View>
@@ -2726,9 +3092,35 @@ export default function ResortGuideSection({
                 </View>
                 <Text style={styles.recreationDesc}>{item.description}</Text>
               </View>
-            </View>
+              <View style={styles.recreationChevronWrap}>
+                <Ionicons name="chevron-forward" size={16} color="#8a7ba7" />
+              </View>
+            </Pressable>
           ))}
         </View>
+
+        {recreation.length > 4 ? (
+          <Pressable
+            style={({ pressed }) => [
+              styles.expandToggleBtn,
+              pressed && styles.cardPressed,
+            ]}
+            onPress={() => setRecreationExpanded((prev) => !prev)}
+            accessibilityRole="button"
+            accessibilityLabel={
+              recreationExpanded
+                ? 'Show fewer activities'
+                : `Show all ${recreation.length} recreation & activities`
+            }
+            testID="resort-recreation-expand-toggle"
+          >
+            <Text style={styles.expandToggleBtnText}>
+              {recreationExpanded
+                ? 'Show fewer activities ▴'
+                : `Show all ${recreation.length} recreation & activities (${visibleRecreationResult.hiddenCount} more) ▾`}
+            </Text>
+          </Pressable>
+        ) : null}
       </View>
 
       {/* ------------------------------------------------------------------ */}
@@ -2827,6 +3219,81 @@ export default function ResortGuideSection({
           })}
         </View>
       </View>
+
+      {/* Amenity Detail Modal for complimentary recreation items */}
+      {selectedAmenity ? (
+        <Modal
+          visible={Boolean(selectedAmenity)}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setSelectedAmenity(null)}
+          testID="resort-amenity-modal"
+        >
+          <Pressable
+            style={styles.modalOverlay}
+            onPress={() => setSelectedAmenity(null)}
+            testID="resort-amenity-modal-backdrop"
+          >
+            <Pressable style={styles.modalCard} onPress={(e) => e?.stopPropagation?.()}>
+              <View style={styles.modalHead}>
+                <View style={styles.modalTitleRow}>
+                  <Text style={styles.modalEmoji}>{selectedAmenity.icon}</Text>
+                  <View style={styles.modalTitleWrap}>
+                    <Text style={styles.modalTitle}>{selectedAmenity.title}</Text>
+                    {selectedAmenity.badge ? (
+                      <View style={styles.recreationBadge}>
+                        <Text style={styles.recreationBadgeText}>{selectedAmenity.badge}</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                </View>
+                <Pressable
+                  style={styles.modalCloseBtn}
+                  onPress={() => setSelectedAmenity(null)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Close amenity details"
+                  testID="resort-amenity-modal-close"
+                >
+                  <Ionicons name="close" size={20} color="#372f4a" />
+                </Pressable>
+              </View>
+
+              <Text style={styles.modalDesc}>{selectedAmenity.description}</Text>
+
+              <View style={styles.modalDetailsRow}>
+                <Ionicons name="time-outline" size={16} color="#5b2a86" />
+                <Text style={styles.modalDetailText}>
+                  {selectedAmenity.hours ?? 'Operating Hours: 7:00 AM – 11:00 PM daily'}
+                </Text>
+              </View>
+
+              <View style={styles.modalDetailsRow}>
+                <Ionicons name="pricetag-outline" size={16} color="#5b2a86" />
+                <Text style={styles.modalDetailText}>
+                  {selectedAmenity.priceTier ?? 'Complimentary for registered resort guests'}
+                </Text>
+              </View>
+
+              <View style={styles.modalDetailsRow}>
+                <Ionicons name="information-circle-outline" size={16} color="#5b2a86" />
+                <Text style={styles.modalDetailText}>
+                  Available to all guests staying at {resort?.name ?? experienceName}.
+                </Text>
+              </View>
+
+              <Pressable
+                style={styles.modalDoneBtn}
+                onPress={() => setSelectedAmenity(null)}
+                accessibilityRole="button"
+                accessibilityLabel="Done"
+                testID="resort-amenity-modal-done"
+              >
+                <Text style={styles.modalDoneBtnText}>Done</Text>
+              </Pressable>
+            </Pressable>
+          </Pressable>
+        </Modal>
+      ) : null}
     </View>
   );
 }
@@ -3211,5 +3678,135 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     paddingVertical: 8,
     textAlign: 'center',
+  },
+  categoryPillRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 12,
+  },
+  categoryPill: {
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    backgroundColor: '#f1edfa',
+    borderWidth: 1,
+    borderColor: '#e4daf5',
+  },
+  categoryPillActive: {
+    backgroundColor: '#5b2a86',
+    borderColor: '#5b2a86',
+  },
+  categoryPillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#5b2a86',
+  },
+  categoryPillTextActive: {
+    color: '#ffffff',
+  },
+  expandToggleBtn: {
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    backgroundColor: '#f7f4fc',
+    borderWidth: 1,
+    borderColor: '#e9e1f5',
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 10,
+  },
+  expandToggleBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#5b2a86',
+  },
+  recreationItemPressable: {
+    borderWidth: 1,
+    borderColor: '#ede6f6',
+    borderRadius: 12,
+    padding: 10,
+    backgroundColor: '#fbf9fe',
+  },
+  recreationChevronWrap: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingLeft: 6,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 10, 28, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  modalHead: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 14,
+  },
+  modalTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  modalEmoji: {
+    fontSize: 26,
+  },
+  modalTitleWrap: {
+    flex: 1,
+  },
+  modalTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#190c2d',
+    marginBottom: 2,
+  },
+  modalCloseBtn: {
+    padding: 4,
+  },
+  modalDesc: {
+    fontSize: 12.5,
+    color: '#4a3f60',
+    lineHeight: 18,
+    marginBottom: 16,
+  },
+  modalDetailsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 10,
+  },
+  modalDetailText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#372f4a',
+    flex: 1,
+  },
+  modalDoneBtn: {
+    backgroundColor: '#5b2a86',
+    borderRadius: 12,
+    paddingVertical: 11,
+    alignItems: 'center',
+    marginTop: 14,
+  },
+  modalDoneBtnText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#ffffff',
   },
 });
