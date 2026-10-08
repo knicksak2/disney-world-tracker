@@ -17,6 +17,7 @@ import {
   tokenizeSearchQuery,
   type SearchableExperience,
 } from '../search/experienceSearch.js';
+import { CURATED_EXPERIENCE_ALIASES } from '../search/experienceAliases.js';
 
 describe('Property 30: Experience Search Normalization, Prefix Matching, Substring Superset Preservation, and Relevance Ordering', () => {
   // Arbitrary for random unicode text, words, and realistic names
@@ -249,6 +250,102 @@ describe('Property 30: Experience Search Normalization, Prefix Matching, Substri
         expect(result.score).toBeGreaterThanOrEqual(20);
       }),
       { numRuns: 50 },
+    );
+  });
+
+  // Feature: experience-search-aliases, Property 1: Exact and Prefix Alias Matching
+  it('Feature: experience-search-aliases, Property 1: Exact and Prefix Alias Matching', () => {
+    const aliasEntryArb = fc.constantFrom(...CURATED_EXPERIENCE_ALIASES);
+
+    fc.assert(
+      fc.property(aliasEntryArb, (entry) => {
+        const targetSubstring = entry.targetSubstrings[0]!;
+        const exp: SearchableExperience = {
+          id: 'test-alias-id',
+          name: `The Grand ${targetSubstring} Experience`,
+        };
+
+        for (const alias of entry.aliases) {
+          const normAlias = normalizeSearchText(alias);
+          if (normAlias.length === 0) continue;
+
+          // 1. Exact alias match -> score >= 85
+          const qTokens = tokenizeSearchQuery(normAlias);
+          const exactResult = scoreExperienceSearch(exp, normAlias, qTokens);
+          expect(exactResult.score).toBeGreaterThanOrEqual(85);
+
+          // 2. Prefix alias match (length >= 3) -> score >= 70
+          if (normAlias.length >= 4) {
+            const prefixSlice = normAlias.slice(0, 3);
+            const prefixTokens = tokenizeSearchQuery(prefixSlice);
+            const prefixResult = scoreExperienceSearch(exp, prefixSlice, prefixTokens);
+            expect(prefixResult.score).toBeGreaterThanOrEqual(70);
+          }
+        }
+      }),
+      { numRuns: 100 },
+    );
+  });
+
+  // Feature: experience-search-aliases, Property 2: Bounded Fuzzy Typo Matching
+  it('Feature: experience-search-aliases, Property 2: Bounded Fuzzy Typo Matching', () => {
+    const wordArb = fc
+      .stringMatching(/^[a-z]{5,10}$/)
+      .filter((w) => w.length >= 5);
+
+    fc.assert(
+      fc.property(wordArb, fc.integer({ min: 0, max: 2 }), (word, editType) => {
+        let typoWord = word;
+        if (editType === 0) {
+          typoWord = word.slice(0, -1);
+        } else if (editType === 1) {
+          typoWord = `${word}x`;
+        } else {
+          if (word[0] !== word[1]) {
+            typoWord = word[1]! + word[0]! + word.slice(2);
+          } else {
+            typoWord = word.slice(0, -1);
+          }
+        }
+
+        const exp: SearchableExperience = {
+          id: 'test-fuzzy-id',
+          name: `Attraction ${word}`,
+        };
+
+        const normTypo = normalizeSearchText(typoWord);
+        const qTokens = tokenizeSearchQuery(normTypo);
+        const result = scoreExperienceSearch(exp, normTypo, qTokens);
+
+        expect(result.score).toBeGreaterThanOrEqual(35);
+      }),
+      { numRuns: 100 },
+    );
+  });
+
+  // Feature: experience-search-aliases, Property 2b: Short query tokens (< 4) do not match fuzzily with edits
+  it('Feature: experience-search-aliases, Property 2b: Short query tokens (< 4) do not match fuzzily with edits', () => {
+    const threeLetterWordArb = fc.constantFrom<readonly [string, string]>(
+      ['cat', 'car'],
+      ['dog', 'fog'],
+      ['sun', 'run'],
+      ['top', 'tot'],
+    );
+
+    fc.assert(
+      fc.property(threeLetterWordArb, ([q, nameWord]) => {
+        const exp: SearchableExperience = {
+          id: 'test-short-id',
+          name: `Experience Of ${nameWord}`,
+        };
+
+        const normQ = normalizeSearchText(q);
+        const qTokens = tokenizeSearchQuery(normQ);
+        const result = scoreExperienceSearch(exp, normQ, qTokens);
+
+        expect(result.tier).not.toBe('fuzzy');
+      }),
+      { numRuns: 100 },
     );
   });
 });

@@ -535,16 +535,25 @@ export { mergeOutcomes, recomputeAfterRetry } from './attention.js';
 
 // Experience search pure normalizer, union matching, and flat-tier relevance ranking.
 export {
+  QUOTES_AND_APOSTROPHES_REGEX,
   MAX_METADATA_FALLBACK_ROWS,
   normalizeSearchText,
   tokenizeSearchQuery,
   scoreExperienceSearch,
   filterAndRankExperiences,
+  CURATED_EXPERIENCE_ALIASES,
+  checkExperienceAliasMatch,
+  FUZZY_MIN_TOKEN_LENGTH,
+  MAX_FUZZY_EDIT_DISTANCE,
+  damerauLevenshteinDistance,
+  isFuzzyTokenMatch,
 } from './search/index.js';
 export type {
   SearchableExperience,
   SearchMatchTier,
   SearchScoredResult,
+  SearchAliasEntry,
+  AliasMatchResult,
 } from './search/index.js';
 
 // Catalog & Explore constants

@@ -12,6 +12,8 @@ import type {
   GroupedFacetsDTO,
   HeightRequirementDTO,
 } from '../dto/Facet.js';
+import { checkExperienceAliasMatch } from './experienceAliases.js';
+import { isFuzzyTokenMatch } from './fuzzyDistance.js';
 
 export const MAX_METADATA_FALLBACK_ROWS = 25;
 
@@ -37,9 +39,12 @@ export interface SearchableExperience {
 
 export type SearchMatchTier =
   | 'exact'
+  | 'alias_exact'
   | 'prefix'
+  | 'alias_phrase'
   | 'phrase'
   | 'tokens'
+  | 'fuzzy'
   | 'metadata'
   | 'none';
 
@@ -48,73 +53,27 @@ export interface SearchScoredResult {
   readonly tier: SearchMatchTier;
 }
 
-/**
- * Regex matching standard and modifier quotes, apostrophes, and okina codepoints:
- * ASCII ' (U+0027), ‘ (U+2018), ’ (U+2019), ‛ (U+201B), ` (U+0060), ´ (U+00B4),
- * ʹ (U+02B9), ʺ (U+02BA), ʻ (U+02BB), ʼ (U+02BC), ′ (U+2032), " (U+0022),
- * “ (U+201C), ” (U+201D).
- */
-const QUOTES_AND_APOSTROPHES_REGEX =
-  /[\u0027\u2018\u2019\u201B\u0060\u00B4\u02B9\u02BA\u02BB\u02BC\u2032\u0022\u201C\u201D]/gu;
-
-/**
- * Normalizes text for search matching via a strict 6-step pipeline:
- * 1. Lowercase
- * 2. Unicode NFD decomposition & diacritic strip (Note: non-decomposable characters like ø, ß, æ are not decomposed by NFD)
- * 3. Strip all quotes, apostrophes, okina, and modifier-letter apostrophes
- * 4. Replace non-alphanumeric punctuation and symbols with space (preserving & and +)
- * 5. Normalize connectors (&, +, standalone n) to ' and ', preserving leading boundary whitespace in $1
- *    (Note: connectors run after quote/apostrophe stripping so rock 'n' roll has already become rock n roll with bare n)
- * 6. Collapse consecutive whitespace and trim
- *
- * Limitation note: Because punctuation replacement preserves & and + and connector normalization
- * requires whitespace boundaries, non-space-delimited connectors survive as literal characters
- * (e.g. normalizeSearchText("M&M's") === 'm&ms', a single token containing '&', so 'M and M' will
- * not match it).
- */
-export function normalizeSearchText(text: string): string {
-  if (typeof text !== 'string' || text.length === 0) {
-    return '';
-  }
-
-  return (
-    text
-      // 1. Lowercase
-      .toLowerCase()
-      // 2. Unicode NFD & diacritic strip
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      // 3. Strip all quotes, apostrophes, and modifier letter apostrophes
-      .replace(QUOTES_AND_APOSTROPHES_REGEX, '')
-      // 4. Replace non-alphanumerics (preserving & and + for connector normalization) with space
-      .replace(/[^\p{L}\p{N}\s&+]/gu, ' ')
-      // 5. Normalize connectors (&, +, standalone n) to ' and ', preserving leading boundary in $1
-      .replace(/(^|\s)(?:n|&|\+)(?=\s|$)/g, '$1and')
-      // 6. Collapse whitespace and trim
-      .replace(/\s+/g, ' ')
-      .trim()
-  );
-}
-
-/**
- * Tokenizes a search query into non-empty normalized string tokens.
- */
-export function tokenizeSearchQuery(query: string): string[] {
-  const normalized = normalizeSearchText(query);
-  if (normalized.length === 0) {
-    return [];
-  }
-  return normalized.split(' ').filter((t) => t.length > 0);
-}
+export {
+  QUOTES_AND_APOSTROPHES_REGEX,
+  normalizeSearchText,
+  tokenizeSearchQuery,
+} from './normalization.js';
+import {
+  normalizeSearchText,
+  tokenizeSearchQuery,
+} from './normalization.js';
 
 /**
  * Scores an individual experience against a normalized query and its tokens.
  *
  * Tiers:
  *   100 - Exact normalized name match
+ *    85 - Exact alias / acronym match
  *    80 - Name starts with normalized query string
+ *    70 - Alias prefix or multi-token phrase match
  *    60 - Name contains normalized query as a contiguous phrase (ensures Substring Superset Invariant)
  *    40 - Every query token prefix-matches at least one token in the normalized name
+ *    35 - Bounded fuzzy typo match (1-edit distance for query tokens with len >= 4)
  *    20 - Metadata fallback (every query token prefix-matches or substring-matches land / country / subType)
  *     0 - No match
  */
@@ -134,9 +93,20 @@ export function scoreExperienceSearch(
     return { score: 100, tier: 'exact' };
   }
 
+  // Check Curated Aliases
+  const aliasResult = checkExperienceAliasMatch(normName, normalizedQuery);
+  if (aliasResult.isMatch && aliasResult.isExact) {
+    return { score: 85, tier: 'alias_exact' };
+  }
+
   // Tier 80: Name Starts With Query
   if (normName.startsWith(normalizedQuery)) {
     return { score: 80, tier: 'prefix' };
+  }
+
+  // Tier 70: Alias Prefix or Phrase Match
+  if (aliasResult.isMatch && !aliasResult.isExact) {
+    return { score: 70, tier: 'alias_phrase' };
   }
 
   // Tier 60: Contiguous Phrase in Name (Guarantees Substring Superset)
@@ -153,6 +123,21 @@ export function scoreExperienceSearch(
     )
   ) {
     return { score: 40, tier: 'tokens' };
+  }
+
+  // Tier 35: Bounded Fuzzy Typo Match (1-edit distance for query tokens with len >= 4)
+  if (
+    queryTokens.length > 0 &&
+    nameTokens.length > 0 &&
+    queryTokens.every((qToken) =>
+      nameTokens.some((nToken) =>
+        qToken.length < 4
+          ? nToken.startsWith(qToken)
+          : isFuzzyTokenMatch(qToken, nToken),
+      ),
+    )
+  ) {
+    return { score: 35, tier: 'fuzzy' };
   }
 
   // Tier 20: Fallback metadata matching across land (with generic compound splitting),
@@ -276,7 +261,7 @@ export function scoreExperienceSearch(
  *
  * Rules:
  * - Empty trimmed query returns the input array unmodified.
- * - Name matches (scores >= 40) are sorted by score DESC, then lower(name) ASC, then id ASC.
+ * - Direct matches (scores >= 35: exact, alias, prefix, phrase, tokens, fuzzy) are sorted by score DESC, then lower(name) ASC, then id ASC.
  * - Metadata matches (score 20) are sorted by lower(name) ASC, then id ASC, and sliced to MAX_METADATA_FALLBACK_ROWS (25).
  * - Returns [...nameMatches, ...cappedMetadataMatches].
  */
@@ -300,7 +285,7 @@ export function filterAndRankExperiences<T extends SearchableExperience>(
 
   for (const exp of experiences) {
     const { score } = scoreExperienceSearch(exp, normalizedQuery, queryTokens);
-    if (score >= 40) {
+    if (score >= 35) {
       nameMatches.push({ item: exp, score, sortName: exp.name.toLowerCase() });
     } else if (score === 20) {
       metadataMatches.push({
