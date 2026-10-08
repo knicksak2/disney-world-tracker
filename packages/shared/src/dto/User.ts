@@ -23,3 +23,21 @@ export interface UserDTO {
   /** ISO-8601 timestamp at which the account was created. */
   readonly createdAt: string;
 }
+
+/**
+ * Uniform message returned on forgot-password request.
+ */
+export interface ForgotPasswordResponseDTO {
+  readonly message: string;
+}
+
+/**
+ * Success response returned when password reset succeeds in mobile app,
+ * automatically establishing an authenticated session.
+ */
+export interface ResetPasswordSuccessDTO {
+  readonly user: { readonly id: string; readonly email: string };
+  readonly profile: { readonly displayName: string };
+  readonly token: string;
+}
+

@@ -1,5 +1,9 @@
 {
   "mcpServers": {
+    "lovable": {
+      "url": "https://mcp.lovable.dev",
+      "disabled": false
+    },
     "codebase-memory-mcp": {
       "command": "C:\\Users\\knick\\AppData\\Local\\Programs\\codebase-memory-mcp\\codebase-memory-mcp.exe",
       "args": [],

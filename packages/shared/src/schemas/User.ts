@@ -79,3 +79,43 @@ export const changePasswordInputSchema = z
   .strict();
 
 export type ChangePasswordInput = z.infer<typeof changePasswordInputSchema>;
+
+/**
+ * Forgot-password input (password-reset R1.1, R1.4).
+ */
+export const forgotPasswordInputSchema = z
+  .object({
+    email: emailSchema,
+  })
+  .strict();
+
+export type ForgotPasswordInput = z.infer<typeof forgotPasswordInputSchema>;
+
+/**
+ * Reset-password input using 6-digit numeric verification code (password-reset R2.1, R2.5).
+ */
+export const resetPasswordInputSchema = z
+  .object({
+    email: emailSchema,
+    code: z
+      .string()
+      .trim()
+      .regex(/^\d{6}$/, 'Verification code must be exactly 6 digits'),
+    newPassword: passwordSchema,
+  })
+  .strict();
+
+export type ResetPasswordInput = z.infer<typeof resetPasswordInputSchema>;
+
+/**
+ * Web reset-password input using opaque URL token (password-reset R3.3, R3.4).
+ */
+export const webResetPasswordInputSchema = z
+  .object({
+    token: z.string().min(16),
+    newPassword: passwordSchema,
+  })
+  .strict();
+
+export type WebResetPasswordInput = z.infer<typeof webResetPasswordInputSchema>;
+

@@ -26,6 +26,7 @@
  * Validates: Requirements 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.8, 6.9
  */
 
+import { createHash, randomBytes, randomInt } from 'node:crypto';
 import type {
   FastifyInstance,
   FastifyPluginAsync,
@@ -36,7 +37,15 @@ import type {
 import { ZodError, type z } from 'zod';
 
 import type { ErrorCode } from '@dwt/shared';
-import { changePasswordInputSchema, loginInputSchema, registerInputSchema } from '@dwt/shared';
+import {
+  changePasswordInputSchema,
+  forgotPasswordInputSchema,
+  loginInputSchema,
+  registerInputSchema,
+  resetPasswordInputSchema,
+  type ForgotPasswordResponseDTO,
+  type ResetPasswordSuccessDTO,
+} from '@dwt/shared';
 
 import type { DbPool } from '../../db/pool.js';
 import { AppError } from '../../errors/AppError.js';
@@ -44,6 +53,11 @@ import { loginRateLimitConfig } from '../../plugins/rateLimit.js';
 import { hash as hashPassword, verify as verifyPassword } from './password.js';
 import { generateToken, hashToken } from './sessionToken.js';
 import type { LockoutService } from './lockout.js';
+import { createMailService, type MailService } from './mailService.js';
+import {
+  createPasswordResetRepo,
+  type PasswordResetRepo,
+} from './passwordResetRepo.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -106,6 +120,18 @@ export interface AuthRoutesOptions {
    * stub to make session-row timestamps deterministic.
    */
   readonly now?: () => Date;
+  /**
+   * Optional transactional mail service for sending password reset emails.
+   */
+  readonly mailService?: MailService;
+  /**
+   * Optional password reset repository.
+   */
+  readonly passwordResetRepo?: PasswordResetRepo;
+  /**
+   * Optional public API URL for generating reset links.
+   */
+  readonly apiPublicUrl?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -160,6 +186,51 @@ export function authRoutes(options: AuthRoutesOptions): FastifyPluginAsync {
       '/me',
       { preHandler: options.requireSession },
       (request, reply) => handleMe(options, request, reply),
+    );
+
+    const mailer = options.mailService ?? createMailService({ logger: app.log });
+    const resetRepo =
+      options.passwordResetRepo ?? createPasswordResetRepo(options.pool);
+    const apiPublicUrl =
+      options.apiPublicUrl ??
+      process.env.API_PUBLIC_URL ??
+      'https://dwt-api.onrender.com';
+
+    if (!app.hasContentTypeParser('application/x-www-form-urlencoded')) {
+      app.addContentTypeParser(
+        'application/x-www-form-urlencoded',
+        { parseAs: 'string' },
+        (_req, body, done) => {
+          try {
+            const bodyStr = typeof body === 'string' ? body : (body as Buffer).toString('utf-8');
+            const parsed = Object.fromEntries(new URLSearchParams(bodyStr));
+            done(null, parsed);
+          } catch (err: unknown) {
+            done(err as Error, undefined);
+          }
+        },
+      );
+    }
+
+    app.post(
+      '/auth/forgot-password',
+      { config: { rateLimit: loginRateLimitConfig() } },
+      (request, reply) =>
+        handleForgotPassword(resetRepo, mailer, apiPublicUrl, now, request, reply),
+    );
+
+    app.post(
+      '/auth/reset-password',
+      { config: { rateLimit: loginRateLimitConfig() } },
+      (request, reply) => handleResetPassword(options, resetRepo, now, request, reply),
+    );
+
+    app.get('/auth/reset-password', (request, reply) =>
+      handleGetResetPasswordWeb(resetRepo, request, reply),
+    );
+
+    app.post('/auth/reset-password-web', (request, reply) =>
+      handlePostResetPasswordWeb(resetRepo, request, reply),
     );
   };
 }
@@ -593,6 +664,325 @@ interface UserLoginRow {
   readonly email: string;
   readonly password_hash: string;
 }
+
+/**
+ * `POST /auth/forgot-password` — initiate password reset flow.
+ *
+ * Anti-enumeration defense (R1.3): Always returns HTTP 200 with an identical
+ * message, whether the user exists or not.
+ */
+async function handleForgotPassword(
+  repo: PasswordResetRepo,
+  mailer: MailService,
+  apiPublicUrl: string,
+  now: () => Date,
+  request: FastifyRequest,
+  reply: FastifyReply,
+): Promise<ForgotPasswordResponseDTO> {
+  const input = parseInput(forgotPasswordInputSchema, request.body);
+
+  const user = await repo.findUserByEmail(input.email);
+  if (user) {
+    const code = String(randomInt(100000, 1000000));
+    const webToken = randomBytes(24).toString('base64url');
+
+    const codeHash = createHash('sha256').update(code).digest('hex');
+    const tokenHash = createHash('sha256').update(webToken).digest('hex');
+
+    const expiresAt = new Date(now().getTime() + 15 * 60 * 1000);
+    await repo.createResetRecord(user.id, codeHash, tokenHash, expiresAt);
+
+    const resetUrl = `${apiPublicUrl}/auth/reset-password?token=${encodeURIComponent(webToken)}`;
+    try {
+      await mailer.sendPasswordReset({ to: user.email, code, resetUrl });
+    } catch (err) {
+      request.log.error(
+        { err, recipient: user.email },
+        'Failed to deliver password reset email',
+      );
+    }
+  }
+
+  reply.code(200);
+  return {
+    message: 'If an account exists with this email, a reset code has been sent.',
+  };
+}
+
+/**
+ * `POST /auth/reset-password` — complete reset using 6-digit verification code.
+ *
+ * Validates code, updates password with Argon2id, revokes existing sessions,
+ * establishes a fresh session, and returns auth token directly (R2.1, R2.2).
+ */
+async function handleResetPassword(
+  opts: AuthRoutesOptions,
+  repo: PasswordResetRepo,
+  now: () => Date,
+  request: FastifyRequest,
+  reply: FastifyReply,
+): Promise<ResetPasswordSuccessDTO> {
+  const input = parseInput(resetPasswordInputSchema, request.body);
+  const codeHash = createHash('sha256').update(input.code).digest('hex');
+
+  const record = await repo.findActiveByEmail(input.email);
+  if (!record) {
+    throw new AppError('invalid_code', 'Invalid or expired verification code.');
+  }
+
+  if (record.attempts >= 5) {
+    await repo.invalidateRecord(record.id);
+    throw new AppError(
+      'too_many_attempts',
+      'Too many failed verification attempts. Please request a new code.',
+    );
+  }
+
+  if (record.codeHash !== codeHash) {
+    const attempts = await repo.incrementAttempts(record.id);
+    if (attempts >= 5) {
+      await repo.invalidateRecord(record.id);
+      throw new AppError(
+        'too_many_attempts',
+        'Too many failed verification attempts. Please request a new code.',
+      );
+    }
+    throw new AppError('invalid_code', 'Invalid or expired verification code.');
+  }
+
+  const newPasswordHash = await hashPassword(input.newPassword);
+  await repo.completeReset(record.id, record.userId, newPasswordHash);
+
+  // Clear any lockout state
+  await opts.lockout.clearOnSuccess(record.userId);
+
+  // Mint fresh session for immediate login
+  const tokenPair = generateToken();
+  const issuedAt = now();
+  const absoluteExpiresAt = new Date(issuedAt.getTime() + ABSOLUTE_TTL_MS);
+
+  await opts.pool.query(
+    `INSERT INTO sessions (user_id, token_hash, created_at, last_seen_at, absolute_expires_at)
+     VALUES ($1, $2, $3, $3, $4)`,
+    [record.userId, tokenPair.tokenHash, issuedAt, absoluteExpiresAt],
+  );
+
+  const profile = await fetchProfile(opts.pool, record.userId);
+
+  reply.code(200);
+  return {
+    user: { id: record.userId, email: record.userEmail },
+    profile: { displayName: profile.displayName },
+    token: tokenPair.token,
+  };
+}
+
+/**
+ * `GET /auth/reset-password` — render web fallback reset form.
+ */
+async function handleGetResetPasswordWeb(
+  repo: PasswordResetRepo,
+  request: FastifyRequest,
+  reply: FastifyReply,
+): Promise<void> {
+  const query = request.query as { token?: string };
+  const token = typeof query.token === 'string' ? query.token.trim() : '';
+
+  if (!token) {
+    reply.type('text/html').code(400);
+    reply.send(
+      renderWebMessageHtml(
+        'Invalid Request',
+        'No reset token was provided. Please request a new link in the Disney World Tracker app.',
+        true,
+      ),
+    );
+    return;
+  }
+
+  const tokenHash = createHash('sha256').update(token).digest('hex');
+  const record = await repo.findActiveByToken(tokenHash);
+
+  if (!record) {
+    reply.type('text/html').code(400);
+    reply.send(
+      renderWebMessageHtml(
+        'Link Expired or Invalid',
+        'This password reset link is invalid or has expired. Please open the Disney World Tracker app and request a new code.',
+        true,
+      ),
+    );
+    return;
+  }
+
+  reply.type('text/html').code(200);
+  reply.send(renderWebResetFormHtml(token));
+}
+
+/**
+ * `POST /auth/reset-password-web` — handle web fallback form submission.
+ */
+async function handlePostResetPasswordWeb(
+  repo: PasswordResetRepo,
+  request: FastifyRequest,
+  reply: FastifyReply,
+): Promise<void> {
+  const body = (request.body ?? {}) as Record<string, unknown>;
+  const token = typeof body.token === 'string' ? body.token.trim() : '';
+  const password = typeof body.password === 'string' ? body.password : '';
+  const confirmPassword =
+    typeof body.confirmPassword === 'string' ? body.confirmPassword : '';
+
+  if (!token) {
+    reply.type('text/html').code(400);
+    reply.send(
+      renderWebMessageHtml(
+        'Invalid Request',
+        'Missing reset token. Please request a new link.',
+        true,
+      ),
+    );
+    return;
+  }
+
+  const tokenHash = createHash('sha256').update(token).digest('hex');
+  const record = await repo.findActiveByToken(tokenHash);
+
+  if (!record) {
+    reply.type('text/html').code(400);
+    reply.send(
+      renderWebMessageHtml(
+        'Link Expired or Invalid',
+        'This password reset link is invalid or has expired. Please open the Disney World Tracker app and request a new code.',
+        true,
+      ),
+    );
+    return;
+  }
+
+  if (password.length < 8 || password.length > 128) {
+    reply.type('text/html').code(400);
+    reply.send(
+      renderWebResetFormHtml(
+        token,
+        'Password must be between 8 and 128 characters.',
+      ),
+    );
+    return;
+  }
+
+  if (password !== confirmPassword) {
+    reply.type('text/html').code(400);
+    reply.send(renderWebResetFormHtml(token, 'Passwords do not match.'));
+    return;
+  }
+
+  const newPasswordHash = await hashPassword(password);
+  await repo.completeReset(record.id, record.userId, newPasswordHash);
+
+  reply.type('text/html').code(200);
+  reply.send(
+    renderWebMessageHtml(
+      'Password Updated!',
+      'Your password has been successfully reset. You can now return to the Disney World Tracker app and sign in with your new password.',
+      false,
+    ),
+  );
+}
+
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function renderWebResetFormHtml(token: string, errorMessage?: string): string {
+  const errorAlert = errorMessage
+    ? `<div style="background-color: #fef2f2; border: 1px solid #fecaca; color: #b91c1c; padding: 12px; border-radius: 8px; font-size: 14px; margin-bottom: 20px;">${escapeHtml(errorMessage)}</div>`
+    : '';
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reset Your Password | Disney World Tracker</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; color: #1e293b; margin: 0; padding: 32px 16px; }
+    .card { max-width: 440px; margin: 40px auto; background: #ffffff; border-radius: 16px; padding: 32px; box-shadow: 0 4px 24px rgba(0,0,0,0.06); border: 1px solid #e2e8f0; }
+    .header { text-align: center; margin-bottom: 24px; }
+    .title { font-size: 22px; font-weight: 700; color: #0f172a; margin: 0 0 8px 0; }
+    .subtitle { font-size: 14px; color: #64748b; margin: 0; }
+    .field { margin-bottom: 18px; }
+    label { display: block; font-size: 13px; font-weight: 600; color: #334155; margin-bottom: 6px; }
+    input[type="password"] { width: 100%; box-sizing: border-box; padding: 12px 14px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 15px; outline: none; }
+    input[type="password"]:focus { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,0.15); }
+    .btn { width: 100%; background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); color: #ffffff; border: none; padding: 14px; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; margin-top: 8px; }
+    .btn:hover { opacity: 0.95; }
+    .hint { font-size: 12px; color: #64748b; margin-top: 4px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="header">
+      <h1 class="title">Choose a New Password</h1>
+      <p class="subtitle">Disney World Tracker</p>
+    </div>
+    ${errorAlert}
+    <form method="POST" action="/auth/reset-password-web">
+      <input type="hidden" name="token" value="${escapeHtml(token)}" />
+      <div class="field">
+        <label for="password">New Password</label>
+        <input type="password" id="password" name="password" required minlength="8" maxlength="128" placeholder="At least 8 characters" />
+        <div class="hint">Minimum 8 characters</div>
+      </div>
+      <div class="field">
+        <label for="confirmPassword">Confirm New Password</label>
+        <input type="password" id="confirmPassword" name="confirmPassword" required minlength="8" maxlength="128" placeholder="Repeat your new password" />
+      </div>
+      <button type="submit" class="btn">Update Password</button>
+    </form>
+  </div>
+</body>
+</html>`;
+}
+
+function renderWebMessageHtml(
+  title: string,
+  message: string,
+  isError: boolean,
+): string {
+  const iconColor = isError ? '#ef4444' : '#10b981';
+  const iconSvg = isError
+    ? `<svg width="48" height="48" fill="none" stroke="${iconColor}" viewBox="0 0 24 24" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`
+    : `<svg width="48" height="48" fill="none" stroke="${iconColor}" viewBox="0 0 24 24" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>`;
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${escapeHtml(title)} | Disney World Tracker</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; color: #1e293b; margin: 0; padding: 32px 16px; }
+    .card { max-width: 440px; margin: 40px auto; background: #ffffff; border-radius: 16px; padding: 40px 32px; box-shadow: 0 4px 24px rgba(0,0,0,0.06); border: 1px solid #e2e8f0; text-align: center; }
+    .title { font-size: 22px; font-weight: 700; color: #0f172a; margin: 16px 0 8px 0; }
+    .message { font-size: 15px; color: #475569; line-height: 1.6; margin: 0 0 24px 0; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div>${iconSvg}</div>
+    <h1 class="title">${escapeHtml(title)}</h1>
+    <p class="message">${escapeHtml(message)}</p>
+  </div>
+</body>
+</html>`;
+}
+
 
 /**
  * Look up a User by email for login. Returns `null` rather than throwing on

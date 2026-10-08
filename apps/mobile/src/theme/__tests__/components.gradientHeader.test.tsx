@@ -117,4 +117,31 @@ describe('GradientHeader — accessible back control (Requirements 2.4, 2.5, 3.6
     expect(screen.getByText('Cinderella Castle · 114 Experiences')).toBeTruthy();
     expect(screen.getByText('RightSlot')).toBeTruthy();
   });
+
+  it('standardizes header title typography to compact 22pt scale by default', () => {
+    render(
+      <GradientHeader
+        title="Trips"
+        subtitle="Plan and log your park days together."
+        testID="standard-header"
+      />,
+    );
+
+    const titleElement = screen.getByText('Trips');
+    const headerElement = screen.getByTestId('standard-header');
+
+    // Title is standardized to 22pt title typography across the app
+    expect(titleElement.props.style).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ fontSize: 22, fontWeight: '700' }),
+      ]),
+    );
+
+    // Header padding is standardized to compact spacing.lg (16)
+    expect(headerElement.props.style).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ paddingBottom: 16 }),
+      ]),
+    );
+  });
 });

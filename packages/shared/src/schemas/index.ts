@@ -32,8 +32,23 @@ export {
 } from './primitives.js';
 
 // DTO schemas
-export { userSchema, registerInputSchema, loginInputSchema, changePasswordInputSchema } from './User.js';
-export type { RegisterInput, LoginInput, ChangePasswordInput } from './User.js';
+export {
+  userSchema,
+  registerInputSchema,
+  loginInputSchema,
+  changePasswordInputSchema,
+  forgotPasswordInputSchema,
+  resetPasswordInputSchema,
+  webResetPasswordInputSchema,
+} from './User.js';
+export type {
+  RegisterInput,
+  LoginInput,
+  ChangePasswordInput,
+  ForgotPasswordInput,
+  ResetPasswordInput,
+  WebResetPasswordInput,
+} from './User.js';
 
 export {
   profileSchema,

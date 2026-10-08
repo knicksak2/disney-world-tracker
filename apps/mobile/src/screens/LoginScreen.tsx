@@ -216,6 +216,23 @@ export default function LoginScreen({ navigation }: Props): JSX.Element {
                 ) : null}
               </View>
 
+              <Pressable
+                style={styles.forgotPasswordButton}
+                onPress={() => {
+                  if (!submitting) {
+                    navigation.navigate(
+                      'ForgotPassword',
+                      email.trim() ? { email: email.trim() } : undefined,
+                    );
+                  }
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Forgot password?"
+                testID="login-forgot-password"
+              >
+                <Text style={styles.forgotPasswordText}>Forgot password?</Text>
+              </Pressable>
+
               {formError !== null ? (
                 <Text style={styles.formError} testID="login-form-error">
                   {formError}
@@ -310,6 +327,17 @@ const styles = StyleSheet.create({
   },
   submit: {
     marginTop: theme.spacing.xs,
+  },
+  forgotPasswordButton: {
+    alignSelf: 'flex-end',
+    marginTop: -theme.spacing.sm,
+    marginBottom: theme.spacing.md,
+    paddingVertical: theme.spacing.xs,
+  },
+  forgotPasswordText: {
+    fontSize: 13,
+    color: theme.color.primary,
+    fontWeight: '600',
   },
   linkButton: {
     alignItems: 'center',

@@ -7,7 +7,11 @@
  * `packages/shared/src/schemas/`.
  */
 
-export type { UserDTO } from './User.js';
+export type {
+  UserDTO,
+  ForgotPasswordResponseDTO,
+  ResetPasswordSuccessDTO,
+} from './User.js';
 export type { ProfileDTO } from './Profile.js';
 export type { ExperienceDTO } from './Experience.js';
 export type {

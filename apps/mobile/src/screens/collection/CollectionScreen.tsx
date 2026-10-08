@@ -72,8 +72,6 @@ import {
   GradientHeader,
   ScreenContainer,
 } from '../../theme/components';
-import AvatarChip from '../navigation/AvatarChip';
-import NotificationBell from '../../features/notifications/NotificationBell';
 import { ExperiencePicker } from '../trips/ExperiencePicker';
 import FoodItemPickerModal from '../catalog/FoodItemPickerModal';
 import LogFoodItemModal from '../catalog/LogFoodItemModal';
@@ -331,12 +329,6 @@ export default function CollectionScreen(): JSX.Element {
         eyebrow="📌 DISNEY VAULT"
         title="My Disney Collection"
         subtitle="Your personal scrapbook of pins, treats, and progress stats"
-        right={
-          <View style={styles.headerRight}>
-            <NotificationBell />
-            <AvatarChip />
-          </View>
-        }
       />
 
       {/* Four-Way Segmented Control (Requirement 6.6a — "Food & Lists" split

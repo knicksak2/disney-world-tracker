@@ -16,6 +16,8 @@ import YouAndCrewStack, { type YouAndCrewStackParamList } from './YouAndCrewStac
 import HomeScreen from '../screens/home/HomeScreen';
 import LoginScreen from '../screens/LoginScreen';
 import RegisterScreen from '../screens/RegisterScreen';
+import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
+import ResetPasswordScreen from '../screens/ResetPasswordScreen';
 import ExperienceDetailScreen from '../screens/catalog/ExperienceDetailScreen';
 import MenuScreen from '../screens/catalog/MenuScreen';
 import ShareComposerScreen from '../screens/share/ShareComposerScreen';
@@ -37,6 +39,8 @@ import MagicFab from '../screens/quickAction/MagicFab';
 export type AuthStackParamList = {
   Login: undefined;
   Register: undefined;
+  ForgotPassword: { email?: string | undefined } | undefined;
+  ResetPassword: { email: string };
 };
 
 export type MainTabParamList = {
@@ -93,6 +97,8 @@ function AuthStackNavigator(): JSX.Element {
     <AuthStack.Navigator screenOptions={{ headerShown: false }}>
       <AuthStack.Screen name="Login" component={LoginScreen} />
       <AuthStack.Screen name="Register" component={RegisterScreen} />
+      <AuthStack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+      <AuthStack.Screen name="ResetPassword" component={ResetPasswordScreen} />
     </AuthStack.Navigator>
   );
 }

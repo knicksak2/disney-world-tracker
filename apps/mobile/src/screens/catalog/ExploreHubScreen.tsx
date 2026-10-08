@@ -57,8 +57,6 @@ import { useResultCountAnnouncement } from './catalogFocus';
 import { useCompletedExperiences } from './useCompletedExperiences';
 import { useFavoritedExperiences } from './useFavoritedExperiences';
 import FavoriteToggle from './FavoriteToggle';
-import AvatarChip from '../navigation/AvatarChip';
-import NotificationBell from '../../features/notifications/NotificationBell';
 import { calculateParkWaitAverage } from '../home/pulseCalculations';
 import { DESTINATION_VISUALS } from './destinationVisuals';
 
@@ -107,18 +105,6 @@ interface CatalogListResponse {
   readonly cacheAgeHours?: number | null;
 }
 
-// ---------------------------------------------------------------------------
-// Header Actions
-// ---------------------------------------------------------------------------
-
-function HeaderActions(): JSX.Element {
-  return (
-    <View style={styles.headerActions}>
-      <NotificationBell tintColor={theme.color.textOnPrimary} />
-      <AvatarChip tintColor={theme.color.textOnPrimary} />
-    </View>
-  );
-}
 
 // ---------------------------------------------------------------------------
 // API Fetchers
@@ -273,13 +259,12 @@ export default function ExploreHubScreen({
 
   return (
     <ScreenContainer testID="explore-hub-screen">
-      {/* 1. Header with Gradient, Search, and Profile Controls (Req 1.1) */}
+      {/* 1. Header with Gradient and Search (Req 1.1) */}
       <GradientHeader
         title="Explore"
         subtitle="Where would you like to explore?"
         icon="compass"
         compact
-        right={<HeaderActions />}
       />
 
       {/* 2. Global Search Input Field (Req 1.2, 7.3) */}

@@ -1038,7 +1038,9 @@ export function adminRoutes(options: AdminRoutesOptions): FastifyPluginAsync {
           const cascades = await options.repo.getTopRideCascades(50);
           const showtimes = await options.repo.getShowTimePatterns();
 
-          const parks = ['MK', 'EPCOT', 'HS', 'AK'] as const;
+          // Only the four WDW theme parks carry a Crowd Index (water parks/Disney
+          // Springs are excluded by samplingService's CROWD_INDEX_PARKS).
+          const parks = ['Magic Kingdom', 'EPCOT', 'Hollywood Studios', 'Animal Kingdom'] as const;
           const parkHistories = await Promise.all(
             parks.map(async (p) => ({ park: p, history: await options.repo.getParkCrowdIndexHistory(p, 14) })),
           );

@@ -77,6 +77,8 @@ export type {
 // DTOs (types only — no runtime payload).
 export type {
   UserDTO,
+  ForgotPasswordResponseDTO,
+  ResetPasswordSuccessDTO,
   ProfileDTO,
   ExperienceDTO,
   FacetValueDTO,
@@ -252,6 +254,9 @@ export {
   registerInputSchema,
   loginInputSchema,
   changePasswordInputSchema,
+  forgotPasswordInputSchema,
+  resetPasswordInputSchema,
+  webResetPasswordInputSchema,
   profileSchema,
   profileDisplayNameInputSchema,
   profileAvatarInputSchema,

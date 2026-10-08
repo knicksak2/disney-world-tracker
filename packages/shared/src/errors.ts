@@ -29,6 +29,9 @@ export const ERROR_CODES = [
   'invalid_credentials',
   'account_locked',
   'unauthorized',
+  'invalid_code',
+  'too_many_attempts',
+  'token_invalid',
 
   // -- Catalog (R1.13, R1.24) -------------------------------------------
   'catalog_unavailable',
@@ -294,6 +297,9 @@ export const errorCodeToHttpStatus: { readonly [K in ErrorCode]: number } = {
   invalid_credentials: 401,
   account_locked: 423,
   unauthorized: 401,
+  invalid_code: 400,
+  too_many_attempts: 429,
+  token_invalid: 400,
 
   // Catalog
   catalog_unavailable: 503,

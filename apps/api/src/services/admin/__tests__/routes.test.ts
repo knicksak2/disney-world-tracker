@@ -109,9 +109,18 @@ describe('Admin Panel Routes - Comprehensive Integration Suite', () => {
       getShowTimePatterns: async () => [
         { experienceId: 'exp-show', name: 'Parade', dayOfWeek: 1, startMinutes: 840, frequency: 1.0, sampleCount: 15 },
       ],
-      getParkCrowdIndexHistory: async (park) => [
-        { park, date: '2026-10-01', crowdIndex: 6.5, dailyAvgWait: 35.0, sampleCount: 120 },
-      ],
+      // Mirrors the real repo's exact `WHERE park = $1` match against the
+      // canonical full park names stored in `park_crowd_index.park` (see
+      // packages/shared PARKS / samplingService's CROWD_INDEX_PARKS). Only
+      // returns rows for the 4 canonical theme-park names so a caller that
+      // queries with an abbreviation (e.g. 'MK') gets back an empty array,
+      // just like the real DB would.
+      getParkCrowdIndexHistory: async (park) =>
+        (['Magic Kingdom', 'EPCOT', 'Hollywood Studios', 'Animal Kingdom'] as const).includes(
+          park as 'Magic Kingdom' | 'EPCOT' | 'Hollywood Studios' | 'Animal Kingdom',
+        )
+          ? [{ park, date: '2026-10-01', crowdIndex: 6.5, dailyAvgWait: 35.0, sampleCount: 120 }]
+          : [],
       getRecentSamplingRuns: async () => [
         {
           id: 'samp-1',
@@ -439,6 +448,22 @@ describe('Admin Panel Routes - Comprehensive Integration Suite', () => {
     expect(res.body).toContain('Learned Ride Cascades');
     expect(res.body).toContain('Show Time Patterns');
     expect(res.body).toContain('14:00'); // 840 mins rendered as clock time
+
+    // Regression guard: the route must query getParkCrowdIndexHistory using the
+    // canonical full park names ('Magic Kingdom', 'Hollywood Studios', 'Animal
+    // Kingdom'), not abbreviations ('MK', 'HS', 'AK'). Querying with an
+    // abbreviation against the real `park_crowd_index` table (keyed by full
+    // name) silently returns zero rows, which previously rendered as empty
+    // "No entries found" tables for 3 of the 4 theme parks. All four must show
+    // a populated row and none may render as empty.
+    expect(res.body).toContain('Magic Kingdom - 14 Day Crowd Index History');
+    expect(res.body).toContain('EPCOT - 14 Day Crowd Index History');
+    expect(res.body).toContain('Hollywood Studios - 14 Day Crowd Index History');
+    expect(res.body).toContain('Animal Kingdom - 14 Day Crowd Index History');
+    expect(res.body).not.toContain('MK - 14 Day Crowd Index History');
+    expect(res.body).not.toContain('HS - 14 Day Crowd Index History');
+    expect(res.body).not.toContain('AK - 14 Day Crowd Index History');
+    expect(res.body).not.toContain('No entries found');
   });
 
   // ---------------------------------------------------------------------------

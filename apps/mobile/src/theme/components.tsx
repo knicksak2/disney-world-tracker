@@ -105,8 +105,8 @@ export function GradientHeader({
   // Ensure a sensible minimum top gap even when the reported inset is small
   // (e.g. no notch, or the inset is briefly unavailable before the provider
   // measures) so the header — and its back control — never crowds the top edge.
-  const topInset = Math.max(insets?.top ?? 0, theme.spacing.xl);
-  const basePadding = compact ? theme.spacing.lg : theme.spacing.xl;
+  const topInset = Math.max(insets?.top ?? 0, theme.spacing.lg);
+  const basePadding = compact ? theme.spacing.sm : theme.spacing.md;
   const gradientColors = (colors ?? theme.gradient.headerVivid) as [string, string, ...string[]];
   return (
     <LinearGradient
@@ -507,14 +507,14 @@ const styles = StyleSheet.create({
   header: {
     // `paddingTop` is applied inline in `GradientHeader` as
     // `safeAreaInset.top + base` so the header clears the status bar / notch.
-    paddingBottom: theme.spacing.xl,
-    paddingHorizontal: theme.spacing.xl,
+    paddingBottom: theme.spacing.lg,
+    paddingHorizontal: theme.spacing.lg,
     borderBottomLeftRadius: theme.radius.xl,
     borderBottomRightRadius: theme.radius.xl,
     overflow: 'hidden',
   },
   headerCompact: {
-    paddingBottom: theme.spacing.lg,
+    paddingBottom: theme.spacing.md,
   },
   headerRow: {
     flexDirection: 'row',
@@ -560,18 +560,18 @@ const styles = StyleSheet.create({
     marginRight: 2,
   },
   headerIconText: {
-    fontSize: 24,
+    fontSize: 20,
     marginRight: 2,
   },
   headerIconTextCompact: {
-    fontSize: 20,
+    fontSize: 18,
   },
   headerRightWrap: {
     marginLeft: theme.spacing.sm,
   },
   headerTitle: {
     color: theme.color.textOnPrimary,
-    ...theme.typography.display,
+    ...theme.typography.title,
     flexShrink: 1,
   },
   headerTitleCompact: {
@@ -580,8 +580,9 @@ const styles = StyleSheet.create({
   },
   headerSubtitle: {
     color: 'rgba(255,255,255,0.82)',
-    ...theme.typography.body,
-    marginTop: theme.spacing.xs,
+    fontSize: 13,
+    fontWeight: '500',
+    marginTop: 3,
   },
   sparkleTopRight: {
     position: 'absolute',

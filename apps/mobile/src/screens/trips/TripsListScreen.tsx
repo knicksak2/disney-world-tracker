@@ -72,8 +72,6 @@ import {
   ScreenContainer,
   SecondaryButton,
 } from '../../theme/components';
-import AvatarChip from '../navigation/AvatarChip';
-import NotificationBell from '../../features/notifications/NotificationBell';
 import { calculateCountdownDays } from '../home/countdown';
 
 // ---------------------------------------------------------------------------
@@ -327,12 +325,6 @@ export default function TripsListScreen({ navigation }: Props): JSX.Element {
           title="Trips"
           subtitle="Plan and log your park days together."
           icon="map"
-          right={
-            <View style={styles.headerRight}>
-              <NotificationBell tintColor={theme.color.textOnPrimary} />
-              <AvatarChip tintColor={theme.color.textOnPrimary} />
-            </View>
-          }
         />
         <View style={styles.center} testID="trips-loading">
           <ActivityIndicator color={theme.color.primary} />
@@ -352,12 +344,6 @@ export default function TripsListScreen({ navigation }: Props): JSX.Element {
           title="Trips"
           subtitle="Plan and log your park days together."
           icon="map"
-          right={
-            <View style={styles.headerRight}>
-              <NotificationBell tintColor={theme.color.textOnPrimary} />
-              <AvatarChip tintColor={theme.color.textOnPrimary} />
-            </View>
-          }
         />
         <View style={styles.center} testID="trips-error">
           <EmptyState
@@ -390,16 +376,12 @@ export default function TripsListScreen({ navigation }: Props): JSX.Element {
         subtitle="Plan and log your park days together."
         icon="map"
         right={
-          <View style={styles.headerRight}>
-            <NotificationBell tintColor={theme.color.textOnPrimary} />
-            <AvatarChip tintColor={theme.color.textOnPrimary} />
-            <PrimaryButton
-              label="Create"
-              icon="add-outline"
-              onPress={openCreate}
-              testID="trips-create"
-            />
-          </View>
+          <PrimaryButton
+            label="Create"
+            icon="add-outline"
+            onPress={openCreate}
+            testID="trips-create"
+          />
         }
       />
 

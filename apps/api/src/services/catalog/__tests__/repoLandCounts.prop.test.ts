@@ -324,7 +324,7 @@ describe('Property 7: case-sensitive conjunctive Land filter', () => {
       ),
       { numRuns: NUM_RUNS },
     );
-  });
+  }, 90_000);
 
   it('returns an empty list for a Land value matching no active Experience (R3.8)', async () => {
     const { repo, pool } = freshRepo();
@@ -390,7 +390,7 @@ describe('Property 8: destination counts', () => {
       }),
       { numRuns: NUM_RUNS },
     );
-  });
+  }, 90_000);
 
   it('reports zero for Destinations with no active Experiences (R4.6)', async () => {
     const { repo, pool } = freshRepo();

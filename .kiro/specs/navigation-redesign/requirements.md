@@ -98,6 +98,7 @@ This feature builds on top of the existing `trips`, `pin-collection`, `stats-exp
 1. THE Trips tab SHALL preserve the existing Trips_List_Screen and Trip_Detail_View hub with its six sections (Planned_List, Schedule Builder, Reservations, Trip_Activity, Members, Summary) unchanged, including the Requirement 20 consolidation of Shared_Log and Trip_Feed into the single Trip_Activity surface.
 2. THE Trips tab SHALL NOT gain, lose, merge, or split any section as a result of this feature.
 3. THE Trips tab's header SHALL present the Notification_Bell.
+3a. (Amended — Header Decluttering): THE Trips tab's header SHALL omit the Notification_Bell and avatar chip to dedicate header actions to primary trip management (e.g. "+ Create"); notification awareness and identity chrome are consolidated directly on the Home tab (reachable in one tap from the bottom navigation bar).
 
 ### Requirement 6: Collection Tab
 
@@ -118,6 +119,7 @@ point behavior.
 1. THE Collection tab SHALL present three sub-sections reachable from its landing screen: Pins (the existing PinBoardScreen and PinShowcaseScreen, with a claimable-count indicator), Food (the existing MyFoodHistoryScreen and MyFoodListsScreen), and Stats (the existing StatsStack Overview hub).
 2. THE Collection tab SHALL preserve the existing behavior, caching, and navigation of PinBoardScreen, PinShowcaseScreen, MyFoodHistoryScreen, MyFoodListsScreen, and the StatsStack unchanged; this feature relocates their entry points only.
 3. THE Collection tab's header SHALL present the Notification_Bell.
+3a. (Amended — Header Decluttering): THE Collection tab's header SHALL omit the Notification_Bell and avatar chip to keep the header focused on the vault title and segmented controls; notification center access is consolidated to the Home tab.
 4. THE Collection tab's landing screen SHALL present the same claimable-Pin count used by the existing Attention_Badge composition unchanged.
 5. THE Collection tab SHALL present the display label "Vault" in the bottom tab bar, displaying an unread badge indicating the claimable-pin count WHERE claimable pins exist.
 6. THE Collection/Vault landing screen SHALL present a three-way segmented pill control — "Pins & Showcase", "Food & Lists", and "Park Stats" — defaulting to "Pins & Showcase".
@@ -177,6 +179,7 @@ Discover-only action are otherwise unchanged.
 
 1. THE App SHALL present an avatar chip in the Home tab's header that, when tapped, opens You_And_Crew.
 2. You_And_Crew SHALL be reachable from every Main_Tab via the same avatar-chip control in that tab's header.
+2a. (Amended — Header Decluttering): You_And_Crew entry point is consolidated to the Home tab header (reachable from any tab in one tap via the bottom navigation bar), freeing up non-Home tab headers from repetitive identity chrome.
 3. You_And_Crew SHALL present, in order: the existing avatar-preset picker and editable display-name control, the existing Friends list with search and a per-friend "Compare Stats" control, the existing Share Inbox and Sent Shares entry points, and the existing push-notification-preference, change-password, and log-out controls.
 4. You_And_Crew SHALL preserve the existing behavior, validation, and error handling of AvatarPicker, the display-name PATCH flow, FriendsListScreen, FriendsSearchScreen, InboxScreen, SentSharesScreen, PushNotificationPreferenceControl, and ChangePasswordControl unchanged; this feature relocates their entry points only.
 5. THE App SHALL NOT present Friends or Profile as a selectable Main_Tab.
@@ -190,6 +193,7 @@ Discover-only action are otherwise unchanged.
 #### Acceptance Criteria
 
 1. THE App SHALL present the Notification_Bell in the header of every Main_Tab.
+1a. (Amended — Header Decluttering): THE App SHALL present the Notification_Bell in the header of the Home tab; headers of non-Home landing tabs omit the bell to maximize space for page-specific actions and eliminate visual clutter.
 2. WHEN the User taps the Notification_Bell, THE App SHALL open the existing NotificationCenterScreen's Attention_Feed as a modal sheet.
 3. THE Notification_Bell SHALL display the existing combined Attention_Badge count unchanged, reading the same shared query cache the badge reads today (`disney-world-tracker` R22.5, notification-center R4.5, R5.6, R10.6).
 4. Closing the Attention_Feed sheet SHALL return the User to the Main_Tab and screen they were on when they opened it.
