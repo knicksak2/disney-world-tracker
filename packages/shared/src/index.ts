@@ -29,6 +29,9 @@ export {
   PIN_COUNT_METRICS,
   FESTIVAL_SLUGS,
   FESTIVAL_SLUG_LABELS,
+  EXPENSE_SPLIT_MODES,
+  EXPENSE_CATEGORIES,
+  CHARGE_LINE_KINDS,
 } from './enums.js';
 export type {
   ExperienceCategory,
@@ -45,6 +48,9 @@ export type {
   PinTrack,
   PinCountMetric,
   FestivalSlug,
+  ExpenseSplitMode,
+  ExpenseCategory,
+  ChargeLineKind,
 } from './enums.js';
 
 // Avatar preset catalog (allowlist of bundled illustration ids).
@@ -476,6 +482,53 @@ export type {
   OptimizedItem,
   TripTravelLeg,
 } from './trips.js';
+
+// Trip Expenses domain: constants, schemas, DTOs.
+export {
+  EXPENSE_AMOUNT_MAX_CENTS,
+  EXPENSE_LIMIT,
+  GUEST_NAME_MAX,
+  EXPENSE_DESCRIPTION_MAX,
+  EXPENSE_TIER_NAME_MAX,
+  EXPENSE_ITEM_NAME_MAX,
+  expenseShareInputSchema,
+  expenseTierInputSchema,
+  expenseTierCountInputSchema,
+  expenseItemInputSchema,
+  chargeLineInputSchema,
+  expenseCreateSchema,
+  expenseEditSchema,
+  settlementCreateSchema,
+  tripGuestAddSchema,
+  tripGuestRenameSchema,
+  refundCreateSchema,
+} from './tripExpenses.js';
+export type {
+  ExpenseShareInput,
+  ExpenseTierInput,
+  ExpenseTierCountInput,
+  ExpenseItemInput,
+  ChargeLineInputDTO,
+  ExpenseCreateInput,
+  ExpenseEditInput,
+  SettlementCreateInput,
+  TripGuestAddInput,
+  TripGuestRenameInput,
+  RefundCreateInput,
+  ExpenseDTO,
+  ExpenseShareDTO,
+  ExpenseTierDTO,
+  ExpenseTierCountDTO,
+  ExpenseItemDTO,
+  ChargeLineDTO,
+  RefundDTO,
+  SettlementDTO,
+  TripGuestDTO,
+  NetBalanceDTO,
+  PairwiseBalanceDTO,
+  TripBalancesResponseDTO,
+  BalanceDrillDownEntryDTO,
+} from './tripExpenses.js';
 
 // Planned List Completion Sync: pure, I/O-free derivation core shared by the
 // mobile Planned_List presentation and the server Trip_Summary planned counts,

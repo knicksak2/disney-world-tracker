@@ -114,6 +114,8 @@ import type {
   RodeWithTagCreatedNotice,
   TripInviteCreatedNotice,
 } from './services/trips/events.js';
+import { createTripExpenseRepo } from './services/tripExpenses/repo.js';
+import type { ExpenseAffectedNotice } from './services/tripExpenses/events.js';
 
 import { createPushRepo } from './services/push/repo.js';
 import { createNotificationPreferenceRepo } from './services/push/preferenceRepo.js';
@@ -246,6 +248,7 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
     pool,
     experienceListRepo,
   );
+  const tripExpenseRepo = createTripExpenseRepo(pool);
 
   /**
    * Synchronous Pin award port (pin-collection R2.1-R2.3). Handed to every
@@ -545,6 +548,31 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
         );
       });
   };
+
+  /**
+   * Background `ExpenseAffected` dispatch (Req 1.9, 1.10).
+   * Mirrors `emitTripInviteCreated` exactly (fire-and-forget, .catch logging).
+   */
+  const emitExpenseAffected = (event: ExpenseAffectedNotice): void => {
+    void Promise.resolve()
+      .then(() => {
+        notificationLogger.info(
+          {
+            expenseId: event.expenseId,
+            tripId: event.tripId,
+            actorUserId: event.actorUserId,
+            affectedMemberIds: event.affectedMemberIds,
+          },
+          'ExpenseAffected notice emitted',
+        );
+      })
+      .catch((err: unknown) => {
+        notificationLogger.error(
+          { err, expenseId: event.expenseId },
+          'ExpenseAffected dispatch failed',
+        );
+      });
+  };
   // The leaderboard cache and the lockout service accept a narrow
   // structural Redis interface whose `set` is a single rest-arg overload;
   // ioredis's `Redis` exposes many `set` overloads that are not assignable
@@ -812,6 +840,12 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
       predictionService,
       // Award Squad/Social Pins to the confirming Tagged_Member (R2.3).
       awardPins,
+    },
+    tripExpenses: {
+      repo: tripExpenseRepo,
+      requireSession: sessionMiddleware,
+      pool,
+      emitExpenseAffected,
     },
     pins: { repo: pinRepo, requireSession: sessionMiddleware },
     pinShowcase: {

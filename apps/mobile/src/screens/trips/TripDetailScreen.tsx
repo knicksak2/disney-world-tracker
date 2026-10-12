@@ -92,6 +92,7 @@ export interface HubSection {
     | 'TripPlannedList'
     | 'TripSchedule'
     | 'TripReservations'
+    | 'TripExpenses'
     | 'TripFeed'
     | 'TripMembers'
     | 'TripSummary';
@@ -140,6 +141,14 @@ export const HUB_SECTIONS: readonly HubSection[] = [
     body: 'Dining, Lightning Lane, and other bookings you hold.',
     icon: 'ticket-outline',
     color: theme.color.accent,
+  },
+  {
+    key: 'expenses',
+    route: 'TripExpenses',
+    title: 'Expenses',
+    body: 'Shared ledger, balances, and settlements.',
+    icon: 'cash-outline',
+    color: theme.color.primary,
   },
   {
     key: 'activity',
@@ -882,6 +891,41 @@ export default function TripDetailScreen({
                 <Text style={styles.tileTitle}>Trip Activity</Text>
                 <Text style={styles.tileDesc} numberOfLines={2}>
                   Group completions & reactions.
+                </Text>
+              </Pressable>
+            </View>
+
+            <View style={styles.gridRow}>
+              {/* Tile 5: Expenses */}
+              <Pressable
+                style={styles.hubTile}
+                onPress={() =>
+                  navigation.navigate('TripExpenses', { tripId })
+                }
+                accessibilityRole="button"
+                accessibilityLabel="Expenses"
+                testID="trip-detail-section-expenses"
+              >
+                <View style={styles.tileBadge}>
+                  <Text style={[styles.tileBadgeText, { color: theme.color.primary }]}>
+                    Ledger
+                  </Text>
+                </View>
+                <View
+                  style={[
+                    styles.tileIconWrap,
+                    { backgroundColor: `${theme.color.primary}18` },
+                  ]}
+                >
+                  <Ionicons
+                    name="cash-outline"
+                    size={20}
+                    color={theme.color.primary}
+                  />
+                </View>
+                <Text style={styles.tileTitle}>Expenses</Text>
+                <Text style={styles.tileDesc} numberOfLines={2}>
+                  Shared ledger & balances.
                 </Text>
               </Pressable>
             </View>

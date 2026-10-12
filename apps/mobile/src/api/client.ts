@@ -238,6 +238,43 @@ export async function apiRequest<T = unknown>(
 }
 
 /**
+ * Issue an authenticated GET request that resolves the response body as raw text.
+ * Used for CSV export and non-JSON payloads.
+ */
+export async function apiFetchText(
+  path: string,
+  signal?: AbortSignal,
+): Promise<string> {
+  const baseUrl = resolveBaseUrl();
+  const url = path.startsWith('/') ? `${baseUrl}${path}` : `${baseUrl}/${path}`;
+
+  const headers: Record<string, string> = {};
+  const token = await getSessionToken();
+  if (token !== null) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  const requestInit: RequestInit = {
+    method: 'GET',
+    headers,
+    ...(signal !== undefined ? { signal } : {}),
+  };
+  const response = await fetch(url, requestInit);
+
+  if (response.status === 401) {
+    await clearSessionToken();
+    notifyUnauthorized();
+    throw await buildApiError(response);
+  }
+
+  if (!response.ok) {
+    throw await buildApiError(response);
+  }
+
+  return response.text();
+}
+
+/**
  * Read the response body and translate it into an `ApiError`. The
  * backend always emits the uniform envelope on error; we still defend
  * against a malformed payload (e.g. an upstream proxy returning a

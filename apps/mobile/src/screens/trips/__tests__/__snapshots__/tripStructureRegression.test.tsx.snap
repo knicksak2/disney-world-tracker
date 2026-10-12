@@ -27,6 +27,14 @@ exports[`Feature: navigation-redesign, Property 6: Trip section structure untouc
     "title": "Reservations",
   },
   {
+    "body": "Shared ledger, balances, and settlements.",
+    "color": "#5b2a86",
+    "icon": "cash-outline",
+    "key": "expenses",
+    "route": "TripExpenses",
+    "title": "Expenses",
+  },
+  {
     "body": "Log completions and follow, react to, and comment on the group.",
     "color": "#f6c343",
     "icon": "chatbubbles-outline",
@@ -53,7 +61,7 @@ exports[`Feature: navigation-redesign, Property 6: Trip section structure untouc
 ]
 `;
 
-exports[`Feature: navigation-redesign, Property 6: Trip section structure untouched (Requirements 5.1, 5.2) TripsStack registers exactly the 11 expected screens and matches snapshot 1`] = `
+exports[`Feature: navigation-redesign, Property 6: Trip section structure untouched (Requirements 5.1, 5.2) TripsStack registers exactly the 13 expected screens and matches snapshot 1`] = `
 [
   {
     "name": "TripsList",
@@ -77,6 +85,14 @@ exports[`Feature: navigation-redesign, Property 6: Trip section structure untouc
   },
   {
     "name": "TripReservations",
+    "options": undefined,
+  },
+  {
+    "name": "TripExpenses",
+    "options": undefined,
+  },
+  {
+    "name": "TripBalances",
     "options": undefined,
   },
   {

@@ -86,6 +86,10 @@ import {
   type TripRoutesOptions,
 } from './services/trips/routes.js';
 import {
+  tripExpenseRoutes,
+  type TripExpenseRoutesOptions,
+} from './services/tripExpenses/routes.js';
+import {
   pinRoutes,
   type PinRoutesOptions,
 } from './services/pins/routes.js';
@@ -216,6 +220,11 @@ export interface BuildServerServices {
    * the routes it needs without satisfying the Trip repo contract.
    */
   readonly trips?: TripRoutesOptions;
+  /**
+   * Trip Expenses routes (Req 1-13). Wires expense ledger, guests, settlements,
+   * refunds, net/pairwise balances, and CSV export.
+   */
+  readonly tripExpenses?: TripExpenseRoutesOptions;
   /**
    * Intelligence_Service routes (task 5). Wires the crowd calendar reads and 
    * the internal sampling cron endpoint (R3, R6, R11).
@@ -530,6 +539,10 @@ export function buildServer(
 
   if (services.trips !== undefined) {
     void app.register(tripRoutes(services.trips));
+  }
+
+  if (services.tripExpenses !== undefined) {
+    void app.register(tripExpenseRoutes(services.tripExpenses));
   }
 
   if (services.intelligence !== undefined) {

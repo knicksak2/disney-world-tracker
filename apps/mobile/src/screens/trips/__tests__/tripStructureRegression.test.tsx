@@ -62,21 +62,22 @@ describe('Feature: navigation-redesign, Property 6: Trip section structure untou
     capturedScreens.length = 0;
   });
 
-  test('HUB_SECTIONS has exactly 6 sections preserving Trip Activity consolidation', () => {
-    // Must be exactly 6 sections: Planned List, Schedule, Reservations, Activity, Members, Summary
-    expect(HUB_SECTIONS).toHaveLength(6);
+  test('HUB_SECTIONS has exactly 7 sections preserving Trip Activity consolidation and Expenses', () => {
+    // Must be exactly 7 sections: Planned List, Schedule, Reservations, Expenses, Activity, Members, Summary
+    expect(HUB_SECTIONS).toHaveLength(7);
 
     const sectionKeys = HUB_SECTIONS.map((s) => s.key);
     expect(sectionKeys).toEqual([
       'planned',
       'schedule',
       'reservations',
+      'expenses',
       'activity',
       'members',
       'summary',
     ]);
 
-    // Section 4 is consolidated Trip Activity (TripFeed)
+    // Section 5 is consolidated Trip Activity (TripFeed)
     const activitySection = HUB_SECTIONS.find((s) => s.key === 'activity');
     expect(activitySection).toBeDefined();
     expect(activitySection?.route).toBe('TripFeed');
@@ -87,7 +88,7 @@ describe('Feature: navigation-redesign, Property 6: Trip section structure untou
     expect(HUB_SECTIONS).toMatchSnapshot();
   });
 
-  test('TripsStack registers exactly the 11 expected screens and matches snapshot', () => {
+  test('TripsStack registers exactly the 13 expected screens and matches snapshot', () => {
     render(<TripsStack />);
 
     const screenNames = capturedScreens.map((s) => s.name);
@@ -98,6 +99,8 @@ describe('Feature: navigation-redesign, Property 6: Trip section structure untou
       'TripPlannedList',
       'TripSchedule',
       'TripReservations',
+      'TripExpenses',
+      'TripBalances',
       'TripFeed',
       'TripMembers',
       'TripSummary',
@@ -106,7 +109,7 @@ describe('Feature: navigation-redesign, Property 6: Trip section structure untou
     ];
 
     expect(screenNames).toEqual(EXPECTED_ROUTES);
-    expect(screenNames).toHaveLength(11);
+    expect(screenNames).toHaveLength(13);
     expect(capturedScreens).toMatchSnapshot();
   });
 });

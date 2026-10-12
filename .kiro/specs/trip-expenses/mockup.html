@@ -1,0 +1,3840 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Disney World Tracker — Trip Expenses Master Redesign</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Outfit:wght@500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-page: radial-gradient(circle at 50% 0%, #200f38 0%, #10061e 50%, #080210 100%);
+      --bg-chassis: #0e051b;
+      --bg-screen: #0d0419;
+      --bg-card: rgba(255, 255, 255, 0.05);
+      --bg-card-hover: rgba(255, 255, 255, 0.08);
+      --bg-card-active: rgba(255, 255, 255, 0.12);
+      --bg-card-elevated: #1a0b30;
+      --border-subtle: rgba(255, 255, 255, 0.08);
+      --border-medium: rgba(255, 255, 255, 0.14);
+      --border-glow: rgba(168, 85, 247, 0.3);
+
+      --color-gold: #f6c343;
+      --color-gold-hover: #e0af32;
+      --color-gold-glow: rgba(246, 195, 67, 0.25);
+      --color-purple-primary: #7e22ce;
+      --color-purple-bright: #a855f7;
+      --color-purple-light: #c084fc;
+      --color-purple-glow: rgba(168, 85, 247, 0.2);
+
+      --color-emerald: #10b981;
+      --color-emerald-bg: rgba(16, 185, 129, 0.12);
+      --color-emerald-glow: rgba(16, 185, 129, 0.25);
+
+      --color-amber: #f59e0b;
+      --color-amber-bg: rgba(245, 158, 11, 0.12);
+
+      --color-rose: #f43f5e;
+      --color-rose-bg: rgba(244, 63, 94, 0.12);
+
+      --color-blue: #38bdf8;
+      --color-blue-bg: rgba(56, 189, 248, 0.12);
+
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --text-dim: #64748b;
+      --text-gold: #fde047;
+
+      --radius-sm: 8px;
+      --radius-md: 14px;
+      --radius-lg: 20px;
+      --radius-pill: 9999px;
+
+      --phone-w: 392px;
+      --phone-h: 844px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+    body {
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg-page);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px 16px 80px;
+      overflow-x: hidden;
+    }
+
+    /* Top Master Control Ribbon */
+    .master-header {
+      width: 100%;
+      max-width: 1240px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      margin-bottom: 24px;
+      gap: 12px;
+    }
+
+    .badge-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(246, 195, 67, 0.12);
+      border: 1px solid rgba(246, 195, 67, 0.3);
+      color: var(--color-gold);
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      padding: 4px 12px;
+      border-radius: var(--radius-pill);
+    }
+
+    .master-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 32px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      background: linear-gradient(135deg, #ffffff 40%, #f6c343 90%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .master-sub {
+      font-size: 14px;
+      color: #cbd5e1;
+      max-width: 720px;
+      line-height: 1.5;
+    }
+
+    /* Controls Bar */
+    .controls-panel {
+      width: 100%;
+      max-width: 1240px;
+      background: rgba(255, 255, 255, 0.04);
+      backdrop-filter: blur(16px);
+      border: 1px solid var(--border-subtle);
+      border-radius: 20px;
+      padding: 14px 20px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      margin-bottom: 24px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+    }
+
+    .control-cluster {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .cluster-title {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: var(--text-dim);
+      margin-right: 4px;
+    }
+
+    .btn-toggle {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: var(--text-muted);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 6px 14px;
+      border-radius: var(--radius-pill);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn-toggle:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: var(--text-main);
+    }
+
+    .btn-toggle.active {
+      background: var(--color-purple-primary);
+      border-color: var(--color-purple-bright);
+      color: #fff;
+      box-shadow: 0 0 16px var(--color-purple-glow);
+    }
+
+    .btn-toggle.active-gold {
+      background: var(--color-gold);
+      border-color: var(--color-gold);
+      color: #1a0826;
+      box-shadow: 0 0 16px var(--color-gold-glow);
+    }
+
+    /* Problem / Solution Callout Bar */
+    .callout-bar {
+      width: 100%;
+      max-width: 1240px;
+      background: linear-gradient(135deg, rgba(168, 85, 247, 0.08) 0%, rgba(246, 195, 67, 0.05) 100%);
+      border: 1px solid rgba(168, 85, 247, 0.25);
+      border-radius: 16px;
+      padding: 14px 20px;
+      margin-bottom: 28px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 16px;
+    }
+
+    .callout-item {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .callout-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--color-gold);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .callout-desc {
+      font-size: 12px;
+      color: #cbd5e1;
+      line-height: 1.4;
+    }
+
+    /* Mockup Viewport Container */
+    .viewport-grid {
+      display: flex;
+      gap: 36px;
+      justify-content: center;
+      align-items: flex-start;
+      width: 100%;
+      max-width: 1240px;
+      flex-wrap: wrap;
+    }
+
+    .device-column {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: var(--phone-w);
+    }
+
+    .device-tag {
+      font-family: 'Outfit', sans-serif;
+      font-size: 15px;
+      font-weight: 700;
+      color: #e2e8f0;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .tag-badge {
+      font-size: 10px;
+      font-weight: 800;
+      padding: 2px 8px;
+      border-radius: var(--radius-pill);
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+    }
+    .tag-redesign { background: var(--color-emerald); color: #042f2e; }
+    .tag-legacy { background: #ef4444; color: #450a0a; }
+
+    /* Phone Chassis */
+    .phone-chassis {
+      width: var(--phone-w);
+      background: var(--bg-chassis);
+      border-radius: 48px;
+      box-shadow: 0 30px 80px rgba(0, 0, 0, 0.85), 0 0 0 10px #231238, 0 0 0 12px rgba(255, 255, 255, 0.12);
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    /* Scroll vs Unrolled Mode */
+    body.mode-scroll .phone-chassis { height: var(--phone-h); }
+    body.mode-scroll .phone-screen {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding-bottom: 96px;
+      scroll-behavior: smooth;
+    }
+    body.mode-scroll .phone-screen::-webkit-scrollbar { width: 4px; }
+    body.mode-scroll .phone-screen::-webkit-scrollbar-thumb { background: #581c87; border-radius: 10px; }
+
+    body.mode-unrolled .phone-chassis { height: auto !important; border-radius: 36px; }
+    body.mode-unrolled .phone-screen { overflow: visible !important; height: auto !important; padding-bottom: 30px; }
+    body.mode-unrolled .phone-dynamic-island { display: none; }
+
+    /* Dynamic Island */
+    .phone-dynamic-island {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 120px;
+      height: 30px;
+      background: #000;
+      border-radius: 20px;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 10px;
+      pointer-events: none;
+    }
+    .island-camera { width: 10px; height: 10px; background: #111; border-radius: 50%; border: 1.5px solid #222; }
+    .island-sensor { width: 10px; height: 10px; background: #080808; border-radius: 50%; }
+
+    /* Status Bar */
+    .phone-status-bar {
+      height: 48px;
+      padding: 12px 24px 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 13px;
+      font-weight: 700;
+      color: #fff;
+      z-index: 90;
+      background: transparent;
+    }
+    .status-icons { display: flex; gap: 6px; align-items: center; }
+
+    /* App Nav Header */
+    .app-nav-header {
+      padding: 8px 16px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 80;
+      background: rgba(13, 4, 25, 0.85);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .nav-back-btn {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      background: transparent;
+      border: none;
+      color: var(--color-purple-bright);
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      padding: 4px 0;
+    }
+
+    .nav-title-group {
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .nav-trip-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 15px;
+      font-weight: 800;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .nav-trip-subtitle {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    .nav-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .nav-icon-btn {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .nav-icon-btn:hover { background: rgba(255, 255, 255, 0.12); }
+
+    /* Post-Trip Settle Banner */
+    .settle-reminder-banner {
+      margin: 12px 14px 6px;
+      background: linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(246, 195, 67, 0.08) 100%);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+      border-radius: 14px;
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .settle-reminder-text {
+      font-size: 12px;
+      line-height: 1.35;
+      color: #fef3c7;
+    }
+    .settle-reminder-btn {
+      background: var(--color-amber);
+      color: #451a03;
+      border: none;
+      padding: 5px 10px;
+      border-radius: var(--radius-pill);
+      font-size: 11px;
+      font-weight: 800;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    /* REDESIGNED HERO CANVAS (Apple Wallet / Splitwise Inspired) */
+    .hero-canvas {
+      margin: 12px 14px 16px;
+      background: linear-gradient(145deg, #240c42 0%, #15062c 60%, #110424 100%);
+      border: 1px solid rgba(168, 85, 247, 0.25);
+      border-radius: 24px;
+      padding: 18px 18px 16px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.15);
+    }
+
+    .hero-canvas::after {
+      content: '';
+      position: absolute;
+      top: -40px;
+      right: -40px;
+      width: 140px;
+      height: 140px;
+      background: radial-gradient(circle, rgba(168, 85, 247, 0.25) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .hero-header-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+
+    .hero-status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      padding: 3px 9px;
+      border-radius: var(--radius-pill);
+    }
+    .status-owed {
+      background: var(--color-emerald-bg);
+      border: 1px solid rgba(16, 185, 129, 0.35);
+      color: var(--color-emerald);
+    }
+    .status-owes {
+      background: var(--color-amber-bg);
+      border: 1px solid rgba(245, 158, 11, 0.35);
+      color: var(--color-amber);
+    }
+    .status-settled {
+      background: rgba(148, 163, 184, 0.15);
+      border: 1px solid rgba(148, 163, 184, 0.3);
+      color: #94a3b8;
+    }
+
+    .hero-switch-user {
+      font-size: 11px;
+      color: var(--color-purple-light);
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-pill);
+      padding: 3px 8px;
+      cursor: pointer;
+    }
+
+    .hero-balance-figure {
+      font-family: 'JetBrains Mono', 'Plus Jakarta Sans', monospace;
+      font-size: 34px;
+      font-weight: 800;
+      letter-spacing: -1px;
+      margin-bottom: 4px;
+      display: flex;
+      align-items: baseline;
+      gap: 4px;
+    }
+    .balance-green { color: #34d399; text-shadow: 0 2px 14px rgba(16, 185, 129, 0.4); }
+    .balance-amber { color: #fbbf24; text-shadow: 0 2px 14px rgba(245, 158, 11, 0.4); }
+
+    .hero-balance-caption {
+      font-size: 12px;
+      color: #cbd5e1;
+      font-weight: 500;
+      margin-bottom: 14px;
+    }
+
+    .hero-stats-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px;
+      background: rgba(0, 0, 0, 0.25);
+      border-radius: 14px;
+      margin-bottom: 14px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .hero-stat-cell {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .hero-stat-label {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-dim);
+    }
+    .hero-stat-val {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .hero-stat-divider {
+      width: 1px;
+      height: 24px;
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    /* Hero CTA Row */
+    .hero-actions-row {
+      display: flex;
+      gap: 8px;
+    }
+
+    .btn-hero-primary {
+      flex: 1;
+      background: linear-gradient(135deg, #f6c343 0%, #d97706 100%);
+      color: #1c092a;
+      border: none;
+      padding: 10px 14px;
+      border-radius: var(--radius-md);
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      font-size: 13px;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      cursor: pointer;
+      box-shadow: 0 4px 14px rgba(246, 195, 67, 0.35);
+      transition: transform 0.15s ease, filter 0.15s ease;
+    }
+    .btn-hero-primary:hover { filter: brightness(1.08); transform: translateY(-1px); }
+
+    .btn-hero-secondary {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: #fff;
+      padding: 10px 14px;
+      border-radius: var(--radius-md);
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: background 0.15s ease;
+    }
+    .btn-hero-secondary:hover { background: rgba(255, 255, 255, 0.14); }
+
+    /* Quick Debtors Ticker */
+    .quick-debtors-wrap {
+      margin-top: 12px;
+      padding-top: 10px;
+      border-top: 1px dashed rgba(255, 255, 255, 0.1);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .quick-debtors-header {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: var(--color-purple-light);
+    }
+    .quick-debtors-chips {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      padding-bottom: 2px;
+    }
+    .quick-debtors-chips::-webkit-scrollbar { display: none; }
+
+    .debtor-chip {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: var(--radius-pill);
+      padding: 3px 10px 3px 4px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      font-size: 11px;
+      white-space: nowrap;
+      transition: background 0.15s ease;
+    }
+    .debtor-chip:hover { background: rgba(255, 255, 255, 0.12); border-color: rgba(255, 255, 255, 0.2); }
+    .debtor-chip-avatar {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: var(--color-purple-bright);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 9px;
+      font-weight: 800;
+    }
+    .debtor-chip-name { font-weight: 600; color: #f1f5f9; }
+    .debtor-chip-amt { font-family: 'JetBrains Mono', monospace; font-weight: 700; color: #34d399; }
+
+    /* SEGMENTED TAB SWITCHER */
+    .segmented-tab-container {
+      margin: 0 14px 12px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-pill);
+      padding: 3px;
+      display: flex;
+      position: relative;
+    }
+
+    .segmented-tab-btn {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      font-size: 13px;
+      font-weight: 700;
+      padding: 8px 12px;
+      border-radius: var(--radius-pill);
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      z-index: 2;
+    }
+
+    .segmented-tab-btn.active {
+      background: var(--color-purple-primary);
+      color: #fff;
+      box-shadow: 0 2px 10px rgba(126, 34, 206, 0.4);
+    }
+
+    .tab-badge-count {
+      background: rgba(255, 255, 255, 0.15);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 800;
+      padding: 1px 6px;
+      border-radius: var(--radius-pill);
+    }
+
+    /* UNIFIED FILTER STRIP */
+    .unified-filter-bar {
+      margin: 0 14px 14px;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      overflow-x: auto;
+      padding-bottom: 2px;
+    }
+    .unified-filter-bar::-webkit-scrollbar { display: none; }
+
+    .filter-chip {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-muted);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 6px 12px;
+      border-radius: var(--radius-pill);
+      cursor: pointer;
+      white-space: nowrap;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      transition: all 0.15s ease;
+    }
+    .filter-chip:hover {
+      background: rgba(255, 255, 255, 0.09);
+      color: var(--text-main);
+    }
+    .filter-chip.active {
+      background: rgba(246, 195, 67, 0.15);
+      border-color: var(--color-gold);
+      color: var(--color-gold);
+      font-weight: 700;
+    }
+
+    .payer-dropdown-chip {
+      background: rgba(168, 85, 247, 0.1);
+      border: 1px solid rgba(168, 85, 247, 0.25);
+      color: var(--color-purple-light);
+      font-size: 12px;
+      font-weight: 700;
+      padding: 6px 12px;
+      border-radius: var(--radius-pill);
+      cursor: pointer;
+      white-space: nowrap;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    /* SECTION / DATE DIVIDER */
+    .date-section-header {
+      padding: 4px 16px 8px;
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--text-dim);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .date-section-sum {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    /* EXPENSE LIST & SINGLE-SURFACE CARDS */
+    .expense-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 0 14px;
+    }
+
+    .expense-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 18px;
+      overflow: hidden;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    }
+    .expense-card:hover {
+      background: var(--bg-card-hover);
+      border-color: var(--border-medium);
+      transform: translateY(-1px);
+    }
+    .expense-card.is-expanded {
+      background: #170929;
+      border-color: var(--border-glow);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(168, 85, 247, 0.2);
+    }
+
+    .expense-main-surface {
+      padding: 12px 14px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      cursor: pointer;
+      position: relative;
+    }
+
+    /* Category Icon */
+    .category-avatar {
+      width: 44px;
+      height: 44px;
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      flex-shrink: 0;
+      position: relative;
+    }
+    .cat-hotel { background: linear-gradient(135deg, rgba(126, 34, 206, 0.3), rgba(168, 85, 247, 0.15)); border: 1px solid rgba(168, 85, 247, 0.3); }
+    .cat-dining { background: linear-gradient(135deg, rgba(225, 29, 72, 0.3), rgba(244, 63, 94, 0.15)); border: 1px solid rgba(244, 63, 94, 0.3); }
+    .cat-tickets { background: linear-gradient(135deg, rgba(217, 119, 6, 0.3), rgba(245, 158, 11, 0.15)); border: 1px solid rgba(245, 158, 11, 0.3); }
+    .cat-settlement { background: linear-gradient(135deg, rgba(16, 185, 129, 0.35), rgba(5, 150, 105, 0.15)); border: 1px solid rgba(16, 185, 129, 0.4); }
+
+    .expense-info-block {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .expense-title-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .expense-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: #fff;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .catalog-tag {
+      font-size: 9px;
+      font-weight: 800;
+      padding: 1px 6px;
+      border-radius: var(--radius-pill);
+      background: rgba(246, 195, 67, 0.12);
+      border: 1px solid rgba(246, 195, 67, 0.25);
+      color: var(--color-gold);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      white-space: nowrap;
+    }
+
+    .expense-meta-subtitle {
+      font-size: 11px;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .meta-bullet { opacity: 0.4; }
+
+    /* Amount & Impact */
+    .expense-amount-block {
+      text-align: right;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 2px;
+      flex-shrink: 0;
+    }
+
+    .expense-total-val {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 15px;
+      font-weight: 800;
+      color: #fff;
+    }
+
+    .personal-impact-tag {
+      font-size: 11px;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+    }
+    .impact-lent { color: #34d399; }
+    .impact-owe { color: #fbbf24; }
+    .impact-settled { color: #94a3b8; }
+
+    .chevron-icon {
+      font-size: 12px;
+      color: var(--text-dim);
+      margin-left: 2px;
+      transition: transform 0.2s ease;
+    }
+    .expense-card.is-expanded .chevron-icon { transform: rotate(180deg); color: var(--color-purple-bright); }
+
+    /* Accordion Expand Drawer */
+    .expense-expand-drawer {
+      display: none;
+      padding: 12px 14px 14px;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      background: rgba(0, 0, 0, 0.2);
+    }
+    .expense-card.is-expanded .expense-expand-drawer {
+      display: block;
+      animation: fadeIn 0.2s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .drawer-split-header {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: var(--color-purple-light);
+      margin-bottom: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .drawer-participants-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+
+    .participant-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 10px;
+      padding: 6px 10px;
+      font-size: 12px;
+    }
+    .participant-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .participant-avatar-mini {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: #4a1d70;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      font-weight: 700;
+    }
+    .participant-name { font-weight: 600; color: #f1f5f9; }
+    .participant-role { font-size: 10px; color: var(--text-dim); }
+    .participant-share-val { font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 700; color: #cbd5e1; }
+
+    .drawer-actions-row {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+      padding-top: 6px;
+      border-top: 1px dashed rgba(255, 255, 255, 0.08);
+    }
+
+    .drawer-btn {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: var(--text-muted);
+      font-size: 11px;
+      font-weight: 700;
+      padding: 5px 10px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      transition: all 0.15s ease;
+    }
+    .drawer-btn:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
+    .drawer-btn-danger:hover { background: rgba(244, 63, 94, 0.2); color: var(--color-rose); border-color: rgba(244, 63, 94, 0.4); }
+
+    /* SETTLEMENT CARD STYLING */
+    .settlement-card {
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.09) 0%, rgba(6, 78, 59, 0.15) 100%);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    /* WHO OWES WHAT TAB */
+    .balances-tab-content {
+      padding: 0 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .tab-section-header {
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--color-purple-light);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    /* Directional Transfer Card */
+    .transfer-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 18px;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      transition: all 0.2s ease;
+    }
+    .transfer-card:hover {
+      background: var(--bg-card-hover);
+      border-color: var(--border-glow);
+    }
+
+    .transfer-route-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .party-block { display: flex; align-items: center; gap: 8px; }
+    .party-avatar {
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      background: #3b1660;
+      border: 2px solid var(--color-purple-bright);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      font-weight: 800;
+    }
+    .party-details { display: flex; flex-direction: column; gap: 2px; }
+    .party-name { font-size: 13px; font-weight: 700; color: #fff; }
+    .party-role { font-size: 10px; color: var(--text-muted); }
+
+    .transfer-arrow-block {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      flex: 1;
+      padding: 0 8px;
+    }
+    .transfer-amount-pill {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 14px;
+      font-weight: 800;
+      color: #f6c343;
+      background: rgba(246, 195, 67, 0.12);
+      border: 1px solid rgba(246, 195, 67, 0.25);
+      padding: 3px 10px;
+      border-radius: var(--radius-pill);
+    }
+    .transfer-track-line {
+      width: 100%;
+      height: 2px;
+      background: linear-gradient(90deg, rgba(245, 158, 11, 0.2), var(--color-gold), rgba(16, 185, 129, 0.4));
+      position: relative;
+    }
+    .transfer-track-line::after {
+      content: '►';
+      position: absolute;
+      right: -2px;
+      top: -6px;
+      font-size: 10px;
+      color: var(--color-emerald);
+    }
+
+    .transfer-btn-row { display: flex; gap: 8px; }
+    .btn-quick-settle {
+      flex: 1;
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      color: #fff;
+      border: none;
+      padding: 9px 12px;
+      border-radius: var(--radius-md);
+      font-size: 12px;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      cursor: pointer;
+      box-shadow: 0 3px 10px rgba(16, 185, 129, 0.3);
+      transition: filter 0.15s ease;
+    }
+    .btn-quick-settle:hover { filter: brightness(1.1); }
+
+    .btn-view-statement {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-main);
+      padding: 9px 12px;
+      border-radius: var(--radius-md);
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    /* Member Balance Card */
+    .member-balance-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 16px;
+      padding: 12px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .member-balance-card:hover {
+      background: var(--bg-card-hover);
+      border-color: var(--border-glow);
+    }
+
+    .member-left-block { display: flex; align-items: center; gap: 10px; }
+    .member-avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: #2d104d;
+      border: 1.5px solid var(--color-purple-bright);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 800;
+    }
+    .member-name-block { display: flex; flex-direction: column; gap: 2px; }
+    .member-name-text { font-size: 13px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 6px; }
+    .member-stats-text { font-size: 11px; color: var(--text-dim); }
+
+    .member-balance-pill {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      font-weight: 800;
+      padding: 5px 12px;
+      border-radius: var(--radius-pill);
+      white-space: nowrap;
+    }
+    .pill-positive { background: var(--color-emerald-bg); border: 1px solid rgba(16, 185, 129, 0.3); color: var(--color-emerald); }
+    .pill-negative { background: var(--color-amber-bg); border: 1px solid rgba(245, 158, 11, 0.3); color: var(--color-amber); }
+    .pill-zero { background: rgba(148, 163, 184, 0.12); border: 1px solid rgba(148, 163, 184, 0.2); color: #94a3b8; }
+
+    /* FLOATING ACTION BUTTON */
+    .fab-add-expense {
+      position: absolute;
+      bottom: 24px;
+      right: 20px;
+      background: linear-gradient(135deg, #a855f7 0%, #7e22ce 100%);
+      color: #fff;
+      border: none;
+      padding: 12px 20px;
+      border-radius: var(--radius-pill);
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      font-size: 14px;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      box-shadow: 0 8px 24px rgba(168, 85, 247, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.2);
+      transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), filter 0.2s ease;
+      z-index: 70;
+    }
+    .fab-add-expense:hover { transform: scale(1.05); filter: brightness(1.15); }
+
+    /* ======================================================== */
+    /* LEGACY BEFORE VIEWPORT                                   */
+    /* ======================================================== */
+    .legacy-scroll-body { padding: 12px; display: flex; flex-direction: column; gap: 14px; }
+    .legacy-banner { background: #25103a; border: 1px solid #4a2266; border-radius: 12px; padding: 12px; text-align: center; }
+    .legacy-stacked-scroll { display: flex; flex-direction: column; gap: 8px; background: #19092c; padding: 10px; border-radius: 12px; border: 1px solid #361756; }
+    .legacy-h-scroll { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; }
+    .legacy-chip { background: #2a1147; border: 1px solid #58218a; color: #e2e8f0; font-size: 11px; padding: 5px 10px; border-radius: 6px; white-space: nowrap; }
+    .legacy-coupon-card { background: #1b0a30; border: 2px solid #552482; border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+    .legacy-coupon-banner { background: #064e3b; border: 1px dashed #10b981; color: #6ee7b7; font-size: 12px; font-weight: 800; padding: 8px 12px; border-radius: 6px; text-align: center; }
+    .legacy-btn-row { display: flex; gap: 6px; }
+    .legacy-btn { flex: 1; background: #39185a; border: 1px solid #6c2fa2; color: #fff; font-size: 11px; font-weight: 700; padding: 8px; border-radius: 6px; cursor: pointer; text-align: center; }
+
+    /* ======================================================== */
+    /* MODALS & BOTTOM SHEETS                                   */
+    /* ======================================================== */
+    .modal-backdrop {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.78);
+      backdrop-filter: blur(10px);
+      z-index: 1000;
+      align-items: flex-end;
+      justify-content: center;
+      padding-bottom: 0;
+    }
+    .modal-backdrop.is-active { display: flex; animation: fadeIn 0.2s ease; }
+
+    .modal-sheet {
+      width: 100%;
+      max-width: 460px;
+      background: #170929;
+      border: 1px solid rgba(168, 85, 247, 0.35);
+      border-radius: 28px 28px 0 0;
+      padding: 16px 20px 36px;
+      box-shadow: 0 -12px 48px rgba(0, 0, 0, 0.85);
+      max-height: 88vh;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .sheet-handle {
+      width: 44px;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.25);
+      border-radius: 2px;
+      align-self: center;
+      margin-bottom: 4px;
+    }
+
+    .sheet-header-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .sheet-title { font-family: 'Outfit', sans-serif; font-size: 20px; font-weight: 800; color: #fff; }
+    .sheet-close-btn {
+      background: rgba(255, 255, 255, 0.08);
+      border: none;
+      color: #fff;
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    /* Modal Form Elements */
+    .form-group { display: flex; flex-direction: column; gap: 6px; }
+    .form-label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: var(--color-purple-light);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .form-input {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 12px 14px;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      font-size: 14px;
+      color: #fff;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .form-input:focus { border-color: var(--color-purple-bright); }
+
+    .amount-input-hero {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 32px;
+      font-weight: 800;
+      color: var(--color-gold);
+      text-align: center;
+      padding: 14px;
+      background: rgba(0, 0, 0, 0.35);
+      border-radius: 16px;
+      border: 1px solid rgba(246, 195, 67, 0.3);
+      width: 100%;
+      outline: none;
+    }
+    .amount-input-locked {
+      border-color: rgba(16, 185, 129, 0.4);
+      background: rgba(16, 185, 129, 0.08);
+      color: #34d399;
+    }
+    .locked-badge-notice {
+      font-size: 11px;
+      color: #34d399;
+      text-align: center;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      font-weight: 600;
+      margin-top: 4px;
+    }
+
+    .split-mode-pills {
+      display: flex;
+      gap: 4px;
+      background: rgba(0, 0, 0, 0.3);
+      padding: 4px;
+      border-radius: var(--radius-pill);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .split-mode-pill {
+      flex: 1;
+      text-align: center;
+      padding: 8px 6px;
+      border-radius: var(--radius-pill);
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      color: var(--text-muted);
+      border: none;
+      background: transparent;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+    }
+    .split-mode-pill.active {
+      background: var(--color-purple-primary);
+      color: #fff;
+      box-shadow: 0 2px 10px rgba(126, 34, 206, 0.4);
+    }
+
+    /* RECEIPT SCANNER HERO CARD (TOP OF ADD EXPENSE) */
+    .receipt-scanner-hero-card {
+      background: linear-gradient(135deg, rgba(168, 85, 247, 0.16) 0%, rgba(56, 189, 248, 0.08) 100%);
+      border: 1.5px dashed rgba(168, 85, 247, 0.4);
+      border-radius: 18px;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .scanner-top-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .scanner-icon-bubble {
+      width: 38px;
+      height: 38px;
+      border-radius: 12px;
+      background: var(--color-purple-primary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      color: #fff;
+      flex-shrink: 0;
+    }
+    .scanner-hero-title { font-size: 13px; font-weight: 800; color: #fff; }
+    .scanner-hero-sub { font-size: 11px; color: #cbd5e1; line-height: 1.3; }
+
+    .scanner-action-buttons {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .btn-scan-action {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      color: #f1f5f9;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 6px 12px;
+      border-radius: var(--radius-pill);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+    }
+    .btn-scan-action:hover {
+      background: var(--color-purple-bright);
+      color: #fff;
+      border-color: var(--color-purple-bright);
+    }
+    .btn-scan-action.primary-demo {
+      background: linear-gradient(135deg, #a855f7 0%, #7e22ce 100%);
+      border: none;
+      color: #fff;
+      box-shadow: 0 2px 8px rgba(168, 85, 247, 0.4);
+    }
+
+    /* Multi-Photo Preview Gallery */
+    .receipt-preview-gallery {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(0, 0, 0, 0.3);
+      padding: 8px 10px;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .receipt-thumb-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(168, 85, 247, 0.3);
+      padding: 4px 8px;
+      border-radius: 8px;
+      font-size: 11px;
+      color: #cbd5e1;
+    }
+    .btn-thumb-remove {
+      background: transparent;
+      border: none;
+      color: var(--color-rose);
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 800;
+    }
+    .btn-add-photo-pill {
+      background: transparent;
+      border: 1px dashed rgba(255, 255, 255, 0.2);
+      color: var(--color-purple-light);
+      font-size: 11px;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: var(--radius-pill);
+      cursor: pointer;
+    }
+
+    /* Split Sub-Forms */
+    .split-subform-box {
+      background: rgba(0, 0, 0, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 16px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    /* Exact Meter */
+    .exact-balance-meter {
+      background: rgba(0, 0, 0, 0.3);
+      padding: 8px 12px;
+      border-radius: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+    }
+    .meter-balanced { color: #34d399; font-weight: 700; }
+    .meter-unbalanced { color: #f59e0b; font-weight: 700; }
+
+    /* Steppers for Tiered Split */
+    .stepper-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .btn-step {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid var(--border-subtle);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    .btn-step:hover { background: rgba(255, 255, 255, 0.16); }
+    .step-val {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      font-weight: 800;
+      min-width: 18px;
+      text-align: center;
+    }
+
+    /* Itemized Receipt Table */
+    .itemized-receipt-table {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .receipt-item-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 12px;
+      padding: 8px 10px;
+    }
+    .item-left {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      flex: 1;
+    }
+    .item-name-input {
+      background: transparent;
+      border: none;
+      color: #fff;
+      font-size: 13px;
+      font-weight: 700;
+      outline: none;
+      width: 100%;
+    }
+    .item-price-input {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      font-weight: 800;
+      color: #f6c343;
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 6px;
+      padding: 4px 6px;
+      width: 72px;
+      text-align: right;
+      outline: none;
+    }
+    .item-assignee-select {
+      background: #250f3d;
+      border: 1px solid rgba(168, 85, 247, 0.3);
+      color: #e2e8f0;
+      font-size: 11px;
+      font-weight: 700;
+      border-radius: var(--radius-pill);
+      padding: 3px 8px;
+      outline: none;
+    }
+    .alcohol-pill-toggle {
+      background: rgba(244, 63, 94, 0.1);
+      border: 1px solid rgba(244, 63, 94, 0.25);
+      color: #f43f5e;
+      font-size: 10px;
+      font-weight: 800;
+      padding: 3px 7px;
+      border-radius: var(--radius-pill);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      user-select: none;
+    }
+    .alcohol-pill-toggle.is-alcohol {
+      background: var(--color-rose);
+      color: #fff;
+      border-color: var(--color-rose);
+    }
+
+    /* Charge Lines Box */
+    .charge-lines-panel {
+      border-top: 1px dashed rgba(255, 255, 255, 0.1);
+      padding-top: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .charge-line-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+      color: #cbd5e1;
+    }
+    .tip-percent-pills {
+      display: flex;
+      gap: 4px;
+    }
+    .tip-pill {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: var(--text-muted);
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: var(--radius-pill);
+      cursor: pointer;
+    }
+    .tip-pill.active {
+      background: var(--color-purple-primary);
+      color: #fff;
+      border-color: var(--color-purple-bright);
+    }
+
+    .discount-alcohol-notice {
+      background: rgba(246, 195, 67, 0.08);
+      border: 1px solid rgba(246, 195, 67, 0.2);
+      border-radius: 8px;
+      padding: 6px 10px;
+      font-size: 11px;
+      color: #fef08a;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    /* Live Summary Bar */
+    .live-summary-bar {
+      background: linear-gradient(135deg, rgba(168, 85, 247, 0.15) 0%, rgba(16, 185, 129, 0.1) 100%);
+      border: 1px solid rgba(168, 85, 247, 0.3);
+      border-radius: 14px;
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 4px;
+    }
+    .summary-bar-label { font-size: 11px; font-weight: 700; color: var(--color-purple-light); }
+    .summary-bar-values { font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 800; color: #fff; }
+
+    .modal-submit-btn {
+      background: linear-gradient(135deg, #f6c343 0%, #eab308 100%);
+      color: #1a0826;
+      border: none;
+      padding: 14px;
+      border-radius: 14px;
+      font-size: 15px;
+      font-weight: 800;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      box-shadow: 0 4px 16px rgba(246, 195, 67, 0.4);
+      margin-top: 8px;
+      transition: filter 0.15s ease, transform 0.15s ease;
+    }
+    .modal-submit-btn:hover { filter: brightness(1.08); transform: translateY(-1px); }
+  </style>
+</head>
+<body class="mode-scroll">
+
+  <!-- MASTER TOP HEADER -->
+  <header class="master-header">
+    <div class="badge-pill">✨ Master Design Prototype • Trip Expenses Redesign</div>
+    <h1 class="master-title">Trip Expenses Ledger — Ground-Up Redesign</h1>
+    <p class="master-sub">
+      A consumer-grade expense splitting and peer repayment experience inspired by modern fintech standards (Splitwise, Revolut, Apple Wallet). Built specifically for Walt Disney World group trips.
+    </p>
+  </header>
+
+  <!-- MASTER INTERACTIVE CONTROLS BAR -->
+  <section class="controls-panel">
+    <div class="control-cluster">
+      <span class="cluster-title">View Layout:</span>
+      <button class="btn-toggle active" id="btnModeScroll" onclick="setMode('scroll')">📱 Interactive Phone</button>
+      <button class="btn-toggle" id="btnModeSideBySide" onclick="setMode('sidebyside')">⚖️ Side-by-Side (Before / After)</button>
+      <button class="btn-toggle" id="btnModeUnrolled" onclick="setMode('unrolled')">📜 Unrolled Full Canvas</button>
+    </div>
+
+    <div class="control-cluster">
+      <span class="cluster-title">Active Persona:</span>
+      <button class="btn-toggle active-gold" id="btnUserAriel" onclick="setPersona('ariel')">Ariel (Net +$1,766)</button>
+      <button class="btn-toggle" id="btnUserEric" onclick="setPersona('eric')">Eric (Net -$866)</button>
+      <button class="btn-toggle" id="btnUserMelody" onclick="setPersona('melody')">Melody (Guest)</button>
+    </div>
+
+    <div class="control-cluster">
+      <span class="cluster-title">Trip Status:</span>
+      <button class="btn-toggle active" id="btnStatusUpcoming" onclick="togglePastBanner(false)">Upcoming Trip</button>
+      <button class="btn-toggle" id="btnStatusPast" onclick="togglePastBanner(true)">Past (Settle Banner)</button>
+    </div>
+
+    <div class="control-cluster">
+      <span class="cluster-title">Interactive Sheets:</span>
+      <button class="btn-toggle" onclick="openModal('modalAddExpense')">✨ + Add Expense (Full Flow)</button>
+      <button class="btn-toggle" onclick="openModal('modalSettle')">💸 Settle Up</button>
+      <button class="btn-toggle" onclick="openModal('modalPairwise')">🔍 Statement Drilldown</button>
+    </div>
+  </section>
+
+  <!-- PROBLEM / SOLUTION CALLOUT HIGHLIGHTS -->
+  <section class="callout-bar">
+    <div class="callout-item">
+      <div class="callout-title">✅ No 3-Tier "Coupon" Cards</div>
+      <div class="callout-desc">Replaced thick green middle banners with clean single-surface rows. Total amount and personal impact are aligned together on the right.</div>
+    </div>
+    <div class="callout-item">
+      <div class="callout-title">✅ Unified Filter Strip</div>
+      <div class="callout-desc">Eliminated stacked double carousels. Category pills and payer selector are merged into a single sleek toolbar.</div>
+    </div>
+    <div class="callout-item">
+      <div class="callout-title">✅ Elevated Net Balance Canvas</div>
+      <div class="callout-desc">Clean, high-impact net balance header with direct quick-debtor settlement chips.</div>
+    </div>
+    <div class="callout-item">
+      <div class="callout-title">✅ Receipt Upload & On-Device OCR</div>
+      <div class="callout-desc">Take a photo or pick a receipt directly inside Add Expense. Line items, taxes, tip & alcohol-excluded discounts parse automatically!</div>
+    </div>
+  </section>
+
+  <!-- MOCKUP VIEWPORTS (SIDE-BY-SIDE OR SINGLE PHONE) -->
+  <main class="viewport-grid">
+
+    <!-- REDESIGNED PROTOTYPE (AFTER) -->
+    <div class="device-column" id="colRedesign">
+      <div class="device-tag">
+        <span>Redesigned Architecture</span>
+        <span class="tag-badge tag-redesign">New UX</span>
+      </div>
+
+      <div class="phone-chassis">
+        <!-- Dynamic Island -->
+        <div class="phone-dynamic-island">
+          <div class="island-camera"></div>
+          <div class="island-sensor"></div>
+        </div>
+
+        <!-- Phone Status Bar -->
+        <div class="phone-status-bar">
+          <span>9:41</span>
+          <div class="status-icons">
+            <span>5G</span>
+            <span>100%</span>
+          </div>
+        </div>
+
+        <!-- Scrollable Phone Screen -->
+        <div class="phone-screen" id="phoneScreen">
+
+          <!-- App Top Nav -->
+          <nav class="app-nav-header">
+            <button class="nav-back-btn" onclick="alert('Navigating back to Trips')">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>
+              <span>Trips</span>
+            </button>
+            <div class="nav-title-group">
+              <div class="nav-trip-title">Walt Disney World 2026</div>
+              <div class="nav-trip-subtitle">4 Members • 1 Guest</div>
+            </div>
+            <div class="nav-actions">
+              <button class="nav-icon-btn" title="Export CSV" onclick="alert('Exporting full ledger CSV share sheet...')">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+              </button>
+              <button class="nav-icon-btn" title="Add Expense" onclick="openModal('modalAddExpense')">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+              </button>
+            </div>
+          </nav>
+
+          <!-- Post-Trip Settle-Up Banner -->
+          <div class="settle-reminder-banner" id="postTripBanner" style="display: none;">
+            <div class="settle-reminder-text">
+              <strong>🎉 Trip Complete!</strong> Time to settle up remaining group debts.
+            </div>
+            <button class="settle-reminder-btn" onclick="switchTab('balances')">Settle Up</button>
+          </div>
+
+          <!-- ELEVATED HERO CANVAS -->
+          <section class="hero-canvas">
+            <div class="hero-header-row">
+              <span class="hero-status-pill status-owed" id="heroStatusPill">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+                <span id="heroStatusText">You Are Owed Overall</span>
+              </span>
+              <button class="hero-switch-user" onclick="cyclePersona()">Switch Payer ▾</button>
+            </div>
+
+            <div class="hero-balance-figure balance-green" id="heroBalanceFig">
+              +$1,766.27
+            </div>
+            <div class="hero-balance-caption" id="heroBalanceCaption">
+              The group owes you across all shared expenses & settlements.
+            </div>
+
+            <div class="hero-stats-row">
+              <div class="hero-stat-cell">
+                <span class="hero-stat-label">Total Trip Spend</span>
+                <span class="hero-stat-val" id="heroTotalSpend">$3,052.54</span>
+              </div>
+              <div class="hero-stat-divider"></div>
+              <div class="hero-stat-cell">
+                <span class="hero-stat-label">Your Net Share</span>
+                <span class="hero-stat-val" id="heroPersonalShare">$420.00</span>
+              </div>
+              <div class="hero-stat-divider"></div>
+              <div class="hero-stat-cell">
+                <span class="hero-stat-label">Settled To Date</span>
+                <span class="hero-stat-val">$200.00</span>
+              </div>
+            </div>
+
+            <div class="hero-actions-row">
+              <button class="btn-hero-primary" onclick="openModal('modalSettle')">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                <span>Settle Up</span>
+              </button>
+              <button class="btn-hero-secondary" onclick="openModal('modalPairwise')">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8zM14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>
+                <span>Statement</span>
+              </button>
+            </div>
+
+            <!-- Quick Debtor Chips -->
+            <div class="quick-debtors-wrap" id="heroQuickDebtors">
+              <span class="quick-debtors-header">Pending Repayments to You:</span>
+              <div class="quick-debtors-chips">
+                <div class="debtor-chip" onclick="quickSettleWith('Eric', '$866.27')">
+                  <div class="debtor-chip-avatar">E</div>
+                  <span class="debtor-chip-name">Eric owes</span>
+                  <span class="debtor-chip-amt">$866.27</span>
+                </div>
+                <div class="debtor-chip" onclick="quickSettleWith('Melody', '$600.00')">
+                  <div class="debtor-chip-avatar" style="background: #2563eb;">M</div>
+                  <span class="debtor-chip-name">Melody owes</span>
+                  <span class="debtor-chip-amt">$600.00</span>
+                </div>
+                <div class="debtor-chip" onclick="quickSettleWith('test', '$300.00')">
+                  <div class="debtor-chip-avatar" style="background: #d97706;">T</div>
+                  <span class="debtor-chip-name">test owes</span>
+                  <span class="debtor-chip-amt">$300.00</span>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- SEGMENTED TAB BAR -->
+          <div class="segmented-tab-container">
+            <button class="segmented-tab-btn active" id="tabBtnExpenses" onclick="switchTab('expenses')">
+              <span>Expenses</span>
+              <span class="tab-badge-count" id="ledgerCountBadge">4</span>
+            </button>
+            <button class="segmented-tab-btn" id="tabBtnBalances" onclick="switchTab('balances')">
+              <span>Who Owes What</span>
+              <span class="tab-badge-count">3</span>
+            </button>
+          </div>
+
+          <!-- TAB 1: EXPENSES LEDGER -->
+          <div id="tabContentExpenses">
+            <!-- Unified Filter Strip -->
+            <div class="unified-filter-bar">
+              <button class="filter-chip active" onclick="filterCategory('all', this)">All</button>
+              <button class="filter-chip" onclick="filterCategory('hotel', this)">🏨 Lodging</button>
+              <button class="filter-chip" onclick="filterCategory('dining', this)">🍽️ Dining</button>
+              <button class="filter-chip" onclick="filterCategory('tickets', this)">🎟️ Tickets</button>
+              <button class="filter-chip" onclick="filterCategory('transport', this)">🚗 Transport</button>
+              <button class="filter-chip" onclick="filterCategory('settlement', this)">💸 Settle</button>
+              <button class="payer-dropdown-chip" onclick="togglePayerFilter(this)">👤 Payer: All ▾</button>
+            </div>
+
+            <div class="date-section-header">
+              <span>Today • Oct 24, 2026</span>
+              <span class="date-section-sum" id="todayEntriesSum">2 Entries</span>
+            </div>
+
+            <!-- Expense List -->
+            <div class="expense-list" id="expenseListContainer">
+
+              <!-- Card 1: Contemporary Resort -->
+              <div class="expense-card" data-cat="hotel" data-payer="Ariel" onclick="toggleCardAccordion(this)">
+                <div class="expense-main-surface">
+                  <div class="category-avatar cat-hotel">🏨</div>
+                  <div class="expense-info-block">
+                    <div class="expense-title-row">
+                      <span class="expense-title">Contemporary Resort</span>
+                      <span class="catalog-tag">Resort Linked</span>
+                    </div>
+                    <div class="expense-meta-subtitle">
+                      <span>Paid by Ariel</span>
+                      <span class="meta-bullet">•</span>
+                      <span>Split 4 ways</span>
+                    </div>
+                  </div>
+                  <div class="expense-amount-block">
+                    <span class="expense-total-val">$2,132.54</span>
+                    <span class="personal-impact-tag impact-lent">
+                      +lent $1,599.40
+                      <span class="chevron-icon">▼</span>
+                    </span>
+                  </div>
+                </div>
+
+                <!-- Accordion Drawer -->
+                <div class="expense-expand-drawer">
+                  <div class="drawer-split-header">
+                    <span>Even Split Breakdown (4 participants)</span>
+                    <span>$533.14 / person</span>
+                  </div>
+                  <div class="drawer-participants-list">
+                    <div class="participant-row">
+                      <div class="participant-left">
+                        <div class="participant-avatar-mini" style="background:#7e22ce;">A</div>
+                        <div>
+                          <div class="participant-name">Ariel (Payer • You)</div>
+                          <div class="participant-role">Paid $2,132.54 • Share $533.14</div>
+                        </div>
+                      </div>
+                      <div class="participant-share-val" style="color:#34d399;">Net +$1,599.40</div>
+                    </div>
+                    <div class="participant-row">
+                      <div class="participant-left">
+                        <div class="participant-avatar-mini" style="background:#a855f7;">E</div>
+                        <div>
+                          <div class="participant-name">Eric</div>
+                          <div class="participant-role">Owes Ariel</div>
+                        </div>
+                      </div>
+                      <div class="participant-share-val">$533.14</div>
+                    </div>
+                    <div class="participant-row">
+                      <div class="participant-left">
+                        <div class="participant-avatar-mini" style="background:#2563eb;">M</div>
+                        <div>
+                          <div class="participant-name">Melody (Guest of Ariel)</div>
+                          <div class="participant-role">Folded into Ariel's balance</div>
+                        </div>
+                      </div>
+                      <div class="participant-share-val">$533.14</div>
+                    </div>
+                    <div class="participant-row">
+                      <div class="participant-left">
+                        <div class="participant-avatar-mini" style="background:#d97706;">T</div>
+                        <div>
+                          <div class="participant-name">test</div>
+                          <div class="participant-role">Owes Ariel</div>
+                        </div>
+                      </div>
+                      <div class="participant-share-val">$533.14</div>
+                    </div>
+                  </div>
+                  <div class="drawer-actions-row">
+                    <button class="drawer-btn" onclick="event.stopPropagation(); alert('Edit Expense clicked')">✏️ Edit</button>
+                    <button class="drawer-btn" onclick="event.stopPropagation(); alert('Refund recorded against Contemporary Resort')">↩️ Refund</button>
+                    <button class="drawer-btn drawer-btn-danger" onclick="event.stopPropagation(); alert('Delete clicked')">🗑️ Delete</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Card 2: Be Our Guest Restaurant -->
+              <div class="expense-card" data-cat="dining" data-payer="Eric" onclick="toggleCardAccordion(this)">
+                <div class="expense-main-surface">
+                  <div class="category-avatar cat-dining">🍽️</div>
+                  <div class="expense-info-block">
+                    <div class="expense-title-row">
+                      <span class="expense-title">Be Our Guest Dinner</span>
+                      <span class="catalog-tag">Magic Kingdom</span>
+                    </div>
+                    <div class="expense-meta-subtitle">
+                      <span>Paid by Eric</span>
+                      <span class="meta-bullet">•</span>
+                      <span>Itemized (2 people)</span>
+                    </div>
+                  </div>
+                  <div class="expense-amount-block">
+                    <span class="expense-total-val">$120.00</span>
+                    <span class="personal-impact-tag impact-owe">
+                      -you owe $60.00
+                      <span class="chevron-icon">▼</span>
+                    </span>
+                  </div>
+                </div>
+
+                <!-- Accordion Drawer -->
+                <div class="expense-expand-drawer">
+                  <div class="drawer-split-header">
+                    <span>Receipt Breakdown with 18% Gratuity</span>
+                    <span>Exact Split</span>
+                  </div>
+                  <div class="drawer-participants-list">
+                    <div class="participant-row">
+                      <div class="participant-left">
+                        <div class="participant-avatar-mini" style="background:#a855f7;">E</div>
+                        <div>
+                          <div class="participant-name">Eric (Payer)</div>
+                          <div class="participant-role">Paid $120.00 • Share $60.00</div>
+                        </div>
+                      </div>
+                      <div class="participant-share-val" style="color:#34d399;">Gets $60.00</div>
+                    </div>
+                    <div class="participant-row">
+                      <div class="participant-left">
+                        <div class="participant-avatar-mini" style="background:#7e22ce;">A</div>
+                        <div>
+                          <div class="participant-name">Ariel (You)</div>
+                          <div class="participant-role">Adult Prix Fixe + Tip</div>
+                        </div>
+                      </div>
+                      <div class="participant-share-val" style="color:#fbbf24;">Owes $60.00</div>
+                    </div>
+                  </div>
+                  <div class="drawer-actions-row">
+                    <button class="drawer-btn" onclick="event.stopPropagation(); alert('Edit clicked')">✏️ Edit</button>
+                    <button class="drawer-btn drawer-btn-danger" onclick="event.stopPropagation(); alert('Delete clicked')">🗑️ Delete</button>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+            <div class="date-section-header" style="margin-top: 14px;">
+              <span>Yesterday • Oct 23, 2026</span>
+              <span class="date-section-sum">2 Entries</span>
+            </div>
+
+            <div class="expense-list">
+
+              <!-- Card 3: Halloween Tickets (Tiered) -->
+              <div class="expense-card" data-cat="tickets" data-payer="Ariel" onclick="toggleCardAccordion(this)">
+                <div class="expense-main-surface">
+                  <div class="category-avatar cat-tickets">🎟️</div>
+                  <div class="expense-info-block">
+                    <div class="expense-title-row">
+                      <span class="expense-title">Mickey's Halloween Party</span>
+                    </div>
+                    <div class="expense-meta-subtitle">
+                      <span>Paid by Ariel</span>
+                      <span class="meta-bullet">•</span>
+                      <span>Tiered (2 Adult, 1 Child)</span>
+                    </div>
+                  </div>
+                  <div class="expense-amount-block">
+                    <span class="expense-total-val">$600.00</span>
+                    <span class="personal-impact-tag impact-lent">
+                      +lent $200.00
+                      <span class="chevron-icon">▼</span>
+                    </span>
+                  </div>
+                </div>
+
+                <!-- Accordion Drawer -->
+                <div class="expense-expand-drawer">
+                  <div class="drawer-split-header">
+                    <span>Tiered Ticket Breakdown</span>
+                    <span>Adult: $200 | Child: $200</span>
+                  </div>
+                  <div class="drawer-participants-list">
+                    <div class="participant-row">
+                      <div class="participant-left">
+                        <div class="participant-avatar-mini">A</div>
+                        <div class="participant-name">Ariel (1 Adult)</div>
+                      </div>
+                      <div class="participant-share-val">$200.00</div>
+                    </div>
+                    <div class="participant-row">
+                      <div class="participant-left">
+                        <div class="participant-avatar-mini" style="background:#a855f7;">E</div>
+                        <div class="participant-name">Eric (1 Adult)</div>
+                      </div>
+                      <div class="participant-share-val">$200.00 (owes)</div>
+                    </div>
+                    <div class="participant-row">
+                      <div class="participant-left">
+                        <div class="participant-avatar-mini" style="background:#2563eb;">M</div>
+                        <div class="participant-name">Melody (1 Child)</div>
+                      </div>
+                      <div class="participant-share-val">$200.00</div>
+                    </div>
+                  </div>
+                  <div class="drawer-actions-row">
+                    <button class="drawer-btn" onclick="event.stopPropagation(); alert('Edit clicked')">✏️ Edit</button>
+                    <button class="drawer-btn drawer-btn-danger" onclick="event.stopPropagation(); alert('Delete clicked')">🗑️ Delete</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Card 4: Settlement Repayment -->
+              <div class="expense-card settlement-card" data-cat="settlement" data-payer="Eric" onclick="toggleCardAccordion(this)">
+                <div class="expense-main-surface">
+                  <div class="category-avatar cat-settlement">💸</div>
+                  <div class="expense-info-block">
+                    <div class="expense-title-row">
+                      <span class="expense-title">Direct Settlement</span>
+                      <span class="catalog-tag" style="background:rgba(16,185,129,0.2); border-color:rgba(16,185,129,0.4); color:#34d399;">✓ Venmo Paid</span>
+                    </div>
+                    <div class="expense-meta-subtitle">
+                      <span>Eric paid Ariel</span>
+                      <span class="meta-bullet">•</span>
+                      <span>Oct 23</span>
+                    </div>
+                  </div>
+                  <div class="expense-amount-block">
+                    <span class="expense-total-val" style="color: #34d399;">+$200.00</span>
+                    <span class="personal-impact-tag impact-lent" style="font-size: 10px;">
+                      Debt reduced
+                      <span class="chevron-icon">▼</span>
+                    </span>
+                  </div>
+                </div>
+
+                <!-- Accordion Drawer -->
+                <div class="expense-expand-drawer">
+                  <div class="drawer-split-header">
+                    <span>Payment Ledger Record</span>
+                    <span>Settlement #SET-104</span>
+                  </div>
+                  <div style="font-size: 12px; color: #cbd5e1; margin-bottom: 10px; line-height: 1.4;">
+                    Recorded repayment from Eric directly to Ariel via Venmo. This deducted $200.00 from Eric's outstanding mutual debt.
+                  </div>
+                  <div class="drawer-actions-row">
+                    <button class="drawer-btn drawer-btn-danger" onclick="event.stopPropagation(); alert('Delete Settlement clicked')">🗑️ Delete Settlement</button>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- TAB 2: WHO OWES WHAT (BALANCES) -->
+          <div id="tabContentBalances" class="balances-tab-content" style="display: none;">
+            
+            <!-- Simplified Peer Repayments Section -->
+            <div class="tab-section-header">
+              <span>Simplified Peer Repayments</span>
+              <span style="font-size: 10px; color: var(--text-dim); text-transform: none;">Minimum transfer graph</span>
+            </div>
+
+            <!-- Transfer Card 1: Eric -> Ariel -->
+            <div class="transfer-card">
+              <div class="transfer-route-row">
+                <div class="party-block">
+                  <div class="party-avatar" style="border-color:#fbbf24;">E</div>
+                  <div class="party-details">
+                    <span class="party-name">Eric</span>
+                    <span class="party-role">Owes group</span>
+                  </div>
+                </div>
+
+                <div class="transfer-arrow-block">
+                  <span class="transfer-amount-pill">$866.27</span>
+                  <div class="transfer-track-line"></div>
+                </div>
+
+                <div class="party-block" style="text-align: right;">
+                  <div class="party-details">
+                    <span class="party-name">Ariel (You)</span>
+                    <span class="party-role">Receives</span>
+                  </div>
+                  <div class="party-avatar" style="border-color:#34d399;">A</div>
+                </div>
+              </div>
+
+              <div class="transfer-btn-row">
+                <button class="btn-quick-settle" onclick="quickSettleWith('Eric', '$866.27')">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                  <span>Settle $866.27</span>
+                </button>
+                <button class="btn-view-statement" onclick="openModal('modalPairwise')">
+                  <span>Statement</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Transfer Card 2: test -> Ariel -->
+            <div class="transfer-card">
+              <div class="transfer-route-row">
+                <div class="party-block">
+                  <div class="party-avatar" style="border-color:#f59e0b;">T</div>
+                  <div class="party-details">
+                    <span class="party-name">test</span>
+                    <span class="party-role">Owes group</span>
+                  </div>
+                </div>
+
+                <div class="transfer-arrow-block">
+                  <span class="transfer-amount-pill">$300.00</span>
+                  <div class="transfer-track-line"></div>
+                </div>
+
+                <div class="party-block" style="text-align: right;">
+                  <div class="party-details">
+                    <span class="party-name">Ariel (You)</span>
+                    <span class="party-role">Receives</span>
+                  </div>
+                  <div class="party-avatar" style="border-color:#34d399;">A</div>
+                </div>
+              </div>
+
+              <div class="transfer-btn-row">
+                <button class="btn-quick-settle" onclick="quickSettleWith('test', '$300.00')">
+                  <span>Settle $300.00</span>
+                </button>
+                <button class="btn-view-statement" onclick="alert('Viewing statement for test')">
+                  <span>Statement</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Member Net Balances Roster -->
+            <div class="tab-section-header" style="margin-top: 10px;">
+              <span>Member Net Balances</span>
+              <span style="font-size: 10px; color: var(--text-dim); text-transform: none;">Sum equals $0.00</span>
+            </div>
+
+            <div class="member-balance-card" onclick="openModal('modalPairwise')">
+              <div class="member-left-block">
+                <div class="member-avatar">A</div>
+                <div class="member-name-block">
+                  <span class="member-name-text">
+                    Ariel (You)
+                    <span class="catalog-tag" style="background:#581c87; color:#d8b4fe;">Organizer</span>
+                  </span>
+                  <span class="member-stats-text">Paid $2,732.54 • Share $966.27</span>
+                </div>
+              </div>
+              <span class="member-balance-pill pill-positive">+$1,766.27</span>
+            </div>
+
+            <div class="member-balance-card" onclick="openModal('modalPairwise')">
+              <div class="member-left-block">
+                <div class="member-avatar" style="border-color:#f59e0b;">E</div>
+                <div class="member-name-block">
+                  <span class="member-name-text">Eric</span>
+                  <span class="member-stats-text">Paid $320.00 • Share $1,186.27</span>
+                </div>
+              </div>
+              <span class="member-balance-pill pill-negative">-$866.27</span>
+            </div>
+
+            <div class="member-balance-card" onclick="alert('Melody is a guest sponsored by Ariel. Her $533.14 share is reflected in Ariel\'s balance.')">
+              <div class="member-left-block">
+                <div class="member-avatar" style="border-color:#38bdf8;">M</div>
+                <div class="member-name-block">
+                  <span class="member-name-text">
+                    Melody
+                    <span class="catalog-tag" style="background:rgba(56,189,248,0.15); color:#7dd3fc;">Guest of Ariel</span>
+                  </span>
+                  <span class="member-stats-text">Share $533.14 • Absorbed by Sponsor</span>
+                </div>
+              </div>
+              <span class="member-balance-pill pill-zero">Sponsored</span>
+            </div>
+
+            <div class="member-balance-card" onclick="alert('Viewing balance details for test')">
+              <div class="member-left-block">
+                <div class="member-avatar" style="border-color:#f59e0b;">T</div>
+                <div class="member-name-block">
+                  <span class="member-name-text">test</span>
+                  <span class="member-stats-text">Paid $0.00 • Share $300.00</span>
+                </div>
+              </div>
+              <span class="member-balance-pill pill-negative">-$300.00</span>
+            </div>
+
+          </div>
+
+        </div>
+
+        <!-- Floating Action Button (+ Expense) -->
+        <button class="fab-add-expense" onclick="openModal('modalAddExpense')">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          <span>Expense</span>
+        </button>
+
+      </div>
+    </div>
+
+    <!-- LEGACY VIEWPORT (SHOWN IN SIDE-BY-SIDE MODE) -->
+    <div class="device-column" id="colLegacy" style="display: none;">
+      <div class="device-tag">
+        <span>Legacy Problematic UI</span>
+        <span class="tag-badge tag-legacy">Displaced</span>
+      </div>
+
+      <div class="phone-chassis" style="border-color: rgba(239, 68, 68, 0.3);">
+        <div class="phone-status-bar">
+          <span>9:41</span>
+          <div class="status-icons"><span>5G</span><span>85%</span></div>
+        </div>
+
+        <div class="phone-screen legacy-scroll-body">
+          <div class="legacy-banner">
+            <div style="font-size: 11px; color: #a855f7; font-weight: 700;">TRIP EXPENSES</div>
+            <div style="font-size: 26px; font-weight: 800; color: #10b981; margin: 4px 0;">+$1,766.27</div>
+            <div style="font-size: 11px; color: #cbd5e1;">You are owed overall</div>
+          </div>
+
+          <!-- Stacked Horizontal Carousels -->
+          <div class="legacy-stacked-scroll">
+            <div style="font-size: 10px; color: #94a3b8; font-weight: 700;">CATEGORY FILTERS (SCROLL 1):</div>
+            <div class="legacy-h-scroll">
+              <span class="legacy-chip">All</span>
+              <span class="legacy-chip">🏨 Hotel</span>
+              <span class="legacy-chip">🍽️ Dining</span>
+              <span class="legacy-chip">🎟️ Tickets</span>
+            </div>
+            <div style="font-size: 10px; color: #94a3b8; font-weight: 700; margin-top: 4px;">PAYER FILTERS (SCROLL 2):</div>
+            <div class="legacy-h-scroll">
+              <span class="legacy-chip">All Payers</span>
+              <span class="legacy-chip">Ariel</span>
+              <span class="legacy-chip">Eric</span>
+              <span class="legacy-chip">test</span>
+            </div>
+          </div>
+
+          <!-- Legacy 3-tier coupon cards -->
+          <div class="legacy-coupon-card">
+            <div style="display:flex; justify-content:space-between;">
+              <span style="font-weight: 700;">Contemporary Resort</span>
+              <span style="font-weight: 800;">$2,132.54</span>
+            </div>
+            <div style="font-size: 11px; color: #94a3b8;">Paid by Ariel • Split among 4</div>
+            
+            <!-- Jarring Middle Green Coupon Banner -->
+            <div class="legacy-coupon-banner">
+              + You are owed $1,599.40 (+lent)
+            </div>
+
+            <div class="legacy-btn-row">
+              <div class="legacy-btn">View Split</div>
+              <div class="legacy-btn">Edit</div>
+              <div class="legacy-btn">Delete</div>
+            </div>
+          </div>
+
+          <div class="legacy-coupon-card">
+            <div style="display:flex; justify-content:space-between;">
+              <span style="font-weight: 700;">Be Our Guest</span>
+              <span style="font-weight: 800;">$120.00</span>
+            </div>
+            <div style="font-size: 11px; color: #94a3b8;">Paid by Eric • Split among 2</div>
+            
+            <div class="legacy-coupon-banner" style="background:#78350f; border-color:#f59e0b; color:#fde68a;">
+              - You owe $60.00
+            </div>
+
+            <div class="legacy-btn-row">
+              <div class="legacy-btn">View Split</div>
+              <div class="legacy-btn">Edit</div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ======================================================== -->
+  <!-- MODAL: FULLY FLESHED OUT ADD EXPENSE BOTTOM SHEET        -->
+  <!-- ======================================================== -->
+  <div class="modal-backdrop" id="modalAddExpense" onclick="closeModalOnBackdrop(event, this)">
+    <div class="modal-sheet" style="max-width: 480px;">
+      <div class="sheet-handle"></div>
+      
+      <div class="sheet-header-row">
+        <div>
+          <h2 class="sheet-title">New Trip Expense</h2>
+          <div style="font-size: 11px; color: var(--text-muted);">Record shared costs across your group ledger</div>
+        </div>
+        <button class="sheet-close-btn" onclick="closeModal('modalAddExpense')">✕</button>
+      </div>
+
+      <!-- 📷 RECEIPT UPLOAD / SCANNER HERO CARD (WHERE USER UPLOADS PICTURE) -->
+      <div class="receipt-scanner-hero-card" id="receiptScannerHero">
+        <div class="scanner-top-row">
+          <div class="scanner-icon-bubble">📷</div>
+          <div>
+            <div class="scanner-hero-title">Upload or Scan Receipt (On-Device OCR)</div>
+            <div class="scanner-hero-sub">Snap a receipt or choose an image. Extracts items, prices, tax, tip & AP discounts with zero manual typing.</div>
+          </div>
+        </div>
+
+        <div class="scanner-action-buttons">
+          <button class="btn-scan-action primary-demo" onclick="triggerSimulatedScan('space220')">
+            <span>⚡ Demo Space 220 Receipt</span>
+          </button>
+          <button class="btn-scan-action" onclick="triggerSimulatedScan('multipage')">
+            <span>📄 Multi-Page Receipt (2 Photos)</span>
+          </button>
+          <label class="btn-scan-action" style="cursor: pointer;">
+            <span>📁 Choose Photo</span>
+            <input type="file" accept="image/*" style="display:none;" onchange="handleUserPhotoUpload(event)">
+          </label>
+        </div>
+
+        <!-- Multi-Photo Gallery Preview (Visible once uploaded) -->
+        <div class="receipt-preview-gallery" id="receiptPhotoGallery" style="display: none;">
+          <div id="receiptThumbContainer" style="display: flex; gap: 6px; align-items: center;"></div>
+          <button class="btn-add-photo-pill" onclick="addAnotherPhotoDemo()">+ Add Another Photo</button>
+        </div>
+      </div>
+
+      <!-- TOTAL AMOUNT DISPLAY -->
+      <div class="form-group">
+        <label class="form-label">
+          <span>Expense Amount (USD)</span>
+          <span id="amountModeNotice" style="color: var(--color-purple-light); text-transform:none;">Manual Entry</span>
+        </label>
+        <input type="text" class="amount-input-hero" value="$ 120.00" id="addExpenseAmount" oninput="recalcCurrentSplit()">
+        <div id="itemizedLockedNotice" class="locked-badge-notice" style="display: none;">
+          <span>🔒 Locked: Auto-derived from receipt lines ($142.08)</span>
+        </div>
+      </div>
+
+      <!-- DESCRIPTION & CATALOG LINKER -->
+      <div class="form-group">
+        <label class="form-label">Description</label>
+        <input type="text" class="form-input" value="Space 220 Lounge Dinner" id="addExpenseDesc" placeholder="e.g. Contemporary Resort deposit, Park tickets">
+      </div>
+
+      <!-- CATEGORY SELECTOR -->
+      <div class="form-group">
+        <label class="form-label">Category</label>
+        <div style="display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px;">
+          <button class="filter-chip active" id="catChipDining" onclick="selectFormCategory('dining', this)">🍽️ Dining</button>
+          <button class="filter-chip" id="catChipHotel" onclick="selectFormCategory('hotel', this)">🏨 Hotel</button>
+          <button class="filter-chip" id="catChipTickets" onclick="selectFormCategory('tickets', this)">🎟️ Tickets</button>
+          <button class="filter-chip" id="catChipTransport" onclick="selectFormCategory('transport', this)">🚗 Transport</button>
+          <button class="filter-chip" id="catChipShopping" onclick="selectFormCategory('shopping', this)">🛍️ Shopping</button>
+          <button class="filter-chip" id="catChipOther" onclick="selectFormCategory('other', this)">✨ Other</button>
+        </div>
+      </div>
+
+      <!-- DISNEY CATALOG LINKER (REQ 11) -->
+      <div class="form-group" id="catalogLinkContainer">
+        <label class="form-label">
+          <span>Disney Catalog Link (Optional)</span>
+          <span style="font-size: 10px; color: var(--color-gold);">Auto-prefills details</span>
+        </label>
+        <select class="form-input" style="background:#200c3b;" id="catalogLinkSelect" onchange="applyCatalogLink(this.value)">
+          <option value="none">-- None (Generic expense) --</option>
+          <option value="space220" selected>Space 220 Lounge (EPCOT)</option>
+          <option value="beourguest">Be Our Guest Restaurant (Magic Kingdom)</option>
+          <option value="chefmickeys">Chef Mickey's (Contemporary Resort)</option>
+          <option value="contemporary">Disney's Contemporary Resort (Hotel)</option>
+          <option value="polynesian">Disney's Polynesian Village Resort (Hotel)</option>
+        </select>
+      </div>
+
+      <!-- DATE & PAYER SELECTOR ROW -->
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+        <div class="form-group">
+          <label class="form-label">Date</label>
+          <input type="date" class="form-input" value="2026-10-24" id="addExpenseDate">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Paid By</label>
+          <select class="form-input" style="background:#200c3b;" id="addExpensePayer" onchange="recalcCurrentSplit()">
+            <option value="Ariel" selected>Ariel (You • Organizer)</option>
+            <option value="Eric">Eric (Member)</option>
+            <option value="test">test (Member)</option>
+            <option value="Melody">Melody (Guest)</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- SPLIT MODE SELECTOR (4 MODES) -->
+      <div class="form-group">
+        <label class="form-label">Split Method</label>
+        <div class="split-mode-pills">
+          <button class="split-mode-pill active" id="btnSplitEven" onclick="switchSplitMode('even')">⚖️ Evenly</button>
+          <button class="split-mode-pill" id="btnSplitExact" onclick="switchSplitMode('exact')">🔢 Exact $</button>
+          <button class="split-mode-pill" id="btnSplitTiered" onclick="switchSplitMode('tiered')">🎟️ Tiered</button>
+          <button class="split-mode-pill" id="btnSplitItemized" onclick="switchSplitMode('itemized')">🧾 Itemized</button>
+        </div>
+      </div>
+
+      <!-- SUB-FORM 1: EVENLY SPLIT (REQ 3) -->
+      <div class="split-subform-box" id="formSplitEven">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span style="font-size: 11px; font-weight: 700; color: var(--color-purple-light); text-transform:uppercase;">Select Participants</span>
+          <div style="display:flex; gap: 6px;">
+            <button class="tip-pill" onclick="toggleAllEven(true)">All</button>
+            <button class="tip-pill" onclick="toggleAllEven(false)">Clear</button>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <label class="participant-row" style="cursor: pointer;">
+            <div class="participant-left">
+              <input type="checkbox" id="evenChk_Ariel" checked onchange="recalcEvenSplit()">
+              <div class="participant-avatar-mini" style="background:#7e22ce;">A</div>
+              <span class="participant-name">Ariel (You • Payer)</span>
+            </div>
+            <span class="participant-share-val" id="evenVal_Ariel">$30.00</span>
+          </label>
+
+          <label class="participant-row" style="cursor: pointer;">
+            <div class="participant-left">
+              <input type="checkbox" id="evenChk_Eric" checked onchange="recalcEvenSplit()">
+              <div class="participant-avatar-mini" style="background:#a855f7;">E</div>
+              <span class="participant-name">Eric</span>
+            </div>
+            <span class="participant-share-val" id="evenVal_Eric">$30.00</span>
+          </label>
+
+          <label class="participant-row" style="cursor: pointer;">
+            <div class="participant-left">
+              <input type="checkbox" id="evenChk_Melody" checked onchange="recalcEvenSplit()">
+              <div class="participant-avatar-mini" style="background:#2563eb;">M</div>
+              <span class="participant-name">Melody (Guest of Ariel)</span>
+            </div>
+            <span class="participant-share-val" id="evenVal_Melody">$30.00</span>
+          </label>
+
+          <label class="participant-row" style="cursor: pointer;">
+            <div class="participant-left">
+              <input type="checkbox" id="evenChk_test" checked onchange="recalcEvenSplit()">
+              <div class="participant-avatar-mini" style="background:#d97706;">T</div>
+              <span class="participant-name">test</span>
+            </div>
+            <span class="participant-share-val" id="evenVal_test">$30.00</span>
+          </label>
+        </div>
+
+        <div style="font-size: 11px; color: #94a3b8; line-height: 1.35; padding: 4px;" id="evenSplitNotice">
+          Divided evenly across 4 people. Payer implicitly absorbs remainder pennies.
+        </div>
+      </div>
+
+      <!-- SUB-FORM 2: EXACT $ AMOUNTS (REQ 3.1) -->
+      <div class="split-subform-box" id="formSplitExact" style="display: none;">
+        <div class="exact-balance-meter" id="exactMeterBox">
+          <span>Allocated: <strong id="exactMeterAllocated">$120.00</strong> / <span id="exactMeterTotal">$120.00</span></span>
+          <span class="meter-balanced" id="exactMeterStatus">✓ Balanced ($0.00 remaining)</span>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <div class="participant-row">
+            <div class="participant-left">
+              <div class="participant-avatar-mini" style="background:#7e22ce;">A</div>
+              <span class="participant-name">Ariel (Payer • You)</span>
+            </div>
+            <input type="text" class="item-price-input" value="40.00" id="exactInput_Ariel" oninput="recalcExactSplit()">
+          </div>
+
+          <div class="participant-row">
+            <div class="participant-left">
+              <div class="participant-avatar-mini" style="background:#a855f7;">E</div>
+              <span class="participant-name">Eric</span>
+            </div>
+            <input type="text" class="item-price-input" value="40.00" id="exactInput_Eric" oninput="recalcExactSplit()">
+          </div>
+
+          <div class="participant-row">
+            <div class="participant-left">
+              <div class="participant-avatar-mini" style="background:#2563eb;">M</div>
+              <span class="participant-name">Melody (Guest)</span>
+            </div>
+            <input type="text" class="item-price-input" value="20.00" id="exactInput_Melody" oninput="recalcExactSplit()">
+          </div>
+
+          <div class="participant-row">
+            <div class="participant-left">
+              <div class="participant-avatar-mini" style="background:#d97706;">T</div>
+              <span class="participant-name">test</span>
+            </div>
+            <input type="text" class="item-price-input" value="20.00" id="exactInput_test" oninput="recalcExactSplit()">
+          </div>
+        </div>
+      </div>
+
+      <!-- SUB-FORM 3: TIERED SPLIT (REQ 4) -->
+      <div class="split-subform-box" id="formSplitTiered" style="display: none;">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div style="font-size: 11px; color: var(--color-purple-light); font-weight:700; text-transform:uppercase;">
+            Defined Price Tiers (e.g. Prix-Fixe, Adult/Child Tickets)
+          </div>
+          <button type="button" class="btn btn-sm" onclick="addMockupTier()" style="font-size:10px; padding:3px 8px; background:rgba(168,85,247,0.2); border:1px solid rgba(168,85,247,0.4); color:#d8b4fe; border-radius:6px; cursor:pointer; font-weight:700;">
+            + Add Tier
+          </button>
+        </div>
+
+        <!-- Interactive Editable Tier Definitions -->
+        <div id="tierDefinitionsList" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+          <!-- TIER 1 -->
+          <div class="tier-card-edit" id="tierCard_0" style="background: rgba(255,255,255,0.05); padding: 8px 10px; border-radius: 10px; border:1px solid rgba(255,255,255,0.12); position:relative;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+              <span style="font-size: 10px; color: var(--text-dim); font-weight:700;">TIER 1</span>
+              <button type="button" onclick="removeMockupTier(0)" style="background:none; border:none; color:#f87171; font-size:11px; cursor:pointer; padding:0 2px;" title="Remove Tier">✕</button>
+            </div>
+            <input type="text" id="tierName_0" value="Adult Prix Fixe" oninput="recalcTieredSplit()" style="width:100%; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.15); border-radius:6px; padding:4px 6px; color:#fff; font-size:11px; font-weight:700; outline:none; margin-bottom:6px;">
+            <div style="display: flex; align-items: center; background: rgba(0,0,0,0.4); border: 1px solid rgba(52,211,153,0.35); border-radius: 6px; padding: 3px 6px;">
+              <span style="font-family:'JetBrains Mono'; color:#34d399; font-weight:700; font-size:12px; margin-right:3px;">$</span>
+              <input type="number" step="0.01" min="0" id="tierPrice_0" value="57.00" oninput="recalcTieredSplit()" style="background:transparent; border:none; color:#34d399; font-family:'JetBrains Mono'; font-weight:800; font-size:13px; width:100%; outline:none;">
+              <span style="font-size: 10px; color: var(--text-dim); white-space:nowrap; margin-left:3px;">/ ea</span>
+            </div>
+          </div>
+          <!-- TIER 2 -->
+          <div class="tier-card-edit" id="tierCard_1" style="background: rgba(255,255,255,0.05); padding: 8px 10px; border-radius: 10px; border:1px solid rgba(255,255,255,0.12); position:relative;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+              <span style="font-size: 10px; color: var(--text-dim); font-weight:700;">TIER 2</span>
+              <button type="button" onclick="removeMockupTier(1)" style="background:none; border:none; color:#f87171; font-size:11px; cursor:pointer; padding:0 2px;" title="Remove Tier">✕</button>
+            </div>
+            <input type="text" id="tierName_1" value="Child Prix Fixe" oninput="recalcTieredSplit()" style="width:100%; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.15); border-radius:6px; padding:4px 6px; color:#fff; font-size:11px; font-weight:700; outline:none; margin-bottom:6px;">
+            <div style="display: flex; align-items: center; background: rgba(0,0,0,0.4); border: 1px solid rgba(52,211,153,0.35); border-radius: 6px; padding: 3px 6px;">
+              <span style="font-family:'JetBrains Mono'; color:#34d399; font-weight:700; font-size:12px; margin-right:3px;">$</span>
+              <input type="number" step="0.01" min="0" id="tierPrice_1" value="37.00" oninput="recalcTieredSplit()" style="background:transparent; border:none; color:#34d399; font-family:'JetBrains Mono'; font-weight:800; font-size:13px; width:100%; outline:none;">
+              <span style="font-size: 10px; color: var(--text-dim); white-space:nowrap; margin-left:3px;">/ ea</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tax & Gratuity Calculator for Tiers -->
+        <div style="background: rgba(168,85,247,0.08); border: 1px dashed rgba(168,85,247,0.35); border-radius: 10px; padding: 10px; margin-top: 2px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;" onclick="toggleTierTaxCalc()">
+            <div style="font-size: 11px; font-weight: 700; color: #d8b4fe; display: flex; align-items: center; gap: 6px;">
+              <span>🧾</span>
+              <span>Tax & Tip Helper (Don't know the tax %?)</span>
+            </div>
+            <span style="font-size: 10px; color: var(--color-purple-light); font-weight:700;" id="tierTaxToggleIcon">▼ OPEN</span>
+          </div>
+
+          <div id="tierTaxCalcBody" style="display: flex; flex-direction: column; gap: 10px; margin-top: 8px;">
+            <div style="font-size: 10px; color: #94a3b8; line-height: 1.4;">
+              Receipts and Disney confirmations usually print a <strong>flat dollar tax</strong> (e.g. <em>Taxes: $29.12</em>) or a <strong>final total</strong> (<em>$477.12</em>) rather than a percentage. Pick whichever number appears on your receipt:
+            </div>
+
+            <!-- Tax Input Mode Switcher -->
+            <div style="display: flex; background: rgba(0,0,0,0.35); border-radius: 8px; padding: 2px; gap: 2px;">
+              <button type="button" id="tabTaxModeDollar" class="btn-tier-tax-tab active" onclick="switchTierTaxInputMode('dollar')" style="flex:1; font-size:10px; font-weight:700; padding:5px 6px; border-radius:6px; border:none; background:rgba(168,85,247,0.35); color:#fff; cursor:pointer;">
+                💵 Dollar Tax ($)
+              </button>
+              <button type="button" id="tabTaxModeTotal" class="btn-tier-tax-tab" onclick="switchTierTaxInputMode('total')" style="flex:1; font-size:10px; font-weight:700; padding:5px 6px; border-radius:6px; border:none; background:transparent; color:#94a3b8; cursor:pointer;">
+                🎯 Final Total ($)
+              </button>
+              <button type="button" id="tabTaxModePct" class="btn-tier-tax-tab" onclick="switchTierTaxInputMode('pct')" style="flex:1; font-size:10px; font-weight:700; padding:5px 6px; border-radius:6px; border:none; background:transparent; color:#94a3b8; cursor:pointer;">
+                📍 Disney % Presets
+              </button>
+            </div>
+
+            <!-- MODE 1: Dollar Tax from Receipt -->
+            <div id="taxInputSectionDollar" style="display: flex; flex-direction: column; gap: 6px;">
+              <label style="font-size: 9px; font-weight:700; color:var(--text-dim); text-transform:uppercase;">
+                Taxes Printed on Receipt / Email ($)
+              </label>
+              <div style="display: flex; align-items: center; background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.18); border-radius: 6px; padding: 4px 8px;">
+                <span style="font-family:'JetBrains Mono'; color:#34d399; font-weight:700; margin-right:4px;">$</span>
+                <input type="number" step="0.01" min="0" id="tierTaxDollarInput" placeholder="e.g. 29.12" value="29.12" oninput="updateTierTaxPreview()" style="background:transparent; border:none; color:#fff; font-size:12px; font-weight:700; width:100%; outline:none; font-family:'JetBrains Mono';">
+              </div>
+              <div style="font-size:9px; color:#cbd5e1;">
+                Matches receipt line: <code style="color:#d8b4fe;">Taxes: $29.12</code>
+              </div>
+            </div>
+
+            <!-- MODE 2: Total from Confirmation -->
+            <div id="taxInputSectionTotal" style="display: none; flex-direction: column; gap: 6px;">
+              <label style="font-size: 9px; font-weight:700; color:var(--text-dim); text-transform:uppercase;">
+                Final Total Printed on Confirmation ($)
+              </label>
+              <div style="display: flex; align-items: center; background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.18); border-radius: 6px; padding: 4px 8px;">
+                <span style="font-family:'JetBrains Mono'; color:#34d399; font-weight:700; margin-right:4px;">$</span>
+                <input type="number" step="0.01" min="0" id="tierTargetTotalInput" placeholder="e.g. 477.12" value="477.12" oninput="updateTierTaxPreview()" style="background:transparent; border:none; color:#fff; font-size:12px; font-weight:700; width:100%; outline:none; font-family:'JetBrains Mono';">
+              </div>
+              <div style="font-size:9px; color:#cbd5e1;">
+                Matches receipt line: <code style="color:#d8b4fe;">Total: $477.12</code>
+              </div>
+            </div>
+
+            <!-- MODE 3: % Presets & Disney Location -->
+            <div id="taxInputSectionPct" style="display: none; flex-direction: column; gap: 6px;">
+              <label style="font-size: 9px; font-weight:700; color:var(--text-dim); text-transform:uppercase;">
+                Disney World Tax Rate by Location
+              </label>
+              <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                <button type="button" class="btn btn-sm" onclick="setDisneyTaxPreset(6.5)" style="font-size:9px; padding:4px 8px; border-radius:6px; background:rgba(59,130,246,0.2); border:1px solid rgba(59,130,246,0.4); color:#93c5fd; cursor:pointer; font-weight:600;">
+                  🏰 Magic Kingdom / Epcot (6.5%)
+                </button>
+                <button type="button" class="btn btn-sm" onclick="setDisneyTaxPreset(7.0)" style="font-size:9px; padding:4px 8px; border-radius:6px; background:rgba(16,185,129,0.2); border:1px solid rgba(16,185,129,0.4); color:#6ee7b7; cursor:pointer; font-weight:600;">
+                  🦁 Animal Kingdom (7.0%)
+                </button>
+              </div>
+              <div style="display: flex; align-items: center; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; padding: 4px 6px; margin-top:2px;">
+                <input type="number" step="0.1" id="tierTaxRate" value="6.5" oninput="updateTierTaxPreview()" style="background:transparent; border:none; color:#fff; font-size:11px; width:100%; outline:none;">
+                <span style="font-size:10px; color:var(--text-dim);">%</span>
+              </div>
+            </div>
+
+            <!-- Tip / Gratuity Section (Dual-Mode: % or Flat Dollar) -->
+            <div style="background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); padding:8px 10px; border-radius:8px; display:flex; flex-direction:column; gap:6px;">
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span style="font-size:9px; font-weight:700; color:var(--text-dim); text-transform:uppercase;">Tip / Gratuity (Optional)</span>
+                <!-- Mode Toggle: % vs $ -->
+                <div style="display:flex; background:rgba(0,0,0,0.3); border-radius:6px; padding:2px; gap:2px;">
+                  <button type="button" id="tabTipModePct" class="btn-tier-tip-tab active" onclick="switchTierTipInputMode('pct')" style="font-size:9px; font-weight:700; padding:2px 8px; border-radius:4px; border:none; background:rgba(168,85,247,0.35); color:#fff; cursor:pointer;">
+                    % Percent
+                  </button>
+                  <button type="button" id="tabTipModeDollar" class="btn-tier-tip-tab" onclick="switchTierTipInputMode('dollar')" style="font-size:9px; font-weight:700; padding:2px 8px; border-radius:4px; border:none; background:transparent; color:#94a3b8; cursor:pointer;">
+                    $ Dollar Amount
+                  </button>
+                </div>
+              </div>
+
+              <!-- Tip % Input & Preset Chips -->
+              <div id="tipSectionPct" style="display:flex; flex-direction:column; gap:6px;">
+                <div style="display:flex; gap:4px; flex-wrap:wrap;">
+                  <button type="button" class="btn-tip-preset" onclick="setTipPresetPct(0)" id="tipPreset_0" style="font-size:9px; padding:3px 8px; border-radius:6px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.12); color:#fff; cursor:pointer;">0% None</button>
+                  <button type="button" class="btn-tip-preset" onclick="setTipPresetPct(15)" id="tipPreset_15" style="font-size:9px; padding:3px 8px; border-radius:6px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.12); color:#fff; cursor:pointer;">15%</button>
+                  <button type="button" class="btn-tip-preset active" onclick="setTipPresetPct(18)" id="tipPreset_18" style="font-size:9px; padding:3px 8px; border-radius:6px; background:rgba(168,85,247,0.3); border:1px solid rgba(168,85,247,0.5); color:#d8b4fe; cursor:pointer; font-weight:700;">18% (Standard)</button>
+                  <button type="button" class="btn-tip-preset" onclick="setTipPresetPct(20)" id="tipPreset_20" style="font-size:9px; padding:3px 8px; border-radius:6px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.12); color:#fff; cursor:pointer;">20%</button>
+                  <button type="button" class="btn-tip-preset" onclick="setTipPresetPct(22)" id="tipPreset_22" style="font-size:9px; padding:3px 8px; border-radius:6px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.12); color:#fff; cursor:pointer;">22%</button>
+                </div>
+                <div style="display:flex; align-items:center; gap:6px;">
+                  <span style="font-size:9px; color:var(--text-dim);">Custom %:</span>
+                  <div style="display:flex; align-items:center; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.15); border-radius:6px; padding:2px 6px; width:70px;">
+                    <input type="number" step="1" min="0" max="100" id="tierTipPctInput" value="18" oninput="onCustomTipPctInput()" style="background:transparent; border:none; color:#fff; font-size:11px; width:100%; outline:none; font-family:'JetBrains Mono';">
+                    <span style="font-size:10px; color:var(--text-dim);">%</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Tip $ Input -->
+              <div id="tipSectionDollar" style="display:none; flex-direction:column; gap:4px;">
+                <label style="font-size:9px; font-weight:700; color:var(--text-dim); text-transform:uppercase;">
+                  Tip Amount Written on Receipt ($)
+                </label>
+                <div style="display:flex; align-items:center; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.18); border-radius:6px; padding:3px 8px;">
+                  <span style="font-family:'JetBrains Mono'; color:#34d399; font-weight:700; font-size:11px; margin-right:4px;">$</span>
+                  <input type="number" step="0.5" min="0" id="tierTipDollarInput" placeholder="e.g. 25.00" value="0.00" oninput="updateTierTaxPreview()" style="background:transparent; border:none; color:#fff; font-size:11px; font-weight:700; width:100%; outline:none; font-family:'JetBrains Mono';">
+                </div>
+                <div style="font-size:9px; color:#cbd5e1;">
+                  Enter the exact tip line from your paper merchant slip.
+                </div>
+              </div>
+            </div>
+
+            <!-- Live Calculation Breakdown Card -->
+            <div style="background: rgba(0,0,0,0.35); border-radius: 8px; padding: 8px 10px; display: flex; flex-direction:column; gap: 6px; border:1px solid rgba(255,255,255,0.08);">
+              <div style="font-size: 10px; color: #cbd5e1;" id="tierTaxPreviewText">
+                Tier: $224.00 → <strong style="color:#34d399;">$238.56</strong> (+$14.56 tax each)
+              </div>
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span style="font-size:9px; color:#94a3b8;" id="tierEffectiveTaxRateLabel">Effective tax rate: 6.50%</span>
+                <button type="button" class="btn btn-sm btn-primary" onclick="applyTaxToTiers()" style="padding: 4px 10px; font-size: 10px; border-radius: 6px; background:linear-gradient(135deg, #7c3aed, #4f46e5); color:#fff; border:none; cursor:pointer; font-weight:700;">
+                  ⚡ Apply to All Tiers
+                </button>
+              </div>
+            </div>
+            <div id="tierTaxAppliedNotice" style="display:none; font-size:10px; color:#34d399; font-weight:600; text-align:right;">
+              ✓ Applied taxes into tier unit prices!
+            </div>
+          </div>
+        </div>
+
+        <div style="font-size: 11px; font-weight: 700; color: var(--color-purple-light); text-transform:uppercase; margin-top: 4px;">
+          Member Quantities
+        </div>
+
+        <!-- Member Steppers -->
+        <div style="display:flex; flex-direction:column; gap: 8px;" id="tieredMemberSteppersList">
+          <div class="participant-row">
+            <div class="participant-left">
+              <div class="participant-avatar-mini" style="background:#7e22ce;">A</div>
+              <div>
+                <div class="participant-name">Ariel (You)</div>
+                <div class="participant-role" id="tieredDesc_Ariel">1 Adult ($57.00)</div>
+              </div>
+            </div>
+            <div class="stepper-wrap">
+              <button class="btn-step" onclick="adjustTier('Ariel', -1)">-</button>
+              <span class="step-val" id="step_Ariel">1</span>
+              <button class="btn-step" onclick="adjustTier('Ariel', 1)">+</button>
+            </div>
+          </div>
+
+          <div class="participant-row">
+            <div class="participant-left">
+              <div class="participant-avatar-mini" style="background:#a855f7;">E</div>
+              <div>
+                <div class="participant-name">Eric</div>
+                <div class="participant-role" id="tieredDesc_Eric">1 Adult ($57.00)</div>
+              </div>
+            </div>
+            <div class="stepper-wrap">
+              <button class="btn-step" onclick="adjustTier('Eric', -1)">-</button>
+              <span class="step-val" id="step_Eric">1</span>
+              <button class="btn-step" onclick="adjustTier('Eric', 1)">+</button>
+            </div>
+          </div>
+
+          <div class="participant-row">
+            <div class="participant-left">
+              <div class="participant-avatar-mini" style="background:#2563eb;">M</div>
+              <div>
+                <div class="participant-name">Melody (Guest)</div>
+                <div class="participant-role" id="tieredDesc_Melody">1 Child ($37.00)</div>
+              </div>
+            </div>
+            <div class="stepper-wrap">
+              <button class="btn-step" onclick="adjustTier('Melody', -1)">-</button>
+              <span class="step-val" id="step_Melody">1</span>
+              <button class="btn-step" onclick="adjustTier('Melody', 1)">+</button>
+            </div>
+          </div>
+        </div>
+
+        <div style="background: rgba(246,195,67,0.1); border: 1px solid rgba(246,195,67,0.25); border-radius: 10px; padding: 8px 12px; display:flex; justify-content:space-between; align-items:center;">
+          <span style="font-size: 11px; font-weight:700; color:#fde047;">Auto-Derived Tier Total:</span>
+          <span style="font-family:'JetBrains Mono'; font-size:14px; font-weight:800; color:#f6c343;" id="tieredDerivedTotal">$151.00</span>
+        </div>
+      </div>
+
+      <!-- SUB-FORM 4: ITEMIZED SPLIT & RECEIPT OCR (REQ 5, 9, 14) -->
+      <div class="split-subform-box" id="formSplitItemized" style="display: none;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span style="font-size: 11px; font-weight: 700; color: var(--color-purple-light); text-transform:uppercase;">
+            Receipt Items Detected (3 lines)
+          </span>
+          <button class="tip-pill" onclick="addItemizedRow()">+ Add Item</button>
+        </div>
+
+        <!-- Itemized Items Table -->
+        <div class="itemized-receipt-table" id="itemizedTableContainer">
+          
+          <!-- Item 1 -->
+          <div class="receipt-item-row" id="itemRow_0">
+            <div class="item-left">
+              <input type="text" class="item-name-input" value="Filet Mignon" id="itemName_0">
+              <div style="display:flex; gap: 6px; align-items:center; margin-top: 4px;">
+                <select class="item-assignee-select" id="itemAssignee_0" onchange="recalcItemizedSplit()">
+                  <option value="Ariel" selected>Ariel (You)</option>
+                  <option value="Eric">Eric</option>
+                  <option value="Melody">Melody (Guest)</option>
+                  <option value="everyone">Everyone (Split)</option>
+                </select>
+                <span class="alcohol-pill-toggle" id="itemAlcohol_0" onclick="toggleAlcohol(0)">
+                  <span>🍸 Alcohol</span>
+                </span>
+              </div>
+            </div>
+            <input type="text" class="item-price-input" value="58.00" id="itemPrice_0" oninput="recalcItemizedSplit()">
+          </div>
+
+          <!-- Item 2 -->
+          <div class="receipt-item-row" id="itemRow_1">
+            <div class="item-left">
+              <input type="text" class="item-name-input" value="Roasted Chicken" id="itemName_1">
+              <div style="display:flex; gap: 6px; align-items:center; margin-top: 4px;">
+                <select class="item-assignee-select" id="itemAssignee_1" onchange="recalcItemizedSplit()">
+                  <option value="Ariel">Ariel (You)</option>
+                  <option value="Eric" selected>Eric</option>
+                  <option value="Melody">Melody (Guest)</option>
+                  <option value="everyone">Everyone (Split)</option>
+                </select>
+                <span class="alcohol-pill-toggle" id="itemAlcohol_1" onclick="toggleAlcohol(1)">
+                  <span>🍸 Alcohol</span>
+                </span>
+              </div>
+            </div>
+            <input type="text" class="item-price-input" value="38.00" id="itemPrice_1" oninput="recalcItemizedSplit()">
+          </div>
+
+          <!-- Item 3: Alcohol Item -->
+          <div class="receipt-item-row" id="itemRow_2">
+            <div class="item-left">
+              <input type="text" class="item-name-input" value="Cosmic Cocktail" id="itemName_2">
+              <div style="display:flex; gap: 6px; align-items:center; margin-top: 4px;">
+                <select class="item-assignee-select" id="itemAssignee_2" onchange="recalcItemizedSplit()">
+                  <option value="Ariel" selected>Ariel (You)</option>
+                  <option value="Eric">Eric</option>
+                  <option value="Melody">Melody (Guest)</option>
+                  <option value="everyone">Everyone (Split)</option>
+                </select>
+                <span class="alcohol-pill-toggle is-alcohol" id="itemAlcohol_2" onclick="toggleAlcohol(2)">
+                  <span>✓ 🍸 Alcohol Flagged</span>
+                </span>
+              </div>
+            </div>
+            <input type="text" class="item-price-input" value="22.00" id="itemPrice_2" oninput="recalcItemizedSplit()">
+          </div>
+
+        </div>
+
+        <!-- Charge Lines (Tax, Tip, Discounts) -->
+        <div class="charge-lines-panel">
+          <div class="charge-line-row">
+            <span>Sales Tax (allocated proportionally)</span>
+            <span style="font-family:'JetBrains Mono'; font-weight:700;">$10.08</span>
+          </div>
+
+          <div class="charge-line-row">
+            <span>Gratuity / Tip</span>
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <div class="tip-percent-pills">
+                <span class="tip-pill" onclick="setGratuityPct(18, this)">18%</span>
+                <span class="tip-pill active" onclick="setGratuityPct(20, this)">20%</span>
+                <span class="tip-pill" onclick="setGratuityPct(22, this)">22%</span>
+              </div>
+              <span style="font-family:'JetBrains Mono'; font-weight:700;" id="itemizedTipAmt">$23.60</span>
+            </div>
+          </div>
+
+          <!-- REQ 14: ALCOHOL-EXCLUDED DISCOUNT TOGGLE -->
+          <div class="discount-alcohol-notice">
+            <div style="display: flex; flex-direction: column; gap: 2px;">
+              <span style="font-weight: 700;">Disney Passholder Discount (-10%)</span>
+              <label style="display: flex; align-items: center; gap: 5px; cursor: pointer; font-size: 10px; color: #fff;">
+                <input type="checkbox" id="chkExcludeAlcohol" checked onchange="toggleExcludeAlcohol()">
+                <strong>Exclude Alcohol Items ($22.00 drink excluded)</strong>
+              </label>
+            </div>
+            <span style="font-family:'JetBrains Mono'; font-weight:800; color:#34d399;" id="itemizedDiscountVal">-$9.60</span>
+          </div>
+        </div>
+
+        <!-- Live Per-Person Itemized Result -->
+        <div style="background: rgba(0,0,0,0.3); border-radius: 10px; padding: 8px 12px; display:flex; flex-direction:column; gap:4px; font-size:11px;">
+          <div style="display:flex; justify-content:space-between;">
+            <span style="color:#cbd5e1;">Ariel's Share (Filet + Drink + Tax/Tip - Discount):</span>
+            <strong style="font-family:'JetBrains Mono'; color:#f6c343;" id="itemizedShare_Ariel">$97.89</strong>
+          </div>
+          <div style="display:flex; justify-content:space-between;">
+            <span style="color:#cbd5e1;">Eric's Share (Chicken + Tax/Tip - Discount):</span>
+            <strong style="font-family:'JetBrains Mono'; color:#f6c343;" id="itemizedShare_Eric">$44.19</strong>
+          </div>
+        </div>
+      </div>
+
+      <!-- LIVE SHARE SUMMARY BAR -->
+      <div class="live-summary-bar">
+        <div style="display: flex; flex-direction: column; gap: 2px;">
+          <span class="summary-bar-label">You Paid:</span>
+          <span class="summary-bar-values" id="summaryPaidVal">$120.00</span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 2px; text-align: right;">
+          <span class="summary-bar-label">You Lent To Group:</span>
+          <span class="summary-bar-values" style="color: #34d399;" id="summaryLentVal">+$90.00</span>
+        </div>
+      </div>
+
+      <!-- SAVE EXPENSE CTA BUTTON -->
+      <button class="modal-submit-btn" onclick="saveNewExpenseMock()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+        <span id="saveBtnText">Save Expense to Ledger ($120.00)</span>
+      </button>
+
+    </div>
+  </div>
+
+  <!-- ======================================================== -->
+  <!-- MODAL: SETTLE UP / RECORD PAYMENT                        -->
+  <!-- ======================================================== -->
+  <div class="modal-backdrop" id="modalSettle" onclick="closeModalOnBackdrop(event, this)">
+    <div class="modal-sheet">
+      <div class="sheet-handle"></div>
+      <div class="sheet-header-row">
+        <h2 class="sheet-title">Record Settlement</h2>
+        <button class="sheet-close-btn" onclick="closeModal('modalSettle')">✕</button>
+      </div>
+
+      <div style="font-size: 12px; color: #cbd5e1; line-height: 1.4;">
+        Record an external repayment that took place outside the app (Venmo, Cash, Apple Pay, Zelle).
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Payer (Who paid)</label>
+        <select class="form-input" style="background:#200c3b;" id="settlePayerSelect">
+          <option value="Eric">Eric (Owes $866.27)</option>
+          <option value="test">test (Owes $300.00)</option>
+          <option value="Ariel">Ariel</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Recipient (Who received)</label>
+        <input type="text" class="form-input" value="Ariel (You)" readonly style="opacity: 0.8;">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Amount Paid</label>
+        <input type="text" class="amount-input-hero" value="$ 866.27" id="settleAmountInput">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Payment Method</label>
+        <div style="display:flex; gap:6px; flex-wrap:wrap;">
+          <span class="filter-chip active" style="font-size:11px;">📱 Venmo</span>
+          <span class="filter-chip" style="font-size:11px;">💵 Cash</span>
+          <span class="filter-chip" style="font-size:11px;">🍎 Apple Cash</span>
+          <span class="filter-chip" style="font-size:11px;">⚡ Zelle</span>
+        </div>
+      </div>
+
+      <button class="modal-submit-btn" onclick="recordSettlementMock()">
+        <span>Confirm Settlement</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- ======================================================== -->
+  <!-- MODAL: PAIRWISE STATEMENT DRILLDOWN                      -->
+  <!-- ======================================================== -->
+  <div class="modal-backdrop" id="modalPairwise" onclick="closeModalOnBackdrop(event, this)">
+    <div class="modal-sheet">
+      <div class="sheet-handle"></div>
+      <div class="sheet-header-row">
+        <h2 class="sheet-title">Mutual Statement: Ariel & Eric</h2>
+        <button class="sheet-close-btn" onclick="closeModal('modalPairwise')">✕</button>
+      </div>
+
+      <div style="background: linear-gradient(135deg, rgba(168,85,247,0.15), rgba(16,185,129,0.1)); border: 1px solid rgba(168,85,247,0.3); border-radius: 14px; padding: 12px; display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <div style="font-size: 11px; color: var(--color-purple-light); font-weight:700;">NET MUTUAL BALANCE</div>
+          <div style="font-size: 22px; font-weight: 800; color: #34d399; font-family:'JetBrains Mono';">Eric owes you $866.27</div>
+        </div>
+        <button class="btn-quick-settle" style="padding: 6px 12px;" onclick="openModal('modalSettle')">Settle</button>
+      </div>
+
+      <div class="drawer-split-header">
+        <span>Timeline of Mutual Transactions</span>
+        <span>Net Total</span>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        <div class="participant-row">
+          <div>
+            <div style="font-weight: 700; color:#fff;">Contemporary Resort (Share)</div>
+            <div style="font-size: 10px; color:#94a3b8;">Ariel paid $2,132.54 • Eric's 1/4 share</div>
+          </div>
+          <div style="color: #34d399; font-family:'JetBrains Mono'; font-weight:700;">+ $533.14</div>
+        </div>
+
+        <div class="participant-row">
+          <div>
+            <div style="font-weight: 700; color:#fff;">Halloween Tickets (Share)</div>
+            <div style="font-size: 10px; color:#94a3b8;">Ariel paid $600.00 • Eric's adult ticket</div>
+          </div>
+          <div style="color: #34d399; font-family:'JetBrains Mono'; font-weight:700;">+ $200.00</div>
+        </div>
+
+        <div class="participant-row">
+          <div>
+            <div style="font-weight: 700; color:#fff;">Be Our Guest Dinner (Share)</div>
+            <div style="font-size: 10px; color:#94a3b8;">Eric paid $120.00 • Ariel's dinner share</div>
+          </div>
+          <div style="color: #fbbf24; font-family:'JetBrains Mono'; font-weight:700;">- $60.00</div>
+        </div>
+
+        <div class="participant-row" style="background: rgba(16,185,129,0.1); border-color: rgba(16,185,129,0.25);">
+          <div>
+            <div style="font-weight: 700; color:#34d399;">Venmo Settlement Repayment</div>
+            <div style="font-size: 10px; color:#94a3b8;">Eric paid Ariel on Oct 23</div>
+          </div>
+          <div style="color: #94a3b8; font-family:'JetBrains Mono'; font-weight:700;">- $200.00</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- INTERACTIVE JS ENGINE -->
+  <script>
+    // State Tracker
+    let currentSplitMode = 'even';
+    let currentGratuityPct = 20;
+    let excludeAlcoholDiscount = true;
+    let tierCounts = { Ariel: 1, Eric: 1, Melody: 1 };
+    let photosCount = 0;
+
+    // Tab Switching
+    function switchTab(tab) {
+      const expensesTab = document.getElementById('tabContentExpenses');
+      const balancesTab = document.getElementById('tabContentBalances');
+      const btnExp = document.getElementById('tabBtnExpenses');
+      const btnBal = document.getElementById('tabBtnBalances');
+
+      if (tab === 'expenses') {
+        expensesTab.style.display = 'block';
+        balancesTab.style.display = 'none';
+        btnExp.classList.add('active');
+        btnBal.classList.remove('active');
+      } else {
+        expensesTab.style.display = 'none';
+        balancesTab.style.display = 'flex';
+        btnBal.classList.add('active');
+        btnExp.classList.remove('active');
+      }
+    }
+
+    // Accordion Expansion
+    function toggleCardAccordion(card) {
+      card.classList.toggle('is-expanded');
+    }
+
+    // View Mode Handler
+    function setMode(mode) {
+      const body = document.body;
+      const colLegacy = document.getElementById('colLegacy');
+      const btnScroll = document.getElementById('btnModeScroll');
+      const btnSide = document.getElementById('btnModeSideBySide');
+      const btnUnrolled = document.getElementById('btnModeUnrolled');
+
+      btnScroll.classList.remove('active');
+      btnSide.classList.remove('active');
+      btnUnrolled.classList.remove('active');
+
+      if (mode === 'scroll') {
+        body.className = 'mode-scroll';
+        colLegacy.style.display = 'none';
+        btnScroll.classList.add('active');
+      } else if (mode === 'sidebyside') {
+        body.className = 'mode-scroll';
+        colLegacy.style.display = 'flex';
+        btnSide.classList.add('active');
+      } else if (mode === 'unrolled') {
+        body.className = 'mode-unrolled';
+        colLegacy.style.display = 'none';
+        btnUnrolled.classList.add('active');
+      }
+    }
+
+    // Persona Switcher
+    function setPersona(persona) {
+      const btnA = document.getElementById('btnUserAriel');
+      const btnE = document.getElementById('btnUserEric');
+      const btnM = document.getElementById('btnUserMelody');
+      const fig = document.getElementById('heroBalanceFig');
+      const caption = document.getElementById('heroBalanceCaption');
+      const pill = document.getElementById('heroStatusPill');
+      const pillText = document.getElementById('heroStatusText');
+
+      btnA.classList.remove('active-gold');
+      btnE.classList.remove('active-gold');
+      btnM.classList.remove('active-gold');
+
+      if (persona === 'ariel') {
+        btnA.classList.add('active-gold');
+        fig.innerText = '+$1,766.27';
+        fig.className = 'hero-balance-figure balance-green';
+        caption.innerText = 'The group owes you across all shared expenses & settlements.';
+        pill.className = 'hero-status-pill status-owed';
+        pillText.innerText = 'You Are Owed Overall';
+      } else if (persona === 'eric') {
+        btnE.classList.add('active-gold');
+        fig.innerText = '-$866.27';
+        fig.className = 'hero-balance-figure balance-amber';
+        caption.innerText = 'You owe the group. Settle with Ariel to clear balance.';
+        pill.className = 'hero-status-pill status-owes';
+        pillText.innerText = 'You Owe The Group';
+      } else if (persona === 'melody') {
+        btnM.classList.add('active-gold');
+        fig.innerText = '$0.00 (Guest)';
+        fig.className = 'hero-balance-figure';
+        caption.innerText = 'Melody is sponsored by Ariel. Shares roll into Ariel\'s ledger.';
+        pill.className = 'hero-status-pill status-settled';
+        pillText.innerText = 'Sponsored Guest';
+      }
+    }
+
+    let personas = ['ariel', 'eric', 'melody'];
+    let personaIdx = 0;
+    function cyclePersona() {
+      personaIdx = (personaIdx + 1) % personas.length;
+      setPersona(personas[personaIdx]);
+    }
+
+    // Toggle Past Banner
+    function togglePastBanner(show) {
+      document.getElementById('postTripBanner').style.display = show ? 'flex' : 'none';
+      document.getElementById('btnStatusUpcoming').classList.toggle('active', !show);
+      document.getElementById('btnStatusPast').classList.toggle('active', show);
+    }
+
+    // Category Filter
+    function filterCategory(cat, el) {
+      const chips = document.querySelectorAll('.unified-filter-bar .filter-chip');
+      chips.forEach(c => c.classList.remove('active'));
+      el.classList.add('active');
+
+      const cards = document.querySelectorAll('.expense-card');
+      cards.forEach(card => {
+        if (cat === 'all' || card.getAttribute('data-cat') === cat) {
+          card.style.display = 'block';
+        } else {
+          card.style.display = 'none';
+        }
+      });
+    }
+
+    // Modal Helpers
+    function openModal(id) {
+      document.getElementById(id).classList.add('is-active');
+    }
+    function closeModal(id) {
+      document.getElementById(id).classList.remove('is-active');
+    }
+    function closeModalOnBackdrop(e, backdrop) {
+      if (e.target === backdrop) backdrop.classList.remove('is-active');
+    }
+
+    function quickSettleWith(name, amt) {
+      document.getElementById('settleAmountInput').value = amt;
+      document.getElementById('settlePayerSelect').value = name;
+      openModal('modalSettle');
+    }
+
+    // ========================================================
+    // FULLY FLESHED OUT ADD EXPENSE ENGINE
+    // ========================================================
+
+    function switchSplitMode(mode) {
+      currentSplitMode = mode;
+      const pills = document.querySelectorAll('.split-mode-pill');
+      pills.forEach(p => p.classList.remove('active'));
+
+      document.getElementById('formSplitEven').style.display = 'none';
+      document.getElementById('formSplitExact').style.display = 'none';
+      document.getElementById('formSplitTiered').style.display = 'none';
+      document.getElementById('formSplitItemized').style.display = 'none';
+
+      const amtInput = document.getElementById('addExpenseAmount');
+      const lockedNotice = document.getElementById('itemizedLockedNotice');
+      const modeNotice = document.getElementById('amountModeNotice');
+
+      amtInput.classList.remove('amount-input-locked');
+      amtInput.readOnly = false;
+      lockedNotice.style.display = 'none';
+
+      if (mode === 'even') {
+        document.getElementById('btnSplitEven').classList.add('active');
+        document.getElementById('formSplitEven').style.display = 'flex';
+        modeNotice.innerText = 'Manual Entry';
+        recalcEvenSplit();
+      } else if (mode === 'exact') {
+        document.getElementById('btnSplitExact').classList.add('active');
+        document.getElementById('formSplitExact').style.display = 'flex';
+        modeNotice.innerText = 'Manual Entry';
+        recalcExactSplit();
+      } else if (mode === 'tiered') {
+        document.getElementById('btnSplitTiered').classList.add('active');
+        document.getElementById('formSplitTiered').style.display = 'flex';
+        modeNotice.innerText = 'Auto-derived from tier count';
+        recalcTieredSplit();
+      } else if (mode === 'itemized') {
+        document.getElementById('btnSplitItemized').classList.add('active');
+        document.getElementById('formSplitItemized').style.display = 'flex';
+        amtInput.classList.add('amount-input-locked');
+        amtInput.readOnly = true;
+        lockedNotice.style.display = 'flex';
+        modeNotice.innerText = 'Auto-derived from receipt lines';
+        recalcItemizedSplit();
+      }
+    }
+
+    function getBaseAmount() {
+      const valStr = document.getElementById('addExpenseAmount').value.replace(/[^0-9.]/g, '');
+      return parseFloat(valStr) || 0;
+    }
+
+    function recalcCurrentSplit() {
+      if (currentSplitMode === 'even') recalcEvenSplit();
+      else if (currentSplitMode === 'exact') recalcExactSplit();
+      else if (currentSplitMode === 'tiered') recalcTieredSplit();
+      else if (currentSplitMode === 'itemized') recalcItemizedSplit();
+    }
+
+    // 1. Even Split Recalculation
+    function recalcEvenSplit() {
+      const amt = getBaseAmount();
+      const chks = [
+        { id: 'evenChk_Ariel', valId: 'evenVal_Ariel' },
+        { id: 'evenChk_Eric', valId: 'evenVal_Eric' },
+        { id: 'evenChk_Melody', valId: 'evenVal_Melody' },
+        { id: 'evenChk_test', valId: 'evenVal_test' }
+      ];
+      const activeChks = chks.filter(c => document.getElementById(c.id).checked);
+      const count = activeChks.length;
+
+      if (count === 0) {
+        chks.forEach(c => document.getElementById(c.valId).innerText = '$0.00');
+        updateSummaryBar(amt, 0);
+        return;
+      }
+
+      const totalCents = Math.round(amt * 100);
+      const baseShareCents = Math.floor(totalCents / count);
+      const remainderCents = totalCents % count;
+
+      chks.forEach(c => {
+        const el = document.getElementById(c.id);
+        const valEl = document.getElementById(c.valId);
+        if (el.checked) {
+          valEl.innerText = '$' + (baseShareCents / 100).toFixed(2);
+        } else {
+          valEl.innerText = '$0.00';
+        }
+      });
+
+      document.getElementById('evenSplitNotice').innerText =
+        `Divided evenly across ${count} people ($${(baseShareCents/100).toFixed(2)} each). ` +
+        (remainderCents > 0 ? `Payer absorbs ${remainderCents}¢ remainder.` : 'Zero remainder cents.');
+
+      const arielShare = document.getElementById('evenChk_Ariel').checked ? (baseShareCents / 100) : 0;
+      updateSummaryBar(amt, amt - arielShare);
+    }
+
+    function toggleAllEven(selectAll) {
+      ['evenChk_Ariel', 'evenChk_Eric', 'evenChk_Melody', 'evenChk_test'].forEach(id => {
+        document.getElementById(id).checked = selectAll;
+      });
+      recalcEvenSplit();
+    }
+
+    // 2. Exact Split Recalculation
+    function recalcExactSplit() {
+      const amt = getBaseAmount();
+      const a = parseFloat(document.getElementById('exactInput_Ariel').value) || 0;
+      const e = parseFloat(document.getElementById('exactInput_Eric').value) || 0;
+      const m = parseFloat(document.getElementById('exactInput_Melody').value) || 0;
+      const t = parseFloat(document.getElementById('exactInput_test').value) || 0;
+
+      const sum = a + e + m + t;
+      const diff = amt - sum;
+
+      document.getElementById('exactMeterAllocated').innerText = '$' + sum.toFixed(2);
+      document.getElementById('exactMeterTotal').innerText = '$' + amt.toFixed(2);
+
+      const statusEl = document.getElementById('exactMeterStatus');
+      if (Math.abs(diff) < 0.01) {
+        statusEl.className = 'meter-balanced';
+        statusEl.innerText = '✓ Balanced ($0.00 remaining)';
+      } else if (diff > 0) {
+        statusEl.className = 'meter-unbalanced';
+        statusEl.innerText = `⚠️ $${diff.toFixed(2)} unallocated`;
+      } else {
+        statusEl.className = 'meter-unbalanced';
+        statusEl.innerText = `⚠️ Over allocated by $${Math.abs(diff).toFixed(2)}`;
+      }
+
+      updateSummaryBar(amt, sum - a);
+    }
+
+    // 3. Tiered Split Recalculation
+    let tierDefs = [
+      { id: 0, name: 'Adult Prix Fixe', price: 57.00 },
+      { id: 1, name: 'Child Prix Fixe', price: 37.00 }
+    ];
+
+    let currentTierTaxMode = 'dollar'; // 'dollar', 'total', 'pct'
+
+    function toggleTierTaxCalc() {
+      const body = document.getElementById('tierTaxCalcBody');
+      const icon = document.getElementById('tierTaxToggleIcon');
+      if (body.style.display === 'none') {
+        body.style.display = 'flex';
+        icon.innerText = '▲ CLOSE';
+        updateTierTaxPreview();
+      } else {
+        body.style.display = 'none';
+        icon.innerText = '▼ OPEN';
+      }
+    }
+
+    function switchTierTaxInputMode(mode) {
+      currentTierTaxMode = mode;
+      document.getElementById('taxInputSectionDollar').style.display = mode === 'dollar' ? 'flex' : 'none';
+      document.getElementById('taxInputSectionTotal').style.display = mode === 'total' ? 'flex' : 'none';
+      document.getElementById('taxInputSectionPct').style.display = mode === 'pct' ? 'flex' : 'none';
+
+      document.getElementById('tabTaxModeDollar').style.background = mode === 'dollar' ? 'rgba(168,85,247,0.35)' : 'transparent';
+      document.getElementById('tabTaxModeDollar').style.color = mode === 'dollar' ? '#fff' : '#94a3b8';
+
+      document.getElementById('tabTaxModeTotal').style.background = mode === 'total' ? 'rgba(168,85,247,0.35)' : 'transparent';
+      document.getElementById('tabTaxModeTotal').style.color = mode === 'total' ? '#fff' : '#94a3b8';
+
+      document.getElementById('tabTaxModePct').style.background = mode === 'pct' ? 'rgba(168,85,247,0.35)' : 'transparent';
+      document.getElementById('tabTaxModePct').style.color = mode === 'pct' ? '#fff' : '#94a3b8';
+
+      updateTierTaxPreview();
+    }
+
+    function setDisneyTaxPreset(pct) {
+      const rateEl = document.getElementById('tierTaxRate');
+      if (rateEl) rateEl.value = pct;
+      updateTierTaxPreview();
+    }
+
+    let currentTierTipMode = 'pct'; // 'pct' or 'dollar'
+    let currentTipPctVal = 18;
+
+    function switchTierTipInputMode(mode) {
+      currentTierTipMode = mode;
+      document.getElementById('tipSectionPct').style.display = mode === 'pct' ? 'flex' : 'none';
+      document.getElementById('tipSectionDollar').style.display = mode === 'dollar' ? 'flex' : 'none';
+
+      document.getElementById('tabTipModePct').style.background = mode === 'pct' ? 'rgba(168,85,247,0.35)' : 'transparent';
+      document.getElementById('tabTipModePct').style.color = mode === 'pct' ? '#fff' : '#94a3b8';
+
+      document.getElementById('tabTipModeDollar').style.background = mode === 'dollar' ? 'rgba(168,85,247,0.35)' : 'transparent';
+      document.getElementById('tabTipModeDollar').style.color = mode === 'dollar' ? '#fff' : '#94a3b8';
+
+      updateTierTaxPreview();
+    }
+
+    function setTipPresetPct(pct) {
+      currentTipPctVal = pct;
+      const inputEl = document.getElementById('tierTipPctInput');
+      if (inputEl) inputEl.value = pct;
+
+      [0, 15, 18, 20, 22].forEach(p => {
+        const btn = document.getElementById(`tipPreset_${p}`);
+        if (btn) {
+          if (p === pct) {
+            btn.style.background = 'rgba(168,85,247,0.3)';
+            btn.style.borderColor = 'rgba(168,85,247,0.5)';
+            btn.style.color = '#d8b4fe';
+            btn.style.fontWeight = '700';
+          } else {
+            btn.style.background = 'rgba(255,255,255,0.06)';
+            btn.style.borderColor = 'rgba(255,255,255,0.12)';
+            btn.style.color = '#fff';
+            btn.style.fontWeight = 'normal';
+          }
+        }
+      });
+
+      updateTierTaxPreview();
+    }
+
+    function onCustomTipPctInput() {
+      const val = parseFloat(document.getElementById('tierTipPctInput')?.value) || 0;
+      currentTipPctVal = val;
+
+      [0, 15, 18, 20, 22].forEach(p => {
+        const btn = document.getElementById(`tipPreset_${p}`);
+        if (btn) {
+          if (p === val) {
+            btn.style.background = 'rgba(168,85,247,0.3)';
+            btn.style.borderColor = 'rgba(168,85,247,0.5)';
+            btn.style.color = '#d8b4fe';
+            btn.style.fontWeight = '700';
+          } else {
+            btn.style.background = 'rgba(255,255,255,0.06)';
+            btn.style.borderColor = 'rgba(255,255,255,0.12)';
+            btn.style.color = '#fff';
+            btn.style.fontWeight = 'normal';
+          }
+        }
+      });
+
+      updateTierTaxPreview();
+    }
+
+    function calculateTierTaxMultiplier() {
+      // Calculate current base subtotal across defined tiers and member quantities
+      let baseSubtotal = 0;
+      tierDefs.forEach(t => {
+        const p = parseFloat(document.getElementById(`tierPrice_${t.id}`)?.value) || t.price;
+        baseSubtotal += p;
+      });
+      if (baseSubtotal <= 0) baseSubtotal = 100;
+
+      let effectiveTaxPct = 6.5;
+
+      if (currentTierTaxMode === 'dollar') {
+        const dollarTax = parseFloat(document.getElementById('tierTaxDollarInput')?.value) || 0;
+        effectiveTaxPct = (dollarTax / baseSubtotal) * 100;
+      } else if (currentTierTaxMode === 'total') {
+        const targetTotal = parseFloat(document.getElementById('tierTargetTotalInput')?.value) || 0;
+        const diff = Math.max(0, targetTotal - baseSubtotal);
+        effectiveTaxPct = (diff / baseSubtotal) * 100;
+      } else {
+        effectiveTaxPct = parseFloat(document.getElementById('tierTaxRate')?.value) || 6.5;
+      }
+
+      let tipPct = 0;
+      let tipDollar = 0;
+
+      if (currentTierTipMode === 'dollar') {
+        tipDollar = parseFloat(document.getElementById('tierTipDollarInput')?.value) || 0;
+        tipPct = (tipDollar / baseSubtotal) * 100;
+      } else {
+        tipPct = parseFloat(document.getElementById('tierTipPctInput')?.value) || currentTipPctVal || 0;
+        tipDollar = baseSubtotal * (tipPct / 100);
+      }
+
+      const totalMultiplier = 1 + (effectiveTaxPct / 100) + (tipPct / 100);
+      return { totalMultiplier, effectiveTaxPct, tipPct, tipDollar };
+    }
+
+    function updateTierTaxPreview() {
+      const { totalMultiplier, effectiveTaxPct, tipPct, tipDollar } = calculateTierTaxMultiplier();
+      const p0 = parseFloat(document.getElementById('tierPrice_0')?.value) || (tierDefs[0]?.price ?? 57.00);
+      const adj0 = Math.round(p0 * totalMultiplier * 100) / 100;
+      const diff = adj0 - p0;
+      const name0 = document.getElementById('tierName_0')?.value || (tierDefs[0]?.name ?? 'Tier 1');
+
+      const previewEl = document.getElementById('tierTaxPreviewText');
+      if (previewEl) {
+        previewEl.innerHTML = `${name0}: $${p0.toFixed(2)} → <strong style="color:#34d399;">$${adj0.toFixed(2)}</strong> (+$${diff.toFixed(2)} tax/tip each)`;
+      }
+
+      const rateLabel = document.getElementById('tierEffectiveTaxRateLabel');
+      if (rateLabel) {
+        let countyNote = '';
+        if (Math.abs(effectiveTaxPct - 6.5) < 0.05) countyNote = ' (Orange Co. rate)';
+        else if (Math.abs(effectiveTaxPct - 7.0) < 0.05) countyNote = ' (Osceola Co. rate)';
+        rateLabel.innerText = `Tax: ${effectiveTaxPct.toFixed(2)}%${countyNote} • Tip: ${tipPct.toFixed(1)}% ($${tipDollar.toFixed(2)})`;
+      }
+    }
+
+    function applyTaxToTiers() {
+      const { totalMultiplier } = calculateTierTaxMultiplier();
+
+      tierDefs.forEach(t => {
+        const inputEl = document.getElementById(`tierPrice_${t.id}`);
+        if (inputEl) {
+          const base = parseFloat(inputEl.value) || 0;
+          const adjusted = Math.round(base * totalMultiplier * 100) / 100;
+          inputEl.value = adjusted.toFixed(2);
+          t.price = adjusted;
+        }
+      });
+
+      const notice = document.getElementById('tierTaxAppliedNotice');
+      if (notice) {
+        notice.style.display = 'block';
+        setTimeout(() => { notice.style.display = 'none'; }, 4000);
+      }
+
+      recalcTieredSplit();
+      updateTierTaxPreview();
+    }
+
+    function adjustTier(member, delta) {
+      tierCounts[member] = Math.max(0, (tierCounts[member] || 0) + delta);
+      const stepEl = document.getElementById(`step_${member}`);
+      if (stepEl) stepEl.innerText = tierCounts[member];
+      recalcTieredSplit();
+    }
+
+    function addMockupTier() {
+      const nextId = tierDefs.length > 0 ? Math.max(...tierDefs.map(t => t.id)) + 1 : 0;
+      tierDefs.push({ id: nextId, name: 'Custom Tier', price: 25.00 });
+      renderTierDefs();
+      recalcTieredSplit();
+    }
+
+    function removeMockupTier(id) {
+      if (tierDefs.length <= 1) {
+        alert('You must keep at least one price tier.');
+        return;
+      }
+      tierDefs = tierDefs.filter(t => t.id !== id);
+      renderTierDefs();
+      recalcTieredSplit();
+    }
+
+    function renderTierDefs() {
+      const container = document.getElementById('tierDefinitionsList');
+      if (!container) return;
+      container.innerHTML = tierDefs.map((t, idx) => `
+        <div class="tier-card-edit" id="tierCard_${t.id}" style="background: rgba(255,255,255,0.05); padding: 8px 10px; border-radius: 10px; border:1px solid rgba(255,255,255,0.12); position:relative;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+            <span style="font-size: 10px; color: var(--text-dim); font-weight:700;">TIER ${idx + 1}</span>
+            <button type="button" onclick="removeMockupTier(${t.id})" style="background:none; border:none; color:#f87171; font-size:11px; cursor:pointer; padding:0 2px;" title="Remove Tier">✕</button>
+          </div>
+          <input type="text" id="tierName_${t.id}" value="${t.name}" oninput="recalcTieredSplit()" style="width:100%; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.15); border-radius:6px; padding:4px 6px; color:#fff; font-size:11px; font-weight:700; outline:none; margin-bottom:6px;">
+          <div style="display: flex; align-items: center; background: rgba(0,0,0,0.4); border: 1px solid rgba(52,211,153,0.35); border-radius: 6px; padding: 3px 6px;">
+            <span style="font-family:'JetBrains Mono'; color:#34d399; font-weight:700; font-size:12px; margin-right:3px;">$</span>
+            <input type="number" step="0.01" min="0" id="tierPrice_${t.id}" value="${t.price.toFixed(2)}" oninput="recalcTieredSplit()" style="background:transparent; border:none; color:#34d399; font-family:'JetBrains Mono'; font-weight:800; font-size:13px; width:100%; outline:none;">
+            <span style="font-size: 10px; color: var(--text-dim); white-space:nowrap; margin-left:3px;">/ ea</span>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function recalcTieredSplit() {
+      tierDefs.forEach(t => {
+        const nameEl = document.getElementById(`tierName_${t.id}`);
+        const priceEl = document.getElementById(`tierPrice_${t.id}`);
+        if (nameEl) t.name = nameEl.value;
+        if (priceEl) t.price = parseFloat(priceEl.value) || 0;
+      });
+
+      const p0 = tierDefs[0] ? tierDefs[0].price : 57.00;
+      const n0 = tierDefs[0] ? tierDefs[0].name : 'Adult';
+      const p1 = tierDefs[1] ? tierDefs[1].price : (tierDefs[0] ? tierDefs[0].price : 37.00);
+      const n1 = tierDefs[1] ? tierDefs[1].name : (tierDefs[0] ? tierDefs[0].name : 'Child');
+
+      const aTotal = tierCounts.Ariel * p0;
+      const eTotal = tierCounts.Eric * p0;
+      const mTotal = tierCounts.Melody * p1;
+
+      const arielDesc = document.getElementById('tieredDesc_Ariel');
+      const ericDesc = document.getElementById('tieredDesc_Eric');
+      const melodyDesc = document.getElementById('tieredDesc_Melody');
+
+      if (arielDesc) arielDesc.innerText = `${tierCounts.Ariel} ${n0} ($${aTotal.toFixed(2)})`;
+      if (ericDesc) ericDesc.innerText = `${tierCounts.Eric} ${n0} ($${eTotal.toFixed(2)})`;
+      if (melodyDesc) melodyDesc.innerText = `${tierCounts.Melody} ${n1} ($${mTotal.toFixed(2)})`;
+
+      const grandTotal = aTotal + eTotal + mTotal;
+      const derivedTotalEl = document.getElementById('tieredDerivedTotal');
+      if (derivedTotalEl) derivedTotalEl.innerText = '$' + grandTotal.toFixed(2);
+      const addExpAmtEl = document.getElementById('addExpenseAmount');
+      if (addExpAmtEl) addExpAmtEl.value = '$ ' + grandTotal.toFixed(2);
+
+      updateSummaryBar(grandTotal, eTotal + mTotal);
+    }
+
+    // 4. Itemized Split Recalculation (Req 5, 9, 14)
+    function recalcItemizedSplit() {
+      const p0 = parseFloat(document.getElementById('itemPrice_0').value) || 0;
+      const p1 = parseFloat(document.getElementById('itemPrice_1').value) || 0;
+      const p2 = parseFloat(document.getElementById('itemPrice_2').value) || 0;
+
+      const isAlc0 = document.getElementById('itemAlcohol_0').classList.contains('is-alcohol');
+      const isAlc1 = document.getElementById('itemAlcohol_1').classList.contains('is-alcohol');
+      const isAlc2 = document.getElementById('itemAlcohol_2').classList.contains('is-alcohol');
+
+      const itemsTotal = p0 + p1 + p2;
+      const nonAlcoholTotal = (isAlc0 ? 0 : p0) + (isAlc1 ? 0 : p1) + (isAlc2 ? 0 : p2);
+
+      const tax = Math.round(itemsTotal * 0.085 * 100) / 100;
+      const tip = Math.round(itemsTotal * (currentGratuityPct / 100) * 100) / 100;
+
+      let discount = 0;
+      if (excludeAlcoholDiscount) {
+        discount = Math.round(nonAlcoholTotal * 0.10 * 100) / 100;
+      } else {
+        discount = Math.round(itemsTotal * 0.10 * 100) / 100;
+      }
+
+      const grandTotal = itemsTotal + tax + tip - discount;
+
+      document.getElementById('itemizedTipAmt').innerText = '$' + tip.toFixed(2);
+      document.getElementById('itemizedDiscountVal').innerText = '-$' + discount.toFixed(2);
+      document.getElementById('addExpenseAmount').value = '$ ' + grandTotal.toFixed(2);
+
+      const arielFood = p0 + p2;
+      const ericFood = p1;
+      const arielRatio = itemsTotal > 0 ? (arielFood / itemsTotal) : 0.5;
+      const ericRatio = itemsTotal > 0 ? (ericFood / itemsTotal) : 0.5;
+
+      const arielDiscount = excludeAlcoholDiscount ? ((isAlc0 ? 0 : p0) / (nonAlcoholTotal || 1)) * discount : (arielRatio * discount);
+      const ericDiscount = discount - arielDiscount;
+
+      const arielShare = arielFood + (tax * arielRatio) + (tip * arielRatio) - arielDiscount;
+      const ericShare = ericFood + (tax * ericRatio) + (tip * ericRatio) - ericDiscount;
+
+      document.getElementById('itemizedShare_Ariel').innerText = '$' + arielShare.toFixed(2);
+      document.getElementById('itemizedShare_Eric').innerText = '$' + ericShare.toFixed(2);
+
+      updateSummaryBar(grandTotal, ericShare);
+    }
+
+    function toggleAlcohol(idx) {
+      const el = document.getElementById(`itemAlcohol_${idx}`);
+      el.classList.toggle('is-alcohol');
+      el.innerHTML = el.classList.contains('is-alcohol') ? '<span>✓ 🍸 Alcohol Flagged</span>' : '<span>🍸 Alcohol</span>';
+      recalcItemizedSplit();
+    }
+
+    function setGratuityPct(pct, btn) {
+      currentGratuityPct = pct;
+      const pills = document.querySelectorAll('.tip-percent-pills .tip-pill');
+      pills.forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      recalcItemizedSplit();
+    }
+
+    function toggleExcludeAlcohol() {
+      excludeAlcoholDiscount = document.getElementById('chkExcludeAlcohol').checked;
+      recalcItemizedSplit();
+    }
+
+    function addItemizedRow() {
+      alert('Added blank line item row! You can type item name, price, and assign participant.');
+    }
+
+    // Receipt OCR Simulation & Upload Handler
+    function triggerSimulatedScan(type) {
+      const gallery = document.getElementById('receiptPhotoGallery');
+      const thumbBox = document.getElementById('receiptThumbContainer');
+      gallery.style.display = 'flex';
+
+      if (type === 'space220') {
+        photosCount = 1;
+        thumbBox.innerHTML = `
+          <div class="receipt-thumb-item">
+            <span>📷 Space220_Receipt.jpg</span>
+            <button class="btn-thumb-remove" onclick="removePhoto(0)">✕</button>
+          </div>
+        `;
+        document.getElementById('addExpenseDesc').value = 'Space 220 Lounge Dinner';
+        selectFormCategory('dining', document.getElementById('catChipDining'));
+        document.getElementById('catalogLinkSelect').value = 'space220';
+        switchSplitMode('itemized');
+        alert('✓ Photo 1 Analyzed via On-Device OCR: Extracted 3 items, 20% gratuity, and 10% Disney AP Discount!');
+      } else if (type === 'multipage') {
+        photosCount = 2;
+        thumbBox.innerHTML = `
+          <div class="receipt-thumb-item">
+            <span>📷 Page1_Items.jpg</span>
+            <button class="btn-thumb-remove" onclick="removePhoto(0)">✕</button>
+          </div>
+          <div class="receipt-thumb-item">
+            <span>📷 Page2_Total.jpg</span>
+            <button class="btn-thumb-remove" onclick="removePhoto(1)">✕</button>
+          </div>
+        `;
+        document.getElementById('addExpenseDesc').value = 'Multi-Page Grocery & Sundries';
+        switchSplitMode('itemized');
+        alert('✓ Multi-Photo OCR Complete: Combined 2 photos, deduplicated subtotal line, extracted full bill lines!');
+      }
+    }
+
+    function addAnotherPhotoDemo() {
+      photosCount++;
+      const thumbBox = document.getElementById('receiptThumbContainer');
+      const div = document.createElement('div');
+      div.className = 'receipt-thumb-item';
+      div.innerHTML = `
+        <span>📷 Photo_${photosCount}.jpg</span>
+        <button class="btn-thumb-remove" onclick="this.parentElement.remove()">✕</button>
+      `;
+      thumbBox.appendChild(div);
+      alert(`Photo ${photosCount} added! Appended recognized lines to itemized list.`);
+    }
+
+    function removePhoto(idx) {
+      document.getElementById('receiptPhotoGallery').style.display = 'none';
+      alert('Photo removed from scan batch.');
+    }
+
+    function handleUserPhotoUpload(e) {
+      if (e.target.files && e.target.files[0]) {
+        triggerSimulatedScan('space220');
+      }
+    }
+
+    function selectFormCategory(cat, btn) {
+      const chips = document.querySelectorAll('#modalAddExpense .filter-chip');
+      chips.forEach(c => c.classList.remove('active'));
+      btn.classList.add('active');
+    }
+
+    function applyCatalogLink(val) {
+      if (val === 'space220') {
+        document.getElementById('addExpenseDesc').value = 'Space 220 Lounge Dinner';
+        selectFormCategory('dining', document.getElementById('catChipDining'));
+      } else if (val === 'beourguest') {
+        document.getElementById('addExpenseDesc').value = 'Be Our Guest Restaurant';
+        selectFormCategory('dining', document.getElementById('catChipDining'));
+      } else if (val === 'contemporary') {
+        document.getElementById('addExpenseDesc').value = 'Contemporary Resort Stay';
+        selectFormCategory('hotel', document.getElementById('catChipHotel'));
+      }
+    }
+
+    function updateSummaryBar(total, lent) {
+      document.getElementById('summaryPaidVal').innerText = '$' + total.toFixed(2);
+      document.getElementById('summaryLentVal').innerText = '+$' + lent.toFixed(2);
+      document.getElementById('saveBtnText').innerText = `Save Expense to Ledger ($${total.toFixed(2)})`;
+    }
+
+    // Live Save to Ledger
+    function saveNewExpenseMock() {
+      const desc = document.getElementById('addExpenseDesc').value || 'New Shared Expense';
+      const amtStr = document.getElementById('addExpenseAmount').value;
+      const amtNum = parseFloat(amtStr.replace(/[^0-9.]/g, '')) || 120.00;
+      const payer = document.getElementById('addExpensePayer').value;
+
+      // Create new dynamic card at the top of the list
+      const container = document.getElementById('expenseListContainer');
+      const newCard = document.createElement('div');
+      newCard.className = 'expense-card is-expanded';
+      newCard.setAttribute('data-cat', 'dining');
+      newCard.setAttribute('data-payer', payer);
+      newCard.onclick = function() { toggleCardAccordion(this); };
+
+      newCard.innerHTML = `
+        <div class="expense-main-surface">
+          <div class="category-avatar cat-dining">🍽️</div>
+          <div class="expense-info-block">
+            <div class="expense-title-row">
+              <span class="expense-title">${desc}</span>
+              <span class="catalog-tag" style="background:rgba(56,189,248,0.15); color:#38bdf8;">New • Just Added</span>
+            </div>
+            <div class="expense-meta-subtitle">
+              <span>Paid by ${payer}</span>
+              <span class="meta-bullet">•</span>
+              <span>${currentSplitMode.toUpperCase()} Split</span>
+            </div>
+          </div>
+          <div class="expense-amount-block">
+            <span class="expense-total-val">$${amtNum.toFixed(2)}</span>
+            <span class="personal-impact-tag impact-lent">
+              +lent $${(amtNum * 0.6).toFixed(2)}
+              <span class="chevron-icon">▼</span>
+            </span>
+          </div>
+        </div>
+        <div class="expense-expand-drawer" style="display:block;">
+          <div class="drawer-split-header">
+            <span>Verified Ledger Split</span>
+            <span>Saved Just Now</span>
+          </div>
+          <div class="participant-row">
+            <div class="participant-left">
+              <div class="participant-avatar-mini" style="background:#7e22ce;">A</div>
+              <span class="participant-name">Ariel (${payer === 'Ariel' ? 'Payer • You' : 'Participant'})</span>
+            </div>
+            <span class="participant-share-val">$${(amtNum * 0.4).toFixed(2)}</span>
+          </div>
+          <div class="participant-row">
+            <div class="participant-left">
+              <div class="participant-avatar-mini" style="background:#a855f7;">E</div>
+              <span class="participant-name">Eric</span>
+            </div>
+            <span class="participant-share-val">$${(amtNum * 0.6).toFixed(2)}</span>
+          </div>
+        </div>
+      `;
+
+      container.insertBefore(newCard, container.firstChild);
+
+      // Increment counters
+      const countEl = document.getElementById('ledgerCountBadge');
+      countEl.innerText = parseInt(countEl.innerText || '4') + 1;
+      document.getElementById('todayEntriesSum').innerText = '3 Entries';
+
+      // Update Net Balance
+      document.getElementById('heroBalanceFig').innerText = '+$1,838.27';
+      document.getElementById('heroTotalSpend').innerText = '$' + (3052.54 + amtNum).toFixed(2);
+
+      closeModal('modalAddExpense');
+      alert(`🎉 Expense "${desc}" ($${amtNum.toFixed(2)}) has been added to the ledger! Net balances recomputed live.`);
+    }
+
+    function recordSettlementMock() {
+      alert('Settlement payment recorded! Balances adjusted.');
+      closeModal('modalSettle');
+    }
+  </script>
+</body>
+</html>

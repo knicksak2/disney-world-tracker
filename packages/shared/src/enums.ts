@@ -313,3 +313,23 @@ export const FESTIVAL_SLUG_LABELS: { readonly [K in FestivalSlug]: string } = {
   'festival-of-the-arts': 'EPCOT International Festival of the Arts',
   'festival-of-the-holidays': 'EPCOT International Festival of the Holidays',
 };
+
+// ---------------------------------------------------------------------------
+// Trip_Expenses vocabularies
+// ---------------------------------------------------------------------------
+
+export const EXPENSE_SPLIT_MODES = ['exact', 'even', 'tiered', 'itemized'] as const;
+export type ExpenseSplitMode = (typeof EXPENSE_SPLIT_MODES)[number];
+
+export const EXPENSE_CATEGORIES = [
+  'hotel',
+  'tickets',
+  'dining',
+  'shopping',
+  'transportation',
+  'other',
+] as const;
+export type ExpenseCategory = (typeof EXPENSE_CATEGORIES)[number];
+
+export const CHARGE_LINE_KINDS = ['tax', 'gratuity', 'fee', 'discount'] as const;
+export type ChargeLineKind = (typeof CHARGE_LINE_KINDS)[number];
