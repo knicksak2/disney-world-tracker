@@ -104,13 +104,19 @@ You can now test it instead of arguing about it: run it as a **second challenger
 ## Record here
 
 ```
-Date run:
-Waits trending up / down / flat since September:
-Per-ride bias Sep -> Oct (name, sep_bias, oct_bias, sign held?):
+Date run:                       2026-10-13 (hosted Neon DB, .env.dev)
+Waits trending up / down / flat since September: UP (all 4 parks, +15-28% Sep avg -> Oct 10-12 week avg; crowd_index rose in lockstep)
+Per-ride bias Sep -> Oct (name, sep_bias, oct_bias, sign held?): see .agents/tasks/bias-vs-lag-decision/plan.md diagnosis table (32/37 held, 86.5%); full detail in query-output.md
 
-Diagnosis: bias / lag / both / resolved
-Action taken (3A / 3B / none):
-Mean MAE by lead now:   lead 1 = ____  lead 3 = ____  lead 7 = ____
-Crowd bias lead 1 now:  MK ____  AK ____  HS ____  EPCOT ____
-R7.7 tested? result:
+Diagnosis: bias
+Action taken (3A / 3B / none): 3A — shadow bias-correction challenger added (challenger_wait_minutes = applyWaitBiasCorrection(predicted, bias), bound +/-15 min, gated sample_count >= 30). R7.7 second challenger (Step 4) also wired for MK/AK as a secondary, mutually-exclusive shadow variant collecting data, not promoted.
+Mean MAE by lead now:   lead 1 = 11.51  lead 3 = 11.48  lead 7 = 12.36
+Crowd bias lead 1 now:  MK +0.109  AK -0.142  HS +0.025  EPCOT -0.041
+R7.7 tested? result: Wired as a shadow challenger this session (Task 7); NOT yet evaluated — needs ~4 weeks of scored samples before any MAE comparison can be drawn. Promotion evaluation for BOTH challengers (3A and the R7.7 variant) is explicitly deferred — see note below.
+
+PENDING: Promotion evaluation (~4-week wait-and-compare, comparing
+challenger_mae vs served mae in wait_forecast_accuracy for both the 3A
+and R7.7 shadow challengers) is OUT OF SCOPE this session. Revisit circa
+2026-11-10 with a new runbook entry once challenger_sample_count >= 30
+for a meaningful number of tracked rides.
 ```

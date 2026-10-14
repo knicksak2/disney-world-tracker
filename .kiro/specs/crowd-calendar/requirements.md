@@ -127,6 +127,8 @@ This feature owns data collection, the wait-time model, the crowd index and fore
 
    THE asymmetry SHALL be revisited once R18's wait-forecast log can score both variants, and SHALL NOT be "tidied up" into a single path before then. A future change that unifies them without wait-side evidence reintroduces this risk silently, which is why the scope is stated as a requirement rather than left as a code comment.
 
+8. WHERE R18's wait-forecast log can score both variants, THE System MAY compute a second, independent shadow challenger that applies the measured Crowd_Forecast bias (R7.4) to the wait-prediction path via `crowdMultiplier`, written to the SAME `challenger_wait_minutes` column. This second challenger is NOT permitted when a Step-3A (R18.10) challenger is already active for that `(experience_id, lead_days)` — the two challengers SHALL NOT be combined or allowed to overwrite one another silently. This challenger SHALL NOT be promoted without a logged MAE comparison per R18.6, and R7.7's prohibition on propagating crowd bias into the served wait path remains in force until such a promotion.
+
 ### Requirement 8: Hosting and Cost Constraints
 
 **User Story:** As an App Developer, I want this to run within the project's free-tier hosting, so that it adds no recurring cost.
@@ -291,3 +293,4 @@ This feature owns data collection, the wait-time model, the crowd index and fore
 7. THE wait-forecast log SHALL be bounded, pruned after reconciliation beyond a retention window (`WAIT_FORECAST_RETENTION_DAYS`, default `180`), per R3.6 and R8.3.
 8. Capture, reconcile, and prune SHALL each run as isolated daily-recompute legs per R13.1, so a failure in wait-accuracy bookkeeping cannot stop crowd reconciliation or any other leg.
 9. THE accuracy summary SHALL be readable by the developer-facing surface without being required by any user-facing path, so that the absence of a UI never blocks the measurement from accruing.
+10. WHERE a scored per-ride bias exists at `(experience_id, lead_days)` with `sample_count >= 30`, THE System SHALL compute a shadow challenger prediction as `applyWaitBiasCorrection(predicted_wait_minutes, bias)` — the served prediction minus the measured bias, clamped to `±WAIT_BIAS_CORRECTION_BOUND_MINUTES` (default `15`) and floored at `0` — and write it to `challenger_wait_minutes` per R18.5. Below that threshold, or with no scored row, the challenger SHALL remain `null`. This is the first concrete challenger model under R18.5's shadow mechanism; R18.6 (no automatic promotion) continues to apply unchanged.

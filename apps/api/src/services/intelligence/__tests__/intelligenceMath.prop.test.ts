@@ -18,6 +18,9 @@ import {
   BASELINE_ESTABLISH_MIN_SHAPE_SAMPLES,
   BASELINE_SAMPLE_COUNT_CAP,
   CROWD_INDEX_DRIFT_HORIZON_PASSES,
+  applyWaitBiasCorrection,
+  WAIT_BIAS_CORRECTION_BOUND_MINUTES,
+  crowdMultiplierVariant,
 } from '../waitMath.js';
 import { forecastIndex } from '../crowdForecast.js';
 import { updateAccuracy, applyBiasCorrection } from '../calibration.js';
@@ -805,6 +808,67 @@ describe('Feature: crowd-calendar', () => {
         queue: {},
       };
       expect(isStandbyBasketEntry(liveEntryWithoutStandby)).toBe(false);
+    });
+  });
+
+  // Feature: crowd-calendar, Property 22: applyWaitBiasCorrection floors at 0 and clamps the bias to +/-15 min
+  describe('Property 22: applyWaitBiasCorrection floors at 0 and clamps the bias to +/-15 min', () => {
+    it('is always >= 0, matches predicted - bias within the clamp, and clamps outside it', () => {
+      fc.assert(
+        fc.property(
+          fc.double({ min: 0, max: 500, noNaN: true }),
+          fc.double({ min: -1000, max: 1000, noNaN: true }),
+          (predicted, biasMinutes) => {
+            const result = applyWaitBiasCorrection(predicted, biasMinutes);
+
+            // (a) never negative.
+            expect(result).toBeGreaterThanOrEqual(0);
+
+            if (Math.abs(biasMinutes) <= WAIT_BIAS_CORRECTION_BOUND_MINUTES) {
+              // (b) within the bound, exact subtraction (floored at 0).
+              expect(result).toBeCloseTo(Math.max(0, predicted - biasMinutes), 9);
+            } else if (biasMinutes > WAIT_BIAS_CORRECTION_BOUND_MINUTES) {
+              // (c) clamped at the positive bound, not following the bias further.
+              expect(result).toBeCloseTo(
+                Math.max(0, predicted - WAIT_BIAS_CORRECTION_BOUND_MINUTES),
+                9,
+              );
+            } else {
+              // (d) symmetric clamp at the negative bound.
+              expect(result).toBeCloseTo(
+                Math.max(0, predicted + WAIT_BIAS_CORRECTION_BOUND_MINUTES),
+                9,
+              );
+            }
+          }
+        ),
+        { numRuns: 100 }
+      );
+    });
+  });
+
+  // Feature: crowd-calendar, Property 24: crowdMultiplierVariant (R7.8, Step 4) is never negative and stays within the crowd-multiplier clamp band
+  describe('Property 24: crowdMultiplierVariant is never negative and stays within the crowd-multiplier clamp band', () => {
+    it('is always >= 0 and matches predicted * clampCrowdMultiplier(1 - bias)', () => {
+      fc.assert(
+        fc.property(
+          fc.double({ min: 0, max: 500, noNaN: true }),
+          fc.double({ min: -10, max: 10, noNaN: true }),
+          (predictedWaitMinutes, crowdBias) => {
+            const result = crowdMultiplierVariant(predictedWaitMinutes, crowdBias);
+            expect(result).toBeGreaterThanOrEqual(0);
+
+            const expectedFactor = clampCrowdMultiplier(1 - crowdBias);
+            expect(result).toBeCloseTo(
+              Math.max(0, predictedWaitMinutes * expectedFactor),
+              9,
+            );
+            expect(expectedFactor).toBeGreaterThanOrEqual(CROWD_MULTIPLIER_MIN);
+            expect(expectedFactor).toBeLessThanOrEqual(CROWD_MULTIPLIER_MAX);
+          }
+        ),
+        { numRuns: 100 }
+      );
     });
   });
 });

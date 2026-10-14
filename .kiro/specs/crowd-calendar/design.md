@@ -228,6 +228,24 @@ Adds `source TEXT NOT NULL DEFAULT 'observed' CHECK (source IN ('observed','seed
 
 **Validates: Requirements 18.1, 18.3, 18.4, 18.5, 18.6**
 
+### Property 22: The bias-correction challenger matches served predictions except where a scored bias authorizes a shadow correction
+
+*For any* captured wait-forecast row, `challenger_wait_minutes` equals `applyWaitBiasCorrection(predicted_wait_minutes, bias)` when a `wait_forecast_accuracy` row exists for the same `(experience_id, lead_days)` with `sample_count >= 30`, and is `null` otherwise. The served `predicted_wait_minutes` is unaffected in either case (Property 18 continues to hold).
+
+**Validates: Requirements 18.5, 18.10**
+
+### Property 23: The Step-3A and Step-4 (R7.7) shadow challengers are mutually exclusive
+
+*For any* captured wait-forecast row, at most one of the Step-3A bias-correction shadow value (R18.10) and the Step-4 crowd-bias shadow value (R7.8) is active in `challenger_wait_minutes` — the Step-3A correction always takes priority when both would otherwise apply, and the Step-4 variant is populated for a row only when Step-3A left that row's challenger `null`.
+
+**Validates: Requirements 7.8**
+
+### Property 24: The Step-4 crowd-bias wait variant is never negative and stays within the shared crowd-multiplier clamp band
+
+*For any* `predictedWaitMinutes >= 0` and finite `crowdBias`, `crowdMultiplierVariant` equals `predictedWaitMinutes * clampCrowdMultiplier(1 - crowdBias)`, which is always `>= 0` because the multiplier factor is clamped to `[CROWD_MULTIPLIER_MIN, CROWD_MULTIPLIER_MAX]` before being applied — a wild crowd bias can swing the result only as far as the existing shared clamp band already permits elsewhere in this spec.
+
+**Validates: Requirements 7.8**
+
 ### Property 20: Same-day live wait substitution touches only the current hour, only for today, only when trustworthy
 *For any* Experience and request date: (a) WHEN the request date is NOT the current WDW calendar day, `getDaySnapshot`'s `waits[]` are entirely unaffected by `Live_Service`, regardless of what it would return; (b) WHEN the request date IS today, a fresh (non-stale), `Operating`, numeric live standby wait from `Live_Service` replaces `predictedWaitMinutes` ONLY in the bucket matching the current WDW hour — every other hour bucket for that Experience remains exactly the model/`R4.3`-corrected value it would have been without a `Live_Service` dependency; (c) a stale reading, a non-`Operating` status, an absent `waitMinutes`, or a `Live_Service` failure/timeout all fall back silently to the model value already computed for that hour (best-effort, mirrors R4.4); (d) omitting the `liveService` dependency entirely reproduces the exact pre-Requirement-4.5 snapshot (strictly additive, opt-in by construction).
 
@@ -317,6 +335,7 @@ Concrete defaults so nothing is left to guess. Override via env where noted.
 - **Day-of-week shrinkage (R16):** `DOW_SHRINKAGE_K = 8` pseudo-observations of the pooled per-hour mean. Holdout-measured on train Aug 4–18 / test Aug 19–25: MAE `5.87` at `k = 0` (raw bucket), `5.65` at `k = 5` and `k = 10`, `5.72` at `k = 20`, `5.82` at `k = 40`, `6.04` at `k = ∞` (weekday ignored). `8` sits in the measured optimum; the curve is flat between 5 and 10, so this is not a knife-edge.
 - **Wait archive (R17):** `WAIT_ARCHIVE_RETENTION_DAYS = 1100` (~3 years). The archive leg aggregates a trailing `WAIT_ARCHIVE_LOOKBACK_DAYS = 3` days each run — wider than one day so a missed recompute cannot leave a day unarchived before the `30`-day raw prune, and narrow enough to stay cheap. Idempotent per `(experience_id, date, hour)` via `ON CONFLICT DO UPDATE`.
 - **Wait forecast accuracy (R18):** `WAIT_FORECAST_LEAD_DAYS = [7, 3, 1]`, `WAIT_FORECAST_HOURS = [10, 13, 16, 19]` ET, `WAIT_FORECAST_MAX_EXPERIENCES = 40` (highest Ride_Baseline wait first), `WAIT_FORECAST_RETENTION_DAYS = 180`. Store size ≈ `40 × 4 × 3 = 480` rows per capture day — trivial against R8.3. Accuracy EMA uses the same capped alpha as R7.3: `2 / (min(sample_count, 100) + 2)`.
+  `WAIT_BIAS_CORRECTION_BOUND_MINUTES = 15` — Step 3A's shadow challenger clamp (R18.10); `WAIT_FORECAST_ACCURACY_MIN_SAMPLES_FOR_CHALLENGER = 30`, reusing R15's `TIER1_RELIABILITY_THRESHOLD` reliability bar rather than a new one.
 
 ### Expected accuracy after these changes — stated so it is not over-sold
 

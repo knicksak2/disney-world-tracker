@@ -219,6 +219,254 @@ describe('Feature: crowd-calendar — captureWaitForecasts freezes predictions (
   });
 });
 
+describe('Feature: crowd-calendar — challenger shadow correction (R18.5 extended, Step 3A)', () => {
+  it('challenger equals predicted - bias (clamped/floored) when a scored bias exists at sample_count >= 30', async () => {
+    const { repo, state } = makeRepo({
+      topExperiences: [{ experience_id: EXP_A, park: PARK, peak_baseline: 70 }],
+      waitForecastAccuracies: [
+        {
+          experience_id: EXP_A,
+          lead_days: 1,
+          mae: 10,
+          bias: 6,
+          sample_count: 30,
+          challenger_mae: null,
+          challenger_bias: null,
+          challenger_sample_count: 0,
+        },
+      ],
+    });
+    await makeService(repo, makePrediction({ [EXP_A]: 50 })).runDailyRecompute();
+
+    const lead1Rows = state.waitForecastLogs.filter(
+      (r) => r.experience_id === EXP_A && r.lead_days === 1,
+    );
+    expect(lead1Rows.length).toBeGreaterThan(0);
+    // predicted 50 - clamp(6, +/-15) = 44.
+    expect(lead1Rows.every((r) => r.challenger_wait_minutes === 44)).toBe(true);
+  });
+
+  it('challenger is null when sample_count is below the 30 threshold', async () => {
+    const { repo, state } = makeRepo({
+      topExperiences: [{ experience_id: EXP_A, park: PARK, peak_baseline: 70 }],
+      waitForecastAccuracies: [
+        {
+          experience_id: EXP_A,
+          lead_days: 1,
+          mae: 10,
+          bias: 6,
+          sample_count: 29,
+          challenger_mae: null,
+          challenger_bias: null,
+          challenger_sample_count: 0,
+        },
+      ],
+    });
+    await makeService(repo, makePrediction({ [EXP_A]: 50 })).runDailyRecompute();
+
+    const lead1Rows = state.waitForecastLogs.filter(
+      (r) => r.experience_id === EXP_A && r.lead_days === 1,
+    );
+    expect(lead1Rows.length).toBeGreaterThan(0);
+    expect(lead1Rows.every((r) => r.challenger_wait_minutes === null)).toBe(true);
+  });
+
+  it('challenger is null when no accuracy row exists at all for that key', async () => {
+    const { repo, state } = makeRepo({
+      topExperiences: [{ experience_id: EXP_A, park: PARK, peak_baseline: 70 }],
+      waitForecastAccuracies: [],
+    });
+    await makeService(repo, makePrediction({ [EXP_A]: 50 })).runDailyRecompute();
+
+    expect(state.waitForecastLogs.length).toBeGreaterThan(0);
+    expect(state.waitForecastLogs.every((r) => r.challenger_wait_minutes === null)).toBe(true);
+  });
+
+  it('floors the challenger at 0 when the bias exceeds the predicted wait', async () => {
+    const { repo, state } = makeRepo({
+      topExperiences: [{ experience_id: EXP_A, park: PARK, peak_baseline: 70 }],
+      waitForecastAccuracies: [
+        {
+          experience_id: EXP_A,
+          lead_days: 1,
+          mae: 10,
+          bias: 10,
+          sample_count: 30,
+          challenger_mae: null,
+          challenger_bias: null,
+          challenger_sample_count: 0,
+        },
+      ],
+    });
+    // predicted 5 - clamp(10, +/-15) = -5 -> floored to 0.
+    await makeService(repo, makePrediction({ [EXP_A]: 5 })).runDailyRecompute();
+
+    const lead1Rows = state.waitForecastLogs.filter(
+      (r) => r.experience_id === EXP_A && r.lead_days === 1,
+    );
+    expect(lead1Rows.length).toBeGreaterThan(0);
+    expect(lead1Rows.every((r) => r.challenger_wait_minutes === 0)).toBe(true);
+  });
+
+  it('clamps the challenger correction to the +/-15 min bound', async () => {
+    const { repo, state } = makeRepo({
+      topExperiences: [{ experience_id: EXP_A, park: PARK, peak_baseline: 70 }],
+      waitForecastAccuracies: [
+        {
+          experience_id: EXP_A,
+          lead_days: 1,
+          mae: 50,
+          bias: 50,
+          sample_count: 30,
+          challenger_mae: null,
+          challenger_bias: null,
+          challenger_sample_count: 0,
+        },
+      ],
+    });
+    // predicted 60 - clamp(50, +/-15) = 60 - 15 = 45, NOT 10.
+    await makeService(repo, makePrediction({ [EXP_A]: 60 })).runDailyRecompute();
+
+    const lead1Rows = state.waitForecastLogs.filter(
+      (r) => r.experience_id === EXP_A && r.lead_days === 1,
+    );
+    expect(lead1Rows.length).toBeGreaterThan(0);
+    expect(lead1Rows.every((r) => r.challenger_wait_minutes === 45)).toBe(true);
+  });
+
+  it('leaves the served predicted_wait_minutes byte-identical whether or not a challenger exists', async () => {
+    const withChallenger = makeRepo({
+      topExperiences: [{ experience_id: EXP_A, park: PARK, peak_baseline: 70 }],
+      waitForecastAccuracies: [
+        {
+          experience_id: EXP_A,
+          lead_days: 1,
+          mae: 10,
+          bias: 6,
+          sample_count: 30,
+          challenger_mae: null,
+          challenger_bias: null,
+          challenger_sample_count: 0,
+        },
+      ],
+    });
+    await makeService(withChallenger.repo, makePrediction({ [EXP_A]: 50 })).runDailyRecompute();
+
+    const withoutChallenger = makeRepo({
+      topExperiences: [{ experience_id: EXP_A, park: PARK, peak_baseline: 70 }],
+      waitForecastAccuracies: [],
+    });
+    await makeService(withoutChallenger.repo, makePrediction({ [EXP_A]: 50 })).runDailyRecompute();
+
+    const servedWith = withChallenger.state.waitForecastLogs
+      .filter((r) => r.lead_days === 1)
+      .map((r) => r.predicted_wait_minutes);
+    const servedWithout = withoutChallenger.state.waitForecastLogs
+      .filter((r) => r.lead_days === 1)
+      .map((r) => r.predicted_wait_minutes);
+
+    // Same predicted wait regardless of whether a challenger was computed —
+    // getDaySnapshot's predictedWaitMinutes feeds this column directly,
+    // never adjusted by the bias correction.
+    expect(servedWith).toEqual(servedWithout);
+    expect(servedWith.every((v) => v === 50)).toBe(true);
+  });
+
+  it('non-vacuity: challenger differs from the served prediction when a real bias exists', async () => {
+    const { repo, state } = makeRepo({
+      topExperiences: [{ experience_id: EXP_A, park: PARK, peak_baseline: 70 }],
+      waitForecastAccuracies: [
+        {
+          experience_id: EXP_A,
+          lead_days: 1,
+          mae: 10,
+          bias: 6,
+          sample_count: 30,
+          challenger_mae: null,
+          challenger_bias: null,
+          challenger_sample_count: 0,
+        },
+      ],
+    });
+    await makeService(repo, makePrediction({ [EXP_A]: 50 })).runDailyRecompute();
+
+    const lead1Row = state.waitForecastLogs.find(
+      (r) => r.experience_id === EXP_A && r.lead_days === 1,
+    );
+    expect(lead1Row).toBeDefined();
+    expect(lead1Row!.challenger_wait_minutes).not.toBeNull();
+    expect(lead1Row!.challenger_wait_minutes).not.toBe(lead1Row!.predicted_wait_minutes);
+  });
+});
+
+describe('Feature: crowd-calendar — R7.8 second challenger variant (Step 4, MK/AK only, mutually exclusive with 3A)', () => {
+  it('populates the crowd-bias challenger for MK when no 3A challenger was set and a scored crowd bias exists', async () => {
+    const { repo, state } = makeRepo({
+      topExperiences: [{ experience_id: EXP_A, park: PARK /* Magic Kingdom */, peak_baseline: 70 }],
+      waitForecastAccuracies: [],
+    });
+    repo.getForecastAccuracies = vi.fn(async (park: string) =>
+      park === PARK
+        ? [{ park: PARK, lead_days: 1, mae: 0.2, bias: 0.1, sample_count: 50 }]
+        : [],
+    );
+    await makeService(repo, makePrediction({ [EXP_A]: 50 })).runDailyRecompute();
+
+    const lead1Rows = state.waitForecastLogs.filter(
+      (r) => r.experience_id === EXP_A && r.lead_days === 1,
+    );
+    expect(lead1Rows.length).toBeGreaterThan(0);
+    // 50 * clamp(1 - 0.1) = 50 * 0.9 = 45.
+    expect(lead1Rows.every((r) => r.challenger_wait_minutes === 45)).toBe(true);
+  });
+
+  it('never populates the crowd-bias challenger for EPCOT or Hollywood Studios', async () => {
+    const { repo, state } = makeRepo({
+      topExperiences: [
+        { experience_id: EXP_A, park: 'EPCOT', peak_baseline: 70 },
+        { experience_id: EXP_B, park: 'Hollywood Studios', peak_baseline: 55 },
+      ],
+      waitForecastAccuracies: [],
+    });
+    repo.getForecastAccuracies = vi.fn(async () => [
+      { park: 'EPCOT', lead_days: 1, mae: 0.2, bias: 0.1, sample_count: 50 },
+      { park: 'Hollywood Studios', lead_days: 1, mae: 0.2, bias: 0.1, sample_count: 50 },
+    ]);
+    await makeService(repo, makePrediction({ [EXP_A]: 50, [EXP_B]: 40 })).runDailyRecompute();
+
+    expect(state.waitForecastLogs.every((r) => r.challenger_wait_minutes === null)).toBe(true);
+  });
+
+  it('never overwrites an existing 3A challenger value with the crowd-bias variant', async () => {
+    const { repo, state } = makeRepo({
+      topExperiences: [{ experience_id: EXP_A, park: PARK /* Magic Kingdom */, peak_baseline: 70 }],
+      waitForecastAccuracies: [
+        {
+          experience_id: EXP_A,
+          lead_days: 1,
+          mae: 10,
+          bias: 6,
+          sample_count: 30,
+          challenger_mae: null,
+          challenger_bias: null,
+          challenger_sample_count: 0,
+        },
+      ],
+    });
+    repo.getForecastAccuracies = vi.fn(async () => [
+      { park: PARK, lead_days: 1, mae: 0.2, bias: 0.1, sample_count: 50 },
+    ]);
+    await makeService(repo, makePrediction({ [EXP_A]: 50 })).runDailyRecompute();
+
+    const lead1Rows = state.waitForecastLogs.filter(
+      (r) => r.experience_id === EXP_A && r.lead_days === 1,
+    );
+    expect(lead1Rows.length).toBeGreaterThan(0);
+    // 3A's value (50 - 6 = 44), NOT the crowd-bias variant (45).
+    expect(lead1Rows.every((r) => r.challenger_wait_minutes === 44)).toBe(true);
+  });
+});
+
 describe('Feature: crowd-calendar — reconcileWaitForecasts scores against the archive (R18.3, R18.4)', () => {
   function pendingLog(overrides: Record<string, unknown> = {}) {
     return {

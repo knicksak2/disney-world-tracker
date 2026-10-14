@@ -30,6 +30,53 @@ export function emaVariance(
 }
 
 /**
+ * Step 3A (2026-10-08 bias-vs-lag runbook): clamp bound, in minutes, on the
+ * measured per-ride bias used by {@link applyWaitBiasCorrection}. Mirrors how
+ * `calibration.ts`'s `applyBiasCorrection` clamps the crowd-side correction
+ * rather than letting an outlier bias swing the whole output.
+ */
+export const WAIT_BIAS_CORRECTION_BOUND_MINUTES = 15;
+
+/**
+ * Shadow bias-correction challenger (R18.10): the served `predicted` minus a
+ * measured per-`(experience_id, lead_days)` bias, clamped to
+ * `+/-WAIT_BIAS_CORRECTION_BOUND_MINUTES` and floored at `0` (a wait can't be
+ * negative, so this floors rather than clamping to a ratio band like the
+ * crowd-side sibling). Never called on the served prediction path — only used
+ * to populate the shadow `challenger_wait_minutes` column.
+ */
+export function applyWaitBiasCorrection(predicted: number, biasMinutes: number): number {
+  const clamped = Math.max(
+    -WAIT_BIAS_CORRECTION_BOUND_MINUTES,
+    Math.min(WAIT_BIAS_CORRECTION_BOUND_MINUTES, biasMinutes),
+  );
+  return Math.max(0, predicted - clamped);
+}
+
+/**
+ * Step 4 (R7.8, 2026-10-08 bias-vs-lag runbook): a SEPARATE, independent
+ * shadow challenger from {@link applyWaitBiasCorrection} (Step 3A). Tests
+ * whether the already-measured **crowd** bias (ratio units, from
+ * `crowd_forecast_accuracy`, e.g. R7.4) improves wait predictions when
+ * applied through the wait path's existing `crowdMultiplier`, which is
+ * exactly what R7.7 currently withholds from the served path pending this
+ * evidence.
+ *
+ * `predictedWaitMinutes` already embeds the SERVED (uncalibrated) crowd
+ * multiplier (R7.7); this reapplies a corrective ratio on top of it —
+ * `clampCrowdMultiplier(1 - crowdBias)` — mirroring `applyBiasCorrection`'s
+ * sign convention (subtract the measured bias) and sharing the same
+ * `[CROWD_MULTIPLIER_MIN, CROWD_MULTIPLIER_MAX]` clamp so a wild bias can't
+ * swing the wait prediction out of the ratio band. Shadow-only: never called
+ * on the served path, only to populate a `challenger_wait_minutes` value for
+ * scoring. No promotion verdict is implied by this function.
+ */
+export function crowdMultiplierVariant(predictedWaitMinutes: number, crowdBias: number): number {
+  const factor = clampCrowdMultiplier(1 - crowdBias);
+  return Math.max(0, predictedWaitMinutes * factor);
+}
+
+/**
  * Normalizes a daily average wait into a continuous crowd index.
  * For example, scaling relative to the park's all-time distribution.
  * For simplicity as a starting formula, we can assume a linear mapping based

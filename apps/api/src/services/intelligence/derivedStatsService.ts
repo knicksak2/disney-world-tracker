@@ -6,6 +6,7 @@ import type {
   WaitForecastAccuracyRow,
 } from './IntelligenceRepo.js';
 import { updateAccuracy } from './calibration.js';
+import { applyWaitBiasCorrection, crowdMultiplierVariant } from './waitMath.js';
 import {
   computeWeatherSensitivities as computeWeatherSensitivitiesPure,
   type ConditionWaitAggregate,
@@ -74,6 +75,15 @@ const WAIT_FORECAST_MAX_EXPERIENCES = 40;
 
 /** R18.7: retention for scored wait-forecast rows. */
 const WAIT_FORECAST_RETENTION_DAYS = 180;
+
+/**
+ * R18.10 (Step 3A of the 2026-10-08 bias-vs-lag runbook): minimum scored
+ * sample count before a measured per-`(experience_id, lead_days)` bias is
+ * trusted enough to drive the shadow challenger. Reuses R15's existing
+ * `TIER1_RELIABILITY_THRESHOLD` reliability bar (also 30) rather than
+ * inventing a new one.
+ */
+const WAIT_FORECAST_ACCURACY_MIN_SAMPLES_FOR_CHALLENGER = 30;
 
 /**
  * R7.6: retention for scored crowd-forecast rows.
@@ -232,6 +242,14 @@ export function createDerivedStatsService(deps: DerivedStatsServiceDeps): Derive
    * `getDaySnapshot` is called once per (park, lead) rather than per experience:
    * it already returns all 24 hours for a whole batch of Experiences, so 4 parks
    * x 3 leads is 12 calls regardless of how many rides are tracked.
+   *
+   * Step 3A (2026-10-08 bias-vs-lag runbook, R18.10): as of this change the
+   * shadow challenger IS configured. `challenger_wait_minutes` is set to
+   * `applyWaitBiasCorrection(predicted, bias)` wherever a scored
+   * `wait_forecast_accuracy` row exists for that `(experience_id, lead_days)`
+   * with `sample_count >= WAIT_FORECAST_ACCURACY_MIN_SAMPLES_FOR_CHALLENGER`,
+   * and stays `null` otherwise. This never touches the served
+   * `predicted_wait_minutes` — only the shadow column (R18.5, R18.6).
    */
   async function captureWaitForecasts(now: Date) {
     if (
@@ -254,6 +272,33 @@ export function createDerivedStatsService(deps: DerivedStatsServiceDeps): Derive
       byPark.set(row.park, list);
     }
 
+    // R18.10: one batched lookup for the whole tracked set, mirroring the
+    // existing batching discipline (getDaySnapshot is also called once per
+    // park/lead rather than per experience).
+    const accuracyByKey = new Map<string, WaitForecastAccuracyRow>();
+    if (typeof repo.getWaitForecastAccuracies === 'function') {
+      const trackedIds = tracked.map((r) => r.experience_id);
+      const accuracies = await repo.getWaitForecastAccuracies(trackedIds);
+      for (const a of accuracies) accuracyByKey.set(`${a.experience_id}|${a.lead_days}`, a);
+    }
+
+    // R7.8 (Step 4): one batched lookup per MK/AK park, not per experience —
+    // same batching discipline as the lookup above.
+    const crowdAccuracyByPark = new Map<
+      string,
+      Array<{ park: string; lead_days: number; mae: number; bias: number; sample_count: number }>
+    >();
+    if (typeof repo.getForecastAccuracies === 'function') {
+      for (const park of byPark.keys()) {
+        if (park !== 'Magic Kingdom' && park !== 'Animal Kingdom') continue;
+        try {
+          crowdAccuracyByPark.set(park, await repo.getForecastAccuracies(park));
+        } catch (err) {
+          logger.warn({ err, park }, 'Failed to look up crowd-bias challenger accuracy (R7.8)');
+        }
+      }
+    }
+
     const todayStr = wdwToday(now);
     const todayEastern = new Date(`${todayStr}T12:00:00-04:00`);
     const logs: WaitForecastLogRow[] = [];
@@ -273,6 +318,34 @@ export function createDerivedStatsService(deps: DerivedStatsServiceDeps): Derive
             for (const hour of WAIT_FORECAST_HOURS) {
               const entry = waits.find((w) => w.hour === hour);
               if (!entry || !Number.isFinite(entry.predictedWaitMinutes)) continue;
+
+              // R18.10 (Step 3A): the shadow challenger. Looked up by the SAME
+              // key reconciliation scores against; never touches `entry` or
+              // the served `predicted_wait_minutes` below.
+              const acc = accuracyByKey.get(`${experienceId}|${lead}`);
+              let challengerWaitMinutes =
+                acc && acc.sample_count >= WAIT_FORECAST_ACCURACY_MIN_SAMPLES_FOR_CHALLENGER
+                  ? applyWaitBiasCorrection(entry.predictedWaitMinutes, acc.bias)
+                  : null;
+
+              // R7.8 (Step 4): a SEPARATE, lower-priority shadow challenger,
+              // scoped to MK/AK only, and only when Step 3A left this row's
+              // challenger null — the two are mutually exclusive on the same
+              // column (Property 23). Collects data only; no promotion.
+              if (challengerWaitMinutes === null) {
+                const crowdAcc = crowdAccuracyByPark.get(park);
+                const scored = crowdAcc?.filter((a) => a.sample_count > 0 && Number.isFinite(a.bias));
+                if (scored && scored.length > 0) {
+                  let nearest = scored[0]!;
+                  for (const candidate of scored) {
+                    if (Math.abs(candidate.lead_days - lead) < Math.abs(nearest.lead_days - lead)) {
+                      nearest = candidate;
+                    }
+                  }
+                  challengerWaitMinutes = crowdMultiplierVariant(entry.predictedWaitMinutes, nearest.bias);
+                }
+              }
+
               logs.push({
                 experience_id: experienceId,
                 date: targetDate,
@@ -280,9 +353,7 @@ export function createDerivedStatsService(deps: DerivedStatsServiceDeps): Derive
                 lead_days: lead,
                 predicted_wait_minutes: entry.predictedWaitMinutes,
                 forecasted_at: now,
-                // R18.5: no challenger model is configured yet. The column exists
-                // so one can be scored in shadow without touching the served path.
-                challenger_wait_minutes: null,
+                challenger_wait_minutes: challengerWaitMinutes,
                 observed_wait_minutes: null,
                 error: null,
                 challenger_error: null,

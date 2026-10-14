@@ -284,6 +284,14 @@ Implementation is **TypeScript**, reusing existing infrastructure: the `Live_Ser
   - [x] 21.6 Checkpoint — measurement in place
     - Confirm `npm run verify` is green, then confirm on the dev database that a recompute run writes `wait_archive` rows and `wait_forecast_log` captures, and that `derived_stat_runs` shows the new legs succeeding.
 
+  - [x] 21.7 Shadow bias-correction challenger (R18.10, Step 3A of the 2026-10-08 bias-vs-lag runbook)
+    - `applyWaitBiasCorrection(predicted, biasMinutes)` in `waitMath.ts`; wire into `captureWaitForecasts` via a batched `getWaitForecastAccuracies` lookup keyed `(experience_id, lead_days)`, gated at `sample_count >= 30`. Never served; only the shadow column.
+    - _Requirements: 18.5, 18.6, 18.10_
+
+  - [x] 21.8 (secondary, lower priority than 21.7) R7.7 second challenger variant — MK/AK crowd-bias shadow, mutually exclusive with 21.7 (R7.8, Step 4 of the 2026-10-08 bias-vs-lag runbook)
+    - For Magic Kingdom and Animal Kingdom only, and only when the Step-3A (21.7) challenger is `null` for that row, apply the measured `crowd_forecast_accuracy` bias for that park/lead via the wait path's `crowdMultiplier`, writing the result to the SAME `challenger_wait_minutes` column. Never writes alongside an existing Step-3A value; never applies to EPCOT/Hollywood Studios. Collects data only — no promotion verdict.
+    - _Requirements: 7.8_
+
 ## Notes
 
 - Test-only tasks (2.3, 4.4, 5.3, 6.3, 8.1, 9.2, 9.4, 10.3, 12.1) are optional for a faster MVP; core tasks are never optional.
@@ -350,9 +358,10 @@ Implementation is **TypeScript**, reusing existing infrastructure: the `Live_Ser
     { "id": 26, "tasks": ["21.1", "21.4"] },
     { "id": 27, "tasks": ["21.2", "21.3"] },
     { "id": 28, "tasks": ["21.5"] },
-    { "id": 29, "tasks": ["21.6"] },
+    { "id": 29, "tasks": ["21.6", "21.7"] },
     { "id": 30, "tasks": ["22.1", "22.2"] },
-    { "id": 31, "tasks": ["22.3", "22.4"] }
+    { "id": 31, "tasks": ["22.3", "22.4"] },
+    { "id": 32, "tasks": ["21.8"] }
   ]
 }
 ```
