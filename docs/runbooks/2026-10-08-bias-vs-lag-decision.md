@@ -106,7 +106,58 @@ You can now test it instead of arguing about it: run it as a **second challenger
 ```
 Date run:                       2026-10-13 (hosted Neon DB, .env.dev)
 Waits trending up / down / flat since September: UP (all 4 parks, +15-28% Sep avg -> Oct 10-12 week avg; crowd_index rose in lockstep)
-Per-ride bias Sep -> Oct (name, sep_bias, oct_bias, sign held?): see .agents/tasks/bias-vs-lag-decision/plan.md diagnosis table (32/37 held, 86.5%); full detail in query-output.md
+Per-ride bias Sep -> Oct (name, sep_bias, oct_bias, sign held?):
+(sep_bias from 2026-09-10-first-accuracy-read.md's per-ride list; oct_bias from
+query-output.md Q1, lead_days=3, sample_count>=30; 37 rides matched between both readings)
+
+Guardians of the Galaxy: Cosmic Rewind              -24.88  -7.90  HELD
+Avatar Flight of Passage                            -12.66  -20.40 HELD
+Na'vi River Journey                                 -12.64  -8.80  HELD
+Kilimanjaro Safaris                                 -10.52  -12.50 HELD
+Remy's Ratatouille Adventure                        -10.45  -4.40  HELD
+Star Wars: Rise of the Resistance                   -10.33  -5.40  HELD
+Frozen Ever After                                   -10.15  -4.50  HELD
+Buzz Lightyear's Space Ranger Spin                    +9.69  +7.00  HELD
+Meet Anna and Elsa at Royal Sommerhus                 -9.36  -7.80  HELD
+Mickey & Minnie's Runaway Railway                     -9.23   0.00  FLIPPED (collapsed to ~0, not a true flip)
+Toy Story Mania!                                      -8.77  -0.90  HELD
+Rock 'n' Roller Coaster Starring The Muppets -- New!  -8.08  +2.60  FLIPPED
+Meet Favorite Disney Pals at Adventurers Outpost      -7.82  -5.00  HELD
+Space Mountain                                        +7.70  +2.80  HELD
+Expedition Everest - Legend of the Forbidden Mountain -6.61  -9.90  HELD
+Meet Disney Stars at Red Carpet Dreams                -5.90  +4.80  FLIPPED
+Meet Daring Disney Pals as Circus Stars at Pete's Silly Sideshow +5.82 +8.50 HELD
+Tiana's Bayou Adventure                               +5.54  +5.70  HELD
+Soarin' Across America -- New!                        -5.49  -5.90  HELD
+Seven Dwarfs Mine Train                               +4.96  +6.80  HELD
+Meet Princess Tiana and a Visiting Princess at Princess Fairytale Hall +4.68 +5.70 HELD
+Meet Dashing Disney Pals as Circus Stars at Pete's Silly Sideshow +4.53 +10.80 HELD
+Meet Cinderella and a Visiting Princess at Princess Fairytale Hall +4.51 +7.10 HELD
+The Many Adventures of Winnie the Pooh                +4.30  +6.10  HELD
+The Twilight Zone(TM) Tower of Terror                 -4.33  -4.60  HELD
+Slinky Dog Dash                                       -4.41  -1.90  HELD
+Jungle Cruise                                         +4.02  +4.50  HELD
+TRON Lightcycle / Run                                 +4.08  +8.20  HELD
+Test Track                                            -3.75  -3.60  HELD
+Kali River Rapids                                     -3.50  -4.80  HELD
+Alien Swirling Saucers                                -3.22  -0.80  HELD
+Big Thunder Mountain Railroad                         +3.57  +2.50  HELD
+Meet Mickey at Town Square Theater                    -2.06  +5.50  FLIPPED
+Peter Pan's Flight                                    +1.91  +9.40  HELD
+Meet Ariel at Her Grotto                               +1.92  +4.30  HELD
+Millennium Falcon: Smugglers Run                       -0.38  -2.60  HELD
+Haunted Mansion                                        -0.09  +4.60  FLIPPED
+
+32 of 37 held sign (86.5%). The 5 flips are all small-|sep_bias| rides (<= 9.36 min,
+three of them <= 5.9), exactly where EMA/sampling noise dominates a near-zero true
+signal -- not the large-magnitude headliners, every one of which held sign (Cosmic
+Rewind, Flight of Passage, Na'vi River Journey, Kilimanjaro Safaris, Remy's, Rise of
+the Resistance, Frozen Ever After, Buzz Lightyear, Space Mountain). Per Step 2's table
+this is "same sign, similar magnitude, on most rides" -> Step 3A, not the
+sign-flipped-on-most-rides or bias-tracks-crowd-index patterns that would indicate lag.
+Full raw source rows are in .agents/tasks/bias-vs-lag-decision/query-output.md (Q1) and
+2026-09-10-first-accuracy-read.md's per-ride list; cross-check table also kept in
+.agents/tasks/bias-vs-lag-decision/plan.md.
 
 Diagnosis: bias
 Action taken (3A / 3B / none): 3A — shadow bias-correction challenger added (challenger_wait_minutes = applyWaitBiasCorrection(predicted, bias), bound +/-15 min, gated sample_count >= 30). R7.7 second challenger (Step 4) also wired for MK/AK as a secondary, mutually-exclusive shadow variant collecting data, not promoted.
