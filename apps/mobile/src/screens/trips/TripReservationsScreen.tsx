@@ -14,7 +14,9 @@
 import React, { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -465,13 +467,20 @@ export default function TripReservationsScreen({ navigation, route }: Props): JS
         onRequestClose={() => setShowAddModal(false)}
       >
         <ScreenContainer>
-          <GradientHeader
-            title="Add Reservation"
-            icon="ticket-outline"
-            compact
-            onBack={() => setShowAddModal(false)}
-          />
-          <ScrollView contentContainerStyle={styles.scroll}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={{ flex: 1 }}
+          >
+            <GradientHeader
+              title="Add Reservation"
+              icon="ticket-outline"
+              compact
+              onBack={() => setShowAddModal(false)}
+            />
+            <ScrollView
+              contentContainerStyle={styles.scroll}
+              keyboardShouldPersistTaps="handled"
+            >
             <SectionLabel>Kind</SectionLabel>
             <View style={styles.kindRow}>
               {RESERVATION_KINDS.map((kind) => {
@@ -626,6 +635,7 @@ export default function TripReservationsScreen({ navigation, route }: Props): JS
               testID="reservation-save-button"
             />
           </ScrollView>
+          </KeyboardAvoidingView>
         </ScreenContainer>
       </Modal>
 
@@ -638,14 +648,21 @@ export default function TripReservationsScreen({ navigation, route }: Props): JS
         onRequestClose={() => setEditing(null)}
       >
         <ScreenContainer>
-          <GradientHeader
-            title="Edit Reservation"
-            {...(editing !== null ? { subtitle: reservationTitle(editing) } : {})}
-            icon="ticket-outline"
-            compact
-            onBack={() => setEditing(null)}
-          />
-          <ScrollView contentContainerStyle={styles.scroll}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={{ flex: 1 }}
+          >
+            <GradientHeader
+              title="Edit Reservation"
+              {...(editing !== null ? { subtitle: reservationTitle(editing) } : {})}
+              icon="ticket-outline"
+              compact
+              onBack={() => setEditing(null)}
+            />
+            <ScrollView
+              contentContainerStyle={styles.scroll}
+              keyboardShouldPersistTaps="handled"
+            >
             <SectionLabel>Date</SectionLabel>
             <View style={styles.dateRow}>
               {availableDates(tripQuery.data, editing?.plannedDate).map((date) => {
@@ -793,6 +810,7 @@ export default function TripReservationsScreen({ navigation, route }: Props): JS
               testID="reservation-remove-button"
             />
           </ScrollView>
+          </KeyboardAvoidingView>
         </ScreenContainer>
       </Modal>
     </ScreenContainer>

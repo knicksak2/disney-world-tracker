@@ -232,7 +232,10 @@
   - [x] 21.2 Update checklist items query in `apps/api/src/services/foodLists/repo.ts` to select `fil.id AS log_id` and attach `logId` when `gotten = true`; update property test in `foodListChecklist.prop.test.ts`
   - [x] 21.3 Make `gottenBadge` on `FoodListDetailScreen.tsx` an accessible `Pressable` button that opens `RateOnCheckoffPrompt` with `initialRating={item.rating ?? null}` and dispatches `PATCH /me/food-items/:foodItemId/logs/:logId` on confirm
   - [x] 21.4 Update `FoodListDetailScreen.test.tsx` with assertions for opening the rating prompt from the completed badge and issuing the PATCH request
-
+- [x] 22. In-List Visibility Toggle, Options Menu, and Streamlined Action Pills (R3.5, R3.6, Property 26)
+  - [x] 22.1 Update `FoodListDetailScreen.tsx` with interactive visibility badge, "•••" options menu modal (with Make Public/Private, Rename, Delete), rename modal, and streamlined action pills
+  - [x] 22.2 Update `FoodListDetailScreen.test.tsx` with unit and interaction test coverage
+  - [x] 22.3 Checkpoint — run `npm run verify:mobile`
 ## Task Dependency Graph
 
 Tasks within a wave can proceed in parallel; each wave depends only on earlier waves. Assumes `food-item-logging`'s tasks 1-5 (through its own backend checkpoint) are already complete, since `food_lists_items.food_item_id` is a foreign key into `food_items`.

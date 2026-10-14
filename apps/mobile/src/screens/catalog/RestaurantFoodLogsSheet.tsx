@@ -6,7 +6,9 @@ import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -183,7 +185,10 @@ export default function RestaurantFoodLogsSheet({
       onRequestClose={onClose}
       testID="restaurant-food-logs-sheet"
     >
-      <View style={styles.backdrop}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.backdrop}
+      >
         <View style={styles.container}>
           {/* Header */}
           <View style={styles.header}>
@@ -298,7 +303,7 @@ export default function RestaurantFoodLogsSheet({
             />
           )}
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

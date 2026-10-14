@@ -22,9 +22,10 @@ Full detail lives in `.kiro/specs/crowd-calendar/{requirements,design,tasks}.md`
 | ~2026-09-03 | `2026-09-03-verify-measurement-loop.md` | Is the daily recompute turning and scoring anything? |
 | ~2026-09-10 | `2026-09-10-first-accuracy-read.md` | How accurate is the wait model, forward, for real? |
 | ~2026-10-08 | `2026-10-08-bias-vs-lag-decision.md` | Is the per-ride error genuine bias or lag? Decides the next model change. |
+| ~2026-11-10 | `2026-11-10-shadow-challenger-promotion-check.md` | Do the two shadow challengers wired up on 2026-10-13 (Step 3A bias correction, Step 4/R7.7 crowd-bias variant) actually beat the served model? Decides promotion. |
 | ~2027-08-01 | `2027-08-01-baseline-reanchor.md` | Task 21.5: re-anchor the frozen baseline from a year of archive. |
 
-`2026-09-03` and `2026-09-10` are health/observation. `2026-10-08` is the one that changes the model, and it **depends on having recorded the September numbers**, so don't skip ahead.
+`2026-09-03` and `2026-09-10` are health/observation. `2026-10-08` is the one that changes the model, and it **depends on having recorded the September numbers**, so don't skip ahead. `2026-11-10` depends on `2026-10-08` having actually wired up the shadow challengers it's checking.
 
 ## How to run a query against the database
 

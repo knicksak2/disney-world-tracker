@@ -35,7 +35,9 @@ import {
   ActivityIndicator,
   FlatList,
   Image,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -987,7 +989,10 @@ export function LogComposerModal({
       animationType="fade"
       onRequestClose={closeAndReset}
     >
-      <View style={styles.modalBackdrop}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.modalBackdrop}
+      >
         <View style={styles.modalCard} testID="activity-log-composer">
           <View style={styles.modalHeaderRow}>
             <Text style={styles.modalTitle}>Log a completion</Text>
@@ -1112,7 +1117,7 @@ export function LogComposerModal({
             </View>
           </ScrollView>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

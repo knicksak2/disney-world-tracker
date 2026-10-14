@@ -14,7 +14,9 @@ import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Keyboard,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -199,7 +201,10 @@ export default function LogVisitModal({
       animationType="slide"
       onRequestClose={resetAndClose}
     >
-      <View style={styles.backdrop}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.backdrop}
+      >
         <View style={styles.sheet} testID="log-visit-modal">
           <ScrollView
             contentContainerStyle={styles.sheetContent}
@@ -363,7 +368,7 @@ export default function LogVisitModal({
             </View>
           </ScrollView>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

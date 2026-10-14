@@ -3,7 +3,10 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Keyboard,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -11,11 +14,12 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ExperienceListCollectionDTO, ExperienceListDTO } from '@dwt/shared';
 
+import type { CollectionStackParamList } from '../../navigation/CollectionStack';
 import { apiRequest } from '../../api/client';
 import { theme } from '../../theme/theme';
 import { Badge, Card, GradientHeader, ScreenContainer } from '../../theme/components';
@@ -23,9 +27,16 @@ import CreateExperienceListModal from './CreateExperienceListModal';
 
 export default function MyExperienceListsScreen(): JSX.Element {
   const navigation = useNavigation<NativeStackNavigationProp<any>>();
+  const route = useRoute<RouteProp<CollectionStackParamList, 'MyExperienceLists'>>();
   const queryClient = useQueryClient();
 
   const [activeTab, setActiveTab] = useState<'owned' | 'saved'>('owned');
+
+  React.useEffect(() => {
+    if (route.params?.initialTab) {
+      setActiveTab(route.params.initialTab);
+    }
+  }, [route.params?.initialTab]);
 
   // Create List Modal State
   const [createModalVisible, setCreateModalVisible] = useState(false);
@@ -74,6 +85,7 @@ export default function MyExperienceListsScreen(): JSX.Element {
 
   async function handleRenameList(): Promise<void> {
     if (!renameTarget || !renameValue.trim() || isRenaming) return;
+    Keyboard.dismiss();
     setIsRenaming(true);
     try {
       await apiRequest('PATCH', `/me/experience-lists/${encodeURIComponent(renameTarget.id)}`, {
@@ -386,11 +398,27 @@ export default function MyExperienceListsScreen(): JSX.Element {
         visible={Boolean(renameTarget)}
         animationType="fade"
         transparent
-        onRequestClose={() => setRenameTarget(null)}
+        onRequestClose={() => {
+          Keyboard.dismiss();
+          setRenameTarget(null);
+        }}
         testID="rename-experience-list-modal"
       >
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalContainer}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalBackdrop}
+        >
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => {
+              Keyboard.dismiss();
+              setRenameTarget(null);
+            }}
+          />
+          <View
+            style={styles.modalContainer}
+            onStartShouldSetResponder={() => true}
+          >
             <Text style={styles.modalTitle}>Rename List</Text>
             <TextInput
               value={renameValue}
@@ -403,7 +431,10 @@ export default function MyExperienceListsScreen(): JSX.Element {
             />
             <View style={styles.modalActions}>
               <Pressable
-                onPress={() => setRenameTarget(null)}
+                onPress={() => {
+                  Keyboard.dismiss();
+                  setRenameTarget(null);
+                }}
                 style={styles.modalCancelBtn}
                 testID="cancel-rename-experience-list-btn"
               >
@@ -426,8 +457,8 @@ export default function MyExperienceListsScreen(): JSX.Element {
               </Pressable>
             </View>
           </View>
-        </View>
-        </Modal>
+        </KeyboardAvoidingView>
+      </Modal>
       </View>
     </ScreenContainer>
   );

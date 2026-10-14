@@ -2,7 +2,9 @@ import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Image,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -1644,42 +1646,47 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
 
           <Modal visible={showAddModal} animationType="slide" onRequestClose={handleCloseAddModal}>
             <ScreenContainer>
-              <GradientHeader
-                title={`Add to ${formatDatePill(activeDate)}`}
-                icon="search"
-                compact
-                onBack={handleCloseAddModal}
-                right={
-                  <SecondaryButton
-                    label="Done"
-                    onPress={handleCloseAddModal}
-                    testID="schedule-add-done-btn"
-                  />
-                }
-              />
-              <View style={styles.modalBody}>
-                <ExperiencePicker
-                  enabled={showAddModal}
-                  onSelect={handleSelectExperience}
-                  onSelectUnlocatedBreak={handleSelectUnlocatedBreak}
-                  pendingId={
-                    addMutation.isPending && addMutation.variables && 'experienceId' in addMutation.variables
-                      ? addMutation.variables.experienceId
-                      : null
+              <KeyboardAvoidingView
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                style={{ flex: 1 }}
+              >
+                <GradientHeader
+                  title={`Add to ${formatDatePill(activeDate)}`}
+                  icon="search"
+                  compact
+                  onBack={handleCloseAddModal}
+                  right={
+                    <SecondaryButton
+                      label="Done"
+                      onPress={handleCloseAddModal}
+                      testID="schedule-add-done-btn"
+                    />
                   }
-                  addedCounts={addedScheduleCounts}
-                  busy={addMutation.isPending}
-                  testIDPrefix="schedule-picker"
-                  showParkFilter={true}
-                  defaultPark={isKnownPark(activeDaySettings.startingPark) ? activeDaySettings.startingPark : null}
-                  fillContainer
-                  listSourcedItems={attachedListItems.items}
-                  listSourcedLoading={attachedListItems.isLoading}
-                  favoriteSourcedItems={favoriteItems.items}
-                  favoriteSourcedLoading={favoriteItems.isLoading}
-                  alreadyPlannedIds={existingExperienceIds}
                 />
-              </View>
+                <View style={styles.modalBody}>
+                  <ExperiencePicker
+                    enabled={showAddModal}
+                    onSelect={handleSelectExperience}
+                    onSelectUnlocatedBreak={handleSelectUnlocatedBreak}
+                    pendingId={
+                      addMutation.isPending && addMutation.variables && 'experienceId' in addMutation.variables
+                        ? addMutation.variables.experienceId
+                        : null
+                    }
+                    addedCounts={addedScheduleCounts}
+                    busy={addMutation.isPending}
+                    testIDPrefix="schedule-picker"
+                    showParkFilter={true}
+                    defaultPark={isKnownPark(activeDaySettings.startingPark) ? activeDaySettings.startingPark : null}
+                    fillContainer
+                    listSourcedItems={attachedListItems.items}
+                    listSourcedLoading={attachedListItems.isLoading}
+                    favoriteSourcedItems={favoriteItems.items}
+                    favoriteSourcedLoading={favoriteItems.isLoading}
+                    alreadyPlannedIds={existingExperienceIds}
+                  />
+                </View>
+              </KeyboardAvoidingView>
             </ScreenContainer>
           </Modal>
 
@@ -1693,7 +1700,10 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
               setDraftItem(null);
             }}
           >
-            <View style={styles.modalBg}>
+            <KeyboardAvoidingView
+              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+              style={styles.modalBg}
+            >
               <View style={styles.modalContent}>
                 {draftItem && (
                   <ScrollView>
@@ -2388,7 +2398,7 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
                   </ScrollView>
                 )}
               </View>
-            </View>
+            </KeyboardAvoidingView>
           </Modal>
 
           {/* Schedule Settings Modal (Touring Hours, Pace, Early Entry, Parties) */}

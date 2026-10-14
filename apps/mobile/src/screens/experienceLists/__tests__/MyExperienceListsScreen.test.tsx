@@ -25,6 +25,7 @@ jest.mock('../../../api/client', () => {
 const mockNavigate = jest.fn();
 const mockGoBack = jest.fn();
 const mockCanGoBack = jest.fn(() => true);
+let mockRouteParams: { initialTab?: 'owned' | 'saved' } | undefined = undefined;
 jest.mock('@react-navigation/native', () => {
   const actual = jest.requireActual('@react-navigation/native');
   return {
@@ -33,6 +34,9 @@ jest.mock('@react-navigation/native', () => {
       navigate: mockNavigate,
       goBack: mockGoBack,
       canGoBack: mockCanGoBack,
+    }),
+    useRoute: () => ({
+      params: mockRouteParams,
     }),
   };
 });
@@ -464,5 +468,15 @@ describe('MyExperienceListsScreen', () => {
 
     fireEvent.press(screen.getByTestId('my-experience-lists-discover-btn'));
     expect(mockNavigate).toHaveBeenCalledWith('ExperienceListDiscovery');
+  });
+
+  test('initializes with Saved tab active when route param initialTab is "saved" (Requirement 6 amendment 8d, Property 13)', async () => {
+    mockRouteParams = { initialTab: 'saved' };
+    renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('saved-experience-list-card-exp-list-saved-1')).toBeTruthy();
+    });
+    mockRouteParams = undefined;
   });
 });

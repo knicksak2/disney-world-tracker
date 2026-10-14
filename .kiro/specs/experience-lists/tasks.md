@@ -236,6 +236,11 @@
 - [x] 26. Final Verification & Quality Gate (Re-run after R19)
   - [x] 26.1 Run full `npm run verify` across all workspaces (`apps/api`, `apps/mobile`, `packages/shared`) — apps/api: 375 test files / 2545 tests passed; apps/mobile: 234 suites / 1564 tests passed; packages/shared: 34 files / 390 tests passed; exit code 0
 
+- [x] 27. In-List Visibility Toggle, Options Menu, and Streamlined Action Pills (R3.5, R3.6, Property 26)
+  - [x] 27.1 Update `ExperienceListDetailScreen.tsx` with interactive visibility badge, "•••" options menu modal (with Make Public/Private, Rename, Delete), rename modal, and streamlined action pills
+  - [x] 27.2 Update `ExperienceListDetailScreen.test.tsx` with unit and interaction test coverage
+  - [x] 27.3 Checkpoint — run `npm run verify:mobile`
+
 ## Notes
 
 - Tasks 8-9 (Visit Summary endpoint and `ParkPassportCard` consolidation) edit

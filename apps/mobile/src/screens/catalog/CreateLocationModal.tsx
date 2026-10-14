@@ -6,7 +6,10 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Keyboard,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -138,6 +141,7 @@ export default function CreateLocationModal({
 
   function handleClose(): void {
     if (isCreating) return;
+    Keyboard.dismiss();
     setName('');
     setSuggestions([]);
     setError(null);
@@ -207,7 +211,10 @@ export default function CreateLocationModal({
       onRequestClose={handleClose}
       testID="create-location-modal"
     >
-      <View style={styles.backdrop}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.backdrop}
+      >
         <View style={styles.container}>
           {/* Header */}
           <View style={styles.header}>
@@ -318,7 +325,7 @@ export default function CreateLocationModal({
             </View>
           </View>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

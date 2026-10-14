@@ -10,7 +10,10 @@
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
+  Keyboard,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -41,6 +44,7 @@ export default function CreateFoodListModal({
   const [createError, setCreateError] = useState<string | null>(null);
 
   function handleRequestClose(): void {
+    Keyboard.dismiss();
     setCreateError(null);
     onClose();
   }
@@ -48,6 +52,7 @@ export default function CreateFoodListModal({
   async function handleCreateList(): Promise<void> {
     const trimmed = newListName.trim();
     if (!trimmed || isCreating) return;
+    Keyboard.dismiss();
     setIsCreating(true);
     setCreateError(null);
     try {
@@ -78,7 +83,10 @@ export default function CreateFoodListModal({
       onRequestClose={handleRequestClose}
       testID="create-food-list-modal"
     >
-      <View style={styles.modalBackdrop}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.modalBackdrop}
+      >
         <View style={styles.modalContainer}>
           <Text style={styles.modalTitle}>Create Food List</Text>
           <TextInput
@@ -191,7 +199,7 @@ export default function CreateFoodListModal({
             </Pressable>
           </View>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

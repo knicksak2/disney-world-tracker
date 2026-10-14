@@ -470,6 +470,7 @@ export default function ProfileScreen(): JSX.Element {
       <ScrollView
         contentContainerStyle={styles.body}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
         <ProfileIdentityBlock
           profile={profile}

@@ -595,7 +595,7 @@ export default function FoodItemPickerModal({
         testID="food-item-picker-modal"
       >
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.backdrop}
         >
           <View style={styles.container}>

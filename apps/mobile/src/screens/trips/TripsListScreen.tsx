@@ -35,7 +35,9 @@ import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   StyleSheet,
   Text,
   TextInput,
@@ -641,7 +643,10 @@ function CreateTripModal({
       animationType="fade"
       onRequestClose={onCancel}
     >
-      <View style={styles.modalBackdrop}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.modalBackdrop}
+      >
         <View style={styles.modalCard} testID="trips-create-modal">
           <Text style={styles.modalTitle}>Create a Trip</Text>
 
@@ -735,7 +740,7 @@ function CreateTripModal({
             />
           </View>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

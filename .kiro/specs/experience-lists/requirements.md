@@ -213,6 +213,9 @@ explicitly share it with) or public (visible to anyone), so I control who sees m
    `Experience_List_Save` held by a User without a share grant, and any `Experience_List_Like`
    from such a User, to no longer resolve to viewable content on next read (Requirement 6.4
    governs the exact surfaced state).
+5. WHERE the viewing User is the owner of an Experience_List, THE App SHALL provide in-list visibility controls on `ExperienceListDetailScreen.tsx`: (1) an interactive visibility badge in the list header card metadata (`testID="experience-list-visibility-toggle-badge"`) displaying the current visibility (`Private` with lock icon or `Public` with globe icon) that toggles the list visibility between `'private'` and `'public'` via `PATCH /me/experience-lists/:id` upon press; and (2) a "•••" options menu button (`testID="experience-list-options-menu-btn"`) in the card header that opens an options modal offering "Make Public" / "Make Private", "Rename List" (opening a modal to rename the list), and "Delete List" (prompting confirmation and returning to the previous screen on delete).
+6. THE App SHALL render action buttons in `ExperienceListDetailScreen.tsx` (`actionRow`) as streamlined, compact pills with consistent height, refined padding, and polished active states so all actions fit on a single line without awkward wrapping.
+
 
 ### Requirement 4: Share a Private List with a Friend (Live Access, Viewer or Editor)
 

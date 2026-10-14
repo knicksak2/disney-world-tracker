@@ -29,8 +29,10 @@ import {
   Alert,
   ImageBackground,
   ImageSourcePropType,
+  KeyboardAvoidingView,
   LayoutChangeEvent,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -260,9 +262,10 @@ export default function CollectionScreen(): JSX.Element {
   // Food metrics
   const foodLogs = Array.isArray(foodLogsQuery.data) ? foodLogsQuery.data : [];
   const ownedLists = Array.isArray(foodListsQuery.data?.owned) ? foodListsQuery.data.owned : [];
+  const savedLists = Array.isArray(foodListsQuery.data?.saved) ? foodListsQuery.data.saved : [];
   const recentLogs = foodLogs.slice(0, 3);
 
-  // Lists sub-view (Requirement 6 amendment 8c): render up to
+  // Lists sub-view (Requirement 6 amendment 8c, 8d): render up to
   // MAX_COLLECTION_PREVIEW_ROWS rows exactly as `listOwned` returns them
   // (pinned-first per food-lists Requirement 14.4 / experience-lists
   // Requirement 19.4) — no client-side re-sort or `[0]`-style pick.
@@ -271,6 +274,9 @@ export default function CollectionScreen(): JSX.Element {
   // Experience list metrics (mirrors the food-lists preview pattern above)
   const ownedExperienceLists = Array.isArray(experienceListsQuery.data?.owned)
     ? experienceListsQuery.data.owned
+    : [];
+  const savedExperienceLists = Array.isArray(experienceListsQuery.data?.saved)
+    ? experienceListsQuery.data.saved
     : [];
   const experienceListPreviewRows = ownedExperienceLists.slice(0, MAX_COLLECTION_PREVIEW_ROWS);
 
@@ -856,9 +862,7 @@ export default function CollectionScreen(): JSX.Element {
         {/* =================================================================== */}
         {activeTab === 'lists' && (
           <View style={styles.subViewWrap} testID="collection-lists-view">
-            {/* My Food Lists Card (Requirement 6 amendment 8c — up to 3 rows,
-                pinned-first as returned by listOwned, each deep-linking to
-                its own list; "View all (N)" row when more than 3 exist) */}
+            {/* My Food Lists Card (Requirement 6 amendment 8c, 8d) */}
             <Card style={styles.foodListCard} testID="food-lists-card">
               <View style={styles.sectionHeaderRow}>
                 <Text style={styles.sectionHeading}>My Food Lists</Text>
@@ -870,6 +874,18 @@ export default function CollectionScreen(): JSX.Element {
                     testID="food-lists-new-link"
                   >
                     <Text style={styles.sectionLinkText}>+ New</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() =>
+                      navigation.navigate('MyFoodLists', { initialTab: 'saved' })
+                    }
+                    accessibilityRole="button"
+                    accessibilityLabel={`View saved food lists${savedLists.length > 0 ? ` (${savedLists.length})` : ''}`}
+                    testID="food-lists-saved-link"
+                  >
+                    <Text style={styles.sectionLinkText}>
+                      Saved{savedLists.length > 0 ? ` (${savedLists.length})` : ''}
+                    </Text>
                   </Pressable>
                   <Pressable
                     onPress={() => (navigation as any).navigate('FoodListDiscovery')}
@@ -928,31 +944,51 @@ export default function CollectionScreen(): JSX.Element {
                       </View>
                     </Pressable>
                   ))}
-                  {ownedLists.length > MAX_COLLECTION_PREVIEW_ROWS ? (
-                    <Pressable
-                      style={styles.viewAllListsRow}
-                      onPress={() => (navigation as any).navigate('MyFoodLists')}
-                      accessibilityRole="button"
-                      accessibilityLabel={`View all ${ownedLists.length} food lists`}
-                      testID="food-lists-view-all-row"
-                    >
-                      <Text style={styles.viewAllListsText}>
-                        View all ({ownedLists.length}) →
-                      </Text>
-                    </Pressable>
-                  ) : null}
+                  <Pressable
+                    style={styles.viewAllListsRow}
+                    onPress={() => navigation.navigate('MyFoodLists', { initialTab: 'owned' })}
+                    accessibilityRole="button"
+                    accessibilityLabel={`View all ${ownedLists.length} food lists`}
+                    testID="food-lists-view-all-row"
+                  >
+                    <Text style={styles.viewAllListsText}>
+                      View all ({ownedLists.length}) →
+                    </Text>
+                  </Pressable>
                 </>
               ) : (
                 <View style={styles.emptyFoodListsBox}>
                   <Text style={styles.emptyFoodListsText}>
-                    No saved food lists yet. Create a Dole Whip tour or track festival foods!
+                    {savedLists.length > 0
+                      ? `You have ${savedLists.length} saved food list${savedLists.length > 1 ? 's' : ''}.`
+                      : 'No food lists created yet. Create a Dole Whip tour or track festival foods!'}
                   </Text>
+                  <Pressable
+                    style={styles.viewAllListsRow}
+                    onPress={() =>
+                      navigation.navigate('MyFoodLists', {
+                        initialTab: savedLists.length > 0 ? 'saved' : 'owned',
+                      })
+                    }
+                    accessibilityRole="button"
+                    accessibilityLabel={
+                      savedLists.length > 0
+                        ? `View ${savedLists.length} saved food lists`
+                        : 'View all food lists'
+                    }
+                    testID="food-lists-view-all-row"
+                  >
+                    <Text style={styles.viewAllListsText}>
+                      {savedLists.length > 0
+                        ? `View saved lists (${savedLists.length}) →`
+                        : 'View food lists →'}
+                    </Text>
+                  </Pressable>
                 </View>
               )}
             </Card>
 
-            {/* My Experience Lists Card (Requirement 12.1, 12.2 — parity entry
-                point; Requirement 6 amendment 8c — same multi-row treatment) */}
+            {/* My Experience Lists Card (Requirement 12.1, 12.2, amendment 8c, 8d) */}
             <Card style={styles.foodListCard} testID="experience-lists-card">
               <View style={styles.sectionHeaderRow}>
                 <Text style={styles.sectionHeading}>My Experience Lists</Text>
@@ -964,6 +1000,18 @@ export default function CollectionScreen(): JSX.Element {
                     testID="experience-lists-new-link"
                   >
                     <Text style={styles.sectionLinkText}>+ New</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() =>
+                      navigation.navigate('MyExperienceLists', { initialTab: 'saved' })
+                    }
+                    accessibilityRole="button"
+                    accessibilityLabel={`View saved experience lists${savedExperienceLists.length > 0 ? ` (${savedExperienceLists.length})` : ''}`}
+                    testID="experience-lists-saved-link"
+                  >
+                    <Text style={styles.sectionLinkText}>
+                      Saved{savedExperienceLists.length > 0 ? ` (${savedExperienceLists.length})` : ''}
+                    </Text>
                   </Pressable>
                   <Pressable
                     onPress={() => (navigation as any).navigate('ExperienceListDiscovery')}
@@ -1024,25 +1072,46 @@ export default function CollectionScreen(): JSX.Element {
                       </View>
                     </Pressable>
                   ))}
-                  {ownedExperienceLists.length > MAX_COLLECTION_PREVIEW_ROWS ? (
-                    <Pressable
-                      style={styles.viewAllListsRow}
-                      onPress={() => navigation.navigate('MyExperienceLists')}
-                      accessibilityRole="button"
-                      accessibilityLabel={`View all ${ownedExperienceLists.length} experience lists`}
-                      testID="experience-lists-view-all-row"
-                    >
-                      <Text style={styles.viewAllListsText}>
-                        View all ({ownedExperienceLists.length}) →
-                      </Text>
-                    </Pressable>
-                  ) : null}
+                  <Pressable
+                    style={styles.viewAllListsRow}
+                    onPress={() => navigation.navigate('MyExperienceLists', { initialTab: 'owned' })}
+                    accessibilityRole="button"
+                    accessibilityLabel={`View all ${ownedExperienceLists.length} experience lists`}
+                    testID="experience-lists-view-all-row"
+                  >
+                    <Text style={styles.viewAllListsText}>
+                      View all ({ownedExperienceLists.length}) →
+                    </Text>
+                  </Pressable>
                 </>
               ) : (
                 <View style={styles.emptyFoodListsBox}>
                   <Text style={styles.emptyFoodListsText}>
-                    No experience lists yet. Start a Thrill Rides or Must-Do list!
+                    {savedExperienceLists.length > 0
+                      ? `You have ${savedExperienceLists.length} saved experience list${savedExperienceLists.length > 1 ? 's' : ''}.`
+                      : 'No experience lists yet. Start a Thrill Rides or Must-Do list!'}
                   </Text>
+                  <Pressable
+                    style={styles.viewAllListsRow}
+                    onPress={() =>
+                      navigation.navigate('MyExperienceLists', {
+                        initialTab: savedExperienceLists.length > 0 ? 'saved' : 'owned',
+                      })
+                    }
+                    accessibilityRole="button"
+                    accessibilityLabel={
+                      savedExperienceLists.length > 0
+                        ? `View ${savedExperienceLists.length} saved experience lists`
+                        : 'View all experience lists'
+                    }
+                    testID="experience-lists-view-all-row"
+                  >
+                    <Text style={styles.viewAllListsText}>
+                      {savedExperienceLists.length > 0
+                        ? `View saved lists (${savedExperienceLists.length}) →`
+                        : 'View experience lists →'}
+                    </Text>
+                  </Pressable>
                 </View>
               )}
             </Card>
@@ -1204,7 +1273,10 @@ export default function CollectionScreen(): JSX.Element {
         onRequestClose={() => setFoodLogPickerVisible(false)}
         testID="collection-food-log-picker-modal"
       >
-        <View style={styles.foodLogModalBackdrop}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.foodLogModalBackdrop}
+        >
           <View style={styles.foodLogModalContent}>
             <View style={styles.foodLogModalHeader}>
               <Text style={styles.foodLogModalTitle} testID="collection-food-log-picker-title">
@@ -1234,7 +1306,7 @@ export default function CollectionScreen(): JSX.Element {
               }}
             />
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {foodLogDiningExperience && (

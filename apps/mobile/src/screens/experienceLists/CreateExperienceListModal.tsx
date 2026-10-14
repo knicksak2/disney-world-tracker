@@ -10,7 +10,10 @@
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
+  Keyboard,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -40,6 +43,7 @@ export default function CreateExperienceListModal({
   const [createError, setCreateError] = useState<string | null>(null);
 
   function handleRequestClose(): void {
+    Keyboard.dismiss();
     setCreateError(null);
     onClose();
   }
@@ -47,6 +51,7 @@ export default function CreateExperienceListModal({
   async function handleCreateList(): Promise<void> {
     const trimmed = newListName.trim();
     if (!trimmed || isCreating) return;
+    Keyboard.dismiss();
     setIsCreating(true);
     setCreateError(null);
     try {
@@ -75,7 +80,10 @@ export default function CreateExperienceListModal({
       onRequestClose={handleRequestClose}
       testID="create-experience-list-modal"
     >
-      <View style={styles.modalBackdrop}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.modalBackdrop}
+      >
         <View style={styles.modalContainer}>
           <Text style={styles.modalTitle}>Create Experience List</Text>
           <TextInput
@@ -156,7 +164,7 @@ export default function CreateExperienceListModal({
             </Pressable>
           </View>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

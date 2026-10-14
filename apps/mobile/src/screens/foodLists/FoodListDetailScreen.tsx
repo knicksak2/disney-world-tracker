@@ -3,7 +3,10 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Keyboard,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -120,6 +123,12 @@ export default function FoodListDetailScreen(): JSX.Element {
   const [isSaving, setIsSaving] = useState(false);
   const [isTogglingChecklist, setIsTogglingChecklist] = useState(false);
   const [isTogglingPinned, setIsTogglingPinned] = useState(false);
+  const [isTogglingVisibility, setIsTogglingVisibility] = useState(false);
+  const [optionsMenuVisible, setOptionsMenuVisible] = useState(false);
+  const [renameModalVisible, setRenameModalVisible] = useState(false);
+  const [renameValue, setRenameValue] = useState('');
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [staleWriteNotice, setStaleWriteNotice] = useState<string | null>(null);
   const [manageSharesVisible, setManageSharesVisible] = useState(false);
   const [markingGottenId, setMarkingGottenId] = useState<string | null>(null);
@@ -159,13 +168,21 @@ export default function FoodListDetailScreen(): JSX.Element {
     }
   }, [restaurantSearchModalVisible]);
 
+  useEffect(() => {
+    return () => {
+      Keyboard.dismiss();
+    };
+  }, []);
+
   const handleCloseRestaurantSearch = useCallback(() => {
+    Keyboard.dismiss();
     setRestaurantSearchModalVisible(false);
     setRestaurantSearch('');
     setDebouncedRestaurantSearch('');
   }, []);
 
   const handleOpenCreateLocation = useCallback(() => {
+    Keyboard.dismiss();
     setRestaurantSearchModalVisible(false);
     setRestaurantSearch('');
     setDebouncedRestaurantSearch('');
@@ -343,6 +360,79 @@ export default function FoodListDetailScreen(): JSX.Element {
       setIsTogglingPinned(false);
     }
   }
+
+  // Requirement 3.5, Property 26: owner can toggle list visibility directly inside the list
+  async function handleToggleVisibility(): Promise<void> {
+    if (!list || isTogglingVisibility || list.myRole !== 'owner') return;
+    setIsTogglingVisibility(true);
+    const nextVisibility = list.visibility === 'public' ? 'private' : 'public';
+    try {
+      await apiRequest('PATCH', `/me/food-lists/${encodeURIComponent(foodListId)}`, {
+        visibility: nextVisibility,
+      });
+      await queryClient.invalidateQueries({ queryKey: ['food-list-detail', foodListId] });
+      await queryClient.invalidateQueries({ queryKey: ['food-lists-collection'] });
+      await queryClient.invalidateQueries({ queryKey: ['discover-food-lists'] });
+    } catch {
+      // Ignore
+    } finally {
+      setIsTogglingVisibility(false);
+    }
+  }
+
+  // Requirement 3.5, Property 26: owner can rename list from options menu
+  async function handleRenameList(): Promise<void> {
+    if (!list || !renameValue.trim() || isRenaming || list.myRole !== 'owner') return;
+    Keyboard.dismiss();
+    setIsRenaming(true);
+    const trimmed = renameValue.trim();
+    try {
+      await apiRequest('PATCH', `/me/food-lists/${encodeURIComponent(foodListId)}`, {
+        name: trimmed,
+      });
+      setRenameModalVisible(false);
+      setRenameValue('');
+      await queryClient.invalidateQueries({ queryKey: ['food-list-detail', foodListId] });
+      await queryClient.invalidateQueries({ queryKey: ['food-lists-collection'] });
+      await queryClient.invalidateQueries({ queryKey: ['discover-food-lists'] });
+    } catch {
+      // Ignore
+    } finally {
+      setIsRenaming(false);
+    }
+  }
+
+  // Requirement 3.5, Property 26: owner can delete list from options menu
+  function promptDeleteList(): void {
+    if (!list || list.myRole !== 'owner') return;
+    setOptionsMenuVisible(false);
+    Alert.alert(
+      'Delete List',
+      `Are you sure you want to delete "${list.name}"? This action cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => void executeDeleteList(),
+        },
+      ],
+    );
+  }
+
+  async function executeDeleteList(): Promise<void> {
+    if (!list || isDeleting || list.myRole !== 'owner') return;
+    setIsDeleting(true);
+    try {
+      await apiRequest('DELETE', `/me/food-lists/${encodeURIComponent(foodListId)}`);
+      await queryClient.invalidateQueries({ queryKey: ['food-lists-collection'] });
+      await queryClient.invalidateQueries({ queryKey: ['discover-food-lists'] });
+      navigation.goBack();
+    } catch {
+      setIsDeleting(false);
+    }
+  }
+
 
   async function handleSave(): Promise<void> {
     if (!list || isSaving || list.myRole === 'owner') return;
@@ -757,6 +847,7 @@ export default function FoodListDetailScreen(): JSX.Element {
         return (
           <Pressable
             onPress={() => {
+              Keyboard.dismiss();
               setSelectedExperience(exp);
               setSelectedLocation(null);
               setRestaurantSearchModalVisible(false);
@@ -782,6 +873,7 @@ export default function FoodListDetailScreen(): JSX.Element {
         return (
           <Pressable
             onPress={() => {
+              Keyboard.dismiss();
               setSelectedLocation({
                 id: loc.id,
                 name: loc.name,
@@ -942,7 +1034,11 @@ export default function FoodListDetailScreen(): JSX.Element {
         onBack={() => navigation.goBack()}
       />
 
-      <NestableScrollContainer contentContainerStyle={styles.content}>
+      <NestableScrollContainer
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+      >
         {/* Completion celebration banner (Requirement 13.12) */}
         {showCelebration ? (
           <View style={styles.celebrationCard} testID="food-list-completion-celebration">
@@ -980,17 +1076,60 @@ export default function FoodListDetailScreen(): JSX.Element {
           <View style={styles.headerTop}>
             <View style={styles.titleArea}>
               <Text style={styles.listName} testID="food-list-name">{list.name}</Text>
-              <Text style={styles.metaText}>
-                Created by {list.ownerDisplayName} • {list.visibility === 'public' ? 'Public' : 'Private'}
-              </Text>
+              <View style={styles.metaRow}>
+                <Text style={styles.metaText}>Created by {list.ownerDisplayName} • </Text>
+                {isOwner ? (
+                  <Pressable
+                    onPress={() => void handleToggleVisibility()}
+                    disabled={isTogglingVisibility}
+                    style={({ pressed }) => [
+                      styles.visibilityBadge,
+                      pressed && styles.visibilityBadgePressed,
+                    ]}
+                    accessibilityRole="button"
+                    accessibilityLabel={`List is ${list.visibility}. Tap to make ${list.visibility === 'public' ? 'private' : 'public'}`}
+                    testID="food-list-visibility-toggle-badge"
+                  >
+                    <Ionicons
+                      name={list.visibility === 'public' ? 'globe-outline' : 'lock-closed-outline'}
+                      size={12}
+                      color={theme.color.primary}
+                    />
+                    <Text style={styles.visibilityBadgeText}>
+                      {list.visibility === 'public' ? 'Public' : 'Private'}
+                    </Text>
+                  </Pressable>
+                ) : (
+                  <Text style={styles.metaText}>
+                    {list.visibility === 'public' ? 'Public' : 'Private'}
+                  </Text>
+                )}
+              </View>
             </View>
 
-            {/* Badges */}
-            <View style={styles.roleBadgeContainer}>
-              <Badge
-                label={list.myRole === 'owner' ? 'Owner' : list.myRole === 'editor' ? 'Editor' : 'Viewer'}
-                color={list.myRole === 'editor' ? theme.color.primary : theme.color.textSecondary}
-              />
+            {/* Badges & Options Menu */}
+            <View style={styles.headerTopRight}>
+              <View style={styles.roleBadgeContainer}>
+                <Badge
+                  label={list.myRole === 'owner' ? 'Owner' : list.myRole === 'editor' ? 'Editor' : 'Viewer'}
+                  color={list.myRole === 'editor' ? theme.color.primary : theme.color.textSecondary}
+                />
+              </View>
+              {isOwner ? (
+                <Pressable
+                  onPress={() => setOptionsMenuVisible(true)}
+                  style={({ pressed }) => [
+                    styles.optionsMenuBtn,
+                    pressed && styles.optionsMenuBtnPressed,
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel="List options"
+                  hitSlop={8}
+                  testID="food-list-options-menu-btn"
+                >
+                  <Ionicons name="ellipsis-horizontal" size={18} color={theme.color.textSecondary} />
+                </Pressable>
+              ) : null}
             </View>
           </View>
 
@@ -1000,17 +1139,23 @@ export default function FoodListDetailScreen(): JSX.Element {
             <Pressable
               onPress={() => void handleToggleLike()}
               disabled={isLiking}
-              style={({ pressed }) => [styles.actionButton, pressed && styles.actionButtonPressed]}
+              style={({ pressed }) => [
+                styles.actionButton,
+                list.liked && styles.actionButtonLiked,
+                pressed && styles.actionButtonPressed,
+              ]}
               accessibilityRole="button"
               accessibilityLabel={`${list.liked ? 'Unlike' : 'Like'} list, ${list.likeCount} likes`}
               testID="food-list-like-btn"
             >
               <Ionicons
                 name={list.liked ? 'heart' : 'heart-outline'}
-                size={20}
+                size={16}
                 color={list.liked ? theme.color.danger : theme.color.textSecondary}
               />
-              <Text style={styles.actionButtonText}>{list.likeCount}</Text>
+              <Text style={[styles.actionButtonText, list.liked && styles.actionButtonTextLiked]}>
+                {list.likeCount}
+              </Text>
             </Pressable>
 
             {/* Save button (non-owners only) */}
@@ -1018,17 +1163,21 @@ export default function FoodListDetailScreen(): JSX.Element {
               <Pressable
                 onPress={() => void handleSave()}
                 disabled={isSaving || list.saved}
-                style={({ pressed }) => [styles.actionButton, pressed && styles.actionButtonPressed]}
+                style={({ pressed }) => [
+                  styles.actionButton,
+                  list.saved && styles.actionButtonSaved,
+                  pressed && styles.actionButtonPressed,
+                ]}
                 accessibilityRole="button"
                 accessibilityLabel={list.saved ? 'List saved' : 'Save list'}
                 testID="food-list-save-btn"
               >
                 <Ionicons
                   name={list.saved ? 'bookmark' : 'bookmark-outline'}
-                  size={20}
+                  size={16}
                   color={list.saved ? theme.color.primary : theme.color.textSecondary}
                 />
-                <Text style={styles.actionButtonText}>
+                <Text style={[styles.actionButtonText, list.saved && styles.actionButtonTextSaved]}>
                   {list.saved ? 'Saved' : 'Save'}
                 </Text>
               </Pressable>
@@ -1038,28 +1187,26 @@ export default function FoodListDetailScreen(): JSX.Element {
             {isOwner && list.visibility === 'private' ? (
               <Pressable
                 onPress={() => setManageSharesVisible(true)}
-                style={styles.actionButton}
+                style={({ pressed }) => [styles.actionButton, pressed && styles.actionButtonPressed]}
                 accessibilityRole="button"
                 accessibilityLabel="Manage sharing"
                 testID="food-list-manage-sharing-btn"
               >
-                <Ionicons name="people-outline" size={20} color={theme.color.primary} />
+                <Ionicons name="people-outline" size={16} color={theme.color.primary} />
                 <Text style={styles.actionButtonText}>Share</Text>
               </Pressable>
             ) : null}
 
-            {/* Checklist mode toggle (owner only, Requirement 13.2). Keeps a
-                short text label ("Checklist"/"List") rather than an
-                unlabeled icon — an icon-only checkbox glyph doesn't tell a
-                sighted User what tapping it does, and `actionRow`'s
-                `flexWrap` (below) already lets this wrap onto a second line
-                on narrow devices instead of needing to sacrifice legibility
-                for width. */}
+            {/* Checklist mode toggle (owner only, Requirement 13.2) */}
             {isOwner ? (
               <Pressable
                 onPress={() => void handleToggleChecklistMode()}
                 disabled={isTogglingChecklist}
-                style={({ pressed }) => [styles.actionButton, pressed && styles.actionButtonPressed]}
+                style={({ pressed }) => [
+                  styles.actionButton,
+                  list.isChecklist && styles.actionButtonChecklistActive,
+                  pressed && styles.actionButtonPressed,
+                ]}
                 accessibilityRole="button"
                 accessibilityLabel={
                   list.isChecklist ? 'Stop tracking as a checklist' : 'Track as a checklist'
@@ -1068,11 +1215,16 @@ export default function FoodListDetailScreen(): JSX.Element {
               >
                 <Ionicons
                   name={list.isChecklist ? 'checkbox' : 'checkbox-outline'}
-                  size={20}
+                  size={16}
                   color={list.isChecklist ? theme.color.primary : theme.color.textSecondary}
                 />
-                <Text style={styles.actionButtonText}>
-                  {list.isChecklist ? 'Checklist' : 'Make checklist'}
+                <Text
+                  style={[
+                    styles.actionButtonText,
+                    list.isChecklist && styles.actionButtonTextChecklistActive,
+                  ]}
+                >
+                  Checklist
                 </Text>
               </Pressable>
             ) : null}
@@ -1082,14 +1234,18 @@ export default function FoodListDetailScreen(): JSX.Element {
               <Pressable
                 onPress={() => void handleTogglePinned()}
                 disabled={isTogglingPinned}
-                style={({ pressed }) => [styles.actionButton, pressed && styles.actionButtonPressed]}
+                style={({ pressed }) => [
+                  styles.actionButton,
+                  list.pinnedAt !== null && styles.actionButtonPinnedActive,
+                  pressed && styles.actionButtonPressed,
+                ]}
                 accessibilityRole="button"
                 accessibilityLabel={list.pinnedAt !== null ? 'Unpin list' : 'Pin list'}
                 testID="food-list-pin-btn"
               >
                 <Ionicons
                   name={list.pinnedAt !== null ? 'pin' : 'pin-outline'}
-                  size={20}
+                  size={16}
                   color={list.pinnedAt !== null ? theme.color.primary : theme.color.textSecondary}
                 />
                 <Text
@@ -1243,6 +1399,180 @@ export default function FoodListDetailScreen(): JSX.Element {
           ))}
         </View>
       ) : null}
+      {/* Options Menu Modal (Requirement 3.5, Property 26) */}
+      <Modal
+        visible={optionsMenuVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          Keyboard.dismiss();
+          setOptionsMenuVisible(false);
+        }}
+        testID="food-list-options-menu-modal"
+      >
+        <Pressable
+          style={styles.optionsMenuBackdrop}
+          onPress={() => {
+            Keyboard.dismiss();
+            setOptionsMenuVisible(false);
+          }}
+        >
+          <View
+            style={styles.optionsMenuContainer}
+            onStartShouldSetResponder={() => true}
+          >
+            <View style={styles.optionsMenuHeader}>
+              <Text style={styles.optionsMenuTitle}>List Options</Text>
+              <Text style={styles.optionsMenuSubtitle} numberOfLines={1}>{list.name}</Text>
+            </View>
+
+            <View style={styles.optionsMenuDivider} />
+
+            {/* Visibility Toggle Option */}
+            <Pressable
+              onPress={() => {
+                Keyboard.dismiss();
+                setOptionsMenuVisible(false);
+                void handleToggleVisibility();
+              }}
+              style={({ pressed }) => [
+                styles.optionsMenuItem,
+                pressed && styles.optionsMenuItemPressed,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel={`Make list ${list.visibility === 'public' ? 'private' : 'public'}`}
+              testID="food-list-option-visibility-btn"
+            >
+              <Ionicons
+                name={list.visibility === 'public' ? 'lock-closed-outline' : 'globe-outline'}
+                size={20}
+                color={theme.color.textPrimary}
+              />
+              <Text style={styles.optionsMenuItemText}>
+                Make {list.visibility === 'public' ? 'Private' : 'Public'}
+              </Text>
+            </Pressable>
+
+            {/* Rename Option */}
+            <Pressable
+              onPress={() => {
+                Keyboard.dismiss();
+                setOptionsMenuVisible(false);
+                setRenameValue(list.name);
+                setRenameModalVisible(true);
+              }}
+              style={({ pressed }) => [
+                styles.optionsMenuItem,
+                pressed && styles.optionsMenuItemPressed,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Rename list"
+              testID="food-list-option-rename-btn"
+            >
+              <Ionicons name="pencil-outline" size={20} color={theme.color.textPrimary} />
+              <Text style={styles.optionsMenuItemText}>Rename List</Text>
+            </Pressable>
+
+            {/* Delete Option */}
+            <Pressable
+              onPress={promptDeleteList}
+              style={({ pressed }) => [
+                styles.optionsMenuItem,
+                pressed && styles.optionsMenuItemPressed,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Delete list"
+              testID="food-list-option-delete-btn"
+            >
+              <Ionicons name="trash-outline" size={20} color={theme.color.danger} />
+              <Text style={[styles.optionsMenuItemText, styles.optionsMenuItemDangerText]}>
+                Delete List
+              </Text>
+            </Pressable>
+
+            <View style={styles.optionsMenuDivider} />
+
+            <Pressable
+              onPress={() => {
+                Keyboard.dismiss();
+                setOptionsMenuVisible(false);
+              }}
+              style={styles.optionsMenuCancelBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel"
+            >
+              <Text style={styles.optionsMenuCancelText}>Cancel</Text>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* Rename Modal (Requirement 3.5, Property 26) */}
+      <Modal
+        visible={renameModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          Keyboard.dismiss();
+          setRenameModalVisible(false);
+        }}
+        testID="rename-food-list-modal"
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.renameModalBackdrop}
+        >
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => {
+              Keyboard.dismiss();
+              setRenameModalVisible(false);
+            }}
+          />
+          <View
+            style={styles.renameModalContainer}
+            onStartShouldSetResponder={() => true}
+          >
+            <Text style={styles.renameModalTitle}>Rename List</Text>
+            <TextInput
+              value={renameValue}
+              onChangeText={setRenameValue}
+              placeholder="List name"
+              placeholderTextColor={theme.color.textSecondary}
+              style={styles.renameInput}
+              autoFocus
+              testID="rename-food-list-input"
+            />
+            <View style={styles.renameModalActions}>
+              <Pressable
+                onPress={() => {
+                  Keyboard.dismiss();
+                  setRenameModalVisible(false);
+                }}
+                style={styles.renameCancelBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Cancel renaming"
+                testID="cancel-rename-food-list-btn"
+              >
+                <Text style={styles.renameCancelBtnText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => void handleRenameList()}
+                disabled={isRenaming || !renameValue.trim()}
+                style={[
+                  styles.renameSubmitBtn,
+                  (!renameValue.trim() || isRenaming) && styles.renameSubmitBtnDisabled,
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel="Save new list name"
+                testID="save-rename-food-list-btn"
+              >
+                <Text style={styles.renameSubmitBtnText}>Save</Text>
+              </Pressable>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
 
       {/* Manage Sharing Sheet */}
       <ManageFoodListSharesSheet
@@ -1259,7 +1589,10 @@ export default function FoodListDetailScreen(): JSX.Element {
         onRequestClose={handleCloseRestaurantSearch}
         testID="restaurant-search-modal"
       >
-        <View style={styles.modalBackdrop}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalBackdrop}
+        >
           <View style={styles.modalContainer}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Choose a Restaurant</Text>
@@ -1362,7 +1695,7 @@ export default function FoodListDetailScreen(): JSX.Element {
               />
             )}
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Entry Point 2: FoodItemPickerModal scoped to selected restaurant or location */}
@@ -1544,37 +1877,220 @@ const styles = StyleSheet.create({
   metaText: {
     fontSize: 11,
     color: theme.color.textSecondary,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
     marginTop: 4,
+  },
+  visibilityBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    borderRadius: theme.radius.pill,
+    backgroundColor: 'rgba(91, 42, 134, 0.08)',
+  },
+  visibilityBadgePressed: {
+    opacity: 0.7,
+  },
+  visibilityBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: theme.color.primary,
   },
   roleBadgeContainer: {
     marginTop: 2,
+  },
+  headerTopRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  optionsMenuBtn: {
+    padding: 6,
+    borderRadius: theme.radius.pill,
+    backgroundColor: theme.color.surfaceAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  optionsMenuBtnPressed: {
+    opacity: 0.7,
   },
   actionRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
-    gap: 10,
+    columnGap: 5,
+    rowGap: 6,
     marginTop: 4,
   },
   actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
+    gap: 4,
+    paddingVertical: 5,
+    paddingHorizontal: 8,
     borderRadius: theme.radius.pill,
     backgroundColor: theme.color.surfaceAlt,
   },
   actionButtonPressed: {
     opacity: 0.7,
   },
+  actionButtonLiked: {
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+  },
+  actionButtonSaved: {
+    backgroundColor: 'rgba(91, 42, 134, 0.1)',
+  },
+  actionButtonChecklistActive: {
+    backgroundColor: 'rgba(91, 42, 134, 0.1)',
+  },
+  actionButtonPinnedActive: {
+    backgroundColor: 'rgba(91, 42, 134, 0.1)',
+  },
   actionButtonText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
     color: theme.color.textPrimary,
   },
+  actionButtonTextLiked: {
+    color: theme.color.danger,
+  },
+  actionButtonTextSaved: {
+    color: theme.color.primary,
+  },
+  actionButtonTextChecklistActive: {
+    color: theme.color.primary,
+  },
   actionButtonTextPinned: {
     color: theme.color.primary,
+  },
+  optionsMenuBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: theme.spacing.lg,
+  },
+  optionsMenuContainer: {
+    width: '100%',
+    maxWidth: 340,
+    backgroundColor: theme.color.surface,
+    borderRadius: theme.radius.lg,
+    padding: theme.spacing.md,
+    ...theme.shadow.card,
+  },
+  optionsMenuHeader: {
+    paddingVertical: 4,
+    gap: 2,
+  },
+  optionsMenuTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: theme.color.textPrimary,
+  },
+  optionsMenuSubtitle: {
+    fontSize: 13,
+    color: theme.color.textSecondary,
+  },
+  optionsMenuDivider: {
+    height: 1,
+    backgroundColor: theme.color.border,
+    marginVertical: 8,
+  },
+  optionsMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: theme.radius.md,
+  },
+  optionsMenuItemPressed: {
+    backgroundColor: theme.color.surfaceAlt,
+  },
+  optionsMenuItemText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: theme.color.textPrimary,
+  },
+  optionsMenuItemDangerText: {
+    color: theme.color.danger,
+  },
+  optionsMenuCancelBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: theme.radius.md,
+  },
+  optionsMenuCancelText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: theme.color.textSecondary,
+  },
+  renameModalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: theme.spacing.lg,
+  },
+  renameModalContainer: {
+    width: '100%',
+    maxWidth: 340,
+    backgroundColor: theme.color.surface,
+    borderRadius: theme.radius.lg,
+    padding: theme.spacing.lg,
+    gap: 14,
+    ...theme.shadow.card,
+  },
+  renameModalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: theme.color.textPrimary,
+  },
+  renameInput: {
+    fontSize: 15,
+    color: theme.color.textPrimary,
+    backgroundColor: theme.color.surfaceAlt,
+    borderRadius: theme.radius.md,
+    borderWidth: 1,
+    borderColor: theme.color.border,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  renameModalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 10,
+    marginTop: 4,
+  },
+  renameCancelBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: theme.radius.md,
+  },
+  renameCancelBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.color.textSecondary,
+  },
+  renameSubmitBtn: {
+    backgroundColor: theme.color.primary,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: theme.radius.md,
+  },
+  renameSubmitBtnDisabled: {
+    opacity: 0.5,
+  },
+  renameSubmitBtnText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
   },
   addItemsBtn: {
     backgroundColor: theme.color.primary,

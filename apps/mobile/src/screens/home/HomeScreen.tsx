@@ -22,7 +22,9 @@
 import React, { useCallback, useContext, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -486,7 +488,10 @@ export default function HomeScreen({ navigation }: Props): JSX.Element {
         onRequestClose={() => setPickerVisible(false)}
         testID="home-experience-picker-modal"
       >
-        <View style={styles.modalBackdrop}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalBackdrop}
+        >
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle} testID="home-picker-title">
@@ -512,7 +517,7 @@ export default function HomeScreen({ navigation }: Props): JSX.Element {
               onSelect={handleSelectExperience}
             />
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Log Visit Modal for selected ride */}

@@ -817,8 +817,8 @@ actionable via the pin toggle already specified in `food-lists` Requirement 14.5
 ## Correctness Properties — Addition
 
 ### Property 10: Collection Preview Rows Are Exactly the First `MAX_COLLECTION_PREVIEW_ROWS` of the Pinned-First-Ordered Owned List (Added by this amendment)
-*For any User and either list card ("My Food Lists" / "My Experience Lists"), the rows rendered on `CollectionScreen` equal `ownedLists.slice(0, 3)` exactly (same ids, same order) as returned by `GET /me/food-lists/collection` / `GET /me/experience-lists/collection`'s `owned` array — no client-side re-sort, re-filter, or `[0]`-style pick is applied. A "View all (N)" row renders if and only if `ownedLists.length > 3`, with `N` equal to the exact `ownedLists.length`.*
-**Validates:** Requirement 6 amendment 8c
+*For any User and either list card ("My Food Lists" / "My Experience Lists"), the rows rendered on `CollectionScreen` equal `ownedLists.slice(0, 4)` exactly (same ids, same order) as returned by `GET /me/food-lists/collection` / `GET /me/experience-lists/collection`'s `owned` array — no client-side re-sort, re-filter, or `[0]`-style pick is applied. A "View all (N)" row renders with `N` equal to the exact `ownedLists.length`.*
+**Validates:** Requirement 6 amendment 8c, 8d
 
 ### Property 11: Each Collection Preview Row Deep-Links to Its Own List (Added by this amendment)
 *For any rendered Collection preview row with id `X`, activating that row navigates to `FoodListDetail`/`ExperienceListDetail` with that exact `X` — never to `MyFoodLists`/`MyExperienceLists`, and never to a different row's id.*
@@ -828,16 +828,24 @@ actionable via the pin toggle already specified in `food-lists` Requirement 14.5
 *For any Food_List or Experience_List, activating its pin/unpin toggle on the Collection preview row and activating the equivalent row's pin/unpin toggle on `MyFoodListsScreen`/`MyExperienceListsScreen` issue the identical `PATCH` request body and produce the identical resulting `pinnedAt` state — the two surfaces are two entry points into the same mutation, never two independently-behaving implementations.*
 **Validates:** Requirement 6 amendment 8c; `food-lists` Requirement 14.5; `experience-lists` Requirement 19.5
 
+### Property 13: Saved Lists Header Action and Unconditional List Screen Entry Points (Added by amendment 8d)
+*For any User and either list card ("My Food Lists" / "My Experience Lists"):*
+*(a) Activating the header "Saved" action navigates to `MyFoodListsScreen`/`MyExperienceListsScreen` with `{ initialTab: 'saved' }`;*
+*(b) When `ownedLists.length > 0`, a "View all (N)" row renders (with `N = ownedLists.length`) for any count N (including 1, 2, 3, 4, or >4) navigating to `MyFoodListsScreen`/`MyExperienceListsScreen` with `{ initialTab: 'owned' }`;*
+*(c) When `ownedLists.length === 0`, an entry point row renders navigating to `MyFoodListsScreen`/`MyExperienceListsScreen` with `{ initialTab: savedLists.length > 0 ? 'saved' : 'owned' }`.*
+**Validates:** Requirement 6 amendment 8d
+
 ## Testing Strategy — Addition
 
-- **`CollectionScreen.test.tsx`**: extend the existing Lists-segment tests to assert (a) up to 3
+- **`CollectionScreen.test.tsx`**: extend the existing Lists-segment tests to assert (a) up to 4
   rows render per card ordered exactly as the mocked `collection` response's `owned` array (no
-  re-sort), (b) a 4th+ list produces a "View all (N)" row navigating to
-  `MyFoodLists`/`MyExperienceLists`, and its absence when `ownedLists.length <= 3`, (c) tapping a
+  re-sort), (b) a "View all (N)" row renders for both >4 lists and ≤4 lists navigating to
+  `MyFoodLists`/`MyExperienceLists`, (c) tapping the "Saved" header link navigates to
+  `MyFoodLists`/`MyExperienceLists` with `{ initialTab: 'saved' }`, (d) tapping a
   specific row's `testID` navigates to `FoodListDetail`/`ExperienceListDetail` with that row's own
-  id (not a different row's, not the management screen), (d) tapping a row's pin toggle issues
+  id (not a different row's, not the management screen), (e) tapping a row's pin toggle issues
   `PATCH .../:id` with `{ pinned: true }` (or `false` when already pinned) and the row's pin icon
-  reflects the new state, (e) tapping "+ New" opens the create-list modal in place (no navigation
+  reflects the new state, (f) tapping "+ New" opens the create-list modal in place (no navigation
   away from `CollectionHome`) and a successful submission adds the new list to the rendered rows.
 - **`CreateFoodListModal.test.tsx` / `CreateExperienceListModal.test.tsx`** (new, extracted
   components): render/interaction tests covering name entry, visibility toggle (and checklist
@@ -846,3 +854,5 @@ actionable via the pin toggle already specified in `food-lists` Requirement 14.5
   modal — ported directly from `MyFoodListsScreen.test.tsx`/`MyExperienceListsScreen.test.tsx`'s
   existing create-modal test cases, which are updated to render the extracted component via those
   screens rather than inline modal markup.
+- **`MyFoodListsScreen.test.tsx` / `MyExperienceListsScreen.test.tsx`**: assert that passing
+  `{ initialTab: 'saved' }` initializes the screen with the Saved tab active.

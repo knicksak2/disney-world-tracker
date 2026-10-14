@@ -291,6 +291,17 @@ sub-tasks are marked optional with `*`.
     - _Requirements: 6 amendment 8c_
   - [x] 18.8 Checkpoint — ran `npx tsc --noEmit` (clean) and full `npx jest` (234 suites, 1564 tests, all passing) in `apps/mobile`; covered by the final full-workspace `npm run verify` gate as well
 
+- [x] 19. Saved Lists Direct Access & Unconditional List Screen Entry Points (Requirement 6 amendment 8d, Property 13)
+  - [x] 19.1 Widen `CollectionStackParamList` for `MyFoodLists` and `MyExperienceLists` to accept `{ initialTab?: 'owned' | 'saved' } | undefined`; support `route.params?.initialTab` in `MyFoodListsScreen.tsx` and `MyExperienceListsScreen.tsx`
+    - _Requirements: 6 amendment 8d (Property 13)_
+  - [x] 19.2 Add "Saved" action to `CollectionScreen.tsx` headers for both Food and Experience list cards (alongside "+ New" and "Discover"), navigating to `MyFoodLists`/`MyExperienceLists` with `{ initialTab: 'saved' }` and displaying count when > 0
+    - _Requirements: 6 amendment 8d (Property 13)_
+  - [x] 19.3 Update `CollectionScreen.tsx` to render the "View all (N)" row unconditionally when `ownedLists.length > 0` (for 1, 2, 3, 4, or >4 lists) navigating with `{ initialTab: 'owned' }`, and render an entry point in the empty state (with "View saved lists (M) →" when saved lists exist)
+    - _Requirements: 6 amendment 8d (Property 13)_
+  - [x] 19.4 Update and write tests in `CollectionScreen.test.tsx`, `MyFoodListsScreen.test.tsx`, and `MyExperienceListsScreen.test.tsx`
+    - _Requirements: 6 amendment 8d (Property 13)_
+  - [x] 19.5 Checkpoint — ran `npm run verify:mobile`, then final full `npm run verify` gate
+
 ## Notes
 
 - Tasks marked with `*` are optional test sub-tasks and can be skipped for a faster MVP. (None are marked in this plan — every test sub-task here guards a Correctness Property or a stated regression risk, so none is optional.)

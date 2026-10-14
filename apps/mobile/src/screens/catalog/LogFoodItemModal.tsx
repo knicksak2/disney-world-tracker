@@ -5,7 +5,9 @@
 import React, { useState } from 'react';
 import {
   Keyboard,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -163,7 +165,10 @@ export default function LogFoodItemModal({
       onRequestClose={handleClose}
       testID="log-food-item-modal"
     >
-      <View style={styles.backdrop}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.backdrop}
+      >
         <View style={styles.sheet}>
           {/* Header */}
           <View style={styles.header}>
@@ -299,7 +304,7 @@ export default function LogFoodItemModal({
             </View>
           </ScrollView>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

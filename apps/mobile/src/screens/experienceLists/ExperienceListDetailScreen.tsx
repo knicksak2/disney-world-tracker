@@ -2,7 +2,10 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Keyboard,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -115,6 +118,7 @@ function AddItemsCatalogSearch({
 
   async function handleAdd(experience: ExperienceDTO): Promise<void> {
     if (pendingId) return;
+    Keyboard.dismiss();
     setErrorNotice(null);
     setPendingId(experience.id);
     try {
@@ -153,6 +157,7 @@ function AddItemsCatalogSearch({
         {searchInput.length > 0 ? (
           <Pressable
             onPress={() => {
+              Keyboard.dismiss();
               setSearchInput('');
               setDebouncedQuery('');
             }}
@@ -254,6 +259,12 @@ export default function ExperienceListDetailScreen(): JSX.Element {
   const [isLiking, setIsLiking] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isTogglingPinned, setIsTogglingPinned] = useState(false);
+  const [isTogglingVisibility, setIsTogglingVisibility] = useState(false);
+  const [optionsMenuVisible, setOptionsMenuVisible] = useState(false);
+  const [renameModalVisible, setRenameModalVisible] = useState(false);
+  const [renameValue, setRenameValue] = useState('');
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [staleWriteNotice, setStaleWriteNotice] = useState<string | null>(null);
   const [manageSharesVisible, setManageSharesVisible] = useState(false);
   // Drives the "Add items" modal (Requirement 9.5, Entry Point 2), whose
@@ -264,6 +275,12 @@ export default function ExperienceListDetailScreen(): JSX.Element {
   // `LiveWaitsScreen.tsx`'s `activeLogExperienceId` pattern — a single modal
   // instance conditionally rendered per-id, rather than one modal per row.
   const [loggingExperienceId, setLoggingExperienceId] = useState<string | null>(null);
+
+  useEffect(() => {
+    return () => {
+      Keyboard.dismiss();
+    };
+  }, []);
 
   const transientNotice = useExperienceListNotice();
 
@@ -393,6 +410,77 @@ export default function ExperienceListDetailScreen(): JSX.Element {
       }
     } finally {
       setIsTogglingPinned(false);
+    }
+  }
+
+  // In-list visibility toggle (Requirement 3.5, Property 26)
+  async function handleToggleVisibility(): Promise<void> {
+    if (!list || isTogglingVisibility || list.myRole !== 'owner') return;
+    const nextVisibility = list.visibility === 'public' ? 'private' : 'public';
+    setIsTogglingVisibility(true);
+    try {
+      await apiRequest('PATCH', `/me/experience-lists/${encodeURIComponent(experienceListId)}`, {
+        visibility: nextVisibility,
+      });
+      await queryClient.invalidateQueries({ queryKey: ['experience-list-detail', experienceListId] });
+      await queryClient.invalidateQueries({ queryKey: ['experience-lists-collection'] });
+    } catch {
+      Alert.alert('Error', 'Could not update list visibility. Please try again.');
+    } finally {
+      setIsTogglingVisibility(false);
+    }
+  }
+
+  // Rename list (Requirement 3.5, Property 26)
+  async function handleRenameList(): Promise<void> {
+    const trimmed = renameValue.trim();
+    if (!list || !trimmed || isRenaming || list.myRole !== 'owner') return;
+    Keyboard.dismiss();
+    setIsRenaming(true);
+    try {
+      await apiRequest('PATCH', `/me/experience-lists/${encodeURIComponent(experienceListId)}`, {
+        name: trimmed,
+      });
+      await queryClient.invalidateQueries({ queryKey: ['experience-list-detail', experienceListId] });
+      await queryClient.invalidateQueries({ queryKey: ['experience-lists-collection'] });
+      setRenameModalVisible(false);
+    } catch {
+      Alert.alert('Error', 'Could not rename list. Please try again.');
+    } finally {
+      setIsRenaming(false);
+    }
+  }
+
+  // Delete list (Requirement 3.5, Property 26)
+  function promptDeleteList(): void {
+    if (!list || list.myRole !== 'owner') return;
+    setOptionsMenuVisible(false);
+    Alert.alert(
+      'Delete List',
+      `Are you sure you want to delete "${list.name}"? This action cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            void executeDeleteList();
+          },
+        },
+      ],
+    );
+  }
+
+  async function executeDeleteList(): Promise<void> {
+    if (!list || isDeleting || list.myRole !== 'owner') return;
+    setIsDeleting(true);
+    try {
+      await apiRequest('DELETE', `/me/experience-lists/${encodeURIComponent(experienceListId)}`);
+      await queryClient.invalidateQueries({ queryKey: ['experience-lists-collection'] });
+      navigation.goBack();
+    } catch {
+      Alert.alert('Error', 'Could not delete list. Please try again.');
+      setIsDeleting(false);
     }
   }
 
@@ -663,7 +751,11 @@ export default function ExperienceListDetailScreen(): JSX.Element {
           onBack={() => navigation.goBack()}
         />
 
-        <NestableScrollContainer contentContainerStyle={styles.content}>
+        <NestableScrollContainer
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+        >
           {/* Stale write message (Requirement 11.3) */}
           {staleWriteNotice ? (
             <View style={styles.staleNotice} testID="experience-list-stale-write-message">
@@ -679,17 +771,60 @@ export default function ExperienceListDetailScreen(): JSX.Element {
                 <Text style={styles.listName} testID="experience-list-name">
                   {list.name}
                 </Text>
-                <Text style={styles.metaText}>
-                  Created by {list.ownerDisplayName} •{' '}
-                  {list.visibility === 'public' ? 'Public' : 'Private'}
-                </Text>
+                <View style={styles.metaRow}>
+                  <Text style={styles.metaText}>Created by {list.ownerDisplayName} • </Text>
+                  {isOwner ? (
+                    <Pressable
+                      onPress={() => void handleToggleVisibility()}
+                      disabled={isTogglingVisibility}
+                      style={({ pressed }) => [
+                        styles.visibilityBadge,
+                        pressed && styles.visibilityBadgePressed,
+                      ]}
+                      accessibilityRole="button"
+                      accessibilityLabel={`List is ${list.visibility}. Tap to make ${list.visibility === 'public' ? 'private' : 'public'}`}
+                      testID="experience-list-visibility-toggle-badge"
+                    >
+                      <Ionicons
+                        name={list.visibility === 'public' ? 'globe-outline' : 'lock-closed-outline'}
+                        size={12}
+                        color={theme.color.primary}
+                      />
+                      <Text style={styles.visibilityBadgeText}>
+                        {list.visibility === 'public' ? 'Public' : 'Private'}
+                      </Text>
+                    </Pressable>
+                  ) : (
+                    <Text style={styles.metaText}>
+                      {list.visibility === 'public' ? 'Public' : 'Private'}
+                    </Text>
+                  )}
+                </View>
               </View>
 
-              <View style={styles.roleBadgeContainer}>
-                <Badge
-                  label={list.myRole === 'owner' ? 'Owner' : list.myRole === 'editor' ? 'Editor' : 'Viewer'}
-                  color={list.myRole === 'editor' ? theme.color.primary : theme.color.textSecondary}
-                />
+              {/* Badges & Options Menu */}
+              <View style={styles.headerTopRight}>
+                <View style={styles.roleBadgeContainer}>
+                  <Badge
+                    label={list.myRole === 'owner' ? 'Owner' : list.myRole === 'editor' ? 'Editor' : 'Viewer'}
+                    color={list.myRole === 'editor' ? theme.color.primary : theme.color.textSecondary}
+                  />
+                </View>
+                {isOwner ? (
+                  <Pressable
+                    onPress={() => setOptionsMenuVisible(true)}
+                    style={({ pressed }) => [
+                      styles.optionsMenuBtn,
+                      pressed && styles.optionsMenuBtnPressed,
+                    ]}
+                    accessibilityRole="button"
+                    accessibilityLabel="List options"
+                    hitSlop={8}
+                    testID="experience-list-options-menu-btn"
+                  >
+                    <Ionicons name="ellipsis-horizontal" size={18} color={theme.color.textSecondary} />
+                  </Pressable>
+                ) : null}
               </View>
             </View>
 
@@ -698,17 +833,23 @@ export default function ExperienceListDetailScreen(): JSX.Element {
               <Pressable
                 onPress={() => void handleToggleLike()}
                 disabled={isLiking}
-                style={({ pressed }) => [styles.actionButton, pressed && styles.actionButtonPressed]}
+                style={({ pressed }) => [
+                  styles.actionButton,
+                  list.liked && styles.actionButtonLiked,
+                  pressed && styles.actionButtonPressed,
+                ]}
                 accessibilityRole="button"
                 accessibilityLabel={`${list.liked ? 'Unlike' : 'Like'} list, ${list.likeCount} likes`}
                 testID="experience-list-like-btn"
               >
                 <Ionicons
                   name={list.liked ? 'heart' : 'heart-outline'}
-                  size={20}
+                  size={16}
                   color={list.liked ? theme.color.danger : theme.color.textSecondary}
                 />
-                <Text style={styles.actionButtonText}>{list.likeCount}</Text>
+                <Text style={[styles.actionButtonText, list.liked && styles.actionButtonTextLiked]}>
+                  {list.likeCount}
+                </Text>
               </Pressable>
 
               {/* Save button (non-owners only; no unsave endpoint exists) */}
@@ -716,17 +857,23 @@ export default function ExperienceListDetailScreen(): JSX.Element {
                 <Pressable
                   onPress={() => void handleSave()}
                   disabled={isSaving || list.saved}
-                  style={({ pressed }) => [styles.actionButton, pressed && styles.actionButtonPressed]}
+                  style={({ pressed }) => [
+                    styles.actionButton,
+                    list.saved && styles.actionButtonSaved,
+                    pressed && styles.actionButtonPressed,
+                  ]}
                   accessibilityRole="button"
                   accessibilityLabel={list.saved ? 'List saved' : 'Save list'}
                   testID="experience-list-save-btn"
                 >
                   <Ionicons
                     name={list.saved ? 'bookmark' : 'bookmark-outline'}
-                    size={20}
+                    size={16}
                     color={list.saved ? theme.color.primary : theme.color.textSecondary}
                   />
-                  <Text style={styles.actionButtonText}>{list.saved ? 'Saved' : 'Save'}</Text>
+                  <Text style={[styles.actionButtonText, list.saved && styles.actionButtonTextSaved]}>
+                    {list.saved ? 'Saved' : 'Save'}
+                  </Text>
                 </Pressable>
               ) : null}
 
@@ -734,12 +881,12 @@ export default function ExperienceListDetailScreen(): JSX.Element {
               {isOwner && list.visibility === 'private' ? (
                 <Pressable
                   onPress={() => setManageSharesVisible(true)}
-                  style={styles.actionButton}
+                  style={({ pressed }) => [styles.actionButton, pressed && styles.actionButtonPressed]}
                   accessibilityRole="button"
                   accessibilityLabel="Manage sharing"
                   testID="experience-list-manage-sharing-btn"
                 >
-                  <Ionicons name="people-outline" size={20} color={theme.color.primary} />
+                  <Ionicons name="people-outline" size={16} color={theme.color.primary} />
                   <Text style={styles.actionButtonText}>Share</Text>
                 </Pressable>
               ) : null}
@@ -749,14 +896,18 @@ export default function ExperienceListDetailScreen(): JSX.Element {
                 <Pressable
                   onPress={() => void handleTogglePinned()}
                   disabled={isTogglingPinned}
-                  style={({ pressed }) => [styles.actionButton, pressed && styles.actionButtonPressed]}
+                  style={({ pressed }) => [
+                    styles.actionButton,
+                    list.pinnedAt !== null && styles.actionButtonPinnedActive,
+                    pressed && styles.actionButtonPressed,
+                  ]}
                   accessibilityRole="button"
                   accessibilityLabel={list.pinnedAt !== null ? 'Unpin list' : 'Pin list'}
                   testID="experience-list-pin-btn"
                 >
                   <Ionicons
                     name={list.pinnedAt !== null ? 'pin' : 'pin-outline'}
-                    size={20}
+                    size={16}
                     color={list.pinnedAt !== null ? theme.color.primary : theme.color.textSecondary}
                   />
                   <Text
@@ -824,15 +975,24 @@ export default function ExperienceListDetailScreen(): JSX.Element {
           visible={addItemsModalVisible}
           animationType="slide"
           transparent
-          onRequestClose={() => setAddItemsModalVisible(false)}
+          onRequestClose={() => {
+            Keyboard.dismiss();
+            setAddItemsModalVisible(false);
+          }}
           testID="experience-list-add-items-modal"
         >
-          <View style={styles.modalBackdrop}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={styles.modalBackdrop}
+          >
             <View style={styles.modalContainer}>
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>Add Items</Text>
                 <Pressable
-                  onPress={() => setAddItemsModalVisible(false)}
+                  onPress={() => {
+                    Keyboard.dismiss();
+                    setAddItemsModalVisible(false);
+                  }}
                   accessibilityRole="button"
                   accessibilityLabel="Close add items"
                   testID="close-experience-list-add-items-btn"
@@ -848,7 +1008,7 @@ export default function ExperienceListDetailScreen(): JSX.Element {
                 />
               ) : null}
             </View>
-          </View>
+          </KeyboardAvoidingView>
         </Modal>
 
         {/* Manage sharing sheet (Requirement 9.8, 11.4) */}
@@ -857,6 +1017,181 @@ export default function ExperienceListDetailScreen(): JSX.Element {
           visible={manageSharesVisible}
           onClose={() => setManageSharesVisible(false)}
         />
+
+        {/* Options Menu Modal (Requirement 3.5, Property 26) */}
+        <Modal
+          visible={optionsMenuVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={() => {
+            Keyboard.dismiss();
+            setOptionsMenuVisible(false);
+          }}
+          testID="experience-list-options-menu-modal"
+        >
+          <Pressable
+            style={styles.optionsMenuBackdrop}
+            onPress={() => {
+              Keyboard.dismiss();
+              setOptionsMenuVisible(false);
+            }}
+          >
+            <View
+              style={styles.optionsMenuContainer}
+              onStartShouldSetResponder={() => true}
+            >
+              <View style={styles.optionsMenuHeader}>
+                <Text style={styles.optionsMenuTitle}>List Options</Text>
+                <Text style={styles.optionsMenuSubtitle} numberOfLines={1}>{list.name}</Text>
+              </View>
+
+              <View style={styles.optionsMenuDivider} />
+
+              {/* Visibility Toggle Option */}
+              <Pressable
+                onPress={() => {
+                  Keyboard.dismiss();
+                  setOptionsMenuVisible(false);
+                  void handleToggleVisibility();
+                }}
+                style={({ pressed }) => [
+                  styles.optionsMenuItem,
+                  pressed && styles.optionsMenuItemPressed,
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel={`Make list ${list.visibility === 'public' ? 'private' : 'public'}`}
+                testID="experience-list-option-visibility-btn"
+              >
+                <Ionicons
+                  name={list.visibility === 'public' ? 'lock-closed-outline' : 'globe-outline'}
+                  size={20}
+                  color={theme.color.textPrimary}
+                />
+                <Text style={styles.optionsMenuItemText}>
+                  Make {list.visibility === 'public' ? 'Private' : 'Public'}
+                </Text>
+              </Pressable>
+
+              {/* Rename Option */}
+              <Pressable
+                onPress={() => {
+                  Keyboard.dismiss();
+                  setOptionsMenuVisible(false);
+                  setRenameValue(list.name);
+                  setRenameModalVisible(true);
+                }}
+                style={({ pressed }) => [
+                  styles.optionsMenuItem,
+                  pressed && styles.optionsMenuItemPressed,
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel="Rename list"
+                testID="experience-list-option-rename-btn"
+              >
+                <Ionicons name="pencil-outline" size={20} color={theme.color.textPrimary} />
+                <Text style={styles.optionsMenuItemText}>Rename List</Text>
+              </Pressable>
+
+              {/* Delete Option */}
+              <Pressable
+                onPress={promptDeleteList}
+                style={({ pressed }) => [
+                  styles.optionsMenuItem,
+                  pressed && styles.optionsMenuItemPressed,
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel="Delete list"
+                testID="experience-list-option-delete-btn"
+              >
+                <Ionicons name="trash-outline" size={20} color={theme.color.danger} />
+                <Text style={[styles.optionsMenuItemText, styles.optionsMenuItemDangerText]}>
+                  Delete List
+                </Text>
+              </Pressable>
+
+              <View style={styles.optionsMenuDivider} />
+
+              <Pressable
+                onPress={() => {
+                  Keyboard.dismiss();
+                  setOptionsMenuVisible(false);
+                }}
+                style={styles.optionsMenuCancelBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Cancel"
+              >
+                <Text style={styles.optionsMenuCancelText}>Cancel</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Modal>
+
+        {/* Rename Modal (Requirement 3.5, Property 26) */}
+        <Modal
+          visible={renameModalVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={() => {
+            Keyboard.dismiss();
+            setRenameModalVisible(false);
+          }}
+          testID="rename-experience-list-modal"
+        >
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={styles.renameModalBackdrop}
+          >
+            <Pressable
+              style={StyleSheet.absoluteFill}
+              onPress={() => {
+                Keyboard.dismiss();
+                setRenameModalVisible(false);
+              }}
+            />
+            <View
+              style={styles.renameModalContainer}
+              onStartShouldSetResponder={() => true}
+            >
+              <Text style={styles.renameModalTitle}>Rename List</Text>
+              <TextInput
+                value={renameValue}
+                onChangeText={setRenameValue}
+                placeholder="List name"
+                placeholderTextColor={theme.color.textSecondary}
+                style={styles.renameInput}
+                autoFocus
+                testID="rename-experience-list-input"
+              />
+              <View style={styles.renameModalActions}>
+                <Pressable
+                  onPress={() => {
+                    Keyboard.dismiss();
+                    setRenameModalVisible(false);
+                  }}
+                  style={styles.renameCancelBtn}
+                  accessibilityRole="button"
+                  accessibilityLabel="Cancel renaming"
+                  testID="cancel-rename-experience-list-btn"
+                >
+                  <Text style={styles.renameCancelBtnText}>Cancel</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => void handleRenameList()}
+                  disabled={isRenaming || !renameValue.trim()}
+                  style={[
+                    styles.renameSubmitBtn,
+                    (!renameValue.trim() || isRenaming) && styles.renameSubmitBtnDisabled,
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Save new list name"
+                  testID="save-rename-experience-list-btn"
+                >
+                  <Text style={styles.renameSubmitBtnText}>Save</Text>
+                </Pressable>
+              </View>
+            </View>
+          </KeyboardAvoidingView>
+        </Modal>
 
         {/* "Log a visit" modal (Requirement 13.5, 13.6) — reuses the existing
             `LogVisitModal` exactly as-is (no new props, no new endpoint); it
@@ -964,37 +1299,214 @@ const styles = StyleSheet.create({
   metaText: {
     fontSize: 11,
     color: theme.color.textSecondary,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
     marginTop: 4,
+  },
+  visibilityBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    borderRadius: theme.radius.pill,
+    backgroundColor: 'rgba(91, 42, 134, 0.08)',
+  },
+  visibilityBadgePressed: {
+    opacity: 0.7,
+  },
+  visibilityBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: theme.color.primary,
   },
   roleBadgeContainer: {
     marginTop: 2,
+  },
+  headerTopRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  optionsMenuBtn: {
+    padding: 6,
+    borderRadius: theme.radius.pill,
+    backgroundColor: theme.color.surfaceAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  optionsMenuBtnPressed: {
+    opacity: 0.7,
   },
   actionRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
-    gap: 10,
+    columnGap: 5,
+    rowGap: 6,
     marginTop: 4,
   },
   actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
+    gap: 4,
+    paddingVertical: 5,
+    paddingHorizontal: 8,
     borderRadius: theme.radius.pill,
     backgroundColor: theme.color.surfaceAlt,
   },
   actionButtonPressed: {
     opacity: 0.7,
   },
+  actionButtonLiked: {
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+  },
+  actionButtonSaved: {
+    backgroundColor: 'rgba(91, 42, 134, 0.1)',
+  },
+  actionButtonPinnedActive: {
+    backgroundColor: 'rgba(91, 42, 134, 0.1)',
+  },
   actionButtonText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
     color: theme.color.textPrimary,
   },
+  actionButtonTextLiked: {
+    color: theme.color.danger,
+  },
+  actionButtonTextSaved: {
+    color: theme.color.primary,
+  },
   actionButtonTextPinned: {
     color: theme.color.primary,
+  },
+  optionsMenuBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: theme.spacing.lg,
+  },
+  optionsMenuContainer: {
+    width: '100%',
+    maxWidth: 340,
+    backgroundColor: theme.color.surface,
+    borderRadius: theme.radius.lg,
+    padding: theme.spacing.md,
+    ...theme.shadow.card,
+  },
+  optionsMenuHeader: {
+    paddingVertical: 4,
+    gap: 2,
+  },
+  optionsMenuTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: theme.color.textPrimary,
+  },
+  optionsMenuSubtitle: {
+    fontSize: 13,
+    color: theme.color.textSecondary,
+  },
+  optionsMenuDivider: {
+    height: 1,
+    backgroundColor: theme.color.border,
+    marginVertical: 8,
+  },
+  optionsMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: theme.radius.md,
+  },
+  optionsMenuItemPressed: {
+    backgroundColor: theme.color.surfaceAlt,
+  },
+  optionsMenuItemText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: theme.color.textPrimary,
+  },
+  optionsMenuItemDangerText: {
+    color: theme.color.danger,
+  },
+  optionsMenuCancelBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: theme.radius.md,
+  },
+  optionsMenuCancelText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: theme.color.textSecondary,
+  },
+  renameModalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: theme.spacing.lg,
+  },
+  renameModalContainer: {
+    width: '100%',
+    maxWidth: 340,
+    backgroundColor: theme.color.surface,
+    borderRadius: theme.radius.lg,
+    padding: theme.spacing.lg,
+    gap: 14,
+    ...theme.shadow.card,
+  },
+  renameModalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: theme.color.textPrimary,
+  },
+  renameInput: {
+    fontSize: 15,
+    color: theme.color.textPrimary,
+    backgroundColor: theme.color.surfaceAlt,
+    borderRadius: theme.radius.md,
+    borderWidth: 1,
+    borderColor: theme.color.border,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  renameModalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 10,
+    marginTop: 4,
+  },
+  renameCancelBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: theme.radius.md,
+  },
+  renameCancelBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.color.textSecondary,
+  },
+  renameSubmitBtn: {
+    backgroundColor: theme.color.primary,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: theme.radius.md,
+  },
+  renameSubmitBtnDisabled: {
+    opacity: 0.5,
+  },
+  renameSubmitBtnText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
   },
   addItemsBtn: {
     backgroundColor: theme.color.primary,

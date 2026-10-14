@@ -28,7 +28,9 @@
 import React, { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -945,7 +947,10 @@ function AddItemModal({
       animationType="fade"
       onRequestClose={closeAndReset}
     >
-      <View style={styles.modalBackdrop}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.modalBackdrop}
+      >
         <View style={styles.modalCard} testID="planned-list-composer">
           <Text style={styles.modalTitle}>Add to the planned list</Text>
           <Text style={styles.label}>Search experiences</Text>
@@ -986,7 +991,7 @@ function AddItemModal({
             style={styles.cancelBtn}
           />
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

@@ -1,7 +1,7 @@
 // Feature: experience-lists, Task 10.4 — ExperienceListDetailScreen render/interaction tests
 // Feature: experience-lists, Task 13.5 — visit-summary badges/sections + log-from-list flow
 import React from 'react';
-import { Alert } from 'react-native';
+import { Alert, Keyboard } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
@@ -1361,5 +1361,300 @@ describe('ExperienceListDetailScreen', () => {
     });
     alertSpy.mockRestore();
   });
+
+  test('owner can toggle list visibility directly via the header badge (Requirement 3.5, Task 27.1)', async () => {
+    let currentDetail: ExperienceListDetailDTO = {
+      ...sampleOwnerList,
+      visibility: 'private',
+    };
+
+    apiRequestMock.mockImplementation(async (method, path, body) => {
+      if (path === '/experience-lists/exp-list-detail-1' && method === 'GET') {
+        return currentDetail;
+      }
+      if (path === '/me/experience-lists/exp-list-detail-1' && method === 'PATCH') {
+        currentDetail = {
+          ...currentDetail,
+          visibility: (body as { visibility: 'public' | 'private' }).visibility,
+        };
+        return currentDetail;
+      }
+      return {};
+    });
+
+    renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('experience-list-visibility-toggle-badge')).toBeTruthy();
+    });
+
+    const badge = screen.getByTestId('experience-list-visibility-toggle-badge');
+    expect(within(badge).getByText('Private')).toBeTruthy();
+
+    fireEvent.press(badge);
+
+    await waitFor(() => {
+      expect(apiRequestMock).toHaveBeenCalledWith('PATCH', '/me/experience-lists/exp-list-detail-1', {
+        visibility: 'public',
+      });
+      expect(within(screen.getByTestId('experience-list-visibility-toggle-badge')).getByText('Public')).toBeTruthy();
+    });
+  });
+
+  test('owner can toggle list visibility via the options menu modal (Requirement 3.5, Task 27.1)', async () => {
+    let currentDetail: ExperienceListDetailDTO = {
+      ...sampleOwnerList,
+      visibility: 'public',
+    };
+
+    apiRequestMock.mockImplementation(async (method, path, body) => {
+      if (path === '/experience-lists/exp-list-detail-1' && method === 'GET') {
+        return currentDetail;
+      }
+      if (path === '/me/experience-lists/exp-list-detail-1' && method === 'PATCH') {
+        currentDetail = {
+          ...currentDetail,
+          visibility: (body as { visibility: 'public' | 'private' }).visibility,
+        };
+        return currentDetail;
+      }
+      return {};
+    });
+
+    renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('experience-list-options-menu-btn')).toBeTruthy();
+    });
+
+    // Open options menu modal
+    fireEvent.press(screen.getByTestId('experience-list-options-menu-btn'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('experience-list-options-menu-modal')).toBeTruthy();
+      expect(screen.getByTestId('experience-list-option-visibility-btn')).toBeTruthy();
+      expect(screen.getByText('Make Private')).toBeTruthy();
+    });
+
+    // Tap "Make Private"
+    fireEvent.press(screen.getByTestId('experience-list-option-visibility-btn'));
+
+    await waitFor(() => {
+      expect(apiRequestMock).toHaveBeenCalledWith('PATCH', '/me/experience-lists/exp-list-detail-1', {
+        visibility: 'private',
+      });
+    });
+  });
+
+  test('owner can rename list via the options menu modal (Requirement 3.5, Task 27.1)', async () => {
+    let currentDetail: ExperienceListDetailDTO = {
+      ...sampleOwnerList,
+      name: 'Old Experience List',
+    };
+
+    apiRequestMock.mockImplementation(async (method, path, body) => {
+      if (path === '/experience-lists/exp-list-detail-1' && method === 'GET') {
+        return currentDetail;
+      }
+      if (path === '/me/experience-lists/exp-list-detail-1' && method === 'PATCH') {
+        currentDetail = {
+          ...currentDetail,
+          name: (body as { name: string }).name,
+        };
+        return currentDetail;
+      }
+      return {};
+    });
+
+    renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('experience-list-options-menu-btn')).toBeTruthy();
+    });
+
+    // Open options menu
+    fireEvent.press(screen.getByTestId('experience-list-options-menu-btn'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('experience-list-option-rename-btn')).toBeTruthy();
+    });
+
+    // Press Rename option -> opens rename modal
+    fireEvent.press(screen.getByTestId('experience-list-option-rename-btn'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('rename-experience-list-modal')).toBeTruthy();
+      expect(screen.getByTestId('rename-experience-list-input')).toBeTruthy();
+    });
+
+    // Type new name and save
+    fireEvent.changeText(screen.getByTestId('rename-experience-list-input'), 'Renamed Experience List');
+    fireEvent.press(screen.getByTestId('save-rename-experience-list-btn'));
+
+    await waitFor(() => {
+      expect(apiRequestMock).toHaveBeenCalledWith('PATCH', '/me/experience-lists/exp-list-detail-1', {
+        name: 'Renamed Experience List',
+      });
+      expect(within(screen.getByTestId('experience-list-name')).getByText('Renamed Experience List')).toBeTruthy();
+    });
+  });
+
+  test('owner can delete list via the options menu modal (Requirement 3.5, Task 27.1)', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation((_title, _message, buttons) => {
+      const deleteBtn = buttons?.find((b) => b.text === 'Delete');
+      deleteBtn?.onPress?.();
+    });
+
+    apiRequestMock.mockImplementation(async (method, path) => {
+      if (path === '/experience-lists/exp-list-detail-1') {
+        return sampleOwnerList;
+      }
+      if (path === '/me/experience-lists/exp-list-detail-1' && method === 'DELETE') {
+        return {};
+      }
+      return {};
+    });
+
+    renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('experience-list-options-menu-btn')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByTestId('experience-list-options-menu-btn'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('experience-list-option-delete-btn')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByTestId('experience-list-option-delete-btn'));
+
+    await waitFor(() => {
+      expect(alertSpy).toHaveBeenCalledWith(
+        'Delete List',
+        expect.stringContaining('Are you sure you want to delete'),
+        expect.any(Array),
+      );
+      expect(apiRequestMock).toHaveBeenCalledWith('DELETE', '/me/experience-lists/exp-list-detail-1');
+      expect(mockGoBack).toHaveBeenCalled();
+    });
+
+    alertSpy.mockRestore();
+  });
+
+  test('non-owners (editor/viewer) do not see the options menu button or interactive visibility badge (Requirement 3.5, Task 27.1)', async () => {
+    apiRequestMock.mockImplementation(async (_method, path) => {
+      if (path === '/experience-lists/exp-list-detail-1') {
+        return sampleViewerList;
+      }
+      return {};
+    });
+
+    renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('experience-list-name')).toBeTruthy();
+    });
+
+    // Options menu button is hidden for non-owner
+    expect(screen.queryByTestId('experience-list-options-menu-btn')).toBeNull();
+    // Interactive badge is replaced by static text
+    expect(screen.queryByTestId('experience-list-visibility-toggle-badge')).toBeNull();
+    expect(screen.getByText(/Created by/)).toBeTruthy();
+  });
+
+  test('dismisses keyboard when closing add items modal or adding an item', async () => {
+    const newExperience = {
+      id: 'exp-space',
+      name: 'Space Mountain',
+      park: 'Magic Kingdom',
+      category: 'Ride',
+    };
+
+    apiRequestMock.mockImplementation(async (method, path) => {
+      if (path === '/experience-lists/exp-list-detail-1') {
+        return sampleOwnerList;
+      }
+      if (typeof path === 'string' && path.startsWith('/catalog?')) {
+        return { experiences: [newExperience] };
+      }
+      if (
+        path === '/me/experience-lists/exp-list-detail-1/items' &&
+        method === 'POST'
+      ) {
+        return {};
+      }
+      return {};
+    });
+
+    const dismissSpy = jest.spyOn(Keyboard, 'dismiss');
+    renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('experience-list-add-items-btn')).toBeTruthy();
+    });
+
+    // Open add items modal
+    fireEvent.press(screen.getByTestId('experience-list-add-items-btn'));
+    expect(screen.getByTestId('experience-list-add-items-modal')).toBeTruthy();
+
+    // Close add items modal via close button
+    fireEvent.press(screen.getByTestId('close-experience-list-add-items-btn'));
+    expect(dismissSpy).toHaveBeenCalled();
+
+    // Reopen and search
+    fireEvent.press(screen.getByTestId('experience-list-add-items-btn'));
+    fireEvent.changeText(
+      screen.getByTestId('experience-list-add-items-search-input'),
+      'Space',
+    );
+    await waitFor(() => {
+      expect(screen.getByTestId('experience-list-add-items-result-exp-space')).toBeTruthy();
+    });
+    dismissSpy.mockClear();
+    fireEvent.press(screen.getByTestId('experience-list-add-items-result-exp-space'));
+    expect(dismissSpy).toHaveBeenCalled();
+
+    dismissSpy.mockRestore();
+  });
+
+  test('dismisses keyboard when canceling or saving list rename modal', async () => {
+    const dismissSpy = jest.spyOn(Keyboard, 'dismiss');
+    renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('experience-list-options-menu-btn')).toBeTruthy();
+    });
+
+    // Open options menu
+    fireEvent.press(screen.getByTestId('experience-list-options-menu-btn'));
+    await waitFor(() => {
+      expect(screen.getByTestId('experience-list-option-rename-btn')).toBeTruthy();
+    });
+
+    // Open rename modal
+    fireEvent.press(screen.getByTestId('experience-list-option-rename-btn'));
+    expect(screen.getByTestId('rename-experience-list-modal')).toBeTruthy();
+
+    // Cancel rename
+    dismissSpy.mockClear();
+    fireEvent.press(screen.getByTestId('cancel-rename-experience-list-btn'));
+    expect(dismissSpy).toHaveBeenCalled();
+
+    // Reopen rename modal and save
+    fireEvent.press(screen.getByTestId('experience-list-options-menu-btn'));
+    await waitFor(() => {
+      expect(screen.getByTestId('experience-list-option-rename-btn')).toBeTruthy();
+    });
+    fireEvent.press(screen.getByTestId('experience-list-option-rename-btn'));
+    fireEvent.changeText(screen.getByTestId('rename-experience-list-input'), 'Updated Exp List Name');
+
+    dismissSpy.mockClear();
+    fireEvent.press(screen.getByTestId('save-rename-experience-list-btn'));
+    expect(dismissSpy).toHaveBeenCalled();
+
+    dismissSpy.mockRestore();
+  });
 });
+
 

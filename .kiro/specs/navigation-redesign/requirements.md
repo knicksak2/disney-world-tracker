@@ -169,6 +169,22 @@ Discover-only action are otherwise unchanged.
     the same create-list modal `MyFoodListsScreen`/`MyExperienceListsScreen` already uses, without
     navigating away from the Collection screen; "Discover" continues to navigate to
     `FoodListDiscoveryScreen`/`ExperienceListDiscoveryScreen` unchanged.
+8d. (Supersedes 8c's conditional-only "View all" row and header actions without direct Saved access.)
+    WHEN "Lists" is active on the Collection screen:
+    - THE "My Food Lists" and "My Experience Lists" card headers SHALL each present a "Saved" action
+      alongside "+ New" and "Discover" that navigates to `MyFoodListsScreen`/`MyExperienceListsScreen`
+      with `{ initialTab: 'saved' }`, displaying the count of saved lists if greater than 0
+      (e.g., "Saved (3)");
+    - THE "My Food Lists" and "My Experience Lists" cards SHALL unconditionally provide entry points
+      to `MyFoodListsScreen`/`MyExperienceListsScreen`:
+      WHERE the User owns 1 or more lists of that type, THE card SHALL render a "View all (N) →" row
+      (`N` = total owned count) navigating to `MyFoodListsScreen`/`MyExperienceListsScreen` regardless
+      of whether `N` is greater than 4 or 4 or fewer;
+      WHERE the User owns 0 lists of that type, THE card's empty state SHALL render a navigation action
+      ("View saved lists (M) →" when `M = saved count > 0`, or "View food lists →" / "View experience lists →"
+      when 0 saved lists exist) navigating to the corresponding screen;
+    - THE "+ New" action continues to open the create modal in place, and "Discover" continues to navigate
+      to `FoodListDiscoveryScreen`/`ExperienceListDiscoveryScreen` unchanged.
 9. WHEN "Park Stats" is active, THE screen SHALL present overall completion and per-park coverage progress bars derived from `/me/stats`, with an action navigating to the StatsStack overview.
 
 ### Requirement 7: You & Crew (Identity, Friends, Settings)

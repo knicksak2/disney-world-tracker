@@ -26,8 +26,8 @@ export type CollectionStackParamList = {
   PinAttribution: undefined;
   PinShowcase: { userId?: string; readOnly?: boolean } | undefined;
   MyFoodHistory: undefined;
-  MyFoodLists: undefined;
-  MyExperienceLists: undefined;
+  MyFoodLists: { initialTab?: 'owned' | 'saved' } | undefined;
+  MyExperienceLists: { initialTab?: 'owned' | 'saved' } | undefined;
   Stats: NavigatorScreenParams<StatsStackParamList> | undefined;
 };
 

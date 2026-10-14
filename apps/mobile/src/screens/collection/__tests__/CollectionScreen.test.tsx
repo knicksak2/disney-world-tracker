@@ -5,7 +5,7 @@
 
 import React from 'react';
 import { View } from 'react-native';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import {
   NavigationContainer,
   createNavigationContainerRef,
@@ -453,7 +453,7 @@ describe('CollectionScreen — Disney Vault Hub', () => {
     expect(screen.getByText('View all (5) →')).toBeTruthy();
   });
 
-  it('renders no "View all" row when 4 or fewer food lists are owned', async () => {
+  it('renders "View all (4) →" row even when 4 or fewer food lists are owned, navigating to MyFoodLists (Property 13)', async () => {
     const fourOwned = [
       { ...mockFoodLists.owned[0]!, id: 'list-a', name: 'List A', pinnedAt: null },
       { ...mockFoodLists.owned[0]!, id: 'list-b', name: 'List B', pinnedAt: null },
@@ -471,7 +471,8 @@ describe('CollectionScreen — Disney Vault Hub', () => {
       return {} as never;
     });
 
-    renderCollection();
+    const navRef = createNavigationContainerRef();
+    renderCollection(navRef);
     fireEvent.press(screen.getByTestId('vault-seg-lists'));
 
     await waitFor(() => {
@@ -480,7 +481,70 @@ describe('CollectionScreen — Disney Vault Hub', () => {
       expect(screen.getByTestId('food-list-preview-row-list-c')).toBeTruthy();
       expect(screen.getByTestId('food-list-preview-row-list-d')).toBeTruthy();
     });
-    expect(screen.queryByTestId('food-lists-view-all-row')).toBeNull();
+    expect(screen.getByTestId('food-lists-view-all-row')).toBeTruthy();
+    expect(screen.getByText('View all (4) →')).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId('food-lists-view-all-row'));
+    await waitFor(() => {
+      expect(navRef.getCurrentRoute()?.name).toBe('MyFoodLists');
+      expect(navRef.getCurrentRoute()?.params).toEqual({ initialTab: 'owned' });
+    });
+  });
+
+  it('tapping "Saved" link in Food Lists card header navigates to MyFoodLists with initialTab: "saved" (Property 13)', async () => {
+    const navRef = createNavigationContainerRef();
+    renderCollection(navRef);
+    fireEvent.press(screen.getByTestId('vault-seg-lists'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('food-lists-saved-link')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByTestId('food-lists-saved-link'));
+    await waitFor(() => {
+      expect(navRef.getCurrentRoute()?.name).toBe('MyFoodLists');
+      expect(navRef.getCurrentRoute()?.params).toEqual({ initialTab: 'saved' });
+    });
+  });
+
+  it('renders View all link in empty food lists state and navigates to MyFoodLists (Property 13)', async () => {
+    mockApiRequest.mockImplementation(async (_method: string, path: string) => {
+      if (path === '/me/pins') return mockBoardData as never;
+      if (path === '/me/pin-showcase') return mockShowcaseData as never;
+      if (path === '/me/food-item-logs') return mockFoodLogs as never;
+      if (path === '/me/food-lists/collection')
+        return {
+          owned: [],
+          saved: [
+            {
+              available: true,
+              id: 'saved-1',
+              name: 'Saved List 1',
+              itemCount: 3,
+              likeCount: 5,
+              visibility: 'public',
+            },
+          ],
+        } as never;
+      if (path === '/me/experience-lists/collection') return mockExperienceLists as never;
+      if (path === '/me/stats?percentile=true') return mockStats as never;
+      return {} as never;
+    });
+
+    const navRef = createNavigationContainerRef();
+    renderCollection(navRef);
+    fireEvent.press(screen.getByTestId('vault-seg-lists'));
+
+    await waitFor(() => {
+      expect(screen.getByText('You have 1 saved food list.')).toBeTruthy();
+      expect(screen.getByTestId('food-lists-view-all-row')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByTestId('food-lists-view-all-row'));
+    await waitFor(() => {
+      expect(navRef.getCurrentRoute()?.name).toBe('MyFoodLists');
+      expect(navRef.getCurrentRoute()?.params).toEqual({ initialTab: 'saved' });
+    });
   });
 
   it('tapping a specific food list row navigates to FoodListDetail with that row\'s own id (Property 11)', async () => {
@@ -808,6 +872,81 @@ describe('CollectionScreen — Disney Vault Hub', () => {
 
     await waitFor(() => {
       expect(navRef.getCurrentRoute()?.name).toBe('MyExperienceLists');
+      expect(navRef.getCurrentRoute()?.params).toEqual({ initialTab: 'owned' });
+    });
+  });
+
+  it('renders "View all (1) →" row even when 4 or fewer experience lists are owned (Property 13)', async () => {
+    const navRef = createNavigationContainerRef();
+    renderCollection(navRef);
+    fireEvent.press(screen.getByTestId('vault-seg-lists'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('experience-list-preview-row-exp-list-1')).toBeTruthy();
+    });
+
+    const viewAllRow = screen.getByTestId('experience-lists-view-all-row');
+    expect(within(viewAllRow).getByText('View all (1) →')).toBeTruthy();
+    fireEvent.press(viewAllRow);
+    await waitFor(() => {
+      expect(navRef.getCurrentRoute()?.name).toBe('MyExperienceLists');
+      expect(navRef.getCurrentRoute()?.params).toEqual({ initialTab: 'owned' });
+    });
+  });
+
+  it('tapping "Saved" link in Experience Lists card header navigates to MyExperienceLists with initialTab: "saved" (Property 13)', async () => {
+    const navRef = createNavigationContainerRef();
+    renderCollection(navRef);
+    fireEvent.press(screen.getByTestId('vault-seg-lists'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('experience-lists-saved-link')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByTestId('experience-lists-saved-link'));
+    await waitFor(() => {
+      expect(navRef.getCurrentRoute()?.name).toBe('MyExperienceLists');
+      expect(navRef.getCurrentRoute()?.params).toEqual({ initialTab: 'saved' });
+    });
+  });
+
+  it('renders View all link in empty experience lists state and navigates to MyExperienceLists (Property 13)', async () => {
+    mockApiRequest.mockImplementation(async (_method: string, path: string) => {
+      if (path === '/me/pins') return mockBoardData as never;
+      if (path === '/me/pin-showcase') return mockShowcaseData as never;
+      if (path === '/me/food-item-logs') return mockFoodLogs as never;
+      if (path === '/me/food-lists/collection') return mockFoodLists as never;
+      if (path === '/me/experience-lists/collection')
+        return {
+          owned: [],
+          saved: [
+            {
+              available: true,
+              id: 'saved-exp-1',
+              name: 'Saved Exp List 1',
+              itemCount: 2,
+              likeCount: 4,
+              visibility: 'public',
+            },
+          ],
+        } as never;
+      if (path === '/me/stats?percentile=true') return mockStats as never;
+      return {} as never;
+    });
+
+    const navRef = createNavigationContainerRef();
+    renderCollection(navRef);
+    fireEvent.press(screen.getByTestId('vault-seg-lists'));
+
+    await waitFor(() => {
+      expect(screen.getByText('You have 1 saved experience list.')).toBeTruthy();
+      expect(screen.getByTestId('experience-lists-view-all-row')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByTestId('experience-lists-view-all-row'));
+    await waitFor(() => {
+      expect(navRef.getCurrentRoute()?.name).toBe('MyExperienceLists');
+      expect(navRef.getCurrentRoute()?.params).toEqual({ initialTab: 'saved' });
     });
   });
 

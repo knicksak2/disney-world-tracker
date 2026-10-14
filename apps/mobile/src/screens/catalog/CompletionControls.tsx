@@ -57,7 +57,9 @@ import React, { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   StyleSheet,
   Text,
   TextInput,
@@ -407,7 +409,10 @@ export default function CompletionControls({
         animationType="fade"
         onRequestClose={closeEditor}
       >
-        <View style={styles.modalBackdrop}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalBackdrop}
+        >
           <View style={styles.modalCard} testID="completion-edit-modal">
             <Text style={styles.modalTitle}>Edit completion date</Text>
             <Text style={styles.modalHint}>
@@ -456,7 +461,7 @@ export default function CompletionControls({
               />
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );

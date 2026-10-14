@@ -8,7 +8,9 @@
 
 import React, { useCallback, useState } from 'react';
 import {
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -115,7 +117,10 @@ export function MagicFab({
         onRequestClose={() => setPickerVisible(false)}
         testID="fab-experience-picker-modal"
       >
-        <View style={styles.modalBackdrop}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalBackdrop}
+        >
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle} testID="fab-picker-title">
@@ -141,7 +146,7 @@ export function MagicFab({
               onSelect={handleSelectExperience}
             />
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Log Visit Modal for selected ride */}

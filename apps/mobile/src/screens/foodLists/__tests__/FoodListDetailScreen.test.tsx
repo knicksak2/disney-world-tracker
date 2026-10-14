@@ -1,6 +1,6 @@
 // Feature: food-lists, Task 8.4, 8.7, 8.8, 8.13, 8.15, 8.16 — FoodListDetailScreen interaction tests
 import React from 'react';
-import { Alert } from 'react-native';
+import { Alert, Keyboard } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
@@ -361,7 +361,7 @@ describe('FoodListDetailScreen', () => {
     await waitFor(() => {
       expect(screen.getByTestId('food-list-toggle-checklist-btn')).toBeTruthy();
     });
-    expect(screen.getByText('Make checklist')).toBeTruthy();
+    expect(screen.getByText('Checklist')).toBeTruthy();
 
     fireEvent.press(screen.getByTestId('food-list-toggle-checklist-btn'));
 
@@ -2279,5 +2279,292 @@ describe('FoodListDetailScreen', () => {
     });
     alertSpy.mockRestore();
   });
+
+  test('owner can toggle list visibility directly via the header badge (Requirement 3.5, Task 22.1)', async () => {
+    let currentDetail: FoodListDetailDTO = {
+      ...sampleOwnerList,
+      visibility: 'private',
+    };
+
+    apiRequestMock.mockImplementation(async (method, path, body) => {
+      if (path === '/food-lists/list-detail-1' && method === 'GET') {
+        return currentDetail;
+      }
+      if (path === '/me/food-lists/list-detail-1' && method === 'PATCH') {
+        currentDetail = {
+          ...currentDetail,
+          visibility: (body as { visibility: 'public' | 'private' }).visibility,
+        };
+        return currentDetail;
+      }
+      return {};
+    });
+
+    renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('food-list-visibility-toggle-badge')).toBeTruthy();
+    });
+
+    const badge = screen.getByTestId('food-list-visibility-toggle-badge');
+    expect(within(badge).getByText('Private')).toBeTruthy();
+
+    fireEvent.press(badge);
+
+    await waitFor(() => {
+      expect(apiRequestMock).toHaveBeenCalledWith('PATCH', '/me/food-lists/list-detail-1', {
+        visibility: 'public',
+      });
+      expect(within(screen.getByTestId('food-list-visibility-toggle-badge')).getByText('Public')).toBeTruthy();
+    });
+  });
+
+  test('owner can toggle list visibility via the options menu modal (Requirement 3.5, Task 22.1)', async () => {
+    let currentDetail: FoodListDetailDTO = {
+      ...sampleOwnerList,
+      visibility: 'public',
+    };
+
+    apiRequestMock.mockImplementation(async (method, path, body) => {
+      if (path === '/food-lists/list-detail-1' && method === 'GET') {
+        return currentDetail;
+      }
+      if (path === '/me/food-lists/list-detail-1' && method === 'PATCH') {
+        currentDetail = {
+          ...currentDetail,
+          visibility: (body as { visibility: 'public' | 'private' }).visibility,
+        };
+        return currentDetail;
+      }
+      return {};
+    });
+
+    renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('food-list-options-menu-btn')).toBeTruthy();
+    });
+
+    // Open options menu modal
+    fireEvent.press(screen.getByTestId('food-list-options-menu-btn'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('food-list-options-menu-modal')).toBeTruthy();
+      expect(screen.getByTestId('food-list-option-visibility-btn')).toBeTruthy();
+      expect(screen.getByText('Make Private')).toBeTruthy();
+    });
+
+    // Tap "Make Private"
+    fireEvent.press(screen.getByTestId('food-list-option-visibility-btn'));
+
+    await waitFor(() => {
+      expect(apiRequestMock).toHaveBeenCalledWith('PATCH', '/me/food-lists/list-detail-1', {
+        visibility: 'private',
+      });
+    });
+  });
+
+  test('owner can rename list via the options menu modal (Requirement 3.5, Task 22.1)', async () => {
+    let currentDetail: FoodListDetailDTO = {
+      ...sampleOwnerList,
+      name: 'Old Food List',
+    };
+
+    apiRequestMock.mockImplementation(async (method, path, body) => {
+      if (path === '/food-lists/list-detail-1' && method === 'GET') {
+        return currentDetail;
+      }
+      if (path === '/me/food-lists/list-detail-1' && method === 'PATCH') {
+        currentDetail = {
+          ...currentDetail,
+          name: (body as { name: string }).name,
+        };
+        return currentDetail;
+      }
+      return {};
+    });
+
+    renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('food-list-options-menu-btn')).toBeTruthy();
+    });
+
+    // Open options menu
+    fireEvent.press(screen.getByTestId('food-list-options-menu-btn'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('food-list-option-rename-btn')).toBeTruthy();
+    });
+
+    // Press Rename option -> opens rename modal
+    fireEvent.press(screen.getByTestId('food-list-option-rename-btn'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('rename-food-list-modal')).toBeTruthy();
+      expect(screen.getByTestId('rename-food-list-input')).toBeTruthy();
+    });
+
+    // Type new name and save
+    fireEvent.changeText(screen.getByTestId('rename-food-list-input'), 'Renamed Food List');
+    fireEvent.press(screen.getByTestId('save-rename-food-list-btn'));
+
+    await waitFor(() => {
+      expect(apiRequestMock).toHaveBeenCalledWith('PATCH', '/me/food-lists/list-detail-1', {
+        name: 'Renamed Food List',
+      });
+      expect(within(screen.getByTestId('food-list-name')).getByText('Renamed Food List')).toBeTruthy();
+    });
+  });
+
+  test('owner can delete list via the options menu modal (Requirement 3.5, Task 22.1)', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation((_title, _message, buttons) => {
+      const deleteBtn = buttons?.find((b) => b.text === 'Delete');
+      deleteBtn?.onPress?.();
+    });
+
+    apiRequestMock.mockImplementation(async (method, path) => {
+      if (path === '/food-lists/list-detail-1') {
+        return sampleOwnerList;
+      }
+      if (path === '/me/food-lists/list-detail-1' && method === 'DELETE') {
+        return {};
+      }
+      return {};
+    });
+
+    renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('food-list-options-menu-btn')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByTestId('food-list-options-menu-btn'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('food-list-option-delete-btn')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByTestId('food-list-option-delete-btn'));
+
+    await waitFor(() => {
+      expect(alertSpy).toHaveBeenCalledWith(
+        'Delete List',
+        expect.stringContaining('Are you sure you want to delete'),
+        expect.any(Array),
+      );
+      expect(apiRequestMock).toHaveBeenCalledWith('DELETE', '/me/food-lists/list-detail-1');
+      expect(mockGoBack).toHaveBeenCalled();
+    });
+
+    alertSpy.mockRestore();
+  });
+
+  test('non-owners (editor/viewer) do not see the options menu button or interactive visibility badge (Requirement 3.5, Task 22.1)', async () => {
+    apiRequestMock.mockImplementation(async (_method, path) => {
+      if (path === '/food-lists/list-detail-1') {
+        return sampleViewerList;
+      }
+      return {};
+    });
+
+    renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('food-list-name')).toBeTruthy();
+    });
+
+    // Options menu button is hidden for non-owner
+    expect(screen.queryByTestId('food-list-options-menu-btn')).toBeNull();
+    // Interactive badge is replaced by static text
+    expect(screen.queryByTestId('food-list-visibility-toggle-badge')).toBeNull();
+    expect(screen.getByText(/Created by/)).toBeTruthy();
+  });
+
+  test('dismisses keyboard when closing restaurant search modal or selecting a restaurant', async () => {
+    apiRequestMock.mockImplementation(async (_method, path) => {
+      if (path === '/food-lists/list-detail-1') {
+        return sampleOwnerList;
+      }
+      if (path.startsWith('/catalog')) {
+        return {
+          experiences: [
+            {
+              id: 'exp-gaston',
+              name: "Gaston's Tavern",
+              park: 'Magic Kingdom',
+              category: 'Restaurant',
+            },
+          ],
+        };
+      }
+      return {};
+    });
+
+    const dismissSpy = jest.spyOn(Keyboard, 'dismiss');
+    renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('food-list-add-items-btn')).toBeTruthy();
+    });
+
+    // Open restaurant search modal
+    fireEvent.press(screen.getByTestId('food-list-add-items-btn'));
+    expect(screen.getByTestId('restaurant-search-modal')).toBeTruthy();
+
+    // Close restaurant search modal via close button
+    fireEvent.press(screen.getByTestId('close-restaurant-search-btn'));
+    expect(dismissSpy).toHaveBeenCalled();
+
+    // Reopen and select a restaurant
+    fireEvent.press(screen.getByTestId('food-list-add-items-btn'));
+    await waitFor(() => {
+      expect(screen.getByTestId('restaurant-select-row-exp-gaston')).toBeTruthy();
+    });
+    dismissSpy.mockClear();
+    fireEvent.press(screen.getByTestId('restaurant-select-row-exp-gaston'));
+    expect(dismissSpy).toHaveBeenCalled();
+
+    dismissSpy.mockRestore();
+  });
+
+  test('dismisses keyboard when canceling or saving list rename modal', async () => {
+    const dismissSpy = jest.spyOn(Keyboard, 'dismiss');
+    renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('food-list-options-menu-btn')).toBeTruthy();
+    });
+
+    // Open options menu
+    fireEvent.press(screen.getByTestId('food-list-options-menu-btn'));
+    await waitFor(() => {
+      expect(screen.getByTestId('food-list-option-rename-btn')).toBeTruthy();
+    });
+
+    // Open rename modal
+    fireEvent.press(screen.getByTestId('food-list-option-rename-btn'));
+    expect(screen.getByTestId('rename-food-list-modal')).toBeTruthy();
+
+    // Cancel rename
+    dismissSpy.mockClear();
+    fireEvent.press(screen.getByTestId('cancel-rename-food-list-btn'));
+    expect(dismissSpy).toHaveBeenCalled();
+
+    // Reopen rename modal and save
+    fireEvent.press(screen.getByTestId('food-list-options-menu-btn'));
+    await waitFor(() => {
+      expect(screen.getByTestId('food-list-option-rename-btn')).toBeTruthy();
+    });
+    fireEvent.press(screen.getByTestId('food-list-option-rename-btn'));
+    fireEvent.changeText(screen.getByTestId('rename-food-list-input'), 'Updated List Name');
+
+    dismissSpy.mockClear();
+    fireEvent.press(screen.getByTestId('save-rename-food-list-btn'));
+    expect(dismissSpy).toHaveBeenCalled();
+
+    dismissSpy.mockRestore();
+  });
 });
+
 

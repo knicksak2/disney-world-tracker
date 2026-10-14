@@ -9,7 +9,9 @@
 
 import React, { useEffect, useState } from 'react';
 import {
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -184,7 +186,10 @@ export function TripGuestManagementModal({
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={styles.modalOverlay}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.modalOverlay}
+      >
         <View style={styles.modalContent} testID="trip-guest-management-modal">
           <View style={styles.headerRow}>
             <Text style={styles.headerTitle}>Manage Trip Guests</Text>
@@ -364,7 +369,7 @@ export function TripGuestManagementModal({
             )}
           </ScrollView>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

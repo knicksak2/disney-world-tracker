@@ -737,7 +737,7 @@ export function ExpenseFormModal({
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.modalOverlay}
       >
         <View style={styles.modalContent} testID="expense-form-modal">
@@ -2171,7 +2171,10 @@ export function ExpenseFormModal({
           transparent
           onRequestClose={() => setShowExpPicker(false)}
         >
-          <View style={styles.modalOverlay}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={styles.modalOverlay}
+          >
             <View style={styles.modalContent} testID="restaurant-picker-modal">
               <View style={styles.headerRow}>
                 <Text style={styles.headerTitle}>Select Disney Restaurant</Text>
@@ -2197,7 +2200,7 @@ export function ExpenseFormModal({
                 }}
               />
             </View>
-          </View>
+          </KeyboardAvoidingView>
         </Modal>
       ) : null}
 

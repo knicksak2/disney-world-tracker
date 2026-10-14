@@ -100,6 +100,7 @@ const config: ExpoConfig = {
   },
   android: {
     package: 'com.dwt.mobile',
+    softwareKeyboardLayoutMode: 'resize',
     // FCM config for the `com.dwt.mobile` Firebase app. Expo's prebuild reads
     // this file and wires the Google Services Gradle plugin automatically, so
     // the native FCM SDK can obtain a device push token in a dev/production
