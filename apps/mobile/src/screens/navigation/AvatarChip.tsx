@@ -7,7 +7,7 @@
  */
 
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useQuery } from '@tanstack/react-query';
@@ -15,7 +15,10 @@ import { isAvatarPresetId } from '@dwt/shared';
 
 import { apiRequest } from '../../api/client';
 import { renderAvatarPreset } from '../../avatars/AvatarPresets';
-import { color } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { withAlpha } from '../../theme/theme';
+import { useAppTheme } from '../../theme/useAppTheme';
+import { AVATAR_PILL } from './AvatarChip.palette';
 
 interface MeResponse {
   readonly user: { readonly id: string; readonly email: string };
@@ -34,10 +37,14 @@ export interface AvatarChipProps {
 
 export function AvatarChip({
   size = 30,
-  tintColor = color.textOnPrimary,
+  tintColor: tintColorProp,
   testID = 'avatar-chip',
   variant = 'icon',
 }: AvatarChipProps): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
+  // Default tint: white on the header gradient (textOnPrimary).
+  const tintColor = tintColorProp ?? t.color.textOnPrimary;
   const navigation = useNavigation<any>();
   const meQuery = useQuery<MeResponse>({
     queryKey: ['me'],
@@ -117,7 +124,7 @@ export function AvatarChip({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   container: {
     justifyContent: 'center',
     alignItems: 'center',
@@ -135,9 +142,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    // Neutral white veil on the header gradient (rule 5, exempt).
     backgroundColor: 'rgba(255, 255, 255, 0.18)',
     borderWidth: 1.5,
-    borderColor: 'rgba(246, 195, 67, 0.7)',
+    borderColor: withAlpha(t.color.accent, 0.7),
     borderRadius: 20,
     paddingVertical: 3,
     paddingRight: 10,
@@ -148,7 +156,7 @@ const styles = StyleSheet.create({
     width: 26,
     height: 26,
     borderRadius: 13,
-    backgroundColor: '#f6c343',
+    backgroundColor: t.color.accent,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
@@ -156,13 +164,13 @@ const styles = StyleSheet.create({
   pillInitial: {
     fontSize: 13,
     fontWeight: '800',
-    color: '#3b1d60',
+    color: AVATAR_PILL[t.scheme].initialText,
   },
   pillLabel: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#ffffff',
+    color: t.color.textOnPrimary,
   },
-});
+}));
 
 export default AvatarChip;

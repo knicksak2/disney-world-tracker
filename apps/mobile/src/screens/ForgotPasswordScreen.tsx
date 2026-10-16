@@ -14,7 +14,6 @@ import {
   Platform,
   Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   TextInput,
   View,
@@ -24,7 +23,8 @@ import type { ForgotPasswordResponseDTO } from '@dwt/shared';
 
 import { ApiError, apiRequest } from '../api/client';
 import type { AuthStackParamList } from '../navigation/RootNavigator';
-import { theme } from '../theme/theme';
+import { makeStyles } from '../theme/makeStyles';
+import { useAppTheme } from '../theme/useAppTheme';
 import {
   Card,
   GradientHeader,
@@ -38,6 +38,8 @@ export default function ForgotPasswordScreen({
   navigation,
   route,
 }: Props): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const initialEmail = route.params?.email ?? '';
   const [email, setEmail] = useState(initialEmail);
   const [submitting, setSubmitting] = useState(false);
@@ -115,7 +117,8 @@ export default function ForgotPasswordScreen({
                   keyboardType="email-address"
                   textContentType="emailAddress"
                   placeholder="you@example.com"
-                  placeholderTextColor={theme.color.textSecondary}
+                  placeholderTextColor={t.color.textSecondary}
+                  keyboardAppearance={t.scheme}
                   editable={!submitting}
                   accessibilityLabel="Email Address"
                   testID="forgot-email"
@@ -166,60 +169,60 @@ export default function ForgotPasswordScreen({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   flex: { flex: 1 },
-  scroll: { flexGrow: 1, paddingBottom: theme.spacing.xxl },
+  scroll: { flexGrow: 1, paddingBottom: t.spacing.xxl },
   body: {
-    paddingHorizontal: theme.spacing.xl,
-    marginTop: theme.spacing.lg,
-    gap: theme.spacing.lg,
+    paddingHorizontal: t.spacing.xl,
+    marginTop: t.spacing.lg,
+    gap: t.spacing.lg,
   },
   field: {
-    marginBottom: theme.spacing.lg,
+    marginBottom: t.spacing.lg,
   },
   label: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
-    marginBottom: theme.spacing.xs,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
+    marginBottom: t.spacing.xs,
   },
   input: {
     borderWidth: 1,
-    borderColor: theme.color.border,
-    borderRadius: theme.radius.md,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.md,
+    borderColor: t.color.border,
+    borderRadius: t.radius.md,
+    paddingHorizontal: t.spacing.md,
+    paddingVertical: t.spacing.md,
     fontSize: 16,
-    color: theme.color.textPrimary,
-    backgroundColor: theme.color.surfaceAlt,
+    color: t.color.textPrimary,
+    backgroundColor: t.color.surfaceAlt,
   },
   inputError: {
-    borderColor: theme.color.danger,
+    borderColor: t.color.danger,
   },
   fieldError: {
-    marginTop: theme.spacing.xs,
-    color: theme.color.danger,
+    marginTop: t.spacing.xs,
+    color: t.color.danger,
     fontSize: 13,
   },
   formError: {
-    marginBottom: theme.spacing.md,
-    color: theme.color.danger,
+    marginBottom: t.spacing.md,
+    color: t.color.danger,
     fontSize: 14,
     textAlign: 'center',
   },
   submit: {
-    marginTop: theme.spacing.xs,
+    marginTop: t.spacing.xs,
   },
   linkButton: {
     alignSelf: 'center',
-    paddingVertical: theme.spacing.sm,
-    paddingHorizontal: theme.spacing.md,
+    paddingVertical: t.spacing.sm,
+    paddingHorizontal: t.spacing.md,
   },
   linkText: {
-    ...theme.typography.body,
-    color: theme.color.textSecondary,
+    ...t.typography.body,
+    color: t.color.textSecondary,
   },
   linkTextEmphasis: {
-    color: theme.color.primary,
+    color: t.color.primaryFg,
     fontWeight: '600',
   },
-});
+}));

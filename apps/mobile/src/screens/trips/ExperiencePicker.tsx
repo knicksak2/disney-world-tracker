@@ -16,7 +16,6 @@ import {
   Modal,
   Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   TextInput,
   View,
@@ -29,8 +28,11 @@ import { Ionicons } from '@expo/vector-icons';
 import type { ExperienceDTO, Park } from '@dwt/shared';
 
 import { ApiError, apiRequest } from '../../api/client';
-import { theme, categoryVisual } from '../../theme/theme';
+import { theme } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme } from '../../theme/useAppTheme';
 import { Badge } from '../../theme/components';
+import { PICKER } from './ExperiencePicker.palette';
 import { DESTINATIONS, type DestinationId } from '../catalog/destinations';
 import { groupByPavilionFiltered } from '../catalog/catalogGrouping';
 import {
@@ -180,6 +182,8 @@ export function ExperiencePicker({
   favoriteSourcedLoading = false,
   alreadyPlannedIds,
 }: ExperiencePickerProps): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const [activeTab, setActiveTab] = useState<ExperiencePickerTab>(defaultTab);
   const [selectedPark, setSelectedPark] = useState<DestinationId | 'all'>(
     defaultPark && isKnownPark(defaultPark) ? defaultPark : 'all',
@@ -477,6 +481,7 @@ export function ExperiencePicker({
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.filterBarScroll}
+            keyboardShouldPersistTaps="handled"
           >
             <Pressable
               style={[
@@ -532,6 +537,7 @@ export function ExperiencePicker({
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.filterBarScroll}
+            keyboardShouldPersistTaps="handled"
           >
             {/* Filters Button */}
             <Pressable
@@ -548,7 +554,7 @@ export function ExperiencePicker({
               <Ionicons
                 name="options-outline"
                 size={14}
-                color={activeFilterCount > 0 ? '#FFFFFF' : theme.color.textSecondary}
+                color={activeFilterCount > 0 ? t.color.textOnPrimary : t.color.textSecondary}
               />
               <Text
                 style={[
@@ -645,7 +651,7 @@ export function ExperiencePicker({
                   accessibilityLabel="Close filters sheet"
                   testID={`${testIDPrefix}-modal-close`}
                 >
-                  <Ionicons name="close" size={22} color={theme.color.textPrimary} />
+                  <Ionicons name="close" size={22} color={t.color.textPrimary} />
                 </Pressable>
               </View>
             </View>
@@ -655,6 +661,7 @@ export function ExperiencePicker({
               style={styles.modalScroll}
               contentContainerStyle={styles.modalScrollContent}
               showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
             >
               {/* Lands Section */}
               {landChips.length > 0 && (
@@ -796,7 +803,8 @@ export function ExperiencePicker({
             value={breakTitle}
             onChangeText={setBreakTitle}
             placeholder="Break description (e.g. Midday Hotel Nap, Pool Time)"
-            placeholderTextColor={theme.color.textSecondary}
+            placeholderTextColor={t.color.textSecondary}
+            keyboardAppearance={t.scheme}
             testID={`${testIDPrefix}-break-title-input`}
           />
 
@@ -812,7 +820,7 @@ export function ExperiencePicker({
                 accessibilityLabel="Clear attached location"
                 testID={`${testIDPrefix}-clear-staged-location`}
               >
-                <Ionicons name="close-circle" size={18} color={theme.color.textSecondary} />
+                <Ionicons name="close-circle" size={18} color={t.color.textSecondary} />
               </Pressable>
             </View>
           )}
@@ -857,7 +865,7 @@ export function ExperiencePicker({
             accessibilityState={{ disabled: busy || !breakTitle.trim() }}
             testID={`${testIDPrefix}-add-break-btn`}
           >
-            <Ionicons name={breakAddedFeedback ? "checkmark-circle" : "add-circle"} size={18} color="#FFFFFF" />
+            <Ionicons name={breakAddedFeedback ? "checkmark-circle" : "add-circle"} size={18} color={t.color.textOnPrimary} />
             <Text style={styles.addBreakBtnText}>Add Break ({breakDuration} min)</Text>
           </Pressable>
         </View>
@@ -867,7 +875,7 @@ export function ExperiencePicker({
         <Ionicons
           name="search"
           size={18}
-          color={theme.color.textSecondary}
+          color={t.color.textSecondary}
         />
         <TextInput
           value={searchInput}
@@ -885,7 +893,8 @@ export function ExperiencePicker({
               ? 'Search your favorites...'
               : 'Search experiences, lands, or facets...'
           }
-          placeholderTextColor={theme.color.textSecondary}
+          placeholderTextColor={t.color.textSecondary}
+          keyboardAppearance={t.scheme}
           autoCapitalize="none"
           autoCorrect={false}
           editable={!busy}
@@ -897,7 +906,7 @@ export function ExperiencePicker({
           <Ionicons
             name="close-circle"
             size={18}
-            color={theme.color.textSecondary}
+            color={t.color.textSecondary}
             onPress={clear}
             accessibilityRole="button"
             accessibilityLabel="Clear search"
@@ -915,15 +924,15 @@ export function ExperiencePicker({
           </Text>
         ) : activeTab === 'myLists' && listSourcedLoading ? (
           <View style={styles.center} testID={`${testIDPrefix}-search-loading`}>
-            <ActivityIndicator color={theme.color.primary} />
+            <ActivityIndicator color={t.color.primaryFg} />
           </View>
         ) : activeTab === 'favorites' && favoriteSourcedLoading ? (
           <View style={styles.center} testID={`${testIDPrefix}-search-loading`}>
-            <ActivityIndicator color={theme.color.primary} />
+            <ActivityIndicator color={t.color.primaryFg} />
           </View>
         ) : activeTab !== 'myLists' && activeTab !== 'favorites' && searchQuery.isLoading ? (
           <View style={styles.center} testID={`${testIDPrefix}-search-loading`}>
-            <ActivityIndicator color={theme.color.primary} />
+            <ActivityIndicator color={t.color.primaryFg} />
           </View>
         ) : activeTab !== 'myLists' && activeTab !== 'favorites' && searchQuery.isError ? (
           <Text style={styles.hint} testID={`${testIDPrefix}-search-error`}>
@@ -1023,6 +1032,8 @@ function ExperienceResultRow({
   readonly onPress: () => void;
   readonly testID: string;
 }): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const inactive = disabled || busy;
   const accessibilityAlreadyPlannedSuffix = alreadyPlanned ? ', already added to your planned list' : '';
   return (
@@ -1056,39 +1067,39 @@ function ExperienceResultRow({
         <View style={styles.resultBadges}>
           {(() => {
             const visual =
-              experience.category && experience.category in categoryVisual
-                ? categoryVisual[experience.category as keyof typeof categoryVisual]
-                : { label: experience.category || 'Experience', tint: theme.color.textSecondary };
+              experience.category && experience.category in t.categoryVisual
+                ? t.categoryVisual[experience.category as keyof typeof t.categoryVisual]
+                : { label: experience.category || 'Experience', tint: t.color.textSecondary };
             return <Badge label={visual.label} color={visual.tint} />;
           })()}
           {experience.park !== null ? (
-            <Badge label={experience.park} color={theme.color.primary} />
+            <Badge label={experience.park} color={t.color.primaryFg} />
           ) : null}
           {addedCount > 0 ? (
             <Badge
               label={addedCount === 1 ? '✓ 1 added' : `✓ ${addedCount} added`}
-              color={theme.color.success}
+              color={t.color.success}
             />
           ) : null}
           {alreadyPlanned ? (
-            <Badge label="Already added" color={theme.color.textSecondary} />
+            <Badge label="Already added" color={t.color.textSecondary} />
           ) : null}
           {isStaged ? (
-            <Badge label="📍 Attached Location" color={theme.color.primary} />
+            <Badge label="📍 Attached Location" color={t.color.primaryFg} />
           ) : null}
         </View>
       </View>
       {pending ? (
-        <ActivityIndicator color={theme.color.primary} />
+        <ActivityIndicator color={t.color.primaryFg} />
       ) : disabled ? (
         <Text style={styles.disabledTag}>{disabledLabel}</Text>
       ) : isStaged ? (
-        <Ionicons name="checkmark-circle" size={22} color={theme.color.primary} />
+        <Ionicons name="checkmark-circle" size={22} color={t.color.primaryFg} />
       ) : (
         <Ionicons
           name="add-circle-outline"
           size={22}
-          color={theme.color.primary}
+          color={t.color.primaryFg}
         />
       )}
     </Pressable>
@@ -1099,7 +1110,7 @@ function ExperienceResultRow({
 // Styles
 // ---------------------------------------------------------------------------
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   container: {},
   containerFill: {
     flex: 1,
@@ -1123,21 +1134,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 16,
-    backgroundColor: theme.color.surfaceAlt,
+    backgroundColor: t.color.surfaceAlt,
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
   },
   tabBtnActive: {
-    backgroundColor: theme.color.primary,
-    borderColor: theme.color.primary,
+    backgroundColor: t.color.primary,
+    borderColor: t.color.primary,
   },
   tabText: {
     ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     fontWeight: '500',
   },
   tabTextActive: {
-    color: '#FFFFFF',
+    color: t.color.textOnPrimary,
     fontWeight: '700',
   },
   filterBarWrap: {
@@ -1152,34 +1163,34 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.md,
     paddingVertical: 6,
     borderRadius: 16,
-    backgroundColor: theme.color.surfaceAlt,
+    backgroundColor: t.color.surfaceAlt,
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
   },
   filterChipActive: {
-    backgroundColor: theme.color.primary,
-    borderColor: theme.color.primary,
+    backgroundColor: t.color.primary,
+    borderColor: t.color.primary,
   },
   filterChipText: {
     ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     fontWeight: '500',
   },
   filterChipTextActive: {
-    color: '#FFFFFF',
+    color: t.color.textOnPrimary,
     fontWeight: '700',
   },
   filterModalBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: theme.color.surface,
-    borderColor: theme.color.borderStrong,
+    backgroundColor: t.color.surface,
+    borderColor: t.color.borderStrong,
     borderWidth: 1.5,
   },
   filterModalBtnActive: {
-    backgroundColor: theme.color.primary,
-    borderColor: theme.color.primary,
+    backgroundColor: t.color.primary,
+    borderColor: t.color.primary,
   },
   filterModalBtnText: {
     fontWeight: '600',
@@ -1187,33 +1198,33 @@ const styles = StyleSheet.create({
   chipDivider: {
     width: 1,
     height: 18,
-    backgroundColor: theme.color.border,
+    backgroundColor: t.color.border,
     alignSelf: 'center',
     marginHorizontal: theme.spacing.xs,
   },
   resetChip: {
-    backgroundColor: theme.color.surface,
-    borderColor: theme.color.border,
+    backgroundColor: t.color.surface,
+    borderColor: t.color.border,
   },
   resetChipText: {
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     fontWeight: '600',
   },
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(31, 18, 53, 0.5)',
+    backgroundColor: PICKER[t.scheme].scrim,
     justifyContent: 'flex-end',
   },
   modalBackdropDismiss: {
     flex: 1,
   },
   modalContent: {
-    backgroundColor: theme.color.surface,
+    backgroundColor: t.color.surface,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     maxHeight: '80%',
     paddingBottom: theme.spacing.xl,
-    ...theme.shadow.card,
+    ...t.shadow.card,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -1223,13 +1234,13 @@ const styles = StyleSheet.create({
     paddingTop: theme.spacing.lg,
     paddingBottom: theme.spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: theme.color.border,
+    borderBottomColor: t.color.border,
   },
   modalTitle: {
     ...theme.typography.title,
     fontSize: 18,
     fontWeight: '700',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   modalHeaderActions: {
     flexDirection: 'row',
@@ -1242,7 +1253,7 @@ const styles = StyleSheet.create({
   },
   modalClearText: {
     ...theme.typography.meta,
-    color: theme.color.primary,
+    color: t.color.primaryFg,
     fontWeight: '600',
   },
   modalCloseBtn: {
@@ -1263,7 +1274,7 @@ const styles = StyleSheet.create({
     ...theme.typography.meta,
     fontSize: 12,
     fontWeight: '700',
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     letterSpacing: 0.5,
   },
   chipGrid: {
@@ -1275,46 +1286,46 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.md,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: theme.color.surfaceAlt,
+    backgroundColor: t.color.surfaceAlt,
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
   },
   modalChipActive: {
-    backgroundColor: theme.color.primary,
-    borderColor: theme.color.primary,
+    backgroundColor: t.color.primary,
+    borderColor: t.color.primary,
   },
   modalChipText: {
     ...theme.typography.meta,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
     fontWeight: '500',
   },
   modalChipTextActive: {
-    color: '#FFFFFF',
+    color: t.color.textOnPrimary,
     fontWeight: '700',
   },
   modalFooter: {
     paddingHorizontal: theme.spacing.lg,
     paddingTop: theme.spacing.md,
     borderTopWidth: 1,
-    borderTopColor: theme.color.border,
+    borderTopColor: t.color.border,
   },
   modalApplyBtn: {
-    backgroundColor: theme.color.primary,
+    backgroundColor: t.color.primary,
     paddingVertical: 14,
     borderRadius: theme.radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    ...theme.shadow.card,
+    ...t.shadow.card,
   },
   modalApplyBtnText: {
-    color: '#FFFFFF',
+    color: t.color.textOnPrimary,
     fontWeight: '700',
     fontSize: 15,
   },
   breakCard: {
-    backgroundColor: theme.color.surfaceAlt,
+    backgroundColor: t.color.surfaceAlt,
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
     borderRadius: theme.radius.md,
     padding: theme.spacing.md,
     marginBottom: theme.spacing.md,
@@ -1322,22 +1333,22 @@ const styles = StyleSheet.create({
   },
   breakCardTitle: {
     ...theme.typography.subtitle,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
     fontWeight: '600',
   },
   breakTitleInput: {
-    backgroundColor: theme.color.surface,
+    backgroundColor: t.color.surface,
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
     borderRadius: theme.radius.sm,
     paddingHorizontal: theme.spacing.sm,
     paddingVertical: theme.spacing.sm,
     fontSize: 14,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   subLabel: {
     ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     marginTop: 2,
   },
   durationPresetsRow: {
@@ -1349,21 +1360,21 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     alignItems: 'center',
     borderRadius: theme.radius.sm,
-    backgroundColor: theme.color.surface,
+    backgroundColor: t.color.surface,
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
   },
   durChipActive: {
-    backgroundColor: theme.color.primary,
-    borderColor: theme.color.primary,
+    backgroundColor: t.color.primary,
+    borderColor: t.color.primary,
   },
   durChipText: {
     ...theme.typography.meta,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
     fontWeight: '500',
   },
   durChipTextActive: {
-    color: '#FFFFFF',
+    color: t.color.textOnPrimary,
     fontWeight: '700',
   },
   addBreakBtn: {
@@ -1371,13 +1382,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: theme.spacing.xs,
-    backgroundColor: theme.color.primary,
+    backgroundColor: t.color.primary,
     paddingVertical: theme.spacing.sm,
     borderRadius: theme.radius.sm,
     marginTop: 4,
   },
   addBreakBtnText: {
-    color: '#FFFFFF',
+    color: t.color.textOnPrimary,
     fontWeight: '600',
     fontSize: 14,
   },
@@ -1386,16 +1397,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: theme.spacing.sm,
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
     borderRadius: theme.radius.md,
     paddingHorizontal: theme.spacing.md,
-    backgroundColor: theme.color.surfaceAlt,
+    backgroundColor: t.color.surfaceAlt,
   },
   searchInput: {
     flex: 1,
     paddingVertical: theme.spacing.md,
     fontSize: 16,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   resultsArea: {
     marginTop: theme.spacing.md,
@@ -1420,7 +1431,7 @@ const styles = StyleSheet.create({
   },
   hint: {
     ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     paddingVertical: theme.spacing.md,
   },
   landSection: {
@@ -1432,19 +1443,19 @@ const styles = StyleSheet.create({
     gap: theme.spacing.xs,
     paddingVertical: 6,
     paddingHorizontal: theme.spacing.sm,
-    backgroundColor: theme.color.surfaceAlt,
+    backgroundColor: t.color.surfaceAlt,
     borderRadius: theme.radius.sm,
     marginBottom: 4,
   },
   landTitle: {
     ...theme.typography.subtitle,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
     fontWeight: '700',
     fontSize: 14,
   },
   landCount: {
     ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     fontWeight: '500',
   },
   resultRow: {
@@ -1454,10 +1465,10 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing.md,
     paddingHorizontal: theme.spacing.sm,
     borderBottomWidth: 1,
-    borderBottomColor: theme.color.border,
+    borderBottomColor: t.color.border,
   },
   resultRowPressed: {
-    backgroundColor: theme.color.surfaceAlt,
+    backgroundColor: t.color.surfaceAlt,
   },
   resultRowDisabled: {
     opacity: 0.55,
@@ -1475,26 +1486,26 @@ const styles = StyleSheet.create({
   },
   resultName: {
     ...theme.typography.subtitle,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   disabledTag: {
     ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   stagedLocationBox: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: theme.color.surface,
+    backgroundColor: t.color.surface,
     paddingHorizontal: theme.spacing.sm,
     paddingVertical: 6,
     borderRadius: theme.radius.sm,
     borderWidth: 1,
-    borderColor: theme.color.primary,
+    borderColor: t.color.primaryFg,
   },
   stagedLocationText: {
     ...theme.typography.meta,
-    color: theme.color.primary,
+    color: t.color.primaryFg,
     fontWeight: '600',
     flex: 1,
   },
@@ -1503,7 +1514,7 @@ const styles = StyleSheet.create({
     marginLeft: theme.spacing.xs,
   },
   breakFeedbackBox: {
-    backgroundColor: '#dcfce7',
+    backgroundColor: PICKER[t.scheme].breakFeedbackBg,
     paddingVertical: 6,
     paddingHorizontal: theme.spacing.sm,
     borderRadius: theme.radius.sm,
@@ -1511,14 +1522,14 @@ const styles = StyleSheet.create({
   },
   breakFeedbackText: {
     ...theme.typography.meta,
-    color: '#15803d',
+    color: PICKER[t.scheme].breakFeedbackText,
     fontWeight: '700',
   },
   addBreakBtnSuccess: {
-    backgroundColor: theme.color.success,
+    backgroundColor: PICKER[t.scheme].addBreakSuccessBg,
   },
   resultRowStaged: {
-    backgroundColor: '#eff6ff',
-    borderColor: theme.color.primary,
+    backgroundColor: PICKER[t.scheme].stagedRowBg,
+    borderColor: t.color.primaryFg,
   },
-});
+}));

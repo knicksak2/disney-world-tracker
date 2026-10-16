@@ -1,11 +1,16 @@
 // Feature: experience-lists, Task 10.4 — ExperienceListDetailScreen render/interaction tests
 // Feature: experience-lists, Task 13.5 — visit-summary badges/sections + log-from-list flow
 import React from 'react';
-import { Alert, Keyboard } from 'react-native';
+import { Alert, Keyboard, StyleSheet } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
+import type { ReactTestInstance } from 'react-test-renderer';
 import type { ExperienceListDetailDTO, VisitSummaryResponseDTO } from '@dwt/shared';
+
+import { darkTheme, withAlpha } from '../../../theme/theme';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
+import { EXPERIENCE_LIST_DETAIL } from '../ExperienceListDetailScreen.palette';
 
 jest.mock('expo-constants', () => ({
   __esModule: true,
@@ -1654,6 +1659,97 @@ describe('ExperienceListDetailScreen', () => {
     expect(dismissSpy).toHaveBeenCalled();
 
     dismissSpy.mockRestore();
+  });
+});
+
+/** Nearest painted `backgroundColor` at or above `node`. */
+function paintedBackground(node: ReactTestInstance | null): unknown {
+  for (let n = node; n !== null; n = n.parent) {
+    const style = n.props.style;
+    if (style === undefined || typeof style === 'function') continue;
+    const flat = StyleSheet.flatten(style) as { backgroundColor?: unknown } | undefined;
+    if (flat?.backgroundColor !== undefined) return flat.backgroundColor;
+  }
+  return undefined;
+}
+
+describe('ExperienceListDetailScreen — dark mode', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockExperienceListId = 'exp-list-detail-1';
+  });
+  afterEach(resetTestScheme);
+
+  test('paints the screen, header, rows and primary-hued controls with dark values', async () => {
+    setTestScheme('dark');
+    apiRequestMock.mockImplementation(async (_method, path) =>
+      path === '/experience-lists/exp-list-detail-1' ? sampleOwnerList : {},
+    );
+    renderScreen();
+
+    const name = await screen.findByTestId('experience-list-name');
+    // (a) the screen background, (b) primary text (list name and a row).
+    expect(paintedBackground(screen.getByTestId('experience-list-detail-screen'))).toBe(
+      darkTheme.color.background,
+    );
+    expect(StyleSheet.flatten(name.props.style).color).toBe(darkTheme.color.textPrimary);
+    expect(StyleSheet.flatten(screen.getByText('Space Mountain').props.style).color).toBe(
+      darkTheme.color.textPrimary,
+    );
+    // (c) attribution is primary-as-text → primaryFg; the visibility badge tint
+    // is `withAlpha(primary, 0.08)` (rule 2).
+    expect(
+      StyleSheet.flatten(
+        screen.getByTestId('experience-list-attribution-exp-space-mountain').props.style,
+      ).color,
+    ).toBe(darkTheme.color.primaryFg);
+    expect(
+      StyleSheet.flatten(screen.getByTestId('experience-list-visibility-toggle-badge').props.style)
+        .backgroundColor,
+    ).toBe(withAlpha(darkTheme.color.primary, 0.08));
+  });
+
+  test('a liked list paints its like chip with the palette red tint', async () => {
+    setTestScheme('dark');
+    apiRequestMock.mockImplementation(async (_method, path) =>
+      path === '/experience-lists/exp-list-detail-1' ? sampleViewerList : {},
+    );
+    renderScreen();
+
+    await screen.findByText('Haunted Mansion');
+    expect(
+      StyleSheet.flatten(screen.getByTestId('experience-list-like-btn').props.style).backgroundColor,
+    ).toBe(EXPERIENCE_LIST_DETAIL.dark.likedBg);
+  });
+
+  test('the add-items search badges read the dark category tint (bare categoryVisual → t.categoryVisual)', async () => {
+    setTestScheme('dark');
+    apiRequestMock.mockImplementation(async (_method, path) => {
+      if (path === '/experience-lists/exp-list-detail-1') return sampleOwnerList;
+      if (typeof path === 'string' && path.startsWith('/catalog?')) {
+        return {
+          experiences: [
+            { id: 'exp-big-thunder', name: 'Big Thunder', park: 'Magic Kingdom', category: 'Ride' },
+          ],
+        };
+      }
+      return {};
+    });
+    renderScreen();
+
+    fireEvent.press(await screen.findByTestId('experience-list-add-items-btn'));
+    const input = screen.getByTestId('experience-list-add-items-search-input');
+    expect(input.props.keyboardAppearance).toBe('dark');
+    fireEvent.changeText(input, 'thunder');
+
+    await screen.findByTestId('experience-list-add-items-result-exp-big-thunder');
+    // Category badge text = `t.categoryVisual.Ride.tint`; park badge = primaryFg.
+    expect(StyleSheet.flatten(screen.getByText('Ride').props.style).color).toBe(
+      darkTheme.categoryVisual.Ride.tint,
+    );
+    expect(StyleSheet.flatten(screen.getByText('Magic Kingdom').props.style).color).toBe(
+      darkTheme.color.primaryFg,
+    );
   });
 });
 

@@ -6,12 +6,14 @@
 // resolves to showtimes, listing today's showtimes and indicating the next upcoming one.
 
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { Showtime } from '@dwt/shared';
 
-import { theme } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { usePalette } from '../../theme/useAppTheme';
 import { EmptyState } from '../../theme/components';
+import { SHOWTIMES } from './ShowtimesCard.palette';
 import { sortedShowtimes } from './live/liveView';
 import { formatParkTime } from './live/parkTime';
 
@@ -24,6 +26,8 @@ export default function ShowtimesCard({
   showtimes = [],
   now = new Date(),
 }: ShowtimesCardProps): JSX.Element {
+  const styles = useStyles();
+  const pal = usePalette(SHOWTIMES);
   const sorted = sortedShowtimes(showtimes);
   const nowMs = now.getTime();
 
@@ -75,7 +79,7 @@ export default function ShowtimesCard({
         <View style={styles.contentWrap}>
           {nonStandardTypes.length > 0 ? (
             <View style={styles.typeNotice} testID="showtime-type">
-              <Ionicons name="ticket-outline" size={13} color="#7e22ce" />
+              <Ionicons name="ticket-outline" size={13} color={pal.typeIcon} />
               <Text style={styles.typeNoticeText}>
                 {nonStandardTypes.join(' • ')}
               </Text>
@@ -125,17 +129,17 @@ export default function ShowtimesCard({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   card: {
-    marginHorizontal: theme.spacing.lg,
-    marginTop: theme.spacing.md,
+    marginHorizontal: t.spacing.lg,
+    marginTop: t.spacing.md,
     marginBottom: 4,
-    backgroundColor: '#ffffff',
+    backgroundColor: t.color.surface,
     borderWidth: 1.5,
-    borderColor: '#ded3f0',
+    borderColor: SHOWTIMES[t.scheme].cardBorder,
     borderRadius: 22,
     padding: 16,
-    shadowColor: '#5b2a86',
+    shadowColor: SHOWTIMES[t.scheme].cardShadow,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.08,
     shadowRadius: 20,
@@ -153,30 +157,31 @@ const styles = StyleSheet.create({
     gap: 7,
   },
   titleIcon: {
+    ...t.textDefault,
     fontSize: 16,
   },
   title: {
     fontSize: 14,
     fontWeight: '800',
-    color: '#190c2d',
+    color: SHOWTIMES[t.scheme].title,
     letterSpacing: -0.2,
   },
   pulseBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#ecfdf5',
+    backgroundColor: SHOWTIMES[t.scheme].pulseBg,
     paddingVertical: 4,
     paddingHorizontal: 10,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: 'rgba(22, 163, 74, 0.25)',
+    borderColor: SHOWTIMES[t.scheme].pulseBorder,
   },
   pulseDotWrapper: {
     width: 11,
     height: 11,
     borderRadius: 5.5,
-    backgroundColor: 'rgba(22, 163, 74, 0.2)',
+    backgroundColor: SHOWTIMES[t.scheme].pulseDotRing,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -184,12 +189,12 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#16a34a',
+    backgroundColor: SHOWTIMES[t.scheme].pulseDot,
   },
   pulseText: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#16a34a',
+    color: SHOWTIMES[t.scheme].pulseText,
   },
   contentWrap: {
     gap: 8,
@@ -199,9 +204,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     alignSelf: 'flex-start',
-    backgroundColor: '#f5eeff',
+    backgroundColor: SHOWTIMES[t.scheme].typeBg,
     borderWidth: 1,
-    borderColor: '#e9d5ff',
+    borderColor: SHOWTIMES[t.scheme].typeBorder,
     paddingVertical: 3,
     paddingHorizontal: 9,
     borderRadius: 8,
@@ -209,7 +214,7 @@ const styles = StyleSheet.create({
   typeNoticeText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#7e22ce',
+    color: SHOWTIMES[t.scheme].typeText,
   },
   pillsRow: {
     flexDirection: 'row',
@@ -224,20 +229,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   pillPast: {
-    backgroundColor: '#f3f4f6',
+    backgroundColor: SHOWTIMES[t.scheme].pastBg,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: SHOWTIMES[t.scheme].pastBorder,
   },
   pillTextPast: {
     fontSize: 11.5,
     fontWeight: '600',
-    color: '#9ca3af',
+    color: SHOWTIMES[t.scheme].pastText,
   },
   pillNext: {
-    backgroundColor: '#16a34a',
+    backgroundColor: SHOWTIMES[t.scheme].nextBg,
     borderWidth: 1,
-    borderColor: '#15803d',
-    shadowColor: '#16a34a',
+    borderColor: SHOWTIMES[t.scheme].nextBorder,
+    shadowColor: SHOWTIMES[t.scheme].nextShadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 4,
@@ -246,19 +251,19 @@ const styles = StyleSheet.create({
   pillTextNext: {
     fontSize: 11.5,
     fontWeight: '800',
-    color: '#ffffff',
+    color: t.color.textOnPrimary,
   },
   pillFuture: {
-    backgroundColor: '#ffffff',
+    backgroundColor: t.color.surface,
     borderWidth: 1,
-    borderColor: '#dcd1ed',
+    borderColor: SHOWTIMES[t.scheme].futureBorder,
   },
   pillTextFuture: {
     fontSize: 11.5,
     fontWeight: '700',
-    color: '#190c2d',
+    color: SHOWTIMES[t.scheme].futureText,
   },
   pillText: {
     fontSize: 11.5,
   },
-});
+}));

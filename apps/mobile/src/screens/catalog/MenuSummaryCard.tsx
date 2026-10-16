@@ -21,14 +21,15 @@
 // Badge, EmptyState) so it matches the other detail sections (R4.7).
 
 import React from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Text, View } from 'react-native';
 import { NavigationContext } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import type { ExperienceCategory, MenuDTO } from '@dwt/shared';
 
 import type { RootStackParamList } from '../../navigation/RootNavigator';
-import { theme } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme } from '../../theme/useAppTheme';
 import { Badge, Card, EmptyState, SectionLabel } from '../../theme/components';
 import { summarizeMenus } from './menuSummary';
 
@@ -76,6 +77,8 @@ export default function MenuSummaryCard({
   experienceId,
   navigation,
 }: MenuSummaryCardProps): JSX.Element | null {
+  const styles = useStyles();
+  const t = useAppTheme();
   const fallbackNav = React.useContext(NavigationContext);
   const activeNav = navigation ?? (fallbackNav as any);
   // R4.6: the card exists only for restaurants — every other category renders
@@ -91,7 +94,7 @@ export default function MenuSummaryCard({
       <Card style={styles.section} testID="menu-summary-loading">
         <ActivityIndicator
           accessibilityLabel="Loading menus"
-          color={theme.color.primary}
+          color={t.color.primaryFg}
         />
       </Card>
     );
@@ -141,7 +144,7 @@ export default function MenuSummaryCard({
           <Badge
             key={`${menuType}-${index}`}
             label={menuType}
-            color={theme.color.primary}
+            color={t.color.primaryFg}
             icon="restaurant"
             testID={`menu-summary-type-${index}`}
           />
@@ -151,17 +154,17 @@ export default function MenuSummaryCard({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   section: {
-    gap: theme.spacing.md,
+    gap: t.spacing.md,
   },
   count: {
-    ...theme.typography.body,
-    color: theme.color.textPrimary,
+    ...t.typography.body,
+    color: t.color.textPrimary,
   },
   badgeRow: {
     flexDirection: 'row',
-    gap: theme.spacing.sm,
+    gap: t.spacing.sm,
     flexWrap: 'wrap',
   },
-});
+}));

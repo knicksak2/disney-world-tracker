@@ -9,7 +9,7 @@
 // each section composes them consistently rather than re-deriving them.
 
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
 import type {
   BoardingGroupState,
@@ -18,7 +18,8 @@ import type {
   OperatingStatus,
 } from '@dwt/shared';
 
-import { theme } from '../../../theme/theme';
+import { makeStyles } from '../../../theme/makeStyles';
+import { useAppTheme } from '../../../theme/useAppTheme';
 import { Badge, SectionLabel } from '../../../theme/components';
 import { formatParkDateTime, formatParkTime } from './parkTime';
 import { formatLightningLanePrice, humanizeCoarseState } from './liveView';
@@ -37,18 +38,6 @@ export interface LiveSectionProps {
 }
 
 /**
- * Per-status badge tint. Operating reads as success, hard-down/closed as
- * danger, refurbishment as a warning hue, and Unknown as a neutral grey.
- */
-const STATUS_COLOR: Record<OperatingStatus, string> = {
-  Operating: theme.color.success,
-  Closed: theme.color.danger,
-  Down: theme.color.danger,
-  Refurbishment: theme.color.warning,
-  Unknown: theme.color.textSecondary,
-};
-
-/**
  * Render the Operating_Status as exactly one of the labels Operating, Closed,
  * Down, Refurbishment, or Unknown (R4.1, R6.1) — the enum literal is already
  * the user-facing label.
@@ -58,10 +47,20 @@ export function StatusBadge({
 }: {
   readonly status: OperatingStatus;
 }): JSX.Element {
+  const t = useAppTheme();
+  // Per-status badge tint. Operating reads as success, hard-down/closed as
+  // danger, refurbishment as a warning hue, and Unknown as a neutral grey.
+  const statusColor: Record<OperatingStatus, string> = {
+    Operating: t.color.success,
+    Closed: t.color.danger,
+    Down: t.color.danger,
+    Refurbishment: t.color.warning,
+    Unknown: t.color.textSecondary,
+  };
   return (
     <Badge
       label={status}
-      color={STATUS_COLOR[status]}
+      color={statusColor[status]}
       testID="live-operating-status"
     />
   );
@@ -73,6 +72,7 @@ export function StatusBadge({
  * accompanying Retrieved_At time is shown in the footer below.
  */
 export function StaleIndicator(): JSX.Element {
+  const styles = useStyles();
   return (
     <View style={styles.staleRow} testID="live-stale-indicator">
       <Text style={styles.staleText}>
@@ -95,6 +95,7 @@ export function RetrievalFooter({
   readonly retrievedAt: string;
   readonly upstreamLastUpdated?: string | undefined;
 }): JSX.Element {
+  const styles = useStyles();
   return (
     <View style={styles.footer}>
       <Text style={styles.footerText} testID="live-retrieved-at">
@@ -119,6 +120,7 @@ export function DetailRow({
   readonly value: string;
   readonly testID?: string;
 }): JSX.Element {
+  const styles = useStyles();
   return (
     <View style={styles.detailRow}>
       <Text style={styles.detailLabel}>{label}</Text>
@@ -135,6 +137,7 @@ export function SubLabel({
 }: {
   readonly children: React.ReactNode;
 }): JSX.Element {
+  const styles = useStyles();
   return <SectionLabel style={styles.subLabel}>{children}</SectionLabel>;
 }
 
@@ -149,6 +152,7 @@ export function LightningLaneBlock({
 }: {
   readonly state: LightningLaneState;
 }): JSX.Element | null {
+  const styles = useStyles();
   const rows: { readonly label: string; readonly value: string; readonly testID: string }[] = [];
 
   if (state.price !== undefined) {
@@ -201,6 +205,7 @@ export function BoardingGroupBlock({
 }: {
   readonly state: BoardingGroupState;
 }): JSX.Element | null {
+  const styles = useStyles();
   const rows: { readonly label: string; readonly value: string; readonly testID: string }[] = [];
 
   const coarse = humanizeCoarseState(state.state);
@@ -239,44 +244,44 @@ export function BoardingGroupBlock({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   block: {
-    gap: theme.spacing.xs,
+    gap: t.spacing.xs,
   },
   staleRow: {
-    backgroundColor: theme.color.warningSurface,
-    borderRadius: theme.radius.sm,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.sm,
+    backgroundColor: t.color.warningSurface,
+    borderRadius: t.radius.sm,
+    paddingHorizontal: t.spacing.md,
+    paddingVertical: t.spacing.sm,
   },
   staleText: {
-    ...theme.typography.meta,
-    color: theme.color.warningText,
+    ...t.typography.meta,
+    color: t.color.warningText,
   },
   footer: {
-    marginTop: theme.spacing.xs,
+    marginTop: t.spacing.xs,
     gap: 2,
   },
   footerText: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
   },
   detailRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: theme.spacing.md,
+    gap: t.spacing.md,
   },
   detailLabel: {
-    ...theme.typography.body,
-    color: theme.color.textSecondary,
+    ...t.typography.body,
+    color: t.color.textSecondary,
   },
   detailValue: {
-    ...theme.typography.subtitle,
-    color: theme.color.textPrimary,
+    ...t.typography.subtitle,
+    color: t.color.textPrimary,
   },
   subLabel: {
-    ...theme.typography.subtitle,
-    marginBottom: theme.spacing.xs,
+    ...t.typography.subtitle,
+    marginBottom: t.spacing.xs,
   },
-});
+}));

@@ -3,10 +3,15 @@
 // Validates: Requirements 14.2
 
 import React from 'react';
+import { StyleSheet } from 'react-native';
+import type { ReactTestInstance } from 'react-test-renderer';
 import { render } from '@testing-library/react-native';
 import type { Showtime } from '@dwt/shared';
 
 import ShowtimesCard from '../ShowtimesCard';
+import { SHOWTIMES as SHOWTIMES_PALETTE } from '../ShowtimesCard.palette';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
+import { darkTheme } from '../../../theme/theme';
 
 describe('ShowtimesCard', () => {
   it('renders empty state when no showtimes are scheduled', () => {
@@ -100,5 +105,49 @@ describe('ShowtimesCard', () => {
     const times = getAllByTestId('showtime-time');
     expect(times[0]!.props.children).not.toMatch(/\(Next\)$/);
     expect(times[1]!.props.children).not.toMatch(/\(Next\)$/);
+  });
+
+  // Feature: dark-mode — (c) converted literals (B2)
+  describe('dark mode', () => {
+    afterEach(resetTestScheme);
+
+    const flat = (node: ReactTestInstance): Record<string, unknown> =>
+      (StyleSheet.flatten(node.props.style) ?? {}) as Record<string, unknown>;
+    const NOW = new Date('2026-09-25T12:00:00Z');
+    const SHOWTIMES: Showtime[] = [
+      { start: '2026-09-25T10:00:00Z', end: '2026-09-25T10:00:00Z' },
+      { start: '2026-09-25T13:00:00Z', end: '2026-09-25T13:00:00Z' },
+      { start: '2026-09-25T14:00:00Z', end: '2026-09-25T14:00:00Z' },
+    ];
+
+    it('(c) card, past / next / future pills and the pulse badge use the dark values', () => {
+      setTestScheme('dark');
+      const { getByTestId, getAllByTestId, getByText } = render(
+        <ShowtimesCard showtimes={SHOWTIMES} now={NOW} />,
+      );
+
+      const card = flat(getByTestId('showtimes-card'));
+      expect(card.backgroundColor).toBe(darkTheme.color.surface);
+      expect(card.borderColor).toBe(SHOWTIMES_PALETTE.dark.cardBorder);
+      expect(flat(getByText("Today's Showtimes")).color).toBe(SHOWTIMES_PALETTE.dark.title);
+      expect(flat(getByTestId('next-showtime-indicator')).backgroundColor).toBe(
+        SHOWTIMES_PALETTE.dark.pulseBg,
+      );
+      const [past, next, future] = getAllByTestId('showtime-row');
+      expect(flat(past!).backgroundColor).toBe(SHOWTIMES_PALETTE.dark.pastBg);
+      expect(flat(next!).backgroundColor).toBe(SHOWTIMES_PALETTE.dark.nextBg);
+      expect(flat(future!).backgroundColor).toBe(darkTheme.color.surface);
+      const [pastText, nextText] = getAllByTestId('showtime-time');
+      expect(flat(pastText!).color).toBe(SHOWTIMES_PALETTE.dark.pastText);
+      expect(flat(nextText!).color).toBe(darkTheme.color.textOnPrimary);
+    });
+
+    it('keeps the pre-retrofit light values under light', () => {
+      const { getByTestId, getAllByTestId } = render(
+        <ShowtimesCard showtimes={SHOWTIMES} now={NOW} />,
+      );
+      expect(flat(getByTestId('showtimes-card')).backgroundColor).toBe('#ffffff');
+      expect(flat(getAllByTestId('showtime-row')[1]!).backgroundColor).toBe('#16a34a');
+    });
   });
 });

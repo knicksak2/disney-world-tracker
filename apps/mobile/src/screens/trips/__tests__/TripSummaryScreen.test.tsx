@@ -1,7 +1,12 @@
 import React from 'react';
-import { Share } from 'react-native';
+import { processColor, Share, StyleSheet } from 'react-native';
+import type { ReactTestInstance } from 'react-test-renderer';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen } from '@testing-library/react-native';
+import { darkTheme } from '../../../theme/theme';
+import { ScreenContainer } from '../../../theme/components';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
+import { SUMMARY_HERO, SUMMARY_MISC, SUMMARY_STAT } from '../TripSummaryScreen.palette';
 
 import type { TripSummaryDTO } from '@dwt/shared';
 
@@ -241,5 +246,94 @@ describe('Trip_Summary screen — celebratory culmination & stats (R14)', () => 
         message: expect.stringContaining('Disney World Trip Highlights'),
       }),
     );
+  });
+
+  // Feature: dark-mode — the Trip Summary repaints with the Twilight palette.
+  describe('dark mode', () => {
+    afterEach(resetTestScheme);
+
+    const flat = (node: ReactTestInstance): Record<string, unknown> =>
+      (StyleSheet.flatten(node.props.style) ?? {}) as Record<string, unknown>;
+
+    /** The screen root: the host View that `ScreenContainer` paints. */
+    function rootContainer(): ReactTestInstance {
+      const container = screen.UNSAFE_getAllByType(ScreenContainer)[0]!;
+      return container.children[0] as ReactTestInstance;
+    }
+
+    /** Every mocked icon host node with the given glyph name. */
+    function icons(name: string): ReactTestInstance[] {
+      return screen.UNSAFE_root.findAll(
+        (n) => (n.type as unknown) === 'Icon' && n.props.name === name,
+      );
+    }
+
+    /** The nearest ancestor of `node` that paints a background colour. */
+    function paintedAncestor(node: ReactTestInstance): ReactTestInstance {
+      let current: ReactTestInstance | null = node.parent;
+      while (current !== null && flat(current).backgroundColor === undefined) {
+        current = current.parent;
+      }
+      if (current === null) throw new Error('no painted ancestor');
+      return current;
+    }
+
+    test('(a)(b)(c) paints the root, section titles and converted stat / favourite colours dark', async () => {
+      apiRequestMock.mockResolvedValue(SUMMARY_RICH);
+      setTestScheme('dark');
+      renderSummary();
+
+      await screen.findByTestId('trip-summary-hero');
+      // (a) root container.
+      expect(flat(rootContainer()).backgroundColor).toBe(darkTheme.color.background);
+      // (b) primary text — a section title.
+      expect(flat(screen.getByText('Top-Rated Moments')).color).toBe(darkTheme.color.textPrimary);
+      // (c) quick-stat icon disc (rule 3 green S + T).
+      const compass = icons('compass')[0]!;
+      expect(compass.props.color).toBe(SUMMARY_STAT.dark.greenIcon);
+      expect(flat(paintedAncestor(compass)).backgroundColor).toBe(SUMMARY_STAT.dark.greenBg);
+      // (c) the member "Top Ride" pill text (rule 3 pink T).
+      expect(flat(screen.getByText(/Top Ride: Soarin/)).color).toBe(SUMMARY_MISC.dark.favoriteText);
+      // The H-role hero gradient is mode-invariant.
+      // (expo-linear-gradient hands the native view processed colour ints.)
+      expect(screen.getByTestId('trip-summary-hero').props.colors).toEqual(
+        [SUMMARY_HERO.light.gradStart, SUMMARY_HERO.light.gradMid, SUMMARY_HERO.light.gradEnd].map(
+          (c) => processColor(c),
+        ),
+      );
+    });
+
+    test('a category placeholder thumb uses the dark category fill with a white glyph', async () => {
+      apiRequestMock.mockResolvedValue(SUMMARY_RICH);
+      setTestScheme('dark');
+      renderSummary();
+
+      await screen.findByTestId('trip-summary-hero');
+      // "Soarin" has no image, so it renders the Ride placeholder.
+      const glyph = icons(darkTheme.categoryVisual.Ride.glyph).find(
+        (n) => n.props.color === SUMMARY_MISC.dark.thumbGlyph,
+      );
+      expect(glyph).toBeDefined();
+      expect(glyph!.props.color).toBe(darkTheme.color.textOnPrimary);
+      expect(flat(paintedAncestor(glyph!)).backgroundColor).toBe(
+        darkTheme.categoryVisual.Ride.fill,
+      );
+    });
+
+    test('keeps the pre-retrofit light values under light', async () => {
+      apiRequestMock.mockResolvedValue(SUMMARY_RICH);
+      renderSummary();
+
+      await screen.findByTestId('trip-summary-hero');
+      const compass = icons('compass')[0]!;
+      expect(compass.props.color).toBe('#2ECC71');
+      expect(flat(paintedAncestor(compass)).backgroundColor).toBe('rgba(46, 204, 113, 0.15)');
+      expect(flat(screen.getByText(/Top Ride: Soarin/)).color).toBe('#D81B60');
+      const glyph = icons(darkTheme.categoryVisual.Ride.glyph).find(
+        (n) => n.props.color === '#5b2a86',
+      );
+      expect(glyph).toBeDefined();
+      expect(flat(paintedAncestor(glyph!)).backgroundColor).toBe('#7e57c2');
+    });
   });
 });

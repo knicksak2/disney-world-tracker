@@ -4,9 +4,11 @@ import { Alert, StyleSheet } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import type { ReactTestInstance } from 'react-test-renderer';
 import type { FoodListDTO } from '@dwt/shared';
 
-import { theme } from '../../../theme/theme';
+import { darkTheme, lightTheme, theme } from '../../../theme/theme';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
 
 jest.setTimeout(15000);
 
@@ -588,5 +590,68 @@ describe('MyFoodListsScreen', () => {
       expect(screen.getByTestId('saved-food-list-card-list-saved-1')).toBeTruthy();
     });
     mockRouteParams = undefined;
+  });
+});
+
+/** Nearest painted `backgroundColor` at or above `node`. */
+function paintedBackground(node: ReactTestInstance | null): unknown {
+  for (let n = node; n !== null; n = n.parent) {
+    const style = n.props.style;
+    if (style === undefined || typeof style === 'function') continue;
+    const flat = StyleSheet.flatten(style) as { backgroundColor?: unknown } | undefined;
+    if (flat?.backgroundColor !== undefined) return flat.backgroundColor;
+  }
+  return undefined;
+}
+
+describe('MyFoodListsScreen — dark mode', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    apiRequestMock.mockImplementation(async (_method, path) => {
+      if (path === '/me/food-lists/collection') {
+        return { owned: sampleOwnedLists, saved: sampleSavedLists };
+      }
+      return {};
+    });
+  });
+  afterEach(resetTestScheme);
+
+  test('(a)(b)(c) paints the screen, list rows and primary controls with dark tokens', async () => {
+    setTestScheme('dark');
+    renderScreen();
+
+    const title = await screen.findByText('Best Snacks in EPCOT');
+    // (a) the screen background.
+    expect(paintedBackground(screen.getByTestId('my-food-lists-screen'))).toBe(
+      darkTheme.color.background,
+    );
+    // (b) a row's primary text.
+    expect(StyleSheet.flatten(title.props.style).color).toBe(darkTheme.color.textPrimary);
+    // (c) the active tab and the create button are primary fills.
+    expect(
+      StyleSheet.flatten(screen.getByTestId('my-food-lists-tab-owned').props.style).backgroundColor,
+    ).toBe(darkTheme.color.primary);
+    expect(
+      StyleSheet.flatten(screen.getByTestId('my-food-lists-create-btn').props.style).backgroundColor,
+    ).toBe(darkTheme.color.primary);
+  });
+
+  test('(d) a mounted FlatList row repaints when the scheme flips, without remounting', async () => {
+    renderScreen();
+    const lightTitle = await screen.findByText('Best Snacks in EPCOT');
+    expect(StyleSheet.flatten(lightTitle.props.style).color).toBe(lightTheme.color.textPrimary);
+    const lightMeta = StyleSheet.flatten(screen.getByText('4 items').props.style);
+    expect(lightMeta.color).toBe(lightTheme.color.textSecondary);
+
+    setTestScheme('dark');
+
+    // Same mounted tree: the row (rendered by the parent's memoized
+    // `renderOwnedList`, reading the parent's `styles`) now carries dark values.
+    expect(StyleSheet.flatten(screen.getByText('Best Snacks in EPCOT').props.style).color).toBe(
+      darkTheme.color.textPrimary,
+    );
+    expect(StyleSheet.flatten(screen.getByText('4 items').props.style).color).toBe(
+      darkTheme.color.textSecondary,
+    );
   });
 });

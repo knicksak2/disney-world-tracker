@@ -4,7 +4,6 @@ import {
   FlatList,
   Modal,
   Pressable,
-  StyleSheet,
   Text,
   View,
 } from 'react-native';
@@ -13,7 +12,9 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ExperienceListShareDTO, ExperienceListShareRole } from '@dwt/shared';
 
 import { apiRequest } from '../../api/client';
-import { theme } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme } from '../../theme/useAppTheme';
+import { EXPERIENCE_SHARES } from './ManageExperienceListSharesSheet.palette';
 
 export interface ManageExperienceListSharesSheetProps {
   readonly experienceListId: string;
@@ -37,6 +38,8 @@ export default function ManageExperienceListSharesSheet({
   visible,
   onClose,
 }: ManageExperienceListSharesSheetProps): JSX.Element | null {
+  const styles = useStyles();
+  const t = useAppTheme();
   const queryClient = useQueryClient();
   const [isUpdating, setIsUpdating] = useState<string | null>(null);
   const [selectedFriendId, setSelectedFriendId] = useState<string | null>(null);
@@ -155,7 +158,7 @@ export default function ManageExperienceListSharesSheet({
         </Pressable>
       );
     },
-    [selectedFriendId],
+    [selectedFriendId, styles],
   );
 
   // Same stable-identity fix as `renderFriend` above, for the current-shares
@@ -198,7 +201,7 @@ export default function ManageExperienceListSharesSheet({
               <Ionicons
                 name="swap-horizontal"
                 size={14}
-                color={item.role === 'editor' ? '#fff' : theme.color.primary}
+                color={item.role === 'editor' ? t.color.textOnPrimary : t.color.primaryFg}
               />
             </Pressable>
 
@@ -211,12 +214,12 @@ export default function ManageExperienceListSharesSheet({
               testID={`experience-share-revoke-btn-${item.recipientId}`}
             >
               {busy ? (
-                <ActivityIndicator size="small" color={theme.color.danger} />
+                <ActivityIndicator size="small" color={t.color.danger} />
               ) : (
                 <Ionicons
                   name="trash-outline"
                   size={18}
-                  color={theme.color.danger}
+                  color={t.color.danger}
                 />
               )}
             </Pressable>
@@ -224,7 +227,7 @@ export default function ManageExperienceListSharesSheet({
         </View>
       );
     },
-    [isUpdating, handleToggleRole, handleRevoke],
+    [isUpdating, handleToggleRole, handleRevoke, styles, t],
   );
 
   if (!visible) return null;
@@ -254,7 +257,7 @@ export default function ManageExperienceListSharesSheet({
               style={styles.closeBtn}
               testID="close-manage-experience-shares-btn"
             >
-              <Ionicons name="close" size={24} color={theme.color.textSecondary} />
+              <Ionicons name="close" size={24} color={t.color.textSecondary} />
             </Pressable>
           </View>
 
@@ -273,6 +276,7 @@ export default function ManageExperienceListSharesSheet({
                   data={availableFriends}
                   keyExtractor={(f) => f.userId}
                   renderItem={renderFriend}
+                  extraData={t.scheme}
                   contentContainerStyle={styles.friendsList}
                 />
 
@@ -325,7 +329,7 @@ export default function ManageExperienceListSharesSheet({
                       testID="add-experience-share-submit-btn"
                     >
                       {isSubmittingNewShare ? (
-                        <ActivityIndicator size="small" color="#fff" />
+                        <ActivityIndicator size="small" color={t.color.textOnPrimary} />
                       ) : (
                         <Text style={styles.shareSubmitBtnText}>Share</Text>
                       )}
@@ -343,13 +347,14 @@ export default function ManageExperienceListSharesSheet({
 
           {sharesQuery.isLoading ? (
             <View style={styles.loadingWrap}>
-              <ActivityIndicator color={theme.color.primary} testID="manage-experience-shares-loading" />
+              <ActivityIndicator color={t.color.primaryFg} testID="manage-experience-shares-loading" />
             </View>
           ) : (
             <FlatList
               data={shares}
               keyExtractor={(item) => item.recipientId}
               renderItem={renderShare}
+              extraData={t.scheme}
               ListEmptyComponent={
                 <View style={styles.emptyWrap}>
                   <Text style={styles.emptyText} testID="manage-experience-shares-empty">
@@ -366,16 +371,16 @@ export default function ManageExperienceListSharesSheet({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   backdrop: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'flex-end',
   },
   container: {
-    backgroundColor: theme.color.surface,
-    borderTopLeftRadius: theme.radius.lg,
-    borderTopRightRadius: theme.radius.lg,
+    backgroundColor: t.color.surface,
+    borderTopLeftRadius: t.radius.lg,
+    borderTopRightRadius: t.radius.lg,
     maxHeight: '85%',
     paddingBottom: 24,
   },
@@ -383,9 +388,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: theme.spacing.md,
+    padding: t.spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: theme.color.border,
+    borderBottomColor: t.color.border,
   },
   headerTitles: {
     flex: 1,
@@ -393,11 +398,11 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 18,
     fontWeight: '700',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   subtitle: {
     fontSize: 13,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     marginTop: 2,
   },
   closeBtn: {
@@ -406,93 +411,93 @@ const styles = StyleSheet.create({
   sectionHeader: {
     fontSize: 13,
     fontWeight: '700',
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
-    marginHorizontal: theme.spacing.md,
-    marginTop: theme.spacing.md,
-    marginBottom: theme.spacing.xs,
+    marginHorizontal: t.spacing.md,
+    marginTop: t.spacing.md,
+    marginBottom: t.spacing.xs,
   },
   currentSharesHeader: {
-    marginTop: theme.spacing.lg,
+    marginTop: t.spacing.lg,
   },
   addShareSection: {
-    paddingBottom: theme.spacing.sm,
+    paddingBottom: t.spacing.sm,
     borderBottomWidth: 1,
-    borderBottomColor: theme.color.border,
+    borderBottomColor: t.color.border,
   },
   noFriendsText: {
-    paddingHorizontal: theme.spacing.md,
+    paddingHorizontal: t.spacing.md,
     paddingVertical: 8,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     fontSize: 13,
   },
   friendsList: {
-    paddingHorizontal: theme.spacing.md,
+    paddingHorizontal: t.spacing.md,
     paddingVertical: 8,
     gap: 8,
   },
   friendChip: {
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: theme.radius.pill,
+    borderRadius: t.radius.pill,
     borderWidth: 1,
-    borderColor: theme.color.border,
-    backgroundColor: theme.color.surfaceAlt,
+    borderColor: t.color.border,
+    backgroundColor: t.color.surfaceAlt,
   },
   friendChipSelected: {
-    backgroundColor: theme.color.primary,
-    borderColor: theme.color.primary,
+    backgroundColor: t.color.primary,
+    borderColor: t.color.primary,
   },
   friendChipText: {
     fontSize: 13,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
     fontWeight: '500',
   },
   friendChipTextSelected: {
-    color: '#fff',
+    color: t.color.textOnPrimary,
     fontWeight: '600',
   },
   addShareControls: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: theme.spacing.md,
+    paddingHorizontal: t.spacing.md,
     marginTop: 8,
   },
   roleToggleGroup: {
     flexDirection: 'row',
-    backgroundColor: theme.color.surfaceAlt,
-    borderRadius: theme.radius.sm,
+    backgroundColor: t.color.surfaceAlt,
+    borderRadius: t.radius.sm,
     padding: 2,
   },
   rolePill: {
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: theme.radius.sm - 2,
+    borderRadius: t.radius.sm - 2,
   },
   rolePillActive: {
-    backgroundColor: theme.color.primary,
+    backgroundColor: t.color.primary,
   },
   rolePillText: {
     fontSize: 11,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     fontWeight: '600',
   },
   rolePillTextActive: {
-    color: '#fff',
+    color: t.color.textOnPrimary,
   },
   shareSubmitBtn: {
-    backgroundColor: theme.color.primary,
+    backgroundColor: t.color.primary,
     paddingHorizontal: 16,
     paddingVertical: 6,
-    borderRadius: theme.radius.sm,
+    borderRadius: t.radius.sm,
   },
   shareSubmitBtnDisabled: {
     opacity: 0.5,
   },
   shareSubmitBtnText: {
-    color: '#fff',
+    color: t.color.textOnPrimary,
     fontWeight: '600',
     fontSize: 13,
   },
@@ -507,10 +512,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: theme.spacing.md,
+    paddingHorizontal: t.spacing.md,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: theme.color.border,
+    borderBottomColor: t.color.border,
   },
   shareInfo: {
     flex: 1,
@@ -518,11 +523,11 @@ const styles = StyleSheet.create({
   shareName: {
     fontSize: 15,
     fontWeight: '600',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   shareRoleLabel: {
     fontSize: 11,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     marginTop: 2,
   },
   shareActions: {
@@ -536,22 +541,22 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: theme.radius.pill,
+    borderRadius: t.radius.pill,
     borderWidth: 1,
-    borderColor: theme.color.primary,
-    backgroundColor: 'rgba(107, 70, 193, 0.08)',
+    borderColor: t.color.primaryFg,
+    backgroundColor: EXPERIENCE_SHARES[t.scheme].roleBadgeBg,
   },
   roleBadgeEditor: {
-    backgroundColor: theme.color.primary,
-    borderColor: theme.color.primary,
+    backgroundColor: t.color.primary,
+    borderColor: t.color.primary,
   },
   roleBadgeText: {
     fontSize: 11,
     fontWeight: '700',
-    color: theme.color.primary,
+    color: t.color.primaryFg,
   },
   roleBadgeTextEditor: {
-    color: '#fff',
+    color: t.color.textOnPrimary,
   },
   revokeBtn: {
     padding: 6,
@@ -561,7 +566,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   emptyText: {
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     fontSize: 13,
   },
-});
+}));

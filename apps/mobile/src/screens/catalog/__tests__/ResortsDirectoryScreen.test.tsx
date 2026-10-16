@@ -1,9 +1,14 @@
 import React from 'react';
-import { render, fireEvent, waitFor } from '@testing-library/react-native';
+import { StyleSheet } from 'react-native';
+import type { ReactTestInstance } from 'react-test-renderer';
+import { render, fireEvent, waitFor, within } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import ResortsDirectoryScreen from '../ResortsDirectoryScreen';
+import { RESORTS, RESORT_TIER } from '../ResortsDirectoryScreen.palette';
 import { apiRequest } from '../../../api/client';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
+import { darkTheme, lightTheme } from '../../../theme/theme';
 
 const mockNavigate = jest.fn();
 const mockGoBack = jest.fn();
@@ -550,6 +555,108 @@ describe('ResortsDirectoryScreen (Requirement 2, Tasks 5.1-5.4)', () => {
       : allPill.props.style;
     expect(flattenedPillStyle).toMatchObject({
       alignSelf: 'center',
+    });
+  });
+
+  describe('dark mode', () => {
+    const flat = (node: ReactTestInstance) => StyleSheet.flatten(node.props.style) ?? {};
+    /** Nearest host ancestor whose flattened style sets `key`. */
+    function ancestorWith(node: ReactTestInstance, key: string): Record<string, unknown> {
+      let cur: ReactTestInstance | null = node.parent;
+      while (cur !== null) {
+        if (typeof cur.type === 'string' && flat(cur)[key] !== undefined) {
+          return flat(cur);
+        }
+        cur = cur.parent;
+      }
+      return {};
+    }
+    function renderDirectory() {
+      return render(
+        <QueryClientProvider client={createQueryClient()}>
+          <ResortsDirectoryScreen />
+        </QueryClientProvider>,
+      );
+    }
+
+    afterEach(resetTestScheme);
+
+    it('(a)(b)(c) paints the screen, primary text and converted hotel-card literals with dark values', async () => {
+      setTestScheme('dark');
+      const { getByTestId } = renderDirectory();
+
+      // (a) root container.
+      expect(flat(getByTestId('resorts-directory-screen')).backgroundColor).toBe(
+        darkTheme.color.background,
+      );
+      // (b) primary text.
+      await waitFor(() => {
+        expect(getByTestId('hotel-title-resort-grand-floridian')).toBeTruthy();
+      });
+      expect(flat(getByTestId('hotel-title-resort-grand-floridian')).color).toBe(
+        darkTheme.color.textPrimary,
+      );
+      // (c) converted literals on the hotel card.
+      const card = flat(getByTestId('hotel-preview-card-resort-grand-floridian'));
+      expect(card.backgroundColor).toBe(darkTheme.color.surface);
+      expect(card.borderColor).toBe(RESORTS.dark.cardBorder);
+      expect(card.shadowColor).toBe(RESORTS.dark.cardShadow);
+      const tierBadgeText = within(
+        getByTestId('hotel-preview-card-resort-grand-floridian'),
+      ).getByText('Deluxe Resort');
+      // Requirement 9.14: on-photo badges keep the light fill in dark.
+      expect(ancestorWith(tierBadgeText, 'backgroundColor').backgroundColor).toBe(
+        RESORTS.light.tierDeluxe,
+      );
+      const moderateBadgeText = within(
+        getByTestId('hotel-preview-card-resort-coronado'),
+      ).getByText('Moderate Resort');
+      expect(ancestorWith(moderateBadgeText, 'backgroundColor').backgroundColor).toBe(
+        RESORTS.light.tierModerate,
+      );
+      expect(flat(getByTestId('resorts-tab-hotels')).backgroundColor).toBe(darkTheme.color.primary);
+      expect(getByTestId('resorts-search-input').props.keyboardAppearance).toBe('dark');
+    });
+
+    it('suffixes the hotel-picker tier colour with its alpha in both schemes (rule 2a)', async () => {
+      const { getByTestId } = renderDirectory();
+      fireEvent.press(getByTestId('resorts-tab-dining'));
+      await waitFor(() => {
+        expect(getByTestId('dining-hotel-filter-btn')).toBeTruthy();
+      });
+      fireEvent.press(getByTestId('dining-hotel-filter-btn'));
+      const tierText = () =>
+        within(getByTestId('hotel-filter-option-resort-grand-floridian')).getByText('Deluxe');
+
+      // Light: byte-identical to the pre-retrofit literals.
+      expect(flat(tierText()).color).toBe('#7c3aed');
+      expect(ancestorWith(tierText(), 'backgroundColor').backgroundColor).toBe('#7c3aed18');
+
+      setTestScheme('dark');
+
+      expect(flat(tierText()).color).toBe(RESORT_TIER.dark.deluxe);
+      expect(ancestorWith(tierText(), 'backgroundColor').backgroundColor).toBe(
+        `${RESORT_TIER.dark.deluxe}18`,
+      );
+      expect(flat(getByTestId('resorts-hotel-picker-modal')).backgroundColor).toBe(
+        darkTheme.color.surface,
+      );
+    });
+
+    it('repaints a mounted dining FlatList row live on a scheme switch (extraData)', async () => {
+      const { getByTestId, getByText } = renderDirectory();
+      fireEvent.press(getByTestId('resorts-tab-dining'));
+      await waitFor(() => {
+        expect(getByText("Victoria & Albert's")).toBeTruthy();
+      });
+      expect(flat(getByText("Victoria & Albert's")).color).toBe(lightTheme.color.textPrimary);
+
+      setTestScheme('dark');
+
+      expect(flat(getByText("Victoria & Albert's")).color).toBe(darkTheme.color.textPrimary);
+      expect(flat(getByTestId('resort-dining-card-exp-gf-victoria-albert')).borderColor).toBe(
+        RESORTS.dark.cardBorder,
+      );
     });
   });
 });

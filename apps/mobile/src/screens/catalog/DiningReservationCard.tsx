@@ -6,12 +6,14 @@
 // and the existing Reservation_Action.
 
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { LiveDetailDTO } from '@dwt/shared';
 
-import { theme } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme } from '../../theme/useAppTheme';
 import { formatParkTime } from './live/parkTime';
+import { DINING } from './DiningReservationCard.palette';
 
 export interface DiningReservationCardProps {
   readonly experienceName: string;
@@ -38,6 +40,8 @@ export default function DiningReservationCard({
   onAddToList,
   loggedDishesCount,
 }: DiningReservationCardProps): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const hasDiningUrl =
     typeof diningUrl === 'string' && diningUrl.trim().length > 0 && !isQuickService;
 
@@ -69,7 +73,7 @@ export default function DiningReservationCard({
       {/* Header: icon + title + pulse status badge */}
       <View style={styles.head}>
         <View style={styles.titleWrap}>
-          <Ionicons name="restaurant" size={17} color="#5b2a86" />
+          <Ionicons name="restaurant" size={17} color={t.color.primaryFg} />
           <Text style={styles.title}>
             {isQuickService ? 'Quick Service & Dishes' : 'Reservations & Dishes'}
           </Text>
@@ -86,7 +90,7 @@ export default function DiningReservationCard({
       {waitInfo || availabilityText !== 'Reservations Available' ? (
         <View style={styles.statusBox}>
           <View style={styles.statusLeft}>
-            <Ionicons name="restaurant" size={18} color="#5b2a86" />
+            <Ionicons name="restaurant" size={18} color={t.color.primaryFg} />
             <View>
               <Text style={styles.statusTitle}>{availabilityText}</Text>
               {waitInfo ? <Text style={styles.statusSub}>{waitInfo}</Text> : null}
@@ -108,7 +112,7 @@ export default function DiningReservationCard({
             accessibilityLabel={`Reserve a table at ${experienceName} on Disney's site`}
             testID="experience-reserve-action"
           >
-            <Ionicons name="calendar-outline" size={17} color="#ffffff" />
+            <Ionicons name="calendar-outline" size={17} color={t.color.textOnPrimary} />
             <Text style={styles.reserveButtonText}>Reserve on Disney&apos;s Site</Text>
           </Pressable>
           {reservationFailed ? (
@@ -132,7 +136,7 @@ export default function DiningReservationCard({
           accessibilityLabel={`Log a dish at ${experienceName}`}
           testID="dining-card-log-dish-btn"
         >
-          <Ionicons name="restaurant" size={15} color="#ffffff" />
+          <Ionicons name="restaurant" size={15} color={t.color.textOnPrimary} />
           <Text style={styles.logDishButtonText}>Log a Dish</Text>
         </Pressable>
 
@@ -146,7 +150,7 @@ export default function DiningReservationCard({
           accessibilityLabel={`Add a dish at ${experienceName} to a food list`}
           testID="dining-card-add-to-list-btn"
         >
-          <Ionicons name="bookmark-outline" size={15} color="#5b2a86" />
+          <Ionicons name="bookmark-outline" size={15} color={t.color.primaryFg} />
           <Text style={styles.addToListButtonText}>Add to List</Text>
         </Pressable>
       </View>
@@ -161,7 +165,7 @@ export default function DiningReservationCard({
         accessibilityLabel={`View my logged dishes at ${experienceName}`}
         testID="dining-card-my-dishes-btn"
       >
-        <Ionicons name="time-outline" size={15} color="#5b2a86" />
+        <Ionicons name="time-outline" size={15} color={t.color.primaryFg} />
         <Text style={styles.myDishesButtonText}>
           My Dishes{typeof loggedDishesCount === 'number' && loggedDishesCount > 0 ? ` (${loggedDishesCount})` : ''} →
         </Text>
@@ -170,17 +174,17 @@ export default function DiningReservationCard({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   card: {
-    backgroundColor: '#ffffff',
+    backgroundColor: t.color.surface,
     borderRadius: 22,
     borderWidth: 1.5,
-    borderColor: '#ded3f0',
+    borderColor: DINING[t.scheme].cardBorder,
     padding: 16,
     marginHorizontal: 0,
     marginTop: 8,
     marginBottom: 4,
-    shadowColor: '#5b2a86',
+    shadowColor: DINING[t.scheme].cardShadow,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.08,
     shadowRadius: 20,
@@ -200,51 +204,51 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 14,
     fontWeight: '800',
-    color: '#190c2d',
+    color: DINING[t.scheme].inkText,
     letterSpacing: -0.2,
   },
   pulseBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#ecfdf5',
+    backgroundColor: DINING[t.scheme].openBg,
     paddingVertical: 4,
     paddingHorizontal: 10,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: 'rgba(22, 163, 74, 0.25)',
+    borderColor: DINING[t.scheme].openBorder,
   },
   pulseBadgeClosed: {
-    backgroundColor: '#fef2f2',
-    borderColor: 'rgba(239, 68, 68, 0.25)',
+    backgroundColor: DINING[t.scheme].closedBg,
+    borderColor: DINING[t.scheme].closedBorder,
   },
   pulseDot: {
     width: 7,
     height: 7,
     borderRadius: 3.5,
-    backgroundColor: '#16a34a',
+    backgroundColor: DINING[t.scheme].openDot,
   },
   pulseDotClosed: {
-    backgroundColor: '#ef4444',
+    backgroundColor: DINING[t.scheme].closedDot,
   },
   pulseText: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#16a34a',
+    color: DINING[t.scheme].openText,
   },
   pulseTextClosed: {
-    color: '#ef4444',
+    color: DINING[t.scheme].closedText,
   },
   statusBox: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#fbf9fe',
+    backgroundColor: DINING[t.scheme].statusBg,
     borderRadius: 14,
     padding: 12,
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: '#ede6f6',
+    borderColor: DINING[t.scheme].statusBorder,
   },
   statusLeft: {
     flexDirection: 'row',
@@ -254,12 +258,12 @@ const styles = StyleSheet.create({
   statusTitle: {
     fontSize: 14,
     fontWeight: '800',
-    color: '#190c2d',
+    color: DINING[t.scheme].inkText,
   },
   statusSub: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#655d78',
+    color: DINING[t.scheme].mutedText,
     marginTop: 2,
   },
   actionWrap: {
@@ -267,7 +271,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   reserveButton: {
-    backgroundColor: '#d97706',
+    backgroundColor: DINING[t.scheme].reserveBg,
     borderRadius: 12,
     paddingVertical: 12,
     paddingHorizontal: 14,
@@ -275,7 +279,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    shadowColor: '#d97706',
+    shadowColor: DINING[t.scheme].reserveShadow,
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.25,
     shadowRadius: 8,
@@ -284,7 +288,7 @@ const styles = StyleSheet.create({
   reserveButtonText: {
     fontSize: 13,
     fontWeight: '800',
-    color: '#ffffff',
+    color: t.color.textOnPrimary,
   },
   buttonPressed: {
     opacity: 0.85,
@@ -292,14 +296,14 @@ const styles = StyleSheet.create({
   },
   errorText: {
     fontSize: 12,
-    color: theme.color.danger,
+    color: t.color.danger,
     marginTop: 4,
     textAlign: 'center',
   },
   dishSeparator: {
     height: 1,
     borderTopWidth: 1,
-    borderTopColor: '#e2d9f3',
+    borderTopColor: DINING[t.scheme].dishSeparator,
     borderStyle: 'dashed',
     marginTop: 12,
     marginBottom: 10,
@@ -310,7 +314,7 @@ const styles = StyleSheet.create({
   },
   logDishButton: {
     flex: 1,
-    backgroundColor: '#5b2a86',
+    backgroundColor: t.color.primary,
     borderRadius: 10,
     paddingVertical: 10,
     paddingHorizontal: 8,
@@ -318,7 +322,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    shadowColor: '#5b2a86',
+    shadowColor: DINING[t.scheme].logDishShadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 4,
@@ -327,13 +331,13 @@ const styles = StyleSheet.create({
   logDishButtonText: {
     fontSize: 11.5,
     fontWeight: '800',
-    color: '#ffffff',
+    color: t.color.textOnPrimary,
   },
   addToListButton: {
     flex: 1,
-    backgroundColor: '#fbf9fe',
+    backgroundColor: DINING[t.scheme].secondaryBg,
     borderWidth: 1.5,
-    borderColor: '#dcd1ed',
+    borderColor: DINING[t.scheme].secondaryBorder,
     borderRadius: 10,
     paddingVertical: 10,
     paddingHorizontal: 8,
@@ -345,13 +349,13 @@ const styles = StyleSheet.create({
   addToListButtonText: {
     fontSize: 11.5,
     fontWeight: '800',
-    color: '#5b2a86',
+    color: t.color.primaryFg,
   },
   myDishesButton: {
     marginTop: 8,
-    backgroundColor: '#fbf9fe',
+    backgroundColor: DINING[t.scheme].secondaryBg,
     borderWidth: 1.5,
-    borderColor: '#dcd1ed',
+    borderColor: DINING[t.scheme].secondaryBorder,
     borderRadius: 10,
     paddingVertical: 9,
     paddingHorizontal: 8,
@@ -363,6 +367,6 @@ const styles = StyleSheet.create({
   myDishesButtonText: {
     fontSize: 11.5,
     fontWeight: '800',
-    color: '#5b2a86',
+    color: t.color.primaryFg,
   },
-});
+}));

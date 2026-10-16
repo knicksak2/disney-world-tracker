@@ -30,7 +30,8 @@
  */
 
 import React from 'react';
-import { Alert } from 'react-native';
+import { Alert, StyleSheet } from 'react-native';
+import type { ReactTestInstance } from 'react-test-renderer';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
@@ -107,6 +108,8 @@ jest.mock('../../../features/notifications/useAttentionActions', () => ({
 
 import NotificationCenterScreen from '../NotificationCenterScreen';
 import { apiRequest } from '../../../api/client';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
+import { darkTheme } from '../../../theme/theme';
 
 // ---------------------------------------------------------------------------
 // Fixtures / helpers
@@ -461,5 +464,83 @@ describe('NotificationCenterScreen presentation (R1.7, R2.9, R8.2, R9.1, R9.5, R
     });
     expect(mockNavigate).not.toHaveBeenCalledWith('PinShowcase', expect.anything());
     alertSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Dark mode (dark-mode retrofit, batch B6)
+// ---------------------------------------------------------------------------
+
+describe('NotificationCenterScreen — dark mode', () => {
+  const flat = (node: ReactTestInstance) => StyleSheet.flatten(node.props.style) ?? {};
+
+  /** Nearest host ancestor (exclusive) whose flattened style paints a backgroundColor. */
+  function paintedAncestor(node: ReactTestInstance): Record<string, unknown> {
+    let cur: ReactTestInstance | null = node.parent;
+    while (cur !== null) {
+      if (typeof cur.type === 'string' && flat(cur).backgroundColor !== undefined) {
+        return flat(cur);
+      }
+      cur = cur.parent;
+    }
+    return {};
+  }
+
+  function programFeed(failedDomains: AttentionDomain[] = []): void {
+    const item = friendRequestItem();
+    programAttention({
+      state: makeState({ items: [item], failedDomains }),
+      outcomes: [
+        success('friendRequest', [item]),
+        failedDomains.includes('tripInvite') ? failure('tripInvite') : success('tripInvite'),
+        success('rodeWithTag'),
+        success('share'),
+      ],
+      inFlight: false,
+      retryFailed: jest.fn(),
+    });
+  }
+
+  beforeEach(() => {
+    mockNavigate.mockReset();
+    mockUseAttention.mockReset();
+    mockUseAttentionActions.mockReset();
+    mockUseAttentionActions.mockReturnValue(noopActions);
+  });
+  afterEach(resetTestScheme);
+
+  test('(a)(b)(c) the screen, a group header and the failure banner render dark values', () => {
+    programFeed(['tripInvite']);
+    setTestScheme('dark');
+    renderScreen();
+
+    fireEvent.press(screen.getByTestId('notification-sort-toggle'));
+    const groupHeader = screen.getByTestId('notification-group-friendRequest');
+    // (a) root container.
+    expect(paintedAncestor(groupHeader).backgroundColor).toBe(darkTheme.color.background);
+    // (b) primary text.
+    expect(flat(groupHeader).color).toBe(darkTheme.color.textPrimary);
+    // (c) token-converted banner.
+    const banner = flat(screen.getByTestId('notification-failure-banner'));
+    expect(banner.backgroundColor).toBe(darkTheme.color.warningSurface);
+    expect(banner.borderColor).toBe(darkTheme.color.warning);
+    expect(flat(screen.getByText("Some sources didn't load")).color).toBe(
+      darkTheme.color.warningText,
+    );
+  });
+
+  test('(d) a mounted FlatList row repaints when the scheme switches, without a remount', () => {
+    programFeed();
+    renderScreen();
+
+    fireEvent.press(screen.getByTestId('notification-sort-toggle'));
+    const before = screen.getByTestId('notification-group-friendRequest');
+    expect(flat(before).color).toBe('#1f1235');
+
+    setTestScheme('dark');
+
+    const after = screen.getByTestId('notification-group-friendRequest');
+    expect(flat(after).color).toBe(darkTheme.color.textPrimary);
+    expect(paintedAncestor(after).backgroundColor).toBe(darkTheme.color.background);
   });
 });

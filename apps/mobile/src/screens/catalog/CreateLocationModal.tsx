@@ -27,8 +27,9 @@ import {
 } from '@dwt/shared';
 
 import { ApiError, apiRequest } from '../../api/client';
-import { theme } from '../../theme/theme';
 import { PrimaryButton, SecondaryButton } from '../../theme/components';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme } from '../../theme/useAppTheme';
 
 export interface CreateLocationModalProps {
   /** The currently-selected park for the location (optional, defaults to 'Magic Kingdom'). */
@@ -49,6 +50,8 @@ export default function CreateLocationModal({
   onClose,
   onLocationSelected,
 }: CreateLocationModalProps): JSX.Element | null {
+  const styles = useStyles();
+  const t = useAppTheme();
   const [selectedPark, setSelectedPark] = useState<Park>(park);
   const [name, setName] = useState<string>('');
   const [suggestions, setSuggestions] = useState<readonly LocationSuggestionDTO[]>([]);
@@ -122,7 +125,7 @@ export default function CreateLocationModal({
         ]}
         testID={`location-suggestion-${item.id}`}
       >
-        <Ionicons name="location-outline" size={18} color={theme.color.primary} />
+        <Ionicons name="location-outline" size={18} color={t.color.primaryFg} />
         <View style={styles.suggestionTextWrap}>
           <Text style={styles.suggestionName}>{item.name}</Text>
           <Text style={styles.suggestionPark}>{park}</Text>
@@ -132,7 +135,7 @@ export default function CreateLocationModal({
         </Text>
       </Pressable>
     ),
-    [handleSelectSuggestion, park],
+    [handleSelectSuggestion, park, styles, t],
   );
 
   if (!visible) {
@@ -212,7 +215,7 @@ export default function CreateLocationModal({
       testID="create-location-modal"
     >
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.backdrop}
       >
         <View style={styles.container}>
@@ -231,7 +234,7 @@ export default function CreateLocationModal({
               style={styles.closeBtn}
               testID="close-create-location-btn"
             >
-              <Ionicons name="close" size={24} color={theme.color.textSecondary} />
+              <Ionicons name="close" size={24} color={t.color.textSecondary} />
             </Pressable>
           </View>
 
@@ -243,6 +246,7 @@ export default function CreateLocationModal({
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.parkChipsContent}
               style={styles.parkChipsScroll}
+              keyboardShouldPersistTaps="handled"
             >
               {PARKS.map((p) => {
                 const isSelected = p === selectedPark;
@@ -276,7 +280,8 @@ export default function CreateLocationModal({
                   if (error) setError(null);
                 }}
                 placeholder="e.g. Spring Roll Snack Cart"
-                placeholderTextColor={theme.color.textSecondary}
+                placeholderTextColor={t.color.textSecondary}
+                keyboardAppearance={t.scheme}
                 style={styles.textInput}
                 maxLength={200}
                 autoFocus
@@ -285,7 +290,7 @@ export default function CreateLocationModal({
               {isLoadingSuggestions && (
                 <ActivityIndicator
                   size="small"
-                  color={theme.color.primary}
+                  color={t.color.primaryFg}
                   style={styles.loadingIcon}
                   testID="location-suggestions-loading"
                 />
@@ -306,7 +311,9 @@ export default function CreateLocationModal({
               data={suggestions}
               keyExtractor={(item) => item.id}
               renderItem={renderSuggestion}
+              extraData={t.scheme}
               contentContainerStyle={styles.suggestionsList}
+              keyboardShouldPersistTaps="handled"
             />
           </View>
 
@@ -330,16 +337,16 @@ export default function CreateLocationModal({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   backdrop: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.45)',
     justifyContent: 'flex-end',
   },
   container: {
-    backgroundColor: theme.color.surface,
-    borderTopLeftRadius: theme.radius.xl,
-    borderTopRightRadius: theme.radius.xl,
+    backgroundColor: t.color.surface,
+    borderTopLeftRadius: t.radius.xl,
+    borderTopRightRadius: t.radius.xl,
     maxHeight: '85%',
     paddingBottom: 24,
   },
@@ -351,7 +358,7 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     paddingBottom: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: theme.color.border,
+    borderBottomColor: t.color.border,
   },
   headerTitles: {
     flex: 1,
@@ -360,11 +367,11 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 18,
     fontWeight: '700',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   subtitle: {
     fontSize: 13,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     marginTop: 2,
   },
   closeBtn: {
@@ -388,49 +395,49 @@ const styles = StyleSheet.create({
   parkChip: {
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: theme.radius.pill,
-    backgroundColor: theme.color.surfaceAlt,
+    borderRadius: t.radius.pill,
+    backgroundColor: t.color.surfaceAlt,
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
   },
   parkChipSelected: {
-    backgroundColor: theme.color.primary,
-    borderColor: theme.color.primary,
+    backgroundColor: t.color.primary,
+    borderColor: t.color.primary,
   },
   parkChipText: {
     fontSize: 12,
     fontWeight: '600',
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   parkChipTextSelected: {
-    color: '#ffffff',
+    color: t.color.textOnPrimary,
   },
   inputLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
     marginBottom: 8,
   },
   inputWrap: {
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: theme.color.border,
-    borderRadius: theme.radius.md,
-    backgroundColor: theme.color.surfaceAlt,
+    borderColor: t.color.border,
+    borderRadius: t.radius.md,
+    backgroundColor: t.color.surfaceAlt,
     paddingHorizontal: 12,
     height: 44,
   },
   textInput: {
     flex: 1,
     fontSize: 15,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   loadingIcon: {
     marginLeft: 8,
   },
   errorText: {
-    color: theme.color.danger,
+    color: t.color.danger,
     fontSize: 13,
     marginTop: 6,
   },
@@ -442,7 +449,7 @@ const styles = StyleSheet.create({
   suggestionsHeader: {
     fontSize: 13,
     fontWeight: '600',
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     marginBottom: 8,
   },
   suggestionsList: {
@@ -453,8 +460,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 12,
     paddingHorizontal: 10,
-    backgroundColor: theme.color.surfaceAlt,
-    borderRadius: theme.radius.md,
+    backgroundColor: t.color.surfaceAlt,
+    borderRadius: t.radius.md,
     marginBottom: 8,
     gap: 10,
   },
@@ -467,17 +474,17 @@ const styles = StyleSheet.create({
   suggestionName: {
     fontSize: 14,
     fontWeight: '600',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   suggestionPark: {
     fontSize: 12,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     marginTop: 1,
   },
   matchScore: {
     fontSize: 12,
     fontWeight: '600',
-    color: theme.color.accent,
+    color: t.color.accent,
   },
   actionsRow: {
     flexDirection: 'row',
@@ -488,4 +495,4 @@ const styles = StyleSheet.create({
   actionBtn: {
     flex: 1,
   },
-});
+}));

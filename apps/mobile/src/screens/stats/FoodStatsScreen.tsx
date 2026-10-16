@@ -38,13 +38,20 @@ import {
   PrimaryButton,
   ScreenContainer,
 } from '../../theme/components';
-import { theme } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { withAlpha } from '../../theme/theme';
+import { useAppTheme, usePalette } from '../../theme/useAppTheme';
 
 import {
   formatDishMarathonRecord,
   formatFoodOdometer,
   formatMostAdventurousDay,
 } from './statsView';
+import {
+  FOOD_PODIUM,
+  FOOD_RATING,
+  FOOD_RECORD_ICON,
+} from './FoodStatsScreen.palette';
 
 // ---------------------------------------------------------------------------
 // Copy
@@ -59,6 +66,9 @@ const FOOD_STATS_ERROR_BODY =
 // ---------------------------------------------------------------------------
 
 export default function FoodStatsScreen(): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
+  const recordIcon = usePalette(FOOD_RECORD_ICON);
   const navigation = useNavigation();
 
   // Shared stats query for food activity metrics (reads from warm cache, R28.7)
@@ -94,7 +104,7 @@ export default function FoodStatsScreen(): JSX.Element {
       <ScreenContainer>
         {header}
         <View style={styles.center} testID="food-stats-loading">
-          <ActivityIndicator color={theme.color.primary} />
+          <ActivityIndicator color={t.color.primaryFg} />
         </View>
       </ScreenContainer>
     );
@@ -309,10 +319,10 @@ export default function FoodStatsScreen(): JSX.Element {
                 <View
                   style={[
                     styles.recordIcon,
-                    { backgroundColor: '#fff4d6' },
+                    { backgroundColor: t.color.warningSurface },
                   ]}
                 >
-                  <Ionicons name="compass" size={18} color="#d4a017" />
+                  <Ionicons name="compass" size={18} color={t.color.accentDark} />
                 </View>
                 <View style={styles.recordBody}>
                   <Text style={styles.recordHeadline}>
@@ -329,10 +339,10 @@ export default function FoodStatsScreen(): JSX.Element {
                 <View
                   style={[
                     styles.recordIcon,
-                    { backgroundColor: '#eef2ff' },
+                    { backgroundColor: recordIcon.marathonBg },
                   ]}
                 >
-                  <Ionicons name="restaurant" size={18} color="#3b5bdb" />
+                  <Ionicons name="restaurant" size={18} color={recordIcon.marathonFg} />
                 </View>
                 <View style={styles.recordBody}>
                   <Text style={styles.recordHeadline}>
@@ -453,55 +463,55 @@ export default function FoodStatsScreen(): JSX.Element {
 // Styles
 // ---------------------------------------------------------------------------
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   scrollContent: {
-    padding: theme.spacing.lg,
-    gap: theme.spacing.md,
+    padding: t.spacing.lg,
+    gap: t.spacing.md,
   },
   center: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: theme.spacing.xl,
+    padding: t.spacing.xl,
   },
   retryBtn: {
-    marginTop: theme.spacing.lg,
+    marginTop: t.spacing.lg,
     alignSelf: 'center',
   },
   odometerGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: theme.spacing.sm,
+    gap: t.spacing.sm,
   },
   odometerCard: {
     flex: 1,
     minWidth: '30%',
-    backgroundColor: theme.color.surface,
-    padding: theme.spacing.md,
-    borderRadius: theme.radius.md,
+    backgroundColor: t.color.surface,
+    padding: t.spacing.md,
+    borderRadius: t.radius.md,
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
     gap: 2,
   },
   odometerVal: {
-    ...theme.typography.title,
+    ...t.typography.title,
     fontSize: 22,
     fontWeight: '800',
-    color: theme.color.primary,
+    color: t.color.primaryFg,
   },
   odometerLbl: {
-    ...theme.typography.meta,
+    ...t.typography.meta,
     fontSize: 11,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     fontWeight: '600',
   },
   podiumCard: {
-    backgroundColor: '#2b1430',
-    borderRadius: theme.radius.lg,
-    padding: theme.spacing.md,
-    gap: theme.spacing.sm,
+    backgroundColor: FOOD_PODIUM[t.scheme].bg,
+    borderRadius: t.radius.lg,
+    padding: t.spacing.md,
+    gap: t.spacing.sm,
     borderWidth: 1,
-    borderColor: '#4d2055',
+    borderColor: FOOD_PODIUM[t.scheme].border,
   },
   podiumHeader: {
     flexDirection: 'row',
@@ -509,22 +519,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   podiumTitle: {
-    ...theme.typography.subtitle,
+    ...t.typography.subtitle,
     fontSize: 13,
     fontWeight: '800',
-    color: '#ffffff',
+    color: t.color.textOnPrimary,
   },
   podiumSubtitle: {
-    ...theme.typography.meta,
+    ...t.typography.meta,
     fontSize: 10,
-    color: '#d6a3d9',
+    color: FOOD_PODIUM[t.scheme].mutedText,
   },
   podiumSteps: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     justifyContent: 'center',
-    gap: theme.spacing.xs,
-    paddingTop: theme.spacing.xs,
+    gap: t.spacing.xs,
+    paddingTop: t.spacing.xs,
   },
   podiumColumn: {
     flex: 1,
@@ -536,10 +546,10 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   podiumName: {
-    ...theme.typography.meta,
+    ...t.typography.meta,
     fontSize: 10.5,
     fontWeight: '700',
-    color: '#ffffff',
+    color: t.color.textOnPrimary,
     textAlign: 'center',
   },
   podiumNameGold: {
@@ -547,10 +557,10 @@ const styles = StyleSheet.create({
     fontSize: 11,
   },
   podiumLogs: {
-    ...theme.typography.meta,
+    ...t.typography.meta,
     fontSize: 10.5,
     fontWeight: '800',
-    color: '#f6c343',
+    color: t.color.accent,
     marginBottom: 4,
   },
   podiumLogsGold: {
@@ -563,9 +573,9 @@ const styles = StyleSheet.create({
   },
   podiumBarGold: {
     height: 52,
-    backgroundColor: 'rgba(246, 195, 67, 0.3)',
+    backgroundColor: withAlpha(t.color.accent, 0.3),
     borderTopWidth: 2,
-    borderTopColor: '#f6c343',
+    borderTopColor: t.color.accent,
   },
   podiumBarSilver: {
     height: 36,
@@ -578,35 +588,35 @@ const styles = StyleSheet.create({
   podiumRunnersUp: {
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: 'rgba(255, 255, 255, 0.15)',
-    paddingTop: theme.spacing.xs,
+    paddingTop: t.spacing.xs,
     gap: 4,
   },
   runnerUpRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.xs,
+    gap: t.spacing.xs,
   },
   runnerUpRank: {
-    ...theme.typography.meta,
-    color: '#d6a3d9',
+    ...t.typography.meta,
+    color: FOOD_PODIUM[t.scheme].mutedText,
     fontSize: 11,
     fontWeight: '700',
     width: 16,
   },
   runnerUpName: {
-    ...theme.typography.meta,
-    color: '#ffffff',
+    ...t.typography.meta,
+    color: t.color.textOnPrimary,
     fontSize: 11,
     flex: 1,
   },
   runnerUpCount: {
-    ...theme.typography.meta,
-    color: '#f6c343',
+    ...t.typography.meta,
+    color: t.color.accent,
     fontSize: 11,
     fontWeight: '700',
   },
   highestRatedSection: {
-    gap: theme.spacing.xs,
+    gap: t.spacing.xs,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -614,42 +624,42 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   sectionTitle: {
-    ...theme.typography.subtitle,
+    ...t.typography.subtitle,
     fontSize: 13,
     fontWeight: '800',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   sectionMeta: {
-    ...theme.typography.meta,
+    ...t.typography.meta,
     fontSize: 11,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     fontWeight: '500',
   },
   highestRatedCard: {
-    padding: theme.spacing.sm,
+    padding: t.spacing.sm,
   },
   ratedRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: theme.spacing.xs,
-    gap: theme.spacing.sm,
+    paddingVertical: t.spacing.xs,
+    gap: t.spacing.sm,
   },
   ratedRowBorder: {
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: theme.color.border,
+    borderTopColor: t.color.border,
   },
   ratedRank: {
-    ...theme.typography.meta,
+    ...t.typography.meta,
     fontWeight: '700',
     fontSize: 12,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     width: 18,
   },
   ratedName: {
-    ...theme.typography.body,
+    ...t.typography.body,
     fontSize: 12,
     fontWeight: '600',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
     flex: 1,
   },
   ratedRatingWrap: {
@@ -659,39 +669,39 @@ const styles = StyleSheet.create({
   },
   ratedStars: {
     fontSize: 12,
-    color: '#f59f00',
+    color: FOOD_RATING[t.scheme].star,
   },
   ratedScore: {
-    ...theme.typography.meta,
+    ...t.typography.meta,
     fontWeight: '800',
     fontSize: 12,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   ratedCount: {
-    ...theme.typography.meta,
+    ...t.typography.meta,
     fontSize: 11,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   emptyNote: {
-    ...theme.typography.meta,
+    ...t.typography.meta,
     fontSize: 12,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     fontStyle: 'italic',
-    padding: theme.spacing.xs,
+    padding: t.spacing.xs,
     textAlign: 'center',
   },
   recordsSection: {
-    gap: theme.spacing.xs,
+    gap: t.spacing.xs,
   },
   recordCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: theme.color.surface,
-    padding: theme.spacing.sm,
-    borderRadius: theme.radius.md,
+    backgroundColor: t.color.surface,
+    padding: t.spacing.sm,
+    borderRadius: t.radius.md,
     borderWidth: 1,
-    borderColor: theme.color.border,
-    gap: theme.spacing.sm,
+    borderColor: t.color.border,
+    gap: t.spacing.sm,
   },
   recordIcon: {
     width: 32,
@@ -705,83 +715,84 @@ const styles = StyleSheet.create({
     gap: 1,
   },
   recordHeadline: {
-    ...theme.typography.body,
+    ...t.typography.body,
     fontWeight: '700',
     fontSize: 12,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   recordSubtext: {
-    ...theme.typography.meta,
+    ...t.typography.meta,
     fontSize: 11,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   catalogHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: theme.spacing.sm,
+    paddingTop: t.spacing.sm,
     borderTopWidth: 1,
-    borderTopColor: theme.color.border,
+    borderTopColor: t.color.border,
   },
   sortToggleContainer: {
     flexDirection: 'row',
-    backgroundColor: theme.color.surfaceAlt,
-    borderRadius: theme.radius.sm,
+    backgroundColor: t.color.surfaceAlt,
+    borderRadius: t.radius.sm,
     padding: 2,
   },
   sortButton: {
     paddingVertical: 4,
-    paddingHorizontal: theme.spacing.sm,
-    borderRadius: theme.radius.sm - 2,
+    paddingHorizontal: t.spacing.sm,
+    borderRadius: t.radius.sm - 2,
   },
   sortButtonActive: {
-    backgroundColor: theme.color.surface,
+    // Dark: lighter than the `surfaceAlt` track so it reads raised (Requirement 9.12).
+    backgroundColor: t.scheme === 'dark' ? t.color.borderStrong : t.color.surface,
     shadowColor: '#000',
     shadowOpacity: 0.05,
     shadowRadius: 2,
     elevation: 1,
   },
   sortButtonText: {
-    ...theme.typography.meta,
+    ...t.typography.meta,
     fontSize: 10,
     fontWeight: '600',
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   sortButtonTextActive: {
-    color: theme.color.primary,
+    color: t.color.primaryFg,
     fontWeight: '700',
   },
   dishesListCard: {
-    padding: theme.spacing.sm,
+    padding: t.spacing.sm,
   },
   dishRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: theme.spacing.xs,
-    gap: theme.spacing.sm,
+    paddingVertical: t.spacing.xs,
+    gap: t.spacing.sm,
   },
   dishRowBorder: {
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: theme.color.border,
+    borderTopColor: t.color.border,
   },
   dishRank: {
-    ...theme.typography.meta,
+    ...t.typography.meta,
     fontSize: 11,
     fontWeight: '700',
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     width: 24,
   },
   dishName: {
-    ...theme.typography.body,
+    ...t.typography.body,
     fontSize: 12,
     fontWeight: '600',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
     flex: 1,
   },
   dishBadge: {
-    ...theme.typography.meta,
+    ...t.typography.meta,
     fontSize: 11,
     fontWeight: '700',
-    color: theme.color.primary,
+    color: t.color.primaryFg,
   },
-});
+}));

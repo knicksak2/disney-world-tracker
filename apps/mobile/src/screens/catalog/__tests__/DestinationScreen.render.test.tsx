@@ -6,11 +6,14 @@
  */
 
 import React from 'react';
-import { AccessibilityInfo, Text } from 'react-native';
+import { AccessibilityInfo, StyleSheet, Text } from 'react-native';
+import type { ReactTestInstance } from 'react-test-renderer';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
+import { darkTheme, lightTheme } from '../../../theme/theme';
 
 import type { ExperienceDTO } from '@dwt/shared';
 
@@ -339,6 +342,92 @@ describe('DestinationScreen in-destination search', () => {
     // Rows reappear
     await screen.findByTestId('destination-row-exp-runaway');
     expect(screen.queryByTestId('destination-favorites-empty')).toBeNull();
+  });
+});
+
+describe('DestinationScreen (Disney Springs body) — dark mode', () => {
+  const springsExperiences: ExperienceDTO[] = [
+    {
+      id: 'exp-world-of-disney',
+      name: 'World of Disney',
+      park: 'Disney Springs',
+      category: 'Other',
+      description: 'Flagship store',
+      active: true,
+      imageUrl: null,
+      areaType: 'ThemePark',
+      land: 'Marketplace',
+    },
+    {
+      id: 'exp-raglan',
+      name: 'Raglan Road Irish Pub',
+      park: 'Disney Springs',
+      category: 'Restaurant',
+      description: 'Irish pub',
+      active: true,
+      imageUrl: null,
+      areaType: 'ThemePark',
+      land: 'The Landing',
+    },
+  ];
+
+  const flat = (node: ReactTestInstance) => StyleSheet.flatten(node.props.style) ?? {};
+  /** Nearest host ancestor whose flattened style sets `key`. */
+  function ancestorWith(node: ReactTestInstance, key: string): Record<string, unknown> {
+    let cur: ReactTestInstance | null = node.parent;
+    while (cur !== null) {
+      if (typeof cur.type === 'string' && flat(cur)[key] !== undefined) {
+        return flat(cur);
+      }
+      cur = cur.parent;
+    }
+    return {};
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    stub(springsExperiences);
+  });
+  afterEach(resetTestScheme);
+
+  it('(a)(b)(c) paints the screen, primary text and converted row elements with dark values', async () => {
+    setTestScheme('dark');
+    renderScreen('Disney Springs');
+
+    // (a) the screen background behind the grouped list.
+    const section = await screen.findByTestId('destination-section-Restaurant');
+    expect(ancestorWith(section, 'backgroundColor').backgroundColor).toBe(
+      darkTheme.color.background,
+    );
+    // (b) primary text.
+    expect(flat(screen.getByText('Raglan Road Irish Pub')).color).toBe(darkTheme.color.textPrimary);
+    // (c) converted elements: the category placeholder fill (rule 1, fill split) and
+    // the price-less Restaurant badge tint; the row's nested-item rail.
+    const row = screen.getByTestId('destination-row-exp-raglan');
+    expect(
+      flat(within(row).getByTestId('destination-thumb-placeholder')).backgroundColor,
+    ).toBe(darkTheme.categoryVisual.Restaurant.fill);
+    expect(ancestorWith(row, 'borderLeftColor').borderLeftColor).toBe(
+      darkTheme.color.borderStrong,
+    );
+    const input = screen.getByTestId('destination-search');
+    expect(input.props.keyboardAppearance).toBe('dark');
+  });
+
+  it('repaints the closure-styled list rail live on a scheme switch (extraData)', async () => {
+    renderScreen('Disney Springs');
+    const row = await screen.findByTestId('destination-row-exp-raglan');
+    expect(ancestorWith(row, 'borderLeftColor').borderLeftColor).toBe(
+      lightTheme.color.borderStrong,
+    );
+
+    setTestScheme('dark');
+
+    const rowAfter = screen.getByTestId('destination-row-exp-raglan');
+    expect(ancestorWith(rowAfter, 'borderLeftColor').borderLeftColor).toBe(
+      darkTheme.color.borderStrong,
+    );
+    expect(flat(screen.getByText('World of Disney')).color).toBe(darkTheme.color.textPrimary);
   });
 });
 

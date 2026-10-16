@@ -1,9 +1,15 @@
 import React from 'react';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react-native';
+import { StyleSheet } from 'react-native';
+import type { ReactTestInstance } from 'react-test-renderer';
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { NavigationContainer } from '@react-navigation/native';
+import { Calendar } from 'react-native-calendars';
 import { apiRequest } from '../../../api/client';
 import CrowdCalendarScreen from '../CrowdCalendarScreen';
+import { CROWD_LEVEL, EVENT_BADGE } from '../CrowdCalendarScreen.palette';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
+import { darkTheme } from '../../../theme/theme';
 
 jest.mock('../../../api/client', () => {
   const actual = jest.requireActual('../../../api/client');
@@ -329,6 +335,126 @@ describe('CrowdCalendarScreen — Day detail additions (R6.2, R6.6, R10.5)', () 
       expect(screen.getByText('Live tracking today')).toBeTruthy();
       expect(screen.getByText('We predicted 6/10 · tracking 5/10 so far ✓')).toBeTruthy();
     });
+  });
+});
+
+describe('CrowdCalendarScreen — dark mode', () => {
+  let queryClient: QueryClient;
+  const flat = (node: ReactTestInstance) => StyleSheet.flatten(node.props.style) ?? {};
+  /** Nearest host ancestor whose flattened style sets `key`. */
+  function ancestorWith(node: ReactTestInstance, key: string): Record<string, unknown> {
+    let cur: ReactTestInstance | null = node.parent;
+    while (cur !== null) {
+      if (typeof cur.type === 'string' && flat(cur)[key] !== undefined) {
+        return flat(cur);
+      }
+      cur = cur.parent;
+    }
+    return {};
+  }
+
+  beforeEach(() => {
+    queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    mockApiRequest.mockReset();
+    const today = new Date().toISOString().split('T')[0];
+    mockApiRequest.mockResolvedValue({
+      days: [
+        {
+          date: today,
+          park: 'Magic Kingdom',
+          forecastIndex: 1.2, // Level 6 — Moderate
+          parkHours: { openTime: '2026-08-07T09:00:00Z', closeTime: '2026-08-07T22:00:00Z' },
+          earlyEntry: true,
+          extendedEvening: false,
+          ticketedEvent: false,
+          festival: 'Food & Wine Festival',
+          allParks: [
+            { park: 'Magic Kingdom', forecastIndex: 1.2, expectedAvgWaitMinutes: 38 },
+            { park: 'EPCOT', forecastIndex: 0.4, expectedAvgWaitMinutes: 20 },
+          ],
+        },
+      ],
+    });
+  });
+  afterEach(resetTestScheme);
+
+  function renderScreen() {
+    return render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationContainer>
+          <CrowdCalendarScreen />
+        </NavigationContainer>
+      </QueryClientProvider>,
+    );
+  }
+
+  it('(a)(b)(c) paints the screen, primary text, badges and the calendar theme with dark values', async () => {
+    setTestScheme('dark');
+    renderScreen();
+    await waitFor(() => {
+      expect(screen.getByText('Day detail')).toBeTruthy();
+    });
+
+    // (a) the screen background behind the scroll body.
+    expect(ancestorWith(screen.getByText('Day detail'), 'backgroundColor').backgroundColor).toBe(
+      darkTheme.color.background,
+    );
+    // (b) primary text.
+    expect(flat(screen.getByText('Moderate')).color).toBe(darkTheme.color.textPrimary);
+    // (c) converted literals / role-converted reads.
+    expect(flat(screen.getByText('Early Entry')).color).toBe(EVENT_BADGE.dark.earlyEntry);
+    expect(flat(screen.getByText(/Food & Wine Festival/)).color).toBe(darkTheme.color.primaryFg);
+    // The crowd scale is a mode-invariant data encoding (rule 3 V).
+    const epcot = screen.getByLabelText(/EPCOT: Level 2\/10/);
+    expect(
+      ancestorWith(within(epcot).getByText('2/10'), 'backgroundColor').backgroundColor,
+    ).toBe(CROWD_LEVEL.dark.quiet);
+    // The Calendar receives the themed theme prop.
+    const calendar = screen.UNSAFE_getByType(Calendar);
+    expect(calendar.props.theme.calendarBackground).toBe(darkTheme.color.surface);
+    expect(calendar.props.theme.monthTextColor).toBe(darkTheme.color.textPrimary);
+    expect(calendar.props.theme.arrowColor).toBe(darkTheme.color.primaryFg);
+  });
+
+  it('park segmented control: the selected segment is raised above the `surfaceAlt` track and moves on press', async () => {
+    setTestScheme('dark');
+    renderScreen();
+    await waitFor(() => {
+      expect(screen.getByText('Day detail')).toBeTruthy();
+    });
+    // The segment is the nearest host ancestor carrying the segment's own radius.
+    const seg = (label: string) => ancestorWith(screen.getByText(label), 'borderRadius');
+
+    expect(seg('All').backgroundColor).toBe(darkTheme.color.borderStrong);
+    expect(seg('All').backgroundColor).not.toBe(darkTheme.color.surface);
+    expect(seg('All').backgroundColor).not.toBe(darkTheme.color.surfaceAlt);
+    expect(seg('MK').backgroundColor).toBeUndefined();
+    expect(flat(screen.getByText('All')).color).toBe(darkTheme.color.primaryFg);
+
+    fireEvent.press(screen.getByText('MK'));
+    await waitFor(() => expect(seg('MK').backgroundColor).toBe(darkTheme.color.borderStrong));
+    expect(seg('All').backgroundColor).toBeUndefined();
+    expect(flat(screen.getByText('MK')).color).toBe(darkTheme.color.primaryFg);
+  });
+
+  it('keeps the light calendar theme unchanged and remounts the Calendar on a scheme switch', async () => {
+    renderScreen();
+    await waitFor(() => {
+      expect(screen.getByText('Day detail')).toBeTruthy();
+    });
+    expect(ancestorWith(screen.getByText('All'), 'borderRadius').backgroundColor).toBe('#ffffff');
+    const lightCalendar = screen.UNSAFE_getByType(Calendar);
+    expect(lightCalendar.props.theme.calendarBackground).toBe('transparent');
+    expect(lightCalendar.props.theme.arrowColor).toBe('#5b2a86');
+    expect(flat(screen.getByText('Early Entry')).color).toBe('#2e7d3a');
+
+    setTestScheme('dark');
+
+    const darkCalendar = screen.UNSAFE_getByType(Calendar);
+    // `key={t.scheme}` gives a fresh instance (Calendar captures styles once at mount).
+    expect(darkCalendar).not.toBe(lightCalendar);
+    expect(darkCalendar.props.theme.calendarBackground).toBe(darkTheme.color.surface);
+    expect(flat(screen.getByText('Early Entry')).color).toBe(EVENT_BADGE.dark.earlyEntry);
   });
 });
 

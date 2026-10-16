@@ -12,7 +12,7 @@
 //     6. Remaining TagGroupCards (Good to know, Accessibility, Good for)
 
 import React from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Text, View } from 'react-native';
 import type {
   AggregateRatingDTO,
   CompletionDTO,
@@ -23,8 +23,10 @@ import type {
   WhyThisDTO,
 } from '@dwt/shared';
 
-import { theme } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme } from '../../theme/useAppTheme';
 import { Card, SectionLabel } from '../../theme/components';
+import { LORE } from './PassportAndLoreLens.palette';
 import ParkPassportCard from './ParkPassportCard';
 import RestaurantDishLogCard from './RestaurantDishLogCard';
 import AboutSection from './AboutSection';
@@ -79,6 +81,8 @@ export default function PassportAndLoreLens({
   onMyLoggedItems,
   onAddToList,
 }: PassportAndLoreLensProps): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   // Normalize copy for Why This duplicate filtering
   const normalizedDescription = (description ?? '').trim().replace(/\s+/gu, ' ').toLowerCase();
   const bullets = (whyThis?.bullets ?? []).filter(
@@ -125,7 +129,7 @@ export default function PassportAndLoreLens({
           <View testID="experience-why-this">
             <View style={styles.insiderSecretsBox}>
               <View style={styles.insiderBadgeRow}>
-                <Text style={{ fontSize: 13 }}>✨</Text>
+                <Text style={{ ...t.textDefault, fontSize: 13 }}>✨</Text>
                 <Text style={styles.insiderBadgeText}>
                   {category === 'Resort'
                     ? 'Architectural Lore & Backstory'
@@ -195,6 +199,8 @@ function AggregateContent({
 }: {
   readonly query: QueryLike<AggregateRatingDTO | null>;
 }): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   if (query.isError) {
     return <Text style={styles.errorText}>Could not load community rating.</Text>;
   }
@@ -202,7 +208,7 @@ function AggregateContent({
     return (
       <ActivityIndicator
         accessibilityLabel="Loading community rating"
-        color={theme.color.primary}
+        color={t.color.primaryFg}
       />
     );
   }
@@ -222,7 +228,7 @@ function AggregateContent({
       <View style={styles.guestScoreDial}>
         <Text style={styles.guestScoreNum}>{display.mean}</Text>
         <Text style={styles.guestScoreLbl}>Out of 10</Text>
-        <Text style={{ height: 0, width: 0, opacity: 0, overflow: 'hidden' }} testID="aggregate-value">
+        <Text style={{ ...t.textDefault, height: 0, width: 0, opacity: 0, overflow: 'hidden' }} testID="aggregate-value">
           {display.mean} / 10
         </Text>
       </View>
@@ -245,21 +251,21 @@ function AggregateContent({
 // Styles
 // ---------------------------------------------------------------------------
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   container: {
-    gap: theme.spacing.md,
+    gap: t.spacing.md,
   },
   guideCard: {
-    padding: theme.spacing.md,
-    gap: theme.spacing.md,
+    padding: t.spacing.md,
+    gap: t.spacing.md,
   },
   section: {
-    gap: theme.spacing.md,
+    gap: t.spacing.md,
   },
   communitySubhead: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#655d78',
+    color: LORE[t.scheme].mutedText,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginBottom: 6,
@@ -268,7 +274,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: '#ded1f1',
+    borderTopColor: LORE[t.scheme].divider,
     borderStyle: 'dashed',
     gap: 12,
   },
@@ -276,40 +282,40 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   bodyText: {
-    ...theme.typography.body,
-    color: theme.color.textPrimary,
+    ...t.typography.body,
+    color: t.color.textPrimary,
   },
   emptyText: {
-    ...theme.typography.body,
-    color: theme.color.textSecondary,
+    ...t.typography.body,
+    color: t.color.textSecondary,
   },
   errorText: {
-    ...theme.typography.body,
-    color: theme.color.danger,
+    ...t.typography.body,
+    color: t.color.danger,
   },
   aggregateBlock: {
-    gap: theme.spacing.xs,
+    gap: t.spacing.xs,
   },
   aggregateValueRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.xs,
+    gap: t.spacing.xs,
   },
   aggregateValue: {
-    ...theme.typography.title,
-    color: theme.color.textPrimary,
+    ...t.typography.title,
+    color: t.color.textPrimary,
     fontWeight: '700',
   },
   aggregateMeta: {
-    ...theme.typography.meta,
-    color: '#655d78',
+    ...t.typography.meta,
+    color: LORE[t.scheme].mutedText,
     fontSize: 10,
     marginTop: 1,
   },
   insiderSecretsBox: {
-    backgroundColor: '#f9f5fe',
+    backgroundColor: LORE[t.scheme].insiderBg,
     borderWidth: 1.5,
-    borderColor: '#ded1f1',
+    borderColor: LORE[t.scheme].insiderBorder,
     borderRadius: 16,
     padding: 14,
   },
@@ -322,7 +328,7 @@ const styles = StyleSheet.create({
   insiderBadgeText: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#5b2a86',
+    color: t.color.primaryFg,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
@@ -333,29 +339,30 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   insiderBulletIcon: {
+    ...t.textDefault,
     fontSize: 13,
     marginTop: 1,
   },
   insiderBulletText: {
     flex: 1,
     fontSize: 12,
-    color: '#190c2d',
+    color: LORE[t.scheme].inkText,
     lineHeight: 18,
   },
   communityGuestStrip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: '#fffcf4',
+    backgroundColor: LORE[t.scheme].guestStripBg,
     borderWidth: 1,
-    borderColor: '#f6e6be',
+    borderColor: LORE[t.scheme].guestStripBorder,
     borderRadius: 14,
     padding: 12,
   },
   guestScoreDial: {
-    backgroundColor: '#fef3c7',
+    backgroundColor: LORE[t.scheme].scoreDialBg,
     borderWidth: 1,
-    borderColor: '#fde68a',
+    borderColor: LORE[t.scheme].scoreDialBorder,
     borderRadius: 10,
     paddingVertical: 6,
     paddingHorizontal: 10,
@@ -366,13 +373,13 @@ const styles = StyleSheet.create({
   guestScoreNum: {
     fontSize: 22,
     fontWeight: '800',
-    color: '#b45309',
+    color: LORE[t.scheme].scoreNum,
     lineHeight: 24,
   },
   guestScoreLbl: {
     fontSize: 8.5,
     fontWeight: '700',
-    color: '#92400e',
+    color: LORE[t.scheme].scoreLabel,
   },
   commRightCol: {
     flex: 1,
@@ -380,17 +387,17 @@ const styles = StyleSheet.create({
   commTitle: {
     fontSize: 12,
     fontWeight: '800',
-    color: '#190c2d',
+    color: LORE[t.scheme].inkText,
   },
   commSub: {
     fontSize: 10.5,
-    color: '#655d78',
+    color: LORE[t.scheme].mutedText,
     marginTop: 2,
   },
   cloudLabel: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#655d78',
+    color: LORE[t.scheme].mutedText,
     letterSpacing: 0.5,
     marginBottom: 8,
     textTransform: 'uppercase',
@@ -401,9 +408,9 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   cloudPill: {
-    backgroundColor: '#f1ecf9',
+    backgroundColor: LORE[t.scheme].cloudPillBg,
     borderWidth: 1,
-    borderColor: '#e2d7f2',
+    borderColor: LORE[t.scheme].cloudPillBorder,
     paddingVertical: 5,
     paddingHorizontal: 11,
     borderRadius: 999,
@@ -411,11 +418,11 @@ const styles = StyleSheet.create({
   cloudPillText: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#190c2d',
+    color: LORE[t.scheme].inkText,
   },
   badgeRow: {
     flexDirection: 'row',
-    gap: theme.spacing.sm,
+    gap: t.spacing.sm,
     flexWrap: 'wrap',
   },
-});
+}));

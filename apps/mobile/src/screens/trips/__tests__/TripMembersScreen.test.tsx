@@ -56,6 +56,12 @@ jest.mock('../../../api/client', () => {
 import TripMembersScreen from '../TripMembersScreen';
 import { ApiError, apiRequest as mockedApiRequest } from '../../../api/client';
 import type { TripMemberDTO, TripPendingInviteDTO } from '@dwt/shared';
+import { StyleSheet } from 'react-native';
+import type { ReactTestInstance } from 'react-test-renderer';
+import { darkTheme } from '../../../theme/theme';
+import { ScreenContainer } from '../../../theme/components';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
+import { MEMBER_AVATAR, MEMBERS_MODAL } from '../TripMembersScreen.palette';
 
 const apiRequestMock = mockedApiRequest as jest.MockedFunction<
   typeof mockedApiRequest
@@ -402,5 +408,78 @@ describe('Trip_Members screen', () => {
       ]),
     );
     expect(mutate).not.toHaveBeenCalled();
+  });
+
+  // Feature: dark-mode — the Members screen repaints with the Twilight palette.
+  describe('dark mode', () => {
+    afterEach(resetTestScheme);
+
+    const flat = (node: ReactTestInstance): Record<string, unknown> =>
+      (StyleSheet.flatten(node.props.style) ?? {}) as Record<string, unknown>;
+
+    /** The screen root: the host View that `ScreenContainer` paints. */
+    function rootContainer(): ReactTestInstance {
+      const container = screen.UNSAFE_getAllByType(ScreenContainer)[0]!;
+      return container.children[0] as ReactTestInstance;
+    }
+
+    /** The nearest ancestor of `node` that paints a background colour. */
+    function paintedAncestor(node: ReactTestInstance): ReactTestInstance {
+      let current: ReactTestInstance | null = node.parent;
+      while (
+        current !== null &&
+        // Skip the composite wrapper that shares the node's own style.
+        (current.props.style === node.props.style || flat(current).backgroundColor === undefined)
+      ) {
+        current = current.parent;
+      }
+      if (current === null) throw new Error('no painted ancestor');
+      return current;
+    }
+
+    test('(a)(b)(c) paints the root, member names, role badge and avatar fill dark', async () => {
+      installApi(ORGANIZER_ROSTER);
+      setTestScheme('dark');
+      renderMembers(makeNavigation());
+
+      await screen.findByTestId(`trip-member-${MEMBER_ID}`);
+      // (a) root container.
+      expect(flat(rootContainer()).backgroundColor).toBe(darkTheme.color.background);
+      // (b) primary text — a member's display name.
+      expect(flat(screen.getByText('Eric')).color).toBe(darkTheme.color.textPrimary);
+      // (c) the Organizer role Badge: `primary` as text → `primaryFg` (rule 1a).
+      expect(flat(screen.getAllByText('Organizer')[0]!).color).toBe(darkTheme.color.primaryFg);
+      // (c) "Eric" hashes to the third avatar fill — `success` behind white
+      // (rule 4 → DARK_TONAL.green.fill); the initial stays textOnPrimary.
+      const initial = screen.getByText('E');
+      expect(flat(initial).color).toBe(darkTheme.color.textOnPrimary);
+      expect(flat(paintedAncestor(initial)).backgroundColor).toBe(MEMBER_AVATAR.dark.success);
+
+      await flushPending();
+    });
+
+    test('the invite modal card and its scrim use dark values', async () => {
+      installApi(ORGANIZER_ROSTER);
+      setTestScheme('dark');
+      renderMembers(makeNavigation());
+
+      fireEvent.press(await screen.findByTestId('trip-members-invite-open'));
+      const card = await screen.findByTestId('trip-members-invite-modal');
+      expect(flat(card).backgroundColor).toBe(darkTheme.color.surface);
+      expect(flat(paintedAncestor(card)).backgroundColor).toBe(MEMBERS_MODAL.dark.scrim);
+
+      await flushPending();
+    });
+
+    test('keeps the pre-retrofit light values under light', async () => {
+      installApi(ORGANIZER_ROSTER);
+      renderMembers(makeNavigation());
+
+      await screen.findByTestId(`trip-member-${MEMBER_ID}`);
+      expect(flat(screen.getAllByText('Organizer')[0]!).color).toBe('#5b2a86');
+      expect(flat(paintedAncestor(screen.getByText('E'))).backgroundColor).toBe('#2e9e6b');
+
+      await flushPending();
+    });
   });
 });

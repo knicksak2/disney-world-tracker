@@ -27,7 +27,6 @@ import {
   Pressable,
   ScrollView,
   Share,
-  StyleSheet,
   Text,
   View,
 } from 'react-native';
@@ -48,13 +47,16 @@ import {
 } from '@dwt/shared';
 
 import type { TripsStackParamList } from '../../navigation/TripsStack';
-import { theme } from '../../theme/theme';
+import type { AppTheme } from '../../theme/theme';
 import {
   Card,
   EmptyState,
   GradientHeader,
   ScreenContainer,
 } from '../../theme/components';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme, usePalette } from '../../theme/useAppTheme';
+import { CATEGORY_META, EXPENSES } from './TripExpensesScreen.palette';
 import { apiRequest } from '../../api/client';
 import { tripDetailKeys } from './tripDetailQueryKeys';
 import {
@@ -75,25 +77,26 @@ import { TripGuestManagementModal } from './TripGuestManagementModal';
 
 type Props = NativeStackScreenProps<TripsStackParamList, 'TripExpenses'>;
 
-function getCategoryMeta(cat: ExpenseCategory | null | undefined): {
+function getCategoryMeta(cat: ExpenseCategory | null | undefined, t: Pick<AppTheme, 'scheme'>): {
   icon: keyof typeof Ionicons.glyphMap;
   emoji: string;
   bg: string;
   fg: string;
 } {
+  const catPal = CATEGORY_META[t.scheme];
   switch (cat) {
     case 'hotel':
-      return { icon: 'bed-outline', emoji: '🏨', bg: '#f3e8ff', fg: '#7e22ce' };
+      return { icon: 'bed-outline', emoji: '🏨', bg: catPal.hotelBg, fg: catPal.hotelFg };
     case 'tickets':
-      return { icon: 'ticket-outline', emoji: '🎟️', bg: '#fef3c7', fg: '#b45309' };
+      return { icon: 'ticket-outline', emoji: '🎟️', bg: catPal.ticketsBg, fg: catPal.ticketsFg };
     case 'dining':
-      return { icon: 'restaurant-outline', emoji: '🍽️', bg: '#ffe4e6', fg: '#e11d48' };
+      return { icon: 'restaurant-outline', emoji: '🍽️', bg: catPal.diningBg, fg: catPal.diningFg };
     case 'shopping':
-      return { icon: 'bag-handle-outline', emoji: '🛍️', bg: '#e0f2fe', fg: '#0284c7' };
+      return { icon: 'bag-handle-outline', emoji: '🛍️', bg: catPal.shoppingBg, fg: catPal.shoppingFg };
     case 'transportation':
-      return { icon: 'car-outline', emoji: '🚗', bg: '#f0fdf4', fg: '#15803d' };
+      return { icon: 'car-outline', emoji: '🚗', bg: catPal.transportBg, fg: catPal.transportFg };
     default:
-      return { icon: 'sparkles-outline', emoji: '✨', bg: '#f1f5f9', fg: '#475569' };
+      return { icon: 'sparkles-outline', emoji: '✨', bg: catPal.otherBg, fg: catPal.otherFg };
   }
 }
 
@@ -134,6 +137,9 @@ export default function TripExpensesScreen({
   navigation,
   route,
 }: Props): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
+  const pal = usePalette(EXPENSES);
   const { tripId } = route.params;
   const queryClient = useQueryClient();
 
@@ -514,7 +520,7 @@ export default function TripExpensesScreen({
               hitSlop={8}
               style={styles.headerIconButton}
             >
-              <Ionicons name="people-outline" size={20} color={theme.color.textOnPrimary} />
+              <Ionicons name="people-outline" size={20} color={t.color.textOnPrimary} />
             </Pressable>
             <Pressable
               onPress={handleExportCsv}
@@ -524,7 +530,7 @@ export default function TripExpensesScreen({
               hitSlop={8}
               style={styles.headerIconButton}
             >
-              <Ionicons name="share-outline" size={20} color={theme.color.textOnPrimary} />
+              <Ionicons name="share-outline" size={20} color={t.color.textOnPrimary} />
             </Pressable>
             <Pressable
               onPress={() => navigation.navigate('TripBalances', { tripId })}
@@ -534,7 +540,7 @@ export default function TripExpensesScreen({
               hitSlop={8}
               style={styles.headerIconButton}
             >
-              <Ionicons name="wallet-outline" size={20} color={theme.color.textOnPrimary} />
+              <Ionicons name="wallet-outline" size={20} color={t.color.textOnPrimary} />
             </Pressable>
           </View>
         }
@@ -552,7 +558,7 @@ export default function TripExpensesScreen({
           <Ionicons
             name={activeTab === 'expenses' ? 'receipt' : 'receipt-outline'}
             size={15}
-            color={activeTab === 'expenses' ? '#5b2a86' : '#655d78'}
+            color={activeTab === 'expenses' ? t.color.primaryFg : pal.tabIdleText}
           />
           <Text
             style={[
@@ -579,7 +585,7 @@ export default function TripExpensesScreen({
           <Ionicons
             name={activeTab === 'balances' ? 'scale' : 'scale-outline'}
             size={15}
-            color={activeTab === 'balances' ? '#5b2a86' : '#655d78'}
+            color={activeTab === 'balances' ? t.color.primaryFg : pal.tabIdleText}
           />
           <Text
             style={[
@@ -597,7 +603,7 @@ export default function TripExpensesScreen({
         </Pressable>
       </View>
 
-      <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+      <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer} keyboardShouldPersistTaps="handled">
         {activeTab === 'expenses' ? (
           <>
             {/* Post-Trip Settle-Up Banner (Req 13.2, Task 16.2) */}
@@ -608,14 +614,14 @@ export default function TripExpensesScreen({
               >
                 <Card style={styles.settleUpBanner}>
                   <View style={styles.bannerRow}>
-                    <Ionicons name="sparkles" size={20} color="#f6c343" />
+                    <Ionicons name="sparkles" size={20} color={t.color.accent} />
                     <View style={styles.bannerTextWrap}>
                       <Text style={styles.bannerTitle}>Time to Settle Up!</Text>
                       <Text style={styles.bannerSubtitle}>
                         This trip is in the past and has outstanding balances. Tap to view simplified repayments.
                       </Text>
                     </View>
-                    <Ionicons name="chevron-forward" size={16} color={theme.color.primary} />
+                    <Ionicons name="chevron-forward" size={16} color={t.color.primaryFg} />
                   </View>
                 </Card>
               </Pressable>
@@ -632,7 +638,7 @@ export default function TripExpensesScreen({
                   <Ionicons
                     name={callerNetCents > 0 ? 'checkmark-circle' : callerNetCents < 0 ? 'hourglass-outline' : 'sparkles'}
                     size={12}
-                    color={callerNetCents > 0 ? '#059669' : callerNetCents < 0 ? '#d97706' : '#7c3aed'}
+                    color={callerNetCents > 0 ? pal.greenText : callerNetCents < 0 ? pal.amberText : pal.violetText}
                   />
                   <Text style={[
                     styles.heroStatusPillText,
@@ -709,7 +715,7 @@ export default function TripExpensesScreen({
                   accessibilityRole="button"
                   accessibilityLabel="Log payment"
                 >
-                  <Ionicons name="swap-horizontal" size={15} color="#ffffff" />
+                  <Ionicons name="swap-horizontal" size={15} color={t.color.textOnPrimary} />
                   <Text style={styles.heroPrimarySettleBtnText}>Log Payment</Text>
                 </Pressable>
 
@@ -719,7 +725,7 @@ export default function TripExpensesScreen({
                   testID="hero-view-balances-btn"
                   accessibilityRole="button"
                 >
-                  <Ionicons name="document-text-outline" size={15} color="#6d28d9" />
+                  <Ionicons name="document-text-outline" size={15} color={pal.violetDeepText} />
                   <Text style={styles.heroSecondaryStatementBtnText}>Statement</Text>
                 </Pressable>
               </View>
@@ -734,6 +740,7 @@ export default function TripExpensesScreen({
                     horizontal
                     showsHorizontalScrollIndicator={false}
                     contentContainerStyle={styles.heroDebtsSnippetList}
+                    keyboardShouldPersistTaps="handled"
                   >
                     {pairwiseForCaller.owedToCaller.map((d) => (
                       <Pressable
@@ -744,8 +751,8 @@ export default function TripExpensesScreen({
                         accessibilityRole="button"
                         accessibilityLabel={`Settle debt with ${d.name}`}
                       >
-                        <View style={[styles.debtAvatarMini, { backgroundColor: '#dcfce7' }]}>
-                          <Text style={[styles.debtAvatarText, { color: '#15803d' }]}>
+                        <View style={[styles.debtAvatarMini, { backgroundColor: pal.owedBg }]}>
+                          <Text style={[styles.debtAvatarText, { color: pal.owedText }]}>
                             {d.name.charAt(0).toUpperCase()}
                           </Text>
                         </View>
@@ -763,13 +770,13 @@ export default function TripExpensesScreen({
                         accessibilityRole="button"
                         accessibilityLabel={`Pay debt to ${d.name}`}
                       >
-                        <View style={[styles.debtAvatarMini, { backgroundColor: '#fee2e2' }]}>
-                          <Text style={[styles.debtAvatarText, { color: '#dc2626' }]}>
+                        <View style={[styles.debtAvatarMini, { backgroundColor: pal.owesBg }]}>
+                          <Text style={[styles.debtAvatarText, { color: pal.owesText }]}>
                             {d.name.charAt(0).toUpperCase()}
                           </Text>
                         </View>
                         <Text style={styles.heroDebtorChipName}>
-                          You owe {d.name}: <Text style={[styles.heroDebtorChipAmount, { color: '#dc2626' }]}>${(d.amountCents / 100).toFixed(2)}</Text>
+                          You owe {d.name}: <Text style={[styles.heroDebtorChipAmount, { color: pal.owesText }]}>${(d.amountCents / 100).toFixed(2)}</Text>
                         </Text>
                       </Pressable>
                     ))}
@@ -784,6 +791,7 @@ export default function TripExpensesScreen({
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.unifiedFilterScrollContent}
+                keyboardShouldPersistTaps="handled"
               >
                 <Pressable
                   style={[styles.filterChip, selectedCategory === 'all' && styles.filterChipSelected]}
@@ -801,7 +809,7 @@ export default function TripExpensesScreen({
                 </Pressable>
                 {EXPENSE_CATEGORIES.map((cat) => {
                   const isSel = selectedCategory === cat;
-                  const meta = getCategoryMeta(cat);
+                  const meta = getCategoryMeta(cat, t);
                   return (
                     <Pressable
                       key={cat}
@@ -859,7 +867,7 @@ export default function TripExpensesScreen({
 
             {/* Date-Grouped Ledger List (Mockup Specification) */}
             {ledgerQuery.isLoading ? (
-              <ActivityIndicator style={{ marginTop: 24 }} color={theme.color.primary} />
+              <ActivityIndicator style={{ marginTop: 24 }} color={t.color.primaryFg} />
             ) : ledgerItems.length === 0 ? (
               <EmptyState
                 title="No Expenses Yet"
@@ -884,7 +892,7 @@ export default function TripExpensesScreen({
                         const canEdit = isOrganizer || item.createdByUserId === callerId;
                         const refundSumCents = item.refunds.reduce((s, r) => s + r.amountCents, 0);
                         const netCents = Math.max(0, item.amountCents - refundSumCents);
-                        const catMeta = getCategoryMeta(item.category);
+                        const catMeta = getCategoryMeta(item.category, t);
 
                         // Personal share calculation for current user (Req 10.5)
                         const isCallerPayer = item.payerId === callerId;
@@ -1013,10 +1021,10 @@ export default function TripExpensesScreen({
                                     size={11}
                                     color={
                                       personalShareTone === 'payer'
-                                        ? '#059669'
+                                        ? pal.greenText
                                         : personalShareTone === 'participant'
-                                        ? '#d97706'
-                                        : '#64748b'
+                                        ? pal.amberText
+                                        : pal.slate500Text
                                     }
                                   />
                                   <Text style={styles.srOnly}>{personalShareText}</Text>
@@ -1026,7 +1034,7 @@ export default function TripExpensesScreen({
 
                             {refundSumCents > 0 ? (
                               <View style={styles.refundsBanner} testID={`expense-refunds-banner-${item.id}`}>
-                                <Ionicons name="arrow-undo" size={12} color="#dc2626" />
+                                <Ionicons name="arrow-undo" size={12} color={pal.owesText} />
                                 <Text style={styles.refundsText}>
                                   Refunded: ${(refundSumCents / 100).toFixed(2)} ·{' '}
                                   <Text style={{ fontWeight: '800' }}>
@@ -1045,7 +1053,7 @@ export default function TripExpensesScreen({
                                 accessibilityLabel="Refund expense"
                                 hitSlop={6}
                               >
-                                <Ionicons name="arrow-undo-outline" size={12} color="#475569" />
+                                <Ionicons name="arrow-undo-outline" size={12} color={pal.slate600Text} />
                                 <Text style={styles.cardActionBtnLabel}>Refund</Text>
                               </Pressable>
 
@@ -1059,7 +1067,7 @@ export default function TripExpensesScreen({
                                     accessibilityLabel="Edit expense"
                                     hitSlop={6}
                                   >
-                                    <Ionicons name="pencil-outline" size={12} color="#475569" />
+                                    <Ionicons name="pencil-outline" size={12} color={pal.slate600Text} />
                                     <Text style={styles.cardActionBtnLabel}>Edit</Text>
                                   </Pressable>
                                   <Pressable
@@ -1070,7 +1078,7 @@ export default function TripExpensesScreen({
                                     accessibilityLabel="Delete expense"
                                     hitSlop={6}
                                   >
-                                    <Ionicons name="trash-outline" size={12} color="#e11d48" />
+                                    <Ionicons name="trash-outline" size={12} color={pal.dangerText} />
                                     <Text style={[styles.cardActionBtnLabel, styles.cardActionBtnLabelDanger]}>
                                       Delete
                                     </Text>
@@ -1117,7 +1125,7 @@ export default function TripExpensesScreen({
                                     return (
                                       <View key={`${p.id}-${pIdx}`} style={styles.participantRow}>
                                         <View style={styles.participantLeft}>
-                                          <View style={[styles.participantAvatarMini, { backgroundColor: isP ? '#7c3aed' : '#94a3b8' }]}>
+                                          <View style={[styles.participantAvatarMini, { backgroundColor: isP ? pal.violetFill : pal.neutralAvatarFill }]}>
                                             <Text style={styles.participantAvatarMiniText}>
                                               {pName.charAt(0).toUpperCase()}
                                             </Text>
@@ -1157,8 +1165,8 @@ export default function TripExpensesScreen({
                         return (
                           <Card key={item.id} style={styles.settlementCard} testID={`settlement-card-${item.id}`}>
                             <View style={styles.expenseMainSurface}>
-                              <View style={[styles.categoryAvatar, { backgroundColor: '#dcfce7', borderColor: '#86efac' }]}>
-                                <Ionicons name="swap-horizontal" size={20} color="#059669" />
+                              <View style={[styles.categoryAvatar, { backgroundColor: pal.owedBg, borderColor: pal.owedCardBorder }]}>
+                                <Ionicons name="swap-horizontal" size={20} color={pal.greenText} />
                               </View>
 
                               <View style={styles.expenseInfoBlock}>
@@ -1195,7 +1203,7 @@ export default function TripExpensesScreen({
                                   accessibilityLabel="Edit settlement"
                                   hitSlop={6}
                                 >
-                                  <Ionicons name="pencil-outline" size={12} color="#475569" />
+                                  <Ionicons name="pencil-outline" size={12} color={pal.slate600Text} />
                                   <Text style={styles.cardActionBtnLabel}>Edit</Text>
                                 </Pressable>
                                 <Pressable
@@ -1206,7 +1214,7 @@ export default function TripExpensesScreen({
                                   accessibilityLabel="Delete settlement"
                                   hitSlop={6}
                                 >
-                                  <Ionicons name="trash-outline" size={12} color="#e11d48" />
+                                  <Ionicons name="trash-outline" size={12} color={pal.dangerText} />
                                   <Text style={[styles.cardActionBtnLabel, styles.cardActionBtnLabelDanger]}>
                                     Delete
                                   </Text>
@@ -1245,13 +1253,13 @@ export default function TripExpensesScreen({
                 accessibilityRole="button"
                 accessibilityLabel="Record a settlement"
               >
-                <Ionicons name="swap-horizontal" size={14} color="#ffffff" />
+                <Ionicons name="swap-horizontal" size={14} color={t.color.textOnPrimary} />
                 <Text style={styles.recordSettlementCompactBtnText}>+ Settle</Text>
               </Pressable>
             </View>
 
             {balancesQuery.isLoading ? (
-              <ActivityIndicator style={{ marginTop: 24 }} color={theme.color.primary} />
+              <ActivityIndicator style={{ marginTop: 24 }} color={t.color.primaryFg} />
             ) : (
               <>
                 {pairwiseBalances.length === 0 ? (
@@ -1303,7 +1311,7 @@ export default function TripExpensesScreen({
                                 </Text>
                                 <View style={styles.flowArrowLineRow}>
                                   <View style={styles.flowArrowLine} />
-                                  <Ionicons name="arrow-forward-circle" size={16} color={theme.color.primary} />
+                                  <Ionicons name="arrow-forward-circle" size={16} color={t.color.primaryFg} />
                                 </View>
                                 <Text style={styles.pairwiseDebtText}>
                                   <Text style={{ fontWeight: '700' }}>{debtor}</Text> owes <Text style={{ fontWeight: '700' }}>{creditor}</Text>
@@ -1330,16 +1338,16 @@ export default function TripExpensesScreen({
                                 accessibilityRole="button"
                                 testID={`settle-pair-btn-${idx}`}
                               >
-                                <Ionicons name="checkmark-circle" size={15} color="#ffffff" />
+                                <Ionicons name="checkmark-circle" size={15} color={t.color.textOnPrimary} />
                                 <Text style={styles.settleBtnText}>Settle</Text>
                               </Pressable>
                             ) : null}
                           </View>
 
                           <View style={styles.pairwiseBreakdownHintRow}>
-                            <Ionicons name="receipt-outline" size={12} color={theme.color.primary} />
+                            <Ionicons name="receipt-outline" size={12} color={t.color.primaryFg} />
                             <Text style={styles.pairwiseBreakdownHintText}>View transaction breakdown</Text>
-                            <Ionicons name="chevron-forward" size={12} color={theme.color.primary} />
+                            <Ionicons name="chevron-forward" size={12} color={t.color.primaryFg} />
                           </View>
                         </Pressable>
                       </Card>
@@ -1371,8 +1379,8 @@ export default function TripExpensesScreen({
                         >
                           <Card style={styles.balanceCard}>
                             <View style={styles.balanceCardRow}>
-                              <View style={[styles.memberAvatarWrap, isPositive ? { backgroundColor: '#dcfce7' } : !isZero ? { backgroundColor: '#fee2e2' } : { backgroundColor: '#f1f5f9' }]}>
-                                <Text style={[styles.avatarInitial, isPositive ? { color: '#15803d' } : !isZero ? { color: '#dc2626' } : { color: '#64748b' }]}>
+                              <View style={[styles.memberAvatarWrap, isPositive ? { backgroundColor: pal.owedBg } : !isZero ? { backgroundColor: pal.owesBg } : { backgroundColor: pal.greyPillBg }]}>
+                                <Text style={[styles.avatarInitial, isPositive ? { color: pal.owedText } : !isZero ? { color: pal.owesText } : { color: pal.slate500Text }]}>
                                   {name.charAt(0).toUpperCase()}
                                 </Text>
                               </View>
@@ -1415,7 +1423,7 @@ export default function TripExpensesScreen({
                                 <Ionicons
                                   name="chevron-forward"
                                   size={16}
-                                  color={theme.color.textSecondary}
+                                  color={t.color.textSecondary}
                                 />
                               </View>
                             </View>
@@ -1440,7 +1448,7 @@ export default function TripExpensesScreen({
           accessibilityRole="button"
           accessibilityLabel="Add an expense"
         >
-          <Ionicons name="add" size={18} color="#ffffff" />
+          <Ionicons name="add" size={18} color={t.color.textOnPrimary} />
           <Text style={styles.fabAddButtonText}>Expense</Text>
         </Pressable>
       ) : null}
@@ -1545,7 +1553,7 @@ export default function TripExpensesScreen({
                         <Text
                           style={[
                             styles.modalSub,
-                            net > 0 ? { color: '#15803d', fontWeight: '700' } : net < 0 ? { color: '#dc2626', fontWeight: '700' } : {},
+                            net > 0 ? { color: pal.owedText, fontWeight: '700' } : net < 0 ? { color: pal.owesText, fontWeight: '700' } : {},
                           ]}
                         >
                           {net === 0 ? 'All settled up ($0.00)' : net > 0 ? `Net position: +$${abs}` : `Net position: -$${abs}`}
@@ -1561,12 +1569,12 @@ export default function TripExpensesScreen({
                   testID="close-drilldown-modal"
                   hitSlop={10}
                 >
-                  <Ionicons name="close" size={24} color={theme.color.textPrimary} />
+                  <Ionicons name="close" size={24} color={t.color.textPrimary} />
                 </Pressable>
               </View>
 
               {drillDownQuery.isLoading ? (
-                <ActivityIndicator style={{ marginVertical: 32 }} color={theme.color.primary} />
+                <ActivityIndicator style={{ marginVertical: 32 }} color={t.color.primaryFg} />
               ) : (
                 <ScrollView style={styles.drillDownList}>
                   {drillDownEntries.length === 0 ? (
@@ -1582,10 +1590,10 @@ export default function TripExpensesScreen({
                           <View
                             style={[
                               styles.drillDownIconCircle,
-                              isSettlement ? { backgroundColor: '#dcfce7' } : { backgroundColor: '#f3e8ff' },
+                              isSettlement ? { backgroundColor: pal.owedBg } : { backgroundColor: pal.expenseTint },
                             ]}
                           >
-                            <Text style={{ fontSize: 16 }}>{isSettlement ? '🤝' : '🧾'}</Text>
+                            <Text style={{ fontSize: 16, ...t.textDefault }}>{isSettlement ? '🤝' : '🧾'}</Text>
                           </View>
                           <View style={styles.drillDownItemLeft}>
                             <Text style={styles.drillDownItemTitle}>{entry.description}</Text>
@@ -1632,7 +1640,7 @@ export default function TripExpensesScreen({
                         {(memberNameMap.get(pairwiseBreakdownPair.memberIdA) ?? 'M').charAt(0).toUpperCase()}
                       </Text>
                     </View>
-                    <Ionicons name="swap-horizontal" size={16} color={theme.color.primary} />
+                    <Ionicons name="swap-horizontal" size={16} color={t.color.primaryFg} />
                     <View style={[styles.debtAvatarMini, styles.flowAvatarCreditor]}>
                       <Text style={styles.flowAvatarCreditorText}>
                         {(memberNameMap.get(pairwiseBreakdownPair.memberIdB) ?? 'M').charAt(0).toUpperCase()}
@@ -1670,7 +1678,7 @@ export default function TripExpensesScreen({
                   testID="close-pairwise-breakdown-modal"
                   hitSlop={10}
                 >
-                  <Ionicons name="close" size={24} color={theme.color.textPrimary} />
+                  <Ionicons name="close" size={24} color={t.color.textPrimary} />
                 </Pressable>
               </View>
 
@@ -1690,7 +1698,7 @@ export default function TripExpensesScreen({
                     testID="pairwise-modal-settle-btn"
                     accessibilityRole="button"
                   >
-                    <Ionicons name="swap-horizontal" size={16} color="#ffffff" />
+                    <Ionicons name="swap-horizontal" size={16} color={t.color.textOnPrimary} />
                     <Text style={styles.pairwiseModalSettleBtnText}>
                       Log Payment ${(Math.abs(pairwiseBreakdownPair.aOwesBCents) / 100).toFixed(2)}
                     </Text>
@@ -1708,7 +1716,7 @@ export default function TripExpensesScreen({
 
               {/* Scrollable list */}
               {pairwiseDrillDownQuery.isLoading ? (
-                <ActivityIndicator style={{ marginVertical: 32 }} color={theme.color.primary} />
+                <ActivityIndicator style={{ marginVertical: 32 }} color={t.color.primaryFg} />
               ) : (
                 <ScrollView style={styles.drillDownList} testID="pairwise-drilldown-list">
                   {pairwiseDrillDownEntries.length === 0 ? (
@@ -1749,7 +1757,7 @@ export default function TripExpensesScreen({
                             testID={`pairwise-entry-${idx}`}
                           >
                             <View style={[styles.pairwiseEntryIcon, styles.pairwiseSettlementIconWrap]}>
-                              <Ionicons name="checkmark-circle" size={20} color="#15803d" />
+                              <Ionicons name="checkmark-circle" size={20} color={pal.owedText} />
                             </View>
                             <View style={styles.pairwiseEntryContent}>
                               <View style={styles.pairwiseTitleRow}>
@@ -1773,7 +1781,7 @@ export default function TripExpensesScreen({
                               >
                                 -${absDollars}
                               </Text>
-                              <Text style={[styles.pairwiseAmountSub, { color: '#16a34a' }]}>
+                              <Text style={[styles.pairwiseAmountSub, { color: pal.paidDownText }]}>
                                 Paid down
                               </Text>
                             </View>
@@ -1799,7 +1807,7 @@ export default function TripExpensesScreen({
                           testID={`pairwise-entry-${idx}`}
                         >
                           <View style={[styles.pairwiseEntryIcon, styles.pairwiseExpenseIconWrap]}>
-                            <Text style={{ fontSize: 18 }}>🧾</Text>
+                            <Text style={{ fontSize: 18, ...t.textDefault }}>🧾</Text>
                           </View>
                           <View style={styles.pairwiseEntryContent}>
                             <View style={styles.pairwiseTitleRow}>
@@ -1821,14 +1829,14 @@ export default function TripExpensesScreen({
                                 isZero
                                   ? styles.amountZero
                                   : isPositive
-                                  ? { color: theme.color.textPrimary }
+                                  ? { color: t.color.textPrimary }
                                   : styles.amountNegative,
                               ]}
                               testID={`pairwise-entry-amount-${idx}`}
                             >
                               {isZero ? '$0.00' : isPositive ? `+$${absDollars}` : `-$${absDollars}`}
                             </Text>
-                            <Text style={[styles.pairwiseAmountSub, { color: theme.color.textSecondary }]}>
+                            <Text style={[styles.pairwiseAmountSub, { color: t.color.textSecondary }]}>
                               {isPositive ? 'Added to debt' : 'Your share'}
                             </Text>
                           </View>
@@ -1846,7 +1854,7 @@ export default function TripExpensesScreen({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   container: {
     flex: 1,
   },
@@ -1866,9 +1874,9 @@ const styles = StyleSheet.create({
   },
   tabSwitcher: {
     flexDirection: 'row',
-    backgroundColor: '#ede6f6',
+    backgroundColor: EXPENSES[t.scheme].tabTrack,
     borderWidth: 1,
-    borderColor: '#dcd1ec',
+    borderColor: EXPENSES[t.scheme].tabTrackBorder,
     padding: 4,
     marginHorizontal: 16,
     marginTop: 12,
@@ -1887,8 +1895,8 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   tabButtonActive: {
-    backgroundColor: '#ffffff',
-    shadowColor: '#5b2a86',
+    backgroundColor: EXPENSES[t.scheme].tabActiveBg,
+    shadowColor: EXPENSES[t.scheme].tabActiveShadow,
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.16,
     shadowRadius: 8,
@@ -1897,10 +1905,10 @@ const styles = StyleSheet.create({
   tabButtonText: {
     fontSize: 12.5,
     fontWeight: '700',
-    color: '#655d78',
+    color: EXPENSES[t.scheme].tabIdleText,
   },
   tabButtonTextActive: {
-    color: '#5b2a86',
+    color: t.color.primaryFg,
     fontWeight: '800',
   },
   tabBadgePill: {
@@ -1910,24 +1918,24 @@ const styles = StyleSheet.create({
     marginLeft: 2,
   },
   tabBadgePillActive: {
-    backgroundColor: '#f3e8ff',
+    backgroundColor: EXPENSES[t.scheme].tabBadgeActiveBg,
   },
   tabBadgePillInactive: {
-    backgroundColor: '#ded5ea',
+    backgroundColor: EXPENSES[t.scheme].tabBadgeIdleBg,
   },
   tabBadgePillText: {
     fontSize: 10.5,
     fontWeight: '800',
   },
   tabBadgePillTextActive: {
-    color: '#5b2a86',
+    color: t.color.primaryFg,
   },
   tabBadgePillTextInactive: {
-    color: '#655d78',
+    color: EXPENSES[t.scheme].tabIdleText,
   },
   settleUpBanner: {
-    backgroundColor: '#fffbeb',
-    borderColor: '#fcd34d',
+    backgroundColor: EXPENSES[t.scheme].amberTint,
+    borderColor: EXPENSES[t.scheme].amberStrongBorder,
     borderWidth: 1,
     marginBottom: 12,
     padding: 14,
@@ -1944,23 +1952,23 @@ const styles = StyleSheet.create({
   bannerTitle: {
     fontSize: 14.5,
     fontWeight: '700',
-    color: '#92400e',
+    color: EXPENSES[t.scheme].bannerTitle,
   },
   bannerSubtitle: {
     fontSize: 12,
-    color: '#b45309',
+    color: EXPENSES[t.scheme].amberDeepText,
     marginTop: 2,
     lineHeight: 16,
   },
   heroBalanceCard: {
-    backgroundColor: '#ffffff',
-    borderColor: '#ede9fe',
+    backgroundColor: t.color.surface,
+    borderColor: EXPENSES[t.scheme].violetCardBorder,
     borderWidth: 1.5,
     paddingVertical: 16,
     paddingHorizontal: 16,
     marginBottom: 12,
     borderRadius: 22,
-    shadowColor: '#7c3aed',
+    shadowColor: EXPENSES[t.scheme].heroShadow,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.05,
     shadowRadius: 10,
@@ -1982,16 +1990,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   heroStatusPillOwed: {
-    backgroundColor: '#ecfdf5',
-    borderColor: '#a7f3d0',
+    backgroundColor: EXPENSES[t.scheme].greenTint,
+    borderColor: EXPENSES[t.scheme].greenBorder,
   },
   heroStatusPillOwes: {
-    backgroundColor: '#fffbeb',
-    borderColor: '#fde68a',
+    backgroundColor: EXPENSES[t.scheme].amberTint,
+    borderColor: EXPENSES[t.scheme].amberBorder,
   },
   heroStatusPillSettled: {
-    backgroundColor: '#f1f5f9',
-    borderColor: '#e2e8f0',
+    backgroundColor: EXPENSES[t.scheme].greyPillBg,
+    borderColor: EXPENSES[t.scheme].hairline,
   },
   heroStatusPillText: {
     fontSize: 10,
@@ -1999,17 +2007,17 @@ const styles = StyleSheet.create({
     letterSpacing: 0.6,
   },
   heroStatusPillTextOwed: {
-    color: '#059669',
+    color: EXPENSES[t.scheme].greenText,
   },
   heroStatusPillTextOwes: {
-    color: '#d97706',
+    color: EXPENSES[t.scheme].amberText,
   },
   heroStatusPillTextSettled: {
-    color: '#64748b',
+    color: EXPENSES[t.scheme].slate500Text,
   },
   heroPayerBadge: {
-    backgroundColor: '#f5f3ff',
-    borderColor: '#ede9fe',
+    backgroundColor: EXPENSES[t.scheme].violetWellBg,
+    borderColor: EXPENSES[t.scheme].violetCardBorder,
     borderWidth: 1,
     paddingHorizontal: 10,
     paddingVertical: 3.5,
@@ -2018,7 +2026,7 @@ const styles = StyleSheet.create({
   heroPayerBadgeText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#7c3aed',
+    color: EXPENSES[t.scheme].violetText,
   },
   heroFigureWrap: {
     marginVertical: 4,
@@ -2030,17 +2038,17 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   heroFigureTextPositive: {
-    color: '#059669',
+    color: EXPENSES[t.scheme].greenText,
   },
   heroFigureTextNegative: {
-    color: '#d97706',
+    color: EXPENSES[t.scheme].amberText,
   },
   heroFigureTextZero: {
-    color: '#475569',
+    color: EXPENSES[t.scheme].slate600Text,
   },
   heroCaptionText: {
     fontSize: 12,
-    color: '#64748b',
+    color: EXPENSES[t.scheme].slate500Text,
     fontWeight: '500',
     marginBottom: 12,
     lineHeight: 16,
@@ -2049,8 +2057,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#f8fafc',
-    borderColor: '#e2e8f0',
+    backgroundColor: EXPENSES[t.scheme].subtleWellBg,
+    borderColor: EXPENSES[t.scheme].hairline,
     borderWidth: 1,
     borderRadius: 14,
     paddingVertical: 10,
@@ -2064,19 +2072,19 @@ const styles = StyleSheet.create({
   heroStatLabel: {
     fontSize: 9,
     fontWeight: '800',
-    color: '#64748b',
+    color: EXPENSES[t.scheme].slate500Text,
     letterSpacing: 0.6,
     marginBottom: 2,
   },
   heroStatVal: {
     fontSize: 13,
     fontWeight: '800',
-    color: '#0f172a',
+    color: EXPENSES[t.scheme].inkText,
   },
   heroStatDivider: {
     width: 1,
     height: 22,
-    backgroundColor: '#e2e8f0',
+    backgroundColor: EXPENSES[t.scheme].hairline,
   },
   heroActionButtonsRow: {
     flexDirection: 'row',
@@ -2089,17 +2097,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    backgroundColor: '#7c3aed',
+    backgroundColor: EXPENSES[t.scheme].violetFill,
     paddingVertical: 10,
     borderRadius: 14,
-    shadowColor: '#7c3aed',
+    shadowColor: EXPENSES[t.scheme].violetFillShadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 4,
     elevation: 2,
   },
   heroPrimarySettleBtnText: {
-    color: '#ffffff',
+    color: t.color.textOnPrimary,
     fontSize: 13,
     fontWeight: '800',
   },
@@ -2109,14 +2117,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    backgroundColor: '#f5f3ff',
-    borderColor: '#ddd6fe',
+    backgroundColor: EXPENSES[t.scheme].violetWellBg,
+    borderColor: EXPENSES[t.scheme].violetButtonBorder,
     borderWidth: 1,
     paddingVertical: 10,
     borderRadius: 14,
   },
   heroSecondaryStatementBtnText: {
-    color: '#6d28d9',
+    color: EXPENSES[t.scheme].violetDeepText,
     fontSize: 13,
     fontWeight: '700',
   },
@@ -2124,12 +2132,12 @@ const styles = StyleSheet.create({
     marginTop: 4,
     paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: '#f1f5f9',
+    borderTopColor: EXPENSES[t.scheme].softDivider,
   },
   heroDebtsSectionLabel: {
     fontSize: 9.5,
     fontWeight: '800',
-    color: '#94a3b8',
+    color: EXPENSES[t.scheme].slate400Text,
     letterSpacing: 0.7,
     marginBottom: 6,
   },
@@ -2142,8 +2150,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    backgroundColor: '#f8fafc',
-    borderColor: '#e2e8f0',
+    backgroundColor: EXPENSES[t.scheme].subtleWellBg,
+    borderColor: EXPENSES[t.scheme].hairline,
     borderWidth: 1,
     paddingVertical: 4,
     paddingLeft: 4,
@@ -2164,12 +2172,12 @@ const styles = StyleSheet.create({
   heroDebtorChipName: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#334155',
+    color: EXPENSES[t.scheme].slate700Text,
   },
   heroDebtorChipAmount: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#059669',
+    color: EXPENSES[t.scheme].greenText,
   },
   unifiedFilterBar: {
     marginBottom: 12,
@@ -2184,14 +2192,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 11,
     paddingVertical: 5,
     borderRadius: 14,
-    backgroundColor: '#f8fafc',
+    backgroundColor: EXPENSES[t.scheme].subtleWellBg,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: EXPENSES[t.scheme].hairline,
   },
   filterChipSelected: {
-    backgroundColor: '#6d28d9',
-    borderColor: '#6d28d9',
-    shadowColor: '#6d28d9',
+    backgroundColor: EXPENSES[t.scheme].filterSelectedFill,
+    borderColor: EXPENSES[t.scheme].filterSelectedFill,
+    shadowColor: EXPENSES[t.scheme].filterSelectedShadow,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.2,
     shadowRadius: 2,
@@ -2199,17 +2207,17 @@ const styles = StyleSheet.create({
   },
   filterChipText: {
     fontSize: 11.5,
-    color: '#475569',
+    color: EXPENSES[t.scheme].slate600Text,
     fontWeight: '600',
   },
   filterChipTextSelected: {
-    color: '#ffffff',
+    color: t.color.textOnPrimary,
     fontWeight: '800',
   },
   filterDivider: {
     width: 1,
     height: 20,
-    backgroundColor: '#cbd5e1',
+    backgroundColor: EXPENSES[t.scheme].strongLine,
     marginHorizontal: 4,
   },
   payerSectionInline: {
@@ -2223,41 +2231,41 @@ const styles = StyleSheet.create({
     paddingHorizontal: 9,
     paddingVertical: 3.5,
     borderRadius: 12,
-    backgroundColor: '#f8fafc',
+    backgroundColor: EXPENSES[t.scheme].subtleWellBg,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: EXPENSES[t.scheme].hairline,
   },
   payerFilterChipSelected: {
-    backgroundColor: '#ede9fe',
-    borderColor: '#c4b5fd',
+    backgroundColor: EXPENSES[t.scheme].payerSelectedBg,
+    borderColor: EXPENSES[t.scheme].violetBorderStrong,
   },
   payerAvatarMini: {
     width: 14,
     height: 14,
     borderRadius: 7,
-    backgroundColor: '#94a3b8',
+    backgroundColor: EXPENSES[t.scheme].neutralAvatarFill,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 4,
   },
   payerAvatarMiniSelected: {
-    backgroundColor: '#7c3aed',
+    backgroundColor: EXPENSES[t.scheme].violetFill,
   },
   payerAvatarMiniText: {
     fontSize: 8.5,
     fontWeight: '800',
-    color: '#ffffff',
+    color: t.color.textOnPrimary,
   },
   payerAvatarMiniTextSelected: {
-    color: '#ffffff',
+    color: t.color.textOnPrimary,
   },
   payerFilterChipText: {
     fontSize: 11,
-    color: '#64748b',
+    color: EXPENSES[t.scheme].slate500Text,
     fontWeight: '600',
   },
   payerFilterChipTextSelected: {
-    color: '#6d28d9',
+    color: EXPENSES[t.scheme].violetDeepText,
     fontWeight: '800',
   },
   dateSectionContainer: {
@@ -2273,33 +2281,33 @@ const styles = StyleSheet.create({
   dateSectionTitle: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#64748b',
+    color: EXPENSES[t.scheme].slate500Text,
     letterSpacing: 0.8,
   },
   dateSectionSum: {
     fontSize: 10.5,
     fontWeight: '700',
-    color: '#94a3b8',
+    color: EXPENSES[t.scheme].slate400Text,
     letterSpacing: 0.5,
   },
   dateSectionItemsList: {
     gap: 8,
   },
   expenseCard: {
-    backgroundColor: '#ffffff',
-    borderColor: '#ede9fe',
+    backgroundColor: t.color.surface,
+    borderColor: EXPENSES[t.scheme].violetCardBorder,
     borderWidth: 1,
     borderRadius: 18,
     padding: 12,
-    shadowColor: '#1e1b4b',
+    shadowColor: EXPENSES[t.scheme].expenseShadow,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04,
     shadowRadius: 4,
     elevation: 1,
   },
   expenseCardExpanded: {
-    borderColor: '#c4b5fd',
-    backgroundColor: '#faf8fe',
+    borderColor: EXPENSES[t.scheme].violetBorderStrong,
+    backgroundColor: EXPENSES[t.scheme].expandedBg,
     shadowOpacity: 0.08,
   },
   expenseMainSurface: {
@@ -2317,6 +2325,7 @@ const styles = StyleSheet.create({
   },
   categoryAvatarEmoji: {
     fontSize: 20,
+    ...t.textDefault,
   },
   expenseInfoBlock: {
     flex: 1,
@@ -2333,12 +2342,12 @@ const styles = StyleSheet.create({
   expenseTitle: {
     fontSize: 14.5,
     fontWeight: '700',
-    color: '#0f172a',
+    color: EXPENSES[t.scheme].inkText,
     flexShrink: 1,
   },
   catalogTagGold: {
-    backgroundColor: '#fef3c7',
-    borderColor: '#fde68a',
+    backgroundColor: EXPENSES[t.scheme].amberBadgeBg,
+    borderColor: EXPENSES[t.scheme].amberBorder,
     borderWidth: 1,
     paddingHorizontal: 6,
     paddingVertical: 1,
@@ -2347,12 +2356,12 @@ const styles = StyleSheet.create({
   catalogTagGoldText: {
     fontSize: 9,
     fontWeight: '800',
-    color: '#b45309',
+    color: EXPENSES[t.scheme].amberDeepText,
     letterSpacing: 0.4,
   },
   splitModeBadge: {
-    backgroundColor: '#f1f5f9',
-    borderColor: '#e2e8f0',
+    backgroundColor: EXPENSES[t.scheme].greyPillBg,
+    borderColor: EXPENSES[t.scheme].hairline,
     borderWidth: 1,
     paddingHorizontal: 6,
     paddingVertical: 1,
@@ -2361,7 +2370,7 @@ const styles = StyleSheet.create({
   splitModeBadgeText: {
     fontSize: 9,
     fontWeight: '800',
-    color: '#475569',
+    color: EXPENSES[t.scheme].slate600Text,
     letterSpacing: 0.4,
   },
   expenseMetaSubtitle: {
@@ -2373,12 +2382,12 @@ const styles = StyleSheet.create({
   },
   expenseSubtitleText: {
     fontSize: 11.5,
-    color: '#64748b',
+    color: EXPENSES[t.scheme].slate500Text,
     fontWeight: '500',
   },
   expenseSubtitlePayer: {
     fontWeight: '700',
-    color: '#334155',
+    color: EXPENSES[t.scheme].slate700Text,
   },
   expenseAmountBlock: {
     alignItems: 'flex-end',
@@ -2387,7 +2396,7 @@ const styles = StyleSheet.create({
   expenseTotalVal: {
     fontSize: 15.5,
     fontWeight: '800',
-    color: '#0f172a',
+    color: EXPENSES[t.scheme].inkText,
     letterSpacing: -0.3,
   },
   personalImpactTagWrap: {
@@ -2400,32 +2409,32 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   personalImpactTagWrapLent: {
-    backgroundColor: '#ecfdf5',
+    backgroundColor: EXPENSES[t.scheme].greenTint,
     borderWidth: 1,
-    borderColor: '#a7f3d0',
+    borderColor: EXPENSES[t.scheme].greenBorder,
   },
   personalImpactTagWrapOwe: {
-    backgroundColor: '#fffbeb',
+    backgroundColor: EXPENSES[t.scheme].amberTint,
     borderWidth: 1,
-    borderColor: '#fde68a',
+    borderColor: EXPENSES[t.scheme].amberBorder,
   },
   personalImpactTagWrapSettled: {
-    backgroundColor: '#f1f5f9',
+    backgroundColor: EXPENSES[t.scheme].greyPillBg,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: EXPENSES[t.scheme].hairline,
   },
   personalImpactTagText: {
     fontSize: 10.5,
     fontWeight: '700',
   },
   personalImpactLent: {
-    color: '#059669',
+    color: EXPENSES[t.scheme].greenText,
   },
   personalImpactOwe: {
-    color: '#d97706',
+    color: EXPENSES[t.scheme].amberText,
   },
   personalImpactSettled: {
-    color: '#64748b',
+    color: EXPENSES[t.scheme].slate500Text,
   },
   cardActionsBar: {
     flexDirection: 'row',
@@ -2435,7 +2444,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
     paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: '#f1f5f9',
+    borderTopColor: EXPENSES[t.scheme].softDivider,
   },
   cardActionIconBtn: {
     flexDirection: 'row',
@@ -2444,27 +2453,27 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     paddingHorizontal: 9,
     borderRadius: 7,
-    backgroundColor: '#f8fafc',
+    backgroundColor: EXPENSES[t.scheme].subtleWellBg,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: EXPENSES[t.scheme].hairline,
   },
   cardActionIconBtnDanger: {
-    backgroundColor: '#fff1f2',
-    borderColor: '#fecdd3',
+    backgroundColor: EXPENSES[t.scheme].dangerTint,
+    borderColor: EXPENSES[t.scheme].dangerBorder,
   },
   cardActionBtnLabel: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#475569',
+    color: EXPENSES[t.scheme].slate600Text,
   },
   cardActionBtnLabelDanger: {
-    color: '#e11d48',
+    color: EXPENSES[t.scheme].dangerText,
   },
   expenseExpandDrawer: {
     marginTop: 8,
     padding: 10,
-    backgroundColor: '#ffffff',
-    borderColor: '#ede9fe',
+    backgroundColor: t.color.surface,
+    borderColor: EXPENSES[t.scheme].violetCardBorder,
     borderWidth: 1,
     borderRadius: 12,
   },
@@ -2475,19 +2484,19 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     paddingBottom: 6,
     borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
+    borderBottomColor: EXPENSES[t.scheme].softDivider,
   },
   drawerSplitHeaderText: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#7c3aed',
+    color: EXPENSES[t.scheme].violetText,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   drawerSplitHeaderSub: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#64748b',
+    color: EXPENSES[t.scheme].slate500Text,
   },
   drawerParticipantsList: {
     gap: 6,
@@ -2513,43 +2522,43 @@ const styles = StyleSheet.create({
   participantAvatarMiniText: {
     fontSize: 9.5,
     fontWeight: '800',
-    color: '#ffffff',
+    color: t.color.textOnPrimary,
   },
   participantName: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#1e293b',
+    color: EXPENSES[t.scheme].slate800Text,
   },
   participantRole: {
     fontSize: 10.5,
-    color: '#64748b',
+    color: EXPENSES[t.scheme].slate500Text,
   },
   participantShareVal: {
     fontSize: 12,
     fontWeight: '800',
   },
   participantSharePayer: {
-    color: '#059669',
+    color: EXPENSES[t.scheme].greenText,
   },
   participantShareOwes: {
-    color: '#1e293b',
+    color: EXPENSES[t.scheme].slate800Text,
   },
   settlementCard: {
-    backgroundColor: '#ffffff',
-    borderColor: '#bbf7d0',
+    backgroundColor: t.color.surface,
+    borderColor: EXPENSES[t.scheme].owedBorder,
     borderWidth: 1.5,
     borderRadius: 18,
     padding: 12,
     marginBottom: 10,
-    shadowColor: '#16a34a',
+    shadowColor: EXPENSES[t.scheme].settlementShadow,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04,
     shadowRadius: 4,
     elevation: 1,
   },
   settlementTag: {
-    backgroundColor: '#dcfce7',
-    borderColor: '#bbf7d0',
+    backgroundColor: EXPENSES[t.scheme].owedBg,
+    borderColor: EXPENSES[t.scheme].owedBorder,
     borderWidth: 1,
     paddingHorizontal: 6,
     paddingVertical: 1,
@@ -2558,21 +2567,21 @@ const styles = StyleSheet.create({
   settlementTagText: {
     fontSize: 9,
     fontWeight: '800',
-    color: '#15803d',
+    color: EXPENSES[t.scheme].owedText,
     letterSpacing: 0.4,
   },
   settlementTotalVal: {
     fontSize: 15.5,
     fontWeight: '800',
-    color: '#059669',
+    color: EXPENSES[t.scheme].greenText,
   },
   settlementSettledStatus: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#059669',
-    backgroundColor: '#ecfdf5',
+    color: EXPENSES[t.scheme].greenText,
+    backgroundColor: EXPENSES[t.scheme].greenTint,
     borderWidth: 1,
-    borderColor: '#a7f3d0',
+    borderColor: EXPENSES[t.scheme].greenBorder,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 6,
@@ -2585,18 +2594,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    backgroundColor: '#7c3aed',
+    backgroundColor: EXPENSES[t.scheme].violetFill,
     paddingVertical: 11,
     paddingHorizontal: 18,
     borderRadius: 24,
-    shadowColor: '#7c3aed',
+    shadowColor: EXPENSES[t.scheme].violetFillShadow,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.35,
     shadowRadius: 8,
     elevation: 6,
   },
   fabAddButtonText: {
-    color: '#ffffff',
+    color: t.color.textOnPrimary,
     fontSize: 13,
     fontWeight: '800',
   },
@@ -2611,8 +2620,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    backgroundColor: '#fef2f2',
-    borderColor: '#fecaca',
+    backgroundColor: EXPENSES[t.scheme].refundBg,
+    borderColor: EXPENSES[t.scheme].refundBorder,
     borderWidth: 1,
     paddingHorizontal: 8,
     paddingVertical: 3,
@@ -2621,7 +2630,7 @@ const styles = StyleSheet.create({
   },
   refundsText: {
     fontSize: 10.5,
-    color: '#991b1b',
+    color: EXPENSES[t.scheme].refundText,
   },
   whoOwesWhatTopHeader: {
     flexDirection: 'row',
@@ -2636,30 +2645,30 @@ const styles = StyleSheet.create({
   sectionHeaderTitle: {
     fontSize: 12,
     fontWeight: '800',
-    color: '#475569',
+    color: EXPENSES[t.scheme].slate600Text,
     letterSpacing: 0.8,
   },
   sectionHeaderSubtitle: {
     fontSize: 11.5,
-    color: '#64748b',
+    color: EXPENSES[t.scheme].slate500Text,
     marginTop: 2,
   },
   recordSettlementCompactBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#7c3aed',
+    backgroundColor: EXPENSES[t.scheme].violetFill,
     paddingVertical: 7,
     paddingHorizontal: 12,
     borderRadius: 10,
-    shadowColor: '#7c3aed',
+    shadowColor: EXPENSES[t.scheme].violetFillShadow,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.2,
     shadowRadius: 2,
     elevation: 2,
   },
   recordSettlementCompactBtnText: {
-    color: '#ffffff',
+    color: t.color.textOnPrimary,
     fontSize: 12,
     fontWeight: '700',
   },
@@ -2667,10 +2676,10 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     padding: 14,
     borderRadius: 18,
-    backgroundColor: '#ffffff',
-    borderColor: '#ede9fe',
+    backgroundColor: t.color.surface,
+    borderColor: EXPENSES[t.scheme].violetCardBorder,
     borderWidth: 1,
-    shadowColor: '#241242',
+    shadowColor: EXPENSES[t.scheme].pairwiseShadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.04,
     shadowRadius: 6,
@@ -2706,41 +2715,41 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   flowAvatarDebtor: {
-    backgroundColor: '#fee2e2',
+    backgroundColor: EXPENSES[t.scheme].owesBg,
   },
   flowAvatarDebtorText: {
-    color: '#dc2626',
+    color: EXPENSES[t.scheme].owesText,
     fontWeight: '800',
     fontSize: 15,
   },
   flowAvatarCreditor: {
-    backgroundColor: '#dcfce7',
+    backgroundColor: EXPENSES[t.scheme].owedBg,
   },
   flowAvatarCreditorText: {
-    color: '#15803d',
+    color: EXPENSES[t.scheme].owedText,
     fontWeight: '800',
     fontSize: 15,
   },
   flowAvatarCaller: {
-    backgroundColor: '#fef3c7',
+    backgroundColor: EXPENSES[t.scheme].amberBadgeBg,
   },
   flowAvatarCallerText: {
-    color: '#b45309',
+    color: EXPENSES[t.scheme].amberDeepText,
     fontWeight: '800',
     fontSize: 15,
   },
   flowAvatarCallerGreen: {
-    backgroundColor: '#dcfce7',
+    backgroundColor: EXPENSES[t.scheme].owedBg,
   },
   flowAvatarCallerGreenText: {
-    color: '#15803d',
+    color: EXPENSES[t.scheme].owedText,
     fontWeight: '800',
     fontSize: 15,
   },
   flowPartyName: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#1e1b4b',
+    color: EXPENSES[t.scheme].indigoText,
     textAlign: 'center',
     maxWidth: 78,
   },
@@ -2755,11 +2764,11 @@ const styles = StyleSheet.create({
     marginTop: 9,
     paddingTop: 7,
     borderTopWidth: 1,
-    borderTopColor: '#f1f5f9',
+    borderTopColor: EXPENSES[t.scheme].softDivider,
   },
   pairwiseBreakdownHintText: {
     fontSize: 11,
-    color: theme.color.primary,
+    color: t.color.primaryFg,
     fontWeight: '700',
   },
   pairwiseModalTitleWrap: {
@@ -2776,7 +2785,7 @@ const styles = StyleSheet.create({
   pairwiseBreakdownSubtitle: {
     fontSize: 13,
     fontWeight: '700',
-    color: theme.color.primary,
+    color: t.color.primaryFg,
     marginTop: 2,
   },
   pairwiseModalSettleRow: {
@@ -2787,12 +2796,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    backgroundColor: '#16a34a',
+    backgroundColor: EXPENSES[t.scheme].logPaymentFill,
     paddingVertical: 10,
     borderRadius: 10,
   },
   pairwiseModalSettleBtnText: {
-    color: '#ffffff',
+    color: t.color.textOnPrimary,
     fontSize: 14,
     fontWeight: '700',
   },
@@ -2802,18 +2811,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingBottom: 6,
     borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
+    borderBottomColor: EXPENSES[t.scheme].softDivider,
     marginBottom: 8,
   },
   pairwiseListHeaderText: {
     fontSize: 11,
     fontWeight: '700',
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     letterSpacing: 0.5,
   },
   pairwiseListHeaderCount: {
     fontSize: 11,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     fontWeight: '600',
   },
   flowCenterCol: {
@@ -2832,34 +2841,34 @@ const styles = StyleSheet.create({
   flowArrowLine: {
     flex: 1,
     height: 1.5,
-    backgroundColor: '#cbd5e1',
+    backgroundColor: EXPENSES[t.scheme].strongLine,
   },
   pairwiseDebtText: {
     fontSize: 9.5,
-    color: '#64748b',
+    color: EXPENSES[t.scheme].slate500Text,
     textAlign: 'center',
   },
   pairwiseAmount: {
     fontSize: 16,
     fontWeight: '900',
-    color: '#0f172a',
+    color: EXPENSES[t.scheme].inkText,
   },
   settleBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#10b981',
+    backgroundColor: EXPENSES[t.scheme].settleFill,
     paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: 10,
-    shadowColor: '#10b981',
+    shadowColor: EXPENSES[t.scheme].settleShadow,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.2,
     shadowRadius: 2,
     elevation: 1,
   },
   settleBtnText: {
-    color: '#ffffff',
+    color: t.color.textOnPrimary,
     fontSize: 11.5,
     fontWeight: '800',
   },
@@ -2867,10 +2876,10 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     padding: 13,
     borderRadius: 16,
-    backgroundColor: '#ffffff',
-    borderColor: '#ede9fe',
+    backgroundColor: t.color.surface,
+    borderColor: EXPENSES[t.scheme].violetCardBorder,
     borderWidth: 1,
-    shadowColor: '#241242',
+    shadowColor: EXPENSES[t.scheme].pairwiseShadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.04,
     shadowRadius: 5,
@@ -2885,14 +2894,14 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: theme.color.primaryLight ?? '#eee',
+    backgroundColor: EXPENSES[t.scheme].avatarWellBg ?? EXPENSES[t.scheme].avatarWellFallback,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarInitial: {
     fontSize: 15,
     fontWeight: '800',
-    color: theme.color.primary,
+    color: t.color.primaryFg,
   },
   memberInfo: {
     flex: 1,
@@ -2900,7 +2909,7 @@ const styles = StyleSheet.create({
   memberName: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#1e1b4b',
+    color: EXPENSES[t.scheme].indigoText,
   },
   statusBadgePill: {
     alignSelf: 'flex-start',
@@ -2910,28 +2919,28 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
   statusBadgeSettled: {
-    backgroundColor: '#f1f5f9',
+    backgroundColor: EXPENSES[t.scheme].greyPillBg,
   },
   statusBadgeOwed: {
-    backgroundColor: '#dcfce7',
+    backgroundColor: EXPENSES[t.scheme].owedBg,
   },
   statusBadgeOwes: {
-    backgroundColor: '#fee2e2',
+    backgroundColor: EXPENSES[t.scheme].owesBg,
   },
   balanceStatusText: {
     fontSize: 11,
     fontWeight: '700',
   },
   statusSettled: {
-    color: '#64748b',
+    color: EXPENSES[t.scheme].slate500Text,
     fontWeight: '500',
   },
   statusOwed: {
-    color: '#15803d',
+    color: EXPENSES[t.scheme].owedText,
     fontWeight: '700',
   },
   statusOwes: {
-    color: '#dc2626',
+    color: EXPENSES[t.scheme].owesText,
     fontWeight: '700',
   },
   drillDownArrow: {
@@ -2945,13 +2954,13 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
   },
   amountPositive: {
-    color: '#15803d',
+    color: EXPENSES[t.scheme].owedText,
   },
   amountNegative: {
-    color: '#dc2626',
+    color: EXPENSES[t.scheme].owesText,
   },
   amountZero: {
-    color: '#94a3b8',
+    color: EXPENSES[t.scheme].slate400Text,
   },
   modalOverlay: {
     flex: 1,
@@ -2959,7 +2968,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: theme.color.surface,
+    backgroundColor: t.color.surface,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 16,
@@ -2972,7 +2981,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     paddingBottom: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
+    borderBottomColor: EXPENSES[t.scheme].softDivider,
   },
   drilldownHeaderLeft: {
     flexDirection: 'row',
@@ -2982,11 +2991,11 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 16,
     fontWeight: '800',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   modalSub: {
     fontSize: 11,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   drillDownList: {
     maxHeight: 340,
@@ -2996,7 +3005,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
+    borderBottomColor: EXPENSES[t.scheme].softDivider,
     gap: 10,
   },
   drillDownIconCircle: {
@@ -3012,11 +3021,11 @@ const styles = StyleSheet.create({
   drillDownItemTitle: {
     fontSize: 14,
     fontWeight: '700',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   drillDownItemMeta: {
     fontSize: 11,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     marginTop: 2,
   },
   drillDownAmount: {
@@ -3025,7 +3034,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 13,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     textAlign: 'center',
     marginVertical: 20,
   },
@@ -3036,13 +3045,13 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
-    backgroundColor: '#ffffff',
+    borderColor: EXPENSES[t.scheme].hairline,
+    backgroundColor: t.color.surface,
     gap: 12,
   },
   pairwiseSettlementCard: {
-    backgroundColor: '#f0fdf4',
-    borderColor: '#86efac',
+    backgroundColor: EXPENSES[t.scheme].owedCardBg,
+    borderColor: EXPENSES[t.scheme].owedCardBorder,
     borderWidth: 1.5,
   },
   pairwiseEntryIcon: {
@@ -3053,13 +3062,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   pairwiseExpenseIconWrap: {
-    backgroundColor: '#f3e8ff',
-    borderColor: '#e9d5ff',
+    backgroundColor: EXPENSES[t.scheme].expenseTint,
+    borderColor: EXPENSES[t.scheme].expenseIconBorder,
     borderWidth: 1,
   },
   pairwiseSettlementIconWrap: {
-    backgroundColor: '#dcfce7',
-    borderColor: '#bbf7d0',
+    backgroundColor: EXPENSES[t.scheme].owedBg,
+    borderColor: EXPENSES[t.scheme].owedBorder,
     borderWidth: 1,
   },
   pairwiseEntryContent: {
@@ -3074,7 +3083,7 @@ const styles = StyleSheet.create({
   pairwiseEntryTitle: {
     fontSize: 14,
     fontWeight: '700',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   pairwiseBadge: {
     paddingHorizontal: 6,
@@ -3082,24 +3091,24 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   pairwiseExpenseBadge: {
-    backgroundColor: '#f3e8ff',
+    backgroundColor: EXPENSES[t.scheme].expenseTint,
   },
   pairwiseSettlementBadge: {
-    backgroundColor: '#dcfce7',
+    backgroundColor: EXPENSES[t.scheme].owedBg,
   },
   pairwiseBadgeText: {
     fontSize: 10,
     fontWeight: '700',
   },
   pairwiseExpenseBadgeText: {
-    color: '#7e22ce',
+    color: EXPENSES[t.scheme].expenseBadgeText,
   },
   pairwiseSettlementBadgeText: {
-    color: '#15803d',
+    color: EXPENSES[t.scheme].owedText,
   },
   pairwiseEntryMeta: {
     fontSize: 11,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     marginTop: 3,
   },
   pairwiseAmountCol: {
@@ -3115,6 +3124,6 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   pairwiseSettlementAmount: {
-    color: '#15803d',
+    color: EXPENSES[t.scheme].owedText,
   },
-});
+}));

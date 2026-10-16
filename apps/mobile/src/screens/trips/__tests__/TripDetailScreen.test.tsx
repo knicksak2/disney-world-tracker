@@ -21,7 +21,9 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from '@testing-library/react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 // ---------------------------------------------------------------------------
 // Mocks (declared before the modules under test are imported).
@@ -50,6 +52,13 @@ jest.mock('../../../api/client', () => {
 import TripDetailScreen from '../TripDetailScreen';
 import { ApiError, apiRequest as mockedApiRequest } from '../../../api/client';
 import type { TripDTO } from '@dwt/shared';
+import { StyleSheet } from 'react-native';
+import type { ReactTestInstance } from 'react-test-renderer';
+import { DARK_TONAL, darkTheme } from '../../../theme/theme';
+import { ScreenContainer } from '../../../theme/components';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
+import { HUB_TILE } from '../TripDetailScreen.palette';
+import { GROUP_FAVORITES } from '../GroupFavoritesSection.palette';
 
 const apiRequestMock = mockedApiRequest as jest.MockedFunction<
   typeof mockedApiRequest
@@ -610,6 +619,112 @@ describe('Trip_Detail_View hub (R18.1, R18.6)', () => {
 
     // Distinct from Crowd Favorite
     expect(screen.queryByText(/Crowd Favorite/i)).toBeNull();
+  });
+
+  // Feature: dark-mode — the hub repaints with the Twilight palette.
+  describe('dark mode', () => {
+    afterEach(resetTestScheme);
+
+    const flat = (node: ReactTestInstance): Record<string, unknown> =>
+      (StyleSheet.flatten(node.props.style) ?? {}) as Record<string, unknown>;
+
+    /** The screen root: the host View that `ScreenContainer` paints. */
+    function rootContainer(): ReactTestInstance {
+      const container = screen.UNSAFE_getAllByType(ScreenContainer)[0]!;
+      return container.children[0] as ReactTestInstance;
+    }
+
+    test('(a)(b)(c) paints the root, tile titles and converted tile + favorites colours dark', async () => {
+      apiRequestMock.mockImplementation(async (_method: string, path: string) => {
+        if (path === `/trips/${TRIP_ID}`) return TRIP;
+        if (path === `/trips/${TRIP_ID}/favorites/shared`) {
+          return {
+            items: [
+              {
+                experienceId: 'exp-space-mountain',
+                experienceName: 'Space Mountain',
+                park: 'Magic Kingdom',
+                category: 'Attraction',
+                favoritingCount: 3,
+                favoritingDisplayNames: ['Alice', 'Bob', 'Charlie'],
+              },
+            ],
+          };
+        }
+        return [];
+      });
+      setTestScheme('dark');
+      renderDetail(makeNavigation());
+
+      await screen.findByTestId('trip-detail-hub');
+      // (a) root container.
+      expect(flat(rootContainer()).backgroundColor).toBe(darkTheme.color.background);
+      // (b) primary text — a tool tile title.
+      expect(flat(screen.getByText('Planned List')).color).toBe(darkTheme.color.textPrimary);
+      // (c) converted literals: the Trip Activity tile badge (rule 3 red T)
+      // and the Ledger badge (`primary` as text → `primaryFg`, rule 1a).
+      expect(flat(screen.getByText(/ Logs$/)).color).toBe(HUB_TILE.dark.activityText);
+      expect(flat(screen.getByText('Ledger')).color).toBe(darkTheme.color.primaryFg);
+      // Tool tile icons follow dark (B5-1: the rendered tiles, not HUB_SECTIONS).
+      const tileIcon = (id: string): unknown =>
+        within(screen.getByTestId(id)).UNSAFE_getByType(Ionicons).props.color;
+      expect(tileIcon('trip-detail-section-planned')).toBe(darkTheme.color.primaryFg);
+      expect(tileIcon('trip-detail-section-schedule')).toBe(darkTheme.color.primaryLight);
+      expect(tileIcon('trip-detail-section-reservations')).toBe(DARK_TONAL.amber.fg);
+      // GroupFavoritesSection (c): the favoriting count text (rule 3 red T).
+      await screen.findByTestId('group-favorite-item-exp-space-mountain');
+      expect(flat(screen.getByText('3')).color).toBe(GROUP_FAVORITES.dark.heart);
+    });
+
+    test('GroupFavoritesSection empty state keeps its rule-2a primary tint in dark', async () => {
+      apiRequestMock.mockImplementation(async (_method: string, path: string) => {
+        if (path === `/trips/${TRIP_ID}`) return TRIP;
+        if (path === `/trips/${TRIP_ID}/favorites/shared`) return { items: [] };
+        return [];
+      });
+      setTestScheme('dark');
+      renderDetail(makeNavigation());
+
+      const empty = await screen.findByTestId('group-favorites-empty');
+      // `${t.color.primary}0a` / `${t.color.primaryFg}18` (rule 2a, suffix verbatim).
+      expect(flat(empty).backgroundColor).toBe(`${darkTheme.color.primary}0a`);
+      expect(flat(empty).borderColor).toBe(`${darkTheme.color.primaryFg}18`);
+    });
+
+    test('a past trip paints its recap hero with primaryDark in dark', async () => {
+      apiRequestMock.mockImplementation(async (_method: string, path: string) => {
+        if (path === `/trips/${TRIP_ID}`) return { ...TRIP, status: 'past' };
+        return [];
+      });
+      setTestScheme('dark');
+      renderDetail(makeNavigation());
+
+      const hero = await screen.findByTestId('trip-detail-section-summary');
+      expect(flat(hero).backgroundColor).toBe(darkTheme.color.primaryDark);
+      expect(flat(screen.getByText('Magical Vacation Recap')).color).toBe(
+        darkTheme.color.textOnPrimary,
+      );
+    });
+
+    test('keeps the pre-retrofit light values under light', async () => {
+      apiRequestMock.mockImplementation(async (_method: string, path: string) => {
+        if (path === `/trips/${TRIP_ID}`) return TRIP;
+        if (path === `/trips/${TRIP_ID}/favorites/shared`) return { items: [] };
+        return [];
+      });
+      renderDetail(makeNavigation());
+
+      await screen.findByTestId('trip-detail-hub');
+      expect(flat(screen.getByText(/ Logs$/)).color).toBe('#e8505b');
+      expect(flat(screen.getByText('Ledger')).color).toBe('#5b2a86');
+      const tileIcon = (id: string): unknown =>
+        within(screen.getByTestId(id)).UNSAFE_getByType(Ionicons).props.color;
+      expect(tileIcon('trip-detail-section-planned')).toBe('#5b2a86');
+      expect(tileIcon('trip-detail-section-schedule')).toBe('#7e57c2');
+      expect(tileIcon('trip-detail-section-reservations')).toBe('#b27a00');
+      const empty = await screen.findByTestId('group-favorites-empty');
+      expect(flat(empty).backgroundColor).toBe('#5b2a860a');
+    });
   });
 });
 

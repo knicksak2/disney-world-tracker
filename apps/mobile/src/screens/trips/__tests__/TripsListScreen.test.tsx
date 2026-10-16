@@ -51,10 +51,16 @@ jest.mock('../../../api/client', () => {
 // Imports of modules under test (after the mocks above).
 // ---------------------------------------------------------------------------
 
+import { StyleSheet } from 'react-native';
+import type { ReactTestInstance } from 'react-test-renderer';
 import TripsStack from '../../../navigation/TripsStack';
 import { apiRequest as mockedApiRequest } from '../../../api/client';
 import { clearTripsListNotice } from '../../../navigation/tripsListNotice';
 import type { TripDTO } from '@dwt/shared';
+import { darkTheme } from '../../../theme/theme';
+import { ScreenContainer } from '../../../theme/components';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
+import { TRIP_ROW } from '../TripsListScreen.palette';
 
 const apiRequestMock = mockedApiRequest as jest.MockedFunction<
   typeof mockedApiRequest
@@ -234,6 +240,89 @@ describe('Trips_List_Screen (R16.6, R16.7, R16.8, R16.9)', () => {
     expect(screen.getByText('UPCOMING')).toBeTruthy();
     expect(screen.getByText('Summer Vacation')).toBeTruthy();
     expect(screen.getByText('Winter Holiday')).toBeTruthy();
+  });
+
+  // Feature: dark-mode — the Trips list repaints with the Twilight palette.
+  describe('dark mode', () => {
+    afterEach(resetTestScheme);
+
+    const flat = (node: ReactTestInstance): Record<string, unknown> =>
+      (StyleSheet.flatten(node.props.style) ?? {}) as Record<string, unknown>;
+
+    const PAST_TRIP: TripDTO = {
+      id: 'trip-past-dark',
+      name: 'Winter Holiday',
+      description: '',
+      startDate: '2020-01-01',
+      endDate: '2020-01-05',
+      status: 'past',
+      createdAt: '2020-01-01T12:00:00Z',
+      resorts: [],
+      foodLists: [],
+      experienceLists: [],
+    };
+
+    function mockPopulatedList(): void {
+      apiRequestMock.mockImplementation(async (_method, path) => {
+        if (path === '/me/trips') {
+          return [
+            { status: 'active', trips: [ACTIVE_TRIP] },
+            { status: 'past', trips: [PAST_TRIP] },
+          ];
+        }
+        if (path === '/resorts') return { resorts: [] };
+        return [];
+      });
+    }
+
+    /** The screen root: the host View that `ScreenContainer` paints. */
+    function rootContainer(): ReactTestInstance {
+      const container = screen.UNSAFE_getAllByType(ScreenContainer)[0]!;
+      return container.children[0] as ReactTestInstance;
+    }
+
+    test('(a)(b)(c) paints the root, row text and converted row badge dark', async () => {
+      mockPopulatedList();
+      setTestScheme('dark');
+      renderTripsStack();
+
+      const pastBadge = await screen.findByTestId(`trips-trip-past-${PAST_TRIP.id}`);
+      // (a) root container.
+      expect(flat(rootContainer()).backgroundColor).toBe(darkTheme.color.background);
+      // (b) primary text — the Trip name.
+      expect(flat(screen.getByText('Winter Holiday')).color).toBe(darkTheme.color.textPrimary);
+      // (c) converted literals — the past badge tile and the row border.
+      expect(flat(pastBadge).backgroundColor).toBe(TRIP_ROW.dark.pastBg);
+      expect(flat(pastBadge).borderColor).toBe(TRIP_ROW.dark.pastBorder);
+      expect(flat(screen.getByTestId(`trips-trip-${PAST_TRIP.id}`)).borderColor).toBe(
+        TRIP_ROW.dark.rowBorder,
+      );
+      // The active H-role countdown tile is mode-invariant (rule 3 H).
+      expect(
+        flat(screen.getByTestId(`trips-trip-active-${ACTIVE_TRIP.id}`)).backgroundColor,
+      ).toBe(TRIP_ROW.dark.activeBg);
+    });
+
+    test('(d) a mounted list repaints its rows live when the scheme switches (no remount)', async () => {
+      mockPopulatedList();
+      renderTripsStack();
+
+      const pastBadge = await screen.findByTestId(`trips-trip-past-${PAST_TRIP.id}`);
+      // Light first: today's literal values.
+      expect(flat(pastBadge).backgroundColor).toBe(TRIP_ROW.light.pastBg);
+      expect(flat(screen.getByText('Winter Holiday')).color).toBe('#1f1235');
+
+      setTestScheme('dark');
+
+      // Same mounted FlatList row, now painted with the dark values.
+      await waitFor(() => {
+        expect(
+          flat(screen.getByTestId(`trips-trip-past-${PAST_TRIP.id}`)).backgroundColor,
+        ).toBe(TRIP_ROW.dark.pastBg);
+      });
+      expect(flat(screen.getByText('Winter Holiday')).color).toBe(darkTheme.color.textPrimary);
+      expect(flat(rootContainer()).backgroundColor).toBe(darkTheme.color.background);
+    });
   });
 });
 

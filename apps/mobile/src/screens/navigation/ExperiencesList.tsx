@@ -45,7 +45,6 @@ import React from 'react';
 import {
   Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   TextInput,
   View,
@@ -58,7 +57,9 @@ import {
   type CompletionEntryDTO,
 } from '@dwt/shared';
 
-import { theme } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { categoryMeta } from '../../theme/theme';
+import { useAppTheme } from '../../theme/useAppTheme';
 import { EmptyState } from '../../theme/components';
 import { CompletionRow } from './CompletionRow';
 import {
@@ -85,6 +86,8 @@ export function ExperiencesList({
   readonly testIDPrefix: string;
   readonly onOpenExperience?: (experienceId: string) => void;
 }): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   // Independent per-instance filter state (R14.1, R14.2, R14.10).
   const [filter, setFilter] = React.useState<ExperienceFilterState>(DEFAULT_FILTER);
   const [activePicker, setActivePicker] = React.useState<'park' | 'category' | null>(null);
@@ -121,7 +124,7 @@ export function ExperiencesList({
         <Ionicons
           name="search"
           size={16}
-          color={theme.color.textSecondary}
+          color={t.color.textSecondary}
           style={styles.searchIcon}
         />
         <TextInput
@@ -129,7 +132,8 @@ export function ExperiencesList({
           value={filter.search ?? ''}
           onChangeText={(text) => setFilter((prev) => ({ ...prev, search: text }))}
           placeholder="Search completed experiences..."
-          placeholderTextColor={theme.color.textSecondary}
+          placeholderTextColor={t.color.textSecondary}
+          keyboardAppearance={t.scheme}
           autoCapitalize="none"
           autoCorrect={false}
           returnKeyType="search"
@@ -145,7 +149,7 @@ export function ExperiencesList({
             hitSlop={8}
             style={styles.searchClearBtn}
           >
-            <Ionicons name="close-circle" size={18} color={theme.color.textSecondary} />
+            <Ionicons name="close-circle" size={18} color={t.color.textSecondary} />
           </Pressable>
         ) : null}
       </View>
@@ -168,7 +172,7 @@ export function ExperiencesList({
             <Ionicons
               name="business-outline"
               size={14}
-              color={filter.park !== 'All' ? theme.color.primary : theme.color.textSecondary}
+              color={filter.park !== 'All' ? t.color.primaryFg : t.color.textSecondary}
               style={styles.selectorIcon}
             />
             <Text
@@ -184,7 +188,7 @@ export function ExperiencesList({
           <Ionicons
             name={activePicker === 'park' ? 'chevron-up' : 'chevron-down'}
             size={14}
-            color={filter.park !== 'All' ? theme.color.primary : theme.color.textSecondary}
+            color={filter.park !== 'All' ? t.color.primaryFg : t.color.textSecondary}
           />
         </Pressable>
 
@@ -204,7 +208,7 @@ export function ExperiencesList({
             <Ionicons
               name="pricetag-outline"
               size={14}
-              color={filter.category !== 'All' ? theme.color.primary : theme.color.textSecondary}
+              color={filter.category !== 'All' ? t.color.primaryFg : t.color.textSecondary}
               style={styles.selectorIcon}
             />
             <Text
@@ -220,7 +224,7 @@ export function ExperiencesList({
           <Ionicons
             name={activePicker === 'category' ? 'chevron-up' : 'chevron-down'}
             size={14}
-            color={filter.category !== 'All' ? theme.color.primary : theme.color.textSecondary}
+            color={filter.category !== 'All' ? t.color.primaryFg : t.color.textSecondary}
           />
         </Pressable>
       </View>
@@ -242,7 +246,7 @@ export function ExperiencesList({
             style={styles.resetBtn}
             hitSlop={6}
           >
-            <Ionicons name="refresh-outline" size={13} color={theme.color.primary} />
+            <Ionicons name="refresh-outline" size={13} color={t.color.primaryFg} />
             <Text style={styles.resetBtnText}>Clear filters</Text>
           </Pressable>
         </View>
@@ -262,7 +266,7 @@ export function ExperiencesList({
             accessibilityLabel="Close park filter"
             testID={`${testIDPrefix}-filter-park-tray-close`}
           >
-            <Ionicons name="close" size={18} color={theme.color.textSecondary} />
+            <Ionicons name="close" size={18} color={t.color.textSecondary} />
           </Pressable>
         </View>
         <View style={styles.optionsList}>
@@ -281,7 +285,7 @@ export function ExperiencesList({
               All Parks
             </Text>
             {filter.park === 'All' ? (
-              <Ionicons name="checkmark-circle" size={18} color={theme.color.primary} />
+              <Ionicons name="checkmark-circle" size={18} color={t.color.primaryFg} />
             ) : null}
           </Pressable>
           {PARKS.map((park) => {
@@ -303,7 +307,7 @@ export function ExperiencesList({
                   {park}
                 </Text>
                 {isSelected ? (
-                  <Ionicons name="checkmark-circle" size={18} color={theme.color.primary} />
+                  <Ionicons name="checkmark-circle" size={18} color={t.color.primaryFg} />
                 ) : null}
               </Pressable>
             );
@@ -325,7 +329,7 @@ export function ExperiencesList({
             accessibilityLabel="Close experience type filter"
             testID={`${testIDPrefix}-filter-category-tray-close`}
           >
-            <Ionicons name="close" size={18} color={theme.color.textSecondary} />
+            <Ionicons name="close" size={18} color={t.color.textSecondary} />
           </Pressable>
         </View>
         <ScrollView
@@ -348,7 +352,7 @@ export function ExperiencesList({
               All Types
             </Text>
             {filter.category === 'All' ? (
-              <Ionicons name="checkmark-circle" size={18} color={theme.color.primary} />
+              <Ionicons name="checkmark-circle" size={18} color={t.color.primaryFg} />
             ) : null}
           </Pressable>
           {EXPERIENCE_CATEGORIES.map((category) => {
@@ -371,7 +375,7 @@ export function ExperiencesList({
                   {label}
                 </Text>
                 {isSelected ? (
-                  <Ionicons name="checkmark-circle" size={18} color={theme.color.primary} />
+                  <Ionicons name="checkmark-circle" size={18} color={t.color.primaryFg} />
                 ) : null}
               </Pressable>
             );
@@ -408,7 +412,7 @@ export function ExperiencesList({
 
 /** Friendly label for an Experience_Category, falling back to the raw enum. */
 function categoryLabel(category: CompletionEntryDTO['category']): string {
-  return theme.categoryVisual[category]?.label ?? category;
+  return categoryMeta[category]?.label ?? category;
 }
 
 /** Accessibility value text for the current Park selection. */
@@ -425,57 +429,57 @@ function categoryValueText(category: FilterCategorySelection): string {
 // Styles
 // ---------------------------------------------------------------------------
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   container: {
     width: '100%',
   },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: theme.color.surface,
-    borderRadius: theme.radius.md,
-    paddingHorizontal: theme.spacing.md,
+    backgroundColor: t.color.surface,
+    borderRadius: t.radius.md,
+    paddingHorizontal: t.spacing.md,
     borderWidth: 1,
-    borderColor: theme.color.border,
-    marginBottom: theme.spacing.sm,
-    ...theme.shadow.card,
+    borderColor: t.color.border,
+    marginBottom: t.spacing.sm,
+    ...t.shadow.card,
   },
   searchIcon: {
-    marginRight: theme.spacing.sm,
+    marginRight: t.spacing.sm,
   },
   searchInput: {
     flex: 1,
     paddingVertical: 10,
     fontSize: 14,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   searchClearBtn: {
     padding: 4,
-    marginLeft: theme.spacing.xs,
+    marginLeft: t.spacing.xs,
   },
   selectorRow: {
     flexDirection: 'row',
-    gap: theme.spacing.sm,
-    marginBottom: theme.spacing.sm,
+    gap: t.spacing.sm,
+    marginBottom: t.spacing.sm,
   },
   selectorPill: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: theme.color.surface,
+    backgroundColor: t.color.surface,
     borderWidth: 1,
-    borderColor: theme.color.border,
-    borderRadius: theme.radius.pill,
+    borderColor: t.color.border,
+    borderRadius: t.radius.pill,
     paddingVertical: 9,
     paddingHorizontal: 12,
   },
   selectorPillActive: {
-    backgroundColor: theme.color.surfaceAlt,
-    borderColor: theme.color.primary,
+    backgroundColor: t.color.surfaceAlt,
+    borderColor: t.color.primaryFg,
   },
   selectorPillFocused: {
-    borderColor: theme.color.primary,
+    borderColor: t.color.primaryFg,
   },
   selectorPillContent: {
     flexDirection: 'row',
@@ -487,13 +491,13 @@ const styles = StyleSheet.create({
     marginRight: 6,
   },
   selectorText: {
-    ...theme.typography.meta,
+    ...t.typography.meta,
     fontSize: 13,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
     fontWeight: '500',
   },
   selectorTextActive: {
-    color: theme.color.primary,
+    color: t.color.primaryFg,
     fontWeight: '700',
   },
   filterStatusBar: {
@@ -501,12 +505,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 4,
-    marginBottom: theme.spacing.xs,
+    marginBottom: t.spacing.xs,
   },
   filterStatusText: {
-    ...theme.typography.meta,
+    ...t.typography.meta,
     fontSize: 12,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     fontWeight: '600',
   },
   resetBtn: {
@@ -515,23 +519,23 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingVertical: 4,
     paddingHorizontal: 8,
-    backgroundColor: theme.color.surfaceAlt,
+    backgroundColor: t.color.surfaceAlt,
     borderRadius: 12,
   },
   resetBtnText: {
-    ...theme.typography.meta,
+    ...t.typography.meta,
     fontSize: 11,
-    color: theme.color.primary,
+    color: t.color.primaryFg,
     fontWeight: '600',
   },
   trayWrapper: {
-    backgroundColor: theme.color.surface,
-    borderRadius: theme.radius.lg,
+    backgroundColor: t.color.surface,
+    borderRadius: t.radius.lg,
     borderWidth: 1,
-    borderColor: theme.color.border,
-    padding: theme.spacing.sm,
-    marginBottom: theme.spacing.sm,
-    ...theme.shadow.card,
+    borderColor: t.color.border,
+    padding: t.spacing.sm,
+    marginBottom: t.spacing.sm,
+    ...t.shadow.card,
   },
   trayVisible: {
     opacity: 1,
@@ -551,14 +555,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 6,
     borderBottomWidth: 1,
-    borderBottomColor: theme.color.border,
+    borderBottomColor: t.color.border,
     marginBottom: 4,
   },
   trayTitle: {
-    ...theme.typography.meta,
+    ...t.typography.meta,
     fontSize: 12,
     fontWeight: '700',
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
@@ -575,18 +579,18 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 10,
     paddingHorizontal: 12,
-    borderRadius: theme.radius.md,
+    borderRadius: t.radius.md,
   },
   optionItemActive: {
-    backgroundColor: theme.color.surfaceAlt,
+    backgroundColor: t.color.surfaceAlt,
   },
   optionLabel: {
-    ...theme.typography.body,
+    ...t.typography.body,
     fontSize: 14,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   optionLabelActive: {
-    color: theme.color.primary,
+    color: t.color.primaryFg,
     fontWeight: '700',
   },
-});
+}));

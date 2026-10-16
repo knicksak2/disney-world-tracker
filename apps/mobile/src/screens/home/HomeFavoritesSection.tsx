@@ -11,7 +11,6 @@ import React, { useMemo } from 'react';
 import {
   Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   View,
 } from 'react-native';
@@ -26,36 +25,45 @@ import type {
 
 import { apiRequest } from '../../api/client';
 import { EmptyState } from '../../theme/components';
-import { theme } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme, usePalette } from '../../theme/useAppTheme';
 import { useFavoritedExperiences } from '../catalog/useFavoritedExperiences';
+import { HOME_FAVORITES } from './HomeFavoritesSection.palette';
 
 export interface HomeFavoritesSectionProps {
   readonly onSelectExperience?: (experienceId: string) => void;
   readonly onSeeAll?: () => void;
 }
 
-const PARK_COLORS: Record<string, string> = {
-  'Magic Kingdom': '#7e57c2',
-  EPCOT: '#2f80ed',
-  'Hollywood Studios': '#e8505b',
-  'Animal Kingdom': '#3fa34d',
-};
+/** The parks that carry their own accent on a favorite pill; others fall back to primary. */
+const ACCENTED_PARKS: ReadonlySet<string> = new Set<string>([
+  'Magic Kingdom',
+  'EPCOT',
+  'Hollywood Studios',
+  'Animal Kingdom',
+]);
 
-function getStatusBadgeConfig(liveEntry: ParkLiveEntryDTO, isClosedOrDown: boolean) {
+type FavoritesPalette = (typeof HOME_FAVORITES)['light'];
+
+function getStatusBadgeConfig(
+  liveEntry: ParkLiveEntryDTO,
+  isClosedOrDown: boolean,
+  pal: FavoritesPalette,
+) {
   if (isClosedOrDown) {
     if (liveEntry.status === 'DOWN') {
       return {
-        bg: '#fef2f2',
-        border: '#fee2e2',
-        text: '#dc2626',
+        bg: pal.downBg,
+        border: pal.downBorder,
+        text: pal.downText,
         icon: 'alert-circle-outline' as const,
         label: 'Down',
       };
     }
     return {
-      bg: '#f1f5f9',
-      border: '#e2e8f0',
-      text: '#64748b',
+      bg: pal.closedBg,
+      border: pal.closedBorder,
+      text: pal.closedText,
       icon: 'moon-outline' as const,
       label: 'Closed',
     };
@@ -64,9 +72,9 @@ function getStatusBadgeConfig(liveEntry: ParkLiveEntryDTO, isClosedOrDown: boole
   const wait = liveEntry.waitMinutes ?? 0;
   if (wait === 0) {
     return {
-      bg: '#dcfce7',
-      border: '#bbf7d0',
-      text: '#15803d',
+      bg: pal.walkOnBg,
+      border: pal.walkOnBorder,
+      text: pal.walkOnText,
       icon: 'sparkles' as const,
       label: 'Walk-on',
     };
@@ -74,9 +82,9 @@ function getStatusBadgeConfig(liveEntry: ParkLiveEntryDTO, isClosedOrDown: boole
 
   if (wait <= 25) {
     return {
-      bg: '#dcfce7',
-      border: '#bbf7d0',
-      text: '#15803d',
+      bg: pal.shortBg,
+      border: pal.shortBorder,
+      text: pal.shortText,
       icon: 'time-outline' as const,
       label: `${wait}m`,
     };
@@ -84,18 +92,18 @@ function getStatusBadgeConfig(liveEntry: ParkLiveEntryDTO, isClosedOrDown: boole
 
   if (wait <= 50) {
     return {
-      bg: '#fef3c7',
-      border: '#fde68a',
-      text: '#b45309',
+      bg: pal.moderateBg,
+      border: pal.moderateBorder,
+      text: pal.moderateText,
       icon: 'time-outline' as const,
       label: `${wait}m`,
     };
   }
 
   return {
-    bg: '#fee2e2',
-    border: '#fecaca',
-    text: '#b91c1c',
+    bg: pal.heavyBg,
+    border: pal.heavyBorder,
+    text: pal.heavyText,
     icon: 'time-outline' as const,
     label: `${wait}m`,
   };
@@ -110,14 +118,20 @@ function FavoritePill({
   readonly liveEntry: ParkLiveEntryDTO;
   readonly onPress: () => void;
 }): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
+  const pal = usePalette(HOME_FAVORITES);
   const isClosedOrDown =
     liveEntry.status === 'CLOSED' ||
     liveEntry.status === 'DOWN' ||
     liveEntry.status === 'REFURBISHMENT' ||
     liveEntry.waitMinutes === null;
 
-  const parkColor = (experience.park && PARK_COLORS[experience.park]) ?? theme.color.primary;
-  const statusConfig = getStatusBadgeConfig(liveEntry, isClosedOrDown);
+  const parkColor =
+    experience.park && ACCENTED_PARKS.has(experience.park)
+      ? t.parkAccent[experience.park]
+      : t.color.primaryFg;
+  const statusConfig = getStatusBadgeConfig(liveEntry, isClosedOrDown, pal);
 
   return (
     <Pressable
@@ -137,7 +151,7 @@ function FavoritePill({
             {experience.park ?? ''}
           </Text>
         </View>
-        <Ionicons name="heart" size={13} color="#e8505b" style={styles.heartIcon} />
+        <Ionicons name="heart" size={13} color={pal.pillHeart} style={styles.heartIcon} />
       </View>
 
       <Text style={styles.experienceName} numberOfLines={2}>
@@ -176,6 +190,8 @@ export default function HomeFavoritesSection({
   onSelectExperience,
   onSeeAll,
 }: HomeFavoritesSectionProps): JSX.Element {
+  const styles = useStyles();
+  const pal = usePalette(HOME_FAVORITES);
   const favoritedIds = useFavoritedExperiences();
 
   // All catalog experiences to map IDs to Experience metadata (park, name, category)
@@ -287,7 +303,7 @@ export default function HomeFavoritesSection({
     <View style={styles.container} testID="home-favorites-section">
       <View style={styles.sectionHeader}>
         <View style={styles.sectionTitleRow}>
-          <Ionicons name="heart" size={17} color="#e8505b" style={styles.sectionIcon} />
+          <Ionicons name="heart" size={17} color={pal.sectionHeart} style={styles.sectionIcon} />
           <Text style={styles.sectionTitle}>Your Favorites</Text>
         </View>
         {onSeeAll && (
@@ -332,16 +348,16 @@ export default function HomeFavoritesSection({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   container: {
-    marginTop: theme.spacing.md,
-    marginBottom: theme.spacing.sm,
+    marginTop: t.spacing.md,
+    marginBottom: t.spacing.sm,
   },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: theme.spacing.lg,
+    paddingHorizontal: t.spacing.lg,
     marginBottom: 10,
   },
   sectionTitleRow: {
@@ -353,36 +369,36 @@ const styles = StyleSheet.create({
     marginRight: 2,
   },
   sectionTitle: {
-    ...theme.typography.heading,
+    ...t.typography.heading,
     fontSize: 17,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
     fontWeight: '800',
   },
   sectionLink: {
     fontSize: 13,
     fontWeight: '700',
-    color: theme.color.primary,
+    color: t.color.primaryFg,
   },
   scrollContent: {
-    paddingHorizontal: theme.spacing.lg,
+    paddingHorizontal: t.spacing.lg,
     gap: 12,
     paddingBottom: 6,
   },
   emptyContainer: {
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.xs,
+    paddingHorizontal: t.spacing.lg,
+    paddingVertical: t.spacing.xs,
   },
   pill: {
     width: 178,
-    backgroundColor: theme.color.surface,
+    backgroundColor: t.color.surface,
     borderRadius: 16,
     padding: 12,
     borderWidth: 1,
-    borderColor: '#eee6f7',
+    borderColor: HOME_FAVORITES[t.scheme].pillBorder,
     borderTopWidth: 3.5,
     justifyContent: 'space-between',
     minHeight: 122,
-    shadowColor: '#3d1c5c',
+    shadowColor: t.shadow.card.shadowColor,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.07,
     shadowRadius: 6,
@@ -414,10 +430,10 @@ const styles = StyleSheet.create({
     opacity: 0.85,
   },
   experienceName: {
-    ...theme.typography.body,
+    ...t.typography.body,
     fontSize: 13.5,
     fontWeight: '700',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
     lineHeight: 17.5,
     marginBottom: 8,
     flex: 1,
@@ -447,4 +463,4 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     opacity: 0.9,
   },
-});
+}));

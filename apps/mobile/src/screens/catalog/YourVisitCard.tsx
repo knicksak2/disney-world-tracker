@@ -30,7 +30,7 @@
 // their placement (one shared card) differs.
 
 import React, { useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Text, View } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
 
 import type {
@@ -40,7 +40,8 @@ import type {
   RatingDTO,
 } from '@dwt/shared';
 
-import { theme } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme } from '../../theme/useAppTheme';
 import { Card, PrimaryButton, SectionLabel } from '../../theme/components';
 import CompletionControls from './CompletionControls';
 import RatingControl from './RatingControl';
@@ -87,6 +88,7 @@ export default function YourVisitCard({
   noteQuery,
   logsQuery,
 }: YourVisitCardProps): JSX.Element {
+  const styles = useStyles();
   const queryClient = useQueryClient();
 
   // Invalidate every surface a visit log affects (R6.5): the history itself,
@@ -194,6 +196,8 @@ function VisitsSection({
   readonly query: QueryLike<ExperienceVisitHistoryDTO | null>;
   readonly onChanged: () => void;
 }): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const [modalVisible, setModalVisible] = useState<boolean>(false);
 
   const history = query.data ?? null;
@@ -207,7 +211,7 @@ function VisitsSection({
       ) : query.isLoading ? (
         <ActivityIndicator
           accessibilityLabel="Loading visit history"
-          color={theme.color.primary}
+          color={t.color.primaryFg}
         />
       ) : (
         <>
@@ -274,6 +278,8 @@ function CompletionSection({
   readonly query: QueryLike<CompletionDTO | null>;
   readonly onMutated: () => void;
 }): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   if (query.isError) {
     return <Text style={styles.errorText}>Could not load completion.</Text>;
   }
@@ -281,7 +287,7 @@ function CompletionSection({
     return (
       <ActivityIndicator
         accessibilityLabel="Loading completion"
-        color={theme.color.primary}
+        color={t.color.primaryFg}
       />
     );
   }
@@ -307,6 +313,8 @@ function RatingSection({
   readonly query: QueryLike<RatingDTO | null>;
   readonly onMutated: () => void;
 }): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   if (query.isError) {
     return <Text style={styles.errorText}>Could not load rating.</Text>;
   }
@@ -314,7 +322,7 @@ function RatingSection({
     return (
       <ActivityIndicator
         accessibilityLabel="Loading rating"
-        color={theme.color.primary}
+        color={t.color.primaryFg}
       />
     );
   }
@@ -342,6 +350,8 @@ function NoteSection({
   readonly query: QueryLike<NoteDTO | null>;
   readonly onMutated: () => void;
 }): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   if (query.isError) {
     return <Text style={styles.errorText}>Could not load note.</Text>;
   }
@@ -349,7 +359,7 @@ function NoteSection({
     return (
       <ActivityIndicator
         accessibilityLabel="Loading note"
-        color={theme.color.primary}
+        color={t.color.primaryFg}
       />
     );
   }
@@ -372,26 +382,26 @@ function NoteSection({
 // Styles
 // ---------------------------------------------------------------------------
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   section: {
-    gap: theme.spacing.md,
+    gap: t.spacing.md,
   },
   visitsSection: {
-    gap: theme.spacing.sm,
+    gap: t.spacing.sm,
   },
   visitBadge: {
     alignSelf: 'flex-start',
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.xs,
-    borderRadius: theme.radius.pill,
-    backgroundColor: theme.color.surfaceAlt,
+    paddingHorizontal: t.spacing.md,
+    paddingVertical: t.spacing.xs,
+    borderRadius: t.radius.pill,
+    backgroundColor: t.color.surfaceAlt,
   },
   visitBadgeText: {
-    ...theme.typography.subtitle,
-    color: theme.color.textPrimary,
+    ...t.typography.subtitle,
+    color: t.color.textPrimary,
   },
   errorText: {
-    ...theme.typography.body,
-    color: theme.color.danger,
+    ...t.typography.body,
+    color: t.color.danger,
   },
-});
+}));

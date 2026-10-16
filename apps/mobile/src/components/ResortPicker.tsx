@@ -23,7 +23,6 @@ import React, { useMemo, useState } from 'react';
 import {
   Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   TextInput,
   View,
@@ -32,7 +31,8 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { filterAndRankExperiences, type ResortDTO } from '@dwt/shared';
 
-import { theme } from '../theme/theme';
+import { makeStyles } from '../theme/makeStyles';
+import { useAppTheme } from '../theme/useAppTheme';
 
 interface ResortPickerProps {
   /** All selectable Catalog Resorts (from `GET /resorts`). */
@@ -55,6 +55,8 @@ export function ResortPicker({
   testIDPrefix,
 }: ResortPickerProps): JSX.Element {
   const [query, setQuery] = useState('');
+  const styles = useStyles();
+  const t = useAppTheme();
 
   // The selected Resorts, resolved to their catalog rows for the chip summary.
   const selectedResorts = useMemo(
@@ -86,7 +88,7 @@ export function ResortPicker({
               <Text style={styles.chipText} numberOfLines={1}>
                 {resort.name}
               </Text>
-              <Ionicons name="close" size={14} color={theme.color.primary} />
+              <Ionicons name="close" size={14} color={t.color.primaryFg} />
             </Pressable>
           ))}
         </View>
@@ -96,14 +98,15 @@ export function ResortPicker({
         <Ionicons
           name="search"
           size={16}
-          color={theme.color.textSecondary}
+          color={t.color.textSecondary}
           style={styles.searchIcon}
         />
         <TextInput
           value={query}
           onChangeText={setQuery}
           placeholder="Search resorts"
-          placeholderTextColor={theme.color.textSecondary}
+          placeholderTextColor={t.color.textSecondary}
+          keyboardAppearance={t.scheme}
           editable={!disabled}
           autoCorrect={false}
           style={styles.searchInput}
@@ -121,7 +124,7 @@ export function ResortPicker({
             <Ionicons
               name="close-circle"
               size={18}
-              color={theme.color.textSecondary}
+              color={t.color.textSecondary}
             />
           </Pressable>
         ) : null}
@@ -155,7 +158,7 @@ export function ResortPicker({
                 <Ionicons
                   name={selected ? 'checkbox' : 'square-outline'}
                   size={20}
-                  color={selected ? theme.color.primary : theme.color.textSecondary}
+                  color={selected ? t.color.primaryFg : t.color.textSecondary}
                 />
                 <Text style={styles.rowText} numberOfLines={1}>
                   {resort.name}
@@ -169,73 +172,73 @@ export function ResortPicker({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   chips: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: theme.spacing.sm,
-    marginBottom: theme.spacing.sm,
+    gap: t.spacing.sm,
+    marginBottom: t.spacing.sm,
   },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.xs,
+    gap: t.spacing.xs,
     maxWidth: '100%',
-    backgroundColor: `${theme.color.primary}18`,
-    borderRadius: theme.radius.md,
-    paddingLeft: theme.spacing.sm,
-    paddingRight: theme.spacing.xs,
-    paddingVertical: theme.spacing.xs,
+    backgroundColor: `${t.color.primary}18`,
+    borderRadius: t.radius.md,
+    paddingLeft: t.spacing.sm,
+    paddingRight: t.spacing.xs,
+    paddingVertical: t.spacing.xs,
   },
   chipText: {
-    ...theme.typography.meta,
-    color: theme.color.textPrimary,
+    ...t.typography.meta,
+    color: t.color.textPrimary,
     flexShrink: 1,
   },
   searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.xs,
+    gap: t.spacing.xs,
     borderWidth: 1,
-    borderColor: theme.color.border,
-    borderRadius: theme.radius.md,
-    paddingHorizontal: theme.spacing.md,
-    backgroundColor: theme.color.surface,
+    borderColor: t.color.border,
+    borderRadius: t.radius.md,
+    paddingHorizontal: t.spacing.md,
+    backgroundColor: t.color.surface,
   },
   searchIcon: {
-    marginRight: theme.spacing.xs,
+    marginRight: t.spacing.xs,
   },
   searchInput: {
     flex: 1,
-    paddingVertical: theme.spacing.md,
-    ...theme.typography.body,
-    color: theme.color.textPrimary,
+    paddingVertical: t.spacing.md,
+    ...t.typography.body,
+    color: t.color.textPrimary,
   },
   list: {
     maxHeight: 220,
-    marginTop: theme.spacing.sm,
+    marginTop: t.spacing.sm,
     borderWidth: 1,
-    borderColor: theme.color.border,
-    borderRadius: theme.radius.md,
+    borderColor: t.color.border,
+    borderRadius: t.radius.md,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.sm,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.sm,
+    gap: t.spacing.sm,
+    paddingHorizontal: t.spacing.md,
+    paddingVertical: t.spacing.sm,
   },
   rowSelected: {
-    backgroundColor: `${theme.color.primary}12`,
+    backgroundColor: `${t.color.primary}12`,
   },
   rowText: {
-    ...theme.typography.body,
-    color: theme.color.textPrimary,
+    ...t.typography.body,
+    color: t.color.textPrimary,
     flexShrink: 1,
   },
   empty: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
-    padding: theme.spacing.md,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
+    padding: t.spacing.md,
   },
-});
+}));

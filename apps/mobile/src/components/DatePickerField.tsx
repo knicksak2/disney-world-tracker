@@ -16,13 +16,16 @@
 // rendered/selected day never shifts with the device time zone.
 
 import React, { useMemo, useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Calendar, type DateData } from 'react-native-calendars';
 import type { Theme } from 'react-native-calendars/src/types';
 
-import { theme } from '../theme/theme';
+import type { AppTheme } from '../theme/theme';
 import { SecondaryButton } from '../theme/components';
+import { makeStyles } from '../theme/makeStyles';
+import { useAppTheme, usePalette } from '../theme/useAppTheme';
+import { DATE_PICKER } from './DatePickerField.palette';
 
 // ---------------------------------------------------------------------------
 // Date helpers (time-zone-free, string-parts based)
@@ -99,22 +102,32 @@ function displayLabel(value: string): string | null {
 // Calendar theme (map the app palette onto react-native-calendars' Theme)
 // ---------------------------------------------------------------------------
 
-const calendarTheme: Theme = {
-  calendarBackground: theme.color.surface,
-  monthTextColor: theme.color.textPrimary,
-  textMonthFontWeight: '700',
-  textSectionTitleColor: theme.color.textSecondary,
-  dayTextColor: theme.color.textPrimary,
-  textDisabledColor: theme.color.border,
-  todayTextColor: theme.color.primary,
-  selectedDayBackgroundColor: theme.color.primary,
-  selectedDayTextColor: theme.color.textOnPrimary,
-  arrowColor: theme.color.primary,
-  disabledArrowColor: theme.color.border,
-  textDayFontSize: 15,
-  textMonthFontSize: 18,
-  textDayHeaderFontSize: 12,
-};
+/**
+ * Builds the calendar theme for the active app theme. `Calendar` captures its
+ * styles once (`useRef(styleConstructor(theme))`), so the caller also keys
+ * the `Calendar` by scheme to remount it on a switch.
+ */
+function buildCalendarTheme(
+  t: AppTheme,
+  pal: Readonly<Record<keyof typeof DATE_PICKER.light, string>>,
+): Theme {
+  return {
+    calendarBackground: t.color.surface,
+    monthTextColor: t.color.textPrimary,
+    textMonthFontWeight: '700',
+    textSectionTitleColor: t.color.textSecondary,
+    dayTextColor: t.color.textPrimary,
+    textDisabledColor: pal.disabledDayText,
+    todayTextColor: t.color.primaryFg,
+    selectedDayBackgroundColor: t.color.primary,
+    selectedDayTextColor: t.color.textOnPrimary,
+    arrowColor: t.color.primaryFg,
+    disabledArrowColor: t.color.border,
+    textDayFontSize: 15,
+    textMonthFontSize: 18,
+    textDayHeaderFontSize: 12,
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Component
@@ -156,6 +169,10 @@ export function DatePickerField({
   testID,
 }: DatePickerFieldProps): JSX.Element {
   const [open, setOpen] = useState(false);
+  const styles = useStyles();
+  const t = useAppTheme();
+  const pal = usePalette(DATE_PICKER);
+  const calendarTheme = useMemo(() => buildCalendarTheme(t, pal), [t, pal]);
 
   const label = displayLabel(value);
 
@@ -174,11 +191,11 @@ export function DatePickerField({
     return {
       [value]: {
         selected: true,
-        selectedColor: theme.color.primary,
-        selectedTextColor: theme.color.textOnPrimary,
+        selectedColor: t.color.primary,
+        selectedTextColor: t.color.textOnPrimary,
       },
     };
-  }, [value]);
+  }, [value, t]);
 
   const openPicker = (): void => {
     if (disabled) return;
@@ -216,7 +233,7 @@ export function DatePickerField({
         <Ionicons
           name="calendar-outline"
           size={20}
-          color={theme.color.textSecondary}
+          color={t.color.textSecondary}
         />
       </Pressable>
 
@@ -232,6 +249,7 @@ export function DatePickerField({
             testID={testID ? `${testID}-calendar` : undefined}
           >
             <Calendar
+              key={t.scheme}
               current={initialMonth}
               onDayPress={onDayPress}
               markedDates={marked}
@@ -261,52 +279,53 @@ export function DatePickerField({
 // Styles
 // ---------------------------------------------------------------------------
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   field: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     borderWidth: 1,
-    borderColor: theme.color.border,
-    borderRadius: theme.radius.md,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.md,
-    backgroundColor: theme.color.surfaceAlt,
+    borderColor: t.color.border,
+    borderRadius: t.radius.md,
+    paddingHorizontal: t.spacing.md,
+    paddingVertical: t.spacing.md,
+    backgroundColor: t.color.surfaceAlt,
   },
   fieldPressed: {
-    borderColor: theme.color.borderStrong,
+    borderColor: t.color.borderStrong,
   },
   fieldDisabled: {
     opacity: 0.5,
   },
   fieldText: {
     fontSize: 16,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   fieldPlaceholder: {
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(31, 18, 53, 0.5)',
+    backgroundColor: DATE_PICKER[t.scheme].scrim,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: theme.spacing.xl,
+    padding: t.spacing.xl,
   },
   card: {
-    backgroundColor: theme.color.surface,
-    borderRadius: theme.radius.lg,
-    padding: theme.spacing.lg,
+    backgroundColor: t.color.surface,
+    borderRadius: t.radius.lg,
+    padding: t.spacing.lg,
     width: '100%',
     maxWidth: 360,
-    ...theme.shadow.floating,
+    ...t.shadow.floating,
+    ...t.outline.card,
   },
   actions: {
     flexDirection: 'row',
-    marginTop: theme.spacing.md,
+    marginTop: t.spacing.md,
   },
   flexBtn: {
     flexGrow: 1,
     flexBasis: 0,
   },
-});
+}));

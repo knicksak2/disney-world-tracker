@@ -33,7 +33,10 @@ import type {
 import { EXPERIENCE_CATEGORIES } from '@dwt/shared';
 
 import { ApiError, apiRequest } from '../../api/client';
-import { theme, categoryVisual } from '../../theme/theme';
+import { withAlpha } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme } from '../../theme/useAppTheme';
+import { EXPERIENCE_LIST_DETAIL } from './ExperienceListDetailScreen.palette';
 import { Badge, Card, GradientHeader, ScreenContainer } from '../../theme/components';
 import { useOpenExperience } from '../navigation/experienceNavigation';
 import LogVisitModal from '../catalog/LogVisitModal';
@@ -87,6 +90,8 @@ function AddItemsCatalogSearch({
   readonly existingExperienceIds: ReadonlySet<string>;
   readonly onAdded: () => void;
 }): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const [searchInput, setSearchInput] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [pendingId, setPendingId] = useState<string | null>(null);
@@ -145,12 +150,13 @@ function AddItemsCatalogSearch({
   return (
     <View style={styles.addItemsSearchWrap} testID="experience-list-add-items-search">
       <View style={styles.addItemsSearchInputWrap}>
-        <Ionicons name="search" size={18} color={theme.color.textSecondary} />
+        <Ionicons name="search" size={18} color={t.color.textSecondary} />
         <TextInput
           value={searchInput}
           onChangeText={setSearchInput}
           placeholder="Search rides, shows, and more..."
-          placeholderTextColor={theme.color.textSecondary}
+          placeholderTextColor={t.color.textSecondary}
+          keyboardAppearance={t.scheme}
           style={styles.addItemsSearchInput}
           testID="experience-list-add-items-search-input"
         />
@@ -166,7 +172,7 @@ function AddItemsCatalogSearch({
             testID="experience-list-add-items-clear-btn"
             style={styles.clearSearchBtn}
           >
-            <Ionicons name="close-circle" size={18} color={theme.color.textSecondary} />
+            <Ionicons name="close-circle" size={18} color={t.color.textSecondary} />
           </Pressable>
         ) : null}
       </View>
@@ -183,7 +189,7 @@ function AddItemsCatalogSearch({
           (restaurants aren&apos;t added here).
         </Text>
       ) : searchQuery.isLoading ? (
-        <ActivityIndicator color={theme.color.primary} style={styles.addItemsLoading} />
+        <ActivityIndicator color={t.color.primaryFg} style={styles.addItemsLoading} />
       ) : results.length === 0 ? (
         <Text style={styles.addItemsHintText} testID="experience-list-add-items-empty">
           No matching experiences found.
@@ -193,9 +199,9 @@ function AddItemsCatalogSearch({
           {results.map((experience) => {
             const alreadyOnList = existingExperienceIds.has(experience.id) || addedIds.has(experience.id);
             const visual =
-              experience.category in categoryVisual
-                ? categoryVisual[experience.category as keyof typeof categoryVisual]
-                : { label: experience.category, tint: theme.color.textSecondary };
+              experience.category in t.categoryVisual
+                ? t.categoryVisual[experience.category as keyof typeof t.categoryVisual]
+                : { label: experience.category, tint: t.color.textSecondary };
             return (
               <Pressable
                 key={experience.id}
@@ -220,16 +226,16 @@ function AddItemsCatalogSearch({
                   <View style={styles.addItemsResultBadges}>
                     <Badge label={visual.label} color={visual.tint} />
                     {experience.park !== null ? (
-                      <Badge label={experience.park} color={theme.color.primary} />
+                      <Badge label={experience.park} color={t.color.primaryFg} />
                     ) : null}
                   </View>
                 </View>
                 {pendingId === experience.id ? (
-                  <ActivityIndicator color={theme.color.primary} />
+                  <ActivityIndicator color={t.color.primaryFg} />
                 ) : alreadyOnList ? (
                   <Text style={styles.addItemsAddedTag}>Added</Text>
                 ) : (
-                  <Ionicons name="add-circle-outline" size={22} color={theme.color.primary} />
+                  <Ionicons name="add-circle-outline" size={22} color={t.color.primaryFg} />
                 )}
               </Pressable>
             );
@@ -250,6 +256,8 @@ type ExperienceListDetailRouteProp = RouteProp<
 >;
 
 export default function ExperienceListDetailScreen(): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const route = useRoute<ExperienceListDetailRouteProp>();
   const navigation = useNavigation<NativeStackNavigationProp<any>>();
   const openExperience = useOpenExperience();
@@ -609,7 +617,7 @@ export default function ExperienceListDetailScreen(): JSX.Element {
                   <Ionicons
                     name="reorder-three"
                     size={22}
-                    color={theme.color.textSecondary}
+                    color={t.color.textSecondary}
                   />
                 </Pressable>
               ) : null}
@@ -669,7 +677,7 @@ export default function ExperienceListDetailScreen(): JSX.Element {
                 accessibilityLabel={`Log a visit to ${item.name}`}
                 testID={`experience-list-item-log-visit-${item.experienceId}`}
               >
-                <Ionicons name="checkmark-circle-outline" size={18} color={theme.color.primary} />
+                <Ionicons name="checkmark-circle-outline" size={18} color={t.color.primaryFg} />
               </Pressable>
 
               {/* Delete action (Requirement 9.7, 11.1) */}
@@ -681,7 +689,7 @@ export default function ExperienceListDetailScreen(): JSX.Element {
                   accessibilityLabel={`Remove ${item.name} from list`}
                   testID={`experience-list-item-delete-${item.experienceId}`}
                 >
-                  <Ionicons name="trash-outline" size={18} color={theme.color.danger} />
+                  <Ionicons name="trash-outline" size={18} color={t.color.danger} />
                 </Pressable>
               ) : null}
             </View>
@@ -697,6 +705,8 @@ export default function ExperienceListDetailScreen(): JSX.Element {
       visitSummaryByExperienceId,
       firstDoneIndex,
       doneItemCount,
+      styles,
+      t,
     ],
   );
 
@@ -704,7 +714,7 @@ export default function ExperienceListDetailScreen(): JSX.Element {
   if (listQuery.isLoading) {
     return (
       <ScreenContainer style={styles.centerContainer}>
-        <ActivityIndicator color={theme.color.primary} size="large" />
+        <ActivityIndicator color={t.color.primaryFg} size="large" />
       </ScreenContainer>
     );
   }
@@ -719,7 +729,7 @@ export default function ExperienceListDetailScreen(): JSX.Element {
           onBack={() => navigation.goBack()}
         />
         <View style={styles.unavailableWrap} testID="experience-list-unavailable-notice">
-          <Ionicons name="alert-circle-outline" size={48} color={theme.color.danger} />
+          <Ionicons name="alert-circle-outline" size={48} color={t.color.danger} />
           <Text style={styles.unavailableTitle}>No longer available</Text>
           <Text style={styles.unavailableBody}>
             {transientNotice ?? 'This experience list does not exist or is no longer shared with you.'}
@@ -759,7 +769,7 @@ export default function ExperienceListDetailScreen(): JSX.Element {
           {/* Stale write message (Requirement 11.3) */}
           {staleWriteNotice ? (
             <View style={styles.staleNotice} testID="experience-list-stale-write-message">
-              <Ionicons name="information-circle" size={18} color={theme.color.primary} />
+              <Ionicons name="information-circle" size={18} color={t.color.primaryFg} />
               <Text style={styles.staleNoticeText}>{staleWriteNotice}</Text>
             </View>
           ) : null}
@@ -788,7 +798,7 @@ export default function ExperienceListDetailScreen(): JSX.Element {
                       <Ionicons
                         name={list.visibility === 'public' ? 'globe-outline' : 'lock-closed-outline'}
                         size={12}
-                        color={theme.color.primary}
+                        color={t.color.primaryFg}
                       />
                       <Text style={styles.visibilityBadgeText}>
                         {list.visibility === 'public' ? 'Public' : 'Private'}
@@ -807,7 +817,7 @@ export default function ExperienceListDetailScreen(): JSX.Element {
                 <View style={styles.roleBadgeContainer}>
                   <Badge
                     label={list.myRole === 'owner' ? 'Owner' : list.myRole === 'editor' ? 'Editor' : 'Viewer'}
-                    color={list.myRole === 'editor' ? theme.color.primary : theme.color.textSecondary}
+                    color={list.myRole === 'editor' ? t.color.primaryFg : t.color.textSecondary}
                   />
                 </View>
                 {isOwner ? (
@@ -822,7 +832,7 @@ export default function ExperienceListDetailScreen(): JSX.Element {
                     hitSlop={8}
                     testID="experience-list-options-menu-btn"
                   >
-                    <Ionicons name="ellipsis-horizontal" size={18} color={theme.color.textSecondary} />
+                    <Ionicons name="ellipsis-horizontal" size={18} color={t.color.textSecondary} />
                   </Pressable>
                 ) : null}
               </View>
@@ -845,7 +855,7 @@ export default function ExperienceListDetailScreen(): JSX.Element {
                 <Ionicons
                   name={list.liked ? 'heart' : 'heart-outline'}
                   size={16}
-                  color={list.liked ? theme.color.danger : theme.color.textSecondary}
+                  color={list.liked ? t.color.danger : t.color.textSecondary}
                 />
                 <Text style={[styles.actionButtonText, list.liked && styles.actionButtonTextLiked]}>
                   {list.likeCount}
@@ -869,7 +879,7 @@ export default function ExperienceListDetailScreen(): JSX.Element {
                   <Ionicons
                     name={list.saved ? 'bookmark' : 'bookmark-outline'}
                     size={16}
-                    color={list.saved ? theme.color.primary : theme.color.textSecondary}
+                    color={list.saved ? t.color.primaryFg : t.color.textSecondary}
                   />
                   <Text style={[styles.actionButtonText, list.saved && styles.actionButtonTextSaved]}>
                     {list.saved ? 'Saved' : 'Save'}
@@ -886,7 +896,7 @@ export default function ExperienceListDetailScreen(): JSX.Element {
                   accessibilityLabel="Manage sharing"
                   testID="experience-list-manage-sharing-btn"
                 >
-                  <Ionicons name="people-outline" size={16} color={theme.color.primary} />
+                  <Ionicons name="people-outline" size={16} color={t.color.primaryFg} />
                   <Text style={styles.actionButtonText}>Share</Text>
                 </Pressable>
               ) : null}
@@ -908,7 +918,7 @@ export default function ExperienceListDetailScreen(): JSX.Element {
                   <Ionicons
                     name={list.pinnedAt !== null ? 'pin' : 'pin-outline'}
                     size={16}
-                    color={list.pinnedAt !== null ? theme.color.primary : theme.color.textSecondary}
+                    color={list.pinnedAt !== null ? t.color.primaryFg : t.color.textSecondary}
                   />
                   <Text
                     style={[
@@ -935,7 +945,7 @@ export default function ExperienceListDetailScreen(): JSX.Element {
                 accessibilityLabel="Add items to this list"
                 testID="experience-list-add-items-btn"
               >
-                <Ionicons name="add" size={20} color="#fff" />
+                <Ionicons name="add" size={20} color={t.color.textOnPrimary} />
                 <Text style={styles.addItemsBtnText}>Add items</Text>
               </Pressable>
             ) : null}
@@ -945,7 +955,7 @@ export default function ExperienceListDetailScreen(): JSX.Element {
               react-native-draggable-flatlist's drag handle. */}
           {list.items.length === 0 ? (
             <View style={styles.emptyItemsWrap}>
-              <Ionicons name="sparkles-outline" size={40} color={theme.color.textSecondary} />
+              <Ionicons name="sparkles-outline" size={40} color={t.color.textSecondary} />
               <Text style={styles.emptyItemsText}>No items in this list yet.</Text>
               {canEdit ? (
                 <Pressable
@@ -962,6 +972,7 @@ export default function ExperienceListDetailScreen(): JSX.Element {
               keyExtractor={(item) => item.experienceId}
               scrollEnabled={false}
               renderItem={renderDraggableItem}
+              extraData={t.scheme}
               onDragEnd={handleDragEnd}
             />
           )}
@@ -982,7 +993,7 @@ export default function ExperienceListDetailScreen(): JSX.Element {
           testID="experience-list-add-items-modal"
         >
           <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
             style={styles.modalBackdrop}
           >
             <View style={styles.modalContainer}>
@@ -997,7 +1008,7 @@ export default function ExperienceListDetailScreen(): JSX.Element {
                   accessibilityLabel="Close add items"
                   testID="close-experience-list-add-items-btn"
                 >
-                  <Ionicons name="close" size={24} color={theme.color.textSecondary} />
+                  <Ionicons name="close" size={24} color={t.color.textSecondary} />
                 </Pressable>
               </View>
               {addItemsModalVisible ? (
@@ -1065,7 +1076,7 @@ export default function ExperienceListDetailScreen(): JSX.Element {
                 <Ionicons
                   name={list.visibility === 'public' ? 'lock-closed-outline' : 'globe-outline'}
                   size={20}
-                  color={theme.color.textPrimary}
+                  color={t.color.textPrimary}
                 />
                 <Text style={styles.optionsMenuItemText}>
                   Make {list.visibility === 'public' ? 'Private' : 'Public'}
@@ -1088,7 +1099,7 @@ export default function ExperienceListDetailScreen(): JSX.Element {
                 accessibilityLabel="Rename list"
                 testID="experience-list-option-rename-btn"
               >
-                <Ionicons name="pencil-outline" size={20} color={theme.color.textPrimary} />
+                <Ionicons name="pencil-outline" size={20} color={t.color.textPrimary} />
                 <Text style={styles.optionsMenuItemText}>Rename List</Text>
               </Pressable>
 
@@ -1103,7 +1114,7 @@ export default function ExperienceListDetailScreen(): JSX.Element {
                 accessibilityLabel="Delete list"
                 testID="experience-list-option-delete-btn"
               >
-                <Ionicons name="trash-outline" size={20} color={theme.color.danger} />
+                <Ionicons name="trash-outline" size={20} color={t.color.danger} />
                 <Text style={[styles.optionsMenuItemText, styles.optionsMenuItemDangerText]}>
                   Delete List
                 </Text>
@@ -1138,7 +1149,7 @@ export default function ExperienceListDetailScreen(): JSX.Element {
           testID="rename-experience-list-modal"
         >
           <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
             style={styles.renameModalBackdrop}
           >
             <Pressable
@@ -1157,7 +1168,8 @@ export default function ExperienceListDetailScreen(): JSX.Element {
                 value={renameValue}
                 onChangeText={setRenameValue}
                 placeholder="List name"
-                placeholderTextColor={theme.color.textSecondary}
+                placeholderTextColor={t.color.textSecondary}
+                keyboardAppearance={t.scheme}
                 style={styles.renameInput}
                 autoFocus
                 testID="rename-experience-list-input"
@@ -1223,14 +1235,14 @@ export default function ExperienceListDetailScreen(): JSX.Element {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   centerContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
   content: {
-    padding: theme.spacing.md,
+    padding: t.spacing.md,
     gap: 12,
   },
   unavailableWrap: {
@@ -1243,22 +1255,22 @@ const styles = StyleSheet.create({
   unavailableTitle: {
     fontSize: 22,
     fontWeight: '700',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   unavailableBody: {
     fontSize: 15,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     textAlign: 'center',
   },
   backBtn: {
     marginTop: 12,
-    backgroundColor: theme.color.primary,
+    backgroundColor: t.color.primary,
     paddingHorizontal: 20,
     paddingVertical: 10,
-    borderRadius: theme.radius.md,
+    borderRadius: t.radius.md,
   },
   backBtnText: {
-    color: '#fff',
+    color: t.color.textOnPrimary,
     fontWeight: '600',
     fontSize: 15,
   },
@@ -1266,20 +1278,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: 'rgba(107, 70, 193, 0.1)',
+    backgroundColor: EXPERIENCE_LIST_DETAIL[t.scheme].staleNoticeBg,
     padding: 10,
-    borderRadius: theme.radius.md,
+    borderRadius: t.radius.md,
     borderWidth: 1,
-    borderColor: theme.color.primary,
+    borderColor: t.color.primaryFg,
   },
   staleNoticeText: {
     fontSize: 13,
-    color: theme.color.primary,
+    color: t.color.primaryFg,
     fontWeight: '500',
     flex: 1,
   },
   headerCard: {
-    padding: theme.spacing.md,
+    padding: t.spacing.md,
     gap: 12,
   },
   headerTop: {
@@ -1294,11 +1306,11 @@ const styles = StyleSheet.create({
   listName: {
     fontSize: 22,
     fontWeight: '700',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   metaText: {
     fontSize: 11,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   metaRow: {
     flexDirection: 'row',
@@ -1312,8 +1324,8 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingVertical: 2,
     paddingHorizontal: 6,
-    borderRadius: theme.radius.pill,
-    backgroundColor: 'rgba(91, 42, 134, 0.08)',
+    borderRadius: t.radius.pill,
+    backgroundColor: withAlpha(t.color.primary, 0.08),
   },
   visibilityBadgePressed: {
     opacity: 0.7,
@@ -1321,7 +1333,7 @@ const styles = StyleSheet.create({
   visibilityBadgeText: {
     fontSize: 11,
     fontWeight: '600',
-    color: theme.color.primary,
+    color: t.color.primaryFg,
   },
   roleBadgeContainer: {
     marginTop: 2,
@@ -1333,8 +1345,8 @@ const styles = StyleSheet.create({
   },
   optionsMenuBtn: {
     padding: 6,
-    borderRadius: theme.radius.pill,
-    backgroundColor: theme.color.surfaceAlt,
+    borderRadius: t.radius.pill,
+    backgroundColor: t.color.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1355,49 +1367,49 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingVertical: 5,
     paddingHorizontal: 8,
-    borderRadius: theme.radius.pill,
-    backgroundColor: theme.color.surfaceAlt,
+    borderRadius: t.radius.pill,
+    backgroundColor: t.color.surfaceAlt,
   },
   actionButtonPressed: {
     opacity: 0.7,
   },
   actionButtonLiked: {
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    backgroundColor: EXPERIENCE_LIST_DETAIL[t.scheme].likedBg,
   },
   actionButtonSaved: {
-    backgroundColor: 'rgba(91, 42, 134, 0.1)',
+    backgroundColor: withAlpha(t.color.primary, 0.1),
   },
   actionButtonPinnedActive: {
-    backgroundColor: 'rgba(91, 42, 134, 0.1)',
+    backgroundColor: withAlpha(t.color.primary, 0.1),
   },
   actionButtonText: {
     fontSize: 12,
     fontWeight: '600',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   actionButtonTextLiked: {
-    color: theme.color.danger,
+    color: t.color.danger,
   },
   actionButtonTextSaved: {
-    color: theme.color.primary,
+    color: t.color.primaryFg,
   },
   actionButtonTextPinned: {
-    color: theme.color.primary,
+    color: t.color.primaryFg,
   },
   optionsMenuBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: theme.spacing.lg,
+    padding: t.spacing.lg,
   },
   optionsMenuContainer: {
     width: '100%',
     maxWidth: 340,
-    backgroundColor: theme.color.surface,
-    borderRadius: theme.radius.lg,
-    padding: theme.spacing.md,
-    ...theme.shadow.card,
+    backgroundColor: t.color.surface,
+    borderRadius: t.radius.lg,
+    padding: t.spacing.md,
+    ...t.shadow.card,
   },
   optionsMenuHeader: {
     paddingVertical: 4,
@@ -1406,15 +1418,15 @@ const styles = StyleSheet.create({
   optionsMenuTitle: {
     fontSize: 17,
     fontWeight: '700',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   optionsMenuSubtitle: {
     fontSize: 13,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   optionsMenuDivider: {
     height: 1,
-    backgroundColor: theme.color.border,
+    backgroundColor: t.color.border,
     marginVertical: 8,
   },
   optionsMenuItem: {
@@ -1423,58 +1435,58 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingVertical: 10,
     paddingHorizontal: 8,
-    borderRadius: theme.radius.md,
+    borderRadius: t.radius.md,
   },
   optionsMenuItemPressed: {
-    backgroundColor: theme.color.surfaceAlt,
+    backgroundColor: t.color.surfaceAlt,
   },
   optionsMenuItemText: {
     fontSize: 15,
     fontWeight: '600',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   optionsMenuItemDangerText: {
-    color: theme.color.danger,
+    color: t.color.danger,
   },
   optionsMenuCancelBtn: {
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 10,
-    borderRadius: theme.radius.md,
+    borderRadius: t.radius.md,
   },
   optionsMenuCancelText: {
     fontSize: 15,
     fontWeight: '600',
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   renameModalBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: theme.spacing.lg,
+    padding: t.spacing.lg,
   },
   renameModalContainer: {
     width: '100%',
     maxWidth: 340,
-    backgroundColor: theme.color.surface,
-    borderRadius: theme.radius.lg,
-    padding: theme.spacing.lg,
+    backgroundColor: t.color.surface,
+    borderRadius: t.radius.lg,
+    padding: t.spacing.lg,
     gap: 14,
-    ...theme.shadow.card,
+    ...t.shadow.card,
   },
   renameModalTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   renameInput: {
     fontSize: 15,
-    color: theme.color.textPrimary,
-    backgroundColor: theme.color.surfaceAlt,
-    borderRadius: theme.radius.md,
+    color: t.color.textPrimary,
+    backgroundColor: t.color.surfaceAlt,
+    borderRadius: t.radius.md,
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
@@ -1487,32 +1499,32 @@ const styles = StyleSheet.create({
   renameCancelBtn: {
     paddingVertical: 8,
     paddingHorizontal: 14,
-    borderRadius: theme.radius.md,
+    borderRadius: t.radius.md,
   },
   renameCancelBtnText: {
     fontSize: 14,
     fontWeight: '600',
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   renameSubmitBtn: {
-    backgroundColor: theme.color.primary,
+    backgroundColor: t.color.primary,
     paddingVertical: 8,
     paddingHorizontal: 16,
-    borderRadius: theme.radius.md,
+    borderRadius: t.radius.md,
   },
   renameSubmitBtnDisabled: {
     opacity: 0.5,
   },
   renameSubmitBtnText: {
-    color: '#fff',
+    color: t.color.textOnPrimary,
     fontSize: 14,
     fontWeight: '600',
   },
   addItemsBtn: {
-    backgroundColor: theme.color.primary,
+    backgroundColor: t.color.primary,
   },
   addItemsBtnText: {
-    color: '#fff',
+    color: t.color.textOnPrimary,
     fontWeight: '600',
     fontSize: 13,
   },
@@ -1527,7 +1539,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   emptyItemsWrap: {
     padding: 36,
@@ -1536,28 +1548,28 @@ const styles = StyleSheet.create({
   },
   emptyItemsText: {
     fontSize: 15,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   emptyAddBtn: {
     marginTop: 8,
-    backgroundColor: theme.color.primary,
+    backgroundColor: t.color.primary,
     paddingHorizontal: 16,
     paddingVertical: 8,
-    borderRadius: theme.radius.md,
+    borderRadius: t.radius.md,
   },
   emptyAddBtnText: {
-    color: '#fff',
+    color: t.color.textOnPrimary,
     fontWeight: '600',
   },
   // Task 13.3: mirrors `TripPlannedListScreen`'s `doneSection`/`doneHeading`
   // visual pattern (own testID/style names — not the same instance).
   doneSection: {
-    marginTop: theme.spacing.lg,
-    marginBottom: theme.spacing.sm,
+    marginTop: t.spacing.lg,
+    marginBottom: t.spacing.sm,
   },
   doneHeading: {
-    ...theme.typography.subtitle,
-    color: theme.color.textSecondary,
+    ...t.typography.subtitle,
+    color: t.color.textSecondary,
   },
   itemCard: {
     padding: 12,
@@ -1568,7 +1580,7 @@ const styles = StyleSheet.create({
   },
   itemCardDragging: {
     opacity: 0.85,
-    ...theme.shadow.card,
+    ...t.shadow.card,
   },
   itemCardMain: {
     flexDirection: 'row',
@@ -1584,22 +1596,22 @@ const styles = StyleSheet.create({
   itemName: {
     fontSize: 15,
     fontWeight: '600',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   itemMeta: {
     fontSize: 11,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     marginTop: 2,
   },
   visitBadge: {
     fontSize: 11,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     fontWeight: '600',
     marginTop: 4,
   },
   attributionLabel: {
     fontSize: 11,
-    color: theme.color.primary,
+    color: t.color.primaryFg,
     fontWeight: '500',
     marginTop: 4,
   },
@@ -1620,9 +1632,9 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalContainer: {
-    backgroundColor: theme.color.surface,
-    borderTopLeftRadius: theme.radius.lg,
-    borderTopRightRadius: theme.radius.lg,
+    backgroundColor: t.color.surface,
+    borderTopLeftRadius: t.radius.lg,
+    borderTopRightRadius: t.radius.lg,
     maxHeight: '80%',
     paddingBottom: 24,
   },
@@ -1630,26 +1642,26 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: theme.spacing.md,
+    padding: t.spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: theme.color.border,
+    borderBottomColor: t.color.border,
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   addItemsSearchWrap: {
-    paddingHorizontal: theme.spacing.md,
-    paddingTop: theme.spacing.sm,
-    paddingBottom: theme.spacing.md,
+    paddingHorizontal: t.spacing.md,
+    paddingTop: t.spacing.sm,
+    paddingBottom: t.spacing.md,
   },
   addItemsSearchInputWrap: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: theme.color.surfaceAlt,
-    borderRadius: theme.radius.md,
+    backgroundColor: t.color.surfaceAlt,
+    borderRadius: t.radius.md,
     paddingHorizontal: 12,
     paddingVertical: 8,
     marginBottom: 12,
@@ -1657,19 +1669,19 @@ const styles = StyleSheet.create({
   addItemsSearchInput: {
     flex: 1,
     fontSize: 15,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   clearSearchBtn: {
     padding: 4,
   },
   addItemsHintText: {
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     fontSize: 13,
     textAlign: 'center',
     padding: 16,
   },
   addItemsErrorText: {
-    color: theme.color.danger,
+    color: t.color.danger,
     fontSize: 13,
     marginBottom: 8,
   },
@@ -1684,10 +1696,10 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 4,
     borderBottomWidth: 1,
-    borderBottomColor: theme.color.border,
+    borderBottomColor: t.color.border,
   },
   addItemsResultRowPressed: {
-    backgroundColor: theme.color.surfaceAlt,
+    backgroundColor: t.color.surfaceAlt,
   },
   addItemsResultRowDisabled: {
     opacity: 0.5,
@@ -1698,7 +1710,7 @@ const styles = StyleSheet.create({
   addItemsResultName: {
     fontSize: 14,
     fontWeight: '600',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   addItemsResultBadges: {
     flexDirection: 'row',
@@ -1708,6 +1720,6 @@ const styles = StyleSheet.create({
   addItemsAddedTag: {
     fontSize: 12,
     fontWeight: '600',
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
-});
+}));

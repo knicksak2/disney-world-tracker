@@ -17,9 +17,9 @@
  */
 
 import React from 'react';
-import { StyleSheet, Text } from 'react-native';
+import { Text } from 'react-native';
 
-import { theme } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
 
 // ---------------------------------------------------------------------------
 // Component
@@ -33,6 +33,7 @@ export function CompactEmptyState({
   readonly message: string;
   readonly testID?: string;
 }): JSX.Element {
+  const styles = useStyles();
   // A plain, non-interactive Text node — deliberately not wrapped in a
   // Pressable and given no accessibility role/action, so it offers no
   // navigation affordance (R11.4).
@@ -51,11 +52,11 @@ export function CompactEmptyState({
 // Styles
 // ---------------------------------------------------------------------------
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   text: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
     fontStyle: 'italic',
-    paddingVertical: theme.spacing.sm,
+    paddingVertical: t.spacing.sm,
   },
-});
+}));

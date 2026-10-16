@@ -26,7 +26,7 @@
  */
 
 import React from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, ScrollView, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useQuery } from '@tanstack/react-query';
 
@@ -38,7 +38,8 @@ import {
   PrimaryButton,
   ScreenContainer,
 } from '../../theme/components';
-import { theme } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme } from '../../theme/useAppTheme';
 
 import { InterestsSection } from './components';
 
@@ -73,6 +74,8 @@ async function fetchOwnStats(): Promise<StatsResponse> {
 // ---------------------------------------------------------------------------
 
 export default function InterestsDetailScreen(): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const navigation = useNavigation();
 
   // Read the shared cached snapshot (R4.2). A warm cache renders with no
@@ -101,7 +104,7 @@ export default function InterestsDetailScreen(): JSX.Element {
       <ScreenContainer>
         {header}
         <View style={styles.center} testID="interests-detail-loading">
-          <ActivityIndicator color={theme.color.primary} />
+          <ActivityIndicator color={t.color.primaryFg} />
         </View>
       </ScreenContainer>
     );
@@ -159,18 +162,18 @@ export default function InterestsDetailScreen(): JSX.Element {
 // Styles
 // ---------------------------------------------------------------------------
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   scrollContent: {
-    padding: theme.spacing.lg,
-    gap: theme.spacing.xl,
+    padding: t.spacing.lg,
+    gap: t.spacing.xl,
   },
   center: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: theme.spacing.xl,
+    padding: t.spacing.xl,
   },
   retryBtn: {
-    marginTop: theme.spacing.lg,
+    marginTop: t.spacing.lg,
   },
-});
+}));

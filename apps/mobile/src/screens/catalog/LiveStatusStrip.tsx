@@ -11,14 +11,17 @@
 //   - Live error: renders live-unavailable indicator
 
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type {
   ExperienceCategory,
   LiveDetailResponseDTO,
 } from '@dwt/shared';
 
-import { theme } from '../../theme/theme';
+import { withAlpha } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme, usePalette } from '../../theme/useAppTheme';
+import { STRIP } from './LiveStatusStrip.palette';
 import { liveSectionFor, NO_LIVE_SHAPE, type LiveShape } from './gating';
 import { formatParkTime } from './live/parkTime';
 import { sortedShowtimes } from './live/liveView';
@@ -38,6 +41,9 @@ export default function LiveStatusStrip({
   liveQuery,
   now = new Date(),
 }: LiveStatusStripProps): JSX.Element | null {
+  const styles = useStyles();
+  const t = useAppTheme();
+  const pal = usePalette(STRIP);
   const detail = liveQuery.data?.liveDetail;
   const liveShape: LiveShape = detail
     ? {
@@ -63,7 +69,7 @@ export default function LiveStatusStrip({
         testID="live-status-strip-unavailable"
         accessibilityLabel="Live information currently unavailable"
       >
-        <Ionicons name="cloud-offline-outline" size={16} color={theme.color.danger} />
+        <Ionicons name="cloud-offline-outline" size={16} color={t.color.danger} />
         <Text style={styles.unavailableText} testID="live-unavailable">
           Live information unavailable
         </Text>
@@ -114,7 +120,7 @@ export default function LiveStatusStrip({
           <Ionicons
             name={isOperating ? 'time' : 'alert-circle'}
             size={18}
-            color={isOperating ? theme.color.primary : theme.color.danger}
+            color={isOperating ? t.color.primaryFg : t.color.danger}
           />
           <Text style={styles.headlineText} testID="live-status-headline">
             {waitText}
@@ -123,7 +129,7 @@ export default function LiveStatusStrip({
 
         {llText ? (
           <View style={styles.llBadge} testID="live-status-ll">
-            <Ionicons name="flash" size={13} color="#92400e" />
+            <Ionicons name="flash" size={13} color={pal.llIcon} />
             <Text style={styles.llBadgeText}>{llText}</Text>
           </View>
         ) : null}
@@ -160,7 +166,7 @@ export default function LiveStatusStrip({
         accessibilityLabel={`Dining status: ${displayText}`}
       >
         <View style={styles.headlineGroup}>
-          <Ionicons name="restaurant" size={17} color={theme.color.primary} />
+          <Ionicons name="restaurant" size={17} color={t.color.primaryFg} />
           <Text style={styles.headlineText} testID="live-status-headline">
             {displayText}
           </Text>
@@ -191,7 +197,7 @@ export default function LiveStatusStrip({
         accessibilityLabel={`Showtime status: ${headline}`}
       >
         <View style={styles.headlineGroup}>
-          <Ionicons name="musical-notes" size={17} color={theme.color.primary} />
+          <Ionicons name="musical-notes" size={17} color={t.color.primaryFg} />
           <Text style={styles.headlineText} testID="live-status-headline">
             {headline}
           </Text>
@@ -203,12 +209,12 @@ export default function LiveStatusStrip({
   return null;
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    backgroundColor: withAlpha(t.color.surface, 0.95),
     borderRadius: 999,
     paddingVertical: 6,
     paddingHorizontal: 12,
@@ -216,27 +222,27 @@ const styles = StyleSheet.create({
     marginTop: 2,
     marginBottom: 2,
     borderWidth: 1,
-    borderColor: '#e6def2',
-    shadowColor: '#190c2d',
+    borderColor: STRIP[t.scheme].border,
+    shadowColor: STRIP[t.scheme].shadow,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04,
     shadowRadius: 4,
     elevation: 1,
   },
   unavailableContainer: {
-    backgroundColor: '#fff1f2',
-    borderColor: '#fecdd3',
+    backgroundColor: STRIP[t.scheme].unavailableBg,
+    borderColor: STRIP[t.scheme].unavailableBorder,
     justifyContent: 'flex-start',
     gap: 8,
   },
   unavailableText: {
     fontSize: 12,
     fontWeight: '700',
-    color: theme.color.danger,
+    color: t.color.danger,
   },
   mutedText: {
     fontSize: 12,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   headlineGroup: {
     flexDirection: 'row',
@@ -246,22 +252,22 @@ const styles = StyleSheet.create({
   headlineText: {
     fontSize: 12,
     fontWeight: '800',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   llBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#fef3c7',
+    backgroundColor: STRIP[t.scheme].llBg,
     paddingVertical: 3,
     paddingHorizontal: 8,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#fde68a',
+    borderColor: STRIP[t.scheme].llBorder,
   },
   llBadgeText: {
     fontSize: 10.5,
     fontWeight: '800',
-    color: '#92400e',
+    color: STRIP[t.scheme].llText,
   },
-});
+}));

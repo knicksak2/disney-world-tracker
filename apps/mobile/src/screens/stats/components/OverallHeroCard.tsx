@@ -20,8 +20,11 @@ import { Ionicons } from '@expo/vector-icons';
 import type { ActivityStatistics, CompletionCell } from '../../../api/statsTypes';
 import { CompleteBadge, ProgressRing } from '../../../theme/charts';
 import { Card } from '../../../theme/components';
-import { theme } from '../../../theme/theme';
+import { makeStyles } from '../../../theme/makeStyles';
+import { useAppTheme, usePalette } from '../../../theme/useAppTheme';
 import { displayedPercentLabel } from '../statsView';
+
+import { HERO_METRIC } from './OverallHeroCard.palette';
 
 export interface OverallHeroCardProps {
   /** The overall coverage cell driving the hero ring. */
@@ -53,6 +56,9 @@ export function OverallHeroCard({
   size,
   testID,
 }: OverallHeroCardProps): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
+  const metric = usePalette(HERO_METRIC);
   const complete = overall.completeBadge;
   const hasActivity = Boolean(activity && activity.totalLogs > 0);
   const ringSize = size ?? (hasActivity ? 116 : 168);
@@ -82,8 +88,8 @@ export function OverallHeroCard({
 
           <View style={styles.activityCol} testID="hero-activity-pillar">
             <View style={styles.metricRow}>
-              <View style={[styles.metricIcon, { backgroundColor: '#efe9f7' }]}>
-                <Ionicons name="flash" size={15} color={theme.color.primary} />
+              <View style={[styles.metricIcon, { backgroundColor: t.color.surfaceAlt }]}>
+                <Ionicons name="flash" size={15} color={t.color.primaryFg} />
               </View>
               <View style={styles.metricInfo}>
                 <Text style={styles.metricVal}>{activity!.totalLogs}</Text>
@@ -92,8 +98,8 @@ export function OverallHeroCard({
             </View>
 
             <View style={styles.metricRow}>
-              <View style={[styles.metricIcon, { backgroundColor: '#e8f4ff' }]}>
-                <Ionicons name="calendar" size={15} color="#2f80ed" />
+              <View style={[styles.metricIcon, { backgroundColor: metric.parkDaysBg }]}>
+                <Ionicons name="calendar" size={15} color={metric.parkDaysFg} />
               </View>
               <View style={styles.metricInfo}>
                 <Text style={styles.metricVal}>{activity!.distinctParkDays}</Text>
@@ -102,8 +108,8 @@ export function OverallHeroCard({
             </View>
 
             <View style={styles.metricRow}>
-              <View style={[styles.metricIcon, { backgroundColor: '#fff4e6' }]}>
-                <Ionicons name="repeat" size={15} color="#d9480f" />
+              <View style={[styles.metricIcon, { backgroundColor: metric.repeatBg }]}>
+                <Ionicons name="repeat" size={15} color={metric.repeatFg} />
               </View>
               <View style={styles.metricInfo}>
                 <Text style={styles.metricVal}>
@@ -138,14 +144,14 @@ export function OverallHeroCard({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   card: {
     alignItems: 'center',
-    gap: theme.spacing.md,
+    gap: t.spacing.md,
   },
   label: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
@@ -154,8 +160,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     width: '100%',
-    paddingHorizontal: theme.spacing.sm,
-    gap: theme.spacing.md,
+    paddingHorizontal: t.spacing.sm,
+    gap: t.spacing.md,
   },
   ringCol: {
     alignItems: 'center',
@@ -163,22 +169,22 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   ringMeta: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
     fontSize: 10,
     fontWeight: '600',
   },
   activityCol: {
     flex: 1,
     borderLeftWidth: StyleSheet.hairlineWidth,
-    borderLeftColor: theme.color.border,
-    paddingLeft: theme.spacing.md,
-    gap: theme.spacing.sm,
+    borderLeftColor: t.color.border,
+    paddingLeft: t.spacing.md,
+    gap: t.spacing.sm,
   },
   metricRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.sm,
+    gap: t.spacing.sm,
   },
   metricIcon: {
     width: 28,
@@ -191,20 +197,20 @@ const styles = StyleSheet.create({
     gap: 1,
   },
   metricVal: {
-    ...theme.typography.subtitle,
-    color: theme.color.textPrimary,
+    ...t.typography.subtitle,
+    color: t.color.textPrimary,
     fontWeight: '800',
     lineHeight: 18,
   },
   metricLbl: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
     fontSize: 10,
   },
   count: {
-    ...theme.typography.body,
-    color: theme.color.textSecondary,
+    ...t.typography.body,
+    color: t.color.textSecondary,
     textAlign: 'center',
   },
-});
+}));
 

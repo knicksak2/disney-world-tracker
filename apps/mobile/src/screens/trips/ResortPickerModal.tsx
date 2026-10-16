@@ -12,7 +12,6 @@ import {
   Platform,
   Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   TextInput,
   View,
@@ -20,7 +19,9 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 
-import { theme } from '../../theme/theme';
+import { withAlpha } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme } from '../../theme/useAppTheme';
 import { apiRequest } from '../../api/client';
 
 export interface ResortItem {
@@ -41,6 +42,8 @@ export function ResortPickerModal({
   onSelect,
   onClose,
 }: Props): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const [search, setSearch] = useState('');
 
   const resortsQuery = useQuery<{ resorts: readonly ResortItem[] }>({
@@ -69,23 +72,24 @@ export function ResortPickerModal({
               accessibilityLabel="Close"
               testID="close-resort-picker"
             >
-              <Ionicons name="close" size={24} color={theme.color.textPrimary} />
+              <Ionicons name="close" size={24} color={t.color.textPrimary} />
             </Pressable>
           </View>
 
           <TextInput
             style={styles.searchInput}
             placeholder="Search Disney resorts..."
-            placeholderTextColor={theme.color.textSecondary}
+            placeholderTextColor={t.color.textSecondary}
+            keyboardAppearance={t.scheme}
             value={search}
             onChangeText={setSearch}
             testID="resort-search-input"
           />
 
           {resortsQuery.isLoading ? (
-            <ActivityIndicator style={{ marginTop: 24 }} color={theme.color.primary} />
+            <ActivityIndicator style={{ marginTop: 24 }} color={t.color.primaryFg} />
           ) : (
-            <ScrollView style={styles.list}>
+            <ScrollView style={styles.list} keyboardShouldPersistTaps="handled">
               {filtered.length === 0 ? (
                 <Text style={styles.emptyText}>No matching resorts found.</Text>
               ) : (
@@ -104,13 +108,13 @@ export function ResortPickerModal({
                       <Ionicons
                         name="bed-outline"
                         size={18}
-                        color={isSelected ? theme.color.primary : theme.color.textSecondary}
+                        color={isSelected ? t.color.primaryFg : t.color.textSecondary}
                       />
                       <Text style={[styles.resortName, isSelected && styles.resortNameSelected]}>
                         {resort.name}
                       </Text>
                       {isSelected ? (
-                        <Ionicons name="checkmark" size={18} color={theme.color.primary} />
+                        <Ionicons name="checkmark" size={18} color={t.color.primaryFg} />
                       ) : null}
                     </Pressable>
                   );
@@ -124,14 +128,14 @@ export function ResortPickerModal({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-end',
   },
   content: {
-    backgroundColor: theme.color.surface,
+    backgroundColor: t.color.surface,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 20,
@@ -146,24 +150,24 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 18,
     fontWeight: '700',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   searchInput: {
-    backgroundColor: theme.color.surface,
+    backgroundColor: t.color.surface,
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 14,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
     marginBottom: 12,
   },
   list: {
     maxHeight: 350,
   },
   emptyText: {
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     fontSize: 13,
     textAlign: 'center',
     marginVertical: 20,
@@ -175,19 +179,19 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 8,
     borderBottomWidth: 1,
-    borderBottomColor: theme.color.border,
+    borderBottomColor: t.color.border,
   },
   resortRowSelected: {
-    backgroundColor: 'rgba(91, 42, 134, 0.08)',
+    backgroundColor: withAlpha(t.color.primary, 0.08),
     borderRadius: 8,
   },
   resortName: {
     flex: 1,
     fontSize: 15,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   resortNameSelected: {
     fontWeight: '600',
-    color: theme.color.primary,
+    color: t.color.primaryFg,
   },
-});
+}));

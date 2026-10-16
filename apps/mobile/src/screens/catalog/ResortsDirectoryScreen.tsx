@@ -30,8 +30,11 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { ExperienceDTO, ResortDTO, ResortRecreationItemDTO } from '@dwt/shared';
 import { apiRequest } from '../../api/client';
 import type { RootStackParamList } from '../../navigation/RootNavigator';
-import { theme } from '../../theme/theme';
+import { withAlpha } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme, usePalette } from '../../theme/useAppTheme';
 import { Card, EmptyState, GradientHeader, ScreenContainer } from '../../theme/components';
+import { RESORTS, RESORTS_ART, RESORT_TIER } from './ResortsDirectoryScreen.palette';
 import {
   filterDiningByCategory,
   type DiningCategoryFilter,
@@ -708,6 +711,9 @@ export function HotelPreviewCard({
   onToggleFavorite,
   onSelect,
 }: HotelPreviewCardProps): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
+  const art = usePalette(RESORTS_ART);
   const tier = resort.tier ?? 'Moderate';
   const tierStyle =
     tier === 'Deluxe'
@@ -746,7 +752,7 @@ export function HotelPreviewCard({
           ) : (
             <View style={[styles.hotelHeroImg, styles.hotelThemedHeader]}>
               <LinearGradient
-                colors={['#1d0a2d', '#4a154b', '#7b1fa2']}
+                colors={[art.gradient0, art.gradient1, art.gradient2]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={StyleSheet.absoluteFill}
@@ -834,7 +840,7 @@ export function HotelPreviewCard({
             accessibilityLabel={`View Resort Page for ${resort.name}`}
           >
             <Text style={styles.hotelCtaBtnText}>🏨 View Resort Page</Text>
-            <Ionicons name="arrow-forward" size={16} color={theme.color.primary} />
+            <Ionicons name="arrow-forward" size={16} color={t.color.primaryFg} />
           </Pressable>
         </View>
       </Pressable>
@@ -857,6 +863,8 @@ export const DiningThumb = React.memo(function DiningThumb({
   name,
   testID,
 }: DiningThumbProps): JSX.Element {
+  const styles = useStyles();
+  const pal = usePalette(RESORTS);
   const [failed, setFailed] = useState(false);
 
   if (imageUrl !== null && imageUrl !== undefined && imageUrl.length > 0 && !failed) {
@@ -880,7 +888,7 @@ export const DiningThumb = React.memo(function DiningThumb({
       style={[styles.diningThumbWrap, styles.diningThumbPlaceholder]}
       testID={testID ?? 'dining-thumb-placeholder'}
     >
-      <Ionicons name="restaurant" size={24} color="#6d28d9" />
+      <Ionicons name="restaurant" size={24} color={pal.violetText} />
     </View>
   );
 });
@@ -893,6 +901,11 @@ export default function ResortsDirectoryScreen({
   navigation: passedNavigation,
   onBack,
 }: ResortsDirectoryScreenProps): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
+  const pal = usePalette(RESORTS);
+  const art = usePalette(RESORTS_ART);
+  const tierPal = usePalette(RESORT_TIER);
   const hookNavigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const navigation = passedNavigation ?? hookNavigation;
 
@@ -1286,7 +1299,7 @@ export default function ResortsDirectoryScreen({
     <ScreenContainer testID="resorts-directory-screen">
       {/* Header with back navigation, title, and subtitle matching Explore size and shape (Requirement 2.1) */}
       <GradientHeader
-        colors={['#1d0a2d', '#4a154b', '#7b1fa2']}
+        colors={[art.gradient0, art.gradient1, art.gradient2]}
         iconText="🏨"
         title="Disney Resorts & Hotels"
         subtitle={`${liveResorts.length} Properties · On-Property Concierge`}
@@ -1299,12 +1312,13 @@ export default function ResortsDirectoryScreen({
       {/* Dedicated Search Input (Requirement 2.1) */}
       <View style={styles.controls}>
         <View style={styles.searchBar}>
-          <Ionicons name="search" size={18} color={theme.color.textSecondary} style={styles.searchIcon} />
+          <Ionicons name="search" size={18} color={t.color.textSecondary} style={styles.searchIcon} />
           <TextInput
             value={searchInput}
             onChangeText={setSearchInput}
             placeholder="Search hotels, lounges, dining, activities..."
-            placeholderTextColor={theme.color.textSecondary}
+            placeholderTextColor={t.color.textSecondary}
+            keyboardAppearance={t.scheme}
             style={styles.searchInput}
             autoCapitalize="none"
             autoCorrect={false}
@@ -1320,7 +1334,7 @@ export default function ResortsDirectoryScreen({
               testID="resorts-search-clear"
               hitSlop={8}
             >
-              <Ionicons name="close-circle" size={18} color={theme.color.textSecondary} />
+              <Ionicons name="close-circle" size={18} color={t.color.textSecondary} />
             </Pressable>
           ) : null}
         </View>
@@ -1644,13 +1658,13 @@ export default function ResortsDirectoryScreen({
                   accessibilityRole="button"
                   accessibilityLabel="Clear hotel filter"
                 >
-                  <Ionicons name="close-circle" size={14} color="#ffffff" style={styles.hotelFilterPillClearIcon} />
+                  <Ionicons name="close-circle" size={14} color={t.color.textOnPrimary} style={styles.hotelFilterPillClearIcon} />
                 </Pressable>
               ) : (
                 <Ionicons
                   name="chevron-down"
                   size={12}
-                  color={theme.color.textSecondary}
+                  color={t.color.textSecondary}
                   style={styles.hotelFilterPillChevron}
                 />
               )}
@@ -1721,6 +1735,8 @@ export default function ResortsDirectoryScreen({
         <FlatList
           style={styles.list}
           data={filteredDining}
+            // `renderItem` reads `styles` / `t` from this closure: repaint rows on a scheme switch.
+            extraData={t.scheme}
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.listContent}
             renderItem={({ item }) => (
@@ -1745,7 +1761,7 @@ export default function ResortsDirectoryScreen({
                       <Ionicons
                         name="location-sharp"
                         size={11}
-                        color="#6d28d9"
+                        color={pal.violetText}
                         style={styles.diningLocationIcon}
                       />
                       <Text style={styles.diningLocationText} numberOfLines={1}>
@@ -1769,7 +1785,7 @@ export default function ResortsDirectoryScreen({
                     favorited={favoritedIds.has(item.id)}
                     size="small"
                   />
-                  <Ionicons name="chevron-forward" size={18} color={theme.color.textSecondary} />
+                  <Ionicons name="chevron-forward" size={18} color={t.color.textSecondary} />
                 </View>
               </Pressable>
             )}
@@ -1830,13 +1846,13 @@ export default function ResortsDirectoryScreen({
                   accessibilityRole="button"
                   accessibilityLabel="Clear hotel filter"
                 >
-                  <Ionicons name="close-circle" size={14} color="#ffffff" style={styles.hotelFilterPillClearIcon} />
+                  <Ionicons name="close-circle" size={14} color={t.color.textOnPrimary} style={styles.hotelFilterPillClearIcon} />
                 </Pressable>
               ) : (
                 <Ionicons
                   name="chevron-down"
                   size={12}
-                  color={theme.color.textSecondary}
+                  color={t.color.textSecondary}
                   style={styles.hotelFilterPillChevron}
                 />
               )}
@@ -1952,6 +1968,8 @@ export default function ResortsDirectoryScreen({
         <FlatList
           style={styles.list}
           data={filteredRecreation}
+            // `renderItem` reads `styles` / `t` from this closure: repaint rows on a scheme switch.
+            extraData={t.scheme}
             keyExtractor={(item, index) => item.id ?? `${item.title}-${index}`}
             contentContainerStyle={styles.listContent}
             initialNumToRender={50}
@@ -1996,7 +2014,7 @@ export default function ResortsDirectoryScreen({
                     ) : null}
                   </View>
                 </View>
-                <Ionicons name="chevron-forward" size={18} color={theme.color.textSecondary} />
+                <Ionicons name="chevron-forward" size={18} color={t.color.textSecondary} />
               </Pressable>
             )}
             ListEmptyComponent={
@@ -2018,8 +2036,8 @@ export default function ResortsDirectoryScreen({
           {/* 1. Disney's BoardWalk & Promenade */}
           <Card style={styles.subdestCard} testID="subdest-card-boardwalk">
             <View style={styles.subdestHeaderRow}>
-              <View style={[styles.subdestBadge, { backgroundColor: '#ede9fe' }]}>
-                <Text style={[styles.subdestBadgeText, { color: '#6d28d9' }]}>
+              <View style={[styles.subdestBadge, { backgroundColor: pal.violetTagBg }]}>
+                <Text style={[styles.subdestBadgeText, { color: pal.violetText }]}>
                   Crescent Lake Waterfront
                 </Text>
               </View>
@@ -2039,8 +2057,8 @@ export default function ResortsDirectoryScreen({
           {/* 2. ESPN Wide World of Sports Complex */}
           <Card style={styles.subdestCard} testID="subdest-card-wwos">
             <View style={styles.subdestHeaderRow}>
-              <View style={[styles.subdestBadge, { backgroundColor: '#fee2e2' }]}>
-                <Text style={[styles.subdestBadgeText, { color: '#b91c1c' }]}>
+              <View style={[styles.subdestBadge, { backgroundColor: pal.redTagBg }]}>
+                <Text style={[styles.subdestBadgeText, { color: pal.redText }]}>
                   Premier Athletics
                 </Text>
               </View>
@@ -2060,8 +2078,8 @@ export default function ResortsDirectoryScreen({
           {/* 3. Championship Golf Courses & Mini-Golf */}
           <Card style={styles.subdestCard} testID="subdest-card-golf">
             <View style={styles.subdestHeaderRow}>
-              <View style={[styles.subdestBadge, { backgroundColor: '#dcfce7' }]}>
-                <Text style={[styles.subdestBadgeText, { color: '#15803d' }]}>
+              <View style={[styles.subdestBadge, { backgroundColor: pal.greenTagBg }]}>
+                <Text style={[styles.subdestBadgeText, { color: pal.greenText }]}>
                   Outdoor Adventures & Golf
                 </Text>
               </View>
@@ -2145,7 +2163,7 @@ export default function ResortsDirectoryScreen({
                 accessibilityRole="button"
                 accessibilityLabel="Close hotel filter"
               >
-                <Ionicons name="close" size={22} color={theme.color.textSecondary} />
+                <Ionicons name="close" size={22} color={t.color.textSecondary} />
               </Pressable>
             </View>
 
@@ -2154,14 +2172,15 @@ export default function ResortsDirectoryScreen({
               <Ionicons
                 name="search"
                 size={16}
-                color={theme.color.textSecondary}
+                color={t.color.textSecondary}
                 style={styles.hotelModalSearchIcon}
               />
               <TextInput
                 value={hotelModalSearch}
                 onChangeText={setHotelModalSearch}
                 placeholder="Search resorts (e.g. Grand Floridian, Riviera)..."
-                placeholderTextColor={theme.color.textSecondary}
+                placeholderTextColor={t.color.textSecondary}
+                keyboardAppearance={t.scheme}
                 style={styles.hotelModalSearchInput}
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -2174,7 +2193,7 @@ export default function ResortsDirectoryScreen({
                   hitSlop={8}
                   testID="resorts-hotel-modal-search-clear"
                 >
-                  <Ionicons name="close-circle" size={16} color={theme.color.textSecondary} />
+                  <Ionicons name="close-circle" size={16} color={t.color.textSecondary} />
                 </Pressable>
               ) : null}
             </View>
@@ -2213,7 +2232,7 @@ export default function ResortsDirectoryScreen({
                   </Text>
                 </View>
                 {selectedHotelId === null ? (
-                  <Ionicons name="checkmark-circle" size={20} color="#6d28d9" />
+                  <Ionicons name="checkmark-circle" size={20} color={pal.violetText} />
                 ) : null}
               </Pressable>
 
@@ -2222,10 +2241,10 @@ export default function ResortsDirectoryScreen({
                 const isSelected = selectedHotelId === resort.id;
                 const tierColor =
                   resort.tier === 'Deluxe' || resort.tier === 'Deluxe Villa'
-                    ? '#7c3aed'
+                    ? tierPal.deluxe
                     : resort.tier === 'Moderate'
-                      ? '#059669'
-                      : '#2563eb';
+                      ? tierPal.moderate
+                      : tierPal.value;
                 return (
                   <Pressable
                     key={resort.id}
@@ -2274,7 +2293,7 @@ export default function ResortsDirectoryScreen({
                       </View>
                     </View>
                     {isSelected ? (
-                      <Ionicons name="checkmark-circle" size={20} color="#6d28d9" />
+                      <Ionicons name="checkmark-circle" size={20} color={pal.violetText} />
                     ) : null}
                   </Pressable>
                 );
@@ -2299,24 +2318,24 @@ export default function ResortsDirectoryScreen({
 // Stylesheet
 // ---------------------------------------------------------------------------
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   controls: {
     paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 8,
-    backgroundColor: theme.color.surface,
+    backgroundColor: t.color.surface,
     borderBottomWidth: 1,
-    borderBottomColor: theme.color.border,
+    borderBottomColor: t.color.border,
   },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: theme.color.background,
+    backgroundColor: t.color.background,
     borderRadius: 12,
     paddingHorizontal: 12,
     height: 44,
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
   },
   searchIcon: {
     marginRight: 8,
@@ -2324,12 +2343,12 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 14,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   tabsRow: {
-    backgroundColor: '#ffffff',
+    backgroundColor: t.color.surface,
     borderBottomWidth: 1,
-    borderBottomColor: '#f1edfa',
+    borderBottomColor: RESORTS[t.scheme].lavenderLine,
   },
   tabsContent: {
     paddingHorizontal: 12,
@@ -2340,18 +2359,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 7,
     borderRadius: 20,
-    backgroundColor: '#f1edfa',
+    backgroundColor: RESORTS[t.scheme].lavenderBg,
   },
   tabBtnActive: {
-    backgroundColor: theme.color.primary,
+    backgroundColor: t.color.primary,
   },
   tabBtnText: {
     fontSize: 12,
     fontWeight: '700',
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   tabBtnTextActive: {
-    color: '#ffffff',
+    color: t.color.textOnPrimary,
   },
   tabBody: {
     flex: 1,
@@ -2378,21 +2397,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
-    backgroundColor: '#ffffff',
+    backgroundColor: t.color.surface,
     borderWidth: 1,
-    borderColor: '#e9e3f5',
+    borderColor: RESORTS[t.scheme].cardBorder,
   },
   filterPillActive: {
-    backgroundColor: theme.color.primary,
-    borderColor: theme.color.primary,
+    backgroundColor: t.color.primary,
+    borderColor: t.color.primary,
   },
   filterPillText: {
     fontSize: 11.5,
     fontWeight: '700',
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   filterPillTextActive: {
-    color: '#ffffff',
+    color: t.color.textOnPrimary,
   },
   list: {
     flex: 1,
@@ -2403,12 +2422,12 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   hotelCard: {
-    backgroundColor: '#ffffff',
+    backgroundColor: t.color.surface,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#e9e3f5',
+    borderColor: RESORTS[t.scheme].cardBorder,
     overflow: 'hidden',
-    shadowColor: '#371556',
+    shadowColor: RESORTS[t.scheme].cardShadow,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.08,
     shadowRadius: 10,
@@ -2421,7 +2440,7 @@ const styles = StyleSheet.create({
     height: 130,
     width: '100%',
     position: 'relative',
-    backgroundColor: '#371556',
+    backgroundColor: RESORTS_ART[t.scheme].heroBackstop,
   },
   hotelHeroImg: {
     width: '100%',
@@ -2453,19 +2472,19 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '800',
     textTransform: 'uppercase',
-    color: '#ffffff',
+    color: t.color.textOnPrimary,
   },
   tierDeluxe: {
-    backgroundColor: '#d97706',
+    backgroundColor: RESORTS[t.scheme].tierDeluxe,
   },
   tierVilla: {
-    backgroundColor: '#7c3aed',
+    backgroundColor: RESORTS[t.scheme].tierVilla,
   },
   tierModerate: {
-    backgroundColor: '#0284c7',
+    backgroundColor: RESORTS[t.scheme].tierModerate,
   },
   tierValue: {
-    backgroundColor: '#9333ea',
+    backgroundColor: RESORTS[t.scheme].tierValue,
   },
   transitPillsRow: {
     position: 'absolute',
@@ -2483,7 +2502,7 @@ const styles = StyleSheet.create({
   transitPillText: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#ffffff',
+    color: t.color.textOnPrimary,
   },
   hotelCardBody: {
     padding: 12,
@@ -2500,11 +2519,11 @@ const styles = StyleSheet.create({
   hotelTitle: {
     fontSize: 15,
     fontWeight: '800',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   hotelDescription: {
     fontSize: 11.5,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     marginTop: 2,
     lineHeight: 16,
   },
@@ -2513,10 +2532,10 @@ const styles = StyleSheet.create({
   },
   favHeartIcon: {
     fontSize: 18,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   favHeartActive: {
-    color: '#ef4444',
+    color: RESORTS[t.scheme].heartActive,
   },
   previewMetricsRow: {
     flexDirection: 'row',
@@ -2526,32 +2545,32 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   previewMetricPill: {
-    backgroundColor: '#f5f2fb',
+    backgroundColor: t.color.background,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: 'rgba(126, 87, 194, 0.15)',
+    borderColor: withAlpha(t.color.primaryLight, 0.15),
   },
   previewMetricPillText: {
     fontSize: 10.5,
     fontWeight: '700',
-    color: theme.color.primary,
+    color: t.color.primaryFg,
   },
   transitMetricPill: {
-    backgroundColor: '#f0f9ff',
-    borderColor: '#bae6fd',
+    backgroundColor: RESORTS[t.scheme].transitBg,
+    borderColor: RESORTS[t.scheme].transitBorder,
   },
   transitMetricText: {
-    color: '#0284c7',
+    color: RESORTS[t.scheme].transitText,
   },
   hotelCtaBtn: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#f8f5fd',
+    backgroundColor: RESORTS[t.scheme].ctaBg,
     borderWidth: 1,
-    borderColor: 'rgba(106, 27, 154, 0.2)',
+    borderColor: RESORTS[t.scheme].ctaBorder,
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 8,
@@ -2560,15 +2579,15 @@ const styles = StyleSheet.create({
   hotelCtaBtnText: {
     fontSize: 12,
     fontWeight: '800',
-    color: theme.color.primary,
+    color: t.color.primaryFg,
   },
   diningCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#ffffff',
+    backgroundColor: t.color.surface,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#e9e3f5',
+    borderColor: RESORTS[t.scheme].cardBorder,
     padding: 10,
     gap: 12,
   },
@@ -2584,7 +2603,7 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   diningThumbPlaceholder: {
-    backgroundColor: '#ede9fe',
+    backgroundColor: RESORTS[t.scheme].violetTagBg,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -2595,7 +2614,7 @@ const styles = StyleSheet.create({
   diningTitle: {
     fontSize: 14,
     fontWeight: '800',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   diningLocationRow: {
     flexDirection: 'row',
@@ -2609,7 +2628,7 @@ const styles = StyleSheet.create({
   diningLocationText: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#6d28d9',
+    color: RESORTS[t.scheme].violetText,
   },
   diningMetaRow: {
     flexDirection: 'row',
@@ -2619,7 +2638,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   diningTagBadge: {
-    backgroundColor: '#ede9fe',
+    backgroundColor: RESORTS[t.scheme].violetTagBg,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
@@ -2627,16 +2646,16 @@ const styles = StyleSheet.create({
   diningTagText: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#6d28d9',
+    color: RESORTS[t.scheme].violetText,
   },
   diningPrice: {
     fontSize: 11,
     fontWeight: '700',
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   diningMealsText: {
     fontSize: 10.5,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   diningCardActions: {
     flexDirection: 'row',
@@ -2646,10 +2665,10 @@ const styles = StyleSheet.create({
   recCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#ffffff',
+    backgroundColor: t.color.surface,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#e9e3f5',
+    borderColor: RESORTS[t.scheme].cardBorder,
     padding: 12,
     gap: 10,
   },
@@ -2657,11 +2676,12 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 10,
-    backgroundColor: '#ede9fe',
+    backgroundColor: RESORTS[t.scheme].violetTagBg,
     justifyContent: 'center',
     alignItems: 'center',
   },
   recIconText: {
+    ...t.textDefault,
     fontSize: 18,
   },
   recCardBody: {
@@ -2670,11 +2690,11 @@ const styles = StyleSheet.create({
   recTitle: {
     fontSize: 13.5,
     fontWeight: '800',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   recDescription: {
     fontSize: 11,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     marginTop: 2,
   },
   recMetaRow: {
@@ -2684,13 +2704,13 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   recBadge: {
-    backgroundColor: '#dcfce7',
+    backgroundColor: RESORTS[t.scheme].greenTagBg,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
   },
   recResortBadge: {
-    backgroundColor: '#ede9fe',
+    backgroundColor: RESORTS[t.scheme].violetTagBg,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
@@ -2698,21 +2718,21 @@ const styles = StyleSheet.create({
   recResortBadgeText: {
     fontSize: 9.5,
     fontWeight: '700',
-    color: '#6d28d9',
+    color: RESORTS[t.scheme].violetText,
   },
   recBadgeText: {
     fontSize: 9.5,
     fontWeight: '700',
-    color: '#15803d',
+    color: RESORTS[t.scheme].greenText,
   },
   recHoursText: {
     fontSize: 10,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   recPriceText: {
     fontSize: 10,
     fontWeight: '700',
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   subdestContainer: {
     padding: 16,
@@ -2738,17 +2758,17 @@ const styles = StyleSheet.create({
   subdestTitle: {
     fontSize: 16,
     fontWeight: '800',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
     marginBottom: 4,
   },
   subdestDescription: {
     fontSize: 12,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     lineHeight: 17,
     marginBottom: 10,
   },
   subdestHighlightPill: {
-    backgroundColor: '#f1edfa',
+    backgroundColor: RESORTS[t.scheme].lavenderBg,
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 6,
@@ -2756,7 +2776,7 @@ const styles = StyleSheet.create({
   subdestHighlightText: {
     fontSize: 11,
     fontWeight: '700',
-    color: theme.color.primary,
+    color: t.color.primaryFg,
   },
   modalOverlay: {
     flex: 1,
@@ -2767,7 +2787,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   modalSheet: {
-    backgroundColor: '#ffffff',
+    backgroundColor: t.color.surface,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 20,
@@ -2777,30 +2797,30 @@ const styles = StyleSheet.create({
     width: 36,
     height: 4,
     borderRadius: 2,
-    backgroundColor: '#cbd5e1',
+    backgroundColor: RESORTS[t.scheme].handle,
     alignSelf: 'center',
     marginBottom: 14,
   },
   modalTitle: {
     fontSize: 17,
     fontWeight: '800',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
     marginBottom: 8,
   },
   modalDescription: {
     fontSize: 13,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     lineHeight: 18,
     marginBottom: 10,
   },
   modalDetailText: {
     fontSize: 12,
     fontWeight: '600',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
     marginBottom: 4,
   },
   modalCloseBtn: {
-    backgroundColor: theme.color.primary,
+    backgroundColor: t.color.primary,
     borderRadius: 10,
     paddingVertical: 10,
     alignItems: 'center',
@@ -2809,24 +2829,25 @@ const styles = StyleSheet.create({
   modalCloseBtnText: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#ffffff',
+    color: t.color.textOnPrimary,
   },
   // Hotel filter pill & modal styles (Requirement 2.10)
   hotelFilterPill: {
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'center',
-    backgroundColor: '#f5f3ff',
+    backgroundColor: RESORTS[t.scheme].hotelPillBg,
     borderWidth: 1,
-    borderColor: '#ddd6fe',
+    borderColor: RESORTS[t.scheme].hotelPillBorder,
     borderRadius: 20,
     paddingHorizontal: 11,
     paddingVertical: 7,
     marginRight: 8,
   },
   hotelFilterPillActive: {
-    backgroundColor: '#6d28d9',
-    borderColor: '#6d28d9',
+    backgroundColor: RESORTS[t.scheme].hotelPillActive,
+    // The border coincides with the fill it outlines (same as an active Chip's primary/primary).
+    borderColor: RESORTS[t.scheme].hotelPillActive,
   },
   hotelFilterPillIcon: {
     fontSize: 13,
@@ -2835,11 +2856,11 @@ const styles = StyleSheet.create({
   hotelFilterPillText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#6d28d9',
+    color: RESORTS[t.scheme].violetText,
     maxWidth: 130,
   },
   hotelFilterPillTextActive: {
-    color: '#ffffff',
+    color: t.color.textOnPrimary,
   },
   hotelFilterPillChevron: {
     marginLeft: 4,
@@ -2848,7 +2869,7 @@ const styles = StyleSheet.create({
     marginLeft: 5,
   },
   hotelModalSheet: {
-    backgroundColor: theme.color.surface,
+    backgroundColor: t.color.surface,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     maxHeight: '82%',
@@ -2865,15 +2886,15 @@ const styles = StyleSheet.create({
   hotelModalTitle: {
     fontSize: 17,
     fontWeight: '700',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   hotelModalSearchWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: theme.color.background,
+    backgroundColor: t.color.background,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
     paddingHorizontal: 10,
     height: 38,
     marginBottom: 10,
@@ -2884,7 +2905,7 @@ const styles = StyleSheet.create({
   hotelModalSearchInput: {
     flex: 1,
     fontSize: 14,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
     paddingVertical: 0,
   },
   hotelModalList: {
@@ -2897,21 +2918,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     borderRadius: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: theme.color.border,
+    borderBottomColor: t.color.border,
   },
   hotelModalRowSelected: {
-    backgroundColor: '#f5f3ff',
+    backgroundColor: RESORTS[t.scheme].rowSelectedBg,
   },
   hotelModalRowIconWrap: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#f3f4f6',
+    backgroundColor: RESORTS[t.scheme].rowIconBg,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 10,
   },
   hotelModalRowIcon: {
+    ...t.textDefault,
     fontSize: 16,
   },
   hotelModalRowInfo: {
@@ -2921,14 +2943,14 @@ const styles = StyleSheet.create({
   hotelModalRowName: {
     fontSize: 14,
     fontWeight: '600',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   hotelModalRowNameSelected: {
-    color: '#6d28d9',
+    color: RESORTS[t.scheme].violetText,
   },
   hotelModalRowSubtitle: {
     fontSize: 12,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     marginTop: 2,
   },
   hotelModalRowBadgeRow: {
@@ -2949,7 +2971,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   hotelModalEmptyText: {
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     fontSize: 14,
   },
-});
+}));

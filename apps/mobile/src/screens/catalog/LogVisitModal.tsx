@@ -19,7 +19,6 @@ import {
   Platform,
   Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   TextInput,
   View,
@@ -35,8 +34,9 @@ import type {
 
 import { ApiError, apiRequest } from '../../api/client';
 import { DatePickerField } from '../../components/DatePickerField';
-import { theme } from '../../theme/theme';
 import { PrimaryButton, SecondaryButton } from '../../theme/components';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme } from '../../theme/useAppTheme';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -114,6 +114,8 @@ export default function LogVisitModal({
   onClose,
   onLogged,
 }: LogVisitModalProps): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const tz = deviceTimeZone();
   const today = ymdInTimeZone(new Date(), tz);
 
@@ -202,7 +204,7 @@ export default function LogVisitModal({
       onRequestClose={resetAndClose}
     >
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.backdrop}
       >
         <View style={styles.sheet} testID="log-visit-modal">
@@ -263,6 +265,8 @@ export default function LogVisitModal({
               value={note}
               onChangeText={setNote}
               placeholder="How was it?"
+              placeholderTextColor={t.scheme === 'dark' ? t.color.textSecondary : undefined}
+              keyboardAppearance={t.scheme}
               multiline
               maxLength={MAX_NOTE_LENGTH}
               editable={!busy}
@@ -361,7 +365,7 @@ export default function LogVisitModal({
               {busy ? (
                 <ActivityIndicator
                   accessibilityLabel="Saving visit"
-                  color={theme.color.primary}
+                  color={t.color.primaryFg}
                   testID="log-visit-busy"
                 />
               ) : null}
@@ -398,38 +402,38 @@ function messageForError(err: unknown): string {
 // Styles
 // ---------------------------------------------------------------------------
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   backdrop: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.4)',
     justifyContent: 'flex-end',
   },
   sheet: {
-    backgroundColor: theme.color.surface,
-    borderTopLeftRadius: theme.radius.lg,
-    borderTopRightRadius: theme.radius.lg,
+    backgroundColor: t.color.surface,
+    borderTopLeftRadius: t.radius.lg,
+    borderTopRightRadius: t.radius.lg,
     maxHeight: '85%',
   },
   sheetContent: {
-    padding: theme.spacing.lg,
-    gap: theme.spacing.md,
+    padding: t.spacing.lg,
+    gap: t.spacing.md,
   },
   title: {
-    ...theme.typography.title,
-    color: theme.color.textPrimary,
+    ...t.typography.title,
+    color: t.color.textPrimary,
   },
   fieldLabel: {
-    ...theme.typography.subtitle,
-    color: theme.color.textSecondary,
+    ...t.typography.subtitle,
+    color: t.color.textSecondary,
   },
   input: {
     borderWidth: 1,
-    borderColor: theme.color.borderStrong,
-    borderRadius: theme.radius.md,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.sm,
-    color: theme.color.textPrimary,
-    backgroundColor: theme.color.surfaceAlt,
+    borderColor: t.color.borderStrong,
+    borderRadius: t.radius.md,
+    paddingHorizontal: t.spacing.md,
+    paddingVertical: t.spacing.sm,
+    color: t.color.textPrimary,
+    backgroundColor: t.color.surfaceAlt,
   },
   noteInput: {
     minHeight: 80,
@@ -438,57 +442,57 @@ const styles = StyleSheet.create({
   pickerRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: theme.spacing.sm,
+    gap: t.spacing.sm,
   },
   pickerButton: {
     minWidth: 40,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.sm,
-    borderRadius: theme.radius.md,
+    paddingHorizontal: t.spacing.md,
+    paddingVertical: t.spacing.sm,
+    borderRadius: t.radius.md,
     borderWidth: 1,
-    borderColor: theme.color.borderStrong,
-    backgroundColor: theme.color.surfaceAlt,
+    borderColor: t.color.borderStrong,
+    backgroundColor: t.color.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
   pickerButtonSelected: {
-    backgroundColor: theme.color.primary,
-    borderColor: theme.color.primary,
+    backgroundColor: t.color.primary,
+    borderColor: t.color.primary,
   },
   pickerButtonText: {
-    ...theme.typography.subtitle,
-    color: theme.color.textPrimary,
+    ...t.typography.subtitle,
+    color: t.color.textPrimary,
   },
   pickerButtonTextSelected: {
-    color: theme.color.textOnPrimary,
+    color: t.color.textOnPrimary,
   },
   tripChip: {
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.sm,
-    borderRadius: theme.radius.md,
+    paddingHorizontal: t.spacing.md,
+    paddingVertical: t.spacing.sm,
+    borderRadius: t.radius.md,
     borderWidth: 1,
-    borderColor: theme.color.borderStrong,
-    backgroundColor: theme.color.surfaceAlt,
+    borderColor: t.color.borderStrong,
+    backgroundColor: t.color.surfaceAlt,
   },
   tripChipSelected: {
-    backgroundColor: theme.color.primary,
-    borderColor: theme.color.primary,
+    backgroundColor: t.color.primary,
+    borderColor: t.color.primary,
   },
   tripChipText: {
-    ...theme.typography.body,
-    color: theme.color.textPrimary,
+    ...t.typography.body,
+    color: t.color.textPrimary,
   },
   tripChipTextSelected: {
-    color: theme.color.textOnPrimary,
+    color: t.color.textOnPrimary,
   },
   actionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.sm,
-    marginTop: theme.spacing.sm,
+    gap: t.spacing.sm,
+    marginTop: t.spacing.sm,
   },
   errorText: {
-    color: theme.color.danger,
+    color: t.color.danger,
     fontSize: 13,
   },
-});
+}));

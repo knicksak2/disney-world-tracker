@@ -13,13 +13,19 @@
  */
 
 import React from 'react';
+import { StyleSheet } from 'react-native';
+import type { ReactTestInstance } from 'react-test-renderer';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   fireEvent,
   render,
   screen,
   waitFor,
+  within,
 } from '@testing-library/react-native';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
+import { darkTheme } from '../../../theme/theme';
+import { BALANCES } from '../TripBalancesScreen.palette';
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -343,6 +349,96 @@ describe('TripBalancesScreen', () => {
     fireEvent.press(screen.getByTestId('close-pairwise-breakdown-modal'));
     await waitFor(() => {
       expect(screen.queryByTestId('pairwise-breakdown-modal')).toBeNull();
+    });
+  });
+
+  describe('dark mode', () => {
+    const flat = (node: ReactTestInstance) => StyleSheet.flatten(node.props.style) ?? {};
+    /** Nearest host ancestor whose flattened style sets `key`. */
+    function ancestorWith(node: ReactTestInstance, key: string): Record<string, unknown> {
+      let cur: ReactTestInstance | null = node.parent;
+      while (cur !== null) {
+        if (typeof cur.type === 'string' && flat(cur)[key] !== undefined) {
+          return flat(cur);
+        }
+        cur = cur.parent;
+      }
+      return {};
+    }
+
+    afterEach(resetTestScheme);
+
+    it('(a)(b)(c) paints the screen, primary text and converted balance elements with dark values', async () => {
+      setTestScheme('dark');
+      renderScreen();
+
+      const toggle = await screen.findByTestId('balances-view-toggle');
+      await waitFor(() => expect(screen.getByTestId(`net-balance-amount-${USER_1}`)).toBeTruthy());
+      // (a) the screen background behind the toggle bar.
+      expect(ancestorWith(toggle, 'backgroundColor').backgroundColor).toBe(
+        darkTheme.color.background,
+      );
+      // (c) converted literals: the toggle track (#f1f5f9), the "owed" amount
+      // (#15803d) and the violet "Record a Settlement" fill (#7c3aed).
+      expect(flat(toggle).backgroundColor).toBe(BALANCES.dark.toggleTrack);
+      expect(flat(screen.getByTestId(`net-balance-amount-${USER_1}`)).color).toBe(
+        BALANCES.dark.owedText,
+      );
+      expect(flat(screen.getByTestId('open-record-settlement-btn')).backgroundColor).toBe(
+        BALANCES.dark.heroFill,
+      );
+
+      // (b) primary text: the pairwise debt amount.
+      fireEvent.press(screen.getByTestId('toggle-pairwise-balances'));
+      const amount = await screen.findByTestId('pairwise-amount-0');
+      expect(flat(amount).color).toBe(darkTheme.color.textPrimary);
+    });
+
+    it('opens the SettlementModal sheet on the dark surface with a themed selected chip', async () => {
+      setTestScheme('dark');
+      renderScreen();
+
+      fireEvent.press(await screen.findByTestId('open-record-settlement-btn'));
+      const sheet = await screen.findByTestId('settlement-modal');
+      expect(flat(sheet).backgroundColor).toBe(darkTheme.color.surface);
+      // The selected payer chip is a primary fill with white text.
+      const chip = screen.getByTestId(`settlement-payer-chip-${USER_1}`);
+      expect(flat(chip).backgroundColor).toBe(darkTheme.color.primary);
+      expect(flat(within(chip).getByText('Ariel')).color).toBe(darkTheme.color.textOnPrimary);
+      expect(screen.getByTestId('settlement-amount-input').props.keyboardAppearance).toBe('dark');
+    });
+
+    // Feature: dark-mode polish pass (Requirement 9.12): active toggle reads stronger than idle.
+    it('Net/Pairwise toggle: the active pill is raised and its label is textPrimary', async () => {
+      setTestScheme('dark');
+      renderScreen();
+      await screen.findByTestId('balances-view-toggle');
+
+      const net = () => flat(screen.getByTestId('toggle-net-balances'));
+      const pairwise = () => flat(screen.getByTestId('toggle-pairwise-balances'));
+      const netLabel = () => flat(screen.getByText('Net Balances')).color;
+      const pairwiseLabel = () => flat(screen.getByText('Pairwise Debts')).color;
+
+      expect(net().backgroundColor).toBe(darkTheme.color.borderStrong);
+      expect(net().backgroundColor).not.toBe(BALANCES.dark.toggleTrack);
+      expect(pairwise().backgroundColor).toBeUndefined();
+      expect(netLabel()).toBe(darkTheme.color.textPrimary);
+      expect(pairwiseLabel()).toBe(darkTheme.color.textSecondary);
+      expect(netLabel()).not.toBe(pairwiseLabel());
+
+      fireEvent.press(screen.getByTestId('toggle-pairwise-balances'));
+      await waitFor(() => expect(pairwise().backgroundColor).toBe(darkTheme.color.borderStrong));
+      expect(net().backgroundColor).toBeUndefined();
+      expect(pairwiseLabel()).toBe(darkTheme.color.textPrimary);
+      expect(netLabel()).toBe(darkTheme.color.textSecondary);
+    });
+
+    it('light: the active toggle keeps today\'s white pill and #1e1b4b label', async () => {
+      setTestScheme('light');
+      renderScreen();
+      await screen.findByTestId('balances-view-toggle');
+      expect(flat(screen.getByTestId('toggle-net-balances')).backgroundColor).toBe('#ffffff');
+      expect(flat(screen.getByText('Net Balances')).color).toBe('#1e1b4b');
     });
   });
 });

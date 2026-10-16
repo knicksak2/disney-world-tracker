@@ -41,10 +41,20 @@
  */
 
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react-native';
 
 import { type ProfileDTO } from '@dwt/shared';
+import { darkTheme } from '../../../theme/theme';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
 
 // ---------------------------------------------------------------------------
 // Mocks (declared before the modules under test are imported).
@@ -434,5 +444,96 @@ describe('FriendProfileScreen loading/forbidden/error/retry (R7.1–R7.4)', () =
     } finally {
       jest.useRealTimers();
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Feature: dark-mode — the converted screen follows the Active theme.
+// ---------------------------------------------------------------------------
+
+describe('FriendProfileScreen — dark mode', () => {
+  const flat = (node: { props: { style?: unknown } }): Record<string, unknown> =>
+    (StyleSheet.flatten(node.props.style as never) ?? {}) as Record<string, unknown>;
+
+  beforeEach(() => {
+    apiRequestMock.mockReset();
+    apiRequestMock.mockImplementation(async (_method, path) => {
+      if (typeof path !== 'string') throw new Error('unexpected non-string path');
+      if (isStatsPath(path)) return makeStats();
+      if (isCompletionsPath(path)) return { entries: [] };
+      if (isProfilePath(path)) return makeProfile();
+      throw new Error(`unexpected call to ${path}`);
+    });
+  });
+  afterEach(resetTestScheme);
+
+  test('(a)(b)(c) background, profile name, avatar placeholder and active coverage lens use dark values', async () => {
+    setTestScheme('dark');
+    renderScreen();
+
+    const summary = await screen.findByTestId('friend-profile-summary');
+    // (a) root ScreenContainer.
+    expect(flat(screen.root).backgroundColor).toBe(darkTheme.color.background);
+    // (b) the profile card's name (primary text on the card).
+    expect(flat(within(summary).getByText(DISPLAY_NAME)).color).toBe(
+      darkTheme.color.textPrimary,
+    );
+    // (c) placeholder glyph: `primary` as an icon on a surface → primaryFg.
+    const placeholder = within(summary).getByTestId('friend-avatar-placeholder');
+    expect(flat(placeholder).backgroundColor).toBe(darkTheme.color.surfaceAlt);
+    const glyph = placeholder.findAll(
+      (n) => (n.type as string) === 'Icon' && n.props.name === 'person',
+    )[0];
+    expect(glyph?.props.color).toBe(darkTheme.color.primaryFg);
+
+    // (c) Coverage pane: the active lens label is primary-as-text → primaryFg.
+    fireEvent.press(screen.getByTestId('tab-Coverage'));
+    const lens = await screen.findByTestId('friend-coverage-lens-parks');
+    expect(flat(within(lens).getByText('Parks')).color).toBe(darkTheme.color.primaryFg);
+    expect(flat(screen.getByTestId('friend-coverage-lens-switcher')).backgroundColor).toBe(
+      darkTheme.color.surfaceAlt,
+    );
+  });
+
+  test('coverage lens switcher: the active lens is raised above the `surfaceAlt` track and moves on press', async () => {
+    setTestScheme('dark');
+    renderScreen();
+    await screen.findByTestId('friend-profile-summary');
+    fireEvent.press(screen.getByTestId('tab-Coverage'));
+    await screen.findByTestId('friend-coverage-lens-parks');
+
+    const seg = (lens: string) => flat(screen.getByTestId(`friend-coverage-lens-${lens}`));
+    // Lighter than the track, not the darker `surface` hole.
+    expect(seg('parks').backgroundColor).toBe(darkTheme.color.borderStrong);
+    expect(seg('parks').backgroundColor).not.toBe(darkTheme.color.surface);
+    expect(seg('parks').backgroundColor).not.toBe(darkTheme.color.surfaceAlt);
+    expect(seg('categories').backgroundColor).toBeUndefined();
+
+    fireEvent.press(screen.getByTestId('friend-coverage-lens-categories'));
+    await waitFor(() =>
+      expect(seg('categories').backgroundColor).toBe(darkTheme.color.borderStrong),
+    );
+    expect(seg('parks').backgroundColor).toBeUndefined();
+    expect(
+      flat(within(screen.getByTestId('friend-coverage-lens-categories')).getByText('Categories'))
+        .color,
+    ).toBe(darkTheme.color.primaryFg);
+  });
+
+  test('light keeps today\u2019s active coverage lens fill', async () => {
+    renderScreen();
+    await screen.findByTestId('friend-profile-summary');
+    fireEvent.press(screen.getByTestId('tab-Coverage'));
+    const lens = await screen.findByTestId('friend-coverage-lens-parks');
+    expect(flat(lens).backgroundColor).toBe('#ffffff');
+  });
+
+  test('light keeps today\u2019s placeholder glyph colour', async () => {
+    renderScreen();
+    const summary = await screen.findByTestId('friend-profile-summary');
+    const glyph = within(summary)
+      .getByTestId('friend-avatar-placeholder')
+      .findAll((n) => (n.type as string) === 'Icon' && n.props.name === 'person')[0];
+    expect(glyph?.props.color).toBe('#5b2a86');
   });
 });

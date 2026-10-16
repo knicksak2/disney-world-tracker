@@ -4,6 +4,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ExperiencePicker } from '../ExperiencePicker';
 import { apiRequest } from '../../../api/client';
 import type { ExperienceDTO } from '@dwt/shared';
+import { StyleSheet } from 'react-native';
+import type { ReactTestInstance } from 'react-test-renderer';
+import { darkTheme } from '../../../theme/theme';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
+import { PICKER } from '../ExperiencePicker.palette';
 
 jest.mock('../../../api/client', () => ({
   apiRequest: jest.fn(),
@@ -1051,5 +1056,86 @@ describe('ExperiencePicker "Already added" tag (R15.5)', () => {
     expect(onSelect).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'exp-ride-1', name: 'Space Mountain' }),
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Feature: dark-mode — the picker repaints with the Twilight palette.
+// ---------------------------------------------------------------------------
+
+describe('ExperiencePicker dark mode', () => {
+  const flat = (node: ReactTestInstance): Record<string, unknown> =>
+    (StyleSheet.flatten(node.props.style) ?? {}) as Record<string, unknown>;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (apiRequest as jest.Mock).mockImplementation(async (_method: string, path: string) => {
+      if (path === '/me/favorites') {
+        return { experienceIds: [] };
+      }
+      return { experiences: mockExperiences };
+    });
+  });
+  afterEach(resetTestScheme);
+
+  it('(a)(b)(c) paints the tab chips, result text, park badge and search input dark', async () => {
+    setTestScheme('dark');
+    renderPicker();
+
+    // (a) the picker's own surfaces: inactive tab chip on surfaceAlt, active on primary.
+    expect(flat(screen.getByTestId('picker-tab-attractions')).backgroundColor).toBe(
+      darkTheme.color.surfaceAlt,
+    );
+    expect(flat(screen.getByTestId('picker-tab-all')).backgroundColor).toBe(
+      darkTheme.color.primary,
+    );
+
+    const search = screen.getByTestId('picker-search');
+    expect(search.props.placeholderTextColor).toBe(darkTheme.color.textSecondary);
+    expect(search.props.keyboardAppearance).toBe('dark');
+    expect(flat(search).color).toBe(darkTheme.color.textPrimary);
+
+    fireEvent.changeText(search, 'Magic');
+    await waitFor(() => {
+      expect(screen.getByText('Space Mountain')).toBeTruthy();
+    });
+
+    // (b) primary text — a result name.
+    expect(flat(screen.getByText('Space Mountain')).color).toBe(darkTheme.color.textPrimary);
+    // (c) the park Badge: `primary` as text → `primaryFg` (rule 1a); the
+    // category Badge reads the dark category tint.
+    expect(flat(screen.getAllByText('Magic Kingdom')[0]!).color).toBe(darkTheme.color.primaryFg);
+    expect(flat(screen.getAllByText(darkTheme.categoryVisual.Ride.label)[0]!).color).toBe(
+      darkTheme.categoryVisual.Ride.tint,
+    );
+  });
+
+  it('stages a break location on a sky-tinted row (palette dark value)', async () => {
+    setTestScheme('dark');
+    renderPicker();
+
+    fireEvent.press(screen.getByTestId('picker-tab-breaks'));
+    fireEvent.changeText(screen.getByTestId('picker-search'), 'Magic');
+    const row = await screen.findByTestId('picker-result-exp-ride-1');
+    fireEvent.press(row);
+
+    await waitFor(() => {
+      expect(flat(screen.getByTestId('picker-result-exp-ride-1')).backgroundColor).toBe(
+        PICKER.dark.stagedRowBg,
+      );
+    });
+    expect(screen.getByTestId('picker-staged-location')).toBeTruthy();
+  });
+
+  it('keeps the pre-retrofit light values under light', async () => {
+    renderPicker();
+
+    expect(flat(screen.getByTestId('picker-tab-all')).backgroundColor).toBe('#5b2a86');
+    expect(screen.getByTestId('picker-search').props.placeholderTextColor).toBe('#6b6480');
+    fireEvent.changeText(screen.getByTestId('picker-search'), 'Magic');
+    await waitFor(() => {
+      expect(screen.getByText('Space Mountain')).toBeTruthy();
+    });
+    expect(flat(screen.getAllByText('Magic Kingdom')[0]!).color).toBe('#5b2a86');
   });
 });

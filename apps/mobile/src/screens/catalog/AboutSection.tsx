@@ -27,14 +27,13 @@
 import React from 'react';
 import {
   Pressable,
-  StyleSheet,
   Text,
   View,
   type NativeSyntheticEvent,
   type TextLayoutEventData,
 } from 'react-native';
 
-import { theme } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
 import { Card, SectionLabel } from '../../theme/components';
 
 /**
@@ -72,6 +71,7 @@ export default function AboutSection({
   title,
   noCard = false,
 }: AboutSectionProps): JSX.Element {
+  const styles = useStyles();
   // Initial state is collapsed (R5.9). `overflow` starts false and flips to
   // true only once the hidden measurement pass reports more than the collapsed
   // limit of lines (R5.2 / R5.3).
@@ -195,27 +195,27 @@ export default function AboutSection({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   section: {
-    gap: theme.spacing.md,
+    gap: t.spacing.md,
   },
   noCardSection: {
-    gap: theme.spacing.sm,
+    gap: t.spacing.sm,
   },
   guideChapterTitle: {
     fontSize: 14.5,
     fontWeight: '800',
-    color: theme.color.primary,
+    color: t.color.primaryFg,
     letterSpacing: 0.3,
   },
   bodyText: {
-    ...theme.typography.body,
-    color: theme.color.textPrimary,
+    ...t.typography.body,
+    color: t.color.textPrimary,
     lineHeight: 20,
   },
   empty: {
-    ...theme.typography.body,
-    color: theme.color.textSecondary,
+    ...t.typography.body,
+    color: t.color.textSecondary,
     fontStyle: 'italic',
   },
   // Off-screen measurement copy: absolutely positioned and fully transparent
@@ -235,8 +235,8 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   toggleText: {
-    ...theme.typography.subtitle,
-    color: theme.color.primary,
+    ...t.typography.subtitle,
+    color: t.color.primaryFg,
   },
   hiddenTestWrap: {
     position: 'absolute',
@@ -246,9 +246,10 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   hiddenTestText: {
+    ...t.textDefault,
     height: 0,
     width: 0,
     opacity: 0,
     overflow: 'hidden',
   },
-});
+}));

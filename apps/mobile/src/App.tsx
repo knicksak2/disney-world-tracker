@@ -1,7 +1,9 @@
+import './setupScrollDefaults';
 import React, { useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { StatusBar } from 'expo-status-bar';
+import * as SystemUI from 'expo-system-ui';
 import { Platform } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -11,6 +13,9 @@ import { navigationRef } from './navigation/navigationRef';
 import { usePushRegistration } from './hooks/usePushRegistration';
 import { useNotificationResponse } from './hooks/useNotificationResponse';
 import { useSessionStore } from './state/sessionStore';
+import { useThemeStore } from './state/themeStore';
+import { useActiveTheme } from './theme/useActiveTheme';
+import { deriveAppearanceChrome } from './theme/AppearanceChrome';
 import { ApiError } from './api/client';
 
 // Suppress known third-party library deprecation noise:
@@ -62,10 +67,15 @@ const queryClient = new QueryClient({
 
 export default function App(): JSX.Element {
   const loadFromStorage = useSessionStore((state) => state.loadFromStorage);
+  const loadThemeFromStorage = useThemeStore((state) => state.loadFromStorage);
 
   useEffect(() => {
     void loadFromStorage();
   }, [loadFromStorage]);
+
+  useEffect(() => {
+    void loadThemeFromStorage();
+  }, [loadThemeFromStorage]);
 
   // Register this device for Share push notifications once authenticated
   // (R8.1, R9.1); no-op until a session is hydrated and present.
@@ -76,6 +86,23 @@ export default function App(): JSX.Element {
   // so it can dispatch navigation through the shared `navigationRef`.
   useNotificationResponse();
 
+  // dark-mode: resolve the Active theme and derive the three chrome
+  // surfaces (Navigation theme, status bar style, root safe-area
+  // background) this spec owns from it (Requirement 6).
+  const activeTheme = useActiveTheme();
+  const { navigationTheme, statusBarStyle, rootBackground } = deriveAppearanceChrome(activeTheme);
+
+  // dark-mode R6.5: paint the native window/root view with the same root
+  // background, so the area behind the Android gesture bar (outside the React
+  // root, unreachable from JS views) follows the Active theme instead of
+  // showing the platform default white. Non-fatal: a native failure must
+  // never crash the app.
+  useEffect(() => {
+    SystemUI.setBackgroundColorAsync(rootBackground).catch((error: unknown) => {
+      console.warn('expo-system-ui: setBackgroundColorAsync failed', error);
+    });
+  }, [rootBackground]);
+
   return (
     // GestureHandlerRootView must wrap the entire app root — required by
     // react-native-gesture-handler (added for react-native-draggable-flatlist's
@@ -83,12 +110,12 @@ export default function App(): JSX.Element {
     // Without it, gesture handlers anywhere in the tree silently fail to
     // capture touches.
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaProvider>
+      <SafeAreaProvider style={{ backgroundColor: rootBackground }}>
         <QueryClientProvider client={queryClient}>
-          <NavigationContainer ref={navigationRef}>
+          <NavigationContainer ref={navigationRef} theme={navigationTheme}>
             <RootNavigator />
           </NavigationContainer>
-          <StatusBar style="auto" />
+          <StatusBar style={statusBarStyle} />
         </QueryClientProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

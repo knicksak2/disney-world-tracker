@@ -18,7 +18,6 @@ import {
   Platform,
   Pressable,
   ScrollView,
-  StyleSheet,
   Switch,
   Text,
   TextInput,
@@ -27,7 +26,6 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import type { TripGuestDTO, TripMemberDTO } from '@dwt/shared';
 
-import { theme } from '../../theme/theme';
 import {
   Badge,
   Card,
@@ -35,6 +33,10 @@ import {
   SecondaryButton,
   SectionLabel,
 } from '../../theme/components';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme, usePalette } from '../../theme/useAppTheme';
+import { themedSwitchProps } from '../../theme/switchColors';
+import { RECEIPT_REVIEW } from './ReceiptReviewModal.palette';
 import {
   type DraftReceiptItem,
   type DraftReceiptChargeLine,
@@ -84,6 +86,9 @@ export function ReceiptReviewModal({
   onFallbackToManual,
   onClose,
 }: ReceiptReviewModalProps): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
+  const pal = usePalette(RECEIPT_REVIEW);
   const isOcrSupported = typeof isNativeOcrAvailable === 'function' ? isNativeOcrAvailable() : true;
 
   // All participants (members + guests) for assignee chips
@@ -281,7 +286,7 @@ export function ReceiptReviewModal({
           <View style={styles.headerRow}>
             <Text style={styles.headerTitle}>Review Receipt Scan</Text>
             <Pressable onPress={onClose} testID="close-receipt-review-button" hitSlop={8}>
-              <Ionicons name="close" size={24} color={theme.color.textSecondary} />
+              <Ionicons name="close" size={24} color={t.color.textSecondary} />
             </Pressable>
           </View>
 
@@ -293,7 +298,7 @@ export function ReceiptReviewModal({
 
           {!isOcrSupported ? (
             <View style={styles.demoNoticeBanner} testID="receipt-demo-notice">
-              <Ionicons name="sparkles" size={16} color="#7c3aed" />
+              <Ionicons name="sparkles" size={16} color={pal.demoIcon} />
               <Text style={styles.demoNoticeText}>
                 Demo mode (Expo Go): Sample Disney dining receipt loaded. Live camera OCR is available in development builds.
               </Text>
@@ -303,7 +308,7 @@ export function ReceiptReviewModal({
           {/* Subtotal detected banner (Req 9.6 - Context only) */}
           {detectedSubtotals.length > 0 ? (
             <View style={styles.subtotalBanner} testID="receipt-detected-subtotal">
-              <Ionicons name="information-circle-outline" size={18} color={theme.color.primary} />
+              <Ionicons name="information-circle-outline" size={18} color={t.color.primaryFg} />
               <Text style={styles.subtotalBannerText}>
                 Detected Subtotal: ${detectedSubtotals.map((s) => (s / 100).toFixed(2)).join(', $')}{' '}
                 (Reference only, not billed)
@@ -315,7 +320,7 @@ export function ReceiptReviewModal({
           {photos.length > 0 ? (
             <View style={styles.photosBar}>
               <Text style={styles.photosBarLabel}>Scanned Photos ({photos.length}):</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.photosList}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.photosList} keyboardShouldPersistTaps="handled">
                 {photos.map((p, idx) => (
                   <View key={p.id} style={styles.photoChip}>
                     <Text style={styles.photoChipText}>Photo {idx + 1}</Text>
@@ -324,7 +329,7 @@ export function ReceiptReviewModal({
                       hitSlop={6}
                       testID={`discard-photo-${p.id}`}
                     >
-                      <Ionicons name="close-circle" size={16} color={theme.color.danger} />
+                      <Ionicons name="close-circle" size={16} color={t.color.danger} />
                     </Pressable>
                   </View>
                 ))}
@@ -332,11 +337,11 @@ export function ReceiptReviewModal({
             </View>
           ) : null}
 
-          <ScrollView style={styles.scrollBody} contentContainerStyle={{ paddingBottom: 24 }}>
+          <ScrollView style={styles.scrollBody} contentContainerStyle={{ paddingBottom: 24 }} keyboardShouldPersistTaps="handled">
             {/* Zero items fallback (Req 9.5) */}
             {zeroItems ? (
               <Card style={styles.fallbackCard}>
-                <Ionicons name="receipt-outline" size={48} color={theme.color.textSecondary} />
+                <Ionicons name="receipt-outline" size={48} color={t.color.textSecondary} />
                 <Text style={styles.fallbackTitle} testID="receipt-no-items-message">
                   No items detected
                 </Text>
@@ -365,7 +370,7 @@ export function ReceiptReviewModal({
                     onPress={() => handleScanAdditionalPhoto('camera')}
                     testID="scan-another-photo-button"
                   >
-                    <Ionicons name="camera-outline" size={16} color={theme.color.primary} />
+                    <Ionicons name="camera-outline" size={16} color={t.color.primaryFg} />
                     <Text style={styles.scanMoreBtnText}>+ Add Photo</Text>
                   </Pressable>
 
@@ -375,7 +380,7 @@ export function ReceiptReviewModal({
                       onPress={handleMergeSelected}
                       testID="receipt-merge-items-btn"
                     >
-                      <Ionicons name="git-merge-outline" size={16} color="#ffffff" />
+                      <Ionicons name="git-merge-outline" size={16} color={t.color.textOnPrimary} />
                       <Text style={styles.mergeBtnText}>Merge ({selectedForMerge.length})</Text>
                     </Pressable>
                   ) : null}
@@ -407,7 +412,7 @@ export function ReceiptReviewModal({
                           testID={`receipt-select-merge-${item.id}`}
                         >
                           {isSelectedForMerge ? (
-                            <Ionicons name="checkmark" size={14} color="#ffffff" />
+                            <Ionicons name="checkmark" size={14} color={t.color.textOnPrimary} />
                           ) : null}
                         </Pressable>
 
@@ -422,6 +427,8 @@ export function ReceiptReviewModal({
                             );
                           }}
                           placeholder="Item name"
+                          placeholderTextColor={t.scheme === 'dark' ? t.color.textSecondary : undefined}
+                          keyboardAppearance={t.scheme}
                           testID={`receipt-item-name-${item.id}`}
                         />
 
@@ -438,6 +445,8 @@ export function ReceiptReviewModal({
                             );
                           }}
                           placeholder="0.00"
+                          placeholderTextColor={t.scheme === 'dark' ? t.color.textSecondary : undefined}
+                          keyboardAppearance={t.scheme}
                           testID={`receipt-item-price-${item.id}`}
                         />
                       </View>
@@ -457,7 +466,7 @@ export function ReceiptReviewModal({
                           }}
                           testID={`receipt-suggested-name-${item.id}`}
                         >
-                          <Ionicons name="sparkles" size={14} color={theme.color.primary} />
+                          <Ionicons name="sparkles" size={14} color={t.color.primaryFg} />
                           <Text style={styles.menuSuggestionText}>
                             Did you mean: <Text style={{ fontWeight: '700' }}>{menuMatch}</Text>? (Tap to use)
                           </Text>
@@ -470,11 +479,12 @@ export function ReceiptReviewModal({
                           <Ionicons
                             name="wine-outline"
                             size={16}
-                            color={item.isAlcohol ? '#d97706' : theme.color.textSecondary}
+                            color={item.isAlcohol ? pal.alcoholIcon : t.color.textSecondary}
                           />
                           <Text style={styles.alcoholLabel}>Alcoholic Beverage</Text>
                         </View>
                         <Switch
+                          key={t.scheme}
                           value={item.isAlcohol}
                           onValueChange={(val) => {
                             setItems((prev) =>
@@ -482,6 +492,7 @@ export function ReceiptReviewModal({
                             );
                           }}
                           testID={`receipt-item-alcohol-${item.id}`}
+                          {...themedSwitchProps(t, item.isAlcohol)}
                         />
                       </View>
 
@@ -530,7 +541,7 @@ export function ReceiptReviewModal({
                           onPress={() => handleSplitItem(item.id)}
                           testID={`receipt-split-item-${item.id}`}
                         >
-                          <Ionicons name="git-branch-outline" size={14} color={theme.color.primary} />
+                          <Ionicons name="git-branch-outline" size={14} color={t.color.primaryFg} />
                           <Text style={styles.splitBtnText}>Split</Text>
                         </Pressable>
 
@@ -539,7 +550,7 @@ export function ReceiptReviewModal({
                           onPress={() => setItems((prev) => prev.filter((it) => it.id !== item.id))}
                           testID={`receipt-delete-item-${item.id}`}
                         >
-                          <Ionicons name="trash-outline" size={14} color={theme.color.danger} />
+                          <Ionicons name="trash-outline" size={14} color={t.color.danger} />
                           <Text style={styles.deleteBtnText}>Delete</Text>
                         </Pressable>
                       </View>
@@ -556,10 +567,10 @@ export function ReceiptReviewModal({
                         label={cl.kind.toUpperCase()}
                         color={
                           cl.kind === 'discount'
-                            ? '#10b981'
+                            ? pal.discountBadge
                             : cl.kind === 'tax'
-                            ? '#6366f1'
-                            : '#f59e0b'
+                            ? pal.taxBadge
+                            : t.color.starRating
                         }
                       />
                       <TextInput
@@ -573,6 +584,8 @@ export function ReceiptReviewModal({
                           );
                         }}
                         placeholder="0.00"
+                        placeholderTextColor={t.scheme === 'dark' ? t.color.textSecondary : undefined}
+                        keyboardAppearance={t.scheme}
                         testID={`receipt-charge-amount-${cl.id}`}
                       />
                       <Pressable
@@ -580,7 +593,7 @@ export function ReceiptReviewModal({
                         onPress={() => setChargeLines((prev) => prev.filter((c) => c.id !== cl.id))}
                         testID={`receipt-delete-charge-${cl.id}`}
                       >
-                        <Ionicons name="trash-outline" size={16} color={theme.color.danger} />
+                        <Ionicons name="trash-outline" size={16} color={t.color.danger} />
                       </Pressable>
                     </View>
 
@@ -588,6 +601,7 @@ export function ReceiptReviewModal({
                       <View style={styles.alcoholRow}>
                         <Text style={styles.alcoholLabel}>Exclude alcohol items</Text>
                         <Switch
+                          key={t.scheme}
                           value={Boolean(cl.excludeAlcohol)}
                           onValueChange={(val) => {
                             setChargeLines((prev) =>
@@ -595,6 +609,7 @@ export function ReceiptReviewModal({
                             );
                           }}
                           testID={`receipt-charge-exclude-alcohol-${cl.id}`}
+                          {...themedSwitchProps(t, Boolean(cl.excludeAlcohol))}
                         />
                       </View>
                     ) : null}
@@ -620,14 +635,14 @@ export function ReceiptReviewModal({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: theme.color.surface,
+    backgroundColor: t.color.surface,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 20,
@@ -642,30 +657,30 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   errorBox: {
-    backgroundColor: 'rgba(232, 80, 91, 0.15)',
+    backgroundColor: RECEIPT_REVIEW[t.scheme].errorBg,
     padding: 10,
     borderRadius: 8,
     marginBottom: 12,
   },
   errorText: {
-    color: theme.color.danger,
+    color: t.color.danger,
     fontSize: 13,
   },
   subtotalBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: 'rgba(99, 102, 241, 0.12)',
+    backgroundColor: RECEIPT_REVIEW[t.scheme].subtotalBg,
     padding: 10,
     borderRadius: 8,
     marginBottom: 12,
   },
   subtotalBannerText: {
     fontSize: 13,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
     flex: 1,
   },
   photosBar: {
@@ -674,7 +689,7 @@ const styles = StyleSheet.create({
   photosBarLabel: {
     fontSize: 12,
     fontWeight: '600',
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     marginBottom: 6,
   },
   photosList: {
@@ -685,16 +700,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: theme.color.background,
+    backgroundColor: t.color.background,
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 16,
   },
   photoChipText: {
     fontSize: 12,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   scrollBody: {
     maxHeight: '75%',
@@ -707,13 +722,13 @@ const styles = StyleSheet.create({
   fallbackTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
     marginTop: 12,
     marginBottom: 6,
   },
   fallbackBody: {
     fontSize: 14,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     textAlign: 'center',
     marginBottom: 20,
   },
@@ -735,18 +750,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: theme.color.primary,
+    borderColor: t.color.primaryFg,
   },
   scanMoreBtnText: {
     fontSize: 13,
     fontWeight: '600',
-    color: theme.color.primary,
+    color: t.color.primaryFg,
   },
   mergeBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: theme.color.primary,
+    backgroundColor: t.color.primary,
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 8,
@@ -754,7 +769,7 @@ const styles = StyleSheet.create({
   mergeBtnText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#ffffff',
+    color: t.color.textOnPrimary,
   },
   itemCard: {
     padding: 12,
@@ -771,22 +786,22 @@ const styles = StyleSheet.create({
     height: 22,
     borderRadius: 4,
     borderWidth: 1.5,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
   checkboxSelected: {
-    backgroundColor: theme.color.primary,
-    borderColor: theme.color.primary,
+    backgroundColor: t.color.primary,
+    borderColor: t.color.primary,
   },
   input: {
-    backgroundColor: theme.color.background,
+    backgroundColor: t.color.background,
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 6,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
     fontSize: 14,
   },
   itemNameInput: {
@@ -799,14 +814,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: 'rgba(251, 191, 36, 0.15)',
+    backgroundColor: RECEIPT_REVIEW[t.scheme].menuSuggestionBg,
     padding: 8,
     borderRadius: 6,
     marginBottom: 8,
   },
   menuSuggestionText: {
     fontSize: 12,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
     flex: 1,
   },
   alcoholRow: {
@@ -823,7 +838,7 @@ const styles = StyleSheet.create({
   },
   alcoholLabel: {
     fontSize: 13,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   assigneesWrap: {
     marginTop: 4,
@@ -831,7 +846,7 @@ const styles = StyleSheet.create({
   },
   assigneesTitle: {
     fontSize: 11,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     marginBottom: 4,
     textTransform: 'uppercase',
   },
@@ -844,20 +859,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
-    backgroundColor: theme.color.surface,
+    backgroundColor: t.color.surface,
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
   },
   assigneeChipActive: {
-    backgroundColor: 'rgba(99, 102, 241, 0.15)',
-    borderColor: theme.color.primary,
+    backgroundColor: RECEIPT_REVIEW[t.scheme].assigneeActiveBg,
+    borderColor: t.color.primaryFg,
   },
   assigneeChipText: {
     fontSize: 11,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   assigneeChipTextActive: {
-    color: theme.color.primary,
+    color: t.color.primaryFg,
     fontWeight: '600',
   },
   itemFooterRow: {
@@ -865,7 +880,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     gap: 12,
     borderTopWidth: 1,
-    borderTopColor: theme.color.border,
+    borderTopColor: t.color.border,
     paddingTop: 8,
     marginTop: 4,
   },
@@ -876,7 +891,7 @@ const styles = StyleSheet.create({
   },
   splitBtnText: {
     fontSize: 12,
-    color: theme.color.primary,
+    color: t.color.primaryFg,
   },
   deleteBtn: {
     flexDirection: 'row',
@@ -885,7 +900,7 @@ const styles = StyleSheet.create({
   },
   deleteBtnText: {
     fontSize: 12,
-    color: theme.color.danger,
+    color: t.color.danger,
   },
   chargeCard: {
     padding: 12,
@@ -906,9 +921,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: '#f5f3ff',
+    backgroundColor: RECEIPT_REVIEW[t.scheme].demoBg,
     borderWidth: 1,
-    borderColor: '#ddd6fe',
+    borderColor: RECEIPT_REVIEW[t.scheme].demoBorder,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 8,
@@ -917,7 +932,7 @@ const styles = StyleSheet.create({
   demoNoticeText: {
     flex: 1,
     fontSize: 11,
-    color: '#6d28d9',
+    color: RECEIPT_REVIEW[t.scheme].demoText,
     lineHeight: 15,
   },
-});
+}));

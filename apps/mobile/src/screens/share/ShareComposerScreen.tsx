@@ -39,7 +39,7 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -49,7 +49,9 @@ import type {
   RootStackParamList,
   ShareComposerParams,
 } from '../../navigation/RootNavigator';
-import { theme } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme, usePalette } from '../../theme/useAppTheme';
+import { SHARE_COMPOSER } from './ShareComposerScreen.palette';
 import {
   Card,
   Chip,
@@ -125,6 +127,9 @@ export default function ShareComposerScreen({
   navigation,
   route,
 }: Props): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
+  const pal = usePalette(SHARE_COMPOSER);
   const params = route.params;
 
   // -------------------------------------------------------------------------
@@ -233,7 +238,7 @@ export default function ShareComposerScreen({
       return (
         <Card
           onPress={() => toggleRecipient(item.userId)}
-          {...(isSelected ? { accentColor: theme.color.primary } : {})}
+          {...(isSelected ? { accentColor: t.color.primaryFg } : {})}
           style={[styles.friendRow, isSelected && styles.friendRowSelected]}
         >
           <View style={styles.friendRowInner}>
@@ -242,14 +247,14 @@ export default function ShareComposerScreen({
               name={isSelected ? 'checkmark-circle' : 'ellipse-outline'}
               size={22}
               color={
-                isSelected ? theme.color.primary : theme.color.borderStrong
+                isSelected ? t.color.primaryFg : pal.unselectedIcon
               }
             />
           </View>
         </Card>
       );
     },
-    [selected, toggleRecipient],
+    [selected, toggleRecipient, styles, t, pal],
   );
 
   const handleSend = useCallback((): void => {
@@ -296,7 +301,7 @@ export default function ShareComposerScreen({
           onBack={() => navigation.goBack()}
         />
         <View style={styles.centered} accessibilityRole="progressbar">
-          <ActivityIndicator color={theme.color.primary} />
+          <ActivityIndicator color={t.color.primaryFg} />
         </View>
       </ScreenContainer>
     );
@@ -369,6 +374,7 @@ export default function ShareComposerScreen({
       <FlatList
         data={friends}
         keyExtractor={(item) => item.userId}
+        extraData={t.scheme}
         contentContainerStyle={styles.listContent}
         ListHeaderComponent={
           <SharePreview
@@ -402,7 +408,7 @@ export default function ShareComposerScreen({
                 <Ionicons
                   name="checkmark-circle"
                   size={18}
-                  color={theme.color.success}
+                  color={t.color.success}
                 />
                 <Text style={styles.success}>Sent</Text>
               </View>
@@ -441,6 +447,7 @@ function SharePreview({
   readonly onToggleRating: () => void;
   readonly onToggleNote: () => void;
 }): JSX.Element {
+  const styles = useStyles();
   if (params.kind === 'experience') {
     const showRating = params.rating !== undefined;
     const showNote = params.note !== undefined && params.note.length > 0;
@@ -596,56 +603,56 @@ function mapServerError(err: ApiError): string {
 // Styles
 // ---------------------------------------------------------------------------
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   centered: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: theme.spacing.xl,
+    padding: t.spacing.xl,
   },
   listContent: {
-    paddingHorizontal: theme.spacing.lg,
-    paddingTop: theme.spacing.md,
-    paddingBottom: theme.spacing.xxl,
+    paddingHorizontal: t.spacing.lg,
+    paddingTop: t.spacing.md,
+    paddingBottom: t.spacing.xxl,
   },
   previewBlock: {
-    gap: theme.spacing.sm,
-    marginBottom: theme.spacing.md,
+    gap: t.spacing.sm,
+    marginBottom: t.spacing.md,
   },
   previewLabel: {
-    marginBottom: theme.spacing.xs,
+    marginBottom: t.spacing.xs,
   },
   previewCard: {
-    padding: theme.spacing.md,
-    gap: theme.spacing.xs,
+    padding: t.spacing.md,
+    gap: t.spacing.xs,
   },
   previewTitle: {
-    ...theme.typography.subtitle,
-    color: theme.color.textPrimary,
+    ...t.typography.subtitle,
+    color: t.color.textPrimary,
   },
   previewMeta: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
   },
   previewValue: {
-    ...theme.typography.body,
-    color: theme.color.textPrimary,
+    ...t.typography.body,
+    color: t.color.textPrimary,
   },
   toggleRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: theme.spacing.sm,
+    gap: t.spacing.sm,
   },
   pickerLabel: {
-    marginTop: theme.spacing.sm,
-    marginBottom: theme.spacing.sm,
+    marginTop: t.spacing.sm,
+    marginBottom: t.spacing.sm,
   },
   friendRow: {
-    marginBottom: theme.spacing.sm,
-    padding: theme.spacing.md,
+    marginBottom: t.spacing.sm,
+    padding: t.spacing.md,
   },
   friendRowSelected: {
-    backgroundColor: theme.color.surfaceAlt,
+    backgroundColor: t.color.surfaceAlt,
   },
   friendRowInner: {
     flexDirection: 'row',
@@ -653,28 +660,28 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   friendName: {
-    ...theme.typography.subtitle,
-    color: theme.color.textPrimary,
+    ...t.typography.subtitle,
+    color: t.color.textPrimary,
     flexShrink: 1,
   },
   footer: {
-    marginTop: theme.spacing.lg,
-    gap: theme.spacing.md,
+    marginTop: t.spacing.lg,
+    gap: t.spacing.md,
   },
   error: {
-    color: theme.color.danger,
+    color: t.color.danger,
     fontSize: 14,
   },
   successRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.xs,
+    gap: t.spacing.xs,
   },
   success: {
-    color: theme.color.success,
-    ...theme.typography.subtitle,
+    color: t.color.success,
+    ...t.typography.subtitle,
   },
   sendButton: {
-    marginTop: theme.spacing.sm,
+    marginTop: t.spacing.sm,
   },
-});
+}));

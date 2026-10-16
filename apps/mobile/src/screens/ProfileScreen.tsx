@@ -14,7 +14,6 @@ import {
   ActivityIndicator,
   Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   TextInput,
   View,
@@ -25,7 +24,9 @@ import { useRoute, type RouteProp } from '@react-navigation/native';
 import { displayNameSchema, type ProfileDTO } from '@dwt/shared';
 
 import { ApiError, apiRequest } from '../api/client';
-import { theme } from '../theme/theme';
+import { makeStyles } from '../theme/makeStyles';
+import { useAppTheme } from '../theme/useAppTheme';
+import { AVATAR_GOLD } from './ProfileScreen.palette';
 import {
   Card,
   EmptyState,
@@ -85,6 +86,8 @@ export function ProfileIdentityBlock({
   onAvatarChanged,
   onProfileUpdated,
 }: ProfileIdentityBlockProps): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const queryClient = useQueryClient();
   const [isEditing, setIsEditing] = useState(false);
   const [draftName, setDraftName] = useState(profile.displayName);
@@ -245,7 +248,8 @@ export function ProfileIdentityBlock({
                     if (nameError !== null) setNameError(null);
                   }}
                   placeholder="Display name"
-                  placeholderTextColor={theme.color.textSecondary}
+                  placeholderTextColor={t.color.textSecondary}
+                  keyboardAppearance={t.scheme}
                   autoCapitalize="none"
                   autoCorrect={false}
                   maxLength={50}
@@ -285,7 +289,7 @@ export function ProfileIdentityBlock({
                   accessibilityLabel="Cancel editing display name"
                   testID="cancel-display-name-button"
                 >
-                  <Ionicons name="close" size={18} color={theme.color.textSecondary} />
+                  <Ionicons name="close" size={18} color={t.color.textSecondary} />
                 </Pressable>
               </View>
               {nameError !== null ? (
@@ -318,7 +322,7 @@ export function ProfileIdentityBlock({
                   accessibilityLabel="Edit display name"
                   testID="edit-display-name-button"
                 >
-                  <Ionicons name="create-outline" size={14} color={theme.color.primary} />
+                  <Ionicons name="create-outline" size={14} color={t.color.primaryFg} />
                   <Text style={styles.editNameBtnText}>Edit</Text>
                 </Pressable>
               ) : null}
@@ -346,6 +350,8 @@ export function ProfileIdentityBlock({
 // ---------------------------------------------------------------------------
 
 export default function ProfileScreen(): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const route = useRoute<ProfileRouteProp>();
   const targetUserIdParam = route.params?.userId;
 
@@ -404,7 +410,7 @@ export default function ProfileScreen(): JSX.Element {
     return (
       <ScreenContainer>
         <View style={styles.centered} accessibilityRole="progressbar">
-          <ActivityIndicator color={theme.color.primary} />
+          <ActivityIndicator color={t.color.primaryFg} />
         </View>
       </ScreenContainer>
     );
@@ -509,24 +515,24 @@ export default function ProfileScreen(): JSX.Element {
 // Styles
 // ---------------------------------------------------------------------------
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   centered: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: theme.spacing.xl,
-    gap: theme.spacing.sm,
+    padding: t.spacing.xl,
+    gap: t.spacing.sm,
   },
   body: {
     flexGrow: 1,
-    paddingHorizontal: theme.spacing.xl,
-    marginTop: -theme.layout.headerOverlap,
-    gap: theme.spacing.lg,
-    paddingBottom: theme.spacing.xxl,
+    paddingHorizontal: t.spacing.xl,
+    marginTop: -t.layout.headerOverlap,
+    gap: t.spacing.lg,
+    paddingBottom: t.spacing.xxl,
   },
   identityCard: {
     padding: 14,
-    gap: theme.spacing.sm,
+    gap: t.spacing.sm,
   },
   cardHeaderRow: {
     marginBottom: 2,
@@ -534,7 +540,7 @@ const styles = StyleSheet.create({
   identityEyebrow: {
     fontSize: 11,
     fontWeight: '800',
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
@@ -555,25 +561,25 @@ const styles = StyleSheet.create({
     height: 58,
     borderRadius: 29,
     borderWidth: 2.5,
-    borderColor: '#ffd54f',
+    borderColor: AVATAR_GOLD[t.scheme].ring,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: theme.color.surfaceAlt,
+    backgroundColor: t.color.surfaceAlt,
     overflow: 'hidden',
   },
   avatar: {
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: theme.color.surfaceAlt,
+    backgroundColor: t.color.surfaceAlt,
   },
   avatarPlaceholder: {
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarPlaceholderText: {
-    ...theme.typography.title,
-    color: theme.color.primary,
+    ...t.typography.title,
+    color: t.color.primaryFg,
     fontSize: 22,
     fontWeight: '800',
   },
@@ -581,17 +587,18 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: -2,
     right: -2,
-    backgroundColor: '#ffd54f',
+    backgroundColor: AVATAR_GOLD[t.scheme].badgeBg,
     paddingHorizontal: 5,
     paddingVertical: 1,
     borderRadius: 6,
     borderWidth: 1.5,
-    borderColor: '#ffffff',
+    // Cut-out ring matching the card it sits on (rule 1: ring on a themed surface → surface).
+    borderColor: t.color.surface,
   },
   changeBadgeText: {
     fontSize: 8.5,
     fontWeight: '800',
-    color: '#311b92',
+    color: AVATAR_GOLD[t.scheme].badgeText,
     letterSpacing: 0.5,
   },
   identityDetails: {
@@ -601,18 +608,18 @@ const styles = StyleSheet.create({
   fieldLabel: {
     fontSize: 11,
     fontWeight: '600',
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   nameDisplayRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: theme.spacing.sm,
+    gap: t.spacing.sm,
   },
   displayName: {
-    ...theme.typography.title,
+    ...t.typography.title,
     fontSize: 16,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
     flexShrink: 1,
   },
   editNameBtn: {
@@ -622,14 +629,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
-    backgroundColor: theme.color.surfaceAlt,
+    backgroundColor: t.color.surfaceAlt,
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
   },
   editNameBtnText: {
     fontSize: 12,
     fontWeight: '700',
-    color: theme.color.primary,
+    color: t.color.primaryFg,
   },
   editorWrap: {
     gap: 4,
@@ -642,17 +649,17 @@ const styles = StyleSheet.create({
   inlineInput: {
     flex: 1,
     borderWidth: 1,
-    borderColor: theme.color.border,
-    backgroundColor: theme.color.surfaceAlt,
+    borderColor: t.color.border,
+    backgroundColor: t.color.surfaceAlt,
     borderRadius: 7,
     paddingHorizontal: 8,
     paddingVertical: 5,
     fontSize: 13,
     fontWeight: '700',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   inlineSaveBtn: {
-    backgroundColor: theme.color.primary,
+    backgroundColor: t.color.primary,
     borderRadius: 7,
     paddingHorizontal: 10,
     paddingVertical: 6,
@@ -660,7 +667,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   inlineSaveBtnText: {
-    color: '#ffffff',
+    color: t.color.textOnPrimary,
     fontSize: 11,
     fontWeight: '700',
   },
@@ -677,19 +684,19 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   inlineError: {
-    ...theme.typography.meta,
-    color: theme.color.danger,
+    ...t.typography.meta,
+    color: t.color.danger,
     fontSize: 11,
   },
   securityCard: {
-    gap: theme.spacing.md,
+    gap: t.spacing.md,
   },
   statLabel: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
     textTransform: 'uppercase',
   },
   logoutBlock: {
-    marginTop: theme.spacing.sm,
+    marginTop: t.spacing.sm,
   },
-});
+}));

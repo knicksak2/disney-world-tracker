@@ -2,8 +2,13 @@
 // extracted-component tests, ported from MyFoodListsScreen.test.tsx's
 // pre-extraction inline-modal create-flow test cases.
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import type { ReactTestInstance } from 'react-test-renderer';
 import type { FoodListDTO } from '@dwt/shared';
+
+import { darkTheme } from '../../../theme/theme';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
 
 jest.mock('expo-constants', () => ({
   __esModule: true,
@@ -164,4 +169,43 @@ describe('CreateFoodListModal', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(apiRequestMock).not.toHaveBeenCalled();
   });
+
+  describe('dark mode', () => {
+    afterEach(resetTestScheme);
+
+    test('paints the dialog, title, input and active pill with dark tokens', () => {
+      setTestScheme('dark');
+      render(<CreateFoodListModal visible onClose={jest.fn()} onCreated={jest.fn()} />);
+
+      const title = screen.getByText('Create Food List');
+      // (a) dialog surface, (b) primary text.
+      expect(paintedBackground(title)).toBe(darkTheme.color.surface);
+      expect(StyleSheet.flatten(title.props.style).color).toBe(darkTheme.color.textPrimary);
+      // (c) the input and the active pill (rule 1 `#fff` text on a fill → textOnPrimary).
+      const input = screen.getByTestId('new-food-list-name-input');
+      expect(StyleSheet.flatten(input.props.style).backgroundColor).toBe(
+        darkTheme.color.background,
+      );
+      expect(input.props.keyboardAppearance).toBe('dark');
+      fireEvent.press(screen.getByTestId('new-food-list-visibility-public'));
+      expect(
+        StyleSheet.flatten(screen.getByTestId('new-food-list-visibility-public').props.style)
+          .backgroundColor,
+      ).toBe(darkTheme.color.primary);
+      expect(StyleSheet.flatten(screen.getByText('Public').props.style).color).toBe(
+        darkTheme.color.textOnPrimary,
+      );
+    });
+  });
 });
+
+/** Nearest painted `backgroundColor` at or above `node` (dialog surface lookup). */
+function paintedBackground(node: ReactTestInstance | null): unknown {
+  for (let n = node; n !== null; n = n.parent) {
+    const style = n.props.style;
+    if (style === undefined || typeof style === 'function') continue;
+    const flat = StyleSheet.flatten(style) as { backgroundColor?: unknown } | undefined;
+    if (flat?.backgroundColor !== undefined) return flat.backgroundColor;
+  }
+  return undefined;
+}

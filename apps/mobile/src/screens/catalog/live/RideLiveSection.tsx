@@ -18,9 +18,9 @@
 // rendered here when present.
 
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
-import { theme } from '../../../theme/theme';
+import { makeStyles } from '../../../theme/makeStyles';
 import { Card, EmptyState, SectionLabel } from '../../../theme/components';
 import {
   lowestWaitEntry,
@@ -47,6 +47,7 @@ export default function RideLiveSection({
   upstreamLastUpdated,
   now = new Date(),
 }: LiveSectionProps & { readonly now?: Date }): JSX.Element {
+  const styles = useStyles();
   const wait = waitStatusDisplay(liveDetail.status, liveDetail.waitMinutes);
   const upcoming = upcomingForecast(liveDetail.forecast, now);
   const lowest = lowestWaitEntry(upcoming);
@@ -127,25 +128,25 @@ export default function RideLiveSection({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   section: {
-    gap: theme.spacing.md,
+    gap: t.spacing.md,
   },
   statusRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.sm,
+    gap: t.spacing.sm,
     flexWrap: 'wrap',
   },
   block: {
-    gap: theme.spacing.xs,
+    gap: t.spacing.xs,
   },
   muted: {
-    ...theme.typography.body,
-    color: theme.color.textSecondary,
+    ...t.typography.body,
+    color: t.color.textSecondary,
   },
   forecastLegend: {
-    ...theme.typography.meta,
-    color: theme.color.success,
+    ...t.typography.meta,
+    color: t.color.success,
   },
-});
+}));

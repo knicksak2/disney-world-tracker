@@ -151,8 +151,11 @@ describe('ExperienceDetailScreen - Resort Recreation Experiences', () => {
     expect(screen.getByText('Resort Activity')).toBeTruthy();
     expect(screen.getAllByText('Arts & Crafts').length).toBeGreaterThanOrEqual(1);
 
-    // Assert location in Today lens
-    expect(screen.getByText("Disney's Coronado Springs Resort • Gran Destino Tower")).toBeTruthy();
+    // Assert location in Today lens. The resort prefix arrives with the separate
+    // /resorts query, so wait for it rather than reading synchronously.
+    expect(
+      await screen.findByText("Disney's Coronado Springs Resort • Gran Destino Tower"),
+    ).toBeTruthy();
 
     // Switch to My Passport & Lore lens to verify description
     fireEvent.press(screen.getByTestId('lens-tab-passport'));

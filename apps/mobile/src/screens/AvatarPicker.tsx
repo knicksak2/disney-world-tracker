@@ -12,7 +12,7 @@
  */
 
 import React, { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
 import { AVATAR_PRESET_IDS, type AvatarPresetId, type ProfileDTO } from '@dwt/shared';
 
@@ -21,7 +21,7 @@ import {
   AVATAR_PRESET_COMPONENTS,
   AVATAR_PRESET_LABELS,
 } from '../avatars/AvatarPresets';
-import { theme } from '../theme/theme';
+import { makeStyles } from '../theme/makeStyles';
 import { SecondaryButton } from '../theme/components';
 
 const TILE_SIZE = 64;
@@ -54,6 +54,7 @@ export default function AvatarPicker({
   onOpenChange,
   showDefaultTrigger = true,
 }: AvatarPickerProps): JSX.Element {
+  const styles = useStyles();
   const [internalOpen, setInternalOpen] = useState(false);
   const open = isOpen !== undefined ? isOpen : internalOpen;
 
@@ -157,17 +158,17 @@ export default function AvatarPicker({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   container: {
     alignItems: 'center',
     alignSelf: 'stretch',
-    gap: theme.spacing.sm,
+    gap: t.spacing.sm,
   },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'center',
-    gap: theme.spacing.sm,
+    gap: t.spacing.sm,
   },
   tile: {
     width: TILE_SIZE + 12,
@@ -177,10 +178,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 2,
     borderColor: 'transparent',
-    backgroundColor: theme.color.surfaceAlt,
+    backgroundColor: t.color.surfaceAlt,
   },
+  // Selection ring: a primary border on a surface → primaryFg (rule 1a).
   tileSelected: {
-    borderColor: theme.color.primary,
+    borderColor: t.color.primaryFg,
   },
   tileTargeted: {
     opacity: 0.5,
@@ -190,12 +192,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   noneText: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
   },
   error: {
-    ...theme.typography.meta,
-    color: theme.color.danger,
+    ...t.typography.meta,
+    color: t.color.danger,
     textAlign: 'center',
   },
-});
+}));

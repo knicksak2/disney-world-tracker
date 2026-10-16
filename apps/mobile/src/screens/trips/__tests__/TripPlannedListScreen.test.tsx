@@ -52,6 +52,12 @@ jest.mock('../../../api/client', () => {
 import TripPlannedListScreen from '../TripPlannedListScreen';
 import { ApiError, apiRequest as mockedApiRequest } from '../../../api/client';
 import type { PlannedItemDTO, TripFeedItemDTO, TripMemberDTO } from '@dwt/shared';
+import { StyleSheet } from 'react-native';
+import type { ReactTestInstance } from 'react-test-renderer';
+import { darkTheme } from '../../../theme/theme';
+import { ScreenContainer } from '../../../theme/components';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
+import { RESERVATION_BADGE, SCHED_BADGE } from '../TripPlannedListScreen.palette';
 
 const apiRequestMock = mockedApiRequest as jest.MockedFunction<
   typeof mockedApiRequest
@@ -905,6 +911,76 @@ describe('Planned_List completion sync presentation', () => {
       `planned-item-reservation-${reservationItem.id}`,
     );
     expect(within(resBadge).getByText('Dining Reservation')).toBeTruthy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Feature: dark-mode — the Planned_List repaints with the Twilight palette.
+// ---------------------------------------------------------------------------
+
+describe('Planned_List dark mode', () => {
+  beforeEach(() => {
+    apiRequestMock.mockReset();
+  });
+  afterEach(resetTestScheme);
+
+  const flat = (node: ReactTestInstance): Record<string, unknown> =>
+    (StyleSheet.flatten(node.props.style) ?? {}) as Record<string, unknown>;
+
+  /** The screen root: the host View that `ScreenContainer` paints. */
+  function rootContainer(): ReactTestInstance {
+    const container = screen.UNSAFE_getAllByType(ScreenContainer)[0]!;
+    return container.children[0] as ReactTestInstance;
+  }
+
+  const LL_ITEM: PlannedItemDTO = {
+    ...ITEM,
+    id: 'item-ll',
+    experienceName: 'Seven Dwarfs Mine Train',
+    reservationKind: 'lightning_lane',
+  };
+
+  test('(a)(b)(c) paints the root, item names and converted badges dark', async () => {
+    installApi([ITEM, LL_ITEM]);
+    setTestScheme('dark');
+    renderPlanned(makeNavigation());
+
+    await screen.findByTestId(`planned-item-${ITEM.id}`);
+    // (a) root container.
+    expect(flat(rootContainer()).backgroundColor).toBe(darkTheme.color.background);
+    // (b) primary text — a planned item's name.
+    expect(flat(screen.getByText('Space Mountain')).color).toBe(darkTheme.color.textPrimary);
+    // (c) the "Unscheduled" badge (rule 3 amber S + T).
+    const sched = screen.getByTestId(`planned-item-sched-${ITEM.id}`);
+    expect(flat(sched).backgroundColor).toBe(SCHED_BADGE.dark.unscheduledBg);
+    expect(flat(within(sched).getByText(/Unscheduled/)).color).toBe(
+      SCHED_BADGE.dark.unscheduledText,
+    );
+    // (c) a park Badge used for a park → parkAccent (rule 1).
+    expect(
+      flat(within(screen.getByTestId(`planned-item-${ITEM.id}`)).getByText('Magic Kingdom')).color,
+    ).toBe(darkTheme.parkAccent['Magic Kingdom']);
+    // (c) the Lightning Lane reservation Badge (rule 3 amber T).
+    expect(
+      flat(within(screen.getByTestId(`planned-item-reservation-${LL_ITEM.id}`)).getByText('Lightning Lane'))
+        .color,
+    ).toBe(RESERVATION_BADGE.dark.lightningLane);
+  });
+
+  test('keeps the pre-retrofit light values under light', async () => {
+    installApi([ITEM, LL_ITEM]);
+    renderPlanned(makeNavigation());
+
+    const sched = await screen.findByTestId(`planned-item-sched-${ITEM.id}`);
+    expect(flat(sched).backgroundColor).toBe('rgba(246, 166, 9, 0.16)');
+    expect(flat(within(sched).getByText(/Unscheduled/)).color).toBe('#9a6500');
+    expect(
+      flat(within(screen.getByTestId(`planned-item-${ITEM.id}`)).getByText('Magic Kingdom')).color,
+    ).toBe('#7e57c2');
+    expect(
+      flat(within(screen.getByTestId(`planned-item-reservation-${LL_ITEM.id}`)).getByText('Lightning Lane'))
+        .color,
+    ).toBe('#f6a609');
   });
 });
 

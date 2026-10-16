@@ -3,12 +3,17 @@
 // Validates: Requirements 10.1, 14.4
 
 import React from 'react';
+import { StyleSheet } from 'react-native';
+import type { ReactTestInstance } from 'react-test-renderer';
 import { render } from '@testing-library/react-native';
 
 import LocationGroupSection, {
   resolveLandmarkDetails,
 } from '../LocationGroupSection';
+import { LOCATION } from '../LocationGroupSection.palette';
 import type { TagGroup } from '../infoTags';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
+import { darkTheme } from '../../../theme/theme';
 
 describe('LocationGroupSection & resolveLandmarkDetails', () => {
   describe('resolveLandmarkDetails', () => {
@@ -232,6 +237,55 @@ describe('LocationGroupSection & resolveLandmarkDetails', () => {
       expect(getByText(/1000 W Buena Vista Dr/)).toBeTruthy();
       expect(queryByText(/Central Plaza/)).toBeNull();
       expect(queryByText(/Magic Kingdom/)).toBeNull();
+    });
+  });
+
+  describe('dark mode', () => {
+    const flat = (node: ReactTestInstance) => StyleSheet.flatten(node.props.style) ?? {};
+    afterEach(resetTestScheme);
+
+    it('(c) paints the converted location card, brief and directions button with dark values', () => {
+      setTestScheme('dark');
+      const group: TagGroup = {
+        id: 'location',
+        label: 'Location',
+        tags: [
+          { kind: 'park', label: 'EPCOT', accessibilityLabel: 'Park: EPCOT' },
+          { kind: 'land', label: 'World Showcase', accessibilityLabel: 'Land: World Showcase' },
+        ],
+      };
+      const { getByTestId, getByText } = render(
+        <LocationGroupSection
+          group={group}
+          experienceName="Remy's Ratatouille Adventure"
+          latitude={28.36825}
+          longitude={-81.553097}
+        />,
+      );
+
+      const card = flat(getByTestId('experience-location-group'));
+      expect(card.backgroundColor).toBe(darkTheme.color.surface);
+      expect(card.borderColor).toBe(LOCATION.dark.cardBorder);
+      expect(card.shadowColor).toBe(LOCATION.dark.shadow);
+      expect(flat(getByText('World Showcase • France Pavilion')).color).toBe(
+        LOCATION.dark.briefTitle,
+      );
+      expect(flat(getByText('EPCOT • Landmark Navigation')).color).toBe(LOCATION.dark.briefSub);
+      // Text hierarchy (Requirement 9.13): title is textPrimary, the muted subtitle
+      // is textSecondary, and the two differ (the subtitle used to be brighter).
+      expect(flat(getByText('World Showcase • France Pavilion')).color).toBe(
+        darkTheme.color.textPrimary,
+      );
+      expect(flat(getByText('EPCOT • Landmark Navigation')).color).toBe(
+        darkTheme.color.textSecondary,
+      );
+      expect(flat(getByTestId('experience-get-directions')).backgroundColor).toBe(
+        darkTheme.color.primary,
+      );
+      expect(flat(getByText('Get Directions')).color).toBe(darkTheme.color.textOnPrimary);
+      expect(flat(getByTestId('experience-static-map')).backgroundColor).toBe(
+        LOCATION.dark.mapFrameBg,
+      );
     });
   });
 });

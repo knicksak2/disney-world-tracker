@@ -11,7 +11,6 @@ import React from 'react';
 import {
   Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   View,
 } from 'react-native';
@@ -20,12 +19,14 @@ import type { Park, ParkLiveSnapshotDTO } from '@dwt/shared';
 
 import { apiRequest } from '../../api/client';
 import { navigateToLiveWaits } from '../../navigation/navigationRef';
-import { theme } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme, usePalette } from '../../theme/useAppTheme';
 import {
   calculateParkWaitAverage,
   classifyCrowdTrend,
   type CrowdTrend,
 } from './pulseCalculations';
+import { PARK_WAIT_PULSE } from './ParkWaitPulse.palette';
 
 const THEME_PARKS: readonly Park[] = [
   'Magic Kingdom',
@@ -34,19 +35,8 @@ const THEME_PARKS: readonly Park[] = [
   'Animal Kingdom',
 ] as const;
 
-const PARK_COLORS: Record<string, string> = {
-  'Magic Kingdom': '#7e57c2',
-  EPCOT: '#2f80ed',
-  'Hollywood Studios': '#e8505b',
-  'Animal Kingdom': '#3fa34d',
-};
-
-const TREND_COLORS: Record<CrowdTrend, { readonly bg: string; readonly text: string }> = {
-  'Walk-on': { bg: '#dcfce7', text: '#15803d' },
-  'Light lines': { bg: '#dcfce7', text: '#15803d' },
-  Moderate: { bg: '#fef3c7', text: '#b45309' },
-  Heavy: { bg: '#fee2e2', text: '#b91c1c' },
-};
+/** The parks that carry their own accent on a pill (all four theme parks). */
+const ACCENTED_PARKS: ReadonlySet<string> = new Set<string>(THEME_PARKS);
 
 function ParkPill({
   park,
@@ -57,6 +47,15 @@ function ParkPill({
   readonly isActive?: boolean;
   readonly onPress: (park: Park) => void;
 }): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
+  const pal = usePalette(PARK_WAIT_PULSE);
+  const trendColors: Record<CrowdTrend, { readonly bg: string; readonly text: string }> = {
+    'Walk-on': { bg: pal.walkOnBg, text: pal.walkOnText },
+    'Light lines': { bg: pal.lightLinesBg, text: pal.lightLinesText },
+    Moderate: { bg: pal.moderateBg, text: pal.moderateText },
+    Heavy: { bg: pal.heavyBg, text: pal.heavyText },
+  };
   const liveQuery = useQuery<ParkLiveSnapshotDTO>({
     queryKey: ['park-live', park],
     queryFn: () =>
@@ -70,8 +69,8 @@ function ParkPill({
   const entries = liveQuery.data?.entries ?? [];
   const avgWait = calculateParkWaitAverage(entries);
   const trend = classifyCrowdTrend(avgWait);
-  const trendColor = TREND_COLORS[trend];
-  const parkColor = PARK_COLORS[park] ?? theme.color.primary;
+  const trendColor = trendColors[trend];
+  const parkColor = ACCENTED_PARKS.has(park) ? t.parkAccent[park] : t.color.primaryFg;
 
   return (
     <Pressable
@@ -116,6 +115,7 @@ export default function ParkWaitPulse({
   activePark = null,
   testID = 'home-park-wait-pulse',
 }: ParkWaitPulseProps): JSX.Element {
+  const styles = useStyles();
   const handleParkPress = (park: Park) => {
     if (onSelectPark) {
       onSelectPark(park);
@@ -168,15 +168,15 @@ export default function ParkWaitPulse({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   container: {
-    marginBottom: theme.spacing.md,
+    marginBottom: t.spacing.md,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: theme.spacing.md,
+    paddingHorizontal: t.spacing.md,
     marginBottom: 8,
   },
   titleRow: {
@@ -186,30 +186,31 @@ const styles = StyleSheet.create({
   },
   icon: {
     fontSize: 16,
+    ...t.textDefault,
   },
   title: {
     fontSize: 16,
     fontWeight: '800',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   link: {
     fontSize: 13,
     fontWeight: '700',
-    color: theme.color.primary,
+    color: t.color.primaryFg,
   },
   scrollContent: {
-    paddingHorizontal: theme.spacing.md,
+    paddingHorizontal: t.spacing.md,
     gap: 10,
   },
   pill: {
     width: 124,
-    backgroundColor: theme.color.surface,
+    backgroundColor: t.color.surface,
     borderRadius: 14,
     padding: 10,
     borderWidth: 1,
-    borderColor: '#eee6f7',
+    borderColor: PARK_WAIT_PULSE[t.scheme].pillBorder,
     gap: 4,
-    shadowColor: '#5b2a86',
+    shadowColor: PARK_WAIT_PULSE[t.scheme].pillShadow,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 4,
@@ -217,8 +218,8 @@ const styles = StyleSheet.create({
   },
   pillActive: {
     borderWidth: 2,
-    borderColor: '#22c55e',
-    shadowColor: '#22c55e',
+    borderColor: PARK_WAIT_PULSE[t.scheme].activeBorder,
+    shadowColor: PARK_WAIT_PULSE[t.scheme].activeShadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.35,
     shadowRadius: 6,
@@ -240,13 +241,13 @@ const styles = StyleSheet.create({
   waitNum: {
     fontSize: 18,
     fontWeight: '800',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
     lineHeight: 22,
   },
   waitUnit: {
     fontSize: 10,
     fontWeight: '600',
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   trendBadge: {
     alignSelf: 'flex-start',
@@ -259,4 +260,4 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '800',
   },
-});
+}));

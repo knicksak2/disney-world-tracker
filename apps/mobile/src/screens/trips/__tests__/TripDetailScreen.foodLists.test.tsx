@@ -19,8 +19,12 @@
  */
 
 import React from 'react';
-import { Alert } from 'react-native';
+import { Alert, StyleSheet } from 'react-native';
+import type { ReactTestInstance } from 'react-test-renderer';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { darkTheme } from '../../../theme/theme';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
+import { ATTACHED_FOOD_LISTS } from '../AttachedFoodListsSection.palette';
 import {
   fireEvent,
   render,
@@ -659,6 +663,63 @@ describe('Attached Food Lists UI (Task 24.6, 24.7)', () => {
         'DELETE',
         `/trips/${TRIP_ID}/food-lists/${LIST_UNAVAIL_ID}`,
       );
+    });
+  });
+
+  // Feature: dark-mode — AttachedFoodListsSection (c) assertions.
+  describe('dark mode', () => {
+    afterEach(resetTestScheme);
+
+    const flat = (node: ReactTestInstance): Record<string, unknown> =>
+      (StyleSheet.flatten(node.props.style) ?? {}) as Record<string, unknown>;
+
+    function renderSection(lists: readonly TripFoodListDTO[]): void {
+      render(
+        <QueryClientProvider client={makeQueryClient()}>
+          <AttachedFoodListsSection
+            tripId={TRIP_ID}
+            foodLists={lists}
+            isOrganizer={true}
+            callerDisplayName="Ariel"
+          />
+        </QueryClientProvider>,
+      );
+    }
+
+    test('(c) the unavailable row, title and Attach control use dark values', () => {
+      setTestScheme('dark');
+      renderSection([AVAILABLE_LIST_1, UNAVAILABLE_LIST]);
+
+      expect(
+        flat(screen.getByTestId(`attached-food-list-unavailable-${LIST_UNAVAIL_ID}`))
+          .backgroundColor,
+      ).toBe(ATTACHED_FOOD_LISTS.dark.unavailableBg);
+      expect(flat(screen.getByText('Attached Food Lists')).color).toBe(
+        darkTheme.color.textPrimary,
+      );
+      expect(flat(screen.getByText('Snacks of Epcot')).color).toBe(darkTheme.color.textPrimary);
+      expect(
+        flat(screen.getByTestId('trip-detail-attach-food-list-btn')).backgroundColor,
+      ).toBe(darkTheme.color.primary);
+      expect(flat(screen.getByText('Attach')).color).toBe(darkTheme.color.textOnPrimary);
+    });
+
+    test('(c) the empty state keeps its rule-2a primary tint and border in dark', () => {
+      setTestScheme('dark');
+      renderSection([]);
+
+      const empty = flat(screen.getByTestId('attached-food-lists-empty'));
+      expect(empty.backgroundColor).toBe(`${darkTheme.color.primary}0a`);
+      expect(empty.borderColor).toBe(`${darkTheme.color.primaryFg}18`);
+    });
+
+    test('keeps the pre-retrofit light values under light', () => {
+      renderSection([UNAVAILABLE_LIST]);
+
+      expect(
+        flat(screen.getByTestId(`attached-food-list-unavailable-${LIST_UNAVAIL_ID}`))
+          .backgroundColor,
+      ).toBe('#eee');
     });
   });
 });

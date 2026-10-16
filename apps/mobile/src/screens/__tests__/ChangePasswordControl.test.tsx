@@ -8,8 +8,11 @@
 // and the `invalid_credentials` / `validation_failed` error mappings.
 
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { darkTheme } from '../../theme/theme';
+import { resetTestScheme, setTestScheme } from '../../test/themeTestUtils';
 
 // ---------------------------------------------------------------------------
 // Mocks (declared before the module under test is imported).
@@ -191,5 +194,31 @@ describe('ChangePasswordControl', () => {
         'Password must be 8 to 128 characters.',
       );
     });
+  });
+});
+
+// Feature: dark-mode — the expanded editor's inputs follow the Active theme.
+describe('ChangePasswordControl — dark mode', () => {
+  const flat = (node: { props: { style?: unknown } }): Record<string, unknown> =>
+    (StyleSheet.flatten(node.props.style as never) ?? {}) as Record<string, unknown>;
+  beforeEach(() => {
+    apiRequestMock.mockReset();
+  });
+  afterEach(resetTestScheme);
+
+  test('(c) inputs, labels and the error line use dark values', () => {
+    setTestScheme('dark');
+    renderControl();
+    openAndFill({ current: VALID_CURRENT, next: VALID_NEW, confirm: 'different-pass-3' });
+
+    const input = screen.getByTestId('change-password-current');
+    expect(input.props.keyboardAppearance).toBe('dark');
+    expect(input.props.placeholderTextColor).toBe(darkTheme.color.textSecondary);
+    expect(flat(input).backgroundColor).toBe(darkTheme.color.surfaceAlt);
+    expect(flat(input).color).toBe(darkTheme.color.textPrimary);
+    expect(flat(screen.getByText('Current password')).color).toBe(darkTheme.color.textSecondary);
+
+    fireEvent.press(screen.getByTestId('change-password-submit'));
+    expect(flat(screen.getByTestId('change-password-error')).color).toBe(darkTheme.color.danger);
   });
 });

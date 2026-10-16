@@ -10,6 +10,8 @@
 // (or the reverse), so the toggle's wire behavior is worth asserting directly.
 
 import React from 'react';
+import { StyleSheet, Switch } from 'react-native';
+import type { ReactTestInstance } from 'react-test-renderer';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
@@ -48,6 +50,8 @@ jest.mock('../../../api/client', () => {
 
 import NoteControl from '../NoteControl';
 import { apiRequest as mockedApiRequest } from '../../../api/client';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
+import { darkTheme } from '../../../theme/theme';
 
 const apiRequestMock = mockedApiRequest as jest.MockedFunction<
   typeof mockedApiRequest
@@ -170,5 +174,82 @@ describe('NoteControl shareable toggle (R4.6, R4.7)', () => {
     expect(screen.getByTestId('note-share-status')).toHaveTextContent(
       'Private — only you can see this',
     );
+  });
+
+  // Feature: dark-mode — (c) the note editor's TextInput and copy (B2)
+  describe('dark mode', () => {
+    afterEach(resetTestScheme);
+
+    const flat = (node: ReactTestInstance): Record<string, unknown> =>
+      (StyleSheet.flatten(node.props.style) ?? {}) as Record<string, unknown>;
+
+    test('(c) the editor input gets dark field colours, a dark placeholder and a dark keyboard', () => {
+      setTestScheme('dark');
+      renderControl(null);
+      fireEvent.press(screen.getByTestId('note-add'));
+
+      const input = screen.getByTestId('note-input');
+      const style = flat(input);
+      expect(style.backgroundColor).toBe(darkTheme.color.surfaceAlt);
+      expect(style.borderColor).toBe(darkTheme.color.border);
+      expect(style.color).toBe(darkTheme.color.textPrimary);
+      expect(input.props.placeholderTextColor).toBe(darkTheme.color.textSecondary);
+      expect(input.props.keyboardAppearance).toBe('dark');
+      expect(flat(screen.getByText('Share with friends')).color).toBe(darkTheme.color.textPrimary);
+    });
+
+    test('light keeps the platform default placeholder colour (light byte-identical)', () => {
+      renderControl(null);
+      fireEvent.press(screen.getByTestId('note-add'));
+
+      const input = screen.getByTestId('note-input');
+      expect(input.props.placeholderTextColor).toBeUndefined();
+      expect(input.props.keyboardAppearance).toBe('light');
+      expect(flat(input).backgroundColor).toBe('#efe9f7');
+    });
+
+    // Feature: dark-mode polish pass (Requirement 9.15, B2-4): the share Switch.
+    const shareSwitch = (): ReactTestInstance =>
+      screen.UNSAFE_getAllByType(Switch).find((s) => s.props.testID === 'note-shareable')!;
+
+    test('dark: the share Switch gets token track/thumb colours, on stronger than off', () => {
+      setTestScheme('dark');
+      renderControl(null);
+      fireEvent.press(screen.getByTestId('note-add'));
+
+      expect(shareSwitch().props.trackColor).toEqual({
+        false: darkTheme.color.borderStrong,
+        true: darkTheme.color.primary,
+      });
+      expect(shareSwitch().props.ios_backgroundColor).toBe(darkTheme.color.borderStrong);
+      expect(shareSwitch().props.thumbColor).toBe(darkTheme.color.textSecondary);
+
+      fireEvent(screen.getByTestId('note-shareable'), 'valueChange', true);
+      expect(shareSwitch().props.value).toBe(true);
+      expect(shareSwitch().props.thumbColor).toBe(darkTheme.color.textOnPrimary);
+    });
+
+    test('light: the share Switch stays on platform defaults (no colour props)', () => {
+      renderControl(null);
+      fireEvent.press(screen.getByTestId('note-add'));
+      expect(shareSwitch().props.trackColor).toBeUndefined();
+      expect(shareSwitch().props.thumbColor).toBeUndefined();
+      expect(shareSwitch().props.ios_backgroundColor).toBeUndefined();
+    });
+
+    test('a live dark→light switch remounts the Switch with platform defaults', () => {
+      setTestScheme('dark');
+      renderControl(null);
+      fireEvent.press(screen.getByTestId('note-add'));
+      const darkHost = screen.getByTestId('note-shareable');
+      expect(shareSwitch().props.thumbColor).toBe(darkTheme.color.textSecondary);
+
+      setTestScheme('light');
+      const lightHost = screen.getByTestId('note-shareable');
+      // `key={t.scheme}`: a new native view, so no dark colour is left stuck on Android.
+      expect(lightHost).not.toBe(darkHost);
+      expect(shareSwitch().props.thumbColor).toBeUndefined();
+      expect(shareSwitch().props.trackColor).toBeUndefined();
+    });
   });
 });

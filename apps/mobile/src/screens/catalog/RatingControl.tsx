@@ -58,7 +58,6 @@ import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
-  StyleSheet,
   Text,
   View,
 } from 'react-native';
@@ -67,7 +66,8 @@ import { Ionicons } from '@expo/vector-icons';
 import type { RatingDTO } from '@dwt/shared';
 
 import { ApiError, apiRequest } from '../../api/client';
-import { theme } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme } from '../../theme/useAppTheme';
 import { PrimaryButton, SecondaryButton } from '../../theme/components';
 
 // ---------------------------------------------------------------------------
@@ -129,6 +129,8 @@ export default function RatingControl({
   rating,
   onMutated,
 }: RatingControlProps): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const [pickerOpen, setPickerOpen] = useState<boolean>(false);
   // `busy` gates every Pressable while a request is in flight to
   // prevent double-submits (e.g. a fast User tapping two buttons in
@@ -253,7 +255,7 @@ export default function RatingControl({
           {busy ? (
             <ActivityIndicator
               accessibilityLabel="Saving rating"
-              color={theme.color.primary}
+              color={t.color.primaryFg}
               testID="rating-busy"
             />
           ) : null}
@@ -271,7 +273,7 @@ export default function RatingControl({
     return (
       <View style={styles.container} testID="rating-control">
         <View style={styles.ratingValueRow}>
-          <Ionicons name="star" size={20} color={theme.color.accent} />
+          <Ionicons name="star" size={20} color={t.color.accent} />
           <Text style={styles.ratingValue} testID="rating-value">
             {rating.value} / 10
           </Text>
@@ -299,7 +301,7 @@ export default function RatingControl({
           {busy ? (
             <ActivityIndicator
               accessibilityLabel="Updating rating"
-              color={theme.color.primary}
+              color={t.color.primaryFg}
               testID="rating-busy"
             />
           ) : null}
@@ -385,58 +387,58 @@ function messageForRemoveError(err: unknown): string {
 // Styles
 // ---------------------------------------------------------------------------
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   container: {
-    gap: theme.spacing.md,
+    gap: t.spacing.md,
   },
   pickerRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: theme.spacing.sm,
+    gap: t.spacing.sm,
   },
   pickerButton: {
     minWidth: 40,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.sm,
-    borderRadius: theme.radius.md,
+    paddingHorizontal: t.spacing.md,
+    paddingVertical: t.spacing.sm,
+    borderRadius: t.radius.md,
     borderWidth: 1,
-    borderColor: theme.color.borderStrong,
-    backgroundColor: theme.color.surfaceAlt,
+    borderColor: t.color.borderStrong,
+    backgroundColor: t.color.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
   pickerButtonSelected: {
-    backgroundColor: theme.color.primary,
-    borderColor: theme.color.primary,
+    backgroundColor: t.color.primary,
+    borderColor: t.color.primary,
   },
   pickerButtonText: {
-    ...theme.typography.subtitle,
-    color: theme.color.textPrimary,
+    ...t.typography.subtitle,
+    color: t.color.textPrimary,
   },
   pickerButtonTextSelected: {
-    color: theme.color.textOnPrimary,
+    color: t.color.textOnPrimary,
   },
   actionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.sm,
+    gap: t.spacing.sm,
   },
   ratingValueRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.sm,
+    gap: t.spacing.sm,
   },
   ratingValue: {
-    ...theme.typography.title,
-    color: theme.color.textPrimary,
+    ...t.typography.title,
+    color: t.color.textPrimary,
   },
   empty: {
-    ...theme.typography.body,
-    color: theme.color.textSecondary,
+    ...t.typography.body,
+    color: t.color.textSecondary,
     fontStyle: 'italic',
   },
   errorText: {
-    color: theme.color.danger,
+    color: t.color.danger,
     fontSize: 13,
   },
-});
+}));

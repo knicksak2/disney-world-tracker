@@ -45,7 +45,7 @@
 // should expose this read to match.
 
 import React, { useMemo, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
@@ -57,6 +57,8 @@ import {
 import { ApiError, apiRequest } from '../../api/client';
 import type { TripsStackParamList } from '../../navigation/TripsStack';
 import { theme } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme } from '../../theme/useAppTheme';
 import {
   Badge,
   Card,
@@ -114,6 +116,8 @@ export default function RodeWithConfirmScreen({
   navigation,
   route,
 }: Props): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const { rodeWithTagId } = route.params;
   const queryClient = useQueryClient();
 
@@ -222,7 +226,7 @@ export default function RodeWithConfirmScreen({
       <ScreenContainer>
         <ConfirmHeader onBack={backToList} />
         <View style={styles.center} testID="rode-with-loading">
-          <ActivityIndicator color={theme.color.primary} />
+          <ActivityIndicator color={t.color.primaryFg} />
         </View>
       </ScreenContainer>
     );
@@ -391,6 +395,8 @@ function RatingSelector({
   readonly disabled: boolean;
   readonly onSelect: (value: number | null) => void;
 }): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const heading = useMemo(
     () => (currentRating === null ? 'Add a rating (optional)' : 'Update your rating'),
     [currentRating],
@@ -400,7 +406,7 @@ function RatingSelector({
       <View style={styles.ratingHeaderRow}>
         <Text style={styles.ratingHeading}>{heading}</Text>
         {currentRating !== null ? (
-          <Badge label={`Current ${currentRating}/10`} color={theme.color.primary} />
+          <Badge label={`Current ${currentRating}/10`} color={t.color.primaryFg} />
         ) : null}
       </View>
       <Text style={styles.helper}>
@@ -480,7 +486,7 @@ function actionErrorMessage(err: ApiError | null): string {
 // Styles
 // ---------------------------------------------------------------------------
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   center: {
     flex: 1,
     alignItems: 'center',
@@ -499,15 +505,15 @@ const styles = StyleSheet.create({
   },
   experienceName: {
     ...theme.typography.subtitle,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   prompt: {
     ...theme.typography.body,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   helper: {
     ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   ratingCard: {
     gap: theme.spacing.sm,
@@ -520,7 +526,7 @@ const styles = StyleSheet.create({
   },
   ratingHeading: {
     ...theme.typography.subtitle,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
     flexShrink: 1,
   },
   ratingChips: {
@@ -537,7 +543,7 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
   },
   error: {
-    color: theme.color.danger,
+    color: t.color.danger,
     fontSize: 13,
   },
-});
+}));

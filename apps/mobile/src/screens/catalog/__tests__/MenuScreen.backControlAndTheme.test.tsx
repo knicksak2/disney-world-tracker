@@ -22,6 +22,8 @@
 // with a cuisine type, one without — is sufficient.
 
 import React from 'react';
+import { StyleSheet } from 'react-native';
+import type { ReactTestInstance } from 'react-test-renderer';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 
 import type { MenuDTO } from '@dwt/shared';
@@ -80,9 +82,12 @@ jest.mock('../../../api/client', () => {
 jest.mock('../../../theme/components', () => {
   const ReactLocal = require('react');
   const { Text, View, Pressable } = require('react-native');
+  // The real container (themed screen background) so the dark-mode case can
+  // assert the root surface; it is still a spy so composition stays visible.
+  const actual = jest.requireActual('../../../theme/components');
 
-  const ScreenContainer = jest.fn(({ children }: any) =>
-    ReactLocal.createElement(View, null, children),
+  const ScreenContainer = jest.fn((props: any) =>
+    ReactLocal.createElement(actual.ScreenContainer, props),
   );
   const GradientHeader = jest.fn(({ title, onBack }: any) =>
     ReactLocal.createElement(
@@ -141,6 +146,9 @@ import {
   GradientHeader as MockGradientHeader,
   SectionLabel as MockSectionLabel,
 } from '../../../theme/components';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
+import { darkTheme } from '../../../theme/theme';
+import { MENU_ITEM } from '../MenuScreen.palette';
 
 const apiRequestMock = mockedApiRequest as jest.MockedFunction<
   typeof mockedApiRequest
@@ -269,5 +277,57 @@ describe('MenuScreen back control and theme usage (R5.8, R5.9)', () => {
     expect(cardCount).toBe(sectionCount);
     expect(cardCount).toBeGreaterThan(0);
     expect(badgeCount).toBeGreaterThan(cardCount);
+  });
+
+  // -------------------------------------------------------------------------
+  // Feature: dark-mode — (a)/(b)/(c) for the Menu_Screen (B2)
+  // -------------------------------------------------------------------------
+  describe('dark mode', () => {
+    afterEach(resetTestScheme);
+
+    const flat = (node: ReactTestInstance): Record<string, unknown> =>
+      (StyleSheet.flatten(node.props.style) ?? {}) as Record<string, unknown>;
+    const ActualScreenContainer = jest.requireActual('../../../theme/components')
+      .ScreenContainer as React.ComponentType;
+    const lastBadgeProps = (testID: string): Record<string, unknown> => {
+      const calls = (MockBadge as jest.Mock).mock.calls.filter(
+        ([props]) => props.testID === testID,
+      );
+      return calls[calls.length - 1]![0];
+    };
+
+    test('(a)(b)(c) renders the screen, menu text and converted controls with dark values', async () => {
+      setTestScheme('dark');
+      const view = renderMenuScreen();
+      await waitFor(() => {
+        expect(view.queryByTestId('menu-screen')).not.toBeNull();
+      });
+
+      // (a) root container.
+      const root = view.UNSAFE_getByType(ActualScreenContainer).children[0] as ReactTestInstance;
+      expect(flat(root).backgroundColor).toBe(darkTheme.color.background);
+      // (b) primary text (menu group name).
+      expect(flat(view.getByText('Mains')).color).toBe(darkTheme.color.textPrimary);
+      // (c) converted token reads / literals.
+      expect(lastBadgeProps('menu-type-0').color).toBe(darkTheme.color.primaryFg);
+      expect(lastBadgeProps('menu-cuisine-0').color).toBe(darkTheme.color.accent);
+      expect(flat(view.getByTestId('menu-item-add-to-list-0-0-0')).backgroundColor).toBe(
+        MENU_ITEM.dark.addBg,
+      );
+      expect(flat(view.getByTestId('menu-tab-1')).backgroundColor).toBe(
+        darkTheme.color.surfaceAlt,
+      );
+    });
+
+    test('keeps the pre-retrofit light values under light', async () => {
+      const view = renderMenuScreen();
+      await waitFor(() => {
+        expect(view.queryByTestId('menu-screen')).not.toBeNull();
+      });
+
+      expect(lastBadgeProps('menu-type-0').color).toBe('#5b2a86');
+      expect(flat(view.getByTestId('menu-item-add-to-list-0-0-0')).backgroundColor).toBe('#f6f2fa');
+      expect(flat(view.getByText('Mains')).color).toBe('#1f1235');
+    });
   });
 });

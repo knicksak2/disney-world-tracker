@@ -13,13 +13,16 @@
  * single-pin celebration (no `position`, or `total <= 1`) renders exactly as before.
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { AccessibilityInfo, Animated, Modal, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { AccessibilityInfo, Animated, Modal, ScrollView, Text, View } from 'react-native';
 import { PINS, type PinDTO } from '@dwt/shared';
 
 import { PinView } from '../../components/pins/PinView';
-import { TIER_COLOR, TIER_LABEL } from '../../components/pins/pinTierMeta';
-import { theme } from '../../theme/theme';
+import { TIER_LABEL } from '../../components/pins/pinTierMeta';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme, usePalette } from '../../theme/useAppTheme';
 import { Badge, PrimaryButton, SecondaryButton } from '../../theme/components';
+import { CONFETTI, PIN_CELEBRATION } from './PinCelebrationModal.palette';
+import { TIER_TEXT } from './tierText.palette';
 
 export interface CelebrationPosition {
   /** 1-based position of the pin currently being celebrated within its claim batch. */
@@ -51,20 +54,18 @@ export interface PinCelebrationModalProps {
 const CATALOG: ReadonlyMap<string, PinDTO> = new Map(PINS.map((p) => [p.id, p]));
 
 const CONFETTI_COUNT = 16;
-const CONFETTI_COLORS = [
-  theme.color.primary,
-  theme.color.accent,
-  '#f2c14e',
-  '#4ecdc4',
-  '#ff6f91',
-];
+/** Number of confetti hues (primary, accent, and the three `CONFETTI` palette hues). */
+const CONFETTI_COLOR_COUNT = 5;
 
-/** Deterministic-per-mount confetti particle geometry (seeded once, not per-frame-random). */
+/**
+ * Deterministic-per-mount confetti particle geometry (seeded once, not per-frame-random). The
+ * hue is stored as an index and resolved at render time, so a scheme switch repaints it.
+ */
 interface ConfettiSpec {
   readonly angle: number;
   readonly distance: number;
   readonly rotation: number;
-  readonly color: string;
+  readonly colorIndex: number;
 }
 
 function makeConfettiSpecs(): ConfettiSpec[] {
@@ -72,12 +73,22 @@ function makeConfettiSpecs(): ConfettiSpec[] {
     angle: (i / CONFETTI_COUNT) * Math.PI * 2 + (Math.random() - 0.5) * 0.6,
     distance: 70 + Math.random() * 50,
     rotation: Math.random() * 360,
-    color: CONFETTI_COLORS[i % CONFETTI_COLORS.length]!,
+    colorIndex: i % CONFETTI_COLOR_COUNT,
   }));
 }
 
 /** A single outward-bursting confetti particle. */
 function ConfettiParticle({ spec, testID }: { spec: ConfettiSpec; testID: string }): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
+  const confetti = usePalette(CONFETTI);
+  const confettiColors = [
+    t.color.primary,
+    t.color.accent,
+    confetti.gold,
+    confetti.teal,
+    confetti.pink,
+  ];
   const progress = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -95,7 +106,7 @@ function ConfettiParticle({ spec, testID }: { spec: ConfettiSpec; testID: string
       style={[
         styles.confettiParticle,
         {
-          backgroundColor: spec.color,
+          backgroundColor: confettiColors[spec.colorIndex]!,
           opacity: progress.interpolate({ inputRange: [0, 0.7, 1], outputRange: [1, 1, 0] }),
           transform: [
             { translateX: progress.interpolate({ inputRange: [0, 1], outputRange: [0, dx] }) },
@@ -122,6 +133,8 @@ export default function PinCelebrationModal({
   onSkipAll,
   dismissLabel,
 }: PinCelebrationModalProps): JSX.Element | null {
+  const styles = useStyles();
+  const tierUi = usePalette(TIER_TEXT);
   const awarded = useMemo(
     () => pinIds.map((id) => CATALOG.get(id)).filter((p): p is PinDTO => p != null),
     [pinIds],
@@ -195,7 +208,7 @@ export default function PinCelebrationModal({
                   </Animated.View>
                 </View>
                 <Text style={styles.pinName}>{pin.name}</Text>
-                <Badge label={TIER_LABEL[pin.tier]} color={TIER_COLOR[pin.tier]} />
+                <Badge label={TIER_LABEL[pin.tier]} color={tierUi[pin.tier]} />
               </View>
             ))}
           </ScrollView>
@@ -228,38 +241,39 @@ export default function PinCelebrationModal({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(10,7,20,0.72)',
+    backgroundColor: PIN_CELEBRATION[t.scheme].backdrop,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: theme.spacing.xl,
+    padding: t.spacing.xl,
   },
   sheet: {
-    backgroundColor: theme.color.surface,
-    borderRadius: theme.radius.xl,
-    padding: theme.spacing.xl,
+    backgroundColor: t.color.surface,
+    borderRadius: t.radius.xl,
+    padding: t.spacing.xl,
     alignItems: 'center',
     maxWidth: 520,
     width: '100%',
+    ...t.outline.card,
   },
   heading: {
-    ...theme.typography.title,
-    color: theme.color.textPrimary,
+    ...t.typography.title,
+    color: t.color.textPrimary,
     textAlign: 'center',
-    marginBottom: theme.spacing.xs,
+    marginBottom: t.spacing.xs,
   },
   position: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
     textAlign: 'center',
-    marginBottom: theme.spacing.lg,
+    marginBottom: t.spacing.lg,
   },
-  pinsRow: { alignItems: 'center', paddingHorizontal: theme.spacing.sm },
-  viewDetailsWrap: { marginTop: theme.spacing.sm },
-  skipAllWrap: { marginTop: theme.spacing.sm },
-  pinCell: { alignItems: 'center', marginHorizontal: theme.spacing.md, marginBottom: theme.spacing.lg },
+  pinsRow: { alignItems: 'center', paddingHorizontal: t.spacing.sm },
+  viewDetailsWrap: { marginTop: t.spacing.sm },
+  skipAllWrap: { marginTop: t.spacing.sm },
+  pinCell: { alignItems: 'center', marginHorizontal: t.spacing.md, marginBottom: t.spacing.lg },
   artWrap: { alignItems: 'center', justifyContent: 'center' },
   confettiParticle: {
     position: 'absolute',
@@ -270,10 +284,10 @@ const styles = StyleSheet.create({
     borderRadius: 2,
   },
   pinName: {
-    ...theme.typography.subtitle,
-    color: theme.color.textPrimary,
+    ...t.typography.subtitle,
+    color: t.color.textPrimary,
     textAlign: 'center',
-    marginTop: theme.spacing.sm,
-    marginBottom: theme.spacing.xs,
+    marginTop: t.spacing.sm,
+    marginBottom: t.spacing.xs,
   },
-});
+}));

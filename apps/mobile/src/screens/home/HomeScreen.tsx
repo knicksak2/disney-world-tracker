@@ -28,7 +28,6 @@ import {
   Pressable,
   RefreshControl,
   ScrollView,
-  StyleSheet,
   Text,
   View,
 } from 'react-native';
@@ -65,7 +64,8 @@ import { navigateToTripSchedule } from '../../navigation/navigationRef';
 import { tripsListKeys } from '../trips/TripsListScreen';
 import { tripPlannedListKeys } from '../trips/TripPlannedListScreen';
 import { getTodayWDW } from '../trips/TripScheduleScreen';
-import { theme } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme } from '../../theme/useAppTheme';
 import {
   Badge,
   Card,
@@ -111,10 +111,12 @@ type TripsListResponse = readonly TripStatusGroup[];
 const CACHE_WINDOW_MS = 5 * 60 * 1000;
 
 export default function HomeScreen({ navigation }: Props): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
   const insets = useContext(SafeAreaInsetsContext);
-  const topInset = Math.max(insets?.top ?? 0, theme.spacing.xl);
+  const topInset = Math.max(insets?.top ?? 0, t.spacing.xl);
 
   // Quick Action / Experience Logging modal flow state
   const [pickerVisible, setPickerVisible] = useState(false);
@@ -295,7 +297,7 @@ export default function HomeScreen({ navigation }: Props): JSX.Element {
     <ScreenContainer style={styles.container}>
       {/* 1. Gradient Hero Header */}
       <LinearGradient
-        colors={theme.gradient.headerVivid}
+        colors={t.gradient.headerVivid}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={[styles.heroHeader, { paddingTop: topInset + 12 }]}
@@ -322,11 +324,11 @@ export default function HomeScreen({ navigation }: Props): JSX.Element {
           </View>
           <View style={styles.headerActions}>
             <View style={styles.iconCircleBtn}>
-              <NotificationBell tintColor="#ffffff" size={18} />
+              <NotificationBell tintColor={t.color.textOnPrimary} size={18} />
             </View>
             <AvatarChip
               variant="pill"
-              tintColor={theme.color.textOnPrimary}
+              tintColor={t.color.textOnPrimary}
               testID="avatar-chip"
             />
           </View>
@@ -347,7 +349,7 @@ export default function HomeScreen({ navigation }: Props): JSX.Element {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor={theme.color.primary}
+            tintColor={t.color.primaryFg}
           />
         }
         showsVerticalScrollIndicator={false}
@@ -436,7 +438,7 @@ export default function HomeScreen({ navigation }: Props): JSX.Element {
 
           {showLoading ? (
             <View style={styles.center} testID="home-leaderboard-loading">
-              <ActivityIndicator color={theme.color.primary} />
+              <ActivityIndicator color={t.color.primaryFg} />
             </View>
           ) : null}
 
@@ -504,7 +506,7 @@ export default function HomeScreen({ navigation }: Props): JSX.Element {
                 accessibilityLabel="Close picker"
                 testID="home-picker-close-btn"
               >
-                <Ionicons name="close" size={24} color={theme.color.textSecondary} />
+                <Ionicons name="close" size={24} color={t.color.textSecondary} />
               </Pressable>
             </View>
             <ExperiencePicker
@@ -584,13 +586,15 @@ interface LeaderboardRowProps {
 }
 
 function LeaderboardRow({ rank, entry, land, onPress }: LeaderboardRowProps): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const meanLabel = entry.value.toFixed(1);
   const countLabel = `${entry.count} ${entry.count === 1 ? 'rating' : 'ratings'}`;
-  const visual = theme.categoryVisual[entry.category];
+  const visual = t.categoryVisual[entry.category];
   return (
     <Card
       onPress={onPress}
-      accentColor={theme.parkAccent[entry.park]}
+      accentColor={t.parkAccent[entry.park]}
       style={styles.row}
       testID={`home-leaderboard-row-${entry.experienceId}`}
     >
@@ -620,7 +624,7 @@ function LeaderboardRow({ rank, entry, land, onPress }: LeaderboardRowProps): JS
         </View>
         <View style={styles.rowStats}>
           <View style={styles.ratingPill}>
-            <Ionicons name="star" size={14} color={theme.color.starRating ?? '#f59e0b'} />
+            <Ionicons name="star" size={14} color={t.color.starRating} />
             <Text style={styles.ratingValue}>{meanLabel}</Text>
           </View>
           <Text style={styles.ratingCount}>{countLabel}</Text>
@@ -638,13 +642,13 @@ function formatCategory(value: ExperienceCategory): string {
 // Styles
 // ---------------------------------------------------------------------------
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   container: {
     padding: 0,
-    backgroundColor: theme.color.background,
+    backgroundColor: t.color.background,
   },
   heroHeader: {
-    paddingHorizontal: theme.spacing.md,
+    paddingHorizontal: t.spacing.md,
     paddingBottom: 20,
     borderBottomLeftRadius: 26,
     borderBottomRightRadius: 26,
@@ -674,7 +678,7 @@ const styles = StyleSheet.create({
   greetingPill: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#f6c343',
+    color: t.color.accent,
     textTransform: 'uppercase',
     letterSpacing: 0.6,
   },
@@ -696,7 +700,7 @@ const styles = StyleSheet.create({
   heroTitle: {
     fontSize: 22,
     fontWeight: '800',
-    color: '#ffffff',
+    color: t.color.textOnPrimary,
     lineHeight: 26,
   },
   heroSubtitle: {
@@ -712,7 +716,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   sectionContainer: {
-    paddingHorizontal: theme.spacing.md,
+    paddingHorizontal: t.spacing.md,
     marginTop: 4,
   },
   sectionHeader: {
@@ -728,28 +732,29 @@ const styles = StyleSheet.create({
   },
   sectionIcon: {
     fontSize: 16,
+    ...t.textDefault,
   },
   sectionTitle: {
     fontSize: 16,
     fontWeight: '800',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   sectionLink: {
     fontSize: 13,
     fontWeight: '700',
-    color: theme.color.primary,
+    color: t.color.primaryFg,
   },
   leaderboardList: {
-    gap: theme.spacing.sm,
+    gap: t.spacing.sm,
   },
   center: {
-    padding: theme.spacing.xl,
+    padding: t.spacing.xl,
     alignItems: 'center',
     justifyContent: 'center',
   },
   row: {
-    marginBottom: theme.spacing.sm,
-    padding: theme.spacing.sm,
+    marginBottom: t.spacing.sm,
+    padding: t.spacing.sm,
   },
   rowInner: {
     flexDirection: 'row',
@@ -759,28 +764,28 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: theme.color.surfaceAlt,
+    backgroundColor: t.color.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: theme.spacing.sm,
+    marginRight: t.spacing.sm,
   },
   rankText: {
     fontSize: 13,
     fontWeight: '800',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   rowText: {
     flex: 1,
-    marginRight: theme.spacing.sm,
+    marginRight: t.spacing.sm,
   },
   rowName: {
     fontSize: 15,
     fontWeight: '700',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   rowPark: {
     fontSize: 12,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     marginTop: 2,
   },
   rowTags: {
@@ -798,11 +803,11 @@ const styles = StyleSheet.create({
   ratingValue: {
     fontSize: 15,
     fontWeight: '800',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   ratingCount: {
     fontSize: 11,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     marginTop: 2,
   },
   modalBackdrop: {
@@ -811,27 +816,27 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: theme.color.background,
-    borderTopLeftRadius: theme.radius.xl,
-    borderTopRightRadius: theme.radius.xl,
-    paddingTop: theme.spacing.md,
-    paddingHorizontal: theme.spacing.md,
-    paddingBottom: theme.spacing.xl,
+    backgroundColor: t.color.background,
+    borderTopLeftRadius: t.radius.xl,
+    borderTopRightRadius: t.radius.xl,
+    paddingTop: t.spacing.md,
+    paddingHorizontal: t.spacing.md,
+    paddingBottom: t.spacing.xl,
     height: '90%',
     width: '100%',
-    ...theme.shadow.floating,
+    ...t.shadow.floating,
   },
   modalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingBottom: theme.spacing.sm,
+    paddingBottom: t.spacing.sm,
     borderBottomWidth: 1,
-    borderBottomColor: theme.color.border,
-    marginBottom: theme.spacing.xs,
+    borderBottomColor: t.color.border,
+    marginBottom: t.spacing.xs,
   },
   modalTitle: {
-    ...theme.typography.title,
-    color: theme.color.textPrimary,
+    ...t.typography.title,
+    color: t.color.textPrimary,
   },
-});
+}));

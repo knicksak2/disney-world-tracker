@@ -50,6 +50,8 @@ import { DatePickerField } from '../../components/DatePickerField';
 import { ResortPicker } from '../../components/ResortPicker';
 import type { TripsStackParamList } from '../../navigation/TripsStack';
 import { theme } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme } from '../../theme/useAppTheme';
 import {
   EmptyState,
   GradientHeader,
@@ -77,6 +79,8 @@ export default function TripEditScreen({
   navigation,
   route,
 }: Props): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const { tripId } = route.params;
   const queryClient = useQueryClient();
 
@@ -228,7 +232,7 @@ export default function TripEditScreen({
           onBack={() => navigation.goBack()}
         />
         <View style={styles.center} testID="trip-edit-loading">
-          <ActivityIndicator color={theme.color.primary} />
+          <ActivityIndicator color={t.color.primaryFg} />
         </View>
       </ScreenContainer>
     );
@@ -291,7 +295,8 @@ export default function TripEditScreen({
             clearError();
           }}
           placeholder="e.g. Spring Break at WDW"
-          placeholderTextColor={theme.color.textSecondary}
+          placeholderTextColor={t.color.textSecondary}
+          keyboardAppearance={t.scheme}
           maxLength={100}
           editable={!busy}
           style={styles.input}
@@ -307,7 +312,8 @@ export default function TripEditScreen({
             clearError();
           }}
           placeholder="What's the plan?"
-          placeholderTextColor={theme.color.textSecondary}
+          placeholderTextColor={t.color.textSecondary}
+          keyboardAppearance={t.scheme}
           multiline
           maxLength={2000}
           editable={!busy}
@@ -439,7 +445,7 @@ function editErrorMessage(err: ApiError | null): string {
 // Styles
 // ---------------------------------------------------------------------------
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   center: {
     flex: 1,
     alignItems: 'center',
@@ -459,18 +465,18 @@ const styles = StyleSheet.create({
   },
   label: {
     ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     marginTop: theme.spacing.xs,
   },
   input: {
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
     borderRadius: theme.radius.md,
     paddingHorizontal: theme.spacing.md,
     paddingVertical: theme.spacing.md,
     ...theme.typography.body,
-    color: theme.color.textPrimary,
-    backgroundColor: theme.color.surface,
+    color: t.color.textPrimary,
+    backgroundColor: t.color.surface,
   },
   inputMultiline: {
     minHeight: 84,
@@ -478,7 +484,7 @@ const styles = StyleSheet.create({
   },
   error: {
     ...theme.typography.meta,
-    color: theme.color.danger,
+    color: t.color.danger,
     marginTop: theme.spacing.xs,
   },
   actions: {
@@ -493,10 +499,10 @@ const styles = StyleSheet.create({
     marginTop: theme.spacing.xl,
     paddingTop: theme.spacing.lg,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: theme.color.border,
+    borderTopColor: t.color.border,
   },
   deleteBtn: {
     alignSelf: 'stretch',
   },
-});
+}));
 

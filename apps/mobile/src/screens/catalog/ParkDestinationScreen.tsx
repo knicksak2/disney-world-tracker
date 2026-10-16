@@ -22,7 +22,6 @@ import {
   Modal,
   Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   TextInput,
   View,
@@ -44,7 +43,9 @@ import {
 
 import { ApiError, apiRequest } from '../../api/client';
 import type { RootStackParamList } from '../../navigation/RootNavigator';
-import { theme } from '../../theme/theme';
+import { withAlpha } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme, usePalette } from '../../theme/useAppTheme';
 import {
   Badge,
   Card,
@@ -52,6 +53,7 @@ import {
   GradientHeader,
   ScreenContainer,
 } from '../../theme/components';
+import { PARK, PARK_ART, PARK_HERO } from './ParkDestinationScreen.palette';
 import {
   DESTINATIONS,
   destinationCatalogFilter,
@@ -220,6 +222,10 @@ export default function ParkDestinationScreen({
   favoritedIds: passedFavoritedIds,
   showStaleBanner: passedShowStaleBanner,
 }: ParkDestinationScreenProps): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
+  const pal = usePalette(PARK);
+  const art = usePalette(PARK_ART);
   const defaultNav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const navigation = passedNavigation ?? defaultNav;
 
@@ -493,7 +499,7 @@ export default function ParkDestinationScreen({
         </View>
       );
     },
-    [isExpanded, toggle, onSelectExperience, completedIds, favoritedIds],
+    [isExpanded, toggle, onSelectExperience, completedIds, favoritedIds, styles],
   );
 
   const visual =
@@ -502,8 +508,7 @@ export default function ParkDestinationScreen({
       id: destination.id,
       icon: '🏰',
       landmark: 'Walt Disney World Resort',
-      accent: '#7e57c2',
-      gradient: ['#280b45', '#5b2a86', '#7e57c2'] as const,
+      gradient: [art.fallback0, art.fallback1, art.fallback2] as const,
       watermarkGlyph: 'sparkles' as const,
     };
 
@@ -528,7 +533,7 @@ export default function ParkDestinationScreen({
           <Ionicons
             name="cloud-offline-outline"
             size={16}
-            color={theme.color.warningText}
+            color={t.color.warningText}
             style={styles.staleBannerIcon}
           />
           <Text style={styles.staleBannerText}>Showing cached catalog</Text>
@@ -541,7 +546,7 @@ export default function ParkDestinationScreen({
           <Ionicons
             name="search"
             size={18}
-            color={theme.color.textSecondary}
+            color={t.color.textSecondary}
             style={styles.searchIcon}
           />
           <TextInput
@@ -549,7 +554,8 @@ export default function ParkDestinationScreen({
             value={searchInput}
             onChangeText={setSearchInput}
             placeholder="Search by name, land, or facet..."
-            placeholderTextColor={theme.color.textSecondary}
+            placeholderTextColor={t.color.textSecondary}
+            keyboardAppearance={t.scheme}
             autoCapitalize="none"
             autoCorrect={false}
             returnKeyType="search"
@@ -560,7 +566,7 @@ export default function ParkDestinationScreen({
             <Ionicons
               name="close-circle"
               size={18}
-              color={theme.color.textSecondary}
+              color={t.color.textSecondary}
               style={styles.searchClear}
               onPress={() => setSearchInput('')}
               accessibilityRole="button"
@@ -574,7 +580,7 @@ export default function ParkDestinationScreen({
       {/* Flat search results if search is active */}
       {showLoading ? (
         <View style={styles.center} testID="destination-loading">
-          <ActivityIndicator color={theme.color.primary} />
+          <ActivityIndicator color={t.color.primaryFg} />
         </View>
       ) : searchActive ? (
         <DestinationSearchResults
@@ -696,7 +702,7 @@ export default function ParkDestinationScreen({
               <Ionicons
                 name={favoritesOnly ? 'heart' : 'heart-outline'}
                 size={14}
-                color={favoritesOnly ? '#FF2D55' : theme.color.textSecondary}
+                color={favoritesOnly ? pal.favoritesActiveIcon : t.color.textSecondary}
               />
               <Text
                 style={[
@@ -736,8 +742,8 @@ export default function ParkDestinationScreen({
                     size={14}
                     color={
                       activeFilterCount > 0
-                        ? '#FFFFFF'
-                        : theme.color.textSecondary
+                        ? t.color.textOnPrimary
+                        : t.color.textSecondary
                     }
                   />
                   <Text
@@ -849,7 +855,7 @@ export default function ParkDestinationScreen({
                       <Ionicons
                         name="close"
                         size={22}
-                        color={theme.color.textPrimary}
+                        color={t.color.textPrimary}
                       />
                     </Pressable>
                   </View>
@@ -1200,6 +1206,8 @@ export default function ParkDestinationScreen({
             <FlatList
               data={flatRows}
               keyExtractor={(row) => row.key}
+              // `renderRow` reads `styles` from this closure: repaint rows on a scheme switch.
+              extraData={t.scheme}
               style={styles.list}
               contentContainerStyle={styles.listContent}
               initialNumToRender={12}
@@ -1235,6 +1243,7 @@ function CollapsibleHeaderRow({
   readonly header: React.ReactNode;
   readonly testID?: string;
 }): JSX.Element {
+  const styles = useStyles();
   const handlePress = () => onToggle(sectionKey);
   return (
     <Pressable
@@ -1267,12 +1276,14 @@ function SectionHeader({
   readonly count: number;
   readonly expanded: boolean;
 }): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   return (
     <View style={styles.sectionHeader}>
       <Ionicons
         name={expanded ? 'chevron-down' : 'chevron-forward'}
         size={18}
-        color={theme.color.textSecondary}
+        color={t.color.textSecondary}
         style={styles.sectionChevron}
       />
       <Text style={styles.sectionTitle} numberOfLines={1}>
@@ -1298,20 +1309,23 @@ export const ExperienceRow = React.memo(function ExperienceRow({
   completed = false,
   favorited = false,
 }: ExperienceRowProps): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
+  const pal = usePalette(PARK);
   const onPress = useCallback(
     () => onSelectExperience(experience),
     [onSelectExperience, experience],
   );
-  const visual = theme.categoryVisual[experience.category] ?? {
+  const visual = t.categoryVisual[experience.category] ?? {
     label: experience.category,
-    tint: theme.color.primary,
+    tint: t.color.primaryFg,
     glyph: 'compass-outline',
   };
 
   const accent =
     experience.park !== null && experience.park !== undefined
-      ? theme.parkAccent[experience.park] ?? theme.color.primary
-      : theme.color.primary;
+      ? t.parkAccent[experience.park] ?? t.color.primaryFg
+      : t.color.primaryFg;
 
   const showPriceTag =
     experience.category === 'Restaurant' &&
@@ -1362,7 +1376,7 @@ export const ExperienceRow = React.memo(function ExperienceRow({
               <Ionicons
                 name="location"
                 size={12}
-                color={theme.color.textSecondary}
+                color={t.color.textSecondary}
                 style={styles.rowMetaIcon}
               />
               <Text style={styles.rowMeta} numberOfLines={1}>
@@ -1379,7 +1393,7 @@ export const ExperienceRow = React.memo(function ExperienceRow({
             {priceTag !== null && (
               <Badge
                 label={priceTag.label}
-                color={theme.color.primary}
+                color={t.color.primaryFg}
                 accessibilityLabel={priceTag.accessibilityLabel}
                 testID={`destination-price-${experience.id}`}
               />
@@ -1388,7 +1402,7 @@ export const ExperienceRow = React.memo(function ExperienceRow({
             {heightText !== null && (
               <Badge
                 label={`📏 ${heightText}`}
-                color="#B91C1C"
+                color={pal.heightBadge}
                 accessibilityLabel={`Height requirement: ${heightText}`}
                 testID={`destination-height-${experience.id}`}
               />
@@ -1404,7 +1418,7 @@ export const ExperienceRow = React.memo(function ExperienceRow({
           <Ionicons
             name="chevron-forward"
             size={20}
-            color={theme.color.textSecondary}
+            color={t.color.textSecondary}
           />
         </View>
       </View>
@@ -1419,9 +1433,11 @@ const ExperienceThumb = React.memo(function ExperienceThumb({
   readonly imageUrl: string | null;
   readonly category: ExperienceCategory;
 }): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const [failed, setFailed] = useState(false);
-  const visual = theme.categoryVisual[category] ?? {
-    tint: theme.color.primary,
+  const visual = t.categoryVisual[category] ?? {
+    fill: t.color.primary,
     glyph: 'compass-outline',
   };
 
@@ -1442,14 +1458,14 @@ const ExperienceThumb = React.memo(function ExperienceThumb({
       style={[
         styles.thumb,
         styles.thumbPlaceholder,
-        { backgroundColor: visual.tint },
+        { backgroundColor: visual.fill },
       ]}
       testID="destination-thumb-placeholder"
     >
       <Ionicons
         name={visual.glyph as keyof typeof Ionicons.glyphMap}
         size={22}
-        color={theme.color.textOnPrimary}
+        color={t.color.textOnPrimary}
       />
     </View>
   );
@@ -1460,6 +1476,8 @@ const VisitedOverlay = React.memo(function VisitedOverlay({
 }: {
   readonly testID: string;
 }): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   return (
     <View
       style={styles.visitedOverlay}
@@ -1467,7 +1485,7 @@ const VisitedOverlay = React.memo(function VisitedOverlay({
       accessible
       accessibilityLabel="Visited"
     >
-      <Ionicons name="checkmark" size={14} color={theme.color.textOnPrimary} />
+      <Ionicons name="checkmark" size={14} color={t.color.textOnPrimary} />
     </View>
   );
 });
@@ -1485,6 +1503,7 @@ function DestinationSearchResults({
   readonly completedIds: ReadonlySet<string>;
   readonly favoritedIds: ReadonlySet<string>;
 }): JSX.Element {
+  const styles = useStyles();
   const results = useMemo(() => {
     return filterAndRankExperiences(experiences, query);
   }, [experiences, query]);
@@ -1535,7 +1554,7 @@ function DestinationSearchResults({
 // Styles
 // ---------------------------------------------------------------------------
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   heroHeaderWrap: {
     position: 'relative',
     justifyContent: 'center',
@@ -1555,7 +1574,7 @@ const styles = StyleSheet.create({
     right: 0,
     top: 0,
     bottom: 0,
-    backgroundColor: 'rgba(29, 18, 51, 0.65)',
+    backgroundColor: PARK_HERO[t.scheme].heroVeil,
   },
   headerContentRow: {
     flexDirection: 'row',
@@ -1582,14 +1601,14 @@ const styles = StyleSheet.create({
     fontSize: 18,
   },
   heroTitle: {
-    color: '#FFFFFF',
+    color: t.color.textOnPrimary,
     fontSize: 18,
     fontWeight: '800',
     letterSpacing: -0.3,
     flexShrink: 1,
   },
   heroSubtitle: {
-    color: '#E5DEF5',
+    color: PARK_HERO[t.scheme].heroSubtitle,
     fontSize: 11,
     fontWeight: '600',
     marginTop: 1,
@@ -1597,7 +1616,7 @@ const styles = StyleSheet.create({
   staleBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: theme.color.warningSurface,
+    backgroundColor: t.color.warningSurface,
     paddingHorizontal: 16,
     paddingVertical: 8,
     gap: 8,
@@ -1606,23 +1625,23 @@ const styles = StyleSheet.create({
     marginRight: 2,
   },
   staleBannerText: {
-    color: theme.color.warningText,
+    color: t.color.warningText,
     fontSize: 12,
     fontWeight: '600',
   },
   controls: {
     paddingHorizontal: 16,
     paddingVertical: 10,
-    backgroundColor: theme.color.background,
+    backgroundColor: t.color.background,
   },
   searchWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: theme.color.surface,
+    backgroundColor: t.color.surface,
     borderRadius: 12,
     paddingHorizontal: 12,
     borderWidth: 1,
-    borderColor: 'rgba(91, 42, 134, 0.08)',
+    borderColor: withAlpha(t.color.primary, 0.08),
   },
   searchIcon: {
     marginRight: 8,
@@ -1630,7 +1649,7 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     height: 40,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
     fontSize: 14,
   },
   searchClear: {
@@ -1649,7 +1668,7 @@ const styles = StyleSheet.create({
   tabBar: {
     flex: 1,
     flexDirection: 'row',
-    backgroundColor: '#F1EDFB',
+    backgroundColor: PARK[t.scheme].lavenderBg,
     borderRadius: 10,
     padding: 3,
   },
@@ -1661,7 +1680,8 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   tabBtnActive: {
-    backgroundColor: '#FFFFFF',
+    // Dark: lighter than the `surfaceAlt` track so it reads raised (Requirement 9.12).
+    backgroundColor: t.scheme === 'dark' ? t.color.borderStrong : t.color.surface,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
@@ -1671,10 +1691,10 @@ const styles = StyleSheet.create({
   tabText: {
     fontSize: 12,
     fontWeight: '700',
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   tabTextActive: {
-    color: theme.color.primary,
+    color: t.color.primaryFg,
     fontWeight: '800',
   },
   favoritesToggleBtn: {
@@ -1684,27 +1704,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 8,
     borderRadius: 10,
-    backgroundColor: '#F1EDFB',
+    backgroundColor: PARK[t.scheme].lavenderBg,
     borderWidth: 1,
     borderColor: 'transparent',
   },
   favoritesToggleBtnActive: {
-    backgroundColor: '#FFF1F2',
-    borderColor: '#FECDD3',
+    backgroundColor: PARK[t.scheme].favoritesActiveBg,
+    borderColor: PARK[t.scheme].favoritesActiveBorder,
   },
   favoritesToggleText: {
     fontSize: 12,
     fontWeight: '700',
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   favoritesToggleTextActive: {
-    color: '#E11D48',
+    color: PARK[t.scheme].favoritesActiveText,
     fontWeight: '800',
   },
   filterBarWrap: {
     paddingVertical: 6,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(91, 42, 134, 0.06)',
+    borderBottomColor: withAlpha(t.color.primary, 0.06),
   },
   filterBarScroll: {
     paddingHorizontal: 16,
@@ -1714,55 +1734,55 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 999,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: PARK[t.scheme].chipBg,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: PARK[t.scheme].chipBorder,
   },
   filterChipActive: {
-    backgroundColor: '#F3E8FF',
-    borderColor: '#A855F7',
+    backgroundColor: PARK[t.scheme].chipActiveBg,
+    borderColor: PARK[t.scheme].chipActiveBorder,
   },
   filterChipText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#64748B',
+    color: PARK[t.scheme].chipText,
   },
   filterChipTextActive: {
-    color: '#7E22CE',
+    color: PARK[t.scheme].chipActiveText,
     fontWeight: '800',
   },
   filterModalBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#F1EDFB',
-    borderColor: '#D8B4FE',
+    backgroundColor: PARK[t.scheme].lavenderBg,
+    borderColor: PARK[t.scheme].filterButtonBorder,
   },
   filterModalBtnActive: {
-    backgroundColor: theme.color.primary,
-    borderColor: theme.color.primary,
+    backgroundColor: t.color.primary,
+    borderColor: t.color.primary,
   },
   filterModalBtnText: {
-    color: theme.color.primary,
+    color: t.color.primaryFg,
   },
   resetChip: {
-    backgroundColor: '#FEE2E2',
-    borderColor: '#FCA5A5',
+    backgroundColor: PARK[t.scheme].resetChipBg,
+    borderColor: PARK[t.scheme].resetChipBorder,
   },
   resetChipText: {
-    color: '#B91C1C',
+    color: PARK[t.scheme].resetChipText,
     fontWeight: '800',
   },
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(15, 10, 28, 0.5)',
+    backgroundColor: PARK_HERO[t.scheme].scrim,
     justifyContent: 'flex-end',
   },
   modalBackdropDismiss: {
     flex: 1,
   },
   modalContent: {
-    backgroundColor: theme.color.surface,
+    backgroundColor: t.color.surface,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     maxHeight: '82%',
@@ -1776,12 +1796,12 @@ const styles = StyleSheet.create({
     paddingTop: 18,
     paddingBottom: 14,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(91, 42, 134, 0.08)',
+    borderBottomColor: withAlpha(t.color.primary, 0.08),
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: '800',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   modalHeaderActions: {
     flexDirection: 'row',
@@ -1795,7 +1815,7 @@ const styles = StyleSheet.create({
   modalClearText: {
     fontSize: 13,
     fontWeight: '700',
-    color: theme.color.primary,
+    color: t.color.primaryFg,
   },
   modalCloseBtn: {
     padding: 4,
@@ -1814,7 +1834,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '800',
     letterSpacing: 0.5,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   chipGrid: {
     flexDirection: 'row',
@@ -1825,37 +1845,37 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 8,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: PARK[t.scheme].chipBg,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: PARK[t.scheme].chipBorder,
   },
   modalChipActive: {
-    backgroundColor: '#F3E8FF',
-    borderColor: theme.color.primary,
+    backgroundColor: PARK[t.scheme].chipActiveBg,
+    borderColor: t.color.primaryFg,
   },
   modalChipText: {
     fontSize: 12,
     fontWeight: '600',
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   modalChipTextActive: {
-    color: theme.color.primary,
+    color: t.color.primaryFg,
     fontWeight: '800',
   },
   modalFooter: {
     paddingHorizontal: 20,
     paddingTop: 14,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(91, 42, 134, 0.08)',
+    borderTopColor: withAlpha(t.color.primary, 0.08),
   },
   modalApplyBtn: {
-    backgroundColor: theme.color.primary,
+    backgroundColor: t.color.primary,
     borderRadius: 14,
     paddingVertical: 12,
     alignItems: 'center',
   },
   modalApplyBtnText: {
-    color: '#FFFFFF',
+    color: t.color.textOnPrimary,
     fontSize: 14,
     fontWeight: '800',
   },
@@ -1866,7 +1886,7 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
   },
   headerRowPressable: {
-    backgroundColor: theme.color.background,
+    backgroundColor: t.color.background,
   },
   sectionHeader: {
     height: SECTION_HEADER_ROW_HEIGHT,
@@ -1874,7 +1894,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     gap: 6,
-    backgroundColor: theme.color.background,
+    backgroundColor: t.color.background,
   },
   sectionChevron: {
     marginRight: 2,
@@ -1882,11 +1902,11 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 14,
     fontWeight: '800',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
     flex: 1,
   },
   sectionCountBadge: {
-    backgroundColor: '#F1EDFB',
+    backgroundColor: PARK[t.scheme].lavenderBg,
     paddingHorizontal: 7,
     paddingVertical: 2,
     borderRadius: 6,
@@ -1894,7 +1914,7 @@ const styles = StyleSheet.create({
   sectionCountText: {
     fontSize: 11,
     fontWeight: '700',
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   itemRowWrap: {
     paddingHorizontal: 16,
@@ -1903,7 +1923,7 @@ const styles = StyleSheet.create({
   row: {
     borderRadius: 14,
     padding: 10,
-    backgroundColor: theme.color.surface,
+    backgroundColor: t.color.surface,
   },
   rowInner: {
     flexDirection: 'row',
@@ -1932,11 +1952,12 @@ const styles = StyleSheet.create({
     width: 18,
     height: 18,
     borderRadius: 9,
-    backgroundColor: '#10B981',
+    backgroundColor: PARK[t.scheme].visitedFill,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1.5,
-    borderColor: '#FFFFFF',
+    // Ring drawn on the thumbnail image: white in both schemes.
+    borderColor: t.color.textOnPrimary,
   },
   rowText: {
     flex: 1,
@@ -1945,7 +1966,7 @@ const styles = StyleSheet.create({
   rowName: {
     fontSize: 13.5,
     fontWeight: '800',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
     lineHeight: 18,
   },
   rowMetaLine: {
@@ -1958,7 +1979,7 @@ const styles = StyleSheet.create({
   },
   rowMeta: {
     fontSize: 11,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   rowBadges: {
     flexDirection: 'row',
@@ -1982,12 +2003,12 @@ const styles = StyleSheet.create({
     marginTop: 12,
     paddingHorizontal: 16,
     paddingVertical: 8,
-    backgroundColor: '#F1EDFB',
+    backgroundColor: PARK[t.scheme].lavenderBg,
     borderRadius: 8,
   },
   resetFilterEmptyBtnText: {
-    color: theme.color.primary,
+    color: t.color.primaryFg,
     fontWeight: '700',
     fontSize: 12,
   },
-});
+}));

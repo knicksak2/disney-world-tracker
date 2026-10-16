@@ -73,6 +73,10 @@ import ActiveTripShortcut from '../ActiveTripShortcut';
 import { apiRequest as mockedApiRequest } from '../../api/client';
 import type { PlannedItemDTO, TripDTO } from '@dwt/shared';
 import { getTodayWDW } from '../../screens/trips/TripScheduleScreen';
+import { StyleSheet } from 'react-native';
+import { resetTestScheme, setTestScheme } from '../../test/themeTestUtils';
+import { themes } from '../../theme/theme';
+import { ACTIVE_TRIP } from '../ActiveTripShortcut.palette';
 
 const apiRequestMock = mockedApiRequest as jest.MockedFunction<
   typeof mockedApiRequest
@@ -378,5 +382,60 @@ describe('Active_Trip_Shortcut (R19.1, R19.4)', () => {
     expect(screen.getByText(/Dining: Pecos Bill Tall Tale Inn and Cafe/)).toBeTruthy();
     expect(screen.getByText('🚀 Next: Tap to plan your day')).toBeTruthy();
     expect(screen.queryByText(/Next: Pecos Bill/)).toBeNull();
+  });
+});
+
+// Feature: dark-mode — the converted hero card and chooser follow the Active theme.
+describe('Active_Trip_Shortcut — dark mode', () => {
+  const flat = (node: { props: { style?: unknown } }): Record<string, unknown> =>
+    (StyleSheet.flatten(node.props.style as never) ?? {}) as Record<string, unknown>;
+
+  beforeEach(() => {
+    apiRequestMock.mockReset();
+    mockNavigateToTripDetail.mockReset();
+  });
+  afterEach(resetTestScheme);
+
+  test('renders the hero card with the dark surface and green tonal palette', async () => {
+    setTestScheme('dark');
+    apiRequestMock.mockResolvedValue([{ status: 'active', trips: [TRIP_A] }]);
+    renderShortcut();
+
+    const card = await screen.findByTestId('active-trip-shortcut');
+    expect(flat(card).backgroundColor).toBe(themes.dark.color.surface);
+    expect(flat(card).borderColor).toBe(ACTIVE_TRIP.dark.cardBorder);
+    expect(flat(card).shadowColor).toBe('#000000');
+    expect(flat(screen.getByText(/ACTIVE VACATION/)).color).toBe(ACTIVE_TRIP.dark.liveText);
+    expect(flat(screen.getByText('Magic Kingdom Day')).color).toBe(themes.dark.color.textPrimary);
+    expect(flat(screen.getByText(/Today's Schedule/)).color).toBe(themes.dark.color.primaryFg);
+  });
+
+  test('light keeps the pre-retrofit literals', async () => {
+    apiRequestMock.mockResolvedValue([{ status: 'active', trips: [TRIP_A] }]);
+    renderShortcut();
+
+    const card = await screen.findByTestId('active-trip-shortcut');
+    expect(flat(card).backgroundColor).toBe('#ffffff');
+    expect(flat(card).borderColor).toBe('#86efac');
+    expect(flat(card).shadowColor).toBe('#22c55e');
+    expect(flat(screen.getByText(/ACTIVE VACATION/)).color).toBe('#15803d');
+    expect(flat(screen.getByText(/Today's Schedule/)).color).toBe('#5b2a86');
+  });
+
+  test('repaints the mounted card live, and the chooser modal card is themed', async () => {
+    apiRequestMock.mockResolvedValue([{ status: 'active', trips: [TRIP_A, TRIP_B] }]);
+    renderShortcut();
+    const card = await screen.findByTestId('active-trip-shortcut');
+    expect(flat(card).backgroundColor).toBe(themes.light.color.surface);
+
+    setTestScheme('dark');
+    expect(screen.getByTestId('active-trip-shortcut')).toBe(card);
+    expect(flat(card).backgroundColor).toBe(themes.dark.color.surface);
+
+    fireEvent.press(card);
+    const chooser = await screen.findByTestId('active-trip-chooser');
+    expect(flat(chooser).backgroundColor).toBe(themes.dark.color.surface);
+    expect(flat(chooser).borderColor).toBe(themes.dark.color.border);
+    expect(flat(screen.getByText('Your active trips')).color).toBe(themes.dark.color.textPrimary);
   });
 });

@@ -18,7 +18,6 @@ import {
   Image,
   ScrollView,
   Share,
-  StyleSheet,
   Text,
   TouchableOpacity,
   View,
@@ -34,7 +33,9 @@ import { isAvatarPresetId } from '@dwt/shared';
 import { ApiError, apiRequest } from '../../api/client';
 import { renderAvatarPreset } from '../../avatars/AvatarPresets';
 import type { TripsStackParamList } from '../../navigation/TripsStack';
-import { theme } from '../../theme/theme';
+import { theme, withAlpha } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme, usePalette } from '../../theme/useAppTheme';
 import {
   Badge,
   Card,
@@ -44,6 +45,13 @@ import {
   ScreenContainer,
 } from '../../theme/components';
 import { ProgressBar, ProgressRing } from '../../theme/charts';
+import {
+  SUMMARY_AVATAR,
+  SUMMARY_HERO,
+  SUMMARY_MEDAL,
+  SUMMARY_MISC,
+  SUMMARY_STAT,
+} from './TripSummaryScreen.palette';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -66,17 +74,6 @@ export const tripSummaryKeys = {
 /** Load timeout for summary read. */
 const SUMMARY_LOAD_TIMEOUT_MS = 10_000;
 
-const AVATAR_COLORS = [
-  '#5856D6',
-  '#FF2D55',
-  '#AF52DE',
-  '#007AFF',
-  '#34C759',
-  '#FF9500',
-  '#5AC8FA',
-  '#FF3B30',
-];
-
 // ---------------------------------------------------------------------------
 // Screen
 // ---------------------------------------------------------------------------
@@ -85,6 +82,12 @@ export default function TripSummaryScreen({
   navigation,
   route,
 }: Props): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
+  const hero = usePalette(SUMMARY_HERO);
+  const medal = usePalette(SUMMARY_MEDAL);
+  const stat = usePalette(SUMMARY_STAT);
+  const misc = usePalette(SUMMARY_MISC);
   const { tripId } = route.params;
 
   const summaryQuery = useQuery<TripSummaryResponse, ApiError>({
@@ -137,7 +140,7 @@ export default function TripSummaryScreen({
       <ScreenContainer>
         <SummaryHeader onBack={backToHub} />
         <View style={styles.center} testID="trip-summary-loading">
-          <ActivityIndicator color={theme.color.primary} />
+          <ActivityIndicator color={t.color.primaryFg} />
         </View>
       </ScreenContainer>
     );
@@ -202,12 +205,12 @@ export default function TripSummaryScreen({
           void handleShare(summary);
         }}
       />
-      <ScrollView contentContainerStyle={styles.content} testID="trip-summary">
+      <ScrollView contentContainerStyle={styles.content} testID="trip-summary" keyboardShouldPersistTaps="handled">
         {/* ================================================================= */}
         {/* 1. Celebratory Hero Card */}
         {/* ================================================================= */}
         <LinearGradient
-          colors={['#3B185F', '#5E227F', '#2A0845']}
+          colors={[hero.gradStart, hero.gradMid, hero.gradEnd]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.heroCard}
@@ -216,7 +219,7 @@ export default function TripSummaryScreen({
           <View style={styles.heroGlow} />
           <View style={styles.heroHeader}>
             <View style={styles.heroBadge}>
-              <Ionicons name="sparkles" size={14} color="#FFD700" />
+              <Ionicons name="sparkles" size={14} color={hero.gold} />
               <Text style={styles.heroBadgeText}>Vacation Wrap-Up</Text>
             </View>
             <Text style={styles.heroTitle}>A Magical Adventure!</Text>
@@ -243,7 +246,7 @@ export default function TripSummaryScreen({
                 <Text style={styles.heroProgressLabel}>planned Experiences completed</Text>
                 {isCompleteItinerary ? (
                   <View style={styles.congratsPill}>
-                    <Ionicons name="ribbon" size={13} color="#FFD700" />
+                    <Ionicons name="ribbon" size={13} color={hero.gold} />
                     <Text style={styles.congratsText}>100% Itinerary Completed! 🎉</Text>
                   </View>
                 ) : null}
@@ -252,7 +255,7 @@ export default function TripSummaryScreen({
           ) : (
             <View style={styles.heroRingRow} testID="trip-summary-planned">
               <View style={styles.heroCastleBadge}>
-                <Ionicons name="trophy" size={32} color="#FFD700" />
+                <Ionicons name="trophy" size={32} color={hero.gold} />
               </View>
               <View style={styles.heroProgressTextCol}>
                 <Text style={styles.heroProgressNum} testID="trip-summary-planned-count">
@@ -270,8 +273,8 @@ export default function TripSummaryScreen({
         <View style={styles.quickStatsGrid}>
           {/* Distinct Experiences (R14.1) */}
           <Card style={styles.statGridCard} testID="trip-summary-distinct">
-            <View style={[styles.statIconBadge, { backgroundColor: 'rgba(155, 81, 224, 0.15)' }]}>
-              <Ionicons name="sparkles" size={18} color="#9B51E0" />
+            <View style={[styles.statIconBadge, { backgroundColor: stat.violetBg }]}>
+              <Ionicons name="sparkles" size={18} color={stat.violetIcon} />
             </View>
             <Text style={styles.statGridValue} testID="trip-summary-distinct-count">
               {summary.distinctExperienceCount}
@@ -283,8 +286,8 @@ export default function TripSummaryScreen({
 
           {/* Total Group Completions */}
           <Card style={styles.statGridCard} testID="trip-summary-total-completions">
-            <View style={[styles.statIconBadge, { backgroundColor: 'rgba(255, 107, 107, 0.15)' }]}>
-              <Ionicons name="checkmark-done-circle" size={18} color="#FF6B6B" />
+            <View style={[styles.statIconBadge, { backgroundColor: stat.redBg }]}>
+              <Ionicons name="checkmark-done-circle" size={18} color={stat.redIcon} />
             </View>
             <Text style={styles.statGridValue}>{totalCompletions}</Text>
             <Text style={styles.statGridLabel}>Total Logged Rides</Text>
@@ -292,8 +295,8 @@ export default function TripSummaryScreen({
 
           {/* Ratings Submitted */}
           <Card style={styles.statGridCard} testID="trip-summary-total-ratings">
-            <View style={[styles.statIconBadge, { backgroundColor: 'rgba(246, 195, 67, 0.18)' }]}>
-              <Ionicons name="star" size={18} color="#F6C343" />
+            <View style={[styles.statIconBadge, { backgroundColor: withAlpha(t.color.accent, 0.18) }]}>
+              <Ionicons name="star" size={18} color={t.color.accent} />
             </View>
             <Text style={styles.statGridValue}>{summary.totalRatingsCount ?? 0}</Text>
             <Text style={styles.statGridLabel}>Ratings Given</Text>
@@ -301,8 +304,8 @@ export default function TripSummaryScreen({
 
           {/* Parks Explored */}
           <Card style={styles.statGridCard} testID="trip-summary-parks-explored">
-            <View style={[styles.statIconBadge, { backgroundColor: 'rgba(46, 204, 113, 0.15)' }]}>
-              <Ionicons name="compass" size={18} color="#2ECC71" />
+            <View style={[styles.statIconBadge, { backgroundColor: stat.greenBg }]}>
+              <Ionicons name="compass" size={18} color={stat.greenIcon} />
             </View>
             <Text style={styles.statGridValue}>{summary.parkBreakdown?.length ?? 0}</Text>
             <Text style={styles.statGridLabel}>Parks Explored</Text>
@@ -315,7 +318,7 @@ export default function TripSummaryScreen({
         {summary.superlatives && summary.superlatives.length > 0 ? (
           <View style={styles.section} testID="trip-summary-superlatives">
             <View style={styles.sectionHeaderRow}>
-              <Ionicons name="trophy" size={20} color="#FFD700" />
+              <Ionicons name="trophy" size={20} color={misc.trophy} />
               <Text style={styles.sectionTitle}>Group Superlatives & Awards</Text>
             </View>
 
@@ -332,7 +335,7 @@ export default function TripSummaryScreen({
         {/* ================================================================= */}
         <View style={styles.section}>
           <View style={styles.sectionHeaderRow}>
-            <Ionicons name="star" size={20} color="#F6C343" />
+            <Ionicons name="star" size={20} color={t.color.accent} />
             <Text style={styles.sectionTitle}>Top-Rated Moments</Text>
           </View>
 
@@ -349,19 +352,19 @@ export default function TripSummaryScreen({
               {summary.topRated.map((exp, index) => {
                 const rankColor =
                   index === 0
-                    ? '#FFD700'
+                    ? medal.gold
                     : index === 1
-                      ? '#C0C0C0'
+                      ? medal.silver
                       : index === 2
-                        ? '#CD7F32'
-                        : theme.color.surfaceAlt;
+                        ? medal.bronze
+                        : t.color.surfaceAlt;
                 const rankTextColor =
-                  index < 3 ? '#2A0845' : theme.color.textSecondary;
+                  index < 3 ? medal.text : t.color.textSecondary;
 
                 const parkAccentColor =
-                  exp.park && exp.park in theme.parkAccent
-                    ? theme.parkAccent[exp.park as Park]
-                    : theme.color.primary;
+                  exp.park && exp.park in t.parkAccent
+                    ? t.parkAccent[exp.park as Park]
+                    : t.color.primaryFg;
 
                 return (
                   <Card
@@ -407,7 +410,7 @@ export default function TripSummaryScreen({
                     </View>
 
                     <View style={styles.ratingPill}>
-                      <Ionicons name="star" size={14} color="#F6C343" />
+                      <Ionicons name="star" size={14} color={t.color.accent} />
                       <Text style={styles.ratingPillText}>
                         {formatMeanRating(exp.meanRating)}
                       </Text>
@@ -425,16 +428,16 @@ export default function TripSummaryScreen({
         {summary.parkBreakdown && summary.parkBreakdown.length > 0 ? (
           <View style={styles.section} testID="trip-summary-parks">
             <View style={styles.sectionHeaderRow}>
-              <Ionicons name="map" size={20} color={theme.color.primary} />
+              <Ionicons name="map" size={20} color={t.color.primaryFg} />
               <Text style={styles.sectionTitle}>Adventures by Park</Text>
             </View>
 
             <View style={styles.parkGrid}>
               {summary.parkBreakdown.map((item) => {
                 const parkColor =
-                  item.park in theme.parkAccent
-                    ? theme.parkAccent[item.park as Park]
-                    : theme.color.primary;
+                  item.park in t.parkAccent
+                    ? t.parkAccent[item.park as Park]
+                    : t.color.primaryFg;
                 const maxCount = summary.parkBreakdown![0]?.count ?? 1;
                 const parkPercent = Math.round((item.count / maxCount) * 100);
 
@@ -480,7 +483,7 @@ export default function TripSummaryScreen({
         {/* ================================================================= */}
         <View style={styles.section}>
           <View style={styles.sectionHeaderRow}>
-            <Ionicons name="people" size={20} color={theme.color.primary} />
+            <Ionicons name="people" size={20} color={t.color.primaryFg} />
             <Text style={styles.sectionTitle}>Member Contributions</Text>
           </View>
 
@@ -554,7 +557,7 @@ export default function TripSummaryScreen({
                         style={styles.memberFavoritePill}
                         testID={`trip-summary-member-${member.memberId}-top`}
                       >
-                        <Ionicons name="heart" size={13} color="#FF2D55" />
+                        <Ionicons name="heart" size={13} color={misc.favoriteHeart} />
                         <Text style={styles.memberFavoriteText} numberOfLines={1}>
                           Top Ride: {member.topRatedExperienceName} ({member.topRating} ★)
                         </Text>
@@ -592,6 +595,9 @@ export default function TripSummaryScreen({
 
 /** Superlative award card. */
 function SuperlativeCard({ award }: { readonly award: TripSuperlativeDTO }): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
+  const misc = usePalette(SUMMARY_MISC);
   const iconMap: Record<string, keyof typeof Ionicons.glyphMap> = {
     trophy: 'trophy',
     compass: 'compass',
@@ -607,7 +613,7 @@ function SuperlativeCard({ award }: { readonly award: TripSuperlativeDTO }): JSX
     <Card style={styles.superlativeCard} testID={`trip-summary-superlative-${award.id}`}>
       <View style={styles.superlativeHeader}>
         <View style={styles.superlativeIconDisc}>
-          <Ionicons name={ioniconName} size={18} color="#FFD700" />
+          <Ionicons name={ioniconName} size={18} color={misc.trophy} />
         </View>
         <View style={styles.superlativeTitleCol}>
           <Text style={styles.superlativeTitle}>{award.title}</Text>
@@ -617,7 +623,7 @@ function SuperlativeCard({ award }: { readonly award: TripSuperlativeDTO }): JSX
 
       <View style={styles.superlativeWinnerRow}>
         <View style={styles.winnerIdentity}>
-          <Ionicons name="medal" size={14} color="#F6C343" />
+          <Ionicons name="medal" size={14} color={t.color.accent} />
           <Text style={styles.winnerText} numberOfLines={1}>
             {award.memberDisplayName ?? award.experienceName ?? 'The Group'}
           </Text>
@@ -642,6 +648,8 @@ function MemberAvatar({
   readonly preset?: string | null | undefined;
   readonly size?: number;
 }): JSX.Element {
+  const styles = useStyles();
+  const avatar = usePalette(SUMMARY_AVATAR);
   if (isAvatarPresetId(preset)) {
     return (
       <View
@@ -655,7 +663,17 @@ function MemberAvatar({
     );
   }
   const initials = initialsOf(name);
-  const bg = AVATAR_COLORS[hashString(name) % AVATAR_COLORS.length]!;
+  const avatarColors = [
+    avatar.a0,
+    avatar.a1,
+    avatar.a2,
+    avatar.a3,
+    avatar.a4,
+    avatar.a5,
+    avatar.a6,
+    avatar.a7,
+  ];
+  const bg = avatarColors[hashString(name) % avatarColors.length]!;
   return (
     <View
       style={[
@@ -678,10 +696,13 @@ function ExperienceThumb({
   readonly imageUrl: string | null;
   readonly category: string | null;
 }): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
+  const misc = usePalette(SUMMARY_MISC);
   const [failed, setFailed] = useState(false);
   const visual =
-    category !== null && category in theme.categoryVisual
-      ? theme.categoryVisual[category as ExperienceCategory]
+    category !== null && category in t.categoryVisual
+      ? t.categoryVisual[category as ExperienceCategory]
       : null;
 
   if (imageUrl !== null && imageUrl.length > 0 && !failed) {
@@ -700,7 +721,7 @@ function ExperienceThumb({
       style={[
         styles.experienceThumb,
         styles.experienceThumbPlaceholder,
-        { backgroundColor: visual?.tint ?? theme.color.surfaceAlt },
+        { backgroundColor: visual?.fill ?? t.color.surfaceAlt },
       ]}
     >
       <Ionicons
@@ -709,7 +730,7 @@ function ExperienceThumb({
           'sparkles'
         }
         size={18}
-        color={theme.color.primary}
+        color={misc.thumbGlyph}
       />
     </View>
   );
@@ -723,6 +744,8 @@ function SummaryHeader({
   readonly onBack: () => void;
   readonly onShare?: () => void;
 }): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   return (
     <GradientHeader
       title="Trip Summary"
@@ -739,7 +762,7 @@ function SummaryHeader({
             accessibilityLabel="Share Summary"
             testID="trip-summary-header-share"
           >
-            <Ionicons name="share-social-outline" size={20} color={theme.color.textOnPrimary} />
+            <Ionicons name="share-social-outline" size={20} color={t.color.textOnPrimary} />
           </TouchableOpacity>
         ) : undefined
       }
@@ -819,7 +842,7 @@ function readErrorMessage(err: ApiError | null): string {
 // Styles
 // ---------------------------------------------------------------------------
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   center: {
     flex: 1,
     alignItems: 'center',
@@ -847,7 +870,7 @@ const styles = StyleSheet.create({
     padding: theme.spacing.lg,
     overflow: 'hidden',
     position: 'relative',
-    ...theme.shadow.floating,
+    ...t.shadow.floating,
   },
   heroGlow: {
     position: 'absolute',
@@ -856,7 +879,7 @@ const styles = StyleSheet.create({
     width: 140,
     height: 140,
     borderRadius: 70,
-    backgroundColor: 'rgba(246, 195, 67, 0.15)',
+    backgroundColor: withAlpha(t.color.accent, 0.15),
   },
   heroHeader: {
     gap: theme.spacing.xs,
@@ -866,7 +889,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(255, 215, 0, 0.15)',
+    backgroundColor: SUMMARY_HERO[t.scheme].badgeBg,
     paddingHorizontal: theme.spacing.md,
     paddingVertical: 4,
     borderRadius: theme.radius.pill,
@@ -875,14 +898,14 @@ const styles = StyleSheet.create({
   },
   heroBadgeText: {
     ...theme.typography.meta,
-    color: '#FFD700',
+    color: SUMMARY_HERO[t.scheme].gold,
     fontWeight: '700',
   },
   heroTitle: {
     ...theme.typography.heading,
     fontSize: 24,
     lineHeight: 28,
-    color: theme.color.textOnPrimary,
+    color: t.color.textOnPrimary,
   },
   heroSubtitle: {
     ...theme.typography.body,
@@ -901,11 +924,11 @@ const styles = StyleSheet.create({
     width: 90,
     height: 90,
     borderRadius: 45,
-    backgroundColor: 'rgba(255, 215, 0, 0.12)',
+    backgroundColor: SUMMARY_HERO[t.scheme].castleBg,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: 'rgba(255, 215, 0, 0.3)',
+    borderColor: SUMMARY_HERO[t.scheme].castleBorder,
   },
   heroProgressTextCol: {
     flex: 1,
@@ -914,7 +937,7 @@ const styles = StyleSheet.create({
   heroProgressNum: {
     ...theme.typography.heading,
     fontSize: 22,
-    color: theme.color.textOnPrimary,
+    color: t.color.textOnPrimary,
   },
   heroProgressLabel: {
     ...theme.typography.meta,
@@ -930,7 +953,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(255, 215, 0, 0.2)',
+    backgroundColor: SUMMARY_HERO[t.scheme].congratsBg,
     paddingHorizontal: theme.spacing.sm,
     paddingVertical: 3,
     borderRadius: theme.radius.sm,
@@ -939,7 +962,7 @@ const styles = StyleSheet.create({
   },
   congratsText: {
     ...theme.typography.meta,
-    color: '#FFD700',
+    color: SUMMARY_HERO[t.scheme].gold,
     fontWeight: '700',
     fontSize: 12,
   },
@@ -968,11 +991,11 @@ const styles = StyleSheet.create({
   statGridValue: {
     ...theme.typography.heading,
     fontSize: 24,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   statGridLabel: {
     ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     fontSize: 12,
   },
 
@@ -989,7 +1012,7 @@ const styles = StyleSheet.create({
     ...theme.typography.subtitle,
     fontSize: 18,
     fontWeight: '700',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   list: {
     gap: theme.spacing.md,
@@ -1003,7 +1026,7 @@ const styles = StyleSheet.create({
     padding: theme.spacing.md,
     gap: theme.spacing.sm,
     borderLeftWidth: 4,
-    borderLeftColor: '#F6C343',
+    borderLeftColor: t.color.accent,
   },
   superlativeHeader: {
     flexDirection: 'row',
@@ -1014,7 +1037,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: 'rgba(246, 195, 67, 0.15)',
+    backgroundColor: withAlpha(t.color.accent, 0.15),
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1026,17 +1049,17 @@ const styles = StyleSheet.create({
     ...theme.typography.subtitle,
     fontSize: 16,
     fontWeight: '700',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   superlativeDesc: {
     ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   superlativeWinnerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: theme.color.surfaceAlt,
+    backgroundColor: t.color.surfaceAlt,
     paddingHorizontal: theme.spacing.md,
     paddingVertical: theme.spacing.xs,
     borderRadius: theme.radius.sm,
@@ -1051,17 +1074,17 @@ const styles = StyleSheet.create({
     ...theme.typography.subtitle,
     fontSize: 14,
     fontWeight: '700',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   winnerValuePill: {
-    backgroundColor: 'rgba(155, 81, 224, 0.15)',
+    backgroundColor: SUMMARY_MISC[t.scheme].winnerValueBg,
     paddingHorizontal: theme.spacing.sm,
     paddingVertical: 2,
     borderRadius: theme.radius.pill,
   },
   winnerValueText: {
     ...theme.typography.meta,
-    color: theme.color.primary,
+    color: t.color.primaryFg,
     fontWeight: '700',
     fontSize: 12,
   },
@@ -1091,7 +1114,7 @@ const styles = StyleSheet.create({
   },
   rankName: {
     ...theme.typography.subtitle,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
     fontSize: 15,
   },
   rankMetaRow: {
@@ -1101,7 +1124,7 @@ const styles = StyleSheet.create({
   },
   rankMeta: {
     ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     fontSize: 12,
   },
   ratingPill: {
@@ -1111,11 +1134,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.sm,
     paddingVertical: 4,
     borderRadius: theme.radius.pill,
-    backgroundColor: 'rgba(246, 195, 67, 0.18)',
+    backgroundColor: withAlpha(t.color.accent, 0.18),
   },
   ratingPillText: {
     ...theme.typography.meta,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
     fontWeight: '800',
     fontSize: 13,
   },
@@ -1123,7 +1146,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: theme.radius.md,
-    backgroundColor: theme.color.surface,
+    backgroundColor: t.color.surface,
   },
   experienceThumbPlaceholder: {
     alignItems: 'center',
@@ -1157,10 +1180,10 @@ const styles = StyleSheet.create({
   parkName: {
     ...theme.typography.subtitle,
     fontSize: 15,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   parkCountBadge: {
-    backgroundColor: theme.color.surfaceAlt,
+    backgroundColor: t.color.surfaceAlt,
     paddingHorizontal: theme.spacing.sm,
     paddingVertical: 2,
     borderRadius: theme.radius.pill,
@@ -1186,7 +1209,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   avatarText: {
-    color: theme.color.textOnPrimary,
+    color: t.color.textOnPrimary,
     fontWeight: '700',
   },
   memberIdentityCol: {
@@ -1196,17 +1219,17 @@ const styles = StyleSheet.create({
   memberName: {
     ...theme.typography.subtitle,
     fontSize: 16,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   memberSummaryStat: {
     ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     fontSize: 12,
   },
   memberStatsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: theme.color.surfaceAlt,
+    backgroundColor: t.color.surfaceAlt,
     padding: theme.spacing.sm,
     borderRadius: theme.radius.md,
   },
@@ -1218,30 +1241,30 @@ const styles = StyleSheet.create({
   memberStatDivider: {
     width: 1,
     height: 24,
-    backgroundColor: theme.color.border,
+    backgroundColor: t.color.border,
   },
   memberStatValue: {
     ...theme.typography.heading,
     fontSize: 18,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   memberStatLabel: {
     ...theme.typography.meta,
     fontSize: 11,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   memberFavoritePill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: 'rgba(255, 45, 85, 0.08)',
+    backgroundColor: SUMMARY_MISC[t.scheme].favoriteBg,
     paddingHorizontal: theme.spacing.md,
     paddingVertical: 6,
     borderRadius: theme.radius.sm,
   },
   memberFavoriteText: {
     ...theme.typography.meta,
-    color: '#D81B60',
+    color: SUMMARY_MISC[t.scheme].favoriteText,
     fontWeight: '600',
     fontSize: 12,
     flex: 1,
@@ -1254,4 +1277,4 @@ const styles = StyleSheet.create({
   shareBtn: {
     alignSelf: 'stretch',
   },
-});
+}));

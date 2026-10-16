@@ -38,9 +38,9 @@
  */
 
 import React from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
-import { theme } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
 
 // ---------------------------------------------------------------------------
 // Component
@@ -69,6 +69,7 @@ export function GroupSection({
   readonly children: React.ReactNode;
   readonly testID?: string;
 }): JSX.Element {
+  const styles = useStyles();
   const handlePress = React.useCallback(() => {
     onToggle(sectionKey);
   }, [onToggle, sectionKey]);
@@ -108,7 +109,7 @@ export function GroupSection({
 // Styles
 // ---------------------------------------------------------------------------
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   headerPressed: {
     opacity: 0.85,
   },
@@ -116,10 +117,10 @@ const styles = StyleSheet.create({
   // group header (flush, full-width) is clearly the parent and the rows below
   // are clearly its children.
   body: {
-    marginTop: theme.spacing.sm,
-    marginLeft: theme.spacing.md,
-    paddingLeft: theme.spacing.md,
+    marginTop: t.spacing.sm,
+    marginLeft: t.spacing.md,
+    paddingLeft: t.spacing.md,
     borderLeftWidth: 2,
-    borderLeftColor: theme.color.borderStrong,
+    borderLeftColor: t.color.borderStrong,
   },
-});
+}));

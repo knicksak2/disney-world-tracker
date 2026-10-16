@@ -31,6 +31,15 @@ import { render, screen, waitFor } from '@testing-library/react-native';
 // Mocks (declared before the modules under test are imported).
 // ---------------------------------------------------------------------------
 
+// dark-mode: `YouAndCrewStack` -> `YouAndCrewScreen` -> `ProfileScreen`
+// (`ProfileIdentityBlock`) -> `AppearancePreferenceControl` ->
+// `@react-native-async-storage/async-storage` — stub it with the package's
+// own shipped jest mock so the native module never has to resolve.
+jest.mock('@react-native-async-storage/async-storage', () =>
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  require('@react-native-async-storage/async-storage/jest/async-storage-mock'),
+);
+
 jest.mock('expo-secure-store', () => {
   const store = new Map<string, string>();
   return {

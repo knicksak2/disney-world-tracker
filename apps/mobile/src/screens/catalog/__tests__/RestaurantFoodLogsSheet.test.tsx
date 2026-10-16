@@ -3,9 +3,14 @@
 // Validates: Requirements 9.1, 9.2, 9.3, 9.4, 9.5, 9.6, 9.7, 9.8, Property 11, Property 12
 
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import type { ReactTestInstance } from 'react-test-renderer';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { FoodItemLogWithContextDTO } from '@dwt/shared';
+
+import { darkTheme } from '../../../theme/theme';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
 
 jest.mock('../../../api/client', () => {
   const actual = jest.requireActual('../../../api/client');
@@ -279,5 +284,40 @@ describe('RestaurantFoodLogsSheet', () => {
     });
 
     expect(screen.getByText('No logged items here yet')).toBeTruthy();
+  });
+});
+
+/** Nearest painted `backgroundColor` at or above `node` (sheet surface lookup). */
+function paintedBackground(node: ReactTestInstance | null): unknown {
+  for (let n = node; n !== null; n = n.parent) {
+    const style = n.props.style;
+    if (style === undefined || typeof style === 'function') continue;
+    const flat = StyleSheet.flatten(style) as { backgroundColor?: unknown } | undefined;
+    if (flat?.backgroundColor !== undefined) return flat.backgroundColor;
+  }
+  return undefined;
+}
+
+describe('RestaurantFoodLogsSheet — dark mode', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+  afterEach(resetTestScheme);
+
+  test('paints the sheet, rows and the active sort chip with dark tokens', async () => {
+    setTestScheme('dark');
+    apiRequestMock.mockResolvedValueOnce([...MOCK_BE_OUR_GUEST_LOGS]);
+    renderSheet({ experienceId: 'exp-bog' });
+
+    const header = await screen.findByText('Be Our Guest Restaurant');
+    // (a) sheet surface, (b) primary text.
+    expect(paintedBackground(header)).toBe(darkTheme.color.surface);
+    expect(StyleSheet.flatten(header.props.style).color).toBe(darkTheme.color.textPrimary);
+    // (c) the row's rating pill (surfaceAlt) and the active sort chip (primary fill).
+    expect(paintedBackground(screen.getByText('8/10'))).toBe(darkTheme.color.surfaceAlt);
+    expect(
+      StyleSheet.flatten(screen.getByTestId('scoped-sort-chip-recent').props.style).backgroundColor,
+    ).toBe(darkTheme.color.primary);
+    expect(screen.getByTestId('scoped-food-search-input').props.keyboardAppearance).toBe('dark');
   });
 });

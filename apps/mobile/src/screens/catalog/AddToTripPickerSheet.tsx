@@ -11,22 +11,30 @@
 // for the same "pick a Trip from a list" presentation problem.
 
 import React from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { TripDTO } from '@dwt/shared';
 
-import { theme } from '../../theme/theme';
+import type { AppTheme } from '../../theme/theme';
 import { Badge, Card, PrimaryButton } from '../../theme/components';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme } from '../../theme/useAppTheme';
 
 /**
  * Status label/color, matching `TripsListScreen.tsx`'s `STATUS_META` mapping
  * exactly (`active` -> success green, `upcoming` -> primary purple) so a
  * Trip's status reads identically here as it does on the Trips list itself.
+ * Built from the active theme (the colour is `Badge` text, so primary is
+ * `primaryFg`).
  */
-const STATUS_META: Record<'active' | 'upcoming', { readonly label: string; readonly color: string }> = {
-  active: { label: 'Active', color: theme.color.success },
-  upcoming: { label: 'Upcoming', color: theme.color.primary },
-};
+function statusMeta(
+  t: AppTheme,
+): Record<'active' | 'upcoming', { readonly label: string; readonly color: string }> {
+  return {
+    active: { label: 'Active', color: t.color.success },
+    upcoming: { label: 'Upcoming', color: t.color.primaryFg },
+  };
+}
 
 export interface AddToTripPickerSheetProps {
   readonly visible: boolean;
@@ -41,9 +49,14 @@ export default function AddToTripPickerSheet({
   onSelect,
   onClose,
 }: AddToTripPickerSheetProps): JSX.Element | null {
+  const styles = useStyles();
+  const t = useAppTheme();
+
   if (!visible) {
     return null;
   }
+
+  const STATUS_META = statusMeta(t);
 
   return (
     <Modal
@@ -64,7 +77,7 @@ export default function AddToTripPickerSheet({
               accessibilityLabel="Close"
               testID="add-to-trip-picker-close-btn"
             >
-              <Ionicons name="close" size={24} color={theme.color.textSecondary} />
+              <Ionicons name="close" size={24} color={t.color.textSecondary} />
             </Pressable>
           </View>
 
@@ -94,7 +107,7 @@ export default function AddToTripPickerSheet({
                       {formatDateRange(trip)}
                     </Text>
                   </View>
-                  <Ionicons name="chevron-forward" size={18} color={theme.color.textSecondary} />
+                  <Ionicons name="chevron-forward" size={18} color={t.color.textSecondary} />
                 </View>
               </Card>
             ))}
@@ -118,16 +131,16 @@ function formatDateRange(trip: TripDTO): string {
     : `${trip.startDate} \u2013 ${trip.endDate}`;
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   backdrop: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.45)',
     justifyContent: 'flex-end',
   },
   sheet: {
-    backgroundColor: theme.color.surface,
-    borderTopLeftRadius: theme.radius.lg,
-    borderTopRightRadius: theme.radius.lg,
+    backgroundColor: t.color.surface,
+    borderTopLeftRadius: t.radius.lg,
+    borderTopRightRadius: t.radius.lg,
     paddingHorizontal: 20,
     paddingBottom: 32,
     paddingTop: 12,
@@ -141,7 +154,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 18,
     fontWeight: '700',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   tripList: {
     gap: 8,
@@ -170,12 +183,12 @@ const styles = StyleSheet.create({
   tripName: {
     fontSize: 15,
     fontWeight: '700',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
     flexShrink: 1,
   },
   tripDates: {
     fontSize: 12,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     marginTop: 2,
   },
-});
+}));

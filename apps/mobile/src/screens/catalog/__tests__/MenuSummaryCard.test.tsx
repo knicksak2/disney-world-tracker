@@ -19,11 +19,15 @@
 // `navigate('Menu', { experienceId })` call the card can make.
 
 import React from 'react';
+import { ActivityIndicator, StyleSheet } from 'react-native';
+import type { ReactTestInstance } from 'react-test-renderer';
 import { fireEvent, render } from '@testing-library/react-native';
 
 import type { ExperienceCategory, MenuDTO } from '@dwt/shared';
 
 import MenuSummaryCard from '../MenuSummaryCard';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
+import { darkTheme } from '../../../theme/theme';
 
 // ---------------------------------------------------------------------------
 // Fixtures & helpers
@@ -177,6 +181,31 @@ describe('MenuSummaryCard interactions and states (R4.2-R4.6)', () => {
     expect(navigate).toHaveBeenCalledTimes(1);
     expect(navigate).toHaveBeenCalledWith('Menu', {
       experienceId: EXPERIENCE_ID,
+    });
+  });
+
+  // Feature: dark-mode — (c) converted token reads (B2)
+  describe('dark mode', () => {
+    afterEach(resetTestScheme);
+
+    const flat = (node: ReactTestInstance): Record<string, unknown> =>
+      (StyleSheet.flatten(node.props.style) ?? {}) as Record<string, unknown>;
+
+    test('(c) menu-type badges and the loading spinner use primaryFg; the count uses textPrimary', () => {
+      setTestScheme('dark');
+      const { view } = renderCard({ menus: MENUS });
+      expect(flat(view.getByText('Breakfast')).color).toBe(darkTheme.color.primaryFg);
+      expect(flat(view.getByTestId('menu-summary-count')).color).toBe(darkTheme.color.textPrimary);
+
+      const { view: loading } = renderCard({ isLoading: true, menus: undefined });
+      expect(loading.UNSAFE_getByType(ActivityIndicator).props.color).toBe(
+        darkTheme.color.primaryFg,
+      );
+    });
+
+    test('keeps the pre-retrofit light badge colour under light', () => {
+      const { view } = renderCard({ menus: MENUS });
+      expect(flat(view.getByText('Breakfast')).color).toBe('#5b2a86');
     });
   });
 });

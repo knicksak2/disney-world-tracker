@@ -10,13 +10,15 @@ import {
   Linking,
   Platform,
   Pressable,
-  StyleSheet,
   Text,
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { SectionLabel } from '../../theme/components';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme } from '../../theme/useAppTheme';
+import { LOCATION } from './LocationGroupSection.palette';
 import type { TagGroup } from './infoTags';
 import type { DirectionsPlatform } from './directions';
 import {
@@ -610,6 +612,8 @@ export default function LocationGroupSection({
   latitude,
   longitude,
 }: LocationGroupSectionProps): JSX.Element | null {
+  const styles = useStyles();
+  const t = useAppTheme();
   const [failed, setFailed] = React.useState(false);
   const [mapImageFailed, setMapImageFailed] = React.useState(false);
   const canGetDirections = hasValidCoordinates(latitude, longitude);
@@ -727,7 +731,7 @@ export default function LocationGroupSection({
           <Ionicons
             name="location"
             size={34}
-            color="#f6c343"
+            color={t.color.accent}
             style={styles.mapPin}
             accessibilityElementsHidden
             importantForAccessibility="no"
@@ -789,14 +793,14 @@ export default function LocationGroupSection({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   card: {
-    backgroundColor: '#ffffff',
+    backgroundColor: t.color.surface,
     borderRadius: 22,
     overflow: 'hidden',
     borderWidth: 1.5,
-    borderColor: '#ded3f0',
-    shadowColor: '#5b2a86',
+    borderColor: LOCATION[t.scheme].cardBorder,
+    shadowColor: LOCATION[t.scheme].shadow,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.08,
     shadowRadius: 20,
@@ -807,7 +811,7 @@ const styles = StyleSheet.create({
   mapFrame: {
     width: '100%',
     height: 195,
-    backgroundColor: '#f3edf9',
+    backgroundColor: LOCATION[t.scheme].mapFrameBg,
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
@@ -837,22 +841,22 @@ const styles = StyleSheet.create({
   briefTitle: {
     fontSize: 14,
     fontWeight: '800',
-    color: '#190c2d',
+    color: LOCATION[t.scheme].briefTitle,
   },
   briefSub: {
     fontSize: 11,
-    color: '#655d78',
+    color: LOCATION[t.scheme].briefSub,
     marginTop: 2,
   },
   directionsBtn: {
-    backgroundColor: '#5b2a86',
+    backgroundColor: t.color.primary,
     borderRadius: 999,
     paddingVertical: 9,
     paddingHorizontal: 14,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    shadowColor: '#5b2a86',
+    shadowColor: LOCATION[t.scheme].shadow,
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.25,
     shadowRadius: 8,
@@ -861,7 +865,7 @@ const styles = StyleSheet.create({
   directionsBtnText: {
     fontSize: 12,
     fontWeight: '800',
-    color: '#ffffff',
+    color: t.color.textOnPrimary,
   },
   badgeRow: {
     height: 0,
@@ -870,9 +874,9 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   tagPill: {
-    backgroundColor: '#f1ecf9',
+    backgroundColor: LOCATION[t.scheme].tagPillBg,
     borderWidth: 1,
-    borderColor: '#e2d7f2',
+    borderColor: LOCATION[t.scheme].tagPillBorder,
     paddingVertical: 4,
     paddingHorizontal: 10,
     borderRadius: 999,
@@ -880,28 +884,28 @@ const styles = StyleSheet.create({
   tagPillText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#371756',
+    color: LOCATION[t.scheme].tagPillText,
   },
   walkingCallout: {
-    backgroundColor: '#eef2ff',
+    backgroundColor: LOCATION[t.scheme].walkingBg,
     borderWidth: 1,
-    borderColor: '#c7d2fe',
+    borderColor: LOCATION[t.scheme].walkingBorder,
     borderRadius: 10,
     padding: 10,
     marginTop: 12,
   },
   walkingCalloutText: {
     fontSize: 11.5,
-    color: '#4338ca',
+    color: LOCATION[t.scheme].walkingText,
     lineHeight: 16,
   },
   walkingCalloutBold: {
     fontWeight: '800',
-    color: '#312e81',
+    color: LOCATION[t.scheme].walkingBold,
   },
   errorText: {
     fontSize: 12,
-    color: '#e11d48',
+    color: LOCATION[t.scheme].errorText,
     marginTop: 8,
   },
   srOnly: {
@@ -910,4 +914,4 @@ const styles = StyleSheet.create({
     opacity: 0,
     overflow: 'hidden',
   },
-});
+}));

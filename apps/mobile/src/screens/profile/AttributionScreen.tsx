@@ -6,17 +6,18 @@
  * author, so each line names the author, source, and licence. Reached from the Pin Board / Profile.
  */
 import React from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import type { CollectionStackParamList } from '../../navigation/CollectionStack';
 import { PIN_CREDITS } from '../../components/pins/pinCredits';
-import { theme } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
 import { Card, GradientHeader, ScreenContainer, SectionLabel } from '../../theme/components';
 
 type Props = NativeStackScreenProps<CollectionStackParamList, 'PinAttribution'>;
 
 export default function AttributionScreen({ navigation }: Props): JSX.Element {
+  const styles = useStyles();
   return (
     <ScreenContainer>
       <GradientHeader
@@ -50,15 +51,15 @@ export default function AttributionScreen({ navigation }: Props): JSX.Element {
   );
 }
 
-const styles = StyleSheet.create({
-  content: { padding: theme.spacing.lg },
+const useStyles = makeStyles((t) => ({
+  content: { padding: t.spacing.lg },
   intro: {
-    ...theme.typography.body,
-    color: theme.color.textSecondary,
-    marginBottom: theme.spacing.lg,
+    ...t.typography.body,
+    color: t.color.textSecondary,
+    marginBottom: t.spacing.lg,
   },
-  creditCard: { marginBottom: theme.spacing.md },
-  creditText: { ...theme.typography.body, color: theme.color.textPrimary },
-  footer: { marginTop: theme.spacing.md },
-  footerText: { ...theme.typography.meta, color: theme.color.textSecondary },
-});
+  creditCard: { marginBottom: t.spacing.md },
+  creditText: { ...t.typography.body, color: t.color.textPrimary },
+  footer: { marginTop: t.spacing.md },
+  footerText: { ...t.typography.meta, color: t.color.textSecondary },
+}));

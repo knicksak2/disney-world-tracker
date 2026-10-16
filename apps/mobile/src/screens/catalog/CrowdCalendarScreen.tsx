@@ -1,13 +1,15 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
+import { View, Text, ScrollView, Pressable } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { Calendar } from 'react-native-calendars';
 import { useNavigation } from '@react-navigation/native';
 
 import { type Park, type CrowdCalendarDayDTO } from '@dwt/shared';
 import { apiRequest } from '../../api/client';
-import { theme } from '../../theme/theme';
 import { ScreenContainer, GradientHeader, Card, SectionLabel, Badge } from '../../theme/components';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme, usePalette } from '../../theme/useAppTheme';
+import { CROWD_LEVEL, EVENT_BADGE } from './CrowdCalendarScreen.palette';
 
 interface CrowdCalendarResponse {
   readonly days: readonly CrowdCalendarDayDTO[];
@@ -27,6 +29,10 @@ function getWeatherIcon(cond?: string): string {
 }
 
 export default function CrowdCalendarScreen(): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
+  const crowd = usePalette(CROWD_LEVEL);
+  const events = usePalette(EVENT_BADGE);
   const navigation = useNavigation();
   const [selectedPark, setSelectedPark] = useState<Park | 'All'>('All');
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
@@ -84,13 +90,13 @@ export default function CrowdCalendarScreen(): JSX.Element {
 
   const getLevelInfo = (index: number) => {
     const lvl = Math.max(1, Math.min(10, Math.round(index > 2 ? index : index * 5)));
-    let color: string = theme.color.textSecondary;
+    let color: string = t.color.textSecondary;
     let label = 'Unknown';
-    if (lvl <= 3) { color = '#3fa34d'; label = 'Quiet'; }
-    else if (lvl <= 5) { color = '#8bbf3f'; label = 'Below Average'; }
-    else if (lvl <= 7) { color = '#f6c343'; label = 'Moderate'; }
-    else if (lvl <= 8) { color = '#e8792b'; label = 'High'; }
-    else { color = '#d64545'; label = 'Peak'; }
+    if (lvl <= 3) { color = crowd.quiet; label = 'Quiet'; }
+    else if (lvl <= 5) { color = crowd.belowAverage; label = 'Below Average'; }
+    else if (lvl <= 7) { color = t.color.accent; label = 'Moderate'; }
+    else if (lvl <= 8) { color = crowd.high; label = 'High'; }
+    else { color = crowd.peak; label = 'Peak'; }
     return { level: lvl, color, label };
   };
 
@@ -103,7 +109,7 @@ export default function CrowdCalendarScreen(): JSX.Element {
     if (!dayData) {
       return (
         <View style={styles.dayCell}>
-          <Text style={[styles.dayText, { color: theme.color.textSecondary }]}>{date.day}</Text>
+          <Text style={[styles.dayText, { color: t.color.textSecondary }]}>{date.day}</Text>
         </View>
       );
     }
@@ -161,6 +167,8 @@ export default function CrowdCalendarScreen(): JSX.Element {
 
         <Card style={{ padding: 8 }}>
           <Calendar
+            // `Calendar` captures its styles once at mount; remount it on a scheme switch.
+            key={t.scheme}
             current={todayStr}
             onMonthChange={(month: any) => {
               if (month?.dateString) {
@@ -170,20 +178,22 @@ export default function CrowdCalendarScreen(): JSX.Element {
             hideExtraDays={false}
             dayComponent={renderDay}
             theme={{
-              calendarBackground: 'transparent',
-              textSectionTitleColor: theme.color.textSecondary,
-              monthTextColor: theme.color.textPrimary,
+              // Light keeps 'transparent' (the Card's surface shows through, as
+              // before); dark paints the surface token explicitly.
+              calendarBackground: t.scheme === 'dark' ? t.color.surface : 'transparent',
+              textSectionTitleColor: t.color.textSecondary,
+              monthTextColor: t.color.textPrimary,
               textMonthFontWeight: '700',
-              arrowColor: theme.color.primary,
+              arrowColor: t.color.primaryFg,
             }}
           />
           <View style={styles.legend}>
             <Text style={styles.legendText}>Quiet</Text>
-            <View style={[styles.legendSwatch, { backgroundColor: '#3fa34d' }]} />
-            <View style={[styles.legendSwatch, { backgroundColor: '#8bbf3f' }]} />
-            <View style={[styles.legendSwatch, { backgroundColor: '#f6c343' }]} />
-            <View style={[styles.legendSwatch, { backgroundColor: '#e8792b' }]} />
-            <View style={[styles.legendSwatch, { backgroundColor: '#d64545' }]} />
+            <View style={[styles.legendSwatch, { backgroundColor: crowd.quiet }]} />
+            <View style={[styles.legendSwatch, { backgroundColor: crowd.belowAverage }]} />
+            <View style={[styles.legendSwatch, { backgroundColor: t.color.accent }]} />
+            <View style={[styles.legendSwatch, { backgroundColor: crowd.high }]} />
+            <View style={[styles.legendSwatch, { backgroundColor: crowd.peak }]} />
             <Text style={styles.legendText}>Packed</Text>
           </View>
           
@@ -285,7 +295,7 @@ export default function CrowdCalendarScreen(): JSX.Element {
               {selectedDayInfo.festival && (
                 <View style={styles.infoRow}>
                   <Text style={styles.infoKey}>Festival</Text>
-                  <Text style={[styles.infoVal, { color: theme.color.primary }]}>
+                  <Text style={[styles.infoVal, { color: t.color.primaryFg }]}>
                     🎉 {selectedDayInfo.festival}
                   </Text>
                 </View>
@@ -294,9 +304,9 @@ export default function CrowdCalendarScreen(): JSX.Element {
                 <View style={styles.infoRow}>
                   <Text style={styles.infoKey}>Events</Text>
                   <View style={styles.flagsRow}>
-                    {selectedDayInfo.earlyEntry && <Badge label="Early Entry" color="#2e7d3a" />}
-                    {selectedDayInfo.extendedEvening && <Badge label="Extended Eve" color="#6a1b9a" />}
-                    {selectedDayInfo.ticketedEvent && <Badge label="Ticketed Event" color="#d84315" />}
+                    {selectedDayInfo.earlyEntry && <Badge label="Early Entry" color={events.earlyEntry} />}
+                    {selectedDayInfo.extendedEvening && <Badge label="Extended Eve" color={events.extendedEvening} />}
+                    {selectedDayInfo.ticketedEvent && <Badge label="Ticketed Event" color={events.ticketedEvent} />}
                   </View>
                 </View>
               )}
@@ -350,26 +360,27 @@ export default function CrowdCalendarScreen(): JSX.Element {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   body: {
-    padding: theme.spacing.md,
+    padding: t.spacing.md,
     paddingBottom: 60,
   },
   segmentedControl: {
     flexDirection: 'row',
-    backgroundColor: theme.color.surfaceAlt,
-    borderRadius: theme.radius.md,
+    backgroundColor: t.color.surfaceAlt,
+    borderRadius: t.radius.md,
     padding: 4,
-    marginBottom: theme.spacing.md,
+    marginBottom: t.spacing.md,
   },
   segment: {
     flex: 1,
     paddingVertical: 8,
     alignItems: 'center',
-    borderRadius: theme.radius.sm,
+    borderRadius: t.radius.sm,
   },
   segmentSelected: {
-    backgroundColor: theme.color.surface,
+    // Dark: lighter than the `surfaceAlt` track so it reads raised (Requirement 9.12).
+    backgroundColor: t.scheme === 'dark' ? t.color.borderStrong : t.color.surface,
     shadowColor: '#000',
     shadowOpacity: 0.1,
     shadowRadius: 4,
@@ -379,18 +390,18 @@ const styles = StyleSheet.create({
   segmentText: {
     fontSize: 12,
     fontWeight: '600',
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   segmentTextSelected: {
-    color: theme.color.primary,
+    color: t.color.primaryFg,
   },
   bestBanner: {
     flexDirection: 'row',
-    backgroundColor: '#f6c343',
-    padding: theme.spacing.md,
-    borderRadius: theme.radius.md,
+    backgroundColor: t.color.accent,
+    padding: t.spacing.md,
+    borderRadius: t.radius.md,
     alignItems: 'center',
-    marginBottom: theme.spacing.md,
+    marginBottom: t.spacing.md,
   },
   bestBannerIcon: {
     fontSize: 24,
@@ -399,17 +410,17 @@ const styles = StyleSheet.create({
   bestBannerTitle: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#3d1c5c',
+    color: t.color.textOnAccent,
   },
   bestBannerSub: {
     fontSize: 12,
-    color: '#3d1c5c',
+    color: t.color.textOnAccent,
     opacity: 0.8,
     marginTop: 2,
   },
   dayCell: {
     aspectRatio: 1,
-    borderRadius: theme.radius.sm,
+    borderRadius: t.radius.sm,
     alignItems: 'center',
     justifyContent: 'center',
     width: 40,
@@ -423,32 +434,32 @@ const styles = StyleSheet.create({
   dayText: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#fff',
+    color: t.color.textOnPrimary,
   },
   dayTextEmpty: {
     fontSize: 16,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     opacity: 0.5,
   },
   dayCellSelected: {
     borderWidth: 3,
-    borderColor: theme.color.primary,
+    borderColor: t.color.primaryFg,
   },
   dayTextSelected: {
-    color: '#fff',
+    color: t.color.textOnPrimary,
   },
   bestStar: {
     position: 'absolute',
     top: 2,
     right: 4,
     fontSize: 8,
-    color: '#fff',
+    color: t.color.textOnPrimary,
   },
   legend: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: theme.spacing.sm,
+    marginTop: t.spacing.sm,
     gap: 4,
   },
   legendSwatch: {
@@ -458,12 +469,12 @@ const styles = StyleSheet.create({
   },
   legendText: {
     fontSize: 10,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   dayCap: {
     textAlign: 'center',
     fontSize: 12,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     marginTop: 12,
   },
   levelHero: {
@@ -476,17 +487,17 @@ const styles = StyleSheet.create({
     borderRadius: 33,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: theme.spacing.md,
+    marginRight: t.spacing.md,
   },
   lvlBadgeNum: {
     fontSize: 26,
     fontWeight: '800',
-    color: '#fff',
+    color: t.color.textOnPrimary,
     lineHeight: 28,
   },
   lvlBadgeOut: {
     fontSize: 10,
-    color: '#fff',
+    color: t.color.textOnPrimary,
     opacity: 0.9,
   },
   levelHeroText: {
@@ -495,11 +506,11 @@ const styles = StyleSheet.create({
   levelHeroTitle: {
     fontSize: 16,
     fontWeight: '800',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   levelHeroSub: {
     fontSize: 13,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     marginTop: 4,
   },
   infoRow: {
@@ -507,16 +518,16 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: theme.color.border,
+    borderBottomColor: t.color.border,
   },
   infoKey: {
     fontSize: 13,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   infoVal: {
     fontSize: 13,
     fontWeight: '700',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   flagsRow: {
     flexDirection: 'row',
@@ -526,19 +537,19 @@ const styles = StyleSheet.create({
   accNote: {
     fontSize: 13,
     fontWeight: '600',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
     textAlign: 'center',
   },
   accSub: {
     fontSize: 12,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     textAlign: 'center',
     marginTop: 4,
   },
   parkComparisonRow: {
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: theme.color.border,
+    borderBottomColor: t.color.border,
   },
   parkComparisonTop: {
     flexDirection: 'row',
@@ -549,11 +560,11 @@ const styles = StyleSheet.create({
   parkComparisonName: {
     fontSize: 14,
     fontWeight: '600',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   parkComparisonNameCurrent: {
     fontWeight: '800',
-    color: theme.color.primary,
+    color: t.color.primaryFg,
   },
   parkComparisonRight: {
     flexDirection: 'row',
@@ -562,22 +573,22 @@ const styles = StyleSheet.create({
   },
   parkComparisonWait: {
     fontSize: 12,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     fontWeight: '500',
   },
   parkComparisonBadge: {
     paddingHorizontal: 8,
     paddingVertical: 2,
-    borderRadius: theme.radius.sm,
+    borderRadius: t.radius.sm,
   },
   parkComparisonBadgeText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#fff',
+    color: t.color.textOnPrimary,
   },
   barTrack: {
     height: 6,
-    backgroundColor: theme.color.surfaceAlt,
+    backgroundColor: t.color.surfaceAlt,
     borderRadius: 3,
     overflow: 'hidden',
   },
@@ -585,4 +596,4 @@ const styles = StyleSheet.create({
     height: '100%',
     borderRadius: 3,
   },
-});
+}));

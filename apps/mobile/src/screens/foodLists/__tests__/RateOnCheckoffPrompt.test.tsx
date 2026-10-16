@@ -3,9 +3,13 @@
 // Validates: Requirements 13.15
 
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { fireEvent, render, screen } from '@testing-library/react-native';
+import type { ReactTestInstance } from 'react-test-renderer';
 
 import RateOnCheckoffPrompt from '../RateOnCheckoffPrompt';
+import { darkTheme } from '../../../theme/theme';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
 
 describe('RateOnCheckoffPrompt', () => {
   test('selecting a rating and confirming calls onConfirm with that value', () => {
@@ -149,4 +153,49 @@ describe('RateOnCheckoffPrompt', () => {
 
     expect(screen.queryByTestId('rate-on-checkoff-prompt')).toBeNull();
   });
+
+  describe('dark mode', () => {
+    afterEach(resetTestScheme);
+
+    test('paints the sheet, title and rating tiles with dark tokens', () => {
+      setTestScheme('dark');
+      render(
+        <RateOnCheckoffPrompt
+          visible
+          foodItemName="Dole Whip"
+          initialRating={7}
+          onSkip={jest.fn()}
+          onConfirm={jest.fn()}
+        />,
+      );
+
+      const title = screen.getByText('Dole Whip');
+      // (a) the sheet surface, (b) primary text.
+      expect(paintedBackground(title)).toBe(darkTheme.color.surface);
+      expect(StyleSheet.flatten(title.props.style).color).toBe(darkTheme.color.textPrimary);
+      // (c) idle tile on surfaceAlt; selected tile is a primary fill with white text.
+      expect(
+        StyleSheet.flatten(screen.getByTestId('rate-on-checkoff-rating-btn-1').props.style)
+          .backgroundColor,
+      ).toBe(darkTheme.color.surfaceAlt);
+      expect(
+        StyleSheet.flatten(screen.getByTestId('rate-on-checkoff-rating-btn-7').props.style)
+          .backgroundColor,
+      ).toBe(darkTheme.color.primary);
+      expect(StyleSheet.flatten(screen.getByText('7').props.style).color).toBe(
+        darkTheme.color.textOnPrimary,
+      );
+    });
+  });
 });
+
+/** Nearest painted `backgroundColor` at or above `node` (sheet surface lookup). */
+function paintedBackground(node: ReactTestInstance | null): unknown {
+  for (let n = node; n !== null; n = n.parent) {
+    const style = n.props.style;
+    if (style === undefined || typeof style === 'function') continue;
+    const flat = StyleSheet.flatten(style) as { backgroundColor?: unknown } | undefined;
+    if (flat?.backgroundColor !== undefined) return flat.backgroundColor;
+  }
+  return undefined;
+}

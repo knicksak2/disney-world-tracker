@@ -6,7 +6,6 @@ import {
   Modal,
   Platform,
   Pressable,
-  StyleSheet,
   Text,
   TextInput,
   View,
@@ -16,7 +15,9 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { FoodItemDTO, FoodListDetailDTO, FoodListDTO } from '@dwt/shared';
 
 import { ApiError, apiRequest } from '../../api/client';
-import { theme } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme } from '../../theme/useAppTheme';
+import { ADD_TO_LISTS } from './AddToListsSheet.palette';
 
 export interface AddToListsSheetProps {
   readonly visible: boolean;
@@ -31,6 +32,8 @@ export default function AddToListsSheet({
   foodItems,
   onComplete,
 }: AddToListsSheetProps): JSX.Element | null {
+  const styles = useStyles();
+  const t = useAppTheme();
   const queryClient = useQueryClient();
   const hasCheckedPreselectionsRef = useRef(false);
   const [selectedListIds, setSelectedListIds] = useState<Set<string>>(new Set());
@@ -213,7 +216,7 @@ export default function AddToListsSheet({
           <Ionicons
             name={isSelected ? 'checkbox' : 'square-outline'}
             size={22}
-            color={isSelected ? theme.color.primary : theme.color.textSecondary}
+            color={isSelected ? t.color.primaryFg : t.color.textSecondary}
           />
           <View style={styles.listRowInfo}>
             <Text style={styles.listRowName}>{item.name}</Text>
@@ -224,7 +227,7 @@ export default function AddToListsSheet({
         </Pressable>
       );
     },
-    [selectedListIds, toggleListSelection],
+    [selectedListIds, toggleListSelection, styles, t],
   );
 
   if (!visible) return null;
@@ -238,7 +241,7 @@ export default function AddToListsSheet({
       testID="add-to-lists-sheet"
     >
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.backdrop}
       >
         <View style={styles.container}>
@@ -257,7 +260,7 @@ export default function AddToListsSheet({
               style={styles.closeBtn}
               testID="close-add-to-lists-btn"
             >
-              <Ionicons name="close" size={24} color={theme.color.textSecondary} />
+              <Ionicons name="close" size={24} color={t.color.textSecondary} />
             </Pressable>
           </View>
 
@@ -268,7 +271,8 @@ export default function AddToListsSheet({
                 value={newListName}
                 onChangeText={setNewListName}
                 placeholder="New list name..."
-                placeholderTextColor={theme.color.textSecondary}
+                placeholderTextColor={t.color.textSecondary}
+                keyboardAppearance={t.scheme}
                 style={styles.createInput}
                 autoFocus
                 testID="create-list-name-input"
@@ -291,7 +295,7 @@ export default function AddToListsSheet({
                   testID="submit-create-list-btn"
                 >
                   {isSubmittingNewList ? (
-                    <ActivityIndicator size="small" color="#fff" />
+                    <ActivityIndicator size="small" color={t.color.textOnPrimary} />
                   ) : (
                     <Text style={styles.submitCreateBtnText}>Create</Text>
                   )}
@@ -306,7 +310,7 @@ export default function AddToListsSheet({
               accessibilityLabel="Create new list"
               testID="inline-create-list-btn"
             >
-              <Ionicons name="add-circle" size={20} color={theme.color.primary} />
+              <Ionicons name="add-circle" size={20} color={t.color.primaryFg} />
               <Text style={styles.inlineAddListText}>Create new list</Text>
             </Pressable>
           )}
@@ -314,13 +318,14 @@ export default function AddToListsSheet({
           {/* Owned Lists Checklist */}
           {ownedListsQuery.isLoading ? (
             <View style={styles.loadingWrap}>
-              <ActivityIndicator color={theme.color.primary} testID="add-to-lists-loading" />
+              <ActivityIndicator color={t.color.primaryFg} testID="add-to-lists-loading" />
             </View>
           ) : (
             <FlatList
               data={ownedLists}
               keyExtractor={(item) => item.id}
               renderItem={renderOwnedList}
+              extraData={t.scheme}
               ListEmptyComponent={
                 <View style={styles.emptyWrap}>
                   <Text style={styles.emptyText} testID="add-to-lists-empty">
@@ -347,7 +352,7 @@ export default function AddToListsSheet({
               testID="add-to-lists-save-btn"
             >
               {isSaving ? (
-                <ActivityIndicator color="#fff" />
+                <ActivityIndicator color={t.color.textOnPrimary} />
               ) : (
                 <Text style={styles.saveBtnText}>Save</Text>
               )}
@@ -359,16 +364,16 @@ export default function AddToListsSheet({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   backdrop: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'flex-end',
   },
   container: {
-    backgroundColor: theme.color.surface,
-    borderTopLeftRadius: theme.radius.lg,
-    borderTopRightRadius: theme.radius.lg,
+    backgroundColor: t.color.surface,
+    borderTopLeftRadius: t.radius.lg,
+    borderTopRightRadius: t.radius.lg,
     maxHeight: '80%',
     paddingBottom: 24,
   },
@@ -376,9 +381,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: theme.spacing.md,
+    padding: t.spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: theme.color.border,
+    borderBottomColor: t.color.border,
   },
   headerTitles: {
     flex: 1,
@@ -386,11 +391,11 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 18,
     fontWeight: '700',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   subtitle: {
     fontSize: 13,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     marginTop: 2,
   },
   closeBtn: {
@@ -400,31 +405,31 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    padding: theme.spacing.md,
-    backgroundColor: 'rgba(107, 70, 193, 0.06)',
+    padding: t.spacing.md,
+    backgroundColor: ADD_TO_LISTS[t.scheme].inlineAddBg,
     borderBottomWidth: 1,
-    borderBottomColor: theme.color.border,
+    borderBottomColor: t.color.border,
   },
   inlineAddListText: {
-    color: theme.color.primary,
+    color: t.color.primaryFg,
     fontWeight: '600',
     fontSize: 15,
   },
   createSection: {
-    padding: theme.spacing.md,
-    backgroundColor: theme.color.background,
+    padding: t.spacing.md,
+    backgroundColor: t.color.background,
     borderBottomWidth: 1,
-    borderBottomColor: theme.color.border,
+    borderBottomColor: t.color.border,
   },
   createInput: {
-    backgroundColor: theme.color.surface,
+    backgroundColor: t.color.surface,
     borderWidth: 1,
-    borderColor: theme.color.border,
-    borderRadius: theme.radius.md,
+    borderColor: t.color.border,
+    borderRadius: t.radius.md,
     paddingHorizontal: 12,
     paddingVertical: 8,
     fontSize: 15,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   createActions: {
     flexDirection: 'row',
@@ -435,23 +440,23 @@ const styles = StyleSheet.create({
   cancelBtn: {
     paddingVertical: 8,
     paddingHorizontal: 14,
-    borderRadius: theme.radius.sm,
+    borderRadius: t.radius.sm,
   },
   cancelBtnText: {
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     fontWeight: '600',
   },
   submitCreateBtn: {
-    backgroundColor: theme.color.primary,
+    backgroundColor: t.color.primary,
     paddingVertical: 8,
     paddingHorizontal: 16,
-    borderRadius: theme.radius.sm,
+    borderRadius: t.radius.sm,
   },
   submitCreateBtnDisabled: {
     opacity: 0.5,
   },
   submitCreateBtnText: {
-    color: '#fff',
+    color: t.color.textOnPrimary,
     fontWeight: '600',
   },
   loadingWrap: {
@@ -464,12 +469,12 @@ const styles = StyleSheet.create({
   listRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: theme.spacing.md,
+    paddingHorizontal: t.spacing.md,
     paddingVertical: 12,
     gap: 12,
   },
   listRowPressed: {
-    backgroundColor: theme.color.surfaceAlt,
+    backgroundColor: t.color.surfaceAlt,
   },
   listRowInfo: {
     flex: 1,
@@ -477,11 +482,11 @@ const styles = StyleSheet.create({
   listRowName: {
     fontSize: 15,
     fontWeight: '600',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   listRowMeta: {
     fontSize: 11,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     marginTop: 2,
   },
   emptyWrap: {
@@ -489,20 +494,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   emptyText: {
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     fontSize: 13,
     textAlign: 'center',
   },
   footer: {
-    paddingHorizontal: theme.spacing.md,
-    paddingTop: theme.spacing.md,
+    paddingHorizontal: t.spacing.md,
+    paddingTop: t.spacing.md,
     borderTopWidth: 1,
-    borderTopColor: theme.color.border,
+    borderTopColor: t.color.border,
   },
   saveBtn: {
-    backgroundColor: theme.color.primary,
+    backgroundColor: t.color.primary,
     paddingVertical: 14,
-    borderRadius: theme.radius.md,
+    borderRadius: t.radius.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -510,8 +515,8 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   saveBtnText: {
-    color: '#fff',
+    color: t.color.textOnPrimary,
     fontWeight: '700',
     fontSize: 15,
   },
-});
+}));

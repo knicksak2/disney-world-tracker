@@ -18,8 +18,9 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { FoodItemDTO, FoodItemLogDTO, FoodItemLogHistoryDTO } from '@dwt/shared';
 
 import { apiRequest } from '../../api/client';
-import { theme } from '../../theme/theme';
 import { Badge, Card } from '../../theme/components';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme } from '../../theme/useAppTheme';
 
 export interface FoodItemLogHistorySheetProps {
   /** The food item whose history is being viewed. */
@@ -38,6 +39,8 @@ export default function FoodItemLogHistorySheet({
   onClose,
   onLogDeleted,
 }: FoodItemLogHistorySheetProps): JSX.Element | null {
+  const styles = useStyles();
+  const t = useAppTheme();
   const queryClient = useQueryClient();
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -119,7 +122,7 @@ export default function FoodItemLogHistorySheet({
               style={styles.closeBtn}
               testID="close-food-item-history-btn"
             >
-              <Ionicons name="close" size={24} color={theme.color.textSecondary} />
+              <Ionicons name="close" size={24} color={t.color.textSecondary} />
             </Pressable>
           </View>
 
@@ -128,7 +131,7 @@ export default function FoodItemLogHistorySheet({
             <View style={styles.badgeRow}>
               <Badge
                 label="Not currently on menu"
-                color={theme.color.textSecondary}
+                color={t.color.textSecondary}
                 testID="food-item-history-not-on-menu"
               />
             </View>
@@ -145,7 +148,7 @@ export default function FoodItemLogHistorySheet({
             {historyQuery.isLoading ? (
               <View style={styles.loadingWrap}>
                 <ActivityIndicator
-                  color={theme.color.primary}
+                  color={t.color.primaryFg}
                   testID="food-item-history-loading"
                   accessibilityLabel="Loading visit history"
                 />
@@ -166,7 +169,7 @@ export default function FoodItemLogHistorySheet({
                       <Text style={styles.logDate}>{log.visitedOn}</Text>
                       {log.rating !== null && (
                         <View style={styles.ratingBadge}>
-                          <Ionicons name="star" size={14} color={theme.color.accent} />
+                          <Ionicons name="star" size={14} color={t.color.accent} />
                           <Text style={styles.ratingText}>{log.rating}/10</Text>
                         </View>
                       )}
@@ -180,9 +183,9 @@ export default function FoodItemLogHistorySheet({
                       testID={`food-item-delete-log-${log.id}`}
                     >
                       {deletingId === log.id ? (
-                        <ActivityIndicator size="small" color={theme.color.danger} />
+                        <ActivityIndicator size="small" color={t.color.danger} />
                       ) : (
-                        <Ionicons name="trash-outline" size={18} color={theme.color.danger} />
+                        <Ionicons name="trash-outline" size={18} color={t.color.danger} />
                       )}
                     </Pressable>
                   </View>
@@ -199,16 +202,16 @@ export default function FoodItemLogHistorySheet({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   backdrop: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.45)',
     justifyContent: 'flex-end',
   },
   container: {
-    backgroundColor: theme.color.surface,
-    borderTopLeftRadius: theme.radius.xl,
-    borderTopRightRadius: theme.radius.xl,
+    backgroundColor: t.color.surface,
+    borderTopLeftRadius: t.radius.xl,
+    borderTopRightRadius: t.radius.xl,
     maxHeight: '80%',
     paddingBottom: 24,
   },
@@ -220,7 +223,7 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     paddingBottom: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: theme.color.border,
+    borderBottomColor: t.color.border,
   },
   headerTitles: {
     flex: 1,
@@ -229,11 +232,11 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 18,
     fontWeight: '700',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   subtitle: {
     fontSize: 13,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     marginTop: 2,
   },
   closeBtn: {
@@ -260,7 +263,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   emptyText: {
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     fontSize: 15,
   },
   errorWrap: {
@@ -268,7 +271,7 @@ const styles = StyleSheet.create({
     paddingTop: 10,
   },
   errorText: {
-    color: theme.color.danger,
+    color: t.color.danger,
     fontSize: 13,
   },
   logCard: {
@@ -288,12 +291,12 @@ const styles = StyleSheet.create({
   logDate: {
     fontSize: 14,
     fontWeight: '600',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   ratingBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: theme.color.surfaceAlt,
+    backgroundColor: t.color.surfaceAlt,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 6,
@@ -302,7 +305,7 @@ const styles = StyleSheet.create({
   ratingText: {
     fontSize: 12,
     fontWeight: '600',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   deleteBtn: {
     padding: 6,
@@ -310,7 +313,7 @@ const styles = StyleSheet.create({
   logNote: {
     marginTop: 8,
     fontSize: 13,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     lineHeight: 18,
   },
-});
+}));

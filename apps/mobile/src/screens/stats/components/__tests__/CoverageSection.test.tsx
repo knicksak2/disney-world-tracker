@@ -20,8 +20,12 @@
  */
 
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { render, screen } from '@testing-library/react-native';
 
+import { darkTheme } from '../../../../theme/theme';
+import { resetTestScheme, setTestScheme } from '../../../../test/themeTestUtils';
+import { AREA_ACCENT } from '../CoverageSection.palette';
 import {
   COMPLETE_CELL,
   EMPTY_CELL,
@@ -118,5 +122,48 @@ describe('CoverageSection — Resorts lens separation (Requirements 6.1, 6.3, 6.
     render(<CoverageSection coverage={coverage} lens="parks" />);
     // All seven parks render as rows (none hidden).
     expect(screen.getAllByTestId(/^park-row-/)).toHaveLength(7);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Feature: dark-mode — row accents (dot marks) follow the Active theme.
+// ---------------------------------------------------------------------------
+
+describe('CoverageSection — dark mode', () => {
+  const flat = (node: { props: { style?: unknown } }): Record<string, unknown> =>
+    (StyleSheet.flatten(node.props.style as never) ?? {}) as Record<string, unknown>;
+  const dotOf = (rowTestID: string): unknown =>
+    flat(
+      screen
+        .getByTestId(rowTestID)
+        .findAll((n) => (n.type as string) === 'View' && flat(n).width === 9)[0] ?? {
+        props: {},
+      },
+    ).backgroundColor;
+  afterEach(resetTestScheme);
+
+  it('(c) area, land, park rows and labels use their dark values', () => {
+    setTestScheme('dark');
+    const { unmount } = render(
+      <CoverageSection coverage={makeCoverageResponse()} lens="areas" />,
+    );
+    expect(dotOf('area-row-ThemePark')).toBe(AREA_ACCENT.dark.themePark);
+    expect(dotOf('area-row-WaterPark')).toBe(AREA_ACCENT.dark.waterPark);
+    expect(dotOf('area-row-Resort')).toBe(darkTheme.resortVisual.tint);
+    // Open-ended rows: `primary` as a mark → primaryFg (rule 1a).
+    expect(dotOf('resort-area-row-Deluxe Resorts')).toBe(darkTheme.color.primaryFg);
+    expect(flat(screen.getByText('Deluxe Resorts')).color).toBe(darkTheme.color.textPrimary);
+    unmount();
+
+    render(<CoverageSection coverage={makeCoverageResponse()} lens="parks" />);
+    expect(dotOf('park-row-EPCOT')).toBe(darkTheme.parkAccent.EPCOT);
+  });
+
+  it('light keeps today\u2019s area accents and the primary mark colour', () => {
+    render(<CoverageSection coverage={makeCoverageResponse()} lens="areas" />);
+    expect(dotOf('area-row-ThemePark')).toBe('#7e57c2');
+    expect(dotOf('area-row-WaterPark')).toBe('#17a2b8');
+    expect(dotOf('area-row-DisneySprings')).toBe('#f6a609');
+    expect(dotOf('resort-area-row-Deluxe Resorts')).toBe('#5b2a86');
   });
 });

@@ -13,7 +13,6 @@ import {
   Modal,
   Platform,
   Pressable,
-  StyleSheet,
   Text,
   TextInput,
   View,
@@ -22,13 +21,16 @@ import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { ExpenseDTO } from '@dwt/shared';
 
-import { theme } from '../../theme/theme';
+import { withAlpha } from '../../theme/theme';
 import {
   PrimaryButton,
   SecondaryButton,
   SectionLabel,
 } from '../../theme/components';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme } from '../../theme/useAppTheme';
 import { createRefund, tripExpenseKeys } from './tripExpenseApi';
+import { REFUND } from './RefundModal.palette';
 
 interface Props {
   readonly visible: boolean;
@@ -43,6 +45,8 @@ export function RefundModal({
   expense,
   onClose,
 }: Props): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const queryClient = useQueryClient();
   const [amountDollars, setAmountDollars] = useState('');
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
@@ -96,7 +100,7 @@ export function RefundModal({
               testID="close-refund-modal"
               hitSlop={12}
             >
-              <Ionicons name="close" size={24} color={theme.color.textPrimary} />
+              <Ionicons name="close" size={24} color={t.color.textPrimary} />
             </Pressable>
           </View>
 
@@ -136,7 +140,8 @@ export function RefundModal({
           <TextInput
             style={styles.input}
             placeholder="0.00"
-            placeholderTextColor={theme.color.textSecondary}
+            placeholderTextColor={t.color.textSecondary}
+            keyboardAppearance={t.scheme}
             keyboardType="decimal-pad"
             value={amountDollars}
             onChangeText={setAmountDollars}
@@ -147,7 +152,8 @@ export function RefundModal({
           <TextInput
             style={styles.input}
             placeholder="2026-10-04"
-            placeholderTextColor={theme.color.textSecondary}
+            placeholderTextColor={t.color.textSecondary}
+            keyboardAppearance={t.scheme}
             value={date}
             onChangeText={setDate}
             testID="refund-date-input"
@@ -176,14 +182,14 @@ export function RefundModal({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: theme.color.surface,
+    backgroundColor: t.color.surface,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 20,
@@ -197,29 +203,29 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   subtitle: {
     fontSize: 14,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     marginBottom: 16,
   },
   errorBox: {
-    backgroundColor: 'rgba(232, 80, 91, 0.15)',
+    backgroundColor: REFUND[t.scheme].errorBg,
     padding: 10,
     borderRadius: 8,
     marginBottom: 12,
   },
   errorText: {
-    color: theme.color.danger,
+    color: t.color.danger,
     fontSize: 13,
   },
   contextCard: {
-    backgroundColor: theme.color.surface,
+    backgroundColor: t.color.surface,
     padding: 12,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
     marginBottom: 16,
   },
   contextRow: {
@@ -229,42 +235,42 @@ const styles = StyleSheet.create({
   },
   contextRowHighlight: {
     borderTopWidth: 1,
-    borderTopColor: theme.color.border,
+    borderTopColor: t.color.border,
     paddingTop: 6,
     marginTop: 4,
     marginBottom: 0,
   },
   contextLabel: {
     fontSize: 13,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   contextValue: {
     fontSize: 13,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   contextLabelBold: {
     fontSize: 14,
     fontWeight: '600',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   contextValueBold: {
     fontSize: 14,
     fontWeight: '700',
-    color: theme.color.primary,
+    color: t.color.primaryFg,
   },
   input: {
-    backgroundColor: theme.color.surface,
+    backgroundColor: t.color.surface,
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 15,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
     marginBottom: 12,
   },
   projectedBox: {
-    backgroundColor: 'rgba(91, 42, 134, 0.08)',
+    backgroundColor: withAlpha(t.color.primary, 0.08),
     padding: 10,
     borderRadius: 8,
     marginBottom: 12,
@@ -272,7 +278,7 @@ const styles = StyleSheet.create({
   projectedText: {
     fontSize: 13,
     fontWeight: '600',
-    color: theme.color.primary,
+    color: t.color.primaryFg,
   },
   footerRow: {
     flexDirection: 'row',
@@ -280,4 +286,4 @@ const styles = StyleSheet.create({
     gap: 10,
     marginTop: 8,
   },
-});
+}));

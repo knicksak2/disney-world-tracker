@@ -1,5 +1,10 @@
 import React from 'react';
+import { StyleSheet, Switch } from 'react-native';
+import type { ReactTestInstance } from 'react-test-renderer';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react-native';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
+import { darkTheme } from '../../../theme/theme';
+import { RECEIPT_REVIEW } from '../ReceiptReviewModal.palette';
 import { ReceiptReviewModal } from '../ReceiptReviewModal';
 import { scanReceiptPhoto, isNativeOcrAvailable } from '../receiptScan.native';
 import type { TripMemberDTO, TripGuestDTO } from '@dwt/shared';
@@ -258,5 +263,164 @@ describe('ReceiptReviewModal Component Tests', () => {
 
     expect(screen.getByTestId('receipt-demo-notice')).toBeTruthy();
     expect(screen.getByText(/Demo mode \(Expo Go\)/i)).toBeTruthy();
+  });
+
+  describe('dark mode', () => {
+    const flat = (node: ReactTestInstance) => StyleSheet.flatten(node.props.style) ?? {};
+    const renderModal = () =>
+      render(
+        <ReceiptReviewModal
+          visible={true}
+          members={mockMembers}
+          guests={mockGuests}
+          callerId="u-1"
+          initialRawText={'Soup $10.00\nSubtotal $10.00'}
+          onConfirm={jest.fn()}
+          onFallbackToManual={jest.fn()}
+          onClose={jest.fn()}
+        />,
+      );
+
+    afterEach(resetTestScheme);
+
+    it('(a)(b)(c) paints the sheet, primary text and converted banners with dark values', () => {
+      mockIsNativeOcrAvailable.mockReturnValueOnce(false);
+      setTestScheme('dark');
+      renderModal();
+
+      // (a) the modal sheet surface.
+      expect(flat(screen.getByTestId('receipt-review-modal')).backgroundColor).toBe(
+        darkTheme.color.surface,
+      );
+      // (b) primary text: the sheet title.
+      expect(flat(screen.getByText('Review Receipt Scan')).color).toBe(
+        darkTheme.color.textPrimary,
+      );
+      // (c) converted literals: the indigo subtotal banner tint, the demo-notice
+      // lavender well and violet text.
+      expect(flat(screen.getByTestId('receipt-detected-subtotal')).backgroundColor).toBe(
+        RECEIPT_REVIEW.dark.subtotalBg,
+      );
+      expect(flat(screen.getByTestId('receipt-demo-notice')).backgroundColor).toBe(
+        RECEIPT_REVIEW.dark.demoBg,
+      );
+      expect(flat(screen.getByText(/Demo mode \(Expo Go\)/i)).color).toBe(
+        RECEIPT_REVIEW.dark.demoText,
+      );
+    });
+
+    it('themes the item TextInput placeholder in dark only, leaving light at the RN default', () => {
+      setTestScheme('dark');
+      const { unmount } = renderModal();
+      const darkInput = screen.getByDisplayValue('Soup');
+      expect(darkInput.props.placeholderTextColor).toBe(darkTheme.color.textSecondary);
+      expect(darkInput.props.keyboardAppearance).toBe('dark');
+      unmount();
+
+      setTestScheme('light');
+      renderModal();
+      const lightInput = screen.getByDisplayValue('Soup');
+      expect(lightInput.props.placeholderTextColor).toBeUndefined();
+      expect(lightInput.props.keyboardAppearance).toBe('light');
+    });
+
+    // Feature: dark-mode polish pass (Requirement 9.15): item alcohol Switches.
+    const renderWithAlcohol = () =>
+      render(
+        <ReceiptReviewModal
+          visible={true}
+          members={mockMembers}
+          guests={mockGuests}
+          callerId="u-1"
+          initialRawText={'Soup $10.00\nSafari Amber $9.50'}
+          onConfirm={jest.fn()}
+          onFallbackToManual={jest.fn()}
+          onClose={jest.fn()}
+        />,
+      );
+    const itemSwitches = () =>
+      screen
+        .UNSAFE_getAllByType(Switch)
+        .filter((s) => String(s.props.testID).startsWith('receipt-item-alcohol-'));
+
+    it('dark: item alcohol Switches get token colours; the on thumb differs from off', () => {
+      setTestScheme('dark');
+      renderWithAlcohol();
+      const switches = itemSwitches();
+      const off = switches.find((s) => s.props.value === false)!;
+      const on = switches.find((s) => s.props.value === true)!;
+      expect(off).toBeDefined();
+      expect(on).toBeDefined();
+      for (const s of [off, on]) {
+        expect(s.props.trackColor).toEqual({
+          false: darkTheme.color.borderStrong,
+          true: darkTheme.color.primary,
+        });
+        expect(s.props.ios_backgroundColor).toBe(darkTheme.color.borderStrong);
+      }
+      expect(off.props.thumbColor).toBe(darkTheme.color.textSecondary);
+      expect(on.props.thumbColor).toBe(darkTheme.color.textOnPrimary);
+
+      // Flipping the off one on gives it the on thumb.
+      fireEvent(screen.getByTestId(off.props.testID), 'valueChange', true);
+      const flipped = itemSwitches().find((s) => s.props.testID === off.props.testID)!;
+      expect(flipped.props.value).toBe(true);
+      expect(flipped.props.thumbColor).toBe(darkTheme.color.textOnPrimary);
+    });
+
+    it('light: item alcohol Switches stay on platform defaults', () => {
+      setTestScheme('light');
+      renderWithAlcohol();
+      for (const s of itemSwitches()) {
+        expect(s.props.trackColor).toBeUndefined();
+        expect(s.props.thumbColor).toBeUndefined();
+        expect(s.props.ios_backgroundColor).toBeUndefined();
+      }
+    });
+
+    // Feature: dark-mode polish pass (Requirement 9.15): the discount charge
+    // line's "Exclude alcohol items" Switch.
+    const chargeSwitch = () =>
+      screen
+        .UNSAFE_getAllByType(Switch)
+        .find((s) => String(s.props.testID).startsWith('receipt-charge-exclude-alcohol-'))!;
+
+    it('discount exclude-alcohol Switch: dark tokens, on thumb on flip, remount + defaults in light', () => {
+      setTestScheme('dark');
+      render(
+        <ReceiptReviewModal
+          visible={true}
+          members={mockMembers}
+          guests={mockGuests}
+          callerId="u-1"
+          initialRawText={'Soup $10.00\nAnnual Passholder Discount -1.99'}
+          onConfirm={jest.fn()}
+          onFallbackToManual={jest.fn()}
+          onClose={jest.fn()}
+        />,
+      );
+      const off = chargeSwitch();
+      expect(off).toBeDefined();
+      const testID: string = off.props.testID;
+      expect(off.props.value).toBe(false);
+      expect(off.props.trackColor).toEqual({
+        false: darkTheme.color.borderStrong,
+        true: darkTheme.color.primary,
+      });
+      expect(off.props.ios_backgroundColor).toBe(darkTheme.color.borderStrong);
+      expect(off.props.thumbColor).toBe(darkTheme.color.textSecondary);
+
+      fireEvent(screen.getByTestId(testID), 'valueChange', true);
+      expect(chargeSwitch().props.value).toBe(true);
+      expect(chargeSwitch().props.thumbColor).toBe(darkTheme.color.textOnPrimary);
+
+      const darkHost = screen.getByTestId(testID);
+      setTestScheme('light');
+      // `key={t.scheme}`: a new native view, so no dark colour is left stuck on Android.
+      expect(screen.getByTestId(testID)).not.toBe(darkHost);
+      expect(chargeSwitch().props.trackColor).toBeUndefined();
+      expect(chargeSwitch().props.thumbColor).toBeUndefined();
+      expect(chargeSwitch().props.ios_backgroundColor).toBeUndefined();
+    });
   });
 });

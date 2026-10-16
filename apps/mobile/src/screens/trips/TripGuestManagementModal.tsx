@@ -14,7 +14,6 @@ import {
   Platform,
   Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   TextInput,
   View,
@@ -23,7 +22,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { TripGuestDTO, TripMemberDTO } from '@dwt/shared';
 
-import { theme } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme } from '../../theme/useAppTheme';
+import { GUEST_MANAGEMENT } from './TripGuestManagementModal.palette';
 import {
   Card,
   PrimaryButton,
@@ -57,6 +58,8 @@ export function TripGuestManagementModal({
   isOrganizer,
   onClose,
 }: Props): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const queryClient = useQueryClient();
   const [newGuestName, setNewGuestName] = useState('');
   const [addSponsorId, setAddSponsorId] = useState<string>(callerId);
@@ -200,7 +203,7 @@ export function TripGuestManagementModal({
               testID="close-guest-modal"
               hitSlop={12}
             >
-              <Ionicons name="close" size={24} color={theme.color.textPrimary} />
+              <Ionicons name="close" size={24} color={t.color.textPrimary} />
             </Pressable>
           </View>
 
@@ -221,7 +224,8 @@ export function TripGuestManagementModal({
               <TextInput
                 style={styles.input}
                 placeholder="Guest name (e.g. Little Timmy)"
-                placeholderTextColor={theme.color.textSecondary}
+                placeholderTextColor={t.color.textSecondary}
+                keyboardAppearance={t.scheme}
                 value={newGuestName}
                 onChangeText={setNewGuestName}
                 testID="add-guest-name-input"
@@ -237,7 +241,7 @@ export function TripGuestManagementModal({
             {members.length > 0 ? (
               <View style={styles.sponsorSelectContainer}>
                 <Text style={styles.sponsorSelectLabel}>Tied to (Sponsored by):</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll} keyboardShouldPersistTaps="handled">
                   {members.map((m) => {
                     const isSelected = m.userId === addSponsorId;
                     return (
@@ -266,7 +270,7 @@ export function TripGuestManagementModal({
 
           {/* Guest Roster */}
           <SectionLabel>{`ROSTER (${guestList.length})`}</SectionLabel>
-          <ScrollView style={styles.guestList}>
+          <ScrollView style={styles.guestList} keyboardShouldPersistTaps="handled">
             {guestList.length === 0 ? (
               <Text style={styles.emptyText}>No guests added yet for this trip.</Text>
             ) : (
@@ -284,6 +288,7 @@ export function TripGuestManagementModal({
                             style={[styles.input, { flex: 1 }]}
                             value={renameText}
                             onChangeText={setRenameText}
+                            keyboardAppearance={t.scheme}
                             testID={`rename-guest-input-${g.id}`}
                           />
                           <PrimaryButton
@@ -303,7 +308,7 @@ export function TripGuestManagementModal({
                         {members.length > 0 ? (
                           <View style={styles.editSponsorContainer}>
                             <Text style={styles.sponsorSelectLabel}>Tied to (Sponsored by):</Text>
-                            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll}>
+                            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll} keyboardShouldPersistTaps="handled">
                               {members.map((m) => {
                                 const isSelected = m.userId === editSponsorId;
                                 return (
@@ -348,7 +353,7 @@ export function TripGuestManagementModal({
                               accessibilityLabel={`Rename ${g.name}`}
                               testID={`rename-guest-btn-${g.id}`}
                             >
-                              <Ionicons name="pencil-outline" size={18} color={theme.color.primary} />
+                              <Ionicons name="pencil-outline" size={18} color={t.color.primaryFg} />
                             </Pressable>
                             <Pressable
                               style={styles.iconBtn}
@@ -357,7 +362,7 @@ export function TripGuestManagementModal({
                               accessibilityLabel={`Remove ${g.name}`}
                               testID={`remove-guest-btn-${g.id}`}
                             >
-                              <Ionicons name="trash-outline" size={18} color={theme.color.danger} />
+                              <Ionicons name="trash-outline" size={18} color={t.color.danger} />
                             </Pressable>
                           </View>
                         ) : null}
@@ -374,14 +379,14 @@ export function TripGuestManagementModal({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: theme.color.surface,
+    backgroundColor: t.color.surface,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 20,
@@ -396,22 +401,22 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   subtitle: {
     fontSize: 13,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     marginBottom: 16,
     lineHeight: 18,
   },
   errorBox: {
-    backgroundColor: 'rgba(232, 80, 91, 0.15)',
+    backgroundColor: GUEST_MANAGEMENT[t.scheme].errorBg,
     padding: 10,
     borderRadius: 8,
     marginBottom: 12,
   },
   errorText: {
-    color: theme.color.danger,
+    color: t.color.danger,
     fontSize: 13,
   },
   addSection: {
@@ -425,21 +430,21 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    backgroundColor: theme.color.surface,
+    backgroundColor: t.color.surface,
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 14,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   guestList: {
     maxHeight: 300,
     marginTop: 8,
   },
   emptyText: {
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     fontSize: 13,
     textAlign: 'center',
     marginVertical: 16,
@@ -459,11 +464,11 @@ const styles = StyleSheet.create({
   guestName: {
     fontSize: 15,
     fontWeight: '600',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   guestSponsor: {
     fontSize: 12,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     marginTop: 2,
   },
   actionRow: {
@@ -489,7 +494,7 @@ const styles = StyleSheet.create({
   },
   sponsorSelectLabel: {
     fontSize: 12,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     marginBottom: 6,
     fontWeight: '500',
   },
@@ -500,23 +505,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 16,
-    backgroundColor: theme.color.surface,
+    backgroundColor: t.color.surface,
     marginRight: 8,
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
   },
   sponsorChipSelected: {
-    backgroundColor: theme.color.primary,
-    borderColor: theme.color.primary,
+    backgroundColor: t.color.primary,
+    borderColor: t.color.primary,
   },
   sponsorChipText: {
     fontSize: 13,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   sponsorChipTextSelected: {
-    color: '#ffffff',
+    color: t.color.textOnPrimary,
     fontWeight: '600',
   },
-});
+}));
 
 export default TripGuestManagementModal;

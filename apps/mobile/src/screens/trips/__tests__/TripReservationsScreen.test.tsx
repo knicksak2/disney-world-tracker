@@ -11,7 +11,13 @@
 
 import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react-native';
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react-native';
+import { StyleSheet } from 'react-native';
+import type { ReactTestInstance } from 'react-test-renderer';
+import { Ionicons } from '@expo/vector-icons';
+import { darkTheme } from '../../../theme/theme';
+import { ScreenContainer } from '../../../theme/components';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
 
 jest.setTimeout(15000);
 
@@ -1077,6 +1083,105 @@ describe('TripReservationsScreen', () => {
 
       expect(nav.goBack).toHaveBeenCalledTimes(1);
       expect(nav.replace).not.toHaveBeenCalled();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Feature: dark-mode — Twilight palette, incl. Property 22 (rule 1a chips)
+  // -------------------------------------------------------------------------
+
+  describe('dark mode', () => {
+    afterEach(resetTestScheme);
+
+    const flat = (node: ReactTestInstance): Record<string, unknown> =>
+      (StyleSheet.flatten(node.props.style) ?? {}) as Record<string, unknown>;
+
+    /** The screen root: the host View that `ScreenContainer` paints. */
+    function rootContainer(): ReactTestInstance {
+      const container = screen.UNSAFE_getAllByType(ScreenContainer)[0]!;
+      return container.children[0] as ReactTestInstance;
+    }
+
+    /** The label `Text` rendered inside a chip `Pressable`. */
+    function chipText(chip: ReactTestInstance): ReactTestInstance {
+      return within(chip).getAllByText(/.+/)[0]!;
+    }
+
+    async function openAddModalAndPickDate(): Promise<void> {
+      await waitFor(() => {
+        expect(screen.getByTestId('reservations-add-button')).toBeTruthy();
+      });
+      fireEvent.press(screen.getByTestId('reservations-add-button'));
+      await waitFor(() => {
+        expect(screen.getByTestId('reservation-kind-dining')).toBeTruthy();
+      });
+      fireEvent.press(screen.getByTestId('reservation-date-2026-10-01'));
+    }
+
+    it('(a)(b)(c) paints the root, row title and converted row time dark', async () => {
+      mockApi();
+      setTestScheme('dark');
+      renderScreen();
+
+      await waitFor(() => {
+        expect(screen.getByText('Be Our Guest')).toBeTruthy();
+      });
+      // (a) root container.
+      expect(flat(rootContainer()).backgroundColor).toBe(darkTheme.color.background);
+      // (b) primary text — the reservation title.
+      expect(flat(screen.getByText('Be Our Guest')).color).toBe(darkTheme.color.textPrimary);
+      // (c) the park-time readout: `primary` as text → `primaryFg` (rule 1a).
+      expect(flat(screen.getByTestId('reservation-time-item-1')).color).toBe(
+        darkTheme.color.primaryFg,
+      );
+    });
+
+    it('Property 22: an active kind / date chip shows textOnPrimary on a primary fill in dark', async () => {
+      mockApi({ items: [] });
+      setTestScheme('dark');
+      renderScreen();
+      await openAddModalAndPickDate();
+
+      // Dining is the default (active) kind.
+      const kindChip = screen.getByTestId('reservation-kind-dining');
+      expect(flat(kindChip).backgroundColor).toBe(darkTheme.color.primary);
+      expect(flat(chipText(kindChip)).color).toBe(darkTheme.color.textOnPrimary);
+      // An inactive kind chip keeps the muted label.
+      expect(flat(chipText(screen.getByTestId('reservation-kind-other'))).color).toBe(
+        darkTheme.color.textSecondary,
+      );
+      // B5-3: the kind-chip icon follows the same rule-1a split.
+      expect(within(kindChip).UNSAFE_getByType(Ionicons).props.color).toBe(
+        darkTheme.color.textOnPrimary,
+      );
+      expect(
+        within(screen.getByTestId('reservation-kind-other')).UNSAFE_getByType(Ionicons).props.color,
+      ).toBe(darkTheme.color.textSecondary);
+
+      // The picked date chip.
+      const dateChip = screen.getByTestId('reservation-date-2026-10-01');
+      expect(flat(dateChip).backgroundColor).toBe(darkTheme.color.primary);
+      expect(flat(chipText(dateChip)).color).toBe(darkTheme.color.textOnPrimary);
+      // A straight `surface` substitution would paint the dark card colour —
+      // the defect rule 1a fixes.
+      expect(flat(chipText(dateChip)).color).not.toBe(darkTheme.color.surface);
+    });
+
+    it('Property 22 under light keeps the pre-retrofit chip colours', async () => {
+      mockApi({ items: [] });
+      renderScreen();
+      await openAddModalAndPickDate();
+
+      const kindChip = screen.getByTestId('reservation-kind-dining');
+      expect(flat(kindChip).backgroundColor).toBe('#5b2a86');
+      expect(flat(chipText(kindChip)).color).toBe('#ffffff');
+      expect(within(kindChip).UNSAFE_getByType(Ionicons).props.color).toBe('#ffffff');
+      expect(
+        within(screen.getByTestId('reservation-kind-other')).UNSAFE_getByType(Ionicons).props.color,
+      ).toBe('#6b6480');
+      const dateChip = screen.getByTestId('reservation-date-2026-10-01');
+      expect(flat(dateChip).backgroundColor).toBe('#5b2a86');
+      expect(flat(chipText(dateChip)).color).toBe('#ffffff');
     });
   });
 });

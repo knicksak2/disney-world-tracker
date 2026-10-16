@@ -48,7 +48,6 @@ import {
   ActivityIndicator,
   Pressable,
   ScrollView,
-  StyleSheet,
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -62,7 +61,8 @@ import type {
   RootStackParamList,
   ShareComposerParams,
 } from '../../navigation/RootNavigator';
-import { theme } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme } from '../../theme/useAppTheme';
 import {
   EmptyState,
   GradientHeader,
@@ -210,6 +210,8 @@ function ShareProgressButton({
   readonly disabled: boolean;
   readonly onPress: () => void;
 }): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   return (
     <Pressable
       onPress={onPress}
@@ -228,7 +230,7 @@ function ShareProgressButton({
       <Ionicons
         name="share-outline"
         size={22}
-        color={theme.color.textOnPrimary}
+        color={t.color.textOnPrimary}
       />
     </Pressable>
   );
@@ -239,6 +241,8 @@ function ShareProgressButton({
 // ---------------------------------------------------------------------------
 
 export default function StatsScreen(): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const navigation = useNavigation<NavigationProp<StatsHubNavParamList>>();
 
   // The single shared stats query — the one source of truth every detail screen
@@ -282,7 +286,7 @@ export default function StatsScreen(): JSX.Element {
           right={shareControl}
         />
         <View style={styles.center} testID="stats-loading">
-          <ActivityIndicator color={theme.color.primary} />
+          <ActivityIndicator color={t.color.primaryFg} />
         </View>
       </ScreenContainer>
     );
@@ -379,19 +383,19 @@ export { buildProgressShareParams } from './statsView';
 // Styles
 // ---------------------------------------------------------------------------
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   scrollContent: {
-    padding: theme.spacing.lg,
-    gap: theme.spacing.md,
+    padding: t.spacing.lg,
+    gap: t.spacing.md,
   },
   center: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: theme.spacing.xl,
+    padding: t.spacing.xl,
   },
   retryBtn: {
-    marginTop: theme.spacing.lg,
+    marginTop: t.spacing.lg,
     alignSelf: 'center',
   },
   shareBtn: {
@@ -400,7 +404,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: theme.color.primary,
+    backgroundColor: t.color.primary,
   },
   shareBtnPressed: {
     opacity: 0.85,
@@ -408,4 +412,4 @@ const styles = StyleSheet.create({
   shareBtnDisabled: {
     opacity: 0.4,
   },
-});
+}));

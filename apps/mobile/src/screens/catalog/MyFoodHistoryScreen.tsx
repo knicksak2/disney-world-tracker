@@ -8,7 +8,6 @@ import {
   FlatList,
   Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   TextInput,
   View,
@@ -19,8 +18,9 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { FoodItemLogWithContextDTO } from '@dwt/shared';
 
 import { apiRequest } from '../../api/client';
-import { theme } from '../../theme/theme';
 import { Badge, Card, EmptyState, GradientHeader, ScreenContainer } from '../../theme/components';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme } from '../../theme/useAppTheme';
 import {
   FOOD_HISTORY_SORT_OPTIONS,
   type FoodHistorySort,
@@ -29,6 +29,8 @@ import {
 import RateOnCheckoffPrompt from '../foodLists/RateOnCheckoffPrompt';
 
 export default function MyFoodHistoryScreen(): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const navigation = useNavigation();
   const queryClient = useQueryClient();
 
@@ -162,7 +164,7 @@ export default function MyFoodHistoryScreen(): JSX.Element {
                   <Ionicons
                     name="location-outline"
                     size={14}
-                    color={theme.color.textSecondary}
+                    color={t.color.textSecondary}
                   />
                   <Text style={styles.placeName} numberOfLines={1}>
                     {placeName}
@@ -179,9 +181,9 @@ export default function MyFoodHistoryScreen(): JSX.Element {
               testID={`food-history-delete-${item.id}`}
             >
               {deletingId === item.id ? (
-                <ActivityIndicator size="small" color={theme.color.danger} />
+                <ActivityIndicator size="small" color={t.color.danger} />
               ) : (
-                <Ionicons name="trash-outline" size={18} color={theme.color.danger} />
+                <Ionicons name="trash-outline" size={18} color={t.color.danger} />
               )}
             </Pressable>
           </View>
@@ -196,7 +198,7 @@ export default function MyFoodHistoryScreen(): JSX.Element {
                 style={styles.ratingBadge}
                 testID={`food-history-rating-${item.id}`}
               >
-                <Ionicons name="star" size={13} color={theme.color.accent} />
+                <Ionicons name="star" size={13} color={t.color.accent} />
                 <Text style={styles.ratingText}>{item.rating}/10</Text>
               </Pressable>
             ) : (
@@ -207,14 +209,14 @@ export default function MyFoodHistoryScreen(): JSX.Element {
                 style={styles.addRatingBtn}
                 testID={`food-history-add-rating-${item.id}`}
               >
-                <Ionicons name="star-outline" size={13} color={theme.color.primary} />
+                <Ionicons name="star-outline" size={13} color={t.color.primaryFg} />
                 <Text style={styles.addRatingText}>+ Add rating</Text>
               </Pressable>
             )}
             {!item.currentlyOnMenu && (
               <Badge
                 label="Not currently on menu"
-                color={theme.color.textSecondary}
+                color={t.color.textSecondary}
                 testID={`food-history-not-on-menu-${item.id}`}
               />
             )}
@@ -226,7 +228,7 @@ export default function MyFoodHistoryScreen(): JSX.Element {
         </Card>
       );
     },
-    [deletingId, handleDeleteLog, setEditingLog],
+    [deletingId, handleDeleteLog, setEditingLog, styles, t],
   );
 
   return (
@@ -242,12 +244,13 @@ export default function MyFoodHistoryScreen(): JSX.Element {
         <View style={styles.container}>
         {/* Search bar (Requirement 8.9) */}
         <View style={styles.searchBar}>
-          <Ionicons name="search" size={18} color={theme.color.textSecondary} />
+          <Ionicons name="search" size={18} color={t.color.textSecondary} />
           <TextInput
             value={searchText}
             onChangeText={setSearchText}
             placeholder="Search dishes or places..."
-            placeholderTextColor={theme.color.textSecondary}
+            placeholderTextColor={t.color.textSecondary}
+            keyboardAppearance={t.scheme}
             style={styles.searchInput}
             testID="food-history-search-input"
             autoCorrect={false}
@@ -260,7 +263,7 @@ export default function MyFoodHistoryScreen(): JSX.Element {
               style={styles.clearBtn}
               testID="food-history-clear-search"
             >
-              <Ionicons name="close-circle" size={18} color={theme.color.textSecondary} />
+              <Ionicons name="close-circle" size={18} color={t.color.textSecondary} />
             </Pressable>
           )}
         </View>
@@ -354,7 +357,7 @@ export default function MyFoodHistoryScreen(): JSX.Element {
           <View style={styles.loadingWrap}>
             <ActivityIndicator
               size="large"
-              color={theme.color.primary}
+              color={t.color.primaryFg}
               testID="food-history-loading"
               accessibilityLabel="Loading food history"
             />
@@ -386,6 +389,7 @@ export default function MyFoodHistoryScreen(): JSX.Element {
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.listContent}
             renderItem={renderHistoryRow}
+            extraData={t.scheme}
           />
         )}
       </View>
@@ -409,92 +413,92 @@ export default function MyFoodHistoryScreen(): JSX.Element {
 );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   outerWrap: {
     flex: 1,
   },
   container: {
     flex: 1,
-    paddingTop: theme.spacing.sm,
+    paddingTop: t.spacing.sm,
   },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: theme.color.surfaceAlt,
-    borderRadius: theme.radius.md,
+    backgroundColor: t.color.surfaceAlt,
+    borderRadius: t.radius.md,
     borderWidth: 1,
-    borderColor: theme.color.border,
-    paddingHorizontal: theme.spacing.md,
-    marginHorizontal: theme.spacing.lg,
-    marginBottom: theme.spacing.sm,
+    borderColor: t.color.border,
+    paddingHorizontal: t.spacing.md,
+    marginHorizontal: t.spacing.lg,
+    marginBottom: t.spacing.sm,
     height: 44,
   },
   searchInput: {
     flex: 1,
-    marginLeft: theme.spacing.sm,
+    marginLeft: t.spacing.sm,
     fontSize: 15,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   clearBtn: {
     padding: 4,
   },
   sortSection: {
-    marginBottom: theme.spacing.xs,
+    marginBottom: t.spacing.xs,
   },
   filterSection: {
-    marginBottom: theme.spacing.sm,
+    marginBottom: t.spacing.sm,
   },
   chipsScroll: {
-    paddingHorizontal: theme.spacing.lg,
+    paddingHorizontal: t.spacing.lg,
     gap: 8,
   },
   chip: {
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: theme.radius.pill,
-    backgroundColor: theme.color.surfaceAlt,
+    borderRadius: t.radius.pill,
+    backgroundColor: t.color.surfaceAlt,
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
   },
   chipActive: {
-    backgroundColor: theme.color.primary,
-    borderColor: theme.color.primary,
+    backgroundColor: t.color.primary,
+    borderColor: t.color.primary,
   },
   chipText: {
     fontSize: 13,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     fontWeight: '500',
   },
   chipTextActive: {
-    color: theme.color.textOnPrimary,
+    color: t.color.textOnPrimary,
     fontWeight: '700',
   },
   filterChip: {
     paddingHorizontal: 12,
     paddingVertical: 5,
-    borderRadius: theme.radius.pill,
-    backgroundColor: theme.color.surface,
+    borderRadius: t.radius.pill,
+    backgroundColor: t.color.surface,
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
   },
   filterChipActive: {
-    backgroundColor: theme.color.surfaceAlt,
-    borderColor: theme.color.primary,
+    backgroundColor: t.color.surfaceAlt,
+    borderColor: t.color.primaryFg,
   },
   filterChipText: {
     fontSize: 12,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   filterChipTextActive: {
-    color: theme.color.primary,
+    color: t.color.primaryFg,
     fontWeight: '600',
   },
   errorWrap: {
-    paddingHorizontal: theme.spacing.lg,
-    paddingBottom: theme.spacing.xs,
+    paddingHorizontal: t.spacing.lg,
+    paddingBottom: t.spacing.xs,
   },
   errorText: {
-    color: theme.color.danger,
+    color: t.color.danger,
     fontSize: 13,
   },
   loadingWrap: {
@@ -505,16 +509,16 @@ const styles = StyleSheet.create({
   },
   emptyWrap: {
     flex: 1,
-    paddingHorizontal: theme.spacing.lg,
+    paddingHorizontal: t.spacing.lg,
     justifyContent: 'center',
   },
   listContent: {
-    paddingHorizontal: theme.spacing.lg,
-    paddingBottom: theme.spacing.xl,
+    paddingHorizontal: t.spacing.lg,
+    paddingBottom: t.spacing.xl,
     gap: 10,
   },
   logCard: {
-    padding: theme.spacing.md,
+    padding: t.spacing.md,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -528,7 +532,7 @@ const styles = StyleSheet.create({
   dishName: {
     fontSize: 16,
     fontWeight: '700',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   placeRow: {
     flexDirection: 'row',
@@ -538,7 +542,7 @@ const styles = StyleSheet.create({
   },
   placeName: {
     fontSize: 13,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     fontWeight: '500',
   },
   deleteBtn: {
@@ -554,12 +558,12 @@ const styles = StyleSheet.create({
   dateText: {
     fontSize: 13,
     fontWeight: '600',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   ratingBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: theme.color.surfaceAlt,
+    backgroundColor: t.color.surfaceAlt,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 6,
@@ -568,28 +572,28 @@ const styles = StyleSheet.create({
   addRatingBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: theme.color.surfaceAlt,
+    backgroundColor: t.color.surfaceAlt,
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 6,
     gap: 4,
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
   },
   addRatingText: {
     fontSize: 12,
     fontWeight: '600',
-    color: theme.color.primary,
+    color: t.color.primaryFg,
   },
   ratingText: {
     fontSize: 12,
     fontWeight: '600',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   noteText: {
     marginTop: 8,
     fontSize: 13,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     lineHeight: 18,
   },
-});
+}));

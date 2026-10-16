@@ -17,7 +17,6 @@ import {
   Platform,
   Pressable,
   ScrollView,
-  StyleSheet,
   Switch,
   Text,
   TextInput,
@@ -41,13 +40,17 @@ import {
   type MenuDTO,
 } from '@dwt/shared';
 
-import { theme } from '../../theme/theme';
+import { withAlpha, type AppTheme } from '../../theme/theme';
 import {
   Card,
   PrimaryButton,
   SecondaryButton,
   SectionLabel,
 } from '../../theme/components';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme, usePalette } from '../../theme/useAppTheme';
+import { themedSwitchProps } from '../../theme/switchColors';
+import { AVATAR_FILL, FORM, FORM_SWITCH } from './ExpenseFormModal.palette';
 import { DatePickerField } from '../../components/DatePickerField';
 import { apiRequest } from '../../api/client';
 import {
@@ -101,9 +104,9 @@ function isValidUuid(val: string | undefined | null): val is string {
   return typeof val === 'string' && uuidSchema.safeParse(val).success;
 }
 
-const AVATAR_PALETTE = ['#7c3aed', '#2563eb', '#059669', '#d97706', '#dc2626', '#db2777', '#0891b2', '#4f46e5'];
-
-function getAvatarColor(name: string): string {
+function getAvatarColor(name: string, t: Pick<AppTheme, 'scheme'>): string {
+  const avatarPal = AVATAR_FILL[t.scheme];
+  const AVATAR_PALETTE = [avatarPal.violet, avatarPal.blue, avatarPal.green, avatarPal.orange, avatarPal.red, avatarPal.pink, avatarPal.teal, avatarPal.indigo];
   let hash = 0;
   for (let i = 0; i < name.length; i++) {
     hash = name.charCodeAt(i) + ((hash << 5) - hash);
@@ -122,6 +125,10 @@ export function ExpenseFormModal({
   onOpenManageGuests,
   onOpenReceiptScan,
 }: Props): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
+  const pal = usePalette(FORM);
+  const switchPal = usePalette(FORM_SWITCH);
   const queryClient = useQueryClient();
 
   const guestsQuery = useQuery<readonly TripGuestDTO[]>({
@@ -129,7 +136,7 @@ export function ExpenseFormModal({
     queryFn: () => fetchTripGuests(tripId),
     initialData: initialGuestsProp,
   });
-  const guests = guestsQuery.data ?? initialGuestsProp;
+  const guests = guestsQuery.data ?? initialGuestsProp ?? [];
 
   const [showManageGuestsModal, setShowManageGuestsModal] = useState(false);
 
@@ -762,13 +769,13 @@ export function ExpenseFormModal({
               style={styles.closeBtn}
               hitSlop={12}
             >
-              <Ionicons name="close" size={20} color={theme.color.textPrimary} />
+              <Ionicons name="close" size={20} color={t.color.textPrimary} />
             </Pressable>
           </View>
 
           {errorMessage ? (
             <View style={styles.errorBox} testID="expense-form-error">
-              <Ionicons name="alert-circle-outline" size={16} color={theme.color.danger} />
+              <Ionicons name="alert-circle-outline" size={16} color={t.color.danger} />
               <Text style={styles.errorText}>{errorMessage}</Text>
             </View>
           ) : null}
@@ -777,6 +784,8 @@ export function ExpenseFormModal({
             style={styles.scrollBody}
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            testID="expense-form-scroll"
           >
             {/* 1. HERO EXPENSE CARD (Amount + Description + Date & Venue) */}
             <View style={styles.heroExpenseCard}>
@@ -789,7 +798,7 @@ export function ExpenseFormModal({
                     </Text>
                   </View>
                   <View style={styles.derivedBadgeLock}>
-                    <Ionicons name="lock-closed" size={12} color="#059669" />
+                    <Ionicons name="lock-closed" size={12} color={pal.greenText} />
                     <Text style={styles.derivedBadgeLockText}>Locked: Items</Text>
                   </View>
                 </View>
@@ -800,7 +809,8 @@ export function ExpenseFormModal({
                     <TextInput
                       style={styles.heroAmountInput}
                       placeholder={(derivedTiersTotalCents / 100).toFixed(2)}
-                      placeholderTextColor={theme.color.textSecondary}
+                      placeholderTextColor={t.color.textSecondary}
+                      keyboardAppearance={t.scheme}
                       keyboardType="decimal-pad"
                       value={manualAmountDollars}
                       onChangeText={(v) => {
@@ -831,7 +841,8 @@ export function ExpenseFormModal({
                     <TextInput
                       style={styles.heroAmountInput}
                       placeholder="0.00"
-                      placeholderTextColor="#a39bb3"
+                      placeholderTextColor={pal.placeholder}
+                      keyboardAppearance={t.scheme}
                       keyboardType="decimal-pad"
                       value={manualAmountDollars}
                       onChangeText={setManualAmountDollars}
@@ -848,11 +859,12 @@ export function ExpenseFormModal({
 
               {/* Description Input */}
               <View style={styles.heroDescRow}>
-                <Ionicons name="create-outline" size={18} color={theme.color.primary} />
+                <Ionicons name="create-outline" size={18} color={t.color.primaryFg} />
                 <TextInput
                   style={styles.heroDescInput}
                   placeholder="What was this for? (e.g. Be Our Guest Dinner)"
-                  placeholderTextColor={theme.color.textSecondary}
+                  placeholderTextColor={t.color.textSecondary}
+                  keyboardAppearance={t.scheme}
                   value={description}
                   onChangeText={setDescription}
                   testID="expense-description-input"
@@ -877,11 +889,11 @@ export function ExpenseFormModal({
                     onPress={() => setShowExpPicker(true)}
                     testID="link-restaurant-button"
                   >
-                    <Ionicons name="restaurant" size={13} color={theme.color.primary} />
+                    <Ionicons name="restaurant" size={13} color={t.color.primaryFg} />
                     <Text style={styles.heroVenueBtnText} numberOfLines={1}>
                       {experienceName || (experienceId ? 'Restaurant Linked' : 'Link Disney Dining')}
                     </Text>
-                    <Ionicons name="chevron-forward" size={12} color={theme.color.primary} />
+                    <Ionicons name="chevron-forward" size={12} color={t.color.primaryFg} />
                   </Pressable>
                 ) : null}
 
@@ -891,11 +903,11 @@ export function ExpenseFormModal({
                     onPress={() => setShowResortPicker(true)}
                     testID="link-resort-button"
                   >
-                    <Ionicons name="bed" size={13} color={theme.color.primary} />
+                    <Ionicons name="bed" size={13} color={t.color.primaryFg} />
                     <Text style={styles.heroVenueBtnText} numberOfLines={1}>
                       {resortName || (resortId ? 'Resort Linked' : 'Link Disney Resort')}
                     </Text>
-                    <Ionicons name="chevron-forward" size={12} color={theme.color.primary} />
+                    <Ionicons name="chevron-forward" size={12} color={t.color.primaryFg} />
                   </Pressable>
                 ) : null}
               </View>
@@ -937,7 +949,7 @@ export function ExpenseFormModal({
             <Card style={styles.receiptScannerQuickBar} testID="receipt-scanner-hero-card">
               <View style={styles.quickBarLeft}>
                 <View style={styles.quickBarIconBubble}>
-                  <Ionicons name="receipt" size={14} color="#ffffff" />
+                  <Ionicons name="receipt" size={14} color={t.color.textOnPrimary} />
                 </View>
                 <Text style={styles.quickBarTitle}>Scan Receipt</Text>
               </View>
@@ -949,7 +961,7 @@ export function ExpenseFormModal({
                   accessibilityRole="button"
                   accessibilityLabel="Take a photo of a receipt"
                 >
-                  <Ionicons name="camera" size={13} color="#ffffff" />
+                  <Ionicons name="camera" size={13} color={t.color.textOnPrimary} />
                   <Text style={styles.quickBarBtnCameraText}>Camera</Text>
                 </Pressable>
                 <Pressable
@@ -959,7 +971,7 @@ export function ExpenseFormModal({
                   accessibilityRole="button"
                   accessibilityLabel="Choose receipt photo from library"
                 >
-                  <Ionicons name="images-outline" size={13} color={theme.color.primary} />
+                  <Ionicons name="images-outline" size={13} color={t.color.primaryFg} />
                   <Text style={styles.quickBarBtnPhotoText}>Photo</Text>
                 </Pressable>
                 <Pressable
@@ -969,7 +981,7 @@ export function ExpenseFormModal({
                   accessibilityRole="button"
                   accessibilityLabel="Load sample Disney receipt"
                 >
-                  <Ionicons name="sparkles" size={12} color={theme.color.primary} />
+                  <Ionicons name="sparkles" size={12} color={t.color.primaryFg} />
                   <Text style={styles.quickBarBtnSampleText}>Sample</Text>
                 </Pressable>
               </View>
@@ -980,7 +992,7 @@ export function ExpenseFormModal({
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll}>
               {members.map((m) => {
                 const isSelected = m.userId === payerId;
-                const avatarColor = getAvatarColor(m.displayName);
+                const avatarColor = getAvatarColor(m.displayName, t);
                 return (
                   <Pressable
                     key={m.userId}
@@ -992,7 +1004,7 @@ export function ExpenseFormModal({
                       styles.payerAvatarMini,
                       { backgroundColor: isSelected ? 'rgba(255,255,255,0.28)' : avatarColor },
                     ]}>
-                      <Text style={[styles.payerAvatarMiniText, isSelected && { color: '#ffffff' }]}>
+                      <Text style={[styles.payerAvatarMiniText, isSelected && { color: t.color.textOnPrimary }]}>
                         {m.displayName.charAt(0).toUpperCase()}
                       </Text>
                     </View>
@@ -1079,10 +1091,10 @@ export function ExpenseFormModal({
                           width: `${Math.min(100, Math.round((exactSharesSumCents / parsedAmountCents) * 100))}%`,
                           backgroundColor:
                             exactSharesSumCents > parsedAmountCents
-                              ? theme.color.danger
+                              ? t.color.danger
                               : exactSharesSumCents === parsedAmountCents
-                                ? '#059669'
-                                : theme.color.primary,
+                                ? pal.greenText
+                                : t.color.primaryFg,
                         },
                       ]}
                     />
@@ -1090,7 +1102,7 @@ export function ExpenseFormModal({
                 ) : null}
                 {allParticipants.map((p) => {
                   if (p.id === payerId) return null;
-                  const avatarColor = getAvatarColor(p.name);
+                  const avatarColor = getAvatarColor(p.name, t);
                   return (
                     <View key={p.id} style={styles.shareRow} testID={`exact-share-row-${p.id}`}>
                       <View style={styles.participantLeftGroup}>
@@ -1111,7 +1123,8 @@ export function ExpenseFormModal({
                         <TextInput
                           style={styles.shareInput}
                           placeholder="0.00"
-                          placeholderTextColor={theme.color.textSecondary}
+                          placeholderTextColor={t.color.textSecondary}
+                          keyboardAppearance={t.scheme}
                           keyboardType="decimal-pad"
                           value={exactShares[p.id] ?? ''}
                           onChangeText={(v) =>
@@ -1125,7 +1138,7 @@ export function ExpenseFormModal({
                 })}
                 <View style={styles.payerImplicitCard}>
                   <View style={styles.payerImplicitIconWrap}>
-                    <Ionicons name="wallet-outline" size={18} color={theme.color.primary} />
+                    <Ionicons name="wallet-outline" size={18} color={t.color.primaryFg} />
                   </View>
                   <View style={styles.payerImplicitTextWrap}>
                     <Text style={styles.previewText}>
@@ -1169,7 +1182,7 @@ export function ExpenseFormModal({
                 {allParticipants.map((p) => {
                   const isChecked = evenParticipants.includes(p.id);
                   const isPayer = p.id === payerId;
-                  const avatarColor = getAvatarColor(p.name);
+                  const avatarColor = getAvatarColor(p.name, t);
                   const computedShare = evenSharesPreview.find((s) => s.id === p.id);
                   return (
                     <Pressable
@@ -1186,7 +1199,7 @@ export function ExpenseFormModal({
                         <Ionicons
                           name={isChecked ? 'checkmark-circle' : 'ellipse-outline'}
                           size={22}
-                          color={isChecked ? theme.color.primary : '#cbd5e1'}
+                          color={isChecked ? t.color.primaryFg : pal.checkIdleIcon}
                         />
                         <View style={[styles.avatarBubble, { backgroundColor: avatarColor }]}>
                           <Text style={styles.avatarBubbleText}>{p.name.charAt(0).toUpperCase()}</Text>
@@ -1240,7 +1253,7 @@ export function ExpenseFormModal({
                 {suggestedTiers.length > 0 && showTierSuggestions ? (
                   <Card style={styles.tierSuggestionCard} testID="tier-suggestions-banner">
                     <View style={styles.tierSuggestionHeader}>
-                      <Ionicons name="sparkles" size={16} color={theme.color.primary} />
+                      <Ionicons name="sparkles" size={16} color={t.color.primaryFg} />
                       <Text style={styles.tierSuggestionTitle}>Menu Pricing Suggestions</Text>
                     </View>
                     <Text style={styles.tierSuggestionBody}>
@@ -1273,20 +1286,21 @@ export function ExpenseFormModal({
                     }
                     testID="add-tier-btn"
                   >
-                    <Ionicons name="add" size={13} color="#5b2a86" />
+                    <Ionicons name="add" size={13} color={t.color.primaryFg} />
                     <Text style={styles.addTierHeaderBtnText}>Add Tier</Text>
                   </Pressable>
                 </View>
 
-                {tiers.map((t, idx) => (
+                {tiers.map((tier, idx) => (
                   <View key={idx} style={styles.tierCard}>
                     <View style={styles.tierCardRow}>
                       <View style={styles.tierNameCol}>
                         <TextInput
                           style={styles.tierNameInput}
                           placeholder={`Tier ${idx + 1} Name`}
-                          placeholderTextColor={theme.color.textSecondary}
-                          value={t.name}
+                          placeholderTextColor={t.color.textSecondary}
+                          keyboardAppearance={t.scheme}
+                          value={tier.name}
                           onChangeText={(v) => {
                             const copy = [...tiers];
                             copy[idx]!.name = v;
@@ -1301,9 +1315,10 @@ export function ExpenseFormModal({
                           <TextInput
                             style={styles.tierPriceInput}
                             placeholder="0.00"
-                            placeholderTextColor={theme.color.textSecondary}
+                            placeholderTextColor={t.color.textSecondary}
+                            keyboardAppearance={t.scheme}
                             keyboardType="decimal-pad"
-                            value={(t.priceCents / 100).toFixed(2)}
+                            value={(tier.priceCents / 100).toFixed(2)}
                             onChangeText={(v) => {
                               const copy = [...tiers];
                               copy[idx]!.priceCents = Math.round((parseFloat(v) || 0) * 100);
@@ -1322,7 +1337,7 @@ export function ExpenseFormModal({
                           accessibilityRole="button"
                           accessibilityLabel={`Remove tier ${idx + 1}`}
                         >
-                          <Ionicons name="trash-outline" size={16} color={theme.color.danger} />
+                          <Ionicons name="trash-outline" size={16} color={t.color.danger} />
                         </Pressable>
                       ) : null}
                     </View>
@@ -1343,13 +1358,13 @@ export function ExpenseFormModal({
                     accessibilityRole="button"
                   >
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <Ionicons name="calculator-outline" size={16} color={theme.color.primary} />
+                      <Ionicons name="calculator-outline" size={16} color={t.color.primaryFg} />
                       <Text style={styles.taxTipHelperTitle}>Tax & Tip Distribution Helper</Text>
                     </View>
                     <Ionicons
                       name={showTierTaxTipHelper ? 'chevron-up' : 'chevron-down'}
                       size={14}
-                      color={theme.color.primary}
+                      color={t.color.primaryFg}
                     />
                   </Pressable>
 
@@ -1398,7 +1413,8 @@ export function ExpenseFormModal({
                           <TextInput
                             style={styles.shareInput}
                             placeholder="e.g. 14.56"
-                            placeholderTextColor={theme.color.textSecondary}
+                            placeholderTextColor={t.color.textSecondary}
+                            keyboardAppearance={t.scheme}
                             keyboardType="decimal-pad"
                             value={tierTaxDollar}
                             onChangeText={setTierTaxDollar}
@@ -1411,7 +1427,8 @@ export function ExpenseFormModal({
                           <TextInput
                             style={styles.shareInput}
                             placeholder="Final total on receipt"
-                            placeholderTextColor={theme.color.textSecondary}
+                            placeholderTextColor={t.color.textSecondary}
+                            keyboardAppearance={t.scheme}
                             keyboardType="decimal-pad"
                             value={tierTaxTotal}
                             onChangeText={setTierTaxTotal}
@@ -1438,7 +1455,8 @@ export function ExpenseFormModal({
                             <TextInput
                               style={styles.shareInput}
                               placeholder="Custom %"
-                              placeholderTextColor={theme.color.textSecondary}
+                              placeholderTextColor={t.color.textSecondary}
+                              keyboardAppearance={t.scheme}
                               keyboardType="decimal-pad"
                               value={tierTaxPct}
                               onChangeText={setTierTaxPct}
@@ -1489,7 +1507,8 @@ export function ExpenseFormModal({
                             <TextInput
                               style={styles.shareInput}
                               placeholder="Tip %"
-                              placeholderTextColor={theme.color.textSecondary}
+                              placeholderTextColor={t.color.textSecondary}
+                              keyboardAppearance={t.scheme}
                               keyboardType="decimal-pad"
                               value={tierTipPct}
                               onChangeText={setTierTipPct}
@@ -1504,7 +1523,8 @@ export function ExpenseFormModal({
                           <TextInput
                             style={styles.shareInput}
                             placeholder="Exact tip dollars"
-                            placeholderTextColor={theme.color.textSecondary}
+                            placeholderTextColor={t.color.textSecondary}
+                            keyboardAppearance={t.scheme}
                             keyboardType="decimal-pad"
                             value={tierTipDollar}
                             onChangeText={setTierTipDollar}
@@ -1609,7 +1629,7 @@ export function ExpenseFormModal({
                   <View style={styles.tierMatrixCard}>
                     {tiers.length > 3 ? (
                       <View style={styles.matrixScrollHintRow}>
-                        <Ionicons name="swap-horizontal" size={12} color="#5b2a86" />
+                        <Ionicons name="swap-horizontal" size={12} color={t.color.primaryFg} />
                         <Text style={styles.matrixScrollHintText}>
                           Swipe table horizontally to see all {tiers.length} tiers & totals
                         </Text>
@@ -1650,7 +1670,7 @@ export function ExpenseFormModal({
 
                         {/* Table Participant Rows */}
                         {allParticipants.map((p, pIdx) => {
-                          const avatarColor = getAvatarColor(p.name);
+                          const avatarColor = getAvatarColor(p.name, t);
                           const pSubtotal = participantSubtotals[p.id] ?? 0;
                           const hasAssignedTiers = pSubtotal > 0;
                           return (
@@ -1681,7 +1701,7 @@ export function ExpenseFormModal({
                                 </View>
                               </View>
 
-                              {tiers.map((t, tIdx) => {
+                              {tiers.map((tier, tIdx) => {
                                 const count = tierCounts[String(tIdx)]?.[p.id] ?? 0;
                                 const isCellActive = count > 0;
                                 return (
@@ -1693,7 +1713,10 @@ export function ExpenseFormModal({
                                       tiers.length > 3 && styles.tierMatrixTierColMany,
                                     ]}
                                   >
-                                    <View style={[styles.matrixStepperPill, isCellActive && styles.matrixStepperPillActive]}>
+                                    <View
+                                      style={[styles.matrixStepperPill, isCellActive && styles.matrixStepperPillActive]}
+                                      testID={`tier-matrix-pill-${tIdx}-${p.id}`}
+                                    >
                                       <Pressable
                                         style={styles.matrixStepperBtn}
                                         onPress={() => {
@@ -1708,13 +1731,14 @@ export function ExpenseFormModal({
                                         }}
                                         testID={`tier-count-dec-${tIdx}-${p.id}`}
                                         accessibilityRole="button"
-                                        accessibilityLabel={`Decrement ${t.name} for ${p.name}`}
+                                        accessibilityLabel={`Decrement ${tier.name} for ${p.name}`}
                                       >
                                         <Text style={styles.matrixStepperBtnText}>−</Text>
                                       </Pressable>
                                       <TextInput
                                         style={[styles.matrixCountInput, isCellActive && styles.matrixCountInputActive]}
                                         keyboardType="number-pad"
+                                        keyboardAppearance={t.scheme}
                                         value={String(count)}
                                         onChangeText={(v) => {
                                           const num = parseInt(v, 10) || 0;
@@ -1742,7 +1766,7 @@ export function ExpenseFormModal({
                                         }}
                                         testID={`tier-count-inc-${tIdx}-${p.id}`}
                                         accessibilityRole="button"
-                                        accessibilityLabel={`Increment ${t.name} for ${p.name}`}
+                                        accessibilityLabel={`Increment ${tier.name} for ${p.name}`}
                                       >
                                         <Text style={styles.matrixStepperBtnText}>+</Text>
                                       </Pressable>
@@ -1769,7 +1793,7 @@ export function ExpenseFormModal({
                 ) : (
                   /* BALANCED CARDS VIEW: Fixed 2-column layout (no awkward stretching for odd tiers) */
                   allParticipants.map((p) => {
-                    const avatarColor = getAvatarColor(p.name);
+                    const avatarColor = getAvatarColor(p.name, t);
                     const pSubtotal = participantSubtotals[p.id] ?? 0;
                     const hasAssignedTiers = pSubtotal > 0;
                     return (
@@ -1802,13 +1826,17 @@ export function ExpenseFormModal({
                           </View>
                         </View>
                         <View style={styles.tierCountGrid}>
-                          {tiers.map((t, tIdx) => {
+                          {tiers.map((tier, tIdx) => {
                             const count = tierCounts[String(tIdx)]?.[p.id] ?? 0;
                             const isTierActive = count > 0;
                             return (
-                              <View key={tIdx} style={[styles.tierCountPillCard, isTierActive && styles.tierCountPillCardActive]}>
+                              <View
+                                key={tIdx}
+                                style={[styles.tierCountPillCard, isTierActive && styles.tierCountPillCardActive]}
+                                testID={`tier-count-pill-${tIdx}-${p.id}`}
+                              >
                                 <Text style={styles.tierCountPillName} numberOfLines={1}>
-                                  {t.name} <Text style={styles.tierCountPillPrice}>(${Math.round(t.priceCents / 100)})</Text>
+                                  {tier.name} <Text style={styles.tierCountPillPrice}>(${Math.round(tier.priceCents / 100)})</Text>
                                 </Text>
                                 <View style={styles.stepperPill}>
                                   <Pressable
@@ -1825,13 +1853,14 @@ export function ExpenseFormModal({
                                     }}
                                     testID={`tier-count-dec-${tIdx}-${p.id}`}
                                     accessibilityRole="button"
-                                    accessibilityLabel={`Decrement ${t.name} for ${p.name}`}
+                                    accessibilityLabel={`Decrement ${tier.name} for ${p.name}`}
                                   >
                                     <Text style={styles.stepperBtnText}>-</Text>
                                   </Pressable>
                                   <TextInput
                                     style={styles.tierCountInput}
                                     keyboardType="number-pad"
+                                    keyboardAppearance={t.scheme}
                                     value={String(count)}
                                     onChangeText={(v) => {
                                       const num = parseInt(v, 10) || 0;
@@ -1859,7 +1888,7 @@ export function ExpenseFormModal({
                                     }}
                                     testID={`tier-count-inc-${tIdx}-${p.id}`}
                                     accessibilityRole="button"
-                                    accessibilityLabel={`Increment ${t.name} for ${p.name}`}
+                                    accessibilityLabel={`Increment ${tier.name} for ${p.name}`}
                                   >
                                     <Text style={styles.stepperBtnText}>+</Text>
                                   </Pressable>
@@ -1885,7 +1914,7 @@ export function ExpenseFormModal({
                     onPress={() => handleStartReceiptScan('camera')}
                     testID="scan-receipt-button"
                   >
-                    <Ionicons name="camera-outline" size={13} color={theme.color.primary} />
+                    <Ionicons name="camera-outline" size={13} color={t.color.primaryFg} />
                     <Text style={styles.itemizedScanBtnText}>Camera</Text>
                   </Pressable>
                   <Pressable
@@ -1893,7 +1922,7 @@ export function ExpenseFormModal({
                     onPress={() => handleStartReceiptScan('library')}
                     testID="pick-receipt-library-button"
                   >
-                    <Ionicons name="images-outline" size={13} color={theme.color.primary} />
+                    <Ionicons name="images-outline" size={13} color={t.color.primaryFg} />
                     <Text style={styles.itemizedScanBtnText}>Choose Photo</Text>
                   </Pressable>
                 </View>
@@ -1924,6 +1953,8 @@ export function ExpenseFormModal({
                       <TextInput
                         style={[styles.input, styles.itemNameInput]}
                         placeholder="Item name (e.g. Burger)"
+                        placeholderTextColor={t.scheme === 'dark' ? t.color.textSecondary : undefined}
+                        keyboardAppearance={t.scheme}
                         value={it.name}
                         onChangeText={(v) => {
                           const copy = [...items];
@@ -1937,6 +1968,8 @@ export function ExpenseFormModal({
                         <TextInput
                           style={[styles.input, styles.itemPriceInput]}
                           placeholder="0.00"
+                          placeholderTextColor={t.scheme === 'dark' ? t.color.textSecondary : undefined}
+                          keyboardAppearance={t.scheme}
                           keyboardType="decimal-pad"
                           value={(it.priceCents / 100).toFixed(2)}
                           onChangeText={(v) => {
@@ -1954,7 +1987,7 @@ export function ExpenseFormModal({
                         accessibilityRole="button"
                         accessibilityLabel={`Remove item ${idx + 1}`}
                       >
-                        <Ionicons name="trash-outline" size={16} color={theme.color.danger} />
+                        <Ionicons name="trash-outline" size={16} color={t.color.danger} />
                       </Pressable>
                     </View>
 
@@ -1965,6 +1998,7 @@ export function ExpenseFormModal({
                         <Text style={styles.alcoholLabel}>Alcoholic Drink</Text>
                       </View>
                       <Switch
+                        key={t.scheme}
                         value={it.isAlcohol}
                         onValueChange={(val) => {
                           const copy = [...items];
@@ -1972,8 +2006,10 @@ export function ExpenseFormModal({
                           setItems(copy);
                         }}
                         testID={`item-alcohol-toggle-${idx}`}
-                        trackColor={{ false: '#cbd5e1', true: '#c084fc' }}
-                        thumbColor={it.isAlcohol ? '#7c3aed' : '#ffffff'}
+                        {...themedSwitchProps(t, it.isAlcohol, {
+                          trackColor: { false: switchPal.trackOff, true: switchPal.trackOn },
+                          thumbColor: it.isAlcohol ? switchPal.thumbOn : t.color.textOnPrimary,
+                        })}
                       />
                     </View>
 
@@ -1996,7 +2032,7 @@ export function ExpenseFormModal({
                       <View style={styles.assigneeChips}>
                         {allParticipants.map((p) => {
                           const isAssigned = it.assigneeIds.includes(p.id);
-                          const avatarColor = getAvatarColor(p.name);
+                          const avatarColor = getAvatarColor(p.name, t);
                           return (
                             <Pressable
                               key={p.id}
@@ -2016,11 +2052,11 @@ export function ExpenseFormModal({
                             >
                               <View style={[
                                 styles.assigneeMiniAvatar,
-                                { backgroundColor: isAssigned ? '#ffffff' : avatarColor },
+                                { backgroundColor: isAssigned ? t.color.surface : avatarColor },
                               ]}>
                                 <Text style={[
                                   styles.assigneeMiniAvatarText,
-                                  { color: isAssigned ? '#7c3aed' : '#ffffff' },
+                                  { color: isAssigned ? pal.assigneeInitialSelected : t.color.textOnPrimary },
                                 ]}>
                                   {p.name.charAt(0).toUpperCase()}
                                 </Text>
@@ -2065,6 +2101,8 @@ export function ExpenseFormModal({
                     <TextInput
                       style={[styles.input, styles.chargeInput]}
                       placeholder="Amount ($)"
+                      placeholderTextColor={t.scheme === 'dark' ? t.color.textSecondary : undefined}
+                      keyboardAppearance={t.scheme}
                       keyboardType="decimal-pad"
                       value={(cl.amountCents / 100).toFixed(2)}
                       onChangeText={(v) => {
@@ -2079,14 +2117,17 @@ export function ExpenseFormModal({
                       <View style={styles.alcoholExcludeWrap}>
                         <Text style={styles.excludeText}>Exclude Alcohol</Text>
                         <Switch
+                          key={t.scheme}
                           value={Boolean(cl.excludeAlcohol)}
                           onValueChange={(val) => {
                             const copy = [...chargeLines];
                             copy[idx]!.excludeAlcohol = val;
                             setChargeLines(copy);
                           }}
-                          trackColor={{ false: '#cbd5e1', true: '#c084fc' }}
-                          thumbColor={cl.excludeAlcohol ? '#7c3aed' : '#ffffff'}
+                          {...themedSwitchProps(t, Boolean(cl.excludeAlcohol), {
+                            trackColor: { false: switchPal.trackOff, true: switchPal.trackOn },
+                            thumbColor: cl.excludeAlcohol ? switchPal.thumbOn : t.color.textOnPrimary,
+                          })}
                         />
                       </View>
                     ) : null}
@@ -2095,7 +2136,7 @@ export function ExpenseFormModal({
                       onPress={() => setChargeLines((prev) => prev.filter((_, i) => i !== idx))}
                       hitSlop={8}
                     >
-                      <Ionicons name="trash-outline" size={16} color={theme.color.danger} />
+                      <Ionicons name="trash-outline" size={16} color={t.color.danger} />
                     </Pressable>
                   </View>
                 ))}
@@ -2136,7 +2177,7 @@ export function ExpenseFormModal({
               }}
               testID="open-manage-guests-link"
             >
-              <Ionicons name="people-outline" size={16} color={theme.color.primary} />
+              <Ionicons name="people-outline" size={16} color={t.color.primaryFg} />
               <Text style={styles.guestLinkText}>Manage Trip Guests</Text>
             </Pressable>
 
@@ -2184,7 +2225,7 @@ export function ExpenseFormModal({
                   accessibilityLabel="Close"
                   hitSlop={12}
                 >
-                  <Ionicons name="close" size={24} color={theme.color.textPrimary} />
+                  <Ionicons name="close" size={24} color={t.color.textPrimary} />
                 </Pressable>
               </View>
               <ExperiencePicker
@@ -2269,20 +2310,20 @@ export function ExpenseFormModal({
   );
 };
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    backgroundColor: FORM[t.scheme].scrim,
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: '#ffffff',
+    backgroundColor: t.color.surface,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     height: '92%',
     paddingTop: 10,
     overflow: 'hidden',
-    shadowColor: '#1f1235',
+    shadowColor: FORM[t.scheme].sheetShadow,
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.1,
     shadowRadius: 16,
@@ -2292,7 +2333,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 4,
     borderRadius: 2,
-    backgroundColor: '#cbd5e1',
+    backgroundColor: FORM[t.scheme].sheetHandle,
     alignSelf: 'center',
     marginBottom: 12,
   },
@@ -2309,19 +2350,19 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 22,
     fontWeight: '800',
-    color: '#1f1235',
+    color: t.color.textPrimary,
     letterSpacing: -0.4,
   },
   headerSubtitle: {
     fontSize: 12.5,
-    color: '#6b6480',
+    color: t.color.textSecondary,
     marginTop: 2,
   },
   closeBtn: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#f5f0fb',
+    backgroundColor: FORM[t.scheme].lavenderWell,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -2329,16 +2370,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: 'rgba(214, 51, 108, 0.08)',
+    backgroundColor: withAlpha(t.color.danger, 0.08),
     borderWidth: 1,
-    borderColor: 'rgba(214, 51, 108, 0.2)',
+    borderColor: withAlpha(t.color.danger, 0.2),
     padding: 10,
     borderRadius: 10,
     marginHorizontal: 20,
     marginBottom: 10,
   },
   errorText: {
-    color: theme.color.danger,
+    color: t.color.danger,
     fontSize: 13,
     fontWeight: '600',
     flex: 1,
@@ -2353,20 +2394,20 @@ const styles = StyleSheet.create({
   fieldLabel: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#6b6480',
+    color: t.color.textSecondary,
     letterSpacing: 0.8,
     marginBottom: 8,
     marginTop: 4,
     textTransform: 'uppercase',
   },
   heroExpenseCard: {
-    backgroundColor: '#ffffff',
-    borderColor: '#e2d9f0',
+    backgroundColor: t.color.surface,
+    borderColor: t.color.border,
     borderWidth: 1.5,
     borderRadius: 18,
     padding: 16,
     marginBottom: 16,
-    shadowColor: '#5b2a86',
+    shadowColor: FORM[t.scheme].violetShadow,
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.06,
     shadowRadius: 8,
@@ -2386,28 +2427,28 @@ const styles = StyleSheet.create({
   heroCurrencyPrefix: {
     fontSize: 32,
     fontWeight: '800',
-    color: '#5b2a86',
+    color: t.color.primaryFg,
     marginRight: 4,
   },
   heroAmountInput: {
     fontSize: 34,
     fontWeight: '800',
-    color: '#1f1235',
+    color: t.color.textPrimary,
     flex: 1,
     paddingVertical: 0,
   },
   heroAmountDisplay: {
     fontSize: 34,
     fontWeight: '800',
-    color: '#1f1235',
+    color: t.color.textPrimary,
   },
   heroDescRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: '#fbf9fe',
+    backgroundColor: FORM[t.scheme].lavenderInput,
     borderWidth: 1,
-    borderColor: '#e8dcfa',
+    borderColor: FORM[t.scheme].violetHairline,
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 9,
@@ -2416,7 +2457,7 @@ const styles = StyleSheet.create({
   heroDescInput: {
     flex: 1,
     fontSize: 14,
-    color: '#1f1235',
+    color: t.color.textPrimary,
     fontWeight: '500',
     paddingVertical: 0,
   },
@@ -2432,27 +2473,27 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    backgroundColor: '#f5f0fb',
+    backgroundColor: FORM[t.scheme].lavenderWell,
     borderWidth: 1,
-    borderColor: '#d8c7f2',
+    borderColor: FORM[t.scheme].violetBorder,
     paddingHorizontal: 10,
     paddingVertical: 8,
     borderRadius: 10,
     maxWidth: '52%',
   },
   heroVenueBtnActive: {
-    backgroundColor: '#ede3fa',
-    borderColor: '#5b2a86',
+    backgroundColor: FORM[t.scheme].venueActiveBg,
+    borderColor: t.color.primaryFg,
   },
   heroVenueBtnText: {
     fontSize: 11.5,
     fontWeight: '700',
-    color: '#5b2a86',
+    color: t.color.primaryFg,
     flexShrink: 1,
   },
   tierHeroSummaryBadge: {
     alignItems: 'flex-end',
-    backgroundColor: '#f5f0fb',
+    backgroundColor: FORM[t.scheme].lavenderWell,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 8,
@@ -2460,20 +2501,20 @@ const styles = StyleSheet.create({
   tierHeroSummaryText: {
     fontSize: 15,
     fontWeight: '800',
-    color: '#5b2a86',
+    color: t.color.primaryFg,
   },
   tierHeroCountText: {
     fontSize: 10,
     fontWeight: '600',
-    color: '#6b6480',
+    color: t.color.textSecondary,
   },
   receiptScannerQuickBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#faf7ff',
+    backgroundColor: FORM[t.scheme].lavenderPanel,
     borderWidth: 1,
-    borderColor: '#e2d9f0',
+    borderColor: t.color.border,
     borderRadius: 14,
     paddingHorizontal: 12,
     paddingVertical: 8,
@@ -2488,14 +2529,14 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: '#5b2a86',
+    backgroundColor: t.color.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
   quickBarTitle: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#1f1235',
+    color: t.color.textPrimary,
   },
   quickBarActions: {
     flexDirection: 'row',
@@ -2505,13 +2546,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#5b2a86',
+    backgroundColor: t.color.primary,
     paddingHorizontal: 9,
     paddingVertical: 5,
     borderRadius: 12,
   },
   quickBarBtnCameraText: {
-    color: '#ffffff',
+    color: t.color.textOnPrimary,
     fontSize: 11,
     fontWeight: '700',
   },
@@ -2519,15 +2560,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#ffffff',
+    backgroundColor: t.color.surface,
     borderWidth: 1,
-    borderColor: '#d8c7f2',
+    borderColor: FORM[t.scheme].violetBorder,
     paddingHorizontal: 9,
     paddingVertical: 5,
     borderRadius: 12,
   },
   quickBarBtnPhotoText: {
-    color: '#5b2a86',
+    color: t.color.primaryFg,
     fontSize: 11,
     fontWeight: '700',
   },
@@ -2535,19 +2576,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
-    backgroundColor: '#f5f0fb',
+    backgroundColor: FORM[t.scheme].lavenderWell,
     paddingHorizontal: 8,
     paddingVertical: 5,
     borderRadius: 12,
   },
   quickBarBtnSampleText: {
-    color: '#5b2a86',
+    color: t.color.primaryFg,
     fontSize: 11,
     fontWeight: '700',
   },
   modeRow: {
     flexDirection: 'row',
-    backgroundColor: '#f1ecf7',
+    backgroundColor: FORM[t.scheme].lavenderWellAlt,
     padding: 4,
     borderRadius: 14,
     gap: 4,
@@ -2562,8 +2603,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   modeChipSelected: {
-    backgroundColor: '#ffffff',
-    shadowColor: '#5b2a86',
+    backgroundColor: FORM[t.scheme].modeChipSelectedBg,
+    shadowColor: FORM[t.scheme].violetShadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
@@ -2572,10 +2613,10 @@ const styles = StyleSheet.create({
   modeChipText: {
     fontSize: 11.5,
     fontWeight: '600',
-    color: '#6b6480',
+    color: t.color.textSecondary,
   },
   modeChipTextSelected: {
-    color: '#5b2a86',
+    color: t.color.primaryFg,
     fontWeight: '800',
   },
   chipScroll: {
@@ -2589,14 +2630,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 20,
-    backgroundColor: '#ffffff',
+    backgroundColor: t.color.surface,
     marginRight: 8,
     borderWidth: 1.5,
-    borderColor: '#e2d9f0',
+    borderColor: t.color.border,
   },
   payerChipSelected: {
-    backgroundColor: '#5b2a86',
-    borderColor: '#5b2a86',
+    backgroundColor: t.color.primary,
+    borderColor: t.color.primary,
   },
   payerAvatarMini: {
     width: 22,
@@ -2608,38 +2649,38 @@ const styles = StyleSheet.create({
   payerAvatarMiniText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#ffffff',
+    color: t.color.textOnPrimary,
   },
   payerChipText: {
     fontSize: 12.5,
-    color: '#1f1235',
+    color: t.color.textPrimary,
     fontWeight: '600',
   },
   payerChipTextSelected: {
-    color: '#ffffff',
+    color: t.color.textOnPrimary,
     fontWeight: '700',
   },
   catChip: {
     paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: 14,
-    backgroundColor: '#ffffff',
+    backgroundColor: t.color.surface,
     marginRight: 6,
     borderWidth: 1.5,
-    borderColor: '#e2d9f0',
+    borderColor: t.color.border,
   },
   catChipSelected: {
-    backgroundColor: '#5b2a86',
-    borderColor: '#5b2a86',
+    backgroundColor: t.color.primary,
+    borderColor: t.color.primary,
   },
   catChipText: {
     fontSize: 12,
-    color: '#6b6480',
+    color: t.color.textSecondary,
     textTransform: 'capitalize',
     fontWeight: '600',
   },
   catChipTextSelected: {
-    color: '#ffffff',
+    color: t.color.textOnPrimary,
     fontWeight: '700',
   },
   catalogLinkSection: {
@@ -2650,14 +2691,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: 12,
-    backgroundColor: '#faf7ff',
+    backgroundColor: FORM[t.scheme].lavenderPanel,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#e2d9f0',
+    borderColor: t.color.border,
   },
   catalogButtonActive: {
-    borderColor: '#cdbce6',
-    backgroundColor: '#f5f0fb',
+    borderColor: t.color.borderStrong,
+    backgroundColor: FORM[t.scheme].lavenderWell,
   },
   catalogButtonContent: {
     flexDirection: 'row',
@@ -2669,25 +2710,25 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 8,
-    backgroundColor: '#f1ecf7',
+    backgroundColor: FORM[t.scheme].lavenderWellAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
   catalogButtonText: {
     fontSize: 13,
-    color: '#5b2a86',
+    color: t.color.primaryFg,
     fontWeight: '700',
     flex: 1,
   },
   input: {
-    backgroundColor: '#ffffff',
+    backgroundColor: t.color.surface,
     borderWidth: 1.5,
-    borderColor: '#e2d9f0',
+    borderColor: t.color.border,
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 11,
     fontSize: 14,
-    color: '#1f1235',
+    color: t.color.textPrimary,
     marginBottom: 14,
   },
   datePickerContainer: {
@@ -2703,7 +2744,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   manualBadge: {
-    backgroundColor: '#f1ecf7',
+    backgroundColor: FORM[t.scheme].lavenderWellAlt,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
@@ -2711,12 +2752,12 @@ const styles = StyleSheet.create({
   manualBadgeText: {
     fontSize: 10.5,
     fontWeight: '700',
-    color: '#5b2a86',
+    color: t.color.primaryFg,
   },
   derivedHeroCard: {
-    backgroundColor: '#faf7ff',
+    backgroundColor: FORM[t.scheme].lavenderPanel,
     borderWidth: 1,
-    borderColor: '#e8dcfa',
+    borderColor: FORM[t.scheme].violetHairline,
     borderRadius: 14,
     padding: 14,
     marginBottom: 16,
@@ -2729,18 +2770,18 @@ const styles = StyleSheet.create({
   derivedHeroTitle: {
     fontSize: 13.5,
     fontWeight: '700',
-    color: '#1f1235',
+    color: t.color.textPrimary,
   },
   derivedHeroSubtitle: {
     fontSize: 11.5,
-    color: '#6b6480',
+    color: t.color.textSecondary,
     marginTop: 2,
   },
   derivedBadgeLock: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#d1fae5',
+    backgroundColor: FORM[t.scheme].greenBadgeBg,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
@@ -2748,7 +2789,7 @@ const styles = StyleSheet.create({
   derivedBadgeLockText: {
     fontSize: 10.5,
     fontWeight: '700',
-    color: '#047857',
+    color: FORM[t.scheme].greenDeepText,
   },
   derivedHeroValueRow: {
     flexDirection: 'row',
@@ -2759,31 +2800,31 @@ const styles = StyleSheet.create({
   derivedHeroDollarPrefix: {
     fontSize: 20,
     fontWeight: '800',
-    color: '#5b2a86',
+    color: t.color.primaryFg,
   },
   derivedHeroValue: {
     fontSize: 26,
     fontWeight: '800',
-    color: '#5b2a86',
+    color: t.color.primaryFg,
   },
   tierTotalHelperBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#f5f0fb',
+    backgroundColor: FORM[t.scheme].lavenderWell,
     padding: 8,
     borderRadius: 8,
     marginVertical: 8,
   },
   tierTotalHelperText: {
     fontSize: 11.5,
-    color: '#6b6480',
+    color: t.color.textSecondary,
     flex: 1,
     lineHeight: 15,
   },
   tierExtraText: {
     fontSize: 11.5,
-    color: '#5b2a86',
+    color: t.color.primaryFg,
     fontWeight: '600',
     marginTop: 6,
   },
@@ -2793,7 +2834,7 @@ const styles = StyleSheet.create({
   },
   helperText: {
     fontSize: 12,
-    color: '#6b6480',
+    color: t.color.textSecondary,
     marginBottom: 10,
     lineHeight: 16,
   },
@@ -2801,20 +2842,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#faf7ff',
+    backgroundColor: FORM[t.scheme].lavenderPanel,
     borderWidth: 1,
-    borderColor: '#e8dcfa',
+    borderColor: FORM[t.scheme].violetHairline,
     borderRadius: 12,
     padding: 12,
     marginBottom: 8,
   },
   exactBalanceMeterLabel: {
     fontSize: 12.5,
-    color: '#475569',
+    color: FORM[t.scheme].slate600Text,
   },
   exactBalanceMeterBold: {
     fontWeight: '800',
-    color: '#1f1235',
+    color: t.color.textPrimary,
   },
   meterStatusBadge: {
     paddingHorizontal: 8,
@@ -2822,30 +2863,30 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   meterStatusBalanced: {
-    backgroundColor: '#d1fae5',
+    backgroundColor: FORM[t.scheme].greenBadgeBg,
   },
   meterStatusOver: {
-    backgroundColor: '#fee2e2',
+    backgroundColor: FORM[t.scheme].redBadgeBg,
   },
   meterStatusNeutral: {
-    backgroundColor: '#f1ecf7',
+    backgroundColor: FORM[t.scheme].lavenderWellAlt,
   },
   meterStatusText: {
     fontSize: 11,
     fontWeight: '700',
   },
   meterStatusTextBalanced: {
-    color: '#047857',
+    color: FORM[t.scheme].greenDeepText,
   },
   meterStatusTextOver: {
-    color: '#b91c1c',
+    color: FORM[t.scheme].redText,
   },
   meterStatusTextNeutral: {
-    color: '#6b6480',
+    color: t.color.textSecondary,
   },
   exactProgressBarTrack: {
     height: 4,
-    backgroundColor: '#efe9f7',
+    backgroundColor: t.color.surfaceAlt,
     borderRadius: 2,
     marginBottom: 12,
     overflow: 'hidden',
@@ -2861,11 +2902,11 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
     paddingHorizontal: 12,
     borderRadius: 12,
-    backgroundColor: '#ffffff',
+    backgroundColor: t.color.surface,
     borderWidth: 1,
-    borderColor: '#e8dcfa',
+    borderColor: FORM[t.scheme].violetHairline,
     marginBottom: 8,
-    shadowColor: '#5b2a86',
+    shadowColor: FORM[t.scheme].violetShadow,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.03,
     shadowRadius: 3,
@@ -2887,7 +2928,7 @@ const styles = StyleSheet.create({
   avatarBubbleText: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#ffffff',
+    color: t.color.textOnPrimary,
   },
   participantNameWrap: {
     flex: 1,
@@ -2899,13 +2940,13 @@ const styles = StyleSheet.create({
   participantName: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#1f1235',
+    color: t.color.textPrimary,
   },
   participantNameDimmed: {
-    color: '#94a3b8',
+    color: FORM[t.scheme].slate400Text,
   },
   payerPill: {
-    backgroundColor: '#f1ecf7',
+    backgroundColor: FORM[t.scheme].lavenderWellAlt,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 6,
@@ -2913,10 +2954,10 @@ const styles = StyleSheet.create({
   payerPillText: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#5b2a86',
+    color: t.color.primaryFg,
   },
   guestPill: {
-    backgroundColor: '#e0f2fe',
+    backgroundColor: FORM[t.scheme].guestBg,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 6,
@@ -2924,15 +2965,15 @@ const styles = StyleSheet.create({
   guestPillText: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#0284c7',
+    color: FORM[t.scheme].guestText,
   },
   shareInputWrap: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#f8f5fc',
+    backgroundColor: FORM[t.scheme].shareInputBg,
     borderWidth: 1,
-    borderColor: '#e2d9f0',
+    borderColor: t.color.border,
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 2,
@@ -2940,13 +2981,13 @@ const styles = StyleSheet.create({
   currencyPrefix: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#6b6480',
+    color: t.color.textSecondary,
   },
   shareInput: {
     width: 68,
     fontSize: 14,
     fontWeight: '700',
-    color: '#1f1235',
+    color: t.color.textPrimary,
     textAlign: 'right',
     paddingVertical: 4,
   },
@@ -2954,9 +2995,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: '#faf7ff',
+    backgroundColor: FORM[t.scheme].lavenderPanel,
     borderWidth: 1,
-    borderColor: '#e8dcfa',
+    borderColor: FORM[t.scheme].violetHairline,
     borderRadius: 12,
     padding: 12,
     marginTop: 10,
@@ -2965,7 +3006,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#f1ecf7',
+    backgroundColor: FORM[t.scheme].lavenderWellAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -2974,13 +3015,13 @@ const styles = StyleSheet.create({
   },
   payerImplicitSubtext: {
     fontSize: 11,
-    color: '#6b6480',
+    color: t.color.textSecondary,
     marginTop: 2,
   },
   previewBox: {
-    backgroundColor: 'rgba(91, 42, 134, 0.06)',
+    backgroundColor: withAlpha(t.color.primary, 0.06),
     borderWidth: 1,
-    borderColor: 'rgba(91, 42, 134, 0.15)',
+    borderColor: withAlpha(t.color.primary, 0.15),
     padding: 12,
     borderRadius: 10,
     marginTop: 10,
@@ -2988,18 +3029,18 @@ const styles = StyleSheet.create({
   previewTitle: {
     fontSize: 12,
     fontWeight: '700',
-    color: theme.color.primary,
+    color: t.color.primaryFg,
     marginBottom: 4,
   },
   previewLine: {
     fontSize: 12,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
     marginTop: 2,
   },
   previewText: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#5b2a86',
+    color: t.color.primaryFg,
   },
   participantsHeaderRow: {
     flexDirection: 'row',
@@ -3012,9 +3053,9 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   quickToggleBtn: {
-    backgroundColor: '#f1ecf7',
+    backgroundColor: FORM[t.scheme].lavenderWellAlt,
     borderWidth: 1,
-    borderColor: '#e2d9f0',
+    borderColor: t.color.border,
     paddingHorizontal: 10,
     paddingVertical: 3,
     borderRadius: 12,
@@ -3022,7 +3063,7 @@ const styles = StyleSheet.create({
   quickToggleBtnText: {
     fontSize: 10.5,
     fontWeight: '700',
-    color: '#5b2a86',
+    color: t.color.primaryFg,
   },
   checkRow: {
     flexDirection: 'row',
@@ -3031,31 +3072,31 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderRadius: 12,
-    backgroundColor: '#ffffff',
+    backgroundColor: t.color.surface,
     borderWidth: 1,
-    borderColor: '#e8dcfa',
+    borderColor: FORM[t.scheme].violetHairline,
     marginBottom: 8,
   },
   checkRowChecked: {
-    backgroundColor: '#faf7ff',
-    borderColor: '#cdbce6',
+    backgroundColor: FORM[t.scheme].lavenderPanel,
+    borderColor: t.color.borderStrong,
   },
   participantShareVal: {
     fontSize: 13.5,
     fontWeight: '800',
-    color: '#5b2a86',
+    color: t.color.primaryFg,
   },
   participantExcludedText: {
     fontSize: 11.5,
-    color: '#94a3b8',
+    color: FORM[t.scheme].slate400Text,
     fontWeight: '500',
   },
   tierSuggestionCard: {
     padding: 12,
     marginBottom: 12,
-    backgroundColor: 'rgba(91, 42, 134, 0.06)',
+    backgroundColor: withAlpha(t.color.primary, 0.06),
     borderWidth: 1,
-    borderColor: 'rgba(91, 42, 134, 0.2)',
+    borderColor: withAlpha(t.color.primary, 0.2),
     borderRadius: 12,
   },
   tierSuggestionHeader: {
@@ -3067,11 +3108,11 @@ const styles = StyleSheet.create({
   tierSuggestionTitle: {
     fontSize: 13,
     fontWeight: '700',
-    color: theme.color.primary,
+    color: t.color.primaryFg,
   },
   tierSuggestionBody: {
     fontSize: 13,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
     marginBottom: 8,
   },
   tierSuggestionActions: {
@@ -3088,9 +3129,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#f3eafd',
+    backgroundColor: FORM[t.scheme].addTierBg,
     borderWidth: 1,
-    borderColor: '#d8c7f2',
+    borderColor: FORM[t.scheme].violetBorder,
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 8,
@@ -3098,16 +3139,16 @@ const styles = StyleSheet.create({
   addTierHeaderBtnText: {
     fontSize: 11.5,
     fontWeight: '700',
-    color: '#5b2a86',
+    color: t.color.primaryFg,
   },
   tierCard: {
-    backgroundColor: '#ffffff',
+    backgroundColor: t.color.surface,
     borderWidth: 1.5,
-    borderColor: '#e8dcfa',
+    borderColor: FORM[t.scheme].violetHairline,
     borderRadius: 14,
     padding: 10,
     marginBottom: 8,
-    shadowColor: '#5b2a86',
+    shadowColor: FORM[t.scheme].violetShadow,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.03,
     shadowRadius: 3,
@@ -3122,15 +3163,15 @@ const styles = StyleSheet.create({
     flex: 1.3,
   },
   tierNameInput: {
-    backgroundColor: '#faf8fe',
+    backgroundColor: FORM[t.scheme].tierNameBg,
     borderWidth: 1,
-    borderColor: '#e2d9f0',
+    borderColor: t.color.border,
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 6,
     fontSize: 13,
     fontWeight: '600',
-    color: '#1f1235',
+    color: t.color.textPrimary,
     marginBottom: 0,
   },
   tierPriceCol: {
@@ -3139,9 +3180,9 @@ const styles = StyleSheet.create({
   tierPriceBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f0fdf4',
+    backgroundColor: FORM[t.scheme].greenWell,
     borderWidth: 1,
-    borderColor: '#bbf7d0',
+    borderColor: FORM[t.scheme].greenBorder,
     borderRadius: 8,
     paddingHorizontal: 8,
     paddingVertical: 5,
@@ -3149,19 +3190,19 @@ const styles = StyleSheet.create({
   tierPriceDollarSign: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#16a34a',
+    color: FORM[t.scheme].greenPriceText,
     marginRight: 2,
   },
   tierPriceInput: {
     flex: 1,
     fontSize: 12.5,
     fontWeight: '800',
-    color: '#16a34a',
+    color: FORM[t.scheme].greenPriceText,
     paddingVertical: 0,
   },
   tierPriceUnitSuffix: {
     fontSize: 10,
-    color: '#64748b',
+    color: FORM[t.scheme].slate500Text,
     marginLeft: 2,
   },
   tierDeleteBtn: {
@@ -3176,29 +3217,29 @@ const styles = StyleSheet.create({
     marginTop: 6,
     paddingTop: 4,
     borderTopWidth: 1,
-    borderTopColor: '#f8f5fc',
+    borderTopColor: FORM[t.scheme].violetFooterDivider,
   },
   tierSummaryBadgeText: {
     fontSize: 10.5,
-    color: '#5b2a86',
+    color: t.color.primaryFg,
     fontWeight: '600',
   },
   participantTierCard: {
-    backgroundColor: '#ffffff',
+    backgroundColor: t.color.surface,
     borderWidth: 1,
-    borderColor: '#e8dcfa',
+    borderColor: FORM[t.scheme].violetHairline,
     borderRadius: 14,
     padding: 10,
     marginBottom: 8,
-    shadowColor: '#5b2a86',
+    shadowColor: FORM[t.scheme].violetShadow,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.03,
     shadowRadius: 3,
     elevation: 1,
   },
   participantTierCardActive: {
-    borderColor: '#bca5db',
-    backgroundColor: '#fdfbff',
+    borderColor: FORM[t.scheme].violetBorderActive,
+    backgroundColor: FORM[t.scheme].cardActiveBg,
   },
   participantHeaderRow: {
     flexDirection: 'row',
@@ -3216,24 +3257,24 @@ const styles = StyleSheet.create({
   avatarBubbleMiniText: {
     fontSize: 10.5,
     fontWeight: '700',
-    color: '#ffffff',
+    color: t.color.textOnPrimary,
   },
   participantSubtotalPill: {
-    backgroundColor: '#f8fafc',
+    backgroundColor: FORM[t.scheme].neutralWell,
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 6,
   },
   participantSubtotalPillActive: {
-    backgroundColor: '#f3ebfa',
+    backgroundColor: FORM[t.scheme].subtotalActiveBg,
   },
   participantSubtotalText: {
     fontSize: 11.5,
     fontWeight: '700',
-    color: '#64748b',
+    color: FORM[t.scheme].slate500Text,
   },
   participantSubtotalTextActive: {
-    color: '#5b2a86',
+    color: t.color.primaryFg,
   },
   tierCountsHeaderRow: {
     flexDirection: 'row',
@@ -3244,17 +3285,17 @@ const styles = StyleSheet.create({
   },
   tierCountsSubheader: {
     fontSize: 11,
-    color: '#8b7a9f',
+    color: FORM[t.scheme].mutedVioletText,
     fontWeight: '600',
     marginTop: -4,
   },
   tierViewToggleContainer: {
     flexDirection: 'row',
-    backgroundColor: '#f3eafd',
+    backgroundColor: FORM[t.scheme].addTierBg,
     borderRadius: 8,
     padding: 2,
     borderWidth: 1,
-    borderColor: '#e2d3f5',
+    borderColor: FORM[t.scheme].violetBorderSoft,
   },
   tierViewToggleBtn: {
     paddingHorizontal: 9,
@@ -3262,8 +3303,8 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   tierViewToggleBtnActive: {
-    backgroundColor: '#5b2a86',
-    shadowColor: '#5b2a86',
+    backgroundColor: t.color.primary,
+    shadowColor: FORM[t.scheme].violetShadow,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.15,
     shadowRadius: 2,
@@ -3272,10 +3313,10 @@ const styles = StyleSheet.create({
   tierViewToggleText: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#6b5880',
+    color: FORM[t.scheme].toggleIdleText,
   },
   tierViewToggleTextActive: {
-    color: '#ffffff',
+    color: t.color.textOnPrimary,
     fontWeight: '700',
   },
   tierQuickActionsRow: {
@@ -3286,9 +3327,9 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   tierQuickActionBtn: {
-    backgroundColor: '#f5effa',
+    backgroundColor: FORM[t.scheme].quickActionBg,
     borderWidth: 1,
-    borderColor: '#d8c7f2',
+    borderColor: FORM[t.scheme].violetBorder,
     borderRadius: 12,
     paddingHorizontal: 10,
     paddingVertical: 4,
@@ -3296,12 +3337,12 @@ const styles = StyleSheet.create({
   tierQuickActionBtnText: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#5b2a86',
+    color: t.color.primaryFg,
   },
   tierQuickActionBtnReset: {
-    backgroundColor: '#fff5f5',
+    backgroundColor: FORM[t.scheme].resetBg,
     borderWidth: 1,
-    borderColor: '#fed7d7',
+    borderColor: FORM[t.scheme].resetBorder,
     borderRadius: 12,
     paddingHorizontal: 10,
     paddingVertical: 4,
@@ -3309,32 +3350,32 @@ const styles = StyleSheet.create({
   tierQuickActionResetText: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#c53030',
+    color: FORM[t.scheme].resetText,
   },
   matrixScrollHintRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 5,
-    backgroundColor: '#faf6fe',
+    backgroundColor: FORM[t.scheme].matrixHeaderBg,
     paddingVertical: 5,
     paddingHorizontal: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#ede2fb',
+    borderBottomColor: FORM[t.scheme].violetDivider,
   },
   matrixScrollHintText: {
     fontSize: 10.5,
     fontWeight: '600',
-    color: '#5b2a86',
+    color: t.color.primaryFg,
   },
   tierMatrixCard: {
-    backgroundColor: '#ffffff',
+    backgroundColor: t.color.surface,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#e8dcfa',
+    borderColor: FORM[t.scheme].violetHairline,
     overflow: 'hidden',
     marginBottom: 10,
-    shadowColor: '#5b2a86',
+    shadowColor: FORM[t.scheme].violetShadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.04,
     shadowRadius: 4,
@@ -3349,9 +3390,9 @@ const styles = StyleSheet.create({
   tierMatrixHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#faf6fe',
+    backgroundColor: FORM[t.scheme].matrixHeaderBg,
     borderBottomWidth: 1,
-    borderBottomColor: '#ede2fb',
+    borderBottomColor: FORM[t.scheme].violetDivider,
     paddingVertical: 7,
     paddingHorizontal: 6,
   },
@@ -3383,14 +3424,14 @@ const styles = StyleSheet.create({
   tierMatrixColHeaderText: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#5b2a86',
+    color: t.color.primaryFg,
     textTransform: 'uppercase',
     letterSpacing: 0.3,
   },
   tierMatrixColHeaderPrice: {
     fontSize: 9.5,
     fontWeight: '600',
-    color: '#8b7a9f',
+    color: FORM[t.scheme].mutedVioletText,
   },
   tierMatrixRow: {
     flexDirection: 'row',
@@ -3398,11 +3439,11 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     paddingHorizontal: 6,
     borderBottomWidth: 1,
-    borderBottomColor: '#f5effa',
-    backgroundColor: '#ffffff',
+    borderBottomColor: FORM[t.scheme].violetRowDivider,
+    backgroundColor: t.color.surface,
   },
   tierMatrixRowActive: {
-    backgroundColor: '#fcfaff',
+    backgroundColor: FORM[t.scheme].rowActiveBg,
   },
   tierMatrixRowLast: {
     borderBottomWidth: 0,
@@ -3418,31 +3459,31 @@ const styles = StyleSheet.create({
   tierMatrixParticipantName: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#1f1235',
+    color: t.color.textPrimary,
   },
   payerSubtext: {
     fontSize: 9,
     fontWeight: '600',
-    color: '#5b2a86',
+    color: t.color.primaryFg,
   },
   guestSubtext: {
     fontSize: 9,
     fontWeight: '600',
-    color: '#64748b',
+    color: FORM[t.scheme].slate500Text,
   },
   matrixStepperPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f8f4fc',
+    backgroundColor: FORM[t.scheme].stepperPillBg,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#e8dcfa',
+    borderColor: FORM[t.scheme].violetHairline,
     padding: 1,
   },
   matrixStepperPillActive: {
-    backgroundColor: '#ffffff',
-    borderColor: '#bca5db',
-    shadowColor: '#5b2a86',
+    backgroundColor: t.color.surface,
+    borderColor: FORM[t.scheme].matrixPillActiveBorder,
+    shadowColor: FORM[t.scheme].violetShadow,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.08,
     shadowRadius: 2,
@@ -3452,38 +3493,38 @@ const styles = StyleSheet.create({
     width: 18,
     height: 18,
     borderRadius: 9,
-    backgroundColor: '#f0e6fa',
+    backgroundColor: FORM[t.scheme].stepperBtnBg,
     alignItems: 'center',
     justifyContent: 'center',
   },
   matrixStepperBtnText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#5b2a86',
+    color: t.color.primaryFg,
     lineHeight: 13,
   },
   matrixCountInput: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#948a9e',
+    color: FORM[t.scheme].mutedVioletText2,
     textAlign: 'center',
     minWidth: 16,
     paddingHorizontal: 1,
     paddingVertical: 0,
   },
   matrixCountInputActive: {
-    color: '#5b2a86',
+    color: t.color.primaryFg,
     fontWeight: '800',
   },
   matrixSubtotalText: {
     fontSize: 10,
     fontWeight: '600',
-    color: '#94a3b8',
+    color: FORM[t.scheme].slate400Text,
     textAlign: 'right',
     lineHeight: 13,
   },
   matrixSubtotalTextActive: {
-    color: '#5b2a86',
+    color: t.color.primaryFg,
     fontWeight: '800',
   },
   tierCountGrid: {
@@ -3497,56 +3538,56 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#fcfaff',
+    backgroundColor: FORM[t.scheme].rowActiveBg,
     borderWidth: 1,
-    borderColor: '#e8dcfa',
+    borderColor: FORM[t.scheme].violetHairline,
     borderRadius: 10,
     paddingHorizontal: 8,
     paddingVertical: 5,
   },
   tierCountPillCardActive: {
-    backgroundColor: '#f5effa',
-    borderColor: '#bca5db',
+    backgroundColor: FORM[t.scheme].tierPillActiveBg,
+    borderColor: FORM[t.scheme].tierPillActiveBorder,
   },
   tierCountPillName: {
     fontSize: 11.5,
     fontWeight: '700',
-    color: '#1f1235',
+    color: t.color.textPrimary,
     flexShrink: 1,
     marginRight: 4,
   },
   tierCountPillPrice: {
     fontSize: 10.5,
     fontWeight: '600',
-    color: '#6b6480',
+    color: t.color.textSecondary,
   },
   stepperPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#ffffff',
+    backgroundColor: t.color.surface,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#d8c7f2',
+    borderColor: FORM[t.scheme].violetBorder,
     padding: 1,
   },
   stepperBtn: {
     width: 22,
     height: 22,
     borderRadius: 11,
-    backgroundColor: '#f5f0fb',
+    backgroundColor: FORM[t.scheme].lavenderWell,
     alignItems: 'center',
     justifyContent: 'center',
   },
   stepperBtnText: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#5b2a86',
+    color: t.color.primaryFg,
     lineHeight: 15,
   },
   tierCountInput: {
     fontSize: 12,
     fontWeight: '800',
-    color: '#1f1235',
+    color: t.color.textPrimary,
     minWidth: 20,
     textAlign: 'center',
     paddingVertical: 0,
@@ -3556,7 +3597,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: '#faf7ff',
+    backgroundColor: FORM[t.scheme].lavenderPanel,
     padding: 8,
     borderRadius: 10,
     marginBottom: 12,
@@ -3564,15 +3605,15 @@ const styles = StyleSheet.create({
   itemizedScanBarText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#5b2a86',
+    color: t.color.primaryFg,
   },
   itemizedScanBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#ffffff',
+    backgroundColor: t.color.surface,
     borderWidth: 1,
-    borderColor: '#d8c7f2',
+    borderColor: FORM[t.scheme].violetBorder,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
@@ -3580,7 +3621,7 @@ const styles = StyleSheet.create({
   itemizedScanBtnText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#5b2a86',
+    color: t.color.primaryFg,
   },
   itemizedHeaderRow: {
     flexDirection: 'row',
@@ -3589,9 +3630,9 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   addItemHeaderBtn: {
-    backgroundColor: '#f1ecf7',
+    backgroundColor: FORM[t.scheme].lavenderWellAlt,
     borderWidth: 1,
-    borderColor: '#e2d9f0',
+    borderColor: t.color.border,
     paddingHorizontal: 10,
     paddingVertical: 3,
     borderRadius: 8,
@@ -3599,12 +3640,12 @@ const styles = StyleSheet.create({
   addItemHeaderBtnText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#5b2a86',
+    color: t.color.primaryFg,
   },
   itemCard: {
-    backgroundColor: '#ffffff',
+    backgroundColor: t.color.surface,
     borderWidth: 1,
-    borderColor: '#e8dcfa',
+    borderColor: FORM[t.scheme].violetHairline,
     borderRadius: 14,
     padding: 12,
     marginBottom: 10,
@@ -3623,16 +3664,16 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#ffffff',
+    backgroundColor: t.color.surface,
     borderWidth: 1.5,
-    borderColor: '#e2d9f0',
+    borderColor: t.color.border,
     borderRadius: 10,
     paddingHorizontal: 8,
   },
   itemPricePrefix: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#64748b',
+    color: FORM[t.scheme].slate500Text,
     marginRight: 2,
   },
   itemPriceInput: {
@@ -3650,15 +3691,16 @@ const styles = StyleSheet.create({
     marginTop: 8,
     paddingTop: 6,
     borderTopWidth: 1,
-    borderTopColor: '#f1f5f9',
+    borderTopColor: FORM[t.scheme].greyDivider,
   },
   alcoholIcon: {
     fontSize: 14,
+    ...t.textDefault,
   },
   alcoholLabel: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#475569',
+    color: FORM[t.scheme].slate600Text,
   },
   assigneesWrap: {
     marginTop: 8,
@@ -3672,18 +3714,18 @@ const styles = StyleSheet.create({
   assigneeTitle: {
     fontSize: 10.5,
     fontWeight: '700',
-    color: '#64748b',
+    color: FORM[t.scheme].slate500Text,
     textTransform: 'uppercase',
   },
   everyoneBtn: {
     paddingHorizontal: 6,
     paddingVertical: 2,
-    backgroundColor: '#f1ecf7',
+    backgroundColor: FORM[t.scheme].lavenderWellAlt,
     borderRadius: 6,
   },
   everyoneBtnText: {
     fontSize: 10.5,
-    color: '#5b2a86',
+    color: t.color.primaryFg,
     fontWeight: '700',
   },
   assigneeChips: {
@@ -3698,13 +3740,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 14,
-    backgroundColor: '#f1ecf7',
+    backgroundColor: FORM[t.scheme].lavenderWellAlt,
     borderWidth: 1,
-    borderColor: '#e2d9f0',
+    borderColor: t.color.border,
   },
   assigneeChipSelected: {
-    backgroundColor: '#5b2a86',
-    borderColor: '#5b2a86',
+    backgroundColor: t.color.primary,
+    borderColor: t.color.primary,
   },
   assigneeMiniAvatar: {
     width: 16,
@@ -3719,10 +3761,10 @@ const styles = StyleSheet.create({
   },
   assigneeChipText: {
     fontSize: 11,
-    color: '#475569',
+    color: FORM[t.scheme].slate600Text,
   },
   assigneeChipTextSelected: {
-    color: '#ffffff',
+    color: t.color.textOnPrimary,
     fontWeight: '700',
   },
   chargeRow: {
@@ -3734,7 +3776,7 @@ const styles = StyleSheet.create({
   chargeKind: {
     fontSize: 11.5,
     fontWeight: '700',
-    color: '#334155',
+    color: FORM[t.scheme].slate700Text,
     width: 70,
   },
   chargeInput: {
@@ -3748,7 +3790,7 @@ const styles = StyleSheet.create({
   },
   excludeText: {
     fontSize: 10,
-    color: '#64748b',
+    color: FORM[t.scheme].slate500Text,
   },
   chargeButtonsRow: {
     flexDirection: 'row',
@@ -3759,14 +3801,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 8,
-    backgroundColor: '#f8fafc',
+    backgroundColor: FORM[t.scheme].neutralWell,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: FORM[t.scheme].greyHairline,
   },
   addChargeBtnText: {
     fontSize: 11.5,
     fontWeight: '700',
-    color: '#334155',
+    color: FORM[t.scheme].slate700Text,
   },
   guestLinkRow: {
     flexDirection: 'row',
@@ -3778,13 +3820,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: '#faf7ff',
+    backgroundColor: FORM[t.scheme].lavenderPanel,
     borderWidth: 1,
-    borderColor: '#e8dcfa',
+    borderColor: FORM[t.scheme].violetHairline,
   },
   guestLinkText: {
     fontSize: 13,
-    color: '#5b2a86',
+    color: t.color.primaryFg,
     fontWeight: '700',
   },
   footerRow: {
@@ -3794,9 +3836,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 12,
     paddingBottom: 28,
-    backgroundColor: '#ffffff',
+    backgroundColor: t.color.surface,
     borderTopWidth: 1,
-    borderTopColor: '#f1ecf7',
+    borderTopColor: FORM[t.scheme].footerDivider,
   },
   footerCancelBtn: {
     flex: 1,
@@ -3808,9 +3850,9 @@ const styles = StyleSheet.create({
     padding: 6,
   },
   taxTipHelperCard: {
-    backgroundColor: '#ffffff',
+    backgroundColor: t.color.surface,
     borderWidth: 1,
-    borderColor: '#e8dcfa',
+    borderColor: FORM[t.scheme].violetHairline,
     borderRadius: 14,
     marginVertical: 10,
     overflow: 'hidden',
@@ -3821,26 +3863,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 10,
     paddingHorizontal: 12,
-    backgroundColor: '#faf7ff',
+    backgroundColor: FORM[t.scheme].lavenderPanel,
   },
   taxTipHelperTitle: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#5b2a86',
+    color: t.color.primaryFg,
   },
   taxTipHelperBody: {
     padding: 12,
   },
   taxTipHelperSub: {
     fontSize: 11,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     marginBottom: 10,
     lineHeight: 15,
   },
   helperMiniLabel: {
     fontSize: 9.5,
     fontWeight: '800',
-    color: '#64748b',
+    color: FORM[t.scheme].slate500Text,
     letterSpacing: 0.5,
     marginBottom: 4,
   },
@@ -3854,22 +3896,22 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 8,
     borderRadius: 8,
-    backgroundColor: '#f1f5f9',
+    backgroundColor: FORM[t.scheme].greyWell,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: 'transparent',
   },
   helperSegmentBtnActive: {
-    backgroundColor: '#f1ecf7',
-    borderColor: '#5b2a86',
+    backgroundColor: FORM[t.scheme].lavenderWellAlt,
+    borderColor: t.color.primaryFg,
   },
   helperSegmentText: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#64748b',
+    color: FORM[t.scheme].slate500Text,
   },
   helperSegmentTextActive: {
-    color: '#5b2a86',
+    color: t.color.primaryFg,
     fontWeight: '700',
   },
   helperInputRow: {
@@ -3882,21 +3924,21 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     paddingHorizontal: 8,
     borderRadius: 6,
-    backgroundColor: '#f1f5f9',
+    backgroundColor: FORM[t.scheme].greyWell,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: FORM[t.scheme].greyHairline,
   },
   miniPresetChipActive: {
-    backgroundColor: '#f1ecf7',
-    borderColor: '#5b2a86',
+    backgroundColor: FORM[t.scheme].lavenderWellAlt,
+    borderColor: t.color.primaryFg,
   },
   miniPresetText: {
     fontSize: 10,
-    color: '#64748b',
+    color: FORM[t.scheme].slate500Text,
     fontWeight: '600',
   },
   miniPresetTextActive: {
-    color: '#5b2a86',
+    color: t.color.primaryFg,
     fontWeight: '700',
   },
   helperPreviewRow: {
@@ -3906,15 +3948,15 @@ const styles = StyleSheet.create({
     marginTop: 10,
     paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: '#f1f5f9',
+    borderTopColor: FORM[t.scheme].greyDivider,
   },
   helperPreviewText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#059669',
+    color: FORM[t.scheme].greenText,
   },
   helperApplyBtn: {
-    backgroundColor: '#5b2a86',
+    backgroundColor: t.color.primary,
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 8,
@@ -3922,13 +3964,13 @@ const styles = StyleSheet.create({
   helperApplyBtnText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#ffffff',
+    color: t.color.textOnPrimary,
   },
   helperSuccessNotice: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#059669',
+    color: FORM[t.scheme].greenText,
     marginTop: 6,
     textAlign: 'right',
   },
-});
+}));

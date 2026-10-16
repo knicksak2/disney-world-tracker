@@ -14,6 +14,9 @@ import type { FavoritesResponseDTO } from '@dwt/shared';
 import { apiRequest } from '../../../api/client';
 import FavoriteToggle from '../FavoriteToggle';
 import { FAVORITES_QUERY_KEY } from '../useFavoritedExperiences';
+import { HEART } from '../FavoriteToggle.palette';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
+import { darkTheme } from '../../../theme/theme';
 
 jest.mock('../../../api/client', () => ({
   apiRequest: jest.fn(),
@@ -289,6 +292,38 @@ describe('FavoriteToggle (Requirements 2.2, 2.3, 2.4, 3.3)', () => {
 
       const button = getByTestId(`favorite-toggle-${expId}`);
       expect(button.props.accessibilityLabel).toBe('Custom favorite button');
+    });
+  });
+
+  // Feature: dark-mode — (c) converted heart literal + token (B2)
+  describe('dark mode', () => {
+    afterEach(resetTestScheme);
+
+    it('(c) the filled heart uses the red-family dark value and the outline uses textSecondary', () => {
+      setTestScheme('dark');
+      const { getByTestId } = renderFavoriteToggle(
+        { experienceId: 'exp-dark-on', favorited: true },
+        ['exp-dark-on'],
+      );
+      expect(getIconProps(getByTestId('favorite-toggle-exp-dark-on')).color).toBe(
+        HEART.dark.favorited,
+      );
+
+      const { getByTestId: getOff } = renderFavoriteToggle({
+        experienceId: 'exp-dark-off',
+        favorited: false,
+      });
+      expect(getIconProps(getOff('favorite-toggle-exp-dark-off')).color).toBe(
+        darkTheme.color.textSecondary,
+      );
+    });
+
+    it('keeps the pre-retrofit light heart colour under light', () => {
+      const { getByTestId } = renderFavoriteToggle(
+        { experienceId: 'exp-light-on', favorited: true },
+        ['exp-light-on'],
+      );
+      expect(getIconProps(getByTestId('favorite-toggle-exp-light-on')).color).toBe('#FF2D55');
     });
   });
 });

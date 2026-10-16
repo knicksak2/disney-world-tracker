@@ -11,7 +11,6 @@ import {
   Platform,
   Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   TextInput,
   View,
@@ -20,17 +19,19 @@ import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { SettlementDTO, TripMemberDTO } from '@dwt/shared';
 
-import { theme } from '../../theme/theme';
 import {
   PrimaryButton,
   SecondaryButton,
   SectionLabel,
 } from '../../theme/components';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme } from '../../theme/useAppTheme';
 import {
   createSettlement,
   editSettlement,
   tripExpenseKeys,
 } from './tripExpenseApi';
+import { SETTLEMENT } from './SettlementModal.palette';
 
 interface Props {
   readonly visible: boolean;
@@ -53,6 +54,8 @@ export function SettlementModal({
   prefillAmountCents,
   onClose,
 }: Props): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const queryClient = useQueryClient();
   const isEditing = Boolean(initialSettlement);
 
@@ -139,7 +142,7 @@ export function SettlementModal({
               testID="close-settlement-modal"
               hitSlop={12}
             >
-              <Ionicons name="close" size={24} color={theme.color.textPrimary} />
+              <Ionicons name="close" size={24} color={t.color.textPrimary} />
             </Pressable>
           </View>
 
@@ -155,7 +158,7 @@ export function SettlementModal({
 
           {/* Who Paid */}
           <SectionLabel>WHO PAID (PAYER)?</SectionLabel>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll} keyboardShouldPersistTaps="handled">
             {members.map((m) => {
               const isSelected = m.userId === payerId;
               return (
@@ -175,7 +178,7 @@ export function SettlementModal({
 
           {/* Who Received */}
           <SectionLabel>WHO RECEIVED (RECIPIENT)?</SectionLabel>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll} keyboardShouldPersistTaps="handled">
             {members.map((m) => {
               const isSelected = m.userId === recipientId;
               return (
@@ -197,7 +200,8 @@ export function SettlementModal({
           <TextInput
             style={styles.input}
             placeholder="0.00"
-            placeholderTextColor={theme.color.textSecondary}
+            placeholderTextColor={t.color.textSecondary}
+            keyboardAppearance={t.scheme}
             keyboardType="decimal-pad"
             value={amountDollars}
             onChangeText={setAmountDollars}
@@ -208,7 +212,8 @@ export function SettlementModal({
           <TextInput
             style={styles.input}
             placeholder="2026-10-04"
-            placeholderTextColor={theme.color.textSecondary}
+            placeholderTextColor={t.color.textSecondary}
+            keyboardAppearance={t.scheme}
             value={date}
             onChangeText={setDate}
             testID="settlement-date-input"
@@ -229,14 +234,14 @@ export function SettlementModal({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: theme.color.surface,
+    backgroundColor: t.color.surface,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 20,
@@ -250,21 +255,21 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   subtitle: {
     fontSize: 13,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     marginBottom: 16,
   },
   errorBox: {
-    backgroundColor: 'rgba(232, 80, 91, 0.15)',
+    backgroundColor: SETTLEMENT[t.scheme].errorBg,
     padding: 10,
     borderRadius: 8,
     marginBottom: 12,
   },
   errorText: {
-    color: theme.color.danger,
+    color: t.color.danger,
     fontSize: 13,
   },
   chipScroll: {
@@ -275,32 +280,32 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 16,
-    backgroundColor: theme.color.surface,
+    backgroundColor: t.color.surface,
     marginRight: 8,
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
   },
   memberChipSelected: {
-    backgroundColor: theme.color.primary,
-    borderColor: theme.color.primary,
+    backgroundColor: t.color.primary,
+    borderColor: t.color.primary,
   },
   memberChipText: {
     fontSize: 13,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   memberChipTextSelected: {
-    color: '#ffffff',
+    color: t.color.textOnPrimary,
     fontWeight: '600',
   },
   input: {
-    backgroundColor: theme.color.surface,
+    backgroundColor: t.color.surface,
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 15,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
     marginBottom: 12,
   },
   footerRow: {
@@ -309,4 +314,4 @@ const styles = StyleSheet.create({
     gap: 10,
     marginTop: 12,
   },
-});
+}));

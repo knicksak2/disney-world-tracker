@@ -7,7 +7,6 @@ import {
   Platform,
   Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   TextInput,
   View,
@@ -39,7 +38,6 @@ import {
 
 import { ApiError, apiRequest } from '../../api/client';
 import type { TripsStackParamList } from '../../navigation/TripsStack';
-import { theme } from '../../theme/theme';
 import {
   Badge,
   Card,
@@ -49,6 +47,9 @@ import {
   SecondaryButton,
   ScreenContainer,
 } from '../../theme/components';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme, usePalette } from '../../theme/useAppTheme';
+import { SCHEDULE } from './TripScheduleScreen.palette';
 import { tripPlannedListKeys } from './TripPlannedListScreen';
 import { tripDetailKeys } from './TripDetailScreen';
 import { ExperiencePicker } from './ExperiencePicker';
@@ -428,6 +429,9 @@ export function getParkHoursDetails(parkName: string): ParkHoursDetails {
 }
 
 export default function TripScheduleScreen({ navigation, route }: Props): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
+  const pal = usePalette(SCHEDULE);
   const { tripId } = route.params;
   const queryClient = useQueryClient();
 
@@ -1144,14 +1148,14 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
             onPress={() => setShowSettingsModal(true)}
             style={styles.headerSettingsBtn}
           >
-            <Ionicons name="settings-outline" size={22} color="#FFFFFF" />
+            <Ionicons name="settings-outline" size={22} color={t.color.textOnPrimary} />
           </Pressable>
         }
       />
 
       {(tripQuery.isLoading || itemsQuery.isLoading) ? (
         <View style={styles.center}>
-          <ActivityIndicator color={theme.color.primary} />
+          <ActivityIndicator color={t.color.primaryFg} />
         </View>
       ) : (tripQuery.isError || itemsQuery.isError) ? (
         <View style={styles.center}>
@@ -1227,7 +1231,7 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
             {/* Park Operating Hours Horizontal Scroll Row */}
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.parkHoursRowScroll}>
               {(activeDayParks.length > 0 ? activeDayParks : ['Animal Kingdom', 'Epcot']).map((parkName, pIdx) => {
-                const accentColors = ['#22c55e', '#0284c7', '#a855f7', '#f97316'];
+                const accentColors = [pal.parkStripeGreen, pal.parkStripeSky, pal.parkStripeViolet, pal.parkStripeOrange];
                 const accentColor = accentColors[pIdx % accentColors.length]!;
                 const parkDetails = getParkHoursDetails(parkName);
                 const showEarlyEntry = (currentUseEarlyEntry || (tripQuery.data?.earlyEntryEligible ?? false)) && parkDetails.hasEarlyEntry;
@@ -1279,7 +1283,7 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
                       ? `⏰ Touring: ${formatMinutesToTime(currentStartMinutes)}`
                       : `🏰 Touring: Park Open (${formatMinutesToTime(parkOpenMinutes)})`}
                   </Text>
-                  <Ionicons name="chevron-down" size={14} color="#6d28d9" style={{ marginLeft: 4 }} />
+                  <Ionicons name="chevron-down" size={14} color={pal.touringChevron} style={{ marginLeft: 4 }} />
                 </Pressable>
               </View>
             )}
@@ -1346,7 +1350,7 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
                             {isParkHop ? (
                               <View style={styles.parkHopRow}>
                                 <View style={styles.busNodeCircle}>
-                                  <Ionicons name="bus" size={18} color="#ffffff" />
+                                  <Ionicons name="bus" size={18} color={t.color.textOnPrimary} />
                                 </View>
                                 <View style={styles.dashedParkHopBox}>
                                   <Text style={styles.dashedParkHopText}>
@@ -1366,7 +1370,7 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
                               </View>
                             ) : (
                               <View style={styles.walkTextRow}>
-                                <Ionicons name="walk-outline" size={16} color="#334155" />
+                                <Ionicons name="walk-outline" size={16} color={pal.slate700Text} />
                                 <Text style={styles.inlineWalkText}>
                                   <Text style={styles.boldMins}>+{travelMins}m </Text>
                                   walk{expInfo?.land ? ` to ${expInfo.land}` : ''}
@@ -1410,7 +1414,7 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
                                 <Ionicons
                                   name={item.itemType === 'break' ? 'restaurant-outline' : 'compass-outline'}
                                   size={28}
-                                  color="#475569"
+                                  color={pal.slate600Text}
                                 />
                               </View>
                             )}
@@ -1419,7 +1423,7 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
                               <Text style={styles.mockupCardTitle}>{item.customTitle || item.experienceName || 'Planned Item'}</Text>
                               {item.customTitle && (item.experienceName || expInfo?.name) ? (
                                 <View style={styles.mockupCardLocationRow} testID={`item-location-${item.id}`}>
-                                  <Ionicons name="location-sharp" size={12} color="#64748b" />
+                                  <Ionicons name="location-sharp" size={12} color={pal.slate500Text} />
                                   <Text style={styles.mockupCardLocationText} numberOfLines={1}>
                                     {item.experienceName || expInfo?.name}{expInfo?.land ? ` • ${expInfo.land}` : ''}
                                   </Text>
@@ -1545,14 +1549,14 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
                     ) : null}
                     <View style={styles.itemProps}>
                       {item.reservationKind != null && (
-                        <Badge label={reservationBadgeLabel(item.reservationKind)} color={theme.color.accentDark} />
+                        <Badge label={reservationBadgeLabel(item.reservationKind)} color={t.color.accentDark} />
                       )}
-                      {item.isFixed && item.reservationKind == null && <Badge label="Fixed" color={theme.color.primary} />}
-                      {item.isLightningLane && <Badge label="⚡ LL" color={theme.color.accent} />}
-                      {item.useSingleRider && <Badge label="👤 Single Rider" color={theme.color.primaryLight} />}
-                      {item.itemType === 'break' && item.reservationKind == null && <Badge label={`☕ Break (${item.durationMinutes || 45}m)`} color={theme.color.success} />}
-                      {item.mealPeriod && <Badge label={`🍽️ ${item.mealPeriod}`} color="#f97316" />}
-                      <Badge label={`Priority: ${item.priority ?? 2}`} color={theme.color.textSecondary} />
+                      {item.isFixed && item.reservationKind == null && <Badge label="Fixed" color={t.color.primaryFg} />}
+                      {item.isLightningLane && <Badge label="⚡ LL" color={t.color.accent} />}
+                      {item.useSingleRider && <Badge label="👤 Single Rider" color={t.color.primaryLight} />}
+                      {item.itemType === 'break' && item.reservationKind == null && <Badge label={`☕ Break (${item.durationMinutes || 45}m)`} color={t.color.success} />}
+                      {item.mealPeriod && <Badge label={`🍽️ ${item.mealPeriod}`} color={pal.mealBadge} />}
+                      <Badge label={`Priority: ${item.priority ?? 2}`} color={t.color.textSecondary} />
                     </View>
                     <View style={styles.itemActions}>
                       <SecondaryButton
@@ -1588,14 +1592,14 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
                     ) : null}
                     <View style={styles.itemProps}>
                       {item.reservationKind != null && (
-                        <Badge label={reservationBadgeLabel(item.reservationKind)} color={theme.color.accentDark} />
+                        <Badge label={reservationBadgeLabel(item.reservationKind)} color={t.color.accentDark} />
                       )}
-                      {item.isFixed && item.reservationKind == null && <Badge label="Fixed" color={theme.color.primary} />}
-                      {item.isLightningLane && <Badge label="⚡ LL" color={theme.color.accent} />}
-                      {item.useSingleRider && <Badge label="👤 Single Rider" color={theme.color.primaryLight} />}
-                      {item.itemType === 'break' && item.reservationKind == null && <Badge label={`☕ Break (${item.durationMinutes || 45}m)`} color={theme.color.success} />}
-                      {item.mealPeriod && <Badge label={`🍽️ ${item.mealPeriod}`} color="#f97316" />}
-                      <Badge label={`Priority: ${item.priority ?? 2}`} color={theme.color.textSecondary} />
+                      {item.isFixed && item.reservationKind == null && <Badge label="Fixed" color={t.color.primaryFg} />}
+                      {item.isLightningLane && <Badge label="⚡ LL" color={t.color.accent} />}
+                      {item.useSingleRider && <Badge label="👤 Single Rider" color={t.color.primaryLight} />}
+                      {item.itemType === 'break' && item.reservationKind == null && <Badge label={`☕ Break (${item.durationMinutes || 45}m)`} color={t.color.success} />}
+                      {item.mealPeriod && <Badge label={`🍽️ ${item.mealPeriod}`} color={pal.mealBadge} />}
+                      <Badge label={`Priority: ${item.priority ?? 2}`} color={t.color.textSecondary} />
                     </View>
                     <View style={styles.itemActions}>
                       <SecondaryButton
@@ -1623,14 +1627,14 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
                   ) : null}
                   <View style={styles.itemProps}>
                     {item.reservationKind != null && (
-                      <Badge label={reservationBadgeLabel(item.reservationKind)} color={theme.color.accentDark} />
+                      <Badge label={reservationBadgeLabel(item.reservationKind)} color={t.color.accentDark} />
                     )}
-                    {item.isFixed && item.reservationKind == null && <Badge label="Fixed" color={theme.color.primary} />}
-                    {item.isLightningLane && <Badge label="⚡ LL" color={theme.color.accent} />}
-                    {item.useSingleRider && <Badge label="👤 Single Rider" color={theme.color.primaryLight} />}
-                    {item.itemType === 'break' && item.reservationKind == null && <Badge label={`☕ Break (${item.durationMinutes || 45}m)`} color={theme.color.success} />}
-                    {item.mealPeriod && <Badge label={`🍽️ ${item.mealPeriod}`} color="#f97316" />}
-                    <Badge label={`Priority: ${item.priority ?? 2}`} color={theme.color.textSecondary} />
+                    {item.isFixed && item.reservationKind == null && <Badge label="Fixed" color={t.color.primaryFg} />}
+                    {item.isLightningLane && <Badge label="⚡ LL" color={t.color.accent} />}
+                    {item.useSingleRider && <Badge label="👤 Single Rider" color={t.color.primaryLight} />}
+                    {item.itemType === 'break' && item.reservationKind == null && <Badge label={`☕ Break (${item.durationMinutes || 45}m)`} color={t.color.success} />}
+                    {item.mealPeriod && <Badge label={`🍽️ ${item.mealPeriod}`} color={pal.mealBadge} />}
+                    <Badge label={`Priority: ${item.priority ?? 2}`} color={t.color.textSecondary} />
                   </View>
                   <View style={styles.itemActions}>
                     <SecondaryButton
@@ -1706,7 +1710,7 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
             >
               <View style={styles.modalContent}>
                 {draftItem && (
-                  <ScrollView>
+                  <ScrollView keyboardShouldPersistTaps="handled">
                     <Text style={styles.modalTitle}>
                       {draftItem.customTitle || draftItem.experienceName || 'Item Settings'}
                     </Text>
@@ -1719,12 +1723,13 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
                           value={draftCustomTitle}
                           onChangeText={setDraftCustomTitle}
                           placeholder="e.g. Midday Hotel Nap, Pool Time"
-                          placeholderTextColor={theme.color.textSecondary}
+                          placeholderTextColor={t.color.textSecondary}
+                          keyboardAppearance={t.scheme}
                           testID="item-custom-title-input"
                         />
                         {(draftItem.experienceName || editingExpInfo?.name) && (
                           <View style={styles.modalLocationBox} testID="item-modal-location">
-                            <Ionicons name="location-sharp" size={14} color={theme.color.textSecondary} />
+                            <Ionicons name="location-sharp" size={14} color={t.color.textSecondary} />
                             <Text style={styles.modalLocationText} numberOfLines={1}>
                               {draftItem.experienceName || editingExpInfo?.name}
                             </Text>
@@ -1845,7 +1850,7 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
                         <Ionicons
                           name="sparkles"
                           size={16}
-                          color={timingMode === 'any_time' ? theme.color.primary : theme.color.textSecondary}
+                          color={timingMode === 'any_time' ? t.color.primaryFg : t.color.textSecondary}
                         />
                         <Text style={[styles.timingModeText, timingMode === 'any_time' && styles.timingModeTextActive]}>
                           Any Time
@@ -1859,7 +1864,7 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
                         <Ionicons
                           name="time"
                           size={16}
-                          color={timingMode === 'soft_window' ? theme.color.primary : theme.color.textSecondary}
+                          color={timingMode === 'soft_window' ? t.color.primaryFg : t.color.textSecondary}
                         />
                         <Text style={[styles.timingModeText, timingMode === 'soft_window' && styles.timingModeTextActive]}>
                           Time Window
@@ -1885,9 +1890,9 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
                           color={
                             timingMode === 'exact_time'
                               ? draftItem?.isLightningLane
-                                ? theme.color.accent
-                                : theme.color.primary
-                              : theme.color.textSecondary
+                                ? t.color.accent
+                                : t.color.primaryFg
+                              : t.color.textSecondary
                           }
                         />
                         <Text style={[styles.timingModeText, timingMode === 'exact_time' && styles.timingModeTextActive]}>
@@ -2188,7 +2193,7 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
                               <Ionicons
                                 name="lock-closed"
                                 size={14}
-                                color={!draftItem.isLightningLane ? theme.color.primary : theme.color.textSecondary}
+                                color={!draftItem.isLightningLane ? t.color.primaryFg : t.color.textSecondary}
                               />
                               <Text style={[styles.exactModeBtnText, !draftItem.isLightningLane && styles.exactModeBtnTextActive]}>
                                 🔒 Fixed Time / Lock
@@ -2212,7 +2217,7 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
                               <Ionicons
                                 name="flash"
                                 size={14}
-                                color={draftItem.isLightningLane ? theme.color.accent : theme.color.textSecondary}
+                                color={draftItem.isLightningLane ? t.color.accent : t.color.textSecondary}
                               />
                               <Text style={[styles.exactModeBtnText, draftItem.isLightningLane && styles.exactModeBtnTextActive]}>
                                 ⚡ Lightning Lane (1h Window)
@@ -2269,7 +2274,8 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
                           <TextInput
                             style={styles.timeInput}
                             placeholder="Custom time (e.g. 10:30 AM)"
-                            placeholderTextColor={theme.color.textSecondary}
+                            placeholderTextColor={t.color.textSecondary}
+                            keyboardAppearance={t.scheme}
                             value={passTimeText}
                             onChangeText={(txt: string) => {
                               setPassTimeText(txt);
@@ -2284,7 +2290,7 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
                                 setTimeError(null);
                               }}
                             >
-                              <Ionicons name="close-circle" size={20} color={theme.color.textSecondary} />
+                              <Ionicons name="close-circle" size={20} color={t.color.textSecondary} />
                             </Pressable>
                           )}
                         </View>
@@ -2418,11 +2424,11 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
                     onPress={() => setShowSettingsModal(false)}
                     hitSlop={8}
                   >
-                    <Ionicons name="close" size={24} color={theme.color.textSecondary} />
+                    <Ionicons name="close" size={24} color={t.color.textSecondary} />
                   </Pressable>
                 </View>
 
-                <ScrollView contentContainerStyle={{ gap: theme.spacing.md, paddingVertical: theme.spacing.sm }}>
+                <ScrollView contentContainerStyle={{ gap: t.spacing.md, paddingVertical: t.spacing.sm }} keyboardShouldPersistTaps="handled">
                   <Text style={styles.label}>Walking Pace</Text>
                   <View style={styles.chipRow}>
                     {[
@@ -2498,7 +2504,7 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
                     </Pressable>
                   </View>
 
-                  <Text style={[styles.label, { marginTop: theme.spacing.xs }]}>Starting Park</Text>
+                  <Text style={[styles.label, { marginTop: t.spacing.xs }]}>Starting Park</Text>
                   <View style={styles.chipRow}>
                     {[
                       { label: 'Auto-detect', val: undefined },
@@ -2631,8 +2637,8 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
                         </View>
 
                         {currentStartMode === 'custom' && (
-                          <View style={{ marginTop: theme.spacing.xs }} testID="custom-start-time-picker-container">
-                            <Text style={[styles.label, { fontSize: theme.typography.meta.fontSize, color: theme.color.textSecondary }]}>
+                          <View style={{ marginTop: t.spacing.xs }} testID="custom-start-time-picker-container">
+                            <Text style={[styles.label, { fontSize: t.typography.meta.fontSize, color: t.color.textSecondary }]}>
                               Selected Arrival: {formatMinutesToTime(currentStartMinutes)}
                             </Text>
                             <TimeWheelPicker
@@ -2652,14 +2658,14 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
                               testIDPrefix="custom-start-time"
                             />
                             {isToday && (
-                              <Text style={{ fontSize: 12, color: theme.color.textSecondary, marginTop: 4 }}>
+                              <Text style={{ fontSize: 12, color: t.color.textSecondary, marginTop: 4 }}>
                                 Earliest arrival today is Right Now ({formatMinutesToTime(roundedNowMinutes)}). Past times are clamped.
                               </Text>
                             )}
                           </View>
                         )}
 
-                        <Text style={[styles.label, { marginTop: theme.spacing.xs }]}>Quick Presets</Text>
+                        <Text style={[styles.label, { marginTop: t.spacing.xs }]}>Quick Presets</Text>
                         <View style={styles.chipRow}>
                           <Pressable
                             testID="preset-park-open-close"
@@ -2746,7 +2752,7 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
                           </Pressable>
                         </View>
 
-                        <Text style={[styles.label, { marginTop: theme.spacing.xs }]}>Day End Time</Text>
+                        <Text style={[styles.label, { marginTop: t.spacing.xs }]}>Day End Time</Text>
                         <View style={styles.chipRow}>
                           {[
                             { label: '1:00 PM', val: 13 },
@@ -2776,7 +2782,7 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
                   })()}
                 </ScrollView>
 
-                <View style={[styles.modalFooter, { marginTop: theme.spacing.md }]}>
+                <View style={[styles.modalFooter, { marginTop: t.spacing.md }]}>
                   <PrimaryButton
                     testID="save-schedule-settings-btn"
                     label="Done"
@@ -2794,87 +2800,87 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   center: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: theme.spacing.xl,
+    padding: t.spacing.xl,
   },
   content: {
-    padding: theme.spacing.lg,
-    paddingBottom: theme.spacing.xl * 2,
+    padding: t.spacing.lg,
+    paddingBottom: t.spacing.xl * 2,
   },
   dateSelectorContainer: {
-    backgroundColor: theme.color.surface,
+    backgroundColor: t.color.surface,
     borderBottomWidth: 1,
-    borderBottomColor: theme.color.border,
-    paddingVertical: theme.spacing.sm,
+    borderBottomColor: t.color.border,
+    paddingVertical: t.spacing.sm,
   },
   dateSelector: {
-    paddingHorizontal: theme.spacing.md,
-    gap: theme.spacing.xs,
+    paddingHorizontal: t.spacing.md,
+    gap: t.spacing.xs,
   },
   datePill: {
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.xs,
-    borderRadius: theme.radius.lg,
-    backgroundColor: theme.color.surfaceAlt,
+    paddingHorizontal: t.spacing.md,
+    paddingVertical: t.spacing.xs,
+    borderRadius: t.radius.lg,
+    backgroundColor: t.color.surfaceAlt,
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
   },
   datePillActive: {
-    backgroundColor: theme.color.primary,
-    borderColor: theme.color.primary,
+    backgroundColor: t.color.primary,
+    borderColor: t.color.primary,
   },
   datePillText: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
     fontWeight: '600',
   },
   datePillTextActive: {
-    color: theme.color.textOnPrimary,
+    color: t.color.textOnPrimary,
   },
   actionBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.md,
-    backgroundColor: theme.color.surface,
-    gap: theme.spacing.sm,
+    paddingHorizontal: t.spacing.lg,
+    paddingVertical: t.spacing.md,
+    backgroundColor: t.color.surface,
+    gap: t.spacing.sm,
   },
   touringStartBadgeContainer: {
-    paddingHorizontal: theme.spacing.lg,
-    paddingTop: theme.spacing.sm,
-    paddingBottom: theme.spacing.xs,
+    paddingHorizontal: t.spacing.lg,
+    paddingTop: t.spacing.sm,
+    paddingBottom: t.spacing.xs,
   },
   touringStartBadge: {
     alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: theme.color.surface,
-    borderColor: theme.color.primary,
+    backgroundColor: t.color.surface,
+    borderColor: t.color.primaryFg,
     borderWidth: 1,
-    borderRadius: theme.radius.pill,
-    paddingHorizontal: theme.spacing.md,
+    borderRadius: t.radius.pill,
+    paddingHorizontal: t.spacing.md,
     paddingVertical: 4,
   },
   touringStartBadgeText: {
-    fontSize: theme.typography.meta.fontSize,
+    fontSize: t.typography.meta.fontSize,
     fontWeight: '600',
-    color: theme.color.primary,
+    color: t.color.primaryFg,
   },
   parkHoursRow: {
-    gap: theme.spacing.xs,
-    marginBottom: theme.spacing.md,
+    gap: t.spacing.xs,
+    marginBottom: t.spacing.md,
   },
   parkHoursCard: {
-    backgroundColor: theme.color.surface,
-    borderRadius: theme.radius.md,
-    padding: theme.spacing.md,
+    backgroundColor: t.color.surface,
+    borderRadius: t.radius.md,
+    padding: t.spacing.md,
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
   },
   parkHoursHeader: {
     flexDirection: 'row',
@@ -2882,52 +2888,53 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   parkHoursTitle: {
-    ...theme.typography.subtitle,
-    color: theme.color.textPrimary,
+    ...t.typography.subtitle,
+    color: t.color.textPrimary,
     fontWeight: '700',
   },
   parkHoursTime: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
   },
   parkTagRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: theme.spacing.xs,
-    marginTop: theme.spacing.xs,
+    gap: t.spacing.xs,
+    marginTop: t.spacing.xs,
   },
   sectionTitle: {
-    ...theme.typography.title,
-    color: theme.color.textPrimary,
-    marginVertical: theme.spacing.md,
+    ...t.typography.title,
+    color: t.color.textPrimary,
+    marginVertical: t.spacing.md,
   },
   lastOptimizedHint: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
-    marginBottom: theme.spacing.sm,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
+    marginBottom: t.spacing.sm,
     fontWeight: '400',
   },
   notOptimizedNotice: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
-    marginBottom: theme.spacing.sm,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
+    marginBottom: t.spacing.sm,
     fontWeight: '400',
   },
   resultContainer: {
-    backgroundColor: theme.color.surface,
-    borderRadius: theme.radius.lg,
-    padding: theme.spacing.md,
-    marginBottom: theme.spacing.lg,
+    backgroundColor: t.color.surface,
+    borderRadius: t.radius.lg,
+    padding: t.spacing.md,
+    marginBottom: t.spacing.lg,
+    ...t.outline.card,
   },
   timelineRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: theme.spacing.xs,
-    gap: theme.spacing.sm,
+    marginVertical: t.spacing.xs,
+    gap: t.spacing.sm,
     zIndex: 2,
   },
   speechBubble: {
-    backgroundColor: '#6b21a8',
+    backgroundColor: SCHEDULE[t.scheme].nodeFill,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 14,
@@ -2940,76 +2947,77 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
   },
   speechBubbleText: {
-    ...theme.typography.meta,
-    color: theme.color.textOnPrimary,
+    ...t.typography.meta,
+    color: t.color.textOnPrimary,
     fontWeight: '700',
   },
   timelineCard: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: theme.color.surfaceAlt,
-    borderRadius: theme.radius.md,
-    padding: theme.spacing.sm,
+    backgroundColor: t.color.surfaceAlt,
+    borderRadius: t.radius.md,
+    padding: t.spacing.sm,
     borderWidth: 1,
-    borderColor: theme.color.border,
-    gap: theme.spacing.md,
+    borderColor: t.color.border,
+    gap: t.spacing.md,
   },
   squareThumbnail: {
     width: 56,
     height: 56,
-    borderRadius: theme.radius.sm,
-    backgroundColor: theme.color.surface,
+    borderRadius: t.radius.sm,
+    backgroundColor: t.color.surface,
   },
   thumbnailFallback: {
     width: 56,
     height: 56,
-    borderRadius: theme.radius.sm,
-    backgroundColor: theme.color.surface,
+    borderRadius: t.radius.sm,
+    backgroundColor: t.color.surface,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
   },
   timelineContent: {
     flex: 1,
   },
   timelineName: {
-    ...theme.typography.subtitle,
-    color: theme.color.textPrimary,
+    ...t.typography.subtitle,
+    color: t.color.textPrimary,
     fontWeight: '600',
   },
   timelineSub: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
     fontSize: 11,
     marginTop: 2,
   },
   timelineWait: {
-    ...theme.typography.meta,
-    color: theme.color.primary,
+    ...t.typography.meta,
+    color: t.color.primaryFg,
     fontWeight: '600',
     marginTop: 2,
   },
   chipRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: theme.spacing.xs,
-    marginTop: theme.spacing.xs,
+    gap: t.spacing.xs,
+    marginTop: t.spacing.xs,
   },
   parkHoursRowScroll: {
     gap: 12,
-    paddingVertical: theme.spacing.xs,
-    paddingHorizontal: theme.spacing.xs,
-    marginBottom: theme.spacing.md,
+    paddingVertical: t.spacing.xs,
+    paddingHorizontal: t.spacing.xs,
+    marginBottom: t.spacing.md,
   },
   parkHoursCardHorizontal: {
     width: 190,
-    backgroundColor: '#ffffff',
+    backgroundColor: t.color.surface,
+    ...t.outline.card,
     borderRadius: 16,
     padding: 12,
     borderLeftWidth: 5,
-    borderLeftColor: '#22c55e',
+    borderLeftColor: SCHEDULE[t.scheme].parkStripeGreen,
     elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
@@ -3019,11 +3027,11 @@ const styles = StyleSheet.create({
   parkHoursTitleHoriz: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#0f172a',
+    color: SCHEDULE[t.scheme].inkText,
   },
   parkHoursTimeHoriz: {
     fontSize: 12,
-    color: '#475569',
+    color: SCHEDULE[t.scheme].slate600Text,
     marginTop: 2,
     marginBottom: 6,
   },
@@ -3033,7 +3041,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   earlyEntryBadge: {
-    backgroundColor: '#fef08a',
+    backgroundColor: SCHEDULE[t.scheme].earlyEntryBg,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 10,
@@ -3041,10 +3049,10 @@ const styles = StyleSheet.create({
   earlyEntryBadgeText: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#854d0e',
+    color: SCHEDULE[t.scheme].earlyEntryText,
   },
   extendedHoursBadge: {
-    backgroundColor: '#e9d5ff',
+    backgroundColor: SCHEDULE[t.scheme].extendedBg,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 10,
@@ -3052,10 +3060,10 @@ const styles = StyleSheet.create({
   extendedHoursBadgeText: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#581c87',
+    color: SCHEDULE[t.scheme].extendedText,
   },
   afterHoursBadge: {
-    backgroundColor: '#fecdd3',
+    backgroundColor: SCHEDULE[t.scheme].afterHoursBg,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 10,
@@ -3063,10 +3071,10 @@ const styles = StyleSheet.create({
   afterHoursBadgeText: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#9f1239',
+    color: SCHEDULE[t.scheme].afterHoursText,
   },
   timelineSectionContainer: {
-    marginBottom: theme.spacing.lg,
+    marginBottom: t.spacing.lg,
   },
   timelineWrapper: {
     position: 'relative',
@@ -3080,7 +3088,7 @@ const styles = StyleSheet.create({
     top: 10,
     bottom: 10,
     width: 2,
-    backgroundColor: '#cbd5e1',
+    backgroundColor: SCHEDULE[t.scheme].trackLine,
   },
   connectorRowContainer: {
     marginVertical: 4,
@@ -3096,12 +3104,12 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#6b21a8',
+    backgroundColor: SCHEDULE[t.scheme].nodeFill,
     justifyContent: 'center',
     alignItems: 'center',
     elevation: 2,
     borderWidth: 2,
-    borderColor: '#ffffff',
+    borderColor: t.color.surface,
     position: 'absolute',
     left: 2,
     zIndex: 2,
@@ -3110,21 +3118,21 @@ const styles = StyleSheet.create({
     flex: 1,
     marginLeft: 52,
     borderWidth: 1.5,
-    borderColor: '#94a3b8',
+    borderColor: SCHEDULE[t.scheme].dashedBorder,
     borderStyle: 'dashed',
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 10,
-    backgroundColor: '#ffffff',
+    backgroundColor: t.color.surface,
   },
   dashedParkHopText: {
     fontSize: 13,
-    color: '#334155',
+    color: SCHEDULE[t.scheme].slate700Text,
   },
   boldMins: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#0f172a',
+    color: SCHEDULE[t.scheme].inkText,
   },
   walkTextRow: {
     flexDirection: 'row',
@@ -3134,7 +3142,7 @@ const styles = StyleSheet.create({
   },
   inlineWalkText: {
     fontSize: 13,
-    color: '#475569',
+    color: SCHEDULE[t.scheme].slate600Text,
   },
   topSpeechNodeRow: {
     height: 34,
@@ -3146,9 +3154,9 @@ const styles = StyleSheet.create({
     width: 16,
     height: 16,
     borderRadius: 8,
-    backgroundColor: '#6b21a8',
+    backgroundColor: SCHEDULE[t.scheme].nodeFill,
     borderWidth: 2,
-    borderColor: '#ffffff',
+    borderColor: t.color.surface,
     position: 'absolute',
     left: 12,
     zIndex: 3,
@@ -3168,10 +3176,10 @@ const styles = StyleSheet.create({
     borderRightWidth: 6,
     borderTopColor: 'transparent',
     borderBottomColor: 'transparent',
-    borderRightColor: '#581c87',
+    borderRightColor: SCHEDULE[t.scheme].speechFill,
   },
   speechPillPointer: {
-    backgroundColor: '#581c87',
+    backgroundColor: SCHEDULE[t.scheme].speechFill,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 14,
@@ -3179,7 +3187,7 @@ const styles = StyleSheet.create({
   speechPillText: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#ffffff',
+    color: t.color.textOnPrimary,
   },
   timelineCardRow: {
     position: 'relative',
@@ -3194,7 +3202,7 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#f5f3ff',
+    backgroundColor: SCHEDULE[t.scheme].timeBoxBg,
     paddingVertical: 2,
     borderRadius: 6,
     zIndex: 5,
@@ -3202,13 +3210,13 @@ const styles = StyleSheet.create({
   vertTimeDigits: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#0f172a',
+    color: SCHEDULE[t.scheme].inkText,
     lineHeight: 17,
   },
   vertTimeAmpm: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#64748b',
+    color: SCHEDULE[t.scheme].slate500Text,
     textTransform: 'uppercase',
     marginTop: -1,
   },
@@ -3217,11 +3225,11 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#ffffff',
+    backgroundColor: t.color.surface,
     borderRadius: 16,
     padding: 12,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: SCHEDULE[t.scheme].cardHairline,
     gap: 12,
     elevation: 2,
     shadowColor: '#000',
@@ -3233,13 +3241,13 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 12,
-    backgroundColor: '#f1f5f9',
+    backgroundColor: SCHEDULE[t.scheme].greyPillBg,
   },
   mockupThumbnailFallback: {
     width: 64,
     height: 64,
     borderRadius: 12,
-    backgroundColor: '#f1f5f9',
+    backgroundColor: SCHEDULE[t.scheme].greyPillBg,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -3249,12 +3257,12 @@ const styles = StyleSheet.create({
   cardIndexLabel: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#64748b',
+    color: SCHEDULE[t.scheme].slate500Text,
   },
   mockupCardTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#0f172a',
+    color: SCHEDULE[t.scheme].inkText,
     marginTop: 1,
   },
   mockupCardLocationRow: {
@@ -3266,7 +3274,7 @@ const styles = StyleSheet.create({
   mockupCardLocationText: {
     fontSize: 12,
     fontWeight: '500',
-    color: '#64748b',
+    color: SCHEDULE[t.scheme].slate500Text,
     flexShrink: 1,
   },
   mockupBadgeRow: {
@@ -3276,7 +3284,7 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   waitPillGray: {
-    backgroundColor: '#f1f5f9',
+    backgroundColor: SCHEDULE[t.scheme].greyPillBg,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 10,
@@ -3284,10 +3292,10 @@ const styles = StyleSheet.create({
   waitPillText: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#334155',
+    color: SCHEDULE[t.scheme].slate700Text,
   },
   llPillGold: {
-    backgroundColor: '#fde68a',
+    backgroundColor: SCHEDULE[t.scheme].llPillBg,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 10,
@@ -3295,13 +3303,13 @@ const styles = StyleSheet.create({
   llPillText: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#92400e',
+    color: SCHEDULE[t.scheme].llPillText,
   },
   // Reservation kind pill (trip-reservations R4.3). Distinct fill from the
   // Lightning-Lane pill, and always accompanied by its kind in words so the
   // distinction is never carried by color alone.
   reservationPill: {
-    backgroundColor: '#ede9fe',
+    backgroundColor: SCHEDULE[t.scheme].reservationBg,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 10,
@@ -3309,10 +3317,10 @@ const styles = StyleSheet.create({
   reservationPillText: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#5b21b6',
+    color: SCHEDULE[t.scheme].reservationText,
   },
   earlyEntryPillCyan: {
-    backgroundColor: '#a5f3fc',
+    backgroundColor: SCHEDULE[t.scheme].earlyPillBg,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 10,
@@ -3320,10 +3328,10 @@ const styles = StyleSheet.create({
   earlyEntryPillText: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#0891b2',
+    color: SCHEDULE[t.scheme].earlyPillText,
   },
   singleRiderPillSky: {
-    backgroundColor: '#bae6fd',
+    backgroundColor: SCHEDULE[t.scheme].singleRiderBg,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 10,
@@ -3331,10 +3339,10 @@ const styles = StyleSheet.create({
   singleRiderPillText: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#0369a1',
+    color: SCHEDULE[t.scheme].singleRiderText,
   },
   fixedTimePillPurple: {
-    backgroundColor: '#e9d5ff',
+    backgroundColor: SCHEDULE[t.scheme].fixedBg,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 10,
@@ -3342,10 +3350,10 @@ const styles = StyleSheet.create({
   fixedTimePillText: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#6b21a8',
+    color: SCHEDULE[t.scheme].fixedText,
   },
   durationPillGray: {
-    backgroundColor: '#f1f5f9',
+    backgroundColor: SCHEDULE[t.scheme].greyPillBg,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 10,
@@ -3353,54 +3361,54 @@ const styles = StyleSheet.create({
   durationPillText: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#475569',
+    color: SCHEDULE[t.scheme].slate600Text,
   },
   itemCard: {
-    marginBottom: theme.spacing.sm,
-    padding: theme.spacing.md,
+    marginBottom: t.spacing.sm,
+    padding: t.spacing.md,
   },
   itemName: {
-    ...theme.typography.subtitle,
-    color: theme.color.textPrimary,
-    marginBottom: theme.spacing.xs,
+    ...t.typography.subtitle,
+    color: t.color.textPrimary,
+    marginBottom: t.spacing.xs,
   },
   itemMeta: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
-    marginBottom: theme.spacing.xs,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
+    marginBottom: t.spacing.xs,
   },
   itemProps: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: theme.spacing.xs,
-    marginBottom: theme.spacing.sm,
+    gap: t.spacing.xs,
+    marginBottom: t.spacing.sm,
   },
   itemActions: {
     flexDirection: 'row',
-    gap: theme.spacing.sm,
+    gap: t.spacing.sm,
   },
   emptyDayContainer: {
-    paddingVertical: theme.spacing.lg,
+    paddingVertical: t.spacing.lg,
   },
   emptyText: {
-    ...theme.typography.body,
-    color: theme.color.textSecondary,
+    ...t.typography.body,
+    color: t.color.textSecondary,
     fontStyle: 'italic',
-    marginBottom: theme.spacing.md,
+    marginBottom: t.spacing.md,
   },
   warnings: {
-    backgroundColor: theme.color.warningSurface,
-    padding: theme.spacing.sm,
-    borderRadius: theme.radius.md,
-    marginBottom: theme.spacing.md,
+    backgroundColor: t.color.warningSurface,
+    padding: t.spacing.sm,
+    borderRadius: t.radius.md,
+    marginBottom: t.spacing.md,
   },
   warningText: {
-    color: theme.color.warningText,
-    ...theme.typography.meta,
+    color: t.color.warningText,
+    ...t.typography.meta,
   },
   modalBody: {
     flex: 1,
-    padding: theme.spacing.lg,
+    padding: t.spacing.lg,
   },
   modalBg: {
     flex: 1,
@@ -3408,14 +3416,14 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: theme.color.background,
-    padding: theme.spacing.xl,
-    borderTopLeftRadius: theme.radius.xl,
-    borderTopRightRadius: theme.radius.xl,
+    backgroundColor: t.color.background,
+    padding: t.spacing.xl,
+    borderTopLeftRadius: t.radius.xl,
+    borderTopRightRadius: t.radius.xl,
     maxHeight: '80%',
   },
   headerSettingsBtn: {
-    padding: theme.spacing.xs,
+    padding: t.spacing.xs,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -3423,140 +3431,140 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: theme.spacing.sm,
+    marginBottom: t.spacing.sm,
   },
   modalTitle: {
-    ...theme.typography.title,
-    color: theme.color.textPrimary,
+    ...t.typography.title,
+    color: t.color.textPrimary,
   },
   label: {
-    ...theme.typography.subtitle,
-    color: theme.color.textSecondary,
-    marginTop: theme.spacing.md,
-    marginBottom: theme.spacing.xs,
+    ...t.typography.subtitle,
+    color: t.color.textSecondary,
+    marginTop: t.spacing.md,
+    marginBottom: t.spacing.xs,
   },
   modalActions: {
-    gap: theme.spacing.sm,
+    gap: t.spacing.sm,
   },
   optionChip: {
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.xs,
-    borderRadius: theme.radius.md,
-    backgroundColor: theme.color.surfaceAlt,
+    paddingHorizontal: t.spacing.md,
+    paddingVertical: t.spacing.xs,
+    borderRadius: t.radius.md,
+    backgroundColor: t.color.surfaceAlt,
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
   },
   optionChipActive: {
-    backgroundColor: theme.color.primary,
-    borderColor: theme.color.primary,
+    backgroundColor: t.color.primary,
+    borderColor: t.color.primary,
   },
   optionChipText: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
   },
   optionChipTextActive: {
-    color: theme.color.textOnPrimary,
+    color: t.color.textOnPrimary,
     fontWeight: '600',
   },
   modalFooter: {
-    marginTop: theme.spacing.xl,
-    gap: theme.spacing.md,
+    marginTop: t.spacing.xl,
+    gap: t.spacing.md,
   },
   timeSection: {
-    marginTop: theme.spacing.sm,
-    backgroundColor: theme.color.surface,
-    padding: theme.spacing.md,
-    borderRadius: theme.radius.md,
+    marginTop: t.spacing.sm,
+    backgroundColor: t.color.surface,
+    padding: t.spacing.md,
+    borderRadius: t.radius.md,
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
   },
   timeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.md,
-    marginTop: theme.spacing.xs,
+    gap: t.spacing.md,
+    marginTop: t.spacing.xs,
   },
   timeInput: {
     flex: 1,
     borderWidth: 1,
-    borderColor: theme.color.border,
-    borderRadius: theme.radius.md,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.sm,
-    backgroundColor: theme.color.surfaceAlt,
-    color: theme.color.textPrimary,
+    borderColor: t.color.border,
+    borderRadius: t.radius.md,
+    paddingHorizontal: t.spacing.md,
+    paddingVertical: t.spacing.sm,
+    backgroundColor: t.color.surfaceAlt,
+    color: t.color.textPrimary,
     fontSize: 15,
   },
   errorText: {
-    ...theme.typography.meta,
-    color: theme.color.danger,
-    marginTop: theme.spacing.xs,
+    ...t.typography.meta,
+    color: t.color.danger,
+    marginTop: t.spacing.xs,
   },
   llWindowBox: {
-    marginTop: theme.spacing.sm,
-    backgroundColor: theme.color.surfaceAlt,
-    padding: theme.spacing.sm,
-    borderRadius: theme.radius.md,
+    marginTop: t.spacing.sm,
+    backgroundColor: t.color.surfaceAlt,
+    padding: t.spacing.sm,
+    borderRadius: t.radius.md,
     borderLeftWidth: 3,
-    borderLeftColor: theme.color.accent,
+    borderLeftColor: t.color.accent,
   },
   llWindowText: {
-    ...theme.typography.body,
+    ...t.typography.body,
     fontWeight: '600',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   llGraceText: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
     marginTop: 2,
   },
   wheelCard: {
-    marginTop: theme.spacing.xs,
-    marginBottom: theme.spacing.xs,
+    marginTop: t.spacing.xs,
+    marginBottom: t.spacing.xs,
   },
   subLabel: {
     fontSize: 11,
     fontWeight: '700',
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginBottom: 4,
   },
   presetRow: {
     flexDirection: 'row',
-    gap: theme.spacing.xs,
-    marginBottom: theme.spacing.xs,
+    gap: t.spacing.xs,
+    marginBottom: t.spacing.xs,
   },
   presetChip: {
     flex: 1,
-    paddingVertical: theme.spacing.xs,
-    paddingHorizontal: theme.spacing.xs,
-    borderRadius: theme.radius.sm,
-    backgroundColor: theme.color.surfaceAlt,
+    paddingVertical: t.spacing.xs,
+    paddingHorizontal: t.spacing.xs,
+    borderRadius: t.radius.sm,
+    backgroundColor: t.color.surfaceAlt,
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
     alignItems: 'center',
   },
   presetChipActive: {
-    backgroundColor: theme.color.primary,
-    borderColor: theme.color.primary,
+    backgroundColor: t.color.primary,
+    borderColor: t.color.primary,
   },
   presetChipText: {
     fontSize: 11,
     fontWeight: '600',
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   presetChipTextActive: {
-    color: theme.color.textOnPrimary,
+    color: t.color.textOnPrimary,
   },
   wheelGrid: {
     flexDirection: 'row',
-    gap: theme.spacing.xs,
-    backgroundColor: theme.color.surfaceAlt,
-    padding: theme.spacing.xs,
-    borderRadius: theme.radius.md,
+    gap: t.spacing.xs,
+    backgroundColor: t.color.surfaceAlt,
+    padding: t.spacing.xs,
+    borderRadius: t.radius.md,
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
     height: 140,
   },
   wheelColumn: {
@@ -3566,7 +3574,7 @@ const styles = StyleSheet.create({
   wheelColHeader: {
     fontSize: 10,
     fontWeight: '700',
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     textTransform: 'uppercase',
     marginBottom: 4,
   },
@@ -3574,54 +3582,54 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   wheelItem: {
-    paddingVertical: theme.spacing.xs,
+    paddingVertical: t.spacing.xs,
     alignItems: 'center',
-    borderRadius: theme.radius.sm,
+    borderRadius: t.radius.sm,
     marginVertical: 1,
   },
   wheelItemActive: {
-    backgroundColor: theme.color.primary,
+    backgroundColor: t.color.primary,
   },
   wheelItemText: {
     fontSize: 14,
     fontWeight: '600',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   wheelItemTextActive: {
-    color: theme.color.textOnPrimary,
+    color: t.color.textOnPrimary,
   },
   ampmBox: {
     width: '100%',
-    gap: theme.spacing.xs,
+    gap: t.spacing.xs,
     marginTop: 4,
   },
   ampmBtn: {
-    paddingVertical: theme.spacing.xs + 2,
+    paddingVertical: t.spacing.xs + 2,
     alignItems: 'center',
-    borderRadius: theme.radius.sm,
-    backgroundColor: theme.color.surface,
+    borderRadius: t.radius.sm,
+    backgroundColor: t.color.surface,
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
   },
   ampmBtnActive: {
-    backgroundColor: theme.color.primary,
-    borderColor: theme.color.primary,
+    backgroundColor: t.color.primary,
+    borderColor: t.color.primary,
   },
   ampmText: {
     fontSize: 13,
     fontWeight: '700',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   ampmTextActive: {
-    color: theme.color.textOnPrimary,
+    color: t.color.textOnPrimary,
   },
   clearTimeButton: {
-    padding: theme.spacing.xs,
+    padding: t.spacing.xs,
     justifyContent: 'center',
     alignItems: 'center',
   },
   windowPillOrange: {
-    backgroundColor: '#ffedd5',
+    backgroundColor: SCHEDULE[t.scheme].windowPillBg,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 10,
@@ -3629,49 +3637,49 @@ const styles = StyleSheet.create({
   windowPillText: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#c2410c',
+    color: SCHEDULE[t.scheme].windowPillText,
   },
   fieldSection: {
-    marginBottom: theme.spacing.sm,
+    marginBottom: t.spacing.sm,
   },
   customTitleInput: {
-    backgroundColor: theme.color.surfaceAlt,
+    backgroundColor: t.color.surfaceAlt,
     borderWidth: 1,
-    borderColor: theme.color.border,
-    borderRadius: theme.radius.md,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.sm,
+    borderColor: t.color.border,
+    borderRadius: t.radius.md,
+    paddingHorizontal: t.spacing.md,
+    paddingVertical: t.spacing.sm,
     fontSize: 15,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
     marginTop: 4,
   },
   modalLocationBox: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: theme.color.surfaceAlt,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.sm,
-    borderRadius: theme.radius.md,
-    marginTop: theme.spacing.xs,
+    backgroundColor: t.color.surfaceAlt,
+    paddingHorizontal: t.spacing.md,
+    paddingVertical: t.spacing.sm,
+    borderRadius: t.radius.md,
+    marginTop: t.spacing.xs,
   },
   modalLocationText: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
     flexShrink: 1,
   },
   timingModeRow: {
     flexDirection: 'row',
-    gap: theme.spacing.xs,
-    backgroundColor: theme.color.surfaceAlt,
-    padding: theme.spacing.xs,
-    borderRadius: theme.radius.md,
-    marginBottom: theme.spacing.sm,
+    gap: t.spacing.xs,
+    backgroundColor: t.color.surfaceAlt,
+    padding: t.spacing.xs,
+    borderRadius: t.radius.md,
+    marginBottom: t.spacing.sm,
   },
   exactModeToggleRow: {
     flexDirection: 'row',
-    gap: theme.spacing.xs,
-    marginBottom: theme.spacing.sm,
+    gap: t.spacing.xs,
+    marginBottom: t.spacing.sm,
   },
   exactModeBtn: {
     flex: 1,
@@ -3679,26 +3687,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    paddingVertical: theme.spacing.sm,
-    paddingHorizontal: theme.spacing.xs,
-    borderRadius: theme.radius.md,
-    backgroundColor: theme.color.surfaceAlt,
+    paddingVertical: t.spacing.sm,
+    paddingHorizontal: t.spacing.xs,
+    borderRadius: t.radius.md,
+    backgroundColor: t.color.surfaceAlt,
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
   },
   exactModeBtnActive: {
-    backgroundColor: theme.color.surface,
-    borderColor: theme.color.primary,
-    ...theme.shadow.card,
+    backgroundColor: t.color.surface,
+    borderColor: t.color.primaryFg,
+    ...t.shadow.card,
   },
   exactModeBtnText: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
     fontWeight: '500',
     fontSize: 12,
   },
   exactModeBtnTextActive: {
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
     fontWeight: '700',
   },
   timingModeBtn: {
@@ -3707,101 +3715,102 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 4,
-    paddingVertical: theme.spacing.sm,
-    borderRadius: theme.radius.sm,
+    paddingVertical: t.spacing.sm,
+    borderRadius: t.radius.sm,
   },
   timingModeBtnActive: {
-    backgroundColor: theme.color.surface,
-    ...theme.shadow.card,
+    // Dark: lighter than the `surfaceAlt` track so it reads raised (Requirement 9.12).
+    backgroundColor: t.scheme === 'dark' ? t.color.borderStrong : t.color.surface,
+    ...t.shadow.card,
   },
   timingModeText: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
     fontWeight: '500',
   },
   timingModeTextActive: {
-    color: theme.color.primary,
+    color: t.color.primaryFg,
     fontWeight: '700',
   },
   modeInfoBox: {
-    backgroundColor: theme.color.surfaceAlt,
-    padding: theme.spacing.md,
-    borderRadius: theme.radius.md,
-    marginBottom: theme.spacing.sm,
+    backgroundColor: t.color.surfaceAlt,
+    padding: t.spacing.md,
+    borderRadius: t.radius.md,
+    marginBottom: t.spacing.sm,
   },
   modeInfoText: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
     lineHeight: 18,
   },
   windowPresetsGrid: {
-    gap: theme.spacing.xs,
-    marginBottom: theme.spacing.sm,
+    gap: t.spacing.xs,
+    marginBottom: t.spacing.sm,
   },
   windowPresetCard: {
-    backgroundColor: theme.color.surfaceAlt,
+    backgroundColor: t.color.surfaceAlt,
     borderWidth: 1,
-    borderColor: theme.color.border,
-    borderRadius: theme.radius.md,
-    padding: theme.spacing.sm,
+    borderColor: t.color.border,
+    borderRadius: t.radius.md,
+    padding: t.spacing.sm,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
   windowPresetCardActive: {
-    backgroundColor: '#fff7ed',
-    borderColor: '#f97316',
+    backgroundColor: SCHEDULE[t.scheme].presetActiveBg,
+    borderColor: SCHEDULE[t.scheme].presetActiveBorder,
   },
   windowPresetTitle: {
-    ...theme.typography.body,
+    ...t.typography.body,
     fontWeight: '600',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   windowPresetTitleActive: {
-    color: '#ea580c',
+    color: SCHEDULE[t.scheme].presetActiveTitle,
     fontWeight: '700',
   },
   windowPresetSubtitle: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
   },
   windowPresetSubtitleActive: {
-    color: '#c2410c',
+    color: SCHEDULE[t.scheme].presetActiveSubtitle,
     fontWeight: '600',
   },
   selectedWindowNotice: {
-    backgroundColor: '#fef3c7',
-    padding: theme.spacing.xs + 2,
-    borderRadius: theme.radius.sm,
-    marginTop: theme.spacing.xs,
+    backgroundColor: SCHEDULE[t.scheme].noticeBg,
+    padding: t.spacing.xs + 2,
+    borderRadius: t.radius.sm,
+    marginTop: t.spacing.xs,
     alignItems: 'center',
   },
   selectedWindowText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#92400e',
+    color: SCHEDULE[t.scheme].noticeText,
   },
   unservedWarningBox: {
-    backgroundColor: '#fef2f2',
+    backgroundColor: SCHEDULE[t.scheme].unservedBg,
     borderWidth: 1,
-    borderColor: '#fca5a5',
-    padding: theme.spacing.sm,
-    borderRadius: theme.radius.md,
-    marginBottom: theme.spacing.xs,
+    borderColor: SCHEDULE[t.scheme].unservedBorder,
+    padding: t.spacing.sm,
+    borderRadius: t.radius.md,
+    marginBottom: t.spacing.xs,
   },
   unservedWarningText: {
     fontSize: 12,
-    color: '#b91c1c',
+    color: SCHEDULE[t.scheme].unservedText,
     fontWeight: '600',
   },
   customWindowBox: {
-    marginTop: theme.spacing.xs,
-    padding: theme.spacing.sm,
-    backgroundColor: theme.color.surfaceAlt,
-    borderRadius: theme.radius.md,
+    marginTop: t.spacing.xs,
+    padding: t.spacing.sm,
+    backgroundColor: t.color.surfaceAlt,
+    borderRadius: t.radius.md,
     borderWidth: 1,
-    borderColor: theme.color.border,
-    gap: theme.spacing.xs,
+    borderColor: t.color.border,
+    gap: t.spacing.xs,
   },
   stepperRow: {
     flexDirection: 'row',
@@ -3811,89 +3820,89 @@ const styles = StyleSheet.create({
   stepperLabel: {
     fontSize: 12,
     fontWeight: '600',
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   stepperControls: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.xs,
+    gap: t.spacing.xs,
   },
   stepperBtn: {
     paddingHorizontal: 8,
     paddingVertical: 4,
-    backgroundColor: theme.color.surface,
-    borderRadius: theme.radius.sm,
+    backgroundColor: t.color.surface,
+    borderRadius: t.radius.sm,
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
   },
   stepperBtnText: {
     fontSize: 12,
     fontWeight: '600',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   stepperValue: {
     fontSize: 12,
     fontWeight: '700',
-    color: theme.color.primary,
+    color: t.color.primaryFg,
     minWidth: 70,
     textAlign: 'center',
   },
   showtimesSection: {
-    marginBottom: theme.spacing.md,
-    padding: theme.spacing.md,
-    backgroundColor: theme.color.surfaceAlt,
-    borderRadius: theme.radius.md,
+    marginBottom: t.spacing.md,
+    padding: t.spacing.md,
+    backgroundColor: t.color.surfaceAlt,
+    borderRadius: t.radius.md,
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
   },
   showtimesSubLabel: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
-    marginBottom: theme.spacing.xs,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
+    marginBottom: t.spacing.xs,
   },
   showtimesLoadingText: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
     fontStyle: 'italic',
-    marginTop: theme.spacing.xs,
+    marginTop: t.spacing.xs,
   },
   emptyShowtimesBox: {
-    paddingVertical: theme.spacing.sm,
+    paddingVertical: t.spacing.sm,
   },
   emptyShowtimesText: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
     fontStyle: 'italic',
   },
   showtimePillsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: theme.spacing.xs,
-    marginTop: theme.spacing.xs,
+    gap: t.spacing.xs,
+    marginTop: t.spacing.xs,
   },
   showtimePill: {
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: theme.color.surface,
+    backgroundColor: t.color.surface,
     borderWidth: 1.5,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
   },
   showtimePillActive: {
-    backgroundColor: theme.color.primary,
-    borderColor: theme.color.primary,
+    backgroundColor: t.color.primary,
+    borderColor: SCHEDULE[t.scheme].showtimeActiveBorder,
   },
   showtimePillText: {
     fontSize: 12,
     fontWeight: '600',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   showtimePillTextActive: {
-    color: '#ffffff',
+    color: t.color.textOnPrimary,
   },
   typicalShowtimeNotice: {
-    backgroundColor: '#fef3c7',
-    borderRadius: theme.radius.sm,
+    backgroundColor: SCHEDULE[t.scheme].noticeBg,
+    borderRadius: t.radius.sm,
     paddingHorizontal: 8,
     paddingVertical: 4,
     marginTop: 4,
@@ -3902,6 +3911,6 @@ const styles = StyleSheet.create({
   typicalShowtimeNoticeText: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#b45309',
+    color: SCHEDULE[t.scheme].typicalShowtimeText,
   },
-});
+}));

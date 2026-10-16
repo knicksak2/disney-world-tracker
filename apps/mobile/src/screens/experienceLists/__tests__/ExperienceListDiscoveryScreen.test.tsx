@@ -3,8 +3,13 @@ import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { FlatList } from 'react-native';
+import { FlatList, StyleSheet } from 'react-native';
+import type { ReactTestInstance } from 'react-test-renderer';
 import type { ExperienceListDiscoveryPageDTO } from '@dwt/shared';
+
+import { darkTheme, withAlpha } from '../../../theme/theme';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
+import { EXPERIENCE_DISCOVERY } from '../ExperienceListDiscoveryScreen.palette';
 
 jest.mock('expo-constants', () => ({
   __esModule: true,
@@ -225,4 +230,52 @@ describe('ExperienceListDiscoveryScreen', () => {
       expect(screen.getByText('Could not load public experience lists.')).toBeTruthy();
     });
   });
+
+  describe('dark mode', () => {
+    afterEach(resetTestScheme);
+
+    test('paints the screen, rows, like badge and sort tab with dark values', async () => {
+      setTestScheme('dark');
+      renderScreen();
+
+      const name = await screen.findByText('Best Thrill Rides in MK');
+      // (a) the screen background, (b) a row's primary text.
+      expect(paintedBackground(screen.getByTestId('experience-list-discovery-screen'))).toBe(
+        darkTheme.color.background,
+      );
+      expect(StyleSheet.flatten(name.props.style).color).toBe(darkTheme.color.textPrimary);
+      // (c) the like badge (rule 2 `rgba` of `danger` → withAlpha) and the item count.
+      expect(paintedBackground(screen.getByText('99'))).toBe(withAlpha(darkTheme.color.danger, 0.1));
+      expect(StyleSheet.flatten(screen.getByText('3 items').props.style).color).toBe(
+        darkTheme.color.primaryFg,
+      );
+      expect(
+        StyleSheet.flatten(screen.getByTestId('experience-discovery-sort-popular').props.style)
+          .backgroundColor,
+      ).toBe(darkTheme.color.primary);
+    });
+
+    test('the empty-state compass icon uses the palette dark value', async () => {
+      setTestScheme('dark');
+      apiRequestMock.mockImplementation(async () => ({ items: [], nextCursor: null }));
+      renderScreen();
+
+      await screen.findByText('No public experience lists found yet.');
+      const icon = screen.UNSAFE_root.findAll(
+        (n) => (n.type as unknown) === 'Icon' && n.props.name === 'compass-outline',
+      )[0];
+      expect(icon?.props.color).toBe(EXPERIENCE_DISCOVERY.dark.emptyIcon);
+    });
+  });
 });
+
+/** Nearest painted `backgroundColor` at or above `node`. */
+function paintedBackground(node: ReactTestInstance | null): unknown {
+  for (let n = node; n !== null; n = n.parent) {
+    const style = n.props.style;
+    if (style === undefined || typeof style === 'function') continue;
+    const flat = StyleSheet.flatten(style) as { backgroundColor?: unknown } | undefined;
+    if (flat?.backgroundColor !== undefined) return flat.backgroundColor;
+  }
+  return undefined;
+}

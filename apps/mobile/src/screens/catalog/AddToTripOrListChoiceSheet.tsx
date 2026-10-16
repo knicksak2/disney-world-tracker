@@ -12,10 +12,11 @@
 // modal/backdrop/dismiss conventions for visual consistency.
 
 import React from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-import { theme } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme } from '../../theme/useAppTheme';
 
 export interface AddToTripOrListChoiceSheetProps {
   readonly visible: boolean;
@@ -30,6 +31,9 @@ export default function AddToTripOrListChoiceSheet({
   onAddToTrip,
   onAddToList,
 }: AddToTripOrListChoiceSheetProps): JSX.Element | null {
+  const styles = useStyles();
+  const t = useAppTheme();
+
   if (!visible) {
     return null;
   }
@@ -54,7 +58,7 @@ export default function AddToTripOrListChoiceSheet({
               accessibilityLabel="Close"
               testID="add-to-trip-or-list-close-btn"
             >
-              <Ionicons name="close" size={24} color={theme.color.textSecondary} />
+              <Ionicons name="close" size={24} color={t.color.textSecondary} />
             </Pressable>
           </View>
 
@@ -66,10 +70,10 @@ export default function AddToTripOrListChoiceSheet({
             testID="add-to-trip-or-list-choice-trip"
           >
             <View style={styles.iconCircle}>
-              <Ionicons name="add" size={22} color={theme.color.primary} />
+              <Ionicons name="add" size={22} color={t.color.primaryFg} />
             </View>
             <Text style={styles.optionLabel}>Add to Trip</Text>
-            <Ionicons name="chevron-forward" size={18} color={theme.color.textSecondary} />
+            <Ionicons name="chevron-forward" size={18} color={t.color.textSecondary} />
           </Pressable>
 
           <Pressable
@@ -80,10 +84,10 @@ export default function AddToTripOrListChoiceSheet({
             testID="add-to-trip-or-list-choice-list"
           >
             <View style={styles.iconCircle}>
-              <Ionicons name="list" size={22} color={theme.color.primary} />
+              <Ionicons name="list" size={22} color={t.color.primaryFg} />
             </View>
             <Text style={styles.optionLabel}>Add to a List</Text>
-            <Ionicons name="chevron-forward" size={18} color={theme.color.textSecondary} />
+            <Ionicons name="chevron-forward" size={18} color={t.color.textSecondary} />
           </Pressable>
         </Pressable>
       </Pressable>
@@ -91,16 +95,16 @@ export default function AddToTripOrListChoiceSheet({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   backdrop: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.45)',
     justifyContent: 'flex-end',
   },
   sheet: {
-    backgroundColor: theme.color.surface,
-    borderTopLeftRadius: theme.radius.lg,
-    borderTopRightRadius: theme.radius.lg,
+    backgroundColor: t.color.surface,
+    borderTopLeftRadius: t.radius.lg,
+    borderTopRightRadius: t.radius.lg,
     paddingHorizontal: 20,
     paddingBottom: 32,
     paddingTop: 12,
@@ -109,7 +113,7 @@ const styles = StyleSheet.create({
   dragHandle: {
     width: 40,
     height: 4,
-    backgroundColor: theme.color.border,
+    backgroundColor: t.color.border,
     borderRadius: 2,
     alignSelf: 'center',
     marginBottom: 12,
@@ -123,15 +127,15 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 18,
     fontWeight: '700',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   option: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 12,
     paddingHorizontal: 12,
-    borderRadius: theme.radius.md,
-    backgroundColor: theme.color.surfaceAlt,
+    borderRadius: t.radius.md,
+    backgroundColor: t.color.surfaceAlt,
   },
   optionPressed: {
     opacity: 0.7,
@@ -140,7 +144,7 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: theme.color.surface,
+    backgroundColor: t.color.surface,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 14,
@@ -149,6 +153,6 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     fontWeight: '600',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
-});
+}));

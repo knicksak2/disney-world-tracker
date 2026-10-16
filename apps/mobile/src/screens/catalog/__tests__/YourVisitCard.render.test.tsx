@@ -23,6 +23,8 @@
 // component's actual `useQueryClient()` wiring rather than a stand-in.
 
 import React from 'react';
+import { StyleSheet } from 'react-native';
+import type { ReactTestInstance } from 'react-test-renderer';
 import {
   fireEvent,
   render,
@@ -75,7 +77,10 @@ jest.mock('expo-secure-store', () => ({
 // ---------------------------------------------------------------------------
 
 import YourVisitCard from '../YourVisitCard';
+import { SCRIM } from '../CompletionControls.palette';
 import { apiRequest as mockedApiRequest } from '../../../api/client';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
+import { darkTheme } from '../../../theme/theme';
 
 const apiRequestMock = mockedApiRequest as jest.MockedFunction<
   typeof mockedApiRequest
@@ -457,5 +462,99 @@ describe('YourVisitCard render (R6.1–R6.10)', () => {
     // The other two controls remain interactive.
     expect(screen.getByTestId('rating-open')).toBeEnabled();
     expect(screen.getByTestId('note-add')).toBeEnabled();
+  });
+
+  // -------------------------------------------------------------------------
+  // Feature: dark-mode — (c) for the card and the controls it composes (B2)
+  // -------------------------------------------------------------------------
+  describe('dark mode', () => {
+    afterEach(resetTestScheme);
+
+    const flat = (node: ReactTestInstance): Record<string, unknown> =>
+      (StyleSheet.flatten(node.props.style) ?? {}) as Record<string, unknown>;
+    const HISTORY: ExperienceVisitHistoryDTO = {
+      experienceId: EXPERIENCE_ID,
+      repeatCount: 2,
+      logs: [
+        {
+          id: 'log-a',
+          experienceId: EXPERIENCE_ID,
+          userId: 'user-1',
+          userTz: 'America/New_York',
+          visitedOn: '2024-06-01',
+          rating: 7,
+          note: null,
+          loggedAt: '2024-06-01T12:00:00Z',
+        },
+      ],
+    } as ExperienceVisitHistoryDTO;
+
+    test('(c) visit badge, completion, rating and visit-history rows use dark tokens', () => {
+      setTestScheme('dark');
+      renderCard({
+        completionQuery: dataQuery(makeCompletion()),
+        ratingQuery: dataQuery(makeRating()),
+        logsQuery: dataQuery(HISTORY),
+      });
+
+      expect(flat(screen.getByTestId('visit-count-badge')).backgroundColor).toBe(
+        darkTheme.color.surfaceAlt,
+      );
+      expect(flat(screen.getByTestId('completion-date')).color).toBe(darkTheme.color.textPrimary);
+      expect(flat(screen.getByTestId('rating-value')).color).toBe(darkTheme.color.textPrimary);
+      expect(flat(screen.getByText('Visit history (1)')).color).toBe(darkTheme.color.textPrimary);
+
+      fireEvent.press(screen.getByTestId('visit-history-toggle'));
+      expect(flat(screen.getByTestId('visit-history-item-log-a')).borderTopColor).toBe(
+        darkTheme.color.border,
+      );
+
+      // The rating picker: the selected value is a primary fill with white text.
+      fireEvent.press(screen.getByTestId('rating-change'));
+      expect(flat(screen.getByTestId('rating-pick-7')).backgroundColor).toBe(
+        darkTheme.color.primary,
+      );
+      expect(flat(screen.getByTestId('rating-pick-6')).backgroundColor).toBe(
+        darkTheme.color.surfaceAlt,
+      );
+    });
+
+    test('(c) loading spinners use primaryFg in dark', () => {
+      setTestScheme('dark');
+      renderCard({ completionQuery: loadingQuery(), ratingQuery: loadingQuery() });
+      expect(screen.getByLabelText('Loading completion').props.color).toBe(
+        darkTheme.color.primaryFg,
+      );
+    });
+
+    test('(c) the completion edit modal uses the dark scrim and keyboard', () => {
+      setTestScheme('dark');
+      renderCard({ completionQuery: dataQuery(makeCompletion()) });
+
+      fireEvent.press(screen.getByTestId('completion-edit-button'));
+      const input = screen.getByTestId('completion-edit-input');
+      expect(input.props.keyboardAppearance).toBe('dark');
+      expect(input.props.placeholderTextColor).toBe(darkTheme.color.textSecondary);
+      const modalCard = screen.getByTestId('completion-edit-modal');
+      expect(flat(modalCard).backgroundColor).toBe(darkTheme.color.surface);
+      // The nearest ancestor painting a *different* background (composite
+      // wrappers repeat the card's own props) is the scrim backdrop.
+      let cur: ReactTestInstance | null = modalCard.parent;
+      while (
+        cur !== null &&
+        (flat(cur).backgroundColor === undefined ||
+          flat(cur).backgroundColor === darkTheme.color.surface)
+      ) {
+        cur = cur.parent;
+      }
+      expect(cur).not.toBeNull();
+      expect(flat(cur!).backgroundColor).toBe(SCRIM.dark.backdrop);
+    });
+
+    test('keeps the pre-retrofit light values under light', () => {
+      renderCard({ logsQuery: dataQuery(HISTORY), ratingQuery: dataQuery(makeRating()) });
+      expect(flat(screen.getByTestId('visit-count-badge')).backgroundColor).toBe('#efe9f7');
+      expect(flat(screen.getByTestId('rating-value')).color).toBe('#1f1235');
+    });
   });
 });

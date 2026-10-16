@@ -40,7 +40,6 @@ import {
   Platform,
   Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   TextInput,
   View,
@@ -67,7 +66,16 @@ import { Ionicons } from '@expo/vector-icons';
 import { ApiError, apiRequest } from '../../api/client';
 import { renderAvatarPreset } from '../../avatars/AvatarPresets';
 import type { TripsStackParamList } from '../../navigation/TripsStack';
-import { theme } from '../../theme/theme';
+import { theme, type AppTheme } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme, usePalette } from '../../theme/useAppTheme';
+import {
+  FEED_AVATAR,
+  FEED_MISC,
+  FEED_TONE,
+  REACTION_TINT,
+  RODE_WITH,
+} from './TripFeedScreen.palette';
 import {
   Badge,
   Card,
@@ -195,7 +203,7 @@ const RATING_VALUES: readonly number[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
  * supported Trip_Reaction (closed set, R13.6). The solid glyph is shown when
  * the caller has applied that reaction so the control reads as "on".
  */
-const REACTION_META: Record<
+function reactionMetaFor(t: AppTheme): Record<
   TripReactionValue,
   {
     readonly label: string;
@@ -204,50 +212,47 @@ const REACTION_META: Record<
     readonly tint: string;
     readonly emoji: string;
   }
-> = {
-  like: { label: 'Like', icon: 'thumbs-up-outline', iconActive: 'thumbs-up', tint: '#2f80ed', emoji: '👍' },
-  love: { label: 'Love', icon: 'heart-outline', iconActive: 'heart', tint: '#d6336c', emoji: '❤️' },
-  celebrate: { label: 'Celebrate', icon: 'sparkles-outline', iconActive: 'sparkles', tint: '#f6a609', emoji: '✨' },
-  wow: { label: 'Wow', icon: 'star-outline', iconActive: 'star', tint: '#7e57c2', emoji: '🤩' },
-};
+> {
+  const tint = REACTION_TINT[t.scheme];
+  return {
+    like: { label: 'Like', icon: 'thumbs-up-outline', iconActive: 'thumbs-up', tint: tint.like, emoji: '👍' },
+    love: { label: 'Love', icon: 'heart-outline', iconActive: 'heart', tint: t.color.danger, emoji: '❤️' },
+    celebrate: { label: 'Celebrate', icon: 'sparkles-outline', iconActive: 'sparkles', tint: tint.celebrate, emoji: '✨' },
+    wow: { label: 'Wow', icon: 'star-outline', iconActive: 'star', tint: t.color.primaryLight, emoji: '🤩' },
+  };
+}
 
 /** Human copy + glyph + accent tone for the known Trip_Feed_Item types (R13.1). */
-const FEED_TYPE_META: Record<
+function feedTypeMetaFor(t: AppTheme): Record<
   string,
   {
     readonly label: string;
     readonly icon: keyof typeof Ionicons.glyphMap;
     readonly tone: string;
   }
-> = {
-  trip_created: { label: 'created the trip', icon: 'flag', tone: '#7e57c2' },
-  member_joined: { label: 'joined the trip', icon: 'person-add', tone: '#2f80ed' },
-  completion_logged: { label: 'logged a completion', icon: 'checkmark-circle', tone: '#2e9e6b' },
-  rating_recorded: { label: 'recorded a rating', icon: 'star', tone: '#f6a609' },
-};
+> {
+  const tone = FEED_TONE[t.scheme];
+  return {
+    trip_created: { label: 'created the trip', icon: 'flag', tone: t.color.primaryLight },
+    member_joined: { label: 'joined the trip', icon: 'person-add', tone: tone.memberJoined },
+    completion_logged: { label: 'logged a completion', icon: 'checkmark-circle', tone: t.color.success },
+    rating_recorded: { label: 'recorded a rating', icon: 'star', tone: tone.ratingRecorded },
+  };
+}
 
 /** Per-state visuals for a rode-with tag chip (R10.3 lifecycle). */
-const RODE_WITH_VISUAL: Record<
+function rodeWithVisualFor(t: AppTheme): Record<
   RodeWithTagState,
   { readonly bg: string; readonly fg: string; readonly prefix: string }
-> = {
-  confirmed: { bg: 'rgba(46, 158, 107, 0.14)', fg: '#27855a', prefix: '✓ ' },
-  pending: { bg: 'rgba(246, 166, 9, 0.16)', fg: '#9a6500', prefix: '⏳ ' },
-  declined: { bg: 'rgba(214, 51, 108, 0.12)', fg: theme.color.danger, prefix: '✕ ' },
-  cancelled: { bg: theme.color.surfaceAlt, fg: theme.color.textSecondary, prefix: '— ' },
-};
-
-/** Palette for the initials avatar, chosen by a stable hash of the name. */
-const AVATAR_COLORS: readonly string[] = [
-  '#7e57c2',
-  '#2f80ed',
-  '#2e9e6b',
-  '#e8505b',
-  '#f6a609',
-  '#00897b',
-  '#8e24aa',
-  '#d6336c',
-];
+> {
+  const rode = RODE_WITH[t.scheme];
+  return {
+    confirmed: { bg: withAlpha(t.color.success, 0.14), fg: rode.confirmedFg, prefix: '✓ ' },
+    pending: { bg: rode.pendingBg, fg: rode.pendingFg, prefix: '⏳ ' },
+    declined: { bg: withAlpha(t.color.danger, 0.12), fg: t.color.danger, prefix: '✕ ' },
+    cancelled: { bg: t.color.surfaceAlt, fg: t.color.textSecondary, prefix: '— ' },
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Screen
@@ -257,6 +262,8 @@ export default function TripFeedScreen({
   navigation,
   route,
 }: Props): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const { tripId } = route.params;
   const queryClient = useQueryClient();
 
@@ -340,7 +347,7 @@ export default function TripFeedScreen({
       <ScreenContainer>
         <ActivityHeader onBack={backToHub} />
         <View style={styles.center} testID="trip-feed-loading">
-          <ActivityIndicator color={theme.color.primary} />
+          <ActivityIndicator color={t.color.primaryFg} />
         </View>
       </ScreenContainer>
     );
@@ -388,6 +395,7 @@ export default function TripFeedScreen({
         data={items}
         keyExtractor={(item) => item.id}
         renderItem={renderRow}
+        extraData={t.scheme}
         contentContainerStyle={styles.listContent}
         testID="trip-feed"
         ListHeaderComponent={
@@ -414,7 +422,7 @@ export default function TripFeedScreen({
                 </View>
               </View>
               <View style={styles.composerCtaPlus}>
-                <Ionicons name="add" size={18} color={theme.color.textOnPrimary} />
+                <Ionicons name="add" size={18} color={t.color.textOnPrimary} />
               </View>
             </Pressable>
 
@@ -480,6 +488,8 @@ function FeedItemCard({
   readonly tripId: string;
   readonly item: TripFeedItemDTO;
 }): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -509,11 +519,13 @@ function FeedItemCard({
     void queryClient.invalidateQueries({ queryKey: feedKey });
   };
 
-  const meta = FEED_TYPE_META[item.type] ?? {
+  const meta = feedTypeMetaFor(t)[item.type] ?? {
     label: item.type.replace(/_/g, ' '),
     icon: 'ellipse-outline' as const,
-    tone: theme.color.primary,
+    tone: t.color.primaryFg,
   };
+  const rodeWithVisual = rodeWithVisualFor(t);
+  const reactionMeta = reactionMetaFor(t);
 
   // Human context folded into the feed item by the read projection.
   const experienceName = readString(item.metadata, 'experienceName');
@@ -683,17 +695,17 @@ function FeedItemCard({
             </Text>
             <View style={styles.experienceMetaRow}>
               {park !== null ? (
-                <Badge label={park} color={theme.color.primary} />
+                <Badge label={park} color={t.color.primaryFg} />
               ) : null}
               {experienceLand !== null ? (
-                <Badge label={experienceLand} color={theme.color.accentDark} />
+                <Badge label={experienceLand} color={t.color.accentDark} />
               ) : null}
               {experienceCategory !== null ? (
-                <Badge label={experienceCategory} color={theme.color.textSecondary} />
+                <Badge label={experienceCategory} color={t.color.textSecondary} />
               ) : null}
               {rating !== null ? (
                 <View style={styles.ratingPill}>
-                  <Ionicons name="star" size={12} color={theme.color.accentDark} />
+                  <Ionicons name="star" size={12} color={t.color.accentDark} />
                   <Text style={styles.ratingText}>{rating}/10</Text>
                 </View>
               ) : null}
@@ -704,7 +716,7 @@ function FeedItemCard({
                   {experienceCategory === 'Dining' ? '👥 Dined with:' : '👥 Rode with:'}
                 </Text>
                 {rodeWith.map((tag) => {
-                  const visual = RODE_WITH_VISUAL[tag.state];
+                  const visual = rodeWithVisual[tag.state];
                   return (
                     <View
                       key={tag.taggedMemberId}
@@ -732,7 +744,7 @@ function FeedItemCard({
             const summary = reactionByValue.get(reaction);
             const active = summary?.mine ?? false;
             const count = summary?.count ?? 0;
-            const rmeta = REACTION_META[reaction];
+            const rmeta = reactionMeta[reaction];
             return (
               <Pressable
                 key={reaction}
@@ -806,7 +818,7 @@ function FeedItemCard({
                 <Ionicons
                   name="trash-outline"
                   size={18}
-                  color={theme.color.danger}
+                  color={t.color.danger}
                   onPress={() => {
                     if (removeCommentMutation.isPending) return;
                     setError(null);
@@ -832,7 +844,8 @@ function FeedItemCard({
               if (error !== null) setError(null);
             }}
             placeholder="Add a comment"
-            placeholderTextColor={theme.color.textSecondary}
+            placeholderTextColor={t.color.textSecondary}
+            keyboardAppearance={t.scheme}
             multiline
             maxLength={2000}
             editable={!addCommentMutation.isPending}
@@ -844,7 +857,7 @@ function FeedItemCard({
           <Ionicons
             name="send"
             size={20}
-            color={canSubmit ? theme.color.primary : theme.color.textSecondary}
+            color={canSubmit ? t.color.primaryFg : t.color.textSecondary}
             onPress={() => {
               if (!canSubmit) return;
               const bodyText = draft;
@@ -873,7 +886,7 @@ function FeedItemCard({
 
       {busy ? (
         <ActivityIndicator
-          color={theme.color.primary}
+          color={t.color.primaryFg}
           style={styles.itemBusy}
           testID={`trip-feed-item-busy-${item.id}`}
         />
@@ -907,6 +920,8 @@ export function LogComposerModal({
   readonly onClose: () => void;
   readonly onLogged: () => void;
 }): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const [experience, setExperience] = useState<PickedExperience | null>(
     initialExperience,
   );
@@ -1005,10 +1020,10 @@ export function LogComposerModal({
               style={({ pressed }) => [styles.modalClose, pressed && styles.pressed]}
               testID="activity-log-close"
             >
-              <Ionicons name="close" size={22} color={theme.color.textSecondary} />
+              <Ionicons name="close" size={22} color={t.color.textSecondary} />
             </Pressable>
           </View>
-          <ScrollView contentContainerStyle={styles.modalScroll}>
+          <ScrollView contentContainerStyle={styles.modalScroll} keyboardShouldPersistTaps="handled">
             <Text style={styles.label}>Experience</Text>
             {experience === null ? (
               <ExperiencePicker
@@ -1026,7 +1041,7 @@ export function LogComposerModal({
                     {experience.name}
                   </Text>
                   {experience.park !== null ? (
-                    <Badge label={experience.park} color={theme.color.primary} />
+                    <Badge label={experience.park} color={t.color.primaryFg} />
                   ) : null}
                 </View>
                 <SecondaryButton
@@ -1136,6 +1151,8 @@ function Avatar({
   readonly preset?: string | null;
   readonly size?: number;
 }): JSX.Element {
+  const styles = useStyles();
+  const avatarPal = usePalette(FEED_AVATAR);
   // Render the chosen avatar art when the Member has a valid preset; otherwise
   // fall back to the name-hashed initials disc so a preset-less Member still
   // reads clearly.
@@ -1152,7 +1169,17 @@ function Avatar({
     );
   }
   const initials = initialsOf(name);
-  const bg = AVATAR_COLORS[hashString(name) % AVATAR_COLORS.length]!;
+  const avatarColors = [
+    avatarPal.a0,
+    avatarPal.a1,
+    avatarPal.a2,
+    avatarPal.a3,
+    avatarPal.a4,
+    avatarPal.a5,
+    avatarPal.a6,
+    avatarPal.a7,
+  ];
+  const bg = avatarColors[hashString(name) % avatarColors.length]!;
   return (
     <View
       style={[
@@ -1178,10 +1205,13 @@ function ExperienceThumb({
   readonly imageUrl: string | null;
   readonly category: string | null;
 }): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
+  const misc = usePalette(FEED_MISC);
   const [failed, setFailed] = useState(false);
   const visual =
-    category !== null && category in theme.categoryVisual
-      ? theme.categoryVisual[category as ExperienceCategory]
+    category !== null && category in t.categoryVisual
+      ? t.categoryVisual[category as ExperienceCategory]
       : null;
 
   if (imageUrl !== null && imageUrl.length > 0 && !failed) {
@@ -1201,7 +1231,7 @@ function ExperienceThumb({
       style={[
         styles.experienceThumb,
         styles.experienceThumbPlaceholder,
-        { backgroundColor: visual?.tint ?? theme.color.surfaceAlt },
+        { backgroundColor: visual?.fill ?? t.color.surfaceAlt },
       ]}
       testID="trip-feed-experience-placeholder"
     >
@@ -1211,7 +1241,7 @@ function ExperienceThumb({
           'sparkles'
         }
         size={18}
-        color={theme.color.primary}
+        color={misc.thumbGlyph}
       />
     </View>
   );
@@ -1389,7 +1419,7 @@ function logErrorMessage(err: ApiError | null): string {
 // Styles
 // ---------------------------------------------------------------------------
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   center: {
     flex: 1,
     alignItems: 'center',
@@ -1433,7 +1463,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   avatarText: {
-    color: theme.color.textOnPrimary,
+    color: t.color.textOnPrimary,
     fontSize: 15,
     fontWeight: '700',
   },
@@ -1443,18 +1473,19 @@ const styles = StyleSheet.create({
   },
   itemActorLine: {
     flexShrink: 1,
+    ...t.textDefault,
   },
   itemActor: {
     ...theme.typography.subtitle,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   itemAction: {
     ...theme.typography.body,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   itemMeta: {
     ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   typeBadge: {
     width: 32,
@@ -1469,13 +1500,13 @@ const styles = StyleSheet.create({
     gap: theme.spacing.md,
     padding: theme.spacing.md,
     borderRadius: theme.radius.md,
-    backgroundColor: theme.color.surfaceAlt,
+    backgroundColor: t.color.surfaceAlt,
   },
   experienceThumb: {
     width: 48,
     height: 48,
     borderRadius: theme.radius.md,
-    backgroundColor: theme.color.surface,
+    backgroundColor: t.color.surface,
   },
   experienceThumbPlaceholder: {
     alignItems: 'center',
@@ -1487,7 +1518,7 @@ const styles = StyleSheet.create({
   },
   experienceName: {
     ...theme.typography.subtitle,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   experienceMetaRow: {
     flexDirection: 'row',
@@ -1502,23 +1533,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.md,
     paddingVertical: 4,
     borderRadius: theme.radius.pill,
-    backgroundColor: 'rgba(246, 195, 67, 0.18)',
+    backgroundColor: withAlpha(t.color.accent, 0.18),
   },
   ratingText: {
     ...theme.typography.meta,
-    color: theme.color.accentDark,
+    color: t.color.accentDark,
   },
   composerCtaCard: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#fcfaff',
+    backgroundColor: FEED_MISC[t.scheme].ctaBg,
     borderWidth: 1.5,
-    borderColor: '#ece4f6',
+    borderColor: FEED_MISC[t.scheme].ctaBorder,
     borderRadius: theme.radius.lg,
     paddingHorizontal: theme.spacing.md,
     paddingVertical: theme.spacing.md,
-    ...theme.shadow.card,
+    ...t.shadow.card,
   },
   composerCtaLeft: {
     flexDirection: 'row',
@@ -1530,12 +1561,13 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: 'rgba(91, 42, 134, 0.08)',
+    backgroundColor: withAlpha(t.color.primary, 0.08),
     alignItems: 'center',
     justifyContent: 'center',
   },
   composerCtaIcon: {
     fontSize: 18,
+    ...t.textDefault,
   },
   composerCtaTextWrap: {
     flex: 1,
@@ -1543,18 +1575,18 @@ const styles = StyleSheet.create({
   },
   composerCtaTitle: {
     ...theme.typography.subtitle,
-    color: theme.color.primary,
+    color: t.color.primaryFg,
     fontWeight: '800',
   },
   composerCtaSubtitle: {
     ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   composerCtaPlus: {
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: theme.color.primary,
+    backgroundColor: t.color.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1568,7 +1600,7 @@ const styles = StyleSheet.create({
   rodeWithLabel: {
     fontSize: 11,
     fontWeight: '700',
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   tagChip: {
     flexDirection: 'row',
@@ -1590,7 +1622,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingTop: theme.spacing.sm,
     borderTopWidth: 1,
-    borderTopColor: theme.color.border,
+    borderTopColor: t.color.border,
   },
   reactionsGroup: {
     flexDirection: 'row',
@@ -1604,24 +1636,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 5,
     borderRadius: theme.radius.pill,
-    backgroundColor: theme.color.surfaceAlt,
+    backgroundColor: t.color.surfaceAlt,
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
   },
   rxChipActive: {
-    backgroundColor: 'rgba(91, 42, 134, 0.12)',
-    borderColor: 'rgba(91, 42, 134, 0.35)',
+    backgroundColor: withAlpha(t.color.primary, 0.12),
+    borderColor: withAlpha(t.color.primaryFg, 0.35),
   },
   rxEmoji: {
     fontSize: 14,
+    ...t.textDefault,
   },
   rxCount: {
     fontSize: 11,
     fontWeight: '600',
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   rxCountActive: {
-    color: theme.color.primary,
+    color: t.color.primaryFg,
     fontWeight: '800',
   },
   commentLink: {
@@ -1630,7 +1663,7 @@ const styles = StyleSheet.create({
   },
   commentLinkText: {
     ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     fontWeight: '600',
   },
   pressed: {
@@ -1646,7 +1679,7 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing.sm,
     paddingHorizontal: theme.spacing.md,
     borderRadius: theme.radius.md,
-    backgroundColor: theme.color.surfaceAlt,
+    backgroundColor: t.color.surfaceAlt,
   },
   commentContent: {
     flex: 1,
@@ -1654,19 +1687,20 @@ const styles = StyleSheet.create({
   },
   commentAuthorLine: {
     flexShrink: 1,
+    ...t.textDefault,
   },
   commentAuthor: {
     ...theme.typography.meta,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   commentTime: {
     ...theme.typography.meta,
     fontWeight: '400',
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   commentBody: {
     ...theme.typography.body,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   composer: {
     flexDirection: 'row',
@@ -1676,13 +1710,13 @@ const styles = StyleSheet.create({
   composerInput: {
     flex: 1,
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
     borderRadius: theme.radius.md,
     paddingHorizontal: theme.spacing.md,
     paddingVertical: theme.spacing.md,
     fontSize: 16,
-    color: theme.color.textPrimary,
-    backgroundColor: theme.color.surfaceAlt,
+    color: t.color.textPrimary,
+    backgroundColor: t.color.surfaceAlt,
     minHeight: 44,
     maxHeight: 120,
     textAlignVertical: 'top',
@@ -1691,7 +1725,7 @@ const styles = StyleSheet.create({
     padding: theme.spacing.sm,
   },
   error: {
-    color: theme.color.danger,
+    color: t.color.danger,
     fontSize: 13,
   },
   itemBusy: {
@@ -1700,19 +1734,19 @@ const styles = StyleSheet.create({
   // Log composer modal
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(31, 18, 53, 0.5)',
+    backgroundColor: FEED_MISC[t.scheme].scrim,
     alignItems: 'center',
     justifyContent: 'center',
     padding: theme.spacing.xl,
   },
   modalCard: {
-    backgroundColor: theme.color.surface,
+    backgroundColor: t.color.surface,
     borderRadius: theme.radius.lg,
     padding: theme.spacing.xl,
     width: '100%',
     maxWidth: 420,
     maxHeight: '85%',
-    ...theme.shadow.floating,
+    ...t.shadow.floating,
   },
   modalScroll: {
     gap: theme.spacing.sm,
@@ -1725,7 +1759,7 @@ const styles = StyleSheet.create({
   },
   modalTitle: {
     ...theme.typography.heading,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
     flexShrink: 1,
   },
   modalClose: {
@@ -1734,12 +1768,12 @@ const styles = StyleSheet.create({
   },
   label: {
     ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     marginTop: theme.spacing.sm,
   },
   helper: {
     ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   selectedRow: {
     flexDirection: 'row',
@@ -1755,7 +1789,7 @@ const styles = StyleSheet.create({
   },
   selectedName: {
     ...theme.typography.subtitle,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   chips: {
     flexDirection: 'row',
@@ -1772,4 +1806,4 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     flexBasis: 0,
   },
-});
+}));

@@ -21,8 +21,9 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { FoodItemLogWithContextDTO } from '@dwt/shared';
 
 import { apiRequest } from '../../api/client';
-import { theme } from '../../theme/theme';
 import { Badge, Card, EmptyState } from '../../theme/components';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme } from '../../theme/useAppTheme';
 import {
   FOOD_HISTORY_SORT_OPTIONS,
   type FoodHistorySort,
@@ -49,6 +50,8 @@ export default function RestaurantFoodLogsSheet({
   onClose,
   onLogDeleted,
 }: RestaurantFoodLogsSheetProps): JSX.Element | null {
+  const styles = useStyles();
+  const t = useAppTheme();
   const queryClient = useQueryClient();
 
   const [sort, setSort] = useState<FoodHistorySort>('recent');
@@ -111,9 +114,9 @@ export default function RestaurantFoodLogsSheet({
             testID={`scoped-food-log-delete-${item.id}`}
           >
             {deletingId === item.id ? (
-              <ActivityIndicator size="small" color={theme.color.danger} />
+              <ActivityIndicator size="small" color={t.color.danger} />
             ) : (
-              <Ionicons name="trash-outline" size={18} color={theme.color.danger} />
+              <Ionicons name="trash-outline" size={18} color={t.color.danger} />
             )}
           </Pressable>
         </View>
@@ -122,14 +125,14 @@ export default function RestaurantFoodLogsSheet({
           <Text style={styles.dateText}>{item.visitedOn}</Text>
           {item.rating !== null && (
             <View style={styles.ratingBadge}>
-              <Ionicons name="star" size={13} color={theme.color.accent} />
+              <Ionicons name="star" size={13} color={t.color.accent} />
               <Text style={styles.ratingText}>{item.rating}/10</Text>
             </View>
           )}
           {!item.currentlyOnMenu && (
             <Badge
               label="Not currently on menu"
-              color={theme.color.textSecondary}
+              color={t.color.textSecondary}
               testID={`scoped-food-log-not-on-menu-${item.id}`}
             />
           )}
@@ -140,7 +143,7 @@ export default function RestaurantFoodLogsSheet({
         )}
       </Card>
     ),
-    [deletingId, handleDeleteLog],
+    [deletingId, handleDeleteLog, styles, t],
   );
 
   if (!visible) {
@@ -186,7 +189,7 @@ export default function RestaurantFoodLogsSheet({
       testID="restaurant-food-logs-sheet"
     >
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.backdrop}
       >
         <View style={styles.container}>
@@ -205,18 +208,19 @@ export default function RestaurantFoodLogsSheet({
               style={styles.closeBtn}
               testID="close-restaurant-food-logs-sheet"
             >
-              <Ionicons name="close" size={24} color={theme.color.textSecondary} />
+              <Ionicons name="close" size={24} color={t.color.textSecondary} />
             </Pressable>
           </View>
 
           {/* Search bar (scoped to dish name only, Requirement 9.8) */}
           <View style={styles.searchBar}>
-            <Ionicons name="search" size={18} color={theme.color.textSecondary} />
+            <Ionicons name="search" size={18} color={t.color.textSecondary} />
             <TextInput
               value={searchText}
               onChangeText={setSearchText}
               placeholder="Search dishes logged here..."
-              placeholderTextColor={theme.color.textSecondary}
+              placeholderTextColor={t.color.textSecondary}
+              keyboardAppearance={t.scheme}
               style={styles.searchInput}
               testID="scoped-food-search-input"
               autoCorrect={false}
@@ -229,7 +233,7 @@ export default function RestaurantFoodLogsSheet({
                 style={styles.clearBtn}
                 testID="scoped-clear-search"
               >
-                <Ionicons name="close-circle" size={18} color={theme.color.textSecondary} />
+                <Ionicons name="close-circle" size={18} color={t.color.textSecondary} />
               </Pressable>
             )}
           </View>
@@ -272,7 +276,7 @@ export default function RestaurantFoodLogsSheet({
             <View style={styles.loadingWrap}>
               <ActivityIndicator
                 size="large"
-                color={theme.color.primary}
+                color={t.color.primaryFg}
                 testID="scoped-food-logs-loading"
                 accessibilityLabel="Loading logged dishes"
               />
@@ -300,6 +304,7 @@ export default function RestaurantFoodLogsSheet({
               keyExtractor={(item) => item.id}
               contentContainerStyle={styles.listContent}
               renderItem={renderLogRow}
+              extraData={t.scheme}
             />
           )}
         </View>
@@ -308,16 +313,16 @@ export default function RestaurantFoodLogsSheet({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   backdrop: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.45)',
     justifyContent: 'flex-end',
   },
   container: {
-    backgroundColor: theme.color.surface,
-    borderTopLeftRadius: theme.radius.xl,
-    borderTopRightRadius: theme.radius.xl,
+    backgroundColor: t.color.surface,
+    borderTopLeftRadius: t.radius.xl,
+    borderTopRightRadius: t.radius.xl,
     maxHeight: '85%',
     minHeight: '45%',
     paddingBottom: 24,
@@ -330,7 +335,7 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     paddingBottom: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: theme.color.border,
+    borderBottomColor: t.color.border,
   },
   headerTitles: {
     flex: 1,
@@ -339,11 +344,11 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 18,
     fontWeight: '700',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   subtitle: {
     fontSize: 13,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     marginTop: 2,
   },
   closeBtn: {
@@ -352,59 +357,59 @@ const styles = StyleSheet.create({
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: theme.color.surfaceAlt,
-    borderRadius: theme.radius.md,
+    backgroundColor: t.color.surfaceAlt,
+    borderRadius: t.radius.md,
     borderWidth: 1,
-    borderColor: theme.color.border,
-    paddingHorizontal: theme.spacing.md,
-    marginHorizontal: theme.spacing.lg,
-    marginTop: theme.spacing.md,
-    marginBottom: theme.spacing.xs,
+    borderColor: t.color.border,
+    paddingHorizontal: t.spacing.md,
+    marginHorizontal: t.spacing.lg,
+    marginTop: t.spacing.md,
+    marginBottom: t.spacing.xs,
     height: 42,
   },
   searchInput: {
     flex: 1,
-    marginLeft: theme.spacing.sm,
+    marginLeft: t.spacing.sm,
     fontSize: 14,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   clearBtn: {
     padding: 4,
   },
   sortSection: {
-    marginVertical: theme.spacing.xs,
+    marginVertical: t.spacing.xs,
   },
   chipsScroll: {
-    paddingHorizontal: theme.spacing.lg,
+    paddingHorizontal: t.spacing.lg,
     gap: 8,
   },
   chip: {
     paddingHorizontal: 12,
     paddingVertical: 5,
-    borderRadius: theme.radius.pill,
-    backgroundColor: theme.color.surfaceAlt,
+    borderRadius: t.radius.pill,
+    backgroundColor: t.color.surfaceAlt,
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
   },
   chipActive: {
-    backgroundColor: theme.color.primary,
-    borderColor: theme.color.primary,
+    backgroundColor: t.color.primary,
+    borderColor: t.color.primary,
   },
   chipText: {
     fontSize: 12,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     fontWeight: '500',
   },
   chipTextActive: {
-    color: theme.color.textOnPrimary,
+    color: t.color.textOnPrimary,
     fontWeight: '700',
   },
   errorWrap: {
-    paddingHorizontal: theme.spacing.lg,
-    paddingTop: theme.spacing.xs,
+    paddingHorizontal: t.spacing.lg,
+    paddingTop: t.spacing.xs,
   },
   errorText: {
-    color: theme.color.danger,
+    color: t.color.danger,
     fontSize: 13,
   },
   loadingWrap: {
@@ -414,17 +419,17 @@ const styles = StyleSheet.create({
   },
   emptyWrap: {
     paddingVertical: 32,
-    paddingHorizontal: theme.spacing.lg,
+    paddingHorizontal: t.spacing.lg,
     alignItems: 'center',
   },
   listContent: {
-    paddingHorizontal: theme.spacing.lg,
-    paddingTop: theme.spacing.xs,
-    paddingBottom: theme.spacing.lg,
+    paddingHorizontal: t.spacing.lg,
+    paddingTop: t.spacing.xs,
+    paddingBottom: t.spacing.lg,
     gap: 10,
   },
   logCard: {
-    padding: theme.spacing.md,
+    padding: t.spacing.md,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -435,7 +440,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     fontWeight: '700',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
     marginRight: 8,
   },
   deleteBtn: {
@@ -451,12 +456,12 @@ const styles = StyleSheet.create({
   dateText: {
     fontSize: 13,
     fontWeight: '600',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   ratingBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: theme.color.surfaceAlt,
+    backgroundColor: t.color.surfaceAlt,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 6,
@@ -465,12 +470,12 @@ const styles = StyleSheet.create({
   ratingText: {
     fontSize: 12,
     fontWeight: '600',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   noteText: {
     marginTop: 6,
     fontSize: 13,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     lineHeight: 18,
   },
-});
+}));

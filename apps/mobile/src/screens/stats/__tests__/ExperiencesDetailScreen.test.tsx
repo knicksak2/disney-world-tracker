@@ -26,6 +26,7 @@
  */
 
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { fireEvent, render, screen, within } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
@@ -38,6 +39,9 @@ import {
   makeDefaultActivity,
   makeStatsResponse,
 } from '../__testSupport__/statsFixture';
+import { darkTheme } from '../../../theme/theme';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
+import { PODIUM, RECORD_ICON } from '../ExperiencesDetailScreen.palette';
 
 // ---------------------------------------------------------------------------
 // Mocks (declared before the modules under test are imported).
@@ -506,5 +510,75 @@ describe('ExperiencesDetailScreen scoped completions read + in-pane isolation (R
     expect(apiRequestMock).toHaveBeenCalledTimes(1);
     expect(apiRequestMock).toHaveBeenCalledWith('GET', '/me/stats?percentile=true');
     expect(statsFetchCount()).toBe(1);
+  });
+});
+
+// Feature: dark-mode — the converted screen follows the Active theme.
+describe('ExperiencesDetailScreen — dark mode', () => {
+  const flat = (node: { props: { style?: unknown } }): Record<string, unknown> =>
+    (StyleSheet.flatten(node.props.style as never) ?? {}) as Record<string, unknown>;
+
+  beforeEach(() => {
+    useOwnCompletionsQueryMock.mockReset();
+    apiRequestMock.mockReset();
+    apiRequestMock.mockResolvedValue(makeStatsResponse());
+    useOwnCompletionsQueryMock.mockReturnValue(
+      queryResult({ data: { entries: [completionEntry()] }, isFetching: false }),
+    );
+  });
+  afterEach(resetTestScheme);
+
+  test('(a)(b)(c) background, section title, odometer value, podium and record tile use dark values', () => {
+    setTestScheme('dark');
+    renderScreen(makeStatsResponse({ activity: makeDefaultActivity() }));
+
+    // (a) root ScreenContainer.
+    expect(flat(screen.root).backgroundColor).toBe(darkTheme.color.background);
+    // (b) primary text.
+    expect(flat(screen.getByText('Personal Records & Bests')).color).toBe(
+      darkTheme.color.textPrimary,
+    );
+    // (c) primary-as-text → primaryFg; H-role podium keeps its fill; the
+    // non-token record tile takes its palette dark value.
+    const odoValue = within(screen.getByTestId('odometer-total-rides')).getByText('42');
+    expect(flat(odoValue).color).toBe(darkTheme.color.primaryFg);
+    const podium = flat(screen.getByTestId('podium-card'));
+    expect(podium.backgroundColor).toBe(PODIUM.dark.bg);
+    expect(podium.borderColor).toBe(PODIUM.dark.border);
+    const marathonIcon = screen
+      .getByTestId('record-marathon')
+      .findAll((n) => (n.type as string) === 'Icon' && n.props.name === 'repeat')[0];
+    expect(marathonIcon?.props.color).toBe(RECORD_ICON.dark.marathonFg);
+  });
+
+  test('sort toggle: the active option is raised above the `surfaceAlt` track and moves on press', () => {
+    setTestScheme('dark');
+    renderScreen(makeStatsResponse({ activity: makeDefaultActivity() }));
+
+    const btn = (id: string) => flat(screen.getByTestId(id));
+    const label = (id: string, text: string) =>
+      flat(within(screen.getByTestId(id)).getByText(text)).color;
+
+    // Lighter than the track (not the darker `surface` hole).
+    expect(btn('sort-toggle-visits').backgroundColor).toBe(darkTheme.color.borderStrong);
+    expect(btn('sort-toggle-visits').backgroundColor).not.toBe(darkTheme.color.surface);
+    expect(btn('sort-toggle-visits').backgroundColor).not.toBe(darkTheme.color.surfaceAlt);
+    expect(btn('sort-toggle-date').backgroundColor).toBeUndefined();
+    expect(label('sort-toggle-visits', 'Most Visited')).toBe(darkTheme.color.primaryFg);
+
+    fireEvent.press(screen.getByTestId('sort-toggle-date'));
+    expect(btn('sort-toggle-date').backgroundColor).toBe(darkTheme.color.borderStrong);
+    expect(btn('sort-toggle-visits').backgroundColor).toBeUndefined();
+    expect(label('sort-toggle-date', 'Date')).toBe(darkTheme.color.primaryFg);
+  });
+
+  test('light keeps today\u2019s literal values for the converted elements', () => {
+    renderScreen(makeStatsResponse({ activity: makeDefaultActivity() }));
+    expect(flat(screen.getByTestId('sort-toggle-visits')).backgroundColor).toBe('#ffffff');
+    const podium = flat(screen.getByTestId('podium-card'));
+    expect(podium.backgroundColor).toBe('#201032');
+    expect(podium.borderColor).toBe('#3d1c5c');
+    const odoValue = within(screen.getByTestId('odometer-total-rides')).getByText('42');
+    expect(flat(odoValue).color).toBe('#5b2a86');
   });
 });

@@ -12,7 +12,6 @@ import React from 'react';
 import {
   ActivityIndicator,
   Pressable,
-  StyleSheet,
   Text,
   View,
   type AccessibilityRole,
@@ -24,7 +23,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 
-import { theme } from './theme';
+import { withAlpha } from './theme';
+import { useAppTheme } from './useAppTheme';
+import { makeStyles } from './makeStyles';
+import { DANGER_BUTTON, HEADER } from './components.palette';
 
 // ---------------------------------------------------------------------------
 // ScreenContainer — themed page background
@@ -39,6 +41,7 @@ export function ScreenContainer({
   readonly style?: StyleProp<ViewStyle>;
   readonly testID?: string;
 }): JSX.Element {
+  const styles = useStyles();
   return <View style={[styles.screen, style]} testID={testID}>{children}</View>;
 }
 
@@ -102,12 +105,14 @@ export function GradientHeader({
   // wraps everything in one (see `App.tsx`), so the true inset is used at run
   // time and we fall back to `0` only when it is genuinely unavailable.
   const insets = React.useContext(SafeAreaInsetsContext);
+  const styles = useStyles();
+  const t = useAppTheme();
   // Ensure a sensible minimum top gap even when the reported inset is small
   // (e.g. no notch, or the inset is briefly unavailable before the provider
   // measures) so the header — and its back control — never crowds the top edge.
-  const topInset = Math.max(insets?.top ?? 0, theme.spacing.lg);
-  const basePadding = compact ? theme.spacing.sm : theme.spacing.md;
-  const gradientColors = (colors ?? theme.gradient.headerVivid) as [string, string, ...string[]];
+  const topInset = Math.max(insets?.top ?? 0, t.spacing.lg);
+  const basePadding = compact ? t.spacing.sm : t.spacing.md;
+  const gradientColors = (colors ?? t.gradient.headerVivid) as [string, string, ...string[]];
   return (
     <LinearGradient
       testID={testID}
@@ -149,7 +154,7 @@ export function GradientHeader({
             <Ionicons
               name="arrow-back"
               size={compact ? 22 : 24}
-              color={theme.color.textOnPrimary}
+              color={t.color.textOnPrimary}
             />
           </Pressable>
         ) : null}
@@ -173,7 +178,7 @@ export function GradientHeader({
               <Ionicons
                 name={icon}
                 size={compact ? 20 : 24}
-                color={theme.color.accent}
+                color={t.color.accent}
                 style={styles.headerIcon}
               />
             ) : null}
@@ -220,6 +225,7 @@ export function Card({
   /** Accessibility label forwarded to the pressable wrapper when `onPress` is set. */
   readonly accessibilityLabel?: string;
 }): JSX.Element {
+  const styles = useStyles();
   const cardStyle = [
     styles.card,
     accentColor !== undefined ? styles.cardWithAccent : null,
@@ -270,6 +276,8 @@ export function PrimaryButton({
   /** Override the spoken label; defaults to the visible `label`. */
   readonly accessibilityLabel?: string;
 }): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const isDisabled = disabled || loading;
   return (
     <Pressable
@@ -281,20 +289,20 @@ export function PrimaryButton({
       style={[styles.btnShadow, style]}
     >
       <LinearGradient
-        colors={theme.gradient.header}
+        colors={t.gradient.header}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
         style={[styles.primaryBtn, isDisabled && styles.btnDisabled]}
       >
         {loading ? (
-          <ActivityIndicator color={theme.color.textOnPrimary} />
+          <ActivityIndicator color={t.color.textOnPrimary} />
         ) : (
           <View style={styles.btnContent}>
             {icon !== undefined ? (
               <Ionicons
                 name={icon}
                 size={18}
-                color={theme.color.textOnPrimary}
+                color={t.color.textOnPrimary}
                 style={styles.btnIcon}
               />
             ) : null}
@@ -326,6 +334,8 @@ export function SecondaryButton({
   /** Override the spoken label; defaults to the visible `label`. */
   readonly accessibilityLabel?: string;
 }): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   return (
     <Pressable
       onPress={onPress}
@@ -346,7 +356,7 @@ export function SecondaryButton({
           <Ionicons
             name={icon}
             size={18}
-            color={tone === 'danger' ? theme.color.danger : theme.color.primary}
+            color={tone === 'danger' ? t.color.danger : t.color.primaryFg}
             style={styles.btnIcon}
           />
         ) : null}
@@ -369,7 +379,7 @@ export function SecondaryButton({
 
 export function Badge({
   label,
-  color: badgeColor = theme.color.primary,
+  color: colorProp,
   icon,
   testID,
   accessibilityLabel,
@@ -385,9 +395,12 @@ export function Badge({
    */
   readonly accessibilityLabel?: string;
 }): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
+  const badgeColor = colorProp ?? t.color.primaryFg;
   return (
     <View
-      style={[styles.badge, { backgroundColor: `${hexToRgba(badgeColor, 0.14)}` }]}
+      style={[styles.badge, { backgroundColor: `${withAlpha(badgeColor, 0.14)}` }]}
       testID={testID}
       {...(accessibilityLabel !== undefined
         ? { accessible: true, accessibilityLabel }
@@ -424,6 +437,7 @@ export function Chip({
    */
   readonly accessibilityLabel?: string;
 }): JSX.Element {
+  const styles = useStyles();
   const spokenLabel =
     accessibilityLabel ?? `${label}, ${active ? 'selected' : 'not selected'}`;
   return (
@@ -457,6 +471,7 @@ export function SectionLabel({
   readonly children: React.ReactNode;
   readonly style?: StyleProp<TextStyle>;
 }): JSX.Element {
+  const styles = useStyles();
   return <Text style={[styles.sectionLabel, style]}>{children}</Text>;
 }
 
@@ -471,10 +486,12 @@ export function EmptyState({
   readonly body?: string;
   readonly testID?: string;
 }): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   return (
     <View style={styles.emptyState} testID={testID}>
       <View style={styles.emptyIconCircle}>
-        <Ionicons name={icon} size={28} color={theme.color.primary} />
+        <Ionicons name={icon} size={28} color={t.color.primaryFg} />
       </View>
       <Text style={styles.emptyTitle}>{title}</Text>
       {body !== undefined ? <Text style={styles.emptyBody}>{body}</Text> : null}
@@ -483,38 +500,25 @@ export function EmptyState({
 }
 
 // ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/** Convert a `#rrggbb` hex to an `rgba()` string at the given alpha. */
-function hexToRgba(hex: string, alpha: number): string {
-  const clean = hex.replace('#', '');
-  const r = parseInt(clean.slice(0, 2), 16);
-  const g = parseInt(clean.slice(2, 4), 16);
-  const b = parseInt(clean.slice(4, 6), 16);
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-}
-
-// ---------------------------------------------------------------------------
 // Styles
 // ---------------------------------------------------------------------------
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   screen: {
     flex: 1,
-    backgroundColor: theme.color.background,
+    backgroundColor: t.color.background,
   },
   header: {
     // `paddingTop` is applied inline in `GradientHeader` as
     // `safeAreaInset.top + base` so the header clears the status bar / notch.
-    paddingBottom: theme.spacing.lg,
-    paddingHorizontal: theme.spacing.lg,
-    borderBottomLeftRadius: theme.radius.xl,
-    borderBottomRightRadius: theme.radius.xl,
+    paddingBottom: t.spacing.lg,
+    paddingHorizontal: t.spacing.lg,
+    borderBottomLeftRadius: t.radius.xl,
+    borderBottomRightRadius: t.radius.xl,
     overflow: 'hidden',
   },
   headerCompact: {
-    paddingBottom: theme.spacing.md,
+    paddingBottom: t.spacing.md,
   },
   headerRow: {
     flexDirection: 'row',
@@ -530,7 +534,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: theme.spacing.sm,
+    marginRight: t.spacing.sm,
     backgroundColor: 'rgba(255,255,255,0.16)',
   },
   headerEyebrowPill: {
@@ -544,8 +548,8 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 255, 255, 0.28)',
   },
   headerEyebrowText: {
-    ...theme.typography.meta,
-    color: '#ffd54f',
+    ...t.typography.meta,
+    color: HEADER[t.scheme].eyebrowText,
     fontWeight: '700',
     fontSize: 11,
     letterSpacing: 0.5,
@@ -554,7 +558,7 @@ const styles = StyleSheet.create({
   headerTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.sm,
+    gap: t.spacing.sm,
   },
   headerIcon: {
     marginRight: 2,
@@ -567,16 +571,16 @@ const styles = StyleSheet.create({
     fontSize: 18,
   },
   headerRightWrap: {
-    marginLeft: theme.spacing.sm,
+    marginLeft: t.spacing.sm,
   },
   headerTitle: {
-    color: theme.color.textOnPrimary,
-    ...theme.typography.title,
+    color: t.color.textOnPrimary,
+    ...t.typography.title,
     flexShrink: 1,
   },
   headerTitleCompact: {
-    ...theme.typography.title,
-    color: theme.color.textOnPrimary,
+    ...t.typography.title,
+    color: t.color.textOnPrimary,
   },
   headerSubtitle: {
     color: 'rgba(255,255,255,0.82)',
@@ -595,10 +599,11 @@ const styles = StyleSheet.create({
     left: 60,
   },
   card: {
-    backgroundColor: theme.color.surface,
-    borderRadius: theme.radius.lg,
-    padding: theme.spacing.lg,
-    ...theme.shadow.card,
+    backgroundColor: t.color.surface,
+    borderRadius: t.radius.lg,
+    padding: t.spacing.lg,
+    ...t.shadow.card,
+    ...t.outline.card,
   },
   cardWithAccent: {
     borderLeftWidth: 4,
@@ -608,25 +613,25 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.99 }],
   },
   btnShadow: {
-    ...theme.shadow.card,
-    borderRadius: theme.radius.md,
+    ...t.shadow.card,
+    borderRadius: t.radius.md,
   },
   primaryBtn: {
-    borderRadius: theme.radius.md,
+    borderRadius: t.radius.md,
     paddingVertical: 14,
-    paddingHorizontal: theme.spacing.lg,
+    paddingHorizontal: t.spacing.lg,
     alignItems: 'center',
     justifyContent: 'center',
   },
   primaryBtnText: {
-    color: theme.color.textOnPrimary,
-    ...theme.typography.button,
+    color: t.color.textOnPrimary,
+    ...t.typography.button,
   },
   btnContent: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: theme.spacing.sm,
+    gap: t.spacing.sm,
   },
   btnIcon: {
     marginRight: 2,
@@ -635,89 +640,89 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   secondaryBtn: {
-    borderRadius: theme.radius.md,
+    borderRadius: t.radius.md,
     paddingVertical: 12,
-    paddingHorizontal: theme.spacing.lg,
+    paddingHorizontal: t.spacing.lg,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: theme.color.surfaceAlt,
+    backgroundColor: t.color.surfaceAlt,
     borderWidth: 1,
-    borderColor: theme.color.borderStrong,
+    borderColor: t.color.borderStrong,
   },
   secondaryBtnDanger: {
-    backgroundColor: '#fdebf2',
-    borderColor: '#f3b6cf',
+    backgroundColor: DANGER_BUTTON[t.scheme].bg,
+    borderColor: DANGER_BUTTON[t.scheme].border,
   },
   secondaryBtnText: {
-    color: theme.color.primary,
-    ...theme.typography.subtitle,
+    color: t.color.primaryFg,
+    ...t.typography.subtitle,
   },
   secondaryBtnTextDanger: {
-    color: theme.color.danger,
+    color: t.color.danger,
   },
   badge: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: theme.spacing.md,
+    paddingHorizontal: t.spacing.md,
     paddingVertical: 5,
-    borderRadius: theme.radius.pill,
+    borderRadius: t.radius.pill,
     flexShrink: 1,
   },
   badgeIcon: {
     marginRight: 4,
   },
   badgeText: {
-    ...theme.typography.meta,
+    ...t.typography.meta,
     flexShrink: 1,
   },
   chip: {
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.sm,
-    borderRadius: theme.radius.pill,
-    backgroundColor: theme.color.surfaceAlt,
-    marginRight: theme.spacing.sm,
+    paddingHorizontal: t.spacing.lg,
+    paddingVertical: t.spacing.sm,
+    borderRadius: t.radius.pill,
+    backgroundColor: t.color.surfaceAlt,
+    marginRight: t.spacing.sm,
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
   },
   chipActive: {
-    backgroundColor: theme.color.primary,
-    borderColor: theme.color.primary,
+    backgroundColor: t.color.primary,
+    borderColor: t.color.primary,
   },
   chipText: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
   },
   chipTextActive: {
-    color: theme.color.textOnPrimary,
+    color: t.color.textOnPrimary,
   },
   sectionLabel: {
-    ...theme.typography.heading,
-    color: theme.color.textPrimary,
-    marginBottom: theme.spacing.sm,
+    ...t.typography.heading,
+    color: t.color.textPrimary,
+    marginBottom: t.spacing.sm,
   },
   emptyState: {
     alignItems: 'center',
     justifyContent: 'center',
-    padding: theme.spacing.xl,
-    gap: theme.spacing.sm,
+    padding: t.spacing.xl,
+    gap: t.spacing.sm,
   },
   emptyIconCircle: {
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: theme.color.surfaceAlt,
+    backgroundColor: t.color.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: theme.spacing.xs,
+    marginBottom: t.spacing.xs,
   },
   emptyTitle: {
-    ...theme.typography.subtitle,
-    color: theme.color.textPrimary,
+    ...t.typography.subtitle,
+    color: t.color.textPrimary,
     textAlign: 'center',
   },
   emptyBody: {
-    ...theme.typography.body,
-    color: theme.color.textSecondary,
+    ...t.typography.body,
+    color: t.color.textSecondary,
     textAlign: 'center',
   },
-});
+}));

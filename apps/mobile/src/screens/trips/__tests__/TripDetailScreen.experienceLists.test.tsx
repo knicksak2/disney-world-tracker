@@ -19,8 +19,12 @@
  */
 
 import React from 'react';
-import { Alert } from 'react-native';
+import { Alert, StyleSheet } from 'react-native';
+import type { ReactTestInstance } from 'react-test-renderer';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { darkTheme } from '../../../theme/theme';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
+import { ATTACHED_EXPERIENCE_LISTS } from '../AttachedExperienceListsSection.palette';
 import {
   fireEvent,
   render,
@@ -683,6 +687,66 @@ describe('Attached Experience Lists UI (Task 19.1, 19.2)', () => {
         'DELETE',
         `/trips/${TRIP_ID}/experience-lists/${LIST_UNAVAIL_ID}`,
       );
+    });
+  });
+
+  // Feature: dark-mode — AttachedExperienceListsSection (c) assertions.
+  describe('dark mode', () => {
+    afterEach(resetTestScheme);
+
+    const flat = (node: ReactTestInstance): Record<string, unknown> =>
+      (StyleSheet.flatten(node.props.style) ?? {}) as Record<string, unknown>;
+
+    function renderSection(lists: readonly TripExperienceListDTO[]): void {
+      render(
+        <QueryClientProvider client={makeQueryClient()}>
+          <AttachedExperienceListsSection
+            tripId={TRIP_ID}
+            experienceLists={lists}
+            isOrganizer={true}
+            callerDisplayName="Ariel"
+          />
+        </QueryClientProvider>,
+      );
+    }
+
+    test('(c) the unavailable row, title and Attach control use dark values', () => {
+      setTestScheme('dark');
+      renderSection([AVAILABLE_LIST_1, UNAVAILABLE_LIST]);
+
+      expect(
+        flat(screen.getByTestId(`attached-experience-list-unavailable-${LIST_UNAVAIL_ID}`))
+          .backgroundColor,
+      ).toBe(ATTACHED_EXPERIENCE_LISTS.dark.unavailableBg);
+      expect(flat(screen.getByText('Attached Experience Lists')).color).toBe(
+        darkTheme.color.textPrimary,
+      );
+      expect(flat(screen.getByText('Thrill Rides of Magic Kingdom')).color).toBe(
+        darkTheme.color.textPrimary,
+      );
+      // Attach control: primary fill with textOnPrimary label.
+      expect(
+        flat(screen.getByTestId('trip-detail-attach-experience-list-btn')).backgroundColor,
+      ).toBe(darkTheme.color.primary);
+      expect(flat(screen.getByText('Attach')).color).toBe(darkTheme.color.textOnPrimary);
+    });
+
+    test('(c) the empty state keeps its rule-2a primary tint and border in dark', () => {
+      setTestScheme('dark');
+      renderSection([]);
+
+      const empty = flat(screen.getByTestId('attached-experience-lists-empty'));
+      expect(empty.backgroundColor).toBe(`${darkTheme.color.primary}0a`);
+      expect(empty.borderColor).toBe(`${darkTheme.color.primaryFg}18`);
+    });
+
+    test('keeps the pre-retrofit light values under light', () => {
+      renderSection([UNAVAILABLE_LIST]);
+
+      expect(
+        flat(screen.getByTestId(`attached-experience-list-unavailable-${LIST_UNAVAIL_ID}`))
+          .backgroundColor,
+      ).toBe('#eee');
     });
   });
 });

@@ -14,12 +14,15 @@
  */
 
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import type { OverviewHighlight } from '../statsView';
 import { Card } from '../../../theme/components';
-import { theme } from '../../../theme/theme';
+import { makeStyles } from '../../../theme/makeStyles';
+import { useAppTheme, usePalette } from '../../../theme/useAppTheme';
+
+import { HIGHLIGHT_ICON } from './HighlightCard.palette';
 
 export interface HighlightCardProps {
   /** The curated highlight to render (from `buildOverviewHighlights`). */
@@ -30,16 +33,10 @@ export interface HighlightCardProps {
 }
 
 /** Per-dimension icon-tile background + glyph tint (matching the mockup). */
-const ICON_STYLE: Record<
+type IconStyleMap = Record<
   OverviewHighlight['id'],
   { readonly bg: string; readonly fg: string }
-> = {
-  coverage: { bg: '#efe9f7', fg: '#5b2a86' },
-  ratings: { bg: '#fff4d6', fg: '#d4a017' },
-  interests: { bg: '#efe9f7', fg: '#7e57c2' },
-  experiences: { bg: '#e8f4ff', fg: '#2f80ed' },
-  foodStats: { bg: '#fbeaf0', fg: '#d6336c' },
-};
+>;
 
 /**
  * Human phrase for the action a highlight performs, derived from its `target`
@@ -84,7 +81,17 @@ export function HighlightCard({
   onPress,
   testID,
 }: HighlightCardProps): JSX.Element {
-  const iconStyle = ICON_STYLE[highlight.id];
+  const styles = useStyles();
+  const t = useAppTheme();
+  const icon = usePalette(HIGHLIGHT_ICON);
+  const iconStyles: IconStyleMap = {
+    coverage: { bg: t.color.surfaceAlt, fg: t.color.primaryFg },
+    ratings: { bg: t.color.warningSurface, fg: t.color.accentDark },
+    interests: { bg: t.color.surfaceAlt, fg: t.color.primaryLight },
+    experiences: { bg: icon.experiencesBg, fg: icon.experiencesFg },
+    foodStats: { bg: icon.foodStatsBg, fg: t.color.danger },
+  };
+  const iconStyle = iconStyles[highlight.id];
   return (
     <Card
       onPress={onPress}
@@ -111,26 +118,26 @@ export function HighlightCard({
         <Ionicons
           name={highlight.locked === true ? 'lock-closed' : 'chevron-forward'}
           size={highlight.locked === true ? 16 : 18}
-          color={theme.color.textSecondary}
+          color={t.color.textSecondary}
         />
       </View>
     </Card>
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   card: {
-    paddingVertical: theme.spacing.md,
+    paddingVertical: t.spacing.md,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.md,
+    gap: t.spacing.md,
   },
   iconTile: {
     width: 42,
     height: 42,
-    borderRadius: theme.radius.md,
+    borderRadius: t.radius.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -139,17 +146,17 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   title: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   headline: {
-    ...theme.typography.subtitle,
-    color: theme.color.textPrimary,
+    ...t.typography.subtitle,
+    color: t.color.textPrimary,
   },
   subtext: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
   },
-});
+}));

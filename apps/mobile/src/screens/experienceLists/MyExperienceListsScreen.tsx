@@ -21,11 +21,14 @@ import type { ExperienceListCollectionDTO, ExperienceListDTO } from '@dwt/shared
 
 import type { CollectionStackParamList } from '../../navigation/CollectionStack';
 import { apiRequest } from '../../api/client';
-import { theme } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme } from '../../theme/useAppTheme';
 import { Badge, Card, GradientHeader, ScreenContainer } from '../../theme/components';
 import CreateExperienceListModal from './CreateExperienceListModal';
 
 export default function MyExperienceListsScreen(): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const navigation = useNavigation<NativeStackNavigationProp<any>>();
   const route = useRoute<RouteProp<CollectionStackParamList, 'MyExperienceLists'>>();
   const queryClient = useQueryClient();
@@ -151,13 +154,13 @@ export default function MyExperienceListsScreen(): JSX.Element {
             <Text style={styles.cardTitle}>{item.name}</Text>
             <Badge
               label={item.visibility === 'public' ? 'Public' : 'Private'}
-              color={item.visibility === 'public' ? theme.color.primary : theme.color.textSecondary}
+              color={item.visibility === 'public' ? t.color.primaryFg : t.color.textSecondary}
             />
           </View>
           <View style={styles.cardMeta}>
             <Text style={styles.cardMetaText}>{item.itemCount} items</Text>
             <View style={styles.likeCountBadge}>
-              <Ionicons name="heart" size={14} color={theme.color.danger} />
+              <Ionicons name="heart" size={14} color={t.color.danger} />
               <Text style={styles.likeCountText}>{item.likeCount}</Text>
             </View>
           </View>
@@ -177,7 +180,7 @@ export default function MyExperienceListsScreen(): JSX.Element {
             <Ionicons
               name={item.pinnedAt !== null ? 'pin' : 'pin-outline'}
               size={16}
-              color={item.pinnedAt !== null ? theme.color.primary : theme.color.textSecondary}
+              color={item.pinnedAt !== null ? t.color.primaryFg : t.color.textSecondary}
             />
             <Text style={styles.controlBtnText}>{item.pinnedAt !== null ? 'Pinned' : 'Pin'}</Text>
           </Pressable>
@@ -192,7 +195,7 @@ export default function MyExperienceListsScreen(): JSX.Element {
             accessibilityLabel={`Rename ${item.name}`}
             testID={`my-experience-lists-rename-btn-${item.id}`}
           >
-            <Ionicons name="pencil-outline" size={16} color={theme.color.textSecondary} />
+            <Ionicons name="pencil-outline" size={16} color={t.color.textSecondary} />
             <Text style={styles.controlBtnText}>Rename</Text>
           </Pressable>
 
@@ -206,7 +209,7 @@ export default function MyExperienceListsScreen(): JSX.Element {
             <Ionicons
               name={item.visibility === 'public' ? 'globe-outline' : 'lock-closed-outline'}
               size={16}
-              color={theme.color.textSecondary}
+              color={t.color.textSecondary}
             />
             <Text style={styles.controlBtnText}>
               Make {item.visibility === 'public' ? 'Private' : 'Public'}
@@ -220,13 +223,13 @@ export default function MyExperienceListsScreen(): JSX.Element {
             accessibilityLabel={`Delete ${item.name}`}
             testID={`my-experience-lists-delete-btn-${item.id}`}
           >
-            <Ionicons name="trash-outline" size={16} color={theme.color.danger} />
+            <Ionicons name="trash-outline" size={16} color={t.color.danger} />
             <Text style={[styles.controlBtnText, styles.deleteBtnText]}>Delete</Text>
           </Pressable>
         </View>
       </Card>
     ),
-    [navigation, handleTogglePinned, handleToggleVisibility, handleDeleteList],
+    [navigation, handleTogglePinned, handleToggleVisibility, handleDeleteList, styles, t],
   );
 
   // Same stable-identity fix as `renderOwnedList` above, for the saved-lists
@@ -241,7 +244,7 @@ export default function MyExperienceListsScreen(): JSX.Element {
             style={styles.unavailableRow}
             testID={`saved-experience-list-unavailable-${item.experienceListId}`}
           >
-            <Ionicons name="alert-circle-outline" size={20} color={theme.color.textSecondary} />
+            <Ionicons name="alert-circle-outline" size={20} color={t.color.textSecondary} />
             <Text style={styles.unavailableRowText}>No longer available</Text>
           </View>
         );
@@ -258,7 +261,7 @@ export default function MyExperienceListsScreen(): JSX.Element {
             <View style={styles.cardHeader}>
               <Text style={styles.cardTitle}>{item.name}</Text>
               <View style={styles.likeCountBadge}>
-                <Ionicons name="heart" size={14} color={theme.color.danger} />
+                <Ionicons name="heart" size={14} color={t.color.danger} />
                 <Text style={styles.likeCountText}>{item.likeCount}</Text>
               </View>
             </View>
@@ -270,7 +273,7 @@ export default function MyExperienceListsScreen(): JSX.Element {
         </Pressable>
       );
     },
-    [navigation],
+    [navigation, styles, t],
   );
 
   return (
@@ -289,7 +292,7 @@ export default function MyExperienceListsScreen(): JSX.Element {
               style={styles.headerRightBtn}
               testID="my-experience-lists-discover-btn"
             >
-              <Ionicons name="compass-outline" size={20} color="#fff" />
+              <Ionicons name="compass-outline" size={20} color={t.color.textOnPrimary} />
               <Text style={styles.headerRightBtnText}>Discover</Text>
             </Pressable>
           }
@@ -330,7 +333,7 @@ export default function MyExperienceListsScreen(): JSX.Element {
       {collectionQuery.isLoading ? (
         <View style={styles.loadingWrap}>
           <ActivityIndicator
-            color={theme.color.primary}
+            color={t.color.primaryFg}
             size="large"
             testID="my-experience-lists-loading"
           />
@@ -345,7 +348,7 @@ export default function MyExperienceListsScreen(): JSX.Element {
             accessibilityLabel="Create a new experience list"
             testID="my-experience-lists-create-btn"
           >
-            <Ionicons name="add-circle" size={22} color="#fff" />
+            <Ionicons name="add-circle" size={22} color={t.color.textOnPrimary} />
             <Text style={styles.createButtonText}>Create New List</Text>
           </Pressable>
 
@@ -353,9 +356,10 @@ export default function MyExperienceListsScreen(): JSX.Element {
             data={ownedLists}
             keyExtractor={(item) => item.id}
             renderItem={renderOwnedList}
+            extraData={t.scheme}
             ListEmptyComponent={
               <View style={styles.emptyWrap}>
-                <Ionicons name="sparkles-outline" size={44} color={theme.color.textSecondary} />
+                <Ionicons name="sparkles-outline" size={44} color={t.color.textSecondary} />
                 <Text style={styles.emptyText} testID="my-experience-lists-owned-empty">
                   You haven&apos;t created any experience lists yet.
                 </Text>
@@ -370,9 +374,10 @@ export default function MyExperienceListsScreen(): JSX.Element {
             data={savedLists}
             keyExtractor={(item) => (item.available ? item.id : item.experienceListId)}
             renderItem={renderSavedList}
+            extraData={t.scheme}
             ListEmptyComponent={
               <View style={styles.emptyWrap}>
-                <Ionicons name="bookmark-outline" size={44} color={theme.color.textSecondary} />
+                <Ionicons name="bookmark-outline" size={44} color={t.color.textSecondary} />
                 <Text style={styles.emptyText} testID="my-experience-lists-saved-empty">
                   No saved lists yet.
                 </Text>
@@ -405,7 +410,7 @@ export default function MyExperienceListsScreen(): JSX.Element {
         testID="rename-experience-list-modal"
       >
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.modalBackdrop}
         >
           <Pressable
@@ -424,7 +429,8 @@ export default function MyExperienceListsScreen(): JSX.Element {
               value={renameValue}
               onChangeText={setRenameValue}
               placeholder="List name..."
-              placeholderTextColor={theme.color.textSecondary}
+              placeholderTextColor={t.color.textSecondary}
+              keyboardAppearance={t.scheme}
               style={styles.modalInput}
               autoFocus
               testID="rename-experience-list-input"
@@ -450,7 +456,7 @@ export default function MyExperienceListsScreen(): JSX.Element {
                 testID="submit-rename-experience-list-btn"
               >
                 {isRenaming ? (
-                  <ActivityIndicator size="small" color="#fff" />
+                  <ActivityIndicator size="small" color={t.color.textOnPrimary} />
                 ) : (
                   <Text style={styles.modalSubmitText}>Save</Text>
                 )}
@@ -464,7 +470,7 @@ export default function MyExperienceListsScreen(): JSX.Element {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   headerRightBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -472,22 +478,22 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: theme.radius.pill,
+    borderRadius: t.radius.pill,
   },
   headerRightBtnText: {
-    color: '#fff',
+    color: t.color.textOnPrimary,
     fontWeight: '600',
     fontSize: 13,
   },
   tabsContainer: {
-    paddingHorizontal: theme.spacing.md,
-    paddingTop: theme.spacing.md,
-    paddingBottom: theme.spacing.xs,
+    paddingHorizontal: t.spacing.md,
+    paddingTop: t.spacing.md,
+    paddingBottom: t.spacing.xs,
   },
   tabsRow: {
     flexDirection: 'row',
-    backgroundColor: theme.color.surfaceAlt,
-    borderRadius: theme.radius.pill,
+    backgroundColor: t.color.surfaceAlt,
+    borderRadius: t.radius.pill,
     padding: 4,
   },
   tab: {
@@ -495,19 +501,19 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: theme.radius.pill,
+    borderRadius: t.radius.pill,
   },
   tabActive: {
-    backgroundColor: theme.color.primary,
-    ...theme.shadow.card,
+    backgroundColor: t.color.primary,
+    ...t.shadow.card,
   },
   tabText: {
     fontSize: 13,
     fontWeight: '600',
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   tabTextActive: {
-    color: theme.color.textOnPrimary,
+    color: t.color.textOnPrimary,
     fontWeight: '700',
   },
   tabContent: {
@@ -518,21 +524,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    marginHorizontal: theme.spacing.md,
-    marginTop: theme.spacing.sm,
-    marginBottom: theme.spacing.sm,
-    backgroundColor: theme.color.primary,
+    marginHorizontal: t.spacing.md,
+    marginTop: t.spacing.sm,
+    marginBottom: t.spacing.sm,
+    backgroundColor: t.color.primary,
     paddingVertical: 12,
-    borderRadius: theme.radius.md,
+    borderRadius: t.radius.md,
   },
   createButtonText: {
-    color: '#fff',
+    color: t.color.textOnPrimary,
     fontWeight: '700',
     fontSize: 15,
   },
   listContent: {
-    paddingHorizontal: theme.spacing.md,
-    paddingTop: theme.spacing.sm,
+    paddingHorizontal: t.spacing.md,
+    paddingTop: t.spacing.sm,
     paddingBottom: 24,
     gap: 12,
   },
@@ -541,11 +547,11 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   savedCard: {
-    padding: theme.spacing.md,
+    padding: t.spacing.md,
     gap: 8,
   },
   cardPressable: {
-    padding: theme.spacing.md,
+    padding: t.spacing.md,
     gap: 6,
   },
   cardHeader: {
@@ -556,7 +562,7 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 15,
     fontWeight: '700',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
     flex: 1,
     marginRight: 8,
   },
@@ -567,7 +573,7 @@ const styles = StyleSheet.create({
   },
   cardMetaText: {
     fontSize: 11,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   likeCountBadge: {
     flexDirection: 'row',
@@ -576,15 +582,15 @@ const styles = StyleSheet.create({
   },
   likeCountText: {
     fontSize: 11,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     fontWeight: '600',
   },
   cardControls: {
     flexDirection: 'row',
     alignItems: 'center',
     borderTopWidth: 1,
-    borderTopColor: theme.color.border,
-    backgroundColor: theme.color.surfaceAlt,
+    borderTopColor: t.color.border,
+    backgroundColor: t.color.surfaceAlt,
   },
   controlBtn: {
     flex: 1,
@@ -597,22 +603,22 @@ const styles = StyleSheet.create({
   controlBtnText: {
     fontSize: 11,
     fontWeight: '600',
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   deleteBtnText: {
-    color: theme.color.danger,
+    color: t.color.danger,
   },
   unavailableRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    padding: theme.spacing.md,
-    backgroundColor: theme.color.surfaceAlt,
-    borderRadius: theme.radius.md,
+    padding: t.spacing.md,
+    backgroundColor: t.color.surfaceAlt,
+    borderRadius: t.radius.md,
     opacity: 0.7,
   },
   unavailableRowText: {
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     fontSize: 13,
     fontStyle: 'italic',
   },
@@ -629,7 +635,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   emptyText: {
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     fontSize: 15,
   },
   modalBackdrop: {
@@ -640,26 +646,26 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   modalContainer: {
-    backgroundColor: theme.color.surface,
+    backgroundColor: t.color.surface,
     width: '100%',
-    borderRadius: theme.radius.lg,
-    padding: theme.spacing.lg,
+    borderRadius: t.radius.lg,
+    padding: t.spacing.lg,
     gap: 16,
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   modalInput: {
-    backgroundColor: theme.color.background,
+    backgroundColor: t.color.background,
     borderWidth: 1,
-    borderColor: theme.color.border,
-    borderRadius: theme.radius.md,
+    borderColor: t.color.border,
+    borderRadius: t.radius.md,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 15,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   modalActions: {
     flexDirection: 'row',
@@ -668,7 +674,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   modalErrorText: {
-    color: theme.color.danger,
+    color: t.color.danger,
     fontSize: 13,
     fontWeight: '500',
     marginTop: 8,
@@ -679,20 +685,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   modalCancelText: {
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     fontWeight: '600',
   },
   modalSubmitBtn: {
-    backgroundColor: theme.color.primary,
+    backgroundColor: t.color.primary,
     paddingVertical: 10,
     paddingHorizontal: 20,
-    borderRadius: theme.radius.md,
+    borderRadius: t.radius.md,
   },
   modalSubmitBtnDisabled: {
     opacity: 0.5,
   },
   modalSubmitText: {
-    color: '#fff',
+    color: t.color.textOnPrimary,
     fontWeight: '700',
   },
-});
+}));

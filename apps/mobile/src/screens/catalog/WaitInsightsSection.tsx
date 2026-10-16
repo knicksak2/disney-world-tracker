@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, Text, Pressable } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { apiRequest } from '../../api/client';
-import { theme } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme } from '../../theme/useAppTheme';
+import { VERDICT } from './WaitInsightsSection.palette';
 import { Card, SectionLabel, PrimaryButton, SecondaryButton } from '../../theme/components';
 import type { WaitInsightsDTO } from '@dwt/shared';
 import { resolveTripContextDate } from './tripContextDate';
@@ -24,6 +26,8 @@ export default function WaitInsightsSection({
   activeTripRange,
   todayWdw,
 }: Props): JSX.Element | null {
+  const styles = useStyles();
+  const t = useAppTheme();
   const [context, setContext] = useState<'Now' | 'Trip' | 'Typical'>('Now');
 
   // Active trip fetch to determine the trip range and planned items
@@ -166,7 +170,7 @@ export default function WaitInsightsSection({
           <Text style={styles.verdictK}>🎯 Best time to ride</Text>
           {isLowConfidence && (
             <View style={{ backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
-              <Text style={{ fontSize: 9, fontWeight: '700', color: '#fff', textTransform: 'uppercase' }}>Early Estimate</Text>
+              <Text style={{ fontSize: 9, fontWeight: '700', color: t.color.textOnPrimary, textTransform: 'uppercase' }}>Early Estimate</Text>
             </View>
           )}
         </View>
@@ -259,7 +263,7 @@ export default function WaitInsightsSection({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   container: {
     marginVertical: 12,
   },
@@ -271,43 +275,43 @@ const styles = StyleSheet.create({
   chip: {
     flex: 1,
     paddingVertical: 8,
-    backgroundColor: theme.color.surfaceAlt,
-    borderRadius: theme.radius.md,
+    backgroundColor: t.color.surfaceAlt,
+    borderRadius: t.radius.md,
     alignItems: 'center',
   },
   chipOn: {
-    backgroundColor: theme.color.primary,
+    backgroundColor: t.color.primary,
   },
   chipText: {
     fontSize: 12,
     fontWeight: '700',
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   chipTextOn: {
-    color: '#fff',
+    color: t.color.textOnPrimary,
   },
   verdict: {
-    backgroundColor: '#3fa34d',
-    padding: theme.spacing.md,
-    borderRadius: theme.radius.md,
+    backgroundColor: VERDICT[t.scheme].fill,
+    padding: t.spacing.md,
+    borderRadius: t.radius.md,
     marginBottom: 12,
   },
   verdictK: {
     fontSize: 10,
     fontWeight: '800',
-    color: '#fff',
+    color: t.color.textOnPrimary,
     textTransform: 'uppercase',
     opacity: 0.9,
   },
   verdictH: {
     fontSize: 16,
     fontWeight: '800',
-    color: '#fff',
+    color: t.color.textOnPrimary,
     marginTop: 4,
   },
   verdictS: {
     fontSize: 13,
-    color: '#fff',
+    color: t.color.textOnPrimary,
     marginTop: 4,
     opacity: 0.9,
   },
@@ -324,7 +328,7 @@ const styles = StyleSheet.create({
   },
   sparkBar: {
     flex: 1,
-    backgroundColor: theme.color.primaryLight,
+    backgroundColor: t.color.primaryLight,
     borderTopLeftRadius: 4,
     borderTopRightRadius: 4,
   },
@@ -335,25 +339,26 @@ const styles = StyleSheet.create({
   },
   sparkXText: {
     fontSize: 10,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   decide: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    backgroundColor: theme.color.surface,
+    backgroundColor: t.color.surface,
     padding: 12,
-    borderRadius: theme.radius.md,
+    borderRadius: t.radius.md,
     marginBottom: 8,
+    ...t.outline.card,
   },
   decideL: {},
   decideH: {
     fontSize: 14,
     fontWeight: '700',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   decideS: {
     fontSize: 12,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     marginTop: 2,
   },
   decideR: {
@@ -362,11 +367,11 @@ const styles = StyleSheet.create({
   decideSave: {
     fontSize: 13,
     fontWeight: '800',
-    color: '#3fa34d',
+    color: VERDICT[t.scheme].saveText,
   },
   decideCost: {
     fontSize: 11,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     marginTop: 2,
   },
   twocol: {
@@ -375,25 +380,25 @@ const styles = StyleSheet.create({
   },
   stat: {
     flex: 1,
-    backgroundColor: theme.color.surfaceAlt,
+    backgroundColor: t.color.surfaceAlt,
     padding: 12,
-    borderRadius: theme.radius.md,
+    borderRadius: t.radius.md,
   },
   statK: {
     fontSize: 10,
     fontWeight: '700',
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     textTransform: 'uppercase',
   },
   statV: {
     fontSize: 16,
     fontWeight: '800',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
     marginTop: 4,
   },
   statSmall: {
     fontSize: 11,
     fontWeight: '600',
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
-});
+}));

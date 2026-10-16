@@ -12,10 +12,15 @@
 // false.
 
 import React from 'react';
+import { StyleSheet } from 'react-native';
+import type { ReactTestInstance } from 'react-test-renderer';
 import { render } from '@testing-library/react-native';
 import type { LiveDetailDTO } from '@dwt/shared';
 
 import DiningReservationCard from '../DiningReservationCard';
+import { DINING } from '../DiningReservationCard.palette';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
+import { darkTheme } from '../../../theme/theme';
 
 /** The exact shape `projectThemeParksLive` produces for an empty/absent input. */
 const EMPTY_UNKNOWN_LIVE_DETAIL: LiveDetailDTO = {
@@ -116,5 +121,72 @@ describe('DiningReservationCard — resolved-but-empty live data (regression)', 
     const { fireEvent } = require('@testing-library/react-native');
     fireEvent.press(addToListBtn);
     expect(onAddToListMock).toHaveBeenCalledTimes(1);
+  });
+
+  // Feature: dark-mode — (c) converted literals (B2)
+  describe('dark mode', () => {
+    afterEach(resetTestScheme);
+
+    const flat = (node: ReactTestInstance): Record<string, unknown> =>
+      (StyleSheet.flatten(node.props.style) ?? {}) as Record<string, unknown>;
+    const renderTableService = (): ReturnType<typeof render> =>
+      render(
+        <DiningReservationCard
+          experienceName="Be Our Guest Restaurant"
+          diningUrl="https://disneyworld.disney.go.com/dining/magic-kingdom/be-our-guest-restaurant/"
+          liveDetail={EMPTY_UNKNOWN_LIVE_DETAIL}
+          onReserve={() => {}}
+        />,
+      );
+
+    it('(c) card surface, title, reserve fill and dish buttons use the dark values', () => {
+      setTestScheme('dark');
+      const { getByTestId, getByText } = renderTableService();
+
+      const card = flat(getByTestId('dining-reservation-card'));
+      expect(card.backgroundColor).toBe(darkTheme.color.surface);
+      expect(card.borderColor).toBe(DINING.dark.cardBorder);
+      expect(card.shadowColor).toBe(DINING.dark.cardShadow);
+      expect(flat(getByText('Reservations & Dishes')).color).toBe(DINING.dark.inkText);
+      expect(flat(getByText('Open Today')).color).toBe(DINING.dark.openText);
+      expect(flat(getByTestId('experience-reserve-action')).backgroundColor).toBe(
+        DINING.dark.reserveBg,
+      );
+      expect(flat(getByTestId('dining-card-log-dish-btn')).backgroundColor).toBe(
+        darkTheme.color.primary,
+      );
+      expect(flat(getByTestId('dining-card-add-to-list-btn')).backgroundColor).toBe(
+        DINING.dark.secondaryBg,
+      );
+      expect(flat(getByText('Add to List')).color).toBe(darkTheme.color.primaryFg);
+    });
+
+    it('(Requirement 9.13) status title is textPrimary and the muted wait line is textSecondary', () => {
+      setTestScheme('dark');
+      const { getByText } = render(
+        <DiningReservationCard
+          experienceName="Be Our Guest Restaurant"
+          diningUrl={null}
+          liveDetail={{
+            ...EMPTY_UNKNOWN_LIVE_DETAIL,
+            diningAvailability: [{ status: 'Walk-up Available', partySize: 2, estimatedWaitMinutes: 25 }],
+          }}
+          onReserve={() => {}}
+        />,
+      );
+      const title = flat(getByText('Walk-up Available')).color;
+      const sub = flat(getByText('~25 min walk-up wait')).color;
+      expect(title).toBe(darkTheme.color.textPrimary);
+      expect(sub).toBe(darkTheme.color.textSecondary);
+      expect(sub).not.toBe(title);
+      expect(flat(getByText('Reservations & Dishes')).color).toBe(darkTheme.color.textPrimary);
+    });
+
+    it('keeps the pre-retrofit light values under light', () => {
+      const { getByTestId, getByText } = renderTableService();
+      expect(flat(getByTestId('dining-reservation-card')).backgroundColor).toBe('#ffffff');
+      expect(flat(getByTestId('experience-reserve-action')).backgroundColor).toBe('#d97706');
+      expect(flat(getByText('Reservations & Dishes')).color).toBe('#190c2d');
+    });
   });
 });

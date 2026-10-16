@@ -10,8 +10,11 @@
  */
 
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { render, screen, fireEvent } from '@testing-library/react-native';
 
+import { resetTestScheme, setTestScheme } from '../../test/themeTestUtils';
+import { themes } from '../../theme/theme';
 import {
   TimeWheelPicker,
   parseWheelValue,
@@ -136,5 +139,39 @@ describe('TimeWheelPicker', () => {
     }
     expect(screen.getByTestId('t-meridiem-AM').props.accessibilityState.selected).toBe(false);
     expect(screen.getByTestId('t-meridiem-PM').props.accessibilityState.selected).toBe(false);
+  });
+});
+
+// Feature: dark-mode — the wheel's surfaces and selection follow the Active theme.
+describe('TimeWheelPicker — dark mode', () => {
+  const flat = (node: { props: { style?: unknown } }): Record<string, unknown> =>
+    (StyleSheet.flatten(node.props.style as never) ?? {}) as Record<string, unknown>;
+
+  afterEach(resetTestScheme);
+
+  it('renders the dark wheel and repaints a selection made after the switch', () => {
+    const onChange = jest.fn();
+    const view = render(
+      <TimeWheelPicker value="6:25 PM" onChange={onChange} minuteStep={5} testIDPrefix="t" />,
+    );
+    expect(flat(screen.getByTestId('t-wheel')).backgroundColor).toBe(themes.light.color.surfaceAlt);
+    expect(flat(screen.getByTestId('t-hour-6')).backgroundColor).toBe(themes.light.color.primary);
+
+    setTestScheme('dark');
+    const d = themes.dark.color;
+    expect(flat(screen.getByTestId('t-wheel')).backgroundColor).toBe(d.surfaceAlt);
+    expect(flat(screen.getByTestId('t-wheel')).borderColor).toBe(d.border);
+    expect(flat(screen.getByTestId('t-hour-6')).backgroundColor).toBe(d.primary);
+    expect(flat(screen.getByText('6')).color).toBe(d.textOnPrimary);
+    expect(flat(screen.getByText('7')).color).toBe(d.textPrimary);
+    expect(flat(screen.getByTestId('t-meridiem-AM')).backgroundColor).toBe(d.surface);
+
+    fireEvent.press(screen.getByTestId('t-hour-7'));
+    expect(onChange).toHaveBeenCalledWith('7:25 PM');
+    view.rerender(
+      <TimeWheelPicker value="7:25 PM" onChange={onChange} minuteStep={5} testIDPrefix="t" />,
+    );
+    expect(flat(screen.getByTestId('t-hour-7')).backgroundColor).toBe(d.primary);
+    expect(flat(screen.getByText('7')).color).toBe(d.textOnPrimary);
   });
 });

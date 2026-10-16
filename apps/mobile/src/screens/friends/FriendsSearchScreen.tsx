@@ -7,24 +7,27 @@
 //   - Forwards 1..100-character queries to the server (R8.1, R8.2). Inputs
 //     outside that range surface an inline message before any network call,
 //     mirroring the server's `search_query_length_invalid` error.
-//   - Each result row offers a "Send request" button that posts to
-//     `POST /me/friend-requests` (R8.3). Per-row errors are mapped to
-//     friendly messages via `friendsErrorMessage`, covering self-target
-//     (R8.8), duplicates (R8.7), and unknown recipient (R8.10).
+//   - Each result row reflects friendship and request state:
+//     - Previously added friends render a disabled "Added" indicator with a checkmark.
+//     - Pending outgoing requests render a disabled "Sent" indicator.
+//     - Pending incoming requests render a disabled "Pending" indicator.
+//     - Other users render a "Send request" button that posts to
+//       `POST /me/friend-requests` (R8.3).
+//   - Per-row errors are mapped to friendly messages via `friendsErrorMessage`,
+//     covering self-target (R8.8), duplicates (R8.7), and unknown recipient (R8.10).
 //   - Successful sends invalidate the `['friends']` cache so when the user
 //     navigates back to `FriendsList`, the new outgoing request is visible
 //     without a second fetch.
 //
 // Styling: uses the shared "Magical / Whimsical" theme — a gradient hero
 // header, a themed search field matching CatalogScreen, result rows as
-// `Card`s with a "Send request" PrimaryButton, and calm muted helper/empty
+// `Card`s with status-aware PrimaryButton controls, and calm muted helper/empty
 // states. See `theme/theme.ts` and `theme/components.tsx`.
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
-  StyleSheet,
   Text,
   TextInput,
   View,
@@ -39,7 +42,8 @@ import {
 
 import { ApiError, apiRequest } from '../../api/client';
 import { useDebounce } from '../../hooks/useDebounce';
-import { theme } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme } from '../../theme/useAppTheme';
 import {
   Card,
   EmptyState,
@@ -75,6 +79,26 @@ interface FriendRequestResponse {
   readonly createdAt: string;
 }
 
+interface FriendsAndRequests {
+  readonly friends: readonly FriendListEntry[];
+  readonly incomingRequests: readonly FriendRequestListEntry[];
+  readonly outgoingRequests: readonly FriendRequestListEntry[];
+}
+
+interface FriendListEntry {
+  readonly userId: string;
+  readonly displayName: string;
+  readonly avatarPreset: string | null;
+  readonly establishedAt: string;
+}
+
+interface FriendRequestListEntry {
+  readonly id: string;
+  readonly otherUserId: string;
+  readonly otherDisplayName: string;
+  readonly createdAt: string;
+}
+
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
@@ -99,6 +123,8 @@ const SEARCH_DEBOUNCE_MS = 250;
 // ---------------------------------------------------------------------------
 
 export default function FriendsSearchScreen(): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const queryClient = useQueryClient();
   const navigation = useNavigation();
   const [input, setInput] = useState('');
@@ -135,6 +161,37 @@ export default function FriendsSearchScreen(): JSX.Element {
     staleTime: 30 * 1000,
     retry: false,
   });
+
+  // Query existing friends and pending requests to cross-reference with search results.
+  const friendsQuery = useQuery<FriendsAndRequests, ApiError>({
+    queryKey: ['friends'],
+    queryFn: () => apiRequest<FriendsAndRequests>('GET', '/me/friends'),
+    staleTime: 30 * 1000,
+  });
+
+  const friendIds = useMemo<ReadonlySet<string>>(() => {
+    const ids = new Set<string>();
+    for (const friend of friendsQuery.data?.friends ?? []) {
+      ids.add(friend.userId);
+    }
+    return ids;
+  }, [friendsQuery.data?.friends]);
+
+  const outgoingRequestIds = useMemo<ReadonlySet<string>>(() => {
+    const ids = new Set<string>();
+    for (const req of friendsQuery.data?.outgoingRequests ?? []) {
+      ids.add(req.otherUserId);
+    }
+    return ids;
+  }, [friendsQuery.data?.outgoingRequests]);
+
+  const incomingRequestIds = useMemo<ReadonlySet<string>>(() => {
+    const ids = new Set<string>();
+    for (const req of friendsQuery.data?.incomingRequests ?? []) {
+      ids.add(req.otherUserId);
+    }
+    return ids;
+  }, [friendsQuery.data?.incomingRequests]);
 
   // Per-row error and per-row "request sent" success markers, both keyed
   // by the result row's user id. Successes survive across re-renders so
@@ -195,13 +252,23 @@ export default function FriendsSearchScreen(): JSX.Element {
       const inFlight =
         sendRequestMutation.isPending &&
         sendRequestMutation.variables === item.id;
+      const isFriend = friendIds.has(item.id);
+      const isSent =
+        sentTo[item.id] === true || outgoingRequestIds.has(item.id);
+      const isPendingIncoming = incomingRequestIds.has(item.id);
+
       return (
         <ResultRow
           hit={item}
           busy={inFlight}
-          sent={sentTo[item.id] === true}
+          added={isFriend}
+          sent={isSent}
+          pendingIncoming={isPendingIncoming}
           error={rowErrors[item.id] ?? null}
           onSend={() => {
+            if (isFriend || isSent || isPendingIncoming) {
+              return;
+            }
             setRowErrors((prev) => {
               const next = { ...prev };
               delete next[item.id];
@@ -212,7 +279,14 @@ export default function FriendsSearchScreen(): JSX.Element {
         />
       );
     },
-    [sendRequestMutation, sentTo, rowErrors],
+    [
+      sendRequestMutation,
+      sentTo,
+      rowErrors,
+      friendIds,
+      outgoingRequestIds,
+      incomingRequestIds,
+    ],
   );
 
   const inlineLengthError = useMemo<string | null>(() => {
@@ -250,14 +324,15 @@ export default function FriendsSearchScreen(): JSX.Element {
           <Ionicons
             name="search"
             size={18}
-            color={theme.color.textSecondary}
+            color={t.color.textSecondary}
             style={styles.searchIcon}
           />
           <TextInput
             value={input}
             onChangeText={setInput}
             placeholder="Search by name or email"
-            placeholderTextColor={theme.color.textSecondary}
+            placeholderTextColor={t.color.textSecondary}
+            keyboardAppearance={t.scheme}
             autoCapitalize="none"
             autoCorrect={false}
             returnKeyType="search"
@@ -284,7 +359,7 @@ export default function FriendsSearchScreen(): JSX.Element {
         </View>
       ) : isLoading ? (
         <View style={styles.center} testID="friends-search-loading">
-          <ActivityIndicator color={theme.color.primary} />
+          <ActivityIndicator color={t.color.primaryFg} />
         </View>
       ) : isError ? (
         <View style={styles.center}>
@@ -308,6 +383,8 @@ export default function FriendsSearchScreen(): JSX.Element {
           keyExtractor={(item) => item.id}
           renderItem={renderRow}
           contentContainerStyle={styles.listContent}
+          keyboardShouldPersistTaps="handled"
+          testID="friends-search-results-list"
         />
       )}
     </ScreenContainer>
@@ -321,7 +398,9 @@ export default function FriendsSearchScreen(): JSX.Element {
 interface ResultRowProps {
   readonly hit: UserSearchHit;
   readonly busy: boolean;
+  readonly added: boolean;
   readonly sent: boolean;
+  readonly pendingIncoming: boolean;
   readonly error: string | null;
   readonly onSend: () => void;
 }
@@ -329,10 +408,33 @@ interface ResultRowProps {
 function ResultRow({
   hit,
   busy,
+  added,
   sent,
+  pendingIncoming,
   error,
   onSend,
 }: ResultRowProps): JSX.Element {
+  const styles = useStyles();
+  const isActionDisabled = busy || added || sent || pendingIncoming;
+  const buttonLabel = added
+    ? 'Added'
+    : sent
+    ? 'Sent'
+    : pendingIncoming
+    ? 'Pending'
+    : busy
+    ? 'Sending\u2026'
+    : 'Send request';
+  const buttonIcon =
+    added || sent
+      ? 'checkmark-outline'
+      : pendingIncoming
+      ? 'time-outline'
+      : 'person-add-outline';
+  const testId = added
+    ? `friends-added-${hit.id}`
+    : `friends-send-${hit.id}`;
+
   return (
     <Card style={styles.row} testID={`friends-search-row-${hit.id}`}>
       <View style={styles.rowMain}>
@@ -341,12 +443,13 @@ function ResultRow({
           <Text style={styles.rowMeta}>{hit.email}</Text>
         </View>
         <PrimaryButton
-          label={sent ? 'Sent' : busy ? 'Sending\u2026' : 'Send request'}
-          icon={sent ? 'checkmark-outline' : 'person-add-outline'}
+          label={buttonLabel}
+          icon={buttonIcon}
           onPress={onSend}
-          disabled={busy || sent}
+          disabled={isActionDisabled}
           loading={busy}
-          testID={`friends-send-${hit.id}`}
+          testID={testId}
+          accessibilityLabel={buttonLabel}
         />
       </View>
       {error !== null ? (
@@ -362,71 +465,71 @@ function ResultRow({
 // Styles
 // ---------------------------------------------------------------------------
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   controls: {
-    paddingHorizontal: theme.spacing.lg,
-    paddingTop: theme.spacing.md,
-    paddingBottom: theme.spacing.sm,
-    gap: theme.spacing.sm,
+    paddingHorizontal: t.spacing.lg,
+    paddingTop: t.spacing.md,
+    paddingBottom: t.spacing.sm,
+    gap: t.spacing.sm,
   },
   searchWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: theme.color.surface,
-    borderRadius: theme.radius.md,
-    paddingHorizontal: theme.spacing.md,
+    backgroundColor: t.color.surface,
+    borderRadius: t.radius.md,
+    paddingHorizontal: t.spacing.md,
     borderWidth: 1,
-    borderColor: theme.color.border,
-    ...theme.shadow.card,
+    borderColor: t.color.border,
+    ...t.shadow.card,
   },
   searchIcon: {
-    marginRight: theme.spacing.sm,
+    marginRight: t.spacing.sm,
   },
   searchInput: {
     flex: 1,
-    paddingVertical: theme.spacing.md,
+    paddingVertical: t.spacing.md,
     fontSize: 16,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   inlineError: {
-    color: theme.color.danger,
+    color: t.color.danger,
     fontSize: 13,
   },
   center: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: theme.spacing.xl,
+    padding: t.spacing.xl,
   },
   listContent: {
-    paddingHorizontal: theme.spacing.lg,
-    paddingTop: theme.spacing.sm,
-    paddingBottom: theme.spacing.xxl,
+    paddingHorizontal: t.spacing.lg,
+    paddingTop: t.spacing.sm,
+    paddingBottom: t.spacing.xxl,
   },
   row: {
-    marginBottom: theme.spacing.md,
-    gap: theme.spacing.sm,
+    marginBottom: t.spacing.md,
+    gap: t.spacing.sm,
   },
   rowMain: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: theme.spacing.md,
+    gap: t.spacing.md,
   },
   rowText: {
     flexShrink: 1,
     gap: 2,
   },
   rowName: {
-    ...theme.typography.subtitle,
-    color: theme.color.textPrimary,
+    ...t.typography.subtitle,
+    color: t.color.textPrimary,
   },
   rowMeta: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
   },
   rowError: {
-    ...theme.typography.meta,
-    color: theme.color.danger,
+    ...t.typography.meta,
+    color: t.color.danger,
   },
-});
+}));

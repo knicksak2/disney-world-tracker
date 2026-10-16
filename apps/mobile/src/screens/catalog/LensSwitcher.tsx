@@ -6,8 +6,12 @@
 // (My Passport & Lore). Renders directly beneath QuickSpecsRow.
 
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme, usePalette } from '../../theme/useAppTheme';
+import { LENS } from './LensSwitcher.palette';
 
 export type LensMode = 'today' | 'passport';
 
@@ -26,6 +30,9 @@ export default function LensSwitcher({
   category,
   areaType,
 }: LensSwitcherProps): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
+  const pal = usePalette(LENS);
   const changeLens = onChangeLens ?? onLensChange;
   const isToday = activeLens === 'today';
   const isPassport = activeLens === 'passport';
@@ -64,7 +71,7 @@ export default function LensSwitcher({
         <Ionicons
           name={isToday ? todayIconActive : todayIconInactive}
           size={15}
-          color={isToday ? '#5b2a86' : '#655d78'}
+          color={isToday ? t.color.primaryFg : pal.inactiveIcon}
         />
         <Text
           style={[styles.segmentText, isToday ? styles.segmentTextActive : null]}
@@ -84,7 +91,7 @@ export default function LensSwitcher({
         <Ionicons
           name={isPassport ? 'compass' : 'compass-outline'}
           size={16}
-          color={isPassport ? '#5b2a86' : '#655d78'}
+          color={isPassport ? t.color.primaryFg : pal.inactiveIcon}
         />
         <Text
           style={[
@@ -99,10 +106,10 @@ export default function LensSwitcher({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   container: {
     flexDirection: 'row',
-    backgroundColor: '#ede6f6',
+    backgroundColor: LENS[t.scheme].trackBg,
     borderRadius: 999,
     padding: 4,
     marginHorizontal: 0,
@@ -110,7 +117,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     gap: 4,
     borderWidth: 1,
-    borderColor: '#dcd1ec',
+    borderColor: LENS[t.scheme].trackBorder,
   },
   segment: {
     flex: 1,
@@ -123,8 +130,8 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   segmentActive: {
-    backgroundColor: '#ffffff',
-    shadowColor: '#5b2a86',
+    backgroundColor: LENS[t.scheme].activeBg,
+    shadowColor: LENS[t.scheme].activeShadow,
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.18,
     shadowRadius: 10,
@@ -133,9 +140,9 @@ const styles = StyleSheet.create({
   segmentText: {
     fontSize: 12,
     fontWeight: '800',
-    color: '#655d78',
+    color: LENS[t.scheme].inactiveText,
   },
   segmentTextActive: {
-    color: '#5b2a86',
+    color: t.color.primaryFg,
   },
-});
+}));

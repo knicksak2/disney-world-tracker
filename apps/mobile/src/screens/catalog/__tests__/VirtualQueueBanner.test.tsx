@@ -4,8 +4,12 @@
 // Validates: Requirements 15.1, 15.2, 15.3, 15.4
 
 import React from 'react';
+import { StyleSheet } from 'react-native';
+import type { ReactTestInstance } from 'react-test-renderer';
 import { render } from '@testing-library/react-native';
 import VirtualQueueBanner from '../VirtualQueueBanner';
+import { VQ } from '../VirtualQueueBanner.palette';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
 
 describe('VirtualQueueBanner (Task 17.2)', () => {
   // Feature: experience-detail-redesign, Property 24: Virtual Queue Banner renders iff state is present
@@ -97,6 +101,31 @@ describe('VirtualQueueBanner (Task 17.2)', () => {
       );
       const banner = getByTestId('experience-virtual-queue-banner');
       expect(banner.props.accessibilityLabel).toBe('Virtual Queue: Closed');
+    });
+  });
+
+  // Feature: dark-mode — (c) converted literals (B2)
+  describe('dark mode', () => {
+    afterEach(resetTestScheme);
+
+    const flat = (node: ReactTestInstance): Record<string, unknown> =>
+      (StyleSheet.flatten(node.props.style) ?? {}) as Record<string, unknown>;
+    const RANGE = { state: 'Open', currentGroupStart: 15, currentGroupEnd: 30 };
+
+    it('(c) banner surface, border and range badge use the sky/blue dark tonal values', () => {
+      setTestScheme('dark');
+      const { getByTestId, getByText } = render(<VirtualQueueBanner boardingGroup={RANGE} />);
+
+      const banner = flat(getByTestId('experience-virtual-queue-banner'));
+      expect(banner.backgroundColor).toBe(VQ.dark.containerBg);
+      expect(banner.borderColor).toBe(VQ.dark.containerBorder);
+      expect(flat(getByTestId('vq-group-range')).backgroundColor).toBe(VQ.dark.rangeBg);
+      expect(flat(getByText('Groups 15\u201330')).color).toBe(VQ.dark.rangeText);
+    });
+
+    it('keeps the pre-retrofit light values under light', () => {
+      const { getByTestId } = render(<VirtualQueueBanner boardingGroup={RANGE} />);
+      expect(flat(getByTestId('experience-virtual-queue-banner')).backgroundColor).toBe('#eff6ff');
     });
   });
 });

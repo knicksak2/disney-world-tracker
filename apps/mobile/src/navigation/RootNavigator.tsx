@@ -28,6 +28,7 @@ import ExperienceListDiscoveryScreen from '../screens/experienceLists/Experience
 import NotificationCenterScreen from '../screens/notifications/NotificationCenterScreen';
 import { useClaimablePinsBadge } from '../components/pins/useClaimablePinsBadge';
 import MagicFab from '../screens/quickAction/MagicFab';
+import { useAppTheme } from '../theme/useAppTheme';
 
 /**
  * Root navigator for the mobile app (Tasks 12.1, 12.2, 12.6, Requirements 1.1, 1.2, 1.5, 7.2, 8.2).
@@ -119,13 +120,14 @@ function EmptySlot(): JSX.Element {
 
 function MainTabsNavigator(): JSX.Element {
   const { count: claimableCount } = useClaimablePinsBadge();
+  const t = useAppTheme();
 
   return (
     <MainTabs.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
-        tabBarActiveTintColor: '#003a9b',
-        tabBarInactiveTintColor: '#6b7280',
+        tabBarActiveTintColor: t.tabBar.activeTint,
+        tabBarInactiveTintColor: t.tabBar.inactiveTint,
         tabBarIcon: ({ focused, color, size }) => {
           const glyphs = TAB_ICONS[route.name as keyof MainTabParamList];
           if (!glyphs) return null;
@@ -177,8 +179,8 @@ function MainTabsNavigator(): JSX.Element {
             ? {
                 tabBarBadge: claimableCount > 99 ? '99+' : claimableCount,
                 tabBarBadgeStyle: {
-                  backgroundColor: '#d97706',
-                  color: '#ffffff',
+                  backgroundColor: t.tabBar.badgeBackground,
+                  color: t.tabBar.badgeText,
                   fontSize: 10,
                   fontWeight: '700',
                 },

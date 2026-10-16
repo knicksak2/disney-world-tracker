@@ -15,11 +15,16 @@
  */
 
 import React from 'react';
+import { StyleSheet } from 'react-native';
+import type { ReactTestInstance } from 'react-test-renderer';
 import { NavigationContainer } from '@react-navigation/native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 
 import type { ExperienceDTO, ParkLiveSnapshotDTO } from '@dwt/shared';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
+import { darkTheme, lightTheme } from '../../../theme/theme';
+import { EXPLORE } from '../ExploreHubScreen.palette';
 
 // Mocks
 jest.mock('expo-secure-store', () => {
@@ -513,5 +518,120 @@ describe('ExploreHubScreen', () => {
     await waitFor(() => {
       expect(screen.getByTestId('catalog-unavailable')).toBeTruthy();
     });
+  });
+});
+
+describe('ExploreHubScreen — dark mode', () => {
+  const flat = (node: ReactTestInstance) => StyleSheet.flatten(node.props.style) ?? {};
+  /** Host icon nodes (the vector-icons mock renders a host `Icon`) with a glyph name. */
+  const iconsNamed = (root: ReactTestInstance, name: string): ReactTestInstance[] =>
+    root.findAll((n) => (n.type as unknown) === 'Icon' && n.props.name === name);
+  /** Nearest host ancestor whose flattened style paints a backgroundColor. */
+  function paintedAncestor(node: ReactTestInstance): Record<string, unknown> {
+    let cur: ReactTestInstance | null = node.parent;
+    while (cur !== null) {
+      if (typeof cur.type === 'string' && flat(cur).backgroundColor !== undefined) {
+        return flat(cur);
+      }
+      cur = cur.parent;
+    }
+    return {};
+  }
+
+  function renderHub(): void {
+    render(
+      <QueryClientProvider client={makeQueryClient()}>
+        <NavigationContainer>
+          <ExploreHubScreen navigation={mockNavigation} />
+        </NavigationContainer>
+      </QueryClientProvider>,
+    );
+  }
+
+  async function searchFor(text: string): Promise<void> {
+    fireEvent.changeText(screen.getByTestId('catalog-search'), text);
+    await waitFor(() => {
+      expect(screen.getByTestId('catalog-search-row-exp-space')).toBeTruthy();
+    });
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    stubApi();
+  });
+  afterEach(resetTestScheme);
+
+  it('(a)(b)(c) paints the screen, primary text and converted dock literals with dark values', () => {
+    setTestScheme('dark');
+    renderHub();
+
+    // (a) root container.
+    expect(flat(screen.getByTestId('explore-hub-screen')).backgroundColor).toBe(
+      darkTheme.color.background,
+    );
+    // (b) a primary text node.
+    expect(flat(screen.getByText('Live Waits')).color).toBe(darkTheme.color.textPrimary);
+    expect(flat(screen.getByText('THEME PARKS')).color).toBe(darkTheme.color.textSecondary);
+    // (c) converted literals: the Live Waits dock disc + glyph (rule 3 S / T).
+    const waitsIcon = iconsNamed(screen.getByTestId('utility-dock-waits'), 'time')[0]!;
+    expect(waitsIcon.props.color).toBe(EXPLORE.dark.dockWaitsIcon);
+    expect(paintedAncestor(waitsIcon).backgroundColor).toBe(EXPLORE.dark.dockWaitsBg);
+    // The search field is themed for the keyboard too.
+    const input = screen.getByTestId('catalog-search');
+    expect(input.props.keyboardAppearance).toBe('dark');
+    expect(input.props.placeholderTextColor).toBe(darkTheme.color.textSecondary);
+  });
+
+  it('keeps the light values in light mode (light parity spot-check)', () => {
+    renderHub();
+    expect(flat(screen.getByTestId('explore-hub-screen')).backgroundColor).toBe(
+      lightTheme.color.background,
+    );
+    const waitsIcon = iconsNamed(screen.getByTestId('utility-dock-waits'), 'time')[0]!;
+    expect(waitsIcon.props.color).toBe('#0284C7');
+    expect(paintedAncestor(waitsIcon).backgroundColor).toBe('#E0F2FE');
+  });
+
+  it('(d) repaints a mounted search-result row live when the scheme switches (Property 20)', async () => {
+    renderHub();
+    await searchFor('Space');
+
+    const rowName = () => screen.getByText('Space Mountain');
+    expect(flat(rowName()).color).toBe(lightTheme.color.textPrimary);
+
+    // Switch the scheme WITHOUT remounting.
+    setTestScheme('dark');
+
+    expect(screen.getByTestId('catalog-search-results')).toBeTruthy();
+    expect(flat(rowName()).color).toBe(darkTheme.color.textPrimary);
+    const row = screen.getByTestId('catalog-search-row-exp-space');
+    expect(flat(within(row).getByText(/Magic Kingdom/)).color).toBe(darkTheme.color.textSecondary);
+  });
+
+  it('paints the category placeholder tile with the category fill behind a white glyph (Property 22)', async () => {
+    renderHub();
+    await searchFor('Space');
+
+    const tileFor = (rowId: string) =>
+      within(screen.getByTestId(rowId)).getByTestId('catalog-search-thumb-placeholder');
+
+    // Light: fill === the pre-retrofit tint.
+    expect(flat(tileFor('catalog-search-row-exp-space')).backgroundColor).toBe(
+      lightTheme.categoryVisual.Ride.tint,
+    );
+
+    setTestScheme('dark');
+
+    const rideTile = tileFor('catalog-search-row-exp-space');
+    expect(flat(rideTile).backgroundColor).toBe(darkTheme.categoryVisual.Ride.fill);
+    expect(iconsNamed(rideTile, darkTheme.categoryVisual.Ride.glyph)[0]!.props.color).toBe(
+      darkTheme.color.textOnPrimary,
+    );
+    const restaurantTile = tileFor('catalog-search-row-exp-be-our-guest');
+    expect(flat(restaurantTile).backgroundColor).toBe(darkTheme.categoryVisual.Restaurant.fill);
+    // The fill is the tile role, not the (brighter) foreground tint.
+    expect(darkTheme.categoryVisual.Restaurant.fill).not.toBe(
+      darkTheme.categoryVisual.Restaurant.tint,
+    );
   });
 });

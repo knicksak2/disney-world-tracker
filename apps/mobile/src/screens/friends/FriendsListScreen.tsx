@@ -41,7 +41,6 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
-  StyleSheet,
   Text,
   View,
 } from 'react-native';
@@ -58,7 +57,8 @@ import { isAvatarPresetId } from '@dwt/shared';
 import { ApiError, apiRequest } from '../../api/client';
 import { renderAvatarPreset } from '../../avatars/AvatarPresets';
 import type { YouAndCrewStackParamList } from '../../navigation/YouAndCrewStack';
-import { theme } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme } from '../../theme/useAppTheme';
 import {
   Badge,
   Card,
@@ -127,6 +127,8 @@ type Row =
 // ---------------------------------------------------------------------------
 
 export default function FriendsListScreen({ navigation }: Props): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const queryClient = useQueryClient();
 
   const friendsQuery = useQuery<FriendsAndRequests, ApiError>({
@@ -272,7 +274,7 @@ export default function FriendsListScreen({ navigation }: Props): JSX.Element {
       <ScreenContainer>
         <GradientHeader title="Friends" icon="people" />
         <View style={styles.center} testID="friends-loading">
-          <ActivityIndicator color={theme.color.primary} />
+          <ActivityIndicator color={t.color.primaryFg} />
         </View>
       </ScreenContainer>
     );
@@ -402,6 +404,7 @@ function buildRows(data: FriendsAndRequests): readonly Row[] {
 }
 
 function SectionHeader({ label }: { readonly label: string }): JSX.Element {
+  const styles = useStyles();
   return (
     <View style={styles.sectionHeader}>
       <Text style={styles.sectionHeaderText}>{label}</Text>
@@ -410,6 +413,7 @@ function SectionHeader({ label }: { readonly label: string }): JSX.Element {
 }
 
 function SectionEmpty({ label }: { readonly label: string }): JSX.Element {
+  const styles = useStyles();
   return (
     <View style={styles.sectionEmpty}>
       <Text style={styles.sectionEmptyText}>{label}</Text>
@@ -429,6 +433,7 @@ function FriendAvatar({
   readonly preset: string | null;
   readonly displayName: string;
 }): JSX.Element {
+  const styles = useStyles();
   const art = isAvatarPresetId(preset) ? renderAvatarPreset(preset, 40) : null;
   if (art !== null) {
     return (
@@ -464,9 +469,12 @@ function FriendRow({
   onRemove,
   onPress,
 }: FriendRowProps): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   return (
     <Card
-      accentColor={theme.color.primary}
+      // Accent stripe: a primary-hued mark on the card → primaryFg (rule 1a).
+      accentColor={t.color.primaryFg}
       style={styles.row}
       onPress={onPress}
       testID={`friends-friend-${friend.userId}`}
@@ -498,11 +506,13 @@ function OutgoingRequestRow({
 }: {
   readonly request: FriendRequestListEntry;
 }): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   return (
     <Card style={styles.row} testID={`friends-outgoing-${request.id}`}>
       <View style={styles.rowMain}>
         <Text style={styles.rowName}>{request.otherDisplayName}</Text>
-        <Badge label="Pending" color={theme.color.warning} icon="time-outline" />
+        <Badge label="Pending" color={t.color.warning} icon="time-outline" />
       </View>
     </Card>
   );
@@ -512,12 +522,12 @@ function OutgoingRequestRow({
 // Styles
 // ---------------------------------------------------------------------------
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   headerActions: {
     flexDirection: 'row',
-    gap: theme.spacing.sm,
-    paddingHorizontal: theme.spacing.lg,
-    paddingTop: theme.spacing.md,
+    gap: t.spacing.sm,
+    paddingHorizontal: t.spacing.lg,
+    paddingTop: t.spacing.md,
   },
   headerBtn: {
     flexGrow: 1,
@@ -527,56 +537,56 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: theme.spacing.xl,
-    gap: theme.spacing.md,
+    padding: t.spacing.xl,
+    gap: t.spacing.md,
   },
   retryBtn: {
     alignSelf: 'center',
     minWidth: 160,
   },
   listContent: {
-    paddingHorizontal: theme.spacing.lg,
-    paddingTop: theme.spacing.md,
-    paddingBottom: theme.spacing.xxl,
+    paddingHorizontal: t.spacing.lg,
+    paddingTop: t.spacing.md,
+    paddingBottom: t.spacing.xxl,
   },
   sectionHeader: {
-    paddingVertical: theme.spacing.sm,
-    marginTop: theme.spacing.sm,
+    paddingVertical: t.spacing.sm,
+    marginTop: t.spacing.sm,
   },
   sectionHeaderText: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   sectionEmpty: {
-    paddingVertical: theme.spacing.sm,
-    paddingHorizontal: theme.spacing.xs,
+    paddingVertical: t.spacing.sm,
+    paddingHorizontal: t.spacing.xs,
   },
   sectionEmptyText: {
-    ...theme.typography.body,
-    color: theme.color.textSecondary,
+    ...t.typography.body,
+    color: t.color.textSecondary,
     fontStyle: 'italic',
   },
   row: {
-    marginBottom: theme.spacing.md,
-    gap: theme.spacing.md,
+    marginBottom: t.spacing.md,
+    gap: t.spacing.md,
   },
   rowMain: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: theme.spacing.md,
+    gap: t.spacing.md,
   },
   rowIdentity: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.sm,
+    gap: t.spacing.sm,
     flexShrink: 1,
   },
   rowName: {
-    ...theme.typography.subtitle,
-    color: theme.color.textPrimary,
+    ...t.typography.subtitle,
+    color: t.color.textPrimary,
     flexShrink: 1,
   },
   avatar: {
@@ -584,18 +594,18 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: 20,
     overflow: 'hidden',
-    backgroundColor: theme.color.surfaceAlt,
+    backgroundColor: t.color.surfaceAlt,
   },
   avatarPlaceholder: {
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarPlaceholderText: {
-    ...theme.typography.subtitle,
-    color: theme.color.primary,
+    ...t.typography.subtitle,
+    color: t.color.primaryFg,
   },
   rowError: {
-    ...theme.typography.meta,
-    color: theme.color.danger,
+    ...t.typography.meta,
+    color: t.color.danger,
   },
-});
+}));

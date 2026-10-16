@@ -28,8 +28,10 @@ import type {
 } from '@dwt/shared';
 
 import { ApiError, apiRequest } from '../../api/client';
-import { theme } from '../../theme/theme';
 import { Badge, SecondaryButton } from '../../theme/components';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme } from '../../theme/useAppTheme';
+import { PICKER } from './FoodItemPickerModal.palette';
 import FoodItemLogHistorySheet from './FoodItemLogHistorySheet';
 import RestaurantFoodLogsSheet from './RestaurantFoodLogsSheet';
 
@@ -75,6 +77,8 @@ function FoodItemRow({
   onSelect,
   onOpenHistory,
 }: FoodItemRowProps): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   // Sourced from GET /me/food-items/:foodItemId/logs (Requirement 5.5).
   // In addToLists mode, or when repeatCount is provided directly from the scope-level query,
   // do not flood the network with individual log queries for every single menu item.
@@ -116,10 +120,10 @@ function FoodItemRow({
             size={22}
             color={
               isAlreadyInList
-                ? theme.color.textSecondary
+                ? t.color.textSecondary
                 : isSelected
-                ? theme.color.primary
-                : theme.color.textSecondary
+                ? t.color.primaryFg
+                : t.color.textSecondary
             }
           />
         </View>
@@ -132,7 +136,7 @@ function FoodItemRow({
           {isAlreadyInList ? (
             <Badge
               label="Already on list"
-              color={theme.color.textSecondary}
+              color={t.color.textSecondary}
               testID={`food-item-already-on-list-${item.id}`}
             />
           ) : null}
@@ -140,7 +144,7 @@ function FoodItemRow({
           {!item.currentlyOnMenu && (
             <Badge
               label="Not currently on menu"
-              color={theme.color.textSecondary}
+              color={t.color.textSecondary}
               testID={`food-item-not-on-menu-${item.id}`}
             />
           )}
@@ -160,12 +164,12 @@ function FoodItemRow({
             style={styles.repeatBadge}
             testID={`food-item-repeat-count-${item.id}`}
           >
-            <Ionicons name="time-outline" size={14} color={theme.color.primary} />
+            <Ionicons name="time-outline" size={14} color={t.color.primaryFg} />
             <Text style={styles.repeatText}>Logged {repeatCount}x</Text>
           </Pressable>
         ) : null}
         {mode === 'log' ? (
-          <Ionicons name="chevron-forward" size={18} color={theme.color.textSecondary} />
+          <Ionicons name="chevron-forward" size={18} color={t.color.textSecondary} />
         ) : null}
       </View>
     </Pressable>
@@ -188,6 +192,8 @@ export default function FoodItemPickerModal({
   existingItemIds,
   isSubmittingSelection = false,
 }: FoodItemPickerModalProps): JSX.Element | null {
+  const styles = useStyles();
+  const t = useAppTheme();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState<string>('');
   const [selectedTab, setSelectedTab] = useState<string | null>(null);
@@ -197,6 +203,12 @@ export default function FoodItemPickerModal({
   const [historyItem, setHistoryItem] = useState<FoodItemDTO | null>(null);
   const [scopedLogsVisible, setScopedLogsVisible] = useState<boolean>(false);
   const [selectedItems, setSelectedItems] = useState<Map<string, FoodItemDTO>>(new Map());
+  // Stable FlatList `extraData`: a new identity only when the selection or the
+  // scheme changes, so an unrelated parent render doesn't re-render every row.
+  const listExtraData = useMemo(
+    () => [selectedItems, t.scheme] as const,
+    [selectedItems, t.scheme],
+  );
 
   const scopeId = experienceId ?? locationId;
 
@@ -510,7 +522,7 @@ export default function FoodItemPickerModal({
         />
       );
     },
-    [mode, selectedItems, existingSet, handleItemPress],
+    [mode, selectedItems, existingSet, handleItemPress, styles],
   );
 
   function handleSearchSubmit(): void {
@@ -595,7 +607,7 @@ export default function FoodItemPickerModal({
         testID="food-item-picker-modal"
       >
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.backdrop}
         >
           <View style={styles.container}>
@@ -614,14 +626,14 @@ export default function FoodItemPickerModal({
                 style={styles.closeBtn}
                 testID="close-food-item-picker-btn"
               >
-                <Ionicons name="close" size={24} color={theme.color.textSecondary} />
+                <Ionicons name="close" size={24} color={t.color.textSecondary} />
               </Pressable>
             </View>
 
             {/* Search Input */}
             <View style={styles.searchSection}>
               <View style={styles.searchBar}>
-                <Ionicons name="search" size={18} color={theme.color.textSecondary} />
+                <Ionicons name="search" size={18} color={t.color.textSecondary} />
                 <TextInput
                   value={search}
                   onChangeText={(val) => {
@@ -631,7 +643,8 @@ export default function FoodItemPickerModal({
                   onSubmitEditing={handleSearchSubmit}
                   returnKeyType="done"
                   placeholder="Search dishes or snacks..."
-                  placeholderTextColor={theme.color.textSecondary}
+                  placeholderTextColor={t.color.textSecondary}
+                  keyboardAppearance={t.scheme}
                   style={styles.searchInput}
                   testID="food-item-search-input"
                   autoCorrect={false}
@@ -646,7 +659,7 @@ export default function FoodItemPickerModal({
                     accessibilityLabel="Clear search text"
                     style={styles.clearSearchBtn}
                   >
-                    <Ionicons name="close-circle" size={18} color={theme.color.textSecondary} />
+                    <Ionicons name="close-circle" size={18} color={t.color.textSecondary} />
                   </Pressable>
                 )}
               </View>
@@ -659,6 +672,7 @@ export default function FoodItemPickerModal({
                   horizontal
                   showsHorizontalScrollIndicator={false}
                   contentContainerStyle={styles.tabBarContent}
+                  keyboardShouldPersistTaps="handled"
                 >
                   {tabLabels.map((label) => {
                     const active = label === activeTab;
@@ -711,7 +725,7 @@ export default function FoodItemPickerModal({
             {itemsQuery.isLoading ? (
               <View style={styles.loadingWrap}>
                 <ActivityIndicator
-                  color={theme.color.primary}
+                  color={t.color.primaryFg}
                   accessibilityLabel="Loading dishes"
                   testID="food-item-picker-loading"
                 />
@@ -725,7 +739,7 @@ export default function FoodItemPickerModal({
                 data={displayRows}
                 keyExtractor={(row) => row.id}
                 renderItem={renderRow}
-                extraData={selectedItems}
+                extraData={listExtraData}
                 keyboardShouldPersistTaps="handled"
                 ListHeaderComponent={
                   showAddRow ? (
@@ -737,7 +751,7 @@ export default function FoodItemPickerModal({
                       style={styles.addRow}
                       testID="food-item-picker-add-btn"
                     >
-                      <Ionicons name="add-circle" size={22} color={theme.color.primary} />
+                      <Ionicons name="add-circle" size={22} color={t.color.primaryFg} />
                       <View style={styles.addRowTextWrap}>
                         <Text style={styles.addRowTitle}>
                           Add &quot;{trimmedSearch}&quot;
@@ -747,7 +761,7 @@ export default function FoodItemPickerModal({
                         </Text>
                       </View>
                       {isSubmitting ? (
-                        <ActivityIndicator size="small" color={theme.color.primary} />
+                        <ActivityIndicator size="small" color={t.color.primaryFg} />
                       ) : null}
                     </Pressable>
                   ) : null
@@ -768,7 +782,7 @@ export default function FoodItemPickerModal({
                           style={styles.switchTabBtn}
                           testID="food-item-switch-to-all-btn"
                         >
-                          <Ionicons name="search" size={16} color={theme.color.primary} />
+                          <Ionicons name="search" size={16} color={t.color.primaryFg} />
                           <Text style={styles.switchTabBtnText}>
                             Search in All dishes ({allMatchingSearchItems.length} match
                             {allMatchingSearchItems.length === 1 ? '' : 'es'})
@@ -804,7 +818,7 @@ export default function FoodItemPickerModal({
                   testID="food-item-picker-done-btn"
                 >
                   {isBusy ? (
-                    <ActivityIndicator size="small" color={theme.color.textOnPrimary} />
+                    <ActivityIndicator size="small" color={t.color.textOnPrimary} />
                   ) : (
                     <Text style={styles.doneBtnText}>
                       {selectedItems.size > 0
@@ -838,16 +852,16 @@ export default function FoodItemPickerModal({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   backdrop: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.45)',
     justifyContent: 'flex-end',
   },
   container: {
-    backgroundColor: theme.color.surface,
-    borderTopLeftRadius: theme.radius.xl,
-    borderTopRightRadius: theme.radius.xl,
+    backgroundColor: t.color.surface,
+    borderTopLeftRadius: t.radius.xl,
+    borderTopRightRadius: t.radius.xl,
     height: '85%',
     paddingBottom: 24,
   },
@@ -859,7 +873,7 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     paddingBottom: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: theme.color.border,
+    borderBottomColor: t.color.border,
   },
   headerTitles: {
     flex: 1,
@@ -868,11 +882,11 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 18,
     fontWeight: '700',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   subtitle: {
     fontSize: 13,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     marginTop: 2,
   },
   closeBtn: {
@@ -882,13 +896,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: theme.color.border,
+    borderBottomColor: t.color.border,
   },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: theme.color.surfaceAlt,
-    borderRadius: theme.radius.md,
+    backgroundColor: t.color.surfaceAlt,
+    borderRadius: t.radius.md,
     paddingHorizontal: 12,
     height: 42,
     gap: 8,
@@ -896,7 +910,7 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 15,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   clearSearchBtn: {
     padding: 4,
@@ -904,7 +918,7 @@ const styles = StyleSheet.create({
   tabBar: {
     paddingVertical: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: theme.color.border,
+    borderBottomColor: t.color.border,
   },
   tabBarContent: {
     paddingHorizontal: 20,
@@ -913,38 +927,38 @@ const styles = StyleSheet.create({
   tab: {
     paddingVertical: 6,
     paddingHorizontal: 14,
-    borderRadius: theme.radius.pill,
+    borderRadius: t.radius.pill,
     borderWidth: 1,
   },
   tabActive: {
-    backgroundColor: theme.color.primary,
-    borderColor: theme.color.primary,
+    backgroundColor: t.color.primary,
+    borderColor: t.color.primary,
   },
   tabInactive: {
-    backgroundColor: theme.color.surfaceAlt,
-    borderColor: theme.color.border,
+    backgroundColor: t.color.surfaceAlt,
+    borderColor: t.color.border,
   },
   tabText: {
     fontSize: 13,
     fontWeight: '600',
   },
   tabTextActive: {
-    color: theme.color.textOnPrimary,
+    color: t.color.textOnPrimary,
   },
   tabTextInactive: {
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   groupHeaderWrap: {
     paddingTop: 16,
     paddingBottom: 6,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: theme.color.border,
-    backgroundColor: theme.color.surface,
+    borderBottomColor: t.color.border,
+    backgroundColor: t.color.surface,
   },
   groupHeaderText: {
     fontSize: 12,
     fontWeight: '700',
-    color: theme.color.primary,
+    color: t.color.primaryFg,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
   },
@@ -957,21 +971,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: 'rgba(107, 70, 193, 0.08)',
+    backgroundColor: PICKER[t.scheme].switchTabBg,
     paddingVertical: 8,
     paddingHorizontal: 16,
-    borderRadius: theme.radius.pill,
+    borderRadius: t.radius.pill,
     borderWidth: 1,
-    borderColor: 'rgba(107, 70, 193, 0.2)',
+    borderColor: PICKER[t.scheme].switchTabBorder,
     marginTop: 4,
   },
   switchTabBtnText: {
     fontSize: 13,
     fontWeight: '600',
-    color: theme.color.primary,
+    color: t.color.primaryFg,
   },
   submissionErrorText: {
-    color: theme.color.danger,
+    color: t.color.danger,
     fontSize: 13,
     paddingHorizontal: 20,
     paddingTop: 6,
@@ -994,7 +1008,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   errorText: {
-    color: theme.color.danger,
+    color: t.color.danger,
     fontSize: 14,
   },
   emptyWrap: {
@@ -1002,7 +1016,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   emptyText: {
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     fontSize: 14,
   },
   addRow: {
@@ -1010,8 +1024,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 14,
     paddingHorizontal: 12,
-    backgroundColor: 'rgba(107, 70, 193, 0.08)',
-    borderRadius: theme.radius.md,
+    backgroundColor: PICKER[t.scheme].addRowBg,
+    borderRadius: t.radius.md,
     marginBottom: 8,
     gap: 12,
   },
@@ -1021,11 +1035,11 @@ const styles = StyleSheet.create({
   addRowTitle: {
     fontSize: 15,
     fontWeight: '600',
-    color: theme.color.primary,
+    color: t.color.primaryFg,
   },
   addRowSubtitle: {
     fontSize: 12,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     marginTop: 2,
   },
   itemRow: {
@@ -1034,7 +1048,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: theme.color.border,
+    borderBottomColor: t.color.border,
   },
   itemRowPressed: {
     opacity: 0.7,
@@ -1046,10 +1060,10 @@ const styles = StyleSheet.create({
   itemName: {
     fontSize: 15,
     fontWeight: '600',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   itemNameInList: {
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   itemMetaRow: {
     flexDirection: 'row',
@@ -1059,7 +1073,7 @@ const styles = StyleSheet.create({
   },
   itemPrice: {
     fontSize: 13,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     fontWeight: '500',
   },
   itemRowRight: {
@@ -1070,7 +1084,7 @@ const styles = StyleSheet.create({
   repeatBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(107, 70, 193, 0.1)',
+    backgroundColor: PICKER[t.scheme].repeatBadgeBg,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
@@ -1079,7 +1093,7 @@ const styles = StyleSheet.create({
   repeatText: {
     fontSize: 12,
     fontWeight: '600',
-    color: theme.color.primary,
+    color: t.color.primaryFg,
   },
   multiSelectCheck: {
     marginRight: 10,
@@ -1087,15 +1101,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   footer: {
-    padding: theme.spacing.md,
+    padding: t.spacing.md,
     borderTopWidth: 1,
-    borderTopColor: theme.color.border,
-    backgroundColor: theme.color.surface,
+    borderTopColor: t.color.border,
+    backgroundColor: t.color.surface,
   },
   doneBtn: {
-    backgroundColor: theme.color.primary,
+    backgroundColor: t.color.primary,
     paddingVertical: 12,
-    borderRadius: theme.radius.md,
+    borderRadius: t.radius.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1103,8 +1117,8 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   doneBtnText: {
-    color: theme.color.textOnPrimary,
+    color: t.color.textOnPrimary,
     fontWeight: '700',
     fontSize: 15,
   },
-});
+}));

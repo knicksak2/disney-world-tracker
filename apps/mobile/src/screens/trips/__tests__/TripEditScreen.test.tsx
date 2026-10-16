@@ -13,7 +13,8 @@
  */
 
 import React from 'react';
-import { Alert } from 'react-native';
+import { Alert, StyleSheet } from 'react-native';
+import type { ReactTestInstance } from 'react-test-renderer';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   fireEvent,
@@ -38,6 +39,9 @@ jest.mock('../../../api/client', () => {
   };
 });
 
+import { darkTheme } from '../../../theme/theme';
+import { ScreenContainer } from '../../../theme/components';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
 import TripEditScreen from '../TripEditScreen';
 import { ApiError, apiRequest as mockedApiRequest } from '../../../api/client';
 import type { ResortDTO, TripDTO } from '@dwt/shared';
@@ -442,5 +446,51 @@ describe('Trip edit form (R3.1, R3.8, R21.1, R21.5)', () => {
       screen.getByText('This trip is no longer available, or you can no longer edit it.'),
     ).toBeTruthy();
     expect(navigation.navigate).not.toHaveBeenCalled();
+  });
+
+  // Feature: dark-mode — the edit form repaints with the Twilight palette.
+  describe('dark mode', () => {
+    afterEach(resetTestScheme);
+
+    const flat = (node: ReactTestInstance): Record<string, unknown> =>
+      (StyleSheet.flatten(node.props.style) ?? {}) as Record<string, unknown>;
+
+    /** The screen root: the host View that `ScreenContainer` paints. */
+    function rootContainer(): ReactTestInstance {
+      const container = screen.UNSAFE_getAllByType(ScreenContainer)[0]!;
+      return container.children[0] as ReactTestInstance;
+    }
+
+    test('(a)(b)(c) paints the root, input text and themed TextInput props dark', async () => {
+      mockReads();
+      setTestScheme('dark');
+      renderEdit(makeNavigation());
+
+      await screen.findByTestId('trip-edit-form');
+      // (a) root container.
+      expect(flat(rootContainer()).backgroundColor).toBe(darkTheme.color.background);
+      // (b) primary text — the Trip name input.
+      const name = screen.getByTestId('trip-edit-name');
+      expect(flat(name).color).toBe(darkTheme.color.textPrimary);
+      // (c) converted TextInput props and field surface.
+      expect(flat(name).backgroundColor).toBe(darkTheme.color.surface);
+      expect(flat(name).borderColor).toBe(darkTheme.color.border);
+      expect(name.props.placeholderTextColor).toBe(darkTheme.color.textSecondary);
+      expect(name.props.keyboardAppearance).toBe('dark');
+      expect(screen.getByTestId('trip-edit-description').props.keyboardAppearance).toBe('dark');
+      expect(flat(screen.getByText('Trip name')).color).toBe(darkTheme.color.textSecondary);
+    });
+
+    test('keeps the pre-retrofit light values under light', async () => {
+      mockReads();
+      renderEdit(makeNavigation());
+
+      await screen.findByTestId('trip-edit-form');
+      const name = screen.getByTestId('trip-edit-name');
+      expect(flat(name).color).toBe('#1f1235');
+      expect(flat(name).backgroundColor).toBe('#ffffff');
+      expect(name.props.placeholderTextColor).toBe('#6b6480');
+      expect(name.props.keyboardAppearance).toBe('light');
+    });
   });
 });

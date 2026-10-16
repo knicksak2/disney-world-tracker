@@ -60,7 +60,6 @@ import {
   KeyboardAvoidingView,
   Modal,
   Platform,
-  StyleSheet,
   Text,
   TextInput,
   View,
@@ -70,8 +69,10 @@ import { Ionicons } from '@expo/vector-icons';
 import type { CompletionDTO } from '@dwt/shared';
 
 import { ApiError, apiRequest } from '../../api/client';
-import { theme } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme } from '../../theme/useAppTheme';
 import { PrimaryButton, SecondaryButton } from '../../theme/components';
+import { SCRIM } from './CompletionControls.palette';
 
 // ---------------------------------------------------------------------------
 // Public props
@@ -198,6 +199,8 @@ export default function CompletionControls({
   completion,
   onMutated,
 }: CompletionControlsProps): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   // Resolve the encoded id once per render. Re-encoding inside each
   // handler would be free but the variable doubles as a readability
   // anchor for the three endpoints below.
@@ -358,7 +361,7 @@ export default function CompletionControls({
             <Ionicons
               name="checkmark-circle"
               size={18}
-              color={theme.color.success}
+              color={t.color.success}
               style={styles.statusIcon}
             />
             <Text style={styles.statusFilled} testID="completion-date">
@@ -392,7 +395,7 @@ export default function CompletionControls({
       {busy ? (
         <ActivityIndicator
           accessibilityLabel="Updating completion"
-          color={theme.color.primary}
+          color={t.color.primaryFg}
           style={styles.spinner}
         />
       ) : null}
@@ -426,7 +429,8 @@ export default function CompletionControls({
                 if (editorError !== null) setEditorError(null);
               }}
               placeholder="YYYY-MM-DD"
-              placeholderTextColor={theme.color.textSecondary}
+              placeholderTextColor={t.color.textSecondary}
+              keyboardAppearance={t.scheme}
               autoCapitalize="none"
               autoCorrect={false}
               keyboardType="numbers-and-punctuation"
@@ -471,17 +475,17 @@ export default function CompletionControls({
 // Styles
 // ---------------------------------------------------------------------------
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   container: {
-    gap: theme.spacing.sm,
+    gap: t.spacing.sm,
   },
   populated: {
-    gap: theme.spacing.sm,
+    gap: t.spacing.sm,
   },
   row: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: theme.spacing.sm,
+    gap: t.spacing.sm,
     alignItems: 'center',
   },
   flexBtn: {
@@ -489,8 +493,8 @@ const styles = StyleSheet.create({
     flexBasis: 0,
   },
   statusEmpty: {
-    ...theme.typography.body,
-    color: theme.color.textSecondary,
+    ...t.typography.body,
+    color: t.color.textSecondary,
     fontStyle: 'italic',
     flexGrow: 1,
   },
@@ -499,55 +503,56 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   statusIcon: {
-    marginRight: theme.spacing.sm,
+    marginRight: t.spacing.sm,
   },
   statusFilled: {
-    ...theme.typography.subtitle,
-    color: theme.color.textPrimary,
+    ...t.typography.subtitle,
+    color: t.color.textPrimary,
   },
   spinner: {
     alignSelf: 'flex-start',
   },
   error: {
-    color: theme.color.danger,
+    color: t.color.danger,
     fontSize: 13,
   },
   input: {
     borderWidth: 1,
-    borderColor: theme.color.border,
-    borderRadius: theme.radius.md,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.md,
+    borderColor: t.color.border,
+    borderRadius: t.radius.md,
+    paddingHorizontal: t.spacing.md,
+    paddingVertical: t.spacing.md,
     fontSize: 16,
-    color: theme.color.textPrimary,
-    backgroundColor: theme.color.surfaceAlt,
+    color: t.color.textPrimary,
+    backgroundColor: t.color.surfaceAlt,
   },
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(31, 18, 53, 0.5)',
+    backgroundColor: SCRIM[t.scheme].backdrop,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: theme.spacing.xl,
+    padding: t.spacing.xl,
   },
   modalCard: {
-    backgroundColor: theme.color.surface,
-    borderRadius: theme.radius.lg,
-    padding: theme.spacing.xl,
+    backgroundColor: t.color.surface,
+    borderRadius: t.radius.lg,
+    padding: t.spacing.xl,
     width: '100%',
     maxWidth: 400,
-    gap: theme.spacing.sm,
-    ...theme.shadow.floating,
+    gap: t.spacing.sm,
+    ...t.shadow.floating,
+    ...t.outline.card,
   },
   modalTitle: {
-    ...theme.typography.heading,
-    color: theme.color.textPrimary,
+    ...t.typography.heading,
+    color: t.color.textPrimary,
   },
   modalHint: {
-    ...theme.typography.body,
-    color: theme.color.textSecondary,
+    ...t.typography.body,
+    color: t.color.textSecondary,
   },
   modalMeta: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
   },
-});
+}));

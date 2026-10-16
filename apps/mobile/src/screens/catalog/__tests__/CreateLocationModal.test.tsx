@@ -3,9 +3,14 @@
 // Validates: Requirements 6.1, 6.2, 6.3, 6.4, 7.1, 7.2, 7.3, 7.4
 
 import React from 'react';
+import { KeyboardAvoidingView, Platform, StyleSheet } from 'react-native';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import type { ReactTestInstance } from 'react-test-renderer';
 
 import type { LocationSuggestionDTO, UserSubmittedLocationDTO } from '@dwt/shared';
+
+import { darkTheme } from '../../../theme/theme';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
 
 jest.mock('../../../api/client', () => {
   const actual = jest.requireActual('../../../api/client');
@@ -280,6 +285,70 @@ describe('CreateLocationModal', () => {
         }),
       );
     });
+  });
+
+  test('uses undefined behavior for KeyboardAvoidingView on Android to prevent adjustResize jitter loops', () => {
+    const originalPlatform = Platform.OS;
+    try {
+      Platform.OS = 'android';
+      render(
+        <CreateLocationModal
+          park="Magic Kingdom"
+          visible={true}
+          onClose={jest.fn()}
+          onLocationSelected={jest.fn()}
+        />,
+      );
+      const modal = screen.getByTestId('create-location-modal');
+      const kav = modal.findByType(KeyboardAvoidingView);
+      expect(kav.props.behavior).toBeUndefined();
+    } finally {
+      Platform.OS = originalPlatform;
+    }
+  });
+});
+
+/** Nearest painted `backgroundColor` at or above `node` (sheet surface lookup). */
+function paintedBackground(node: ReactTestInstance | null): unknown {
+  for (let n = node; n !== null; n = n.parent) {
+    const style = n.props.style;
+    if (style === undefined || typeof style === 'function') continue;
+    const flat = StyleSheet.flatten(style) as { backgroundColor?: unknown } | undefined;
+    if (flat?.backgroundColor !== undefined) return flat.backgroundColor;
+  }
+  return undefined;
+}
+
+describe('CreateLocationModal — dark mode', () => {
+  afterEach(resetTestScheme);
+
+  it('paints the sheet, title and converted controls with dark tokens', () => {
+    setTestScheme('dark');
+    render(
+      <CreateLocationModal
+        park="Magic Kingdom"
+        visible={true}
+        onClose={jest.fn()}
+        onLocationSelected={jest.fn()}
+      />,
+    );
+
+    // (a) the sheet surface.
+    expect(paintedBackground(screen.getByText('Add Food Spot'))).toBe(darkTheme.color.surface);
+    // (b) primary text.
+    expect(StyleSheet.flatten(screen.getByText('Add Food Spot').props.style).color).toBe(
+      darkTheme.color.textPrimary,
+    );
+    // (c) the selected park chip is a primary fill with white text (rule 1 `#ffffff`
+    // on a fill → textOnPrimary), and the TextInput follows the scheme.
+    const chip = screen.getByTestId('create-location-park-chip-magic-kingdom');
+    expect(StyleSheet.flatten(chip.props.style).backgroundColor).toBe(darkTheme.color.primary);
+    expect(StyleSheet.flatten(screen.getByText('Magic Kingdom').props.style).color).toBe(
+      darkTheme.color.textOnPrimary,
+    );
+    const input = screen.getByTestId('create-location-name-input');
+    expect(input.props.placeholderTextColor).toBe(darkTheme.color.textSecondary);
+    expect(input.props.keyboardAppearance).toBe('dark');
   });
 });
 

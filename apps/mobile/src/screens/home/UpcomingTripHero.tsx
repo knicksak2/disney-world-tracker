@@ -8,7 +8,7 @@
  */
 
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import type { TripDTO, TripStatus } from '@dwt/shared';
@@ -16,8 +16,10 @@ import type { TripDTO, TripStatus } from '@dwt/shared';
 import { apiRequest } from '../../api/client';
 import { navigateToTripDetail } from '../../navigation/navigationRef';
 import { tripsListKeys } from '../trips/TripsListScreen';
-import { theme } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme } from '../../theme/useAppTheme';
 import { calculateCountdownDays } from './countdown';
+import { UPCOMING_TRIP_HERO } from './UpcomingTripHero.palette';
 
 interface TripStatusGroup {
   readonly status: TripStatus;
@@ -42,6 +44,8 @@ export default function UpcomingTripHero({
   testID = 'home-upcoming-trip-card',
   onPressTrip,
 }: UpcomingTripHeroProps): JSX.Element | null {
+  const styles = useStyles();
+  const t = useAppTheme();
   const tripsQuery = useQuery<TripsListResponse>({
     queryKey: tripsListKeys.list(),
     queryFn: () => apiRequest<TripsListResponse>('GET', '/me/trips'),
@@ -98,28 +102,28 @@ export default function UpcomingTripHero({
       </View>
 
       <View style={styles.arrowWrap}>
-        <Ionicons name="arrow-forward" size={18} color={theme.color.primary} />
+        <Ionicons name="arrow-forward" size={18} color={t.color.primaryFg} />
       </View>
     </Pressable>
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   card: {
-    backgroundColor: theme.color.surface,
+    backgroundColor: t.color.surface,
     borderRadius: 16,
     padding: 12,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     borderWidth: 1,
-    borderColor: '#ebdff8',
-    shadowColor: '#5b2a86',
+    borderColor: UPCOMING_TRIP_HERO[t.scheme].cardBorder,
+    shadowColor: UPCOMING_TRIP_HERO[t.scheme].cardShadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
     shadowRadius: 6,
     elevation: 2,
-    marginHorizontal: theme.spacing.md,
+    marginHorizontal: t.spacing.md,
     marginTop: 12,
     marginBottom: 12,
   },
@@ -131,7 +135,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 14,
-    backgroundColor: '#3b1d60',
+    backgroundColor: UPCOMING_TRIP_HERO[t.scheme].countdownBg,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 2,
@@ -139,7 +143,7 @@ const styles = StyleSheet.create({
   countdownNum: {
     fontSize: 18,
     fontWeight: '800',
-    color: '#f6c343',
+    color: t.color.accent,
     lineHeight: 20,
   },
   countdownUnit: {
@@ -154,21 +158,21 @@ const styles = StyleSheet.create({
   tag: {
     fontSize: 9.5,
     fontWeight: '800',
-    color: '#7e57c2',
+    color: t.color.primaryLight,
     letterSpacing: 0.5,
     marginBottom: 2,
   },
   title: {
     fontSize: 15,
     fontWeight: '800',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   meta: {
     fontSize: 11.5,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     marginTop: 2,
   },
   arrowWrap: {
     paddingLeft: 4,
   },
-});
+}));

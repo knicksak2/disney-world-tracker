@@ -54,6 +54,10 @@ import { apiRequest as mockedApiRequest } from '../../../api/client';
 import * as Haptics from 'expo-haptics';
 import { PINS, PIN_TIERS } from '@dwt/shared';
 import type { PinBoardDTO, PinDTO, UserPinProgressDTO } from '@dwt/shared';
+import type { ReactTestInstance } from 'react-test-renderer';
+import { TIER_COLOR } from '../../../components/pins/pinTierMeta';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
+import { darkTheme } from '../../../theme/theme';
 
 const apiRequestMock = mockedApiRequest as jest.MockedFunction<typeof mockedApiRequest>;
 const notificationAsyncMock = Haptics.notificationAsync as jest.MockedFunction<
@@ -612,5 +616,55 @@ describe('PinBoardScreen', () => {
       expect(screen.queryByTestId(`pin-cell-ready-${pinB.id}`)).toBeNull();
       expect(screen.queryByTestId(`pin-cell-ready-${pinC.id}`)).toBeNull();
     });
+  });
+});
+
+describe('PinBoardScreen — dark mode', () => {
+  afterEach(resetTestScheme);
+
+  const flat = (node: ReactTestInstance) => StyleSheet.flatten(node.props.style) ?? {};
+
+  function paintedAncestor(node: ReactTestInstance): Record<string, unknown> {
+    let cur: ReactTestInstance | null = node.parent;
+    while (cur !== null) {
+      if (typeof cur.type === 'string' && flat(cur).backgroundColor !== undefined) {
+        return flat(cur);
+      }
+      cur = cur.parent;
+    }
+    return {};
+  }
+
+  it('(a)(b)(c) paints the board, its text and converted tokens dark; tier dots keep TIER_COLOR', async () => {
+    mockApi(BOARD_WITH_READY);
+    setTestScheme('dark');
+    renderBoard();
+
+    const summary = await screen.findByTestId('pin-board-summary');
+    // (a) root container.
+    expect(paintedAncestor(summary).backgroundColor).toBe(darkTheme.color.background);
+    // (b) primary text (the Tier section label rendered by the board).
+    expect(flat(screen.getByText('Tier')).color).toBe(darkTheme.color.textPrimary);
+    // (c) primary-as-text → primaryFg; ready badge keeps a primary fill + white text.
+    expect(flat(screen.getByTestId('pin-board-overall')).color).toBe(darkTheme.color.primaryFg);
+    const badge = await screen.findByTestId(`pin-cell-ready-${pinB.id}`);
+    expect(flat(badge).backgroundColor).toBe(darkTheme.color.primary);
+    expect(flat(screen.getByText('Tap to claim')).color).toBe(darkTheme.color.textOnPrimary);
+    // Tier dot is a non-text swatch: unchanged pin-tier artwork colour (rule 7).
+    const dot = screen.getByTestId('tier-summary-bronze').children[0] as ReactTestInstance;
+    expect(flat(dot).backgroundColor).toBe(TIER_COLOR.bronze);
+  });
+
+  it('a mounted memoized grid cell repaints on a scheme switch without a remount', async () => {
+    mockApi(BOARD_WITH_READY);
+    renderBoard();
+
+    const badge = await screen.findByTestId(`pin-cell-ready-${pinB.id}`);
+    expect(flat(badge).backgroundColor).toBe('#5b2a86');
+    setTestScheme('dark');
+    expect(flat(screen.getByTestId(`pin-cell-ready-${pinB.id}`)).backgroundColor).toBe(
+      darkTheme.color.primary,
+    );
+    expect(flat(screen.getByTestId('pin-board-overall')).color).toBe(darkTheme.color.primaryFg);
   });
 });

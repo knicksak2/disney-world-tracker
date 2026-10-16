@@ -14,7 +14,6 @@ import React from 'react';
 import {
   ActivityIndicator,
   Pressable,
-  StyleSheet,
   Text,
   View,
 } from 'react-native';
@@ -25,6 +24,9 @@ import type { GroupFavoriteDTO, GroupFavoritesResponseDTO } from '@dwt/shared';
 import { ApiError, apiRequest } from '../../api/client';
 import { Badge, Card } from '../../theme/components';
 import { theme } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme, usePalette } from '../../theme/useAppTheme';
+import { GROUP_FAVORITES } from './GroupFavoritesSection.palette';
 
 export interface GroupFavoritesSectionProps {
   readonly tripId: string;
@@ -37,6 +39,9 @@ export default function GroupFavoritesSection({
   onSelectExperience,
   testID = 'trip-detail-group-favorites',
 }: GroupFavoritesSectionProps): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
+  const pal = usePalette(GROUP_FAVORITES);
   const query = useQuery<GroupFavoritesResponseDTO, ApiError>({
     queryKey: ['trips', tripId, 'favorites', 'shared'],
     queryFn: () =>
@@ -55,12 +60,12 @@ export default function GroupFavoritesSection({
       {/* Header Row */}
       <View style={styles.headerRow}>
         <View style={styles.titleWrap}>
-          <Ionicons name="heart" size={18} color="#e11d48" />
+          <Ionicons name="heart" size={18} color={pal.heart} />
           <Text style={styles.sectionTitle}>Group Favorites</Text>
           {items.length > 0 ? (
             <Badge
               label={String(items.length)}
-              color={theme.color.primary}
+              color={t.color.primaryFg}
             />
           ) : null}
         </View>
@@ -69,7 +74,7 @@ export default function GroupFavoritesSection({
       {/* Loading state */}
       {query.isLoading && !query.data ? (
         <View style={styles.loadingContainer} testID="group-favorites-loading">
-          <ActivityIndicator size="small" color={theme.color.primary} />
+          <ActivityIndicator size="small" color={t.color.primaryFg} />
         </View>
       ) : items.length === 0 ? (
         /* Empty state (Requirement 9.5) */
@@ -110,7 +115,7 @@ export default function GroupFavoritesSection({
                     ) : null}
                   </View>
                   <View style={styles.countBadge}>
-                    <Ionicons name="heart" size={12} color="#e11d48" />
+                    <Ionicons name="heart" size={12} color={pal.heart} />
                     <Text style={styles.countText}>{item.favoritingCount}</Text>
                   </View>
                 </View>
@@ -119,7 +124,7 @@ export default function GroupFavoritesSection({
                   <Ionicons
                     name="people-outline"
                     size={14}
-                    color={theme.color.textSecondary}
+                    color={t.color.textSecondary}
                   />
                   <Text style={styles.membersText} numberOfLines={2}>
                     Favorited by {item.favoritingDisplayNames.join(', ')}
@@ -134,7 +139,7 @@ export default function GroupFavoritesSection({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   sectionContainer: {
     gap: theme.spacing.sm,
     marginBottom: theme.spacing.sm,
@@ -151,7 +156,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     ...theme.typography.subtitle,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
     fontSize: 15,
     fontWeight: '600',
   },
@@ -162,21 +167,21 @@ const styles = StyleSheet.create({
   },
   emptyContainer: {
     padding: theme.spacing.md,
-    backgroundColor: `${theme.color.primary}0a`,
+    backgroundColor: `${t.color.primary}0a`,
     borderRadius: theme.radius.md,
     borderWidth: 1,
-    borderColor: `${theme.color.primary}18`,
+    borderColor: `${t.color.primaryFg}18`,
     gap: 4,
   },
   emptyTitle: {
     ...theme.typography.body,
     fontSize: 14,
     fontWeight: '600',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   emptySubtext: {
     ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   itemsList: {
     gap: theme.spacing.xs,
@@ -205,18 +210,18 @@ const styles = StyleSheet.create({
     ...theme.typography.body,
     fontSize: 15,
     fontWeight: '600',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   parkText: {
     ...theme.typography.meta,
     fontSize: 12,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   countBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
-    backgroundColor: '#ffe4e6',
+    backgroundColor: GROUP_FAVORITES[t.scheme].countBg,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: theme.radius.pill,
@@ -224,7 +229,7 @@ const styles = StyleSheet.create({
   countText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#e11d48',
+    color: GROUP_FAVORITES[t.scheme].heart,
   },
   membersRow: {
     flexDirection: 'row',
@@ -235,7 +240,7 @@ const styles = StyleSheet.create({
   membersText: {
     ...theme.typography.meta,
     fontSize: 13,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     flex: 1,
   },
-});
+}));

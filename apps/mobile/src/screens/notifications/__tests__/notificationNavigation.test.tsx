@@ -45,6 +45,15 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react-nativ
 // Mocks (declared before the modules under test are imported).
 // ---------------------------------------------------------------------------
 
+// dark-mode: `RootNavigator` -> `YouAndCrewStack` -> `YouAndCrewScreen` ->
+// `ProfileScreen` (`ProfileIdentityBlock`) -> `AppearancePreferenceControl`
+// -> `@react-native-async-storage/async-storage` — stub it with the
+// package's own shipped jest mock so the native module never has to resolve.
+jest.mock('@react-native-async-storage/async-storage', () =>
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  require('@react-native-async-storage/async-storage/jest/async-storage-mock'),
+);
+
 // In-memory replacement for `expo-secure-store`, matching the navigation suite.
 jest.mock('expo-secure-store', () => {
   const store = new Map<string, string>();
@@ -110,6 +119,11 @@ import { AttentionBadge } from '../../../features/notifications/AttentionBadge';
 import { NotificationBell } from '../../../features/notifications/NotificationBell';
 import { useSessionStore } from '../../../state/sessionStore';
 import { apiRequest as mockedApiRequest } from '../../../api/client';
+import { StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { ATTENTION_BADGE } from '../../../features/notifications/AttentionBadge.palette';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
+import { themes } from '../../../theme/theme';
 
 const apiRequestMock = mockedApiRequest as jest.MockedFunction<typeof mockedApiRequest>;
 
@@ -280,5 +294,49 @@ describe('Notification_Center navigation / tab entry (R10.1, R10.2, R10.3, R10.4
       expect(screen.getByTestId('profile-tab-badge')).toBeTruthy();
       expect(screen.getByText('99+')).toBeTruthy();
     });
+  });
+});
+
+// Feature: dark-mode — AttentionBadge's red pill and NotificationBell's glyph follow the Active theme.
+describe('AttentionBadge / NotificationBell — dark mode', () => {
+  const flat = (node: { props: { style?: unknown } }): Record<string, unknown> =>
+    (StyleSheet.flatten(node.props.style as never) ?? {}) as Record<string, unknown>;
+
+  afterEach(resetTestScheme);
+
+  test('the badge pill is the red tonal fill with white text in dark, and today\'s red in light', () => {
+    render(<AttentionBadge display="count" count={7} testID="badge" />);
+    expect(flat(screen.getByTestId('badge')).backgroundColor).toBe('#e11d48');
+    expect(flat(screen.getByText('7')).color).toBe('#ffffff');
+
+    setTestScheme('dark');
+    expect(flat(screen.getByTestId('badge')).backgroundColor).toBe(ATTENTION_BADGE.dark.fill);
+    expect(ATTENTION_BADGE.dark.fill).toBe('#c42b3c');
+    expect(flat(screen.getByText('7')).color).toBe(themes.dark.color.textOnPrimary);
+  });
+
+  test('the bell glyph defaults to textOnPrimary (header gradient) and honours a custom tint', async () => {
+    setTestScheme('dark');
+    render(
+      <NavigationContainer>
+        <Stack.Navigator>
+          <Stack.Screen name="Host" component={BellHostScreen} />
+          <Stack.Screen name="NotificationCenter" component={NotificationCenterSentinel} />
+        </Stack.Navigator>
+      </NavigationContainer>,
+    );
+    const bell = await screen.findByTestId('notification-bell');
+    expect(bell.findByType(Ionicons).props.color).toBe(themes.dark.color.textOnPrimary);
+    screen.unmount();
+
+    render(
+      <NavigationContainer>
+        <Stack.Navigator>
+          <Stack.Screen name="Host">{() => <NotificationBell tintColor="#123456" />}</Stack.Screen>
+        </Stack.Navigator>
+      </NavigationContainer>,
+    );
+    const custom = await screen.findByTestId('notification-bell');
+    expect(custom.findByType(Ionicons).props.color).toBe('#123456');
   });
 });

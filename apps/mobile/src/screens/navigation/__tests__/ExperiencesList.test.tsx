@@ -24,6 +24,7 @@
  */
 
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { fireEvent, render, screen } from '@testing-library/react-native';
 
 import {
@@ -33,6 +34,8 @@ import {
 } from '@dwt/shared';
 
 import { ExperiencesList } from '../ExperiencesList';
+import { darkTheme } from '../../../theme/theme';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -367,6 +370,31 @@ describe('ExperiencesList — dropdown selector trays (R14.3)', () => {
     // Only Lion King matches
     expect(screen.getByTestId('friend-experience-row-0')).toBeTruthy();
     expect(screen.queryByTestId('friend-experience-row-1')).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Feature: dark-mode — search input and filter selectors follow the Active theme.
+// ---------------------------------------------------------------------------
+
+describe('ExperiencesList — dark mode', () => {
+  const flat = (node: { props: { style?: unknown } }): Record<string, unknown> =>
+    (StyleSheet.flatten(node.props.style as never) ?? {}) as Record<string, unknown>;
+  afterEach(resetTestScheme);
+
+  test('(c) the search input and an active park filter use dark values', () => {
+    setTestScheme('dark');
+    render(<ExperiencesList entries={ENTRIES} testIDPrefix="friend" />);
+
+    const input = screen.getByTestId('friend-filter-search');
+    expect(input.props.placeholderTextColor).toBe(darkTheme.color.textSecondary);
+    expect(input.props.keyboardAppearance).toBe('dark');
+    expect(flat(input).color).toBe(darkTheme.color.textPrimary);
+
+    // Activate a park filter: the active pill text is primary-as-text → primaryFg.
+    fireEvent.press(screen.getByTestId('friend-filter-park'));
+    fireEvent.press(screen.getByTestId('friend-filter-park-option-EPCOT'));
+    expect(flat(screen.getByText('Clear filters')).color).toBe(darkTheme.color.primaryFg);
   });
 });
 

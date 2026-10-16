@@ -31,13 +31,13 @@
  *     tier shows the compact price-tier Info_Tag built by `priceTierListTag`,
  *     identical to the detail view's presentation.
  *
- * The three Destination layouts (theme/water-park Land groups, Disney Springs
- * category groups, Resorts resort groups) are dispatched by `renderBody`, which
- * switches on `destination.kind` and renders the matching grouped/collapsible
- * layout (`ThemeOrWaterParkLayout`, `DisneySpringsLayout`, `ResortsLayout`)
- * built on `useDestinationSections` and the `catalogGrouping` cores. They share
- * the data-fetch, stale/unavailable/empty, and row-rendering plumbing
- * established here.
+ * `themeOrWaterPark` and `resorts` Destinations are dispatched *before* `renderBody` is reached,
+ * straight to `ParkDestinationScreen` and `ResortsDirectoryScreen` respectively — this file no
+ * longer defines a `ThemeOrWaterParkLayout` or `ResortsLayout`. `renderBody` itself now
+ * unconditionally renders only the remaining Disney Springs layout (`DisneySpringsLayout`,
+ * Experience_Category collapsible groups), built on `useDestinationSections` and the
+ * `catalogGrouping` cores. All three destination paths share the data-fetch,
+ * stale/unavailable/empty, and row-rendering plumbing established here.
  *
  * Validates: Requirements 6.1, 6.10, 7.1, 8.1, 8.5, 9.9, 10.1, 10.2, 10.3, 10.7
  */
@@ -47,7 +47,6 @@ import {
   ActivityIndicator,
   FlatList,
   Pressable,
-  StyleSheet,
   Text,
   TextInput,
   View,
@@ -67,7 +66,9 @@ import {
 import { ApiError, apiRequest } from '../../api/client';
 import type { ExploreStackParamList } from '../../navigation/ExploreStack';
 import type { RootStackParamList } from '../../navigation/RootNavigator';
-import { theme } from '../../theme/theme';
+import { categoryMeta } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme } from '../../theme/useAppTheme';
 import {
   Badge,
   Card,
@@ -75,6 +76,7 @@ import {
   GradientHeader,
   ScreenContainer,
 } from '../../theme/components';
+import { DESTINATION } from './DestinationScreen.palette';
 import {
   DESTINATIONS,
   destinationCatalogFilter,
@@ -279,6 +281,7 @@ const CollapsibleHeaderRow = React.memo(function CollapsibleHeaderRow({
   readonly header: React.ReactNode;
   readonly testID: string;
 }): JSX.Element {
+  const styles = useStyles();
   const handlePress = useCallback(() => {
     onToggle(sectionKey);
   }, [onToggle, sectionKey]);
@@ -307,6 +310,7 @@ export default function DestinationScreen({
   route,
   navigation,
 }: Props): JSX.Element {
+  const styles = useStyles();
   const destination = useMemo<Destination | undefined>(
     () => DESTINATIONS.find((d) => d.id === route.params.destination),
     [route.params.destination],
@@ -365,6 +369,8 @@ function DestinationBody({
   readonly destination: Destination;
   readonly navigation: Props['navigation'];
 }): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const filter = useMemo(
     () => destinationCatalogFilter(destination),
     [destination],
@@ -461,7 +467,7 @@ function DestinationBody({
           <Ionicons
             name="cloud-offline-outline"
             size={16}
-            color={theme.color.warningText}
+            color={t.color.warningText}
             style={styles.staleBannerIcon}
           />
           <Text style={styles.staleBannerText}>Showing cached catalog</Text>
@@ -478,7 +484,7 @@ function DestinationBody({
 
       {showLoading ? (
         <View style={styles.center} testID="destination-loading">
-          <ActivityIndicator color={theme.color.primary} />
+          <ActivityIndicator color={t.color.primaryFg} />
         </View>
       ) : showEmpty ? (
         <View style={styles.center} testID="destination-empty">
@@ -522,13 +528,15 @@ function DestinationSearchControl({
   readonly onChangeText: (text: string) => void;
   readonly onClear: () => void;
 }): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   return (
     <View style={styles.controls}>
       <View style={styles.searchWrap}>
         <Ionicons
           name="search"
           size={18}
-          color={theme.color.textSecondary}
+          color={t.color.textSecondary}
           style={styles.searchIcon}
         />
         <TextInput
@@ -536,7 +544,8 @@ function DestinationSearchControl({
           value={value}
           onChangeText={onChangeText}
           placeholder="Search by name, land, or facet..."
-          placeholderTextColor={theme.color.textSecondary}
+          placeholderTextColor={t.color.textSecondary}
+          keyboardAppearance={t.scheme}
           autoCapitalize="none"
           autoCorrect={false}
           returnKeyType="search"
@@ -547,7 +556,7 @@ function DestinationSearchControl({
           <Ionicons
             name="close-circle"
             size={18}
-            color={theme.color.textSecondary}
+            color={t.color.textSecondary}
             style={styles.searchClear}
             onPress={onClear}
             accessibilityRole="button"
@@ -586,6 +595,7 @@ function DestinationSearchResults({
   readonly completedIds: ReadonlySet<string>;
   readonly favoritedIds: ReadonlySet<string>;
 }): JSX.Element {
+  const styles = useStyles();
   const results = useMemo(() => {
     return filterAndRankExperiences(experiences, query);
   }, [experiences, query]);
@@ -638,19 +648,16 @@ function DestinationSearchResults({
 }
 
 /**
- * Render the Destination's body by its `kind`.
+ * Render the Destination's body for the one `kind` that still reaches this function.
  *
- * Each branch renders its grouped, collapsible layout, all built on
- * `useDestinationSections` for collapsible state and the `catalogGrouping`
- * cores, and sharing the data-fetch / stale / unavailable / empty /
- * row-rendering plumbing established here:
+ * `themeOrWaterPark` and `resorts` Destinations never reach `renderBody` — they are dispatched
+ * earlier, straight to `ParkDestinationScreen` and `ResortsDirectoryScreen` respectively (see the
+ * `destination.kind` checks above, before this function is called). `renderBody` therefore now
+ * unconditionally renders the one remaining layout:
  *
- *   - `themeOrWaterPark` → `ThemeOrWaterParkLayout`: Land collapsible sections
- *     + a scoped Experience_Category `Chip` filter driving `groupByLandFiltered`.
- *   - `disneySprings`    → `DisneySpringsLayout`: `groupByCategory` collapsible
- *     sections.
- *   - `resorts`          → `ResortsLayout`: also fetches `GET /resorts` and
- *     renders `buildResortRows` with scroll-to-group anchors.
+ *   - `disneySprings` → `DisneySpringsLayout`: `groupByCategory` collapsible sections, built on
+ *     `useDestinationSections` for collapsible state and the `catalogGrouping` cores, sharing the
+ *     data-fetch / stale / unavailable / empty / row-rendering plumbing established here.
  */
 function renderBody(
   _destination: Destination,
@@ -693,12 +700,14 @@ function SectionHeader({
   readonly count: number;
   readonly expanded: boolean;
 }): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   return (
     <View style={styles.sectionHeader}>
       <Ionicons
         name={expanded ? 'chevron-down' : 'chevron-forward'}
         size={18}
-        color={theme.color.textSecondary}
+        color={t.color.textSecondary}
         style={styles.sectionChevron}
       />
       <Text style={styles.sectionTitle} numberOfLines={1}>
@@ -711,7 +720,7 @@ function SectionHeader({
 
 /** Friendly label for an Experience_Category, falling back to the raw enum. */
 function categoryLabel(category: ExperienceCategory): string {
-  return theme.categoryVisual[category]?.label ?? category;
+  return categoryMeta[category]?.label ?? category;
 }
 
 // ---------------------------------------------------------------------------
@@ -752,6 +761,8 @@ function DisneySpringsLayout({
   readonly completedIds: ReadonlySet<string>;
   readonly favoritedIds: ReadonlySet<string>;
 }): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   // R7.2/R7.5: derive the category sections client-side over the already-fetched
   // Experiences in canonical order, empties omitted (no refetch).
   const sections = useMemo(() => groupByCategory(experiences), [experiences]);
@@ -818,13 +829,15 @@ function DisneySpringsLayout({
         </View>
       );
     },
-    [isExpanded, toggle, onSelectExperience, completedIds, favoritedIds],
+    [isExpanded, toggle, onSelectExperience, completedIds, favoritedIds, styles],
   );
 
   return (
     <FlatList
       data={flatRows}
       keyExtractor={(row) => row.key}
+      // `renderRow` reads `styles` from this closure: repaint rows on a scheme switch.
+      extraData={t.scheme}
       style={styles.list}
       contentContainerStyle={styles.listContent}
       initialNumToRender={12}
@@ -879,17 +892,19 @@ const ExperienceRow = React.memo(function ExperienceRow({
   completed = false,
   favorited = false,
 }: ExperienceRowProps): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const onPress = useCallback(
     () => onSelectExperience(experience),
     [onSelectExperience, experience],
   );
-  const visual = theme.categoryVisual[experience.category];
+  const visual = t.categoryVisual[experience.category];
   // `park` is `null` for a Resort-area Experience with no park ancestor; fall
   // back to the brand accent so the row still reads.
   const accent =
     experience.park !== null
-      ? theme.parkAccent[experience.park]
-      : theme.color.primary;
+      ? t.parkAccent[experience.park]
+      : t.color.primaryFg;
 
   // R9.9: a Restaurant with a persisted price tier shows the compact price tag.
   const showPriceTag =
@@ -939,7 +954,7 @@ const ExperienceRow = React.memo(function ExperienceRow({
               <Ionicons
                 name="location"
                 size={12}
-                color={theme.color.textSecondary}
+                color={t.color.textSecondary}
                 style={styles.rowMetaIcon}
               />
               <Text style={styles.rowMeta} numberOfLines={1}>
@@ -956,7 +971,7 @@ const ExperienceRow = React.memo(function ExperienceRow({
             {priceTag !== null ? (
               <Badge
                 label={priceTag.label}
-                color={theme.color.primary}
+                color={t.color.primaryFg}
                 accessibilityLabel={priceTag.accessibilityLabel}
                 testID={`destination-price-${experience.id}`}
               />
@@ -972,7 +987,7 @@ const ExperienceRow = React.memo(function ExperienceRow({
           <Ionicons
             name="chevron-forward"
             size={20}
-            color={theme.color.textSecondary}
+            color={t.color.textSecondary}
           />
         </View>
       </View>
@@ -992,8 +1007,10 @@ const ExperienceThumb = React.memo(function ExperienceThumb({
   readonly imageUrl: string | null;
   readonly category: ExperienceCategory;
 }): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const [failed, setFailed] = useState(false);
-  const visual = theme.categoryVisual[category];
+  const visual = t.categoryVisual[category];
 
   if (imageUrl !== null && imageUrl.length > 0 && !failed) {
     return (
@@ -1013,13 +1030,13 @@ const ExperienceThumb = React.memo(function ExperienceThumb({
 
   return (
     <View
-      style={[styles.thumb, styles.thumbPlaceholder, { backgroundColor: visual.tint }]}
+      style={[styles.thumb, styles.thumbPlaceholder, { backgroundColor: visual.fill }]}
       testID="destination-thumb-placeholder"
     >
       <Ionicons
         name={visual.glyph as keyof typeof Ionicons.glyphMap}
         size={22}
-        color={theme.color.textOnPrimary}
+        color={t.color.textOnPrimary}
       />
     </View>
   );
@@ -1038,6 +1055,8 @@ const VisitedOverlay = React.memo(function VisitedOverlay({
 }: {
   readonly testID: string;
 }): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   return (
     <View
       style={styles.visitedOverlay}
@@ -1045,7 +1064,7 @@ const VisitedOverlay = React.memo(function VisitedOverlay({
       accessible
       accessibilityLabel="Visited"
     >
-      <Ionicons name="checkmark" size={14} color={theme.color.textOnPrimary} />
+      <Ionicons name="checkmark" size={14} color={t.color.textOnPrimary} />
     </View>
   );
 });
@@ -1055,6 +1074,7 @@ function DestinationUnavailableState({
 }: {
   readonly title: string;
 }): JSX.Element {
+  const styles = useStyles();
   return (
     <ScreenContainer>
       <GradientHeader title={title} icon="map" />
@@ -1076,6 +1096,7 @@ function GenericErrorState({
   readonly title: string;
   readonly message: string;
 }): JSX.Element {
+  const styles = useStyles();
   return (
     <ScreenContainer>
       <GradientHeader title={title} icon="map" />
@@ -1118,68 +1139,68 @@ async function fetchCatalog(
 // Styles
 // ---------------------------------------------------------------------------
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   controls: {
-    paddingHorizontal: theme.spacing.lg,
-    paddingTop: theme.spacing.md,
-    paddingBottom: theme.spacing.sm,
+    paddingHorizontal: t.spacing.lg,
+    paddingTop: t.spacing.md,
+    paddingBottom: t.spacing.sm,
   },
   searchWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: theme.color.surface,
-    borderRadius: theme.radius.md,
-    paddingHorizontal: theme.spacing.md,
+    backgroundColor: t.color.surface,
+    borderRadius: t.radius.md,
+    paddingHorizontal: t.spacing.md,
     borderWidth: 1,
-    borderColor: theme.color.border,
-    ...theme.shadow.card,
+    borderColor: t.color.border,
+    ...t.shadow.card,
   },
   searchIcon: {
-    marginRight: theme.spacing.sm,
+    marginRight: t.spacing.sm,
   },
   searchInput: {
     flex: 1,
-    paddingVertical: theme.spacing.md,
+    paddingVertical: t.spacing.md,
     fontSize: 16,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   searchClear: {
-    marginLeft: theme.spacing.sm,
+    marginLeft: t.spacing.sm,
   },
   staleBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: theme.color.warningSurface,
-    marginHorizontal: theme.spacing.lg,
-    marginTop: theme.spacing.sm,
-    paddingVertical: theme.spacing.sm,
-    paddingHorizontal: theme.spacing.md,
-    borderRadius: theme.radius.md,
+    backgroundColor: t.color.warningSurface,
+    marginHorizontal: t.spacing.lg,
+    marginTop: t.spacing.sm,
+    paddingVertical: t.spacing.sm,
+    paddingHorizontal: t.spacing.md,
+    borderRadius: t.radius.md,
   },
   staleBannerIcon: {
-    marginRight: theme.spacing.sm,
+    marginRight: t.spacing.sm,
   },
   staleBannerText: {
-    color: theme.color.warningText,
-    ...theme.typography.meta,
+    color: t.color.warningText,
+    ...t.typography.meta,
   },
   center: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: theme.spacing.xl,
+    padding: t.spacing.xl,
   },
   list: {
     flex: 1,
   },
   listContent: {
-    paddingHorizontal: theme.spacing.lg,
-    paddingTop: theme.spacing.sm,
-    paddingBottom: theme.spacing.xxl,
+    paddingHorizontal: t.spacing.lg,
+    paddingTop: t.spacing.sm,
+    paddingBottom: t.spacing.xxl,
   },
   row: {
-    marginBottom: theme.spacing.md,
-    padding: theme.spacing.md,
+    marginBottom: t.spacing.md,
+    padding: t.spacing.md,
   },
   rowInner: {
     flexDirection: 'row',
@@ -1189,17 +1210,17 @@ const styles = StyleSheet.create({
   rowActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.sm,
+    gap: t.spacing.sm,
   },
   thumbWrap: {
     position: 'relative',
-    marginRight: theme.spacing.md,
+    marginRight: t.spacing.md,
   },
   thumb: {
     width: 56,
     height: 56,
-    borderRadius: theme.radius.md,
-    backgroundColor: theme.color.surfaceAlt,
+    borderRadius: t.radius.md,
+    backgroundColor: t.color.surfaceAlt,
   },
   thumbPlaceholder: {
     alignItems: 'center',
@@ -1212,20 +1233,20 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: theme.color.success,
+    backgroundColor: DESTINATION[t.scheme].visitedFill,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: theme.color.surface,
+    borderColor: t.color.surface,
   },
   rowText: {
     flex: 1,
-    marginRight: theme.spacing.md,
-    gap: theme.spacing.sm,
+    marginRight: t.spacing.md,
+    gap: t.spacing.sm,
   },
   rowName: {
-    ...theme.typography.subtitle,
-    color: theme.color.textPrimary,
+    ...t.typography.subtitle,
+    color: t.color.textPrimary,
   },
   rowMetaLine: {
     flexDirection: 'row',
@@ -1235,24 +1256,24 @@ const styles = StyleSheet.create({
     marginRight: 4,
   },
   rowMeta: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
     flexShrink: 1,
   },
   rowBadges: {
     flexDirection: 'row',
     alignSelf: 'flex-start',
     flexWrap: 'wrap',
-    gap: theme.spacing.sm,
+    gap: t.spacing.sm,
   },
   filterRow: {
-    paddingBottom: theme.spacing.sm,
+    paddingBottom: t.spacing.sm,
   },
   chipRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.sm,
-    paddingRight: theme.spacing.md,
+    gap: t.spacing.sm,
+    paddingRight: t.spacing.md,
   },
   headerPressed: {
     opacity: 0.85,
@@ -1261,36 +1282,36 @@ const styles = StyleSheet.create({
   // still reads as nested under its section header, now that each item is its
   // own flat-list row rather than a child inside a shared bordered container.
   itemRowWrap: {
-    marginLeft: theme.spacing.md,
-    paddingLeft: theme.spacing.md,
+    marginLeft: t.spacing.md,
+    paddingLeft: t.spacing.md,
     borderLeftWidth: 2,
-    borderLeftColor: theme.color.borderStrong,
+    borderLeftColor: t.color.borderStrong,
   },
   emptyGroupWrap: {
-    marginTop: theme.spacing.sm,
-    marginLeft: theme.spacing.md,
-    paddingLeft: theme.spacing.md,
+    marginTop: t.spacing.sm,
+    marginLeft: t.spacing.md,
+    paddingLeft: t.spacing.md,
     borderLeftWidth: 2,
-    borderLeftColor: theme.color.borderStrong,
+    borderLeftColor: t.color.borderStrong,
   },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: theme.spacing.sm,
-    marginTop: theme.spacing.sm,
+    paddingVertical: t.spacing.sm,
+    marginTop: t.spacing.sm,
   },
   sectionChevron: {
-    marginRight: theme.spacing.sm,
+    marginRight: t.spacing.sm,
   },
   sectionTitle: {
-    ...theme.typography.subtitle,
-    color: theme.color.textPrimary,
+    ...t.typography.subtitle,
+    color: t.color.textPrimary,
     flex: 1,
   },
   sectionCount: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
-    marginLeft: theme.spacing.sm,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
+    marginLeft: t.spacing.sm,
   },
   tabLayoutContainer: {
     flex: 1,
@@ -1298,20 +1319,20 @@ const styles = StyleSheet.create({
   tabBarWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginHorizontal: theme.spacing.lg,
-    marginTop: theme.spacing.xs,
-    marginBottom: theme.spacing.sm,
-    gap: theme.spacing.xs,
+    marginHorizontal: t.spacing.lg,
+    marginTop: t.spacing.xs,
+    marginBottom: t.spacing.sm,
+    gap: t.spacing.xs,
   },
   tabBar: {
     flex: 1,
     flexDirection: 'row',
-    backgroundColor: theme.color.surface,
-    borderRadius: theme.radius.md,
+    backgroundColor: t.color.surface,
+    borderRadius: t.radius.md,
     padding: 3,
     borderWidth: 1,
-    borderColor: theme.color.border,
-    ...theme.shadow.card,
+    borderColor: t.color.border,
+    ...t.shadow.card,
   },
   favoritesToggleBtn: {
     flexDirection: 'row',
@@ -1319,24 +1340,24 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingHorizontal: 10,
     paddingVertical: 8,
-    borderRadius: theme.radius.md,
-    backgroundColor: theme.color.surface,
+    borderRadius: t.radius.md,
+    backgroundColor: t.color.surface,
     borderWidth: 1,
-    borderColor: theme.color.border,
-    ...theme.shadow.card,
+    borderColor: t.color.border,
+    ...t.shadow.card,
   },
   favoritesToggleBtnActive: {
-    borderColor: '#FF2D55',
-    backgroundColor: '#fff1f2',
+    borderColor: DESTINATION[t.scheme].favoritesActiveBorder,
+    backgroundColor: DESTINATION[t.scheme].favoritesActiveBg,
   },
   favoritesToggleText: {
-    ...theme.typography.meta,
+    ...t.typography.meta,
     fontSize: 12,
     fontWeight: '600',
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   favoritesToggleTextActive: {
-    color: '#FF2D55',
+    color: DESTINATION[t.scheme].favoritesActiveText,
     fontWeight: '700',
   },
   tabBtn: {
@@ -1344,32 +1365,32 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: theme.radius.sm,
+    borderRadius: t.radius.sm,
   },
   tabBtnActive: {
-    backgroundColor: theme.color.primary,
+    backgroundColor: t.color.primary,
   },
   tabText: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
     fontWeight: '600',
   },
   tabTextActive: {
-    color: theme.color.textOnPrimary,
+    color: t.color.textOnPrimary,
     fontWeight: '700',
   },
   hiddenCompatibilityRow: {
     display: 'none',
   },
   filterBarWrap: {
-    paddingHorizontal: theme.spacing.lg,
-    paddingBottom: theme.spacing.xs,
+    paddingHorizontal: t.spacing.lg,
+    paddingBottom: t.spacing.xs,
   },
   filterBarScroll: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.xs,
-    paddingRight: theme.spacing.lg,
+    gap: t.spacing.xs,
+    paddingRight: t.spacing.lg,
   },
   filterChip: {
     flexDirection: 'row',
@@ -1378,41 +1399,41 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 16,
-    backgroundColor: theme.color.surfaceAlt,
+    backgroundColor: t.color.surfaceAlt,
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
   },
   filterChipActive: {
-    backgroundColor: theme.color.primary,
-    borderColor: theme.color.primary,
+    backgroundColor: t.color.primary,
+    borderColor: t.color.primary,
   },
   filterChipText: {
-    ...theme.typography.meta,
+    ...t.typography.meta,
     fontSize: 12,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     fontWeight: '500',
   },
   filterChipTextActive: {
-    color: theme.color.textOnPrimary,
+    color: t.color.textOnPrimary,
     fontWeight: '700',
   },
   filterModalBtn: {
-    backgroundColor: theme.color.surface,
-    borderColor: theme.color.border,
+    backgroundColor: t.color.surface,
+    borderColor: t.color.border,
   },
   filterModalBtnActive: {
-    backgroundColor: theme.color.primary,
-    borderColor: theme.color.primary,
+    backgroundColor: t.color.primary,
+    borderColor: t.color.primary,
   },
   filterModalBtnText: {
     fontWeight: '600',
   },
   resetChip: {
-    backgroundColor: '#fee2e2',
-    borderColor: '#fca5a5',
+    backgroundColor: DESTINATION[t.scheme].resetChipBg,
+    borderColor: DESTINATION[t.scheme].resetChipBorder,
   },
   resetChipText: {
-    color: '#b91c1c',
+    color: DESTINATION[t.scheme].resetChipText,
     fontWeight: '700',
   },
   modalBackdrop: {
@@ -1424,39 +1445,40 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   modalContent: {
-    backgroundColor: theme.color.surface,
-    borderTopLeftRadius: theme.radius.xl,
-    borderTopRightRadius: theme.radius.xl,
-    paddingTop: theme.spacing.md,
-    paddingBottom: theme.spacing.xxl,
+    backgroundColor: t.color.surface,
+    borderTopLeftRadius: t.radius.xl,
+    borderTopRightRadius: t.radius.xl,
+    paddingTop: t.spacing.md,
+    paddingBottom: t.spacing.xxl,
     maxHeight: '80%',
-    ...theme.shadow.card,
+    ...t.shadow.card,
+    ...t.outline.card,
   },
   modalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: theme.spacing.lg,
-    paddingBottom: theme.spacing.sm,
+    paddingHorizontal: t.spacing.lg,
+    paddingBottom: t.spacing.sm,
     borderBottomWidth: 1,
-    borderBottomColor: theme.color.border,
+    borderBottomColor: t.color.border,
   },
   modalTitle: {
-    ...theme.typography.title,
-    color: theme.color.textPrimary,
+    ...t.typography.title,
+    color: t.color.textPrimary,
   },
   modalHeaderActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.md,
+    gap: t.spacing.md,
   },
   modalClearBtn: {
     paddingVertical: 4,
     paddingHorizontal: 8,
   },
   modalClearText: {
-    ...theme.typography.meta,
-    color: theme.color.primary,
+    ...t.typography.meta,
+    color: t.color.primaryFg,
     fontWeight: '600',
   },
   modalCloseBtn: {
@@ -1466,99 +1488,99 @@ const styles = StyleSheet.create({
     maxHeight: 400,
   },
   modalScrollContent: {
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.md,
-    gap: theme.spacing.lg,
+    paddingHorizontal: t.spacing.lg,
+    paddingVertical: t.spacing.md,
+    gap: t.spacing.lg,
   },
   modalSection: {
-    gap: theme.spacing.sm,
+    gap: t.spacing.sm,
   },
   modalSectionTitle: {
-    ...theme.typography.meta,
+    ...t.typography.meta,
     fontSize: 12,
     fontWeight: '700',
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     letterSpacing: 0.5,
   },
   chipGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: theme.spacing.xs,
+    gap: t.spacing.xs,
   },
   modalChip: {
-    paddingHorizontal: theme.spacing.md,
+    paddingHorizontal: t.spacing.md,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: theme.color.surfaceAlt,
+    backgroundColor: t.color.surfaceAlt,
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
   },
   modalChipActive: {
-    backgroundColor: theme.color.primary,
-    borderColor: theme.color.primary,
+    backgroundColor: t.color.primary,
+    borderColor: t.color.primary,
   },
   modalChipText: {
-    ...theme.typography.meta,
-    color: theme.color.textPrimary,
+    ...t.typography.meta,
+    color: t.color.textPrimary,
     fontWeight: '500',
   },
   modalChipTextActive: {
-    color: '#FFFFFF',
+    color: t.color.textOnPrimary,
     fontWeight: '700',
   },
   modalFooter: {
-    paddingHorizontal: theme.spacing.lg,
-    paddingTop: theme.spacing.md,
+    paddingHorizontal: t.spacing.lg,
+    paddingTop: t.spacing.md,
     borderTopWidth: 1,
-    borderTopColor: theme.color.border,
+    borderTopColor: t.color.border,
   },
   modalApplyBtn: {
-    backgroundColor: theme.color.primary,
+    backgroundColor: t.color.primary,
     paddingVertical: 14,
-    borderRadius: theme.radius.md,
+    borderRadius: t.radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    ...theme.shadow.card,
+    ...t.shadow.card,
   },
   modalApplyBtnText: {
-    color: '#FFFFFF',
+    color: t.color.textOnPrimary,
     fontWeight: '700',
     fontSize: 15,
   },
   resetFilterEmptyBtn: {
-    marginTop: theme.spacing.md,
-    backgroundColor: theme.color.primary,
+    marginTop: t.spacing.md,
+    backgroundColor: t.color.primary,
     paddingVertical: 10,
-    paddingHorizontal: theme.spacing.lg,
-    borderRadius: theme.radius.md,
+    paddingHorizontal: t.spacing.lg,
+    borderRadius: t.radius.md,
   },
   resetFilterEmptyBtnText: {
-    color: theme.color.textOnPrimary,
-    ...theme.typography.button,
+    color: t.color.textOnPrimary,
+    ...t.typography.button,
   },
   resortAnchor: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: theme.spacing.md,
-    paddingHorizontal: theme.spacing.md,
-    marginTop: theme.spacing.sm,
-    marginBottom: theme.spacing.sm,
-    backgroundColor: theme.color.surfaceAlt,
-    borderRadius: theme.radius.md,
+    paddingVertical: t.spacing.md,
+    paddingHorizontal: t.spacing.md,
+    marginTop: t.spacing.sm,
+    marginBottom: t.spacing.sm,
+    backgroundColor: t.color.surfaceAlt,
+    borderRadius: t.radius.md,
   },
   resortAnchorIcon: {
-    marginRight: theme.spacing.sm,
+    marginRight: t.spacing.sm,
   },
   resortAnchorText: {
     flex: 1,
   },
   resortAnchorName: {
-    ...theme.typography.subtitle,
-    color: theme.color.textPrimary,
+    ...t.typography.subtitle,
+    color: t.color.textPrimary,
   },
   resortAnchorEmpty: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
-    marginTop: theme.spacing.xs,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
+    marginTop: t.spacing.xs,
   },
-});
+}));

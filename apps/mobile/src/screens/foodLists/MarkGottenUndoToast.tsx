@@ -12,10 +12,12 @@
 // (Requirement 13.17 — never "the most recent log for this item").
 
 import React, { useEffect, useRef } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-import { theme } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme } from '../../theme/useAppTheme';
+import { TOAST } from './MarkGottenUndoToast.palette';
 
 export interface MarkGottenUndoToastProps {
   /** The Food_Item's display name, shown in the toast's message. */
@@ -36,6 +38,8 @@ export default function MarkGottenUndoToast({
   onDismiss,
   durationMs = DEFAULT_DURATION_MS,
 }: MarkGottenUndoToastProps): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const onDismissRef = useRef(onDismiss);
   onDismissRef.current = onDismiss;
 
@@ -57,7 +61,7 @@ export default function MarkGottenUndoToast({
 
   return (
     <View style={styles.toast} testID="mark-gotten-undo-toast">
-      <Ionicons name="checkmark-circle" size={18} color={theme.color.success} />
+      <Ionicons name="checkmark-circle" size={18} color={t.color.success} />
       <Text style={styles.message} numberOfLines={2}>
         Ate this: {itemName}
       </Text>
@@ -74,13 +78,15 @@ export default function MarkGottenUndoToast({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   toast: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: theme.color.textPrimary,
-    borderRadius: theme.radius.md,
+    // Inverse toast: mode-invariant H-role surface (rule 1a), outlined in dark.
+    backgroundColor: TOAST[t.scheme].bg,
+    ...t.outline.card,
+    borderRadius: t.radius.md,
     paddingVertical: 10,
     paddingHorizontal: 12,
   },
@@ -88,7 +94,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     fontWeight: '500',
-    color: theme.color.textOnPrimary,
+    color: t.color.textOnPrimary,
   },
   undoBtn: {
     paddingVertical: 4,
@@ -97,6 +103,6 @@ const styles = StyleSheet.create({
   undoText: {
     fontSize: 13,
     fontWeight: '700',
-    color: theme.color.accent,
+    color: t.color.accent,
   },
-});
+}));

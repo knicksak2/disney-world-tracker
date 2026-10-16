@@ -15,7 +15,6 @@ import {
   Modal,
   Platform,
   Pressable,
-  StyleSheet,
   Text,
   TextInput,
   View,
@@ -23,7 +22,8 @@ import {
 import type { ExperienceListDTO } from '@dwt/shared';
 
 import { apiRequest } from '../../api/client';
-import { theme } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme } from '../../theme/useAppTheme';
 
 export interface CreateExperienceListModalProps {
   readonly visible: boolean;
@@ -37,6 +37,8 @@ export default function CreateExperienceListModal({
   onClose,
   onCreated,
 }: CreateExperienceListModalProps): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const [newListName, setNewListName] = useState('');
   const [newListVisibility, setNewListVisibility] = useState<'private' | 'public'>('private');
   const [isCreating, setIsCreating] = useState(false);
@@ -81,7 +83,7 @@ export default function CreateExperienceListModal({
       testID="create-experience-list-modal"
     >
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.modalBackdrop}
       >
         <View style={styles.modalContainer}>
@@ -93,7 +95,8 @@ export default function CreateExperienceListModal({
               if (createError) setCreateError(null);
             }}
             placeholder="e.g. Thrill Rides"
-            placeholderTextColor={theme.color.textSecondary}
+            placeholderTextColor={t.color.textSecondary}
+            keyboardAppearance={t.scheme}
             style={styles.modalInput}
             autoFocus
             testID="new-experience-list-name-input"
@@ -157,7 +160,7 @@ export default function CreateExperienceListModal({
               testID="submit-create-experience-list-btn"
             >
               {isCreating ? (
-                <ActivityIndicator size="small" color="#fff" />
+                <ActivityIndicator size="small" color={t.color.textOnPrimary} />
               ) : (
                 <Text style={styles.modalSubmitText}>Create</Text>
               )}
@@ -169,7 +172,7 @@ export default function CreateExperienceListModal({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   modalBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -178,26 +181,26 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   modalContainer: {
-    backgroundColor: theme.color.surface,
+    backgroundColor: t.color.surface,
     width: '100%',
-    borderRadius: theme.radius.lg,
-    padding: theme.spacing.lg,
+    borderRadius: t.radius.lg,
+    padding: t.spacing.lg,
     gap: 16,
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   modalInput: {
-    backgroundColor: theme.color.background,
+    backgroundColor: t.color.background,
     borderWidth: 1,
-    borderColor: theme.color.border,
-    borderRadius: theme.radius.md,
+    borderColor: t.color.border,
+    borderRadius: t.radius.md,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 15,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   visibilityToggleRow: {
     flexDirection: 'row',
@@ -207,29 +210,29 @@ const styles = StyleSheet.create({
   visibilityLabel: {
     fontSize: 13,
     fontWeight: '600',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   visToggleGroup: {
     flexDirection: 'row',
-    backgroundColor: theme.color.surfaceAlt,
-    borderRadius: theme.radius.sm,
+    backgroundColor: t.color.surfaceAlt,
+    borderRadius: t.radius.sm,
     padding: 2,
   },
   visPill: {
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: theme.radius.sm - 2,
+    borderRadius: t.radius.sm - 2,
   },
   visPillActive: {
-    backgroundColor: theme.color.primary,
+    backgroundColor: t.color.primary,
   },
   visPillText: {
     fontSize: 11,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     fontWeight: '600',
   },
   visPillTextActive: {
-    color: '#fff',
+    color: t.color.textOnPrimary,
   },
   modalActions: {
     flexDirection: 'row',
@@ -238,7 +241,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   modalErrorText: {
-    color: theme.color.danger,
+    color: t.color.danger,
     fontSize: 13,
     fontWeight: '500',
     marginTop: 8,
@@ -249,20 +252,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   modalCancelText: {
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     fontWeight: '600',
   },
   modalSubmitBtn: {
-    backgroundColor: theme.color.primary,
+    backgroundColor: t.color.primary,
     paddingVertical: 10,
     paddingHorizontal: 20,
-    borderRadius: theme.radius.md,
+    borderRadius: t.radius.md,
   },
   modalSubmitBtnDisabled: {
     opacity: 0.5,
   },
   modalSubmitText: {
-    color: '#fff',
+    color: t.color.textOnPrimary,
     fontWeight: '700',
   },
-});
+}));

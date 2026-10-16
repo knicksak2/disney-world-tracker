@@ -1,7 +1,13 @@
 // Feature: experience-detail-redesign — RateExperienceModal interaction tests
 
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import type { ReactTestInstance } from 'react-test-renderer';
+
+import { darkTheme } from '../../../theme/theme';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
+import { RATE_DIALOG } from '../RateExperienceModal.palette';
 
 jest.mock('../../../api/client', () => {
   const actual = jest.requireActual('../../../api/client');
@@ -173,5 +179,54 @@ describe('RateExperienceModal', () => {
       expect(screen.getByText('Rating must be 1-10.')).toBeTruthy();
     });
     expect(mockOnClose).not.toHaveBeenCalled();
+  });
+});
+
+/** Nearest painted `backgroundColor` at or above `node` (dialog surface lookup). */
+function paintedBackground(node: ReactTestInstance | null): unknown {
+  for (let n = node; n !== null; n = n.parent) {
+    const style = n.props.style;
+    if (style === undefined || typeof style === 'function') continue;
+    const flat = StyleSheet.flatten(style) as { backgroundColor?: unknown } | undefined;
+    if (flat?.backgroundColor !== undefined) return flat.backgroundColor;
+  }
+  return undefined;
+}
+
+describe('RateExperienceModal — dark mode', () => {
+  afterEach(resetTestScheme);
+
+  it('paints the dialog, title and rating tiles with dark values', () => {
+    setTestScheme('dark');
+    render(
+      <RateExperienceModal
+        experienceId={EXPERIENCE_ID}
+        experienceName={EXPERIENCE_NAME}
+        visible={true}
+        currentRating={4}
+        onClose={jest.fn()}
+        onRated={jest.fn()}
+      />,
+    );
+
+    // (a) dialog surface (rule 1: `#ffffff` background → surface).
+    const title = screen.getByText('Rate Experience');
+    expect(paintedBackground(title)).toBe(darkTheme.color.surface);
+    // (b) the dialog's primary text — its violet title literal (rule 3 T).
+    expect(StyleSheet.flatten(title.props.style).color).toBe(RATE_DIALOG.dark.title);
+    // (c) idle tile (lavender subtle → surfaceAlt), active tile (primary fill,
+    // white number) and the red Remove button (rule 3 S / T).
+    expect(StyleSheet.flatten(screen.getByTestId('rating-tile-1').props.style).backgroundColor).toBe(
+      darkTheme.color.surfaceAlt,
+    );
+    expect(StyleSheet.flatten(screen.getByTestId('rating-tile-4').props.style).backgroundColor).toBe(
+      darkTheme.color.primary,
+    );
+    expect(StyleSheet.flatten(screen.getByText('4', { exact: true }).props.style).color).toBe(
+      darkTheme.color.textOnPrimary,
+    );
+    expect(StyleSheet.flatten(screen.getByText('Remove').props.style).color).toBe(
+      RATE_DIALOG.dark.removeText,
+    );
   });
 });

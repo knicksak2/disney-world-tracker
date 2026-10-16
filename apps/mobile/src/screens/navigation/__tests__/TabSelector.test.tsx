@@ -27,8 +27,12 @@
  */
 
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import { Ionicons } from '@expo/vector-icons';
+
+import { darkTheme } from '../../../theme/theme';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
 
 import {
   FRIEND_PROFILE_TABS,
@@ -163,5 +167,36 @@ describe('TabSelector', () => {
       // ...and, with `active` unchanged, the tab remains the selected one.
       expect(selectedState(`tab-${activeMode}`)).toBe(true);
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Feature: dark-mode — the selector follows the Active theme.
+// ---------------------------------------------------------------------------
+
+describe('TabSelector — dark mode', () => {
+  const flat = (node: { props: { style?: unknown } }): Record<string, unknown> =>
+    (StyleSheet.flatten(node.props.style as never) ?? {}) as Record<string, unknown>;
+  afterEach(resetTestScheme);
+
+  test('(c) bar, active tab fill, and labels use the dark tokens', () => {
+    setTestScheme('dark');
+    render(
+      <TabSelector
+        tabs={FRIEND_PROFILE_TABS as readonly TabSpec<string>[]}
+        active="Overview"
+        onSelect={jest.fn()}
+      />,
+    );
+    expect(flat(screen.getByTestId('tab-selector')).backgroundColor).toBe(
+      darkTheme.color.surfaceAlt,
+    );
+    expect(flat(screen.getByTestId('tab-Overview')).backgroundColor).toBe(
+      darkTheme.color.primary,
+    );
+    const active = FRIEND_PROFILE_TABS.find((tab) => tab.mode === 'Overview')!;
+    const inactive = FRIEND_PROFILE_TABS.find((tab) => tab.mode === 'Coverage')!;
+    expect(flat(screen.getByText(active.label)).color).toBe(darkTheme.color.textOnPrimary);
+    expect(flat(screen.getByText(inactive.label)).color).toBe(darkTheme.color.textSecondary);
   });
 });

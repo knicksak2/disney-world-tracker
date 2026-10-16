@@ -5,8 +5,11 @@
  */
 
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { darkTheme } from '../../theme/theme';
+import { resetTestScheme, setTestScheme } from '../../test/themeTestUtils';
 
 const mockSecureStore = new Map<string, string>();
 jest.mock('expo-secure-store', () => ({
@@ -170,6 +173,41 @@ describe('ResetPasswordScreen', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Invalid or expired verification code.')).toBeTruthy();
+    });
+  });
+
+  // Feature: dark-mode — the converted screen follows the Active theme.
+  describe('dark mode', () => {
+    const flat = (node: { props: { style?: unknown } }): Record<string, unknown> =>
+      (StyleSheet.flatten(node.props.style as never) ?? {}) as Record<string, unknown>;
+    afterEach(resetTestScheme);
+
+    it('(a)(b)(c) background, input text, and the resend / sign-in links use dark values', () => {
+      setTestScheme('dark');
+      const navigation = { navigate: jest.fn() } as any;
+      const route = { params: { email: 'mickey@example.com' } } as any;
+      render(
+        <NavigationContainer>
+          <ResetPasswordScreen navigation={navigation} route={route} />
+        </NavigationContainer>,
+      );
+
+      // (a) root ScreenContainer.
+      expect(flat(screen.root).backgroundColor).toBe(darkTheme.color.background);
+      // (b) the code input's text.
+      const code = screen.getByTestId('reset-code');
+      expect(flat(code).color).toBe(darkTheme.color.textPrimary);
+      expect(code.props.keyboardAppearance).toBe('dark');
+      // (c) the disabled resend text is textSecondary; once enabled it is
+      // `primary` as text → primaryFg.
+      expect(flat(screen.getByText('Resend code in 60s')).color).toBe(
+        darkTheme.color.textSecondary,
+      );
+      act(() => {
+        jest.advanceTimersByTime(60000);
+      });
+      expect(flat(screen.getByText('Resend code')).color).toBe(darkTheme.color.primaryFg);
+      expect(flat(screen.getByText('Sign in')).color).toBe(darkTheme.color.primaryFg);
     });
   });
 });

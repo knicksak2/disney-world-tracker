@@ -6,12 +6,16 @@
 // rendered directly above the LensSwitcher from existing DTO fields.
 
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import type {
   FacetValueDTO,
   GroupedFacetsDTO,
   HeightRequirementDTO,
 } from '@dwt/shared';
+
+import { withAlpha } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { SPECS } from './QuickSpecsRow.palette';
 
 export interface QuickSpecsExperience {
   readonly category: string;
@@ -616,6 +620,7 @@ function resolveFeature(
 }
 
 export default function QuickSpecsRow({ experience }: QuickSpecsRowProps): JSX.Element {
+  const styles = useStyles();
   if (experience.category === 'Resort') {
     const tier = experience.tier ? `${experience.tier} Resort` : 'Moderate Resort';
     const primaryTransit =
@@ -746,12 +751,12 @@ export default function QuickSpecsRow({ experience }: QuickSpecsRowProps): JSX.E
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-start',
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    backgroundColor: withAlpha(t.color.surface, 0.95),
     borderRadius: 16,
     paddingVertical: 9,
     paddingHorizontal: 12,
@@ -759,8 +764,8 @@ const styles = StyleSheet.create({
     marginTop: 2,
     marginBottom: 4,
     borderWidth: 1,
-    borderColor: 'rgba(230, 222, 242, 0.9)',
-    shadowColor: '#190c2d',
+    borderColor: SPECS[t.scheme].rowBorder,
+    shadowColor: SPECS[t.scheme].rowShadow,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04,
     shadowRadius: 4,
@@ -803,24 +808,25 @@ const styles = StyleSheet.create({
     paddingLeft: 6,
   },
   specIcon: {
+    ...t.textDefault,
     fontSize: 12,
   },
   separator: {
     width: 1,
     height: 16,
-    backgroundColor: '#ddd2ee',
+    backgroundColor: SPECS[t.scheme].separator,
     marginHorizontal: 8,
   },
   specText: {
     fontSize: 10.5,
     fontWeight: '800',
-    color: '#190c2d',
+    color: SPECS[t.scheme].specText,
     letterSpacing: -0.2,
   },
   indoorClimateText: {
-    color: '#0284c7',
+    color: SPECS[t.scheme].indoorText,
   },
   outdoorClimateText: {
-    color: '#d97706',
+    color: SPECS[t.scheme].outdoorText,
   },
-});
+}));

@@ -9,7 +9,6 @@ import {
   ActivityIndicator,
   Modal,
   Pressable,
-  StyleSheet,
   Text,
   View,
 } from 'react-native';
@@ -17,7 +16,9 @@ import { Ionicons } from '@expo/vector-icons';
 import type { RatingDTO } from '@dwt/shared';
 
 import { ApiError, apiRequest } from '../../api/client';
-import { theme } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme, usePalette } from '../../theme/useAppTheme';
+import { RATE_DIALOG } from './RateExperienceModal.palette';
 
 export interface RateExperienceModalProps {
   readonly experienceId: string;
@@ -49,6 +50,9 @@ export default function RateExperienceModal({
   onClose,
   onRated,
 }: RateExperienceModalProps): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
+  const pal = usePalette(RATE_DIALOG);
   const [selectedRating, setSelectedRating] = useState<number | null>(currentRating);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -119,7 +123,7 @@ export default function RateExperienceModal({
           <View style={styles.headerRow}>
             <View style={styles.titleContainer}>
               <View style={styles.iconCircle}>
-                <Ionicons name="star" size={20} color="#e5a100" />
+                <Ionicons name="star" size={20} color={pal.starIcon} />
               </View>
               <View style={styles.titleTextWrapper}>
                 <Text style={styles.title}>Rate Experience</Text>
@@ -135,7 +139,7 @@ export default function RateExperienceModal({
               style={styles.closeButton}
               testID="close-rate-modal"
             >
-              <Ionicons name="close" size={22} color={theme.color.textSecondary} />
+              <Ionicons name="close" size={22} color={t.color.textSecondary} />
             </Pressable>
           </View>
 
@@ -176,7 +180,7 @@ export default function RateExperienceModal({
                   <Ionicons
                     name={isActive ? 'star' : 'star-outline'}
                     size={16}
-                    color={isActive ? '#ffffff' : '#7b6899'}
+                    color={isActive ? t.color.textOnPrimary : pal.tileStar}
                   />
                   <Text
                     style={[
@@ -214,7 +218,7 @@ export default function RateExperienceModal({
               testID="save-rating-button"
             >
               {isSubmitting ? (
-                <ActivityIndicator size="small" color="#ffffff" />
+                <ActivityIndicator size="small" color={t.color.textOnPrimary} />
               ) : (
                 <Text style={styles.saveButtonText}>Save Rating</Text>
               )}
@@ -241,10 +245,10 @@ export default function RateExperienceModal({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(20, 8, 36, 0.65)',
+    backgroundColor: RATE_DIALOG[t.scheme].scrim,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
@@ -252,12 +256,12 @@ const styles = StyleSheet.create({
   dialog: {
     width: '100%',
     maxWidth: 420,
-    backgroundColor: '#ffffff',
+    backgroundColor: t.color.surface,
     borderRadius: 24,
     padding: 22,
     borderWidth: 1.5,
-    borderColor: 'rgba(230, 222, 242, 0.95)',
-    shadowColor: '#5b2a86',
+    borderColor: RATE_DIALOG[t.scheme].dialogBorder,
+    shadowColor: RATE_DIALOG[t.scheme].dialogShadow,
     shadowOffset: { width: 0, height: 12 },
     shadowOpacity: 0.28,
     shadowRadius: 28,
@@ -279,11 +283,11 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#fff8e6',
+    backgroundColor: RATE_DIALOG[t.scheme].starCircleBg,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#fce299',
+    borderColor: RATE_DIALOG[t.scheme].starCircleBorder,
   },
   titleTextWrapper: {
     flex: 1,
@@ -291,47 +295,47 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 18,
     fontWeight: '800',
-    color: '#371756',
+    color: RATE_DIALOG[t.scheme].title,
   },
   subtitle: {
     fontSize: 13,
     fontWeight: '600',
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   closeButton: {
     padding: 6,
     borderRadius: 16,
   },
   scoreCallout: {
-    backgroundColor: '#faf8fd',
+    backgroundColor: RATE_DIALOG[t.scheme].calloutBg,
     borderRadius: 16,
     paddingVertical: 14,
     paddingHorizontal: 16,
     alignItems: 'center',
     marginBottom: 18,
     borderWidth: 1,
-    borderColor: '#ede5f7',
+    borderColor: RATE_DIALOG[t.scheme].calloutBorder,
   },
   scoreNumber: {
     fontSize: 26,
     fontWeight: '900',
-    color: '#5b2a86',
+    color: t.color.primaryFg,
   },
   scoreTen: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#8b7aa3',
+    color: RATE_DIALOG[t.scheme].scoreTen,
   },
   scoreDescription: {
     fontSize: 12.5,
     fontWeight: '700',
-    color: '#655082',
+    color: RATE_DIALOG[t.scheme].scoreDescription,
     marginTop: 3,
   },
   scorePrompt: {
     fontSize: 13.5,
     fontWeight: '600',
-    color: '#7b6899',
+    color: RATE_DIALOG[t.scheme].scorePrompt,
   },
   pickerGrid: {
     flexDirection: 'row',
@@ -343,18 +347,18 @@ const styles = StyleSheet.create({
   pickerTile: {
     width: '18%',
     aspectRatio: 1,
-    backgroundColor: '#fbf9fe',
+    backgroundColor: RATE_DIALOG[t.scheme].tileBg,
     borderRadius: 12,
     borderWidth: 1.5,
-    borderColor: '#e2d7f2',
+    borderColor: RATE_DIALOG[t.scheme].tileBorder,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 2,
   },
   pickerTileActive: {
-    backgroundColor: '#5b2a86',
-    borderColor: '#5b2a86',
-    shadowColor: '#5b2a86',
+    backgroundColor: t.color.primary,
+    borderColor: t.color.primary,
+    shadowColor: RATE_DIALOG[t.scheme].tileActiveShadow,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.35,
     shadowRadius: 8,
@@ -363,15 +367,15 @@ const styles = StyleSheet.create({
   pickerTileText: {
     fontSize: 13,
     fontWeight: '800',
-    color: '#49236d',
+    color: RATE_DIALOG[t.scheme].tileText,
   },
   pickerTileTextActive: {
-    color: '#ffffff',
+    color: t.color.textOnPrimary,
   },
   errorText: {
     fontSize: 12.5,
     fontWeight: '600',
-    color: theme.color.danger,
+    color: t.color.danger,
     textAlign: 'center',
     marginBottom: 12,
   },
@@ -382,38 +386,38 @@ const styles = StyleSheet.create({
   },
   saveButton: {
     flex: 2,
-    backgroundColor: '#5b2a86',
+    backgroundColor: t.color.primary,
     borderRadius: 14,
     paddingVertical: 13,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#5b2a86',
+    shadowColor: RATE_DIALOG[t.scheme].saveShadow,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 10,
     elevation: 3,
   },
   saveButtonText: {
-    color: '#ffffff',
+    color: t.color.textOnPrimary,
     fontSize: 14,
     fontWeight: '800',
   },
   removeButton: {
     flex: 1,
-    backgroundColor: '#fff0f3',
+    backgroundColor: RATE_DIALOG[t.scheme].removeBg,
     borderRadius: 14,
     paddingVertical: 13,
     borderWidth: 1,
-    borderColor: '#ffd0da',
+    borderColor: RATE_DIALOG[t.scheme].removeBorder,
     alignItems: 'center',
     justifyContent: 'center',
   },
   removeButtonText: {
-    color: '#d32f2f',
+    color: RATE_DIALOG[t.scheme].removeText,
     fontSize: 13,
     fontWeight: '700',
   },
   buttonDisabled: {
     opacity: 0.5,
   },
-});
+}));

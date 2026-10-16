@@ -16,7 +16,6 @@ import {
   Platform,
   Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   TextInput,
   View,
@@ -31,7 +30,8 @@ import type {
 import { ApiError, apiRequest } from '../api/client';
 import type { AuthStackParamList } from '../navigation/RootNavigator';
 import { useSessionStore } from '../state/sessionStore';
-import { theme } from '../theme/theme';
+import { makeStyles } from '../theme/makeStyles';
+import { useAppTheme } from '../theme/useAppTheme';
 import {
   Card,
   GradientHeader,
@@ -45,6 +45,8 @@ export default function ResetPasswordScreen({
   navigation,
   route,
 }: Props): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const email = route.params.email;
   const setToken = useSessionStore((state) => state.setToken);
 
@@ -200,7 +202,8 @@ export default function ResetPasswordScreen({
                   keyboardType="number-pad"
                   maxLength={6}
                   placeholder="123456"
-                  placeholderTextColor={theme.color.textSecondary}
+                  placeholderTextColor={t.color.textSecondary}
+                  keyboardAppearance={t.scheme}
                   editable={!submitting}
                   accessibilityLabel="Verification Code"
                   testID="reset-code"
@@ -254,7 +257,8 @@ export default function ResetPasswordScreen({
                     textContentType="newPassword"
                     secureTextEntry={!showPassword}
                     placeholder="At least 8 characters"
-                    placeholderTextColor={theme.color.textSecondary}
+                    placeholderTextColor={t.color.textSecondary}
+                    keyboardAppearance={t.scheme}
                     editable={!submitting}
                     accessibilityLabel="New Password"
                     testID="reset-password"
@@ -272,7 +276,7 @@ export default function ResetPasswordScreen({
                     <Ionicons
                       name={showPassword ? 'eye-off-outline' : 'eye-outline'}
                       size={22}
-                      color={theme.color.textSecondary}
+                      color={t.color.textSecondary}
                     />
                   </Pressable>
                 </View>
@@ -297,7 +301,8 @@ export default function ResetPasswordScreen({
                   textContentType="newPassword"
                   secureTextEntry={!showPassword}
                   placeholder="Repeat your new password"
-                  placeholderTextColor={theme.color.textSecondary}
+                  placeholderTextColor={t.color.textSecondary}
+                  keyboardAppearance={t.scheme}
                   editable={!submitting}
                   accessibilityLabel="Confirm Password"
                   testID="reset-confirm-password"
@@ -351,31 +356,31 @@ export default function ResetPasswordScreen({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   flex: { flex: 1 },
-  scroll: { flexGrow: 1, paddingBottom: theme.spacing.xxl },
+  scroll: { flexGrow: 1, paddingBottom: t.spacing.xxl },
   body: {
-    paddingHorizontal: theme.spacing.xl,
-    marginTop: theme.spacing.lg,
-    gap: theme.spacing.lg,
+    paddingHorizontal: t.spacing.xl,
+    marginTop: t.spacing.lg,
+    gap: t.spacing.lg,
   },
   field: {
-    marginBottom: theme.spacing.lg,
+    marginBottom: t.spacing.lg,
   },
   label: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
-    marginBottom: theme.spacing.xs,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
+    marginBottom: t.spacing.xs,
   },
   input: {
     borderWidth: 1,
-    borderColor: theme.color.border,
-    borderRadius: theme.radius.md,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.md,
+    borderColor: t.color.border,
+    borderRadius: t.radius.md,
+    paddingHorizontal: t.spacing.md,
+    paddingVertical: t.spacing.md,
     fontSize: 16,
-    color: theme.color.textPrimary,
-    backgroundColor: theme.color.surfaceAlt,
+    color: t.color.textPrimary,
+    backgroundColor: t.color.surfaceAlt,
   },
   codeInput: {
     fontSize: 22,
@@ -387,62 +392,62 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   passwordInput: {
-    paddingRight: theme.spacing.xl + theme.spacing.lg,
+    paddingRight: t.spacing.xl + t.spacing.lg,
   },
   passwordToggle: {
     position: 'absolute',
-    right: theme.spacing.md,
+    right: t.spacing.md,
     height: '100%',
     justifyContent: 'center',
   },
   inputError: {
-    borderColor: theme.color.danger,
+    borderColor: t.color.danger,
   },
   fieldError: {
-    marginTop: theme.spacing.xs,
-    color: theme.color.danger,
+    marginTop: t.spacing.xs,
+    color: t.color.danger,
     fontSize: 13,
   },
   formError: {
-    marginBottom: theme.spacing.md,
-    color: theme.color.danger,
+    marginBottom: t.spacing.md,
+    color: t.color.danger,
     fontSize: 14,
     textAlign: 'center',
   },
   infoMessage: {
-    color: theme.color.primary,
-    marginBottom: theme.spacing.md,
+    color: t.color.primaryFg,
+    marginBottom: t.spacing.md,
     textAlign: 'center',
     fontSize: 13,
   },
   resendRow: {
     alignItems: 'flex-end',
-    marginTop: -theme.spacing.sm,
-    marginBottom: theme.spacing.lg,
+    marginTop: -t.spacing.sm,
+    marginBottom: t.spacing.lg,
   },
   resendText: {
     fontSize: 13,
-    color: theme.color.primary,
+    color: t.color.primaryFg,
     fontWeight: '600',
   },
   resendDisabled: {
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     opacity: 0.6,
   },
   submit: {
-    marginTop: theme.spacing.xs,
+    marginTop: t.spacing.xs,
   },
   linkButton: {
     alignSelf: 'center',
-    paddingVertical: theme.spacing.sm,
-    paddingHorizontal: theme.spacing.md,
+    paddingVertical: t.spacing.sm,
+    paddingHorizontal: t.spacing.md,
   },
   linkText: {
-    ...theme.typography.body,
-    color: theme.color.textSecondary,
+    ...t.typography.body,
+    color: t.color.textSecondary,
   },
   linkTextEmphasis: {
-    color: theme.color.primary,
+    color: t.color.primaryFg,
     fontWeight: '600',
   },
-});
+}));

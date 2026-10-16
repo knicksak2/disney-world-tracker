@@ -17,11 +17,12 @@
  */
 
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import type { StatsResponse } from '../../../api/statsTypes';
-import { theme } from '../../../theme/theme';
+import { makeStyles } from '../../../theme/makeStyles';
+import { useAppTheme } from '../../../theme/useAppTheme';
 import { phrasePercentile, shouldShowPercentile } from '../statsView';
 
 export interface PercentileBannerProps {
@@ -37,12 +38,14 @@ export function PercentileBanner({
   stats,
   testID,
 }: PercentileBannerProps): JSX.Element | null {
+  const styles = useStyles();
+  const t = useAppTheme();
   if (!shouldShowPercentile(stats)) return null;
   // `shouldShowPercentile` guarantees `percentileRank` is a number here.
   const phrase = phrasePercentile(stats.percentileRank as number);
   return (
     <LinearGradient
-      colors={theme.gradient.gold}
+      colors={t.gradient.gold}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 0 }}
       style={styles.banner}
@@ -61,14 +64,14 @@ export function PercentileBanner({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   banner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.md,
-    padding: theme.spacing.lg,
-    borderRadius: theme.radius.lg,
-    ...theme.shadow.card,
+    gap: t.spacing.md,
+    padding: t.spacing.lg,
+    borderRadius: t.radius.lg,
+    ...t.shadow.card,
   },
   medal: {
     fontSize: 24,
@@ -78,13 +81,13 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   text: {
-    ...theme.typography.subtitle,
-    color: theme.color.textOnAccent,
+    ...t.typography.subtitle,
+    color: t.color.textOnAccent,
     flexShrink: 1,
   },
   sub: {
-    ...theme.typography.meta,
-    color: theme.color.textOnAccent,
+    ...t.typography.meta,
+    color: t.color.textOnAccent,
     opacity: 0.8,
   },
-});
+}));

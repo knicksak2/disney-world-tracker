@@ -4,13 +4,17 @@
 //            14.1, 14.2, 14.3, 14.4
 
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { LiveDetailDTO } from '@dwt/shared';
 
 import TodayInParkLens from '../TodayInParkLens';
 import LiveWaitCockpit from '../LiveWaitCockpit';
+import { LOCATION } from '../LocationGroupSection.palette';
 import * as client from '../../../api/client';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
+import { darkTheme } from '../../../theme/theme';
 
 jest.mock('../../../api/client', () => ({
   apiRequest: jest.fn(),
@@ -209,6 +213,52 @@ describe('TodayInParkLens & LiveWaitCockpit (Task 18.4)', () => {
       expect(queryByTestId('dining-reservation-card')).toBeNull();
       expect(queryByTestId('showtimes-card')).toBeNull();
       expect(getByTestId('experience-location-group')).toBeTruthy();
+    });
+
+    describe('dark mode', () => {
+      afterEach(resetTestScheme);
+
+      it('(c) renders its B1-owned Location_Group with dark values', () => {
+        setTestScheme('dark');
+        const { getByTestId } = renderWithClient(
+          <TodayInParkLens
+            experienceId="exp-tour"
+            experienceName="Keys to the Kingdom"
+            category="Tour"
+            locationGroup={mockLocationGroup}
+            latitude={28.41}
+            longitude={-81.58}
+            onReserve={jest.fn()}
+          />,
+        );
+
+        const card = StyleSheet.flatten(getByTestId('experience-location-group').props.style);
+        expect(card.backgroundColor).toBe(darkTheme.color.surface);
+        expect(card.borderColor).toBe(LOCATION.dark.cardBorder);
+        expect(
+          StyleSheet.flatten(getByTestId('experience-get-directions').props.style).backgroundColor,
+        ).toBe(darkTheme.color.primary);
+      });
+
+      it('(Requirement 9.13) LiveWaitCockpit title is textPrimary and idle chip copy is textSecondary', () => {
+        setTestScheme('dark');
+        const { getByText } = renderWithClient(
+          <LiveWaitCockpit
+            experienceId="exp-1"
+            activeTripRange={null}
+            plannedDate={null}
+            todayWdw="2026-09-24"
+          />,
+        );
+        const color = (text: string): unknown =>
+          StyleSheet.flatten(getByText(text).props.style).color;
+        expect(color('Live Park Cockpit')).toBe(darkTheme.color.textPrimary);
+        // Idle "Typical" chip label is muted; it used to be brighter than the title.
+        expect(color('Typical')).toBe(darkTheme.color.textSecondary);
+        expect(color('Typical')).not.toBe(color('Live Park Cockpit'));
+        // The active "Now" chip keeps white on its primary fill.
+        expect(color('Now')).toBe(darkTheme.color.textOnPrimary);
+      });
     });
   });
 

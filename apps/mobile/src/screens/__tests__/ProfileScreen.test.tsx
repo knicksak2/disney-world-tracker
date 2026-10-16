@@ -8,10 +8,14 @@
  */
 
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { darkTheme } from '../../theme/theme';
+import { resetTestScheme, setTestScheme } from '../../test/themeTestUtils';
+import { AVATAR_GOLD } from '../ProfileScreen.palette';
 
 jest.mock('expo-secure-store', () => ({
   __esModule: true,
@@ -123,6 +127,56 @@ describe('ProfileScreen — Identity Block (Requirements 7.3, 7.4)', () => {
       expect(apiRequestMock).toHaveBeenCalledWith('PATCH', '/me/profile', {
         displayName: 'Mickey Mouse',
       });
+    });
+  });
+
+  // Feature: dark-mode — ProfileIdentityBlock (reused by YouAndCrewScreen)
+  // follows the Active theme; the gold avatar frame is mode-invariant.
+  describe('dark mode', () => {
+    const flat = (node: { props: { style?: unknown } }): Record<string, unknown> =>
+      (StyleSheet.flatten(node.props.style as never) ?? {}) as Record<string, unknown>;
+    afterEach(resetTestScheme);
+
+    function renderProfile(): void {
+      render(
+        <QueryClientProvider client={makeQueryClient()}>
+          <NavigationContainer>
+            <Stack.Navigator screenOptions={{ headerShown: false }}>
+              <Stack.Screen name="ProfileMain" component={ProfileScreen} />
+            </Stack.Navigator>
+          </NavigationContainer>
+        </QueryClientProvider>,
+      );
+    }
+
+    it('(c) identity text, placeholder initial, and the inline editor use dark values', async () => {
+      setTestScheme('dark');
+      setupApi('Donald');
+      renderProfile();
+
+      const nameText = await screen.findByTestId('profile-display-name');
+      expect(flat(nameText).color).toBe(darkTheme.color.textPrimary);
+      // Placeholder initial: `primary` as text → primaryFg.
+      expect(flat(screen.getByText('D')).color).toBe(darkTheme.color.primaryFg);
+      // CHANGE pill: G-role gold stays mode-invariant; its cut-out ring tracks the card.
+      expect(flat(screen.getByText('CHANGE')).color).toBe(AVATAR_GOLD.dark.badgeText);
+
+      fireEvent.press(screen.getByTestId('edit-display-name-button'));
+      const input = screen.getByTestId('edit-display-name-input');
+      expect(input.props.keyboardAppearance).toBe('dark');
+      expect(input.props.placeholderTextColor).toBe(darkTheme.color.textSecondary);
+      expect(flat(screen.getByTestId('save-display-name-button')).backgroundColor).toBe(
+        darkTheme.color.primary,
+      );
+      expect(flat(screen.getByText('Save')).color).toBe(darkTheme.color.textOnPrimary);
+    });
+
+    it('light keeps today\u2019s identity literals', async () => {
+      setupApi('Donald');
+      renderProfile();
+      await screen.findByTestId('profile-display-name');
+      expect(flat(screen.getByText('D')).color).toBe('#5b2a86');
+      expect(flat(screen.getByText('CHANGE')).color).toBe('#311b92');
     });
   });
 });

@@ -15,14 +15,21 @@
  */
 
 import React from 'react';
-import { Share } from 'react-native';
+import { Share, StyleSheet, Switch } from 'react-native';
+import type { ReactTestInstance } from 'react-test-renderer';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   fireEvent,
   render,
   screen,
   waitFor,
+  within,
 } from '@testing-library/react-native';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
+import { contrastRatio } from '../../../theme/contrast';
+import { DARK_TONAL, darkTheme, withAlpha } from '../../../theme/theme';
+import { CATEGORY_META, EXPENSES } from '../TripExpensesScreen.palette';
+import { FORM } from '../ExpenseFormModal.palette';
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -1324,6 +1331,379 @@ describe('TripExpensesScreen', () => {
     await waitFor(() => {
       expect(screen.getByTestId('receipt-review-modal')).toBeTruthy();
       expect(screen.getByDisplayValue('French Dip Sandwich')).toBeTruthy();
+    });
+  });
+
+  describe('dark mode', () => {
+    const flat = (node: ReactTestInstance) => StyleSheet.flatten(node.props.style) ?? {};
+    /** Nearest host ancestor whose flattened style sets `key`. */
+    function ancestorWith(node: ReactTestInstance, key: string): Record<string, unknown> {
+      let cur: ReactTestInstance | null = node.parent;
+      while (cur !== null) {
+        if (typeof cur.type === 'string' && flat(cur)[key] !== undefined) {
+          return flat(cur);
+        }
+        cur = cur.parent;
+      }
+      return {};
+    }
+
+    afterEach(resetTestScheme);
+
+    it('(a)(b)(c) paints the screen, primary text and converted ledger elements with dark values', async () => {
+      setTestScheme('dark');
+      renderScreen();
+
+      const card = await screen.findByTestId(`expense-card-${EXPENSE_1.id}`);
+      const tabs = screen.getByTestId('trip-expenses-tab-switcher');
+      // (a) the screen background behind the tab switcher.
+      expect(ancestorWith(tabs, 'backgroundColor').backgroundColor).toBe(
+        darkTheme.color.background,
+      );
+      // (b) primary text: the expense title.
+      expect(flat(screen.getByText('Be Our Guest Dinner')).color).toBe(
+        darkTheme.color.textPrimary,
+      );
+      // (c) converted literals: the lavender tab track, the expense card surface and
+      // violet hairline, and the dining category avatar (tint + rule-2a `fg + '33'` border).
+      expect(flat(tabs).backgroundColor).toBe(EXPENSES.dark.tabTrack);
+      expect(flat(card).backgroundColor).toBe(darkTheme.color.surface);
+      expect(flat(card).borderColor).toBe(EXPENSES.dark.violetCardBorder);
+      const avatar = ancestorWith(within(card).getByText(/^🍽/), 'backgroundColor');
+      expect(avatar.backgroundColor).toBe(CATEGORY_META.dark.diningBg);
+      expect(avatar.borderColor).toBe(`${CATEGORY_META.dark.diningFg}33`);
+      expect(avatar.borderColor).toMatch(/^#[0-9a-f]{8}$/);
+    });
+
+    it('renders the ExpenseFormModal sheet with dark surface and converted controls', async () => {
+      setTestScheme('dark');
+      renderScreen();
+      await waitFor(() => expect(screen.getByTestId('add-expense-button')).toBeTruthy());
+      fireEvent.press(screen.getByTestId('add-expense-button'));
+
+      const sheet = await screen.findByTestId('expense-form-modal');
+      expect(flat(sheet).backgroundColor).toBe(darkTheme.color.surface);
+      expect(flat(screen.getByText('Add Expense')).color).toBe(darkTheme.color.textPrimary);
+      // #5b2a86 fill → primary; #ffffff pill → surface with a violet (B) border.
+      expect(flat(screen.getByTestId('scan-receipt-camera-button')).backgroundColor).toBe(
+        darkTheme.color.primary,
+      );
+      const photo = flat(screen.getByTestId('scan-receipt-library-button'));
+      expect(photo.backgroundColor).toBe(darkTheme.color.surface);
+      expect(photo.borderColor).toBe(FORM.dark.violetBorder);
+      // A checked EVEN participant row sits on the lavender panel (neutral S).
+      expect(flat(screen.getByTestId(`even-participant-${USER_1}`)).backgroundColor).toBe(
+        FORM.dark.lavenderPanel,
+      );
+      expect(screen.getByTestId('expense-description-input').props.keyboardAppearance).toBe('dark');
+    });
+
+    it('renders the RefundModal sheet with dark surface and a primary-tinted projection', async () => {
+      setTestScheme('dark');
+      renderScreen();
+      fireEvent.press(await screen.findByTestId(`refund-expense-${EXPENSE_1.id}`));
+
+      const sheet = await screen.findByTestId('refund-modal');
+      expect(flat(sheet).backgroundColor).toBe(darkTheme.color.surface);
+      fireEvent.changeText(screen.getByTestId('refund-amount-input'), '10.00');
+      const projected = await screen.findByText('Projected Net: $110.00');
+      expect(flat(projected).color).toBe(darkTheme.color.primaryFg);
+      expect(ancestorWith(projected, 'backgroundColor').backgroundColor).toBe(
+        withAlpha(darkTheme.color.primary, 0.08),
+      );
+    });
+
+    // Feature: dark-mode polish pass (Requirement 9.12): active tab reads stronger than idle.
+    it('tab switcher: the active pill is raised and its label is stronger than the idle label', async () => {
+      setTestScheme('dark');
+      renderScreen();
+      await screen.findByTestId(`expense-card-${EXPENSE_1.id}`);
+
+      const tabColors = () => ({
+        expensesBg: flat(screen.getByTestId('tab-expenses-btn')).backgroundColor,
+        balancesBg: flat(screen.getByTestId('tab-balances-btn')).backgroundColor,
+        expensesLabel: flat(within(screen.getByTestId('tab-expenses-btn')).getByText('Expenses')).color,
+        balancesLabel: flat(
+          within(screen.getByTestId('tab-balances-btn')).getByText('Who Owes What'),
+        ).color,
+      });
+
+      const before = tabColors();
+      expect(before.expensesBg).toBe(darkTheme.color.borderStrong);
+      expect(before.balancesBg).toBeUndefined();
+      expect(before.expensesLabel).toBe(darkTheme.color.primaryFg);
+      expect(before.balancesLabel).toBe(darkTheme.color.textSecondary);
+      expect(before.balancesLabel).not.toBe(before.expensesLabel);
+      // The idle label is not brighter than the active one (it was textPrimary before).
+      expect(
+        contrastRatio(before.balancesLabel as string, EXPENSES.dark.tabTrack),
+      ).toBeLessThan(contrastRatio(before.expensesLabel as string, EXPENSES.dark.tabTrack));
+      // The active pill differs from (and is lighter than) the surfaceAlt track.
+      expect(before.expensesBg).not.toBe(EXPENSES.dark.tabTrack);
+
+      fireEvent.press(screen.getByTestId('tab-balances-btn'));
+      await waitFor(() =>
+        expect(flat(screen.getByTestId('tab-balances-btn')).backgroundColor).toBe(
+          darkTheme.color.borderStrong,
+        ),
+      );
+      const after = tabColors();
+      expect(after.expensesBg).toBeUndefined();
+      expect(after.balancesLabel).toBe(darkTheme.color.primaryFg);
+      expect(after.expensesLabel).toBe(darkTheme.color.textSecondary);
+
+      // B4-4: member names are name ink (textPrimary), not the primaryFg accent.
+      const memberName = flat(
+        within(await screen.findByTestId(`net-balance-card-${USER_1}`)).getByText('Ariel'),
+      ).color;
+      expect(memberName).toBe(darkTheme.color.textPrimary);
+      expect(memberName).not.toBe(darkTheme.color.primaryFg);
+    });
+
+    // Feature: dark-mode polish pass (Requirements 9.12, 9.6): tier pills + count inputs.
+    it('tier counts: inputs get the dark keyboard and the active pill border is distinct', async () => {
+      setTestScheme('dark');
+      renderScreen();
+      fireEvent.press(await screen.findByTestId('add-expense-button'));
+      await screen.findByTestId('expense-form-modal');
+      fireEvent.press(screen.getByTestId('split-mode-chip-tiered'));
+
+      // Matrix view (default).
+      await waitFor(() => expect(screen.getByTestId('tier-view-toggle-matrix')).toBeTruthy());
+      expect(screen.getByTestId(`tier-count-0-${USER_1}`).props.keyboardAppearance).toBe('dark');
+
+      // Cards view.
+      fireEvent.press(screen.getByTestId('tier-view-toggle-cards'));
+      await waitFor(() => expect(screen.getByTestId(`tier-count-pill-0-${USER_1}`)).toBeTruthy());
+      expect(screen.getByTestId(`tier-count-0-${USER_1}`).props.keyboardAppearance).toBe('dark');
+
+      fireEvent.press(screen.getByTestId(`tier-count-inc-0-${USER_1}`));
+      await waitFor(() =>
+        expect(flat(screen.getByTestId(`tier-count-pill-0-${USER_1}`)).borderColor).toBe(
+          darkTheme.color.primaryFg,
+        ),
+      );
+      const active = flat(screen.getByTestId(`tier-count-pill-0-${USER_1}`));
+      const idle = flat(screen.getByTestId(`tier-count-pill-1-${USER_1}`));
+      expect(idle.borderColor).toBe(DARK_TONAL.violet.border);
+      expect(active.borderColor).not.toBe(idle.borderColor);
+      expect(
+        contrastRatio(active.borderColor as string, active.backgroundColor as string),
+      ).toBeGreaterThanOrEqual(3);
+    });
+
+    // Feature: dark-mode visual-verify pass (Requirement 9.12): found on emulator-5554.
+    // The selected split-mode chip was `surface` on a `surfaceAlt` track (a darker hole),
+    // and the matrix-view active stepper kept the idle `violet.border`.
+    it('split-mode selector: the selected chip is raised above the track and moves on press', async () => {
+      setTestScheme('dark');
+      renderScreen();
+      fireEvent.press(await screen.findByTestId('add-expense-button'));
+      await screen.findByTestId('expense-form-modal');
+
+      const track = flat(screen.getByTestId('split-mode-selector')).backgroundColor;
+      expect(track).toBe(darkTheme.color.surfaceAlt);
+      const even = flat(screen.getByTestId('split-mode-chip-even'));
+      expect(even.backgroundColor).toBe(darkTheme.color.borderStrong);
+      expect(even.backgroundColor).not.toBe(darkTheme.color.surface);
+      // Lighter than the track, so it reads raised.
+      expect(contrastRatio(even.backgroundColor as string, '#000000')).toBeGreaterThan(
+        contrastRatio(track as string, '#000000'),
+      );
+      expect(flat(screen.getByTestId('split-mode-chip-tiered')).backgroundColor).toBe('transparent');
+      expect(flat(within(screen.getByTestId('split-mode-chip-even')).getByText(/EVEN/)).color).toBe(
+        darkTheme.color.primaryFg,
+      );
+
+      fireEvent.press(screen.getByTestId('split-mode-chip-tiered'));
+      await waitFor(() =>
+        expect(flat(screen.getByTestId('split-mode-chip-tiered')).backgroundColor).toBe(
+          darkTheme.color.borderStrong,
+        ),
+      );
+      expect(flat(screen.getByTestId('split-mode-chip-even')).backgroundColor).toBe('transparent');
+    });
+
+    it('tier matrix: the active stepper border is distinct from the idle steppers', async () => {
+      setTestScheme('dark');
+      renderScreen();
+      fireEvent.press(await screen.findByTestId('add-expense-button'));
+      await screen.findByTestId('expense-form-modal');
+      fireEvent.press(screen.getByTestId('split-mode-chip-tiered'));
+      await waitFor(() => expect(screen.getByTestId(`tier-matrix-pill-0-${USER_1}`)).toBeTruthy());
+
+      // Before any count, the pill is idle with the violet hairline.
+      expect(flat(screen.getByTestId(`tier-matrix-pill-0-${USER_1}`)).borderColor).toBe(
+        DARK_TONAL.violet.border,
+      );
+      fireEvent.press(screen.getByTestId(`tier-count-inc-0-${USER_1}`));
+      await waitFor(() =>
+        expect(flat(screen.getByTestId(`tier-matrix-pill-0-${USER_1}`)).borderColor).toBe(
+          darkTheme.color.primaryFg,
+        ),
+      );
+      const active = flat(screen.getByTestId(`tier-matrix-pill-0-${USER_1}`));
+      const idle = flat(screen.getByTestId(`tier-matrix-pill-1-${USER_1}`));
+      expect(idle.borderColor).toBe(DARK_TONAL.violet.border);
+      expect(active.borderColor).not.toBe(idle.borderColor);
+      expect(
+        contrastRatio(active.borderColor as string, active.backgroundColor as string),
+      ).toBeGreaterThanOrEqual(3);
+    });
+
+    // Feature: dark-mode polish pass (Requirement 9.15): the alcohol Switch.
+    it('alcohol Switch: token colours with the on state stronger than off', async () => {
+      setTestScheme('dark');
+      renderScreen();
+      fireEvent.press(await screen.findByTestId('add-expense-button'));
+      await screen.findByTestId('expense-form-modal');
+      fireEvent.press(screen.getByTestId('split-mode-chip-itemized'));
+      fireEvent.press(screen.getByTestId('add-item-btn'));
+
+      const sw = () =>
+        screen.UNSAFE_getAllByType(Switch).find((s) => s.props.testID === 'item-alcohol-toggle-0')!
+          .props;
+      expect(sw().trackColor).toEqual({
+        false: darkTheme.color.borderStrong,
+        true: darkTheme.color.primary,
+      });
+      expect(sw().ios_backgroundColor).toBe(darkTheme.color.borderStrong);
+      expect(sw().thumbColor).toBe(darkTheme.color.textSecondary);
+      const offThumb: string = sw().thumbColor;
+
+      fireEvent(screen.getByTestId('item-alcohol-toggle-0'), 'valueChange', true);
+      await waitFor(() => expect(sw().value).toBe(true));
+      expect(sw().thumbColor).toBe(darkTheme.color.textOnPrimary);
+      expect(sw().thumbColor).not.toBe(offThumb);
+      // On track vs off track: the on track is brighter.
+      expect(
+        contrastRatio(sw().trackColor.true, darkTheme.color.surface),
+      ).toBeGreaterThan(contrastRatio(sw().trackColor.false, darkTheme.color.surface));
+    });
+
+    // Feature: dark-mode polish pass (Requirement 9.15): the discount charge
+    // line's "Exclude Alcohol" Switch (themedSwitchProps + key={t.scheme}).
+    it('discount exclude-alcohol Switch: dark tokens, remounted with today\'s light colours', async () => {
+      setTestScheme('dark');
+      renderScreen();
+      fireEvent.press(await screen.findByTestId('add-expense-button'));
+      await screen.findByTestId('expense-form-modal');
+      fireEvent.press(screen.getByTestId('split-mode-chip-itemized'));
+      fireEvent.press(screen.getByTestId('add-charge-discount'));
+
+      const discountSwitch = () => within(screen.getByTestId('charge-line-0')).UNSAFE_getByType(Switch);
+      // A new discount line starts with excludeAlcohol on.
+      expect(discountSwitch().props.value).toBe(true);
+      expect(discountSwitch().props.trackColor).toEqual({
+        false: darkTheme.color.borderStrong,
+        true: darkTheme.color.primary,
+      });
+      expect(discountSwitch().props.ios_backgroundColor).toBe(darkTheme.color.borderStrong);
+      expect(discountSwitch().props.thumbColor).toBe(darkTheme.color.textOnPrimary);
+
+      fireEvent(discountSwitch(), 'valueChange', false);
+      await waitFor(() => expect(discountSwitch().props.value).toBe(false));
+      expect(discountSwitch().props.thumbColor).toBe(darkTheme.color.textSecondary);
+
+      const darkInstance = discountSwitch();
+      setTestScheme('light');
+      // `key={t.scheme}` remounts it, and light keeps today's literal colours.
+      await waitFor(() => expect(discountSwitch()).not.toBe(darkInstance));
+      expect(discountSwitch().props.trackColor).toEqual({ false: '#cbd5e1', true: '#c084fc' });
+      expect(discountSwitch().props.thumbColor).toBe('#ffffff');
+      expect(discountSwitch().props.ios_backgroundColor).toBeUndefined();
+    });
+
+    // B4-8: AVATAR_FILL. A participant avatar keeps its hue family across schemes:
+    // today's light literal in light, that family's DARK_TONAL fill in dark, with
+    // the white initial still legible on it.
+    it('payer avatar fill: light literal in light, same hue family\'s dark fill in dark', async () => {
+      const LIGHT_FILLS = ['#7c3aed', '#2563eb', '#059669', '#d97706', '#dc2626', '#db2777', '#0891b2', '#4f46e5'];
+      const DARK_FILLS = [
+        DARK_TONAL.violet.fill,
+        DARK_TONAL.blue.fill,
+        DARK_TONAL.green.fill,
+        DARK_TONAL.orange.fill,
+        DARK_TONAL.red.fill,
+        DARK_TONAL.pink.fill,
+        DARK_TONAL.teal.fill,
+        DARK_TONAL.blue.fill,
+      ];
+      const ericAvatar = async () => {
+        fireEvent.press(await screen.findByTestId('add-expense-button'));
+        await screen.findByTestId('expense-form-modal');
+        // Ariel pays, so Eric's chip is unselected and shows its generated fill.
+        fireEvent.press(screen.getByTestId(`payer-chip-${USER_1}`));
+        const initial = within(screen.getByTestId(`payer-chip-${USER_2}`)).getByText('E');
+        return { fill: ancestorWith(initial, 'backgroundColor').backgroundColor as string, initial };
+      };
+
+      setTestScheme('light');
+      const { unmount } = renderScreen();
+      const light = await ericAvatar();
+      const idx = LIGHT_FILLS.indexOf(light.fill);
+      expect(idx).toBeGreaterThanOrEqual(0);
+      unmount();
+
+      setTestScheme('dark');
+      renderScreen();
+      const dark = await ericAvatar();
+      expect(dark.fill).toBe(DARK_FILLS[idx]);
+      expect(dark.fill).not.toBe(light.fill);
+      expect(flat(dark.initial).color).toBe(darkTheme.color.textOnPrimary);
+      expect(contrastRatio(darkTheme.color.textOnPrimary, dark.fill)).toBeGreaterThanOrEqual(4.5);
+    });
+  });
+
+  describe('light-mode parity for the dark polish pass', () => {
+    const flat = (node: ReactTestInstance) => StyleSheet.flatten(node.props.style) ?? {};
+    afterEach(resetTestScheme);
+
+    it('tab switcher keeps today\'s white active pill and #655d78 idle label', async () => {
+      setTestScheme('light');
+      renderScreen();
+      await screen.findByTestId(`expense-card-${EXPENSE_1.id}`);
+      expect(flat(screen.getByTestId('tab-expenses-btn')).backgroundColor).toBe('#ffffff');
+      expect(
+        flat(within(screen.getByTestId('tab-balances-btn')).getByText('Who Owes What')).color,
+      ).toBe('#655d78');
+    });
+
+    it('tier pill and alcohol Switch keep today\'s light colours', async () => {
+      setTestScheme('light');
+      renderScreen();
+      fireEvent.press(await screen.findByTestId('add-expense-button'));
+      await screen.findByTestId('expense-form-modal');
+      fireEvent.press(screen.getByTestId('split-mode-chip-tiered'));
+      await waitFor(() => expect(screen.getByTestId('tier-view-toggle-cards')).toBeTruthy());
+      expect(screen.getByTestId(`tier-count-0-${USER_1}`).props.keyboardAppearance).toBe('light');
+      fireEvent.press(screen.getByTestId('tier-view-toggle-cards'));
+      fireEvent.press(await screen.findByTestId(`tier-count-inc-0-${USER_1}`));
+      await waitFor(() =>
+        expect(flat(screen.getByTestId(`tier-count-pill-0-${USER_1}`)).borderColor).toBe('#bca5db'),
+      );
+      expect(flat(screen.getByTestId(`tier-count-pill-0-${USER_1}`)).backgroundColor).toBe(
+        '#f5effa',
+      );
+      // Selected split-mode chip keeps today's white fill (visual-verify pass).
+      expect(flat(screen.getByTestId('split-mode-chip-tiered')).backgroundColor).toBe('#ffffff');
+      // Matrix view: the active stepper keeps today's white fill and #bca5db border.
+      fireEvent.press(screen.getByTestId('tier-view-toggle-matrix'));
+      await waitFor(() =>
+        expect(flat(screen.getByTestId(`tier-matrix-pill-0-${USER_1}`)).borderColor).toBe('#bca5db'),
+      );
+      expect(flat(screen.getByTestId(`tier-matrix-pill-0-${USER_1}`)).backgroundColor).toBe('#ffffff');
+
+      fireEvent.press(screen.getByTestId('split-mode-chip-itemized'));
+      fireEvent.press(screen.getByTestId('add-item-btn'));
+      const sw = () =>
+        screen.UNSAFE_getAllByType(Switch).find((s) => s.props.testID === 'item-alcohol-toggle-0')!
+          .props;
+      expect(sw().trackColor).toEqual({ false: '#cbd5e1', true: '#c084fc' });
+      expect(sw().thumbColor).toBe('#ffffff');
+      expect(sw().ios_backgroundColor).toBeUndefined();
+      fireEvent(screen.getByTestId('item-alcohol-toggle-0'), 'valueChange', true);
+      await waitFor(() => expect(sw().thumbColor).toBe('#7c3aed'));
     });
   });
 });

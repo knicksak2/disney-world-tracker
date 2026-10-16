@@ -36,7 +36,6 @@ import {
   Alert,
   Modal,
   ScrollView,
-  StyleSheet,
   Text,
   View,
 } from 'react-native';
@@ -52,7 +51,10 @@ import type {
 
 import { ApiError, apiRequest } from '../../api/client';
 import type { TripsStackParamList } from '../../navigation/TripsStack';
-import { theme } from '../../theme/theme';
+import { theme, type AppTheme } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme, usePalette } from '../../theme/useAppTheme';
+import { MEMBER_AVATAR, MEMBERS_MODAL } from './TripMembersScreen.palette';
 import {
   Badge,
   Card,
@@ -120,11 +122,15 @@ export const tripMembersKeys = {
   friends: () => ['me-friends'] as const,
 };
 
-/** Human labels + badge colors for each Trip_Role. */
-const ROLE_META: Record<TripRole, { readonly label: string; readonly color: string }> = {
-  organizer: { label: 'Organizer', color: theme.color.primary },
-  member: { label: 'Member', color: theme.color.textSecondary },
-};
+/** Human labels + badge colors for each Trip_Role, read from the active theme. */
+function roleMetaFor(
+  t: AppTheme,
+): Record<TripRole, { readonly label: string; readonly color: string }> {
+  return {
+    organizer: { label: 'Organizer', color: t.color.primaryFg },
+    member: { label: 'Member', color: t.color.textSecondary },
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Screen
@@ -134,6 +140,8 @@ export default function TripMembersScreen({
   navigation,
   route,
 }: Props): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const { tripId } = route.params;
   const queryClient = useQueryClient();
 
@@ -310,7 +318,7 @@ export default function TripMembersScreen({
       <ScreenContainer>
         <MembersHeader onBack={backToHub} />
         <View style={styles.center} testID="trip-members-loading">
-          <ActivityIndicator color={theme.color.primary} />
+          <ActivityIndicator color={t.color.primaryFg} />
         </View>
       </ScreenContainer>
     );
@@ -364,7 +372,7 @@ export default function TripMembersScreen({
         }
       />
 
-      <ScrollView contentContainerStyle={styles.content} testID="trip-members">
+      <ScrollView contentContainerStyle={styles.content} testID="trip-members" keyboardShouldPersistTaps="handled">
         {actionError !== null ? (
           <Text
             style={styles.error}
@@ -377,7 +385,7 @@ export default function TripMembersScreen({
 
         {members.map((member) => {
           const isSelf = member.userId === ownUserId;
-          const roleMeta = ROLE_META[member.role];
+          const roleMeta = roleMetaFor(t)[member.role];
           return (
             <Card
               key={member.userId}
@@ -473,7 +481,7 @@ export default function TripMembersScreen({
                     <Text style={styles.memberName} numberOfLines={1}>
                       {invite.inviteeDisplayName}
                     </Text>
-                    <Badge label="Invite pending" color={theme.color.accent} />
+                    <Badge label="Invite pending" color={t.color.accent} />
                   </View>
                 </View>
                 <View style={styles.memberActions}>
@@ -497,7 +505,7 @@ export default function TripMembersScreen({
 
         {busy ? (
           <ActivityIndicator
-            color={theme.color.primary}
+            color={t.color.primaryFg}
             style={styles.busy}
             testID="trip-members-busy"
           />
@@ -541,6 +549,8 @@ function InviteModal({
   readonly onClose: () => void;
   readonly onInvited: () => void;
 }): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const [error, setError] = useState<string | null>(null);
 
   const friendsQuery = useQuery<FriendsAndRequestsResponse, ApiError>({
@@ -596,7 +606,7 @@ function InviteModal({
     >
       <View style={styles.modalBackdrop}>
         <View style={styles.modalCard} testID="trip-members-invite-modal">
-          <ScrollView contentContainerStyle={styles.modalScroll}>
+          <ScrollView contentContainerStyle={styles.modalScroll} keyboardShouldPersistTaps="handled">
             <Text style={styles.modalTitle}>Invite a friend</Text>
             <Text style={styles.helper}>
               Only your friends can be invited. Tap a friend to send them an
@@ -605,7 +615,7 @@ function InviteModal({
 
             {friendsQuery.isLoading && friendsQuery.data === undefined ? (
               <View style={styles.center} testID="trip-members-invite-loading">
-                <ActivityIndicator color={theme.color.primary} />
+                <ActivityIndicator color={t.color.primaryFg} />
               </View>
             ) : friendsQuery.isError && friendsQuery.data === undefined ? (
               <Text style={styles.error} testID="trip-members-invite-load-error">
@@ -640,7 +650,7 @@ function InviteModal({
                       <Ionicons
                         name="add-circle-outline"
                         size={22}
-                        color={theme.color.primary}
+                        color={t.color.primaryFg}
                       />
                     </View>
                   </Card>
@@ -678,19 +688,29 @@ function InviteModal({
 // Components
 // ---------------------------------------------------------------------------
 
-const AVATAR_PALETTE = ['#5b2a86', '#2f80ed', '#2e9e6b', '#f6a609', '#d6336c'];
-function getAvatarColor(name: string): string {
+function getAvatarColor(
+  name: string,
+  avatarColors: readonly string[],
+  fallback: string,
+): string {
   let hash = 0;
   for (let i = 0; i < name.length; i++) {
-    hash = (hash + name.charCodeAt(i)) % AVATAR_PALETTE.length;
+    hash = (hash + name.charCodeAt(i)) % avatarColors.length;
   }
-  return AVATAR_PALETTE[hash] ?? '#5b2a86';
+  return avatarColors[hash] ?? fallback;
 }
 
 /** A small circular avatar showing the first initial of a display name. */
 function MemberAvatar({ displayName }: { readonly displayName: string }): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
+  const avatarPal = usePalette(MEMBER_AVATAR);
   const initial = displayName.trim().charAt(0).toUpperCase() || '?';
-  const bgColor = getAvatarColor(displayName);
+  const bgColor = getAvatarColor(
+    displayName,
+    [t.color.primary, avatarPal.sky, avatarPal.success, avatarPal.amber, avatarPal.danger],
+    t.color.primary,
+  );
   return (
     <View style={[styles.avatar, { backgroundColor: bgColor }]}>
       <Text style={styles.avatarText}>{initial}</Text>
@@ -778,7 +798,7 @@ function inviteErrorMessage(err: ApiError): string {
 // Styles
 // ---------------------------------------------------------------------------
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   center: {
     flex: 1,
     alignItems: 'center',
@@ -812,7 +832,7 @@ const styles = StyleSheet.create({
   },
   memberName: {
     ...theme.typography.subtitle,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
     flexShrink: 1,
   },
   memberActions: {
@@ -826,7 +846,7 @@ const styles = StyleSheet.create({
   },
   sectionLabel: {
     ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
@@ -836,46 +856,46 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: theme.color.surfaceAlt,
+    backgroundColor: t.color.surfaceAlt,
   },
   avatarText: {
     ...theme.typography.subtitle,
-    color: '#ffffff',
+    color: t.color.textOnPrimary,
     fontWeight: '800',
   },
   busy: {
     alignSelf: 'center',
   },
   error: {
-    color: theme.color.danger,
+    color: t.color.danger,
     fontSize: 13,
   },
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(31, 18, 53, 0.5)',
+    backgroundColor: MEMBERS_MODAL[t.scheme].scrim,
     alignItems: 'center',
     justifyContent: 'center',
     padding: theme.spacing.xl,
   },
   modalCard: {
-    backgroundColor: theme.color.surface,
+    backgroundColor: t.color.surface,
     borderRadius: theme.radius.lg,
     padding: theme.spacing.xl,
     width: '100%',
     maxWidth: 420,
     maxHeight: '85%',
-    ...theme.shadow.floating,
+    ...t.shadow.floating,
   },
   modalScroll: {
     gap: theme.spacing.sm,
   },
   modalTitle: {
     ...theme.typography.heading,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   helper: {
     ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   candidateList: {
     gap: theme.spacing.sm,
@@ -893,4 +913,4 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     flexBasis: 0,
   },
-});
+}));

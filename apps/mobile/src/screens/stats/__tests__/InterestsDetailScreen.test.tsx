@@ -25,6 +25,7 @@
  */
 
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import {
   fireEvent,
   render,
@@ -32,6 +33,9 @@ import {
   waitFor,
 } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { darkTheme } from '../../../theme/theme';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
+import { FACET_ACCENT } from '../components/InterestsSection.palette';
 
 // ---------------------------------------------------------------------------
 // Mocks (declared before the modules under test are imported).
@@ -291,5 +295,57 @@ describe('InterestsDetailScreen (Requirements 9.1, 9.2, 9.3, 14.3)', () => {
     expect(await screen.findByTestId('interests-detail-section')).toBeTruthy();
     // The shared stats query was re-fetched by the Retry.
     expect(statsFetchCount()).toBe(2);
+  });
+});
+
+// Feature: dark-mode — the converted screen and its facet rows follow the Active theme.
+describe('InterestsDetailScreen — dark mode', () => {
+  const flat = (node: { props: { style?: unknown } }): Record<string, unknown> =>
+    (StyleSheet.flatten(node.props.style as never) ?? {}) as Record<string, unknown>;
+  const dotOf = (tileTestID: string): Record<string, unknown> => {
+    const dot = screen
+      .getByTestId(tileTestID)
+      .findAll((n) => (n.type as string) === 'View' && flat(n).width === 9)[0];
+    return dot === undefined ? {} : flat(dot);
+  };
+  const facets: readonly FacetCoverage[] = [
+    { key: 'thrill', label: 'Thrill Rides', cell: makeCell(6, 10) }, // 60% → index 0
+    { key: 'water', label: 'Water Rides', cell: makeCell(1, 10) }, // 10% → index 1
+  ];
+
+  beforeEach(() => {
+    apiRequestMock.mockReset();
+  });
+  afterEach(resetTestScheme);
+
+  test('(a)(b)(c) background, facet label, and the cycled facet accents use dark values', async () => {
+    setTestScheme('dark');
+    const client = makeClient();
+    client.setQueryData(
+      OWN_STATS_QUERY_KEY,
+      makeStatsResponse({ coverage: { byFacetValue: facets } }),
+    );
+    renderScreen(client);
+    await screen.findByTestId('interests-detail-section');
+
+    // (a) root ScreenContainer.
+    expect(flat(screen.root).backgroundColor).toBe(darkTheme.color.background);
+    // (b) primary text (FacetCoverageTile label).
+    expect(flat(screen.getByText('Thrill Rides')).color).toBe(darkTheme.color.textPrimary);
+    // (c) cycled accents: index 0 is the `primaryLight` token, index 1 a palette value.
+    expect(dotOf('facet-tile-thrill').backgroundColor).toBe(darkTheme.color.primaryLight);
+    expect(dotOf('facet-tile-water').backgroundColor).toBe(FACET_ACCENT.dark.blue);
+  });
+
+  test('light keeps today\u2019s cycled accent literals', async () => {
+    const client = makeClient();
+    client.setQueryData(
+      OWN_STATS_QUERY_KEY,
+      makeStatsResponse({ coverage: { byFacetValue: facets } }),
+    );
+    renderScreen(client);
+    await screen.findByTestId('interests-detail-section');
+    expect(dotOf('facet-tile-thrill').backgroundColor).toBe('#7e57c2');
+    expect(dotOf('facet-tile-water').backgroundColor).toBe('#2f80ed');
   });
 });

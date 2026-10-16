@@ -35,7 +35,6 @@ import {
   ActivityIndicator,
   Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   View,
 } from 'react-native';
@@ -46,7 +45,8 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import type { FoodItemDTO, FoodItemsResponseDTO, MenuDTO } from '@dwt/shared';
 
 import { ApiError, apiRequest } from '../../api/client';
-import { theme } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme } from '../../theme/useAppTheme';
 import {
   Badge,
   Card,
@@ -57,6 +57,7 @@ import {
 } from '../../theme/components';
 import FoodItemPickerModal from './FoodItemPickerModal';
 import AddToListsSheet from '../foodLists/AddToListsSheet';
+import { MENU_ITEM } from './MenuScreen.palette';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -80,6 +81,8 @@ type MenuRouteProp = RouteProp<{ Menu: { experienceId: string } }, 'Menu'>;
 // ---------------------------------------------------------------------------
 
 export default function MenuScreen(): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const route = useRoute<MenuRouteProp>();
   const navigation = useNavigation();
   const { experienceId } = route.params;
@@ -162,7 +165,7 @@ export default function MenuScreen(): JSX.Element {
       <ScreenContainer>
         <GradientHeader title="Menu" icon="restaurant" compact onBack={() => navigation.goBack()} />
         <View style={styles.centered} accessibilityRole="progressbar">
-          <ActivityIndicator color={theme.color.primary} />
+          <ActivityIndicator color={t.color.primaryFg} />
         </View>
       </ScreenContainer>
     );
@@ -210,7 +213,7 @@ export default function MenuScreen(): JSX.Element {
               pressed && styles.headerActionBtnPressed,
             ]}
           >
-            <Ionicons name="bookmark-outline" size={15} color="#ffffff" />
+            <Ionicons name="bookmark-outline" size={15} color={t.color.textOnPrimary} />
             <Text style={styles.headerActionBtnText}>Add to List</Text>
           </Pressable>
         }
@@ -295,6 +298,7 @@ function MenuTabs({
   readonly activeIndex: number;
   readonly onSelect: (index: number) => void;
 }): JSX.Element {
+  const styles = useStyles();
   return (
     <View style={styles.tabBar} testID="menu-tabs">
       <ScrollView
@@ -346,17 +350,19 @@ function MenuBlock({
   readonly index: number;
   readonly onAddItem?: (item: { name: string; price?: string | null }) => void;
 }): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const hasCuisine = typeof menu.cuisineType === 'string' && menu.cuisineType.length > 0;
 
   return (
     <Card style={styles.menuCard} testID={`menu-block-${index}`}>
       <SectionLabel>{menu.menuType}</SectionLabel>
       <View style={styles.badgeRow}>
-        <Badge label={menu.menuType} color={theme.color.primary} icon="restaurant" testID={`menu-type-${index}`} />
+        <Badge label={menu.menuType} color={t.color.primaryFg} icon="restaurant" testID={`menu-type-${index}`} />
         {hasCuisine ? (
           <Badge
             label={menu.cuisineType as string}
-            color={theme.color.accent}
+            color={t.color.accent}
             icon="pricetag"
             testID={`menu-cuisine-${index}`}
           />
@@ -391,7 +397,7 @@ function MenuBlock({
                     testID={`menu-item-add-to-list-${index}-${groupIndex}-${itemIndex}`}
                     hitSlop={8}
                   >
-                    <Ionicons name="bookmark-outline" size={16} color={theme.color.primary} />
+                    <Ionicons name="bookmark-outline" size={16} color={t.color.primaryFg} />
                   </Pressable>
                 ) : null}
               </View>
@@ -407,67 +413,67 @@ function MenuBlock({
 // Styles
 // ---------------------------------------------------------------------------
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   container: {
-    padding: theme.spacing.lg,
-    paddingBottom: theme.spacing.xxl,
-    gap: theme.spacing.md,
+    padding: t.spacing.lg,
+    paddingBottom: t.spacing.xxl,
+    gap: t.spacing.md,
   },
   centered: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: theme.spacing.xl,
-    gap: theme.spacing.sm,
+    padding: t.spacing.xl,
+    gap: t.spacing.sm,
   },
   tabBar: {
-    paddingTop: theme.spacing.sm,
+    paddingTop: t.spacing.sm,
   },
   tabBarContent: {
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.xs,
-    gap: theme.spacing.sm,
+    paddingHorizontal: t.spacing.lg,
+    paddingVertical: t.spacing.xs,
+    gap: t.spacing.sm,
   },
   tab: {
-    paddingVertical: theme.spacing.sm,
-    paddingHorizontal: theme.spacing.lg,
-    borderRadius: theme.radius.pill,
+    paddingVertical: t.spacing.sm,
+    paddingHorizontal: t.spacing.lg,
+    borderRadius: t.radius.pill,
     borderWidth: 1,
   },
   tabActive: {
-    backgroundColor: theme.color.primary,
-    borderColor: theme.color.primary,
+    backgroundColor: t.color.primary,
+    borderColor: t.color.primary,
   },
   tabInactive: {
-    backgroundColor: theme.color.surfaceAlt,
-    borderColor: theme.color.border,
+    backgroundColor: t.color.surfaceAlt,
+    borderColor: t.color.border,
   },
   tabText: {
-    ...theme.typography.subtitle,
+    ...t.typography.subtitle,
   },
   tabTextActive: {
-    color: theme.color.textOnPrimary,
+    color: t.color.textOnPrimary,
   },
   tabTextInactive: {
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   menuCard: {
-    gap: theme.spacing.sm,
+    gap: t.spacing.sm,
   },
   badgeRow: {
     flexDirection: 'row',
-    gap: theme.spacing.sm,
+    gap: t.spacing.sm,
     flexWrap: 'wrap',
-    marginBottom: theme.spacing.sm,
+    marginBottom: t.spacing.sm,
   },
   group: {
-    marginTop: theme.spacing.sm,
-    gap: theme.spacing.xs,
+    marginTop: t.spacing.sm,
+    gap: t.spacing.xs,
   },
   groupName: {
-    ...theme.typography.subtitle,
-    color: theme.color.textPrimary,
-    marginBottom: theme.spacing.xs,
+    ...t.typography.subtitle,
+    color: t.color.textPrimary,
+    marginBottom: t.spacing.xs,
   },
   headerActionBtn: {
     flexDirection: 'row',
@@ -476,7 +482,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.22)',
     paddingVertical: 5,
     paddingHorizontal: 10,
-    borderRadius: theme.radius.pill,
+    borderRadius: t.radius.pill,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.35)',
   },
@@ -487,7 +493,7 @@ const styles = StyleSheet.create({
   headerActionBtnText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#ffffff',
+    color: t.color.textOnPrimary,
   },
   itemRow: {
     flexDirection: 'row',
@@ -500,29 +506,29 @@ const styles = StyleSheet.create({
     alignItems: 'baseline',
     justifyContent: 'space-between',
     flex: 1,
-    gap: theme.spacing.md,
+    gap: t.spacing.md,
   },
   itemName: {
-    ...theme.typography.body,
-    color: theme.color.textPrimary,
+    ...t.typography.body,
+    color: t.color.textPrimary,
     flexShrink: 1,
     flexGrow: 1,
   },
   itemPrice: {
-    ...theme.typography.body,
-    color: theme.color.textSecondary,
+    ...t.typography.body,
+    color: t.color.textSecondary,
     flexShrink: 0,
   },
   itemAddBtn: {
     padding: 6,
     marginLeft: 8,
     borderRadius: 8,
-    backgroundColor: '#f6f2fa',
+    backgroundColor: MENU_ITEM[t.scheme].addBg,
     alignItems: 'center',
     justifyContent: 'center',
   },
   itemAddBtnPressed: {
     opacity: 0.7,
-    backgroundColor: '#ede6f6',
+    backgroundColor: MENU_ITEM[t.scheme].addBgPressed,
   },
-});
+}));

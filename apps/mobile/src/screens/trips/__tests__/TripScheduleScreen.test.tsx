@@ -3,8 +3,14 @@
  */
 
 import React from 'react';
+import { StyleSheet } from 'react-native';
+import type { ReactTestInstance } from 'react-test-renderer';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor, fireEvent, within } from '@testing-library/react-native';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
+import { darkTheme, lightTheme } from '../../../theme/theme';
+import { contrastRatio } from '../../../theme/contrast';
+import { SCHEDULE } from '../TripScheduleScreen.palette';
 
 jest.setTimeout(15000);
 
@@ -3886,5 +3892,231 @@ describe('TripScheduleScreen — Property 19: list-sourced selection is behavior
     expect(Object.keys(postedBodies[0] as object).sort()).toEqual(
       ['experienceId', 'plannedDate'].sort(),
     );
+  });
+});
+
+describe('TripScheduleScreen — dark mode', () => {
+  const flat = (node: ReactTestInstance) => StyleSheet.flatten(node.props.style) ?? {};
+  /** Nearest host ancestor whose flattened style sets `key`. */
+  function ancestorWith(node: ReactTestInstance, key: string): Record<string, unknown> {
+    let cur: ReactTestInstance | null = node.parent;
+    while (cur !== null) {
+      if (typeof cur.type === 'string' && flat(cur)[key] !== undefined) {
+        return flat(cur);
+      }
+      cur = cur.parent;
+    }
+    return {};
+  }
+
+  /** A scheduled, already-optimized day so the timeline item card renders. */
+  function stubOptimizedDay(): void {
+    apiRequestMock.mockImplementation(async (method, path) => {
+      if (method === 'GET' && path === `/trips/${TRIP_ID}`) {
+        return {
+          id: TRIP_ID,
+          name: 'Disney Trip',
+          startDate: '2026-10-01',
+          endDate: '2026-10-03',
+          status: 'upcoming',
+          role: 'organizer',
+        } as any;
+      }
+      if (method === 'GET' && path === `/trips/${TRIP_ID}/planned-items`) {
+        return [
+          {
+            ...PLANNED_ITEM,
+            plannedDate: '2026-10-01',
+            plannedTime: '2026-10-01T14:00:00.000Z',
+            predictedWaitMinutes: 35,
+            travelFromPrev: null,
+            optimizedAt: '2026-10-01T18:00:00.000Z',
+          },
+        ] as any;
+      }
+      throw new Error(`Unexpected request: ${method} ${path}`);
+    });
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.useFakeTimers({ doNotFake: ['nextTick', 'setImmediate'] });
+    jest.setSystemTime(new Date('2026-05-01T12:00:00.000Z'));
+    stubOptimizedDay();
+  });
+
+  afterEach(() => {
+    resetTestScheme();
+    jest.useRealTimers();
+  });
+
+  it('(a)(b)(c) paints the screen, primary text and converted timeline elements with dark values', async () => {
+    setTestScheme('dark');
+    renderScreen();
+
+    const hint = await screen.findByTestId('last-optimized-hint');
+    // (a) the screen background behind the itinerary.
+    expect(ancestorWith(hint, 'backgroundColor').backgroundColor).toBe(
+      darkTheme.color.background,
+    );
+    // (b) primary text: the itinerary section title.
+    expect(flat(screen.getByText('Thu, Oct 1 Itinerary')).color).toBe(
+      darkTheme.color.textPrimary,
+    );
+    // (c) converted literals: the item card surface (#ffffff → surface), its title
+    // (#0f172a → palette inkText), the grey wait pill (#f1f5f9 → palette greyPillBg)
+    // and the active date pill fill (primary).
+    const title = screen.getByText('Space Mountain');
+    expect(flat(title).color).toBe(SCHEDULE.dark.inkText);
+    expect(ancestorWith(title, 'backgroundColor').backgroundColor).toBe(darkTheme.color.surface);
+    expect(ancestorWith(screen.getByText('Wait: 35 min'), 'backgroundColor').backgroundColor).toBe(
+      SCHEDULE.dark.greyPillBg,
+    );
+    expect(flat(screen.getByTestId('date-pill-2026-10-01')).backgroundColor).toBe(
+      darkTheme.color.primary,
+    );
+  });
+
+  it('(d) repaints a mounted schedule item card live on a scheme switch, without remounting', async () => {
+    renderScreen();
+
+    const title = await screen.findByText('Space Mountain');
+    const waitText = screen.getByText('Wait: 35 min');
+    // Mounted under light: the light literals, byte-identical.
+    expect(flat(title).color).toBe(SCHEDULE.light.inkText);
+    expect(ancestorWith(waitText, 'backgroundColor').backgroundColor).toBe(
+      SCHEDULE.light.greyPillBg,
+    );
+    expect(ancestorWith(title, 'backgroundColor').backgroundColor).toBe(lightTheme.color.surface);
+
+    setTestScheme('dark');
+
+    // Same mounted tree, now dark.
+    await waitFor(() => {
+      expect(flat(screen.getByText('Space Mountain')).color).toBe(SCHEDULE.dark.inkText);
+    });
+    expect(
+      ancestorWith(screen.getByText('Wait: 35 min'), 'backgroundColor').backgroundColor,
+    ).toBe(SCHEDULE.dark.greyPillBg);
+    expect(
+      ancestorWith(screen.getByText('Space Mountain'), 'backgroundColor').backgroundColor,
+    ).toBe(darkTheme.color.surface);
+  });
+
+  /** A Show with crowd-calendar showtimes so the Item Settings showtime pills render. */
+  function stubShowWithShowtimes(): void {
+    apiRequestMock.mockImplementation(async (method, path, body) => {
+      if (method === 'GET' && path === `/trips/${TRIP_ID}`) {
+        return { id: TRIP_ID, startDate: '2026-10-01', endDate: '2026-10-03' } as any;
+      }
+      if (method === 'GET' && path === '/catalog') {
+        return {
+          experiences: [
+            {
+              id: 'exp-show-1',
+              name: 'Festival of the Lion King',
+              category: 'Show',
+              park: "Disney's Animal Kingdom",
+            },
+          ],
+        } as any;
+      }
+      if (method === 'GET' && path === `/trips/${TRIP_ID}/planned-items`) {
+        return [
+          {
+            ...PLANNED_ITEM,
+            id: 'item-show-1',
+            experienceId: 'exp-show-1',
+            experienceName: 'Festival of the Lion King',
+            park: "Disney's Animal Kingdom",
+            plannedDate: '2026-10-01',
+          },
+        ] as any;
+      }
+      if (method === 'GET' && path.startsWith('/crowd-calendar')) {
+        return {
+          days: [
+            {
+              date: '2026-10-01',
+              park: "Disney's Animal Kingdom",
+              rideSignals: [
+                {
+                  experienceId: 'exp-show-1',
+                  reliability: 1,
+                  showtimes: ['2026-10-01T14:00:00.000Z', '2026-10-01T18:00:00.000Z'],
+                },
+              ],
+            },
+          ],
+        } as any;
+      }
+      if (method === 'PATCH') return { ...PLANNED_ITEM, ...(body as any) };
+      throw new Error(`Unexpected request: ${method} ${path}`);
+    });
+  }
+
+  async function openShowtimePills(): Promise<void> {
+    renderScreen();
+    await screen.findByText('Festival of the Lion King');
+    fireEvent.press(screen.getByText('Edit Settings'));
+    await screen.findByTestId('showtime-pill-10:00-am');
+  }
+
+  // Feature: dark-mode polish pass (Requirement 9.12): selected showtime pill ≥ 3:1 on its section.
+  it('the selected showtime pill border is primaryFg (>= 3:1 on surfaceAlt) and distinct from idle', async () => {
+    stubShowWithShowtimes();
+    setTestScheme('dark');
+    await openShowtimePills();
+
+    const active = flat(screen.getByTestId('showtime-autofit-pill'));
+    const idle = flat(screen.getByTestId('showtime-pill-10:00-am'));
+    expect(active.borderColor).toBe(darkTheme.color.primaryFg);
+    expect(active.backgroundColor).toBe(darkTheme.color.primary);
+    expect(idle.borderColor).toBe(darkTheme.color.border);
+    expect(active.borderColor).not.toBe(idle.borderColor);
+    expect(
+      contrastRatio(active.borderColor as string, darkTheme.color.surfaceAlt),
+    ).toBeGreaterThanOrEqual(3);
+
+    // Selecting a performance moves the selected border to it.
+    fireEvent.press(screen.getByTestId('showtime-pill-10:00-am'));
+    await waitFor(() =>
+      expect(flat(screen.getByTestId('showtime-pill-10:00-am')).borderColor).toBe(
+        darkTheme.color.primaryFg,
+      ),
+    );
+    expect(flat(screen.getByTestId('showtime-autofit-pill')).borderColor).toBe(
+      darkTheme.color.border,
+    );
+  });
+
+  it('light: the selected showtime pill keeps today\'s #5b2a86 border', async () => {
+    stubShowWithShowtimes();
+    setTestScheme('light');
+    await openShowtimePills();
+    expect(flat(screen.getByTestId('showtime-autofit-pill')).borderColor).toBe('#5b2a86');
+    expect(flat(screen.getByTestId('timing-mode-any_time')).backgroundColor).toBe('#ffffff');
+  });
+
+  // Feature: dark-mode polish pass (Requirement 9.12): the active timing-mode segment reads raised.
+  it('timing mode: the active segment is lighter than its `surfaceAlt` track and moves on press', async () => {
+    stubShowWithShowtimes();
+    setTestScheme('dark');
+    await openShowtimePills();
+
+    const seg = (mode: string) => flat(screen.getByTestId(`timing-mode-${mode}`));
+    expect(seg('any_time').backgroundColor).toBe(darkTheme.color.borderStrong);
+    expect(seg('any_time').backgroundColor).not.toBe(darkTheme.color.surface);
+    expect(seg('any_time').backgroundColor).not.toBe(darkTheme.color.surfaceAlt);
+    expect(seg('soft_window').backgroundColor).toBeUndefined();
+    expect(
+      flat(within(screen.getByTestId('timing-mode-any_time')).getByText('Any Time')).color,
+    ).toBe(darkTheme.color.primaryFg);
+
+    fireEvent.press(screen.getByTestId('timing-mode-soft_window'));
+    await waitFor(() =>
+      expect(seg('soft_window').backgroundColor).toBe(darkTheme.color.borderStrong),
+    );
+    expect(seg('any_time').backgroundColor).toBeUndefined();
   });
 });

@@ -15,28 +15,16 @@
  */
 
 import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import { View } from 'react-native';
 
 import type { FacetCoverage } from '../../../api/statsTypes';
 import { EmptyState } from '../../../theme/components';
-import { theme } from '../../../theme/theme';
+import { makeStyles } from '../../../theme/makeStyles';
+import { useAppTheme, usePalette } from '../../../theme/useAppTheme';
 import { sortFacetsForDisplay } from '../statsView';
 
 import { FacetCoverageTile } from './FacetCoverageTile';
-
-/**
- * Accent palette cycled across the ranked facet rows so the interests list
- * reads as a colorful ranking (matching the mockup) rather than a monochrome
- * stack. Assigned by display position, not by facet identity.
- */
-const FACET_PALETTE: readonly string[] = [
-  '#7e57c2', // purple
-  '#2f80ed', // blue
-  '#17a2b8', // teal
-  '#f6a609', // amber
-  '#e8505b', // red
-  '#3fa34d', // green
-];
+import { FACET_ACCENT } from './InterestsSection.palette';
 
 export interface InterestsSectionProps {
   /** The per-facet coverage entries (server order); sorted here for display. */
@@ -52,6 +40,23 @@ export function InterestsSection({
   facets,
   testID,
 }: InterestsSectionProps): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
+  const facetAccent = usePalette(FACET_ACCENT);
+  /**
+   * Accent palette cycled across the ranked facet rows so the interests list
+   * reads as a colorful ranking (matching the mockup) rather than a monochrome
+   * stack. Assigned by display position, not by facet identity.
+   */
+  const facetPalette: readonly string[] = [
+    t.color.primaryLight, // purple
+    facetAccent.blue,
+    facetAccent.teal,
+    facetAccent.amber,
+    facetAccent.red,
+    facetAccent.green,
+  ];
+
   if (facets.length === 0) {
     return (
       <EmptyState
@@ -70,7 +75,7 @@ export function InterestsSection({
         <FacetCoverageTile
           key={facet.key}
           facet={facet}
-          color={FACET_PALETTE[index % FACET_PALETTE.length] ?? theme.color.primary}
+          color={facetPalette[index % facetPalette.length] ?? t.color.primaryFg}
           testID={`facet-tile-${facet.key}`}
         />
       ))}
@@ -78,8 +83,8 @@ export function InterestsSection({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   list: {
-    gap: theme.spacing.sm,
+    gap: t.spacing.sm,
   },
-});
+}));

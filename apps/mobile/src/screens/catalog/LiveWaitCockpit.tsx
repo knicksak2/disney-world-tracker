@@ -12,14 +12,16 @@
 //   7. Best_Time_Verdict
 
 import React, { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import type { LiveDetailDTO, WaitInsightsDTO } from '@dwt/shared';
 
 import { apiRequest } from '../../api/client';
-import { theme } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme, usePalette } from '../../theme/useAppTheme';
 import { Card } from '../../theme/components';
+import { COCKPIT } from './LiveWaitCockpit.palette';
 import { resolveTripContextDate } from './tripContextDate';
 import { formatParkTime, getTodayWdwDate } from './live/parkTime';
 import VirtualQueueBanner from './VirtualQueueBanner';
@@ -48,6 +50,9 @@ export default function LiveWaitCockpit({
   waitContext: controlledContext,
   onWaitContextChange,
 }: LiveWaitCockpitProps): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
+  const pal = usePalette(COCKPIT);
   const [internalContext, setInternalContext] = useState<WaitContextMode>('Now');
   const context = controlledContext ?? internalContext;
   const setContext = onWaitContextChange ?? setInternalContext;
@@ -274,7 +279,7 @@ export default function LiveWaitCockpit({
       {/* Cockpit Headline & Live Operational Pulse Badge */}
       <View style={styles.cockpitHead}>
         <View style={styles.cockpitTitleWrap}>
-          <Ionicons name="flash" size={15} color="#5b2a86" />
+          <Ionicons name="flash" size={15} color={t.color.primaryFg} />
           <Text style={styles.cockpitTitleText}>Live Park Cockpit</Text>
         </View>
         <View
@@ -340,7 +345,7 @@ export default function LiveWaitCockpit({
 
         <View style={styles.llTicket} testID="cockpit-lightning-lane">
           <View style={styles.llTicketHead}>
-            <Ionicons name="flash" size={12} color="#5b2a86" />
+            <Ionicons name="flash" size={12} color={t.color.primaryFg} />
             <Text style={styles.llTicketTitle}>LIGHTNING LANE</Text>
           </View>
           <Text style={styles.llWindowText}>
@@ -361,7 +366,7 @@ export default function LiveWaitCockpit({
           accessibilityRole="button"
           accessibilityLabel="Add to my plan"
         >
-          <Ionicons name="add" size={16} color="#ffffff" />
+          <Ionicons name="add" size={16} color={t.color.textOnPrimary} />
           <Text style={styles.actionBtnPlanText}>Add to my plan</Text>
         </Pressable>
         <Pressable
@@ -369,7 +374,7 @@ export default function LiveWaitCockpit({
           accessibilityRole="button"
           accessibilityLabel="Alert when wait drops under 30 minutes"
         >
-          <Ionicons name="notifications-outline" size={15} color="#5b2a86" />
+          <Ionicons name="notifications-outline" size={15} color={t.color.primaryFg} />
           <Text style={styles.actionBtnAlertText}>Alert &lt; 30 min</Text>
         </Pressable>
       </View>
@@ -382,7 +387,7 @@ export default function LiveWaitCockpit({
       (isOperating && liveDetail?.singleRiderWaitMinutes !== undefined) ? (
         <View style={styles.singleRiderStrip} testID="single-rider-strip">
           <View style={styles.singleRiderLeft}>
-            <Ionicons name="person" size={14} color="#7e22ce" />
+            <Ionicons name="person" size={14} color={pal.singleRiderIcon} />
             <Text style={styles.singleRiderTitle}>Single Rider</Text>
             {liveDetail?.singleRiderWaitMinutes !== undefined ? (
               <Text style={styles.singleRiderWait} testID="single-rider-wait">
@@ -422,11 +427,11 @@ export default function LiveWaitCockpit({
           <View style={styles.statCell}>
             <Text style={styles.statLabel}>Reliability</Text>
             <Text
-              style={[styles.statValue, { color: '#16a34a' }]}
+              style={[styles.statValue, { color: pal.reliability }]}
               testID="cockpit-stat-reliability"
             >
               {((1 - insights.downRate) * 100).toFixed(0)}%{' '}
-              <Text style={[styles.statUnit, { color: '#16a34a' }]}>uptime</Text>
+              <Text style={[styles.statUnit, { color: pal.reliability }]}>uptime</Text>
             </Text>
           </View>
         </View>
@@ -504,16 +509,16 @@ export default function LiveWaitCockpit({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   card: {
     marginHorizontal: 0,
-    marginVertical: theme.spacing.xs,
+    marginVertical: t.spacing.xs,
     padding: 16,
     borderRadius: 22,
-    backgroundColor: '#ffffff',
+    backgroundColor: t.color.surface,
     borderWidth: 1.5,
-    borderColor: '#ded3f0',
-    shadowColor: '#5b2a86',
+    borderColor: COCKPIT[t.scheme].cardBorder,
+    shadowColor: COCKPIT[t.scheme].cardShadow,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.08,
     shadowRadius: 20,
@@ -530,15 +535,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#e2d9f3',
-    backgroundColor: '#fbf9fe',
+    borderColor: COCKPIT[t.scheme].chipBorder,
+    backgroundColor: COCKPIT[t.scheme].chipBg,
     alignItems: 'center',
     justifyContent: 'center',
   },
   chipActive: {
-    backgroundColor: theme.color.primary,
-    borderColor: theme.color.primary,
-    shadowColor: '#5b2a86',
+    backgroundColor: t.color.primary,
+    borderColor: t.color.primary,
+    shadowColor: COCKPIT[t.scheme].chipActiveShadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 6,
@@ -547,10 +552,10 @@ const styles = StyleSheet.create({
   chipText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#655d78',
+    color: COCKPIT[t.scheme].mutedText,
   },
   chipTextActive: {
-    color: '#ffffff',
+    color: t.color.textOnPrimary,
   },
   cockpitHead: {
     flexDirection: 'row',
@@ -566,7 +571,7 @@ const styles = StyleSheet.create({
   cockpitTitleText: {
     fontSize: 13.5,
     fontWeight: '800',
-    color: '#190c2d',
+    color: COCKPIT[t.scheme].inkText,
     letterSpacing: -0.2,
   },
   opBadge: {
@@ -578,12 +583,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   opBadgeOperating: {
-    backgroundColor: '#ecfdf5',
-    borderColor: 'rgba(22, 163, 74, 0.25)',
+    backgroundColor: COCKPIT[t.scheme].operatingBg,
+    borderColor: COCKPIT[t.scheme].operatingBorder,
   },
   opBadgeClosed: {
-    backgroundColor: '#fef2f2',
-    borderColor: 'rgba(220, 38, 38, 0.25)',
+    backgroundColor: COCKPIT[t.scheme].closedBg,
+    borderColor: COCKPIT[t.scheme].closedBorder,
   },
   pulseDot: {
     width: 7,
@@ -592,20 +597,20 @@ const styles = StyleSheet.create({
     marginRight: 6,
   },
   pulseDotOperating: {
-    backgroundColor: '#16a34a',
+    backgroundColor: COCKPIT[t.scheme].operatingFg,
   },
   pulseDotClosed: {
-    backgroundColor: '#dc2626',
+    backgroundColor: COCKPIT[t.scheme].closedFg,
   },
   opBadgeText: {
     fontSize: 11,
     fontWeight: '800',
   },
   opBadgeTextOperating: {
-    color: '#16a34a',
+    color: COCKPIT[t.scheme].operatingFg,
   },
   opBadgeTextClosed: {
-    color: '#dc2626',
+    color: COCKPIT[t.scheme].closedFg,
   },
   instrumentsRow: {
     flexDirection: 'row',
@@ -619,15 +624,15 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   standbyInstrumentOperating: {
-    backgroundColor: '#1b864d',
-    shadowColor: '#1b864d',
+    backgroundColor: COCKPIT[t.scheme].standbyOperatingBg,
+    shadowColor: COCKPIT[t.scheme].standbyOperatingShadow,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
     shadowRadius: 14,
     elevation: 3,
   },
   standbyInstrumentClosed: {
-    backgroundColor: '#1e293b',
+    backgroundColor: COCKPIT[t.scheme].standbyClosedBg,
   },
   instrumentLabel: {
     fontSize: 10,
@@ -648,10 +653,10 @@ const styles = StyleSheet.create({
     lineHeight: 34,
   },
   standbyValueOperating: {
-    color: '#ffffff',
+    color: t.color.textOnPrimary,
   },
   standbyValueClosed: {
-    color: '#ffffff',
+    color: t.color.textOnPrimary,
   },
   instrumentStatus: {
     fontSize: 10,
@@ -659,19 +664,19 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   instrumentStatusOperating: {
-    color: '#bbf7d0',
+    color: COCKPIT[t.scheme].standbyOperatingStatus,
   },
   instrumentStatusClosed: {
-    color: '#94a3b8',
+    color: COCKPIT[t.scheme].standbyClosedStatus,
   },
   llTicket: {
     flex: 1.25,
-    backgroundColor: '#fbf9fe',
+    backgroundColor: COCKPIT[t.scheme].llTicketBg,
     borderRadius: 18,
     padding: 12,
     borderWidth: 1.5,
     borderStyle: 'dashed',
-    borderColor: '#c8b7e6',
+    borderColor: COCKPIT[t.scheme].llTicketBorder,
     justifyContent: 'space-between',
   },
   llTicketHead: {
@@ -682,20 +687,20 @@ const styles = StyleSheet.create({
   llTicketTitle: {
     fontSize: 10.5,
     fontWeight: '800',
-    color: '#5b2a86',
+    color: t.color.primaryFg,
     textTransform: 'uppercase',
     letterSpacing: 0.4,
   },
   llWindowText: {
     fontSize: 13.5,
     fontWeight: '800',
-    color: '#190c2d',
+    color: COCKPIT[t.scheme].inkText,
     marginTop: 4,
   },
   llBenefitText: {
     fontSize: 10.5,
     fontWeight: '700',
-    color: '#15803d',
+    color: COCKPIT[t.scheme].llBenefit,
     marginTop: 4,
   },
   actionBtnRow: {
@@ -709,7 +714,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    backgroundColor: '#5b2a86',
+    backgroundColor: t.color.primary,
     paddingVertical: 8,
     paddingHorizontal: 10,
     borderRadius: 10,
@@ -717,7 +722,7 @@ const styles = StyleSheet.create({
   actionBtnPlanText: {
     fontSize: 11.5,
     fontWeight: '800',
-    color: '#ffffff',
+    color: t.color.textOnPrimary,
   },
   actionBtnAlert: {
     flex: 1,
@@ -725,9 +730,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    backgroundColor: '#f3edf9',
+    backgroundColor: COCKPIT[t.scheme].alertBg,
     borderWidth: 1,
-    borderColor: '#d8c8ed',
+    borderColor: COCKPIT[t.scheme].alertBorder,
     paddingVertical: 8,
     paddingHorizontal: 10,
     borderRadius: 10,
@@ -735,16 +740,16 @@ const styles = StyleSheet.create({
   actionBtnAlertText: {
     fontSize: 11.5,
     fontWeight: '800',
-    color: '#5b2a86',
+    color: t.color.primaryFg,
   },
   singleRiderStrip: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#faf5ff',
+    backgroundColor: COCKPIT[t.scheme].singleRiderBg,
     borderWidth: 1.5,
     borderStyle: 'dashed',
-    borderColor: '#d8b4fe',
+    borderColor: COCKPIT[t.scheme].singleRiderBorder,
     borderRadius: 12,
     paddingVertical: 8,
     paddingHorizontal: 12,
@@ -758,25 +763,25 @@ const styles = StyleSheet.create({
   singleRiderTitle: {
     fontSize: 12,
     fontWeight: '800',
-    color: '#7e22ce',
+    color: COCKPIT[t.scheme].singleRiderTitle,
   },
   singleRiderWait: {
     fontSize: 12,
     fontWeight: '900',
-    color: '#581c87',
+    color: COCKPIT[t.scheme].singleRiderWait,
   },
   singleRiderSub: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#6b21a8',
+    color: COCKPIT[t.scheme].singleRiderSub,
   },
   forecastBox: {
-    backgroundColor: '#fbf9fe',
+    backgroundColor: COCKPIT[t.scheme].forecastBg,
     borderRadius: 14,
     padding: 12,
     marginVertical: 8,
     borderWidth: 1,
-    borderColor: '#ede6f6',
+    borderColor: COCKPIT[t.scheme].forecastBorder,
   },
   forecastHeader: {
     flexDirection: 'row',
@@ -787,17 +792,17 @@ const styles = StyleSheet.create({
   forecastTitle: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#655d78',
+    color: COCKPIT[t.scheme].mutedText,
   },
   forecastScrubLabel: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#5b2a86',
+    color: t.color.primaryFg,
   },
   forecastPeak: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#8b5cf6',
+    color: COCKPIT[t.scheme].forecastPeakText,
   },
   spark: {
     flexDirection: 'row',
@@ -812,17 +817,18 @@ const styles = StyleSheet.create({
   },
   sparkBar: {
     width: '100%',
-    backgroundColor: '#cfc2e5',
+    backgroundColor: COCKPIT[t.scheme].sparkBar,
     borderTopLeftRadius: 4,
     borderTopRightRadius: 4,
   },
   sparkBarPeak: {
-    backgroundColor: '#8b5cf6',
+    backgroundColor: COCKPIT[t.scheme].sparkBarPeak,
   },
   sparkBarActive: {
-    backgroundColor: '#5b2a86',
+    // Data mark on a surface → `primaryFg` (non-text graphics rule).
+    backgroundColor: t.color.primaryFg,
     borderWidth: 1.5,
-    borderColor: '#3b145d',
+    borderColor: COCKPIT[t.scheme].sparkBarActiveBorder,
   },
   sparkX: {
     flexDirection: 'row',
@@ -831,12 +837,12 @@ const styles = StyleSheet.create({
   },
   sparkXText: {
     fontSize: 10,
-    color: '#948ca5',
+    color: COCKPIT[t.scheme].axisText,
     fontWeight: '600',
   },
   lowestForecastLegend: {
     fontSize: 10,
-    color: '#16a34a',
+    color: COCKPIT[t.scheme].operatingFg,
     fontWeight: '700',
     marginTop: 6,
     textAlign: 'center',
@@ -847,17 +853,17 @@ const styles = StyleSheet.create({
     marginTop: 8,
     paddingTop: 6,
     borderTopWidth: 1,
-    borderTopColor: '#f0eaf7',
+    borderTopColor: COCKPIT[t.scheme].freshnessDivider,
   },
   freshnessText: {
     fontSize: 9.5,
     fontWeight: '600',
-    color: '#948ca5',
+    color: COCKPIT[t.scheme].axisText,
   },
   statsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f3edf9',
+    backgroundColor: COCKPIT[t.scheme].statsBg,
     borderRadius: 12,
     paddingVertical: 8,
     paddingHorizontal: 12,
@@ -870,29 +876,29 @@ const styles = StyleSheet.create({
   statDivider: {
     width: 1,
     height: 24,
-    backgroundColor: '#e2d9f3',
+    backgroundColor: COCKPIT[t.scheme].statDivider,
   },
   statLabel: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#655d78',
+    color: COCKPIT[t.scheme].mutedText,
     textTransform: 'uppercase',
   },
   statValue: {
     fontSize: 14,
     fontWeight: '800',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
     marginTop: 2,
   },
   statUnit: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#655d78',
+    color: COCKPIT[t.scheme].mutedText,
   },
   verdictBox: {
-    backgroundColor: '#f0fdf4',
+    backgroundColor: COCKPIT[t.scheme].verdictBg,
     borderLeftWidth: 4,
-    borderLeftColor: '#16a34a',
+    borderLeftColor: COCKPIT[t.scheme].verdictAccent,
     borderRadius: 10,
     padding: 10,
     marginTop: 8,
@@ -908,19 +914,19 @@ const styles = StyleSheet.create({
   verdictTitle: {
     fontSize: 10,
     fontWeight: '800',
-    color: '#166534',
+    color: COCKPIT[t.scheme].verdictTitle,
     letterSpacing: 0.5,
   },
   verdictHeadline: {
     fontSize: 13,
     fontWeight: '800',
-    color: '#14532d',
+    color: COCKPIT[t.scheme].verdictHeadline,
     marginTop: 2,
   },
   verdictSubtext: {
     fontSize: 11,
-    color: '#166534',
+    color: COCKPIT[t.scheme].verdictSub,
     fontWeight: '600',
     marginTop: 2,
   },
-});
+}));

@@ -14,10 +14,16 @@
  */
 
 import React from 'react';
+import { StyleSheet } from 'react-native';
+import type { ReactTestInstance } from 'react-test-renderer';
 import { NavigationContainer } from '@react-navigation/native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen, within } from '@testing-library/react-native';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
+import { darkTheme, lightTheme } from '../../../theme/theme';
+import { PARK } from '../ParkDestinationScreen.palette';
 
+import { FESTIVAL_SLUG_LABELS } from '@dwt/shared';
 import type { ExperienceDTO, ParkLiveSnapshotDTO } from '@dwt/shared';
 
 // Mocks
@@ -177,6 +183,42 @@ function createSampleExperiences(): readonly ExperienceDTO[] {
       subType: 'Parade',
       groupedFacets: {
         interests: [{ id: 'parade', name: 'Parades' }],
+      },
+    },
+  ];
+}
+
+/**
+ * Extends `createSampleExperiences` with `festivalTag`s (festival-booth-tagging
+ * R8.1, R8.2) so the Festival-chip tests exercise real tagged/untagged
+ * Experiences across two different Lands: `exp-be-our-guest` (Fantasyland)
+ * tagged `food-and-wine`, and a new `exp-popcorn` (Tomorrowland) tagged
+ * `flower-and-garden`. `festival-of-the-arts` and `festival-of-the-holidays`
+ * are deliberately never tagged on any Experience here, so they are the
+ * "unobserved slug" cases those tests assert get no chip.
+ */
+function createFestivalTaggedExperiences(): readonly ExperienceDTO[] {
+  const base = createSampleExperiences().map((exp) =>
+    exp.id === 'exp-be-our-guest'
+      ? { ...exp, festivalTag: { slug: 'food-and-wine' as const, year: 2025 } }
+      : exp,
+  );
+  return [
+    ...base,
+    {
+      id: 'exp-popcorn',
+      name: 'Magical Popcorn Cart',
+      park: 'Magic Kingdom',
+      areaType: 'ThemePark',
+      land: 'Tomorrowland',
+      category: 'Restaurant',
+      description: 'A festival popcorn cart tucked beside the PeopleMover.',
+      imageUrl: null,
+      active: true,
+      subType: 'Snack Cart',
+      festivalTag: { slug: 'flower-and-garden' as const, year: 2025 },
+      groupedFacets: {
+        dining: [{ id: 'snack', name: 'Snacks' }],
       },
     },
   ];
@@ -477,5 +519,240 @@ describe('ParkDestinationScreen', () => {
 
     // Restores Peter Pan
     expect(screen.getByText("Peter Pan's Flight")).toBeTruthy();
+  });
+
+  it('renders a Festival chip per tagged slug and no chip for an untagged slug (Requirements 8.9, 8.11)', async () => {
+    const queryClient = makeQueryClient();
+    const destination = DESTINATIONS[0] as Destination; // Magic Kingdom
+    stubApi(createFestivalTaggedExperiences());
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationContainer>
+          <ParkDestinationScreen
+            destination={destination}
+            navigation={mockNavigation}
+            experiences={createFestivalTaggedExperiences()}
+          />
+        </NavigationContainer>
+      </QueryClientProvider>,
+    );
+
+    fireEvent.press(screen.getByTestId('destination-open-filters-modal'));
+
+    // FESTIVALS section renders because at least one tagged Experience exists.
+    const festivalsSection = screen.getByTestId(
+      'destination-modal-festivals-section',
+    );
+    expect(festivalsSection).toBeTruthy();
+
+    // A chip renders for each distinct tagged slug observed in the fixture
+    // ('food-and-wine' on Be Our Guest Restaurant, 'flower-and-garden' on
+    // the Magical Popcorn Cart), labeled via FESTIVAL_SLUG_LABELS (R8.9).
+    const foodAndWineChip = screen.getByTestId(
+      'destination-modal-filter-festival-food-and-wine',
+    );
+    expect(
+      within(foodAndWineChip).getByText(FESTIVAL_SLUG_LABELS['food-and-wine']),
+    ).toBeTruthy();
+
+    const flowerAndGardenChip = screen.getByTestId(
+      'destination-modal-filter-festival-flower-and-garden',
+    );
+    expect(
+      within(flowerAndGardenChip).getByText(
+        FESTIVAL_SLUG_LABELS['flower-and-garden'],
+      ),
+    ).toBeTruthy();
+
+    // No Experience in the fixture is tagged 'festival-of-the-arts' or
+    // 'festival-of-the-holidays', so neither gets a chip (R8.11).
+    expect(
+      screen.queryByTestId('destination-modal-filter-festival-festival-of-the-arts'),
+    ).toBeNull();
+    expect(
+      screen.queryByTestId(
+        'destination-modal-filter-festival-festival-of-the-holidays',
+      ),
+    ).toBeNull();
+    expect(
+      within(festivalsSection).queryByText(
+        FESTIVAL_SLUG_LABELS['festival-of-the-arts'],
+      ),
+    ).toBeNull();
+    expect(
+      within(festivalsSection).queryByText(
+        FESTIVAL_SLUG_LABELS['festival-of-the-holidays'],
+      ),
+    ).toBeNull();
+  });
+
+  it('selecting a Festival chip narrows results to that festival while preserving Land grouping (Requirement 8.10)', async () => {
+    const queryClient = makeQueryClient();
+    const destination = DESTINATIONS[0] as Destination; // Magic Kingdom
+    stubApi(createFestivalTaggedExperiences());
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NavigationContainer>
+          <ParkDestinationScreen
+            destination={destination}
+            navigation={mockNavigation}
+            experiences={createFestivalTaggedExperiences()}
+          />
+        </NavigationContainer>
+      </QueryClientProvider>,
+    );
+
+    // Before filtering: all four Lands are present (Tomorrowland now holds
+    // both Space Mountain and the Magical Popcorn Cart).
+    expect(screen.getByTestId('destination-section-Tomorrowland')).toBeTruthy();
+    expect(screen.getByTestId('destination-section-Fantasyland')).toBeTruthy();
+    expect(
+      screen.getByTestId('destination-section-Main Street, U.S.A.'),
+    ).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId('destination-open-filters-modal'));
+    fireEvent.press(
+      screen.getByTestId('destination-modal-filter-festival-food-and-wine'),
+    );
+    fireEvent.press(screen.getByTestId('destination-modal-apply-btn'));
+
+    // Only the 'food-and-wine'-tagged Experience (Be Our Guest Restaurant, in
+    // Fantasyland) remains; the other Fantasyland Experience (Peter Pan's
+    // Flight) is filtered out despite sharing its Land.
+    expect(screen.getByText('Be Our Guest Restaurant')).toBeTruthy();
+    expect(screen.queryByText("Peter Pan's Flight")).toBeNull();
+    expect(screen.queryByText('Space Mountain')).toBeNull();
+    expect(screen.queryByText('Magical Popcorn Cart')).toBeNull();
+    expect(screen.queryByText('Festival of Fantasy Parade')).toBeNull();
+
+    // Land grouping is preserved for the Land that still has a match: the
+    // Fantasyland header remains. Lands left with zero matches (Tomorrowland,
+    // Main Street, U.S.A.) are omitted entirely, consistent with
+    // `groupByPavilionFiltered`'s existing omit-empty-section behavior.
+    expect(screen.getByTestId('destination-section-Fantasyland')).toBeTruthy();
+    expect(screen.queryByTestId('destination-section-Tomorrowland')).toBeNull();
+    expect(
+      screen.queryByTestId('destination-section-Main Street, U.S.A.'),
+    ).toBeNull();
+
+    // Deselecting the chip (clear all) restores every Land and Experience.
+    fireEvent.press(screen.getByTestId('destination-open-filters-modal'));
+    fireEvent.press(screen.getByTestId('destination-modal-clear-all'));
+    fireEvent.press(screen.getByTestId('destination-modal-apply-btn'));
+
+    expect(screen.getByText("Peter Pan's Flight")).toBeTruthy();
+    expect(screen.getByText('Space Mountain')).toBeTruthy();
+    expect(screen.getByText('Magical Popcorn Cart')).toBeTruthy();
+    expect(screen.getByTestId('destination-section-Tomorrowland')).toBeTruthy();
+  });
+});
+
+describe('ParkDestinationScreen — dark mode', () => {
+  const flat = (node: ReactTestInstance) => StyleSheet.flatten(node.props.style) ?? {};
+  /** Nearest host ancestor whose flattened style sets `key`. */
+  function ancestorWith(node: ReactTestInstance, key: string): Record<string, unknown> {
+    let cur: ReactTestInstance | null = node.parent;
+    while (cur !== null) {
+      if (typeof cur.type === 'string' && flat(cur)[key] !== undefined) {
+        return flat(cur);
+      }
+      cur = cur.parent;
+    }
+    return {};
+  }
+
+  function renderPark(): void {
+    render(
+      <QueryClientProvider client={makeQueryClient()}>
+        <NavigationContainer>
+          <ParkDestinationScreen
+            destination={DESTINATIONS[0] as Destination}
+            navigation={mockNavigation}
+            experiences={createSampleExperiences()}
+            completedIds={new Set(['exp-space'])}
+          />
+        </NavigationContainer>
+      </QueryClientProvider>,
+    );
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    stubApi();
+  });
+  afterEach(resetTestScheme);
+
+  it('(a)(b)(c) paints the screen, primary text and converted row / chrome literals with dark values', () => {
+    setTestScheme('dark');
+    renderPark();
+
+    // (a) the screen background behind the hero header.
+    expect(
+      ancestorWith(screen.getByTestId('park-destination-hero-header'), 'backgroundColor')
+        .backgroundColor,
+    ).toBe(darkTheme.color.background);
+    // (b) primary text.
+    expect(flat(screen.getByText('Space Mountain')).color).toBe(darkTheme.color.textPrimary);
+    // (c) converted literals.
+    const row = screen.getByTestId('destination-row-exp-space');
+    expect(
+      flat(within(row).getByTestId('destination-thumb-placeholder')).backgroundColor,
+    ).toBe(darkTheme.categoryVisual.Ride.fill);
+    expect(
+      flat(within(screen.getByTestId('destination-height-exp-space')).getByText(/44 in/)).color,
+    ).toBe(PARK.dark.heightBadge);
+    const visited = flat(screen.getByTestId('destination-visited-exp-space'));
+    expect(visited.backgroundColor).toBe(PARK.dark.visitedFill);
+    expect(visited.borderColor).toBe(darkTheme.color.textOnPrimary);
+    expect(flat(screen.getByTestId('destination-favorites-toggle')).backgroundColor).toBe(
+      PARK.dark.lavenderBg,
+    );
+  });
+
+  it('category tabs: the active tab is raised above the lavender track and moves on press', () => {
+    setTestScheme('dark');
+    renderPark();
+
+    const tab = (id: string) => flat(screen.getByTestId(`destination-category-${id}`));
+    const track = flat(screen.getByTestId('destination-category-filter')).backgroundColor;
+    expect(track).toBe(PARK.dark.lavenderBg);
+
+    // Lighter than the `surfaceAlt` track, not the darker `surface` hole.
+    expect(tab('All').backgroundColor).toBe(darkTheme.color.borderStrong);
+    expect(tab('All').backgroundColor).not.toBe(darkTheme.color.surface);
+    expect(tab('All').backgroundColor).not.toBe(track);
+    expect(tab('Ride').backgroundColor).toBeUndefined();
+
+    fireEvent.press(screen.getByTestId('destination-category-Ride'));
+    expect(tab('Ride').backgroundColor).toBe(darkTheme.color.borderStrong);
+    expect(tab('All').backgroundColor).toBeUndefined();
+    expect(
+      flat(within(screen.getByTestId('destination-category-Ride')).getByText('Rides')).color,
+    ).toBe(darkTheme.color.primaryFg);
+  });
+
+  it('category tabs: light keeps today\u2019s white active fill', () => {
+    renderPark();
+    expect(flat(screen.getByTestId('destination-category-All')).backgroundColor).toBe('#ffffff');
+  });
+
+  it('repaints a mounted row and the favorites toggle live on a scheme switch', () => {
+    renderPark();
+    expect(flat(screen.getByText('Space Mountain')).color).toBe(lightTheme.color.textPrimary);
+    fireEvent.press(screen.getByTestId('destination-favorites-toggle'));
+    expect(flat(screen.getByTestId('destination-favorites-toggle')).backgroundColor).toBe(
+      PARK.light.favoritesActiveBg,
+    );
+
+    setTestScheme('dark');
+
+    expect(flat(screen.getByTestId('destination-favorites-toggle')).backgroundColor).toBe(
+      PARK.dark.favoritesActiveBg,
+    );
+    expect(flat(screen.getByTestId('destination-favorites-toggle')).borderColor).toBe(
+      PARK.dark.favoritesActiveBorder,
+    );
   });
 });

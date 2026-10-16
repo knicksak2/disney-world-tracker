@@ -18,6 +18,11 @@ import {
 import { QuickActionSheet } from '../QuickActionSheet';
 import MagicFab from '../MagicFab';
 import { getTodayWDW } from '../../trips/TripScheduleScreen';
+import { StyleSheet } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
+import { themes } from '../../../theme/theme';
 
 jest.mock('../../../api/client', () => {
   const actual = jest.requireActual('../../../api/client');
@@ -294,6 +299,50 @@ describe('QuickActionSheet & MagicFab', () => {
 
       fireEvent.press(screen.getByTestId('quick-action-backdrop'));
       expect(onClose).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  // Feature: dark-mode — the FAB disc, ring and the sheet follow the Active theme.
+  describe('dark mode', () => {
+    const flat = (node: { props: { style?: unknown } }): Record<string, unknown> =>
+      (StyleSheet.flatten(node.props.style as never) ?? {}) as Record<string, unknown>;
+
+    afterEach(resetTestScheme);
+
+    it('MagicFab disc uses gradient.fab with a textOnPrimary glyph; light keeps today\'s headerVivid', () => {
+      renderWithClient(<MagicFab />);
+      const fab = screen.getByTestId('magic-fab');
+      expect(fab.findByType(LinearGradient).props.colors).toEqual(['#7e57c2', '#5b2a86', '#3d1c5c']);
+
+      setTestScheme('dark');
+      expect(screen.getByTestId('magic-fab')).toBe(fab);
+      const disc = fab.findByType(LinearGradient);
+      expect(disc.props.colors).toEqual(themes.dark.gradient.fab);
+      const glyph = disc.findByType(Ionicons);
+      expect(glyph.props.name).toBe('sparkles');
+      expect(glyph.props.color).toBe(themes.dark.color.textOnPrimary);
+      // The halo ring is the dark surface with the dark-only hairline outline.
+      const halo = disc.parent!;
+      expect(flat(halo).backgroundColor).toBe(themes.dark.color.surface);
+      expect(flat(halo).borderColor).toBe(themes.dark.color.border);
+    });
+
+    it('opening the sheet from the FAB in dark renders the dark sheet, rows and primaryFg icons', async () => {
+      setTestScheme('dark');
+      renderWithClient(<MagicFab />);
+      fireEvent.press(screen.getByTestId('magic-fab'));
+
+      const title = await screen.findByText('Quick Actions');
+      expect(flat(title).color).toBe(themes.dark.color.textPrimary);
+      const row = screen.getByTestId('quick-action-logRide');
+      expect(flat(row).backgroundColor).toBe(themes.dark.color.surfaceAlt);
+      const icons = row.findAllByType(Ionicons).map((n) => n.props.color);
+      expect(icons).toEqual([themes.dark.color.primaryFg, themes.dark.color.textSecondary]);
+      // The nearest ancestor of the title that paints a background is the sheet.
+      let sheet = title.parent;
+      while (sheet !== null && flat(sheet).backgroundColor === undefined) sheet = sheet.parent;
+      expect(sheet).not.toBeNull();
+      expect(flat(sheet!).backgroundColor).toBe(themes.dark.color.surface);
     });
   });
 });

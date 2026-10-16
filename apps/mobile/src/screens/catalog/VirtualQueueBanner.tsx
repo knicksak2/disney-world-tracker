@@ -6,9 +6,13 @@
 // is a non-empty string. Displays current group range when both start and end are present.
 
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { LiveDetailDTO } from '@dwt/shared';
+
+import { makeStyles } from '../../theme/makeStyles';
+import { usePalette } from '../../theme/useAppTheme';
+import { VQ } from './VirtualQueueBanner.palette';
 
 export interface VirtualQueueBannerProps {
   readonly boardingGroup?: LiveDetailDTO['boardingGroup'];
@@ -17,6 +21,8 @@ export interface VirtualQueueBannerProps {
 export default function VirtualQueueBanner({
   boardingGroup,
 }: VirtualQueueBannerProps): JSX.Element | null {
+  const styles = useStyles();
+  const pal = usePalette(VQ);
   // Requirement 15.1, 15.3: renders if and only if boardingGroup.state is a non-empty string
   if (!boardingGroup || typeof boardingGroup.state !== 'string' || boardingGroup.state.trim().length === 0) {
     return null;
@@ -43,7 +49,7 @@ export default function VirtualQueueBanner({
       accessibilityLabel={a11yLabel}
     >
       <View style={styles.titleWrap}>
-        <Ionicons name="ticket-outline" size={16} color="#1d4ed8" />
+        <Ionicons name="ticket-outline" size={16} color={pal.icon} />
         <Text style={styles.titleText}>
           Virtual Queue:{' '}
           <Text style={styles.stateText} testID="vq-state">
@@ -61,14 +67,14 @@ export default function VirtualQueueBanner({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#eff6ff',
+    backgroundColor: VQ[t.scheme].containerBg,
     borderWidth: 1,
-    borderColor: '#bfdbfe',
+    borderColor: VQ[t.scheme].containerBorder,
     borderRadius: 12,
     paddingVertical: 9,
     paddingHorizontal: 12,
@@ -84,14 +90,14 @@ const styles = StyleSheet.create({
   titleText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#1e40af',
+    color: VQ[t.scheme].titleText,
   },
   stateText: {
     fontWeight: '800',
     textTransform: 'uppercase',
   },
   rangeBadge: {
-    backgroundColor: '#dbeafe',
+    backgroundColor: VQ[t.scheme].rangeBg,
     paddingVertical: 3,
     paddingHorizontal: 8,
     borderRadius: 8,
@@ -99,6 +105,6 @@ const styles = StyleSheet.create({
   rangeText: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#1d4ed8',
+    color: VQ[t.scheme].rangeText,
   },
-});
+}));

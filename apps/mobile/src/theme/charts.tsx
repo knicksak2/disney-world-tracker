@@ -24,7 +24,7 @@
  */
 
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, {
@@ -34,7 +34,8 @@ import Svg, {
   Stop,
 } from 'react-native-svg';
 
-import { theme } from './theme';
+import { useAppTheme } from './useAppTheme';
+import { makeStyles } from './makeStyles';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -83,7 +84,7 @@ export interface ProgressRingProps {
   readonly strokeWidth?: number;
   /** Indicator color; defaults to the purple brand gradient. */
   readonly color?: string;
-  /** Track (unfilled) color; defaults to `theme.color.surfaceAlt`. */
+  /** Track (unfilled) color; defaults to the active theme's `color.surfaceAlt`. */
   readonly trackColor?: string;
   /** Drives the celebratory gold "complete" treatment. */
   readonly complete?: boolean;
@@ -115,8 +116,10 @@ export function ProgressRing({
   accessibilityLabel,
   testID,
 }: ProgressRingProps): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const p = clamp(percent, 0, 100);
-  const track = trackColor ?? theme.color.surfaceAlt;
+  const track = trackColor ?? t.color.surfaceAlt;
   const gradientId = React.useMemo(() => {
     ringGradientSeq += 1;
     return `ringGrad${ringGradientSeq}`;
@@ -125,10 +128,10 @@ export function ProgressRing({
   // Gradient stops: gold when complete, a solid hue when an accent `color` is
   // given, otherwise the brand purple gradient.
   const [stop0, stop1] = complete
-    ? theme.gradient.gold
+    ? t.gradient.gold
     : color !== undefined
       ? ([color, color] as const)
-      : ([theme.color.primaryLight, theme.color.primary] as const);
+      : ([t.color.primaryLight, t.color.primaryFg] as const);
 
   const radius = (size - strokeWidth) / 2;
   const center = size / 2;
@@ -217,7 +220,7 @@ export function ProgressRing({
 export interface ProgressBarProps {
   /** Completion percent in `[0, 100]`. */
   readonly percent: number;
-  /** Fill color; defaults to `theme.color.primary`. */
+  /** Fill color; defaults to the active theme's `color.primaryFg`. */
   readonly color?: string;
   /** Drives the celebratory gold "complete" fill. */
   readonly complete?: boolean;
@@ -241,10 +244,12 @@ export function ProgressBar({
   accessibilityLabel,
   testID,
 }: ProgressBarProps): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const p = clamp(percent, 0, 100);
   const fillColor = complete
-    ? theme.color.success
-    : color ?? theme.color.primary;
+    ? t.color.success
+    : color ?? t.color.primaryFg;
   return (
     <View
       style={[styles.barTrack, { height, borderRadius: height / 2 }]}
@@ -256,7 +261,7 @@ export function ProgressBar({
     >
       {complete ? (
         <LinearGradient
-          colors={theme.gradient.gold}
+          colors={t.gradient.gold}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
           style={[styles.barFill, { width: `${p}%`, borderRadius: height / 2 }]}
@@ -319,6 +324,8 @@ export function RatingHistogram({
   accessibilityLabel,
   testID,
 }: RatingHistogramProps): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const fractions = normalizeHistogram(distribution);
   const anyNonZero = RATING_VALUES.some((v) => (distribution[v] ?? 0) > 0);
   return (
@@ -341,7 +348,7 @@ export function RatingHistogram({
           <View key={value} style={styles.histogramColumn}>
             <View style={styles.histogramBarArea}>
               <LinearGradient
-                colors={hot ? theme.gradient.gold : theme.gradient.headerVivid}
+                colors={hot ? t.gradient.gold : t.gradient.chartBar}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 0, y: 1 }}
                 style={[styles.histogramBar, { height: `${fraction * 100}%` }]}
@@ -380,6 +387,8 @@ export function RatingDial({
   accessibilityLabel,
   testID,
 }: RatingDialProps): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const value = clamp(average, 0, 10);
   const filled = Math.round(value);
   return (
@@ -401,7 +410,7 @@ export function RatingDial({
             key={i}
             name={i < filled ? 'star' : 'star-outline'}
             size={14}
-            color={theme.color.accent}
+            color={t.color.accent}
           />
         ))}
       </View>
@@ -422,9 +431,11 @@ export interface CompleteBadgeProps {
  * is true. One accessible element announcing "Complete" (R15.3/R15.5).
  */
 export function CompleteBadge({ testID }: CompleteBadgeProps): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   return (
     <LinearGradient
-      colors={theme.gradient.gold}
+      colors={t.gradient.gold}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 0 }}
       style={styles.completeBadge}
@@ -432,7 +443,7 @@ export function CompleteBadge({ testID }: CompleteBadgeProps): JSX.Element {
       accessibilityLabel="Complete"
       testID={testID}
     >
-      <Ionicons name="star" size={12} color={theme.color.textOnAccent} />
+      <Ionicons name="star" size={12} color={t.color.textOnAccent} />
       <Text style={styles.completeBadgeText}>Complete!</Text>
     </LinearGradient>
   );
@@ -442,25 +453,25 @@ export function CompleteBadge({ testID }: CompleteBadgeProps): JSX.Element {
 // Styles
 // ---------------------------------------------------------------------------
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   ringCenter: {
     position: 'absolute',
     alignItems: 'center',
     justifyContent: 'center',
   },
   ringCenterLabel: {
-    ...theme.typography.display,
-    color: theme.color.primary,
+    ...t.typography.display,
+    color: t.color.primaryFg,
     textAlign: 'center',
   },
   ringCenterSub: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
     textAlign: 'center',
     marginTop: 2,
   },
   barTrack: {
-    backgroundColor: theme.color.surfaceAlt,
+    backgroundColor: t.color.surfaceAlt,
     overflow: 'hidden',
     width: '100%',
   },
@@ -472,7 +483,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     justifyContent: 'space-between',
     height: 120,
-    gap: theme.spacing.xs,
+    gap: t.spacing.xs,
   },
   histogramColumn: {
     flex: 1,
@@ -486,17 +497,17 @@ const styles = StyleSheet.create({
   },
   histogramBar: {
     width: '80%',
-    borderTopLeftRadius: theme.radius.sm,
-    borderTopRightRadius: theme.radius.sm,
+    borderTopLeftRadius: t.radius.sm,
+    borderTopRightRadius: t.radius.sm,
     minHeight: 2,
   },
   histogramLabel: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
-    marginTop: theme.spacing.xs,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
+    marginTop: t.spacing.xs,
   },
   dial: {
-    gap: theme.spacing.xs,
+    gap: t.spacing.xs,
   },
   dialNumberRow: {
     flexDirection: 'row',
@@ -505,12 +516,12 @@ const styles = StyleSheet.create({
   dialNumber: {
     fontSize: 40,
     fontWeight: '800',
-    color: theme.color.primary,
+    color: t.color.primaryFg,
     lineHeight: 44,
   },
   dialOutOf: {
-    ...theme.typography.subtitle,
-    color: theme.color.textSecondary,
+    ...t.typography.subtitle,
+    color: t.color.textSecondary,
     marginLeft: 2,
   },
   dialStars: {
@@ -522,12 +533,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     alignSelf: 'flex-start',
     gap: 4,
-    paddingHorizontal: theme.spacing.md,
+    paddingHorizontal: t.spacing.md,
     paddingVertical: 4,
-    borderRadius: theme.radius.pill,
+    borderRadius: t.radius.pill,
   },
   completeBadgeText: {
-    ...theme.typography.meta,
-    color: theme.color.textOnAccent,
+    ...t.typography.meta,
+    color: t.color.textOnAccent,
   },
-});
+}));

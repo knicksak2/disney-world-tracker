@@ -33,13 +33,16 @@
  */
 
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
 import type { CompletionEntryDTO, ExperienceCategory } from '@dwt/shared';
 
-import { theme } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { categoryMeta, type AppTheme } from '../../theme/theme';
+import { useAppTheme, usePalette } from '../../theme/useAppTheme';
 import { Badge, Card } from '../../theme/components';
 import { resolveExperienceTarget } from './experienceNavigation';
+import { REPEAT_BADGE } from './CompletionRow.palette';
 
 // ---------------------------------------------------------------------------
 // Fields selector
@@ -72,6 +75,9 @@ export function CompletionRow({
   readonly onOpenExperience?: (experienceId: string) => void;
   readonly testID?: string;
 }): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
+  const repeatBadge = usePalette(REPEAT_BADGE);
   const metaParts: string[] = [];
   if (fields !== 'parks' && entry.park !== null) {
     metaParts.push(entry.park);
@@ -103,7 +109,7 @@ export function CompletionRow({
       <View style={styles.cardHeader}>
         <View style={styles.titleWrap}>
           <View
-            style={[styles.categoryDot, { backgroundColor: categoryTint(entry.category) }]}
+            style={[styles.categoryDot, { backgroundColor: categoryTint(entry.category, t) }]}
           />
           <Text style={styles.cardTitle} numberOfLines={2}>
             {entry.experienceName}
@@ -113,7 +119,7 @@ export function CompletionRow({
           {entry.repeatCount !== undefined && entry.repeatCount > 1 ? (
             <Badge
               label={`${entry.repeatCount}×`}
-              color={entry.repeatCount >= 5 ? '#d9480f' : '#3b5bdb'}
+              color={entry.repeatCount >= 5 ? repeatBadge.frequent : repeatBadge.repeat}
               icon="repeat"
               {...(testID !== undefined ? { testID: `${testID}-repeat-badge` } : {})}
             />
@@ -121,7 +127,7 @@ export function CompletionRow({
           {entry.rating !== null ? (
             <Badge
               label={`${entry.rating}/10`}
-              color={ratingColor(entry.rating)}
+              color={ratingColor(entry.rating, t)}
               icon="star"
             />
           ) : null}
@@ -143,13 +149,14 @@ export function CompletionRow({
 
 /** Friendly label for an Experience_Category, falling back to the raw enum. */
 function categoryLabel(category: ExperienceCategory): string {
-  return theme.categoryVisual[category]?.label ?? category;
+  return categoryMeta[category]?.label ?? category;
 }
 
 /** The category's accent tint for the row's color dot, matching the coverage /
- * interests dot language; falls back to the brand purple. */
-function categoryTint(category: ExperienceCategory): string {
-  return theme.categoryVisual[category]?.tint ?? theme.color.primary;
+ * interests dot language; falls back to the brand purple (a mark on a
+ * surface → primaryFg). */
+function categoryTint(category: ExperienceCategory, t: AppTheme): string {
+  return t.categoryVisual[category]?.tint ?? t.color.primaryFg;
 }
 
 /**
@@ -158,10 +165,10 @@ function categoryTint(category: ExperienceCategory): string {
  * raspberry. The `Badge` applies this color to its star icon, text, and tinted
  * background.
  */
-function ratingColor(rating: number): string {
-  if (rating >= 8) return theme.color.success;
-  if (rating >= 5) return theme.color.accentDark;
-  return theme.color.danger;
+function ratingColor(rating: number, t: AppTheme): string {
+  if (rating >= 8) return t.color.success;
+  if (rating >= 5) return t.color.accentDark;
+  return t.color.danger;
 }
 
 const MONTHS = [
@@ -190,26 +197,26 @@ function formatCalendarDate(value: string): string {
 // Styles
 // ---------------------------------------------------------------------------
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   card: {
-    marginBottom: theme.spacing.md,
+    marginBottom: t.spacing.md,
   },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: theme.spacing.xs,
-    gap: theme.spacing.sm,
+    marginBottom: t.spacing.xs,
+    gap: t.spacing.sm,
   },
   badgeGroup: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.xs,
+    gap: t.spacing.xs,
   },
   titleWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.sm,
+    gap: t.spacing.sm,
     flexShrink: 1,
   },
   categoryDot: {
@@ -218,8 +225,8 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   cardTitle: {
-    ...theme.typography.subtitle,
-    color: theme.color.textPrimary,
+    ...t.typography.subtitle,
+    color: t.color.textPrimary,
     flexShrink: 1,
   },
   metaIndent: {
@@ -227,13 +234,13 @@ const styles = StyleSheet.create({
     paddingLeft: 18,
   },
   completionMeta: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
   },
   completionNote: {
-    ...theme.typography.body,
-    color: theme.color.textPrimary,
-    marginTop: theme.spacing.sm,
+    ...t.typography.body,
+    color: t.color.textPrimary,
+    marginTop: t.spacing.sm,
     fontStyle: 'italic',
   },
-});
+}));

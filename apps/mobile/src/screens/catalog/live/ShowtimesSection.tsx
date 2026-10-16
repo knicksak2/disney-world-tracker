@@ -15,11 +15,11 @@
 // presentation only.
 
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
 import type { Showtime } from '@dwt/shared';
 
-import { theme } from '../../../theme/theme';
+import { makeStyles } from '../../../theme/makeStyles';
 import { Badge, Card, EmptyState, SectionLabel } from '../../../theme/components';
 import { sortedShowtimes } from './liveView';
 import { formatParkTime } from './parkTime';
@@ -36,6 +36,7 @@ export default function ShowtimesSection({
   stale,
   upstreamLastUpdated,
 }: LiveSectionProps): JSX.Element {
+  const styles = useStyles();
   const showtimes = sortedShowtimes(liveDetail.showtimes);
 
   return (
@@ -78,6 +79,7 @@ export default function ShowtimesSection({
  * the optional Showtime_Type label (R5.6).
  */
 function ShowtimeRow({ showtime }: { readonly showtime: Showtime }): JSX.Element {
+  const styles = useStyles();
   const timeRange =
     showtime.end !== undefined
       ? `${formatParkTime(showtime.start)} – ${formatParkTime(showtime.end)}`
@@ -95,27 +97,27 @@ function ShowtimeRow({ showtime }: { readonly showtime: Showtime }): JSX.Element
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   section: {
-    gap: theme.spacing.md,
+    gap: t.spacing.md,
   },
   statusRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.sm,
+    gap: t.spacing.sm,
     flexWrap: 'wrap',
   },
   list: {
-    gap: theme.spacing.sm,
+    gap: t.spacing.sm,
   },
   showtimeRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: theme.spacing.md,
+    gap: t.spacing.md,
   },
   showtimeTime: {
-    ...theme.typography.subtitle,
-    color: theme.color.textPrimary,
+    ...t.typography.subtitle,
+    color: t.color.textPrimary,
   },
-});
+}));

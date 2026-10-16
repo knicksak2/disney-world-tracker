@@ -1,10 +1,15 @@
 // Feature: food-lists, Task 8.4, 8.7, 8.8, 8.13, 8.15, 8.16 — FoodListDetailScreen interaction tests
 import React from 'react';
-import { Alert, Keyboard } from 'react-native';
+import { Alert, Keyboard, KeyboardAvoidingView, Platform, StyleSheet } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
+import type { ReactTestInstance } from 'react-test-renderer';
 import type { FoodItemDTO, FoodListDetailDTO, UserSubmittedLocationDTO } from '@dwt/shared';
+
+import { darkTheme, withAlpha } from '../../../theme/theme';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
+import { FOOD_LIST_DETAIL } from '../FoodListDetailScreen.palette';
 
 jest.mock('expo-constants', () => ({
   __esModule: true,
@@ -2564,6 +2569,97 @@ describe('FoodListDetailScreen', () => {
     expect(dismissSpy).toHaveBeenCalled();
 
     dismissSpy.mockRestore();
+  });
+
+  test('KeyboardAvoidingView on Android uses undefined behavior so it does not conflict with adjustResize and cause screen shaking', async () => {
+    const originalPlatform = Platform.OS;
+    try {
+      Platform.OS = 'android';
+      apiRequestMock.mockImplementation(async (_method, path) =>
+        path === '/food-lists/list-detail-1' ? sampleOwnerList : {},
+      );
+      renderScreen();
+
+      await screen.findByTestId('food-list-add-items-btn');
+      fireEvent.press(screen.getByTestId('food-list-add-items-btn'));
+
+      const modal = screen.getByTestId('restaurant-search-modal');
+      const kav = modal.findByType(KeyboardAvoidingView);
+      expect(kav.props.behavior).toBeUndefined();
+    } finally {
+      Platform.OS = originalPlatform;
+    }
+  });
+});
+
+/** Nearest painted `backgroundColor` at or above `node`. */
+function paintedBackground(node: ReactTestInstance | null): unknown {
+  for (let n = node; n !== null; n = n.parent) {
+    const style = n.props.style;
+    if (style === undefined || typeof style === 'function') continue;
+    const flat = StyleSheet.flatten(style) as { backgroundColor?: unknown } | undefined;
+    if (flat?.backgroundColor !== undefined) return flat.backgroundColor;
+  }
+  return undefined;
+}
+
+describe('FoodListDetailScreen — dark mode', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockFoodListId = 'list-detail-1';
+  });
+  afterEach(resetTestScheme);
+
+  test('paints the screen, header, rows and primary-hued controls with dark values', async () => {
+    setTestScheme('dark');
+    const checklistList: FoodListDetailDTO = {
+      ...sampleOwnerList,
+      isChecklist: true,
+      gottenCount: 1,
+    };
+    apiRequestMock.mockImplementation(async (_method, path) =>
+      path === '/food-lists/list-detail-1' ? checklistList : {},
+    );
+    renderScreen();
+
+    const name = await screen.findByTestId('food-list-name');
+    // (a) the screen background, (b) primary text (list name and a row).
+    expect(paintedBackground(screen.getByTestId('food-list-detail-screen'))).toBe(
+      darkTheme.color.background,
+    );
+    expect(StyleSheet.flatten(name.props.style).color).toBe(darkTheme.color.textPrimary);
+    expect(StyleSheet.flatten(screen.getByText('Dole Whip').props.style).color).toBe(
+      darkTheme.color.textPrimary,
+    );
+    // (c) row attribution and progress fill are primary marks → primaryFg; the
+    // visibility badge tint is `withAlpha(primary, 0.08)` (rule 2).
+    expect(
+      StyleSheet.flatten(screen.getByTestId('food-list-attribution-item-dole').props.style).color,
+    ).toBe(darkTheme.color.primaryFg);
+    expect(
+      StyleSheet.flatten(screen.getByTestId('food-list-progress-bar').props.style).backgroundColor,
+    ).toBe(darkTheme.color.primaryFg);
+    expect(
+      StyleSheet.flatten(screen.getByTestId('food-list-visibility-toggle-badge').props.style)
+        .backgroundColor,
+    ).toBe(withAlpha(darkTheme.color.primary, 0.08));
+    expect(
+      StyleSheet.flatten(screen.getByTestId('food-list-item-check-off-btn-item-dole').props.style)
+        .borderColor,
+    ).toBe(darkTheme.color.primaryFg);
+  });
+
+  test('a liked list paints its like chip with the palette red tint', async () => {
+    setTestScheme('dark');
+    apiRequestMock.mockImplementation(async (_method, path) =>
+      path === '/food-lists/list-detail-1' ? sampleViewerList : {},
+    );
+    renderScreen();
+
+    await screen.findByText('Hand-dipped Corn Dog');
+    expect(
+      StyleSheet.flatten(screen.getByTestId('food-list-like-btn').props.style).backgroundColor,
+    ).toBe(FOOD_LIST_DETAIL.dark.likedBg);
   });
 });
 

@@ -35,6 +35,12 @@ jest.mock('../../../api/client', () => {
 import TripFeedScreen from '../TripFeedScreen';
 import { apiRequest as mockedApiRequest } from '../../../api/client';
 import type { TripFeedItemDTO, TripMemberDTO } from '@dwt/shared';
+import { StyleSheet } from 'react-native';
+import type { ReactTestInstance } from 'react-test-renderer';
+import { darkTheme } from '../../../theme/theme';
+import { ScreenContainer } from '../../../theme/components';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
+import { FEED_MISC, RODE_WITH } from '../TripFeedScreen.palette';
 
 const apiRequestMock = mockedApiRequest as jest.MockedFunction<
   typeof mockedApiRequest
@@ -286,6 +292,52 @@ describe('Trip_Activity screen', () => {
         `/trips/${TRIP_ID}/feed/feed_item/${COMPLETION_ITEM_ID}/comments`,
         { body: 'Great ride!' },
       );
+    });
+  });
+
+  // Feature: dark-mode — the activity feed repaints with the Twilight palette.
+  describe('dark mode', () => {
+    afterEach(resetTestScheme);
+
+    const flat = (node: ReactTestInstance): Record<string, unknown> =>
+      (StyleSheet.flatten(node.props.style) ?? {}) as Record<string, unknown>;
+
+    /** The screen root: the host View that `ScreenContainer` paints. */
+    function rootContainer(): ReactTestInstance {
+      const container = screen.UNSAFE_getAllByType(ScreenContainer)[0]!;
+      return container.children[0] as ReactTestInstance;
+    }
+
+    test('(a)(b)(c) paints the root, feed text, log CTA and rode-with chip dark', async () => {
+      installApi();
+      setTestScheme('dark');
+      renderActivity();
+
+      await screen.findByText('Big Thunder Mountain');
+      // (a) root container.
+      expect(flat(rootContainer()).backgroundColor).toBe(darkTheme.color.background);
+      // (b) primary text — the completed Experience's name.
+      expect(flat(screen.getByText('Big Thunder Mountain')).color).toBe(
+        darkTheme.color.textPrimary,
+      );
+      // (c) converted literals: the "Log a ride" CTA card (rule 3 violet S/B)
+      // and its title (`primary` as text → `primaryFg`), and the confirmed
+      // rode-with chip text (rule 3 green T).
+      const cta = flat(screen.getByTestId('trip-activity-log-cta'));
+      expect(cta.backgroundColor).toBe(FEED_MISC.dark.ctaBg);
+      expect(cta.borderColor).toBe(FEED_MISC.dark.ctaBorder);
+      expect(flat(screen.getByText('Log a ride or snack')).color).toBe(darkTheme.color.primaryFg);
+      expect(flat(screen.getByText('✓ Ariel')).color).toBe(RODE_WITH.dark.confirmedFg);
+    });
+
+    test('keeps the pre-retrofit light values under light', async () => {
+      installApi();
+      renderActivity();
+
+      await screen.findByText('Big Thunder Mountain');
+      expect(flat(screen.getByTestId('trip-activity-log-cta')).backgroundColor).toBe('#fcfaff');
+      expect(flat(screen.getByText('✓ Ariel')).color).toBe('#27855a');
+      expect(flat(screen.getByText('Log a ride or snack')).color).toBe('#5b2a86');
     });
   });
 });

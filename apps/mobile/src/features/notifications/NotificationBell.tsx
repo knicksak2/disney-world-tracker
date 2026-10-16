@@ -13,7 +13,7 @@ import { useNavigation } from '@react-navigation/native';
 
 import { AttentionBadge } from './AttentionBadge';
 import { useAttentionBadge } from './useAttentionBadge';
-import { color } from '../../theme/theme';
+import { useAppTheme } from '../../theme/useAppTheme';
 
 export interface NotificationBellProps {
   readonly size?: number;
@@ -23,9 +23,12 @@ export interface NotificationBellProps {
 
 export function NotificationBell({
   size = 24,
-  tintColor = color.textOnPrimary,
+  tintColor: tintColorProp,
   testID = 'notification-bell',
 }: NotificationBellProps): JSX.Element {
+  const t = useAppTheme();
+  // Default: white glyph on the header gradient.
+  const tintColor = tintColorProp ?? t.color.textOnPrimary;
   const navigation = useNavigation<any>();
   const { display, count } = useAttentionBadge();
 

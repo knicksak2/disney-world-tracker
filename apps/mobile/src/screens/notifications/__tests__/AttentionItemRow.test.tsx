@@ -31,6 +31,9 @@ import { fireEvent, render, screen } from '@testing-library/react-native';
 import type { AttentionItem } from '@dwt/shared';
 
 import { AttentionItemRow } from '../../../features/notifications/AttentionItemRow';
+import { StyleSheet } from 'react-native';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
+import { themes, withAlpha } from '../../../theme/theme';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -238,5 +241,58 @@ describe('AttentionItemRow Share open-destination control is conditional (R2.3)'
     // Card press does nothing
     fireEvent.press(screen.getByTestId('attention-row-sh-nodest'));
     expect(cbs.onOpenDestination).not.toHaveBeenCalled();
+  });
+});
+
+// Feature: dark-mode — the row, its domain tint and its rating input follow the Active theme.
+describe('AttentionItemRow — dark mode', () => {
+  const flat = (node: { props: { style?: unknown } }): Record<string, unknown> =>
+    (StyleSheet.flatten(node.props.style as never) ?? {}) as Record<string, unknown>;
+
+  afterEach(resetTestScheme);
+
+  test('the card, summary and friend-request tint use the dark tokens (primary → primaryFg)', () => {
+    setTestScheme('dark');
+    renderRow(friendRequestItem('fr-d'));
+    const card = screen.getByTestId('attention-row-fr-d');
+    expect(flat(card).backgroundColor).toBe(themes.dark.color.surface);
+    expect(flat(card).borderLeftColor).toBe(themes.dark.color.primaryFg);
+    expect(flat(screen.getByTestId('attention-summary-fr-d')).color).toBe(themes.dark.color.textPrimary);
+    expect(flat(screen.getByText('Friend request')).color).toBe(themes.dark.color.primaryFg);
+  });
+
+  test('light keeps the pre-retrofit tint and badge background', () => {
+    renderRow(friendRequestItem('fr-l'));
+    expect(flat(screen.getByTestId('attention-row-fr-l')).borderLeftColor).toBe('#5b2a86');
+    expect(flat(screen.getByText('Friend request')).color).toBe('#5b2a86');
+    expect(withAlpha('#5b2a86', 0.14)).toBe('rgba(91, 42, 134, 0.14)');
+  });
+
+  test('each domain maps to its scheme tint', () => {
+    for (const s of ['light', 'dark'] as const) {
+      setTestScheme(s);
+      const c = themes[s].color;
+      const cases = [
+        [tripInviteItem(`ti-${s}`), 'Trip invite', c.accentDark],
+        [rodeWithTagItem(`rw-${s}`), 'Rode-with tag', c.success],
+        [shareItem(`sh-${s}`, false), 'Share', c.primaryLight],
+      ] as const;
+      for (const [item, label, tint] of cases) {
+        renderRow(item);
+        expect(flat(screen.getByTestId(`attention-row-${item.id}`)).borderLeftColor).toBe(tint);
+        expect(flat(screen.getByText(label)).color).toBe(tint);
+        screen.unmount();
+      }
+    }
+  });
+
+  test('the rating input gets themed placeholder, keyboard appearance and text colour', () => {
+    setTestScheme('dark');
+    renderRow(rodeWithTagItem('rw-in'));
+    const input = screen.getByTestId('attention-rating-rw-in');
+    expect(input.props.placeholderTextColor).toBe(themes.dark.color.textSecondary);
+    expect(input.props.keyboardAppearance).toBe('dark');
+    expect(flat(input).color).toBe(themes.dark.color.textPrimary);
+    expect(flat(input).backgroundColor).toBe(themes.dark.color.surfaceAlt);
   });
 });

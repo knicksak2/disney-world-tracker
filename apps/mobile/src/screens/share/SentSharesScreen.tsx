@@ -52,7 +52,8 @@ import {
 
 import { ApiError, apiRequest } from '../../api/client';
 import type { YouAndCrewStackParamList } from '../../navigation/YouAndCrewStack';
-import { theme } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme } from '../../theme/useAppTheme';
 import {
   Badge,
   Card,
@@ -142,6 +143,8 @@ function formatPercent(value: number): string {
 // ---------------------------------------------------------------------------
 
 export default function SentSharesScreen({ navigation }: Props): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const sentQuery = useQuery<SentShareDTO[], ApiError>({
     queryKey: SENT_SHARES_QUERY_KEY,
     queryFn: () => apiRequest<SentShareDTO[]>('GET', '/me/shares'),
@@ -168,7 +171,7 @@ export default function SentSharesScreen({ navigation }: Props): JSX.Element {
           onBack={() => navigation.goBack()}
         />
         <View style={styles.centerWrap}>
-          <ActivityIndicator color={theme.color.primary} testID="sent-loading" />
+          <ActivityIndicator color={t.color.primaryFg} testID="sent-loading" />
         </View>
       </ScreenContainer>
     );
@@ -207,6 +210,7 @@ export default function SentSharesScreen({ navigation }: Props): JSX.Element {
       <FlatList
         data={shares}
         keyExtractor={(item) => item.shareId}
+        extraData={t.scheme}
         contentContainerStyle={styles.listContent}
         ListEmptyComponent={
           <View style={styles.centerWrap}>
@@ -234,6 +238,7 @@ export default function SentSharesScreen({ navigation }: Props): JSX.Element {
  */
 function SentShareRow(props: { share: SentShareDTO }): JSX.Element {
   const { share } = props;
+  const styles = useStyles();
   return (
     <Card style={styles.row} testID={`sent-row-${share.shareId}`}>
       <View style={styles.header}>
@@ -272,6 +277,7 @@ function PinShowcaseShareContent(props: {
   shareId: string;
 }): JSX.Element {
   const { payload, shareId } = props;
+  const styles = useStyles();
   return (
     <View style={styles.payloadWrap}>
       <Text style={styles.summary} testID={`sent-pin-showcase-${shareId}`}>
@@ -291,6 +297,7 @@ function ProgressShareContent(props: {
   shareId: string;
 }): JSX.Element {
   const { payload, shareId } = props;
+  const styles = useStyles();
   return (
     <View style={styles.payloadWrap}>
       <Text style={styles.summary} testID={`sent-progress-overall-${shareId}`}>
@@ -341,6 +348,8 @@ function ExperienceShareContent(props: {
   shareId: string;
 }): JSX.Element {
   const { payload, shareId } = props;
+  const styles = useStyles();
+  const t = useAppTheme();
   const encodedId = encodeURIComponent(payload.experienceId);
 
   const metaQuery = useQuery<ExperienceMetadata, ApiError>({
@@ -378,7 +387,7 @@ function ExperienceShareContent(props: {
     block = (
       <View style={styles.experienceLoading}>
         <ActivityIndicator
-          color={theme.color.primary}
+          color={t.color.primaryFg}
           testID={`sent-experience-loading-${shareId}`}
         />
       </View>
@@ -405,6 +414,8 @@ function ExperienceShareContent(props: {
  */
 function ShareReactions(props: { shareId: string }): JSX.Element {
   const { shareId } = props;
+  const styles = useStyles();
+  const t = useAppTheme();
 
   const reactionsQuery = useQuery<ShareReactionDTO[], ApiError>({
     queryKey: reactionsQueryKey(shareId),
@@ -421,7 +432,7 @@ function ShareReactions(props: { shareId: string }): JSX.Element {
     return (
       <View style={styles.reactionsWrap}>
         <ActivityIndicator
-          color={theme.color.primary}
+          color={t.color.primaryFg}
           testID={`sent-reactions-loading-${shareId}`}
         />
       </View>
@@ -470,7 +481,7 @@ function ShareReactions(props: { shareId: string }): JSX.Element {
           <Text style={styles.reactorName}>{reaction.reactorDisplayName}</Text>
           <Badge
             label={REACTION_LABELS[reaction.reaction]}
-            color={theme.color.accent}
+            color={t.color.accent}
           />
         </View>
       ))}
@@ -482,70 +493,70 @@ function ShareReactions(props: { shareId: string }): JSX.Element {
 // Styles
 // ---------------------------------------------------------------------------
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   centerWrap: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: theme.spacing.xl,
+    padding: t.spacing.xl,
   },
   listContent: {
-    paddingHorizontal: theme.spacing.lg,
-    paddingTop: theme.spacing.md,
-    paddingBottom: theme.spacing.xxl,
+    paddingHorizontal: t.spacing.lg,
+    paddingTop: t.spacing.md,
+    paddingBottom: t.spacing.xxl,
   },
   row: {
-    marginBottom: theme.spacing.md,
-    gap: theme.spacing.sm,
+    marginBottom: t.spacing.md,
+    gap: t.spacing.sm,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
   },
   timestamp: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
   },
   payloadWrap: {
-    gap: theme.spacing.xs,
+    gap: t.spacing.xs,
   },
   summary: {
-    ...theme.typography.subtitle,
-    color: theme.color.textPrimary,
+    ...t.typography.subtitle,
+    color: t.color.textPrimary,
   },
   bodyLine: {
-    ...theme.typography.body,
-    color: theme.color.textSecondary,
+    ...t.typography.body,
+    color: t.color.textSecondary,
   },
   experienceLoading: {
-    paddingVertical: theme.spacing.sm,
+    paddingVertical: t.spacing.sm,
     alignItems: 'flex-start',
   },
   reactionsWrap: {
-    marginTop: theme.spacing.sm,
-    paddingTop: theme.spacing.sm,
+    marginTop: t.spacing.sm,
+    paddingTop: t.spacing.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: theme.color.border,
-    gap: theme.spacing.sm,
+    borderTopColor: t.color.border,
+    gap: t.spacing.sm,
   },
   reactionRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: theme.spacing.md,
+    gap: t.spacing.md,
   },
   reactorName: {
-    ...theme.typography.body,
-    color: theme.color.textPrimary,
+    ...t.typography.body,
+    color: t.color.textPrimary,
     flexShrink: 1,
   },
   reactionsEmpty: {
-    ...theme.typography.body,
-    color: theme.color.textSecondary,
+    ...t.typography.body,
+    color: t.color.textSecondary,
     fontStyle: 'italic',
   },
   reactionsUnavailable: {
-    ...theme.typography.body,
-    color: theme.color.textSecondary,
+    ...t.typography.body,
+    color: t.color.textSecondary,
   },
-});
+}));

@@ -18,11 +18,11 @@
 // `diningWalkupState` helpers; this component is presentation only.
 
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
 import type { DiningAvailabilityEntry, OperatingHours } from '@dwt/shared';
 
-import { theme } from '../../../theme/theme';
+import { makeStyles } from '../../../theme/makeStyles';
 import { Badge, Card, EmptyState, SectionLabel } from '../../../theme/components';
 import { diningHoursState, diningWalkupState } from './liveView';
 import { formatParkTime } from './parkTime';
@@ -40,6 +40,7 @@ export default function DiningSection({
   stale,
   upstreamLastUpdated,
 }: LiveSectionProps): JSX.Element {
+  const styles = useStyles();
   const hours = diningHoursState(liveDetail.operatingHours);
   const walkup = diningWalkupState(liveDetail.diningAvailability);
 
@@ -100,6 +101,7 @@ export default function DiningSection({
  * (R6.2) with the optional Operating_Hours_Type label (R6.5).
  */
 function HoursRow({ hours }: { readonly hours: OperatingHours }): JSX.Element {
+  const styles = useStyles();
   return (
     <View style={styles.hoursRow} testID="dining-hours-row">
       <Text style={styles.hoursText} testID="dining-hours-text">
@@ -121,6 +123,7 @@ function WalkupRow({
 }: {
   readonly entry: DiningAvailabilityEntry;
 }): JSX.Element {
+  const styles = useStyles();
   const parts: string[] = [];
   if (entry.partySize !== undefined) {
     parts.push(`Party of ${entry.partySize}`);
@@ -139,37 +142,37 @@ function WalkupRow({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   section: {
-    gap: theme.spacing.md,
+    gap: t.spacing.md,
   },
   statusRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.sm,
+    gap: t.spacing.sm,
     flexWrap: 'wrap',
   },
   block: {
-    gap: theme.spacing.xs,
+    gap: t.spacing.xs,
   },
   hoursRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: theme.spacing.md,
+    gap: t.spacing.md,
   },
   hoursText: {
-    ...theme.typography.subtitle,
-    color: theme.color.textPrimary,
+    ...t.typography.subtitle,
+    color: t.color.textPrimary,
   },
   walkupRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: theme.spacing.xs,
+    paddingVertical: t.spacing.xs,
   },
   walkupText: {
-    ...theme.typography.body,
-    color: theme.color.textPrimary,
+    ...t.typography.body,
+    color: t.color.textPrimary,
   },
-});
+}));

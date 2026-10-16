@@ -44,7 +44,7 @@
  */
 
 import React from 'react';
-import { ActivityIndicator, Alert, FlatList, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { CompositeNavigationProp, RouteProp } from '@react-navigation/native';
@@ -63,7 +63,8 @@ import {
 
 import { ApiError, apiRequest } from '../../api/client';
 import type { MainTabParamList, RootStackParamList } from '../../navigation/RootNavigator';
-import { theme } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme } from '../../theme/useAppTheme';
 import {
   EmptyState,
   GradientHeader,
@@ -187,6 +188,8 @@ interface FriendsListSnapshot {
 // ---------------------------------------------------------------------------
 
 export default function NotificationCenterScreen(): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const navigation = useNavigation<NotificationCenterNavigation>();
   const route = useRoute<RouteProp<RootStackParamList, 'NotificationCenter'>>();
   const queryClient = useQueryClient();
@@ -377,7 +380,7 @@ export default function NotificationCenterScreen(): JSX.Element {
         </View>
       );
     },
-    [sortMode, state.items, actions, openDestination, highlightedItemId],
+    [sortMode, state.items, actions, openDestination, highlightedItemId, styles],
   );
 
   // `FlatList` calls `renderItem` with a `{ item, index, separators }` object,
@@ -437,7 +440,7 @@ export default function NotificationCenterScreen(): JSX.Element {
               <Ionicons
                 name="warning-outline"
                 size={16}
-                color={theme.color.warningText}
+                color={t.color.warningText}
                 style={styles.bannerIcon}
               />
               <Text style={styles.bannerTitle}>Some sources didn't load</Text>
@@ -468,7 +471,7 @@ export default function NotificationCenterScreen(): JSX.Element {
               <Ionicons
                 name="information-circle-outline"
                 size={16}
-                color={theme.color.warningText}
+                color={t.color.warningText}
                 style={styles.bannerIcon}
               />
               <Text style={styles.bannerTitle}>{FOCUS_UNAVAILABLE_TITLE}</Text>
@@ -488,7 +491,7 @@ export default function NotificationCenterScreen(): JSX.Element {
       {/* Exactly one of loading / error / empty / feed (R9.6). */}
       {isLoading ? (
         <View style={styles.centerWrap} testID="notification-loading">
-          <ActivityIndicator color={theme.color.primary} size="large" />
+          <ActivityIndicator color={t.color.primaryFg} size="large" />
           <Text style={styles.loadingText}>Loading your notifications…</Text>
         </View>
       ) : isTotalFailure ? (
@@ -510,6 +513,7 @@ export default function NotificationCenterScreen(): JSX.Element {
         <FlatList
           data={state.items}
           keyExtractor={(item) => item.id}
+          extraData={t.scheme}
           contentContainerStyle={styles.listContent}
           renderItem={renderItem}
         />
@@ -522,13 +526,13 @@ export default function NotificationCenterScreen(): JSX.Element {
 // Styles
 // ---------------------------------------------------------------------------
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   controlsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.sm,
-    paddingHorizontal: theme.spacing.lg,
-    paddingTop: theme.spacing.md,
+    gap: t.spacing.sm,
+    paddingHorizontal: t.spacing.lg,
+    paddingTop: t.spacing.md,
   },
   controlBtn: {
     flex: 1,
@@ -536,14 +540,14 @@ const styles = StyleSheet.create({
   banner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.md,
-    marginHorizontal: theme.spacing.lg,
-    marginTop: theme.spacing.md,
-    padding: theme.spacing.md,
-    borderRadius: theme.radius.md,
-    backgroundColor: theme.color.warningSurface,
+    gap: t.spacing.md,
+    marginHorizontal: t.spacing.lg,
+    marginTop: t.spacing.md,
+    padding: t.spacing.md,
+    borderRadius: t.radius.md,
+    backgroundColor: t.color.warningSurface,
     borderWidth: 1,
-    borderColor: theme.color.warning,
+    borderColor: t.color.warning,
   },
   bannerTextWrap: {
     flex: 1,
@@ -552,18 +556,18 @@ const styles = StyleSheet.create({
   bannerTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.xs,
+    gap: t.spacing.xs,
   },
   bannerIcon: {
     marginRight: 2,
   },
   bannerTitle: {
-    ...theme.typography.subtitle,
-    color: theme.color.warningText,
+    ...t.typography.subtitle,
+    color: t.color.warningText,
   },
   bannerBody: {
-    ...theme.typography.meta,
-    color: theme.color.warningText,
+    ...t.typography.meta,
+    color: t.color.warningText,
   },
   bannerRetry: {
     alignSelf: 'center',
@@ -572,23 +576,23 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: theme.spacing.xl,
-    gap: theme.spacing.md,
+    padding: t.spacing.xl,
+    gap: t.spacing.md,
   },
   loadingText: {
-    ...theme.typography.body,
-    color: theme.color.textSecondary,
+    ...t.typography.body,
+    color: t.color.textSecondary,
   },
   errorRetry: {
     minWidth: 160,
   },
   listContent: {
-    padding: theme.spacing.lg,
+    padding: t.spacing.lg,
   },
   groupHeader: {
-    ...theme.typography.heading,
-    color: theme.color.textPrimary,
-    marginBottom: theme.spacing.sm,
-    marginTop: theme.spacing.xs,
+    ...t.typography.heading,
+    color: t.color.textPrimary,
+    marginBottom: t.spacing.sm,
+    marginTop: t.spacing.xs,
   },
-});
+}));

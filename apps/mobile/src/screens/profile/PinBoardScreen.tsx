@@ -55,7 +55,9 @@ import type { CollectionStackParamList } from '../../navigation/CollectionStack'
 import { ApiError, apiRequest } from '../../api/client';
 import { PinView } from '../../components/pins/PinView';
 import { TIER_COLOR, TIER_LABEL, TRACK_LABEL } from '../../components/pins/pinTierMeta';
-import { theme } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme } from '../../theme/useAppTheme';
+import { PIN_BOARD } from './PinBoardScreen.palette';
 import {
   Chip,
   EmptyState,
@@ -113,6 +115,8 @@ function claimableFirstComparator(a: UserPinProgressDTO, b: UserPinProgressDTO):
 }
 
 export default function PinBoardScreen({ navigation, route }: Props): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const [tier, setTier] = useState<TierFilter>('all');
   const [track, setTrack] = useState<TrackFilter>('all');
   const [ownership, setOwnership] = useState<OwnershipFilter>('all');
@@ -336,7 +340,7 @@ export default function PinBoardScreen({ navigation, route }: Props): JSX.Elemen
   }
 
   const tileSize = Math.floor(
-    (Dimensions.get('window').width - theme.spacing.lg * 2 - theme.spacing.md * (NUM_COLUMNS - 1)) /
+    (Dimensions.get('window').width - t.spacing.lg * 2 - t.spacing.md * (NUM_COLUMNS - 1)) /
       NUM_COLUMNS,
   );
 
@@ -494,7 +498,7 @@ export default function PinBoardScreen({ navigation, route }: Props): JSX.Elemen
               style={({ pressed }) => [styles.headerBtn, pressed && styles.headerBtnPressed]}
               testID="pin-board-showcase"
             >
-              <Ionicons name="images-outline" size={20} color={theme.color.textOnPrimary} />
+              <Ionicons name="images-outline" size={20} color={t.color.textOnPrimary} />
             </Pressable>
             <Pressable
               onPress={() => navigation.navigate('PinAttribution')}
@@ -504,7 +508,7 @@ export default function PinBoardScreen({ navigation, route }: Props): JSX.Elemen
               style={({ pressed }) => [styles.headerBtn, pressed && styles.headerBtnPressed]}
               testID="pin-board-credits"
             >
-              <Ionicons name="information-circle-outline" size={22} color={theme.color.textOnPrimary} />
+              <Ionicons name="information-circle-outline" size={22} color={t.color.textOnPrimary} />
             </Pressable>
           </View>
         }
@@ -512,7 +516,7 @@ export default function PinBoardScreen({ navigation, route }: Props): JSX.Elemen
 
       {board.isLoading ? (
         <View style={styles.center} testID="pin-board-loading">
-          <ActivityIndicator color={theme.color.primary} />
+          <ActivityIndicator color={t.color.primaryFg} />
         </View>
       ) : board.isError ? (
         <View style={styles.center}>
@@ -526,6 +530,7 @@ export default function PinBoardScreen({ navigation, route }: Props): JSX.Elemen
           numColumns={NUM_COLUMNS}
           keyExtractor={(p) => p.pinId}
           ListHeaderComponent={header}
+          extraData={t.scheme}
           contentContainerStyle={styles.grid}
           columnWrapperStyle={styles.gridRow}
           ListEmptyComponent={
@@ -591,6 +596,7 @@ const PinCell = React.memo(function PinCell({
   onEnqueueClaim,
   onViewDetail,
 }: PinCellProps): JSX.Element {
+  const styles = useStyles();
   const scale = useRef(new Animated.Value(1)).current;
 
   const onTap = useCallback(() => {
@@ -681,62 +687,62 @@ const PinCell = React.memo(function PinCell({
   );
 });
 
-const styles = StyleSheet.create({
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: theme.spacing.xl },
-  summary: { alignItems: 'center', paddingVertical: theme.spacing.lg },
-  summaryPct: { ...theme.typography.display, color: theme.color.primary },
-  summaryCount: { ...theme.typography.subtitle, color: theme.color.textSecondary, marginTop: theme.spacing.xs },
+const useStyles = makeStyles((t) => ({
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: t.spacing.xl },
+  summary: { alignItems: 'center', paddingVertical: t.spacing.lg },
+  summaryPct: { ...t.typography.display, color: t.color.primaryFg },
+  summaryCount: { ...t.typography.subtitle, color: t.color.textSecondary, marginTop: t.spacing.xs },
   tierSummaryRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'center',
-    marginTop: theme.spacing.md,
+    marginTop: t.spacing.md,
   },
   tierSummaryChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginHorizontal: theme.spacing.sm,
-    marginVertical: theme.spacing.xs,
+    marginHorizontal: t.spacing.sm,
+    marginVertical: t.spacing.xs,
   },
   tierDot: { width: 10, height: 10, borderRadius: 5, marginRight: 4 },
-  tierSummaryText: { ...theme.typography.meta, color: theme.color.textSecondary },
-  claimAllWrap: { marginTop: theme.spacing.md },
+  tierSummaryText: { ...t.typography.meta, color: t.color.textSecondary },
+  claimAllWrap: { marginTop: t.spacing.md },
   crossfadeLayer: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center' },
-  filterRow: { paddingVertical: theme.spacing.sm, paddingHorizontal: theme.spacing.lg },
-  filterChip: { marginRight: theme.spacing.sm },
-  grid: { padding: theme.spacing.lg },
+  filterRow: { paddingVertical: t.spacing.sm, paddingHorizontal: t.spacing.lg },
+  filterChip: { marginRight: t.spacing.sm },
+  grid: { padding: t.spacing.lg },
   gridRow: {
     flexDirection: 'row',
     justifyContent: 'flex-start',
-    gap: theme.spacing.md,
-    marginBottom: theme.spacing.md,
+    gap: t.spacing.md,
+    marginBottom: t.spacing.md,
   },
   cell: { alignItems: 'center' },
   readyRing: {
     borderRadius: 999,
     borderWidth: 2,
-    borderColor: theme.color.primary,
-    shadowColor: theme.color.primary,
+    borderColor: t.color.primaryFg,
+    shadowColor: PIN_BOARD[t.scheme].readyRingShadow,
     shadowOpacity: 0.6,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 0 },
   },
   readyBadge: {
-    marginTop: theme.spacing.xs,
-    backgroundColor: theme.color.primary,
-    borderRadius: theme.radius.sm,
-    paddingHorizontal: theme.spacing.sm,
+    marginTop: t.spacing.xs,
+    backgroundColor: t.color.primary,
+    borderRadius: t.radius.sm,
+    paddingHorizontal: t.spacing.sm,
     paddingVertical: 2,
   },
   readyBadgeText: {
-    ...theme.typography.meta,
-    color: '#fff',
+    ...t.typography.meta,
+    color: t.color.textOnPrimary,
     fontWeight: '700',
   },
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.sm,
+    gap: t.spacing.sm,
   },
   headerBtn: {
     width: 36,
@@ -750,4 +756,4 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.28)',
     opacity: 0.85,
   },
-});
+}));

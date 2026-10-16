@@ -35,7 +35,6 @@ import {
   Platform,
   Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   View,
 } from 'react-native';
@@ -67,7 +66,10 @@ import { isReadyToClaim, pinBoardKey } from '../profile/PinBoardScreen';
 import PinDetailModal from '../profile/PinDetailModal';
 import { PinView } from '../../components/pins/PinView';
 import { TIER_COLOR, TIER_LABEL } from '../../components/pins/pinTierMeta';
-import { theme } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme, usePalette } from '../../theme/useAppTheme';
+import { TIER_TEXT } from '../profile/tierText.palette';
+import { COLLECTION, CORKBOARD, CORKBOARD_SHADOW } from './CollectionScreen.palette';
 import {
   Badge,
   Card,
@@ -92,13 +94,6 @@ const CATALOG: ReadonlyMap<string, PinDTO> = new Map(PINS.map((p) => [p.id, p]))
 const PIN_CANVAS_SIZE = 38;
 const CANVAS_MARGIN = 10;
 
-const PARK_META: Record<string, { readonly name: string; readonly color: string }> = {
-  'magic-kingdom': { name: 'Magic Kingdom', color: '#7e57c2' },
-  'epcot': { name: 'EPCOT', color: '#0288d1' },
-  'hollywood-studios': { name: 'Hollywood Studios', color: '#e53935' },
-  'animal-kingdom': { name: 'Animal Kingdom', color: '#2e7d32' },
-};
-
 // navigation-redesign Requirement 6 amendment 8c — cap on rows rendered per
 // list-type card before a "View all (N)" row appears. Client-side rendering
 // decision only; the server always returns the full `listOwned` array.
@@ -112,6 +107,16 @@ const ICONIC_TREATS = [
 ] as const;
 
 export default function CollectionScreen(): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
+  const pal = usePalette(COLLECTION);
+  const tierUi = usePalette(TIER_TEXT);
+  const parkMeta: Record<string, { readonly name: string; readonly color: string }> = {
+    'magic-kingdom': { name: 'Magic Kingdom', color: t.parkAccent['Magic Kingdom'] },
+    'epcot': { name: 'EPCOT', color: pal.parkEpcot },
+    'hollywood-studios': { name: 'Hollywood Studios', color: pal.parkHollywood },
+    'animal-kingdom': { name: 'Animal Kingdom', color: pal.parkAnimal },
+  };
   const navigation = useNavigation<NavigationProp>();
   const queryClient = useQueryClient();
   const { count: claimableCount } = useClaimablePinsBadge();
@@ -664,7 +669,7 @@ export default function CollectionScreen(): JSX.Element {
                             </Text>
                             <Badge
                               label={TIER_LABEL[pin.tier]}
-                              color={TIER_COLOR[pin.tier]}
+                              color={tierUi[pin.tier]}
                             />
                           </View>
                           <Text style={styles.inReachDesc} numberOfLines={1}>
@@ -736,7 +741,7 @@ export default function CollectionScreen(): JSX.Element {
               accessibilityLabel="Log a food item"
               testID="collection-log-food-button"
             >
-              <Ionicons name="restaurant" size={18} color="#ffffff" />
+              <Ionicons name="restaurant" size={18} color={t.color.textOnPrimary} />
               <Text style={styles.primaryActionButtonText}>Log a Food Item</Text>
             </Pressable>
 
@@ -747,7 +752,7 @@ export default function CollectionScreen(): JSX.Element {
                 recentLogs.map((log) => (
                   <View key={log.id} style={styles.recentTreatRow}>
                     <View style={styles.treatIconCircle}>
-                      <Ionicons name="restaurant" size={16} color="#e65100" />
+                      <Ionicons name="restaurant" size={16} color={pal.treatIcon} />
                     </View>
                     <View style={styles.treatTextWrap}>
                       <Text style={styles.treatName} numberOfLines={1}>
@@ -760,7 +765,7 @@ export default function CollectionScreen(): JSX.Element {
                     {log.rating ? (
                       <Badge
                         label={`★ ${log.rating}`}
-                        color="#e65100"
+                        color={pal.treatRatingBadge}
                       />
                     ) : null}
                   </View>
@@ -787,7 +792,7 @@ export default function CollectionScreen(): JSX.Element {
                     styles.progressBarFill,
                     {
                       width: `${(iconicTastedCount / ICONIC_TREATS.length) * 100}%`,
-                      backgroundColor: '#e65100',
+                      backgroundColor: pal.iconicProgressFill,
                     },
                   ]}
                 />
@@ -817,12 +822,12 @@ export default function CollectionScreen(): JSX.Element {
                       </View>
                       {isTried ? (
                         <View style={styles.triedBadge}>
-                          <Ionicons name="checkmark-circle" size={16} color="#2e7d32" />
+                          <Ionicons name="checkmark-circle" size={16} color={pal.triedIcon} />
                           <Text style={styles.triedBadgeText}>Tasted!</Text>
                         </View>
                       ) : (
                         <View style={styles.untriedBadge}>
-                          <Ionicons name="ellipse-outline" size={16} color={theme.color.textSecondary} />
+                          <Ionicons name="ellipse-outline" size={16} color={t.color.textSecondary} />
                         </View>
                       )}
                     </View>
@@ -842,7 +847,7 @@ export default function CollectionScreen(): JSX.Element {
               accessibilityLabel="Open Food History Timeline"
               testID="food-entry-button"
             >
-              <Ionicons name="time-outline" size={18} color="#ffffff" />
+              <Ionicons name="time-outline" size={18} color={t.color.textOnPrimary} />
               <Text style={styles.primaryActionButtonText}>Open Food History Timeline</Text>
             </Pressable>
 
@@ -935,12 +940,12 @@ export default function CollectionScreen(): JSX.Element {
                             size={16}
                             color={
                               list.pinnedAt !== null
-                                ? theme.color.primary
-                                : theme.color.textSecondary
+                                ? t.color.primaryFg
+                                : t.color.textSecondary
                             }
                           />
                         </Pressable>
-                        <Ionicons name="chevron-forward" size={18} color={theme.color.primary} />
+                        <Ionicons name="chevron-forward" size={18} color={t.color.primaryFg} />
                       </View>
                     </Pressable>
                   ))}
@@ -1063,12 +1068,12 @@ export default function CollectionScreen(): JSX.Element {
                             size={16}
                             color={
                               list.pinnedAt !== null
-                                ? theme.color.primary
-                                : theme.color.textSecondary
+                                ? t.color.primaryFg
+                                : t.color.textSecondary
                             }
                           />
                         </Pressable>
-                        <Ionicons name="chevron-forward" size={18} color={theme.color.primary} />
+                        <Ionicons name="chevron-forward" size={18} color={t.color.primaryFg} />
                       </View>
                     </Pressable>
                   ))}
@@ -1142,7 +1147,7 @@ export default function CollectionScreen(): JSX.Element {
 
               {/* Park Coverage Bars */}
               <View style={styles.parkBarsList}>
-                {Object.entries(PARK_META).map(([key, meta]) => {
+                {Object.entries(parkMeta).map(([key, meta]) => {
                   const parkCell = statsCoverage?.byPark?.[key as keyof typeof statsCoverage.byPark];
                   const pct = parkCell?.percent ?? 0;
                   return (
@@ -1172,8 +1177,8 @@ export default function CollectionScreen(): JSX.Element {
               <Text style={styles.sectionHeading}>Experience Milestones</Text>
               <View style={styles.milestoneGrid}>
                 <View style={styles.milestoneBox}>
-                  <View style={[styles.milestoneIconWrap, { backgroundColor: '#ede7f6' }]}>
-                    <Ionicons name="rocket-outline" size={18} color="#673ab7" />
+                  <View style={[styles.milestoneIconWrap, { backgroundColor: pal.milestoneRideBg }]}>
+                    <Ionicons name="rocket-outline" size={18} color={pal.milestoneRideIcon} />
                   </View>
                   <Text style={styles.milestoneCount}>
                     {byCategory?.Ride?.completed ?? 0}
@@ -1182,8 +1187,8 @@ export default function CollectionScreen(): JSX.Element {
                 </View>
 
                 <View style={styles.milestoneBox}>
-                  <View style={[styles.milestoneIconWrap, { backgroundColor: '#e1f5fe' }]}>
-                    <Ionicons name="film-outline" size={18} color="#0288d1" />
+                  <View style={[styles.milestoneIconWrap, { backgroundColor: pal.milestoneShowBg }]}>
+                    <Ionicons name="film-outline" size={18} color={pal.milestoneShowIcon} />
                   </View>
                   <Text style={styles.milestoneCount}>
                     {(byCategory?.Show?.completed ?? 0) + (byCategory?.Parade?.completed ?? 0)}
@@ -1192,8 +1197,8 @@ export default function CollectionScreen(): JSX.Element {
                 </View>
 
                 <View style={styles.milestoneBox}>
-                  <View style={[styles.milestoneIconWrap, { backgroundColor: '#fff3e0' }]}>
-                    <Ionicons name="restaurant-outline" size={18} color="#e65100" />
+                  <View style={[styles.milestoneIconWrap, { backgroundColor: pal.milestoneDiningBg }]}>
+                    <Ionicons name="restaurant-outline" size={18} color={pal.milestoneDiningIcon} />
                   </View>
                   <Text style={styles.milestoneCount}>
                     {foodLogs.length || (byCategory?.Restaurant?.completed ?? 0)}
@@ -1202,8 +1207,8 @@ export default function CollectionScreen(): JSX.Element {
                 </View>
 
                 <View style={styles.milestoneBox}>
-                  <View style={[styles.milestoneIconWrap, { backgroundColor: '#e8f5e9' }]}>
-                    <Ionicons name="business-outline" size={18} color="#2e7d32" />
+                  <View style={[styles.milestoneIconWrap, { backgroundColor: pal.milestoneResortBg }]}>
+                    <Ionicons name="business-outline" size={18} color={pal.milestoneResortIcon} />
                   </View>
                   <Text style={styles.milestoneCount}>
                     {statsCoverage?.resort?.completed ?? (byCategory?.Resort?.completed ?? 0)}
@@ -1237,7 +1242,7 @@ export default function CollectionScreen(): JSX.Element {
             <Pressable
               style={({ pressed }) => [
                 styles.primaryActionButton,
-                { backgroundColor: '#2e7d32' },
+                { backgroundColor: pal.statsCtaBg },
                 pressed && styles.primaryActionPressed,
               ]}
               onPress={() => (navigation as any).navigate('Stats')}
@@ -1245,7 +1250,7 @@ export default function CollectionScreen(): JSX.Element {
               accessibilityLabel="View Full Stats and Insights"
               testID="stats-entry-button"
             >
-              <Ionicons name="stats-chart-outline" size={18} color="#ffffff" />
+              <Ionicons name="stats-chart-outline" size={18} color={t.color.textOnPrimary} />
               <Text style={styles.primaryActionButtonText}>View Full Stats & Insights</Text>
             </Pressable>
           </View>
@@ -1289,7 +1294,7 @@ export default function CollectionScreen(): JSX.Element {
                 accessibilityLabel="Close picker"
                 testID="collection-food-log-picker-close-btn"
               >
-                <Ionicons name="close" size={24} color={theme.color.textSecondary} />
+                <Ionicons name="close" size={24} color={t.color.textSecondary} />
               </Pressable>
             </View>
             <ExperiencePicker
@@ -1367,22 +1372,22 @@ export default function CollectionScreen(): JSX.Element {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   container: {
     flex: 1,
   },
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.sm,
+    gap: t.spacing.sm,
   },
   segmentedControl: {
     flexDirection: 'row',
-    backgroundColor: '#ebe8f0',
+    backgroundColor: COLLECTION[t.scheme].segTrackBg,
     padding: 3,
-    marginHorizontal: theme.spacing.sm,
-    marginTop: theme.spacing.md,
-    borderRadius: theme.radius.pill,
+    marginHorizontal: t.spacing.sm,
+    marginTop: t.spacing.md,
+    borderRadius: t.radius.pill,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
@@ -1397,10 +1402,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 7,
     paddingHorizontal: 4,
-    borderRadius: theme.radius.pill,
+    borderRadius: t.radius.pill,
   },
   segBtnActive: {
-    backgroundColor: '#ffffff',
+    backgroundColor: COLLECTION[t.scheme].segActiveBg,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
@@ -1408,22 +1413,22 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   segBtnText: {
-    ...theme.typography.meta,
+    ...t.typography.meta,
     fontSize: 11,
     fontWeight: '600',
-    color: '#4b5563',
+    color: COLLECTION[t.scheme].segText,
     letterSpacing: -0.2,
     textAlign: 'center',
   },
   segBtnTextActive: {
-    color: theme.color.primary,
+    color: t.color.primaryFg,
     fontWeight: '800',
   },
   segBadge: {
     position: 'absolute',
     top: 1,
     right: 4,
-    backgroundColor: '#e65100',
+    backgroundColor: COLLECTION[t.scheme].segBadgeBg,
     borderRadius: 8,
     minWidth: 16,
     height: 16,
@@ -1431,34 +1436,34 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 3,
     borderWidth: 1.5,
-    borderColor: '#ffffff',
+    borderColor: t.color.surface,
   },
   segBadgeText: {
-    color: '#ffffff',
+    color: t.color.textOnPrimary,
     fontSize: 9,
     fontWeight: '800',
     lineHeight: 11,
   },
   content: {
-    padding: theme.spacing.md,
-    paddingTop: theme.spacing.lg,
+    padding: t.spacing.md,
+    paddingTop: t.spacing.lg,
     paddingBottom: 40,
   },
   subViewWrap: {
-    gap: theme.spacing.md,
+    gap: t.spacing.md,
   },
 
   // Claim Banner
   claimBanner: {
-    backgroundColor: '#fffbeb',
-    borderRadius: theme.radius.lg,
-    padding: theme.spacing.md,
+    backgroundColor: COLLECTION[t.scheme].claimBannerBg,
+    borderRadius: t.radius.lg,
+    padding: t.spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     borderWidth: 1.5,
-    borderColor: '#fde68a',
-    shadowColor: '#d97706',
+    borderColor: COLLECTION[t.scheme].claimBannerBorder,
+    shadowColor: COLLECTION[t.scheme].claimBannerShadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
@@ -1468,11 +1473,12 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.sm,
-    marginRight: theme.spacing.sm,
+    gap: t.spacing.sm,
+    marginRight: t.spacing.sm,
   },
   claimBannerMedal: {
     fontSize: 26,
+    ...t.textDefault,
   },
   claimBannerTextWrap: {
     flex: 1,
@@ -1481,21 +1487,21 @@ const styles = StyleSheet.create({
   claimTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.xs,
+    gap: t.spacing.xs,
   },
   claimBannerTitle: {
-    ...theme.typography.subtitle,
+    ...t.typography.subtitle,
     fontSize: 13.5,
     fontWeight: '800',
-    color: '#92400e',
+    color: COLLECTION[t.scheme].claimTitle,
   },
   claimBannerSub: {
-    ...theme.typography.meta,
+    ...t.typography.meta,
     fontSize: 11,
-    color: '#b45309',
+    color: COLLECTION[t.scheme].claimSub,
   },
   claimBtn: {
-    backgroundColor: '#d97706',
+    backgroundColor: COLLECTION[t.scheme].claimBtnBg,
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 8,
@@ -1504,19 +1510,19 @@ const styles = StyleSheet.create({
     opacity: 0.85,
   },
   claimBtnText: {
-    color: '#ffffff',
+    color: t.color.textOnPrimary,
     fontWeight: '800',
     fontSize: 11,
   },
 
   // Corkboard Card — Rich Wood Frame
   corkboardCard: {
-    borderRadius: theme.radius.lg,
+    borderRadius: t.radius.lg,
     overflow: 'hidden',
-    backgroundColor: '#3e2723',
+    backgroundColor: CORKBOARD[t.scheme].frameBg,
     borderWidth: 5,
-    borderColor: '#5d4037',
-    shadowColor: '#1a0c02',
+    borderColor: CORKBOARD[t.scheme].frameBorder,
+    shadowColor: CORKBOARD_SHADOW[t.scheme].frame,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
     shadowRadius: 6,
@@ -1526,17 +1532,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: theme.spacing.md,
+    paddingHorizontal: t.spacing.md,
     paddingVertical: 9,
-    backgroundColor: '#2e1c14',
+    backgroundColor: CORKBOARD[t.scheme].headerBg,
     borderBottomWidth: 1,
-    borderBottomColor: '#4a3224',
+    borderBottomColor: CORKBOARD[t.scheme].headerBorder,
   },
   corkboardTitle: {
-    ...theme.typography.meta,
+    ...t.typography.meta,
     fontSize: 11.5,
     fontWeight: '800',
-    color: '#fde68a',
+    color: CORKBOARD[t.scheme].title,
     letterSpacing: 0.6,
   },
   openCanvasBtn: {
@@ -1545,17 +1551,17 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     backgroundColor: 'rgba(255,255,255,0.15)',
     borderWidth: 1,
-    borderColor: 'rgba(253, 230, 138, 0.4)',
+    borderColor: CORKBOARD[t.scheme].customizeBorder,
   },
   openCanvasText: {
-    ...theme.typography.meta,
+    ...t.typography.meta,
     fontSize: 11,
     fontWeight: '700',
-    color: '#fef3c7',
+    color: CORKBOARD[t.scheme].customizeText,
   },
   boardFrame: {
     height: 340,
-    backgroundColor: '#c8a27a',
+    backgroundColor: CORKBOARD[t.scheme].boardBg,
     position: 'relative',
   },
   corkBackground: {
@@ -1569,12 +1575,12 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: theme.spacing.md,
+    padding: t.spacing.md,
     backgroundColor: 'rgba(0,0,0,0.15)',
   },
   canvasEmptyTitle: {
-    ...theme.typography.subtitle,
-    color: '#ffffff',
+    ...t.typography.subtitle,
+    color: t.color.textOnPrimary,
     fontWeight: '800',
     fontSize: 14,
     marginBottom: 4,
@@ -1583,23 +1589,23 @@ const styles = StyleSheet.create({
     textShadowRadius: 3,
   },
   canvasEmptySub: {
-    ...theme.typography.meta,
+    ...t.typography.meta,
     color: 'rgba(255,255,255,0.9)',
     fontSize: 11,
     textAlign: 'center',
-    marginBottom: theme.spacing.sm,
+    marginBottom: t.spacing.sm,
     textShadowColor: 'rgba(0,0,0,0.6)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
   },
   canvasEmptyBtn: {
-    backgroundColor: theme.color.accent,
+    backgroundColor: t.color.accent,
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 8,
   },
   canvasEmptyBtnText: {
-    color: theme.color.primaryDark,
+    color: t.color.textOnAccent,
     fontWeight: '800',
     fontSize: 11,
   },
@@ -1620,8 +1626,8 @@ const styles = StyleSheet.create({
 
   // Directory Card & 4x2 Tier Grid
   directoryCard: {
-    padding: theme.spacing.md,
-    gap: theme.spacing.sm,
+    padding: t.spacing.md,
+    gap: t.spacing.sm,
   },
   directoryHeader: {
     flexDirection: 'row',
@@ -1632,37 +1638,37 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   directoryTitle: {
-    ...theme.typography.subtitle,
+    ...t.typography.subtitle,
     fontSize: 13,
     fontWeight: '700',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   directoryCount: {
-    ...theme.typography.meta,
+    ...t.typography.meta,
     fontSize: 11,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   viewBoardBtn: {
-    backgroundColor: theme.color.surfaceAlt,
+    backgroundColor: t.color.surfaceAlt,
     paddingVertical: 6,
     paddingHorizontal: 10,
     borderRadius: 8,
   },
   viewBoardBtnText: {
-    ...theme.typography.meta,
+    ...t.typography.meta,
     fontSize: 11,
     fontWeight: '700',
-    color: theme.color.primary,
+    color: t.color.primaryFg,
   },
   progressBarTrack: {
     height: 6,
-    backgroundColor: theme.color.surfaceAlt,
+    backgroundColor: t.color.surfaceAlt,
     borderRadius: 3,
     overflow: 'hidden',
   },
   progressBarFill: {
     height: '100%',
-    backgroundColor: theme.color.primary,
+    backgroundColor: t.color.primaryFg,
     borderRadius: 3,
   },
   tierGrid: {
@@ -1675,7 +1681,7 @@ const styles = StyleSheet.create({
     width: '23.5%',
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: theme.color.surfaceAlt,
+    backgroundColor: t.color.surfaceAlt,
     paddingHorizontal: 5,
     paddingVertical: 5,
     borderRadius: 6,
@@ -1683,27 +1689,27 @@ const styles = StyleSheet.create({
   },
   tierGridItemLocked: {
     opacity: 0.45,
-    backgroundColor: '#f5f5f7',
+    backgroundColor: COLLECTION[t.scheme].tierLockedBg,
   },
   tierGridItemTotal: {
-    backgroundColor: '#ede7f6',
+    backgroundColor: COLLECTION[t.scheme].tierTotalBg,
     borderWidth: 1,
-    borderColor: '#d1c4e9',
+    borderColor: COLLECTION[t.scheme].tierTotalBorder,
     justifyContent: 'center',
   },
   tierGridText: {
     fontSize: 9.5,
     fontWeight: '700',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   tierGridTextLocked: {
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     fontWeight: '500',
   },
   tierGridTotalText: {
     fontSize: 9.5,
     fontWeight: '800',
-    color: theme.color.primary,
+    color: t.color.primaryFg,
   },
   tierDot: {
     width: 7,
@@ -1716,13 +1722,13 @@ const styles = StyleSheet.create({
 
   // Badges In Reach Card
   inReachCard: {
-    padding: theme.spacing.md,
-    gap: theme.spacing.sm,
+    padding: t.spacing.md,
+    gap: t.spacing.sm,
   },
   inReachSub: {
-    ...theme.typography.meta,
+    ...t.typography.meta,
     fontSize: 11,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   inReachList: {
     gap: 8,
@@ -1730,10 +1736,10 @@ const styles = StyleSheet.create({
   inReachItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: theme.color.surfaceAlt,
-    padding: theme.spacing.sm,
+    backgroundColor: t.color.surfaceAlt,
+    padding: t.spacing.sm,
     borderRadius: 10,
-    gap: theme.spacing.sm,
+    gap: t.spacing.sm,
   },
   inReachPinWrap: {
     width: 40,
@@ -1751,17 +1757,17 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   inReachTitle: {
-    ...theme.typography.body,
+    ...t.typography.body,
     fontSize: 12.5,
     fontWeight: '700',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
     flex: 1,
     marginRight: 6,
   },
   inReachDesc: {
-    ...theme.typography.meta,
+    ...t.typography.meta,
     fontSize: 10.5,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   inReachProgressRow: {
     flexDirection: 'row',
@@ -1772,7 +1778,7 @@ const styles = StyleSheet.create({
   inReachTrack: {
     flex: 1,
     height: 4,
-    backgroundColor: '#e0e0e0',
+    backgroundColor: COLLECTION[t.scheme].inReachTrack,
     borderRadius: 2,
     overflow: 'hidden',
   },
@@ -1783,7 +1789,7 @@ const styles = StyleSheet.create({
   inReachPctText: {
     fontSize: 9.5,
     fontWeight: '700',
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     minWidth: 26,
     textAlign: 'right',
   },
@@ -1791,29 +1797,29 @@ const styles = StyleSheet.create({
   // Food Sub-View Styles
   statsRow: {
     flexDirection: 'row',
-    gap: theme.spacing.md,
+    gap: t.spacing.md,
   },
   metricCard: {
     flex: 1,
-    padding: theme.spacing.md,
+    padding: t.spacing.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
   metricNumber: {
-    ...theme.typography.display,
+    ...t.typography.display,
     fontSize: 22,
-    color: theme.color.primary,
+    color: t.color.primaryFg,
     marginBottom: 2,
   },
   metricLabel: {
-    ...theme.typography.meta,
+    ...t.typography.meta,
     fontSize: 11,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     textAlign: 'center',
   },
   foodListCard: {
-    padding: theme.spacing.md,
-    gap: theme.spacing.sm,
+    padding: t.spacing.md,
+    gap: t.spacing.sm,
   },
   sectionHeaderRow: {
     flexDirection: 'row',
@@ -1821,87 +1827,87 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   sectionHeading: {
-    ...theme.typography.subtitle,
+    ...t.typography.subtitle,
     fontSize: 13.5,
     fontWeight: '700',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   cardHeaderActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.sm,
+    gap: t.spacing.sm,
   },
   sectionLinkText: {
-    ...theme.typography.meta,
+    ...t.typography.meta,
     fontSize: 11,
     fontWeight: '700',
-    color: theme.color.primary,
+    color: t.color.primaryFg,
   },
   foodListItem: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: theme.color.surfaceAlt,
-    padding: theme.spacing.sm,
+    backgroundColor: t.color.surfaceAlt,
+    padding: t.spacing.sm,
     borderRadius: 8,
   },
   foodListItemInfo: {
     flex: 1,
     gap: 2,
-    marginRight: theme.spacing.sm,
+    marginRight: t.spacing.sm,
   },
   foodListItemActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.sm,
+    gap: t.spacing.sm,
   },
   viewAllListsRow: {
     alignItems: 'center',
-    paddingVertical: theme.spacing.sm,
+    paddingVertical: t.spacing.sm,
   },
   viewAllListsText: {
-    ...theme.typography.meta,
+    ...t.typography.meta,
     fontSize: 12,
     fontWeight: '700',
-    color: theme.color.primary,
+    color: t.color.primaryFg,
   },
   foodListItemTitle: {
-    ...theme.typography.body,
+    ...t.typography.body,
     fontSize: 12.5,
     fontWeight: '700',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   foodListItemSubtitle: {
-    ...theme.typography.meta,
+    ...t.typography.meta,
     fontSize: 10.5,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   emptyFoodListsBox: {
-    paddingVertical: theme.spacing.sm,
+    paddingVertical: t.spacing.sm,
   },
   emptyFoodListsText: {
-    ...theme.typography.meta,
+    ...t.typography.meta,
     fontSize: 11,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     fontStyle: 'italic',
   },
   recentTreatsCard: {
-    padding: theme.spacing.md,
-    gap: theme.spacing.sm,
+    padding: t.spacing.md,
+    gap: t.spacing.sm,
   },
   recentTreatRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.sm,
+    gap: t.spacing.sm,
     paddingVertical: 4,
     borderBottomWidth: 1,
-    borderBottomColor: theme.color.border,
+    borderBottomColor: t.color.border,
   },
   treatIconCircle: {
     width: 30,
     height: 30,
     borderRadius: 15,
-    backgroundColor: '#fff3e0',
+    backgroundColor: COLLECTION[t.scheme].treatIconCircleBg,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1910,34 +1916,34 @@ const styles = StyleSheet.create({
     gap: 1,
   },
   treatName: {
-    ...theme.typography.body,
+    ...t.typography.body,
     fontSize: 12,
     fontWeight: '700',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   treatLocation: {
-    ...theme.typography.meta,
+    ...t.typography.meta,
     fontSize: 10,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   emptyTreatsText: {
-    ...theme.typography.meta,
+    ...t.typography.meta,
     fontSize: 11,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     fontStyle: 'italic',
     paddingVertical: 4,
   },
 
   // Iconic Treats Checklist Styles
   iconicTreatsCard: {
-    padding: theme.spacing.md,
-    gap: theme.spacing.sm,
+    padding: t.spacing.md,
+    gap: t.spacing.sm,
   },
   iconicCounterText: {
-    ...theme.typography.meta,
+    ...t.typography.meta,
     fontSize: 11,
     fontWeight: '700',
-    color: '#e65100',
+    color: COLLECTION[t.scheme].iconicCounterText,
   },
   iconicTreatsList: {
     gap: 8,
@@ -1948,36 +1954,37 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 6,
     paddingHorizontal: 8,
-    backgroundColor: theme.color.surfaceAlt,
+    backgroundColor: t.color.surfaceAlt,
     borderRadius: 8,
-    gap: theme.spacing.sm,
+    gap: t.spacing.sm,
   },
   iconicTreatEmoji: {
     fontSize: 22,
+    ...t.textDefault,
   },
   iconicTreatInfo: {
     flex: 1,
     gap: 1,
   },
   iconicTreatName: {
-    ...theme.typography.body,
+    ...t.typography.body,
     fontSize: 12.5,
     fontWeight: '700',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   iconicTreatNameDone: {
-    color: '#2e7d32',
+    color: COLLECTION[t.scheme].triedNameText,
   },
   iconicTreatLoc: {
-    ...theme.typography.meta,
+    ...t.typography.meta,
     fontSize: 10,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   triedBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
-    backgroundColor: '#e8f5e9',
+    backgroundColor: COLLECTION[t.scheme].triedBadgeBg,
     paddingVertical: 2,
     paddingHorizontal: 6,
     borderRadius: 6,
@@ -1985,13 +1992,13 @@ const styles = StyleSheet.create({
   triedBadgeText: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#2e7d32',
+    color: COLLECTION[t.scheme].triedBadgeText,
   },
   untriedBadge: {
     paddingHorizontal: 6,
   },
   primaryActionButton: {
-    backgroundColor: theme.color.primary,
+    backgroundColor: t.color.primary,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -2008,15 +2015,15 @@ const styles = StyleSheet.create({
     opacity: 0.9,
   },
   primaryActionButtonText: {
-    ...theme.typography.button,
-    color: '#ffffff',
+    ...t.typography.button,
+    color: t.color.textOnPrimary,
     fontSize: 13,
   },
 
   // Stats Sub-View Styles
   coverageCard: {
-    padding: theme.spacing.md,
-    gap: theme.spacing.md,
+    padding: t.spacing.md,
+    gap: t.spacing.md,
   },
   coverageHeader: {
     flexDirection: 'row',
@@ -2024,22 +2031,22 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   coverageHeading: {
-    ...theme.typography.subtitle,
+    ...t.typography.subtitle,
     fontSize: 13.5,
     fontWeight: '700',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   percentileText: {
-    ...theme.typography.meta,
+    ...t.typography.meta,
     fontSize: 10.5,
-    color: theme.color.primary,
+    color: t.color.primaryFg,
     fontWeight: '600',
     marginTop: 2,
   },
   coverageTotalPct: {
-    ...theme.typography.display,
+    ...t.typography.display,
     fontSize: 18,
-    color: theme.color.primary,
+    color: t.color.primaryFg,
   },
   parkBarsList: {
     gap: 10,
@@ -2053,19 +2060,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   parkBarName: {
-    ...theme.typography.meta,
+    ...t.typography.meta,
     fontSize: 11,
     fontWeight: '700',
   },
   parkBarPct: {
-    ...theme.typography.meta,
+    ...t.typography.meta,
     fontSize: 10.5,
     fontWeight: '700',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   parkBarTrack: {
     height: 8,
-    backgroundColor: theme.color.surfaceAlt,
+    backgroundColor: t.color.surfaceAlt,
     borderRadius: 4,
     overflow: 'hidden',
   },
@@ -2076,18 +2083,18 @@ const styles = StyleSheet.create({
 
   // Experience Milestones Styles
   milestonesCard: {
-    padding: theme.spacing.md,
-    gap: theme.spacing.sm,
+    padding: t.spacing.md,
+    gap: t.spacing.sm,
   },
   milestoneGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: theme.spacing.sm,
+    gap: t.spacing.sm,
   },
   milestoneBox: {
     width: '48%',
-    backgroundColor: theme.color.surfaceAlt,
-    padding: theme.spacing.sm,
+    backgroundColor: t.color.surfaceAlt,
+    padding: t.spacing.sm,
     borderRadius: 10,
     alignItems: 'center',
     gap: 4,
@@ -2101,21 +2108,21 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   milestoneCount: {
-    ...theme.typography.display,
+    ...t.typography.display,
     fontSize: 18,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   milestoneLabel: {
-    ...theme.typography.meta,
+    ...t.typography.meta,
     fontSize: 10.5,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     textAlign: 'center',
   },
 
   // Ratings & Guest Favorites Card
   ratingsCard: {
-    padding: theme.spacing.md,
-    gap: theme.spacing.sm,
+    padding: t.spacing.md,
+    gap: t.spacing.sm,
   },
   favoritesRow: {
     flexDirection: 'row',
@@ -2131,17 +2138,17 @@ const styles = StyleSheet.create({
   favoriteDivider: {
     width: 1,
     height: 36,
-    backgroundColor: theme.color.border,
+    backgroundColor: t.color.border,
   },
   favoriteMetric: {
-    ...theme.typography.display,
+    ...t.typography.display,
     fontSize: 16,
-    color: theme.color.primary,
+    color: t.color.primaryFg,
   },
   favoriteLabel: {
-    ...theme.typography.meta,
+    ...t.typography.meta,
     fontSize: 10.5,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   hiddenAnchor: {
     // `position: 'absolute'` removes these purely-for-tests compatibility
@@ -2163,27 +2170,27 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   foodLogModalContent: {
-    backgroundColor: theme.color.background,
-    borderTopLeftRadius: theme.radius.xl,
-    borderTopRightRadius: theme.radius.xl,
-    paddingTop: theme.spacing.md,
-    paddingHorizontal: theme.spacing.md,
-    paddingBottom: theme.spacing.xl,
+    backgroundColor: t.color.background,
+    borderTopLeftRadius: t.radius.xl,
+    borderTopRightRadius: t.radius.xl,
+    paddingTop: t.spacing.md,
+    paddingHorizontal: t.spacing.md,
+    paddingBottom: t.spacing.xl,
     height: '90%',
     width: '100%',
-    ...theme.shadow.floating,
+    ...t.shadow.floating,
   },
   foodLogModalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingBottom: theme.spacing.sm,
+    paddingBottom: t.spacing.sm,
     borderBottomWidth: 1,
-    borderBottomColor: theme.color.border,
-    marginBottom: theme.spacing.xs,
+    borderBottomColor: t.color.border,
+    marginBottom: t.spacing.xs,
   },
   foodLogModalTitle: {
-    ...theme.typography.title,
-    color: theme.color.textPrimary,
+    ...t.typography.title,
+    color: t.color.textPrimary,
   },
-});
+}));

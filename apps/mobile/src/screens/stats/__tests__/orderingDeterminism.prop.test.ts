@@ -41,7 +41,14 @@ import { EXPERIENCE_CATEGORIES, PARKS } from '@dwt/shared';
 import type { ExperienceCategory, Park } from '@dwt/shared';
 import fc from 'fast-check';
 
-import { buildCategoryTiles, buildParkTiles, sortFacetsForDisplay } from '../statsView';
+import {
+  buildCategoryTiles,
+  buildParkTiles,
+  rankCategoryRows,
+  rankParkRows,
+  sortFacetsForDisplay,
+} from '../statsView';
+import { darkTheme, lightTheme } from '../../../theme/theme';
 import { makeCell } from '../__testSupport__/statsFixture';
 import type { CompletionCell, FacetCoverage } from '../../../api/statsTypes';
 
@@ -179,7 +186,7 @@ describe('Property 9: Ordering determinism (R9.2)', () => {
   test('park tiles follow the canonical PARKS order for any byPark map', () => {
     fc.assert(
       fc.property(byParkArb, (byPark) => {
-        const tiles = buildParkTiles(byPark);
+        const tiles = buildParkTiles(byPark, lightTheme);
 
         // One tile per park, in canonical order (keys and titles both == PARKS).
         expect(tiles.map((t) => t.key)).toEqual([...PARKS]);
@@ -191,7 +198,7 @@ describe('Property 9: Ordering determinism (R9.2)', () => {
         });
 
         // Determinism: equal input → equal ordered output.
-        expect(buildParkTiles(byPark)).toEqual(tiles);
+        expect(buildParkTiles(byPark, lightTheme)).toEqual(tiles);
       }),
       { numRuns: 200 },
     );
@@ -200,7 +207,7 @@ describe('Property 9: Ordering determinism (R9.2)', () => {
   test('category tiles follow the canonical EXPERIENCE_CATEGORIES order for any byCategory map', () => {
     fc.assert(
       fc.property(byCategoryArb, (byCategory) => {
-        const tiles = buildCategoryTiles(byCategory);
+        const tiles = buildCategoryTiles(byCategory, lightTheme);
 
         // One tile per category, in canonical order (keys == EXPERIENCE_CATEGORIES).
         expect(tiles.map((t) => t.key)).toEqual([...EXPERIENCE_CATEGORIES]);
@@ -211,9 +218,52 @@ describe('Property 9: Ordering determinism (R9.2)', () => {
         });
 
         // Determinism: equal input → equal ordered output.
-        expect(buildCategoryTiles(byCategory)).toEqual(tiles);
+        expect(buildCategoryTiles(byCategory, lightTheme)).toEqual(tiles);
       }),
       { numRuns: 200 },
+    );
+  });
+
+  // Feature: dark-mode, Property 22: role-converted token reads stay legible in dark (view-model accents take the passed theme)
+  // The colour-bearing view-model helpers take the active theme as a
+  // parameter; light keeps today's values exactly.
+  test('tile and ranked-row accents come from the passed theme (light unchanged, dark tints)', () => {
+    fc.assert(
+      fc.property(byParkArb, byCategoryArb, (byPark, byCategory) => {
+        // Light: today's pre-retrofit values, byte-for-byte.
+        const lightParks = buildParkTiles(byPark, lightTheme);
+        expect(lightParks.find((tile) => tile.key === 'Magic Kingdom')?.accentColor).toBe('#7e57c2');
+        expect(lightParks.find((tile) => tile.key === 'Disney Springs')?.accentColor).toBe('#f6a609');
+        const lightCats = buildCategoryTiles(byCategory, lightTheme);
+        expect(lightCats.find((tile) => tile.key === 'Ride')?.accentColor).toBe('#7e57c2');
+        expect(lightCats.find((tile) => tile.key === 'Walkthrough')?.accentColor).toBe('#00897b');
+
+        // Dark: the tile is a foreground mark (ring arc / icon), so `tint`.
+        buildParkTiles(byPark, darkTheme).forEach((tile) => {
+          expect(tile.accentColor).toBe(darkTheme.parkAccent[tile.key as Park]);
+        });
+        buildCategoryTiles(byCategory, darkTheme).forEach((tile) => {
+          const k = tile.key as ExperienceCategory;
+          expect(tile.accentColor).toBe(darkTheme.categoryVisual[k].tint);
+        });
+        // A concrete dark value that differs from light (guards a light leak).
+        expect(
+          buildCategoryTiles(byCategory, darkTheme).find((tile) => tile.key === 'Ride')?.accentColor,
+        ).toBe(darkTheme.categoryVisual.Ride.tint);
+        expect(
+          buildCategoryTiles(byCategory, darkTheme).find((tile) => tile.key === 'Ride')?.accentColor,
+        ).not.toBe(lightTheme.categoryVisual.Ride.tint);
+        rankParkRows(byPark, darkTheme).forEach((row) => {
+          expect(row.color).toBe(darkTheme.parkAccent[row.key as Park]);
+        });
+        rankCategoryRows(byCategory, darkTheme).forEach((row) => {
+          expect(row.color).toBe(darkTheme.categoryVisual[row.key as ExperienceCategory].tint);
+        });
+        rankCategoryRows(byCategory, lightTheme).forEach((row) => {
+          expect(row.color).toBe(lightTheme.categoryVisual[row.key as ExperienceCategory].tint);
+        });
+      }),
+      { numRuns: 100 },
     );
   });
 

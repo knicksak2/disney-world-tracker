@@ -29,7 +29,6 @@ import {
   ActivityIndicator,
   Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   View,
 } from 'react-native';
@@ -47,7 +46,8 @@ import {
   PrimaryButton,
   ScreenContainer,
 } from '../../theme/components';
-import { theme } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme } from '../../theme/useAppTheme';
 import { buildCoverageGlance, displayedPercentLabel, type CoverageFocus } from './statsView';
 import { CoverageSection, type CoverageLens } from './components';
 
@@ -122,6 +122,8 @@ type CoverageDetailRoute = RouteProp<
 // ---------------------------------------------------------------------------
 
 export default function CoverageDetailScreen(): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const navigation = useNavigation();
   const route = useRoute<CoverageDetailRoute>();
   const focus = route.params?.focus;
@@ -144,7 +146,7 @@ export default function CoverageDetailScreen(): JSX.Element {
       <ScreenContainer>
         {header}
         <View style={styles.center} testID="coverage-loading">
-          <ActivityIndicator color={theme.color.primary} />
+          <ActivityIndicator color={t.color.primaryFg} />
         </View>
       </ScreenContainer>
     );
@@ -235,32 +237,32 @@ export default function CoverageDetailScreen(): JSX.Element {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   scrollContent: {
-    padding: theme.spacing.lg,
-    gap: theme.spacing.md,
+    padding: t.spacing.lg,
+    gap: t.spacing.md,
   },
   glanceCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.lg,
+    gap: t.spacing.lg,
   },
   glanceText: {
     flexShrink: 1,
     gap: 2,
   },
   glanceSummary: {
-    ...theme.typography.heading,
-    color: theme.color.textPrimary,
+    ...t.typography.heading,
+    color: t.color.textPrimary,
   },
   glanceClosest: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
   },
   seg: {
     flexDirection: 'row',
-    backgroundColor: theme.color.surfaceAlt,
-    borderRadius: theme.radius.md,
+    backgroundColor: t.color.surfaceAlt,
+    borderRadius: t.radius.md,
     padding: 4,
     gap: 2,
   },
@@ -270,31 +272,33 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 7,
     paddingHorizontal: 2,
-    borderRadius: theme.radius.sm,
+    borderRadius: t.radius.sm,
   },
   segItemActive: {
-    backgroundColor: theme.color.surface,
-    ...theme.shadow.card,
+    // Dark: lighter than the `surfaceAlt` track so the active lens reads raised
+    // rather than as a darker hole (Requirement 9.12; same ruling as the Expenses tabs).
+    backgroundColor: t.scheme === 'dark' ? t.color.borderStrong : t.color.surface,
+    ...t.shadow.card,
   },
   segText: {
-    ...theme.typography.meta,
+    ...t.typography.meta,
     fontSize: 11,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   segTextActive: {
-    color: theme.color.primary,
+    color: t.color.primaryFg,
   },
   lensCard: {
-    paddingVertical: theme.spacing.sm,
+    paddingVertical: t.spacing.sm,
   },
   center: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: theme.spacing.xl,
+    padding: t.spacing.xl,
   },
   retryBtn: {
-    marginTop: theme.spacing.lg,
+    marginTop: t.spacing.lg,
     alignSelf: 'center',
   },
-});
+}));

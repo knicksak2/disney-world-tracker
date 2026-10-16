@@ -15,7 +15,6 @@ import {
   Alert,
   Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   View,
 } from 'react-native';
@@ -26,7 +25,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { isAvatarPresetId, MAX_INLINE_FRIENDS, type ProfileDTO } from '@dwt/shared';
 
 import { ApiError, apiRequest } from '../../api/client';
-import { theme } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { withAlpha } from '../../theme/theme';
+import { useAppTheme, usePalette } from '../../theme/useAppTheme';
+import { SHARE_ICON } from './YouAndCrewScreen.palette';
 import {
   Badge,
   Card,
@@ -40,6 +42,7 @@ import { renderAvatarPreset } from '../../avatars/AvatarPresets';
 import type { YouAndCrewStackParamList } from '../../navigation/YouAndCrewStack';
 import { ProfileIdentityBlock } from '../ProfileScreen';
 import PushNotificationPreferenceControl from '../PushNotificationPreferenceControl';
+import AppearancePreferenceControl from '../AppearancePreferenceControl';
 import ChangePasswordControl from '../ChangePasswordControl';
 import { invalidatePushRegistration } from '../../hooks/usePushRegistration';
 import { useSessionStore } from '../../state/sessionStore';
@@ -78,6 +81,9 @@ interface FriendsAndRequests {
 }
 
 export default function YouAndCrewScreen(): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
+  const shareIcon = usePalette(SHARE_ICON);
   const navigation = useNavigation<NavigationProp>();
   const queryClient = useQueryClient();
   const clearToken = useSessionStore((state) => state.clearToken);
@@ -198,7 +204,7 @@ export default function YouAndCrewScreen(): JSX.Element {
           <SectionLabel>Your Identity</SectionLabel>
           {profileQuery.isLoading && !profileQuery.data ? (
             <Card style={styles.loadingCard}>
-              <ActivityIndicator color={theme.color.primary} />
+              <ActivityIndicator color={t.color.primaryFg} />
             </Card>
           ) : profileQuery.data ? (
             <ProfileIdentityBlock
@@ -218,7 +224,7 @@ export default function YouAndCrewScreen(): JSX.Element {
             <View style={styles.titleWithBadge}>
               <SectionLabel>My Friends (Crew)</SectionLabel>
               {friends.length > 0 ? (
-                <Badge label={String(friends.length)} color={theme.color.primary} />
+                <Badge label={String(friends.length)} color={t.color.primaryFg} />
               ) : null}
             </View>
             <Pressable
@@ -234,7 +240,7 @@ export default function YouAndCrewScreen(): JSX.Element {
 
           {friendsQuery.isLoading && !friendsQuery.data ? (
             <Card style={styles.loadingCard}>
-              <ActivityIndicator color={theme.color.primary} />
+              <ActivityIndicator color={t.color.primaryFg} />
             </Card>
           ) : friends.length === 0 && outgoingRequests.length === 0 ? (
             <EmptyState
@@ -317,8 +323,8 @@ export default function YouAndCrewScreen(): JSX.Element {
                             size={16}
                             color={
                               isRemoving
-                                ? theme.color.textSecondary
-                                : theme.color.danger
+                                ? t.color.textSecondary
+                                : t.color.danger
                             }
                           />
                         </Pressable>
@@ -360,7 +366,7 @@ export default function YouAndCrewScreen(): JSX.Element {
                       testID={`outgoing-request-${req.id}`}
                     >
                       <Text style={styles.outgoingName}>{req.otherDisplayName}</Text>
-                      <Badge label="Pending" color={theme.color.warning} />
+                      <Badge label="Pending" color={t.color.warning} />
                     </Card>
                   ))}
                 </View>
@@ -382,8 +388,8 @@ export default function YouAndCrewScreen(): JSX.Element {
                 accessibilityLabel="View Shared Inbox"
                 testID="inbox-entry-button"
               >
-                <View style={[styles.iconCircle, { backgroundColor: '#e3f2fd' }]}>
-                  <Ionicons name="mail-outline" size={24} color="#1976d2" />
+                <View style={[styles.iconCircle, { backgroundColor: shareIcon.inboxBg }]}>
+                  <Ionicons name="mail-outline" size={24} color={shareIcon.inboxFg} />
                 </View>
                 <Text style={styles.cardTitle}>Share Inbox</Text>
                 <Text style={styles.cardSubtitle} numberOfLines={2}>
@@ -401,8 +407,8 @@ export default function YouAndCrewScreen(): JSX.Element {
                 accessibilityLabel="View Sent Shares"
                 testID="sent-entry-button"
               >
-                <View style={[styles.iconCircle, { backgroundColor: '#f3e5f5' }]}>
-                  <Ionicons name="paper-plane-outline" size={24} color="#7b1fa2" />
+                <View style={[styles.iconCircle, { backgroundColor: shareIcon.sentBg }]}>
+                  <Ionicons name="paper-plane-outline" size={24} color={shareIcon.sentFg} />
                 </View>
                 <Text style={styles.cardTitle}>Sent Shares</Text>
                 <Text style={styles.cardSubtitle} numberOfLines={2}>
@@ -422,7 +428,7 @@ export default function YouAndCrewScreen(): JSX.Element {
 
           <Card style={styles.settingsCard}>
             <View style={styles.settingsCardHeader}>
-              <Ionicons name="notifications-outline" size={16} color={theme.color.primary} />
+              <Ionicons name="notifications-outline" size={16} color={t.color.primaryFg} />
               <Text style={styles.settingsTitle}>Push Notifications</Text>
             </View>
             <PushNotificationPreferenceControl />
@@ -430,7 +436,15 @@ export default function YouAndCrewScreen(): JSX.Element {
 
           <Card style={styles.settingsCard}>
             <View style={styles.settingsCardHeader}>
-              <Ionicons name="shield-checkmark-outline" size={16} color={theme.color.primary} />
+              <Ionicons name="color-palette-outline" size={16} color={t.color.primaryFg} />
+              <Text style={styles.settingsTitle}>Appearance</Text>
+            </View>
+            <AppearancePreferenceControl />
+          </Card>
+
+          <Card style={styles.settingsCard}>
+            <View style={styles.settingsCardHeader}>
+              <Ionicons name="shield-checkmark-outline" size={16} color={t.color.primaryFg} />
               <Text style={styles.settingsTitle}>Account Security</Text>
             </View>
             <ChangePasswordControl />
@@ -452,17 +466,17 @@ export default function YouAndCrewScreen(): JSX.Element {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   container: {
     flex: 1,
   },
   content: {
-    padding: theme.spacing.md,
-    gap: theme.spacing.xl,
-    paddingBottom: theme.spacing.xxl,
+    padding: t.spacing.md,
+    gap: t.spacing.xl,
+    paddingBottom: t.spacing.xxl,
   },
   section: {
-    gap: theme.spacing.sm,
+    gap: t.spacing.sm,
   },
   sectionHeaderRow: {
     flexDirection: 'row',
@@ -472,12 +486,12 @@ const styles = StyleSheet.create({
   titleWithBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.sm,
+    gap: t.spacing.sm,
   },
   addFriendsLink: {
-    ...theme.typography.button,
+    ...t.typography.button,
     fontSize: 13,
-    color: theme.color.primary,
+    color: t.color.primaryFg,
     fontWeight: '700',
   },
   findButton: {
@@ -485,7 +499,7 @@ const styles = StyleSheet.create({
   },
   cardsRow: {
     flexDirection: 'row',
-    gap: theme.spacing.md,
+    gap: t.spacing.md,
   },
   halfCard: {
     flex: 1,
@@ -493,9 +507,9 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   cardPressable: {
-    padding: theme.spacing.md,
+    padding: t.spacing.md,
     alignItems: 'center',
-    gap: theme.spacing.xs,
+    gap: t.spacing.xs,
     width: '100%',
   },
   iconCircle: {
@@ -507,26 +521,26 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   cardTitle: {
-    ...theme.typography.title,
+    ...t.typography.title,
     fontSize: 16,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   cardSubtitle: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
     textAlign: 'center',
   },
   loadingCard: {
-    padding: theme.spacing.xl,
+    padding: t.spacing.xl,
     alignItems: 'center',
     justifyContent: 'center',
   },
   friendsList: {
-    gap: theme.spacing.xs,
+    gap: t.spacing.xs,
   },
   friendCard: {
     padding: 10,
-    backgroundColor: theme.color.surfaceAlt,
+    backgroundColor: t.color.surfaceAlt,
     borderRadius: 12,
   },
   friendRow: {
@@ -538,37 +552,37 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
-    marginRight: theme.spacing.sm,
+    marginRight: t.spacing.sm,
   },
   friendAvatarWrap: {
-    marginRight: theme.spacing.sm,
+    marginRight: t.spacing.sm,
   },
   avatarPlaceholder: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: theme.color.surface,
+    backgroundColor: t.color.surface,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
   },
   avatarPlaceholderText: {
-    ...theme.typography.subtitle,
-    color: theme.color.primary,
+    ...t.typography.subtitle,
+    color: t.color.primaryFg,
   },
   friendDetails: {
     flex: 1,
   },
   friendName: {
-    ...theme.typography.title,
+    ...t.typography.title,
     fontSize: 14,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   friendSubtitle: {
-    ...theme.typography.meta,
+    ...t.typography.meta,
     fontSize: 11,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     marginTop: 1,
   },
   friendActions: {
@@ -580,20 +594,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 8,
-    backgroundColor: theme.color.surface,
+    backgroundColor: t.color.surface,
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
   },
   compareBtnText: {
-    ...theme.typography.meta,
+    ...t.typography.meta,
     fontSize: 11,
     fontWeight: '700',
-    color: theme.color.primary,
+    color: t.color.primaryFg,
   },
   removeIconBtn: {
     padding: 6,
     borderRadius: 6,
-    backgroundColor: 'rgba(214, 51, 108, 0.08)',
+    backgroundColor: withAlpha(t.color.danger, 0.08),
   },
   toggleExpandBtn: {
     paddingVertical: 8,
@@ -601,34 +615,34 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   toggleExpandText: {
-    ...theme.typography.meta,
+    ...t.typography.meta,
     fontSize: 12,
     fontWeight: '700',
-    color: theme.color.primary,
+    color: t.color.primaryFg,
   },
   outgoingSection: {
-    marginTop: theme.spacing.md,
-    gap: theme.spacing.xs,
+    marginTop: t.spacing.md,
+    gap: t.spacing.xs,
   },
   outgoingTitle: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
     textTransform: 'uppercase',
   },
   outgoingCard: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: theme.spacing.md,
+    padding: t.spacing.md,
   },
   outgoingName: {
-    ...theme.typography.body,
+    ...t.typography.body,
     fontWeight: '600',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   settingsCard: {
     padding: 14,
-    gap: theme.spacing.sm,
+    gap: t.spacing.sm,
   },
   settingsCardHeader: {
     flexDirection: 'row',
@@ -637,18 +651,18 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   settingsTitle: {
-    ...theme.typography.meta,
+    ...t.typography.meta,
     fontWeight: '700',
     fontSize: 12,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   logoutBlock: {
-    marginTop: theme.spacing.sm,
+    marginTop: t.spacing.sm,
   },
   errorText: {
-    ...theme.typography.meta,
-    color: theme.color.danger,
+    ...t.typography.meta,
+    color: t.color.danger,
   },
-});
+}));

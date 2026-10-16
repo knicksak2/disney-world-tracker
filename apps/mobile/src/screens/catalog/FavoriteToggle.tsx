@@ -14,7 +14,8 @@ import { Ionicons } from '@expo/vector-icons';
 import type { FavoritesResponseDTO } from '@dwt/shared';
 
 import { ApiError, apiRequest } from '../../api/client';
-import { theme } from '../../theme/theme';
+import { useAppTheme, usePalette } from '../../theme/useAppTheme';
+import { HEART } from './FavoriteToggle.palette';
 import { FAVORITES_QUERY_KEY } from './useFavoritedExperiences';
 
 export interface FavoriteToggleProps {
@@ -30,6 +31,8 @@ export default function FavoriteToggle({
   size = 'large',
   accessibilityLabel,
 }: FavoriteToggleProps): JSX.Element {
+  const t = useAppTheme();
+  const heart = usePalette(HEART);
   const queryClient = useQueryClient();
 
   const toggleMutation = useMutation<void, ApiError, boolean, { previous?: FavoritesResponseDTO | undefined }>({
@@ -87,7 +90,7 @@ export default function FavoriteToggle({
       <Ionicons
         name={isFavorited ? 'heart' : 'heart-outline'}
         size={size === 'large' ? 22 : 18}
-        color={isFavorited ? '#FF2D55' : theme.color.textSecondary}
+        color={isFavorited ? heart.favorited : t.color.textSecondary}
       />
     </Pressable>
   );

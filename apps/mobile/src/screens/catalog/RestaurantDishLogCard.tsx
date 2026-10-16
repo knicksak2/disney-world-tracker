@@ -12,13 +12,15 @@
 //   - Renders an empty state when zero logged food items (R18.3).
 
 import React from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import type { ExperienceCategory, FoodItemLogWithContextDTO } from '@dwt/shared';
 
 import { apiRequest } from '../../api/client';
-import { theme } from '../../theme/theme';
 import { Card } from '../../theme/components';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme } from '../../theme/useAppTheme';
+import { DISH_CARD } from './RestaurantDishLogCard.palette';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -45,6 +47,9 @@ export default function RestaurantDishLogCard({
   onMyLoggedItems,
   onAddToList,
 }: RestaurantDishLogCardProps): JSX.Element | null {
+  const styles = useStyles();
+  const t = useAppTheme();
+
   // R18.4: Omit for non-restaurant categories
   if (category !== 'Restaurant') {
     return null;
@@ -71,7 +76,7 @@ export default function RestaurantDishLogCard({
       {/* Keepsake Header with inline Log a Dish button */}
       <View style={styles.headerRow}>
         <View style={styles.titleWrap}>
-          <Text style={{ fontSize: 14 }}>🍽️</Text>
+          <Text style={{ fontSize: 14, ...t.textDefault }}>🍽️</Text>
           <Text style={styles.title}>My Logged Dishes ({foodLogs.length})</Text>
         </View>
         <Pressable
@@ -94,14 +99,14 @@ export default function RestaurantDishLogCard({
           style={{ height: 0, width: 0, opacity: 0, overflow: 'hidden' }}
           testID="dish-log-count"
         >
-          <Text>{`${foodLogs.length} ${foodLogs.length === 1 ? 'dish logged' : 'dishes logged'}`}</Text>
+          <Text style={t.textDefault}>{`${foodLogs.length} ${foodLogs.length === 1 ? 'dish logged' : 'dishes logged'}`}</Text>
         </View>
       </View>
 
       {isLoading ? (
         <ActivityIndicator
           accessibilityLabel="Loading dish logs"
-          color={theme.color.primary}
+          color={t.color.primaryFg}
         />
       ) : isError ? (
         <Text style={styles.errorText}>Could not load dish logs.</Text>
@@ -123,7 +128,7 @@ export default function RestaurantDishLogCard({
             >
               <View style={styles.dishCardHeader}>
                 <View style={styles.dishNameRow}>
-                  <Text style={{ fontSize: 13 }}>🍽️</Text>
+                  <Text style={{ fontSize: 13, ...t.textDefault }}>🍽️</Text>
                   <Text style={styles.dishName} testID={`dish-name-${item.id}`}>
                     {item.foodItemName}
                   </Text>
@@ -182,15 +187,15 @@ export default function RestaurantDishLogCard({
 // Styles
 // ---------------------------------------------------------------------------
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   section: {
-    backgroundColor: '#fffdfa',
+    backgroundColor: DISH_CARD[t.scheme].cardBg,
     borderWidth: 1.5,
-    borderColor: '#f3e5b8',
+    borderColor: DISH_CARD[t.scheme].cardBorder,
     borderRadius: 22,
     padding: 16,
-    marginVertical: theme.spacing.xs,
-    shadowColor: '#d4a017',
+    marginVertical: t.spacing.xs,
+    shadowColor: DISH_CARD[t.scheme].cardShadow,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
     shadowRadius: 16,
@@ -212,11 +217,11 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 12.5,
     fontWeight: '800',
-    color: '#78350f',
+    color: DISH_CARD[t.scheme].title,
     letterSpacing: -0.2,
   },
   logDishBtn: {
-    backgroundColor: '#d97706',
+    backgroundColor: DISH_CARD[t.scheme].logBtnBg,
     paddingHorizontal: 9,
     paddingVertical: 4.5,
     borderRadius: 8,
@@ -224,7 +229,7 @@ const styles = StyleSheet.create({
   logDishBtnText: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#ffffff',
+    color: t.color.textOnPrimary,
   },
   btnPressed: {
     opacity: 0.8,
@@ -234,23 +239,23 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: 10.5,
-    color: '#78350f',
+    color: DISH_CARD[t.scheme].subtitle,
   },
   emptyContainer: {
-    paddingVertical: theme.spacing.sm,
+    paddingVertical: t.spacing.sm,
   },
   emptyText: {
     fontSize: 11.5,
-    color: '#92400e',
+    color: DISH_CARD[t.scheme].emptyText,
     fontStyle: 'italic',
   },
   itemsList: {
     gap: 8,
   },
   dishCard: {
-    backgroundColor: '#ffffff',
+    backgroundColor: t.color.surface,
     borderWidth: 1,
-    borderColor: '#fde68a',
+    borderColor: DISH_CARD[t.scheme].dishBorder,
     borderRadius: 10,
     paddingHorizontal: 11,
     paddingVertical: 9,
@@ -269,13 +274,13 @@ const styles = StyleSheet.create({
   dishName: {
     fontSize: 12,
     fontWeight: '800',
-    color: '#451a03',
+    color: DISH_CARD[t.scheme].dishName,
     flexShrink: 1,
   },
   ratingBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fef3c7',
+    backgroundColor: DISH_CARD[t.scheme].ratingBg,
     paddingHorizontal: 6,
     paddingVertical: 1.5,
     borderRadius: 4,
@@ -284,30 +289,30 @@ const styles = StyleSheet.create({
   ratingBadgeStar: {
     fontSize: 10.5,
     fontWeight: '800',
-    color: '#d97706',
+    color: DISH_CARD[t.scheme].ratingStar,
   },
   ratingBadgeText: {
     fontSize: 10.5,
     fontWeight: '800',
-    color: '#d97706',
+    color: DISH_CARD[t.scheme].ratingText,
   },
   dishNoteCallout: {
     marginTop: 4,
-    backgroundColor: '#fffdf8',
+    backgroundColor: DISH_CARD[t.scheme].noteBg,
     paddingVertical: 3,
     paddingHorizontal: 6,
     borderRadius: 6,
     borderLeftWidth: 2,
-    borderLeftColor: '#f59e0b',
+    borderLeftColor: t.color.starRating,
   },
   dishNoteText: {
     fontSize: 11,
     fontStyle: 'italic',
-    color: '#78350f',
+    color: DISH_CARD[t.scheme].noteText,
   },
   dishMetaText: {
     fontSize: 9,
-    color: '#a16207',
+    color: DISH_CARD[t.scheme].metaText,
     marginTop: 4,
   },
   footerRow: {
@@ -318,9 +323,9 @@ const styles = StyleSheet.create({
   viewLogsBtn: {
     flex: 1,
     paddingVertical: 8,
-    backgroundColor: '#fff8eb',
+    backgroundColor: DISH_CARD[t.scheme].viewLogsBg,
     borderWidth: 1,
-    borderColor: '#d97706',
+    borderColor: DISH_CARD[t.scheme].viewLogsBorder,
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
@@ -328,14 +333,14 @@ const styles = StyleSheet.create({
   viewLogsBtnText: {
     fontSize: 10.5,
     fontWeight: '800',
-    color: '#92400e',
+    color: DISH_CARD[t.scheme].viewLogsText,
   },
   addToListBtn: {
     flex: 1,
     paddingVertical: 8,
-    backgroundColor: '#ffffff',
+    backgroundColor: t.color.surface,
     borderWidth: 1,
-    borderColor: '#dcd1ed',
+    borderColor: DISH_CARD[t.scheme].addToListBorder,
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
@@ -343,10 +348,10 @@ const styles = StyleSheet.create({
   addToListBtnText: {
     fontSize: 10.5,
     fontWeight: '800',
-    color: '#5b2a86',
+    color: t.color.primaryFg,
   },
   errorText: {
     fontSize: 11,
-    color: theme.color.danger,
+    color: t.color.danger,
   },
-});
+}));

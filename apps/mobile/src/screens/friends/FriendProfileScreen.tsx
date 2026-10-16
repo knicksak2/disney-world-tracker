@@ -107,7 +107,6 @@ import {
   ImageSourcePropType,
   Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   View,
 } from 'react-native';
@@ -140,7 +139,10 @@ import {
   formatComparisonPercent,
 } from './progressComparison';
 import { deriveCompletionDiff } from './completionDiff';
-import { theme } from '../../theme/theme';
+import { CORK_BOARD } from './FriendProfileScreen.palette';
+import { makeStyles } from '../../theme/makeStyles';
+import { categoryMeta } from '../../theme/theme';
+import { useAppTheme } from '../../theme/useAppTheme';
 import {
   Card,
   EmptyState,
@@ -279,6 +281,7 @@ function readState(query: {
 export default function FriendProfileScreen({
   route,
 }: FriendProfileScreenProps): JSX.Element {
+  const styles = useStyles();
   const { friendId, displayName, initialSection } = route.params;
 
   const navigation = useNavigation();
@@ -476,6 +479,7 @@ function OverviewMode({
   readonly onRetryStats: () => void;
   readonly onOpenExperience: (experienceId: string) => void;
 }): JSX.Element {
+  const styles = useStyles();
   return (
     <View testID="friend-mode-overview">
       {profileState === 'loading' ? (
@@ -540,6 +544,8 @@ function FriendShowcaseSection({
   readonly friendId: string;
   readonly showcaseQuery: UseQueryResult<PinShowcaseDTO, ApiError>;
 }): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const navigation = useNavigation<any>();
 
   if (isForbidden(showcaseQuery.error)) {
@@ -557,7 +563,7 @@ function FriendShowcaseSection({
   if (showcaseQuery.isPending) {
     return (
       <Card style={styles.showcaseSectionCard} testID="friend-showcase-loading">
-        <ActivityIndicator color={theme.color.primary} />
+        <ActivityIndicator color={t.color.primaryFg} />
       </Card>
     );
   }
@@ -650,6 +656,7 @@ function CoverageMode({
   readonly lens: CoverageLens;
   readonly onSelectLens: (lens: CoverageLens) => void;
 }): JSX.Element {
+  const styles = useStyles();
   // Scope the pane to the Stats read: its own loading / error + retry, same as
   // the Overview stats block (R7.1, R7.3, R7.5).
   if (statsState === 'loading') {
@@ -816,6 +823,8 @@ function ComparisonMode({
   readonly viewerFailed: boolean;
   readonly friendFailed: boolean;
 }): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const bothReady = viewerStats !== undefined && friendStats !== undefined;
   const failed = viewerFailed || friendFailed;
 
@@ -844,7 +853,7 @@ function ComparisonMode({
               <Ionicons
                 name="cloud-offline-outline"
                 size={22}
-                color={theme.color.textSecondary}
+                color={t.color.textSecondary}
               />
               <Text style={styles.comparisonUnavailableTitle}>
                 {COMPARISON_UNAVAILABLE_TITLE}
@@ -915,7 +924,7 @@ function ComparisonMode({
           {sharedAttraction && (
             <Card style={styles.card} testID="friend-comparison-shared-attraction">
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Text style={{ fontSize: 16 }}>👑</Text>
+                <Text style={{ fontSize: 16, ...t.textDefault }}>👑</Text>
                 <Text style={styles.comparisonTitle}>Shared Favorite Attraction</Text>
               </View>
               <Text style={[styles.cardTitle, { marginVertical: 4 }]}>
@@ -1013,6 +1022,7 @@ function ActivityComparisonCard({
   readonly friendName: string;
   readonly testID: string;
 }): JSX.Element {
+  const styles = useStyles();
   return (
     <Card style={styles.card} testID={testID}>
       <Text style={styles.comparisonTitle}>{title}</Text>
@@ -1048,6 +1058,7 @@ function ComparisonRowCard({
   readonly friendName: string;
   readonly testID: string;
 }): JSX.Element {
+  const styles = useStyles();
   return (
     <Card style={styles.card} testID={testID}>
       <Text style={styles.comparisonTitle}>{title}</Text>
@@ -1077,8 +1088,8 @@ function ComparisonRowCard({
  * Falls back to the raw key for any value without a visual.
  */
 function categoryLabel(key: string): string {
-  const visual = theme.categoryVisual[key as keyof typeof theme.categoryVisual];
-  return visual?.label ?? key;
+  const meta = categoryMeta[key as keyof typeof categoryMeta];
+  return meta?.label ?? key;
 }
 
 // ---------------------------------------------------------------------------
@@ -1124,6 +1135,8 @@ function CompletionDiffSection({
   readonly friendEntries: readonly CompletionEntryDTO[] | undefined;
   readonly onOpenExperience: (experienceId: string) => void;
 }): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   // R13.7: either completions read failed with no data → the diff is
   // unavailable. Checked before loading so a failed read never spins forever.
   if (viewerState === 'error' || friendState === 'error') {
@@ -1135,7 +1148,7 @@ function CompletionDiffSection({
             <Ionicons
               name="cloud-offline-outline"
               size={22}
-              color={theme.color.textSecondary}
+              color={t.color.textSecondary}
             />
             <Text style={styles.comparisonUnavailableTitle}>
               {DIFF_UNAVAILABLE_TITLE}
@@ -1225,6 +1238,7 @@ function AvatarPresetBadge({
 }: {
   readonly preset: AvatarPresetId;
 }): JSX.Element {
+  const styles = useStyles();
   const art = renderAvatarPreset(preset, 80);
   if (art === null) return <AvatarPlaceholder />;
   return (
@@ -1235,9 +1249,11 @@ function AvatarPresetBadge({
 }
 
 function AvatarPlaceholder(): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   return (
     <View style={styles.avatarPlaceholder} testID="friend-avatar-placeholder">
-      <Ionicons name="person" size={36} color={theme.color.primary} />
+      <Ionicons name="person" size={36} color={t.color.primaryFg} />
     </View>
   );
 }
@@ -1247,9 +1263,11 @@ function AvatarPlaceholder(): JSX.Element {
 // ---------------------------------------------------------------------------
 
 function ModeLoader({ testID }: { readonly testID: string }): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   return (
     <Card style={styles.card} testID={testID}>
-      <ActivityIndicator color={theme.color.primary} />
+      <ActivityIndicator color={t.color.primaryFg} />
     </Card>
   );
 }
@@ -1261,13 +1279,15 @@ function SectionError({
   readonly testID: string;
   readonly onRetry: () => void;
 }): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   return (
     <Card style={styles.card} testID={testID}>
       <View style={styles.errorWrap}>
         <Ionicons
           name="cloud-offline-outline"
           size={22}
-          color={theme.color.textSecondary}
+          color={t.color.textSecondary}
         />
         <Text style={styles.errorText}>{ERROR_BODY}</Text>
         <PrimaryButton
@@ -1295,30 +1315,30 @@ function isForbidden(error: unknown): boolean {
 // Styles
 // ---------------------------------------------------------------------------
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   center: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: theme.spacing.xl,
-    gap: theme.spacing.md,
+    padding: t.spacing.xl,
+    gap: t.spacing.md,
   },
   scrollContent: {
-    padding: theme.spacing.lg,
-    paddingBottom: theme.spacing.xxl,
+    padding: t.spacing.lg,
+    paddingBottom: t.spacing.xxl,
   },
   profileCard: {
     alignItems: 'center',
-    paddingVertical: theme.spacing.xl,
-    marginBottom: theme.spacing.lg,
-    gap: theme.spacing.xs,
+    paddingVertical: t.spacing.xl,
+    marginBottom: t.spacing.lg,
+    gap: t.spacing.xs,
   },
   avatar: {
     width: 80,
     height: 80,
     borderRadius: 40,
-    marginBottom: theme.spacing.sm,
-    backgroundColor: theme.color.surfaceAlt,
+    marginBottom: t.spacing.sm,
+    backgroundColor: t.color.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1326,47 +1346,47 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: theme.color.surfaceAlt,
+    backgroundColor: t.color.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: theme.spacing.sm,
+    marginBottom: t.spacing.sm,
   },
   profileName: {
-    ...theme.typography.title,
-    color: theme.color.textPrimary,
+    ...t.typography.title,
+    color: t.color.textPrimary,
   },
   heroWrap: {
-    gap: theme.spacing.md,
+    gap: t.spacing.md,
   },
   ratingsWrap: {
-    marginTop: theme.spacing.sm,
+    marginTop: t.spacing.sm,
   },
   modeLoader: {
-    paddingVertical: theme.spacing.xxl,
+    paddingVertical: t.spacing.xxl,
     alignItems: 'center',
     justifyContent: 'center',
   },
   sectionError: {
     alignItems: 'center',
-    paddingVertical: theme.spacing.xl,
-    gap: theme.spacing.md,
+    paddingVertical: t.spacing.xl,
+    gap: t.spacing.md,
   },
   card: {
-    marginBottom: theme.spacing.md,
+    marginBottom: t.spacing.md,
   },
   cardTitle: {
-    ...theme.typography.subtitle,
-    color: theme.color.textPrimary,
+    ...t.typography.subtitle,
+    color: t.color.textPrimary,
     flexShrink: 1,
   },
   // Coverage Lens_Switcher — mirrors CoverageDetailScreen's segmented control.
   seg: {
     flexDirection: 'row',
-    backgroundColor: theme.color.surfaceAlt,
-    borderRadius: theme.radius.md,
+    backgroundColor: t.color.surfaceAlt,
+    borderRadius: t.radius.md,
     padding: 4,
     gap: 2,
-    marginBottom: theme.spacing.md,
+    marginBottom: t.spacing.md,
   },
   segItem: {
     flex: 1,
@@ -1374,53 +1394,54 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 7,
     paddingHorizontal: 2,
-    borderRadius: theme.radius.sm,
+    borderRadius: t.radius.sm,
   },
   segItemActive: {
-    backgroundColor: theme.color.surface,
-    ...theme.shadow.card,
+    // Dark: lighter than the `surfaceAlt` track so it reads raised (Requirement 9.12).
+    backgroundColor: t.scheme === 'dark' ? t.color.borderStrong : t.color.surface,
+    ...t.shadow.card,
   },
   segText: {
-    ...theme.typography.meta,
+    ...t.typography.meta,
     fontSize: 11,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   segTextActive: {
-    color: theme.color.primary,
+    color: t.color.primaryFg,
   },
   lensCard: {
-    paddingVertical: theme.spacing.sm,
-    marginBottom: theme.spacing.md,
+    paddingVertical: t.spacing.sm,
+    marginBottom: t.spacing.md,
   },
   errorWrap: {
     alignItems: 'center',
-    gap: theme.spacing.sm,
+    gap: t.spacing.sm,
   },
   errorText: {
-    ...theme.typography.body,
-    color: theme.color.danger,
+    ...t.typography.body,
+    color: t.color.danger,
     textAlign: 'center',
   },
   retryBtn: {
     alignSelf: 'center',
     minWidth: 160,
-    marginTop: theme.spacing.xs,
+    marginTop: t.spacing.xs,
   },
   // Compare mode (Progress_Comparison, R12.*)
   comparisonGroupHeading: {
-    ...theme.typography.subtitle,
-    color: theme.color.textPrimary,
-    marginTop: theme.spacing.md,
-    marginBottom: theme.spacing.sm,
+    ...t.typography.subtitle,
+    color: t.color.textPrimary,
+    marginTop: t.spacing.md,
+    marginBottom: t.spacing.sm,
   },
   comparisonTitle: {
-    ...theme.typography.subtitle,
-    color: theme.color.textPrimary,
-    marginBottom: theme.spacing.sm,
+    ...t.typography.subtitle,
+    color: t.color.textPrimary,
+    marginBottom: t.spacing.sm,
   },
   comparisonRow: {
     flexDirection: 'row',
-    gap: theme.spacing.md,
+    gap: t.spacing.md,
   },
   comparisonCell: {
     flex: 1,
@@ -1428,57 +1449,57 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   comparisonOwner: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
   },
   comparisonPercent: {
-    ...theme.typography.subtitle,
-    color: theme.color.textPrimary,
+    ...t.typography.subtitle,
+    color: t.color.textPrimary,
   },
   comparisonUnavailableTitle: {
-    ...theme.typography.subtitle,
-    color: theme.color.textPrimary,
+    ...t.typography.subtitle,
+    color: t.color.textPrimary,
     textAlign: 'center',
   },
   showcaseSectionCard: {
-    marginTop: theme.spacing.md,
-    padding: theme.spacing.md,
+    marginTop: t.spacing.md,
+    padding: t.spacing.md,
   },
   showcaseHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: theme.spacing.sm,
+    marginBottom: t.spacing.sm,
   },
   showcaseTitleWrap: {
     flex: 1,
-    marginRight: theme.spacing.sm,
+    marginRight: t.spacing.sm,
   },
   showcaseTitle: {
-    ...theme.typography.heading,
-    color: theme.color.textPrimary,
+    ...t.typography.heading,
+    color: t.color.textPrimary,
   },
   showcaseSubtitle: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
   },
   showcaseEmptyWrap: {
-    paddingVertical: theme.spacing.sm,
+    paddingVertical: t.spacing.sm,
   },
   showcasePreviewBoard: {
     height: 100,
     borderWidth: 4,
-    borderColor: '#5D3A1A',
-    borderRadius: theme.radius.md,
+    borderColor: CORK_BOARD[t.scheme].frame,
+    borderRadius: t.radius.md,
     overflow: 'hidden',
-    backgroundColor: '#c49a6c',
+    backgroundColor: CORK_BOARD[t.scheme].cork,
   },
   showcasePreviewCork: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-around',
-    paddingHorizontal: theme.spacing.sm,
+    paddingHorizontal: t.spacing.sm,
   },
   showcasePreviewPin: {
     shadowColor: '#000',
@@ -1487,4 +1508,4 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     elevation: 4,
   },
-});
+}));

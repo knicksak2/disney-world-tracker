@@ -38,7 +38,6 @@ import {
   KeyboardAvoidingView,
   Modal,
   Platform,
-  StyleSheet,
   Text,
   TextInput,
   View,
@@ -65,7 +64,9 @@ import {
   clearTripsListNotice,
   useTripsListNotice,
 } from '../../navigation/tripsListNotice';
-import { theme } from '../../theme/theme';
+import { theme, type AppTheme } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme } from '../../theme/useAppTheme';
 import {
   Card,
   EmptyState,
@@ -75,6 +76,7 @@ import {
   SecondaryButton,
 } from '../../theme/components';
 import { calculateCountdownDays } from '../home/countdown';
+import { TRIP_ROW, TRIPS_MODAL } from './TripsListScreen.palette';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -138,21 +140,32 @@ export const tripInvitesKeys = {
  */
 const TRIPS_LOAD_TIMEOUT_MS = 10_000;
 
-/** Human labels + badge colors for each status group, in presentation order. */
-const STATUS_META: Record<
+/** Human labels for each status group, in presentation order. */
+const STATUS_LABEL: Record<TripStatus, string> = {
+  active: 'Active',
+  upcoming: 'Upcoming',
+  past: 'Past',
+};
+
+/** Human labels + badge colors for each status group, read from the active theme. */
+function statusMetaFor(t: AppTheme): Record<
   TripStatus,
   { readonly label: string; readonly color: string }
-> = {
-  active: { label: 'Active', color: theme.color.success },
-  upcoming: { label: 'Upcoming', color: theme.color.primary },
-  past: { label: 'Past', color: theme.color.textSecondary },
-};
+> {
+  return {
+    active: { label: STATUS_LABEL.active, color: t.color.success },
+    upcoming: { label: STATUS_LABEL.upcoming, color: t.color.primaryFg },
+    past: { label: STATUS_LABEL.past, color: t.color.textSecondary },
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Screen
 // ---------------------------------------------------------------------------
 
 export default function TripsListScreen({ navigation }: Props): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const queryClient = useQueryClient();
 
   // A "no longer available" notice queued by a fallback navigation — e.g. the
@@ -329,7 +342,7 @@ export default function TripsListScreen({ navigation }: Props): JSX.Element {
           icon="map"
         />
         <View style={styles.center} testID="trips-loading">
-          <ActivityIndicator color={theme.color.primary} />
+          <ActivityIndicator color={t.color.primaryFg} />
         </View>
       </ScreenContainer>
     );
@@ -414,6 +427,7 @@ export default function TripsListScreen({ navigation }: Props): JSX.Element {
           keyExtractor={(row) => row.id}
           renderItem={renderRow}
           contentContainerStyle={styles.listContent}
+          keyboardShouldPersistTaps="handled"
         />
       )}
 
@@ -474,7 +488,7 @@ function buildRows(groups: TripsListResponse): readonly Row[] {
     rows.push({
       kind: 'header',
       id: `header-${group.status}`,
-      label: STATUS_META[group.status].label,
+      label: STATUS_LABEL[group.status],
     });
     for (const trip of group.trips) {
       rows.push({ kind: 'trip', id: `trip-${trip.id}`, trip });
@@ -494,19 +508,21 @@ function NoticeBanner({
   readonly message: string;
   readonly onDismiss: () => void;
 }): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   return (
     <View style={styles.notice} accessibilityRole="alert" testID="trips-notice">
       <Ionicons
         name="information-circle-outline"
         size={18}
-        color={theme.color.warningText}
+        color={t.color.warningText}
         style={styles.noticeIcon}
       />
       <Text style={styles.noticeText}>{message}</Text>
       <Ionicons
         name="close"
         size={18}
-        color={theme.color.warningText}
+        color={t.color.warningText}
         onPress={onDismiss}
         testID="trips-notice-dismiss"
         accessibilityRole="button"
@@ -517,6 +533,7 @@ function NoticeBanner({
 }
 
 function SectionHeader({ label }: { readonly label: string }): JSX.Element {
+  const styles = useStyles();
   return (
     <View style={styles.sectionHeader}>
       <Text style={styles.sectionHeaderText}>{label}</Text>
@@ -531,7 +548,9 @@ function TripRow({
   readonly trip: TripDTO;
   readonly onPress: () => void;
 }): JSX.Element {
-  const statusMeta = STATUS_META[trip.status];
+  const styles = useStyles();
+  const t = useAppTheme();
+  const statusMeta = statusMetaFor(t)[trip.status];
   const daysLeft =
     trip.status === 'upcoming'
       ? calculateCountdownDays(trip.startDate)
@@ -562,7 +581,7 @@ function TripRow({
             style={[styles.countdownCircle, styles.activeCircle]}
             testID={`trips-trip-active-${trip.id}`}
           >
-            <Ionicons name="sparkles" size={18} color="#f6c343" />
+            <Ionicons name="sparkles" size={18} color={t.color.accent} />
             <Text style={styles.countdownUnit}>NOW</Text>
           </View>
         ) : (
@@ -570,7 +589,7 @@ function TripRow({
             style={[styles.countdownCircle, styles.pastCircle]}
             testID={`trips-trip-past-${trip.id}`}
           >
-            <Ionicons name="checkmark-done" size={18} color="#7e57c2" />
+            <Ionicons name="checkmark-done" size={18} color={t.color.primaryLight} />
             <Text style={[styles.countdownUnit, styles.pastUnit]}>PAST</Text>
           </View>
         )}
@@ -591,7 +610,7 @@ function TripRow({
           <Ionicons
             name="chevron-forward"
             size={18}
-            color={theme.color.primary}
+            color={t.color.primaryFg}
           />
         </View>
       </View>
@@ -636,6 +655,8 @@ function CreateTripModal({
   onSubmit,
   onCancel,
 }: CreateTripModalProps): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   return (
     <Modal
       visible={visible}
@@ -655,7 +676,8 @@ function CreateTripModal({
             value={name}
             onChangeText={onChangeName}
             placeholder="e.g. Spring Break at WDW"
-            placeholderTextColor={theme.color.textSecondary}
+            placeholderTextColor={t.color.textSecondary}
+            keyboardAppearance={t.scheme}
             maxLength={100}
             editable={!busy}
             style={styles.input}
@@ -668,7 +690,8 @@ function CreateTripModal({
             value={description}
             onChangeText={onChangeDescription}
             placeholder="What's the plan?"
-            placeholderTextColor={theme.color.textSecondary}
+            placeholderTextColor={t.color.textSecondary}
+            keyboardAppearance={t.scheme}
             multiline
             maxLength={2000}
             editable={!busy}
@@ -792,7 +815,7 @@ function tripsErrorMessage(err: ApiError | null): string {
 // Styles
 // ---------------------------------------------------------------------------
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   center: {
     flex: 1,
     alignItems: 'center',
@@ -813,16 +836,16 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing.sm,
     paddingHorizontal: theme.spacing.md,
     borderRadius: theme.radius.md,
-    backgroundColor: theme.color.warningSurface,
+    backgroundColor: t.color.warningSurface,
     borderWidth: 1,
-    borderColor: theme.color.warning,
+    borderColor: t.color.warning,
   },
   noticeIcon: {
     marginTop: 1,
   },
   noticeText: {
     ...theme.typography.meta,
-    color: theme.color.warningText,
+    color: t.color.warningText,
     flex: 1,
   },
   listContent: {
@@ -836,7 +859,7 @@ const styles = StyleSheet.create({
   },
   sectionHeaderText: {
     ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
@@ -844,7 +867,7 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.md,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#ebdff8',
+    borderColor: TRIP_ROW[t.scheme].rowBorder,
     padding: 12,
   },
   rowMain: {
@@ -865,11 +888,11 @@ const styles = StyleSheet.create({
   rowName: {
     fontSize: 15,
     fontWeight: '800',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   rowDates: {
     fontSize: 11.5,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     marginTop: 1,
   },
   arrowWrap: {
@@ -879,7 +902,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 14,
-    backgroundColor: '#3b1d60',
+    backgroundColor: TRIP_ROW[t.scheme].countdownBg,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 2,
@@ -887,7 +910,7 @@ const styles = StyleSheet.create({
   countdownNum: {
     fontSize: 18,
     fontWeight: '800',
-    color: '#f6c343',
+    color: t.color.accent,
     lineHeight: 20,
   },
   countdownUnit: {
@@ -897,57 +920,57 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   activeCircle: {
-    backgroundColor: '#3b1d60',
+    backgroundColor: TRIP_ROW[t.scheme].activeBg,
   },
   pastCircle: {
-    backgroundColor: '#f1ebf9',
+    backgroundColor: TRIP_ROW[t.scheme].pastBg,
     borderWidth: 1,
-    borderColor: '#ebdff8',
+    borderColor: TRIP_ROW[t.scheme].pastBorder,
   },
   pastUnit: {
-    color: '#7e57c2',
+    color: t.color.primaryLight,
   },
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(31, 18, 53, 0.5)',
+    backgroundColor: TRIPS_MODAL[t.scheme].scrim,
     alignItems: 'center',
     justifyContent: 'center',
     padding: theme.spacing.xl,
   },
   modalCard: {
-    backgroundColor: theme.color.surface,
+    backgroundColor: t.color.surface,
     borderRadius: theme.radius.lg,
     padding: theme.spacing.xl,
     width: '100%',
     maxWidth: 400,
     gap: theme.spacing.sm,
-    ...theme.shadow.floating,
+    ...t.shadow.floating,
   },
   modalTitle: {
     ...theme.typography.heading,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   label: {
     ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     marginTop: theme.spacing.xs,
   },
   input: {
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
     borderRadius: theme.radius.md,
     paddingHorizontal: theme.spacing.md,
     paddingVertical: theme.spacing.md,
     fontSize: 16,
-    color: theme.color.textPrimary,
-    backgroundColor: theme.color.surfaceAlt,
+    color: t.color.textPrimary,
+    backgroundColor: t.color.surfaceAlt,
   },
   inputMultiline: {
     minHeight: 72,
     textAlignVertical: 'top',
   },
   error: {
-    color: theme.color.danger,
+    color: t.color.danger,
     fontSize: 13,
   },
   modalActions: {
@@ -964,4 +987,4 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: theme.spacing.sm,
   },
-});
+}));

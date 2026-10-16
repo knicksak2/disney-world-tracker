@@ -3,10 +3,15 @@
 // Validates: Requirements 4.1, 4.3, 4.4, 5.5, 5.6, 5.7
 
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import type { ReactTestInstance } from 'react-test-renderer';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import type { FoodItemDTO, FoodItemLogHistoryDTO } from '@dwt/shared';
+
+import { darkTheme } from '../../../theme/theme';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
 
 jest.mock('../../../api/client', () => {
   const actual = jest.requireActual('../../../api/client');
@@ -199,5 +204,47 @@ describe('FoodItemLogHistorySheet', () => {
       });
       expect(onLogDeleted).toHaveBeenCalled();
     });
+  });
+});
+
+/** Nearest painted `backgroundColor` at or above `node` (sheet surface lookup). */
+function paintedBackground(node: ReactTestInstance | null): unknown {
+  for (let n = node; n !== null; n = n.parent) {
+    const style = n.props.style;
+    if (style === undefined || typeof style === 'function') continue;
+    const flat = StyleSheet.flatten(style) as { backgroundColor?: unknown } | undefined;
+    if (flat?.backgroundColor !== undefined) return flat.backgroundColor;
+  }
+  return undefined;
+}
+
+describe('FoodItemLogHistorySheet — dark mode', () => {
+  afterEach(resetTestScheme);
+
+  it('paints the sheet, title, rating pill and loading spinner with dark tokens', async () => {
+    setTestScheme('dark');
+    let resolveHistory: (v: FoodItemLogHistoryDTO) => void = () => undefined;
+    apiRequestMock.mockReturnValueOnce(
+      new Promise<FoodItemLogHistoryDTO>((resolve) => {
+        resolveHistory = resolve;
+      }) as never,
+    );
+
+    renderWithClient(
+      <FoodItemLogHistorySheet foodItem={MOCK_ITEM} visible={true} onClose={jest.fn()} />,
+    );
+
+    // (c) loading spinner: primary as a mark on a surface → primaryFg.
+    expect(screen.getByTestId('food-item-history-loading').props.color).toBe(
+      darkTheme.color.primaryFg,
+    );
+    // (a) sheet surface, (b) primary text.
+    const title = screen.getByText('Dole Whip Float');
+    expect(paintedBackground(title)).toBe(darkTheme.color.surface);
+    expect(StyleSheet.flatten(title.props.style).color).toBe(darkTheme.color.textPrimary);
+
+    resolveHistory(MOCK_HISTORY);
+    // (c) the rating pill sits on surfaceAlt.
+    expect(paintedBackground(await screen.findByText('9/10'))).toBe(darkTheme.color.surfaceAlt);
   });
 });

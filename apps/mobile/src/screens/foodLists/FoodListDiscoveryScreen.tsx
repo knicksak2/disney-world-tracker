@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   FlatList,
   Pressable,
-  StyleSheet,
   Text,
   View,
 } from 'react-native';
@@ -14,10 +13,16 @@ import { useInfiniteQuery } from '@tanstack/react-query';
 import type { FoodListDiscoveryPageDTO, FoodListDTO } from '@dwt/shared';
 
 import { apiRequest } from '../../api/client';
-import { theme } from '../../theme/theme';
+import { withAlpha } from '../../theme/theme';
 import { Card, GradientHeader, ScreenContainer } from '../../theme/components';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme, usePalette } from '../../theme/useAppTheme';
+import { FOOD_DISCOVERY } from './FoodListDiscoveryScreen.palette';
 
 export default function FoodListDiscoveryScreen(): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
+  const pal = usePalette(FOOD_DISCOVERY);
   const navigation = useNavigation<NativeStackNavigationProp<any>>();
   const [sort, setSort] = useState<'popular' | 'recent'>('popular');
 
@@ -71,7 +76,7 @@ export default function FoodListDiscoveryScreen(): JSX.Element {
               {item.name}
             </Text>
             <View style={styles.likeBadge}>
-              <Ionicons name="heart" size={14} color={theme.color.danger} />
+              <Ionicons name="heart" size={14} color={t.color.danger} />
               <Text style={styles.likeCount}>{item.likeCount}</Text>
             </View>
           </View>
@@ -85,7 +90,7 @@ export default function FoodListDiscoveryScreen(): JSX.Element {
         </Pressable>
       </Card>
     ),
-    [navigation],
+    [navigation, styles, t],
   );
 
   return (
@@ -110,7 +115,7 @@ export default function FoodListDiscoveryScreen(): JSX.Element {
             <Ionicons
               name="flame-outline"
               size={16}
-              color={sort === 'popular' ? '#fff' : theme.color.textSecondary}
+              color={sort === 'popular' ? t.color.textOnPrimary : t.color.textSecondary}
             />
             <Text style={[styles.sortTabText, sort === 'popular' && styles.sortTabTextActive]}>
               Popular
@@ -127,7 +132,7 @@ export default function FoodListDiscoveryScreen(): JSX.Element {
             <Ionicons
               name="time-outline"
               size={16}
-              color={sort === 'recent' ? '#fff' : theme.color.textSecondary}
+              color={sort === 'recent' ? t.color.textOnPrimary : t.color.textSecondary}
             />
             <Text style={[styles.sortTabText, sort === 'recent' && styles.sortTabTextActive]}>
               Recent
@@ -137,7 +142,7 @@ export default function FoodListDiscoveryScreen(): JSX.Element {
 
         {isLoading ? (
           <View style={styles.loadingWrap}>
-            <ActivityIndicator size="large" color={theme.color.primary} />
+            <ActivityIndicator size="large" color={t.color.primaryFg} />
           </View>
         ) : isError ? (
           <View style={styles.centerWrap}>
@@ -149,18 +154,19 @@ export default function FoodListDiscoveryScreen(): JSX.Element {
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.listContent}
             renderItem={renderDiscoveryItem}
+            extraData={t.scheme}
             onEndReached={handleLoadMore}
             onEndReachedThreshold={0.5}
             ListFooterComponent={
               isFetchingNextPage ? (
                 <View style={styles.footerLoading}>
-                  <ActivityIndicator size="small" color={theme.color.primary} />
+                  <ActivityIndicator size="small" color={t.color.primaryFg} />
                 </View>
               ) : null
             }
             ListEmptyComponent={
               <View style={styles.emptyWrap}>
-                <Ionicons name="compass-outline" size={48} color={theme.color.borderStrong} />
+                <Ionicons name="compass-outline" size={48} color={pal.emptyIcon} />
                 <Text style={styles.emptyText}>No public food lists found yet.</Text>
               </View>
             }
@@ -171,10 +177,10 @@ export default function FoodListDiscoveryScreen(): JSX.Element {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   filterBar: {
     flexDirection: 'row',
-    padding: theme.spacing.md,
+    padding: t.spacing.md,
     gap: 10,
   },
   sortTab: {
@@ -183,27 +189,27 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: 16,
     paddingVertical: 8,
-    borderRadius: theme.radius.pill,
-    backgroundColor: theme.color.surfaceAlt,
+    borderRadius: t.radius.pill,
+    backgroundColor: t.color.surfaceAlt,
   },
   sortTabActive: {
-    backgroundColor: theme.color.primary,
+    backgroundColor: t.color.primary,
   },
   sortTabText: {
     fontSize: 13,
     fontWeight: '600',
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   sortTabTextActive: {
-    color: '#fff',
+    color: t.color.textOnPrimary,
   },
   listContent: {
-    paddingHorizontal: theme.spacing.md,
+    paddingHorizontal: t.spacing.md,
     paddingBottom: 24,
     gap: 10,
   },
   listCard: {
-    padding: theme.spacing.md,
+    padding: t.spacing.md,
     gap: 8,
   },
   cardHeader: {
@@ -214,7 +220,7 @@ const styles = StyleSheet.create({
   listName: {
     fontSize: 15,
     fontWeight: '700',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
     flex: 1,
     marginRight: 8,
   },
@@ -222,15 +228,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(214, 51, 108, 0.1)',
+    backgroundColor: withAlpha(t.color.danger, 0.1),
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: theme.radius.pill,
+    borderRadius: t.radius.pill,
   },
   likeCount: {
     fontSize: 11,
     fontWeight: '700',
-    color: theme.color.danger,
+    color: t.color.danger,
   },
   cardFooter: {
     flexDirection: 'row',
@@ -239,11 +245,11 @@ const styles = StyleSheet.create({
   },
   ownerText: {
     fontSize: 11,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   itemCountText: {
     fontSize: 11,
-    color: theme.color.primary,
+    color: t.color.primaryFg,
     fontWeight: '600',
   },
   loadingWrap: {
@@ -259,7 +265,7 @@ const styles = StyleSheet.create({
     padding: 32,
   },
   errorText: {
-    color: theme.color.danger,
+    color: t.color.danger,
     fontSize: 15,
   },
   emptyWrap: {
@@ -269,11 +275,11 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   emptyText: {
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     fontSize: 15,
   },
   footerLoading: {
     paddingVertical: 16,
     alignItems: 'center',
   },
-});
+}));

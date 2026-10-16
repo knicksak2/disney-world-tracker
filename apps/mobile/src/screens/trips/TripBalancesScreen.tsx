@@ -17,7 +17,6 @@ import {
   Modal,
   Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   View,
 } from 'react-native';
@@ -33,7 +32,6 @@ import type {
 } from '@dwt/shared';
 
 import type { TripsStackParamList } from '../../navigation/TripsStack';
-import { theme } from '../../theme/theme';
 import {
   Card,
   EmptyState,
@@ -41,6 +39,9 @@ import {
   ScreenContainer,
   SectionLabel,
 } from '../../theme/components';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme, usePalette } from '../../theme/useAppTheme';
+import { BALANCES } from './TripBalancesScreen.palette';
 import { apiRequest } from '../../api/client';
 import { tripDetailKeys } from './tripDetailQueryKeys';
 import {
@@ -56,6 +57,9 @@ export default function TripBalancesScreen({
   navigation,
   route,
 }: Props): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
+  const pal = usePalette(BALANCES);
   const { tripId } = route.params;
 
   // View toggle: 'net' or 'pairwise' (Req 6.5)
@@ -185,12 +189,12 @@ export default function TripBalancesScreen({
             accessibilityLabel="View ledger"
             hitSlop={8}
           >
-            <Ionicons name="receipt-outline" size={22} color={theme.color.textOnPrimary} />
+            <Ionicons name="receipt-outline" size={22} color={t.color.textOnPrimary} />
           </Pressable>
         }
       />
 
-      <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+      <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer} keyboardShouldPersistTaps="handled">
         {/* View Toggle Bar (Req 6.5) */}
         <View style={styles.toggleRow} testID="balances-view-toggle">
           <Pressable
@@ -224,13 +228,13 @@ export default function TripBalancesScreen({
             accessibilityRole="button"
             accessibilityLabel="Record a settlement"
           >
-            <Ionicons name="swap-horizontal" size={16} color="#ffffff" />
+            <Ionicons name="swap-horizontal" size={16} color={t.color.textOnPrimary} />
             <Text style={styles.recordSettlementHeroBtnText}>+ Record a Settlement</Text>
           </Pressable>
         </View>
 
         {balancesQuery.isLoading ? (
-          <ActivityIndicator style={{ marginTop: 24 }} color={theme.color.primary} />
+          <ActivityIndicator style={{ marginTop: 24 }} color={t.color.primaryFg} />
         ) : viewMode === 'net' ? (
           /* NET BALANCES VIEW (Req 6.1-6.4) */
           <View style={styles.section} testID="net-balances-section">
@@ -256,8 +260,8 @@ export default function TripBalancesScreen({
                   >
                     <Card style={styles.balanceCard}>
                       <View style={styles.balanceCardRow}>
-                        <View style={[styles.memberAvatarWrap, isPositive ? { backgroundColor: '#dcfce7' } : !isZero ? { backgroundColor: '#fee2e2' } : { backgroundColor: '#f1f5f9' }]}>
-                          <Text style={[styles.avatarInitial, isPositive ? { color: '#15803d' } : !isZero ? { color: '#dc2626' } : { color: '#64748b' }]}>
+                        <View style={[styles.memberAvatarWrap, isPositive ? { backgroundColor: pal.owedBg } : !isZero ? { backgroundColor: pal.owesBg } : { backgroundColor: pal.settledBg }]}>
+                          <Text style={[styles.avatarInitial, isPositive ? { color: pal.owedText } : !isZero ? { color: pal.owesText } : { color: pal.slateText }]}>
                             {name.charAt(0).toUpperCase()}
                           </Text>
                         </View>
@@ -297,7 +301,7 @@ export default function TripBalancesScreen({
                           >
                             {isZero ? '$0.00' : isPositive ? `+$${absDollars}` : `-$${absDollars}`}
                           </Text>
-                          <Ionicons name="chevron-forward" size={16} color={theme.color.textSecondary} />
+                          <Ionicons name="chevron-forward" size={16} color={t.color.textSecondary} />
                         </View>
                       </View>
                     </Card>
@@ -354,15 +358,15 @@ export default function TripBalancesScreen({
                             accessibilityRole="button"
                             testID={`settle-pair-btn-${idx}`}
                           >
-                            <Ionicons name="checkmark-circle-outline" size={16} color="#ffffff" />
+                            <Ionicons name="checkmark-circle-outline" size={16} color={t.color.textOnPrimary} />
                             <Text style={styles.settleBtnText}>Settle</Text>
                           </Pressable>
                         ) : null}
                       </View>
                       <View style={styles.pairwiseHintRow}>
-                        <Ionicons name="receipt-outline" size={12} color={theme.color.primary} />
+                        <Ionicons name="receipt-outline" size={12} color={t.color.primaryFg} />
                         <Text style={styles.pairwiseHintText}>View transaction breakdown</Text>
-                        <Ionicons name="chevron-forward" size={12} color={theme.color.primary} />
+                        <Ionicons name="chevron-forward" size={12} color={t.color.primaryFg} />
                       </View>
                     </Pressable>
                   </Card>
@@ -393,14 +397,14 @@ export default function TripBalancesScreen({
                   accessibilityLabel="Close"
                   testID="close-drilldown-modal"
                 >
-                  <Ionicons name="close" size={24} color={theme.color.textPrimary} />
+                  <Ionicons name="close" size={24} color={t.color.textPrimary} />
                 </Pressable>
               </View>
 
               {drillDownQuery.isLoading ? (
-                <ActivityIndicator style={{ marginVertical: 32 }} color={theme.color.primary} />
+                <ActivityIndicator style={{ marginVertical: 32 }} color={t.color.primaryFg} />
               ) : (
-                <ScrollView style={styles.drillDownList}>
+                <ScrollView style={styles.drillDownList} keyboardShouldPersistTaps="handled">
                   {drillDownEntries.length === 0 ? (
                     <Text style={styles.emptyText}>No activity for this member.</Text>
                   ) : (
@@ -468,7 +472,7 @@ export default function TripBalancesScreen({
                   accessibilityLabel="Close"
                   testID="close-pairwise-breakdown-modal"
                 >
-                  <Ionicons name="close" size={24} color={theme.color.textPrimary} />
+                  <Ionicons name="close" size={24} color={t.color.textPrimary} />
                 </Pressable>
               </View>
 
@@ -487,7 +491,7 @@ export default function TripBalancesScreen({
                     testID="pairwise-modal-settle-btn"
                     accessibilityRole="button"
                   >
-                    <Ionicons name="swap-horizontal" size={16} color="#ffffff" />
+                    <Ionicons name="swap-horizontal" size={16} color={t.color.textOnPrimary} />
                     <Text style={styles.pairwiseModalSettleBtnText}>
                       Log Payment ${(Math.abs(pairwiseBreakdownPair.aOwesBCents) / 100).toFixed(2)}
                     </Text>
@@ -496,9 +500,9 @@ export default function TripBalancesScreen({
               ) : null}
 
               {pairwiseDrillDownQuery.isLoading ? (
-                <ActivityIndicator style={{ marginVertical: 32 }} color={theme.color.primary} />
+                <ActivityIndicator style={{ marginVertical: 32 }} color={t.color.primaryFg} />
               ) : (
-                <ScrollView style={styles.drillDownList} testID="pairwise-drilldown-list">
+                <ScrollView style={styles.drillDownList} testID="pairwise-drilldown-list" keyboardShouldPersistTaps="handled">
                   {pairwiseDrillDownEntries.length === 0 ? (
                     <Text style={styles.emptyText} testID="pairwise-drilldown-empty">No mutual transactions between these members.</Text>
                   ) : (
@@ -536,7 +540,7 @@ export default function TripBalancesScreen({
                             testID={`pairwise-entry-${idx}`}
                           >
                             <View style={[styles.pairwiseEntryIcon, styles.pairwiseSettlementIconWrap]}>
-                              <Ionicons name="checkmark-circle" size={20} color="#15803d" />
+                              <Ionicons name="checkmark-circle" size={20} color={pal.owedText} />
                             </View>
                             <View style={styles.pairwiseEntryContent}>
                               <View style={styles.pairwiseTitleRow}>
@@ -560,7 +564,7 @@ export default function TripBalancesScreen({
                               >
                                 -${absDollars}
                               </Text>
-                              <Text style={[styles.pairwiseAmountSub, { color: '#16a34a' }]}>
+                              <Text style={[styles.pairwiseAmountSub, { color: pal.paidDownText }]}>
                                 Paid down
                               </Text>
                             </View>
@@ -586,7 +590,7 @@ export default function TripBalancesScreen({
                           testID={`pairwise-entry-${idx}`}
                         >
                           <View style={[styles.pairwiseEntryIcon, styles.pairwiseExpenseIconWrap]}>
-                            <Text style={{ fontSize: 18 }}>🧾</Text>
+                            <Text style={{ fontSize: 18, ...t.textDefault }}>🧾</Text>
                           </View>
                           <View style={styles.pairwiseEntryContent}>
                             <View style={styles.pairwiseTitleRow}>
@@ -608,14 +612,14 @@ export default function TripBalancesScreen({
                                 isZero
                                   ? styles.amountZero
                                   : isPositive
-                                  ? { color: theme.color.textPrimary }
+                                  ? { color: t.color.textPrimary }
                                   : styles.amountNegative,
                               ]}
                               testID={`pairwise-entry-amount-${idx}`}
                             >
                               {isZero ? '$0.00' : isPositive ? `+$${absDollars}` : `-$${absDollars}`}
                             </Text>
-                            <Text style={[styles.pairwiseAmountSub, { color: theme.color.textSecondary }]}>
+                            <Text style={[styles.pairwiseAmountSub, { color: t.color.textSecondary }]}>
                               {isPositive ? 'Added to debt' : 'Your share'}
                             </Text>
                           </View>
@@ -646,7 +650,7 @@ export default function TripBalancesScreen({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   container: {
     flex: 1,
   },
@@ -656,7 +660,7 @@ const styles = StyleSheet.create({
   },
   toggleRow: {
     flexDirection: 'row',
-    backgroundColor: '#f1f5f9',
+    backgroundColor: BALANCES[t.scheme].toggleTrack,
     borderRadius: 14,
     padding: 4,
     marginBottom: 14,
@@ -668,8 +672,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   toggleBtnActive: {
-    backgroundColor: '#ffffff',
-    shadowColor: '#0f172a',
+    backgroundColor: BALANCES[t.scheme].toggleActiveBg,
+    shadowColor: BALANCES[t.scheme].toggleActiveShadow,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.08,
     shadowRadius: 3,
@@ -678,10 +682,10 @@ const styles = StyleSheet.create({
   toggleText: {
     fontSize: 12.5,
     fontWeight: '600',
-    color: '#64748b',
+    color: BALANCES[t.scheme].slateText,
   },
   toggleTextActive: {
-    color: '#1e1b4b',
+    color: BALANCES[t.scheme].inkText,
     fontWeight: '800',
   },
   toolbar: {
@@ -692,18 +696,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: '#7c3aed',
+    backgroundColor: BALANCES[t.scheme].heroFill,
     paddingVertical: 12,
     paddingHorizontal: 18,
     borderRadius: 14,
-    shadowColor: '#7c3aed',
+    shadowColor: BALANCES[t.scheme].heroShadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 4,
     elevation: 2,
   },
   recordSettlementHeroBtnText: {
-    color: '#ffffff',
+    color: t.color.textOnPrimary,
     fontSize: 14,
     fontWeight: '800',
     letterSpacing: 0.2,
@@ -713,17 +717,17 @@ const styles = StyleSheet.create({
   },
   sectionSubtitle: {
     fontSize: 12,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     marginBottom: 12,
   },
   balanceCard: {
     marginBottom: 8,
     padding: 14,
     borderRadius: 16,
-    backgroundColor: '#ffffff',
-    borderColor: '#e2d9f0',
+    backgroundColor: t.color.surface,
+    borderColor: t.color.border,
     borderWidth: 1,
-    shadowColor: '#3d1c5c',
+    shadowColor: t.shadow.card.shadowColor,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.04,
     shadowRadius: 5,
@@ -744,7 +748,7 @@ const styles = StyleSheet.create({
   avatarInitial: {
     fontSize: 15,
     fontWeight: '800',
-    color: theme.color.primary,
+    color: t.color.primaryFg,
   },
   memberInfo: {
     flex: 1,
@@ -752,7 +756,7 @@ const styles = StyleSheet.create({
   memberName: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#1e1b4b',
+    color: BALANCES[t.scheme].inkText,
   },
   statusBadgePill: {
     alignSelf: 'flex-start',
@@ -762,28 +766,28 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
   statusBadgeSettled: {
-    backgroundColor: '#f1f5f9',
+    backgroundColor: BALANCES[t.scheme].settledBg,
   },
   statusBadgeOwed: {
-    backgroundColor: '#dcfce7',
+    backgroundColor: BALANCES[t.scheme].owedBg,
   },
   statusBadgeOwes: {
-    backgroundColor: '#fee2e2',
+    backgroundColor: BALANCES[t.scheme].owesBg,
   },
   balanceStatusText: {
     fontSize: 11,
     fontWeight: '700',
   },
   statusSettled: {
-    color: '#64748b',
+    color: BALANCES[t.scheme].slateText,
     fontWeight: '500',
   },
   statusOwed: {
-    color: '#15803d',
+    color: BALANCES[t.scheme].owedText,
     fontWeight: '700',
   },
   statusOwes: {
-    color: '#dc2626',
+    color: BALANCES[t.scheme].owesText,
     fontWeight: '700',
   },
   drillDownArrow: {
@@ -797,22 +801,22 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
   },
   amountZero: {
-    color: '#94a3b8',
+    color: BALANCES[t.scheme].zeroAmountText,
   },
   amountPositive: {
-    color: '#15803d',
+    color: BALANCES[t.scheme].owedText,
   },
   amountNegative: {
-    color: '#dc2626',
+    color: BALANCES[t.scheme].owesText,
   },
   pairwiseCard: {
     marginBottom: 10,
     padding: 14,
     borderRadius: 16,
-    backgroundColor: '#ffffff',
-    borderColor: '#e2d9f0',
+    backgroundColor: t.color.surface,
+    borderColor: t.color.border,
     borderWidth: 1,
-    shadowColor: '#3d1c5c',
+    shadowColor: t.shadow.card.shadowColor,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.04,
     shadowRadius: 5,
@@ -828,25 +832,25 @@ const styles = StyleSheet.create({
   },
   pairwiseDebtText: {
     fontSize: 14,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   pairwiseAmount: {
     fontSize: 16,
     fontWeight: '700',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
     marginTop: 2,
   },
   settleBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: theme.color.success,
+    backgroundColor: BALANCES[t.scheme].settleFill,
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 8,
   },
   settleBtnText: {
-    color: '#ffffff',
+    color: t.color.textOnPrimary,
     fontSize: 13,
     fontWeight: '600',
   },
@@ -856,7 +860,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: theme.color.surface,
+    backgroundColor: t.color.surface,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 20,
@@ -871,13 +875,13 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   drillDownList: {
     maxHeight: 400,
   },
   emptyText: {
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     fontSize: 13,
     textAlign: 'center',
     marginVertical: 20,
@@ -888,7 +892,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: theme.color.border,
+    borderBottomColor: t.color.border,
   },
   drillDownItemLeft: {
     flex: 1,
@@ -897,11 +901,11 @@ const styles = StyleSheet.create({
   drillDownItemTitle: {
     fontSize: 14,
     fontWeight: '600',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   drillDownItemMeta: {
     fontSize: 12,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     marginTop: 2,
   },
   drillDownItemAmount: {
@@ -916,17 +920,17 @@ const styles = StyleSheet.create({
     marginTop: 8,
     paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: '#f1f5f9',
+    borderTopColor: BALANCES[t.scheme].hintDivider,
   },
   pairwiseHintText: {
     fontSize: 11,
-    color: theme.color.primary,
+    color: t.color.primaryFg,
     fontWeight: '600',
   },
   pairwiseModalSub: {
     fontSize: 13,
     fontWeight: '700',
-    color: theme.color.primary,
+    color: t.color.primaryFg,
     marginTop: 2,
   },
   pairwiseModalSettleBtn: {
@@ -934,12 +938,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    backgroundColor: '#16a34a',
+    backgroundColor: BALANCES[t.scheme].logPaymentFill,
     paddingVertical: 10,
     borderRadius: 10,
   },
   pairwiseModalSettleBtnText: {
-    color: '#ffffff',
+    color: t.color.textOnPrimary,
     fontSize: 14,
     fontWeight: '700',
   },
@@ -950,13 +954,13 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
-    backgroundColor: '#ffffff',
+    borderColor: BALANCES[t.scheme].entryBorder,
+    backgroundColor: t.color.surface,
     gap: 12,
   },
   pairwiseSettlementCard: {
-    backgroundColor: '#f0fdf4',
-    borderColor: '#86efac',
+    backgroundColor: BALANCES[t.scheme].settlementCardBg,
+    borderColor: BALANCES[t.scheme].settlementCardBorder,
     borderWidth: 1.5,
   },
   pairwiseEntryIcon: {
@@ -967,13 +971,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   pairwiseExpenseIconWrap: {
-    backgroundColor: '#f3e8ff',
-    borderColor: '#e9d5ff',
+    backgroundColor: BALANCES[t.scheme].expenseTint,
+    borderColor: BALANCES[t.scheme].expenseIconBorder,
     borderWidth: 1,
   },
   pairwiseSettlementIconWrap: {
-    backgroundColor: '#dcfce7',
-    borderColor: '#bbf7d0',
+    backgroundColor: BALANCES[t.scheme].owedBg,
+    borderColor: BALANCES[t.scheme].settlementIconBorder,
     borderWidth: 1,
   },
   pairwiseEntryContent: {
@@ -988,7 +992,7 @@ const styles = StyleSheet.create({
   pairwiseEntryTitle: {
     fontSize: 14,
     fontWeight: '700',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   pairwiseBadge: {
     paddingHorizontal: 6,
@@ -996,24 +1000,24 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   pairwiseExpenseBadge: {
-    backgroundColor: '#f3e8ff',
+    backgroundColor: BALANCES[t.scheme].expenseTint,
   },
   pairwiseSettlementBadge: {
-    backgroundColor: '#dcfce7',
+    backgroundColor: BALANCES[t.scheme].owedBg,
   },
   pairwiseBadgeText: {
     fontSize: 10,
     fontWeight: '700',
   },
   pairwiseExpenseBadgeText: {
-    color: '#7e22ce',
+    color: BALANCES[t.scheme].expenseBadgeText,
   },
   pairwiseSettlementBadgeText: {
-    color: '#15803d',
+    color: BALANCES[t.scheme].owedText,
   },
   pairwiseEntryMeta: {
     fontSize: 11,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     marginTop: 3,
   },
   pairwiseAmountCol: {
@@ -1029,6 +1033,6 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   pairwiseSettlementAmount: {
-    color: '#15803d',
+    color: BALANCES[t.scheme].owedText,
   },
-});
+}));

@@ -24,6 +24,7 @@
  */
 
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
@@ -62,7 +63,9 @@ jest.mock('@react-navigation/native', () => ({
 import CoverageDetailScreen, { SHARED_STATS_QUERY_KEY } from '../CoverageDetailScreen';
 import { ApiError, apiRequest as mockedApiRequest } from '../../../api/client';
 import type { StatsResponse } from '../../../api/statsTypes';
-import { rankParkRows } from '../statsView';
+import { buildCoverageGlance, rankParkRows } from '../statsView';
+import { darkTheme, lightTheme } from '../../../theme/theme';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
 import {
   DEFAULT_BY_RESORT,
   EMPTY_CELL,
@@ -171,7 +174,9 @@ describe('CoverageDetailScreen (R4.3, R5.1, R5.2, R5.3, R6.1, R6.3, R6.4, R14.3)
     await screen.findByTestId('coverage-parks');
 
     const renderedIds = screen.getAllByTestId(/^park-row-/).map((n) => String(n.props.testID));
-    const expectedIds = rankParkRows(seed.coverage.byPark).map((r) => `park-row-${r.key}`);
+    const expectedIds = rankParkRows(seed.coverage.byPark, lightTheme).map(
+      (r) => `park-row-${r.key}`,
+    );
     expect(renderedIds).toEqual(expectedIds);
   });
 
@@ -254,5 +259,67 @@ describe('CoverageDetailScreen (R4.3, R5.1, R5.2, R5.3, R6.1, R6.3, R6.4, R14.3)
 
     expect(await screen.findByTestId('coverage-screen')).toBeTruthy();
     expect(statsFetchCount()).toBe(2);
+  });
+});
+
+// Feature: dark-mode — the converted screen follows the Active theme.
+describe('CoverageDetailScreen — dark mode', () => {
+  const flat = (node: { props: { style?: unknown } }): Record<string, unknown> =>
+    (StyleSheet.flatten(node.props.style as never) ?? {}) as Record<string, unknown>;
+
+  beforeEach(() => {
+    apiRequestMock.mockReset();
+    mockRouteParams = undefined;
+  });
+  afterEach(resetTestScheme);
+
+  test('(a)(b)(c) background, primary text, and the active lens text use dark tokens', async () => {
+    setTestScheme('dark');
+    const seed = makeStatsResponse();
+    renderScreen(seed);
+    await screen.findByTestId('coverage-screen');
+
+    // (a) root ScreenContainer.
+    expect(flat(screen.root).backgroundColor).toBe(darkTheme.color.background);
+    // (b) the glance summary (primary text).
+    const summary = screen.getByText(buildCoverageGlance(seed.coverage).summary);
+    expect(flat(summary).color).toBe(darkTheme.color.textPrimary);
+    // (c) active segment label: primary-as-text → primaryFg (rule 1a).
+    expect(flat(screen.getByText('Parks')).color).toBe(darkTheme.color.primaryFg);
+    expect(flat(screen.getByTestId('coverage-lens-switcher')).backgroundColor).toBe(
+      darkTheme.color.surfaceAlt,
+    );
+  });
+
+  test('lens switcher: the active segment is raised above the track and moves on press', async () => {
+    setTestScheme('dark');
+    renderScreen(makeStatsResponse());
+    await screen.findByTestId('coverage-screen');
+
+    const seg = (lens: string) => flat(screen.getByTestId(`coverage-lens-${lens}`));
+    const track = flat(screen.getByTestId('coverage-lens-switcher')).backgroundColor;
+    expect(track).toBe(darkTheme.color.surfaceAlt);
+
+    // Active fill is lighter than the `surfaceAlt` track, not the darker `surface` hole.
+    expect(seg('parks').backgroundColor).toBe(darkTheme.color.borderStrong);
+    expect(seg('parks').backgroundColor).not.toBe(darkTheme.color.surface);
+    expect(seg('parks').backgroundColor).not.toBe(track);
+    expect(seg('categories').backgroundColor).toBeUndefined();
+    expect(flat(screen.getByText('Categories')).color).toBe(darkTheme.color.textSecondary);
+
+    fireEvent.press(screen.getByTestId('coverage-lens-categories'));
+    expect(seg('categories').backgroundColor).toBe(darkTheme.color.borderStrong);
+    expect(seg('parks').backgroundColor).toBeUndefined();
+    expect(flat(screen.getByText('Categories')).color).toBe(darkTheme.color.primaryFg);
+    expect(screen.getByTestId('coverage-categories')).toBeTruthy();
+  });
+
+  test('light keeps today\u2019s values for the same elements', async () => {
+    const seed = makeStatsResponse();
+    renderScreen(seed);
+    await screen.findByTestId('coverage-screen');
+    expect(flat(screen.getByText('Parks')).color).toBe('#5b2a86');
+    expect(flat(screen.getByTestId('coverage-lens-switcher')).backgroundColor).toBe('#efe9f7');
+    expect(flat(screen.getByTestId('coverage-lens-parks')).backgroundColor).toBe('#ffffff');
   });
 });

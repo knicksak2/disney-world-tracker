@@ -3,6 +3,8 @@
 // Validates: Requirements 11.1, 11.5, 19.1, 19.2, 19.3, 19.4, 19.5, 19.6, 19.7
 
 import React from 'react';
+import { StyleSheet } from 'react-native';
+import type { ReactTestInstance } from 'react-test-renderer';
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ExperienceCategory } from '@dwt/shared';
@@ -32,6 +34,10 @@ jest.mock('expo-secure-store', () => ({
 
 import FloatingActionDock from '../FloatingActionDock';
 import PassportAndLoreLens from '../PassportAndLoreLens';
+import { DOCK } from '../FloatingActionDock.palette';
+import { LORE } from '../PassportAndLoreLens.palette';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
+import { darkTheme, withAlpha } from '../../../theme/theme';
 
 const EXPERIENCE_ID = '11111111-1111-1111-1111-111111111111';
 
@@ -335,5 +341,87 @@ describe('PassportAndLoreLens composition (Requirements 11.1, 11.5)', () => {
     expect(screen.getByTestId('park-passport-card')).toBeTruthy();
     expect(screen.getByTestId('about-section')).toBeTruthy();
     expect(screen.getByTestId('community-rating-section')).toBeTruthy();
+  });
+});
+
+// Feature: dark-mode — (c) converted literals for the dock and the Passport lens (B2)
+describe('dark mode', () => {
+  afterEach(resetTestScheme);
+
+  const flat = (node: ReactTestInstance): Record<string, unknown> =>
+    (StyleSheet.flatten(node.props.style) ?? {}) as Record<string, unknown>;
+  const handlers = {
+    onLogVisit: jest.fn(),
+    onAddToPlan: jest.fn(),
+    onLogDish: jest.fn(),
+  };
+
+  test('(c) dock surface, primary fill and secondary pill use the dark values', () => {
+    setTestScheme('dark');
+    render(<FloatingActionDock category="Ride" activeLens="today" {...handlers} />);
+
+    const dock = flat(screen.getByTestId('floating-action-dock'));
+    expect(dock.backgroundColor).toBe(withAlpha(darkTheme.color.surface, 0.95));
+    expect(dock.borderColor).toBe(DOCK.dark.dockBorder);
+    expect(flat(screen.getByTestId('dock-primary-action')).backgroundColor).toBe(
+      darkTheme.color.primary,
+    );
+    const secondary = flat(screen.getByTestId('dock-secondary-action'));
+    expect(secondary.backgroundColor).toBe(DOCK.dark.secondaryBg);
+    expect(secondary.borderColor).toBe(DOCK.dark.secondaryBorder);
+    expect(flat(screen.getByText('Add to…')).color).toBe(DOCK.dark.secondaryText);
+  });
+
+  test('keeps the pre-retrofit light dock values under light', () => {
+    render(<FloatingActionDock category="Ride" activeLens="today" {...handlers} />);
+
+    expect(flat(screen.getByTestId('floating-action-dock')).backgroundColor).toBe(
+      'rgba(255, 255, 255, 0.95)',
+    );
+    expect(flat(screen.getByTestId('dock-primary-action')).backgroundColor).toBe('#5b2a86');
+    expect(flat(screen.getByTestId('dock-secondary-action')).backgroundColor).toBe('#fbf9fe');
+  });
+
+  test('(c) PassportAndLoreLens insider notes and tag cloud use the dark tonal values', () => {
+    setTestScheme('dark');
+    render(
+      <QueryClientProvider client={createQueryClient()}>
+        <PassportAndLoreLens
+          experienceId={EXPERIENCE_ID}
+          experienceName="Space Mountain"
+          category="Ride"
+          description="High speed coaster in the dark."
+          whyThis={{ title: 'Why visit', bullets: ['Ride in the front row'], quotes: [] }}
+          completionQuery={emptyQuery()}
+          ratingQuery={emptyQuery()}
+          noteQuery={emptyQuery()}
+          logsQuery={emptyQuery()}
+          aggregateQuery={emptyQuery()}
+          remainingGroups={[
+            {
+              id: 'goodToKnow',
+              label: 'Good to know',
+              tags: [{ kind: 'interest', label: 'Indoor', accessibilityLabel: 'Interest: Indoor' }],
+            },
+          ]}
+        />
+      </QueryClientProvider>,
+    );
+
+    expect(flat(screen.getByText("Imagineer's Insider Notes")).color).toBe(
+      darkTheme.color.primaryFg,
+    );
+    expect(flat(screen.getByText('Ride in the front row')).color).toBe(LORE.dark.inkText);
+    expect(flat(screen.getByTestId('experience-info-tag-interest')).backgroundColor).toBe(
+      LORE.dark.cloudPillBg,
+    );
+    expect(flat(screen.getByText('Good to know')).color).toBe(LORE.dark.mutedText);
+    // Text hierarchy (Requirement 9.13): ink body is textPrimary and the muted
+    // group label is textSecondary (it used to be brighter than the body).
+    const ink = flat(screen.getByText('Ride in the front row')).color;
+    const muted = flat(screen.getByText('Good to know')).color;
+    expect(ink).toBe(darkTheme.color.textPrimary);
+    expect(muted).toBe(darkTheme.color.textSecondary);
+    expect(muted).not.toBe(ink);
   });
 });

@@ -14,9 +14,9 @@
 // Validates: trip-reservations Requirements 3.8, 3.9, 3.10, 3.11
 
 import React from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 
-import { theme } from '../theme/theme';
+import { makeStyles } from '../theme/makeStyles';
 
 /** 12-hour clock hours, in wheel order. */
 export const WHEEL_HOURS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'] as const;
@@ -85,6 +85,7 @@ export function TimeWheelPicker({
   minuteStep = 15,
   testIDPrefix,
 }: TimeWheelPickerProps): JSX.Element {
+  const styles = useStyles();
   const { hour, minute, meridiem } = parseWheelValue(value, minuteStep);
   const minutes = wheelMinutes(minuteStep);
 
@@ -170,15 +171,15 @@ export function TimeWheelPicker({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   grid: {
     flexDirection: 'row',
-    gap: theme.spacing.xs,
-    backgroundColor: theme.color.surfaceAlt,
-    padding: theme.spacing.xs,
-    borderRadius: theme.radius.md,
+    gap: t.spacing.xs,
+    backgroundColor: t.color.surfaceAlt,
+    padding: t.spacing.xs,
+    borderRadius: t.radius.md,
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
     height: 140,
   },
   column: {
@@ -188,7 +189,7 @@ const styles = StyleSheet.create({
   columnHeader: {
     fontSize: 10,
     fontWeight: '700',
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     textTransform: 'uppercase',
     marginBottom: 4,
   },
@@ -196,45 +197,45 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   item: {
-    paddingVertical: theme.spacing.xs,
+    paddingVertical: t.spacing.xs,
     alignItems: 'center',
-    borderRadius: theme.radius.sm,
+    borderRadius: t.radius.sm,
     marginVertical: 1,
   },
   itemActive: {
-    backgroundColor: theme.color.primary,
+    backgroundColor: t.color.primary,
   },
   itemText: {
     fontSize: 14,
     fontWeight: '600',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   itemTextActive: {
-    color: theme.color.textOnPrimary,
+    color: t.color.textOnPrimary,
   },
   meridiemBox: {
     width: '100%',
-    gap: theme.spacing.xs,
+    gap: t.spacing.xs,
     marginTop: 4,
   },
   meridiemBtn: {
-    paddingVertical: theme.spacing.xs + 2,
+    paddingVertical: t.spacing.xs + 2,
     alignItems: 'center',
-    borderRadius: theme.radius.sm,
-    backgroundColor: theme.color.surface,
+    borderRadius: t.radius.sm,
+    backgroundColor: t.color.surface,
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
   },
   meridiemBtnActive: {
-    backgroundColor: theme.color.primary,
-    borderColor: theme.color.primary,
+    backgroundColor: t.color.primary,
+    borderColor: t.color.primary,
   },
   meridiemText: {
     fontSize: 13,
     fontWeight: '700',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   meridiemTextActive: {
-    color: theme.color.textOnPrimary,
+    color: t.color.textOnPrimary,
   },
-});
+}));

@@ -20,13 +20,14 @@
 //     cannot be read back from a later component-tree dump (R6.11 hygiene).
 
 import React, { useState } from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { Text, TextInput, View } from 'react-native';
 import { useMutation } from '@tanstack/react-query';
 
 import { changePasswordInputSchema } from '@dwt/shared';
 
 import { ApiError, apiRequest } from '../api/client';
-import { theme } from '../theme/theme';
+import { makeStyles } from '../theme/makeStyles';
+import { useAppTheme } from '../theme/useAppTheme';
 import { PrimaryButton, SecondaryButton } from '../theme/components';
 
 // ---------------------------------------------------------------------------
@@ -54,6 +55,8 @@ interface ChangePasswordPayload {
  * self-mode block.
  */
 export default function ChangePasswordControl(): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const [isOpen, setIsOpen] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -161,7 +164,8 @@ export default function ChangePasswordControl(): JSX.Element {
         textContentType="password"
         editable={!busy}
         placeholder="Current password"
-        placeholderTextColor={theme.color.textSecondary}
+        placeholderTextColor={t.color.textSecondary}
+        keyboardAppearance={t.scheme}
         style={styles.input}
         accessibilityLabel="Current password"
         testID="change-password-current"
@@ -181,7 +185,8 @@ export default function ChangePasswordControl(): JSX.Element {
         textContentType="newPassword"
         editable={!busy}
         placeholder="New password (8-128 characters)"
-        placeholderTextColor={theme.color.textSecondary}
+        placeholderTextColor={t.color.textSecondary}
+        keyboardAppearance={t.scheme}
         style={styles.input}
         accessibilityLabel="New password"
         testID="change-password-new"
@@ -201,7 +206,8 @@ export default function ChangePasswordControl(): JSX.Element {
         textContentType="newPassword"
         editable={!busy}
         placeholder="Re-enter new password"
-        placeholderTextColor={theme.color.textSecondary}
+        placeholderTextColor={t.color.textSecondary}
+        keyboardAppearance={t.scheme}
         style={styles.input}
         accessibilityLabel="Confirm new password"
         testID="change-password-confirm"
@@ -243,42 +249,42 @@ export default function ChangePasswordControl(): JSX.Element {
 // Styles
 // ---------------------------------------------------------------------------
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   container: {
-    gap: theme.spacing.sm,
+    gap: t.spacing.sm,
   },
   editor: {
     alignSelf: 'stretch',
-    gap: theme.spacing.sm,
+    gap: t.spacing.sm,
   },
   label: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
   },
   input: {
     borderWidth: 1,
-    borderColor: theme.color.border,
-    borderRadius: theme.radius.md,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.md,
+    borderColor: t.color.border,
+    borderRadius: t.radius.md,
+    paddingHorizontal: t.spacing.md,
+    paddingVertical: t.spacing.md,
     fontSize: 16,
-    color: theme.color.textPrimary,
-    backgroundColor: theme.color.surfaceAlt,
+    color: t.color.textPrimary,
+    backgroundColor: t.color.surfaceAlt,
   },
   error: {
-    color: theme.color.danger,
+    color: t.color.danger,
     fontSize: 14,
   },
   success: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
   },
   row: {
     flexDirection: 'row',
-    gap: theme.spacing.md,
+    gap: t.spacing.md,
   },
   flexBtn: {
     flexGrow: 1,
     flexBasis: 0,
   },
-});
+}));

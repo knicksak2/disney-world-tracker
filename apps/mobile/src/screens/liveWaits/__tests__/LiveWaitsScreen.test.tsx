@@ -4,13 +4,19 @@
  */
 
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { StyleSheet } from 'react-native';
+import type { ReactTestInstance } from 'react-test-renderer';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { NavigationContainer } from '@react-navigation/native';
 import type { ExperienceDTO, ParkLiveSnapshotDTO } from '@dwt/shared';
 
 import { ApiError, apiRequest } from '../../../api/client';
 import LiveWaitsScreen from '../LiveWaitsScreen';
+import { LIVE_WAITS } from '../LiveWaitsScreen.palette';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
+import { darkTheme, withAlpha } from '../../../theme/theme';
+import { ScreenContainer } from '../../../theme/components';
 
 jest.mock('../../../api/client', () => {
   const actual = jest.requireActual('../../../api/client');
@@ -583,6 +589,78 @@ describe('LiveWaitsScreen', () => {
     await waitFor(() => {
       expect(screen.getByTestId('live-waits-filter-empty')).toBeTruthy();
       expect(screen.getByText('No rides match this filter')).toBeTruthy();
+    });
+  });
+
+  // Feature: dark-mode — (a)/(b)/(c) plus the B2 per-batch live-repaint test (d)
+  describe('dark mode', () => {
+    afterEach(resetTestScheme);
+
+    const flat = (node: ReactTestInstance): Record<string, unknown> =>
+      (StyleSheet.flatten(node.props.style) ?? {}) as Record<string, unknown>;
+
+    const stubLive = (): void => {
+      mockApiRequest.mockImplementation(async (_method, url) => {
+        if (url.includes('/parks/') && url.includes('/live')) {
+          return mockSnapshot;
+        }
+        if (url.includes('/catalog')) {
+          return { experiences: mockExperiences };
+        }
+        if (url.includes('/me/trips')) {
+          return [];
+        }
+        return {};
+      });
+    };
+
+    it('(a)(b)(c) paints the screen, row text and converted literals with dark values', async () => {
+      setTestScheme('dark');
+      stubLive();
+      renderScreen();
+
+      await waitFor(() => {
+        expect(screen.getByText('PeopleMover')).toBeTruthy();
+      });
+
+      // (a) root container.
+      const root = screen.UNSAFE_getByType(ScreenContainer).children[0] as ReactTestInstance;
+      expect(flat(root).backgroundColor).toBe(darkTheme.color.background);
+      // (b) primary text (row name).
+      expect(flat(screen.getByText('PeopleMover')).color).toBe(darkTheme.color.textPrimary);
+      // (c) converted literals / token reads.
+      const crowdCard = flat(screen.getByTestId('live-waits-crowd-card'));
+      expect(crowdCard.backgroundColor).toBe(LIVE_WAITS.dark.crowdCardBg);
+      expect(crowdCard.borderColor).toBe(LIVE_WAITS.dark.crowdCardBorder);
+      expect(flat(screen.getByTestId('filter-chip-all')).backgroundColor).toBe(
+        withAlpha(darkTheme.color.primary, 0.15),
+      );
+      const row = screen.getByTestId('live-waits-row-exp-peoplemover');
+      expect(flat(row).backgroundColor).toBe(darkTheme.color.surface);
+      expect(flat(within(row).getByText('+ Log')).color).toBe(darkTheme.color.primaryFg);
+    });
+
+    it('(d) a mounted FlatList row repaints to the dark value without a remount', async () => {
+      stubLive();
+      renderScreen();
+
+      await waitFor(() => {
+        expect(screen.getByTestId('live-waits-row-exp-peoplemover')).toBeTruthy();
+      });
+
+      const row = screen.getByTestId('live-waits-row-exp-peoplemover');
+      expect(flat(row).backgroundColor).toBe('#ffffff');
+      expect(flat(within(row).getByText('PeopleMover')).color).toBe('#1f1235');
+      expect(flat(within(row).getByText('+ Log')).color).toBe('#5b2a86');
+
+      setTestScheme('dark');
+
+      // Same host instance (no remount), now painted with the dark tokens.
+      const after = screen.getByTestId('live-waits-row-exp-peoplemover');
+      expect(after).toBe(row);
+      expect(flat(after).backgroundColor).toBe(darkTheme.color.surface);
+      expect(flat(within(after).getByText('PeopleMover')).color).toBe(darkTheme.color.textPrimary);
+      expect(flat(within(after).getByText('+ Log')).color).toBe(darkTheme.color.primaryFg);
     });
   });
 });

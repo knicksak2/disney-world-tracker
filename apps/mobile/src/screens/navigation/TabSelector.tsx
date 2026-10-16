@@ -38,10 +38,11 @@
  */
 
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-import { theme } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme } from '../../theme/useAppTheme';
 
 // ---------------------------------------------------------------------------
 // Mode unions
@@ -170,6 +171,8 @@ export function TabSelector<M extends string>({
   readonly active: M;
   readonly onSelect: (mode: M) => void;
 }): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   return (
     <View style={styles.bar} accessibilityRole="tablist" testID="tab-selector">
       {tabs.map((tab) => {
@@ -193,7 +196,7 @@ export function TabSelector<M extends string>({
             <Ionicons
               name={tab.icon}
               size={20}
-              color={selected ? theme.color.textOnPrimary : theme.color.textSecondary}
+              color={selected ? t.color.textOnPrimary : t.color.textSecondary}
             />
             <Text
               numberOfLines={1}
@@ -215,14 +218,14 @@ export function TabSelector<M extends string>({
 // Styles
 // ---------------------------------------------------------------------------
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   bar: {
     flexDirection: 'row',
-    backgroundColor: theme.color.surfaceAlt,
-    borderRadius: theme.radius.pill,
-    padding: theme.spacing.xs,
-    gap: theme.spacing.xs,
-    marginBottom: theme.spacing.lg,
+    backgroundColor: t.color.surfaceAlt,
+    borderRadius: t.radius.pill,
+    padding: t.spacing.xs,
+    gap: t.spacing.xs,
+    marginBottom: t.spacing.lg,
   },
   tab: {
     flex: 1,
@@ -230,13 +233,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 2,
-    paddingVertical: theme.spacing.sm,
-    paddingHorizontal: theme.spacing.xs,
-    borderRadius: theme.radius.pill,
+    paddingVertical: t.spacing.sm,
+    paddingHorizontal: t.spacing.xs,
+    borderRadius: t.radius.pill,
   },
   // Active treatment: filled primary background (R1.6, R8.6).
   tabActive: {
-    backgroundColor: theme.color.primary,
+    backgroundColor: t.color.primary,
   },
   // Inactive treatment: transparent over the bar's tinted surface.
   tabInactive: {
@@ -246,12 +249,12 @@ const styles = StyleSheet.create({
     opacity: 0.85,
   },
   label: {
-    ...theme.typography.meta,
+    ...t.typography.meta,
   },
   labelActive: {
-    color: theme.color.textOnPrimary,
+    color: t.color.textOnPrimary,
   },
   labelInactive: {
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
-});
+}));

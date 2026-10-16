@@ -3,10 +3,16 @@
 // Validates: Requirements 1.9, 2.1, 2.2, 5.1, 5.2, 5.5, 5.6, 5.7, 6.5
 
 import React from 'react';
+import { FlatList, KeyboardAvoidingView, Platform, StyleSheet } from 'react-native';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import type { ReactTestInstance } from 'react-test-renderer';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import type { FoodItemDTO, MenuDTO } from '@dwt/shared';
+
+import { darkTheme } from '../../../theme/theme';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
+import { PICKER } from '../FoodItemPickerModal.palette';
 
 jest.mock('../../../api/client', () => {
   const actual = jest.requireActual('../../../api/client');
@@ -830,5 +836,128 @@ describe('FoodItemPickerModal', () => {
       // Selection count is still preserved
       expect(screen.getByText('Done (2)')).toBeTruthy();
     });
+  });
+
+  it('uses undefined behavior for KeyboardAvoidingView on Android to prevent adjustResize jitter loops', async () => {
+    const originalPlatform = Platform.OS;
+    try {
+      Platform.OS = 'android';
+      apiRequestMock.mockImplementation((_method, path) => {
+        if (path === '/experiences/exp-1/food-items') {
+          return Promise.resolve(itemsEnvelope(MOCK_ITEMS));
+        }
+        return Promise.resolve({});
+      });
+      renderWithClient(
+        <FoodItemPickerModal
+          experienceId="exp-1"
+          visible={true}
+          onClose={jest.fn()}
+        />,
+      );
+      await screen.findByText('Churro with Chocolate Sauce');
+      const modal = screen.getByTestId('food-item-picker-modal');
+      const kav = modal.findByType(KeyboardAvoidingView);
+      expect(kav.props.behavior).toBeUndefined();
+    } finally {
+      Platform.OS = originalPlatform;
+    }
+  });
+});
+
+/** Nearest painted `backgroundColor` at or above `node` (sheet surface lookup). */
+function paintedBackground(node: ReactTestInstance | null): unknown {
+  for (let n = node; n !== null; n = n.parent) {
+    const style = n.props.style;
+    if (style === undefined || typeof style === 'function') continue;
+    const flat = StyleSheet.flatten(style) as { backgroundColor?: unknown } | undefined;
+    if (flat?.backgroundColor !== undefined) return flat.backgroundColor;
+  }
+  return undefined;
+}
+
+describe('FoodItemPickerModal — dark mode', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+  afterEach(resetTestScheme);
+
+  it('paints the sheet, title, rows and the violet repeat badge with dark values', async () => {
+    setTestScheme('dark');
+    apiRequestMock.mockImplementation((_method, path) => {
+      if (path === '/experiences/exp-1/food-items') {
+        return Promise.resolve(itemsEnvelope(MOCK_ITEMS));
+      }
+      if (path === '/me/food-items/item-1/logs') {
+        return Promise.resolve({ foodItemId: 'item-1', repeatCount: 3, logs: [] });
+      }
+      return Promise.resolve({ foodItemId: 'x', repeatCount: 0, logs: [] });
+    });
+
+    renderWithClient(
+      <FoodItemPickerModal
+        experienceId="exp-1"
+        visible={true}
+        onClose={jest.fn()}
+        onSelectFoodItem={jest.fn()}
+      />,
+    );
+
+    const title = screen.getByText('Select Dish');
+    // (a) sheet surface, (b) primary text.
+    expect(paintedBackground(title)).toBe(darkTheme.color.surface);
+    expect(StyleSheet.flatten(title.props.style).color).toBe(darkTheme.color.textPrimary);
+    // TextInput follows the scheme.
+    const input = screen.getByTestId('food-item-search-input');
+    expect(input.props.keyboardAppearance).toBe('dark');
+    expect(input.props.placeholderTextColor).toBe(darkTheme.color.textSecondary);
+
+    // (c) the row (its own useStyles) and the converted violet badge (rule 3 S).
+    const repeatText = await screen.findByText('Logged 3x');
+    expect(StyleSheet.flatten(repeatText.props.style).color).toBe(darkTheme.color.primaryFg);
+    expect(paintedBackground(repeatText)).toBe(PICKER.dark.repeatBadgeBg);
+    expect(
+      StyleSheet.flatten(screen.getByText('Churro with Chocolate Sauce').props.style).color,
+    ).toBe(darkTheme.color.textPrimary);
+  });
+
+  // B3-N2: FlatList `extraData` keeps its identity across an unrelated parent
+  // render and changes only on a selection or scheme change.
+  it('keeps a stable FlatList extraData identity and renews it on a scheme switch', async () => {
+    apiRequestMock.mockImplementation((_method, path) => {
+      if (path === '/experiences/exp-1/food-items') {
+        return Promise.resolve(itemsEnvelope(MOCK_ITEMS));
+      }
+      return Promise.resolve({ foodItemId: 'x', repeatCount: 0, logs: [] });
+    });
+    const onClose = jest.fn();
+    const onSelect = jest.fn();
+    // A fresh element on every call: re-rendering with a new element (new props
+    // object) forces FoodItemPickerModal to actually run again, so an inline
+    // `extraData` array would get a new identity. Re-using one element would let
+    // React bail out and the assertion below would hold even without useMemo.
+    const makeUi = () => (
+      <FoodItemPickerModal
+        experienceId="exp-1"
+        visible={true}
+        onClose={onClose}
+        onSelectFoodItem={onSelect}
+      />
+    );
+    const { queryClient, rerender } = renderWithClient(makeUi());
+    await screen.findByText('Churro with Chocolate Sauce');
+
+    const extraData = (): readonly unknown[] =>
+      screen.UNSAFE_getByType(FlatList).props.extraData as readonly unknown[];
+    const before = extraData();
+    expect(before[1]).toBe('light');
+
+    rerender(<QueryClientProvider client={queryClient}>{makeUi()}</QueryClientProvider>);
+    expect(extraData()).toBe(before);
+
+    setTestScheme('dark');
+    await waitFor(() => expect(extraData()).not.toBe(before));
+    expect(extraData()[1]).toBe('dark');
+    expect(extraData()[0]).toBe(before[0]);
   });
 });

@@ -1,8 +1,14 @@
 // Feature: experience-lists, Task 12.4 — ManageExperienceListSharesSheet interaction tests
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import type { ReactTestInstance } from 'react-test-renderer';
 import type { ExperienceListShareDTO } from '@dwt/shared';
+
+import { darkTheme } from '../../../theme/theme';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
+import { EXPERIENCE_SHARES } from '../ManageExperienceListSharesSheet.palette';
 
 jest.mock('expo-constants', () => ({
   __esModule: true,
@@ -208,4 +214,44 @@ describe('ManageExperienceListSharesSheet', () => {
       );
     });
   });
+
+  describe('dark mode', () => {
+    afterEach(resetTestScheme);
+
+    test('paints the sheet, share rows and role badges with dark values', async () => {
+      setTestScheme('dark');
+      renderSheet();
+
+      const name = await screen.findByText('Friend One');
+      const title = screen.getByText('Manage Sharing');
+      // (a) sheet surface, (b) primary text.
+      expect(paintedBackground(title)).toBe(darkTheme.color.surface);
+      expect(StyleSheet.flatten(name.props.style).color).toBe(darkTheme.color.textPrimary);
+      // (c) the Viewer badge: violet tint (rule 3 S), primaryFg outline and label.
+      const viewer = StyleSheet.flatten(
+        screen.getByTestId('experience-share-role-toggle-user-friend-1').props.style,
+      );
+      expect(viewer.backgroundColor).toBe(EXPERIENCE_SHARES.dark.roleBadgeBg);
+      expect(viewer.borderColor).toBe(darkTheme.color.primaryFg);
+      expect(StyleSheet.flatten(screen.getByText('Viewer').props.style).color).toBe(
+        darkTheme.color.primaryFg,
+      );
+      expect(
+        StyleSheet.flatten(
+          screen.getByTestId('experience-share-role-toggle-user-friend-2').props.style,
+        ).backgroundColor,
+      ).toBe(darkTheme.color.primary);
+    });
+  });
 });
+
+/** Nearest painted `backgroundColor` at or above `node` (sheet surface lookup). */
+function paintedBackground(node: ReactTestInstance | null): unknown {
+  for (let n = node; n !== null; n = n.parent) {
+    const style = n.props.style;
+    if (style === undefined || typeof style === 'function') continue;
+    const flat = StyleSheet.flatten(style) as { backgroundColor?: unknown } | undefined;
+    if (flat?.backgroundColor !== undefined) return flat.backgroundColor;
+  }
+  return undefined;
+}

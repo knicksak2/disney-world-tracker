@@ -5,6 +5,7 @@
  */
 
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import {
   fireEvent,
   render,
@@ -13,6 +14,9 @@ import {
   within,
 } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { darkTheme } from '../../../theme/theme';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
+import { FOOD_PODIUM, FOOD_RATING } from '../FoodStatsScreen.palette';
 
 // In-memory expo-secure-store mock
 jest.mock('expo-secure-store', () => ({
@@ -372,5 +376,78 @@ describe('FoodStatsScreen', () => {
 
     expect(screen.getByTestId('food-odometer-grid')).toBeTruthy();
     expect(apiRequestMock).not.toHaveBeenCalled();
+  });
+});
+
+// Feature: dark-mode — the converted screen follows the Active theme.
+describe('FoodStatsScreen — dark mode', () => {
+  const flat = (node: { props: { style?: unknown } }): Record<string, unknown> =>
+    (StyleSheet.flatten(node.props.style as never) ?? {}) as Record<string, unknown>;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+  afterEach(resetTestScheme);
+
+  test('(a)(b)(c) background, section title, podium and rated star use dark values', () => {
+    setTestScheme('dark');
+    const client = createClient();
+    client.setQueryData(
+      SHARED_STATS_QUERY_KEY,
+      makeStatsResponse({ foodActivity: DEFAULT_FOOD_ACTIVITY }),
+    );
+    renderWithClient(client);
+
+    // (a) root ScreenContainer.
+    expect(flat(screen.root).backgroundColor).toBe(darkTheme.color.background);
+    // (b) primary text.
+    expect(flat(screen.getByText('Personal Records & Bests')).color).toBe(
+      darkTheme.color.textPrimary,
+    );
+    // (c) H-role podium fill stays; its outline and the star take palette dark values.
+    const podium = flat(screen.getByTestId('food-podium-card'));
+    expect(podium.backgroundColor).toBe(FOOD_PODIUM.dark.bg);
+    expect(podium.borderColor).toBe(FOOD_PODIUM.dark.border);
+    const star = within(screen.getByTestId('food-highest-rated-row-1')).getByText('★');
+    expect(flat(star).color).toBe(FOOD_RATING.dark.star);
+  });
+
+  test('sort toggle: the active option is raised above the `surfaceAlt` track and moves on press', () => {
+    setTestScheme('dark');
+    const client = createClient();
+    client.setQueryData(
+      SHARED_STATS_QUERY_KEY,
+      makeStatsResponse({ foodActivity: DEFAULT_FOOD_ACTIVITY }),
+    );
+    renderWithClient(client);
+
+    const btn = (id: string) => flat(screen.getByTestId(id));
+    const label = (id: string, text: string) =>
+      flat(within(screen.getByTestId(id)).getByText(text)).color;
+
+    // Lighter than the track (not the darker `surface` hole).
+    expect(btn('food-sort-toggle-logged').backgroundColor).toBe(darkTheme.color.borderStrong);
+    expect(btn('food-sort-toggle-logged').backgroundColor).not.toBe(darkTheme.color.surface);
+    expect(btn('food-sort-toggle-logged').backgroundColor).not.toBe(darkTheme.color.surfaceAlt);
+    expect(btn('food-sort-toggle-rated').backgroundColor).toBeUndefined();
+    expect(label('food-sort-toggle-logged', 'Most Logged')).toBe(darkTheme.color.primaryFg);
+
+    fireEvent.press(screen.getByTestId('food-sort-toggle-rated'));
+    expect(btn('food-sort-toggle-rated').backgroundColor).toBe(darkTheme.color.borderStrong);
+    expect(btn('food-sort-toggle-logged').backgroundColor).toBeUndefined();
+    expect(label('food-sort-toggle-rated', 'Highest Rated')).toBe(darkTheme.color.primaryFg);
+  });
+
+  test('light keeps today\u2019s literal values for the converted elements', () => {
+    const client = createClient();
+    client.setQueryData(
+      SHARED_STATS_QUERY_KEY,
+      makeStatsResponse({ foodActivity: DEFAULT_FOOD_ACTIVITY }),
+    );
+    renderWithClient(client);
+    expect(flat(screen.getByTestId('food-sort-toggle-logged')).backgroundColor).toBe('#ffffff');
+    expect(flat(screen.getByTestId('food-podium-card')).borderColor).toBe('#4d2055');
+    const star = within(screen.getByTestId('food-highest-rated-row-1')).getByText('★');
+    expect(flat(star).color).toBe('#f59f00');
   });
 });

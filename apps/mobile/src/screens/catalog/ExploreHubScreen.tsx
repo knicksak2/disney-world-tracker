@@ -42,7 +42,9 @@ import {
 } from '@dwt/shared';
 
 import { ApiError, apiRequest } from '../../api/client';
-import { theme } from '../../theme/theme';
+import { withAlpha } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme, usePalette } from '../../theme/useAppTheme';
 import {
   Badge,
   Card,
@@ -50,6 +52,7 @@ import {
   GradientHeader,
   ScreenContainer,
 } from '../../theme/components';
+import { EXPLORE, EXPLORE_ART, EXPLORE_HERO } from './ExploreHubScreen.palette';
 import { destinationCardLabel, type DestinationId } from './destinations';
 import { priceTierListTag, resortAreaLabel } from './infoTags';
 import { browseLandOf } from './catalogGrouping';
@@ -130,6 +133,9 @@ async function fetchAllCatalog(): Promise<CatalogListResponse> {
 export default function ExploreHubScreen({
   navigation: passedNavigation,
 }: ExploreHubScreenProps): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
+  const pal = usePalette(EXPLORE);
   const navigation = passedNavigation;
 
   // Search state
@@ -273,7 +279,7 @@ export default function ExploreHubScreen({
           <Ionicons
             name="search"
             size={18}
-            color={theme.color.textSecondary}
+            color={t.color.textSecondary}
             style={styles.searchIcon}
           />
           <TextInput
@@ -281,7 +287,8 @@ export default function ExploreHubScreen({
             value={searchInput}
             onChangeText={setSearchInput}
             placeholder="Search experiences, lands, or facets..."
-            placeholderTextColor={theme.color.textSecondary}
+            placeholderTextColor={t.color.textSecondary}
+            keyboardAppearance={t.scheme}
             autoCapitalize="none"
             autoCorrect={false}
             returnKeyType="search"
@@ -292,7 +299,7 @@ export default function ExploreHubScreen({
             <Ionicons
               name="close-circle"
               size={18}
-              color={theme.color.textSecondary}
+              color={t.color.textSecondary}
               style={styles.searchClear}
               onPress={() => {
                 setSearchInput('');
@@ -312,7 +319,7 @@ export default function ExploreHubScreen({
           <Ionicons
             name="cloud-offline-outline"
             size={16}
-            color={theme.color.warningText}
+            color={t.color.warningText}
             style={styles.staleBannerIcon}
           />
           <Text style={styles.staleBannerText}>Showing cached catalog</Text>
@@ -351,8 +358,8 @@ export default function ExploreHubScreen({
               accessibilityLabel="Live Waits, real-time wait times"
               testID="utility-dock-waits"
             >
-              <View style={[styles.dockIconCircle, { backgroundColor: '#E0F2FE' }]}>
-                <Ionicons name="time" size={20} color="#0284C7" />
+              <View style={[styles.dockIconCircle, { backgroundColor: pal.dockWaitsBg }]}>
+                <Ionicons name="time" size={20} color={pal.dockWaitsIcon} />
               </View>
               <Text style={styles.dockTileTitle}>Live Waits</Text>
               <Text style={styles.dockTileSub}>Line times</Text>
@@ -365,8 +372,8 @@ export default function ExploreHubScreen({
               accessibilityLabel="Crowds, day-by-day crowd projections"
               testID="utility-dock-crowds"
             >
-              <View style={[styles.dockIconCircle, { backgroundColor: '#FEF3C7' }]}>
-                <Ionicons name="bar-chart" size={20} color="#D97706" />
+              <View style={[styles.dockIconCircle, { backgroundColor: pal.dockCrowdsBg }]}>
+                <Ionicons name="bar-chart" size={20} color={pal.dockCrowdsIcon} />
               </View>
               <Text style={styles.dockTileTitle}>Crowds</Text>
               <Text style={styles.dockTileSub}>Calendar</Text>
@@ -379,8 +386,8 @@ export default function ExploreHubScreen({
               accessibilityLabel="Favorites, your saved rides and dining"
               testID="utility-dock-favorites"
             >
-              <View style={[styles.dockIconCircle, { backgroundColor: '#FFE4E6' }]}>
-                <Ionicons name="heart" size={20} color="#E11D48" />
+              <View style={[styles.dockIconCircle, { backgroundColor: pal.dockFavoritesBg }]}>
+                <Ionicons name="heart" size={20} color={pal.dockFavoritesIcon} />
               </View>
               <Text style={styles.dockTileTitle}>Favorites</Text>
               <Text style={styles.dockTileSub}>Saved</Text>
@@ -549,12 +556,14 @@ function ThemeParkGridTile({
   readonly count: number;
   readonly onPress: () => void;
 }): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
+  const art = usePalette(EXPLORE_ART);
   const visual = DESTINATION_VISUALS[park] ?? {
     id: park,
     icon: '🏰',
     landmark: park,
-    accent: '#7e57c2',
-    gradient: ['#280b45', '#5b2a86', '#7e57c2'] as const,
+    gradient: [art.parkFallback0, art.parkFallback1, art.parkFallback2] as const,
     watermarkGlyph: 'sparkles' as const,
   };
 
@@ -605,7 +614,7 @@ function ThemeParkGridTile({
               style={styles.parkWaitPulseBadge}
               testID={`explore-park-wait-pulse-${park}`}
             >
-              <Ionicons name="flash" size={11} color="#F6C343" />
+              <Ionicons name="flash" size={11} color={t.color.accent} />
               <Text style={styles.parkWaitPulseText}>{avgWait}m avg</Text>
             </View>
           )}
@@ -641,12 +650,13 @@ function WaterParkGridTile({
   readonly count: number;
   readonly onPress: () => void;
 }): JSX.Element {
+  const styles = useStyles();
+  const art = usePalette(EXPLORE_ART);
   const visual = DESTINATION_VISUALS[park] ?? {
     id: park,
     icon: '🏄‍♂️',
     landmark: park,
-    accent: '#17a2b8',
-    gradient: ['#052930', '#00838f', '#17a2b8'] as const,
+    gradient: [art.waterFallback0, art.waterFallback1, art.waterFallback2] as const,
     watermarkGlyph: 'water' as const,
   };
 
@@ -709,6 +719,8 @@ function SearchResultsBody({
   readonly completedIds: ReadonlySet<string>;
   readonly favoritedIds: ReadonlySet<string>;
 }): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const results = query.data?.experiences ?? [];
 
   const renderSearchResult = useCallback(
@@ -739,7 +751,7 @@ function SearchResultsBody({
   if (showLoading) {
     return (
       <View style={styles.center} testID="catalog-search-loading">
-        <ActivityIndicator color={theme.color.primary} />
+        <ActivityIndicator color={t.color.primaryFg} />
       </View>
     );
   }
@@ -789,15 +801,17 @@ const SearchResultRow = React.memo(function SearchResultRow({
   completed = false,
   favorited = false,
 }: SearchResultRowProps): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const onPress = useCallback(
     () => onSelectExperience(experience),
     [onSelectExperience, experience],
   );
-  const visual = theme.categoryVisual[experience.category];
+  const visual = t.categoryVisual[experience.category];
   const accent =
     experience.park !== null
-      ? theme.parkAccent[experience.park]
-      : theme.color.primary;
+      ? t.parkAccent[experience.park]
+      : t.color.primaryFg;
 
   const destinationLabel =
     experience.park ?? (experience.areaType === 'Resort' ? 'Resort' : 'Walt Disney World');
@@ -849,7 +863,7 @@ const SearchResultRow = React.memo(function SearchResultRow({
             {priceTag !== null ? (
               <Badge
                 label={priceTag.label}
-                color={theme.color.primary}
+                color={t.color.primaryFg}
                 accessibilityLabel={priceTag.accessibilityLabel}
                 testID={`catalog-search-price-${experience.id}`}
               />
@@ -865,7 +879,7 @@ const SearchResultRow = React.memo(function SearchResultRow({
           <Ionicons
             name="chevron-forward"
             size={20}
-            color={theme.color.textSecondary}
+            color={t.color.textSecondary}
           />
         </View>
       </View>
@@ -880,8 +894,10 @@ const ExperienceThumb = React.memo(function ExperienceThumb({
   readonly imageUrl: string | null;
   readonly category: ExperienceCategory;
 }): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const [failed, setFailed] = useState(false);
-  const visual = theme.categoryVisual[category];
+  const visual = t.categoryVisual[category];
 
   if (imageUrl !== null && imageUrl.length > 0 && !failed) {
     return (
@@ -897,13 +913,13 @@ const ExperienceThumb = React.memo(function ExperienceThumb({
 
   return (
     <View
-      style={[styles.thumb, styles.thumbPlaceholder, { backgroundColor: visual.tint }]}
+      style={[styles.thumb, styles.thumbPlaceholder, { backgroundColor: visual.fill }]}
       testID="catalog-search-thumb-placeholder"
     >
       <Ionicons
         name={visual.glyph as keyof typeof Ionicons.glyphMap}
         size={22}
-        color={theme.color.textOnPrimary}
+        color={t.color.textOnPrimary}
       />
     </View>
   );
@@ -914,6 +930,8 @@ const VisitedOverlay = React.memo(function VisitedOverlay({
 }: {
   readonly testID: string;
 }): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   return (
     <View
       style={styles.visitedOverlay}
@@ -921,7 +939,7 @@ const VisitedOverlay = React.memo(function VisitedOverlay({
       accessible
       accessibilityLabel="Visited"
     >
-      <Ionicons name="checkmark" size={14} color={theme.color.textOnPrimary} />
+      <Ionicons name="checkmark" size={14} color={t.color.textOnPrimary} />
     </View>
   );
 });
@@ -948,6 +966,8 @@ function FavoritesBody({
   readonly favoritedIds: ReadonlySet<string>;
   readonly onBack: () => void;
 }): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const experiences = allCatalogQuery.data?.experiences ?? [];
   const favoritedExperiences = useMemo(
     () => experiences.filter((exp) => favoritedIds.has(exp.id)),
@@ -977,7 +997,7 @@ function FavoritesBody({
             accessibilityLabel="Back to catalog"
             testID="catalog-favorites-back-button"
           >
-            <Ionicons name="arrow-back" size={20} color={theme.color.primary} />
+            <Ionicons name="arrow-back" size={20} color={t.color.primaryFg} />
             <Text style={styles.favoritesBackText}>Explore</Text>
           </Pressable>
           <Text style={styles.favoritesHeaderTitle}>My Favorites</Text>
@@ -1007,7 +1027,7 @@ function FavoritesBody({
           accessibilityLabel="Back to catalog"
           testID="catalog-favorites-back-button"
         >
-          <Ionicons name="arrow-back" size={20} color={theme.color.primary} />
+          <Ionicons name="arrow-back" size={20} color={t.color.primaryFg} />
           <Text style={styles.favoritesBackText}>Explore</Text>
         </Pressable>
         <Text style={styles.favoritesHeaderTitle}>My Favorites</Text>
@@ -1016,7 +1036,7 @@ function FavoritesBody({
 
       {showLoading ? (
         <View style={styles.center} testID="catalog-favorites-loading">
-          <ActivityIndicator color={theme.color.primary} />
+          <ActivityIndicator color={t.color.primaryFg} />
         </View>
       ) : favoritedExperiences.length === 0 ? (
         <View style={styles.center} testID="catalog-favorites-empty">
@@ -1049,6 +1069,7 @@ function FavoritesBody({
 // ---------------------------------------------------------------------------
 
 function CatalogUnavailableState(): JSX.Element {
+  const styles = useStyles();
   return (
     <ScreenContainer>
       <GradientHeader title="Explore" icon="compass" />
@@ -1064,6 +1085,7 @@ function CatalogUnavailableState(): JSX.Element {
 }
 
 function GenericErrorState({ message }: { readonly message: string }): JSX.Element {
+  const styles = useStyles();
   return (
     <ScreenContainer>
       <GradientHeader title="Explore" icon="compass" />
@@ -1082,7 +1104,7 @@ function GenericErrorState({ message }: { readonly message: string }): JSX.Eleme
 // Styles
 // ---------------------------------------------------------------------------
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1092,26 +1114,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 8,
-    backgroundColor: theme.color.surface,
+    backgroundColor: t.color.surface,
     borderBottomWidth: 1,
-    borderBottomColor: theme.color.border,
+    borderBottomColor: t.color.border,
   },
   searchWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: theme.color.background,
+    backgroundColor: t.color.background,
     borderRadius: 12,
     paddingHorizontal: 12,
     height: 44,
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
   },
   searchIcon: {
     marginRight: 8,
   },
   searchInput: {
     flex: 1,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
     fontSize: 15,
   },
   searchClear: {
@@ -1120,14 +1142,14 @@ const styles = StyleSheet.create({
   staleBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: theme.color.warningSurface,
+    backgroundColor: t.color.warningSurface,
     paddingHorizontal: 16,
     paddingVertical: 8,
     gap: 8,
   },
   staleBannerIcon: {},
   staleBannerText: {
-    color: theme.color.warningText,
+    color: t.color.warningText,
     fontSize: 13,
     fontWeight: '500',
   },
@@ -1154,13 +1176,13 @@ const styles = StyleSheet.create({
   },
   dockTile: {
     flex: 1,
-    backgroundColor: theme.color.surface,
+    backgroundColor: t.color.surface,
     borderRadius: 14,
     paddingVertical: 12,
     paddingHorizontal: 8,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
     shadowColor: '#000',
     shadowOpacity: 0.04,
     shadowRadius: 4,
@@ -1177,12 +1199,12 @@ const styles = StyleSheet.create({
   dockTileTitle: {
     fontSize: 13,
     fontWeight: '700',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
     textAlign: 'center',
   },
   dockTileSub: {
     fontSize: 11,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     textAlign: 'center',
     marginTop: 1,
   },
@@ -1196,12 +1218,12 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '800',
     letterSpacing: 0.8,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     textTransform: 'uppercase',
   },
   sectionSub: {
     fontSize: 12,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     marginTop: 2,
   },
 
@@ -1217,7 +1239,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     overflow: 'hidden',
     position: 'relative',
-    backgroundColor: '#1E293B',
+    backgroundColor: EXPLORE_HERO[t.scheme].parkTileBg,
     elevation: 2,
     shadowColor: '#000',
     shadowOpacity: 0.1,
@@ -1225,7 +1247,7 @@ const styles = StyleSheet.create({
   },
   parkTileGradient: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    backgroundColor: EXPLORE_HERO[t.scheme].slateVeil,
   },
   parkTileContent: {
     flex: 1,
@@ -1257,10 +1279,10 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     gap: 3,
     borderWidth: 1,
-    borderColor: 'rgba(246, 195, 67, 0.5)',
+    borderColor: withAlpha(t.color.accent, 0.5),
   },
   parkWaitPulseText: {
-    color: '#F6C343',
+    color: t.color.accent,
     fontSize: 11,
     fontWeight: '700',
   },
@@ -1270,18 +1292,18 @@ const styles = StyleSheet.create({
   parkTileTitle: {
     fontSize: 14,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: t.color.textOnPrimary,
   },
   parkTileLandmark: {
     fontSize: 11,
-    color: '#E2E8F0',
+    color: EXPLORE_HERO[t.scheme].heroSubText,
   },
   parkTileBadgeRow: {
     marginTop: 2,
   },
   parkTileCountText: {
     fontSize: 10,
-    color: '#CBD5E1',
+    color: EXPLORE_HERO[t.scheme].heroCountText,
     fontWeight: '600',
   },
 
@@ -1291,7 +1313,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     overflow: 'hidden',
     position: 'relative',
-    backgroundColor: '#0F172A',
+    backgroundColor: EXPLORE_HERO[t.scheme].slateBg,
     elevation: 3,
     shadowColor: '#000',
     shadowOpacity: 0.12,
@@ -1299,7 +1321,7 @@ const styles = StyleSheet.create({
   },
   showcaseGradient: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    backgroundColor: EXPLORE_HERO[t.scheme].slateVeil,
   },
   showcaseContent: {
     flex: 1,
@@ -1333,25 +1355,25 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   showcaseVenuePillText: {
-    color: '#FFFFFF',
+    color: t.color.textOnPrimary,
     fontSize: 11,
     fontWeight: '600',
   },
   showcaseAdmissionPill: {
-    backgroundColor: 'rgba(16, 185, 129, 0.25)',
+    backgroundColor: EXPLORE_HERO[t.scheme].admissionBg,
     borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.45)',
+    borderColor: EXPLORE_HERO[t.scheme].admissionBorder,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 10,
   },
   freeAdmissionPill: {
-    backgroundColor: 'rgba(16, 185, 129, 0.25)',
+    backgroundColor: EXPLORE_HERO[t.scheme].admissionBg,
     borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.45)',
+    borderColor: EXPLORE_HERO[t.scheme].admissionBorder,
   },
   freeAdmissionPillText: {
-    color: '#D1FAE5',
+    color: EXPLORE_HERO[t.scheme].admissionText,
     fontSize: 11,
     fontWeight: '700',
   },
@@ -1361,11 +1383,11 @@ const styles = StyleSheet.create({
   showcaseTitle: {
     fontSize: 18,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: t.color.textOnPrimary,
   },
   showcaseSub: {
     fontSize: 12,
-    color: '#E2E8F0',
+    color: EXPLORE_HERO[t.scheme].heroSubText,
   },
 
   // 2-Column Water Parks Grid (Req 1.7)
@@ -1379,7 +1401,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     overflow: 'hidden',
     position: 'relative',
-    backgroundColor: '#0F172A',
+    backgroundColor: EXPLORE_HERO[t.scheme].slateBg,
     elevation: 2,
     shadowColor: '#000',
     shadowOpacity: 0.1,
@@ -1388,7 +1410,7 @@ const styles = StyleSheet.create({
   waterParkTitle: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: t.color.textOnPrimary,
   },
 
   // Resorts Spotlight Card (Req 1.8, 8.1)
@@ -1397,7 +1419,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     overflow: 'hidden',
     position: 'relative',
-    backgroundColor: '#1E1B4B',
+    backgroundColor: EXPLORE_HERO[t.scheme].resortsBg,
     elevation: 3,
     shadowColor: '#000',
     shadowOpacity: 0.12,
@@ -1405,7 +1427,7 @@ const styles = StyleSheet.create({
   },
   resortsSpotlightGradient: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(30, 27, 75, 0.7)',
+    backgroundColor: EXPLORE_HERO[t.scheme].indigoVeil,
   },
   resortsSpotlightContent: {
     flex: 1,
@@ -1435,7 +1457,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   resortsPillText: {
-    color: '#FFFFFF',
+    color: t.color.textOnPrimary,
     fontSize: 11,
     fontWeight: '600',
   },
@@ -1445,17 +1467,17 @@ const styles = StyleSheet.create({
   resortsSpotlightTitle: {
     fontSize: 17,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: t.color.textOnPrimary,
   },
   resortsSpotlightSub: {
     fontSize: 12,
-    color: '#E2E8F0',
+    color: EXPLORE_HERO[t.scheme].heroSubText,
   },
   resortsSpotlightCtaRow: {
     marginTop: 6,
   },
   resortsSpotlightCta: {
-    color: '#93C5FD',
+    color: EXPLORE_HERO[t.scheme].resortsCta,
     fontSize: 13,
     fontWeight: '700',
   },
@@ -1515,14 +1537,14 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: -4,
     right: -4,
-    backgroundColor: '#10B981',
+    backgroundColor: EXPLORE[t.scheme].visitedFill,
     borderRadius: 10,
     width: 20,
     height: 20,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: theme.color.surface,
+    borderColor: t.color.surface,
   },
   rowText: {
     flex: 1,
@@ -1531,11 +1553,11 @@ const styles = StyleSheet.create({
   rowName: {
     fontSize: 15,
     fontWeight: '600',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   rowMeta: {
     fontSize: 12,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   rowBadges: {
     flexDirection: 'row',
@@ -1559,8 +1581,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: theme.color.border,
-    backgroundColor: theme.color.surface,
+    borderBottomColor: t.color.border,
+    backgroundColor: t.color.surface,
   },
   favoritesBackBtn: {
     flexDirection: 'row',
@@ -1568,16 +1590,16 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   favoritesBackText: {
-    color: theme.color.primary,
+    color: t.color.primaryFg,
     fontSize: 15,
     fontWeight: '500',
   },
   favoritesHeaderTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   favoritesHeaderSpacer: {
     width: 60,
   },
-});
+}));

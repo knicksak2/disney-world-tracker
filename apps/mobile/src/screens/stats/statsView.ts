@@ -24,7 +24,7 @@ import { EXPERIENCE_CATEGORIES, PARKS } from '@dwt/shared';
 import type { ExperienceCategory, Park } from '@dwt/shared';
 
 import type { ShareComposerParams } from '../../navigation/RootNavigator';
-import { theme } from '../../theme/theme';
+import type { AppTheme } from '../../theme/theme';
 
 import { MINIMUM_RATINGS_THRESHOLD } from '../../api/statsTypes';
 import type {
@@ -117,18 +117,26 @@ export interface TileSpec {
 }
 
 /**
+ * The slice of the active theme the colour-bearing view-model helpers read.
+ * Callers pass `useAppTheme()`; unit tests pass `lightTheme`/`darkTheme`.
+ * Keeps this module framework-free (no hook call here).
+ */
+export type StatsViewTheme = Pick<AppTheme, 'color' | 'parkAccent' | 'categoryVisual'>;
+
+/**
  * Ordered park tiles from `coverage.byPark`, always in canonical `PARKS` order
  * and always including every park (even `total === 0` ones) for a stable
- * layout (R5.4, R9.2). Each tile carries the park's accent hue.
+ * layout (R5.4, R9.2). Each tile carries the park's accent hue for `t`.
  */
 export function buildParkTiles(
   byPark: CoverageResponse['byPark'],
+  t: StatsViewTheme,
 ): readonly TileSpec[] {
   return PARKS.map((park) => ({
     key: park,
     title: park,
     cell: byPark[park],
-    accentColor: theme.parkAccent[park],
+    accentColor: t.parkAccent[park],
   }));
 }
 
@@ -136,13 +144,14 @@ export function buildParkTiles(
  * Ordered category tiles from `coverage.byCategory`, always in canonical
  * `EXPERIENCE_CATEGORIES` order and always including every category (R5.4,
  * R9.2). Each tile carries the category's display label, tint, and glyph from
- * `theme.categoryVisual`.
+ * `t.categoryVisual`.
  */
 export function buildCategoryTiles(
   byCategory: CoverageResponse['byCategory'],
+  t: StatsViewTheme,
 ): readonly TileSpec[] {
   return EXPERIENCE_CATEGORIES.map((category) => {
-    const visual = theme.categoryVisual[category];
+    const visual = t.categoryVisual[category];
     return {
       key: category,
       title: visual.label,
@@ -654,21 +663,23 @@ function byCompletionDesc(a: RankedRow, b: RankedRow): number {
 /** Park rows ranked most→least complete, each carrying its park accent hue. */
 export function rankParkRows(
   byPark: CoverageResponse['byPark'],
+  t: StatsViewTheme,
 ): readonly RankedRow[] {
   return PARKS.map((park) => ({
     key: park,
     label: park,
     cell: byPark[park],
-    color: theme.parkAccent[park],
+    color: t.parkAccent[park],
   })).sort(byCompletionDesc);
 }
 
 /** Category rows ranked most→least complete, each carrying its category tint. */
 export function rankCategoryRows(
   byCategory: CoverageResponse['byCategory'],
+  t: StatsViewTheme,
 ): readonly RankedRow[] {
   return EXPERIENCE_CATEGORIES.map((category) => {
-    const visual = theme.categoryVisual[category];
+    const visual = t.categoryVisual[category];
     return {
       key: category,
       label: visual.label,

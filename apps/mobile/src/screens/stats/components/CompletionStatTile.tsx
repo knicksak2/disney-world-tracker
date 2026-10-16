@@ -20,12 +20,13 @@
  */
 
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import type { CompletionCell } from '../../../api/statsTypes';
 import { CompleteBadge, ProgressRing } from '../../../theme/charts';
-import { theme } from '../../../theme/theme';
+import { makeStyles } from '../../../theme/makeStyles';
+import { useAppTheme } from '../../../theme/useAppTheme';
 import {
   displayedPercentLabel,
   remainingToGo,
@@ -70,12 +71,16 @@ export function CompletionStatTile({
   icon,
   testID,
 }: CompletionStatTileProps): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const muted = cell.total === 0;
   const complete = showCompleteBadge(cell);
   const remaining = remainingToGo(cell);
+  // Muted arc is drawn in the ring's track colour (track role → surfaceAlt);
+  // the default arc is a data mark on a surface → primaryFg (rule 1a).
   const ringColor = muted
-    ? theme.color.surfaceAlt
-    : accentColor ?? theme.color.primary;
+    ? t.color.surfaceAlt
+    : accentColor ?? t.color.primaryFg;
 
   return (
     <View
@@ -98,7 +103,7 @@ export function CompletionStatTile({
           <Ionicons
             name={icon}
             size={14}
-            color={muted ? theme.color.textSecondary : accentColor ?? theme.color.primary}
+            color={muted ? t.color.textSecondary : accentColor ?? t.color.primaryFg}
             style={styles.titleIcon}
           />
         ) : null}
@@ -121,12 +126,12 @@ export function CompletionStatTile({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   tile: {
     alignItems: 'center',
-    gap: theme.spacing.xs,
-    paddingVertical: theme.spacing.md,
-    paddingHorizontal: theme.spacing.sm,
+    gap: t.spacing.xs,
+    paddingVertical: t.spacing.md,
+    paddingHorizontal: t.spacing.sm,
   },
   tileMuted: {
     opacity: 0.55,
@@ -135,26 +140,26 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    marginTop: theme.spacing.xs,
+    marginTop: t.spacing.xs,
   },
   titleIcon: {
     marginRight: 2,
   },
   title: {
-    ...theme.typography.subtitle,
-    color: theme.color.textPrimary,
+    ...t.typography.subtitle,
+    color: t.color.textPrimary,
     textAlign: 'center',
     flexShrink: 1,
   },
   counts: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
   },
   textMuted: {
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   toGo: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
   },
-});
+}));

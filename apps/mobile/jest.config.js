@@ -41,7 +41,10 @@ module.exports = {
   // Jest's Node environment. react-native-reanimated 4.x no longer ships
   // an equivalent dedicated setup file; jest-expo's own preset mock
   // already covers it.
-  setupFiles: ['react-native-gesture-handler/jestSetup'],
+  setupFiles: [
+    '<rootDir>/src/setupScrollDefaults.ts',
+    'react-native-gesture-handler/jestSetup',
+  ],
   setupFilesAfterEnv: ['@testing-library/jest-native/extend-expect'],
   // React Native's Animated module schedules background timers that the
   // BottomTabBar uses for its press feedback. They keep the Node event

@@ -5,9 +5,12 @@
  */
 
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { darkTheme } from '../../theme/theme';
+import { resetTestScheme, setTestScheme } from '../../test/themeTestUtils';
 
 jest.mock('expo-secure-store', () => {
   const store = new Map<string, string>();
@@ -131,5 +134,65 @@ describe('ForgotPasswordScreen & LoginScreen Integration', () => {
 
     expect(screen.getByText('Email is required.')).toBeTruthy();
     expect(mockApiRequest).not.toHaveBeenCalled();
+  });
+});
+
+// Feature: dark-mode — the auth screens follow the Active theme.
+describe('ForgotPasswordScreen & LoginScreen — dark mode', () => {
+  const flat = (node: { props: { style?: unknown } }): Record<string, unknown> =>
+    (StyleSheet.flatten(node.props.style as never) ?? {}) as Record<string, unknown>;
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+  afterEach(resetTestScheme);
+
+  it('(a)(b)(c) ForgotPassword: background, input text, and the Sign in link use dark values', () => {
+    setTestScheme('dark');
+    const navigation = { navigate: jest.fn() } as any;
+    const route = { params: undefined } as any;
+    render(
+      <NavigationContainer>
+        <ForgotPasswordScreen navigation={navigation} route={route} />
+      </NavigationContainer>,
+    );
+
+    // (a) root ScreenContainer.
+    expect(flat(screen.root).backgroundColor).toBe(darkTheme.color.background);
+    // (b) the email input's text (primary text on surfaceAlt).
+    const input = screen.getByTestId('forgot-email');
+    expect(flat(input).color).toBe(darkTheme.color.textPrimary);
+    expect(flat(input).backgroundColor).toBe(darkTheme.color.surfaceAlt);
+    expect(input.props.keyboardAppearance).toBe('dark');
+    // (c) link emphasis: `primary` as text → primaryFg.
+    expect(flat(screen.getByText('Sign in')).color).toBe(darkTheme.color.primaryFg);
+
+    // Validation error uses the dark danger token.
+    fireEvent.press(screen.getByTestId('forgot-submit'));
+    expect(flat(screen.getByText('Email is required.')).color).toBe(darkTheme.color.danger);
+  });
+
+  it('(c) Login: inputs and the Forgot password link use dark values', () => {
+    setTestScheme('dark');
+    render(
+      <NavigationContainer>
+        <Stack.Navigator>
+          <Stack.Screen name="Login" component={LoginScreen} />
+        </Stack.Navigator>
+      </NavigationContainer>,
+    );
+    const email = screen.getByTestId('login-email');
+    expect(email.props.placeholderTextColor).toBe(darkTheme.color.textSecondary);
+    expect(email.props.keyboardAppearance).toBe('dark');
+    expect(flat(screen.getByText('Forgot password?')).color).toBe(darkTheme.color.primaryFg);
+  });
+
+  it('light keeps today\u2019s link colour', () => {
+    const navigation = { navigate: jest.fn() } as any;
+    render(
+      <NavigationContainer>
+        <ForgotPasswordScreen navigation={navigation} route={{ params: undefined } as any} />
+      </NavigationContainer>,
+    );
+    expect(flat(screen.getByText('Sign in')).color).toBe('#5b2a86');
   });
 });

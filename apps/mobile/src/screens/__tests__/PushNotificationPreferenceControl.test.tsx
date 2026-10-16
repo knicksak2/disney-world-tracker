@@ -14,9 +14,12 @@
 //     persisted value (the cache is not mutated) and surfaces a message.
 
 import React from 'react';
-import { AppState } from 'react-native';
+import { AppState, StyleSheet, Switch } from 'react-native';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { darkTheme } from '../../theme/theme';
+import { resetTestScheme, setTestScheme } from '../../test/themeTestUtils';
+import { NOTIFICATION_SWITCH } from '../PushNotificationPreferenceControl.palette';
 
 // ---------------------------------------------------------------------------
 // Mocks (declared before the module under test is imported).
@@ -289,5 +292,78 @@ describe('PushNotificationPreferenceControl', () => {
     expect(
       screen.getByTestId('notification-preference-switch').props.value,
     ).toBe(true);
+  });
+});
+
+// Feature: dark-mode — the Switch palette pair and text follow the Active theme.
+describe('PushNotificationPreferenceControl — dark mode', () => {
+  const flat = (node: { props: { style?: unknown } }): Record<string, unknown> =>
+    (StyleSheet.flatten(node.props.style as never) ?? {}) as Record<string, unknown>;
+
+  beforeEach(() => {
+    apiRequestMock.mockReset();
+    getPermissionsMock.mockReset();
+    getPermissionsMock.mockResolvedValue(permission(true));
+  });
+  afterEach(() => {
+    resetTestScheme();
+    jest.restoreAllMocks();
+  });
+
+  test('(c) the Switch track pair and the title use the dark values', async () => {
+    setTestScheme('dark');
+    stubPreferenceGet(true);
+    renderControl();
+    await screen.findByTestId('notification-preference-switch');
+
+    expect(screen.UNSAFE_getByType(Switch).props.trackColor).toEqual({
+      false: NOTIFICATION_SWITCH.dark.trackOff,
+      true: NOTIFICATION_SWITCH.dark.trackOn,
+    });
+    expect(flat(screen.getByText('Push notifications')).color).toBe(
+      darkTheme.color.textPrimary,
+    );
+  });
+
+  // Requirement 9.15: the thumb is themed too (it was the blue platform default).
+  test('(c) dark: track, thumb and iOS background come from the dark tokens', async () => {
+    setTestScheme('dark');
+    stubPreferenceGet(true);
+    renderControl();
+    await waitFor(() => expect(screen.UNSAFE_getByType(Switch).props.value).toBe(true));
+
+    const props = screen.UNSAFE_getByType(Switch).props;
+    expect(props.trackColor).toEqual({
+      false: darkTheme.color.borderStrong,
+      true: darkTheme.color.primary,
+    });
+    expect(props.thumbColor).toBe(darkTheme.color.textOnPrimary);
+    expect(props.ios_backgroundColor).toBe(darkTheme.color.borderStrong);
+  });
+
+  test('dark, off: the thumb is the muted textSecondary', async () => {
+    setTestScheme('dark');
+    stubPreferenceGet(false);
+    renderControl();
+    await screen.findByTestId('notification-preference-switch');
+    await waitFor(() =>
+      expect(screen.UNSAFE_getByType(Switch).props.thumbColor).toBe(
+        darkTheme.color.textSecondary,
+      ),
+    );
+    expect(screen.UNSAFE_getByType(Switch).props.value).toBe(false);
+  });
+
+  test('light keeps today\u2019s track colours', async () => {
+    stubPreferenceGet(true);
+    renderControl();
+    await screen.findByTestId('notification-preference-switch');
+    expect(screen.UNSAFE_getByType(Switch).props.trackColor).toEqual({
+      false: '#e2d9f0',
+      true: '#5b2a86',
+    });
+    // Light leaves the thumb and iOS background on platform defaults, as today.
+    expect(screen.UNSAFE_getByType(Switch).props.thumbColor).toBeUndefined();
+    expect(screen.UNSAFE_getByType(Switch).props.ios_backgroundColor).toBeUndefined();
   });
 });

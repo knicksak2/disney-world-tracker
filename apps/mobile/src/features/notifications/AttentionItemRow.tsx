@@ -31,7 +31,6 @@
 
 import React from 'react';
 import {
-  StyleSheet,
   Text,
   TextInput,
   View,
@@ -41,8 +40,10 @@ import { Ionicons } from '@expo/vector-icons';
 
 import type { AttentionDomain, AttentionItem } from '@dwt/shared';
 
-import { theme } from '../../theme/theme';
+import type { AppTheme } from '../../theme/theme';
 import { Badge, Card, PrimaryButton, SecondaryButton } from '../../theme/components';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme } from '../../theme/useAppTheme';
 import type { AttentionActionError } from './useAttentionActions';
 
 // ---------------------------------------------------------------------------
@@ -57,14 +58,32 @@ import type { AttentionActionError } from './useAttentionActions';
 const DOMAIN_META: Readonly<
   Record<
     AttentionDomain,
-    { readonly label: string; readonly icon: keyof typeof Ionicons.glyphMap; readonly tint: string }
+    { readonly label: string; readonly icon: keyof typeof Ionicons.glyphMap }
   >
 > = {
-  friendRequest: { label: 'Friend request', icon: 'person-add', tint: theme.color.primary },
-  tripInvite: { label: 'Trip invite', icon: 'airplane', tint: theme.color.accentDark },
-  rodeWithTag: { label: 'Rode-with tag', icon: 'people', tint: theme.color.success },
-  share: { label: 'Share', icon: 'mail', tint: theme.color.primaryLight },
+  friendRequest: { label: 'Friend request', icon: 'person-add' },
+  tripInvite: { label: 'Trip invite', icon: 'airplane' },
+  rodeWithTag: { label: 'Rode-with tag', icon: 'people' },
+  share: { label: 'Share', icon: 'mail' },
 };
+
+/**
+ * The domain's tint — used as `Badge` text / icon colour and as the card's
+ * accent stripe, i.e. a foreground on a surface, so primary resolves to the
+ * text-safe `primaryFg`.
+ */
+function domainTint(domain: AttentionDomain, t: AppTheme): string {
+  switch (domain) {
+    case 'friendRequest':
+      return t.color.primaryFg;
+    case 'tripInvite':
+      return t.color.accentDark;
+    case 'rodeWithTag':
+      return t.color.success;
+    case 'share':
+      return t.color.primaryLight;
+  }
+}
 
 /**
  * Compact "time ago" for a source timestamp: "just now", "5m ago", "2h ago",
@@ -151,7 +170,10 @@ export function AttentionItemRow({
   onMarkShareRead,
   onOpenDestination,
 }: AttentionItemRowProps): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const meta = DOMAIN_META[item.domain];
+  const tint = domainTint(item.domain, t);
 
   // Local, optional rode-with rating the user types before confirming. Parsed
   // to a number on confirm; left empty means "confirm with no rating".
@@ -166,7 +188,7 @@ export function AttentionItemRow({
 
   return (
     <Card
-      accentColor={meta.tint}
+      accentColor={tint}
       style={[styles.row, highlighted ? styles.rowHighlighted : null]}
       testID={`attention-row-${item.id}`}
       {...(item.ref.destination !== undefined
@@ -189,7 +211,7 @@ export function AttentionItemRow({
 
       {/* Header: domain badge + relative timestamp */}
       <View style={styles.headerRow}>
-        <Badge label={meta.label} color={meta.tint} icon={meta.icon} />
+        <Badge label={meta.label} color={tint} icon={meta.icon} />
         <Text style={styles.timestamp} testID={`attention-timestamp-${item.id}`}>
           {formatRelativeTime(item.sourceTimestamp)}
         </Text>
@@ -212,7 +234,7 @@ export function AttentionItemRow({
           <Ionicons
             name="alert-circle-outline"
             size={14}
-            color={theme.color.danger}
+            color={t.color.danger}
             style={styles.errorIcon}
           />
           <Text style={styles.errorText}>{error.message}</Text>
@@ -282,7 +304,8 @@ export function AttentionItemRow({
                 editable={!pending}
                 keyboardType={KEYBOARD_NUMERIC}
                 placeholder="—"
-                placeholderTextColor={theme.color.textSecondary}
+                placeholderTextColor={t.color.textSecondary}
+                keyboardAppearance={t.scheme}
                 maxLength={2}
                 style={styles.ratingInput}
                 testID={`attention-rating-${item.id}`}
@@ -348,35 +371,35 @@ export function AttentionItemRow({
 // Styles
 // ---------------------------------------------------------------------------
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   row: {
-    marginBottom: theme.spacing.md,
-    gap: theme.spacing.sm,
+    marginBottom: t.spacing.md,
+    gap: t.spacing.sm,
   },
   rowHighlighted: {
     borderWidth: 2,
-    borderColor: theme.color.primary,
-    backgroundColor: theme.color.surfaceAlt,
+    borderColor: t.color.primaryFg,
+    backgroundColor: t.color.surfaceAlt,
   },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: theme.spacing.sm,
+    gap: t.spacing.sm,
   },
   timestamp: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
   },
   summary: {
-    ...theme.typography.body,
-    color: theme.color.textPrimary,
+    ...t.typography.body,
+    color: t.color.textPrimary,
   },
   actionsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.sm,
-    marginTop: theme.spacing.xs,
+    gap: t.spacing.sm,
+    marginTop: t.spacing.xs,
   },
   actionBtn: {
     flex: 1,
@@ -384,41 +407,41 @@ const styles = StyleSheet.create({
   ratingRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.sm,
-    marginTop: theme.spacing.xs,
+    gap: t.spacing.sm,
+    marginTop: t.spacing.xs,
   },
   ratingLabel: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
   },
   ratingInput: {
     minWidth: 48,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.sm,
-    borderRadius: theme.radius.md,
+    paddingHorizontal: t.spacing.md,
+    paddingVertical: t.spacing.sm,
+    borderRadius: t.radius.md,
     borderWidth: 1,
-    borderColor: theme.color.borderStrong,
-    backgroundColor: theme.color.surfaceAlt,
-    color: theme.color.textPrimary,
+    borderColor: t.color.borderStrong,
+    backgroundColor: t.color.surfaceAlt,
+    color: t.color.textPrimary,
     textAlign: 'center',
-    ...theme.typography.subtitle,
+    ...t.typography.subtitle,
   },
   ratingSuffix: {
-    ...theme.typography.subtitle,
-    color: theme.color.textSecondary,
+    ...t.typography.subtitle,
+    color: t.color.textSecondary,
   },
   errorRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.xs,
-    marginTop: theme.spacing.xs,
+    gap: t.spacing.xs,
+    marginTop: t.spacing.xs,
   },
   errorIcon: {
     marginRight: 2,
   },
   errorText: {
-    ...theme.typography.meta,
-    color: theme.color.danger,
+    ...t.typography.meta,
+    color: t.color.danger,
     flexShrink: 1,
   },
-});
+}));

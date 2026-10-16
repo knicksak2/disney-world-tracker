@@ -11,11 +11,12 @@
 // fast and skippable.
 
 import React, { useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-import { theme } from '../../theme/theme';
 import { PrimaryButton, SecondaryButton } from '../../theme/components';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme } from '../../theme/useAppTheme';
 
 export interface RateOnCheckoffPromptProps {
   /** Whether the prompt is presented. */
@@ -65,6 +66,8 @@ export default function RateOnCheckoffPrompt({
   onSkip,
   onConfirm,
 }: RateOnCheckoffPromptProps): JSX.Element | null {
+  const styles = useStyles();
+  const t = useAppTheme();
   const [rating, setRating] = useState<number | null>(initialRating ?? null);
 
   React.useEffect(() => {
@@ -118,7 +121,7 @@ export default function RateOnCheckoffPrompt({
             touch events don't reliably expose in every environment. */}
         <View style={styles.sheet}>
           <View style={styles.header}>
-            <Ionicons name="restaurant" size={22} color={theme.color.primary} />
+            <Ionicons name="restaurant" size={22} color={t.color.primaryFg} />
             <Text style={styles.title} numberOfLines={2}>
               {foodItemName}
             </Text>
@@ -189,20 +192,20 @@ export default function RateOnCheckoffPrompt({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   backdrop: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.45)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: theme.spacing.lg,
+    padding: t.spacing.lg,
   },
   sheet: {
     width: '100%',
     maxWidth: 360,
-    backgroundColor: theme.color.surface,
-    borderRadius: theme.radius.lg,
-    padding: theme.spacing.md,
+    backgroundColor: t.color.surface,
+    borderRadius: t.radius.lg,
+    padding: t.spacing.md,
     gap: 12,
   },
   header: {
@@ -213,11 +216,11 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 16,
     fontWeight: '700',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   subtitle: {
     fontSize: 13,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   // Vertical gap between the two fixed rows (see `RATING_VALUE_ROWS` above).
   ratingGrid: {
@@ -239,22 +242,22 @@ const styles = StyleSheet.create({
     minWidth: 28,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: theme.color.surfaceAlt,
+    backgroundColor: t.color.surfaceAlt,
   },
   ratingBtnSelected: {
-    backgroundColor: theme.color.primary,
-    borderColor: theme.color.primary,
+    backgroundColor: t.color.primary,
+    borderColor: t.color.primary,
   },
   ratingBtnText: {
     fontSize: 14,
     fontWeight: '600',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   ratingBtnTextSelected: {
-    color: theme.color.textOnPrimary,
+    color: t.color.textOnPrimary,
   },
   actionsRow: {
     flexDirection: 'row',
@@ -264,4 +267,4 @@ const styles = StyleSheet.create({
   actionBtn: {
     flex: 1,
   },
-});
+}));

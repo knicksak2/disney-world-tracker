@@ -27,8 +27,11 @@
  */
 
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { render, screen } from '@testing-library/react-native';
 
+import { darkTheme } from '../../../../theme/theme';
+import { resetTestScheme, setTestScheme } from '../../../../test/themeTestUtils';
 import { MINIMUM_RATINGS_THRESHOLD } from '../../../../api/statsTypes';
 import type { RatingStatistics } from '../../../../api/statsTypes';
 import {
@@ -208,5 +211,31 @@ describe('RatingsSection — insufficient (Requirements 8.2, 8.3, 8.4)', () => {
         `Rate 1 more experience to unlock your ratings (2/${MINIMUM_RATINGS_THRESHOLD}).`,
       ),
     ).toBeTruthy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Feature: dark-mode — the rich view follows the Active theme.
+// ---------------------------------------------------------------------------
+
+describe('RatingsSection — dark mode', () => {
+  const flat = (node: { props: { style?: unknown } }): Record<string, unknown> =>
+    (StyleSheet.flatten(node.props.style as never) ?? {}) as Record<string, unknown>;
+  afterEach(resetTestScheme);
+
+  it('(c) hero values, averages, and category labels use dark tokens', () => {
+    setTestScheme('dark');
+    render(<RatingsSection ratings={makeSufficientRatings()} />);
+    // Lowest hero value: `primary` as text → primaryFg (rule 1a).
+    expect(flat(screen.getByText('3/10')).color).toBe(darkTheme.color.primaryFg);
+    expect(flat(screen.getByText('Space Mountain')).color).toBe(darkTheme.color.textPrimary);
+    // Averages grid: the category label comes from colour-free `categoryMeta`.
+    expect(flat(screen.getByText('Ride')).color).toBe(darkTheme.color.textSecondary);
+    expect(flat(screen.getByText('7.2')).color).toBe(darkTheme.color.textPrimary);
+  });
+
+  it('light keeps today\u2019s hero value colour', () => {
+    render(<RatingsSection ratings={makeSufficientRatings()} />);
+    expect(flat(screen.getByText('3/10')).color).toBe('#5b2a86');
   });
 });

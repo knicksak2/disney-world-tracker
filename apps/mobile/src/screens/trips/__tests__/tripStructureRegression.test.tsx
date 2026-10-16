@@ -14,7 +14,8 @@
  */
 
 import React from 'react';
-import { HUB_SECTIONS } from '../TripDetailScreen';
+import { HUB_SECTIONS, hubSectionsFor } from '../TripDetailScreen';
+import { darkTheme } from '../../../theme/theme';
 import TripsStack, { type TripsStackParamList } from '../../../navigation/TripsStack';
 import { render } from '@testing-library/react-native';
 
@@ -86,6 +87,41 @@ describe('Feature: navigation-redesign, Property 6: Trip section structure untou
 
   test('HUB_SECTIONS snapshot matches pre-change canonical definition', () => {
     expect(HUB_SECTIONS).toMatchSnapshot();
+  });
+
+  // Feature: dark-mode polish pass (B5-1): the section colours follow the scheme.
+  test('hubSectionsFor: light is the snapshot set, dark carries the dark tokens', () => {
+    const light = hubSectionsFor('light');
+    const dark = hubSectionsFor('dark');
+    expect(light).toEqual(HUB_SECTIONS);
+    expect(light.map((s) => s.color)).toEqual([
+      '#5b2a86',
+      '#7e57c2',
+      '#f6c343',
+      '#5b2a86',
+      '#f6c343',
+      '#7e57c2',
+      '#6b6480',
+    ]);
+
+    // Same structure in both schemes; only the colour changes.
+    const strip = (s: (typeof light)[number]) => ({ ...s, color: undefined });
+    expect(dark.map(strip)).toEqual(light.map(strip));
+    expect(dark.map((s) => s.color)).toEqual([
+      darkTheme.color.primaryFg,
+      darkTheme.color.primaryLight,
+      darkTheme.color.accent,
+      darkTheme.color.primaryFg,
+      darkTheme.color.accent,
+      darkTheme.color.primaryLight,
+      darkTheme.color.textSecondary,
+    ]);
+    // Every violet/neutral section repaints; the gold accent is the same in both schemes.
+    for (const key of ['planned', 'schedule', 'expenses', 'members', 'summary']) {
+      expect(dark.find((s) => s.key === key)!.color).not.toBe(
+        light.find((s) => s.key === key)!.color,
+      );
+    }
   });
 
   test('TripsStack registers exactly the 13 expected screens and matches snapshot', () => {

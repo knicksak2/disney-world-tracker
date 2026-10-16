@@ -13,7 +13,6 @@ import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
-  StyleSheet,
   Text,
   View,
 } from 'react-native';
@@ -22,7 +21,8 @@ import { Ionicons } from '@expo/vector-icons';
 import type { ExperienceLogDTO } from '@dwt/shared';
 
 import { ApiError, apiRequest } from '../../api/client';
-import { theme } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme } from '../../theme/useAppTheme';
 
 export interface VisitHistoryTimelineProps {
   readonly experienceId: string;
@@ -37,6 +37,8 @@ export default function VisitHistoryTimeline({
   logs,
   onDeleted,
 }: VisitHistoryTimelineProps): JSX.Element | null {
+  const styles = useStyles();
+  const t = useAppTheme();
   const [expanded, setExpanded] = useState<boolean>(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -90,7 +92,7 @@ export default function VisitHistoryTimeline({
         <Ionicons
           name={expanded ? 'chevron-up' : 'chevron-down'}
           size={18}
-          color={theme.color.textSecondary}
+          color={t.color.textSecondary}
         />
       </Pressable>
 
@@ -108,7 +110,7 @@ export default function VisitHistoryTimeline({
                   <Ionicons
                     name={log.rating === null ? 'star-outline' : 'star'}
                     size={14}
-                    color={theme.color.accent}
+                    color={t.color.accent}
                   />
                   <Text style={styles.itemRating}>
                     {log.rating === null ? 'Not rated' : `${log.rating} / 10`}
@@ -121,7 +123,7 @@ export default function VisitHistoryTimeline({
               {deletingId === log.id ? (
                 <ActivityIndicator
                   accessibilityLabel="Deleting visit"
-                  color={theme.color.primary}
+                  color={t.color.primaryFg}
                 />
               ) : (
                 <Pressable
@@ -138,7 +140,7 @@ export default function VisitHistoryTimeline({
                   <Ionicons
                     name="trash-outline"
                     size={18}
-                    color={theme.color.danger}
+                    color={t.color.danger}
                   />
                 </Pressable>
               )}
@@ -162,59 +164,59 @@ function messageForError(err: unknown): string {
   return 'Could not delete this visit. Please try again.';
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   container: {
-    gap: theme.spacing.sm,
+    gap: t.spacing.sm,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: theme.spacing.sm,
+    paddingVertical: t.spacing.sm,
   },
   headerText: {
-    ...theme.typography.subtitle,
-    color: theme.color.textPrimary,
+    ...t.typography.subtitle,
+    color: t.color.textPrimary,
   },
   list: {
-    gap: theme.spacing.sm,
+    gap: t.spacing.sm,
   },
   item: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
-    gap: theme.spacing.sm,
-    paddingVertical: theme.spacing.sm,
+    gap: t.spacing.sm,
+    paddingVertical: t.spacing.sm,
     borderTopWidth: 1,
-    borderTopColor: theme.color.border,
+    borderTopColor: t.color.border,
   },
   itemMain: {
     flex: 1,
     gap: 2,
   },
   itemDate: {
-    ...theme.typography.body,
-    color: theme.color.textPrimary,
+    ...t.typography.body,
+    color: t.color.textPrimary,
     fontWeight: '600',
   },
   itemMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.xs,
+    gap: t.spacing.xs,
   },
   itemRating: {
-    ...theme.typography.body,
-    color: theme.color.textSecondary,
+    ...t.typography.body,
+    color: t.color.textSecondary,
   },
   itemNote: {
-    ...theme.typography.body,
-    color: theme.color.textSecondary,
+    ...t.typography.body,
+    color: t.color.textSecondary,
   },
   deleteButton: {
-    padding: theme.spacing.xs,
+    padding: t.spacing.xs,
   },
   errorText: {
-    color: theme.color.danger,
+    color: t.color.danger,
     fontSize: 13,
   },
-});
+}));

@@ -33,7 +33,7 @@
  */
 
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
 import { EXPERIENCE_CATEGORIES, PARKS } from '@dwt/shared';
 import type { ExperienceCategory, Park } from '@dwt/shared';
@@ -43,7 +43,9 @@ import {
   RatingHistogram as RatingHistogramChart,
 } from '../../../theme/charts';
 import { Card, EmptyState, SectionLabel } from '../../../theme/components';
-import { theme } from '../../../theme/theme';
+import { makeStyles } from '../../../theme/makeStyles';
+import { categoryMeta } from '../../../theme/theme';
+import { useAppTheme } from '../../../theme/useAppTheme';
 
 import { MINIMUM_RATINGS_THRESHOLD } from '../../../api/statsTypes';
 import type {
@@ -169,7 +171,10 @@ function HeroCard({
   readonly onOpenExperience?: (experienceId: string) => void;
   readonly testID?: string;
 }): JSX.Element {
-  const accentColor = tone === 'high' ? theme.color.success : theme.color.primary;
+  const styles = useStyles();
+  const t = useAppTheme();
+  // Card accent stripe + value text on a surface → primaryFg (rule 1a).
+  const accentColor = tone === 'high' ? t.color.success : t.color.primaryFg;
   const spoken = `${label}: ${experience.name}, rated ${experience.value} out of 10`;
   return (
     <Card
@@ -213,6 +218,7 @@ export function HighLowHeroCards({
   onOpenExperience,
   testID,
 }: HighLowHeroCardsProps): JSX.Element | null {
+  const styles = useStyles();
   if (highest === undefined && lowest === undefined) return null;
   return (
     <View style={styles.heroRow} testID={testID}>
@@ -259,6 +265,7 @@ function AverageRow({
   readonly value: number;
   readonly testID?: string;
 }): JSX.Element {
+  const styles = useStyles();
   return (
     <View
       style={styles.averageRow}
@@ -285,6 +292,7 @@ export function RatingAveragesGrid({
   averageByCategory,
   testID,
 }: RatingAveragesGridProps): JSX.Element | null {
+  const styles = useStyles();
   const parkRows = PARKS.map((park) => ({
     key: park,
     label: park,
@@ -296,7 +304,7 @@ export function RatingAveragesGrid({
 
   const categoryRows = EXPERIENCE_CATEGORIES.map((category) => ({
     key: category,
-    label: theme.categoryVisual[category].label,
+    label: categoryMeta[category].label,
     value: averageByCategory?.[category],
   })).filter(
     (row): row is { key: ExperienceCategory; label: string; value: number } =>
@@ -431,6 +439,7 @@ export function RatingsSection({
   onOpenExperience,
   testID,
 }: RatingsSectionProps): JSX.Element {
+  const styles = useStyles();
   if (ratingsView(ratings) === 'unlock') {
     // UNLOCK / neutral branch — read ONLY `ratedCompletionsCount` (R8.3, R8.4).
     return (
@@ -508,15 +517,15 @@ export function RatingsSection({
 // Styles
 // ---------------------------------------------------------------------------
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   section: {
-    gap: theme.spacing.lg,
+    gap: t.spacing.lg,
   },
   dialCard: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: theme.spacing.md,
+    gap: t.spacing.md,
   },
   dialCardLeft: {
     flexShrink: 1,
@@ -525,36 +534,36 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   ratedCountLabel: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
   },
   ratedCount: {
-    ...theme.typography.subtitle,
-    color: theme.color.textPrimary,
+    ...t.typography.subtitle,
+    color: t.color.textPrimary,
   },
   heroRow: {
     flexDirection: 'row',
-    gap: theme.spacing.md,
+    gap: t.spacing.md,
   },
   heroCard: {
     flex: 1,
   },
   heroLabel: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
-    marginBottom: theme.spacing.xs,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
+    marginBottom: t.spacing.xs,
   },
   heroName: {
-    ...theme.typography.subtitle,
-    color: theme.color.textPrimary,
-    marginBottom: theme.spacing.xs,
+    ...t.typography.subtitle,
+    color: t.color.textPrimary,
+    marginBottom: t.spacing.xs,
   },
   heroValue: {
-    ...theme.typography.heading,
+    ...t.typography.heading,
   },
   averagesWrap: {
     flexDirection: 'row',
-    gap: theme.spacing.xl,
+    gap: t.spacing.xl,
   },
   averagesColumn: {
     flex: 1,
@@ -563,16 +572,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: theme.spacing.xs,
-    gap: theme.spacing.sm,
+    paddingVertical: t.spacing.xs,
+    gap: t.spacing.sm,
   },
   averageLabel: {
-    ...theme.typography.body,
-    color: theme.color.textSecondary,
+    ...t.typography.body,
+    color: t.color.textSecondary,
     flexShrink: 1,
   },
   averageValue: {
-    ...theme.typography.subtitle,
-    color: theme.color.textPrimary,
+    ...t.typography.subtitle,
+    color: t.color.textPrimary,
   },
-});
+}));

@@ -3,9 +3,13 @@
 // Validates: Requirements 20.4, 20.5, 20.6
 
 import React from 'react';
-import { Linking } from 'react-native';
+import { Linking, StyleSheet } from 'react-native';
+import type { ReactTestInstance } from 'react-test-renderer';
 import { render, fireEvent, waitFor, within } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
+import { darkTheme } from '../../../theme/theme';
+import { RESORT_GUIDE } from '../ResortGuideSection.palette';
 
 import ResortGuideSection, {
   cleanAndSortMealPeriods,
@@ -1015,6 +1019,65 @@ describe('ResortGuideSection (Requirements 20.4, 20.5, 20.6)', () => {
         experienceId: 'b1010001-c001-4000-8000-000000000004',
       });
     });
+  });
+});
+
+describe('ResortGuideSection — dark mode', () => {
+  const flat = (node: ReactTestInstance) => StyleSheet.flatten(node.props.style) ?? {};
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (apiRequest as jest.Mock).mockResolvedValue({ items: [] });
+  });
+  afterEach(resetTestScheme);
+
+  it('(c) paints the converted resort-guide cards, headings and pills with dark values', () => {
+    setTestScheme('dark');
+    const { getByTestId, getByText } = render(
+      <QueryClientProvider client={createQueryClient()}>
+        <ResortGuideSection
+          experienceId="exp-coronado"
+          experienceName="Disney's Coronado Springs Resort"
+          resort={
+            {
+              id: 'resort-coronado',
+              name: "Disney's Coronado Springs Resort",
+              tier: 'Moderate',
+              featurePool: 'The Dig Site & Lost City of Cibola Pool',
+              transportationModes: ['Bus'],
+              transitTimes: { 'Animal Kingdom': 8 },
+            } as any
+          }
+          latitude={28.3644}
+          longitude={-81.5694}
+        />
+      </QueryClientProvider>,
+    );
+
+    const card = flat(getByTestId('resort-highlights-card'));
+    expect(card.backgroundColor).toBe(darkTheme.color.surface);
+    expect(card.borderColor).toBe(RESORT_GUIDE.dark.cardBorder);
+    expect(card.shadowColor).toBe(RESORT_GUIDE.dark.cardShadow);
+    expect(flat(getByText('Property Highlights & Atmosphere')).color).toBe(
+      RESORT_GUIDE.dark.heading,
+    );
+    expect(flat(getByText('Moderate Resort')).color).toBe(RESORT_GUIDE.dark.tierText);
+    // Text hierarchy (Requirement 9.13): headings are textPrimary and the muted
+    // card subtitle is textSecondary (it used to be brighter than the heading).
+    const heading = flat(getByText('Property Highlights & Atmosphere')).color;
+    const muted = flat(
+      getByText('Signature activities, wellness spaces, and recreation available to resort guests.'),
+    ).color;
+    expect(heading).toBe(darkTheme.color.textPrimary);
+    expect(muted).toBe(darkTheme.color.textSecondary);
+    expect(muted).not.toBe(heading);
+    expect(flat(getByTestId('resort-get-directions-btn')).backgroundColor).toBe(
+      darkTheme.color.primary,
+    );
+    expect(flat(getByText('Open in Maps App')).color).toBe(darkTheme.color.textOnPrimary);
+    expect(flat(getByTestId('resort-dining-filter-all')).backgroundColor).toBe(
+      darkTheme.color.primary,
+    );
   });
 });
 

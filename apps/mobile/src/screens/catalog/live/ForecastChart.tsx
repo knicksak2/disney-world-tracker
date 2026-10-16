@@ -11,11 +11,11 @@
 // this component is presentation only.
 
 import React from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
 
 import type { ForecastEntry } from '@dwt/shared';
 
-import { theme } from '../../../theme/theme';
+import { makeStyles } from '../../../theme/makeStyles';
 import { forecastChartBars } from './liveView';
 import { formatParkHour } from './parkTime';
 
@@ -33,6 +33,7 @@ export default function ForecastChart({
   readonly entries: readonly ForecastEntry[];
   readonly lowest: ForecastEntry | undefined;
 }): JSX.Element {
+  const styles = useStyles();
   const bars = forecastChartBars(entries, lowest);
 
   return (
@@ -85,17 +86,17 @@ export default function ForecastChart({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   plot: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    gap: theme.spacing.xs,
-    paddingVertical: theme.spacing.xs,
+    gap: t.spacing.xs,
+    paddingVertical: t.spacing.xs,
   },
   column: {
     width: COLUMN_WIDTH,
     alignItems: 'center',
-    gap: theme.spacing.xs,
+    gap: t.spacing.xs,
   },
   track: {
     height: CHART_HEIGHT,
@@ -103,28 +104,31 @@ const styles = StyleSheet.create({
   },
   bar: {
     width: 24,
-    borderTopLeftRadius: theme.radius.sm,
-    borderTopRightRadius: theme.radius.sm,
+    borderTopLeftRadius: t.radius.sm,
+    borderTopRightRadius: t.radius.sm,
   },
   barDefault: {
-    backgroundColor: theme.color.primaryLight,
+    // Data mark on a surface. Stays `primaryLight` (light `#7e57c2`
+    // byte-identical; dark `#b28dff` is 6.80:1 on the card, above the 3:1
+    // non-text floor) — `primaryFg` would change the light value.
+    backgroundColor: t.color.primaryLight,
   },
   barBest: {
-    backgroundColor: theme.color.success,
+    backgroundColor: t.color.success,
   },
   value: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
   },
   valueBest: {
-    color: theme.color.success,
+    color: t.color.success,
   },
   hour: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
   },
   hourBest: {
-    color: theme.color.success,
+    color: t.color.success,
     fontWeight: '700',
   },
-});
+}));

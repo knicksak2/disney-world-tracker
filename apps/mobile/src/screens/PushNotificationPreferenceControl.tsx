@@ -26,7 +26,6 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   AppState,
-  StyleSheet,
   Switch,
   Text,
   View,
@@ -38,7 +37,10 @@ import type { NotificationPreferenceDTO } from '@dwt/shared';
 
 import { ApiError, apiRequest } from '../api/client';
 import { loadNotifications } from '../env/notifications';
-import { theme } from '../theme/theme';
+import { makeStyles } from '../theme/makeStyles';
+import { useAppTheme, usePalette } from '../theme/useAppTheme';
+import { themedSwitchProps } from '../theme/switchColors';
+import { NOTIFICATION_SWITCH } from './PushNotificationPreferenceControl.palette';
 
 // ---------------------------------------------------------------------------
 // Copy
@@ -66,6 +68,9 @@ const PERMISSION_REVOKED_MESSAGE =
  * `<PushNotificationPreferenceControl />` in its self-mode block.
  */
 export default function PushNotificationPreferenceControl(): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
+  const switchTrack = usePalette(NOTIFICATION_SWITCH);
   const queryClient = useQueryClient();
 
   // R9.3 / R9.7: read the stored preference. The server returns the default
@@ -171,7 +176,7 @@ export default function PushNotificationPreferenceControl(): JSX.Element {
       <View style={styles.container}>
         <Text style={styles.title}>{TITLE}</Text>
         <View style={styles.loadingRow} accessibilityRole="progressbar">
-          <ActivityIndicator color={theme.color.primary} />
+          <ActivityIndicator color={t.color.primaryFg} />
         </View>
       </View>
     );
@@ -207,6 +212,7 @@ export default function PushNotificationPreferenceControl(): JSX.Element {
           <Text style={styles.description}>{DESCRIPTION}</Text>
         </View>
         <Switch
+          key={t.scheme}
           value={toggleValue}
           disabled={toggleDisabled}
           onValueChange={(next) => {
@@ -215,10 +221,12 @@ export default function PushNotificationPreferenceControl(): JSX.Element {
             }
             setPreferenceMutation.mutate(next);
           }}
-          trackColor={{
-            false: theme.color.border,
-            true: theme.color.primary,
-          }}
+          {...themedSwitchProps(t, toggleValue, {
+            trackColor: {
+              false: switchTrack.trackOff,
+              true: switchTrack.trackOn,
+            },
+          })}
           accessibilityLabel="Push notifications"
           accessibilityState={{
             disabled: toggleDisabled,
@@ -255,37 +263,37 @@ export default function PushNotificationPreferenceControl(): JSX.Element {
 // Styles
 // ---------------------------------------------------------------------------
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   container: {
-    gap: theme.spacing.sm,
+    gap: t.spacing.sm,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: theme.spacing.md,
+    gap: t.spacing.md,
   },
   textWrap: {
     flex: 1,
-    gap: theme.spacing.xs,
+    gap: t.spacing.xs,
   },
   title: {
-    ...theme.typography.subtitle,
-    color: theme.color.textPrimary,
+    ...t.typography.subtitle,
+    color: t.color.textPrimary,
   },
   description: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
   },
   loadingRow: {
     alignItems: 'flex-start',
   },
   message: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
   },
   error: {
-    color: theme.color.danger,
+    color: t.color.danger,
     fontSize: 14,
   },
-});
+}));

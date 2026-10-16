@@ -30,7 +30,6 @@ import {
   ActivityIndicator,
   Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   View,
 } from 'react-native';
@@ -51,7 +50,17 @@ import {
 
 import { ApiError, apiRequest } from '../../api/client';
 import type { TripsStackParamList } from '../../navigation/TripsStack';
-import { theme } from '../../theme/theme';
+import { theme, withAlpha, type AppTheme, type ColorScheme } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme, usePalette } from '../../theme/useAppTheme';
+import {
+  CREW_AVATAR,
+  GLANCE,
+  HUB_SECTION_COLOR,
+  HUB_TILE,
+  PAST_HERO,
+  PROGRESS_CARD,
+} from './TripDetailScreen.palette';
 import {
   Badge,
   EmptyState,
@@ -113,18 +122,19 @@ export interface HubSection {
  */
 export { tripDetailKeys } from './tripDetailQueryKeys';
 
-/**
- * The hub sections, in canonical presentation order. Kept byte-for-byte
- * identical to satisfy snapshot tests.
- */
-export const HUB_SECTIONS: readonly HubSection[] = [
+/** A hub section without its scheme-dependent colour. */
+type HubSectionDef = Omit<HubSection, 'key' | 'color'> & {
+  readonly key: keyof typeof HUB_SECTION_COLOR.light;
+};
+
+/** The colour-free hub section definitions, in canonical presentation order. */
+const HUB_SECTION_DEFS: readonly HubSectionDef[] = [
   {
     key: 'planned',
     route: 'TripPlannedList',
     title: 'Planned List',
     body: 'Experiences the group wants to do together.',
     icon: 'list-outline',
-    color: theme.color.primary,
   },
   {
     key: 'schedule',
@@ -132,7 +142,6 @@ export const HUB_SECTIONS: readonly HubSection[] = [
     title: 'Schedule Builder',
     body: 'Plan and optimize your day-by-day timeline.',
     icon: 'calendar-outline',
-    color: theme.color.primaryLight,
   },
   {
     key: 'reservations',
@@ -140,7 +149,6 @@ export const HUB_SECTIONS: readonly HubSection[] = [
     title: 'Reservations',
     body: 'Dining, Lightning Lane, and other bookings you hold.',
     icon: 'ticket-outline',
-    color: theme.color.accent,
   },
   {
     key: 'expenses',
@@ -148,7 +156,6 @@ export const HUB_SECTIONS: readonly HubSection[] = [
     title: 'Expenses',
     body: 'Shared ledger, balances, and settlements.',
     icon: 'cash-outline',
-    color: theme.color.primary,
   },
   {
     key: 'activity',
@@ -156,7 +163,6 @@ export const HUB_SECTIONS: readonly HubSection[] = [
     title: 'Trip Activity',
     body: 'Log completions and follow, react to, and comment on the group.',
     icon: 'chatbubbles-outline',
-    color: theme.color.accent,
   },
   {
     key: 'members',
@@ -164,7 +170,6 @@ export const HUB_SECTIONS: readonly HubSection[] = [
     title: 'Members',
     body: 'Who is on this Trip and their roles.',
     icon: 'people-outline',
-    color: theme.color.primaryLight,
   },
   {
     key: 'summary',
@@ -172,28 +177,54 @@ export const HUB_SECTIONS: readonly HubSection[] = [
     title: 'Summary',
     body: 'Group counts, top-rated moments, and contributions.',
     icon: 'stats-chart-outline',
-    color: theme.color.textSecondary,
   },
 ];
 
-/** Human labels + badge colors for each derived Trip_Status. */
-const STATUS_META: Record<
+/**
+ * The hub sections for `scheme`, each carrying that scheme's section colour.
+ * Any consumer that paints with `color` must call this with `t.scheme`.
+ */
+export function hubSectionsFor(scheme: ColorScheme): readonly HubSection[] {
+  return HUB_SECTION_DEFS.map((d) => ({ ...d, color: HUB_SECTION_COLOR[scheme][d.key] }));
+}
+
+/**
+ * The hub sections with their light colours — the reference set the
+ * tripStructureRegression snapshot pins byte-for-byte. Painting consumers use
+ * `hubSectionsFor(t.scheme)` instead.
+ */
+export const HUB_SECTIONS: readonly HubSection[] = hubSectionsFor('light');
+
+/** Human labels + badge colors for each derived Trip_Status, from the active theme. */
+function statusMetaFor(t: AppTheme): Record<
   TripStatus,
   { readonly label: string; readonly color: string }
-> = {
-  active: { label: 'Active', color: theme.color.success },
-  upcoming: { label: 'Upcoming', color: theme.color.primary },
-  past: { label: 'Past', color: theme.color.textSecondary },
-};
+> {
+  return {
+    active: { label: 'Active', color: t.color.success },
+    upcoming: { label: 'Upcoming', color: t.color.primaryFg },
+    past: { label: 'Past', color: t.color.textSecondary },
+  };
+}
 
-const AVATAR_COLORS = ['#5b2a86', '#2f80ed', '#2e9e6b', '#f6a609', '#d6336c'];
-
-const PARK_COLORS: Record<string, { bg: string; text: string }> = {
-  'magic-kingdom': { bg: 'rgba(126, 87, 194, 0.15)', text: '#7e57c2' },
-  'epcot': { bg: 'rgba(47, 128, 237, 0.15)', text: '#2f80ed' },
-  'hollywood-studios': { bg: 'rgba(232, 80, 91, 0.15)', text: '#e8505b' },
-  'animal-kingdom': { bg: 'rgba(63, 163, 77, 0.15)', text: '#2e9e6b' },
-};
+/** Glance-card park pill tint + text per park, from the active theme. */
+function parkColorsFor(t: AppTheme): Record<string, { bg: string; text: string }> {
+  return {
+    'magic-kingdom': {
+      bg: withAlpha(t.parkAccent['Magic Kingdom'], 0.15),
+      text: t.parkAccent['Magic Kingdom'],
+    },
+    'epcot': { bg: withAlpha(t.parkAccent.EPCOT, 0.15), text: t.parkAccent.EPCOT },
+    'hollywood-studios': {
+      bg: withAlpha(t.parkAccent['Hollywood Studios'], 0.15),
+      text: t.parkAccent['Hollywood Studios'],
+    },
+    'animal-kingdom': {
+      bg: withAlpha(t.parkAccent['Animal Kingdom'], 0.15),
+      text: t.color.success,
+    },
+  };
+}
 
 const PARK_LABELS: Record<string, string> = {
   'magic-kingdom': 'Magic Kingdom',
@@ -316,6 +347,12 @@ export default function TripDetailScreen({
   navigation,
   route,
 }: Props): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
+  const crewAvatar = usePalette(CREW_AVATAR);
+  const glancePal = usePalette(GLANCE);
+  const tile = usePalette(HUB_TILE);
+  const progressCard = usePalette(PROGRESS_CARD);
   const { tripId } = route.params;
 
   const tripQuery = useQuery<TripDetailResponse, ApiError>({
@@ -422,7 +459,7 @@ export default function TripDetailScreen({
           onBack={handleBack}
         />
         <View style={styles.center} testID="trip-detail-loading">
-          <ActivityIndicator color={theme.color.primary} />
+          <ActivityIndicator color={t.color.primaryFg} />
         </View>
       </ScreenContainer>
     );
@@ -462,7 +499,15 @@ export default function TripDetailScreen({
   }
 
   const trip = tripQuery.data as TripDetailResponse;
-  const statusMeta = STATUS_META[trip.status];
+  const statusMeta = statusMetaFor(t)[trip.status];
+  const parkColors = parkColorsFor(t);
+  const avatarColors = [
+    t.color.primary,
+    crewAvatar.sky,
+    crewAvatar.success,
+    crewAvatar.amber,
+    crewAvatar.danger,
+  ];
   const isCompleted = trip.status === 'past';
 
   const todayDate = new Date().toISOString().slice(0, 10);
@@ -491,14 +536,14 @@ export default function TripDetailScreen({
                 style={styles.editButton}
                 testID="trip-detail-edit"
               >
-                <Ionicons name="create-outline" size={22} color="#ffffff" />
+                <Ionicons name="create-outline" size={22} color={t.color.textOnPrimary} />
               </Pressable>
             ) : null}
           </View>
         }
       />
 
-      <ScrollView contentContainerStyle={styles.content} testID="trip-detail-hub">
+      <ScrollView contentContainerStyle={styles.content} testID="trip-detail-hub" keyboardShouldPersistTaps="handled">
         {trip.description.trim().length > 0 ? (
           <Text style={styles.description}>{trip.description}</Text>
         ) : null}
@@ -517,7 +562,7 @@ export default function TripDetailScreen({
                     <Ionicons
                       name="bed-outline"
                       size={14}
-                      color={theme.color.primary}
+                      color={t.color.primaryFg}
                     />
                     <Text style={styles.resortChipText}>{resort.name}</Text>
                   </View>
@@ -553,7 +598,7 @@ export default function TripDetailScreen({
                       styles.crewAvatar,
                       {
                         backgroundColor:
-                          AVATAR_COLORS[index % AVATAR_COLORS.length],
+                          avatarColors[index % avatarColors.length],
                         marginLeft: index === 0 ? 0 : -8,
                         zIndex: 10 - index,
                       },
@@ -600,7 +645,7 @@ export default function TripDetailScreen({
                 testID="trip-detail-glance-reservation"
               >
                 <View style={styles.glanceTagRow}>
-                  <Ionicons name="restaurant-outline" size={12} color="#9333ea" />
+                  <Ionicons name="restaurant-outline" size={12} color={glancePal.reservationTag} />
                   <Text style={styles.glanceTagReservation}>
                     UP NEXT TODAY · RESERVATION
                   </Text>
@@ -615,7 +660,7 @@ export default function TripDetailScreen({
                         styles.parkPill,
                         {
                           backgroundColor:
-                            PARK_COLORS[glance.park]?.bg ?? '#ebdff8',
+                            parkColors[glance.park]?.bg ?? glancePal.parkPillFallbackBg,
                         },
                       ]}
                     >
@@ -624,8 +669,8 @@ export default function TripDetailScreen({
                           styles.parkPillText,
                           {
                             color:
-                              PARK_COLORS[glance.park]?.text ??
-                              theme.color.primary,
+                              parkColors[glance.park]?.text ??
+                              t.color.primaryFg,
                           },
                         ]}
                       >
@@ -652,7 +697,7 @@ export default function TripDetailScreen({
                 testID="trip-detail-glance-schedule"
               >
                 <View style={styles.glanceTagRow}>
-                  <Ionicons name="flag-outline" size={12} color="#2f80ed" />
+                  <Ionicons name="flag-outline" size={12} color={glancePal.scheduleTag} />
                   <Text style={styles.glanceTagSchedule}>
                     UP NEXT TODAY · SCHEDULE TARGET
                   </Text>
@@ -667,7 +712,7 @@ export default function TripDetailScreen({
                         styles.parkPill,
                         {
                           backgroundColor:
-                            PARK_COLORS[glance.park]?.bg ?? '#ebdff8',
+                            parkColors[glance.park]?.bg ?? glancePal.parkPillFallbackBg,
                         },
                       ]}
                     >
@@ -676,8 +721,8 @@ export default function TripDetailScreen({
                           styles.parkPillText,
                           {
                             color:
-                              PARK_COLORS[glance.park]?.text ??
-                              theme.color.primary,
+                              parkColors[glance.park]?.text ??
+                              t.color.primaryFg,
                           },
                         ]}
                       >
@@ -701,7 +746,7 @@ export default function TripDetailScreen({
                 testID="trip-detail-glance-rest"
               >
                 <View style={styles.glanceTagRow}>
-                  <Ionicons name="sunny-outline" size={12} color="#6a5880" />
+                  <Ionicons name="sunny-outline" size={12} color={glancePal.quietTag} />
                   <Text style={styles.glanceTagQuiet}>
                     TODAY · RESORT & FREE TIME
                   </Text>
@@ -750,7 +795,7 @@ export default function TripDetailScreen({
               <View style={styles.pastHeroBadge}>
                 <Text style={styles.pastHeroBadgeText}>🏆 TRIP COMPLETE</Text>
               </View>
-              <Ionicons name="chevron-forward" size={18} color="#ffffff" />
+              <Ionicons name="chevron-forward" size={18} color={t.color.textOnPrimary} />
             </View>
             <Text style={styles.pastHeroTitle}>Magical Vacation Recap</Text>
             <Text style={styles.pastHeroSubtitle}>
@@ -784,13 +829,13 @@ export default function TripDetailScreen({
                 <View
                   style={[
                     styles.tileIconWrap,
-                    { backgroundColor: `${theme.color.primary}18` },
+                    { backgroundColor: `${t.color.primary}18` },
                   ]}
                 >
                   <Ionicons
                     name="list-outline"
                     size={20}
-                    color={theme.color.primary}
+                    color={t.color.primaryFg}
                   />
                 </View>
                 <Text style={styles.tileTitle}>Planned List</Text>
@@ -813,13 +858,13 @@ export default function TripDetailScreen({
                 <View
                   style={[
                     styles.tileIconWrap,
-                    { backgroundColor: `${theme.color.primaryLight}18` },
+                    { backgroundColor: `${t.color.primaryLight}18` },
                   ]}
                 >
                   <Ionicons
                     name="calendar-outline"
                     size={20}
-                    color={theme.color.primaryLight}
+                    color={t.color.primaryLight}
                   />
                 </View>
                 <Text style={styles.tileTitle}>Schedule Builder</Text>
@@ -848,13 +893,13 @@ export default function TripDetailScreen({
                 <View
                   style={[
                     styles.tileIconWrap,
-                    { backgroundColor: 'rgba(246, 195, 67, 0.2)' },
+                    { backgroundColor: withAlpha(t.color.accent, 0.2) },
                   ]}
                 >
                   <Ionicons
                     name="ticket-outline"
                     size={20}
-                    color="#b27a00"
+                    color={tile.reservationsIcon}
                   />
                 </View>
                 <Text style={styles.tileTitle}>Reservations</Text>
@@ -872,20 +917,20 @@ export default function TripDetailScreen({
                 testID="trip-detail-section-activity"
               >
                 <View style={styles.tileBadge}>
-                  <Text style={[styles.tileBadgeText, { color: '#e8505b' }]}>
+                  <Text style={[styles.tileBadgeText, { color: tile.activityText }]}>
                     {feedItems.length} Logs
                   </Text>
                 </View>
                 <View
                   style={[
                     styles.tileIconWrap,
-                    { backgroundColor: 'rgba(232, 80, 91, 0.15)' },
+                    { backgroundColor: tile.activityBg },
                   ]}
                 >
                   <Ionicons
                     name="chatbubbles-outline"
                     size={20}
-                    color="#e8505b"
+                    color={tile.activityIcon}
                   />
                 </View>
                 <Text style={styles.tileTitle}>Trip Activity</Text>
@@ -907,20 +952,20 @@ export default function TripDetailScreen({
                 testID="trip-detail-section-expenses"
               >
                 <View style={styles.tileBadge}>
-                  <Text style={[styles.tileBadgeText, { color: theme.color.primary }]}>
+                  <Text style={[styles.tileBadgeText, { color: t.color.primaryFg }]}>
                     Ledger
                   </Text>
                 </View>
                 <View
                   style={[
                     styles.tileIconWrap,
-                    { backgroundColor: `${theme.color.primary}18` },
+                    { backgroundColor: `${t.color.primary}18` },
                   ]}
                 >
                   <Ionicons
                     name="cash-outline"
                     size={20}
-                    color={theme.color.primary}
+                    color={t.color.primaryFg}
                   />
                 </View>
                 <Text style={styles.tileTitle}>Expenses</Text>
@@ -980,7 +1025,7 @@ export default function TripDetailScreen({
             testID="trip-detail-section-summary"
           >
             <LinearGradient
-              colors={['#24143d', '#3e1e63']}
+              colors={[progressCard.gradStart, progressCard.gradEnd]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.summaryCard}
@@ -1013,7 +1058,7 @@ export default function TripDetailScreen({
                 <Ionicons
                   name="chevron-forward"
                   size={16}
-                  color={theme.color.accent}
+                  color={t.color.accent}
                 />
               </View>
               {plannedItems.length > 0 && completedCount > 0 ? (
@@ -1072,7 +1117,7 @@ export function detailErrorMessage(err: ApiError | null): string {
 // Styles
 // ---------------------------------------------------------------------------
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   center: {
     flex: 1,
     alignItems: 'center',
@@ -1105,19 +1150,19 @@ const styles = StyleSheet.create({
   },
   description: {
     ...theme.typography.body,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     marginBottom: theme.spacing.xs,
   },
 
   // Hero Card
   heroCard: {
-    backgroundColor: theme.color.surface,
+    backgroundColor: t.color.surface,
     borderRadius: theme.radius.lg,
     padding: theme.spacing.md,
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
     gap: theme.spacing.sm,
-    shadowColor: theme.color.primaryDark,
+    shadowColor: t.shadow.card.shadowColor,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
     shadowRadius: 8,
@@ -1135,14 +1180,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: theme.spacing.xs,
-    backgroundColor: `${theme.color.primary}12`,
+    backgroundColor: `${t.color.primary}12`,
     borderRadius: theme.radius.pill,
     paddingHorizontal: theme.spacing.sm,
     paddingVertical: 4,
   },
   resortChipText: {
     ...theme.typography.meta,
-    color: theme.color.primary,
+    color: t.color.primaryFg,
     fontWeight: '600',
   },
 
@@ -1161,11 +1206,11 @@ const styles = StyleSheet.create({
   crewLabel: {
     ...theme.typography.meta,
     fontWeight: '800',
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     letterSpacing: 0.5,
   },
   managePill: {
-    backgroundColor: theme.color.surfaceAlt,
+    backgroundColor: t.color.surfaceAlt,
     paddingHorizontal: 7,
     paddingVertical: 2,
     borderRadius: 6,
@@ -1173,7 +1218,7 @@ const styles = StyleSheet.create({
   managePillText: {
     fontSize: 10,
     fontWeight: '800',
-    color: theme.color.primary,
+    color: t.color.primaryFg,
   },
   crewRight: {
     flexDirection: 'row',
@@ -1190,18 +1235,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: '#ffffff',
+    borderColor: t.color.surface,
   },
   crewAvatarText: {
-    color: '#ffffff',
+    color: t.color.textOnPrimary,
     fontSize: 11,
     fontWeight: '800',
   },
   crewAvatarMore: {
-    backgroundColor: theme.color.surfaceAlt,
+    backgroundColor: t.color.surfaceAlt,
   },
   crewAvatarMoreText: {
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     fontSize: 10,
     fontWeight: '700',
   },
@@ -1219,32 +1264,32 @@ const styles = StyleSheet.create({
   glanceSectionLabel: {
     ...theme.typography.meta,
     fontWeight: '800',
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     letterSpacing: 0.5,
   },
   glanceCard: {
     borderRadius: theme.radius.lg,
     padding: theme.spacing.md,
     borderWidth: 1.5,
-    borderColor: '#d9c4f5',
-    backgroundColor: theme.color.surface,
+    borderColor: GLANCE[t.scheme].cardBorder,
+    backgroundColor: t.color.surface,
     gap: 4,
-    shadowColor: theme.color.primaryDark,
+    shadowColor: t.shadow.card.shadowColor,
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.08,
     shadowRadius: 10,
     elevation: 2,
   },
   glanceCardReservation: {
-    borderColor: '#d9c4f5',
+    borderColor: GLANCE[t.scheme].reservationBorder,
   },
   glanceCardSchedule: {
-    borderColor: '#b9d5fc',
+    borderColor: GLANCE[t.scheme].scheduleBorder,
   },
   glanceCardQuiet: {
     borderStyle: 'dashed',
-    borderColor: '#d6c6e8',
-    backgroundColor: theme.color.surfaceAlt,
+    borderColor: GLANCE[t.scheme].quietBorder,
+    backgroundColor: t.color.surfaceAlt,
   },
   glanceTagRow: {
     flexDirection: 'row',
@@ -1254,35 +1299,35 @@ const styles = StyleSheet.create({
   glanceTagReservation: {
     fontSize: 10,
     fontWeight: '800',
-    color: '#9333ea',
+    color: GLANCE[t.scheme].reservationTag,
     letterSpacing: 0.5,
   },
   glanceTagSchedule: {
     fontSize: 10,
     fontWeight: '800',
-    color: '#2f80ed',
+    color: GLANCE[t.scheme].scheduleTag,
     letterSpacing: 0.5,
   },
   glanceTagQuiet: {
     fontSize: 10,
     fontWeight: '800',
-    color: '#6a5880',
+    color: GLANCE[t.scheme].quietTag,
     letterSpacing: 0.5,
   },
   glanceTitle: {
     ...theme.typography.subtitle,
     fontWeight: '800',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   glanceTitleQuiet: {
     ...theme.typography.subtitle,
     fontWeight: '800',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
     fontSize: 14,
   },
   glanceBodyQuiet: {
     ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     marginBottom: 4,
   },
   glanceMetaRow: {
@@ -1294,7 +1339,7 @@ const styles = StyleSheet.create({
   },
   glanceMetaText: {
     ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   parkPill: {
     paddingHorizontal: 7,
@@ -1311,9 +1356,9 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   glanceBtnPrimary: {
-    backgroundColor: theme.color.surface,
+    backgroundColor: t.color.surface,
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
     borderRadius: theme.radius.sm,
     paddingVertical: 5,
     paddingHorizontal: 10,
@@ -1321,12 +1366,12 @@ const styles = StyleSheet.create({
   glanceBtnPrimaryText: {
     fontSize: 11,
     fontWeight: '700',
-    color: theme.color.primary,
+    color: t.color.primaryFg,
   },
   glanceBtnSecondary: {
-    backgroundColor: theme.color.surfaceAlt,
+    backgroundColor: t.color.surfaceAlt,
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
     borderRadius: theme.radius.sm,
     paddingVertical: 5,
     paddingHorizontal: 10,
@@ -1334,16 +1379,16 @@ const styles = StyleSheet.create({
   glanceBtnSecondaryText: {
     fontSize: 11,
     fontWeight: '700',
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
 
   // Past Trip Hero
   pastHeroCard: {
-    backgroundColor: '#3d1c5c',
+    backgroundColor: t.color.primaryDark,
     borderRadius: theme.radius.lg,
     padding: theme.spacing.md,
     borderWidth: 1,
-    borderColor: 'rgba(246, 195, 67, 0.35)',
+    borderColor: withAlpha(t.color.accent, 0.35),
     gap: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
@@ -1358,7 +1403,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   pastHeroBadge: {
-    backgroundColor: 'rgba(246, 195, 67, 0.2)',
+    backgroundColor: withAlpha(t.color.accent, 0.2),
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
@@ -1366,17 +1411,17 @@ const styles = StyleSheet.create({
   pastHeroBadgeText: {
     fontSize: 10,
     fontWeight: '800',
-    color: theme.color.accent,
+    color: t.color.accent,
     letterSpacing: 0.5,
   },
   pastHeroTitle: {
     ...theme.typography.title,
-    color: '#ffffff',
+    color: t.color.textOnPrimary,
     fontSize: 17,
   },
   pastHeroSubtitle: {
     ...theme.typography.meta,
-    color: '#d9c4f5',
+    color: PAST_HERO[t.scheme].subtitle,
   },
 
   // 2x2 Command Grid (Vacation Tools)
@@ -1386,7 +1431,7 @@ const styles = StyleSheet.create({
   toolsSectionLabel: {
     ...theme.typography.meta,
     fontWeight: '800',
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     letterSpacing: 0.5,
   },
   grid: {
@@ -1398,14 +1443,14 @@ const styles = StyleSheet.create({
   },
   hubTile: {
     flex: 1,
-    backgroundColor: theme.color.surface,
+    backgroundColor: t.color.surface,
     borderRadius: theme.radius.lg,
     padding: theme.spacing.md,
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
     gap: 4,
     position: 'relative',
-    shadowColor: theme.color.primaryDark,
+    shadowColor: t.shadow.card.shadowColor,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 6,
@@ -1415,7 +1460,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 10,
     right: 10,
-    backgroundColor: theme.color.surfaceAlt,
+    backgroundColor: t.color.surfaceAlt,
     paddingHorizontal: 7,
     paddingVertical: 2,
     borderRadius: theme.radius.pill,
@@ -1423,7 +1468,7 @@ const styles = StyleSheet.create({
   tileBadgeText: {
     fontSize: 9.5,
     fontWeight: '800',
-    color: theme.color.primary,
+    color: t.color.primaryFg,
   },
   tileIconWrap: {
     width: 36,
@@ -1437,13 +1482,13 @@ const styles = StyleSheet.create({
     ...theme.typography.subtitle,
     fontSize: 13,
     fontWeight: '800',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   tileDesc: {
     ...theme.typography.meta,
     fontSize: 10.5,
     lineHeight: 14,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
 
   // Vacation Progress Card
@@ -1460,7 +1505,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     padding: 14,
     borderWidth: 1,
-    borderColor: 'rgba(246, 195, 67, 0.25)',
+    borderColor: withAlpha(t.color.accent, 0.25),
     gap: 10,
   },
   summaryTopRow: {
@@ -1472,9 +1517,9 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: 'rgba(246, 195, 67, 0.15)',
+    backgroundColor: withAlpha(t.color.accent, 0.15),
     borderWidth: 1.5,
-    borderColor: 'rgba(246, 195, 67, 0.6)',
+    borderColor: withAlpha(t.color.accent, 0.6),
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
@@ -1494,23 +1539,23 @@ const styles = StyleSheet.create({
   summaryEyebrowText: {
     fontSize: 10,
     fontWeight: '800',
-    color: theme.color.accent,
+    color: t.color.accent,
     letterSpacing: 0.5,
   },
   summaryRecapLink: {
     fontSize: 10.5,
     fontWeight: '700',
-    color: theme.color.accent,
+    color: t.color.accent,
   },
   summaryTitle: {
     fontSize: 13.5,
     fontWeight: '800',
-    color: '#ffffff',
+    color: t.color.textOnPrimary,
     marginTop: 2,
   },
   summarySub: {
     fontSize: 10.5,
-    color: '#e2d9f0',
+    color: PROGRESS_CARD[t.scheme].sub,
     opacity: 0.85,
     marginTop: 2,
   },
@@ -1522,7 +1567,7 @@ const styles = StyleSheet.create({
   },
   progressBarFill: {
     height: '100%',
-    backgroundColor: theme.color.accent,
+    backgroundColor: t.color.accent,
     borderRadius: 3,
   },
-});
+}));

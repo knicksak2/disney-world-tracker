@@ -15,7 +15,6 @@ import {
   Modal,
   Platform,
   Pressable,
-  StyleSheet,
   Text,
   View,
 } from 'react-native';
@@ -32,6 +31,9 @@ import type {
 
 import { apiRequest } from '../../api/client';
 import type { RootStackParamList } from '../../navigation/RootNavigator';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme, usePalette } from '../../theme/useAppTheme';
+import { RESORT_GUIDE } from './ResortGuideSection.palette';
 import {
   directionsUrlCandidates,
   hasValidCoordinates,
@@ -2576,6 +2578,9 @@ export default function ResortGuideSection({
   latitude,
   longitude,
 }: ResortGuideSectionProps): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
+  const pal = usePalette(RESORT_GUIDE);
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [directionsFailed, setDirectionsFailed] = React.useState(false);
   const [mapImageFailed, setMapImageFailed] = React.useState(false);
@@ -2888,7 +2893,7 @@ export default function ResortGuideSection({
       <View style={styles.card} testID="resort-highlights-card">
         <View style={styles.cardHead}>
           <View style={styles.titleWrap}>
-            <Ionicons name="sparkles" size={17} color="#5b2a86" />
+            <Ionicons name="sparkles" size={17} color={t.color.primaryFg} />
             <Text style={styles.cardTitle}>Property Highlights & Atmosphere</Text>
           </View>
           <View style={styles.tierPill}>
@@ -3055,7 +3060,7 @@ export default function ResortGuideSection({
       <View style={styles.card} testID="resort-recreation-card">
         <View style={styles.cardHead}>
           <View style={styles.titleWrap}>
-            <Ionicons name="fitness-outline" size={18} color="#5b2a86" />
+            <Ionicons name="fitness-outline" size={18} color={t.color.primaryFg} />
             <Text style={styles.cardTitle}>Recreation & Resort Amenities</Text>
           </View>
         </View>
@@ -3093,7 +3098,7 @@ export default function ResortGuideSection({
                 <Text style={styles.recreationDesc}>{item.description}</Text>
               </View>
               <View style={styles.recreationChevronWrap}>
-                <Ionicons name="chevron-forward" size={16} color="#8a7ba7" />
+                <Ionicons name="chevron-forward" size={16} color={pal.chevron} />
               </View>
             </Pressable>
           ))}
@@ -3129,7 +3134,7 @@ export default function ResortGuideSection({
       <View style={styles.card} testID="resort-map-transit-card">
         <View style={styles.cardHead}>
           <View style={styles.titleWrap}>
-            <Ionicons name="map-outline" size={18} color="#5b2a86" />
+            <Ionicons name="map-outline" size={18} color={t.color.primaryFg} />
             <Text style={styles.cardTitle}>Property Map & Transit Times</Text>
           </View>
         </View>
@@ -3154,13 +3159,13 @@ export default function ResortGuideSection({
               accessibilityIgnoresInvertColors
             />
             <View style={styles.mapPinContainer}>
-              <Ionicons name="location" size={32} color="#f6c343" />
+              <Ionicons name="location" size={32} color={t.color.accent} />
             </View>
           </Pressable>
         ) : null}
 
         <View style={styles.addressBar}>
-          <Ionicons name="pin" size={15} color="#5b2a86" />
+          <Ionicons name="pin" size={15} color={t.color.primaryFg} />
           <Text style={styles.addressText}>
             {profile.address}
           </Text>
@@ -3254,28 +3259,28 @@ export default function ResortGuideSection({
                   accessibilityLabel="Close amenity details"
                   testID="resort-amenity-modal-close"
                 >
-                  <Ionicons name="close" size={20} color="#372f4a" />
+                  <Ionicons name="close" size={20} color={pal.body} />
                 </Pressable>
               </View>
 
               <Text style={styles.modalDesc}>{selectedAmenity.description}</Text>
 
               <View style={styles.modalDetailsRow}>
-                <Ionicons name="time-outline" size={16} color="#5b2a86" />
+                <Ionicons name="time-outline" size={16} color={t.color.primaryFg} />
                 <Text style={styles.modalDetailText}>
                   {selectedAmenity.hours ?? 'Operating Hours: 7:00 AM – 11:00 PM daily'}
                 </Text>
               </View>
 
               <View style={styles.modalDetailsRow}>
-                <Ionicons name="pricetag-outline" size={16} color="#5b2a86" />
+                <Ionicons name="pricetag-outline" size={16} color={t.color.primaryFg} />
                 <Text style={styles.modalDetailText}>
                   {selectedAmenity.priceTier ?? 'Complimentary for registered resort guests'}
                 </Text>
               </View>
 
               <View style={styles.modalDetailsRow}>
-                <Ionicons name="information-circle-outline" size={16} color="#5b2a86" />
+                <Ionicons name="information-circle-outline" size={16} color={t.color.primaryFg} />
                 <Text style={styles.modalDetailText}>
                   Available to all guests staying at {resort?.name ?? experienceName}.
                 </Text>
@@ -3298,19 +3303,19 @@ export default function ResortGuideSection({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   container: {
     gap: 14,
     marginTop: 4,
     marginBottom: 10,
   },
   card: {
-    backgroundColor: '#ffffff',
+    backgroundColor: t.color.surface,
     borderRadius: 22,
     borderWidth: 1.5,
-    borderColor: '#ded3f0',
+    borderColor: RESORT_GUIDE[t.scheme].cardBorder,
     padding: 16,
-    shadowColor: '#5b2a86',
+    shadowColor: RESORT_GUIDE[t.scheme].cardShadow,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.08,
     shadowRadius: 20,
@@ -3331,19 +3336,19 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 14,
     fontWeight: '800',
-    color: '#190c2d',
+    color: RESORT_GUIDE[t.scheme].heading,
     letterSpacing: -0.2,
   },
   cardSubtitle: {
     fontSize: 12,
-    color: '#655d78',
+    color: RESORT_GUIDE[t.scheme].bodyMuted,
     marginBottom: 12,
     lineHeight: 16,
   },
   tierPill: {
-    backgroundColor: '#f3e8ff',
+    backgroundColor: RESORT_GUIDE[t.scheme].violetSubtleBg,
     borderWidth: 1,
-    borderColor: '#d8b4fe',
+    borderColor: RESORT_GUIDE[t.scheme].violetSubtleBorder,
     borderRadius: 999,
     paddingVertical: 3,
     paddingHorizontal: 9,
@@ -3351,10 +3356,10 @@ const styles = StyleSheet.create({
   tierPillText: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#7e22ce',
+    color: RESORT_GUIDE[t.scheme].tierText,
   },
   countBadge: {
-    backgroundColor: '#ede6f6',
+    backgroundColor: RESORT_GUIDE[t.scheme].lavenderBg,
     borderRadius: 999,
     paddingVertical: 3,
     paddingHorizontal: 8,
@@ -3362,11 +3367,11 @@ const styles = StyleSheet.create({
   countBadgeText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#5b2a86',
+    color: t.color.primaryFg,
   },
   propertyBlurb: {
     fontSize: 12.5,
-    color: '#372f4a',
+    color: RESORT_GUIDE[t.scheme].body,
     lineHeight: 18,
     marginBottom: 14,
   },
@@ -3375,15 +3380,16 @@ const styles = StyleSheet.create({
   },
   highlightBlock: {
     flexDirection: 'row',
-    backgroundColor: '#fbf9fe',
+    backgroundColor: RESORT_GUIDE[t.scheme].paleBg,
     borderWidth: 1,
-    borderColor: '#ede6f6',
+    borderColor: RESORT_GUIDE[t.scheme].lavenderBorder,
     borderRadius: 14,
     padding: 12,
     alignItems: 'flex-start',
     gap: 12,
   },
   highlightEmoji: {
+    ...t.textDefault,
     fontSize: 22,
     marginTop: 1,
   },
@@ -3393,12 +3399,12 @@ const styles = StyleSheet.create({
   highlightTitle: {
     fontSize: 13,
     fontWeight: '800',
-    color: '#190c2d',
+    color: RESORT_GUIDE[t.scheme].heading,
     marginBottom: 3,
   },
   highlightDesc: {
     fontSize: 11.5,
-    color: '#655d78',
+    color: RESORT_GUIDE[t.scheme].bodyMuted,
     lineHeight: 16,
   },
   diningHeaderRow: {
@@ -3408,12 +3414,13 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   diningHeaderEmoji: {
+    ...t.textDefault,
     fontSize: 16,
     marginRight: 6,
   },
   inspectHintText: {
     fontSize: 12,
-    color: '#655d78',
+    color: RESORT_GUIDE[t.scheme].bodyMuted,
     fontWeight: '500',
   },
   diningList: {
@@ -3421,16 +3428,16 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   diningItemCard: {
-    backgroundColor: '#ffffff',
+    backgroundColor: t.color.surface,
     borderWidth: 1,
-    borderColor: '#ede6f6',
+    borderColor: RESORT_GUIDE[t.scheme].lavenderBorder,
     borderRadius: 14,
     paddingVertical: 12,
     paddingHorizontal: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    shadowColor: '#1f1235',
+    shadowColor: RESORT_GUIDE[t.scheme].diningCardShadow,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04,
     shadowRadius: 4,
@@ -3447,19 +3454,19 @@ const styles = StyleSheet.create({
   diningName: {
     fontSize: 14,
     fontWeight: '800',
-    color: '#190c2d',
+    color: RESORT_GUIDE[t.scheme].heading,
     marginBottom: 2,
   },
   diningSubtitle: {
     fontSize: 11.5,
-    color: '#655d78',
+    color: RESORT_GUIDE[t.scheme].bodyMuted,
     lineHeight: 16,
     marginBottom: 4,
   },
   diningMealsText: {
     fontSize: 11.5,
     fontWeight: '600',
-    color: '#5b2a86',
+    color: t.color.primaryFg,
     marginBottom: 6,
   },
   diningTagRow: {
@@ -3468,7 +3475,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   diningTagPill: {
-    backgroundColor: '#f3e8ff',
+    backgroundColor: RESORT_GUIDE[t.scheme].violetSubtleBg,
     paddingVertical: 2.5,
     paddingHorizontal: 8,
     borderRadius: 999,
@@ -3476,16 +3483,16 @@ const styles = StyleSheet.create({
   diningTagText: {
     fontSize: 10.5,
     fontWeight: '700',
-    color: '#5b2a86',
+    color: t.color.primaryFg,
   },
   diningPriceText: {
     fontSize: 11.5,
     fontWeight: '800',
-    color: '#16a34a',
+    color: RESORT_GUIDE[t.scheme].price,
     marginLeft: 2,
   },
   diningActionBtn: {
-    backgroundColor: '#5b2a86',
+    backgroundColor: t.color.primary,
     borderRadius: 16,
     paddingVertical: 7,
     paddingHorizontal: 16,
@@ -3499,16 +3506,16 @@ const styles = StyleSheet.create({
   diningActionBtnText: {
     fontSize: 12.5,
     fontWeight: '800',
-    color: '#ffffff',
+    color: t.color.textOnPrimary,
   },
   recreationList: {
     gap: 10,
   },
   recreationItem: {
     flexDirection: 'row',
-    backgroundColor: '#fbf9fe',
+    backgroundColor: RESORT_GUIDE[t.scheme].paleBg,
     borderWidth: 1,
-    borderColor: '#ede6f6',
+    borderColor: RESORT_GUIDE[t.scheme].lavenderBorder,
     borderRadius: 14,
     padding: 12,
     alignItems: 'flex-start',
@@ -3518,11 +3525,12 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: '#ede6f6',
+    backgroundColor: RESORT_GUIDE[t.scheme].lavenderBg,
     alignItems: 'center',
     justifyContent: 'center',
   },
   recreationEmoji: {
+    ...t.textDefault,
     fontSize: 18,
   },
   recreationContent: {
@@ -3539,11 +3547,11 @@ const styles = StyleSheet.create({
   recreationTitle: {
     fontSize: 12.5,
     fontWeight: '800',
-    color: '#190c2d',
+    color: RESORT_GUIDE[t.scheme].heading,
     flex: 1,
   },
   recreationBadge: {
-    backgroundColor: '#ede6f6',
+    backgroundColor: RESORT_GUIDE[t.scheme].lavenderBg,
     borderRadius: 999,
     paddingVertical: 2,
     paddingHorizontal: 7,
@@ -3551,11 +3559,11 @@ const styles = StyleSheet.create({
   recreationBadgeText: {
     fontSize: 10,
     fontWeight: '800',
-    color: '#5b2a86',
+    color: t.color.primaryFg,
   },
   recreationDesc: {
     fontSize: 11.5,
-    color: '#655d78',
+    color: RESORT_GUIDE[t.scheme].bodyMuted,
     lineHeight: 16,
   },
   mapFrame: {
@@ -3563,7 +3571,7 @@ const styles = StyleSheet.create({
     height: 160,
     borderRadius: 14,
     overflow: 'hidden',
-    backgroundColor: '#ede6f6',
+    backgroundColor: RESORT_GUIDE[t.scheme].lavenderBg,
     marginBottom: 10,
     position: 'relative',
   },
@@ -3587,11 +3595,11 @@ const styles = StyleSheet.create({
   addressText: {
     fontSize: 11.5,
     fontWeight: '600',
-    color: '#372f4a',
+    color: RESORT_GUIDE[t.scheme].body,
     flex: 1,
   },
   directionsBtn: {
-    backgroundColor: '#5b2a86',
+    backgroundColor: t.color.primary,
     borderRadius: 12,
     paddingVertical: 10,
     paddingHorizontal: 14,
@@ -3604,11 +3612,11 @@ const styles = StyleSheet.create({
   directionsBtnText: {
     fontSize: 12.5,
     fontWeight: '800',
-    color: '#ffffff',
+    color: t.color.textOnPrimary,
   },
   errorText: {
     fontSize: 11.5,
-    color: '#e11d48',
+    color: RESORT_GUIDE[t.scheme].error,
     marginBottom: 10,
     textAlign: 'center',
   },
@@ -3621,12 +3629,12 @@ const styles = StyleSheet.create({
   transitGridTitle: {
     fontSize: 12,
     fontWeight: '800',
-    color: '#190c2d',
+    color: RESORT_GUIDE[t.scheme].heading,
   },
   transitModeBadge: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#5b2a86',
+    color: t.color.primaryFg,
   },
   transitGrid: {
     flexDirection: 'row',
@@ -3636,9 +3644,9 @@ const styles = StyleSheet.create({
   transitCell: {
     flex: 1,
     minWidth: '45%',
-    backgroundColor: '#fbf9fe',
+    backgroundColor: RESORT_GUIDE[t.scheme].paleBg,
     borderWidth: 1,
-    borderColor: '#ede6f6',
+    borderColor: RESORT_GUIDE[t.scheme].lavenderBorder,
     borderRadius: 12,
     paddingVertical: 9,
     paddingHorizontal: 11,
@@ -3653,16 +3661,16 @@ const styles = StyleSheet.create({
   destName: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#190c2d',
+    color: RESORT_GUIDE[t.scheme].heading,
   },
   destTransitMode: {
     fontSize: 10.5,
     fontWeight: '600',
-    color: '#5b2a86',
+    color: t.color.primaryFg,
     marginTop: 2,
   },
   minutePill: {
-    backgroundColor: '#ede6f6',
+    backgroundColor: RESORT_GUIDE[t.scheme].lavenderBg,
     borderRadius: 999,
     paddingVertical: 3,
     paddingHorizontal: 7,
@@ -3670,11 +3678,11 @@ const styles = StyleSheet.create({
   minuteText: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#5b2a86',
+    color: t.color.primaryFg,
   },
   noDiningText: {
     fontSize: 12.5,
-    color: '#655d78',
+    color: RESORT_GUIDE[t.scheme].bodyMuted,
     fontStyle: 'italic',
     paddingVertical: 8,
     textAlign: 'center',
@@ -3689,28 +3697,28 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     paddingHorizontal: 10,
     borderRadius: 999,
-    backgroundColor: '#f1edfa',
+    backgroundColor: RESORT_GUIDE[t.scheme].pillBg,
     borderWidth: 1,
-    borderColor: '#e4daf5',
+    borderColor: RESORT_GUIDE[t.scheme].pillBorder,
   },
   categoryPillActive: {
-    backgroundColor: '#5b2a86',
-    borderColor: '#5b2a86',
+    backgroundColor: t.color.primary,
+    borderColor: t.color.primary,
   },
   categoryPillText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#5b2a86',
+    color: t.color.primaryFg,
   },
   categoryPillTextActive: {
-    color: '#ffffff',
+    color: t.color.textOnPrimary,
   },
   expandToggleBtn: {
     paddingVertical: 10,
     paddingHorizontal: 12,
-    backgroundColor: '#f7f4fc',
+    backgroundColor: RESORT_GUIDE[t.scheme].toggleBg,
     borderWidth: 1,
-    borderColor: '#e9e1f5',
+    borderColor: RESORT_GUIDE[t.scheme].toggleBorder,
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
@@ -3719,14 +3727,14 @@ const styles = StyleSheet.create({
   expandToggleBtnText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#5b2a86',
+    color: t.color.primaryFg,
   },
   recreationItemPressable: {
     borderWidth: 1,
-    borderColor: '#ede6f6',
+    borderColor: RESORT_GUIDE[t.scheme].lavenderBorder,
     borderRadius: 12,
     padding: 10,
-    backgroundColor: '#fbf9fe',
+    backgroundColor: RESORT_GUIDE[t.scheme].paleBg,
   },
   recreationChevronWrap: {
     justifyContent: 'center',
@@ -3735,7 +3743,7 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 10, 28, 0.6)',
+    backgroundColor: RESORT_GUIDE[t.scheme].scrim,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
@@ -3743,7 +3751,7 @@ const styles = StyleSheet.create({
   modalCard: {
     width: '100%',
     maxWidth: 420,
-    backgroundColor: '#ffffff',
+    backgroundColor: t.color.surface,
     borderRadius: 20,
     padding: 20,
     shadowColor: '#000',
@@ -3765,6 +3773,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   modalEmoji: {
+    ...t.textDefault,
     fontSize: 26,
   },
   modalTitleWrap: {
@@ -3773,7 +3782,7 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 15,
     fontWeight: '800',
-    color: '#190c2d',
+    color: RESORT_GUIDE[t.scheme].heading,
     marginBottom: 2,
   },
   modalCloseBtn: {
@@ -3781,7 +3790,7 @@ const styles = StyleSheet.create({
   },
   modalDesc: {
     fontSize: 12.5,
-    color: '#4a3f60',
+    color: RESORT_GUIDE[t.scheme].modalBody,
     lineHeight: 18,
     marginBottom: 16,
   },
@@ -3794,11 +3803,11 @@ const styles = StyleSheet.create({
   modalDetailText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#372f4a',
+    color: RESORT_GUIDE[t.scheme].body,
     flex: 1,
   },
   modalDoneBtn: {
-    backgroundColor: '#5b2a86',
+    backgroundColor: t.color.primary,
     borderRadius: 12,
     paddingVertical: 11,
     alignItems: 'center',
@@ -3807,6 +3816,6 @@ const styles = StyleSheet.create({
   modalDoneBtnText: {
     fontSize: 13,
     fontWeight: '800',
-    color: '#ffffff',
+    color: t.color.textOnPrimary,
   },
-});
+}));

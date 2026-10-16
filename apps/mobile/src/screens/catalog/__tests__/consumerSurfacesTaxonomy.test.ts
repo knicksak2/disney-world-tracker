@@ -2,7 +2,7 @@ import { describe, expect, it } from '@jest/globals';
 import { EXPERIENCE_CATEGORIES, type ExperienceCategory, type ExperienceDTO } from '@dwt/shared';
 import { TAB_CATEGORIES } from '../../trips/experiencePickerFilters';
 import { groupByCategory } from '../catalogGrouping';
-import { categoryVisual } from '../../../theme/theme';
+import { categoryMeta, lightTheme } from '../../../theme/theme';
 import { buildCategoryTiles } from '../../stats/statsView';
 
 describe('Consumer Surfaces Taxonomy Extension (Task 7.3, Requirements 6.1-6.6)', () => {
@@ -78,12 +78,12 @@ describe('Consumer Surfaces Taxonomy Extension (Task 7.3, Requirements 6.1-6.6)'
   it('Requirement 2.9, 6.6: Category visuals and distinct labels for Walkthrough, PlayArea, and Game', () => {
     const newCategories: ExperienceCategory[] = ['Walkthrough', 'PlayArea', 'Game'];
     for (const cat of newCategories) {
-      const visual = categoryVisual[cat];
-      expect(visual).toBeDefined();
-      expect(visual.label).toBeTruthy();
-      expect(visual.glyph).toBeTruthy();
-      expect(visual.tint).toBeTruthy();
-      expect(visual.label).not.toBe('Ride');
+      const meta = categoryMeta[cat];
+      expect(meta).toBeDefined();
+      expect(meta.label).toBeTruthy();
+      expect(meta.glyph).toBeTruthy();
+      expect(lightTheme.categoryVisual[cat].tint).toBeTruthy();
+      expect(meta.label).not.toBe('Ride');
     }
   });
 
@@ -93,7 +93,7 @@ describe('Consumer Surfaces Taxonomy Extension (Task 7.3, Requirements 6.1-6.6)'
     for (const cat of EXPERIENCE_CATEGORIES) {
       byCategory[cat] = dummyCell;
     }
-    const tiles = buildCategoryTiles(byCategory);
+    const tiles = buildCategoryTiles(byCategory, lightTheme);
     const categoryKeys = tiles.map((t) => t.key);
     expect(categoryKeys).toContain('Walkthrough');
     expect(categoryKeys).toContain('PlayArea');

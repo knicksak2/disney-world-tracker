@@ -1,29 +1,16 @@
 /**
  * DestinationScreen layout component tests (tasks.md → 10.5).
  *
- * Validates: Requirements 6.2, 6.4, 6.8, 6.9, 7.2, 7.5, 7.7, 8.3, 8.4, 8.6, 8.7
+ * Validates: Requirements 7.2, 7.5, 7.7
  *
- * These component tests mount the real `DestinationScreen` for each of its three
- * Level-2 layouts with `apiRequest` stubbed to fixed `/catalog` (and, for the
- * Resorts Destination, `/resorts`) fixtures, and assert the grouped/collapsible
- * rendering each layout produces:
- *
- *   - **Theme / water park (Magic Kingdom).** `groupByLand` sections render in
- *     case-insensitive ascending order with the Land_Catchall section last
- *     (R6.2); every section is expanded on first render so its rows are visible
- *     (R6.4); selecting an Experience_Category chip filters to that category
- *     while preserving the Land grouping (R6.8) and dropping Land sections left
- *     with no matching Experience (R6.9).
+ * `DestinationScreen` today only renders the Disney Springs layout itself — the
+ * `themeOrWaterPark` and `resorts` Destination kinds are dispatched before `renderBody` is
+ * reached, straight to `ParkDestinationScreen`/`ResortsDirectoryScreen` (covered by those
+ * screens' own test files, not here). This file's coverage is scoped to what remains:
  *
  *   - **Disney Springs.** `groupByCategory` sections render in canonical
  *     Experience_Category order with empty categories omitted (R7.2, R7.5), and
  *     a Destination with zero active Experiences shows the empty state (R7.7).
- *
- *   - **Resorts.** Every active Resort renders as a browsable anchor including
- *     Resorts with no Experiences (R8.3); Experiences with no / unmatched
- *     `resortId` fall under the trailing catch-all group (R8.4); an empty Resort
- *     shows its empty-group indication (R8.7); tapping a Resort anchor scrolls
- *     the list to that group and stays on the screen (R8.6).
  *
  * Implementation mirrors `CatalogScreen.render.test.tsx` /
  * `ExperienceDetailScreen.enrichedDetail.test.tsx`: `expo-secure-store`,
@@ -31,7 +18,7 @@
  * preserved), each test uses a retry-disabled `QueryClient`, and the screen is
  * mounted inside a native stack with `destination` seeded as `initialParams`.
  *
- * `DestinationScreen` renders each layout through a virtualizing `FlatList`; in
+ * `DestinationScreen` renders its layout through a virtualizing `FlatList`; in
  * the layout-less test environment only the leading window of cells is
  * committed, so every fixture is kept small enough that all asserted
  * items/sections fall inside the rendered window.

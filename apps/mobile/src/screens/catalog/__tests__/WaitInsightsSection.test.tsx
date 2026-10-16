@@ -1,8 +1,13 @@
 import React from 'react';
+import { StyleSheet } from 'react-native';
+import type { ReactTestInstance } from 'react-test-renderer';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import WaitInsightsSection from '../WaitInsightsSection';
+import { VERDICT } from '../WaitInsightsSection.palette';
 import { apiRequest } from '../../../api/client';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
+import { darkTheme } from '../../../theme/theme';
 
 jest.mock('../../../api/client', () => {
   const actual = jest.requireActual('../../../api/client');
@@ -329,6 +334,52 @@ describe('WaitInsightsSection', () => {
       });
 
       expect(screen.queryByText('Trip')).toBeNull();
+    });
+  });
+
+  // Feature: dark-mode — (c) converted literals (B2)
+  describe('dark mode', () => {
+    afterEach(resetTestScheme);
+
+    const flat = (node: ReactTestInstance): Record<string, unknown> =>
+      (StyleSheet.flatten(node.props.style) ?? {}) as Record<string, unknown>;
+    /** Nearest ancestor (or self) that paints a background. */
+    const paintedAncestor = (node: ReactTestInstance): Record<string, unknown> => {
+      let cur: ReactTestInstance | null = node;
+      while (cur !== null) {
+        const style = flat(cur);
+        if (style.backgroundColor !== undefined) return style;
+        cur = cur.parent;
+      }
+      return {};
+    };
+    const stub = (): void => {
+      mockApiRequest.mockImplementation(async (_method, url) => {
+        if (url.includes('/trips')) return { trips: [] };
+        if (url.includes('/wait-insights')) return { ...baseResponse, escalationRate: 25 };
+        throw new Error('Unknown url');
+      });
+    };
+
+    it('(c) the verdict fill and savings copy use the green dark tonal values', async () => {
+      setTestScheme('dark');
+      stub();
+      renderSection('123');
+
+      const headline = await screen.findByText('Rope drop');
+      expect(flat(headline).color).toBe(darkTheme.color.textOnPrimary);
+      expect(paintedAncestor(headline).backgroundColor).toBe(VERDICT.dark.fill);
+      expect(flat(screen.getByText(/^saves ~/)).color).toBe(VERDICT.dark.saveText);
+      expect(flat(screen.getByText('Lightning Lane')).color).toBe(darkTheme.color.textPrimary);
+    });
+
+    it('keeps the pre-retrofit light values under light', async () => {
+      stub();
+      renderSection('123');
+
+      const headline = await screen.findByText('Rope drop');
+      expect(paintedAncestor(headline).backgroundColor).toBe('#3fa34d');
+      expect(flat(screen.getByText(/^saves ~/)).color).toBe('#3fa34d');
     });
   });
 });

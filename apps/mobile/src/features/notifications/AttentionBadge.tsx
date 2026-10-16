@@ -10,7 +10,8 @@
  * - `'overflow'` → renders "99+", for a count of 100 or more (R4.4).
  *
  * It is intentionally **props-in, view-out**: it does not call
- * {@link useAttentionBadge} or any hook, so the same view can be placed on the
+ * {@link useAttentionBadge} or any data hook (only the theme's `useStyles`),
+ * so the same view can be placed on the
  * Profile tab icon, in the screen header, or anywhere else, and is trivially
  * testable. The caller (the Profile tab icon / screen header) reads the badge
  * state and passes `display` + `count` down.
@@ -26,9 +27,12 @@
  */
 
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
 import { type BadgeDisplay } from '@dwt/shared';
+
+import { makeStyles } from '../../theme/makeStyles';
+import { ATTENTION_BADGE } from './AttentionBadge.palette';
 
 /** The literal shown when the count overflows the two-digit badge (R4.4). */
 const OVERFLOW_LABEL = '99+';
@@ -61,6 +65,7 @@ export function AttentionBadge({
   count,
   testID = 'attention-badge',
 }: AttentionBadgeProps): JSX.Element | null {
+  const styles = useStyles();
   if (display === 'hidden') {
     return null;
   }
@@ -84,20 +89,20 @@ export function AttentionBadge({
 
 // Mirrors the tab-bar badge styling in `RootNavigator` (a small red pill with
 // white, bold text) so the indicator is visually identical wherever it renders.
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   badge: {
     minWidth: 18,
     height: 18,
     paddingHorizontal: 4,
     borderRadius: 9,
-    backgroundColor: '#e11d48',
+    backgroundColor: ATTENTION_BADGE[t.scheme].fill,
     alignItems: 'center',
     justifyContent: 'center',
   },
   badgeText: {
-    color: '#ffffff',
+    color: t.color.textOnPrimary,
     fontSize: 11,
     fontWeight: '700',
     lineHeight: 14,
   },
-});
+}));

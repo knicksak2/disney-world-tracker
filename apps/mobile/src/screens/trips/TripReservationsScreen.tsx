@@ -19,7 +19,6 @@ import {
   Platform,
   Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   TextInput,
   View,
@@ -41,7 +40,9 @@ import {
 
 import { ApiError, apiRequest } from '../../api/client';
 import type { TripsStackParamList } from '../../navigation/TripsStack';
-import { theme } from '../../theme/theme';
+import { theme, withAlpha } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme } from '../../theme/useAppTheme';
 import {
   Badge,
   Card,
@@ -106,6 +107,8 @@ function emptyDraft(date: string): DraftState {
 }
 
 export default function TripReservationsScreen({ navigation, route }: Props): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const { tripId } = route.params;
   const queryClient = useQueryClient();
 
@@ -401,7 +404,7 @@ export default function TripReservationsScreen({ navigation, route }: Props): JS
         }
       />
 
-      <ScrollView contentContainerStyle={styles.scroll} testID="trip-reservations-scroll">
+      <ScrollView contentContainerStyle={styles.scroll} testID="trip-reservations-scroll" keyboardShouldPersistTaps="handled">
         <PrimaryButton
           label="Add Reservation"
           icon="add-circle-outline"
@@ -412,7 +415,7 @@ export default function TripReservationsScreen({ navigation, route }: Props): JS
         {itemsQuery.isPending ? (
           <ActivityIndicator
             style={styles.loading}
-            color={theme.color.primary}
+            color={t.color.primaryFg}
             testID="reservations-loading"
           />
         ) : null}
@@ -501,7 +504,7 @@ export default function TripReservationsScreen({ navigation, route }: Props): JS
                     <Ionicons
                       name={presentation.icon as keyof typeof Ionicons.glyphMap}
                       size={16}
-                      color={active ? theme.color.surface : theme.color.textSecondary}
+                      color={active ? t.color.textOnPrimary : t.color.textSecondary}
                     />
                     <Text style={[styles.kindChipText, active && styles.kindChipTextActive]}>
                       {presentation.label}
@@ -553,7 +556,8 @@ export default function TripReservationsScreen({ navigation, route }: Props): JS
               value={draft.partySizeText}
               onChangeText={(partySizeText) => setDraft((prev) => ({ ...prev, partySizeText }))}
               placeholder="4"
-              placeholderTextColor={theme.color.textSecondary}
+              placeholderTextColor={t.color.textSecondary}
+              keyboardAppearance={t.scheme}
               keyboardType="number-pad"
               style={styles.input}
               accessibilityLabel="Party size"
@@ -567,7 +571,8 @@ export default function TripReservationsScreen({ navigation, route }: Props): JS
                 setDraft((prev) => ({ ...prev, confirmationNumber }))
               }
               placeholder="Optional"
-              placeholderTextColor={theme.color.textSecondary}
+              placeholderTextColor={t.color.textSecondary}
+              keyboardAppearance={t.scheme}
               maxLength={CONFIRMATION_NUMBER_MAX}
               style={styles.input}
               accessibilityLabel="Confirmation number"
@@ -615,7 +620,8 @@ export default function TripReservationsScreen({ navigation, route }: Props): JS
                   value={draft.customTitle}
                   onChangeText={(customTitle) => setDraft((prev) => ({ ...prev, customTitle }))}
                   placeholder="Off-property restaurant"
-                  placeholderTextColor={theme.color.textSecondary}
+                  placeholderTextColor={t.color.textSecondary}
+                  keyboardAppearance={t.scheme}
                   style={styles.input}
                   accessibilityLabel="Off-property booking name"
                   testID="reservation-custom-title-input"
@@ -707,7 +713,8 @@ export default function TripReservationsScreen({ navigation, route }: Props): JS
               value={editPartySizeText}
               onChangeText={setEditPartySizeText}
               placeholder="4"
-              placeholderTextColor={theme.color.textSecondary}
+              placeholderTextColor={t.color.textSecondary}
+              keyboardAppearance={t.scheme}
               keyboardType="number-pad"
               style={styles.input}
               accessibilityLabel="Party size"
@@ -719,7 +726,8 @@ export default function TripReservationsScreen({ navigation, route }: Props): JS
               value={editConfirmation}
               onChangeText={setEditConfirmation}
               placeholder="Optional"
-              placeholderTextColor={theme.color.textSecondary}
+              placeholderTextColor={t.color.textSecondary}
+              keyboardAppearance={t.scheme}
               maxLength={CONFIRMATION_NUMBER_MAX}
               style={styles.input}
               accessibilityLabel="Confirmation number"
@@ -760,7 +768,8 @@ export default function TripReservationsScreen({ navigation, route }: Props): JS
                   value={editCustomTitle}
                   onChangeText={setEditCustomTitle}
                   placeholder="Off-property restaurant"
-                  placeholderTextColor={theme.color.textSecondary}
+                  placeholderTextColor={t.color.textSecondary}
+                  keyboardAppearance={t.scheme}
                   style={styles.input}
                   accessibilityLabel="Off-property booking name"
                   testID="reservation-edit-custom-title-input"
@@ -832,6 +841,8 @@ function ReservationRow({
   readonly onEdit: () => void;
   readonly onViewMenu?: (() => void) | undefined;
 }): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const presentation =
     item.reservationKind != null
       ? reservationKindPresentation(item.reservationKind)
@@ -858,7 +869,7 @@ function ReservationRow({
             <Ionicons
               name={presentation.icon as keyof typeof Ionicons.glyphMap}
               size={13}
-              color={theme.color.textSecondary}
+              color={t.color.textSecondary}
             />
             <Text style={styles.kindBadgeText} testID={`reservation-kind-label-${item.id}`}>
               {presentation.label}
@@ -869,7 +880,7 @@ function ReservationRow({
         <Text style={styles.rowTitle}>{reservationTitle(item)}</Text>
 
         <View style={styles.rowMetaLine}>
-          {item.park != null ? <Badge label={item.park} color={theme.color.primaryLight} /> : null}
+          {item.park != null ? <Badge label={item.park} color={t.color.primaryLight} /> : null}
           {item.partySize != null ? (
             <Text style={styles.rowMeta} testID={`reservation-party-${item.id}`}>
               👥 Party of {item.partySize}
@@ -893,7 +904,7 @@ function ReservationRow({
                 testID={`reservation-menu-${item.id}`}
                 style={({ pressed }) => [styles.smallActionBtn, pressed && styles.pressed]}
               >
-                <Ionicons name="restaurant-outline" size={13} color={theme.color.primary} />
+                <Ionicons name="restaurant-outline" size={13} color={t.color.primaryFg} />
                 <Text style={styles.smallActionBtnText}>Menu</Text>
               </Pressable>
             ) : null}
@@ -904,7 +915,7 @@ function ReservationRow({
               testID={`reservation-edit-${item.id}`}
               style={({ pressed }) => [styles.smallActionBtn, pressed && styles.pressed]}
             >
-              <Ionicons name="pencil-outline" size={13} color={theme.color.textSecondary} />
+              <Ionicons name="pencil-outline" size={13} color={t.color.textSecondary} />
               <Text style={styles.smallActionBtnTextMuted}>Edit</Text>
             </Pressable>
           </View>
@@ -937,7 +948,7 @@ function availableDates(trip: TripDTO | undefined, extraDate?: string | null): r
   return Array.from(dates).sort();
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   scroll: {
     padding: theme.spacing.md,
     gap: theme.spacing.sm,
@@ -954,7 +965,7 @@ const styles = StyleSheet.create({
   },
   resTimeBadge: {
     alignSelf: 'flex-start',
-    backgroundColor: 'rgba(91, 42, 134, 0.08)',
+    backgroundColor: withAlpha(t.color.primary, 0.08),
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
@@ -962,13 +973,13 @@ const styles = StyleSheet.create({
   rowTime: {
     fontSize: 13,
     fontWeight: '800',
-    color: theme.color.primary,
+    color: t.color.primaryFg,
   },
   kindBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: theme.color.surfaceAlt,
+    backgroundColor: t.color.surfaceAlt,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 999,
@@ -976,12 +987,12 @@ const styles = StyleSheet.create({
   kindBadgeText: {
     fontSize: 11,
     fontWeight: '700',
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   rowTitle: {
     fontSize: 15,
     fontWeight: '800',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   rowMetaLine: {
     flexDirection: 'row',
@@ -992,11 +1003,11 @@ const styles = StyleSheet.create({
   rowMeta: {
     fontSize: 12,
     fontWeight: '600',
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   rowConfirmation: {
     fontSize: 12,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   cardFooter: {
     flexDirection: 'row',
@@ -1004,12 +1015,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingTop: theme.spacing.xs,
     borderTopWidth: 1,
-    borderTopColor: theme.color.border,
+    borderTopColor: t.color.border,
     marginTop: 4,
   },
   rowAdder: {
     fontSize: 11,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   footerActions: {
     flexDirection: 'row',
@@ -1023,19 +1034,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 8,
-    backgroundColor: theme.color.surfaceAlt,
+    backgroundColor: t.color.surfaceAlt,
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
   },
   smallActionBtnText: {
     fontSize: 11,
     fontWeight: '700',
-    color: theme.color.primary,
+    color: t.color.primaryFg,
   },
   smallActionBtnTextMuted: {
     fontSize: 11,
     fontWeight: '700',
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   pressed: {
     opacity: 0.7,
@@ -1049,42 +1060,42 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
   },
   kindChipActive: {
-    backgroundColor: theme.color.primary,
-    borderColor: theme.color.primary,
+    backgroundColor: t.color.primary,
+    borderColor: t.color.primary,
   },
   kindChipText: {
     fontSize: theme.typography.meta.fontSize,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
-  kindChipTextActive: { color: theme.color.surface, fontWeight: '700' },
+  kindChipTextActive: { color: t.color.textOnPrimary, fontWeight: '700' },
   dateRow: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.xs },
   dateChip: {
     paddingVertical: 6,
     paddingHorizontal: 10,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
   },
   dateChipActive: {
-    backgroundColor: theme.color.primary,
-    borderColor: theme.color.primary,
+    backgroundColor: t.color.primary,
+    borderColor: t.color.primary,
   },
   dateChipText: {
     fontSize: theme.typography.meta.fontSize,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
-  dateChipTextActive: { color: theme.color.surface, fontWeight: '700' },
+  dateChipTextActive: { color: t.color.textOnPrimary, fontWeight: '700' },
   input: {
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
     borderRadius: theme.radius.sm,
     paddingHorizontal: theme.spacing.sm,
     paddingVertical: theme.spacing.xs,
-    color: theme.color.textPrimary,
-    backgroundColor: theme.color.surface,
+    color: t.color.textPrimary,
+    backgroundColor: t.color.surface,
   },
   selectedVenue: {
     flexDirection: 'row',
@@ -1092,21 +1103,21 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: theme.spacing.sm,
   },
-  selectedVenueText: { color: theme.color.textPrimary, flexShrink: 1 },
+  selectedVenueText: { color: t.color.textPrimary, flexShrink: 1 },
   hint: {
     fontSize: theme.typography.meta.fontSize,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   // The picked time, echoed in words so the selection is legible without
   // decoding which wheel cells are highlighted.
   timeReadout: {
     fontSize: theme.typography.heading.fontSize,
     fontWeight: '700',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
-  errorCard: { borderColor: theme.color.danger, borderWidth: 1 },
+  errorCard: { borderColor: t.color.danger, borderWidth: 1 },
   errorText: {
-    color: theme.color.danger,
+    color: t.color.danger,
     fontSize: theme.typography.meta.fontSize,
   },
-});
+}));

@@ -7,13 +7,16 @@
  * plus the user's per-pin progress projection.
  */
 import React from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import type { PinDTO, UserPinProgressDTO } from '@dwt/shared';
 
 import { PinView } from '../../components/pins/PinView';
-import { TIER_COLOR, TIER_LABEL, TRACK_LABEL } from '../../components/pins/pinTierMeta';
-import { theme } from '../../theme/theme';
+import { TIER_LABEL, TRACK_LABEL } from '../../components/pins/pinTierMeta';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme, usePalette } from '../../theme/useAppTheme';
 import { Badge, SecondaryButton } from '../../theme/components';
+import { PIN_DETAIL } from './PinDetailModal.palette';
+import { TIER_TEXT } from './tierText.palette';
 
 export interface PinDetailModalProps {
   readonly visible: boolean;
@@ -36,6 +39,9 @@ export default function PinDetailModal({
   pin,
   progress,
 }: PinDetailModalProps): JSX.Element | null {
+  const styles = useStyles();
+  const t = useAppTheme();
+  const tierUi = usePalette(TIER_TEXT);
   if (!pin) return null;
   const unlocked = progress?.unlocked ?? false;
   const pct = progress?.percentComplete ?? 0;
@@ -55,9 +61,9 @@ export default function PinDetailModal({
 
           <View style={styles.badgeRow}>
             <View style={styles.badgeSpacer}>
-              <Badge label={TIER_LABEL[pin.tier]} color={TIER_COLOR[pin.tier]} />
+              <Badge label={TIER_LABEL[pin.tier]} color={tierUi[pin.tier]} />
             </View>
-            <Badge label={TRACK_LABEL[pin.track]} color={theme.color.primary} />
+            <Badge label={TRACK_LABEL[pin.track]} color={t.color.primaryFg} />
           </View>
 
           <Text style={styles.lore}>{pin.description}</Text>
@@ -86,59 +92,59 @@ export default function PinDetailModal({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   backdrop: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(10,7,20,0.6)',
+    backgroundColor: PIN_DETAIL[t.scheme].backdrop,
   },
   sheet: {
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: theme.color.surface,
-    borderTopLeftRadius: theme.radius.lg,
-    borderTopRightRadius: theme.radius.lg,
+    backgroundColor: t.color.surface,
+    borderTopLeftRadius: t.radius.lg,
+    borderTopRightRadius: t.radius.lg,
     maxHeight: '86%',
   },
-  sheetContent: { padding: theme.spacing.xl, alignItems: 'center' },
-  artWrap: { marginBottom: theme.spacing.lg },
+  sheetContent: { padding: t.spacing.xl, alignItems: 'center' },
+  artWrap: { marginBottom: t.spacing.lg },
   name: {
-    ...theme.typography.title,
-    color: theme.color.textPrimary,
+    ...t.typography.title,
+    color: t.color.textPrimary,
     textAlign: 'center',
-    marginBottom: theme.spacing.sm,
+    marginBottom: t.spacing.sm,
   },
-  badgeRow: { flexDirection: 'row', marginBottom: theme.spacing.lg },
-  badgeSpacer: { marginRight: theme.spacing.sm },
+  badgeRow: { flexDirection: 'row', marginBottom: t.spacing.lg },
+  badgeSpacer: { marginRight: t.spacing.sm },
   lore: {
-    ...theme.typography.body,
-    color: theme.color.textSecondary,
+    ...t.typography.body,
+    color: t.color.textSecondary,
     textAlign: 'center',
-    marginBottom: theme.spacing.lg,
+    marginBottom: t.spacing.lg,
   },
   unlockedAt: {
-    ...theme.typography.body,
-    color: theme.color.primary,
+    ...t.typography.body,
+    color: t.color.primaryFg,
     fontWeight: '700',
-    marginBottom: theme.spacing.lg,
+    marginBottom: t.spacing.lg,
   },
-  progressWrap: { width: '100%', marginBottom: theme.spacing.lg },
+  progressWrap: { width: '100%', marginBottom: t.spacing.lg },
   progressTrack: {
     height: 10,
     borderRadius: 5,
-    backgroundColor: theme.color.border,
+    backgroundColor: t.color.border,
     overflow: 'hidden',
   },
-  progressFill: { height: '100%', borderRadius: 5, backgroundColor: theme.color.primary },
+  progressFill: { height: '100%', borderRadius: 5, backgroundColor: t.color.primaryFg },
   progressLabel: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
     textAlign: 'center',
-    marginTop: theme.spacing.xs,
+    marginTop: t.spacing.xs,
   },
-});
+}));

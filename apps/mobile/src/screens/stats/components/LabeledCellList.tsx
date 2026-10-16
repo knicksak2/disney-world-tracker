@@ -23,7 +23,8 @@ import { StyleSheet, Text, View } from 'react-native';
 import type { CompletionCell } from '../../../api/statsTypes';
 import { ProgressBar } from '../../../theme/charts';
 import { EmptyState } from '../../../theme/components';
-import { theme } from '../../../theme/theme';
+import { makeStyles } from '../../../theme/makeStyles';
+import { useAppTheme } from '../../../theme/useAppTheme';
 import {
   displayedPercentLabel,
   remainingToGo,
@@ -73,9 +74,12 @@ function LabeledCellRowView({
   readonly row: LabeledCellRow;
   readonly testID?: string;
 }): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const { label, cell, color } = row;
   const complete = showCompleteBadge(cell);
-  const dotColor = complete ? theme.color.success : color ?? theme.color.primary;
+  // The dot is a data mark on a surface → primaryFg (rule 1a).
+  const dotColor = complete ? t.color.success : color ?? t.color.primaryFg;
   return (
     <View
       style={styles.row}
@@ -115,6 +119,7 @@ export function LabeledCellList({
   rowTestIDPrefix,
   testID,
 }: LabeledCellListProps): JSX.Element {
+  const styles = useStyles();
   if (rows.length === 0) {
     return (
       <EmptyState
@@ -140,26 +145,26 @@ export function LabeledCellList({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   list: {
-    gap: theme.spacing.xs,
+    gap: t.spacing.xs,
   },
   row: {
-    gap: theme.spacing.sm,
-    paddingVertical: theme.spacing.sm,
+    gap: t.spacing.sm,
+    paddingVertical: t.spacing.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: theme.color.border,
+    borderBottomColor: t.color.border,
   },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: theme.spacing.sm,
+    gap: t.spacing.sm,
   },
   nameWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.sm,
+    gap: t.spacing.sm,
     flexShrink: 1,
   },
   dot: {
@@ -168,20 +173,21 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   label: {
-    ...theme.typography.subtitle,
-    color: theme.color.textPrimary,
+    ...t.typography.subtitle,
+    color: t.color.textPrimary,
     flexShrink: 1,
   },
   trophy: {
     fontSize: 12,
+    ...t.textDefault,
   },
   value: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
     fontVariant: ['tabular-nums'],
   },
   valueComplete: {
-    color: theme.color.success,
+    color: t.color.success,
     fontWeight: '700',
   },
-});
+}));

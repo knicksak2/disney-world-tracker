@@ -4,7 +4,8 @@
  */
 
 import React from 'react';
-import { View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import type { ReactTestInstance } from 'react-test-renderer';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import {
   NavigationContainer,
@@ -24,7 +25,12 @@ import type {
 import { apiRequest } from '../../../api/client';
 import type { StatsResponse } from '../../../api/statsTypes';
 import { useClaimablePinsBadge } from '../../../components/pins/useClaimablePinsBadge';
+import { TIER_COLOR, TIER_LABEL } from '../../../components/pins/pinTierMeta';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
+import { darkTheme } from '../../../theme/theme';
+import { TIER_TEXT } from '../../profile/tierText.palette';
 import CollectionScreen from '../CollectionScreen';
+import { COLLECTION, CORKBOARD } from '../CollectionScreen.palette';
 
 jest.mock('../../../api/client', () => {
   const actual = jest.requireActual('../../../api/client');
@@ -1005,5 +1011,111 @@ describe('CollectionScreen — Disney Vault Hub', () => {
     expect(screen.getByText('Top Rated Item')).toBeTruthy();
     expect(await screen.findByText('Space Mountain')).toBeTruthy();
     expect(await screen.findByText('★ 9.2/10')).toBeTruthy();
+  });
+
+  describe('dark mode', () => {
+    afterEach(resetTestScheme);
+
+    const flat = (node: ReactTestInstance) => StyleSheet.flatten(node.props.style) ?? {};
+
+    it('(a)(b)(c) paints the Vault screen, text and converted Pins-view elements dark', async () => {
+      mockUseClaimablePinsBadge.mockReturnValue({ count: 1, display: 'count' });
+      setTestScheme('dark');
+      renderCollection();
+
+      // (a) root container.
+      expect(flat(screen.getByTestId('collection-screen')).backgroundColor).toBe(
+        darkTheme.color.background,
+      );
+      // (b) primary text.
+      expect(flat(screen.getByText('Pin Directory & Rarity Tiers')).color).toBe(
+        darkTheme.color.textPrimary,
+      );
+      // (c) converted literals.
+      expect(flat(screen.getByTestId('vault-segmented-control')).backgroundColor).toBe(
+        COLLECTION.dark.segTrackBg,
+      );
+      expect(flat(screen.getByTestId('vault-seg-pins')).backgroundColor).toBe(
+        darkTheme.color.borderStrong,
+      );
+      expect(flat(screen.getByTestId('vault-seg-badge-pins')).backgroundColor).toBe(
+        COLLECTION.dark.segBadgeBg,
+      );
+      const banner = flat(screen.getByTestId('claim-banner'));
+      expect(banner.backgroundColor).toBe(COLLECTION.dark.claimBannerBg);
+      expect(banner.borderColor).toBe(COLLECTION.dark.claimBannerBorder);
+      // The wooden corkboard frame is artwork: identical in both schemes.
+      expect(flat(screen.getByTestId('showcase-corkboard-canvas')).backgroundColor).toBe(
+        CORKBOARD.light.frameBg,
+      );
+    });
+
+    // Feature: dark-mode visual-verify pass (Requirement 9.12): found on emulator-5554.
+    // The active segment was `surface` on the violet.tint track (a darker hole) and the
+    // idle labels were textPrimary, as bright as the active one.
+    it('segmented control: the active segment is raised, idle labels are quieter, and it moves on press', () => {
+      setTestScheme('dark');
+      renderCollection();
+
+      const track = flat(screen.getByTestId('vault-segmented-control')).backgroundColor;
+      const seg = (id: string) => flat(screen.getByTestId(id));
+      const label = (id: string, text: RegExp) =>
+        flat(within(screen.getByTestId(id)).getByText(text)).color;
+
+      expect(seg('vault-seg-pins').backgroundColor).toBe(darkTheme.color.borderStrong);
+      expect(seg('vault-seg-pins').backgroundColor).not.toBe(darkTheme.color.surface);
+      expect(seg('vault-seg-pins').backgroundColor).not.toBe(track);
+      expect(seg('vault-seg-food').backgroundColor).toBeUndefined();
+      expect(label('vault-seg-pins', /Pins/)).toBe(darkTheme.color.primaryFg);
+      expect(label('vault-seg-food', /Food/)).toBe(darkTheme.color.textSecondary);
+      expect(label('vault-seg-food', /Food/)).not.toBe(darkTheme.color.textPrimary);
+
+      fireEvent.press(screen.getByTestId('vault-seg-food'));
+      expect(seg('vault-seg-food').backgroundColor).toBe(darkTheme.color.borderStrong);
+      expect(seg('vault-seg-pins').backgroundColor).toBeUndefined();
+      expect(label('vault-seg-food', /Food/)).toBe(darkTheme.color.primaryFg);
+      expect(label('vault-seg-pins', /Pins/)).toBe(darkTheme.color.textSecondary);
+    });
+
+    it('a tier Badge in "Badges in Reach" uses TIER_TEXT in dark (rule 7)', async () => {
+      setTestScheme('dark');
+      renderCollection();
+
+      const pin = PINS[2]!;
+      const item = await screen.findByTestId(`pin-in-reach-${pin.id}`);
+      expect(flat(within(item).getByText(TIER_LABEL[pin.tier])).color).toBe(TIER_TEXT.dark[pin.tier]);
+    });
+
+    it('Park Stats bars use parkAccent / palette dark values', async () => {
+      setTestScheme('dark');
+      renderCollection();
+
+      fireEvent.press(screen.getByTestId('vault-seg-stats'));
+      const card = await screen.findByTestId('park-coverage-card');
+      expect(flat(within(card).getByText('Magic Kingdom')).color).toBe(
+        darkTheme.parkAccent['Magic Kingdom'],
+      );
+      expect(flat(within(card).getByText('EPCOT')).color).toBe(COLLECTION.dark.parkEpcot);
+    });
+
+    it('keeps the pre-retrofit light values under light', async () => {
+      mockUseClaimablePinsBadge.mockReturnValue({ count: 1, display: 'count' });
+      renderCollection();
+
+      expect(flat(screen.getByTestId('vault-segmented-control')).backgroundColor).toBe('#ebe8f0');
+      expect(flat(screen.getByTestId('vault-seg-pins')).backgroundColor).toBe('#ffffff');
+      expect(
+        flat(within(screen.getByTestId('vault-seg-food')).getByText(/Food/)).color,
+      ).toBe('#4b5563');
+      expect(flat(screen.getByTestId('claim-banner')).backgroundColor).toBe('#fffbeb');
+      const pin = PINS[2]!;
+      const item = await screen.findByTestId(`pin-in-reach-${pin.id}`);
+      expect(flat(within(item).getByText(TIER_LABEL[pin.tier])).color).toBe(TIER_COLOR[pin.tier]);
+
+      fireEvent.press(screen.getByTestId('vault-seg-stats'));
+      const card = await screen.findByTestId('park-coverage-card');
+      expect(flat(within(card).getByText('Magic Kingdom')).color).toBe('#7e57c2');
+      expect(flat(within(card).getByText('EPCOT')).color).toBe('#0288d1');
+    });
   });
 });

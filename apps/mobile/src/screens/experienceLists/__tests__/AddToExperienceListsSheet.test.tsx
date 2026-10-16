@@ -2,9 +2,15 @@
 // Structural mirror of foodLists/__tests__/AddToListsSheet.test.tsx, adapted to this
 // sheet's single-experience prop shape ({ experienceId, experienceName }, not an array).
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import type { ReactTestInstance } from 'react-test-renderer';
 import type { ExperienceListDetailDTO, ExperienceListDTO } from '@dwt/shared';
+
+import { darkTheme } from '../../../theme/theme';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
+import { ADD_TO_EXPERIENCE_LISTS } from '../AddToExperienceListsSheet.palette';
 
 jest.mock('expo-constants', () => ({
   __esModule: true,
@@ -322,4 +328,43 @@ describe('AddToExperienceListsSheet', () => {
       expect(mockOnClose).toHaveBeenCalled();
     });
   });
+
+  describe('dark mode', () => {
+    afterEach(resetTestScheme);
+
+    test('paints the sheet, rows, inline-create tint and input with dark values', async () => {
+      setTestScheme('dark');
+      renderSheet();
+
+      const row = await screen.findByText('Thrill Rides');
+      const title = screen.getByText('Add to Lists');
+      // (a) sheet surface, (b) primary text (header and a row).
+      expect(paintedBackground(title)).toBe(darkTheme.color.surface);
+      expect(StyleSheet.flatten(title.props.style).color).toBe(darkTheme.color.textPrimary);
+      expect(StyleSheet.flatten(row.props.style).color).toBe(darkTheme.color.textPrimary);
+      // (c) the violet "Create new list" tint (rule 3 S) and its primaryFg label.
+      expect(
+        StyleSheet.flatten(screen.getByTestId('inline-create-experience-list-btn').props.style)
+          .backgroundColor,
+      ).toBe(ADD_TO_EXPERIENCE_LISTS.dark.inlineAddBg);
+      expect(StyleSheet.flatten(screen.getByText('Create new list').props.style).color).toBe(
+        darkTheme.color.primaryFg,
+      );
+      fireEvent.press(screen.getByTestId('inline-create-experience-list-btn'));
+      expect(
+        screen.getByTestId('create-experience-list-name-input').props.keyboardAppearance,
+      ).toBe('dark');
+    });
+  });
 });
+
+/** Nearest painted `backgroundColor` at or above `node` (sheet surface lookup). */
+function paintedBackground(node: ReactTestInstance | null): unknown {
+  for (let n = node; n !== null; n = n.parent) {
+    const style = n.props.style;
+    if (style === undefined || typeof style === 'function') continue;
+    const flat = StyleSheet.flatten(style) as { backgroundColor?: unknown } | undefined;
+    if (flat?.backgroundColor !== undefined) return flat.backgroundColor;
+  }
+  return undefined;
+}

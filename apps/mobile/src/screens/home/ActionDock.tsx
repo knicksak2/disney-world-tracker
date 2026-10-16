@@ -10,10 +10,12 @@
  */
 
 import React from 'react';
-import { Pressable, type StyleProp, StyleSheet, Text, View, type ViewStyle } from 'react-native';
+import { Pressable, type StyleProp, Text, View, type ViewStyle } from 'react-native';
 import { useClaimablePinsBadge } from '../../components/pins/useClaimablePinsBadge';
 import { navigateToLiveWaits, navigateToPinBoard } from '../../navigation/navigationRef';
-import { theme } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { usePalette } from '../../theme/useAppTheme';
+import { ACTION_DOCK } from './ActionDock.palette';
 
 export interface ActionDockProps {
   readonly onOpenLogRide?: () => void;
@@ -38,6 +40,8 @@ export default function ActionDock({
   testID = 'home-action-dock',
   style,
 }: ActionDockProps): JSX.Element {
+  const styles = useStyles();
+  const pal = usePalette(ACTION_DOCK);
   const { count: claimablePinCount } = useClaimablePinsBadge();
 
   const handleLiveWaits = () => {
@@ -84,7 +88,7 @@ export default function ActionDock({
         accessibilityLabel="Check live wait times"
         testID="home-dock-live-waits"
       >
-        <View style={[styles.iconWrap, { backgroundColor: '#eef2ff' }]}>
+        <View style={[styles.iconWrap, { backgroundColor: pal.liveWaitsBg }]}>
           <Text style={styles.emojiIcon}>⏱️</Text>
         </View>
         <Text style={styles.label}>Live Waits</Text>
@@ -98,7 +102,7 @@ export default function ActionDock({
         accessibilityLabel="Log attraction or ride"
         testID="home-dock-log-ride"
       >
-        <View style={[styles.iconWrap, { backgroundColor: '#fdf2f8' }]}>
+        <View style={[styles.iconWrap, { backgroundColor: pal.logRideBg }]}>
           <Text style={styles.emojiIcon}>🎢</Text>
         </View>
         <Text style={styles.label}>Log Ride</Text>
@@ -112,7 +116,7 @@ export default function ActionDock({
         accessibilityLabel="Log food item or snack"
         testID="home-dock-log-snack"
       >
-        <View style={[styles.iconWrap, { backgroundColor: '#fffbeb' }]}>
+        <View style={[styles.iconWrap, { backgroundColor: pal.logSnackBg }]}>
           <Text style={styles.emojiIcon}>🍦</Text>
         </View>
         <Text style={styles.label}>Log Snack</Text>
@@ -133,7 +137,7 @@ export default function ActionDock({
         <View
           style={[
             styles.iconWrap,
-            { backgroundColor: isActiveVacation ? '#ecfdf5' : '#f5f3ff' },
+            { backgroundColor: isActiveVacation ? pal.dayPlanBg : pal.myPinsBg },
           ]}
         >
           <Text style={styles.emojiIcon}>{isActiveVacation ? '🗺️' : '📌'}</Text>
@@ -151,25 +155,25 @@ export default function ActionDock({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   dock: {
     flexDirection: 'row',
     gap: 8,
-    marginHorizontal: theme.spacing.md,
-    marginBottom: theme.spacing.md,
+    marginHorizontal: t.spacing.md,
+    marginBottom: t.spacing.md,
   },
   dockBtn: {
     flex: 1,
-    backgroundColor: theme.color.surface,
+    backgroundColor: t.color.surface,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#eee6f7',
+    borderColor: ACTION_DOCK[t.scheme].tileBorder,
     paddingVertical: 10,
     paddingHorizontal: 4,
     alignItems: 'center',
     gap: 6,
     position: 'relative',
-    shadowColor: '#5b2a86',
+    shadowColor: ACTION_DOCK[t.scheme].tileShadow,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 4,
@@ -188,11 +192,12 @@ const styles = StyleSheet.create({
   },
   emojiIcon: {
     fontSize: 19,
+    ...t.textDefault,
   },
   label: {
     fontSize: 11,
     fontWeight: '700',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
     textAlign: 'center',
   },
   badge: {
@@ -202,16 +207,16 @@ const styles = StyleSheet.create({
     minWidth: 16,
     height: 16,
     borderRadius: 8,
-    backgroundColor: '#ef4444',
+    backgroundColor: ACTION_DOCK[t.scheme].badgeBg,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 3,
     borderWidth: 1.5,
-    borderColor: '#ffffff',
+    borderColor: t.color.surface,
   },
   badgeText: {
     fontSize: 9,
     fontWeight: '800',
-    color: '#ffffff',
+    color: t.color.textOnPrimary,
   },
-});
+}));

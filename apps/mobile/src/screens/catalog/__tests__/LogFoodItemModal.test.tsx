@@ -3,10 +3,16 @@
 // Validates: Requirements 3.1, 3.2, 3.3, 3.4, 3.5, 5.3, 5.4, 5.7
 
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import type { ReactTestInstance } from 'react-test-renderer';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import type { FoodItemDTO, FoodItemLogDTO } from '@dwt/shared';
+
+import { darkTheme } from '../../../theme/theme';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
+import { LOG_FOOD } from '../LogFoodItemModal.palette';
 
 jest.mock('../../../api/client', () => {
   const actual = jest.requireActual('../../../api/client');
@@ -217,5 +223,50 @@ describe('LogFoodItemModal', () => {
       expect(screen.getByTestId('log-food-item-error')).toBeTruthy();
       expect(screen.getByText('Visit date cannot be in the future')).toBeTruthy();
     });
+  });
+});
+
+/** Nearest painted `backgroundColor` at or above `node` (sheet surface lookup). */
+function paintedBackground(node: ReactTestInstance | null): unknown {
+  for (let n = node; n !== null; n = n.parent) {
+    const style = n.props.style;
+    if (style === undefined || typeof style === 'function') continue;
+    const flat = StyleSheet.flatten(style) as { backgroundColor?: unknown } | undefined;
+    if (flat?.backgroundColor !== undefined) return flat.backgroundColor;
+  }
+  return undefined;
+}
+
+describe('LogFoodItemModal — dark mode', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+  afterEach(resetTestScheme);
+
+  it('paints the sheet, title, selected rating and error banner with dark values', async () => {
+    setTestScheme('dark');
+    apiRequestMock.mockRejectedValueOnce(
+      new ApiError({ code: 'food_log_future_date', message: 'x', status: 400 }),
+    );
+    renderWithClient(<LogFoodItemModal foodItem={MOCK_ITEM} visible={true} onClose={jest.fn()} />);
+
+    const title = screen.getByText('Cheshire Cat Tail');
+    // (a) sheet surface, (b) primary text.
+    expect(paintedBackground(title)).toBe(darkTheme.color.surface);
+    expect(StyleSheet.flatten(title.props.style).color).toBe(darkTheme.color.textPrimary);
+
+    // (c) the selected rating tile is a primary fill with textOnPrimary text.
+    fireEvent.press(screen.getByTestId('rating-btn-8'));
+    expect(StyleSheet.flatten(screen.getByTestId('rating-btn-8').props.style).backgroundColor).toBe(
+      darkTheme.color.primary,
+    );
+    const note = screen.getByTestId('log-food-item-note-input');
+    expect(note.props.keyboardAppearance).toBe('dark');
+    expect(StyleSheet.flatten(note.props.style).backgroundColor).toBe(darkTheme.color.surfaceAlt);
+
+    // (c) the error banner's red tint (rule 3 role S) is the palette's dark value.
+    fireEvent.press(screen.getByTestId('submit-log-food-item-btn'));
+    const banner = await screen.findByTestId('log-food-item-error');
+    expect(StyleSheet.flatten(banner.props.style).backgroundColor).toBe(LOG_FOOD.dark.errorBannerBg);
   });
 });

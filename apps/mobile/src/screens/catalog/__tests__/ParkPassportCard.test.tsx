@@ -6,6 +6,8 @@
 // 18.2, 18.3, 18.4
 
 import React from 'react';
+import { StyleSheet } from 'react-native';
+import type { ReactTestInstance } from 'react-test-renderer';
 import {
   fireEvent,
   render,
@@ -50,7 +52,11 @@ jest.mock('expo-secure-store', () => ({
 
 import ParkPassportCard from '../ParkPassportCard';
 import RestaurantDishLogCard from '../RestaurantDishLogCard';
+import { PASSPORT } from '../ParkPassportCard.palette';
 import { apiRequest as mockedApiRequest } from '../../../api/client';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
+import { DARK_TONAL, darkTheme, withAlpha } from '../../../theme/theme';
+import { contrastRatio } from '../../../theme/contrast';
 
 const apiRequestMock = mockedApiRequest as jest.MockedFunction<
   typeof mockedApiRequest
@@ -691,6 +697,97 @@ describe('ParkPassportCard (Requirements 17.1 - 17.8)', () => {
     });
     expect(screen.queryByText('3.0 / 10')).toBeNull();
   });
+
+  // Feature: dark-mode — (c) converted literals (B2)
+  describe('dark mode', () => {
+    afterEach(resetTestScheme);
+
+    const flat = (node: ReactTestInstance): Record<string, unknown> =>
+      (StyleSheet.flatten(node.props.style) ?? {}) as Record<string, unknown>;
+    const HISTORY: ExperienceVisitHistoryDTO = {
+      experienceId: EXPERIENCE_ID,
+      repeatCount: 1,
+      logs: [makeLog({ id: 'log-dark', visitedOn: '2026-05-01', rating: 8 })],
+    };
+    const renderPassport = (): void => {
+      const { client } = createQueryClient();
+      stubVisitSummary({
+        [EXPERIENCE_ID]: { repeatCount: 1, ratedCount: 1, averageRating: 8 },
+      });
+      render(
+        <QueryClientProvider client={client}>
+          <ParkPassportCard
+            experienceId={EXPERIENCE_ID}
+            completionQuery={emptyQuery()}
+            ratingQuery={emptyQuery()}
+            noteQuery={emptyQuery()}
+            logsQuery={dataQuery(HISTORY)}
+            initialExpanded
+          />
+        </QueryClientProvider>,
+      );
+    };
+
+    test('(c) passport card, seal, journal ink and timeline rows use the dark tonal values', async () => {
+      setTestScheme('dark');
+      renderPassport();
+
+      const card = flat(screen.getByTestId('park-passport-card'));
+      expect(card.backgroundColor).toBe(PASSPORT.dark.cardBg);
+      expect(card.borderColor).toBe(PASSPORT.dark.cardBorder);
+      const seal = flat(screen.getByTestId('passport-stamp'));
+      expect(seal.backgroundColor).toBe(PASSPORT.dark.sealBg);
+      expect(seal.borderColor).toBe(darkTheme.color.accentDark);
+      expect(flat(screen.getByText('Park Passport & Journal')).color).toBe(PASSPORT.dark.inkDeep);
+      expect(flat(screen.getByText('2026-05-01')).color).toBe(PASSPORT.dark.visitDate);
+      expect(flat(screen.getByTestId('visit-history-item-log-dark')).backgroundColor).toBe(
+        withAlpha(darkTheme.color.surface, 0.95),
+      );
+      await waitFor(() => {
+        expect(screen.getByTestId('passport-average-rating')).toBeTruthy();
+      });
+    });
+
+    test('(c) the active rating chip uses the amber dark fill behind white text', async () => {
+      setTestScheme('dark');
+      renderPassport();
+
+      fireEvent.press(screen.getByTestId('edit-rating-btn-log-dark'));
+      expect(flat(screen.getByTestId('rating-picker-option-log-dark-8')).backgroundColor).toBe(
+        PASSPORT.dark.pickerActiveBg,
+      );
+      expect(flat(screen.getByTestId('rating-picker-option-log-dark-7')).backgroundColor).toBe(
+        PASSPORT.dark.ribbonBg,
+      );
+      await waitFor(() => {
+        expect(apiRequestMock).toHaveBeenCalled();
+      });
+    });
+
+    test('(Requirement 9.13) the tip editor close glyph is muted textSecondary in dark', async () => {
+      setTestScheme('dark');
+      renderPassport();
+
+      fireEvent.press(screen.getByTestId('edit-tip-button'));
+      const close = flat(screen.getByText('✕')).color;
+      expect(close).toBe(darkTheme.color.textSecondary);
+      expect(close).not.toBe(darkTheme.color.textPrimary);
+      await waitFor(() => {
+        expect(apiRequestMock).toHaveBeenCalled();
+      });
+    });
+
+    test('keeps the pre-retrofit light values under light', async () => {
+      renderPassport();
+
+      expect(flat(screen.getByTestId('park-passport-card')).backgroundColor).toBe('#fffcf5');
+      expect(flat(screen.getByTestId('passport-stamp')).borderColor).toBe('#d4a017');
+      expect(flat(screen.getByText('Park Passport & Journal')).color).toBe('#78350f');
+      await waitFor(() => {
+        expect(apiRequestMock).toHaveBeenCalled();
+      });
+    });
+  });
 });
 
 describe('RestaurantDishLogCard (Requirements 18.1 - 18.4)', () => {
@@ -805,5 +902,81 @@ describe('RestaurantDishLogCard (Requirements 18.1 - 18.4)', () => {
 
     fireEvent.press(screen.getByTestId('experience-add-to-list-btn'));
     expect(onAddToList).toHaveBeenCalledTimes(1);
+  });
+
+  // Feature: dark-mode (B3-N3) — the warm keepsake card's DISH_CARD palette.
+  describe('dark mode', () => {
+    afterEach(resetTestScheme);
+
+    const flat = (node: ReactTestInstance): Record<string, unknown> =>
+      (StyleSheet.flatten(node.props.style) ?? {}) as Record<string, unknown>;
+    const LOG: FoodItemLogWithContextDTO = {
+      id: 'dish-dark',
+      userId: 'user-1',
+      foodItemId: 'item-1',
+      foodItemName: 'Grey Stuff',
+      visitedOn: '2026-05-01',
+      userTz: 'America/New_York',
+      loggedAt: '2026-05-01T12:00:00Z',
+      rating: 9,
+      note: 'Delicious!',
+      currentlyOnMenu: true,
+      restaurantName: 'Be Our Guest',
+      locationName: null,
+    };
+    const renderCard = async (): Promise<void> => {
+      const { client } = createQueryClient();
+      apiRequestMock.mockResolvedValueOnce([LOG]);
+      render(
+        <QueryClientProvider client={client}>
+          <RestaurantDishLogCard experienceId={EXPERIENCE_ID} category="Restaurant" />
+        </QueryClientProvider>,
+      );
+      await screen.findByTestId('dish-log-item-dish-dark');
+    };
+
+    test('paints the card, dish row, rating pill and buttons with amber/orange dark tonals', async () => {
+      setTestScheme('dark');
+      await renderCard();
+
+      const card = flat(screen.getByTestId('restaurant-dish-log-card'));
+      expect(card.backgroundColor).toBe(DARK_TONAL.amber.tint);
+      expect(card.borderColor).toBe(DARK_TONAL.amber.border);
+      const title = flat(screen.getByText('My Logged Dishes (1)'));
+      expect(title.color).toBe(DARK_TONAL.orange.fg);
+      expect(contrastRatio(title.color as string, card.backgroundColor as string)).toBeGreaterThanOrEqual(4.5);
+
+      const row = flat(screen.getByTestId('dish-log-item-dish-dark'));
+      expect(row.backgroundColor).toBe(darkTheme.color.surface);
+      expect(row.borderColor).toBe(DARK_TONAL.amber.border);
+      expect(flat(screen.getByTestId('dish-name-dish-dark')).color).toBe(DARK_TONAL.orange.fg);
+      expect(flat(screen.getByTestId('dish-rating-dish-dark')).backgroundColor).toBe(DARK_TONAL.amber.tint);
+      expect(flat(screen.getByText('9 / 10')).color).toBe(DARK_TONAL.orange.fg);
+      const meta = flat(screen.getByText(/^Logged 2026-05-01/));
+      expect(meta.color).toBe(DARK_TONAL.amber.fg);
+      expect(contrastRatio(meta.color as string, darkTheme.color.surface)).toBeGreaterThanOrEqual(4.5);
+
+      expect(flat(screen.getByTestId('experience-log-food-item-btn')).backgroundColor).toBe(
+        DARK_TONAL.orange.fill,
+      );
+      expect(flat(screen.getByTestId('experience-my-logged-items-btn')).borderColor).toBe(
+        DARK_TONAL.orange.border,
+      );
+      expect(flat(screen.getByTestId('experience-add-to-list-btn')).borderColor).toBe(
+        DARK_TONAL.violet.border,
+      );
+    });
+
+    test('light keeps today\'s literal keepsake colours', async () => {
+      setTestScheme('light');
+      await renderCard();
+      const card = flat(screen.getByTestId('restaurant-dish-log-card'));
+      expect(card.backgroundColor).toBe('#fffdfa');
+      expect(card.borderColor).toBe('#f3e5b8');
+      expect(flat(screen.getByText('My Logged Dishes (1)')).color).toBe('#78350f');
+      expect(flat(screen.getByTestId('dish-name-dish-dark')).color).toBe('#451a03');
+      expect(flat(screen.getByText(/^Logged 2026-05-01/)).color).toBe('#a16207');
+      expect(flat(screen.getByTestId('experience-log-food-item-btn')).backgroundColor).toBe('#d97706');
+    });
   });
 });

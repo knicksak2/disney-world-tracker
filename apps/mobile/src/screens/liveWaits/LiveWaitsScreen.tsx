@@ -24,7 +24,6 @@ import {
   Pressable,
   RefreshControl,
   ScrollView,
-  StyleSheet,
   Text,
   View,
 } from 'react-native';
@@ -41,8 +40,11 @@ import {
 } from '@dwt/shared';
 
 import { ApiError, apiRequest } from '../../api/client';
-import { theme } from '../../theme/theme';
+import { withAlpha } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme, usePalette } from '../../theme/useAppTheme';
 import { EmptyState, ScreenContainer } from '../../theme/components';
+import { LIVE_WAITS, WAIT_STATUS } from './LiveWaitsScreen.palette';
 import {
   RetrievalFooter,
   StaleIndicator,
@@ -121,8 +123,11 @@ export default function LiveWaitsScreen({
   route,
   navigation,
 }: LiveWaitsScreenProps): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
+  const waitStatus = usePalette(WAIT_STATUS);
   const insets = useContext(SafeAreaInsetsContext);
-  const topInset = Math.max(insets?.top ?? 0, theme.spacing.xl);
+  const topInset = Math.max(insets?.top ?? 0, t.spacing.xl);
 
   const queryClient = useQueryClient();
   const routePark = route?.params?.park;
@@ -248,12 +253,12 @@ export default function LiveWaitsScreen({
     const status = getWaitStatus(item.waitMinutes, item.isClosedOrDown);
     const statusColor =
       status === 'low'
-        ? '#22c55e'
+        ? waitStatus.low
         : status === 'mod'
-        ? '#f59e0b'
+        ? t.color.starRating
         : status === 'high'
-        ? '#ef4444'
-        : '#8e889b';
+        ? waitStatus.high
+        : waitStatus.down;
 
     const llText = formatLightningLane(item);
 
@@ -323,7 +328,7 @@ export default function LiveWaitsScreen({
         </View>
       </View>
     );
-  }, [navigation, setActiveLogExperienceId]);
+  }, [navigation, setActiveLogExperienceId, styles, t, waitStatus]);
 
   const renderContent = () => {
     if ((liveQuery.isLoading && !liveQuery.data) || (catalogQuery.isLoading && !catalogQuery.data)) {
@@ -331,7 +336,7 @@ export default function LiveWaitsScreen({
         <View style={styles.centered} testID="live-waits-loading">
           <ActivityIndicator
             size="large"
-            color={theme.color.primary}
+            color={t.color.primaryFg}
             accessibilityLabel="Loading live waits"
           />
         </View>
@@ -356,12 +361,13 @@ export default function LiveWaitsScreen({
         data={rows}
         keyExtractor={(item) => item.experienceId}
         renderItem={renderItem}
+        extraData={t.scheme}
         contentContainerStyle={styles.listContent}
         refreshControl={
           <RefreshControl
             refreshing={liveQuery.isRefetching}
             onRefresh={handleRefresh}
-            tintColor={theme.color.primary}
+            tintColor={t.color.primaryFg}
           />
         }
         ListHeaderComponent={
@@ -538,7 +544,7 @@ export default function LiveWaitsScreen({
     <ScreenContainer style={styles.container}>
       {/* Mockup Signature Gradient Header */}
       <LinearGradient
-        colors={theme.gradient.headerVivid}
+        colors={t.gradient.headerVivid}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={[styles.headerContainer, { paddingTop: topInset + 10 }]}
@@ -552,11 +558,11 @@ export default function LiveWaitsScreen({
                 accessibilityLabel="Go back"
                 style={styles.backButton}
               >
-                <Ionicons name="arrow-back" size={20} color="#ffffff" />
+                <Ionicons name="arrow-back" size={20} color={t.color.textOnPrimary} />
               </Pressable>
             ) : null}
             <View style={styles.greetingPill}>
-              <Ionicons name="time" size={13} color={theme.color.accent} style={{ marginRight: 4 }} />
+              <Ionicons name="time" size={13} color={t.color.accent} style={{ marginRight: 4 }} />
               <Text style={styles.greetingPillText}>REAL-TIME LINE TIMES</Text>
             </View>
           </View>
@@ -568,7 +574,7 @@ export default function LiveWaitsScreen({
             accessibilityLabel="Refresh wait times"
             testID="refresh-waits-button"
           >
-            <Ionicons name="refresh" size={18} color="#ffffff" />
+            <Ionicons name="refresh" size={18} color={t.color.textOnPrimary} />
           </Pressable>
         </View>
 
@@ -635,14 +641,14 @@ export default function LiveWaitsScreen({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   container: {
     flex: 1,
-    backgroundColor: theme.color.background,
+    backgroundColor: t.color.background,
   },
   headerContainer: {
-    paddingHorizontal: theme.spacing.lg,
-    paddingBottom: theme.spacing.lg,
+    paddingHorizontal: t.spacing.lg,
+    paddingBottom: t.spacing.lg,
     borderBottomLeftRadius: 26,
     borderBottomRightRadius: 26,
   },
@@ -650,7 +656,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: theme.spacing.xs,
+    marginBottom: t.spacing.xs,
   },
   headerGreetingRow: {
     flexDirection: 'row',
@@ -672,7 +678,7 @@ const styles = StyleSheet.create({
   greetingPillText: {
     fontSize: 10.5,
     fontWeight: '800',
-    color: theme.color.accent,
+    color: t.color.accent,
     letterSpacing: 0.6,
   },
   iconBtn: {
@@ -688,7 +694,7 @@ const styles = StyleSheet.create({
   headerParkTitle: {
     fontSize: 22,
     fontWeight: '800',
-    color: '#ffffff',
+    color: t.color.textOnPrimary,
     marginTop: 2,
     letterSpacing: -0.3,
   },
@@ -699,11 +705,11 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   parkSelectorWrapper: {
-    paddingTop: theme.spacing.sm,
+    paddingTop: t.spacing.sm,
     paddingBottom: 4,
   },
   parkChipsScroll: {
-    paddingHorizontal: theme.spacing.md,
+    paddingHorizontal: t.spacing.md,
     gap: 8,
   },
   parkChip: {
@@ -712,14 +718,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 13,
     paddingVertical: 7,
     borderRadius: 999,
-    backgroundColor: theme.color.surface,
+    backgroundColor: t.color.surface,
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
   },
   parkChipActive: {
-    backgroundColor: theme.color.primary,
-    borderColor: theme.color.primary,
-    shadowColor: theme.color.primary,
+    backgroundColor: t.color.primary,
+    borderColor: t.color.primary,
+    shadowColor: LIVE_WAITS[t.scheme].parkChipActiveShadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
     shadowRadius: 4,
@@ -728,27 +734,27 @@ const styles = StyleSheet.create({
   parkChipText: {
     fontSize: 12,
     fontWeight: '700',
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   parkChipTextActive: {
-    color: '#ffffff',
+    color: t.color.textOnPrimary,
     fontWeight: '800',
   },
   listContent: {
-    paddingHorizontal: theme.spacing.md,
+    paddingHorizontal: t.spacing.md,
     paddingTop: 6,
-    paddingBottom: theme.spacing.xl,
+    paddingBottom: t.spacing.xl,
   },
   crowdAlertCard: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#faf8ff',
+    backgroundColor: LIVE_WAITS[t.scheme].crowdCardBg,
     borderLeftWidth: 4,
-    borderLeftColor: theme.color.primary,
+    borderLeftColor: t.color.primaryFg,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#e9e4f5',
+    borderColor: LIVE_WAITS[t.scheme].crowdCardBorder,
     paddingHorizontal: 12,
     paddingVertical: 10,
     marginBottom: 10,
@@ -761,18 +767,18 @@ const styles = StyleSheet.create({
   crowdAlertLevel: {
     fontSize: 11.5,
     fontWeight: '800',
-    color: theme.color.primary,
+    color: t.color.primaryFg,
   },
   crowdAlertDesc: {
     fontSize: 10.5,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     marginTop: 2,
     lineHeight: 14,
   },
   tipsBtn: {
-    backgroundColor: theme.color.surfaceAlt,
+    backgroundColor: t.color.surfaceAlt,
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
     borderRadius: 6,
     paddingHorizontal: 8,
     paddingVertical: 4,
@@ -780,7 +786,7 @@ const styles = StyleSheet.create({
   tipsBtnText: {
     fontSize: 10,
     fontWeight: '800',
-    color: theme.color.primary,
+    color: t.color.primaryFg,
   },
   filterRow: {
     marginBottom: 8,
@@ -792,28 +798,28 @@ const styles = StyleSheet.create({
     paddingHorizontal: 11,
     paddingVertical: 6,
     borderRadius: 8,
-    backgroundColor: theme.color.surfaceAlt,
+    backgroundColor: t.color.surfaceAlt,
   },
   filterPillActive: {
-    backgroundColor: 'rgba(91, 42, 134, 0.15)',
+    backgroundColor: withAlpha(t.color.primary, 0.15),
   },
   filterPillText: {
     fontSize: 11,
     fontWeight: '700',
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   filterPillTextActive: {
-    color: theme.color.primary,
+    color: t.color.primaryFg,
     fontWeight: '800',
   },
   waitCard: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: theme.color.surface,
+    backgroundColor: t.color.surface,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
     paddingHorizontal: 12,
     paddingVertical: 10,
     marginVertical: 4,
@@ -836,10 +842,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   waitName: {
-    ...theme.typography.title,
+    ...t.typography.title,
     fontSize: 14,
     fontWeight: '700',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
     lineHeight: 18,
   },
   waitMetaRow: {
@@ -850,12 +856,12 @@ const styles = StyleSheet.create({
   },
   landText: {
     fontSize: 10.5,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   llBadgeText: {
     fontSize: 10.5,
     fontWeight: '700',
-    color: '#b45309',
+    color: LIVE_WAITS[t.scheme].llText,
   },
   waitTimeBox: {
     alignItems: 'flex-end',
@@ -869,30 +875,30 @@ const styles = StyleSheet.create({
   waitTimeNum: {
     fontSize: 20,
     fontWeight: '800',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
     lineHeight: 22,
   },
   waitTimeUnit: {
     fontSize: 8.5,
     fontWeight: '700',
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   waitStatusClosed: {
     fontSize: 11.5,
     fontWeight: '800',
-    color: theme.color.danger,
+    color: t.color.danger,
     lineHeight: 16,
   },
   waitStatusMuted: {
     fontSize: 12,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   quickLogBtn: {
-    backgroundColor: theme.color.surfaceAlt,
+    backgroundColor: t.color.surfaceAlt,
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
     borderRadius: 6,
     paddingHorizontal: 8,
     paddingVertical: 3,
@@ -901,23 +907,23 @@ const styles = StyleSheet.create({
   quickLogText: {
     fontSize: 10,
     fontWeight: '800',
-    color: theme.color.primary,
+    color: t.color.primaryFg,
   },
   centered: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: theme.spacing.xl,
+    padding: t.spacing.xl,
   },
   errorContainer: {
     flex: 1,
-    paddingTop: theme.spacing.xl,
+    paddingTop: t.spacing.xl,
   },
   staleBannerContainer: {
-    marginBottom: theme.spacing.sm,
+    marginBottom: t.spacing.sm,
   },
   footerContainer: {
-    marginTop: theme.spacing.md,
-    paddingVertical: theme.spacing.md,
+    marginTop: t.spacing.md,
+    paddingVertical: t.spacing.md,
   },
-});
+}));

@@ -15,11 +15,15 @@
 //   - Rendered with absolute bottom positioning (R19.7).
 
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { ExperienceCategory } from '@dwt/shared';
 
+import { withAlpha } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme } from '../../theme/useAppTheme';
 import AddToTripOrListChoiceSheet from './AddToTripOrListChoiceSheet';
+import { DOCK } from './FloatingActionDock.palette';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -62,6 +66,8 @@ export default function FloatingActionDock({
   onReserveTable,
   onAddToExperienceList,
 }: FloatingActionDockProps): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const isRestaurant = category === 'Restaurant';
   const reserveHandler = onReserve ?? onReserveTable ?? (() => {});
 
@@ -134,7 +140,7 @@ export default function FloatingActionDock({
           pressed && styles.pillPressed,
         ]}
       >
-        <Ionicons name={primaryIcon} size={16} color="#ffffff" />
+        <Ionicons name={primaryIcon} size={16} color={t.color.textOnPrimary} />
         <Text style={styles.primaryPillText}>{primaryLabel}</Text>
       </Pressable>
 
@@ -148,7 +154,7 @@ export default function FloatingActionDock({
           pressed && styles.pillPressed,
         ]}
       >
-        <Ionicons name={secondaryIcon} size={16} color="#5b2a86" />
+        <Ionicons name={secondaryIcon} size={16} color={t.color.primaryFg} />
         <Text style={styles.secondaryPillText}>{secondaryLabel}</Text>
       </Pressable>
 
@@ -174,7 +180,7 @@ export default function FloatingActionDock({
 
 export const DOCK_HEIGHT = 80;
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   container: {
     position: 'absolute',
     bottom: 14,
@@ -183,13 +189,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    backgroundColor: withAlpha(t.color.surface, 0.95),
     borderRadius: 999,
     paddingVertical: 7,
     paddingHorizontal: 9,
     borderWidth: 1.5,
-    borderColor: 'rgba(230, 222, 242, 0.95)',
-    shadowColor: '#5b2a86',
+    borderColor: DOCK[t.scheme].dockBorder,
+    shadowColor: DOCK[t.scheme].dockShadow,
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.24,
     shadowRadius: 24,
@@ -201,11 +207,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    backgroundColor: '#5b2a86',
+    backgroundColor: t.color.primary,
     borderRadius: 999,
     paddingVertical: 12,
     paddingHorizontal: 14,
-    shadowColor: '#5b2a86',
+    shadowColor: DOCK[t.scheme].primaryShadow,
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.35,
     shadowRadius: 10,
@@ -214,7 +220,7 @@ const styles = StyleSheet.create({
   primaryPillText: {
     fontSize: 13,
     fontWeight: '800',
-    color: '#ffffff',
+    color: t.color.textOnPrimary,
   },
   secondaryPill: {
     flex: 1,
@@ -222,9 +228,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    backgroundColor: '#fbf9fe',
+    backgroundColor: DOCK[t.scheme].secondaryBg,
     borderWidth: 1.5,
-    borderColor: '#ded3f0',
+    borderColor: DOCK[t.scheme].secondaryBorder,
     borderRadius: 999,
     paddingVertical: 12,
     paddingHorizontal: 12,
@@ -232,10 +238,10 @@ const styles = StyleSheet.create({
   secondaryPillText: {
     fontSize: 12.5,
     fontWeight: '800',
-    color: '#371756',
+    color: DOCK[t.scheme].secondaryText,
   },
   pillPressed: {
     transform: [{ scale: 0.97 }],
     opacity: 0.85,
   },
-});
+}));

@@ -58,9 +58,13 @@ import {
 
 import { ApiError, apiRequest } from '../../api/client';
 import { PinView } from '../../components/pins/PinView';
-import { TIER_COLOR, TIER_LABEL, TRACK_LABEL } from '../../components/pins/pinTierMeta';
+import { TIER_LABEL, TRACK_LABEL } from '../../components/pins/pinTierMeta';
 import { findAvailablePlacement } from './findAvailablePlacement';
-import { theme } from '../../theme/theme';
+import { withAlpha } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme, usePalette } from '../../theme/useAppTheme';
+import { PIN_SHOWCASE, SHOWCASE_FRAME } from './PinShowcaseScreen.palette';
+import { TIER_TEXT } from './tierText.palette';
 import {
   Badge,
   Chip,
@@ -131,6 +135,8 @@ function PlacedPinItem({
   onMove,
   onRemove,
 }: PlacedPinItemProps): React.ReactElement {
+  const styles = useStyles();
+  const t = useAppTheme();
   const pan = useRef(new Animated.ValueXY()).current;
   const [isDragging, setIsDragging] = useState(false);
   const pin = CATALOG.get(placement.pinId);
@@ -348,7 +354,7 @@ function PlacedPinItem({
         accessibilityLabel={`Remove pin ${pin?.name ?? placement.pinId}`}
         hitSlop={8}
       >
-        <Ionicons name="close-circle" size={22} color={theme.color.danger} />
+        <Ionicons name="close-circle" size={22} color={t.color.danger} />
       </Pressable>
     </Animated.View>
   );
@@ -388,6 +394,7 @@ function TrayPinItem({
   onDragEnd,
   isDragging,
 }: TrayPinItemProps): React.ReactElement {
+  const styles = useStyles();
   const pan = useRef(new Animated.ValueXY()).current;
   const pin = CATALOG.get(pinId);
 
@@ -574,6 +581,9 @@ export default function PinShowcaseScreen(props: PinShowcaseScreenProps): React.
   const isReadOnly = Boolean(props.readOnly ?? routeParams?.readOnly);
   const targetUserId = props.userId ?? routeParams?.userId;
 
+  const styles = useStyles();
+  const t = useAppTheme();
+  const tierUi = usePalette(TIER_TEXT);
   const queryClient = useQueryClient();
   const containerRef = useRef<View>(null);
   const boardRef = useRef<View>(null);
@@ -843,7 +853,7 @@ export default function PinShowcaseScreen(props: PinShowcaseScreenProps): React.
           <View style={styles.cardHeader}>
             <Badge
               label={TIER_LABEL[p?.tier ?? 'bronze']}
-              color={TIER_COLOR[p?.tier ?? 'bronze']}
+              color={tierUi[p?.tier ?? 'bronze']}
             />
             <Text style={styles.cardTrackText} numberOfLines={1}>
               {p ? TRACK_LABEL[p.track] : ''}
@@ -875,7 +885,7 @@ export default function PinShowcaseScreen(props: PinShowcaseScreenProps): React.
             <Ionicons
               name={isBoardFull ? 'lock-closed' : 'add-circle-outline'}
               size={16}
-              color={isBoardFull ? theme.color.textSecondary : theme.color.textOnPrimary}
+              color={isBoardFull ? t.color.textSecondary : t.color.textOnPrimary}
             />
             <Text
               style={[
@@ -889,7 +899,7 @@ export default function PinShowcaseScreen(props: PinShowcaseScreenProps): React.
         </View>
       );
     },
-    [placements, handleTapPlace],
+    [placements, handleTapPlace, styles, t, tierUi],
   );
 
   const headerNavProps = nav ? { onBack: () => (nav as any).goBack() } : {};
@@ -907,7 +917,7 @@ export default function PinShowcaseScreen(props: PinShowcaseScreenProps): React.
               accessibilityLabel="Share my Showcase"
               style={({ pressed }) => [styles.shareBtn, pressed && styles.shareBtnPressed]}
             >
-              <Ionicons name="share-social" size={18} color={theme.color.textOnPrimary} />
+              <Ionicons name="share-social" size={18} color={t.color.textOnPrimary} />
               <Text style={styles.shareBtnText}>Share</Text>
             </Pressable>
           </View>
@@ -968,7 +978,7 @@ export default function PinShowcaseScreen(props: PinShowcaseScreenProps): React.
           {...headerNavProps}
         />
         <View style={styles.center}>
-          <ActivityIndicator size="large" color={theme.color.accent} />
+          <ActivityIndicator size="large" color={t.color.accent} />
         </View>
       </ScreenContainer>
     );
@@ -1059,7 +1069,7 @@ export default function PinShowcaseScreen(props: PinShowcaseScreenProps): React.
                   <Ionicons
                     name="search"
                     size={16}
-                    color={isSearchOpen ? theme.color.accent : theme.color.textSecondary}
+                    color={isSearchOpen ? t.color.accent : t.color.textSecondary}
                   />
                 </Pressable>
                 <Pressable
@@ -1077,7 +1087,7 @@ export default function PinShowcaseScreen(props: PinShowcaseScreenProps): React.
                   <Ionicons
                     name="swap-vertical"
                     size={16}
-                    color={sortOption !== 'catalog' ? theme.color.accent : theme.color.textSecondary}
+                    color={sortOption !== 'catalog' ? t.color.accent : t.color.textSecondary}
                   />
                   {sortOption !== 'catalog' && (
                     <Text style={styles.traySortBadgeText}>
@@ -1097,7 +1107,7 @@ export default function PinShowcaseScreen(props: PinShowcaseScreenProps): React.
                   accessibilityLabel="Browse all unplaced pins"
                   hitSlop={6}
                 >
-                  <Ionicons name="apps-outline" size={15} color={theme.color.accent} />
+                  <Ionicons name="apps-outline" size={15} color={t.color.accent} />
                   <Text style={styles.browseAllBtnText}>Browse All</Text>
                 </Pressable>
               </View>
@@ -1108,7 +1118,7 @@ export default function PinShowcaseScreen(props: PinShowcaseScreenProps): React.
                 <Ionicons
                   name="search"
                   size={14}
-                  color={theme.color.textSecondary}
+                  color={t.color.textSecondary}
                   style={{ marginRight: 6 }}
                 />
                 <TextInput
@@ -1116,7 +1126,8 @@ export default function PinShowcaseScreen(props: PinShowcaseScreenProps): React.
                   value={searchQuery}
                   onChangeText={setSearchQuery}
                   placeholder="Search pins..."
-                  placeholderTextColor={theme.color.textSecondary}
+                  placeholderTextColor={t.color.textSecondary}
+                  keyboardAppearance={t.scheme}
                   style={styles.inlineSearchInput}
                   autoCorrect={false}
                   autoCapitalize="none"
@@ -1127,7 +1138,7 @@ export default function PinShowcaseScreen(props: PinShowcaseScreenProps): React.
                     onPress={() => setSearchQuery('')}
                     hitSlop={8}
                   >
-                    <Ionicons name="close-circle" size={16} color={theme.color.textSecondary} />
+                    <Ionicons name="close-circle" size={16} color={t.color.textSecondary} />
                   </Pressable>
                 )}
               </View>
@@ -1188,19 +1199,20 @@ export default function PinShowcaseScreen(props: PinShowcaseScreenProps): React.
                   accessibilityLabel="Close available pins"
                   hitSlop={8}
                 >
-                  <Ionicons name="close" size={22} color={theme.color.textPrimary} />
+                  <Ionicons name="close" size={22} color={t.color.textPrimary} />
                 </Pressable>
               </View>
 
               {/* Modal Search Bar */}
               <View style={styles.modalSearchBar}>
-                <Ionicons name="search" size={18} color={theme.color.textSecondary} style={{ marginRight: 8 }} />
+                <Ionicons name="search" size={18} color={t.color.textSecondary} style={{ marginRight: 8 }} />
                 <TextInput
                   testID="pin-showcase-modal-search-input"
                   value={searchQuery}
                   onChangeText={setSearchQuery}
                   placeholder="Search by name, description, or track..."
-                  placeholderTextColor={theme.color.textSecondary}
+                  placeholderTextColor={t.color.textSecondary}
+                  keyboardAppearance={t.scheme}
                   style={styles.modalSearchInput}
                   autoCorrect={false}
                   autoCapitalize="none"
@@ -1211,7 +1223,7 @@ export default function PinShowcaseScreen(props: PinShowcaseScreenProps): React.
                     onPress={() => setSearchQuery('')}
                     hitSlop={8}
                   >
-                    <Ionicons name="close-circle" size={18} color={theme.color.textSecondary} />
+                    <Ionicons name="close-circle" size={18} color={t.color.textSecondary} />
                   </Pressable>
                 )}
               </View>
@@ -1288,6 +1300,7 @@ export default function PinShowcaseScreen(props: PinShowcaseScreenProps): React.
                   contentContainerStyle={styles.modalGridContent}
                   columnWrapperStyle={styles.modalGridRow}
                   renderItem={renderUnplacedPin}
+                  extraData={t.scheme}
                 />
               )}
             </View>
@@ -1327,7 +1340,7 @@ export default function PinShowcaseScreen(props: PinShowcaseScreenProps): React.
 // Styles
 // ---------------------------------------------------------------------------
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   rootContainer: {
     flex: 1,
     position: 'relative',
@@ -1336,50 +1349,50 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: theme.spacing.xl,
+    padding: t.spacing.xl,
   },
   headerControls: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.sm,
+    gap: t.spacing.sm,
   },
   capacityText: {
-    ...theme.typography.meta,
-    color: theme.color.textOnPrimary,
+    ...t.typography.meta,
+    color: t.color.textOnPrimary,
     fontWeight: '700',
     backgroundColor: 'rgba(0,0,0,0.25)',
-    paddingHorizontal: theme.spacing.sm,
+    paddingHorizontal: t.spacing.sm,
     paddingVertical: 2,
-    borderRadius: theme.radius.sm,
+    borderRadius: t.radius.sm,
   },
   shareBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     backgroundColor: 'rgba(255,255,255,0.2)',
-    paddingHorizontal: theme.spacing.sm,
+    paddingHorizontal: t.spacing.sm,
     paddingVertical: 4,
-    borderRadius: theme.radius.sm,
+    borderRadius: t.radius.sm,
   },
   shareBtnPressed: {
     opacity: 0.7,
   },
   shareBtnText: {
-    ...theme.typography.meta,
-    color: theme.color.textOnPrimary,
+    ...t.typography.meta,
+    color: t.color.textOnPrimary,
     fontWeight: '600',
   },
   boardOuter: {
     flex: 1,
-    padding: theme.spacing.md,
+    padding: t.spacing.md,
   },
   boardFrame: {
     flex: 1,
     borderWidth: 8,
-    borderColor: '#5D3A1A',
-    borderRadius: theme.radius.lg,
+    borderColor: SHOWCASE_FRAME[t.scheme].border,
+    borderRadius: t.radius.lg,
     overflow: 'hidden',
-    backgroundColor: '#c49a6c',
+    backgroundColor: SHOWCASE_FRAME[t.scheme].bg,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.4,
@@ -1416,60 +1429,60 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 0,
     right: 0,
-    backgroundColor: '#ffffff',
+    backgroundColor: t.color.surface,
     borderRadius: 12,
   },
   trayContainer: {
-    backgroundColor: theme.color.surface,
+    backgroundColor: t.color.surface,
     borderTopWidth: 1,
-    borderTopColor: theme.color.border,
-    paddingVertical: theme.spacing.sm,
-    paddingHorizontal: theme.spacing.md,
+    borderTopColor: t.color.border,
+    paddingVertical: t.spacing.sm,
+    paddingHorizontal: t.spacing.md,
   },
   trayHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: theme.spacing.xs,
+    marginBottom: t.spacing.xs,
   },
   trayHeaderLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.sm,
+    gap: t.spacing.sm,
   },
   trayHeaderActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.xs,
+    gap: t.spacing.xs,
   },
   trayActionBtn: {
     paddingHorizontal: 8,
     paddingVertical: 6,
-    borderRadius: theme.radius.sm,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: t.radius.sm,
+    backgroundColor: withAlpha(t.color.surface, 0.06),
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
     gap: 4,
   },
   trayActionBtnActive: {
-    backgroundColor: 'rgba(230,195,92,0.15)',
-    borderColor: theme.color.accent,
+    backgroundColor: PIN_SHOWCASE[t.scheme].trayActionActiveBg,
+    borderColor: t.color.accent,
     borderWidth: 1,
   },
   traySortBadgeText: {
-    ...theme.typography.meta,
+    ...t.typography.meta,
     fontSize: 10,
-    color: theme.color.accent,
+    color: t.color.accent,
     fontWeight: '700',
   },
   browseAllBtn: {
-    backgroundColor: 'rgba(230,195,92,0.12)',
-    paddingHorizontal: theme.spacing.sm,
+    backgroundColor: PIN_SHOWCASE[t.scheme].browseAllBg,
+    paddingHorizontal: t.spacing.sm,
   },
   browseAllBtnText: {
-    ...theme.typography.meta,
-    color: theme.color.accent,
+    ...t.typography.meta,
+    color: t.color.accent,
     fontWeight: '700',
     fontSize: 12,
   },
@@ -1480,38 +1493,38 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(0,0,0,0.25)',
-    borderRadius: theme.radius.md,
-    paddingHorizontal: theme.spacing.sm,
+    borderRadius: t.radius.md,
+    paddingHorizontal: t.spacing.sm,
     paddingVertical: 4,
-    marginVertical: theme.spacing.xs,
+    marginVertical: t.spacing.xs,
   },
   inlineSearchInput: {
     flex: 1,
-    ...theme.typography.body,
-    color: theme.color.textPrimary,
+    ...t.typography.body,
+    color: t.color.textPrimary,
     paddingVertical: 2,
     fontSize: 13,
   },
   trayTitle: {
-    ...theme.typography.meta,
-    color: theme.color.textPrimary,
+    ...t.typography.meta,
+    color: t.color.textPrimary,
     fontWeight: '700',
   },
   trayCount: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
   },
   trayEmptyText: {
-    ...theme.typography.body,
-    color: theme.color.textSecondary,
-    paddingVertical: theme.spacing.sm,
+    ...t.typography.body,
+    color: t.color.textSecondary,
+    paddingVertical: t.spacing.sm,
     fontStyle: 'italic',
   },
   trayScrollContent: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    paddingVertical: theme.spacing.xs,
-    gap: theme.spacing.md,
+    paddingVertical: t.spacing.xs,
+    gap: t.spacing.md,
   },
   trayPinItem: {
     width: 72,
@@ -1519,9 +1532,9 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   trayPinName: {
-    ...theme.typography.meta,
+    ...t.typography.meta,
     fontSize: 10,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     textAlign: 'center',
     width: 72,
     marginTop: 2,
@@ -1535,47 +1548,47 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: theme.color.surface,
+    backgroundColor: t.color.surface,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     height: '82%',
-    paddingHorizontal: theme.spacing.md,
-    paddingTop: theme.spacing.md,
+    paddingHorizontal: t.spacing.md,
+    paddingTop: t.spacing.md,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: theme.spacing.sm,
+    marginBottom: t.spacing.sm,
   },
   modalTitle: {
-    ...theme.typography.title,
-    color: theme.color.textPrimary,
+    ...t.typography.title,
+    color: t.color.textPrimary,
     fontWeight: '800',
   },
   modalSubtitle: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
     marginTop: 2,
   },
   modalCloseBtn: {
     padding: 6,
     borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: withAlpha(t.color.surface, 0.08),
   },
   modalSearchBar: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(0,0,0,0.25)',
-    borderRadius: theme.radius.md,
-    paddingHorizontal: theme.spacing.md,
+    borderRadius: t.radius.md,
+    paddingHorizontal: t.spacing.md,
     paddingVertical: 8,
-    marginVertical: theme.spacing.xs,
+    marginVertical: t.spacing.xs,
   },
   modalSearchInput: {
     flex: 1,
-    ...theme.typography.body,
-    color: theme.color.textPrimary,
+    ...t.typography.body,
+    color: t.color.textPrimary,
   },
   modalSortRow: {
     marginVertical: 4,
@@ -1584,76 +1597,76 @@ const styles = StyleSheet.create({
     marginVertical: 4,
   },
   chipsScroll: {
-    gap: theme.spacing.xs,
+    gap: t.spacing.xs,
     paddingVertical: 2,
   },
   modalEmptyWrap: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: theme.spacing.xxl,
+    paddingVertical: t.spacing.xxl,
   },
   modalGridContent: {
-    paddingVertical: theme.spacing.md,
+    paddingVertical: t.spacing.md,
     paddingBottom: 40,
   },
   modalGridRow: {
     justifyContent: 'space-between',
-    gap: theme.spacing.md,
+    gap: t.spacing.md,
   },
   pinCard: {
     flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    backgroundColor: withAlpha(t.color.surface, 0.04),
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    borderRadius: theme.radius.lg,
-    padding: theme.spacing.md,
+    borderColor: withAlpha(t.color.surface, 0.08),
+    borderRadius: t.radius.lg,
+    padding: t.spacing.md,
     alignItems: 'center',
-    marginBottom: theme.spacing.md,
+    marginBottom: t.spacing.md,
   },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     width: '100%',
-    marginBottom: theme.spacing.xs,
+    marginBottom: t.spacing.xs,
   },
   cardTrackText: {
-    ...theme.typography.meta,
+    ...t.typography.meta,
     fontSize: 10,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   cardPinWrap: {
-    marginVertical: theme.spacing.sm,
+    marginVertical: t.spacing.sm,
   },
   cardPinName: {
-    ...theme.typography.meta,
+    ...t.typography.meta,
     fontWeight: '700',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
     textAlign: 'center',
     minHeight: 32,
-    marginBottom: theme.spacing.sm,
+    marginBottom: t.spacing.sm,
   },
   cardPlaceBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 4,
-    backgroundColor: theme.color.primary,
-    borderRadius: theme.radius.md,
+    backgroundColor: t.color.primary,
+    borderRadius: t.radius.md,
     paddingVertical: 8,
-    paddingHorizontal: theme.spacing.sm,
+    paddingHorizontal: t.spacing.sm,
     width: '100%',
   },
   cardPlaceBtnDisabled: {
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: withAlpha(t.color.surface, 0.08),
   },
   cardPlaceBtnText: {
-    ...theme.typography.meta,
-    color: theme.color.textOnPrimary,
+    ...t.typography.meta,
+    color: t.color.textOnPrimary,
     fontWeight: '700',
   },
   cardPlaceBtnTextDisabled: {
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
-});
+}));

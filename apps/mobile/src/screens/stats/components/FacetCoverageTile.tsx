@@ -17,7 +17,8 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import type { FacetCoverage } from '../../../api/statsTypes';
 import { ProgressBar } from '../../../theme/charts';
-import { theme } from '../../../theme/theme';
+import { makeStyles } from '../../../theme/makeStyles';
+import { useAppTheme } from '../../../theme/useAppTheme';
 import {
   displayedPercentLabel,
   remainingToGo,
@@ -53,9 +54,12 @@ export function FacetCoverageTile({
   color,
   testID,
 }: FacetCoverageTileProps): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const { label, cell } = facet;
   const complete = showCompleteBadge(cell);
-  const dotColor = complete ? theme.color.success : color ?? theme.color.primary;
+  // The dot is a data mark on a surface → primaryFg (rule 1a).
+  const dotColor = complete ? t.color.success : color ?? t.color.primaryFg;
   return (
     <View
       style={styles.tile}
@@ -85,23 +89,23 @@ export function FacetCoverageTile({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   tile: {
-    gap: theme.spacing.sm,
-    paddingVertical: theme.spacing.sm,
+    gap: t.spacing.sm,
+    paddingVertical: t.spacing.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: theme.color.border,
+    borderBottomColor: t.color.border,
   },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: theme.spacing.sm,
+    gap: t.spacing.sm,
   },
   nameWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.sm,
+    gap: t.spacing.sm,
     flexShrink: 1,
   },
   dot: {
@@ -110,20 +114,21 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   label: {
-    ...theme.typography.subtitle,
-    color: theme.color.textPrimary,
+    ...t.typography.subtitle,
+    color: t.color.textPrimary,
     flexShrink: 1,
   },
   trophy: {
     fontSize: 12,
+    ...t.textDefault,
   },
   value: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
     fontVariant: ['tabular-nums'],
   },
   valueComplete: {
-    color: theme.color.success,
+    color: t.color.success,
     fontWeight: '700',
   },
-});
+}));

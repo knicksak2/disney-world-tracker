@@ -5,6 +5,8 @@
  */
 
 import React from 'react';
+import { StyleSheet } from 'react-native';
+import type { ReactTestInstance } from 'react-test-renderer';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -14,7 +16,13 @@ import { apiRequest } from '../../../api/client';
 import { useClaimablePinsBadge } from '../../../components/pins/useClaimablePinsBadge';
 import * as navigationRefModule from '../../../navigation/navigationRef';
 import { getTodayWDW } from '../../trips/TripScheduleScreen';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
+import { darkTheme } from '../../../theme/theme';
 import HomeScreen from '../HomeScreen';
+import { ACTION_DOCK } from '../ActionDock.palette';
+import { HOME_FAVORITES } from '../HomeFavoritesSection.palette';
+import { PARK_WAIT_PULSE } from '../ParkWaitPulse.palette';
+import { UPCOMING_TRIP_HERO } from '../UpcomingTripHero.palette';
 
 jest.mock('../../../api/client', () => {
   const actual = jest.requireActual('../../../api/client');
@@ -850,6 +858,112 @@ describe('HomeScreen (Requirements 2.1–2.5)', () => {
         expect(subtitle.props.children).not.toContain('°');
         expect(subtitle.props.children).not.toContain('Sunny');
       });
+    });
+  });
+
+  describe('dark mode', () => {
+    afterEach(resetTestScheme);
+
+    const flat = (node: ReactTestInstance) => StyleSheet.flatten(node.props.style) ?? {};
+
+    /** Nearest ancestor (inclusive) whose flattened style paints a backgroundColor. */
+    function paintedAncestor(node: ReactTestInstance): Record<string, unknown> {
+      let cur: ReactTestInstance | null = node.parent;
+      while (cur !== null) {
+        if (typeof cur.type === 'string' && flat(cur).backgroundColor !== undefined) {
+          return flat(cur);
+        }
+        cur = cur.parent;
+      }
+      return {};
+    }
+
+    it('(a)(b)(c) paints the screen, text and converted Home sections with dark values', async () => {
+      setTestScheme('dark');
+      renderHome();
+
+      // (a) the ScreenContainer behind the hero header is the dark background.
+      const header = await screen.findByTestId('home-header');
+      expect(paintedAncestor(header).backgroundColor).toBe(darkTheme.color.background);
+
+      // (b) primary text.
+      expect(flat(await screen.findByText('Highest-Rated Experiences')).color).toBe(
+        darkTheme.color.textPrimary,
+      );
+
+      // (c) converted tokens / palette values across the Home sections.
+      expect(flat(screen.getByTestId('home-hero-title')).color).toBe(darkTheme.color.textOnPrimary);
+      expect(flat(screen.getByTestId('home-greeting-pill')).color).toBe(darkTheme.color.accent);
+      expect(flat(screen.getByText('See All')).color).toBe(darkTheme.color.primaryFg);
+      const dockTile = flat(screen.getByTestId('home-dock-live-waits'));
+      expect(dockTile.borderColor).toBe(ACTION_DOCK.dark.tileBorder);
+      expect(dockTile.shadowColor).toBe(ACTION_DOCK.dark.tileShadow);
+      expect(dockTile.backgroundColor).toBe(darkTheme.color.surface);
+      expect(flat(screen.getByTestId('home-dock-pins-badge')).backgroundColor).toBe(
+        ACTION_DOCK.dark.badgeBg,
+      );
+
+      const pill = flat(await screen.findByTestId('home-pulse-pill-Magic Kingdom'));
+      expect(pill.borderColor).toBe(PARK_WAIT_PULSE.dark.pillBorder);
+      expect(flat(screen.getByText('Animal Kingdom')).color).toBe(
+        darkTheme.parkAccent['Animal Kingdom'],
+      );
+
+      const upcoming = flat(await screen.findByTestId('home-upcoming-trip-card'));
+      expect(upcoming.borderColor).toBe(UPCOMING_TRIP_HERO.dark.cardBorder);
+      expect(flat(await screen.findByText('UPCOMING VACATION')).color).toBe(darkTheme.color.primaryLight);
+      expect(flat(screen.getByTestId('home-upcoming-trip-card-circle')).backgroundColor).toBe(
+        UPCOMING_TRIP_HERO.dark.countdownBg,
+      );
+
+      expect(flat(await screen.findByText('Your Favorites')).color).toBe(darkTheme.color.textPrimary);
+    });
+
+    it('renders a favorite pill status badge with its dark palette values', async () => {
+      mockApiRequest.mockImplementation(async (_method: string, path: string) => {
+        if (path === '/me/favorites') return { experienceIds: ['e-1'] };
+        if (path === '/catalog') {
+          return {
+            experiences: [{ id: 'e-1', name: 'Space Mountain', park: 'Magic Kingdom', category: 'Ride' }],
+          };
+        }
+        if (path.startsWith('/parks/')) {
+          return {
+            park: 'Magic Kingdom',
+            entries: [{ experienceId: 'e-1', name: 'Space Mountain', status: 'OPERATING', waitMinutes: 35 }],
+            retrievedAt: new Date().toISOString(),
+            stale: false,
+          };
+        }
+        if (path === '/home/highest-rated') return { entries: [] };
+        if (path === '/me/trips') return [];
+        return {};
+      });
+      setTestScheme('dark');
+      renderHome();
+
+      const pill = flat(await screen.findByTestId('home-favorite-pill-e-1'));
+      expect(pill.borderColor).toBe(HOME_FAVORITES.dark.pillBorder);
+      expect(pill.borderTopColor).toBe(darkTheme.parkAccent['Magic Kingdom']);
+      // 35 min → the moderate (amber/orange) badge.
+      expect(flat(screen.getByTestId('home-favorite-wait-e-1')).color).toBe(
+        HOME_FAVORITES.dark.moderateText,
+      );
+    });
+
+    it('keeps the pre-retrofit light values under light', async () => {
+      renderHome();
+      const header = await screen.findByTestId('home-header');
+      expect(paintedAncestor(header).backgroundColor).toBe('#f5f2fb');
+      expect(flat(screen.getByTestId('home-hero-title')).color).toBe('#ffffff');
+      expect(flat(screen.getByTestId('home-greeting-pill')).color).toBe('#f6c343');
+      const dockTile = flat(screen.getByTestId('home-dock-live-waits'));
+      expect(dockTile.borderColor).toBe('#eee6f7');
+      expect(dockTile.shadowColor).toBe('#5b2a86');
+      expect(flat(screen.getByTestId('home-dock-pins-badge')).backgroundColor).toBe('#ef4444');
+      expect(flat(await screen.findByTestId('home-pulse-pill-Magic Kingdom')).borderColor).toBe('#eee6f7');
+      expect(flat(screen.getByText('Animal Kingdom')).color).toBe('#3fa34d');
+      expect(flat(await screen.findByText('UPCOMING VACATION')).color).toBe('#7e57c2');
     });
   });
 });

@@ -10,12 +10,14 @@
  */
 
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { navigateToTripsList } from '../../navigation/navigationRef';
-import { theme } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme, usePalette } from '../../theme/useAppTheme';
+import { EXPLORATION_PROMPT } from './ExplorationPromptCard.palette';
 
 export interface ExplorationPromptCardProps {
   readonly testID?: string;
@@ -26,6 +28,9 @@ export default function ExplorationPromptCard({
   testID = 'home-exploration-prompt-card',
   onPress,
 }: ExplorationPromptCardProps): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
+  const pal = usePalette(EXPLORATION_PROMPT);
   const handlePress = () => {
     if (onPress) {
       onPress();
@@ -43,12 +48,12 @@ export default function ExplorationPromptCard({
       testID={testID}
     >
       <LinearGradient
-        colors={['#7e57c2', '#5b2a86']}
+        colors={[pal.iconTileStart, t.color.primary]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.iconTile}
       >
-        <Ionicons name="sparkles" size={22} color="#f6c343" />
+        <Ionicons name="sparkles" size={22} color={t.color.accent} />
       </LinearGradient>
 
       <View style={styles.info}>
@@ -62,28 +67,28 @@ export default function ExplorationPromptCard({
       </View>
 
       <View style={styles.arrowWrap}>
-        <Ionicons name="arrow-forward" size={18} color={theme.color.primary} />
+        <Ionicons name="arrow-forward" size={18} color={t.color.primaryFg} />
       </View>
     </Pressable>
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   card: {
-    backgroundColor: theme.color.surface,
+    backgroundColor: t.color.surface,
     borderRadius: 16,
     padding: 12,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     borderWidth: 1,
-    borderColor: '#ebdff8',
-    shadowColor: '#5b2a86',
+    borderColor: EXPLORATION_PROMPT[t.scheme].cardBorder,
+    shadowColor: EXPLORATION_PROMPT[t.scheme].cardShadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
     shadowRadius: 6,
     elevation: 2,
-    marginHorizontal: theme.spacing.md,
+    marginHorizontal: t.spacing.md,
     marginTop: 12,
     marginBottom: 12,
   },
@@ -97,7 +102,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#5b2a86',
+    shadowColor: EXPLORATION_PROMPT[t.scheme].iconTileShadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 4,
@@ -110,21 +115,21 @@ const styles = StyleSheet.create({
   tag: {
     fontSize: 9.5,
     fontWeight: '800',
-    color: '#7e57c2',
+    color: t.color.primaryLight,
     letterSpacing: 0.5,
     marginBottom: 2,
   },
   title: {
     fontSize: 15,
     fontWeight: '800',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   meta: {
     fontSize: 11.5,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     marginTop: 2,
   },
   arrowWrap: {
     paddingLeft: 4,
   },
-});
+}));

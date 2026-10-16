@@ -32,17 +32,20 @@
  */
 
 import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import { View } from 'react-native';
 
 import { AREA_TYPES } from '@dwt/shared';
 import type { AreaType } from '@dwt/shared';
 
 import type { CoverageResponse } from '../../../api/statsTypes';
 import { SectionLabel } from '../../../theme/components';
-import { theme } from '../../../theme/theme';
+import { makeStyles } from '../../../theme/makeStyles';
+import type { AppTheme } from '../../../theme/theme';
+import { useAppTheme, usePalette } from '../../../theme/useAppTheme';
 import type { RankedRow } from '../statsView';
 import { rankCategoryRows, rankParkRows } from '../statsView';
 
+import { AREA_ACCENT } from './CoverageSection.palette';
 import { LabeledCellList } from './LabeledCellList';
 import type { LabeledCellRow } from './LabeledCellList';
 
@@ -66,20 +69,17 @@ export interface CoverageSectionProps {
   readonly testID?: string;
 }
 
-/** Per-`AreaType` display label + accent used for the ranked area rows. */
-const AREA_TYPE_VISUAL: Record<AreaType, { label: string; accent: string }> = {
-  ThemePark: { label: 'Theme Parks', accent: '#7e57c2' },
-  WaterPark: { label: 'Water Parks', accent: '#17a2b8' },
-  DisneySprings: { label: 'Disney Springs', accent: '#f6a609' },
-  Resort: { label: 'Resorts', accent: theme.resortVisual.tint },
-};
+/** Per-`AreaType` display label + accent used for the ranked area rows
+ * (built per render from the active theme; see `CoverageSection`). */
+type AreaTypeVisual = Record<AreaType, { label: string; accent: string }>;
 
 /** Area-type rows ranked most→least complete (all members, incl. 0%). */
 function rankAreaRows(
   byAreaType: CoverageResponse['byAreaType'],
+  visuals: AreaTypeVisual,
 ): readonly RankedRow[] {
   return AREA_TYPES.map((areaType) => {
-    const visual = AREA_TYPE_VISUAL[areaType];
+    const visual = visuals[areaType];
     return {
       key: areaType,
       label: visual.label,
@@ -97,12 +97,14 @@ function rankAreaRows(
  * order; the label doubles as the stable row key. */
 function labeledRows(
   items: CoverageResponse['byLand'],
+  t: AppTheme,
 ): readonly LabeledCellRow[] {
   return items.map((item) => ({
     key: item.label,
     label: item.label,
     cell: item.cell,
-    color: theme.color.primary,
+    // Dot + bar are data marks on a surface → primaryFg (rule 1a).
+    color: t.color.primaryFg,
   }));
 }
 
@@ -110,12 +112,13 @@ function labeledRows(
  * `resortId` / `label` / `cell` (R6.2). */
 function resortRows(
   byResort: CoverageResponse['byResort'],
+  t: AppTheme,
 ): readonly LabeledCellRow[] {
   return byResort.map((entry) => ({
     key: entry.resortId,
     label: entry.label,
     cell: entry.cell,
-    color: theme.resortVisual.tint,
+    color: t.resortVisual.tint,
   }));
 }
 
@@ -127,11 +130,20 @@ export function CoverageSection({
   lens,
   testID,
 }: CoverageSectionProps): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
+  const areaAccent = usePalette(AREA_ACCENT);
+  const areaVisuals: AreaTypeVisual = {
+    ThemePark: { label: 'Theme Parks', accent: areaAccent.themePark },
+    WaterPark: { label: 'Water Parks', accent: areaAccent.waterPark },
+    DisneySprings: { label: 'Disney Springs', accent: areaAccent.disneySprings },
+    Resort: { label: 'Resorts', accent: t.resortVisual.tint },
+  };
   switch (lens) {
     case 'parks':
       return (
         <View testID={testID}>
-          <LabeledCellList rows={rankParkRows(coverage.byPark)} rowTestIDPrefix="park-row" />
+          <LabeledCellList rows={rankParkRows(coverage.byPark, t)} rowTestIDPrefix="park-row" />
         </View>
       );
 
@@ -139,7 +151,7 @@ export function CoverageSection({
       return (
         <View testID={testID}>
           <LabeledCellList
-            rows={rankCategoryRows(coverage.byCategory)}
+            rows={rankCategoryRows(coverage.byCategory, t)}
             rowTestIDPrefix="category-row"
           />
         </View>
@@ -148,10 +160,13 @@ export function CoverageSection({
     case 'areas':
       return (
         <View style={styles.stack} testID={testID}>
-          <LabeledCellList rows={rankAreaRows(coverage.byAreaType)} rowTestIDPrefix="area-row" />
+          <LabeledCellList
+            rows={rankAreaRows(coverage.byAreaType, areaVisuals)}
+            rowTestIDPrefix="area-row"
+          />
           <SectionLabel>Resort areas</SectionLabel>
           <LabeledCellList
-            rows={labeledRows(coverage.byResortArea)}
+            rows={labeledRows(coverage.byResortArea, t)}
             emptyTitle="No resort areas yet"
             emptyBody="Complete an experience in a resort area to see it here."
             rowTestIDPrefix="resort-area-row"
@@ -164,7 +179,7 @@ export function CoverageSection({
       return (
         <View testID={testID}>
           <LabeledCellList
-            rows={labeledRows(coverage.byLand)}
+            rows={labeledRows(coverage.byLand, t)}
             emptyTitle="No lands yet"
             emptyBody="Complete an experience in a themed land to see it here."
             rowTestIDPrefix="land-row"
@@ -186,7 +201,7 @@ export function CoverageSection({
                 key: 'resort',
                 label: 'Resorts stayed at',
                 cell: coverage.resort,
-                color: theme.resortVisual.tint,
+                color: t.resortVisual.tint,
               },
             ]}
             testID="coverage-hotels-visited"
@@ -194,7 +209,7 @@ export function CoverageSection({
           {/* Per-resort activity completion, in server order (R6.1). */}
           <SectionLabel>What you&rsquo;ve done at each resort</SectionLabel>
           <LabeledCellList
-            rows={resortRows(coverage.byResort)}
+            rows={resortRows(coverage.byResort, t)}
             emptyTitle="No resort activity yet"
             emptyBody="Complete a dining, recreation, or spa experience at a resort to see it here."
             rowTestIDPrefix="resort-row"
@@ -211,8 +226,8 @@ export function CoverageSection({
   }
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   stack: {
-    gap: theme.spacing.md,
+    gap: t.spacing.md,
   },
-});
+}));

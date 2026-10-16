@@ -19,6 +19,15 @@ import { NavigationContainer } from '@react-navigation/native';
 import { QueryClientProvider, QueryClient } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
+// dark-mode: `RootNavigator` -> `YouAndCrewStack` -> `YouAndCrewScreen` ->
+// `ProfileScreen` (`ProfileIdentityBlock`) -> `AppearancePreferenceControl`
+// -> `@react-native-async-storage/async-storage` — stub it with the
+// package's own shipped jest mock so the native module never has to resolve.
+jest.mock('@react-native-async-storage/async-storage', () =>
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  require('@react-native-async-storage/async-storage/jest/async-storage-mock'),
+);
+
 jest.mock('expo-secure-store', () => ({
   __esModule: true,
   getItemAsync: jest.fn(async () => null),

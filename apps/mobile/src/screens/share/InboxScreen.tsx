@@ -90,7 +90,6 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
-  StyleSheet,
   Text,
   View,
 } from 'react-native';
@@ -124,7 +123,8 @@ import type {
   MainTabParamList,
   RootStackParamList,
 } from '../../navigation/RootNavigator';
-import { theme } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme } from '../../theme/useAppTheme';
 import {
   Badge,
   Card,
@@ -332,6 +332,8 @@ interface FriendsListSnapshot {
 }
 
 export default function InboxScreen(): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const queryClient = useQueryClient();
   const navigation = useNavigation<InboxNavigation>();
   const route = useRoute<InboxRoute>();
@@ -663,7 +665,7 @@ export default function InboxScreen(): JSX.Element {
       <ScreenContainer>
         <GradientHeader title="Inbox" icon="mail" onBack={() => navigation.goBack()} />
         <View style={styles.centerWrap}>
-          <ActivityIndicator color={theme.color.primary} />
+          <ActivityIndicator color={t.color.primaryFg} />
         </View>
       </ScreenContainer>
     );
@@ -705,7 +707,7 @@ export default function InboxScreen(): JSX.Element {
         right={
           <Badge
             label={`${displayedUnread} unread`}
-            color={theme.color.accent}
+            color={t.color.accent}
             icon="ellipse"
             testID="inbox-unread-badge"
           />
@@ -714,6 +716,7 @@ export default function InboxScreen(): JSX.Element {
       <FlatList
         data={items}
         keyExtractor={(item) => item.shareId}
+        extraData={t.scheme}
         contentContainerStyle={styles.listContent}
         ListHeaderComponent={
           <>
@@ -725,7 +728,7 @@ export default function InboxScreen(): JSX.Element {
                 <Ionicons
                   name="alert-circle-outline"
                   size={16}
-                  color={theme.color.danger}
+                  color={t.color.danger}
                   style={styles.deepLinkBannerIcon}
                 />
                 <Text style={styles.deepLinkBannerText}>{deepLinkMessage}</Text>
@@ -794,10 +797,12 @@ function InboxRow(props: {
 }): JSX.Element {
   const { item, onSelect, onReacted, isVerifying, message, onDelete, isDeleting } =
     props;
+  const styles = useStyles();
+  const t = useAppTheme();
 
   return (
     <Card
-      accentColor={item.read ? theme.color.primary : theme.color.accent}
+      accentColor={item.read ? t.color.primaryFg : t.color.accent}
       style={styles.row}
       onPress={onSelect}
       accessibilityRole="button"
@@ -810,7 +815,7 @@ function InboxRow(props: {
             <Ionicons
               name="ellipse"
               size={10}
-              color={theme.color.accent}
+              color={t.color.accent}
               style={styles.unreadDot}
               testID={`inbox-unread-dot-${item.shareId}`}
             />
@@ -831,7 +836,7 @@ function InboxRow(props: {
       {isVerifying && (
         <View style={styles.verifyingRow}>
           <ActivityIndicator
-            color={theme.color.primary}
+            color={t.color.primaryFg}
             testID={`inbox-verifying-${item.shareId}`}
           />
         </View>
@@ -888,6 +893,7 @@ function PinShowcaseShareContent(props: {
   shareId: string;
 }): JSX.Element {
   const { payload, shareId } = props;
+  const styles = useStyles();
   return (
     <View style={styles.payloadWrap}>
       <Text style={styles.summary} testID={`inbox-pin-showcase-${shareId}`}>
@@ -907,6 +913,7 @@ function ProgressShareContent(props: {
   shareId: string;
 }): JSX.Element {
   const { payload, shareId } = props;
+  const styles = useStyles();
   return (
     <View style={styles.payloadWrap}>
       <Text style={styles.summary} testID={`inbox-progress-overall-${shareId}`}>
@@ -986,6 +993,8 @@ function ExperienceShareContent(props: {
   shareId: string;
 }): JSX.Element {
   const { payload, shareId } = props;
+  const styles = useStyles();
+  const t = useAppTheme();
   const encodedId = encodeURIComponent(payload.experienceId);
 
   const metaQuery = useQuery<ExperienceMetadata, ApiError>({
@@ -1053,7 +1062,7 @@ function ExperienceShareContent(props: {
     metadataBlock = (
       <View style={styles.experienceLoading}>
         <ActivityIndicator
-          color={theme.color.primary}
+          color={t.color.primaryFg}
           testID={`inbox-experience-loading-${shareId}`}
         />
       </View>
@@ -1091,6 +1100,7 @@ function ExperienceRatingNote(props: {
   shareId: string;
 }): JSX.Element | null {
   const { payload, shareId } = props;
+  const styles = useStyles();
 
   const ratingLine =
     typeof payload.rating === 'number' ? (
@@ -1192,6 +1202,8 @@ function ShareReactions(props: {
 }): JSX.Element {
   const { item, onReacted } = props;
   const { shareId } = item;
+  const styles = useStyles();
+  const t = useAppTheme();
   const queryClient = useQueryClient();
 
   const [failureMessage, setFailureMessage] = React.useState<string | null>(
@@ -1308,7 +1320,7 @@ function ShareReactions(props: {
         // R11.9 — a submit/remove is in flight.
         <View style={styles.reactionStatus}>
           <ActivityIndicator
-            color={theme.color.primary}
+            color={t.color.primaryFg}
             testID={`inbox-reaction-loading-${shareId}`}
           />
         </View>
@@ -1339,26 +1351,26 @@ function ShareReactions(props: {
 // Styles
 // ---------------------------------------------------------------------------
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   centerWrap: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: theme.spacing.xl,
+    padding: t.spacing.xl,
   },
   listContent: {
-    paddingHorizontal: theme.spacing.lg,
-    paddingTop: theme.spacing.md,
-    paddingBottom: theme.spacing.xxl,
+    paddingHorizontal: t.spacing.lg,
+    paddingTop: t.spacing.md,
+    paddingBottom: t.spacing.xxl,
     flexGrow: 1,
   },
   markAllRow: {
     alignItems: 'flex-end',
-    marginBottom: theme.spacing.md,
+    marginBottom: t.spacing.md,
   },
   row: {
-    marginBottom: theme.spacing.md,
-    gap: theme.spacing.sm,
+    marginBottom: t.spacing.md,
+    gap: t.spacing.sm,
   },
   header: {
     flexDirection: 'row',
@@ -1371,90 +1383,90 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   unreadDot: {
-    marginRight: theme.spacing.sm,
+    marginRight: t.spacing.sm,
   },
   sender: {
-    ...theme.typography.subtitle,
-    color: theme.color.textPrimary,
+    ...t.typography.subtitle,
+    color: t.color.textPrimary,
     flexShrink: 1,
   },
   timestamp: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
   },
   payloadWrap: {
     gap: 2,
   },
   experienceLoading: {
     alignItems: 'flex-start',
-    paddingVertical: theme.spacing.xs,
+    paddingVertical: t.spacing.xs,
   },
   summary: {
-    ...theme.typography.body,
-    color: theme.color.textPrimary,
+    ...t.typography.body,
+    color: t.color.textPrimary,
     marginTop: 2,
   },
   bodyLine: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
   },
   note: {
-    ...theme.typography.body,
-    color: theme.color.textPrimary,
-    marginTop: theme.spacing.xs,
+    ...t.typography.body,
+    color: t.color.textPrimary,
+    marginTop: t.spacing.xs,
   },
   verifyingRow: {
     alignItems: 'flex-start',
-    paddingVertical: theme.spacing.xs,
+    paddingVertical: t.spacing.xs,
   },
   rowMessage: {
-    ...theme.typography.meta,
-    color: theme.color.danger,
-    marginTop: theme.spacing.xs,
+    ...t.typography.meta,
+    color: t.color.danger,
+    marginTop: t.spacing.xs,
   },
   deepLinkBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: theme.color.surfaceAlt,
-    borderRadius: theme.radius.md,
-    paddingVertical: theme.spacing.sm,
-    paddingHorizontal: theme.spacing.md,
-    marginBottom: theme.spacing.md,
-    gap: theme.spacing.xs,
+    backgroundColor: t.color.surfaceAlt,
+    borderRadius: t.radius.md,
+    paddingVertical: t.spacing.sm,
+    paddingHorizontal: t.spacing.md,
+    marginBottom: t.spacing.md,
+    gap: t.spacing.xs,
   },
   deepLinkBannerIcon: {
-    marginRight: theme.spacing.xs,
+    marginRight: t.spacing.xs,
   },
   deepLinkBannerText: {
-    ...theme.typography.meta,
-    color: theme.color.danger,
+    ...t.typography.meta,
+    color: t.color.danger,
     flexShrink: 1,
   },
 
   reactionsWrap: {
-    gap: theme.spacing.xs,
-    marginTop: theme.spacing.sm,
+    gap: t.spacing.xs,
+    marginTop: t.spacing.sm,
   },
   reactionChips: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: theme.spacing.xs,
+    gap: t.spacing.xs,
   },
   reactionStatus: {
     alignItems: 'flex-start',
-    paddingVertical: theme.spacing.xs,
+    paddingVertical: t.spacing.xs,
   },
   reactionEmpty: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
   },
   reactionMessage: {
-    ...theme.typography.meta,
-    color: theme.color.danger,
-    marginTop: theme.spacing.xs,
+    ...t.typography.meta,
+    color: t.color.danger,
+    marginTop: t.spacing.xs,
   },
   actions: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
   },
-});
+}));

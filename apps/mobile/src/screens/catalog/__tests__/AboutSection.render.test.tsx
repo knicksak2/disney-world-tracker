@@ -28,9 +28,12 @@ import {
   render,
   type RenderResult,
 } from '@testing-library/react-native';
-import type { NativeSyntheticEvent, TextLayoutEventData } from 'react-native';
+import { StyleSheet, type NativeSyntheticEvent, type TextLayoutEventData } from 'react-native';
+import type { ReactTestInstance } from 'react-test-renderer';
 
 import AboutSection, { COLLAPSED_LINE_LIMIT } from '../AboutSection';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
+import { darkTheme } from '../../../theme/theme';
 
 // ---------------------------------------------------------------------------
 // Fixtures & helpers
@@ -220,5 +223,29 @@ describe('AboutSection render behavior (R5.1-R5.10)', () => {
     expect(expandedToggle.props.accessibilityLabel).toBe('Read less');
     expect(expandedToggle.props.accessibilityLabel.length).toBeGreaterThan(0);
     expect(expandedToggle.props.accessibilityState).toEqual({ expanded: true });
+  });
+
+  // Feature: dark-mode — (c) converted token reads (B2)
+  describe('dark mode', () => {
+    afterEach(resetTestScheme);
+
+    const flat = (node: ReactTestInstance): Record<string, unknown> =>
+      (StyleSheet.flatten(node.props.style) ?? {}) as Record<string, unknown>;
+
+    test('(c) the Read more toggle uses primaryFg and the body copy textPrimary in dark', () => {
+      setTestScheme('dark');
+      const view = render(<AboutSection description={LONG_DESCRIPTION} />);
+      fireMeasureLayout(view, COLLAPSED_LINE_LIMIT + 2);
+
+      expect(flat(view.getByText('Read more')).color).toBe(darkTheme.color.primaryFg);
+      expect(flat(view.getByTestId('about-text')).color).toBe(darkTheme.color.textPrimary);
+    });
+
+    test('keeps the pre-retrofit light toggle colour under light', () => {
+      const view = render(<AboutSection description={LONG_DESCRIPTION} />);
+      fireMeasureLayout(view, COLLAPSED_LINE_LIMIT + 2);
+
+      expect(flat(view.getByText('Read more')).color).toBe('#5b2a86');
+    });
   });
 });

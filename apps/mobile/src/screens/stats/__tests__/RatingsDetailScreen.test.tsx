@@ -32,6 +32,7 @@
  */
 
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import {
   fireEvent,
   render,
@@ -39,6 +40,8 @@ import {
   waitFor,
 } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { darkTheme } from '../../../theme/theme';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
 
 // ---------------------------------------------------------------------------
 // Mocks (declared before the modules under test are imported).
@@ -343,5 +346,38 @@ describe('RatingsDetailScreen (Requirements 8.1, 8.2, 8.3, 14.3)', () => {
 
     expect(await screen.findByTestId('ratings-detail-screen')).toBeTruthy();
     expect(callsMatching(isStatsPath)).toBe(2);
+  });
+});
+
+// Feature: dark-mode — the converted screen and its ratings section follow the Active theme.
+describe('RatingsDetailScreen — dark mode', () => {
+  const flat = (node: { props: { style?: unknown } }): Record<string, unknown> =>
+    (StyleSheet.flatten(node.props.style as never) ?? {}) as Record<string, unknown>;
+
+  beforeEach(() => {
+    apiRequestMock.mockReset();
+  });
+  afterEach(resetTestScheme);
+
+  test('(a)(b)(c) background, hero name, and the low-rated value (primary-as-text) use dark values', async () => {
+    setTestScheme('dark');
+    renderScreen(makeStatsResponse({ ratings: makeSufficientRatings() }));
+    await screen.findByTestId('ratings-detail-screen');
+
+    // (a) root ScreenContainer.
+    expect(flat(screen.root).backgroundColor).toBe(darkTheme.color.background);
+    // (b) primary text.
+    expect(flat(screen.getByText('Tomorrowland Speedway')).color).toBe(
+      darkTheme.color.textPrimary,
+    );
+    // (c) the "lowest" hero value was `primary` as text → primaryFg (rule 1a).
+    expect(flat(screen.getByText('3/10')).color).toBe(darkTheme.color.primaryFg);
+    expect(flat(screen.getByText('10/10')).color).toBe(darkTheme.color.success);
+  });
+
+  test('light keeps today\u2019s value colour', async () => {
+    renderScreen(makeStatsResponse({ ratings: makeSufficientRatings() }));
+    await screen.findByTestId('ratings-detail-screen');
+    expect(flat(screen.getByText('3/10')).color).toBe('#5b2a86');
   });
 });

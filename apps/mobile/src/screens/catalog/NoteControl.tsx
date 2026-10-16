@@ -35,13 +35,15 @@
 // of the detail screen read consistently.
 
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { Switch, Text, TextInput, View } from 'react-native';
 import { useMutation } from '@tanstack/react-query';
 
 import { type NoteDTO, noteInputSchema } from '@dwt/shared';
 
 import { ApiError, apiRequest } from '../../api/client';
-import { theme } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme } from '../../theme/useAppTheme';
+import { themedSwitchProps } from '../../theme/switchColors';
 import { PrimaryButton, SecondaryButton } from '../../theme/components';
 
 // ---------------------------------------------------------------------------
@@ -103,6 +105,8 @@ export default function NoteControl({
   note,
   onMutated,
 }: NoteControlProps): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const encodedId = encodeURIComponent(experienceId);
 
   // Local edit state. The control toggles between "view" (showing the
@@ -252,6 +256,8 @@ export default function NoteControl({
           value={draft}
           onChangeText={handleChangeDraft}
           placeholder="Write a note about this experience"
+          placeholderTextColor={t.scheme === 'dark' ? t.color.textSecondary : undefined}
+          keyboardAppearance={t.scheme}
           multiline
           maxLength={MAX_NOTE_BODY_LENGTH}
           editable={!isMutating}
@@ -274,11 +280,13 @@ export default function NoteControl({
             </Text>
           </View>
           <Switch
+            key={t.scheme}
             value={shareable}
             onValueChange={setShareable}
             disabled={isMutating}
             accessibilityLabel="Share note with friends"
             testID="note-shareable"
+            {...themedSwitchProps(t, shareable)}
           />
         </View>
         {error !== null ? (
@@ -389,33 +397,33 @@ export default function NoteControl({
 // Styles
 // ---------------------------------------------------------------------------
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   viewer: {
-    gap: theme.spacing.md,
+    gap: t.spacing.md,
   },
   editor: {
-    gap: theme.spacing.sm,
+    gap: t.spacing.sm,
   },
   body: {
-    ...theme.typography.body,
-    color: theme.color.textPrimary,
+    ...t.typography.body,
+    color: t.color.textPrimary,
     lineHeight: 20,
   },
   empty: {
-    ...theme.typography.body,
-    color: theme.color.textSecondary,
+    ...t.typography.body,
+    color: t.color.textSecondary,
     fontStyle: 'italic',
   },
   input: {
     borderWidth: 1,
-    borderColor: theme.color.border,
-    borderRadius: theme.radius.md,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.md,
+    borderColor: t.color.border,
+    borderRadius: t.radius.md,
+    paddingHorizontal: t.spacing.md,
+    paddingVertical: t.spacing.md,
     fontSize: 14,
     minHeight: 96,
-    color: theme.color.textPrimary,
-    backgroundColor: theme.color.surfaceAlt,
+    color: t.color.textPrimary,
+    backgroundColor: t.color.surfaceAlt,
     textAlignVertical: 'top',
   },
   counterRow: {
@@ -423,41 +431,41 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   counter: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
   },
   shareRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: theme.spacing.md,
+    gap: t.spacing.md,
   },
   shareTextCol: {
     flexShrink: 1,
     gap: 2,
   },
   shareLabel: {
-    ...theme.typography.body,
-    color: theme.color.textPrimary,
+    ...t.typography.body,
+    color: t.color.textPrimary,
   },
   shareHelper: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
   },
   shareStatus: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
   },
   buttonRow: {
     flexDirection: 'row',
-    gap: theme.spacing.md,
+    gap: t.spacing.md,
   },
   flexBtn: {
     flexGrow: 1,
     flexBasis: 0,
   },
   errorText: {
-    color: theme.color.danger,
+    color: t.color.danger,
     fontSize: 14,
   },
-});
+}));

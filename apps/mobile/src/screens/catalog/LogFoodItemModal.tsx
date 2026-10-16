@@ -22,8 +22,10 @@ import type { CreateFoodItemLogInputDTO, FoodItemDTO, FoodItemLogDTO } from '@dw
 
 import { ApiError, apiRequest } from '../../api/client';
 import { DatePickerField } from '../../components/DatePickerField';
-import { theme } from '../../theme/theme';
 import { Badge, PrimaryButton, SecondaryButton } from '../../theme/components';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme } from '../../theme/useAppTheme';
+import { LOG_FOOD } from './LogFoodItemModal.palette';
 
 export interface LogFoodItemModalProps {
   /** The food item being logged. */
@@ -68,6 +70,8 @@ export default function LogFoodItemModal({
   onClose,
   onLogged,
 }: LogFoodItemModalProps): JSX.Element | null {
+  const styles = useStyles();
+  const t = useAppTheme();
   const queryClient = useQueryClient();
   const tz = deviceTimeZone();
   const today = ymdInTimeZone(new Date(), tz);
@@ -166,7 +170,7 @@ export default function LogFoodItemModal({
       testID="log-food-item-modal"
     >
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.backdrop}
       >
         <View style={styles.sheet}>
@@ -185,7 +189,7 @@ export default function LogFoodItemModal({
               style={styles.closeBtn}
               testID="close-log-food-item-btn"
             >
-              <Ionicons name="close" size={24} color={theme.color.textSecondary} />
+              <Ionicons name="close" size={24} color={t.color.textSecondary} />
             </Pressable>
           </View>
 
@@ -194,7 +198,7 @@ export default function LogFoodItemModal({
             <View style={styles.badgeRow}>
               <Badge
                 label="Not currently on menu"
-                color={theme.color.textSecondary}
+                color={t.color.textSecondary}
                 testID="log-food-item-not-on-menu"
               />
             </View>
@@ -208,7 +212,7 @@ export default function LogFoodItemModal({
           >
             {error && (
               <View style={styles.errorBanner} testID="log-food-item-error">
-                <Ionicons name="alert-circle" size={18} color={theme.color.danger} />
+                <Ionicons name="alert-circle" size={18} color={t.color.danger} />
                 <Text style={styles.errorText}>{error}</Text>
               </View>
             )}
@@ -280,7 +284,8 @@ export default function LogFoodItemModal({
                 value={note}
                 onChangeText={setNote}
                 placeholder="How was it? What did you like?"
-                placeholderTextColor={theme.color.textSecondary}
+                placeholderTextColor={t.color.textSecondary}
+                keyboardAppearance={t.scheme}
                 multiline
                 maxLength={MAX_NOTE_LENGTH}
                 style={styles.noteInput}
@@ -309,16 +314,16 @@ export default function LogFoodItemModal({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   backdrop: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.45)',
     justifyContent: 'flex-end',
   },
   sheet: {
-    backgroundColor: theme.color.surface,
-    borderTopLeftRadius: theme.radius.xl,
-    borderTopRightRadius: theme.radius.xl,
+    backgroundColor: t.color.surface,
+    borderTopLeftRadius: t.radius.xl,
+    borderTopRightRadius: t.radius.xl,
     maxHeight: '85%',
     paddingBottom: 24,
   },
@@ -330,7 +335,7 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     paddingBottom: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: theme.color.border,
+    borderBottomColor: t.color.border,
   },
   headerTitles: {
     flex: 1,
@@ -339,11 +344,11 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 18,
     fontWeight: '700',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   subtitle: {
     fontSize: 13,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     marginTop: 2,
   },
   closeBtn: {
@@ -361,14 +366,14 @@ const styles = StyleSheet.create({
   errorBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-    borderRadius: theme.radius.md,
+    backgroundColor: LOG_FOOD[t.scheme].errorBannerBg,
+    borderRadius: t.radius.md,
     padding: 10,
     marginBottom: 16,
     gap: 8,
   },
   errorText: {
-    color: theme.color.danger,
+    color: t.color.danger,
     fontSize: 13,
     fontWeight: '500',
     flex: 1,
@@ -379,7 +384,7 @@ const styles = StyleSheet.create({
   fieldLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
     marginBottom: 8,
   },
   labelWithClear: {
@@ -390,7 +395,7 @@ const styles = StyleSheet.create({
   },
   clearText: {
     fontSize: 13,
-    color: theme.color.accent,
+    color: t.color.accent,
     fontWeight: '600',
   },
   ratingRow: {
@@ -403,32 +408,32 @@ const styles = StyleSheet.create({
     aspectRatio: 1,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: theme.color.surfaceAlt,
+    backgroundColor: t.color.surfaceAlt,
   },
   ratingBtnSelected: {
-    backgroundColor: theme.color.primary,
-    borderColor: theme.color.primary,
+    backgroundColor: t.color.primary,
+    borderColor: t.color.primary,
   },
   ratingBtnText: {
     fontSize: 14,
     fontWeight: '600',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   ratingBtnTextSelected: {
-    color: theme.color.textOnPrimary,
+    color: t.color.textOnPrimary,
   },
   noteInput: {
     minHeight: 80,
     borderWidth: 1,
-    borderColor: theme.color.border,
-    borderRadius: theme.radius.md,
+    borderColor: t.color.border,
+    borderRadius: t.radius.md,
     padding: 12,
     fontSize: 14,
-    color: theme.color.textPrimary,
-    backgroundColor: theme.color.surfaceAlt,
+    color: t.color.textPrimary,
+    backgroundColor: t.color.surfaceAlt,
     textAlignVertical: 'top',
   },
   actionsRow: {
@@ -439,4 +444,4 @@ const styles = StyleSheet.create({
   actionBtn: {
     flex: 1,
   },
-});
+}));

@@ -39,11 +39,13 @@
  */
 
 import React from 'react';
-import { ActivityIndicator } from 'react-native';
+import { ActivityIndicator, StyleSheet } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
+import type { ReactTestInstance } from 'react-test-renderer';
+import { Ionicons } from '@expo/vector-icons';
 
 // ---------------------------------------------------------------------------
 // Mocks (declared before the modules under test are imported).
@@ -102,6 +104,10 @@ jest.mock('@react-navigation/native', () => {
 
 import ExperienceDetailScreen from '../ExperienceDetailScreen';
 import { ApiError, apiRequest as mockedApiRequest } from '../../../api/client';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
+import { darkTheme } from '../../../theme/theme';
+import { ScreenContainer } from '../../../theme/components';
+import { LENS } from '../LensSwitcher.palette';
 
 type CatalogStackParamList = {
   ExperienceDetail: { experienceId: string; initialLens?: 'today' | 'passport' };
@@ -650,5 +656,81 @@ describe('ExperienceDetailScreen preserved behaviors (R8.1, R8.2, R8.4, R8.5, R8
     // duplicates the description (R8.11).
     expect(screen.queryByTestId('experience-why-this')).toBeNull();
     expect(screen.queryByText('Why visit')).toBeNull();
+  });
+
+  // -------------------------------------------------------------------------
+  // Feature: dark-mode — (a)/(b)/(c) + Property 22 placeholder fill (B2)
+  // -------------------------------------------------------------------------
+  describe('dark mode', () => {
+    afterEach(resetTestScheme);
+
+    const flat = (node: ReactTestInstance): Record<string, unknown> =>
+      (StyleSheet.flatten(node.props.style) ?? {}) as Record<string, unknown>;
+
+    const SHOW_FIXTURE: DetailFixture = {
+      id: 'exp-dark-show',
+      name: 'Country Bear Jamboree',
+      park: 'Magic Kingdom',
+      category: 'Show',
+      description: 'A classic audio-animatronic revue.',
+      areaType: 'ThemePark',
+    };
+
+    test('(a)(b)(c) paints the screen, body text and the no-image category tile with dark values', async () => {
+      setTestScheme('dark');
+      stubDetail(SHOW_FIXTURE);
+      renderDetail(SHOW_FIXTURE.id);
+
+      await screen.findByText(SHOW_FIXTURE.description);
+
+      // (a) root container.
+      const root = screen.UNSAFE_getByType(ScreenContainer).children[0] as ReactTestInstance;
+      expect(flat(root).backgroundColor).toBe(darkTheme.color.background);
+      // (b) primary text (AboutSection body copy).
+      expect(flat(screen.getByTestId('about-text')).color).toBe(darkTheme.color.textPrimary);
+      // (c) Property 22: the no-image placeholder uses the category *fill*
+      // (not the tint) behind a white glyph.
+      const tile = screen.getByTestId('experience-hero-placeholder');
+      expect(flat(tile).backgroundColor).toBe(darkTheme.categoryVisual.Show.fill);
+      expect(darkTheme.categoryVisual.Show.fill).not.toBe(darkTheme.categoryVisual.Show.tint);
+      expect(within(tile).UNSAFE_getByType(Ionicons).props.color).toBe(
+        darkTheme.color.textOnPrimary,
+      );
+      // (c) converted literal: the lens switcher track.
+      expect(flat(screen.getByTestId('lens-switcher')).backgroundColor).toBe(LENS.dark.trackBg);
+      // Requirement 9.12/9.13: the idle lens (icon + label) is textSecondary and
+      // reads quieter than the active primaryFg lens (it used to be textPrimary).
+      const tabs = [screen.getByTestId('lens-tab-today'), screen.getByTestId('lens-tab-passport')];
+      const activeTab = tabs.find((n) => n.props.accessibilityState?.selected === true)!;
+      const idleTab = tabs.find((n) => n.props.accessibilityState?.selected !== true)!;
+      expect(activeTab).toBeDefined();
+      expect(idleTab).toBeDefined();
+      const labelColor = (tab: ReactTestInstance): unknown =>
+        flat(
+          tab.findAll(
+            (n) => (n.type as unknown) === 'Text' && typeof n.props.children === 'string',
+          )[0]!,
+        ).color;
+      expect(within(activeTab).UNSAFE_getByType(Ionicons).props.color).toBe(
+        darkTheme.color.primaryFg,
+      );
+      expect(labelColor(activeTab)).toBe(darkTheme.color.primaryFg);
+      expect(within(idleTab).UNSAFE_getByType(Ionicons).props.color).toBe(
+        darkTheme.color.textSecondary,
+      );
+      expect(labelColor(idleTab)).toBe(darkTheme.color.textSecondary);
+      expect(labelColor(idleTab)).not.toBe(labelColor(activeTab));
+    });
+
+    test('keeps the pre-retrofit light values under light', async () => {
+      stubDetail(SHOW_FIXTURE);
+      renderDetail(SHOW_FIXTURE.id);
+
+      await screen.findByText(SHOW_FIXTURE.description);
+
+      expect(flat(screen.getByTestId('experience-hero-placeholder')).backgroundColor).toBe('#e8505b');
+      expect(flat(screen.getByTestId('about-text')).color).toBe('#1f1235');
+      expect(flat(screen.getByTestId('lens-switcher')).backgroundColor).toBe('#ede6f6');
+    });
   });
 });

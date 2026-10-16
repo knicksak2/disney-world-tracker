@@ -12,7 +12,6 @@ import {
   Modal,
   Platform,
   Pressable,
-  StyleSheet,
   Text,
   View,
   type StyleProp,
@@ -23,7 +22,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useQueryClient } from '@tanstack/react-query';
 import type { ExperienceDTO, FoodItemDTO } from '@dwt/shared';
 
-import { theme } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme } from '../../theme/useAppTheme';
 import { ExperiencePicker } from '../trips/ExperiencePicker';
 import LogVisitModal from '../catalog/LogVisitModal';
 import FoodItemPickerModal from '../catalog/FoodItemPickerModal';
@@ -43,6 +43,8 @@ export function MagicFab({
   testID = 'magic-fab',
   accessibilityLabel = 'Quick actions',
 }: MagicFabProps): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const queryClient = useQueryClient();
   const [sheetVisible, setSheetVisible] = useState(false);
 
@@ -89,12 +91,12 @@ export function MagicFab({
           {/* Subtle magical halo ring */}
           <View style={styles.halo}>
             <LinearGradient
-              colors={theme.gradient.headerVivid}
+              colors={t.gradient.fab}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.gradientCircle}
             >
-              <Ionicons name="sparkles" size={24} color="#ffffff" />
+              <Ionicons name="sparkles" size={24} color={t.color.textOnPrimary} />
             </LinearGradient>
           </View>
         </Pressable>
@@ -133,7 +135,7 @@ export function MagicFab({
                 accessibilityLabel="Close picker"
                 testID="fab-picker-close-btn"
               >
-                <Ionicons name="close" size={24} color={theme.color.textSecondary} />
+                <Ionicons name="close" size={24} color={t.color.textSecondary} />
               </Pressable>
             </View>
             <ExperiencePicker
@@ -203,7 +205,7 @@ export function MagicFab({
 
 export default MagicFab;
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   container: {
     top: -14,
     justifyContent: 'center',
@@ -221,9 +223,10 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: theme.color.surface,
+    backgroundColor: t.color.surface,
     padding: 3,
-    ...theme.shadow.card,
+    ...t.shadow.card,
+    ...t.outline.card,
     elevation: 6,
     justifyContent: 'center',
     alignItems: 'center',
@@ -241,27 +244,27 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: theme.color.background,
-    borderTopLeftRadius: theme.radius.xl,
-    borderTopRightRadius: theme.radius.xl,
-    paddingTop: theme.spacing.md,
-    paddingHorizontal: theme.spacing.md,
-    paddingBottom: theme.spacing.xl,
+    backgroundColor: t.color.background,
+    borderTopLeftRadius: t.radius.xl,
+    borderTopRightRadius: t.radius.xl,
+    paddingTop: t.spacing.md,
+    paddingHorizontal: t.spacing.md,
+    paddingBottom: t.spacing.xl,
     height: '90%',
     width: '100%',
-    ...theme.shadow.floating,
+    ...t.shadow.floating,
   },
   modalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingBottom: theme.spacing.sm,
+    paddingBottom: t.spacing.sm,
     borderBottomWidth: 1,
-    borderBottomColor: theme.color.border,
-    marginBottom: theme.spacing.xs,
+    borderBottomColor: t.color.border,
+    marginBottom: t.spacing.xs,
   },
   modalTitle: {
-    ...theme.typography.title,
-    color: theme.color.textPrimary,
+    ...t.typography.title,
+    color: t.color.textPrimary,
   },
-});
+}));

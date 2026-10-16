@@ -7,6 +7,7 @@
 import React from 'react';
 import { StyleSheet } from 'react-native';
 import { render, screen } from '@testing-library/react-native';
+import type { ReactTestInstance } from 'react-test-renderer';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
@@ -45,7 +46,9 @@ jest.mock('../../api/client', () => {
 import LoginScreen from '../LoginScreen';
 import RegisterScreen from '../RegisterScreen';
 import type { AuthStackParamList } from '../../navigation/RootNavigator';
-import { theme } from '../../theme/theme';
+import { darkTheme, theme } from '../../theme/theme';
+import { ScreenContainer } from '../../theme/components';
+import { resetTestScheme, setTestScheme } from '../../test/themeTestUtils';
 
 const Stack = createNativeStackNavigator<AuthStackParamList>();
 
@@ -83,5 +86,36 @@ describe('Auth screens layout — non-overlapping header and card body', () => {
 
     expect(flattened.marginTop).toBeGreaterThanOrEqual(0);
     expect(flattened.marginTop).toBe(theme.spacing.lg);
+  });
+});
+
+// Feature: dark-mode — B7: RegisterScreen had no dark render assertion.
+describe('RegisterScreen (dark)', () => {
+  afterEach(resetTestScheme);
+
+  it('paints the root background, inputs and title from the dark theme', () => {
+    setTestScheme('dark');
+    render(
+      <NavigationContainer>
+        <Stack.Navigator>
+          <Stack.Screen name="Register" component={RegisterScreen} />
+        </Stack.Navigator>
+      </NavigationContainer>,
+    );
+
+    const root = screen.UNSAFE_getAllByType(ScreenContainer)[0]!.children[0] as ReactTestInstance;
+    expect(StyleSheet.flatten(root.props.style).backgroundColor).toBe(
+      darkTheme.color.background,
+    );
+    expect(screen.getByTestId('register-email').props.keyboardAppearance).toBe('dark');
+    expect(screen.getByTestId('register-password').props.keyboardAppearance).toBe('dark');
+    // Field labels on the dark card use the muted textSecondary token.
+    expect(StyleSheet.flatten(screen.getByText('Email').props.style).color).toBe(
+      darkTheme.color.textSecondary,
+    );
+    // The header title sits on the gradient: white in both schemes.
+    expect(StyleSheet.flatten(screen.getByText('Create your account').props.style).color).toBe(
+      darkTheme.color.textOnPrimary,
+    );
   });
 });

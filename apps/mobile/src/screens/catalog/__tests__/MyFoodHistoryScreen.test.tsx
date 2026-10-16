@@ -3,9 +3,14 @@
 // Validates: Requirements 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8, 8.9, 8.10, Property 12
 
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import type { ReactTestInstance } from 'react-test-renderer';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { FoodItemLogWithContextDTO } from '@dwt/shared';
+
+import { darkTheme } from '../../../theme/theme';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
 
 const mockGoBack = jest.fn();
 jest.mock('@react-navigation/native', () => {
@@ -399,5 +404,47 @@ describe('MyFoodHistoryScreen', () => {
         { rating: 10 },
       );
     });
+  });
+});
+
+/** Nearest painted `backgroundColor` at or above `node`. */
+function paintedBackground(node: ReactTestInstance | null): unknown {
+  for (let n = node; n !== null; n = n.parent) {
+    const style = n.props.style;
+    if (style === undefined || typeof style === 'function') continue;
+    const flat = StyleSheet.flatten(style) as { backgroundColor?: unknown } | undefined;
+    if (flat?.backgroundColor !== undefined) return flat.backgroundColor;
+  }
+  return undefined;
+}
+
+describe('MyFoodHistoryScreen — dark mode', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+  afterEach(resetTestScheme);
+
+  test('paints the screen, rows and primary-hued controls with dark values', async () => {
+    setTestScheme('dark');
+    apiRequestMock.mockResolvedValueOnce([...MOCK_LOGS]);
+    renderWithClient();
+
+    const dish = await screen.findByText('Dole Whip Float');
+    // (a) the screen background.
+    expect(paintedBackground(screen.getByTestId('my-food-history-screen'))).toBe(
+      darkTheme.color.background,
+    );
+    // (b) a row's primary text.
+    expect(StyleSheet.flatten(dish.props.style).color).toBe(darkTheme.color.textPrimary);
+    // (c) "+ Add rating" is primary-as-text → primaryFg.
+    expect(StyleSheet.flatten(screen.getByText('+ Add rating').props.style).color).toBe(
+      darkTheme.color.primaryFg,
+    );
+    // (c) toggling a place filter outlines the chip in primaryFg.
+    fireEvent.press(screen.getByTestId('restaurant-filter-Aloha Isle'));
+    expect(
+      StyleSheet.flatten(screen.getByTestId('restaurant-filter-Aloha Isle').props.style).borderColor,
+    ).toBe(darkTheme.color.primaryFg);
+    expect(screen.getByTestId('food-history-search-input').props.keyboardAppearance).toBe('dark');
   });
 });

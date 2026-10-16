@@ -20,11 +20,15 @@
  */
 
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { fireEvent, render, screen } from '@testing-library/react-native';
 
 import type { CompletionEntryDTO } from '@dwt/shared';
 
 import { CompletionRow } from '../CompletionRow';
+import { REPEAT_BADGE } from '../CompletionRow.palette';
+import { darkTheme } from '../../../theme/theme';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -315,5 +319,44 @@ describe('CompletionRow — affordance gating', () => {
       );
       expect(screen.queryByTestId('row-undefined-repeat-badge')).toBeNull();
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Feature: dark-mode — converted row colours follow the Active theme.
+// ---------------------------------------------------------------------------
+
+describe('CompletionRow — dark mode', () => {
+  const flat = (node: { props: { style?: unknown } }): Record<string, unknown> =>
+    (StyleSheet.flatten(node.props.style as never) ?? {}) as Record<string, unknown>;
+  afterEach(resetTestScheme);
+
+  test('(c) title, category dot, repeat and rating badges use their dark values', () => {
+    setTestScheme('dark');
+    render(
+      <CompletionRow
+        entry={makeEntry({ repeatCount: 6, rating: 9 })}
+        fields="experiences"
+        testID="row"
+      />,
+    );
+    expect(flat(screen.getByText(NAME)).color).toBe(darkTheme.color.textPrimary);
+    // Category dot: the dark `Ride` tint.
+    const dot = screen
+      .getByTestId('row')
+      .findAll((n) => (n.type as string) === 'View' && flat(n).width === 10)[0];
+    expect(dot === undefined ? undefined : flat(dot).backgroundColor).toBe(
+      darkTheme.categoryVisual.Ride.tint,
+    );
+    // Repeat badge (6+ → orange): palette dark value; rating 9 → success.
+    expect(flat(screen.getByText('6\u00d7')).color).toBe(REPEAT_BADGE.dark.frequent);
+    expect(flat(screen.getByText('9/10')).color).toBe(darkTheme.color.success);
+  });
+
+  test('light keeps today\u2019s repeat badge literals', () => {
+    render(
+      <CompletionRow entry={makeEntry({ repeatCount: 2 })} fields="experiences" testID="row" />,
+    );
+    expect(flat(screen.getByText('2\u00d7')).color).toBe('#3b5bdb');
   });
 });

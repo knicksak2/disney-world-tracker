@@ -21,7 +21,6 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
-  StyleSheet,
   Text,
   View,
 } from 'react-native';
@@ -38,10 +37,13 @@ import type {
 } from '@dwt/shared';
 
 import { ApiError, apiRequest } from '../../api/client';
-import { theme } from '../../theme/theme';
+import { withAlpha } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme, usePalette } from '../../theme/useAppTheme';
 import { Card, PrimaryButton } from '../../theme/components';
 import NoteControl from './NoteControl';
 import LogVisitModal from './LogVisitModal';
+import { PASSPORT } from './ParkPassportCard.palette';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -74,6 +76,9 @@ export default function ParkPassportCard({
   logsQuery,
   initialExpanded = false,
 }: ParkPassportCardProps): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
+  const pal = usePalette(PASSPORT);
   const queryClient = useQueryClient();
   const encodedId = encodeURIComponent(experienceId);
 
@@ -182,9 +187,9 @@ export default function ParkPassportCard({
       {/* Header section matching mockup.html */}
       <View style={styles.passportHead}>
         <View style={styles.passportTitleRow}>
-          <Text style={{ fontSize: 15 }}>🧭</Text>
+          <Text style={{ ...t.textDefault, fontSize: 15 }}>🧭</Text>
           <Text style={styles.passportMainTitle}>Park Passport &amp; Journal</Text>
-          <Text style={{ height: 0, width: 0, opacity: 0, overflow: 'hidden' }}>Park Passport</Text>
+          <Text style={{ ...t.textDefault, height: 0, width: 0, opacity: 0, overflow: 'hidden' }}>Park Passport</Text>
         </View>
         {visitCount > 0 ? (
           <View style={styles.badgeRibbon}>
@@ -206,7 +211,7 @@ export default function ParkPassportCard({
         ) : logsQuery.isLoading ? (
           <ActivityIndicator
             accessibilityLabel="Loading visit history"
-            color={theme.color.primary}
+            color={t.color.primaryFg}
           />
         ) : (
           <>
@@ -247,7 +252,7 @@ export default function ParkPassportCard({
                     style={{ height: 0, width: 0, opacity: 0, overflow: 'hidden' }}
                     testID="passport-visit-count"
                   >
-                    <Text>{`${visitCount} ${visitCount === 1 ? 'visit' : 'visits'}`}</Text>
+                    <Text style={t.textDefault}>{`${visitCount} ${visitCount === 1 ? 'visit' : 'visits'}`}</Text>
                   </View>
 
                   {/* Personal tip quote bubble or empty prompt */}
@@ -349,7 +354,7 @@ export default function ParkPassportCard({
                     <Ionicons
                       name={historyExpanded ? 'chevron-up' : 'chevron-down'}
                       size={16}
-                      color="#78350f"
+                      color={pal.inkDeep}
                     />
                   </View>
                 </Pressable>
@@ -383,7 +388,7 @@ export default function ParkPassportCard({
                               >
                                 {log.rating === null ? 'Not rated' : `${log.rating} / 10`}
                               </Text>
-                              <Text style={{ fontSize: 10, color: '#b45309', marginLeft: 2 }}>
+                              <Text style={{ fontSize: 10, color: pal.inkWarm, marginLeft: 2 }}>
                                 ✏
                               </Text>
                             </Pressable>
@@ -393,7 +398,7 @@ export default function ParkPassportCard({
                             <ActivityIndicator
                               size="small"
                               accessibilityLabel="Deleting visit"
-                              color="#e11d48"
+                              color={pal.deleteSpinner}
                             />
                           ) : (
                             <Pressable
@@ -407,7 +412,7 @@ export default function ParkPassportCard({
                               style={styles.deleteIconButton}
                               testID={`visit-history-delete-${log.id}`}
                             >
-                              <Text style={{ fontSize: 13 }}>🗑️</Text>
+                              <Text style={{ ...t.textDefault, fontSize: 13 }}>🗑️</Text>
                             </Pressable>
                           )}
                         </View>
@@ -518,7 +523,7 @@ export default function ParkPassportCard({
       {/* Hidden contract tokens for backward compatibility with empty-state assertions */}
       {ratingQuery.data === null ? (
         <Text
-          style={{ height: 0, width: 0, opacity: 0, overflow: 'hidden' }}
+          style={{ ...t.textDefault, height: 0, width: 0, opacity: 0, overflow: 'hidden' }}
           testID="rating-empty"
         >
           Not rated
@@ -526,7 +531,7 @@ export default function ParkPassportCard({
       ) : null}
       {noteQuery.data === null ? (
         <Text
-          style={{ height: 0, width: 0, opacity: 0, overflow: 'hidden' }}
+          style={{ ...t.textDefault, height: 0, width: 0, opacity: 0, overflow: 'hidden' }}
           testID="note-empty"
         >
           No note yet
@@ -540,21 +545,21 @@ export default function ParkPassportCard({
 // Styles
 // ---------------------------------------------------------------------------
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   section: {
-    gap: theme.spacing.sm,
-    backgroundColor: '#fffcf5',
+    gap: t.spacing.sm,
+    backgroundColor: PASSPORT[t.scheme].cardBg,
     borderWidth: 2,
-    borderColor: '#ecd899',
+    borderColor: PASSPORT[t.scheme].cardBorder,
     borderRadius: 22,
-    shadowColor: '#d4a017',
+    shadowColor: PASSPORT[t.scheme].cardShadow,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.12,
     shadowRadius: 22,
     elevation: 3,
     padding: 16,
     marginHorizontal: 0,
-    marginVertical: theme.spacing.xs,
+    marginVertical: t.spacing.xs,
     overflow: 'hidden',
   },
   passportHead: {
@@ -574,13 +579,13 @@ const styles = StyleSheet.create({
   passportMainTitle: {
     fontSize: 12,
     fontWeight: '800',
-    color: '#78350f',
+    color: PASSPORT[t.scheme].inkDeep,
     letterSpacing: -0.2,
   },
   badgeRibbon: {
-    backgroundColor: '#fef3c7',
+    backgroundColor: PASSPORT[t.scheme].ribbonBg,
     borderWidth: 1,
-    borderColor: '#fde68a',
+    borderColor: PASSPORT[t.scheme].ribbonBorder,
     borderRadius: 999,
     paddingHorizontal: 7,
     paddingVertical: 2.5,
@@ -589,7 +594,7 @@ const styles = StyleSheet.create({
   badgeRibbonText: {
     fontSize: 9.5,
     fontWeight: '800',
-    color: '#92400e',
+    color: PASSPORT[t.scheme].inkMid,
     letterSpacing: -0.2,
   },
   keepsakeBody: {
@@ -602,14 +607,14 @@ const styles = StyleSheet.create({
     width: 82,
     height: 82,
     borderWidth: 2.5,
-    borderColor: '#d4a017',
+    borderColor: t.color.accentDark,
     borderStyle: 'dashed',
     borderRadius: 14,
-    backgroundColor: '#fffdf7',
+    backgroundColor: PASSPORT[t.scheme].sealBg,
     alignItems: 'center',
     justifyContent: 'center',
     transform: [{ rotate: '-2.5deg' }],
-    shadowColor: '#d4a017',
+    shadowColor: PASSPORT[t.scheme].sealShadow,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.18,
     shadowRadius: 10,
@@ -618,19 +623,19 @@ const styles = StyleSheet.create({
   sealNum: {
     fontSize: 26,
     fontWeight: '800',
-    color: '#b45309',
+    color: PASSPORT[t.scheme].inkWarm,
     lineHeight: 28,
   },
   sealWord: {
     fontSize: 9,
     fontWeight: '800',
-    color: '#92400e',
+    color: PASSPORT[t.scheme].inkMid,
     letterSpacing: 0.5,
   },
   sealAvg: {
     fontSize: 8.5,
     fontWeight: '800',
-    color: '#78350f',
+    color: PASSPORT[t.scheme].inkDeep,
     marginTop: 1,
   },
   journalEntry: {
@@ -647,21 +652,21 @@ const styles = StyleSheet.create({
   scoreValStar: {
     fontSize: 14,
     fontWeight: '800',
-    color: '#b45309',
+    color: PASSPORT[t.scheme].inkWarm,
   },
   scoreVal: {
     fontSize: 14,
     fontWeight: '800',
-    color: '#b45309',
+    color: PASSPORT[t.scheme].inkWarm,
   },
   scoreSub: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#78350f',
+    color: PASSPORT[t.scheme].inkDeep,
     marginTop: 1,
   },
   ratedCountPill: {
-    backgroundColor: '#fef3c7',
+    backgroundColor: PASSPORT[t.scheme].ribbonBg,
     paddingHorizontal: 7,
     paddingVertical: 2,
     borderRadius: 999,
@@ -669,22 +674,22 @@ const styles = StyleSheet.create({
   ratedCountBadge: {
     fontSize: 9.5,
     fontWeight: '700',
-    color: '#92400e',
+    color: PASSPORT[t.scheme].inkMid,
   },
   quoteBubble: {
-    backgroundColor: '#ffffff',
+    backgroundColor: t.color.surface,
     borderWidth: 1,
-    borderColor: '#f3e5b8',
+    borderColor: PASSPORT[t.scheme].quoteBorder,
     borderLeftWidth: 3,
-    borderLeftColor: '#d4a017',
+    borderLeftColor: t.color.accentDark,
     borderRadius: 8,
     padding: 8,
     marginTop: 6,
   },
   quoteBubbleEmpty: {
-    backgroundColor: 'rgba(255, 255, 255, 0.65)',
+    backgroundColor: withAlpha(t.color.surface, 0.65),
     borderWidth: 1,
-    borderColor: '#e5d9b5',
+    borderColor: PASSPORT[t.scheme].quoteEmptyBorder,
     borderStyle: 'dashed',
     borderRadius: 8,
     padding: 8,
@@ -693,13 +698,13 @@ const styles = StyleSheet.create({
   quoteBubbleEmptyText: {
     fontSize: 10.5,
     fontStyle: 'italic',
-    color: '#8c7853',
+    color: PASSPORT[t.scheme].inkMuted,
     lineHeight: 14,
   },
   quoteBubbleText: {
     fontSize: 11,
     fontStyle: 'italic',
-    color: '#451a03',
+    color: PASSPORT[t.scheme].inkQuote,
     lineHeight: 15,
   },
   quoteFooterRow: {
@@ -710,7 +715,7 @@ const styles = StyleSheet.create({
   },
   quoteSub: {
     fontSize: 9.5,
-    color: '#78716c',
+    color: PASSPORT[t.scheme].footnote,
   },
   editTipButton: {
     paddingVertical: 2,
@@ -719,22 +724,22 @@ const styles = StyleSheet.create({
   editTipButtonText: {
     fontSize: 10,
     fontWeight: '800',
-    color: '#5b2a86',
+    color: t.color.primaryFg,
   },
   headerRow: {
-    gap: theme.spacing.xs,
+    gap: t.spacing.xs,
   },
   emptyContainer: {
-    paddingVertical: theme.spacing.sm,
-    gap: theme.spacing.sm,
+    paddingVertical: t.spacing.sm,
+    gap: t.spacing.sm,
   },
   emptyText: {
-    ...theme.typography.body,
-    color: theme.color.textSecondary,
+    ...t.typography.body,
+    color: t.color.textSecondary,
   },
   timelineContainer: {
     borderTopWidth: 1,
-    borderTopColor: '#e4d3a2',
+    borderTopColor: PASSPORT[t.scheme].timelineDivider,
     borderStyle: 'dashed',
     marginTop: 12,
     paddingTop: 10,
@@ -748,21 +753,21 @@ const styles = StyleSheet.create({
   timelineHeaderText: {
     fontSize: 11.5,
     fontWeight: '800',
-    color: '#78350f',
+    color: PASSPORT[t.scheme].inkDeep,
   },
   timelineAvgBadge: {
     fontSize: 9.5,
     fontWeight: '700',
-    color: '#78350f',
+    color: PASSPORT[t.scheme].inkDeep,
   },
   logsList: {
     gap: 8,
     marginTop: 8,
   },
   timelineRow: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    backgroundColor: withAlpha(t.color.surface, 0.95),
     borderWidth: 1,
-    borderColor: '#eee2be',
+    borderColor: PASSPORT[t.scheme].timelineRowBorder,
     borderRadius: 10,
     padding: 8,
   },
@@ -779,15 +784,15 @@ const styles = StyleSheet.create({
   timelineDateCheck: {
     fontSize: 11.5,
     fontWeight: '700',
-    color: '#16a34a',
+    color: PASSPORT[t.scheme].visitDate,
   },
   timelineDateText: {
     fontSize: 11.5,
     fontWeight: '700',
-    color: '#16a34a',
+    color: PASSPORT[t.scheme].visitDate,
   },
   ratingBadgePill: {
-    backgroundColor: '#fef3c7',
+    backgroundColor: PASSPORT[t.scheme].ribbonBg,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
@@ -797,34 +802,34 @@ const styles = StyleSheet.create({
   ratingBadgePillText: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#b45309',
+    color: PASSPORT[t.scheme].inkWarm,
   },
   deleteIconButton: {
     padding: 2,
   },
   visitNoteCallout: {
-    backgroundColor: '#fffdf8',
+    backgroundColor: PASSPORT[t.scheme].noteCalloutBg,
     paddingVertical: 4,
     paddingHorizontal: 8,
     borderRadius: 6,
     borderLeftWidth: 2,
-    borderLeftColor: '#f59e0b',
+    borderLeftColor: t.color.starRating,
     marginTop: 4,
   },
   visitNoteText: {
     fontSize: 11,
     fontStyle: 'italic',
-    color: '#451a03',
+    color: PASSPORT[t.scheme].inkQuote,
   },
   visitNoteQuote: {
     fontSize: 11,
     fontStyle: 'italic',
-    color: '#451a03',
+    color: PASSPORT[t.scheme].inkQuote,
   },
   logAnotherButton: {
     width: '100%',
     marginTop: 10,
-    backgroundColor: '#5b2a86',
+    backgroundColor: t.color.primary,
     paddingVertical: 10,
     borderRadius: 10,
     alignItems: 'center',
@@ -833,7 +838,7 @@ const styles = StyleSheet.create({
   logAnotherButtonText: {
     fontSize: 11.5,
     fontWeight: '800',
-    color: '#ffffff',
+    color: t.color.textOnPrimary,
   },
   ratingPickerRow: {
     flexDirection: 'row',
@@ -842,43 +847,43 @@ const styles = StyleSheet.create({
     marginTop: 8,
     paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: '#fde68a',
+    borderTopColor: PASSPORT[t.scheme].ribbonBorder,
   },
   ratingPickerOption: {
     paddingHorizontal: 7,
     paddingVertical: 4,
     borderRadius: 6,
-    backgroundColor: '#fef3c7',
+    backgroundColor: PASSPORT[t.scheme].ribbonBg,
     borderWidth: 1,
-    borderColor: '#fde68a',
+    borderColor: PASSPORT[t.scheme].ribbonBorder,
   },
   ratingPickerOptionActive: {
-    backgroundColor: '#f59e0b',
-    borderColor: '#d97706',
+    backgroundColor: PASSPORT[t.scheme].pickerActiveBg,
+    borderColor: PASSPORT[t.scheme].pickerActiveBorder,
   },
   ratingPickerOptionText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#92400e',
+    color: PASSPORT[t.scheme].inkMid,
   },
   ratingPickerOptionTextActive: {
-    color: '#ffffff',
+    color: t.color.textOnPrimary,
   },
   ratingPickerRemove: {
     paddingHorizontal: 7,
     paddingVertical: 4,
     borderRadius: 6,
-    backgroundColor: '#fee2e2',
+    backgroundColor: PASSPORT[t.scheme].removeBg,
   },
   ratingPickerRemoveText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#dc2626',
+    color: PASSPORT[t.scheme].removeText,
   },
   tipEditModalCard: {
-    backgroundColor: '#ffffff',
+    backgroundColor: t.color.surface,
     borderWidth: 1,
-    borderColor: '#dcd1ed',
+    borderColor: PASSPORT[t.scheme].tipBorder,
     borderRadius: 12,
     padding: 12,
     marginTop: 8,
@@ -892,7 +897,7 @@ const styles = StyleSheet.create({
   tipEditModalTitle: {
     fontSize: 12,
     fontWeight: '800',
-    color: '#5b2a86',
+    color: t.color.primaryFg,
   },
   tipEditModalClose: {
     padding: 4,
@@ -900,11 +905,11 @@ const styles = StyleSheet.create({
   tipEditModalCloseText: {
     fontSize: 13,
     fontWeight: '800',
-    color: '#655d78',
+    color: PASSPORT[t.scheme].tipClose,
   },
   errorText: {
-    ...theme.typography.body,
-    color: theme.color.danger,
+    ...t.typography.body,
+    color: t.color.danger,
     marginTop: 4,
   },
-});
+}));

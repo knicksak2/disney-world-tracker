@@ -28,7 +28,14 @@ jest.mock('../../../api/client', () => {
   return { __esModule: true, ...actual, apiRequest: jest.fn() };
 });
 
+import type { ReactTestInstance } from 'react-test-renderer';
+import { within } from '@testing-library/react-native';
 import PinShowcaseScreen from '../PinShowcaseScreen';
+import { PIN_SHOWCASE, SHOWCASE_FRAME } from '../PinShowcaseScreen.palette';
+import { TIER_TEXT } from '../tierText.palette';
+import { TIER_COLOR, TIER_LABEL } from '../../../components/pins/pinTierMeta';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
+import { darkTheme, withAlpha } from '../../../theme/theme';
 import { ApiError, apiRequest as mockedApiRequest } from '../../../api/client';
 import {
   PINS,
@@ -903,6 +910,100 @@ describe('PinShowcaseScreen (Task 16.10)', () => {
         posY: expectedMaxPosY,
       });
     });
+  });
+});
+
+describe('PinShowcaseScreen — dark mode', () => {
+  afterEach(resetTestScheme);
+
+  const flat = (node: ReactTestInstance) => StyleSheet.flatten(node.props.style) ?? {};
+
+  /** Nearest host ancestor (exclusive) whose flattened style paints a backgroundColor. */
+  function paintedAncestor(node: ReactTestInstance): Record<string, unknown> {
+    let cur: ReactTestInstance | null = node.parent;
+    while (cur !== null) {
+      if (typeof cur.type === 'string' && flat(cur).backgroundColor !== undefined) {
+        return flat(cur);
+      }
+      cur = cur.parent;
+    }
+    return {};
+  }
+
+  const amethystPin: PinDTO = PINS.find((p) => p.tier === 'amethyst')!;
+
+  function mockShowcase(): void {
+    const showcase: PinShowcaseDTO = {
+      ownerId: 'user-123',
+      placements: [{ pinId: pinA.id, posX: 0.25, posY: 0.5, zIndex: 0 }],
+      unplaced: [amethystPin.id],
+    };
+    apiRequestMock.mockReset();
+    apiRequestMock.mockImplementation(async (method: string, path: string) => {
+      if (method === 'GET' && path === '/me/pin-showcase') return showcase as never;
+      throw new Error(`Unexpected ${method} ${path}`);
+    });
+  }
+
+  it('(a)(b)(c) screen, tray, frame art and converted controls render dark values', async () => {
+    mockShowcase();
+    setTestScheme('dark');
+    renderScreen();
+
+    const tray = await screen.findByTestId('pin-showcase-tray');
+    // (a) root container behind the tray.
+    expect(paintedAncestor(tray).backgroundColor).toBe(darkTheme.color.background);
+    expect(flat(tray).backgroundColor).toBe(darkTheme.color.surface);
+    // (b) primary text.
+    expect(flat(screen.getByText('Unplaced Pins')).color).toBe(darkTheme.color.textPrimary);
+    // (c) the wooden board frame is artwork (mode-invariant); the remove badge sits on surface.
+    expect(paintedAncestor(screen.getByTestId('pin-showcase-board')).backgroundColor).toBe(
+      SHOWCASE_FRAME.light.bg,
+    );
+    expect(flat(screen.getByTestId(`pin-showcase-remove-${pinA.id}`)).backgroundColor).toBe(
+      darkTheme.color.surface,
+    );
+    // Rule-5 veil on a themed surface: withAlpha(surface).
+    expect(flat(screen.getByTestId('pin-showcase-sort-toggle')).backgroundColor).toBe(
+      withAlpha(darkTheme.color.surface, 0.06),
+    );
+    // Toggling search shows the amber-tint active state and a themed TextInput.
+    fireEvent.press(screen.getByTestId('pin-showcase-search-toggle'));
+    expect(flat(screen.getByTestId('pin-showcase-search-toggle')).backgroundColor).toBe(
+      PIN_SHOWCASE.dark.trayActionActiveBg,
+    );
+    const input = screen.getByTestId('pin-showcase-search-input');
+    expect(input.props.keyboardAppearance).toBe('dark');
+    expect(input.props.placeholderTextColor).toBe(darkTheme.color.textSecondary);
+  });
+
+  it('the Browse-All modal tier Badge uses TIER_TEXT in dark (rule 7)', async () => {
+    mockShowcase();
+    setTestScheme('dark');
+    renderScreen();
+
+    fireEvent.press(await screen.findByTestId('pin-showcase-expand-button'));
+    expect(flat(screen.getByTestId('pin-showcase-modal')).backgroundColor).toBe(
+      darkTheme.color.surface,
+    );
+    const card = await screen.findByTestId(`pin-showcase-card-${amethystPin.id}`);
+    expect(flat(within(card).getByText(TIER_LABEL.amethyst)).color).toBe(TIER_TEXT.dark.amethyst);
+  });
+
+  it('keeps the pre-retrofit light values under light', async () => {
+    mockShowcase();
+    renderScreen();
+
+    expect(flat(await screen.findByTestId('pin-showcase-tray')).backgroundColor).toBe('#ffffff');
+    expect(paintedAncestor(screen.getByTestId('pin-showcase-board')).backgroundColor).toBe('#c49a6c');
+    expect(flat(screen.getByTestId(`pin-showcase-remove-${pinA.id}`)).backgroundColor).toBe('#ffffff');
+    fireEvent.press(screen.getByTestId('pin-showcase-search-toggle'));
+    expect(flat(screen.getByTestId('pin-showcase-search-toggle')).backgroundColor).toBe(
+      'rgba(230,195,92,0.15)',
+    );
+    fireEvent.press(screen.getByTestId('pin-showcase-expand-button'));
+    const card = await screen.findByTestId(`pin-showcase-card-${amethystPin.id}`);
+    expect(flat(within(card).getByText(TIER_LABEL.amethyst)).color).toBe(TIER_COLOR.amethyst);
   });
 });
 

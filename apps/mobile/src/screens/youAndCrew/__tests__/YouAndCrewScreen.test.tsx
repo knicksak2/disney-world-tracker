@@ -22,6 +22,18 @@ import {
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
+// dark-mode: `YouAndCrewScreen.tsx` renders `AppearancePreferenceControl`
+// directly in its "Preferences & Security" section (the Appearance toggle's
+// actual reachable home — `ProfileScreen.tsx`'s default-exported screen is
+// not registered as a route anywhere in the navigator, only its
+// `ProfileIdentityBlock` export is reused here). That control's module graph
+// reaches `@react-native-async-storage/async-storage` — stub it with the
+// package's own shipped jest mock so the native module never has to resolve.
+jest.mock('@react-native-async-storage/async-storage', () =>
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  require('@react-native-async-storage/async-storage/jest/async-storage-mock'),
+);
+
 jest.mock('expo-secure-store', () => ({
   __esModule: true,
   getItemAsync: jest.fn(async () => null),
@@ -47,6 +59,11 @@ jest.mock('../../../env/notifications', () => ({
 import YouAndCrewScreen from '../YouAndCrewScreen';
 import { apiRequest as mockedApiRequest } from '../../../api/client';
 import { useSessionStore } from '../../../state/sessionStore';
+import { useThemeStore } from '../../../state/themeStore';
+import { DEFAULT_APPEARANCE_PREFERENCE } from '../../../theme/appearance';
+import { darkTheme, withAlpha } from '../../../theme/theme';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
+import { SHARE_ICON } from '../YouAndCrewScreen.palette';
 import type { YouAndCrewStackParamList } from '../../../navigation/YouAndCrewStack';
 
 const apiRequestMock = mockedApiRequest as jest.MockedFunction<typeof mockedApiRequest>;
@@ -66,6 +83,7 @@ describe('YouAndCrewScreen (Requirements 7.3, 7.4)', () => {
     });
     apiRequestMock.mockReset();
     useSessionStore.setState({ token: 'token-abc', hydrated: true });
+    useThemeStore.setState({ preference: DEFAULT_APPEARANCE_PREFERENCE, hydrated: false });
   });
 
   const ME_RESPONSE = {
@@ -348,6 +366,7 @@ describe('YouAndCrewScreen (Requirements 7.3, 7.4)', () => {
 
     // Settings titles
     expect(screen.getByText('Push Notifications')).toBeTruthy();
+    expect(screen.getAllByText('Appearance').length).toBeGreaterThan(0);
     expect(screen.getByText('Account Security')).toBeTruthy();
 
     // Logout button
@@ -357,6 +376,36 @@ describe('YouAndCrewScreen (Requirements 7.3, 7.4)', () => {
     await waitFor(() => {
       expect(apiRequestMock).toHaveBeenCalledWith('POST', '/auth/logout');
       expect(useSessionStore.getState().token).toBeNull();
+    });
+  });
+
+  // Feature: dark-mode — Requirement 4 (Appearance control reachable from
+  // the real You & Crew screen; moved here from the unreachable
+  // ProfileScreen.tsx default export, which is not wired as a navigator route).
+  describe('Appearance control (dark-mode, Requirement 4)', () => {
+    it('renders the Appearance card with all three selectable options', async () => {
+      setupApi();
+      renderScreen();
+
+      await screen.findByTestId('profile-display-name');
+
+      expect(screen.getByTestId('appearance-preference-control')).toBeTruthy();
+      expect(screen.getByTestId('appearance-option-system')).toBeTruthy();
+      expect(screen.getByTestId('appearance-option-light')).toBeTruthy();
+      expect(screen.getByTestId('appearance-option-dark')).toBeTruthy();
+    });
+
+    it('pressing a different option updates the theme store and persists to AsyncStorage', async () => {
+      setupApi();
+      renderScreen();
+
+      await screen.findByTestId('profile-display-name');
+
+      fireEvent.press(screen.getByTestId('appearance-option-dark'));
+
+      await waitFor(() => {
+        expect(useThemeStore.getState().preference).toBe('dark');
+      });
     });
   });
 
@@ -412,5 +461,56 @@ describe('YouAndCrewScreen (Requirements 7.3, 7.4)', () => {
     expect(screen.queryByText('Friend Four')).toBeNull();
     expect(screen.queryByText('Friend Five')).toBeNull();
     expect(toggleBtn).toHaveTextContent('Show all (5) friends \u25BE');
+  });
+
+  // Feature: dark-mode — the converted screen follows the Active theme.
+  describe('dark mode', () => {
+    const flat = (node: { props: { style?: unknown } }): Record<string, unknown> =>
+      (StyleSheet.flatten(node.props.style as never) ?? {}) as Record<string, unknown>;
+    const iconNamed = (name: string): { props: Record<string, unknown> } | undefined =>
+      screen.UNSAFE_root.findAll(
+        (n) => (n.type as string) === 'Icon' && n.props.name === name,
+      )[0];
+
+    afterEach(resetTestScheme);
+
+    it('(a)(b)(c) background, friend name, and converted controls use dark values', async () => {
+      setTestScheme('dark');
+      setupApi();
+      renderScreen();
+      await screen.findByText('Donald Duck');
+
+      // (a) root ScreenContainer.
+      expect(flat(screen.getByTestId('you-and-crew-screen')).backgroundColor).toBe(
+        darkTheme.color.background,
+      );
+      // (b) primary text.
+      expect(flat(screen.getByText('Donald Duck')).color).toBe(darkTheme.color.textPrimary);
+      // (c) `primary` as text → primaryFg; non-token icon circle → palette dark;
+      // the danger veil keeps its alpha over the dark `danger`.
+      expect(flat(screen.getAllByText('Compare Stats')[0]!).color).toBe(
+        darkTheme.color.primaryFg,
+      );
+      expect(iconNamed('mail-outline')?.props.color).toBe(SHARE_ICON.dark.inboxFg);
+      expect(flat(screen.getByTestId('remove-friend-f1')).backgroundColor).toBe(
+        withAlpha(darkTheme.color.danger, 0.08),
+      );
+    });
+
+    it('repaints live when the user picks Dark in the Appearance control (no remount)', async () => {
+      setupApi();
+      renderScreen();
+      await screen.findByText('Donald Duck');
+      const root = screen.getByTestId('you-and-crew-screen');
+      expect(flat(root).backgroundColor).toBe('#f5f2fb');
+      expect(iconNamed('mail-outline')?.props.color).toBe('#1976d2');
+
+      fireEvent.press(screen.getByTestId('appearance-option-dark'));
+
+      expect(screen.getByTestId('you-and-crew-screen')).toBe(root);
+      expect(flat(root).backgroundColor).toBe(darkTheme.color.background);
+      expect(flat(screen.getByText('Donald Duck')).color).toBe(darkTheme.color.textPrimary);
+      expect(iconNamed('mail-outline')?.props.color).toBe(SHARE_ICON.dark.inboxFg);
+    });
   });
 });

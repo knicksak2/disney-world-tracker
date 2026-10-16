@@ -10,7 +10,6 @@ import React from 'react';
 import {
   Modal,
   Pressable,
-  StyleSheet,
   Text,
   View,
 } from 'react-native';
@@ -34,7 +33,8 @@ import {
   navigateToTripsList,
 } from '../../navigation/navigationRef';
 import { buildQuickActions, type QuickAction } from './quickActions';
-import { theme } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme } from '../../theme/useAppTheme';
 
 type TripsListResponse = readonly { status: TripStatus; trips: readonly TripDTO[] }[];
 
@@ -49,6 +49,8 @@ export function QuickActionSheet({
   onClose,
   onOpenExperiencePicker,
 }: QuickActionSheetProps): JSX.Element | null {
+  const styles = useStyles();
+  const t = useAppTheme();
   const { count: claimableCount } = useClaimablePinsBadge();
   const lastViewedPark = useLiveWaitsStore((state) => state.lastViewedPark);
 
@@ -149,7 +151,7 @@ export function QuickActionSheet({
               accessibilityLabel="Close"
               testID="quick-action-close-btn"
             >
-              <Ionicons name="close" size={24} color={theme.color.textSecondary} />
+              <Ionicons name="close" size={24} color={t.color.textSecondary} />
             </Pressable>
           </View>
 
@@ -167,10 +169,10 @@ export function QuickActionSheet({
                 testID={`quick-action-${action.key}`}
               >
                 <View style={styles.iconCircle}>
-                  <Ionicons name={action.icon} size={22} color={theme.color.primary} />
+                  <Ionicons name={action.icon} size={22} color={t.color.primaryFg} />
                 </View>
                 <Text style={styles.actionLabel}>{action.label}</Text>
-                <Ionicons name="chevron-forward" size={18} color={theme.color.textSecondary} />
+                <Ionicons name="chevron-forward" size={18} color={t.color.textSecondary} />
               </Pressable>
             ))}
           </View>
@@ -180,16 +182,16 @@ export function QuickActionSheet({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   backdrop: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.45)',
     justifyContent: 'flex-end',
   },
   sheet: {
-    backgroundColor: theme.color.surface,
-    borderTopLeftRadius: theme.radius.lg,
-    borderTopRightRadius: theme.radius.lg,
+    backgroundColor: t.color.surface,
+    borderTopLeftRadius: t.radius.lg,
+    borderTopRightRadius: t.radius.lg,
     paddingHorizontal: 20,
     paddingBottom: 32,
     paddingTop: 12,
@@ -197,7 +199,7 @@ const styles = StyleSheet.create({
   dragHandle: {
     width: 40,
     height: 4,
-    backgroundColor: theme.color.border,
+    backgroundColor: t.color.border,
     borderRadius: 2,
     alignSelf: 'center',
     marginBottom: 12,
@@ -211,7 +213,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 18,
     fontWeight: '700',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   actionList: {
     gap: 8,
@@ -221,8 +223,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 12,
     paddingHorizontal: 12,
-    borderRadius: theme.radius.md,
-    backgroundColor: theme.color.surfaceAlt,
+    borderRadius: t.radius.md,
+    backgroundColor: t.color.surfaceAlt,
   },
   actionItemPressed: {
     opacity: 0.7,
@@ -231,7 +233,7 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: theme.color.surface,
+    backgroundColor: t.color.surface,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 14,
@@ -240,8 +242,8 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     fontWeight: '600',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
-});
+}));
 
 export default QuickActionSheet;

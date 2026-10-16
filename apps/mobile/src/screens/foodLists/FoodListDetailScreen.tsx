@@ -33,8 +33,11 @@ import type {
 } from '@dwt/shared';
 
 import { ApiError, apiRequest } from '../../api/client';
-import { theme } from '../../theme/theme';
+import { withAlpha } from '../../theme/theme';
 import { Badge, Card, GradientHeader, ScreenContainer } from '../../theme/components';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme } from '../../theme/useAppTheme';
+import { FOOD_LIST_DETAIL } from './FoodListDetailScreen.palette';
 import CreateLocationModal from '../catalog/CreateLocationModal';
 import FoodItemPickerModal from '../catalog/FoodItemPickerModal';
 import ManageFoodListSharesSheet from './ManageFoodListSharesSheet';
@@ -113,6 +116,8 @@ function ymdInTimeZone(now: Date, timeZone: string): string {
 }
 
 export default function FoodListDetailScreen(): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const route = useRoute<FoodListDetailRouteProp>();
   const navigation = useNavigation<NativeStackNavigationProp<any>>();
   const openExperience = useOpenExperience();
@@ -712,7 +717,7 @@ export default function FoodListDetailScreen(): JSX.Element {
                 <Ionicons
                   name="reorder-three"
                   size={22}
-                  color={theme.color.textSecondary}
+                  color={t.color.textSecondary}
                 />
               </Pressable>
             ) : null}
@@ -804,7 +809,7 @@ export default function FoodListDetailScreen(): JSX.Element {
                 accessibilityLabel={`Rating for ${item.name}: ${item.rating != null ? `${item.rating} out of 10` : 'unrated'}. Tap to edit rating`}
                 testID={`food-list-item-gotten-badge-${item.foodItemId}`}
               >
-                <Ionicons name="checkmark" size={14} color={theme.color.primary} />
+                <Ionicons name="checkmark" size={14} color={t.color.primaryFg} />
                 <Text style={styles.gottenBadgeText}>
                   {item.rating != null ? `${item.rating}/10` : 'Ate this'}
                 </Text>
@@ -822,7 +827,7 @@ export default function FoodListDetailScreen(): JSX.Element {
                 accessibilityLabel={`Remove ${item.name} from list`}
                 testID={`food-list-item-delete-${item.foodItemId}`}
               >
-                <Ionicons name="trash-outline" size={18} color={theme.color.danger} />
+                <Ionicons name="trash-outline" size={18} color={t.color.danger} />
               </Pressable>
             ) : null}
           </View>
@@ -836,6 +841,8 @@ export default function FoodListDetailScreen(): JSX.Element {
       list?.isChecklist,
       markingGottenId,
       handleDeleteItem,
+      styles,
+      t,
     ],
   );
 
@@ -860,12 +867,12 @@ export default function FoodListDetailScreen(): JSX.Element {
             accessibilityLabel={`Select restaurant ${exp.name}`}
             testID={`restaurant-select-row-${exp.id}`}
           >
-            <Ionicons name="restaurant" size={20} color={theme.color.primary} />
+            <Ionicons name="restaurant" size={20} color={t.color.primaryFg} />
             <View style={styles.restaurantRowText}>
               <Text style={styles.restaurantRowName}>{exp.name}</Text>
               <Text style={styles.restaurantRowMeta}>{exp.park}</Text>
             </View>
-            <Ionicons name="chevron-forward" size={18} color={theme.color.textSecondary} />
+            <Ionicons name="chevron-forward" size={18} color={t.color.textSecondary} />
           </Pressable>
         );
       } else {
@@ -890,7 +897,7 @@ export default function FoodListDetailScreen(): JSX.Element {
             accessibilityLabel={`Select snack cart ${loc.name}`}
             testID={`custom-location-select-row-${loc.id}`}
           >
-            <Ionicons name="fast-food-outline" size={20} color={theme.color.primary} />
+            <Ionicons name="fast-food-outline" size={20} color={t.color.primaryFg} />
             <View style={styles.restaurantRowText}>
               <View style={styles.locationTitleRow}>
                 <Text style={styles.restaurantRowName}>{loc.name}</Text>
@@ -898,19 +905,19 @@ export default function FoodListDetailScreen(): JSX.Element {
               </View>
               <Text style={styles.restaurantRowMeta}>{loc.park}</Text>
             </View>
-            <Ionicons name="chevron-forward" size={18} color={theme.color.textSecondary} />
+            <Ionicons name="chevron-forward" size={18} color={t.color.textSecondary} />
           </Pressable>
         );
       }
     },
-    [],
+    [styles, t],
   );
 
   // Loading state (only show full-screen loader on initial fetch when no cached list exists)
   if (listQuery.isLoading && !list) {
     return (
       <ScreenContainer style={styles.centerContainer}>
-        <ActivityIndicator color={theme.color.primary} size="large" />
+        <ActivityIndicator color={t.color.primaryFg} size="large" />
       </ScreenContainer>
     );
   }
@@ -932,7 +939,7 @@ export default function FoodListDetailScreen(): JSX.Element {
           onBack={() => navigation.goBack()}
         />
         <View style={styles.unavailableWrap} testID="food-list-unavailable-notice">
-          <Ionicons name="alert-circle-outline" size={48} color={theme.color.danger} />
+          <Ionicons name="alert-circle-outline" size={48} color={t.color.danger} />
           <Text style={styles.unavailableTitle}>No longer available</Text>
           <Text style={styles.unavailableBody}>
             {transientNotice ?? 'This food list does not exist or is no longer shared with you.'}
@@ -966,7 +973,7 @@ export default function FoodListDetailScreen(): JSX.Element {
             onBack={() => navigation.goBack()}
           />
           <View style={styles.unavailableWrap} testID="food-list-rate-limit-notice">
-            <Ionicons name="time-outline" size={48} color={theme.color.warning} />
+            <Ionicons name="time-outline" size={48} color={t.color.warning} />
             <Text style={styles.unavailableTitle}>Too many requests</Text>
             <Text style={styles.unavailableBody}>
               Please wait a moment and try again.
@@ -994,7 +1001,7 @@ export default function FoodListDetailScreen(): JSX.Element {
           onBack={() => navigation.goBack()}
         />
         <View style={styles.unavailableWrap} testID="food-list-unavailable-notice">
-          <Ionicons name="alert-circle-outline" size={48} color={theme.color.danger} />
+          <Ionicons name="alert-circle-outline" size={48} color={t.color.danger} />
           <Text style={styles.unavailableTitle}>No longer available</Text>
           <Text style={styles.unavailableBody}>
             {transientNotice ?? 'This food list does not exist or is no longer shared with you.'}
@@ -1016,7 +1023,7 @@ export default function FoodListDetailScreen(): JSX.Element {
   if (!list) {
     return (
       <ScreenContainer style={styles.centerContainer}>
-        <ActivityIndicator color={theme.color.primary} size="large" />
+        <ActivityIndicator color={t.color.primaryFg} size="large" />
       </ScreenContainer>
     );
   }
@@ -1044,7 +1051,7 @@ export default function FoodListDetailScreen(): JSX.Element {
           <View style={styles.celebrationCard} testID="food-list-completion-celebration">
             <View style={styles.celebrationTop}>
               <View style={styles.celebrationIconRow}>
-                <Ionicons name="sparkles" size={24} color="#f59e0b" />
+                <Ionicons name="sparkles" size={24} color={t.color.starRating} />
                 <Text style={styles.celebrationTitle}>List Complete!</Text>
               </View>
               <Pressable
@@ -1054,7 +1061,7 @@ export default function FoodListDetailScreen(): JSX.Element {
                 style={styles.celebrationDismissBtn}
                 testID="dismiss-celebration-btn"
               >
-                <Ionicons name="close" size={20} color={theme.color.textSecondary} />
+                <Ionicons name="close" size={20} color={t.color.textSecondary} />
               </Pressable>
             </View>
             <Text style={styles.celebrationMessage}>
@@ -1066,7 +1073,7 @@ export default function FoodListDetailScreen(): JSX.Element {
         {/* Stale write message (Requirement 11.3) */}
         {staleWriteNotice ? (
           <View style={styles.staleNotice} testID="food-list-stale-write-message">
-            <Ionicons name="information-circle" size={18} color={theme.color.primary} />
+            <Ionicons name="information-circle" size={18} color={t.color.primaryFg} />
             <Text style={styles.staleNoticeText}>{staleWriteNotice}</Text>
           </View>
         ) : null}
@@ -1093,7 +1100,7 @@ export default function FoodListDetailScreen(): JSX.Element {
                     <Ionicons
                       name={list.visibility === 'public' ? 'globe-outline' : 'lock-closed-outline'}
                       size={12}
-                      color={theme.color.primary}
+                      color={t.color.primaryFg}
                     />
                     <Text style={styles.visibilityBadgeText}>
                       {list.visibility === 'public' ? 'Public' : 'Private'}
@@ -1112,7 +1119,7 @@ export default function FoodListDetailScreen(): JSX.Element {
               <View style={styles.roleBadgeContainer}>
                 <Badge
                   label={list.myRole === 'owner' ? 'Owner' : list.myRole === 'editor' ? 'Editor' : 'Viewer'}
-                  color={list.myRole === 'editor' ? theme.color.primary : theme.color.textSecondary}
+                  color={list.myRole === 'editor' ? t.color.primaryFg : t.color.textSecondary}
                 />
               </View>
               {isOwner ? (
@@ -1127,7 +1134,7 @@ export default function FoodListDetailScreen(): JSX.Element {
                   hitSlop={8}
                   testID="food-list-options-menu-btn"
                 >
-                  <Ionicons name="ellipsis-horizontal" size={18} color={theme.color.textSecondary} />
+                  <Ionicons name="ellipsis-horizontal" size={18} color={t.color.textSecondary} />
                 </Pressable>
               ) : null}
             </View>
@@ -1151,7 +1158,7 @@ export default function FoodListDetailScreen(): JSX.Element {
               <Ionicons
                 name={list.liked ? 'heart' : 'heart-outline'}
                 size={16}
-                color={list.liked ? theme.color.danger : theme.color.textSecondary}
+                color={list.liked ? t.color.danger : t.color.textSecondary}
               />
               <Text style={[styles.actionButtonText, list.liked && styles.actionButtonTextLiked]}>
                 {list.likeCount}
@@ -1175,7 +1182,7 @@ export default function FoodListDetailScreen(): JSX.Element {
                 <Ionicons
                   name={list.saved ? 'bookmark' : 'bookmark-outline'}
                   size={16}
-                  color={list.saved ? theme.color.primary : theme.color.textSecondary}
+                  color={list.saved ? t.color.primaryFg : t.color.textSecondary}
                 />
                 <Text style={[styles.actionButtonText, list.saved && styles.actionButtonTextSaved]}>
                   {list.saved ? 'Saved' : 'Save'}
@@ -1192,7 +1199,7 @@ export default function FoodListDetailScreen(): JSX.Element {
                 accessibilityLabel="Manage sharing"
                 testID="food-list-manage-sharing-btn"
               >
-                <Ionicons name="people-outline" size={16} color={theme.color.primary} />
+                <Ionicons name="people-outline" size={16} color={t.color.primaryFg} />
                 <Text style={styles.actionButtonText}>Share</Text>
               </Pressable>
             ) : null}
@@ -1216,7 +1223,7 @@ export default function FoodListDetailScreen(): JSX.Element {
                 <Ionicons
                   name={list.isChecklist ? 'checkbox' : 'checkbox-outline'}
                   size={16}
-                  color={list.isChecklist ? theme.color.primary : theme.color.textSecondary}
+                  color={list.isChecklist ? t.color.primaryFg : t.color.textSecondary}
                 />
                 <Text
                   style={[
@@ -1246,7 +1253,7 @@ export default function FoodListDetailScreen(): JSX.Element {
                 <Ionicons
                   name={list.pinnedAt !== null ? 'pin' : 'pin-outline'}
                   size={16}
-                  color={list.pinnedAt !== null ? theme.color.primary : theme.color.textSecondary}
+                  color={list.pinnedAt !== null ? t.color.primaryFg : t.color.textSecondary}
                 />
                 <Text
                   style={[
@@ -1266,7 +1273,7 @@ export default function FoodListDetailScreen(): JSX.Element {
           <Card style={styles.progressCard} testID="food-list-progress-row">
             <View style={styles.progressTextRow}>
               <View style={styles.progressLabelGroup}>
-                <Ionicons name="checkbox-outline" size={18} color={theme.color.primary} />
+                <Ionicons name="checkbox-outline" size={18} color={t.color.primaryFg} />
                 <Text style={styles.progressLabel} testID="food-list-progress-text">
                   {`${list.gottenCount ?? 0} of ${list.itemCount} tried`}
                 </Text>
@@ -1312,7 +1319,7 @@ export default function FoodListDetailScreen(): JSX.Element {
               accessibilityLabel="Add items to this list"
               testID="food-list-add-items-btn"
             >
-              <Ionicons name="add" size={20} color="#fff" />
+              <Ionicons name="add" size={20} color={t.color.textOnPrimary} />
               <Text style={styles.addItemsBtnText}>Add items</Text>
             </Pressable>
           ) : null}
@@ -1326,7 +1333,7 @@ export default function FoodListDetailScreen(): JSX.Element {
             completion styling. */}
         {list.items.length === 0 ? (
           <View style={styles.emptyItemsWrap}>
-            <Ionicons name="restaurant-outline" size={40} color={theme.color.textSecondary} />
+            <Ionicons name="restaurant-outline" size={40} color={t.color.textSecondary} />
             <Text style={styles.emptyItemsText}>No dishes in this list yet.</Text>
             {canEdit ? (
               <Pressable
@@ -1343,6 +1350,7 @@ export default function FoodListDetailScreen(): JSX.Element {
             keyExtractor={(item) => item.foodItemId}
             scrollEnabled={false}
             renderItem={renderDraggableItem}
+            extraData={t.scheme}
             onDragEnd={handleDragEnd}
           />
         )}
@@ -1446,7 +1454,7 @@ export default function FoodListDetailScreen(): JSX.Element {
               <Ionicons
                 name={list.visibility === 'public' ? 'lock-closed-outline' : 'globe-outline'}
                 size={20}
-                color={theme.color.textPrimary}
+                color={t.color.textPrimary}
               />
               <Text style={styles.optionsMenuItemText}>
                 Make {list.visibility === 'public' ? 'Private' : 'Public'}
@@ -1469,7 +1477,7 @@ export default function FoodListDetailScreen(): JSX.Element {
               accessibilityLabel="Rename list"
               testID="food-list-option-rename-btn"
             >
-              <Ionicons name="pencil-outline" size={20} color={theme.color.textPrimary} />
+              <Ionicons name="pencil-outline" size={20} color={t.color.textPrimary} />
               <Text style={styles.optionsMenuItemText}>Rename List</Text>
             </Pressable>
 
@@ -1484,7 +1492,7 @@ export default function FoodListDetailScreen(): JSX.Element {
               accessibilityLabel="Delete list"
               testID="food-list-option-delete-btn"
             >
-              <Ionicons name="trash-outline" size={20} color={theme.color.danger} />
+              <Ionicons name="trash-outline" size={20} color={t.color.danger} />
               <Text style={[styles.optionsMenuItemText, styles.optionsMenuItemDangerText]}>
                 Delete List
               </Text>
@@ -1519,7 +1527,7 @@ export default function FoodListDetailScreen(): JSX.Element {
         testID="rename-food-list-modal"
       >
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.renameModalBackdrop}
         >
           <Pressable
@@ -1538,7 +1546,8 @@ export default function FoodListDetailScreen(): JSX.Element {
               value={renameValue}
               onChangeText={setRenameValue}
               placeholder="List name"
-              placeholderTextColor={theme.color.textSecondary}
+              placeholderTextColor={t.color.textSecondary}
+              keyboardAppearance={t.scheme}
               style={styles.renameInput}
               autoFocus
               testID="rename-food-list-input"
@@ -1590,7 +1599,7 @@ export default function FoodListDetailScreen(): JSX.Element {
         testID="restaurant-search-modal"
       >
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.modalBackdrop}
         >
           <View style={styles.modalContainer}>
@@ -1602,17 +1611,18 @@ export default function FoodListDetailScreen(): JSX.Element {
                 accessibilityLabel="Close restaurant search"
                 testID="close-restaurant-search-btn"
               >
-                <Ionicons name="close" size={24} color={theme.color.textSecondary} />
+                <Ionicons name="close" size={24} color={t.color.textSecondary} />
               </Pressable>
             </View>
 
             <View style={styles.searchSection}>
-              <Ionicons name="search" size={18} color={theme.color.textSecondary} />
+              <Ionicons name="search" size={18} color={t.color.textSecondary} />
               <TextInput
                 value={restaurantSearch}
                 onChangeText={setRestaurantSearch}
                 placeholder="Search restaurants..."
-                placeholderTextColor={theme.color.textSecondary}
+                placeholderTextColor={t.color.textSecondary}
+                keyboardAppearance={t.scheme}
                 style={styles.searchInput}
                 autoCorrect={false}
                 testID="restaurant-search-input"
@@ -1628,7 +1638,7 @@ export default function FoodListDetailScreen(): JSX.Element {
                   testID="restaurant-search-clear-btn"
                   style={styles.clearSearchBtn}
                 >
-                  <Ionicons name="close-circle" size={18} color={theme.color.textSecondary} />
+                  <Ionicons name="close-circle" size={18} color={t.color.textSecondary} />
                 </Pressable>
               ) : null}
             </View>
@@ -1636,7 +1646,7 @@ export default function FoodListDetailScreen(): JSX.Element {
             {restaurantSearchQuery.isLoading ||
             (customLocationSearchQuery.isLoading && debouncedRestaurantSearch.trim().length > 0) ? (
               <View style={styles.loadingWrap}>
-                <ActivityIndicator color={theme.color.primary} testID="restaurant-search-loading" />
+                <ActivityIndicator color={t.color.primaryFg} testID="restaurant-search-loading" />
               </View>
             ) : restaurantSearchQuery.isError ? (
               <View style={styles.emptyWrap}>
@@ -1651,6 +1661,7 @@ export default function FoodListDetailScreen(): JSX.Element {
                   item.kind === 'restaurant' ? item.data.id : `loc-${item.data.id}`
                 }
                 renderItem={renderSearchResult}
+                extraData={t.scheme}
                 keyboardShouldPersistTaps="handled"
                 ListEmptyComponent={
                   <View style={styles.emptyWrap}>
@@ -1665,7 +1676,7 @@ export default function FoodListDetailScreen(): JSX.Element {
                       ]}
                       testID="restaurant-search-not-listed-btn"
                     >
-                      <Ionicons name="add-circle-outline" size={18} color={theme.color.primary} />
+                      <Ionicons name="add-circle-outline" size={18} color={t.color.primaryFg} />
                       <Text style={styles.notListedBtnText}>
                         It&apos;s not listed? Add a snack cart or stand
                       </Text>
@@ -1684,7 +1695,7 @@ export default function FoodListDetailScreen(): JSX.Element {
                       ]}
                       testID="restaurant-search-footer-not-listed-btn"
                     >
-                      <Ionicons name="add-circle-outline" size={16} color={theme.color.primary} />
+                      <Ionicons name="add-circle-outline" size={16} color={t.color.primaryFg} />
                       <Text style={styles.notListedFooterBtnText}>
                         Can&apos;t find a snack cart or stand? Add it here
                       </Text>
@@ -1728,14 +1739,14 @@ export default function FoodListDetailScreen(): JSX.Element {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   centerContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
   content: {
-    padding: theme.spacing.md,
+    padding: t.spacing.md,
     gap: 12,
   },
   unavailableWrap: {
@@ -1748,54 +1759,54 @@ const styles = StyleSheet.create({
   unavailableTitle: {
     fontSize: 22,
     fontWeight: '700',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   unavailableBody: {
     fontSize: 15,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     textAlign: 'center',
   },
   backBtn: {
     marginTop: 12,
-    backgroundColor: theme.color.primary,
+    backgroundColor: t.color.primary,
     paddingHorizontal: 20,
     paddingVertical: 10,
-    borderRadius: theme.radius.md,
+    borderRadius: t.radius.md,
   },
   backBtnText: {
-    color: '#fff',
+    color: t.color.textOnPrimary,
     fontWeight: '600',
     fontSize: 15,
   },
   undoToastStack: {
     position: 'absolute',
-    left: theme.spacing.md,
-    right: theme.spacing.md,
-    bottom: theme.spacing.lg,
+    left: t.spacing.md,
+    right: t.spacing.md,
+    bottom: t.spacing.lg,
     gap: 8,
   },
   staleNotice: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: 'rgba(107, 70, 193, 0.1)',
+    backgroundColor: FOOD_LIST_DETAIL[t.scheme].staleNoticeBg,
     padding: 10,
-    borderRadius: theme.radius.md,
+    borderRadius: t.radius.md,
     borderWidth: 1,
-    borderColor: theme.color.primary,
+    borderColor: t.color.primaryFg,
   },
   staleNoticeText: {
     fontSize: 13,
-    color: theme.color.primary,
+    color: t.color.primaryFg,
     fontWeight: '500',
     flex: 1,
   },
   celebrationCard: {
-    backgroundColor: '#fef3c7',
+    backgroundColor: FOOD_LIST_DETAIL[t.scheme].celebrationBg,
     borderWidth: 1,
-    borderColor: '#f59e0b',
-    borderRadius: theme.radius.md,
-    padding: theme.spacing.md,
+    borderColor: t.color.starRating,
+    borderRadius: t.radius.md,
+    padding: t.spacing.md,
     gap: 6,
   },
   celebrationTop: {
@@ -1811,18 +1822,18 @@ const styles = StyleSheet.create({
   celebrationTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#92400e',
+    color: FOOD_LIST_DETAIL[t.scheme].celebrationTitle,
   },
   celebrationDismissBtn: {
     padding: 4,
   },
   celebrationMessage: {
     fontSize: 14,
-    color: '#78350f',
+    color: FOOD_LIST_DETAIL[t.scheme].celebrationMessage,
     fontWeight: '500',
   },
   progressCard: {
-    padding: theme.spacing.md,
+    padding: t.spacing.md,
     gap: 8,
   },
   progressTextRow: {
@@ -1838,26 +1849,27 @@ const styles = StyleSheet.create({
   progressLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   progressPercent: {
     fontSize: 13,
     fontWeight: '700',
-    color: theme.color.primary,
+    color: t.color.primaryFg,
   },
   progressBarTrack: {
     height: 8,
-    backgroundColor: theme.color.surfaceAlt,
-    borderRadius: theme.radius.pill,
+    backgroundColor: t.color.surfaceAlt,
+    borderRadius: t.radius.pill,
     overflow: 'hidden',
   },
   progressBarFill: {
     height: '100%',
-    backgroundColor: theme.color.primary,
-    borderRadius: theme.radius.pill,
+    // Data mark on the surfaceAlt track (non-text graphics rule) → primaryFg.
+    backgroundColor: t.color.primaryFg,
+    borderRadius: t.radius.pill,
   },
   headerCard: {
-    padding: theme.spacing.md,
+    padding: t.spacing.md,
     gap: 12,
   },
   headerTop: {
@@ -1872,11 +1884,11 @@ const styles = StyleSheet.create({
   listName: {
     fontSize: 22,
     fontWeight: '700',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   metaText: {
     fontSize: 11,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   metaRow: {
     flexDirection: 'row',
@@ -1890,8 +1902,8 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingVertical: 2,
     paddingHorizontal: 6,
-    borderRadius: theme.radius.pill,
-    backgroundColor: 'rgba(91, 42, 134, 0.08)',
+    borderRadius: t.radius.pill,
+    backgroundColor: withAlpha(t.color.primary, 0.08),
   },
   visibilityBadgePressed: {
     opacity: 0.7,
@@ -1899,7 +1911,7 @@ const styles = StyleSheet.create({
   visibilityBadgeText: {
     fontSize: 11,
     fontWeight: '600',
-    color: theme.color.primary,
+    color: t.color.primaryFg,
   },
   roleBadgeContainer: {
     marginTop: 2,
@@ -1911,8 +1923,8 @@ const styles = StyleSheet.create({
   },
   optionsMenuBtn: {
     padding: 6,
-    borderRadius: theme.radius.pill,
-    backgroundColor: theme.color.surfaceAlt,
+    borderRadius: t.radius.pill,
+    backgroundColor: t.color.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1933,55 +1945,55 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingVertical: 5,
     paddingHorizontal: 8,
-    borderRadius: theme.radius.pill,
-    backgroundColor: theme.color.surfaceAlt,
+    borderRadius: t.radius.pill,
+    backgroundColor: t.color.surfaceAlt,
   },
   actionButtonPressed: {
     opacity: 0.7,
   },
   actionButtonLiked: {
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    backgroundColor: FOOD_LIST_DETAIL[t.scheme].likedBg,
   },
   actionButtonSaved: {
-    backgroundColor: 'rgba(91, 42, 134, 0.1)',
+    backgroundColor: withAlpha(t.color.primary, 0.1),
   },
   actionButtonChecklistActive: {
-    backgroundColor: 'rgba(91, 42, 134, 0.1)',
+    backgroundColor: withAlpha(t.color.primary, 0.1),
   },
   actionButtonPinnedActive: {
-    backgroundColor: 'rgba(91, 42, 134, 0.1)',
+    backgroundColor: withAlpha(t.color.primary, 0.1),
   },
   actionButtonText: {
     fontSize: 12,
     fontWeight: '600',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   actionButtonTextLiked: {
-    color: theme.color.danger,
+    color: t.color.danger,
   },
   actionButtonTextSaved: {
-    color: theme.color.primary,
+    color: t.color.primaryFg,
   },
   actionButtonTextChecklistActive: {
-    color: theme.color.primary,
+    color: t.color.primaryFg,
   },
   actionButtonTextPinned: {
-    color: theme.color.primary,
+    color: t.color.primaryFg,
   },
   optionsMenuBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: theme.spacing.lg,
+    padding: t.spacing.lg,
   },
   optionsMenuContainer: {
     width: '100%',
     maxWidth: 340,
-    backgroundColor: theme.color.surface,
-    borderRadius: theme.radius.lg,
-    padding: theme.spacing.md,
-    ...theme.shadow.card,
+    backgroundColor: t.color.surface,
+    borderRadius: t.radius.lg,
+    padding: t.spacing.md,
+    ...t.shadow.card,
   },
   optionsMenuHeader: {
     paddingVertical: 4,
@@ -1990,15 +2002,15 @@ const styles = StyleSheet.create({
   optionsMenuTitle: {
     fontSize: 17,
     fontWeight: '700',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   optionsMenuSubtitle: {
     fontSize: 13,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   optionsMenuDivider: {
     height: 1,
-    backgroundColor: theme.color.border,
+    backgroundColor: t.color.border,
     marginVertical: 8,
   },
   optionsMenuItem: {
@@ -2007,58 +2019,58 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingVertical: 10,
     paddingHorizontal: 8,
-    borderRadius: theme.radius.md,
+    borderRadius: t.radius.md,
   },
   optionsMenuItemPressed: {
-    backgroundColor: theme.color.surfaceAlt,
+    backgroundColor: t.color.surfaceAlt,
   },
   optionsMenuItemText: {
     fontSize: 15,
     fontWeight: '600',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   optionsMenuItemDangerText: {
-    color: theme.color.danger,
+    color: t.color.danger,
   },
   optionsMenuCancelBtn: {
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 10,
-    borderRadius: theme.radius.md,
+    borderRadius: t.radius.md,
   },
   optionsMenuCancelText: {
     fontSize: 15,
     fontWeight: '600',
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   renameModalBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: theme.spacing.lg,
+    padding: t.spacing.lg,
   },
   renameModalContainer: {
     width: '100%',
     maxWidth: 340,
-    backgroundColor: theme.color.surface,
-    borderRadius: theme.radius.lg,
-    padding: theme.spacing.lg,
+    backgroundColor: t.color.surface,
+    borderRadius: t.radius.lg,
+    padding: t.spacing.lg,
     gap: 14,
-    ...theme.shadow.card,
+    ...t.shadow.card,
   },
   renameModalTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   renameInput: {
     fontSize: 15,
-    color: theme.color.textPrimary,
-    backgroundColor: theme.color.surfaceAlt,
-    borderRadius: theme.radius.md,
+    color: t.color.textPrimary,
+    backgroundColor: t.color.surfaceAlt,
+    borderRadius: t.radius.md,
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
@@ -2071,32 +2083,32 @@ const styles = StyleSheet.create({
   renameCancelBtn: {
     paddingVertical: 8,
     paddingHorizontal: 14,
-    borderRadius: theme.radius.md,
+    borderRadius: t.radius.md,
   },
   renameCancelBtnText: {
     fontSize: 14,
     fontWeight: '600',
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   renameSubmitBtn: {
-    backgroundColor: theme.color.primary,
+    backgroundColor: t.color.primary,
     paddingVertical: 8,
     paddingHorizontal: 16,
-    borderRadius: theme.radius.md,
+    borderRadius: t.radius.md,
   },
   renameSubmitBtnDisabled: {
     opacity: 0.5,
   },
   renameSubmitBtnText: {
-    color: '#fff',
+    color: t.color.textOnPrimary,
     fontSize: 14,
     fontWeight: '600',
   },
   addItemsBtn: {
-    backgroundColor: theme.color.primary,
+    backgroundColor: t.color.primary,
   },
   addItemsBtnText: {
-    color: '#fff',
+    color: t.color.textOnPrimary,
     fontWeight: '600',
     fontSize: 13,
   },
@@ -2111,7 +2123,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   emptyItemsWrap: {
     padding: 36,
@@ -2120,17 +2132,17 @@ const styles = StyleSheet.create({
   },
   emptyItemsText: {
     fontSize: 15,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   emptyAddBtn: {
     marginTop: 8,
-    backgroundColor: theme.color.primary,
+    backgroundColor: t.color.primary,
     paddingHorizontal: 16,
     paddingVertical: 8,
-    borderRadius: theme.radius.md,
+    borderRadius: t.radius.md,
   },
   emptyAddBtnText: {
-    color: '#fff',
+    color: t.color.textOnPrimary,
     fontWeight: '600',
   },
   itemCard: {
@@ -2144,7 +2156,7 @@ const styles = StyleSheet.create({
   },
   itemCardDragging: {
     opacity: 0.85,
-    ...theme.shadow.card,
+    ...t.shadow.card,
   },
   itemCardMain: {
     flexDirection: 'row',
@@ -2167,20 +2179,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 4,
     paddingHorizontal: 10,
-    borderRadius: theme.radius.pill,
+    borderRadius: t.radius.pill,
     borderWidth: 1,
-    borderColor: theme.color.primary,
+    borderColor: t.color.primaryFg,
     backgroundColor: 'transparent',
     marginLeft: 8,
   },
   checkOffBtnPressed: {
     opacity: 0.7,
-    backgroundColor: 'rgba(91, 42, 134, 0.08)',
+    backgroundColor: withAlpha(t.color.primary, 0.08),
   },
   checkOffBtnText: {
     fontSize: 12,
     fontWeight: '600',
-    color: theme.color.primary,
+    color: t.color.primaryFg,
   },
   gottenBadge: {
     flexDirection: 'row',
@@ -2188,8 +2200,8 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingVertical: 4,
     paddingHorizontal: 8,
-    borderRadius: theme.radius.pill,
-    backgroundColor: 'rgba(91, 42, 134, 0.12)', // muted tint of theme.color.primary
+    borderRadius: t.radius.pill,
+    backgroundColor: withAlpha(t.color.primary, 0.12), // muted tint of the primary token
     marginLeft: 8,
   },
   gottenBadgePressed: {
@@ -2198,27 +2210,27 @@ const styles = StyleSheet.create({
   gottenBadgeText: {
     fontSize: 12,
     fontWeight: '600',
-    color: theme.color.primary,
+    color: t.color.primaryFg,
   },
   itemName: {
     fontSize: 15,
     fontWeight: '600',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   itemLocation: {
     fontSize: 11,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     marginTop: 2,
   },
   itemPrice: {
     fontSize: 11,
     fontWeight: '500',
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     marginTop: 2,
   },
   attributionLabel: {
     fontSize: 11,
-    color: theme.color.primary,
+    color: t.color.primaryFg,
     fontWeight: '500',
     marginTop: 4,
   },
@@ -2235,9 +2247,9 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalContainer: {
-    backgroundColor: theme.color.surface,
-    borderTopLeftRadius: theme.radius.lg,
-    borderTopRightRadius: theme.radius.lg,
+    backgroundColor: t.color.surface,
+    borderTopLeftRadius: t.radius.lg,
+    borderTopRightRadius: t.radius.lg,
     maxHeight: '80%',
     paddingBottom: 24,
   },
@@ -2245,29 +2257,29 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: theme.spacing.md,
+    padding: t.spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: theme.color.border,
+    borderBottomColor: t.color.border,
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   searchSection: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    margin: theme.spacing.md,
+    margin: t.spacing.md,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    backgroundColor: theme.color.background,
-    borderRadius: theme.radius.md,
+    backgroundColor: t.color.background,
+    borderRadius: t.radius.md,
   },
   searchInput: {
     flex: 1,
     fontSize: 15,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   clearSearchBtn: {
     padding: 4,
@@ -2283,13 +2295,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    paddingHorizontal: theme.spacing.md,
+    paddingHorizontal: t.spacing.md,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: theme.color.border,
+    borderBottomColor: t.color.border,
   },
   restaurantRowPressed: {
-    backgroundColor: theme.color.surfaceAlt,
+    backgroundColor: t.color.surfaceAlt,
   },
   restaurantRowText: {
     flex: 1,
@@ -2302,11 +2314,11 @@ const styles = StyleSheet.create({
   restaurantRowName: {
     fontSize: 15,
     fontWeight: '600',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   restaurantRowMeta: {
     fontSize: 11,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     marginTop: 2,
   },
   emptyWrap: {
@@ -2314,7 +2326,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   emptyWrapText: {
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     fontSize: 13,
   },
   notListedBtn: {
@@ -2324,10 +2336,10 @@ const styles = StyleSheet.create({
     marginTop: 16,
     paddingVertical: 10,
     paddingHorizontal: 16,
-    backgroundColor: theme.color.surfaceAlt,
-    borderRadius: theme.radius.pill,
+    backgroundColor: t.color.surfaceAlt,
+    borderRadius: t.radius.pill,
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
   },
   notListedBtnPressed: {
     opacity: 0.7,
@@ -2335,7 +2347,7 @@ const styles = StyleSheet.create({
   notListedBtnText: {
     fontSize: 14,
     fontWeight: '600',
-    color: theme.color.primary,
+    color: t.color.primaryFg,
   },
   notListedFooterBtn: {
     flexDirection: 'row',
@@ -2343,14 +2355,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     paddingVertical: 14,
-    paddingHorizontal: theme.spacing.md,
-    marginHorizontal: theme.spacing.md,
+    paddingHorizontal: t.spacing.md,
+    marginHorizontal: t.spacing.md,
     marginTop: 8,
     marginBottom: 16,
-    backgroundColor: theme.color.surfaceAlt,
-    borderRadius: theme.radius.md,
+    backgroundColor: t.color.surfaceAlt,
+    borderRadius: t.radius.md,
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
   },
   notListedFooterBtnPressed: {
     opacity: 0.7,
@@ -2358,6 +2370,6 @@ const styles = StyleSheet.create({
   notListedFooterBtnText: {
     fontSize: 13,
     fontWeight: '600',
-    color: theme.color.primary,
+    color: t.color.primaryFg,
   },
-});
+}));

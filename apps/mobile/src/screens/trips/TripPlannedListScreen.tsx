@@ -33,7 +33,6 @@ import {
   Platform,
   Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   View,
 } from 'react-native';
@@ -55,7 +54,9 @@ import {
 
 import { ApiError, apiRequest } from '../../api/client';
 import type { TripsStackParamList } from '../../navigation/TripsStack';
-import { theme } from '../../theme/theme';
+import { theme, withAlpha, type AppTheme } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme } from '../../theme/useAppTheme';
 import {
   Badge,
   Card,
@@ -66,6 +67,11 @@ import {
   SecondaryButton,
 } from '../../theme/components';
 import { formatParkTime } from '../catalog/live/parkTime';
+import {
+  PLANNED_MODAL,
+  RESERVATION_BADGE,
+  SCHED_BADGE,
+} from './TripPlannedListScreen.palette';
 import { tripDetailKeys } from './tripDetailQueryKeys';
 import { formatGroupDate } from './reservations';
 import { ExperiencePicker } from './ExperiencePicker';
@@ -120,14 +126,14 @@ const PARK_FILTERS: readonly ParkFilterOption[] = [
   { id: 'dak', label: 'Animal Kingdom', match: (p) => p?.toLowerCase().includes('animal') ?? false },
 ];
 
-function getParkColor(park: string | null): string {
-  if (!park) return theme.color.primary;
+function getParkColor(park: string | null, t: AppTheme): string {
+  if (!park) return t.color.primaryFg;
   const lower = park.toLowerCase();
-  if (lower.includes('epcot')) return '#2f80ed';
-  if (lower.includes('magic')) return '#7e57c2';
-  if (lower.includes('hollywood')) return '#e8505b';
-  if (lower.includes('animal')) return '#2e9e6b';
-  return theme.color.primary;
+  if (lower.includes('epcot')) return t.parkAccent.EPCOT;
+  if (lower.includes('magic')) return t.parkAccent['Magic Kingdom'];
+  if (lower.includes('hollywood')) return t.parkAccent['Hollywood Studios'];
+  if (lower.includes('animal')) return t.color.success;
+  return t.color.primaryFg;
 }
 
 /**
@@ -153,15 +159,18 @@ function formatPlannedTime(timeStr?: string | null): string {
   return timeStr;
 }
 
-const RESERVATION_KIND_LABELS: Record<
+function reservationKindLabelsFor(t: AppTheme): Record<
   ReservationKind,
   { readonly label: string; readonly color: string }
-> = {
-  dining: { label: 'Dining Reservation', color: '#d6336c' },
-  lightning_lane: { label: 'Lightning Lane', color: '#f6a609' },
-  activity: { label: 'Activity Booking', color: '#2f80ed' },
-  other: { label: 'Reservation', color: '#7e57c2' },
-};
+> {
+  const badge = RESERVATION_BADGE[t.scheme];
+  return {
+    dining: { label: 'Dining Reservation', color: t.color.danger },
+    lightning_lane: { label: 'Lightning Lane', color: badge.lightningLane },
+    activity: { label: 'Activity Booking', color: badge.activity },
+    other: { label: 'Reservation', color: t.color.primaryLight },
+  };
+}
 
 function getSchedulingStatus(
   item: PlannedItemView,
@@ -198,6 +207,8 @@ export default function TripPlannedListScreen({
   navigation,
   route,
 }: Props): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const { tripId } = route.params;
   const queryClient = useQueryClient();
 
@@ -323,7 +334,7 @@ export default function TripPlannedListScreen({
       <ScreenContainer>
         <PlannedHeader onBack={backToHub} />
         <View style={styles.center} testID="planned-list-loading">
-          <ActivityIndicator color={theme.color.primary} />
+          <ActivityIndicator color={t.color.primaryFg} />
         </View>
       </ScreenContainer>
     );
@@ -434,7 +445,7 @@ export default function TripPlannedListScreen({
           <Ionicons
             name="checkmark-done-outline"
             size={16}
-            color={theme.color.primary}
+            color={t.color.primaryFg}
           />
           <Text style={styles.progressText}>
             {progress.completed} of {progress.total} completed
@@ -449,6 +460,7 @@ export default function TripPlannedListScreen({
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.parkFilterScroll}
+            keyboardShouldPersistTaps="handled"
           >
             {PARK_FILTERS.map((f) => {
               const count = items.filter((it) => f.match(it.park)).length;
@@ -489,7 +501,7 @@ export default function TripPlannedListScreen({
           <Ionicons
             name="alert-circle-outline"
             size={16}
-            color={theme.color.warningText}
+            color={t.color.warningText}
           />
           <Text style={styles.undeterminedText}>
             We couldn't determine what's been completed yet.
@@ -523,7 +535,7 @@ export default function TripPlannedListScreen({
           />
         </View>
       ) : (
-        <ScrollView contentContainerStyle={styles.content} testID="planned-list">
+        <ScrollView contentContainerStyle={styles.content} testID="planned-list" keyboardShouldPersistTaps="handled">
           {actionError !== null ? (
             <Text
               style={styles.error}
@@ -595,7 +607,7 @@ export default function TripPlannedListScreen({
 
           {removeMutation.isPending ? (
             <ActivityIndicator
-              color={theme.color.primary}
+              color={t.color.primaryFg}
               style={styles.busy}
               testID="planned-list-busy"
             />
@@ -663,6 +675,8 @@ function PlannedItemCard({
   readonly onLog: (item: PlannedItemView) => void;
   readonly onRemove: (item: PlannedItemView) => void;
 }): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const done = item.completionState === 'done';
   const adderName = item.addedByDisplayName.trim();
   const attribution =
@@ -686,7 +700,7 @@ function PlannedItemCard({
               <Ionicons
                 name="checkmark-circle"
                 size={16}
-                color={theme.color.success}
+                color={t.color.success}
               />
               <Text style={styles.completedText}>Completed</Text>
             </View>
@@ -701,17 +715,17 @@ function PlannedItemCard({
           ) : null}
           <View style={styles.tagRow}>
             {item.park ? (
-              <Badge label={item.park} color={getParkColor(item.park)} />
+              <Badge label={item.park} color={getParkColor(item.park, t)} />
             ) : null}
             {item.reservationKind ? (
               <Badge
                 label={
-                  RESERVATION_KIND_LABELS[item.reservationKind]?.label ??
+                  reservationKindLabelsFor(t)[item.reservationKind]?.label ??
                   'Reservation'
                 }
                 color={
-                  RESERVATION_KIND_LABELS[item.reservationKind]?.color ??
-                  theme.color.primaryLight
+                  reservationKindLabelsFor(t)[item.reservationKind]?.color ??
+                  t.color.primaryLight
                 }
                 testID={`planned-item-reservation-${item.id}`}
               />
@@ -744,7 +758,7 @@ function PlannedItemCard({
                 style={styles.ratingPill}
                 testID={`planned-item-rating-${item.id}`}
               >
-                <Ionicons name="star" size={12} color={theme.color.accentDark} />
+                <Ionicons name="star" size={12} color={t.color.accentDark} />
                 <Text style={styles.ratingText}>{rating}/10</Text>
               </View>
             ) : (
@@ -769,7 +783,7 @@ function PlannedItemCard({
             <Ionicons
               name="add-circle-outline"
               size={22}
-              color={theme.color.primary}
+              color={t.color.primaryFg}
             />
           </Pressable>
           <Pressable
@@ -786,7 +800,7 @@ function PlannedItemCard({
             <Ionicons
               name="trash-outline"
               size={18}
-              color={theme.color.textSecondary}
+              color={t.color.textSecondary}
             />
           </Pressable>
         </View>
@@ -828,6 +842,7 @@ function AddItemModal({
   readonly onClose: () => void;
   readonly onAdded: () => void;
 }): JSX.Element {
+  const styles = useStyles();
   const [error, setError] = useState<string | null>(null);
   // The Experience currently being added, so the picker can show a per-row
   // spinner and block a second tap while the POST is in flight.
@@ -1068,7 +1083,7 @@ function removeErrorMessage(err: ApiError): string {
 // Styles
 // ---------------------------------------------------------------------------
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   center: {
     flex: 1,
     alignItems: 'center',
@@ -1102,19 +1117,19 @@ const styles = StyleSheet.create({
   },
   itemName: {
     ...theme.typography.subtitle,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   itemMeta: {
     ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   itemActions: {
     alignItems: 'center',
     gap: theme.spacing.md,
   },
   itemCardDone: {
-    backgroundColor: 'rgba(46, 158, 107, 0.08)',
-    borderColor: theme.color.success,
+    backgroundColor: withAlpha(t.color.success, 0.08),
+    borderColor: t.color.success,
     borderWidth: 1,
   },
   completedIndicator: {
@@ -1124,7 +1139,7 @@ const styles = StyleSheet.create({
   },
   completedText: {
     ...theme.typography.meta,
-    color: theme.color.success,
+    color: t.color.success,
     fontWeight: '700',
   },
   ratingPill: {
@@ -1134,7 +1149,7 @@ const styles = StyleSheet.create({
   },
   ratingText: {
     ...theme.typography.meta,
-    color: theme.color.accentDark,
+    color: t.color.accentDark,
     fontWeight: '600',
   },
   progressRow: {
@@ -1154,21 +1169,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: theme.radius.pill,
-    backgroundColor: theme.color.surface,
+    backgroundColor: t.color.surface,
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: t.color.border,
   },
   filterPillActive: {
-    backgroundColor: theme.color.primary,
-    borderColor: theme.color.primary,
+    backgroundColor: t.color.primary,
+    borderColor: t.color.primary,
   },
   filterPillText: {
     ...theme.typography.meta,
     fontWeight: '700',
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   filterPillTextActive: {
-    color: theme.color.textOnPrimary,
+    color: t.color.textOnPrimary,
   },
   tagRow: {
     flexDirection: 'row',
@@ -1182,20 +1197,20 @@ const styles = StyleSheet.create({
     borderRadius: 5,
   },
   schedBadgeScheduled: {
-    backgroundColor: 'rgba(91, 42, 134, 0.10)',
+    backgroundColor: withAlpha(t.color.primary, 0.10),
   },
   schedBadgeUnscheduled: {
-    backgroundColor: 'rgba(246, 166, 9, 0.16)',
+    backgroundColor: SCHED_BADGE[t.scheme].unscheduledBg,
   },
   schedBadgeText: {
     fontSize: 10,
     fontWeight: '700',
   },
   schedBadgeTextScheduled: {
-    color: theme.color.primary,
+    color: t.color.primaryFg,
   },
   schedBadgeTextUnscheduled: {
-    color: '#9a6500',
+    color: SCHED_BADGE[t.scheme].unscheduledText,
   },
   actionCircleBtn: {
     width: 32,
@@ -1205,7 +1220,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   actionCircleRemove: {
-    backgroundColor: theme.color.surfaceAlt,
+    backgroundColor: t.color.surfaceAlt,
   },
   filterEmpty: {
     padding: theme.spacing.xl,
@@ -1213,7 +1228,7 @@ const styles = StyleSheet.create({
   },
   filterEmptyText: {
     ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   pressed: {
     opacity: 0.7,
@@ -1222,14 +1237,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: theme.spacing.xs,
-    backgroundColor: theme.color.surfaceAlt,
+    backgroundColor: t.color.surfaceAlt,
     borderRadius: theme.radius.pill,
     paddingHorizontal: theme.spacing.md,
     paddingVertical: theme.spacing.xs,
   },
   progressText: {
     ...theme.typography.meta,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
     fontWeight: '600',
   },
   undetermined: {
@@ -1240,11 +1255,11 @@ const styles = StyleSheet.create({
     marginTop: theme.spacing.md,
     padding: theme.spacing.md,
     borderRadius: theme.radius.md,
-    backgroundColor: theme.color.warningSurface,
+    backgroundColor: t.color.warningSurface,
   },
   undeterminedText: {
     ...theme.typography.meta,
-    color: theme.color.warningText,
+    color: t.color.warningText,
     flexShrink: 1,
     flexGrow: 1,
   },
@@ -1254,42 +1269,42 @@ const styles = StyleSheet.create({
   },
   doneHeading: {
     ...theme.typography.subtitle,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   busy: {
     alignSelf: 'center',
   },
   error: {
-    color: theme.color.danger,
+    color: t.color.danger,
     fontSize: 13,
   },
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(31, 18, 53, 0.5)',
+    backgroundColor: PLANNED_MODAL[t.scheme].scrim,
     alignItems: 'center',
     justifyContent: 'center',
     padding: theme.spacing.xl,
   },
   modalCard: {
-    backgroundColor: theme.color.surface,
+    backgroundColor: t.color.surface,
     borderRadius: theme.radius.lg,
     padding: theme.spacing.xl,
     width: '100%',
     maxWidth: 420,
     maxHeight: '85%',
-    ...theme.shadow.floating,
+    ...t.shadow.floating,
   },
   modalTitle: {
     ...theme.typography.heading,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   label: {
     ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     marginTop: theme.spacing.sm,
     marginBottom: theme.spacing.xs,
   },
   cancelBtn: {
     marginTop: theme.spacing.md,
   },
-});
+}));

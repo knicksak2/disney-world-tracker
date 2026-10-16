@@ -23,7 +23,6 @@ import {
   Alert,
   Modal,
   Pressable,
-  StyleSheet,
   Text,
   View,
 } from 'react-native';
@@ -37,7 +36,10 @@ import type {
 
 import { ApiError, apiRequest } from '../../api/client';
 import { theme } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme } from '../../theme/useAppTheme';
 import { Badge, Card, PrimaryButton } from '../../theme/components';
+import { ATTACHED_EXPERIENCE_LISTS } from './AttachedExperienceListsSection.palette';
 import { tripDetailKeys } from './tripDetailQueryKeys';
 
 // ---------------------------------------------------------------------------
@@ -70,6 +72,8 @@ export default function AttachedExperienceListsSection({
   onOpenExperienceList,
   allowAllDetachForTesting = false,
 }: AttachedExperienceListsSectionProps): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const queryClient = useQueryClient();
 
   const [attachModalVisible, setAttachModalVisible] = useState(false);
@@ -246,13 +250,13 @@ export default function AttachedExperienceListsSection({
           <Ionicons
             name="list-outline"
             size={18}
-            color={theme.color.primary}
+            color={t.color.primaryFg}
           />
           <Text style={styles.sectionTitle}>Attached Experience Lists</Text>
           {experienceLists.length > 0 ? (
             <Badge
               label={String(experienceLists.length)}
-              color={theme.color.primary}
+              color={t.color.primaryFg}
             />
           ) : null}
         </View>
@@ -266,7 +270,7 @@ export default function AttachedExperienceListsSection({
           accessibilityLabel="Attach an experience list"
           testID="trip-detail-attach-experience-list-btn"
         >
-          <Ionicons name="add" size={16} color="#ffffff" />
+          <Ionicons name="add" size={16} color={t.color.textOnPrimary} />
           <Text style={styles.attachControlBtnText}>Attach</Text>
         </Pressable>
       </View>
@@ -277,7 +281,7 @@ export default function AttachedExperienceListsSection({
           <Ionicons
             name="alert-circle-outline"
             size={16}
-            color={theme.color.danger}
+            color={t.color.danger}
           />
           <Text style={styles.errorNoticeText}>{detachError}</Text>
         </View>
@@ -308,7 +312,7 @@ export default function AttachedExperienceListsSection({
                     <Ionicons
                       name="alert-circle-outline"
                       size={18}
-                      color={theme.color.textSecondary}
+                      color={t.color.textSecondary}
                     />
                     <Text style={styles.unavailableRowText}>
                       No longer available
@@ -325,7 +329,7 @@ export default function AttachedExperienceListsSection({
                       <Ionicons
                         name="trash-outline"
                         size={16}
-                        color={theme.color.textSecondary}
+                        color={t.color.textSecondary}
                       />
                     </Pressable>
                   ) : null}
@@ -349,7 +353,7 @@ export default function AttachedExperienceListsSection({
                       <Ionicons
                         name="star-outline"
                         size={20}
-                        color={theme.color.primary}
+                        color={t.color.primaryFg}
                       />
                     </View>
                     <View style={styles.experienceListTextWrap}>
@@ -374,14 +378,14 @@ export default function AttachedExperienceListsSection({
                         <Ionicons
                           name="ellipsis-horizontal"
                           size={18}
-                          color={theme.color.textSecondary}
+                          color={t.color.textSecondary}
                         />
                       </Pressable>
                     ) : null}
                     <Ionicons
                       name="chevron-forward"
                       size={18}
-                      color={theme.color.textSecondary}
+                      color={t.color.textSecondary}
                     />
                   </View>
                 </View>
@@ -414,7 +418,7 @@ export default function AttachedExperienceListsSection({
                 <Ionicons
                   name="close"
                   size={24}
-                  color={theme.color.textPrimary}
+                  color={t.color.textPrimary}
                 />
               </Pressable>
             </View>
@@ -428,7 +432,7 @@ export default function AttachedExperienceListsSection({
                 <Ionicons
                   name="alert-circle-outline"
                   size={16}
-                  color={theme.color.danger}
+                  color={t.color.danger}
                 />
                 <Text style={styles.modalErrorText}>{attachError}</Text>
               </View>
@@ -480,14 +484,14 @@ export default function AttachedExperienceListsSection({
             {modalTab === 'owned' ? (
               ownedListsQuery.isLoading ? (
                 <View style={styles.modalCenter}>
-                  <ActivityIndicator color={theme.color.primary} />
+                  <ActivityIndicator color={t.color.primaryFg} />
                 </View>
               ) : selectableOwnedLists.length === 0 ? (
                 <View style={styles.modalEmpty}>
                   <Ionicons
                     name="list-outline"
                     size={36}
-                    color={theme.color.textSecondary}
+                    color={t.color.textSecondary}
                   />
                   <Text
                     style={styles.modalEmptyText}
@@ -531,14 +535,14 @@ export default function AttachedExperienceListsSection({
               )
             ) : discoverListsQuery.isLoading ? (
               <View style={styles.modalCenter}>
-                <ActivityIndicator color={theme.color.primary} />
+                <ActivityIndicator color={t.color.primaryFg} />
               </View>
             ) : selectableDiscoverLists.length === 0 ? (
               <View style={styles.modalEmpty}>
                 <Ionicons
                   name="globe-outline"
                   size={36}
-                  color={theme.color.textSecondary}
+                  color={t.color.textSecondary}
                 />
                 <Text
                   style={styles.modalEmptyText}
@@ -589,7 +593,7 @@ export default function AttachedExperienceListsSection({
 // Styles
 // ---------------------------------------------------------------------------
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   sectionContainer: {
     gap: theme.spacing.sm,
     marginBottom: theme.spacing.sm,
@@ -606,7 +610,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     ...theme.typography.subtitle,
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
     fontSize: 15,
     fontWeight: '600',
   },
@@ -614,13 +618,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: theme.color.primary,
+    backgroundColor: t.color.primary,
     borderRadius: theme.radius.sm,
     paddingHorizontal: theme.spacing.sm,
     paddingVertical: 5,
   },
   attachControlBtnText: {
-    color: '#ffffff',
+    color: t.color.textOnPrimary,
     fontSize: 13,
     fontWeight: '600',
   },
@@ -628,32 +632,32 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: theme.spacing.xs,
-    backgroundColor: `${theme.color.danger}18`,
+    backgroundColor: `${t.color.danger}18`,
     padding: theme.spacing.sm,
     borderRadius: theme.radius.sm,
   },
   errorNoticeText: {
     ...theme.typography.meta,
-    color: theme.color.danger,
+    color: t.color.danger,
     flex: 1,
   },
   emptyContainer: {
     padding: theme.spacing.md,
-    backgroundColor: `${theme.color.primary}0a`,
+    backgroundColor: `${t.color.primary}0a`,
     borderRadius: theme.radius.md,
     borderWidth: 1,
-    borderColor: `${theme.color.primary}18`,
+    borderColor: `${t.color.primaryFg}18`,
     gap: 4,
   },
   emptyText: {
     ...theme.typography.body,
     fontSize: 14,
     fontWeight: '600',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   emptySubtext: {
     ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   experienceListItems: {
     gap: theme.spacing.xs,
@@ -679,7 +683,7 @@ const styles = StyleSheet.create({
     borderRadius: theme.radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: `${theme.color.primary}18`,
+    backgroundColor: `${t.color.primary}18`,
   },
   experienceListTextWrap: {
     flex: 1,
@@ -689,11 +693,11 @@ const styles = StyleSheet.create({
     ...theme.typography.body,
     fontSize: 15,
     fontWeight: '600',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   experienceListMeta: {
     ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   experienceListRight: {
     flexDirection: 'row',
@@ -703,7 +707,7 @@ const styles = StyleSheet.create({
   detachBtn: {
     padding: 6,
     borderRadius: theme.radius.sm,
-    backgroundColor: theme.color.surfaceAlt,
+    backgroundColor: t.color.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -713,7 +717,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 8,
     padding: theme.spacing.md,
-    backgroundColor: '#eee',
+    backgroundColor: ATTACHED_EXPERIENCE_LISTS[t.scheme].unavailableBg,
     borderRadius: theme.radius.md,
     opacity: 0.75,
   },
@@ -724,7 +728,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   unavailableRowText: {
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     fontSize: 14,
     fontStyle: 'italic',
   },
@@ -735,7 +739,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalContainer: {
-    backgroundColor: theme.color.surface,
+    backgroundColor: t.color.surface,
     borderTopLeftRadius: theme.radius.lg,
     borderTopRightRadius: theme.radius.lg,
     padding: theme.spacing.lg,
@@ -751,24 +755,24 @@ const styles = StyleSheet.create({
     ...theme.typography.subtitle,
     fontSize: 18,
     fontWeight: '700',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   modalErrorBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: theme.spacing.xs,
-    backgroundColor: `${theme.color.danger}18`,
+    backgroundColor: `${t.color.danger}18`,
     padding: theme.spacing.sm,
     borderRadius: theme.radius.sm,
   },
   modalErrorText: {
     ...theme.typography.meta,
-    color: theme.color.danger,
+    color: t.color.danger,
     flex: 1,
   },
   modalTabs: {
     flexDirection: 'row',
-    backgroundColor: theme.color.background,
+    backgroundColor: t.color.background,
     borderRadius: theme.radius.md,
     padding: 3,
   },
@@ -779,7 +783,7 @@ const styles = StyleSheet.create({
     borderRadius: theme.radius.sm,
   },
   modalTabBtnActive: {
-    backgroundColor: theme.color.surface,
+    backgroundColor: t.color.surface,
     shadowColor: '#000',
     shadowOpacity: 0.08,
     shadowRadius: 2,
@@ -788,10 +792,10 @@ const styles = StyleSheet.create({
   modalTabText: {
     fontSize: 14,
     fontWeight: '500',
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   modalTabTextActive: {
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
     fontWeight: '600',
   },
   modalList: {
@@ -815,11 +819,11 @@ const styles = StyleSheet.create({
     ...theme.typography.body,
     fontSize: 15,
     fontWeight: '600',
-    color: theme.color.textPrimary,
+    color: t.color.textPrimary,
   },
   modalItemMeta: {
     ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
   },
   modalAttachItemBtn: {
     paddingHorizontal: theme.spacing.md,
@@ -839,7 +843,7 @@ const styles = StyleSheet.create({
   },
   modalEmptyText: {
     ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    color: t.color.textSecondary,
     textAlign: 'center',
   },
-});
+}));

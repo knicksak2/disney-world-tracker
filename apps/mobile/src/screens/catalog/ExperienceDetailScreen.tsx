@@ -36,7 +36,6 @@ import {
   Linking,
   Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   View,
 } from 'react-native';
@@ -71,7 +70,10 @@ import type {
 
 import { ApiError, apiRequest } from '../../api/client';
 import type { RootStackParamList } from '../../navigation/RootNavigator';
-import { theme } from '../../theme/theme';
+import { withAlpha } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme } from '../../theme/useAppTheme';
+import { HERO } from './ExperienceDetailScreen.palette';
 import {
   Card,
   EmptyState,
@@ -359,6 +361,8 @@ const KNOWN_RECREATION_EXPERIENCES: Record<string, ExperienceDetailDTO> = {
 // ---------------------------------------------------------------------------
 
 export default function ExperienceDetailScreen(): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const route = useRoute<ExperienceDetailRouteProp>();
   const navigation = useNavigation<ExperienceDetailNavigationProp>();
   const { experienceId } = route.params;
@@ -683,7 +687,7 @@ export default function ExperienceDetailScreen(): JSX.Element {
     return (
       <ScreenContainer>
         <View style={styles.centered} accessibilityRole="progressbar">
-          <ActivityIndicator color={theme.color.primary} />
+          <ActivityIndicator color={t.color.primaryFg} />
         </View>
       </ScreenContainer>
     );
@@ -709,7 +713,7 @@ export default function ExperienceDetailScreen(): JSX.Element {
   }
 
   const experience = experienceQ.data;
-  const visual = theme.categoryVisual[experience.category];
+  const visual = t.categoryVisual[experience.category];
 
   // Resolve the referenced Resort's name for the specific-Resort Info_Tag
   // (R9.7); `null` whenever the name is unavailable so the tag is omitted.
@@ -878,7 +882,7 @@ export default function ExperienceDetailScreen(): JSX.Element {
                 }) && { opacity: 0.5 },
               ]}
             >
-              <Ionicons name="share-outline" size={18} color="#ffffff" />
+              <Ionicons name="share-outline" size={18} color={t.color.textOnPrimary} />
             </Pressable>
           </View>
         }
@@ -1146,8 +1150,10 @@ function ExperienceHero({
   readonly resortArea?: string | null;
   readonly aggregateRating: AggregateRatingDTO | null;
 }): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
   const [failed, setFailed] = React.useState(false);
-  const visual = theme.categoryVisual[category];
+  const visual = t.categoryVisual[category];
   const hasImage = imageUrl != null && imageUrl.length > 0 && !failed;
   // A Resort's own representing row carries no `land`/`park` (it isn't inside
   // a specific park or land) — its Geographic Area is the resortArea instead.
@@ -1174,20 +1180,20 @@ function ExperienceHero({
         />
       ) : (
         <View
-          style={[styles.heroImage, styles.heroPlaceholder, { backgroundColor: visual.tint }]}
+          style={[styles.heroImage, styles.heroPlaceholder, { backgroundColor: visual.fill }]}
           testID="experience-hero-placeholder"
         >
           <Ionicons
             name={visual.glyph as keyof typeof Ionicons.glyphMap}
             size={48}
-            color={theme.color.textOnPrimary}
+            color={t.color.textOnPrimary}
           />
         </View>
       )}
 
       {/* Gradient scrim overlay across the bottom */}
       <LinearGradient
-        colors={['transparent', 'rgba(20, 8, 36, 0.88)']}
+        colors={['transparent', HERO[t.scheme].scrimEnd]}
         style={styles.heroScrim}
         pointerEvents="none"
       />
@@ -1222,7 +1228,7 @@ function ExperienceHero({
             <Ionicons
               name={visual.glyph as keyof typeof Ionicons.glyphMap}
               size={11}
-              color="#ffffff"
+              color={t.color.textOnPrimary}
             />
             <Text style={styles.heroCategoryPillText}>{categoryLabel(category)}</Text>
           </View>
@@ -1247,6 +1253,7 @@ function ExperienceHero({
  * it is also surfaced when the static detail itself cannot be rendered (R3.4).
  */
 function LiveUnavailableIndicator(): JSX.Element {
+  const styles = useStyles();
   return (
     <Card style={styles.section} testID="live-unavailable">
       <EmptyState
@@ -1262,7 +1269,7 @@ function LiveUnavailableIndicator(): JSX.Element {
 // Styles
 // ---------------------------------------------------------------------------
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   container: {
     paddingHorizontal: 14,
     paddingTop: 12,
@@ -1275,8 +1282,8 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: theme.spacing.xl,
-    gap: theme.spacing.sm,
+    padding: t.spacing.xl,
+    gap: t.spacing.sm,
   },
   headerActionCircle: {
     width: 36,
@@ -1293,11 +1300,11 @@ const styles = StyleSheet.create({
   },
   badgeRow: {
     flexDirection: 'row',
-    gap: theme.spacing.sm,
+    gap: t.spacing.sm,
     flexWrap: 'wrap',
   },
   shareButton: {
-    marginTop: theme.spacing.xs,
+    marginTop: t.spacing.xs,
   },
   heroCard: {
     position: 'relative',
@@ -1305,8 +1312,8 @@ const styles = StyleSheet.create({
     height: 195,
     borderRadius: 20,
     overflow: 'hidden',
-    backgroundColor: theme.color.surfaceAlt,
-    shadowColor: '#1f1235',
+    backgroundColor: t.color.surfaceAlt,
+    shadowColor: HERO[t.scheme].cardShadow,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.16,
     shadowRadius: 16,
@@ -1358,10 +1365,10 @@ const styles = StyleSheet.create({
   heroLandPillText: {
     fontSize: 11.5,
     fontWeight: '700',
-    color: '#371756',
+    color: HERO[t.scheme].landPillText,
   },
   heroRatingPill: {
-    backgroundColor: '#f6c343',
+    backgroundColor: t.color.accent,
     paddingVertical: 5,
     paddingHorizontal: 11,
     borderRadius: 999,
@@ -1374,7 +1381,7 @@ const styles = StyleSheet.create({
   heroRatingPillText: {
     fontSize: 12,
     fontWeight: '800',
-    color: '#3d1c5c',
+    color: t.color.textOnAccent,
   },
   heroRatingCountText: {
     fontSize: 9.5,
@@ -1385,7 +1392,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(91, 42, 134, 0.85)',
+    backgroundColor: withAlpha(t.color.primary, 0.85),
     paddingVertical: 5,
     paddingHorizontal: 11,
     borderRadius: 999,
@@ -1393,7 +1400,7 @@ const styles = StyleSheet.create({
   heroCategoryPillText: {
     fontSize: 11.5,
     fontWeight: '700',
-    color: '#ffffff',
+    color: t.color.textOnPrimary,
   },
   mapPreviewWrap: {
     position: 'relative',
@@ -1404,8 +1411,8 @@ const styles = StyleSheet.create({
   mapPreview: {
     width: '100%',
     height: 180,
-    borderRadius: theme.radius.lg,
-    backgroundColor: theme.color.surfaceAlt,
+    borderRadius: t.radius.lg,
+    backgroundColor: t.color.surfaceAlt,
   },
   mapPin: {
     position: 'absolute',
@@ -1419,51 +1426,51 @@ const styles = StyleSheet.create({
     textShadowRadius: 3,
   },
   section: {
-    gap: theme.spacing.md,
+    gap: t.spacing.md,
   },
   bodyText: {
-    ...theme.typography.body,
-    color: theme.color.textPrimary,
+    ...t.typography.body,
+    color: t.color.textPrimary,
     lineHeight: 20,
   },
   empty: {
-    ...theme.typography.body,
-    color: theme.color.textSecondary,
+    ...t.typography.body,
+    color: t.color.textSecondary,
     fontStyle: 'italic',
   },
   aggregateBlock: {
-    gap: theme.spacing.xs,
+    gap: t.spacing.xs,
   },
   aggregateValueRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.sm,
+    gap: t.spacing.sm,
   },
   directionsButtonText: {
-    ...theme.typography.button,
-    color: theme.color.textOnPrimary,
+    ...t.typography.button,
+    color: t.color.textOnPrimary,
   },
   foodItemButtonsRow: {
-    gap: theme.spacing.sm,
+    gap: t.spacing.sm,
   },
   aggregateValue: {
-    ...theme.typography.title,
-    color: theme.color.textPrimary,
+    ...t.typography.title,
+    color: t.color.textPrimary,
   },
   aggregateMeta: {
-    ...theme.typography.meta,
-    color: theme.color.textSecondary,
+    ...t.typography.meta,
+    color: t.color.textSecondary,
   },
   errorText: {
-    ...theme.typography.body,
-    color: theme.color.danger,
+    ...t.typography.body,
+    color: t.color.danger,
   },
   reservationActionWrap: {
-    gap: theme.spacing.xs,
+    gap: t.spacing.xs,
   },
   headerRightActions: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
   },
-});
+}));

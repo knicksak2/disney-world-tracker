@@ -36,6 +36,7 @@
  */
 
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import {
   fireEvent,
   render,
@@ -43,6 +44,10 @@ import {
   waitFor,
 } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { darkTheme } from '../../../theme/theme';
+import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
+import { HIGHLIGHT_ICON } from '../components/HighlightCard.palette';
+import { HERO_METRIC } from '../components/OverallHeroCard.palette';
 
 // ---------------------------------------------------------------------------
 // Mocks (declared before the modules under test are imported).
@@ -102,6 +107,7 @@ import {
   type OverviewHighlight,
 } from '../statsView';
 import {
+  makeDefaultActivity,
   makeInsufficientRatings,
   makeStatsResponse,
 } from '../__testSupport__/statsFixture';
@@ -461,5 +467,56 @@ describe('StatsScreen Overview_Hub (Requirements 1.1, 1.3, 1.4, 1.5, 4.1, 10.3, 
     expect(await screen.findByTestId('stats-screen')).toBeTruthy();
     // Only the one shared stats query was re-issued (R4.1).
     expect(callsMatching(isStatsPath)).toBe(2);
+  });
+});
+
+// Feature: dark-mode — the hub, hero, and highlight cards follow the Active theme.
+describe('StatsScreen Overview_Hub — dark mode', () => {
+  const flat = (node: { props: { style?: unknown } }): Record<string, unknown> =>
+    (StyleSheet.flatten(node.props.style as never) ?? {}) as Record<string, unknown>;
+  const iconIn = (testID: string, name: string): { props: Record<string, unknown> } | undefined =>
+    screen
+      .getByTestId(testID)
+      .findAll((n) => (n.type as string) === 'Icon' && n.props.name === name)[0];
+
+  beforeEach(() => {
+    apiRequestMock.mockReset();
+    mockNavigate.mockReset();
+  });
+  afterEach(resetTestScheme);
+
+  test('(a)(b)(c) background, a highlight headline, and converted icon colours use dark values', async () => {
+    setTestScheme('dark');
+    const stats = makeStatsResponse({ activity: makeDefaultActivity() });
+    renderScreen(stats);
+    await screen.findByTestId('stats-screen');
+
+    // (a) root ScreenContainer.
+    expect(flat(screen.root).backgroundColor).toBe(darkTheme.color.background);
+    // (b) primary text: the first highlight's headline (HighlightCard).
+    const first = buildOverviewHighlights(stats)[0]!;
+    expect(flat(screen.getByText(first.headline)).color).toBe(darkTheme.color.textPrimary);
+    // (c) token + palette conversions on HighlightCard and OverallHeroCard.
+    expect(iconIn('stats-highlight-coverage', 'map')?.props.color).toBe(
+      darkTheme.color.primaryFg,
+    );
+    expect(iconIn('stats-highlight-experiences', 'list')?.props.color).toBe(
+      HIGHLIGHT_ICON.dark.experiencesFg,
+    );
+    expect(iconIn('hero-activity-pillar', 'calendar')?.props.color).toBe(
+      HERO_METRIC.dark.parkDaysFg,
+    );
+    expect(flat(screen.getByTestId('stats-share-button')).backgroundColor).toBe(
+      darkTheme.color.primary,
+    );
+  });
+
+  test('light keeps today\u2019s literal icon colours', async () => {
+    const stats = makeStatsResponse({ activity: makeDefaultActivity() });
+    renderScreen(stats);
+    await screen.findByTestId('stats-screen');
+    expect(iconIn('stats-highlight-experiences', 'list')?.props.color).toBe('#2f80ed');
+    expect(iconIn('hero-activity-pillar', 'calendar')?.props.color).toBe('#2f80ed');
+    expect(iconIn('stats-highlight-coverage', 'map')?.props.color).toBe('#5b2a86');
   });
 });
