@@ -62,3 +62,10 @@ services:
       # dedicated value, not reused from SAMPLING_CRON_SECRET.
       - key: PIN_RECONCILE_CRON_SECRET
         sync: false
+      # HTTP Basic credentials gating the operator Admin Panel (/admin/*). REQUIRED — the
+      # config loader fails fast at startup if either is missing or empty. Use strong,
+      # unique values; never the `admin`/`admin` local-dev defaults.
+      - key: ADMIN_PANEL_USERNAME
+        sync: false
+      - key: ADMIN_PANEL_PASSWORD
+        sync: false

@@ -17,8 +17,8 @@ We map each one to a managed service that gives us a real free tier. Two externa
 | Concern | Service | Free tier limit | What happens when exceeded |
 | --- | --- | --- | --- |
 | API server | **Render** (Web Service) | 750 instance hours/month, sleeps after 15 min idle | First request after sleep takes 30-60s; upgrade to paid ($7/mo) for always-on |
-| PostgreSQL | **Neon** | 0.5 GB storage, 1 project, autoscale to 0 when idle | Upgrade plan or migrate; data is portable |
-| Redis | **Upstash** | 10,000 commands/day, 256 MB storage, global edge | Per-request pricing kicks in (very cheap); or swap to a different provider |
+| PostgreSQL | **Neon** | 1 GB storage per project, autoscale to 0 when idle | Upgrade plan or migrate; data is portable |
+| Redis | **Upstash** | 500,000 commands/month, 256 MB storage, global edge | Per-request pricing kicks in (very cheap); or swap to a different provider |
 | Live data source | **ThemeParks.wiki** API | n/a (already free) | Public, no key required | n/a |
 | Static catalog source | **Disney** (Sync Gateway + dining-menu API) | n/a (Disney's own endpoints) | Requires Sync Gateway credentials; rate-limited by Disney's edge |
 
@@ -136,7 +136,7 @@ Neon is a managed Postgres provider built around the idea that databases should 
 
 ### The free tier
 
-- **0.5 GB storage** — enough for tens of thousands of users at this app's data shape (text-heavy but small per row).
+- **1 GB storage per project** (raised from Neon's earlier 0.5 GB cap — see [Neon's changelog](https://neon.com/docs/changelog) / [blog post](https://neon.com/blog/neon-free-plan-1-gb-per-project)) — enough for tens of thousands of users at this app's data shape (text-heavy but small per row).
 - **Always-on branch + scale-to-zero compute.** You always have a primary, but it pauses when idle.
 - **Postgres extensions available**, including `citext` (case-insensitive text — the design uses this for emails) and `pg_trgm` (substring search — useful for user search).
 - **Connection pooling included** via PgBouncer, which matters because Render dynos and Postgres connection counts are otherwise a fight.
@@ -150,7 +150,7 @@ The schema in `design.md` (users, experiences, completions, ratings, notes, frie
 | Pro | Con |
 | --- | --- |
 | Real Postgres, not a Postgres-flavored thing | First query after idle has a 1-3 second wake-up |
-| Branching feature is great for trying schema changes | 0.5 GB cap means you'll outgrow it eventually |
+| Branching feature is great for trying schema changes | 1 GB cap means you'll outgrow it eventually |
 | Built-in connection pooling | Free tier is one project at a time |
 
 ### When to upgrade
@@ -178,20 +178,20 @@ Upstash is a serverless Redis provider. You pay per command instead of per serve
 
 ### The free tier
 
-- **10,000 commands per day.** That sounds small, but most of our writes are on user actions (rating change, login attempt) and most of our reads are cache hits — well under 10K/day for a hobby app.
+- **500,000 commands per month** (changed from Upstash's earlier 10,000-commands-per-day cap in a March 2025 pricing update — see [Upstash's own pricing-change announcement](https://upstash.com/blog/redis-new-pricing)). That sounds small on the old per-day framing, but most of our writes are on user actions (rating change, login attempt) and most of our reads are cache hits — well under the monthly budget for a hobby app.
 - **256 MB storage.**
 - **Global edge replication available** (low latency reads from anywhere).
 
 ### What this means for the design
 
-The leaderboard cache lookup is one Redis read per home-screen load. Lockout counters are a few writes per failed login. Catalog_Sync acquires one lock per 24-hour cycle. We're nowhere near the 10K/day limit at hobby scale.
+The leaderboard cache lookup is one Redis read per home-screen load. Lockout counters are a few writes per failed login. Catalog_Sync acquires one lock per 24-hour cycle. We're nowhere near the 500K/month limit at hobby scale.
 
 ### Trade-offs
 
 | Pro | Con |
 | --- | --- |
 | No idle cost, true pay-per-use | Per-command pricing is higher than per-hour at high volumes |
-| 256 MB is plenty for cache + counters | The 10K/day cap is a hard limit, not a soft throttle |
+| 256 MB is plenty for cache + counters | The 500K/month cap is a hard limit, not a soft throttle |
 | HTTPS REST API option (handy for serverless if we ever go that way) | |
 
 ### When to upgrade

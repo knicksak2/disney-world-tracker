@@ -125,7 +125,7 @@ docker compose down -v       # stop and wipe data — clean slate
 
 The API never reads `process.env` directly outside its config loader, so every backend setting lives in an env file. The `.env.example` template ships with values that match `docker-compose.yml` — just copy it to `.env` (see [Quickstart](#quickstart--run-everything-locally)). The real `.env` is gitignored.
 
-Required keys: `DATABASE_URL`, `REDIS_URL`, `SESSION_SECRET` (32+ chars), and the Disney Sync Gateway `Static_Credentials` `DISNEY_SYNC_GATEWAY_USERNAME` / `DISNEY_SYNC_GATEWAY_PASSWORD` (startup fails fast if either is blank). `THEMEPARKS_BASE_URL` (live source), `DISNEY_SYNC_GATEWAY_BASE_URL` (static catalog source), and `DISNEY_DINING_MENU_BASE_URL` (restaurant menus, from Disney's public website dining-menu API — anonymous, no credentials) all default to the documented public endpoints. See `apps/api/.env.example` for descriptions.
+Required keys: `DATABASE_URL`, `REDIS_URL`, `SESSION_SECRET` (32+ chars), and the Disney Sync Gateway `Static_Credentials` `DISNEY_SYNC_GATEWAY_USERNAME` / `DISNEY_SYNC_GATEWAY_PASSWORD` (startup fails fast if either is blank). Also required, because the config loader fails fast without them: `SAMPLING_CRON_SECRET` and `PIN_RECONCILE_CRON_SECRET` (shared secrets for the keep-alive cron's `/internal/*` endpoints; use a distinct value for each) and `ADMIN_PANEL_USERNAME` / `ADMIN_PANEL_PASSWORD` (see [Admin Panel](#admin-panel)). `THEMEPARKS_BASE_URL` (live source), `DISNEY_SYNC_GATEWAY_BASE_URL` (static catalog source), and `DISNEY_DINING_MENU_BASE_URL` (restaurant menus, from Disney's public website dining-menu API — anonymous, no credentials) all default to the documented public endpoints. See `apps/api/.env.example` for descriptions.
 
 Optional Disney resilience-tuning keys (all have sane defaults): `DISNEY_MAX_RPS`, `DISNEY_MAX_CONCURRENCY` (shared Request_Budget), `DISNEY_BACKOFF_*` (bounded backoff), `MENU_FRESHNESS_MS` (lazy-menu cache window), and `CATALOG_SYNC_INTERVAL_MS` (scheduled cadence, floored at 24h). Override only if you have a reason to.
 
@@ -397,6 +397,18 @@ Run these from `apps/api` (they read `apps/api/.env`):
 | `npm run sync:cloud` | Same as `sync`, but against your **hosted** services (reads `apps/api/.env.dev`). Use it to seed or refresh the catalog in the hosted Neon database from your machine — the hosted API has no unattended seed step (see [Updating a running deployment](#updating-a-running-deployment)). |
 | `npm run build-bridge` | One-time identity Bridge_Map build: maps each Disney `Enterprise_Id` to the internal id derived during the ThemeParks.wiki era, preserving id continuity across the source migration. Only needed when migrating an existing catalog. |
 
+## Admin Panel
+
+An internal, server-rendered operator dashboard lives in the API itself under `/admin`. It adds no new process or hosting cost: it is registered on the same Fastify instance as the mobile API (`apps/api/src/services/admin/`), so locally it is at `http://localhost:3000/admin` and in production at `https://dwt-api.onrender.com/admin` (the same host as the hosted API; if you rename the Render service, use that URL instead). Open it in a browser and your browser will prompt for the Basic-auth credentials. As on any free-tier Render service, the first request after idle can take 30–60s while the instance wakes. It is not part of the mobile app.
+
+**Authentication.** Every `/admin` route sits behind HTTP Basic auth, using `ADMIN_PANEL_USERNAME` and `ADMIN_PANEL_PASSWORD`. Both are required and must be non-empty, or the API refuses to start. `apps/api/.env.example` ships `change-me` placeholders and the local `.env` uses throwaway values; **set strong, unique credentials in the Render dashboard for production** (they are `sync: false` secrets in `render.yaml`, so they are never in git). Only expose `/admin` over HTTPS, since Basic auth sends credentials on every request.
+
+**Sections** (linked from the `/admin` index): Catalog & Disney Sync, Disney Transport & Rate Limiter, Sampling Pass Health, Forecast Accuracy (park and per-Experience), Intelligence Model Internals, Derived Stats Health, Infrastructure Budget (Postgres size, Upstash command budget), Push Delivery Visibility, Configuration (non-secret resolved values), User & Support Lookup, Account Lockouts, and Growth & Activity.
+
+**Read vs. write.** Almost everything is read-only. The only mutating actions are operator triggers that call existing code: run a catalog sync (`POST /admin/catalog/sync`, refused with `409` while a sync lock is held), unlock a locked-out account, revoke a user's sessions, and re-reconcile a user's pins.
+
+**Backing data.** The panel adds two small tables, `sampling_runs` and `push_delivery_log` (migration `0056_admin_panel.sql`), each pruned to a trailing 30-day window to stay within the Neon free tier. Design and requirements: `.kiro/specs/admin-panel/`.
+
 ## Experience images
 
 Every Experience and Resort can show an image — a thumbnail in the catalog list and a hero image on the detail screen. Imagery is now **sourced directly from Disney** as part of the catalog: each Facility document carries `detailImageUrl` / `listImageUrl`, and the catalog sync writes the preferred one to `experiences.image_url` (and `resorts.image_url`). No separate image-sourcing job, curated overrides, or third-party (Wikimedia) lookup is involved — that pipeline, its `imageOverrides.json`, the `source-images` command, and the `image_attribution` column were retired when catalog sourcing moved to Disney.
@@ -428,8 +440,8 @@ The backend runs entirely on free tiers, one managed service per concern, chosen
 | Concern | Service | Why this one | Free-tier limit |
 | --- | --- | --- | --- |
 | API server | [**Render**](https://render.com) | GitHub-driven deploys, automatic HTTPS, defined as code in [`render.yaml`](./render.yaml); truly free with no credit card | 750 instance-hours/mo; sleeps after 15 min idle (30–60s cold start) |
-| PostgreSQL | [**Neon**](https://neon.tech) | Real Postgres (not a clone) with the `citext` / `pg_trgm` / `pgcrypto` extensions the schema needs, plus built-in connection pooling and scale-to-zero | 0.5 GB storage, 1 project, pauses when idle (1–3s wake) |
-| Redis | [**Upstash**](https://upstash.com) | Pay-per-command with no idle cost — a good fit for our low, bursty usage (cache reads, lockout counters, sync lock, BullMQ) | 10,000 commands/day, 256 MB |
+| PostgreSQL | [**Neon**](https://neon.tech) | Real Postgres (not a clone) with the `citext` / `pg_trgm` / `pgcrypto` extensions the schema needs, plus built-in connection pooling and scale-to-zero | 1 GB storage per project, pauses when idle (1–3s wake) |
+| Redis | [**Upstash**](https://upstash.com) | Pay-per-command with no idle cost — a good fit for our low, bursty usage (cache reads, lockout counters, sync lock, BullMQ) | 500,000 commands/month, 256 MB |
 | Live data | [ThemeParks.wiki](https://api.themeparks.wiki/v1) | Already free, public, no key required | — |
 
 Everything except the mobile app is reached server-side; the app only ever knows the Render URL. The main free-tier trade-off is Render's cold start (first request after idle is slow) — a $7/mo upgrade makes it always-on when you have real users.
