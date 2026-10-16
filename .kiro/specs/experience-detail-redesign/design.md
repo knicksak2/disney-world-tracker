@@ -655,6 +655,14 @@ exactly the two-Lens shell).
   `WaitInsightsDTO.hasSingleRider`/`singleRiderP50WaitMinutes`) and already rendered by
   `RideLiveSection.tsx` and `WaitInsightsSection.tsx`. The Single_Rider_Strip in the
   `Live_Wait_Cockpit` repositions this existing, working UI; it does not re-implement it.
+
+  **Corrective/superseding note (docs-drift audit, LOW-1).** `WaitInsightsSection.tsx` still
+  exists on disk with passing tests but is no longer imported or rendered anywhere outside its
+  own test file — this amendment's own intended, already-completed task 18.1 outcome.
+  `ExperienceDetailScreen.tsx`'s `TodayInParkLens.tsx` renders `LiveWaitCockpit.tsx` instead,
+  which inlines the former verdict logic. Single-rider surfacing today is in `RideLiveSection.tsx`
+  and `LiveWaitCockpit.tsx` (which inlines `WaitInsightsSection.tsx`'s former verdict logic), not
+  `WaitInsightsSection.tsx`.
 - **The Trip context date bug.** `WaitInsightsSection.tsx` currently computes `tripDate` as
   `activeTrip?.startDate` unconditionally (where `activeTrip = tripsData?.trips?.[0]`). For a
   multi-day trip this pins the "Trip" forecast to day one regardless of which day the user is

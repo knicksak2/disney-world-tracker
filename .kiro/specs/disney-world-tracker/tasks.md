@@ -585,6 +585,11 @@ flowchart LR
     - _Requirements: R6.10_
   - [x] 14.3 Implement navigation shell and protected routes
     - Create `apps/mobile/src/navigation/RootNavigator.tsx` with auth stack (Register, Login) and main tabs (Home, Catalog, Stats, Friends, Profile)
+      - **Corrective/superseding note (docs-drift audit, HIGH-1).** This tab list is stale. The
+        real current mobile tabs, per `navigation-redesign` and `RootNavigator.tsx`, are `Home,
+        Explore, MagicFab, Trips, Collection` — there is no `Catalog`, `Stats`, `Friends`, or
+        `Profile` tab today. This note is additive; the historical task text above is left in
+        place rather than rewritten, per the repo's spec-editing convention.
     - Gate the main tabs on a valid session
     - _Requirements: R6.10_
 

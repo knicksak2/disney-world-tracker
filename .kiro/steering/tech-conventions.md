@@ -35,14 +35,15 @@ Repo-wide conventions for implementing any spec in this project. Applies to all 
 ## Hosting constraints (free tier — design within these)
 
 - **Render** web service sleeps after ~15 min idle. **No always-on background worker** (a BullMQ `Worker` polls Redis continuously and would exhaust the Redis budget). Drive scheduled work from the existing external keep-alive cron hitting an authenticated endpoint that returns fast (`202`) and does work async in-process.
-- **Neon** Postgres ~0.5 GB — keep stores bounded (fixed-shape aggregates; prune raw rows to a recent window).
-- **Upstash** Redis ~10k commands/day — avoid continuous polling.
+- **Neon** Postgres ~1 GB per project — keep stores bounded (fixed-shape aggregates; prune raw rows to a recent window).
+- **Upstash** Redis ~500k commands/month — avoid continuous polling.
 - The keep-alive cron currently runs every ~10 minutes, ~7 AM–1 AM ET.
 
 ## Mobile conventions
 
-- Bottom tabs: Home, Catalog, Trips, Friends, Profile. `ExperienceDetail` is a root-stack screen above the tabs. Feature screens live in the relevant stack (e.g., `TripsStack`, `CatalogStack`).
-- TanStack Query for reads/mutations; Zustand `sessionStore` for session scope; themed component kit.
+- Bottom tabs (`RootNavigator.tsx`'s `MainTabs`): Home, Explore (tab bar label "Explore"; the stack file is `ExploreStack.tsx` — `CatalogStack` is only a legacy type-alias name, not a separate screen), a center `MagicFab` action button, Trips, Collection (tab bar label "Vault"). There is no separate Friends or Profile tab — friends, identity, and account settings live in `YouAndCrewScreen.tsx` (via `YouAndCrewStack`), reached from the "You & Crew" pill in the Home header, not from the tab bar. `ProfileScreen.tsx`'s default-exported screen is NOT registered as a navigator route — only its exported `ProfileIdentityBlock` is reused inside `YouAndCrewScreen`; do not add new screen-level UI to `ProfileScreen.tsx` expecting it to be reachable. `ExperienceDetail` is a root-stack screen above the tabs. Feature screens live in the relevant stack (e.g., `TripsStack`, `ExploreStack`, `YouAndCrewStack`).
+- TanStack Query for reads/mutations; Zustand `sessionStore` for session scope; themed component kit (`theme/components.tsx`, `theme/charts.tsx`).
+- Theming (light + "Twilight" dark, `dark-mode` spec): every colour comes from the **active** theme so it repaints on a scheme switch. Build styles with `const useStyles = makeStyles((t) => ({ … }))` (`theme/makeStyles.ts`) and call `useStyles()` in the component; read inline values with `const t = useAppTheme()` (`theme/useAppTheme.ts`). The static `theme` export from `theme/theme.ts` is colour-free — only `{ spacing, radius, layout, typography }`; there are no static `color`/`gradient`/`shadow`/`parkAccent`/`categoryVisual`/`resortVisual` exports (use `t.color.*`, `t.parkAccent`, `t.categoryVisual[cat]` — `.tint` for foreground, `.fill` behind white — and colour-free `categoryMeta`). A one-off literal colour goes in a co-located `<File>.palette.ts` via `definePalette({ light, dark })` (light = the original value, byte-identical) read with `usePalette(P)`; derive alpha with `withAlpha(t.color.x, a)`. Use `primary` for fills/buttons and `primaryFg` for primary-hued text, icons and links on surfaces. Memoized values and list render callbacks that read `styles`/`t` must list them in deps / pass `extraData` including `t.scheme`. `src/__tests__/themeRetrofit.guard.test.ts` (rules in `src/test/themeGuard.ts`) fails the mobile suite on any raw colour literal or static token read outside its allowlists (pin artwork/token files, `*.palette.ts`), so fix the code rather than extending the allowlist.
 - Accessibility: label visuals; never rely on color alone.
 
 ## Modeling conventions

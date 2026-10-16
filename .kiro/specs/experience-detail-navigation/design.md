@@ -30,6 +30,22 @@ This design changes no authorization rule, no set of returned Completions, no or
 
 ## Architecture
 
+**Superseding note (docs-drift audit, MEDIUM-1).** The navigation topology described below —
+`ExperienceDetailScreen` registered inside the Catalog tab's nested stack (`CatalogStack.tsx`),
+reached via `navigation.navigate('Catalog', { screen: 'ExperienceDetail', params: { experienceId } })`,
+and `FriendProfileScreen` living in `FriendsStack` — reflects the navigation structure at the time
+this spec was written and is now stale. The later `navigation-redesign` spec retired
+`CatalogStack.tsx` and `FriendsStack.tsx` entirely (neither file exists today) and moved
+`ExperienceDetail` onto the **root stack** (`RootNavigator.tsx`'s `RootStackParamList`, a sibling
+of `MainTabs`, not nested under any tab). The real navigation call today (per
+`apps/mobile/src/screens/navigation/experienceNavigation.ts`'s `useOpenExperience`) is
+`navigation.navigate('ExperienceDetail', { experienceId })` with no tab nesting at all. The
+sibling spec **`experience-detail-back-navigation`** already correctly documents this current real
+topology (root-level `ExperienceDetail`, no native header, in-screen back control) — see that
+spec's design.md for the current, accurate navigation structure. This note is additive, mirroring
+how `disney-source-resilience` supersedes `disney-facilities-catalog-source`; the Architecture
+section below is left as originally written rather than rewritten.
+
 ### Data flow: Experience_Id from catalog to navigation target
 
 ```mermaid

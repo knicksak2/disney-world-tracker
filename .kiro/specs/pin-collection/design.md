@@ -147,6 +147,20 @@ the already-committed write.
 *Backs Requirement 22. Purely a presentation-layer change on top of the existing `unlocked`/
 `claimedAt` fields (Requirement 20) — no new persisted field, no new endpoint, no new DTO field.*
 
+> **Corrective/superseding note (docs-drift audit, HIGH-4).** The `ProfileTabIcon`/
+> `useClaimablePinsBadge()`-into-`AttentionBadge`/`profile-tab-badge`/"View your pins" architecture
+> described in this section (and the explicit "No `tabBarBadge`... is used" claim below) is stale:
+> there is no Profile tab in the real App (`RootNavigator.tsx`'s `MainTabParamList` is `Home |
+> Explore | Trips | Collection`), and `ProfileScreen.tsx` has no pin-related button of any kind.
+> `navigation-redesign` Requirement 6.5/6.7a is the source of the current real behavior: the
+> claimable-pin signal lives on `CollectionScreen.tsx`'s "Ready to Claim" banner
+> (`testID="claim-banner"`, text anchor `testID="claimable-pins-badge"`), and the Collection tab
+> itself carries a native React Navigation `tabBarBadge` (`RootNavigator.tsx` sets
+> `tabBarBadge: claimableCount > 99 ? '99+' : claimableCount` on the Collection `Tab.Screen`) —
+> directly contradicting this section's "No `tabBarBadge`... is used" claim below. This note is
+> additive; the section's original text and code samples are left in place rather than rewritten,
+> per the repo's spec-editing convention. See also requirements.md's R22.5/R22.6 corrective notes.
+
 ### Grid sort (Requirement 22.1)
 
 `PinBoardScreen`'s `visible` projection gains a comparator ahead of the existing catalog-order
@@ -1274,10 +1288,19 @@ export type SharePayload =
   | PinShowcaseSharePayload; // extended union, additive
 ```
 
-Unlike `progress` (which snapshots stats at send time, Requirement 9.7 of the social-sharing-loop
-design), a `pinShowcase` payload carries no snapshot at all — just the `ownerId` needed to fetch
-the CURRENT Showcase when opened (Requirement 24.14). This is a deliberate asymmetry: a Showcase is
-a living display the owner keeps rearranging, not a point-in-time stat to preserve.
+Unlike `progress` (which snapshots stats at send time, Requirement 1.8 of the social-sharing-loop
+requirements), a `pinShowcase` payload carries no snapshot at all — just the `ownerId` needed to
+fetch the CURRENT Showcase when opened (Requirement 24.14). This is a deliberate asymmetry: a
+Showcase is a living display the owner keeps rearranging, not a point-in-time stat to preserve.
+
+> **Corrective note (docs-drift audit, MEDIUM-5).** The citation above previously read
+> "Requirement 9.7 of the social-sharing-loop design"; that was the wrong requirement number —
+> `social-sharing-loop` R9/AC9.7 is about defaulting Share_Notification_Preference to enabled,
+> unrelated to snapshot behavior. The correct citation is R1 ("Content-Anchored Share Entry
+> Points"), specifically AC 1.8 (Share_Composer pre-populated with completion percentages "as
+> displayed on the Progress_Screen at activation time"), or equivalently the `Share_Payload`
+> glossary entry. The underlying behavioral claim this document makes is itself correct — only
+> the citation number was wrong.
 
 `SHARE_PAYLOAD_KINDS` (`packages/shared/src/enums.ts`) gains `'pinShowcase'`, extending the
 existing closed union additively; the `shares` table's `payload_kind` CHECK constraint

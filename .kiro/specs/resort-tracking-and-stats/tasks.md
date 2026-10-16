@@ -120,11 +120,21 @@ regressions surface early. All code is TypeScript, matching the existing
   - [x] 9.3 Add the `Own_Areas` mode and "Areas" tab
     - Edit `OwnStatsViewMode` to add `Own_Areas`; add an "Areas" tab (e.g. `business-outline`) to `OWN_STATS_TABS` in `TabSelector.tsx`
     - _Requirements: 5.1_
+    - **Corrective/superseding note (docs-drift audit, MEDIUM-4).** This mobile presentation was
+      replaced by `stats-experience-redesign`; `StatsScreen.tsx` no longer references
+      `OwnStatsViewMode`/`OWN_STATS_TABS`/`TabSelector`. See design.md's "Mobile" section note for
+      the current real presentation (`CoverageDetailScreen.tsx`'s separate Areas/Resorts lenses).
   - [x] 9.4 Implement `OwnAreasPane` and mount it in `StatsScreen`
     - Render one `BreakdownCard` per `AREA_TYPES` value from `stats.byAreaType`
     - Render a collapsible Resorts Group_Section headed by `stats.resort`; body lists visited resorts (representing Completion entries), each navigating to the Resort detail view; show a zero-state message when none
     - Reuse the screen-level stats loading/error/retry gating
     - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5_
+    - **Corrective/superseding note (docs-drift audit, MEDIUM-4).** `OwnAreasPane` was retired by
+      `stats-experience-redesign`'s rewrite. The current real mobile presentation is
+      `CoverageDetailScreen.tsx`'s Lens_Switcher with separate `'areas'` and `'resorts'` lenses
+      (Resorts is its own lens, not a 4th card folded into Areas); the backend `byAreaType`/
+      `resort` data contract this task relies on is unchanged. See design.md's "Mobile" section
+      note.
   - [x] 9.5 Write tests for the Areas pane rendering
     - Cover Area_Statistic + Resort_Statistic rendering, the zero Resort_Visits state, and navigation into a Resort
     - _Requirements: 5.2, 5.3, 5.4, 5.5_

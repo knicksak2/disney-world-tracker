@@ -13,6 +13,13 @@ This feature redesigns catalog navigation into a two-level drill-down with alway
 
 This feature builds directly on the completed `disney-facilities-catalog-source` spec and reuses its vocabulary (Facility_Document, ancestor chain, Enterprise_Id, Catalog_Sync, Catalog_Cache, `resolveArea`, Area, Area_Type, Park, Resort, Internal_Id). Scope is limited to Walt Disney World. The redesign must preserve existing user data (Completions, Ratings, Notes reference the stable Experience Internal_Id, whose derivation does not change) and must not regress the catalog's resilience behaviors (stale-cache serving, `catalog_unavailable`), image placeholders, tap-to-detail navigation, or react-query caching.
 
+**Superseded by `catalog-redesign` (docs-drift audit, LOW-3):** the later `catalog-redesign` spec
+fully replaced this feature's two-level `Catalog_Home`/`CatalogList` → `DestinationScreen`
+navigation with `ExploreHubScreen`, `ParkDestinationScreen`, and `ResortsDirectoryScreen`. This
+note is additive and informational only — the Land/catalog-data work described below remains
+accurate and unaffected; only the mobile navigation surface it drives has moved on. See
+`catalog-redesign/design.md`'s "Migration from existing screens" section for what replaced it.
+
 ## Glossary
 
 - **Catalog_Sync**: The existing orchestrator that fetches Disney Facility_Documents, classifies and enriches them, reconciles the result against the Catalog_Cache within one transaction, and records the run outcome. Reused unchanged except to additionally resolve and persist Land.

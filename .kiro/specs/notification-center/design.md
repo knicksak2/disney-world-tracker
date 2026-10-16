@@ -86,6 +86,12 @@ prefers strict "no touch,"** the fallback is to sort trip invites among
 same-adjacent items using their `inviteId` only and place them with a
 domain-fixed epoch; that produces a worse ordering and is not recommended.
 
+**Resolved (docs-drift audit, LOW-4).** The proposed path above was taken: the real
+`TripIncomingInviteDTO` carries an additive `createdAt: string` field (ISO-8601, sourced from
+`trip_invites.created_at`), confirmed below in the "Shape of the per-domain reads" section —
+see `readonly createdAt: string; // NEW: ISO-8601, from trip_invites.created_at`. No fallback was
+needed.
+
 ## Architecture
 
 ### System context

@@ -2,6 +2,22 @@
 
 ## Introduction
 
+> **Corrective/superseding note (docs-drift audit, HIGH-1).** This Introduction describes the
+> catalog as sourced solely from the ThemeParks.wiki API. **This is superseded by
+> `disney-facilities-catalog-source`**, which makes Disney's own internal data sources the sole
+> static catalog source (`experiences.upstream_entity_id` is now the Disney `Enterprise_Id`),
+> **with live data (status, waits, forecast, dining availability, showtimes) split out and
+> sourced exclusively from ThemeParks.wiki by `disney-source-resilience`**, matched by
+> `Enterprise_Id == externalId` via `themeParksDirectory.resolveEntityId`. The Glossary's
+> `Experience_Category` (six values) is also stale — the real enum
+> (`packages/shared/src/enums.ts`) has ten, adding `Tour`, `Recreation`, `Spa`, `Event`, and
+> `Resort`. **This note affects only the catalog/live-sourcing architecture and the
+> `Experience_Category` enum; the Auth/Tracking/Stats/Friends/Sharing/Aggregate-Ratings
+> requirements elsewhere in this document remain accurate.** This note is additive; the
+> Introduction's original text is left in place rather than rewritten, per the repo's
+> spec-editing convention. See also design.md's Overview corrective note and tasks.md's note
+> on the stale mobile tab list (~line 587).
+
 The Disney World Tracker is a mobile application that provides a comprehensive catalog of experiences available at Walt Disney World, including attractions, shows, restaurants, parades, character meet-and-greets, and other activities. The catalog is sourced from the public ThemeParks.wiki API. Users can track which experiences they have completed, view completion statistics, rate experiences, and record personal notes. The application also surfaces userbase aggregate ratings, highlights highest-rated experiences on the home screen, and supports user profiles, a friends system, and the ability to share progress and recommendations with friends.
 
 ## Glossary

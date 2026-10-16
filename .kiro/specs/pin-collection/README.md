@@ -12,7 +12,7 @@ roster) through `mapV2Pins`, not written inline. The previous inline 167-pin fil
 `pin-catalog-mockup-v1.html`. All ten gate suites pass (`verify/run-all.js` exits 0); provenance
 and dedup, once deliberately red, are now finished.
 
-Nothing in this folder is committed yet. Until it is, all of it exists on one machine.
+This folder is tracked and has been on `develop` since the v2 catalogue promotion (commit `03dddb7`, 2026-09-11) — it is shared, not single-machine-only.
 
 ---
 
@@ -305,8 +305,8 @@ properties, the error handling), schema + migration, award rules, the Pin Board 
 
 ## 7 · Known gaps, stated plainly
 
-- **Nothing here is committed** except the superseded `pins-mockup.html`. Until it is, this
-  work exists only on one machine.
+- This folder is tracked and shared on `develop` (see the Status note at the top) — the
+  "single machine, uncommitted" risk this bullet used to warn about no longer applies.
 - The eight sample pins in the mockup **predate** the contained/die-cut rule and the ladder
   decision. The compliance audit is honest about it, but the sample set is behind the
   decisions. Not worth fixing until the challenge list says which pins exist.

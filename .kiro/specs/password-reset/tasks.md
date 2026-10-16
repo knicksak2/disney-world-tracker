@@ -4,8 +4,16 @@
 
 - [x] 1. Shared Schemas and Error Codes (`packages/shared`)
   - [x] 1.1 Add `invalid_code`, `too_many_attempts`, and `token_invalid` to `ErrorCode` in `packages/shared/src/errors/codes.ts`
+    - **Corrective/superseding note (docs-drift audit, MEDIUM-3).** The real file path is
+      `packages/shared/src/errors.ts` — a single file, not an `errors/` directory with a
+      `codes.ts` inside it. The error codes themselves are correctly implemented and named exactly
+      as described above; only the path was wrong.
     - _Requirements: 1.4, 2.3, 2.4_
   - [x] 1.2 Define `forgotPasswordInputSchema`, `resetPasswordInputSchema`, and associated DTO types in `packages/shared/src/schemas/auth.ts` and `packages/shared/src/dto/auth.ts`
+    - **Corrective/superseding note (docs-drift audit, MEDIUM-3).** The real file paths are
+      `packages/shared/src/schemas/User.ts` and `packages/shared/src/dto/User.ts` — there is no
+      `schemas/auth.ts` or `dto/auth.ts`. The schemas and DTOs are correctly implemented and named
+      exactly as described above; only the paths were wrong.
     - _Requirements: 1.1, 1.4, 2.1, 2.5_
   - [x] 1.3 Add schema tests in `packages/shared/src/schemas/__tests__/authReset.test.ts` validating boundaries, email format, and password length
     - _Requirements: 1.4, 2.5_

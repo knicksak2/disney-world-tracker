@@ -63,9 +63,21 @@
   - [x] 10.1 Add a "View your food lists" `SecondaryButton` to `ProfileScreen.tsx`
     - Place it in its own `Card` section immediately alongside the existing "Your stats"/"Food history" sections, mirroring the exact pattern already used for "View your stats" (`onViewStats`) and "View your food history" (`onViewFoodHistory`, `testID="profile-view-food-history"`); give it `testID="profile-view-food-lists"` and call `navigation.navigate('MyFoodLists')` — `MyFoodLists` is already a registered `RootStackParamList` route (task 8.1), so no navigation/route change is needed here
     - _Requirements: 12.1, 12.2_
+    - **Corrective/superseding note (docs-drift audit, HIGH-2).** This button's real, reachable
+      destination is no longer `ProfileScreen.tsx` — by the time `navigation-redesign` shipped, it
+      relocated this entry point to `CollectionScreen.tsx`'s "My Food Lists" card
+      (`testID="food-lists-card"`), already correctly tested in `CollectionScreen.test.tsx`. This is
+      a build-order artifact, not a broken implementation: this task was correctly built against the
+      contemporary Profile-tab screen before `navigation-redesign` later relocated it. This note is
+      additive; the task remains checked `[x]` since the underlying feature is correctly
+      implemented, just at a different, later-relocated location.
   - [x] 10.2 Write a `ProfileScreen` test assertion for the new button
     - Add to `apps/mobile/src/screens/__tests__/ProfileScreen.test.tsx` (or its existing equivalent test file): pressing `profile-view-food-lists` calls `navigation.navigate('MyFoodLists')`; the button renders identically regardless of the User's owned/saved list counts (Requirement 12.2, Property 13)
     - _Requirements: 12.1, 12.2, 12.3_
+    - **Corrective/superseding note (docs-drift audit, HIGH-2).** The real, current test coverage
+      for this entry point lives in `CollectionScreen.test.tsx`, asserting the "My Food Lists" card
+      (`testID="food-lists-card"`) rather than `ProfileScreen.test.tsx` — see 10.1's note above.
+      This note is additive; the task remains checked `[x]`.
 
 - [x] 11. Final Verification & Quality Gate (Re-run after R12)
   - [x] 11.1 Run full `npm run verify` across all workspaces (`apps/api`, `apps/mobile`, `packages/shared`)

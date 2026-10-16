@@ -312,7 +312,28 @@ This feature consumes the `experience-activity-logging` data foundation to evalu
 3. THE App SHALL surface a claimable-Pin count badge on the Profile tab icon, visible from anywhere in the App, whenever at least one Pin is ready to claim; the badge SHALL be hidden when zero Pins are ready to claim and SHALL never require opening the Pin Board to appear.
 4. THE claimable-Pin badge SHALL be computed from the same Pin Board data the grid renders (i.e. from an already-fetched or freshly-fetched `GET /me/pins` response), so the badge count can never disagree with the number of ready-to-claim tiles a User would see upon opening the board.
 5. **(Revised — Combined Tab-Bar Badge)** On the bottom navigation bar (Profile tab icon), the notification attention count and the claimable-Pin count SHALL be combined into a single total attention badge (positioned at the standard top-right of the icon) displaying the sum of both counts (or '99+' on overflow, hidden when the combined count is zero), keeping the bottom tab bar clean and uncluttered. On the Profile screen itself, the indicators SHALL remain split between their respective entry controls ('View notifications' showing the notification count, and 'View your pins' showing the claimable-Pin count), so a User can see the breakdown immediately upon opening Profile.
+
+   **Corrective/superseding note (docs-drift audit, HIGH-4).** This criterion's literal text is
+   now false as a description of the real App: there is no Profile tab, and no `ProfileTabIcon`
+   combining a notification count and a claimable-Pin count into one overlay badge.
+   `navigation-redesign` Requirement 6.5 replaced the bottom-tab-bar signal with a native React
+   Navigation `tabBarBadge` (not a hand-rolled overlay) on the Collection/Vault tab, showing the
+   claimable-pin count alone — it is not combined with the notification count there.
+   `RootNavigator.tsx` sets `tabBarBadge: claimableCount > 99 ? '99+' : claimableCount` directly on
+   the Collection tab's `Tab.Screen` options. This note is additive; criterion 22.5's original text
+   is left in place rather than rewritten, per the repo's spec-editing convention.
 6. THE Profile screen's "View your pins" entry control SHALL carry the same claimable-Pin count badge (Requirement 22.3–22.4) as the Profile tab icon, positioned and styled the same way the existing "View notifications" entry control already carries its Notification_Center Attention_Badge, so a User scanning the Profile screen sees the same at-a-glance signal they'd see on the tab bar.
+
+   **Corrective/superseding note (docs-drift audit, HIGH-4).** This criterion's literal text is
+   now false: `ProfileScreen.tsx` has no "View your pins" entry control (or any pin-related
+   control) and carries no such badge. The real, reachable claimable-pin signal is
+   `CollectionScreen.tsx`'s "Ready to Claim" banner (`testID="claim-banner"`, with a
+   backward-compatibility text anchor `testID="claimable-pins-badge"`), rendered per
+   `navigation-redesign` Requirement 6.7a, plus the Collection tab's native `tabBarBadge`
+   (Requirement 6.5 above). The `ProfileTabIcon`/`profile-tab-badge`/"View your pins" architecture
+   described by this requirement and by design.md's "Claimable-Pin Discoverability" section was
+   retired by `navigation-redesign`'s tab restructuring. This note is additive; criterion 22.6's
+   original text is left in place rather than rewritten, per the repo's spec-editing convention.
 
 ---
 

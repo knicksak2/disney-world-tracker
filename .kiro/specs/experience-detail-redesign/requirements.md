@@ -387,6 +387,13 @@ in already-shipped code).
 - **Single_Rider_Strip**: The existing single-rider surfacing (Requirement pre-dating this amendment;
   see `RideLiveSection.tsx` / `WaitInsightsSection.tsx`), repositioned within the Live_Wait_Cockpit but
   not otherwise changed by this amendment.
+
+  **Corrective/superseding note (docs-drift audit, LOW-1).** `WaitInsightsSection.tsx` is no
+  longer imported/rendered anywhere outside its own test file — `ExperienceDetailScreen.tsx`'s
+  `TodayInParkLens.tsx` renders `LiveWaitCockpit.tsx` instead, which inlines the former verdict
+  logic (this amendment's own already-completed task 18.1 outcome). Single-rider surfacing today
+  is in `RideLiveSection.tsx` and `LiveWaitCockpit.tsx` (which inlines `WaitInsightsSection.tsx`'s
+  former verdict logic), not `WaitInsightsSection.tsx`.
 - **Park_Passport_Card**: The collapsible card in the My_Passport_And_Lore_Lens presenting the
   viewer's visit count, computed average rating, most recent shared note, and expandable visit
   history, superseding the plain Your_Visit_Card layout (Requirement 6) with a richer presentation

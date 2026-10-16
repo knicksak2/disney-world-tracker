@@ -191,10 +191,17 @@ close to the code they validate.
 - [x] 12. Final checkpoint - Ensure all tests pass
   - Ensure all tests pass (backend + mobile), ask the user if questions arise.
 
-- [ ] 13. Menu Screen Food List Affordances (R5.10, added by this amendment)
-  - [ ] 13.1 Add item-level and header add-to-list actions to `MenuScreen.tsx`, opening `AddToListsSheet` and `FoodItemPickerModal`
+- [x] 13. Menu Screen Food List Affordances (R5.10, added by this amendment)
+  - **Bookkeeping note (docs-drift audit, LOW-5):** verified already fully implemented and
+    tested in the real codebase — `MenuScreen.tsx` already renders `FoodItemPickerModal`
+    (`testID="menu-screen-add-to-list-btn"`) and `AddToListsSheet`
+    (`testID="menu-item-add-to-list-0-0-0"`), with the dedicated test file
+    `MenuScreen.foodListAffordances.test.tsx` passing (`npx jest
+    MenuScreen.foodListAffordances.test.tsx`: 2 passed, exit code 0). Marked `[x]` to reflect
+    reality — code and tests were ahead of the task tracker, not behind it.
+  - [x] 13.1 Add item-level and header add-to-list actions to `MenuScreen.tsx`, opening `AddToListsSheet` and `FoodItemPickerModal`
     - _Requirements: 5.10_
-  - [ ] 13.2 Add interaction tests for MenuScreen add-to-list affordances
+  - [x] 13.2 Add interaction tests for MenuScreen add-to-list affordances
     - _Requirements: 5.10_
 
 ## Notes

@@ -2,6 +2,24 @@
 
 ## Overview
 
+> **Corrective/superseding note (docs-drift audit, HIGH-1).** This Overview (and
+> requirements.md's Introduction) describes the Catalog_Service as sourcing Experience data
+> solely from the ThemeParks.wiki API, via a standalone out-of-band `Image_Sourcing_Job`
+> (`src/scripts/sourceImages.ts`, `imageOverrides.json`), and classifying Experiences into a
+> closed 6-value `Experience_Category` enum. **All of this catalog/live-sourcing architecture is
+> superseded by `disney-facilities-catalog-source`** (which makes Disney's own internal data
+> sources the sole static catalog source and deletes `sourceImages.ts`/`imageOverrides.json`
+> entirely), **with live data further split out by `disney-source-resilience`** (ThemeParks.wiki
+> is retained, but only as the live-data source — status/waits/forecast/dining
+> availability/showtimes — matched by `Enterprise_Id == externalId`, not as the catalog source).
+> The real `Experience_Category` enum (`packages/shared/src/enums.ts`) has ten values, adding
+> `Tour`, `Recreation`, `Spa`, `Event`, and `Resort` to the original six. **The Auth_Service,
+> Tracking_Service, Stats_Service, Friends_Service, Sharing_Service, and Aggregate_Ratings_Service
+> sections of this spec remain accurate and are unaffected by this note** — only the
+> Catalog_Service's sourcing architecture, the `Image_Sourcing_Job`, and the enum/nav details
+> described below and in `tasks.md` are stale. This note is additive; the Overview's original text
+> is left in place rather than rewritten, per the repo's spec-editing convention.
+
 The Disney World Tracker is a mobile application backed by a hosted multi-service backend that catalogs Walt Disney World Experiences sourced from the public ThemeParks.wiki API, lets authenticated Users track Completions, Ratings, and Notes, surfaces personal completion statistics, computes anonymous aggregate ratings, exposes a friends graph with sharing, and highlights the highest-rated Experiences on the Home_Screen.
 
 The design treats the backend as a single deployable service composed of seven cohesive modules — `Auth_Service`, `Catalog_Service`, `Tracking_Service`, `Stats_Service`, `Friends_Service`, `Sharing_Service`, and `Aggregate_Ratings_Service` — each with a clear API and storage boundary. This monolith-with-clear-modules approach keeps deployment and operations simple for a first release while leaving each module independently extractable.

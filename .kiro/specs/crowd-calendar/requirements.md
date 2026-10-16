@@ -239,6 +239,12 @@ This feature owns data collection, the wait-time model, the crowd index and fore
 9. THE frozen baseline SHALL be re-anchored deliberately rather than continuously, from a trailing 365-day window of the wait archive (R17), on a low cadence. A 365-day mean is **season-neutral by construction**, which is precisely why it is the correct re-anchoring source and an exponential average is not. Re-anchoring is how R14.3's genuine multi-season change (a ride's capacity or popularity changing for real) is absorbed; freezing alone would go stale.
    UNTIL the archive holds a full year, the re-anchor SHALL be a no-op and the seeded/established baseline SHALL stand. A stale-but-stable yardstick is strictly preferable to a self-referential one: the former misprices the level, the latter destroys the signal.
 
+   **Status (docs-drift audit, MEDIUM-2): pending, gated on data accrual (see tasks.md 21.5).**
+   This mechanism is correctly not yet built — `wait_archive` has not yet accumulated a year of
+   data — and `tasks.md` task 21.5 is honestly left unchecked for this reason. This is not drift;
+   this line exists only so a requirements.md-only reader doesn't mistake R14.9 for already-shipped
+   behavior.
+
 ### Requirement 15: Season-Tier Crowd Responsiveness
 
 **User Story:** As a Trip_Member, I want a mature seasonal wait estimate to still respond to how busy my specific date is, so that a packed Saturday and a dead Tuesday in the same season are not predicted identically.

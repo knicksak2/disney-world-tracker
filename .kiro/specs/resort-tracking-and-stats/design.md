@@ -256,6 +256,18 @@ export interface CompletionEntryDTO {
 
 ## Mobile
 
+> **Corrective/superseding note (docs-drift audit, MEDIUM-4).** The `Own_Areas`
+> `OwnStatsViewMode`/`OwnAreasPane`/"By Area" mobile presentation described below was fully
+> replaced by `stats-experience-redesign` — `StatsScreen.tsx` no longer references any of
+> `OWN_STATS_TABS`/`TabSelector`/`OwnStatsViewMode`/`OwnAreasPane`. The real current mobile
+> presentation is `CoverageDetailScreen.tsx`'s Lens_Switcher, which offers separate `'areas'` and
+> `'resorts'` lenses — a materially different structure from the "Resorts as a 4th area card"
+> design below: Resorts is its own lens, not folded into Areas. The backend `byAreaType`/`resort`
+> fields described throughout this section and elsewhere in this design remain accurate and
+> unaffected by `stats-experience-redesign`'s rewrite — only the mobile component names/structure
+> below are stale. This note is additive; the section's original text is left in place rather
+> than rewritten, per the repo's spec-editing convention.
+
 ### New Own_Stats_View mode
 
 `OwnStatsViewMode` gains `Own_Areas`; `OWN_STATS_TABS` gains an "Areas" tab

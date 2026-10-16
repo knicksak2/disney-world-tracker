@@ -41,7 +41,15 @@ Experience Activity Logging establishes a clean separation between **User Activi
   - `addLog(input: CreateLogInput): Promise<ExperienceLogDTO>`
   - `getVisitHistory(userId: string, experienceId: string): Promise<ExperienceVisitHistoryDTO>`
   - `deleteLog(userId: string, experienceId: string, logId: string): Promise<{ deleted: boolean; completionRemoved: boolean }>`
-  - `confirmRodeWithLog(taggedMemberId: string, originatingLogId: string): Promise<ExperienceLogDTO>`
+
+> **Corrective/superseding note (docs-drift audit, MEDIUM-1).** The listing above previously
+> included a `confirmRodeWithLog(taggedMemberId, originatingLogId): Promise<ExperienceLogDTO>`
+> method on `ExperienceLogRepo`; it does not exist. The real interface
+> (`apps/api/src/services/tracking/logs/repo.ts`) has only `addLog`, `getVisitHistory`,
+> `deleteLog`, and `getVisitSummaries`. R3's rode-with confirmation logic (R3.1/R3.2) is instead
+> implemented as inline SQL inside `apps/api/src/services/trips/repo.ts`'s `confirmRodeWithTag`
+> function. The behavior is correctly implemented and the requirement is satisfied — only the
+> interface/location description above was wrong.
 - `routes.ts`: Fastify routes mounted at `/me/experiences/:id/logs`.
 - `composeServices.ts`: Composed under `tracking: { logs: { repo, requireSession }, completion, rating, note, friendCompletions }`.
 

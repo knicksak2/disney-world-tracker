@@ -236,9 +236,13 @@ finishing with one full verification gate.
         experiencePickerFilters.prop.test.ts`): `festivalChips` dedup/labeling and
         `selectedFestivals` OR/AND composition + empty-set backward-compatibility
   - [x] 12.4 Component test extension (`apps/mobile/src/screens/catalog/__tests__/
-        DestinationScreen.layouts.test.tsx`): Festival chip rendering per distinct tagged slug,
-        selecting a chip narrows results while preserving Land grouping, no chip for an
-        unobserved slug
+        ParkDestinationScreen.test.tsx` — corrected from the originally-cited
+        `DestinationScreen.layouts.test.tsx`, which does not render this screen's Festival UI and
+        has zero festival-related content; the real `selectedFestivals`/`toggleFestivalFilter`/
+        "FESTIVALS" Filters-modal section live on `ParkDestinationScreen.tsx`, not
+        `DestinationScreen.tsx`'s `ThemeOrWaterParkLayout`, which no longer exists): Festival chip
+        rendering per distinct tagged slug, selecting a chip narrows results while preserving Land
+        grouping, no chip for an unobserved slug
 
 - [x] 13. Checkpoint — final verification gate (re-run after task 12)
   - [x] 13.1 Run full `npm run verify` across all workspaces once, as the final gate for this
