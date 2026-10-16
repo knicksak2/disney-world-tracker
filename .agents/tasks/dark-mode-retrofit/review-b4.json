@@ -1,0 +1,69 @@
+{
+  "verdict": "APPROVED",
+  "findings": [
+    {
+      "id": 1,
+      "severity": "non-blocking",
+      "confidence": "confirmed values; visual impact likely",
+      "label": "Expenses tab switcher emphasis inverts in dark",
+      "detail": "EXPENSES.dark.tabIdleText = textPrimary #f3eefc is brighter than the active primaryFg #c4a3ff, and the active pill (surface #1e1430) is darker than the track (surfaceAlt #2a1d42). Confirm at the screenshot pass; if confirmed, record a design exception (e.g. idle -> textSecondary, a lighter active pill) and add a dark idle-vs-active assertion."
+    },
+    {
+      "id": 2,
+      "severity": "non-blocking",
+      "confidence": "confirmed",
+      "label": "Tier count pill active state vanishes in dark",
+      "detail": "ExpenseFormModal tierCountPillCard (rowActiveBg + violetHairline) and tierCountPillCardActive (quickActionBg + violetBorderActive) both resolve to violet.tint #392b51 + violet.border #584678. Give the active pair a distinct dark value (e.g. border primaryFg) as a recorded exception."
+    },
+    {
+      "id": 3,
+      "severity": "non-blocking",
+      "confidence": "confirmed values; visual impact likely",
+      "label": "Alcohol Switch 'on' reads weaker than 'off'",
+      "detail": "FORM_SWITCH.dark.trackOn #584678 is nearly identical to trackOff #4a3a6b, and the #7e57c2 on-thumb is dimmer than the white off-thumb. Consider trackOn -> violet.fill/primaryFg by exception and add a test (switch colours are untested)."
+    },
+    {
+      "id": 4,
+      "severity": "non-blocking",
+      "confidence": "likely",
+      "label": "Ink-indigo names become accent-violet",
+      "detail": "#1e1b4b (member/flow names, Balances active toggle text) -> DARK_TONAL.violet.fg, which equals primaryFg, so names share the link/accent hue in dark where light shows near-black ink. Rule-compliant; check in screenshots whether textPrimary is the intended role."
+    },
+    {
+      "id": 5,
+      "severity": "non-blocking",
+      "confidence": "confirmed",
+      "label": "Two TextInputs lack keyboardAppearance",
+      "detail": "ExpenseFormModal matrixCountInput and tierCountInput sit in tiers.map((t, tIdx)) callbacks that shadow the theme and were skipped. Rename the parameter (as done for the tier-name block) and add keyboardAppearance={t.scheme}."
+    },
+    {
+      "id": 6,
+      "severity": "non-blocking",
+      "confidence": "confirmed",
+      "label": "Dark-only placeholder ternary is an undocumented design deviation",
+      "detail": "Six TextInputs use t.scheme === 'dark' ? t.color.textSecondary : undefined instead of the design's unconditional textSecondary, which is correct for light parity (Property 8). The integrator should record this in design.md's third-party/native rules so batches stay consistent."
+    },
+    {
+      "id": 7,
+      "severity": "non-blocking",
+      "confidence": "confirmed",
+      "label": "Typecheck/related-tests evidence is scoped",
+      "detail": "C5 used a temporary out-of-repo tsconfig over B4 files (881 files, exit 0) because root tsc stops on B7's ChangePasswordControl.tsx(290,3) TS1005. Integration must run the full npm run verify."
+    },
+    {
+      "id": 8,
+      "severity": "non-blocking",
+      "confidence": "confirmed",
+      "label": "Untested dark values",
+      "detail": "FORM_SWITCH, AVATAR_FILL, tier matrix/count pill states, TripSchedule settings/item-settings modals, park-hours stripes and the Expenses idle-tab label have no dark assertions; findings 2 and 3 live in this gap, so they need screenshot coverage."
+    },
+    {
+      "id": 9,
+      "severity": "non-blocking",
+      "confidence": "likely",
+      "label": "showtimePillActive primary fill on surfaceAlt",
+      "detail": "Flagged by the coder (DoD 8); the integrator should check its contrast against the iteration-3 surfaceAlt pairs."
+    }
+  ],
+  "reviewDoc": "c:\\Users\\knick\\dev\\disney-app\\.agents\\tasks\\dark-mode-retrofit\\review-b4.md"
+}

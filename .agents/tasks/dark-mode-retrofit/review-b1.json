@@ -1,0 +1,27 @@
+{
+  "verdict": "APPROVED",
+  "findings": [
+    {
+      "id": "B1-1",
+      "severity": "non-blocking",
+      "confidence": "confirmed",
+      "label": "Crowd scale kept invariant against rule V's fallback",
+      "detail": "CrowdCalendar's CROWD_LEVEL (quiet #3fa34d, belowAverage #8bbf3f, high #e8792b, peak #d64545) and accent 'Moderate' are fills behind white text that fails 4.5:1 in dark. Rule V says 'if it doesn't, use F'. Literal F would map Quiet and Below-average to the same green.fill #1f7a52 and merge two scale levels. The coder kept the scale mode-invariant (contrast identical to light) and reported the conflict. Integrator: ratify this as a recorded design exception, or amend rule V so the F fallback applies only when the scheme change causes the failure. If overruled, the (c) assertion on CROWD_LEVEL.dark.quiet changes with it."
+    },
+    {
+      "id": "B1-2",
+      "severity": "non-blocking",
+      "confidence": "confirmed",
+      "label": "Dark text hierarchy inverts in ResortGuide and LocationGroup",
+      "detail": "Rule 3 correctly maps the near-black violet headings and body copy (#190c2d, #372f4a, #4a3f60, #371756) to violet.fg #c4a3ff. It maps the muted neutral #655d78 (L 0.1195 < 0.12) to textPrimary #f3eefc. So RESORT_GUIDE.bodyMuted and LOCATION.briefSub render brighter than heading/briefTitle, and body and heading share one colour. Check on the screenshot pass, and record a design exception if unacceptable (e.g. headings -> textPrimary, #655d78 -> textSecondary)."
+    },
+    {
+      "id": "B1-3",
+      "severity": "non-blocking",
+      "confidence": "confirmed",
+      "label": "Tier badges on the hotel photo darken in dark mode",
+      "detail": "RESORTS.tierDeluxe/tierVilla/tierModerate/tierValue follow rule 3 F (orange/violet/sky.fill) even though they sit on the hero photo, which doesn't change with scheme. This is rule-correct and improves white-text contrast, but the badges now differ between modes over identical imagery. Confirm on screenshots."
+    }
+  ],
+  "reviewDoc": "c:\\Users\\knick\\dev\\disney-app\\.agents\\tasks\\dark-mode-retrofit\\review-b1.md"
+}

@@ -1,0 +1,34 @@
+{
+  "verdict": "APPROVED",
+  "findings": [
+    {
+      "id": "B6-1",
+      "severity": "non-blocking",
+      "confidence": "confirmed",
+      "label": "ShareComposer selected/unselected icon collision",
+      "detail": "In dark, SHARE_COMPOSER.dark.unselectedIcon (DARK_TONAL.violet.fg) and the selected t.color.primaryFg are both #c4a3ff, so the muted-vs-emphasised recipient ring is lost. Selection is still shown by glyph and card stripe. This is rule-1a/3-correct but against the light intent. Raise it at the screenshot/integration step: use a muted dark value (e.g. darkColor.textSecondary/borderStrong) as a recorded design exception and add a dark assertion."
+    },
+    {
+      "id": "B6-2",
+      "severity": "non-blocking",
+      "confidence": "confirmed",
+      "label": "ParkWaitPulse active ring nearly invisible in dark",
+      "detail": "activeBorder -> DARK_TONAL.green.border #2e5150 with activeShadow #000000 is barely stronger than the inactive violet.border #584678. Confirm with a screenshot (the coder flagged it). If confirmed, treat the state ring as role T (green.fg) by design exception."
+    },
+    {
+      "id": "B6-3",
+      "severity": "non-blocking",
+      "confidence": "confirmed",
+      "label": "Typecheck/related-tests evidence is scoped",
+      "detail": "C5 was a TS-API check of the 68 B6 files (0 diagnostics) because B7's ChangePasswordControl.tsx syntax error blocks root tsc. C6 had 10 suites fail to load on B4/B5/B7 in-flight files, so the navigation/friends/notificationNavigation suites never ran against B6. Integration must run the full npm run verify."
+    },
+    {
+      "id": "B6-4",
+      "severity": "non-blocking",
+      "confidence": "confirmed",
+      "label": "Share/Attribution dark values untested",
+      "detail": "InboxScreen, SentSharesScreen, ShareComposerScreen and AttributionScreen have no dark render assertions (accepted by the plan). Screenshots for these screens matter, since B6-1 is exactly the kind of defect this gap lets through."
+    }
+  ],
+  "reviewDoc": "c:\\Users\\knick\\dev\\disney-app\\.agents\\tasks\\dark-mode-retrofit\\review-b6.md"
+}

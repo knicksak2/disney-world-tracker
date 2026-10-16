@@ -1,0 +1,41 @@
+{
+  "verdict": "CHANGES_REQUESTED",
+  "findings": [
+    {
+      "id": 1,
+      "severity": "MEDIUM",
+      "title": "Light-colour multiset audit misses real-tree read forms (named imports, aliased palette records, numeric alpha normalisation, ambiguous exemption clause)",
+      "where": "task design DoD item 2; spec design 'Light-colour multiset audit'; spec task 9 Done-when",
+      "fix": "Extend before(F) to bare reads of imported color/categoryVisual/etc. names; resolve `const x = usePalette(P)` / `const x = P[t.scheme]` aliases in after(F); normalise rgba numerically via Number(); count rule-5 exempt literals on both sides; copy spec design's palette read-form sentence into the task design."
+    },
+    {
+      "id": 2,
+      "severity": "NIT",
+      "title": "Rule 2a covers only `${theme.color.X}NN`; tree also suffixes park accents, tier colours and palette values",
+      "where": "rule 2a; Property 7",
+      "fix": "Generalise rule 2a to any token/palette `X + 'NN'` / `${X}NN`; extend Property 7's #rrggbb check to parkAccent and categoryVisual/resortVisual tint+fill; require suffixed palette values be #rrggbb."
+    },
+    {
+      "id": 3,
+      "severity": "NIT",
+      "title": "Category-fill prose: '8 of 11' should be 9 of 11; not every dark fill is a DARK_TONAL fill",
+      "where": "task design 'Category fills'",
+      "fix": "Correct the count and name the Game/Event, Other, Resort exceptions."
+    },
+    {
+      "id": 4,
+      "severity": "NIT",
+      "title": "Req 7.5 'background they sit on' vs PrimaryButton/Chip-active computed only against surface (2.98/2.67 on surfaceAlt)",
+      "where": "requirements 7.5; task design non-text graphics table",
+      "fix": "Add background rows (3.70/3.32) to the table and CONTRAST_REQUIREMENTS and scope 7.5 to surface/background, or have batches report any PrimaryButton on surfaceAlt."
+    },
+    {
+      "id": 5,
+      "severity": "NIT",
+      "title": "Spec task 7.6 still opens by pointing at the .agents scratch file",
+      "where": "tasks.md 7.6",
+      "fix": "Mark the original pointer '(superseded by the iteration-3 note below)'."
+    }
+  ],
+  "reviewDoc": "c:\\Users\\knick\\dev\\disney-app\\.agents\\tasks\\dark-mode-retrofit\\design-review.md"
+}

@@ -1,0 +1,41 @@
+{
+  "verdict": "APPROVED",
+  "findings": [
+    {
+      "id": "B2-1",
+      "severity": "non-blocking",
+      "confidence": "confirmed",
+      "label": "Rule-1 gap: starRating as a fill behind white",
+      "detail": "ParkPassportCard pickerActiveBg (#f59e0b fill, white text) uses DARK_TONAL.amber.fill by analogy with rule 4. A literal rule-1 reading gives dark starRating #f6c343 (~1.6:1 under white). Integrator should add starRating to rule 4's status-fill list or record the ruling so other batches resolve it the same way."
+    },
+    {
+      "id": "B2-2",
+      "severity": "non-blocking",
+      "confidence": "confirmed",
+      "label": "Plan/design conflict on ForecastChart bars",
+      "detail": "w2-plan says ForecastChart bars use primaryFg, but the source reads primaryLight, which rule 1a leaves in its natural role. Switching would change light (#7e57c2 -> #5b2a86). The coder correctly followed the design. Correct the plan text."
+    },
+    {
+      "id": "B2-3",
+      "severity": "non-blocking",
+      "confidence": "possible",
+      "label": "Neutral-T band flattens muted copy",
+      "detail": "#655d78 (L 0.1195 < 0.12) maps to textPrimary, so in dark LensSwitcher's inactive label (#f3eefc) is brighter than the active primaryFg label, and the cockpit, lore and dining muted labels lose their secondary weight. Rule-compliant and matches B1. Raise it as a design question for the W3 screenshot pass."
+    },
+    {
+      "id": "B2-4",
+      "severity": "non-blocking",
+      "confidence": "confirmed",
+      "label": "NoteControl Switch left on platform defaults",
+      "detail": "The plan asked for a palette pair, but the Switch has no track/thumb literals, and adding colours would change light. Confirm on dark screenshots that the default track reads acceptably on surface."
+    },
+    {
+      "id": "B2-5",
+      "severity": "non-blocking",
+      "confidence": "confirmed",
+      "label": "LiveWaits moderate status dot is scheme-dependent",
+      "detail": "#f59e0b -> t.color.starRating (dark #f6c343) by rule-1 first match, while the low/high/down dots are V-invariant in WAIT_STATUS. Accept, or move the moderate step into WAIT_STATUS if an invariant scale is intended."
+    }
+  ],
+  "reviewDoc": "c:\\Users\\knick\\dev\\disney-app\\.agents\\tasks\\dark-mode-retrofit\\review-b2.md"
+}

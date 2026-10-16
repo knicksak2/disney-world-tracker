@@ -1,0 +1,42 @@
+{
+  "verdict": "APPROVED",
+  "findings": [
+    {
+      "id": "B5-1",
+      "severity": "non-blocking",
+      "confidence": "confirmed",
+      "label": "HUB_SECTIONS static .light palette read",
+      "file": "apps/mobile/src/screens/trips/TripDetailScreen.tsx:136-184",
+      "detail": "HUB_SECTIONS[].color reads HUB_SECTION_COLOR.light.*. That is a module-scope colour in a non-allowed palette read form, and it contradicts the w2-plan's 'don't keep a module-scope colour'. The data is dead (nothing renders HubSection.color), and the unowned tripStructureRegression snapshot pins the light hexes.",
+      "action": "Integrator: either drop or replace HubSection.color and re-record the tripStructureRegression snapshot, or explicitly accept it as dead data."
+    },
+    {
+      "id": "B5-2",
+      "severity": "non-blocking",
+      "confidence": "confirmed",
+      "label": "Batch report lacks literal output tails",
+      "file": ".agents/tasks/dark-mode-retrofit/w2-B5-report.md",
+      "detail": "C8 requires literal C4/C5/C6/C7 output tails. The report gives quoted counts (guard 9/9, 11 suites / 189 tests, related sweep 35 / 451, 0 typecheck errors) and a hand-transcribed audit DIFF breakdown instead of raw output.",
+      "action": "Paste the raw tails at integration, or let the integrator's verification run supply them."
+    },
+    {
+      "id": "B5-3",
+      "severity": "non-blocking",
+      "confidence": "confirmed",
+      "label": "Active kind-chip icon not asserted",
+      "file": "apps/mobile/src/screens/trips/TripReservationsScreen.tsx:507",
+      "detail": "The rule-1a icon colour (active ? t.color.textOnPrimary : t.color.textSecondary) has no test. The Property 22 case asserts only the chip fill and label.",
+      "action": "Add an icon-colour assertion to the Property 22 dark case."
+    },
+    {
+      "id": "B5-4",
+      "severity": "non-blocking",
+      "confidence": "confirmed",
+      "label": "Four owned files with no dark render assertion",
+      "file": "ResortPickerModal.tsx, RodeWithConfirmScreen.tsx, TripInviteScreen.tsx, TripGuestManagementModal.tsx",
+      "detail": "These files have guard and audit coverage only. The plan sanctions this. TripGuestManagementModal renders in the unowned TripGuestManagement.test.tsx, which has no dark assertion.",
+      "action": "Cover these files in the W3 screenshot pass."
+    }
+  ],
+  "reviewDoc": "c:\\Users\\knick\\dev\\disney-app\\.agents\\tasks\\dark-mode-retrofit\\review-b5.md"
+}
