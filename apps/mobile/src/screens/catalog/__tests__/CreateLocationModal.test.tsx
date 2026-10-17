@@ -3,8 +3,8 @@
 // Validates: Requirements 6.1, 6.2, 6.3, 6.4, 7.1, 7.2, 7.3, 7.4
 
 import React from 'react';
-import { KeyboardAvoidingView, Platform, StyleSheet } from 'react-native';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { Keyboard, KeyboardAvoidingView, Platform, StyleSheet } from 'react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import type { ReactTestInstance } from 'react-test-renderer';
 
 import type { LocationSuggestionDTO, UserSubmittedLocationDTO } from '@dwt/shared';
@@ -303,6 +303,69 @@ describe('CreateLocationModal', () => {
       const kav = modal.findByType(KeyboardAvoidingView);
       expect(kav.props.behavior).toBeUndefined();
     } finally {
+      Platform.OS = originalPlatform;
+    }
+  });
+
+  test('on Android, soft keyboard dynamically applies bottom padding and clamps maxHeight so inputs and buttons are not hidden behind keyboard', () => {
+    const originalPlatform = Platform.OS;
+    let keyboardShowCallback: ((e: unknown) => void) | undefined;
+    let keyboardHideCallback: (() => void) | undefined;
+
+    const addListenerSpy = jest.spyOn(Keyboard, 'addListener').mockImplementation((event, callback) => {
+      if (event === 'keyboardDidShow') {
+        keyboardShowCallback = callback as (e: unknown) => void;
+      } else if (event === 'keyboardDidHide') {
+        keyboardHideCallback = callback as () => void;
+      }
+      return { remove: jest.fn() } as any;
+    });
+
+    try {
+      Platform.OS = 'android';
+      render(
+        <CreateLocationModal
+          park="Magic Kingdom"
+          visible={true}
+          onClose={jest.fn()}
+          onLocationSelected={jest.fn()}
+        />,
+      );
+      const modal = screen.getByTestId('create-location-modal');
+      const kav = modal.findByType(KeyboardAvoidingView);
+      expect(kav.props.behavior).toBeUndefined();
+
+      // Initially no bottom padding
+      const initialBackdropStyle = StyleSheet.flatten(kav.props.style);
+      expect(initialBackdropStyle.paddingBottom).toBeFalsy();
+
+      // Keyboard shows (320 height)
+      act(() => {
+        keyboardShowCallback?.({ endCoordinates: { height: 320, width: 400, screenX: 0, screenY: 480 } });
+      });
+
+      // Backdrop lifts container
+      const activeBackdropStyle = StyleSheet.flatten(kav.props.style);
+      expect(activeBackdropStyle.paddingBottom).toBe(320);
+
+      // Container clamps maxHeight
+      const container = screen.getByTestId('create-location-modal-container');
+      const containerStyle = StyleSheet.flatten(container.props.style);
+      expect(containerStyle.maxHeight).toBeDefined();
+      expect(typeof containerStyle.maxHeight).toBe('number');
+      expect(containerStyle.maxHeight).toBeGreaterThan(0);
+
+      // Inputs remain accessible
+      expect(screen.getByTestId('create-location-name-input')).toBeTruthy();
+
+      // Keyboard hides
+      act(() => {
+        keyboardHideCallback?.();
+      });
+      const closedBackdropStyle = StyleSheet.flatten(kav.props.style);
+      expect(closedBackdropStyle.paddingBottom).toBeFalsy();
+    } finally {
+      addListenerSpy.mockRestore();
       Platform.OS = originalPlatform;
     }
   });

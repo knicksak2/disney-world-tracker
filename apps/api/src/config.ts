@@ -19,6 +19,11 @@
  */
 
 import { z } from 'zod';
+import {
+  type ReminderConfig,
+  parseReminderLeads,
+  parseClockMinutes,
+} from './services/tripBooking/reminderConfig.js';
 
 // ---------------------------------------------------------------------------
 // Env schema
@@ -61,6 +66,26 @@ const envSchema = z.object({
   PIN_RECONCILE_CRON_SECRET: z
     .string()
     .min(1, 'PIN_RECONCILE_CRON_SECRET is required and must not be empty'),
+
+  // Shared secret for the internal Trip Booking reminders cron (trip-booking-timeline R8.10, R8.15) —
+  // a dedicated secret, required and non-blank after trim, distinct from other cron secrets.
+  TRIP_BOOKING_CRON_SECRET: z
+    .string()
+    .trim()
+    .min(1, 'TRIP_BOOKING_CRON_SECRET is required and must not be empty'),
+
+  // Trip booking reminder runner parameters (trip-booking-timeline R7, R8, R14)
+  BOOKING_REMINDER_LEADS: z.string().default('eve,open'),
+  BOOKING_REMINDER_CATCHUP_MINUTES: z.coerce.number().int().positive().default(180),
+  BOOKING_REMINDER_MIN_PASS_INTERVAL_SECONDS: z.coerce
+    .number()
+    .int('BOOKING_REMINDER_MIN_PASS_INTERVAL_SECONDS must be an integer')
+    .min(60, 'BOOKING_REMINDER_MIN_PASS_INTERVAL_SECONDS must be between 60 and 599')
+    .max(599, 'BOOKING_REMINDER_MIN_PASS_INTERVAL_SECONDS must be between 60 and 599')
+    .default(300),
+  BOOKING_REMINDER_SEND_START: z.string().default('06:00'),
+  BOOKING_REMINDER_SEND_END: z.string().default('23:00'),
+  BOOKING_REMINDER_RETENTION_DAYS: z.coerce.number().int().positive().default(30),
 
   // HTTP Basic authentication credentials for the internal operator Admin Panel (admin-panel R1.5).
   ADMIN_PANEL_USERNAME: z
@@ -142,7 +167,48 @@ const envSchema = z.object({
 
   // Directory for historical crowd seed HTML files (Task 7.2)
   CROWD_SEED_DIR: z.string().default('seed-data/crowd/'),
-});
+})
+  .superRefine((data, ctx) => {
+    if (data.TRIP_BOOKING_CRON_SECRET) {
+      const trimmedSecret = data.TRIP_BOOKING_CRON_SECRET.trim();
+      const trimmedSampling = data.SAMPLING_CRON_SECRET?.trim();
+      const trimmedPins = data.PIN_RECONCILE_CRON_SECRET?.trim();
+      if (trimmedSecret === trimmedSampling || trimmedSecret === trimmedPins) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['TRIP_BOOKING_CRON_SECRET'],
+          message:
+            'TRIP_BOOKING_CRON_SECRET must not equal SAMPLING_CRON_SECRET or PIN_RECONCILE_CRON_SECRET',
+        });
+      }
+    }
+
+    const startM = parseClockMinutes(data.BOOKING_REMINDER_SEND_START);
+    if (startM === null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['BOOKING_REMINDER_SEND_START'],
+        message: 'BOOKING_REMINDER_SEND_START must be in HH:MM format (00:00 - 23:59)',
+      });
+    }
+
+    const endM = parseClockMinutes(data.BOOKING_REMINDER_SEND_END);
+    if (endM === null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['BOOKING_REMINDER_SEND_END'],
+        message: 'BOOKING_REMINDER_SEND_END must be in HH:MM format (00:00 - 23:59)',
+      });
+    }
+
+    if (startM !== null && endM !== null && startM >= endM) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['BOOKING_REMINDER_SEND_START'],
+        message: 'BOOKING_REMINDER_SEND_START must be strictly before BOOKING_REMINDER_SEND_END',
+      });
+    }
+  });
 
 type EnvShape = z.infer<typeof envSchema>;
 
@@ -177,6 +243,10 @@ export interface AppConfig {
   };
   readonly pins: {
     readonly reconcileCronSecret: string;
+  };
+  readonly tripBooking: {
+    readonly cronSecret: string;
+    readonly reminder: ReminderConfig;
   };
   readonly admin: {
     readonly username: string;
@@ -274,6 +344,17 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     },
     pins: {
       reconcileCronSecret: data.PIN_RECONCILE_CRON_SECRET,
+    },
+    tripBooking: {
+      cronSecret: data.TRIP_BOOKING_CRON_SECRET,
+      reminder: {
+        leads: parseReminderLeads(data.BOOKING_REMINDER_LEADS),
+        catchupMinutes: data.BOOKING_REMINDER_CATCHUP_MINUTES,
+        minPassIntervalSeconds: data.BOOKING_REMINDER_MIN_PASS_INTERVAL_SECONDS,
+        sendStartMinutes: parseClockMinutes(data.BOOKING_REMINDER_SEND_START) ?? 360,
+        sendEndMinutes: parseClockMinutes(data.BOOKING_REMINDER_SEND_END) ?? 1380,
+        retentionDays: data.BOOKING_REMINDER_RETENTION_DAYS,
+      },
     },
     admin: {
       username: data.ADMIN_PANEL_USERNAME,

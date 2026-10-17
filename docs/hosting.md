@@ -119,6 +119,24 @@ You can hide the cold start without paying by pinging the service on a schedule 
 
 **Do NOT ping the database to kill the Neon wake.** It's tempting to point a second ping at an endpoint that runs `SELECT 1` so Neon never scales to zero. Don't. Neon's Free plan includes **100 CU-hours per project per month** (~400 hours at the default 0.25 CU). Keeping Neon warm ~19 hours/day is ~580 hours of active compute — well past the 400-hour ceiling. When you hit the 100 CU-hour cap, **Neon suspends your compute until the next month resets**, taking the database offline. That's far worse than a 1-3s wake. Let Neon scale to zero; real daytime traffic keeps it warm on its own between the 5-minute idle gaps, and the occasional first-query wake is a couple of seconds, not a lockout. If you truly want zero database delay for free, the only path is self-hosting Postgres on an always-on VM (see [Honest Caveats](#honest-caveats)) — a Postgres you run yourself never scales to zero, but you own the ops.
 
+### Dedicated Trip Booking Reminders Cron (Reminder_Cron)
+
+Trip booking reminders are driven by a **dedicated Reminder_Cron** job on [cron-job.org](https://cron-job.org), completely separate from the keep-alive pinger. The Keep_Alive_Cron (`GET /health`) touches no database and must **never** call the reminder endpoint, because querying Trips from Neon on a 10-minute keep-alive cadence (~19 hours/day) would consume ~580 CU-hours of Neon compute and breach Neon's free-tier ceiling (~400 CU-hours).
+
+Because booking windows open at fixed WDW wall-clock times (06:00 for dining and 07:00 for Lightning Lane, with 20:00 for eve reminders and 09:00 for week-ahead reminders), the Reminder_Cron fires only a few times per day at minutes 0, 10, and 20 of those hours:
+
+- **Endpoint:** `POST` or `HEAD https://<render-host>/internal/trip-booking-reminders/run` (a `HEAD` request returns no body and avoids cron-job.org's 8 KB limit).
+- **Authentication:** `x-cron-secret: <TRIP_BOOKING_CRON_SECRET>` header (dedicated secret, distinct from other cron secrets).
+- **Timezone:** **`America/New_York`** (ensures schedule follows WDW calendar wall-clock time across DST transitions).
+- **Crontab (default, `week` lead disabled):** `0,10,20 6,7,20 * * *` (at most 9 passes per day).
+- **Crontab (when `week` lead is enabled):** `0,10,20 6,7,9,20 * * *` (at most 12 passes per day).
+- **Primary / retry structure:** The first tick at minute 00 acts as the primary pass. The ticks at minutes 10 and 20 serve as automatic retries if Render experiences a cold-start delay or a transient error. Consecutive ticks are 10 minutes (600 seconds) apart, cleanly clearing the 300-second debounce.
+- **Hosting impact:**
+  - **Render:** ~0.25 extra instance-hour/day for the 06:00 wake (~8 hours/month on top of ~589 hours, comfortably within the 750 instance-hour cap).
+  - **Neon:** At most 9 short wake-ups/day (12 with the `week` lead), well within the ~400 CU-hour free-tier budget.
+  - **Redis:** Zero Redis commands (reminders are derived stateless from Postgres and claimed via idempotency ledger).
+
+
 ---
 
 ## Neon — PostgreSQL

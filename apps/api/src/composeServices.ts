@@ -116,6 +116,9 @@ import type {
 } from './services/trips/events.js';
 import { createTripExpenseRepo } from './services/tripExpenses/repo.js';
 import type { ExpenseAffectedNotice } from './services/tripExpenses/events.js';
+import { createTripBookingRepo } from './services/tripBooking/repo.js';
+import { createReminderRunner } from './services/tripBooking/runner.js';
+import type { TripBookingReminderNotice } from './services/tripBooking/events.js';
 
 import { createPushRepo } from './services/push/repo.js';
 import { createNotificationPreferenceRepo } from './services/push/preferenceRepo.js';
@@ -249,6 +252,7 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
     experienceListRepo,
   );
   const tripExpenseRepo = createTripExpenseRepo(pool);
+  const tripBookingRepo = createTripBookingRepo(pool);
 
   /**
    * Synchronous Pin award port (pin-collection R2.1-R2.3). Handed to every
@@ -573,6 +577,29 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
         );
       });
   };
+
+  /**
+   * Background `TripBookingReminder` dispatch (Feature: trip-booking-timeline R9.5).
+   */
+  const emitTripBookingReminder = async (
+    event: TripBookingReminderNotice,
+  ): Promise<void> => {
+    try {
+      await notificationService.handleTripBookingReminder(event);
+    } catch (err: unknown) {
+      notificationLogger.error(
+        { err, tripId: event.tripId, lead: event.lead },
+        'TripBookingReminder dispatch failed',
+      );
+    }
+  };
+
+  const tripBookingReminderRunner = createReminderRunner({
+    repo: tripBookingRepo,
+    dispatch: emitTripBookingReminder,
+    config: config.tripBooking.reminder,
+    logger: notificationLogger,
+  });
   // The leaderboard cache and the lockout service accept a narrow
   // structural Redis interface whose `set` is a single rest-arg overload;
   // ioredis's `Redis` exposes many `set` overloads that are not assignable
@@ -846,6 +873,12 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
       requireSession: sessionMiddleware,
       pool,
       emitExpenseAffected,
+    },
+    tripBooking: {
+      repo: tripBookingRepo,
+      requireSession: sessionMiddleware,
+      pool,
+      reminderRunner: tripBookingReminderRunner,
     },
     pins: { repo: pinRepo, requireSession: sessionMiddleware },
     pinShowcase: {

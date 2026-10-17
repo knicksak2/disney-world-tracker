@@ -79,6 +79,10 @@ export type ExpoPushData =
        * (experience-lists R8.1, R8.3).
        */
       readonly experienceListId: string;
+    }
+  | {
+      /** Trip whose Booking_Timeline_Screen a booking-reminder tap opens. Carries NO other field (R9.7). */
+      readonly bookingTripId: string;
     };
 
 /**

@@ -45,6 +45,7 @@ import MarkGottenUndoToast from './MarkGottenUndoToast';
 import RateOnCheckoffPrompt from './RateOnCheckoffPrompt';
 import { useFoodListNotice } from './foodListNotice';
 import { useOpenExperience } from '../navigation/experienceNavigation';
+import { useKeyboardBottomInset } from '../../hooks/useKeyboardBottomInset';
 
 export interface FoodListDetailParams {
   readonly foodListId: string;
@@ -156,6 +157,11 @@ export default function FoodListDetailScreen(): JSX.Element {
   const [createLocationModalVisible, setCreateLocationModalVisible] = useState(false);
   const [pickerModalVisible, setPickerModalVisible] = useState(false);
   const [isAddingItems, setIsAddingItems] = useState(false);
+
+  const {
+    keyboardInset: restaurantSearchKeyboardInset,
+    getAvailableModalHeight: getRestaurantSearchModalHeight,
+  } = useKeyboardBottomInset(restaurantSearchModalVisible);
 
   useEffect(() => {
     if (restaurantSearch === debouncedRestaurantSearch) return;
@@ -1600,9 +1606,22 @@ export default function FoodListDetailScreen(): JSX.Element {
       >
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.modalBackdrop}
+          style={[
+            styles.modalBackdrop,
+            Platform.OS === 'android' && restaurantSearchKeyboardInset > 0
+              ? { paddingBottom: restaurantSearchKeyboardInset }
+              : null,
+          ]}
         >
-          <View style={styles.modalContainer}>
+          <View
+            testID="restaurant-search-modal-container"
+            style={[
+              styles.modalContainer,
+              Platform.OS === 'android' && restaurantSearchKeyboardInset > 0
+                ? { maxHeight: getRestaurantSearchModalHeight(40) }
+                : null,
+            ]}
+          >
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Choose a Restaurant</Text>
               <Pressable

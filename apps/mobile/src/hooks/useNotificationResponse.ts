@@ -44,10 +44,18 @@ import type * as NotificationsModule from 'expo-notifications';
 
 import { loadNotifications } from '../env/notifications';
 import {
+  navigateToBookingTimeline,
   navigateToExperienceListDetail,
   navigateToFoodListDetail,
   navigateToNotificationCenter,
+  navigateToTripsList,
 } from '../navigation/navigationRef';
+import {
+  dispatchBookingTapEvent,
+  getBookingTapState,
+  subscribeBookingTapState,
+} from '../navigation/bookingTapState';
+import { setTripsListNotice } from '../navigation/tripsListNotice';
 import { useSessionStore } from '../state/sessionStore';
 
 // ---------------------------------------------------------------------------
@@ -68,6 +76,28 @@ export const NAV_READY_POLL_MS = 100;
 // ---------------------------------------------------------------------------
 // Pure helper
 // ---------------------------------------------------------------------------
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Extract a booking reminder tap from a tapped push notification.
+ *
+ * Checks for the presence of the `bookingTripId` key in `data`. If the key is
+ * present, returns an object with `tripId`: the non-empty UUID string if valid,
+ * or `null` if empty or not a well-formed UUID (Requirement 10.5, Property 39).
+ * Returns `null` when `bookingTripId` is absent or the payload is not an object.
+ */
+export function extractBookingTap(
+  response: NotificationsModule.NotificationResponse | null | undefined,
+): { readonly tripId: string | null } | null {
+  const data = response?.notification?.request?.content?.data;
+  if (data === null || typeof data !== 'object' || !('bookingTripId' in data)) {
+    return null;
+  }
+  const v = (data as { bookingTripId?: unknown }).bookingTripId;
+  return { tripId: typeof v === 'string' && UUID_RE.test(v) ? v : null };
+}
 
 /**
  * Extract a resolvable Share id from a tapped notification response.
@@ -214,6 +244,10 @@ export function extractExperienceListId(
 export function classifyTap(
   response: NotificationsModule.NotificationResponse | null | undefined,
 ): PendingTap {
+  const booking = extractBookingTap(response);
+  if (booking !== null) {
+    return { kind: 'bookingReminder', tripId: booking.tripId };
+  }
   const tripInviteId = extractTripInviteId(response);
   if (tripInviteId !== null) {
     return { kind: 'tripInvite', tripInviteId };
@@ -254,6 +288,7 @@ export function classifyTap(
  * share/role-change tap carries `{ experienceListId }` (R10.1).
  */
 export type PendingTap =
+  | { readonly kind: 'bookingReminder'; readonly tripId: string | null }
   | { readonly kind: 'share'; readonly shareId: string | null }
   | { readonly kind: 'friendRequest' }
   | { readonly kind: 'tripInvite'; readonly tripInviteId: string }
@@ -282,6 +317,12 @@ export type PendingTap =
  */
 function dispatchPendingTap(pending: PendingTap): boolean {
   switch (pending.kind) {
+    case 'bookingReminder':
+      if (pending.tripId === null) {
+        setTripsListNotice('That booking timeline is no longer available.');
+        return navigateToTripsList();
+      }
+      return navigateToBookingTimeline({ tripId: pending.tripId });
     case 'friendRequest':
       // The friend-request push carries no request id, so open the feed with
       // no focus target; the pending request still appears in the list.
@@ -329,11 +370,31 @@ export function useNotificationResponse(): void {
    * (R10.1). Reads the session straight from the store so it is never stale
    * across the listener and effect call sites.
    */
+  // Synchronize held booking tap state: if auth failed or was cancelled,
+  // discard any held booking tap (R10.3, R10.8).
+  useEffect(() => {
+    return subscribeBookingTapState((state) => {
+      if (
+        state.pending === null &&
+        pendingRef.current?.kind === 'bookingReminder'
+      ) {
+        pendingRef.current = null;
+      }
+    });
+  }, []);
+
   const flush = useCallback((): void => {
     if (flushingRef.current) {
       return;
     }
     if (pendingRef.current === null) {
+      return;
+    }
+    if (
+      pendingRef.current.kind === 'bookingReminder' &&
+      getBookingTapState().pending === null
+    ) {
+      pendingRef.current = null;
       return;
     }
 
@@ -355,8 +416,19 @@ export function useNotificationResponse(): void {
         flushingRef.current = false;
         return;
       }
+      if (
+        pending.kind === 'bookingReminder' &&
+        getBookingTapState().pending === null
+      ) {
+        pendingRef.current = null;
+        flushingRef.current = false;
+        return;
+      }
       const navigated = dispatchPendingTap(pending);
       if (navigated) {
+        if (pending.kind === 'bookingReminder') {
+          dispatchBookingTapEvent({ type: 'delivered' });
+        }
         pendingRef.current = null;
         flushingRef.current = false;
         return;
@@ -389,7 +461,13 @@ export function useNotificationResponse(): void {
         if (cancelled || last === null || last === undefined) {
           return;
         }
-        pendingRef.current = classifyTap(last);
+        const tap = classifyTap(last);
+        pendingRef.current = tap;
+        if (tap.kind === 'bookingReminder') {
+          dispatchBookingTapEvent({ type: 'tap', tripId: tap.tripId });
+        } else {
+          dispatchBookingTapEvent({ type: 'otherTap' });
+        }
         flush();
       } catch {
         // A failure to read the launch response must not crash startup; the
@@ -411,7 +489,13 @@ export function useNotificationResponse(): void {
     }
     const subscription = notifications.addNotificationResponseReceivedListener(
       (response) => {
-        pendingRef.current = classifyTap(response);
+        const tap = classifyTap(response);
+        pendingRef.current = tap;
+        if (tap.kind === 'bookingReminder') {
+          dispatchBookingTapEvent({ type: 'tap', tripId: tap.tripId });
+        } else {
+          dispatchBookingTapEvent({ type: 'otherTap' });
+        }
         flush();
       },
     );

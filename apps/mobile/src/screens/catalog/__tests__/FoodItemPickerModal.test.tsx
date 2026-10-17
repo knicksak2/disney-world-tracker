@@ -3,8 +3,8 @@
 // Validates: Requirements 1.9, 2.1, 2.2, 5.1, 5.2, 5.5, 5.6, 5.7, 6.5
 
 import React from 'react';
-import { FlatList, KeyboardAvoidingView, Platform, StyleSheet } from 'react-native';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { FlatList, Keyboard, KeyboardAvoidingView, Platform, StyleSheet } from 'react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import type { ReactTestInstance } from 'react-test-renderer';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
@@ -860,6 +860,73 @@ describe('FoodItemPickerModal', () => {
       const kav = modal.findByType(KeyboardAvoidingView);
       expect(kav.props.behavior).toBeUndefined();
     } finally {
+      Platform.OS = originalPlatform;
+    }
+  });
+
+  it('on Android, soft keyboard dynamically applies bottom padding and clamps maxHeight so search input and dish list are not hidden behind keyboard', async () => {
+    const originalPlatform = Platform.OS;
+    let keyboardShowCallback: ((e: unknown) => void) | undefined;
+    let keyboardHideCallback: (() => void) | undefined;
+
+    const addListenerSpy = jest.spyOn(Keyboard, 'addListener').mockImplementation((event, callback) => {
+      if (event === 'keyboardDidShow') {
+        keyboardShowCallback = callback as (e: unknown) => void;
+      } else if (event === 'keyboardDidHide') {
+        keyboardHideCallback = callback as () => void;
+      }
+      return { remove: jest.fn() } as any;
+    });
+
+    try {
+      Platform.OS = 'android';
+      apiRequestMock.mockImplementation((_method, path) => {
+        if (path === '/experiences/exp-1/food-items') {
+          return Promise.resolve(itemsEnvelope(MOCK_ITEMS));
+        }
+        return Promise.resolve({});
+      });
+      renderWithClient(
+        <FoodItemPickerModal
+          experienceId="exp-1"
+          visible={true}
+          onClose={jest.fn()}
+        />,
+      );
+      await screen.findByText('Churro with Chocolate Sauce');
+      const modal = screen.getByTestId('food-item-picker-modal');
+      const kav = modal.findByType(KeyboardAvoidingView);
+      expect(kav.props.behavior).toBeUndefined();
+
+      // Initially no bottom padding
+      const initialBackdropStyle = StyleSheet.flatten(kav.props.style);
+      expect(initialBackdropStyle.paddingBottom).toBeFalsy();
+
+      // Keyboard shows
+      act(() => {
+        keyboardShowCallback?.({ endCoordinates: { height: 320, width: 400, screenX: 0, screenY: 480 } });
+      });
+
+      // Backdrop lifts container with paddingBottom: 320
+      const activeBackdropStyle = StyleSheet.flatten(kav.props.style);
+      expect(activeBackdropStyle.paddingBottom).toBe(320);
+
+      // Container clamps maxHeight and clears fixed height
+      const container = screen.getByTestId('food-item-picker-container');
+      const containerStyle = StyleSheet.flatten(container.props.style);
+      expect(containerStyle.maxHeight).toBeDefined();
+      expect(typeof containerStyle.maxHeight).toBe('number');
+      expect(containerStyle.maxHeight).toBeGreaterThan(0);
+      expect(containerStyle.height).toBeUndefined();
+
+      // Keyboard hides
+      act(() => {
+        keyboardHideCallback?.();
+      });
+      const closedBackdropStyle = StyleSheet.flatten(kav.props.style);
+      expect(closedBackdropStyle.paddingBottom).toBeFalsy();
+    } finally {
+      addListenerSpy.mockRestore();
       Platform.OS = originalPlatform;
     }
   });

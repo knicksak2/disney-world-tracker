@@ -40,6 +40,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import {
   completedExperienceIdsFromFeed,
+  type PackingListDTO,
   type Park,
   type PlannedItemDTO,
   type TripDTO,
@@ -75,6 +76,7 @@ import GroupFavoritesSection from './GroupFavoritesSection';
 import { tripDetailKeys } from './tripDetailQueryKeys';
 import { tripPlannedListKeys } from './TripPlannedListScreen';
 import { tripFeedKeys } from './TripFeedScreen';
+import { bookingKeys, fetchPackingList } from './bookingTimelineApi';
 
 /** Wire shape of `GET /me`: the caller's identity (to gate the Edit control). */
 interface MeResponse {
@@ -102,6 +104,8 @@ export interface HubSection {
     | 'TripSchedule'
     | 'TripReservations'
     | 'TripExpenses'
+    | 'TripBookingTimeline'
+    | 'TripPackingList'
     | 'TripFeed'
     | 'TripMembers'
     | 'TripSummary';
@@ -156,6 +160,20 @@ const HUB_SECTION_DEFS: readonly HubSectionDef[] = [
     title: 'Expenses',
     body: 'Shared ledger, balances, and settlements.',
     icon: 'cash-outline',
+  },
+  {
+    key: 'booking',
+    route: 'TripBookingTimeline',
+    title: 'Booking timeline',
+    body: 'Key booking dates and dining reservation windows.',
+    icon: 'calendar-number-outline',
+  },
+  {
+    key: 'packing',
+    route: 'TripPackingList',
+    title: 'Packing list',
+    body: 'Collaborative packing checklist for the crew.',
+    icon: 'bag-check-outline',
   },
   {
     key: 'activity',
@@ -397,6 +415,22 @@ export default function TripDetailScreen({
     staleTime: 30 * 1000,
     retry: false,
   });
+
+  // Query packing list for packing tile badge
+  const packingQuery = useQuery<PackingListDTO, ApiError>({
+    queryKey: bookingKeys.packing(tripId),
+    queryFn: () => fetchPackingList(tripId),
+    staleTime: 30 * 1000,
+    retry: false,
+  });
+
+  const packingBadgeText = useMemo(() => {
+    if (packingQuery.isError || !packingQuery.data) {
+      return null;
+    }
+    const { packedCount = 0, totalCount = 0 } = packingQuery.data;
+    return `${packedCount} of ${totalCount}`;
+  }, [packingQuery.data, packingQuery.isError]);
 
   const callerId = meQuery.data?.user?.id;
   const members = Array.isArray(membersQuery.data) ? membersQuery.data : [];
@@ -971,6 +1005,76 @@ export default function TripDetailScreen({
                 <Text style={styles.tileTitle}>Expenses</Text>
                 <Text style={styles.tileDesc} numberOfLines={2}>
                   Shared ledger & balances.
+                </Text>
+              </Pressable>
+
+              {/* Tile 6: Booking timeline */}
+              <Pressable
+                style={styles.hubTile}
+                onPress={() =>
+                  navigation.navigate('TripBookingTimeline', { tripId })
+                }
+                accessibilityRole="button"
+                accessibilityLabel="Booking timeline"
+                testID="trip-detail-section-booking"
+              >
+                <View style={styles.tileBadge}>
+                  <Text style={[styles.tileBadgeText, { color: t.color.primaryFg }]}>
+                    Timeline
+                  </Text>
+                </View>
+                <View
+                  style={[
+                    styles.tileIconWrap,
+                    { backgroundColor: `${t.color.primaryLight}18` },
+                  ]}
+                >
+                  <Ionicons
+                    name="calendar-number-outline"
+                    size={20}
+                    color={t.color.primaryLight}
+                  />
+                </View>
+                <Text style={styles.tileTitle}>Booking timeline</Text>
+                <Text style={styles.tileDesc} numberOfLines={2}>
+                  Key booking dates & windows.
+                </Text>
+              </Pressable>
+            </View>
+
+            <View style={styles.gridRow}>
+              {/* Tile 7: Packing list */}
+              <Pressable
+                style={styles.hubTile}
+                onPress={() =>
+                  navigation.navigate('TripPackingList', { tripId })
+                }
+                accessibilityRole="button"
+                accessibilityLabel="Packing list"
+                testID="trip-detail-section-packing"
+              >
+                {packingBadgeText !== null ? (
+                  <View style={styles.tileBadge}>
+                    <Text style={[styles.tileBadgeText, { color: t.color.primaryFg }]}>
+                      {packingBadgeText}
+                    </Text>
+                  </View>
+                ) : null}
+                <View
+                  style={[
+                    styles.tileIconWrap,
+                    { backgroundColor: `${t.color.primary}18` },
+                  ]}
+                >
+                  <Ionicons
+                    name="bag-check-outline"
+                    size={20}
+                    color={t.color.primaryFg}
+                  />
+                </View>
+                <Text style={styles.tileTitle}>Packing list</Text>
+                <Text style={styles.tileDesc} numberOfLines={2}>
+                  Collaborative packing checklist.
                 </Text>
               </Pressable>
             </View>

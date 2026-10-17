@@ -45,6 +45,7 @@ export type TripAction =
   | 'promote'
   | 'demote'
   | 'delete_trip' // organizer-only (R4.2)
+  | 'edit_booking_settings' // trip-booking-timeline organizer-only (R12.1, R12.5)
   | 'add_planned_item'
   | 'edit_planned_item'
   | 'optimize_day'
@@ -52,7 +53,12 @@ export type TripAction =
   | 'add_rode_with'
   | 'add_comment'
   | 'add_reaction'
-  | 'leave_trip'; // member + organizer (R4.3, R4.4)
+  | 'leave_trip' // member + organizer (R4.3, R4.4)
+  | 'add_packing_item'
+  | 'toggle_packing_item'
+  | 'edit_packing_item'
+  | 'mark_booking_window_done'
+  | 'set_booking_reminder_mute'; // trip-booking-timeline member (R12.1, R12.2)
 
 /**
  * Actions any Trip_Member may perform regardless of role (R4.3). Organizers
@@ -67,6 +73,11 @@ const MEMBER_ACTIONS: ReadonlySet<TripAction> = new Set<TripAction>([
   'add_comment',
   'add_reaction',
   'leave_trip',
+  'add_packing_item',
+  'toggle_packing_item',
+  'edit_packing_item',
+  'mark_booking_window_done',
+  'set_booking_reminder_mute',
 ]);
 
 /**
@@ -82,6 +93,7 @@ const ORGANIZER_ONLY_ACTIONS: ReadonlySet<TripAction> = new Set<TripAction>([
   'promote',
   'demote',
   'delete_trip',
+  'edit_booking_settings',
 ]);
 
 /**

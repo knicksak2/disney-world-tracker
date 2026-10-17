@@ -34,6 +34,7 @@ import { useAppTheme } from '../../theme/useAppTheme';
 import { PICKER } from './FoodItemPickerModal.palette';
 import FoodItemLogHistorySheet from './FoodItemLogHistorySheet';
 import RestaurantFoodLogsSheet from './RestaurantFoodLogsSheet';
+import { useKeyboardBottomInset } from '../../hooks/useKeyboardBottomInset';
 
 export interface FoodItemPickerModalProps {
   /** Experience id if scoped to a Restaurant_Experience. */
@@ -203,6 +204,8 @@ export default function FoodItemPickerModal({
   const [historyItem, setHistoryItem] = useState<FoodItemDTO | null>(null);
   const [scopedLogsVisible, setScopedLogsVisible] = useState<boolean>(false);
   const [selectedItems, setSelectedItems] = useState<Map<string, FoodItemDTO>>(new Map());
+
+  const { keyboardInset, getAvailableModalHeight } = useKeyboardBottomInset(visible);
   // Stable FlatList `extraData`: a new identity only when the selection or the
   // scheme changes, so an unrelated parent render doesn't re-render every row.
   const listExtraData = useMemo(
@@ -608,9 +611,23 @@ export default function FoodItemPickerModal({
       >
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.backdrop}
+          style={[
+            styles.backdrop,
+            Platform.OS === 'android' && keyboardInset > 0 ? { paddingBottom: keyboardInset } : null,
+          ]}
         >
-          <View style={styles.container}>
+          <View
+            testID="food-item-picker-container"
+            style={[
+              styles.container,
+              Platform.OS === 'android' && keyboardInset > 0
+                ? {
+                    height: undefined,
+                    maxHeight: getAvailableModalHeight(40),
+                  }
+                : null,
+            ]}
+          >
             {/* Header */}
             <View style={styles.header}>
               <View style={styles.headerTitles}>

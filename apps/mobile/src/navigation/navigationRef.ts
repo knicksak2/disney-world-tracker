@@ -285,3 +285,38 @@ export function navigateToTripSchedule(params: { readonly tripId: string }): boo
   return true;
 }
 
+/**
+ * Navigate to the `TripBookingTimeline` section of a trip (Requirement 10.6).
+ * Seeds `TripDetail` in the Trips stack so the user can navigate back to the hub.
+ * When the current route is already `TripBookingTimeline` for the same `tripId`,
+ * returns `true` without navigating (R10.6).
+ */
+export function navigateToBookingTimeline(params: { readonly tripId: string }): boolean {
+  if (!navigationRef.isReady()) {
+    return false;
+  }
+  const current = navigationRef.getCurrentRoute();
+  if (
+    current?.name === 'TripBookingTimeline' &&
+    (current.params as { tripId?: string } | undefined)?.tripId === params.tripId
+  ) {
+    return true;
+  }
+  navigationRef.navigate('MainTabs', {
+    screen: 'Trips',
+    params: {
+      screen: 'TripDetail',
+      params: { tripId: params.tripId },
+    },
+  });
+  navigationRef.navigate('MainTabs', {
+    screen: 'Trips',
+    params: {
+      screen: 'TripBookingTimeline',
+      params,
+    },
+  });
+  return true;
+}
+
+

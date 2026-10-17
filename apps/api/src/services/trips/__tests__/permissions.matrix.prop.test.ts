@@ -32,19 +32,31 @@ const NUM_RUNS = 100;
  * Independent oracle: the actions any Trip_Member may perform regardless of
  * role (R4.3, R4.4). Declared here separately from the implementation so the
  * property tests act as a specification check, not a mirror of the code.
+ *
+ * Includes the five trip-booking-timeline member actions (R12.1, R12.2) and
+ * the two member actions previously omitted from this oracle list.
  */
 const MEMBER_ALLOWED: readonly TripAction[] = [
   'add_planned_item',
+  'edit_planned_item',
+  'optimize_day',
   'create_log_entry',
   'add_rode_with',
   'add_comment',
   'add_reaction',
   'leave_trip',
+  'add_packing_item',
+  'toggle_packing_item',
+  'edit_packing_item',
+  'mark_booking_window_done',
+  'set_booking_reminder_mute',
 ];
 
 /**
  * Independent oracle: the actions reserved for Organizers (R4.2). A Member
  * must be denied precisely these.
+ *
+ * Includes edit_booking_settings from trip-booking-timeline (R12.1, R12.5).
  */
 const ORGANIZER_ONLY: readonly TripAction[] = [
   'edit_settings',
@@ -54,6 +66,7 @@ const ORGANIZER_ONLY: readonly TripAction[] = [
   'promote',
   'demote',
   'delete_trip',
+  'edit_booking_settings',
 ];
 
 /** The complete Trip_Action universe = member-allowed ∪ organizer-only. */
@@ -134,3 +147,36 @@ describe('Trip_Service permissions — Property 6: fixed matrix examples', () =>
     }
   });
 });
+
+// Feature: trip-booking-timeline, Property 36: Members get the five shared actions, Organizers all six
+describe('Trip_Service permissions — Property 36: Members get the five shared actions, Organizers all six', () => {
+  const BOOKING_MEMBER_ACTIONS: readonly TripAction[] = [
+    'add_packing_item',
+    'toggle_packing_item',
+    'edit_packing_item',
+    'mark_booking_window_done',
+    'set_booking_reminder_mute',
+  ];
+  const BOOKING_ORGANIZER_ACTIONS: readonly TripAction[] = [
+    ...BOOKING_MEMBER_ACTIONS,
+    'edit_booking_settings',
+  ];
+
+  it('organizer is permitted all six booking actions (R12.1, R12.2, R12.5)', () => {
+    fc.assert(
+      fc.property(fc.constantFrom(...BOOKING_ORGANIZER_ACTIONS), (action) => can('organizer', action) === true),
+      { numRuns: NUM_RUNS },
+    );
+  });
+
+  it('member is permitted the five shared booking actions and denied edit_booking_settings (R12.1, R12.2, R12.5, R2.6)', () => {
+    fc.assert(
+      fc.property(fc.constantFrom(...BOOKING_ORGANIZER_ACTIONS), (action) => {
+        const isMemberAction = BOOKING_MEMBER_ACTIONS.includes(action);
+        return can('member', action) === isMemberAction;
+      }),
+      { numRuns: NUM_RUNS },
+    );
+  });
+});
+

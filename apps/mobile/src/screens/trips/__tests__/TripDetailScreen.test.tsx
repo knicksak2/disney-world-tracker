@@ -726,5 +726,83 @@ describe('Trip_Detail_View hub (R18.1, R18.6)', () => {
       expect(flat(empty).backgroundColor).toBe('#5b2a860a');
     });
   });
+
+  describe('Booking and packing hub tiles (Task 11.9)', () => {
+    test('pressing the booking tile navigates to TripBookingTimeline with the Trip id', async () => {
+      apiRequestMock.mockResolvedValue(TRIP);
+      const navigation = makeNavigation();
+
+      renderDetail(navigation);
+      await screen.findByTestId('trip-detail-hub');
+
+      fireEvent.press(screen.getByTestId('trip-detail-section-booking'));
+      expect(navigation.navigate).toHaveBeenCalledWith('TripBookingTimeline', {
+        tripId: TRIP_ID,
+      });
+      expect(
+        within(screen.getByTestId('trip-detail-section-booking')).getByText('Timeline'),
+      ).toBeTruthy();
+    });
+
+    test('pressing the packing tile navigates to TripPackingList with the Trip id', async () => {
+      apiRequestMock.mockResolvedValue(TRIP);
+      const navigation = makeNavigation();
+
+      renderDetail(navigation);
+      await screen.findByTestId('trip-detail-hub');
+
+      fireEvent.press(screen.getByTestId('trip-detail-section-packing'));
+      expect(navigation.navigate).toHaveBeenCalledWith('TripPackingList', {
+        tripId: TRIP_ID,
+      });
+    });
+
+    test('mocked packing list { packedCount: 3, totalCount: 7 } renders "3 of 7"', async () => {
+      apiRequestMock.mockImplementation(async (_method: string, path: string) => {
+        if (path === `/trips/${TRIP_ID}`) return TRIP;
+        if (path === `/trips/${TRIP_ID}/packing-items`) {
+          return { items: [], packedCount: 3, totalCount: 7 };
+        }
+        return [];
+      });
+
+      renderDetail(makeNavigation());
+      await screen.findByTestId('trip-detail-hub');
+
+      expect(await screen.findByText('3 of 7')).toBeTruthy();
+    });
+
+    test('empty packing list renders "0 of 0"', async () => {
+      apiRequestMock.mockImplementation(async (_method: string, path: string) => {
+        if (path === `/trips/${TRIP_ID}`) return TRIP;
+        if (path === `/trips/${TRIP_ID}/packing-items`) {
+          return { items: [], packedCount: 0, totalCount: 0 };
+        }
+        return [];
+      });
+
+      renderDetail(makeNavigation());
+      await screen.findByTestId('trip-detail-hub');
+
+      expect(await screen.findByText('0 of 0')).toBeTruthy();
+    });
+
+    test('rejected query renders no count text on packing tile', async () => {
+      apiRequestMock.mockImplementation(async (_method: string, path: string) => {
+        if (path === `/trips/${TRIP_ID}`) return TRIP;
+        if (path === `/trips/${TRIP_ID}/packing-items`) {
+          throw new Error('Packing query failed');
+        }
+        return [];
+      });
+
+      renderDetail(makeNavigation());
+      await screen.findByTestId('trip-detail-hub');
+
+      const packingTile = screen.getByTestId('trip-detail-section-packing');
+      expect(packingTile).toBeTruthy();
+      expect(within(packingTile).queryByText(/\d+\s+of\s+\d+/)).toBeNull();
+    });
+  });
 });
 

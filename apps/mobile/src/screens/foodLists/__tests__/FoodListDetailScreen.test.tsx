@@ -3,7 +3,7 @@ import React from 'react';
 import { Alert, Keyboard, KeyboardAvoidingView, Platform, StyleSheet } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import type { ReactTestInstance } from 'react-test-renderer';
 import type { FoodItemDTO, FoodListDetailDTO, UserSubmittedLocationDTO } from '@dwt/shared';
 
@@ -2587,6 +2587,70 @@ describe('FoodListDetailScreen', () => {
       const kav = modal.findByType(KeyboardAvoidingView);
       expect(kav.props.behavior).toBeUndefined();
     } finally {
+      Platform.OS = originalPlatform;
+    }
+  });
+
+  test('on Android, soft keyboard dynamically applies bottom padding and clamps maxHeight so search input and results are not hidden behind keyboard', async () => {
+    const originalPlatform = Platform.OS;
+    let keyboardShowCallback: ((e: unknown) => void) | undefined;
+    let keyboardHideCallback: (() => void) | undefined;
+
+    const addListenerSpy = jest.spyOn(Keyboard, 'addListener').mockImplementation((event, callback) => {
+      if (event === 'keyboardDidShow') {
+        keyboardShowCallback = callback as (e: unknown) => void;
+      } else if (event === 'keyboardDidHide') {
+        keyboardHideCallback = callback as () => void;
+      }
+      return { remove: jest.fn() } as any;
+    });
+
+    try {
+      Platform.OS = 'android';
+      apiRequestMock.mockImplementation(async (_method, path) =>
+        path === '/food-lists/list-detail-1' ? sampleOwnerList : {},
+      );
+      renderScreen();
+
+      await screen.findByTestId('food-list-add-items-btn');
+      fireEvent.press(screen.getByTestId('food-list-add-items-btn'));
+
+      const modal = screen.getByTestId('restaurant-search-modal');
+      const kav = modal.findByType(KeyboardAvoidingView);
+      expect(kav.props.behavior).toBeUndefined();
+
+      // Initially with keyboard hidden, no bottom padding
+      const initialBackdropStyle = StyleSheet.flatten(kav.props.style);
+      expect(initialBackdropStyle.paddingBottom).toBeFalsy();
+
+      // Simulate soft keyboard showing on Android (height = 320)
+      act(() => {
+        keyboardShowCallback?.({ endCoordinates: { height: 320, width: 400, screenX: 0, screenY: 480 } });
+      });
+
+      // Backdrop now lifts modal container above keyboard with paddingBottom
+      const activeBackdropStyle = StyleSheet.flatten(kav.props.style);
+      expect(activeBackdropStyle.paddingBottom).toBe(320);
+
+      // Modal container clamps maxHeight so header is not pushed off the top
+      const container = screen.getByTestId('restaurant-search-modal-container');
+      const containerStyle = StyleSheet.flatten(container.props.style);
+      expect(containerStyle.maxHeight).toBeDefined();
+      expect(typeof containerStyle.maxHeight).toBe('number');
+      expect(containerStyle.maxHeight).toBeGreaterThan(0);
+
+      // Search input is still present and accessible
+      expect(screen.getByTestId('restaurant-search-input')).toBeTruthy();
+
+      // Simulate keyboard closing
+      act(() => {
+        keyboardHideCallback?.();
+      });
+
+      const closedBackdropStyle = StyleSheet.flatten(kav.props.style);
+      expect(closedBackdropStyle.paddingBottom).toBeFalsy();
+    } finally {
+      addListenerSpy.mockRestore();
       Platform.OS = originalPlatform;
     }
   });

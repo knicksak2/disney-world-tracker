@@ -30,6 +30,7 @@ import { ApiError, apiRequest } from '../../api/client';
 import { PrimaryButton, SecondaryButton } from '../../theme/components';
 import { makeStyles } from '../../theme/makeStyles';
 import { useAppTheme } from '../../theme/useAppTheme';
+import { useKeyboardBottomInset } from '../../hooks/useKeyboardBottomInset';
 
 export interface CreateLocationModalProps {
   /** The currently-selected park for the location (optional, defaults to 'Magic Kingdom'). */
@@ -58,6 +59,8 @@ export default function CreateLocationModal({
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState<boolean>(false);
   const [isCreating, setIsCreating] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+
+  const { keyboardInset, getAvailableModalHeight } = useKeyboardBottomInset(visible);
 
   useEffect(() => {
     if (park) {
@@ -216,9 +219,20 @@ export default function CreateLocationModal({
     >
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.backdrop}
+        style={[
+          styles.backdrop,
+          Platform.OS === 'android' && keyboardInset > 0 ? { paddingBottom: keyboardInset } : null,
+        ]}
       >
-        <View style={styles.container}>
+        <View
+          testID="create-location-modal-container"
+          style={[
+            styles.container,
+            Platform.OS === 'android' && keyboardInset > 0
+              ? { maxHeight: getAvailableModalHeight(40) }
+              : null,
+          ]}
+        >
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.headerTitles}>

@@ -35,6 +35,22 @@ exports[`Feature: navigation-redesign, Property 6: Trip section structure untouc
     "title": "Expenses",
   },
   {
+    "body": "Key booking dates and dining reservation windows.",
+    "color": "#7e57c2",
+    "icon": "calendar-number-outline",
+    "key": "booking",
+    "route": "TripBookingTimeline",
+    "title": "Booking timeline",
+  },
+  {
+    "body": "Collaborative packing checklist for the crew.",
+    "color": "#5b2a86",
+    "icon": "bag-check-outline",
+    "key": "packing",
+    "route": "TripPackingList",
+    "title": "Packing list",
+  },
+  {
     "body": "Log completions and follow, react to, and comment on the group.",
     "color": "#f6c343",
     "icon": "chatbubbles-outline",
@@ -61,7 +77,7 @@ exports[`Feature: navigation-redesign, Property 6: Trip section structure untouc
 ]
 `;
 
-exports[`Feature: navigation-redesign, Property 6: Trip section structure untouched (Requirements 5.1, 5.2) TripsStack registers exactly the 13 expected screens and matches snapshot 1`] = `
+exports[`Feature: navigation-redesign, Property 6: Trip section structure untouched (Requirements 5.1, 5.2) TripsStack registers exactly the 15 expected screens and matches snapshot 1`] = `
 [
   {
     "name": "TripsList",
@@ -93,6 +109,14 @@ exports[`Feature: navigation-redesign, Property 6: Trip section structure untouc
   },
   {
     "name": "TripBalances",
+    "options": undefined,
+  },
+  {
+    "name": "TripBookingTimeline",
+    "options": undefined,
+  },
+  {
+    "name": "TripPackingList",
     "options": undefined,
   },
   {

@@ -72,6 +72,7 @@ function validBaseEnv(): NodeJS.ProcessEnv {
     DISNEY_SYNC_GATEWAY_PASSWORD: 'disney-pass',
     SAMPLING_CRON_SECRET: 'test-cron-secret',
     PIN_RECONCILE_CRON_SECRET: 'test-pin-reconcile-secret',
+    TRIP_BOOKING_CRON_SECRET: 'test-trip-booking-cron-secret',
     ADMIN_PANEL_USERNAME: 'admin-user',
     ADMIN_PANEL_PASSWORD: 'admin-password',
   };

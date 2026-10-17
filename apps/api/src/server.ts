@@ -90,6 +90,10 @@ import {
   type TripExpenseRoutesOptions,
 } from './services/tripExpenses/routes.js';
 import {
+  tripBookingRoutes,
+  type TripBookingRoutesOptions,
+} from './services/tripBooking/routes.js';
+import {
   pinRoutes,
   type PinRoutesOptions,
 } from './services/pins/routes.js';
@@ -225,6 +229,11 @@ export interface BuildServerServices {
    * refunds, net/pairwise balances, and CSV export.
    */
   readonly tripExpenses?: TripExpenseRoutesOptions;
+  /**
+   * Trip Booking Timeline routes (tasks 6-8). Wires booking timeline,
+   * settings, done marks, reminder mutes, and packing list.
+   */
+  readonly tripBooking?: TripBookingRoutesOptions;
   /**
    * Intelligence_Service routes (task 5). Wires the crowd calendar reads and 
    * the internal sampling cron endpoint (R3, R6, R11).
@@ -543,6 +552,10 @@ export function buildServer(
 
   if (services.tripExpenses !== undefined) {
     void app.register(tripExpenseRoutes(services.tripExpenses));
+  }
+
+  if (services.tripBooking !== undefined) {
+    void app.register(tripBookingRoutes(services.tripBooking));
   }
 
   if (services.intelligence !== undefined) {

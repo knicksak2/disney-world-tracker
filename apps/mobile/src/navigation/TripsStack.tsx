@@ -32,6 +32,8 @@ import TripScheduleScreen from '../screens/trips/TripScheduleScreen';
 import TripReservationsScreen from '../screens/trips/TripReservationsScreen';
 import TripExpensesScreen from '../screens/trips/TripExpensesScreen';
 import TripBalancesScreen from '../screens/trips/TripBalancesScreen';
+import TripBookingTimelineScreen from '../screens/trips/TripBookingTimelineScreen';
+import TripPackingListScreen from '../screens/trips/TripPackingListScreen';
 
 /**
  * Trips tab stack param list.
@@ -66,6 +68,10 @@ export type TripsStackParamList = {
   TripExpenses: { tripId: string };
   /** Group balances and settlement view (trip-expenses R10.1). */
   TripBalances: { tripId: string };
+  /** Booking timeline section of a Trip. */
+  TripBookingTimeline: { tripId: string };
+  /** Collaborative packing list section of a Trip. */
+  TripPackingList: { tripId: string };
   /** Trip_Activity section of a Trip — the consolidated feed + logging (R20). */
   TripFeed: { tripId: string };
   /** Trip_Members section of a Trip (R18.1, R18.6). */
@@ -100,6 +106,8 @@ export default function TripsStack(): JSX.Element {
       <Stack.Screen name="TripReservations" component={TripReservationsScreen} />
       <Stack.Screen name="TripExpenses" component={TripExpensesScreen} />
       <Stack.Screen name="TripBalances" component={TripBalancesScreen} />
+      <Stack.Screen name="TripBookingTimeline" component={TripBookingTimelineScreen} />
+      <Stack.Screen name="TripPackingList" component={TripPackingListScreen} />
       <Stack.Screen name="TripFeed" component={TripFeedScreen} />
       <Stack.Screen name="TripMembers" component={TripMembersScreen} />
       <Stack.Screen name="TripSummary" component={TripSummaryScreen} />

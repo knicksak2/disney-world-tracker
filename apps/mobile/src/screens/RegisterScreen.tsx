@@ -49,6 +49,7 @@ import { registerInputSchema } from '@dwt/shared';
 
 import { ApiError, apiRequest } from '../api/client';
 import type { AuthStackParamList } from '../navigation/RootNavigator';
+import { dispatchBookingTapEvent } from '../navigation/bookingTapState';
 import { useSessionStore } from '../state/sessionStore';
 import { makeStyles } from '../theme/makeStyles';
 import { useAppTheme } from '../theme/useAppTheme';
@@ -154,6 +155,7 @@ export default function RegisterScreen({ navigation }: Props): JSX.Element {
   }
 
   function handleSubmitError(err: unknown): void {
+    dispatchBookingTapEvent({ type: 'authFailed' });
     if (!(err instanceof ApiError)) {
       setFormError('Something went wrong. Please try again.');
       return;

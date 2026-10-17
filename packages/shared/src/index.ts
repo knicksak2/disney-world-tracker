@@ -32,6 +32,12 @@ export {
   EXPENSE_SPLIT_MODES,
   EXPENSE_CATEGORIES,
   CHARGE_LINE_KINDS,
+  STAY_TYPES,
+  LIGHTNING_LANE_TIMINGS,
+  WINDOW_KINDS,
+  WINDOW_STATUSES,
+  REMINDER_LEADS,
+  PACKING_CATEGORIES,
 } from './enums.js';
 export type {
   ExperienceCategory,
@@ -51,6 +57,12 @@ export type {
   ExpenseSplitMode,
   ExpenseCategory,
   ChargeLineKind,
+  StayType,
+  LightningLaneTiming,
+  WindowKind,
+  WindowStatus,
+  ReminderLead,
+  PackingCategory,
 } from './enums.js';
 
 // Avatar preset catalog (allowlist of bundled illustration ids).
@@ -620,4 +632,45 @@ export type {
   ExploreUtilityTileId,
   ThemeParkExploreGridItem,
 } from './constants/catalog.js';
+
+// Trip Booking domain: rules, limits, starter list, helpers, schemas, DTOs.
+export {
+  BOOKING_RULES_VERSION,
+  BOOKING_RULES,
+  REMINDER_LEAD_SCHEDULE,
+  CHECK_IN_OVERRIDE_MAX_DAYS_BEFORE_START,
+  PACKING_LIST_MAX_ITEMS,
+  PACKING_NAME_MAX,
+  PACKING_QUANTITY_MIN,
+  PACKING_QUANTITY_MAX,
+  BOOKING_REMINDER_BODY_MAX,
+  STARTER_PACKING_LIST,
+  addCalendarDays,
+  diffCalendarDays,
+  listCalendarDates,
+  checkInOverrideRange,
+  isCheckInOverrideValid,
+  formatMonthDay,
+  formatDateRange,
+  bookingSettingsUpdateSchema,
+  windowDoneSchema,
+  reminderMuteSchema,
+  windowDoneParamsSchema,
+  packingItemCreateSchema,
+  packingItemUpdateSchema,
+  packingItemPackedSchema,
+} from './tripBooking.js';
+export type {
+  WindowRule,
+  StarterPackingEntry,
+  BookingWindowDTO,
+  BookingTimelineDTO,
+  BookingSettingsDTO,
+  BookingReminderMuteDTO,
+  PackingItemDTO,
+  PackingListDTO,
+  BookingSettingsUpdateInput,
+  PackingItemCreateInput,
+  PackingItemUpdateInput,
+} from './tripBooking.js';
 

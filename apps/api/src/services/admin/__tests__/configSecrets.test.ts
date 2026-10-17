@@ -26,6 +26,7 @@ describe('Admin Panel - Configuration Visibility & Secret Redaction (Requirement
   const SENTINEL_DISNEY_PASS = 'sentinel_disney_api_password_secret';
   const SENTINEL_SAMPLING_SECRET = 'sentinel-sampling-cron-secret-xyz';
   const SENTINEL_PINS_SECRET = 'sentinel-pins-reconcile-secret-abc';
+  const SENTINEL_TRIP_BOOKING_CRON_SECRET = 'sentinel-trip-booking-cron-secret-12345';
   const SENTINEL_ADMIN_USER = username;
   const SENTINEL_ADMIN_PASS = password;
 
@@ -51,6 +52,17 @@ describe('Admin Panel - Configuration Visibility & Secret Redaction (Requirement
     },
     pins: {
       reconcileCronSecret: SENTINEL_PINS_SECRET,
+    },
+    tripBooking: {
+      cronSecret: SENTINEL_TRIP_BOOKING_CRON_SECRET,
+      reminder: {
+        leads: ['eve', 'open'],
+        catchupMinutes: 180,
+        minPassIntervalSeconds: 300,
+        sendStartMinutes: 360,
+        sendEndMinutes: 1380,
+        retentionDays: 30,
+      },
     },
     admin: {
       username: SENTINEL_ADMIN_USER,
@@ -124,6 +136,7 @@ describe('Admin Panel - Configuration Visibility & Secret Redaction (Requirement
     expect(body).not.toContain(SENTINEL_DISNEY_PASS);
     expect(body).not.toContain(SENTINEL_SAMPLING_SECRET);
     expect(body).not.toContain(SENTINEL_PINS_SECRET);
+    expect(body).not.toContain(SENTINEL_TRIP_BOOKING_CRON_SECRET);
     expect(body).not.toContain(SENTINEL_ADMIN_USER);
     expect(body).not.toContain(SENTINEL_ADMIN_PASS);
   });

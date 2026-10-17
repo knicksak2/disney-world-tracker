@@ -63,9 +63,9 @@ describe('Feature: navigation-redesign, Property 6: Trip section structure untou
     capturedScreens.length = 0;
   });
 
-  test('HUB_SECTIONS has exactly 7 sections preserving Trip Activity consolidation and Expenses', () => {
-    // Must be exactly 7 sections: Planned List, Schedule, Reservations, Expenses, Activity, Members, Summary
-    expect(HUB_SECTIONS).toHaveLength(7);
+  test('HUB_SECTIONS has exactly 9 sections preserving Trip Activity consolidation and Expenses', () => {
+    // Must be exactly 9 sections: Planned List, Schedule, Reservations, Expenses, Booking, Packing, Activity, Members, Summary
+    expect(HUB_SECTIONS).toHaveLength(9);
 
     const sectionKeys = HUB_SECTIONS.map((s) => s.key);
     expect(sectionKeys).toEqual([
@@ -73,12 +73,24 @@ describe('Feature: navigation-redesign, Property 6: Trip section structure untou
       'schedule',
       'reservations',
       'expenses',
+      'booking',
+      'packing',
       'activity',
       'members',
       'summary',
     ]);
 
-    // Section 5 is consolidated Trip Activity (TripFeed)
+    const bookingSection = HUB_SECTIONS.find((s) => s.key === 'booking');
+    expect(bookingSection).toBeDefined();
+    expect(bookingSection?.route).toBe('TripBookingTimeline');
+    expect(bookingSection?.title).toBe('Booking timeline');
+
+    const packingSection = HUB_SECTIONS.find((s) => s.key === 'packing');
+    expect(packingSection).toBeDefined();
+    expect(packingSection?.route).toBe('TripPackingList');
+    expect(packingSection?.title).toBe('Packing list');
+
+    // Section 7 is consolidated Trip Activity (TripFeed)
     const activitySection = HUB_SECTIONS.find((s) => s.key === 'activity');
     expect(activitySection).toBeDefined();
     expect(activitySection?.route).toBe('TripFeed');
@@ -99,6 +111,8 @@ describe('Feature: navigation-redesign, Property 6: Trip section structure untou
       '#7e57c2',
       '#f6c343',
       '#5b2a86',
+      '#7e57c2',
+      '#5b2a86',
       '#f6c343',
       '#7e57c2',
       '#6b6480',
@@ -112,19 +126,21 @@ describe('Feature: navigation-redesign, Property 6: Trip section structure untou
       darkTheme.color.primaryLight,
       darkTheme.color.accent,
       darkTheme.color.primaryFg,
+      darkTheme.color.primaryLight,
+      darkTheme.color.primaryFg,
       darkTheme.color.accent,
       darkTheme.color.primaryLight,
       darkTheme.color.textSecondary,
     ]);
     // Every violet/neutral section repaints; the gold accent is the same in both schemes.
-    for (const key of ['planned', 'schedule', 'expenses', 'members', 'summary']) {
+    for (const key of ['planned', 'schedule', 'expenses', 'booking', 'packing', 'members', 'summary']) {
       expect(dark.find((s) => s.key === key)!.color).not.toBe(
         light.find((s) => s.key === key)!.color,
       );
     }
   });
 
-  test('TripsStack registers exactly the 13 expected screens and matches snapshot', () => {
+  test('TripsStack registers exactly the 15 expected screens and matches snapshot', () => {
     render(<TripsStack />);
 
     const screenNames = capturedScreens.map((s) => s.name);
@@ -137,6 +153,8 @@ describe('Feature: navigation-redesign, Property 6: Trip section structure untou
       'TripReservations',
       'TripExpenses',
       'TripBalances',
+      'TripBookingTimeline',
+      'TripPackingList',
       'TripFeed',
       'TripMembers',
       'TripSummary',
@@ -145,7 +163,8 @@ describe('Feature: navigation-redesign, Property 6: Trip section structure untou
     ];
 
     expect(screenNames).toEqual(EXPECTED_ROUTES);
-    expect(screenNames).toHaveLength(13);
+    expect(screenNames).toHaveLength(15);
     expect(capturedScreens).toMatchSnapshot();
   });
 });
+

@@ -333,3 +333,34 @@ export type ExpenseCategory = (typeof EXPENSE_CATEGORIES)[number];
 
 export const CHARGE_LINE_KINDS = ['tax', 'gratuity', 'fee', 'discount'] as const;
 export type ChargeLineKind = (typeof CHARGE_LINE_KINDS)[number];
+
+// ---------------------------------------------------------------------------
+// Trip_Booking vocabularies
+// ---------------------------------------------------------------------------
+
+export const STAY_TYPES = ['resort', 'partner_hotel', 'offsite'] as const;
+export type StayType = (typeof STAY_TYPES)[number];
+
+export const LIGHTNING_LANE_TIMINGS = ['seven_day', 'three_day', 'three_day_daily'] as const;
+export type LightningLaneTiming = (typeof LIGHTNING_LANE_TIMINGS)[number];
+
+export const WINDOW_KINDS = ['dining', 'lightning_lane'] as const; // order = tie-break order (R1.11)
+export type WindowKind = (typeof WINDOW_KINDS)[number];
+
+export const WINDOW_STATUSES = ['upcoming', 'open', 'past'] as const;
+export type WindowStatus = (typeof WINDOW_STATUSES)[number];
+
+export const REMINDER_LEADS = ['eve', 'open', 'week'] as const;
+export type ReminderLead = (typeof REMINDER_LEADS)[number];
+
+export const PACKING_CATEGORIES = [
+  'documents',
+  'clothing',
+  'toiletries',
+  'health',
+  'tech',
+  'park_gear',
+  'kids',
+  'other',
+] as const; // order = display order (R11.5, R13.2)
+export type PackingCategory = (typeof PACKING_CATEGORIES)[number];

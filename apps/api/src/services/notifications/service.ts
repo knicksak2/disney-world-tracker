@@ -36,12 +36,14 @@
  * Validates: Requirements 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7, 8.6, 9.4, 9.5, 9.7.
  */
 
+import type { ReminderLead, WindowKind } from '@dwt/shared';
 import type {
   ExpoPushClient,
   ExpoPushData,
   ExpoPushDeliveryStatus,
   ExpoPushMessage,
 } from './expoPushClient.js';
+import { composeBookingReminder } from './bookingReminderCompose.js';
 
 // ---------------------------------------------------------------------------
 // ShareDelivered event
@@ -191,6 +193,22 @@ export interface ExperienceListRoleChangedEvent {
   readonly listName: string;
 }
 
+export interface TripBookingReminderEvent {
+  readonly tripId: string;
+  readonly tripName: string;
+  readonly lead: ReminderLead;
+  /** One entry per distinct Window_Kind (≤ 2), ordered dining → lightning_lane. */
+  readonly windows: readonly {
+    readonly kind: WindowKind;
+    readonly dropAt: string;
+    readonly firstCovered: string;
+    readonly lastCovered: string;
+  }[];
+  /** ISO instant the event was built; the "Opened at" decision compares this to each dropAt. */
+  readonly dispatchedAt: string;
+  readonly recipientIds: readonly string[];
+}
+
 // ---------------------------------------------------------------------------
 // Structural dependency ports
 // ---------------------------------------------------------------------------
@@ -305,6 +323,13 @@ export interface NotificationService {
    * (Trips R10.8).
    */
   handleRodeWithTagCreated(event: RodeWithTagCreatedEvent): Promise<void>;
+
+  /**
+   * Handle a {@link TripBookingReminderEvent}: notify the trip members whose
+   * booking reminder is due. Resolves once every recipient has been processed.
+   * Never rejects: all errors are caught and logged (R9.5).
+   */
+  handleTripBookingReminder(event: TripBookingReminderEvent): Promise<void>;
 
   /**
    * Handle a {@link FoodListSharedEvent}: notify recipient that `senderId` shared
@@ -540,6 +565,42 @@ export function createNotificationService(
           'rode-with notification delivery failed for recipient',
         );
       });
+    },
+
+    async handleTripBookingReminder(
+      event: TripBookingReminderEvent,
+    ): Promise<void> {
+      let content: { readonly title: string; readonly body: string };
+      try {
+        content = composeBookingReminder(event);
+      } catch (err) {
+        deps.logger?.error(
+          { err, tripId: event.tripId, lead: event.lead },
+          'trip-booking-reminder notification composition failed',
+        );
+        return;
+      }
+
+      await Promise.all(
+        event.recipientIds.map((recipientId) =>
+          notifyRecipient(
+            recipientId,
+            content,
+            {
+              deps,
+              ...timing,
+              data: { bookingTripId: event.tripId },
+              logContext: { tripId: event.tripId, lead: event.lead },
+              notificationKind: 'trip_booking_reminder',
+            },
+          ).catch((err) => {
+            deps.logger?.error(
+              { err, recipientId, tripId: event.tripId, lead: event.lead },
+              'trip-booking-reminder notification delivery failed for recipient',
+            );
+          }),
+        ),
+      );
     },
 
     async handleFoodListShared(event: FoodListSharedEvent): Promise<void> {
