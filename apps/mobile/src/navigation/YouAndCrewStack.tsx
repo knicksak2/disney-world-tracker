@@ -8,6 +8,7 @@ import FriendProfileScreen, {
 import FriendsSearchScreen from '../screens/friends/FriendsSearchScreen';
 import InboxScreen from '../screens/share/InboxScreen';
 import SentSharesScreen from '../screens/share/SentSharesScreen';
+import FriendFoodHistoryScreen from '../screens/friends/FriendFoodHistoryScreen';
 import PinShowcaseScreen from '../screens/profile/PinShowcaseScreen';
 import YouAndCrewScreen from '../screens/youAndCrew/YouAndCrewScreen';
 
@@ -20,6 +21,7 @@ export type { FriendProfileParams };
 export type YouAndCrewStackParamList = {
   YouAndCrewMain: undefined;
   FriendProfile: FriendProfileParams;
+  FriendFoodHistory: { friendId: string; displayName: string };
   FriendsSearch: undefined;
   Inbox: { shareId?: string } | undefined;
   Sent: undefined;
@@ -66,6 +68,11 @@ export default function YouAndCrewStack(): JSX.Element {
         name="PinShowcase"
         component={PinShowcaseScreen}
         options={{ title: 'Pin Showcase' }}
+      />
+      <Stack.Screen
+        name="FriendFoodHistory"
+        component={FriendFoodHistoryScreen}
+        options={{ title: 'Food History' }}
       />
     </Stack.Navigator>
   );

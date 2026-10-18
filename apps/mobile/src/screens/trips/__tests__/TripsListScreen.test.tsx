@@ -161,6 +161,106 @@ describe('Trips_List_Screen (R16.6, R16.7, R16.8, R16.9)', () => {
     expect(screen.queryByTestId('trips-error')).toBeNull();
   });
 
+  test('R16.9/R16.10: opens create modal, allows entering trip name, and dismisses via close button', async () => {
+    apiRequestMock.mockImplementation(async (_method, path) => {
+      if (path === '/me/trips') return [];
+      if (path === '/resorts') return { resorts: [] };
+      return [];
+    });
+
+    renderTripsStack();
+
+    const createBtn = await screen.findByTestId('trips-empty-create');
+    fireEvent.press(createBtn);
+
+    const modal = await screen.findByTestId('trips-create-modal');
+    expect(modal).toBeTruthy();
+
+    const nameInput = screen.getByTestId('trips-create-name');
+    expect(nameInput).toBeTruthy();
+    fireEvent.changeText(nameInput, 'Family Disney Trip');
+    expect(nameInput.props.value).toBe('Family Disney Trip');
+
+    const closeBtn = screen.getByTestId('trips-create-close');
+    fireEvent.press(closeBtn);
+
+    // Modal is dismissed
+    expect(screen.queryByTestId('trips-create-name')).toBeNull();
+  });
+
+  test('R16.9/R16.10: opens create modal and dismisses via cancel button', async () => {
+    apiRequestMock.mockImplementation(async (_method, path) => {
+      if (path === '/me/trips') return [];
+      if (path === '/resorts') return { resorts: [] };
+      return [];
+    });
+
+    renderTripsStack();
+
+    const createBtn = await screen.findByTestId('trips-empty-create');
+    fireEvent.press(createBtn);
+
+    expect(await screen.findByTestId('trips-create-modal')).toBeTruthy();
+
+    const cancelBtn = screen.getByTestId('trips-create-cancel');
+    fireEvent.press(cancelBtn);
+
+    expect(screen.queryByTestId('trips-create-name')).toBeNull();
+  });
+
+  test('R16.9/R16.10: enters trip details and submits POST /me/trips', async () => {
+    apiRequestMock.mockImplementation(async (method, path) => {
+      if (path === '/me/trips' && method === 'GET') return [];
+      if (path === '/resorts') return { resorts: [] };
+      if (path === '/me/trips' && method === 'POST') {
+        return { id: 'created-trip-42' };
+      }
+      if (path === '/trips/created-trip-42') {
+        return new Promise(() => undefined) as Promise<never>;
+      }
+      return [];
+    });
+
+    renderTripsStack();
+
+    fireEvent.press(await screen.findByTestId('trips-empty-create'));
+
+    const nameInput = await screen.findByTestId('trips-create-name');
+    fireEvent.changeText(nameInput, 'Summer Fun Trip');
+
+    const descInput = screen.getByTestId('trips-create-description');
+    fireEvent.changeText(descInput, 'Visiting all four parks');
+
+    // Pick start date via calendar
+    fireEvent.press(screen.getByTestId('trips-create-start'));
+    fireEvent.press(screen.getByText('10'));
+
+    // Pick end date via calendar
+    fireEvent.press(screen.getByTestId('trips-create-end'));
+    fireEvent.press(screen.getByText('15'));
+
+    fireEvent.press(screen.getByTestId('trips-create-submit'));
+
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const expectedStart = `${y}-${m}-10`;
+    const expectedEnd = `${y}-${m}-15`;
+
+    await waitFor(() => {
+      expect(apiRequestMock).toHaveBeenCalledWith(
+        'POST',
+        '/me/trips',
+        {
+          name: 'Summer Fun Trip',
+          description: 'Visiting all four parks',
+          startDate: expectedStart,
+          endDate: expectedEnd,
+        },
+      );
+    });
+  });
+
   test('R16.6: selecting a Trip navigates into its Trip_Detail_View', async () => {
     apiRequestMock.mockImplementation(async (_method, path) => {
       if (path === '/me/trips') {

@@ -133,9 +133,19 @@ const DEFAULT_LOGIN_ACCOUNT: RouteGroupBudget = {
 // Keying helpers
 // ---------------------------------------------------------------------------
 
+function isReadRequest(req: FastifyRequest | { method: string }): boolean {
+  const method = req.method;
+  return method === 'GET' || method === 'HEAD';
+}
+
 /**
  * Build a stable per-caller key for the global limiter. Authenticated
- * callers key by `tok:<sha256(token)>`; everyone else keys by `ip:<ip>`.
+ * callers key by `tok:<sha256(token)>:<group>`; everyone else keys by `ip:<ip>:<group>`.
+ *
+ * Partitioning by method group (`read` for GET/HEAD vs `mut` for
+ * POST/PUT/PATCH/DELETE) ensures that read traffic (such as screen
+ * transitions, search-as-you-type, and background queries) cannot exhaust
+ * the mutation budget and vice versa.
  *
  * The token is hashed before it lands in any store (Redis or in-memory)
  * so that a leaked store cannot be replayed against the live API. The
@@ -144,6 +154,7 @@ const DEFAULT_LOGIN_ACCOUNT: RouteGroupBudget = {
  * documented hashing convention.
  */
 export function defaultRateLimitKey(req: FastifyRequest): string {
+  const group = isReadRequest(req) ? 'read' : 'mut';
   const auth = req.headers.authorization;
   if (typeof auth === 'string') {
     const match = /^Bearer\s+(\S.*)$/i.exec(auth);
@@ -151,11 +162,11 @@ export function defaultRateLimitKey(req: FastifyRequest): string {
       const token = (match[1] ?? '').trim();
       if (token.length > 0) {
         const hash = createHash('sha256').update(token).digest('hex');
-        return `tok:${hash}`;
+        return `tok:${hash}:${group}`;
       }
     }
   }
-  return `ip:${req.ip}`;
+  return `ip:${req.ip}:${group}`;
 }
 
 /**
@@ -301,10 +312,6 @@ export async function registerRateLimit(
   await app.register(rateLimitPlugin, baseOptions);
 }
 
-function isReadRequest(req: FastifyRequest | { method: string }): boolean {
-  const method = req.method;
-  return method === 'GET' || method === 'HEAD';
-}
 
 // Re-export an alias of the @fastify/rate-limit option shape for callers
 // that want to attach a `config.rateLimit` block to a route. Kept here

@@ -192,3 +192,14 @@ export type {
   GroupFavoriteDTO,
   GroupFavoritesResponseDTO,
 } from './Favorite.js';
+
+export type {
+  FriendFoodSort,
+  FoodScopeKind,
+  FriendDishRatingDTO,
+  FriendFoodScopeDTO,
+  FriendFoodRatingsPageDTO,
+  FriendDishFriendRatingDTO,
+  FriendDishSocialProofDTO,
+  FriendFoodSocialProofResponseDTO,
+} from './FriendFoodRatings.js';

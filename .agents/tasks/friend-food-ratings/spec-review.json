@@ -1,0 +1,62 @@
+{
+  "verdict": "APPROVED",
+  "findings": [
+    {
+      "id": 1,
+      "blocking": false,
+      "confidence": "likely",
+      "label": "Route registration is untested",
+      "detail": "friendFoodRatings? and foodRatingSharing? are optional on BuildServerServices; omitting them in composeServices.ts silently drops the routes while every private-Fastify server.inject test stays green.",
+      "action": "Add one test that goes through the real service map (or a source-level assertion like retirement.smoke.test.ts) and checks the three route families answer 401, not 404; attach to tasks 2.5 and 4.5."
+    },
+    {
+      "id": 2,
+      "blocking": false,
+      "confidence": "likely",
+      "label": "Accessibility R17.2/R17.4 have no automated assertion",
+      "detail": "Property 17 claims every added control has an accessibilityRole/label and the switch exposes checked state, but only the label-builder strings are tested (task 6.2); controls are checked by the manual walk in task 9.1.",
+      "action": "Add role/label assertions to tasks 6.5, 7.2, 8.4 and an accessibilityState.checked assertion to task 8.2."
+    },
+    {
+      "id": 3,
+      "blocking": false,
+      "confidence": "confirmed",
+      "label": "R10.5 does not match design/task 8.1",
+      "detail": "R10.5 says saving invalidates the cached Sharing_Setting; design and task 8.1 use setQueryData with the echo and invalidate only the friend-ratings keys (a no-op for the viewer given the asymmetric opt-out, A5).",
+      "action": "Reword R10.5 to match the setQueryData behavior, or add the invalidation; keep one behavior for the task 8.2 assertion."
+    },
+    {
+      "id": 4,
+      "blocking": false,
+      "confidence": "possible",
+      "label": "pg-mem loading migration 0004",
+      "detail": "Task 3.4 loads 0001, 0004, 0040, 0043, 0062; the existing precedent foodItemLogs.prop.test.ts loads only 0001 and 0040, and 0004 has a large data-mapping section pg-mem may not parse.",
+      "action": "Try it early; fallback is ALTER TABLE experiences ALTER COLUMN park DROP NOT NULL in test setup, recorded as a deviation in the task."
+    },
+    {
+      "id": 5,
+      "blocking": false,
+      "confidence": "possible",
+      "label": "Highlights read also runs the scopes query",
+      "detail": "The Highlights request is the first page of the list route, so it also executes listScopes and returns up to 200 scopes the Overview row does not use, on every friend profile view.",
+      "action": "Accept explicitly with a one-line design note, or add a way to skip scopes (which needs a requirement amendment)."
+    },
+    {
+      "id": 6,
+      "blocking": false,
+      "confidence": "confirmed",
+      "label": "EARS wording nits",
+      "detail": "R5.3 ('THIS applies to every field...'), R8.6 (WHEN with embedded IF/THEN plus a recording obligation) and R2.5 (function names as subject) are not clean EARS sentences.",
+      "action": "Reword without changing meaning or numbering."
+    },
+    {
+      "id": 7,
+      "blocking": false,
+      "confidence": "confirmed",
+      "label": "Open product questions A1 and A11",
+      "detail": "A1 (opted-out owner keeps three count fields visible to friends) and A11 (notice and setting before or with the read routes) are recorded as pending product-owner calls; neither blocks implementation.",
+      "action": "Ask the product owner; either answer changes only requirement 8.3 or release ordering."
+    }
+  ],
+  "reviewDoc": "c:\\Users\\knick\\dev\\disney-app\\.agents\\tasks\\friend-food-ratings/spec-review.md"
+}

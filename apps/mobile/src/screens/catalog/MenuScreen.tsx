@@ -42,9 +42,15 @@ import { Ionicons } from '@expo/vector-icons';
 import type { RouteProp } from '@react-navigation/native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 
-import type { FoodItemDTO, FoodItemsResponseDTO, MenuDTO } from '@dwt/shared';
+import type {
+  FoodItemDTO,
+  FoodItemsResponseDTO,
+  FriendDishSocialProofDTO,
+  MenuDTO,
+} from '@dwt/shared';
 
 import { ApiError, apiRequest } from '../../api/client';
+import { useFriendFoodSocialProof } from '../../hooks/useFriendFoodRatings';
 import { makeStyles } from '../../theme/makeStyles';
 import { useAppTheme } from '../../theme/useAppTheme';
 import {
@@ -56,6 +62,7 @@ import {
   SectionLabel,
 } from '../../theme/components';
 import FoodItemPickerModal from './FoodItemPickerModal';
+import FriendDishSocialProof from './FriendDishSocialProof';
 import AddToListsSheet from '../foodLists/AddToListsSheet';
 import { MENU_ITEM } from './MenuScreen.palette';
 
@@ -111,6 +118,29 @@ export default function MenuScreen(): JSX.Element {
       ),
     staleTime: 60_000,
   });
+
+  // Batch friend social proof query (R14.1, R15.1)
+  const socialProofQ = useFriendFoodSocialProof('experience', experienceId);
+
+  const socialProofByItemId = React.useMemo(() => {
+    const map = new Map<string, FriendDishSocialProofDTO>();
+    if (socialProofQ.data?.items && Array.isArray(socialProofQ.data.items)) {
+      for (const item of socialProofQ.data.items) {
+        map.set(item.foodItemId, item);
+      }
+    }
+    return map;
+  }, [socialProofQ.data?.items]);
+
+  const itemIdByName = React.useMemo(() => {
+    const map = new Map<string, string>();
+    if (foodItemsQ.data?.items && Array.isArray(foodItemsQ.data.items)) {
+      for (const fi of foodItemsQ.data.items) {
+        map.set(fi.name.trim().toLowerCase(), fi.id);
+      }
+    }
+    return map;
+  }, [foodItemsQ.data?.items]);
 
   const handleAddItemToList = React.useCallback(
     async (item: { name: string; price?: string | null }) => {
@@ -248,6 +278,8 @@ export default function MenuScreen(): JSX.Element {
             menu={menus[safeActive]!}
             index={safeActive}
             onAddItem={handleAddItemToList}
+            socialProofByItemId={socialProofByItemId}
+            itemIdByName={itemIdByName}
           />
         )}
       </ScrollView>
@@ -345,10 +377,14 @@ function MenuBlock({
   menu,
   index,
   onAddItem,
+  socialProofByItemId,
+  itemIdByName,
 }: {
   readonly menu: MenuDTO;
   readonly index: number;
   readonly onAddItem?: (item: { name: string; price?: string | null }) => void;
+  readonly socialProofByItemId?: ReadonlyMap<string, FriendDishSocialProofDTO> | undefined;
+  readonly itemIdByName?: ReadonlyMap<string, string> | undefined;
 }): JSX.Element {
   const styles = useStyles();
   const t = useAppTheme();
@@ -374,6 +410,10 @@ function MenuBlock({
           <Text style={styles.groupName}>{group.name}</Text>
           {group.items.map((item, itemIndex) => {
             const hasPrice = typeof item.price === 'string' && item.price.length > 0;
+            const itemId =
+              (item as { id?: string }).id ??
+              itemIdByName?.get(item.name.trim().toLowerCase());
+            const proof = itemId ? socialProofByItemId?.get(itemId) : undefined;
             return (
               <View
                 key={itemIndex}
@@ -386,6 +426,12 @@ function MenuBlock({
                     <Text style={styles.itemPrice} testID={`menu-item-price-${index}-${groupIndex}-${itemIndex}`}>
                       {item.price as string}
                     </Text>
+                  ) : null}
+                  {proof ? (
+                    <FriendDishSocialProof
+                      proof={proof}
+                      foodItemName={item.name}
+                    />
                   ) : null}
                 </View>
                 {onAddItem ? (

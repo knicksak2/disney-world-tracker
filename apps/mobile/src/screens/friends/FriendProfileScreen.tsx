@@ -132,6 +132,8 @@ import {
   useFriendProfileQuery,
   useFriendStatsQuery,
 } from '../../hooks/useFriendProfile';
+import { useFriendFoodHighlights } from '../../hooks/useFriendFoodRatings';
+import { FriendFoodHighlightsRow } from './FriendFoodHighlightsRow';
 import { useOwnCompletionsQuery } from '../../hooks/useOwnCompletions';
 import { useOwnStatsQuery } from '../../hooks/useOwnStats';
 import {
@@ -296,6 +298,7 @@ export default function FriendProfileScreen({
     retry: false,
     retryOnMount: false,
   });
+  const foodHighlightsQuery = useFriendFoodHighlights(friendId);
 
   // Phase 3 foundation (task 23.1): read the viewer's OWN stats and completions
   // alongside the friend reads above, so the Progress_Comparison (task 24) and
@@ -335,14 +338,15 @@ export default function FriendProfileScreen({
   // ExperienceDetail. The repeat-tap guard lives inside the hook (R5.1).
   const openExperience = useOpenExperience();
 
-  // R7.2: the three reads share one owner-or-friend gate, so a
+  // R7.2: the reads share one owner-or-friend gate, so a
   // `profile_forbidden` on any of them means the Friend's data is
   // unavailable. Withhold the View_Selector and every mode, and surface a
   // single unavailable message.
   const forbidden =
     isForbidden(profileQuery.error) ||
     isForbidden(statsQuery.error) ||
-    isForbidden(completionsQuery.error);
+    isForbidden(completionsQuery.error) ||
+    isForbidden(foodHighlightsQuery.error);
 
   if (forbidden) {
     return (
@@ -527,6 +531,11 @@ function OverviewMode({
           </View>
         </View>
       )}
+
+      <FriendFoodHighlightsRow
+        friendId={friendId}
+        displayName={profile?.displayName || fallbackName}
+      />
 
       <FriendShowcaseSection friendId={friendId} showcaseQuery={showcaseQuery} />
     </View>

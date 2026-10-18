@@ -153,6 +153,11 @@ export default function LogFoodItemModal({
     } catch (err) {
       if (err instanceof ApiError && err.code === 'food_log_future_date') {
         setError('Visit date cannot be in the future');
+      } else if (
+        err instanceof ApiError &&
+        (err.code === 'rate_limit_exceeded' || err.status === 429)
+      ) {
+        setError('Too many requests. Please wait a moment and try again.');
       } else {
         setError('Could not save log. Please try again.');
       }

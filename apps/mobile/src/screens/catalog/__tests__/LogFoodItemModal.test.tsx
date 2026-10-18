@@ -224,6 +224,33 @@ describe('LogFoodItemModal', () => {
       expect(screen.getByText('Visit date cannot be in the future')).toBeTruthy();
     });
   });
+
+  it('displays rate limit error when server returns rate_limit_exceeded', async () => {
+    apiRequestMock.mockRejectedValueOnce(
+      new ApiError({
+        code: 'rate_limit_exceeded',
+        message: 'Too many requests. Please try again in 1 minute.',
+        status: 429,
+      }),
+    );
+
+    renderWithClient(
+      <LogFoodItemModal
+        foodItem={MOCK_ITEM}
+        visible={true}
+        onClose={jest.fn()}
+      />,
+    );
+
+    fireEvent.press(screen.getByTestId('submit-log-food-item-btn'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('log-food-item-error')).toBeTruthy();
+      expect(
+        screen.getByText('Too many requests. Please wait a moment and try again.'),
+      ).toBeTruthy();
+    });
+  });
 });
 
 /** Nearest painted `backgroundColor` at or above `node` (sheet surface lookup). */

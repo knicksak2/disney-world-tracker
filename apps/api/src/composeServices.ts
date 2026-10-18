@@ -83,6 +83,7 @@ import {
 
 import { createAggregateRepo } from './services/aggregate/repo.js';
 import { createLeaderboard } from './services/aggregate/leaderboard.js';
+import { createFriendFoodRatingsRepo } from './services/friendFoodRatings/repo.js';
 
 import { createLiveCache } from './services/live/cache.js';
 import { createLiveRepo } from './services/live/repo.js';
@@ -702,6 +703,7 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
   const foodItemRepo = createFoodItemRepo(pool);
   const foodItemLogRepo = createFoodItemLogRepo({ pool });
   const userSubmittedLocationRepo = createUserSubmittedLocationRepo(pool);
+  const friendFoodRatingsRepo = createFriendFoodRatingsRepo(pool);
 
   // Demand-driven Menu retrieval seam (R1.1-R1.3): fetch on cache miss/stale,
   // serve cache when fresh, degrade to cache on failure. The seam's
@@ -934,6 +936,11 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
     },
     reactions: { repo: reactionsRepo, requireSession: sessionMiddleware },
     stats: { repo: statsRepo, pool, requireSession: sessionMiddleware },
+    friendFoodRatings: {
+      repo: friendFoodRatingsRepo,
+      pool,
+      requireSession: sessionMiddleware,
+    },
     aggregate: { repo: aggregateRepo },
     leaderboard: { service: leaderboardService },
     tracking: {

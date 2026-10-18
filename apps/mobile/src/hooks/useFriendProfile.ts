@@ -62,7 +62,7 @@ export const friendProfileKeys = {
  * and the synthetic 30-second timeout — get one automatic retry before
  * the screen shows its manual retry control (R5.4, R5.5, R5.6).
  */
-function retryUnlessForbidden(failureCount: number, error: ApiError): boolean {
+export function retryUnlessForbidden(failureCount: number, error: ApiError): boolean {
   if (error.code === 'profile_forbidden') {
     return false;
   }

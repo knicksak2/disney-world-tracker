@@ -279,11 +279,10 @@ describe('login budget (account-keyed)', () => {
 describe('method classification', () => {
   it('keys read and mutation requests in separate buckets', async () => {
     // A user should be able to spend their read budget without affecting
-    // the mutation budget for their next request, and vice versa. The
-    // limiter shares one Redis key namespace so the differentiator must
-    // come from the per-request `max`. Reads cap at 5, mutations cap at
-    // 10 (test budgets); after 5 reads the 6th read is blocked, but a
-    // POST from the same IP is still allowed.
+    // the mutation budget for their next request, and vice versa. Reads
+    // and mutations are keyed with :read and :mut suffixes. Reads cap at 5,
+    // mutations cap at 10 (test budgets); after 5 reads the 6th read is blocked,
+    // but a POST from the same IP is still allowed.
     for (let i = 0; i < 5; i += 1) {
       const ok = await app.inject({
         method: 'GET',
@@ -293,9 +292,7 @@ describe('method classification', () => {
       expect(ok.statusCode).toBe(200);
     }
 
-    // 6th read from same IP — the read max applies to the shared bucket
-    // (the limiter cannot distinguish read vs mutation slots inside one
-    // bucket), so this is blocked.
+    // 6th read from same IP is blocked because the read bucket is saturated.
     const blockedRead = await app.inject({
       method: 'GET',
       url: '/read',
@@ -303,16 +300,69 @@ describe('method classification', () => {
     });
     expect(blockedRead.statusCode).toBe(429);
 
-    // The mutation also lives in the same bucket; this assertion just
-    // documents the behavior. We do NOT assert that the mutation
-    // succeeds — the design's defense-in-depth posture is that any
-    // caller who has burst beyond their read budget is already on a
-    // suspicious trajectory and a stricter mutation cap is fine.
+    // Follow-up mutation lives in its own mutation bucket (ip:198.51.100.1:mut),
+    // so it succeeds with 200 OK even though the read bucket is saturated.
     const followUpMutation = await app.inject({
       method: 'POST',
       url: '/mutate',
       remoteAddress: '198.51.100.1',
     });
-    expect([200, 429]).toContain(followUpMutation.statusCode);
+    expect(followUpMutation.statusCode).toBe(200);
+  });
+
+  it('allows mutations after read volume exceeds mutation budget (production scenario)', async () => {
+    // In production, reads cap at 300 while mutations cap at 60.
+    // Testing with readsMax=15 and mutationsMax=5:
+    // A caller makes 8 reads (more than the mutation cap of 5, but within the read cap of 15).
+    // The follow-up mutation MUST succeed (200 OK) because read traffic is partitioned
+    // into its own bucket and does not consume the mutation quota.
+    const testApp = await buildTestApp({ readsMax: 15, mutationsMax: 5 });
+    try {
+      for (let i = 0; i < 8; i += 1) {
+        const readRes = await testApp.inject({
+          method: 'GET',
+          url: '/read',
+          headers: { authorization: 'Bearer test-token-123' },
+        });
+        expect(readRes.statusCode).toBe(200);
+      }
+
+      const mutRes = await testApp.inject({
+        method: 'POST',
+        url: '/mutate',
+        headers: { authorization: 'Bearer test-token-123' },
+      });
+      expect(mutRes.statusCode).toBe(200);
+    } finally {
+      await testApp.close();
+    }
+  });
+
+  it('keeps mutation saturation from blocking subsequent reads', async () => {
+    // Conversely, if a caller saturates their mutation budget (10 mutations),
+    // their read requests should still succeed.
+    for (let i = 0; i < 10; i += 1) {
+      const ok = await app.inject({
+        method: 'POST',
+        url: '/mutate',
+        remoteAddress: '198.51.100.55',
+      });
+      expect(ok.statusCode).toBe(200);
+    }
+
+    const blockedMut = await app.inject({
+      method: 'POST',
+      url: '/mutate',
+      remoteAddress: '198.51.100.55',
+    });
+    expect(blockedMut.statusCode).toBe(429);
+
+    const allowedRead = await app.inject({
+      method: 'GET',
+      url: '/read',
+      remoteAddress: '198.51.100.55',
+    });
+    expect(allowedRead.statusCode).toBe(200);
   });
 });
+

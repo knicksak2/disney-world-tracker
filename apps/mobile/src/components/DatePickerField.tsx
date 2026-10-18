@@ -16,7 +16,7 @@
 // rendered/selected day never shifts with the device time zone.
 
 import React, { useMemo, useState } from 'react';
-import { Modal, Pressable, Text, View } from 'react-native';
+import { Keyboard, Modal, Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Calendar, type DateData } from 'react-native-calendars';
 import type { Theme } from 'react-native-calendars/src/types';
@@ -199,6 +199,7 @@ export function DatePickerField({
 
   const openPicker = (): void => {
     if (disabled) return;
+    Keyboard.dismiss();
     setOpen(true);
   };
 

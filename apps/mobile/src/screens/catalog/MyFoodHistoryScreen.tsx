@@ -7,9 +7,7 @@ import {
   ActivityIndicator,
   FlatList,
   Pressable,
-  ScrollView,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -26,6 +24,7 @@ import {
   type FoodHistorySort,
   deriveDisplayedFoodLogs,
 } from './foodHistoryFilters';
+import { FoodHistoryControls } from './foodHistory/FoodHistoryControls';
 import RateOnCheckoffPrompt from '../foodLists/RateOnCheckoffPrompt';
 
 export default function MyFoodHistoryScreen(): JSX.Element {
@@ -242,109 +241,18 @@ export default function MyFoodHistoryScreen(): JSX.Element {
         />
 
         <View style={styles.container}>
-        {/* Search bar (Requirement 8.9) */}
-        <View style={styles.searchBar}>
-          <Ionicons name="search" size={18} color={t.color.textSecondary} />
-          <TextInput
-            value={searchText}
-            onChangeText={setSearchText}
-            placeholder="Search dishes or places..."
-            placeholderTextColor={t.color.textSecondary}
-            keyboardAppearance={t.scheme}
-            style={styles.searchInput}
-            testID="food-history-search-input"
-            autoCorrect={false}
+          {/* Controls (Requirement 8.7, 8.8, 8.9) */}
+          <FoodHistoryControls
+            searchText={searchText}
+            onSearchChange={setSearchText}
+            sortOptions={FOOD_HISTORY_SORT_OPTIONS}
+            sort={sort}
+            onSortChange={setSort}
+            filterChips={availableRestaurants.map((name) => ({ id: name, label: name }))}
+            selectedFilterIds={selectedRestaurants}
+            onToggleFilter={handleToggleRestaurant}
+            onClearFilter={handleClearFilter}
           />
-          {searchText.length > 0 && (
-            <Pressable
-              onPress={() => setSearchText('')}
-              accessibilityRole="button"
-              accessibilityLabel="Clear search text"
-              style={styles.clearBtn}
-              testID="food-history-clear-search"
-            >
-              <Ionicons name="close-circle" size={18} color={t.color.textSecondary} />
-            </Pressable>
-          )}
-        </View>
-
-        {/* Sort Chips (Requirement 8.7) */}
-        <View style={styles.sortSection}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.chipsScroll}
-          >
-            {FOOD_HISTORY_SORT_OPTIONS.map((option) => {
-              const active = sort === option.id;
-              return (
-                <Pressable
-                  key={option.id}
-                  onPress={() => setSort(option.id)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Sort by ${option.label}`}
-                  style={[styles.chip, active && styles.chipActive]}
-                  testID={`sort-chip-${option.id}`}
-                >
-                  <Text style={[styles.chipText, active && styles.chipTextActive]}>
-                    {option.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-        </View>
-
-        {/* Restaurant Filter Chips (Requirement 8.8) */}
-        {availableRestaurants.length > 0 && (
-          <View style={styles.filterSection}>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.chipsScroll}
-            >
-              <Pressable
-                onPress={handleClearFilter}
-                accessibilityRole="button"
-                accessibilityLabel="All places"
-                style={[
-                  styles.filterChip,
-                  selectedRestaurants.size === 0 && styles.filterChipActive,
-                ]}
-                testID="restaurant-filter-all"
-              >
-                <Text
-                  style={[
-                    styles.filterChipText,
-                    selectedRestaurants.size === 0 && styles.filterChipTextActive,
-                  ]}
-                >
-                  All Places
-                </Text>
-              </Pressable>
-              {availableRestaurants.map((name) => {
-                const active = selectedRestaurants.has(name);
-                return (
-                  <Pressable
-                    key={name}
-                    onPress={() => handleToggleRestaurant(name)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Filter by ${name}`}
-                    style={[styles.filterChip, active && styles.filterChipActive]}
-                    testID={`restaurant-filter-${name}`}
-                  >
-                    <Text
-                      style={[styles.filterChipText, active && styles.filterChipTextActive]}
-                      numberOfLines={1}
-                    >
-                      {name}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          </View>
-        )}
 
         {deleteError && (
           <View style={styles.errorWrap}>

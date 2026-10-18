@@ -130,6 +130,10 @@ import {
   type FavoriteRoutesOptions,
 } from './services/tracking/favorite/routes.js';
 import {
+  friendFoodRatingRoutes,
+  type FriendFoodRatingRoutesOptions,
+} from './services/friendFoodRatings/routes.js';
+import {
   adminRoutes,
   type AdminRoutesOptions,
 } from './services/admin/routes.js';
@@ -281,6 +285,11 @@ export interface BuildServerServices {
    * Wires PUT/DELETE /me/experiences/:id/favorite and GET /me/favorites.
    */
   readonly favorite?: FavoriteRoutesOptions;
+  /**
+   * Friend_Food_Ratings_Service route options (Feature: friend-food-ratings).
+   * Wires `GET /users/:userId/food-ratings` behind session authentication.
+   */
+  readonly friendFoodRatings?: FriendFoodRatingRoutesOptions;
   /**
    * Tracking_Service route options. Each tracking sub-domain
    * (`completion`, `rating`, `note`) is opt-in so a focused unit-test
@@ -596,6 +605,10 @@ export function buildServer(
 
   if (services.favorite !== undefined) {
     void app.register(favoriteRoutes(services.favorite));
+  }
+
+  if (services.friendFoodRatings !== undefined) {
+    void app.register(friendFoodRatingRoutes(services.friendFoodRatings));
   }
 
   if (services.tracking?.completion !== undefined) {

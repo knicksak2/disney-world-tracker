@@ -36,6 +36,7 @@ import {
   EXPERIENCE_CATEGORIES,
   PARKS,
   type CompletionEntryDTO,
+  type FriendDishRatingDTO,
   type ProfileDTO,
 } from '@dwt/shared';
 
@@ -69,6 +70,8 @@ jest.mock('../../../api/client', () => {
   };
 });
 
+const mockNavigate = jest.fn();
+
 // The screen calls `useOpenExperience` (which uses React Navigation) to wire
 // row taps to the Catalog tab's ExperienceDetail screen. These mode-content
 // tests render the screen standalone (no navigator), so stub the two
@@ -76,7 +79,7 @@ jest.mock('../../../api/client', () => {
 // covered by the navigation-wiring tests, not here.
 jest.mock('@react-navigation/native', () => ({
   __esModule: true,
-  useNavigation: () => ({ navigate: jest.fn() }),
+  useNavigation: () => ({ navigate: mockNavigate }),
   useFocusEffect: () => undefined,
 }));
 
@@ -85,8 +88,9 @@ jest.mock('@react-navigation/native', () => ({
 // ---------------------------------------------------------------------------
 
 import FriendProfileScreen from '../FriendProfileScreen';
-import { apiRequest as mockedApiRequest } from '../../../api/client';
+import { ApiError, apiRequest as mockedApiRequest } from '../../../api/client';
 import type { CompletionCell, StatsResponse } from '../../../api/statsTypes';
+import { describeDishRating } from '../foodRatingFormat';
 import {
   makeByCategory,
   makeByPark,
@@ -111,6 +115,8 @@ interface RouteHandlers {
   profile: RouteHandler;
   stats: RouteHandler;
   completions: RouteHandler;
+  foodRatings: RouteHandler;
+  showcase: RouteHandler;
 }
 
 let routeHandlers: RouteHandlers;
@@ -181,6 +187,45 @@ function completionEntry(
   };
 }
 
+const HIGHLIGHT_DISH_1: FriendDishRatingDTO = {
+  foodItemId: 'item-101',
+  foodItemName: 'Dole Whip',
+  scopeKind: 'location',
+  scopeId: 'loc-101',
+  scopeName: 'Aloha Isle',
+  park: 'Magic Kingdom',
+  averageRating: 9.5,
+  ratedLogCount: 4,
+  logCount: 4,
+  latestVisitedOn: '2024-05-15',
+};
+
+const HIGHLIGHT_DISH_2: FriendDishRatingDTO = {
+  foodItemId: 'item-102',
+  foodItemName: 'Corn Dog Nuggets',
+  scopeKind: 'experience',
+  scopeId: 'exp-102',
+  scopeName: "Casey's Corner",
+  park: 'Magic Kingdom',
+  averageRating: 8.5,
+  ratedLogCount: 2,
+  logCount: 2,
+  latestVisitedOn: '2024-05-10',
+};
+
+const HIGHLIGHT_UNRATED: FriendDishRatingDTO = {
+  foodItemId: 'item-103',
+  foodItemName: 'Bottled Water',
+  scopeKind: 'location',
+  scopeId: 'loc-103',
+  scopeName: 'Aloha Isle',
+  park: 'Magic Kingdom',
+  averageRating: null,
+  ratedLogCount: 0,
+  logCount: 1,
+  latestVisitedOn: '2024-05-01',
+};
+
 // ---------------------------------------------------------------------------
 // Render helper
 // ---------------------------------------------------------------------------
@@ -190,13 +235,16 @@ function renderScreen(
     friendId: FRIEND_ID,
     displayName: DISPLAY_NAME,
   },
+  clientOverride?: QueryClient,
 ): ReturnType<typeof render> {
-  const client = new QueryClient({
-    defaultOptions: {
-      queries: { retry: false, retryDelay: 0, gcTime: 0 },
-      mutations: { retry: false },
-    },
-  });
+  const client =
+    clientOverride ??
+    new QueryClient({
+      defaultOptions: {
+        queries: { retry: false, retryDelay: 0, gcTime: 0 },
+        mutations: { retry: false },
+      },
+    });
   return render(
     <QueryClientProvider client={client}>
       <FriendProfileScreen route={{ params }} />
@@ -207,6 +255,8 @@ function renderScreen(
 const isProfilePath = (p: string): boolean => p.endsWith('/profile');
 const isStatsPath = (p: string): boolean => p.includes('/stats/summary');
 const isCompletionsPath = (p: string): boolean => p.endsWith('/completions');
+const isFoodRatingsPath = (p: string): boolean => p.includes('/food-ratings');
+const isShowcasePath = (p: string): boolean => p.includes('/pin-showcase');
 
 // ---------------------------------------------------------------------------
 // Suite
@@ -215,11 +265,15 @@ const isCompletionsPath = (p: string): boolean => p.endsWith('/completions');
 describe('FriendProfileScreen mode content (R2.*, R3.2/3.5/3.7, R4.2/4.4/4.7, R5.2/5.4)', () => {
   beforeEach(() => {
     apiRequestMock.mockReset();
+    mockNavigate.mockClear();
 
     routeHandlers = {
       profile: () => Promise.resolve(makeProfile()),
       stats: () => Promise.resolve(makeStats()),
       completions: () => Promise.resolve({ entries: [] }),
+      foodRatings: () =>
+        Promise.resolve({ items: [], nextCursor: null, scopes: null }),
+      showcase: () => Promise.resolve({ placements: [] }),
     };
 
     apiRequestMock.mockImplementation(async (_method, path) => {
@@ -229,6 +283,8 @@ describe('FriendProfileScreen mode content (R2.*, R3.2/3.5/3.7, R4.2/4.4/4.7, R5
       if (isStatsPath(path)) return routeHandlers.stats();
       if (isCompletionsPath(path)) return routeHandlers.completions();
       if (isProfilePath(path)) return routeHandlers.profile();
+      if (isFoodRatingsPath(path)) return routeHandlers.foodRatings();
+      if (isShowcasePath(path)) return routeHandlers.showcase();
       throw new Error(`unexpected call to ${path}`);
     });
   });
@@ -413,5 +469,240 @@ describe('FriendProfileScreen mode content (R2.*, R3.2/3.5/3.7, R4.2/4.4/4.7, R5
     fireEvent.press(screen.getByTestId('tab-Overview'));
     expect(await screen.findByTestId('friend-mode-overview')).toBeTruthy();
     expect(screen.queryByTestId('friend-mode-experiences')).toBeNull();
+  });
+
+  // -------------------------------------------------------------------------
+  // Food Highlights Row (Task 5.2, Requirements 11.1–11.7, 13.5, 17.2–17.4)
+  // -------------------------------------------------------------------------
+
+  describe('Food Highlights row in Overview mode', () => {
+    test('renders in Overview only and does not change the tab set', async () => {
+      renderScreen();
+
+      // Tab set remains unchanged
+      expect(screen.getByTestId('tab-Overview')).toBeTruthy();
+      expect(screen.getByTestId('tab-Coverage')).toBeTruthy();
+      expect(screen.getByTestId('tab-Experiences')).toBeTruthy();
+      expect(screen.getByTestId('tab-Compare')).toBeTruthy();
+
+      // Rendered in Overview
+      expect(await screen.findByTestId('friend-food-highlights')).toBeTruthy();
+
+      // Not rendered when switched to other tabs
+      fireEvent.press(screen.getByTestId('tab-Coverage'));
+      expect(await screen.findByTestId('friend-mode-coverage')).toBeTruthy();
+      expect(screen.queryByTestId('friend-food-highlights')).toBeNull();
+
+      fireEvent.press(screen.getByTestId('tab-Experiences'));
+      expect(await screen.findByTestId('friend-mode-experiences')).toBeTruthy();
+      expect(screen.queryByTestId('friend-food-highlights')).toBeNull();
+
+      fireEvent.press(screen.getByTestId('tab-Compare'));
+      expect(await screen.findByTestId('friend-mode-compare')).toBeTruthy();
+      expect(screen.queryByTestId('friend-food-highlights')).toBeNull();
+    });
+
+    test('queries with sort=highest_rated&limit=5&minRatedLogs=1 and renders cards with dish, rating text, and scope', async () => {
+      routeHandlers.foodRatings = () =>
+        Promise.resolve({
+          items: [HIGHLIGHT_DISH_1, HIGHLIGHT_DISH_2, HIGHLIGHT_UNRATED],
+          nextCursor: null,
+          scopes: null,
+        });
+
+      renderScreen();
+
+      const highlights = await screen.findByTestId('friend-food-highlights');
+      expect(highlights).toBeTruthy();
+
+      // Query parameter verification
+      expect(apiRequestMock).toHaveBeenCalledWith(
+        'GET',
+        `/users/${FRIEND_ID}/food-ratings?sort=highest_rated&limit=5&minRatedLogs=1`,
+      );
+
+      // Cards display dish name, rating text, and scope name
+      expect(await screen.findByText('Dole Whip')).toBeTruthy();
+      expect(screen.getByText('9.5/10')).toBeTruthy();
+      expect(screen.getByText('Aloha Isle')).toBeTruthy();
+
+      expect(screen.getByText('Corn Dog Nuggets')).toBeTruthy();
+      expect(screen.getByText('8.5/10')).toBeTruthy();
+      expect(screen.getByText("Casey's Corner")).toBeTruthy();
+
+      // Unrated dishes are filtered out of highlights
+      expect(screen.queryByText('Bottled Water')).toBeNull();
+
+      // Card accessibility labels match describeDishRating
+      const card1 = screen.getByTestId(
+        `friend-food-highlight-card-${HIGHLIGHT_DISH_1.foodItemId}`,
+      );
+      expect(card1.props.accessibilityLabel).toBe(
+        describeDishRating({
+          foodItemName: HIGHLIGHT_DISH_1.foodItemName,
+          averageRating: HIGHLIGHT_DISH_1.averageRating,
+          logCount: HIGHLIGHT_DISH_1.logCount,
+        }),
+      );
+
+      // See all button accessibility and navigation
+      const seeAllBtn = screen.getByTestId('friend-food-see-all');
+      expect(seeAllBtn.props.accessibilityRole).toBe('button');
+      expect(seeAllBtn.props.accessibilityLabel).toBe(
+        `See all of ${DISPLAY_NAME}'s dishes`,
+      );
+
+      fireEvent.press(seeAllBtn);
+      expect(mockNavigate).toHaveBeenCalledWith('FriendFoodHistory', {
+        friendId: FRIEND_ID,
+        displayName: DISPLAY_NAME,
+      });
+    });
+
+    test('empty state shows highlights copy and "See all" still present', async () => {
+      routeHandlers.foodRatings = () =>
+        Promise.resolve({
+          items: [],
+          nextCursor: null,
+          scopes: null,
+        });
+
+      renderScreen();
+
+      expect(
+        await screen.findByTestId('friend-food-highlights-empty'),
+      ).toBeTruthy();
+      expect(
+        screen.getByText(`${DISPLAY_NAME} hasn't rated any dishes yet.`),
+      ).toBeTruthy();
+
+      const seeAllBtn = screen.getByTestId('friend-food-see-all');
+      expect(seeAllBtn).toBeTruthy();
+      fireEvent.press(seeAllBtn);
+      expect(mockNavigate).toHaveBeenCalledWith('FriendFoodHistory', {
+        friendId: FRIEND_ID,
+        displayName: DISPLAY_NAME,
+      });
+    });
+
+    test('error state shows retry control with accessibility attributes and re-requests', async () => {
+      let callCount = 0;
+      routeHandlers.foodRatings = () => {
+        callCount++;
+        if (callCount <= 2) {
+          return Promise.reject(
+            new ApiError({
+              code: 'internal_error',
+              message: 'Server error',
+              status: 500,
+            }),
+          );
+        }
+        return Promise.resolve({
+          items: [HIGHLIGHT_DISH_1],
+          nextCursor: null,
+          scopes: null,
+        });
+      };
+
+      renderScreen();
+
+      expect(
+        await screen.findByTestId('friend-food-highlights-error'),
+      ).toBeTruthy();
+      expect(screen.getByText("Couldn't load food highlights.")).toBeTruthy();
+
+      const retryBtn = screen.getByTestId('friend-food-highlights-retry');
+      expect(retryBtn.props.accessibilityRole).toBe('button');
+      expect(retryBtn.props.accessibilityLabel).toBe(
+        'Retry loading food highlights',
+      );
+
+      fireEvent.press(retryBtn);
+
+      expect(await screen.findByText('Dole Whip')).toBeTruthy();
+      expect(screen.queryByTestId('friend-food-highlights-error')).toBeNull();
+    });
+
+    test('highlights query uses its own key and profile/stats refetches do not trigger it', async () => {
+      const client = new QueryClient({
+        defaultOptions: {
+          queries: { retry: false, retryDelay: 0, gcTime: 0 },
+          mutations: { retry: false },
+        },
+      });
+
+      renderScreen(undefined, client);
+
+      await screen.findByTestId('friend-food-highlights');
+      await screen.findByTestId('friend-profile-summary');
+
+      const initialCalls = [...apiRequestMock.mock.calls];
+      const foodCallsInitial = initialCalls.filter((c) =>
+        isFoodRatingsPath(c[1] as string),
+      ).length;
+      const profileCallsInitial = initialCalls.filter((c) =>
+        isProfilePath(c[1] as string),
+      ).length;
+      const statsCallsInitial = initialCalls.filter((c) =>
+        isStatsPath(c[1] as string),
+      ).length;
+
+      expect(foodCallsInitial).toBe(1);
+      expect(profileCallsInitial).toBe(1);
+      expect(statsCallsInitial).toBe(1);
+
+      // Refetch profile only
+      await client.refetchQueries({
+        queryKey: ['friend-profile', FRIEND_ID],
+      });
+
+      const afterProfileCalls = [...apiRequestMock.mock.calls];
+      const foodCallsAfterProfile = afterProfileCalls.filter((c) =>
+        isFoodRatingsPath(c[1] as string),
+      ).length;
+      const profileCallsAfter = afterProfileCalls.filter((c) =>
+        isProfilePath(c[1] as string),
+      ).length;
+
+      expect(profileCallsAfter).toBe(2);
+      expect(foodCallsAfterProfile).toBe(1); // food highlights was NOT re-issued
+
+      // Refetch food highlights only
+      await client.refetchQueries({
+        queryKey: ['friend-food-ratings', FRIEND_ID, 'highlights'],
+      });
+
+      const afterHighlightsCalls = [...apiRequestMock.mock.calls];
+      const foodCallsAfterHighlights = afterHighlightsCalls.filter((c) =>
+        isFoodRatingsPath(c[1] as string),
+      ).length;
+      const statsCallsAfter = afterHighlightsCalls.filter((c) =>
+        isStatsPath(c[1] as string),
+      ).length;
+
+      expect(foodCallsAfterHighlights).toBe(2);
+      expect(statsCallsAfter).toBe(1); // stats was NOT re-issued
+    });
+
+    test('profile_forbidden on food-ratings collapses the screen to friend-profile-unavailable', async () => {
+      routeHandlers.foodRatings = () =>
+        Promise.reject(
+          new ApiError({
+            code: 'profile_forbidden',
+            message: 'Forbidden',
+            status: 403,
+          }),
+        );
+
+      renderScreen();
+
+      expect(
+        await screen.findByTestId('friend-profile-unavailable'),
+      ).toBeTruthy();
+      expect(screen.getByText('Profile unavailable')).toBeTruthy();
+      expect(screen.queryByTestId('friend-mode-overview')).toBeNull();
+      expect(screen.queryByTestId('friend-food-highlights')).toBeNull();
+    });
   });
 });

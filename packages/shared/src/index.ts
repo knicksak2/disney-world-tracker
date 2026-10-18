@@ -81,6 +81,20 @@ export {
   PARK_LIVE_CACHE_RETENTION_SECONDS,
 } from './constants/navigation.js';
 
+// Friend Food Ratings constants
+export {
+  FRIEND_FOOD_PAGE_SIZE_DEFAULT,
+  FRIEND_FOOD_PAGE_SIZE_MAX,
+  FRIEND_FOOD_HIGHLIGHT_COUNT,
+  FRIEND_FOOD_HIGHLIGHT_MIN_RATED_LOGS,
+  FRIEND_FOOD_SEARCH_MAX_LENGTH,
+  FRIEND_FOOD_SEARCH_DEBOUNCE_MS,
+  FRIEND_FOOD_SCOPES_MAX,
+  FRIEND_FOOD_INLINE_MAX_FRIENDS,
+  FRIEND_FOOD_BATCH_MAX_ROWS,
+  FRIEND_FOOD_SORTS,
+} from './constants/friendFoodRatings.js';
+
 // Error code catalog and uniform JSON envelope.
 export {
   ERROR_CODES,
@@ -673,4 +687,19 @@ export type {
   PackingItemCreateInput,
   PackingItemUpdateInput,
 } from './tripBooking.js';
+
+// Friend Food Ratings DTOs and schemas
+export type {
+  FriendFoodSort,
+  FoodScopeKind,
+  FriendDishRatingDTO,
+  FriendFoodScopeDTO,
+  FriendFoodRatingsPageDTO,
+  FriendDishFriendRatingDTO,
+  FriendDishSocialProofDTO,
+  FriendFoodSocialProofResponseDTO,
+} from './dto/FriendFoodRatings.js';
+
+export { friendFoodRatingsQuerySchema } from './schemas/FriendFoodRatings.js';
+export type { FriendFoodRatingsQuery } from './schemas/FriendFoodRatings.js';
 

@@ -7,7 +7,7 @@
  */
 import React from 'react';
 import { StyleSheet } from 'react-native';
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AVATAR_PRESET_IDS } from '@dwt/shared';
 
@@ -81,16 +81,19 @@ describe('AvatarChip pill (dark)', () => {
 
     setTestScheme('light');
     const lightView = renderPill();
-    await screen.findByText('You & Crew');
-    // The preset art replaced the initial.
-    expect(screen.queryByText('M')).toBeNull();
+    await waitFor(() => {
+      expect(screen.queryByText('Y')).toBeNull();
+      expect(screen.queryByText('M')).toBeNull();
+    });
     const lightTree = JSON.stringify(lightView.toJSON());
     lightView.unmount();
 
     setTestScheme('dark');
     const darkView = renderPill();
-    await screen.findByText('You & Crew');
-    expect(screen.queryByText('M')).toBeNull();
+    await waitFor(() => {
+      expect(screen.queryByText('Y')).toBeNull();
+      expect(screen.queryByText('M')).toBeNull();
+    });
     // The whole pill (avatar art + mode-invariant chrome) is byte-identical across schemes.
     expect(JSON.stringify(darkView.toJSON())).toBe(lightTree);
   });

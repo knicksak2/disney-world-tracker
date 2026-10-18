@@ -24,15 +24,18 @@ import type {
   FoodItemDTO,
   FoodItemLogHistoryDTO,
   FoodItemsResponseDTO,
+  FriendDishSocialProofDTO,
   MenuDTO,
 } from '@dwt/shared';
 
 import { ApiError, apiRequest } from '../../api/client';
+import { useFriendFoodSocialProof } from '../../hooks/useFriendFoodRatings';
 import { Badge, SecondaryButton } from '../../theme/components';
 import { makeStyles } from '../../theme/makeStyles';
 import { useAppTheme } from '../../theme/useAppTheme';
 import { PICKER } from './FoodItemPickerModal.palette';
 import FoodItemLogHistorySheet from './FoodItemLogHistorySheet';
+import FriendDishSocialProof from './FriendDishSocialProof';
 import RestaurantFoodLogsSheet from './RestaurantFoodLogsSheet';
 import { useKeyboardBottomInset } from '../../hooks/useKeyboardBottomInset';
 
@@ -65,6 +68,7 @@ interface FoodItemRowProps {
   readonly isSelected?: boolean;
   readonly isAlreadyInList?: boolean;
   readonly repeatCount?: number;
+  readonly socialProof?: FriendDishSocialProofDTO | undefined;
   readonly onSelect: (item: FoodItemDTO) => void;
   readonly onOpenHistory: (item: FoodItemDTO) => void;
 }
@@ -75,6 +79,7 @@ function FoodItemRow({
   isSelected = false,
   isAlreadyInList = false,
   repeatCount: propRepeatCount,
+  socialProof,
   onSelect,
   onOpenHistory,
 }: FoodItemRowProps): JSX.Element {
@@ -150,6 +155,9 @@ function FoodItemRow({
             />
           )}
         </View>
+        {socialProof ? (
+          <FriendDishSocialProof proof={socialProof} foodItemName={item.name} />
+        ) : null}
       </View>
 
       <View style={styles.itemRowRight}>
@@ -205,15 +213,32 @@ export default function FoodItemPickerModal({
   const [scopedLogsVisible, setScopedLogsVisible] = useState<boolean>(false);
   const [selectedItems, setSelectedItems] = useState<Map<string, FoodItemDTO>>(new Map());
 
-  const { keyboardInset, getAvailableModalHeight } = useKeyboardBottomInset(visible);
-  // Stable FlatList `extraData`: a new identity only when the selection or the
-  // scheme changes, so an unrelated parent render doesn't re-render every row.
-  const listExtraData = useMemo(
-    () => [selectedItems, t.scheme] as const,
-    [selectedItems, t.scheme],
+  const scopeId = experienceId ?? locationId;
+
+  // Batch friend social proof query (R14.1, R15.2)
+  const socialProofQuery = useFriendFoodSocialProof(
+    experienceId ? 'experience' : 'location',
+    scopeId,
+    { enabled: visible && Boolean(scopeId) },
   );
 
-  const scopeId = experienceId ?? locationId;
+  const socialProofMap = useMemo(() => {
+    const map = new Map<string, FriendDishSocialProofDTO>();
+    if (socialProofQuery.data?.items && Array.isArray(socialProofQuery.data.items)) {
+      for (const item of socialProofQuery.data.items) {
+        map.set(item.foodItemId, item);
+      }
+    }
+    return map;
+  }, [socialProofQuery.data?.items]);
+
+  const { keyboardInset, getAvailableModalHeight } = useKeyboardBottomInset(visible);
+  // Stable FlatList `extraData`: a new identity only when the selection,
+  // scheme, or social proof changes, so an unrelated parent render doesn't re-render every row.
+  const listExtraData = useMemo(
+    () => [selectedItems, t.scheme, socialProofMap] as const,
+    [selectedItems, t.scheme, socialProofMap],
+  );
 
   const handleClose = useCallback(() => {
     setSearch('');
@@ -520,12 +545,13 @@ export default function FoodItemPickerModal({
           mode={mode}
           isSelected={selectedItems.has(item.item.id)}
           isAlreadyInList={existingSet.has(item.item.id)}
+          socialProof={socialProofMap.get(item.item.id)}
           onSelect={handleItemPress}
           onOpenHistory={(foodItem) => setHistoryItem(foodItem)}
         />
       );
     },
-    [mode, selectedItems, existingSet, handleItemPress, styles],
+    [mode, selectedItems, existingSet, handleItemPress, socialProofMap, styles],
   );
 
   function handleSearchSubmit(): void {

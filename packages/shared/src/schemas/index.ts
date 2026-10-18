@@ -222,3 +222,6 @@ export type {
 
 export { currentWeatherSchema } from './Weather.js';
 export type { CurrentWeatherDTO } from './Weather.js';
+
+export { friendFoodRatingsQuerySchema } from './FriendFoodRatings.js';
+export type { FriendFoodRatingsQuery } from './FriendFoodRatings.js';

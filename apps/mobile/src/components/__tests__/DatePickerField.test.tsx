@@ -12,6 +12,7 @@
  */
 
 import React from 'react';
+import { Keyboard } from 'react-native';
 import { fireEvent, render, screen } from '@testing-library/react-native';
 
 import { DatePickerField } from '../DatePickerField';
@@ -22,6 +23,22 @@ describe('DatePickerField — maximumDate', () => {
     // then renders the June 2026 day grid.
     fireEvent.press(screen.getByTestId('when'));
   }
+
+  test('dismisses the software keyboard when opening the picker', () => {
+    const dismissSpy = jest.spyOn(Keyboard, 'dismiss');
+    render(
+      <DatePickerField
+        value="2026-06-15"
+        onChange={jest.fn()}
+        accessibilityLabel="Visit date"
+        testID="when"
+      />,
+    );
+
+    open();
+    expect(dismissSpy).toHaveBeenCalled();
+    dismissSpy.mockRestore();
+  });
 
   test('does not fire onChange for a day after maximumDate (R6.6)', () => {
     const onChange = jest.fn();

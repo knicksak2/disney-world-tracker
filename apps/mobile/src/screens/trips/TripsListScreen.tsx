@@ -38,6 +38,9 @@ import {
   KeyboardAvoidingView,
   Modal,
   Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   View,
@@ -59,6 +62,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { ApiError, apiRequest } from '../../api/client';
 import { DatePickerField } from '../../components/DatePickerField';
 import { ResortPicker } from '../../components/ResortPicker';
+import { useKeyboardBottomInset } from '../../hooks/useKeyboardBottomInset';
 import type { TripsStackParamList } from '../../navigation/TripsStack';
 import {
   clearTripsListNotice,
@@ -657,111 +661,148 @@ function CreateTripModal({
 }: CreateTripModalProps): JSX.Element {
   const styles = useStyles();
   const t = useAppTheme();
+  const { keyboardInset, getAvailableModalHeight } = useKeyboardBottomInset(visible);
+
   return (
     <Modal
       visible={visible}
       transparent
-      animationType="fade"
+      animationType="slide"
       onRequestClose={onCancel}
     >
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.modalBackdrop}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={[
+          styles.modalBackdrop,
+          Platform.OS === 'android' && keyboardInset > 0
+            ? { paddingBottom: keyboardInset }
+            : null,
+        ]}
       >
-        <View style={styles.modalCard} testID="trips-create-modal">
-          <Text style={styles.modalTitle}>Create a Trip</Text>
+        <View
+          style={[
+            styles.modalCard,
+            Platform.OS === 'android' && keyboardInset > 0
+              ? { maxHeight: getAvailableModalHeight(40) }
+              : null,
+          ]}
+          testID="trips-create-modal"
+        >
+          <View style={styles.sheetHandle} />
 
-          <Text style={styles.label}>Trip name</Text>
-          <TextInput
-            value={name}
-            onChangeText={onChangeName}
-            placeholder="e.g. Spring Break at WDW"
-            placeholderTextColor={t.color.textSecondary}
-            keyboardAppearance={t.scheme}
-            maxLength={100}
-            editable={!busy}
-            style={styles.input}
-            accessibilityLabel="Trip name"
-            testID="trips-create-name"
-          />
-
-          <Text style={styles.label}>Description (optional)</Text>
-          <TextInput
-            value={description}
-            onChangeText={onChangeDescription}
-            placeholder="What's the plan?"
-            placeholderTextColor={t.color.textSecondary}
-            keyboardAppearance={t.scheme}
-            multiline
-            maxLength={2000}
-            editable={!busy}
-            style={[styles.input, styles.inputMultiline]}
-            accessibilityLabel="Trip description"
-            testID="trips-create-description"
-          />
-
-          <Text style={styles.label}>Start date</Text>
-          <DatePickerField
-            value={startDate}
-            onChange={onChangeStart}
-            placeholder="Select a date"
-            disabled={busy}
-            accessibilityLabel="Trip start date"
-            testID="trips-create-start"
-          />
-
-          <Text style={styles.label}>End date</Text>
-          <DatePickerField
-            value={endDate}
-            onChange={onChangeEnd}
-            placeholder="Select a date"
-            disabled={busy}
-            {...(startDate.trim().length > 0
-              ? { minimumDate: startDate }
-              : {})}
-            accessibilityLabel="Trip end date"
-            testID="trips-create-end"
-          />
-
-          {resorts.length > 0 ? (
-            <>
-              <Text style={styles.label}>Where you stayed (optional)</Text>
-              <ResortPicker
-                resorts={resorts}
-                selectedIds={selectedResortIds}
-                onToggle={onToggleResort}
-                disabled={busy}
-                testIDPrefix="trips-create"
-              />
-            </>
-          ) : null}
-
-          {error !== null ? (
-            <Text
-              style={styles.error}
-              accessibilityRole="alert"
-              testID="trips-create-error"
-            >
-              {error}
-            </Text>
-          ) : null}
-
-          <View style={styles.modalActions}>
-            <PrimaryButton
-              label={busy ? 'Creating\u2026' : 'Create'}
-              onPress={onSubmit}
-              disabled={busy}
-              testID="trips-create-submit"
-              style={styles.flexBtn}
-            />
-            <SecondaryButton
-              label="Cancel"
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Create a Trip</Text>
+            <Pressable
               onPress={onCancel}
               disabled={busy}
-              testID="trips-create-cancel"
-              style={styles.flexBtn}
-            />
+              accessibilityRole="button"
+              accessibilityLabel="Close create trip modal"
+              hitSlop={12}
+              testID="trips-create-close"
+              style={styles.closeBtn}
+            >
+              <Ionicons name="close" size={24} color={t.color.textSecondary} />
+            </Pressable>
           </View>
+
+          <ScrollView
+            style={styles.modalScroll}
+            contentContainerStyle={styles.modalScrollContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            <Text style={styles.label}>Trip name</Text>
+            <TextInput
+              value={name}
+              onChangeText={onChangeName}
+              placeholder="e.g. Spring Break at WDW"
+              placeholderTextColor={t.color.textSecondary}
+              keyboardAppearance={t.scheme}
+              maxLength={100}
+              editable={!busy}
+              style={styles.input}
+              accessibilityLabel="Trip name"
+              testID="trips-create-name"
+            />
+
+            <Text style={styles.label}>Description (optional)</Text>
+            <TextInput
+              value={description}
+              onChangeText={onChangeDescription}
+              placeholder="What's the plan?"
+              placeholderTextColor={t.color.textSecondary}
+              keyboardAppearance={t.scheme}
+              multiline
+              maxLength={2000}
+              editable={!busy}
+              style={[styles.input, styles.inputMultiline]}
+              accessibilityLabel="Trip description"
+              testID="trips-create-description"
+            />
+
+            <Text style={styles.label}>Start date</Text>
+            <DatePickerField
+              value={startDate}
+              onChange={onChangeStart}
+              placeholder="Select a date"
+              disabled={busy}
+              accessibilityLabel="Trip start date"
+              testID="trips-create-start"
+            />
+
+            <Text style={styles.label}>End date</Text>
+            <DatePickerField
+              value={endDate}
+              onChange={onChangeEnd}
+              placeholder="Select a date"
+              disabled={busy}
+              {...(startDate.trim().length > 0
+                ? { minimumDate: startDate }
+                : {})}
+              accessibilityLabel="Trip end date"
+              testID="trips-create-end"
+            />
+
+            {resorts.length > 0 ? (
+              <>
+                <Text style={styles.label}>Where you stayed (optional)</Text>
+                <ResortPicker
+                  resorts={resorts}
+                  selectedIds={selectedResortIds}
+                  onToggle={onToggleResort}
+                  disabled={busy}
+                  testIDPrefix="trips-create"
+                />
+              </>
+            ) : null}
+
+            {error !== null ? (
+              <Text
+                style={styles.error}
+                accessibilityRole="alert"
+                testID="trips-create-error"
+              >
+                {error}
+              </Text>
+            ) : null}
+
+            <View style={styles.modalActions}>
+              <PrimaryButton
+                label={busy ? 'Creating\u2026' : 'Create'}
+                onPress={onSubmit}
+                disabled={busy}
+                testID="trips-create-submit"
+                style={styles.flexBtn}
+              />
+              <SecondaryButton
+                label="Cancel"
+                onPress={onCancel}
+                disabled={busy}
+                testID="trips-create-cancel"
+                style={styles.flexBtn}
+              />
+            </View>
+          </ScrollView>
         </View>
       </KeyboardAvoidingView>
     </Modal>
@@ -933,18 +974,50 @@ const useStyles = makeStyles((t) => ({
   modalBackdrop: {
     flex: 1,
     backgroundColor: TRIPS_MODAL[t.scheme].scrim,
+    justifyContent: 'flex-end',
     alignItems: 'center',
-    justifyContent: 'center',
-    padding: theme.spacing.xl,
   },
   modalCard: {
     backgroundColor: t.color.surface,
-    borderRadius: theme.radius.lg,
-    padding: theme.spacing.xl,
+    borderTopLeftRadius: theme.radius.xl,
+    borderTopRightRadius: theme.radius.xl,
     width: '100%',
-    maxWidth: 400,
-    gap: theme.spacing.sm,
+    maxWidth: 520,
+    maxHeight: '90%',
     ...t.shadow.floating,
+  },
+  sheetHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: t.color.border,
+    alignSelf: 'center',
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: theme.spacing.xl,
+    paddingTop: theme.spacing.sm,
+    paddingBottom: theme.spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: t.color.border,
+  },
+  closeBtn: {
+    padding: 4,
+    marginRight: -4,
+  },
+  modalScroll: {
+    flexGrow: 0,
+    flexShrink: 1,
+  },
+  modalScrollContent: {
+    paddingHorizontal: theme.spacing.xl,
+    paddingTop: theme.spacing.md,
+    paddingBottom: theme.spacing.xxl,
+    gap: theme.spacing.sm,
   },
   modalTitle: {
     ...theme.typography.heading,
