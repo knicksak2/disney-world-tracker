@@ -77,7 +77,7 @@ exports[`Feature: navigation-redesign, Property 6: Trip section structure untouc
 ]
 `;
 
-exports[`Feature: navigation-redesign, Property 6: Trip section structure untouched (Requirements 5.1, 5.2) TripsStack registers exactly the 15 expected screens and matches snapshot 1`] = `
+exports[`Feature: navigation-redesign, Property 6: Trip section structure untouched (Requirements 5.1, 5.2) TripsStack registers exactly the 16 expected screens and matches snapshot 1`] = `
 [
   {
     "name": "TripsList",
@@ -129,6 +129,10 @@ exports[`Feature: navigation-redesign, Property 6: Trip section structure untouc
   },
   {
     "name": "TripSummary",
+    "options": undefined,
+  },
+  {
+    "name": "TripAlbum",
     "options": undefined,
   },
   {

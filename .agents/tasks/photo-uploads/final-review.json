@@ -1,0 +1,167 @@
+{
+  "verdict": "CHANGES_REQUESTED",
+  "counts": { "high": 1, "medium": 12, "nit": 7 },
+  "findings": [
+    {
+      "id": "H1",
+      "severity": "HIGH",
+      "area": "Phase 2 recap share: authorization / privacy",
+      "where": "requirements.md R15.3, R15.6, R15.11, R15.12, D22; design.md Summary share, Property 21; tasks.md 21.2, 21.3",
+      "problem": "GET /me/inbox/:shareId/trip-recap is called friend-gated but its gate never reads friendships. friends/repo.ts removeFriend only deletes the friendships row and sharing/repo.ts openShare does not check friendship, so an unfriended recipient keeps live access to figures and freshly signed photo URLs of the whole crew, with no sender revoke (D22). InboxScreen checks stillFriend on the client only.",
+      "suggestedFix": "Add 'recipient is currently a Friend of the sharer' (one friendships PK lookup via canonicalPair) to R15.3 and R15.12; failure answers the collapsed validation_failed. Add friendship as a dimension to Property 21 and the 21.3 matrix with an unfriend-after-share test; add unfriending to the D22 consequences and R15.11 residual-window text; reuse InboxScreen's stillFriend pre-check in task 22.4."
+    },
+    {
+      "id": "M1",
+      "severity": "MEDIUM",
+      "area": "Phase 2 recap DTO / privacy",
+      "where": "design.md TripRecapDTO (superlatives: readonly string[]); requirements.md R15.12; tasks.md 17.1, 21.3; packages/shared/src/trips.ts TripSuperlativeDTO",
+      "problem": "Real superlatives are TripSuperlativeDTO objects with memberId and memberDisplayName (the text share prints memberDisplayName). The DTO type string[] does not exist upstream, R15.12 says 'superlatives' and 'no per-member names' at once, and the 21.3 sentinel test would fail if display names pass through or leak crew user ids if memberId does.",
+      "suggestedFix": "Define the projection {id,title,description,icon,experienceName?,value?,memberDisplayName?} and never memberId; decide explicitly whether memberDisplayName is allowed (text share already shows it); reword R15.12 to 'no member ids, no per-member counts or ratings'; align the 21.3 sentinel assertions."
+    },
+    {
+      "id": "M2",
+      "severity": "MEDIUM",
+      "area": "Phase 2 recap route: sharer left / Trip deleted",
+      "where": "design.md Error Handling rows for recap read; R15.6; R15.12; TripRecapDTO",
+      "problem": "Only the photos part is said to become unavailable. For a deleted Trip getSummary has nothing to read (error or zeros that look real); for a sharer who left, live figures and superlatives for a Trip they can no longer see are still served to their Friends indefinitely.",
+      "suggestedFix": "Specify: when the Trip is gone or the sharer is no longer a member, return 200 with recap null and photos.access 'unavailable' (or the collapsed validation_failed); make figure fields optional or nullable; add a test per case asserting no figure and no URL."
+    },
+    {
+      "id": "M3",
+      "severity": "MEDIUM",
+      "area": "Kill switch vs recap route and feed",
+      "where": "design.md routes ('PHOTOS_ENABLED=false registers only GET /photos/config'), summaryShareRoutes.ts in photos service; R20.2; R14.10; trips routes.ts feed handler",
+      "problem": "With PHOTOS_ENABLED=false (default and emergency switch) the recap route is not registered, so recipients cannot open the recap even though the figures are unrelated to photos, while tripSummary shares can still be sent. With the optional FeedPhotoPort absent, member_post items are returned with raw metadata.photoIds and no slots.",
+      "suggestedFix": "Register the recap route from the Sharing/trips side (or always) and return photos.access 'unavailable' when disabled; document it as the R20.2 exception. Require the trips feed route to drop photoIds (and hide or empty the item) when the port is absent. Add PHOTOS_ENABLED=false tests for both."
+    },
+    {
+      "id": "M4",
+      "severity": "MEDIUM",
+      "area": "Wiring / ports",
+      "where": "design.md Summary share ('composes payload after assertTripMember + can'); tasks.md 21.1, 21.3; sharing/routes.ts SharingRoutesOptions; trips/authz.ts; trips/repo.ts getSummary",
+      "problem": "SharingRoutesOptions has no pool or trips port; assertTripMember needs a DbPool, the payload needs tripName, and the recap needs getSummary (deriveTripSummary takes prepared inputs, not a trip id). No port, composeServices change, or route owner is specified, so an implementer will import trips internals into Sharing.",
+      "suggestedFix": "Add a structural port (roleOf, isMember, tripName, summary) built in composeServices.ts from tripRepo and the pool, passed optionally to the Sharing plugin and the recap route; state that the recap calls tripRepo.getSummary and projects it; name the wiring task and add a production-registration wiring test."
+    },
+    {
+      "id": "M5",
+      "severity": "MEDIUM",
+      "area": "Highlight rule (R26.6, Property 38)",
+      "where": "requirements.md D21, R26.6, R13.7, R15.5; design.md selectRecapHighlights; tasks.md 5.5, 19.4, 21.3",
+      "problem": "Grouping by created_at (upload day) makes a bulk end-of-trip upload yield one or two highlights. photos.sort_at already holds the validated capture time (R13.3, falls back to request time) and drives the Album grouping (R13.6), so recap and Album can disagree about a photo's day.",
+      "suggestedFix": "Group by sort_at (rename the input field, tie-break (sortAt,id)) and update R13.7, R15.5, R26.6, Property 38, tasks 5.5/19.4/21.3 together; or record the upload-day choice and its bulk-upload consequence in D21 as an explicit veto."
+    },
+    {
+      "id": "M6",
+      "severity": "MEDIUM",
+      "area": "Feed post creation race",
+      "where": "design.md Trip posts (UPDATE photos SET feed_item_id ... WHERE id = ANY AND owner_id); R14.2; tasks.md 20.1",
+      "problem": "Validation is a plain SELECT followed by an UPDATE with no feed_item_id IS NULL or status condition and no row-count check. Two concurrent creates with the same photo both pass; the photo ends in two posts' photoIds and deleting one post deletes it from the other. A photo that turns rejected or deleted between check and link is linked anyway.",
+      "suggestedFix": "Use SELECT ... FOR UPDATE or a conditional UPDATE ... RETURNING with feed_item_id IS NULL and the status set, rolling back with validation_failed when the returned count differs; add a test that a second create of the same photo creates no feed row."
+    },
+    {
+      "id": "M7",
+      "severity": "MEDIUM",
+      "area": "Feed post deletion authorization",
+      "where": "design.md routes table and Trip posts; tasks.md 20.1; contrast trips/repo.ts assertTargetInTrip",
+      "problem": "DELETE /trips/:id/feed/posts/:feedItemId is gated on membership of :id but nothing requires the item to have trip_id = :id and type = 'member_post'. An organizer of Trip A could delete another trip's post (and its photos, reactions, comments), and a member could delete their own system feed items. Tests do not cover it.",
+      "suggestedFix": "Load the post with WHERE id=$1 AND trip_id=$2 AND type='member_post', else trip_not_found; add 20.1 tests for a foreign-trip post id and a non-member_post id."
+    },
+    {
+      "id": "M8",
+      "severity": "MEDIUM",
+      "area": "Who may delete trip photos (departed uploader)",
+      "where": "requirements.md R12.5, R12.6, D19, D23, R12.7; design.md DELETE /photos/:id row",
+      "problem": "D19 says a departed member can no longer remove their own photos; R12.5, D23 and the routes table say the uploader can delete at any time; R12.6 is ambiguous. Since their photos stay in the Album and recaps and deletion is the uploader's only control, a departed member may have no control at all.",
+      "suggestedFix": "Decide once: uploader may delete own Trip photo regardless of current membership (authorize on owner_id), restrict R12.6 to reads/uploads, reword D19's rationale, and test that a removed member's DELETE of their own photo succeeds, of someone else's is photo_not_found, and their GET /trips/:id/photos is trip_forbidden."
+    },
+    {
+      "id": "M9",
+      "severity": "MEDIUM",
+      "area": "Report auto-hide abuse",
+      "where": "requirements.md R16.4 (threshold 1 for trip), R16.8, R16.5, R16.6; design.md PHOTOS_REPORT_AUTOHIDE_TRIP=1",
+      "problem": "R16.8 lets recap recipients (not Trip members) report highlight photos and the trip threshold is 1, so any Friend of a sharer can hide a crew member's photo from the whole Trip with one report until an operator restores it.",
+      "suggestedFix": "Count toward auto-hide only reports from current Trip members; reports via shareId still record a Photo_Report and queue for admin review (or use a higher threshold). Amend R16.4/R16.8, Property 13, and add a test that a recipient report leaves the photo approved and queued while a member report hides it."
+    },
+    {
+      "id": "M10",
+      "severity": "MEDIUM",
+      "area": "Requirement vs design/test contradiction",
+      "where": "requirements.md R16.8; design.md Summary share (photo must be a current highlight); tasks.md 21.3",
+      "problem": "R16.8 says a photo is visible via a share exactly when R15.3 holds, which allows any approved Trip photo; design and 21.3 require the photo to be one of the share's current highlights, else photo_not_found. A requirement-following implementation fails the planned test.",
+      "suggestedFix": "Amend R16.8 additively: 'and the Photo is one of the share's current recap highlights (Requirement 15.5)'; cite 15.5 in 21.3."
+    },
+    {
+      "id": "M11",
+      "severity": "MEDIUM",
+      "area": "Task ordering",
+      "where": "tasks.md dependency graph wave 31; tasks 22.4, 22.5, 22.6",
+      "problem": "22.4 consumes the photos section component that 22.6 builds, 22.6 says it is shared with 22.4, and 22.5 navigates to the composer built in 22.4, yet all four are in the same wave with no owner for the shared component.",
+      "suggestedFix": "Make 22.6 the owner of TripPhotosSection (recipient-mode prop: no Album action, shareId on report/block) and move it to wave 30; put 22.4 in wave 31 and 22.5 in wave 32 (or merge 22.5 into 22.4); make 22.4 say 'reuse the component from 22.6'."
+    },
+    {
+      "id": "M12",
+      "severity": "MEDIUM",
+      "area": "Shared contracts and share-kind consumers",
+      "where": "tasks.md 17.1, 21.1, 22.4, Notes; packages/shared schemas/Share.ts, schemas/Inbox.ts, attention.ts; InboxScreen.tsx, SentSharesScreen.tsx, shareBody.ts, NotificationCenterScreen.tsx, notifications/service.ts",
+      "problem": "17.1 adds the TS type and an input schema but not tripSummarySharePayloadSchema in the sharePayloadSchema union, so inboxItemSchema rejects tripSummary items. if/else chains on payload.kind (InboxScreen navigation falls through to FriendProfile, attention.ts destination) compile cleanly with a new kind, so the 'fix what typecheck reports' note will not find them.",
+      "suggestedFix": "Add the strict payload schema to the union with a shared test that inboxItemSchema accepts a tripSummary item; list the consumers explicitly in 21.1/22.4 (attention destination, InboxScreen navigation branch before the FriendProfile fallback, SentSharesScreen, shareBody.ts, notification label in both unions) with behavior tests."
+    },
+    {
+      "id": "N1",
+      "severity": "NIT",
+      "area": "Config naming",
+      "where": "design.md Config table, R26.6, task 3.1, task 14.1 docs guard",
+      "problem": "RECAP_HIGHLIGHT_MAX is the only photo variable without the PHOTOS_ prefix, so the PHOTO* docs guard skips it and .env.example / render.yaml entries are easy to miss.",
+      "suggestedFix": "Rename to PHOTOS_RECAP_HIGHLIGHT_MAX everywhere or widen the guard to match it."
+    },
+    {
+      "id": "N2",
+      "severity": "NIT",
+      "area": "Migration 0063",
+      "where": "design.md 0063 snippet; tasks.md 18.1",
+      "problem": "The 0063 SQL has no BEGIN/COMMIT although the repo convention and the 0062 section require it.",
+      "suggestedFix": "Show the BEGIN/COMMIT wrapper in the snippet and in 18.1."
+    },
+    {
+      "id": "N3",
+      "severity": "NIT",
+      "area": "access precedence",
+      "where": "design.md Property 21, Error Handling rows",
+      "problem": "When includePhotos is false and the sharer has also left, access could be not_included or unavailable; unspecified.",
+      "suggestedFix": "State that unavailable wins and add a test row."
+    },
+    {
+      "id": "N4",
+      "severity": "NIT",
+      "area": "Weak tests",
+      "where": "tasks.md 20.2 (statement count 'on the fake or a wrapped pool'), 22.6 (repaint with only the theme guard), 21.2 (route inventory for the word revoke)",
+      "problem": "A fake can pass while the real SQL loops; the theme guard checks literals not repainting; a name scan passes by absence and misses a differently named mutation route.",
+      "suggestedFix": "Require the wrapped pg-mem pool; assert a style value changes on scheme switch; assert no route other than the existing five mutates a delivered tripSummary share."
+    },
+    {
+      "id": "N5",
+      "severity": "NIT",
+      "area": "Source of the sharer id",
+      "where": "design.md recipient route; TripSummarySharePayload.sharerId",
+      "problem": "The payload duplicates shares.sender_id; the gate should use one source.",
+      "suggestedFix": "Use shares.sender_id in the route and either drop sharerId from the payload or test that they are equal."
+    },
+    {
+      "id": "N6",
+      "severity": "NIT",
+      "area": "tasks.md housekeeping",
+      "where": "tasks.md Task 24 and Notes ('D1 to D23'); wave 21 (13.9 with 13.11)",
+      "problem": "D24 (R27) exists but is outside the 'D1 to D23' list; the 13.9 theme/typecheck gate shares a wave with 13.11 so it may run before the strip exists.",
+      "suggestedFix": "Say 'D1 to D24'; scope 13.9 to Phase 1 files or move it after 13.11."
+    },
+    {
+      "id": "N7",
+      "severity": "NIT",
+      "area": "R27.1 wording",
+      "where": "requirements.md R27.1 vs design.md strip placement",
+      "problem": "R27.1 says 'an Experience that has food items' but the design gates on category Restaurant only (the empty first page already hides the strip).",
+      "suggestedFix": "Delete 'that has food items' or define it as category Restaurant."
+    }
+  ],
+  "reviewDoc": "c:\\Users\\knick\\dev\\disney-app\\.agents\\tasks\\photo-uploads\\final-review.md"
+}

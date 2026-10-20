@@ -77,6 +77,12 @@ export type ShareDeliveredEvent =
       readonly senderId: string;
       readonly recipientIds: readonly string[];
       readonly payloadKind: 'pinShowcase';
+    }
+  | {
+      readonly shareId: string;
+      readonly senderId: string;
+      readonly recipientIds: readonly string[];
+      readonly payloadKind: 'tripSummary';
     };
 
 // ---------------------------------------------------------------------------
@@ -789,6 +795,9 @@ async function composeBody(
   }
   if (event.payloadKind === 'pinShowcase') {
     return 'their Pin Showcase';
+  }
+  if (event.payloadKind === 'tripSummary') {
+    return 'a trip recap';
   }
   const name = await deps.resolveExperienceName(event.experienceId);
   const trimmed = name?.trim();

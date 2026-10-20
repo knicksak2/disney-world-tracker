@@ -58,7 +58,11 @@ export type TripAction =
   | 'toggle_packing_item'
   | 'edit_packing_item'
   | 'mark_booking_window_done'
-  | 'set_booking_reminder_mute'; // trip-booking-timeline member (R12.1, R12.2)
+  | 'set_booking_reminder_mute' // trip-booking-timeline member (R12.1, R12.2)
+  | 'upload_trip_photo'
+  | 'post_feed_photo'
+  | 'share_trip_summary' // member + organizer (photo-uploads R12.1, R14.3, R15.9)
+  | 'delete_any_trip_photo'; // organizer-only (photo-uploads R12.5)
 
 /**
  * Actions any Trip_Member may perform regardless of role (R4.3). Organizers
@@ -78,6 +82,9 @@ const MEMBER_ACTIONS: ReadonlySet<TripAction> = new Set<TripAction>([
   'edit_packing_item',
   'mark_booking_window_done',
   'set_booking_reminder_mute',
+  'upload_trip_photo',
+  'post_feed_photo',
+  'share_trip_summary',
 ]);
 
 /**
@@ -94,6 +101,7 @@ const ORGANIZER_ONLY_ACTIONS: ReadonlySet<TripAction> = new Set<TripAction>([
   'demote',
   'delete_trip',
   'edit_booking_settings',
+  'delete_any_trip_photo',
 ]);
 
 /**
@@ -113,8 +121,31 @@ export function can(role: TripRole, action: TripAction): boolean {
     // organizer ⊇ member: permitted for every defined action.
     return MEMBER_ACTIONS.has(action) || ORGANIZER_ONLY_ACTIONS.has(action);
   }
-  // role === 'member'
-  return MEMBER_ACTIONS.has(action);
+  if (role === 'member') {
+    return MEMBER_ACTIONS.has(action);
+  }
+  return false;
+}
+
+/**
+ * Pure authorization check for deleting a Trip photo.
+ *
+ * An uploader may delete their own Trip photo at any time, whether or not they
+ * are still a member of the Trip (Requirement 12.5, 12.11, decision D30).
+ * Any other user may delete a photo only if they currently hold the
+ * `delete_any_trip_photo` action (an organizer) on that Trip.
+ */
+export function canDeleteTripPhoto(
+  role: TripRole | null | undefined,
+  isUploader: boolean,
+): boolean {
+  if (isUploader) {
+    return true;
+  }
+  if (!role) {
+    return false;
+  }
+  return can(role, 'delete_any_trip_photo');
 }
 
 /** A single Trip_Member's identity and role within a Trip. */

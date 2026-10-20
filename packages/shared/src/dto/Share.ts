@@ -69,10 +69,25 @@ export interface PinShowcaseSharePayload {
   readonly ownerDisplayName: string;
 }
 
+/**
+ * Pointer-only payload for a `tripSummary` Share (photo-uploads Requirements 15.2, 15.20).
+ *
+ * Contains exactly 5 keys. The sharer's id is stored in `shares.sender_id` and is
+ * never duplicated here. Does not store summary figures, photos, or URLs.
+ */
+export interface TripSummarySharePayload {
+  readonly kind: 'tripSummary';
+  readonly tripId: string;
+  readonly tripName: string;
+  readonly sharerDisplayName: string;
+  readonly includePhotos: boolean;
+}
+
 export type SharePayload =
   | ExperienceSharePayload
   | ProgressSharePayload
-  | PinShowcaseSharePayload;
+  | PinShowcaseSharePayload
+  | TripSummarySharePayload;
 
 export interface ShareDTO {
   readonly id: string;

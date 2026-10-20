@@ -12,52 +12,68 @@
 //   - Member Hall of Fame: Avatars, roles, logs/tags, and personal favorite moments (R14.4, R14.5, R14.12).
 //   - Share Trip Highlights: Formats vacation highlights into a shareable message (R14.13).
 
-import React, { useState } from 'react';
+import React from 'react';
 import {
   ActivityIndicator,
-  Image,
   ScrollView,
   Share,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
-import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import type { CompositeNavigationProp, RouteProp } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useQuery } from '@tanstack/react-query';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 
-import type { ExperienceCategory, Park, TripSummaryDTO, TripSuperlativeDTO } from '@dwt/shared';
+import type { Park, TripDTO, TripSummaryDTO } from '@dwt/shared';
 import { isAvatarPresetId } from '@dwt/shared';
 
 import { ApiError, apiRequest } from '../../api/client';
 import { renderAvatarPreset } from '../../avatars/AvatarPresets';
+import type { RootStackParamList } from '../../navigation/RootNavigator';
 import type { TripsStackParamList } from '../../navigation/TripsStack';
-import { theme, withAlpha } from '../../theme/theme';
+import { TripPhotosSection } from '../../photos/TripPhotosSection';
+import { theme } from '../../theme/theme';
 import { makeStyles } from '../../theme/makeStyles';
 import { useAppTheme, usePalette } from '../../theme/useAppTheme';
 import {
-  Badge,
   Card,
   EmptyState,
   GradientHeader,
   PrimaryButton,
   ScreenContainer,
 } from '../../theme/components';
-import { ProgressBar, ProgressRing } from '../../theme/charts';
-import {
-  SUMMARY_AVATAR,
-  SUMMARY_HERO,
-  SUMMARY_MEDAL,
-  SUMMARY_MISC,
-  SUMMARY_STAT,
-} from './TripSummaryScreen.palette';
+import { ProgressBar } from '../../theme/charts';
+import { SUMMARY_AVATAR, SUMMARY_MISC } from './TripSummaryScreen.palette';
+import { tripDetailKeys } from './tripDetailQueryKeys';
+import { SummaryAwardCard } from './summary/SummaryAwardCard';
+import { SummaryHeroCard } from './summary/SummaryHeroCard';
+import { SummarySectionHeader } from './summary/SummarySectionHeader';
+import { SummaryStatTiles } from './summary/SummaryStatTiles';
+import { TopRatedMomentRow } from './summary/TopRatedMomentRow';
+import { formatMeanRating } from './summary/summaryFormat';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-type Props = NativeStackScreenProps<TripsStackParamList, 'TripSummary'>;
+/**
+ * Composite navigation: the Trips stack plus the root stack, because the
+ * "Send to friends" action opens the root-level `ShareComposer` (the same
+ * bubbling the Stats hub uses; photo-uploads task 22.5).
+ */
+type Props = {
+  readonly navigation: CompositeNavigationProp<
+    NativeStackNavigationProp<TripsStackParamList, 'TripSummary'>,
+    NativeStackNavigationProp<RootStackParamList>
+  >;
+  readonly route: RouteProp<TripsStackParamList, 'TripSummary'>;
+};
+
+/** Note beside the text share (photo-uploads R26.3). */
+export const TRIP_SUMMARY_TEXT_SHARE_NOTE =
+  "Photos can't go in a text share. Use Send to friends to share the recap with photos.";
 
 /** Wire shape of `GET /trips/:id/summary`: the derived Trip_Summary (R14.6). */
 type TripSummaryResponse = TripSummaryDTO;
@@ -84,9 +100,6 @@ export default function TripSummaryScreen({
 }: Props): JSX.Element {
   const styles = useStyles();
   const t = useAppTheme();
-  const hero = usePalette(SUMMARY_HERO);
-  const medal = usePalette(SUMMARY_MEDAL);
-  const stat = usePalette(SUMMARY_STAT);
   const misc = usePalette(SUMMARY_MISC);
   const { tripId } = route.params;
 
@@ -110,6 +123,23 @@ export default function TripSummaryScreen({
     },
     retry: false,
   });
+
+  // The Trip name feeds only the composer's read-only preview (R15.8): the
+  // server composes the stored payload itself. Shares the hub's cache entry.
+  const tripQuery = useQuery<TripDTO, ApiError>({
+    queryKey: tripDetailKeys.detail(tripId),
+    queryFn: () => apiRequest<TripDTO>('GET', `/trips/${tripId}`),
+    staleTime: 30 * 1000,
+  });
+
+  // Opens the `tripSummary` Share composer (photo-uploads R15.1, R15.8).
+  const handleSendToFriends = (): void => {
+    navigation.navigate('ShareComposer', {
+      kind: 'tripSummary',
+      tripId,
+      tripName: tripQuery.data?.name ?? 'Trip',
+    });
+  };
 
   const backToHub = (): void => {
     if (navigation.canGoBack()) {
@@ -189,14 +219,6 @@ export default function TripSummaryScreen({
       0,
     );
 
-  const itineraryPercent =
-    summary.plannedTotalCount > 0
-      ? Math.min(100, Math.round((summary.plannedCompletedCount / summary.plannedTotalCount) * 100))
-      : 100;
-
-  const isCompleteItinerary =
-    summary.plannedTotalCount > 0 && summary.plannedCompletedCount >= summary.plannedTotalCount;
-
   return (
     <ScreenContainer>
       <SummaryHeader
@@ -209,122 +231,46 @@ export default function TripSummaryScreen({
         {/* ================================================================= */}
         {/* 1. Celebratory Hero Card */}
         {/* ================================================================= */}
-        <LinearGradient
-          colors={[hero.gradStart, hero.gradMid, hero.gradEnd]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.heroCard}
+        <SummaryHeroCard
+          title="A Magical Adventure!"
+          badgeLabel="Vacation Wrap-Up"
+          subtitle="Look back at all the memories, thrills, and milestones your party shared together."
+          plannedCompletedCount={summary.plannedCompletedCount}
+          plannedTotalCount={summary.plannedTotalCount}
           testID="trip-summary-hero"
-        >
-          <View style={styles.heroGlow} />
-          <View style={styles.heroHeader}>
-            <View style={styles.heroBadge}>
-              <Ionicons name="sparkles" size={14} color={hero.gold} />
-              <Text style={styles.heroBadgeText}>Vacation Wrap-Up</Text>
-            </View>
-            <Text style={styles.heroTitle}>A Magical Adventure!</Text>
-            <Text style={styles.heroSubtitle}>
-              Look back at all the memories, thrills, and milestones your party shared together.
-            </Text>
-          </View>
-
-          {summary.plannedTotalCount > 0 ? (
-            <View style={styles.heroRingRow} testID="trip-summary-planned">
-              <ProgressRing
-                percent={itineraryPercent}
-                size={110}
-                strokeWidth={11}
-                complete={isCompleteItinerary}
-                centerLabel={`${itineraryPercent}%`}
-                centerSubLabel="Itinerary Done"
-                accessibilityLabel={`${itineraryPercent}% of planned experiences completed`}
-              />
-              <View style={styles.heroProgressTextCol}>
-                <Text style={styles.heroProgressNum} testID="trip-summary-planned-count">
-                  {summary.plannedCompletedCount} of {summary.plannedTotalCount}
-                </Text>
-                <Text style={styles.heroProgressLabel}>planned Experiences completed</Text>
-                {isCompleteItinerary ? (
-                  <View style={styles.congratsPill}>
-                    <Ionicons name="ribbon" size={13} color={hero.gold} />
-                    <Text style={styles.congratsText}>100% Itinerary Completed! 🎉</Text>
-                  </View>
-                ) : null}
-              </View>
-            </View>
-          ) : (
-            <View style={styles.heroRingRow} testID="trip-summary-planned">
-              <View style={styles.heroCastleBadge}>
-                <Ionicons name="trophy" size={32} color={hero.gold} />
-              </View>
-              <View style={styles.heroProgressTextCol}>
-                <Text style={styles.heroProgressNum} testID="trip-summary-planned-count">
-                  0 of 0
-                </Text>
-                <Text style={styles.heroProgressLabel}>planned Experiences completed</Text>
-              </View>
-            </View>
-          )}
-        </LinearGradient>
+          plannedTestID="trip-summary-planned"
+          plannedCountTestID="trip-summary-planned-count"
+        />
 
         {/* ================================================================= */}
         {/* 2. Quick Stats Grid */}
         {/* ================================================================= */}
-        <View style={styles.quickStatsGrid}>
-          {/* Distinct Experiences (R14.1) */}
-          <Card style={styles.statGridCard} testID="trip-summary-distinct">
-            <View style={[styles.statIconBadge, { backgroundColor: stat.violetBg }]}>
-              <Ionicons name="sparkles" size={18} color={stat.violetIcon} />
-            </View>
-            <Text style={styles.statGridValue} testID="trip-summary-distinct-count">
-              {summary.distinctExperienceCount}
-            </Text>
-            <Text style={styles.statGridLabel}>
-              {summary.distinctExperienceCount === 1 ? 'Distinct Ride' : 'Distinct Rides & Shows'}
-            </Text>
-          </Card>
-
-          {/* Total Group Completions */}
-          <Card style={styles.statGridCard} testID="trip-summary-total-completions">
-            <View style={[styles.statIconBadge, { backgroundColor: stat.redBg }]}>
-              <Ionicons name="checkmark-done-circle" size={18} color={stat.redIcon} />
-            </View>
-            <Text style={styles.statGridValue}>{totalCompletions}</Text>
-            <Text style={styles.statGridLabel}>Total Logged Rides</Text>
-          </Card>
-
-          {/* Ratings Submitted */}
-          <Card style={styles.statGridCard} testID="trip-summary-total-ratings">
-            <View style={[styles.statIconBadge, { backgroundColor: withAlpha(t.color.accent, 0.18) }]}>
-              <Ionicons name="star" size={18} color={t.color.accent} />
-            </View>
-            <Text style={styles.statGridValue}>{summary.totalRatingsCount ?? 0}</Text>
-            <Text style={styles.statGridLabel}>Ratings Given</Text>
-          </Card>
-
-          {/* Parks Explored */}
-          <Card style={styles.statGridCard} testID="trip-summary-parks-explored">
-            <View style={[styles.statIconBadge, { backgroundColor: stat.greenBg }]}>
-              <Ionicons name="compass" size={18} color={stat.greenIcon} />
-            </View>
-            <Text style={styles.statGridValue}>{summary.parkBreakdown?.length ?? 0}</Text>
-            <Text style={styles.statGridLabel}>Parks Explored</Text>
-          </Card>
-        </View>
+        <SummaryStatTiles
+          distinctExperienceCount={summary.distinctExperienceCount}
+          totalCompletionsCount={totalCompletions}
+          totalRatingsCount={summary.totalRatingsCount ?? 0}
+          parksExploredCount={summary.parkBreakdown?.length ?? 0}
+          testIDPrefix="trip-summary"
+        />
 
         {/* ================================================================= */}
         {/* 3. Group Superlatives & Awards (R14.11) */}
         {/* ================================================================= */}
         {summary.superlatives && summary.superlatives.length > 0 ? (
           <View style={styles.section} testID="trip-summary-superlatives">
-            <View style={styles.sectionHeaderRow}>
-              <Ionicons name="trophy" size={20} color={misc.trophy} />
-              <Text style={styles.sectionTitle}>Group Superlatives & Awards</Text>
-            </View>
+            <SummarySectionHeader
+              icon="trophy"
+              iconColor={misc.trophy}
+              title="Group Superlatives & Awards"
+            />
 
             <View style={styles.superlativesList}>
               {summary.superlatives.map((award) => (
-                <SuperlativeCard key={award.id} award={award} />
+                <SummaryAwardCard
+                  key={award.id}
+                  award={award}
+                  testID={`trip-summary-superlative-${award.id}`}
+                />
               ))}
             </View>
           </View>
@@ -334,10 +280,7 @@ export default function TripSummaryScreen({
         {/* 4. Top-Rated Moments (R14.2, R14.3) */}
         {/* ================================================================= */}
         <View style={styles.section}>
-          <View style={styles.sectionHeaderRow}>
-            <Ionicons name="star" size={20} color={t.color.accent} />
-            <Text style={styles.sectionTitle}>Top-Rated Moments</Text>
-          </View>
+          <SummarySectionHeader icon="star" iconColor={t.color.accent} title="Top-Rated Moments" />
 
           {summary.topRated.length === 0 ? (
             <View testID="trip-summary-toprated-empty">
@@ -349,75 +292,19 @@ export default function TripSummaryScreen({
             </View>
           ) : (
             <View style={styles.list} testID="trip-summary-toprated">
-              {summary.topRated.map((exp, index) => {
-                const rankColor =
-                  index === 0
-                    ? medal.gold
-                    : index === 1
-                      ? medal.silver
-                      : index === 2
-                        ? medal.bronze
-                        : t.color.surfaceAlt;
-                const rankTextColor =
-                  index < 3 ? medal.text : t.color.textSecondary;
-
-                const parkAccentColor =
-                  exp.park && exp.park in t.parkAccent
-                    ? t.parkAccent[exp.park as Park]
-                    : t.color.primaryFg;
-
-                return (
-                  <Card
-                    key={exp.experienceId}
-                    style={styles.rankCard}
-                    testID={`trip-summary-toprated-${exp.experienceId}`}
-                  >
-                    <View
-                      style={[
-                        styles.rankBadge,
-                        { backgroundColor: rankColor },
-                      ]}
-                    >
-                      <Text
-                        style={[styles.rankBadgeText, { color: rankTextColor }]}
-                      >
-                        #{index + 1}
-                      </Text>
-                    </View>
-
-                    <ExperienceThumb
-                      imageUrl={exp.imageUrl ?? null}
-                      category={exp.category ?? null}
-                    />
-
-                    <View style={styles.rankBody}>
-                      <Text style={styles.rankName} numberOfLines={1}>
-                        {exp.experienceName}
-                      </Text>
-                      <View style={styles.rankMetaRow}>
-                        {exp.park ? (
-                          <Badge
-                            label={exp.park}
-                            color={parkAccentColor}
-                          />
-                        ) : null}
-                        <Text style={styles.rankMeta}>
-                          {exp.ratingCount === 1
-                            ? '1 rating'
-                            : `${exp.ratingCount} ratings`}
-                        </Text>
-                      </View>
-                    </View>
-
-                    <View style={styles.ratingPill}>
-                      <Ionicons name="star" size={14} color={t.color.accent} />
-                      <Text style={styles.ratingPillText}>
-                        {formatMeanRating(exp.meanRating)}
-                      </Text>
-                    </View>
-                  </Card>
-                );
-              })}
+              {summary.topRated.map((exp, index) => (
+                <TopRatedMomentRow
+                  key={exp.experienceId}
+                  rank={index}
+                  name={exp.experienceName}
+                  meanRating={exp.meanRating}
+                  ratingCount={exp.ratingCount}
+                  park={exp.park}
+                  category={exp.category}
+                  imageUrl={exp.imageUrl}
+                  testID={`trip-summary-toprated-${exp.experienceId}`}
+                />
+              ))}
             </View>
           )}
         </View>
@@ -427,10 +314,11 @@ export default function TripSummaryScreen({
         {/* ================================================================= */}
         {summary.parkBreakdown && summary.parkBreakdown.length > 0 ? (
           <View style={styles.section} testID="trip-summary-parks">
-            <View style={styles.sectionHeaderRow}>
-              <Ionicons name="map" size={20} color={t.color.primaryFg} />
-              <Text style={styles.sectionTitle}>Adventures by Park</Text>
-            </View>
+            <SummarySectionHeader
+              icon="map"
+              iconColor={t.color.primaryFg}
+              title="Adventures by Park"
+            />
 
             <View style={styles.parkGrid}>
               {summary.parkBreakdown.map((item) => {
@@ -482,10 +370,11 @@ export default function TripSummaryScreen({
         {/* 6. Member Contributions Hall of Fame (R14.4, R14.5, R14.12) */}
         {/* ================================================================= */}
         <View style={styles.section}>
-          <View style={styles.sectionHeaderRow}>
-            <Ionicons name="people" size={20} color={t.color.primaryFg} />
-            <Text style={styles.sectionTitle}>Member Contributions</Text>
-          </View>
+          <SummarySectionHeader
+            icon="people"
+            iconColor={t.color.primaryFg}
+            title="Member Contributions"
+          />
 
           {summary.perMember.length === 0 ? (
             <View testID="trip-summary-permember-empty">
@@ -571,6 +460,15 @@ export default function TripSummaryScreen({
         </View>
 
         {/* ================================================================= */}
+        {/* 6.5 Trip Photos Highlights (R26.1) */}
+        {/* ================================================================= */}
+        <TripPhotosSection
+          mode="member"
+          tripId={tripId}
+          onNavigateToAlbum={() => navigation.navigate('TripAlbum', { tripId })}
+        />
+
+        {/* ================================================================= */}
         {/* 7. Share Summary Button (R14.13) */}
         {/* ================================================================= */}
         <View style={styles.shareSection}>
@@ -583,6 +481,17 @@ export default function TripSummaryScreen({
             testID="trip-summary-share-btn"
             style={styles.shareBtn}
           />
+          <Text style={styles.shareNote} testID="trip-summary-text-share-note">
+            {TRIP_SUMMARY_TEXT_SHARE_NOTE}
+          </Text>
+          <PrimaryButton
+            label="Send to friends"
+            icon="people-outline"
+            onPress={handleSendToFriends}
+            accessibilityLabel="Send trip recap to friends"
+            testID="trip-summary-send-to-friends-btn"
+            style={styles.shareBtn}
+          />
         </View>
       </ScrollView>
     </ScreenContainer>
@@ -592,51 +501,6 @@ export default function TripSummaryScreen({
 // ---------------------------------------------------------------------------
 // Subcomponents
 // ---------------------------------------------------------------------------
-
-/** Superlative award card. */
-function SuperlativeCard({ award }: { readonly award: TripSuperlativeDTO }): JSX.Element {
-  const styles = useStyles();
-  const t = useAppTheme();
-  const misc = usePalette(SUMMARY_MISC);
-  const iconMap: Record<string, keyof typeof Ionicons.glyphMap> = {
-    trophy: 'trophy',
-    compass: 'compass',
-    people: 'people',
-    star: 'star',
-    sparkles: 'sparkles',
-    map: 'map',
-  };
-
-  const ioniconName = iconMap[award.icon] ?? 'ribbon';
-
-  return (
-    <Card style={styles.superlativeCard} testID={`trip-summary-superlative-${award.id}`}>
-      <View style={styles.superlativeHeader}>
-        <View style={styles.superlativeIconDisc}>
-          <Ionicons name={ioniconName} size={18} color={misc.trophy} />
-        </View>
-        <View style={styles.superlativeTitleCol}>
-          <Text style={styles.superlativeTitle}>{award.title}</Text>
-          <Text style={styles.superlativeDesc}>{award.description}</Text>
-        </View>
-      </View>
-
-      <View style={styles.superlativeWinnerRow}>
-        <View style={styles.winnerIdentity}>
-          <Ionicons name="medal" size={14} color={t.color.accent} />
-          <Text style={styles.winnerText} numberOfLines={1}>
-            {award.memberDisplayName ?? award.experienceName ?? 'The Group'}
-          </Text>
-        </View>
-        {award.value !== undefined ? (
-          <View style={styles.winnerValuePill}>
-            <Text style={styles.winnerValueText}>{String(award.value)}</Text>
-          </View>
-        ) : null}
-      </View>
-    </Card>
-  );
-}
 
 /** Member avatar renderer with presets and fallback initials. */
 function MemberAvatar({
@@ -688,54 +552,6 @@ function MemberAvatar({
   );
 }
 
-/** Experience thumbnail image or category placeholder. */
-function ExperienceThumb({
-  imageUrl,
-  category,
-}: {
-  readonly imageUrl: string | null;
-  readonly category: string | null;
-}): JSX.Element {
-  const styles = useStyles();
-  const t = useAppTheme();
-  const misc = usePalette(SUMMARY_MISC);
-  const [failed, setFailed] = useState(false);
-  const visual =
-    category !== null && category in t.categoryVisual
-      ? t.categoryVisual[category as ExperienceCategory]
-      : null;
-
-  if (imageUrl !== null && imageUrl.length > 0 && !failed) {
-    return (
-      <Image
-        source={{ uri: imageUrl }}
-        style={styles.experienceThumb}
-        resizeMode="cover"
-        onError={() => setFailed(true)}
-      />
-    );
-  }
-
-  return (
-    <View
-      style={[
-        styles.experienceThumb,
-        styles.experienceThumbPlaceholder,
-        { backgroundColor: visual?.fill ?? t.color.surfaceAlt },
-      ]}
-    >
-      <Ionicons
-        name={
-          (visual?.glyph as keyof typeof Ionicons.glyphMap | undefined) ??
-          'sparkles'
-        }
-        size={18}
-        color={misc.thumbGlyph}
-      />
-    </View>
-  );
-}
-
 /** Shared compact header with optional share trigger in top right. */
 function SummaryHeader({
   onBack,
@@ -773,14 +589,6 @@ function SummaryHeader({
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-function formatMeanRating(mean: number): string {
-  if (!Number.isFinite(mean)) {
-    return '—';
-  }
-  const rounded = Math.round(mean * 10) / 10;
-  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
-}
 
 function formatSummaryShareText(summary: TripSummaryDTO): string {
   const lines: string[] = [
@@ -864,155 +672,9 @@ const useStyles = makeStyles((t) => ({
     gap: theme.spacing.xl,
   },
 
-  // 1. Hero Card
-  heroCard: {
-    borderRadius: theme.radius.lg,
-    padding: theme.spacing.lg,
-    overflow: 'hidden',
-    position: 'relative',
-    ...t.shadow.floating,
-  },
-  heroGlow: {
-    position: 'absolute',
-    top: -50,
-    right: -50,
-    width: 140,
-    height: 140,
-    borderRadius: 70,
-    backgroundColor: withAlpha(t.color.accent, 0.15),
-  },
-  heroHeader: {
-    gap: theme.spacing.xs,
-    marginBottom: theme.spacing.lg,
-  },
-  heroBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: SUMMARY_HERO[t.scheme].badgeBg,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: 4,
-    borderRadius: theme.radius.pill,
-    alignSelf: 'flex-start',
-    marginBottom: 4,
-  },
-  heroBadgeText: {
-    ...theme.typography.meta,
-    color: SUMMARY_HERO[t.scheme].gold,
-    fontWeight: '700',
-  },
-  heroTitle: {
-    ...theme.typography.heading,
-    fontSize: 24,
-    lineHeight: 28,
-    color: t.color.textOnPrimary,
-  },
-  heroSubtitle: {
-    ...theme.typography.body,
-    color: 'rgba(255, 255, 255, 0.8)',
-    fontSize: 14,
-  },
-  heroRingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing.lg,
-    backgroundColor: 'rgba(0, 0, 0, 0.25)',
-    padding: theme.spacing.md,
-    borderRadius: theme.radius.md,
-  },
-  heroCastleBadge: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-    backgroundColor: SUMMARY_HERO[t.scheme].castleBg,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: SUMMARY_HERO[t.scheme].castleBorder,
-  },
-  heroProgressTextCol: {
-    flex: 1,
-    gap: 2,
-  },
-  heroProgressNum: {
-    ...theme.typography.heading,
-    fontSize: 22,
-    color: t.color.textOnPrimary,
-  },
-  heroProgressLabel: {
-    ...theme.typography.meta,
-    color: 'rgba(255, 255, 255, 0.85)',
-  },
-  heroEmptyPlannedNote: {
-    ...theme.typography.meta,
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.6)',
-    marginTop: 2,
-  },
-  congratsPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: SUMMARY_HERO[t.scheme].congratsBg,
-    paddingHorizontal: theme.spacing.sm,
-    paddingVertical: 3,
-    borderRadius: theme.radius.sm,
-    alignSelf: 'flex-start',
-    marginTop: 6,
-  },
-  congratsText: {
-    ...theme.typography.meta,
-    color: SUMMARY_HERO[t.scheme].gold,
-    fontWeight: '700',
-    fontSize: 12,
-  },
-
-  // 2. Quick Stats Grid
-  quickStatsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: theme.spacing.sm,
-  },
-  statGridCard: {
-    flexBasis: '48%',
-    flexGrow: 1,
-    padding: theme.spacing.md,
-    gap: theme.spacing.xs,
-    alignItems: 'flex-start',
-  },
-  statIconBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 4,
-  },
-  statGridValue: {
-    ...theme.typography.heading,
-    fontSize: 24,
-    color: t.color.textPrimary,
-  },
-  statGridLabel: {
-    ...theme.typography.meta,
-    color: t.color.textSecondary,
-    fontSize: 12,
-  },
-
   // Section Common
   section: {
     gap: theme.spacing.md,
-  },
-  sectionHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing.sm,
-  },
-  sectionTitle: {
-    ...theme.typography.subtitle,
-    fontSize: 18,
-    fontWeight: '700',
-    color: t.color.textPrimary,
   },
   list: {
     gap: theme.spacing.md,
@@ -1021,136 +683,6 @@ const useStyles = makeStyles((t) => ({
   // 3. Superlatives
   superlativesList: {
     gap: theme.spacing.md,
-  },
-  superlativeCard: {
-    padding: theme.spacing.md,
-    gap: theme.spacing.sm,
-    borderLeftWidth: 4,
-    borderLeftColor: t.color.accent,
-  },
-  superlativeHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: theme.spacing.md,
-  },
-  superlativeIconDisc: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: withAlpha(t.color.accent, 0.15),
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  superlativeTitleCol: {
-    flex: 1,
-    gap: 2,
-  },
-  superlativeTitle: {
-    ...theme.typography.subtitle,
-    fontSize: 16,
-    fontWeight: '700',
-    color: t.color.textPrimary,
-  },
-  superlativeDesc: {
-    ...theme.typography.meta,
-    color: t.color.textSecondary,
-  },
-  superlativeWinnerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: t.color.surfaceAlt,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.xs,
-    borderRadius: theme.radius.sm,
-  },
-  winnerIdentity: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    flex: 1,
-  },
-  winnerText: {
-    ...theme.typography.subtitle,
-    fontSize: 14,
-    fontWeight: '700',
-    color: t.color.textPrimary,
-  },
-  winnerValuePill: {
-    backgroundColor: SUMMARY_MISC[t.scheme].winnerValueBg,
-    paddingHorizontal: theme.spacing.sm,
-    paddingVertical: 2,
-    borderRadius: theme.radius.pill,
-  },
-  winnerValueText: {
-    ...theme.typography.meta,
-    color: t.color.primaryFg,
-    fontWeight: '700',
-    fontSize: 12,
-  },
-
-  // 4. Top Rated
-  rankCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing.md,
-    padding: theme.spacing.md,
-  },
-  rankBadge: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  rankBadgeText: {
-    ...theme.typography.meta,
-    fontWeight: '800',
-    fontSize: 13,
-  },
-  rankBody: {
-    flex: 1,
-    gap: 4,
-  },
-  rankName: {
-    ...theme.typography.subtitle,
-    color: t.color.textPrimary,
-    fontSize: 15,
-  },
-  rankMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing.sm,
-  },
-  rankMeta: {
-    ...theme.typography.meta,
-    color: t.color.textSecondary,
-    fontSize: 12,
-  },
-  ratingPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: theme.spacing.sm,
-    paddingVertical: 4,
-    borderRadius: theme.radius.pill,
-    backgroundColor: withAlpha(t.color.accent, 0.18),
-  },
-  ratingPillText: {
-    ...theme.typography.meta,
-    color: t.color.textPrimary,
-    fontWeight: '800',
-    fontSize: 13,
-  },
-  experienceThumb: {
-    width: 44,
-    height: 44,
-    borderRadius: theme.radius.md,
-    backgroundColor: t.color.surface,
-  },
-  experienceThumbPlaceholder: {
-    alignItems: 'center',
-    justifyContent: 'center',
   },
 
   // 5. Adventures by Park
@@ -1276,5 +808,10 @@ const useStyles = makeStyles((t) => ({
   },
   shareBtn: {
     alignSelf: 'stretch',
+  },
+  shareNote: {
+    ...t.typography.meta,
+    color: t.color.textSecondary,
+    marginVertical: theme.spacing.sm,
   },
 }));

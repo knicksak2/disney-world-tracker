@@ -39,7 +39,7 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Switch, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -51,6 +51,7 @@ import type {
 } from '../../navigation/RootNavigator';
 import { makeStyles } from '../../theme/makeStyles';
 import { useAppTheme, usePalette } from '../../theme/useAppTheme';
+import { themedSwitchProps } from '../../theme/switchColors';
 import { SHARE_COMPOSER } from './ShareComposerScreen.palette';
 import {
   Card,
@@ -112,6 +113,13 @@ const FRIENDS_QUERY_KEY = ['me-friends'] as const;
 
 const ERROR_NO_FRIENDS = 'Add friends before sharing.';
 
+/**
+ * Shown next to the "Include trip photos" toggle (photo-uploads R15.8): the
+ * recap carries every crew member's highlights, not only the sender's.
+ */
+export const TRIP_RECAP_CREW_PHOTOS_NOTE =
+  'The recap includes photos from all crew members, not only yours.';
+
 const ERROR_RECIPIENT_COUNT = 'Pick between 1 and 50 friends.';
 const ERROR_ATOMIC_REJECTED =
   'Some recipients are no longer your friends. Refresh and try again.';
@@ -155,6 +163,8 @@ export default function ShareComposerScreen({
   // corresponding value is present in the params.
   const [includeRating, setIncludeRating] = useState<boolean>(true);
   const [includeNote, setIncludeNote] = useState<boolean>(true);
+  // `tripSummary` only (photo-uploads R15.8): include Trip photos, default on.
+  const [includePhotos, setIncludePhotos] = useState<boolean>(true);
 
   const [submissionError, setSubmissionError] = useState<string | null>(null);
   const [justSent, setJustSent] = useState<boolean>(false);
@@ -274,12 +284,13 @@ export default function ShareComposerScreen({
 
     const body: ShareCreateBody = buildShareCreateBody(
       params,
-      { includeRating, includeNote },
+      { includeRating, includeNote, includePhotos },
       recipientIds,
     );
     sendMutation.mutate(body);
   }, [
     includeNote,
+    includePhotos,
     includeRating,
     noFriends,
     params,
@@ -381,8 +392,10 @@ export default function ShareComposerScreen({
             params={params}
             includeRating={includeRating}
             includeNote={includeNote}
+            includePhotos={includePhotos}
             onToggleRating={() => setIncludeRating((v) => !v)}
             onToggleNote={() => setIncludeNote((v) => !v)}
+            onTogglePhotos={setIncludePhotos}
           />
         }
         ListEmptyComponent={
@@ -438,16 +451,55 @@ function SharePreview({
   params,
   includeRating,
   includeNote,
+  includePhotos,
   onToggleRating,
   onToggleNote,
+  onTogglePhotos,
 }: {
   readonly params: ShareComposerParams;
   readonly includeRating: boolean;
   readonly includeNote: boolean;
+  readonly includePhotos: boolean;
   readonly onToggleRating: () => void;
   readonly onToggleNote: () => void;
+  readonly onTogglePhotos: (next: boolean) => void;
 }): JSX.Element {
   const styles = useStyles();
+  const t = useAppTheme();
+  if (params.kind === 'tripSummary') {
+    return (
+      <View style={styles.previewBlock}>
+        <SectionLabel style={styles.previewLabel}>Sharing</SectionLabel>
+        <Card style={styles.previewCard}>
+          <Text style={styles.previewTitle} testID="preview-trip-name">
+            {params.tripName}
+          </Text>
+          <Text style={styles.previewValue}>Trip recap</Text>
+        </Card>
+        <View style={styles.photosToggleRow}>
+          <View style={styles.photosToggleText}>
+            <Text style={styles.previewValue} testID="trip-summary-include-photos-label">
+              Include trip photos
+            </Text>
+            <Text style={styles.previewMeta} testID="trip-summary-crew-photos-note">
+              {TRIP_RECAP_CREW_PHOTOS_NOTE}
+            </Text>
+          </View>
+          <Switch
+            key={t.scheme}
+            value={includePhotos}
+            onValueChange={onTogglePhotos}
+            accessibilityRole="switch"
+            accessibilityLabel="Include trip photos"
+            accessibilityState={{ checked: includePhotos }}
+            testID="toggle-trip-photos"
+            {...themedSwitchProps(t, includePhotos)}
+          />
+        </View>
+        <SectionLabel style={styles.pickerLabel}>Recipients</SectionLabel>
+      </View>
+    );
+  }
   if (params.kind === 'experience') {
     const showRating = params.rating !== undefined;
     const showNote = params.note !== undefined && params.note.length > 0;
@@ -642,6 +694,16 @@ const useStyles = makeStyles((t) => ({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: t.spacing.sm,
+  },
+  photosToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: t.spacing.md,
+  },
+  photosToggleText: {
+    flex: 1,
+    gap: t.spacing.xs,
   },
   pickerLabel: {
     marginTop: t.spacing.sm,

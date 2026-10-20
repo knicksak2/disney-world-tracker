@@ -73,12 +73,19 @@ export type ShareComposerParams =
     }
   | {
       kind: 'pinShowcase';
+    }
+  | {
+      // photo-uploads task 22.4 (R15.8): in-app recap share to Friends. Only
+      // the trip id and name travel; the server composes the pointer payload.
+      kind: 'tripSummary';
+      tripId: string;
+      tripName: string;
     };
 
 export type RootStackParamList = {
   MainTabs: NavigatorScreenParams<MainTabParamList> | undefined;
   ExperienceDetail: { experienceId: string; initialLens?: 'today' | 'passport' };
-  Menu: { experienceId: string };
+  Menu: { experienceId: string; focusFoodItemId?: string };
   ShareComposer: ShareComposerParams;
   FoodListDetail: { foodListId: string };
   FoodListDiscovery: undefined;
@@ -88,6 +95,12 @@ export type RootStackParamList = {
   NotificationCenter: { focusRef?: AttentionItemRef } | undefined;
   PinShowcase?: { userId?: string; readOnly?: boolean };
 };
+
+declare global {
+  namespace ReactNavigation {
+    interface RootParamList extends RootStackParamList {}
+  }
+}
 
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
 const MainTabs = createBottomTabNavigator<MainTabParamList>();

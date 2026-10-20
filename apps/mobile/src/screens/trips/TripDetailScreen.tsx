@@ -1077,6 +1077,34 @@ export default function TripDetailScreen({
                   Collaborative packing checklist.
                 </Text>
               </Pressable>
+
+              {/* Tile 8: Trip Album */}
+              <Pressable
+                style={styles.hubTile}
+                onPress={() =>
+                  navigation.navigate('TripAlbum', { tripId })
+                }
+                accessibilityRole="button"
+                accessibilityLabel="Trip Album"
+                testID="trip-detail-section-album"
+              >
+                <View
+                  style={[
+                    styles.tileIconWrap,
+                    { backgroundColor: `${t.color.primaryLight}18` },
+                  ]}
+                >
+                  <Ionicons
+                    name="images-outline"
+                    size={20}
+                    color={t.color.primaryLight}
+                  />
+                </View>
+                <Text style={styles.tileTitle}>Trip Album</Text>
+                <Text style={styles.tileDesc} numberOfLines={2}>
+                  Shared crew photos & memories.
+                </Text>
+              </Pressable>
             </View>
           </View>
         </View>

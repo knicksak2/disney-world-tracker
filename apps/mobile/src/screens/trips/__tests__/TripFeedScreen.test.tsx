@@ -20,6 +20,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from '@testing-library/react-native';
 
 jest.mock('expo-constants', () => ({
@@ -34,9 +35,13 @@ jest.mock('../../../api/client', () => {
 
 import TripFeedScreen from '../TripFeedScreen';
 import { apiRequest as mockedApiRequest } from '../../../api/client';
-import type { TripFeedItemDTO, TripMemberDTO } from '@dwt/shared';
+import type { TripFeedItemDTO, TripMemberDTO, TripPostPhotoSlotDTO } from '@dwt/shared';
+import { useTripAlbum, useTripSummaryPhotos } from '../../../photos/api';
 import { StyleSheet } from 'react-native';
 import type { ReactTestInstance } from 'react-test-renderer';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as photoPickerModule from '../../../photos/photoPicker';
+import * as imagePrepModule from '../../../photos/imagePrep';
 import { darkTheme } from '../../../theme/theme';
 import { ScreenContainer } from '../../../theme/components';
 import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
@@ -96,6 +101,44 @@ const FEED: TripFeedItemDTO[] = [
   },
 ];
 
+const MEMBER_POST_ITEM_ID = '33333333-3333-4333-8333-333333333333';
+
+const MEMBER_POST_MINE_ALL_REMOVED: TripFeedItemDTO = {
+  id: MEMBER_POST_ITEM_ID,
+  type: 'member_post',
+  actorDisplayName: 'Me',
+  actorAvatarPreset: null,
+  createdAt: '2025-08-01T19:00:00.000Z',
+  metadata: {
+    caption: 'Sunset at the castle',
+  },
+  photos: [
+    {
+      photoId: 'photo-rem-1',
+      state: 'removed',
+      mine: true,
+      status: 'deleted',
+      thumbUrl: null,
+      url: null,
+      width: null,
+      height: null,
+    },
+    {
+      photoId: 'photo-rem-2',
+      state: 'removed',
+      mine: true,
+      status: 'deleted',
+      thumbUrl: null,
+      url: null,
+      width: null,
+      height: null,
+    },
+  ],
+  mine: true,
+  reactions: [{ reaction: 'love', count: 2, mine: false }],
+  comments: [],
+};
+
 const SEARCH_HIT = {
   id: EXPERIENCE_UUID,
   name: 'Big Thunder Mountain',
@@ -112,6 +155,7 @@ const SEARCH_HIT = {
 // ---------------------------------------------------------------------------
 
 interface Handlers {
+  readonly members?: readonly TripMemberDTO[];
   readonly feed?: () => Promise<unknown>;
   readonly search?: (path: string) => Promise<unknown>;
   readonly mutate?: (method: string, path: string, body?: unknown) => Promise<unknown>;
@@ -121,7 +165,12 @@ function installApi(handlers: Handlers = {}): void {
   apiRequestMock.mockImplementation(
     async (method: string, path: string, body?: unknown) => {
       if (method === 'GET' && path === '/me') return ME;
-      if (method === 'GET' && path === `/trips/${TRIP_ID}/members`) return MEMBERS;
+      if (method === 'GET' && path === `/trips/${TRIP_ID}/members`) {
+        return handlers.members ?? MEMBERS;
+      }
+      if (method === 'GET' && path === '/photos/config') {
+        return { enabled: true, tripEnabled: true, remainingToday: 20 };
+      }
       if (method === 'GET' && path === `/trips/${TRIP_ID}/feed`) {
         return handlers.feed ? await handlers.feed() : FEED;
       }
@@ -151,7 +200,7 @@ function makeNavigation(): {
   return { navigate: jest.fn(), goBack: jest.fn(), canGoBack: jest.fn(() => true) };
 }
 
-function renderActivity(): void {
+function renderActivity(extra?: React.ReactNode): void {
   const props = {
     navigation: makeNavigation(),
     route: { key: 'TripFeed-1', name: 'TripFeed', params: { tripId: TRIP_ID } },
@@ -159,8 +208,69 @@ function renderActivity(): void {
   render(
     <QueryClientProvider client={makeQueryClient()}>
       <TripFeedScreen {...props} />
+      {extra}
     </QueryClientProvider>,
   );
+}
+
+/**
+ * Keeps the Trip Album and recap-photos queries active next to the feed, the way
+ * they are when those screens sit underneath Trip Activity in the stack, so a
+ * delete from the feed viewer can be seen refetching them.
+ */
+function AlbumAndRecapProbe(): null {
+  useTripAlbum(TRIP_ID);
+  useTripSummaryPhotos(TRIP_ID);
+  return null;
+}
+
+const ALBUM_PATH = `/trips/${TRIP_ID}/photos`;
+const RECAP_PHOTOS_PATH = `/trips/${TRIP_ID}/photos?summary=true`;
+const FEED_PATH = `/trips/${TRIP_ID}/feed`;
+
+function countGets(path: string): number {
+  return apiRequestMock.mock.calls.filter(
+    (call) => call[0] === 'GET' && call[1] === path,
+  ).length;
+}
+
+function readySlot(photoId: string, mine: boolean): TripPostPhotoSlotDTO {
+  return {
+    photoId,
+    state: 'ready',
+    mine,
+    status: 'approved',
+    thumbUrl: `https://cdn.example.com/p/${photoId}/thumb.jpg`,
+    url: `https://cdn.example.com/p/${photoId}/full.jpg`,
+    width: 1280,
+    height: 960,
+  };
+}
+
+function memberPost(
+  id: string,
+  slots: readonly TripPostPhotoSlotDTO[],
+  mine: boolean,
+): TripFeedItemDTO {
+  return {
+    id,
+    type: 'member_post',
+    actorDisplayName: mine ? 'Me' : 'Donald',
+    actorAvatarPreset: null,
+    createdAt: '2025-08-01T20:00:00.000Z',
+    metadata: { caption: 'Castle day' },
+    photos: slots,
+    mine,
+    reactions: [],
+    comments: [],
+  };
+}
+
+/** The `source.uri` of the image rendered inside the open full-screen viewer. */
+function viewerImageUri(): string {
+  const viewer = screen.getByTestId('photo-viewer-modal');
+  const image = within(viewer).getByLabelText('Guest photo');
+  return (image.props as { source: { uri: string } }).source.uri;
 }
 
 // ---------------------------------------------------------------------------
@@ -168,8 +278,20 @@ function renderActivity(): void {
 // ---------------------------------------------------------------------------
 
 describe('Trip_Activity screen', () => {
-  beforeEach(() => {
+  let originalFetch: typeof global.fetch;
+
+  beforeEach(async () => {
     apiRequestMock.mockReset();
+    originalFetch = global.fetch;
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+    });
+    await AsyncStorage.clear();
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
   });
 
   test('R20.3: a completion item shows the Experience, rating, and rode-with tag state', async () => {
@@ -292,6 +414,483 @@ describe('Trip_Activity screen', () => {
         `/trips/${TRIP_ID}/feed/feed_item/${COMPLETION_ITEM_ID}/comments`,
         { body: 'Great ride!' },
       );
+    });
+  });
+
+  test('Task 22.3: posting sends initiate, confirm, then the post body with the returned photo ids and caption', async () => {
+    const mutate = jest.fn().mockImplementation(async (_method: string, path: string) => {
+      if (path === '/photos/uploads') {
+        return {
+          slots: [
+            {
+              photoId: 'photo-101',
+              putUrl: 'http://storage.local/101',
+              thumbPutUrl: 'http://storage.local/101_thumb',
+            },
+          ],
+        };
+      }
+      if (path === '/photos/confirm') {
+        return {
+          results: [{ photoId: 'photo-101', status: 'accepted' }],
+        };
+      }
+      if (path === `/trips/${TRIP_ID}/feed/posts`) {
+        return { id: 'new-post-1' };
+      }
+      return null;
+    });
+
+    installApi({ mutate });
+
+    jest.spyOn(photoPickerModule, 'requestLibraryPermission').mockResolvedValue({
+      granted: true,
+      canAskAgain: true,
+    });
+    jest.spyOn(photoPickerModule, 'pickFromLibrary').mockResolvedValue({
+      canceled: false,
+      photos: [
+        {
+          uri: 'file:///p1.jpg',
+          width: 1200,
+          height: 800,
+          takenAt: '2026-10-18T10:00:00Z',
+          source: 'library',
+        },
+      ],
+    });
+    const fakeBlob = new Blob([new Uint8Array(50)], { type: 'image/jpeg' });
+    jest.spyOn(imagePrepModule, 'prepareImage').mockResolvedValue({
+      full: { uri: 'file:///p1.jpg', width: 1200, height: 800, blob: fakeBlob },
+      thumb: { uri: 'file:///p1_t.jpg', width: 300, height: 200, blob: fakeBlob },
+    });
+
+    await AsyncStorage.setItem('photos.disclosure.v1', 'true');
+
+    renderActivity();
+
+    // 1. Open post composer
+    const postCta = await screen.findByTestId('trip-activity-post-cta');
+    fireEvent.press(postCta);
+
+    // 2. Open picker sheet
+    const pickPhotosBtn = await screen.findByTestId('feed-post-pick-photos');
+    fireEvent.press(pickPhotosBtn);
+
+    // The Trip post picker shows the trip guidance, never the food guidance (Requirement 23.9)
+    const tripGuidance = await screen.findByText(
+      'Share your favorite moments with your crew. People and text are welcome.',
+    );
+    expect(tripGuidance.props.accessibilityLabel).toBe(
+      'Share your favorite moments with your crew. People and text are welcome.',
+    );
+    expect(screen.queryByText(/Frame just the dish/)).toBeNull();
+    expect(screen.queryByText(/No people or text/)).toBeNull();
+
+    // 3. Pick from library
+    const chooseBtn = await screen.findByTestId('choose-from-library-button');
+    fireEvent.press(chooseBtn);
+
+    // Wait for photo to be picked
+    expect(await screen.findByText('Choose Different Photo')).toBeTruthy();
+
+    // 4. Confirm photos in picker sheet
+    const confirmPickerBtn = await screen.findByTestId('confirm-photo-upload-button');
+    fireEvent.press(confirmPickerBtn);
+
+    // Wait for batch to be confirmed into composer
+    expect(await screen.findByText('1 photo selected')).toBeTruthy();
+
+    // 5. Add caption and submit
+    const captionInput = screen.getByTestId('feed-post-caption-input');
+    fireEvent.changeText(captionInput, 'Castle sunset');
+
+    const submitBtn = screen.getByTestId('feed-post-submit');
+    fireEvent.press(submitBtn);
+
+    await waitFor(() => {
+      // Initiate
+      expect(mutate).toHaveBeenCalledWith(
+        'POST',
+        '/photos/uploads',
+        expect.objectContaining({
+          target: { kind: 'trip', id: TRIP_ID },
+          items: expect.any(Array),
+        }),
+      );
+      // Confirm
+      expect(mutate).toHaveBeenCalledWith('POST', '/photos/confirm', {
+        photoIds: ['photo-101'],
+      });
+      // Post feed item
+      expect(mutate).toHaveBeenCalledWith(
+        'POST',
+        `/trips/${TRIP_ID}/feed/posts`,
+        {
+          photoIds: ['photo-101'],
+          caption: 'Castle sunset',
+        },
+      );
+    });
+  });
+
+  test('Task 22.3: deleted-photo slot shows "photo removed", author delete control is driven by mine: true, reactions still render', async () => {
+    let currentFeed: TripFeedItemDTO[] = [MEMBER_POST_MINE_ALL_REMOVED];
+    const feed = jest.fn().mockImplementation(async () => currentFeed);
+    const mutate = jest.fn().mockImplementation(async (method: string, path: string) => {
+      if (method === 'DELETE' && path.includes(MEMBER_POST_ITEM_ID)) {
+        currentFeed = [];
+      }
+      return undefined;
+    });
+    installApi({ mutate, feed });
+
+    renderActivity();
+
+    // The post is rendered
+    expect(await screen.findByTestId(`trip-feed-item-${MEMBER_POST_ITEM_ID}`)).toBeTruthy();
+
+    // Every removed slot shows "photo removed" text
+    const removedTexts = screen.getAllByText('photo removed');
+    expect(removedTexts).toHaveLength(2);
+
+    // Reactions still render
+    expect(screen.getByTestId(`trip-feed-reaction-${MEMBER_POST_ITEM_ID}-love`)).toBeTruthy();
+    expect(screen.getByText('2')).toBeTruthy();
+
+    // Author delete button is present (driven by mine: true)
+    const deleteBtn = screen.getByTestId(`trip-feed-post-delete-${MEMBER_POST_ITEM_ID}`);
+    expect(deleteBtn).toBeTruthy();
+
+    // Tapping delete calls DELETE /trips/:id/feed/posts/:feedItemId and removes the item
+    fireEvent.press(deleteBtn);
+
+    await waitFor(() => {
+      expect(mutate).toHaveBeenCalledWith(
+        'DELETE',
+        `/trips/${TRIP_ID}/feed/posts/${MEMBER_POST_ITEM_ID}`,
+        undefined,
+      );
+    });
+
+    // Item is removed from the feed
+    await waitFor(() => {
+      expect(screen.queryByTestId(`trip-feed-item-${MEMBER_POST_ITEM_ID}`)).toBeNull();
+    });
+  });
+
+  test('Task 22.3: non-author post (mine absent) has no delete control', async () => {
+    const nonAuthorPost: TripFeedItemDTO = {
+      ...MEMBER_POST_MINE_ALL_REMOVED,
+      mine: undefined,
+    };
+    const feed = jest.fn().mockResolvedValue([nonAuthorPost]);
+    installApi({ feed });
+
+    renderActivity();
+
+    expect(await screen.findByTestId(`trip-feed-item-${MEMBER_POST_ITEM_ID}`)).toBeTruthy();
+    expect(screen.queryByTestId(`trip-feed-post-delete-${MEMBER_POST_ITEM_ID}`)).toBeNull();
+  });
+
+  test('Task 22.3: renders ready image, checking placeholder, and unavailable placeholder slots', async () => {
+    const mixedPost: TripFeedItemDTO = {
+      id: 'mixed-post-1',
+      type: 'member_post',
+      actorDisplayName: 'Donald',
+      actorAvatarPreset: null,
+      createdAt: '2025-08-01T20:00:00.000Z',
+      metadata: { caption: 'Mixed photo states' },
+      photos: [
+        {
+          photoId: 'p-ready',
+          state: 'ready',
+          mine: false,
+          status: 'approved',
+          thumbUrl: 'http://cdn.local/ready-thumb.jpg',
+          url: 'http://cdn.local/ready-full.jpg',
+          width: 800,
+          height: 600,
+        },
+        {
+          photoId: 'p-checking',
+          state: 'checking',
+          mine: false,
+          status: 'pending',
+          thumbUrl: null,
+          url: null,
+          width: null,
+          height: null,
+        },
+        {
+          photoId: 'p-unavail',
+          state: 'unavailable',
+          mine: false,
+          status: 'needs_review',
+          thumbUrl: null,
+          url: null,
+          width: null,
+          height: null,
+        },
+      ],
+      mine: false,
+      reactions: [],
+      comments: [],
+    };
+    const feed = jest.fn().mockResolvedValue([mixedPost]);
+    installApi({ feed });
+
+    renderActivity();
+
+    expect(await screen.findByTestId('trip-feed-slot-ready-p-ready')).toBeTruthy();
+    expect(screen.getByTestId('trip-feed-slot-checking-p-checking')).toBeTruthy();
+    expect(screen.getByText('Checking photo...')).toBeTruthy();
+    expect(screen.getByTestId('trip-feed-slot-unavailable-p-unavail')).toBeTruthy();
+    expect(screen.getByText('Photo unavailable')).toBeTruthy();
+  });
+
+  // photo-uploads R14.15: ready post photos open the shared full-screen viewer.
+  describe('R14.15: tapping a post photo opens the full-screen viewer', () => {
+    const OTHER_POST_ID = 'post-other';
+    const OWN_POST_ID = 'post-own';
+
+    /** Album/recap reads return empty pages; everything else is delegated. */
+    function photoReads(
+      inner?: (method: string, path: string, body?: unknown) => unknown,
+    ): (method: string, path: string, body?: unknown) => Promise<unknown> {
+      return async (method, path, body) => {
+        if (method === 'GET' && (path === ALBUM_PATH || path === RECAP_PHOTOS_PATH)) {
+          return { items: [], nextCursor: null };
+        }
+        return inner ? inner(method, path, body) : undefined;
+      };
+    }
+
+    test('opens the viewer for the tapped photo with its full url, not the thumbnail', async () => {
+      const post = memberPost(
+        OTHER_POST_ID,
+        [readySlot('ph-a', false), readySlot('ph-b', false)],
+        false,
+      );
+      installApi({ feed: async () => [post] });
+      renderActivity();
+
+      // The feed card itself keeps showing the thumbnail.
+      const feedImage = await screen.findByTestId('trip-feed-slot-ready-ph-a');
+      expect((feedImage.props as { source: { uri: string } }).source.uri).toBe(
+        'https://cdn.example.com/p/ph-a/thumb.jpg',
+      );
+      expect(screen.queryByTestId('photo-viewer-modal')).toBeNull();
+
+      // Tapping the SECOND photo opens the viewer for that photo (single-photo viewer).
+      fireEvent.press(screen.getByTestId('trip-feed-slot-press-ph-b'));
+      expect(await screen.findByTestId('photo-viewer-modal')).toBeTruthy();
+      expect(viewerImageUri()).toBe('https://cdn.example.com/p/ph-b/full.jpg');
+    });
+
+    test('the tap target is an image button labelled with the author and caption', async () => {
+      installApi({
+        feed: async () => [memberPost(OTHER_POST_ID, [readySlot('ph-a', false)], false)],
+      });
+      renderActivity();
+
+      const press = await screen.findByTestId('trip-feed-slot-press-ph-a');
+      expect(press.props.accessibilityRole).toBe('imagebutton');
+      expect(press.props.accessibilityLabel).toBe('View photo by Donald, Castle day');
+    });
+
+    test('falls back to the thumbnail only when the slot has no full url', async () => {
+      const noFull: TripPostPhotoSlotDTO = { ...readySlot('ph-a', false), url: null };
+      installApi({ feed: async () => [memberPost(OTHER_POST_ID, [noFull], false)] });
+      renderActivity();
+
+      fireEvent.press(await screen.findByTestId('trip-feed-slot-press-ph-a'));
+      await screen.findByTestId('photo-viewer-modal');
+      expect(viewerImageUri()).toBe('https://cdn.example.com/p/ph-a/thumb.jpg');
+    });
+
+    test("someone else's photo: Report posts the reason and confirms; Block uploader posts { photoId } with no userId", async () => {
+      const mutate = jest.fn().mockResolvedValue(undefined);
+      installApi({
+        feed: async () => [memberPost(OTHER_POST_ID, [readySlot('ph-a', false)], false)],
+        mutate: photoReads(mutate),
+      });
+      renderActivity();
+
+      fireEvent.press(await screen.findByTestId('trip-feed-slot-press-ph-a'));
+      expect(await screen.findByTestId('photo-viewer-report')).toBeTruthy();
+      expect(screen.getByTestId('photo-viewer-block')).toBeTruthy();
+
+      // Report: pick a reason, submit, see the confirmation.
+      fireEvent.press(screen.getByTestId('photo-viewer-report'));
+      fireEvent.press(await screen.findByTestId('report-reason-spam'));
+      fireEvent.press(screen.getByTestId('submit-report-button'));
+      expect(await screen.findByTestId('photo-report-confirmation')).toBeTruthy();
+      expect(mutate).toHaveBeenCalledWith('POST', '/photos/ph-a/report', { reason: 'spam' });
+      fireEvent.press(screen.getByLabelText('Done'));
+
+      // Block uploader: confirm, request carries the photo id and never a user id.
+      fireEvent.press(screen.getByTestId('photo-viewer-block'));
+      fireEvent.press(await screen.findByTestId('confirm-block-button'));
+      expect(await screen.findByTestId('block-confirmation-notice')).toBeTruthy();
+      expect(mutate).toHaveBeenCalledWith('POST', '/me/blocks', { photoId: 'ph-a' });
+      const blockCall = mutate.mock.calls.find((c) => c[1] === '/me/blocks');
+      expect(blockCall?.[2]).not.toHaveProperty('userId');
+    });
+
+    test("a plain member gets no Delete on someone else's photo", async () => {
+      installApi({
+        members: [
+          { userId: OWN_USER_ID, displayName: 'Me', avatarPreset: null, role: 'member' },
+          { userId: ARIEL_ID, displayName: 'Ariel', avatarPreset: null, role: 'organizer' },
+        ],
+        feed: async () => [memberPost(OTHER_POST_ID, [readySlot('ph-a', false)], false)],
+      });
+      renderActivity();
+
+      // Wait for the members read so the organizer check has settled.
+      await waitFor(() => {
+        expect(countGets(`/trips/${TRIP_ID}/members`)).toBeGreaterThan(0);
+      });
+      fireEvent.press(await screen.findByTestId('trip-feed-slot-press-ph-a'));
+      expect(await screen.findByTestId('photo-viewer-report')).toBeTruthy();
+      expect(screen.queryByTestId('photo-viewer-delete')).toBeNull();
+    });
+
+    test("an organizer sees Delete on another member's photo", async () => {
+      // MEMBERS (default) makes the caller an organizer.
+      installApi({
+        feed: async () => [memberPost(OTHER_POST_ID, [readySlot('ph-a', false)], false)],
+      });
+      renderActivity();
+
+      fireEvent.press(await screen.findByTestId('trip-feed-slot-press-ph-a'));
+      expect(await screen.findByTestId('photo-viewer-delete')).toBeTruthy();
+      expect(screen.getByTestId('photo-viewer-report')).toBeTruthy();
+    });
+
+    test("the user's own photo: Delete (no Report / Block) sends DELETE, closes the viewer and refetches the feed, album and recap photos", async () => {
+      let removed = false;
+      const ownPost = (): TripFeedItemDTO =>
+        memberPost(
+          OWN_POST_ID,
+          [
+            removed
+              ? {
+                  photoId: 'ph-own',
+                  state: 'removed',
+                  mine: true,
+                  status: 'deleted',
+                  thumbUrl: null,
+                  url: null,
+                  width: null,
+                  height: null,
+                }
+              : readySlot('ph-own', true),
+          ],
+          true,
+        );
+      const mutate = jest.fn().mockImplementation(async (method: string, path: string) => {
+        if (method === 'DELETE' && path === '/photos/ph-own') removed = true;
+        return undefined;
+      });
+      installApi({ feed: async () => [ownPost()], mutate: photoReads(mutate) });
+      // Album and recap photos stay mounted alongside the feed.
+      renderActivity(<AlbumAndRecapProbe />);
+
+      fireEvent.press(await screen.findByTestId('trip-feed-slot-press-ph-own'));
+      expect(await screen.findByTestId('photo-viewer-delete')).toBeTruthy();
+      expect(screen.queryByTestId('photo-viewer-report')).toBeNull();
+      expect(screen.queryByTestId('photo-viewer-block')).toBeNull();
+
+      await waitFor(() => {
+        expect(countGets(ALBUM_PATH)).toBe(1);
+        expect(countGets(RECAP_PHOTOS_PATH)).toBe(1);
+      });
+      const feedBefore = countGets(FEED_PATH);
+
+      fireEvent.press(screen.getByTestId('photo-viewer-delete'));
+      fireEvent.press(await screen.findByTestId('confirm-delete-button'));
+
+      await waitFor(() => {
+        expect(mutate).toHaveBeenCalledWith('DELETE', '/photos/ph-own', undefined);
+      });
+      // The viewer closes and the post now shows the "photo removed" placeholder.
+      await waitFor(() => {
+        expect(screen.queryByTestId('photo-viewer-modal')).toBeNull();
+      });
+      expect(await screen.findByTestId('trip-feed-slot-removed-ph-own')).toBeTruthy();
+      expect(screen.getByText('photo removed')).toBeTruthy();
+      expect(screen.queryByTestId('trip-feed-slot-press-ph-own')).toBeNull();
+
+      // Feed, album and recap photos were all refetched after the delete.
+      expect(countGets(FEED_PATH)).toBeGreaterThan(feedBefore);
+      await waitFor(() => {
+        expect(countGets(ALBUM_PATH)).toBeGreaterThanOrEqual(2);
+        expect(countGets(RECAP_PHOTOS_PATH)).toBeGreaterThanOrEqual(2);
+      });
+    });
+
+    test('only ready slots are tappable: checking, removed and unavailable stay non-interactive', async () => {
+      const inert = (
+        photoId: string,
+        state: TripPostPhotoSlotDTO['state'],
+      ): TripPostPhotoSlotDTO => ({
+        photoId,
+        state,
+        mine: false,
+        status: null,
+        thumbUrl: null,
+        url: null,
+        width: null,
+        height: null,
+      });
+      const post = memberPost(
+        OTHER_POST_ID,
+        [
+          readySlot('ph-ready', false),
+          inert('ph-checking', 'checking'),
+          inert('ph-removed', 'removed'),
+          inert('ph-unavail', 'unavailable'),
+        ],
+        false,
+      );
+      installApi({ feed: async () => [post] });
+      renderActivity();
+
+      await screen.findByTestId('trip-feed-slot-ready-ph-ready');
+      expect(screen.getByTestId('trip-feed-slot-checking-ph-checking')).toBeTruthy();
+      expect(screen.getByTestId('trip-feed-slot-removed-ph-removed')).toBeTruthy();
+      expect(screen.getByTestId('trip-feed-slot-unavailable-ph-unavail')).toBeTruthy();
+
+      expect(screen.queryByTestId('trip-feed-slot-press-ph-checking')).toBeNull();
+      expect(screen.queryByTestId('trip-feed-slot-press-ph-removed')).toBeNull();
+      expect(screen.queryByTestId('trip-feed-slot-press-ph-unavail')).toBeNull();
+      // The ready slot is the only image button in the post.
+      const postBody = screen.getByTestId(`trip-feed-slots-${OTHER_POST_ID}`);
+      expect(within(postBody).getAllByRole('imagebutton')).toHaveLength(1);
+    });
+
+    test('closing the viewer returns to the feed without sending any request', async () => {
+      installApi({
+        feed: async () => [memberPost(OTHER_POST_ID, [readySlot('ph-a', false)], false)],
+      });
+      renderActivity();
+
+      fireEvent.press(await screen.findByTestId('trip-feed-slot-press-ph-a'));
+      await screen.findByTestId('photo-viewer-modal');
+      await waitFor(() => {
+        expect(countGets(`/trips/${TRIP_ID}/members`)).toBeGreaterThan(0);
+      });
+      const callsBefore = apiRequestMock.mock.calls.length;
+
+      fireEvent.press(screen.getByTestId('photo-viewer-close'));
+
+      await waitFor(() => {
+        expect(screen.queryByTestId('photo-viewer-modal')).toBeNull();
+      });
+      expect(screen.getByTestId('trip-feed-slot-press-ph-a')).toBeTruthy();
+      expect(apiRequestMock.mock.calls.length).toBe(callsBefore);
     });
   });
 

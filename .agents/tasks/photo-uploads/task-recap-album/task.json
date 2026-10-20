@@ -1,0 +1,7 @@
+{
+  "task_id": "task-recap-album",
+  "task_description": "Give the recipient of a shared Trip Recap a read-only, paginated 'View all photos' album (decision D35, owner Option B): spec amendments, @dwt/shared DTO+schema, API route GET /me/inbox/:shareId/trip-recap/photos behind the same gate as the recap route, widened report/block eligibility through a shareId, and a mobile TripRecapAlbumScreen. Edited in place on branch develop; no commit, no push.",
+  "status": "pending",
+  "feature_order": ["FEAT-001", "FEAT-002", "FEAT-003"],
+  "blocked_reason": null
+}

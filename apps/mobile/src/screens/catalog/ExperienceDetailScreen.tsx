@@ -963,6 +963,13 @@ export default function ExperienceDetailScreen(): JSX.Element {
               onAddToList={() => setAddToListsPickerVisible(true)}
               loggedDishesCount={foodLogsQ.data?.length ?? 0}
               isQuickService={isQuickService}
+              navigation={navigation}
+              onViewDish={(foodItemId) =>
+                navigation.navigate('Menu', {
+                  experienceId: experience.id,
+                  focusFoodItemId: foodItemId,
+                })
+              }
             />
           )
         ) : (

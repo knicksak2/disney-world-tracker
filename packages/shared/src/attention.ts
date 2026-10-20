@@ -61,6 +61,12 @@ export interface AttentionItemRef {
   /** Share identifier (share mark-read). */
   readonly shareId?: string;
   /**
+   * The sender of a `tripSummary` Share, carried so the Notification Center can
+   * apply the same still-Friend pre-check the Inbox applies before opening the
+   * recap (photo-uploads R15.13, R15.19). Set for `tripSummary` Shares only.
+   */
+  readonly senderId?: string;
+  /**
    * The Share_Destination this item points to, when the Share references one
    * (for example an Experience). Absent when the Share has no openable
    * destination (R2.3).
@@ -529,6 +535,8 @@ function sharePayloadLabel(kind: SharePayloadKind): string {
       return 'their progress';
     case 'pinShowcase':
       return 'their pin showcase';
+    case 'tripSummary':
+      return 'a trip recap';
     default:
       return 'a share';
   }
@@ -634,9 +642,15 @@ export function toAttentionItem(domain: AttentionDomain, dto: AttentionSourceDTO
         destination = { kind: 'experience', id: d.payload.experienceId };
       } else if (d.payload.kind === 'pinShowcase') {
         destination = { kind: 'pinShowcase', id: d.payload.ownerId ?? d.senderId };
+      } else if (d.payload.kind === 'tripSummary') {
+        destination = { kind: 'tripSummary', id: d.shareId };
       }
       const ref: AttentionItemRef = destination
-        ? { shareId: d.shareId, destination }
+        ? {
+            shareId: d.shareId,
+            ...(d.payload.kind === 'tripSummary' ? { senderId: d.senderId } : {}),
+            destination,
+          }
         : { shareId: d.shareId };
       return {
         domain,

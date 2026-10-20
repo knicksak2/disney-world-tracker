@@ -30,6 +30,46 @@ describe('buildShareCreateBody (Task 16.16)', () => {
     });
   });
 
+  it('composes tripSummary body as a pointer with includePhotos defaulting to true and no sharerId (photo-uploads R15.2, R15.8)', () => {
+    const params: ShareComposerParams = {
+      kind: 'tripSummary',
+      tripId: 'trip-1',
+      tripName: 'Fall 2026',
+    };
+    const recipients = ['friend-1', 'friend-2'];
+
+    // Rating/Note toggles are irrelevant to this kind; includePhotos omitted means on.
+    const body = buildShareCreateBody(params, { includeRating: false, includeNote: false }, recipients);
+    expect(body).toEqual({
+      kind: 'tripSummary',
+      tripId: 'trip-1',
+      recipientIds: recipients,
+      includePhotos: true,
+    });
+    expect(Object.keys(body).sort()).toEqual(['includePhotos', 'kind', 'recipientIds', 'tripId']);
+    expect(body).not.toHaveProperty('sharerId');
+    expect(body).not.toHaveProperty('tripName');
+  });
+
+  it('composes tripSummary body with includePhotos false when the toggle is off (photo-uploads R15.8)', () => {
+    const params: ShareComposerParams = {
+      kind: 'tripSummary',
+      tripId: 'trip-1',
+      tripName: 'Fall 2026',
+    };
+    const body = buildShareCreateBody(
+      params,
+      { includeRating: true, includeNote: true, includePhotos: false },
+      ['friend-1'],
+    );
+    expect(body).toEqual({
+      kind: 'tripSummary',
+      tripId: 'trip-1',
+      recipientIds: ['friend-1'],
+      includePhotos: false,
+    });
+  });
+
   it('composes progress share body with stats snapshot (R2.8)', () => {
     const params: ShareComposerParams = {
       kind: 'progress',

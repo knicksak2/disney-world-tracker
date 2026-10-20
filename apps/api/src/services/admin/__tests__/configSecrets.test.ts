@@ -29,6 +29,10 @@ describe('Admin Panel - Configuration Visibility & Secret Redaction (Requirement
   const SENTINEL_TRIP_BOOKING_CRON_SECRET = 'sentinel-trip-booking-cron-secret-12345';
   const SENTINEL_ADMIN_USER = username;
   const SENTINEL_ADMIN_PASS = password;
+  const SENTINEL_PHOTO_CRON_SECRET = 'sentinel-photo-cron-secret-67890';
+  const SENTINEL_PHOTO_STORE_SECRET = 'sentinel-photo-store-secret-xyz';
+  const SENTINEL_PHOTO_HARM_KEY = 'sentinel-photo-harm-key-123';
+  const SENTINEL_PHOTO_VISION_KEY = 'sentinel-photo-vision-key-456';
 
   const sentinelConfig: AppConfig = {
     env: 'production',
@@ -70,6 +74,78 @@ describe('Admin Panel - Configuration Visibility & Secret Redaction (Requirement
     },
     themeparks: {
       baseUrl: 'https://api.themeparks.wiki/v1',
+    },
+    photos: {
+      enabled: false,
+      foodEnabled: true,
+      tripEnabled: true,
+      cronSecret: SENTINEL_PHOTO_CRON_SECRET,
+      recapHighlightMax: 6,
+      experienceStripMax: 8,
+      store: {
+        endpoint: 'https://sentinel.r2.cloudflarestorage.com',
+        bucket: 'sentinel-bucket',
+        accessKeyId: 'sentinel-access-key',
+        secretAccessKey: SENTINEL_PHOTO_STORE_SECRET,
+        region: 'auto',
+      },
+      harm: {
+        apiKey: SENTINEL_PHOTO_HARM_KEY,
+        baseUrl: 'https://api.openai.com',
+        model: 'omni-moderation-latest',
+        timeoutMs: 15000,
+        invalidImageCodes: [],
+        badRequestAlertCount: 5,
+        scoreThreshold: 0.5,
+        checkThumb: true,
+      },
+      vision: {
+        apiKey: SENTINEL_PHOTO_VISION_KEY,
+        baseUrl: 'https://generativelanguage.googleapis.com',
+        model: 'gemini-3.5-flash-lite',
+        fallbackModel: 'gemini-3.1-flash-lite',
+        timeoutMs: 20000,
+        minFoodConfidence: 0.6,
+        maxProminentFaces: 0,
+        maxTextFraction: 0.25,
+      },
+      limits: {
+        dailyUploadCap: 20,
+        globalDailyCap: 2000,
+        maxPerFoodLog: 4,
+        maxPerTrip: 300,
+        maxFeedPostPhotos: 4,
+        maxBatch: 10,
+        maxBytes: 1048576,
+        maxThumbBytes: 65536,
+      },
+      urls: {
+        putTtlSeconds: 900,
+        getTtlSeconds: 3600,
+        adminTtlSeconds: 300,
+      },
+      moderation: {
+        uploadExpiryMinutes: 120,
+        maxAttempts: 6,
+        leaseSeconds: 180,
+        needsReviewMaxAgeHours: 120,
+        uploadPrefixExpiryDays: 7,
+        concurrency: 3,
+        rejectedRetentionHours: 24,
+      },
+      reports: {
+        autohideFood: 3,
+        autohideTrip: 1,
+      },
+      sweep: {
+        batch: 200,
+        timeBudgetMs: 25000,
+        visionFieldsRetentionDays: 30,
+      },
+      exif: {
+        policy: 'log',
+        scanBytes: 65536,
+      },
     },
     disney: {
       syncGateway: {
@@ -139,5 +215,9 @@ describe('Admin Panel - Configuration Visibility & Secret Redaction (Requirement
     expect(body).not.toContain(SENTINEL_TRIP_BOOKING_CRON_SECRET);
     expect(body).not.toContain(SENTINEL_ADMIN_USER);
     expect(body).not.toContain(SENTINEL_ADMIN_PASS);
+    expect(body).not.toContain(SENTINEL_PHOTO_CRON_SECRET);
+    expect(body).not.toContain(SENTINEL_PHOTO_STORE_SECRET);
+    expect(body).not.toContain(SENTINEL_PHOTO_HARM_KEY);
+    expect(body).not.toContain(SENTINEL_PHOTO_VISION_KEY);
   });
 });

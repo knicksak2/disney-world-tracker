@@ -14,9 +14,13 @@
  * having to satisfy every service's dependency contract.
  */
 
-import Fastify, { type FastifyInstance } from 'fastify';
+import Fastify, {
+  type FastifyInstance,
+  type preHandlerHookHandler,
+} from 'fastify';
 
 import type { AppConfig } from './config.js';
+import type { DbPool } from './db/pool.js';
 import { registerErrorHandler } from './errors/handler.js';
 import { registerLatencyMetrics } from './observability/requestId.js';
 import { genRequestId, registerRequestId } from './plugins/requestId.js';
@@ -137,6 +141,12 @@ import {
   adminRoutes,
   type AdminRoutesOptions,
 } from './services/admin/routes.js';
+import { photoRoutes } from './services/photos/routes.js';
+import { foodReadRoutes } from './services/photos/foodReadRoutes.js';
+import { tripPhotoRoutes } from './services/photos/tripRoutes.js';
+import { sweepCronRoute } from './services/photos/sweepCronRoute.js';
+import type { PhotoService } from './services/photos/service.js';
+import type { SweepRunner } from './services/photos/sweep.js';
 import type { RatingChangedEvent } from './services/aggregate/ratingChangedQueue.js';
 
 /**
@@ -155,6 +165,20 @@ import type { RatingChangedEvent } from './services/aggregate/ratingChangedQueue
  * shape; that is the only coupling needed.
  */
 export type EmitRatingChanged = (evt: RatingChangedEvent) => Promise<void>;
+
+/**
+ * Route options for the photos feature (Feature: photo-uploads).
+ */
+export interface PhotosRoutesOptions {
+  readonly photoService?: PhotoService | undefined;
+  readonly requireSession: preHandlerHookHandler;
+  readonly enabled?: boolean | undefined;
+  readonly sweepRunner?: SweepRunner | undefined;
+  readonly cronSecret?: string | undefined;
+  readonly recapShareGate?: import('./services/sharing/ports.js').RecapShareGate | undefined;
+  readonly recapPhotoPort?: import('./services/sharing/ports.js').RecapPhotoPort | undefined;
+  readonly pool?: DbPool | undefined;
+}
 
 /**
  * Optional service-layer dependencies that `buildServer` will wire into
@@ -290,6 +314,11 @@ export interface BuildServerServices {
    * Wires `GET /users/:userId/food-ratings` behind session authentication.
    */
   readonly friendFoodRatings?: FriendFoodRatingRoutesOptions;
+  /**
+   * Photo_Service route options (Feature: photo-uploads).
+   * Wires core photo routes, food photo gallery reads, and sweep cron.
+   */
+  readonly photos?: PhotosRoutesOptions;
   /**
    * Tracking_Service route options. Each tracking sub-domain
    * (`completion`, `rating`, `note`) is opt-in so a focused unit-test
@@ -635,6 +664,21 @@ export function buildServer(
 
   if (services.admin !== undefined) {
     void app.register(adminRoutes(services.admin));
+  }
+
+  if (services.photos !== undefined) {
+    const { photoService, requireSession, enabled, sweepRunner, cronSecret, pool } =
+      services.photos;
+    void app.register(photoRoutes, { photoService, requireSession, enabled });
+    if (enabled !== false && photoService !== undefined) {
+      void app.register(foodReadRoutes, { photoService, requireSession });
+      if (pool !== undefined) {
+        void app.register(tripPhotoRoutes, { photoService, requireSession, pool });
+      }
+      if (sweepRunner !== undefined && cronSecret !== undefined) {
+        void app.register(sweepCronRoute, { sweepRunner, cronSecret });
+      }
+    }
   }
 
   return app;

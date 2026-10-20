@@ -15,6 +15,7 @@ import type {
   MenuDTO,
 } from '@dwt/shared';
 
+import type { NavigationProp } from '@react-navigation/native';
 import { liveSectionFor, NO_LIVE_SHAPE, type LiveShape } from './gating';
 import type { TagGroup } from './infoTags';
 import LiveWaitCockpit, { WaitContextMode } from './LiveWaitCockpit';
@@ -22,6 +23,8 @@ import DiningReservationCard from './DiningReservationCard';
 import MenuSummaryCard from './MenuSummaryCard';
 import ShowtimesCard from './ShowtimesCard';
 import LocationGroupSection from './LocationGroupSection';
+import { ExperiencePhotoStrip } from '../../photos/ExperiencePhotoStrip';
+import type { RootStackParamList } from '../../navigation/RootNavigator';
 
 export interface TodayInParkLensProps {
   readonly experienceId: string;
@@ -49,6 +52,8 @@ export interface TodayInParkLensProps {
   readonly onAddToList?: (() => void) | undefined;
   readonly loggedDishesCount?: number | undefined;
   readonly isQuickService?: boolean | undefined;
+  readonly onViewDish?: ((foodItemId: string) => void) | undefined;
+  readonly navigation?: NavigationProp<RootStackParamList> | undefined;
 }
 
 export default function TodayInParkLens({
@@ -74,7 +79,19 @@ export default function TodayInParkLens({
   onAddToList,
   loggedDishesCount,
   isQuickService,
+  onViewDish,
+  navigation,
 }: TodayInParkLensProps): JSX.Element {
+  const handleViewDish =
+    onViewDish ??
+    (navigation
+      ? (foodItemId: string) =>
+          navigation.navigate('Menu', {
+            experienceId,
+            focusFoodItemId: foodItemId,
+          })
+      : undefined);
+
   const liveShape: LiveShape = liveDetail
     ? {
         hasStandbyWait:
@@ -122,6 +139,12 @@ export default function TodayInParkLens({
               experienceId={experienceId}
             />
           ) : null}
+          <ExperiencePhotoStrip
+            kind="experience"
+            id={experienceId}
+            restaurantName={experienceName}
+            {...(handleViewDish ? { onViewDish: handleViewDish } : {})}
+          />
         </>
       ) : section === 'showtimes' ? (
         <ShowtimesCard showtimes={liveDetail?.showtimes} />

@@ -465,6 +465,80 @@ describe('NotificationCenterScreen presentation (R1.7, R2.9, R8.2, R9.1, R9.5, R
     expect(mockNavigate).not.toHaveBeenCalledWith('PinShowcase', expect.anything());
     alertSpy.mockRestore();
   });
+
+  // -------------------------------------------------------------------------
+  // photo-uploads R15.13, R15.19 — opening a tripSummary destination
+  // -------------------------------------------------------------------------
+  function tripSummaryAttentionItem(id: string): AttentionItem {
+    return {
+      domain: 'share',
+      id,
+      sourceTimestamp: '2024-01-01T00:00:00.000Z',
+      summary: 'Mickey shared a trip recap',
+      ref: {
+        shareId: id,
+        senderId: 'friend-user-1',
+        destination: { kind: 'tripSummary', id },
+      },
+    };
+  }
+
+  function programTripSummaryFeed(item: AttentionItem): void {
+    programAttention({
+      state: makeState({ items: [item] }),
+      outcomes: [
+        success('friendRequest'),
+        success('tripInvite'),
+        success('rodeWithTag'),
+        success('share', [item]),
+      ],
+      inFlight: false,
+      retryFailed: jest.fn(),
+    });
+  }
+
+  test('photo-uploads R15.13: opening a tripSummary destination from a still-Friend sender navigates to the TripRecap screen with the share id', async () => {
+    const item = tripSummaryAttentionItem('share-trip-1');
+    programTripSummaryFeed(item);
+    const apiRequestMock = apiRequest as jest.MockedFunction<typeof apiRequest>;
+    apiRequestMock.mockResolvedValueOnce({
+      friends: [{ userId: 'friend-user-1' }],
+    } as never);
+
+    renderScreen();
+
+    fireEvent.press(screen.getByTestId(`attention-open-${item.id}`));
+
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith('YouAndCrew', {
+        screen: 'TripRecap',
+        params: { shareId: 'share-trip-1' },
+      });
+    });
+  });
+
+  test('photo-uploads R15.13: opening a tripSummary destination when the sender is no longer a Friend alerts and does not navigate', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    const item = tripSummaryAttentionItem('share-trip-2');
+    programTripSummaryFeed(item);
+    const apiRequestMock = apiRequest as jest.MockedFunction<typeof apiRequest>;
+    apiRequestMock.mockResolvedValueOnce({
+      friends: [{ userId: 'other-user' }],
+    } as never);
+
+    renderScreen();
+
+    fireEvent.press(screen.getByTestId(`attention-open-${item.id}`));
+
+    await waitFor(() => {
+      expect(alertSpy).toHaveBeenCalledWith(
+        'Recap unavailable',
+        'This friend\u2019s profile is no longer available.',
+      );
+    });
+    expect(mockNavigate).not.toHaveBeenCalledWith('YouAndCrew', expect.anything());
+    alertSpy.mockRestore();
+  });
 });
 
 // ---------------------------------------------------------------------------

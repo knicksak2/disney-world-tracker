@@ -58,6 +58,7 @@ import {
   type TripFeedItemDTO,
   type TripFeedTargetType,
   type TripMemberDTO,
+  type TripPostPhotoSlotDTO,
   type TripReactionValue,
 } from '@dwt/shared';
 
@@ -87,6 +88,11 @@ import {
   SecondaryButton,
 } from '../../theme/components';
 import { ExperiencePicker } from './ExperiencePicker';
+import { uploadPhotos, usePhotoConfig, usePhotoStatuses } from '../../photos/api';
+import { isFinalPhotoStatus } from '../../photos/pollPlan';
+import { PhotoPickerSheet } from '../../photos/PhotoPickerSheet';
+import { PhotoViewer, type PhotoViewerItem } from '../../photos/PhotoViewer';
+import type { PreparedImages } from '../../photos/imagePrep';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -141,6 +147,31 @@ interface FeedPatchContext {
 
 /** Which slice of the activity stream is shown (R20.4). */
 type ActivityFilter = 'all' | 'completions';
+
+/**
+ * Ids of the signed-in user's own post photos that are still being checked. Only these can
+ * be polled: `GET /me/photos/status` answers for the caller's own photos and omits everyone
+ * else's, and other members' `checking` slots (visible to them, Requirement 14.9) would
+ * never turn final there. A slot whose status is already final (the owner's `rejected`
+ * photo keeps the `checking` state) is excluded too, so polling ends once the feed shows it.
+ */
+function collectOwnCheckingPhotoIds(
+  items: readonly TripFeedItemDTO[] | undefined,
+): readonly string[] {
+  const ids: string[] = [];
+  for (const item of items ?? []) {
+    for (const slot of item.photos ?? []) {
+      if (
+        slot.state === 'checking' &&
+        slot.mine &&
+        (slot.status === null || !isFinalPhotoStatus(slot.status))
+      ) {
+        ids.push(slot.photoId);
+      }
+    }
+  }
+  return ids;
+}
 
 /**
  * Apply a reaction add/remove to an item's aggregated reaction list for the
@@ -237,6 +268,7 @@ function feedTypeMetaFor(t: AppTheme): Record<
     member_joined: { label: 'joined the trip', icon: 'person-add', tone: tone.memberJoined },
     completion_logged: { label: 'logged a completion', icon: 'checkmark-circle', tone: t.color.success },
     rating_recorded: { label: 'recorded a rating', icon: 'star', tone: tone.ratingRecorded },
+    member_post: { label: 'posted photos', icon: 'camera', tone: t.color.primaryFg },
   };
 }
 
@@ -291,6 +323,21 @@ export default function TripFeedScreen({
     retry: false,
   });
 
+  // Photo moderation finishes seconds after a post, while the user is still on this
+  // screen (Requirement 23.10): poll the batched status route for the caller's own
+  // `checking` slots (one request per tick, Requirement 23.4) and refetch the feed when
+  // any of them reaches a final status, so the placeholder becomes the photo (or its
+  // removed state) without leaving the screen. The poll ends when no slot is checking.
+  const checkingPhotoIds = useMemo(
+    () => collectOwnCheckingPhotoIds(feedQuery.data),
+    [feedQuery.data],
+  );
+  usePhotoStatuses(checkingPhotoIds, {
+    onFinal: () => {
+      void queryClient.invalidateQueries({ queryKey: tripFeedKeys.feed(tripId) });
+    },
+  });
+
   // The caller's own id (to exclude the logging Member from the picker, R10.5)
   // and the Trip's current Members (the only Users the picker may tag, R10.4).
   const meQuery = useQuery<MeResponse, ApiError>({
@@ -303,14 +350,28 @@ export default function TripFeedScreen({
       apiRequest<TripMembersResponse>('GET', `/trips/${tripId}/members`),
   });
 
+  const configQuery = usePhotoConfig();
+  const config = configQuery.data;
+  const canUpload = config?.enabled !== false && config?.tripEnabled !== false;
+
   const [filter, setFilter] = useState<ActivityFilter>('all');
   const [composerVisible, setComposerVisible] = useState(false);
+  const [postComposerVisible, setPostComposerVisible] = useState(false);
 
   const ownUserId = meQuery.data?.user.id ?? null;
   const candidates = useMemo<readonly TripMemberDTO[]>(() => {
     const members = membersQuery.data ?? [];
     return members.filter((m) => m.userId !== ownUserId);
   }, [membersQuery.data, ownUserId]);
+
+  // Same permission source the Trip Album uses for the viewer's Delete on
+  // another member's photo (`delete_any_trip_photo`): the caller is an
+  // organizer of this Trip (photo-uploads R12.11, R14.15).
+  const isOrganizer =
+    ownUserId !== null &&
+    (membersQuery.data ?? []).some(
+      (m) => m.userId === ownUserId && m.role === 'organizer',
+    );
 
   const backToHub = (): void => {
     if (navigation.canGoBack()) {
@@ -333,9 +394,9 @@ export default function TripFeedScreen({
   // `items`, since hooks must run unconditionally on every render.
   const renderRow = useCallback(
     ({ item }: { item: TripFeedItemDTO }) => (
-      <FeedItemCard tripId={tripId} item={item} />
+      <FeedItemCard tripId={tripId} item={item} canDeleteAnyPhoto={isOrganizer} />
     ),
-    [tripId],
+    [tripId, isOrganizer],
   );
 
   // -------------------------------------------------------------------------
@@ -426,6 +487,34 @@ export default function TripFeedScreen({
               </View>
             </Pressable>
 
+            {canUpload ? (
+              <Pressable
+                onPress={() => setPostComposerVisible(true)}
+                style={({ pressed }) => [
+                  styles.composerCtaCard,
+                  pressed && styles.pressed,
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel="Post photos. Share photos with your trip crew."
+                testID="trip-activity-post-cta"
+              >
+                <View style={styles.composerCtaLeft}>
+                  <View style={styles.composerCtaIconCircle}>
+                    <Text style={styles.composerCtaIcon}>📸</Text>
+                  </View>
+                  <View style={styles.composerCtaTextWrap}>
+                    <Text style={styles.composerCtaTitle}>Post photos</Text>
+                    <Text style={styles.composerCtaSubtitle}>
+                      Share photos with your trip crew
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.composerCtaPlus}>
+                  <Ionicons name="add" size={18} color={t.color.textOnPrimary} />
+                </View>
+              </Pressable>
+            ) : null}
+
             <View style={styles.filterRow} testID="trip-activity-filter">
               <Chip
                 label="All"
@@ -473,6 +562,18 @@ export default function TripFeedScreen({
           });
         }}
       />
+
+      <FeedPostComposerModal
+        visible={postComposerVisible}
+        tripId={tripId}
+        onClose={() => setPostComposerVisible(false)}
+        onPosted={() => {
+          setPostComposerVisible(false);
+          void queryClient.invalidateQueries({
+            queryKey: tripFeedKeys.feed(tripId),
+          });
+        }}
+      />
     </ScreenContainer>
   );
 }
@@ -484,14 +585,18 @@ export default function TripFeedScreen({
 function FeedItemCard({
   tripId,
   item,
+  canDeleteAnyPhoto,
 }: {
   readonly tripId: string;
   readonly item: TripFeedItemDTO;
+  /** The caller is an organizer, so the viewer offers Delete on others' photos. */
+  readonly canDeleteAnyPhoto: boolean;
 }): JSX.Element {
   const styles = useStyles();
   const t = useAppTheme();
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState('');
+  const [viewerSlot, setViewerSlot] = useState<TripPostPhotoSlotDTO | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [composerOpen, setComposerOpen] = useState(false);
 
@@ -654,10 +759,62 @@ function FeedItemCard({
     },
   });
 
+  const deletePostMutation = useMutation<void, ApiError, void, FeedPatchContext>({
+    mutationFn: async () => {
+      await apiRequest<void>('DELETE', `/trips/${tripId}/feed/posts/${item.id}`);
+    },
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: feedKey });
+      const previous = queryClient.getQueryData<readonly TripFeedItemDTO[]>(feedKey);
+      queryClient.setQueryData<readonly TripFeedItemDTO[]>(feedKey, (prev) =>
+        prev?.filter((it) => it.id !== item.id),
+      );
+      return { previous };
+    },
+    onError: (err, _vars, context) => {
+      if (context?.previous !== undefined) {
+        queryClient.setQueryData(feedKey, context.previous);
+      }
+      setError(actionErrorMessage(err));
+    },
+    onSettled: () => {
+      invalidateFeed();
+    },
+  });
+
+  const caption = readString(item.metadata, 'caption');
+
+  // Accessible name for a tappable ready photo: the author, plus the caption
+  // when the post has one.
+  const photoOpenLabel =
+    caption !== null
+      ? `View photo by ${item.actorDisplayName}, ${caption}`
+      : `View photo by ${item.actorDisplayName}`;
+
+  // The viewer shows the full-size `url`, falling back to the thumbnail only
+  // when the slot carries no full URL. `mine` drives Delete on the member's own
+  // photo; Report / Block uploader appear for everyone else's.
+  const viewerItem: PhotoViewerItem | null =
+    viewerSlot !== null
+      ? {
+          id: viewerSlot.photoId,
+          url: viewerSlot.url ?? viewerSlot.thumbUrl,
+          thumbUrl: viewerSlot.thumbUrl,
+          width: viewerSlot.width,
+          height: viewerSlot.height,
+          uploader: {
+            displayName: item.actorDisplayName,
+            avatarPreset: item.actorAvatarPreset,
+          },
+          mine: viewerSlot.mine,
+        }
+      : null;
+
   const busy =
     reactionMutation.isPending ||
     addCommentMutation.isPending ||
-    removeCommentMutation.isPending;
+    removeCommentMutation.isPending ||
+    deletePostMutation.isPending;
 
   const canSubmit = draft.trim().length > 0 && !addCommentMutation.isPending;
   const commentCount = item.comments.length;
@@ -674,10 +831,60 @@ function FeedItemCard({
           </Text>
           <Text style={styles.itemMeta}>{formatRelativeTime(item.createdAt)}</Text>
         </View>
+        {item.type === 'member_post' && item.mine === true ? (
+          <Pressable
+            onPress={() => {
+              if (deletePostMutation.isPending) return;
+              setError(null);
+              deletePostMutation.mutate();
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Delete post"
+            testID={`trip-feed-post-delete-${item.id}`}
+            style={({ pressed }) => [styles.postDeleteBtn, pressed && styles.pressed]}
+          >
+            <Ionicons name="trash-outline" size={18} color={t.color.danger} />
+          </Pressable>
+        ) : null}
         <View style={[styles.typeBadge, { backgroundColor: withAlpha(meta.tone, 0.14) }]}>
           <Ionicons name={meta.icon} size={16} color={meta.tone} />
         </View>
       </View>
+
+      {/* For member_post: optional caption and photo slots grid */}
+      {item.type === 'member_post' ? (
+        <View style={styles.memberPostBody} testID={`trip-feed-post-body-${item.id}`}>
+          {caption !== null ? (
+            <Text style={styles.postCaption} testID={`trip-feed-post-caption-${item.id}`}>
+              {caption}
+            </Text>
+          ) : null}
+          {item.photos && item.photos.length > 0 ? (
+            <View style={styles.slotsGrid} testID={`trip-feed-slots-${item.id}`}>
+              {item.photos.map((slot, index) => (
+                <FeedPhotoSlotView
+                  key={slot.photoId || `slot-${index}`}
+                  slot={slot}
+                  openLabel={photoOpenLabel}
+                  onOpen={() => setViewerSlot(slot)}
+                />
+              ))}
+            </View>
+          ) : null}
+        </View>
+      ) : null}
+
+      {/* Full-screen viewer for the tapped ready photo (R14.15). Mounted only
+          while open so a long feed does not carry a viewer per post. */}
+      {viewerSlot !== null ? (
+        <PhotoViewer
+          visible
+          photo={viewerItem}
+          canDelete={canDeleteAnyPhoto}
+          onClose={() => setViewerSlot(null)}
+          onDeleted={invalidateFeed}
+        />
+      ) : null}
 
       {/* What the activity was about — the completed/confirmed Experience. */}
       {experienceName !== null ? (
@@ -1134,6 +1341,283 @@ export function LogComposerModal({
         </View>
       </KeyboardAvoidingView>
     </Modal>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Feed post composer modal — upload up to 4 photos + optional caption (R14)
+// ---------------------------------------------------------------------------
+
+export function FeedPostComposerModal({
+  visible,
+  tripId,
+  onClose,
+  onPosted,
+}: {
+  readonly visible: boolean;
+  readonly tripId: string;
+  readonly onClose: () => void;
+  readonly onPosted: () => void;
+}): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
+  const [selectedPhotos, setSelectedPhotos] = useState<
+    readonly { prepared: PreparedImages; takenAt?: string }[]
+  >([]);
+  const [caption, setCaption] = useState('');
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [isPosting, setIsPosting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const wasVisible = useRef(false);
+  useEffect(() => {
+    if (visible && !wasVisible.current) {
+      setSelectedPhotos([]);
+      setCaption('');
+      setPickerOpen(false);
+      setIsPosting(false);
+      setError(null);
+    }
+    wasVisible.current = visible;
+  }, [visible]);
+
+  const resetForm = (): void => {
+    setSelectedPhotos([]);
+    setCaption('');
+    setPickerOpen(false);
+    setIsPosting(false);
+    setError(null);
+  };
+
+  const closeAndReset = (): void => {
+    if (isPosting) return;
+    resetForm();
+    onClose();
+  };
+
+  const handlePost = async (): Promise<void> => {
+    if (selectedPhotos.length === 0 || isPosting) return;
+    setIsPosting(true);
+    setError(null);
+    try {
+      const uploadResult = await uploadPhotos({
+        target: { kind: 'trip', id: tripId },
+        items: selectedPhotos,
+      });
+      const trimmed = caption.trim();
+      const postPayload = {
+        photoIds: uploadResult.photoIds,
+        ...(trimmed.length > 0 ? { caption: trimmed } : {}),
+      };
+      await apiRequest('POST', `/trips/${tripId}/feed/posts`, postPayload);
+      resetForm();
+      onPosted();
+    } catch (err: unknown) {
+      if (err instanceof ApiError) {
+        setError(err.message || 'Failed to post photos');
+      } else if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError('Failed to post photos');
+      }
+    } finally {
+      setIsPosting(false);
+    }
+  };
+
+  return (
+    <>
+      <Modal
+        visible={visible}
+        transparent
+        animationType="fade"
+        onRequestClose={closeAndReset}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalBackdrop}
+        >
+          <View style={styles.modalCard} testID="feed-post-composer">
+            <View style={styles.modalHeaderRow}>
+              <Text style={styles.modalTitle}>Post photos</Text>
+              <Pressable
+                onPress={closeAndReset}
+                disabled={isPosting}
+                accessibilityRole="button"
+                accessibilityLabel="Close"
+                hitSlop={8}
+                style={({ pressed }) => [styles.modalClose, pressed && styles.pressed]}
+                testID="feed-post-close"
+              >
+                <Ionicons name="close" size={22} color={t.color.textSecondary} />
+              </Pressable>
+            </View>
+
+            <ScrollView contentContainerStyle={styles.modalScroll} keyboardShouldPersistTaps="handled">
+              <Text style={styles.label}>Photos (up to 4)</Text>
+              {selectedPhotos.length === 0 ? (
+                <View style={styles.pickPhotosBox}>
+                  <PrimaryButton
+                    label="Choose photos (up to 4)"
+                    icon="images-outline"
+                    onPress={() => setPickerOpen(true)}
+                    disabled={isPosting}
+                    testID="feed-post-pick-photos"
+                  />
+                </View>
+              ) : (
+                <View style={styles.selectedPhotosRow} testID="feed-post-selected-photos">
+                  <Text style={styles.selectedPhotosText}>
+                    {selectedPhotos.length} photo{selectedPhotos.length === 1 ? '' : 's'} selected
+                  </Text>
+                  <SecondaryButton
+                    label="Change"
+                    onPress={() => setPickerOpen(true)}
+                    disabled={isPosting}
+                    testID="feed-post-change-photos"
+                  />
+                </View>
+              )}
+
+              <Text style={styles.label}>Caption (optional)</Text>
+              <TextInput
+                value={caption}
+                onChangeText={(val) => {
+                  setCaption(val);
+                  if (error !== null) setError(null);
+                }}
+                placeholder="Write a caption (optional)"
+                placeholderTextColor={t.color.textSecondary}
+                keyboardAppearance={t.scheme}
+                maxLength={500}
+                multiline
+                editable={!isPosting}
+                style={styles.composerInput}
+                accessibilityLabel="Post caption"
+                testID="feed-post-caption-input"
+              />
+
+              {error !== null ? (
+                <Text
+                  style={styles.error}
+                  accessibilityRole="alert"
+                  testID="feed-post-error"
+                >
+                  {error}
+                </Text>
+              ) : null}
+
+              <View style={styles.modalActions}>
+                <PrimaryButton
+                  label={isPosting ? 'Posting\u2026' : 'Post'}
+                  icon="checkmark-circle-outline"
+                  onPress={handlePost}
+                  disabled={isPosting || selectedPhotos.length === 0}
+                  testID="feed-post-submit"
+                  style={styles.flexBtn}
+                />
+                <SecondaryButton
+                  label="Cancel"
+                  onPress={closeAndReset}
+                  disabled={isPosting}
+                  testID="feed-post-cancel"
+                  style={styles.flexBtn}
+                />
+              </View>
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      <PhotoPickerSheet
+        visible={pickerOpen}
+        target="trip"
+        title="Select up to 4 photos"
+        allowsMultipleSelection
+        maxSelection={4}
+        onClose={() => setPickerOpen(false)}
+        onConfirmBatch={(items) => {
+          setSelectedPhotos(items);
+          setPickerOpen(false);
+          if (error !== null) setError(null);
+        }}
+      />
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Feed photo slot view — ready / checking / removed / unavailable (R14.4, R14.6)
+// ---------------------------------------------------------------------------
+
+function FeedPhotoSlotView({
+  slot,
+  openLabel,
+  onOpen,
+}: {
+  readonly slot: TripPostPhotoSlotDTO;
+  /** Accessible name of the tap target that opens the viewer (ready slots only). */
+  readonly openLabel: string;
+  readonly onOpen: () => void;
+}): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
+
+  if (slot.state === 'ready') {
+    const uri = slot.thumbUrl ?? slot.url ?? '';
+    return (
+      <Pressable
+        onPress={onOpen}
+        style={({ pressed }) => [styles.slotWrapper, pressed && styles.pressed]}
+        accessibilityRole="imagebutton"
+        accessibilityLabel={openLabel}
+        testID={`trip-feed-slot-press-${slot.photoId}`}
+      >
+        <View style={styles.slotFill} testID={`trip-feed-slot-${slot.photoId}`}>
+          <Image
+            source={{ uri }}
+            style={styles.slotImage}
+            resizeMode="cover"
+            accessibilityLabel="Photo"
+            testID={`trip-feed-slot-ready-${slot.photoId}`}
+          />
+        </View>
+      </Pressable>
+    );
+  }
+
+  if (slot.state === 'checking') {
+    return (
+      <View
+        style={[styles.slotWrapper, styles.slotPlaceholder]}
+        testID={`trip-feed-slot-checking-${slot.photoId}`}
+      >
+        <Ionicons name="time-outline" size={24} color={t.color.textSecondary} />
+        <Text style={styles.slotPlaceholderText}>Checking photo...</Text>
+      </View>
+    );
+  }
+
+  if (slot.state === 'removed') {
+    return (
+      <View
+        style={[styles.slotWrapper, styles.slotPlaceholder]}
+        testID={`trip-feed-slot-removed-${slot.photoId}`}
+      >
+        <Ionicons name="trash-outline" size={24} color={t.color.textSecondary} />
+        <Text style={styles.slotPlaceholderText}>photo removed</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View
+      style={[styles.slotWrapper, styles.slotPlaceholder]}
+      testID={`trip-feed-slot-unavailable-${slot.photoId}`}
+    >
+      <Ionicons name="eye-off-outline" size={24} color={t.color.textSecondary} />
+      <Text style={styles.slotPlaceholderText}>Photo unavailable</Text>
+    </View>
   );
 }
 
@@ -1805,5 +2289,61 @@ const useStyles = makeStyles((t) => ({
   flexBtn: {
     flexGrow: 1,
     flexBasis: 0,
+  },
+  postDeleteBtn: {
+    padding: theme.spacing.xs,
+    marginRight: theme.spacing.xs,
+  },
+  memberPostBody: {
+    gap: theme.spacing.sm,
+  },
+  postCaption: {
+    ...theme.typography.body,
+    color: t.color.textPrimary,
+  },
+  slotsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: theme.spacing.sm,
+  },
+  slotWrapper: {
+    flexBasis: '47%',
+    flexGrow: 1,
+    aspectRatio: 1,
+    borderRadius: theme.radius.md,
+    overflow: 'hidden',
+    backgroundColor: t.color.surfaceAlt,
+  },
+  slotFill: {
+    width: '100%',
+    height: '100%',
+  },
+  slotImage: {
+    width: '100%',
+    height: '100%',
+  },
+  slotPlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: theme.spacing.md,
+    gap: theme.spacing.xs,
+  },
+  slotPlaceholderText: {
+    ...theme.typography.meta,
+    color: t.color.textSecondary,
+    textAlign: 'center',
+  },
+  pickPhotosBox: {
+    paddingVertical: theme.spacing.sm,
+  },
+  selectedPhotosRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: theme.spacing.sm,
+  },
+  selectedPhotosText: {
+    ...theme.typography.subtitle,
+    color: t.color.textPrimary,
   },
 }));

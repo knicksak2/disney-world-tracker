@@ -1,0 +1,30 @@
+{
+  "verdict": "APPROVED",
+  "summary": "The recipient album (D35) meets every checklist item I could verify from code and tests. The new route reuses resolveShareAccess/photoAccessFor, so it has the same gate order as the recap route, with the Friendship re-check inside the gate before any Trip or photo read. Items are built from explicit columns (id, sort_at, width, height) with six literal keys and p/ serving keys from photoKeys only. Pagination is sort_at DESC, id DESC keyset with a limit+1 lookahead; limit is 1..100, default 40. report/block via shareId now use isAlbumPhoto, with negatives and D31 covered. The mobile screen, navigation registration, states, and block refetch are present and tested. Spec amendments are additive, Properties 44/45 carry Validates lines, tasks 21.6/22.8 are unchecked and cite every new AC, and the graph JSON parses (waves 38 and 39). I re-ran npm run verify myself: exit 0, api 491 files / 3517 tests, mobile 326 suites / 2559 tests, shared 45 files / 581 tests. Only low-severity observations remain.",
+  "findings": [
+    {
+      "severity": "low",
+      "file": "apps/api/src/services/photos/recapPhotoPort.ts",
+      "issue": "The keyset cursor round-trips sort_at through a JS Date (millisecond precision). Photo inserts always pass a JS-Date sortAt, so stored values are ms-precision and paging is exact today. A row written with the column default now() (microseconds) would break the 'exactly once' guarantee. pg-mem cannot exercise this, and the same limitation exists in the member album.",
+      "fix": "Optional hardening: keep sort_at at ms precision at every write site (e.g. a CHECK or date_trunc), or compare on date_trunc('milliseconds', p.sort_at) in the keyset predicate. No change needed to ship."
+    },
+    {
+      "severity": "low",
+      "file": "apps/api/src/services/sharing/__tests__/tripRecapAlbumRoutes.test.ts",
+      "issue": "The report/block negative matrix at route level does not include 'sharer left the Trip / Trip deleted' (tripAvailable=false). That path is only covered at port level (recapPhotoPort.test.ts: 'is false and runs no query when the Trip is unavailable'), so a service-level regression would not be caught at the route layer.",
+      "fix": "Add one route-level case to the report negatives (and one to the block negatives) that deletes the sharer's trip_memberships row and expects 404 photo_not_found with nothing recorded."
+    },
+    {
+      "severity": "low",
+      "file": ".agents/tasks/photo-uploads/recap-album-fixer-notes.md",
+      "issue": "The 'npm run verify' block in the fixer notes is a condensed excerpt, not a literal tail, and the spec-format validator was not run (hand checklist only). My independent re-run of npm run verify was green, and I checked the spec format by hand (Validates colon inside the bold, only '- [ ]' markers, graph JSON parses).",
+      "fix": "No code change. Run the Kiro spec-format diagnostics in the editor before the spec is committed."
+    },
+    {
+      "severity": "low",
+      "file": "apps/api/src/services/sharing/ports.ts",
+      "issue": "RecapPhotoPort.isHighlight is now unused by PhotoService (kept deliberately per plan A4). It is dead production surface that could mislead a future reader into thinking the narrow D32 rule still applies.",
+      "fix": "Optional: add a short doc comment on isHighlight saying report/block use isAlbumPhoto since D35, or remove it in a follow-up."
+    }
+  ]
+}

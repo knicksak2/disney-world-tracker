@@ -64,6 +64,8 @@ import {
 import FoodItemPickerModal from './FoodItemPickerModal';
 import FriendDishSocialProof from './FriendDishSocialProof';
 import AddToListsSheet from '../foodLists/AddToListsSheet';
+import { DishPhotoStrip } from '../../photos/DishPhotoStrip';
+import { DishPhotosSheet } from '../../photos/DishPhotosSheet';
 import { MENU_ITEM } from './MenuScreen.palette';
 
 // ---------------------------------------------------------------------------
@@ -81,7 +83,10 @@ interface MenuDetailDTO {
   readonly menus?: readonly MenuDTO[];
 }
 
-type MenuRouteProp = RouteProp<{ Menu: { experienceId: string } }, 'Menu'>;
+type MenuRouteProp = RouteProp<
+  { Menu: { experienceId: string; focusFoodItemId?: string } },
+  'Menu'
+>;
 
 // ---------------------------------------------------------------------------
 // Component
@@ -92,7 +97,7 @@ export default function MenuScreen(): JSX.Element {
   const t = useAppTheme();
   const route = useRoute<MenuRouteProp>();
   const navigation = useNavigation();
-  const { experienceId } = route.params;
+  const { experienceId, focusFoodItemId } = route.params;
   const encodedId = encodeURIComponent(experienceId);
   const queryClient = useQueryClient();
 
@@ -100,6 +105,10 @@ export default function MenuScreen(): JSX.Element {
   const [pickerVisible, setPickerVisible] = React.useState(false);
   const [sheetVisible, setSheetVisible] = React.useState(false);
   const [selectedItemsForSheet, setSelectedItemsForSheet] = React.useState<readonly FoodItemDTO[]>([]);
+  const [selectedDishForPhotos, setSelectedDishForPhotos] = React.useState<{
+    id: string;
+    name: string;
+  } | null>(null);
 
   // Same key + fn as `ExperienceDetailScreen`, so the entry the detail view
   // already fetched is reused here.
@@ -189,6 +198,36 @@ export default function MenuScreen(): JSX.Element {
     [encodedId, experienceId, foodItemsQ.data?.items, queryClient],
   );
 
+  const menus = detailQ.data?.menus ?? [];
+
+  // One-shot focusFoodItemId effect (Requirement 27, Task 13.11)
+  const focusHandledRef = React.useRef(false);
+  React.useEffect(() => {
+    if (focusHandledRef.current) return;
+    if (!focusFoodItemId || !foodItemsQ.data?.items) return;
+
+    focusHandledRef.current = true;
+    const targetItem = foodItemsQ.data.items.find((item) => item.id === focusFoodItemId);
+    if (!targetItem) {
+      setSelectedDishForPhotos({ id: focusFoodItemId, name: 'Dish' });
+      return;
+    }
+
+    if (menus.length > 0) {
+      const normalizedTargetName = targetItem.name.trim().toLowerCase();
+      const tabIndex = menus.findIndex((menu) =>
+        menu.groups.some((group) =>
+          group.items.some((item) => item.name.trim().toLowerCase() === normalizedTargetName)
+        )
+      );
+      if (tabIndex >= 0) {
+        setActiveIndex(tabIndex);
+      }
+    }
+
+    setSelectedDishForPhotos({ id: targetItem.id, name: targetItem.name });
+  }, [focusFoodItemId, foodItemsQ.data?.items, menus]);
+
   // Deep-link defensive path: nothing cached yet and the fetch is in flight.
   if (detailQ.isLoading) {
     return (
@@ -219,7 +258,6 @@ export default function MenuScreen(): JSX.Element {
   }
 
   const detail = detailQ.data;
-  const menus = detail.menus ?? [];
   // Clamp the selected tab in case the cached menu list changed underneath us.
   const safeActive = activeIndex >= 0 && activeIndex < menus.length ? activeIndex : 0;
 
@@ -278,6 +316,7 @@ export default function MenuScreen(): JSX.Element {
             menu={menus[safeActive]!}
             index={safeActive}
             onAddItem={handleAddItemToList}
+            onOpenPhotos={setSelectedDishForPhotos}
             socialProofByItemId={socialProofByItemId}
             itemIdByName={itemIdByName}
           />
@@ -307,6 +346,17 @@ export default function MenuScreen(): JSX.Element {
           setSelectedItemsForSheet([]);
         }}
       />
+
+      {/* Dish Photos Sheet */}
+      {selectedDishForPhotos ? (
+        <DishPhotosSheet
+          visible={Boolean(selectedDishForPhotos)}
+          onClose={() => setSelectedDishForPhotos(null)}
+          foodItemId={selectedDishForPhotos.id}
+          foodItemName={selectedDishForPhotos.name}
+          experienceId={experienceId}
+        />
+      ) : null}
     </ScreenContainer>
   );
 }
@@ -377,12 +427,14 @@ function MenuBlock({
   menu,
   index,
   onAddItem,
+  onOpenPhotos,
   socialProofByItemId,
   itemIdByName,
 }: {
   readonly menu: MenuDTO;
   readonly index: number;
   readonly onAddItem?: (item: { name: string; price?: string | null }) => void;
+  readonly onOpenPhotos?: (dish: { id: string; name: string }) => void;
   readonly socialProofByItemId?: ReadonlyMap<string, FriendDishSocialProofDTO> | undefined;
   readonly itemIdByName?: ReadonlyMap<string, string> | undefined;
 }): JSX.Element {
@@ -421,16 +473,25 @@ function MenuBlock({
                 testID={`menu-item-${index}-${groupIndex}-${itemIndex}`}
               >
                 <View style={styles.itemInfo}>
-                  <Text style={styles.itemName}>{item.name}</Text>
-                  {hasPrice ? (
-                    <Text style={styles.itemPrice} testID={`menu-item-price-${index}-${groupIndex}-${itemIndex}`}>
-                      {item.price as string}
-                    </Text>
-                  ) : null}
+                  <View style={styles.itemHeader}>
+                    <Text style={styles.itemName}>{item.name}</Text>
+                    {hasPrice ? (
+                      <Text style={styles.itemPrice} testID={`menu-item-price-${index}-${groupIndex}-${itemIndex}`}>
+                        {item.price as string}
+                      </Text>
+                    ) : null}
+                  </View>
                   {proof ? (
                     <FriendDishSocialProof
                       proof={proof}
                       foodItemName={item.name}
+                    />
+                  ) : null}
+                  {itemId ? (
+                    <DishPhotoStrip
+                      foodItemId={itemId}
+                      foodItemName={item.name}
+                      onPress={() => onOpenPhotos?.({ id: itemId, name: item.name })}
                     />
                   ) : null}
                 </View>
@@ -548,10 +609,13 @@ const useStyles = makeStyles((t) => ({
     paddingVertical: 3,
   },
   itemInfo: {
+    flex: 1,
+    gap: 2,
+  },
+  itemHeader: {
     flexDirection: 'row',
     alignItems: 'baseline',
     justifyContent: 'space-between',
-    flex: 1,
     gap: t.spacing.md,
   },
   itemName: {

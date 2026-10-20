@@ -8,9 +8,12 @@ import FriendProfileScreen, {
 import FriendsSearchScreen from '../screens/friends/FriendsSearchScreen';
 import InboxScreen from '../screens/share/InboxScreen';
 import SentSharesScreen from '../screens/share/SentSharesScreen';
+import TripRecapScreen from '../screens/share/TripRecapScreen';
+import TripRecapAlbumScreen from '../screens/share/TripRecapAlbumScreen';
 import FriendFoodHistoryScreen from '../screens/friends/FriendFoodHistoryScreen';
 import PinShowcaseScreen from '../screens/profile/PinShowcaseScreen';
 import YouAndCrewScreen from '../screens/youAndCrew/YouAndCrewScreen';
+import BlockedUsersScreen from '../screens/youAndCrew/BlockedUsersScreen';
 
 export type { FriendProfileParams };
 
@@ -26,7 +29,12 @@ export type YouAndCrewStackParamList = {
   Inbox: { shareId?: string } | undefined;
   Sent: undefined;
   PinShowcase: { userId?: string; readOnly?: boolean } | undefined;
+  /** Read-only Trip recap opened from a `tripSummary` Share (photo-uploads R15.13). */
+  TripRecap: { shareId: string };
+  /** Read-only album of every approved Trip photo behind a shared recap (photo-uploads R15.31, D35). */
+  TripRecapAlbum: { shareId: string; tripName?: string };
   FriendsList?: undefined;
+  BlockedUsers: undefined;
 };
 
 const Stack = createNativeStackNavigator<YouAndCrewStackParamList>();
@@ -70,9 +78,24 @@ export default function YouAndCrewStack(): JSX.Element {
         options={{ title: 'Pin Showcase' }}
       />
       <Stack.Screen
+        name="TripRecap"
+        component={TripRecapScreen}
+        options={{ title: 'Trip recap' }}
+      />
+      <Stack.Screen
+        name="TripRecapAlbum"
+        component={TripRecapAlbumScreen}
+        options={{ title: 'All trip photos' }}
+      />
+      <Stack.Screen
         name="FriendFoodHistory"
         component={FriendFoodHistoryScreen}
         options={{ title: 'Food History' }}
+      />
+      <Stack.Screen
+        name="BlockedUsers"
+        component={BlockedUsersScreen}
+        options={{ title: 'Blocked Users' }}
       />
     </Stack.Navigator>
   );

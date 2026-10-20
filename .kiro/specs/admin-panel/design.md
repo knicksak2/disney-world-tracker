@@ -28,12 +28,16 @@ Both additions are deliberately minimal: one `INSERT` call each, injected via th
 constructor-injection pattern every other repo in this codebase uses, with no change to either
 service's existing control flow, retry logic, or return values.
 
-Every other Admin_Section is pure read, and the only mutating `Trigger_Action` routes
+Every other Admin_Section is pure read, and the mutating `Trigger_Action` routes
 (`POST /admin/catalog/sync`, `POST /admin/accounts/:userId/unlock`,
-`POST /admin/users/:userId/revoke-sessions`, `POST /admin/users/:userId/pins/reconcile`) each
-call directly into an **existing** exported function (`runSync`, the lockout service's
-`clearOnSuccess`-equivalent, a direct `sessions` UPDATE, `PinRepo.reconcileAll`) rather than
-introducing new business logic.
+`POST /admin/users/:userId/revoke-sessions`, `POST /admin/users/:userId/pins/reconcile`,
+and the five photo moderation actions `POST /admin/photos/:id/{approve,restore,remove,dismiss-reports,ban-uploader}`)
+each call directly into an existing exported function or service port rather than
+introducing new business logic. Note: The photo POST routes enforce same-origin checks
+(`isSameOriginRequest`) per Requirement 18.9 of the `photo-uploads` spec to protect against
+cross-site form submissions carrying cached HTTP Basic credentials. The earlier four
+admin Trigger_Actions would benefit from the same check as an explicit, unscheduled follow-up
+(not changed here).
 
 ### Guiding constraints from the codebase
 
@@ -585,3 +589,15 @@ available on the existing pooled connection — not a new integration, just a ne
   3.6, 5.5, 9.3, 12.3) each get a dedicated case.
 - **No mobile tests.** This feature touches only `apps/api` and `packages/shared`'s error-code
   catalog; `apps/mobile` is unaffected and needs no new or updated tests.
+
+### Photo Review Queue & Moderation (Requirement 15)
+
+The photo review queue (`GET /admin/photos`) and its mutating actions (`POST /admin/photos/:id/{approve,restore,remove,dismiss-reports,ban-uploader}`) are defined in the `photo-uploads` specification (Requirements 18.1–18.12, Correctness Property 27, Property 32).
+
+The section displays:
+1. Review queue items (`open` reports, `hidden`, `needs_review`) ordered oldest first, with presigned thumbnails (Serving_Keys for `approved`/`hidden`, Upload_Keys for `needs_review`, 300s TTL).
+2. 14-day daily usage rollups from `photo_usage_daily`.
+3. Moderation Trigger_Actions with CSRF same-origin enforcement: `approve` (delegates to `PhotoService.operatorApprove`), `restore` (admin repo), `remove` (reports repo, upholds reports and records strike), `dismiss-reports` (admin repo), and `ban-uploader` (reports repo).
+
+**Correctness Note:** Mutating photo actions enforce same-origin validation (`isSameOriginRequest`), returning `403` with no state modification when cross-origin headers are detected.
+

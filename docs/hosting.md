@@ -8,7 +8,7 @@ The full architecture from `design.md` calls for three self-hosted moving pieces
 2. A relational database (PostgreSQL)
 3. A fast in-memory store (Redis)
 
-(Profile avatars are a fixed set of illustrations bundled with the mobile app and referenced by id, so no object storage is needed.)
+(Profile avatars are a fixed set of illustrations bundled with the mobile app and referenced by id. User photos are stored in Cloudflare R2 object storage.)
 
 We map each one to a managed service that gives us a real free tier. Two external data sources sit behind the API and need no hosting of our own — they're consumed over HTTPS server-side (see [Data sources](#data-sources)).
 
@@ -19,6 +19,7 @@ We map each one to a managed service that gives us a real free tier. Two externa
 | API server | **Render** (Web Service) | 750 instance hours/month, sleeps after 15 min idle | First request after sleep takes 30-60s; upgrade to paid ($7/mo) for always-on |
 | PostgreSQL | **Neon** | 1 GB storage per project, autoscale to 0 when idle | Upgrade plan or migrate; data is portable |
 | Redis | **Upstash** | 500,000 commands/month, 256 MB storage, global edge | Per-request pricing kicks in (very cheap); or swap to a different provider |
+| Photo storage | **Cloudflare R2** | 10 GB storage, 1M Class A operations/month, 10M Class B operations/month, zero egress fees | Automatic daily upload ceiling prevents overages |
 | Live data source | **ThemeParks.wiki** API | n/a (already free) | Public, no key required | n/a |
 | Static catalog source | **Disney** (Sync Gateway + dining-menu API) | n/a (Disney's own endpoints) | Requires Sync Gateway credentials; rate-limited by Disney's edge |
 
@@ -136,6 +137,19 @@ Because booking windows open at fixed WDW wall-clock times (06:00 for dining and
   - **Neon:** At most 9 short wake-ups/day (12 with the `week` lead), well within the ~400 CU-hour free-tier budget.
   - **Redis:** Zero Redis commands (reminders are derived stateless from Postgres and claimed via idempotency ledger).
 
+### Dedicated Photo Sweep Cron (Photo_Cron)
+
+Housekeeping for user photo uploads (resuming abandoned pending jobs, expiring stale uploads, pruning rejected rows, cleaning uploaded objects, and sweeping deleted photos) is driven by a **dedicated Photo_Cron** job on [cron-job.org](https://cron-job.org), completely separate from the keep-alive pinger.
+
+**Keep-alive rule (Requirement 19.10):** The keep-alive job (`GET /health`) touches no database and must **never** call the photo sweep endpoint. Calling the sweep on the ~10-minute keep-alive cadence (~19 hours/day) would consume excessive database operations, waste compute, and collide with the single-flight runner. The Photo_Cron runs at most 4 times per day.
+
+- **Endpoint:** `POST` or `HEAD https://<render-host>/internal/photos/sweep/run` (a `HEAD` request returns no body and avoids cron-job.org's 8 KB limit; Fastify answers `202` on both methods).
+- **Authentication:** `x-cron-secret: <PHOTOS_CRON_SECRET>` header (dedicated secret, distinct from `SAMPLING_CRON_SECRET`, `PIN_RECONCILE_CRON_SECRET`, and `TRIP_BOOKING_CRON_SECRET`).
+- **Timezone:** **`America/New_York`**
+- **Crontab:** `5 7,13,19,0 * * *` (at most 4 passes per day, 5 minutes past 7 AM, 1 PM, 7 PM, and midnight).
+- **Single-flight:** The sweep endpoint is guarded against concurrent executions; if a previous pass is still running, subsequent calls return `{ status: 'skipped', reason: 'in_flight' }`.
+- **Hosting impact:** At most 4 short passes per day, with each pass capped by `PHOTOS_SWEEP_TIME_BUDGET_MS` (default 25s), keeping database and object storage usage within free-tier limits.
+
 
 ---
 
@@ -218,9 +232,26 @@ The next tier is **$0.20 per 100K commands** (pay-as-you-go). You'd have to be d
 
 ---
 
-## Avatars — bundled presets (no storage)
+## Avatars — bundled presets
 
-Profile avatars are a fixed set of original, Disney-themed illustrations bundled with the mobile app as `react-native-svg` components (see `apps/mobile/src/avatars/AvatarPresets.tsx`). The Profile stores only the chosen preset *id* in `profiles.avatar_preset`; there is no upload, object storage, or bandwidth cost. Adding a preset is a code change (a new id in the shared allowlist, a matching SVG component, and the migration's CHECK constraint), not an infrastructure change.
+Profile avatars are a fixed set of original, Disney-themed illustrations bundled with the mobile app as `react-native-svg` components (see `apps/mobile/src/avatars/AvatarPresets.tsx`). The Profile stores only the chosen preset *id* in `profiles.avatar_preset`; there is no user upload or per-avatar infrastructure cost. Adding a preset is a code change (a new id in the shared allowlist, a matching SVG component, and the migration's CHECK constraint), not an infrastructure change.
+
+---
+
+## Photos: Cloudflare R2 & External Moderation
+
+User photos (food logs, dish galleries, trip albums, and shared trip recaps) are stored in a private **Cloudflare R2** bucket and moderated before publication through external AI APIs (OpenAI and Google).
+
+### Cloudflare R2 (Object Storage)
+- **Bucket access:** Stored in a single private R2 bucket using S3-compatible APIs via `@aws-sdk/client-s3`. The bucket is never public; clients upload and view photos exclusively via short-lived, presigned URLs (`PHOTOS_PUT_URL_TTL_SECONDS=900` for uploads, `PHOTOS_GET_URL_TTL_SECONDS=3600` for reads).
+- **Key separation:** Uploads use temporary prefixes `u/<photoId>/full.jpg` and `u/<photoId>/thumb.jpg`. Only moderated and approved photos are promoted to permanent serving keys `p/<photoId>/full.jpg` and `p/<photoId>/thumb.jpg`.
+- **Free tier:** Cloudflare R2 includes 10 GB of storage, 1,000,000 Class A (write/list) operations per month, 10,000,000 Class B (read) operations per month, and zero egress fees. An automated daily upload ceiling (`PHOTOS_GLOBAL_DAILY_CAP`) ensures usage stays comfortably within free-tier limits.
+
+### External AI Moderation
+Before any user photo is published, it must pass automated safety screening:
+- **OpenAI Moderation (`omni-moderation-latest`):** Every uploaded photo (both full and thumbnail) is submitted to OpenAI's Moderation API to screen for harmful or prohibited content. Any flag leads to immediate rejection (`harm`).
+- **Google Gemini Vision (`gemini-3.5-flash-lite` / `gemini-3.1-flash-lite`):** Food photos are additionally evaluated by Google Gemini to confirm food content, detect prominent faces, and calculate text fraction. If the image is not food, or if faces are prominent, or if text exceeds the threshold, the photo is rejected with human-readable guidance.
+- **Operator Review:** Photos with ambiguous classifications or repeated transient provider errors escalate to the internal `needs_review` queue in the Admin Panel for operator evaluation.
 
 ---
 
@@ -290,9 +321,12 @@ When the time comes to deploy, the rough order is:
 
 1. **Neon** — create project, copy the pooled connection string. The schema and extensions are created by the migrations (which run in Render's build step), not by hand.
 2. **Upstash** — create Redis database, copy the `rediss://` URL.
-3. **Disney credentials** — obtain the Sync Gateway HTTP Basic credentials locally with `node tools/pull-disney-creds.mjs`; you'll paste the values into Render. The API fails fast on boot without them.
-4. **Render** — create the Blueprint (**New +** → **Blueprint**, point it at the repo). Render reads `render.yaml`; fill in the `sync: false` secrets it prompts for (the two provider connection strings plus the two Disney keys). Push to `develop` to deploy.
-6. **Seed the catalog** — after the first deploy, run `npm run sync:cloud` from your machine to bootstrap the hosted catalog (see [Render — What this means for the design](#what-this-means-for-the-design)).
+3. **Cloudflare R2** — create private bucket and bucket-scoped API token. Set up CORS and lifecycle rules per runbook.
+4. **AI Moderation Keys** — obtain OpenAI API key for harm moderation and Google Gemini API key for food vision checks.
+5. **Disney credentials** — obtain the Sync Gateway HTTP Basic credentials locally with `node tools/pull-disney-creds.mjs`; you'll paste the values into Render. The API fails fast on boot without them.
+6. **Render** — create the Blueprint (**New +** → **Blueprint**, point it at the repo). Render reads `render.yaml`; fill in the `sync: false` secrets it prompts for (the provider connection strings, photo secrets, and Disney keys). Push to `develop` to deploy.
+7. **External Cron Jobs** — configure Reminder_Cron and Photo_Cron on cron-job.org with their respective secrets and crontabs.
+8. **Seed the catalog** — after the first deploy, run `npm run sync:cloud` from your machine to bootstrap the hosted catalog (see [Render — What this means for the design](#what-this-means-for-the-design)).
 
 The provider signups are independent. If any single provider goes down or changes their free tier, you swap that one piece without rewriting the others.
 

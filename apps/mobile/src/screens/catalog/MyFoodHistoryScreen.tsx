@@ -26,6 +26,7 @@ import {
 } from './foodHistoryFilters';
 import { FoodHistoryControls } from './foodHistory/FoodHistoryControls';
 import RateOnCheckoffPrompt from '../foodLists/RateOnCheckoffPrompt';
+import { FoodLogPhotos } from '../../photos/FoodLogPhotos';
 
 export default function MyFoodHistoryScreen(): JSX.Element {
   const styles = useStyles();
@@ -224,6 +225,7 @@ export default function MyFoodHistoryScreen(): JSX.Element {
           {item.note && item.note.trim().length > 0 && (
             <Text style={styles.noteText}>{item.note}</Text>
           )}
+          <FoodLogPhotos logId={item.id} foodItemId={item.foodItemId} />
         </Card>
       );
     },

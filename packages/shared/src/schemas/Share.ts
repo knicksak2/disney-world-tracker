@@ -101,10 +101,21 @@ export const pinShowcaseSharePayloadSchema = z
   })
   .strict();
 
+export const tripSummarySharePayloadSchema = z
+  .object({
+    kind: z.literal('tripSummary'),
+    tripId: uuidSchema,
+    tripName: z.string().min(1),
+    sharerDisplayName: z.string().min(1),
+    includePhotos: z.boolean(),
+  })
+  .strict();
+
 export const sharePayloadSchema = z.discriminatedUnion('kind', [
   experienceSharePayloadSchema,
   progressSharePayloadSchema,
   pinShowcaseSharePayloadSchema,
+  tripSummarySharePayloadSchema,
 ]);
 
 // ---------------------------------------------------------------------------
@@ -151,3 +162,14 @@ export const shareInputSchema = z
   .strict();
 
 export type ShareInput = z.infer<typeof shareInputSchema>;
+
+export const tripSummaryShareInputSchema = z
+  .object({
+    kind: z.literal('tripSummary'),
+    recipientIds: recipientListSchema,
+    tripId: uuidSchema,
+    includePhotos: z.boolean().default(true),
+  })
+  .strict();
+
+export type TripSummaryShareInput = z.infer<typeof tripSummaryShareInputSchema>;

@@ -48,17 +48,35 @@ export interface PinShowcaseShareBody {
   readonly recipientIds: ReadonlyArray<string>;
 }
 
+/**
+ * Body for `POST /me/shares` — Trip recap branch (photo-uploads R15.2, R15.19).
+ * A pointer only: no sharer id (the server reads it from the session), no
+ * figures, no photos, no URLs.
+ */
+export interface TripSummaryShareBody {
+  readonly kind: 'tripSummary';
+  readonly tripId: string;
+  readonly recipientIds: ReadonlyArray<string>;
+  readonly includePhotos: boolean;
+}
+
 export type ShareCreateBody =
   | ExperienceShareBody
   | ProgressShareBody
-  | PinShowcaseShareBody;
+  | PinShowcaseShareBody
+  | TripSummaryShareBody;
 
-/** The states of the two independent include/exclude toggles (R2.14). */
+/** The states of the independent include/exclude toggles (R2.14, R15.8). */
 export interface IncludeToggles {
   /** Whether the sender's Rating is currently marked for inclusion. */
   readonly includeRating: boolean;
   /** Whether the sender's Note is currently marked for inclusion. */
   readonly includeNote: boolean;
+  /**
+   * Whether a `tripSummary` recap includes Trip photos (R15.8). Defaults to
+   * true when omitted; ignored by every other kind.
+   */
+  readonly includePhotos?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -130,6 +148,15 @@ export function buildShareCreateBody(
     return {
       kind: 'pinShowcase',
       recipientIds,
+    };
+  }
+
+  if (params.kind === 'tripSummary') {
+    return {
+      kind: 'tripSummary',
+      tripId: params.tripId,
+      recipientIds,
+      includePhotos: toggles.includePhotos ?? true,
     };
   }
 

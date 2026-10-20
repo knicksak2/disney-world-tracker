@@ -61,7 +61,10 @@ import {
   ratingValueSchema,
   recipientListSchema,
   uuidSchema,
+  tripSummaryShareInputSchema,
 } from '@dwt/shared';
+import { can } from '../trips/permissions.js';
+import { registerTripRecapRoutes } from './tripRecapRoutes.js';
 
 import { AppError } from '../../errors/AppError.js';
 import type { CuratedProgressStats } from '../stats/curatedShare.js';
@@ -124,6 +127,12 @@ export type ShareDeliveredNotice =
       readonly senderId: string;
       readonly recipientIds: readonly string[];
       readonly payloadKind: 'pinShowcase';
+    }
+  | {
+      readonly shareId: string;
+      readonly senderId: string;
+      readonly recipientIds: readonly string[];
+      readonly payloadKind: 'tripSummary';
     };
 
 /**
@@ -175,6 +184,18 @@ export interface SharingRoutesOptions {
    * Optional display name resolver for pin showcase shares (R24.12).
    */
   readonly resolveSenderDisplayName?: (senderId: string) => Promise<string | undefined>;
+  /**
+   * Optional structural facts port for trip summary shares (Phase 2, R15.18).
+   */
+  readonly tripShareFacts?: import('./ports.js').TripShareFacts | undefined;
+  /**
+   * Optional recap share gate (Phase 2, R15.14).
+   */
+  readonly recapShareGate?: import('./ports.js').RecapShareGate | undefined;
+  /**
+   * Optional photo highlights port (Phase 2, R15.17).
+   */
+  readonly recapPhotoPort?: import('./ports.js').RecapPhotoPort | undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -268,6 +289,7 @@ const shareCreateBodySchema = z.discriminatedUnion('kind', [
   experienceShareInputSchema,
   progressShareInputSchema,
   pinShowcaseShareInputSchema,
+  tripSummaryShareInputSchema,
 ]);
 
 type ShareCreateBody = z.infer<typeof shareCreateBodySchema>;
@@ -316,7 +338,40 @@ export function sharingRoutes(
             if (resolved) senderDisplayName = resolved;
           }
         }
-        let payload = composePayload(body, senderId, senderDisplayName);
+        let payload: SharePayload;
+        if (body.kind === 'tripSummary') {
+          if (!options.tripShareFacts) {
+            throw new AppError('validation_failed', 'Trip sharing is unavailable');
+          }
+          const role = await options.tripShareFacts.roleOf(senderId, body.tripId);
+          if (!role) {
+            throw new AppError('trip_forbidden', 'You are not a member of this trip');
+          }
+          if (!can(role, 'share_trip_summary')) {
+            throw new AppError('trip_forbidden', 'You cannot share this trip summary');
+          }
+          const tripName = await options.tripShareFacts.tripName(body.tripId);
+          if (!tripName) {
+            throw new AppError('trip_forbidden', 'Trip not found');
+          }
+          let sharerDisplayName = 'Friend';
+          if (options.resolveSenderDisplayName) {
+            const resolved = await options.resolveSenderDisplayName(senderId);
+            if (resolved) sharerDisplayName = resolved;
+          } else if (options.repo.getSenderDisplayName) {
+            const resolved = await options.repo.getSenderDisplayName(senderId);
+            if (resolved) sharerDisplayName = resolved;
+          }
+          payload = {
+            kind: 'tripSummary',
+            tripId: body.tripId,
+            tripName,
+            sharerDisplayName,
+            includePhotos: body.includePhotos ?? true,
+          };
+        } else {
+          payload = composePayload(body, senderId, senderDisplayName);
+        }
         // R10: for a `progress` share, capture a send-time snapshot of the
         // sender's curated stats via the live computation (when the port is
         // wired) and write `overallPercent`, `topFacet`, and `percentileRank`
@@ -474,6 +529,16 @@ export function sharingRoutes(
         reply.send();
       },
     );
+
+    // Register trip recap routes if gate and facts are wired (Phase 2, R15.17)
+    if (options.recapShareGate && options.tripShareFacts) {
+      registerTripRecapRoutes(app, {
+        requireSession,
+        recapShareGate: options.recapShareGate,
+        tripShareFacts: options.tripShareFacts,
+        recapPhotoPort: options.recapPhotoPort,
+      });
+    }
   };
 }
 
@@ -512,6 +577,14 @@ function buildShareDeliveredNotice(
       payloadKind: 'pinShowcase',
     };
   }
+  if (payload.kind === 'tripSummary') {
+    return {
+      shareId,
+      senderId,
+      recipientIds,
+      payloadKind: 'tripSummary',
+    };
+  }
   return {
     shareId,
     senderId,
@@ -527,7 +600,7 @@ function buildShareDeliveredNotice(
  * the same union type so the caller is single-shape.
  */
 function composePayload(
-  body: ShareCreateBody,
+  body: Exclude<ShareCreateBody, { kind: 'tripSummary' }>,
   senderId: string,
   senderDisplayName: string,
 ): SharePayload {

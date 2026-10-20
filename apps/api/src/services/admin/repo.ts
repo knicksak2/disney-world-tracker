@@ -8,6 +8,7 @@ import type { Redis } from 'ioredis';
 import type { DbPool } from '../../db/pool.js';
 import type { SyncRunStatus, SyncRunOutcome } from '../catalog/repo.js';
 import type { SamplingRunRow } from '../intelligence/IntelligenceRepo.js';
+import { createReportsRepo } from '../photos/reportsRepo.js';
 
 // ---------------------------------------------------------------------------
 // Configuration & Constants (from design.md)
@@ -220,6 +221,34 @@ export function formatBytes(bytes: number): string {
   return `${gb.toFixed(2)} GB`;
 }
 
+export interface AdminPhotoQueueItem {
+  readonly id: string;
+  readonly targetKind: string;
+  readonly status: string;
+  readonly ownerId: string | null;
+  readonly uploaderName: string | null;
+  readonly avatarPreset: string | null;
+  readonly createdAt: Date;
+  readonly objectKey: string;
+  readonly thumbKey: string;
+  readonly visionFields: unknown | null;
+  readonly reportCount: number;
+  readonly reportReasons: readonly string[];
+}
+
+export interface PhotoUsageDailyRow {
+  readonly day: string | Date;
+  readonly uploads: number;
+  readonly uploadBytes: number;
+  readonly harmCalls: number;
+  readonly visionCalls: number;
+  readonly visionPromptTokens: number;
+  readonly visionOutputTokens: number;
+  readonly rejections: number;
+  readonly needsReview: number;
+  readonly exifPresent: number;
+}
+
 // ---------------------------------------------------------------------------
 // AdminRepo Interface
 // ---------------------------------------------------------------------------
@@ -280,6 +309,15 @@ export interface AdminRepo {
   // Requirement 13 — Growth
   getGrowthTotals(): Promise<GrowthTotals>;
   getDailyGrowth(days?: number): Promise<readonly DailyGrowthRow[]>;
+
+  // Requirement 18 — Photos
+  listPhotoQueue(): Promise<readonly AdminPhotoQueueItem[]>;
+  getPhotoUsage(days?: number): Promise<readonly PhotoUsageDailyRow[]>;
+  restorePhoto(photoId: string): Promise<boolean>;
+  removePhoto(photoId: string): Promise<{ removed: boolean; ownerId: string | null }>;
+  dismissPhotoReports(photoId: string): Promise<number>;
+  banUploader(photoId: string, reason?: string | null): Promise<{ banned: boolean; userId: string | null }>;
+  getUploaderStrikes(photoId: string): Promise<number>;
 }
 
 export function createAdminRepo(pool: DbPool, redis: Redis): AdminRepo {
@@ -1034,6 +1072,171 @@ export function createAdminRepo(pool: DbPool, redis: Redis): AdminRepo {
         });
       }
       return result;
+    },
+
+    async listPhotoQueue(): Promise<readonly AdminPhotoQueueItem[]> {
+      const photosSql = `
+        SELECT
+          p.id,
+          p.target_kind,
+          p.status,
+          p.owner_id,
+          pr.display_name AS uploader_name,
+          pr.avatar_preset,
+          p.created_at,
+          p.object_key,
+          p.thumb_key,
+          p.vision_fields
+        FROM photos p
+        LEFT JOIN profiles pr ON pr.user_id = p.owner_id
+        WHERE p.status IN ('hidden', 'needs_review')
+           OR (p.status <> 'deleted' AND p.id IN (SELECT photo_id FROM photo_reports WHERE status = 'open'))
+        ORDER BY p.created_at ASC, p.id ASC;
+      `;
+      const photoRes = await pool.query<{
+        id: string;
+        target_kind: string;
+        status: string;
+        owner_id: string | null;
+        uploader_name: string | null;
+        avatar_preset: string | null;
+        created_at: string | Date;
+        object_key: string;
+        thumb_key: string;
+        vision_fields: unknown | null;
+      }>(photosSql);
+
+      if (photoRes.rows.length === 0) {
+        return [];
+      }
+
+      const reportsSql = `
+        SELECT photo_id, reason
+          FROM photo_reports
+         WHERE status = 'open';
+      `;
+      const reportsRes = await pool.query<{ photo_id: string; reason: string }>(reportsSql);
+      const reportsMap = new Map<string, string[]>();
+      for (const r of reportsRes.rows) {
+        const list = reportsMap.get(r.photo_id) ?? [];
+        list.push(r.reason);
+        reportsMap.set(r.photo_id, list);
+      }
+
+      return photoRes.rows.map((row) => {
+        const reasons = reportsMap.get(row.id) ?? [];
+        return {
+          id: row.id,
+          targetKind: row.target_kind,
+          status: row.status,
+          ownerId: row.owner_id,
+          uploaderName: row.uploader_name,
+          avatarPreset: row.avatar_preset,
+          createdAt: new Date(row.created_at),
+          objectKey: row.object_key,
+          thumbKey: row.thumb_key,
+          visionFields: row.vision_fields,
+          reportCount: reasons.length,
+          reportReasons: Array.from(new Set(reasons)),
+        };
+      });
+    },
+
+    async getPhotoUsage(days = 14): Promise<readonly PhotoUsageDailyRow[]> {
+      const sql = `
+        SELECT
+          day,
+          uploads,
+          upload_bytes,
+          harm_calls,
+          vision_calls,
+          vision_prompt_tokens,
+          vision_output_tokens,
+          rejections,
+          needs_review,
+          exif_present
+        FROM photo_usage_daily
+        ORDER BY day DESC
+        LIMIT $1;
+      `;
+      const res = await pool.query<{
+        day: string | Date;
+        uploads: number | string;
+        upload_bytes: number | string;
+        harm_calls: number | string;
+        vision_calls: number | string;
+        vision_prompt_tokens: number | string;
+        vision_output_tokens: number | string;
+        rejections: number | string;
+        needs_review: number | string;
+        exif_present: number | string;
+      }>(sql, [days]);
+
+      return res.rows.map((r) => ({
+        day: r.day,
+        uploads: Number(r.uploads),
+        uploadBytes: Number(r.upload_bytes),
+        harmCalls: Number(r.harm_calls),
+        visionCalls: Number(r.vision_calls),
+        visionPromptTokens: Number(r.vision_prompt_tokens),
+        visionOutputTokens: Number(r.vision_output_tokens),
+        rejections: Number(r.rejections),
+        needsReview: Number(r.needs_review),
+        exifPresent: Number(r.exif_present),
+      }));
+    },
+
+    async restorePhoto(photoId: string): Promise<boolean> {
+      const sql = `
+        UPDATE photos
+           SET status = 'approved',
+               hidden_reason = NULL
+         WHERE id = $1 AND status = 'hidden'
+        RETURNING id;
+      `;
+      const res = await pool.query(sql, [photoId]);
+      return res.rows.length > 0;
+    },
+
+    async removePhoto(photoId: string): Promise<{ removed: boolean; ownerId: string | null }> {
+      const reportsRepo = createReportsRepo(pool);
+      return reportsRepo.removePhotoByOperator(photoId);
+    },
+
+    async dismissPhotoReports(photoId: string): Promise<number> {
+      const sql = `
+        UPDATE photo_reports
+           SET status = 'dismissed',
+               resolved_at = now()
+         WHERE photo_id = $1 AND status = 'open';
+      `;
+      const res = await pool.query(sql, [photoId]);
+      return res.rowCount ?? res.rows.length ?? 0;
+    },
+
+    async banUploader(photoId: string, reason?: string | null): Promise<{ banned: boolean; userId: string | null }> {
+      const photoRes = await pool.query<{ owner_id: string | null }>(
+        `SELECT owner_id FROM photos WHERE id = $1;`,
+        [photoId]
+      );
+      const ownerId = photoRes.rows[0]?.owner_id ?? null;
+      if (!ownerId) {
+        return { banned: false, userId: null };
+      }
+      const reportsRepo = createReportsRepo(pool);
+      await reportsRepo.addBan(ownerId, reason ?? null);
+      return { banned: true, userId: ownerId };
+    },
+
+    async getUploaderStrikes(photoId: string): Promise<number> {
+      const sql = `
+        SELECT s.upheld_count
+          FROM photos p
+          JOIN photo_upload_strikes s ON s.user_id = p.owner_id
+         WHERE p.id = $1;
+      `;
+      const res = await pool.query<{ upheld_count: number }>(sql, [photoId]);
+      return res.rows[0]?.upheld_count ?? 0;
     },
   };
 }

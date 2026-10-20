@@ -24,6 +24,7 @@ import { apiRequest } from '../../api/client';
 import { Badge, Card, EmptyState } from '../../theme/components';
 import { makeStyles } from '../../theme/makeStyles';
 import { useAppTheme } from '../../theme/useAppTheme';
+import { FoodLogPhotos } from '../../photos/FoodLogPhotos';
 import {
   FOOD_HISTORY_SORT_OPTIONS,
   type FoodHistorySort,
@@ -141,6 +142,7 @@ export default function RestaurantFoodLogsSheet({
         {item.note && item.note.trim().length > 0 && (
           <Text style={styles.noteText}>{item.note}</Text>
         )}
+        <FoodLogPhotos logId={item.id} foodItemId={item.foodItemId} />
       </Card>
     ),
     [deletingId, handleDeleteLog, styles, t],

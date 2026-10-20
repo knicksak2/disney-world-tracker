@@ -44,6 +44,7 @@ export type {
   ExperienceSharePayload,
   ProgressSharePayload,
   PinShowcaseSharePayload,
+  TripSummarySharePayload,
 } from './Share.js';
 export type { ShareRecipientDTO } from './ShareRecipient.js';
 export type { ShareReactionDTO } from './ShareReaction.js';
@@ -203,3 +204,29 @@ export type {
   FriendDishSocialProofDTO,
   FriendFoodSocialProofResponseDTO,
 } from './FriendFoodRatings.js';
+
+export type {
+  PhotoUploaderDTO,
+  PhotoUploadSlotDTO,
+  PhotoInitiateResponseDTO,
+  PhotoConfirmResultDTO,
+  PhotoConfirmResponseDTO,
+  MyPhotoDTO,
+  MyPhotoStatusResponseDTO,
+  FoodPhotoDTO,
+  RestaurantFoodPhotoDTO,
+  TripPhotoDTO,
+  TripPostSlotState,
+  TripPostPhotoSlotDTO,
+  SharedSummaryPhotoDTO,
+  TripSummaryPhotosDTO,
+  TripRecapSuperlativeDTO,
+  TripRecapFiguresDTO,
+  TripRecapTopRatedDTO,
+  TripRecapDTO,
+  TripRecapPhotosDTO,
+  PhotoPageDTO,
+  PhotoClientConfigDTO,
+  BlockedUserDTO,
+} from './Photos.js';
+

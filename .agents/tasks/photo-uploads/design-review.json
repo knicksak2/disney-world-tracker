@@ -1,0 +1,142 @@
+{
+  "verdict": "CHANGES_REQUESTED",
+  "findings": [
+    {
+      "id": "M1",
+      "severity": "MEDIUM",
+      "title": "Feed `mine` flag has no data source: getFeed does not return the author id and the design says getFeed stays unchanged",
+      "where": "requirements.md R14.7, R14.9; design.md Shared contracts (TripFeedItemDTO paragraph), 'Trip posts (Phase 2)', FeedPhotoPort; tasks.md 20.2; apps/api/src/services/trips/repo.ts getFeed (~line 3984)",
+      "problem": "R14.7, the design and task 20.2 set `mine` from trip_feed_items.actor_id = viewerId at the route. getFeed's SELECT (fi.id, fi.type, display name, avatar, created_at, metadata, ...) and TripFeedItemRow carry no author id, the DTO has none, and FeedPhotoPort.slotsForFeedItems returns only Map<feedItemId, slots[]>. With getFeed 'unchanged' the route has nothing to compare with viewerId, yet `mine` drives the author's delete control when every slot is removed and the 'author always sees own post' rule.",
+      "fix": "Change the port to return Map<feedItemId, { authorId, slots }> via one batched query that also reads trip_feed_items.actor_id, and set mine = authorId === viewerId (drop authorId before responding); or add fi.actor_id to getFeed's SELECT and TripFeedItemRow (not the DTO) and delete the 'stays unchanged' sentence. Add a test: non-author gets no mine, author gets mine:true with all slots removed."
+    },
+    {
+      "id": "M2",
+      "severity": "MEDIUM",
+      "title": "Post-slot order is undefined and a swept photo's `removed` slot disappears, contradicting R13.4, R14.6 and Property 18",
+      "where": "requirements.md R13.4, R14.4, R14.6; design.md photos DDL (no position column), Sweep step 6, 'Trip posts', Property 18/22; tasks.md 20.1, 20.2",
+      "problem": "(a) R14.4 returns an 'ordered list' of slots, but photos has no position column and the post-create UPDATE ... WHERE id = ANY($2) discards the order the author chose. (b) A slot is 'removed' only while its photos row exists; sweep step 6 hard-deletes deleted rows, so within one sweep interval (up to ~6 h) the placeholder vanishes and a fully swept post has zero slots. Task 20.2's test passes with a deleted row and does not describe production after the sweep.",
+      "fix": "Store the ordered ids on the feed item (metadata = { caption, photoIds: [...] }) and build one slot per id in that order: row present -> tripPostSlotState, row missing -> removed. Update R14.4/R14.6, Properties 18/22 and task 20.2 with a test that sweeps a deleted photo and still renders a removed slot in position. Alternative: add feed_position SMALLINT to photos in 0063 and reword R13.4/R14.6/Property 18 to say a swept photo's slot is omitted."
+    },
+    {
+      "id": "M3",
+      "severity": "MEDIUM",
+      "title": "Failure containment for the detached moderation job and async sweep is unspecified; an unhandled rejection crashes the Node 22 process",
+      "where": "design.md Ports (Scheduler.run 'fire-and-forget'), Moderation runner, Sweep (createSweepRunner), Error Handling; tasks.md 8.2, 8.3, 8.4, 9.3; apps/api/src/services/tripBooking/runner.ts lines 204-208 (existing pattern)",
+      "problem": "Confirm returns 202 and runs the job detached. Adapters return outcome unions, but the runner also calls repo methods (claim, renew, writes) that throw on a Neon disconnect/timeout, and store.getBytes errors. Only ObjectMissing/TooLarge are mapped. The repo has no unhandledRejection handler, so an escaping rejection ends the Render instance and drops all in-flight photos. The Trip booking runner contains this with void runPass().catch().finally(); the photo spec says it mirrors that runner but never specifies the catch, and says nothing for process().",
+      "fix": "Add an appended R8 criterion and a design Error Handling row: Scheduler.run wraps every job in try/catch, logs photos.job.crashed at error (photo id, error code, no image data/URLs/keys), leaves the row pending so the lease expires and the next trigger resumes it, and never lets a rejection escape; same for the async sweep, whose tryStart must release the single-flight guard after a throw. Tests in 8.3/8.4: a throwing repo yields no unhandledRejection, the photo stays pending, and the guard is released."
+    },
+    {
+      "id": "M4",
+      "severity": "MEDIUM",
+      "title": "friend-food-ratings requirement cited for the D8 privacy posture ('R9.2') does not exist: Requirement 9 is withdrawn",
+      "where": "requirements.md D8 ('friend-food-ratings (R3, R9.2)'); design.md Relationship-to-other-specs row for friend-food-ratings; .kiro/specs/friend-food-ratings/requirements.md Requirement 9",
+      "problem": "friend-food-ratings Requirement 9 is '(Withdrawn) One-Time Launch Notice' with the single criterion '(Withdrawn; no acceptance criteria apply.)'. The consistency claim with friend-food-ratings therefore cites an empty requirement, and a cold-start executor following it finds nothing. R3 (friend-gated list, strangers get nothing) and R5 (private fields never exposed) do exist and support the posture.",
+      "fix": "Cite only real requirements ('friend-food-ratings R3 and R5') in D8 and the design table, grep the three spec files for any other copy of 'R9.2', and re-check every other cross-spec citation in the same pass."
+    },
+    {
+      "id": "M5",
+      "severity": "MEDIUM",
+      "title": "Source-level no-leak guard (task 9.5(a)) is a token denylist and does not enforce R10.7 / Property 14",
+      "where": "requirements.md R10.7; design.md Property 14; tasks.md 9.5(a), 8.1",
+      "problem": "R10.7 and Property 14 require that photos SQL referencing food_item_logs selects no column other than id, user_id, food_item_id. Task 9.5(a) only asserts absence of note, *, SELECT *, RETURNING *, rating, visited_on, logged_at. user_tz (named as forbidden in R10.5) is missing, and any future food_item_logs column would pass. This guard is the mechanism the review brief asks for to prevent note leakage.",
+      "fix": "Implement the guard as an allowlist: extract every alias.column / bare column resolving to food_item_logs in each SQL template under services/photos/ and assert the set is a subset of {id, user_id, food_item_id}; keep the denylist as a second assertion. Add a negative test showing a fixture selecting l.user_tz fails the guard."
+    },
+    {
+      "id": "M6",
+      "severity": "MEDIUM",
+      "title": "Pricing claim asserted as fact and omitted from the verify-before-launch list: 'The OpenAI Moderation endpoint is free'",
+      "where": "design.md Configuration & Constants 'Budget alert guidance (docs)'; Storage notes ('~45k to 100k photos per 10 GB'); tasks.md 14.2 verify list; requirements.md R21.5",
+      "problem": "External Interfaces correctly says the endpoint is 'described as free but rate limited' and must be verified, but the budget paragraph states it flatly and that sentence is what the runbook/docs tasks will copy. The user's stated concern is cost, and the brief requires provider pricing and free-tier figures to be flagged. Task 14.2 and R21.5 verify R2 free-tier limits and OpenAI rate limits/image size but not OpenAI pricing/terms. 'per 10 GB' implies an unverified free-tier size.",
+      "fix": "Reword to 'described as free at the time of planning; verify current pricing and terms before launch'. Add 'OpenAI Moderation pricing and terms' to the 14.2 verify list and R21.5. Replace 'per 10 GB' with 'per GB stored' (~4k to 10k photos per GB, pure arithmetic)."
+    },
+    {
+      "id": "N1",
+      "severity": "NIT",
+      "title": "Lease renewal is not fenced, so R8.3's 'cannot process the same Photo concurrently' is overstated",
+      "where": "requirements.md R8.3; design.md Moderation runner renewLease; tasks.md 7.1, 8.3",
+      "problem": "renewLease is WHERE id=$1 AND status='pending'; a stale job whose lease expired can renew after a second job claimed, so both keep running. Property 30 makes the overlap safe, so this is not a correctness hole.",
+      "fix": "Renew with AND attempts = $claimedAttempts so a stale job's renewal affects zero rows and it exits (exit-on-zero-rows already exists in 8.3)."
+    },
+    {
+      "id": "N2",
+      "severity": "NIT",
+      "title": "R8.11 unconditionally says to delete copied Serving_Key objects on source_changed; R8.13/R8.17 say only when not approved/hidden",
+      "where": "requirements.md R8.11 vs R8.13, R8.17; design.md runner pseudo-code",
+      "problem": "A loser job that sees a re-PUT or deleted upload object after the winner published would delete served objects if it followed R8.11 literally; the pseudo-code resolves it correctly but the requirement text does not.",
+      "fix": "Add 'subject to Requirements 8.13 and 8.17' to R8.11."
+    },
+    {
+      "id": "N3",
+      "severity": "NIT",
+      "title": "Harm provider statuses other than 400/401/403/429/5xx are unspecified (404 retired model, 413, 422)",
+      "where": "requirements.md R6.5, R6.6; design.md External Interfaces (OpenAI error mapping), Error Handling; tasks.md 6.3",
+      "problem": "Adapters must not throw for HTTP errors and a provider failure must never decide a photo, but these statuses have no mapping.",
+      "fix": "Add: any other non-2xx status maps to retryable with code harm_http_<status>, logged at error; add a case to task 6.3."
+    },
+    {
+      "id": "N4",
+      "severity": "NIT",
+      "title": "No fallback if the presigner cannot sign content-length",
+      "where": "requirements.md R3.10; design.md Key decision 3, External Interfaces (R2); tasks.md 6.2",
+      "problem": "Whether @aws-sdk/s3-request-presigner signs content-length via signableHeaders is asserted by a unit test, not known. If it does not, R3.10's rationale is wrong though correctness holds (HEAD at confirm is authoritative).",
+      "fix": "State: if the SDK cannot sign content-length, sign content-type only, keep the HEAD size check, and amend R3.10's wording."
+    },
+    {
+      "id": "N5",
+      "severity": "NIT",
+      "title": "Sweep time budget cannot interrupt an in-flight job",
+      "where": "design.md Sweep step 1 (resumeDue); requirements.md R19.7; tasks.md 8.4",
+      "problem": "resumeDue runs process() sequentially, each up to ~124 s, under a 25 s budget; one slow job overruns the budget.",
+      "fix": "Cap resumeDue at PHOTOS_MODERATION_CONCURRENCY jobs per sweep and check the remaining budget before starting each."
+    },
+    {
+      "id": "N6",
+      "severity": "NIT",
+      "title": "App restart between PUT and confirm is not handled",
+      "where": "requirements.md R4.11; tasks.md 13.3",
+      "problem": "R4.11 lists uploading photos after a restart but nothing re-confirms them; PUT URLs expire in 900 s and the row expires after 120 min.",
+      "fix": "In 13.3: on a useMyPhotos result containing uploading rows with no local upload in progress, call confirm (idempotent); incomplete shows the retry state."
+    },
+    {
+      "id": "N7",
+      "severity": "NIT",
+      "title": "Per-target cap counts uploading and rejected rows",
+      "where": "requirements.md R5.3; design.md initiate transaction",
+      "problem": "Four abandoned initiates block a food log for up to 120 minutes and a rejected photo holds a slot for 24 hours unless deleted.",
+      "fix": "State it in R5.3, or exclude uploading rows older than the PUT URL lifetime (15 minutes) from the count."
+    },
+    {
+      "id": "N8",
+      "severity": "NIT",
+      "title": "Revocation and member removal do not recall already-minted URLs",
+      "where": "requirements.md R15.6, R12.6; docs/runbook (task 14.2)",
+      "problem": "R15.6 says the next read returns nothing; a URL minted within the last hour keeps working until it expires. Same for a removed member.",
+      "fix": "Add one sentence to R15.6 and the runbook naming the residual window (PHOTOS_GET_URL_TTL_SECONDS, up to 1 hour)."
+    },
+    {
+      "id": "N9",
+      "severity": "NIT",
+      "title": "Secret-shaped-string guard does not match the key format that was actually leaked and scans too little",
+      "where": "tasks.md 9.5(d); design.md Testing Strategy ('no secret-shaped strings in the spec folder')",
+      "problem": "Patterns cover sk- and AIza prefixes and a long base64 run on a KEY/SECRET line; the pasted planning key has a different prefix, and the scan covers only services/photos/ and fixtures although the strategy promises the spec folder too.",
+      "fix": "Add the leaked key's prefix fragment (built from pieces so the test does not match itself) and extend the scan to .kiro/specs/photo-uploads and docs/."
+    },
+    {
+      "id": "N10",
+      "severity": "NIT",
+      "title": "AppConfig.photos will break the admin secret-redaction fixture and the new secrets are not pinned out of /admin/config",
+      "where": "tasks.md 3.1; apps/api/src/services/admin/__tests__/configSecrets.test.ts",
+      "problem": "That test builds a complete AppConfig literal with sentinel secrets; adding a required photos namespace breaks it, and nothing asserts the new secrets stay out of the allowlisted /admin/config page.",
+      "fix": "In 3.1 add: update configSecrets.test.ts with photos sentinel secrets (storage secret, harm key, vision key, cron secret) and assert none appears in /admin/config."
+    },
+    {
+      "id": "N11",
+      "severity": "NIT",
+      "title": "Small consistency items",
+      "where": "design.md Sweep (createSweepRunner), 'Revision notes'; tasks.md 9.3, 13.6",
+      "problem": "(a) tryStart reason 'already_running' vs the mirrored reminder runner's 'in_flight'|'debounced'. (b) design.md ends with reviewer-facing 'Revision notes'. (c) Task 13.6 'Add a photo' attaches to the most recent log of the dish with no behaviour when that log is at the 4-photo cap.",
+      "fix": "(a) name the reason strings the route test expects; (b) move the notes to .agents/; (c) on photo_target_full offer to create a new log."
+    }
+  ],
+  "reviewDoc": "c:\\Users\\knick\\dev\\disney-app\\.agents\\tasks\\photo-uploads/design-review.md"
+}

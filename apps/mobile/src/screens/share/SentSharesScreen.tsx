@@ -45,6 +45,7 @@ import {
   type Park,
   type PinShowcaseSharePayload,
   type ProgressSharePayload,
+  type TripSummarySharePayload,
   type SentShareDTO,
   type ShareReactionDTO,
   type ShareReactionValue,
@@ -266,7 +267,28 @@ function ShareContent(props: { share: SentShareDTO }): JSX.Element {
   if (payload.kind === 'pinShowcase') {
     return <PinShowcaseShareContent payload={payload} shareId={props.share.shareId} />;
   }
+  if (payload.kind === 'tripSummary') {
+    return <TripSummaryShareContent payload={payload} shareId={props.share.shareId} />;
+  }
   return <ExperienceShareContent payload={payload} shareId={props.share.shareId} />;
+}
+
+/**
+ * `tripSummary` Share content (photo-uploads R15.2, R15.19, task 22.4).
+ */
+function TripSummaryShareContent(props: {
+  payload: TripSummarySharePayload;
+  shareId: string;
+}): JSX.Element {
+  const { payload, shareId } = props;
+  const styles = useStyles();
+  return (
+    <View style={styles.payloadWrap}>
+      <Text style={styles.summary} testID={`sent-trip-summary-${shareId}`}>
+        {payload.tripName}
+      </Text>
+    </View>
+  );
 }
 
 /**

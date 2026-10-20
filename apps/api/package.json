@@ -26,6 +26,8 @@
     "seed-dining-links:cloud": "tsx --env-file=.env.dev src/scripts/seedDiningLinks.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "3.1152.0",
+    "@aws-sdk/s3-request-presigner": "3.1152.0",
     "@dwt/shared": "0.0.0",
     "@fastify/rate-limit": "^9.1.0",
     "argon2": "^0.40.0",

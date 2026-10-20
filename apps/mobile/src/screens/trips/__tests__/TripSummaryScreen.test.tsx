@@ -2,15 +2,20 @@ import React from 'react';
 import { processColor, Share, StyleSheet } from 'react-native';
 import type { ReactTestInstance } from 'react-test-renderer';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { darkTheme } from '../../../theme/theme';
 import { ScreenContainer } from '../../../theme/components';
 import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
 import { SUMMARY_HERO, SUMMARY_MISC, SUMMARY_STAT } from '../TripSummaryScreen.palette';
 
-import type { TripSummaryDTO } from '@dwt/shared';
+import type {
+  PhotoClientConfigDTO,
+  SharedSummaryPhotoDTO,
+  TripDTO,
+  TripSummaryDTO,
+} from '@dwt/shared';
 
-import TripSummaryScreen from '../TripSummaryScreen';
+import TripSummaryScreen, { TRIP_SUMMARY_TEXT_SHARE_NOTE } from '../TripSummaryScreen';
 import { apiRequest as mockedApiRequest } from '../../../api/client';
 
 jest.mock('expo-constants', () => ({
@@ -154,9 +159,10 @@ function makeNavigation(): {
   return { navigate: jest.fn(), goBack: jest.fn(), canGoBack: jest.fn(() => true) };
 }
 
-function renderSummary(): void {
+function renderSummary(): ReturnType<typeof makeNavigation> {
+  const navigation = makeNavigation();
   const props = {
-    navigation: makeNavigation(),
+    navigation,
     route: { key: 'TripSummary-1', name: 'TripSummary', params: { tripId: TRIP_ID } },
   } as unknown as React.ComponentProps<typeof TripSummaryScreen>;
   render(
@@ -164,6 +170,7 @@ function renderSummary(): void {
       <TripSummaryScreen {...props} />
     </QueryClientProvider>,
   );
+  return navigation;
 }
 
 // ---------------------------------------------------------------------------
@@ -334,6 +341,168 @@ describe('Trip_Summary screen — celebratory culmination & stats (R14)', () => 
       );
       expect(glyph).toBeDefined();
       expect(flat(paintedAncestor(glyph!)).backgroundColor).toBe('#7e57c2');
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// photo-uploads task 22.5 — "Send to friends" entry beside the unchanged text share
+// ---------------------------------------------------------------------------
+
+const TRIP_DETAIL: TripDTO = {
+  id: TRIP_ID,
+  name: 'Fall 2026 Family Trip',
+  description: '',
+  startDate: '2026-10-01',
+  endDate: '2026-10-08',
+  status: 'past',
+  createdAt: '2026-01-01T00:00:00.000Z',
+  resorts: [],
+  foodLists: [],
+  experienceLists: [],
+};
+
+describe('Trip_Summary screen — Send to friends (photo-uploads R15.1, R15.8, R26.3)', () => {
+  let shareSpy: jest.SpyInstance;
+
+  beforeEach(() => {
+    apiRequestMock.mockReset();
+    shareSpy = jest.spyOn(Share, 'share').mockResolvedValue({ action: Share.dismissedAction });
+  });
+
+  afterEach(() => {
+    shareSpy.mockRestore();
+  });
+
+  test('the OS text share still receives the unchanged text only, with no link and no photo', async () => {
+    apiRequestMock.mockImplementation(async (_method, path) =>
+      path === `/trips/${TRIP_ID}` ? TRIP_DETAIL : SUMMARY_RICH,
+    );
+    renderSummary();
+
+    fireEvent.press(await screen.findByTestId('trip-summary-share-btn'));
+
+    const expectedText = [
+      '🏰 ✨ Disney World Trip Highlights ✨ 🏰',
+      '',
+      '🌟 Distinct Rides & Attractions: 5',
+      '📋 Itinerary Completed: 5 of 6',
+      '',
+      '🏆 Group Superlatives:',
+      '• Group MVP: Mickey (7)',
+      '• Best Co-Pilot: Donald (4)',
+      '• Crowd Favorite: Space Mountain (9.5 ★)',
+      '',
+      '⭐ Top Moments:',
+      '1. Space Mountain — 9.5 ★',
+      '2. Soarin Around the World — 9 ★',
+      '',
+      'Tracked with Disney World Tracker ✨',
+    ].join('\n');
+    expect(shareSpy).toHaveBeenCalledTimes(1);
+    expect(shareSpy).toHaveBeenCalledWith({
+      message: expectedText,
+      title: 'Walt Disney World Vacation Summary',
+    });
+    expect(expectedText).not.toMatch(/https?:\/\//);
+  });
+
+  test('renders the note that photos cannot go in a text share', async () => {
+    apiRequestMock.mockImplementation(async (_method, path) =>
+      path === `/trips/${TRIP_ID}` ? TRIP_DETAIL : SUMMARY_RICH,
+    );
+    renderSummary();
+
+    const note = await screen.findByTestId('trip-summary-text-share-note');
+    expect(note.props.children).toBe(
+      "Photos can't go in a text share. Use Send to friends to share the recap with photos.",
+    );
+    expect(TRIP_SUMMARY_TEXT_SHARE_NOTE).toBe(note.props.children);
+  });
+
+  test('"Send to friends" opens the tripSummary composer with the trip id and name, and does not open the OS share sheet', async () => {
+    apiRequestMock.mockImplementation(async (_method, path) =>
+      path === `/trips/${TRIP_ID}` ? TRIP_DETAIL : SUMMARY_RICH,
+    );
+    const navigation = renderSummary();
+
+    const button = await screen.findByTestId('trip-summary-send-to-friends-btn');
+    expect(button.props.accessibilityLabel).toBe('Send trip recap to friends');
+    // Wait for the Trip name read so the composer preview gets the real name.
+    await waitFor(() => {
+      expect(apiRequestMock).toHaveBeenCalledWith('GET', `/trips/${TRIP_ID}`);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    fireEvent.press(button);
+
+    expect(navigation.navigate).toHaveBeenCalledWith('ShareComposer', {
+      kind: 'tripSummary',
+      tripId: TRIP_ID,
+      tripName: 'Fall 2026 Family Trip',
+    });
+    expect(shareSpy).not.toHaveBeenCalled();
+  });
+
+  test('"View all in album" in the photos section navigates to TripAlbum with the trip id', async () => {
+    apiRequestMock.mockImplementation(async (_method, path) => {
+      if (path === '/photos/config') {
+        return {
+          enabled: true,
+          foodEnabled: true,
+          tripEnabled: true,
+          maxPerFoodLog: 4,
+          maxPerTrip: 500,
+          maxFeedPostPhotos: 4,
+          maxBatch: 10,
+          maxBytes: 15_000_000,
+          maxThumbBytes: 500_000,
+          dailyCap: 20,
+          remainingToday: 20,
+          experienceStripMax: 8,
+        } satisfies PhotoClientConfigDTO;
+      }
+      if (path === `/trips/${TRIP_ID}/photos?summary=true`) {
+        return {
+          items: [
+            {
+              id: 'photo-1',
+              thumbUrl: 'https://r2.test/p/photo-1/t.jpg',
+              url: 'https://r2.test/p/photo-1/f.jpg',
+              width: 1200,
+              height: 800,
+              sortAt: '2026-10-02T12:00:00Z',
+              mine: false,
+            },
+          ] satisfies SharedSummaryPhotoDTO[],
+          nextCursor: null,
+        };
+      }
+      return path === `/trips/${TRIP_ID}` ? TRIP_DETAIL : SUMMARY_RICH;
+    });
+    const navigation = renderSummary();
+
+    fireEvent.press(await screen.findByTestId('view-all-in-album-btn'));
+
+    expect(navigation.navigate).toHaveBeenCalledWith('TripAlbum', { tripId: TRIP_ID });
+  });
+
+  test('"Send to friends" falls back to a generic name when the Trip read fails, and still opens the composer', async () => {
+    apiRequestMock.mockImplementation(async (_method, path) => {
+      if (path === `/trips/${TRIP_ID}`) {
+        throw new Error('offline');
+      }
+      return SUMMARY_RICH;
+    });
+    const navigation = renderSummary();
+
+    fireEvent.press(await screen.findByTestId('trip-summary-send-to-friends-btn'));
+
+    expect(navigation.navigate).toHaveBeenCalledWith('ShareComposer', {
+      kind: 'tripSummary',
+      tripId: TRIP_ID,
+      tripName: 'Trip',
     });
   });
 });

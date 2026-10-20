@@ -24,7 +24,7 @@
 import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
 
-import { can, type TripAction, type TripRole } from '../permissions.js';
+import { can, canDeleteTripPhoto, type TripAction, type TripRole } from '../permissions.js';
 
 const NUM_RUNS = 100;
 
@@ -34,7 +34,7 @@ const NUM_RUNS = 100;
  * property tests act as a specification check, not a mirror of the code.
  *
  * Includes the five trip-booking-timeline member actions (R12.1, R12.2) and
- * the two member actions previously omitted from this oracle list.
+ * the three photo-uploads member actions (R12.1, R14.3, R15.9).
  */
 const MEMBER_ALLOWED: readonly TripAction[] = [
   'add_planned_item',
@@ -50,13 +50,17 @@ const MEMBER_ALLOWED: readonly TripAction[] = [
   'edit_packing_item',
   'mark_booking_window_done',
   'set_booking_reminder_mute',
+  'upload_trip_photo',
+  'post_feed_photo',
+  'share_trip_summary',
 ];
 
 /**
  * Independent oracle: the actions reserved for Organizers (R4.2). A Member
  * must be denied precisely these.
  *
- * Includes edit_booking_settings from trip-booking-timeline (R12.1, R12.5).
+ * Includes edit_booking_settings from trip-booking-timeline (R12.1, R12.5)
+ * and delete_any_trip_photo from photo-uploads (R12.5).
  */
 const ORGANIZER_ONLY: readonly TripAction[] = [
   'edit_settings',
@@ -67,6 +71,7 @@ const ORGANIZER_ONLY: readonly TripAction[] = [
   'demote',
   'delete_trip',
   'edit_booking_settings',
+  'delete_any_trip_photo',
 ];
 
 /** The complete Trip_Action universe = member-allowed ∪ organizer-only. */
@@ -177,6 +182,72 @@ describe('Trip_Service permissions — Property 36: Members get the five shared 
       }),
       { numRuns: NUM_RUNS },
     );
+  });
+});
+
+// Feature: photo-uploads, Property 20: Trip permission matrix
+describe('Trip_Service permissions — Property 20: Trip permission matrix', () => {
+  const PHOTO_MEMBER_ACTIONS: readonly TripAction[] = [
+    'upload_trip_photo',
+    'post_feed_photo',
+    'share_trip_summary',
+  ];
+  const PHOTO_ORGANIZER_ACTIONS: readonly TripAction[] = [
+    ...PHOTO_MEMBER_ACTIONS,
+    'delete_any_trip_photo',
+  ];
+
+  it('organizer is permitted all four photo actions (R12.1, R12.5, R14.3, R15.9)', () => {
+    fc.assert(
+      fc.property(fc.constantFrom(...PHOTO_ORGANIZER_ACTIONS), (action) => can('organizer', action) === true),
+      { numRuns: NUM_RUNS },
+    );
+  });
+
+  it('member is permitted the three shared photo actions and denied delete_any_trip_photo (R12.1, R12.5, R14.3, R15.9)', () => {
+    fc.assert(
+      fc.property(fc.constantFrom(...PHOTO_ORGANIZER_ACTIONS), (action) => {
+        const isMemberAction = PHOTO_MEMBER_ACTIONS.includes(action);
+        return can('member', action) === isMemberAction;
+      }),
+      { numRuns: NUM_RUNS },
+    );
+  });
+
+  describe('canDeleteTripPhoto helper truth table (R12.5, R12.11, D30)', () => {
+    const roleOptions: ReadonlyArray<TripRole | null | undefined> = [
+      'organizer',
+      'member',
+      null,
+      undefined,
+    ];
+
+    it('uploader can always delete their own photo regardless of role or departure status', () => {
+      for (const role of roleOptions) {
+        expect(canDeleteTripPhoto(role, true)).toBe(true);
+      }
+    });
+
+    it('non-uploader can delete only if they are an active organizer', () => {
+      expect(canDeleteTripPhoto('organizer', false)).toBe(true);
+      expect(canDeleteTripPhoto('member', false)).toBe(false);
+      expect(canDeleteTripPhoto(null, false)).toBe(false);
+      expect(canDeleteTripPhoto(undefined, false)).toBe(false);
+    });
+
+    it('Property 20 helper property: uploader always true, non-uploader equals can(role, delete_any_trip_photo)', () => {
+      fc.assert(
+        fc.property(
+          fc.constantFrom('organizer', 'member', null, undefined),
+          fc.boolean(),
+          (role, isUploader) => {
+            const expected = isUploader || (role === 'organizer');
+            return canDeleteTripPhoto(role as TripRole | null | undefined, isUploader) === expected;
+          },
+        ),
+        { numRuns: NUM_RUNS },
+      );
+    });
   });
 });
 

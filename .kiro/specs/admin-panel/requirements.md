@@ -382,3 +382,16 @@ actually resolved, so that I can debug a local-vs-cloud environment mismatch wit
 2. THE Admin_Panel SHALL NOT display `database.url`, `redis.url`, `session.secret`,
    `disney.credentials`, `intelligence.samplingCronSecret`, `pins.reconcileCronSecret`, or the
    Admin_Credentials themselves, on this or any other Admin_Panel page.
+
+### Requirement 15: Photo review queue
+
+**User Story:** As the operator, I want to review reported, hidden, and stuck photos and take moderation actions, so that the app complies with user-generated content policies and app-store rules.
+
+#### Acceptance Criteria
+
+1. WHEN an authenticated request targets `GET /admin/photos`, THE Admin_Panel SHALL list Photos with open reports, Photos in `hidden`, and Photos in `needs_review`, oldest first, accompanied by thumbnail and full-image presigned links, report counts and reasons, uploader display name, and stored vision fields (cross-referencing `photo-uploads` Requirement 18.1–18.3).
+2. THE Admin_Panel SHALL display a 14-day history of daily photo usage rollups from `photo_usage_daily` on the same page (cross-referencing `photo-uploads` Requirement 18.8).
+3. THE Admin_Panel SHALL expose mutating Trigger_Actions: `POST /admin/photos/:id/approve` (applies to `needs_review` photos), `POST /admin/photos/:id/restore` (applies to `hidden` photos), `POST /admin/photos/:id/remove` (deletes the photo, upholds open reports, increments the uploader's strike count, and renders a removal confirmation showing the strike count and a ban control), `POST /admin/photos/:id/dismiss-reports`, and `POST /admin/photos/:id/ban-uploader` (cross-referencing `photo-uploads` Requirements 18.4–18.6, 18.11).
+4. THE Admin_Panel SHALL enforce same-origin on every `POST /admin/photos/*` route via `isSameOriginRequest` (cross-referencing `photo-uploads` Requirement 18.9), rejecting cross-origin requests with `403` and changing no state.
+5. WHERE photo storage or photo service is disabled (`PHOTOS_ENABLED=false`), THE Admin_Panel SHALL list the queue without thumbnails, display "Photos are disabled; thumbnails unavailable", allow database writes (`restore`, `remove`, `dismiss-reports`, `ban-uploader`), and refuse `approve` (cross-referencing `photo-uploads` Requirements 18.10, 18.12).
+

@@ -89,9 +89,11 @@ export {
   experienceSharePayloadSchema,
   progressSharePayloadSchema,
   pinShowcaseSharePayloadSchema,
+  tripSummarySharePayloadSchema,
   shareInputSchema,
+  tripSummaryShareInputSchema,
 } from './Share.js';
-export type { ShareInput } from './Share.js';
+export type { ShareInput, TripSummaryShareInput } from './Share.js';
 
 export { shareRecipientSchema } from './ShareRecipient.js';
 
@@ -225,3 +227,22 @@ export type { CurrentWeatherDTO } from './Weather.js';
 
 export { friendFoodRatingsQuerySchema } from './FriendFoodRatings.js';
 export type { FriendFoodRatingsQuery } from './FriendFoodRatings.js';
+
+// Photo schemas
+export {
+  photoUploadItemSchema,
+  photoInitiateSchema,
+  photoConfirmSchema,
+  photoStatusQuerySchema,
+  photoReportSchema,
+  blockCreateSchema,
+  tripPostCreateSchema,
+  tripAlbumQuerySchema,
+  tripRecapPhotosQuerySchema,
+  myPhotosQuerySchema,
+  foodGalleryQuerySchema,
+  photoUploadsRequestSchema,
+  photoConfirmRequestSchema,
+  photoReportCreateSchema,
+} from './Photos.js';
+

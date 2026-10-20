@@ -42,6 +42,9 @@ export interface FoodItemLogRoutesOptions {
   readonly repo: FoodItemLogRepo;
   readonly requireSession: preHandlerHookHandler;
   readonly clock?: () => Date;
+  readonly photoLifecycle?: {
+    softDeleteForTarget(kind: 'food_log' | 'trip', targetId: string): Promise<unknown>;
+  } | undefined;
 }
 
 export interface UserSubmittedLocationRoutesOptions {
@@ -240,6 +243,9 @@ export function foodItemLogRoutes(
         );
 
         await options.repo.deleteLog(userId, foodItemId, logId);
+        if (options.photoLifecycle) {
+          await options.photoLifecycle.softDeleteForTarget('food_log', logId);
+        }
         reply.code(204);
         reply.send();
       },

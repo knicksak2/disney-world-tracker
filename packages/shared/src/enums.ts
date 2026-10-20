@@ -96,8 +96,9 @@ export type Park = (typeof PARKS)[number];
 // - `progress`:   a Share that carries the sender's overall, per-Park, and
 //   per-Experience_Category completion percentages (R9.7).
 // - `pinShowcase`: a Share that links to the sender's current Pin Showcase board (R24.12).
+// - `tripSummary`: a Share that carries a pointer to a Trip summary recap (photo-uploads R15).
 
-export const SHARE_PAYLOAD_KINDS = ['experience', 'progress', 'pinShowcase'] as const;
+export const SHARE_PAYLOAD_KINDS = ['experience', 'progress', 'pinShowcase', 'tripSummary'] as const;
 
 export type SharePayloadKind = (typeof SHARE_PAYLOAD_KINDS)[number];
 

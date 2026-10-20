@@ -239,6 +239,14 @@ export const ERROR_CODES = [
   'admin_user_not_found',
   'admin_sync_already_running',
 
+  // -- Photos (photo-uploads) -------------------------------------------
+  'photo_not_found',
+  'photo_upload_invalid',
+  'photo_quota_exceeded',
+  'photo_target_full',
+  'photo_uploads_disabled',
+  'photo_uploads_banned',
+
   // -- Catch-all --------------------------------------------------------
   // Used by the global Fastify error hook for unhandled exceptions; the
   // client never sees a raw stack or constraint name.
@@ -409,6 +417,14 @@ export const errorCodeToHttpStatus: { readonly [K in ErrorCode]: number } = {
   admin_experience_not_found: 404,
   admin_user_not_found: 404,
   admin_sync_already_running: 409,
+
+  // Photos
+  photo_not_found: 404,
+  photo_upload_invalid: 400,
+  photo_quota_exceeded: 429,
+  photo_target_full: 409,
+  photo_uploads_disabled: 503,
+  photo_uploads_banned: 403,
 
   // Catch-all
   internal_error: 500,

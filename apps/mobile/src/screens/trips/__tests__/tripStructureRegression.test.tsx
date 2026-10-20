@@ -140,7 +140,7 @@ describe('Feature: navigation-redesign, Property 6: Trip section structure untou
     }
   });
 
-  test('TripsStack registers exactly the 15 expected screens and matches snapshot', () => {
+  test('TripsStack registers exactly the 16 expected screens and matches snapshot', () => {
     render(<TripsStack />);
 
     const screenNames = capturedScreens.map((s) => s.name);
@@ -158,12 +158,13 @@ describe('Feature: navigation-redesign, Property 6: Trip section structure untou
       'TripFeed',
       'TripMembers',
       'TripSummary',
+      'TripAlbum',
       'TripInvite',
       'RodeWithConfirm',
     ];
 
     expect(screenNames).toEqual(EXPECTED_ROUTES);
-    expect(screenNames).toHaveLength(15);
+    expect(screenNames).toHaveLength(16);
     expect(capturedScreens).toMatchSnapshot();
   });
 });

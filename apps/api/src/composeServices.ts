@@ -166,9 +166,28 @@ import { createDerivedStatsService } from './services/intelligence/derivedStatsS
 import { createSamplingService } from './services/intelligence/samplingService.js';
 import { createAdminRepo } from './services/admin/repo.js';
 import { createBasicAuthHook } from './services/admin/basicAuth.js';
+import type { AdminPhotoPort } from './services/admin/routes.js';
 import { CATALOG_SYNC_LOCK_KEY } from './services/catalog/sync.js';
 
 import { createLogger } from './logger.js';
+import type { PhotoTargetKind, TripSummaryDTO } from '@dwt/shared';
+import type { TargetAdapter } from './services/photos/ports.js';
+import { createPhotosRepo } from './services/photos/repo.js';
+import { createReportsRepo } from './services/photos/reportsRepo.js';
+import { FoodLogTarget } from './services/photos/targets/foodLogTarget.js';
+import { TripTarget } from './services/photos/targets/tripTarget.js';
+import { R2ObjectStore } from './services/photos/adapters/r2ObjectStore.js';
+import { OpenAIHarmModerator } from './services/photos/adapters/openaiHarmModerator.js';
+import { GeminiVisionChecker } from './services/photos/adapters/geminiVisionChecker.js';
+import { ModerationRunner } from './services/photos/moderationRunner.js';
+import { PhotoService } from './services/photos/service.js';
+import { createSweepRunner, type SweepRunner } from './services/photos/sweep.js';
+import type { TripRole } from './services/trips/permissions.js';
+import type { TripShareFacts, RecapPhotoPort } from './services/sharing/ports.js';
+import type { FeedPhotoPort } from './services/photos/ports.js';
+import { DefaultRecapShareGate } from './services/sharing/tripRecapGate.js';
+import { DefaultRecapPhotoPort } from './services/photos/recapPhotoPort.js';
+import { DefaultFeedPhotoPort } from './services/photos/feedPhotoPort.js';
 
 /**
  * Handle returned by {@link buildApp}. The `app` is a configured-but-unbound
@@ -796,6 +815,179 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
       },
     });
 
+  // --- Photos wiring (photo-uploads) ----------------------------------
+  let photoService: PhotoService | undefined;
+  let sweepRunner: SweepRunner | undefined;
+  let adminPhotos: AdminPhotoPort | undefined;
+  let recapPhotoPort: RecapPhotoPort | undefined;
+  let feedPhotoPort: FeedPhotoPort | undefined;
+
+  if (config.photos.enabled) {
+    const photosRepo = createPhotosRepo(pool);
+    const reportsRepo = createReportsRepo(pool);
+    const foodLogPhotoTarget = new FoodLogTarget({
+      pool,
+      photosRepo,
+      maxPerFoodLog: config.photos.limits.maxPerFoodLog,
+      foodEnabled: config.photos.foodEnabled,
+    });
+    const tripPhotoTarget = new TripTarget({
+      pool,
+      maxPerTrip: config.photos.limits.maxPerTrip,
+      tripEnabled: config.photos.tripEnabled,
+    });
+    const targetAdapters = new Map<PhotoTargetKind, TargetAdapter>([
+      ['food_log', foodLogPhotoTarget],
+      ['trip', tripPhotoTarget],
+    ]);
+    const r2Store = new R2ObjectStore({
+      endpoint: config.photos.store.endpoint,
+      bucket: config.photos.store.bucket,
+      accessKeyId: config.photos.store.accessKeyId,
+      secretAccessKey: config.photos.store.secretAccessKey,
+      region: config.photos.store.region,
+    });
+    recapPhotoPort = new DefaultRecapPhotoPort({
+      pool,
+      store: r2Store,
+      recapHighlightMax: config.photos.recapHighlightMax,
+      urlTtlSeconds: config.photos.urls.getTtlSeconds,
+    });
+    feedPhotoPort = new DefaultFeedPhotoPort({
+      pool,
+      store: r2Store,
+      urlTtlSeconds: config.photos.urls.getTtlSeconds,
+    });
+    const harmModerator = new OpenAIHarmModerator({
+      apiKey: config.photos.harm.apiKey,
+      baseUrl: config.photos.harm.baseUrl,
+      model: config.photos.harm.model,
+      timeoutMs: config.photos.harm.timeoutMs,
+      invalidImageCodes: config.photos.harm.invalidImageCodes,
+      badRequestAlertCount: config.photos.harm.badRequestAlertCount,
+    });
+    const visionChecker = new GeminiVisionChecker({
+      apiKey: config.photos.vision.apiKey,
+      baseUrl: config.photos.vision.baseUrl,
+      model: config.photos.vision.model,
+      fallbackModel: config.photos.vision.fallbackModel,
+      timeoutMs: config.photos.vision.timeoutMs,
+    });
+    const moderationRunner = new ModerationRunner({
+      repo: photosRepo,
+      objectStore: r2Store,
+      harmModerator,
+      visionChecker,
+      targetAdapters,
+      config: {
+        concurrency: config.photos.moderation.concurrency,
+        leaseSeconds: config.photos.moderation.leaseSeconds,
+        maxAttempts: config.photos.moderation.maxAttempts,
+        maxBytes: config.photos.limits.maxBytes,
+        maxThumbBytes: config.photos.limits.maxThumbBytes,
+        exifPolicy: config.photos.exif.policy,
+        exifScanBytes: config.photos.exif.scanBytes,
+        harmCheckThumb: config.photos.harm.checkThumb,
+        harmThreshold: config.photos.harm.scoreThreshold,
+        visionThresholds: {
+          minFoodConfidence: config.photos.vision.minFoodConfidence,
+          maxProminentFaces: config.photos.vision.maxProminentFaces,
+          maxTextFraction: config.photos.vision.maxTextFraction,
+        },
+      },
+    });
+    photoService = new PhotoService({
+      pool,
+      repo: photosRepo,
+      reportsRepo,
+      objectStore: r2Store,
+      targetAdapters,
+      config: {
+        enabled: config.photos.enabled,
+        foodEnabled: config.photos.foodEnabled,
+        tripEnabled: config.photos.tripEnabled,
+        maxPerFoodLog: config.photos.limits.maxPerFoodLog,
+        maxPerTrip: config.photos.limits.maxPerTrip,
+        maxFeedPostPhotos: config.photos.limits.maxFeedPostPhotos,
+        maxBatch: config.photos.limits.maxBatch,
+        maxBytes: config.photos.limits.maxBytes,
+        maxThumbBytes: config.photos.limits.maxThumbBytes,
+        dailyUploadCap: config.photos.limits.dailyUploadCap,
+        globalDailyCap: config.photos.limits.globalDailyCap,
+        putUrlTtlSeconds: config.photos.urls.putTtlSeconds,
+        getUrlTtlSeconds: config.photos.urls.getTtlSeconds,
+        reportAutohideFood: config.photos.reports.autohideFood,
+        reportAutohideTrip: config.photos.reports.autohideTrip,
+        experienceStripMax: config.photos.experienceStripMax,
+        recapHighlightMax: config.photos.recapHighlightMax,
+      },
+      moderationEnqueuer: moderationRunner,
+    });
+    sweepRunner = createSweepRunner({
+      repo: photosRepo,
+      objectStore: r2Store,
+      runner: moderationRunner,
+      targetAdapters,
+      config: {
+        batch: config.photos.sweep.batch,
+        timeBudgetMs: config.photos.sweep.timeBudgetMs,
+        uploadExpiryMinutes: config.photos.moderation.uploadExpiryMinutes,
+        rejectedRetentionHours: config.photos.moderation.rejectedRetentionHours,
+        needsReviewMaxAgeHours: config.photos.moderation.needsReviewMaxAgeHours,
+        visionFieldsRetentionDays: config.photos.sweep.visionFieldsRetentionDays,
+        concurrency: config.photos.moderation.concurrency,
+      },
+    });
+
+    adminPhotos = {
+      presignGet: (key: string, ttlSeconds: number) =>
+        r2Store.presignGet({ key, expiresInSeconds: ttlSeconds }),
+      operatorApprove: async (photoId: string) => {
+        const ok = await moderationRunner.operatorApprove(photoId);
+        return { success: ok };
+      },
+    };
+  }
+
+  const tripShareFacts: TripShareFacts = {
+    async roleOf(userId: string, tripId: string): Promise<TripRole | null> {
+      const result = await pool.query<{ role: TripRole }>(
+        'SELECT role FROM trip_memberships WHERE trip_id = $1 AND user_id = $2',
+        [tripId, userId],
+      );
+      return result.rows[0]?.role ?? null;
+    },
+    async tripName(tripId: string): Promise<string | null> {
+      const result = await pool.query<{ name: string }>(
+        'SELECT name FROM trips WHERE id = $1',
+        [tripId],
+      );
+      return result.rows[0]?.name ?? null;
+    },
+    async isMember(userId: string, tripId: string): Promise<boolean> {
+      const result = await pool.query<{ role: string }>(
+        'SELECT 1 FROM trip_memberships WHERE trip_id = $1 AND user_id = $2',
+        [tripId, userId],
+      );
+      return result.rows.length > 0;
+    },
+    async summary(tripId: string): Promise<TripSummaryDTO | null> {
+      const result = await pool.query<{ id: string }>(
+        'SELECT id FROM trips WHERE id = $1',
+        [tripId],
+      );
+      if (result.rows.length === 0) {
+        return null;
+      }
+      return tripRepo.getSummary(tripId);
+    },
+  };
+
+  const recapShareGate = new DefaultRecapShareGate({
+    pool,
+    tripShareFacts,
+  });
+
   // --- Build app ------------------------------------------------------
   const app = buildServer(config, {
     catalog: {
@@ -855,6 +1047,9 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
         });
         return buildCuratedProgressStats(snapshot);
       },
+      tripShareFacts,
+      recapShareGate,
+      recapPhotoPort,
     },
     trips: {
       repo: tripRepo,
@@ -869,6 +1064,8 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
       predictionService,
       // Award Squad/Social Pins to the confirming Tagged_Member (R2.3).
       awardPins,
+      ...(photoService ? { photoLifecycle: photoService } : {}),
+      ...(feedPhotoPort ? { feedPhotoPort } : {}),
     },
     tripExpenses: {
       repo: tripExpenseRepo,
@@ -897,6 +1094,7 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
       logs: {
         repo: foodItemLogRepo,
         requireSession: sessionMiddleware,
+        ...(photoService ? { photoLifecycle: photoService } : {}),
       },
       locations: {
         repo: userSubmittedLocationRepo,
@@ -984,6 +1182,17 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
         getRateLimiterSnapshot(redis as never, config.disney.requestBudget),
       getDirectorySnapshot: async () => themeParksDirectory.getSnapshot(),
       basicAuth: adminBasicAuth,
+      photos: adminPhotos,
+    },
+    photos: {
+      photoService,
+      requireSession: sessionMiddleware,
+      enabled: config.photos.enabled,
+      sweepRunner,
+      cronSecret: config.photos.cronSecret,
+      recapShareGate,
+      recapPhotoPort,
+      pool,
     },
     // Always set `{}` so the gateway rate limiter (Redis-backed default
     // budgets) applies uniformly across every service route. The

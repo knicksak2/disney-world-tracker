@@ -339,6 +339,11 @@ small, independently testable wave: a repo method, a route, and its tests.
     credentials, click through every section once against the local Docker Postgres/Redis
   - _Requirements: all_
 
+- [x] 22. Photo review queue and usage (cross-reference photo-uploads spec)
+  - [x] 22.1 Wire photo review queue, usage table, and photo moderation Trigger_Actions
+    - Implement `GET /admin/photos` and POST actions `/admin/photos/:id/{approve,restore,remove,dismiss-reports,ban-uploader}` with same-origin preHandler (Requirement 18.9 of photo-uploads). When `photos` port is absent, degrade gracefully with notice.
+    - _Requirements: 15.1, 15.2, 15.3, 15.4, 15.5_
+
 ## Notes
 
 - Tasks marked with `*` are optional (property/unit/integration test tasks) and can be skipped

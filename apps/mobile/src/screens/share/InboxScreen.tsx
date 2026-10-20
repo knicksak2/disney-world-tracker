@@ -114,6 +114,7 @@ import {
   type Park,
   type PinShowcaseSharePayload,
   type ProgressSharePayload,
+  type TripSummarySharePayload,
   type ShareReactionValue,
 } from '@dwt/shared';
 
@@ -547,6 +548,14 @@ export default function InboxScreen(): JSX.Element {
             });
             return;
           }
+          // photo-uploads R15.13 — a Trip recap share opens the read-only
+          // recap. This branch sits after the `stillFriend` pre-check above
+          // (reused, not duplicated) and before the FriendProfile fallback,
+          // which would otherwise swallow the tap.
+          if (item.payload.kind === 'tripSummary') {
+            navigation.navigate('TripRecap', { shareId: item.shareId });
+            return;
+          }
           // R14.1 — a Progress_Share deep-links into the Compare pane so the
           // shared snapshot lands directly on the Progress_Comparison. The
           // navigate call bubbles up past the tab navigator to present
@@ -882,7 +891,31 @@ function ShareContent(props: { item: InboxItemDTO }): JSX.Element {
   if (payload.kind === 'pinShowcase') {
     return <PinShowcaseShareContent payload={payload} shareId={props.item.shareId} />;
   }
+  if (payload.kind === 'tripSummary') {
+    return <TripSummaryShareContent payload={payload} shareId={props.item.shareId} />;
+  }
   return <ExperienceShareContent payload={payload} shareId={props.item.shareId} />;
+}
+
+/**
+ * `tripSummary` Share content (photo-uploads R15.2, R15.19, task 22.4).
+ */
+function TripSummaryShareContent(props: {
+  payload: TripSummarySharePayload;
+  shareId: string;
+}): JSX.Element {
+  const { payload, shareId } = props;
+  const styles = useStyles();
+  return (
+    <View style={styles.payloadWrap}>
+      <Text style={styles.summary} testID={`inbox-trip-summary-${shareId}`}>
+        {payload.tripName}
+      </Text>
+      <Text style={styles.bodyLine}>
+        {payload.sharerDisplayName} shared a trip recap
+      </Text>
+    </View>
+  );
 }
 
 /**

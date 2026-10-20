@@ -21,6 +21,7 @@ import { apiRequest } from '../../api/client';
 import { Badge, Card } from '../../theme/components';
 import { makeStyles } from '../../theme/makeStyles';
 import { useAppTheme } from '../../theme/useAppTheme';
+import { FoodLogPhotos } from '../../photos/FoodLogPhotos';
 
 export interface FoodItemLogHistorySheetProps {
   /** The food item whose history is being viewed. */
@@ -192,6 +193,7 @@ export default function FoodItemLogHistorySheet({
                   {log.note && log.note.trim().length > 0 ? (
                     <Text style={styles.logNote}>{log.note}</Text>
                   ) : null}
+                  <FoodLogPhotos logId={log.id} foodItemId={log.foodItemId} />
                 </Card>
               ))
             )}

@@ -27,6 +27,7 @@ import { z } from 'zod';
 
 import type { Park, ReservationKind, TripReactionValue } from './enums.js';
 import { RESERVATION_KINDS } from './enums.js';
+import type { TripPostPhotoSlotDTO } from './dto/Photos.js';
 import {
   isoTimestampSchema,
   ratingValueSchema,
@@ -1017,6 +1018,8 @@ export interface TripFeedItemDTO {
   readonly metadata: Record<string, unknown>;
   readonly reactions: readonly TripReactionSummary[];
   readonly comments: readonly TripCommentDTO[];
+  readonly photos?: readonly TripPostPhotoSlotDTO[] | undefined;
+  readonly mine?: boolean | undefined;
 }
 
 /**

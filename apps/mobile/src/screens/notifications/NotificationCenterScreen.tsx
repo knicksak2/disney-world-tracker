@@ -339,6 +339,39 @@ export default function NotificationCenterScreen(): JSX.Element {
             readOnly: true,
           });
         })();
+      } else if (destination.kind === 'tripSummary') {
+        // photo-uploads R15.13, R15.19: the same still-Friend pre-check as the
+        // Inbox sender-tap, then the read-only Trip recap keyed on the share id.
+        const shareId = destination.id;
+        const senderId = item.ref.senderId;
+        void (async () => {
+          let stillFriend = false;
+          try {
+            const snapshot = await queryClient.fetchQuery<
+              FriendsListSnapshot,
+              ApiError
+            >({
+              queryKey: ['friends'] as const,
+              queryFn: () =>
+                apiRequest<FriendsListSnapshot>('GET', '/me/friends'),
+              staleTime: FRIENDS_STALE_MS,
+              retry: false,
+            });
+            stillFriend =
+              senderId !== undefined &&
+              snapshot.friends.some((f) => f.userId === senderId);
+          } catch {
+            stillFriend = false;
+          }
+          if (!stillFriend) {
+            Alert.alert('Recap unavailable', SENDER_UNAVAILABLE_COPY);
+            return;
+          }
+          navigation.navigate('YouAndCrew', {
+            screen: 'TripRecap',
+            params: { shareId },
+          });
+        })();
       }
     },
     [navigation, queryClient],

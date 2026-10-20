@@ -450,6 +450,22 @@ export default function YouAndCrewScreen(): JSX.Element {
             <ChangePasswordControl />
           </Card>
 
+          <Card style={styles.settingsCard} testID="you-and-crew-blocked-users-card">
+            <Pressable
+              style={styles.blockedUsersRow}
+              onPress={() => navigation.navigate('BlockedUsers')}
+              accessibilityRole="button"
+              accessibilityLabel="Manage Blocked Users"
+              testID="blocked-users-entry-button"
+            >
+              <View style={styles.settingsCardHeader}>
+                <Ionicons name="ban-outline" size={16} color={t.color.primaryFg} />
+                <Text style={styles.settingsTitle}>Blocked Users</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={t.color.textSecondary} />
+            </Pressable>
+          </Card>
+
           <View style={styles.logoutBlock}>
             <SecondaryButton
               label={logoutMutation.isPending ? 'Logging out\u2026' : 'Log out'}
@@ -657,6 +673,12 @@ const useStyles = makeStyles((t) => ({
     color: t.color.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+  },
+  blockedUsersRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: t.spacing.xs,
   },
   logoutBlock: {
     marginTop: t.spacing.sm,

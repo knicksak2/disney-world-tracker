@@ -18,6 +18,17 @@ import {
 import type { CatalogRepo } from '../catalog/repo.js';
 import type { IntelligenceRepo } from '../intelligence/IntelligenceRepo.js';
 import type { PinRepo } from '../pins/repo.js';
+import { registerPhotoRoutes } from './photoRoutes.js';
+
+export interface OperatorApproveResult {
+  readonly success: boolean;
+  readonly reason?: string;
+}
+
+export interface AdminPhotoPort {
+  presignGet(key: string, ttlSeconds: number): Promise<string>;
+  operatorApprove(photoId: string): Promise<OperatorApproveResult | boolean>;
+}
 
 export interface RateLimiterBucketSnapshot {
   readonly currentRps: number;
@@ -48,6 +59,7 @@ export interface AdminRoutesOptions {
   readonly getRateLimiterSnapshot?: () => Promise<RateLimiterSnapshot>;
   readonly getDirectorySnapshot?: () => Promise<DirectorySnapshot>;
   readonly basicAuth: preHandlerHookHandler;
+  readonly photos?: AdminPhotoPort | undefined;
 }
 
 export interface AdminSectionLink {
@@ -155,6 +167,14 @@ export const ADMIN_SECTIONS: readonly AdminSectionLink[] = [
     category: 'User Operations & Security',
     icon: '📈',
     badge: 'Platform Trends',
+  },
+  {
+    path: '/admin/photos',
+    title: 'Photo Review Queue',
+    description: 'Reported, hidden, and needs-review user photos queue and moderation actions.',
+    category: 'User Operations & Security',
+    icon: '📸',
+    badge: 'Content Moderation',
   },
 ];
 
@@ -1834,5 +1854,10 @@ export function adminRoutes(options: AdminRoutesOptions): FastifyPluginAsync {
         });
       },
     );
+
+    // -------------------------------------------------------------------------
+    // Photo Review Queue & Usage (Task 10.2, 10.3)
+    // -------------------------------------------------------------------------
+    await registerPhotoRoutes(fastify, options);
   };
 }

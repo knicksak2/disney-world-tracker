@@ -4,6 +4,7 @@
 
 import React, { useState } from 'react';
 import {
+  Image,
   Keyboard,
   KeyboardAvoidingView,
   Modal,
@@ -26,6 +27,9 @@ import { Badge, PrimaryButton, SecondaryButton } from '../../theme/components';
 import { makeStyles } from '../../theme/makeStyles';
 import { useAppTheme } from '../../theme/useAppTheme';
 import { LOG_FOOD } from './LogFoodItemModal.palette';
+import { usePhotoConfig, useUploadPhotos } from '../../photos/api';
+import { PhotoPickerSheet } from '../../photos/PhotoPickerSheet';
+import type { PreparedImages } from '../../photos/imagePrep';
 
 export interface LogFoodItemModalProps {
   /** The food item being logged. */
@@ -36,6 +40,8 @@ export interface LogFoodItemModalProps {
   readonly onClose: () => void;
   /** Callback after a successful log creation. */
   readonly onLogged?: (log: FoodItemLogDTO) => void;
+  /** Optional initial photos to attach upon log creation. */
+  readonly initialPhotos?: readonly PreparedImages[];
 }
 
 const RATING_VALUES: ReadonlyArray<number> = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
@@ -69,6 +75,7 @@ export default function LogFoodItemModal({
   visible,
   onClose,
   onLogged,
+  initialPhotos,
 }: LogFoodItemModalProps): JSX.Element | null {
   const styles = useStyles();
   const t = useAppTheme();
@@ -76,11 +83,27 @@ export default function LogFoodItemModal({
   const tz = deviceTimeZone();
   const today = ymdInTimeZone(new Date(), tz);
 
+  const { data: config } = usePhotoConfig();
+  const foodEnabled = Boolean(config?.enabled && config?.foodEnabled);
+  const maxPerFoodLog = config?.maxPerFoodLog ?? 4;
+
   const [visitedOn, setVisitedOn] = useState<string>(today);
   const [rating, setRating] = useState<number | null>(null);
   const [note, setNote] = useState<string>('');
+  const [selectedPhotos, setSelectedPhotos] = useState<
+    Array<{ prepared: PreparedImages; takenAt?: string }>
+  >(() => (initialPhotos ? initialPhotos.map((p) => ({ prepared: p })) : []));
+  const [pickerVisible, setPickerVisible] = useState<boolean>(false);
   const [busy, setBusy] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (visible && initialPhotos && initialPhotos.length > 0) {
+      setSelectedPhotos(initialPhotos.map((p) => ({ prepared: p })));
+    }
+  }, [visible, initialPhotos]);
+
+  const uploadPhotosMutation = useUploadPhotos();
 
   if (!visible || !foodItem) {
     return null;
@@ -90,6 +113,8 @@ export default function LogFoodItemModal({
     setVisitedOn(today);
     setRating(null);
     setNote('');
+    setSelectedPhotos([]);
+    setPickerVisible(false);
     setError(null);
   }
 
@@ -132,6 +157,14 @@ export default function LogFoodItemModal({
         payload,
       );
 
+      // If photos were selected, upload them attached to the new food log (Task 13.5)
+      if (selectedPhotos.length > 0) {
+        await uploadPhotosMutation.mutateAsync({
+          target: { kind: 'food_log', id: created.id },
+          items: selectedPhotos,
+        });
+      }
+
       // Invalidate queries per Requirement 5.4
       await queryClient.invalidateQueries({
         queryKey: ['food-item-logs', foodItem!.id],
@@ -158,6 +191,8 @@ export default function LogFoodItemModal({
         (err.code === 'rate_limit_exceeded' || err.status === 429)
       ) {
         setError('Too many requests. Please wait a moment and try again.');
+      } else if (err instanceof ApiError && err.code === 'photo_target_full') {
+        setError('Photo limit reached for this food log.');
       } else {
         setError('Could not save log. Please try again.');
       }
@@ -298,6 +333,88 @@ export default function LogFoodItemModal({
               />
             </View>
 
+            {/* Photos Section (hidden when foodEnabled is false) */}
+            {foodEnabled ? (
+              <View style={styles.fieldSection} testID="log-food-photos-section">
+                <Text style={styles.fieldLabel}>
+                  Photos ({selectedPhotos.length}/{maxPerFoodLog})
+                </Text>
+
+                {selectedPhotos.length >= maxPerFoodLog ? (
+                  <Text style={styles.capExplanation} testID="log-food-photo-cap-reached">
+                    Maximum {maxPerFoodLog} photos per dish visit reached.
+                  </Text>
+                ) : null}
+
+                {/* Previews */}
+                {selectedPhotos.length > 0 ? (
+                  <View style={styles.photoThumbnailsRow}>
+                    {selectedPhotos.map((item, index) => (
+                      <View
+                        key={index}
+                        style={styles.photoThumbWrapper}
+                        testID={`log-food-photo-preview-${index}`}
+                      >
+                        <Image
+                          source={{ uri: item.prepared.thumb.uri }}
+                          style={styles.photoThumb}
+                          accessibilityRole="image"
+                          accessibilityLabel={`Attached photo ${index + 1}`}
+                        />
+                        <Pressable
+                          onPress={() => {
+                            setSelectedPhotos((prev) => prev.filter((_, i) => i !== index));
+                          }}
+                          style={styles.photoRemoveBtn}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Remove photo ${index + 1}`}
+                          testID={`remove-photo-btn-${index}`}
+                        >
+                          <Ionicons name="close-circle" size={20} color={t.color.danger} />
+                        </Pressable>
+                      </View>
+                    ))}
+                  </View>
+                ) : null}
+
+                {/* Add Photo Button */}
+                <Pressable
+                  disabled={selectedPhotos.length >= maxPerFoodLog}
+                  onPress={() => setPickerVisible(true)}
+                  style={[
+                    styles.addPhotoBtn,
+                    selectedPhotos.length >= maxPerFoodLog && styles.addPhotoBtnDisabled,
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    selectedPhotos.length >= maxPerFoodLog
+                      ? `Add Photo (Maximum ${maxPerFoodLog} photos reached)`
+                      : 'Add Photo'
+                  }
+                  accessibilityState={{ disabled: selectedPhotos.length >= maxPerFoodLog }}
+                  testID="log-food-add-photo-btn"
+                >
+                  <Ionicons
+                    name="camera-outline"
+                    size={20}
+                    color={
+                      selectedPhotos.length >= maxPerFoodLog
+                        ? t.color.textSecondary
+                        : t.color.primaryFg
+                    }
+                  />
+                  <Text
+                    style={[
+                      styles.addPhotoBtnText,
+                      selectedPhotos.length >= maxPerFoodLog && styles.addPhotoBtnTextDisabled,
+                    ]}
+                  >
+                    Add Photo
+                  </Text>
+                </Pressable>
+              </View>
+            ) : null}
+
             {/* Action Buttons */}
             <View style={styles.actionsRow}>
               <View style={styles.actionBtn}>
@@ -315,6 +432,16 @@ export default function LogFoodItemModal({
           </ScrollView>
         </View>
       </KeyboardAvoidingView>
+
+      <PhotoPickerSheet
+        visible={pickerVisible}
+        target="food"
+        onClose={() => setPickerVisible(false)}
+        onConfirm={(prepared, takenAt) => {
+          setSelectedPhotos((prev) => [...prev, { prepared, ...(takenAt ? { takenAt } : {}) }]);
+          setPickerVisible(false);
+        }}
+      />
     </Modal>
   );
 }
@@ -440,6 +567,59 @@ const useStyles = makeStyles((t) => ({
     color: t.color.textPrimary,
     backgroundColor: t.color.surfaceAlt,
     textAlignVertical: 'top',
+  },
+  capExplanation: {
+    ...t.typography.meta,
+    color: t.color.textSecondary,
+    marginBottom: 8,
+  },
+  photoThumbnailsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: 12,
+  },
+  photoThumbWrapper: {
+    position: 'relative',
+    width: 64,
+    height: 64,
+    borderRadius: t.radius.md,
+    overflow: 'hidden',
+  },
+  photoThumb: {
+    width: '100%',
+    height: '100%',
+    borderRadius: t.radius.md,
+  },
+  photoRemoveBtn: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    backgroundColor: t.color.surface,
+    borderRadius: 10,
+  },
+  addPhotoBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: t.radius.md,
+    borderWidth: 1,
+    borderColor: t.color.border,
+    backgroundColor: t.color.surfaceAlt,
+  },
+  addPhotoBtnDisabled: {
+    opacity: 0.5,
+  },
+  addPhotoBtnText: {
+    ...t.typography.body,
+    fontWeight: '600',
+    color: t.color.textPrimary,
+  },
+  addPhotoBtnTextDisabled: {
+    color: t.color.textSecondary,
   },
   actionsRow: {
     flexDirection: 'row',

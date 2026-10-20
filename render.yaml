@@ -75,3 +75,22 @@ services:
         sync: false
       - key: ADMIN_PANEL_PASSWORD
         sync: false
+      # Photo uploads pipeline (photo-uploads spec)
+      - key: PHOTOS_ENABLED
+        value: "false"
+      - key: PHOTOS_EXPERIENCE_STRIP_MAX
+        value: "8"
+      - key: PHOTOS_CRON_SECRET
+        sync: false
+      - key: PHOTO_STORE_ENDPOINT
+        sync: false
+      - key: PHOTO_STORE_BUCKET
+        sync: false
+      - key: PHOTO_STORE_ACCESS_KEY_ID
+        sync: false
+      - key: PHOTO_STORE_SECRET_ACCESS_KEY
+        sync: false
+      - key: PHOTO_HARM_API_KEY
+        sync: false
+      - key: PHOTO_VISION_API_KEY
+        sync: false

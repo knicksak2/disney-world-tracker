@@ -728,6 +728,27 @@ export interface TripRepo {
   getFeed(tripId: string, callerId: string): Promise<TripFeedItemDTO[]>;
 
   /**
+   * Create a member_post feed item linking 1 to 4 photos (Requirement 14.1, 14.2, 14.10, 14.12).
+   */
+  createFeedPost(
+    tripId: string,
+    actorId: string,
+    photoIds: string[],
+    caption?: string,
+    options?: { beforeGuardedUpdate?: () => Promise<void> },
+  ): Promise<{ id: string }>;
+
+  /**
+   * Delete a member_post feed item and its photos, reactions, and comments (Requirement 14.7, 14.13).
+   */
+  deleteFeedPost(
+    tripId: string,
+    feedItemId: string,
+    callerId: string,
+    canDeleteOthers: boolean,
+  ): Promise<void>;
+
+  /**
    * Add a Trip_Reaction of `reaction` by `memberId` to the target
    * `(targetType, targetId)` on `tripId` (R13.4). The target must belong to the
    * caller's Trip — a `feed_item` to `trip_feed_items` or a `log_entry` to
@@ -954,6 +975,10 @@ export function createTripRepo(pool: DbPool, deps: TripRepoDeps): TripRepo {
     listPendingRodeWithTags: (userId) =>
       listPendingRodeWithTags(ctx, userId),
     getFeed: (tripId, callerId) => getFeed(ctx, tripId, callerId),
+    createFeedPost: (tripId, actorId, photoIds, caption, options) =>
+      createFeedPost(ctx, tripId, actorId, photoIds, caption, options),
+    deleteFeedPost: (tripId, feedItemId, callerId, canDeleteOthers) =>
+      deleteFeedPost(ctx, tripId, feedItemId, callerId, canDeleteOthers),
     addReaction: (tripId, targetType, targetId, memberId, reaction) =>
       addReaction(ctx, tripId, targetType, targetId, memberId, reaction),
     removeReaction: (tripId, targetType, targetId, memberId, reaction) =>
@@ -4359,6 +4384,169 @@ async function removeComment(
     await client.query(`DELETE FROM trip_comments WHERE id = $1`, [commentId]);
     await client.query('COMMIT');
     return true;
+  } catch (err) {
+    await safeRollback(client);
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Feed Posts (Requirement 14.1–14.3, 14.7, 14.10, 14.12, 14.13)
+// ---------------------------------------------------------------------------
+
+/**
+ * Create a member_post feed item linking 1 to 4 photos in one transaction (Requirement 14.1, 14.2, 14.10, 14.12).
+ *
+ * 1. Validating read with FOR UPDATE locks photo rows and ensures all photos belong to caller,
+ *    target the trip, are in pending/approved/needs_review status, and are unlinked.
+ * 2. Inserts trip_feed_items row with type 'member_post' and metadata holding photoIds in requested order.
+ * 3. Guarded update sets feed_item_id on photos. If returned count != requested count, rolls back.
+ */
+async function createFeedPost(
+  ctx: TripRepoContext,
+  tripId: string,
+  actorId: string,
+  photoIds: string[],
+  caption?: string,
+  options?: { beforeGuardedUpdate?: () => Promise<void> },
+): Promise<{ id: string }> {
+  if (new Set(photoIds).size !== photoIds.length) {
+    throw new AppError('validation_failed', 'Duplicate photo IDs provided');
+  }
+
+  const client = await ctx.pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // 1. Locking read on referenced photos (Requirement 14.2, 14.12)
+    const lockResult = await client.query<{ id: string }>(
+      `SELECT id FROM photos
+        WHERE id = ANY($1)
+          AND owner_id = $2
+          AND scope_id = $3
+          AND target_kind = 'trip'
+          AND status IN ('pending', 'approved', 'needs_review')
+          AND feed_item_id IS NULL
+        FOR UPDATE`,
+      [photoIds, actorId, tripId],
+    );
+
+    if (lockResult.rowCount !== photoIds.length) {
+      await client.query('ROLLBACK');
+      throw new AppError('validation_failed', 'One or more photos are invalid or already linked to a post');
+    }
+
+    // 2. Insert member_post into trip_feed_items (Requirement 14.1, 14.10)
+    const metadata: Record<string, unknown> = {
+      photoIds,
+    };
+    if (caption !== undefined && caption !== null && caption.length > 0) {
+      metadata.caption = caption;
+    }
+
+    const insertResult = await client.query<{ id: string }>(
+      `INSERT INTO trip_feed_items (trip_id, type, actor_id, metadata)
+       VALUES ($1, 'member_post', $2, $3)
+       RETURNING id`,
+      [tripId, actorId, JSON.stringify(metadata)],
+    );
+    const feedItemId = insertResult.rows[0]?.id;
+    if (!feedItemId) {
+      await client.query('ROLLBACK');
+      throw new AppError('validation_failed', 'Failed to insert member_post feed item');
+    }
+
+    // Optional test hook for double create / race simulation (Property 41)
+    if (options?.beforeGuardedUpdate) {
+      await options.beforeGuardedUpdate();
+    }
+
+    // 3. Guarded update (Requirement 14.12)
+    const updateResult = await client.query<{ id: string }>(
+      `UPDATE photos
+          SET feed_item_id = $1
+        WHERE id = ANY($2)
+          AND owner_id = $3
+          AND feed_item_id IS NULL
+          AND status IN ('pending', 'approved', 'needs_review')
+        RETURNING id`,
+      [feedItemId, photoIds, actorId],
+    );
+
+    if (updateResult.rowCount !== photoIds.length) {
+      await client.query('ROLLBACK');
+      throw new AppError('validation_failed', 'One or more photos changed state during post creation');
+    }
+
+    await client.query('COMMIT');
+    return { id: feedItemId };
+  } catch (err) {
+    await safeRollback(client);
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Delete a member_post feed item and its photos, reactions, and comments (Requirement 14.7, 14.13).
+ */
+async function deleteFeedPost(
+  ctx: TripRepoContext,
+  tripId: string,
+  feedItemId: string,
+  callerId: string,
+  canDeleteOthers: boolean,
+): Promise<void> {
+  const itemResult = await ctx.pool.query<{ id: string; actor_id: string; metadata: any }>(
+    `SELECT id, actor_id, metadata
+       FROM trip_feed_items
+      WHERE id = $1 AND trip_id = $2 AND type = 'member_post'`,
+    [feedItemId, tripId],
+  );
+
+  const row = itemResult.rows[0];
+  if (!row) {
+    throw new AppError('trip_not_found', 'Feed post not found');
+  }
+
+  const isAuthor = row.actor_id === callerId;
+  if (!isAuthor && !canDeleteOthers) {
+    throw new AppError('trip_forbidden', 'You cannot delete another member\'s feed post');
+  }
+
+  const client = await ctx.pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const photoIds = Array.isArray(row.metadata?.photoIds) ? (row.metadata.photoIds as string[]) : [];
+    if (photoIds.length > 0) {
+      await client.query(
+        `UPDATE photos
+            SET status = 'deleted',
+                deleted_at = now()
+          WHERE id = ANY($1)
+            AND status != 'deleted'`,
+        [photoIds],
+      );
+    }
+
+    await client.query(
+      `DELETE FROM trip_reactions WHERE target_type = 'feed_item' AND target_id = $1`,
+      [feedItemId],
+    );
+    await client.query(
+      `DELETE FROM trip_comments WHERE target_type = 'feed_item' AND target_id = $1`,
+      [feedItemId],
+    );
+    await client.query(
+      `DELETE FROM trip_feed_items WHERE id = $1`,
+      [feedItemId],
+    );
+
+    await client.query('COMMIT');
   } catch (err) {
     await safeRollback(client);
     throw err;

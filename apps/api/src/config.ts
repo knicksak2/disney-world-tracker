@@ -33,6 +33,14 @@ import {
 // declare defaults inline. `coerce.number` is used for `PORT` because env
 // values are always strings.
 
+// Coerces number or nan so that invalid strings do not fail envSchema parsing
+// when photos are disabled, leaving validation to superRefine.
+const permissivePhotoNumber = (defaultValue: number) =>
+  z.preprocess((val) => {
+    if (val === undefined || val === '') return defaultValue;
+    return Number(val);
+  }, z.union([z.number(), z.nan()]).default(defaultValue));
+
 const envSchema = z.object({
   NODE_ENV: z
     .enum(['development', 'test', 'production'])
@@ -167,6 +175,99 @@ const envSchema = z.object({
 
   // Directory for historical crowd seed HTML files (Task 7.2)
   CROWD_SEED_DIR: z.string().default('seed-data/crowd/'),
+
+  // ---------------------------------------------------------------------------
+  // Photo uploads (photo-uploads spec)
+  // ---------------------------------------------------------------------------
+  PHOTOS_ENABLED: z
+    .union([z.boolean(), z.string()])
+    .optional()
+    .transform((val) => {
+      if (val === undefined || val === '') return false;
+      if (typeof val === 'boolean') return val;
+      return val === 'true' || val === '1';
+    }),
+  PHOTOS_FOOD_ENABLED: z
+    .union([z.boolean(), z.string()])
+    .optional()
+    .transform((val) => {
+      if (val === undefined || val === '') return true;
+      if (typeof val === 'boolean') return val;
+      return val === 'true' || val === '1';
+    }),
+  PHOTOS_TRIP_ENABLED: z
+    .union([z.boolean(), z.string()])
+    .optional()
+    .transform((val) => {
+      if (val === undefined || val === '') return true;
+      if (typeof val === 'boolean') return val;
+      return val === 'true' || val === '1';
+    }),
+  PHOTOS_CRON_SECRET: z.string().optional(),
+  PHOTO_STORE_ENDPOINT: z.string().optional(),
+  PHOTO_STORE_BUCKET: z.string().optional(),
+  PHOTO_STORE_ACCESS_KEY_ID: z.string().optional(),
+  PHOTO_STORE_SECRET_ACCESS_KEY: z.string().optional(),
+  PHOTO_STORE_REGION: z.string().default('auto'),
+  PHOTO_HARM_API_KEY: z.string().optional(),
+  PHOTO_HARM_BASE_URL: z.string().default('https://api.openai.com'),
+  PHOTO_HARM_MODEL: z.string().default('omni-moderation-latest'),
+  PHOTO_HARM_TIMEOUT_MS: permissivePhotoNumber(15000),
+  PHOTO_HARM_INVALID_IMAGE_CODES: z
+    .string()
+    .optional()
+    .default('')
+    .transform((val) =>
+      val
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean),
+    ),
+  PHOTO_HARM_BAD_REQUEST_ALERT_COUNT: permissivePhotoNumber(5),
+  PHOTO_HARM_SCORE_THRESHOLD: permissivePhotoNumber(0.5),
+  PHOTO_HARM_CHECK_THUMB: z
+    .union([z.boolean(), z.string()])
+    .optional()
+    .transform((val) => {
+      if (val === undefined || val === '') return true;
+      if (typeof val === 'boolean') return val;
+      return val === 'true' || val === '1';
+    }),
+  PHOTO_VISION_API_KEY: z.string().optional(),
+  PHOTO_VISION_BASE_URL: z.string().default('https://generativelanguage.googleapis.com'),
+  PHOTO_VISION_MODEL: z.string().default('gemini-3.5-flash-lite'),
+  PHOTO_VISION_FALLBACK_MODEL: z.string().default('gemini-3.1-flash-lite'),
+  PHOTO_VISION_TIMEOUT_MS: permissivePhotoNumber(20000),
+  PHOTO_VISION_MIN_FOOD_CONFIDENCE: permissivePhotoNumber(0.6),
+  PHOTO_VISION_MAX_PROMINENT_FACES: permissivePhotoNumber(0),
+  PHOTO_VISION_MAX_TEXT_FRACTION: permissivePhotoNumber(0.25),
+  PHOTOS_DAILY_UPLOAD_CAP: permissivePhotoNumber(20),
+  PHOTOS_GLOBAL_DAILY_CAP: permissivePhotoNumber(2000),
+  PHOTOS_MAX_PER_FOOD_LOG: permissivePhotoNumber(4),
+  PHOTOS_MAX_PER_TRIP: permissivePhotoNumber(300),
+  PHOTOS_MAX_FEED_POST_PHOTOS: permissivePhotoNumber(4),
+  PHOTOS_MAX_BATCH: permissivePhotoNumber(10),
+  PHOTOS_MAX_BYTES: permissivePhotoNumber(1048576),
+  PHOTOS_MAX_THUMB_BYTES: permissivePhotoNumber(65536),
+  PHOTOS_PUT_URL_TTL_SECONDS: permissivePhotoNumber(900),
+  PHOTOS_GET_URL_TTL_SECONDS: permissivePhotoNumber(3600),
+  PHOTOS_ADMIN_URL_TTL_SECONDS: permissivePhotoNumber(300),
+  PHOTOS_UPLOAD_EXPIRY_MINUTES: permissivePhotoNumber(120),
+  PHOTOS_MODERATION_MAX_ATTEMPTS: permissivePhotoNumber(6),
+  PHOTOS_MODERATION_LEASE_SECONDS: permissivePhotoNumber(180),
+  PHOTOS_NEEDS_REVIEW_MAX_AGE_HOURS: permissivePhotoNumber(120),
+  PHOTOS_UPLOAD_PREFIX_EXPIRY_DAYS: permissivePhotoNumber(7),
+  PHOTOS_MODERATION_CONCURRENCY: permissivePhotoNumber(3),
+  PHOTOS_REJECTED_RETENTION_HOURS: permissivePhotoNumber(24),
+  PHOTOS_REPORT_AUTOHIDE_FOOD: permissivePhotoNumber(3),
+  PHOTOS_REPORT_AUTOHIDE_TRIP: permissivePhotoNumber(1),
+  PHOTOS_RECAP_HIGHLIGHT_MAX: permissivePhotoNumber(6),
+  PHOTOS_EXPERIENCE_STRIP_MAX: permissivePhotoNumber(8),
+  PHOTOS_SWEEP_BATCH: permissivePhotoNumber(200),
+  PHOTOS_SWEEP_TIME_BUDGET_MS: permissivePhotoNumber(25000),
+  PHOTOS_VISION_FIELDS_RETENTION_DAYS: permissivePhotoNumber(30),
+  PHOTOS_EXIF_POLICY: z.string().default('log'),
+  PHOTOS_EXIF_SCAN_BYTES: permissivePhotoNumber(65536),
 })
   .superRefine((data, ctx) => {
     if (data.TRIP_BOOKING_CRON_SECRET) {
@@ -207,6 +308,136 @@ const envSchema = z.object({
         path: ['BOOKING_REMINDER_SEND_START'],
         message: 'BOOKING_REMINDER_SEND_START must be strictly before BOOKING_REMINDER_SEND_END',
       });
+    }
+
+    // Property 23: Photos validation applies only when PHOTOS_ENABLED is true
+    if (data.PHOTOS_ENABLED) {
+      if (!data.PHOTO_STORE_ENDPOINT || data.PHOTO_STORE_ENDPOINT.trim() === '') {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['PHOTO_STORE_ENDPOINT'],
+          message: 'PHOTO_STORE_ENDPOINT is required when PHOTOS_ENABLED is true',
+        });
+      }
+      if (!data.PHOTO_STORE_BUCKET || data.PHOTO_STORE_BUCKET.trim() === '') {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['PHOTO_STORE_BUCKET'],
+          message: 'PHOTO_STORE_BUCKET is required when PHOTOS_ENABLED is true',
+        });
+      }
+      if (!data.PHOTO_STORE_ACCESS_KEY_ID || data.PHOTO_STORE_ACCESS_KEY_ID.trim() === '') {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['PHOTO_STORE_ACCESS_KEY_ID'],
+          message: 'PHOTO_STORE_ACCESS_KEY_ID is required when PHOTOS_ENABLED is true',
+        });
+      }
+      if (!data.PHOTO_STORE_SECRET_ACCESS_KEY || data.PHOTO_STORE_SECRET_ACCESS_KEY.trim() === '') {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['PHOTO_STORE_SECRET_ACCESS_KEY'],
+          message: 'PHOTO_STORE_SECRET_ACCESS_KEY is required when PHOTOS_ENABLED is true',
+        });
+      }
+      if (!data.PHOTO_HARM_API_KEY || data.PHOTO_HARM_API_KEY.trim() === '') {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['PHOTO_HARM_API_KEY'],
+          message: 'PHOTO_HARM_API_KEY is required when PHOTOS_ENABLED is true',
+        });
+      }
+      if (!data.PHOTOS_CRON_SECRET || data.PHOTOS_CRON_SECRET.trim() === '') {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['PHOTOS_CRON_SECRET'],
+          message: 'PHOTOS_CRON_SECRET is required when PHOTOS_ENABLED is true',
+        });
+      } else {
+        const photoSecret = data.PHOTOS_CRON_SECRET.trim();
+        const samplingSecret = data.SAMPLING_CRON_SECRET?.trim();
+        const pinsSecret = data.PIN_RECONCILE_CRON_SECRET?.trim();
+        const tripSecret = data.TRIP_BOOKING_CRON_SECRET?.trim();
+        if (
+          photoSecret === samplingSecret ||
+          photoSecret === pinsSecret ||
+          photoSecret === tripSecret
+        ) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['PHOTOS_CRON_SECRET'],
+            message:
+              'PHOTOS_CRON_SECRET must not equal SAMPLING_CRON_SECRET, PIN_RECONCILE_CRON_SECRET, or TRIP_BOOKING_CRON_SECRET',
+          });
+        }
+      }
+
+      if (data.PHOTOS_FOOD_ENABLED) {
+        if (!data.PHOTO_VISION_API_KEY || data.PHOTO_VISION_API_KEY.trim() === '') {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['PHOTO_VISION_API_KEY'],
+            message:
+              'PHOTO_VISION_API_KEY is required when PHOTOS_ENABLED and PHOTOS_FOOD_ENABLED are true',
+          });
+        }
+      }
+
+      const harmTimeout = data.PHOTO_HARM_TIMEOUT_MS;
+      const visionTimeout = data.PHOTO_VISION_TIMEOUT_MS;
+      const minLease =
+        Math.ceil(Math.max(2 * harmTimeout, 2 * (3 * visionTimeout + 2000)) / 1000) + 10;
+      if (data.PHOTOS_MODERATION_LEASE_SECONDS < minLease) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['PHOTOS_MODERATION_LEASE_SECONDS'],
+          message: `PHOTOS_MODERATION_LEASE_SECONDS must be at least ${minLease} seconds`,
+        });
+      }
+
+      if (
+        data.PHOTOS_NEEDS_REVIEW_MAX_AGE_HOURS + 24 >
+        data.PHOTOS_UPLOAD_PREFIX_EXPIRY_DAYS * 24
+      ) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['PHOTOS_NEEDS_REVIEW_MAX_AGE_HOURS'],
+          message:
+            'PHOTOS_NEEDS_REVIEW_MAX_AGE_HOURS + 24 must be <= PHOTOS_UPLOAD_PREFIX_EXPIRY_DAYS * 24',
+        });
+      }
+
+      if (
+        !Number.isInteger(data.PHOTOS_RECAP_HIGHLIGHT_MAX) ||
+        data.PHOTOS_RECAP_HIGHLIGHT_MAX < 1 ||
+        data.PHOTOS_RECAP_HIGHLIGHT_MAX > 24
+      ) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['PHOTOS_RECAP_HIGHLIGHT_MAX'],
+          message: 'PHOTOS_RECAP_HIGHLIGHT_MAX must be an integer from 1 to 24',
+        });
+      }
+
+      if (
+        !Number.isInteger(data.PHOTOS_EXPERIENCE_STRIP_MAX) ||
+        data.PHOTOS_EXPERIENCE_STRIP_MAX < 1 ||
+        data.PHOTOS_EXPERIENCE_STRIP_MAX > 24
+      ) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['PHOTOS_EXPERIENCE_STRIP_MAX'],
+          message: 'PHOTOS_EXPERIENCE_STRIP_MAX must be an integer from 1 to 24',
+        });
+      }
+
+      if (data.PHOTOS_EXIF_POLICY !== 'log' && data.PHOTOS_EXIF_POLICY !== 'reject') {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['PHOTOS_EXIF_POLICY'],
+          message: "PHOTOS_EXIF_POLICY must be 'log' or 'reject'",
+        });
+      }
     }
   });
 
@@ -255,6 +486,7 @@ export interface AppConfig {
   readonly themeparks: {
     readonly baseUrl: string;
   };
+  readonly photos: PhotoConfig;
   readonly disney: {
     readonly syncGateway: {
       readonly baseUrl: string;
@@ -282,6 +514,79 @@ export interface AppConfig {
     readonly menuFreshnessMs: number;
     // Infrequent static-sync cadence, floored at 24h (R9).
     readonly syncIntervalMs: number;
+  };
+}
+
+export interface PhotoConfig {
+  readonly enabled: boolean;
+  readonly foodEnabled: boolean;
+  readonly tripEnabled: boolean;
+  readonly cronSecret: string;
+  readonly recapHighlightMax: number;
+  readonly experienceStripMax: number;
+  readonly store: {
+    readonly endpoint: string;
+    readonly bucket: string;
+    readonly accessKeyId: string;
+    readonly secretAccessKey: string;
+    readonly region: string;
+  };
+  readonly harm: {
+    readonly apiKey: string;
+    readonly baseUrl: string;
+    readonly model: string;
+    readonly timeoutMs: number;
+    readonly invalidImageCodes: readonly string[];
+    readonly badRequestAlertCount: number;
+    readonly scoreThreshold: number;
+    readonly checkThumb: boolean;
+  };
+  readonly vision: {
+    readonly apiKey: string;
+    readonly baseUrl: string;
+    readonly model: string;
+    readonly fallbackModel: string;
+    readonly timeoutMs: number;
+    readonly minFoodConfidence: number;
+    readonly maxProminentFaces: number;
+    readonly maxTextFraction: number;
+  };
+  readonly limits: {
+    readonly dailyUploadCap: number;
+    readonly globalDailyCap: number;
+    readonly maxPerFoodLog: number;
+    readonly maxPerTrip: number;
+    readonly maxFeedPostPhotos: number;
+    readonly maxBatch: number;
+    readonly maxBytes: number;
+    readonly maxThumbBytes: number;
+  };
+  readonly urls: {
+    readonly putTtlSeconds: number;
+    readonly getTtlSeconds: number;
+    readonly adminTtlSeconds: number;
+  };
+  readonly moderation: {
+    readonly uploadExpiryMinutes: number;
+    readonly maxAttempts: number;
+    readonly leaseSeconds: number;
+    readonly needsReviewMaxAgeHours: number;
+    readonly uploadPrefixExpiryDays: number;
+    readonly concurrency: number;
+    readonly rejectedRetentionHours: number;
+  };
+  readonly reports: {
+    readonly autohideFood: number;
+    readonly autohideTrip: number;
+  };
+  readonly sweep: {
+    readonly batch: number;
+    readonly timeBudgetMs: number;
+    readonly visionFieldsRetentionDays: number;
+  };
+  readonly exif: {
+    readonly policy: 'log' | 'reject';
+    readonly scanBytes: number;
   };
 }
 
@@ -361,6 +666,78 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       password: data.ADMIN_PANEL_PASSWORD,
     },
     themeparks: { baseUrl: data.THEMEPARKS_BASE_URL },
+    photos: {
+      enabled: data.PHOTOS_ENABLED,
+      foodEnabled: data.PHOTOS_FOOD_ENABLED,
+      tripEnabled: data.PHOTOS_TRIP_ENABLED,
+      cronSecret: data.PHOTOS_CRON_SECRET ?? '',
+      recapHighlightMax: Number.isFinite(data.PHOTOS_RECAP_HIGHLIGHT_MAX) ? data.PHOTOS_RECAP_HIGHLIGHT_MAX : 6,
+      experienceStripMax: Number.isFinite(data.PHOTOS_EXPERIENCE_STRIP_MAX) ? data.PHOTOS_EXPERIENCE_STRIP_MAX : 8,
+      store: {
+        endpoint: data.PHOTO_STORE_ENDPOINT ?? '',
+        bucket: data.PHOTO_STORE_BUCKET ?? '',
+        accessKeyId: data.PHOTO_STORE_ACCESS_KEY_ID ?? '',
+        secretAccessKey: data.PHOTO_STORE_SECRET_ACCESS_KEY ?? '',
+        region: data.PHOTO_STORE_REGION,
+      },
+      harm: {
+        apiKey: data.PHOTO_HARM_API_KEY ?? '',
+        baseUrl: data.PHOTO_HARM_BASE_URL,
+        model: data.PHOTO_HARM_MODEL,
+        timeoutMs: Number.isFinite(data.PHOTO_HARM_TIMEOUT_MS) ? data.PHOTO_HARM_TIMEOUT_MS : 15000,
+        invalidImageCodes: data.PHOTO_HARM_INVALID_IMAGE_CODES,
+        badRequestAlertCount: Number.isFinite(data.PHOTO_HARM_BAD_REQUEST_ALERT_COUNT) ? data.PHOTO_HARM_BAD_REQUEST_ALERT_COUNT : 5,
+        scoreThreshold: Number.isFinite(data.PHOTO_HARM_SCORE_THRESHOLD) ? data.PHOTO_HARM_SCORE_THRESHOLD : 0.5,
+        checkThumb: data.PHOTO_HARM_CHECK_THUMB,
+      },
+      vision: {
+        apiKey: data.PHOTO_VISION_API_KEY ?? '',
+        baseUrl: data.PHOTO_VISION_BASE_URL,
+        model: data.PHOTO_VISION_MODEL,
+        fallbackModel: data.PHOTO_VISION_FALLBACK_MODEL,
+        timeoutMs: Number.isFinite(data.PHOTO_VISION_TIMEOUT_MS) ? data.PHOTO_VISION_TIMEOUT_MS : 20000,
+        minFoodConfidence: Number.isFinite(data.PHOTO_VISION_MIN_FOOD_CONFIDENCE) ? data.PHOTO_VISION_MIN_FOOD_CONFIDENCE : 0.6,
+        maxProminentFaces: Number.isFinite(data.PHOTO_VISION_MAX_PROMINENT_FACES) ? data.PHOTO_VISION_MAX_PROMINENT_FACES : 0,
+        maxTextFraction: Number.isFinite(data.PHOTO_VISION_MAX_TEXT_FRACTION) ? data.PHOTO_VISION_MAX_TEXT_FRACTION : 0.25,
+      },
+      limits: {
+        dailyUploadCap: Number.isFinite(data.PHOTOS_DAILY_UPLOAD_CAP) ? data.PHOTOS_DAILY_UPLOAD_CAP : 20,
+        globalDailyCap: Number.isFinite(data.PHOTOS_GLOBAL_DAILY_CAP) ? data.PHOTOS_GLOBAL_DAILY_CAP : 2000,
+        maxPerFoodLog: Number.isFinite(data.PHOTOS_MAX_PER_FOOD_LOG) ? data.PHOTOS_MAX_PER_FOOD_LOG : 4,
+        maxPerTrip: Number.isFinite(data.PHOTOS_MAX_PER_TRIP) ? data.PHOTOS_MAX_PER_TRIP : 300,
+        maxFeedPostPhotos: Number.isFinite(data.PHOTOS_MAX_FEED_POST_PHOTOS) ? data.PHOTOS_MAX_FEED_POST_PHOTOS : 4,
+        maxBatch: Number.isFinite(data.PHOTOS_MAX_BATCH) ? data.PHOTOS_MAX_BATCH : 10,
+        maxBytes: Number.isFinite(data.PHOTOS_MAX_BYTES) ? data.PHOTOS_MAX_BYTES : 1048576,
+        maxThumbBytes: Number.isFinite(data.PHOTOS_MAX_THUMB_BYTES) ? data.PHOTOS_MAX_THUMB_BYTES : 65536,
+      },
+      urls: {
+        putTtlSeconds: Number.isFinite(data.PHOTOS_PUT_URL_TTL_SECONDS) ? data.PHOTOS_PUT_URL_TTL_SECONDS : 900,
+        getTtlSeconds: Number.isFinite(data.PHOTOS_GET_URL_TTL_SECONDS) ? data.PHOTOS_GET_URL_TTL_SECONDS : 3600,
+        adminTtlSeconds: Number.isFinite(data.PHOTOS_ADMIN_URL_TTL_SECONDS) ? data.PHOTOS_ADMIN_URL_TTL_SECONDS : 300,
+      },
+      moderation: {
+        uploadExpiryMinutes: Number.isFinite(data.PHOTOS_UPLOAD_EXPIRY_MINUTES) ? data.PHOTOS_UPLOAD_EXPIRY_MINUTES : 120,
+        maxAttempts: Number.isFinite(data.PHOTOS_MODERATION_MAX_ATTEMPTS) ? data.PHOTOS_MODERATION_MAX_ATTEMPTS : 6,
+        leaseSeconds: Number.isFinite(data.PHOTOS_MODERATION_LEASE_SECONDS) ? data.PHOTOS_MODERATION_LEASE_SECONDS : 180,
+        needsReviewMaxAgeHours: Number.isFinite(data.PHOTOS_NEEDS_REVIEW_MAX_AGE_HOURS) ? data.PHOTOS_NEEDS_REVIEW_MAX_AGE_HOURS : 120,
+        uploadPrefixExpiryDays: Number.isFinite(data.PHOTOS_UPLOAD_PREFIX_EXPIRY_DAYS) ? data.PHOTOS_UPLOAD_PREFIX_EXPIRY_DAYS : 7,
+        concurrency: Number.isFinite(data.PHOTOS_MODERATION_CONCURRENCY) ? data.PHOTOS_MODERATION_CONCURRENCY : 3,
+        rejectedRetentionHours: Number.isFinite(data.PHOTOS_REJECTED_RETENTION_HOURS) ? data.PHOTOS_REJECTED_RETENTION_HOURS : 24,
+      },
+      reports: {
+        autohideFood: Number.isFinite(data.PHOTOS_REPORT_AUTOHIDE_FOOD) ? data.PHOTOS_REPORT_AUTOHIDE_FOOD : 3,
+        autohideTrip: Number.isFinite(data.PHOTOS_REPORT_AUTOHIDE_TRIP) ? data.PHOTOS_REPORT_AUTOHIDE_TRIP : 1,
+      },
+      sweep: {
+        batch: Number.isFinite(data.PHOTOS_SWEEP_BATCH) ? data.PHOTOS_SWEEP_BATCH : 200,
+        timeBudgetMs: Number.isFinite(data.PHOTOS_SWEEP_TIME_BUDGET_MS) ? data.PHOTOS_SWEEP_TIME_BUDGET_MS : 25000,
+        visionFieldsRetentionDays: Number.isFinite(data.PHOTOS_VISION_FIELDS_RETENTION_DAYS) ? data.PHOTOS_VISION_FIELDS_RETENTION_DAYS : 30,
+      },
+      exif: {
+        policy: (data.PHOTOS_EXIF_POLICY as 'log' | 'reject') || 'log',
+        scanBytes: Number.isFinite(data.PHOTOS_EXIF_SCAN_BYTES) ? data.PHOTOS_EXIF_SCAN_BYTES : 65536,
+      },
+    },
     disney: {
       syncGateway: { baseUrl: data.DISNEY_SYNC_GATEWAY_BASE_URL },
       credentials: {

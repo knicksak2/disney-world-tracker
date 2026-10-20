@@ -34,6 +34,7 @@ import TripExpensesScreen from '../screens/trips/TripExpensesScreen';
 import TripBalancesScreen from '../screens/trips/TripBalancesScreen';
 import TripBookingTimelineScreen from '../screens/trips/TripBookingTimelineScreen';
 import TripPackingListScreen from '../screens/trips/TripPackingListScreen';
+import TripAlbumScreen from '../screens/trips/TripAlbumScreen';
 
 /**
  * Trips tab stack param list.
@@ -78,6 +79,8 @@ export type TripsStackParamList = {
   TripMembers: { tripId: string };
   /** Trip_Summary section of a Trip (R18.1, R18.6). */
   TripSummary: { tripId: string };
+  /** Trip Album section of a Trip (Requirement 13.1, Task 22.1). */
+  TripAlbum: { tripId: string };
   /**
    * Trip_Invite accept/decline deep-link target. Reached when a User taps a
    * Trip_Invite push notification (R18.2); the `tripInviteId` is the routing id
@@ -111,6 +114,7 @@ export default function TripsStack(): JSX.Element {
       <Stack.Screen name="TripFeed" component={TripFeedScreen} />
       <Stack.Screen name="TripMembers" component={TripMembersScreen} />
       <Stack.Screen name="TripSummary" component={TripSummaryScreen} />
+      <Stack.Screen name="TripAlbum" component={TripAlbumScreen} />
       <Stack.Screen name="TripInvite" component={TripInviteScreen} />
       <Stack.Screen name="RodeWithConfirm" component={RodeWithConfirmScreen} />
     </Stack.Navigator>

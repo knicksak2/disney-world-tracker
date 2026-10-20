@@ -94,13 +94,15 @@ import {
   tripLogEntryCreateSchema,
   tripReactionInputSchema,
   tripReactionValueSchema,
+  tripPostCreateSchema,
   uuidSchema,
 } from '@dwt/shared';
-import type { GroupFavoritesResponseDTO } from '@dwt/shared';
+import type { GroupFavoritesResponseDTO, TripFeedItemDTO } from '@dwt/shared';
 
 import type { DbPool } from '../../db/pool.js';
 import { AppError } from '../../errors/AppError.js';
 import { assertTripMember, assertTripOrganizer } from './authz.js';
+import { can } from './permissions.js';
 import { optimize } from '../planning/optimizer.js';
 import type { OptimizeInput, OptimizeInputItem } from '../planning/optimizer.js';
 import { wdwToday, wdwMinutesFromMidnight } from './wdwClock.js';
@@ -109,6 +111,8 @@ import type {
   TripInviteCreatedNotice,
 } from './events.js';
 import type { TripRepo } from './repo.js';
+import type { FeedPhotoPort, FeedPostPhotos } from '../photos/ports.js';
+import { postVisibleToNonAuthor } from '../photos/domain/accessPolicy.js';
 
 // ---------------------------------------------------------------------------
 // TripInviteCreated dispatch seam
@@ -200,6 +204,18 @@ export interface TripRoutesOptions {
    * `composeServices.ts`.
    */
   readonly awardPins?: (userId: string) => Promise<readonly string[]>;
+  /**
+   * Optional photo lifecycle hook (Feature: photo-uploads, Task 19.3).
+   * Soft-deletes trip photos when the trip is deleted.
+   */
+  readonly photoLifecycle?: {
+    softDeleteForTarget(targetKind: string, targetId: string): Promise<unknown>;
+  };
+  /**
+   * Feed photo port (Feature: photo-uploads, Task 20.2).
+   * Supplies photo slots and author identification for member_post feed items.
+   */
+  readonly feedPhotoPort?: FeedPhotoPort;
 }
 
 // ---------------------------------------------------------------------------
@@ -251,6 +267,13 @@ const tripPlannedItemParamsSchema = z
  */
 const tripFoodListParamsSchema = z
   .object({ id: uuidSchema, foodListId: uuidSchema })
+  .strict();
+
+/**
+ * Path parameters for `DELETE /trips/:id/feed/posts/:feedItemId`.
+ */
+const tripFeedPostParamsSchema = z
+  .object({ id: uuidSchema, feedItemId: uuidSchema })
   .strict();
 
 /**
@@ -363,6 +386,7 @@ export function tripRoutes(options: TripRoutesOptions): FastifyPluginAsync {
     emitTripInviteCreated,
     emitRodeWithTagCreated,
     awardPins,
+    feedPhotoPort,
   } = options;
 
   return async function tripRoutesPlugin(
@@ -448,6 +472,9 @@ export function tripRoutes(options: TripRoutesOptions): FastifyPluginAsync {
         // Only an Organizer may delete a Trip (R3.8). The repo's cascade never
         // touches canonical Tracking data (R3.10).
         await assertTripOrganizer(pool, userId, id);
+        if (options.photoLifecycle) {
+          await options.photoLifecycle.softDeleteForTarget('trip', id);
+        }
         const deleted = await repo.deleteTrip(id);
         if (!deleted) {
           throw new AppError('trip_not_found', 'Trip not found.');
@@ -1041,7 +1068,106 @@ export function tripRoutes(options: TripRoutesOptions): FastifyPluginAsync {
         const userId = requireUser(request);
         const { id } = parseOrAppError(tripIdParamsSchema, request.params);
         await assertTripMember(pool, userId, id);
-        return repo.getFeed(id, userId);
+        const rawFeed = await repo.getFeed(id, userId);
+
+        if (!feedPhotoPort) {
+          return rawFeed.map((item) => {
+            if (item.type === 'member_post') {
+              const { photoIds: _dropped, ...cleanMetadata } = (item.metadata ?? {}) as Record<string, unknown>;
+              return {
+                ...item,
+                metadata: cleanMetadata,
+                photos: [],
+              };
+            }
+            return item;
+          });
+        }
+
+        const memberPostIds = rawFeed
+          .filter((item) => item.type === 'member_post')
+          .map((item) => item.id);
+
+        const photoSlotsMap = memberPostIds.length > 0
+          ? await feedPhotoPort.slotsForFeedItems(id, userId, memberPostIds)
+          : new Map<string, FeedPostPhotos>();
+
+        const result: TripFeedItemDTO[] = [];
+        for (const item of rawFeed) {
+          if (item.type !== 'member_post') {
+            result.push(item);
+            continue;
+          }
+
+          const { photoIds: _dropped, ...cleanMetadata } = (item.metadata ?? {}) as Record<string, unknown>;
+          const postData = photoSlotsMap.get(item.id);
+          const authorId = postData?.authorId;
+          const isMine = authorId === userId;
+          const slots = postData?.slots ?? [];
+
+          // Omit a member_post that is not the viewer's own and has no slot in state ready or checking
+          if (!isMine && !postVisibleToNonAuthor(slots)) {
+            continue;
+          }
+
+          result.push({
+            ...item,
+            metadata: cleanMetadata,
+            photos: slots,
+            mine: isMine,
+          });
+        }
+
+        return result;
+      },
+    );
+
+    // -------------------------------------------------------------------
+    // POST /trips/:id/feed/posts — create a member_post feed item
+    // (Requirement 14.1–14.3, 14.10, 14.12)
+    // -------------------------------------------------------------------
+    app.post<{ Params: { id: string } }>(
+      '/trips/:id/feed/posts',
+      { preHandler: requireSession },
+      async (request, reply) => {
+        const userId = requireUser(request);
+        const { id } = parseOrAppError(tripIdParamsSchema, request.params);
+        const role = await assertTripMember(pool, userId, id);
+        if (!can(role, 'post_feed_photo')) {
+          throw new AppError('trip_forbidden', 'Not authorized to post feed photos');
+        }
+        const { photoIds, caption } = parseOrAppError(
+          tripPostCreateSchema,
+          request.body,
+        );
+        const result = await repo.createFeedPost(id, userId, photoIds, caption);
+        reply.code(201);
+        reply.send(result);
+      },
+    );
+
+    // -------------------------------------------------------------------
+    // DELETE /trips/:id/feed/posts/:feedItemId — delete a member_post
+    // (Requirement 14.7, 14.13)
+    // -------------------------------------------------------------------
+    app.delete<{ Params: { id: string; feedItemId: string } }>(
+      '/trips/:id/feed/posts/:feedItemId',
+      { preHandler: requireSession },
+      async (request, reply) => {
+        const userId = requireUser(request);
+        const { id, feedItemId } = parseOrAppError(
+          tripFeedPostParamsSchema,
+          request.params,
+        );
+        const role = await assertTripMember(pool, userId, id);
+        await repo.deleteFeedPost(
+          id,
+          feedItemId,
+          userId,
+          can(role, 'delete_any_trip_photo'),
+        );
+        reply.code(204);
+        reply.send();
       },
     );
 
