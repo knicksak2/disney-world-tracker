@@ -7,7 +7,7 @@
  */
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { escapeHtml, explainerBanner, renderPage, table } from './html.js';
+import { escapeHtml, explainerBanner, localTime, renderPage, table } from './html.js';
 import type { AdminRoutesOptions } from './routes.js';
 import { isSameOriginRequest } from './sameOrigin.js';
 import { readKeysFor } from '../photos/domain/accessPolicy.js';
@@ -147,7 +147,7 @@ export async function registerPhotoRoutes(
         },
         {
           header: 'Created',
-          cell: (r) => `<span class="mono" style="font-size: 0.75rem;">${escapeHtml(r.createdAt.toISOString().replace('T', ' ').slice(0, 19))}</span>`,
+          cell: (r) => `<span style="font-size: 0.75rem;">${localTime(r.createdAt)}</span>`,
         },
         {
           header: 'Actions',

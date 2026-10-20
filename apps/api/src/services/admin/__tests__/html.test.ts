@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { escapeHtml, flagged, renderPage, table, explainerBanner, progressBar } from '../html.js';
+import {
+  escapeHtml,
+  flagged,
+  localTime,
+  LOCAL_TIME_SCRIPT,
+  renderPage,
+  table,
+  explainerBanner,
+  progressBar,
+} from '../html.js';
 
 describe('html — unit tests', () => {
   describe('escapeHtml', () => {
@@ -125,6 +134,62 @@ describe('html — unit tests', () => {
     it('omits breadcrumbs on dashboard landing page', () => {
       const html = renderPage('Admin Overview', '<div>Dashboard</div>', '/admin');
       expect(html).not.toContain('class="breadcrumbs"');
+    });
+
+    it('emits exactly one inline localizer script, after </main> and before </body>, plus the footnote', () => {
+      const html = renderPage('T', '<p>x</p>');
+      expect((html.match(/<script>/g) ?? []).length).toBe(1);
+      expect((html.match(/<\/script>/g) ?? []).length).toBe(1);
+      expect(html).toContain(`<script>${LOCAL_TIME_SCRIPT}</script>`);
+      expect(html.indexOf('<script>')).toBeGreaterThan(html.indexOf('</main>'));
+      expect(html.indexOf('</script>')).toBeLessThan(html.indexOf('</body>'));
+      expect(html).toContain("Timestamps are shown in your browser's time zone");
+    });
+
+    it('LOCAL_TIME_SCRIPT cannot terminate its own script tag early and targets time[data-local-time]', () => {
+      expect(LOCAL_TIME_SCRIPT.toLowerCase()).not.toContain('</script');
+      expect(LOCAL_TIME_SCRIPT).toContain("'time[data-local-time]'");
+    });
+  });
+
+  describe('localTime', () => {
+    const EXPECTED =
+      '<time class="mono" data-local-time datetime="2026-10-19T14:03:00.000Z" title="2026-10-19T14:03:00.000Z">2026-10-19 14:03:00 UTC</time>';
+
+    it('renders a Date as a <time> element with ISO datetime/title and UTC fallback text', () => {
+      expect(localTime(new Date('2026-10-19T14:03:00Z'))).toBe(EXPECTED);
+    });
+
+    it('renders ISO strings (with and without millis) and epoch ms identically to a Date', () => {
+      expect(localTime('2026-10-19T14:03:00Z')).toBe(EXPECTED);
+      expect(localTime('2026-10-19T14:03:00.000Z')).toBe(EXPECTED);
+      expect(localTime(Date.parse('2026-10-19T14:03:00Z'))).toBe(EXPECTED);
+    });
+
+    it('renders "-" for null, undefined and the empty string', () => {
+      expect(localTime(null)).toBe('-');
+      expect(localTime(undefined)).toBe('-');
+      expect(localTime('')).toBe('-');
+    });
+
+    it('escapes malicious input and emits no <time>', () => {
+      const out = localTime('<img src=x onerror=alert(1)>');
+      expect(out).toBe('<span class="mono">&lt;img src=x onerror=alert(1)&gt;</span>');
+      expect(out).not.toContain('<time');
+    });
+
+    it('does not throw on invalid input and escapes it', () => {
+      expect(localTime('not a date')).toBe('<span class="mono">not a date</span>');
+      expect(localTime(new Date(Number.NaN))).toBe('<span class="mono">Invalid Date</span>');
+      expect(localTime('"><script>alert(1)</script>')).toBe(
+        '<span class="mono">&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;</span>',
+      );
+    });
+
+    it('rejects years outside 0..9999 instead of emitting a malformed fallback', () => {
+      const out = localTime(new Date(8.64e15));
+      expect(out).not.toContain('<time');
+      expect(out.startsWith('<span class="mono">')).toBe(true);
     });
   });
 });

@@ -504,4 +504,59 @@ describe('Admin Photo Routes (Task 10.2)', () => {
     expect(populatedRes.body).toContain('1,234,567');
     expect(populatedRes.body).toContain('10500 / 2100');
   });
+
+  // ---------------------------------------------------------------------------
+  // Requirement 16: Viewer-local timestamps
+  // ---------------------------------------------------------------------------
+  it('queue "Created" renders as a viewer-local <time> element and the old bare-UTC text is gone', async () => {
+    const user = randomUUID();
+    await seedUser(user, 'created@example.com', 'Created User');
+    await seedPhoto({
+      id: randomUUID(),
+      ownerId: user,
+      targetKind: 'food_log',
+      status: 'needs_review',
+      createdAt: new Date('2026-10-18T10:00:00Z'),
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/admin/photos',
+      headers: { authorization: validAuth },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain(
+      '<time class="mono" data-local-time datetime="2026-10-18T10:00:00.000Z" title="2026-10-18T10:00:00.000Z">2026-10-18 10:00:00 UTC</time>',
+    );
+    // Old rendering: a bare mono span holding the UTC text, no <time>.
+    expect(res.body).not.toMatch(/<span class="mono"[^>]*>2026-10-18 10:00:00<\/span>/);
+    // The shell's single localizer script and footnote are present.
+    expect((res.body.match(/<script>/g) ?? []).length).toBe(1);
+    expect(res.body).toContain('time[data-local-time]');
+    expect(res.body).toContain("Timestamps are shown in your browser's time zone");
+  });
+
+  // Feature: admin-panel, Property 10: Calendar-date buckets are never converted
+  it('usage "Day (UTC)" bucket keeps its header and renders the bare date, never a <time>', async () => {
+    await pool.query(
+      `INSERT INTO photo_usage_daily (
+        day, uploads, upload_bytes, harm_calls, vision_calls,
+        vision_prompt_tokens, vision_output_tokens, rejections, needs_review, exif_present
+      ) VALUES (
+        '2026-10-18', 1, 10, 1, 1, 1, 1, 0, 0, 0
+      );`,
+    );
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/admin/photos',
+      headers: { authorization: validAuth },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain('<th>Day (UTC)</th>');
+    expect(res.body).toContain('<td><span class="mono">2026-10-18</span></td>');
+    expect(res.body).not.toContain('<time');
+  });
 });

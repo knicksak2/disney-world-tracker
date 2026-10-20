@@ -186,6 +186,41 @@ an XSS vector against the Operator's own browser (e.g. a display name containing
 `table` and `renderPage` are the only two layout primitives; no CSS framework is introduced —
 inline `<style>` in `renderPage`'s `<head>` is sufficient for a readable internal tool.
 
+### 2a. `localTime` and `LOCAL_TIME_SCRIPT` — viewer-local timestamps (Requirement 16)
+
+```typescript
+export function localTime(value: Date | string | number | null | undefined): string;
+export const LOCAL_TIME_SCRIPT: string; // emitted once by renderPage, just before </body>
+```
+
+`localTime` turns a true instant into
+`<time class="mono" data-local-time datetime="2026-10-19T14:03:00.000Z" title="2026-10-19T14:03:00.000Z">2026-10-19 14:03:00 UTC</time>`.
+`datetime` and `title` come from `new Date(value).toISOString()` (never the raw input); the
+visible text is the no-JS fallback. `null`/`undefined`/`''` render `-`; an unparseable value (or a
+year outside 0..9999) renders `<span class="mono">` + `escapeHtml(String(value))` with no `<time>`
+and never throws. It accepts a `Date`, an ISO string, or epoch milliseconds, and owns the `mono`
+class so call sites drop their own wrapper.
+
+`LOCAL_TIME_SCRIPT` is a single constant-string inline script (no interpolated data) that
+`renderPage` emits once after the page container. It rewrites every `time[data-local-time]` to
+`YYYY-MM-DD HH:MM:SS <zone abbreviation>` using `Intl.DateTimeFormat('en-US', { hourCycle: 'h23',
+timeZoneName: 'short', ... }).formatToParts`, so field order is fixed while the zone abbreviation
+comes from the viewer's browser. It never touches `datetime` or `title`, and a bad `datetime` or an
+`Intl` failure leaves the server-rendered UTC fallback. `renderPage` also emits a footnote that
+timestamps are shown in the browser's time zone and that hovering reveals the UTC instant.
+
+No CSP or nonce mechanism exists on admin responses today (only `X-Robots-Tag` and, for photo
+routes, `Cache-Control`), so a plain inline `<script>` is permitted. If a CSP is introduced, this
+script tag must carry the nonce.
+
+Converted (true instants): catalog "last synced" and sync-run Started/Completed, directory Built
+At, sampling-run Started/Completed, derived-stat Last Success/Last Error At, push delivery
+Occurred At, user Created At and push-registration Updated At, pin Unlocked/Claimed At, and the
+photo queue `Created` column. Intentionally left as UTC (not instants): `Date (UTC)` in the
+growth daily table and `Day (UTC)` in the photo usage table (UTC-day aggregation buckets —
+converting a bare `YYYY-MM-DD` would shift the day and misstate the bucket), forecast-log and
+crowd-history park-calendar dates, and minute-of-day show start times.
+
 ### 3. `AdminRepo` — net-new read/write queries (Requirements 3-13)
 
 ```typescript
@@ -466,6 +501,25 @@ SHALL leave every other User's `sessions` rows completely unchanged, and SHALL r
 
 **Validates: Requirements 11.4**
 
+### Property 9: Instants render as exact UTC `<time>` elements and are safe and total
+
+*For any* valid date supplied as a `Date`, an ISO string, or epoch milliseconds, `localTime` SHALL
+emit a `<time data-local-time>` element whose `datetime` and `title` equal `toISOString()` of that
+instant (so `datetime` round-trips to the same instant) and whose fallback text is the UTC
+rendering, and the inline script SHALL map that instant to the viewer's zone without altering
+`datetime`. *For any* other input it SHALL never throw and SHALL never emit unescaped `<`, `>`, or
+`"` from the input.
+
+**Validates: Requirements 16.1, 16.2, 16.3, 16.5**
+
+### Property 10: Calendar-date buckets are never converted
+
+*For any* growth daily row or photo usage row, the `Date (UTC)` and `Day (UTC)` cells SHALL render
+the bare `YYYY-MM-DD` bucket key unchanged under their existing `(UTC)` header, never wrapped in a
+`<time>` element.
+
+**Validates: Requirements 16.4**
+
 ## Error Handling
 
 Three new `ErrorCode` values are added to `packages/shared/src/errors.ts`, mapped via
@@ -587,6 +641,16 @@ available on the existing pooled connection — not a new integration, just a ne
   one test asserts the `401` without credentials, one asserts `200`/success with correct
   credentials and a fake `AdminRepo`, and the not-found/already-running branches (Requirements
   3.6, 5.5, 9.3, 12.3) each get a dedicated case.
+- **Viewer-local timestamps (Requirement 16):** `html.test.ts` pins `localTime`'s exact markup for
+  Date / ISO string / epoch-ms input, the `-` cases, escaped invalid input, and the single
+  `renderPage` script plus footnote. `html.prop.test.ts` is the Property 9 `fast-check` property
+  (`{ numRuns: 100 }`, tagged `// Feature: admin-panel, Property 9: ...`). `localTimeScript.test.ts`
+  evaluates `LOCAL_TIME_SCRIPT` with `node:vm` against a stub `document` (jsdom is not an `apps/api`
+  dependency) with the zone pinned, covering PDT, PST midnight, Asia/Kolkata day roll-over, UTC,
+  bad/missing `datetime`, an `Intl` failure, and that `datetime`/`title` are never modified. The
+  `server.inject` assertions in `routes.test.ts` and `photoRoutes.test.ts` check the exact
+  `<time>` markup for every converted column, that the old raw-UTC/`String(Date)` rendering is
+  gone, and (Property 10, tagged in the test) that `Date (UTC)` / `Day (UTC)` stay bare dates.
 - **No mobile tests.** This feature touches only `apps/api` and `packages/shared`'s error-code
   catalog; `apps/mobile` is unaffected and needs no new or updated tests.
 

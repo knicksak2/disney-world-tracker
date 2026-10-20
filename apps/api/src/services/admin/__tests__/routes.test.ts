@@ -693,4 +693,229 @@ describe('Admin Panel Routes - Comprehensive Integration Suite', () => {
     expect(res.body).toContain('200'); // completions
     expect(res.body).toContain('2026-10-02');
   });
+
+  // ---------------------------------------------------------------------------
+  // Requirement 16: Viewer-local timestamps
+  // ---------------------------------------------------------------------------
+  describe('viewer-local timestamps (Requirement 16)', () => {
+    /** The exact markup `localTime` emits for an ISO-8601 UTC instant. */
+    function timeTag(iso: string): string {
+      const fallback = `${iso.slice(0, 19).replace('T', ' ')} UTC`;
+      return `<time class="mono" data-local-time datetime="${iso}" title="${iso}">${fallback}</time>`;
+    }
+
+    const SAMPLING_STARTED = '2026-10-01T10:00:00.000Z';
+    const SAMPLING_COMPLETED = '2026-10-01T10:01:00.000Z';
+    const BUILT_AT_MS = Date.parse('2026-10-01T09:30:00Z');
+
+    const fixedOverrides = {
+      repo: {
+        getRecentSamplingRuns: async () => [
+          {
+            id: 'samp-fixed',
+            started_at: new Date(SAMPLING_STARTED),
+            completed_at: new Date(SAMPLING_COMPLETED),
+            outcome: 'success',
+            error_message: null,
+            parks_sampled_count: 4,
+            experiences_mapped_count: 80,
+            wait_samples_recorded_count: 75,
+            unmapped_with_wait_count: 0,
+            unmapped_sample: [],
+          },
+        ],
+      },
+      getDirectorySnapshot: async () => ({ builtAtMs: BUILT_AT_MS, entryCount: 420, ttlMs: 43200000 }),
+    };
+
+    async function get(app: ReturnType<typeof buildApp>, url: string) {
+      const res = await app.inject({ method: 'GET', url, headers: { authorization: validAuthHeader } });
+      expect(res.statusCode).toBe(200);
+      return res.body;
+    }
+
+    function scriptCount(body: string): number {
+      return (body.match(/<script>/g) ?? []).length;
+    }
+
+    it('/admin/catalog - sync run started/completed and last-synced render as <time> elements', async () => {
+      const body = await get(buildApp(), '/admin/catalog');
+      expect(body).toContain(timeTag('2026-10-01T00:00:00.000Z')); // sync-1 started
+      expect(body).toContain(timeTag('2026-10-01T00:05:00.000Z')); // sync-1 completed
+      expect(body).toContain(timeTag('2026-09-30T00:00:00.000Z')); // sync-2 started
+      expect(body).toContain(timeTag('2026-09-30T00:01:00.000Z')); // sync-2 completed
+      expect(body).toContain(`1.50 hours ago (last synced ${timeTag('2026-10-01T12:00:00.000Z')})`);
+      expect(scriptCount(body)).toBe(1);
+      expect(body).toContain("Timestamps are shown in your browser's time zone");
+    });
+
+    it('/admin/catalog - a run with completed_at null renders "-" in the Completed cell, and no cache renders text only', async () => {
+      const running = {
+        id: 'sync-running',
+        status: 'running',
+        outcome: null,
+        started_at: new Date('2026-10-02T00:00:00Z'),
+        completed_at: null,
+        error_message: null,
+        entities_processed: null,
+      };
+      const body = await get(
+        buildApp({ repo: { getRecentSyncRuns: async () => [running] } }),
+        '/admin/catalog',
+      );
+      expect(body).toContain(timeTag('2026-10-02T00:00:00.000Z'));
+      // started tag is followed by the completed '-' cell
+      expect(body).toMatch(/<\/time><\/td><td>-<\/td>/);
+
+      const noCache = await get(
+        buildApp({ catalogRepo: { getCacheAge: async () => ({ hours: null, lastSuccessfulSyncAt: null }) } }),
+        '/admin/catalog',
+      );
+      expect(noCache).toContain('No cache recorded');
+    });
+
+    it('/admin/catalog - a null lastSuccessfulSyncAt renders "-" in the last-synced text', async () => {
+      const body = await get(
+        buildApp({ catalogRepo: { getCacheAge: async () => ({ hours: 2, lastSuccessfulSyncAt: null }) } }),
+        '/admin/catalog',
+      );
+      expect(body).toContain('2.00 hours ago (last synced -)');
+    });
+
+    it('/admin/disney-transport - directory Built At renders as a <time> element; unbuilt stays "Not built"', async () => {
+      const body = await get(buildApp(fixedOverrides), '/admin/disney-transport');
+      expect(body).toContain(timeTag(new Date(BUILT_AT_MS).toISOString()));
+      expect(scriptCount(body)).toBe(1);
+
+      const unbuilt = await get(
+        buildApp({ getDirectorySnapshot: async () => ({ builtAtMs: null, entryCount: 0, ttlMs: 43200000 }) }),
+        '/admin/disney-transport',
+      );
+      expect(unbuilt).toContain('Not built');
+      expect(unbuilt).not.toContain('<time');
+    });
+
+    it('/admin/intelligence/sampling - Started At and Completed At render as <time> elements', async () => {
+      const body = await get(buildApp(fixedOverrides), '/admin/intelligence/sampling');
+      expect(body).toContain(timeTag(SAMPLING_STARTED));
+      expect(body).toContain(timeTag(SAMPLING_COMPLETED));
+      expect(scriptCount(body)).toBe(1);
+    });
+
+    it('/admin/intelligence/derived-stats - Last Success / Last Error At render <time> or "-" per leg', async () => {
+      const body = await get(buildApp(), '/admin/intelligence/derived-stats');
+      expect(body).toContain(timeTag('2026-10-01T04:00:00.000Z')); // weather last success
+      expect(body).toContain(timeTag('2026-10-01T04:05:00.000Z')); // cascades last error
+      // weather row: success tag then '-' for last error; cascades row: '-' for success then tag.
+      expect(body).toMatch(/weather[\s\S]*?<\/time><\/td><td>-<\/td>/);
+      expect(body).toMatch(/cascades[\s\S]*?<td>-<\/td><td><time [^>]*datetime="2026-10-01T04:05:00\.000Z"/);
+      expect(scriptCount(body)).toBe(1);
+    });
+
+    it('/admin/notifications - Occurred At is normalized to a <time> element', async () => {
+      const body = await get(buildApp(), '/admin/notifications');
+      // Input had no milliseconds; the emitted instant is normalized to .000Z.
+      expect(body).toContain(timeTag('2026-10-01T12:00:00.000Z'));
+      expect(scriptCount(body)).toBe(1);
+    });
+
+    it('/admin/users?email= - account Created At and push registration Updated At render as <time> elements', async () => {
+      const body = await get(buildApp(), '/admin/users?email=found@example.com');
+      expect(body).toContain(timeTag('2026-01-01T00:00:00.000Z'));
+      expect(body).toContain(timeTag('2026-01-02T00:00:00.000Z'));
+      expect(scriptCount(body)).toBe(1);
+    });
+
+    it('/admin/users/:id/pins - Unlocked At and Claimed At render <time>, "Locked" and "-" otherwise', async () => {
+      const claimedPinRepo = {
+        getBoard: async () => ({
+          pins: [
+            { pinId: 'gold_coaster_royalty', unlocked: true, awardedAt: '2026-10-01T00:00:00Z', claimedAt: '2026-10-03T08:30:00Z', currentValue: 10, targetValue: 10, percentComplete: 100 },
+            { pinId: 'silver_epcot_explorer', unlocked: false, awardedAt: null, claimedAt: null, currentValue: 2, targetValue: 5, percentComplete: 40 },
+          ],
+          tierSummary: [],
+          totalUnlocked: 1,
+          totalPins: 2,
+          overallPercent: 50,
+        }),
+        reconcileAll: async () => ({ usersProcessed: 0, pinsAwarded: 0 }),
+      };
+      const body = await get(buildApp({ pinRepo: claimedPinRepo }), '/admin/users/user-1234/pins');
+      expect(body).toContain(timeTag('2026-10-01T00:00:00.000Z')); // unlocked
+      expect(body).toContain(timeTag('2026-10-03T08:30:00.000Z')); // claimed
+      expect(body).toContain('<span class="text-muted">Locked</span></td><td>-</td>');
+
+      const unclaimed = await get(buildApp(), '/admin/users/user-1234/pins');
+      expect(unclaimed).toContain(timeTag('2026-10-01T00:00:00.000Z'));
+      expect(unclaimed).toContain('<span class="text-muted">Locked</span></td><td>-</td>');
+    });
+
+    // Feature: admin-panel, Property 10: Calendar-date buckets are never converted
+    it('/admin/growth - the "Date (UTC)" bucket keeps its header and renders the bare date, not a <time>', async () => {
+      const body = await get(buildApp(), '/admin/growth');
+      expect(body).toContain('<th>Date (UTC)</th>');
+      expect(body).toContain('<td><span class="mono">2026-10-02</span></td>');
+      expect(body).not.toContain('<time');
+      expect(scriptCount(body)).toBe(1);
+    });
+
+    it('park-calendar dates and minute-of-day show times are not converted', async () => {
+      const model = await get(buildApp(), '/admin/intelligence/model');
+      expect(model).toContain('14:00'); // 840 minutes, park-local clock time
+      expect(model).not.toContain('<time');
+      const accuracy = await get(buildApp(), '/admin/intelligence/accuracy/exp-1');
+      expect(accuracy).toContain('2026-10-02');
+      expect(accuracy).not.toContain('<time');
+    });
+
+    it('the old raw-UTC rendering (bare ISO mono span, String(Date) output) is gone from every converted page', async () => {
+      const pages = [
+        '/admin/catalog',
+        '/admin/disney-transport',
+        '/admin/intelligence/sampling',
+        '/admin/intelligence/derived-stats',
+        '/admin/notifications',
+        '/admin/users?email=found@example.com',
+        '/admin/users/user-1234/pins',
+      ];
+      for (const url of pages) {
+        const body = await get(buildApp(fixedOverrides), url);
+        expect(body, url).not.toMatch(/<span class="mono">\d{4}-\d{2}-\d{2}T[\d:.]+Z<\/span>/);
+        expect(body, url).not.toMatch(/GMT[+-]\d{4}/);
+        expect(body, url).not.toContain('Coordinated Universal Time');
+        expect(body, url).toContain('data-local-time');
+        expect(scriptCount(body), url).toBe(1);
+      }
+    });
+
+    it('a malicious timestamp value is escaped and the page still has exactly one real <script>', async () => {
+      const body = await get(
+        buildApp({
+          repo: {
+            getRecentPushDeliveries: async () => [
+              {
+                id: 'push-evil',
+                occurredAt: '<script>alert(1)</script>',
+                userId: 'user-1',
+                status: 'ok',
+                notificationKind: 'friend_request_received',
+              },
+            ],
+          },
+        }),
+        '/admin/notifications',
+      );
+      expect(body).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
+      expect(body).not.toContain('<script>alert(1)</script>');
+      expect(scriptCount(body)).toBe(1);
+    });
+
+    it('the 401 response from basicAuth is untouched: plain, no script', async () => {
+      const app = buildApp();
+      const unauth = await app.inject({ method: 'GET', url: '/admin/catalog' });
+      expect(unauth.statusCode).toBe(401);
+      expect(unauth.body).not.toContain('<script');
+      expect(unauth.body).not.toContain('data-local-time');
+    });
+  });
 });

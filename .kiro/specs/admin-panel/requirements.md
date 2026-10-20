@@ -395,3 +395,16 @@ actually resolved, so that I can debug a local-vs-cloud environment mismatch wit
 4. THE Admin_Panel SHALL enforce same-origin on every `POST /admin/photos/*` route via `isSameOriginRequest` (cross-referencing `photo-uploads` Requirement 18.9), rejecting cross-origin requests with `403` and changing no state.
 5. WHERE photo storage or photo service is disabled (`PHOTOS_ENABLED=false`), THE Admin_Panel SHALL list the queue without thumbnails, display "Photos are disabled; thumbnails unavailable", allow database writes (`restore`, `remove`, `dismiss-reports`, `ban-uploader`), and refuse `approve` (cross-referencing `photo-uploads` Requirements 18.10, 18.12).
 
+### Requirement 16: Viewer-Local Timestamps
+
+**User Story:** As the Operator, I want every timestamp in the Admin_Panel shown in my own browser's time zone, so that I can read sync, sampling, and delivery times without converting from UTC by hand, while still being able to recover the exact UTC instant.
+
+#### Acceptance Criteria
+
+1. WHEN the Admin_Panel renders an instant (a sync/sampling/derived-stat run time, a push delivery or registration time, an account or pin time, the catalog last-synced time, the directory built-at time, or a photo `Created` time), THE Admin_Panel SHALL emit a `<time>` element whose `datetime` and `title` attributes are the exact ISO-8601 UTC instant and whose visible fallback text is `YYYY-MM-DD HH:MM:SS UTC`.
+2. WHEN a page loads in a browser with JavaScript enabled, THE Admin_Panel SHALL rewrite the visible text of every such `<time>` element to that instant in the viewer's browser time zone as `YYYY-MM-DD HH:MM:SS <zone abbreviation>`, using a single inline script from the shared page shell and leaving the `datetime` and `title` attributes unchanged.
+3. IF an instant is null, undefined, or empty, THEN THE Admin_Panel SHALL render `-`; IF it is not a valid date, THEN THE Admin_Panel SHALL render the HTML-escaped raw value with no `<time>` element and SHALL NOT throw.
+4. THE Admin_Panel SHALL NOT convert calendar-date aggregation buckets (the `Date (UTC)` column of Requirement 13.2 and the `Day (UTC)` column of Requirement 15.2), park-calendar dates, or minute-of-day show times; they SHALL retain their existing semantics and UTC labels.
+5. THE Admin_Panel SHALL HTML-escape every value interpolated into the `<time>` element, and the inline script SHALL contain no interpolated data.
+6. THE Admin_Panel SHALL display, in the shared page shell, a note that timestamps are shown in the viewer's browser time zone and that hovering reveals the UTC instant.
+

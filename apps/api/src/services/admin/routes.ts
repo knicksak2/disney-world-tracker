@@ -8,7 +8,7 @@ import type { FastifyPluginAsync, FastifyReply, preHandlerHookHandler } from 'fa
 import { AppError } from '../../errors/AppError.js';
 import { errorCodeToHttpStatus, PINS } from '@dwt/shared';
 import type { AppConfig } from '../../config.js';
-import { escapeHtml, flagged, renderPage, table, explainerBanner, progressBar } from './html.js';
+import { escapeHtml, flagged, localTime, renderPage, table, explainerBanner, progressBar } from './html.js';
 import {
   type AdminRepo,
   SAMPLING_HEALTH_STALE_MINUTES,
@@ -382,7 +382,7 @@ export function adminRoutes(options: AdminRoutesOptions): FastifyPluginAsync {
           const cacheAgeDisplay =
             cacheInfo === null || cacheInfo.hours === null
               ? 'No cache recorded'
-              : `${cacheInfo.hours.toFixed(2)} hours ago (last synced ${cacheInfo.lastSuccessfulSyncAt ? new Date(cacheInfo.lastSuccessfulSyncAt).toISOString() : '-'})`;
+              : `${escapeHtml(cacheInfo.hours.toFixed(2))} hours ago (last synced ${localTime(cacheInfo.lastSuccessfulSyncAt)})`;
 
           const syncRuns = await options.repo.getRecentSyncRuns(20);
           const dataQuality = await options.repo.getCatalogDataQuality();
@@ -460,11 +460,11 @@ export function adminRoutes(options: AdminRoutesOptions): FastifyPluginAsync {
             },
             {
               header: 'Started At',
-              cell: (r) => `<span class="mono">${escapeHtml(String(r.started_at))}</span>`,
+              cell: (r) => localTime(r.started_at),
             },
             {
               header: 'Completed At',
-              cell: (r) => (r.completed_at ? `<span class="mono">${escapeHtml(String(r.completed_at))}</span>` : '-'),
+              cell: (r) => localTime(r.completed_at),
             },
             {
               header: 'Entities',
@@ -485,7 +485,7 @@ export function adminRoutes(options: AdminRoutesOptions): FastifyPluginAsync {
             <h2>Catalog & Sync Health</h2>
             <div class="metric-card" style="margin-bottom: 1.5rem;">
               <div class="metric-label">Current Catalog Cache Age</div>
-              <div class="metric-val" style="font-size: 1.25rem;">${escapeHtml(cacheAgeDisplay)}</div>
+              <div class="metric-val" style="font-size: 1.25rem;">${cacheAgeDisplay}</div>
             </div>
             ${triggerHtml}
             ${qualityHtml}
@@ -570,13 +570,13 @@ export function adminRoutes(options: AdminRoutesOptions): FastifyPluginAsync {
           try {
             if (options.getDirectorySnapshot) {
               const dir = await options.getDirectorySnapshot();
-              const builtAt = dir.builtAtMs ? new Date(dir.builtAtMs).toISOString() : 'Not built';
+              const builtAtHtml = dir.builtAtMs ? localTime(dir.builtAtMs) : 'Not built';
               const ageMinutes = dir.builtAtMs ? Math.round((Date.now() - dir.builtAtMs) / 60000) : '-';
               dirHtml = `
                 <div class="metric-grid">
                   <div class="metric-card">
                     <div class="metric-label">Built At</div>
-                    <div class="metric-val" style="font-size: 1.1rem;"><span class="mono">${escapeHtml(builtAt)}</span></div>
+                    <div class="metric-val" style="font-size: 1.1rem;">${builtAtHtml}</div>
                   </div>
                   <div class="metric-card">
                     <div class="metric-label">Directory Age</div>
@@ -1204,8 +1204,8 @@ export function adminRoutes(options: AdminRoutesOptions): FastifyPluginAsync {
               header: 'Outcome',
               cell: (r) => (r.outcome === 'failed' ? flagged(true, 'failed') : '<span class="badge badge-success">success</span>'),
             },
-            { header: 'Started At', cell: (r) => `<span class="mono">${escapeHtml(String(r.started_at))}</span>` },
-            { header: 'Completed At', cell: (r) => `<span class="mono">${escapeHtml(String(r.completed_at))}</span>` },
+            { header: 'Started At', cell: (r) => localTime(r.started_at) },
+            { header: 'Completed At', cell: (r) => localTime(r.completed_at) },
             { header: 'Parks', cell: (r) => escapeHtml(r.parks_sampled_count) },
             { header: 'Mapped Exps', cell: (r) => escapeHtml(r.experiences_mapped_count) },
             { header: 'Wait Samples', cell: (r) => escapeHtml(r.wait_samples_recorded_count) },
@@ -1269,11 +1269,11 @@ export function adminRoutes(options: AdminRoutesOptions): FastifyPluginAsync {
             },
             {
               header: 'Last Success',
-              cell: (r) => (r.last_success_at ? `<span class="mono">${escapeHtml(String(r.last_success_at))}</span>` : '-'),
+              cell: (r) => localTime(r.last_success_at),
             },
             {
               header: 'Last Error At',
-              cell: (r) => (r.last_error_at ? `<span class="mono">${escapeHtml(String(r.last_error_at))}</span>` : '-'),
+              cell: (r) => localTime(r.last_error_at),
             },
             {
               header: 'Last Error',
@@ -1469,7 +1469,7 @@ export function adminRoutes(options: AdminRoutesOptions): FastifyPluginAsync {
             : `<span class="badge badge-success">Healthy: ${counts.ok} successful / ${counts.error} errors in 24h</span>`;
 
           const deliveriesTable = table(deliveries, [
-            { header: 'Occurred At', cell: (r) => `<span class="mono">${escapeHtml(r.occurredAt)}</span>` },
+            { header: 'Occurred At', cell: (r) => localTime(r.occurredAt) },
             { header: 'User ID', cell: (r) => `<code>${escapeHtml(r.userId)}</code>` },
             { header: 'Kind', cell: (r) => escapeHtml(r.notificationKind) },
             {
@@ -1542,7 +1542,7 @@ export function adminRoutes(options: AdminRoutesOptions): FastifyPluginAsync {
               const pushTable = table(user.recentPushRegistrations, [
                 { header: 'Registration ID', cell: (r) => `<code>${escapeHtml(r.id)}</code>` },
                 { header: 'Status', cell: (r) => escapeHtml(r.status) },
-                { header: 'Updated At', cell: (r) => `<span class="mono">${escapeHtml(r.updatedAt)}</span>` },
+                { header: 'Updated At', cell: (r) => localTime(r.updatedAt) },
               ]);
 
               userDetailsHtml = `
@@ -1559,7 +1559,7 @@ export function adminRoutes(options: AdminRoutesOptions): FastifyPluginAsync {
                     </div>
                     <div class="metric-card">
                       <div class="metric-label">Created At</div>
-                      <div class="metric-val" style="font-size: 1rem;"><span class="mono">${escapeHtml(user.createdAt)}</span></div>
+                      <div class="metric-val" style="font-size: 1rem;">${localTime(user.createdAt)}</div>
                     </div>
                   </div>
 
@@ -1669,11 +1669,11 @@ export function adminRoutes(options: AdminRoutesOptions): FastifyPluginAsync {
             { header: 'Track', cell: (p) => escapeHtml(pinDefMap.get(p.pinId)?.track ?? '-') },
             {
               header: 'Unlocked At',
-              cell: (p) => (p.awardedAt ? `<span class="mono">${escapeHtml(p.awardedAt)}</span>` : '<span class="text-muted">Locked</span>'),
+              cell: (p) => (p.awardedAt ? localTime(p.awardedAt) : '<span class="text-muted">Locked</span>'),
             },
             {
               header: 'Claimed At',
-              cell: (p) => (p.claimedAt ? `<span class="mono">${escapeHtml(p.claimedAt)}</span>` : '-'),
+              cell: (p) => localTime(p.claimedAt),
             },
           ]);
 

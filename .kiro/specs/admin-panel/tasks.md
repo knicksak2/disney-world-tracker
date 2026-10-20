@@ -344,6 +344,23 @@ small, independently testable wave: a repo method, a route, and its tests.
     - Implement `GET /admin/photos` and POST actions `/admin/photos/:id/{approve,restore,remove,dismiss-reports,ban-uploader}` with same-origin preHandler (Requirement 18.9 of photo-uploads). When `photos` port is absent, degrade gracefully with notice.
     - _Requirements: 15.1, 15.2, 15.3, 15.4, 15.5_
 
+- [x] 23. Viewer-local timestamps (Requirement 16)
+  - [x] 23.1 Add `localTime`, `LOCAL_TIME_SCRIPT`, and the footnote to `html.ts`
+    - `localTime` emits the `<time data-local-time>` element (ISO `datetime`/`title`, UTC fallback
+      text), `-` for null/undefined/empty, and an escaped span for invalid input; `renderPage`
+      emits the single inline script and footnote
+    - _Requirements: 16.1, 16.2, 16.3, 16.5, 16.6_
+  - [x] 23.2 Convert every instant call site in `routes.ts` and `photoRoutes.ts`; leave buckets UTC
+    - Leave `Date (UTC)` (growth) and `Day (UTC)` (photo usage), park-calendar dates, and
+      minute-of-day show times untouched
+    - _Requirements: 16.1, 16.4_
+  - [x] 23.3 Write unit, property (Property 9/10), script-behavior, and route tests
+    - `html.test.ts`, `html.prop.test.ts`, `localTimeScript.test.ts`, and the `routes.test.ts` /
+      `photoRoutes.test.ts` additions described in the design's Testing Strategy
+    - _Requirements: 16.1, 16.2, 16.3, 16.4, 16.5, 16.6_
+  - [x] 23.4 Run `npm run verify` and confirm the behavior→test map
+    - _Requirements: all_
+
 ## Notes
 
 - Tasks marked with `*` are optional (property/unit/integration test tasks) and can be skipped
@@ -385,7 +402,10 @@ small, independently testable wave: a repo method, a route, and its tests.
     { "id": 8, "tasks": [
       "9.4", "10.3", "11.3", "12.3", "13.3", "14.3", "15.3", "16.4", "17.3", "18.2", "19.3"
     ] },
-    { "id": 9, "tasks": ["21"] }
+    { "id": 9, "tasks": ["21"] },
+    { "id": 10, "tasks": ["23.1"] },
+    { "id": 11, "tasks": ["23.2", "23.3"] },
+    { "id": 12, "tasks": ["23.4"] }
   ]
 }
 ```
@@ -396,3 +416,8 @@ persistence hooks, the shell, and the checkpoint) are green. Wave 7 is each sect
 wiring, depending only on its own wave-6 repo methods plus the wave-3/4 shell. Wave 8 is the
 optional (`*`) test tasks for every section, which can trail their own wave-7 route task. Task 21
 is the single final full-suite gate and depends on every prior wave.
+
+Waves 10-12 (Requirement 16) depend on tasks 6 and 22 being done (they extend `html.ts` and the
+photo queue) and are the only waves that touch timestamp rendering in `html.ts`, `routes.ts`, and
+`photoRoutes.ts`. Wave 11 converts the call sites and writes the tests in parallel; wave 12 is the
+final `npm run verify` gate for that change.

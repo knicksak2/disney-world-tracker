@@ -22,6 +22,81 @@ export function escapeHtml(value: unknown): string {
 }
 
 /**
+ * Renders a true instant (Date, ISO string or epoch milliseconds) as a semantic
+ * `<time>` element. `datetime` and `title` carry the exact ISO-8601 UTC instant
+ * (derived from `toISOString()`, never from the raw input); the visible text is the
+ * no-JS fallback `YYYY-MM-DD HH:MM:SS UTC`, which the inline LOCAL_TIME_SCRIPT
+ * rewrites to the viewer's browser time zone.
+ *
+ * - null / undefined / '' render `-`.
+ * - Unparseable input (or a year outside 0..9999) renders the HTML-escaped raw
+ *   value in a mono span, with no `<time>`; this function never throws.
+ *
+ * Do NOT use this for calendar-date buckets (e.g. "Date (UTC)"), park-calendar
+ * dates or minute-of-day times: those are not instants.
+ *
+ * Validates: Requirements 16.1, 16.3, 16.5
+ */
+export function localTime(value: Date | string | number | null | undefined): string {
+  if (value === null || value === undefined || value === '') {
+    return '-';
+  }
+  let ms: number;
+  try {
+    ms = value instanceof Date ? value.getTime() : new Date(value).getTime();
+  } catch {
+    ms = Number.NaN;
+  }
+  const date = Number.isNaN(ms) ? null : new Date(ms);
+  const year = date === null ? Number.NaN : date.getUTCFullYear();
+  if (date === null || year < 0 || year > 9999) {
+    let raw: string;
+    try {
+      raw = String(value);
+    } catch {
+      raw = '';
+    }
+    return `<span class="mono">${escapeHtml(raw)}</span>`;
+  }
+  const iso = date.toISOString();
+  const fallback = `${iso.slice(0, 19).replace('T', ' ')} UTC`;
+  return `<time class="mono" data-local-time datetime="${escapeHtml(iso)}" title="${escapeHtml(iso)}">${escapeHtml(fallback)}</time>`;
+}
+
+/**
+ * Single inline script emitted once by renderPage. Rewrites the text of every
+ * `time[data-local-time]` to the viewer's browser time zone as
+ * `YYYY-MM-DD HH:MM:SS <zone abbreviation>`. Contains no interpolated data. On a
+ * bad `datetime` or any Intl failure the server-rendered UTC fallback is kept.
+ * `datetime` and `title` are never modified.
+ *
+ * No CSP / nonce mechanism exists for admin pages today; if one is introduced
+ * this script tag must carry the nonce.
+ *
+ * Validates: Requirements 16.2, 16.5
+ */
+export const LOCAL_TIME_SCRIPT = `(function () {
+  var nodes = document.querySelectorAll('time[data-local-time]');
+  for (var i = 0; i < nodes.length; i++) {
+    var el = nodes[i];
+    var iso = el.getAttribute('datetime');
+    var d = new Date(iso);
+    if (!iso || isNaN(d.getTime())) continue;
+    try {
+      var fmt = new Intl.DateTimeFormat('en-US', {
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
+        hourCycle: 'h23', timeZoneName: 'short'
+      });
+      var parts = fmt.formatToParts(d), p = {};
+      for (var j = 0; j < parts.length; j++) p[parts[j].type] = parts[j].value;
+      el.textContent = p.year + '-' + p.month + '-' + p.day + ' ' +
+        p.hour + ':' + p.minute + ':' + p.second + ' ' + p.timeZoneName;
+    } catch (e) { /* keep the UTC fallback text */ }
+  }
+})();`;
+
+/**
  * Returns a visible warning badge ("⚠ label") if condition is true, or empty string otherwise.
  */
 export function flagged(condition: boolean, label: string): string {
@@ -743,6 +818,10 @@ export function renderPage(title: string, bodyHtml: string, currentPath?: string
       color: var(--text-muted);
     }
 
+    .admin-footnote {
+      margin-top: 1.5rem;
+    }
+
     /* Forms */
     .form-group {
       margin-bottom: 1rem;
@@ -1031,7 +1110,9 @@ export function renderPage(title: string, bodyHtml: string, currentPath?: string
     <main>
       ${bodyHtml}
     </main>
+    <p class="text-muted text-xs admin-footnote">Timestamps are shown in your browser's time zone. Hover for the UTC instant.</p>
   </div>
+  <script>${LOCAL_TIME_SCRIPT}</script>
 </body>
 </html>`;
 }
