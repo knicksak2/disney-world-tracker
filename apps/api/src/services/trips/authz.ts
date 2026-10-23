@@ -41,6 +41,7 @@
 
 import type { DbPool } from '../../db/pool.js';
 import { AppError } from '../../errors/AppError.js';
+import { ACTIVE_ORGANIZER_COUNT_SQL, actingRole } from './effectiveRole.js';
 import type { TripRole } from './permissions.js';
 
 /**
@@ -68,15 +69,18 @@ export async function assertTripMember(
   userId: string,
   tripId: string,
 ): Promise<TripRole> {
-  const result = await pool.query<{ role: TripRole }>(
-    'SELECT role FROM trip_memberships WHERE trip_id = $1 AND user_id = $2',
+  const result = await pool.query<{ role: TripRole; has_active_organizer?: boolean | null }>(
+    `SELECT tm.role, ${ACTIVE_ORGANIZER_COUNT_SQL}
+       FROM trip_memberships tm
+      WHERE tm.trip_id = $1 AND tm.user_id = $2`,
     [tripId, userId],
   );
-  const role = result.rows[0]?.role;
-  if (role === undefined) {
+  const row = result.rows[0];
+  if (row === undefined) {
     throw new AppError('trip_forbidden', 'You may not view this trip.');
   }
-  return role;
+  // The Interim_Organizer (R7.1): a persisted member acts as organizer while the trip has no active organizer.
+  return actingRole(pool, tripId, userId, row);
 }
 
 /**

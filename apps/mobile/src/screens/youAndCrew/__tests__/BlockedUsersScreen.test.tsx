@@ -79,7 +79,8 @@ describe('BlockedUsersScreen (Task 13.8)', () => {
   it('renders names from GET /me/blocks and label "Photo uploader" with date when name is null', async () => {
     apiRequestSpy.mockImplementation((method: string, path: string) => {
       if (method === 'GET' && path === '/me/blocks') {
-        return Promise.resolve({ blocks: MOCK_BLOCKS });
+        // Real server shape: a bare array (GET /me/blocks), not `{ blocks: [...] }`.
+        return Promise.resolve(MOCK_BLOCKS);
       }
       return Promise.resolve([]);
     });
@@ -105,7 +106,7 @@ describe('BlockedUsersScreen (Task 13.8)', () => {
 
     apiRequestSpy.mockImplementation((method: string, path: string) => {
       if (method === 'GET' && path === '/me/blocks') {
-        return Promise.resolve({ blocks: currentBlocks });
+        return Promise.resolve(currentBlocks);
       }
       if (method === 'DELETE' && path === '/me/blocks/block-anon-2') {
         currentBlocks = currentBlocks.filter((b) => b.blockId !== 'block-anon-2');
@@ -141,7 +142,7 @@ describe('BlockedUsersScreen (Task 13.8)', () => {
   it('renders empty state when there are no blocked users', async () => {
     apiRequestSpy.mockImplementation((method: string, path: string) => {
       if (method === 'GET' && path === '/me/blocks') {
-        return Promise.resolve({ blocks: [] });
+        return Promise.resolve([]);
       }
       return Promise.resolve([]);
     });

@@ -231,3 +231,14 @@ can aggregate rode-with tags the same way it aggregates the other domains.
 2. WHEN the Mobile_App opens the Notification_Center in response to a tapped push notification, THE Notification_Center SHALL present the Attention_Item corresponding to the referenced item so the user can perform its Inline_Action, WHERE that item is still a Pending_Item.
 3. IF the item referenced by a tapped push notification cannot be acted upon, whether because it is no longer a Pending_Item or because it is otherwise unavailable, THEN THE Notification_Center SHALL present an indication that the referenced item is no longer available, and SHALL open with the Attention_Feed where possible; presenting the unavailable indication is sufficient even if the Attention_Feed does not open.
 4. THE Mobile_App SHALL NOT route a tapped push notification for a Friend_Request, Trip_Invite, Rode_With_Tag, or Share to a standalone handler screen in place of the Notification_Center.
+
+### Requirement 14: Pending and deleted accounts (added by the `account-deletion` spec)
+
+**User Story:** As a user, I do not want my attention feed to show requests, invites, or tags from someone who has deactivated or deleted their account. This requirement is additive; the full behavior is in `.kiro/specs/account-deletion/requirements.md` (Requirements 3, 5.4, 10.6).
+
+#### Acceptance Criteria
+
+1. WHILE the counterparty of a Pending_Item (the sender of a Friend_Request, the inviter of a Trip_Invite, the tagger of a Rode_With_Tag, the sender of a Share) is in `pending_deletion`, THE Notification_Center SHALL omit that item from the attention feed and from the attention badge count, and SHALL NOT report the omission as a source failure (Requirement 8).
+2. WHEN the counterparty's account is restored, THE Notification_Center SHALL include the still-pending item again on the next read, because no stored state was changed during the grace period.
+3. WHEN the counterparty's account is purged, THE Pending_Item SHALL no longer exist (the Friend_Request, Trip_Invite, and Rode_With_Tag rows are deleted or cancelled by the purge), and a Share SHALL remain in the Share Inbox with the sender shown as "Deleted user" per the `social-sharing-loop` amendment.
+4. WHEN the user's own account enters `pending_deletion`, THE Mobile_App SHALL clear the cached attention feed and badge count as part of the session-clear sequence (Requirement 11).

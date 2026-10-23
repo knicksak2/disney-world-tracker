@@ -81,7 +81,7 @@ function makeFakePool(
     calls,
     async query(text: string, params: ReadonlyArray<unknown> = []) {
       calls.push({ text, params });
-      if (text.includes('FROM friendships')) {
+      if (text.includes('FROM active_friendships')) {
         return { rows: [{ exists: areFriends }] };
       }
       if (text.includes('FROM users')) {
@@ -306,7 +306,7 @@ describe('stats authorization — owner-or-friend allowed (R9.1)', () => {
       // The friendship lookup ran exactly once with the canonical (lo, hi)
       // pair; a Friend implies existence, so no existence check is issued.
       const friendCalls = pool.calls.filter((c) =>
-        c.text.includes('FROM friendships'),
+        c.text.includes('FROM active_friendships'),
       );
       expect(friendCalls).toHaveLength(1);
       expect(friendCalls[0]!.params).toEqual([VIEWER_ID, TARGET_ID]);
@@ -352,7 +352,7 @@ describe('stats authorization — non-Friend denied (R9.2, R9.3)', () => {
       // The only DB traffic is the friendship lookup + the existence read used
       // to distinguish 403 from 404 — exactly two read-only SELECTs.
       const friendCalls = pool.calls.filter((c) =>
-        c.text.includes('FROM friendships'),
+        c.text.includes('FROM active_friendships'),
       );
       const existenceCalls = pool.calls.filter((c) =>
         c.text.includes('FROM users'),
@@ -401,7 +401,7 @@ describe('stats authorization — non-existent target (R9.6)', () => {
       // The friendship lookup denied, then a single existence check resolved
       // the target as absent → not-found. No write/analytics statement ran.
       expect(
-        pool.calls.filter((c) => c.text.includes('FROM friendships')),
+        pool.calls.filter((c) => c.text.includes('FROM active_friendships')),
       ).toHaveLength(1);
       expect(
         pool.calls.filter((c) => c.text.includes('FROM users')),

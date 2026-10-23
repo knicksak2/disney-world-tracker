@@ -199,6 +199,7 @@ describe('Trip Album Routes (Task 19.2 and 19.4)', () => {
     applyMigration(db, '0015_trips.sql');
     applyMigration(db, '0062_photo_uploads.sql');
     applyMigration(db, '0063_trip_photos.sql');
+    applyMigration(db, '0064_account_deletion.sql');
 
     organizerId = randomUUID();
     memberId = randomUUID();

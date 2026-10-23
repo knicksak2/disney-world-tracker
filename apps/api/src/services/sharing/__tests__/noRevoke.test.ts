@@ -229,6 +229,8 @@ describe('Task 21.2: No sender revoke; recipient delete ends access (decision D2
     applyMigration(db, '0040_food_item_logging.sql');
     applyMigration(db, '0062_photo_uploads.sql');
     applyMigration(db, '0063_trip_photos.sql');
+  // The friend gate and the inbox read the 0064 visibility views.
+  applyMigration(db, '0064_account_deletion.sql');
 
     senderId = randomUUID();
     recipient1Id = randomUUID();

@@ -466,6 +466,23 @@ export default function YouAndCrewScreen(): JSX.Element {
             </Pressable>
           </Card>
 
+          <Card style={styles.settingsCard} testID="you-and-crew-delete-account-card">
+            <Pressable
+              style={styles.blockedUsersRow}
+              onPress={() => navigation.navigate('DeleteAccount')}
+              accessibilityRole="button"
+              accessibilityLabel="Delete account"
+              accessibilityHint="Starts the steps to permanently delete your account"
+              testID="delete-account-entry-button"
+            >
+              <View style={styles.settingsCardHeader}>
+                <Ionicons name="trash-outline" size={16} color={t.color.danger} />
+                <Text style={styles.deleteAccountTitle}>Delete account</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={t.color.textSecondary} />
+            </Pressable>
+          </Card>
+
           <View style={styles.logoutBlock}>
             <SecondaryButton
               label={logoutMutation.isPending ? 'Logging out\u2026' : 'Log out'}
@@ -679,6 +696,14 @@ const useStyles = makeStyles((t) => ({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: t.spacing.xs,
+  },
+  deleteAccountTitle: {
+    ...t.typography.meta,
+    fontWeight: '700',
+    fontSize: 12,
+    color: t.color.danger,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   logoutBlock: {
     marginTop: t.spacing.sm,

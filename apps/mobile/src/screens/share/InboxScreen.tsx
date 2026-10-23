@@ -119,6 +119,7 @@ import {
 } from '@dwt/shared';
 
 import { ApiError, apiRequest } from '../../api/client';
+import { presentPerson } from '../../components/presentPerson';
 import type { YouAndCrewStackParamList } from '../../navigation/YouAndCrewStack';
 import type {
   MainTabParamList,
@@ -484,6 +485,19 @@ export default function InboxScreen(): JSX.Element {
       // its destination turns out to be reachable.
       markShareRead(item.shareId);
 
+      // account-deletion R6.4 — a deleted sender has no profile, comparison or
+      // showcase to open. An `experience` Share still opens its experience (that
+      // is content, not a link to a person); every other kind leads to the sender,
+      // so keep the User on the Inbox with the existing unavailable message and
+      // skip the friends read that could never find a placeholder.
+      if (
+        item.payload.kind !== 'experience' &&
+        !presentPerson(item.senderId, item.senderDisplayName).tappable
+      ) {
+        setRowMessage(item.shareId, SENDER_TAP_UNAVAILABLE_COPY);
+        return;
+      }
+
       // Clear any stale unavailable message from a previous attempt.
       setRowMessage(item.shareId, null);
       beginVerifying(item.shareId);
@@ -808,14 +822,23 @@ function InboxRow(props: {
     props;
   const styles = useStyles();
   const t = useAppTheme();
+  // account-deletion R6.4: a Deleted user's share leads nowhere but its content, so
+  // only an `experience` Share stays tappable. The row never opens a profile,
+  // comparison or showcase for a placeholder.
+  const sender = presentPerson(item.senderId, item.senderDisplayName);
+  const rowTappable = sender.tappable || item.payload.kind === 'experience';
 
   return (
     <Card
       accentColor={item.read ? t.color.primaryFg : t.color.accent}
       style={styles.row}
-      onPress={onSelect}
-      accessibilityRole="button"
-      accessibilityLabel={`Open share from ${item.senderDisplayName}`}
+      {...(rowTappable
+        ? {
+            onPress: onSelect,
+            accessibilityRole: 'button' as const,
+            accessibilityLabel: `Open share from ${sender.accessibilityLabel}`,
+          }
+        : {})}
       testID={`inbox-row-${item.shareId}`}
     >
       <View style={styles.header}>
@@ -829,7 +852,11 @@ function InboxRow(props: {
               testID={`inbox-unread-dot-${item.shareId}`}
             />
           )}
-          <Text style={styles.sender} testID={`inbox-sender-${item.shareId}`}>
+          <Text
+            style={styles.sender}
+            accessibilityLabel={sender.accessibilityLabel}
+            testID={`inbox-sender-${item.shareId}`}
+          >
             {item.senderDisplayName}
           </Text>
         </View>

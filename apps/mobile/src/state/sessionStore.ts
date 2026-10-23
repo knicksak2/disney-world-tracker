@@ -38,20 +38,49 @@ import {
  * valid session.
  */
 
+/**
+ * One-shot notice shown on the sign-in screen right after the user deleted their
+ * account (account-deletion R1.13). In memory only: never written to secure
+ * storage, so it cannot survive an app restart.
+ */
+export interface AccountDeletionNoticeState {
+  readonly scheduledPurgeAt: string;
+  readonly graceDays: number;
+}
+
 export interface SessionState {
   token: string | null;
   hydrated: boolean;
+  /**
+   * Non-persisted (account-deletion R1.13). `clearToken()` deliberately leaves it
+   * alone so it survives the sign-out transition that follows a deletion request.
+   */
+  accountDeletionNotice: AccountDeletionNoticeState | null;
+  /** Non-persisted (account-deletion R4.9): "welcome back" after a restoring sign-in. */
+  accountRestoredNotice: boolean;
   setToken: (token: string) => Promise<void>;
   clearToken: () => Promise<void>;
   loadFromStorage: () => Promise<void>;
+  setAccountDeletionNotice: (notice: AccountDeletionNoticeState) => void;
+  dismissAccountDeletionNotice: () => void;
+  setAccountRestoredNotice: (value: boolean) => void;
+  dismissAccountRestoredNotice: () => void;
 }
 
 export const useSessionStore = create<SessionState>((set) => ({
   token: null,
   hydrated: false,
+  accountDeletionNotice: null,
+  accountRestoredNotice: false,
   setToken: async (token: string) => {
     await setSessionToken(token);
-    set({ token });
+    // Signing in again is what cancels a pending deletion, so a "scheduled for
+    // deletion" banner left over from the request must not outlive a successful
+    // sign-in (it would reappear on the next logout). The same goes for a
+    // "welcome back" notice left undismissed by an earlier session: it belongs to
+    // the sign-in that restored the account, so a later ordinary sign-in must not
+    // inherit it. Login and Reset set the flag AFTER awaiting this call.
+    set({ token, accountDeletionNotice: null, accountRestoredNotice: false });
   },
   clearToken: async () => {
     await clearSessionToken();
@@ -61,4 +90,8 @@ export const useSessionStore = create<SessionState>((set) => ({
     const stored = await getSessionToken();
     set({ token: stored ?? null, hydrated: true });
   },
+  setAccountDeletionNotice: (notice) => set({ accountDeletionNotice: notice }),
+  dismissAccountDeletionNotice: () => set({ accountDeletionNotice: null }),
+  setAccountRestoredNotice: (value) => set({ accountRestoredNotice: value }),
+  dismissAccountRestoredNotice: () => set({ accountRestoredNotice: false }),
 }));

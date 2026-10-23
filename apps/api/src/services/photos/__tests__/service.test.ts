@@ -202,7 +202,11 @@ describe('PhotoService (Task 8.2)', () => {
     applyMigration(db, '0040_food_item_logging.sql');
     applyMigration(db, '0062_photo_uploads.sql');
 
+    // Free-text avatar_preset (this suite stores arbitrary preset ids, so no 0013 CHECK). 0064's visibility
+    // views read it, friendships and trip_memberships (0015).
     db.public.none('ALTER TABLE profiles ADD COLUMN IF NOT EXISTS avatar_preset TEXT;');
+    applyMigration(db, '0015_trips.sql');
+    applyMigration(db, '0064_account_deletion.sql');
 
     user1Id = randomUUID();
     user2Id = randomUUID();
@@ -1085,6 +1089,33 @@ describe('PhotoService (Task 8.2)', () => {
       const r2 = await repo.getById(p2);
       expect(r1?.status).toBe('deleted');
       expect(r2?.status).toBe('uploading');
+    });
+
+    it('deleteAllForUser with { limit } marks at most that many photos per call', async () => {
+      const ids = [randomUUID(), randomUUID(), randomUUID()];
+      for (const id of ids) {
+        await repo.insertUploading({
+          id,
+          ownerId: user1Id,
+          targetKind: 'food_log',
+          targetId: randomUUID(),
+          scopeId: foodItem1Id,
+          objectKey: `u/${id}/full.jpg`,
+          thumbKey: `u/${id}/thumb.jpg`,
+          byteSize: 100,
+          thumbByteSize: 10,
+          width: 10,
+          height: 10,
+          createdAt: clock.now(),
+        });
+      }
+
+      const first = await service.deleteAllForUser(user1Id, { limit: 2 });
+      expect(first).toHaveLength(2);
+      const second = await service.deleteAllForUser(user1Id, { limit: 2 });
+      expect(second).toHaveLength(1);
+      expect([...first, ...second].sort()).toEqual([...ids].sort());
+      expect(await service.deleteAllForUser(user1Id, { limit: 2 })).toEqual([]);
     });
 
     it('softDeleteForTarget soft-deletes photos matching kind and targetId', async () => {

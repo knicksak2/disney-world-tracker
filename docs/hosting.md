@@ -150,6 +150,28 @@ Housekeeping for user photo uploads (resuming abandoned pending jobs, expiring s
 - **Single-flight:** The sweep endpoint is guarded against concurrent executions; if a previous pass is still running, subsequent calls return `{ status: 'skipped', reason: 'in_flight' }`.
 - **Hosting impact:** At most 4 short passes per day, with each pass capped by `PHOTOS_SWEEP_TIME_BUDGET_MS` (default 25s), keeping database and object storage usage within free-tier limits.
 
+### Dedicated Account Deletion Cron (Purge_Cron)
+
+Accounts whose deletion grace period has ended are purged by a **dedicated Purge_Cron** job on [cron-job.org](https://cron-job.org), completely separate from the keep-alive pinger and from the other two cron jobs. Each run claims at most `ACCOUNT_DELETION_PURGE_BATCH` due accounts, works in chunks of at most `ACCOUNT_DELETION_CHUNK_ROWS` rows, and stops starting new work after `ACCOUNT_DELETION_PURGE_TIME_BUDGET_MS`; an unfinished account is picked up by the next run from the stage it reached.
+
+**Keep-alive rule:** the keep-alive job (`GET /health`) touches no database and must **never** call the purge endpoint. Calling it on the ~10-minute keep-alive cadence (~19 hours/day) would wake Neon on every tick and burn its compute budget for no benefit, because almost every run would find nothing due. The Purge_Cron runs twice a day.
+
+- **Endpoint:** `POST` or `HEAD https://<render-host>/internal/account-deletion/purge/run` (a `HEAD` request returns no body and avoids cron-job.org's 8 KB limit; the route answers `202` on both methods and does the work after answering, so a slow purge never times the job out).
+- **Authentication:** `x-cron-secret: <ACCOUNT_DELETION_CRON_SECRET>` header. The secret is dedicated: the service refuses to boot if it equals `SAMPLING_CRON_SECRET`, `PIN_RECONCILE_CRON_SECRET`, `TRIP_BOOKING_CRON_SECRET` or (when set) `PHOTOS_CRON_SECRET`. A missing or wrong secret, including another cron's secret, answers `401` and starts nothing.
+- **Timezone:** **`America/New_York`**
+- **Crontab:** `35 8,20 * * *` (twice a day, at 08:35 and 20:35 ET). The slot is chosen to coincide with neither Photo_Cron (`5 7,13,19,0 * * *`) nor Reminder_Cron (`0,10,20 6,7,20 * * *`, or `0,10,20 6,7,9,20 * * *` with the `week` lead), and both fall inside the day-only keep-alive window.
+- **Single-flight:** if a run is still in progress, the next call answers `202` with `{ status: 'skipped', reason: 'in_flight' }`. Across several instances, each account is claimed with `FOR UPDATE SKIP LOCKED`, so two processes can never purge the same account.
+- **Hosting impact:**
+  - **Render:** two short wakes per day (08:35 and 20:35 are inside the awake window), well within the 750 instance-hour cap.
+  - **Neon:** two short wake-ups per day. An idle pass (nothing due) is two read statements and no write. A real purge is bounded by the chunk size, so it stays well inside the free-tier compute budget.
+  - **Redis:** no polling and no queue. The only commands are the lockout-key cleanup for each purged account.
+- **Operator steps (before the first deploy):**
+  1. Add `ACCOUNT_DELETION_CRON_SECRET` to the Render environment. `render.yaml` declares the key with `sync: false`, so Render asks for the value, but it does not invent one. The migrate step loads the config, so a missing secret fails the build.
+  2. Create the cron-job.org entry above (method `POST` or `HEAD`, the header, the crontab, the timezone).
+  3. Locally, add `ACCOUNT_DELETION_CRON_SECRET` to your own env file; `apps/api/.env.example` lists it with the other variables.
+- **Real-Postgres smoke list (once, after the first deploy).** The automated tests run the purge against pg-mem, which is lenient about parameter typing and has a single connection. These statements are therefore confirmed by the first real run, and you should watch the Render log for `warn` or `error` lines from the purge before announcing the feature: (1) the tombstone `users` insert with `$1::uuid, $2::text` (the first purge of an account that has retained content such as a trip comment); (2) the claim statement with its `Date` parameters against `TIMESTAMPTZ` and `id = ANY(ARRAY(... FOR UPDATE SKIP LOCKED))`; (3) the chunked statements for the six composite-key tables; (4) the multi-row `VALUES` insert that queues rated experiences for recompute; (5) the three `CREATE VIEW` statements in migration `0064`. A purge that fails any of them leaves the account `purging`, grows its `purge_attempts` and logs an `error` (once, at five attempts), so the failure is visible and retried, never silent.
+- **Logs.** The purge identifies an account only by a 12-character keyed hash (`accountLogId`, an HMAC of the user id with `SESSION_SECRET`), never by id, email or name. Rotating `SESSION_SECRET` changes the hash for future lines, so older and newer lines about one account no longer correlate.
+
 
 ---
 

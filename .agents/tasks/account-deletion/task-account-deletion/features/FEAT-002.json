@@ -1,0 +1,27 @@
+{
+  "id": "FEAT-002",
+  "type": "feat",
+  "description": "Repository layer (tasks.md tasks 6-7): accountDeletion/repo.ts with pg-mem tests for every SQL path (request/grant/restore, claim + fencing, trip resolution with the afterTripLocked seam, stage executors, tombstone, chunked enqueue, finalize + ledger) and a whole-purge residual test over a seeded multi-table user graph. Includes the additive photos softDeleteByOwner/deleteAllForUser `limit`. Depends on FEAT-001.",
+  "status": "pending",
+  "steps": [
+    "Task 6.1: add optional `limit` to photos softDeleteByOwner and PhotoService.deleteAllForUser (default behavior unchanged) with a pg-mem test; add no account-deletion wording to files scanned by photos.guards.test.ts.",
+    "Task 6.2: repo.ts + ports.ts: consumeGrantAndRequestDeletion, issueGrant (prune in same tx), restore, restoreInTx, getPasswordHash, getEmail; apps/api/src/services/accountDeletion/__tests__/repo.request.test.ts (Properties 4, 6, restore boundary, race).",
+    "Task 6.3: claimDue (single UPDATE ... IN (SELECT ... FOR UPDATE SKIP LOCKED LIMIT) RETURNING, ordered purge_attempts, scheduled_purge_at, id), releaseClaim, advanceStage, addCounters, rewindStage, recordFailedAttempt (relative vs absolute), recordWarning, all fenced; repo.claim.test.ts (Properties 16, 31).",
+    "Task 6.4: listTripsOf + resolveTrip in one transaction per design order (lock trips row, lock memberships, read user states, planTripResolution, soft-delete trip photos on the same client then DELETE FROM trips, or transfer/promote); afterTripLocked seam; repo.trips.test.ts (Properties 9, 30).",
+    "Task 6.5: ensureTombstone, anonymizeChunk (incl. anonymize_then_delete for trip-referenced experience_logs), scrubShares, enqueueRatedChunk, purgeChunk, drainRecomputeQueue, finalize + ledger prune; repo.stages/tombstone/enqueue/finalize tests iterating DISPOSITIONS (Properties 14, 15, 17, 28, 33).",
+    "Task 6.6: repo.purge.residual.test.ts: seeded graph across every registry table, residual-reference search of all tables for id/email/display name/avatar preset, anonymize rows intact, trip history survives, Net_Balance identical via computeNetBalances, report-count fixture, bounded-run recording pool (Properties 12, 13, 17, 21, 26).",
+    "Task 7 checkpoint: `npm run verify:api`; report literal tail."
+  ],
+  "acceptance_criteria": [
+    "Every registry row in dispositions.ts has a passing pg-mem test (the test iterates DISPOSITIONS so a missing case fails).",
+    "The residual-reference test proves no table/column/JSONB value contains the purged user's id, email, display name or avatar preset after the stages complete.",
+    "No repo statement touches more than ACCOUNT_DELETION_CHUNK_ROWS rows for a per-user table (recording-pool test).",
+    "`npm run verify:api` exits 0."
+  ],
+  "verification": [
+    "npx vitest run src/services/accountDeletion src/services/photos (in apps/api)",
+    "npm run verify:api"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}

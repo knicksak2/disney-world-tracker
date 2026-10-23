@@ -1,0 +1,31 @@
+{
+  "id": "FEAT-005",
+  "type": "feat",
+  "description": "Mobile flow, photos-guard decision, docs and spec housekeeping (tasks.md tasks 14-18, 19 left manual): sessionStore notices + useAnnounceOnMount + notice components, DeleteAccountScreen + YouAndCrew entry + stack registration, LoginScreen/RegisterScreen/ResetPasswordScreen DTO adoption + restored notice mounted in RootNavigator MainTabsNavigator, presentPerson + useAttention filter + trip_party_deleted copy; photosScope.guard.test.ts (photos.guards.test.ts stays UNTOUCHED); privacy-policy/photos-runbook docs; the two residual NIT edits to design.md; spec validator pass. Depends on FEAT-001 (shared) and FEAT-003 (API contracts).",
+  "status": "pending",
+  "steps": [
+    "Task 14.1: apps/mobile/src/state/sessionStore.ts (non-persisted accountDeletionNotice + accountRestoredNotice, clearToken unchanged), apps/mobile/src/hooks/useAnnounceOnMount.ts, components/AccountDeletionNotice.tsx and AccountRestoredNotice.tsx (makeStyles, role=alert, announceForAccessibility once); Jest/RNTL tests.",
+    "Task 14.2: apps/mobile/src/screens/youAndCrew/DeleteAccountScreen.tsx (+ palette only if needed), YouAndCrewStack.tsx registration (DeleteAccount: undefined), YouAndCrewScreen.tsx entry (testID delete-account-entry-button, between Blocked Users and logout); never touch ProfileScreen.tsx; RNTL tests driving every interaction asserting call + on-screen result (wrong password inline error/stay signed in/field cleared, lockout copy, confirm disabled until DELETE, POST payload {reauthGrant, confirmation:'DELETE'}, success sets notice/clears token+cache with no /auth/logout and no push DELETE, reauth_required returns to password step, pending disables submit).",
+    "Task 14.3: apps/mobile/src/screens/LoginScreen.tsx (real path) adopt AuthSessionResponseDTO, render AccountDeletionNotice, set restored notice; RegisterScreen.tsx adopt DTO; ResetPasswordScreen.tsx set restored notice; RootNavigator.tsx MainTabsNavigator wraps navigator in flex container with AccountRestoredNotice first; tests including announceForAccessibility called exactly once with the date, banner absent on fresh store.",
+    "Task 14.4: components/presentPerson.ts used by every person-linking list (trip members, feed, comments, inbox senders, expense parties); useAttention.ts selectUnreadShares drops isDeletedUserId senders; trip_party_deleted copy + hidden settle control on placeholder pairwise rows; tests incl. useAttention.accountDeletion.test.tsx using a real generatePlaceholderId output.",
+    "Task 15 checkpoint: `npm run verify:mobile` (includes apps/mobile typecheck and themeRetrofit.guard.test.ts); report literal tail.",
+    "Task 16: do NOT edit photos.guards.test.ts; add accountDeletion/__tests__/photosScope.guard.test.ts per tasks.md; run both tests.",
+    "Task 17: docs/privacy-policy.md sections 4 and 5, docs/photos-runbook.md note, confirm hosting.md/render.yaml/.env.example edits exist; apply the two design-review NIT edits to design.md additively (unread-count endpoint sentence; 'best-effort' on PurgeRunnerDeps.lockout comment); run the Kiro spec validator on the account-deletion files, trip-expenses/requirements.md and the eight amended specs (if unavailable, say so; do not claim clean).",
+    "Task 18 (workflow variant): do NOT run the full `npm run verify` here (the workflow's final-verify step owns it); instead run `git status --short`, confirm only intended files changed, and write .agents/tasks/account-deletion/impl-behavior-map.md with the behavior->test map and any untested behaviors. Leave task 19 (manual operator gates) unchecked."
+  ],
+  "acceptance_criteria": [
+    "Every mobile interaction in R17.6 is driven by an RNTL test asserting both the network call (endpoint + payload) and the resulting on-screen change; themeRetrofit.guard.test.ts is green.",
+    "photos.guards.test.ts is byte-identical to HEAD and passes; photosScope.guard.test.ts passes.",
+    "`npm run verify:mobile` exits 0.",
+    "docs/privacy-policy.md and docs/photos-runbook.md updated; the two NIT edits are present in design.md and only additive; tasks.md checkboxes for completed tasks are `- [x]` and the file still uses only `- [ ]`/`- [x]` markers.",
+    "No stray scratch files, no .env* edits, nothing committed or staged."
+  ],
+  "verification": [
+    "npx jest apps/mobile test files added in tasks 14.x (in apps/mobile) and npm run typecheck (in apps/mobile)",
+    "npm run verify:mobile",
+    "npx vitest run src/services/photos/__tests__/photos.guards.test.ts src/services/accountDeletion/__tests__/photosScope.guard.test.ts (in apps/api)",
+    "git status --short"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}

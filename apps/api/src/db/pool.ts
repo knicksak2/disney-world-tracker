@@ -6,12 +6,34 @@
  * pool is preferred over per-request clients so that connection limits are
  * enforced application-wide and prepared statements can be reused.
  */
+import pino from "pino";
 import pg from "pg";
 import type { Pool, PoolClient, PoolConfig, QueryResult, QueryResultRow } from "pg";
 
 import { loadConfig } from "../config.js";
 
 const { Pool: PgPool } = pg;
+
+const poolLogger = pino({ name: "db-pool" });
+
+/**
+ * Attach the mandatory `error` listener to a pool.
+ *
+ * `pg.Pool` re-emits errors from *idle* clients (e.g. Neon closing a pooled
+ * connection, a network blip, a server restart) as an `error` event on the
+ * pool. With no listener, Node treats that as an unhandled 'error' event and
+ * crashes the whole process ("Connection terminated unexpectedly"). The pool
+ * already evicts the dead client, so logging is all that is needed; the next
+ * `query()`/`connect()` transparently opens a fresh connection.
+ */
+export function attachPoolErrorHandler(
+  target: Pick<Pool, "on">,
+  log: Pick<typeof poolLogger, "error"> = poolLogger,
+): void {
+  target.on("error", (err) => {
+    log.error({ err }, "idle pg client error (client evicted from pool)");
+  });
+}
 
 /**
  * The exported pool type. We re-export `pg`'s `Pool` so consumers do not need
@@ -33,9 +55,14 @@ export function createPool(overrides: Partial<PoolConfig> = {}): Pool {
     max: 10,
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 10_000,
+    // TCP keep-alive lowers the odds of an idle socket being silently dropped
+    // by Neon's pooler / intermediate NATs.
+    keepAlive: true,
     ...overrides,
   };
-  return new PgPool(poolConfig);
+  const created = new PgPool(poolConfig);
+  attachPoolErrorHandler(created);
+  return created;
 }
 
 /**

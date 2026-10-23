@@ -32,6 +32,7 @@ import {
   tripExpenseKeys,
 } from './tripExpenseApi';
 import { SETTLEMENT } from './SettlementModal.palette';
+import { ledgerSaveErrorMessage } from './tripPartyDeleted';
 
 interface Props {
   readonly visible: boolean;
@@ -120,7 +121,7 @@ export function SettlementModal({
       onClose();
     },
     onError: (err: unknown) => {
-      setErrorMessage(err instanceof Error ? err.message : 'Failed to save settlement');
+      setErrorMessage(ledgerSaveErrorMessage(err, 'Failed to save settlement'));
     },
   });
 

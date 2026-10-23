@@ -1,0 +1,27 @@
+{
+  "id": "FEAT-004",
+  "type": "feat",
+  "description": "Visibility retrofit, money rules, admin visibility and structural guards (tasks.md tasks 12-13): convert every Appendix B read surface to the views/ACTIVE_USER_SQL with a pg-mem test per row, trip_party_deleted money rules, admin lookup/growth changes, then the visibility/trip_memberships/surface guard tests with pinned counts taken from the finished tree. Depends on FEAT-001 (views, visibility.ts, scrub.ts) and FEAT-003 (auth/passwordResetRepo already converted in 9.3). Independent of mobile work.",
+  "status": "pending",
+  "steps": [
+    "Task 12.1 social surfaces: friends/repo.ts, friends/ownerOrFriend.ts, auth/profileRoutes.ts, stats/routes.ts targetExists, friendFoodRatings/repo.ts, pins/showcaseRoutes.ts, pins/repo.ts reconcileAll, sharing/repo.ts (inbox/Sent/single with scrubSharePayload; countUnreadInbox joins active sender), sharing/tripRecapGate.ts, reactions/repo.ts, notifications/directory.ts; one pg-mem test per row (active vs pending vs restored); stats 403-vs-404 comparison; per-payload-kind share tests; countUnreadInbox for active/pending/purging/restored/tombstone.",
+    "Task 12.2 trips/bookings/lists/photos: trips/repo.ts (active_trip_memberships rosters, profile_identity PLACEHOLDER vs OMIT, listPendingRodeWithTags is_visible), trips/summary.ts, sharing/tripRecap*.ts, tripBooking/repo.ts, foodLists/repo.ts, experienceLists/repo.ts, the two composeServices.ts list-owner queries, photos/repo.ts (active-owner EXISTS; friend filter on active_friendships), photos/reportsRepo.ts; pg-mem tests per row incl. reactions count 1 -> 2 after restore and photos not served while pending with no status change (Properties 18, 19).",
+    "Task 12.3 money: tripExpenses getNetBalances zero-sum with pending/placeholder parties, resolvePublicIds name maps (exportLedgerCsv), findNonVisibleParties (the single `deletion_state <> 'active'` literal), trip_party_deleted 409 on create/edit incl. guest-sponsor rule, delete still allowed; tests (Properties 13, 29).",
+    "Task 12.4 admin: admin/repo.ts findUserByEmail/userExists/getGrowthTotals/getDailyGrowth/getPurgeLedgerDaily per design Admin contract, admin/routes.ts Deletion card + growth cards + 7-day purge table, no control targeting deletion routes; pg-mem and server.inject tests.",
+    "Task 12.5 guards: apps/api/src/__tests__/visibility.guard.test.ts (TypeScript compiler API, single rule, per-file allowlist with reason + pinned non-passing hit count, negative fixtures), trip_memberships.guard.test.ts, surface guards; pinned counts come from the guard's own report on the finished converted tree. Convert queries rather than extend allowlists.",
+    "Task 13 checkpoint: `npm run verify:api`; report literal tail and confirm every Appendix B row has a pg-mem test."
+  ],
+  "acceptance_criteria": [
+    "Every row of the design's surface-assignment table has a pg-mem test asserting the pending user is absent (OMIT) or shown as 'Deleted user' with public_id (PLACEHOLDER), and real values return after restore.",
+    "GET /me/inbox/unread-count excludes pending/purging/tombstone senders while GET /me/inbox still lists the share as a placeholder.",
+    "Net balances still sum to exactly zero with a pending or tombstone party; create/edit with a non-Visible party returns trip_party_deleted; delete succeeds.",
+    "Admin lookup shows the pending state/dates/stage (attempts only when > 0), tombstones are 'not found', growth page shows Active users / Pending deletion / Last purge / 7-day table, and no deletion-targeting control exists.",
+    "visibility.guard and trip_memberships.guard pass with non-empty reasons and pins from the finished tree; `npm run verify:api` exits 0."
+  ],
+  "verification": [
+    "npx vitest run src/__tests__ src/services/friends src/services/sharing src/services/trips src/services/tripExpenses src/services/admin src/services/photos (in apps/api)",
+    "npm run verify:api"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}

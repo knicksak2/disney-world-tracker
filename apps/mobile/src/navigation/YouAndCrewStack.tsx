@@ -14,6 +14,7 @@ import FriendFoodHistoryScreen from '../screens/friends/FriendFoodHistoryScreen'
 import PinShowcaseScreen from '../screens/profile/PinShowcaseScreen';
 import YouAndCrewScreen from '../screens/youAndCrew/YouAndCrewScreen';
 import BlockedUsersScreen from '../screens/youAndCrew/BlockedUsersScreen';
+import DeleteAccountScreen from '../screens/youAndCrew/DeleteAccountScreen';
 
 export type { FriendProfileParams };
 
@@ -35,6 +36,8 @@ export type YouAndCrewStackParamList = {
   TripRecapAlbum: { shareId: string; tripName?: string };
   FriendsList?: undefined;
   BlockedUsers: undefined;
+  /** Self-service account deletion: review, re-authenticate, confirm (account-deletion R1). */
+  DeleteAccount: undefined;
 };
 
 const Stack = createNativeStackNavigator<YouAndCrewStackParamList>();
@@ -96,6 +99,11 @@ export default function YouAndCrewStack(): JSX.Element {
         name="BlockedUsers"
         component={BlockedUsersScreen}
         options={{ title: 'Blocked Users' }}
+      />
+      <Stack.Screen
+        name="DeleteAccount"
+        component={DeleteAccountScreen}
+        options={{ title: 'Delete account' }}
       />
     </Stack.Navigator>
   );

@@ -189,7 +189,7 @@ function makeFakePool(rows: ReadonlyArray<SyntheticInboxRow>): DbPool {
       if (
         !text.includes('FROM share_recipients sr') ||
         !text.includes('JOIN shares s') ||
-        !text.includes('JOIN profiles p') ||
+        !text.includes('JOIN profile_identity p') ||
         !text.includes('LEFT JOIN share_reactions')
       ) {
         throw new Error(`unexpected SQL in inbox property test: ${text}`);

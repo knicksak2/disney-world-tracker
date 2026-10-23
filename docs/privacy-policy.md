@@ -51,6 +51,8 @@ We retain data only as long as necessary to provide our services and maintain co
 - **Rejected Photos**: Photos rejected by automated moderation are retained for **24 hours** (`PHOTOS_REJECTED_RETENTION_HOURS`) for audit consistency before automated permanent deletion.
 - **Photos Under Review**: Photos escalated to human operator review are retained for a maximum of **120 hours** (`PHOTOS_NEEDS_REVIEW_MAX_AGE_HOURS`). If not approved within this window, they are automatically deleted by the system sweep.
 - **Deleted Photos**: When you delete a photo, its database row is marked deleted immediately, preventing further reads. Temporary serving URLs expire within 1 hour (`PHOTOS_GET_URL_TTL_SECONDS`), and underlying storage objects are hard-deleted on the next automated background sweep.
+- **Deleted Accounts**: When you delete your account, it is hidden immediately and then permanently erased when a grace period ends (see section 5 for the steps and exactly what is erased and what is kept). The grace period is **30 days** (`ACCOUNT_DELETION_GRACE_DAYS`, default 30). Erasure runs as a background job that works in small batches, so it can finish a few hours after the grace period ends rather than at the exact moment.
+- **Database Backups**: Our database host may keep backups of the database for its own recovery purposes. Copies of your data inside those backups are not edited when you delete your account; they age out on the hosting provider's own schedule. We do not state a backup retention period here because it depends on the provider's plan and has not been verified.
 
 ---
 
@@ -59,6 +61,11 @@ We retain data only as long as necessary to provide our services and maintain co
 - **Delete Your Photos**: You can delete your own photos at any time from your food log history, the dish gallery viewer, or the trip album. Trip organizers may also remove photos from their trips.
 - **Report Content**: If you encounter inappropriate, infringing, or objectionable content, you can tap the **Report** button in the photo viewer. Reports are queued for operator review.
 - **Block Users**: You can block any photo uploader directly from the photo viewer without revealing your identity or learning theirs. Blocking immediately hides all present and future photos from that uploader across all galleries, strips, and albums. You can review and unblock users in **You & Crew** -> **Blocked Users**.
+- **Delete Your Account**: You can delete your account yourself, without contacting us. In the app, open **You & Crew** -> **Delete account**. If you have uninstalled the app or prefer to use a browser, you can also request deletion on the web at `/account-deletion`. You review what will happen, enter your password, and type `DELETE` to confirm. Sign-in is by email address and password only; the App does not use any third-party sign-in provider (such as Apple or Google), so there is no external sign-in token to revoke.
+  - **Grace period**: After you confirm, every device is signed out and your account is hidden from friends and trip members. It is permanently deleted after the grace period (**30 days** by default, the number of days is shown on the confirmation step). **Signing in again with your email and password during the grace period cancels the deletion** and restores your account. Resetting your password during that time also restores it. After the grace period the account cannot be restored.
+  - **What is deleted**: your sign-in and profile (email, display name, avatar), your ratings, completions, notes, favorites, pins, friend connections, saved and shared lists, push notification registrations, and your photos. Trips you own are handed to another trip member, or deleted together with their photos if you are the only member. You are removed from trips you only joined.
+  - **What is kept, anonymized**: content that other people can see and rely on is kept but shown as "Deleted user", with nothing linking it back to you. This covers comments and captions on shared trips, trip history entries, shares you sent to other people, and shared expense records (so that everyone else's balances stay correct). Reports you filed about photos are also kept without your identity.
+  - **After deletion**: the email address becomes available to register again.
 
 ---
 
@@ -77,6 +84,6 @@ Any content violating these standards will be removed immediately without prior 
 
 ### Support Contact Information
 If you have questions about this Privacy Policy, wish to appeal a content decision, or need to report an urgent safety concern, please contact our support team at:
-- **Email:** `[Support Contact Email]`
+- **Email:** the support email address configured for this deployment (the SUPPORT_EMAIL setting). The hosted privacy page shows that address as a clickable mail link.
 
-*(Note: Prior to public app store release, the application owner must replace `[Support Contact Email]` with a valid, monitored support email address).*
+*(Operator note: SUPPORT_EMAIL is required, and the API will not start without a valid, monitored address. No address is written into this document.)*

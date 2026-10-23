@@ -154,7 +154,7 @@ export function createTripBookingRepo(pool: DbPool): TripBookingRepo {
       }>(
         `SELECT d.window_kind, d.drop_on, d.marked_at, COALESCE(p.display_name, 'Someone') AS name
            FROM trip_booking_window_done d
-           LEFT JOIN profiles p ON p.user_id = d.marked_by
+           LEFT JOIN profile_identity p ON p.user_id = d.marked_by
           WHERE d.trip_id = $1`,
         [tripId],
       );
@@ -424,7 +424,7 @@ export function createTripBookingRepo(pool: DbPool): TripBookingRepo {
     async listReminderRecipients(tripId: string): Promise<string[]> {
       const res = await pool.query<{ user_id: string }>(
         `SELECT m.user_id
-           FROM trip_memberships m
+           FROM active_trip_memberships m
            LEFT JOIN trip_booking_reminder_mutes x ON x.trip_id = m.trip_id AND x.user_id = m.user_id
           WHERE m.trip_id = $1
             AND x.user_id IS NULL
@@ -468,14 +468,14 @@ export function createTripBookingRepo(pool: DbPool): TripBookingRepo {
         `SELECT p.id, p.trip_id, p.name, p.category, p.quantity,
                 p.assignee_id, pa.display_name AS assignee_name,
                 (tm.user_id IS NOT NULL) AS assignee_is_member,
-                p.added_by, pu.display_name AS added_by_name,
+                COALESCE(pu.public_id, p.added_by) AS added_by, pu.display_name AS added_by_name,
                 p.packed, p.packed_by, pp.display_name AS packed_by_name, p.packed_at,
                 p.created_at
            FROM trip_packing_items p
-           LEFT JOIN trip_memberships tm ON tm.trip_id = p.trip_id AND tm.user_id = p.assignee_id
-           LEFT JOIN profiles pu ON pu.user_id = p.added_by
-           LEFT JOIN profiles pa ON pa.user_id = p.assignee_id
-           LEFT JOIN profiles pp ON pp.user_id = p.packed_by
+           LEFT JOIN active_trip_memberships tm ON tm.trip_id = p.trip_id AND tm.user_id = p.assignee_id
+           LEFT JOIN profile_identity pu ON pu.user_id = p.added_by
+           LEFT JOIN profile_identity pa ON pa.user_id = p.assignee_id
+           LEFT JOIN profile_identity pp ON pp.user_id = p.packed_by
           WHERE p.trip_id = $1
           ORDER BY p.created_at ASC`,
         [tripId],
@@ -552,7 +552,7 @@ export function createTripBookingRepo(pool: DbPool): TripBookingRepo {
         // 3. Validate assignee membership if provided (R11.4)
         if (input.assigneeId) {
           const memCheck = await client.query(
-            `SELECT 1 FROM trip_memberships WHERE trip_id = $1 AND user_id = $2`,
+            `SELECT 1 FROM active_trip_memberships WHERE trip_id = $1 AND user_id = $2`,
             [tripId, input.assigneeId],
           );
           if (memCheck.rowCount === 0) {
@@ -589,11 +589,11 @@ export function createTripBookingRepo(pool: DbPool): TripBookingRepo {
           assignee_name: string | null;
         }>(
           `SELECT pa.display_name AS adder_name, ps.display_name AS assignee_name
-             FROM users u
-             LEFT JOIN profiles pa ON pa.user_id = $1
-             LEFT JOIN profiles ps ON ps.user_id = $2
-            WHERE u.id = $1`,
-          [adderId, input.assigneeId ?? null],
+             FROM trips t
+             LEFT JOIN profile_identity pa ON pa.user_id = $2
+             LEFT JOIN profile_identity ps ON ps.user_id = $3
+            WHERE t.id = $1`,
+          [tripId, adderId, input.assigneeId ?? null],
         );
         const namesRow = namesRes.rows[0];
 
@@ -649,7 +649,7 @@ export function createTripBookingRepo(pool: DbPool): TripBookingRepo {
         // 2. Validate assignee membership if provided (R11.4)
         if (patch.assigneeId !== undefined && patch.assigneeId !== null) {
           const memCheck = await client.query(
-            `SELECT 1 FROM trip_memberships WHERE trip_id = $1 AND user_id = $2`,
+            `SELECT 1 FROM active_trip_memberships WHERE trip_id = $1 AND user_id = $2`,
             [tripId, patch.assigneeId],
           );
           if (memCheck.rowCount === 0) {
@@ -690,19 +690,21 @@ export function createTripBookingRepo(pool: DbPool): TripBookingRepo {
         // 4. Fetch display names
         const namesRes = await client.query<{
           added_by_name: string | null;
+          added_by_public_id: string | null;
           assignee_name: string | null;
           assignee_is_member: boolean;
           packed_by_name: string | null;
         }>(
           `SELECT pu.display_name AS added_by_name,
+                  pu.public_id AS added_by_public_id,
                   pa.display_name AS assignee_name,
-                  EXISTS (SELECT 1 FROM trip_memberships tm WHERE tm.trip_id = $1 AND tm.user_id = $3) AS assignee_is_member,
+                  EXISTS (SELECT 1 FROM active_trip_memberships tm WHERE tm.trip_id = $1 AND tm.user_id = $3) AS assignee_is_member,
                   pp.display_name AS packed_by_name
-             FROM users u
-             LEFT JOIN profiles pu ON pu.user_id = $2
-             LEFT JOIN profiles pa ON pa.user_id = $3
-             LEFT JOIN profiles pp ON pp.user_id = $4
-            WHERE u.id = $2`,
+             FROM trips t
+             LEFT JOIN profile_identity pu ON pu.user_id = $2
+             LEFT JOIN profile_identity pa ON pa.user_id = $3
+             LEFT JOIN profile_identity pp ON pp.user_id = $4
+            WHERE t.id = $1`,
           [tripId, row.added_by, row.assignee_id, row.packed_by],
         );
         const namesRow = namesRes.rows[0];
@@ -722,7 +724,7 @@ export function createTripBookingRepo(pool: DbPool): TripBookingRepo {
           packed: Boolean(row.packed),
           packedAt: row.packed_at ? new Date(row.packed_at).toISOString() : null,
           packedByDisplayName: namesRow?.packed_by_name ?? null,
-          addedById: row.added_by,
+          addedById: namesRow?.added_by_public_id ?? row.added_by,
           addedByDisplayName: namesRow?.added_by_name ?? 'Someone',
           assigneeId,
           assigneeDisplayName,
@@ -802,19 +804,21 @@ export function createTripBookingRepo(pool: DbPool): TripBookingRepo {
 
         const namesRes = await client.query<{
           added_by_name: string | null;
+          added_by_public_id: string | null;
           assignee_name: string | null;
           assignee_is_member: boolean;
           packed_by_name: string | null;
         }>(
           `SELECT pu.display_name AS added_by_name,
+                  pu.public_id AS added_by_public_id,
                   pa.display_name AS assignee_name,
-                  EXISTS (SELECT 1 FROM trip_memberships tm WHERE tm.trip_id = $1 AND tm.user_id = $3) AS assignee_is_member,
+                  EXISTS (SELECT 1 FROM active_trip_memberships tm WHERE tm.trip_id = $1 AND tm.user_id = $3) AS assignee_is_member,
                   pp.display_name AS packed_by_name
-             FROM users u
-             LEFT JOIN profiles pu ON pu.user_id = $2
-             LEFT JOIN profiles pa ON pa.user_id = $3
-             LEFT JOIN profiles pp ON pp.user_id = $4
-            WHERE u.id = $2`,
+             FROM trips t
+             LEFT JOIN profile_identity pu ON pu.user_id = $2
+             LEFT JOIN profile_identity pa ON pa.user_id = $3
+             LEFT JOIN profile_identity pp ON pp.user_id = $4
+            WHERE t.id = $1`,
           [tripId, row.added_by, row.assignee_id, row.packed_by],
         );
         const namesRow = namesRes.rows[0];
@@ -834,7 +838,7 @@ export function createTripBookingRepo(pool: DbPool): TripBookingRepo {
           packed: Boolean(row.packed),
           packedAt: row.packed_at ? new Date(row.packed_at).toISOString() : null,
           packedByDisplayName: namesRow?.packed_by_name ?? null,
-          addedById: row.added_by,
+          addedById: namesRow?.added_by_public_id ?? row.added_by,
           addedByDisplayName: namesRow?.added_by_name ?? 'Someone',
           assigneeId,
           assigneeDisplayName,

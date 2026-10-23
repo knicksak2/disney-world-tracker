@@ -288,3 +288,15 @@ The Disney World Tracker is a mobile application that provides a comprehensive c
 22. WHEN the App requests an Experience detail view by Experience identifier, THE Catalog_Service SHALL return the imageUrl and imageAttribution fields for that Experience.
 23. WHEN the App displays an Experience on the catalog browse list or the detail view and the Experience's imageUrl is non-null, THE App SHALL display the Experience_Image together with its Image_Attribution.
 24. WHEN the App displays an Experience on the catalog browse list or the detail view and the Experience's imageUrl is null, THE App SHALL display a placeholder corresponding to the Experience's Experience_Category in place of an Experience_Image.
+
+### Requirement 13: Account deletion interplay with accounts, profiles, friends and aggregates (added by the `account-deletion` spec)
+
+**User Story:** As a user, I want to delete my account from the app, and I want the rest of the product to behave sensibly when an account is pending deletion or gone. This requirement is additive and does not change Requirements 6 to 11; the full behavior is in `.kiro/specs/account-deletion/requirements.md`.
+
+#### Acceptance Criteria
+
+1. THE Auth_Service SHALL let a signed-in user request deletion of their own account only after a server-verified re-authentication within `ACCOUNT_DELETION_REAUTH_WINDOW_SECONDS` and a typed confirmation phrase (`account-deletion` Requirement 2); on acceptance it SHALL revoke every session of the user (extending Requirement 6.8 to all sessions) and the user's login, `GET /me` and every other session-gated route SHALL answer `unauthorized` until the account is restored.
+2. WHEN a user signs in with correct credentials while their account is in `pending_deletion` and the grace period has not expired, THE Auth_Service SHALL restore the account and return `accountRestored: true` (extending Requirements 6.5 and 6.6); in every other case a deleted or purging account SHALL be indistinguishable from a wrong password (`invalid_credentials`).
+3. WHILE an account is in `pending_deletion`, THE Friend search, the Friends list, Friend_Requests, `GET /users/:userId/profile`, friend statistics and Progress_Comparison SHALL treat it as absent, using the existing non-probing codes (Requirements 7.8, 8.7 to 8.11; `profile_forbidden`, `stats_target_not_found`).
+4. WHEN an account is purged, THE Auth_Service SHALL have deleted its `users`, `profiles`, `sessions`, Friendships, Friend_Requests, Completions, Ratings, and Notes; THE Aggregate_Ratings_Service SHALL recompute the aggregate of every Experience the user rated, and the Highest-Rated leaderboard of Requirement 11 SHALL reflect the removal within its existing cache lifetime.
+5. THE email address of a pending account SHALL remain reserved (Requirement 6.3 continues to answer `email_in_use`), and SHALL be released when the account is purged.

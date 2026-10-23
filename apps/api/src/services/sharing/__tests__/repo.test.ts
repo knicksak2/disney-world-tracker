@@ -386,7 +386,7 @@ describe('listInbox', () => {
 
   it('joins profiles for the sender display name and left-joins the reaction', async () => {
     const pool = makePool((call) => {
-      expect(call.text).toContain('JOIN profiles p ON p.user_id = s.sender_id');
+      expect(call.text).toContain('JOIN profile_identity p ON p.user_id = s.sender_id');
       expect(call.text).toContain('LEFT JOIN share_reactions');
       return { rows: [] };
     });

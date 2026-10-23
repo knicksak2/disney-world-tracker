@@ -178,6 +178,11 @@ describe('Admin Panel Routes - Comprehensive Integration Suite', () => {
               email: 'found@example.com',
               createdAt: '2026-01-01T00:00:00Z',
               displayName: 'Disney Fan',
+              deletionState: 'active' as const,
+              deletionRequestedAt: null,
+              scheduledPurgeAt: null,
+              purgeStage: 0,
+              purgeAttempts: 0,
               completionCount: 15,
               ratingCount: 12,
               noteCount: 4,
@@ -191,6 +196,8 @@ describe('Admin Panel Routes - Comprehensive Integration Suite', () => {
       userExists: async (userId) => userId === 'user-1234',
       getGrowthTotals: async () => ({
         totalUsers: 50,
+        pendingDeletionCount: 0,
+        lastPurgeAt: null,
         totalTrips: 15,
         totalCompletions: 200,
         totalRatings: 180,
@@ -209,6 +216,7 @@ describe('Admin Panel Routes - Comprehensive Integration Suite', () => {
           newFoodLogs: 5,
         },
       ],
+      getPurgeLedgerDaily: async () => [{ dayUtc: '2026-10-02', count: 0 }],
       ...overrides,
     };
   }

@@ -139,6 +139,30 @@ export type {
   PhotoUploadsDisabledReason,
 } from './constants/photos.js';
 
+// Account-deletion constants and the placeholder-id helper.
+export {
+  DELETE_ACCOUNT_CONFIRMATION_PHRASE,
+  DELETED_USER_DISPLAY_NAME,
+  DELETED_USER_ID_PREFIX,
+  isDeletedUserId,
+} from './constants/deletedUser.js';
+
+// Account-deletion schemas (reauth, deletion request/response, auth session body).
+export {
+  reauthRequestSchema,
+  reauthResponseSchema,
+  deleteAccountRequestSchema,
+  deleteAccountResponseSchema,
+  authSessionResponseSchema,
+} from './schemas/index.js';
+export type {
+  ReauthRequest,
+  ReauthResponse,
+  DeleteAccountRequest,
+  DeleteAccountResponse,
+  AuthSessionResponse,
+} from './schemas/index.js';
+
 // Error code catalog and uniform JSON envelope.
 export {
   ERROR_CODES,
@@ -155,6 +179,7 @@ export type {
   UserDTO,
   ForgotPasswordResponseDTO,
   ResetPasswordSuccessDTO,
+  AuthSessionResponseDTO,
   ProfileDTO,
   ExperienceDTO,
   FacetValueDTO,

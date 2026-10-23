@@ -15,6 +15,8 @@ import type { FastifyBaseLogger } from 'fastify';
 import nodemailer from 'nodemailer';
 import type { Transporter } from 'nodemailer';
 
+import type { AccountDeletionMail } from '../accountDeletion/ports.js';
+
 export interface SendPasswordResetInput {
   readonly to: string;
   readonly code: string;
@@ -54,7 +56,53 @@ export interface MailServiceOptions {
 
 const DEFAULT_FROM = 'Disney World Tracker <auth@disneytracker.app>';
 
-export function createMailService(options: MailServiceOptions = {}): MailService {
+/**
+ * A purge date for an email: the park calendar's zone (`America/New_York`), with the zone abbreviation so the
+ * reader knows which clock it is on, e.g. "May 1, 2026, 8:00 AM EDT".
+ */
+function formatPurgeDate(date: Date): string {
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZoneName: 'short',
+  }).format(date);
+}
+
+/** Wraps a plain-text body in the same card layout the other transactional mail uses. */
+function simpleHtml(subject: string, title: string, paragraphs: readonly string[]): string {
+  const body = paragraphs.map((p) => `    <p class="instructions">${p}</p>`).join('\n');
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${subject}</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; color: #1e293b; margin: 0; padding: 24px; }
+    .card { max-width: 520px; margin: 0 auto; background: #ffffff; border-radius: 16px; padding: 32px; box-shadow: 0 4px 20px rgba(0,0,0,0.06); border: 1px solid #e2e8f0; }
+    .header { text-align: center; margin-bottom: 24px; }
+    .title { font-size: 22px; font-weight: 700; color: #0f172a; margin: 0 0 8px 0; }
+    .subtitle { font-size: 14px; color: #64748b; margin: 0; }
+    .instructions { font-size: 14px; line-height: 1.6; color: #334155; margin-bottom: 16px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="header">
+      <h1 class="title">${title}</h1>
+      <p class="subtitle">Disney World Tracker</p>
+    </div>
+${body}
+  </div>
+</body>
+</html>`;
+}
+
+export function createMailService(options: MailServiceOptions = {}): MailService & AccountDeletionMail {
   const apiKey = options.apiKey ?? process.env.RESEND_API_KEY;
 
   const smtpHost = options.smtp?.host ?? process.env.SMTP_HOST;
@@ -245,6 +293,32 @@ export function createMailService(options: MailServiceOptions = {}): MailService
 </html>`;
 
       await transport({ from, to, subject, html, text, code, resetUrl });
+    },
+
+    async sendDeletionScheduled({ to, scheduledPurgeAt, graceDays }): Promise<void> {
+      const when = formatPurgeDate(scheduledPurgeAt);
+      const subject = 'Your Disney World Tracker account is scheduled for deletion';
+      const lines = [
+        'Hi there,',
+        `We received your request to delete your Disney World Tracker account. Your account is now deactivated and will be permanently deleted after ${when}.`,
+        `Changed your mind? Just sign in again before then, and the deletion is cancelled and your account is restored with everything in it. You have ${graceDays} days.`,
+        'You have been signed out on every device. If you did not ask for this, sign in now to cancel it, and change your password.',
+      ];
+      const text = lines.join('\n\n');
+      const html = simpleHtml(subject, 'Account Deletion Scheduled', lines);
+      await transport({ from, to, subject, html, text });
+    },
+
+    async sendDeletionCancelled({ to }): Promise<void> {
+      const subject = 'Your Disney World Tracker account deletion was cancelled';
+      const lines = [
+        'Hi there,',
+        'Your Disney World Tracker account is active again and the scheduled deletion was cancelled. Nothing was removed.',
+        'If this was not you, change your password right away.',
+      ];
+      const text = lines.join('\n\n');
+      const html = simpleHtml(subject, 'Account Deletion Cancelled', lines);
+      await transport({ from, to, subject, html, text });
     },
   };
 }

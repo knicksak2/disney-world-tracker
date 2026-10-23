@@ -551,22 +551,30 @@ describe('Photos API hooks & uploader (Task 13.3)', () => {
     });
 
     it('useBlocks, useAddBlock, useRemoveBlock execute expected endpoints', async () => {
-      apiRequestSpy.mockResolvedValueOnce({
-        blocks: [
-          {
-            blockId: 'b-1',
-            displayName: null,
-            avatarPreset: null,
-            createdAt: '2026-10-18T10:00:00.000Z',
-          },
-        ],
-      });
+      // Real server shape: GET /me/blocks returns a BARE ARRAY of BlockedUserDTO.
+      const serverBlocks = [
+        {
+          blockId: 'b-1',
+          displayName: null,
+          avatarPreset: null,
+          createdAt: '2026-10-18T10:00:00.000Z',
+        },
+        {
+          blockId: 'b-0',
+          displayName: 'Daisy Duck',
+          avatarPreset: 'mickey',
+          createdAt: '2026-10-17T09:00:00.000Z',
+        },
+      ];
+      apiRequestSpy.mockResolvedValueOnce(serverBlocks);
 
       const wrapper = createWrapper();
       const { result: blocksRes } = renderHook(() => useBlocks(), { wrapper });
 
       await waitFor(() => expect(blocksRes.current.isSuccess).toBe(true));
       expect(apiRequestSpy).toHaveBeenCalledWith('GET', '/me/blocks');
+      expect(blocksRes.current.data).not.toBeUndefined();
+      expect(blocksRes.current.data).toEqual(serverBlocks);
 
       // Add block
       apiRequestSpy.mockResolvedValueOnce({

@@ -623,6 +623,11 @@ async function applyMigration(db: IMemoryDb): Promise<void> {
     db.public.none(sql);
   }
 
+  // The session adapter joins `users` and selects `deletion_state` (account-deletion R4.8). The full migration
+  // 0064 needs the trips tables this curated chain leaves out, so the harness adds just the column; the
+  // migration's own default (`'active'`) means the seeded users need no edit.
+  db.public.none(`ALTER TABLE users ADD COLUMN IF NOT EXISTS deletion_state TEXT NOT NULL DEFAULT 'active'`);
+
   // 0034 introduces `experience_logs` which the stats snapshot reads for
   // multi-visit activity metrics. Since 0034's ALTER TABLE targets trips tables
   // outside the smoke harness scope, create the experience_logs table here.
@@ -670,9 +675,11 @@ function makeSessionDbAdapter(pool: DbPoolLike): SessionDbAdapter {
   return {
     async findByTokenHash(tokenHash) {
       const result = await pool.query(
-        `SELECT id, user_id, absolute_expires_at, last_seen_at, revoked_at
-           FROM sessions
-          WHERE token_hash = $1`,
+        `SELECT s.id, s.user_id, s.absolute_expires_at, s.last_seen_at, s.revoked_at,
+                u.deletion_state
+           FROM sessions s
+           JOIN users u ON u.id = s.user_id
+          WHERE s.token_hash = $1`,
         [tokenHash],
       );
       const row = (result.rows as ReadonlyArray<SessionRow>)[0];

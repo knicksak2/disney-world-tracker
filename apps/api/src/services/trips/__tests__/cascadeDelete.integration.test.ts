@@ -259,6 +259,9 @@ async function setup(): Promise<Fixture> {
   applyMigration(db, '0028_planned_items_meal_period_snack.sql');
   applyMigration(db, '0031_planned_item_reservations.sql');
   applyMigration(db, '0045_trip_walk_wait_weighting.sql');
+  // Reads go through the 0064 visibility views (profile_identity needs profiles.avatar_preset from 0013).
+  applyMigration(db, '0013_avatar_presets.sql');
+  applyMigration(db, '0064_account_deletion.sql');
   // 0034 adds experience_logs + trip_log_entries.log_id, which logCompletion
   // and confirmRodeWithTag now write to.
   applyMigration(db, '0034_experience_logs.sql');

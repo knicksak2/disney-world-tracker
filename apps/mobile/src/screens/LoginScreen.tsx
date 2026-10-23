@@ -43,10 +43,14 @@ import {
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 
+import type { AuthSessionResponseDTO } from '@dwt/shared';
+
 import { ApiError, apiRequest } from '../api/client';
+import AccountDeletionNotice from '../components/AccountDeletionNotice';
 import type { AuthStackParamList } from '../navigation/RootNavigator';
 import { dispatchBookingTapEvent } from '../navigation/bookingTapState';
 import { useSessionStore } from '../state/sessionStore';
+import { ACCOUNT_LOCKED_MESSAGE } from './authCopy';
 import { makeStyles } from '../theme/makeStyles';
 import { useAppTheme } from '../theme/useAppTheme';
 import {
@@ -58,16 +62,13 @@ import {
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'Login'>;
 
-interface LoginResponse {
-  user: { id: string; email: string };
-  profile: { displayName: string };
-  token: string;
-}
-
 export default function LoginScreen({ navigation }: Props): JSX.Element {
   const styles = useStyles();
   const t = useAppTheme();
   const setToken = useSessionStore((state) => state.setToken);
+  const setAccountRestoredNotice = useSessionStore(
+    (state) => state.setAccountRestoredNotice,
+  );
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -90,11 +91,20 @@ export default function LoginScreen({ navigation }: Props): JSX.Element {
     clearErrors();
     setSubmitting(true);
     try {
-      const response = await apiRequest<LoginResponse>('POST', '/auth/login', {
-        email: email.trim(),
-        password,
-      });
+      const response = await apiRequest<AuthSessionResponseDTO>(
+        'POST',
+        '/auth/login',
+        {
+          email: email.trim(),
+          password,
+        },
+      );
       await setToken(response.token);
+      // account-deletion R4.9: the sign-in cancelled a pending deletion. Shown
+      // over the main tabs once the session is stored (the flag is in memory only).
+      if (response.accountRestored === true) {
+        setAccountRestoredNotice(true);
+      }
       setPassword('');
     } catch (err) {
       handleSubmitError(err);
@@ -114,7 +124,7 @@ export default function LoginScreen({ navigation }: Props): JSX.Element {
         setFormError('Email or password is incorrect.');
         return;
       case 'account_locked':
-        setFormError('Account temporarily locked. Try again in 15 minutes.');
+        setFormError(ACCOUNT_LOCKED_MESSAGE);
         return;
       case 'validation_failed':
         applyFieldError(err.field, err.message);
@@ -151,6 +161,8 @@ export default function LoginScreen({ navigation }: Props): JSX.Element {
             subtitle="Sign in to keep tracking the magic."
             icon="sparkles"
           />
+
+          <AccountDeletionNotice />
 
           <View style={styles.body} testID="login-body">
             <Card>

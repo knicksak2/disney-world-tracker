@@ -80,6 +80,8 @@ const MIGRATIONS = [
   '0039_experience_festival_tags.sql', // experience_festival_tags
   '0040_food_item_logging.sql', // food_items, food_item_logs
   '0055_festival_edition_and_dish_tags.sql', // match_kind, festival_editions, food_item_festival_tags
+  '0013_avatar_presets.sql', // profiles.avatar_preset (read by the 0064 views)
+  '0064_account_deletion.sql', // users.deletion_state (reconcileAll) and the visibility views
 ];
 
 interface Fixture {

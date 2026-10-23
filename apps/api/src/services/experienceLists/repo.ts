@@ -27,6 +27,7 @@ import type {
 
 import type { DbPool } from '../../db/pool.js';
 import { AppError } from '../../errors/AppError.js';
+import { ACTIVE_USER_SQL } from '../accountDeletion/visibility.js';
 import { pair } from '../friends/canonicalPair.js';
 
 // ---------------------------------------------------------------------------
@@ -220,8 +221,10 @@ export async function getListAccess(
   userId: string,
 ): Promise<ListAccessRow | null> {
   const res = await pool.query<ListAccessRow>(
+    // A list whose owner is not an active account does not exist for anyone else (account-deletion R5.1).
     `SELECT el.id, el.owner_id, el.visibility, els.role AS share_role
        FROM experience_lists el
+       JOIN users ou ON ou.id = el.owner_id AND ${ACTIVE_USER_SQL('ou')}
        LEFT JOIN experience_list_shares els
          ON els.experience_list_id = el.id AND els.shared_with_user_id = $2
       WHERE el.id = $1`,
@@ -349,7 +352,7 @@ export function createExperienceListRepo(pool: DbPool): ExperienceListRepo {
          el.updated_at,
          el.pinned_at
        FROM experience_lists el
-       LEFT JOIN profiles p ON p.user_id = el.owner_id
+       LEFT JOIN profile_identity p ON p.user_id = el.owner_id
        LEFT JOIN (
          SELECT experience_list_id, COUNT(*)::int AS item_count
          FROM experience_lists_items
@@ -496,7 +499,7 @@ export function createExperienceListRepo(pool: DbPool): ExperienceListRepo {
            el.updated_at,
            el.pinned_at
          FROM experience_lists el
-         LEFT JOIN profiles p ON p.user_id = el.owner_id
+         LEFT JOIN profile_identity p ON p.user_id = el.owner_id
          LEFT JOIN (
            SELECT experience_list_id, COUNT(*)::int AS item_count
            FROM experience_lists_items
@@ -542,7 +545,7 @@ export function createExperienceListRepo(pool: DbPool): ExperienceListRepo {
            (ell.experience_list_id IS NOT NULL) AS liked,
            (els_save.experience_list_id IS NOT NULL) AS saved
          FROM experience_lists el
-         LEFT JOIN profiles p ON p.user_id = el.owner_id
+         LEFT JOIN profile_identity p ON p.user_id = el.owner_id
          LEFT JOIN experience_list_likes ell
            ON ell.experience_list_id = el.id AND ell.user_id = $2
          LEFT JOIN experience_list_saves els_save
@@ -560,11 +563,11 @@ export function createExperienceListRepo(pool: DbPool): ExperienceListRepo {
            e.park,
            e.category,
            eli.position,
-           eli.added_by_user_id,
+           COALESCE(p.public_id, eli.added_by_user_id) AS added_by_user_id,
            p.display_name AS added_by_display_name
          FROM experience_lists_items eli
          JOIN experiences e ON e.id = eli.experience_id
-         LEFT JOIN profiles p ON p.user_id = eli.added_by_user_id
+         LEFT JOIN profile_identity p ON p.user_id = eli.added_by_user_id
         WHERE eli.experience_list_id = $1
         ORDER BY eli.position ASC`,
         [listId],
@@ -661,13 +664,13 @@ export function createExperienceListRepo(pool: DbPool): ExperienceListRepo {
               el.updated_at,
               el.pinned_at
             FROM experience_lists el
-            LEFT JOIN profiles p ON p.user_id = el.owner_id
+            LEFT JOIN profile_identity p ON p.user_id = el.owner_id
             LEFT JOIN (
               SELECT experience_list_id, COUNT(*)::int AS item_count
               FROM experience_lists_items
               GROUP BY experience_list_id
             ) ic ON ic.experience_list_id = el.id
-            WHERE el.visibility = 'public'
+            WHERE el.visibility = 'public' AND COALESCE(p.is_visible, TRUE)
               AND (el.like_count < $2 OR (el.like_count = $2 AND el.id > $3))
             ORDER BY el.like_count DESC, el.id ASC
             LIMIT $1`;
@@ -685,13 +688,13 @@ export function createExperienceListRepo(pool: DbPool): ExperienceListRepo {
               el.updated_at,
               el.pinned_at
             FROM experience_lists el
-            LEFT JOIN profiles p ON p.user_id = el.owner_id
+            LEFT JOIN profile_identity p ON p.user_id = el.owner_id
             LEFT JOIN (
               SELECT experience_list_id, COUNT(*)::int AS item_count
               FROM experience_lists_items
               GROUP BY experience_list_id
             ) ic ON ic.experience_list_id = el.id
-            WHERE el.visibility = 'public'
+            WHERE el.visibility = 'public' AND COALESCE(p.is_visible, TRUE)
             ORDER BY el.like_count DESC, el.id ASC
             LIMIT $1`;
         }
@@ -711,13 +714,13 @@ export function createExperienceListRepo(pool: DbPool): ExperienceListRepo {
               el.updated_at,
               el.pinned_at
             FROM experience_lists el
-            LEFT JOIN profiles p ON p.user_id = el.owner_id
+            LEFT JOIN profile_identity p ON p.user_id = el.owner_id
             LEFT JOIN (
               SELECT experience_list_id, COUNT(*)::int AS item_count
               FROM experience_lists_items
               GROUP BY experience_list_id
             ) ic ON ic.experience_list_id = el.id
-            WHERE el.visibility = 'public'
+            WHERE el.visibility = 'public' AND COALESCE(p.is_visible, TRUE)
               AND (el.created_at < $2 OR (el.created_at = $2 AND el.id > $3))
             ORDER BY el.created_at DESC, el.id ASC
             LIMIT $1`;
@@ -735,13 +738,13 @@ export function createExperienceListRepo(pool: DbPool): ExperienceListRepo {
               el.updated_at,
               el.pinned_at
             FROM experience_lists el
-            LEFT JOIN profiles p ON p.user_id = el.owner_id
+            LEFT JOIN profile_identity p ON p.user_id = el.owner_id
             LEFT JOIN (
               SELECT experience_list_id, COUNT(*)::int AS item_count
               FROM experience_lists_items
               GROUP BY experience_list_id
             ) ic ON ic.experience_list_id = el.id
-            WHERE el.visibility = 'public'
+            WHERE el.visibility = 'public' AND COALESCE(p.is_visible, TRUE)
             ORDER BY el.created_at DESC, el.id ASC
             LIMIT $1`;
         }
@@ -912,11 +915,11 @@ export function createExperienceListItemRepo(pool: DbPool): ExperienceListItemRe
              e.park,
              e.category,
              eli.position,
-             eli.added_by_user_id,
+             COALESCE(p.public_id, eli.added_by_user_id) AS added_by_user_id,
              p.display_name AS added_by_display_name
            FROM experience_lists_items eli
            JOIN experiences e ON e.id = eli.experience_id
-           LEFT JOIN profiles p ON p.user_id = eli.added_by_user_id
+           LEFT JOIN profile_identity p ON p.user_id = eli.added_by_user_id
           WHERE eli.experience_list_id = $1 AND eli.experience_id = $2`,
           [listId, experienceId],
         );
@@ -1052,11 +1055,11 @@ export function createExperienceListItemRepo(pool: DbPool): ExperienceListItemRe
              e.park,
              e.category,
              eli.position,
-             eli.added_by_user_id,
+             COALESCE(p.public_id, eli.added_by_user_id) AS added_by_user_id,
              p.display_name AS added_by_display_name
            FROM experience_lists_items eli
            JOIN experiences e ON e.id = eli.experience_id
-           LEFT JOIN profiles p ON p.user_id = eli.added_by_user_id
+           LEFT JOIN profile_identity p ON p.user_id = eli.added_by_user_id
           WHERE eli.experience_list_id = $1
           ORDER BY eli.position ASC`,
           [listId],
@@ -1103,7 +1106,7 @@ export function createExperienceListShareRepo(pool: DbPool): ExperienceListShare
 
       const { lo, hi } = pair(ownerId, recipientId);
       const friendRes = await pool.query(
-        `SELECT 1 FROM friendships WHERE user_lo_id = $1 AND user_hi_id = $2`,
+        `SELECT 1 FROM active_friendships WHERE user_lo_id = $1 AND user_hi_id = $2`,
         [lo, hi],
       );
       if (friendRes.rows.length === 0) {
@@ -1111,7 +1114,7 @@ export function createExperienceListShareRepo(pool: DbPool): ExperienceListShare
       }
 
       const profileRes = await pool.query<{ display_name: string }>(
-        `SELECT display_name FROM profiles WHERE user_id = $1`,
+        `SELECT display_name FROM profile_identity WHERE user_id = $1`,
         [recipientId],
       );
       const recipientDisplayName = profileRes.rows[0]?.display_name ?? 'Friend';
@@ -1203,8 +1206,9 @@ export function createExperienceListShareRepo(pool: DbPool): ExperienceListShare
            els.role,
            els.shared_at
          FROM experience_list_shares els
-         LEFT JOIN profiles p ON p.user_id = els.shared_with_user_id
+         LEFT JOIN profile_identity p ON p.user_id = els.shared_with_user_id
         WHERE els.experience_list_id = $1
+          AND COALESCE(p.is_visible, TRUE)
         ORDER BY els.shared_at ASC`,
         [listId],
       );
@@ -1400,7 +1404,7 @@ export function createExperienceListAffinityRepo(
            el.created_at,
            el.updated_at,
            el.pinned_at,
-           (el.id IS NOT NULL AND (
+           (el.id IS NOT NULL AND COALESCE(p.is_visible, TRUE) AND (
              el.visibility = 'public'
              OR el.owner_id = $1
              OR shares.role IS NOT NULL
@@ -1408,7 +1412,7 @@ export function createExperienceListAffinityRepo(
            )) AS can_view
          FROM experience_list_saves els_user
          LEFT JOIN experience_lists el ON el.id = els_user.experience_list_id
-         LEFT JOIN profiles p ON p.user_id = el.owner_id
+         LEFT JOIN profile_identity p ON p.user_id = el.owner_id
          LEFT JOIN experience_list_shares shares
            ON shares.experience_list_id = el.id AND shares.shared_with_user_id = $1
          ${tripJoin}

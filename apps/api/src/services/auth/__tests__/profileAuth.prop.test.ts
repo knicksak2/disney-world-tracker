@@ -126,7 +126,7 @@ async function buildApp() {
       const s = currentScenario;
       if (!s) return { rows: [] };
 
-      if (text.includes('FROM friendships')) {
+      if (text.includes('FROM active_friendships')) {
         const lo = String(params[0] ?? '');
         const hi = String(params[1] ?? '');
         const exists = s.friendships.has(`${lo}|${hi}`);
@@ -134,7 +134,7 @@ async function buildApp() {
       }
       if (
         text.startsWith(
-          'SELECT user_id, display_name, avatar_preset FROM profiles',
+          'SELECT user_id, display_name, avatar_preset FROM profile_identity',
         )
       ) {
         if (params[0] === s.owner) {

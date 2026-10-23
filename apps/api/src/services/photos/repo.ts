@@ -160,7 +160,9 @@ SELECT p.id, p.scope_id, p.width, p.height, p.created_at,
        p.owner_id, pr.display_name, pr.avatar_preset
   FROM photos p
   LEFT JOIN profiles pr ON pr.user_id = p.owner_id
+  LEFT JOIN users ou ON ou.id = p.owner_id
  WHERE p.target_kind = 'food_log' AND p.scope_id = $1 AND p.status = 'approved'
+   AND (p.owner_id IS NULL OR ou.deletion_state = 'active')
    AND NOT EXISTS (SELECT 1 FROM user_blocks b
                     WHERE (b.blocker_id = $2 AND b.blocked_id = p.owner_id)
                        OR (b.blocker_id = p.owner_id AND b.blocked_id = $2))
@@ -173,8 +175,10 @@ SELECT p.id, p.scope_id, p.width, p.height, p.created_at,
        p.owner_id, pr.display_name, pr.avatar_preset
   FROM photos p
   LEFT JOIN profiles pr ON pr.user_id = p.owner_id
+  LEFT JOIN users ou ON ou.id = p.owner_id
  WHERE p.target_kind = 'food_log' AND p.scope_id = $1 AND p.status = 'approved'
    AND (p.created_at < $3 OR (p.created_at = $3 AND p.id < $4))
+   AND (p.owner_id IS NULL OR ou.deletion_state = 'active')
    AND NOT EXISTS (SELECT 1 FROM user_blocks b
                     WHERE (b.blocker_id = $2 AND b.blocked_id = p.owner_id)
                        OR (b.blocker_id = p.owner_id AND b.blocked_id = $2))
@@ -188,7 +192,9 @@ SELECT p.id, p.scope_id, p.width, p.height, p.created_at,
   FROM photos p
   JOIN food_items fi ON fi.id = p.scope_id
   LEFT JOIN profiles pr ON pr.user_id = p.owner_id
+  LEFT JOIN users ou ON ou.id = p.owner_id
  WHERE p.target_kind = 'food_log' AND fi.experience_id = $1 AND p.status = 'approved'
+   AND (p.owner_id IS NULL OR ou.deletion_state = 'active')
    AND NOT EXISTS (SELECT 1 FROM user_blocks b
                     WHERE (b.blocker_id = $2 AND b.blocked_id = p.owner_id)
                        OR (b.blocker_id = p.owner_id AND b.blocked_id = $2))
@@ -202,8 +208,10 @@ SELECT p.id, p.scope_id, p.width, p.height, p.created_at,
   FROM photos p
   JOIN food_items fi ON fi.id = p.scope_id
   LEFT JOIN profiles pr ON pr.user_id = p.owner_id
+  LEFT JOIN users ou ON ou.id = p.owner_id
  WHERE p.target_kind = 'food_log' AND fi.experience_id = $1 AND p.status = 'approved'
    AND (p.created_at < $3 OR (p.created_at = $3 AND p.id < $4))
+   AND (p.owner_id IS NULL OR ou.deletion_state = 'active')
    AND NOT EXISTS (SELECT 1 FROM user_blocks b
                     WHERE (b.blocker_id = $2 AND b.blocked_id = p.owner_id)
                        OR (b.blocker_id = p.owner_id AND b.blocked_id = $2))
@@ -217,7 +225,9 @@ SELECT p.id, p.scope_id, p.width, p.height, p.created_at,
   FROM photos p
   JOIN food_items fi ON fi.id = p.scope_id
   LEFT JOIN profiles pr ON pr.user_id = p.owner_id
+  LEFT JOIN users ou ON ou.id = p.owner_id
  WHERE p.target_kind = 'food_log' AND fi.location_id = $1 AND p.status = 'approved'
+   AND (p.owner_id IS NULL OR ou.deletion_state = 'active')
    AND NOT EXISTS (SELECT 1 FROM user_blocks b
                     WHERE (b.blocker_id = $2 AND b.blocked_id = p.owner_id)
                        OR (b.blocker_id = p.owner_id AND b.blocked_id = $2))
@@ -231,8 +241,10 @@ SELECT p.id, p.scope_id, p.width, p.height, p.created_at,
   FROM photos p
   JOIN food_items fi ON fi.id = p.scope_id
   LEFT JOIN profiles pr ON pr.user_id = p.owner_id
+  LEFT JOIN users ou ON ou.id = p.owner_id
  WHERE p.target_kind = 'food_log' AND fi.location_id = $1 AND p.status = 'approved'
    AND (p.created_at < $3 OR (p.created_at = $3 AND p.id < $4))
+   AND (p.owner_id IS NULL OR ou.deletion_state = 'active')
    AND NOT EXISTS (SELECT 1 FROM user_blocks b
                     WHERE (b.blocker_id = $2 AND b.blocked_id = p.owner_id)
                        OR (b.blocker_id = p.owner_id AND b.blocked_id = $2))
@@ -246,7 +258,9 @@ SELECT p.id, p.target_id, p.width, p.height, p.sort_at, p.created_at,
        pr.display_name AS uploader_display_name, pr.avatar_preset AS uploader_avatar_preset
   FROM photos p
   LEFT JOIN profiles pr ON pr.user_id = p.owner_id
+  LEFT JOIN users ou ON ou.id = p.owner_id
  WHERE p.target_kind = 'trip' AND p.target_id = $1
+   AND (p.owner_id IS NULL OR ou.deletion_state = 'active')
    AND (
      (p.owner_id = $2 AND p.status <> 'deleted')
      OR (
@@ -269,7 +283,9 @@ SELECT p.id, p.target_id, p.width, p.height, p.sort_at, p.created_at,
        pr.display_name AS uploader_display_name, pr.avatar_preset AS uploader_avatar_preset
   FROM photos p
   LEFT JOIN profiles pr ON pr.user_id = p.owner_id
+  LEFT JOIN users ou ON ou.id = p.owner_id
  WHERE p.target_kind = 'trip' AND p.target_id = $1
+   AND (p.owner_id IS NULL OR ou.deletion_state = 'active')
    AND (p.sort_at < $3 OR (p.sort_at = $3 AND p.id < $4))
    AND (
      (p.owner_id = $2 AND p.status <> 'deleted')
@@ -290,7 +306,10 @@ SELECT p.id, p.target_id, p.width, p.height, p.sort_at, p.created_at,
 const SQL_TRIP_APPROVED_HIGHLIGHTS = `
 SELECT p.id, p.owner_id, p.sort_at, p.width, p.height
   FROM photos p
- WHERE p.target_kind = 'trip' AND p.target_id = $1 AND p.status = 'approved'
+  LEFT JOIN users ou ON ou.id = p.owner_id
+ WHERE p.target_kind = 'trip' AND p.target_id = $1
+   AND (p.owner_id IS NULL OR ou.deletion_state = 'active')
+   AND p.status = 'approved'
    AND NOT EXISTS (
      SELECT 1 FROM user_blocks b
       WHERE (b.blocker_id = $2 AND b.blocked_id = p.owner_id)
@@ -474,7 +493,13 @@ export interface PhotosRepo {
     now?: Date,
     client?: DbPool | PoolClient
   ): Promise<readonly string[]>;
-  softDeleteByOwner(ownerId: string, now?: Date, client?: DbPool | PoolClient): Promise<readonly string[]>;
+  /** With `limit`, marks at most that many photos `deleted` per call (oldest id first); without it, all of them. */
+  softDeleteByOwner(
+    ownerId: string,
+    now?: Date,
+    client?: DbPool | PoolClient,
+    limit?: number
+  ): Promise<readonly string[]>;
   listDeleted(limit: number, client?: DbPool | PoolClient): Promise<readonly PhotoRow[]>;
   hardDelete(id: string, client?: DbPool | PoolClient): Promise<boolean>;
   incrementDeleteAttempts(id: string, client?: DbPool | PoolClient): Promise<boolean>;
@@ -1052,7 +1077,7 @@ export function createPhotosRepo(pool: DbPool): PhotosRepo {
 
       const sql = `
         SELECT DISTINCT CASE WHEN user_lo_id = $1 THEN user_hi_id ELSE user_lo_id END AS friend_id
-          FROM friendships
+          FROM active_friendships
          WHERE (user_lo_id = $1 AND user_hi_id = ANY($2))
             OR (user_hi_id = $1 AND user_lo_id = ANY($2));
       `;
@@ -1200,9 +1225,15 @@ export function createPhotosRepo(pool: DbPool): PhotosRepo {
       return res.rows.map((r) => r.id);
     },
 
-    async softDeleteByOwner(ownerId: string, now?: Date, client?: DbPool | PoolClient): Promise<readonly string[]> {
+    async softDeleteByOwner(
+      ownerId: string,
+      now?: Date,
+      client?: DbPool | PoolClient,
+      limit?: number
+    ): Promise<readonly string[]> {
       const db = getDb(client);
-      const sql = `
+      if (limit === undefined) {
+        const sql = `
         UPDATE photos
            SET status = 'deleted',
                deleted_at = COALESCE($2, now())
@@ -1210,8 +1241,36 @@ export function createPhotosRepo(pool: DbPool): PhotosRepo {
            AND status <> 'deleted'
         RETURNING id;
       `;
-      const res = await db.query<{ id: string }>(sql, [ownerId, now ?? null]);
-      return res.rows.map((r) => r.id);
+        const res = await db.query<{ id: string }>(sql, [ownerId, now ?? null]);
+        return res.rows.map((r) => r.id);
+      }
+      if (!Number.isInteger(limit) || limit < 1) {
+        throw new RangeError(`softDeleteByOwner: limit must be a positive integer, got ${String(limit)}`);
+      }
+      // Bounded form: at most `limit` rows per call. Rows already `deleted` drop out of the page, so a
+      // caller repeating until fewer than `limit` ids return reaches none left. Two statements (read a
+      // page of ids, then mark exactly those) keep the cap explicit and independent of how a planner
+      // evaluates a LIMIT subselect inside an UPDATE.
+      const page = await db.query<{ id: string }>(
+        `SELECT id FROM photos
+          WHERE owner_id = $1
+            AND status <> 'deleted'
+          ORDER BY id
+          LIMIT $2;`,
+        [ownerId, limit]
+      );
+      const ids = page.rows.map((r) => r.id);
+      if (ids.length === 0) return [];
+      const marked = await db.query<{ id: string }>(
+        `UPDATE photos
+            SET status = 'deleted',
+                deleted_at = COALESCE($2, now())
+          WHERE id = ANY($1)
+            AND status <> 'deleted'
+         RETURNING id;`,
+        [ids, now ?? null]
+      );
+      return marked.rows.map((r) => r.id);
     },
 
     async listDeleted(limit: number, client?: DbPool | PoolClient): Promise<readonly PhotoRow[]> {

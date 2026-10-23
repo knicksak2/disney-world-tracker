@@ -194,8 +194,11 @@ describe('PhotosRepo (pg-mem)', () => {
     applyMigration(db, '0040_food_item_logging.sql');
     applyMigration(db, '0062_photo_uploads.sql');
 
-    // Add avatar_preset to profiles if not present
+    // Add avatar_preset to profiles if not present (free text: this suite stores arbitrary preset ids, so it
+    // does not load 0013's CHECK). 0064's visibility views read it, friendships and trip_memberships (0015).
     db.public.none('ALTER TABLE profiles ADD COLUMN IF NOT EXISTS avatar_preset TEXT;');
+    applyMigration(db, '0015_trips.sql');
+    applyMigration(db, '0064_account_deletion.sql');
 
     user1Id = randomUUID();
     user2Id = randomUUID();
@@ -1153,5 +1156,68 @@ describe('PhotosRepo (pg-mem)', () => {
     expect(locPage2.length).toBe(1);
     expect(locPage2[0]?.id).toBe(pLoc1);
     expect(locPage2[0]?.food_item_name).toBe('Warm Cinnamon Roll');
+  });
+
+  describe('softDeleteByOwner limit', () => {
+    async function seedPhotos(ownerId: string, count: number): Promise<string[]> {
+      const ids: string[] = [];
+      for (let i = 0; i < count; i++) {
+        const id = randomUUID();
+        ids.push(id);
+        await repo.insertUploading({
+          id,
+          ownerId,
+          targetKind: 'food_log',
+          targetId: randomUUID(),
+          scopeId: foodItem1Id,
+          objectKey: `p/${id}/full.jpg`,
+          thumbKey: `p/${id}/thumb.jpg`,
+          byteSize: 1000,
+          thumbByteSize: 200,
+          width: 400,
+          height: 300,
+        });
+      }
+      return ids;
+    }
+
+    async function statusCounts(ownerId: string): Promise<{ live: number; deleted: number }> {
+      const res = await pool.query<{ status: string }>('SELECT status FROM photos WHERE owner_id = $1', [ownerId]);
+      const deleted = res.rows.filter((r) => r.status === 'deleted').length;
+      return { live: res.rows.length - deleted, deleted };
+    }
+
+    it('with a limit, each call marks at most `limit` rows and the loop ends with none left', async () => {
+      const limit = 4;
+      const total = limit * 2 + 2; // 2.5 x limit
+      await seedPhotos(user1Id, total);
+      const other = await seedPhotos(user2Id, 3);
+
+      const sizes: number[] = [];
+      for (let guard = 0; guard < 10; guard++) {
+        const ids = await repo.softDeleteByOwner(user1Id, new Date('2026-10-18T10:00:00Z'), undefined, limit);
+        sizes.push(ids.length);
+        expect(ids.length).toBeLessThanOrEqual(limit);
+        if (ids.length < limit) break;
+      }
+
+      expect(sizes).toEqual([4, 4, 2]);
+      expect(await statusCounts(user1Id)).toEqual({ live: 0, deleted: total });
+      // Another owner's rows are untouched, and a further call returns nothing.
+      expect(await statusCounts(user2Id)).toEqual({ live: other.length, deleted: 0 });
+      expect(await repo.softDeleteByOwner(user1Id, new Date(), undefined, limit)).toEqual([]);
+    });
+
+    it('without a limit the call still marks every row (default unchanged)', async () => {
+      await seedPhotos(user1Id, 9);
+      const ids = await repo.softDeleteByOwner(user1Id, new Date('2026-10-18T10:00:00Z'));
+      expect(ids).toHaveLength(9);
+      expect(await statusCounts(user1Id)).toEqual({ live: 0, deleted: 9 });
+    });
+
+    it('rejects a non-positive or fractional limit', async () => {
+      await expect(repo.softDeleteByOwner(user1Id, new Date(), undefined, 0)).rejects.toThrow(RangeError);
+      await expect(repo.softDeleteByOwner(user1Id, new Date(), undefined, 1.5)).rejects.toThrow(RangeError);
+    });
   });
 });

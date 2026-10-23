@@ -82,6 +82,52 @@ const envSchema = z.object({
     .trim()
     .min(1, 'TRIP_BOOKING_CRON_SECRET is required and must not be empty'),
 
+  // Account deletion (account-deletion R14). Grace period between the request and the purge.
+  ACCOUNT_DELETION_GRACE_DAYS: z.coerce
+    .number()
+    .int('ACCOUNT_DELETION_GRACE_DAYS must be an integer between 1 and 365')
+    .min(1, 'ACCOUNT_DELETION_GRACE_DAYS must be an integer between 1 and 365')
+    .max(365, 'ACCOUNT_DELETION_GRACE_DAYS must be an integer between 1 and 365')
+    .default(30),
+  // Dedicated secret for POST/HEAD /internal/account-deletion/purge/run (x-cron-secret).
+  // Required and non-blank after trim; must differ from the other cron secrets (see superRefine).
+  ACCOUNT_DELETION_CRON_SECRET: z
+    .string()
+    .trim()
+    .min(1, 'ACCOUNT_DELETION_CRON_SECRET is required and must not be empty'),
+  ACCOUNT_DELETION_PURGE_BATCH: z.coerce
+    .number()
+    .int('ACCOUNT_DELETION_PURGE_BATCH must be an integer between 1 and 100')
+    .min(1, 'ACCOUNT_DELETION_PURGE_BATCH must be an integer between 1 and 100')
+    .max(100, 'ACCOUNT_DELETION_PURGE_BATCH must be an integer between 1 and 100')
+    .default(10),
+  ACCOUNT_DELETION_PURGE_TIME_BUDGET_MS: z.coerce
+    .number()
+    .int('ACCOUNT_DELETION_PURGE_TIME_BUDGET_MS must be an integer between 1000 and 120000')
+    .min(1000, 'ACCOUNT_DELETION_PURGE_TIME_BUDGET_MS must be an integer between 1000 and 120000')
+    .max(120000, 'ACCOUNT_DELETION_PURGE_TIME_BUDGET_MS must be an integer between 1000 and 120000')
+    .default(25000),
+  ACCOUNT_DELETION_REAUTH_WINDOW_SECONDS: z.coerce
+    .number()
+    .int('ACCOUNT_DELETION_REAUTH_WINDOW_SECONDS must be an integer between 30 and 900')
+    .min(30, 'ACCOUNT_DELETION_REAUTH_WINDOW_SECONDS must be an integer between 30 and 900')
+    .max(900, 'ACCOUNT_DELETION_REAUTH_WINDOW_SECONDS must be an integer between 30 and 900')
+    .default(300),
+  ACCOUNT_DELETION_CHUNK_ROWS: z.coerce
+    .number()
+    .int('ACCOUNT_DELETION_CHUNK_ROWS must be an integer between 50 and 5000')
+    .min(50, 'ACCOUNT_DELETION_CHUNK_ROWS must be an integer between 50 and 5000')
+    .max(5000, 'ACCOUNT_DELETION_CHUNK_ROWS must be an integer between 50 and 5000')
+    .default(500),
+
+  // Public support contact address rendered on GET /privacy (account-deletion R20.4). Required,
+  // trimmed, and a syntactically valid email; deliberately no default so a placeholder can never ship.
+  SUPPORT_EMAIL: z
+    .string({ required_error: 'SUPPORT_EMAIL is required and must be a valid email address' })
+    .trim()
+    .max(254, 'SUPPORT_EMAIL must be a valid email address')
+    .email('SUPPORT_EMAIL is required and must be a valid email address'),
+
   // Trip booking reminder runner parameters (trip-booking-timeline R7, R8, R14)
   BOOKING_REMINDER_LEADS: z.string().default('eve,open'),
   BOOKING_REMINDER_CATCHUP_MINUTES: z.coerce.number().int().positive().default(180),
@@ -284,6 +330,27 @@ const envSchema = z.object({
       }
     }
 
+    // account-deletion R14.2: the purge cron secret is dedicated. Equality is symmetric, so this
+    // one rule covers every direction; PHOTOS_CRON_SECRET is optional and skipped when blank.
+    if (data.ACCOUNT_DELETION_CRON_SECRET) {
+      const deletionSecret = data.ACCOUNT_DELETION_CRON_SECRET.trim();
+      const others = [
+        data.SAMPLING_CRON_SECRET?.trim(),
+        data.PIN_RECONCILE_CRON_SECRET?.trim(),
+        data.TRIP_BOOKING_CRON_SECRET?.trim(),
+      ];
+      const photosSecret = data.PHOTOS_CRON_SECRET?.trim();
+      if (photosSecret) others.push(photosSecret);
+      if (others.includes(deletionSecret)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['ACCOUNT_DELETION_CRON_SECRET'],
+          message:
+            'ACCOUNT_DELETION_CRON_SECRET must not equal SAMPLING_CRON_SECRET, PIN_RECONCILE_CRON_SECRET, TRIP_BOOKING_CRON_SECRET, or PHOTOS_CRON_SECRET',
+        });
+      }
+    }
+
     const startM = parseClockMinutes(data.BOOKING_REMINDER_SEND_START);
     if (startM === null) {
       ctx.addIssue({
@@ -475,6 +542,17 @@ export interface AppConfig {
   readonly pins: {
     readonly reconcileCronSecret: string;
   };
+  readonly accountDeletion: {
+    readonly graceDays: number;
+    readonly cronSecret: string;
+    readonly purgeBatch: number;
+    readonly purgeTimeBudgetMs: number;
+    readonly reauthWindowSeconds: number;
+    readonly chunkRows: number;
+  };
+  readonly support: {
+    readonly email: string;
+  };
   readonly tripBooking: {
     readonly cronSecret: string;
     readonly reminder: ReminderConfig;
@@ -650,6 +728,15 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     pins: {
       reconcileCronSecret: data.PIN_RECONCILE_CRON_SECRET,
     },
+    accountDeletion: {
+      graceDays: data.ACCOUNT_DELETION_GRACE_DAYS,
+      cronSecret: data.ACCOUNT_DELETION_CRON_SECRET,
+      purgeBatch: data.ACCOUNT_DELETION_PURGE_BATCH,
+      purgeTimeBudgetMs: data.ACCOUNT_DELETION_PURGE_TIME_BUDGET_MS,
+      reauthWindowSeconds: data.ACCOUNT_DELETION_REAUTH_WINDOW_SECONDS,
+      chunkRows: data.ACCOUNT_DELETION_CHUNK_ROWS,
+    },
+    support: { email: data.SUPPORT_EMAIL },
     tripBooking: {
       cronSecret: data.TRIP_BOOKING_CRON_SECRET,
       reminder: {

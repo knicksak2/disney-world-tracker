@@ -43,6 +43,7 @@ import { makeStyles } from '../../theme/makeStyles';
 import { useAppTheme, usePalette } from '../../theme/useAppTheme';
 import { BALANCES } from './TripBalancesScreen.palette';
 import { apiRequest } from '../../api/client';
+import { involvesDeletedUser, withDeletedUserNames } from '../../components/presentPerson';
 import { tripDetailKeys } from './tripDetailQueryKeys';
 import {
   fetchTripBalances,
@@ -130,13 +131,21 @@ export default function TripBalancesScreen({
   });
   const pairwiseDrillDownEntries = pairwiseDrillDownQuery.data ?? [];
 
-  const memberNameMap = useMemo(
-    () => new Map(members.map((m) => [m.userId, m.displayName])),
-    [members],
-  );
-
   const netBalances = balancesData?.net ?? [];
   const pairwiseBalances = balancesData?.pairwise ?? [];
+
+  // The roster omits non-visible people, so a deleted party found in the
+  // balances is named "Deleted user" rather than a generic "Member"
+  // (account-deletion R6.4).
+  const memberNameMap = useMemo(() => {
+    const ids: string[] = [];
+    for (const b of netBalances) ids.push(b.memberId);
+    for (const p of pairwiseBalances) ids.push(p.memberIdA, p.memberIdB);
+    return withDeletedUserNames(
+      new Map(members.map((m) => [m.userId, m.displayName])),
+      ids,
+    );
+  }, [members, netBalances, pairwiseBalances]);
 
   const handleSettlePair = (pair: PairwiseBalanceDTO) => {
     if (pair.aOwesBCents > 0) {
@@ -351,7 +360,7 @@ export default function TripBalancesScreen({
                             ${absDollars}
                           </Text>
                         </View>
-                        {isNonzero ? (
+                        {isNonzero && !involvesDeletedUser(p.memberIdA, p.memberIdB) ? (
                           <Pressable
                             style={styles.settleBtn}
                             onPress={() => handleSettlePair(p)}
@@ -476,7 +485,12 @@ export default function TripBalancesScreen({
                 </Pressable>
               </View>
 
-              {pairwiseBreakdownPair.aOwesBCents && pairwiseBreakdownPair.aOwesBCents !== 0 ? (
+              {pairwiseBreakdownPair.aOwesBCents &&
+              pairwiseBreakdownPair.aOwesBCents !== 0 &&
+              !involvesDeletedUser(
+                pairwiseBreakdownPair.memberIdA,
+                pairwiseBreakdownPair.memberIdB,
+              ) ? (
                 <View style={{ marginBottom: 12 }}>
                   <Pressable
                     style={styles.pairwiseModalSettleBtn}

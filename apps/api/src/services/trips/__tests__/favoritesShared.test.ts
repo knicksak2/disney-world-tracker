@@ -123,6 +123,8 @@ describe('Trip Group Favorites', () => {
     applyMigration(db, '0023_trip_touring_hours.sql');
     applyMigration(db, '0045_trip_walk_wait_weighting.sql');
     applyMigration(db, '0054_experience_favorites.sql');
+    applyMigration(db, '0013_avatar_presets.sql'); // profile_identity (0064) reads profiles.avatar_preset
+    applyMigration(db, '0064_account_deletion.sql');
 
     const rawPool = db.adapters.createPg().Pool;
     pool = withForUpdateCompat(new rawPool() as unknown as DbPool);

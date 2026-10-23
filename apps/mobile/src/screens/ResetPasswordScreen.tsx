@@ -49,6 +49,9 @@ export default function ResetPasswordScreen({
   const t = useAppTheme();
   const email = route.params.email;
   const setToken = useSessionStore((state) => state.setToken);
+  const setAccountRestoredNotice = useSessionStore(
+    (state) => state.setAccountRestoredNotice,
+  );
 
   const [code, setCode] = useState('');
   const [password, setPassword] = useState('');
@@ -142,6 +145,10 @@ export default function ResetPasswordScreen({
       );
       // Immediately set the fresh authenticated session token
       await setToken(response.token);
+      // account-deletion R4.3 / R4.9: the reset cancelled a pending deletion.
+      if (response.accountRestored === true) {
+        setAccountRestoredNotice(true);
+      }
       setPassword('');
       setConfirmPassword('');
       // Navigation to MainTabs happens automatically via RootNavigator token state

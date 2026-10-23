@@ -93,8 +93,12 @@ describe('friendFoodRatings.notes.prop — Property 1', () => {
     db = buildPgMemDatabase();
     applyMigration(db, '0001_init.sql');
     applyMigration(db, '0040_food_item_logging.sql');
+    // The visibility views (0064) read profiles.avatar_preset, friendships and trip_memberships.
+    applyMigration(db, '0013_avatar_presets.sql');
+    applyMigration(db, '0015_trips.sql');
+    applyMigration(db, '0064_account_deletion.sql');
     db.public.none('ALTER TABLE experiences ALTER COLUMN park DROP NOT NULL');
-    db.public.none('ALTER TABLE profiles ADD COLUMN avatar_preset TEXT');
+
 
     const { Pool: PgMemPool } = db.adapters.createPg();
     pool = new PgMemPool() as unknown as DbPool;

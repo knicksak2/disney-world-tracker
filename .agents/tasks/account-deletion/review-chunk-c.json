@@ -1,0 +1,10 @@
+{
+  "verdict": "APPROVED",
+  "findings": [
+    "RESOLVED (confirmed): the prior blocking finding is fixed. routes.test.ts now registers the real registerRateLimit and asserts on the real POST /me/account/deletion/reauth that call 6 on one token is 429 rate_limit_exceeded with verifyCalls and recordFailure staying at 5, that a second token is unaffected, and that the confirmation route is not throttled by the reauth budget. Re-ran routes.test.ts: 52 passed, exit 0.",
+    "NON-BLOCKING (confirmed): with accountRestore undefined, handleResetPassword and handlePostResetPasswordWeb still admit a pending-in-grace account through the eligibility lookup and change its password, while login fails closed. Production always wires the port and logs an error at registration if missing; optionally treat a restorable account with no port as invalid_code.",
+    "NON-BLOCKING (confirmed, disclosed): promoting the interim organizer answers trip_role_invalid because lockMemberRole returns the effective role. Matches the task text and design; confirm intended or read the persisted role in promote.",
+    "NON-BLOCKING (possible): the coder's first verify:api run in the second pass exited 1 with one unidentified failed test; two later runs passed. If it recurs, capture the name with --reporter=dot. Real-Postgres-only behavior (FOR UPDATE with the EXISTS column, Date params in eligibility predicates, JOIN users session query) remains on the hosting.md smoke list."
+  ],
+  "reviewDoc": "c:\\Users\\knick\\dev\\disney-app\\.agents\\tasks\\account-deletion/review-chunk-c.md"
+}

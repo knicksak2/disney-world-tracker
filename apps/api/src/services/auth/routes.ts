@@ -43,6 +43,7 @@ import {
   loginInputSchema,
   registerInputSchema,
   resetPasswordInputSchema,
+  type AuthSessionResponseDTO,
   type ForgotPasswordResponseDTO,
   type ResetPasswordSuccessDTO,
 } from '@dwt/shared';
@@ -50,6 +51,11 @@ import {
 import type { DbPool } from '../../db/pool.js';
 import { AppError } from '../../errors/AppError.js';
 import { loginRateLimitConfig } from '../../plugins/rateLimit.js';
+import {
+  classifyLoginEligibility,
+  type DeletionState,
+} from '../accountDeletion/deletionState.js';
+import type { AccountRestorePort } from '../accountDeletion/ports.js';
 import { hash as hashPassword, verify as verifyPassword } from './password.js';
 import { generateToken, hashToken } from './sessionToken.js';
 import type { LockoutService } from './lockout.js';
@@ -132,6 +138,12 @@ export interface AuthRoutesOptions {
    * Optional public API URL for generating reset links.
    */
   readonly apiPublicUrl?: string;
+  /**
+   * Restores an account that is pending deletion when its owner signs in or completes a password reset
+   * (account-deletion R4). Optional so existing wiring and test doubles keep compiling; when it is absent and the
+   * account is restorable, login FAILS CLOSED with `invalid_credentials` and the reset hook is not passed.
+   */
+  readonly accountRestore?: AccountRestorePort;
 }
 
 // ---------------------------------------------------------------------------
@@ -153,6 +165,14 @@ export function authRoutes(options: AuthRoutesOptions): FastifyPluginAsync {
   const now = options.now ?? (() => new Date());
 
   return async function authRoutesPlugin(app: FastifyInstance): Promise<void> {
+    if (options.accountRestore === undefined) {
+      // Fail-closed gap, not a crash: a pending account cannot sign in or reset until the port is wired.
+      app.log.error(
+        { event: 'auth.account_restore_port_missing' },
+        'auth routes registered without an account restore port; accounts pending deletion cannot sign in',
+      );
+    }
+
     app.post('/auth/register', (request, reply) =>
       handleRegister(options, now, request, reply),
     );
@@ -226,11 +246,11 @@ export function authRoutes(options: AuthRoutesOptions): FastifyPluginAsync {
     );
 
     app.get('/auth/reset-password', (request, reply) =>
-      handleGetResetPasswordWeb(resetRepo, request, reply),
+      handleGetResetPasswordWeb(resetRepo, now, request, reply),
     );
 
     app.post('/auth/reset-password-web', (request, reply) =>
-      handlePostResetPasswordWeb(resetRepo, request, reply),
+      handlePostResetPasswordWeb(resetRepo, options.accountRestore, now, request, reply),
     );
   };
 }
@@ -238,12 +258,6 @@ export function authRoutes(options: AuthRoutesOptions): FastifyPluginAsync {
 // ---------------------------------------------------------------------------
 // Handlers
 // ---------------------------------------------------------------------------
-
-interface AuthSuccessBody {
-  readonly user: { readonly id: string; readonly email: string };
-  readonly profile: { readonly displayName: string };
-  readonly token: string;
-}
 
 /**
  * `POST /auth/register` — create a User, Profile, and a fresh session row in
@@ -262,7 +276,7 @@ async function handleRegister(
   now: () => Date,
   request: FastifyRequest,
   reply: FastifyReply,
-): Promise<AuthSuccessBody> {
+): Promise<AuthSessionResponseDTO> {
   const input = parseInput(registerInputSchema, request.body);
 
   const passwordHash = await hashPassword(input.password);
@@ -377,10 +391,27 @@ async function handleLogin(
   now: () => Date,
   request: FastifyRequest,
   _reply: FastifyReply,
-): Promise<AuthSuccessBody> {
+): Promise<AuthSessionResponseDTO> {
   const input = parseInput(loginInputSchema, request.body);
 
-  const userRow = await fetchUserForLogin(opts.pool, input.email);
+  const fetchedRow = await fetchUserForLogin(opts.pool, input.email);
+
+  // One clock read serves the eligibility check, the restore and the session timestamps.
+  const issuedAt = now();
+
+  // Account deletion (R4.1, R4.3): an account that is purging, a tombstone, or pending past its date is treated
+  // EXACTLY like an unknown email: no lockout call, no password work, the same `invalid_credentials`.
+  const eligibility =
+    fetchedRow === null
+      ? 'ineligible'
+      : classifyLoginEligibility(
+          {
+            state: (fetchedRow.deletion_state ?? 'active') as DeletionState,
+            scheduledPurgeAt: fetchedRow.scheduled_purge_at ?? null,
+          },
+          issuedAt,
+        );
+  const userRow = eligibility === 'ineligible' ? null : fetchedRow;
 
   if (userRow !== null) {
     if (await opts.lockout.isLocked(userRow.id)) {
@@ -405,10 +436,24 @@ async function handleLogin(
   // `userRow === null`, so reaching this branch means we have a row.
   const verifiedUser = userRow!;
 
+  // A correct password on an account pending deletion cancels the deletion (R4.2). The restore happens before the
+  // session is minted. Without the port, or when the purge claim won the race, this fails closed exactly like a
+  // wrong password (R4.5); the lockout counter is untouched in both cases.
+  let restored = false;
+  if (eligibility === 'restorable') {
+    if (opts.accountRestore === undefined) {
+      throw new AppError('invalid_credentials', 'Invalid email or password.');
+    }
+    const outcome = await opts.accountRestore.restore(verifiedUser.id, issuedAt);
+    if (outcome !== 'restored') {
+      throw new AppError('invalid_credentials', 'Invalid email or password.');
+    }
+    restored = true;
+  }
+
   await opts.lockout.clearOnSuccess(verifiedUser.id);
 
   const tokenPair = generateToken();
-  const issuedAt = now();
   const absoluteExpiresAt = new Date(issuedAt.getTime() + ABSOLUTE_TTL_MS);
 
   const profile = await fetchProfile(opts.pool, verifiedUser.id);
@@ -424,6 +469,8 @@ async function handleLogin(
     user: { id: verifiedUser.id, email: verifiedUser.email },
     profile: { displayName: profile.displayName },
     token: tokenPair.token,
+    // Present only as `true`, and only when this call restored the account (R16.6).
+    ...(restored ? { accountRestored: true as const } : {}),
   };
 }
 
@@ -663,6 +710,9 @@ interface UserLoginRow {
   readonly id: string;
   readonly email: string;
   readonly password_hash: string;
+  /** Absent in test doubles that predate account deletion: treated as `'active'`. */
+  readonly deletion_state?: string;
+  readonly scheduled_purge_at?: Date | null;
 }
 
 /**
@@ -681,7 +731,8 @@ async function handleForgotPassword(
 ): Promise<ForgotPasswordResponseDTO> {
   const input = parseInput(forgotPasswordInputSchema, request.body);
 
-  const user = await repo.findUserByEmail(input.email);
+  // The eligibility boundary uses the application clock (one clock for lookup and restore).
+  const user = await repo.findUserByEmail(input.email, now());
   if (user) {
     const code = String(randomInt(100000, 1000000));
     const webToken = randomBytes(24).toString('base64url');
@@ -725,7 +776,10 @@ async function handleResetPassword(
   const input = parseInput(resetPasswordInputSchema, request.body);
   const codeHash = createHash('sha256').update(input.code).digest('hex');
 
-  const record = await repo.findActiveByEmail(input.email);
+  // The same clock value feeds the eligibility lookup and `restoreInTx`, so the two predicates cannot disagree
+  // on the `scheduled_purge_at` boundary (account-deletion R4.11).
+  const resetAt = now();
+  const record = await repo.findActiveByEmail(input.email, resetAt);
   if (!record) {
     throw new AppError('invalid_code', 'Invalid or expired verification code.');
   }
@@ -751,7 +805,23 @@ async function handleResetPassword(
   }
 
   const newPasswordHash = await hashPassword(input.newPassword);
-  await repo.completeReset(record.id, record.userId, newPasswordHash);
+  const restorePort = opts.accountRestore;
+  const outcome = await repo.completeReset(
+    record.id,
+    record.userId,
+    newPasswordHash,
+    restorePort !== undefined
+      ? { restoreInTx: (client) => restorePort.restoreInTx(client, record.userId, resetAt) }
+      : undefined,
+  );
+  if (outcome === 'restore_lost') {
+    // The purge claim won the race: nothing changed, the code is not consumed (R4.11).
+    throw new AppError('invalid_code', 'Invalid or expired verification code.');
+  }
+  const restored = outcome === 'restored';
+  if (restored && restorePort !== undefined) {
+    await notifyRestoredBestEffort(restorePort, record.userId, request);
+  }
 
   // Clear any lockout state
   await opts.lockout.clearOnSuccess(record.userId);
@@ -774,7 +844,27 @@ async function handleResetPassword(
     user: { id: record.userId, email: record.userEmail },
     profile: { displayName: profile.displayName },
     token: tokenPair.token,
+    ...(restored ? { accountRestored: true as const } : {}),
   };
+}
+
+/**
+ * The "deletion cancelled" email goes out after the reset transaction committed and must never fail the reset.
+ * The log line carries no address and no user id.
+ */
+async function notifyRestoredBestEffort(
+  port: AccountRestorePort,
+  userId: string,
+  request: FastifyRequest,
+): Promise<void> {
+  try {
+    await port.notifyRestored(userId);
+  } catch (err) {
+    request.log.warn(
+      { event: 'auth.restore_notify_failed', error: err instanceof Error ? err.name : 'unknown' },
+      'account restored but the confirmation email could not be sent',
+    );
+  }
 }
 
 /**
@@ -782,6 +872,7 @@ async function handleResetPassword(
  */
 async function handleGetResetPasswordWeb(
   repo: PasswordResetRepo,
+  now: () => Date,
   request: FastifyRequest,
   reply: FastifyReply,
 ): Promise<void> {
@@ -801,7 +892,7 @@ async function handleGetResetPasswordWeb(
   }
 
   const tokenHash = createHash('sha256').update(token).digest('hex');
-  const record = await repo.findActiveByToken(tokenHash);
+  const record = await repo.findActiveByToken(tokenHash, now());
 
   if (!record) {
     reply.type('text/html').code(400);
@@ -824,6 +915,8 @@ async function handleGetResetPasswordWeb(
  */
 async function handlePostResetPasswordWeb(
   repo: PasswordResetRepo,
+  accountRestore: AccountRestorePort | undefined,
+  now: () => Date,
   request: FastifyRequest,
   reply: FastifyReply,
 ): Promise<void> {
@@ -845,8 +938,10 @@ async function handlePostResetPasswordWeb(
     return;
   }
 
+  // One clock value for the eligibility lookup and `restoreInTx` (account-deletion R4.11).
+  const resetAt = now();
   const tokenHash = createHash('sha256').update(token).digest('hex');
-  const record = await repo.findActiveByToken(tokenHash);
+  const record = await repo.findActiveByToken(tokenHash, resetAt);
 
   if (!record) {
     reply.type('text/html').code(400);
@@ -878,7 +973,40 @@ async function handlePostResetPasswordWeb(
   }
 
   const newPasswordHash = await hashPassword(password);
-  await repo.completeReset(record.id, record.userId, newPasswordHash);
+  const outcome = await repo.completeReset(
+    record.id,
+    record.userId,
+    newPasswordHash,
+    accountRestore !== undefined
+      ? { restoreInTx: (client) => accountRestore.restoreInTx(client, record.userId, resetAt) }
+      : undefined,
+  );
+
+  if (outcome === 'restore_lost') {
+    // The purge claim won the race: nothing changed and the code was not consumed. Same page as an invalid link.
+    reply.type('text/html').code(400);
+    reply.send(
+      renderWebMessageHtml(
+        'Link Expired or Invalid',
+        'This password reset link is invalid or has expired. Please open the Disney World Tracker app and request a new code.',
+        true,
+      ),
+    );
+    return;
+  }
+
+  if (outcome === 'restored' && accountRestore !== undefined) {
+    await notifyRestoredBestEffort(accountRestore, record.userId, request);
+    reply.type('text/html').code(200);
+    reply.send(
+      renderWebMessageHtml(
+        'Password Updated and Account Restored',
+        'Your password has been reset and your scheduled account deletion was cancelled, so your account has been restored. You can now return to the Disney World Tracker app and sign in with your new password.',
+        false,
+      ),
+    );
+    return;
+  }
 
   reply.type('text/html').code(200);
   reply.send(
@@ -994,7 +1122,7 @@ async function fetchUserForLogin(
   email: string,
 ): Promise<UserLoginRow | null> {
   const result = await pool.query<UserLoginRow>(
-    `SELECT id, email, password_hash
+    `SELECT id, email, password_hash, deletion_state, scheduled_purge_at
        FROM users
       WHERE email = $1`,
     [email],

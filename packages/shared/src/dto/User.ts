@@ -32,12 +32,24 @@ export interface ForgotPasswordResponseDTO {
 }
 
 /**
- * Success response returned when password reset succeeds in mobile app,
- * automatically establishing an authenticated session.
+ * Success body of login, register and mobile reset-password: the user, the
+ * profile name and a fresh session token (account-deletion R16.6).
+ *
+ * `accountRestored` is present only as `true`, and only when the call restored
+ * an account that was pending deletion. It is absent otherwise; `POST
+ * /auth/register` never sets it.
  */
-export interface ResetPasswordSuccessDTO {
+export interface AuthSessionResponseDTO {
   readonly user: { readonly id: string; readonly email: string };
   readonly profile: { readonly displayName: string };
   readonly token: string;
+  readonly accountRestored?: true;
 }
+
+/**
+ * Success response returned when password reset succeeds in mobile app,
+ * automatically establishing an authenticated session. Same shape as
+ * `AuthSessionResponseDTO` (export name unchanged).
+ */
+export type ResetPasswordSuccessDTO = AuthSessionResponseDTO;
 

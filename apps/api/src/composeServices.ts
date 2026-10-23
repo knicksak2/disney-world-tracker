@@ -111,6 +111,7 @@ import { createStatsRepo } from './services/stats/repo.js';
 import { buildCuratedProgressStats } from './services/stats/curatedShare.js';
 
 import { createTripRepo } from './services/trips/repo.js';
+import { resolveExperienceListForTrip, resolveFoodListForTrip } from './services/trips/listResolvers.js';
 import type {
   RodeWithTagCreatedNotice,
   TripInviteCreatedNotice,
@@ -170,6 +171,12 @@ import type { AdminPhotoPort } from './services/admin/routes.js';
 import { CATALOG_SYNC_LOCK_KEY } from './services/catalog/sync.js';
 
 import { createLogger } from './logger.js';
+import { verify as verifyPassword } from './services/auth/password.js';
+import { createMailService } from './services/auth/mailService.js';
+import { resolveEffectiveRole } from './services/trips/effectiveRole.js';
+import { createAccountDeletionRepo } from './services/accountDeletion/repo.js';
+import { createAccountDeletionService } from './services/accountDeletion/service.js';
+import { createPurgeRunner } from './services/accountDeletion/purgeRunner.js';
 import type { PhotoTargetKind, TripSummaryDTO } from '@dwt/shared';
 import type { TargetAdapter } from './services/photos/ports.js';
 import { createPhotosRepo } from './services/photos/repo.js';
@@ -294,43 +301,8 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
   const tripRepo = createTripRepo(pool, {
     completions: completionRepo,
     ratings: ratingRepo,
-    resolveFoodList: async (foodListId: string) => {
-      const res = await pool.query<{
-        id: string;
-        owner_id: string;
-        visibility: 'private' | 'public';
-        name: string;
-        item_count: number;
-        owner_display_name: string;
-      }>(
-        `SELECT
-           fl.id,
-           fl.owner_id,
-           fl.visibility,
-           fl.name,
-           COALESCE(ic.item_count, 0)::int AS item_count,
-           COALESCE(p.display_name, 'User') AS owner_display_name
-         FROM food_lists fl
-         LEFT JOIN profiles p ON p.user_id = fl.owner_id
-         LEFT JOIN (
-           SELECT food_list_id, COUNT(*)::int AS item_count
-           FROM food_lists_items
-           GROUP BY food_list_id
-         ) ic ON ic.food_list_id = fl.id
-        WHERE fl.id = $1`,
-        [foodListId],
-      );
-      if (res.rows.length === 0) return null;
-      const row = res.rows[0]!;
-      return {
-        id: row.id,
-        ownerId: row.owner_id,
-        visibility: row.visibility,
-        name: row.name,
-        itemCount: row.item_count,
-        ownerDisplayName: row.owner_display_name,
-      };
-    },
+    // Both list-owner ports live in `trips/listResolvers.ts` (read through `profile_identity`).
+    resolveFoodList: resolveFoodListForTrip(pool),
     // Feature: experience-lists (task 18.7) — cross-spec port injected into
     // `trips`' attach/detach and Trip read projection (Requirement 14),
     // mirroring `resolveFoodList` immediately above exactly. This runs its
@@ -342,43 +314,7 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
     // check, not the `name`/`itemCount`/`ownerDisplayName` the Trip read
     // projection (`selectTripExperienceListsByTrip`) needs to build a
     // `TripExperienceListDTO`).
-    resolveExperienceList: async (experienceListId: string) => {
-      const res = await pool.query<{
-        id: string;
-        owner_id: string;
-        visibility: 'private' | 'public';
-        name: string;
-        item_count: number;
-        owner_display_name: string;
-      }>(
-        `SELECT
-           el.id,
-           el.owner_id,
-           el.visibility,
-           el.name,
-           COALESCE(ic.item_count, 0)::int AS item_count,
-           COALESCE(p.display_name, 'User') AS owner_display_name
-         FROM experience_lists el
-         LEFT JOIN profiles p ON p.user_id = el.owner_id
-         LEFT JOIN (
-           SELECT experience_list_id, COUNT(*)::int AS item_count
-           FROM experience_lists_items
-           GROUP BY experience_list_id
-         ) ic ON ic.experience_list_id = el.id
-        WHERE el.id = $1`,
-        [experienceListId],
-      );
-      if (res.rows.length === 0) return null;
-      const row = res.rows[0]!;
-      return {
-        id: row.id,
-        ownerId: row.owner_id,
-        visibility: row.visibility,
-        name: row.name,
-        itemCount: row.item_count,
-        ownerDisplayName: row.owner_display_name,
-      };
-    },
+    resolveExperienceList: resolveExperienceListForTrip(pool),
   });
 
   // --- Phase 2 sharing services (push / preferences / reactions / notify) ---
@@ -949,13 +885,61 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
     };
   }
 
+  // --- Account deletion wiring (account-deletion) ----------------------
+  // One compose-time logger instance feeds the mail service, the service and the runner, so all three write
+  // through one redacting logger. `authRoutes` builds its own mail service on `app.log`; this one is separate
+  // but equivalent (provider selection lives in the factory).
+  const accountDeletionLogger = createLogger();
+  const accountDeletionMail = createMailService({ logger: accountDeletionLogger });
+  const accountDeletionRepoInstance = createAccountDeletionRepo(pool, {
+    chunkRows: config.accountDeletion.chunkRows,
+  });
+  const accountDeletionClock = { now: () => new Date() };
+  const accountDeletionService = createAccountDeletionService({
+    repo: accountDeletionRepoInstance,
+    lockout,
+    mail: accountDeletionMail,
+    verify: verifyPassword,
+    clock: accountDeletionClock,
+    logger: accountDeletionLogger,
+    config: {
+      graceDays: config.accountDeletion.graceDays,
+      reauthWindowSeconds: config.accountDeletion.reauthWindowSeconds,
+    },
+    logSecret: config.session.secret,
+  });
+  // With photos disabled there is no PhotoService; the purge still marks any existing rows `deleted` (the
+  // objects wait for the sweep to be enabled).
+  const accountDeletionPhotos = photoService
+    ? photoService
+    : {
+        deleteAllForUser: (userId: string, o?: { limit?: number }) =>
+          createPhotosRepo(pool).softDeleteByOwner(userId, new Date(), undefined, o?.limit),
+      };
+  const purgeRunner = createPurgeRunner({
+    repo: accountDeletionRepoInstance,
+    photos: accountDeletionPhotos,
+    tripPhotos: {
+      softDeleteTripPhotos: (tripId, at, client) =>
+        createPhotosRepo(pool).softDeleteByTarget('trip', tripId, at, client),
+    },
+    aggregate: aggregateRepo,
+    lockout,
+    clock: accountDeletionClock,
+    logger: accountDeletionLogger,
+    logSecret: config.session.secret,
+    config: {
+      batch: config.accountDeletion.purgeBatch,
+      timeBudgetMs: config.accountDeletion.purgeTimeBudgetMs,
+      chunkRows: config.accountDeletion.chunkRows,
+    },
+  });
+
   const tripShareFacts: TripShareFacts = {
     async roleOf(userId: string, tripId: string): Promise<TripRole | null> {
-      const result = await pool.query<{ role: TripRole }>(
-        'SELECT role FROM trip_memberships WHERE trip_id = $1 AND user_id = $2',
-        [tripId, userId],
-      );
-      return result.rows[0]?.role ?? null;
+      // The role the caller acts with: the Interim_Organizer reads as `organizer` while the only organizer is
+      // pending deletion (account-deletion R7.1).
+      return resolveEffectiveRole(pool, tripId, userId);
     },
     async tripName(tripId: string): Promise<string | null> {
       const result = await pool.query<{ name: string }>(
@@ -1194,6 +1178,11 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
       recapPhotoPort,
       pool,
     },
+    accountDeletion: {
+      service: accountDeletionService,
+      purgeRunner,
+      requireSession: sessionMiddleware,
+    },
     // Always set `{}` so the gateway rate limiter (Redis-backed default
     // budgets) applies uniformly across every service route. The
     // login-route override is attached inside `authRoutes`.
@@ -1217,7 +1206,12 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
   // which is exactly the pattern `buildServer` already relies on. Any
   // registration error surfaces through the entrypoint's `listen()` catch.
   void app.register(
-    authRoutes({ pool, lockout, requireSession: sessionMiddleware }),
+    authRoutes({
+      pool,
+      lockout,
+      requireSession: sessionMiddleware,
+      accountRestore: accountDeletionService,
+    }),
   );
   void app.register(profileRoutes, {
     pool,
@@ -1245,13 +1239,15 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
  * middleware reads and writes the `sessions` table with the same SQL the
  * tests exercise.
  */
-function makeSessionDbAdapter(pool: DbPool): SessionDbAdapter {
+export function makeSessionDbAdapter(pool: DbPool): SessionDbAdapter {
   return {
     async findByTokenHash(tokenHash) {
       const result = await pool.query<SessionRow>(
-        `SELECT id, user_id, absolute_expires_at, last_seen_at, revoked_at
-           FROM sessions
-          WHERE token_hash = $1`,
+        `SELECT s.id, s.user_id, s.absolute_expires_at, s.last_seen_at, s.revoked_at,
+                u.deletion_state
+           FROM sessions s
+           JOIN users u ON u.id = s.user_id
+          WHERE s.token_hash = $1`,
         [tokenHash],
       );
       const row = result.rows[0];

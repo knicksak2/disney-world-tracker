@@ -411,6 +411,17 @@ The following capabilities are explicitly out of scope for v1 and are noted as f
 10. WHEN the Trip_Detail_View displays a Trip's attached Food_Lists, THE App SHALL display each Food_List's name, item count, and owner display name; IF resolving a linked Food_List fails for any reason other than the link no longer existing (e.g. a transient read error), THE Trip_Service SHALL project that entry as unavailable (carrying only its `foodListId`) rather than omitting it or erroring the whole read, and THE App SHALL display an unavailable indication in its place, consistent with the existing pattern for an inaccessible saved Food_List.
 11. THE `trip_food_lists.food_list_id` foreign key SHALL be `ON DELETE CASCADE` against `food_lists(id)`, so deleting a Food_List removes its Trip_Food_List links in the same transaction rather than leaving a dangling reference — a deleted Food_List's attachment simply stops appearing on the Trip on the next read, which is why Requirement 22.10's unavailable-entry case is reserved for a resolution failure distinct from deletion, not deletion itself. This is an explicit correction to an earlier inconsistent draft of this spec, which described the foreign key as having no `ON DELETE` action while specifying `ON DELETE CASCADE` in its own migration SQL; the shipped `0042_trip_food_lists.sql` and its migration test use `ON DELETE CASCADE`, and this requirement is amended to match the implementation rather than the reverse.
 
+### Requirement 23: Pending and deleted accounts (added by the `account-deletion` spec)
+
+**User Story:** As a Trip_Member, I want a Trip to keep working when a crew member deletes their account, so that the rest of us keep our plans, log, and expenses. This requirement is additive. The behavior is defined in `.kiro/specs/account-deletion/requirements.md` (Requirements 5, 6, 7, 10, 11); this section states only what the Trip_Service must do.
+
+#### Acceptance Criteria
+
+1. WHILE a Trip_Member's account is in `pending_deletion`, THE Trip_Service SHALL omit that member from the roster, member counts, invite lists and pickers, and SHALL present their log entries, comments, feed items and planned-item attribution as "Deleted user"; the persisted `trip_memberships` rows SHALL be unchanged so a restoration is lossless.
+2. WHILE a Trip has no Active Organizer and at least one Active Trip_Member, THE Trip_Service SHALL authorize organizer actions for the Active member with the earliest `joined_at` (ties by lowest user id) as an Interim_Organizer, derived by a pure function in `permissions.ts` and never persisted; the Last_Organizer_Rule (Requirement 5) SHALL continue to be evaluated over the persisted membership set.
+3. WHEN a deleted account is purged, THE Trip_Service SHALL, for each Trip the account created or belongs to: delete the Trip (after soft-deleting its Photos) if no other member remains; otherwise set `creator_id` to the highest-role remaining member (Organizer before Member, then earliest `joined_at`, then lowest user id) and promote that member to Organizer if needed so that the Last_Organizer_Rule holds after the purge.
+4. THE Trip_Service SHALL retain the purged account's Trip_Log_Entries, Trip_Feed_Items, Trip_Comments and Planned_Items with attribution anonymized, extending Requirement 8.5; it SHALL delete the account's Trip_Reactions, pending Trip_Invites and pending Rode_With_Tags.
+
 ## Out of Scope (Future Work)
 
 - **Real-time group chat**: Live, real-time messaging within a Trip is deferred. Trip_Comments in Requirement 13 are not real-time chat.

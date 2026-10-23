@@ -111,6 +111,8 @@ export function setupTestDb(): { db: IMemoryDb; pool: Pool; recordedQueries: str
   applyMigration(db, '0031_planned_item_reservations.sql');
   applyMigration(db, '0056_admin_panel.sql');
   applyMigration(db, '0061_trip_booking_timeline.sql');
+  applyMigration(db, '0013_avatar_presets.sql'); // profile_identity (0064) reads profiles.avatar_preset
+  applyMigration(db, '0064_account_deletion.sql');
 
   const rawPool = db.adapters.createPg().Pool;
   const poolInstance = new rawPool();

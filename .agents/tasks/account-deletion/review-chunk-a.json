@@ -1,0 +1,11 @@
+{
+  "verdict": "APPROVED",
+  "findings": [
+    "Orphan-reaper assertion missing (confirmed, non-blocking): repo.stages.test.ts 'stage 4 nulls owner_id...' title claims 'the orphan reaper query does not' return the rows but only asserts listDeleted. Add a findOwnerNullOrphanIds() -> [] assertion or drop the clause from the title.",
+    "Composite-key per_key path under-tested (likely, non-blocking): each registry-row test seeds one row, so the six multi-column-key entries run a single tuple; add a multi-tuple case for one composite-key table (e.g. trip_reactions).",
+    "ON CONFLICT batch not explicitly deduped (confirmed, low, non-blocking): enqueueRatedChunk relies on the ratings PK (user_id, experience_id) for distinct ids; add a Set or a comment naming the PK.",
+    "Tautological assertions (confirmed, harmless): covered.size/fixtures.size === DISPOSITIONS.length hold by construction, and the 'fresh account purged within two runs' test asserts the same fact twice. Trim or tighten when next touched.",
+    "Unrelated edits in the working tree (confirmed): db/pool.ts, db/__tests__/pool.test.ts and the .kiro/specs/*/requirements.md edits are not part of chunk A; commit them separately."
+  ],
+  "reviewDoc": "c:\\Users\\knick\\dev\\disney-app\\.agents\\tasks\\account-deletion/review-chunk-a.md"
+}

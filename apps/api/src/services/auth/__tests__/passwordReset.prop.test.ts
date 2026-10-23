@@ -74,6 +74,10 @@ describe('Password Reset Property Tests', () => {
 
     applyMigration(db, '0001_init.sql');
     applyMigration(db, '0059_password_reset_tokens.sql');
+    // The eligibility predicate reads users.deletion_state / scheduled_purge_at (account-deletion R4.3).
+    applyMigration(db, '0013_avatar_presets.sql'); // profile_identity (0064) reads profiles.avatar_preset
+    applyMigration(db, '0015_trips.sql');
+    applyMigration(db, '0064_account_deletion.sql');
 
     repo = createPasswordResetRepo(pool);
   });

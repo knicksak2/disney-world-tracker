@@ -27,6 +27,15 @@ function testConfig(enabled = true): AppConfig {
     session: { secret: 'test-session-secret-must-be-at-least-32-chars' },
     intelligence: { samplingCronSecret: 'test-sampling-secret', crowdSeedDir: 'seed-data/crowd/' },
     pins: { reconcileCronSecret: 'test-pin-reconcile-secret' },
+    accountDeletion: {
+      graceDays: 30,
+      cronSecret: 'test-account-deletion-cron-secret-12345',
+      purgeBatch: 10,
+      purgeTimeBudgetMs: 25000,
+      reauthWindowSeconds: 300,
+      chunkRows: 500,
+    },
+    support: { email: 'support@example.com' },
     themeparks: { baseUrl: 'https://themeparks.invalid/v1' },
     disney: {
       syncGateway: { baseUrl: 'https://disney.invalid' },

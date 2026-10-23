@@ -502,7 +502,9 @@ async function claimPin(pool: DbPool, userId: string, pinId: string): Promise<Cl
  * 21.3); reached only via the dedicated internal reconcile endpoint.
  */
 async function reconcileAll(pool: DbPool): Promise<{ usersProcessed: number; pinsAwarded: number }> {
-  const users = await pool.query<{ id: string }>(`SELECT id FROM users`);
+  // Only active accounts are reconciled: a pending, purging or tombstone account is neither awarded pins nor
+  // costs database time (account-deletion R5.1).
+  const users = await pool.query<{ id: string }>(`SELECT id FROM users WHERE deletion_state = 'active'`);
   let pinsAwarded = 0;
   for (const { id } of users.rows) {
     const awarded = await awardNewly(pool, id);

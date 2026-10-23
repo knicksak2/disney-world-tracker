@@ -133,6 +133,9 @@ describe('Trip Food Lists — Property 27', { timeout: 120_000 }, () => {
     applyMigration(db, '0042_trip_food_lists.sql');
     applyMigration(db, '0047_food_list_checklist.sql');
     applyMigration(db, '0052_food_list_pinning.sql');
+  // Reads go through the 0064 visibility views (profile_identity needs profiles.avatar_preset from 0013).
+  applyMigration(db, '0013_avatar_presets.sql');
+  applyMigration(db, '0064_account_deletion.sql');
 
     const rawPool = db.adapters.createPg().Pool;
     pool = withForUpdateCompat(new rawPool() as unknown as DbPool);

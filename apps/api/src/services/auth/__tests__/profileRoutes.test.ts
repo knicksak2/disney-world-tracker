@@ -344,7 +344,7 @@ describe('PUT /me/profile/avatar', () => {
 describe('GET /users/:userId/profile', () => {
   it('allows the owner to view their own profile', async () => {
     const pool = makeFakePool((call) => {
-      if (call.text.startsWith('SELECT user_id, display_name, avatar_preset FROM profiles')) {
+      if (call.text.startsWith('SELECT user_id, display_name, avatar_preset FROM profile_identity')) {
         return {
           rows: [
             { user_id: 'u-1', display_name: 'Alice', avatar_preset: null },
@@ -374,17 +374,17 @@ describe('GET /users/:userId/profile', () => {
 
     // Self-view skips the friendship lookup (no SELECT against friendships).
     expect(
-      pool.calls.find((c) => c.text.includes('FROM friendships')),
+      pool.calls.find((c) => c.text.includes('FROM active_friendships')),
     ).toBeUndefined();
   });
 
   it('allows an accepted Friend to view the owner profile', async () => {
     const pool = makeFakePool((call) => {
-      if (call.text.includes('FROM friendships')) {
+      if (call.text.includes('FROM active_friendships')) {
         // Friendship row exists.
         return { rows: [{ exists: true }] };
       }
-      if (call.text.startsWith('SELECT user_id, display_name, avatar_preset FROM profiles')) {
+      if (call.text.startsWith('SELECT user_id, display_name, avatar_preset FROM profile_identity')) {
         return {
           rows: [
             { user_id: 'u-2', display_name: 'Bob', avatar_preset: 'fireworks' },
@@ -416,13 +416,13 @@ describe('GET /users/:userId/profile', () => {
     expect(body.overallCompletionPercent).toBe(0); // R3.6 zero numerator
 
     // Friendship lookup ran with canonical (lo, hi) = (u-1, u-2).
-    const fcall = pool.calls.find((c) => c.text.includes('FROM friendships'));
+    const fcall = pool.calls.find((c) => c.text.includes('FROM active_friendships'));
     expect(fcall?.params).toEqual(['u-1', 'u-2']);
   });
 
   it('denies a non-friend with profile_forbidden and emits no analytics on deny (R7.8)', async () => {
     const pool = makeFakePool((call) => {
-      if (call.text.includes('FROM friendships')) {
+      if (call.text.includes('FROM active_friendships')) {
         return { rows: [{ exists: false }] };
       }
       return { rows: [] };
@@ -482,7 +482,7 @@ describe('GET /users/:userId/profile', () => {
     // (defense in depth: the requester learns nothing from the deny).
     expect(
       pool.calls.find((c) =>
-        c.text.startsWith('SELECT user_id, display_name, avatar_preset FROM profiles'),
+        c.text.startsWith('SELECT user_id, display_name, avatar_preset FROM profile_identity'),
       ),
     ).toBeUndefined();
   });

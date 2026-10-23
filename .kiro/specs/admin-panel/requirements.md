@@ -408,3 +408,14 @@ actually resolved, so that I can debug a local-vs-cloud environment mismatch wit
 5. THE Admin_Panel SHALL HTML-escape every value interpolated into the `<time>` element, and the inline script SHALL contain no interpolated data.
 6. THE Admin_Panel SHALL display, in the shared page shell, a note that timestamps are shown in the viewer's browser time zone and that hovering reveals the UTC instant.
 
+### Requirement 17: Account deletion visibility (added by the `account-deletion` spec)
+
+**User Story:** As the Operator, I want to see which accounts are pending deletion and that purges are running, so that I can answer a support question and confirm the cron is working. This requirement is additive; the full behavior is in `.kiro/specs/account-deletion/requirements.md` (Requirements 5.7, 9.6, 15.5). Admin-initiated deletion is out of scope there and here.
+
+#### Acceptance Criteria
+
+1. WHEN an authenticated request targets the user lookup of Requirement 11, THE Admin_Panel SHALL show the account's deletion state (`active`, `pending_deletion`, or `purging`) and, for a pending account, the request time and `Scheduled_Purge_At`; the Admin_Panel SHALL continue to show a pending account, which other users cannot see.
+2. WHEN an authenticated request targets `GET /admin/growth`, THE Admin_Panel SHALL additionally display the number of accounts currently `pending_deletion`, and the `users` total of Requirement 13.1 SHALL count only `active` accounts and SHALL NOT count the anonymization placeholder identity, if the design uses one.
+3. WHEN an authenticated request targets `GET /admin/growth`, THE Admin_Panel SHALL display the count of purge ledger rows completed in each of the trailing 7 calendar days (UTC) and the most recent purge time, read from the non-identifying purge ledger; it SHALL display no user id, email, or name for a purged account.
+4. THE Admin_Panel SHALL provide no control that requests, cancels, or accelerates an account deletion.
+

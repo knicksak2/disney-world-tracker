@@ -232,7 +232,7 @@ function makeFakePool(store: Store): FakePool {
           }
 
           // ---- recipient existence (R8.10) ----------------------------
-          if (trimmed.startsWith('SELECT id FROM users WHERE id =')) {
+          if (trimmed.startsWith('SELECT u.id FROM users u WHERE u.id =')) {
             const recipientId = String(params[0]);
             return store.users.has(recipientId)
               ? { rows: [{ id: recipientId }] }
@@ -242,7 +242,7 @@ function makeFakePool(store: Store): FakePool {
           // ---- existing-friendship EXISTS check (R8.7) ----------------
           if (
             trimmed.startsWith('SELECT EXISTS') &&
-            trimmed.includes('FROM friendships')
+            trimmed.includes('FROM active_friendships')
           ) {
             const lo = String(params[0]);
             const hi = String(params[1]);
@@ -313,7 +313,7 @@ function makeFakePool(store: Store): FakePool {
 
           // ---- accept: lookup gated by recipient_id -------------------
           if (
-            trimmed.startsWith('SELECT sender_id, recipient_id') &&
+            trimmed.startsWith('SELECT fr.sender_id, fr.recipient_id') &&
             trimmed.includes('FROM friend_requests')
           ) {
             const requestId = String(params[0]);

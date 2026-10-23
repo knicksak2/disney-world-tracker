@@ -11,6 +11,7 @@ export type {
   UserDTO,
   ForgotPasswordResponseDTO,
   ResetPasswordSuccessDTO,
+  AuthSessionResponseDTO,
 } from './User.js';
 export type { ProfileDTO } from './Profile.js';
 export type { ExperienceDTO } from './Experience.js';

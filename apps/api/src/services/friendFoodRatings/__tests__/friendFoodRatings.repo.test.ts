@@ -91,13 +91,16 @@ describe('FriendFoodRatingsRepo integration tests (pg-mem)', () => {
     // Load only 0001 and 0040 per spec
     applyMigration(db, '0001_init.sql');
     applyMigration(db, '0040_food_item_logging.sql');
+    // The visibility views (0064) read profiles.avatar_preset, friendships and trip_memberships.
+    applyMigration(db, '0013_avatar_presets.sql');
+    applyMigration(db, '0015_trips.sql');
+    applyMigration(db, '0064_account_deletion.sql');
 
     // Recorded deviation: 0004 is not loaded; run the park DROP NOT NULL directly
     db.public.none('ALTER TABLE experiences ALTER COLUMN park DROP NOT NULL;');
     db.public.none('ALTER TABLE experiences DROP CONSTRAINT experiences_park_chk;');
 
-    // Phase 2 setup deviation: 0013_avatar_presets.sql is not loaded; add avatar_preset to profiles directly
-    db.public.none('ALTER TABLE profiles ADD COLUMN avatar_preset TEXT;');
+    // 0013_avatar_presets.sql is loaded above (0064's views read profiles.avatar_preset).
 
     repo = createFriendFoodRatingsRepo(pool);
   });

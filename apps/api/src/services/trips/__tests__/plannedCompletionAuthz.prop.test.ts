@@ -170,7 +170,9 @@ function makeFakePool(rows: readonly MembershipRow[]): {
     ): Promise<{ rows: unknown[] }> {
       queries.push(text.trim());
       const trimmed = text.trim();
-      if (trimmed.startsWith('SELECT role FROM trip_memberships')) {
+      // The gate's membership lookup also selects the active-organizer count (account-deletion R7.1); this
+      // fake returns only `role`, which the gate reads as "the trip has an active organizer".
+      if (trimmed.startsWith('SELECT tm.role')) {
         const tripId = String(params?.[0]);
         const userId = String(params?.[1]);
         const matches = rows.filter(

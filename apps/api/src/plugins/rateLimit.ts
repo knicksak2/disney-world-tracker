@@ -208,6 +208,44 @@ export function loginRateLimitConfig(
   };
 }
 
+/**
+ * Build the `config.rateLimit` block applied to the account-deletion
+ * re-authentication route (account-deletion R2.11).
+ *
+ * Same budget as the login route (`DEFAULT_LOGIN_ACCOUNT`), but keyed on the
+ * SHA-256 of the bearer token: `loginRateLimitConfig()` keys on `body.email`,
+ * which the reauth body does not carry, so it would fall back to a per-IP
+ * bucket shared with every login on the same network. The key is
+ * `reauth:<sha256 of token>`; the raw token never reaches a store. A request
+ * with no usable bearer header falls back to `reauth:ip:<ip>` so unauthenticated
+ * floods are still counted (the route then answers `401`).
+ *
+ * This runs at `onRequest`, before the session pre-handler, exactly like the
+ * global limiter's `defaultRateLimitKey`, so the header is the only credential
+ * available at keying time.
+ */
+export function reauthRateLimitConfig(
+  budget: RouteGroupBudget = DEFAULT_LOGIN_ACCOUNT,
+): RateLimitOptions {
+  return {
+    max: budget.max,
+    timeWindow: budget.timeWindowMs,
+    keyGenerator: (req) => {
+      const request = req as FastifyRequest;
+      const auth = request.headers.authorization;
+      if (typeof auth === 'string') {
+        const match = /^Bearer\s+(\S.*)$/i.exec(auth);
+        const token = (match?.[1] ?? '').trim();
+        if (token.length > 0) {
+          return `reauth:${createHash('sha256').update(token).digest('hex')}`;
+        }
+      }
+      return `reauth:ip:${request.ip}`;
+    },
+    errorResponseBuilder: buildRateLimitEnvelope,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Envelope builder
 // ---------------------------------------------------------------------------

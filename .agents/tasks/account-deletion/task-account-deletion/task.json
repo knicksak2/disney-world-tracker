@@ -1,0 +1,7 @@
+{
+  "task_id": "task-account-deletion",
+  "task_description": "Self-service account deletion for the Disney trip-planning monorepo: re-auth + typed-phrase confirmation, soft delete with a 30-day grace period (restore on login/reset), hidden-from-others visibility retrofit, cron-driven resumable purge with trip transfer, photo deletion, tombstone anonymization and a non-identifying ledger, admin visibility, and the mobile flow. Authoritative sources: .kiro/specs/account-deletion/{requirements,design,tasks}.md.",
+  "status": "pending",
+  "feature_order": ["FEAT-001", "FEAT-002", "FEAT-003", "FEAT-004", "FEAT-005"],
+  "blocked_reason": null
+}

@@ -28,10 +28,11 @@ import type {
   TripGuestDTO,
   TripGuestRenameInput,
 } from '@dwt/shared';
-import { EXPENSE_LIMIT } from '@dwt/shared';
+import { EXPENSE_LIMIT, isDeletedUserId } from '@dwt/shared';
 
 import type { DbPool } from '../../db/pool.js';
 import { AppError } from '../../errors/AppError.js';
+import { resolvePublicIds } from '../accountDeletion/visibility.js';
 import type { TripRole } from '../trips/permissions.js';
 import { allocateProportionally, type AllocationTarget, splitEvenly } from './allocation.js';
 import { type BalanceEvent, computeNetBalances, computePairwiseBalances } from './balances.js';
@@ -150,7 +151,148 @@ function formatTimestamp(val: Date | string): string {
   return val.toISOString();
 }
 
+/** People an entry names: user ids (members) and guest ids. An ambiguous id may be listed in both. */
+export interface PartyIds {
+  readonly userIds: readonly string[];
+  readonly guestIds: readonly string[];
+}
+
+/**
+ * Which of the named parties are NOT visible (account-deletion R12.10, R12.11): a placeholder id
+ * (`isDeletedUserId`, which covers a pending account's alias and a tombstone), a real id whose account is
+ * not `active`, or a guest whose sponsor is one of those (the sponsor carries the guest's balance). The only
+ * place the rule is written in SQL as `deletion_state <> 'active'`, the negation of the visibility predicate.
+ */
+export async function findNonVisibleParties(
+  db: DbPool | PoolClient,
+  tripId: string,
+  parties: PartyIds,
+): Promise<{ readonly userIds: readonly string[]; readonly guestIds: readonly string[] }> {
+  const userIds = [...new Set(parties.userIds)];
+  const guestIds = [...new Set(parties.guestIds)];
+
+  const sponsorOf = new Map<string, string>();
+  if (guestIds.length > 0) {
+    const guests = await db.query<{ id: string; sponsor_member_id: string }>(
+      `SELECT id, sponsor_member_id FROM trip_guests WHERE trip_id = $1 AND id = ANY($2::uuid[])`,
+      [tripId, guestIds],
+    );
+    for (const g of guests.rows) sponsorOf.set(g.id, g.sponsor_member_id);
+  }
+
+  const candidates = [...new Set([...userIds, ...sponsorOf.values()])];
+  const gone = new Set(candidates.filter((id) => isDeletedUserId(id)));
+  const lookup = candidates.filter((id) => !gone.has(id));
+  if (lookup.length > 0) {
+    const res = await db.query<{ id: string }>(
+      `SELECT u.id FROM users u WHERE u.id = ANY($1::uuid[]) AND u.deletion_state <> 'active'`,
+      [lookup],
+    );
+    for (const row of res.rows) gone.add(row.id);
+  }
+
+  return {
+    userIds: userIds.filter((id) => gone.has(id)),
+    guestIds: guestIds.filter((id) => {
+      const sponsor = sponsorOf.get(id);
+      return sponsor !== undefined && gone.has(sponsor);
+    }),
+  };
+}
+
+/** Throws `trip_party_deleted` (409) when any named party is not visible. The message names nobody. */
+async function assertPartiesVisible(db: DbPool | PoolClient, tripId: string, parties: PartyIds): Promise<void> {
+  if (parties.userIds.length === 0 && parties.guestIds.length === 0) return;
+  const bad = await findNonVisibleParties(db, tripId, parties);
+  if (bad.userIds.length > 0 || bad.guestIds.length > 0) {
+    throw new AppError(
+      'trip_party_deleted',
+      "This entry involves someone who deleted their account, so it can't be changed. You can still delete it.",
+    );
+  }
+}
+
+/** The parties a create or edit request body names. Ambiguous ids (even-split participants, item assignees) go in both lists. */
+function partiesOfExpenseInput(input: {
+  payerId: string;
+  splitMode?: string | undefined;
+  shares?: readonly { memberId?: string | undefined; guestId?: string | undefined }[] | undefined;
+  participantIds?: readonly string[] | undefined;
+  tierCounts?: readonly { memberId?: string | undefined; guestId?: string | undefined }[] | undefined;
+  items?: readonly { assigneeIds: readonly string[] }[] | undefined;
+}): PartyIds {
+  const userIds = new Set<string>([input.payerId]);
+  const guestIds = new Set<string>();
+  const addBoth = (id: string): void => {
+    userIds.add(id);
+    guestIds.add(id);
+  };
+  for (const s of input.shares ?? []) {
+    if (s.memberId) userIds.add(s.memberId);
+    if (s.guestId) guestIds.add(s.guestId);
+  }
+  for (const p of input.participantIds ?? []) addBoth(p);
+  for (const tc of input.tierCounts ?? []) {
+    if (tc.memberId) userIds.add(tc.memberId);
+    if (tc.guestId) guestIds.add(tc.guestId);
+  }
+  for (const item of input.items ?? []) {
+    for (const a of item.assigneeIds) addBoth(a);
+  }
+  return { userIds: [...userIds], guestIds: [...guestIds] };
+}
+
+/** The parties already stored on an expense: payer, shares, tier counts and item assignees. */
+async function storedExpenseParties(db: DbPool | PoolClient, expenseId: string, payerId: string): Promise<PartyIds> {
+  const userIds = new Set<string>([payerId]);
+  const guestIds = new Set<string>();
+  const collect = (rows: readonly { member_id: string | null; guest_id: string | null }[]): void => {
+    for (const r of rows) {
+      if (r.member_id) userIds.add(r.member_id);
+      if (r.guest_id) guestIds.add(r.guest_id);
+    }
+  };
+  collect(
+    (
+      await db.query<{ member_id: string | null; guest_id: string | null }>(
+        `SELECT member_id, guest_id FROM expense_shares WHERE expense_id = $1`,
+        [expenseId],
+      )
+    ).rows,
+  );
+  collect(
+    (
+      await db.query<{ member_id: string | null; guest_id: string | null }>(
+        `SELECT etc.member_id, etc.guest_id
+           FROM expense_tier_counts etc
+           JOIN expense_tiers et ON et.id = etc.tier_id
+          WHERE et.expense_id = $1`,
+        [expenseId],
+      )
+    ).rows,
+  );
+  collect(
+    (
+      await db.query<{ member_id: string | null; guest_id: string | null }>(
+        `SELECT a.member_id, a.guest_id
+           FROM expense_item_assignees a
+           JOIN expense_items i ON i.id = a.item_id
+          WHERE i.expense_id = $1`,
+        [expenseId],
+      )
+    ).rows,
+  );
+  return { userIds: [...userIds], guestIds: [...guestIds] };
+}
+
 export function createTripExpenseRepo(pool: DbPool): TripExpenseRepo {
+  /** Maps ids through `profile_identity` once and returns the public form of each (guest ids pass through). */
+  async function publicIdMap(ids: readonly (string | null | undefined)[]): Promise<(id: string) => string> {
+    const real = ids.filter((id): id is string => typeof id === 'string');
+    const map = await resolvePublicIds(pool, real);
+    return (id) => map.get(id)?.publicId ?? id;
+  }
+
   return {
     async addTripGuest(tripId, sponsorMemberId, input) {
       const targetSponsorId = input.sponsorMemberId ?? sponsorMemberId;
@@ -278,10 +420,11 @@ export function createTripExpenseRepo(pool: DbPool): TripExpenseRepo {
          ORDER BY created_at ASC`,
         [tripId],
       );
+      const pub = await publicIdMap(res.rows.map((r) => r.sponsor_member_id));
       return res.rows.map((row) => ({
         id: row.id,
         tripId: row.trip_id,
-        sponsorMemberId: row.sponsor_member_id,
+        sponsorMemberId: pub(row.sponsor_member_id),
         name: row.name,
         createdAt: formatTimestamp(row.created_at),
       }));
@@ -297,6 +440,10 @@ export function createTripExpenseRepo(pool: DbPool): TripExpenseRepo {
         if (!tripCheck.rows[0]) {
           throw new AppError('trip_forbidden', 'Trip not found');
         }
+
+        // A party who is not visible (pending, purging, purged) cannot be named: checked before any
+        // membership check, because a pending member's real id still passes that check (R12.10, R12.11).
+        await assertPartiesVisible(client, tripId, partiesOfExpenseInput(input));
 
         // Cap check (Req 1.12)
         const countRes = await client.query<{ count: string }>(
@@ -765,9 +912,10 @@ export function createTripExpenseRepo(pool: DbPool): TripExpenseRepo {
         const expCheck = await client.query<{
           id: string;
           created_by: string;
+          payer_id: string;
           split_mode: string;
         }>(
-          `SELECT id, created_by, split_mode FROM expenses WHERE id = $1 AND trip_id = $2 FOR UPDATE`,
+          `SELECT id, created_by, payer_id, split_mode FROM expenses WHERE id = $1 AND trip_id = $2 FOR UPDATE`,
           [expenseId, tripId],
         );
         const existing = expCheck.rows[0];
@@ -777,6 +925,15 @@ export function createTripExpenseRepo(pool: DbPool): TripExpenseRepo {
         if (callerRole !== 'organizer' && existing.created_by !== callerId) {
           throw new AppError('trip_forbidden', 'Only creator or organizer may edit an expense');
         }
+
+        // The request body may not name a party who is not visible, and neither may the stored entry
+        // (the client holds alias ids for those people and cannot resubmit the real ones). Delete stays
+        // allowed (R12.10).
+        const stored = await storedExpenseParties(client, expenseId, existing.payer_id);
+        await assertPartiesVisible(client, tripId, {
+          userIds: [...stored.userIds, ...partiesOfExpenseInput(input).userIds],
+          guestIds: [...stored.guestIds, ...partiesOfExpenseInput(input).guestIds],
+        });
 
         // Clean out existing child rows (Req 8.3)
         await client.query(`DELETE FROM expense_shares WHERE expense_id = $1`, [expenseId]);
@@ -1338,11 +1495,22 @@ export function createTripExpenseRepo(pool: DbPool): TripExpenseRepo {
         createdAt: formatTimestamp(r.created_at),
       }));
 
+      // PLACEHOLDER (account-deletion R5.3): every person id the reader gets is the public form, so a pending
+      // account appears under its alias and a purged one under its tombstone. Amounts are untouched.
+      const pub = await publicIdMap([
+        exp.payer_id,
+        exp.created_by,
+        ...shares.map((s) => s.memberId),
+        ...tierCounts.map((tc) => tc.memberId),
+        ...items.flatMap((i) => i.assigneeIds),
+        ...refunds.map((r) => r.createdByUserId),
+      ]);
+
       return {
         id: exp.id,
         tripId: exp.trip_id,
-        payerId: exp.payer_id,
-        createdByUserId: exp.created_by,
+        payerId: pub(exp.payer_id),
+        createdByUserId: pub(exp.created_by),
         amountCents: parseInt(exp.amount_cents, 10),
         description: exp.description,
         date: formatDate(exp.expense_date),
@@ -1350,12 +1518,12 @@ export function createTripExpenseRepo(pool: DbPool): TripExpenseRepo {
         splitMode: exp.split_mode as any,
         experienceId: exp.experience_id,
         resortId: exp.resort_id,
-        shares,
+        shares: shares.map((s) => ({ ...s, memberId: s.memberId ? pub(s.memberId) : s.memberId })),
         tiers,
-        tierCounts,
-        items,
+        tierCounts: tierCounts.map((tc) => ({ ...tc, memberId: tc.memberId ? pub(tc.memberId) : tc.memberId })),
+        items: items.map((i) => ({ ...i, assigneeIds: i.assigneeIds.map(pub) })),
         chargeLines,
-        refunds,
+        refunds: refunds.map((r) => ({ ...r, createdByUserId: pub(r.createdByUserId) })),
         createdAt: formatTimestamp(exp.created_at),
       };
     },
@@ -1364,6 +1532,12 @@ export function createTripExpenseRepo(pool: DbPool): TripExpenseRepo {
       if (input.payerId === input.recipientId) {
         throw new AppError('trip_validation_failed', 'Payer and recipient must be distinct');
       }
+
+      // A settlement naming a party who is not visible is rejected before the membership check (R12.10).
+      await assertPartiesVisible(pool, tripId, {
+        userIds: [input.payerId, input.recipientId],
+        guestIds: [],
+      });
 
       // Validate both are trip members (Req 7.2)
       const membersRes = await pool.query(
@@ -1408,8 +1582,13 @@ export function createTripExpenseRepo(pool: DbPool): TripExpenseRepo {
         throw new AppError('trip_validation_failed', 'Payer and recipient must be distinct');
       }
 
-      const check = await pool.query<{ id: string; created_by: string }>(
-        `SELECT id, created_by FROM settlements WHERE id = $1 AND trip_id = $2`,
+      const check = await pool.query<{
+        id: string;
+        created_by: string;
+        payer_id: string;
+        recipient_id: string;
+      }>(
+        `SELECT id, created_by, payer_id, recipient_id FROM settlements WHERE id = $1 AND trip_id = $2`,
         [settlementId, tripId],
       );
       const existing = check.rows[0];
@@ -1419,6 +1598,12 @@ export function createTripExpenseRepo(pool: DbPool): TripExpenseRepo {
       if (callerRole !== 'organizer' && existing.created_by !== callerId) {
         throw new AppError('trip_forbidden', 'Only creator or organizer may edit a settlement');
       }
+
+      // Neither the stored parties nor the requested ones may be non-visible (R12.10); delete stays allowed.
+      await assertPartiesVisible(pool, tripId, {
+        userIds: [existing.payer_id, existing.recipient_id, input.payerId, input.recipientId],
+        guestIds: [],
+      });
 
       const membersRes = await pool.query(
         `SELECT user_id FROM trip_memberships WHERE trip_id = $1 AND user_id IN ($2, $3)`,
@@ -1652,14 +1837,17 @@ export function createTripExpenseRepo(pool: DbPool): TripExpenseRepo {
         created_at: Date | string;
       }>(settlementQuery, setParams);
 
+      const settlementPub = await publicIdMap(
+        setRows.rows.flatMap((r) => [r.payer_id, r.recipient_id, r.created_by]),
+      );
       const settlements: SettlementDTO[] = filters?.category
         ? [] // Settlements have no category, so category filter excludes them
         : setRows.rows.map((r) => ({
             id: r.id,
             tripId: r.trip_id,
-            payerId: r.payer_id,
-            recipientId: r.recipient_id,
-            createdByUserId: r.created_by,
+            payerId: settlementPub(r.payer_id),
+            recipientId: settlementPub(r.recipient_id),
+            createdByUserId: settlementPub(r.created_by),
             amountCents: parseInt(r.amount_cents, 10),
             date: formatDate(r.settled_date),
             createdAt: formatTimestamp(r.created_at),
@@ -1677,16 +1865,24 @@ export function createTripExpenseRepo(pool: DbPool): TripExpenseRepo {
     },
 
     async getNetBalances(tripId) {
+      // The deliberate raw read of memberships (pending members included): money must count everyone, or
+      // the Net_Balances stop summing to exactly zero (account-deletion R12.10). A purged person is no longer
+      // a member, so every party found in the data is added too.
       const allMembersRes = await pool.query<{ user_id: string }>(
         `SELECT user_id FROM trip_memberships WHERE trip_id = $1 ORDER BY joined_at ASC`,
         [tripId],
       );
-      const allMemberIds = allMembersRes.rows.map((r) => r.user_id);
+      const memberPub = await publicIdMap(allMembersRes.rows.map((r) => r.user_id));
+      const memberIds = allMembersRes.rows.map((r) => memberPub(r.user_id));
 
+      // Events already carry public ids (see buildBalanceEvents).
       const events = await buildBalanceEvents(pool, tripId);
-      const balancesMap = computeNetBalances(events, allMemberIds);
+      const listed = new Set(memberIds);
+      const extras = [...new Set(events.map((e) => e.memberId))].filter((id) => !listed.has(id)).sort();
+      const allParties = [...memberIds, ...extras];
+      const balancesMap = computeNetBalances(events, allParties);
 
-      return allMemberIds.map((mId) => ({
+      return allParties.map((mId) => ({
         memberId: mId,
         netCents: balancesMap.get(mId) ?? 0,
       }));
@@ -1744,14 +1940,9 @@ export function createTripExpenseRepo(pool: DbPool): TripExpenseRepo {
     async exportLedgerCsv(tripId) {
       const list = await this.listExpensesAndSettlements(tripId);
 
-      // Map member and guest names
-      const profilesRes = await pool.query<{ user_id: string; display_name: string }>(
-        `SELECT user_id, display_name FROM profiles
-         WHERE user_id IN (SELECT user_id FROM trip_memberships WHERE trip_id = $1)`,
-        [tripId],
-      );
-      const memberNames = new Map(profilesRes.rows.map((r) => [r.user_id, r.display_name]));
-
+      // Map member and guest names. The name map is built over the ids that appear in the data (not over current
+      // membership), through `profile_identity`, so a pending member or a purged tombstone prints as
+      // `Deleted user` and never as a raw id (account-deletion R12.10).
       const guestsRes = await pool.query<{
         id: string;
         sponsor_member_id: string;
@@ -1760,6 +1951,17 @@ export function createTripExpenseRepo(pool: DbPool): TripExpenseRepo {
         `SELECT id, sponsor_member_id, name FROM trip_guests WHERE trip_id = $1`,
         [tripId],
       );
+      const partyIds: string[] = guestsRes.rows.map((g) => g.sponsor_member_id);
+      for (const item of list) {
+        partyIds.push(item.payerId);
+        if ('recipientId' in item) partyIds.push(item.recipientId);
+        else for (const s of item.shares) if (s.memberId) partyIds.push(s.memberId);
+      }
+      const identities = await resolvePublicIds(pool, partyIds);
+      const memberNames = {
+        get: (id: string | null | undefined): string | undefined =>
+          id === null || id === undefined ? undefined : identities.get(id)?.displayName,
+      };
       const guestNames = new Map(
         guestsRes.rows.map((g) => {
           const sponsor = memberNames.get(g.sponsor_member_id) ?? 'Unknown';
@@ -1969,5 +2171,20 @@ async function buildBalanceEvents(pool: DbPool, tripId: string): Promise<Balance
     });
   }
 
-  return events;
+  // PLACEHOLDER (account-deletion R5.3, R12.10): the balances are computed over every party in the data,
+  // pending ones included (so they still sum to zero), but each id leaves here in its public form. Done once
+  // over all ids so net, pairwise and drill-down agree on who is who.
+  const ids = events.flatMap((e) => [e.memberId, e.counterpartyId, e.payerId, e.recipientId]);
+  const resolved = await resolvePublicIds(
+    pool,
+    ids.filter((id): id is string => typeof id === 'string'),
+  );
+  const pub = (id: string): string => resolved.get(id)?.publicId ?? id;
+  return events.map((e) => ({
+    ...e,
+    memberId: pub(e.memberId),
+    counterpartyId: e.counterpartyId === null ? null : pub(e.counterpartyId),
+    ...(e.payerId === undefined ? {} : { payerId: pub(e.payerId) }),
+    ...(e.recipientId === undefined ? {} : { recipientId: pub(e.recipientId) }),
+  }));
 }

@@ -75,6 +75,8 @@ const MIGRATIONS = [
   '0039_experience_festival_tags.sql',
   '0040_food_item_logging.sql',
   '0055_festival_edition_and_dish_tags.sql',
+  '0013_avatar_presets.sql',
+  '0064_account_deletion.sql',
 ];
 
 function testConfig(): AppConfig {
@@ -86,6 +88,15 @@ function testConfig(): AppConfig {
     session: { secret: 'test-session-secret-must-be-at-least-32-chars' },
     intelligence: { samplingCronSecret: 'test-sampling-secret', crowdSeedDir: 'seed-data/crowd/' },
     pins: { reconcileCronSecret: 'test-pin-reconcile-secret' },
+    accountDeletion: {
+      graceDays: 30,
+      cronSecret: 'test-account-deletion-cron-secret-12345',
+      purgeBatch: 10,
+      purgeTimeBudgetMs: 25000,
+      reauthWindowSeconds: 300,
+      chunkRows: 500,
+    },
+    support: { email: 'support@example.com' },
     themeparks: { baseUrl: 'https://themeparks.invalid/v1' },
     disney: {
       syncGateway: { baseUrl: 'https://disney.invalid' },

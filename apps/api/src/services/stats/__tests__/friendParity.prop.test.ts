@@ -94,7 +94,7 @@ function makeFakePool(
     calls,
     async query(text: string, params: ReadonlyArray<unknown> = []) {
       calls.push({ text, params });
-      if (text.includes('FROM friendships')) {
+      if (text.includes('FROM active_friendships')) {
         return { rows: [{ exists: friendsAreFriends }] };
       }
       if (text.includes('FROM users')) {
@@ -337,7 +337,7 @@ describe('stats — Property 9: unauthorized requester is denied (R9.2)', () => 
 
       // The friendship lookup ran exactly once with the canonical pair...
       const friendCalls = pool.calls.filter((c) =>
-        c.text.includes('FROM friendships'),
+        c.text.includes('FROM active_friendships'),
       );
       expect(friendCalls).toHaveLength(1);
       expect(friendCalls[0]!.params).toEqual([VIEWER_ID, TARGET_ID]);

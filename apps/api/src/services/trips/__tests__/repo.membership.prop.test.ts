@@ -186,7 +186,9 @@ function makeFakePool(store: Store): FakePool {
           }
 
           // ---- promote: lock the single target row (lockMemberRole) -------
-          if (sql.startsWith('SELECT role FROM trip_memberships')) {
+          // The role read also selects the active-organizer count (account-deletion R7.1); this fake returns
+          // only `role`, which the repo reads as "the trip has an active organizer".
+          if (sql.startsWith('SELECT tm.role')) {
             const [tripId, userId] = params as [string, string];
             const row = tx.memberships.find(
               (m) => m.tripId === tripId && m.userId === userId,

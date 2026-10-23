@@ -228,6 +228,22 @@ export type { CurrentWeatherDTO } from './Weather.js';
 export { friendFoodRatingsQuerySchema } from './FriendFoodRatings.js';
 export type { FriendFoodRatingsQuery } from './FriendFoodRatings.js';
 
+// Account-deletion schemas
+export {
+  reauthRequestSchema,
+  reauthResponseSchema,
+  deleteAccountRequestSchema,
+  deleteAccountResponseSchema,
+  authSessionResponseSchema,
+} from './accountDeletion.js';
+export type {
+  ReauthRequest,
+  ReauthResponse,
+  DeleteAccountRequest,
+  DeleteAccountResponse,
+  AuthSessionResponse,
+} from './accountDeletion.js';
+
 // Photo schemas
 export {
   photoUploadItemSchema,

@@ -127,6 +127,12 @@ declare module 'fastify' {
      * `request.userId` directly.
      */
     userId?: string;
+    /**
+     * Primary key of the session row that authorized this request, set by
+     * `createSessionMiddleware`. The account-deletion re-authentication
+     * grant is bound to it (account-deletion R2.3).
+     */
+    sessionId?: string;
   }
 }
 
@@ -155,6 +161,14 @@ export interface SessionRow {
   readonly last_seen_at: Date;
   /** Non-null when the session has been revoked (logout / lockout / admin). */
   readonly revoked_at: Date | null;
+  /**
+   * `users.deletion_state` of the owning user (account-deletion R4.8). Optional
+   * only so existing fake adapters keep compiling: when present and not
+   * `'active'` the session is rejected even though `revoked_at` is null, so a
+   * failed or raced revocation at deletion time still cannot leave a working
+   * session behind.
+   */
+  readonly deletion_state?: string;
 }
 
 /**
@@ -253,6 +267,16 @@ export function createSessionMiddleware(
       throw unauthorizedError();
     }
 
+    // 3b) Defence in depth for account deletion (R4.8): a session whose
+    //     user is pending deletion, purging or a tombstone is never
+    //     authorized, whatever `revoked_at` says. Same opaque rejection.
+    if (
+      session.deletion_state !== undefined &&
+      session.deletion_state !== 'active'
+    ) {
+      throw unauthorizedError();
+    }
+
     // 4) The current burst window must not have ended (R6.5: "24 hours
     //    of continuous activity"). Boundary semantics: at `nowMs ===
     //    absolute_expires_at` the window has elapsed and the session
@@ -288,6 +312,7 @@ export function createSessionMiddleware(
     // 8) Hand the principal off to downstream handlers.
     request.user = { id: session.user_id };
     request.userId = session.user_id;
+    request.sessionId = session.id;
   };
 }
 

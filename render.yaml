@@ -68,6 +68,16 @@ services:
       # Default crontab `0,10,20 6,7,20 * * *` (<= 9 passes/day; <= 12/day with week lead).
       - key: TRIP_BOOKING_CRON_SECRET
         sync: false
+      # Shared secret gating POST/HEAD /internal/account-deletion/purge/run (x-cron-secret header).
+      # REQUIRED — same fail-fast config loader as SAMPLING_CRON_SECRET. Must be a dedicated
+      # value, not reused from the other cron secrets.
+      - key: ACCOUNT_DELETION_CRON_SECRET
+        sync: false
+      # Public support contact address rendered on GET /privacy (mailto link). REQUIRED — the
+      # config loader fails fast at startup if it is missing or not a valid email. Set it to an
+      # inbox you actually monitor (Google Play requires one).
+      - key: SUPPORT_EMAIL
+        sync: false
       # HTTP Basic credentials gating the operator Admin Panel (/admin/*). REQUIRED — the
       # config loader fails fast at startup if either is missing or empty. Use strong,
       # unique values; never the `admin`/`admin` local-dev defaults.

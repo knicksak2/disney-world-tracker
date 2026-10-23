@@ -73,6 +73,7 @@ import type { PoolClient } from 'pg';
 
 import type { DbPool } from '../../db/pool.js';
 import { AppError } from '../../errors/AppError.js';
+import { resolvePublicIds } from '../accountDeletion/visibility.js';
 import { pair as canonicalPair } from '../friends/canonicalPair.js';
 import type { CompletionRepo } from '../tracking/completion/repo.js';
 import type { RatingRepo } from '../tracking/rating/repo.js';
@@ -83,6 +84,7 @@ import {
   violatesLastOrganizer,
 } from './permissions.js';
 import { assertTripMember } from './authz.js';
+import { ACTIVE_ORGANIZER_COUNT_SQL, actingRole } from './effectiveRole.js';
 import { deriveTripSummary } from './summary.js';
 import { deriveTripStatus } from './tripStatus.js';
 import { groupTripsByStatus, type TripStatusGroup } from './tripsList.js';
@@ -1641,9 +1643,9 @@ async function getGroupFavorites(
             array_agg(p.display_name ORDER BY p.display_name) AS favoriting_display_names,
             count(*)::int AS favoriting_count
        FROM experience_favorites ef
-       JOIN trip_memberships tm ON tm.user_id = ef.user_id AND tm.trip_id = $1
+       JOIN active_trip_memberships tm ON tm.user_id = ef.user_id AND tm.trip_id = $1
        JOIN experiences e ON e.id = ef.experience_id AND e.active = TRUE
-       JOIN profiles p ON p.user_id = ef.user_id
+       JOIN profile_identity p ON p.user_id = ef.user_id AND p.is_visible
       GROUP BY ef.experience_id, e.name, e.park, e.category
      HAVING count(*) >= 2
       ORDER BY count(*) DESC, lower(e.name) ASC`,
@@ -1983,7 +1985,7 @@ async function sendInvite(
     const { lo, hi } = canonicalPair(inviterId, inviteeId);
     const friendship = await client.query<{ exists: boolean }>(
       `SELECT EXISTS (
-         SELECT 1 FROM friendships WHERE user_lo_id = $1 AND user_hi_id = $2
+         SELECT 1 FROM active_friendships WHERE user_lo_id = $1 AND user_hi_id = $2
        ) AS exists`,
       [lo, hi],
     );
@@ -2266,7 +2268,7 @@ async function getInvite(
             ti.state
        FROM trip_invites ti
        JOIN trips t     ON t.id = ti.trip_id
-       JOIN profiles p  ON p.user_id = ti.inviter_id
+       JOIN profile_identity p  ON p.user_id = ti.inviter_id AND p.is_visible
       WHERE ti.id = $1 AND ti.invitee_id = $2`,
     [inviteId, userId],
   );
@@ -2317,7 +2319,7 @@ async function listMyInvites(
             ti.created_at    AS created_at
        FROM trip_invites ti
        JOIN trips t     ON t.id = ti.trip_id
-       JOIN profiles p  ON p.user_id = ti.inviter_id
+       JOIN profile_identity p  ON p.user_id = ti.inviter_id AND p.is_visible
       WHERE ti.invitee_id = $1 AND ti.state = 'pending'
       ORDER BY ti.created_at ASC, ti.id ASC`,
     [userId],
@@ -2608,8 +2610,8 @@ async function listMembers(
             p.display_name   AS display_name,
             p.avatar_preset  AS avatar_preset,
             tm.role          AS role
-       FROM trip_memberships tm
-       JOIN profiles p ON p.user_id = tm.user_id
+       FROM active_trip_memberships tm
+       JOIN profile_identity p ON p.user_id = tm.user_id
       WHERE tm.trip_id = $1
       ORDER BY tm.joined_at ASC, tm.user_id ASC`,
     [tripId],
@@ -2643,7 +2645,7 @@ async function listPendingInvites(
             p.display_name   AS invitee_display_name,
             p.avatar_preset  AS invitee_avatar_preset
        FROM trip_invites ti
-       JOIN profiles p ON p.user_id = ti.invitee_id
+       JOIN profile_identity p ON p.user_id = ti.invitee_id AND p.is_visible
       WHERE ti.trip_id = $1 AND ti.state = 'pending'
       ORDER BY ti.created_at ASC, ti.id ASC`,
     [tripId],
@@ -3316,7 +3318,7 @@ async function listPlannedItems(
             pi.party_size
        FROM planned_items pi
   LEFT JOIN experiences e ON e.id = pi.experience_id
-       JOIN profiles    p ON p.user_id = pi.added_by
+       JOIN profile_identity p ON p.user_id = pi.added_by
       WHERE pi.trip_id = $1
       ORDER BY pi.created_at ASC, pi.id ASC`,
     [tripId],
@@ -3398,7 +3400,7 @@ async function logCompletion(
     // Read the Trip's membership set once and check the tags against it.
     if (distinctTaggedIds.length > 0) {
       const members = await client.query<{ user_id: string }>(
-        `SELECT user_id FROM trip_memberships WHERE trip_id = $1`,
+        `SELECT user_id FROM active_trip_memberships WHERE trip_id = $1`,
         [tripId],
       );
       const memberIds = new Set(members.rows.map((r) => r.user_id));
@@ -3555,25 +3557,13 @@ async function listLogEntries(
 ): Promise<TripLogEntryDTO[]> {
   const result = await ctx.pool.query<TripLogEntryRow>(
     `SELECT le.id,
-            le.member_id,
+            p.public_id     AS member_id,
             p.display_name  AS member_display_name,
             le.experience_id,
             e.name          AS experience_name,
-            r.value         AS rating,
-            COALESCE(
-              (SELECT json_agg(
-                        json_build_object(
-                          'taggedMemberId', rwt.tagged_member_id,
-                          'state', rwt.state
-                        )
-                        ORDER BY rwt.created_at ASC, rwt.id ASC
-                      )
-                 FROM rode_with_tags rwt
-                WHERE rwt.log_entry_id = le.id),
-              '[]'::json
-            )               AS rode_with
+            r.value         AS rating
        FROM trip_log_entries le
-       JOIN profiles    p ON p.user_id = le.member_id
+       JOIN profile_identity p ON p.user_id = le.member_id
        JOIN experiences e ON e.id = le.experience_id
        LEFT JOIN ratings r
               ON r.user_id = le.member_id
@@ -3582,7 +3572,33 @@ async function listLogEntries(
       ORDER BY le.created_at DESC, le.id DESC`,
     [tripId],
   );
-  return result.rows.map(rowToTripLogEntryDto);
+
+  // The entries' Rode_With_Tags (Tagged_Member id + state, oldest first), read in one more query and grouped
+  // here. A tagged member who is not active is reported under their public (alias) id (PLACEHOLDER), mapped
+  // through one read of `profile_identity`.
+  const tagsByEntry = new Map<string, { taggedMemberId: string; state: RodeWithTagState }[]>();
+  if (result.rows.length > 0) {
+    const tags = await ctx.pool.query<{ log_entry_id: string; tagged_member_id: string; state: RodeWithTagState }>(
+      `SELECT log_entry_id, tagged_member_id, state
+         FROM rode_with_tags
+        WHERE log_entry_id = ANY($1::uuid[])
+        ORDER BY created_at ASC, id ASC`,
+      [result.rows.map((row) => row.id)],
+    );
+    const identities = await resolvePublicIds(
+      ctx.pool,
+      tags.rows.map((tag) => tag.tagged_member_id),
+    );
+    for (const tag of tags.rows) {
+      const list = tagsByEntry.get(tag.log_entry_id) ?? [];
+      list.push({
+        taggedMemberId: identities.get(tag.tagged_member_id)?.publicId ?? tag.tagged_member_id,
+        state: tag.state,
+      });
+      tagsByEntry.set(tag.log_entry_id, list);
+    }
+  }
+  return result.rows.map((row) => rowToTripLogEntryDto({ ...row, rode_with: tagsByEntry.get(row.id) ?? [] }));
 }
 
 /** Project a `trip_log_entries` join row to the shared `TripLogEntryDTO`. */
@@ -3861,7 +3877,7 @@ async function getRodeWithTag(
        FROM rode_with_tags rwt
        JOIN trip_log_entries tle ON tle.id = rwt.log_entry_id
        JOIN experiences      e   ON e.id = tle.experience_id
-       JOIN profiles         p   ON p.user_id = tle.member_id
+       JOIN profile_identity p   ON p.user_id = tle.member_id
        LEFT JOIN ratings     r   ON r.user_id = rwt.tagged_member_id
                                 AND r.experience_id = tle.experience_id
       WHERE rwt.id = $1 AND rwt.tagged_member_id = $2`,
@@ -3919,7 +3935,7 @@ async function listPendingRodeWithTags(
        FROM rode_with_tags rwt
        JOIN trip_log_entries tle ON tle.id = rwt.log_entry_id
        JOIN experiences      e   ON e.id = tle.experience_id
-       JOIN profiles         p   ON p.user_id = tle.member_id
+       JOIN profile_identity p   ON p.user_id = tle.member_id AND p.is_visible
       WHERE rwt.tagged_member_id = $1 AND rwt.state = 'pending'
       ORDER BY rwt.created_at DESC, rwt.id ASC`,
     [userId],
@@ -4043,17 +4059,17 @@ async function getFeed(
                 WHERE rwt.log_entry_id = le.id) AS rode_with_count,
               (SELECT json_agg(
                         json_build_object(
-                          'taggedMemberId', rwt.tagged_member_id,
+                          'taggedMemberId', pr.public_id,
                           'displayName', pr.display_name,
                           'state', rwt.state
                         )
                         ORDER BY rwt.created_at ASC, rwt.id ASC
                       )
                  FROM rode_with_tags rwt
-                 JOIN profiles pr ON pr.user_id = rwt.tagged_member_id
+                 JOIN profile_identity pr ON pr.user_id = rwt.tagged_member_id
                 WHERE rwt.log_entry_id = le.id) AS rode_with
          FROM trip_feed_items fi
-         JOIN profiles        p ON p.user_id = fi.actor_id
+         JOIN profile_identity p ON p.user_id = fi.actor_id
          LEFT JOIN experiences e
                 ON e.id = NULLIF(fi.metadata->>'experienceId', '')::uuid
          LEFT JOIN trip_log_entries le
@@ -4068,13 +4084,16 @@ async function getFeed(
     // total count and whether the reading caller is one of the reactors (R13.4,
     // R13.6, R13.7). `bool_or` collapses the caller's membership to one flag.
     ctx.pool.query<TripReactionAggRow>(
-      `SELECT target_id,
-              reaction,
+      // OMIT: a reaction by a member who is not active is neither counted nor flagged; a restore brings it
+      // back with no action (account-deletion R5.1).
+      `SELECT tr.target_id,
+              tr.reaction,
               count(*)::int          AS count,
-              bool_or(member_id = $2) AS mine
-         FROM trip_reactions
-        WHERE trip_id = $1 AND target_type = 'feed_item'
-        GROUP BY target_id, reaction`,
+              bool_or(tr.member_id = $2) AS mine
+         FROM trip_reactions tr
+         JOIN profile_identity rp ON rp.user_id = tr.member_id AND rp.is_visible
+        WHERE tr.trip_id = $1 AND tr.target_type = 'feed_item'
+        GROUP BY tr.target_id, tr.reaction`,
       [tripId, callerId],
     ),
     // Comments on this Trip's feed items, with the author's display name and a
@@ -4083,13 +4102,13 @@ async function getFeed(
     ctx.pool.query<TripCommentRow>(
       `SELECT c.id,
               c.target_id,
-              c.author_id,
+              p.public_id AS author_id,
               p.display_name AS author_display_name,
               p.avatar_preset AS author_avatar_preset,
               c.body,
               c.created_at
          FROM trip_comments c
-         JOIN profiles p ON p.user_id = c.author_id
+         JOIN profile_identity p ON p.user_id = c.author_id
         WHERE c.trip_id = $1 AND c.target_type = 'feed_item'
         ORDER BY c.created_at ASC, c.id ASC`,
       [tripId],
@@ -4697,23 +4716,31 @@ async function getSummary(
 
   // Resolve a display name and avatar preset for every Member the summary reports.
   const memberIds = summary.perMember.map((m) => m.memberId);
-  const profileById = new Map<string, { displayName: string; avatarPreset: string | null }>();
+  // PLACEHOLDER (account-deletion Appendix B): a member who is not active is reported as `Deleted user`
+  // under their public (alias) id, so the summary keeps their counts but never their identity.
+  const profileById = new Map<
+    string,
+    { publicId: string; displayName: string; avatarPreset: string | null }
+  >();
   if (memberIds.length > 0) {
     const profiles = await ctx.pool.query<{
       user_id: string;
+      public_id: string;
       display_name: string;
       avatar_preset: string | null;
     }>(
-      `SELECT user_id, display_name, avatar_preset FROM profiles WHERE user_id = ANY($1)`,
+      `SELECT user_id, public_id, display_name, avatar_preset FROM profile_identity WHERE user_id = ANY($1)`,
       [memberIds],
     );
     for (const row of profiles.rows) {
       profileById.set(row.user_id, {
+        publicId: row.public_id ?? row.user_id,
         displayName: row.display_name,
         avatarPreset: row.avatar_preset,
       });
     }
   }
+  const publicIdOf = (id: string): string => profileById.get(id)?.publicId ?? id;
 
   return {
     distinctExperienceCount: summary.distinctExperienceCount,
@@ -4729,7 +4756,7 @@ async function getSummary(
     perMember: summary.perMember.map((member) => {
       const profile = profileById.get(member.memberId);
       return {
-        memberId: member.memberId,
+        memberId: publicIdOf(member.memberId),
         displayName: profile?.displayName ?? '',
         avatarPreset: profile?.avatarPreset ?? null,
         logEntryCount: member.logEntryCount,
@@ -4750,7 +4777,7 @@ async function getSummary(
       title: s.title,
       description: s.description,
       icon: s.icon,
-      memberId: s.memberId,
+      memberId: s.memberId ? publicIdOf(s.memberId) : s.memberId,
       memberDisplayName: s.memberId ? profileById.get(s.memberId)?.displayName : undefined,
       experienceName: s.experienceName,
       value: s.value,
@@ -4856,7 +4883,7 @@ async function selectPlannedItem(
             pi.party_size
        FROM planned_items pi
   LEFT JOIN experiences e ON e.id = pi.experience_id
-       JOIN profiles    p ON p.user_id = pi.added_by
+       JOIN profile_identity p ON p.user_id = pi.added_by
       WHERE pi.id = $1`,
     [itemId],
   );
@@ -4972,13 +4999,19 @@ async function lockMemberRole(
   tripId: string,
   userId: string,
 ): Promise<TripRole | undefined> {
-  const result = await client.query<{ role: TripRole }>(
-    `SELECT role FROM trip_memberships
-      WHERE trip_id = $1 AND user_id = $2
+  const result = await client.query<{ role: TripRole; has_active_organizer?: boolean | null }>(
+    `SELECT tm.role, ${ACTIVE_ORGANIZER_COUNT_SQL}
+       FROM trip_memberships tm
+      WHERE tm.trip_id = $1 AND tm.user_id = $2
       FOR UPDATE`,
     [tripId, userId],
   );
-  return result.rows[0]?.role;
+  const row = result.rows[0];
+  if (row === undefined) {
+    return undefined;
+  }
+  // The role the member acts with: the Interim_Organizer reads as `organizer` (account-deletion R7.1).
+  return actingRole(client, tripId, userId, row);
 }
 
 /**

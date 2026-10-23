@@ -92,3 +92,14 @@ This feature introduces a complete, secure password recovery mechanism designed 
 4. WHEN the user submits their email on ForgotPasswordScreen and the request succeeds, THE App SHALL navigate to `ResetPasswordScreen` displaying the destination email address, a 6-digit numeric code input, a new password input with visibility toggle, and a confirm password input.
 5. THE ResetPasswordScreen SHALL provide a "Resend code" button that is disabled for 60 seconds after submission with a visible countdown timer.
 6. WHEN the user successfully resets their password on ResetPasswordScreen, THE App SHALL store the returned session token in `sessionStore` and immediately navigate to the main application tabs.
+
+### Requirement 6: Reset for an account pending deletion (added by the `account-deletion` spec)
+
+**User Story:** As a user who requested account deletion and forgot my password, I want a password reset to bring my account back, so that I am not locked out of the cancellation path. This requirement is additive; the full behavior is in `.kiro/specs/account-deletion/requirements.md` (Requirements 4.3, 4.4, 4.6, 4.9).
+
+#### Acceptance Criteria
+
+1. WHEN a password reset request is submitted for an account in `pending_deletion` whose grace period has not expired, THE Auth_Service SHALL treat it exactly like a request for an active account (generate the code and token, send the email), preserving the anti-enumeration response of Requirement 1.3.
+2. WHEN a reset is completed (Requirement 2, or the web fallback of Requirement 3) for an account in `pending_deletion` whose `Scheduled_Purge_At` is in the future, THE Auth_Service SHALL cancel the deletion atomically with establishing the session, SHALL return `accountRestored: true` in the success body of Requirement 2, and THE web fallback success page SHALL state that the account was restored.
+3. IF the account's grace period has expired or the account is being purged, THEN THE Auth_Service SHALL treat a reset request as for a non-existent account (no email sent, identical 200 response) and SHALL reject a code submission with `invalid_code`.
+4. WHEN the App receives `accountRestored: true` from a reset, THE App SHALL show the one-time restored notice defined in `account-deletion` Requirement 4.9 after navigating to the main tabs.

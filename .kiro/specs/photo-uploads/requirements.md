@@ -587,6 +587,17 @@ The following decisions came from the final independent review (`.agents/tasks/p
 14. WHERE no user-submitted-location detail screen exists (verified in `apps/mobile`: none does today), THE Mobile_App SHALL show no Experience_Photo_Strip for locations. THE strip component SHALL accept the kind (`experience` or `location`) and the id, so that a future location detail screen can reuse it against `GET /locations/:id/food-photos`; the "View dish" control SHALL be shown only when the host supplies a navigation target (experiences today).
 15. THE Mobile_App SHALL show the Experience_Photo_Strip for food photos only: it SHALL NOT render, and SHALL NOT request photos, for any Experience whose category is not `Restaurant`. Photos of a ride or attraction themselves are not provided by this requirement and remain Phase 3 (Requirement 25.2).
 
+### Requirement 28: Account deletion integration (added by the `account-deletion` spec)
+
+**User Story:** As the owner of an account being deleted, I want my photos removed with it, so that deleting my account leaves no photo of mine behind. This requirement is additive. Requirement 25.4 and the "Account deletion" line under Out of Scope remain true for the photo-uploads feature itself: this feature still builds no account deletion. The `account-deletion` spec (`.kiro/specs/account-deletion/requirements.md`, Requirements 5.5, 9.2, 11) is the consumer of the `deleteAllForUser` extension point of Requirement 19.9.
+
+#### Acceptance Criteria
+
+1. WHEN the account purge runs for a user, THE Photo_Service SHALL set all of that user's non-deleted Photos to `deleted` through `deleteAllForUser(userId)` before the `users` row is removed, so the Photo_Sweep deletes the storage objects and hard-deletes the rows exactly as for any other `deleted` Photo (Requirement 19.3 to 19.5).
+2. WHILE a user's account is in `pending_deletion`, THE Photo_Service SHALL NOT serve that user's Photos on any read path (dish and restaurant galleries, Trip Album, recap and Summary_Strip, feed post slots), SHALL change no Photo row, and SHALL serve them again if the account is restored.
+3. THE Photo_Service SHALL NOT change any Photo's `status`, `hidden_reason`, or report counts because a reporter's account was purged (the `photo_reports` row is anonymized, not deleted, so Requirement 16's auto-hide state is unchanged).
+4. THE Photo_Sweep orphan reaper of Requirement 19.4 SHALL remain unchanged and SHALL continue to be the backstop for any Photo whose `owner_id` became null.
+
 ## Out of Scope
 
 - Letting anyone who is neither a Trip member nor a Friend recipient of a `tripSummary` Share see or receive a Trip photo: a tokenized public link (D1 option C, rejected for this release), an OS share of an individual photo (D1 option D), and any deep link, domain, or fallback page for the recap (not needed, and app linking configuration is unverified).

@@ -159,6 +159,11 @@ beforeAll(async () => {
 
   applyMigration(db, '0001_init.sql');
   applyMigration(db, '0011_social_sharing_loop.sql');
+  // The reactor-name join reads profile_identity (0064), which reads profiles.avatar_preset (0013),
+  // friendships (0001) and trip_memberships (0015).
+  applyMigration(db, '0013_avatar_presets.sql');
+  applyMigration(db, '0015_trips.sql');
+  applyMigration(db, '0064_account_deletion.sql');
 
   senderId = await seedUserWithProfile('Sender Sam');
   // A user with a profile who is neither the sender nor a recipient of any

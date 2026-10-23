@@ -1,0 +1,20 @@
+{
+  "verdict": "APPROVED",
+  "findings": [
+    {
+      "id": 1,
+      "severity": "NIT",
+      "title": "GET /me/inbox/unread-count has no non-test mobile consumer; 'server count and client feed agree' is weaker than stated",
+      "where": "design.md Notification_Center pending-versus-purged rule; Property 18 final clause",
+      "fix": "Add one sentence: the unread-count endpoint is retained for API consumers and tests, and the app's badge is derived from the feed. No behaviour change."
+    },
+    {
+      "id": 2,
+      "severity": "NIT",
+      "title": "PurgeRunnerDeps.lockout cleanup is not stated to be best-effort",
+      "where": "design.md Factories and dependencies, PurgeRunnerDeps.lockout",
+      "fix": "Append 'best-effort: a Redis failure is logged at warn and never fails the account' to the field comment."
+    }
+  ],
+  "reviewDoc": "c:\\Users\\knick\\dev\\disney-app\\.agents\\tasks\\account-deletion/design-review.md"
+}

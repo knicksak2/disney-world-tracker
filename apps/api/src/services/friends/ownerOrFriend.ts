@@ -55,7 +55,8 @@ export async function assertOwnerOrFriend(
 
   const { lo, hi } = canonicalPair(requesterId, targetId);
   const result = await pool.query<{ exists: boolean }>(
-    'SELECT EXISTS (SELECT 1 FROM friendships WHERE user_lo_id = $1 AND user_hi_id = $2) AS exists',
+    // Read through the view: a friend who is not active is not a friend to anyone else (account-deletion R5.1).
+    'SELECT EXISTS (SELECT 1 FROM active_friendships WHERE user_lo_id = $1 AND user_hi_id = $2) AS exists',
     [lo, hi],
   );
   const exists = result.rows[0]?.exists === true;

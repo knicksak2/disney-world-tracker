@@ -148,6 +148,59 @@ export function canDeleteTripPhoto(
   return can(role, 'delete_any_trip_photo');
 }
 
+/**
+ * One row of a Trip roster as the authorization layer sees it: the persisted role, when the member joined, and
+ * whether their account is `active` (not pending deletion, purging or a tombstone).
+ */
+export interface RosterMember {
+  readonly userId: string;
+  readonly role: TripRole;
+  readonly joinedAt: Date;
+  readonly active: boolean;
+}
+
+/**
+ * The role `userId` acts with on a Trip, derived from the roster at request time (account-deletion R7.1, R7.2).
+ *
+ * It equals the PERSISTED role, except for the Interim_Organizer: a persisted `member` who is active, when the
+ * roster has no active organizer, and who is the active member with the earliest `joinedAt` (ties: lowest
+ * `userId`, plain string compare) acts as `organizer`. That keeps a trip usable while its only organizer is
+ * pending deletion. Nothing is persisted: when the organizer is restored the roster has an active organizer
+ * again and this function returns the persisted roles with no other action (R7.5).
+ *
+ * Returns `null` when `userId` is not on the roster. `can`, `violatesLastOrganizer` and the action matrix are
+ * unchanged; the interim organizer is only a different input role (R7.3, R7.6).
+ */
+export function effectiveRole(
+  members: readonly RosterMember[],
+  userId: string,
+): TripRole | null {
+  const me = members.find((m) => m.userId === userId);
+  if (me === undefined) {
+    return null;
+  }
+  if (me.role === 'organizer' || !me.active) {
+    return me.role;
+  }
+  if (members.some((m) => m.role === 'organizer' && m.active)) {
+    return me.role;
+  }
+  // No active organizer: the earliest-joined active member (ties by lowest user id) is the interim organizer.
+  let first: RosterMember | undefined;
+  for (const m of members) {
+    if (!m.active) continue;
+    if (first === undefined) {
+      first = m;
+      continue;
+    }
+    const byTime = m.joinedAt.getTime() - first.joinedAt.getTime();
+    if (byTime < 0 || (byTime === 0 && m.userId < first.userId)) {
+      first = m;
+    }
+  }
+  return first !== undefined && first.userId === userId ? 'organizer' : me.role;
+}
+
 /** A single Trip_Member's identity and role within a Trip. */
 export interface Membership {
   readonly userId: string;

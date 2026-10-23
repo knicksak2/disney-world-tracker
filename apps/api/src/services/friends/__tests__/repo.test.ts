@@ -167,7 +167,7 @@ describe('sendRequest', () => {
     const pool = makePool((call) => {
       if (call.text === 'BEGIN' || call.text === 'ROLLBACK') return { rows: [] };
       // Recipient lookup returns no rows.
-      if (call.text.includes('FROM users WHERE id =')) return { rows: [] };
+      if (call.text.includes('FROM users u WHERE u.id =')) return { rows: [] };
       throw new Error(`unexpected SQL: ${call.text}`);
     });
     const repo = createFriendsRepo(asPool(pool));
@@ -183,10 +183,10 @@ describe('sendRequest', () => {
   it('rejects an existing friendship with friend_duplicate_relationship (R8.7)', async () => {
     const pool = makePool((call) => {
       if (call.text === 'BEGIN' || call.text === 'ROLLBACK') return { rows: [] };
-      if (call.text.includes('FROM users WHERE id =')) {
+      if (call.text.includes('FROM users u WHERE u.id =')) {
         return { rows: [{ id: OTHER }] };
       }
-      if (call.text.includes('FROM friendships')) {
+      if (call.text.includes('FROM active_friendships')) {
         return { rows: [{ exists: true }] };
       }
       throw new Error(`unexpected SQL: ${call.text}`);
@@ -201,10 +201,10 @@ describe('sendRequest', () => {
   it('rejects a same- or reverse-direction pending request with friend_duplicate_relationship (R8.7)', async () => {
     const pool = makePool((call) => {
       if (call.text === 'BEGIN' || call.text === 'ROLLBACK') return { rows: [] };
-      if (call.text.includes('FROM users WHERE id =')) {
+      if (call.text.includes('FROM users u WHERE u.id =')) {
         return { rows: [{ id: OTHER }] };
       }
-      if (call.text.includes('FROM friendships')) {
+      if (call.text.includes('FROM active_friendships')) {
         return { rows: [{ exists: false }] };
       }
       if (call.text.includes('FROM friend_requests')) {
@@ -227,10 +227,10 @@ describe('sendRequest', () => {
       if (call.text === 'BEGIN' || call.text === 'COMMIT' || call.text === 'ROLLBACK') {
         return { rows: [] };
       }
-      if (call.text.includes('FROM users WHERE id =')) {
+      if (call.text.includes('FROM users u WHERE u.id =')) {
         return { rows: [{ id: OTHER }] };
       }
-      if (call.text.includes('FROM friendships')) {
+      if (call.text.includes('FROM active_friendships')) {
         return { rows: [{ exists: false }] };
       }
       if (
@@ -269,10 +269,10 @@ describe('sendRequest', () => {
   it('translates a 23505 unique-violation race into friend_duplicate_relationship (R8.7)', async () => {
     const pool = makePool((call) => {
       if (call.text === 'BEGIN' || call.text === 'ROLLBACK') return { rows: [] };
-      if (call.text.includes('FROM users WHERE id =')) {
+      if (call.text.includes('FROM users u WHERE u.id =')) {
         return { rows: [{ id: OTHER }] };
       }
-      if (call.text.includes('FROM friendships')) {
+      if (call.text.includes('FROM active_friendships')) {
         return { rows: [{ exists: false }] };
       }
       if (
@@ -439,7 +439,7 @@ describe('listFriendsAndRequests', () => {
     const established = new Date('2024-01-01T00:00:00.000Z');
     const created = new Date('2024-02-01T00:00:00.000Z');
     const pool = makePool((call) => {
-      if (call.text.includes('FROM friendships')) {
+      if (call.text.includes('FROM active_friendships')) {
         return {
           rows: [
             {

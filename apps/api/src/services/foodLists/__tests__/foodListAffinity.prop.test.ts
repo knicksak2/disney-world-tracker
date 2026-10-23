@@ -117,6 +117,10 @@ describe('foodListAffinity repository properties (fast-check)', () => {
     applyMigration(db, '0041_food_lists.sql');
     applyMigration(db, '0047_food_list_checklist.sql');
     applyMigration(db, '0052_food_list_pinning.sql');
+    // The visibility views (0064) read profiles.avatar_preset, friendships and trip_memberships.
+    applyMigration(db, '0013_avatar_presets.sql');
+    applyMigration(db, '0015_trips.sql');
+    applyMigration(db, '0064_account_deletion.sql');
 
     const { Pool: PgMemPool } = db.adapters.createPg();
     rawPool = new PgMemPool() as unknown as DbPool;

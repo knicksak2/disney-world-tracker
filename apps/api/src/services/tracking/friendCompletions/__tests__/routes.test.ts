@@ -134,7 +134,7 @@ const VIEWER_ID = '11111111-1111-4111-8111-111111111111';
 const TARGET_ID = '22222222-2222-4222-8222-222222222222';
 
 const isFriendshipQuery = (call: FakePoolCall): boolean =>
-  call.text.includes('FROM friendships');
+  call.text.includes('FROM active_friendships');
 
 function sampleEntry(
   overrides: Partial<CompletionEntry> = {},

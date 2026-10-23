@@ -979,8 +979,8 @@ export class PhotoService implements PhotoLifecyclePort {
     return { items, nextCursor };
   }
 
-  async deleteAllForUser(userId: string): Promise<readonly string[]> {
-    return this.repo.softDeleteByOwner(userId, this.clock.now());
+  async deleteAllForUser(userId: string, opts?: { limit?: number }): Promise<readonly string[]> {
+    return this.repo.softDeleteByOwner(userId, this.clock.now(), undefined, opts?.limit);
   }
 
   async softDeleteForTarget(kind: PhotoTargetKind, targetId: string): Promise<readonly string[]> {

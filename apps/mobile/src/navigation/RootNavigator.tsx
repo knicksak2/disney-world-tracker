@@ -26,8 +26,10 @@ import FoodListDiscoveryScreen from '../screens/foodLists/FoodListDiscoveryScree
 import ExperienceListDetailScreen from '../screens/experienceLists/ExperienceListDetailScreen';
 import ExperienceListDiscoveryScreen from '../screens/experienceLists/ExperienceListDiscoveryScreen';
 import NotificationCenterScreen from '../screens/notifications/NotificationCenterScreen';
+import AccountRestoredNotice from '../components/AccountRestoredNotice';
 import { useClaimablePinsBadge } from '../components/pins/useClaimablePinsBadge';
 import MagicFab from '../screens/quickAction/MagicFab';
+import { makeStyles } from '../theme/makeStyles';
 import { useAppTheme } from '../theme/useAppTheme';
 
 /**
@@ -131,77 +133,90 @@ function EmptySlot(): JSX.Element {
   return <View />;
 }
 
-function MainTabsNavigator(): JSX.Element {
+const useMainTabsStyles = makeStyles((t) => ({
+  root: { flex: 1, backgroundColor: t.color.background },
+}));
+
+/**
+ * `AccountRestoredNotice` is the FIRST child so the one-time "welcome back"
+ * banner (account-deletion R4.9) sits above the tab content; it renders nothing
+ * unless the in-memory `accountRestoredNotice` flag is set.
+ */
+export function MainTabsNavigator(): JSX.Element {
   const { count: claimableCount } = useClaimablePinsBadge();
   const t = useAppTheme();
+  const styles = useMainTabsStyles();
 
   return (
-    <MainTabs.Navigator
-      screenOptions={({ route }) => ({
-        headerShown: false,
-        tabBarActiveTintColor: t.tabBar.activeTint,
-        tabBarInactiveTintColor: t.tabBar.inactiveTint,
-        tabBarIcon: ({ focused, color, size }) => {
-          const glyphs = TAB_ICONS[route.name as keyof MainTabParamList];
-          if (!glyphs) return null;
-          const name = focused ? glyphs.focused : glyphs.unfocused;
-          return <Ionicons name={name} size={size} color={color} />;
-        },
-      })}
-    >
-      <MainTabs.Screen name="Home" component={HomeScreen} />
-      <MainTabs.Screen
-        name="Explore"
-        component={ExploreStack}
-        options={{ headerShown: false }}
-        listeners={({ navigation }) => ({
-          tabPress: () => {
-            navigation.navigate('Explore', { screen: 'CatalogList' });
-          },
-        })}
-      />
-      <MainTabs.Screen
-        name={'MagicFab' as any}
-        component={EmptySlot}
-        options={{
-          tabBarButton: () => <MagicFab />,
-        }}
-        listeners={{
-          tabPress: (e) => {
-            e.preventDefault();
-          },
-        }}
-      />
-      <MainTabs.Screen
-        name="Trips"
-        component={TripsStack}
-        options={{ headerShown: false }}
-        listeners={({ navigation }) => ({
-          tabPress: () => {
-            navigation.navigate('Trips', { screen: 'TripsList' });
-          },
-        })}
-      />
-      <MainTabs.Screen
-        name="Collection"
-        component={CollectionStack}
-        options={{
+    <View style={styles.root} testID="main-tabs-root">
+      <AccountRestoredNotice />
+      <MainTabs.Navigator
+        screenOptions={({ route }) => ({
           headerShown: false,
-          tabBarLabel: 'Vault',
-          ...(claimableCount > 0
-            ? {
-                tabBarBadge: claimableCount > 99 ? '99+' : claimableCount,
-                tabBarBadgeStyle: {
-                  backgroundColor: t.tabBar.badgeBackground,
-                  color: t.tabBar.badgeText,
-                  fontSize: 10,
-                  fontWeight: '700',
-                },
-              }
-            : {}),
-        }}
-      />
-    </MainTabs.Navigator>
+          tabBarActiveTintColor: t.tabBar.activeTint,
+          tabBarInactiveTintColor: t.tabBar.inactiveTint,
+          tabBarIcon: ({ focused, color, size }) => {
+            const glyphs = TAB_ICONS[route.name as keyof MainTabParamList];
+            if (!glyphs) return null;
+            const name = focused ? glyphs.focused : glyphs.unfocused;
+            return <Ionicons name={name} size={size} color={color} />;
+          },
+        })}
+      >
+        <MainTabs.Screen name="Home" component={HomeScreen} />
+        <MainTabs.Screen
+          name="Explore"
+          component={ExploreStack}
+          options={{ headerShown: false }}
+          listeners={({ navigation }) => ({
+            tabPress: () => {
+              navigation.navigate('Explore', { screen: 'CatalogList' });
+            },
+          })}
+        />
+        <MainTabs.Screen
+          name={'MagicFab' as any}
+          component={EmptySlot}
+          options={{
+            tabBarButton: () => <MagicFab />,
+          }}
+          listeners={{
+            tabPress: (e) => {
+              e.preventDefault();
+            },
+          }}
+        />
+        <MainTabs.Screen
+          name="Trips"
+          component={TripsStack}
+          options={{ headerShown: false }}
+          listeners={({ navigation }) => ({
+            tabPress: () => {
+              navigation.navigate('Trips', { screen: 'TripsList' });
+            },
+          })}
+        />
+        <MainTabs.Screen
+          name="Collection"
+          component={CollectionStack}
+          options={{
+            headerShown: false,
+            tabBarLabel: 'Vault',
+            ...(claimableCount > 0
+              ? {
+                  tabBarBadge: claimableCount > 99 ? '99+' : claimableCount,
+                  tabBarBadgeStyle: {
+                    backgroundColor: t.tabBar.badgeBackground,
+                    color: t.tabBar.badgeText,
+                    fontSize: 10,
+                    fontWeight: '700',
+                  },
+                }
+              : {}),
+          }}
+        />
+      </MainTabs.Navigator>
+    </View>
   );
 }
 

@@ -107,6 +107,9 @@ export function setupTestDb(): { db: IMemoryDb; pool: Pool } {
   db.public.none(RESORTS_STUB);
   applyMigration(db, '0015_trips.sql');
   applyMigration(db, '0060_trip_expenses.sql');
+  // The money reads go through the 0064 visibility views (profile_identity needs profiles.avatar_preset from 0013).
+  applyMigration(db, '0013_avatar_presets.sql');
+  applyMigration(db, '0064_account_deletion.sql');
 
   const rawPool = db.adapters.createPg().Pool;
   const poolInstance = new rawPool();

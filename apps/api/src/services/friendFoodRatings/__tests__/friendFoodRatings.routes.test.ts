@@ -142,17 +142,38 @@ const stubRequireSession: FriendFoodRatingRoutesOptions['requireSession'] = (
 
 function createPgMemPool() {
   const mem = newDb();
+  // The gate reads `active_friendships` (migration 0064): a friendship whose two people are both active.
+  // This route test only needs that view, so it carries the minimal tables and the view body of 0064.
   mem.public.none(`
+    CREATE TABLE users (
+      id UUID PRIMARY KEY,
+      deletion_state TEXT NOT NULL DEFAULT 'active'
+    );
     CREATE TABLE friendships (
       user_lo_id UUID NOT NULL,
       user_hi_id UUID NOT NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
       PRIMARY KEY (user_lo_id, user_hi_id)
     );
+    CREATE VIEW active_friendships AS
+    SELECT f.user_lo_id, f.user_hi_id
+      FROM friendships f
+      JOIN users ul ON ul.id = f.user_lo_id AND ul.deletion_state = 'active'
+      JOIN users uh ON uh.id = f.user_hi_id AND uh.deletion_state = 'active';
   `);
   const { Pool: PgMemPool } = mem.adapters.createPg();
   const pool = new PgMemPool() as unknown as DbPool;
   return { mem, pool };
+}
+
+/** Inserts the two (active) people and their friendship. */
+function befriend(mem: ReturnType<typeof createPgMemPool>['mem'], lo: string, hi: string): void {
+  for (const id of [lo, hi]) {
+    mem.public.none(`INSERT INTO users (id) VALUES ('${id}') ON CONFLICT DO NOTHING`);
+  }
+  mem.public.none(
+    `INSERT INTO friendships (user_lo_id, user_hi_id) VALUES ('${lo}', '${hi}') ON CONFLICT DO NOTHING`,
+  );
 }
 
 async function buildApp(opts: {
@@ -191,9 +212,7 @@ describe('friendFoodRatingRoutes — GET /users/:userId/food-ratings', () => {
 
     // Establish friendship between OWNER_ID and FRIEND_ID
     const { lo, hi } = canonicalPair(OWNER_ID, FRIEND_ID);
-    memDb.public.none(
-      `INSERT INTO friendships (user_lo_id, user_hi_id) VALUES ('${lo}', '${hi}')`,
-    );
+    befriend(memDb, lo, hi);
 
     app = await buildApp({ pool, repo: fakeRepo.repo });
   });
@@ -217,9 +236,7 @@ describe('friendFoodRatingRoutes — GET /users/:userId/food-ratings', () => {
 
     // Seed then delete former friendship
     const { lo: fLo, hi: fHi } = canonicalPair(OWNER_ID, formerFriendId);
-    memDb.public.none(
-      `INSERT INTO friendships (user_lo_id, user_hi_id) VALUES ('${fLo}', '${fHi}')`,
-    );
+    befriend(memDb, fLo, fHi);
     memDb.public.none(
       `DELETE FROM friendships WHERE user_lo_id = '${fLo}' AND user_hi_id = '${fHi}'`,
     );
@@ -449,9 +466,7 @@ describe('friendFoodRatingRoutes — GET /users/:userId/food-ratings', () => {
             const u1 = edge[0]!;
             const u2 = edge[1]!;
             const { lo, hi } = canonicalPair(u1, u2);
-            mem.public.none(
-              `INSERT INTO friendships (user_lo_id, user_hi_id) VALUES ('${lo}', '${hi}') ON CONFLICT DO NOTHING`,
-            );
+            befriend(mem, lo, hi);
           }
 
           propFakeRepo.listDishesCalls.length = 0;

@@ -154,6 +154,11 @@ async function setup(): Promise<Fixture> {
   // Friend Completions read now projects onto each entry's `areaType`.
   applyMigration(db, '0004_disney_sources.sql');
 
+  // The friend gate reads `active_friendships` (0064), whose views read profiles.avatar_preset and trip_memberships.
+  applyMigration(db, '0013_avatar_presets.sql');
+  applyMigration(db, '0015_trips.sql');
+  applyMigration(db, '0064_account_deletion.sql');
+
   // 0034 adds `experience_logs`, which listCompletions joins for repeatCount.
   db.public.none(`
     CREATE TABLE IF NOT EXISTS experience_logs (

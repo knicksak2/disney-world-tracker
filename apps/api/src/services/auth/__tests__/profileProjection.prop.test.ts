@@ -69,7 +69,7 @@ interface FakePool {
 function makeFakePool(fixture: ProfileFixture): FakePool {
   return {
     async query(text: string) {
-      if (text.includes('FROM profiles WHERE user_id')) {
+      if (text.includes('FROM profile_identity WHERE user_id')) {
         return {
           rows: [
             {

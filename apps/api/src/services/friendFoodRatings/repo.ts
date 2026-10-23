@@ -246,7 +246,7 @@ SELECT CASE WHEN fi.experience_id IS NOT NULL THEN 'experience' ELSE 'location' 
       const sql = `
 WITH friend_ids AS (
   SELECT CASE WHEN user_lo_id = $1 THEN user_hi_id ELSE user_lo_id END AS friend_id
-    FROM friendships
+    FROM active_friendships
    WHERE user_lo_id = $1 OR user_hi_id = $1
 ), per_friend AS (
   SELECT fil.food_item_id,
@@ -266,7 +266,7 @@ SELECT pf.food_item_id, pf.friend_id, p.display_name, p.avatar_preset,
        pf.avg_rating::float                          AS average_rating,
        to_char(pf.latest_visited_on, 'YYYY-MM-DD')   AS latest_visited_on
   FROM per_friend pf
-  JOIN profiles p ON p.user_id = pf.friend_id
+  JOIN profile_identity p ON p.user_id = pf.friend_id AND p.is_visible
  WHERE pf.rated_count >= 1
  ORDER BY pf.food_item_id ASC, pf.avg_rating DESC, pf.latest_visited_on DESC, pf.friend_id ASC
  LIMIT $3;

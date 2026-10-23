@@ -4,8 +4,16 @@
  * Encapsulates PostgreSQL database access for password reset tokens, verification
  * attempts, session revocation, and password updates.
  *
+ * Account deletion (account-deletion R4.3, R4.11): the three lookups only see an account that is `active`, or
+ * `pending_deletion` with `now < scheduled_purge_at` (a pending account inside its grace period can reset its
+ * password, which also restores it). Expired, purging and tombstone accounts look non-existent. The boundary uses
+ * the APPLICATION clock (`now`, a trailing optional parameter defaulting to `new Date()`), the same value the
+ * handler later passes to `restoreInTx`, so the lookup and the restore cannot disagree on the boundary.
+ *
  * Validates: Requirements 1.2, 1.6, 2.1, 2.2, 2.3, 2.4, 2.6, 3.3
  */
+
+import type { PoolClient } from 'pg';
 
 import type { DbPool } from '../../db/pool.js';
 
@@ -21,9 +29,24 @@ export interface PasswordResetRecord {
   readonly createdAt: Date;
 }
 
+/**
+ * `void`: the reset completed and nothing was restored (existing callers and fakes). `'restored'`: the account was
+ * pending deletion and was restored in the same transaction. `'restore_lost'`: the restore matched nothing (the
+ * purge claim won), the transaction was rolled back, the password is unchanged and the code is NOT consumed.
+ */
+export type CompleteResetResult = void | 'restored' | 'restore_lost';
+
+export interface CompleteResetOptions {
+  /** Runs first inside the reset transaction on its client. See `AccountRestorePort.restoreInTx`. */
+  readonly restoreInTx?: (client: PoolClient) => Promise<'restored' | 'not_needed' | 'not_restorable'>;
+}
+
 export interface PasswordResetRepo {
   /** Find user account by email (case-insensitive). */
-  findUserByEmail(email: string): Promise<{ readonly id: string; readonly email: string } | null>;
+  findUserByEmail(
+    email: string,
+    now?: Date,
+  ): Promise<{ readonly id: string; readonly email: string } | null>;
 
   /** Invalidate existing unused tokens for user and create a fresh one. */
   createResetRecord(
@@ -34,10 +57,10 @@ export interface PasswordResetRepo {
   ): Promise<string>;
 
   /** Look up active (unused, not expired) reset record for email. */
-  findActiveByEmail(email: string): Promise<PasswordResetRecord | null>;
+  findActiveByEmail(email: string, now?: Date): Promise<PasswordResetRecord | null>;
 
   /** Look up active (unused, not expired) reset record by URL token hash. */
-  findActiveByToken(tokenHash: string): Promise<PasswordResetRecord | null>;
+  findActiveByToken(tokenHash: string, now?: Date): Promise<PasswordResetRecord | null>;
 
   /** Increment failed verification attempts and return new count. */
   incrementAttempts(id: string): Promise<number>;
@@ -45,16 +68,32 @@ export interface PasswordResetRepo {
   /** Invalidate record due to max attempts or manual expiry. */
   invalidateRecord(id: string): Promise<void>;
 
-  /** Complete password reset: update password hash, mark token used, revoke all user sessions. */
-  completeReset(resetId: string, userId: string, newPasswordHash: string): Promise<void>;
+  /**
+   * Complete password reset: update password hash, mark token used, revoke all user sessions. With
+   * `opts.restoreInTx` the restore of a pending-deletion account is the FIRST step of the same transaction.
+   */
+  completeReset(
+    resetId: string,
+    userId: string,
+    newPasswordHash: string,
+    opts?: CompleteResetOptions,
+  ): Promise<CompleteResetResult>;
 }
+
+// The eligibility predicate is written out inside each statement (and not built by a helper) so the literal
+// that reads `users` also carries `deletion_state = 'active'`, which is what the visibility guard checks.
 
 export function createPasswordResetRepo(pool: DbPool): PasswordResetRepo {
   return {
-    async findUserByEmail(email: string) {
+    async findUserByEmail(email: string, now: Date = new Date()) {
       const res = await pool.query<{ id: string; email: string }>(
-        `SELECT id, email FROM users WHERE email = $1 LIMIT 1`,
-        [email.trim()],
+        `SELECT u.id, u.email
+           FROM users u
+          WHERE u.email = $1
+            AND (u.deletion_state = 'active'
+                 OR (u.deletion_state = 'pending_deletion' AND u.scheduled_purge_at > $2))
+          LIMIT 1`,
+        [email.trim(), now],
       );
       return res.rows[0] ?? null;
     },
@@ -98,7 +137,7 @@ export function createPasswordResetRepo(pool: DbPool): PasswordResetRepo {
       }
     },
 
-    async findActiveByEmail(email: string) {
+    async findActiveByEmail(email: string, now: Date = new Date()) {
       const res = await pool.query<{
         id: string;
         user_id: string;
@@ -115,11 +154,13 @@ export function createPasswordResetRepo(pool: DbPool): PasswordResetRepo {
            FROM password_reset_tokens r
            JOIN users u ON u.id = r.user_id
           WHERE u.email = $1
+            AND (u.deletion_state = 'active'
+                 OR (u.deletion_state = 'pending_deletion' AND u.scheduled_purge_at > $2))
             AND r.used_at IS NULL
             AND r.expires_at > now()
           ORDER BY r.created_at DESC
           LIMIT 1`,
-        [email.trim()],
+        [email.trim(), now],
       );
 
       const row = res.rows[0];
@@ -138,7 +179,7 @@ export function createPasswordResetRepo(pool: DbPool): PasswordResetRepo {
       };
     },
 
-    async findActiveByToken(tokenHash: string) {
+    async findActiveByToken(tokenHash: string, now: Date = new Date()) {
       const res = await pool.query<{
         id: string;
         user_id: string;
@@ -155,10 +196,12 @@ export function createPasswordResetRepo(pool: DbPool): PasswordResetRepo {
            FROM password_reset_tokens r
            JOIN users u ON u.id = r.user_id
           WHERE r.token_hash = $1
+            AND (u.deletion_state = 'active'
+                 OR (u.deletion_state = 'pending_deletion' AND u.scheduled_purge_at > $2))
             AND r.used_at IS NULL
             AND r.expires_at > now()
           LIMIT 1`,
-        [tokenHash],
+        [tokenHash, now],
       );
 
       const row = res.rows[0];
@@ -197,10 +240,27 @@ export function createPasswordResetRepo(pool: DbPool): PasswordResetRepo {
       );
     },
 
-    async completeReset(resetId: string, userId: string, newPasswordHash: string) {
+    async completeReset(
+      resetId: string,
+      userId: string,
+      newPasswordHash: string,
+      opts?: CompleteResetOptions,
+    ): Promise<CompleteResetResult> {
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
+
+        // 0. Restore a pending-deletion account FIRST, in this transaction. Losing the race to the purge claim
+        //    changes nothing: no write has happened yet, so the rollback leaves the password and the code intact.
+        let restored = false;
+        if (opts?.restoreInTx !== undefined) {
+          const outcome = await opts.restoreInTx(client);
+          if (outcome === 'not_restorable') {
+            await client.query('ROLLBACK');
+            return 'restore_lost';
+          }
+          restored = outcome === 'restored';
+        }
 
         // 1. Mark reset token as used
         await client.query(
@@ -228,6 +288,7 @@ export function createPasswordResetRepo(pool: DbPool): PasswordResetRepo {
         );
 
         await client.query('COMMIT');
+        return restored ? 'restored' : undefined;
       } catch (err) {
         try {
           await client.query('ROLLBACK');

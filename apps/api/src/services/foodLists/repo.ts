@@ -18,6 +18,7 @@ import type {
 
 import type { DbPool } from '../../db/pool.js';
 import { AppError } from '../../errors/AppError.js';
+import { ACTIVE_USER_SQL } from '../accountDeletion/visibility.js';
 import { pair } from '../friends/canonicalPair.js';
 
 // ---------------------------------------------------------------------------
@@ -184,8 +185,10 @@ export async function getListAccess(
   userId: string,
 ): Promise<ListAccessRow | null> {
   const res = await pool.query<ListAccessRow>(
+    // A list whose owner is not an active account does not exist for anyone else (account-deletion R5.1).
     `SELECT fl.id, fl.owner_id, fl.visibility, fls.role AS share_role
        FROM food_lists fl
+       JOIN users ou ON ou.id = fl.owner_id AND ${ACTIVE_USER_SQL('ou')}
        LEFT JOIN food_list_shares fls
          ON fls.food_list_id = fl.id AND fls.shared_with_user_id = $2
       WHERE fl.id = $1`,
@@ -278,7 +281,7 @@ export function createFoodListRepo(pool: DbPool): FoodListRepo {
          fl.updated_at,
          fl.pinned_at
        FROM food_lists fl
-       LEFT JOIN profiles p ON p.user_id = fl.owner_id
+       LEFT JOIN profile_identity p ON p.user_id = fl.owner_id
        LEFT JOIN (
          SELECT food_list_id, COUNT(*)::int AS item_count
          FROM food_lists_items
@@ -449,7 +452,7 @@ export function createFoodListRepo(pool: DbPool): FoodListRepo {
            fl.updated_at,
            fl.pinned_at
          FROM food_lists fl
-         LEFT JOIN profiles p ON p.user_id = fl.owner_id
+         LEFT JOIN profile_identity p ON p.user_id = fl.owner_id
          LEFT JOIN (
            SELECT food_list_id, COUNT(*)::int AS item_count
            FROM food_lists_items
@@ -497,7 +500,7 @@ export function createFoodListRepo(pool: DbPool): FoodListRepo {
            (fll.food_list_id IS NOT NULL) AS liked,
            (fls_save.food_list_id IS NOT NULL) AS saved
          FROM food_lists fl
-         LEFT JOIN profiles p ON p.user_id = fl.owner_id
+         LEFT JOIN profile_identity p ON p.user_id = fl.owner_id
          LEFT JOIN food_list_likes fll
            ON fll.food_list_id = fl.id AND fll.user_id = $2
          LEFT JOIN food_list_saves fls_save
@@ -530,7 +533,7 @@ export function createFoodListRepo(pool: DbPool): FoodListRepo {
              usl.name AS location_name,
              fi.price,
              fli.position,
-             fli.added_by_user_id,
+             COALESCE(p.public_id, fli.added_by_user_id) AS added_by_user_id,
              p.display_name AS added_by_display_name,
              (fil.food_item_id IS NOT NULL) AS gotten,
              fil.rating,
@@ -539,7 +542,7 @@ export function createFoodListRepo(pool: DbPool): FoodListRepo {
            JOIN food_items fi ON fi.id = fli.food_item_id
            LEFT JOIN experiences e ON e.id = fi.experience_id
            LEFT JOIN user_submitted_locations usl ON usl.id = fi.location_id
-           LEFT JOIN profiles p ON p.user_id = fli.added_by_user_id
+           LEFT JOIN profile_identity p ON p.user_id = fli.added_by_user_id
            LEFT JOIN (
              SELECT DISTINCT ON (food_item_id) food_item_id, id AS log_id, rating
                FROM food_item_logs
@@ -583,13 +586,13 @@ export function createFoodListRepo(pool: DbPool): FoodListRepo {
              usl.name AS location_name,
              fi.price,
              fli.position,
-             fli.added_by_user_id,
+             COALESCE(p.public_id, fli.added_by_user_id) AS added_by_user_id,
              p.display_name AS added_by_display_name
            FROM food_lists_items fli
            JOIN food_items fi ON fi.id = fli.food_item_id
            LEFT JOIN experiences e ON e.id = fi.experience_id
            LEFT JOIN user_submitted_locations usl ON usl.id = fi.location_id
-           LEFT JOIN profiles p ON p.user_id = fli.added_by_user_id
+           LEFT JOIN profile_identity p ON p.user_id = fli.added_by_user_id
           WHERE fli.food_list_id = $1
           ORDER BY fli.position ASC`,
           [listId],
@@ -693,13 +696,13 @@ export function createFoodListRepo(pool: DbPool): FoodListRepo {
               fl.updated_at,
               fl.pinned_at
             FROM food_lists fl
-            LEFT JOIN profiles p ON p.user_id = fl.owner_id
+            LEFT JOIN profile_identity p ON p.user_id = fl.owner_id
             LEFT JOIN (
               SELECT food_list_id, COUNT(*)::int AS item_count
               FROM food_lists_items
               GROUP BY food_list_id
             ) ic ON ic.food_list_id = fl.id
-            WHERE fl.visibility = 'public'
+            WHERE fl.visibility = 'public' AND COALESCE(p.is_visible, TRUE)
               AND (fl.like_count < $2 OR (fl.like_count = $2 AND fl.id > $3))
             ORDER BY fl.like_count DESC, fl.id ASC
             LIMIT $1`;
@@ -718,13 +721,13 @@ export function createFoodListRepo(pool: DbPool): FoodListRepo {
               fl.updated_at,
               fl.pinned_at
             FROM food_lists fl
-            LEFT JOIN profiles p ON p.user_id = fl.owner_id
+            LEFT JOIN profile_identity p ON p.user_id = fl.owner_id
             LEFT JOIN (
               SELECT food_list_id, COUNT(*)::int AS item_count
               FROM food_lists_items
               GROUP BY food_list_id
             ) ic ON ic.food_list_id = fl.id
-            WHERE fl.visibility = 'public'
+            WHERE fl.visibility = 'public' AND COALESCE(p.is_visible, TRUE)
             ORDER BY fl.like_count DESC, fl.id ASC
             LIMIT $1`;
         }
@@ -745,13 +748,13 @@ export function createFoodListRepo(pool: DbPool): FoodListRepo {
               fl.updated_at,
               fl.pinned_at
             FROM food_lists fl
-            LEFT JOIN profiles p ON p.user_id = fl.owner_id
+            LEFT JOIN profile_identity p ON p.user_id = fl.owner_id
             LEFT JOIN (
               SELECT food_list_id, COUNT(*)::int AS item_count
               FROM food_lists_items
               GROUP BY food_list_id
             ) ic ON ic.food_list_id = fl.id
-            WHERE fl.visibility = 'public'
+            WHERE fl.visibility = 'public' AND COALESCE(p.is_visible, TRUE)
               AND (fl.created_at < $2 OR (fl.created_at = $2 AND fl.id > $3))
             ORDER BY fl.created_at DESC, fl.id ASC
             LIMIT $1`;
@@ -770,13 +773,13 @@ export function createFoodListRepo(pool: DbPool): FoodListRepo {
               fl.updated_at,
               fl.pinned_at
             FROM food_lists fl
-            LEFT JOIN profiles p ON p.user_id = fl.owner_id
+            LEFT JOIN profile_identity p ON p.user_id = fl.owner_id
             LEFT JOIN (
               SELECT food_list_id, COUNT(*)::int AS item_count
               FROM food_lists_items
               GROUP BY food_list_id
             ) ic ON ic.food_list_id = fl.id
-            WHERE fl.visibility = 'public'
+            WHERE fl.visibility = 'public' AND COALESCE(p.is_visible, TRUE)
             ORDER BY fl.created_at DESC, fl.id ASC
             LIMIT $1`;
         }
@@ -912,13 +915,13 @@ export function createFoodListItemRepo(pool: DbPool): FoodListItemRepo {
              usl.name AS location_name,
              fi.price,
              fli.position,
-             fli.added_by_user_id,
+             COALESCE(p.public_id, fli.added_by_user_id) AS added_by_user_id,
              p.display_name AS added_by_display_name
            FROM food_lists_items fli
            JOIN food_items fi ON fi.id = fli.food_item_id
            LEFT JOIN experiences e ON e.id = fi.experience_id
            LEFT JOIN user_submitted_locations usl ON usl.id = fi.location_id
-           LEFT JOIN profiles p ON p.user_id = fli.added_by_user_id
+           LEFT JOIN profile_identity p ON p.user_id = fli.added_by_user_id
           WHERE fli.food_list_id = $1 AND fli.food_item_id = $2`,
           [listId, foodItemId],
         );
@@ -1136,13 +1139,13 @@ export function createFoodListItemRepo(pool: DbPool): FoodListItemRepo {
              usl.name AS location_name,
              fi.price,
              fli.position,
-             fli.added_by_user_id,
+             COALESCE(p.public_id, fli.added_by_user_id) AS added_by_user_id,
              p.display_name AS added_by_display_name
            FROM food_lists_items fli
            JOIN food_items fi ON fi.id = fli.food_item_id
            LEFT JOIN experiences e ON e.id = fi.experience_id
            LEFT JOIN user_submitted_locations usl ON usl.id = fi.location_id
-           LEFT JOIN profiles p ON p.user_id = fli.added_by_user_id
+           LEFT JOIN profile_identity p ON p.user_id = fli.added_by_user_id
           WHERE fli.food_list_id = $1
           ORDER BY fli.position ASC`,
           [listId],
@@ -1181,7 +1184,7 @@ export function createFoodListShareRepo(pool: DbPool): FoodListShareRepo {
 
       const { lo, hi } = pair(ownerId, recipientId);
       const friendRes = await pool.query(
-        `SELECT 1 FROM friendships WHERE user_lo_id = $1 AND user_hi_id = $2`,
+        `SELECT 1 FROM active_friendships WHERE user_lo_id = $1 AND user_hi_id = $2`,
         [lo, hi],
       );
       if (friendRes.rows.length === 0) {
@@ -1189,7 +1192,7 @@ export function createFoodListShareRepo(pool: DbPool): FoodListShareRepo {
       }
 
       const profileRes = await pool.query<{ display_name: string }>(
-        `SELECT display_name FROM profiles WHERE user_id = $1`,
+        `SELECT display_name FROM profile_identity WHERE user_id = $1`,
         [recipientId],
       );
       const recipientDisplayName = profileRes.rows[0]?.display_name ?? 'Friend';
@@ -1277,8 +1280,9 @@ export function createFoodListShareRepo(pool: DbPool): FoodListShareRepo {
            fls.role,
            fls.shared_at
          FROM food_list_shares fls
-         LEFT JOIN profiles p ON p.user_id = fls.shared_with_user_id
+         LEFT JOIN profile_identity p ON p.user_id = fls.shared_with_user_id
         WHERE fls.food_list_id = $1
+          AND COALESCE(p.is_visible, TRUE)
         ORDER BY fls.shared_at ASC`,
         [listId],
       );
@@ -1440,7 +1444,7 @@ export function createFoodListAffinityRepo(
            fl.created_at,
            fl.updated_at,
            fl.pinned_at,
-           (fl.id IS NOT NULL AND (
+           (fl.id IS NOT NULL AND COALESCE(p.is_visible, TRUE) AND (
              fl.visibility = 'public'
              OR fl.owner_id = $1
              OR shares.role IS NOT NULL
@@ -1448,7 +1452,7 @@ export function createFoodListAffinityRepo(
            )) AS can_view
          FROM food_list_saves fls_user
          LEFT JOIN food_lists fl ON fl.id = fls_user.food_list_id
-         LEFT JOIN profiles p ON p.user_id = fl.owner_id
+         LEFT JOIN profile_identity p ON p.user_id = fl.owner_id
          LEFT JOIN food_list_shares shares
            ON shares.food_list_id = fl.id AND shares.shared_with_user_id = $1
          ${tripJoin}

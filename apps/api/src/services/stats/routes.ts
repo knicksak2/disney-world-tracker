@@ -431,7 +431,9 @@ async function authorizeTarget(
  */
 async function targetExists(pool: DbPool, targetId: string): Promise<boolean> {
   const result = await pool.query<{ exists: boolean }>(
-    'SELECT EXISTS (SELECT 1 FROM users WHERE id = $1) AS exists',
+    // Only an active account "exists" here, so a pending friend and a never-existing id both answer
+    // `stats_target_not_found` (account-deletion R5.6).
+    "SELECT EXISTS (SELECT 1 FROM users WHERE id = $1 AND deletion_state = 'active') AS exists",
     [targetId],
   );
   return result.rows[0]?.exists === true;

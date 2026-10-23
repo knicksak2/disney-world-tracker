@@ -83,6 +83,8 @@ describe('TripTarget', () => {
     applyMigration(db, '0015_trips.sql');
     applyMigration(db, '0062_photo_uploads.sql');
     applyMigration(db, '0063_trip_photos.sql');
+    applyMigration(db, '0013_avatar_presets.sql'); // profile_identity (0064) reads profiles.avatar_preset
+    applyMigration(db, '0064_account_deletion.sql');
 
     organizerId = randomUUID();
     memberId = randomUUID();

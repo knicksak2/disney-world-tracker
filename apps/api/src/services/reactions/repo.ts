@@ -234,7 +234,7 @@ async function listReactionsForSender(
             p.display_name       AS reactor_display_name,
             r.updated_at         AS reacted_at
        FROM share_reactions r
-       JOIN profiles p ON p.user_id = r.recipient_id
+       JOIN profile_identity p ON p.user_id = r.recipient_id AND p.is_visible
       WHERE r.share_id = $1
       ORDER BY r.created_at ASC, r.recipient_id ASC`,
     [shareId],

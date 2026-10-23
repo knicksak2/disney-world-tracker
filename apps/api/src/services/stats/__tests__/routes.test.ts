@@ -718,7 +718,7 @@ describe('GET /me/stats/summary?for=<userId>', () => {
     ]);
     const { repo, inputs } = makeFakeRepo(new Map([[TARGET_ID, snapshot]]));
     const pool = makeFakePool((call) => {
-      if (call.text.includes('FROM friendships')) {
+      if (call.text.includes('FROM active_friendships')) {
         return { rows: [{ exists: true }] };
       }
       return { rows: [] };
@@ -738,7 +738,7 @@ describe('GET /me/stats/summary?for=<userId>', () => {
 
     // Friendship lookup ran with canonical (lo, hi) = (VIEWER, TARGET).
     const friendCall = pool.calls.find((c) =>
-      c.text.includes('FROM friendships'),
+      c.text.includes('FROM active_friendships'),
     );
     expect(friendCall?.params).toEqual([VIEWER_ID, TARGET_ID]);
     // A Friend implies existence, so no existence check is issued.
@@ -761,7 +761,7 @@ describe('GET /me/stats/summary?for=<userId>', () => {
     const snapshot = snapshotWithResorts(rows);
     const { repo, inputs } = makeFakeRepo(new Map([[TARGET_ID, snapshot]]));
     const pool = makeFakePool((call) => {
-      if (call.text.includes('FROM friendships')) {
+      if (call.text.includes('FROM active_friendships')) {
         return { rows: [{ exists: true }] };
       }
       return { rows: [] };
@@ -787,7 +787,7 @@ describe('GET /me/stats/summary?for=<userId>', () => {
   it('denies a non-Friend of an existing target with profile_forbidden and reads no stats (R9.2)', async () => {
     const { repo, inputs } = makeFakeRepo(new Map());
     const pool = makeFakePool((call) => {
-      if (call.text.includes('FROM friendships')) {
+      if (call.text.includes('FROM active_friendships')) {
         return { rows: [{ exists: false }] };
       }
       if (call.text.includes('FROM users')) {
@@ -816,7 +816,7 @@ describe('GET /me/stats/summary?for=<userId>', () => {
   it('denies a request for a non-existent target with stats_target_not_found (R9.6)', async () => {
     const { repo, inputs } = makeFakeRepo(new Map());
     const pool = makeFakePool((call) => {
-      if (call.text.includes('FROM friendships')) {
+      if (call.text.includes('FROM active_friendships')) {
         return { rows: [{ exists: false }] };
       }
       if (call.text.includes('FROM users')) {

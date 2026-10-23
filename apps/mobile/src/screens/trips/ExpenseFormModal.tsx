@@ -60,6 +60,7 @@ import {
   tripExpenseKeys,
 } from './tripExpenseApi';
 import { TripGuestManagementModal } from './TripGuestManagementModal';
+import { ledgerSaveErrorMessage } from './tripPartyDeleted';
 import { ExperiencePicker } from './ExperiencePicker';
 import { ResortPickerModal, type ResortItem } from './ResortPickerModal';
 import { ReceiptReviewModal } from './ReceiptReviewModal';
@@ -737,7 +738,7 @@ export function ExpenseFormModal({
       onClose();
     },
     onError: (err: unknown) => {
-      setErrorMessage(err instanceof Error ? err.message : 'Failed to save expense');
+      setErrorMessage(ledgerSaveErrorMessage(err, 'Failed to save expense'));
     },
   });
 

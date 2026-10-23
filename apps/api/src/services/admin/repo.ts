@@ -169,11 +169,24 @@ export interface PushDeliveryCounts {
   readonly error: number;
 }
 
+/** A tombstone is never returned to admin (account-deletion R5.7). */
+export type AdminDeletionState = 'active' | 'pending_deletion' | 'purging';
+
 export interface AdminUserSummary {
   readonly id: string;
   readonly email: string;
   readonly createdAt: string;
   readonly displayName: string | null;
+  /** Lifecycle state of the account; admin sees a pending account with its status (R5.7). */
+  readonly deletionState: AdminDeletionState;
+  /** ISO-8601 UTC; non-null iff `deletionState` is not `active`. */
+  readonly deletionRequestedAt: string | null;
+  /** ISO-8601 UTC; non-null iff `deletionState` is not `active`. */
+  readonly scheduledPurgeAt: string | null;
+  /** `users.purge_stage`, 0..4. */
+  readonly purgeStage: number;
+  /** `users.purge_attempts`; above zero means the purge is failing (R8.12). */
+  readonly purgeAttempts: number;
   readonly completionCount: number;
   readonly ratingCount: number;
   readonly noteCount: number;
@@ -188,13 +201,25 @@ export interface AdminUserSummary {
 }
 
 export interface GrowthTotals {
+  /** Active accounts only: pending, purging and tombstone rows are excluded (account-deletion R17.2). */
   readonly totalUsers: number;
+  /** Accounts in `pending_deletion` (`purging` is excluded: already past restore). */
+  readonly pendingDeletionCount: number;
+  /** Newest `account_deletion_ledger.purged_at`, ISO-8601 UTC, or null when the ledger is empty. */
+  readonly lastPurgeAt: string | null;
   readonly totalTrips: number;
   readonly totalCompletions: number;
   readonly totalRatings: number;
   readonly totalFriendships: number;
   readonly totalNotes: number;
   readonly totalFoodLogs: number;
+}
+
+/** One UTC day of the purge ledger: a count, never an identity (the ledger has no user column). */
+export interface PurgeLedgerDay {
+  /** `YYYY-MM-DD`, UTC. */
+  readonly dayUtc: string;
+  readonly count: number;
 }
 
 export interface DailyGrowthRow {
@@ -309,6 +334,8 @@ export interface AdminRepo {
   // Requirement 13 — Growth
   getGrowthTotals(): Promise<GrowthTotals>;
   getDailyGrowth(days?: number): Promise<readonly DailyGrowthRow[]>;
+  /** Purges per UTC day for the trailing `days` (default 7), zero-filled, oldest first. */
+  getPurgeLedgerDaily(days?: number): Promise<readonly PurgeLedgerDay[]>;
 
   // Requirement 18 — Photos
   listPhotoQueue(): Promise<readonly AdminPhotoQueueItem[]>;
@@ -907,6 +934,11 @@ export function createAdminRepo(pool: DbPool, redis: Redis): AdminRepo {
         email: string;
         created_at: string;
         display_name: string | null;
+        deletion_state: AdminDeletionState;
+        deletion_requested_at: string | null;
+        scheduled_purge_at: string | null;
+        purge_stage: number | string;
+        purge_attempts: number | string;
         completion_count: string;
         rating_count: string;
         note_count: string;
@@ -919,6 +951,11 @@ export function createAdminRepo(pool: DbPool, redis: Redis): AdminRepo {
           u.email,
           to_char(u.created_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS created_at,
           p.display_name,
+          u.deletion_state,
+          to_char(u.deletion_requested_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS deletion_requested_at,
+          to_char(u.scheduled_purge_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS scheduled_purge_at,
+          u.purge_stage,
+          u.purge_attempts,
           (SELECT COUNT(*)::int FROM completions WHERE user_id = u.id) AS completion_count,
           (SELECT COUNT(*)::int FROM ratings WHERE user_id = u.id) AS rating_count,
           (SELECT COUNT(*)::int FROM notes WHERE user_id = u.id) AS note_count,
@@ -932,6 +969,7 @@ export function createAdminRepo(pool: DbPool, redis: Redis): AdminRepo {
         FROM users u
         LEFT JOIN profiles p ON p.user_id = u.id
         WHERE lower(u.email) = lower($1)
+          AND u.deletion_state <> 'tombstone'
       `, [email]);
 
       if (userRes.rows.length === 0) {
@@ -960,6 +998,11 @@ export function createAdminRepo(pool: DbPool, redis: Redis): AdminRepo {
         email: row.email,
         createdAt: row.created_at,
         displayName: row.display_name,
+        deletionState: row.deletion_state,
+        deletionRequestedAt: row.deletion_requested_at,
+        scheduledPurgeAt: row.scheduled_purge_at,
+        purgeStage: Number(row.purge_stage),
+        purgeAttempts: Number(row.purge_attempts),
         completionCount: parseInt(row.completion_count, 10),
         ratingCount: parseInt(row.rating_count, 10),
         noteCount: parseInt(row.note_count, 10),
@@ -990,7 +1033,7 @@ export function createAdminRepo(pool: DbPool, redis: Redis): AdminRepo {
 
     async userExists(userId: string): Promise<boolean> {
       const res = await pool.query<{ exists: boolean }>(
-        `SELECT EXISTS(SELECT 1 FROM users WHERE id = $1) AS exists`,
+        `SELECT EXISTS(SELECT 1 FROM users WHERE id = $1 AND deletion_state <> 'tombstone') AS exists`,
         [userId],
       );
       return Boolean(res.rows[0]?.exists);
@@ -999,6 +1042,8 @@ export function createAdminRepo(pool: DbPool, redis: Redis): AdminRepo {
     async getGrowthTotals(): Promise<GrowthTotals> {
       const res = await pool.query<{
         total_users: string;
+        pending_deletion_count: string;
+        last_purge_at: string | null;
         total_trips: string;
         total_completions: string;
         total_ratings: string;
@@ -1007,7 +1052,9 @@ export function createAdminRepo(pool: DbPool, redis: Redis): AdminRepo {
         total_food_logs: string;
       }>(`
         SELECT
-          (SELECT COUNT(*)::int FROM users) AS total_users,
+          (SELECT COUNT(*)::int FROM users WHERE deletion_state = 'active') AS total_users,
+          (SELECT COUNT(*)::int FROM users WHERE deletion_state = 'pending_deletion') AS pending_deletion_count,
+          (SELECT to_char(MAX(purged_at), 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') FROM account_deletion_ledger) AS last_purge_at,
           (SELECT COUNT(*)::int FROM trips) AS total_trips,
           (SELECT COUNT(*)::int FROM completions) AS total_completions,
           (SELECT COUNT(*)::int FROM ratings) AS total_ratings,
@@ -1018,6 +1065,8 @@ export function createAdminRepo(pool: DbPool, redis: Redis): AdminRepo {
       const row = res.rows[0];
       return {
         totalUsers: parseInt(row?.total_users ?? '0', 10),
+        pendingDeletionCount: parseInt(row?.pending_deletion_count ?? '0', 10),
+        lastPurgeAt: row?.last_purge_at ?? null,
         totalTrips: parseInt(row?.total_trips ?? '0', 10),
         totalCompletions: parseInt(row?.total_completions ?? '0', 10),
         totalRatings: parseInt(row?.total_ratings ?? '0', 10),
@@ -1041,6 +1090,7 @@ export function createAdminRepo(pool: DbPool, redis: Redis): AdminRepo {
         SELECT to_char(created_at, 'YYYY-MM-DD') AS day, COUNT(*)::int AS count
         FROM users
         WHERE created_at >= $1::timestamptz
+          AND deletion_state <> 'tombstone'
         GROUP BY to_char(created_at, 'YYYY-MM-DD')
       `, [oldestDate]);
 
@@ -1072,6 +1122,31 @@ export function createAdminRepo(pool: DbPool, redis: Redis): AdminRepo {
         });
       }
       return result;
+    },
+
+    async getPurgeLedgerDaily(days = 7): Promise<readonly PurgeLedgerDay[]> {
+      const now = new Date();
+      // Oldest first, one entry per UTC day, today last.
+      const dayKeys: string[] = [];
+      for (let i = days - 1; i >= 0; i--) {
+        dayKeys.push(
+          new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - i)).toISOString().slice(0, 10),
+        );
+      }
+      const windowStart = new Date(`${dayKeys[0]}T00:00:00.000Z`);
+
+      // The ledger is pruned to 1000 rows, so this read is bounded. Bucketing in TypeScript keeps the UTC
+      // grouping correct by construction. The ledger has no user column: nothing here can name an account.
+      const res = await pool.query<{ purged_at: Date | string }>(
+        `SELECT purged_at FROM account_deletion_ledger WHERE purged_at >= $1::timestamptz`,
+        [windowStart],
+      );
+      const counts = new Map<string, number>();
+      for (const row of res.rows) {
+        const key = new Date(row.purged_at).toISOString().slice(0, 10);
+        counts.set(key, (counts.get(key) ?? 0) + 1);
+      }
+      return dayKeys.map((dayUtc) => ({ dayUtc, count: counts.get(dayUtc) ?? 0 }));
     },
 
     async listPhotoQueue(): Promise<readonly AdminPhotoQueueItem[]> {

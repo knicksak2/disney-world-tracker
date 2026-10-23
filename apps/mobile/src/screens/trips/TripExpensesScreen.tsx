@@ -70,6 +70,7 @@ import {
   tripExpenseKeys,
   type ListExpensesFilters,
 } from './tripExpenseApi';
+import { involvesDeletedUser, withDeletedUserNames } from '../../components/presentPerson';
 import { ExpenseFormModal } from './ExpenseFormModal';
 import { RefundModal } from './RefundModal';
 import { SettlementModal } from './SettlementModal';
@@ -248,10 +249,22 @@ export default function TripExpensesScreen({
   const callerMember = members.find((m) => m.userId === callerId);
   const isOrganizer = callerMember?.role === 'organizer';
 
-  const memberNameMap = useMemo(
-    () => new Map(members.map((m) => [m.userId, m.displayName])),
-    [members],
-  );
+  // The roster omits non-visible people, so a deleted payer / sharer / settlement
+  // party found in the balances or the ledger is named "Deleted user" here rather
+  // than falling back to a generic "Member" (account-deletion R6.4).
+  const memberNameMap = useMemo(() => {
+    const ids: string[] = [];
+    for (const b of netBalances) ids.push(b.memberId);
+    for (const p of pairwiseBalances) ids.push(p.memberIdA, p.memberIdB);
+    for (const item of ledgerItems) {
+      ids.push(item.payerId);
+      if ('recipientId' in item) ids.push(item.recipientId);
+    }
+    return withDeletedUserNames(
+      new Map(members.map((m) => [m.userId, m.displayName])),
+      ids,
+    );
+  }, [members, netBalances, pairwiseBalances, ledgerItems]);
 
   const guestMap = useMemo(
     () => new Map(guests.map((g) => [g.id, g])),
@@ -1331,7 +1344,7 @@ export default function TripExpensesScreen({
                               </View>
                             </View>
 
-                            {isNonzero ? (
+                            {isNonzero && !involvesDeletedUser(p.memberIdA, p.memberIdB) ? (
                               <Pressable
                                 style={styles.settleBtn}
                                 onPress={() => handleSettlePair(p)}
@@ -1683,7 +1696,12 @@ export default function TripExpensesScreen({
               </View>
 
               {/* Settle Up Action Button in Modal */}
-              {pairwiseBreakdownPair.aOwesBCents && pairwiseBreakdownPair.aOwesBCents !== 0 ? (
+              {pairwiseBreakdownPair.aOwesBCents &&
+              pairwiseBreakdownPair.aOwesBCents !== 0 &&
+              !involvesDeletedUser(
+                pairwiseBreakdownPair.memberIdA,
+                pairwiseBreakdownPair.memberIdB,
+              ) ? (
                 <View style={styles.pairwiseModalSettleRow}>
                   <Pressable
                     style={styles.pairwiseModalSettleBtn}

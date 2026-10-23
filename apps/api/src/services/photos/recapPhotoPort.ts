@@ -42,9 +42,11 @@ export class DefaultRecapPhotoPort implements RecapPhotoPort {
     const sql = `
       SELECT p.id, p.sort_at, p.width, p.height
         FROM photos p
+        LEFT JOIN users ou ON ou.id = p.owner_id
        WHERE p.target_kind = 'trip'
          AND p.target_id = $1
          AND p.status = 'approved'
+         AND (p.owner_id IS NULL OR ou.deletion_state = 'active')
          AND NOT EXISTS (
            SELECT 1 FROM user_blocks b
             WHERE (b.blocker_id = $2 AND b.blocked_id = p.owner_id)
@@ -187,9 +189,11 @@ interface AlbumRow {
 const SQL_RECAP_ALBUM_FIRST_PAGE = `
   SELECT p.id, p.sort_at, p.width, p.height
     FROM photos p
+    LEFT JOIN users ou ON ou.id = p.owner_id
    WHERE p.target_kind = 'trip'
      AND p.target_id = $1
      AND p.status = 'approved'
+         AND (p.owner_id IS NULL OR ou.deletion_state = 'active')
      AND NOT EXISTS (
        SELECT 1 FROM user_blocks b
         WHERE (b.blocker_id = $2 AND b.blocked_id = p.owner_id)
@@ -202,9 +206,11 @@ const SQL_RECAP_ALBUM_FIRST_PAGE = `
 const SQL_RECAP_ALBUM_PAGINATED = `
   SELECT p.id, p.sort_at, p.width, p.height
     FROM photos p
+    LEFT JOIN users ou ON ou.id = p.owner_id
    WHERE p.target_kind = 'trip'
      AND p.target_id = $1
      AND p.status = 'approved'
+         AND (p.owner_id IS NULL OR ou.deletion_state = 'active')
      AND (p.sort_at < $3 OR (p.sort_at = $3 AND p.id < $4))
      AND NOT EXISTS (
        SELECT 1 FROM user_blocks b
@@ -218,10 +224,12 @@ const SQL_RECAP_ALBUM_PAGINATED = `
 const SQL_RECAP_IS_ALBUM_PHOTO = `
   SELECT 1
     FROM photos p
+    LEFT JOIN users ou ON ou.id = p.owner_id
    WHERE p.id = $1
      AND p.target_kind = 'trip'
      AND p.target_id = $2
      AND p.status = 'approved'
+         AND (p.owner_id IS NULL OR ou.deletion_state = 'active')
      AND NOT EXISTS (
        SELECT 1 FROM user_blocks b
         WHERE (b.blocker_id = $3 AND b.blocked_id = p.owner_id)

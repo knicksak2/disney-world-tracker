@@ -227,6 +227,9 @@ describe('Food Photo Read Routes (Task 9.2)', () => {
     applyMigration(db, '0013_avatar_presets.sql');
     applyMigration(db, '0040_food_item_logging.sql');
     applyMigration(db, '0062_photo_uploads.sql');
+    // 0064's visibility views read friendships and trip_memberships (0015).
+    applyMigration(db, '0015_trips.sql');
+    applyMigration(db, '0064_account_deletion.sql');
 
     viewerId = randomUUID();
     friendId = randomUUID();

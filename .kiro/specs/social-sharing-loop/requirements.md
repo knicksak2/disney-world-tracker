@@ -258,3 +258,14 @@ Requirements 1 through 6 constitute Phase 1 and are independently shippable. Req
 2. WHEN the App navigates from the Inbox to the Friend_Profile_View for a Progress_Share, THE App SHALL perform the navigation across navigator boundaries such that the Friend_Profile_View is presented from its host stack.
 3. IF the sending User of a Progress_Share is no longer a Friend of the recipient, THEN THE App SHALL keep the recipient on the Inbox, SHALL NOT navigate to the Friend_Profile_View, and SHALL display a message indicating the sender's profile is unavailable.
 4. IF the Progress_Comparison data cannot be retrieved when the App navigates to the Friend_Profile_View from a Progress_Share, THEN THE App SHALL complete the navigation to the Friend_Profile_View and display the comparison-unavailable indication defined in Requirement 12.
+
+### Requirement 15: Pending and deleted accounts (added by the `account-deletion` spec)
+
+**User Story:** As a user who received a share from someone who then deleted their account, I want to keep the share without seeing who sent it, and I never want push notifications routed to or from a deactivated account. This requirement is additive; the full behavior is in `.kiro/specs/account-deletion/requirements.md` (Requirements 3.3, 5, 6, 11.6).
+
+#### Acceptance Criteria
+
+1. WHEN a user requests account deletion, THE Push_Registration_Service SHALL make every Push_Registration of that user inactive so no notification is delivered to it, and WHEN the account is purged THE service SHALL delete them; the App re-registers on the next sign-in as it does today (Requirement 8).
+2. WHILE an account is in `pending_deletion`, THE Notification_Service SHALL NOT send any push to it, and THE share recipient picker and Friend list SHALL omit it.
+3. WHILE the sender of a Share is in `pending_deletion`, AND after the sender's account is purged, THE Inbox SHALL still list the Share to its recipients with the sender shown as "Deleted user" and a generic avatar, SHALL return no sender id that resolves to the original account, and THE App SHALL NOT navigate to a Friend_Profile_View or Progress_Comparison from it (Requirement 14 does not apply to a Deleted_User_Placeholder sender).
+4. WHEN a recipient's account is purged, THE Sharing service SHALL delete that recipient's `share_recipients` rows and `share_reactions`, and SHALL leave the sender's `shares` row intact for the other recipients.

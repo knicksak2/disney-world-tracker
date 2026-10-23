@@ -165,7 +165,8 @@ async function loadProfileRow(
   userId: string,
 ): Promise<ProfileRow | null> {
   const result = await pool.query<ProfileRow>(
-    'SELECT user_id, display_name, avatar_preset FROM profiles WHERE user_id = $1',
+    // Through the view: a profile of an account that is not active is never served (account-deletion R5.1).
+    'SELECT user_id, display_name, avatar_preset FROM profile_identity WHERE user_id = $1 AND is_visible',
     [userId],
   );
   return result.rows[0] ?? null;

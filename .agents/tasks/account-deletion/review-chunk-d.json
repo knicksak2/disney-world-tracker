@@ -1,0 +1,11 @@
+{
+  "verdict": "APPROVED",
+  "findings": [
+    "RESOLVED (confirmed): the pass-1 blocker. visibility.trips.test.ts now cuts the real rode-with json_agg subquery out of the SQL getFeed sends, binds le.id to a seeded entry and asserts the alias id and 'Deleted user' while pending, the real id and name after restore, and that the SQL contains JOIN profile_identity pr and not rwt.tagged_member_id. Spot-checked: that file passes (19 tests, exit 0).",
+    "NON-BLOCKING (possible): tripExpenses/routes.ts guest add and rename keep a raw trip_memberships check, so a guest can be created under a pending sponsor and every expense naming it then fails with trip_party_deleted until restore. No requirement describes rejecting it; user decision, default is current behavior.",
+    "NON-BLOCKING (confirmed): pg-mem shims (correlated sub-selects, to_char, NULLIF, ESCAPE, unnest) and the LEFT JOIN users photo queries and ANY($1::uuid[]) forms are not exercised on real Postgres. Keep a gallery, an inbox, a feed with a pending rode-with tag and a net-balance read with a pending account on the operator's smoke list.",
+    "NON-BLOCKING (possible): chunk C pass 2 recorded one unidentified first-run gate failure that did not reproduce. If the final npm run verify fails on a pg-mem property test, capture the name with --reporter=dot.",
+    "VERIFIED: pins (composeServices 1, accountDeletion/repo 7, admin/repo 5, auth/routes 4, friends/repo 1, tripExpenses/repo 1; roster 13 files) came from the finished tree, no allowlist widened, money Properties 13 and 29 and badge Property 18 are fast-check at 100 runs, no stubs. Suite evidence is the coder's verify:api tail in code-status.md (533 files, 4154 tests, EXIT 0); I did not re-run it."
+  ],
+  "reviewDoc": "c:\\Users\\knick\\dev\\disney-app\\.agents\\tasks\\account-deletion/review-chunk-d.md"
+}

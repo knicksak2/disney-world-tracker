@@ -247,6 +247,15 @@ export const ERROR_CODES = [
   'photo_uploads_disabled',
   'photo_uploads_banned',
 
+  // -- Account deletion (account-deletion R2.4, R2.8, R12.10, R16.2, R16.5) ---
+  // `reauth_failed` / `reauth_required` are 403, never 401, so `apiRequest`
+  // does not sign the user out. `trip_party_deleted`: an expense or settlement
+  // write names a party that is no longer a visible user.
+  'reauth_failed',
+  'reauth_required',
+  'account_deletion_confirmation_invalid',
+  'trip_party_deleted',
+
   // -- Catch-all --------------------------------------------------------
   // Used by the global Fastify error hook for unhandled exceptions; the
   // client never sees a raw stack or constraint name.
@@ -425,6 +434,12 @@ export const errorCodeToHttpStatus: { readonly [K in ErrorCode]: number } = {
   photo_target_full: 409,
   photo_uploads_disabled: 503,
   photo_uploads_banned: 403,
+
+  // Account deletion (never 401)
+  reauth_failed: 403,
+  reauth_required: 403,
+  account_deletion_confirmation_invalid: 400,
+  trip_party_deleted: 409,
 
   // Catch-all
   internal_error: 500,

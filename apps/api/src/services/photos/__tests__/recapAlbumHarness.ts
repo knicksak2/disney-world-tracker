@@ -196,6 +196,7 @@ export function createRecapAlbumWorld(options: { includePhotos?: boolean } = {})
     '0040_food_item_logging.sql',
     '0062_photo_uploads.sql',
     '0063_trip_photos.sql',
+    '0064_account_deletion.sql',
   ]) {
     applyMigration(db, name);
   }

@@ -1545,6 +1545,37 @@ export function adminRoutes(options: AdminRoutesOptions): FastifyPluginAsync {
                 { header: 'Updated At', cell: (r) => localTime(r.updatedAt) },
               ]);
 
+              // Account-deletion R5.7, R8.12: admin sees a pending account with its status. Read-only: the page
+              // has no control that requests, cancels or accelerates a deletion (R17.4).
+              const deletionCardHtml =
+                user.deletionState === 'active'
+                  ? ''
+                  : `
+                  <h3 style="margin-top: 1rem; margin-bottom: 0.5rem;">Deletion</h3>
+                  <div class="metric-grid" data-testid="deletion-card">
+                    <div class="metric-card">
+                      <div class="metric-label">State</div>
+                      <div class="metric-val" style="font-size: 1.1rem;"><span class="mono">${escapeHtml(user.deletionState)}</span></div>
+                    </div>
+                    <div class="metric-card">
+                      <div class="metric-label">Requested At</div>
+                      <div class="metric-val" style="font-size: 1rem;">${localTime(user.deletionRequestedAt)}</div>
+                    </div>
+                    <div class="metric-card">
+                      <div class="metric-label">Scheduled Purge At</div>
+                      <div class="metric-val" style="font-size: 1rem;">${localTime(user.scheduledPurgeAt)}</div>
+                    </div>
+                    <div class="metric-card">
+                      <div class="metric-label">Purge Progress</div>
+                      <div class="metric-val" style="font-size: 1.1rem;">stage ${escapeHtml(user.purgeStage)} of 5</div>
+                      ${
+                        user.purgeAttempts > 0
+                          ? `<div class="text-xs text-muted" style="margin-top: 0.25rem;"><span class="badge badge-warning">${escapeHtml(user.purgeAttempts)} failed attempt(s): purge is failing; see the server log</span></div>`
+                          : ''
+                      }
+                    </div>
+                  </div>`;
+
               userDetailsHtml = `
                 <div class="card">
                   <h2>Account Details: ${escapeHtml(user.email)}</h2>
@@ -1562,6 +1593,7 @@ export function adminRoutes(options: AdminRoutesOptions): FastifyPluginAsync {
                       <div class="metric-val" style="font-size: 1rem;">${localTime(user.createdAt)}</div>
                     </div>
                   </div>
+                  ${deletionCardHtml}
 
                   <h3 style="margin-top: 1rem; margin-bottom: 0.5rem;">Engagement & Activity Counts</h3>
                   <div class="metric-grid">
@@ -1737,6 +1769,12 @@ export function adminRoutes(options: AdminRoutesOptions): FastifyPluginAsync {
         await renderAdminSection(reply, 'Growth & Activity', async () => {
           const totals = await options.repo.getGrowthTotals();
           const daily = await options.repo.getDailyGrowth(7);
+          const purges = await options.repo.getPurgeLedgerDaily(7);
+
+          const purgeTable = table(purges, [
+            { header: 'Date (UTC)', cell: (r) => `<span class="mono">${escapeHtml(r.dayUtc)}</span>` },
+            { header: 'Purges', cell: (r) => escapeHtml(r.count) },
+          ]);
 
           const dailyTable = table(daily, [
             { header: 'Date (UTC)', cell: (r) => `<span class="mono">${escapeHtml(r.date)}</span>` },
@@ -1763,8 +1801,16 @@ export function adminRoutes(options: AdminRoutesOptions): FastifyPluginAsync {
               <h2>System-Wide Activity Totals</h2>
               <div class="metric-grid">
                 <div class="metric-card">
-                  <div class="metric-label">Users</div>
+                  <div class="metric-label">Active users</div>
                   <div class="metric-val">${totals.totalUsers.toLocaleString()}</div>
+                </div>
+                <div class="metric-card">
+                  <div class="metric-label">Pending deletion</div>
+                  <div class="metric-val">${totals.pendingDeletionCount.toLocaleString()}</div>
+                </div>
+                <div class="metric-card">
+                  <div class="metric-label">Last purge (UTC)</div>
+                  <div class="metric-val" style="font-size: 1.1rem;">${totals.lastPurgeAt === null ? 'never' : localTime(totals.lastPurgeAt)}</div>
                 </div>
                 <div class="metric-card">
                   <div class="metric-label">Trips</div>
@@ -1795,6 +1841,10 @@ export function adminRoutes(options: AdminRoutesOptions): FastifyPluginAsync {
             <div class="card">
               <h2>Trailing 7-Day Daily Activity</h2>
               ${dailyTable}
+            </div>
+            <div class="card">
+              <h2>Account purges, trailing 7 days (UTC)</h2>
+              ${purgeTable}
             </div>
           `;
         });

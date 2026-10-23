@@ -221,6 +221,9 @@ describe('Core Photo Routes (Task 9.1)', () => {
     applyMigration(db, '0013_avatar_presets.sql');
     applyMigration(db, '0040_food_item_logging.sql');
     applyMigration(db, '0062_photo_uploads.sql');
+    // 0064's visibility views read friendships and trip_memberships (0015).
+    applyMigration(db, '0015_trips.sql');
+    applyMigration(db, '0064_account_deletion.sql');
 
     user1Id = randomUUID();
     user2Id = randomUUID();
@@ -765,6 +768,19 @@ describe('Core Photo Routes (Task 9.1)', () => {
       );
     `);
 
+    // 0. Wire contract (regression: the mobile client once unwrapped `res.blocks`, which is
+    // undefined for this route). With no blocks the body is a bare empty JSON ARRAY, never an
+    // envelope object such as `{ blocks: [] }`.
+    const resEmpty = await app.inject({
+      method: 'GET',
+      url: '/me/blocks',
+      headers: { authorization: 'Bearer session-token' },
+    });
+    expect(resEmpty.statusCode).toBe(200);
+    const emptyBody: unknown = JSON.parse(resEmpty.payload);
+    expect(Array.isArray(emptyBody)).toBe(true);
+    expect(emptyBody).toEqual([]);
+
     // 1. Both keys or neither -> validation_failed
     const resBad1 = await app.inject({
       method: 'POST',
@@ -838,8 +854,13 @@ describe('Core Photo Routes (Task 9.1)', () => {
       headers: { authorization: 'Bearer session-token' },
     });
     expect(resList.statusCode).toBe(200);
+    // Populated case is also a bare JSON array whose entries are exactly BlockedUserDTO.
+    expect(Array.isArray(JSON.parse(resList.payload))).toBe(true);
     const listBody = resList.json();
     expect(listBody).toHaveLength(1);
+    expect(Object.keys(listBody[0]).sort()).toEqual(
+      ['avatarPreset', 'blockId', 'createdAt', 'displayName']
+    );
     expect(listBody[0].blockId).toBe(blockBody.blockId);
     expect(listBody[0].displayName).toBeNull();
 

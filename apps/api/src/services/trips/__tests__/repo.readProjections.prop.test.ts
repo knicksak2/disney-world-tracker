@@ -249,6 +249,28 @@ function makeFakePool(store: Store): FakeQueryPool {
         return ok(rows);
       }
 
+      // ---- listLogEntries: the entries' tags, read in one more query (oldest first) ----
+      if (sql.startsWith('SELECT log_entry_id, tagged_member_id, state FROM rode_with_tags')) {
+        const [ids] = args as [readonly string[]];
+        return ok(
+          orderTagsAsc(store.tags.filter((t) => ids.includes(t.logEntryId))).map((t) => ({
+            log_entry_id: t.logEntryId,
+            tagged_member_id: t.taggedMemberId,
+            state: t.state,
+          })),
+        );
+      }
+
+      // ---- public ids of the tagged members (every member here is active: public id = id) ----
+      if (sql.startsWith('SELECT user_id, public_id, display_name, avatar_preset, is_visible FROM profile_identity')) {
+        const [ids] = args as [readonly string[]];
+        return ok(
+          ids
+            .filter((id) => store.profiles.has(id))
+            .map((id) => ({ user_id: id, public_id: id, display_name: store.profiles.get(id)!, avatar_preset: null, is_visible: true })),
+        );
+      }
+
       // ---- listPlannedItems: planned-item join projection (R9.9) -----------
       if (sql.startsWith('SELECT pi.id')) {
         const [tripId] = args as [string];

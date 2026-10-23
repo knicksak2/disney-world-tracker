@@ -688,8 +688,8 @@ export function useReportPhoto() {
 // ---------------------------------------------------------------------------
 
 export async function fetchBlocks(): Promise<readonly BlockedUserDTO[]> {
-  const res = await apiRequest<{ blocks: readonly BlockedUserDTO[] }>('GET', '/me/blocks');
-  return res.blocks;
+  // `GET /me/blocks` replies with a bare JSON array (apps/api photos/routes.ts), not an envelope.
+  return apiRequest<readonly BlockedUserDTO[]>('GET', '/me/blocks');
 }
 
 export function useBlocks() {

@@ -185,8 +185,9 @@ export function createReportsRepo(pool: DbPool): ReportsRepo {
       const sql = `
         SELECT b.id, b.blocked_id, b.created_at, pr.display_name, pr.avatar_preset
           FROM user_blocks b
-          LEFT JOIN profiles pr ON pr.user_id = b.blocked_id
+          LEFT JOIN profile_identity pr ON pr.user_id = b.blocked_id
          WHERE b.blocker_id = $1
+           AND COALESCE(pr.is_visible, TRUE)
          ORDER BY b.created_at DESC, b.id DESC;
       `;
       const res = await db.query<BlockWithProfileRow>(sql, [blockerId]);
@@ -305,7 +306,9 @@ export function createReportsRepo(pool: DbPool): ReportsRepo {
       client?: DbPool | PoolClient
     ): Promise<{ displayName: string; avatarPreset: string | null } | null> {
       const db = getDb(client);
-      const sql = `SELECT display_name, avatar_preset FROM profiles WHERE user_id = $1;`;
+      // Called with the id of ANOTHER user (the person being blocked), so it reads the view: an account that
+      // is not active yields no profile (account-deletion R5.1).
+      const sql = `SELECT display_name, avatar_preset FROM profile_identity WHERE user_id = $1 AND is_visible;`;
       const res = await db.query<{ display_name: string; avatar_preset: string | null }>(sql, [userId]);
       if (res.rows.length === 0) return null;
       return {

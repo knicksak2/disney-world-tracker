@@ -265,3 +265,16 @@ The following capabilities are explicitly out of scope for v1 and are noted as f
 2. WHEN a member creates or edits a `discount` Charge_Line, THE Mobile_App SHALL offer an "exclude alcohol items" toggle; WHEN enabled, THE Trip_Service SHALL scope that Charge_Line to exactly the Expense_Items on the Expense not flagged `isAlcohol`, consistent with Requirement 5.10's scoped-allocation rule.
 3. THE Trip_Service SHALL NOT infer or apply any alcohol-exclusion rule automatically based on Expense Category, restaurant link, or any other signal; exclusion SHALL occur only when the member explicitly enables it on a specific Charge_Line, because discount terms vary by promotion and the App has no authoritative source for which discounts exclude alcohol.
 4. WHEN the "exclude alcohol items" toggle is enabled on a Charge_Line and zero Expense_Items on the Expense are flagged `isAlcohol`, THE Trip_Service SHALL reject the Charge_Line with `trip_validation_failed` consistent with Requirement 5.10's zero-scope rejection, and THE Mobile_App SHALL surface that no alcohol items exist to exclude.
+
+### Requirement 15: Expenses involving a deleted account (added by the `account-deletion` spec)
+
+**User Story:** As a Trip_Member, I want the money on a Trip to stay correct when someone deletes their account, so that nobody's balance changes because a person left the app. This requirement is additive and extends Requirement 8.5; the full behavior is in `.kiro/specs/account-deletion/requirements.md` (Requirements 10.7, 12.7, 12.8, Appendix A).
+
+#### Acceptance Criteria
+
+1. WHEN a deleted account is purged, THE Trip_Service SHALL retain every Expense, Expense_Share, Expense_Tier, Tier_Count, Expense_Item assignment, Refund, Settlement, and Trip_Guest that referenced the account, with the account replaced by the Deleted_User_Placeholder, and SHALL NOT delete, merge, or alter the amount of any of them.
+2. THE Net_Balance of every other Trip_Member on every surviving Trip SHALL be identical before and after the purge.
+3. WHERE two distinct deleted accounts appear on the same Expense, Settlement, or Trip, THE Trip_Service SHALL keep them as two distinct participants so that no unique constraint is violated and no amounts are merged.
+4. WHILE an account is in `pending_deletion`, THE Trip_Service SHALL keep counting it in every Net_Balance and SHALL present it by the name "Deleted user"; only the display of the person changes.
+5. THE Trip_Service SHALL return a row in `getNetBalances` for every Trip_Member (including a `pending_deletion` one) and for every deleted-account placeholder that appears in the Trip's Expenses or Settlements, so the returned Net_Balances still sum to exactly zero (Requirement 6.6).
+6. THE Trip_Service SHALL reject creating or editing an Expense or Settlement that names a deleted or `pending_deletion` account as a party, and editing one whose stored parties include such an account, with `trip_party_deleted` (HTTP 409); such an Expense or Settlement can still be deleted under its existing authorization. Pairwise balances against such an account stay visible, labelled "Deleted user", with no settle control.

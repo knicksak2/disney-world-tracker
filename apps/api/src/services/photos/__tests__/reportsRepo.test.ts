@@ -114,7 +114,11 @@ describe('ReportsRepo (pg-mem)', () => {
 
     applyMigration(db, '0001_init.sql');
     applyMigration(db, '0062_photo_uploads.sql');
+    // Free-text avatar_preset (this suite stores arbitrary preset ids, so no 0013 CHECK). 0064's visibility
+    // views read it, friendships and trip_memberships (0015).
     db.public.none('ALTER TABLE profiles ADD COLUMN IF NOT EXISTS avatar_preset TEXT;');
+    applyMigration(db, '0015_trips.sql');
+    applyMigration(db, '0064_account_deletion.sql');
 
     user1Id = randomUUID();
     user2Id = randomUUID();
@@ -375,6 +379,7 @@ describe('Task 21.5 / Property 13: Trip report counting and autohide', () => {
     applyMigration(db, '0015_trips.sql');
     applyMigration(db, '0062_photo_uploads.sql');
     applyMigration(db, '0063_trip_photos.sql');
+    applyMigration(db, '0064_account_deletion.sql');
 
     organizerId = randomUUID();
     member1Id = randomUUID();

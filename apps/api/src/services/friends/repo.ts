@@ -56,6 +56,7 @@ import type { FriendRequestDTO } from '@dwt/shared';
 
 import type { DbPool } from '../../db/pool.js';
 import { AppError } from '../../errors/AppError.js';
+import { ACTIVE_USER_SQL } from '../accountDeletion/visibility.js';
 import { pair as canonicalPair } from './canonicalPair.js';
 
 // ---------------------------------------------------------------------------
@@ -230,6 +231,7 @@ async function searchUsers(
        FROM users u
        JOIN profiles p ON p.user_id = u.id
       WHERE u.id <> $1
+        AND ${ACTIVE_USER_SQL('u')}
         AND (p.display_name ILIKE $2 ESCAPE '\\'
              OR u.email::text ILIKE $2 ESCAPE '\\')
       ORDER BY lower(p.display_name) ASC, u.id ASC
@@ -309,7 +311,7 @@ async function sendRequest(
 
     // R8.10: phantom recipient → friend_recipient_unknown.
     const recipientExists = await client.query<{ id: string }>(
-      `SELECT id FROM users WHERE id = $1`,
+      `SELECT u.id FROM users u WHERE u.id = $1 AND ${ACTIVE_USER_SQL('u')}`,
       [recipientId],
     );
     if (recipientExists.rows.length === 0) {
@@ -323,7 +325,7 @@ async function sendRequest(
     // R8.7: existing friendship → duplicate_relationship.
     const friendshipExists = await client.query<{ exists: boolean }>(
       `SELECT EXISTS (
-         SELECT 1 FROM friendships
+         SELECT 1 FROM active_friendships
           WHERE user_lo_id = $1 AND user_hi_id = $2
        ) AS exists`,
       [lo, hi],
@@ -447,9 +449,12 @@ async function acceptRequest(
       sender_id: string;
       recipient_id: string;
     }>(
-      `SELECT sender_id, recipient_id
-         FROM friend_requests
-        WHERE id = $1 AND recipient_id = $2`,
+      // A request from a sender who is not active looks like a request that does not exist
+      // (account-deletion R5.2), so accepting it answers `friendship_not_found`.
+      `SELECT fr.sender_id, fr.recipient_id
+         FROM friend_requests fr
+         JOIN users su ON su.id = fr.sender_id AND ${ACTIVE_USER_SQL('su')}
+        WHERE fr.id = $1 AND fr.recipient_id = $2`,
       [requestId, recipientId],
     );
     const row = requestRow.rows[0];
@@ -516,8 +521,10 @@ async function declineRequest(
   requestId: string,
 ): Promise<boolean> {
   const result = await pool.query(
+    // Same rule as accept: a pending sender's request is "not found" (account-deletion R5.2).
     `DELETE FROM friend_requests
-      WHERE id = $1 AND recipient_id = $2`,
+      WHERE id = $1 AND recipient_id = $2
+        AND sender_id IN (SELECT su.id FROM users su WHERE ${ACTIVE_USER_SQL('su')})`,
     [requestId, recipientId],
   );
   return (result.rowCount ?? 0) > 0;
@@ -586,8 +593,8 @@ async function listFriendsAndRequests(
          p.display_name,
          p.avatar_preset,
          f.established_at
-       FROM friendships f
-       JOIN profiles p
+       FROM active_friendships f
+       JOIN profile_identity p
          ON p.user_id = (CASE WHEN f.user_lo_id = $1 THEN f.user_hi_id ELSE f.user_lo_id END)
       WHERE f.user_lo_id = $1 OR f.user_hi_id = $1
       ORDER BY lower(p.display_name) ASC, friend_id ASC`,
@@ -599,7 +606,7 @@ async function listFriendsAndRequests(
               p.display_name,
               fr.created_at
          FROM friend_requests fr
-         JOIN profiles p ON p.user_id = fr.sender_id
+         JOIN profile_identity p ON p.user_id = fr.sender_id AND p.is_visible
         WHERE fr.recipient_id = $1
         ORDER BY fr.created_at DESC, fr.id ASC`,
       [userId],
@@ -610,7 +617,7 @@ async function listFriendsAndRequests(
               p.display_name,
               fr.created_at
          FROM friend_requests fr
-         JOIN profiles p ON p.user_id = fr.recipient_id
+         JOIN profile_identity p ON p.user_id = fr.recipient_id AND p.is_visible
         WHERE fr.sender_id = $1
         ORDER BY fr.created_at DESC, fr.id ASC`,
       [userId],

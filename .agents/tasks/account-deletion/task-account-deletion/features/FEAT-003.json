@@ -1,0 +1,30 @@
+{
+  "id": "FEAT-003",
+  "type": "feat",
+  "description": "Service, runner, routes, auth integration, wiring and trip authorization (tasks.md tasks 8-11): service.ts + mail templates, purgeRunner.ts, session middleware defense + sessionId, routes.ts (reauth, deletion, cron), login/reset/web-fallback restore, composeServices.ts + server.ts wiring via structural ports, docs/hosting.md cron section, effectiveRole interim organizer. Depends on FEAT-001 and FEAT-002.",
+  "status": "pending",
+  "steps": [
+    "Task 8.1: finish ports.ts (LoggerPort, Scheduler, AccountDeletionServiceDeps, PurgeRunnerDeps with lockout comment 'best-effort: a Redis failure is logged at warn and never fails the account'); service.ts (reauth order: isLocked first, verify, recordFailure once, issueGrant only on success, never clearOnSuccess; requestDeletion; restore/restoreInTx/notifyRestored); additive sendDeletionScheduled/sendDeletionCancelled in auth/mailService.ts; service.test.ts, mailService.accountDeletion.test.ts (Properties 3, 4, 5).",
+    "Task 8.2: purgeRunner.ts (tryStart single-flight, runOnce, budget before claim/account/stage/chunk, failure + refs_remain accounting with absolute attempts, idle pass = two statements and no write, no bullmq import); purgeRunner.test.ts (Properties 14, 17, 31, 33).",
+    "Task 9.1: sessionMiddleware.ts optional deletion_state + reject non-active + request.sessionId; update makeSessionDbAdapter in composeServices.ts AND apps/api/test/smoke/harness.ts; tests incl. unrevoked pending session -> 401 (Property 24).",
+    "Task 9.2: accountDeletion/routes.ts (POST /me/account/deletion/reauth with reauthRateLimitConfig() in plugins/rateLimit.ts keyed on SHA-256 of bearer token and 403 reauth_failed never 401; POST /me/account/deletion; POST+HEAD /internal/account-deletion/purge/run with local cronGate secretMatches); routes.test.ts server.inject (Property 25).",
+    "Task 9.3: auth/routes.ts replace AuthSuccessBody with AuthSessionResponseDTO, handleLogin eligibility + restore (accountRestored only when restored), optional AuthRoutesOptions.accountRestore (fail closed), passwordResetRepo eligibility predicate with application-clock `now`, completeReset restoreInTx first in its own tx, thread port + now to reset + web fallback handlers; tests (Properties 7, 32). Do NOT write `delete-account` or `account/delete` in auth/routes.ts.",
+    "Task 9.4: composeServices.ts wiring after the photos block (accountDeletionLogger = createLogger(), createMailService({ logger }), photo port with photos-disabled fallback, TripPurgePhotoPort from createPhotosRepo(pool).softDeleteByTarget, aggregateRepo, lockout, config.session.secret), pass accountRestore: accountDeletionService to authRoutes(, register routes in server.ts; wiring test + source scan; docs/hosting.md 'Dedicated Account Deletion Cron (Purge_Cron)' section with crontab `35 8,20 * * *`, operator secret step and real-Postgres smoke list; retirement.smoke.test.ts stays green.",
+    "Task 10: trips/permissions.ts effectiveRole + RosterMember (pure), trips/effectiveRole.ts resolveEffectiveRole, use in authz.ts assertTripMember, trips/repo.ts lockMembership and composeServices roleOf; effectiveRole.prop.test.ts (Property 10) + role-reader guard + interim-organizer route test.",
+    "Task 11 checkpoint: `npm run verify:api` and an end-to-end server.inject walk (reauth, request, login restore, forced due date, purge run); report literal tail."
+  ],
+  "acceptance_criteria": [
+    "POST /me/account/deletion/reauth wrong password returns 403 reauth_failed (never 401) and calls recordFailure exactly once; success never calls clearOnSuccess.",
+    "Login and reset restore a pending account in grace (accountRestored: true only then); an ineligible account is byte-identical to an unknown email; a reset that loses the purge race changes nothing.",
+    "An unrevoked session for a pending user answers 401 through the real adapter SQL.",
+    "Purge cron endpoint: 401 without/with another cron's secret, 202 accepted, overlapping 202 in_flight, HEAD 202 empty; runner idle pass issues exactly two statements and no write.",
+    "`npm run verify:api` exits 0."
+  ],
+  "verification": [
+    "npx vitest run src/services/accountDeletion src/services/auth src/services/photos src/services/trips (in apps/api)",
+    "npm run typecheck (in apps/api)",
+    "npm run verify:api"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}

@@ -210,7 +210,7 @@ function makeFakePool(store: Store): FakePool {
           }
 
           // ---- membership set read for tag target validation (R10.4) --
-          if (sql.startsWith('SELECT user_id FROM trip_memberships')) {
+          if (sql.startsWith('SELECT user_id FROM active_trip_memberships')) {
             const [tripId] = params as [string];
             const rows =
               tripId === TRIP_ID

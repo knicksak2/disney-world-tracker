@@ -75,7 +75,7 @@ function makeFakePool(friendshipKeys: ReadonlySet<string>): {
   const pool = {
     async query(text: string, params: ReadonlyArray<unknown> = []) {
       queries.push({ text, params });
-      if (text.includes('FROM friendships')) {
+      if (text.includes('FROM active_friendships')) {
         const lo = String(params[0] ?? '');
         const hi = String(params[1] ?? '');
         return { rows: [{ exists: friendshipKeys.has(`${lo}|${hi}`) }] };
@@ -246,7 +246,7 @@ describe('Property 1: owner-or-friend authorization and opaque denial', () => {
               expect(queries).toHaveLength(0);
             } else {
               expect(queries).toHaveLength(1);
-              expect(queries[0]?.text).toContain('FROM friendships');
+              expect(queries[0]?.text).toContain('FROM active_friendships');
             }
           } else {
             // Deny path: throws an AppError with the canonical opaque
@@ -274,7 +274,7 @@ describe('Property 1: owner-or-friend authorization and opaque denial', () => {
 
             // Exactly one friendship lookup precedes the deny.
             expect(queries).toHaveLength(1);
-            expect(queries[0]?.text).toContain('FROM friendships');
+            expect(queries[0]?.text).toContain('FROM active_friendships');
           }
         }
       }),

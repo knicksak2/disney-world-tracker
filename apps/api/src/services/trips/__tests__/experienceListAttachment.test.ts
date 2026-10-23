@@ -144,6 +144,9 @@ describe('Trip Experience Lists — Properties 16 & 17', { timeout: 120_000 }, (
     applyMigration(db, '0050_experience_lists.sql');
     applyMigration(db, '0053_experience_list_pinning.sql');
     applyMigration(db, '0051_trip_experience_lists.sql');
+    // Reads go through the 0064 visibility views (profile_identity needs profiles.avatar_preset from 0013).
+    applyMigration(db, '0013_avatar_presets.sql');
+    applyMigration(db, '0064_account_deletion.sql');
 
     const rawPool = db.adapters.createPg().Pool;
     pool = withForUpdateCompat(new rawPool() as unknown as DbPool);

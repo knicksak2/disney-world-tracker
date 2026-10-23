@@ -27,6 +27,7 @@ describe('Admin Panel - Configuration Visibility & Secret Redaction (Requirement
   const SENTINEL_SAMPLING_SECRET = 'sentinel-sampling-cron-secret-xyz';
   const SENTINEL_PINS_SECRET = 'sentinel-pins-reconcile-secret-abc';
   const SENTINEL_TRIP_BOOKING_CRON_SECRET = 'sentinel-trip-booking-cron-secret-12345';
+  const SENTINEL_ACCOUNT_DELETION_CRON_SECRET = 'sentinel-account-deletion-cron-secret-54321';
   const SENTINEL_ADMIN_USER = username;
   const SENTINEL_ADMIN_PASS = password;
   const SENTINEL_PHOTO_CRON_SECRET = 'sentinel-photo-cron-secret-67890';
@@ -57,6 +58,15 @@ describe('Admin Panel - Configuration Visibility & Secret Redaction (Requirement
     pins: {
       reconcileCronSecret: SENTINEL_PINS_SECRET,
     },
+    accountDeletion: {
+      graceDays: 30,
+      cronSecret: SENTINEL_ACCOUNT_DELETION_CRON_SECRET,
+      purgeBatch: 10,
+      purgeTimeBudgetMs: 25000,
+      reauthWindowSeconds: 300,
+      chunkRows: 500,
+    },
+    support: { email: 'support@example.com' },
     tripBooking: {
       cronSecret: SENTINEL_TRIP_BOOKING_CRON_SECRET,
       reminder: {
@@ -213,6 +223,7 @@ describe('Admin Panel - Configuration Visibility & Secret Redaction (Requirement
     expect(body).not.toContain(SENTINEL_SAMPLING_SECRET);
     expect(body).not.toContain(SENTINEL_PINS_SECRET);
     expect(body).not.toContain(SENTINEL_TRIP_BOOKING_CRON_SECRET);
+    expect(body).not.toContain(SENTINEL_ACCOUNT_DELETION_CRON_SECRET);
     expect(body).not.toContain(SENTINEL_ADMIN_USER);
     expect(body).not.toContain(SENTINEL_ADMIN_PASS);
     expect(body).not.toContain(SENTINEL_PHOTO_CRON_SECRET);

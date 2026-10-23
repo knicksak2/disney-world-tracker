@@ -133,6 +133,9 @@ describe('Photos Documentation & Config Guard (Task 14.1 & 14.4)', () => {
 
     // User content section with objectionable content statement and support contact placeholder (Requirement 22.7)
     expect(privacyPolicy).toMatch(/user-generated content|objectionable content/i);
-    expect(privacyPolicy).toContain('[Support Contact Email]');
+    // The contact address is sourced from the SUPPORT_EMAIL env var (account-deletion R20.5); the old
+    // literal placeholder must never come back.
+    expect(privacyPolicy).toContain('SUPPORT_EMAIL');
+    expect(privacyPolicy).not.toContain('[Support Contact Email]');
   });
 });

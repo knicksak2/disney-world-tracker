@@ -274,6 +274,7 @@ describe('Task 20.2: Feed Enrichment (FeedPhotoPort & GET /trips/:id/feed)', () 
     applyMigration(db, '0015_trips.sql');
     applyMigration(db, '0062_photo_uploads.sql');
     applyMigration(db, '0063_trip_photos.sql');
+    applyMigration(db, '0064_account_deletion.sql');
 
     organizerId = randomUUID();
     authorMemberId = randomUUID();

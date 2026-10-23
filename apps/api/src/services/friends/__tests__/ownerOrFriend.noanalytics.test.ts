@@ -132,7 +132,7 @@ describe('assertOwnerOrFriend — no analytics on deny (R1.4)', () => {
     expect(pool.calls).toHaveLength(DENIED_PAIRS.length);
     for (const call of pool.calls) {
       expect(call.text).toContain('SELECT EXISTS');
-      expect(call.text).toContain('FROM friendships');
+      expect(call.text).toContain('FROM active_friendships');
       for (const pattern of VIEWING_ATTEMPT_PATTERNS) {
         expect(call.text).not.toMatch(pattern);
       }

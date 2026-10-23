@@ -45,7 +45,7 @@ import {
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 
-import { registerInputSchema } from '@dwt/shared';
+import { registerInputSchema, type AuthSessionResponseDTO } from '@dwt/shared';
 
 import { ApiError, apiRequest } from '../api/client';
 import type { AuthStackParamList } from '../navigation/RootNavigator';
@@ -61,16 +61,6 @@ import {
 } from '../theme/components';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'Register'>;
-
-/**
- * Server response shape for `POST /auth/register`. Mirrors the
- * `AuthSuccessBody` interface in `apps/api/src/services/auth/routes.ts`.
- */
-interface RegisterResponse {
-  user: { id: string; email: string };
-  profile: { displayName: string };
-  token: string;
-}
 
 /**
  * Per-field error copy used by both the client-side validator and
@@ -138,7 +128,7 @@ export default function RegisterScreen({ navigation }: Props): JSX.Element {
 
     setSubmitting(true);
     try {
-      const response = await apiRequest<RegisterResponse>(
+      const response = await apiRequest<AuthSessionResponseDTO>(
         'POST',
         '/auth/register',
         parsed.data,

@@ -99,8 +99,10 @@ export class DefaultFeedPhotoPort implements FeedPhotoPort {
                ELSE false
              END AS is_blocked
         FROM photos p
+        LEFT JOIN users ou ON ou.id = p.owner_id
        WHERE p.scope_id = $1
-         AND p.id = ANY($2);
+         AND p.id = ANY($2)
+         AND (p.owner_id IS NULL OR ou.deletion_state = 'active');
     `;
 
     const res2 = await this.pool.query<{

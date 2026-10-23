@@ -69,6 +69,8 @@ import type {
 
 import type { DbPool } from '../../db/pool.js';
 import { AppError } from '../../errors/AppError.js';
+import { ACTIVE_USER_SQL } from '../accountDeletion/visibility.js';
+import { scrubSharePayload } from '../accountDeletion/scrub.js';
 import { pair as canonicalPair } from '../friends/canonicalPair.js';
 
 // ---------------------------------------------------------------------------
@@ -296,7 +298,7 @@ async function createShareAtomic(
     }
     const friendshipQuery =
       `SELECT user_lo_id, user_hi_id
-         FROM friendships
+         FROM active_friendships
         WHERE (user_lo_id, user_hi_id) IN (${tuples.join(', ')})`;
     const friendshipResult = await client.query<{
       user_lo_id: string;
@@ -377,6 +379,7 @@ interface InboxRow {
   read: boolean;
   sender_id: string;
   sender_display_name: string;
+  sender_visible: boolean;
   payload_kind: SharePayloadKind;
   payload_snapshot: unknown;
   sent_at: Date | string;
@@ -410,15 +413,16 @@ async function listInbox(
   const result = await pool.query<InboxRow>(
     `SELECT sr.share_id,
             (sr.opened_at IS NOT NULL) AS read,
-            s.sender_id,
+            p.public_id AS sender_id,
             p.display_name AS sender_display_name,
+            p.is_visible AS sender_visible,
             s.payload_kind,
             s.payload_snapshot,
             s.sent_at,
             reaction.reaction AS my_reaction
        FROM share_recipients sr
        JOIN shares s ON s.id = sr.share_id
-       JOIN profiles p ON p.user_id = s.sender_id
+       JOIN profile_identity p ON p.user_id = s.sender_id
        LEFT JOIN share_reactions reaction
               ON reaction.share_id = sr.share_id
              AND reaction.recipient_id = sr.recipient_id
@@ -442,7 +446,7 @@ async function listInbox(
       senderId: row.sender_id,
       senderDisplayName: row.sender_display_name,
       payloadKind: row.payload_kind,
-      payload: parsePayload(row.payload_snapshot),
+      payload: presentPayload(row.payload_snapshot, row.sender_visible, row.sender_id),
       sentAt: toIsoTimestamp(row.sent_at),
       // The `share_reactions_value_chk` CHECK constraint guarantees the
       // stored value is a member of the Reaction_Vocabulary, so the raw
@@ -455,10 +459,14 @@ async function listInbox(
 
 /**
  * Cheap `COUNT(*)` companion to {@link listInbox} for the app-wide unread
- * indicator. Uses the exact predicate behind `listInbox`'s `unread` field
- * (`opened_at IS NULL AND recipient_deleted_at IS NULL`) so the badge count
- * and the inbox screen can never disagree, but skips the joins/projection so
- * it can be polled cheaply. `COUNT(*)` returns a single row; `pg` yields the
+ * indicator. Uses the predicate behind `listInbox`'s `unread` field
+ * (`opened_at IS NULL AND recipient_deleted_at IS NULL`) plus one more: the
+ * sender must be an active account (account-deletion R5.4, R5.14). So for
+ * active senders the badge count and the inbox screen can never disagree; the
+ * inbox header may show a larger number than this one by exactly the unread
+ * shares from senders who are pending, purging or purged, because the inbox
+ * still lists those shares (as "Deleted user") while the app-wide indicator
+ * never alerts for them. `COUNT(*)` returns a single row; `pg` yields the
  * bigint `count` as a string, so we parse it to a number.
  */
 async function countUnreadInbox(
@@ -468,6 +476,8 @@ async function countUnreadInbox(
   const result = await pool.query<{ count: string }>(
     `SELECT count(*) AS count
        FROM share_recipients sr
+       JOIN shares s ON s.id = sr.share_id
+       JOIN users su ON su.id = s.sender_id AND ${ACTIVE_USER_SQL('su')}
       WHERE sr.recipient_id = $1
         AND sr.opened_at IS NULL
         AND sr.recipient_deleted_at IS NULL`,
@@ -569,6 +579,7 @@ async function openShare(
 ): Promise<OpenedShareDetail | null> {
   const result = await pool.query<{
     sender_id: string;
+    sender_visible: boolean;
     payload_kind: SharePayloadKind;
     payload_snapshot: unknown;
     sent_at: Date | string;
@@ -581,9 +592,15 @@ async function openShare(
           AND recipient_deleted_at IS NULL
        RETURNING share_id
      )
-     SELECT s.sender_id, s.payload_kind, s.payload_snapshot, s.sent_at
+     -- LEFT JOIN + COALESCE(.., true): a sender with no profile row is read as visible and the payload is not
+     -- scrubbed. That is safe because every user, including a purged tombstone, always has a profile row, so a
+     -- missing row only means a sender who never existed in profile_identity (nothing to hide).
+     SELECT COALESCE(p.public_id, s.sender_id) AS sender_id,
+            COALESCE(p.is_visible, true) AS sender_visible,
+            s.payload_kind, s.payload_snapshot, s.sent_at
        FROM updated u
-       JOIN shares s ON s.id = u.share_id`,
+       JOIN shares s ON s.id = u.share_id
+       LEFT JOIN profile_identity p ON p.user_id = s.sender_id`,
     [shareId, recipientId],
   );
   const row = result.rows[0];
@@ -594,7 +611,7 @@ async function openShare(
     shareId,
     senderId: row.sender_id,
     payloadKind: row.payload_kind,
-    payload: parsePayload(row.payload_snapshot),
+    payload: presentPayload(row.payload_snapshot, row.sender_visible, row.sender_id),
     sentAt: toIsoTimestamp(row.sent_at),
   };
 }
@@ -669,12 +686,23 @@ function parsePayload(value: unknown): SharePayload {
   return value as SharePayload;
 }
 
+/**
+ * The payload as the reader sees it. While the sender is not an active account the embedded names and
+ * ids are replaced at read time (account-deletion R5.11); the stored row is never touched, so a
+ * restore brings the real values back with no action.
+ */
+function presentPayload(stored: unknown, senderVisible: boolean, publicSenderId: string): SharePayload {
+  const payload = parsePayload(stored);
+  // Only an explicit `false` scrubs: a row from an old fake without the flag is an active sender's.
+  return senderVisible === false ? (scrubSharePayload(payload, publicSenderId) as SharePayload) : payload;
+}
+
 async function getSenderDisplayName(
   pool: DbPool,
   senderId: string,
 ): Promise<string | null> {
   const result = await pool.query<{ display_name: string }>(
-    `SELECT display_name FROM profiles WHERE user_id = $1`,
+    `SELECT display_name FROM profile_identity WHERE user_id = $1`,
     [senderId],
   );
   return result.rows[0]?.display_name ?? null;

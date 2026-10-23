@@ -54,6 +54,7 @@ import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 
 import {
   buildAttentionState,
+  isDeletedUserId,
   toAttentionItem,
   type AttentionDomain,
   type AttentionItem,
@@ -224,6 +225,11 @@ function adaptRodeWithTag(dto: PendingRodeWithTagDTO): AttentionItem {
 function selectUnreadShares(data: InboxResponse): readonly AttentionItem[] {
   return data.items
     .filter((item) => !item.read)
+    // account-deletion R5.14: `GET /me/inbox` keeps a deleted sender's Share (as the
+    // Deleted_User_Placeholder) for browsing, but it must not alert: a pending alias
+    // and a purged tombstone both carry the `deadc0de-` prefix, so the prefix is the
+    // one client-side signal. The attention feed and the badge share this `select`.
+    .filter((item) => !isDeletedUserId(item.senderId))
     .map((item) => toAttentionItem('share', item));
 }
 

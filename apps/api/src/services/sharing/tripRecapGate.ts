@@ -64,7 +64,7 @@ export class DefaultRecapShareGate implements RecapShareGate {
     }
 
     const friendRes = await this.pool.query<{ exists: number }>(
-      `SELECT 1 as exists FROM friendships WHERE user_lo_id = $1 AND user_hi_id = $2`,
+      `SELECT 1 as exists FROM active_friendships WHERE user_lo_id = $1 AND user_hi_id = $2`,
       [lo, hi],
     );
 

@@ -28,7 +28,7 @@ export function createSenderDisplayNameResolver(
 ): (senderId: string) => Promise<string | null> {
   return async (senderId: string): Promise<string | null> => {
     const result = await pool.query<{ display_name: string }>(
-      `SELECT display_name FROM profiles WHERE user_id = $1`,
+      `SELECT display_name FROM profile_identity WHERE user_id = $1`,
       [senderId],
     );
     return result.rows[0]?.display_name ?? null;

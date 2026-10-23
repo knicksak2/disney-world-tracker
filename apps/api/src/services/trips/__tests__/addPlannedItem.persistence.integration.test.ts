@@ -134,6 +134,9 @@ describe('addPlannedItem — SQL INSERT persistence regression test', () => {
     applyMigration(memDb, '0028_planned_items_meal_period_snack.sql');
     applyMigration(memDb, '0031_planned_item_reservations.sql');
     applyMigration(memDb, '0045_trip_walk_wait_weighting.sql');
+  // Reads go through the 0064 visibility views (profile_identity needs profiles.avatar_preset from 0013).
+  applyMigration(memDb, '0013_avatar_presets.sql');
+  applyMigration(memDb, '0064_account_deletion.sql');
 
     const { Pool } = memDb.adapters.createPg();
     const rawPool = new Pool() as unknown as DbPool;
@@ -238,6 +241,9 @@ describe('addPlannedItem — SQL INSERT persistence regression test', () => {
     applyMigration(memDb, '0028_planned_items_meal_period_snack.sql');
     applyMigration(memDb, '0031_planned_item_reservations.sql');
     applyMigration(memDb, '0045_trip_walk_wait_weighting.sql');
+  // Reads go through the 0064 visibility views (profile_identity needs profiles.avatar_preset from 0013).
+  applyMigration(memDb, '0013_avatar_presets.sql');
+  applyMigration(memDb, '0064_account_deletion.sql');
 
     const { Pool } = memDb.adapters.createPg();
     const rawPool = new Pool() as unknown as DbPool;

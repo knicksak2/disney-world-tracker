@@ -98,6 +98,13 @@ Housekeeping is driven by an external authenticated cron job on cron-job.org:
 - The operator can select **Ban uploader** directly from the confirmation modal. Banning sets `users.banned_at`, preventing all subsequent photo initiate requests (`403 photo_uploads_banned`).
 - Strike history survives background sweeps: even if the photo row itself is later hard-deleted by the sweep, the uploader's strike count remains intact.
 
+### Account Deletion Calls `deleteAllForUser`
+- `PhotoService.deleteAllForUser` is now called by the account-deletion purge (`.kiro/specs/account-deletion`, requirement 15.4). When a user's grace period ends, the purge's photos stage soft-deletes every non-deleted photo the user owns, in chunks of at most `ACCOUNT_DELETION_CHUNK_ROWS` per call (the optional `{ limit }` argument), until none are left. This is the same soft delete as a user deleting a photo: the row is marked `deleted`, no new read URLs are minted, and this sweep (section 3) hard-deletes the storage objects on a later pass. The purge does not call the object store itself.
+- A later purge stage then sets `photos.owner_id` to `NULL` on those rows so the user row can be removed; the sweep still finds them through `listDeleted`.
+- The user's `photo_upload_strikes` and `photo_upload_counters` rows are deleted with the account. Reports the user filed about other photos are kept (`photo_reports.reporter_id` is re-pointed to a placeholder), so open-report counts and photo status do not change.
+- Trip photos of a trip that is deleted because its last member was purged are soft-deleted in the same transaction as the trip.
+- A purge that is waiting on photos is visible as an account stuck in `purging` with a rising `purge_attempts`; see `docs/hosting.md` ("Dedicated Account Deletion Cron").
+
 ---
 
 ## 5. Budget Alerts & Capacity Ceilings
@@ -178,7 +185,7 @@ The privacy policy (`docs/privacy-policy.md`) must explicitly disclose:
 ### Launch Gate: Public Hosting
 - `docs/privacy-policy.md` must be hosted at a publicly reachable URL.
 - Set `EXPO_PUBLIC_PRIVACY_POLICY_URL` in the mobile build environment (EAS build) before generating store release builds.
-- Fill in the `[Support Contact Email]` placeholder in `docs/privacy-policy.md` with an active support inbox.
+- Set `SUPPORT_EMAIL` (Render environment and local `apps/api/.env`) to an active, monitored support inbox. The public `/privacy` page renders it as the support contact, and the API refuses to boot without a valid address.
 
 ### App Store Submission Checklist
 - [ ] Published support contact email verified.

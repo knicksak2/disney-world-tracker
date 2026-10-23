@@ -73,6 +73,8 @@ function validBaseEnv(): NodeJS.ProcessEnv {
     SAMPLING_CRON_SECRET: 'test-cron-secret',
     PIN_RECONCILE_CRON_SECRET: 'test-pin-reconcile-secret',
     TRIP_BOOKING_CRON_SECRET: 'test-trip-booking-cron-secret',
+    ACCOUNT_DELETION_CRON_SECRET: 'test-account-deletion-cron-secret',
+    SUPPORT_EMAIL: 'support@example.com',
     ADMIN_PANEL_USERNAME: 'admin-user',
     ADMIN_PANEL_PASSWORD: 'admin-password',
   };

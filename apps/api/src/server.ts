@@ -98,6 +98,10 @@ import {
   type TripBookingRoutesOptions,
 } from './services/tripBooking/routes.js';
 import {
+  accountDeletionRoutes,
+  type AccountDeletionRoutesOptions,
+} from './services/accountDeletion/routes.js';
+import {
   pinRoutes,
   type PinRoutesOptions,
 } from './services/pins/routes.js';
@@ -262,6 +266,11 @@ export interface BuildServerServices {
    * settings, done marks, reminder mutes, and packing list.
    */
   readonly tripBooking?: TripBookingRoutesOptions;
+  /**
+   * Account deletion routes (account-deletion tasks 9.2, 9.4): the two session-gated `/me/account/deletion`
+   * routes and the `x-cron-secret`-gated purge cron route. Opt-in like every other service.
+   */
+  readonly accountDeletion?: AccountDeletionRoutesOptions;
   /**
    * Intelligence_Service routes (task 5). Wires the crowd calendar reads and 
    * the internal sampling cron endpoint (R3, R6, R11).
@@ -590,6 +599,10 @@ export function buildServer(
 
   if (services.tripExpenses !== undefined) {
     void app.register(tripExpenseRoutes(services.tripExpenses));
+  }
+
+  if (services.accountDeletion !== undefined) {
+    void app.register(accountDeletionRoutes(services.accountDeletion));
   }
 
   if (services.tripBooking !== undefined) {

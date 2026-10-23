@@ -132,7 +132,13 @@ describe('Planned List Completion Sync — migration / schema is unchanged', () 
         // planned-completion column/state without false-positiving on them.
         .replace(/\bcompletions\b/giu, '')
         .replace(/\bcompleted_on\b/giu, '')
-        .replace(/\bcompleted_at\b/giu, '');
+        .replace(/\bcompleted_at\b/giu, '')
+        // 0064 (account-deletion): the purge ledger's `outcome` column holds the
+        // values `completed` / `completed_with_warnings` (account-deletion R9.11).
+        // That is the outcome of an account purge, unrelated to planned-list
+        // completion; strip exactly that column clause so the guard still catches
+        // any other completion-ish column or state.
+        .replace(/DEFAULT 'completed' CHECK \(outcome IN \('completed','completed_with_warnings'\)\)/giu, '');
       // NOTE: a later migration may legitimately touch `planned_items` for
       // reasons unrelated to completion — the day-planning-optimization feature
       // adds scheduling columns (planned_date, is_fixed, priority, item_type,
