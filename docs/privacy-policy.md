@@ -3,7 +3,7 @@
 **Effective Date:** October 18, 2026  
 **Last Updated:** October 18, 2026
 
-Welcome to **Disney World Tracker** ("the App"). We respect your privacy and are committed to protecting the personal information you share with us. This Privacy Policy explains what data we collect, how it is processed and stored, who it is shared with, and your rights regarding your photos and account data.
+Welcome to **Disney World Tracker** ("the App"). We respect your privacy and are committed to protecting the personal information you share with us. This Privacy Policy explains what data we collect, how it is processed and stored, who it is shared with, and your rights regarding your photos and account data. For governing terms, user conduct rules, and our non-affiliation disclaimer, please review our [Terms of Service](/terms).
 
 ---
 
@@ -87,3 +87,9 @@ If you have questions about this Privacy Policy, wish to appeal a content decisi
 - **Email:** the support email address configured for this deployment (the SUPPORT_EMAIL setting). The hosted privacy page shows that address as a clickable mail link.
 
 *(Operator note: SUPPORT_EMAIL is required, and the API will not start without a valid, monitored address. No address is written into this document.)*
+
+---
+
+## 7. Disclaimer & Non-Affiliation
+
+Disney World Tracker is an independent, unofficial fan application and is not affiliated with, endorsed by, or authorized by The Walt Disney Company. For full trademark notices and disclaimers, see our [Terms of Service](/terms).

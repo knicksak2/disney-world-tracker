@@ -101,6 +101,7 @@ import {
   accountDeletionRoutes,
   type AccountDeletionRoutesOptions,
 } from './services/accountDeletion/routes.js';
+import { legalRoutes } from './services/legal/routes.js';
 import {
   pinRoutes,
   type PinRoutesOptions,
@@ -554,6 +555,9 @@ export function buildServer(
   // failing dependency cannot mark the instance dead. A separate
   // readiness probe is added in a later task.
   app.get('/health', async () => ({ status: 'ok' }));
+
+  // Public legal routes (/terms).
+  void app.register(legalRoutes());
 
   if (services.catalog !== undefined) {
     void app.register(catalogRoutes(services.catalog));

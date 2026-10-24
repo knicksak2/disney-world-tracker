@@ -273,6 +273,21 @@ describe('MainTabs structure (Requirements 1.1, 1.5, 6.5)', () => {
     expect(mockNavigate).toHaveBeenCalledWith('Explore', { screen: 'CatalogList' });
   });
 
+  it('configures Collection (Vault) tab tabPress listener to navigate to CollectionHome', () => {
+    const mainTabs = captureMainTabs();
+    const collectionScreen = mainTabs.screens.find((s) => s.name === 'Collection');
+    expect(collectionScreen).toBeDefined();
+    expect(collectionScreen?.listeners).toBeDefined();
+
+    const mockNavigate = jest.fn();
+    const listenersFactory = collectionScreen?.listeners as (arg: { navigation: { navigate: jest.Mock } }) => { tabPress: () => void };
+    const listeners = listenersFactory({ navigation: { navigate: mockNavigate } });
+    expect(listeners.tabPress).toBeDefined();
+
+    listeners.tabPress();
+    expect(mockNavigate).toHaveBeenCalledWith('Collection', { screen: 'CollectionHome' });
+  });
+
   it('does NOT register Friends, Profile, Catalog, or Stats as top-level tabs', () => {
     const mainTabs = captureMainTabs();
 

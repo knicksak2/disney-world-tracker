@@ -86,26 +86,41 @@ const config: ExpoConfig = {
   name: 'Disney World Tracker',
   slug: 'disney-tracker',
   owner: 'knicksak2s-team',
-  version: '0.0.0',
+  version: '0.1.0',
   orientation: 'portrait',
-  // NOTE: custom icon/splash/adaptive-icon assets are not yet committed, so
-  // Expo's built-in defaults are used. Add PNGs under `apps/mobile/assets/`
-  // and restore the `icon`, `splash`, and `android.adaptiveIcon` fields when
-  // branding is ready.
+  icon: './assets/icon.png',
+  backgroundColor: '#3d1c5c',
   userInterfaceStyle: 'automatic',
   assetBundlePatterns: ['**/*'],
   ios: {
     supportsTablet: true,
     bundleIdentifier: 'com.dwt.mobile',
+    infoPlist: {
+      NSCameraUsageDescription:
+        'Take photos of your Disney World food and trip memories to share with your crew.',
+      NSPhotoLibraryUsageDescription:
+        'Choose photos from your library to log Disney World dishes and trip memories.',
+    },
   },
   android: {
     package: 'com.dwt.mobile',
     softwareKeyboardLayoutMode: 'resize',
+    adaptiveIcon: {
+      foregroundImage: './assets/adaptive-icon.png',
+      backgroundColor: '#5b2a86',
+    },
     // FCM config for the `com.dwt.mobile` Firebase app. Expo's prebuild reads
     // this file and wires the Google Services Gradle plugin automatically, so
     // the native FCM SDK can obtain a device push token in a dev/production
     // build (remote push is unsupported in Expo Go, SDK 53+).
     googleServicesFile: './google-services.json',
+  },
+  web: {
+    splash: {
+      image: './assets/splash.png',
+      resizeMode: 'contain',
+      backgroundColor: '#3d1c5c',
+    },
   },
   // SDK 56 promotes `expo-status-bar` to a config plugin that must be
   // registered explicitly (expo install --fix / expo-doctor enforce this).

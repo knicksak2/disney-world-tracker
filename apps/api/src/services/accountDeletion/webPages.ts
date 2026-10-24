@@ -287,7 +287,7 @@ export function renderPrivacyPolicyHtml(opts: RenderPrivacyPolicyOptions): strin
   <div class="card">
     <h1>Privacy Policy</h1>
     <div class="meta"><strong>Effective Date:</strong> October 18, 2026 &nbsp;|&nbsp; <strong>Last Updated:</strong> October 18, 2026</div>
-    <p>Welcome to <strong>Disney World Tracker</strong> (&ldquo;the App&rdquo;). We respect your privacy and are committed to protecting the personal information you share with us. This Privacy Policy explains what data we collect, how it is processed and stored, who it is shared with, and your rights regarding your photos and account data.</p>
+    <p>Welcome to <strong>Disney World Tracker</strong> (&ldquo;the App&rdquo;). We respect your privacy and are committed to protecting the personal information you share with us. This Privacy Policy explains what data we collect, how it is processed and stored, who it is shared with, and your rights regarding your photos and account data. For governing terms, user conduct rules, and our non-affiliation disclaimer, please review our <a href="/terms">Terms of Service</a>.</p>
 
     <h2>1. Information We Collect</h2>
     <h3>Account &amp; Profile Data</h3>
@@ -355,6 +355,128 @@ export function renderPrivacyPolicyHtml(opts: RenderPrivacyPolicyOptions): strin
     <p>Any content violating these standards will be removed immediately without prior notice. App operators may issue strikes and permanently ban repeat offenders or severe violators from uploading content or using the application.</p>
     <h3>Support Contact Information</h3>
     <p>If you have questions about this Privacy Policy, wish to appeal a content decision, or need to report an urgent safety concern, please contact our support team at:</p>
+    <ul>
+      <li><strong>Email:</strong> <a href="mailto:${safeEmail}">${safeEmail}</a></li>
+    </ul>
+
+    <h2>7. Disclaimer &amp; Non-Affiliation</h2>
+    <p>Disney World Tracker is an independent, unofficial fan application and is not affiliated with, endorsed by, or authorized by The Walt Disney Company. For full trademark notices and disclaimers, see our <a href="/terms">Terms of Service</a>.</p>
+  </div>
+</body>
+</html>`;
+}
+
+export interface RenderTermsOfServiceOptions {
+  /** The deployment's configured `SUPPORT_EMAIL` (validated at boot); rendered HTML-escaped as a mailto link. */
+  readonly supportEmail: string;
+}
+
+/**
+ * Renders the public HTML Terms of Service page at `GET /terms`, mirroring
+ * `docs/terms-of-service.md` and linking to `/privacy` and `/account-deletion`.
+ */
+export function renderTermsOfServiceHtml(opts: RenderTermsOfServiceOptions): string {
+  const safeEmail = escapeHtml(opts.supportEmail);
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Terms of Service | Disney World Tracker</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; color: #1e293b; margin: 0; padding: 32px 16px; line-height: 1.65; }
+    .card { max-width: 760px; margin: 24px auto; background: #ffffff; border-radius: 16px; padding: 36px 32px; box-shadow: 0 4px 24px rgba(0,0,0,0.06); border: 1px solid #e2e8f0; }
+    h1 { font-size: 28px; font-weight: 700; color: #0f172a; margin: 0 0 8px 0; }
+    h2 { font-size: 19px; font-weight: 700; color: #0f172a; margin: 28px 0 10px 0; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px; }
+    h3 { font-size: 16px; font-weight: 600; color: #1e293b; margin: 18px 0 6px 0; }
+    p, li { font-size: 15px; color: #334155; }
+    ul, ol { padding-left: 22px; }
+    li { margin-bottom: 8px; }
+    .meta { font-size: 13px; color: #64748b; margin-bottom: 20px; }
+    a { color: #4f46e5; text-decoration: none; font-weight: 600; }
+    a:hover { text-decoration: underline; }
+    code { background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Terms of Service</h1>
+    <div class="meta"><strong>Effective Date:</strong> October 23, 2026 &nbsp;|&nbsp; <strong>Last Updated:</strong> October 23, 2026</div>
+    <p>Welcome to <strong>Disney World Tracker</strong> (&ldquo;the App&rdquo;). These Terms of Service (&ldquo;Terms&rdquo;) govern your access to and use of the Disney World Tracker application, website endpoints, and related services.</p>
+    <p>By creating an account, downloading, or using the App, you agree to be bound by these Terms. If you do not agree to these Terms, do not use the App.</p>
+
+    <h2>1. Unofficial Companion App &amp; Disney Trademark Disclaimer</h2>
+    <p><strong>Disney World Tracker is an independent, unofficial companion application created by park enthusiasts. It is not affiliated with, authorized by, endorsed by, or in any way officially connected with The Walt Disney Company, Disney Enterprises, Inc., or any of their subsidiaries or affiliates. The official Disney website can be found at <a href="https://disney.com" target="_blank" rel="noopener noreferrer">https://disney.com</a>.</strong></p>
+    <ul>
+      <li>All Disney-related marks, names, character names, park names, attraction names, logos, and emblems (including Walt Disney World, Magic Kingdom, EPCOT, Disney&rsquo;s Hollywood Studios, Disney&rsquo;s Animal Kingdom, and Lightning Lane) are registered trademarks or copyrights of The Walt Disney Company or its respective affiliates.</li>
+      <li>Any references to Disney trademarks, attraction names, or copyrighted works within the App are used strictly for informational, identification, and <strong>nominative fair use</strong> purposes.</li>
+      <li><strong>Operational Data Disclaimer:</strong> Wait times, park operating hours, crowd predictions, and dining availability are estimates provided for personal planning purposes only. Live park conditions fluctuate. Always refer to official Disney applications (<em>My Disney Experience</em>) and in-park cast members for authoritative information.</li>
+    </ul>
+
+    <h2>2. Third-Party Data &amp; Open-Source Attribution</h2>
+    <ul>
+      <li><strong>ThemeParks.wiki:</strong> Real-time wait times, operating hours, and live attraction status feeds are sourced from the community-driven <a href="https://themeparks.wiki" target="_blank" rel="noopener noreferrer">ThemeParks.wiki</a> project. We gratefully acknowledge ThemeParks.wiki and its contributors for making theme park data accessible.</li>
+      <li><strong>Motif &amp; Art Credits:</strong> Collectible pin motifs and avatar icons incorporate open-source icon libraries licensed under Creative Commons (CC BY 3.0 / 4.0) and MIT licenses. Full author attributions and license texts are accessible in-app via the Vault collection art credits surface.</li>
+    </ul>
+
+    <h2>3. Accounts &amp; Security</h2>
+    <p>To access certain features (such as itineraries, pin collection, friend connections, and photo uploads), you must register an account with a valid email address and password.</p>
+    <ul>
+      <li>You are responsible for safeguarding your login credentials and for all activities that occur under your account.</li>
+      <li>You must provide accurate and current registration information.</li>
+      <li>We reserve the right to suspend or terminate accounts that violate these Terms or threaten community safety.</li>
+    </ul>
+
+    <h2>4. User-Generated Content &amp; Code of Conduct</h2>
+    <p>The App allows users to upload content, including profile display names, avatar selections, food logs, dish photos, trip photos, and shared itineraries (&ldquo;User Content&rdquo;).</p>
+    <h3>Objectionable Content Policy</h3>
+    <p>We maintain a <strong>zero-tolerance policy</strong> for objectionable content and abusive users. You may not submit, post, or share any User Content that is:</p>
+    <ul>
+      <li>Defamatory, obscene, pornographic, sexually explicit, or indecent;</li>
+      <li>Violent, threatening, abusive, harassing, or promoting discrimination or hate speech;</li>
+      <li>Infringing any third party&rsquo;s intellectual property, privacy, or publicity rights;</li>
+      <li>Commercial advertising, promotional spam, or unauthorized solicitation;</li>
+      <li>Depicting or encouraging illegal activity or unsafe park behavior.</li>
+    </ul>
+    <p>All user photos are subject to automated safety screening (via OpenAI moderation and Google vision filters) and community reporting. Content found to violate these standards will be removed immediately without prior notice, and offending accounts may be permanently banned.</p>
+    <h3>Reporting and Blocking</h3>
+    <p>Users can report objectionable content directly from the photo viewer and can block any user to immediately hide all content from that user. You may manage blocked users in <strong>You &amp; Crew</strong> &rarr; <strong>Blocked Users</strong>.</p>
+
+    <h2>5. Proprietary Rights &amp; Restrictions on Use</h2>
+    <h3>Our Intellectual Property</h3>
+    <p>Except for third-party marks, open-source motif libraries, and third-party data feeds, the App&mdash;including its source code, proprietary algorithms (such as day-planning optimization and crowd prediction models), user interfaces, original pin artwork, text, and graphics&mdash;is owned by us and protected by copyright, trademark, and intellectual property laws.</p>
+    <h3>Limited License &amp; Prohibited Uses</h3>
+    <p>We grant you a personal, revocable, non-exclusive, non-transferable license to use the App solely for your personal, non-commercial vacation planning. You agree that you will not:</p>
+    <ul>
+      <li>Reverse engineer, decompile, disassemble, or attempt to derive the source code of the App or API;</li>
+      <li>Scrape, crawl, spider, or use automated means to harvest data or content from our servers or API endpoints;</li>
+      <li>Reproduce, redistribute, license, sell, or commercially exploit any part of the App or our proprietary pin designs without prior written permission;</li>
+      <li>Interfere with, overburden, or compromise the security and performance of our infrastructure.</li>
+    </ul>
+    <h3>License to Your Content</h3>
+    <p>You retain all ownership rights in the photos and text you upload. By submitting content to the App, you grant us a worldwide, non-exclusive, royalty-free license to host, store, re-encode, and display your content solely as necessary to provide the App&rsquo;s features (such as sharing with your trip members and friends) and enforce our safety policies.</p>
+
+    <h2>6. Privacy &amp; Account Deletion</h2>
+    <p>Your privacy is important to us. Our collection and use of personal data are detailed in our <a href="/privacy">Privacy Policy</a>.</p>
+    <p>You may initiate self-service account deletion at any time:</p>
+    <ul>
+      <li>In the mobile app: <strong>You &amp; Crew</strong> &rarr; <strong>Delete account</strong>.</li>
+      <li>On the web: Visit <a href="/account-deletion">/account-deletion</a>.</li>
+    </ul>
+
+    <h2>7. Disclaimers of Warranties</h2>
+    <p>THE APP AND ALL CONTENT, OPERATIONAL DATA, AND SERVICES ARE PROVIDED ON AN &ldquo;AS IS&rdquo; AND &ldquo;AS AVAILABLE&rdquo; BASIS WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE, ACCURACY, OR NON-INFRINGEMENT.</p>
+    <p>WE DO NOT WARRANT THAT THE APP WILL BE UNINTERRUPTED, SECURE, OR ERROR-FREE, OR THAT WAIT TIMES, SHOWTIMES, OR DINING STATUSES WILL BE ACCURATE OR REFLECT REAL-TIME PARK EXPERIENCES.</p>
+
+    <h2>8. Limitation of Liability</h2>
+    <p>TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, IN NO EVENT SHALL DISNEY WORLD TRACKER, ITS OPERATORS, OR CONTRIBUTORS BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, OR ANY LOSS OF PROFITS, DATA, USE, OR GOODWILL, ARISING OUT OF OR IN CONNECTION WITH YOUR USE OF OR INABILITY TO USE THE APP.</p>
+
+    <h2>9. Changes to These Terms</h2>
+    <p>We reserve the right to modify these Terms at any time. When changes are made, we will update the &ldquo;Last Updated&rdquo; date at the top of this document. Continued use of the App following any changes constitutes acceptance of the modified Terms.</p>
+
+    <h2>10. Support Contact Information</h2>
+    <p>If you have questions about these Terms, need support, or wish to appeal a content decision, please contact our support team at:</p>
     <ul>
       <li><strong>Email:</strong> <a href="mailto:${safeEmail}">${safeEmail}</a></li>
     </ul>

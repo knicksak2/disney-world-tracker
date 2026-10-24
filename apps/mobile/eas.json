@@ -8,7 +8,9 @@
       "developmentClient": true,
       "distribution": "internal",
       "env": {
-        "API_BASE_URL": "https://dwt-api.onrender.com"
+        "API_BASE_URL": "https://dwt-api.onrender.com",
+        "EXPO_PUBLIC_PRIVACY_POLICY_URL": "https://dwt-api.onrender.com/privacy",
+        "EXPO_PUBLIC_TERMS_OF_SERVICE_URL": "https://dwt-api.onrender.com/terms"
       }
     },
     "preview": {
@@ -17,13 +19,17 @@
         "buildType": "apk"
       },
       "env": {
-        "API_BASE_URL": "https://dwt-api.onrender.com"
+        "API_BASE_URL": "https://dwt-api.onrender.com",
+        "EXPO_PUBLIC_PRIVACY_POLICY_URL": "https://dwt-api.onrender.com/privacy",
+        "EXPO_PUBLIC_TERMS_OF_SERVICE_URL": "https://dwt-api.onrender.com/terms"
       }
     },
     "production": {
       "autoIncrement": true,
       "env": {
-        "API_BASE_URL": "https://dwt-api.onrender.com"
+        "API_BASE_URL": "https://dwt-api.onrender.com",
+        "EXPO_PUBLIC_PRIVACY_POLICY_URL": "https://dwt-api.onrender.com/privacy",
+        "EXPO_PUBLIC_TERMS_OF_SERVICE_URL": "https://dwt-api.onrender.com/terms"
       }
     }
   },

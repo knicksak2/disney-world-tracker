@@ -13,6 +13,7 @@ import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Linking,
   Pressable,
   ScrollView,
   Text,
@@ -24,7 +25,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { isAvatarPresetId, MAX_INLINE_FRIENDS, type ProfileDTO } from '@dwt/shared';
 
-import { ApiError, apiRequest } from '../../api/client';
+import { ApiError, apiRequest, resolveBaseUrl } from '../../api/client';
+import { PRIVACY_POLICY_URL, TERMS_OF_SERVICE_URL } from '../../photos/constants';
 import { makeStyles } from '../../theme/makeStyles';
 import { withAlpha } from '../../theme/theme';
 import { useAppTheme, usePalette } from '../../theme/useAppTheme';
@@ -466,6 +468,44 @@ export default function YouAndCrewScreen(): JSX.Element {
             </Pressable>
           </Card>
 
+          <Card style={styles.settingsCard} testID="you-and-crew-terms-of-service-card">
+            <Pressable
+              style={styles.blockedUsersRow}
+              onPress={() => {
+                const url = TERMS_OF_SERVICE_URL || `${resolveBaseUrl()}/terms`;
+                void Linking.openURL(url);
+              }}
+              accessibilityRole="link"
+              accessibilityLabel="Terms of Service"
+              testID="terms-of-service-entry-button"
+            >
+              <View style={styles.settingsCardHeader}>
+                <Ionicons name="newspaper-outline" size={16} color={t.color.primaryFg} />
+                <Text style={styles.settingsTitle}>Terms of Service</Text>
+              </View>
+              <Ionicons name="open-outline" size={18} color={t.color.textSecondary} />
+            </Pressable>
+          </Card>
+
+          <Card style={styles.settingsCard} testID="you-and-crew-privacy-policy-card">
+            <Pressable
+              style={styles.blockedUsersRow}
+              onPress={() => {
+                const url = PRIVACY_POLICY_URL || `${resolveBaseUrl()}/privacy`;
+                void Linking.openURL(url);
+              }}
+              accessibilityRole="link"
+              accessibilityLabel="Privacy Policy"
+              testID="privacy-policy-entry-button"
+            >
+              <View style={styles.settingsCardHeader}>
+                <Ionicons name="document-text-outline" size={16} color={t.color.primaryFg} />
+                <Text style={styles.settingsTitle}>Privacy Policy</Text>
+              </View>
+              <Ionicons name="open-outline" size={18} color={t.color.textSecondary} />
+            </Pressable>
+          </Card>
+
           <Card style={styles.settingsCard} testID="you-and-crew-delete-account-card">
             <Pressable
               style={styles.blockedUsersRow}
@@ -492,6 +532,15 @@ export default function YouAndCrewScreen(): JSX.Element {
               disabled={logoutMutation.isPending}
               testID="you-and-crew-logout"
             />
+          </View>
+
+          <View style={styles.disclaimerBlock} testID="you-and-crew-legal-disclaimer">
+            <Text style={styles.disclaimerText}>
+              Disney World Tracker is an independent, unofficial companion application and is not
+              affiliated with, endorsed by, or sponsored by The Walt Disney Company. All Disney
+              trademarks, service marks, and trade names are the property of their respective owners.
+              Wait times and park schedules are estimates for personal planning purposes.
+            </Text>
           </View>
         </View>
       </ScrollView>
@@ -711,5 +760,16 @@ const useStyles = makeStyles((t) => ({
   errorText: {
     ...t.typography.meta,
     color: t.color.danger,
+  },
+  disclaimerBlock: {
+    paddingHorizontal: t.spacing.sm,
+    paddingTop: t.spacing.md,
+    alignItems: 'center',
+  },
+  disclaimerText: {
+    ...t.typography.meta,
+    color: t.color.textSecondary,
+    textAlign: 'center',
+    lineHeight: 18,
   },
 }));

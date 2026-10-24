@@ -214,6 +214,11 @@ export function MainTabsNavigator(): JSX.Element {
                 }
               : {}),
           }}
+          listeners={({ navigation }) => ({
+            tabPress: () => {
+              navigation.navigate('Collection', { screen: 'CollectionHome' });
+            },
+          })}
         />
       </MainTabs.Navigator>
     </View>

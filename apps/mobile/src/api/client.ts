@@ -7,14 +7,14 @@
  *        • resolves the base URL from `app.config.ts` via `expo-constants`
  *        • attaches `Authorization: Bearer <token>` from secure storage
  *        • parses the uniform error envelope into a typed `ApiError`
- *        • on 401, clears the persisted session token and notifies
- *          listeners so the navigator can flip back to the auth stack
- *          (R6.10).
+ *        • on 401 (excluding payload credential failures like `invalid_credentials`),
+ *          clears the persisted session token and notifies listeners so the navigator
+ *          can flip back to the auth stack (R6.10).
  *
  *   2. The unauthorized-callback registry — the navigator subscribes
  *      via `setOnUnauthorizedCallback` so that any layer of the app
- *      that observes a 401 (including `apiRequest` itself) can call
- *      `notifyUnauthorized()` and trigger the auth-stack reset.
+ *      that observes an expired/unauthorized session (including `apiRequest` itself)
+ *      can call `notifyUnauthorized()` and trigger the auth-stack reset.
  *
  * The registry is intentionally module-local so the client does not
  * have to know who triggered the 401 — every registered listener
@@ -41,9 +41,9 @@ export type UnauthorizedCallback = () => void;
 let onUnauthorized: UnauthorizedCallback | null = null;
 
 /**
- * Register a callback that runs when the API client observes a 401
- * response. Replaces any previously registered callback. Pass `null`
- * to clear.
+ * Register a callback that runs when the API client observes an unauthorized
+ * session response (401 with an expired or revoked session token). Replaces any
+ * previously registered callback. Pass `null` to clear.
  *
  * Per R6.10, the navigator uses this to clear the session token and
  * route back to the auth stack as soon as the server reports the
@@ -57,7 +57,7 @@ export function setOnUnauthorizedCallback(
 
 /**
  * Invoke the currently registered unauthorized callback, if any. Used
- * by the API client when it sees a 401 response.
+ * by the API client when it sees an unauthorized session response.
  */
 export function notifyUnauthorized(): void {
   if (onUnauthorized !== null) {
@@ -125,7 +125,7 @@ export type ApiMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
  * builds, dev menus). If none of the sources surfaces a base URL we
  * throw — there is no useful default for a network call.
  */
-function resolveBaseUrl(): string {
+export function resolveBaseUrl(): string {
   const extra =
     (Constants.expoConfig?.extra as { apiBaseUrl?: unknown } | undefined) ??
     ((Constants as unknown as { manifest?: { extra?: { apiBaseUrl?: unknown } } })
@@ -152,8 +152,9 @@ function resolveBaseUrl(): string {
  *     `Content-Type` header).
  *   - Reads the persisted bearer token from secure storage and
  *     attaches it as `Authorization: Bearer <token>` when present.
- *   - On 401: clears the persisted token and fires the unauthorized
- *     callback (R6.10) before throwing an `ApiError`.
+ *   - On 401 (excluding payload credential failures like `invalid_credentials`):
+ *     clears the persisted token and fires the unauthorized callback (R6.10)
+ *     before throwing an `ApiError`.
  *   - On any non-2xx: parses the uniform error envelope into an
  *     `ApiError`. If the response body is not a valid envelope, falls
  *     back to `internal_error`.
@@ -205,18 +206,20 @@ export async function apiRequest<T = unknown>(
 
   const response = await fetch(url, init);
 
-  if (response.status === 401) {
-    // R6.10: once the server reports the credential is invalid, the
-    // app must stop using it. Clear before notifying so any listener
-    // that re-renders the navigator does not race against a still-
-    // present token.
-    await clearSessionToken();
-    notifyUnauthorized();
-    throw await buildApiError(response);
-  }
-
   if (!response.ok) {
-    throw await buildApiError(response);
+    const error = await buildApiError(response);
+    if (response.status === 401 && error.code !== 'invalid_credentials') {
+      // R6.10: once the server reports the session credential is invalid, the
+      // app must stop using it. Clear before notifying so any listener
+      // that re-renders the navigator does not race against a still-
+      // present token.
+      // Note: `invalid_credentials` is a payload credential failure (such as a wrong
+      // current password on `/auth/change-password` or wrong credentials on `/auth/login`),
+      // not an expired/revoked session, so it must not log the caller out.
+      await clearSessionToken();
+      notifyUnauthorized();
+    }
+    throw error;
   }
 
   if (response.status === 204) {
@@ -261,14 +264,13 @@ export async function apiFetchText(
   };
   const response = await fetch(url, requestInit);
 
-  if (response.status === 401) {
-    await clearSessionToken();
-    notifyUnauthorized();
-    throw await buildApiError(response);
-  }
-
   if (!response.ok) {
-    throw await buildApiError(response);
+    const error = await buildApiError(response);
+    if (response.status === 401 && error.code !== 'invalid_credentials') {
+      await clearSessionToken();
+      notifyUnauthorized();
+    }
+    throw error;
   }
 
   return response.text();

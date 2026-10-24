@@ -9,7 +9,7 @@
  */
 
 import React from 'react';
-import { StyleSheet } from 'react-native';
+import { Linking, StyleSheet } from 'react-native';
 import { fireEvent, render, screen, waitFor, act } from '@testing-library/react-native';
 import {
   NavigationContainer,
@@ -205,6 +205,8 @@ describe('Delete account: entry and three-step flow', () => {
       const order: string[] = [];
       const wanted = new Set([
         'blocked-users-entry-button',
+        'terms-of-service-entry-button',
+        'privacy-policy-entry-button',
         'delete-account-entry-button',
         'you-and-crew-logout',
       ]);
@@ -223,6 +225,8 @@ describe('Delete account: entry and three-step flow', () => {
 
       expect(order).toEqual([
         'blocked-users-entry-button',
+        'terms-of-service-entry-button',
+        'privacy-policy-entry-button',
         'delete-account-entry-button',
         'you-and-crew-logout',
       ]);
@@ -235,6 +239,48 @@ describe('Delete account: entry and three-step flow', () => {
       expect(screen.getByTestId('delete-account-step-review')).toBeTruthy();
       expect(callsTo('POST', REAUTH_PATH)).toHaveLength(0);
       expect(callsTo('POST', DELETE_PATH)).toHaveLength(0);
+    });
+
+    it('renders the Privacy Policy link row and opens the hosted privacy policy URL when pressed (R20.5)', async () => {
+      const openUrlSpy = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
+      try {
+        renderApp();
+        await screen.findByTestId('profile-display-name');
+
+        const privacyLink = screen.getByTestId('privacy-policy-entry-button');
+        expect(privacyLink.props.accessibilityRole).toBe('link');
+        expect(privacyLink.props.accessibilityLabel).toBe('Privacy Policy');
+        expect(screen.getByText('Privacy Policy')).toBeTruthy();
+
+        fireEvent.press(privacyLink);
+        expect(openUrlSpy).toHaveBeenCalledWith('http://test.local/privacy');
+      } finally {
+        openUrlSpy.mockRestore();
+      }
+    });
+
+    it('renders the Terms of Service link row, opens the hosted terms URL when pressed, and renders the in-app Disney disclaimer (R4.1-R4.5)', async () => {
+      const openUrlSpy = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
+      try {
+        renderApp();
+        await screen.findByTestId('profile-display-name');
+
+        const termsLink = screen.getByTestId('terms-of-service-entry-button');
+        expect(termsLink.props.accessibilityRole).toBe('link');
+        expect(termsLink.props.accessibilityLabel).toBe('Terms of Service');
+        expect(screen.getByText('Terms of Service')).toBeTruthy();
+
+        fireEvent.press(termsLink);
+        expect(openUrlSpy).toHaveBeenCalledWith('http://test.local/terms');
+
+        const disclaimer = screen.getByTestId('you-and-crew-legal-disclaimer');
+        expect(disclaimer).toBeTruthy();
+        expect(
+          screen.getByText(/not affiliated with, endorsed by, or sponsored by The Walt Disney Company/i),
+        ).toBeTruthy();
+      } finally {
+        openUrlSpy.mockRestore();
+      }
     });
   });
 

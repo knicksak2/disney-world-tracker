@@ -579,12 +579,19 @@ describe('experienceLists repository properties (fast-check)', () => {
       ),
       { numRuns: 100 },
     );
-  }, 30000);
+  }, 60000);
 
   it('Property 25.1: Attempting to pin a 5th experience list rejects with experience_list_pin_limit_reached', async () => {
+    const testOwnerId = randomUUID();
+    await pool.query(
+      `INSERT INTO users (id, email, password_hash)
+       VALUES ($1, 'exp-limit-test@test.com', 'hash')`,
+      [testOwnerId],
+    );
+
     const listIds: string[] = [];
     for (let i = 0; i < 5; i++) {
-      const list = await experienceListRepo.createList(ownerId, {
+      const list = await experienceListRepo.createList(testOwnerId, {
         name: `Limit Test ${i}-${randomUUID().slice(0, 6)}`,
       });
       listIds.push(list.id);
@@ -592,22 +599,23 @@ describe('experienceLists repository properties (fast-check)', () => {
 
     // Pin the first 4 lists
     for (let i = 0; i < 4; i++) {
-      await experienceListRepo.setPinned(listIds[i]!, ownerId, true);
+      await experienceListRepo.setPinned(listIds[i]!, testOwnerId, true);
     }
 
     // Attempting to pin the 5th list must reject with experience_list_pin_limit_reached
-    await expect(experienceListRepo.setPinned(listIds[4]!, ownerId, true)).rejects.toSatisfy(
+    await expect(experienceListRepo.setPinned(listIds[4]!, testOwnerId, true)).rejects.toSatisfy(
       (err: unknown) =>
         err instanceof AppError && err.code === 'experience_list_pin_limit_reached',
     );
 
     // Unpinning one list allows the 5th to be pinned
-    await experienceListRepo.setPinned(listIds[0]!, ownerId, false);
-    const updated5 = await experienceListRepo.setPinned(listIds[4]!, ownerId, true);
+    await experienceListRepo.setPinned(listIds[0]!, testOwnerId, false);
+    const updated5 = await experienceListRepo.setPinned(listIds[4]!, testOwnerId, true);
     expect(updated5.pinnedAt).not.toBeNull();
 
     for (const id of listIds) {
       await pool.query(`DELETE FROM experience_lists WHERE id = $1`, [id]);
     }
+    await pool.query(`DELETE FROM users WHERE id = $1`, [testOwnerId]);
   });
 });

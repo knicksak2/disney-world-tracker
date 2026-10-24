@@ -173,7 +173,7 @@
   - Verify: `npx vitest run src/services/photos/__tests__/photos.guards.test.ts src/services/accountDeletion/__tests__/photosScope.guard.test.ts` in `apps/api`.
   - _Requirements: 17.7, 18.3_
 
-- [ ] 17. Documentation, spec housekeeping, and residual review findings
+- [x] 17. Documentation, spec housekeeping, and residual review findings
   - Update `docs/privacy-policy.md` sections 4 and 5 (path in the app, the configured grace period, signing in cancels it, what is deleted, what is kept anonymized, and that provider backups age out on the provider's schedule; state a backup retention period only if verified; also record that sign-in is email and password only, R13.1); add the `deleteAllForUser`-is-now-called-by-the-purge note to `docs/photos-runbook.md` (R15.4); confirm `docs/hosting.md`, `render.yaml` and `apps/api/.env.example` edits from tasks 2.1 and 9.4 are present.
   - Capture the two residual NIT findings from `.agents/tasks/account-deletion/design-review.json` (round 5) as explicit, additive edits: (a) add one sentence to `design.md` "Notification_Center: the pending-versus-purged rule" saying `GET /me/inbox/unread-count` is retained for API consumers and tests and the app's badge is derived from the `['inbox']` feed through `selectUnreadShares`; (b) append "best-effort: a Redis failure is logged at `warn` and never fails the account" to the `PurgeRunnerDeps.lockout` field comment in `design.md` (the matching code comment is made in task 8.1). Edit additively only; do not renumber or delete any requirement, criterion or section.
   - Run the Kiro spec validator (Kiro Spec Format diagnostics) on `account-deletion/requirements.md`, `design.md` and `tasks.md`, on `trip-expenses/requirements.md`, and on the eight amended specs (`photo-uploads`, `trips`, `trip-expenses`, `admin-panel`, `social-sharing-loop`, `notification-center`, `password-reset`, `disney-world-tracker`); every file must report no diagnostics and use only `- [ ]` / `- [x]` markers. If the validator is not available to the executor, say so plainly and do not claim the files are clean.
@@ -202,6 +202,9 @@
     - Add `SUPPORT_EMAIL` to `config.ts` (required, trimmed, `.email()`, exposed as `config.support.email`), `apps/api/.env.example` (fake example value only there) and `render.yaml` (`sync: false`, comment); add `support: { email }` to every full `AppConfig` fixture and `SUPPORT_EMAIL` to every full env-object fixture. Change `renderPrivacyPolicyHtml` to `({ graceDays, supportEmail })` rendering an escaped `mailto:` link, wire `app.config.support.email` in `GET /privacy`, remove the placeholder and the "owner must replace" note from `docs/privacy-policy.md`, `docs/photos-runbook.md` and `photos.docs.guard.test.ts`. Tests: config tests (missing, blank, malformed rejected; valid trimmed), `webPages.prop.test.ts` (escaped mailto, hostile-character property, placeholder never present, drift test no longer expects the placeholder), `routes.test.ts` (`GET /privacy` shows the configured email, escaped, and not the placeholder).
     - Operator: add `SUPPORT_EMAIL` to the Render environment and to local `apps/api/.env` and `.env.dev`; the API refuses to boot without it.
     - _Requirements: 20.4_
+  - [x] 20.5 In-app Privacy Policy link on `YouAndCrewScreen` and EAS build env (`YouAndCrewScreen.tsx`, `eas.json`, `.env.example`)
+    - Add a "Privacy Policy" card and row (`testID="privacy-policy-entry-button"`, `accessibilityRole="link"`, `accessibilityLabel="Privacy Policy"`) in the settings section of `apps/mobile/src/screens/youAndCrew/YouAndCrewScreen.tsx` that opens `PRIVACY_POLICY_URL || `${resolveBaseUrl()}/privacy`` via `Linking.openURL`. Configure `"EXPO_PUBLIC_PRIVACY_POLICY_URL": "https://dwt-api.onrender.com/privacy"` in `apps/mobile/eas.json` (`development`, `preview`, `production` build profiles) and document it in `apps/mobile/.env.example`. Add an RNTL interaction test in `apps/mobile/src/screens/youAndCrew/__tests__/DeleteAccountFlow.test.tsx` asserting that pressing `privacy-policy-entry-button` calls `Linking.openURL` with `'http://test.local/privacy'`.
+    - _Requirements: 20.5_
 
 ## Notes
 
@@ -255,7 +258,8 @@ Waves group tasks whose dependencies are all satisfied by earlier waves. Tasks i
     { "id": 25, "tasks": ["19.3"] },
     { "id": 26, "tasks": ["20.1", "20.2"] },
     { "id": 27, "tasks": ["20.3"] },
-    { "id": 28, "tasks": ["20.4"] }
+    { "id": 28, "tasks": ["20.4"] },
+    { "id": 29, "tasks": ["20.5"] }
   ]
 }
 ```

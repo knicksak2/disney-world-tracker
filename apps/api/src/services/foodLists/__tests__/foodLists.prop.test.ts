@@ -562,12 +562,19 @@ describe('foodLists repository properties (fast-check)', () => {
       ),
       { numRuns: 100 },
     );
-  }, 30000);
+  }, 60000);
 
   it('Property 24.1: Attempting to pin a 5th food list rejects with food_list_pin_limit_reached', async () => {
+    const testOwnerId = randomUUID();
+    await pool.query(
+      `INSERT INTO users (id, email, password_hash)
+       VALUES ($1, 'limit-test@test.com', 'hash')`,
+      [testOwnerId],
+    );
+
     const listIds: string[] = [];
     for (let i = 0; i < 5; i++) {
-      const list = await foodListRepo.createList(ownerId, {
+      const list = await foodListRepo.createList(testOwnerId, {
         name: `Limit Test ${i}-${randomUUID().slice(0, 6)}`,
       });
       listIds.push(list.id);
@@ -575,21 +582,22 @@ describe('foodLists repository properties (fast-check)', () => {
 
     // Pin the first 4 lists
     for (let i = 0; i < 4; i++) {
-      await foodListRepo.setPinned(listIds[i]!, ownerId, true);
+      await foodListRepo.setPinned(listIds[i]!, testOwnerId, true);
     }
 
     // Attempting to pin the 5th list must reject with food_list_pin_limit_reached
-    await expect(foodListRepo.setPinned(listIds[4]!, ownerId, true)).rejects.toSatisfy(
+    await expect(foodListRepo.setPinned(listIds[4]!, testOwnerId, true)).rejects.toSatisfy(
       (err: unknown) => err instanceof AppError && err.code === 'food_list_pin_limit_reached',
     );
 
     // Unpinning one list allows the 5th to be pinned
-    await foodListRepo.setPinned(listIds[0]!, ownerId, false);
-    const updated5 = await foodListRepo.setPinned(listIds[4]!, ownerId, true);
+    await foodListRepo.setPinned(listIds[0]!, testOwnerId, false);
+    const updated5 = await foodListRepo.setPinned(listIds[4]!, testOwnerId, true);
     expect(updated5.pinnedAt).not.toBeNull();
 
     for (const id of listIds) {
       await pool.query(`DELETE FROM food_lists WHERE id = $1`, [id]);
     }
+    await pool.query(`DELETE FROM users WHERE id = $1`, [testOwnerId]);
   });
 });

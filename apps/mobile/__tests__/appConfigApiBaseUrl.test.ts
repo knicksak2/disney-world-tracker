@@ -11,7 +11,7 @@
  * case mutates the environment, writes a temp env file where needed, and
  * re-imports the module in isolation.
  */
-import { existsSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const HOSTED_DEFAULT = 'https://dwt-api.onrender.com';
@@ -121,5 +121,84 @@ describe('app.config.ts apiBaseUrl resolution', () => {
   it('defaults to the local Android-emulator route for a plain dev run', () => {
     // No APP_ENV, no API_BASE_URL, not production => local default.
     expect(resolveApiBaseUrl()).toBe(LOCAL_DEFAULT);
+  });
+
+  it('sets pre-release version 0.1.0 and iOS camera/photo-library usage strings', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const config = require('../app.config').default as {
+      version?: string;
+      ios?: { infoPlist?: Record<string, string> };
+    };
+    expect(config.version).toBe('0.1.0');
+    expect(config.ios?.infoPlist?.NSCameraUsageDescription).toEqual(expect.any(String));
+    expect(config.ios?.infoPlist?.NSCameraUsageDescription?.length).toBeGreaterThan(10);
+    expect(config.ios?.infoPlist?.NSPhotoLibraryUsageDescription).toEqual(expect.any(String));
+    expect(config.ios?.infoPlist?.NSPhotoLibraryUsageDescription?.length).toBeGreaterThan(10);
+  });
+
+  // Feature: legal-disclaimers-and-terms, Property 5: App Store & Google Play Packaging Asset Integrity
+  it('wires icon, splash, and android.adaptiveIcon to valid 1024x1024 PNG assets on disk', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const config = require('../app.config').default as {
+      icon?: string;
+      backgroundColor?: string;
+      web?: {
+        splash?: { image?: string; resizeMode?: string; backgroundColor?: string };
+      };
+      android?: {
+        adaptiveIcon?: { foregroundImage?: string; backgroundColor?: string };
+      };
+    };
+
+    expect(config.icon).toBe('./assets/icon.png');
+    expect(config.backgroundColor).toBe('#3d1c5c');
+    expect(config.web?.splash).toEqual({
+      image: './assets/splash.png',
+      resizeMode: 'contain',
+      backgroundColor: '#3d1c5c',
+    });
+    expect(config.android?.adaptiveIcon).toEqual({
+      foregroundImage: './assets/adaptive-icon.png',
+      backgroundColor: '#5b2a86',
+    });
+
+    const parsePngIhdr = (relPath: string) => {
+      const fullPath = join(process.cwd(), relPath);
+      expect(existsSync(fullPath)).toBe(true);
+      const buf = readFileSync(fullPath);
+      // PNG signature: 89 50 4E 47 0D 0A 1A 0A
+      expect(buf.subarray(0, 8).toString('hex')).toBe('89504e470d0a1a0a');
+      expect(buf.subarray(12, 16).toString('ascii')).toBe('IHDR');
+      return {
+        width: buf.readUInt32BE(16),
+        height: buf.readUInt32BE(20),
+        bitDepth: buf.readUInt8(24),
+        colorType: buf.readUInt8(25),
+      };
+    };
+
+    // icon.png: 1024x1024 opaque RGB (colorType 2) required by Apple App Store
+    expect(parsePngIhdr('./assets/icon.png')).toEqual({
+      width: 1024,
+      height: 1024,
+      bitDepth: 8,
+      colorType: 2,
+    });
+
+    // adaptive-icon.png: 1024x1024 transparent RGBA (colorType 6) for Android foreground
+    expect(parsePngIhdr('./assets/adaptive-icon.png')).toEqual({
+      width: 1024,
+      height: 1024,
+      bitDepth: 8,
+      colorType: 6,
+    });
+
+    // splash.png: 1024x1024 opaque RGB (colorType 2) on #3d1c5c background
+    expect(parsePngIhdr('./assets/splash.png')).toEqual({
+      width: 1024,
+      height: 1024,
+      bitDepth: 8,
+      colorType: 2,
+    });
   });
 });

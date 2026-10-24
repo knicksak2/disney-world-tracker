@@ -10,6 +10,7 @@ import {
   escapeHtml,
   formatPurgeDate,
   renderPrivacyPolicyHtml,
+  renderTermsOfServiceHtml,
   renderWebAccountDeletionFormHtml,
   renderWebAccountDeletionSuccessHtml,
   validateWebDeletionInput,
@@ -293,6 +294,51 @@ describe('webPages unit & property tests', () => {
       email: 'reader@example.com',
       message: 'Please enter your password.',
     });
+  });
+
+  // Feature: legal-disclaimers-and-terms, Property 1: Terms HTML rendering and escaping
+  it('Property 1: renderTermsOfServiceHtml stays synchronized with docs/terms-of-service.md headings and key topics', () => {
+    const here = dirname(fileURLToPath(import.meta.url));
+    const mdPath = resolve(here, '..', '..', '..', '..', '..', '..', 'docs', 'terms-of-service.md');
+    const md = readFileSync(mdPath, 'utf8');
+    const html = renderTermsOfServiceHtml({ supportEmail: SUPPORT_EMAIL });
+    const plainHtml = html
+      .replace(/&amp;/g, '&')
+      .replace(/&ldquo;|&rdquo;/g, '"')
+      .replace(/&rsquo;/g, "'")
+      .replace(/&rarr;/g, '->')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ');
+
+    const headings = [...md.matchAll(/^#{2,3}\s+(.+)$/gm)].map((m) => m[1]!.trim());
+    expect(headings.length).toBeGreaterThanOrEqual(8);
+    for (const h of headings) {
+      expect(plainHtml, `missing heading from docs/terms-of-service.md: "${h}"`).toContain(h);
+    }
+  });
+
+  // Feature: legal-disclaimers-and-terms, Property 1: Terms HTML rendering and escaping
+  it('Property 1: renderTermsOfServiceHtml includes Disney disclaimer, ThemeParks.wiki credit, links, and safely escapes support email', () => {
+    fc.assert(
+      fc.property(hostileEmailArb, (supportEmail) => {
+        const html = renderTermsOfServiceHtml({ supportEmail });
+
+        expect(html).toContain('Terms of Service');
+        expect(html).toContain('The Walt Disney Company');
+        expect(html).toContain('nominative fair use');
+        expect(html).toContain('ThemeParks.wiki');
+        expect(html).toContain('href="/privacy"');
+        expect(html).toContain('href="/account-deletion"');
+        expect(html).toContain('href="mailto:');
+
+        // Escaping check: the mailto contains an escaped version and no raw injection characters
+        if (supportEmail.includes('<') || supportEmail.includes('>') || supportEmail.includes('"')) {
+          expect(html).not.toContain(`mailto:${supportEmail}`);
+        }
+      }),
+      RUNS,
+    );
   });
 });
 

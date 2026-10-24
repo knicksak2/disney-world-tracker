@@ -1376,8 +1376,9 @@ For any submitted `email`, `password`, and `confirmation` string on `POST /accou
 4. All user-supplied values rendered into HTML (`email`, error messages) are HTML-escaped so arbitrary inputs containing `<`, `>`, `&`, `"`, `'` never inject unescaped HTML tags or attributes.
 5. `GET /account-deletion` and `GET /privacy` return HTTP `200` (`text/html`) describing the deletion policy and linking to each other, with `X-Frame-Options: DENY` and `Content-Security-Policy: frame-ancestors 'none'` on all three routes and `Cache-Control: no-store` on `GET /account-deletion` and `POST /account-deletion`, and the rendered `/privacy` page stays synchronized with `docs/privacy-policy.md`.
 6. *(Added with R20.4.)* `renderPrivacyPolicyHtml({ graceDays, supportEmail })` renders the Support Contact line as exactly `<a href="mailto:ESC">ESC</a>` where `ESC = escapeHtml(supportEmail)`, so for any email-like string containing `<`, `>`, `&`, `"`, `'` no raw metacharacter reaches the href or the text; the literal `[Support Contact Email]` and any "must replace" note never appear in the output (and `docs/privacy-policy.md` no longer contains them). `GET /privacy` renders the `SUPPORT_EMAIL` the app was configured with. `loadConfig` rejects a missing, blank or malformed `SUPPORT_EMAIL` (message names the variable) and accepts a valid one, trimmed, as `config.support.email` (covered under Property 23's config tests).
+7. *(Added with R20.5.)* On `YouAndCrewScreen`, pressing the `privacy-policy-entry-button` control (`accessibilityRole="link"`, `accessibilityLabel="Privacy Policy"`) opens `PRIVACY_POLICY_URL` when non-empty and otherwise `${resolveBaseUrl()}/privacy` via `Linking.openURL`.
 
-**Validates: Requirements 19.1, 19.2, 19.3, 19.4, 19.5, 19.6, 19.7, 19.8, 20.1, 20.2, 20.4**
+**Validates: Requirements 19.1, 19.2, 19.3, 19.4, 19.5, 19.6, 19.7, 19.8, 20.1, 20.2, 20.4, 20.5**
 
 ## Error Handling
 
