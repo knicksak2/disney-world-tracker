@@ -49,7 +49,7 @@ jest.mock('../../../api/client', () => {
 // Imports of modules under test (after the mocks above).
 // ---------------------------------------------------------------------------
 
-import TripDetailScreen from '../TripDetailScreen';
+import TripDetailScreen, { deriveGlanceCard } from '../TripDetailScreen';
 import { ApiError, apiRequest as mockedApiRequest } from '../../../api/client';
 import type { TripDTO } from '@dwt/shared';
 import { StyleSheet } from 'react-native';
@@ -434,6 +434,115 @@ describe('Trip_Detail_View hub (R18.1, R18.6)', () => {
     fireEvent.press(openScheduleBtn);
     expect(navigation.navigate).toHaveBeenCalledWith('TripSchedule', {
       tripId: TRIP_ID,
+    });
+  });
+
+  test('Live glance card (Task 25.8 / 25.8.3c): shows Today: EPCOT when only Day_Park exists, shows reservation when one exists, and shows old quiet copy when neither exists', async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const tripWithDayPark: TripDTO = {
+      ...TRIP,
+      dayTouringHours: {
+        [today]: {
+          startingPark: 'EPCOT',
+        },
+      },
+    };
+
+    // 1. Only Day_Park exists for today -> renders "Today: EPCOT"
+    apiRequestMock.mockImplementation(async (_method: string, path: string) => {
+      if (path === `/trips/${TRIP_ID}`) return tripWithDayPark;
+      if (path === `/trips/${TRIP_ID}/planned-items`) return [];
+      if (path === '/me') return { user: { id: 'user-1' } };
+      if (path === `/trips/${TRIP_ID}/members`) return [];
+      if (path === `/trips/${TRIP_ID}/feed`) return [];
+      throw new Error(`unexpected path ${path}`);
+    });
+    const nav1 = makeNavigation();
+    renderDetail(nav1);
+
+    const glance1 = await screen.findByTestId('trip-detail-glance-rest');
+    expect(glance1).toBeTruthy();
+    expect(screen.getByText('Today: EPCOT')).toBeTruthy();
+    expect(screen.queryByText('No Scheduled Plans Today')).toBeNull();
+
+    // 2. Both Day_Park and reservation exist for today -> reservation takes precedence
+    apiRequestMock.mockImplementation(async (_method: string, path: string) => {
+      if (path === `/trips/${TRIP_ID}`) return tripWithDayPark;
+      if (path === `/trips/${TRIP_ID}/planned-items`) {
+        return [
+          {
+            id: 'item-res-1',
+            experienceId: 'exp-biergarten',
+            experienceName: 'Biergarten Restaurant',
+            park: 'epcot',
+            plannedDate: today,
+            plannedTime: '18:00',
+            reservationKind: 'dining',
+            partySize: 4,
+          },
+        ];
+      }
+      if (path === '/me') return { user: { id: 'user-1' } };
+      if (path === `/trips/${TRIP_ID}/members`) return [];
+      if (path === `/trips/${TRIP_ID}/feed`) return [];
+      throw new Error(`unexpected path ${path}`);
+    });
+    const nav2 = makeNavigation();
+    renderDetail(nav2);
+
+    const resCard = await screen.findByTestId('trip-detail-glance-reservation');
+    expect(resCard).toBeTruthy();
+    expect(screen.getByText('Biergarten Restaurant')).toBeTruthy();
+    expect(screen.queryByText('Today: EPCOT')).toBeNull();
+
+    // 3. Neither exists -> shows old quiet copy
+    apiRequestMock.mockImplementation(async (_method: string, path: string) => {
+      if (path === `/trips/${TRIP_ID}`) return TRIP;
+      if (path === `/trips/${TRIP_ID}/planned-items`) return [];
+      if (path === '/me') return { user: { id: 'user-1' } };
+      if (path === `/trips/${TRIP_ID}/members`) return [];
+      if (path === `/trips/${TRIP_ID}/feed`) return [];
+      throw new Error(`unexpected path ${path}`);
+    });
+    const nav3 = makeNavigation();
+    renderDetail(nav3);
+
+    const quietCard = await screen.findByTestId('trip-detail-glance-rest');
+    expect(quietCard).toBeTruthy();
+    expect(screen.getByText('No Scheduled Plans Today')).toBeTruthy();
+    expect(screen.getByText('Relax at your resort or explore Disney Springs!')).toBeTruthy();
+  });
+
+  describe('deriveGlanceCard unit tests (Task 25.8)', () => {
+    const testDate = '2026-10-01';
+
+    it('returns Today: <Park> when dayPark is a known park and no items are planned', () => {
+      const glance = deriveGlanceCard([], testDate, undefined, 'EPCOT');
+      expect(glance.type).toBe('quiet');
+      expect(glance.title).toBe('Today: EPCOT');
+      expect(glance.park).toBe('EPCOT');
+    });
+
+    it('returns reservation when a reservation exists today, overriding dayPark', () => {
+      const resItem = {
+        id: 'res-1',
+        plannedDate: testDate,
+        plannedTime: '12:00',
+        reservationKind: 'dining' as const,
+        experienceName: 'Space 220',
+        park: 'EPCOT',
+      } as any;
+      const glance = deriveGlanceCard([resItem], testDate, undefined, 'EPCOT');
+      expect(glance.type).toBe('reservation');
+      expect(glance.title).toBe('Space 220');
+      expect(glance.time).toBe('12:00 PM');
+    });
+
+    it('returns generic quiet placeholder when neither dayPark nor items exist', () => {
+      const glance = deriveGlanceCard([], testDate, 'Contemporary Resort', undefined);
+      expect(glance.type).toBe('quiet');
+      expect(glance.title).toBe('No Scheduled Plans Today');
+      expect(glance.meta).toBe('Relax at Contemporary Resort or explore Disney Springs!');
     });
   });
 

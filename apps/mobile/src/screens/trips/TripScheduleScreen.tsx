@@ -51,9 +51,10 @@ import { makeStyles } from '../../theme/makeStyles';
 import { useAppTheme, usePalette } from '../../theme/useAppTheme';
 import { SCHEDULE } from './TripScheduleScreen.palette';
 import { tripPlannedListKeys } from './TripPlannedListScreen';
-import { tripDetailKeys } from './TripDetailScreen';
+import { tripDetailKeys } from './tripDetailQueryKeys';
 import { ExperiencePicker } from './ExperiencePicker';
 import { isKnownPark } from './experiencePickerFilters';
+import { useSetDayPark } from './TripDayParksSection';
 import { useAttachedExperienceListItems } from './useAttachedExperienceListItems';
 import { useFavoriteSourcedExperienceItems } from '../catalog/useFavoriteSourcedExperienceItems';
 import { reservationKindPresentation } from './reservations';
@@ -76,7 +77,8 @@ export type ClientDayTouringHours = Omit<DayTouringHoursDTO, 'startMode'> & {
 
 type Props = NativeStackScreenProps<TripsStackParamList, 'TripSchedule'>;
 
-const WDW_TIME_ZONE = 'America/New_York';
+import { WDW_TIME_ZONE, getTodayWDW, getWDWNowMinutes } from './wdwDate';
+export { WDW_TIME_ZONE, getTodayWDW, getWDWNowMinutes };
 
 function getETOffsetMinutes(dateString: string): number {
   const d = new Date(`${dateString}T12:00:00Z`);
@@ -183,35 +185,6 @@ function formatDatePill(dateStr: string): string {
     // fallback below
   }
   return dateStr;
-}
-
-/** Return today's date in YYYY-MM-DD in the WDW (America/New_York) timezone. */
-export function getTodayWDW(): string {
-  const now = new Date();
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: WDW_TIME_ZONE,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(now);
-  const y = parts.find((p) => p.type === 'year')!.value;
-  const m = parts.find((p) => p.type === 'month')!.value;
-  const d = parts.find((p) => p.type === 'day')!.value;
-  return `${y}-${m}-${d}`;
-}
-
-/** Return current minutes from midnight in the WDW (America/New_York) timezone. */
-export function getWDWNowMinutes(): number {
-  const now = new Date();
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: WDW_TIME_ZONE,
-    hour: 'numeric',
-    minute: 'numeric',
-    hour12: false,
-  }).formatToParts(now);
-  const hour = parseInt(parts.find((p) => p.type === 'hour')!.value, 10);
-  const minute = parseInt(parts.find((p) => p.type === 'minute')!.value, 10);
-  return (hour === 24 ? 0 : hour) * 60 + minute;
 }
 
 function generateDateRange(startDateStr?: string, endDateStr?: string, filterPastDates = false): string[] {
@@ -498,14 +471,26 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
       if (tripQuery.data.walkingSpeed) setWalkingSpeed(tripQuery.data.walkingSpeed);
       if (tripQuery.data.walkWaitWeighting) setWalkWaitWeighting(tripQuery.data.walkWaitWeighting);
       if (tripQuery.data.earlyEntryEligible !== undefined) setEarlyEntryEligible(tripQuery.data.earlyEntryEligible);
-      if (tripQuery.data.dayTouringHours) {
+      if (tripQuery.data.dayTouringHours !== undefined) {
         setDayHoursMap((prev) => {
-          const next: Record<string, ClientDayTouringHours> = {
-            ...(tripQuery.data!.dayTouringHours as Record<string, ClientDayTouringHours>),
-          };
+          const serverDays = (tripQuery.data!.dayTouringHours as Record<string, ClientDayTouringHours> | null | undefined) ?? {};
+          const next: Record<string, ClientDayTouringHours> = {};
+
+          for (const [d, sVal] of Object.entries(serverDays)) {
+            next[d] = { ...sVal };
+          }
+
           for (const [d, prevSetting] of Object.entries(prev)) {
-            if (prevSetting.startMode === 'now') {
-              next[d] = { ...next[d], startMode: 'now' };
+            const serverSetting = serverDays[d];
+            next[d] = {
+              ...prevSetting,
+              ...(serverSetting ?? {}),
+              ...(prevSetting.startMode === 'now' ? { startMode: 'now' } : {}),
+            };
+            if (serverSetting?.startingPark) {
+              next[d]!.startingPark = serverSetting.startingPark;
+            } else {
+              delete next[d]!.startingPark;
             }
           }
           return next;
@@ -652,10 +637,29 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
 
   const activeDayParks = [...new Set(dayItems.map((i) => i.park).filter((p): p is import('@dwt/shared').Park => p != null))];
 
+  const setDayParkMutation = useSetDayPark(tripId);
+
   const activeDaySettings: ClientDayTouringHours = (activeDate !== 'No Date' && dayHoursMap[activeDate]) || {};
   const primaryParkName = activeDaySettings.startingPark || activeDayParks[0];
   const primaryParkInfo = primaryParkName ? getParkHoursDetails(primaryParkName) : null;
   const primaryParkOpenHour = primaryParkInfo ? parseInt(primaryParkInfo.openTimeText.split(':')[0]!, 10) : 9;
+
+  const isParkMismatch = React.useMemo(() => {
+    if (activeDate === 'No Date') return false;
+    const assignedPark = activeDaySettings.startingPark;
+    if (!isKnownPark(assignedPark)) return false;
+    if (activeDayParks.length !== 1) return false;
+    return activeDayParks[0] !== assignedPark;
+  }, [activeDate, activeDaySettings.startingPark, activeDayParks]);
+
+  const mismatchTargetPark = isParkMismatch ? activeDayParks[0] : null;
+
+  const handleSwitchDayPark = () => {
+    if (!mismatchTargetPark || activeDate === 'No Date') return;
+    const target = mismatchTargetPark;
+    setDaySetting({ startingPark: target });
+    setDayParkMutation.mutate({ date: activeDate, park: target });
+  };
 
   const nowMinutesWDW = getWDWNowMinutes();
   const currentUseEarlyEntry = activeDaySettings.useEarlyEntry ?? earlyEntryEligible;
@@ -714,6 +718,8 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
   };
 
   const handleSaveScheduleSettings = () => {
+    const serverDayHours = (tripQuery.data?.dayTouringHours as Record<string, ClientDayTouringHours> | undefined) ?? {};
+
     const updatedDaySetting: ClientDayTouringHours = {
       startHour: currentStartHour,
       endHour: currentEndHour,
@@ -729,6 +735,13 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
       ...dayHoursMap,
       ...(activeDate !== 'No Date' ? { [activeDate]: updatedDaySetting } : {}),
     };
+
+    for (const [d, sVal] of Object.entries(serverDayHours)) {
+      if (!updatedMap[d]) {
+        updatedMap[d] = { ...sVal };
+      }
+    }
+
     setDayHoursMap(updatedMap);
 
     // Sanitize for DB persistence: exclude ephemeral 'now' from dayTouringHoursSchema
@@ -1179,6 +1192,10 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dateSelector}>
               {tripDates.map((dateStr) => {
                 const isSelected = dateStr === activeDate;
+                const startingPark =
+                  dayHoursMap[dateStr]?.startingPark ??
+                  tripQuery.data?.dayTouringHours?.[dateStr]?.startingPark;
+                const hasPark = isKnownPark(startingPark);
                 return (
                   <Pressable
                     key={dateStr}
@@ -1189,6 +1206,16 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
                     <Text style={[styles.datePillText, isSelected && styles.datePillTextActive]}>
                       {formatDatePill(dateStr)}
                     </Text>
+                    {hasPark ? (
+                      <Text
+                        style={[
+                          styles.datePillParkText,
+                          isSelected && styles.datePillParkTextActive,
+                        ]}
+                      >
+                        {startingPark}
+                      </Text>
+                    ) : null}
                   </Pressable>
                 );
               })}
@@ -1228,6 +1255,31 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
           </View>
 
           <ScrollView contentContainerStyle={styles.content}>
+            {/* Park Mismatch Banner (Requirement 24.12) */}
+            {isParkMismatch && mismatchTargetPark && (
+              <View style={styles.mismatchBanner} testID="day-park-mismatch-banner">
+                <View style={styles.mismatchBannerTextCol}>
+                  <View style={styles.mismatchBannerTitleRow}>
+                    <Ionicons name="swap-horizontal" size={16} color={t.color.primaryFg} style={styles.mismatchIcon} />
+                    <Text style={styles.mismatchBannerTitle}>Park Mismatch</Text>
+                  </View>
+                  <Text style={styles.mismatchBannerText}>
+                    All items are in <Text style={styles.boldText}>{mismatchTargetPark}</Text>, but Day Park is set to{' '}
+                    <Text style={styles.boldText}>{activeDaySettings.startingPark}</Text>.
+                  </Text>
+                </View>
+                <Pressable
+                  style={styles.mismatchSwitchBtn}
+                  onPress={handleSwitchDayPark}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Switch Day Park to ${mismatchTargetPark}`}
+                  testID="day-park-mismatch-switch-btn"
+                >
+                  <Text style={styles.mismatchSwitchBtnText}>Switch to {mismatchTargetPark}</Text>
+                </Pressable>
+              </View>
+            )}
+
             {/* Park Operating Hours Horizontal Scroll Row */}
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.parkHoursRowScroll}>
               {(activeDayParks.length > 0 ? activeDayParks : ['Animal Kingdom', 'Epcot']).map((parkName, pIdx) => {
@@ -2518,6 +2570,8 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
                         <Pressable
                           key={parkOpt.label}
                           testID={`starting-park-${parkOpt.label.toLowerCase().replace(/\s+/g, '-')}`}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected: isSelected }}
                           style={[styles.optionChip, isSelected && styles.optionChipActive]}
                           onPress={() => {
                             const newPark = parkOpt.val;
@@ -2811,6 +2865,56 @@ const useStyles = makeStyles((t) => ({
     padding: t.spacing.lg,
     paddingBottom: t.spacing.xl * 2,
   },
+  mismatchBanner: {
+    backgroundColor: t.color.surfaceAlt,
+    borderRadius: t.radius.md,
+    borderWidth: 1,
+    borderColor: t.color.border,
+    padding: 12,
+    marginBottom: t.spacing.md,
+    gap: 8,
+  },
+  mismatchBannerTextCol: {
+    gap: 4,
+  },
+  mismatchBannerTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  mismatchIcon: {
+    marginRight: 2,
+  },
+  mismatchBannerTitle: {
+    ...t.typography.meta,
+    fontWeight: '700',
+    color: t.color.primaryFg,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  mismatchBannerText: {
+    ...t.typography.body,
+    fontSize: 13,
+    color: t.color.textSecondary,
+    lineHeight: 18,
+  },
+  boldText: {
+    fontWeight: '700',
+    color: t.color.textPrimary,
+  },
+  mismatchSwitchBtn: {
+    alignSelf: 'flex-start',
+    backgroundColor: t.color.primary,
+    borderRadius: t.radius.sm,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    marginTop: 2,
+  },
+  mismatchSwitchBtnText: {
+    ...t.typography.meta,
+    fontWeight: '700',
+    color: t.color.textOnPrimary,
+  },
   dateSelectorContainer: {
     backgroundColor: t.color.surface,
     borderBottomWidth: 1,
@@ -2828,6 +2932,8 @@ const useStyles = makeStyles((t) => ({
     backgroundColor: t.color.surfaceAlt,
     borderWidth: 1,
     borderColor: t.color.border,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   datePillActive: {
     backgroundColor: t.color.primary,
@@ -2840,6 +2946,17 @@ const useStyles = makeStyles((t) => ({
   },
   datePillTextActive: {
     color: t.color.textOnPrimary,
+  },
+  datePillParkText: {
+    ...t.typography.meta,
+    fontSize: 11,
+    color: t.color.textSecondary,
+    marginTop: 2,
+    fontWeight: '500',
+  },
+  datePillParkTextActive: {
+    color: t.color.textOnPrimary,
+    opacity: 0.9,
   },
   actionBar: {
     flexDirection: 'row',

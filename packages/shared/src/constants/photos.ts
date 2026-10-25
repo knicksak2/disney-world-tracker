@@ -77,3 +77,7 @@ export const PHOTO_EXPERIENCE_STRIP_MAX_LIMIT = 24;
 export const PHOTO_EXPERIENCE_STRIP_MAX_DEFAULT = 8;
 export const PHOTO_EXPERIENCE_STRIP_HEADING = 'Photos from guests';
 export const PHOTO_STRIP_BLANK_DISH_LABEL = 'Dish';
+
+// Requirement 29 constants (task 25.1)
+export const MY_PHOTOS_DEFAULT_LIMIT = 40;
+export const MY_PHOTOS_MAX_LIMIT = 100;

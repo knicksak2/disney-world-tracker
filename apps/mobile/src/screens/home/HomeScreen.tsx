@@ -11,7 +11,7 @@
  *      - ActiveTripShortcut (for active in-park vacation)
  *      - UpcomingTripHero (countdown card for upcoming vacations)
  *   3. Action Dock:
- *      - 4 quick-action launch tiles (Live Waits, Log Ride, Log Snack, My Pins)
+ *      - 4 quick-action launch tiles (Live Waits, Log Ride, Log Food, My Pins)
  *   4. Park Wait Pulse:
  *      - Horizontal line radar carousel across the 4 theme parks
  *   5. Highest-Rated Experiences:
@@ -60,7 +60,6 @@ import type {
   RootStackParamList,
 } from '../../navigation/RootNavigator';
 import AvatarChip from '../navigation/AvatarChip';
-import { navigateToTripSchedule } from '../../navigation/navigationRef';
 import { tripsListKeys } from '../trips/TripsListScreen';
 import { tripPlannedListKeys } from '../trips/TripPlannedListScreen';
 import { getTodayWDW } from '../trips/TripScheduleScreen';
@@ -76,10 +75,9 @@ import { ExperiencePicker } from '../trips/ExperiencePicker';
 import LogVisitModal from '../catalog/LogVisitModal';
 import FoodItemPickerModal from '../catalog/FoodItemPickerModal';
 import LogFoodItemModal from '../catalog/LogFoodItemModal';
-import ActionDock from './ActionDock';
 import ExplorationPromptCard from './ExplorationPromptCard';
 import HomeFavoritesSection from './HomeFavoritesSection';
-import ParkWaitPulse from './ParkWaitPulse';
+import HomeThemeParksSection from './HomeThemeParksSection';
 import UpcomingTripHero from './UpcomingTripHero';
 import { buildOperatingContextSubtitle } from './operatingContext';
 import { deriveTodaysPark } from './deriveTodaysPark';
@@ -356,51 +354,35 @@ export default function HomeScreen({ navigation }: Props): JSX.Element {
       >
         {/* 2. Vacation Context: Active Vacation, Upcoming Countdown Hero, or Exploration Prompt */}
         <ActiveTripShortcut />
-        <UpcomingTripHero />
+        {!activeTrip && <UpcomingTripHero />}
         {showExplorationPrompt && (
           <ExplorationPromptCard
             onPress={() => navigation.navigate('Trips' as any)}
           />
         )}
 
-        {/* 3. Action Dock */}
-        <ActionDock
-          isActiveVacation={Boolean(activeTrip)}
-          dayNumber={currentDay}
-          style={!hasActiveTrip && !hasUpcomingTrip && !showExplorationPrompt ? styles.actionDockTopSpacing : undefined}
-          onOpenSchedule={() => {
-            if (activeTrip?.id) {
-              navigateToTripSchedule({ tripId: activeTrip.id });
-            }
-          }}
-          onOpenLogRide={() => {
-            setPickerTab('rides');
-            setPickerVisible(true);
-          }}
-          onOpenLogSnack={() => {
-            setPickerTab('dining');
-            setPickerVisible(true);
-          }}
+        {/* Zone 2: The Parks & Quick Logging */}
+        <HomeThemeParksSection
+          onSelectPark={(park) =>
+            navigation.navigate('Explore', {
+              screen: 'DestinationScreen' as any,
+              params: { destination: park } as any,
+            } as any)
+          }
           onOpenLiveWaits={() =>
             navigation.navigate('Explore', {
               screen: 'LiveWaits' as any,
               params: { park: currentPark } as any,
             } as any)
           }
-          onOpenMyPins={() =>
-            navigation.navigate('Collection', { screen: 'PinBoard' as any } as any)
-          }
-        />
-
-        {/* 4. Park Wait Pulse */}
-        <ParkWaitPulse
-          activePark={activeTrip ? currentPark : undefined}
-          onSelectPark={(park) =>
-            navigation.navigate('Explore', {
-              screen: 'LiveWaits' as any,
-              params: { park } as any,
-            } as any)
-          }
+          onOpenLogRide={() => {
+            setPickerTab('rides');
+            setPickerVisible(true);
+          }}
+          onOpenLogFood={() => {
+            setPickerTab('dining');
+            setPickerVisible(true);
+          }}
         />
 
         {/* 4b. Your Favorites (R8, Task 10.2, 10.5) */}
@@ -482,7 +464,7 @@ export default function HomeScreen({ navigation }: Props): JSX.Element {
         </View>
       </ScrollView>
 
-      {/* Experience Picker Modal for Log Ride / Log Snack */}
+      {/* Experience Picker Modal for Log Ride / Log Food */}
       <Modal
         visible={pickerVisible}
         animationType="slide"
@@ -711,9 +693,6 @@ const useStyles = makeStyles((t) => ({
   },
   scrollContent: {
     paddingBottom: 110,
-  },
-  actionDockTopSpacing: {
-    marginTop: 12,
   },
   sectionContainer: {
     paddingHorizontal: t.spacing.md,

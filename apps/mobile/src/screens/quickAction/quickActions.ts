@@ -5,7 +5,7 @@
  * Fixed action order:
  *   1. Check Live Waits (key: 'liveWaits')
  *   2. Log Ride (key: 'logRide')
- *   3. Log Snack (key: 'logSnack')
+ *   3. Log Food (key: 'logSnack')
  *   4. Claim Pins (key: 'claimPins') — included only when claimablePinCount > 0
  *   5. View Today's Schedule (key: 'todaySchedule')
  */
@@ -32,7 +32,7 @@ const ACTION_LOG_RIDE: QuickAction = {
 
 const ACTION_LOG_SNACK: QuickAction = {
   key: 'logSnack',
-  label: 'Log Snack',
+  label: 'Log Food',
   icon: 'restaurant-outline',
 };
 

@@ -111,7 +111,7 @@ export function MagicFab({
         }}
       />
 
-      {/* Experience Picker Modal for Log Ride / Log Snack */}
+      {/* Experience Picker Modal for Log Ride / Log Food */}
       <Modal
         visible={pickerVisible}
         animationType="slide"

@@ -28,6 +28,7 @@ import {
   type BlockedUserDTO,
   type PhotoReportReason,
   PHOTO_REJECT_MESSAGES,
+  MY_PHOTOS_DEFAULT_LIMIT,
 } from '@dwt/shared';
 import { type PhotosRepo, type PhotoRow } from './repo.js';
 import { type ReportsRepo } from './reportsRepo.js';
@@ -467,6 +468,46 @@ export class PhotoService implements PhotoLifecyclePort {
       userId,
       params.targetKind,
       params.scopeId,
+      decodedCursor,
+      limit + 1
+    );
+
+    const hasMore = rows.length > limit;
+    const pageRows = hasMore ? rows.slice(0, limit) : rows;
+
+    const items: MyPhotoDTO[] = [];
+    for (const row of pageRows) {
+      items.push(await this.mapToMyPhotoDTO(row));
+    }
+
+    let nextCursor: string | null = null;
+    if (hasMore && pageRows.length > 0) {
+      const last = pageRows[pageRows.length - 1]!;
+      nextCursor = encodeAlbumCursor({ sortAt: last.created_at, id: last.id });
+    }
+
+    return { items, nextCursor };
+  }
+
+  async listAllMine(
+    userId: string,
+    params: {
+      readonly cursor?: string | undefined;
+      readonly limit?: number | undefined;
+    }
+  ): Promise<PhotoPageDTO<MyPhotoDTO>> {
+    const limit = params.limit ?? MY_PHOTOS_DEFAULT_LIMIT;
+    let decodedCursor: { createdAt: Date; id: string } | undefined;
+    if (params.cursor) {
+      const decoded = decodeAlbumCursor(params.cursor);
+      if (!decoded) {
+        throw new AppError('validation_failed', 'Invalid cursor');
+      }
+      decodedCursor = { createdAt: decoded.sortAt, id: decoded.id };
+    }
+
+    const rows = await this.repo.listAllMine(
+      userId,
       decodedCursor,
       limit + 1
     );
@@ -1004,7 +1045,21 @@ export class PhotoService implements PhotoLifecyclePort {
     return { url, thumbUrl };
   }
 
-  private async mapToMyPhotoDTO(photo: PhotoRow): Promise<MyPhotoDTO> {
+  private async mapToMyPhotoDTO(
+    photo: Pick<
+      PhotoRow,
+      | 'id'
+      | 'status'
+      | 'target_kind'
+      | 'target_id'
+      | 'scope_id'
+      | 'reject_reason'
+      | 'width'
+      | 'height'
+      | 'feed_item_id'
+      | 'created_at'
+    >
+  ): Promise<MyPhotoDTO> {
     const keys = readKeysFor({ status: photo.status, viewer: 'owner' }, photo.id);
     let url: string | null = null;
     let thumbUrl: string | null = null;

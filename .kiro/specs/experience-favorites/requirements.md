@@ -275,6 +275,12 @@ digging into Live Waits.
 3. WHERE the User has no favorited Experiences, or none with live wait data currently available,
    THE "Your Favorites" section SHALL display a compact empty/prompt state rather than rendering
    nothing, inviting the User to favorite something.
+
+**Amendment (Requirement 8.3a):**
+3a. WHERE the User has no favorited Experiences, or none with live wait data currently available,
+    THE "Your Favorites" section on the Home tab SHALL render nothing (omitting the section header
+    and empty state box) to preserve a clean 2-zone layout for new users, rather than presenting an
+    empty state box.
 4. Selecting an Experience within the "Your Favorites" section SHALL navigate to
    `Experience_Detail_Screen` for that Experience.
 5. THE "Your Favorites" section SHALL NOT alter the existing Park Wait Pulse section's data,

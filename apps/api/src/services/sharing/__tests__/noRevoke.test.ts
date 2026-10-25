@@ -546,6 +546,7 @@ describe('Task 21.2: No sender revoke; recipient delete ends access (decision D2
       'GET /photos/:id',
       'GET /me/photos/status',
       'GET /me/photos',
+      'GET /me/photos/all',
       'DELETE /photos/:id',
       'POST /photos/:id/report',
       'POST /me/blocks',

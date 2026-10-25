@@ -15,3 +15,4 @@ export const TERMS_OF_SERVICE_URL = process.env.EXPO_PUBLIC_TERMS_OF_SERVICE_URL
 export const PHOTOS_DISCLOSURE_VERSION = 1;
 export const PHOTOS_DISCLOSURE_STORAGE_KEY = 'photos.disclosure.v1';
 export const PHOTO_STRIP_BLANK_DISH_LABEL = 'Dish';
+export const MY_PHOTOS_GRID_COLUMNS = 3;

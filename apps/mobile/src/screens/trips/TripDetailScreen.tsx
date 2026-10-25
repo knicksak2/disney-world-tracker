@@ -73,6 +73,8 @@ import { formatParkTime } from '../catalog/live/parkTime';
 import AttachedFoodListsSection from './AttachedFoodListsSection';
 import AttachedExperienceListsSection from './AttachedExperienceListsSection';
 import GroupFavoritesSection from './GroupFavoritesSection';
+import TripDayParksSection, { isKnownPark } from './TripDayParksSection';
+import { getTodayWDW } from './wdwDate';
 import { tripDetailKeys } from './tripDetailQueryKeys';
 import { tripPlannedListKeys } from './TripPlannedListScreen';
 import { tripFeedKeys } from './TripFeedScreen';
@@ -297,6 +299,10 @@ export function deriveGlanceCard(
   items: readonly PlannedItemDTO[],
   todayDate: string,
   resortName?: string,
+  dayParkOrHours?:
+    | string
+    | null
+    | Record<string, { startingPark?: string } | undefined>,
 ): {
   type: 'reservation' | 'schedule' | 'quiet';
   title: string;
@@ -347,7 +353,22 @@ export function deriveGlanceCard(
     }
   }
 
-  // 3. Fallback: Quiet / Pool / Rest day
+  // 3. Fallback: Day Park or Quiet / Pool / Rest day
+  const resolvedPark =
+    typeof dayParkOrHours === 'string'
+      ? dayParkOrHours
+      : typeof dayParkOrHours === 'object' && dayParkOrHours !== null
+      ? dayParkOrHours[todayDate]?.startingPark
+      : undefined;
+
+  if (resolvedPark && isKnownPark(resolvedPark)) {
+    return {
+      type: 'quiet',
+      title: `Today: ${resolvedPark}`,
+      park: resolvedPark,
+    };
+  }
+
   return {
     type: 'quiet',
     title: 'No Scheduled Plans Today',
@@ -544,8 +565,17 @@ export default function TripDetailScreen({
   ];
   const isCompleted = trip.status === 'past';
 
+  const wdwToday = getTodayWDW();
   const todayDate = new Date().toISOString().slice(0, 10);
-  const glance = deriveGlanceCard(plannedItems, todayDate, trip.resorts?.[0]?.name);
+  const todayDayPark =
+    trip.dayTouringHours?.[wdwToday]?.startingPark ??
+    trip.dayTouringHours?.[todayDate]?.startingPark;
+  const glance = deriveGlanceCard(
+    plannedItems,
+    todayDate,
+    trip.resorts?.[0]?.name,
+    todayDayPark,
+  );
   const dayText = trip ? getVacationDayText(trip.startDate, trip.endDate) : null;
 
   return (
@@ -782,11 +812,13 @@ export default function TripDetailScreen({
                 <View style={styles.glanceTagRow}>
                   <Ionicons name="sunny-outline" size={12} color={glancePal.quietTag} />
                   <Text style={styles.glanceTagQuiet}>
-                    TODAY · RESORT & FREE TIME
+                    {glance.park ? 'TODAY · DAY PARK' : 'TODAY · RESORT & FREE TIME'}
                   </Text>
                 </View>
                 <Text style={styles.glanceTitleQuiet}>{glance.title}</Text>
-                <Text style={styles.glanceBodyQuiet}>{glance.meta}</Text>
+                {glance.meta ? (
+                  <Text style={styles.glanceBodyQuiet}>{glance.meta}</Text>
+                ) : null}
                 <View style={styles.glanceActionsRow}>
                   <Pressable
                     style={styles.glanceBtnPrimary}
@@ -1108,6 +1140,14 @@ export default function TripDetailScreen({
             </View>
           </View>
         </View>
+
+        {/* Days (Per-day park assignment) section (R24, Task 25.7) */}
+        <TripDayParksSection
+          tripId={tripId}
+          startDate={trip.startDate}
+          endDate={trip.endDate}
+          dayTouringHours={trip.dayTouringHours}
+        />
 
         {/* Attached Food Lists section (R22, Task 24.6) */}
         <AttachedFoodListsSection

@@ -12,7 +12,7 @@ This feature builds on top of the existing `trips`, `pin-collection`, `stats-exp
 
 - **Main_Tab**: One of the four persistent bottom-tab destinations: Home, Explore, Trips, Collection. Distinct from the existing `MainTabParamList` tabs, which this feature replaces.
 - **Magic_FAB**: The center, raised, gold action control on the bottom tab bar, positioned between Explore and Trips, that opens the Quick_Action_Sheet. Not a Main_Tab; it has no associated screen of its own and does not participate in tab selection state.
-- **Quick_Action_Sheet**: The modal bottom sheet the Magic_FAB opens, presenting a fixed, ordered list of quick actions: Check Live Waits, Log Ride, Log Snack, Claim Pins (only shown when at least one Pin is claimable), and View Today's Schedule.
+- **Quick_Action_Sheet**: The modal bottom sheet the Magic_FAB opens, presenting a fixed, ordered list of quick actions: Check Live Waits, Log Ride, Log Food, Claim Pins (only shown when at least one Pin is claimable), and View Today's Schedule.
 - **You_And_Crew**: The header-reachable surface (opened via the avatar chip in the Home header, and reachable from any Main_Tab via the same control) presenting the signed-in User's identity (avatar, display name), Friends list and search, Share inbox and sent shares, and account settings (push preferences, change password, log out). Replaces the current Profile tab and the current Friends tab as top-level destinations.
 - **Notification_Bell**: The header-reachable control, present on every Main_Tab's header, that opens the existing Notification_Center's Attention_Feed as a modal sheet. Carries the existing combined Attention_Badge count unchanged.
 - **Collection**: The Main_Tab presenting the User's Pins, Food History/Lists, and personal Stats as three sub-sections, replacing their current placement as buttons under Profile.
@@ -55,14 +55,28 @@ This feature builds on top of the existing `trips`, `pin-collection`, `stats-exp
 1. THE Home tab SHALL present, in vertical scroll order:
    - A personalized hero header featuring a time-aware greeting pill (e.g. "✨ Good morning, [Name]!"), the Notification_Bell with Attention_Badge, a pill-shaped "You & Crew" avatar chip that navigates to You_And_Crew, a hero title ("Ready for the Magic?"), and an operating context subtitle.
    - A Vacation Context hero: an Upcoming Vacation countdown card displaying days remaining, trip name, date range, and metrics when the user has an upcoming Trip; or the active in-park day card when a Trip is active; or an exploration prompt when no trips exist.
-   - An Action Dock presenting quick-action tiles for Live Waits, Log Ride, Log Snack, and My Pins (with claimable badge).
+   - An Action Dock presenting quick-action tiles for Live Waits, Log Ride, Log Food, and My Pins (with claimable badge).
    - A Park Wait Pulse horizontal carousel displaying current wait averages and line status for Magic Kingdom, EPCOT, Disney's Hollywood Studios, and Disney's Animal Kingdom, with a link to Live Waits.
    - A Community Favorites section featuring the Highest-Rated Experiences leaderboard with a "See All" link navigating to Explore.
 2. THE Home tab's header SHALL present the Notification_Bell and a pill-shaped avatar chip ("You & Crew") that opens You_And_Crew.
 3. THE Home tab SHALL preserve the existing leaderboard's caching (R11.7-R11.9 of `disney-world-tracker`), empty state, and tap-to-detail navigation unchanged.
-4. THE Home tab's Action Dock SHALL present four quick-action controls: "Live Waits" (navigates to LiveWaits), "Log Ride" (opens LogVisitModal), "Log Snack" (opens LogFoodItemModal), and "My Pins" (navigates to Collection with claimable badge count).
+4. THE Home tab's Action Dock SHALL present four quick-action controls: "Live Waits" (navigates to LiveWaits), "Log Ride" (opens LogVisitModal), "Log Food" (opens LogFoodItemModal), and "My Pins" (navigates to Collection with claimable badge count).
 5. THE Home tab's Park Wait Pulse SHALL display live wait averages across operating attractions for each of the four Walt Disney World theme parks with crowd status classification (Walk-on, Light lines, Moderate, Heavy); selecting any park navigates to Live Waits pre-filtered to that park.
 6. THE Home tab's operating context subtitle SHALL derive its park hours and current weather from real server data (the existing `GET /crowd-calendar` day's `parkHours`, and a new weather read backed by the existing `weatherClient.getWDWWeather()`) for the User's active or upcoming Trip's park, defaulting to Magic Kingdom when the User has no Trip; the subtitle SHALL NOT display a hardcoded or fabricated hours or weather value under any condition, including when the underlying reads are loading or have failed. IF the weather read fails or has not yet returned, THEN THE Home tab SHALL omit the weather segment from the subtitle rather than substitute a placeholder value.
+
+**Amendment — Home Screen Simplification & 2-Zone Layout (Requirements 2.7, 2.8):**
+
+7. THE Home tab SHALL organize its main body into a predictable vertical layout:
+   - **Vacation Context**: WHERE the User has an upcoming Trip, THE App SHALL render an expanded Upcoming Vacation Preview card (Requirement 2.8); WHERE the User has an active in-park Trip, THE App SHALL render the Active_Trip_Shortcut; WHERE the User has no Trips, THE App SHALL render the ExplorationPromptCard.
+   - **The Parks & Quick Logging**: THE App SHALL render a 2x2 Theme Parks grid for Magic Kingdom, EPCOT, Disney's Hollywood Studios, and Disney's Animal Kingdom, displaying each park's landmark artwork, experience count, and live wait average badge (`⚡ XXm avg`); selecting any park SHALL navigate to that park's DestinationScreen. The section header SHALL provide an "All Live Waits ›" link navigating to LiveWaitsScreen.
+   - **Quick Log Row**: Directly below the 2x2 Theme Parks grid, THE App SHALL present two equal-width quick-log action buttons: "Log a Ride" (opening attraction selection → LogVisitModal) and "Log Food" (opening dining selection → FoodItemPickerModal → LogFoodItemModal).
+   - **Your Favorites**: WHERE the User has at least one favorited Experience with live wait data, THE App SHALL render the "Your Favorites" horizontal carousel below the Quick Log row; WHERE the User has zero favorited Experiences with live wait data, THE App SHALL render nothing (omitting the section and empty state entirely).
+   - **Community Favorites**: THE App SHALL render the Highest-Rated Experiences leaderboard at the bottom of the scroll view.
+   - THE top 4-tile Action Dock and standalone Park Wait Pulse carousel SHALL be replaced by the 2x2 Theme Parks grid and the Quick Log row.
+8. THE expanded Upcoming Vacation Preview card SHALL present:
+   - A prominent countdown badge displaying days remaining, trip title, and date range; selecting the card header SHALL navigate to Trip_Detail_View.
+   - A Travel Party / Crew section: WHERE the Trip has two or more total participants (Members and/or Guests), THE card SHALL display an overlapping avatar stack and summary text (e.g. "With Emma, Chloe & 2 others"), selecting which navigates to TripMembers; WHERE the Trip has only one participant, THE card SHALL present an invite affordance ("Just you so far • + Invite Crew ›") navigating to TripMembers.
+   - A Next Booking Milestone banner: WHERE the Trip has an upcoming or open active booking window (`splitWindows(timeline.windows).active` where `!isDone`), THE card SHALL display the earliest active milestone (e.g. 60-Day Dining Window countdown or "Open now", advancing to Lightning Lane window upon Dining completion/past); selecting the milestone banner SHALL navigate directly to TripBookingTimeline. WHERE no active booking window remains, the milestone banner SHALL be omitted.
 
 ### Requirement 3: Explore Tab
 
@@ -82,9 +96,9 @@ This feature builds on top of the existing `trips`, `pin-collection`, `stats-exp
 #### Acceptance Criteria
 
 1. WHEN the User taps the Magic_FAB from any Main_Tab, THE App SHALL present the Quick_Action_Sheet as a modal bottom sheet without changing the selected Main_Tab.
-2. THE Quick_Action_Sheet SHALL present, in order: "Check Live Waits," "Log Ride," "Log Snack," "Claim Pins" (WHERE the User has at least one claimable Pin per the existing Pin_Board claimable count), and "View Today's Schedule."
+2. THE Quick_Action_Sheet SHALL present, in order: "Check Live Waits," "Log Ride," "Log Food," "Claim Pins" (WHERE the User has at least one claimable Pin per the existing Pin_Board claimable count), and "View Today's Schedule."
 3. WHEN the User selects "Check Live Waits," THE App SHALL dismiss the Quick_Action_Sheet and navigate to the Live_Waits_Screen, defaulting to the Park of the User's active Trip WHERE one exists, else the most recently viewed Park, else the first Park in canonical order.
-4. WHEN the User selects "Log Ride" or "Log Snack," THE App SHALL dismiss the Quick_Action_Sheet and present the existing LogVisitModal or LogFoodItemModal experience-selection flow unchanged.
+4. WHEN the User selects "Log Ride" or "Log Food," THE App SHALL dismiss the Quick_Action_Sheet and present the existing LogVisitModal or LogFoodItemModal experience-selection flow unchanged.
 5. WHEN the User selects "Claim Pins," THE App SHALL dismiss the Quick_Action_Sheet and navigate to the existing PinBoardScreen with `celebratePinIds` set to the User's currently claimable Pin ids, reusing the existing claim-and-celebrate queue (`pin-collection` Requirement 20, 23) unchanged. THE App SHALL NOT present a Pin_Celebration_Modal directly from the Quick_Action_Sheet without first navigating through PinBoardScreen.
 6. WHEN the User selects "View Today's Schedule," THE App SHALL dismiss the Quick_Action_Sheet and navigate to the Schedule section of the User's active Trip WHERE one exists, else navigate to the Trips tab's list screen.
 7. IF the User has no claimable Pins, THEN THE Quick_Action_Sheet SHALL NOT present the "Claim Pins" action.

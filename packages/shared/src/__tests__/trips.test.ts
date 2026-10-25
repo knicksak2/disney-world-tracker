@@ -28,6 +28,8 @@ import {
   tripFoodListSchema,
   tripExperienceListSchema,
   dayTouringHoursSchema,
+  dayParkSetSchema,
+  dayParkParamsSchema,
   tripOptimizationInputSchema,
   tripEditSchema,
 } from '../trips.js';
@@ -403,3 +405,35 @@ describe('tripEditSchema: walkWaitWeighting (R10.1)', () => {
   });
 });
 
+
+
+describe('dayParkSetSchema (R24.3, R24.4, R24.6)', () => {
+  it('accepts valid park and null park', () => {
+    expect(dayParkSetSchema.safeParse({ park: 'EPCOT' }).success).toBe(true);
+    expect(dayParkSetSchema.safeParse({ park: null }).success).toBe(true);
+  });
+
+  it('rejects empty object, unknown park, extra properties, and undefined', () => {
+    expect(dayParkSetSchema.safeParse({}).success).toBe(false);
+    expect(dayParkSetSchema.safeParse({ park: 'Space Mountain' }).success).toBe(false);
+    expect(dayParkSetSchema.safeParse({ park: 'EPCOT', extra: 1 }).success).toBe(false);
+    expect(dayParkSetSchema.safeParse({ park: undefined }).success).toBe(false);
+  });
+});
+
+describe('dayParkParamsSchema (R24.6)', () => {
+  const validId = '44444444-4444-4444-8444-444444444444';
+
+  it('accepts valid id and calendar date', () => {
+    expect(dayParkParamsSchema.safeParse({ id: validId, date: '2026-10-01' }).success).toBe(true);
+  });
+
+  it('rejects invalid dates: 2026-02-30 and not-a-date', () => {
+    expect(dayParkParamsSchema.safeParse({ id: validId, date: '2026-02-30' }).success).toBe(false);
+    expect(dayParkParamsSchema.safeParse({ id: validId, date: 'not-a-date' }).success).toBe(false);
+  });
+
+  it('rejects non-uuid id', () => {
+    expect(dayParkParamsSchema.safeParse({ id: 'invalid-id', date: '2026-10-01' }).success).toBe(false);
+  });
+});

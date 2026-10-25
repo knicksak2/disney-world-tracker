@@ -257,6 +257,7 @@ export {
   tripRecapPhotosQuerySchema,
   myPhotosQuerySchema,
   foodGalleryQuerySchema,
+  myPhotosAllQuerySchema,
   photoUploadsRequestSchema,
   photoConfirmRequestSchema,
   photoReportCreateSchema,

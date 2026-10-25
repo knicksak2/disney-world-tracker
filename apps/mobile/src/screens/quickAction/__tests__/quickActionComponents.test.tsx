@@ -138,6 +138,7 @@ describe('QuickActionSheet & MagicFab', () => {
       expect(screen.getByTestId('quick-action-liveWaits')).toBeTruthy();
       expect(screen.getByTestId('quick-action-logRide')).toBeTruthy();
       expect(screen.getByTestId('quick-action-logSnack')).toBeTruthy();
+      expect(screen.getByText('Log Food')).toBeTruthy();
       expect(screen.getByTestId('quick-action-todaySchedule')).toBeTruthy();
       expect(screen.queryByTestId('quick-action-claimPins')).toBeNull();
     });
@@ -271,7 +272,7 @@ describe('QuickActionSheet & MagicFab', () => {
       expect(mockNavigateToTripsList).toHaveBeenCalled();
     });
 
-    it('opens experience picker on Log Ride and Log Snack', () => {
+    it('opens experience picker on Log Ride and Log Food', () => {
       const onOpenPicker = jest.fn();
       const onClose = jest.fn();
       renderWithClient(

@@ -7,6 +7,7 @@ export const ACTION_DOCK = definePalette({
     // Tile icon wells (S).
     liveWaitsBg: '#eef2ff',
     logRideBg: '#fdf2f8',
+    logFoodBg: '#fffbeb',
     logSnackBg: '#fffbeb',
     dayPlanBg: '#ecfdf5',
     myPinsBg: '#f5f3ff',
@@ -20,6 +21,7 @@ export const ACTION_DOCK = definePalette({
   dark: {
     liveWaitsBg: DARK_TONAL.blue.tint,
     logRideBg: DARK_TONAL.pink.tint,
+    logFoodBg: DARK_TONAL.amber.tint,
     logSnackBg: DARK_TONAL.amber.tint,
     dayPlanBg: DARK_TONAL.green.tint,
     myPinsBg: darkColor.surfaceAlt,

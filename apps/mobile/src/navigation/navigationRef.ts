@@ -319,4 +319,29 @@ export function navigateToBookingTimeline(params: { readonly tripId: string }): 
   return true;
 }
 
+/**
+ * Navigate to the `TripMembers` section of a trip.
+ * Seeds `TripDetail` in the Trips stack so the user can navigate back to the hub.
+ */
+export function navigateToTripMembers(params: { readonly tripId: string }): boolean {
+  if (!navigationRef.isReady()) {
+    return false;
+  }
+  navigationRef.navigate('MainTabs', {
+    screen: 'Trips',
+    params: {
+      screen: 'TripDetail',
+      params: { tripId: params.tripId },
+    },
+  });
+  navigationRef.navigate('MainTabs', {
+    screen: 'Trips',
+    params: {
+      screen: 'TripMembers',
+      params,
+    },
+  });
+  return true;
+}
+
 

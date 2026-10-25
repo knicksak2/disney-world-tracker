@@ -26,6 +26,7 @@ export interface PhotoViewerItem {
   } | null | undefined;
   readonly mine?: boolean | undefined;
   readonly foodItemName?: string | undefined;
+  readonly subtitle?: string | undefined;
 }
 
 export interface PhotoViewerAction {
@@ -121,13 +122,24 @@ export function PhotoViewer({
         <View style={styles.topBar}>
           <View style={styles.bylineBlock}>
             <Ionicons name="person-circle-outline" size={24} color={t.color.textSecondary} />
-            <Text
-              style={styles.bylineText}
-              accessibilityLabel={`Photo by ${uploaderName}`}
-              accessibilityRole="text"
-            >
-              {uploaderName}
-            </Text>
+            <View style={styles.bylineTextContainer}>
+              <Text
+                style={styles.bylineText}
+                accessibilityLabel={`Photo by ${uploaderName}`}
+                accessibilityRole="text"
+              >
+                {uploaderName}
+              </Text>
+              {photo.subtitle ? (
+                <Text
+                  style={styles.bylineSubtitle}
+                  numberOfLines={1}
+                  accessibilityRole="text"
+                >
+                  {photo.subtitle}
+                </Text>
+              ) : null}
+            </View>
           </View>
 
           <TouchableOpacity
@@ -340,11 +352,21 @@ const useStyles = makeStyles((t) => ({
     flexDirection: 'row',
     alignItems: 'center',
     gap: t.spacing.xs,
+    flex: 1,
+  },
+  bylineTextContainer: {
+    flexDirection: 'column',
+    justifyContent: 'center',
   },
   bylineText: {
     ...t.typography.body,
     fontWeight: '600',
     color: t.color.textPrimary,
+  },
+  bylineSubtitle: {
+    ...t.typography.meta,
+    color: t.color.textSecondary,
+    marginTop: 1,
   },
   iconButton: {
     padding: t.spacing.xs,

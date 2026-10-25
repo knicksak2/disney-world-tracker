@@ -47,7 +47,7 @@ import {
 import { setTripsListNotice } from '../navigation/tripsListNotice';
 import { tripsListKeys } from '../screens/trips/TripsListScreen';
 import { tripPlannedListKeys } from '../screens/trips/TripPlannedListScreen';
-import { getTodayWDW } from '../screens/trips/TripScheduleScreen';
+import { getTodayWDW } from '../screens/trips/wdwDate';
 import { formatParkTime } from '../screens/catalog/live/parkTime';
 import { deriveTodaysPark } from '../screens/home/deriveTodaysPark';
 import { withAlpha } from '../theme/theme';
@@ -321,7 +321,7 @@ export default function ActiveTripShortcut(): JSX.Element | null {
             <Pressable
               style={styles.scheduleBadge}
               onPress={(e) => {
-                e.stopPropagation();
+                e?.stopPropagation?.();
                 if (single?.id) {
                   navigateToTripSchedule({ tripId: single.id });
                 }

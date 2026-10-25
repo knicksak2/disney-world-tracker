@@ -55,6 +55,9 @@ describe('buildQuickActions property tests', () => {
             'logSnack',
             'todaySchedule',
           ]);
+
+          // 6. Action labels
+          expect(actions.find((a) => a.key === 'logSnack')?.label).toBe('Log Food');
         },
       ),
       { numRuns: NUM_RUNS },

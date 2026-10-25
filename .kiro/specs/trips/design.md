@@ -490,6 +490,66 @@ and are wired in `composeServices.ts` exactly like the existing notice dispatche
 - **`Active_Trip_Shortcut`** appears on surfaces outside the Trips tab while the User is in ≥1 `active`
   Trip; it opens the single active Trip directly or presents a chooser for several (R19).
 
+### Per-day park assignment — Day_Park (R24)
+
+**Decision: reuse `day_touring_hours[date].startingPark`; add no column, table, or migration.** The per-date
+JSONB map (`day-planning-optimization` R7.1) already stores `startingPark`, and three consumers already read
+it: the ExperiencePicker's `defaultPark` (day-planning R4.13), the optimizer's starting-park bias (R7.5), and
+Home's `deriveTodaysPark`. A second "park for the day" field would force a precedence rule between two values
+that mean the same thing to the user. The cost of reuse is that the optimizer will prefer to start the day at
+that park, which is the intended behaviour when someone says "we're doing Magic Kingdom Tuesday".
+
+**Why a dedicated endpoint instead of `PATCH /trips/:id`.** `PATCH /trips/:id` (a) is Organizer-only
+(`edit_settings`), but a day's park is a shared-planning input like a Planned_Item, so any Member may set it
+(R24.5); and (b) replaces the whole `day_touring_hours` JSON (`editTrip` writes `JSON.stringify(input.dayTouringHours)`),
+so two Members editing different dates would silently overwrite each other. The dedicated route merges one
+date server-side under a row lock.
+
+**Components:**
+
+- `packages/shared/src/trips.ts` — `dayParkSetSchema = z.object({ park: parkSchema.nullable() }).strict()`
+  (`parkSchema` is the existing `z.enum(PARKS)` in `schemas/primitives.ts`), plus a params schema `{ id: uuid, date: ISO date }`
+  reusing the repo's existing ISO-date primitive. Export from `index.ts`. **Do not tighten**
+  `dayTouringHoursSchema.startingPark` (currently `z.string().optional()`): doing so could make a full-map
+  `PATCH` containing a legacy value fail. The new route validates strictly; the client narrows with `isKnownPark`.
+- `apps/api/src/services/trips/dayPark.ts` (pure, no I/O) — `applyDayPark(map, date, park): Record<string, DayTouringHoursDTO>`.
+  Returns a **new** map (never mutates its input). `park !== null`: `map[date] = { ...map[date], startingPark: park }`.
+  `park === null`: drop `startingPark` from `map[date]`; if the entry is then empty, drop the date key; if the date is absent, return an equal map.
+- `apps/api/src/services/trips/permissions.ts` — add `'set_day_park'` to `TripAction` and to `MEMBER_ACTIONS`
+  (so `can('member','set_day_park')` and `can('organizer','set_day_park')` are both `true`).
+- `apps/api/src/services/trips/repo.ts` — `setDayPark(ctx, tripId, date, park): Promise<TripDTO>`. In one
+  transaction: `SELECT start_date, end_date, day_touring_hours FROM trips WHERE id = $1 FOR UPDATE` (the same
+  lock-then-write pattern `editTrip` already uses, which also keeps it runnable under `pg-mem`); reject a date
+  outside `[start_date, end_date]` with `trip_validation_failed` (`field: 'date'`); parse the JSON (it may arrive as
+  a string or an object, as `rowToTripDto` already handles); `applyDayPark`; `UPDATE trips SET day_touring_hours = $2, updated_at = now()`;
+  return the DTO via the existing row→DTO projection. A trip deleted between the membership check and the lock
+  surfaces as `trip_not_found`, as in R3.9.
+- `apps/api/src/services/trips/routes.ts` — `PUT /trips/:id/days/:date/park`: `requireSession` → parse params
+  and body with the shared schemas → `assertTripMember` → `can(role, 'set_day_park')` → `setDayPark`. No feed item, no notification (R24.7).
+- Mobile `TripDayParksSection` (new, rendered by `TripDetailScreen.tsx`, filtering out dates prior to the current WDW date) with a `DayParkPickerSheet`, and a
+  `useSetDayPark(tripId)` mutation hook. The hook does `PUT /trips/:id/days/:date/park`, applies the change to the
+  `GET /trips/:id` cache (key from `tripDetailQueryKeys.ts`) optimistically with rollback `onError`, and on success replaces the cache entry
+  with the returned TripDTO. Styles via `makeStyles`/`useAppTheme`; any literal colour in a co-located `*.palette.ts`; park accent from `t.parkAccent`;
+  no raw colour literals (the theme guard test enforces this).
+- `TripScheduleScreen.tsx` — (a) date pills show the Day_Park name when set; (b) its `dayHoursMap` initialisation/merge effect must take the
+  server's `startingPark` for a date after a Day_Park mutation, so a later Settings "Done" `PATCH` carries it (R24.9c). Read the existing merge effect
+  before changing it: it merges `tripQuery.data.dayTouringHours` with `prev` local state, and the regression test below must fail if the stale local value wins.
+- `TripDetailScreen.tsx` glance card — in the `quiet` branch of the glance derivation, use `Today: <Park>` when `dayTouringHours[wdwToday]?.startingPark` is a known Park (R24.10).
+
+**Configuration & Constants.** None. There is no env var, threshold, cadence, or retention window: the only
+closed set is `PARKS` from `@dwt/shared`. The route is not rate-limited beyond the app default and stores at most one
+short string per date in an already-bounded JSONB map.
+
+**External Interfaces.** None. This feature does not touch ThemeParks.wiki or any Disney source, and does not use `Live_Service`.
+
+**Known residual risk (not introduced here, not fixed here).** Schedule Settings "Done" still sends the whole
+`dayTouringHours` map via `PATCH /trips/:id` (Organizer-only, last-write-wins). A Day_Park set by another Member after the
+Organizer loaded the screen but before they tap Done can be overwritten by that save. R24.9c only guarantees the *local* cache
+is current at save time. Moving Schedule Settings onto per-date merge writes is a separate change.
+
+**Cross-spec dependencies and build order.** Requires `day-planning-optimization` Requirement 7 (the `day_touring_hours` column and `startingPark` field) to
+be present — it is already shipped, so this builds on top with no ordering constraint beyond Task 25's own waves.
+
 ## Data Models
 
 ### Existing tables reused (unchanged)
@@ -1074,6 +1134,25 @@ and (d) a Food_List's visibility changing from public to private after attachmen
 Trip-derived branch's result for any current or future Trip_Member.
 
 **Validates: Requirements 22.1, 22.3, 22.4, 22.8**
+
+### Property 28: Setting or clearing a Day_Park changes only that date's `startingPark`
+
+*For any* `day_touring_hours` map `M` (including empty, and including dates with arbitrary other fields such as
+`startHour`, `endHour`, `startMode`), any date `d`, and any `p ∈ PARKS`: (a) `applyDayPark(M, d, p)` has
+`startingPark = p` at `d`, every other field of `d`'s entry is equal to its value in `M`, and every other date's
+entry is deeply equal to its value in `M`; (b) `applyDayPark(M, d, null)` has no `startingPark` at `d`, every
+other field of `d`'s entry is unchanged, `d`'s key is absent exactly when its entry would otherwise be empty, and
+every other date is unchanged; (c) both operations are idempotent (`apply(apply(M,d,x),d,x)` deep-equals
+`apply(M,d,x)`); (d) for a date `d` absent from `M`, `applyDayPark(applyDayPark(M, d, p), d, null)` deep-equals `M`;
+and (e) the input `M` is never mutated.
+
+**Validates: Requirements 24.2, 24.3, 24.4, 24.7**
+
+### Property 29: Schedule Builder Park Mismatch Detection
+
+*For any* date `d` with configured `startingPark = S ∈ PARKS`, and any non-empty list of scheduled items for `d` with resolved parks `P_items = { item.park | item.park ∈ PARKS }`: the park mismatch banner is displayed if and only if `|P_items| === 1` and `P_items[0] !== S`. When `|P_items| > 1` (park hopping) or `P_items` contains `S`, or when no items with known parks are scheduled, or when no `startingPark` is set, no mismatch banner is displayed.
+
+**Validates: Requirements 24.12**
 
 ## Error Handling
 

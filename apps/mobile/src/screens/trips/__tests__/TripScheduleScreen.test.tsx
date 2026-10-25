@@ -22,6 +22,7 @@ import TripScheduleScreen, {
   getTodayWDW,
   getWDWNowMinutes,
 } from '../TripScheduleScreen';
+import { tripDetailKeys } from '../tripDetailQueryKeys';
 import { apiRequest as mockedApiRequest } from '../../../api/client';
 
 jest.mock('expo-constants', () => ({
@@ -75,10 +76,12 @@ const PLANNED_ITEM: PlannedItemDTO = {
   partySize: null,
 };
 
-function renderScreen(navOverrides?: Record<string, any>) {
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
-  });
+function renderScreen(navOverrides?: Record<string, any>, client?: QueryClient) {
+  const queryClient =
+    client ??
+    new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
 
   const navigation = {
     navigate: jest.fn(),
@@ -103,7 +106,7 @@ function renderScreen(navOverrides?: Record<string, any>) {
     </QueryClientProvider>,
   );
 
-  return Object.assign(rendered, { navigation });
+  return Object.assign(rendered, { navigation, queryClient });
 }
 
 describe('TripScheduleScreen', () => {
@@ -4118,5 +4121,463 @@ describe('TripScheduleScreen — dark mode', () => {
       expect(seg('soft_window').backgroundColor).toBe(darkTheme.color.borderStrong),
     );
     expect(seg('any_time').backgroundColor).toBeUndefined();
+  });
+
+  // Task 25.8 / Requirement 24.8: Date selector pills display Day_Park
+  it('Task 25.8: renders park name on date pill when dayTouringHours[date].startingPark is set and omits it when undefined', async () => {
+    apiRequestMock.mockImplementation(async (method, path) => {
+      if (method === 'GET' && path === `/trips/${TRIP_ID}`) {
+        return {
+          id: TRIP_ID,
+          name: 'Disney Trip',
+          startDate: '2026-10-01',
+          endDate: '2026-10-02',
+          status: 'upcoming',
+          dayTouringHours: {
+            '2026-10-01': {
+              startHour: 9,
+              endHour: 21,
+              startingPark: 'Animal Kingdom',
+            },
+            '2026-10-02': {
+              startHour: 9,
+              endHour: 21,
+            },
+          },
+        } as any;
+      }
+      if (method === 'GET' && path === `/trips/${TRIP_ID}/planned-items`) {
+        return [];
+      }
+      if (method === 'GET' && path.startsWith('/catalog')) {
+        return { experiences: [] };
+      }
+      throw new Error(`Unexpected request: ${method} ${path}`);
+    });
+
+    renderScreen();
+
+    const pill1 = await screen.findByTestId('date-pill-2026-10-01');
+    const pill2 = await screen.findByTestId('date-pill-2026-10-02');
+
+    expect(within(pill1).getByText('Animal Kingdom')).toBeTruthy();
+    expect(within(pill2).queryByText('Animal Kingdom')).toBeNull();
+  });
+
+  // Task 25.8 / Requirement 24.9c regression: preserving Day_Park startingPark in PATCH /trips/:id
+  it('Task 25.8 / R24.9c regression: preserves server-supplied Day_Park startingPark in PATCH /trips/:id when schedule settings are modified', async () => {
+    let patchedBody: any = null;
+    const initialTrip = {
+      id: TRIP_ID,
+      name: 'Disney Trip',
+      startDate: '2026-10-01',
+      endDate: '2026-10-02',
+      status: 'upcoming',
+      walkingSpeed: 'moderate',
+      walkWaitWeighting: 'balanced',
+      dayTouringHours: {
+        '2026-10-01': {
+          startHour: 9,
+          endHour: 21,
+        },
+      },
+    };
+
+    apiRequestMock.mockImplementation(async (method, path, body) => {
+      if (method === 'GET' && path === `/trips/${TRIP_ID}`) {
+        return initialTrip as any;
+      }
+      if (method === 'GET' && path === `/trips/${TRIP_ID}/planned-items`) {
+        return [];
+      }
+      if (method === 'GET' && path.startsWith('/catalog')) {
+        return { experiences: [] };
+      }
+      if (method === 'PATCH' && path === `/trips/${TRIP_ID}`) {
+        patchedBody = body;
+        return { ...initialTrip, ...(body as any) } as any;
+      }
+      throw new Error(`Unexpected request: ${method} ${path}`);
+    });
+
+    const { queryClient } = renderScreen();
+
+    // Verify initial load
+    await screen.findByTestId('date-pill-2026-10-01');
+
+    // Simulate query cache update setting startingPark on 2026-10-01 (as from Day_Park picker)
+    const updatedTrip = {
+      ...initialTrip,
+      dayTouringHours: {
+        '2026-10-01': {
+          startHour: 9,
+          endHour: 21,
+          startingPark: 'Animal Kingdom',
+        },
+      },
+    };
+    queryClient.setQueryData(tripDetailKeys.detail(TRIP_ID), updatedTrip);
+
+    // Verify the date pill reflects the new park name
+    await waitFor(() => {
+      expect(screen.getByText('Animal Kingdom')).toBeTruthy();
+    });
+
+    // Open Schedule Settings modal
+    fireEvent.press(screen.getByTestId('schedule-settings-btn'));
+    await screen.findByTestId('walking-pace-fast');
+
+    // Change an unrelated setting (walking speed to fast)
+    fireEvent.press(screen.getByTestId('walking-pace-fast'));
+
+    // Tap Done to save settings
+    fireEvent.press(screen.getByTestId('save-schedule-settings-btn'));
+
+    // Assert that the PATCH request to the API preserves the server-supplied startingPark
+    await waitFor(() => {
+      expect(patchedBody).not.toBeNull();
+    });
+    expect(patchedBody.walkingSpeed).toBe('fast');
+    expect(patchedBody.dayTouringHours?.['2026-10-01']?.startingPark).toBe('Animal Kingdom');
+  });
+
+  // Task 25.8 / R24.9 regression: server-side clear removes local startingPark
+  it('Task 25.8 / R24.9 regression: server-side Day_Park clear removes local startingPark and does not send startingPark in PATCH', async () => {
+    let patchedBody: any = null;
+    const initialTrip = {
+      id: TRIP_ID,
+      name: 'Disney Trip',
+      startDate: '2026-10-01',
+      endDate: '2026-10-02',
+      status: 'upcoming',
+      walkingSpeed: 'moderate',
+      walkWaitWeighting: 'balanced',
+      dayTouringHours: {
+        '2026-10-02': {
+          startHour: 9,
+          endHour: 21,
+          startingPark: 'EPCOT',
+        },
+      },
+    };
+
+    apiRequestMock.mockImplementation(async (method, path, body) => {
+      if (method === 'GET' && path === `/trips/${TRIP_ID}`) {
+        return initialTrip as any;
+      }
+      if (method === 'GET' && path === `/trips/${TRIP_ID}/planned-items`) {
+        return [];
+      }
+      if (method === 'GET' && path.startsWith('/catalog')) {
+        return { experiences: [] };
+      }
+      if (method === 'PATCH' && path === `/trips/${TRIP_ID}`) {
+        patchedBody = body;
+        return { ...initialTrip, ...(body as any) } as any;
+      }
+      throw new Error(`Unexpected request: ${method} ${path}`);
+    });
+
+    const { queryClient } = renderScreen();
+
+    // Verify initial load
+    await screen.findByTestId('date-pill-2026-10-01');
+    const pill2 = await screen.findByTestId('date-pill-2026-10-02');
+
+    // Select date 2026-10-02
+    fireEvent.press(pill2);
+
+    // Initial state: date pill for 2026-10-02 shows EPCOT
+    expect(within(pill2).getByText('EPCOT')).toBeTruthy();
+
+    // Simulate hub clear: server entry disappears (dayTouringHours becomes {})
+    const clearedTrip = {
+      ...initialTrip,
+      dayTouringHours: {},
+    };
+    queryClient.setQueryData(tripDetailKeys.detail(TRIP_ID), clearedTrip);
+
+    // Date pill should no longer display EPCOT
+    await waitFor(() => {
+      expect(within(screen.getByTestId('date-pill-2026-10-02')).queryByText('EPCOT')).toBeNull();
+    });
+
+    // Open Schedule Settings modal
+    fireEvent.press(screen.getByTestId('schedule-settings-btn'));
+    await screen.findByTestId('walking-pace-fast');
+
+    // Assert that the Starting Park control shows no park after the clear
+    const autoDetectChip = screen.getByTestId('starting-park-auto-detect');
+    const epcotChip = screen.getByTestId('starting-park-epcot');
+    expect(autoDetectChip.props.accessibilityState).toEqual({ selected: true });
+    expect(epcotChip.props.accessibilityState).toEqual({ selected: false });
+
+    // Change only the walking pace
+    fireEvent.press(screen.getByTestId('walking-pace-fast'));
+
+    // Tap Done to save settings
+    fireEvent.press(screen.getByTestId('save-schedule-settings-btn'));
+
+    // Assert that the PATCH body's dayTouringHours does NOT contain startingPark for that date
+    await waitFor(() => {
+      expect(patchedBody).not.toBeNull();
+    });
+    expect(patchedBody.walkingSpeed).toBe('fast');
+    expect(patchedBody.dayTouringHours?.['2026-10-02']?.startingPark).toBeUndefined();
+  });
+
+  // Task 25.8 / R24.9 regression: Auto-detect in settings clears startingPark
+  it('Task 25.8 / R24.9 regression: selecting Auto-detect in settings clears startingPark in PATCH body', async () => {
+    let patchedBody: any = null;
+    const initialTrip = {
+      id: TRIP_ID,
+      name: 'Disney Trip',
+      startDate: '2026-10-01',
+      endDate: '2026-10-02',
+      status: 'upcoming',
+      walkingSpeed: 'moderate',
+      walkWaitWeighting: 'balanced',
+      dayTouringHours: {
+        '2026-10-02': {
+          startHour: 9,
+          endHour: 21,
+          startingPark: 'EPCOT',
+        },
+      },
+    };
+
+    apiRequestMock.mockImplementation(async (method, path, body) => {
+      if (method === 'GET' && path === `/trips/${TRIP_ID}`) {
+        return initialTrip as any;
+      }
+      if (method === 'GET' && path === `/trips/${TRIP_ID}/planned-items`) {
+        return [];
+      }
+      if (method === 'GET' && path.startsWith('/catalog')) {
+        return { experiences: [] };
+      }
+      if (method === 'PATCH' && path === `/trips/${TRIP_ID}`) {
+        patchedBody = body;
+        return { ...initialTrip, ...(body as any) } as any;
+      }
+      throw new Error(`Unexpected request: ${method} ${path}`);
+    });
+
+    renderScreen();
+
+    // Verify initial load
+    await screen.findByTestId('date-pill-2026-10-01');
+    const pill2 = await screen.findByTestId('date-pill-2026-10-02');
+
+    // Select date 2026-10-02
+    fireEvent.press(pill2);
+
+    // Initial state: date pill for 2026-10-02 shows EPCOT
+    expect(within(pill2).getByText('EPCOT')).toBeTruthy();
+
+    // Open Schedule Settings modal
+    fireEvent.press(screen.getByTestId('schedule-settings-btn'));
+    await screen.findByTestId('starting-park-auto-detect');
+
+    // Press Auto-detect to clear Starting Park
+    fireEvent.press(screen.getByTestId('starting-park-auto-detect'));
+
+    // Tap Done to save settings
+    fireEvent.press(screen.getByTestId('save-schedule-settings-btn'));
+
+    // Assert that the PATCH body's dayTouringHours['2026-10-02'].startingPark is undefined
+    await waitFor(() => {
+      expect(patchedBody).not.toBeNull();
+    });
+    expect(patchedBody.dayTouringHours?.['2026-10-02']?.startingPark).toBeUndefined();
+  });
+
+  describe('Task 25.10 / R24.12: Schedule Builder park mismatch banner', () => {
+    it('displays mismatch banner when all items are in EPCOT but startingPark is Magic Kingdom, and tapping switch updates Day Park', async () => {
+      let putCall: { method: string; path: string; body: any } | null = null;
+      const trip = {
+        id: TRIP_ID,
+        name: 'Disney Trip',
+        startDate: '2026-10-01',
+        endDate: '2026-10-02',
+        status: 'upcoming',
+        dayTouringHours: {
+          '2026-10-02': {
+            startHour: 9,
+            endHour: 21,
+            startingPark: 'Magic Kingdom',
+          },
+        },
+      };
+
+      const epcotItems = [
+        {
+          id: 'item-epcot-1',
+          tripId: TRIP_ID,
+          experienceId: 'exp-1',
+          experienceName: 'Test Track',
+          park: 'EPCOT',
+          plannedDate: '2026-10-02',
+          itemType: 'attraction',
+        },
+        {
+          id: 'item-epcot-2',
+          tripId: TRIP_ID,
+          experienceId: 'exp-2',
+          experienceName: 'Soarin',
+          park: 'EPCOT',
+          plannedDate: '2026-10-02',
+          itemType: 'attraction',
+        },
+      ];
+
+      apiRequestMock.mockImplementation(async (method, path, body) => {
+        if (method === 'GET' && path === `/trips/${TRIP_ID}`) {
+          return trip as any;
+        }
+        if (method === 'GET' && path === `/trips/${TRIP_ID}/planned-items`) {
+          return epcotItems as any;
+        }
+        if (method === 'GET' && path.startsWith('/catalog')) {
+          return { experiences: [] };
+        }
+        if (method === 'PUT' && path === `/trips/${TRIP_ID}/days/2026-10-02/park`) {
+          putCall = { method, path, body };
+          return {
+            ...trip,
+            dayTouringHours: {
+              '2026-10-02': {
+                ...trip.dayTouringHours['2026-10-02'],
+                startingPark: 'EPCOT',
+              },
+            },
+          } as any;
+        }
+        throw new Error(`Unexpected request: ${method} ${path}`);
+      });
+
+      renderScreen();
+
+      // Select 2026-10-02 pill
+      const pill2 = await screen.findByTestId('date-pill-2026-10-02');
+      fireEvent.press(pill2);
+
+      // Verify mismatch banner appears
+      const banner = await screen.findByTestId('day-park-mismatch-banner');
+      expect(banner).toBeTruthy();
+      expect(within(banner).getAllByText(/EPCOT/i).length).toBeGreaterThan(0);
+      expect(within(banner).getByText(/Magic Kingdom/i)).toBeTruthy();
+
+      // Switch button
+      const switchBtn = screen.getByTestId('day-park-mismatch-switch-btn');
+      expect(switchBtn).toHaveTextContent('Switch to EPCOT');
+
+      // Tap switch button
+      fireEvent.press(switchBtn);
+
+      // Assert PUT was called
+      await waitFor(() => {
+        expect(putCall).toEqual({
+          method: 'PUT',
+          path: `/trips/${TRIP_ID}/days/2026-10-02/park`,
+          body: { park: 'EPCOT' },
+        });
+      });
+
+      // Banner is dismissed
+      await waitFor(() => {
+        expect(screen.queryByTestId('day-park-mismatch-banner')).toBeNull();
+      });
+    });
+
+    it('does not display mismatch banner when items are in multiple parks (park hopping)', async () => {
+      const trip = {
+        id: TRIP_ID,
+        name: 'Disney Trip',
+        startDate: '2026-10-01',
+        endDate: '2026-10-02',
+        status: 'upcoming',
+        dayTouringHours: {
+          '2026-10-02': {
+            startingPark: 'Magic Kingdom',
+          },
+        },
+      };
+
+      const hoppingItems = [
+        {
+          id: 'item-mk',
+          tripId: TRIP_ID,
+          experienceName: 'Space Mountain',
+          park: 'Magic Kingdom',
+          plannedDate: '2026-10-02',
+          itemType: 'attraction',
+        },
+        {
+          id: 'item-epcot',
+          tripId: TRIP_ID,
+          experienceName: 'Test Track',
+          park: 'EPCOT',
+          plannedDate: '2026-10-02',
+          itemType: 'attraction',
+        },
+      ];
+
+      apiRequestMock.mockImplementation(async (method, path) => {
+        if (method === 'GET' && path === `/trips/${TRIP_ID}`) return trip as any;
+        if (method === 'GET' && path === `/trips/${TRIP_ID}/planned-items`) return hoppingItems as any;
+        if (method === 'GET' && path.startsWith('/catalog')) return { experiences: [] };
+        throw new Error(`Unexpected request: ${method} ${path}`);
+      });
+
+      renderScreen();
+
+      const pill2 = await screen.findByTestId('date-pill-2026-10-02');
+      fireEvent.press(pill2);
+
+      await screen.findByText('Space Mountain');
+      expect(screen.queryByTestId('day-park-mismatch-banner')).toBeNull();
+    });
+
+    it('does not display mismatch banner when items match startingPark', async () => {
+      const trip = {
+        id: TRIP_ID,
+        name: 'Disney Trip',
+        startDate: '2026-10-01',
+        endDate: '2026-10-02',
+        status: 'upcoming',
+        dayTouringHours: {
+          '2026-10-02': {
+            startingPark: 'Magic Kingdom',
+          },
+        },
+      };
+
+      const mkItems = [
+        {
+          id: 'item-mk-1',
+          tripId: TRIP_ID,
+          experienceName: 'Space Mountain',
+          park: 'Magic Kingdom',
+          plannedDate: '2026-10-02',
+          itemType: 'attraction',
+        },
+      ];
+
+      apiRequestMock.mockImplementation(async (method, path) => {
+        if (method === 'GET' && path === `/trips/${TRIP_ID}`) return trip as any;
+        if (method === 'GET' && path === `/trips/${TRIP_ID}/planned-items`) return mkItems as any;
+        if (method === 'GET' && path.startsWith('/catalog')) return { experiences: [] };
+        throw new Error(`Unexpected request: ${method} ${path}`);
+      });
+
+      renderScreen();
+
+      const pill2 = await screen.findByTestId('date-pill-2026-10-02');
+      fireEvent.press(pill2);
+
+      await screen.findByText('Space Mountain');
+      expect(screen.queryByTestId('day-park-mismatch-banner')).toBeNull();
+    });
   });
 });

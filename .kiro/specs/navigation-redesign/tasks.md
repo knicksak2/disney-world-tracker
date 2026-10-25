@@ -302,6 +302,36 @@ sub-tasks are marked optional with `*`.
     - _Requirements: 6 amendment 8d (Property 13)_
   - [x] 19.5 Checkpoint — ran `npm run verify:mobile`, then final full `npm run verify` gate
 
+- [x] 20. Home Screen Simplification & 2-Zone Layout (Requirements 2.7, 2.8, Property 11)
+  - [x] 20.1 Implement `resolveEarliestActiveMilestone` pure core and property test
+    - Create `apps/mobile/src/screens/home/milestoneDerivation.ts` with pure `resolveEarliestActiveMilestone(windows: readonly BookingWindowDTO[])` returning `{ kind, label, subtitle, dropMoment } | null` for the earliest active window with `!w.isDone`, prioritizing dining countdown and progressing to Lightning Lane
+    - Write property-based tests in `apps/mobile/src/screens/home/__tests__/milestoneDerivation.prop.test.ts` (Property 11, ≥100 runs)
+    - _Requirements: 2.8 (Property 11)_
+  - [x] 20.2 Expand `UpcomingTripHero.tsx` into a rich Trip Preview Card
+    - Add crew preview row querying `['trips', 'members', trip.id]` and reading `trip.guests`; show avatars, participant count, and navigation to `TripMembers` (or "Just you so far • + Invite Crew ›" for solo trips)
+    - Query `bookingKeys.timeline(trip.id)` via `fetchBookingTimeline` and render the active milestone banner via `resolveEarliestActiveMilestone` with direct navigation to `TripBookingTimeline`
+    - Update styling and palettes in `UpcomingTripHero.palette.ts` and `UpcomingTripHero.tsx`
+    - _Requirements: 2.8_
+  - [x] 20.3 Build `HomeThemeParksSection.tsx`
+    - Render 2x2 Theme Parks grid for Magic Kingdom, EPCOT, Disney's Hollywood Studios, and Disney's Animal Kingdom with landmark visuals, experience counts, and embedded `⚡ XXm avg` live wait pulse badges; tapping any park navigates to `DestinationScreen`
+    - Header with "All Live Waits ›" link navigating to `LiveWaitsScreen`
+    - Two equal-width Quick Log buttons directly below the grid: `🎢 Log a Ride` and `🍽️ Log Food` wired to the existing experience and food logging modals
+    - Co-locate `HomeThemeParksSection.palette.ts`
+    - _Requirements: 2.7_
+  - [x] 20.4 Update `HomeFavoritesSection.tsx` to conditionally omit empty state on Home
+    - When `visibleFavorites.length === 0`, return `null` instead of rendering empty state box, keeping Home clean for users with no favorites
+    - _Requirements: 2.7; experience-favorites Requirement 8.3a_
+  - [x] 20.5 Recompose `HomeScreen.tsx` into the 2-Zone Layout
+    - Zone 1: Vacation Context (`UpcomingTripHero` / `ActiveTripShortcut` / `ExplorationPromptCard`)
+    - Zone 2: `HomeThemeParksSection` (Parks + Quick Log row)
+    - Followed by `HomeFavoritesSection` (when non-empty) and `Highest-Rated Experiences`
+    - Remove top `ActionDock` and standalone `ParkWaitPulse` from `HomeScreen`
+    - _Requirements: 2.7, 2.8_
+  - [x] 20.6 Update and expand tests in `HomeScreen.render.test.tsx` and run verification gate
+    - Update test assertions for 2-zone layout: expanded Upcoming Trip card with crew & milestone, 2x2 Theme Parks grid with Destination navigation and Live Waits link, 2-button Quick Log row, and Favorites hidden when empty
+    - Run file-level test loop, then `npm run verify`
+    - _Requirements: 2.7, 2.8_
+
 ## Notes
 
 - Tasks marked with `*` are optional test sub-tasks and can be skipped for a faster MVP. (None are marked in this plan — every test sub-task here guards a Correctness Property or a stated regression risk, so none is optional.)

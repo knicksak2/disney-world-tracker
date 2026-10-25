@@ -30,6 +30,7 @@ import { RESERVATION_KINDS } from './enums.js';
 import type { TripPostPhotoSlotDTO } from './dto/Photos.js';
 import {
   isoTimestampSchema,
+  parkSchema,
   ratingValueSchema,
   tripReactionValueSchema,
   uuidSchema,
@@ -210,6 +211,30 @@ export const dayTouringHoursSchema = z
 
 export type DayTouringHoursDTO = z.infer<typeof dayTouringHoursSchema>;
 export type TouringStartMode = NonNullable<DayTouringHoursDTO['startMode']>;
+
+/**
+ * Body for `PUT /trips/:id/days/:date/park` (R24.3, R24.4, R24.6).
+ * Accepts `{ park: <Park> | null }`.
+ */
+export const dayParkSetSchema = z
+  .object({
+    park: parkSchema.nullable(),
+  })
+  .strict();
+
+export type DayParkSetInput = z.infer<typeof dayParkSetSchema>;
+
+/**
+ * Route parameters for `PUT /trips/:id/days/:date/park` (R24.6).
+ */
+export const dayParkParamsSchema = z
+  .object({
+    id: uuidSchema,
+    date: tripCalendarDateSchema,
+  })
+  .strict();
+
+export type DayParkParams = z.infer<typeof dayParkParamsSchema>;
 
 /**
  * Body for `PATCH /trips/:id` (R3.4–R3.6). Every field is optional so an edit

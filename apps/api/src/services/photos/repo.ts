@@ -63,6 +63,21 @@ export interface FoodGalleryRow {
   readonly food_item_name?: string | null;
 }
 
+export type MyPhotoListRow = Pick<
+  PhotoRow,
+  | 'id'
+  | 'owner_id'
+  | 'target_kind'
+  | 'target_id'
+  | 'scope_id'
+  | 'feed_item_id'
+  | 'status'
+  | 'reject_reason'
+  | 'width'
+  | 'height'
+  | 'created_at'
+>;
+
 export interface InsertUploadingPhotoParams {
   readonly id?: string;
   readonly ownerId: string;
@@ -318,6 +333,28 @@ SELECT p.id, p.owner_id, p.sort_at, p.width, p.height
  ORDER BY p.sort_at ASC, p.id ASC;
 `;
 
+export const SQL_MY_PHOTOS_FIRST_PAGE = `
+SELECT id, owner_id, target_kind, target_id, scope_id, feed_item_id, status, reject_reason,
+       width, height, created_at
+  FROM photos
+ WHERE owner_id = $1
+   AND status <> 'deleted'
+ ORDER BY created_at DESC, id DESC
+ LIMIT $2;
+`;
+
+export const SQL_MY_PHOTOS_NEXT_PAGE = `
+SELECT id, owner_id, target_kind, target_id, scope_id, feed_item_id, status, reject_reason,
+       width, height, created_at
+  FROM photos
+ WHERE owner_id = $1
+   AND status <> 'deleted'
+   AND (created_at < $2
+        OR (created_at = $2 AND id < $3))
+ ORDER BY created_at DESC, id DESC
+ LIMIT $4;
+`;
+
 export interface TripPhotoRow {
   readonly id: string;
   readonly target_id: string;
@@ -418,6 +455,12 @@ export interface PhotosRepo {
     limit?: number,
     client?: DbPool | PoolClient
   ): Promise<readonly PhotoRow[]>;
+  listAllMine(
+    ownerId: string,
+    cursor: { createdAt: Date; id: string } | undefined,
+    limit: number,
+    client?: DbPool | PoolClient
+  ): Promise<readonly MyPhotoListRow[]>;
   listFoodByScope(
     params: { scopeId: string; viewerId: string; limit: number; cursor?: { createdAt: Date; id: string } },
     client?: DbPool | PoolClient
@@ -834,6 +877,26 @@ export function createPhotosRepo(pool: DbPool): PhotosRepo {
         ownerId,
         targetKind,
         scopeId,
+        cursor.createdAt,
+        cursor.id,
+        limit,
+      ]);
+      return res.rows;
+    },
+
+    async listAllMine(
+      ownerId: string,
+      cursor: { createdAt: Date; id: string } | undefined,
+      limit: number,
+      client?: DbPool | PoolClient
+    ): Promise<readonly MyPhotoListRow[]> {
+      const db = getDb(client);
+      if (!cursor) {
+        const res = await db.query<MyPhotoListRow>(SQL_MY_PHOTOS_FIRST_PAGE, [ownerId, limit]);
+        return res.rows;
+      }
+      const res = await db.query<MyPhotoListRow>(SQL_MY_PHOTOS_NEXT_PAGE, [
+        ownerId,
         cursor.createdAt,
         cursor.id,
         limit,

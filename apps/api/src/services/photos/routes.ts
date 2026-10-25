@@ -32,6 +32,7 @@ import {
   photoReportCreateSchema,
   blockCreateSchema,
   myPhotosQuerySchema,
+  myPhotosAllQuerySchema,
   uuidSchema,
   type PhotoClientConfigDTO,
   type PhotoInitiateResponseDTO,
@@ -176,6 +177,19 @@ export const photoRoutes: FastifyPluginAsync<PhotoRoutesOptions> = async (
       const userId = requireUser(request);
       const query = parseOrAppError(myPhotosQuerySchema, request.query);
       const result = await photoService.listMine(userId, query);
+      setPrivateNoStore(reply);
+      return result;
+    }
+  );
+
+  // 5b. GET /me/photos/all
+  app.get<{ Querystring: unknown; Reply: PhotoPageDTO<MyPhotoDTO> }>(
+    '/me/photos/all',
+    { preHandler: requireSession },
+    async (request, reply) => {
+      const userId = requireUser(request);
+      const query = parseOrAppError(myPhotosAllQuerySchema, request.query);
+      const result = await photoService.listAllMine(userId, query);
       setPrivateNoStore(reply);
       return result;
     }

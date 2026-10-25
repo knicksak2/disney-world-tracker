@@ -48,6 +48,7 @@ export type TripAction =
   | 'edit_booking_settings' // trip-booking-timeline organizer-only (R12.1, R12.5)
   | 'add_planned_item'
   | 'edit_planned_item'
+  | 'set_day_park'
   | 'optimize_day'
   | 'create_log_entry'
   | 'add_rode_with'
@@ -71,6 +72,7 @@ export type TripAction =
 const MEMBER_ACTIONS: ReadonlySet<TripAction> = new Set<TripAction>([
   'add_planned_item',
   'edit_planned_item',
+  'set_day_park',
   'optimize_day',
   'create_log_entry',
   'add_rode_with',

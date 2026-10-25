@@ -5,7 +5,7 @@
  * Features 4 quick-action launch tiles:
  *   1. Live Waits (⏱️) -> navigates to LiveWaitsScreen
  *   2. Log Ride (🎢) -> opens LogVisitModal / navigates to Explore
- *   3. Log Snack (🍦) -> opens LogFoodItemModal / navigates to Explore
+ *   3. Log Food (🍽️) -> opens LogFoodItemModal / navigates to Explore
  *   4. My Pins (📌) -> navigates to Collection tab / PinBoard with claimable badge
  */
 
@@ -19,6 +19,7 @@ import { ACTION_DOCK } from './ActionDock.palette';
 
 export interface ActionDockProps {
   readonly onOpenLogRide?: () => void;
+  readonly onOpenLogFood?: () => void;
   readonly onOpenLogSnack?: () => void;
   readonly onOpenLiveWaits?: () => void;
   readonly onOpenMyPins?: () => void;
@@ -31,6 +32,7 @@ export interface ActionDockProps {
 
 export default function ActionDock({
   onOpenLogRide,
+  onOpenLogFood,
   onOpenLogSnack,
   onOpenLiveWaits,
   onOpenMyPins,
@@ -56,8 +58,12 @@ export default function ActionDock({
     onOpenLogRide?.();
   };
 
-  const handleLogSnack = () => {
-    onOpenLogSnack?.();
+  const handleLogFood = () => {
+    if (onOpenLogFood) {
+      onOpenLogFood();
+    } else {
+      onOpenLogSnack?.();
+    }
   };
 
   const handleFourthTile = () => {
@@ -108,18 +114,18 @@ export default function ActionDock({
         <Text style={styles.label}>Log Ride</Text>
       </Pressable>
 
-      {/* 3. Log Snack */}
+      {/* 3. Log Food */}
       <Pressable
         style={({ pressed }) => [styles.dockBtn, pressed && styles.pressed]}
-        onPress={handleLogSnack}
+        onPress={handleLogFood}
         accessibilityRole="button"
-        accessibilityLabel="Log food item or snack"
-        testID="home-dock-log-snack"
+        accessibilityLabel="Log food item or meal"
+        testID="home-dock-log-food"
       >
-        <View style={[styles.iconWrap, { backgroundColor: pal.logSnackBg }]}>
-          <Text style={styles.emojiIcon}>🍦</Text>
+        <View style={[styles.iconWrap, { backgroundColor: pal.logFoodBg ?? pal.logSnackBg }]}>
+          <Text style={styles.emojiIcon}>🍽️</Text>
         </View>
-        <Text style={styles.label}>Log Snack</Text>
+        <Text style={styles.label}>Log Food</Text>
       </Pressable>
 
       {/* 4. Day Plan or My Pins */}

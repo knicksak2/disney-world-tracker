@@ -9,6 +9,7 @@ import AttributionScreen from '../screens/profile/AttributionScreen';
 import MyFoodHistoryScreen from '../screens/catalog/MyFoodHistoryScreen';
 import MyFoodListsScreen from '../screens/foodLists/MyFoodListsScreen';
 import MyExperienceListsScreen from '../screens/experienceLists/MyExperienceListsScreen';
+import MyPhotosScreen from '../screens/collection/MyPhotosScreen';
 import StatsStack, { type StatsStackParamList } from './StatsStack';
 
 /**
@@ -29,6 +30,7 @@ export type CollectionStackParamList = {
   MyFoodLists: { initialTab?: 'owned' | 'saved' } | undefined;
   MyExperienceLists: { initialTab?: 'owned' | 'saved' } | undefined;
   Stats: NavigatorScreenParams<StatsStackParamList> | undefined;
+  MyPhotos: undefined;
 };
 
 const Stack = createNativeStackNavigator<CollectionStackParamList>();
@@ -44,6 +46,7 @@ export default function CollectionStack(): JSX.Element {
       <Stack.Screen name="MyFoodLists" component={MyFoodListsScreen} />
       <Stack.Screen name="MyExperienceLists" component={MyExperienceListsScreen} />
       <Stack.Screen name="Stats" component={StatsStack} />
+      <Stack.Screen name="MyPhotos" component={MyPhotosScreen} />
     </Stack.Navigator>
   );
 }

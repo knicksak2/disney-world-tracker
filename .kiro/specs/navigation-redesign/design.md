@@ -122,7 +122,7 @@ apps/mobile/src/screens/
                                         avatar pill button, countdown card for upcoming trips,
                                         action dock, park wait pulse carousel, and sectioned leaderboard
   home/UpcomingTripHero.tsx   (new) countdown hero card for upcoming trips reading /me/trips
-  home/ActionDock.tsx         (new) 4 quick action tiles: Live Waits, Log Ride, Log Snack, My Pins
+  home/ActionDock.tsx         (new) 4 quick action tiles: Live Waits, Log Ride, Log Food, My Pins
   home/ParkWaitPulse.tsx      (new) horizontal line-radar carousel across 4 parks using /parks/:park/live
   home/pulseCalculations.ts   (new) pure calculation of average wait and crowd trend level
   explore/ExploreScreen.tsx   (renamed from catalog/CatalogScreen's role as landing; the existing
@@ -256,8 +256,8 @@ bottom-sheet pattern already in the codebase) that renders `buildQuickActions(cl
   `PARKS` order). "Last-viewed park" is tracked by a small Zustand slice (`liveWaitsStore`, mirroring
   `sessionStore`'s shape) updated whenever `LiveWaitsScreen` mounts with a park selected — no new
   server-side state.
-- **Log Ride / Log Snack** → dismiss, then open the existing experience-picker flow the current
-  Home/Catalog "Log Ride"/"Log Snack" entry points already use (`LogVisitModal`/`LogFoodItemModal`'s
+- **Log Ride / Log Food** → dismiss, then open the existing experience-picker flow the current
+  Home/Catalog "Log Ride"/"Log Food" entry points already use (`LogVisitModal`/`LogFoodItemModal`'s
   existing presentation contract is unchanged; Requirement 4.4).
 - **Claim Pins** → dismiss, then `navigation.navigate('MainTabs', { screen: 'Collection', params: {
   screen: 'PinBoard', params: { celebratePinIds: claimableIds } } })`, reusing `PinBoardScreen`'s
@@ -818,6 +818,25 @@ actionable via the pin toggle already specified in `food-lists` Requirement 14.5
 
 ### Property 10: Collection Preview Rows Are Exactly the First `MAX_COLLECTION_PREVIEW_ROWS` of the Pinned-First-Ordered Owned List (Added by this amendment)
 *For any User and either list card ("My Food Lists" / "My Experience Lists"), the rows rendered on `CollectionScreen` equal `ownedLists.slice(0, 4)` exactly (same ids, same order) as returned by `GET /me/food-lists/collection` / `GET /me/experience-lists/collection`'s `owned` array — no client-side re-sort, re-filter, or `[0]`-style pick is applied. A "View all (N)" row renders with `N` equal to the exact `ownedLists.length`.*
+
+### Property 11: Earliest Active Milestone Selection for Upcoming Vacation Card (Requirements 2.7, 2.8)
+**Validates: Requirement 2.8**
+*For any list of booking windows from `BookingTimelineDTO`, filtering by `splitWindows(windows).active` where `!w.isDone` and selecting the first window by drop timestamp deterministically yields the active milestone banner displayed on `UpcomingTripHero`. When no active, unfinished window exists (or windows is empty), the milestone banner evaluates to `null` and is omitted.*
+
+## Amendment: Home Screen Simplification & 2-Zone Architecture (Requirements 2.7, 2.8)
+
+### Architectural Overview
+The Home Screen (`HomeScreen.tsx`) is restructured from 6 competing visual tiers into two clear primary zones:
+1. **Zone 1: Vacation Context**:
+   - `UpcomingTripHero`: Expanded from a compact single row into an informative pre-trip card featuring countdown badge, trip title, date range, a Travel Party / Crew preview row (with member avatars, guest count, and direct jump to `TripMembers`), and a Next Booking Milestone banner (60-day dining / Lightning Lane window status from `fetchBookingTimeline`, with 1-tap jump to `TripBookingTimeline`).
+   - `ActiveTripShortcut`: Maintained when a trip is active.
+   - `ExplorationPromptCard`: Maintained when no trip exists.
+2. **Zone 2: The Parks & Quick Logging**:
+   - `HomeThemeParksSection`: Replaces both `ActionDock` and `ParkWaitPulse` with a cohesive 2x2 Theme Parks Grid (Magic Kingdom, EPCOT, Disney's Hollywood Studios, Disney's Animal Kingdom). Each card mirrors `ThemeParkGridTile`'s aesthetic with landmark iconography, experience counts, and an embedded `⚡ XXm avg` wait average pill in the top-right corner. Tapping any park tile navigates to `DestinationScreen` for that park. The section header includes an `"All Live Waits ›"` link navigating to `LiveWaitsScreen`.
+   - Directly underneath the 2x2 grid, a 2-button Quick Log row provides equal-width `🎢 Log a Ride` and `🍽️ Log Food` buttons opening the existing attraction and dining logging modals.
+3. **Progressive Disclosure Sections**:
+   - `HomeFavoritesSection`: Re-positioned below the Parks & Quick Log row, and conditionally rendered **only** when the user has at least one favorited experience with live wait data; omitted entirely when empty.
+   - `Highest-Rated Experiences`: Retained at the bottom of the scroll view.
 **Validates:** Requirement 6 amendment 8c, 8d
 
 ### Property 11: Each Collection Preview Row Deep-Links to Its Own List (Added by this amendment)

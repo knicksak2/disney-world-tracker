@@ -8,6 +8,7 @@
  *   POST   /me/trips        create a Trip                    (R1.1)
  *   GET    /trips/:id       read a Trip (Member-gated)       (R3.1, R15.1)
  *   PATCH  /trips/:id       edit a Trip (Organizer-gated)    (R3.1, R3.8)
+ *   PUT    /trips/:id/days/:date/park  set/clear Day_Park (Member-gated) (R24.3, R24.4)
  *   DELETE /trips/:id       delete a Trip (Organizer-gated)  (R3.8)
  *
  * The invite slice (task 6.4) adds:
@@ -83,6 +84,8 @@ import { ZodError, z } from 'zod';
 
 import {
   attachExperienceListSchema,
+  dayParkParamsSchema,
+  dayParkSetSchema,
   attachFoodListSchema,
   plannedItemAddSchema,
   plannedItemEditSchema,
@@ -457,6 +460,26 @@ export function tripRoutes(options: TripRoutesOptions): FastifyPluginAsync {
           throw new AppError('trip_not_found', 'Trip not found.');
         }
         return trip;
+      },
+    );
+
+    // -------------------------------------------------------------------
+    // PUT /trips/:id/days/:date/park — assign or clear Day_Park (R24.3, R24.4, R24.5)
+    // -------------------------------------------------------------------
+    app.put<{ Params: { id: string; date: string } }>(
+      '/trips/:id/days/:date/park',
+      { preHandler: requireSession },
+      async (request, reply) => {
+        const userId = requireUser(request);
+        const { id, date } = parseOrAppError(dayParkParamsSchema, request.params);
+        const body = parseOrAppError(dayParkSetSchema, request.body);
+        const callerRole = await assertTripMember(pool, userId, id);
+        if (!can(callerRole, 'set_day_park')) {
+          throw new AppError('trip_forbidden', 'Forbidden');
+        }
+        const updatedTrip = await repo.setDayPark(id, date, body.park);
+        reply.code(200);
+        reply.send(updatedTrip);
       },
     );
 
@@ -1714,7 +1737,9 @@ function zodErrorToAppError(error: ZodError): AppError {
   const field =
     issue && issue.path.length > 0
       ? issue.path.map(String).join('.')
-      : undefined;
+      : issue && 'keys' in issue && Array.isArray((issue as { keys?: unknown[] }).keys) && (issue as { keys: unknown[] }).keys.length > 0
+        ? String((issue as { keys: unknown[] }).keys[0])
+        : undefined;
 
   const message = `Invalid value${field ? ` for "${field}"` : ''}.`;
   return field !== undefined

@@ -107,9 +107,9 @@ export function DishPhotosSheet({
     setShowLogModal(true);
   };
 
-  const headerAddButton = (
+  const renderAddButton = (buttonTestID: string) => (
     <TouchableOpacity
-      testID="dish-photos-add-photo-btn"
+      testID={buttonTestID}
       onPress={handleAddPhotoPress}
       style={styles.addPhotoButton}
       accessibilityRole="button"
@@ -141,10 +141,10 @@ export function DishPhotosSheet({
         fetchNextPage={fetchNextPage}
         hasNextPage={hasNextPage}
         isFetchingNextPage={isFetchingNextPage}
-        headerAction={headerAddButton}
+        headerAction={renderAddButton('dish-photos-add-photo-btn')}
         emptyTitle="No photos yet"
         emptySubtitle={`Be the first to share a photo of ${foodItemName}!`}
-        emptyAction={headerAddButton}
+        emptyAction={renderAddButton('dish-photos-empty-add-photo-btn')}
         testID={testID}
       />
 

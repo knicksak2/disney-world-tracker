@@ -81,6 +81,7 @@ import FoodItemPickerModal from '../catalog/FoodItemPickerModal';
 import LogFoodItemModal from '../catalog/LogFoodItemModal';
 import CreateFoodListModal from '../foodLists/CreateFoodListModal';
 import CreateExperienceListModal from '../experienceLists/CreateExperienceListModal';
+import { MyPhotosEntry } from './MyPhotosEntry';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const corkTexture: ImageSourcePropType = require('../../../assets/cork.png');
@@ -340,6 +341,7 @@ export default function CollectionScreen(): JSX.Element {
         eyebrow="📌 DISNEY VAULT"
         title="My Disney Collection"
         subtitle="Your personal scrapbook of pins, treats, and progress stats"
+        right={<MyPhotosEntry onPress={() => navigation.navigate('MyPhotos')} />}
       />
 
       {/* Four-Way Segmented Control (Requirement 6.6a — "Food & Lists" split

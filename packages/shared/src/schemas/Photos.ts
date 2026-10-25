@@ -7,6 +7,7 @@ import {
   PHOTO_REPORT_REASONS,
   PHOTO_REPORT_NOTE_MAX,
   PHOTO_POST_CAPTION_MAX,
+  MY_PHOTOS_MAX_LIMIT,
 } from '../constants/photos.js';
 
 export const photoUploadItemSchema = z
@@ -123,6 +124,13 @@ export const foodGalleryQuerySchema = z
   .object({
     cursor: z.string().min(1).max(200).optional(),
     limit: z.coerce.number().int().min(1).max(100).optional(),
+  })
+  .strict();
+
+export const myPhotosAllQuerySchema = z
+  .object({
+    cursor: z.string().min(1).max(200).optional(),
+    limit: z.coerce.number().int().min(1).max(MY_PHOTOS_MAX_LIMIT).optional(),
   })
   .strict();
 

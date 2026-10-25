@@ -143,7 +143,7 @@ function testConfig(enabled = true): AppConfig {
 }
 
 describe('photos.wiring — Task 9.4', () => {
-  it('registers all 16 photos routes when photos are enabled (answering non-404)', async () => {
+  it('registers all 17 photos routes when photos are enabled (answering non-404)', async () => {
     const dummyPhotoService = {
       enabled: true,
       getClientConfig: async () => ({
@@ -203,6 +203,7 @@ describe('photos.wiring — Task 9.4', () => {
       { method: 'GET', url: `/photos/${sampleUuid}` },
       { method: 'GET', url: `/me/photos/status?ids=${sampleUuid}` },
       { method: 'GET', url: '/me/photos' },
+      { method: 'GET', url: '/me/photos/all' },
       { method: 'DELETE', url: `/photos/${sampleUuid}` },
       { method: 'POST', url: `/photos/${sampleUuid}/report` },
       { method: 'POST', url: '/me/blocks' },
@@ -254,6 +255,7 @@ describe('photos.wiring — Task 9.4', () => {
       { method: 'POST', url: '/photos/uploads' },
       { method: 'POST', url: '/photos/confirm' },
       { method: 'GET', url: `/photos/${sampleUuid}` },
+      { method: 'GET', url: '/me/photos/all' },
       { method: 'GET', url: `/food-items/${sampleUuid}/photos` },
       { method: 'GET', url: `/experiences/${sampleUuid}/food-photos` },
       { method: 'GET', url: `/locations/${sampleUuid}/food-photos` },

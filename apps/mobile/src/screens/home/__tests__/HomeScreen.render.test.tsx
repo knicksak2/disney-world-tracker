@@ -19,9 +19,8 @@ import { getTodayWDW } from '../../trips/TripScheduleScreen';
 import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
 import { darkTheme } from '../../../theme/theme';
 import HomeScreen from '../HomeScreen';
-import { ACTION_DOCK } from '../ActionDock.palette';
 import { HOME_FAVORITES } from '../HomeFavoritesSection.palette';
-import { PARK_WAIT_PULSE } from '../ParkWaitPulse.palette';
+import { HOME_THEME_PARKS } from '../HomeThemeParksSection.palette';
 import { UPCOMING_TRIP_HERO } from '../UpcomingTripHero.palette';
 
 jest.mock('../../../api/client', () => {
@@ -106,6 +105,37 @@ describe('HomeScreen (Requirements 2.1–2.5)', () => {
           },
         ];
       }
+      if (path.includes('/members')) {
+        return [
+          { userId: 'user-1', displayName: 'Nicholas K', role: 'organizer' },
+          { userId: 'user-2', displayName: 'Emma Stone', role: 'member' },
+        ];
+      }
+      if (path.includes('/booking-timeline')) {
+        return {
+          tripId: 'trip-fall-magic',
+          rulesVersion: 1,
+          stayType: { value: 'resort', source: 'auto' },
+          lightningLaneTiming: { value: 'seven_day', source: 'auto' },
+          arrivalDate: { value: '2026-10-04', source: 'trip_start' },
+          muted: false,
+          windows: [
+            {
+              windowKey: 'dining:2026-08-05',
+              kind: 'dining',
+              dropOn: '2026-08-05',
+              dropAt: '2026-08-05T10:00:00.000Z',
+              coveredDates: ['2026-10-04'],
+              status: 'open',
+              daysUntilDrop: 0,
+              done: false,
+              doneAt: null,
+              doneByDisplayName: null,
+              bookedCount: 0,
+            },
+          ],
+        };
+      }
       if (path.startsWith('/parks/')) {
         return {
           park: 'Magic Kingdom',
@@ -173,9 +203,15 @@ describe('HomeScreen (Requirements 2.1–2.5)', () => {
     expect(screen.getByTestId('avatar-chip')).toBeTruthy();
   });
 
-  it('renders the upcoming vacation countdown card and handles tap to view trip', async () => {
+  it('renders the upcoming vacation countdown card with crew and milestone, handling taps (Requirement 2.8)', async () => {
     const navigateToTripDetailSpy = jest
       .spyOn(navigationRefModule, 'navigateToTripDetail')
+      .mockReturnValue(true);
+    const navigateToTripMembersSpy = jest
+      .spyOn(navigationRefModule, 'navigateToTripMembers')
+      .mockReturnValue(true);
+    const navigateToBookingTimelineSpy = jest
+      .spyOn(navigationRefModule, 'navigateToBookingTimeline')
       .mockReturnValue(true);
 
     renderHome();
@@ -185,10 +221,29 @@ describe('HomeScreen (Requirements 2.1–2.5)', () => {
     expect(screen.getByText('UPCOMING VACATION')).toBeTruthy();
     expect(screen.getByText('Fall Magic Trip')).toBeTruthy();
 
+    // Crew preview row
+    const crewRow = await screen.findByTestId('home-upcoming-trip-card-crew');
+    expect(crewRow).toBeTruthy();
+    expect(screen.getByText(/With Emma/)).toBeTruthy();
+
+    fireEvent.press(crewRow);
+    expect(navigateToTripMembersSpy).toHaveBeenCalledWith({ tripId: 'trip-fall-magic' });
+
+    // Next booking milestone banner
+    const milestoneBanner = await screen.findByTestId('home-upcoming-trip-card-milestone');
+    expect(milestoneBanner).toBeTruthy();
+    expect(screen.getByText(/60-Day Dining Window Open Now!/)).toBeTruthy();
+
+    fireEvent.press(milestoneBanner);
+    expect(navigateToBookingTimelineSpy).toHaveBeenCalledWith({ tripId: 'trip-fall-magic' });
+
+    // Header card tap navigates to trip detail
     fireEvent.press(countdownCard);
     expect(navigateToTripDetailSpy).toHaveBeenCalledWith({ tripId: 'trip-fall-magic' });
 
     navigateToTripDetailSpy.mockRestore();
+    navigateToTripMembersSpy.mockRestore();
+    navigateToBookingTimelineSpy.mockRestore();
   });
 
   it('renders the exploration prompt card when no active or upcoming trips exist and navigates to Trips on tap', async () => {
@@ -237,34 +292,28 @@ describe('HomeScreen (Requirements 2.1–2.5)', () => {
     expect(mockNavigate).toHaveBeenCalledWith('Trips');
   });
 
-  it('renders the 4 action dock tiles with badge and handles Live Waits tap', async () => {
-    const navigateToLiveWaitsSpy = jest
-      .spyOn(navigationRefModule, 'navigateToLiveWaits')
-      .mockReturnValue(true);
-
+  it('renders the 2x2 Theme Parks grid and handles park navigation to DestinationScreen (Requirement 2.7)', async () => {
     renderHome();
 
-    expect(await screen.findByTestId('home-action-dock')).toBeTruthy();
-    expect(screen.getByTestId('home-dock-live-waits')).toBeTruthy();
-    expect(screen.getByTestId('home-dock-log-ride')).toBeTruthy();
-    expect(screen.getByTestId('home-dock-log-snack')).toBeTruthy();
-    expect(screen.getByTestId('home-dock-my-pins')).toBeTruthy();
-    expect(screen.getByTestId('home-dock-pins-badge')).toHaveTextContent('2');
+    expect(await screen.findByTestId('home-theme-parks-section')).toBeTruthy();
+    expect(screen.getByTestId('home-parks-grid')).toBeTruthy();
 
-    fireEvent.press(screen.getByTestId('home-dock-live-waits'));
-    expect(mockNavigate).toHaveBeenCalledWith('Explore', expect.objectContaining({
-      screen: 'LiveWaits',
-      params: { park: 'Magic Kingdom' },
-    }));
+    const mkCard = await screen.findByTestId('home-park-tile-Magic Kingdom');
+    expect(mkCard).toBeTruthy();
+    expect(await screen.findByTestId('home-park-wait-Magic Kingdom')).toHaveTextContent(/30m avg/);
 
-    navigateToLiveWaitsSpy.mockRestore();
+    fireEvent.press(mkCard);
+    expect(mockNavigate).toHaveBeenCalledWith('Explore', {
+      screen: 'DestinationScreen',
+      params: { destination: 'Magic Kingdom' },
+    });
   });
 
-  it('opens experience picker for Log Ride and Log Snack from action dock', async () => {
+  it('opens experience picker for Log Ride and Log Food from quick log row (Requirement 2.7)', async () => {
     renderHome();
 
     // Log Ride
-    const logRideBtn = await screen.findByTestId('home-dock-log-ride');
+    const logRideBtn = await screen.findByTestId('home-quick-log-ride');
     fireEvent.press(logRideBtn);
 
     expect(await screen.findByTestId('home-experience-picker-modal')).toBeTruthy();
@@ -273,42 +322,36 @@ describe('HomeScreen (Requirements 2.1–2.5)', () => {
     // Close picker
     fireEvent.press(screen.getByTestId('home-picker-close-btn'));
 
-    // Log Snack
-    const logSnackBtn = screen.getByTestId('home-dock-log-snack');
-    fireEvent.press(logSnackBtn);
+    // Log Food
+    const logFoodBtn = screen.getByTestId('home-quick-log-food');
+    fireEvent.press(logFoodBtn);
 
     expect(await screen.findByTestId('home-experience-picker-modal')).toBeTruthy();
     expect(screen.getByTestId('home-picker-title')).toHaveTextContent('Select Restaurant to Log Food');
   });
 
-  it('renders the Park Wait Pulse carousel and navigates to LiveWaits on park tap', async () => {
+  it('navigates to LiveWaits from the Parks section header link (Requirement 2.7)', async () => {
     renderHome();
 
-    expect(await screen.findByTestId('home-park-wait-pulse')).toBeTruthy();
-    expect(screen.getByText('Park Wait Pulse')).toBeTruthy();
+    const liveWaitsLink = await screen.findByTestId('home-parks-live-waits-link');
+    expect(liveWaitsLink).toBeTruthy();
 
-    const mkPill = await screen.findByTestId('home-pulse-pill-Magic Kingdom');
-    expect(mkPill).toBeTruthy();
-
-    fireEvent.press(mkPill);
+    fireEvent.press(liveWaitsLink);
     expect(mockNavigate).toHaveBeenCalledWith('Explore', expect.objectContaining({
       screen: 'LiveWaits',
       params: { park: 'Magic Kingdom' },
     }));
   });
 
-  it('renders Your Favorites below Park Wait Pulse without altering Pulse assertions and shows empty state when zero favorites (Requirements 8.1, 8.3, 8.5)', async () => {
+  it('omits Your Favorites section completely when zero favorited experiences exist (Requirements 2.7, 8.3a)', async () => {
     renderHome();
 
-    // Pulse carousel assertions remain valid (non-regression check, R8.5)
-    expect(await screen.findByTestId('home-park-wait-pulse')).toBeTruthy();
-    expect(await screen.findByTestId('home-pulse-pill-Magic Kingdom')).toBeTruthy();
+    // The Parks section is rendered
+    expect(await screen.findByTestId('home-theme-parks-section')).toBeTruthy();
 
-    // Your Favorites section renders below Pulse
-    expect(await screen.findByTestId('home-favorites-section')).toBeTruthy();
-    expect(screen.getByText('Your Favorites')).toBeTruthy();
-    expect(screen.getByTestId('home-favorites-empty')).toBeTruthy();
-    expect(screen.getByText('No favorites with live waits')).toBeTruthy();
+    // Your Favorites is completely omitted (no header, no empty state)
+    expect(screen.queryByTestId('home-favorites-section')).toBeNull();
+    expect(screen.queryByTestId('home-favorites-empty')).toBeNull();
   });
 
   it('renders favorited attractions with live wait status and navigates to ExperienceDetail on tap (Requirements 8.2, 8.4)', async () => {
@@ -516,6 +559,19 @@ describe('HomeScreen (Requirements 2.1–2.5)', () => {
               },
             ],
           },
+          {
+            status: 'upcoming',
+            trips: [
+              {
+                id: 'trip-upcoming-future',
+                name: 'December Vacation',
+                description: '',
+                startDate: '2026-12-15',
+                endDate: '2026-12-31',
+                status: 'upcoming',
+              },
+            ],
+          },
         ];
       }
       if (path.includes('/planned-items')) {
@@ -560,14 +616,16 @@ describe('HomeScreen (Requirements 2.1–2.5)', () => {
     expect(screen.getByText('ACTIVE VACATION • DAY 1 OF 5')).toBeTruthy();
     expect(screen.getByText('new')).toBeTruthy();
 
-    // ActionDock switches tile 4 to Day 1 Plan and navigates to TripSchedule
-    const dayPlanBtn = screen.getByTestId('home-dock-my-pins');
-    expect(dayPlanBtn).toHaveTextContent(/Day 1 Plan/);
-    fireEvent.press(dayPlanBtn);
+    // Upcoming trip hero is suppressed while an active vacation is ongoing (Requirement 2.7 mutual exclusion)
+    expect(screen.queryByTestId('home-upcoming-trip-card')).toBeNull();
+
+    // Active vacation shortcut hero card has Today's Schedule button
+    const scheduleBtn = screen.getByText("Today's Schedule ›");
+    fireEvent.press(scheduleBtn);
     expect(navigateToTripScheduleSpy).toHaveBeenCalledWith({ tripId: 'trip-active-1' });
 
-    // Live Waits button defaults to current park (EPCOT)
-    const liveWaitsBtn = screen.getByTestId('home-dock-live-waits');
+    // Live Waits button on Theme Parks section defaults to current park (EPCOT)
+    const liveWaitsBtn = screen.getByTestId('home-parks-live-waits-link');
     fireEvent.press(liveWaitsBtn);
     expect(mockNavigate).toHaveBeenCalledWith('Explore', expect.objectContaining({
       screen: 'LiveWaits',
@@ -895,19 +953,14 @@ describe('HomeScreen (Requirements 2.1–2.5)', () => {
       expect(flat(screen.getByTestId('home-hero-title')).color).toBe(darkTheme.color.textOnPrimary);
       expect(flat(screen.getByTestId('home-greeting-pill')).color).toBe(darkTheme.color.accent);
       expect(flat(screen.getByText('See All')).color).toBe(darkTheme.color.primaryFg);
-      const dockTile = flat(screen.getByTestId('home-dock-live-waits'));
-      expect(dockTile.borderColor).toBe(ACTION_DOCK.dark.tileBorder);
-      expect(dockTile.shadowColor).toBe(ACTION_DOCK.dark.tileShadow);
-      expect(dockTile.backgroundColor).toBe(darkTheme.color.surface);
-      expect(flat(screen.getByTestId('home-dock-pins-badge')).backgroundColor).toBe(
-        ACTION_DOCK.dark.badgeBg,
-      );
+      const logBtn = flat(await screen.findByTestId('home-quick-log-ride'));
+      expect(logBtn.borderColor).toBe(HOME_THEME_PARKS.dark.logBtnBorder);
+      expect(logBtn.shadowColor).toBe(HOME_THEME_PARKS.dark.logBtnShadow);
+      expect(logBtn.backgroundColor).toBe(HOME_THEME_PARKS.dark.logBtnBg);
 
-      const pill = flat(await screen.findByTestId('home-pulse-pill-Magic Kingdom'));
-      expect(pill.borderColor).toBe(PARK_WAIT_PULSE.dark.pillBorder);
-      expect(flat(screen.getByText('Animal Kingdom')).color).toBe(
-        darkTheme.parkAccent['Animal Kingdom'],
-      );
+      const parkCard = flat(await screen.findByTestId('home-park-tile-Magic Kingdom'));
+      expect(parkCard.borderColor).toBe(HOME_THEME_PARKS.dark.tileBorder);
+      expect(flat(screen.getByText('Animal Kingdom'))).toBeTruthy();
 
       const upcoming = flat(await screen.findByTestId('home-upcoming-trip-card'));
       expect(upcoming.borderColor).toBe(UPCOMING_TRIP_HERO.dark.cardBorder);
@@ -916,7 +969,7 @@ describe('HomeScreen (Requirements 2.1–2.5)', () => {
         UPCOMING_TRIP_HERO.dark.countdownBg,
       );
 
-      expect(flat(await screen.findByText('Your Favorites')).color).toBe(darkTheme.color.textPrimary);
+      expect(flat(screen.getByText('The Parks')).color).toBe(darkTheme.color.textPrimary);
     });
 
     it('renders a favorite pill status badge with its dark palette values', async () => {
@@ -957,12 +1010,11 @@ describe('HomeScreen (Requirements 2.1–2.5)', () => {
       expect(paintedAncestor(header).backgroundColor).toBe('#f5f2fb');
       expect(flat(screen.getByTestId('home-hero-title')).color).toBe('#ffffff');
       expect(flat(screen.getByTestId('home-greeting-pill')).color).toBe('#f6c343');
-      const dockTile = flat(screen.getByTestId('home-dock-live-waits'));
-      expect(dockTile.borderColor).toBe('#eee6f7');
-      expect(dockTile.shadowColor).toBe('#5b2a86');
-      expect(flat(screen.getByTestId('home-dock-pins-badge')).backgroundColor).toBe('#ef4444');
-      expect(flat(await screen.findByTestId('home-pulse-pill-Magic Kingdom')).borderColor).toBe('#eee6f7');
-      expect(flat(screen.getByText('Animal Kingdom')).color).toBe('#3fa34d');
+      const logBtn = flat(await screen.findByTestId('home-quick-log-ride'));
+      expect(logBtn.borderColor).toBe('#e9d5ff');
+      expect(logBtn.shadowColor).toBe('#5b2a86');
+      expect(flat(await screen.findByTestId('home-park-tile-Magic Kingdom'))).toBeTruthy();
+      expect(flat(screen.getByText('The Parks'))).toBeTruthy();
       expect(flat(await screen.findByText('UPCOMING VACATION')).color).toBe('#7e57c2');
     });
   });

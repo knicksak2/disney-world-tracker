@@ -19,7 +19,7 @@ describe('harmVerdict properties', () => {
           expect(verdict).toBe(expected);
 
           // Monotonicity: raising any category score can never turn flag into pass
-          const bumpedScores: Record<string, number> = {};
+          const bumpedScores: Record<string, number> = Object.create(null);
           for (const [cat, score] of Object.entries(categoryScores)) {
             bumpedScores[cat] = Math.min(1, score + 0.1);
           }

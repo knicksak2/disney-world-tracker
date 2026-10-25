@@ -135,6 +135,7 @@ The optimizer solves a Time-Dependent Traveling Salesperson Problem: the cost of
 4. THE Schedule Settings Modal SHALL provide interactive controls for Walking Pace (`slow`, `moderate`, `fast`), Early Entry Eligibility, Extended Evening Hours, Ticketed After-Hours Events, and Starting Park selection, persisting all settings to the backend API via `PATCH /trips/:id` on Done.
 5. WHEN `startingPark` is configured for a date, THE Optimization_Engine SHALL prioritize starting the itinerary at `startingPark` and SHALL apply a penalty if the first item is scheduled in a different park.
 6. WHEN a user selects a Starting Park in Schedule Settings, THE App SHALL automatically populate the Day Start Time to that park's official opening time and update the Park Open to Close preset button to match that park's operating schedule.
+7. THE `startingPark` of a date MAY also be set or cleared without opening the Schedule Builder, via the Trip_Detail_View "Days" section defined in `trips` Requirement 24 (Day_Park); the Schedule Settings Starting Park control and the Day_Park are the same stored value, and the automatic Day Start Time population in criterion 6 applies only to a selection made in Schedule Settings.
 
 ### Requirement 8: Persisted Optimization Results and Un-Optimized State
 

@@ -24,7 +24,6 @@ import type {
 } from '@dwt/shared';
 
 import { apiRequest } from '../../api/client';
-import { EmptyState } from '../../theme/components';
 import { makeStyles } from '../../theme/makeStyles';
 import { useAppTheme, usePalette } from '../../theme/useAppTheme';
 import { useFavoritedExperiences } from '../catalog/useFavoritedExperiences';
@@ -189,7 +188,7 @@ function FavoritePill({
 export default function HomeFavoritesSection({
   onSelectExperience,
   onSeeAll,
-}: HomeFavoritesSectionProps): JSX.Element {
+}: HomeFavoritesSectionProps): JSX.Element | null {
   const styles = useStyles();
   const pal = usePalette(HOME_FAVORITES);
   const favoritedIds = useFavoritedExperiences();
@@ -299,6 +298,10 @@ export default function HomeFavoritesSection({
     });
   }, [favoritedExperiences, liveEntriesByExperienceId]);
 
+  if (visibleFavorites.length === 0) {
+    return null;
+  }
+
   return (
     <View style={styles.container} testID="home-favorites-section">
       <View style={styles.sectionHeader}>
@@ -319,31 +322,21 @@ export default function HomeFavoritesSection({
         )}
       </View>
 
-      {visibleFavorites.length === 0 ? (
-        <View style={styles.emptyContainer} testID="home-favorites-empty">
-          <EmptyState
-            icon="heart-outline"
-            title="No favorites with live waits"
-            body="Heart attractions in Explore or Live Waits to track them here."
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+        testID="home-favorites-scroll"
+      >
+        {visibleFavorites.map(({ experience, liveEntry }) => (
+          <FavoritePill
+            key={experience.id}
+            experience={experience}
+            liveEntry={liveEntry}
+            onPress={() => onSelectExperience?.(experience.id)}
           />
-        </View>
-      ) : (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.scrollContent}
-          testID="home-favorites-scroll"
-        >
-          {visibleFavorites.map(({ experience, liveEntry }) => (
-            <FavoritePill
-              key={experience.id}
-              experience={experience}
-              liveEntry={liveEntry}
-              onPress={() => onSelectExperience?.(experience.id)}
-            />
-          ))}
-        </ScrollView>
-      )}
+        ))}
+      </ScrollView>
     </View>
   );
 }

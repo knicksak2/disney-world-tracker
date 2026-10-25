@@ -39,6 +39,7 @@ const NUM_RUNS = 100;
 const MEMBER_ALLOWED: readonly TripAction[] = [
   'add_planned_item',
   'edit_planned_item',
+  'set_day_park',
   'optimize_day',
   'create_log_entry',
   'add_rode_with',
@@ -251,3 +252,11 @@ describe('Trip_Service permissions — Property 20: Trip permission matrix', () 
   });
 });
 
+
+
+describe('Trip_Service permissions — Day_Park (R24.5)', () => {
+  it('both member and organizer are permitted set_day_park', () => {
+    expect(can('member', 'set_day_park')).toBe(true);
+    expect(can('organizer', 'set_day_park')).toBe(true);
+  });
+});

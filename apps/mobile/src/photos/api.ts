@@ -32,6 +32,7 @@ import {
   filterPendingPhotoIds,
   isFinalPhotoStatus,
 } from './pollPlan';
+import { flattenMyPhotoPages } from './myPhotos.pure';
 
 export const PHOTO_STALE_TIME_MS = 30 * 60 * 1000; // 30 minutes
 
@@ -58,6 +59,8 @@ export const photoKeys = {
   /** Own-photo list; for a food_log the scope is the FOOD ITEM id (R4.11). */
   my: (targetKind?: string, scopeId?: string) =>
     [...photoKeys.all, 'my', targetKind ?? '', scopeId ?? ''] as const,
+  /** All own photos library (R29.3, D36). */
+  myLibrary: () => [...photoKeys.all, 'my', 'library'] as const,
   /**
    * Prefix matching every dish strip entry. Invalidate THIS (or `dish(realId)`), never
    * `dish('')`: the empty-string segment would not prefix-match any real dish id.
@@ -509,6 +512,95 @@ export function useMyPhotos(targetKind: PhotoTargetKind, scopeId: string) {
   return {
     ...query,
     retryPhotoIds,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// 4b. All My Photos Library (useAllMyPhotos, Requirement 29, decision D36)
+// ---------------------------------------------------------------------------
+
+export async function fetchAllMyPhotos(
+  cursor?: string | null
+): Promise<PhotoPageDTO<MyPhotoDTO>> {
+  const qs = cursor ? `?${new URLSearchParams({ cursor }).toString()}` : '';
+  return apiRequest<PhotoPageDTO<MyPhotoDTO>>('GET', `/me/photos/all${qs}`);
+}
+
+export function useAllMyPhotos() {
+  const queryClient = useQueryClient();
+  const confirmedIds = useRef(new Set<string>());
+
+  const clearConfirmedIds = () => {
+    confirmedIds.current.clear();
+  };
+
+  const query = useInfiniteQuery<
+    PhotoPageDTO<MyPhotoDTO>,
+    Error,
+    InfiniteData<PhotoPageDTO<MyPhotoDTO>>,
+    readonly [string, string, string],
+    string | null
+  >({
+    queryKey: photoKeys.myLibrary(),
+    queryFn: ({ pageParam }) => fetchAllMyPhotos(pageParam),
+    initialPageParam: null,
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? null,
+    staleTime: PHOTO_GALLERY_STALE_TIME_MS,
+  });
+
+  const items = useMemo(
+    () => flattenMyPhotoPages(query.data?.pages ?? []),
+    [query.data?.pages]
+  );
+
+  // Restart recovery (Requirements 4.12, 29.13):
+  // When loading returns uploading photos for which no local upload is in progress,
+  // call confirm for them. Guarded by confirmedIds to confirm each id at most once per screen visit.
+  useEffect(() => {
+    if (items.length === 0) {
+      return;
+    }
+
+    const unconfirmedToRecover = items
+      .filter(
+        (p) =>
+          p.status === 'uploading' &&
+          !isUploadActive(p.id) &&
+          !confirmedIds.current.has(p.id)
+      )
+      .map((p) => p.id);
+
+    if (unconfirmedToRecover.length === 0) {
+      return;
+    }
+
+    for (const id of unconfirmedToRecover) {
+      confirmedIds.current.add(id);
+    }
+
+    apiRequest<PhotoConfirmResponseDTO>('POST', '/photos/confirm', {
+      photoIds: unconfirmedToRecover,
+    })
+      .then((res) => {
+        const hasRelevantChange = res.results.some(
+          (item) =>
+            item.result === 'accepted' ||
+            item.result === 'already' ||
+            item.result === 'invalid'
+        );
+        if (hasRelevantChange) {
+          queryClient.invalidateQueries({ queryKey: photoKeys.myLibrary() });
+        }
+      })
+      .catch(() => {
+        // Leave unconfirmed for next cycle / pull-to-refresh
+      });
+  }, [items, queryClient]);
+
+  return {
+    ...query,
+    items,
+    clearConfirmedIds,
   };
 }
 

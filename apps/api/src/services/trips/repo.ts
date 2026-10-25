@@ -40,6 +40,7 @@
  */
 
 import type {
+  DayTouringHoursDTO,
   ExperienceCategory,
   GroupFavoriteDTO,
   Park,
@@ -77,6 +78,7 @@ import { resolvePublicIds } from '../accountDeletion/visibility.js';
 import { pair as canonicalPair } from '../friends/canonicalPair.js';
 import type { CompletionRepo } from '../tracking/completion/repo.js';
 import type { RatingRepo } from '../tracking/rating/repo.js';
+import { applyDayPark } from './dayPark.js';
 import { orderFeed } from './feedOrder.js';
 import {
   type Membership,
@@ -376,6 +378,21 @@ export interface TripRepo {
     input: TripEditInput,
     now?: Date,
   ): Promise<TripDTO | null>;
+
+  /**
+   * Set or clear a Day_Park assignment for a specific date (R24.1–R24.4, R24.6).
+   *
+   * @param tripId The Trip identifier.
+   * @param date   The calendar date (YYYY-MM-DD). Must fall in [startDate, endDate].
+   * @param park   The Park to set, or null to clear.
+   * @param now    Optional instant for status derivation.
+   */
+  setDayPark(
+    tripId: string,
+    date: string,
+    park: Park | null,
+    now?: Date,
+  ): Promise<TripDTO>;
 
   /**
    * Permanently delete a Trip. Every child entity cascades via the migration's
@@ -941,6 +958,8 @@ export function createTripRepo(pool: DbPool, deps: TripRepoDeps): TripRepo {
       createTrip(ctx, creatorId, input, now),
     getTripForMember: (tripId, now) => getTripForMember(ctx, tripId, now),
     editTrip: (tripId, input, now) => editTrip(ctx, tripId, input, now),
+    setDayPark: (tripId, date, park, now) =>
+      setDayPark(ctx, tripId, date, park, now),
     deleteTrip: (tripId) => deleteTrip(ctx, tripId),
     sendInvite: (tripId, inviterId, inviteeId) =>
       sendInvite(ctx, tripId, inviterId, inviteeId),
@@ -1898,6 +1917,89 @@ async function editTrip(
     const updatedRow = updated.rows[0];
     if (!updatedRow) {
       // Unreachable: the row was locked FOR UPDATE above.
+      throw new AppError('internal_error', 'Trip update returned no row.');
+    }
+
+    const resorts = await selectTripResorts(client, tripId);
+    const foodLists = await selectTripFoodLists(ctx, tripId);
+    const experienceLists = await selectTripExperienceLists(ctx, tripId);
+    await client.query('COMMIT');
+    return rowToDto(updatedRow, now, resorts, foodLists, experienceLists);
+  } catch (err) {
+    await safeRollback(client);
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// setDayPark (R24.1–R24.4, R24.6)
+// ---------------------------------------------------------------------------
+
+/**
+ * Assigns or clears a Day_Park for a specific date on a Trip in one transaction.
+ *
+ * Locks the Trip row `FOR UPDATE` (matching the editTrip pattern and runnable under pg-mem).
+ * Rejects a date outside `[start_date, end_date]` with `trip_validation_failed` (`field: 'date'`).
+ * Merges or removes `startingPark` via `applyDayPark` on the parsed `day_touring_hours` map,
+ * updates `day_touring_hours` and `updated_at = now()`, and returns the updated TripDTO.
+ * A missing row surfaces as `trip_not_found`.
+ */
+async function setDayPark(
+  ctx: TripRepoContext,
+  tripId: string,
+  date: string,
+  park: Park | null,
+  now?: Date,
+): Promise<TripDTO> {
+  const client = await ctx.pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const current = await client.query<TripRow>(
+      `SELECT id, name, description, start_date, end_date, created_at, walking_speed, early_entry_eligible, day_touring_hours, walk_wait_weighting
+         FROM trips
+        WHERE id = $1
+        FOR UPDATE`,
+      [tripId],
+    );
+    const currentRow = current.rows[0];
+    if (!currentRow) {
+      await client.query('ROLLBACK');
+      throw new AppError('trip_not_found', 'Trip does not exist or has been deleted.');
+    }
+
+    const startDate = toIsoDate(currentRow.start_date);
+    const endDate = toIsoDate(currentRow.end_date);
+    if (date < startDate || date > endDate) {
+      await client.query('ROLLBACK');
+      throw new AppError(
+        'trip_validation_failed',
+        'Date must be within the trip date range.',
+        { field: 'date' },
+      );
+    }
+
+    let currentMap: Record<string, DayTouringHoursDTO> = {};
+    if (currentRow.day_touring_hours) {
+      currentMap =
+        typeof currentRow.day_touring_hours === 'string'
+          ? JSON.parse(currentRow.day_touring_hours)
+          : currentRow.day_touring_hours;
+    }
+
+    const updatedMap = applyDayPark(currentMap, date, park);
+
+    const updated = await client.query<TripRow>(
+      `UPDATE trips
+          SET day_touring_hours = $1, updated_at = now()
+        WHERE id = $2
+      RETURNING id, name, description, start_date, end_date, created_at, walking_speed, early_entry_eligible, day_touring_hours, walk_wait_weighting`,
+      [JSON.stringify(updatedMap), tripId],
+    );
+    const updatedRow = updated.rows[0];
+    if (!updatedRow) {
       throw new AppError('internal_error', 'Trip update returned no row.');
     }
 

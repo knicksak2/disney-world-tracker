@@ -130,6 +130,8 @@ export {
   PHOTO_EXPERIENCE_STRIP_MAX_DEFAULT,
   PHOTO_EXPERIENCE_STRIP_HEADING,
   PHOTO_STRIP_BLANK_DISH_LABEL,
+  MY_PHOTOS_DEFAULT_LIMIT,
+  MY_PHOTOS_MAX_LIMIT,
 } from './constants/photos.js';
 export type {
   PhotoTargetKind,
@@ -488,6 +490,7 @@ export {
   tripRecapPhotosQuerySchema,
   myPhotosQuerySchema,
   foodGalleryQuerySchema,
+  myPhotosAllQuerySchema,
   photoUploadsRequestSchema,
   photoConfirmRequestSchema,
   photoReportCreateSchema,
@@ -556,6 +559,8 @@ export {
   PARTY_SIZE_MAX,
   // input schemas
   dayTouringHoursSchema,
+  dayParkSetSchema,
+  dayParkParamsSchema,
   tripCreateSchema,
   tripEditSchema,
   plannedItemAddSchema,
@@ -582,6 +587,8 @@ export type {
   TripFeedTargetType,
   DayTouringHoursDTO,
   TouringStartMode,
+  DayParkSetInput,
+  DayParkParams,
   OptimizationStartMode,
   MealPeriod,
   // input types

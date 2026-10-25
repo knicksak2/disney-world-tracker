@@ -429,6 +429,47 @@ existing `RatingChanged` propagation path is reused unchanged.
   - [x] 24.7 * Add backend route integration tests and mobile render/interaction tests for attach, detach (adder/organizer/forbidden-third-party), the ineligible-attach rejection, and the unavailable-entry rendering
     - _Requirements: 22.1, 22.5, 22.7, 22.9, 22.10_
 
+- [x] 25. Per-day park assignment — Day_Park (R24)
+  - [x] 25.1 Spec amendments
+    - Add Requirement 24 and the Day_Park glossary term to `requirements.md`, the "Per-day park assignment — Day_Park (R24)" design subsection and Property 28 to `design.md`, Task 25 and Wave 18-23 to this file, and the additive cross-reference (Requirement 7.7) in `day-planning-optimization/requirements.md`.
+    - _Requirements: 24.1, 24.2, 24.3, 24.4, 24.5, 24.6, 24.7, 24.8, 24.9, 24.10, 24.11_
+  - [x] 25.2 Shared contracts (`packages/shared/src/trips.ts`, `packages/shared/src/index.ts`)
+    - Add `dayParkSetSchema = z.object({ park: parkSchema.nullable() }).strict()` and a route-params schema `{ id: uuid, date: <the existing ISO YYYY-MM-DD primitive> }`; export both from `index.ts`. Find and reuse the ISO-date primitive that `tripCreateSchema` already uses rather than writing a new regex. **Do NOT change** `dayTouringHoursSchema.startingPark` (it stays `z.string().optional()`).
+    - Schema tests in `packages/shared/src/__tests__/trips.test.ts` (Vitest): accepts `{park:'EPCOT'}` and `{park:null}`; rejects `{}`, `{park:'Space Mountain'}`, `{park:'EPCOT', extra:1}`, `{park:undefined}`; date param rejects `2026-02-30` and `not-a-date`.
+    - _Requirements: 24.3, 24.4, 24.6_
+  - [x] 25.3 Pure module and Property 28 (`apps/api/src/services/trips/dayPark.ts`)
+    - Implement `applyDayPark(map, date, park)` exactly as specified in design "Per-day park assignment — Day_Park (R24)": returns a new map, never mutates input; set merges `startingPark` into the date's entry; clear removes `startingPark` and drops the date key iff the entry becomes empty; clearing an absent date returns an equal map.
+    - `apps/api/src/services/trips/__tests__/dayPark.prop.test.ts` (Vitest + fast-check, ≥100 runs, tagged `// Feature: trips, Property 28: Setting or clearing a Day_Park changes only that date's startingPark`): generate arbitrary maps with other dates and other per-date fields; assert clauses (a)–(e) of Property 28, including that the input is not mutated (deep-freeze the input).
+    - _Requirements: 24.2, 24.3, 24.4, 24.7_
+  - [x] 25.4 Permission action (`apps/api/src/services/trips/permissions.ts`)
+    - Add `'set_day_park'` to the `TripAction` union and to `MEMBER_ACTIONS` (not `ORGANIZER_ONLY_ACTIONS`). Update the existing permissions tests/property (Property 6) so the new action is covered: `can('member','set_day_park') === true`, `can('organizer','set_day_park') === true`. If the existing test enumerates actions from a hard-coded list, add the new one; the test must fail if `set_day_park` were moved to the organizer-only set.
+    - _Requirements: 24.5_
+  - [x] 25.5 Repo method (`apps/api/src/services/trips/repo.ts`)
+    - Add `setDayPark(ctx, tripId, date, park)` per the design: one transaction, `SELECT … FROM trips WHERE id = $1 FOR UPDATE`, reject `date` outside `[start_date, end_date]` with `trip_validation_failed` (`field: 'date'`), parse `day_touring_hours` (string or object, `NULL` → `{}`), `applyDayPark`, `UPDATE trips SET day_touring_hours = $2, updated_at = now()`, return the TripDTO through the existing row→DTO projection; a missing row → `trip_not_found`. Wire it onto the repo object the way `editTrip` is exposed.
+    - pg-mem repo test (real SQL, read the row back): set on a trip with other dates and other per-date fields preserves them all; clear removes only `startingPark`; clear of the only field removes the date key; first write on a trip whose `day_touring_hours` is `NULL`/`{}` works; out-of-range date (before start, after end) rejects and leaves the stored value unchanged; `updated_at` advances. The test must fail against an implementation that overwrote the whole map.
+    - _Requirements: 24.1, 24.2, 24.3, 24.4, 24.6_
+  - [x] 25.6 Route (`apps/api/src/services/trips/routes.ts`)
+    - `PUT /trips/:id/days/:date/park`: `requireSession` → parse params/body with the 25.2 schemas (`parseOrAppError`) → `assertTripMember` → `can(role, 'set_day_park')` (else `trip_forbidden`) → `setDayPark` → respond with the TripDTO. Write no `trip_feed_items` row and send no notification. Add the route to the file-header route list comment in the same style as its neighbours.
+    - `server.inject` tests: 401 with no session; non-member and non-existent trip return the identical 403 `trip_forbidden` body; a `member` succeeds (this is the case that distinguishes it from `PATCH /trips/:id`, which a member gets 403 on); an `organizer` succeeds; `{park:null}` clears; malformed date, out-of-range date, unknown park, missing `park`, and extra body key each return 400 `trip_validation_failed` with `field` set; after a successful call `trip_feed_items` has no new row and `day_touring_hours` for other dates is unchanged.
+    - _Requirements: 24.3, 24.4, 24.5, 24.6, 24.7_
+  - [x] 25.7 Mobile "Days" section on the Trip Detail hub (`apps/mobile/src/screens/trips/`)
+    - New `TripDayParksSection.tsx` (+ `DayParkPickerSheet`, + `useSetDayPark(tripId)` hook, + `TripDayParksSection.palette.ts` only if a literal colour is truly needed) rendered by `TripDetailScreen.tsx`. Rows list every date from `startDate` to `endDate` using the existing trip-date helpers (WDW calendar dates, no `new Date(string)` local-zone parsing); each shows the date, the Day_Park text label with `t.parkAccent`, or "Choose park". Picker offers the seven `PARKS` plus "No park yet". Hook: `PUT /trips/:id/days/:date/park`, optimistic update of the `GET /trips/:id` cache (key from `tripDetailQueryKeys.ts`) with rollback `onError`, replace with the returned TripDTO `onSuccess`. Accessibility labels name the date and park. Use `makeStyles`/`useAppTheme`; the `themeRetrofit.guard` test must stay green.
+    - Jest + `@testing-library/react-native` (`jest-expo`, never Vitest) component tests, mocking only the network layer: render a 3-day trip and assert one row per date; tap a row → picker opens → choose EPCOT → assert the PUT URL contains the right date and the body is `{park:'EPCOT'}` **and** the row now reads EPCOT; choose "No park yet" → body is `{park:null}` and the row reads "Choose park"; make the PUT reject → the row reverts and the error message is shown; assert the accessibility label contains the date and park; a trip with no Day_Parks renders three "Choose park" rows.
+    - _Requirements: 24.8_
+  - [x] 25.8 Mobile consumers: Schedule Builder, Settings consistency, Up Next glance
+    - `TripScheduleScreen.tsx`: date selector pills show the Day_Park name when `dayTouringHours[date].startingPark` is a known Park (`isKnownPark`). Read the existing `dayHoursMap` init/merge effect (the one that merges `tripQuery.data.dayTouringHours` with `prev`) and make sure a Day_Park set from the hub (cache updated by 25.7) is what the Settings modal shows and what `handleSaveScheduleSettings` sends in its `PATCH` body. Do not otherwise change that handler.
+    - `TripDetailScreen.tsx` glance: in the quiet branch use `Today: <Park>` when today's (WDW) entry has a known `startingPark`; a reservation or scheduled item still takes precedence.
+    - Jest component tests (extend `TripScheduleScreen.test.tsx` and the TripDetail test): (a) with `dayTouringHours['2026-10-01'].startingPark = 'Animal Kingdom'` the matching pill renders "Animal Kingdom" and a pill without one does not; (b) **regression for 24.9c** — render the screen, simulate the trip query returning a new `startingPark` for a date (as after a hub change), open Settings, change only the walking pace, tap Done, and assert the `PATCH` body's `dayTouringHours[date].startingPark` equals the new value (this must fail if stale local state wins); (c) glance shows `Today: EPCOT` when only a Day_Park exists, still shows the reservation when one exists, and shows the old quiet copy when neither exists.
+    - _Requirements: 24.9, 24.10, 24.11_
+  - [x] 25.10 Mobile Schedule Builder park mismatch banner
+    - In `TripScheduleScreen.tsx`, when all scheduled items for `activeDate` belong to a single park `singlePark` and `activeDaySettings.startingPark` is set to a different park (`isKnownPark(activeDaySettings.startingPark) && activeDaySettings.startingPark !== singlePark`), render an informational banner with testID `day-park-mismatch-banner` and a switch action button with testID `day-park-mismatch-switch-btn`.
+    - Tapping the switch button invokes `useSetDayPark(tripId)` to send `PUT /trips/:id/days/:date/park` with `{ park: singlePark }` and updates local `dayHoursMap` and cached TripDTO.
+    - Jest component tests in `TripScheduleScreen.test.tsx`: (a) with day park set to Magic Kingdom and 2 items both in EPCOT, the mismatch banner is displayed; (b) tapping the switch button sends `PUT /trips/:id/days/2026-10-02/park` with `{ park: 'EPCOT' }`; (c) when items are mixed across multiple parks, the banner is not displayed; (d) when items match the day park, the banner is not displayed.
+    - _Requirements: 24.12_
+  - [x] 25.9 Verification gate
+    - Run `npm run verify` once at the end of the whole change and paste the literal tail (per-workspace test counts and exit code). Confirm `deriveTodaysPark.test.ts`, `ExperiencePicker` tests, and `routes.schedule` tests (the other `startingPark` consumers) are still green.
+    - _Requirements: 24.1, 24.2, 24.3, 24.4, 24.5, 24.6, 24.7, 24.8, 24.9, 24.10, 24.11_
+
 ## Notes
 
 - Tasks marked with `*` are optional (property, unit, integration, and mobile tests) and can be skipped for a faster MVP; core implementation tasks are never optional.
@@ -460,7 +501,13 @@ existing `RatingChanged` propagation path is reused unchanged.
     { "id": 14, "tasks": ["24.2", "24.3"] },
     { "id": 15, "tasks": ["24.4"] },
     { "id": 16, "tasks": ["24.5", "24.6"] },
-    { "id": 17, "tasks": ["24.7"] }
+    { "id": 17, "tasks": ["24.7"] },
+    { "id": 18, "tasks": ["25.1", "25.2", "25.3", "25.4"] },
+    { "id": 19, "tasks": ["25.5"] },
+    { "id": 20, "tasks": ["25.6"] },
+    { "id": 21, "tasks": ["25.7"] },
+    { "id": 22, "tasks": ["25.8", "25.10"] },
+    { "id": 23, "tasks": ["25.9"] }
   ]
 }
 ```
@@ -470,3 +517,7 @@ complete) and depends on both `food-item-logging` and `food-lists` having landed
 first, since `trip_food_lists.food_list_id` is a foreign key into `food_lists`, and task 24.2 edits
 `food-lists`' own access-predicate code. Do not begin wave 13 before both of those specs' backend
 checkpoints are green.
+
+Task 25 (Day_Park) is independent of Task 24. It needs no migration: it reuses the `day_touring_hours`
+column and `startingPark` field already shipped by `day-planning-optimization` Requirement 7. Work its
+waves in order (18 → 23); 25.7 and 25.8 both touch `TripDetailScreen.tsx`, so they are sequenced rather than parallel.
