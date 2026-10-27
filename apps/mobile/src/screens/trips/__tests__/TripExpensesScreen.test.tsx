@@ -335,6 +335,7 @@ describe('TripExpensesScreen', () => {
     expect(screen.getByTestId('hero-total-spend')).toBeTruthy();
     expect(screen.getByTestId('hero-personal-share')).toBeTruthy();
     expect(screen.getByTestId('hero-settled-total')).toBeTruthy();
+    expect(screen.queryByText(/Switch Payer/)).toBeNull();
   });
 
   it('adds an expense in EXACT split mode asserting POST payload', async () => {

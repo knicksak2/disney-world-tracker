@@ -191,8 +191,61 @@ describe('computeNetBalances and computePairwiseBalances', () => {
       },
     ];
 
+    const net = computeNetBalances(events, [userA, userB]);
+    expect(net.get(userA)).toBe(0);
+    expect(net.get(userB)).toBe(0);
+
     const pairwise = computePairwiseBalances(events);
     expect(pairwise).toHaveLength(0); // net zero omitted!
+  });
+
+  it('reduces net balances toward zero when a partial settlement is paid (Req 6.2, 7.1)', () => {
+    const creditor = 'user-knicksak2';
+    const debtor = 'user-test';
+
+    // debtor owes creditor $100.00 (10000 cents), then pays $8.00 (800 cents)
+    const events: BalanceEvent[] = [
+      {
+        kind: 'expense_payer',
+        memberId: creditor,
+        counterpartyId: debtor,
+        amountCents: 10000,
+        sourceId: 'exp-1',
+        description: 'Halloween party tickets',
+        date: '2026-10-06',
+      },
+      {
+        kind: 'expense_share',
+        memberId: debtor,
+        counterpartyId: creditor,
+        amountCents: 10000,
+        sourceId: 'exp-1',
+        description: 'Halloween party tickets',
+        date: '2026-10-06',
+      },
+      {
+        kind: 'settlement_paid',
+        memberId: debtor,
+        counterpartyId: creditor,
+        amountCents: 800,
+        sourceId: 'set-1',
+        description: 'Settlement',
+        date: '2026-10-27',
+      },
+      {
+        kind: 'settlement_received',
+        memberId: creditor,
+        counterpartyId: debtor,
+        amountCents: 800,
+        sourceId: 'set-1',
+        description: 'Settlement',
+        date: '2026-10-27',
+      },
+    ];
+
+    const net = computeNetBalances(events, [creditor, debtor]);
+    expect(net.get(creditor)).toBe(9200);
+    expect(net.get(debtor)).toBe(-9200);
   });
 
   it('reports 0 for members with no activity (Req 6.3)', () => {

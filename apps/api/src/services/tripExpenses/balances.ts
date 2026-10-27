@@ -20,8 +20,8 @@ export interface BalanceEvent {
 
 /**
  * Reduce a Trip's full event stream into each Trip_Member's Net_Balance
- * (Req 6.1, 6.2) — `expense_payer` and `settlement_received` are positive
- * contributions, `expense_share` and `settlement_paid` are negative. Every
+ * (Req 6.1, 6.2) — `expense_payer` and `settlement_paid` are positive
+ * contributions, `expense_share` and `settlement_received` are negative. Every
  * Trip_Member who appears in at least one event is present in the result,
  * reporting exactly `0` for a Member with perfectly offsetting activity or
  * (by the caller including every Trip_Member id, not just those with
@@ -41,9 +41,9 @@ export function computeNetBalances(
 
   for (const event of events) {
     const cur = balances.get(event.memberId) ?? 0;
-    if (event.kind === 'expense_payer' || event.kind === 'settlement_received') {
+    if (event.kind === 'expense_payer' || event.kind === 'settlement_paid') {
       balances.set(event.memberId, cur + event.amountCents);
-    } else if (event.kind === 'expense_share' || event.kind === 'settlement_paid') {
+    } else if (event.kind === 'expense_share' || event.kind === 'settlement_received') {
       balances.set(event.memberId, cur - event.amountCents);
     }
   }

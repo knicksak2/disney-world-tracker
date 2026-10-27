@@ -1909,7 +1909,7 @@ export function createTripExpenseRepo(pool: DbPool): TripExpenseRepo {
           }
           const sign = counterpartyId
             ? (e.kind === 'expense_share' || e.kind === 'settlement_received' ? 1 : -1)
-            : (e.kind === 'expense_payer' || e.kind === 'settlement_received' ? 1 : -1);
+            : (e.kind === 'expense_payer' || e.kind === 'settlement_paid' ? 1 : -1);
           const kind = e.kind.startsWith('expense') ? 'expense' : 'settlement';
           const key = `${kind}:${e.sourceId}`;
           const existing = consolidated.get(key);

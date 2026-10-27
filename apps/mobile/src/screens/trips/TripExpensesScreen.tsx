@@ -642,7 +642,7 @@ export default function TripExpensesScreen({
 
             {/* Vacation Balance Hero Card (Mockup Specification) */}
             <Card style={styles.heroBalanceCard} testID="expenses-balance-hero">
-              {/* Row 1: Status Pill & Persona Switcher */}
+              {/* Row 1: Status Pill */}
               <View style={styles.heroHeaderPillRow}>
                 <View style={[
                   styles.heroStatusPill,
@@ -664,15 +664,6 @@ export default function TripExpensesScreen({
                     {callerNetCents > 0 ? 'You are owed overall' : callerNetCents < 0 ? 'You owe overall' : 'All settled'}
                   </Text>
                 </View>
-
-                <Pressable
-                  style={styles.heroPayerBadge}
-                  onPress={() => setActiveTab('balances')}
-                  accessibilityRole="button"
-                  accessibilityLabel="Switch perspective or view balances"
-                >
-                  <Text style={styles.heroPayerBadgeText}>Switch Payer ▾</Text>
-                </Pressable>
               </View>
 
               {/* Row 2 & 3: Big Net Figure & Caption */}
@@ -2032,19 +2023,6 @@ const useStyles = makeStyles((t) => ({
   },
   heroStatusPillTextSettled: {
     color: EXPENSES[t.scheme].slate500Text,
-  },
-  heroPayerBadge: {
-    backgroundColor: EXPENSES[t.scheme].violetWellBg,
-    borderColor: EXPENSES[t.scheme].violetCardBorder,
-    borderWidth: 1,
-    paddingHorizontal: 10,
-    paddingVertical: 3.5,
-    borderRadius: 20,
-  },
-  heroPayerBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: EXPENSES[t.scheme].violetText,
   },
   heroFigureWrap: {
     marginVertical: 4,

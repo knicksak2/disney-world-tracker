@@ -253,7 +253,7 @@ describe('TripExpenseRepo - Settlements & Refunds', () => {
       });
 
       // Bob settles $50 to Alice:
-      // Net: Alice +210, Bob -130, Carol -80
+      // Net: Alice +110, Bob -30, Carol -80
       await repo.createSettlement(seed.tripId, seed.user2Id, {
         payerId: seed.user2Id,
         recipientId: seed.user1Id,
@@ -266,8 +266,8 @@ describe('TripExpenseRepo - Settlements & Refunds', () => {
       const bobNet = netBalances.find((b) => b.memberId === seed.user2Id);
       const carolNet = netBalances.find((b) => b.memberId === seed.user3Id);
 
-      expect(aliceNet?.netCents).toBe(21000);
-      expect(bobNet?.netCents).toBe(-13000);
+      expect(aliceNet?.netCents).toBe(11000);
+      expect(bobNet?.netCents).toBe(-3000);
       expect(carolNet?.netCents).toBe(-8000);
 
       // Sum of all net balances must equal 0
@@ -290,9 +290,19 @@ describe('TripExpenseRepo - Settlements & Refunds', () => {
       expect(aliceCarolPair).toBeDefined();
       expect(Math.abs(aliceCarolPair!.aOwesBCents)).toBe(8000);
 
-      // Drill down for Bob
+      // Drill down for Bob (single-member net balance perspective)
       const bobDrillDown = await repo.getBalanceDrillDown(seed.tripId, seed.user2Id);
       expect(bobDrillDown).toHaveLength(2); // The expense and the settlement
+      expect(bobDrillDown.find((it) => it.kind === 'expense')?.contributionCents).toBe(-8000);
+      expect(bobDrillDown.find((it) => it.kind === 'settlement')?.contributionCents).toBe(5000);
+      expect(bobDrillDown.reduce((sum, it) => sum + it.contributionCents, 0)).toBe(-3000);
+
+      // Drill down for Alice (single-member net balance perspective)
+      const aliceDrillDown = await repo.getBalanceDrillDown(seed.tripId, seed.user1Id);
+      expect(aliceDrillDown).toHaveLength(2);
+      expect(aliceDrillDown.find((it) => it.kind === 'expense')?.contributionCents).toBe(16000);
+      expect(aliceDrillDown.find((it) => it.kind === 'settlement')?.contributionCents).toBe(-5000);
+      expect(aliceDrillDown.reduce((sum, it) => sum + it.contributionCents, 0)).toBe(11000);
 
       // Drill down for Bob with Alice as counterparty (Req 6.7, Property 13)
       const bobAliceDrillDown = await repo.getBalanceDrillDown(seed.tripId, seed.user2Id, seed.user1Id);
