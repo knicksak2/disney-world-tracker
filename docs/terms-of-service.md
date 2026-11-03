@@ -16,12 +16,13 @@ By creating an account, downloading, or using the App, you agree to be bound by 
 - All Disney-related marks, names, character names, park names, attraction names, logos, and emblems (including Walt Disney World, Magic Kingdom, EPCOT, Disney's Hollywood Studios, Disney's Animal Kingdom, and Lightning Lane) are registered trademarks or copyrights of The Walt Disney Company or its respective affiliates.
 - Any references to Disney trademarks, attraction names, or copyrighted works within the App are used strictly for informational, identification, and **nominative fair use** purposes.
 - **Operational Data Disclaimer:** Wait times, park operating hours, crowd predictions, and dining availability are estimates provided for personal planning purposes only. Live park conditions fluctuate. Always refer to official Disney applications (*My Disney Experience*) and in-park cast members for authoritative information.
+- **Ticket & Menu Price Disclaimer:** Park ticket prices and restaurant menu prices come from Disney's website, are shown before tax, may be out of date or estimated, and the final price at checkout may differ. Discounted, military, reseller, and special-offer prices are not covered.
 
 ---
 
 ## 2. Third-Party Data & Open-Source Attribution
 
-- **ThemeParks.wiki:** Real-time wait times, operating hours, and live attraction status feeds are sourced from the community-driven [ThemeParks.wiki](https://themeparks.wiki) project. We gratefully acknowledge ThemeParks.wiki and its contributors for making theme park data accessible.
+- **ThemeParks.wiki:** Real-time wait times, operating hours, live attraction status feeds, and Lightning Lane prices are sourced from the community-driven [ThemeParks.wiki](https://themeparks.wiki) project. We gratefully acknowledge ThemeParks.wiki and its contributors for making theme park data accessible.
 - **Motif & Art Credits:** Collectible pin motifs and avatar icons incorporate open-source icon libraries licensed under Creative Commons (CC BY 3.0 / 4.0) and MIT licenses. Full author attributions and license texts are accessible in-app via the Vault collection art credits surface (`PinAttribution`).
 
 ---

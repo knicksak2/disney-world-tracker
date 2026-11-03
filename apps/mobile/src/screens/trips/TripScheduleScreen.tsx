@@ -1703,7 +1703,7 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
           <Modal visible={showAddModal} animationType="slide" onRequestClose={handleCloseAddModal}>
             <ScreenContainer>
               <KeyboardAvoidingView
-                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
                 style={{ flex: 1 }}
               >
                 <GradientHeader
@@ -1757,7 +1757,7 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
             }}
           >
             <KeyboardAvoidingView
-              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
               style={styles.modalBg}
             >
               <View style={styles.modalContent}>

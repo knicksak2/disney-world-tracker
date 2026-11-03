@@ -12,6 +12,7 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   View,
@@ -34,6 +35,7 @@ interface Props {
   readonly selectedResortId?: string | null | undefined;
   readonly onSelect: (resort: ResortItem) => void;
   readonly onClose: () => void;
+  readonly nested?: boolean;
 }
 
 export function ResortPickerModal({
@@ -41,7 +43,8 @@ export function ResortPickerModal({
   selectedResortId,
   onSelect,
   onClose,
-}: Props): JSX.Element {
+  nested = false,
+}: Props): JSX.Element | null {
   const styles = useStyles();
   const t = useAppTheme();
   const [search, setSearch] = useState('');
@@ -52,78 +55,92 @@ export function ResortPickerModal({
     enabled: visible,
   });
 
+  if (!visible) return null;
+
   const allResorts = resortsQuery.data?.resorts ?? [];
   const filtered = search.trim()
     ? allResorts.filter((r) => r.name.toLowerCase().includes(search.toLowerCase().trim()))
     : allResorts;
 
+  const content = (
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      style={styles.overlay}
+    >
+      <View style={styles.content} testID="resort-picker-modal">
+        <View style={styles.header}>
+          <Text style={styles.title}>Select Resort Hotel</Text>
+          <Pressable
+            onPress={onClose}
+            accessibilityRole="button"
+            accessibilityLabel="Close"
+            testID="close-resort-picker"
+          >
+            <Ionicons name="close" size={24} color={t.color.textPrimary} />
+          </Pressable>
+        </View>
+
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search Disney resorts..."
+          placeholderTextColor={t.color.textSecondary}
+          keyboardAppearance={t.scheme}
+          value={search}
+          onChangeText={setSearch}
+          testID="resort-search-input"
+        />
+
+        {resortsQuery.isLoading ? (
+          <ActivityIndicator style={{ marginTop: 24 }} color={t.color.primaryFg} />
+        ) : (
+          <ScrollView style={styles.list} keyboardShouldPersistTaps="handled">
+            {filtered.length === 0 ? (
+              <Text style={styles.emptyText}>No matching resorts found.</Text>
+            ) : (
+              filtered.map((resort) => {
+                const isSelected = resort.id === selectedResortId;
+                return (
+                  <Pressable
+                    key={resort.id}
+                    style={[styles.resortRow, isSelected && styles.resortRowSelected]}
+                    onPress={() => {
+                      onSelect(resort);
+                      onClose();
+                    }}
+                    testID={`resort-option-${resort.id}`}
+                  >
+                    <Ionicons
+                      name="bed-outline"
+                      size={18}
+                      color={isSelected ? t.color.primaryFg : t.color.textSecondary}
+                    />
+                    <Text style={[styles.resortName, isSelected && styles.resortNameSelected]}>
+                      {resort.name}
+                    </Text>
+                    {isSelected ? (
+                      <Ionicons name="checkmark" size={18} color={t.color.primaryFg} />
+                    ) : null}
+                  </Pressable>
+                );
+              })
+            )}
+          </ScrollView>
+        )}
+      </View>
+    </KeyboardAvoidingView>
+  );
+
+  if (nested) {
+    return (
+      <View style={styles.nestedOverlayWrapper} testID="resort-picker-nested-wrapper">
+        {content}
+      </View>
+    );
+  }
+
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.overlay}
-      >
-        <View style={styles.content} testID="resort-picker-modal">
-          <View style={styles.header}>
-            <Text style={styles.title}>Select Resort Hotel</Text>
-            <Pressable
-              onPress={onClose}
-              accessibilityRole="button"
-              accessibilityLabel="Close"
-              testID="close-resort-picker"
-            >
-              <Ionicons name="close" size={24} color={t.color.textPrimary} />
-            </Pressable>
-          </View>
-
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search Disney resorts..."
-            placeholderTextColor={t.color.textSecondary}
-            keyboardAppearance={t.scheme}
-            value={search}
-            onChangeText={setSearch}
-            testID="resort-search-input"
-          />
-
-          {resortsQuery.isLoading ? (
-            <ActivityIndicator style={{ marginTop: 24 }} color={t.color.primaryFg} />
-          ) : (
-            <ScrollView style={styles.list} keyboardShouldPersistTaps="handled">
-              {filtered.length === 0 ? (
-                <Text style={styles.emptyText}>No matching resorts found.</Text>
-              ) : (
-                filtered.map((resort) => {
-                  const isSelected = resort.id === selectedResortId;
-                  return (
-                    <Pressable
-                      key={resort.id}
-                      style={[styles.resortRow, isSelected && styles.resortRowSelected]}
-                      onPress={() => {
-                        onSelect(resort);
-                        onClose();
-                      }}
-                      testID={`resort-option-${resort.id}`}
-                    >
-                      <Ionicons
-                        name="bed-outline"
-                        size={18}
-                        color={isSelected ? t.color.primaryFg : t.color.textSecondary}
-                      />
-                      <Text style={[styles.resortName, isSelected && styles.resortNameSelected]}>
-                        {resort.name}
-                      </Text>
-                      {isSelected ? (
-                        <Ionicons name="checkmark" size={18} color={t.color.primaryFg} />
-                      ) : null}
-                    </Pressable>
-                  );
-                })
-              )}
-            </ScrollView>
-          )}
-        </View>
-      </KeyboardAvoidingView>
+      {content}
     </Modal>
   );
 }
@@ -133,6 +150,10 @@ const useStyles = makeStyles((t) => ({
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-end',
+  },
+  nestedOverlayWrapper: {
+    ...StyleSheet.absoluteFill,
+    zIndex: 100,
   },
   content: {
     backgroundColor: t.color.surface,

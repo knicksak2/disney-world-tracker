@@ -473,7 +473,7 @@ export default function HomeScreen({ navigation }: Props): JSX.Element {
         testID="home-experience-picker-modal"
       >
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.modalBackdrop}
         >
           <View style={styles.modalContent}>

@@ -31,6 +31,7 @@ import RodeWithConfirmScreen from '../screens/trips/RodeWithConfirmScreen';
 import TripScheduleScreen from '../screens/trips/TripScheduleScreen';
 import TripReservationsScreen from '../screens/trips/TripReservationsScreen';
 import TripExpensesScreen from '../screens/trips/TripExpensesScreen';
+import { TripBudgetScreen } from '../screens/trips/TripBudgetScreen';
 import TripBalancesScreen from '../screens/trips/TripBalancesScreen';
 import TripBookingTimelineScreen from '../screens/trips/TripBookingTimelineScreen';
 import TripPackingListScreen from '../screens/trips/TripPackingListScreen';
@@ -67,6 +68,8 @@ export type TripsStackParamList = {
   TripReservations: { tripId: string };
   /** Shared expense ledger section of a Trip (trip-expenses R10.1). */
   TripExpenses: { tripId: string };
+  /** Planned budget, savings plan and actuals comparison (trip-budget R22.1). */
+  TripBudget: { tripId: string };
   /** Group balances and settlement view (trip-expenses R10.1). */
   TripBalances: { tripId: string };
   /** Booking timeline section of a Trip. */
@@ -108,6 +111,7 @@ export default function TripsStack(): JSX.Element {
       <Stack.Screen name="TripSchedule" component={TripScheduleScreen} />
       <Stack.Screen name="TripReservations" component={TripReservationsScreen} />
       <Stack.Screen name="TripExpenses" component={TripExpensesScreen} />
+      <Stack.Screen name="TripBudget" component={TripBudgetScreen} />
       <Stack.Screen name="TripBalances" component={TripBalancesScreen} />
       <Stack.Screen name="TripBookingTimeline" component={TripBookingTimelineScreen} />
       <Stack.Screen name="TripPackingList" component={TripPackingListScreen} />

@@ -91,7 +91,7 @@ function requireUser(request: FastifyRequest): string {
   return userId;
 }
 
-function parseOrAppError<S extends z.ZodTypeAny>(
+export function parseOrAppError<S extends z.ZodTypeAny>(
   schema: S,
   input: unknown,
 ): z.infer<S> {

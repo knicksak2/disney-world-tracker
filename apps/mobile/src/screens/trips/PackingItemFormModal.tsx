@@ -28,6 +28,7 @@ import { makeStyles } from '../../theme/makeStyles';
 import { useAppTheme, usePalette } from '../../theme/useAppTheme';
 import { PACKING_ITEM_FORM_MODAL } from './PackingItemFormModal.palette';
 import { validatePackingForm } from './packingListView';
+import { useKeyboardBottomInset } from '../../hooks/useKeyboardBottomInset';
 
 export interface PackingItemFormModalProps {
   readonly visible: boolean;
@@ -77,6 +78,7 @@ export function PackingItemFormModal({
   const [quantity, setQuantity] = useState<string>('1');
   const [assigneeId, setAssigneeId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const { keyboardInset } = useKeyboardBottomInset(visible);
 
   const handleClose = onCancel ?? onClose;
 
@@ -121,10 +123,18 @@ export function PackingItemFormModal({
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={handleClose}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={[styles.modalOverlay, { backgroundColor: pal.overlayBg }]}
       >
-        <View style={styles.modalContent} testID="packing-item-form-modal">
+        <View
+          style={[
+            styles.modalContent,
+            Platform.OS === 'android' && keyboardInset > 0
+              ? { paddingBottom: keyboardInset }
+              : null,
+          ]}
+          testID="packing-item-form-modal"
+        >
           <View style={styles.headerRow}>
             <Text style={styles.headerTitle}>
               {mode === 'edit' ? 'Edit Packing Item' : 'Add Packing Item'}

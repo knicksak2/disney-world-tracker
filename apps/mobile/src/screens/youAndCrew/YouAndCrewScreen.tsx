@@ -539,7 +539,11 @@ export default function YouAndCrewScreen(): JSX.Element {
               Disney World Tracker is an independent, unofficial companion application and is not
               affiliated with, endorsed by, or sponsored by The Walt Disney Company. All Disney
               trademarks, service marks, and trade names are the property of their respective owners.
-              Wait times and park schedules are estimates for personal planning purposes.
+              Wait times, park schedules, and price estimates are for personal planning purposes.
+              Lightning Lane prices powered by ThemeParks.wiki. Ticket and menu prices come from
+              Disney's website, are shown before tax, may be out of date or estimated, and final
+              checkout prices may differ; discounted, military, reseller, and special-offer prices
+              are not covered.
             </Text>
           </View>
         </View>

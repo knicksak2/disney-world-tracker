@@ -31,6 +31,7 @@ import { makeStyles } from '../../theme/makeStyles';
 import { useAppTheme } from '../../theme/useAppTheme';
 import { createRefund, tripExpenseKeys } from './tripExpenseApi';
 import { REFUND } from './RefundModal.palette';
+import { useKeyboardBottomInset } from '../../hooks/useKeyboardBottomInset';
 
 interface Props {
   readonly visible: boolean;
@@ -84,13 +85,23 @@ export function RefundModal({
     },
   });
 
+  const { keyboardInset } = useKeyboardBottomInset(visible);
+
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.modalOverlay}
       >
-        <View style={styles.modalContent} testID="refund-modal">
+        <View
+          style={[
+            styles.modalContent,
+            Platform.OS === 'android' && keyboardInset > 0
+              ? { paddingBottom: keyboardInset }
+              : null,
+          ]}
+          testID="refund-modal"
+        >
           <View style={styles.headerRow}>
             <Text style={styles.headerTitle}>Record a Refund</Text>
             <Pressable

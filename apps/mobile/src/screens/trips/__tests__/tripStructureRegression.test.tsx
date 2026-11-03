@@ -63,9 +63,9 @@ describe('Feature: navigation-redesign, Property 6: Trip section structure untou
     capturedScreens.length = 0;
   });
 
-  test('HUB_SECTIONS has exactly 9 sections preserving Trip Activity consolidation and Expenses', () => {
-    // Must be exactly 9 sections: Planned List, Schedule, Reservations, Expenses, Booking, Packing, Activity, Members, Summary
-    expect(HUB_SECTIONS).toHaveLength(9);
+  test('HUB_SECTIONS has exactly 10 sections preserving Trip Activity consolidation, Expenses and Budget', () => {
+    // Must be exactly 10 sections: Planned List, Schedule, Reservations, Expenses, Budget, Booking, Packing, Activity, Members, Summary
+    expect(HUB_SECTIONS).toHaveLength(10);
 
     const sectionKeys = HUB_SECTIONS.map((s) => s.key);
     expect(sectionKeys).toEqual([
@@ -73,12 +73,18 @@ describe('Feature: navigation-redesign, Property 6: Trip section structure untou
       'schedule',
       'reservations',
       'expenses',
+      'budget',
       'booking',
       'packing',
       'activity',
       'members',
       'summary',
     ]);
+
+    const budgetSection = HUB_SECTIONS.find((s) => s.key === 'budget');
+    expect(budgetSection).toBeDefined();
+    expect(budgetSection?.route).toBe('TripBudget');
+    expect(budgetSection?.title).toBe('Budget');
 
     const bookingSection = HUB_SECTIONS.find((s) => s.key === 'booking');
     expect(bookingSection).toBeDefined();
@@ -112,6 +118,7 @@ describe('Feature: navigation-redesign, Property 6: Trip section structure untou
       '#f6c343',
       '#5b2a86',
       '#7e57c2',
+      '#7e57c2',
       '#5b2a86',
       '#f6c343',
       '#7e57c2',
@@ -127,20 +134,21 @@ describe('Feature: navigation-redesign, Property 6: Trip section structure untou
       darkTheme.color.accent,
       darkTheme.color.primaryFg,
       darkTheme.color.primaryLight,
+      darkTheme.color.primaryLight,
       darkTheme.color.primaryFg,
       darkTheme.color.accent,
       darkTheme.color.primaryLight,
       darkTheme.color.textSecondary,
     ]);
     // Every violet/neutral section repaints; the gold accent is the same in both schemes.
-    for (const key of ['planned', 'schedule', 'expenses', 'booking', 'packing', 'members', 'summary']) {
+    for (const key of ['planned', 'schedule', 'expenses', 'budget', 'booking', 'packing', 'members', 'summary']) {
       expect(dark.find((s) => s.key === key)!.color).not.toBe(
         light.find((s) => s.key === key)!.color,
       );
     }
   });
 
-  test('TripsStack registers exactly the 16 expected screens and matches snapshot', () => {
+  test('TripsStack registers exactly the 17 expected screens and matches snapshot', () => {
     render(<TripsStack />);
 
     const screenNames = capturedScreens.map((s) => s.name);
@@ -152,6 +160,7 @@ describe('Feature: navigation-redesign, Property 6: Trip section structure untou
       'TripSchedule',
       'TripReservations',
       'TripExpenses',
+      'TripBudget',
       'TripBalances',
       'TripBookingTimeline',
       'TripPackingList',
@@ -164,7 +173,7 @@ describe('Feature: navigation-redesign, Property 6: Trip section structure untou
     ];
 
     expect(screenNames).toEqual(EXPECTED_ROUTES);
-    expect(screenNames).toHaveLength(16);
+    expect(screenNames).toHaveLength(17);
     expect(capturedScreens).toMatchSnapshot();
   });
 });

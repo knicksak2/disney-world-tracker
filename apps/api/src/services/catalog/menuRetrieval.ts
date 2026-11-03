@@ -35,7 +35,7 @@
  * Validates: Requirements 8.1, 8.2, 8.4, 8.5
  */
 
-import type { MenuDTO } from '@dwt/shared';
+import { MENU_SHAPE_VERSION, type MenuDTO } from '@dwt/shared';
 
 import { createLogger } from '../../logger.js';
 import type { FacilitiesClient } from './disney/facilitiesClient.js';
@@ -77,6 +77,38 @@ export function decideMenuFetch(
   }
   const ageMs = now.getTime() - fetchedAt.getTime();
   return ageMs > interval;
+}
+
+export interface MenuRefreshState {
+  readonly fetchedAt: Date | null;
+  readonly shapeVersion?: number | null | undefined;
+}
+
+/**
+ * Decide whether a restaurant's menu must be (re-)fetched, accounting for both
+ * time-based freshness (R8.2) and schema shape version upgrades (R10.7).
+ *
+ * Pure, total, and deterministic:
+ * Returns true when `decideMenuFetch` is true OR `shapeVersion < currentShape`.
+ *
+ * @param state        - The cache state with fetchedAt and shapeVersion.
+ * @param now          - The current instant.
+ * @param intervalMs   - The freshness window in milliseconds.
+ * @param currentShape - Current target shape version (defaults to MENU_SHAPE_VERSION).
+ */
+export function decideMenuRefresh(
+  state: MenuRefreshState,
+  now: Date,
+  intervalMs: number,
+  currentShape: number = MENU_SHAPE_VERSION,
+): boolean {
+  if (decideMenuFetch(state.fetchedAt, now, intervalMs)) {
+    return true;
+  }
+  if (state.shapeVersion === undefined || state.shapeVersion === null) {
+    return false;
+  }
+  return state.shapeVersion < currentShape;
 }
 
 // ---------------------------------------------------------------------------
@@ -179,9 +211,10 @@ export function createMenuRetrieval(deps: MenuRetrievalDeps): MenuRetrieval {
 
       const cachedMenus = state.cached?.menus ?? [];
       const fetchedAt = state.cached?.fetchedAt ?? null;
+      const shapeVersion = state.cached?.shapeVersion ?? state.shapeVersion;
 
-      // Fresh cache ⇒ serve without contacting the Menu_Service (R8.4).
-      if (!decideMenuFetch(fetchedAt, now, deps.freshnessMs)) {
+      // Fresh cache with current shape version => serve without contacting Menu_Service (R8.4, R10.7).
+      if (!decideMenuRefresh({ fetchedAt, shapeVersion }, now, deps.freshnessMs, MENU_SHAPE_VERSION)) {
         return cachedMenus;
       }
 

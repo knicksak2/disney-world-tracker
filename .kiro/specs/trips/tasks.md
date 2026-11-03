@@ -470,6 +470,28 @@ existing `RatingChanged` propagation path is reused unchanged.
     - Run `npm run verify` once at the end of the whole change and paste the literal tail (per-workspace test counts and exit code). Confirm `deriveTodaysPark.test.ts`, `ExperiencePicker` tests, and `routes.schedule` tests (the other `startingPark` consumers) are still green.
     - _Requirements: 24.1, 24.2, 24.3, 24.4, 24.5, 24.6, 24.7, 24.8, 24.9, 24.10, 24.11_
 
+- [ ] 26. Trip Budget actions and hub section (R25, added by the `trip-budget` spec)
+  - [ ] 26.1 Permission actions
+    - Specified and tested in `.kiro/specs/trip-budget/tasks.md` task 9.1 (`permissions.ts`, `permissions.budget.test.ts`; trips Property 30 = trip-budget Property 24). All existing permission tests must pass unmodified.
+    - _Requirements: 25.1, 25.2_
+  - [ ] 26.2 Hub tile and route
+    - Specified and tested in `.kiro/specs/trip-budget/tasks.md` task 18.5 (`TripsStack.tsx`, `TripDetailScreen.tsx` `budget` entry with test id `trip-detail-section-budget`, deliberate update of `tripStructureRegression.test.tsx`). Cascade deletion is covered by trip-budget task 3.4.
+    - _Requirements: 25.3, 25.4_
+  - [x] 26.3 Traveler_Profile cleanup on departure
+    - Specified and tested in `.kiro/specs/trip-budget/tasks.md` task 14.5 (`DELETE FROM trip_traveler_profiles` inside `departMember`, with a repo-level test that fails against the unmodified function; trips Property 30 departure half = trip-budget Property 25). Existing `departMember` tests must pass unmodified and the `trip_memberships.guard.test.ts` pin for `services/trips/repo.ts` stays unchanged.
+    - _Requirements: 25.5_
+
+- [x] 27. Trip Activity text-only updates and UX polish (R20.7–R20.9)
+  - [x] 27.1 Shared schema (`packages/shared/src/schemas/photos.ts`)
+    - Relax `tripPostCreateSchema.photoIds` to `z.array(uuidSchema).max(4).default([])` with a `.superRefine` requiring at least one photo (`photoIds.length > 0`) or a non-empty trimmed `caption` (1–500 chars); add unit tests in `packages/shared/src/__tests__/photos.test.ts`.
+    - _Requirements: 20.7_
+  - [x] 27.2 Backend repo & feed route (`apps/api/src/services/trips/repo.ts`, `routes.ts`)
+    - Allow `createFeedPost` to insert a `member_post` with `photoIds: []` when `caption` is non-empty; update `GET /trips/:id/feed` in `routes.ts` so non-author omission (`!postVisibleToNonAuthor(slots)`) applies only when the post originally had photos (`rawPhotoIds.length > 0`). Cover in `feedPosts.test.ts` and `feedEnrichment.test.ts`.
+    - _Requirements: 20.7_
+  - [x] 27.3 Mobile Trip Activity inline quick-post, modal caption-only post, `Posts` filter chip, pull-to-refresh, and card polish (`apps/mobile/src/screens/trips/TripFeedScreen.tsx`)
+    - Add inline quick-post input (`trip-activity-quick-post-input`, `trip-activity-quick-post-submit`), allow `FeedPostComposerModal` to post with caption-only or photos, add `Posts` filter chip (`trip-activity-filter-posts`), wire `FlatList` pull-to-refresh, render `"posted an update"` vs `"posted photos"` based on `item.photos.length`, and cover all new flows in `TripFeedScreen.test.tsx`.
+    - _Requirements: 20.8, 20.9_
+
 ## Notes
 
 - Tasks marked with `*` are optional (property, unit, integration, and mobile tests) and can be skipped for a faster MVP; core implementation tasks are never optional.
@@ -507,7 +529,9 @@ existing `RatingChanged` propagation path is reused unchanged.
     { "id": 20, "tasks": ["25.6"] },
     { "id": 21, "tasks": ["25.7"] },
     { "id": 22, "tasks": ["25.8", "25.10"] },
-    { "id": 23, "tasks": ["25.9"] }
+    { "id": 23, "tasks": ["25.9"] },
+    { "id": 24, "tasks": ["26.1", "26.2", "26.3"] },
+    { "id": 25, "tasks": ["27.1", "27.2", "27.3"] }
   ]
 }
 ```

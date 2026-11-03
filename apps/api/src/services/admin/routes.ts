@@ -19,6 +19,18 @@ import type { CatalogRepo } from '../catalog/repo.js';
 import type { IntelligenceRepo } from '../intelligence/IntelligenceRepo.js';
 import type { PinRepo } from '../pins/repo.js';
 import { registerPhotoRoutes } from './photoRoutes.js';
+import { registerTicketPriceRoutes } from './ticketPriceRoutes.js';
+import type {
+  AdminTicketPricesPort,
+  AdminTicketPricesState,
+  AdminDiagnoseResult,
+} from '../ticketPrices/adminPort.js';
+
+export type {
+  AdminTicketPricesPort,
+  AdminTicketPricesState,
+  AdminDiagnoseResult,
+};
 
 export interface OperatorApproveResult {
   readonly success: boolean;
@@ -60,6 +72,7 @@ export interface AdminRoutesOptions {
   readonly getDirectorySnapshot?: () => Promise<DirectorySnapshot>;
   readonly basicAuth: preHandlerHookHandler;
   readonly photos?: AdminPhotoPort | undefined;
+  readonly ticketPrices?: AdminTicketPricesPort | undefined;
 }
 
 export interface AdminSectionLink {
@@ -227,8 +240,27 @@ export async function renderAdminSection(
   }
 }
 
+export const TICKET_PRICES_ADMIN_SECTION: AdminSectionLink = {
+  path: '/admin/ticket-prices',
+  title: 'Disney Ticket Prices',
+  description: 'Ticket price cache state, refresh controls, diagnostic probe, and circuit breaker.',
+  category: 'Data Ingestion & External Sync',
+  icon: '🎟️',
+  badge: 'Demand Cache',
+};
+
 export function adminRoutes(options: AdminRoutesOptions): FastifyPluginAsync {
   return async function adminPlugin(fastify) {
+    if (options.ticketPrices) {
+      if (!ADMIN_SECTIONS.some((s) => s.path === '/admin/ticket-prices')) {
+        (ADMIN_SECTIONS as AdminSectionLink[]).push(TICKET_PRICES_ADMIN_SECTION);
+      }
+    } else {
+      const idx = ADMIN_SECTIONS.findIndex((s) => s.path === '/admin/ticket-prices');
+      if (idx !== -1) {
+        (ADMIN_SECTIONS as AdminSectionLink[]).splice(idx, 1);
+      }
+    }
     // Requirement 2.4: Ensure X-Robots-Tag: noindex, nofollow is attached to every response in this plugin
     fastify.addHook('onSend', async (_request, reply) => {
       void reply.header('X-Robots-Tag', 'noindex, nofollow');
@@ -1909,5 +1941,10 @@ export function adminRoutes(options: AdminRoutesOptions): FastifyPluginAsync {
     // Photo Review Queue & Usage (Task 10.2, 10.3)
     // -------------------------------------------------------------------------
     await registerPhotoRoutes(fastify, options);
+
+    // -------------------------------------------------------------------------
+    // Ticket Prices Management & Diagnostics (Task 10.1)
+    // -------------------------------------------------------------------------
+    await registerTicketPriceRoutes(fastify, options);
   };
 }

@@ -204,6 +204,14 @@ close to the code they validate.
   - [x] 13.2 Add interaction tests for MenuScreen add-to-list affordances
     - _Requirements: 5.10_
 
+- [ ] 14. Structured menu prices and lazy refill (R8, added by the `trip-budget` spec)
+  - [ ] 14.1 Additive projection and DTO fields
+    - Specified and tested in `.kiro/specs/trip-budget/tasks.md` tasks 1.2 (DTO fields) and 5.1 (projection in `menu.ts` and `diningMenuClient.ts`; restaurant-menu-display Property 12 first half = trip-budget Property 8). Run the existing `projectMenus` property tests and confirm they pass unmodified.
+    - _Requirements: 8.1, 8.2, 8.3, 8.6_
+  - [ ] 14.2 Shape version and lazy refill
+    - Specified and tested in `.kiro/specs/trip-budget/tasks.md` tasks 3.3 (migration `0067`, or the number reserved at implementation time) and 5.2 (`decideMenuRefresh`, repo, retrieval; restaurant-menu-display Property 12 second half = trip-budget Property 34 context and the `menuRetrieval.shape.test.ts` cases). Refill stays demand-driven and never bulk.
+    - _Requirements: 8.4, 8.5_
+
 ## Notes
 
 - Tasks marked with `*` are optional and can be skipped for faster MVP
@@ -229,7 +237,8 @@ close to the code they validate.
     { "id": 6, "tasks": ["9.2", "9.3", "10.2"] },
     { "id": 7, "tasks": ["9.4", "10.3", "11.1"] },
     { "id": 8, "tasks": ["11.2", "11.3"] },
-    { "id": 9, "tasks": ["12"] }
+    { "id": 9, "tasks": ["12"] },
+    { "id": 10, "tasks": ["14.1", "14.2"] }
   ]
 }
 ```

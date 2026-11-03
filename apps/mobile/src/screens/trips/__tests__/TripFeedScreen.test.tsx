@@ -37,7 +37,7 @@ import TripFeedScreen from '../TripFeedScreen';
 import { apiRequest as mockedApiRequest } from '../../../api/client';
 import type { TripFeedItemDTO, TripMemberDTO, TripPostPhotoSlotDTO } from '@dwt/shared';
 import { useTripAlbum, useTripSummaryPhotos } from '../../../photos/api';
-import { StyleSheet } from 'react-native';
+import { KeyboardAvoidingView, Platform, StyleSheet } from 'react-native';
 import type { ReactTestInstance } from 'react-test-renderer';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as photoPickerModule from '../../../photos/photoPicker';
@@ -937,6 +937,146 @@ describe('Trip_Activity screen', () => {
       expect(flat(screen.getByTestId('trip-activity-log-cta')).backgroundColor).toBe('#fcfaff');
       expect(flat(screen.getByText('✓ Ariel')).color).toBe('#27855a');
       expect(flat(screen.getByText('Log a ride or snack')).color).toBe('#5b2a86');
+    });
+
+    test('uses undefined behavior for KeyboardAvoidingView on Android to prevent soft-keyboard jitter loops', async () => {
+      const originalPlatform = Platform.OS;
+      try {
+        Platform.OS = 'android';
+        installApi();
+        renderActivity();
+
+        fireEvent.press(await screen.findByTestId('trip-activity-log-cta'));
+        await screen.findByTestId('activity-log-composer');
+        const kavs = screen.UNSAFE_getAllByType(KeyboardAvoidingView);
+        expect(kavs.length).toBeGreaterThan(0);
+        for (const kav of kavs) {
+          expect(kav.props.behavior).toBeUndefined();
+        }
+      } finally {
+        Platform.OS = originalPlatform;
+      }
+    });
+  });
+
+  describe('Task 27.3: text-only posts, inline quick-post composer, and Posts filter chip (R20.7–R20.9)', () => {
+    test('inline quick-post composer submits POST /trips/:id/feed/posts with { photoIds: [], caption }, clears input, and refetches feed', async () => {
+      const feed = jest.fn().mockResolvedValue(FEED);
+      const mutate = jest.fn().mockResolvedValue({ id: 'new-text-post-1' });
+      installApi({ feed, mutate });
+
+      renderActivity();
+
+      const input = await screen.findByTestId('trip-activity-quick-post-input');
+      fireEvent.changeText(input, '  Meet at Main Street Bakery in 10 mins!  ');
+      fireEvent.press(screen.getByTestId('trip-activity-quick-post-submit'));
+
+      await waitFor(() => {
+        expect(mutate).toHaveBeenCalledWith(
+          'POST',
+          `/trips/${TRIP_ID}/feed/posts`,
+          {
+            photoIds: [],
+            caption: 'Meet at Main Street Bakery in 10 mins!',
+          },
+        );
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('trip-activity-quick-post-input').props.value).toBe('');
+        expect(feed).toHaveBeenCalledTimes(2);
+      });
+    });
+
+    test('FeedPostComposerModal allows submitting a caption-only post without selecting or uploading photos', async () => {
+      const feed = jest.fn().mockResolvedValue(FEED);
+      const mutate = jest.fn().mockResolvedValue({ id: 'modal-text-post-1' });
+      installApi({ feed, mutate });
+
+      renderActivity();
+
+      const quickInput = await screen.findByTestId('trip-activity-quick-post-input');
+      fireEvent.changeText(quickInput, 'Draft carried over');
+
+      fireEvent.press(await screen.findByTestId('trip-activity-post-cta'));
+      const captionInput = await screen.findByTestId('feed-post-caption-input');
+      expect(captionInput.props.value).toBe('Draft carried over');
+      fireEvent.changeText(captionInput, 'Quick update from the monorail!');
+      fireEvent.press(screen.getByTestId('feed-post-submit'));
+
+      await waitFor(() => {
+        expect(mutate).not.toHaveBeenCalledWith(
+          'POST',
+          '/photos/uploads',
+          expect.anything(),
+        );
+        expect(mutate).toHaveBeenCalledTimes(1);
+        expect(mutate).toHaveBeenCalledWith(
+          'POST',
+          `/trips/${TRIP_ID}/feed/posts`,
+          {
+            photoIds: [],
+            caption: 'Quick update from the monorail!',
+          },
+        );
+        expect(feed).toHaveBeenCalledTimes(2);
+      });
+    });
+
+    test('renders zero-photo member_post as "posted an update" without slots grid, and filters by Posts chip', async () => {
+      const textOnlyPost: TripFeedItemDTO = {
+        id: 'text-only-post-1',
+        type: 'member_post',
+        actorDisplayName: 'Goofy',
+        actorAvatarPreset: null,
+        createdAt: '2025-08-01T21:00:00.000Z',
+        metadata: { caption: 'Headed to Fantasyland next!' },
+        photos: [],
+        mine: false,
+        reactions: [],
+        comments: [],
+      };
+      const photoPost: TripFeedItemDTO = {
+        id: 'photo-post-1',
+        type: 'member_post',
+        actorDisplayName: 'Donald',
+        actorAvatarPreset: null,
+        createdAt: '2025-08-01T20:30:00.000Z',
+        metadata: { caption: 'Castle view' },
+        photos: [readySlot('ph-castle', false)],
+        mine: false,
+        reactions: [],
+        comments: [],
+      };
+      installApi({ feed: async () => [...FEED, textOnlyPost, photoPost] });
+
+      renderActivity();
+
+      // Both posts and completions are visible under All
+      expect(await screen.findByTestId('trip-feed-item-text-only-post-1')).toBeTruthy();
+      expect(screen.getByText('posted an update')).toBeTruthy();
+      expect(screen.getByText('Headed to Fantasyland next!')).toBeTruthy();
+      expect(screen.queryByTestId('trip-feed-slots-text-only-post-1')).toBeNull();
+
+      expect(screen.getByTestId('trip-feed-item-photo-post-1')).toBeTruthy();
+      expect(screen.getByText('posted photos')).toBeTruthy();
+      expect(screen.getByTestId('trip-feed-slots-photo-post-1')).toBeTruthy();
+      expect(screen.getByText('Big Thunder Mountain')).toBeTruthy();
+
+      // Filter by Posts chip -> only member_post items remain visible
+      fireEvent.press(screen.getByTestId('trip-activity-filter-posts'));
+      expect(screen.getByTestId('trip-feed-item-text-only-post-1')).toBeTruthy();
+      expect(screen.getByTestId('trip-feed-item-photo-post-1')).toBeTruthy();
+      expect(screen.queryByText('Big Thunder Mountain')).toBeNull();
+      expect(screen.queryByText('joined the trip')).toBeNull();
+
+      // Switch back to All -> completions reappear
+      fireEvent.press(screen.getByTestId('trip-activity-filter-all'));
+      expect(screen.getByText('Big Thunder Mountain')).toBeTruthy();
+
+      // Pull-to-refresh wired on FlatList
+      const list = screen.getByTestId('trip-feed');
+      expect(typeof list.props.onRefresh).toBe('function');
     });
   });
 });

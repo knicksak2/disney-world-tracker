@@ -139,23 +139,28 @@ export interface DatePickerFieldProps {
   /** Called with the newly selected `YYYY-MM-DD` string. */
   readonly onChange: (value: string) => void;
   /** Text shown when no date is selected. */
-  readonly placeholder?: string;
+  readonly placeholder?: string | undefined;
   /** When true, the field is not tappable. */
-  readonly disabled?: boolean;
+  readonly disabled?: boolean | undefined;
   /**
    * Earliest selectable date as `YYYY-MM-DD`. Days before it are grayed out
    * and not selectable. Used to keep an end date on or after a start date.
    */
-  readonly minimumDate?: string;
+  readonly minimumDate?: string | undefined;
   /**
    * Latest selectable date as `YYYY-MM-DD`. Days after it are grayed out and
    * not selectable — the Calendar guards `onDayPress` for out-of-range days,
    * so a later day cannot be chosen. Used to keep a visit date on or before
    * today.
    */
-  readonly maximumDate?: string;
+  readonly maximumDate?: string | undefined;
+  /**
+   * Initial month to open when no date is selected (YYYY-MM-DD).
+   * Defaults to minimumDate or today's date.
+   */
+  readonly initialMonth?: string | undefined;
   readonly accessibilityLabel: string;
-  readonly testID?: string;
+  readonly testID?: string | undefined;
 }
 
 export function DatePickerField({
@@ -165,6 +170,7 @@ export function DatePickerField({
   disabled = false,
   minimumDate,
   maximumDate,
+  initialMonth: initialMonthProp,
   accessibilityLabel,
   testID,
 }: DatePickerFieldProps): JSX.Element {
@@ -176,15 +182,18 @@ export function DatePickerField({
 
   const label = displayLabel(value);
 
-  // The month the calendar opens on: the selected value, else the minimum, else
-  // today. Kept as a valid `YYYY-MM-DD` string for the `current` prop.
+  // The month the calendar opens on: the selected value, else the specified initialMonth,
+  // else the minimum, else today. Kept as a valid `YYYY-MM-DD` string for the `current` prop.
   const initialMonth = useMemo<string>(() => {
     if (parseYmd(value) !== null) return value;
+    if (initialMonthProp !== undefined && parseYmd(initialMonthProp) !== null) {
+      return initialMonthProp;
+    }
     if (minimumDate !== undefined && parseYmd(minimumDate) !== null) {
       return minimumDate;
     }
     return todayIso();
-  }, [value, minimumDate]);
+  }, [value, initialMonthProp, minimumDate]);
 
   const marked = useMemo(() => {
     if (parseYmd(value) === null) return {};

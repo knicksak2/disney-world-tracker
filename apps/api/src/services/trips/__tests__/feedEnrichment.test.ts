@@ -501,6 +501,47 @@ describe('Task 20.2: Feed Enrichment (FeedPhotoPort & GET /trips/:id/feed)', () 
       expect(nonAuthorItem).toBeUndefined();
     });
 
+    it('text-only member_post (photoIds: []) is visible to both author (mine: true) and non-author Trip members (mine: false, photos: [], caption preserved) (trips R20.7, Property 31)', async () => {
+      const textPostId = seedPost({
+        photoIds: [],
+        caption: 'Line at Haunted Mansion is only 15 minutes right now!',
+        actorId: authorMemberId,
+      });
+
+      const authorServer = buildTestServer({ userId: authorMemberId });
+      const nonAuthorServer = buildTestServer({ userId: otherMemberId });
+
+      const authorRes = await authorServer.inject({
+        method: 'GET',
+        url: `/trips/${tripId}/feed`,
+      });
+      expect(authorRes.statusCode).toBe(200);
+      const authorFeed = authorRes.json() as TripFeedItemDTO[];
+      const authorItem = authorFeed.find((item) => item.id === textPostId);
+      expect(authorItem).toBeDefined();
+      expect(authorItem?.mine).toBe(true);
+      expect(authorItem?.photos).toEqual([]);
+      expect(authorItem?.metadata?.caption).toBe(
+        'Line at Haunted Mansion is only 15 minutes right now!',
+      );
+      expect(authorItem?.metadata?.photoIds).toBeUndefined();
+
+      const nonAuthorRes = await nonAuthorServer.inject({
+        method: 'GET',
+        url: `/trips/${tripId}/feed`,
+      });
+      expect(nonAuthorRes.statusCode).toBe(200);
+      const nonAuthorFeed = nonAuthorRes.json() as TripFeedItemDTO[];
+      const nonAuthorItem = nonAuthorFeed.find((item) => item.id === textPostId);
+      expect(nonAuthorItem).toBeDefined();
+      expect(nonAuthorItem?.mine).toBe(false);
+      expect(nonAuthorItem?.photos).toEqual([]);
+      expect(nonAuthorItem?.metadata?.caption).toBe(
+        'Line at Haunted Mansion is only 15 minutes right now!',
+      );
+      expect(nonAuthorItem?.metadata?.photoIds).toBeUndefined();
+    });
+
     it('neither serialized feed nor DTO contains authorId, actor_id, or photoIds', async () => {
       const p1 = seedPhoto({ status: 'approved' });
       const postId = seedPost({ photoIds: [p1], caption: 'Wonderful day!' });

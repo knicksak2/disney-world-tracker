@@ -317,6 +317,11 @@ function makeFakePool(store: Store): FakePool {
             return { rows: [], rowCount: affected };
           }
 
+          // ---- departMember: clean up traveler profile -------------
+          if (sql.startsWith('DELETE FROM trip_traveler_profiles')) {
+            return { rows: [], rowCount: 0 };
+          }
+
           // ---- departMember: sole-Member cascade delete ------------
           if (sql.startsWith('DELETE FROM trips')) {
             const [tripId] = params as [string];

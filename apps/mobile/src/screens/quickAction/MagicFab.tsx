@@ -120,7 +120,7 @@ export function MagicFab({
         testID="fab-experience-picker-modal"
       >
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.modalBackdrop}
         >
           <View style={styles.modalContent}>

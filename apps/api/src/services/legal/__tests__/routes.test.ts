@@ -32,6 +32,10 @@ describe('legalRoutes: GET /terms', () => {
     expect(res.payload).toContain('The Walt Disney Company');
     expect(res.payload).toContain('nominative fair use');
     expect(res.payload).toContain('ThemeParks.wiki');
+    expect(res.payload).toContain('Lightning Lane prices are sourced from the community-driven');
+    expect(res.payload).toContain('Park ticket prices and restaurant menu prices come from Disney&rsquo;s website');
+    expect(res.payload).toContain('shown before tax, may be out of date or estimated, and the final price at checkout may differ');
+    expect(res.payload).toContain('Discounted, military, reseller, and special-offer prices are not covered');
     expect(res.payload).toContain('href="/privacy"');
     expect(res.payload).toContain('href="/account-deletion"');
     expect(res.payload).toContain('href="mailto:legal@example.org"');

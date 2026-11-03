@@ -520,6 +520,12 @@ the bare `YYYY-MM-DD` bucket key unchanged under their existing `(UTC)` header, 
 
 **Validates: Requirements 16.4**
 
+### Property 11: Ticket price admin actions are gated, bounded and never leak the token
+
+Added by the `trip-budget` spec. For any request without valid Basic Auth, `GET /admin/ticket-prices`, `POST /admin/ticket-prices/refresh` and `POST /admin/ticket-prices/diagnose` return `401` with no body detail and no state change (Property 1 applies). For any cross-origin POST, the response is `403` and `ticket_price_control`, `ticket_price_sets` and `ticket_prices` are byte-identical before and after. `refresh` makes no outbound call while the kill switch is off or `blocked_until` is in the future, and otherwise bypasses only the attempt cooldown. `diagnose` makes exactly two outbound calls, writes nothing to the price cache, works with the kill switch off, refuses while blocked, and a WAF-classified response sets `blocked_until` exactly as a refresh would. For any scripted client behavior, the rendered HTML, the JSON result and every logged object contain no substring equal to the access token and no `Authorization` header value, and the page contains no input that edits a price. Implementation notes: a new `admin/ticketPriceRoutes.ts` registered by `adminRoutes` with `preHandler: options.basicAuth`, reusing `renderPage`, `table` and `explainerBanner`; one `ADMIN_SECTIONS` entry under "Data Ingestion & External Sync". Second-review additions (trip-budget Property 38): `POST /admin/ticket-prices/block` is gated and same-origin enforced like the others and sets `blocked_until` with reason `manual`; `diagnose` takes the in-progress claim and is refused inside 60 seconds of the previous diagnose or during a run; error text shown is a closed-set code and a `<script>` value from a fake repo renders escaped; the routes exist only when the `ticketPrices` port is passed to `adminRoutes`.
+
+**Validates: Requirements 18.1, 18.2, 18.3, 18.4, 18.5, 18.6, 18.7, 18.8**
+
 ## Error Handling
 
 Three new `ErrorCode` values are added to `packages/shared/src/errors.ts`, mapped via

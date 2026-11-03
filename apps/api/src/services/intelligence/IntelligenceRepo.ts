@@ -111,6 +111,19 @@ export interface ScheduleSignalRow {
   extended_evening: boolean;
   ticketed_event: boolean;
   ll_multipass_price_cents: number | null;
+  ll_multipass_available?: boolean | null;
+  ll_premier_price_cents?: number | null;
+  ll_premier_available?: boolean | null;
+  ll_prices_captured_at?: Date | null;
+}
+
+export interface LlSinglePriceRow {
+  park: string;
+  date: string;
+  purchaseId: string;
+  attractionName: string;
+  priceCents: number;
+  available: boolean | null;
 }
 
 export interface ForecastLogRow {
@@ -435,29 +448,108 @@ export class IntelligenceRepo {
     if (signals.length === 0) return;
     const query = `
       INSERT INTO park_schedule_signals (
-        park, date, open_time, close_time, early_entry, extended_evening, ticketed_event, ll_multipass_price_cents
+        park, date, open_time, close_time, early_entry, extended_evening, ticketed_event,
+        ll_multipass_price_cents, ll_multipass_available, ll_premier_price_cents, ll_premier_available,
+        ll_prices_captured_at, ll_multipass_captured_at, ll_premier_captured_at
       )
-      SELECT * FROM unnest(
-        $1::text[], $2::date[], $3::timestamptz[], $4::timestamptz[], $5::boolean[], $6::boolean[], $7::boolean[], $8::int[]
-      ) AS t(park, date, open_time, close_time, early_entry, extended_evening, ticketed_event, ll_multipass_price_cents)
+      SELECT
+        t.park, t.date, t.open_time, t.close_time, t.early_entry, t.extended_evening, t.ticketed_event,
+        t.ll_multipass_price_cents, t.ll_multipass_available, t.ll_premier_price_cents, t.ll_premier_available,
+        t.ll_prices_captured_at,
+        CASE WHEN t.ll_multipass_price_cents IS NOT NULL THEN t.ll_prices_captured_at ELSE NULL END,
+        CASE WHEN t.ll_premier_price_cents IS NOT NULL THEN t.ll_prices_captured_at ELSE NULL END
+      FROM unnest(
+        $1::text[], $2::date[], $3::timestamptz[], $4::timestamptz[], $5::boolean[], $6::boolean[], $7::boolean[],
+        $8::int[], $9::boolean[], $10::int[], $11::boolean[], $12::timestamptz[]
+      ) AS t(park, date, open_time, close_time, early_entry, extended_evening, ticketed_event,
+        ll_multipass_price_cents, ll_multipass_available, ll_premier_price_cents, ll_premier_available, ll_prices_captured_at)
       ON CONFLICT (park, date) DO UPDATE SET
         open_time = EXCLUDED.open_time,
         close_time = EXCLUDED.close_time,
         early_entry = EXCLUDED.early_entry,
         extended_evening = EXCLUDED.extended_evening,
         ticketed_event = EXCLUDED.ticketed_event,
-        ll_multipass_price_cents = EXCLUDED.ll_multipass_price_cents
+        ll_multipass_price_cents = COALESCE(EXCLUDED.ll_multipass_price_cents, park_schedule_signals.ll_multipass_price_cents),
+        ll_multipass_available = COALESCE(EXCLUDED.ll_multipass_available, park_schedule_signals.ll_multipass_available),
+        ll_premier_price_cents = COALESCE(EXCLUDED.ll_premier_price_cents, park_schedule_signals.ll_premier_price_cents),
+        ll_premier_available = COALESCE(EXCLUDED.ll_premier_available, park_schedule_signals.ll_premier_available),
+        ll_multipass_captured_at = CASE WHEN EXCLUDED.ll_multipass_price_cents IS NOT NULL THEN EXCLUDED.ll_prices_captured_at ELSE park_schedule_signals.ll_multipass_captured_at END,
+        ll_premier_captured_at = CASE WHEN EXCLUDED.ll_premier_price_cents IS NOT NULL THEN EXCLUDED.ll_prices_captured_at ELSE park_schedule_signals.ll_premier_captured_at END,
+        ll_prices_captured_at = CASE WHEN EXCLUDED.ll_multipass_price_cents IS NOT NULL OR EXCLUDED.ll_premier_price_cents IS NOT NULL THEN EXCLUDED.ll_prices_captured_at ELSE park_schedule_signals.ll_prices_captured_at END
     `;
     await this.pool.query(query, [
       signals.map(s => s.park),
-      signals.map(s => s.date),
+      signals.map(s => s.date instanceof Date ? s.date.toISOString().slice(0, 10) : s.date),
       signals.map(s => s.open_time),
       signals.map(s => s.close_time),
       signals.map(s => s.early_entry),
       signals.map(s => s.extended_evening),
       signals.map(s => s.ticketed_event),
       signals.map(s => s.ll_multipass_price_cents),
+      signals.map(s => s.ll_multipass_available ?? null),
+      signals.map(s => s.ll_premier_price_cents ?? null),
+      signals.map(s => s.ll_premier_available ?? null),
+      signals.map(s => s.ll_prices_captured_at ?? null),
     ]);
+  }
+
+  async upsertLightningLaneSinglePrices(rows: readonly LlSinglePriceRow[]): Promise<void> {
+    if (rows.length === 0) return;
+
+    // Dedupe by park|date|purchase_id in a Map (round 5 M5)
+    const deduped = new Map<string, LlSinglePriceRow>();
+    for (const r of rows) {
+      deduped.set(`${r.park}|${r.date}|${r.purchaseId}`, r);
+    }
+    const list = Array.from(deduped.values());
+
+    const numericIds = list.map((r) => {
+      const match = r.purchaseId.match(/_(\d+)$/);
+      return match ? match[1]! : null;
+    });
+
+    const query = `
+      INSERT INTO lightning_lane_single_prices (
+        park, date, purchase_id, experience_id, attraction_name, price_cents, available
+      )
+      SELECT v.park, v.date, v.purchase_id, e.id, v.attraction_name, v.price_cents, v.available
+      FROM unnest(
+        $1::text[], $2::date[], $3::text[], $4::text[], $5::text[], $6::int[], $7::boolean[]
+      ) AS v(park, date, purchase_id, numeric_id, attraction_name, price_cents, available)
+      LEFT JOIN experiences e ON e.upstream_entity_id = v.numeric_id || ';entityType=Attraction'
+      ON CONFLICT (park, date, purchase_id) DO UPDATE SET
+        price_cents = EXCLUDED.price_cents,
+        available = EXCLUDED.available,
+        attraction_name = EXCLUDED.attraction_name,
+        experience_id = EXCLUDED.experience_id,
+        captured_at = now()
+    `;
+
+    await this.pool.query(query, [
+      list.map((r) => r.park),
+      list.map((r) => r.date),
+      list.map((r) => r.purchaseId),
+      numericIds,
+      list.map((r) => r.attractionName),
+      list.map((r) => r.priceCents),
+      list.map((r) => r.available ?? null),
+    ]);
+  }
+
+  async pruneLightningLaneSinglePrices(olderThanDate: string): Promise<number> {
+    const res = await this.pool.query(
+      `DELETE FROM lightning_lane_single_prices WHERE date < $1::date`,
+      [olderThanDate],
+    );
+    return res.rowCount ?? 0;
+  }
+
+  async getLlSinglePricesLastCapturedAt(): Promise<Date | null> {
+    const res = await this.pool.query(
+      `SELECT max(captured_at) AS last_captured_at FROM lightning_lane_single_prices`,
+    );
+    const val = res.rows[0]?.last_captured_at;
+    return val ? new Date(val) : null;
   }
 
   async getParkScheduleSignals(park: string, fromDate: Date, toDate: Date): Promise<ScheduleSignalRow[]> {

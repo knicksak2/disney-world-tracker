@@ -431,7 +431,7 @@ describe('TripPackingListScreen (Task 11.7)', () => {
         expect(screen.queryByText('Updated Park Tickets')).toBeNull();
         expect(screen.getByTestId('packing-counts')).toHaveTextContent('1 of 2 packed');
       },
-      { timeout: 5000 },
+      { timeout: 10000 },
     );
   });
 

@@ -175,6 +175,18 @@ Accounts whose deletion grace period has ended are purged by a **dedicated Purge
 
 ---
 
+### Ticket prices (no cron)
+
+There is no cron for ticket prices. Ticket price caching is demand-driven: cache rows are refreshed in the background only when a user views a trip budget or requests a price quote for a stale or missing ticket set.
+
+- **Kill switch default off:** `TICKET_PRICES_ENABLED` defaults to `false`. Automated tests use fake fixtures only. In production, the kill switch stays off until the operator runs Diagnose three times at different times of day (including once after 20:00 ET to verify the start-date handling).
+- **Keep-alive never touches the database:** The keep-alive pinger (`GET /health` or `HEAD /health`) must never touch the database or trigger ticket pricing queries, preserving Neon free-tier compute hours; the keep-alive never touches the database.
+- **Instant circuit breaker:** The admin page (`/admin/ticket-prices`) provides an instant "Block now" action that immediately sets `blocked_until` on the control row and sets, stopping any in-flight run before its next upstream call.
+- **Lightning Lane prices:** Lightning Lane prices depend on the sampling job (`POST /internal/sampling/run`). They exist only while the scheduled sampling job runs in production. The operator launch gate confirms the sampling job is scheduled and `park_schedule_signals.ll_prices_captured_at` is advancing.
+
+
+---
+
 ## Neon — PostgreSQL
 
 ### What it does

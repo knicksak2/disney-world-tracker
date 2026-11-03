@@ -38,6 +38,19 @@ export {
   WINDOW_STATUSES,
   REMINDER_LEADS,
   PACKING_CATEGORIES,
+  BUDGET_CATEGORIES,
+  PRICE_SOURCES,
+  CREATABLE_PRICE_SOURCES,
+  PRICE_LABEL_KINDS,
+  AGE_BRACKETS,
+  TICKET_OPTIONS,
+  TICKET_DISCOUNT_GROUPS,
+  TRAVELER_PASS_TYPES,
+  LL_PASS_TYPES,
+  TICKET_PARKS,
+  TICKET_PARK_BY_CANONICAL_PARK,
+  TIP_BEARING_SERVICE_STYLES,
+  isTipBearingServiceStyle,
 } from './enums.js';
 export type {
   ExperienceCategory,
@@ -63,6 +76,16 @@ export type {
   WindowStatus,
   ReminderLead,
   PackingCategory,
+  BudgetCategory,
+  PriceSource,
+  CreatablePriceSource,
+  PriceLabelKind,
+  AgeBracket,
+  TicketOption,
+  TicketDiscountGroup,
+  TravelerPassType,
+  LLPassType,
+  TicketPark,
 } from './enums.js';
 
 // Avatar preset catalog (allowlist of bundled illustration ids).
@@ -818,4 +841,96 @@ export type {
 
 export { friendFoodRatingsQuerySchema } from './schemas/FriendFoodRatings.js';
 export type { FriendFoodRatingsQuery } from './schemas/FriendFoodRatings.js';
+
+// Shared money helpers
+export {
+  bpsOf,
+  splitCentsEvenly,
+} from './money.js';
+
+// Menu DTO additions and validation schemas
+export type {
+  MenuGroupDTO,
+  MenuItemDTO,
+  MenuPriceEntry,
+} from './dto/Menu.js';
+
+export {
+  menuPriceEntrySchema,
+  menuDtoSchema,
+} from './schemas/Menu.js';
+
+// Menu pricing pure parsers and tier extractors
+export {
+  parseDollarAmounts,
+  parseMenuPriceString,
+  extractMenuPriceOffers,
+  extractTierPriceSuggestions,
+  isAlcoholGroupType,
+  formatCentsAsDollarString,
+  normalizeMenuName,
+  normalizeTierName,
+  computeMenuEstimatePerPerson,
+} from './menuPricing.js';
+export type {
+  MenuPriceOffer,
+  MenuEstimatePerPerson,
+} from './menuPricing.js';
+
+// Trip Budget domain: constants, schemas, DTOs, helpers
+export {
+  BUDGET_LINE_LIMIT,
+  BUDGET_ALLOCATIONS_PER_LINE_MAX,
+  BUDGET_DISMISSED_LIMIT,
+  BUDGET_MENU_ITEMS_PER_LINE_MAX,
+  BUDGET_READ_MAX_STATEMENTS,
+  BUDGET_DESCRIPTION_MAX,
+  BUDGET_TOTAL_CAP_CENTS,
+  BUDGET_DEFAULT_TAX_BPS,
+  BUDGET_DEFAULT_DINING_TIP_BPS,
+  BUDGET_TO_EXPENSE_CATEGORY,
+  MENU_SHAPE_VERSION,
+  ticketPriceRefSchema,
+  llPriceRefSchema,
+  menuPriceRefSchema,
+  priceRefSchema,
+  budgetAllocationInputSchema,
+  budgetLineInputSchema,
+  budgetLineReplaceSchema,
+  dismissSuggestionBodySchema,
+  travelerProfileInputSchema,
+  budgetSettingsPatchSchema,
+  priceQuoteRequestSchema,
+  priceQuoteBodySchema,
+  budgetSuggestionDtoSchema,
+  formatCalendarDateAsOf,
+  priceLabelText,
+} from './tripBudget.js';
+export type {
+  TicketPriceRef,
+  LlPriceRef,
+  MenuPriceRef,
+  PriceRef,
+  BudgetAllocationInput,
+  BudgetLineInput,
+  BudgetLineReplace,
+  DismissSuggestionBody,
+  TravelerProfileInput,
+  BudgetSettingsPatch,
+  PriceQuoteRequest,
+  PriceQuoteBody,
+  PriceStampDTO,
+  BudgetAllocationDTO,
+  BudgetLineDTO,
+  BudgetBucketDTO,
+  SavingsPlanDTO,
+  VsActualDTO,
+  TravelerProfileDTO,
+  BudgetSettingsDTO,
+  BudgetDTO,
+  BudgetSuggestionDraft,
+  BudgetSuggestionDTO,
+  PriceQuoteDTO,
+} from './tripBudget.js';
+
 

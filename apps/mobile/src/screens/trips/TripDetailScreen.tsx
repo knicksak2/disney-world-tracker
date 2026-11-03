@@ -49,7 +49,7 @@ import {
   type TripStatus,
 } from '@dwt/shared';
 
-import { ApiError, apiRequest } from '../../api/client';
+import { type ApiError, apiRequest } from '../../api/client';
 import type { TripsStackParamList } from '../../navigation/TripsStack';
 import { theme, withAlpha, type AppTheme, type ColorScheme } from '../../theme/theme';
 import { makeStyles } from '../../theme/makeStyles';
@@ -106,6 +106,7 @@ export interface HubSection {
     | 'TripSchedule'
     | 'TripReservations'
     | 'TripExpenses'
+    | 'TripBudget'
     | 'TripBookingTimeline'
     | 'TripPackingList'
     | 'TripFeed'
@@ -162,6 +163,13 @@ const HUB_SECTION_DEFS: readonly HubSectionDef[] = [
     title: 'Expenses',
     body: 'Shared ledger, balances, and settlements.',
     icon: 'cash-outline',
+  },
+  {
+    key: 'budget',
+    route: 'TripBudget',
+    title: 'Budget',
+    body: 'Plan costs, save per week, compare to what you spent.',
+    icon: 'wallet-outline',
   },
   {
     key: 'booking',
@@ -870,12 +878,16 @@ export default function TripDetailScreen({
           </Pressable>
         )}
 
-        {/* 2x2 Command Grid: Vacation Tools */}
+        {/* 4 + 2 + 3 Tiered Command Hub: Vacation Tools */}
         <View style={styles.toolsSection}>
-          <Text style={styles.toolsSectionLabel}>
-            {isCompleted ? 'TRIP ARCHIVE' : 'VACATION TOOLS'}
-          </Text>
+          <View style={styles.toolsHeaderRow}>
+            <Text style={styles.toolsSectionLabel}>
+              {isCompleted ? 'TRIP ARCHIVE' : 'VACATION TOOLS'}
+            </Text>
+            <Text style={styles.toolsSectionSubLabel}>Core Itinerary</Text>
+          </View>
           <View style={styles.grid} testID="trip-detail-grid">
+            {/* Tier 1 (Core 2x2): Row 1 — Planned List & Schedule Builder */}
             <View style={styles.gridRow}>
               {/* Tile 1: Planned List */}
               <Pressable
@@ -940,6 +952,7 @@ export default function TripDetailScreen({
               </Pressable>
             </View>
 
+            {/* Tier 1 (Core 2x2): Row 2 — Reservations & Trip Activity */}
             <View style={styles.gridRow}>
               {/* Tile 3: Reservations */}
               <Pressable
@@ -1006,137 +1019,235 @@ export default function TripDetailScreen({
               </Pressable>
             </View>
 
-            <View style={styles.gridRow}>
-              {/* Tile 5: Expenses */}
-              <Pressable
-                style={styles.hubTile}
-                onPress={() =>
-                  navigation.navigate('TripExpenses', { tripId })
-                }
-                accessibilityRole="button"
-                accessibilityLabel="Expenses"
-                testID="trip-detail-section-expenses"
-              >
-                <View style={styles.tileBadge}>
-                  <Text style={[styles.tileBadgeText, { color: t.color.primaryFg }]}>
-                    Ledger
-                  </Text>
-                </View>
-                <View
-                  style={[
-                    styles.tileIconWrap,
-                    { backgroundColor: `${t.color.primary}18` },
-                  ]}
+            {/* Tier 2: Finances (2-up Compact Horizontal Row) */}
+            <View style={styles.tierGroup} testID="trip-detail-tier-finances">
+              <Text style={styles.tierLabel}>FINANCES</Text>
+              <View style={styles.financeRow} testID="trip-detail-finances-row">
+                {/* Tile 5: Budget */}
+                <Pressable
+                  style={styles.financeTile}
+                  onPress={() => navigation.navigate('TripBudget', { tripId })}
+                  accessibilityRole="button"
+                  accessibilityLabel="Budget"
+                  testID="trip-detail-section-budget"
                 >
-                  <Ionicons
-                    name="cash-outline"
-                    size={20}
-                    color={t.color.primaryFg}
-                  />
-                </View>
-                <Text style={styles.tileTitle}>Expenses</Text>
-                <Text style={styles.tileDesc} numberOfLines={2}>
-                  Shared ledger & balances.
-                </Text>
-              </Pressable>
-
-              {/* Tile 6: Booking timeline */}
-              <Pressable
-                style={styles.hubTile}
-                onPress={() =>
-                  navigation.navigate('TripBookingTimeline', { tripId })
-                }
-                accessibilityRole="button"
-                accessibilityLabel="Booking timeline"
-                testID="trip-detail-section-booking"
-              >
-                <View style={styles.tileBadge}>
-                  <Text style={[styles.tileBadgeText, { color: t.color.primaryFg }]}>
-                    Timeline
-                  </Text>
-                </View>
-                <View
-                  style={[
-                    styles.tileIconWrap,
-                    { backgroundColor: `${t.color.primaryLight}18` },
-                  ]}
-                >
-                  <Ionicons
-                    name="calendar-number-outline"
-                    size={20}
-                    color={t.color.primaryLight}
-                  />
-                </View>
-                <Text style={styles.tileTitle}>Booking timeline</Text>
-                <Text style={styles.tileDesc} numberOfLines={2}>
-                  Key booking dates & windows.
-                </Text>
-              </Pressable>
-            </View>
-
-            <View style={styles.gridRow}>
-              {/* Tile 7: Packing list */}
-              <Pressable
-                style={styles.hubTile}
-                onPress={() =>
-                  navigation.navigate('TripPackingList', { tripId })
-                }
-                accessibilityRole="button"
-                accessibilityLabel="Packing list"
-                testID="trip-detail-section-packing"
-              >
-                {packingBadgeText !== null ? (
-                  <View style={styles.tileBadge}>
-                    <Text style={[styles.tileBadgeText, { color: t.color.primaryFg }]}>
-                      {packingBadgeText}
+                  <View
+                    style={[
+                      styles.financeIconWrap,
+                      { backgroundColor: tile.financeBg },
+                    ]}
+                  >
+                    <Ionicons
+                      name="wallet-outline"
+                      size={18}
+                      color={tile.financeIcon}
+                    />
+                  </View>
+                  <View style={styles.financeTextWrap}>
+                    <View style={styles.financeTitleRow}>
+                      <Text style={styles.financeTitle} numberOfLines={1}>
+                        Budget
+                      </Text>
+                      <View
+                        style={[
+                          styles.compactBadge,
+                          { backgroundColor: tile.financeBg },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.tileBadgeText,
+                            { color: tile.financeIcon },
+                          ]}
+                        >
+                          Plan
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={styles.financeDesc} numberOfLines={1}>
+                      Plan costs & save per week.
                     </Text>
                   </View>
-                ) : null}
-                <View
-                  style={[
-                    styles.tileIconWrap,
-                    { backgroundColor: `${t.color.primary}18` },
-                  ]}
-                >
-                  <Ionicons
-                    name="bag-check-outline"
-                    size={20}
-                    color={t.color.primaryFg}
-                  />
-                </View>
-                <Text style={styles.tileTitle}>Packing list</Text>
-                <Text style={styles.tileDesc} numberOfLines={2}>
-                  Collaborative packing checklist.
-                </Text>
-              </Pressable>
+                </Pressable>
 
-              {/* Tile 8: Trip Album */}
-              <Pressable
-                style={styles.hubTile}
-                onPress={() =>
-                  navigation.navigate('TripAlbum', { tripId })
-                }
-                accessibilityRole="button"
-                accessibilityLabel="Trip Album"
-                testID="trip-detail-section-album"
-              >
-                <View
-                  style={[
-                    styles.tileIconWrap,
-                    { backgroundColor: `${t.color.primaryLight}18` },
-                  ]}
+                {/* Tile 6: Expenses */}
+                <Pressable
+                  style={styles.financeTile}
+                  onPress={() =>
+                    navigation.navigate('TripExpenses', { tripId })
+                  }
+                  accessibilityRole="button"
+                  accessibilityLabel="Expenses"
+                  testID="trip-detail-section-expenses"
                 >
-                  <Ionicons
-                    name="images-outline"
-                    size={20}
-                    color={t.color.primaryLight}
-                  />
-                </View>
-                <Text style={styles.tileTitle}>Trip Album</Text>
-                <Text style={styles.tileDesc} numberOfLines={2}>
-                  Shared crew photos & memories.
-                </Text>
-              </Pressable>
+                  <View
+                    style={[
+                      styles.financeIconWrap,
+                      { backgroundColor: tile.financeBg },
+                    ]}
+                  >
+                    <Ionicons
+                      name="cash-outline"
+                      size={18}
+                      color={tile.financeIcon}
+                    />
+                  </View>
+                  <View style={styles.financeTextWrap}>
+                    <View style={styles.financeTitleRow}>
+                      <Text style={styles.financeTitle} numberOfLines={1}>
+                        Expenses
+                      </Text>
+                      <View style={styles.compactBadge}>
+                        <Text
+                          style={[
+                            styles.tileBadgeText,
+                            { color: t.color.primaryFg },
+                          ]}
+                        >
+                          Ledger
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={styles.financeDesc} numberOfLines={1}>
+                      Shared ledger & balances.
+                    </Text>
+                  </View>
+                </Pressable>
+              </View>
+            </View>
+
+            {/* Tier 3: Prep & Memories (3-up Compact Strip) */}
+            <View style={styles.tierGroup} testID="trip-detail-tier-prep">
+              <Text style={styles.tierLabel}>PREP & MEMORIES</Text>
+              <View style={styles.prepRow} testID="trip-detail-prep-row">
+                {/* Tile 7: Booking timeline */}
+                <Pressable
+                  style={styles.prepTile}
+                  onPress={() =>
+                    navigation.navigate('TripBookingTimeline', { tripId })
+                  }
+                  accessibilityRole="button"
+                  accessibilityLabel="Booking timeline"
+                  testID="trip-detail-section-booking"
+                >
+                  <View
+                    style={[
+                      styles.prepIconWrap,
+                      { backgroundColor: tile.bookingBg },
+                    ]}
+                  >
+                    <Ionicons
+                      name="calendar-number-outline"
+                      size={18}
+                      color={tile.bookingIcon}
+                    />
+                  </View>
+                  <Text style={styles.prepTitle} numberOfLines={1}>
+                    Booking timeline
+                  </Text>
+                  <View
+                    style={[
+                      styles.prepBadge,
+                      { backgroundColor: tile.bookingBg },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.tileBadgeText,
+                        { color: tile.bookingIcon },
+                      ]}
+                    >
+                      Timeline
+                    </Text>
+                  </View>
+                </Pressable>
+
+                {/* Tile 8: Packing list */}
+                <Pressable
+                  style={styles.prepTile}
+                  onPress={() =>
+                    navigation.navigate('TripPackingList', { tripId })
+                  }
+                  accessibilityRole="button"
+                  accessibilityLabel="Packing list"
+                  testID="trip-detail-section-packing"
+                >
+                  <View
+                    style={[
+                      styles.prepIconWrap,
+                      { backgroundColor: tile.packingBg },
+                    ]}
+                  >
+                    <Ionicons
+                      name="bag-check-outline"
+                      size={18}
+                      color={tile.packingIcon}
+                    />
+                  </View>
+                  <Text style={styles.prepTitle} numberOfLines={1}>
+                    Packing list
+                  </Text>
+                  {packingBadgeText !== null ? (
+                    <View
+                      style={[
+                        styles.prepBadge,
+                        { backgroundColor: tile.packingBg },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.tileBadgeText,
+                          { color: tile.packingIcon },
+                        ]}
+                      >
+                        {packingBadgeText}
+                      </Text>
+                    </View>
+                  ) : null}
+                </Pressable>
+
+                {/* Tile 9: Trip Album */}
+                <Pressable
+                  style={styles.prepTile}
+                  onPress={() =>
+                    navigation.navigate('TripAlbum', { tripId })
+                  }
+                  accessibilityRole="button"
+                  accessibilityLabel="Trip Album"
+                  testID="trip-detail-section-album"
+                >
+                  <View
+                    style={[
+                      styles.prepIconWrap,
+                      { backgroundColor: tile.albumBg },
+                    ]}
+                  >
+                    <Ionicons
+                      name="images-outline"
+                      size={18}
+                      color={tile.albumIcon}
+                    />
+                  </View>
+                  <Text style={styles.prepTitle} numberOfLines={1}>
+                    Trip Album
+                  </Text>
+                  <View
+                    style={[
+                      styles.prepBadge,
+                      { backgroundColor: tile.albumBg },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.tileBadgeText,
+                        { color: tile.albumIcon },
+                      ]}
+                    >
+                      Photos
+                    </Text>
+                  </View>
+                </Pressable>
+              </View>
             </View>
           </View>
         </View>
@@ -1596,15 +1707,26 @@ const useStyles = makeStyles((t) => ({
     color: PAST_HERO[t.scheme].subtitle,
   },
 
-  // 2x2 Command Grid (Vacation Tools)
+  // 4 + 2 + 3 Tiered Command Hub (Vacation Tools)
   toolsSection: {
     gap: theme.spacing.xs,
+  },
+  toolsHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 2,
   },
   toolsSectionLabel: {
     ...theme.typography.meta,
     fontWeight: '800',
     color: t.color.textSecondary,
     letterSpacing: 0.5,
+  },
+  toolsSectionSubLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: t.color.textSecondary,
   },
   grid: {
     gap: theme.spacing.sm,
@@ -1661,6 +1783,116 @@ const useStyles = makeStyles((t) => ({
     fontSize: 10.5,
     lineHeight: 14,
     color: t.color.textSecondary,
+  },
+
+  // Tier 2 (Finances 2-up) & Tier 3 (Prep & Memories 3-up)
+  tierGroup: {
+    gap: 6,
+    marginTop: 2,
+  },
+  tierLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: t.color.textSecondary,
+    letterSpacing: 0.6,
+    paddingHorizontal: 2,
+  },
+  financeRow: {
+    flexDirection: 'row',
+    gap: theme.spacing.sm,
+  },
+  financeTile: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+    backgroundColor: t.color.surface,
+    borderRadius: theme.radius.lg,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: HUB_TILE[t.scheme].financeBorder,
+    shadowColor: t.shadow.card.shadowColor,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 5,
+    elevation: 1,
+  },
+  financeIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  financeTextWrap: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  financeTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 4,
+  },
+  financeTitle: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: t.color.textPrimary,
+    flexShrink: 1,
+  },
+  financeDesc: {
+    fontSize: 10,
+    color: t.color.textSecondary,
+  },
+  compactBadge: {
+    backgroundColor: t.color.surfaceAlt,
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: theme.radius.pill,
+    flexShrink: 0,
+  },
+  prepRow: {
+    flexDirection: 'row',
+    gap: theme.spacing.sm,
+  },
+  prepTile: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: t.color.surface,
+    borderRadius: theme.radius.lg,
+    paddingVertical: 10,
+    paddingHorizontal: 6,
+    borderWidth: 1,
+    borderColor: t.color.border,
+    gap: 5,
+    shadowColor: t.shadow.card.shadowColor,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 5,
+    elevation: 1,
+  },
+  prepIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  prepTitle: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: t.color.textPrimary,
+    textAlign: 'center',
+  },
+  prepBadge: {
+    backgroundColor: t.color.surfaceAlt,
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: theme.radius.pill,
   },
 
   // Vacation Progress Card

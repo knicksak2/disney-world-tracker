@@ -447,6 +447,19 @@ Build order inside this spec (later items need the earlier ones):
 4. *(Added after review: the support contact is configuration, never a placeholder.)* THE `GET /privacy` page SHALL render the deployment's configured `SUPPORT_EMAIL` as the support contact, as a `mailto:` link whose href and visible text are both HTML-escaped (`&`, `<`, `>`, `"`, `'`), AND the placeholder text `[Support Contact Email]` and any "owner must replace" note SHALL NOT appear in the served output. `SUPPORT_EMAIL` SHALL be a required `loadConfig` variable (trimmed, a syntactically valid email, no default) exposed as `config.support.email`, so a deployment without a valid address fails fast at boot instead of publishing a privacy page with no real contact. `docs/privacy-policy.md` SHALL name `SUPPORT_EMAIL` as the source of the address and SHALL NOT contain an address or the placeholder.
 5. THE Mobile_App `YouAndCrewScreen` SHALL include a "Privacy Policy" entry control in the settings section (`testID="privacy-policy-entry-button"`, `accessibilityRole="link"`, `accessibilityLabel="Privacy Policy"`) that opens the hosted privacy policy URL (`PRIVACY_POLICY_URL` when non-empty, or `${resolveBaseUrl()}/privacy` as fallback) via `Linking.openURL`, and `apps/mobile/eas.json` and `apps/mobile/.env.example` SHALL configure `EXPO_PUBLIC_PRIVACY_POLICY_URL` pointing to `https://dwt-api.onrender.com/privacy`.
 
+### Requirement 21: Budget data of a deleted account (added by the `trip-budget` spec)
+
+**User Story:** As a Trip_Member, I want the Trip's Budget to stay correct when someone deletes their account, so that nobody's planned totals change because a person left the app. This requirement is additive; the Budget itself is specified in `.kiro/specs/trip-budget`.
+
+#### Acceptance Criteria
+
+1. THE disposition registry SHALL contain an entry for every new `users(id)` foreign-key column added by the Budget migration: `trip_budget_lines.created_by` (`anonymize`, stage 3), `trip_budget_allocations.member_id` (`anonymize`, stage 3, nullable), and `trip_traveler_profiles.member_id` (`delete`, stage 4, nullable), as listed in the Appendix A addendum.
+2. WHEN a deleted account is purged, THE purge SHALL replace the account with its Deleted_User_Placeholder on every Budget_Line and Budget_Allocation that referenced it, SHALL NOT delete or change the amount of any of them, and SHALL leave the whole-party total and every other person's total identical before and after the purge.
+3. WHEN a deleted account is purged, THE purge SHALL delete the account's own Traveler_Profile rows.
+4. THE Budget tables `ticket_prices`, `ticket_price_sets`, `ticket_price_control` and `lightning_lane_single_prices` SHALL carry no `users(id)` reference and SHALL need no registry entry.
+5. WHILE an account is in `pending_deletion`, THE Trip_Service SHALL keep counting its Budget_Allocations and SHALL present the person as "Deleted user" on Budget_Lines, Budget_Allocations and the by-person view and SHALL OMIT that person's Traveler_Profile from the profile list (Appendix B addendum; no "Deleted user" profile row exists); THE Trip_Service SHALL reject creating or editing a Budget_Line or Traveler_Profile that names a deleted or `pending_deletion` account with `trip_party_deleted` (HTTP 409), while leaving existing rows readable and deletable.
+6. THE registry completeness test (Requirement 17) SHALL pass with the new entries and an updated expected foreign-key count.
+
 ## Out of Scope
 
 - **Admin-initiated deletion or suspension** of another user's account. Future work; it would reuse the Pending_Deletion state and purge but needs its own authorization and audit design.
@@ -525,6 +538,16 @@ Legend: **DELETE** = row deleted at purge. **ANONYMIZE** = row kept, attribution
 - A placeholder identity must never be able to sign in, appear in search or rosters, be counted in admin growth numbers, or be a candidate in Requirement 10.3.
 - JSONB values that embed a user id or name (for example `trip_feed_items.metadata`, `shares.payload_snapshot`) must be inspected and scrubbed; the residual-reference test (R12.6) is the check.
 
+### Appendix A addendum: Trip Budget references (added by the `trip-budget` spec)
+
+Additive rows for the Budget migration (`0068_trip_budget.sql`, or the number reserved at implementation time). They raise the `users(id)` reference count by 3 (the test constant `EXPECTED_USER_FK_COUNT` is raised by 3 in the same change).
+
+| Table.column | Disposition | Stage | chunkColumns | ON DELETE today | Nullable | Reason |
+|---|---|---|---|---|---|---|
+| `trip_budget_lines.created_by` | `anonymize` | 3 | `id` | cascade | no | A planned cost must survive its creator's deletion |
+| `trip_budget_allocations.member_id` | `anonymize` | 3 | `id` | cascade | yes | Rows with `guest_id` set have `member_id` NULL |
+| `trip_traveler_profiles.member_id` | `delete` | 4 | `id` | cascade | yes | Personal attributes of the departing person; nothing depends on the row |
+
 ## Appendix B: Cross-user read surfaces and their mode
 
 Derived by searching `apps/api/src/services` for joins on `profiles` and `users`. The design confirms each by reading the code and the Requirement 5.8 guard keeps it current. **OMIT** = person absent. **PLACEHOLDER** = content kept, person shown as "Deleted user".
@@ -560,3 +583,10 @@ Derived by searching `apps/api/src/services` for joins on `profiles` and `users`
 | Unread-share badge count (`GET /me/inbox/unread-count`, `sharing/repo.ts` `countUnreadInbox`) | OMIT (count only; the inbox list stays PLACEHOLDER) | a Share from a non-active sender is not counted |
 | Pending rode-with tags (`GET /me/rode-with-tags?state=pending`, `trips/repo.ts` `listPendingRodeWithTags`) | OMIT | a tag whose tagging member is not Visible is not returned |
 | Unread-share attention items (`apps/mobile/src/features/notifications/useAttention.ts` `selectUnreadShares`) | OMIT (client filter) | a Share whose sender id is a placeholder id (`isDeletedUserId`) is not listed |
+
+*(Added by the `trip-budget` spec; no row above is edited.)* Appendix B addendum: Trip Budget surfaces. Both are covered by the structural guards of Requirement 5 without a new allowlist entry beyond the one roster pin named in `trip-budget` Requirement 18.8.
+
+| Surface (source) | Mode | Behavior while pending |
+|---|---|---|
+| Budget by-person view, Budget_Line and Budget_Allocation labels, Suggestions attribution (`tripBudget/repo.ts` `loadBudget`; labels through the `profile_identity` view) | PLACEHOLDER | the person prints as "Deleted user"; the allocation stays and every total is unchanged; creating or editing a line naming the account answers `trip_party_deleted` |
+| Traveler_Profile list (`tripBudget/repo.ts` profiles) | OMIT | the profile of a pending account is not listed and produces no ticket Suggestion; it is deleted at purge (registry entry `trip_traveler_profiles.member_id`) |

@@ -110,6 +110,12 @@ A canonical Markdown version of the Terms of Service stored in `docs/terms-of-se
 *The assets `apps/mobile/assets/icon.png` (1024×1024 opaque RGB), `apps/mobile/assets/adaptive-icon.png` (1024×1024 RGBA), and `apps/mobile/assets/splash.png` exist on disk with valid PNG headers and dimensions, and `apps/mobile/app.config.ts` declares `icon`, `backgroundColor`, `web.splash`, and `android.adaptiveIcon` pointing to them.*
 **Validates:** Requirements 6.1, 6.2, 6.3, 6.4
 
+### Property 6: Price data sources are credited and not exposed in bulk
+
+Added by the `trip-budget` spec. For the rendered `GET /terms` HTML and the mobile legal notice, the text credits ThemeParks.wiki for Lightning Lane prices with the link `https://themeparks.wiki`, names Disney's website as the source of ticket and menu prices, states they are before tax and may differ at checkout, and states that discounted, military, reseller and special-offer prices are not covered; all added text is HTML-escaped (Property 1). For every screen that renders a Lightning Lane price, the text "Powered by ThemeParks.wiki" is present and links to the same URL. No registered route returns raw ticket or Lightning Lane price rows as a list; prices are returned only as the resolved price of a requested key or inside a Trip's own Budget lines.
+
+**Validates: Requirements 7.1, 7.2, 7.3, 7.4**
+
 ## Error Handling
 
 - **Browser Link Failures**: If `Linking.openURL` fails (e.g. no browser installed), the error is caught and logged gracefully without crashing the app.

@@ -278,6 +278,15 @@ describe('Delete account: entry and three-step flow', () => {
         expect(
           screen.getByText(/not affiliated with, endorsed by, or sponsored by The Walt Disney Company/i),
         ).toBeTruthy();
+        expect(
+          screen.getByText(/Lightning Lane prices powered by ThemeParks\.wiki/i),
+        ).toBeTruthy();
+        expect(
+          screen.getByText(/Ticket and menu prices come from Disney's website/i),
+        ).toBeTruthy();
+        expect(
+          screen.getByText(/discounted, military, reseller, and special-offer prices are not covered/i),
+        ).toBeTruthy();
       } finally {
         openUrlSpy.mockRestore();
       }

@@ -93,4 +93,22 @@ describe('DatePickerField — maximumDate', () => {
     fireEvent.press(screen.getByText('15'));
     expect(onChange).toHaveBeenCalledWith('2026-06-15');
   });
+
+  test('opens to initialMonth when value is empty', () => {
+    const onChange = jest.fn();
+    render(
+      <DatePickerField
+        value=""
+        onChange={onChange}
+        initialMonth="2026-11-01"
+        accessibilityLabel="Select trip date"
+        testID="trip-date"
+      />,
+    );
+
+    fireEvent.press(screen.getByTestId('trip-date'));
+    // In November 2026, selecting day 12 triggers onChange with 2026-11-12
+    fireEvent.press(screen.getByText('12'));
+    expect(onChange).toHaveBeenCalledWith('2026-11-12');
+  });
 });

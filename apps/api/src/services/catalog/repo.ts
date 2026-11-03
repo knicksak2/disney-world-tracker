@@ -57,7 +57,7 @@
  */
 
 import type { QueryResultRow } from 'pg';
-import { PARKS, filterAndRankExperiences } from '@dwt/shared';
+import { MENU_SHAPE_VERSION, PARKS, filterAndRankExperiences } from '@dwt/shared';
 import type {
   AreaType,
   ExperienceCategory,
@@ -226,6 +226,8 @@ export interface MenuCacheEntry {
   readonly menus: readonly MenuDTO[];
   /** When these menus were last fetched from the Menu_Service (R8.2, R8.4). */
   readonly fetchedAt: Date;
+  /** Schema shape version of the persisted menu JSON (R10.7). Defaults to 1 for legacy rows. */
+  readonly shapeVersion?: number;
 }
 
 /**
@@ -237,6 +239,7 @@ export interface MenuCacheEntry {
  *     when the cache is missing or stale (R8.2).
  *   - `cached` — the current cached menu + `fetched_at`, or `null` when the
  *     restaurant has no `experience_menus` row yet (cache missing, R8.2).
+ *   - `shapeVersion` — schema shape version of the cached row (R10.7).
  *
  * A `null` return from {@link CatalogRepo.getMenuFetchState} means no such
  * Experience exists.
@@ -244,6 +247,7 @@ export interface MenuCacheEntry {
 export interface MenuFetchState {
   readonly upstreamEntityId: string;
   readonly cached: MenuCacheEntry | null;
+  readonly shapeVersion?: number;
 }
 
 /** Information about the cache used by the read-decision logic in task 9.4. */
@@ -372,6 +376,7 @@ interface MenuFetchRow extends QueryResultRow {
   upstream_entity_id: string;
   menus: readonly MenuDTO[] | null;
   fetched_at: Date | null;
+  shape_version: number | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -1353,7 +1358,7 @@ async function getMenuFetchState(
   experienceId: string,
 ): Promise<MenuFetchState | null> {
   const result = await pool.query<MenuFetchRow>(
-    `SELECT e.upstream_entity_id, m.menus, m.fetched_at
+    `SELECT e.upstream_entity_id, m.menus, m.fetched_at, m.shape_version
        FROM experiences e
        LEFT JOIN experience_menus m ON m.experience_id = e.id
       WHERE e.id = $1`,
@@ -1365,12 +1370,13 @@ async function getMenuFetchState(
     return null;
   }
 
+  const shapeVersion = row.shape_version ?? 1;
   const cached: MenuCacheEntry | null =
     row.fetched_at !== null && row.menus !== null
-      ? { menus: row.menus, fetchedAt: row.fetched_at }
+      ? { menus: row.menus, fetchedAt: row.fetched_at, shapeVersion }
       : null;
 
-  return { upstreamEntityId: row.upstream_entity_id, cached };
+  return { upstreamEntityId: row.upstream_entity_id, cached, shapeVersion };
 }
 
 // ---------------------------------------------------------------------------
@@ -1380,8 +1386,9 @@ async function getMenuFetchState(
 /**
  * Cache a freshly-fetched restaurant menu, stamping `fetched_at` with the
  * supplied instant so the freshness window restarts (R8.2). A conflict on the
- * `experience_id` primary key replaces the prior menu and its `fetched_at`. The
- * `menus` array is encoded as JSONB, matching {@link getMenusFor}'s round-trip.
+ * `experience_id` primary key replaces the prior menu, its `fetched_at`, and
+ * sets `shape_version = MENU_SHAPE_VERSION` (R10.7). The `menus` array is
+ * encoded as JSONB, matching {@link getMenusFor}'s round-trip.
  */
 async function upsertMenus(
   pool: DbPool,
@@ -1390,13 +1397,14 @@ async function upsertMenus(
   fetchedAt: Date,
 ): Promise<void> {
   await pool.query(
-    `INSERT INTO experience_menus (experience_id, menus, fetched_at, updated_at)
-     VALUES ($1, $2::jsonb, $3, now())
+    `INSERT INTO experience_menus (experience_id, menus, fetched_at, updated_at, shape_version)
+     VALUES ($1, $2::jsonb, $3, now(), $4)
      ON CONFLICT (experience_id) DO UPDATE SET
-       menus      = EXCLUDED.menus,
-       fetched_at = EXCLUDED.fetched_at,
-       updated_at = now()`,
-    [experienceId, JSON.stringify(menus), fetchedAt],
+       menus         = EXCLUDED.menus,
+       fetched_at    = EXCLUDED.fetched_at,
+       updated_at    = now(),
+       shape_version = EXCLUDED.shape_version`,
+    [experienceId, JSON.stringify(menus), fetchedAt, MENU_SHAPE_VERSION],
   );
 }
 

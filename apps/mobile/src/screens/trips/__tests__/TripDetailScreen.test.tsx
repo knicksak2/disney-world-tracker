@@ -49,7 +49,7 @@ jest.mock('../../../api/client', () => {
 // Imports of modules under test (after the mocks above).
 // ---------------------------------------------------------------------------
 
-import TripDetailScreen, { deriveGlanceCard } from '../TripDetailScreen';
+import TripDetailScreen, { deriveGlanceCard, HUB_SECTIONS } from '../TripDetailScreen';
 import { ApiError, apiRequest as mockedApiRequest } from '../../../api/client';
 import type { TripDTO } from '@dwt/shared';
 import { StyleSheet } from 'react-native';
@@ -780,6 +780,11 @@ describe('Trip_Detail_View hub (R18.1, R18.6)', () => {
       expect(tileIcon('trip-detail-section-planned')).toBe(darkTheme.color.primaryFg);
       expect(tileIcon('trip-detail-section-schedule')).toBe(darkTheme.color.primaryLight);
       expect(tileIcon('trip-detail-section-reservations')).toBe(DARK_TONAL.amber.fg);
+      expect(tileIcon('trip-detail-section-budget')).toBe(DARK_TONAL.green.fg);
+      expect(tileIcon('trip-detail-section-expenses')).toBe(DARK_TONAL.green.fg);
+      expect(tileIcon('trip-detail-section-booking')).toBe(DARK_TONAL.sky.fg);
+      expect(tileIcon('trip-detail-section-packing')).toBe(DARK_TONAL.teal.fg);
+      expect(tileIcon('trip-detail-section-album')).toBe(DARK_TONAL.pink.fg);
       // GroupFavoritesSection (c): the favoriting count text (rule 3 red T).
       await screen.findByTestId('group-favorite-item-exp-space-mountain');
       expect(flat(screen.getByText('3')).color).toBe(GROUP_FAVORITES.dark.heart);
@@ -911,6 +916,124 @@ describe('Trip_Detail_View hub (R18.1, R18.6)', () => {
       const packingTile = screen.getByTestId('trip-detail-section-packing');
       expect(packingTile).toBeTruthy();
       expect(within(packingTile).queryByText(/\d+\s+of\s+\d+/)).toBeNull();
+    });
+  });
+
+  describe('Budget hub tile & 4 + 2 + 3 tiered layout (Task 18.5, R22.14)', () => {
+    test('renders 4 + 2 + 3 tiered hub layout with Core 2x2, 2-up Finances row (Budget + Expenses), and 3-up Prep & Memories strip', async () => {
+      apiRequestMock.mockResolvedValue(TRIP);
+      const navigation = makeNavigation();
+
+      renderDetail(navigation);
+      await screen.findByTestId('trip-detail-hub');
+
+      // 1. Tile presence and labels
+      const budgetTile = screen.getByTestId('trip-detail-section-budget');
+      expect(budgetTile).toBeTruthy();
+      expect(screen.getByLabelText('Budget')).toBeTruthy();
+      expect(within(budgetTile).getByText('Budget')).toBeTruthy();
+      expect(
+        within(budgetTile).getByText('Plan costs & save per week.'),
+      ).toBeTruthy();
+      expect(within(budgetTile).getByText('Plan')).toBeTruthy();
+
+      // 2. Icon is wallet-outline with emerald finance accent
+      const icon = within(budgetTile).UNSAFE_getByType(Ionicons);
+      expect(icon.props.name).toBe('wallet-outline');
+      expect(icon.props.color).toBe(HUB_TILE.light.financeIcon);
+
+      // 3. Tiered structure inside trip-detail-grid:
+      //    - 2 Core Itinerary rows (2x2 = 4 tiles)
+      //    - Tier 2 FINANCES row (2 tiles: Budget, Expenses)
+      //    - Tier 3 PREP & MEMORIES row (3 tiles: Booking timeline, Packing list, Trip Album)
+      interface TestElementProps {
+        testID?: string;
+        children?: React.ReactNode;
+      }
+      const grid = screen.getByTestId('trip-detail-grid');
+      const gridBlocks = React.Children.toArray(
+        grid.props.children,
+      ) as React.ReactElement<TestElementProps>[];
+      expect(gridBlocks).toHaveLength(4);
+
+      const row0Children = React.Children.toArray(
+        gridBlocks[0]!.props.children,
+      ) as React.ReactElement<TestElementProps>[];
+      expect(row0Children.map((c) => c.props.testID)).toEqual([
+        'trip-detail-section-planned',
+        'trip-detail-section-schedule',
+      ]);
+
+      const row1Children = React.Children.toArray(
+        gridBlocks[1]!.props.children,
+      ) as React.ReactElement<TestElementProps>[];
+      expect(row1Children.map((c) => c.props.testID)).toEqual([
+        'trip-detail-section-reservations',
+        'trip-detail-section-activity',
+      ]);
+
+      expect(screen.getByText('FINANCES')).toBeTruthy();
+      const financesRow = screen.getByTestId('trip-detail-finances-row');
+      const financeChildren = React.Children.toArray(
+        financesRow.props.children,
+      ) as React.ReactElement<TestElementProps>[];
+      expect(financeChildren.map((c) => c.props.testID)).toEqual([
+        'trip-detail-section-budget',
+        'trip-detail-section-expenses',
+      ]);
+
+      expect(screen.getByText('PREP & MEMORIES')).toBeTruthy();
+      const prepRow = screen.getByTestId('trip-detail-prep-row');
+      const prepChildren = React.Children.toArray(
+        prepRow.props.children,
+      ) as React.ReactElement<TestElementProps>[];
+      expect(prepChildren.map((c) => c.props.testID)).toEqual([
+        'trip-detail-section-booking',
+        'trip-detail-section-packing',
+        'trip-detail-section-album',
+      ]);
+
+      // 4. Expenses tile renders alongside Budget with its labels and navigates to TripExpenses
+      const expensesTile = screen.getByTestId('trip-detail-section-expenses');
+      expect(expensesTile).toBeTruthy();
+      expect(within(expensesTile).getByText('Expenses')).toBeTruthy();
+      expect(
+        within(expensesTile).getByText('Shared ledger & balances.'),
+      ).toBeTruthy();
+      expect(within(expensesTile).getByText('Ledger')).toBeTruthy();
+      fireEvent.press(expensesTile);
+      expect(navigation.navigate).toHaveBeenCalledWith('TripExpenses', {
+        tripId: TRIP_ID,
+      });
+
+      // 5. Trip Album tile in Prep & Memories strip shows Photos badge and navigates to TripAlbum
+      const albumTile = screen.getByTestId('trip-detail-section-album');
+      expect(within(albumTile).getByText('Trip Album')).toBeTruthy();
+      expect(within(albumTile).getByText('Photos')).toBeTruthy();
+      fireEvent.press(albumTile);
+      expect(navigation.navigate).toHaveBeenCalledWith('TripAlbum', {
+        tripId: TRIP_ID,
+      });
+
+      // 6. Press Budget tile navigates to TripBudget with tripId
+      fireEvent.press(budgetTile);
+      expect(navigation.navigate).toHaveBeenCalledWith('TripBudget', {
+        tripId: TRIP_ID,
+      });
+
+      // 7. Pinned contract list: HUB_SECTIONS has budget right after expenses
+      const expensesIndex = HUB_SECTIONS.findIndex((s) => s.key === 'expenses');
+      expect(expensesIndex).toBeGreaterThanOrEqual(0);
+      expect(HUB_SECTIONS[expensesIndex + 1]).toEqual(
+        expect.objectContaining({
+          key: 'budget',
+          route: 'TripBudget',
+          title: 'Budget',
+          body: 'Plan costs, save per week, compare to what you spent.',
+          icon: 'wallet-outline',
+        }),
+      );
+      expect(HUB_SECTIONS).toHaveLength(10);
     });
   });
 });

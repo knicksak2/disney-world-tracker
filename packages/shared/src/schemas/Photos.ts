@@ -88,10 +88,19 @@ export const blockCreateSchema = z.union([
 
 export const tripPostCreateSchema = z
   .object({
-    photoIds: z.array(uuidSchema).min(1).max(4),
+    photoIds: z.array(uuidSchema).max(4).default([]),
     caption: z.string().trim().min(1).max(PHOTO_POST_CAPTION_MAX).optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((val, ctx) => {
+    if (val.photoIds.length === 0 && (!val.caption || val.caption.length === 0)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['caption'],
+        message: 'A post must include a caption or at least one photo',
+      });
+    }
+  });
 
 export const tripAlbumQuerySchema = z
   .object({

@@ -240,7 +240,7 @@ describe('accountDeletion: whole purge over a seeded multi-table graph (pg-mem)'
   // ---- Property 21 ---------------------------------------------------------------------------------------
   it('Property 21: every anonymize row exists with its attribution re-pointed and every other column unchanged', () => {
     const entries = DISPOSITIONS.filter((e) => e.disposition === 'anonymize');
-    expect(entries.length).toBe(20);
+    expect(entries.length).toBe(22);
     for (const entry of entries) {
       const fx = fixtures.get(entry)!;
       const row = after[entry.table]!.find((r) => samePk(entry.table, r, fx.subject));

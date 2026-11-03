@@ -63,7 +63,11 @@ export type TripAction =
   | 'upload_trip_photo'
   | 'post_feed_photo'
   | 'share_trip_summary' // member + organizer (photo-uploads R12.1, R14.3, R15.9)
-  | 'delete_any_trip_photo'; // organizer-only (photo-uploads R12.5)
+  | 'delete_any_trip_photo' // organizer-only (photo-uploads R12.5)
+  | 'view_budget'
+  | 'edit_budget'
+  | 'edit_budget_travelers'
+  | 'edit_budget_settings';
 
 /**
  * Actions any Trip_Member may perform regardless of role (R4.3). Organizers
@@ -87,6 +91,9 @@ const MEMBER_ACTIONS: ReadonlySet<TripAction> = new Set<TripAction>([
   'upload_trip_photo',
   'post_feed_photo',
   'share_trip_summary',
+  'view_budget',
+  'edit_budget',
+  'edit_budget_travelers',
 ]);
 
 /**
@@ -104,6 +111,7 @@ const ORGANIZER_ONLY_ACTIONS: ReadonlySet<TripAction> = new Set<TripAction>([
   'delete_trip',
   'edit_booking_settings',
   'delete_any_trip_photo',
+  'edit_budget_settings',
 ]);
 
 /**

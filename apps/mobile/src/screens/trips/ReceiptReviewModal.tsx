@@ -37,6 +37,7 @@ import { makeStyles } from '../../theme/makeStyles';
 import { useAppTheme, usePalette } from '../../theme/useAppTheme';
 import { themedSwitchProps } from '../../theme/switchColors';
 import { RECEIPT_REVIEW } from './ReceiptReviewModal.palette';
+import { useKeyboardBottomInset } from '../../hooks/useKeyboardBottomInset';
 import {
   type DraftReceiptItem,
   type DraftReceiptChargeLine,
@@ -274,14 +275,23 @@ export function ReceiptReviewModal({
 
   // If zero items detected from scans, show friendly fallback (Req 9.5)
   const zeroItems = items.length === 0;
+  const { keyboardInset } = useKeyboardBottomInset(visible);
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.modalOverlay}
       >
-        <View style={styles.modalContent} testID="receipt-review-modal">
+        <View
+          style={[
+            styles.modalContent,
+            Platform.OS === 'android' && keyboardInset > 0
+              ? { paddingBottom: keyboardInset }
+              : null,
+          ]}
+          testID="receipt-review-modal"
+        >
           {/* Header */}
           <View style={styles.headerRow}>
             <Text style={styles.headerTitle}>Review Receipt Scan</Text>

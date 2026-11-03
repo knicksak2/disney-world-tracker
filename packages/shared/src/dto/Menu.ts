@@ -25,25 +25,48 @@ export interface MealPeriodDTO {
 }
 
 /**
+ * A structured menu price entry for an item with one or more price variants.
+ * (design.md -> "Menu structured fields (dto/Menu.ts, additive)")
+ */
+export interface MenuPriceEntry {
+  readonly cents: number;
+  readonly label: string | null;
+}
+
+/**
  * A single dining menu for a restaurant Experience, projected from the
  * Menu_Service payload. Each menu carries its type, an optional cuisine type,
- * and one or more named groups; each group lists its items with an optional
- * price string carried verbatim from upstream (R8.2).
+ * optional serviceStyle and experience, and one or more named groups; each group
+ * lists its items with an optional price string, optional parsed cents, and
+ * optional structured price entries.
  */
 export interface MenuDTO {
   /** Menu_Type label (e.g. `"Dinner"`, `"All Day"`) (R8.2). */
   readonly menuType: string;
   /** Cuisine type when present upstream, else `null` (R8.2). */
   readonly cuisineType?: string | null;
+  /** Service style when present (e.g. "buffet", "table service", "prix fixe"). */
+  readonly serviceStyle?: string | null;
+  /** Dining experience descriptor when present. */
+  readonly experience?: string | null;
   /** Menu groups (courses/sections), each with its items (R8.2). */
   readonly groups: readonly {
     /** Group name (e.g. `"Appetizers"`) (R8.2). */
     readonly name: string;
+    /** Group type/classification (e.g. "Alcohol", "Beverage", "Appetizer"). */
+    readonly type?: string | null;
     /** Items in the group, each with a name and optional price string (R8.2). */
     readonly items: readonly {
       readonly name: string;
       /** Price string carried verbatim from upstream, or `null` when absent. */
       readonly price?: string | null;
+      /** Parsed price in integer cents (> 0) when single price resolves. */
+      readonly priceCents?: number | null;
+      /** Structured price entries when multiple price variants exist. */
+      readonly prices?: readonly MenuPriceEntry[];
     }[];
   }[];
 }
+
+export type MenuGroupDTO = MenuDTO['groups'][number];
+export type MenuItemDTO = MenuGroupDTO['items'][number];

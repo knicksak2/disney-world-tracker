@@ -111,3 +111,13 @@ This feature implements the lean, in-place legal compliance architecture (Option
 4. THE `apps/mobile/app.config.ts` configuration SHALL reference `./assets/icon.png` in `icon`, set `backgroundColor: '#3d1c5c'`, configure `web.splash` with `image: './assets/splash.png'`, `resizeMode: 'contain'`, and `backgroundColor: '#3d1c5c'`, and configure `android.adaptiveIcon` with `foregroundImage: './assets/adaptive-icon.png'` and `backgroundColor: '#5b2a86'`.
 
 
+### Requirement 7: Third-party price data credits and limits (added by the `trip-budget` spec)
+
+**User Story:** As a user and as a data provider, I want the sources of prices shown in the app to be credited and used within their terms.
+
+#### Acceptance Criteria
+
+1. THE `GET /terms` page and mobile legal notices SHALL credit **ThemeParks.wiki** as the provider of Lightning Lane prices in addition to the data listed in Requirement 3.1, with the link of Requirement 3.2.
+2. THE `GET /terms` page and mobile legal notices SHALL state that park ticket prices and restaurant menu prices come from Disney's website, are shown before tax, may be out of date or estimated, and that the final price at checkout may differ; and SHALL state that discounted, military, reseller and special-offer prices are not covered.
+3. THE Mobile_App SHALL show the visible credit "Powered by ThemeParks.wiki" on every screen that displays a Lightning Lane price, as specified in `trip-budget` Requirement 21.3.
+4. THE App SHALL NOT expose a bulk export, public feed, or endpoint returning raw ThemeParks.wiki-derived price rows; Lightning Lane prices are exposed only as the resolved price of a requested key and within a Trip's own Budget lines.

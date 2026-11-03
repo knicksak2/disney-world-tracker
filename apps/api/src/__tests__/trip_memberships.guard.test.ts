@@ -38,6 +38,7 @@ export const ROSTER_ALLOWLIST: readonly RosterAllowEntry[] = [
   { file: 'services/photos/reportsRepo.ts', hits: 1, reason: 'The member-scoped open-report count (countOpenDistinct, R11.10) returns a number, never an identity.' },
   { file: 'services/pins/repo.ts', hits: 1, reason: "The caller's own trip count for pin progress." },
   { file: 'services/tracking/logs/repo.ts', hits: 1, reason: "Caller membership check for trip logging." },
+  { file: 'services/tripBudget/repo.ts', hits: 1, reason: "Party validation on line create/edit and profile upsert (Requirement 18.8); pending members are validated." },
   { file: 'services/tripExpenses/repo.ts', hits: 7, reason: 'Sponsor and party validation (after the trip_party_deleted check) and getNetBalances, the deliberate raw read: money must count pending members.' },
   { file: 'services/tripExpenses/routes.ts', hits: 2, reason: 'Guest sponsor membership checks on add and rename.' },
   { file: 'services/trips/authz.ts', hits: 1, reason: "assertTripMember: the caller's own role and membership (the caller always has a session, so is active)." },

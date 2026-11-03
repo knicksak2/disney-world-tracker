@@ -122,11 +122,19 @@ describe('projectDiningMenuPayload', () => {
       {
         menuType: 'Breakfast',
         cuisineType: null,
+        serviceStyle: 'A la Carte',
+        experience: 'Signature Dining',
         groups: [
           {
             name: 'Eggs',
+            type: 'Entree',
             items: [
-              { name: 'The Reg', price: '$20' },
+              {
+                name: 'The Reg',
+                price: '$20',
+                priceCents: 2000,
+                prices: [{ cents: 2000, label: 'Per Serving' }],
+              },
               { name: 'Buffet Plate', price: null },
             ],
           },
@@ -135,10 +143,22 @@ describe('projectDiningMenuPayload', () => {
       {
         menuType: 'Dinner',
         cuisineType: null,
+        serviceStyle: 'A la Carte',
+        experience: 'Signature Dining',
         groups: [
           {
             name: 'Mains',
-            items: [{ name: 'Branzino', price: '$42 / $48' }],
+            type: 'Entree',
+            items: [
+              {
+                name: 'Branzino',
+                price: '$42 / $48',
+                prices: [
+                  { cents: 4200, label: 'Lunch' },
+                  { cents: 4800, label: 'Dinner' },
+                ],
+              },
+            ],
           },
         ],
       },

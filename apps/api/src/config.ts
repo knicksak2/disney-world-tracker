@@ -223,6 +223,65 @@ const envSchema = z.object({
   CROWD_SEED_DIR: z.string().default('seed-data/crowd/'),
 
   // ---------------------------------------------------------------------------
+  // Lightning Lane prices (trip-budget spec, task 6.4)
+  // ---------------------------------------------------------------------------
+  LL_PRICES_MIN_REFRESH_HOURS: z.coerce
+    .number()
+    .int('LL_PRICES_MIN_REFRESH_HOURS must be a positive integer')
+    .positive('LL_PRICES_MIN_REFRESH_HOURS must be a positive integer')
+    .default(12),
+  LL_PRICES_STALE_HOURS: z.coerce
+    .number()
+    .int('LL_PRICES_STALE_HOURS must be a positive integer')
+    .positive('LL_PRICES_STALE_HOURS must be a positive integer')
+    .default(72),
+  LL_PRICES_RETENTION_DAYS: z.coerce
+    .number()
+    .int('LL_PRICES_RETENTION_DAYS must be a positive integer')
+    .positive('LL_PRICES_RETENTION_DAYS must be a positive integer')
+    .default(400),
+  LL_TYPICAL_LOOKBACK_DAYS: z.coerce
+    .number()
+    .int('LL_TYPICAL_LOOKBACK_DAYS must be a positive integer')
+    .positive('LL_TYPICAL_LOOKBACK_DAYS must be a positive integer')
+    .default(400),
+  LL_TYPICAL_MIN_SAMPLES: z.coerce
+    .number()
+    .int('LL_TYPICAL_MIN_SAMPLES must be a positive integer')
+    .positive('LL_TYPICAL_MIN_SAMPLES must be a positive integer')
+    .default(4),
+
+  // ---------------------------------------------------------------------------
+  // Ticket prices (trip-budget spec, task 8.4)
+  // ---------------------------------------------------------------------------
+  TICKET_PRICES_ENABLED: z
+    .union([z.boolean(), z.string()])
+    .optional()
+    .transform((val) => {
+      if (val === undefined || val === '') return false;
+      if (typeof val === 'boolean') return val;
+      return val === 'true' || val === '1';
+    }),
+  TICKET_PRICES_BASE_URL: z.string().default('https://disneyworld.disney.go.com'),
+  TICKET_PRICES_GROUPS: z.string().default('std-gst'),
+  TICKET_PRICES_FL_RESIDENT_NUMDAYS: z.string().default('4'),
+  TICKET_PRICES_STALE_AFTER_DAYS: z.coerce.number().default(30),
+  TICKET_PRICES_MIN_ATTEMPT_INTERVAL_HOURS: z.coerce.number().default(24),
+  TICKET_PRICES_PROBE_MIN_INTERVAL_HOURS: z.coerce.number().default(24),
+  TICKET_PRICES_REQUEST_SPACING_MS: z.coerce.number().default(1500),
+  TICKET_PRICES_BLOCK_COOLDOWN_MINUTES: z.coerce.number().default(360),
+  TICKET_PRICES_USER_AGENT: z.string().default('DwtTripBudget/1.0 (personal trip planner)'),
+  TICKET_PRICES_REQUEST_TIMEOUT_MS: z.coerce.number().default(20000),
+  TICKET_PRICES_MAX_BODY_BYTES: z.coerce.number().default(5000000),
+  TICKET_PRICES_SANITY_MIN_RATIO: z.coerce.number().default(0.5),
+  TICKET_PRICES_MAX_UNRECOGNIZED_FRACTION: z.coerce.number().default(0.1),
+  TICKET_PRICES_DIAGNOSE_MIN_INTERVAL_SECONDS: z.coerce.number().default(60),
+  TICKET_PRICES_LABEL_FRESH_DAYS: z.coerce.number().default(45),
+  TICKET_PRICES_LABEL_ESTIMATE_AFTER_DAYS: z.coerce.number().default(120),
+  TICKET_PRICES_MAX_CONSECUTIVE_FAILURES: z.coerce.number().default(2),
+  TICKET_PRICES_FAILURE_COOLDOWN_MINUTES: z.coerce.number().default(60),
+
+  // ---------------------------------------------------------------------------
   // Photo uploads (photo-uploads spec)
   // ---------------------------------------------------------------------------
   PHOTOS_ENABLED: z
@@ -506,6 +565,143 @@ const envSchema = z.object({
         });
       }
     }
+
+    // -------------------------------------------------------------------------
+    // Ticket Prices validation (trip-budget spec, review F17, round 5 L3)
+    // -------------------------------------------------------------------------
+    // TICKET_PRICES_BASE_URL: https URL
+    try {
+      const u = new URL(data.TICKET_PRICES_BASE_URL);
+      if (u.protocol !== 'https:') {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['TICKET_PRICES_BASE_URL'],
+          message: 'TICKET_PRICES_BASE_URL must be an https URL',
+        });
+      }
+    } catch {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['TICKET_PRICES_BASE_URL'],
+        message: 'TICKET_PRICES_BASE_URL must be a valid URL',
+      });
+    }
+
+    // TICKET_PRICES_GROUPS: non-empty comma list, subset of std-gst,fl-resident, CONTAINS std-gst
+    const rawGroups = data.TICKET_PRICES_GROUPS.split(',').map((s) => s.trim()).filter(Boolean);
+    const uniqueGroups = Array.from(new Set(rawGroups));
+    const allowedGroups = ['std-gst', 'fl-resident'];
+    const invalidGroup = uniqueGroups.find((g) => !allowedGroups.includes(g));
+
+    if (uniqueGroups.length === 0 || invalidGroup) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['TICKET_PRICES_GROUPS'],
+        message: 'TICKET_PRICES_GROUPS must be a comma-separated subset of std-gst,fl-resident',
+      });
+    } else if (!uniqueGroups.includes('std-gst')) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['TICKET_PRICES_GROUPS'],
+        message: 'TICKET_PRICES_GROUPS must contain std-gst',
+      });
+    }
+
+    // TICKET_PRICES_FL_RESIDENT_NUMDAYS: comma list of integers 1 to 10
+    const rawFlDays = data.TICKET_PRICES_FL_RESIDENT_NUMDAYS.split(',').map((s) => s.trim()).filter(Boolean);
+    if (uniqueGroups.includes('fl-resident') && rawFlDays.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['TICKET_PRICES_FL_RESIDENT_NUMDAYS'],
+        message: 'TICKET_PRICES_FL_RESIDENT_NUMDAYS must not be empty when fl-resident is in TICKET_PRICES_GROUPS',
+      });
+    }
+    for (const d of rawFlDays) {
+      const num = Number(d);
+      if (!Number.isInteger(num) || num < 1 || num > 10) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['TICKET_PRICES_FL_RESIDENT_NUMDAYS'],
+          message: 'TICKET_PRICES_FL_RESIDENT_NUMDAYS must contain integers from 1 to 10',
+        });
+        break;
+      }
+    }
+
+    // TICKET_PRICES_SANITY_MIN_RATIO, TICKET_PRICES_MAX_UNRECOGNIZED_FRACTION in 0..1
+    if (
+      typeof data.TICKET_PRICES_SANITY_MIN_RATIO !== 'number' ||
+      Number.isNaN(data.TICKET_PRICES_SANITY_MIN_RATIO) ||
+      data.TICKET_PRICES_SANITY_MIN_RATIO < 0 ||
+      data.TICKET_PRICES_SANITY_MIN_RATIO > 1
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['TICKET_PRICES_SANITY_MIN_RATIO'],
+        message: 'TICKET_PRICES_SANITY_MIN_RATIO must be a number between 0 and 1',
+      });
+    }
+
+    if (
+      typeof data.TICKET_PRICES_MAX_UNRECOGNIZED_FRACTION !== 'number' ||
+      Number.isNaN(data.TICKET_PRICES_MAX_UNRECOGNIZED_FRACTION) ||
+      data.TICKET_PRICES_MAX_UNRECOGNIZED_FRACTION < 0 ||
+      data.TICKET_PRICES_MAX_UNRECOGNIZED_FRACTION > 1
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['TICKET_PRICES_MAX_UNRECOGNIZED_FRACTION'],
+        message: 'TICKET_PRICES_MAX_UNRECOGNIZED_FRACTION must be a number between 0 and 1',
+      });
+    }
+
+    // Positive integers
+    const positiveIntVars: [string, number][] = [
+      ['TICKET_PRICES_STALE_AFTER_DAYS', data.TICKET_PRICES_STALE_AFTER_DAYS],
+      ['TICKET_PRICES_MIN_ATTEMPT_INTERVAL_HOURS', data.TICKET_PRICES_MIN_ATTEMPT_INTERVAL_HOURS],
+      ['TICKET_PRICES_PROBE_MIN_INTERVAL_HOURS', data.TICKET_PRICES_PROBE_MIN_INTERVAL_HOURS],
+      ['TICKET_PRICES_BLOCK_COOLDOWN_MINUTES', data.TICKET_PRICES_BLOCK_COOLDOWN_MINUTES],
+      ['TICKET_PRICES_FAILURE_COOLDOWN_MINUTES', data.TICKET_PRICES_FAILURE_COOLDOWN_MINUTES],
+      ['TICKET_PRICES_DIAGNOSE_MIN_INTERVAL_SECONDS', data.TICKET_PRICES_DIAGNOSE_MIN_INTERVAL_SECONDS],
+      ['TICKET_PRICES_REQUEST_SPACING_MS', data.TICKET_PRICES_REQUEST_SPACING_MS],
+      ['TICKET_PRICES_REQUEST_TIMEOUT_MS', data.TICKET_PRICES_REQUEST_TIMEOUT_MS],
+      ['TICKET_PRICES_MAX_BODY_BYTES', data.TICKET_PRICES_MAX_BODY_BYTES],
+      ['TICKET_PRICES_MAX_CONSECUTIVE_FAILURES', data.TICKET_PRICES_MAX_CONSECUTIVE_FAILURES],
+      ['TICKET_PRICES_LABEL_FRESH_DAYS', data.TICKET_PRICES_LABEL_FRESH_DAYS],
+      ['TICKET_PRICES_LABEL_ESTIMATE_AFTER_DAYS', data.TICKET_PRICES_LABEL_ESTIMATE_AFTER_DAYS],
+    ];
+
+    for (const [name, val] of positiveIntVars) {
+      if (typeof val !== 'number' || !Number.isInteger(val) || val <= 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [name],
+          message: `${name} must be a positive integer`,
+        });
+      }
+    }
+
+    // TICKET_PRICES_LABEL_FRESH_DAYS < TICKET_PRICES_LABEL_ESTIMATE_AFTER_DAYS
+    if (data.TICKET_PRICES_LABEL_FRESH_DAYS >= data.TICKET_PRICES_LABEL_ESTIMATE_AFTER_DAYS) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['TICKET_PRICES_LABEL_FRESH_DAYS'],
+        message: 'TICKET_PRICES_LABEL_FRESH_DAYS must be less than TICKET_PRICES_LABEL_ESTIMATE_AFTER_DAYS',
+      });
+    }
+
+    // TICKET_PRICES_USER_AGENT: non-empty, <= 200 chars, no mozilla|chrome|safari
+    if (
+      !data.TICKET_PRICES_USER_AGENT ||
+      data.TICKET_PRICES_USER_AGENT.length > 200 ||
+      /mozilla|chrome|safari/i.test(data.TICKET_PRICES_USER_AGENT)
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['TICKET_PRICES_USER_AGENT'],
+        message: 'TICKET_PRICES_USER_AGENT must be non-empty, at most 200 characters, and non-browser',
+      });
+    }
   });
 
 type EnvShape = z.infer<typeof envSchema>;
@@ -564,6 +760,14 @@ export interface AppConfig {
   readonly themeparks: {
     readonly baseUrl: string;
   };
+  readonly lightningLane?: {
+    readonly minRefreshHours: number;
+    readonly staleHours: number;
+    readonly retentionDays: number;
+    readonly typicalLookbackDays: number;
+    readonly typicalMinSamples: number;
+  };
+  readonly ticketPrices?: TicketPricesConfig;
   readonly photos: PhotoConfig;
   readonly disney: {
     readonly syncGateway: {
@@ -593,6 +797,28 @@ export interface AppConfig {
     // Infrequent static-sync cadence, floored at 24h (R9).
     readonly syncIntervalMs: number;
   };
+}
+
+export interface TicketPricesConfig {
+  readonly enabled: boolean;
+  readonly baseUrl: string;
+  readonly groups: readonly string[];
+  readonly flResidentNumDays: readonly number[];
+  readonly staleAfterDays: number;
+  readonly minAttemptIntervalHours: number;
+  readonly probeMinIntervalHours: number;
+  readonly requestSpacingMs: number;
+  readonly blockCooldownMinutes: number;
+  readonly userAgent: string;
+  readonly requestTimeoutMs: number;
+  readonly maxBodyBytes: number;
+  readonly sanityMinRatio: number;
+  readonly maxUnrecognizedFraction: number;
+  readonly diagnoseMinIntervalSeconds: number;
+  readonly freshDays: number;
+  readonly estimateAfterDays: number;
+  readonly maxConsecutiveFailures: number;
+  readonly failureCooldownMinutes: number;
 }
 
 export interface PhotoConfig {
@@ -824,6 +1050,36 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
         policy: (data.PHOTOS_EXIF_POLICY as 'log' | 'reject') || 'log',
         scanBytes: Number.isFinite(data.PHOTOS_EXIF_SCAN_BYTES) ? data.PHOTOS_EXIF_SCAN_BYTES : 65536,
       },
+    },
+    lightningLane: {
+      minRefreshHours: data.LL_PRICES_MIN_REFRESH_HOURS,
+      staleHours: data.LL_PRICES_STALE_HOURS,
+      retentionDays: data.LL_PRICES_RETENTION_DAYS,
+      typicalLookbackDays: data.LL_TYPICAL_LOOKBACK_DAYS,
+      typicalMinSamples: data.LL_TYPICAL_MIN_SAMPLES,
+    },
+    ticketPrices: {
+      enabled: data.TICKET_PRICES_ENABLED,
+      baseUrl: data.TICKET_PRICES_BASE_URL,
+      groups: data.TICKET_PRICES_GROUPS.split(',').map((s) => s.trim()).filter(Boolean),
+      flResidentNumDays: data.TICKET_PRICES_FL_RESIDENT_NUMDAYS.split(',')
+        .map((s) => parseInt(s.trim(), 10))
+        .filter((n) => !isNaN(n)),
+      staleAfterDays: data.TICKET_PRICES_STALE_AFTER_DAYS,
+      minAttemptIntervalHours: data.TICKET_PRICES_MIN_ATTEMPT_INTERVAL_HOURS,
+      probeMinIntervalHours: data.TICKET_PRICES_PROBE_MIN_INTERVAL_HOURS,
+      requestSpacingMs: data.TICKET_PRICES_REQUEST_SPACING_MS,
+      blockCooldownMinutes: data.TICKET_PRICES_BLOCK_COOLDOWN_MINUTES,
+      userAgent: data.TICKET_PRICES_USER_AGENT,
+      requestTimeoutMs: data.TICKET_PRICES_REQUEST_TIMEOUT_MS,
+      maxBodyBytes: data.TICKET_PRICES_MAX_BODY_BYTES,
+      sanityMinRatio: data.TICKET_PRICES_SANITY_MIN_RATIO,
+      maxUnrecognizedFraction: data.TICKET_PRICES_MAX_UNRECOGNIZED_FRACTION,
+      diagnoseMinIntervalSeconds: data.TICKET_PRICES_DIAGNOSE_MIN_INTERVAL_SECONDS,
+      freshDays: data.TICKET_PRICES_LABEL_FRESH_DAYS,
+      estimateAfterDays: data.TICKET_PRICES_LABEL_ESTIMATE_AFTER_DAYS,
+      maxConsecutiveFailures: data.TICKET_PRICES_MAX_CONSECUTIVE_FAILURES,
+      failureCooldownMinutes: data.TICKET_PRICES_FAILURE_COOLDOWN_MINUTES,
     },
     disney: {
       syncGateway: { baseUrl: data.DISNEY_SYNC_GATEWAY_BASE_URL },

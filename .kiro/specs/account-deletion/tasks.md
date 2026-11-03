@@ -206,6 +206,11 @@
     - Add a "Privacy Policy" card and row (`testID="privacy-policy-entry-button"`, `accessibilityRole="link"`, `accessibilityLabel="Privacy Policy"`) in the settings section of `apps/mobile/src/screens/youAndCrew/YouAndCrewScreen.tsx` that opens `PRIVACY_POLICY_URL || `${resolveBaseUrl()}/privacy`` via `Linking.openURL`. Configure `"EXPO_PUBLIC_PRIVACY_POLICY_URL": "https://dwt-api.onrender.com/privacy"` in `apps/mobile/eas.json` (`development`, `preview`, `production` build profiles) and document it in `apps/mobile/.env.example`. Add an RNTL interaction test in `apps/mobile/src/screens/youAndCrew/__tests__/DeleteAccountFlow.test.tsx` asserting that pressing `privacy-policy-entry-button` calls `Linking.openURL` with `'http://test.local/privacy'`.
     - _Requirements: 20.5_
 
+- [ ] 21. Budget dispositions (R21, added by the `trip-budget` spec)
+  - [ ] 21.1 Registry entries and purge test
+    - Specified and tested in `.kiro/specs/trip-budget/tasks.md` tasks 3.4 (migration) and 9.2 (three `dispositions.ts` entries, `EXPECTED_USER_FK_COUNT` raised by 3, anonymization purge integration test, Appendix B addendum; account-deletion Property 35 = trip-budget Properties 30 (registry) and 41 (deleted parties and guards)). Do this after the Budget migration exists; the registry completeness test fails on the count until both land together.
+    - _Requirements: 21.1, 21.2, 21.3, 21.4, 21.5, 21.6_
+
 ## Notes
 
 - **Authority.** `requirements.md` and `design.md` in this folder are authoritative, including Configuration & Constants, the disposition registry, the SQL, the 33 Correctness Properties and the Testing Strategy. Use their names, defaults and formulas exactly. The design review ended APPROVED (round 5, 0 HIGH, 0 MEDIUM, 2 NIT); both NITs are captured in tasks 8.1 and 17. If a task conflicts with the design, the design wins, and a genuinely missing value is asked about rather than guessed.
@@ -259,7 +264,8 @@ Waves group tasks whose dependencies are all satisfied by earlier waves. Tasks i
     { "id": 26, "tasks": ["20.1", "20.2"] },
     { "id": 27, "tasks": ["20.3"] },
     { "id": 28, "tasks": ["20.4"] },
-    { "id": 29, "tasks": ["20.5"] }
+    { "id": 29, "tasks": ["20.5"] },
+    { "id": 30, "tasks": ["21.1"] }
   ]
 }
 ```

@@ -33,6 +33,7 @@ import {
 } from './tripExpenseApi';
 import { SETTLEMENT } from './SettlementModal.palette';
 import { ledgerSaveErrorMessage } from './tripPartyDeleted';
+import { useKeyboardBottomInset } from '../../hooks/useKeyboardBottomInset';
 
 interface Props {
   readonly visible: boolean;
@@ -125,13 +126,23 @@ export function SettlementModal({
     },
   });
 
+  const { keyboardInset } = useKeyboardBottomInset(visible);
+
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.modalOverlay}
       >
-        <View style={styles.modalContent} testID="settlement-modal">
+        <View
+          style={[
+            styles.modalContent,
+            Platform.OS === 'android' && keyboardInset > 0
+              ? { paddingBottom: keyboardInset }
+              : null,
+          ]}
+          testID="settlement-modal"
+        >
           <View style={styles.headerRow}>
             <Text style={styles.headerTitle}>
               {isEditing ? 'Edit Settlement' : 'Record a Settlement'}

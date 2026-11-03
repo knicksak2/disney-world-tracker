@@ -517,6 +517,12 @@ transformation, fallback candidate list, or derived URL.
 
 **Validates: Requirement 5.10**
 
+### Property 12: Structured menu fields are additive, valid and lazily refilled
+
+Added by the `trip-budget` spec. For any `RawMenu[]` that lacks the optional `serviceStyle`, `experience`, group `type`, item `prices` and item `priceCents`, `projectMenus` returns output deep-equal to its output before this change (Property 5 continues to pass unmodified). For any input that has them, each new field is present only when valid; every `prices[].cents` equals `Math.round(withoutTax * 100)` of a finite, positive USD entry; `priceCents` is present exactly when there is one such entry; and the display `price` string is unchanged. For a cached row with `shape_version` below `MENU_SHAPE_VERSION` (2), the retrieval seam refetches it on demand (at most one Menu_Service request per request), writes `shape_version = 2`, and on a fetch failure serves the previous cache unchanged. Implementation notes: the migration is `experience_menus.shape_version SMALLINT NOT NULL DEFAULT 1` (trip-budget migration `0067`), `decideMenuRefresh` in `menuRetrieval.ts` extends the pure freshness decision, and `diningMenuClient.ts` fills the fields from `prices[].withoutTax/type/currency`, group `type`, and the meal period's `serviceStyle` and `experience`.
+
+**Validates: Requirements 8.1, 8.2, 8.3, 8.4, 8.5, 8.6**
+
 ## Error Handling
 
 ### Backend

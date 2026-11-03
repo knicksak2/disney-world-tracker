@@ -199,6 +199,17 @@ export const DISPOSITIONS: readonly DispositionEntry[] = [
   e('settlements', 'payer_id', 'anonymize', 3, ['id']),
   e('settlements', 'recipient_id', 'anonymize', 3, ['id']),
   e('settlements', 'created_by', 'anonymize', 3, ['id']),
+
+  // -- trip budget ---------------------------------------------------------------------------
+  e('trip_budget_lines', 'created_by', 'anonymize', 3, ['id'], 'cascade', false, {
+    note: "A budget line must survive its creator's deletion.",
+  }),
+  e('trip_budget_allocations', 'member_id', 'anonymize', 3, ['id'], 'cascade', true, {
+    note: 'Rows with guest_id set have member_id NULL.',
+  }),
+  e('trip_traveler_profiles', 'member_id', 'delete', 4, ['id'], 'cascade', true, {
+    note: 'Personal attributes of a departing person; nothing depends on the row.',
+  }),
 ];
 
 /**

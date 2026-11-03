@@ -195,6 +195,11 @@ import type { FeedPhotoPort } from './services/photos/ports.js';
 import { DefaultRecapShareGate } from './services/sharing/tripRecapGate.js';
 import { DefaultRecapPhotoPort } from './services/photos/recapPhotoPort.js';
 import { DefaultFeedPhotoPort } from './services/photos/feedPhotoPort.js';
+import { createLightningLaneReadRepo } from './services/lightningLane/repo.js';
+import { createTicketPricesRepo } from './services/ticketPrices/repo.js';
+import { createTicketPriceClient } from './services/ticketPrices/ticketPriceClient.js';
+import { createTicketPricesService } from './services/ticketPrices/refreshService.js';
+import { createTripBudgetRepo } from './services/tripBudget/repo.js';
 
 /**
  * Handle returned by {@link buildApp}. The `app` is a configured-but-unbound
@@ -694,6 +699,10 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
     directory: themeParksDirectory,
     weatherClient,
     derivedStatsService,
+    llConfig: {
+      minRefreshHours: config.lightningLane?.minRefreshHours ?? 12,
+      retentionDays: config.lightningLane?.retentionDays ?? 400,
+    },
   });
   
   // --- Admin wiring ---------------------------------------------------
@@ -972,6 +981,48 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
     tripShareFacts,
   });
 
+  // --- Lightning Lane & Ticket Prices (trip-budget spec, task 8.4) -----
+  const lightningLaneRepo = createLightningLaneReadRepo(pool);
+  const ticketPricesRepo = createTicketPricesRepo(pool);
+  const tpConfig = config.ticketPrices ?? {
+    enabled: false,
+    baseUrl: 'https://disneyworld.disney.go.com',
+    groups: ['std-gst'],
+    flResidentNumDays: [4],
+    staleAfterDays: 30,
+    minAttemptIntervalHours: 24,
+    probeMinIntervalHours: 24,
+    requestSpacingMs: 1500,
+    blockCooldownMinutes: 360,
+    userAgent: 'DwtTripBudget/1.0 (personal trip planner)',
+    requestTimeoutMs: 20000,
+    maxBodyBytes: 5000000,
+    sanityMinRatio: 0.5,
+    maxUnrecognizedFraction: 0.1,
+    diagnoseMinIntervalSeconds: 60,
+    freshDays: 45,
+    estimateAfterDays: 120,
+    maxConsecutiveFailures: 2,
+    failureCooldownMinutes: 60,
+  };
+  const ticketPriceClient = createTicketPriceClient({
+    baseUrl: tpConfig.baseUrl,
+    userAgent: tpConfig.userAgent,
+    requestTimeoutMs: tpConfig.requestTimeoutMs,
+    maxBodyBytes: tpConfig.maxBodyBytes,
+  });
+  const ticketPricesLogger = createLogger();
+  const ticketPricesService = createTicketPricesService({
+    pool,
+    client: ticketPriceClient,
+    repo: ticketPricesRepo,
+    config: tpConfig,
+    logger: ticketPricesLogger,
+  });
+  const adminTicketPrices = ticketPricesService.admin;
+  void ticketPriceClient;
+  const tripBudgetRepo = createTripBudgetRepo(pool);
+
   // --- Build app ------------------------------------------------------
   const app = buildServer(config, {
     catalog: {
@@ -1056,6 +1107,17 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
       requireSession: sessionMiddleware,
       pool,
       emitExpenseAffected,
+    },
+    tripBudget: {
+      pool,
+      repo: tripBudgetRepo,
+      requireSession: sessionMiddleware,
+      ticketPricesRepo,
+      ticketPricesService,
+      lightningLaneRepo,
+      config: {
+        ticketPrices: tpConfig,
+      },
     },
     tripBooking: {
       repo: tripBookingRepo,
@@ -1167,6 +1229,7 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
       getDirectorySnapshot: async () => themeParksDirectory.getSnapshot(),
       basicAuth: adminBasicAuth,
       photos: adminPhotos,
+      ticketPrices: adminTicketPrices,
     },
     photos: {
       photoService,

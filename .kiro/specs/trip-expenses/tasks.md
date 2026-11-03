@@ -300,6 +300,12 @@ No external vendor, credential, or network call is introduced anywhere in this p
     - Run `npm run verify` across all workspaces to confirm clean exit code 0.
     - _Requirements: all_
 
+- [ ] 21. Menu Item Picker for Expenses (Requirement 16, added by the `trip-budget` spec)
+  - [ ] 21.1 Implement the shared picker and the additive Expense form integration
+    - The work and its tests are specified in `.kiro/specs/trip-budget/tasks.md` tasks 1.3 (shared `menuPricing.ts` parser, promoted `extractTierPriceSuggestions`), 5.1 and 5.2 (structured menu prices and lazy refill), 17.3 (`MenuItemPicker` and pure helpers, Property 14) and 19.1 (additive `ExpenseFormModal.tsx` change including the "Add estimated tax" and "Add estimated gratuity" actions, and the new `ExpenseFormModal.menuPicker.test.tsx`). Property numbers: trip-expenses Properties 14 and 15 = trip-budget Property 27; trip-expenses Property 16 = trip-budget Property 42. The guest-removal rule of Requirement 2.13 is implemented and tested by trip-budget task 14.4 (trip-expenses Property 17, lock-first transaction removal with a two-connection livedb test). The hub tile (Requirement 10.6, trip-expenses Property 18) is tested by trip-budget task 18.5. The picker control conditions and tiered suggestions (Requirements 16.1 and 16.5, trip-expenses Properties 19 and 20) are tested by `ExpenseFormModal.menuPicker.test.tsx` in trip-budget task 19.1, and the single shared component (Requirement 16.8, trip-expenses Property 21) by trip-budget tasks 17.3 and 19.1. Read `.kiro/specs/trip-budget/tasks.md` first, and start from the current working tree: `ExpenseFormModal.tsx`, `ReceiptReviewModal.tsx` and `TripExpensesScreen.test.tsx` carry uncommitted user edits that must not be clobbered. No migration, no route, no DTO change here.
+    - Mark this task done only when trip-budget tasks 1.3, 5.1, 5.2, 17.3 and 19.1 are done and the existing `TripExpensesScreen` tests still pass.
+    - _Requirements: 16.1, 16.2, 16.3, 16.4, 16.5, 16.6, 16.7, 16.8, 10.6, 2.13_
+
 ## Notes
 
 - **New service, not an extension of `trips/repo.ts`.** `apps/api/src/services/tripExpenses/` is a sibling to `apps/api/src/services/trips/`, reusing only `assertTripMember`/`assertTripOrganizer` from `trips/authz.ts` by import. Do not add Expense/Settlement/Guest methods to `trips/repo.ts` itself.
@@ -373,7 +379,8 @@ No external vendor, credential, or network call is introduced anywhere in this p
     { "id": 53, "tasks": ["19.5"] },
     { "id": 54, "tasks": ["20.1", "20.2", "20.3", "20.4"] },
     { "id": 55, "tasks": ["20.5"] },
-    { "id": 56, "tasks": ["20.6"] }
+    { "id": 56, "tasks": ["20.6"] },
+    { "id": 57, "tasks": ["21.1"] }
   ]
 }
 ```

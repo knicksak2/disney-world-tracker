@@ -17,6 +17,7 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  StyleSheet,
   Switch,
   Text,
   TextInput,
@@ -29,6 +30,9 @@ import {
   EXPENSE_SPLIT_MODES,
   CHARGE_LINE_KINDS,
   uuidSchema,
+  bpsOf,
+  BUDGET_DEFAULT_TAX_BPS,
+  BUDGET_DEFAULT_DINING_TIP_BPS,
   type ExpenseCategory,
   type ExpenseSplitMode,
   type ChargeLineKind,
@@ -66,6 +70,11 @@ import { ResortPickerModal, type ResortItem } from './ResortPickerModal';
 import { ReceiptReviewModal } from './ReceiptReviewModal';
 import { extractTierPriceSuggestions, SAMPLE_DISNEY_RECEIPT } from './receiptScan.pure';
 import { scanReceiptPhoto, type ReceiptImageSource } from './receiptScan.native';
+import { MenuItemPicker } from '../../components/MenuItemPicker';
+import {
+  buildPickerRows,
+  selectionToExpenseItems,
+} from '../../components/menuItemPicker.pure';
 
 interface Props {
   readonly visible: boolean;
@@ -217,6 +226,14 @@ export function ExpenseFormModal({
   const suggestedTiers = useMemo(() => {
     return extractTierPriceSuggestions(expDetail?.menus);
   }, [expDetail?.menus]);
+
+  const [showMenuItemPicker, setShowMenuItemPicker] = useState<boolean>(false);
+
+  const hasCachedMenuItems = useMemo(() => {
+    if (!experienceId || !expDetail?.menus || expDetail.menus.length === 0) return false;
+    const sections = buildPickerRows(expDetail.menus);
+    return sections.some((s) => s.items.some((it) => !it.isPriceless));
+  }, [experienceId, expDetail?.menus]);
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -745,7 +762,7 @@ export function ExpenseFormModal({
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.modalOverlay}
       >
         <View style={styles.modalContent} testID="expense-form-modal">
@@ -1926,6 +1943,18 @@ export function ExpenseFormModal({
                     <Ionicons name="images-outline" size={13} color={t.color.primaryFg} />
                     <Text style={styles.itemizedScanBtnText}>Choose Photo</Text>
                   </Pressable>
+                  {hasCachedMenuItems && (
+                    <Pressable
+                      style={styles.itemizedScanBtn}
+                      onPress={() => setShowMenuItemPicker(true)}
+                      testID="pick-from-menu-button"
+                      accessibilityRole="button"
+                      accessibilityLabel="Pick from menu"
+                    >
+                      <Ionicons name="restaurant-outline" size={13} color={t.color.primaryFg} />
+                      <Text style={styles.itemizedScanBtnText}>Pick from menu</Text>
+                    </Pressable>
+                  )}
                 </View>
 
                 <View style={styles.itemizedHeaderRow}>
@@ -2162,6 +2191,46 @@ export function ExpenseFormModal({
                       <Text style={styles.addChargeBtnText}>+ {k}</Text>
                     </Pressable>
                   ))}
+                  <Pressable
+                    style={styles.addChargeBtn}
+                    accessibilityRole="button"
+                    accessibilityLabel="Add estimated tax"
+                    testID="add-estimated-tax-btn"
+                    onPress={() => {
+                      const subtotal = items.reduce((s, it) => s + (it.priceCents || 0), 0);
+                      const taxAmt = bpsOf(subtotal, BUDGET_DEFAULT_TAX_BPS.dining);
+                      setChargeLines((prev) => [
+                        ...prev,
+                        {
+                          kind: 'tax',
+                          amountCents: taxAmt,
+                          excludeAlcohol: false,
+                        },
+                      ]);
+                    }}
+                  >
+                    <Text style={styles.addChargeBtnText}>+ Estimated Tax</Text>
+                  </Pressable>
+                  <Pressable
+                    style={styles.addChargeBtn}
+                    accessibilityRole="button"
+                    accessibilityLabel="Add estimated gratuity"
+                    testID="add-estimated-gratuity-btn"
+                    onPress={() => {
+                      const subtotal = items.reduce((s, it) => s + (it.priceCents || 0), 0);
+                      const tipAmt = bpsOf(subtotal, BUDGET_DEFAULT_DINING_TIP_BPS);
+                      setChargeLines((prev) => [
+                        ...prev,
+                        {
+                          kind: 'gratuity',
+                          amountCents: tipAmt,
+                          excludeAlcohol: false,
+                        },
+                      ]);
+                    }}
+                  >
+                    <Text style={styles.addChargeBtnText}>+ Estimated Gratuity</Text>
+                  </Pressable>
                 </View>
               </View>
             ) : null}
@@ -2205,18 +2274,10 @@ export function ExpenseFormModal({
         </View>
       </KeyboardAvoidingView>
 
-      {/* Catalog Restaurant Picker Modal */}
+      {/* Catalog Restaurant Picker Overlay */}
       {showExpPicker ? (
-        <Modal
-          visible={showExpPicker}
-          animationType="slide"
-          transparent
-          onRequestClose={() => setShowExpPicker(false)}
-        >
-          <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            style={styles.modalOverlay}
-          >
+        <View style={styles.pickerOverlayWrapper} testID="restaurant-picker-modal-container">
+          <View style={styles.modalOverlay}>
             <View style={styles.modalContent} testID="restaurant-picker-modal">
               <View style={styles.headerRow}>
                 <Text style={styles.headerTitle}>Select Disney Restaurant</Text>
@@ -2233,23 +2294,30 @@ export function ExpenseFormModal({
                 enabled={showExpPicker}
                 defaultTab="dining"
                 showTabs={false}
+                fillContainer
                 testIDPrefix="expense-restaurant-picker"
                 onSelect={(exp: ExperienceDTO) => {
                   setExperienceId(exp.id);
                   setExperienceName(exp.name);
-                  if (!description.trim()) setDescription(exp.name);
+                  if (
+                    !description.trim() ||
+                    exp.name.toLowerCase().includes(description.trim().toLowerCase())
+                  ) {
+                    setDescription(exp.name);
+                  }
                   setShowExpPicker(false);
                 }}
               />
             </View>
-          </KeyboardAvoidingView>
-        </Modal>
+          </View>
+        </View>
       ) : null}
 
       {/* Catalog Resort Picker Modal */}
       {showResortPicker ? (
         <ResortPickerModal
           visible={showResortPicker}
+          nested
           selectedResortId={resortId}
           onSelect={(resort: ResortItem) => {
             setResortId(resort.id);
@@ -2307,11 +2375,40 @@ export function ExpenseFormModal({
           onClose={() => setShowManageGuestsModal(false)}
         />
       ) : null}
+
+      {/* Menu Item Picker Modal */}
+      {showMenuItemPicker ? (
+        <MenuItemPicker
+          visible={showMenuItemPicker}
+          menus={expDetail?.menus ?? []}
+          onConfirm={(selection) => {
+            const defaultAssignees =
+              allParticipants.length > 0 ? allParticipants.map((p) => p.id) : [payerId];
+            const drafts = selectionToExpenseItems(selection, defaultAssignees);
+            setItems((prev) => [
+              ...prev,
+              ...drafts.map((d) => ({
+                name: d.name,
+                priceCents: d.priceCents,
+                assigneeIds: d.assigneeIds,
+                isAlcohol: Boolean(d.isAlcohol),
+              })),
+            ]);
+            setShowMenuItemPicker(false);
+          }}
+          onCancel={() => setShowMenuItemPicker(false)}
+          testID="expense-menu-item-picker"
+        />
+      ) : null}
     </Modal>
   );
 };
 
 const useStyles = makeStyles((t) => ({
+  pickerOverlayWrapper: {
+    ...StyleSheet.absoluteFill,
+    zIndex: 100,
+  },
   modalOverlay: {
     flex: 1,
     backgroundColor: FORM[t.scheme].scrim,

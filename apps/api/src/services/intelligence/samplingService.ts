@@ -6,8 +6,10 @@ import type {
   DailySignalRow,
   RideShapeRow,
   SeasonHourRow,
-  ExperienceSignalRow
+  ExperienceSignalRow,
+  LlSinglePriceRow
 } from './IntelligenceRepo.js';
+import { extractLlPrices, type LlDayPrices } from '../lightningLane/llExtract.js';
 import type { ThemeParksLiveClient } from '../live/themeParksLiveClient.js';
 import type { ThemeParksClient } from '../catalog/themeparks.js';
 import type { ThemeParksDirectory } from '../live/themeParksDirectory.js';
@@ -65,6 +67,7 @@ export interface SamplingServiceDeps {
   directory: ThemeParksDirectory;
   weatherClient: WeatherClient;
   derivedStatsService?: DerivedStatsService;
+  llConfig?: { minRefreshHours?: number; retentionDays?: number };
   logger?: any;
   now?: () => Date;
 }
@@ -227,6 +230,17 @@ export function createSamplingService(deps: SamplingServiceDeps): SamplingServic
     let totalWaitSamplesRecorded = 0;
     let parksSampledCount = 0;
 
+    const passStartTime = now;
+    let lastSinglePricesCapturedAt: Date | null = null;
+    if (typeof repo.getLlSinglePricesLastCapturedAt === 'function') {
+      try {
+        lastSinglePricesCapturedAt = await repo.getLlSinglePricesLastCapturedAt();
+      } catch (err) {
+        logger.warn({ err }, 'Failed to read getLlSinglePricesLastCapturedAt');
+      }
+    }
+    const passSingles: LlSinglePriceRow[] = [];
+
     for (const park of wdwParks) {
       try {
         const liveRes = await liveClient.getEntityLive(park.id);
@@ -264,19 +278,44 @@ export function createSamplingService(deps: SamplingServiceDeps): SamplingServic
         parksSampledCount++;
 
         const schedRes = await liveClient.getEntitySchedule(park.id);
-        
+
+        const llDayMap = new Map<string, LlDayPrices>();
+        try {
+          const extractedDays = extractLlPrices(schedRes.schedule);
+          for (const ed of extractedDays) {
+            llDayMap.set(ed.date, ed);
+            for (const s of ed.singles) {
+              passSingles.push({
+                park: canonicalPark,
+                date: ed.date,
+                purchaseId: s.purchaseId,
+                attractionName: s.attractionName,
+                priceCents: s.cents,
+                available: s.available,
+              });
+            }
+          }
+        } catch (err) {
+          logger.warn({ err, park: canonicalPark }, 'extractLlPrices failed, skipping LL for park');
+        }
+
         const schedRowsMap = new Map<string, ScheduleSignalRow>();
         for (const se of schedRes.schedule) {
            if (!se.date) continue;
            const sDate = new Date(se.date as string);
            const dateKey = sDate.toISOString().split('T')[0] as string;
-           
+
            let openTime = se.openingTime ? new Date(se.openingTime as string) : null;
            let closeTime = se.closingTime ? new Date(se.closingTime as string) : null;
-           
+
            const desc = (se.description || '').toLowerCase();
-           const ll = se.purchases?.find(p => p.name === 'Lightning Lane Multi Pass');
-           
+           const llDay = llDayMap.get(dateKey);
+           const multiPrice = llDay?.multi ? llDay.multi.cents : null;
+           const multiAvail = llDay?.multi ? (llDay.multi.available ?? null) : null;
+           const premierPrice = llDay?.premier ? llDay.premier.cents : null;
+           const premierAvail = llDay?.premier ? (llDay.premier.available ?? null) : null;
+           const hasLl = multiPrice !== null || premierPrice !== null;
+
            if (schedRowsMap.has(dateKey)) {
              const existing = schedRowsMap.get(dateKey)!;
              if (openTime && (!existing.open_time || openTime < existing.open_time)) {
@@ -288,8 +327,16 @@ export function createSamplingService(deps: SamplingServiceDeps): SamplingServic
              existing.early_entry = existing.early_entry || desc.includes('early entry');
              existing.extended_evening = existing.extended_evening || desc.includes('extended evening');
              existing.ticketed_event = existing.ticketed_event || desc.includes('special ticketed');
-             if (ll?.price?.amount && !existing.ll_multipass_price_cents) {
-               existing.ll_multipass_price_cents = ll.price.amount;
+             if (multiPrice !== null && !existing.ll_multipass_price_cents) {
+               existing.ll_multipass_price_cents = multiPrice;
+               existing.ll_multipass_available = multiAvail;
+             }
+             if (premierPrice !== null && !existing.ll_premier_price_cents) {
+               existing.ll_premier_price_cents = premierPrice;
+               existing.ll_premier_available = premierAvail;
+             }
+             if (existing.ll_multipass_price_cents !== null || existing.ll_premier_price_cents !== null) {
+               existing.ll_prices_captured_at = passStartTime;
              }
            } else {
              schedRowsMap.set(dateKey, {
@@ -300,7 +347,11 @@ export function createSamplingService(deps: SamplingServiceDeps): SamplingServic
                early_entry: desc.includes('early entry'),
                extended_evening: desc.includes('extended evening'),
                ticketed_event: desc.includes('special ticketed'),
-               ll_multipass_price_cents: ll?.price?.amount ?? null
+               ll_multipass_price_cents: multiPrice,
+               ll_multipass_available: multiAvail,
+               ll_premier_price_cents: premierPrice,
+               ll_premier_available: premierAvail,
+               ll_prices_captured_at: hasLl ? passStartTime : null,
              });
            }
         }
@@ -568,6 +619,34 @@ export function createSamplingService(deps: SamplingServiceDeps): SamplingServic
       },
       `Sampling pass summary: ${parksSampledCount} parks sampled, ${tpIdToDbId.size} experiences mapped, ${totalWaitSamplesRecorded} wait samples recorded, ${unmappedStandbyEntries.size} unmapped with standby waits, ${unresolvedCount} unresolved`
     );
+
+    // Lightning Lane Single Pass persistence and retention (12-hour guard, R15.5, R20.5)
+    const minRefreshHours = deps.llConfig?.minRefreshHours ?? 12;
+    const retentionDays = deps.llConfig?.retentionDays ?? 400;
+    const minRefreshMs = minRefreshHours * 3_600_000;
+    const shouldRefreshSingles =
+      lastSinglePricesCapturedAt === null ||
+      now.getTime() - lastSinglePricesCapturedAt.getTime() >= minRefreshMs;
+
+    if (shouldRefreshSingles) {
+      if (typeof repo.upsertLightningLaneSinglePrices === 'function') {
+        try {
+          await repo.upsertLightningLaneSinglePrices(passSingles);
+        } catch (err) {
+          logger.warn({ err }, 'Failed to upsert Lightning Lane single prices');
+        }
+      }
+      if (typeof repo.pruneLightningLaneSinglePrices === 'function') {
+        try {
+          const retentionCutoff = new Date(now.getTime() - retentionDays * 86_400_000)
+            .toISOString()
+            .split('T')[0]!;
+          await repo.pruneLightningLaneSinglePrices(retentionCutoff);
+        } catch (err) {
+          logger.warn({ err }, 'Failed to prune Lightning Lane single prices');
+        }
+      }
+    }
 
     // Prune old samples and sampling runs (30 days)
     const thirtyDaysAgo = new Date(now.getTime() - SAMPLING_RUNS_RETENTION_DAYS * 24 * 60 * 60 * 1000);

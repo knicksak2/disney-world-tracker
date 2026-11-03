@@ -227,6 +227,11 @@ annotation.
 - [x] 14. Final checkpoint - full suite
   - Ensure all tests pass, ask the user if questions arise.
 
+- [ ] 15. Ticket price client exception (R16, added by the `trip-budget` spec)
+  - [ ] 15.1 Dedicated client, structural guard and wiring
+    - Specified and tested in `.kiro/specs/trip-budget/tasks.md` tasks 8.1 (client and tests), 8.3 (circuit breaker and service) and 8.4 (composition outside the live path, `retirement.smoke.test.ts` unmodified, Property 17). Add the structural test described by Property 17 as part of trip-budget task 8.4 (`structure.test.ts`; disney-source-resilience Property 17 = trip-budget Properties 36 and 16/37: the client and breaker behavior, including WAF markers on any non-JSON or non-2xx body and the consecutive-failure breaker, is trip-budget Property 16).
+    - _Requirements: 16.1, 16.2, 16.3, 16.4, 16.5_
+
 ## Notes
 
 - Tasks marked with `*` are optional test tasks and can be skipped for a faster MVP; core implementation tasks are never optional.
@@ -251,7 +256,8 @@ annotation.
     { "id": 7, "tasks": ["8.5", "9.2", "9.3", "10.1", "11.2"] },
     { "id": 8, "tasks": ["9.4", "10.2", "13.1", "13.2", "13.4"] },
     { "id": 9, "tasks": ["13.3", "13.5", "13.6"] },
-    { "id": 10, "tasks": ["13.7"] }
+    { "id": 10, "tasks": ["13.7"] },
+    { "id": 11, "tasks": ["15.1"] }
   ]
 }
 ```

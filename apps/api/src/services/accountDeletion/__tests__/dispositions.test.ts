@@ -18,8 +18,8 @@ import {
 } from '../dispositions.js';
 import { coversUniqueKey, parseMigrations, type MigrationSchema } from './migrationSchema.js';
 
-/** `users.id` references today (69) plus `account_deletion_reauth_grants.user_id` (this change). */
-const EXPECTED_USER_FK_COUNT = 70;
+/** `users.id` references today (70) plus trip budget (3). */
+const EXPECTED_USER_FK_COUNT = 73;
 const key = (e: { table: string; column: string }): string => `${e.table}.${e.column}`;
 
 const schema: MigrationSchema = parseMigrations();

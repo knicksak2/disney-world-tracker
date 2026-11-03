@@ -28,6 +28,7 @@ import { PrimaryButton, SecondaryButton, SectionLabel } from '../../theme/compon
 import { makeStyles } from '../../theme/makeStyles';
 import { useAppTheme, usePalette } from '../../theme/useAppTheme';
 import { BOOKING_SETTINGS_MODAL } from './BookingSettingsModal.palette';
+import { useKeyboardBottomInset } from '../../hooks/useKeyboardBottomInset';
 import {
   checkInRangeText,
   pickChangedSettings,
@@ -119,13 +120,23 @@ export function BookingSettingsModal({
     setCheckInOverride(val);
   };
 
+  const { keyboardInset } = useKeyboardBottomInset(visible);
+
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onCancel}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={[styles.modalOverlay, { backgroundColor: pal.overlayBg }]}
       >
-        <View style={styles.modalContent} testID="booking-settings-modal">
+        <View
+          style={[
+            styles.modalContent,
+            Platform.OS === 'android' && keyboardInset > 0
+              ? { paddingBottom: keyboardInset }
+              : null,
+          ]}
+          testID="booking-settings-modal"
+        >
           <View style={styles.headerRow}>
             <Text style={styles.headerTitle}>Booking Settings</Text>
             <Pressable

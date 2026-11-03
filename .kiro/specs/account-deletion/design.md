@@ -1380,6 +1380,12 @@ For any submitted `email`, `password`, and `confirmation` string on `POST /accou
 
 **Validates: Requirements 19.1, 19.2, 19.3, 19.4, 19.5, 19.6, 19.7, 19.8, 20.1, 20.2, 20.4, 20.5**
 
+### Property 35: Budget data survives the purge of a participant
+
+Added by the `trip-budget` spec. With the three Budget entries in the disposition registry, the completeness test (Property 11) passes with the expected foreign-key count raised by 3. For any Trip with Budget_Lines and Budget_Allocations referencing a purged account, after the purge every such row still exists with the account replaced by its Deleted_User_Placeholder, no allocation amount changes, the whole-party total and every other person's total are identical before and after, and the purged account's Traveler_Profile rows are gone. Two distinct deleted accounts on one Budget_Line remain two distinct allocations (no unique-index violation). `ticket_prices`, `ticket_price_sets`, `ticket_price_control` and `lightning_lane_single_prices` have no `users(id)` reference. Implementation notes: entries are `trip_budget_lines.created_by` (`anonymize`, stage 3, `['id']`), `trip_budget_allocations.member_id` (`anonymize`, stage 3, `['id']`, nullable) and `trip_traveler_profiles.member_id` (`delete`, stage 4, `['id']`, nullable), exactly as in the requirements' Appendix A addendum.
+
+**Validates: Requirements 21.1, 21.2, 21.3, 21.4, 21.5, 21.6**
+
 ## Error Handling
 
 All errors use `AppError(code, message)` and the shared catalog. Messages never contain the password, grant, phrase, email or user id.

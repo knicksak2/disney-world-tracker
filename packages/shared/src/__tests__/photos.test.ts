@@ -297,8 +297,33 @@ describe('Shared Photos: Schemas', () => {
       ).toBe(true);
     });
 
-    it('rejects 0 or > 4 photoIds', () => {
+    it('accepts text-only post with 0 photoIds (empty array or omitted) and a non-empty caption', () => {
+      const withEmptyPhotos = tripPostCreateSchema.safeParse({
+        photoIds: [],
+        caption: 'Heading to Space Mountain now!',
+      });
+      expect(withEmptyPhotos.success).toBe(true);
+      if (withEmptyPhotos.success) {
+        expect(withEmptyPhotos.data.photoIds).toEqual([]);
+        expect(withEmptyPhotos.data.caption).toBe('Heading to Space Mountain now!');
+      }
+
+      const withOmittedPhotos = tripPostCreateSchema.safeParse({
+        caption: '  Meet at the hub for fireworks  ',
+      });
+      expect(withOmittedPhotos.success).toBe(true);
+      if (withOmittedPhotos.success) {
+        expect(withOmittedPhotos.data.photoIds).toEqual([]);
+        expect(withOmittedPhotos.data.caption).toBe('Meet at the hub for fireworks');
+      }
+    });
+
+    it('rejects empty post (0 photoIds with no caption or whitespace-only caption) or > 4 photoIds', () => {
       expect(tripPostCreateSchema.safeParse({ photoIds: [] }).success).toBe(false);
+      expect(tripPostCreateSchema.safeParse({}).success).toBe(false);
+      expect(
+        tripPostCreateSchema.safeParse({ photoIds: [], caption: '   ' }).success,
+      ).toBe(false);
       expect(
         tripPostCreateSchema.safeParse({
           photoIds: [UUID_1, UUID_2, UUID_3, UUID_1, UUID_2],

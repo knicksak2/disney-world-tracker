@@ -15,7 +15,7 @@
  */
 
 import React from 'react';
-import { Share, StyleSheet, Switch } from 'react-native';
+import { KeyboardAvoidingView, Platform, Share, StyleSheet, Switch } from 'react-native';
 import type { ReactTestInstance } from 'react-test-renderer';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
@@ -727,6 +727,54 @@ describe('TripExpensesScreen', () => {
     });
   });
 
+  it('updates description when linking restaurant even if user already typed a partial prefix', async () => {
+    apiRequestMock.mockImplementation(async (method: string, path: string) => {
+      if (method === 'GET' && path === '/me') return { user: { id: USER_1 } } as any;
+      if (method === 'GET' && path === `/trips/${TRIP_ID}`) return TRIP_FIXTURE as any;
+      if (method === 'GET' && path === `/trips/${TRIP_ID}/members`) return MEMBERS_FIXTURE as any;
+      if (method === 'GET' && path === `/trips/${TRIP_ID}/guests`) return GUESTS_FIXTURE as any;
+      if (method === 'GET' && path.startsWith(`/trips/${TRIP_ID}/expenses`)) return recordedLedger as any;
+      if (method === 'GET' && path === `/trips/${TRIP_ID}/balances`) return BALANCES_FIXTURE as any;
+      if (method === 'GET' && path.startsWith('/catalog')) {
+        return {
+          experiences: [
+            {
+              id: 'exp-cinderella',
+              name: "Cinderella's Royal Table",
+              category: 'Restaurant',
+              subCategory: 'Table Service',
+              park: 'magic-kingdom',
+            },
+          ],
+        } as any;
+      }
+      throw new Error(`Unhandled: ${method} ${path}`);
+    });
+
+    renderScreen();
+    await waitFor(() => expect(screen.getByTestId('add-expense-button')).toBeTruthy());
+
+    fireEvent.press(screen.getByTestId('add-expense-button'));
+    await waitFor(() => expect(screen.getByTestId('expense-description-input')).toBeTruthy());
+
+    // User types "Cinderella" into description input first
+    fireEvent.changeText(screen.getByTestId('expense-description-input'), 'Cinderella');
+
+    // Tap link restaurant button
+    fireEvent.press(screen.getByTestId('link-restaurant-button'));
+
+    // Wait for ExperiencePicker and select Cinderella's Royal Table
+    await waitFor(() =>
+      expect(screen.getByTestId('expense-restaurant-picker-result-exp-cinderella')).toBeTruthy(),
+    );
+    fireEvent.press(screen.getByTestId('expense-restaurant-picker-result-exp-cinderella'));
+
+    // Description is updated to the full restaurant name
+    await waitFor(() => {
+      expect(screen.getByTestId('expense-description-input')).toHaveProp('value', "Cinderella's Royal Table");
+    });
+  });
+
   it('populates suggested tiers from linked restaurant cached menu and allows editing before save (Req 11.4, 11.5)', async () => {
     apiRequestMock.mockImplementation(async (method: string, path: string, body?: any) => {
       if (method === 'GET' && path === '/me') return { user: { id: USER_1 } } as any;
@@ -865,6 +913,57 @@ describe('TripExpensesScreen', () => {
       fireEvent.press(screen.getByTestId(`category-chip-${cat}`));
       expect(screen.queryByTestId('link-restaurant-button')).toBeNull();
       expect(screen.queryByTestId('link-resort-button')).toBeNull();
+    }
+  });
+
+  it('uses undefined behavior on Android for KeyboardAvoidingView and renders restaurant and resort pickers as in-dialog overlays', async () => {
+    const originalPlatform = Platform.OS;
+    try {
+      Platform.OS = 'android';
+      apiRequestMock.mockImplementation(async (method: string, path: string) => {
+        if (method === 'GET' && path === '/me') return { user: { id: USER_1 } } as any;
+        if (method === 'GET' && path === `/trips/${TRIP_ID}`) return TRIP_FIXTURE as any;
+        if (method === 'GET' && path === `/trips/${TRIP_ID}/members`) return MEMBERS_FIXTURE as any;
+        if (method === 'GET' && path === `/trips/${TRIP_ID}/guests`) return GUESTS_FIXTURE as any;
+        if (method === 'GET' && path.startsWith(`/trips/${TRIP_ID}/expenses`)) return recordedLedger as any;
+        if (method === 'GET' && path === `/trips/${TRIP_ID}/balances`) return BALANCES_FIXTURE as any;
+        if (method === 'GET' && path.startsWith('/catalog?')) {
+          return { experiences: [] } as any;
+        }
+        if (method === 'GET' && path === '/resorts') {
+          return { resorts: [] } as any;
+        }
+        throw new Error(`Unhandled: ${method} ${path}`);
+      });
+
+      renderScreen();
+      await waitFor(() => expect(screen.getByTestId('add-expense-button')).toBeTruthy());
+      fireEvent.press(screen.getByTestId('add-expense-button'));
+      await waitFor(() => expect(screen.getByTestId('expense-form-modal')).toBeTruthy());
+
+      // Assert KeyboardAvoidingView behavior on Android is undefined (prevents adjustResize oscillation loops)
+      expect(screen.getByTestId('expense-form-modal')).toBeTruthy();
+      const kavs = screen.UNSAFE_getAllByType(KeyboardAvoidingView);
+      expect(kavs.length).toBeGreaterThan(0);
+      for (const kav of kavs) {
+        expect(kav.props.behavior).toBeUndefined();
+      }
+
+      // Open restaurant picker and verify it renders as an in-dialog overlay (no nested native Modal)
+      fireEvent.press(screen.getByTestId('link-restaurant-button'));
+      await waitFor(() => expect(screen.getByTestId('restaurant-picker-modal-container')).toBeTruthy());
+      expect(screen.getByTestId('restaurant-picker-modal')).toBeTruthy();
+      fireEvent.press(within(screen.getByTestId('restaurant-picker-modal')).getByLabelText('Close'));
+
+      // Switch to hotel and verify ResortPickerModal renders as nested overlay
+      await waitFor(() => expect(screen.getByTestId('category-chip-hotel')).toBeTruthy());
+      fireEvent.press(screen.getByTestId('category-chip-hotel'));
+      fireEvent.press(screen.getByTestId('link-resort-button'));
+      await waitFor(() => expect(screen.getByTestId('resort-picker-nested-wrapper')).toBeTruthy());
+      expect(screen.getByTestId('resort-picker-modal')).toBeTruthy();
+      fireEvent.press(screen.getByTestId('close-resort-picker'));
+    } finally {
+      Platform.OS = originalPlatform;
     }
   });
 

@@ -2657,6 +2657,12 @@ async function departMember(
       [tripId, userId],
     );
 
+    // Remove the departing Member's budget traveler profile on this Trip (trip-budget Requirement 4.7).
+    await client.query(
+      `DELETE FROM trip_traveler_profiles WHERE trip_id = $1 AND member_id = $2`,
+      [tripId, userId],
+    );
+
     // Cancel every pending rode-with tag on this Trip that the departing Member
     // created (tags on a log entry they authored) or is named in, so they can
     // no longer be confirmed (R8.6, R8.7). Confirmed/declined tags and the log
@@ -4533,6 +4539,10 @@ async function createFeedPost(
   caption?: string,
   options?: { beforeGuardedUpdate?: () => Promise<void> },
 ): Promise<{ id: string }> {
+  const trimmedCaption = caption !== undefined && caption !== null ? caption.trim() : '';
+  if (photoIds.length === 0 && trimmedCaption.length === 0) {
+    throw new AppError('validation_failed', 'A post must include a caption or at least one photo');
+  }
   if (new Set(photoIds).size !== photoIds.length) {
     throw new AppError('validation_failed', 'Duplicate photo IDs provided');
   }
@@ -4541,30 +4551,32 @@ async function createFeedPost(
   try {
     await client.query('BEGIN');
 
-    // 1. Locking read on referenced photos (Requirement 14.2, 14.12)
-    const lockResult = await client.query<{ id: string }>(
-      `SELECT id FROM photos
-        WHERE id = ANY($1)
-          AND owner_id = $2
-          AND scope_id = $3
-          AND target_kind = 'trip'
-          AND status IN ('pending', 'approved', 'needs_review')
-          AND feed_item_id IS NULL
-        FOR UPDATE`,
-      [photoIds, actorId, tripId],
-    );
+    // 1. Locking read on referenced photos when photos are attached (Requirement 14.2, 14.12)
+    if (photoIds.length > 0) {
+      const lockResult = await client.query<{ id: string }>(
+        `SELECT id FROM photos
+          WHERE id = ANY($1)
+            AND owner_id = $2
+            AND scope_id = $3
+            AND target_kind = 'trip'
+            AND status IN ('pending', 'approved', 'needs_review')
+            AND feed_item_id IS NULL
+          FOR UPDATE`,
+        [photoIds, actorId, tripId],
+      );
 
-    if (lockResult.rowCount !== photoIds.length) {
-      await client.query('ROLLBACK');
-      throw new AppError('validation_failed', 'One or more photos are invalid or already linked to a post');
+      if (lockResult.rowCount !== photoIds.length) {
+        await client.query('ROLLBACK');
+        throw new AppError('validation_failed', 'One or more photos are invalid or already linked to a post');
+      }
     }
 
-    // 2. Insert member_post into trip_feed_items (Requirement 14.1, 14.10)
+    // 2. Insert member_post into trip_feed_items (Requirement 14.1, 14.10, trips R20.7)
     const metadata: Record<string, unknown> = {
       photoIds,
     };
-    if (caption !== undefined && caption !== null && caption.length > 0) {
-      metadata.caption = caption;
+    if (trimmedCaption.length > 0) {
+      metadata.caption = trimmedCaption;
     }
 
     const insertResult = await client.query<{ id: string }>(
@@ -4584,21 +4596,23 @@ async function createFeedPost(
       await options.beforeGuardedUpdate();
     }
 
-    // 3. Guarded update (Requirement 14.12)
-    const updateResult = await client.query<{ id: string }>(
-      `UPDATE photos
-          SET feed_item_id = $1
-        WHERE id = ANY($2)
-          AND owner_id = $3
-          AND feed_item_id IS NULL
-          AND status IN ('pending', 'approved', 'needs_review')
-        RETURNING id`,
-      [feedItemId, photoIds, actorId],
-    );
+    // 3. Guarded update when photos are attached (Requirement 14.12)
+    if (photoIds.length > 0) {
+      const updateResult = await client.query<{ id: string }>(
+        `UPDATE photos
+            SET feed_item_id = $1
+          WHERE id = ANY($2)
+            AND owner_id = $3
+            AND feed_item_id IS NULL
+            AND status IN ('pending', 'approved', 'needs_review')
+          RETURNING id`,
+        [feedItemId, photoIds, actorId],
+      );
 
-    if (updateResult.rowCount !== photoIds.length) {
-      await client.query('ROLLBACK');
-      throw new AppError('validation_failed', 'One or more photos changed state during post creation');
+      if (updateResult.rowCount !== photoIds.length) {
+        await client.query('ROLLBACK');
+        throw new AppError('validation_failed', 'One or more photos changed state during post creation');
+      }
     }
 
     await client.query('COMMIT');

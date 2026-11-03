@@ -413,7 +413,7 @@ export default function CompletionControls({
         onRequestClose={closeEditor}
       >
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.modalBackdrop}
         >
           <View style={styles.modalCard} testID="completion-edit-modal">

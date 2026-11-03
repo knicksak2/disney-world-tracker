@@ -1122,14 +1122,16 @@ export function tripRoutes(options: TripRoutesOptions): FastifyPluginAsync {
             continue;
           }
 
-          const { photoIds: _dropped, ...cleanMetadata } = (item.metadata ?? {}) as Record<string, unknown>;
+          const rawMetadata = (item.metadata ?? {}) as Record<string, unknown>;
+          const rawPhotoIds = Array.isArray(rawMetadata.photoIds) ? rawMetadata.photoIds : [];
+          const { photoIds: _dropped, ...cleanMetadata } = rawMetadata;
           const postData = photoSlotsMap.get(item.id);
           const authorId = postData?.authorId;
           const isMine = authorId === userId;
           const slots = postData?.slots ?? [];
 
-          // Omit a member_post that is not the viewer's own and has no slot in state ready or checking
-          if (!isMine && !postVisibleToNonAuthor(slots)) {
+          // Omit a photo-bearing member_post that is not the viewer's own and has no slot in state ready or checking (R14.9, trips R20.7)
+          if (!isMine && rawPhotoIds.length > 0 && !postVisibleToNonAuthor(slots)) {
             continue;
           }
 

@@ -375,35 +375,54 @@ export function createTripExpenseRepo(pool: DbPool): TripExpenseRepo {
     },
 
     async removeTripGuest(tripId, guestId, callerId, callerRole) {
-      const check = await pool.query<{ id: string; sponsor_member_id: string }>(
-        `SELECT id, sponsor_member_id FROM trip_guests WHERE id = $1 AND trip_id = $2`,
-        [guestId, tripId],
-      );
-      const guest = check.rows[0];
-      if (!guest) {
-        throw new AppError('trip_forbidden', 'Guest not found');
-      }
-      if (callerRole !== 'organizer' && guest.sponsor_member_id !== callerId) {
-        throw new AppError('trip_forbidden', 'Only sponsor or organizer may remove a guest');
-      }
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
 
-      // Check if guest is referenced by any share, assignee, or tier count (Req 2.9)
-      const inUse = await pool.query<{ exists: boolean }>(
-        `SELECT (
-           EXISTS (SELECT 1 FROM expense_shares WHERE guest_id = $1) OR
-           EXISTS (SELECT 1 FROM expense_item_assignees WHERE guest_id = $1) OR
-           EXISTS (SELECT 1 FROM expense_tier_counts WHERE guest_id = $1)
-         ) AS exists`,
-        [guestId],
-      );
-      if (inUse.rows[0]?.exists) {
-        throw new AppError(
-          'trip_validation_failed',
-          'Cannot remove guest with recorded expense shares or assignments',
+        const check = await client.query<{ id: string; sponsor_member_id: string }>(
+          `SELECT id, sponsor_member_id FROM trip_guests WHERE id = $1 AND trip_id = $2 FOR UPDATE`,
+          [guestId, tripId],
         );
-      }
+        const guest = check.rows[0];
+        if (!guest) {
+          await client.query('ROLLBACK');
+          throw new AppError('trip_forbidden', 'Guest not found');
+        }
+        if (callerRole !== 'organizer' && guest.sponsor_member_id !== callerId) {
+          await client.query('ROLLBACK');
+          throw new AppError('trip_forbidden', 'Only sponsor or organizer may remove a guest');
+        }
 
-      await pool.query(`DELETE FROM trip_guests WHERE id = $1 AND trip_id = $2`, [guestId, tripId]);
+        // Check if guest is referenced by any budget allocation, share, assignee, or tier count (Req 2.9, 2.13)
+        const inUse = await client.query<{ exists: boolean }>(
+          `SELECT (
+             EXISTS (SELECT 1 FROM trip_budget_allocations WHERE guest_id = $1 LIMIT 1) OR
+             EXISTS (SELECT 1 FROM expense_shares WHERE guest_id = $1 LIMIT 1) OR
+             EXISTS (SELECT 1 FROM expense_item_assignees WHERE guest_id = $1 LIMIT 1) OR
+             EXISTS (SELECT 1 FROM expense_tier_counts WHERE guest_id = $1 LIMIT 1)
+           ) AS exists`,
+          [guestId],
+        );
+        if (inUse.rows[0]?.exists) {
+          await client.query('ROLLBACK');
+          throw new AppError(
+            'trip_validation_failed',
+            'Cannot remove guest with recorded expense shares or assignments',
+          );
+        }
+
+        await client.query(`DELETE FROM trip_guests WHERE id = $1 AND trip_id = $2`, [guestId, tripId]);
+        await client.query('COMMIT');
+      } catch (err) {
+        try {
+          await client.query('ROLLBACK');
+        } catch {
+          // ignore rollback error
+        }
+        throw err;
+      } finally {
+        client.release();
+      }
     },
 
     async listTripGuests(tripId) {

@@ -145,8 +145,8 @@ interface FeedPatchContext {
   readonly previous: readonly TripFeedItemDTO[] | undefined;
 }
 
-/** Which slice of the activity stream is shown (R20.4). */
-type ActivityFilter = 'all' | 'completions';
+/** Which slice of the activity stream is shown (R20.4, R20.9). */
+type ActivityFilter = 'all' | 'posts' | 'completions';
 
 /**
  * Ids of the signed-in user's own post photos that are still being checked. Only these can
@@ -357,6 +357,26 @@ export default function TripFeedScreen({
   const [filter, setFilter] = useState<ActivityFilter>('all');
   const [composerVisible, setComposerVisible] = useState(false);
   const [postComposerVisible, setPostComposerVisible] = useState(false);
+  const [quickPostDraft, setQuickPostDraft] = useState('');
+  const [quickPostError, setQuickPostError] = useState<string | null>(null);
+
+  const quickPostMutation = useMutation<void, ApiError, string>({
+    mutationFn: async (captionText) => {
+      const trimmed = captionText.trim();
+      await apiRequest('POST', `/trips/${tripId}/feed/posts`, {
+        photoIds: [],
+        caption: trimmed,
+      });
+    },
+    onSuccess: () => {
+      setQuickPostDraft('');
+      setQuickPostError(null);
+      void queryClient.invalidateQueries({ queryKey: tripFeedKeys.feed(tripId) });
+    },
+    onError: (err) => {
+      setQuickPostError(actionErrorMessage(err));
+    },
+  });
 
   const ownUserId = meQuery.data?.user.id ?? null;
   const candidates = useMemo<readonly TripMemberDTO[]>(() => {
@@ -446,7 +466,12 @@ export default function TripFeedScreen({
   const items =
     filter === 'completions'
       ? allItems.filter((item) => item.type === 'completion_logged')
-      : allItems;
+      : filter === 'posts'
+        ? allItems.filter((item) => item.type === 'member_post')
+        : allItems;
+
+  const canQuickPost =
+    quickPostDraft.trim().length > 0 && !quickPostMutation.isPending;
 
   return (
     <ScreenContainer>
@@ -458,62 +483,105 @@ export default function TripFeedScreen({
         renderItem={renderRow}
         extraData={t.scheme}
         contentContainerStyle={styles.listContent}
+        refreshing={feedQuery.isRefetching && !feedQuery.isLoading}
+        onRefresh={() => {
+          void feedQuery.refetch();
+        }}
         testID="trip-feed"
         ListHeaderComponent={
           <View style={styles.listHeader}>
-            <Pressable
-              onPress={openComposer}
-              style={({ pressed }) => [
-                styles.composerCtaCard,
-                pressed && styles.pressed,
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel="Log a ride or snack. Tag who rode with you and share ratings."
-              testID="trip-activity-log-cta"
-            >
-              <View style={styles.composerCtaLeft}>
-                <View style={styles.composerCtaIconCircle}>
-                  <Text style={styles.composerCtaIcon}>✨</Text>
-                </View>
-                <View style={styles.composerCtaTextWrap}>
-                  <Text style={styles.composerCtaTitle}>Log a ride or snack</Text>
-                  <Text style={styles.composerCtaSubtitle}>
-                    Tag who rode with you and share ratings
-                  </Text>
-                </View>
+            <Card style={styles.quickPostCard} testID="trip-activity-quick-post-card">
+              <View style={styles.quickPostRow}>
+                <TextInput
+                  value={quickPostDraft}
+                  onChangeText={(val) => {
+                    setQuickPostDraft(val);
+                    if (quickPostError !== null) setQuickPostError(null);
+                  }}
+                  placeholder="Share an update, plan, or thought with the crew..."
+                  placeholderTextColor={t.color.textSecondary}
+                  keyboardAppearance={t.scheme}
+                  maxLength={500}
+                  multiline
+                  editable={!quickPostMutation.isPending}
+                  style={styles.quickPostInput}
+                  accessibilityLabel="Share an update with your trip crew"
+                  testID="trip-activity-quick-post-input"
+                />
+                <Pressable
+                  onPress={() => {
+                    if (!canQuickPost) return;
+                    setQuickPostError(null);
+                    quickPostMutation.mutate(quickPostDraft);
+                  }}
+                  disabled={!canQuickPost}
+                  accessibilityRole="button"
+                  accessibilityLabel="Post update"
+                  testID="trip-activity-quick-post-submit"
+                  style={({ pressed }) => [
+                    styles.quickPostSendBtn,
+                    !canQuickPost && styles.quickPostSendBtnDisabled,
+                    pressed && canQuickPost && styles.pressed,
+                  ]}
+                >
+                  {quickPostMutation.isPending ? (
+                    <ActivityIndicator size="small" color={t.color.textOnPrimary} />
+                  ) : (
+                    <Ionicons
+                      name="send"
+                      size={15}
+                      color={canQuickPost ? t.color.textOnPrimary : t.color.textSecondary}
+                    />
+                  )}
+                </Pressable>
               </View>
-              <View style={styles.composerCtaPlus}>
-                <Ionicons name="add" size={18} color={t.color.textOnPrimary} />
-              </View>
-            </Pressable>
 
-            {canUpload ? (
-              <Pressable
-                onPress={() => setPostComposerVisible(true)}
-                style={({ pressed }) => [
-                  styles.composerCtaCard,
-                  pressed && styles.pressed,
-                ]}
-                accessibilityRole="button"
-                accessibilityLabel="Post photos. Share photos with your trip crew."
-                testID="trip-activity-post-cta"
-              >
-                <View style={styles.composerCtaLeft}>
-                  <View style={styles.composerCtaIconCircle}>
+              {quickPostError !== null ? (
+                <Text
+                  style={styles.error}
+                  accessibilityRole="alert"
+                  testID="trip-activity-quick-post-error"
+                >
+                  {quickPostError}
+                </Text>
+              ) : null}
+
+              <View style={styles.quickPostToolbar}>
+                <Pressable
+                  onPress={openComposer}
+                  style={({ pressed }) => [
+                    styles.composerCtaCard,
+                    pressed && styles.pressed,
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Log a ride or snack. Tag who rode with you and share ratings."
+                  testID="trip-activity-log-cta"
+                >
+                  <Text style={styles.composerCtaIcon}>✨</Text>
+                  <Text style={styles.composerCtaTitle} numberOfLines={1}>
+                    Log a ride or snack
+                  </Text>
+                </Pressable>
+
+                {canUpload ? (
+                  <Pressable
+                    onPress={() => setPostComposerVisible(true)}
+                    style={({ pressed }) => [
+                      styles.composerCtaCard,
+                      pressed && styles.pressed,
+                    ]}
+                    accessibilityRole="button"
+                    accessibilityLabel="Post photos. Share photos with your trip crew."
+                    testID="trip-activity-post-cta"
+                  >
                     <Text style={styles.composerCtaIcon}>📸</Text>
-                  </View>
-                  <View style={styles.composerCtaTextWrap}>
-                    <Text style={styles.composerCtaTitle}>Post photos</Text>
-                    <Text style={styles.composerCtaSubtitle}>
-                      Share photos with your trip crew
+                    <Text style={styles.composerCtaTitle} numberOfLines={1}>
+                      Post photos
                     </Text>
-                  </View>
-                </View>
-                <View style={styles.composerCtaPlus}>
-                  <Ionicons name="add" size={18} color={t.color.textOnPrimary} />
-                </View>
-              </Pressable>
-            ) : null}
+                  </Pressable>
+                ) : null}
+              </View>
+            </Card>
 
             <View style={styles.filterRow} testID="trip-activity-filter">
               <Chip
@@ -521,6 +589,12 @@ export default function TripFeedScreen({
                 active={filter === 'all'}
                 onPress={() => setFilter('all')}
                 testID="trip-activity-filter-all"
+              />
+              <Chip
+                label="Posts"
+                active={filter === 'posts'}
+                onPress={() => setFilter('posts')}
+                testID="trip-activity-filter-posts"
               />
               <Chip
                 label="Completions"
@@ -534,16 +608,26 @@ export default function TripFeedScreen({
         ListEmptyComponent={
           <View style={styles.center} testID="trip-feed-empty">
             <EmptyState
-              icon={filter === 'completions' ? 'sparkles-outline' : 'megaphone-outline'}
+              icon={
+                filter === 'completions'
+                  ? 'sparkles-outline'
+                  : filter === 'posts'
+                    ? 'chatbubble-ellipses-outline'
+                    : 'megaphone-outline'
+              }
               title={
                 filter === 'completions'
                   ? 'No completions yet'
-                  : 'Nothing here yet'
+                  : filter === 'posts'
+                    ? 'No posts yet'
+                    : 'Nothing here yet'
               }
               body={
                 filter === 'completions'
                   ? 'Log an Experience your group did together and it’ll show up here.'
-                  : "As the group plans, logs, and rides together, it'll show up in this feed."
+                  : filter === 'posts'
+                    ? 'Share a quick update or photo with your trip crew above.'
+                    : "As the group plans, logs, and rides together, it'll show up in this feed."
               }
             />
           </View>
@@ -566,9 +650,11 @@ export default function TripFeedScreen({
       <FeedPostComposerModal
         visible={postComposerVisible}
         tripId={tripId}
+        initialCaption={quickPostDraft}
         onClose={() => setPostComposerVisible(false)}
         onPosted={() => {
           setPostComposerVisible(false);
+          setQuickPostDraft('');
           void queryClient.invalidateQueries({
             queryKey: tripFeedKeys.feed(tripId),
           });
@@ -624,11 +710,20 @@ function FeedItemCard({
     void queryClient.invalidateQueries({ queryKey: feedKey });
   };
 
-  const meta = feedTypeMetaFor(t)[item.type] ?? {
+  const hasPostPhotos = Boolean(item.photos && item.photos.length > 0);
+  const baseMeta = feedTypeMetaFor(t)[item.type] ?? {
     label: item.type.replace(/_/g, ' '),
     icon: 'ellipse-outline' as const,
     tone: t.color.primaryFg,
   };
+  const meta =
+    item.type === 'member_post' && !hasPostPhotos
+      ? {
+          label: 'posted an update',
+          icon: 'chatbubble-ellipses' as const,
+          tone: t.color.primaryFg,
+        }
+      : baseMeta;
   const rodeWithVisual = rodeWithVisualFor(t);
   const reactionMeta = reactionMetaFor(t);
 
@@ -966,6 +1061,7 @@ function FeedItemCard({
                 testID={`trip-feed-reaction-${item.id}-${reaction}`}
                 style={({ pressed }) => [
                   styles.rxChip,
+                  count === 0 && !active && styles.rxChipIdle,
                   active && styles.rxChipActive,
                   pressed && styles.pressed,
                 ]}
@@ -1212,7 +1308,7 @@ export function LogComposerModal({
       onRequestClose={closeAndReset}
     >
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.modalBackdrop}
       >
         <View style={styles.modalCard} testID="activity-log-composer">
@@ -1351,11 +1447,13 @@ export function LogComposerModal({
 export function FeedPostComposerModal({
   visible,
   tripId,
+  initialCaption = '',
   onClose,
   onPosted,
 }: {
   readonly visible: boolean;
   readonly tripId: string;
+  readonly initialCaption?: string;
   readonly onClose: () => void;
   readonly onPosted: () => void;
 }): JSX.Element {
@@ -1364,7 +1462,7 @@ export function FeedPostComposerModal({
   const [selectedPhotos, setSelectedPhotos] = useState<
     readonly { prepared: PreparedImages; takenAt?: string }[]
   >([]);
-  const [caption, setCaption] = useState('');
+  const [caption, setCaption] = useState(initialCaption);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [isPosting, setIsPosting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1373,13 +1471,13 @@ export function FeedPostComposerModal({
   useEffect(() => {
     if (visible && !wasVisible.current) {
       setSelectedPhotos([]);
-      setCaption('');
+      setCaption(initialCaption);
       setPickerOpen(false);
       setIsPosting(false);
       setError(null);
     }
     wasVisible.current = visible;
-  }, [visible]);
+  }, [visible, initialCaption]);
 
   const resetForm = (): void => {
     setSelectedPhotos([]);
@@ -1396,17 +1494,21 @@ export function FeedPostComposerModal({
   };
 
   const handlePost = async (): Promise<void> => {
-    if (selectedPhotos.length === 0 || isPosting) return;
+    const trimmed = caption.trim();
+    if ((selectedPhotos.length === 0 && trimmed.length === 0) || isPosting) return;
     setIsPosting(true);
     setError(null);
     try {
-      const uploadResult = await uploadPhotos({
-        target: { kind: 'trip', id: tripId },
-        items: selectedPhotos,
-      });
-      const trimmed = caption.trim();
+      let photoIds: readonly string[] = [];
+      if (selectedPhotos.length > 0) {
+        const uploadResult = await uploadPhotos({
+          target: { kind: 'trip', id: tripId },
+          items: selectedPhotos,
+        });
+        photoIds = uploadResult.photoIds;
+      }
       const postPayload = {
-        photoIds: uploadResult.photoIds,
+        photoIds,
         ...(trimmed.length > 0 ? { caption: trimmed } : {}),
       };
       await apiRequest('POST', `/trips/${tripId}/feed/posts`, postPayload);
@@ -1434,7 +1536,7 @@ export function FeedPostComposerModal({
         onRequestClose={closeAndReset}
       >
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.modalBackdrop}
         >
           <View style={styles.modalCard} testID="feed-post-composer">
@@ -1512,7 +1614,10 @@ export function FeedPostComposerModal({
                   label={isPosting ? 'Posting\u2026' : 'Post'}
                   icon="checkmark-circle-outline"
                   onPress={handlePost}
-                  disabled={isPosting || selectedPhotos.length === 0}
+                  disabled={
+                    isPosting ||
+                    (selectedPhotos.length === 0 && caption.trim().length === 0)
+                  }
                   testID="feed-post-submit"
                   style={styles.flexBtn}
                 />
@@ -1924,6 +2029,45 @@ const useStyles = makeStyles((t) => ({
   listHeader: {
     gap: theme.spacing.md,
   },
+  quickPostCard: {
+    paddingHorizontal: theme.spacing.md,
+    paddingTop: theme.spacing.sm,
+    paddingBottom: theme.spacing.sm,
+    gap: theme.spacing.sm,
+  },
+  quickPostRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+  },
+  quickPostInput: {
+    flex: 1,
+    minHeight: 36,
+    maxHeight: 96,
+    paddingHorizontal: theme.spacing.xs,
+    paddingVertical: theme.spacing.xs,
+    color: t.color.textPrimary,
+    fontSize: 15,
+  },
+  quickPostSendBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: t.color.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quickPostSendBtnDisabled: {
+    backgroundColor: t.color.surfaceAlt,
+  },
+  quickPostToolbar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+    paddingTop: theme.spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: t.color.border,
+  },
   logBtn: {
     alignSelf: 'stretch',
   },
@@ -2024,55 +2168,27 @@ const useStyles = makeStyles((t) => ({
     color: t.color.accentDark,
   },
   composerCtaCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: FEED_MISC[t.scheme].ctaBg,
-    borderWidth: 1.5,
-    borderColor: FEED_MISC[t.scheme].ctaBorder,
-    borderRadius: theme.radius.lg,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.md,
-    ...t.shadow.card,
-  },
-  composerCtaLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing.md,
     flex: 1,
-  },
-  composerCtaIconCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: withAlpha(t.color.primary, 0.08),
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 6,
+    backgroundColor: FEED_MISC[t.scheme].ctaBg,
+    borderWidth: 1,
+    borderColor: FEED_MISC[t.scheme].ctaBorder,
+    borderRadius: theme.radius.pill,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: 8,
   },
   composerCtaIcon: {
-    fontSize: 18,
+    fontSize: 14,
     ...t.textDefault,
   },
-  composerCtaTextWrap: {
-    flex: 1,
-    gap: 2,
-  },
   composerCtaTitle: {
-    ...theme.typography.subtitle,
+    fontSize: 13,
     color: t.color.primaryFg,
-    fontWeight: '800',
-  },
-  composerCtaSubtitle: {
-    ...theme.typography.meta,
-    color: t.color.textSecondary,
-  },
-  composerCtaPlus: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: t.color.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
+    fontWeight: '700',
+    flexShrink: 1,
   },
   rodeWithRow: {
     flexDirection: 'row',
@@ -2123,6 +2239,11 @@ const useStyles = makeStyles((t) => ({
     backgroundColor: t.color.surfaceAlt,
     borderWidth: 1,
     borderColor: t.color.border,
+  },
+  rxChipIdle: {
+    backgroundColor: 'transparent',
+    borderColor: 'transparent',
+    opacity: 0.78,
   },
   rxChipActive: {
     backgroundColor: withAlpha(t.color.primary, 0.12),

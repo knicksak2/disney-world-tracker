@@ -367,3 +367,15 @@ that unreachable or out-of-scope concerns are not silently pulled in.
 2. WHERE a Disney data source or operation requires per-guest authentication, THE feature SHALL exclude that data source or operation and SHALL send only the Static_Credentials or the Public_Token.
 3. THE feature SHALL NOT attempt to obtain real Lightning Lane return windows or boarding-group availability from any Disney_Source, and SHALL source the coarse Lightning Lane and boarding-group fields only from ThemeParks_Wiki (Requirement 11).
 4. THE feature SHALL NOT source Static_Catalog_Data from ThemeParks_Wiki.
+
+### Requirement 16: Documented exception for the ticket price client (added by the `trip-budget` spec)
+
+**User Story:** As the project owner, I want the Disney ticket price calendar fetched by a dedicated, more cautious client, so that its honest User-Agent and stop-at-first-block behavior are not overridden by the shared transport.
+
+#### Acceptance Criteria
+
+1. THE Ticket_Price_Client of `.kiro/specs/trip-budget` (Requirements 11 to 13) SHALL be a documented exception to Requirement 1.3: it dispatches its requests to Disney's token endpoint and price calendar endpoint directly rather than through the Disney_Transport, because the Disney_Transport overrides the caller's User-Agent (Requirement 5.2), retries a WAF_Block under the Backoff_Policy (Requirement 4.2), and draws from the Redis-backed Rate_Limiter (Requirement 2.4), each of which conflicts with that client's honest-User-Agent, stop-at-first-block and no-Redis rules.
+2. THE exception SHALL apply to no other component and no other Disney_Source; every other Disney request SHALL continue to flow through the Disney_Transport.
+3. THE Ticket_Price_Client SHALL limit itself: single-flight, a minimum spacing of `TICKET_PRICES_REQUEST_SPACING_MS` (default `1500`) between its calls, no retry of a WAF-classified response, a Postgres-backed block of `TICKET_PRICES_BLOCK_COOLDOWN_MINUTES` (default `360`) after any `403`, `429` or WAF marker, and a shorter block of `TICKET_PRICES_FAILURE_COOLDOWN_MINUTES` (default `60`) after `TICKET_PRICES_MAX_CONSECUTIVE_FAILURES` (default `2`) consecutive network, timeout, 5xx or invalid-response outcomes, and the same shorter block after a `start_date_rejected` outcome (an HTTP 400 that persists after the client's one UTC-date retry), so that no persistent upstream rejection lets Budget reads or quotes trigger unlimited Disney calls (added at the second `trip-budget` design review).
+4. THE Ticket_Price_Client SHALL reuse the pure `classifyDisneyResponse` function (with `target: 'web'`) for the 403/429 decision and `DISNEY_WAF_BODY_MARKERS` for every other non-JSON or non-2xx body, so that WAF and authentication failures are distinguished consistently with Requirement 4 and an edge challenge returned with HTTP 200 or 503 is also treated as a WAF block.
+5. THE Ticket_Price_Client SHALL NOT be wired as a Disney live module, SHALL NOT revive any module retired by Requirement 11, and `retirement.smoke.test.ts` SHALL continue to pass unmodified.

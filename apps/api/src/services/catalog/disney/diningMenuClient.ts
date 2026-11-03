@@ -53,7 +53,7 @@
 
 import { createLogger } from '../../../logger.js';
 import type { DisneyTransport } from './transport.js';
-import type { RawMenu, RawMenuGroup, RawMenuItem } from './menu.js';
+import type { RawMenu, RawMenuGroup, RawMenuItem, RawMenuPriceItem } from './menu.js';
 
 /** Public dining-menu API base the anonymous website itself calls. */
 export const DISNEY_DINING_MENU_DEFAULT_BASE_URL =
@@ -138,14 +138,46 @@ function mapItem(raw: unknown): RawMenuItem | null {
   if (!isObject(raw)) return null;
   const name = asString(raw['title']) ?? asString(raw['name']);
   if (name === undefined) return null;
-  return { name, price: formatDiningPrice(raw['prices']) };
+  const price = formatDiningPrice(raw['prices']);
+
+  const rawPrices = Array.isArray(raw['prices']) ? raw['prices'] : [];
+  const prices: RawMenuPriceItem[] = [];
+  for (const p of rawPrices) {
+    if (!isObject(p)) continue;
+    if (p['currency'] !== 'USD') continue;
+    const withoutTax = p['withoutTax'];
+    if (typeof withoutTax !== 'number' || !Number.isFinite(withoutTax) || withoutTax <= 0) continue;
+    const cents = Math.round(withoutTax * 100);
+    if (!Number.isSafeInteger(cents) || cents <= 0) continue;
+    const label = asString(p['type']) ?? null;
+    prices.push({
+      cents,
+      label,
+      withoutTax,
+      currency: 'USD',
+      type: label,
+    });
+  }
+
+  const result: RawMenuItem = {
+    name,
+    price,
+    ...(prices.length > 0 ? { prices } : {}),
+    ...(prices.length === 1 && prices[0] ? { priceCents: prices[0].cents } : {}),
+  };
+  return result;
 }
 
 function mapGroup(raw: unknown): RawMenuGroup | null {
   if (!isObject(raw)) return null;
   const itemsRaw = Array.isArray(raw['items']) ? raw['items'] : [];
   const items = itemsRaw.map(mapItem).filter((i): i is RawMenuItem => i !== null);
-  return { name: asString(raw['name']) ?? '', items };
+  const type = asString(raw['type']);
+  return {
+    name: asString(raw['name']) ?? '',
+    items,
+    ...(type ? { type } : {}),
+  };
 }
 
 /**
@@ -163,9 +195,17 @@ export function projectDiningMenuPayload(body: unknown): readonly RawMenu[] {
   for (const mp of mealPeriods) {
     if (!isObject(mp)) continue;
     const menuType = asString(mp['label']) ?? asString(mp['name']) ?? '';
+    const serviceStyle = asString(mp['serviceStyle']);
+    const experience = asString(mp['experience']);
     const groupsRaw = Array.isArray(mp['groups']) ? mp['groups'] : [];
     const groups = groupsRaw.map(mapGroup).filter((g): g is RawMenuGroup => g !== null);
-    menus.push({ menuType, cuisineType: null, groups });
+    menus.push({
+      menuType,
+      cuisineType: null,
+      groups,
+      ...(serviceStyle ? { serviceStyle } : {}),
+      ...(experience ? { experience } : {}),
+    });
   }
   return menus;
 }

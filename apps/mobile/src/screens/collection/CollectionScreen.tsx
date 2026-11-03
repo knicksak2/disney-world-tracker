@@ -1281,7 +1281,7 @@ export default function CollectionScreen(): JSX.Element {
         testID="collection-food-log-picker-modal"
       >
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.foodLogModalBackdrop}
         >
           <View style={styles.foodLogModalContent}>

@@ -5,6 +5,25 @@ import { fileURLToPath } from 'node:url';
 import { DataType, newDb, type IMemoryDb } from 'pg-mem';
 import type { Pool } from 'pg';
 
+function jsonbTypeof(val: unknown): string {
+  if (val === null || val === undefined) return 'null';
+  let parsed = val;
+  if (typeof val === 'string') {
+    try {
+      parsed = JSON.parse(val);
+    } catch {
+      return 'string';
+    }
+  }
+  if (parsed === null) return 'null';
+  if (Array.isArray(parsed)) return 'array';
+  if (typeof parsed === 'object') return 'object';
+  if (typeof parsed === 'string') return 'string';
+  if (typeof parsed === 'number') return 'number';
+  if (typeof parsed === 'boolean') return 'boolean';
+  return 'null';
+}
+
 export function buildPgMemDatabase(): IMemoryDb {
   const db = newDb({ noAstCoverageCheck: true });
 
@@ -39,10 +58,22 @@ export function buildPgMemDatabase(): IMemoryDb {
     implementation: (s: unknown): string => (typeof s === 'string' ? s.trim() : ''),
   });
   pub.registerFunction({
+    name: 'btrim',
+    args: [DataType.text],
+    returns: DataType.text,
+    implementation: (s: unknown): string => (typeof s === 'string' ? s.trim() : ''),
+  });
+  pub.registerFunction({
     name: 'length',
     args: [DataType.text],
     returns: DataType.integer,
     implementation: (s: unknown): number => (typeof s === 'string' ? s.length : 0),
+  });
+  pub.registerFunction({
+    name: 'jsonb_typeof',
+    args: [DataType.jsonb],
+    returns: DataType.text,
+    implementation: jsonbTypeof,
   });
 
   return db;
@@ -110,6 +141,7 @@ export function setupTestDb(): { db: IMemoryDb; pool: Pool } {
   // The money reads go through the 0064 visibility views (profile_identity needs profiles.avatar_preset from 0013).
   applyMigration(db, '0013_avatar_presets.sql');
   applyMigration(db, '0064_account_deletion.sql');
+  applyMigration(db, '0068_trip_budget.sql');
 
   const rawPool = db.adapters.createPg().Pool;
   const poolInstance = new rawPool();

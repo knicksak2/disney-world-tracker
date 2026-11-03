@@ -123,9 +123,9 @@ describe('migration 0064_account_deletion (pg-mem)', () => {
     applyMigration(db, MIGRATION_FILE);
   });
 
-  it('0064 is the highest migration and the SQL file is wrapped in BEGIN/COMMIT', () => {
+  it('0064 is in the migrations and the SQL file is wrapped in BEGIN/COMMIT', () => {
     const names = migrationNames();
-    expect(names[names.length - 1]).toBe(MIGRATION_FILE);
+    expect(names).toContain(MIGRATION_FILE);
     const raw = readFileSync(resolve(MIGRATIONS_DIR, MIGRATION_FILE), 'utf8');
     expect(raw).toMatch(/^\s*BEGIN;/m);
     expect(raw).toMatch(/^\s*COMMIT;/m);

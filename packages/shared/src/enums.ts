@@ -365,3 +365,101 @@ export const PACKING_CATEGORIES = [
   'other',
 ] as const; // order = display order (R11.5, R13.2)
 export type PackingCategory = (typeof PACKING_CATEGORIES)[number];
+
+// ---------------------------------------------------------------------------
+// Trip_Budget vocabularies
+// ---------------------------------------------------------------------------
+
+export const BUDGET_CATEGORIES = [
+  'tickets',
+  'lightning_lane',
+  'dining',
+  'lodging',
+  'transportation',
+  'shopping',
+  'other',
+] as const;
+export type BudgetCategory = (typeof BUDGET_CATEGORIES)[number];
+
+export const PRICE_SOURCES = [
+  'disney_ticket_calendar',
+  'disney_menu',
+  'themeparks_ll',
+  'typical_estimate',
+  'user_entered',
+] as const;
+export type PriceSource = (typeof PRICE_SOURCES)[number];
+
+export const CREATABLE_PRICE_SOURCES = [
+  'disney_ticket_calendar',
+  'disney_menu',
+  'themeparks_ll',
+  'user_entered',
+] as const;
+export type CreatablePriceSource = (typeof CREATABLE_PRICE_SOURCES)[number];
+
+export const PRICE_LABEL_KINDS = [
+  'current',
+  'may_have_changed',
+  'estimate',
+  'add_your_price',
+  'your_price',
+] as const;
+export type PriceLabelKind = (typeof PRICE_LABEL_KINDS)[number];
+
+export const AGE_BRACKETS = ['adult', 'child', 'under3'] as const;
+export type AgeBracket = (typeof AGE_BRACKETS)[number];
+
+export const TICKET_OPTIONS = [
+  'base',
+  'park_hopper',
+  'park_hopper_plus',
+  'water_parks_sports',
+] as const;
+export type TicketOption = (typeof TICKET_OPTIONS)[number];
+
+export const TICKET_DISCOUNT_GROUPS = ['std-gst', 'fl-resident'] as const;
+export type TicketDiscountGroup = (typeof TICKET_DISCOUNT_GROUPS)[number];
+
+export const TRAVELER_PASS_TYPES = [
+  'none',
+  'annual_pass',
+  'dvc',
+  'other_discount',
+] as const;
+export type TravelerPassType = (typeof TRAVELER_PASS_TYPES)[number];
+
+export const LL_PASS_TYPES = ['multi', 'premier', 'single'] as const;
+export type LLPassType = (typeof LL_PASS_TYPES)[number];
+
+export const TICKET_PARKS = ['any', 'mk', 'ep', 'hs', 'ak'] as const;
+export type TicketPark = (typeof TICKET_PARKS)[number];
+
+export const TICKET_PARK_BY_CANONICAL_PARK = {
+  'Magic Kingdom': 'mk',
+  'EPCOT': 'ep',
+  'Hollywood Studios': 'hs',
+  'Animal Kingdom': 'ak',
+} as const;
+
+/**
+ * [A] Assumption: starting tip-bearing service styles for dining suggestions (Task 11 / 12.5).
+ * The restaurant sample is deferred pending owner decision; unknown styles default to false (applyTip: false).
+ * Must be compared case-insensitively.
+ */
+export const TIP_BEARING_SERVICE_STYLES: readonly string[] = [
+  'buffet',
+  'family style',
+  'prix fixe',
+  'table service',
+];
+
+/**
+ * Returns true if the service style indicates a tip-bearing meal period.
+ * Comparison is case-insensitive and trims whitespace.
+ */
+export function isTipBearingServiceStyle(style: string | null | undefined): boolean {
+  if (!style) return false;
+  return TIP_BEARING_SERVICE_STYLES.includes(style.trim().toLowerCase());
+}
+

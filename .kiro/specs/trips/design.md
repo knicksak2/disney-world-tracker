@@ -1154,6 +1154,18 @@ and (e) the input `M` is never mutated.
 
 **Validates: Requirements 24.12**
 
+### Property 30: Budget actions follow the role matrix and collapse non-members
+
+Added by the `trip-budget` spec. For every Trip_Role, `can(role, 'view_budget')`, `can(role, 'edit_budget')` and `can(role, 'edit_budget_travelers')` are true for `member` and `organizer`; `can(role, 'edit_budget_settings')` is true for `organizer` only; `can` stays total over the extended `TripAction` union and no previously defined action changes its result. For any non-member caller or unknown Trip id, every Budget route returns `trip_forbidden` before any Budget data is read, and the Trip detail hub lists the `budget` section after the `expenses` section without changing any other section. Implementation notes: the four actions are added to `MEMBER_ACTIONS` (three) and `ORGANIZER_ONLY_ACTIONS` (one) in `permissions.ts`; routes authorize with `assertTripMember(pool, userId, tripId)` (which returns the ACTING role, so the interim-organizer rule of `account-deletion` Requirement 7 applies) followed by `can(role, action)`; the Budget module does not import `services/trips/effectiveRole.ts` (trip-budget round 5 H1: `roleReader.guard.test.ts` pins its importers). Departure addition (Requirement 25.5): after a member leaves or is removed (`departMember` in `trips/repo.ts`), their `trip_traveler_profiles` row for that Trip no longer exists, their Budget_Allocations are unchanged, and no existing departure outcome (last-organizer rule, pending-tag cancellation, empty-Trip deletion) changes. In `.kiro/specs/trip-budget` this is trip-budget Properties 24 (matrix) and 25 (departure); the trips number is Property 30.
+
+**Validates: Requirements 25.1, 25.2, 25.3, 25.4, 25.5**
+
+### Property 31: Trip Activity `member_post` text-only and photo validation and visibility
+
+*For any* `POST /trips/:id/feed/posts` payload by an authorized Trip_Member with `photoIds` of length `0..4` and optional `caption`: (a) the request is accepted by `tripPostCreateSchema` and `repo.createFeedPost` only when `photoIds.length > 0` or `caption` (trimmed) is 1–500 characters, and is rejected with `validation_failed` when both `photoIds` is empty and `caption` is absent/blank; (b) when `photoIds.length === 0` and `caption` is non-empty, `createFeedPost` inserts a `member_post` feed item with `metadata: { photoIds: [], caption }` without querying or locking `photos`; and (c) on `GET /trips/:id/feed`, a `member_post` whose original `metadata.photoIds` was empty (`rawPhotoIds.length === 0`) is visible to both the author (`mine: true`) and non-author Trip_Members (`mine: false`, `photos: []`, `metadata.caption` preserved), whereas a `member_post` that originally referenced one or more photos (`rawPhotoIds.length > 0`) continues to be omitted for non-authors when every slot is `removed` or `unavailable`.
+
+**Validates: Requirements 20.7, 20.8, 20.9**
+
 ## Error Handling
 
 All errors are thrown as `AppError(code, message, { field? })` with `code` drawn from the closed

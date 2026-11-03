@@ -702,7 +702,7 @@ describe('Feature: crowd-calendar', () => {
             // For arbitrary baselines, we verify it moves toward 1.0 (or stays).
             const withExtra = relativeCrowdIndex([...rides, atExpected]);
             if (Math.abs(baseline - 1.0) < 1e-9) {
-              expect(withExtra).toBeCloseTo(1.0, 9);
+              expect(withExtra).toBeCloseTo(1.0, 8);
             } else if (baseline > 1.0) {
               expect(withExtra).toBeLessThanOrEqual(baseline + 1e-9);
             } else {

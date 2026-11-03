@@ -820,6 +820,12 @@ offending variable, and SHALL succeed otherwise.
 
 **Validates: Requirements 14.2, 14.5**
 
+### Property 17: The ticket price client is the only Disney client outside the transport and never retries a block
+
+Added by the `trip-budget` spec (revised at its design review). A structural test asserts, in checkable terms, that no module under `services/ticketPrices/` imports `catalog/disney/transport.ts`, `catalog/disney/rateLimiter.ts`, an `ioredis`/Redis client, or any module of the retired live path (`catalog/disney/liveClient.ts`, `liveService.ts`); that the Ticket_Price_Client's only request paths are the token endpoint and the price calendar endpoint; that `composeServices.ts` builds the ticket service in its own block; and that `retirement.smoke.test.ts` passes unmodified. (A repo-wide "no other module calls `fetch` against a Disney origin" scan is deliberately NOT used: `catalog/disney/liveClient.ts`, which calls the Sync Gateway through an injected `fetch`, and `themeparks.ts` call `fetch` today.) For any scripted sequence of responses, once a response is `403`, `429` or classified `waf_block` by `classifyDisneyResponse`, the client issues no further request in that run and a Postgres-backed block of `TICKET_PRICES_BLOCK_COOLDOWN_MINUTES` is recorded; consecutive requests are spaced by at least `TICKET_PRICES_REQUEST_SPACING_MS`; and every request carries the configured honest User-Agent. Every other Disney request path still flows through the Disney_Transport (Properties 1 to 3 unchanged). Implementation notes: the decision and the transport findings (forced User-Agent at `transport.ts` line 214, WAF retry under the Backoff_Policy, Redis-backed limiter) are recorded in `.kiro/specs/trip-budget/design.md` ("Why the transport is not used").
+
+**Validates: Requirements 16.1, 16.2, 16.3, 16.4, 16.5**
+
 ## Error Handling
 
 Error handling centers on the transport's single typed error and the sync's

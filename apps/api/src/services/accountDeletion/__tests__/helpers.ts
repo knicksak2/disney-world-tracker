@@ -60,6 +60,26 @@ export function buildMigratedDb(): IMemoryDb {
     implementation: (s: unknown): string => (typeof s === 'string' ? s.trim() : ''),
   });
   db.public.registerFunction({
+    name: 'btrim',
+    args: [DataType.text],
+    returns: DataType.text,
+    implementation: (s: unknown): string => (typeof s === 'string' ? s.trim() : ''),
+  });
+  db.public.registerFunction({
+    name: 'jsonb_typeof',
+    args: [DataType.jsonb],
+    returns: DataType.text,
+    implementation: (j: unknown): string => {
+      if (j === null) return 'null';
+      if (Array.isArray(j)) return 'array';
+      if (typeof j === 'object') return 'object';
+      if (typeof j === 'number') return 'number';
+      if (typeof j === 'boolean') return 'boolean';
+      if (typeof j === 'string') return 'string';
+      return 'object';
+    },
+  });
+  db.public.registerFunction({
     name: 'length',
     args: [DataType.text],
     returns: DataType.integer,

@@ -361,6 +361,11 @@ small, independently testable wave: a repo method, a route, and its tests.
   - [x] 23.4 Run `npm run verify` and confirm the behavior→test map
     - _Requirements: all_
 
+- [ ] 24. Ticket price diagnostics (R18, added by the `trip-budget` spec)
+  - [ ] 24.1 Routes, page and navigation
+    - Specified and tested in `.kiro/specs/trip-budget/tasks.md` task 10.1 (`admin/ticketPriceRoutes.ts`, `ADMIN_SECTIONS` entry, route tests; admin-panel Property 11 = trip-budget Property 38; the page now also shows the operator gate text, the recorded decision, the table size and the diagnose `startDateSent`). It depends on trip-budget tasks 8.3 (refresh service and diagnose) and 8.4 (composition that constructs the `AdminTicketPricesPort` passed to `adminRoutes`); trip-budget schedules 10.1 in a wave after 8.4. Update any existing test that counts `ADMIN_SECTIONS`.
+    - _Requirements: 18.1, 18.2, 18.3, 18.4, 18.5, 18.6, 18.7, 18.8_
+
 ## Notes
 
 - Tasks marked with `*` are optional (property/unit/integration test tasks) and can be skipped
@@ -405,7 +410,8 @@ small, independently testable wave: a repo method, a route, and its tests.
     { "id": 9, "tasks": ["21"] },
     { "id": 10, "tasks": ["23.1"] },
     { "id": 11, "tasks": ["23.2", "23.3"] },
-    { "id": 12, "tasks": ["23.4"] }
+    { "id": 12, "tasks": ["23.4"] },
+    { "id": 13, "tasks": ["24.1"] }
   ]
 }
 ```

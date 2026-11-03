@@ -68,6 +68,11 @@
     - Add unit assertions in `apps/mobile/__tests__/appConfigApiBaseUrl.test.ts` verifying the PNG files exist, have valid dimensions/color types (1024×1024 RGB for `icon.png`, 1024×1024 RGBA for `adaptive-icon.png`), and are wired in `app.config.ts`.
     - _Requirements: 6.1, 6.2, 6.3, 6.4_
 
+- [ ] 8. Price data credits (R7, added by the `trip-budget` spec)
+  - [ ] 8.1 `/terms` page, mobile notice and in-screen credit
+    - Specified and tested in `.kiro/specs/trip-budget/tasks.md` tasks 20.1 (terms page and mobile legal notice text and tests) and 17.2 (`PriceBadge` credit and source lines; legal Property 6 = trip-budget Property 39). The no-bulk-export assertion is part of trip-budget task 15.3.
+    - _Requirements: 7.1, 7.2, 7.3, 7.4_
+
 ## Notes
 
 - **Authority.** `requirements.md` and `design.md` in this folder are authoritative.
@@ -86,7 +91,8 @@
     { "id": 4, "tasks": ["3"] },
     { "id": 5, "tasks": ["5.1"] },
     { "id": 6, "tasks": ["5.2"] },
-    { "id": 7, "tasks": ["6"] }
+    { "id": 7, "tasks": ["6"] },
+    { "id": 8, "tasks": ["8.1"] }
   ]
 }
 ```

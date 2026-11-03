@@ -92,6 +92,7 @@ The following capabilities are explicitly out of scope for v1 and are noted as f
 10. THE Trip_Service SHALL permit only the Sponsoring_Member or a Trip Organizer to remove a Trip_Guest, and SHALL reject removal by any other Trip_Member with `trip_forbidden`.
 11. WHEN a Sponsoring_Member or Trip Organizer edits a Trip_Guest, THE Trip_Service SHALL permit updating the Guest_Name and optionally reassigning the Trip_Guest to another Trip_Member of that Trip as the sponsor. IF the reassigned sponsor is not a Trip_Member of that Trip, THEN THE Trip_Service SHALL reject the request with `trip_validation_failed`.
 12. THE Mobile_App SHALL provide a sponsor selector when adding a Trip_Guest and when editing a Trip_Guest, allowing the user to select which Trip_Member the Trip_Guest is tied to.
+13. *(Added by the `trip-budget` spec; additive to Requirement 2.9.)* WHEN a Trip_Member or Organizer removes a Trip_Guest, THE Trip_Service SHALL additionally reject the removal with `trip_validation_failed` while any Budget_Allocation of the `trip-budget` feature references that Trip_Guest; a Traveler_Profile of that Trip_Guest does not block the removal and is deleted with it. This extension changes no Expense, Settlement or Net_Balance behavior.
 
 ### Requirement 3: Exact and Even Split Modes
 
@@ -215,6 +216,7 @@ The following capabilities are explicitly out of scope for v1 and are noted as f
 3. THE Trip_Service SHALL NOT include any Expense, Settlement, or balance data in the Trip Feed, the Trip Summary, or any shared or public surface that is not membership-gated.
 4. THE Trip_Service SHALL NOT require a new Trip_Action beyond those enumerated in the `trips` feature's permission matrix, because Expense and Settlement creation are available to every Trip_Member (consistent with `trips` R4.3's `create_log_entry`-style member actions) and edit/removal follows the adder-or-organizer rule already established for Planned_Items (`trips` R9.6–R9.8).
 5. THE Mobile_App SHALL provide an integrated balance overview on the Expense_Ledger_Screen showing the user's current net position, simplified direct debts, and quick navigation or tab toggle to full pairwise debts and member balances, and SHALL display on each Expense row the user's personal share and an expandable split breakdown of each participant's share.
+6. *(Added by the `trip-budget` spec; additive to Requirement 10.1.)* THE Trip_Detail_View SHALL additionally present the Trip_Budget_Section defined by `.kiro/specs/trip-budget` (Requirement 1) next to the Trip_Expenses_Section; this SHALL NOT change the Trip_Expenses_Section, the Expense_Ledger_Screen, the Balances_View, or any Expense, Settlement, or Net_Balance computation, and Budget data SHALL NOT appear in any of them.
 
 ### Requirement 11: Linking an Expense to a Catalog Restaurant or Resort
 
@@ -278,3 +280,19 @@ The following capabilities are explicitly out of scope for v1 and are noted as f
 4. WHILE an account is in `pending_deletion`, THE Trip_Service SHALL keep counting it in every Net_Balance and SHALL present it by the name "Deleted user"; only the display of the person changes.
 5. THE Trip_Service SHALL return a row in `getNetBalances` for every Trip_Member (including a `pending_deletion` one) and for every deleted-account placeholder that appears in the Trip's Expenses or Settlements, so the returned Net_Balances still sum to exactly zero (Requirement 6.6).
 6. THE Trip_Service SHALL reject creating or editing an Expense or Settlement that names a deleted or `pending_deletion` account as a party, and editing one whose stored parties include such an account, with `trip_party_deleted` (HTTP 409); such an Expense or Settlement can still be deleted under its existing authorization. Pairwise balances against such an account stay visible, labelled "Deleted user", with no settle control.
+
+
+### Requirement 16: Menu Item Picker (added by the `trip-budget` spec)
+
+**User Story:** As a Trip_Member, I want to choose the dishes we ate from the restaurant's menu, so that I do not have to type each item and price by hand. This requirement is additive; it extends Requirements 5, 9, and 11 and changes no server behavior. The full shared component and the structured menu prices it reads are specified in `.kiro/specs/trip-budget` (Requirements 9 and 10).
+
+#### Acceptance Criteria
+
+1. WHEN a Trip_Member creates or edits an `itemized` Expense that is linked to a Catalog restaurant (Requirement 11.1) whose cached menus contain at least one item, THE Mobile_App SHALL offer a "Pick from menu" control that opens the Menu Item Picker.
+2. THE Menu Item Picker SHALL list the restaurant's menus by meal period, then groups, then items with their prices; SHALL allow selecting several items with a quantity for each; SHALL require the member to choose one price when an item has more than one price (for example sizes); and SHALL NOT allow an item with no parseable price to be added until the member types a price.
+3. WHEN the member confirms the selection, THE Mobile_App SHALL append one draft Expense_Item per unit of each selected item to the Expense form (quantity is expressed by repeating rows, because Expense_Items have no quantity), each with the item name truncated to 100 characters, the chosen price in integer cents, the current default Assignees, and `isAlcohol` pre-checked when the item's menu group type is `Alcoholic Beverage`; every draft SHALL remain editable, and nothing SHALL be sent to the Trip_Service until the member submits the Expense.
+4. THE Mobile_App SHALL submit picked items using the existing `expenseItemInputSchema` payload (`name`, `priceCents`, `assigneeIds`, `isAlcohol`) only; THE Trip_Service SHALL NOT receive, store, or expose any field, column, or flag distinguishing a picked Expense_Item from a manually typed or scanned one, consistent with Requirement 9.4, and this requirement SHALL NOT require a migration.
+5. WHERE an Expense linked to a Catalog restaurant uses Split_Mode `tiered` and the restaurant's cached menu contains a prix fixe, buffet, or per-person price offer recognized by the shared Menu_Price_Parser, THE Mobile_App SHALL offer it as a suggested Expense_Tier alongside the suggestions of Requirement 11.4, which the member may accept, edit, or discard; THE Trip_Service SHALL NOT persist an unconfirmed suggestion.
+6. THE Mobile_App SHALL state in the picker that menu prices are before tax and gratuity, and SHALL offer, as explicit member actions, to add an estimated `tax` Charge_Line and an estimated `gratuity` Charge_Line computed from the shared default rates, each created as an ordinary editable Charge_Line (Requirement 5.8, 5.9) and never added silently.
+7. IF the linked restaurant has no cached menu, or no item with a parseable price, THEN THE Mobile_App SHALL hide or disable the picker and fall back to manual and scanned entry without error.
+8. THE Menu Item Picker SHALL be one shared component used by both the Expense form and the Budget line form of the `trip-budget` feature.

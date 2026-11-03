@@ -140,3 +140,16 @@ No public Disney API returns a per-restaurant reservation-page URL or slug (conf
 3. IF opening the `diningUrl` fails, THEN THE ExperienceDetailScreen SHALL render a non-blocking inline error indication and SHALL leave the rest of the screen intact, mirroring the existing Get_Directions_Action failure handling.
 4. IF the Experience_Detail_Response carries no `diningUrl` (including a non-restaurant, a restaurant outside the curated set, or a restaurant load error), THEN THE ExperienceDetailScreen SHALL render no Reservation_Action and SHALL provide no other in-app path to a reservation link for that Experience.
 5. THE Reservation_Action SHALL render using the shared Magical / Whimsical theme button components (`PrimaryButton`/`SecondaryButton`) used by the other detail-screen actions.
+
+### Requirement 8: Structured menu prices and lazy refill (added by the `trip-budget` spec)
+
+**User Story:** As a developer of budgeting and expense features, I want menu items to carry machine-readable prices and labels as well as the display string, so that features can build totals from real menu data without parsing display text. This requirement is additive and changes no displayed behavior.
+
+#### Acceptance Criteria
+
+1. THE Menu projection SHALL add these optional fields to MenuDTO, each present only when the upstream document supplies a valid value and omitted otherwise: on a menu, `serviceStyle` and `experience` (from the meal period's `serviceStyle` and `experience`); on a group, `type` (from the group's `type`, for example `Alcoholic Beverage`); on an item, `prices` (a list of `{ cents, label }` built from `prices[].withoutTax` in dollars converted to integer cents and the entry's `type` as `label`) and `priceCents` (set only when exactly one valid USD price exists).
+2. THE Menu projection SHALL skip, for the structured fields, any price entry that is non-USD, non-finite, zero, or negative, and SHALL leave the existing display `price` string exactly as produced today.
+3. THE `projectMenus` function SHALL return, for any input that lacks the new optional fields, output identical to its output before this requirement, and the round-trip behavior of Requirement 3.6 and Property 5 SHALL continue to hold without modification.
+4. THE Menu_Cache SHALL record a `shape_version` for each cached row (`MENU_SHAPE_VERSION` = 2 for rows written after this requirement, 1 for older rows).
+5. WHEN a Restaurant_Experience detail or menu is requested and its cached row has a `shape_version` below the current one, THE Catalog_Service SHALL treat the cache as stale and refetch through the Disney_Transport under the same rules as Requirements 1 and 2 (demand-driven, at most one Menu_Service request per request, never as a bulk job), and on failure SHALL serve the previous cached menu unchanged (Requirement 3.3).
+6. THE Menu_Screen display and its tests of Requirement 5 SHALL be unaffected by the new fields.

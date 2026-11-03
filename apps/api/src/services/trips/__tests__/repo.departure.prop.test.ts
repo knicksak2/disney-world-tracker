@@ -222,6 +222,10 @@ function makeFakePool(store: Store): FakePool {
           }
 
           // ---- delete the departing Member's membership -------------
+          if (sql.startsWith('DELETE FROM trip_traveler_profiles')) {
+            return ok([]);
+          }
+
           if (sql.startsWith('DELETE FROM trip_memberships')) {
             const [tripId, userId] = params as [string, string];
             const before = tx.memberships.length;

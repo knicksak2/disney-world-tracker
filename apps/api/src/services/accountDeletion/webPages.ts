@@ -412,11 +412,12 @@ export function renderTermsOfServiceHtml(opts: RenderTermsOfServiceOptions): str
       <li>All Disney-related marks, names, character names, park names, attraction names, logos, and emblems (including Walt Disney World, Magic Kingdom, EPCOT, Disney&rsquo;s Hollywood Studios, Disney&rsquo;s Animal Kingdom, and Lightning Lane) are registered trademarks or copyrights of The Walt Disney Company or its respective affiliates.</li>
       <li>Any references to Disney trademarks, attraction names, or copyrighted works within the App are used strictly for informational, identification, and <strong>nominative fair use</strong> purposes.</li>
       <li><strong>Operational Data Disclaimer:</strong> Wait times, park operating hours, crowd predictions, and dining availability are estimates provided for personal planning purposes only. Live park conditions fluctuate. Always refer to official Disney applications (<em>My Disney Experience</em>) and in-park cast members for authoritative information.</li>
+      <li><strong>Ticket &amp; Menu Price Disclaimer:</strong> Park ticket prices and restaurant menu prices come from Disney&rsquo;s website, are shown before tax, may be out of date or estimated, and the final price at checkout may differ. Discounted, military, reseller, and special-offer prices are not covered.</li>
     </ul>
 
     <h2>2. Third-Party Data &amp; Open-Source Attribution</h2>
     <ul>
-      <li><strong>ThemeParks.wiki:</strong> Real-time wait times, operating hours, and live attraction status feeds are sourced from the community-driven <a href="https://themeparks.wiki" target="_blank" rel="noopener noreferrer">ThemeParks.wiki</a> project. We gratefully acknowledge ThemeParks.wiki and its contributors for making theme park data accessible.</li>
+      <li><strong>ThemeParks.wiki:</strong> Real-time wait times, operating hours, live attraction status feeds, and Lightning Lane prices are sourced from the community-driven <a href="https://themeparks.wiki" target="_blank" rel="noopener noreferrer">ThemeParks.wiki</a> project. We gratefully acknowledge ThemeParks.wiki and its contributors for making theme park data accessible.</li>
       <li><strong>Motif &amp; Art Credits:</strong> Collectible pin motifs and avatar icons incorporate open-source icon libraries licensed under Creative Commons (CC BY 3.0 / 4.0) and MIT licenses. Full author attributions and license texts are accessible in-app via the Vault collection art credits surface.</li>
     </ul>
 

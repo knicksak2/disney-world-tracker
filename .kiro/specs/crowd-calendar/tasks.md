@@ -324,6 +324,11 @@ Implementation is **TypeScript**, reusing existing infrastructure: the `Live_Ser
     - Requirement 4.5 (`requirements.md`), Property 20 (`design.md`), this task + wave 30 (`tasks.md`).
     - _Requirements: 4.5_
 
+- [ ] 23. Lightning Lane price persistence (R19, added by the `trip-budget` spec)
+  - [ ] 23.1 Extract Lightning Lane prices inside the per-park sampling loop and persist them
+    - Specified and tested in `.kiro/specs/trip-budget/tasks.md` tasks 3.2 (migration `0066`, or the number reserved at implementation time), 6.1 (`llExtract.ts`; crowd-calendar Property 25 = trip-budget Property 18), 6.3 (extended `ScheduleSignalRow` / `upsertParkScheduleSignals` as the single writer, single-pass writer and prune; crowd-calendar Property 25 persistence half = trip-budget Property 19; real-SQL `*.livedb.test.ts`), 6.4 (`samplingService.ts` integration inside the per-park loop, no extra request, single-pass writes once per 12 hours, failure isolated) and 6.5 (read repo). Existing sampling tests must pass unmodified; `ll_multipass_price_cents` and the four new LL columns are assigned non-destructively on null (`COALESCE(EXCLUDED.col, stored)`; `ll_prices_captured_at` advances only with a fresh price, and the two per-pass timestamps `ll_multipass_captured_at` and `ll_premier_captured_at` each advance only with a fresh price of their own kind; Requirement 19.3), its consumers are unchanged, and its value now comes from the id-prefix classifier. The single permitted exception to "unmodified" is an existing assertion, if one exists, that a later pass without a Multi Pass purchase clears `ll_multipass_price_cents`; amend only that assertion deliberately and report it.
+    - _Requirements: 19.1, 19.2, 19.3, 19.4, 19.5, 19.6, 19.7, 19.8_
+
 ## Task Dependency Graph
 
 ```json
@@ -361,7 +366,8 @@ Implementation is **TypeScript**, reusing existing infrastructure: the `Live_Ser
     { "id": 29, "tasks": ["21.6", "21.7"] },
     { "id": 30, "tasks": ["22.1", "22.2"] },
     { "id": 31, "tasks": ["22.3", "22.4"] },
-    { "id": 32, "tasks": ["21.8"] }
+    { "id": 32, "tasks": ["21.8"] },
+    { "id": 33, "tasks": ["23.1"] }
   ]
 }
 ```

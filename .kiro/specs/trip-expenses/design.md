@@ -322,6 +322,8 @@ Factory `createTripExpenseRepo(pool: DbPool): TripExpenseRepo`, same shape as `c
 - `createExpense(tripId, submittedByUserId, input)` — `BEGIN`; `SELECT COUNT(*) FROM expenses WHERE trip_id = $1 FOR UPDATE` against a row lock on the Trip (mirrors the existing `PLANNED_ITEM_LIMIT` race-safe pattern) to enforce the 1,000 cap (Req 1.12); validate `payerId` is a Trip_Member (Req 1.2) and any `shares`/`items`/`tierCounts` recipient is a Trip_Member or Trip_Guest of the *same* Trip (Req 2.5); for `itemized`, call `computeItemizedTotals` and use its derived `amountCents`/`shares`/`payerImplicitCents` for the INSERTs (Req 5.14) instead of a submitted amount; for `exact`/`even`/`tiered`, validate per Requirements 3/4 and compute shares via `splitEvenly`/tier arithmetic; INSERT `expenses` row, then the Split_Mode-specific child rows (`expense_shares`, `expense_tiers`+`expense_tier_counts`, or `expense_items`+`charge_lines`); `COMMIT`; return the assembled `ExpenseDTO`. Rolls back and throws `trip_validation_failed` for every Requirement-1/3/4/5 violation before any INSERT.
 - `editExpense(tripId, expenseId, callerId, callerRole, input)` — `SELECT ... FOR UPDATE` the existing Expense and its Split_Mode; adder-or-organizer check (`callerRole !== 'organizer' && expense.created_by !== callerId` → `ROLLBACK; throw trip_forbidden`, Req 8.1); if `input.splitMode` differs from the stored one, `DELETE FROM expense_shares/expense_tiers/expense_tier_counts/expense_items/charge_lines WHERE expense_id = $1` (all four, unconditionally — cheap and simple) before re-running the same validation/INSERT path as `createExpense` for the new mode (Req 8.3); otherwise, re-validate and replace the existing child rows in place. Returns the updated `ExpenseDTO`.
 - `removeExpense(tripId, expenseId, callerId, callerRole)` — adder-or-organizer check; `DELETE FROM expenses WHERE id = $1` — children cascade via FK (Req 8.4).
+- *(Requirement 2.13, added by the `trip-budget` spec: `removeTripGuest` also checks `trip_budget_allocations.guest_id` and rejects with `trip_validation_failed` while any allocation references the guest, inside a lock-first transaction (`SELECT ... FOR UPDATE` on the guest row, then the reference checks, then the `DELETE`) so a concurrently inserted allocation cannot be cascade-deleted; implemented and tested by trip-budget task 14.4.)*
+- *(Known quirk of `allocateProportionally`, recorded by the `trip-budget` spec round 5 M2; behavior NOT changed here: the primitive guarantees an exact sum but not non-negative shares for a non-negative total. Reproduced by running the helper: `allocateProportionally(1, [0,1,1])` returns `[-1,1,1]` (a negative share for a zero-weight target) and `allocateProportionally(2, [1,3,3,3])` returns `[-1,1,1,1]` (a negative share for a positive-weight target whose exact share is 0.2), because base shares use `Math.round` (ties up) and the remainder correction subtracts from the first target regardless of weight. Property 2 below checks sum and determinism only. Trip Budget does not use this helper for its tax and tip split (it uses its own largest-remainder `allocateShares`); an owner of the Expense paths that call it (Charge_Line and Refund distribution) may decide separately whether the same guarantee is wanted there.)*
 - `addTripGuest` / `renameTripGuest` / `removeTripGuest` — `addTripGuest` creates a guest with the specified or caller's `sponsorMemberId` after validating membership (Req 2.1); `renameTripGuest` permits updating name and optionally reassigning `sponsorMemberId` after validating new sponsor membership (Req 2.11); `removeTripGuest` first checks `NOT EXISTS` across `expense_shares`, `expense_item_assignees`, `expense_tier_counts` referencing the guest before deleting (Req 2.9); sponsor-or-organizer check (Req 2.10, 2.11).
 - `createSettlement` / `editSettlement` / `removeSettlement` — same adder-or-organizer pattern; `createSettlement` validates `payerId !== recipientId` and both are Trip_Members (Req 7.2) as a defense-in-depth backstop to the Zod-level check.
 - `createRefund` / `editRefund` / `removeRefund` — `SELECT` the target Expense and the sum of its existing Refunds `FOR UPDATE`; reject if the new total would exceed the Expense's original Amount (Req 12.2); on success, call `allocateProportionally` against the Expense's existing shares (weighted by their own amount) to get the Refund's per-recipient negative contribution, used only when assembling `NetBalanceDTO` output — the original `expense_shares` rows are never rewritten, only the Refund row is inserted (keeping Req 12.4's "original Amount stays visible" property true by construction).
@@ -352,6 +354,10 @@ export interface ExpenseAffectedNotice {
 - `receiptScan.ts` (pure) — `parseReceiptText(rawText: string): { items: DraftItem[]; chargeLines: DraftChargeLine[]; subtotalCents: number | null }`, the OCR-output-to-draft-list parser (Req 9.2, 9.6), plus `flagAlcoholCandidate(name: string): boolean` (Req 9.8) and `matchMenuItemName(recognizedName: string, menuItemNames: readonly string[]): string | null` (Req 9.9, Req 11's tier/name suggestions reuse the same fuzzy-match helper).
 - `receiptScan.native.ts` — the thin call site into the on-device OCR library (e.g. `expo-ocr-kit`/ML Kit/Vision wrapper) that produces the raw recognized text handed to `parseReceiptText`; this is the one piece that cannot be unit-tested without a device/simulator, so it is kept to the smallest possible surface (capture/pick a photo, call the library, return text) with every actual decision pushed into the pure `receiptScan.ts`.
 - `ExperiencePicker.tsx` — reused unchanged for the Requirement 11 restaurant link (`defaultTab = 'dining'`, `showTabs={false}`, same pattern as `trip-reservations`); a parallel lightweight Resort picker (no existing component — Resorts aren't browsed via `ExperiencePicker`'s category tabs) is a small new `ResortPicker.tsx` or a `category`-less list sourced from the existing Resort list endpoint, whichever the implementer finds already exists in the Catalog screens — this is a task-level decision, not a design-level one, since no cross-cutting contract depends on which.
+
+### Menu Item Picker (Requirement 16, added by the `trip-budget` spec)
+
+A mobile-only prefill; there is no server, schema, route, or migration change, which keeps Requirement 9.4 true by construction. The shared component `apps/mobile/src/components/MenuItemPicker.tsx` and its pure helpers `menuItemPicker.pure.ts` (`buildPickerRows`, `selectionToExpenseItems`, `selectionSubtotalCents`) are specified in `.kiro/specs/trip-budget/design.md` (Components and Interfaces, Mobile). The Expense form change in `ExpenseFormModal.tsx` is additive only: a "Pick from menu" control (visible when Split_Mode is `itemized` and a restaurant with cached menus is linked), an append of the confirmed drafts to the existing item state (quantity N becomes N rows because `expense_items` has no quantity column), prix fixe offers surfaced through the existing "Menu Pricing Suggestions" card for `tiered`, and explicit "Add estimated tax" and "Add estimated gratuity" actions that create ordinary editable Charge_Lines from `BUDGET_DEFAULT_TAX_BPS.dining` and `BUDGET_DEFAULT_DINING_TIP_BPS` in `@dwt/shared`. `selectionToExpenseItems` returns objects that validate against the existing `expenseItemInputSchema` and contain exactly `name`, `priceCents`, `assigneeIds`, `isAlcohol`. Price data comes from the additive structured fields on `MenuDTO` (`prices`, `priceCents`, group `type`) and the shared `menuPricing.ts` parser; menus cached before the change are refilled lazily by `restaurant-menu-display` Requirement 8.
 
 ## Data Models
 
@@ -601,6 +607,54 @@ For any tiered Expense with defined tiers and participant tier counts, the deriv
 For any two Trip_Members A and B, the pairwise transaction breakdown listing for (A, B) contains exactly those events where {A, B} are the member and counterparty. Settlements paid reduce debt (`-`) while mutual expense shares increase debt (`+`), such that the sum of signed contributions from A's perspective equals B's net pairwise debt to A (`aOwesBCents`). Furthermore, settlements are visually distinguished from expense shares with dedicated payment card styling and attribution.
 
 **Validates: Requirement 6.7**
+
+### Property 14: Picker selections become valid Expense_Item payloads
+
+For any Menu Item Picker selection, every row produced by `selectionToExpenseItems` passes `expenseItemInputSchema` (name 1 to 100 characters after truncation, positive integer `priceCents` within the cap, at least one assignee), a selected item with quantity N yields exactly N rows, `isAlcohol` is true exactly for items whose menu group type matches `Alcoholic Beverage`, and the sum of the produced rows' `priceCents` equals `selectionSubtotalCents`.
+
+**Validates: Requirements 16.2, 16.3**
+
+### Property 15: Picking introduces no persisted origin
+
+For any Expense submitted after using the picker, the request body's item objects have exactly the key set `{name, priceCents, assigneeIds, isAlcohol}` (plus the optional `id` the form already sends for edits), identical to manually typed and scanned items, and the server-side create and edit paths contain no branch on item origin.
+
+**Validates: Requirements 16.4, 9.4**
+
+### Property 16: Estimated tax and gratuity are explicit, editable Charge_Lines
+
+Added by the `trip-budget` spec (its Property 42). For any itemized Expense form state, pressing "Add estimated tax" adds exactly one `tax` Charge_Line whose amount is `floor((subtotal * BUDGET_DEFAULT_TAX_BPS.dining + 5000) / 10000)` over the sum of the assignees' item subtotals, and pressing "Add estimated gratuity" adds exactly one `gratuity` Charge_Line with the same formula using `BUDGET_DEFAULT_DINING_TIP_BPS`; neither line exists in the form state or in the submitted body before the press (nothing is added silently); each added line is an ordinary Charge_Line that can be edited (the edited amount is what is submitted) and removed; the amounts are non-negative integers; and when the linked restaurant has no cached menu or no parseable price the picker and these actions are hidden and the form behaves as before (Requirement 16.7).
+
+**Validates: Requirements 16.6, 16.7**
+
+### Property 17: A Trip_Guest referenced by a Budget_Allocation cannot be removed
+
+Added by the `trip-budget` spec (its tasks 14.4 and 3.4). For any Trip_Guest referenced by at least one `trip_budget_allocations` row, removing the guest is rejected with `trip_validation_failed` and both the guest row and the allocation row survive, including when the allocation is inserted concurrently while the removal is in progress (the removal is a lock-first transaction: `SELECT ... FROM trip_guests WHERE id = $1 AND trip_id = $2 FOR UPDATE`, which waits for any in-flight insert holding a `FOR KEY SHARE` lock on the guest, then the reference checks as ordinary statements that take a fresh snapshot, then the `DELETE`; a single `DELETE ... WHERE NOT EXISTS (...)` statement is NOT relied on because it does not re-evaluate its subquery after waiting on a lock-only blocker; a foreign-key violation `23503` on the inserter side maps to `trip_validation_failed`); a guest referenced by no allocation and by none of the existing Expense references is removed together with its Traveler_Profile; and no Expense, Settlement or Net_Balance changes in either case. Proved by the pg-mem repo test of `removeTripGuest` (sequential case) and by the two-connection `guestRemoval.livedb.test.ts` (concurrent case: allocation inserted on connection A and not yet committed, removal started on connection B, A commits, B rejects and the allocation survives) in trip-budget task 14.4.
+
+**Validates: Requirements 2.13**
+
+### Property 18: The Budget tile leaves Expenses data untouched
+
+Added by the `trip-budget` spec (its tasks 18.5 and 14.4). The Trip hub shows the Budget tile after the Expenses tile; the Expenses tile, the Expense_Ledger_Screen, the Balances_View and every Expense, Settlement and Net_Balance computation produce identical output with and without Budget rows present, and no Budget field appears in any Expense response. Proved by `TripDetailScreen` / `tripStructureRegression.test.tsx` (tile order, Expenses entry unchanged) and trip-budget Property 31 (recording pool shows no Expense-table write by any Budget operation, Expense routes carry no Budget field).
+
+**Validates: Requirements 10.6**
+
+### Property 19: The picker is offered only when it can work
+
+Added by the `trip-budget` spec (its tasks 17.3 and 19.1). The "Pick from menu" control is present exactly when the Expense is `itemized`, is linked to a Catalog restaurant, and that restaurant's cached menus contain at least one item with a parseable price; it is absent for `even`, `tiered` and `custom` Expenses, for an unlinked Expense, and for a restaurant with no cached menu or no parseable price. Proved by `ExpenseFormModal.menuPicker.test.tsx` (one case per condition).
+
+**Validates: Requirements 16.1**
+
+### Property 20: Tiered suggestions are offered, never persisted unconfirmed
+
+Added by the `trip-budget` spec (its task 19.1). For a `tiered` Expense linked to a restaurant whose cached menu has a prix fixe, buffet or per-person offer recognized by the shared Menu_Price_Parser, the offer appears in the existing Menu Pricing Suggestions card as a suggested Expense_Tier; no request is issued until the member accepts (and optionally edits) it and submits the Expense, and a discarded suggestion never appears in the submitted body. Proved by `ExpenseFormModal.menuPicker.test.tsx` (accept, edit, discard, and an assertion that no network call occurs before submit).
+
+**Validates: Requirements 16.5**
+
+### Property 21: One shared Menu Item Picker serves both forms
+
+Added by the `trip-budget` spec (its tasks 17.3 and 19.1). `apps/mobile/src/components/MenuItemPicker.tsx` is the single implementation; both `ExpenseFormModal.tsx` and `BudgetLineFormModal.tsx` import it from that path, and no second picker component or copy of `menuItemPicker.pure.ts` exists under `apps/mobile/src/`. Proved by a structural test in trip-budget task 19.1 that scans the two form files' imports and the `components/` and `screens/trips/` directories.
+
+**Validates: Requirements 16.8**
 
 ## Error Handling
 

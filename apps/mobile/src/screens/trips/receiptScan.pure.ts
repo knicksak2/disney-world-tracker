@@ -13,7 +13,8 @@
  * PURE MODULE: Zero React imports, zero I/O, zero network calls (Requirement 9.7).
  */
 
-import type { ChargeLineKind, MenuDTO } from '@dwt/shared';
+import type { ChargeLineKind } from '@dwt/shared';
+import { extractTierPriceSuggestions } from '@dwt/shared';
 
 export interface DraftReceiptItem {
   id?: string | undefined;
@@ -355,49 +356,9 @@ export function matchMenuItemName(
 }
 
 /**
- * Extracts suggested pricing tiers from cached restaurant menus (Req 11.4, 11.5).
- * Matches patterns like "$65 per adult", "$40 per child", "Adult: $65".
+ * Promoted to @dwt/shared (menuPricing.ts). Re-exported here for compatibility (Req 11.4).
  */
-export function extractTierPriceSuggestions(
-  menus?: readonly MenuDTO[] | null
-): { name: string; priceCents: number }[] {
-  if (!menus || menus.length === 0) return [];
-
-  const suggestions: { name: string; priceCents: number }[] = [];
-  const seen = new Set<string>();
-
-  for (const menu of menus) {
-    for (const group of menu.groups ?? []) {
-      for (const item of group.items ?? []) {
-        const text = `${item.name} ${item.price ?? ''}`;
-
-        // Pattern 1: "$65 per adult", "$40 per child"
-        const perMatch = text.match(/\$?(\d+(?:\.\d{2})?)\s*(?:per|\/)\s*(adult|child|guest|senior)/i);
-        if (perMatch && perMatch[1] && perMatch[2]) {
-          const price = Math.round(parseFloat(perMatch[1]) * 100);
-          const name = perMatch[2].charAt(0).toUpperCase() + perMatch[2].slice(1).toLowerCase();
-          if (!seen.has(name) && price > 0) {
-            seen.add(name);
-            suggestions.push({ name, priceCents: price });
-          }
-        }
-
-        // Pattern 2: "Adult: $65.00", "Child: $40.00"
-        const colonMatch = text.match(/(Adult|Child|Guest|Senior)\s*:\s*\$?(\d+(?:\.\d{2})?)/i);
-        if (colonMatch && colonMatch[1] && colonMatch[2]) {
-          const name = colonMatch[1].charAt(0).toUpperCase() + colonMatch[1].slice(1).toLowerCase();
-          const price = Math.round(parseFloat(colonMatch[2]) * 100);
-          if (!seen.has(name) && price > 0) {
-            seen.add(name);
-            suggestions.push({ name, priceCents: price });
-          }
-        }
-      }
-    }
-  }
-
-  return suggestions;
-}
+export { extractTierPriceSuggestions };
 
 /**
  * Multi-photo receipt support (Req 9.10, 9.11, 9.12, Property 9).

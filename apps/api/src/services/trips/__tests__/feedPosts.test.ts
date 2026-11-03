@@ -615,7 +615,126 @@ describe('Task 20.1: Trip Feed Posts (POST & DELETE /trips/:id/feed/posts)', () 
             expect(afterCount).toBe(beforeCount + 1);
           } else {
             expect(res.statusCode).toBe(400);
-            expect(res.json().error?.code).toBe('validation_failed');
+            expect(['validation_failed', 'trip_validation_failed']).toContain(
+              res.json().error?.code,
+            );
+            expect(afterCount).toBe(beforeCount);
+          }
+        },
+      ),
+      { numRuns: 100 },
+    );
+  });
+
+  it('creates and deletes a text-only member_post (0 photoIds with non-empty caption) and rejects an empty post (trips R20.7)', async () => {
+    const server = buildTestServer(memberId);
+
+    // 1. Text-only post with photoIds: []
+    const resText = await server.inject({
+      method: 'POST',
+      url: `/trips/${tripAId}/feed/posts`,
+      payload: {
+        photoIds: [],
+        caption: '  Meet at Main Street Bakery in 10 mins!  ',
+      },
+    });
+    expect(resText.statusCode).toBe(201);
+    const textPostId = resText.json().id;
+    expect(textPostId).toBeDefined();
+
+    const rows = db.public.many(
+      `SELECT id, type, actor_id, metadata FROM trip_feed_items WHERE id = '${textPostId}'`,
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].type).toBe('member_post');
+    expect(rows[0].actor_id).toBe(memberId);
+    expect(rows[0].metadata.photoIds).toEqual([]);
+    expect(rows[0].metadata.caption).toBe('Meet at Main Street Bakery in 10 mins!');
+
+    // 2. Text-only post with photoIds omitted
+    const resOmitted = await server.inject({
+      method: 'POST',
+      url: `/trips/${tripAId}/feed/posts`,
+      payload: {
+        caption: 'Fireworks spot secured!',
+      },
+    });
+    expect(resOmitted.statusCode).toBe(201);
+
+    // 3. Empty post (0 photoIds and blank/absent caption) rejected at route and repo
+    const resEmpty = await server.inject({
+      method: 'POST',
+      url: `/trips/${tripAId}/feed/posts`,
+      payload: { photoIds: [], caption: '   ' },
+    });
+    expect(resEmpty.statusCode).toBe(400);
+    expect(['validation_failed', 'trip_validation_failed']).toContain(
+      resEmpty.json().error?.code,
+    );
+
+    await expect(
+      tripRepo.createFeedPost(tripAId, memberId, [], '   '),
+    ).rejects.toMatchObject({ code: 'validation_failed' });
+
+    // 4. Author can delete text-only post
+    const delRes = await server.inject({
+      method: 'DELETE',
+      url: `/trips/${tripAId}/feed/posts/${textPostId}`,
+    });
+    expect(delRes.statusCode).toBe(204);
+    expect(
+      db.public.many(`SELECT id FROM trip_feed_items WHERE id = '${textPostId}'`),
+    ).toHaveLength(0);
+  });
+
+  // Feature: trips, Property 31: Trip Activity member_post text-only and photo validation and visibility
+  it('Property 31: member_post with 0..4 photos and optional caption succeeds iff photoIds.length > 0 or trimmed caption is non-empty', async () => {
+    const server = buildTestServer(memberId);
+
+    await fc.assert(
+      fc.asyncProperty(
+        fc.record({
+          photoCount: fc.integer({ min: 0, max: 4 }),
+          hasCaption: fc.boolean(),
+          captionText: fc.string({ minLength: 1, maxLength: 80 }).filter((s) => s.trim().length > 0),
+        }),
+        async ({ photoCount, hasCaption, captionText }) => {
+          const photoIds: string[] = [];
+          for (let i = 0; i < photoCount; i++) {
+            photoIds.push(seedPhoto({ ownerId: memberId, scopeId: tripAId, status: 'approved' }));
+          }
+          const caption = hasCaption ? captionText : undefined;
+          const shouldSucceed = photoCount > 0 || (caption !== undefined && caption.trim().length > 0);
+
+          const beforeCount = db.public.many(
+            `SELECT id FROM trip_feed_items WHERE type = 'member_post'`,
+          ).length;
+
+          const res = await server.inject({
+            method: 'POST',
+            url: `/trips/${tripAId}/feed/posts`,
+            payload: caption !== undefined ? { photoIds, caption } : { photoIds },
+          });
+
+          const afterCount = db.public.many(
+            `SELECT id FROM trip_feed_items WHERE type = 'member_post'`,
+          ).length;
+
+          if (shouldSucceed) {
+            expect(res.statusCode).toBe(201);
+            expect(afterCount).toBe(beforeCount + 1);
+            const createdRow = db.public.many(
+              `SELECT metadata FROM trip_feed_items WHERE id = '${res.json().id}'`,
+            )[0];
+            expect(createdRow.metadata.photoIds).toEqual(photoIds);
+            if (hasCaption) {
+              expect(createdRow.metadata.caption).toBe(captionText.trim());
+            }
+          } else {
+            expect(res.statusCode).toBe(400);
+            expect(['validation_failed', 'trip_validation_failed']).toContain(
+              res.json().error?.code,
+            );
             expect(afterCount).toBe(beforeCount);
           }
         },
