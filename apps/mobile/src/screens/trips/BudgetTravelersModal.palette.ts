@@ -1,0 +1,38 @@
+import { definePalette } from '../../theme/theme';
+
+export const BUDGET_TRAVELERS_MODAL = definePalette({
+  light: {
+    chipActiveBg: '#EDE7F6',
+    chipActiveText: '#5E35B1',
+    chipInactiveBg: '#F5F5F5',
+    chipInactiveText: '#424242',
+    border: '#E0E0E0',
+    hintText: '#757575',
+    cardBg: '#FAFAFA',
+    deleteBtnText: '#C62828',
+    noteText: '#5E35B1',
+    avatarBg: '#5B2A86',
+    avatarText: '#FFFFFF',
+    spendText: '#5B2A86',
+    addBtnBg: '#5B2A86',
+    addBtnText: '#FFFFFF',
+    cardHeaderBg: '#EDE7F6',
+  },
+  dark: {
+    chipActiveBg: '#311B92',
+    chipActiveText: '#D1C4E9',
+    chipInactiveBg: '#212121',
+    chipInactiveText: '#BDBDBD',
+    border: '#424242',
+    hintText: '#9E9E9E',
+    cardBg: '#1E1E1E',
+    deleteBtnText: '#EF9A9A',
+    noteText: '#B39DDB',
+    avatarBg: '#6A3DE8',
+    avatarText: '#FFFFFF',
+    spendText: '#D1C4E9',
+    addBtnBg: '#6A3DE8',
+    addBtnText: '#FFFFFF',
+    cardHeaderBg: '#281B36',
+  },
+});
